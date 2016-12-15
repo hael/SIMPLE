@@ -1,0 +1,116 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">
+
+<!--Converted with LaTeX2HTML 2002-2-1 (1.71)
+original version by:  Nikos Drakos, CBLU, University of Leeds
+* revised and updated by:  Marcus Hennecke, Ross Moore, Herb Swan
+* with significant contributions from:
+  Jens Lippmann, Marek Rouchal, Martin Wilck and others -->
+<HTML>
+<HEAD>
+<TITLE>Program: simple_recvol</TITLE>
+<META NAME="description" CONTENT="Program: simple_recvol">
+<META NAME="keywords" CONTENT="simple21manual">
+<META NAME="resource-type" CONTENT="document">
+<META NAME="distribution" CONTENT="global">
+
+<META NAME="Generator" CONTENT="LaTeX2HTML v2002-2-1">
+<META HTTP-EQUIV="Content-Style-Type" CONTENT="text/css">
+
+<LINK REL="STYLESHEET" HREF="simple21manual.css">
+
+<LINK REL="next" HREF="node39.html">
+<LINK REL="previous" HREF="node37.html">
+<LINK REL="up" HREF="node33.html">
+<LINK REL="next" HREF="node39.html">
+</HEAD>
+
+<BODY >
+<!--Navigation Panel-->
+<A NAME="tex2html590"
+  HREF="node39.html">
+<IMG WIDTH="37" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="next"
+ SRC="file:/sw/share/lib/latex2html/icons/next.png"></A> 
+<A NAME="tex2html586"
+  HREF="node33.html">
+<IMG WIDTH="26" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="up"
+ SRC="file:/sw/share/lib/latex2html/icons/up.png"></A> 
+<A NAME="tex2html580"
+  HREF="node37.html">
+<IMG WIDTH="63" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="previous"
+ SRC="file:/sw/share/lib/latex2html/icons/prev.png"></A> 
+<A NAME="tex2html588"
+  HREF="node1.html">
+<IMG WIDTH="65" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="contents"
+ SRC="file:/sw/share/lib/latex2html/icons/contents.png"></A>  
+<BR>
+<B> Next:</B> <A NAME="tex2html591"
+  HREF="node39.html">Program: simple_eo_recvol</A>
+<B> Up:</B> <A NAME="tex2html587"
+  HREF="node33.html">Ab initio 3D reconstruction</A>
+<B> Previous:</B> <A NAME="tex2html581"
+  HREF="node37.html">Program: simple_symsrch</A>
+ &nbsp; <B>  <A NAME="tex2html589"
+  HREF="node1.html">Contents</A></B> 
+<BR>
+<BR>
+<!--End of Navigation Panel-->
+
+<H3><A NAME="SECTION00082500000000000000"></A>
+<A NAME="recvol"></A>
+<BR>
+Program: <FONT COLOR="#0f75ff"><TT>simple_recvol</TT></FONT>
+</H3>
+<FONT COLOR="#0f75ff"><TT>simple_recvol</TT></FONT> is a program for reconstructing volumes from MRC and SPIDER stacks, given input orientations and state assignments (obtained by program <FONT COLOR="#0f75ff"><TT>simple_prime3D</TT></FONT>). The algorithm is based on direct Fourier inversion with a Kaiser-Bessel (KB) interpolation kernel. This window function reduces the real-space ripple artifacts associated with direct moving windowed-sinc interpolation. The feature sought when implementing this algorithm was to enable quick, reliable reconstruction from aligned individual particle images.
+<PRE>
+    $ SIMPLE_RECVOL stk=&lt;ptcls.ext&gt; smpd=&lt;sampling distance(in A)&gt;}
+    oritab=&lt;algndoc.txt&gt; msk=&lt;mask radius(in pixels)&gt; [lp=&lt;low-pass limit{20}&gt;]
+    [frac=&lt;fraction of ptcls to include{1.}&gt;] [nthr=&lt;nr of openMP threads{1}&gt;]
+    [pgrp=&lt;cn|dn|t|o|i{c1}&gt;]
+    ** less commonly used **
+    [mw=&lt;molecular weight(in kD)&gt;] [amsklp=&lt;low-pass limit(in A){20}&gt;]
+    [mul=&lt;shift multiplication factor{1}&gt;] [ctf=&lt;yes|no|flip|mul{no}&gt;]
+    [kv=&lt;acceleration voltage(in kV){300.}&gt;] [fraca=&lt;frac amp contrast{0.07}&gt;]
+    [cs=&lt;spherical aberration constant(in mm){2.7}&gt;] [deftab=&lt;text file defocus
+    values&gt;] [state=&lt;state to reconstruct{all}&gt;] [edge=&lt;edge size for softening
+    molecular envelope(in pixels){3}&gt;] [dens=&lt;density(e.g.9.368 Da/A3 4 gold
+    clusters){0.}&gt;] [inner=&lt;inner mask radius(in pixels)&gt;] [width=&lt;pixels falloff
+    inner mask{10}&gt;] [mirr=&lt;yes|no{no}&gt;] [even=&lt;yes|no{no}&gt;]
+    [odd=&lt;yes|no{no}&gt;]
+</PRE>
+<B>Comments:</B> <TT>mul</TT> is used to scale the origin shifts if down-sampled were used for alignment and the original images are used for reconstruction. This program can be run in distributed mode using <FONT COLOR="#0f75ff"><TT>distr_simple.pl</TT></FONT>. <TT>ctf</TT>, <TT>kv</TT>, <TT>fraca</TT>, <TT>cs</TT> and <TT>deftab</TT> are used to communicate CTF information to the program. <TT>ctf=yes</TT>, <TT>ctf=flip</TT> or <TT>ctf=mul</TT> turns on the Wiener restoration. If the images were pre-multiplied with CTF set <TT>ctf=mul</TT> or if the images were phase-flipped set <TT>ctf=flip</TT>. <TT>amsklp</TT>, <TT>mw</TT>, and <TT>edge</TT> are parameters that control the solvent mask: the low-pass limit used to generate the envelope; the molecular weight of the molecule (protein assumed but it works reasonably well also for RNA; slight modification of <TT>mw</TT> might be needed). The <TT>inner</TT> parameter controls the radius of the soft-edged mask used to remove the unordered DNA/RNA core of spherical icosahedral viruses. The <TT>even</TT> and <TT>odd</TT> parameters allow you to reconstruct either the even or the odd pair.
+
+<P>
+<HR>
+<!--Navigation Panel-->
+<A NAME="tex2html590"
+  HREF="node39.html">
+<IMG WIDTH="37" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="next"
+ SRC="file:/sw/share/lib/latex2html/icons/next.png"></A> 
+<A NAME="tex2html586"
+  HREF="node33.html">
+<IMG WIDTH="26" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="up"
+ SRC="file:/sw/share/lib/latex2html/icons/up.png"></A> 
+<A NAME="tex2html580"
+  HREF="node37.html">
+<IMG WIDTH="63" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="previous"
+ SRC="file:/sw/share/lib/latex2html/icons/prev.png"></A> 
+<A NAME="tex2html588"
+  HREF="node1.html">
+<IMG WIDTH="65" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="contents"
+ SRC="file:/sw/share/lib/latex2html/icons/contents.png"></A>  
+<BR>
+<B> Next:</B> <A NAME="tex2html591"
+  HREF="node39.html">Program: simple_eo_recvol</A>
+<B> Up:</B> <A NAME="tex2html587"
+  HREF="node33.html">Ab initio 3D reconstruction</A>
+<B> Previous:</B> <A NAME="tex2html581"
+  HREF="node37.html">Program: simple_symsrch</A>
+ &nbsp; <B>  <A NAME="tex2html589"
+  HREF="node1.html">Contents</A></B> 
+<!--End of Navigation Panel-->
+<ADDRESS>
+Hans Elmlund
+2016-05-24
+</ADDRESS>
+</BODY>
+</HTML>

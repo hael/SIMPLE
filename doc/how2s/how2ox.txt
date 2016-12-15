@@ -1,0 +1,48 @@
+Remote Access
+ssh into ln1.path.ox.ac.uk. Username is smlea and password is your SSO (standard password also works).
+
+Data Location
+Data are located in /home2/lea/ELECTRON_MICROSCOPY/2015-08-22-OPIC. I've made sure that you have read and write access to files in this directory. The raw and motion corrected images are in their respective folders. There is also a Processing directory where I have done most of my analysis.
+
+Software
+In order to load software modules use "module load <package name in capitals>" eg "module load RELION". Modules include RELION, XMIPP, EMAN2, SIMPLE etc. You can then use the normal commands.
+
+Cluster
+
+User helmlund created with password Han52015. Access via SSH into ln1.path.ox.ac.uk.
+
+All FFTW libraries ( double and single precision ) are installed in /software/TOOLS/FFTW/fftw-3.3.4/
+
+Have given you full permissions in /software/ELECTRON_MICROSCOPY/SIMPLE 
+
+We use environment modules for our sourcing so 'module load FFTW' will add libraries to ld_library_path etc.
+
+Similarly, the compute nodes are diskless and have a very minimal install. Do a 'module load GCC' to load the shared gcc and associated libraries and use this for compiling. Then make sure the -V parameter is passed to qsub to ensure that the paths to the libraries (eg libgfortran) are passed to the compute nodes. Once installed this is easily handled by a a SIMPLE environment module.
+
+We use torque (pbs) for scheduling and job submission. We have 15 nodes, each with 16 cores (2 sockets). 
+
+I agree that PBS does not guarantee shared memory threads. However, can you get round this by cheekily using mpirun underneath  to bind a single process to a single socket requiring all the processors for this process? eg  qsub -l nodes=1:ppn=8 -V  then  start the job with mpirun -np 1 --bind-to-socket --cpus-per-proc 8 . Not sure if this would add any overhead.
+
+Let me know how it goes.
+
+Please keep at least one node free in case anybody needs to do anything (not too busy at the moment).
+
+Cheers
+
+Joe
+Our cluster has 15 nodes with 16 cores each. Relion is the most easy to use with the cluster and I have created a relion_qsub file in your home directory already so it should just work from the gui. There are a few "weirdities" with running these and we often modify the submit scripts to ensure that the number of MPI processes (np) multiplied by the number of threads (j) is equal to the the number of nodes (nodes) multiplied by the number of processors per node (ppn). To avoid this just keep the number of mpi processes in the gui at 15 or less, although this is less than optimal for some processes, it will work. I can show you the other bits at another time.
+Useful cluster commands are -
+qnodes - show how busy the nodes are.
+qstat - show the progress of your jobs
+qdel <process number from qstat> delete job.
+qsub <submit script> submit a script to the cluster.
+
+You can also monitor how busy the cluster is at https://ln1.path.ox.ac.uk/status
+
+With relion generally use as many nodes (MPI processes) as possible with as many cores as possible for every process. Except-use 1 mpi process for calculating the FOM maps during autopicking (only for three micrographs). Use as many nodes (mpi processes) as available for CTF correction and particle extraction. There are more efficient ways as mentioned above, but its rather difficult to explain in words.
+
+You should get an email when jobs start and finish. Pay special attention to the finish email. If the return status is not 0, something is wrong.
+
+GPU
+
+At the moment the GPU is not integrated into the cluster. Instead you will have to ssh into gn1 from ln1. Username is smlea password is Susan. This is a bit of a cludge but it works fine. In order to use the GPU you will need to add the CUDA libraries to your environment. To do this "export LD_LIBRARY_PATH=/software/TOOLS/CUDA/cuda-5.0/lib64". You can then use the motion correction program /software/ELECTRON_MICROSCOPY/MOTIONCORRECTION/nmeth.2472-S2/motioncorr.

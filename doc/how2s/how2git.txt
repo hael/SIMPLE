@@ -1,0 +1,59 @@
+# DELETED AND RECREATED SIMPLE
+# WHAT I DID:
+
+git commit -m 'first commit'
+git remote add origin https://github.com/hael/SIMPLE.git
+git push -u origin master
+
+# ADD NEW BRANCH TO REMOTE REPO
+# First, create a new branch locally
+git checkout -b elbrus
+# Then, push it
+git push git@github.com:hael/SIMPLE.git elbrus
+# Remove the local branch
+git checkout master
+git branch -d elbrus
+
+# HOW TO PURGE ALL THE HISTORY AND PUSH IT
+git checkout --orphan <name_you_choose_for_orphan_branch>
+git commit
+git push <remote-name> <branch-name>
+
+# HOW TO CLONE THE REPO
+mkdir /Users/hael/src/fortran/lib/simple_wfrederic/Simple_Restruct.projet
+git clone git@130.194.198.11:/opt/git/Simple_Restruct.projet.git .
+
+# HOW TO OVERRIDE LOCAL CHANGES
+git fetch --all
+git reset --hard origin/master
+
+# HOW TO FIX THE IP ADDRESS ISSUE
+git config remote.origin.url git@130.194.193.158:/opt/git/Simple_Restruct.projet.git
+
+# THE RECOMMENDED PUSH/PULL PROCEDURE
+make a tar ball backup of current project.
+at the root of project directory $git status
+add untracked files using $git add
+at the root of project directory $git stash
+$git pull (resolve conflicts if any)
+$git stash pop
+compile and testrun if necessary
+To push your stuff then do a $git commit -a
+$git push
+
+CHANGE EDITOR FOR COMMIT MESSAGES
+git config --global core.editor "vi"
+
+# TO CLEAR ALL STASHED BRANCHES
+git stash clear
+
+HOW TO DELETE ALL THE HISTORY OF THE BIG FILES
+git filter-branch --force --index-filter 'git rm --cached --ignore-unmatch web/SIMPLE2.1/1.0/binaries/simple_linux_120521.tar.gz' --prune-empty --tag-name-filter cat -- --all
+
+git filter-branch --force --index-filter 'git rm --cached --ignore-unmatch web/SIMPLE2.1/binaries/Install_Simple_MacOSX_binaries.tar.gz' --prune-empty --tag-name-filter cat -- --all
+
+git filter-branch --force --index-filter 'git rm --cached --ignore-unmatch web/SIMPLE2.1/1.0/binaries/simple_mac_120521.tar.gz' --prune-empty --tag-name-filter cat -- --all
+
+git filter-branch --force --index-filter 'git rm --cached --ignore-unmatch web/SIMPLE2.1/2.0/binaries/simple_release2.tar.gz' --prune-empty --tag-name-filter cat -- --all
+
+git filter-branch --force --index-filter 'git rm --cached --ignore-unmatch web/SIMPLE2.1/binaries/simple2.1.tar.gz' --prune-empty --tag-name-filter cat -- --all

@@ -1,0 +1,30 @@
+The CVL environment set up is complete. Please refer to the following webpage which gives you a overview about how MASSIVE works with CVL:
+  https://www.massive.org.au/userguide/cluster-status-real-time/architecture
+
+To use CVL, here is the instruction:
+
+1) To login to m2cvl
+  ssh hael@login.cvl.massive.org.au
+
+2) The following MASSIVE user scripts exist on CVL as well:
+  show_job
+  show_cluster
+
+3) CVL is running separate Slurm controller as MASSIVE, there is only one single Slurm acocunt called 'cvl' and no credit accounting is enabled. No per-user disk quota is set up. So there is no
+  user_info
+
+4) To submit a job, you may need to specify:
+  #SBATCH --partition=compute
+  #SBATCH --account=cvl
+
+The 'batch' partition (default partition, will be auto-picked if you don't specify '--partition' in your script) only cover 1-core nodes while the 'compute' partition includes both 'batch' partition and 16-core and 64-core machines.
+
+5) There is no 'sinteractive' enabled yet.
+
+6) To sync data between MASSIVE project and CVL project:
+  [hael@m2cvllogin0]$ scp m2.massive.org.au:~/Monash084/<file> ~/Monash084/
+Project scratch space sync should be the same way.
+
+Please give it a try first and let us know if there is any issue.
+
+Probably best to submit 11 jobs, request 16 cores, no specification about sockets, and request 32000 MEM

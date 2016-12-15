@@ -1,0 +1,97 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<groupId>eu.multiscale-modelling.gridbeans</groupId>
+	<artifactId>SimpleEoVolAssembleGridBean</artifactId>
+	<version>2.0</version>
+	<name>simpleeovolassemble-gridbean</name>
+	<packaging>jar</packaging>
+
+	<dependencies>
+		<dependency>
+			<groupId>junit</groupId>
+			<artifactId>junit</artifactId>
+			<version>3.8.1</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.intel.gpe.clients</groupId>
+			<artifactId>gpe-gridbean-api</artifactId>
+			<version>2.2.0</version>
+		</dependency>
+		<dependency>
+			<groupId>com.intel.gpe</groupId>
+			<artifactId>gpe-client-api</artifactId>
+			<version>2.2.0</version>
+			<type>pom</type>
+		</dependency>
+		<dependency>
+			<groupId>com.intel.gpe.clients</groupId>
+			<artifactId>gpe-common</artifactId>
+			<version>2.2.0</version>
+			<type>pom</type>
+		</dependency>
+		<dependency>
+			<groupId>com.intel.gpe</groupId>
+			<artifactId>gpe-utils</artifactId>
+			<version>2.2.0</version>
+			<type>pom</type>
+		</dependency>
+		<dependency>
+			<groupId>activemq</groupId>
+			<artifactId>jaxb-api</artifactId>
+			<version>20050407</version>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<plugins>
+			<plugin>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<configuration>
+					<source>1.6</source>
+					<target>1.6</target>
+				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-release-plugin</artifactId>
+				<version>2.0</version>
+				<configuration>
+					<preparationGoals>clean verify install</preparationGoals>
+					<tagBase>https://www.multiscale-modelling.eu/svn/mmmhpc/gridbeans/dlpoly/tags</tagBase>
+				</configuration>
+			</plugin>
+		</plugins>
+	</build>
+
+	<scm>
+		<connection>
+		scm:svn:https://www.multiscale-modelling.eu/svn/mmmhpc/gridbeans/dlpoly/trunk
+		</connection>
+		<developerConnection>
+		scm:svn:https://www.multiscale-modelling.eu/svn/mmmhpc/gridbeans/dlpoly/trunk
+		</developerConnection>
+	</scm>
+
+	<distributionManagement>
+		<repository>
+			<id>multiscale-modelling</id>
+			<name>multiscale-modelling-releases</name>
+			<url>http://www.multiscale-modelling.eu/artifactory/libs-release-local</url>
+		</repository>
+		<snapshotRepository>
+			<id>multiscale-modelling</id>
+			<name>multiscale-modelling-snapshots</name>
+			<url>http://www.multiscale-modelling.eu/artifactory/libs-snapshot-local</url>
+		</snapshotRepository>
+	</distributionManagement>
+
+	<repositories>
+		<repository>
+			<id>multiscale-modelling</id>
+			<url>http://www.multiscale-modelling.eu/artifactory/repo</url>
+		</repository>
+	</repositories>
+
+</project>

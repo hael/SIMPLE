@@ -1,0 +1,13 @@
+#!/bin/bash -l
+
+# Wrapper for running simpleEoRecVol job on local UNICORE client-server installation
+# --------------------------------------------------------------------------
+
+C1=/opt/application/lib/simpleEoRecVolApplicationWrapper-0.1-SNAPSHOT.jar
+C2=/opt/application/lib/mmm-openmolgrid-common-0.5-SNAPSHOT.jar
+C3=/opt/application/lib/log4j-1.2.14.jar
+
+export CLASSPATH=$C1:$C2:$C3
+
+java -cp $CLASSPATH edu.kit.mmm.wrapper.simpleEoRecVol.simpleEoRecVolLauncher \
+--workingDirectory=`pwd`

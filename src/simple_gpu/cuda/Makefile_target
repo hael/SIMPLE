@@ -1,0 +1,3 @@
+src_gpu_kernel_cuda_code: kernel_cuda ;
+
+kernel_cuda: ;

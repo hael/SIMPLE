@@ -1,0 +1,10 @@
+# Mac
+sudo fink install fftw3 fftw3-shlibs
+# >> then set link by: -L/sw/lib/ -lfftw3f -lfftw3f_threads
+
+# Linux
+make clean
+./configure prefix=/em6/users/hael/fftw/ --enable-float --enable-threads --with-openmp
+make
+make install
+# >> then set link by: -L/em6/users/hael/fftw/ -lfftw3f -lfftw3f_threads

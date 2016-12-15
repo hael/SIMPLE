@@ -1,0 +1,3 @@
+src_gpu_kernel_OpenCL_code: kernel_opencl_code ;
+
+kernel_opencl_code:  ;

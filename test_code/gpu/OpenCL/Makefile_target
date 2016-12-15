@@ -1,0 +1,4 @@
+openCL_test_code: openCL_test      ;
+
+openCL_test: getGPU_interface.o    \
+             testing_openCL_defs.o ;

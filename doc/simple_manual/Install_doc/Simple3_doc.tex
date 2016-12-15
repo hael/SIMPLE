@@ -1,0 +1,1566 @@
+\documentclass[review]{elsarticle}
+
+\usepackage{lineno,hyperref}
+\usepackage{amsfonts}
+\usepackage{amsmath}
+\usepackage{bbm}
+\usepackage{epsfig}
+\usepackage{amssymb}
+\usepackage{xcolor}
+\modulolinenumbers[5]
+
+\journal{Journal of Molecular Biology}
+%% `Elsevier LaTeX' style
+\bibliographystyle{elsarticle-num}
+%%%%%%%%%%%%%%%%%%%%%%%
+\newcommand{\nc}{\newcommand}
+\nc{\be}{\begin{equation}}
+\nc{\ee}{\end{equation}}
+\nc{\bea}{\begin{eqnarray}}
+\nc{\eea}{\end{eqnarray}}
+\nc{\bib}{\bibitem}
+\nc{\nm}{\nonumber}
+\nc{\prm}{\prime}
+\nc{\xo}{x_{0}}
+\nc{\yo}{y_{0}}
+\nc{\txo}{t^{(x_{0})}(\psi,k)}
+\nc{\tyo}{t^{(y_{0})}(\psi,k)}
+\nc{\tcxo}{t^{(x_{0})}(h,k)}
+\nc{\tcyo}{t^{(y_{0})}(h,k)}
+\nc{\mtxo}{\mathbf{T}^{(x_{0})}(\psi,k)}
+\nc{\mtyo}{\mathbf{T}^{(y_{0})}(\psi,k)}
+\nc{\pdxo}{\frac{\partial}{\partial{x_{0}}}}
+\nc{\pdyo}{\frac{\partial}{\partial{y_{0}}}}
+\nc{\grad}{\nabla}
+\nc{\tldx}{\tilde{x}}
+\nc{\tldy}{\tilde{y}}
+\nc{\tlda}{\tilde{\alpha}}
+\nc{\fxoyo}{{\cal{F}}\left[f\left(x-x_{0},y-y_{0}\right)\right]}
+\nc{\calf}{{\cal{F}}}
+\nc{\calfxo}{{\cal{F}}_{x_{0}}}
+\nc{\calfyo}{{\cal{F}}_{y_{0}}}
+\nc{\costxoyo}{\cos\left(\txo{x_{0}}+\tyo{y_{0}}\right)}
+\nc{\sintxoyo}{\sin\left(\txo{x_{0}}+\tyo{y_{0}}\right)}
+\nc{\fhk}{F(h,k)}
+\begin{document}
+\begin{frontmatter}
+
+\title{Single-Particle Cryo-EM Image Processing. Probabilistic 3D Alignment (PRIME) Using Hadamard Products.}
+
+%% Group authors per affiliation:
+\author[MonashBio,ARCCentre]{Frederic Bonnet}
+\author[MonashBio,ARCCentre]{Jarrod Voss}
+\author[MonashBio,MonashMicro]{Georg Ramm}
+\author[MonashBio,ARCCentre]{Dominika Elmlund}
+\author[MonashBio,ARCCentre]{Hans Elmlund\corref{cor1}}
+% Corresponding Author
+\cortext[cor1]{Corresponding author}
+\ead{hans.elmlund@monash.edu}
+\ead[url]{http://simple.stanford.edu}
+% Affiliations
+\address[MonashBio]{Department of Biochemistry Molecular Biology, Monash University, Clayton 3800, Australia}
+\address[ARCCentre]{ARC Centre of Excellence for Advanced Molecular Imaging, Clayton 3800, Australia}
+\address[MonashMicro]{Monash Micro Imaging, Clayton 3800, Victoria, Australia}
+
+\begin{abstract}
+Cryogenic electron microscopy (cryo--EM) in combination....
+\end{abstract}
+
+\begin{keyword}
+cryo--EM
+\end{keyword}
+
+\end{frontmatter}
+
+\linenumbers
+
+
+\section{System requirements}
+\label{sysreq}
+
+\subsection{Hardware}
+\label{hardware}
+
+\begin{itemize}
+\item [CPU]
+  \begin{itemize}
+  \item MacOSX (Yosemite and El Capitan, i.e. 10.09 and above)
+  \item Linux (fully supported Debians: Mint-17.1, Ubuntu (14.10, 15.04,
+    15.10, 16.04 LTS)), SUSE-13.2. (Earlier versions are also supported but
+    not tested)
+  \item Intel i-3,5-7 and Intel Xeon5 2620 v2 and v3 but creates
+    dependencies on OS such as certain versions of Ubuntu.
+  \end{itemize}
+\end{itemize}
+
+\subsection{Software}
+\label{soft}
+\begin{itemize}
+\item [CPU]
+  \begin{itemize}
+  \item GNU chain tool 4.9 and above.
+  \item Lapack and the BLAS
+  \item FFTW-3 (Fast Fourier Transforms)
+  \end{itemize}
+\end{itemize}
+
+\section{Installation}
+\label{install}
+
+Provided that the system has the correct compilers and library, the
+installation of the SIMPLE library consists of three major steps:
+\begin{enumerate}
+\item If the directory {\bf{obj/GFORTgpu}} does not exist, create it:
+\begin{verbatim}
+    >$ mkdir -p obj/GFORTgpu
+\end{verbatim}
+this must match
+\begin{verbatim}
+    $OBJDIR={path to the object compiled files, default: obj/GFORTgpu}
+\end{verbatim}
+specified in the simple\_user\_input.pm file.
+
+In the {\bf{.bashrc}} (under {\bf{bash}}) one needs to add 
+\begin{verbatim}
+    #Simple path set in the .bashrc 
+    export SIMPLE_HOME={full path where SIMPLE lib has been installed,
+                        example: /home/username/Simple}
+    export SIMPLEBIN=$SIMPLE_HOME/bin
+    export SIMPLEBINTESTS=$SIMPLE_HOME/bin/bin_tests
+    export SIMPLESYS="LOCAL"
+    export PATH=$PATH:$SIMPLEBIN:$SIMPLEBINTESTS:$SIMPLE_HOME/scripts
+\end{verbatim}
+
+It is important that the path that is set in the SIMPLE\_HOME matches
+the installation path, this allows the user to run any of the SIMPLE
+library command without having to specify the full path from any
+directory on the machine as well as executing the checks via:
+\begin{verbatim}
+  $ make check
+  $ make check_cpu
+\end{verbatim}
+
+If the two paths differs, i.e. the installation path for SIMPLE
+library and environment path set in the {\bf{.bashrc}}, the
+automated checks will not work properly and the user will need to
+specify the full path of the SIMPLE executables. The make check and make
+check\_cpu must be executed once the library has been compiled and
+linked correctly without any errors and installed successfully.
+
+\item Set the path in simple\_user\_input.pm
+\item Run the Perl script Makefile\_genAll.pl
+
+\end{enumerate}
+
+Below outlines further details for the installation procedure. In
+the folder scripts there are some templates for the input files used to
+compile the SIMPLE library, for example.
+
+\begin{itemize}
+\item Template\_MacOSX\_10.9.5x64\_CPU\_simple\_user\_input.pm (also for 10.11.4)
+\item Template\_Mint\_17.1x64\_CPU\_simple\_user\_input.pm
+\item Template\_SUSE\_13.2x64\_CPU\_simple\_user\_input.pm
+\item Template\_FEDORA\_21x64\_CPU\_simple\_user\_input.pm
+\item Template\_Ubuntu\_14.10x64\_CPU\_simple\_user\_input.pm
+\item Template\_Ubuntu\_15.10x64\_CPU\_simple\_user\_input.pm
+\end{itemize}
+
+You may use and copy the one that suits your platform into
+simple\_user\_input.pm file
+
+\begin{verbatim}
+>$ cp scripts/Template_MacOSX_10.9.5x64_CPU_simple_user_input.pm simple_user_input.pm
+\end{verbatim}
+    
+or you may edit simple\_user\_input.pm yourself using your favorite
+text editor. It is recommneded that the user checks that the Template
+fits its system configuration. If not modify it accordingly.
+
+\subsection{MacOSX}
+\label{inst_mac}
+
+%\subsubsection{CPU}
+\begin{enumerate}
+
+\item \label{copy}In {\bf{simple\_user\_input.pm}} change the path of the root of
+  the application \$SIMPLE\_PATH="{the full path of where simple is
+    installed}";
+\item \label{directives} In {\bf{simple\_user\_input.pm}} check that
+  the correct directives are set properly
+\begin{verbatim}
+    $DOPENMP = "-fopenmp";
+    $DBENCH = "";
+\end{verbatim}
+The DBENCH directive provides various timings for the run it is
+optional and not required for production runs.
+
+\item {\label{fftw_inst}} If not already installed, install the FFTW-3 library
+  this can be obtained from:
+  \url{http://www.fftw.org/install/mac.html}. Follow the instruction
+  there but typically you will need to do a
+\begin{verbatim}
+    >$./configure;
+    >$make;
+    >$sudo make install
+\end{verbatim}
+and (repeat at least twice for the floats, double, long and quad)
+\begin{verbatim}
+    >$./configure --enable-floats --enable-threads;
+    >$make;
+    >$sudo make install
+\end{verbatim}
+
+check that you have in your lib folder (typically: /usr/local/lib/)
+
+\begin{verbatim}
+    libfftw3.a libfftw3.la libfftw3_threads.a libfftw3_threads.la
+    libfftw3f.a libfftw3f.la libfftw3f_omp.a libfftw3f_omp.la
+    libfftw3f_threads.a libfftw3f_threads.la libfftw3l.a libfftw3l.la
+    libfftw3l_omp.a libfftw3l_omp.la libfftw3l_threads.a
+    libfftw3l_threads.la libfftw3q.a libfftw3q.la libfftw3q_omp.a
+    libfftw3q_omp.la libfftw3q_threads.a libfftw3q_threads.la
+\end{verbatim}
+
+similarly the {\bf{Lapack3}} and the {\bf{BLAS}} will need to be
+installed on the system.
+
+\item \label{perlMake}At this point SIMPLE library is ready for
+  compilation provided that all the paths have been set properly as
+  well as the correct compiler version has been installed on the
+  system for all of the compilers gcc, g++ and gfortran. This is done via:   
+\begin{verbatim}
+    >$ perl Makefile_genAll.pl
+\end{verbatim}
+if not follow steps~(\ref{compilers}) to (\ref{paths}). It is
+recommended that you read on to check that everything is setup
+properly, particularly for the GNU gcc and gfortran compilers suite.
+
+\item \label{compilers} If not already, specify the paths of the GNU
+  compilers, make sure that you are linking to the [GNU gcc] and
+  {\bf{**not the APPLE gcc**}}. On a MacOSX systems it is required to have the
+  correct Xtool for Command Line Tools OS X 10.11 for XCode 7.2
+  package. Typically the GNU compilers are found in: 
+\begin{verbatim}
+    $CC_COMPILER = "/usr/local/bin/gcc";
+    $GCC_COMPILER = "/usr/local/bin/g++";
+    $MPI_F_COMPILER = "/usr/loacl/bin/mpif90";
+    $FCOMPILER = "/usr/local/bin/gfortran";
+\end{verbatim}
+
+if the GNU compiler suite are not installed already, install the
+gfortran and gcc compiler from the GNU tool
+chain\footnote{\url{http://hpc.sourceforge.net/}} by following the
+instructions therein\footnote{
+\url{https://wiki.helsinki.fi/display/HUGG/Installing+the+GNU+compilers+on+Mac+OS+X}}.
+Select the bin tar ball {\bf{gcc-4.9-bin.tar.gz}},
+{\bf{gfortran-4.9-bin.tar.gz}} (gfortran only), updated Nov 2014
+(Yosemite). System administration rights are needed for this
+installation step.
+
+After doing a $>$\$sudo make install, the gfortran and gcc compilers
+should appear in /usr/local/bin/, see that it works properly and check
+the version of the compiler
+
+\begin{verbatim}
+    >$ /usr/local/bin/gfortran --version 
+     GNU Fortran (GCC) 4.9.2 20141029 (prerelease)
+     Copyright (C) 2014 Free Software Foundation, Inc.
+
+     GNU Fortran comes with NO WARRANTY, to the extent permitted by law.
+     You may redistribute copies of GNU Fortran
+     under the terms of the GNU General Public License.
+     For more information about these matters, see the file named COPYING
+\end{verbatim}
+
+similarly for the gcc and g++ compilers.
+
+\begin{verbatim}
+    >$ /usr/local/bin/gcc --version
+     gcc (GCC) 4.9.2 20141029 (prerelease)
+     Copyright (C) 2014 Free Software Foundation, Inc.
+     This is free software; see the source for copying conditions.  There is NO
+     warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+    >$ /usr/local/bin/g++ --version 
+     g++ (GCC) 4.9.2 20141029 (prerelease)
+     Copyright (C) 2014 Free Software Foundation, Inc.
+     This is free software; see the source for copying conditions.  There is NO
+     warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+\end{verbatim}
+
+Be aware that Apple has has a gcc compiler which is different
+than the GNU one and will generate errors at compilations.
+
+\begin{verbatim}
+    >$ gcc --version 
+    Configured with: --prefix=/Applications/Xcode.app/Contents/Developer/usr
+    --with-gxx-include-dir=/usr/include/c++/4.2.1
+    Apple LLVM version 6.0 (clang-600.0.54) (based on LLVM 3.5svn)
+    Target: x86_64-apple-darwin13.4.0
+    Thread model: posix
+\end{verbatim}
+
+The compilation needs to point towards the GNU compiler and not the
+APPLE one. The compilation will not work otherwise.
+
+\item \label{paths} Make sure that the paths are pointing to the
+  correct location
+
+\begin{verbatim}
+    $SIMPLE_PATH= {path where simple is installed}
+    $CC_COMPILER = {path to the gcc compiler on MacOSX,
+                     default: /usr/local/bin/gcc}
+    $GCC_COMPILER = {path to the g++ compiler on MacOSX,
+                     default: /usr/local/bin/g++}
+    $MPI_F_COMPILER = {path to the mpif90 compiler on MacOSX, 
+                       default:/usr/local/bin/mpif90}
+    $FCOMPILER = {path to the gfortran or ifort compiler on MacOSX,
+                   default: /usr/local/bin/gfortran}
+
+    $MPI_DIR={path to the mpi directory, default:/usr}
+    $MPI_DIR_INCLUDE="/usr/include/mpi";
+    $FFTW_LIB={path for to the FFTW lib, default: /usr/local/lib}
+    $FFTW_INC={path to the include for the FFTW, default:
+    /usr/local/fftw/3.3.4-gcc/include/} cluster dependent
+
+    $OBJDIR={path to the object compiled files, default: obj/GFORTgpu}
+    $MODDIR={path to the .mod files, default: obj/GFORTgpu}
+\end{verbatim}
+All the compiler versions must match and be consistent.
+
+\item \label{perl} Once you have done all of that execute the Perl
+  script to complete the installation using
+\begin{verbatim}
+    >$ perl Makefile_genAll.pl
+\end{verbatim}
+
+\end{enumerate}
+
+\subsection{Linux}
+\label{inst_linux}
+
+For the Linux installation it is the same as the the MacOSX in
+section.~\ref{inst_mac} with the exception that the paths
+differ. Using the appropriate script in the script folder:
+\begin{enumerate}
+\item Installation of the compilers on a debian operating system such
+  as Ubuntu and Mint is done using apt-get install command
+\begin{verbatim}
+    #the compilers
+    $ sudo apt-get install gfortran gfortran-4.9 gcc-4.9 g++-4.9
+    #libraries (Lapack and BLAS)
+    $ sudo apt-get install scalapack-doc scalapack-mpi-test
+    scalapack-pvm-test scalapack-test-common  libscalapack-pvm1
+    libscalapack-pvm-dev libscalapack-openmpi1 libopenblas-base
+    libopenblas-dev libmlpack-dev libblas-dev libblas3 liblapack-dev
+    liblapack-doc liblapack-doc-man liblapack3 libopenmpi-dev
+    libmeep-mpich2-dev
+    # The FFTW-3
+    $ sudo apt-get install libfftw3-bin libfftw3-dbg libfftw3-dev
+      libfftw3-doc libfftw3-double3 libfftw3-long3 libfftw3-quad3
+      libfftw3-single3 cl-fftw3 fftw-dev fftw-docs libfftw3-3
+      libfftw3-mpi-dev libfftw3-mpi3 
+\end{verbatim}
+
+\item Copy the appropriate Template from the scripts folder into simple\_user\_input.pm
+\item Modify the \$SIMPLE\_PATH to match the SIMPLE library
+  installation path.
+\begin{verbatim}
+    $SIMPLE_PATH={root path to the library}
+\end{verbatim}
+\item Modify the paths of the compilers if needed, same as
+  item~(\ref{compilers},\ref{paths}) in Section~\ref{inst_mac}.
+
+\begin{verbatim}
+    $CC_COMPILER = {default (Ubuntu): /usr/local/bin/gcc-4.9}
+    $GCC_COMPILER = {default (Ubuntu): /usr/local/bin/g++-4.9}
+    $MPI_F_COMPILER = {default (Ubuntu): /usr/local/bin/mpif90}
+    $FCOMPILER = {default (Ubuntu): /usr/local/bin/gfortran-4.9}
+\end{verbatim}
+\item Modify the paths in the same way as
+  item~(\ref{compilers},\ref{paths}) in section~\ref{inst_mac}, if
+  needed for the
+
+\begin{verbatim}
+    $MPI_DIR={path to the mpi directory, default:/usr}
+    $MPI_DIR_INCLUDE="/usr/include/mpi";
+    $FFTW_LIB={path for to the FFTW lib, default: /usr/lib/x86_64-linux-gnu}
+    $FFTW_INC={path to the include for the FFTW, default:
+    /usr/local/fftw/3.3.4-gcc/include/} cluster dependent
+
+    $OBJDIR={path to the object compiled files, default: obj/GFORTgpu}
+    $MODDIR={path to the .mod files, default: obj/GFORTgpu}
+\end{verbatim}
+  
+\item \label{perlMake}At this point you are ready to compile SIMPLE
+  library provided you have the correct compilers installed on your
+  system using   
+\begin{verbatim}
+    >$ perl Makefile_genAll.pl
+\end{verbatim}
+
+\end{enumerate}
+
+\subsection{Installing on Linux cluster}
+\label{inst_clusters_linux}
+
+The installation on a Linux cluster is essentially the same as on Linux
+workstation with the exception that one needs to load the
+appropriate modules before hand for installation {\bf{and}}
+execution. On a typical SLURM cluster it would be
+
+\begin{verbatim}
+    $ module load fftw/3.3.4-gcc
+    $ module load gcc/4.9.1
+    $ module load lapack/3.4.2 
+\end{verbatim}
+
+Once this is done the compilation is the same as explained in
+Secs.~\ref{inst_mac} and ~\ref{inst_linux}.
+
+
+
+\subsection{Installation of the binaries on MacOSX}
+\label{inst_binaries_macosx}
+
+Once the BinaryInstall.gz file has been downloaded:
+\begin{enumerate}
+%unzipping
+\item {\label{unzip_bin}} Untar the tar ball and go into the
+  directory
+\begin{verbatim}
+     $ tar xvfz BinaryInstall_MacOSX.tar.gz
+     $ cd BinaryInstall_MacOSX
+\end{verbatim}
+%copying compilers to root dir
+\item {\label{copy_2root_inst}} Once in the directory, as a super user, the
+  compilers for GNU chain tool version 4.9, if not already installed
+  need to be installed.
+\begin{verbatim}
+    $ sudo cp gcc-4.9-bin.tar.gz  gfortran-4.9-bin.tar.gz /
+    $ cd /
+\end{verbatim}
+\item In the root folder, the two files need to be uncompressed. Start
+with the gcc, followed by gfortran:
+\begin{verbatim}
+    $ sudo tar xvfz gcc-4.9-bin.tar.gz
+    $ sudo tar xvfz gfortran-4.9-bin.tar.gz
+\end{verbatim}
+This will install the compilers in the /usr/local/bin folder and insert
+the correct files in the /ust/local/lib, along with the header files
+in the /usr/local/include. The /usr/local/bin folder typically looks
+like
+
+\begin{verbatim}
+$ ls /usr/local/bin/g*
+g++*            gcc-nm*         getwarranty.py* gsl-histogram*
+g77*            gcc-ranlib*     gfortran*       gsl-randist*
+gcc*            gcov*           gif2tiff*
+gcc-ar*         gcov-tool*      gsl-config*
+\end{verbatim}
+and if the version of the compiler is queried, it should show 4.9 version:
+\begin{verbatim}
+$ /usr/local/bin/gcc --version
+gcc (GCC) 4.9.2 20141029 (prerelease)
+Copyright (C) 2014 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+$ /usr/local/bin/g++ --version
+g++ (GCC) 4.9.2 20141029 (prerelease)
+Copyright (C) 2014 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+$ /usr/local/bin/gfortran --version
+GNU Fortran (GCC) 4.9.2 20141029 (prerelease)
+Copyright (C) 2014 Free Software Foundation, Inc.
+
+GNU Fortran comes with NO WARRANTY, to the extent permitted by law.
+You may redistribute copies of GNU Fortran
+under the terms of the GNU General Public License.
+For more information about these matters, see the file named COPYING
+\end{verbatim}
+
+\item {\label{inst_fftw}} Step~\ref{copy_2root_inst} installed the GNU
+  compilers in the correct location. Next the FFTW library needs to be
+  correctly installed on the system. We recommend the fftw-3.3.4 for
+  best results. For this part of the installation, it is best to
+  create a temporary directory to perform this task, for example in
+  $\sim$/Downloads folder for example or simply in a temp folder away from
+  the ./BinaryInstall\_MacOSX local folder
+
+\begin{verbatim}
+    $ cp fftw-3.3.4.tar.gz ~/Downloads
+    $ cd ~/Downloads
+    $ tar xvfz fftw-3.3.4.tar.gz
+    $ cd fftw-3.3.4
+\end{verbatim}
+
+Before the library can be installed it needs to be configured for the
+local system and typical level of precision required. It is
+recommended that one installs float, single, double, long and
+quad-precision, as well as enabling threads and OpenMP such that all
+precision are covered. More options are available and can be viewed
+using the command:
+\begin{verbatim}
+    $ ./configure --help
+\end{verbatim}
+The configure script, make and make install need to be executed as a
+superuser for each configuration
+\begin{verbatim}
+    #float
+    $ sudo ./configure CC=/usr/local/bin/gcc --enable-float
+                --enable-threads --enable-openmp
+    $ sudo make
+    $ make install
+    #single precision
+    $ sudo ./configure CC=/usr/local/bin/gcc --enable-single 
+                --enable-threads --enable-openmp
+    $ sudo make
+    $ sudo make install
+    #double precision
+    $ sudo ./configure CC=/usr/local/bin/gcc --enable-double
+                --enable-threads --enable-openmp
+    $ sudo make
+    $ sudo make install
+    #long double
+    $ sudo ./configure CC=/usr/local/bin/gcc --enable-long-double
+                --enable-threads --enable-openmp
+    $ sudo make
+    $ sudo make install
+    #quad precision
+    $ sudo ./configure CC=/usr/local/bin/gcc --enable-quad-precision
+                --enable-threads --enable-openmp
+    $ sudo make
+    $ sudo make install
+\end{verbatim}
+Once this is done the installation can be verified as in
+item~\ref{fftw_inst} so that in the /usr/local/lib folder the libraries
+appear as such:
+\begin{verbatim}
+$ ls /usr/local/lib/*fftw*
+libfftw3.a            libfftw3f_threads.a   libfftw3q.a
+libfftw3.la*          libfftw3f_threads.la* libfftw3q.la*
+libfftw3_threads.a    libfftw3l.a           libfftw3q_omp.a
+libfftw3_threads.la*  libfftw3l.la*         libfftw3q_omp.la*
+libfftw3f.a           libfftw3l_omp.a       libfftw3q_threads.a
+libfftw3f.la*         libfftw3l_omp.la*     libfftw3q_threads.la*
+libfftw3f_omp.a       libfftw3l_threads.a
+libfftw3f_omp.la*     libfftw3l_threads.la*
+\end{verbatim}
+
+\item {\label{env_path}} Make sure that the environment path for the
+  SIMPLE library has been set correctly in the ~/.bashrc by adding the
+  following lines, i.e. if these has not already been added. 
+
+\begin{verbatim}
+#Simple path
+export SIMPLE_HOME={...path to the folder...}/MacOSX_binaries
+export SIMPLEBIN=$SIMPLE_HOME/bin
+export SIMPLEBINTESTS=$SIMPLE_HOME/bin/bin_tests
+export PATH=$PATH:$SIMPLEBIN:$SIMPLEBINTESTS:$SIMPLE_HOME/scripts
+export PATH=$PATH:~/bin:.
+\end{verbatim}
+
+\item {\label{run_checks}} Once all successfully done, it is possible
+  to use the binaries in the ./bin and ./bin\_tests folders and be able to run
+  the check for the library using the following command:
+\begin{verbatim}
+    $ csh launch_checks.csh
+\end{verbatim}
+If everything launches and runs properly, the SIMPLE library, is ready
+for image processing.
+\end{enumerate}
+
+
+\subsection{Installation of the binaries on MacOSX using the automated
+  script}
+\label{inst_auto_binaries_macosx}
+
+The library also provides a self contained package that will do the
+full installation in an automated way. Download the tar ball package
+and untar it in a directory of your choice 
+\begin{verbatim}
+    $ tar xvfz Instal_Simple_MacOSX_binaries_ball.tar
+\end{verbatim}
+Then change directory to where it has been untared
+\begin{verbatim}
+    $ cd {path to/}Instal_Simple_MacOSX_binaries
+\end{verbatim}
+The fully self contained script contains the installer and all of the
+binaries necessary to use the SIMPLE library as well as the all the
+checks currently in place.
+
+This installation requires to have administration rights to be
+successful. Since it will install GNU compilers version 4.9 and a full
+installation of the highly optimized Fast Fourier Transform library
+(fftw-3.4.4) in the /usr/local/bin and /usr/local/lib respectively.
+
+To proceed with the installation the user needs to execute the script
+using c-shell (csh), in its current location (i.e.: ./) and specify the
+{\bf{full path of the target location}} for the installation (If the
+username is Foo for example the username will be replaced by Foo).
+\begin{verbatim}
+    $ csh install_MacOSX_binaries_prod.csh /Users/{username}/Simple
+\end{verbatim}
+It is recommended to execute this script as a super user that is for
+example will install SIMPLE library in $\sim$/Simple.
+\begin{verbatim}
+    $ sudo csh install_MacOSX_binaries_prod.csh /Users/{username}/Simple
+\end{verbatim}
+The script will then prompt the user with:
+\begin{verbatim}
+! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! !
+!                                                                       !
+!            Script install_MacOSX_binarties.csh installs the binaries  !
+!                and dependencies:                                      !
+!                     1. gcc-4.9-bin.tar.gz                             !
+!                     2. gfortran-4.9-bin.tar.gz                        !
+!                     3. fftw-3.3.4.tar.gz                              !
+!  Usage: csh install_MacOSX_binarties.csh {target path ex: ./ ./Simple}!
+! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! !
+!                        WARNING...                                     !
+!                                                                       !
+!   This script will install GNU chain tool, gcc, g++ version 4.9:      !
+!   cpp  g++  gcc  gcc-ar  gcc-nm  gcc-ranlib  gcov  gfortran           !
+!             in: /usr/local/bin/                                       !
+!   It wil also configure, compile and install fftw-3.4.4 for           !
+! float, double, long-double and quad-precision with threads and OpenMp !
+!             in: /usr/local/lib/                                       !
+!                                                                       !
+!   This will replace previous version previously installed             !
+       Do you wish to proceed: yes or no?
+\end{verbatim}
+
+Enter yes or no depending on the desired choice.
+
+The user admin password is then prompted for to proceed if the command
+has been launched
+\begin{verbatim}
+    $ csh install_MacOSX_binaries_prod.csh /Users/{username}/Simple
+\end{verbatim}
+instead. Let it finish, this may take a while because it needs to
+compile all of the fftw-3.4.4 library for most commonly used
+precision. You will only need to do this once, if successful on the
+first attempt.
+
+The scripts installs and checks for the correctness of the installed
+compilers (i.e. gcc, g++ and gfortran) in /usr/local/bin folder and
+the fftw-3.4.4 in the /usr/local/lib folder. It should look like as in
+Sec.{\ref{compilers}} on successful completion of the sript,
+
+\begin{verbatim}
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+-                       Checking installation ...                       -
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+-                                                                       -
+-                      fftw-3.3.4 library ...                           -
+-                                                                       -
+libfftw3.a	    libfftw3f.a	         libfftw3l.a	      libfftw3q.a
+libfftw3.la	    libfftw3f.la	 libfftw3l.la	      libfftw3q.la
+libfftw3_omp.a	    libfftw3f_omp.a	 libfftw3l_omp.a      libfftw3q_omp.a
+libfftw3_omp.la	    libfftw3f_omp.la     libfftw3l_omp.la     libfftw3q_omp.la
+libfftw3_threads.a  libfftw3f_threads.a  libfftw3l_threads.a  libfftw3q_threads.a
+libfftw3_threads.la libfftw3f_threads.la libfftw3l_threads.la libfftw3q_threads.la
+-                                                                       -
+-    GNU compilers /usr/local/bin/{gcc-4.9,g++-4.9, gfortran-4.9} ...   -
+-                                                                       -
+     g++  gcc    gfortran {... plus other files ...}
+
+gcc (GCC) 4.9.2 20141029 (prerelease)
+Copyright (C) 2014 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+g++ (GCC) 4.9.2 20141029 (prerelease)
+Copyright (C) 2014 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+GNU Fortran (GCC) 4.9.2 20141029 (prerelease)
+Copyright (C) 2014 Free Software Foundation, Inc.
+
+GNU Fortran comes with NO WARRANTY, to the extent permitted by law.
+You may redistribute copies of GNU Fortran
+under the terms of the GNU General Public License.
+For more information about these matters, see the file named COPYING
+\end{verbatim}
+A successful completion of script provides the final steps for
+successful installation and should show:
+\begin{verbatim}
+    ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! !
+    !                                                                       !
+    !            You now need to add the environment variable in            !
+    !                your ~/.bashrc or shell rc:                            !
+    !                                                                       !
+                                 in bash                                     
+    #Simple path                                                             
+    export SIMPLE_HOME={full path to: }/Users/{username}/Simple/MacOSX_binaries
+    export SIMPLEBIN=$SIMPLE_HOME/bin                                        
+    export SIMPLEBINTESTS=$SIMPLE_HOME/bin/bin_tests                         
+    export PATH=$PATH:$SIMPLEBIN:$SIMPLEBINTESTS:$SIMPLE_HOME/scripts        
+                                                                             
+                         in shell or cshell or tshell                        
+    #Simple path (in cshell)                                                 
+    setenv SIMPLE_HOME {full path to: }/Users/{username}/Simple/MacOSX_binaries
+    setenv SIMPLEBIN $SIMPLE_HOME/bin                                        
+    setenv SIMPLEBINTESTS $SIMPLE_HOME/bin/bin_tests                         
+    setenv PATH=(${SIMPLEBIN} ${SIMPLEBINTESTS} ${SIMPLE_HOME}/scripts $PATH 
+
+                    source ~/.basrc or source ~/.cshrc                   
+    !                                                                       !
+        Check ownership of installation path: ls -al /Users/{username}/Simple
+             if it has root and not {username} then change it by:                 
+    !                                                                       !
+                    sudo chown -R {username} /Users/{username}/Simple
+    !                                                                       !
+    !          You may now start using SIMPLE from command line             !
+          and go to: cd /Users/{username}/Simple/MacOSX_binaries
+    !                       to launch the checks                             
+    !                                                                       !
+                            csh launch_checks.csh                            
+    !                                                                       !
+    ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! !
+\end{verbatim}
+The user then needs to check the owner ship of the target location,
+\begin{verbatim}
+    $ ls -al /Users/{username}/Simple
+\end{verbatim}
+although it will work as is, however the ownership will most likely be of
+``root'' i.e.:
+\begin{verbatim}
+    $ ls -al /Users/{username}/Simple
+    total 0
+    drwxr-xr-x   3 root       staff  102 20 May 12:48 .
+    drwxr-xr-x+ 26 {username} staff  884 20 May 13:36 ..
+    drwxr-xr-x   7 root       staff  238 20 May 14:03 MacOSX_binaries
+\end{verbatim}
+It is recommended that it is changed to the ``username''
+ownership. To do that one needs to   
+\begin{verbatim}
+    $ sudo chown -R {username} /Users/{username}/Simple
+\end{verbatim}
+then it should look like
+\begin{verbatim}
+    $ ls -al /Users/{username}/Simple
+    total 0
+    drwxr-xr-x   3 {username} staff  102 20 May 12:48 .
+    drwxr-xr-x+ 26 {username} staff  884 20 May 13:36 ..
+    drwxr-xr-x   7 {username} staff  238 20 May 14:03 MacOSX_binaries
+\end{verbatim}
+Once this is done the final and most important step in all of SIMPLE
+installation is the addition of the paths for the environment
+variable. This enables the user to run simple commands from the
+prompt anywhere in the user directory structure and allows to run the
+checks from the /Users/{username}/Simple/MacOSX\_binaries
+directory. Depending on the shell used one wants to add in the .bashrc
+\begin{verbatim}
+    #Simple path in .bashrc                                                            
+    export SIMPLE_HOME={full path to: }/Users/{username}/Simple/MacOSX_binaries
+    export SIMPLEBIN=$SIMPLE_HOME/bin
+    export SIMPLEBINTESTS=$SIMPLE_HOME/bin/bin_tests
+    export PATH=$PATH:$SIMPLEBIN:$SIMPLEBINTESTS:$SIMPLE_HOME/scripts
+\end{verbatim}
+and in ordinary cshell or tshell shell
+\begin{verbatim}
+    #Simple path (in cshell, .cshrc)
+    setenv SIMPLE_HOME {full path to: }/Users/{username}/Simple/MacOSX_binaries
+    setenv SIMPLEBIN $SIMPLE_HOME/bin
+    setenv SIMPLEBINTESTS $SIMPLE_HOME/bin/bin_tests
+    setenv PATH=(${SIMPLEBIN} ${SIMPLEBINTESTS} ${SIMPLE_HOME}/scripts $PATH
+\end{verbatim}
+Do not forget to source the bashrc by typing
+\begin{verbatim}
+    #for bash
+    $ source ~/.bashrc
+    #for cshell
+    $source ~/.cshrc
+\end{verbatim}
+Once this is done it is possible to launch the checks in
+$\sim$/Simple/MacOSX\_binaries: 
+\begin{verbatim}
+    $ cd /Users/{username}/Simple/MacOSX_binaries                                         
+    $ csh launch_checks.csh
+\end{verbatim}
+If the checks passes then the full installation is complete and
+successful and the user is ready to use SIMPLE library and processing
+some Cryo-EM images.
+
+\section{Prime package documentation}
+
+\subsection{Command Line Dictionary}
+\begin{tabular}{ll}
+\texttt{acf}&{yes|no{no}}\\
+\texttt{amsklp}&{low-pass}\\
+\texttt{angerr}&{angular}\\
+\texttt{append}&{yes|no{no}}\\
+\texttt{arad}&{atomic}\\
+\texttt{astigerr}&{astigmatism}\\
+\texttt{avg}&{yes|no}\\
+\texttt{bfac}&{bfactor(in}\\
+\texttt{bfacerr}&{bfactor}\\
+\texttt{bin}&{yes|no{no}}\\
+\texttt{box}&{image}\\
+\texttt{boxconvsz}&{box}\\
+\texttt{boxcovolution(pixels){512}>nthr}&{nr}\\
+\texttt{boxtab}&{boxfiles.txt}\\
+\texttt{center}&{yes|no{no}}\\
+\texttt{chunksz}&{size}\\
+\texttt{class}&{symmetry}\\
+\texttt{clip}&{clip2box{256}}\\
+\texttt{clustvalid}&{yes|homo|no|{no}}\\
+\texttt{comlindoc}&{shc\_clustering\_nclsX.txt}\\
+\texttt{compare}&{yes|no{no}}\\
+\texttt{corner}&{corner}\\
+\texttt{countvox}&{yes|no{no}}\\
+\texttt{cs}&{spherical}\\
+\texttt{ctf}&{yes|no|flip|mul{no}}\\
+\texttt{ctfreslim}&{resolution}\\
+\texttt{ctfsq}&{yes|no{no}}\\
+\texttt{ctfstats}&{yes|no{no}}\\
+\texttt{cube}&{side}\\
+\texttt{deferr}&{defocuserror(in}\\
+\texttt{deflim}&{minimum}\\
+\texttt{defocus}&{defocus(in}\\
+\texttt{deftab}&{text}\\
+\texttt{dens}&{density(e.g.}\\
+\texttt{discrete}&{yes|no{no}}\\
+\texttt{diversify}&{yes|no{yes}}\\
+\texttt{doclist}&{list}\\
+\texttt{dynlp}&{yes|no{yes}}\\
+\texttt{e1}&{1st}\\
+\texttt{e2}&{2nd}\\
+\texttt{e3}&{3d}\\
+\texttt{edge}&{edge}\\
+\texttt{eo}&{yes|no{yes}}\\
+\texttt{errify}&{yes|no{no}}\\
+\texttt{even}&{yes|no{no}}\\
+\texttt{extrmode}&{all|ind{all}}\\
+\texttt{fbody}&{body}\\
+\texttt{filetab}&{movies.txt}\\
+\texttt{filetab=<imagelist.txt>fbody}&{body}\\
+\texttt{find}&{Fourier}\\
+\texttt{fname}&{smat.bin}\\
+\texttt{frac}&{fraction}\\
+\texttt{fraca}&{frac}\\
+\end{tabular}
+
+\begin{tabular}{ll}
+\texttt{fracdeadhot}&{fraction}\\
+\texttt{fracv}&{yes|no{no}}\\
+\texttt{fraczero}&{fraction}\\
+\texttt{frameavg}&{nr}\\
+\texttt{fromp}&{from}\\
+\texttt{fsc}&{fsc\_state1.bin}\\
+\texttt{ft2img}&{yes|no{no}}\\
+\texttt{guinier}&{yes|no{no}}\\
+\texttt{hfun}&{sigm|tanh|lin{sigm}}\\
+\texttt{hist}&{var2plot}\\
+\texttt{hp}&{high-pass}\\
+\texttt{index>xfel}&{yes|no{no}}\\
+\texttt{infile}&{text}\\
+\texttt{inner}&{inner}\\
+\texttt{jumpsz}&{time}\\
+\texttt{kv}&{acceleration}\\
+\texttt{label}&{class|state|subclass{class}}\\
+\texttt{lp}&{low-pass}\\
+\texttt{lpstart}&{low-pass}\\
+\texttt{lpstop}&{stay}\\
+\texttt{masscen}&{yes|no{no}}\\
+\texttt{maxits}&{max}\\
+\texttt{minp}&{cluster}\\
+\texttt{mirr}&{no|2d|3d{no}}\\
+\texttt{mkcavgs}&{yes|no{no}}\\
+\texttt{moldiam}&{molecular}\\
+\texttt{msk}&{mask}\\
+\texttt{mskfile}&{mask.ext}\\
+\texttt{msktype}&{hard|soft{soft}}\\
+\texttt{mul}&{shift}\\
+\texttt{mw}&{molecular}\\
+\texttt{nboot}&{nr}\\
+\texttt{ncls}&{nr}\\
+\texttt{ndiscrete}&{nr}\\
+\texttt{ndocs}&{nr}\\
+\texttt{neg}&{yes|no}\\
+\texttt{newbox}&{scaled}\\
+\texttt{nframes}&{nr}\\
+\texttt{noise}&{yes|no{no}}\\
+\texttt{noise\_norm}&{yes|no}\\
+\texttt{norm}&{yes|no{no}}\\
+\texttt{npart}&{nr}\\
+\texttt{npeaks}&{number}\\
+\texttt{nptcls}&{nr}\\
+\texttt{nran}&{size}\\
+\texttt{nspace}&{nr}\\
+\texttt{nstates}&{nr}\\
+\texttt{nthr}&{nr}\\
+\texttt{nvars}&{nr}\\
+\texttt{nvox}&{nr}\\
+\texttt{odd}&{yes|no{no}}\\
+\texttt{oritab}&{clustering}\\
+\texttt{oritab2}&{2nd}\\
+\end{tabular}
+
+\begin{tabular}{ll}
+\texttt{oritab=oritab}&{alignment}\\
+\texttt{outfile}&{output}\\
+\texttt{outstk}&{output}\\
+\texttt{outstk=<keep.ext>nthr}&{nr}\\
+\texttt{outvol}&{outvol.ext}\\
+\texttt{pgrp}&{cn|dn|t|o|i{c1}}\\
+\texttt{phrand}&{yes|no{no}}\\
+\texttt{plot}&{yes|no{no}}\\
+\texttt{pspecsz}&{box}\\
+\texttt{rankify}&{yes|no}\\
+\texttt{readwrite}&{yes|no{no}}\\
+\texttt{refine}&{no|shift|oasis|het|shc{no}}\\
+\texttt{refs}&{initial\_references.ext}\\
+\texttt{restart}&{yes|no{no}}\\
+\texttt{rnd}&{yes|no{no}}\\
+\texttt{round}&{yes|no{no}}\\
+\texttt{scale}&{scale}\\
+\texttt{shalgn}&{yes|no{no}}\\
+\texttt{sherr}&{shift}\\
+\texttt{smpd}&{sampling}\\
+\texttt{snr}&{signal2noise}\\
+\texttt{soften}&{yes|no{no}}\\
+\texttt{speckind}&{amp|square|phase|real|log|sqrt{sqrt}}\\
+\texttt{split}&{nr}\\
+\texttt{srch\_inpl}&{yes|no{yes}**less}\\
+\texttt{startit}&{start}\\
+\texttt{state}&{state}\\
+\texttt{stats}&{yes|no|print{no}}\\
+\texttt{stk}&{input}\\
+\texttt{stk2}&{cavgs2del.ext}\\
+\texttt{stk3}&{orig\_cavgs.ext}\\
+\texttt{thres}&{homogeneity}\\
+\texttt{top}&{stop}\\
+\texttt{trs}&{origin}\\
+\texttt{vis}&{yes|no{no}}\\
+\texttt{vol1}&{invol.ext}\\
+\texttt{vol2}&{invol2.ext}\\
+\texttt{vollist}&{list}\\
+\texttt{voltab}&{file}\\
+\texttt{voltab2}&{file}\\
+\texttt{which\_iter}&{iteration}\\
+\texttt{width}&{pixels}\\
+\texttt{xdim}&{x}\\
+\texttt{xfel}&{yes|no{no}}\\
+\texttt{xsh}&{x}\\
+\texttt{ydim}&{y}\\
+\texttt{ysh}&{y}\\
+\texttt{zero}&{yes|no{no}}\\
+\texttt{zsh}&{z}\\
+\end{tabular}
+
+\subsubsection{Utility Program: {\it{simple\_automask}}}
+\label{automask}
+{\it{simple\_automask}} is a program for solvent flattening of a volume (MRC or SPIDER). The algorithm for background removal is based on low-pass filtering and binarization. First, the volume is low- pass filtered to \texttt{amsklp}. A binary volume is then generated by assigning foreground pixels (=1) based on the volume calculated from the molecular weight, assuming a protein density of 1.43 g/mL. A real-space low-pass filter softens the edge of the resulting binary volume before multiplying it with the unmasked input volume to generate the flattened map.\\
+{\it{SIMPLE\_AUTOMASK vol1=<invol.ext> [vol2=<invol2.ext> etc.] smpd=<sampling}}
+{\it{distance(in A)> [mw=<molecular weight(in kD)>] [amsklp=<low-pass limit(in}]}
+{\it{A)\{20\}>] [nthr=<nr of OpenMP threads\{1\}>]}}
+{\it{** less commonly used **}}
+{\it{[edge=<edge size for softening molecular envelope(in pixels)\{3\}>]}}
+{\it{[dens=<density(e.g. 9.368 Da/A3 4 gold clusters)\{0.\}>] [nvox=<nr of voxels in}}
+{\it{mask\{0\}>] [bin=<yes|no\{no\}>]}}
+
+\subsubsection{Utility Program: {\it{simple\_bootstrap}}}
+\label{bootstrap}
+{\it{simple\_bootstrap} is a program for bootstrap sampling.}\\
+{\it{SIMPLE\_BOOTSTRAP infile=<text file with numbers> [nboot=<nr of bootstrap}}
+{\it{samples\{5000\}>]}}
+
+\subsubsection{Utility Program: {\it{simple\_boxconvs}}}
+\label{boxconvs}
+{\it{SIMPLE\_BOXCONVS [stk=<input stack>] [filetab=<imagelist.txt>]fbody=<body of}}
+{\it{output stack> [boxconvsz=<box size for boxcovolution(pixels)\{256\}>]}}
+{\it{[startit=<start from here>]}}
+
+\subsubsection{Utility Program: {\it{simple\_cavgassemble}}}
+\label{cavgassemble}
+{\it{simple\_cavgassemble}} is a program that assembles class averages when the clustering program ({\it{simple\_prime2\_cluster}) has been executed in distributed mode.}\\
+{\it{SIMPLE\_CAVGASSEMBLE stk=<stack.ext> ncls=<nr clusters> msk=<mask radius(in}}
+{\it{pixels)> npart=<nr partitions> which\_iter=<iteration nr> [nthr=<nr openMP}}
+{\it{threads\{1\}>] [inner=<inner mask radius(in pixels)>] [width=<pixels falloff}}
+{\it{inner mask\{10\}>]}}
+
+\subsubsection{Utility Program: {\it{simple\_check2d\_conv}}}
+\label{check2d_conv}
+{\it{SIMPLE\_CHECK2D\_CONV smpd=<sampling distance(in A)> box=<image size(in}}
+{\it{pixels)> oritab=<clustering doc> nptcls=<nr particle images> [lp=<low-pass}}
+{\it{limit\{20\}>]}}
+
+\subsubsection{Utility Program: {\it{simple\_check3D\_conv}}}
+\label{check3D_conv}
+{\it{SIMPLE\_CHECK3D\_CONV smpd=<sampling distance(in A)> box=<image size(in}}
+{\it{pixels)> oritab=<alignment doc> nptcls=<nr particle images> [lp=<low-pass}}
+{\it{limit\{20\}>] [fsc=<fsc\_state1.bin>] [pgrp=<cn|dn|t|o|i\{c1\}>] [nspace=<nr}}
+{\it{reference sections\{1000\}>] [find=<Fourier index>]}}
+{\it{[refine=<no|shift|oasis|het|shc\{no\}>]}}
+
+\subsubsection{Utility Program: {\it{simple\_check\_box}}}
+\label{check_box}
+{\it{simple\_check\_box} is a program for checking the image dimensions of MRC and SPIDER stacks and volumes\\}
+{\it{SIMPLE\_CHECK\_BOX [stk=<ptcls.ext>] [vol1=<vol.ext>]}}
+
+\subsubsection{Utility Program: {\it{simple\_check\_conv}}}
+\label{check_conv}
+{\it{SIMPLE\_CHECK\_CONV smpd=<sampling distance(in A)> box=<image size(in pixels)>}}
+{\it{oritab=<alignment doc> nptcls=<nr particle images> [lp=<low-pass limit\{20\}>]}}
+{\it{[fsc=<fsc\_state1.bin>] [pgrp=<cn|dn|t|o|i\{c1\}>] [nspace=<nr reference}}
+{\it{sections\{1000\}>] [find=<Fourier index>]}}
+{\it{[refine=<no|shift|oasis|het|shc\{no\}>]}}
+
+\subsubsection{Utility Program: {\it{simple\_check\_nptcls}}}
+\label{check_nptcls}
+{\it{simple\_check\_nptcls} is a program for checking the number of images in MRC and SPIDER stacks}\\
+{\it{SIMPLE\_CHECK\_NPTCLS stk=<ptcls.ext>}}
+
+\subsubsection{Utility Program: {\it{simple\_clin\_smat}}}
+\label{clin_smat}
+{\it{SIMPLE\_CLIN\_SMAT stk=<stack.ext> smpd=<sampling distance(in A)> lp=<low-pass}}
+{\it{limit(in A)> ncls=<nr of clusters> msk=<mask radius(in pixels)> [hp=<high-pass}}
+{\it{limit(in A)>] [nthr=<nr openMP threads\{1\}>] [trs=<origin shift(in}}
+{\it{pixels)\{0\}>] [restart=<yes|no\{no\}>]}}
+
+\subsubsection{Application Program: {\it{simple\_cluster}}}
+\label{cluster}
+{\it{simple\_cluster}} is a program for image clustering based on reference-free in-plane alignment \citep{Penczek:1992aa} and probabilistic principal component analysis (PCA) for generation of feature vectors \citep{Bishop:2006}. Agglomerative hierarchical clustering (HAC) is used for grouping of feature vectors. Refinement of the clustering solution is done using center-based k-means clustering. {\it{simple\_cluster}} in-plane aligns the input image stack. Bicubic interpolation is used for shifting and rotating the stack before extraction of the pixels within the circular mask defined by mask radius \texttt{msk}. Next, the probabilistic PCA method generates feature vectors from the vectors of extracted pixels. The minimum cluster population (\texttt{minp}) prevents clusters below population \texttt{minp} to be represented by an output average.\\
+{\it{SIMPLE\_CLUSTER stk=<stack.ext> smpd=<sampling distance(in A)> ncls=<nr of}}
+{\it{clusters> msk=<mask radius(in pixels)> oritab=<PRIME3D doc> [nthr=<nr of openMP}}
+{\it{threads\{1\}>]}}
+{\it{** less commonly used **}}
+{\it{[nvars=<nr of eigen vectors\{30\}>]}}
+\\\\
+\noindent\textbf{Comments:} The setup allows for quick testing of the number of clusters. One pass produces the file \texttt{pdfile.bin} containing the matrix of all pair-wise feature vector distances. Using the optional parameter \texttt{dopca=no} in a second round of execution from the same directory will make the program read the previously generated distances and re-do the clustering using whatever settings inputted for parameters \texttt{ncls} \& \texttt{minp}. The optional parameter \texttt{oritab} is used to provide in-plane parameters for the clustering (provided by program {\it{simple\_prime}}). This option can be used for generating class averages that are going to be subjected to heterogeneity analysis. The default setting uses 30 eigenvectors, if you are \textit{not} inputting in-plane parameters via optional parameter \texttt{oritab}, and 60 eigenvectors if you do input in-plane parameters. Note that the distance matrix is kept in RAM, so for large data sets you need LOTS of internal memory. This quirk can be addressed by using a random sample of the data for initial clustering by HAC. This is done by setting \texttt{nran} to some number < \texttt{nptcls}. In this setting, the HAC centres generated from the random sample are used to extend the clustering to the entire data set with k-means. This overcomes the well-known initialisation problem of k-means, and enables clustering of many hundreds of thousands of particle images. SIMPLE has been used to cluster 300,000 images with a box size of 100 using a random subset of 60,000 images on a machine with 96 GB RAM.
+
+\subsubsection{Application Program: {\it{simple\_cluster\_smat}}}
+\label{cluster_smat}
+{\it{SIMPLE\_CLUSTER\_SMAT nptcls=<nr particles> fname=<smat.bin> ncls=<max nr}}
+{\it{clusters to test> label=<class|state|subclass\{class\}> [nthr=<nr OpenMP}}
+{\it{threads\{1\}>]}}
+
+\subsubsection{Utility Program: {\it{simple\_comlin\_smat}}}
+\label{comlin_smat}
+{\it{SIMPLE\_COMLIN\_SMAT stk=<stack.ext> smpd=<sampling distance(in A)>}}
+{\it{lp=<low-pass limit(in A)> msk=<mask radius(in pixels)> [hp=<high-pass limit(in}]}
+{\it{A)>] [trs=<origin shift(in pixels)\{0\}>]}}
+
+\subsubsection{Utility Program: {\it{simple\_converter}}}
+\label{converter}
+{\it{SIMPLE\_CONVERTER [stk=<input particle stack>] [vol1=<invol.ext>]}}
+{\it{[outstk=<output particle stack>] [outvol=<outvol.ext>]}}
+
+\subsubsection{Utility Program: {\it{simple\_del\_cavgs}}}
+\label{del_cavgs}
+{\it{SIMPLE\_EXTR\_CLUSTERS stk=<cavgs\_all.ext> stk2=<cavgs2del.ext>}}
+{\it{[outstk=<output particle stack>]}}
+
+\subsubsection{Utility Program: {\it{simple\_delete}}}
+\label{delete}
+{\it{simple\_delete} is a program for deleting images based on correlation matching.}\\
+{\it{SIMPLE\_DELETE stk=<all\_imgs.ext> stk2=<imgs2del.ext>}}
+{\it{outstk=<keep.ext>[nthr=<nr of OpenMP threads\{1\}>]}}
+
+\subsubsection{Utility Program: {\it{simple\_eo\_recvol}}}
+\label{eo_recvol}
+{\it{simple\_eo\_recvol} is a program for reconstructing volumes from MRC or SPIDER stacks, given input orientations and state assignments (obtained by program {\it{simple\_prime3D}}. The algorithm is based on direct Fourier inversion with a Kaiser-Bessel (KB) interpolation kernel. This window function reduces the real-space ripple artefacts associated with direct moving window sinc interpolation. The feature sought when implementing this algorithm was to enable quick, reliable reconstruction from aligned individual particle images. The even and odd pairs are automatically reconstructed, the FSC calculated, and the Wiener filter formalism used for image restoration (CTF correction).\\
+{\it{SIMPLE\_EO\_RECVOL stk=<ptcls.ext> msk=<mask radius(in pixels)> smpd=<sampling}}
+{\it{distance(in A)> oritab=<algndoc.txt> [frac=<fraction ptcls to include\{1.\}>]}}
+{\it{[nthr=<nr openMP threads\{1\}>] [pgrp=<cn|dn|t|o|i\{c1\}>]}}
+{\it{** less commonly used **}}
+{\it{[mul=<shift multiplication factor\{1\}>] [ctf=<yes|no|flip|mul\{no\}>]}}
+{\it{[kv=<acceleration voltage(in kV)\{300.\}>] [fraca=<frac amp contrast\{0.07\}>]}}
+{\it{[cs=<spherical aberration constant(in mm)\{2.7\}>] [deftab=<text file defocus}}
+{\it{values>] [state=<state to reconstruct\{all\}>] [mw=<molecular weight(in kD)>]}}
+{\it{[amsklp=<low-pass limit(in A)\{20\}>] [edge=<edge size softening molecular}}
+{\it{envelope(in pixels)\{3\}>] [dens=<density(e.g.9.368 Da/A3 4 gold}}
+{\it{clusters)\{0.\}>] [inner=<inner mask radius(in pixels)>] [width=<pixels falloff}}
+{\it{inner mask\{10\}>]}}
+\\\\
+\noindent\textbf{Comments:} \texttt{mul} is used to scale the origin shifts if down-sampled were used for alignment, and the original images are used for reconstruction. \texttt{part; fromp; top} are used to control distributed execution of the program. This is done by {\it{distr\_simple.pl}}.  \texttt{ctf; kv; fraca; cs; deftab} are used to communicate CTF information to the program. \texttt{ctf=yes|flip|mul} turns on the Wiener restoration. If the images were pre-multiplied with CTF set \texttt{ctf=mul} or if the images were phase-flipped set \texttt{ctf=flip}. \texttt{amsklp; mw; edge} are parameters that control the solvent mask: the low-pass limit used to generate the envelope; the molecular weight of the molecule (protein assumed but it works reasonably well also for RNA; slight modification of \texttt{mw} might be needed). If you want to change the density (say you are reconstructing gold nano particles) you do that with \texttt{dens}. The \texttt{inner} parameter controls the radius of the soft-edged mask used to remove the unordered DNA/RNA core of spherical icosahedral viruses.
+
+\subsubsection{Utility Program: {\it{simple\_eo\_volassemble}}}
+\label{eo_volassemble}
+{\it{simple\_eo\_volassemble} is a program that assembles volume(s) when the reconstruction program ({\it{simple\_eo\_recvol}}) has been executed in distributed mode using {\it{distr\_simple.pl}.}\\
+{\it{SIMPLE\_EO\_VOLASSEMBLE stk=<ptcls.ext> npart=<nr partitions> msk=<mask}}
+{\it{radius(in pixels)> smpd=<sampling distance(in A)> oritab=<algndoc.txt>}}
+{\it{[nthr=<nr openMP threads\{1\}>] [mw=<molecular weight(in kD)>] [lpstop=<stay at}}
+{\it{this low-pass limit(in A)>] [inner=<inner mask radius(in pixels)>]}}
+{\it{[width=<pixels falloff inner mask\{10\}>] [xfel=<yes|no\{no\}>] [state=<state}}
+{\it{to reconstruct\{all\}>]}}
+\\\\
+\noindent\textbf{Comments:} \texttt{inner} applies a soft-edged inner mask. An inner mask is used for icosahedral virus reconstruction, because the DNA or RNA core is often unordered, and if not removed it may negatively impact the alignment. The \texttt{width} parameter controls the fall-off of the edge of the \texttt{inner} mask.
+
+\subsubsection{Application Program: {\it{simple\_extr\_clusters}}}
+\label{extr_clusters}
+{\it{SIMPLE\_EXTR\_CLUSTERS stk=<particles.ext> stk2=<selected\_cavgs.ext>}}
+{\it{stk3=<orig\_cavgs.ext> oritab=<clustering doc> [outstk=<output particle stack>]}}
+{\it{[deftab=<text file defocus values>] [extrmode=<all|ind\{all\}>]}}
+
+\subsubsection{Utility Program: {\it{simple\_extr\_ptcls}}}
+\label{extr_ptcls}
+{\it{simple\_extr\_ptcls}} is a program that extracts particle images from DDD movies using input parameters from CTFFIND4 (CTF parameterisation), unblur (drift correction) and EMAN2 (boxer). The program creates one stack per movie frame as well as a stack of corrected framesums. The movie frames are either multiplied with the CTF (\texttt{ctf=mul}) or multiplied with the sign of the CTF (\texttt{ctf=flip}) using the phase flipping  heuristic. We recommend using phase-flipped images, since the initial model production in PRIME works better with phase-flipped images. The Wiener restoration can be turned on later simply by giving the command-line argument \texttt{ctf=flip}, in which case SIMPLE uses the absolute value of the CTF in the nominator of the Wiener restoration formula. In addition to single-particle image stacks, the program produces a parameter file \texttt{extr\_ptcls\_params.txt} that can be used in conjunction with other SIMPLE programs.\\
+{\it{SIMPLE\_EXTR\_PTCLS filetab=<movies.txt> boxtab=<boxfiles.txt>}}
+{\it{smpd=<samplingdistance(in A)> [oritab=<alignment/CTF doc>] ctf=<no|flip|mul>}}
+{\it{neg=<yes|no> msk=<rough estimate particle radius(pixels)> [kv=<acceleration}}
+{\it{voltage(kV)\{300.\}>] [cs=<spherical aberration constant(mm)\{2.7\}>]}}
+{\it{[fraca=<frac amp contrast\{0.07\}>] [box=<box size(in pixels)>]}}
+{\it{[ctfreslim=<resolution limit of Thon rings(A)\{8.\}>]}}
+{\it{[noise\_norm=<yes|no\{yes\}>]}}
+
+\subsubsection{Utility Program: {\it{simple\_image\_smat}}}
+\label{image_smat}
+{\it{SIMPLE\_IMAGE\_SMAT stk=<stack.ext> smpd=<sampling distance(in A)>}}
+{\it{[lp=<low-pass limit(in A)>] [msk=<mask radius(in pixels)>] [hp=<high-pass}}
+{\it{limit(in A)>] [nthr=<nr of OpenMP threads\{1\}>]}}
+
+\subsubsection{Utility Program: {\it{simple\_iminfo}}}
+\label{iminfo}
+{\it{simple\_iminfo} is a program for printing header information in MRC and SPIDER stacks and volumes}\\
+{\it{SIMPLE\_IMINFO [fname=<filename.ext>] [vol1=<invol.ext>] [stk=<instack.ext>]}}
+{\it{[box=<box size(pixels)>] [smpd=<sampling distance(in A)>]}}
+{\it{[stats=<yes|no|print\{no\}>] [readwrite=<yes|no\{no\}>] [vis=<yes|no\{no\}>]}}
+{\it{[outstk=<filename.ext>]}}
+
+\subsubsection{Utility Program: {\it{simple\_integrate\_movies}}}
+\label{integrate_movies}
+{\it{SIMPLE\_INTEGRATE\_MOVIES filetab=<movies.txt> fbody=<body of output files>}}
+{\it{smpd=<sampling distance(in A)> [oritab=<shift parameters 4 frames>]}}
+{\it{[pspecsz=<box size for boxcovolution(pixels)\{512\}>]}}
+
+\subsubsection{Utility Program: {\it{simple\_join\_ptcls}}}
+\label{join_ptcls}
+{\it{simple\_join\_ptcls} is a program for joining multiple image stacks produced during parallel simple\_extr\_ptcls execution into one}\\
+{\it{SIMPLE\_JOIN\_PTCLS stk=<sumstack\_part1.ext> nframes=<nr movie frames>}}
+{\it{npart=<nr partitions>}}
+
+\subsubsection{Utility Program: {\it{simple\_make\_cavgs}}}
+\label{make_cavgs}
+{\it{SIMPLE\_MAKE\_CAVGS stk=<stack.ext> smpd=<sampling distance(in A)> msk=<mask}}
+{\it{radius(in pixels)> ncls=<nr of clusters> [oritab=<previous clustering doc>]}}
+{\it{[which\_iter=<iteration nr>] [mul=<shift multiplication factor\{1\}>] [nthr=<nr}}
+{\it{of OpenMP threads\{1\}>] [srch\_inpl=<yes|no\{yes\}>]}}
+\\\\
+\noindent\textbf{Comments:} . The program assumes that the images have been phase-flipped, as no CTF correction by Wiener restoration is implemented yet. The random clustering and in-plane alignment will be printed in the file \texttt{make\_cavgs.txt} produced by the program. This file is used together with the initial references to execute PRIME2D in distributed mode by {\it{distr\_simple.pl}}.
+
+\subsubsection{Utility Program: {\it{simple\_map2ptcls}}}
+\label{map2ptcls}
+{\it{SIMPLE\_MAP2PTCLS stk=<particles.ext> stk2=<selected\_cavgs.ext>}}
+{\it{stk3=<orig\_cavgs.ext> oritab=<2d clustering doc> [oritab2= <prime3D shc doc>]}}
+{\it{[comlindoc=<shc\_clustering\_nclsX.txt>] [doclist=<list of oritabs for the}}
+{\it{different states>] [deftab=<text file defocus values>] [outfile=<output}}
+{\it{parameter file\{merged\_params.txt\}>] [nthr=<nr of OpenMP threads\{1\}>]}}
+
+\subsubsection{Utility Program: {\it{simple\_merge\_algndocs}}}
+\label{merge_algndocs}
+{\it{simple\_merge\_algndocs} is a program for merging alignment documents produced by PRIME/OASIS when run in distributed mode using \texttt{distr\_simple.pl}.}\\
+{\it{SIMPLE\_MERGE\_ALGNDOCS fbody=<file\_body of algndocs> nptcls=<nr of particle}}
+{\it{images> ndocs=<nr of docs> outfile=<merged alignment doc> [oritab=<previous}}
+{\it{oritab>]}}
+
+\subsubsection{Utility Program: {\it{simple\_merge\_params}}}
+\label{merge_params}
+{\it{SIMPLE\_MERGE\_PARAMS oritab=<prime2d/prime3d doc>}}
+{\it{comlindoc=<shc\_clustering\_nclsX.txt> [doclist=<list of oritabs for the}}
+{\it{different states>] [deftab=<text file defocus values>] [outfile=<output}}
+{\it{parameter file\{merged\_params.txt\}>]}}
+
+\subsubsection{Utility Program: {\it{simple\_merge\_similarities}}}
+\label{merge_similarities}
+{\it{SIMPLE\_MERGE\_SIMILARITIES nptcls=<nr particles> npart=<nr partitions>}}
+
+\subsubsection{Utility Program: {\it{simple\_multiptcl\_init}}}
+\label{multiptcl_init}
+{\it{SIMPLE\_MULTIPTCL\_INIT stk=<ptcls.ext> smpd=<sampling distance(in A)>}}
+{\it{oritab=<PRIME 3D algndoc.txt> msk=<mask radius(in pixels)> nstates=<nr states>}}
+{\it{[lp=<low-pass limit\{20\}>] [eo=<yes|no\{yes\}>] [frac=<fraction of ptcls to}}
+{\it{include\{1.\}>] [nthr=<nr of openMP threads\{1\}>] [pgrp=<cn|dn|t|o|i\{c1\}>]}}
+{\it{** less commonly used **}}
+{\it{[mul=<shift multiplication factor\{1\}>] [ctf=<yes|no|flip|mul\{no\}>]}}
+{\it{[kv=<acceleration voltage(in kV)\{300.\}>] [fraca=<frac amp contrast\{0.07\}>]}}
+{\it{[cs=<spherical aberration constant(in mm)\{2.7\}>] [deftab=<text file defocus}}
+{\it{values>] [inner=<inner mask radius(in pixels)>] [width=<pixels falloff inner}}
+{\it{mask\{10\}>]}}
+
+\subsubsection{Utility Program: {\it{simple\_npeaks}}}
+\label{npeaks}
+{\it{simple\_npeaks} is a program for checking the number of nonzero orientation weights (number of correlation peaks included in the weighted reconstruction)}\\
+{\it{SIMPLE\_NPEAKS smpd=<sampling distance(in A)> box=<image size(in pixels)>}}
+{\it{lp=<low-pass limit(A)\{20\}> [nspace=<nr of projection directions\{1000\}>]}}
+{\it{[moldiam=<molecular diameter(A)>] [pgrp=<cn|dn|t|o|i\{c1\}>]}}
+
+\subsubsection{Utility Program: {\it{simple\_nspace}}}
+\label{nspace}
+{\it{simple\_nspace} is a program for checking the theoretical resolution limit for different numbers of discrete projection directions}\\
+{\it{SIMPLE\_NSPACE moldiam=<molecular diameter (in A)>}}
+
+\subsubsection{Utility Program: {\it{simple\_orisops}}}
+\label{orisops}
+{\it{simple\_orisops}} is a program for analyzing SIMPLE orientation/parameter files (text files containing input parameters and/or parameters estimated by {\it{simple\_prime}} or {\it{simple\_oasis}.}\\
+{\it{SIMPLE\_ORISOPS [nptcls=<number of oris>] [oritab=<input alignment doc>]}}
+{\it{[oritab2=<2nd input alignment doc>] [plot=<yes|no\{no\}>] [outfile=<output}}
+{\it{alignment doc>] [e1=<1st Euler\{0\}>] [e2=<2nd Euler\{0\}>] [e3=<3d}}
+{\it{Euler\{0\}>] [trs=<origin shift(in pixels)\{0\}>] [nstates=<nr of states\{1\}>]}}
+{\it{[pgrp=<cn|dn|t|o|i\{c1\}>] [ctf=<yes|no\{no\}>] [kv=<acceleration voltage(in}}
+{\it{kV)\{300.\}>] [fraca=<frac amp contrast\{0.07\}>] [cs=<spherical aberration}}
+{\it{constant(in mm)\{2.7\}>] [defocus=<defocus(in microns)\{3.0\}>] [deftab=<text}}
+{\it{file defocus values>] [angerr=<angular error(in degrees)\{0\}>] [sherr=<shift}}
+{\it{error(in pixels)\{0\}>] [deferr=<defocuserror(in microns)\{1.0\}>]}}
+{\it{[astigerr=<astigmatism error(in microns)\{0.\}>] [even=<yes|no\{no\}>]}}
+{\it{[zero=<yes|no\{no\}>] [discrete=<yes|no\{no\}>] [ndiscrete=<nr of discrete}}
+{\it{orientations>] [state=<state 2 process>] [errify=<yes|no\{no\}>] [deftab=<text}}
+{\it{file defocus values>] [mul=<shift multiplication factor\{1\}>]}}
+{\it{[mirr=<no|2d|3d\{no\}>] [round=<yes|no\{no\}>] [xsh=<x shift(pixels)\{0\}>]}}
+{\it{[ysh=<y shift(pixels)\{0\}>] [zsh=<z shift(pixels)\{0\}>]}}
+{\it{[ctfstats=<yes|no\{no\}>] [hist=<var2plot>] [ncls=<number of clusters>]}}
+{\it{[minp=<cluster population\{10\}>] [clustvalid=<yes|homo|no|\{no\}>]}}
+{\it{[thres=<homogeneity treshold\{0.7\}>]}}
+\\\\
+\noindent\textbf{Comments:} If two orientation tables (\texttt{oritab} and \texttt{oritab2}) are inputted, the program provides statistics of the distances between the orientations in the two documents. These statistics include the sum of angular distances between the orientations, the average angular distance between the orientations, the standard deviation of angular distances, the minimum angular distance, and the maximum angular distance. If only \texttt{oritab} is inputted, there are a few options available. If \texttt{errify=yes}, then the program introduces uniform random angular errors $\in{[\texttt{-angerr,angerr}]}$, and uniform origin shift errors $\in{[\texttt{-sherr,sherr}]}$, and uniform random defocus errors $\in{[\texttt{-deferr,deferr}]}$. If $\texttt{nstates}>1$ then random states are assigned $\in{[1,\texttt{nstates}]}$. If \texttt{mirr=2d}, then the Euler angles in \texttt{oritab} are mirrored according to the relation \texttt{e1=e1, e2=180.+e2, e3=-e3}. If \texttt{mirr=3d}, then the Euler angles in \texttt{oritab} are mirrored according to the relation $R=M(M\cdot{}R)$, where $R$ is the rotation matrix calculated from the Euler angle triplet and $M$ is a 3D reflection matrix (like a unit matrix but with the 3,3-component sign swapped). If \texttt{e1}, \texttt{e2}, or \texttt{e3} is inputted, the orientations in \texttt{oritab} are rotated correspondingly. If you input \texttt{state} as well, you rotate \textit{only} the orientations assigned to state \texttt{state}. If \texttt{mul} is defined, you multiply the origin shifts with \texttt{mul}. If \texttt{zero=yes}, then the shifts are zeroed. If none of the above described parameter are defined, and \texttt{oritab} is still defined, the program projects the 3D orientation into the xy-plane and plots the resulting vector (this is useful for checking orientation coverage). If \texttt{oritab} is not defined, the program generates random Euler angles $e1\in{[0,360]}$, $e2\in{[0,180]}$, and $e3\in{[0,360]}$ and random origin shifts $x\in{[\texttt{-trs,yrs}]}$ and $y\in{[\texttt{-trs,yrs}]}$. If \texttt{ndiscrete} is set to an integer number > 0, the orientations produced are randomly sampled from the set of \texttt{ndiscrete} quasi-even projection directions, and the in-plane parameters are assigned randomly, as described above. If \texttt{even=yes}, then all \texttt{nptcls} orientations are assigned quasi-even projection directions, and random in-plane parameters. If \texttt{nstates} is set to some integer number > 0, then states are assigned randomly $\in{[1,\texttt{nstates}]}$. If \texttt{zero=yes} in this mode of execution, the projection directions are zeroed and only the in-plane parameters are kept intact. If \texttt{errify=yes} and \texttt{astigerr} defined, then uniform random astigmatism errors are introduced $\in{[\texttt{-astigerr,astigerr}]}$.
+
+\subsubsection{Utility Program: {\it{simple\_powerspec}}}
+\label{powerspec}
+{\it{SIMPLE\_POWERSPEC stk=<input stack> smpd=<sampling distance(in A)> fbody=<body}}
+{\it{of output stack> [pspecsz=<box size for boxcovolution(pixels)\{512\}>]}}
+{\it{[speckind=<amp|square|phase|real|log|sqrt\{sqrt\}>]}}
+
+\subsubsection{Utility Program: {\it{simple\_powerspecs}}}
+\label{powerspecs}
+{\it{SIMPLE\_POWERSPECS [stk=<input stack>] [filetab=<imagelist.txt>] smpd=<sampling}}
+{\it{distance(in A)> fbody=<body of output stack> [pspecsz=<box size for}}
+{\it{boxcovolution(pixels)\{512\}>]}}
+{\it{[speckind=<amp|square|phase|real|log|sqrt\{sqrt\}>] [startit=<start from here>]}}
+{\it{[lp=low-pass limit(in A)\{6\}] [clip=<clip2box\{256\}>]}}
+
+\subsubsection{Application Program: {\it{simple\_prime2}}}
+\label{prime2}
+{\it{current date and time: May 11 2016 14:59:23.104 SIMPLE\_PRIME2 stk=<stack.ext>}}
+{\it{[vol1=<invol.ext>] [vol2=<refvol\_2.ext> etc.] smpd=<sampling distance(in A)>}}
+{\it{[msk=<mask radius(in pixels)>] [oritab=<previous alignment doc>] [trs=<origin}}
+{\it{shift(in pixels)\{0\}>] [lp=<low-pass limit\{20\}>] [dynlp=<yes|no\{yes\}>]}}
+{\it{[nstates=<nstates to reconstruct>] [frac=<fraction of ptcls to include\{1\}>]}}
+{\it{[mw=<molecular weight(in kD)>] [nthr=<nr of OpenMP threads\{1\}>]}}
+{\it{[startit=<start iteration>] [refine=<no|shift|shc\{no\}>] [lpstop=<stay at this}}
+{\it{low-pass limit (in A)>] [deftab=<text file defocus values>] [nspace=<nr}}
+{\it{reference sections\{1000\}>] [eo=<yes|no\{no\}>] [amsklp=<automask low-pass}}
+{\it{limit(in A)>] [pgrp=<cn|dn|t|o|i\{c1\}>] [ctf=<yes|no|flip|mul\{no\}>]}}
+{\it{[kv=<acceleration voltage(in kV)\{300.\}>] [cs=<spherical aberration}}
+{\it{constant(in mm)\{2.7\}>] [fraca=<frac amp contrast\{0.07\}>] [hp=<high-pass}}
+{\it{limit(in A)>] [diversify=<yes|no\{yes\}>] [xfel=<yes|no\{no\}>]}}
+{\it{** less commonly used **}}
+{\it{[maxits=<max iterations\{100\}>] [edge=<edge size for softening molecular}}
+{\it{envelope(in pixels)\{3\}>] [noise=<yes|no\{no\}>] [npeaks=<number of nonzero}}
+{\it{orientation weights>] [dens=<density(e.g. 9.368 Da/A3 4 gold clusters)\{0.\}>]}}
+{\it{[nvox=<nr of voxels in mask\{0\}>] [inner=<inner mask radius(in pixels)>]}}
+{\it{[width=<pixels falloff inner mask\{10\}>]}}
+
+\subsubsection{Application Program: {\it{simple\_prime2\_cluster}}}
+\label{prime2_cluster}
+{\it{SIMPLE\_PRIME2\_CLUSTER stk=<stack.ext> [refs=<initial\_references.ext>]}}
+{\it{smpd=<sampling distance(in A)> lp=<low-pass limit\{20\}> [ncls=<nr of}}
+{\it{clusters\{500\})>] [msk=<mask radius(in pixels)>] [oritab=<previous clustering}}
+{\it{doc>] [trs=<origin shift(in pixels)\{0\}>] [nthr=<nr of OpenMP threads\{1\}>]}}
+{\it{[startit=<start iteration>] [hp=<high-pass limit(in A)>]}}
+{\it{** less commonly used **}}
+{\it{[maxits=<max iterations\{100\}>] [inner=<inner mask radius(in pixels)>]}}
+{\it{[width=<pixels falloff inner mask\{10\}>]}}
+
+\subsubsection{Application Program: {\it{simple\_prime2D}}}
+\label{prime2D}
+{\it{simple\_prime2D}} is a reference-free 2D alignment/clusterimng algorithm adopted from the prime3D probabbilistic \textit{ab initio} 3D reconstruction algorithm. It i assumed that the images are phase-flipped images for clustering with prime2D (phase flipping can be done with {\it{simple\_stackops}}). Do \textit{not} search the origin shifts initially, when the cluster centers are of of low quality. If your images are far off centre, use {\it{simple\_stackops}} with option \texttt{shalgn=yes} instead to shiftalign the images beforehand (the algorithm implemented is the same as EMAN's \texttt{cenalignint} program). Use {\it{distr\_simple.pl}, described below, for distributed PRIME2D execution.}\\
+{\it{SIMPLE\_PRIME2D stk=<stack.ext> smpd=<sampling distance(in A)> msk=<mask}}
+{\it{radius(in pixels)> ncls=<nr of clusters> [refs=<initial\_references.ext>]}}
+{\it{[lp=<low-pass limit\{20\}>] [oritab=<previous clustering doc>] [trs=<origin}}
+{\it{shift(in pixels)\{0\}>] [nthr=<nr of OpenMP threads\{1\}>] [startit=<start}}
+{\it{iteration>] [hp=<high-pass limit(in A)>] [srch\_inpl=<yes|no\{yes\}>]}}
+{\it{** less commonly used **}}
+{\it{[maxits=<max iterations\{500\}>] [inner=<inner mask radius(in pixels)>]}}
+{\it{[width=<pixels falloff inner mask\{10\}>]}}
+\\\\
+\noindent\textbf{Comments:} Since the search is probabilistic, we figured that an elegant convergence criterion could be formulated based on the variance of the distribution of orientations assigned to each image. This works well for asymmetrical reconstructions, but for symmetrical reconstructions the variance increases towards the end of the run, when the shape most consistent with the point group is being established. Note that we do not assume any point-group symmetry in the initial runs. However, the {\it{simple\_symsrch}} program (described below) can be used to align the reconstruction to its symmetry axis so that future searches can be restricted to the asymmetric unit in refinement (see section \ref{recsym}, below). Less commonly used, and less obvious input parameters are \texttt{maxits}, which controls the maximum number of iterations executed
+
+\subsubsection{Application Program: {\it{simple\_prime2D\_init}}}
+\label{prime2D_init}
+{\it{SIMPLE\_PRIME2D\_INIT stk=<stack.ext> smpd=<sampling distance(in A)> msk=<mask}}
+{\it{radius(in pixels)> ncls=<nr of clusters> [nthr=<nr of OpenMP threads\{1\}>]}}
+\\\\
+\noindent\textbf{Comments:} . The program assumes that the images have been phase-flipped, as no CTF correction by Wiener restoration is implemented yet. The random clustering and in-plane alignment will be printed in the file \texttt{prime2D\_startdoc.txt} produced by the program. This file is used together with the initial references to execute PRIME2D in distributed mode by {\it{distr\_simple.pl}}.
+
+\subsubsection{Application Program: {\it{simple\_prime3D}}}
+\label{prime3D}
+{\it{simple\_prime3D}} is an \textit{ab inito} reconstruction/refinement program based on probabilistic projection matching. PRIME is shorthand for PRobabilistic Initial 3D Model Generation for Single-Particle Cryo-Electron Microscopy. You should use phase-flipped images for initial model production with PRIME (phase flipping can be done with {\it{simple\_stackops}}). Do \textit{not} search the origin shifts initially, when the model is of very low quality. If your images are far off centre, use {\it{simple\_stackops}} with option \texttt{shalgn=yes} instead to shiftalign the images beforehand (the algorithm implemented is the same as EMAN's \texttt{cenalignint} program). We recommend running the first round of PRIME with the default dynamic resolution stepping \texttt{dynlp=yes}. The \texttt{dynlp} option implements a heuristic resolution weighting/update scheme. The initial low-pass limit is set so that each image receives ten nonzero orientation weights. When quasi-convergence has been reached, the limit is updated one Fourier index at the time until PRIME reaches the condition where six nonzero orientation weights is assigned to each image. FSC-based filtering is unfortunately not possible to do in the \textit{ab initio} reconstruction step, because when the orientations are mostly random, the FSC overestimates the resolution. Once the initial model has converged, we recommend start searching the shifts (by setting \texttt{trs} to some nonzero value), apply the FSC for resolution-weighting (by setting \texttt{eo=yes}), and turn on the Wiener restoration by setting \texttt{ctf=yes|flip|mul} where \texttt{yes} instructs PRIME to take care of all CTF correction, \texttt{flip} indicates that the images have been phase-flipped beforehand and \texttt{mul} indicates that the images have been multiplied with the CTF beforehand. To use Wiener restoration you also need to input CTF parameters, for example via \texttt{deftab=defocus\_values.txt}. Remember that the defocus values should be given in microns and the astigmatism angle in degrees (one row of the file \texttt{defocus\_values.txt} may look like: \texttt{dfx=3.5  dfy=3.3  angast=20.0}). Note that we do not assume any point-group symmetry in the initial runs. However, the {\it{simple\_symsrch}} program (described below) can be used to align the reconstruction to its symmetry axis so that future searches can be restricted to the asymmetric unit in refinement (see section \ref{recsym}, below). Less commonly used, and less obvious input parameters are \texttt{nspace}, which controls the number of reference projections, \texttt{amsklp}, which controls the low-pass limit used in the automask routine, \texttt{maxits}, which controls the maximum number of iterations executed, \texttt{pgrp}, which controls the point-group symmetry, assuming that the starting volume is aligned to its principal symmetry axis, \texttt{edge}, which controls the size of the softening edge in the automask routine. <comment/end>\\
+{\it{current date and time: May 11 2016 14:59:23.145 SIMPLE\_PRIME3D}}
+{\it{stk=<stack.ext> [vol1=<invol.ext>] [vol2=<refvol\_2.ext> etc.] smpd=<sampling}}
+{\it{distance(in A)> [msk=<mask radius(in pixels)>] [oritab=<previous alignment}}
+{\it{doc>] [trs=<origin shift(in pixels)\{0\}>] [lp=<low-pass limit\{20\}>]}}
+{\it{[dynlp=<yes|no\{yes\}>] [nstates=<nstates to reconstruct>] [frac=<fraction of}}
+{\it{ptcls to include\{1\}>] [mw=<molecular weight(in kD)>] [nthr=<nr of OpenMP}}
+{\it{threads\{1\}>] [startit=<start iteration>]}}
+{\it{[refine=<no|shc|neigh|shcneigh\{no\}>] [lpstop=<stay at this low-pass limit (in}}
+{\it{A)>] [deftab=<text file defocus values>] [nspace=<nr reference}}
+{\it{sections\{1000\}>] [eo=<yes|no\{no\}>] [amsklp=<automask low-pass limit(in A)>]}}
+{\it{[pgrp=<cn|dn|t|o|i\{c1\}>] [ctf=<yes|no|flip|mul\{no\}>] [kv=<acceleration}}
+{\it{voltage(in kV)\{300.\}>] [cs=<spherical aberration constant(in mm)\{2.7\}>]}}}
+{\it{[fraca=<frac amp contrast\{0.07\}>] [hp=<high-pass limit(in A)>]}
+{\it{[diversify=<yes|no\{yes\}>] [xfel=<yes|no\{no\}>]}}
+{\it{** less commonly used **}}
+{\it{[maxits=<max iterations\{100\}>] [edge=<edge size for softening molecular}}
+{\it{envelope(in pixels)\{3\}>] [noise=<yes|no\{no\}>] [npeaks=<number of nonzero}}
+{\it{orientation weights>] [dens=<density(e.g. 9.368 Da/A3 4 gold clusters)\{0.\}>]}}
+{\it{[nvox=<nr of voxels in mask\{0\}>] [inner=<inner mask radius(in pixels)>]}}
+{\it{[width=<pixels falloff inner mask\{10\}>]}}
+
+\subsubsection{Application Program: {\it{simple\_prime3D\_init}}}
+\label{prime3D_init}
+{\it{SIMPLE\_PRIME3D\_INIT stk=<stack.ext> smpd=<sampling distance(in A)> msk=<mask}}
+{\it{radius(in pixels)> [nspace=<nr reference sections\{1000\}>] [nran=<size of}}
+{\it{random sample>] [lp=<low-pass limit(in A)>] [nthr=<nr OpenMP threads\{1\}>]}}
+{\it{** less commonly used **}}
+{\it{[pgrp=<cn|dn|t|o|i\{c1\}>] [npeaks=<nr nonzero orientation weights\{1\}>]}}
+{\it{[ctf=<yes|no|flip|mul\{no\}>] [kv=<acceleration voltage(in kV)\{300.\}>]}}
+{\it{[fraca=<frac amp contrast\{0.07\}>] [cs=<spherical aberration constant(in}}
+{\it{mm)\{2.7\}>] [deftab=<text file with defocus values>] [inner=<inner mask}}
+{\it{radius(in pixels)>] [width=<pixels falloff inner mask\{10\}>]}}
+{\it{[xfel=<yes|no\{no\}>]}}
+\\\\
+\noindent\textbf{Comments:} If the data set is large (>5000 images), generating a random model can be quite slow. To speedup, set \texttt{nran} to some smaller number, resulting in \texttt{nran} images selected randomly for reconstruction. If you want to override the automatically determined feasible region size (the number of nonzero orientation weights per image) you can set \texttt{npeaks} to any number that you wish. Just as in the other reconstruction programs, there is the option of using CTF information for Wiener restoration. You communicate defocus values via \texttt{deftab}. This can be useful to do even if you are using phase-flipped images for initial model production, which by the way you should do. The defocus values will then be printed together with the other orientation information the file \texttt{prime3D\_startdoc.txt} produced by the program. This file is used together with the initial volume to execute PRIME3D in distributed mode by {\it{distr\_simple.pl}}, so if you have the defocus values there already you can turn on the Wiener restoration when the model is close to convergence, simply by adding \texttt{ctf=flip} to the command line. It is critical to inform SIMPLE that the images have been phase-flipped so that the $|CTF|$ value can be used in replacement of CTF. If the CTF correction is not working as intended you will see dark shadows in projections generated from the map.
+
+\subsubsection{Utility Program: {\it{simple\_print\_fsc}}}
+\label{print_fsc}
+{\it{simple\_print\_fsc} is a program for printing the binary FSC files produced by PRIME2/OASIS}\\
+{\it{SIMPLE\_PRINT\_FSC smpd=<sampling distance(in A)> box=<image size(in pixels)>}}
+{\it{fsc=<fsc\_state1.bin>}}
+
+\subsubsection{Utility Program: {\it{simple\_projvol}}}
+\label{projvol}
+{\it{simple\_projvol} is a SIMPLE program for projecting a volume using interpolation in Fourier space. Input is a SPIDER or MRC volume. Output is a stack of projection images of the same format as the inputted volume.}\\
+{\it{SIMPLE\_PROJVOL vol1=<invol.ext> smpd=<sampling distance(in A)> [nspace=<nr of}}
+{\it{projs\{1000\}>] [outstk=<ouput stack>] [oritab=<SIMPLE alignment doc>]}}
+{\it{[nthr=<nr of openMP threads\{1\}>] [rnd=<yes|no\{no\}>] [trs=<origin shift(in}}
+{\it{pixels)\{0\}>] ** less commonly used ** [pgrp=<cn|dn|t|o|i\{c1\}>]}}
+{\it{[ctf=<yes|no|flip|mul\{no\}>] [kv=<acceleration voltage(in kV)\{300.\}>]}}
+{\it{[fraca=<frac amp contrast\{0.07\}>] [cs=<spherical aberration constant(in}}
+{\it{mm)\{2.7\}>] [defocus=<underfocus(in microns)\{3.\}>] [bfac=<bfactor(in}}
+{\it{A**2)\{200.\}>] [neg=<yes|no\{no\}>] [mirr=<yes|x|y|no\{no\}>] [top=<stop at}}
+{\it{this index>][xfel=<yes|no\{no\}>]}}
+\\\\
+\noindent\textbf{Comments:} Projections are generated by extraction of central sections from the Fourier volume and back transformation of the 2D FTs. \texttt{nspace} controls the number of projection images generated with quasi-even projection directions.The \texttt{oritab} parameter allows you to input the orientations that you wish to have your volume projected in. If \texttt{rnd=yes}, random rather than quasi-even projections are generated, \texttt{trs} then controls the halfwidth of the random origin shift. Less commonly used parameters are \texttt{pgrp}, which controls the point-group symmetry \texttt{c, d, t} (tetrahedral), \texttt{o} (octahedral), or \texttt{i} (icosahedral). The point-group symmetry is used to restrict the set of projections to within the asymmetric unit. \texttt{wfun} controls the window function used (\texttt{bman=Blackmann window; gau=Gaussian window; hann=Hanning window}). \texttt{alpha} is the oversampling ratio or padding factor (the volume is padded with zeroes before projection to reduce interpolation artifacts). \texttt{winsz} is the hard window half-width. \texttt{ctf=yes} allows you to apply CTF to the images, using constant defocus and no astigmatism. If you want to do this you need to define the parameters \texttt{kv, fraca, cs, defocus} and \texttt{bfac}. However, it is more convenient to use  {\it{simple\_simemimgs}} to simulate EM images. \texttt{neg} inverts the contrast of the projections. \texttt{mirr=yes} mirrors the projection by modifying the Euler angle according to the relation \texttt{e1=e1, e2=180.+e2, e3=-e3}. If \texttt{mirr=x} or \texttt{mirr=y} the projection is physically mirrored after it has been generated.
+
+\subsubsection{Utility Program: {\it{simple\_rank\_cavgs}}}
+\label{rank_cavgs}
+{\it{SIMPLE\_RANK\_CAVGS stk=<cavgs.ext> oritab=<2D clustering doc> [outstk=<ranked}}
+{\it{cavgs stack>]}}
+
+\subsubsection{Utility Program: {\it{simple\_recvol}}}
+\label{recvol}
+{\it{simple\_recvol}} is a program for reconstructing volumes from MRC and SPIDER stacks, given input orientations and state assignments (obtained by program {\it{simple\_prime3D}}). The algorithm is based on direct Fourier inversion with a Kaiser-Bessel (KB) interpolation kernel. This window function reduces the real-space ripple artifacts associated with direct moving window sinc interpolation. The feature sought when implementing this algorithm was to enable quick, reliable reconstruction from aligned individual particle images.}\\
+{\it{SIMPLE\_RECVOL stk=<ptcls.ext> smpd=<sampling distance(in A)>}}
+{\it{oritab=<algndoc.txt> msk=<mask radius(in pixels)> [lp=<low-pass limit\{20\}>]}}
+{\it{[frac=<fraction of ptcls to include\{1.\}>] [nthr=<nr of openMP threads\{1\}>]}}
+{\it{[pgrp=<cn|dn|t|o|i\{c1\}>]}}
+{\it{** less commonly used **}}
+{\it{[mw=<molecular weight(in kD)>] [amsklp=<low-pass limit(in A)\{20\}>]}}
+{\it{[mul=<shift multiplication factor\{1\}>] [ctf=<yes|no|flip|mul\{no\}>]}}
+{\it{[kv=<acceleration voltage(in kV)\{300.\}>] [fraca=<frac amp contrast\{0.07\}>]}}
+{\it{[cs=<spherical aberration constant(in mm)\{2.7\}>] [deftab=<text file defocus}}
+{\it{values>] [state=<state to reconstruct\{all\}>] [edge=<edge size for softening}}
+{\it{molecular envelope(in pixels)\{3\}>] [dens=<density(e.g.9.368 Da/A3 4 gold}}
+{\it{clusters)\{0.\}>] [inner=<inner mask radius(in pixels)>] [width=<pixels falloff}}
+{\it{inner mask\{10\}>] [mirr=<yes|no\{no\}>] [even=<yes|no\{no\}>]}}
+{\it{[odd=<yes|no\{no\}>]}}
+\\\\
+\noindent\textbf{Comments:} \texttt{mul} is used to scale the origin shifts if down-sampled were used for alignment, and the original images are used for reconstruction. \texttt{part; fromp; top} are used to control distributed execution of the program. This is done by {\it{distr\_simple.pl}}. \texttt{ctf; kv; fraca; cs; deftab} are used to communicate CTF information to the program. \texttt{ctf=yes|flip|mul} turns on the Wiener restoration. If the images were pre-multiplied with CTF set \texttt{ctf=mul} or if the images were phase-flipped set \texttt{ctf=flip}. \texttt{amsklp; mw; edge} are parameters that control the solvent mask: the low-pass limit used to generate the envelope; the molecular weight of the molecule (protein assumed but it works reasonably well also for RNA; slight modification of \texttt{mw} might be needed). If you want to change the density (say you are reconstructing gold nano particles) you do that with \texttt{dens}. The \texttt{inner} parameter controls the radius of the soft-edged mask used to remove the unordered DNA/RNA core of spherical icosahedral viruses. The \texttt{even; odd} parameters allows you to reconstruct either the even or the odd pair.
+
+\subsubsection{Utility Program: {\it{simple\_res}}}
+\label{res}
+{\it{simple\_res} is a program for checking the low-pass resolution limit for a given Fourier index.}\\
+{\it{SIMPLE\_RES smpd=<sampling distance(in A)> find=<Fourier index> box=<box size}}
+{\it{(in pixels)>}}
+
+\subsubsection{Utility Program: {\it{simple\_resrange}}}
+\label{resrange}
+{\it{simple\_resrange}} is a program for estimating the resolution range used in the heuristic resolution-stepping scheme in the PRIME initial model production procedure. The initial low-pass limit is set so that each image receives ten nonzero orientation weights. When quasi-convergence has been reached, the limit is updated one Fourier index at the time, until PRIME reaches the condition where six nonzero orientation weights is assigned to each image. FSC-based filtering is unfortunately not possible to do in the \textit{ab initio} reconstruction step, because when the orientations are mostly random, the FSC overestimates the resolution. This program is used internally by {\it{distr\_simple.pl} when executing PRIME in distributed mode. We advice you to check the the starting and stopping low-pass limits before executing prime, using this program.}\\
+{\it{SIMPLE\_RESRANGE smpd=<sampling distance(in A)> [nspace=<nr of reference}}
+{\it{sections\{1000\}>] [pgrp=<cn|dn|t|o|i\{c1\}>] [box=<image size(in pixels)>]}}
+{\it{[moldiam=<molecular diameter(in A))>]}
+\\\\
+\noindent\textbf{Comments:} The resolution range estimate depends on the molecular diameter, which is estimated by $0.7\cdot{}\texttt{box}\cdot{}\texttt{smpd}$. If you want to override this estimate, set \texttt{moldiam} to the desired value (in \AA{}). This may be necessary if your images have a lot of background "padding" (you may have included a lot of background because you are worried that the point-spread function shoots out information far beyond the boundaries of the particle). However, for starting model generation it is probably better to clip the images snugly around the particle, because smaller images equals less computation.
+
+\subsubsection{Utility Program: {\it{simple\_rndrec}}}
+\label{rndrec}
+{\it{SIMPLE\_RNDREC stk=<stack.ext> smpd=<sampling distance(in A)> msk=<mask}}
+{\it{radius(in pixels)> [nspace=<nr reference sections\{1000\}>] [nran=<size of}}
+{\it{random sample>] [lp=<low-pass limit(in A)>] [nthr=<nr OpenMP threads\{1\}>]}}
+{\it{** less commonly used **}}
+{\it{[pgrp=<cn|dn|t|o|i\{c1\}>] [npeaks=<nr nonzero orientation weights\{1\}>]}}
+{\it{[ctf=<yes|no|flip|mul\{no\}>] [kv=<acceleration voltage(in kV)\{300.\}>]}}
+{\it{[fraca=<frac amp contrast\{0.07\}>] [cs=<spherical aberration constant(in}}
+{\it{mm)\{2.7\}>] [deftab=<text file with defocus values>] [inner=<inner mask}}
+{\it{radius(in pixels)>] [width=<pixels falloff inner mask\{10\}>]}}
+{\it{[xfel=<yes|no\{no\}>]}}
+
+\subsubsection{Utility Program: {\it{simple\_select}}}
+\label{select}
+{\it{simple\_select} is a program for selecting files in table based on image correlation matching.}\\
+{\it{SIMPLE\_SELECT stk=<all\_imgs.ext> stk2=<selected\_imgs.ext>}}
+{\it{filetab=<table2selectfrom.txt> outfile=<selected\_lines.txt> [nthr=<nr of}}
+{\it{OpenMP threads\{1\}>]}}
+
+\subsubsection{Utility Program: {\it{simple\_select\_frames}}}
+\label{select_frames}
+{\it{SIMPLE\_SELECT\_FRAMES filetab=<movies.txt> fbody=<body of output files>}}
+{\it{fromp=<from frame> top=<to frame> smpd=<sampling distance(in A)>}}
+{\it{[startit=<start from here>]}}
+
+\subsubsection{Utility Program: {\it{simple\_simemimgs}}}
+\label{simemimgs}
+{\it{simple\_simemimgs} is a program for simulating cryo-EM images. It is not a very sophisticated simulator, but it is nevertheless useful for testing purposes. It does not do any multi-slice simulation, and it cannot be used for simulating molecules containing heavy atoms. It does not even accept a PDB file as an input, and tries to calculate a Coulomb potential. Input is a cryo-EM map, which we usually generate from a PDB file using EMAN's program \texttt{pdb2mrc}.} {\it{simple\_simemimgs} then projects the volume using Fourier interpolation, applies 20\% of the total noise to the images (pink noise), Fourier transforms them, and multiplies them with astigmatic CTF and B-factor. The images are inverse FTed before the remaining 80\% of the noise (white noise) is added.}\\
+{\it{SIMPLE\_SIMEMIMGS vol1=<invol.ext> smpd=<sampling distance(in A)> msk=<mask}}
+{\it{radius(in pixels)> nptcls=<number of particles> snr=<signal2noise ratio>}}
+{\it{[sherr=<shift error(in pixels)\{2\}>] [ctf=<yes|no|flip|mul\{yes\}>]}}
+{\it{[kv=<acceleration voltage(in kV)\{300.\}>] [fraca=<frac amp contrast\{0.07\}>]}}
+{\it{[cs=<spherical aberration constant(in mm)\{2.7\}>] [defocus=<defocus(in}}
+{\it{microns)\{3.0\}>] [deferr=<defocus error(in microns)\{1.0\}>]}}
+{\it{[astigerr=<astigmatism error(in microns)\{0.1\}>] [bfac=<bfactor(in}}
+{\it{A**2)\{0\}>] [bfacerr=<bfactor error(in A**2)\{0\}>] [oritab=<input alignment}}
+{\it{doc>] [outfile=<output alignment doc\{simoris.txt\}>] [outstk=<ouput}}
+{\it{stack\{simimgs.ext\}>] [nthr=<nr of OpenMP threads\{1\}>]}}
+
+\subsubsection{Utility Program: {\it{simple\_simemmovie}}}
+\label{simemmovie}
+{\it{simple\_simemmovie} is a program for simulating a DDD movie. Input is a set of projection images to place. Movie frames are then generated related by randomly shifting the base image and applying three different noise sources. Shot and detector noise is simulated as well as fixed pattern noise due to dead or hot pixels. This is necessary to simulate since any movie alignment procedure must overcome the correlation peak bias in at (0,0) due to this fixed pattern noise.}\\
+{\it{SIMPLE\_SIMEMMOVIE stk=<projs2place.ext> smpd=<sampling distance(in A)>}}
+{\it{msk=<mask radius(in pixels)> xdim=<x dimension(in pixles)> ydim=<y dimension(in}}
+{\it{pixles)> snr=<per frame signal2noise ratio> [nframes=<number of frames\{30\}>]}}
+{\it{[fracdeadhot=<fraction of dead or hot pixles\{0.01\}>] [trs=<shift error(in}}
+{\it{pixles)\{3.\}>] [kv=<acceleration voltage(in kV)\{300.\}>] [fraca=<frac amp}}
+{\it{contrast\{0.07\}>] [cs=<spherical aberrationconstant(in mm)\{2.7\}>]}}
+{\it{[defocus=<defocus(in microns)\{3.\}>] [bfac=<bfactor(in A**2)\{200\}>]}}
+{\it{[vis=<yes|no\{no\}>]}}
+
+\subsubsection{Utility Program: {\it{simple\_split\_pairs}}}
+\label{split_pairs}
+{\it{SIMPLE\_SPLIT\_PAIRS nptcls=<number of particles> npart=<number of partitions>}}
+
+\subsubsection{Utility Program: {\it{simple\_stack\_powerspecs}}}
+\label{stack_powerspecs}
+{\it{SIMPLE\_STACK\_POWERSPECS filetab=<specs.txt> smpd=<sampling distance(in A)>}}
+{\it{outstk=<powerspecs.ext> [lp=low-pass limit(in A)\{6\}] [clip=<clip2box\{256\}>]}}
+
+\subsubsection{Utility Program: {\it{simple\_stackops}}}
+\label{stackops}
+{\it{simple\_stackops} is a program that provides standard single-particle image processing routines that are applied to MRC or SPIDER stacks.}\\
+{\it{SIMPLE\_STACKOPS [stk=<stack.ext>] [stk2=<stack2.ext>] [nptcls=<nr of imgs>]}}
+{\it{[smpd=<sampling distance(in A)>] [outstk=<outstk.ext>] [split=<nr of partitions}}
+{\it{to split the stack into>] [oritab=<SIMPLE alignment doc>] [hp=<high-pass}}
+{\it{limit(in A)>](in A)>] [shalgn=<yes|no\{no\}>] [mul=<shift multiplication}}
+{\it{factor\{1\}>] [trs=<origin [lp=<low-pass limitshift(in pixels)\{3\}>]}}
+{\it{[state=<state to extract>] [frac=<fraction of ptcls to extract\{1\}>]}}
+{\it{[class=<symmetry class>] [mkcavgs=<yes|no\{no\}>] [ndiscrete=<nr of discrete}}
+{\it{orientations>] [snr=<signal2noise ratio>] [msk=<mask radius(in}}
+{\it{pixels)\{box/2\}>] [vis=<yes|no>] [bin=<binarize\{no\}>] [acf=<yes|no\{no\}>]}}
+{\it{[phrand=<yes|no\{no\}>] [fromp=<start ptcl>] [top=<stop ptcl>] [nran=<number of}}
+{\it{random images to select>] [newbox=<scaled box>] [scale=<scale factor\{1\}>]}}
+{\it{[hfun=<sigm|tanh|lin\{sigm\}>] [norm=<yes|no\{no\}>] [noise\_norm=<yes|no>]}}
+{\it{[nthr=<nr of openMP threads\{1\}>] [avg=<yes|no>] [rankify=<yes|no>]}}
+{\it{[filetab=<filenames.txt>] [stats=<yes|no\{yes\}>] [ctfreslim=<resolution limit}}
+{\it{of Thon rings\{8.\}>] [deflim=<minimum defocus(in microns)>]}}
+{\it{[fraczero=<fraction of zeroes\{0.8\}>] [ctf=<yes|no|flip|mul|abs\{no\}>]}}
+{\it{[kv=<acceleration voltage(in kV)\{300.\}>] [fraca=<frac amp contrast\{0.07\}>]}}
+{\it{[cs=<spherical aberration constant(in mm)\{2.7\}>] [deftab=<text file with}}
+{\it{defocus values>] [ft2img=<yes|no\{no\}>] [frameavg=<nr of frames to}}
+{\it{average\{0\}>] [clip=<clipped box size\{box\}>] [compare=<yes|no\{no\}>]}}
+{\it{[mirr=<no|x|y\{no\}>] [neg=<yes|no\{no\}>] [box=<image size(in pixels)>]}}
+{\it{[outfile=<output\_params.txt>] [ctfsq=<yes|no\{no\}>] [masscen=<yes|no\{no\}>]}}
+{\it{[thres=<threshold4bin[0,1]\{0.6\}>] [inner=<inner mask radius(in pixels)>]}}
+{\it{[width=<pixels falloff inner mask\{10\}>] [append=<yes|no\{no\}>]}}
+\\\\
+\noindent\textbf{Comments:} You can do many things with {\it{simple\_stackops}. Inputting two stacks of the same size results calculation of the joint Fourier Ring  Correlation (FRC) between the images. Inputting no stacks, but setting \texttt{nptcls}, results in production of \texttt{nptcls} pure noise images, unless \texttt{ctf=yes}, then CTF images are produced. Filtering is controlled by the \texttt{hp} and \texttt{lp} arguments. Two kinds of alignments are available: shift alignment and rotational alignment. If you input an alignment document (via \texttt{oritab}) \texttt{shalgn=yes} will produce a shift-aligned stack based on the inputted orientations, whereas if you do \textit{not} input an alignment document, the alignment will be done in a reference-free manner (remember to set \texttt{trs} to some nonzero value). If you want to center the images based on their center of mass, set \texttt{masscen=yes}. If you want to extract a particular state, give an alignment document (\texttt{oritab}) and set \texttt{state} to the state that you want to extract. If you want to select the fraction of best particles (according to the goal function), input an alignment doc (\texttt{oritab}) and set \texttt{frac}$\in{[0,1]}$. You can combine the \texttt{state} and \texttt{frac} options. If you want to apply noise to images, give the desired signal-to-noise ratio via \texttt{snr}. If you want to mask your images with a spherical mask with a soft falloff, set \texttt{msk} to the radius in pixels. If you want to binarize your images, set \texttt{bin=yes}. If \texttt{thres} is defined, the images are sigmoid normalised to $\in{[0,1]}$ and threshold binarized. If \texttt{thres} is not defined the foreground/background pixels are assigned by sort-means (a variant of the continuous k-means algorithm where the initial centers are obtained by sorting the real values). If you want to calculate the autocorrelation function of your images set \texttt{acf=yes}. If you want to randomise the phases of the Fourier transforms of your images, set \texttt{phrand=yes} and \texttt{lp} to the desired low-pass limit. If you want to extract a contiguous subset of particle images from the stack, set \texttt{fromp} and \texttt{top}. If you want to fish out a number of particle images from your stack at random, set \texttt{nran} to some nonzero integer number < \texttt{nptcls}. If you want to resize you images, set the desired box \texttt{newbox} < \texttt{box} or use the \texttt{scale} option. It is often convenient to use \texttt{scale} in combination with \texttt{clip} to resize images.  If you want to normalise your images, set \texttt{norm=yes}. \texttt{hfun} controls the normalisation function. With \texttt{avg=yes} the global average of the inputted stack is calculated. With \texttt{rankify=yes} the amplitudes and phases of the FT are replaced by their ranks and the images are reverse FTed. This removes the power-law dependency of the FT. With \texttt{ctf=flip} the contrast inversions due to the CTF are corrected by the infamous (but effective) phase-flipping heuristic. This requires additional input of CTF-related parameters (\texttt{kv; fraca; cs}) as well as defocus values and astigmatism angles, communicated either via \texttt{oritab} or via \texttt{deftab}. Even if you do initially phase-flip the images, which you should do for initial model production with PRIME, you can turn on the Wiener restoration later anyway, to accomplish correct weighting of information around the CTF zeroes and maximal noise reduction. \texttt{ft2img=yes} produces images of the square power spectrum of the images in \texttt{stk}. If you define \texttt{frameavg} to some integer number > 1 averages with chunk sizes of \texttt{frameavg} are produced, which may be useful for analysis of dose-fractionated image series. \texttt{clip} can be used to re-window or pad the images to a different box size. When \texttt{compare=yes}, the two inputted stacks are Fourier ring correlated. \texttt{neg} inverts the contrast of the images by multiplication with $-1$ in Fourier space. \texttt{ctfsq} applies the squared CTF to the inputted images. \texttt{inner} is for applying an inner mask with fall-off width \texttt{width}. Finally, \texttt{append} is for appending stack \texttt{stk2} with stack \texttt{stk}, so that the \texttt{stk2} images occur last in the series and the stk name is preserved.
+
+\subsubsection{Application Program: {\it{simple\_subcluster}}}
+\label{subcluster}
+{\it{simple\_subcluster stk=<input particles stack> smpd=<sampling distance(in A)>}}
+{\it{[lp=<low-pass limit\{20\}>] msk=<mask radius(in pixels)>}}
+{\it{[oritab=<particles2cavgs 2d alignment doc>] [trs=<shift limit for refinment(in}}
+{\it{pixels)\{0\}>] [nthr=<nr of OpenMP threads\{1\}>] [minp] [hp=<high-pass}}
+{\it{limit(in A)>] [oritab2=<cavgs 3d alignment doc>] [outstk=<mirrored particles}}
+{\it{stack>]}}
+{\it{** less commonly used **}}
+{\it{[maxits=<max iterations\{100\}>] [inner=<inner mask radius(in pixels)>]}}
+{\it{[width=<pixels falloff inner mask\{10\}>] [outfile=<output alignment doc>]}}
+
+\subsubsection{Application Program: {\it{simple\_symsrch}}}
+\label{symsrch}
+{\it{simple\_symsrch} is a program for searching for the principal symmetry axis of a volume reconstructed without assuming any point-group symmetry. Our philosophy is to start off without assuming any symmetry, and then analyze the reconstructed volume to identify the correct point-group symmetry. {\it{simple\_symsrch} can be used for this purpose. The program takes as input the asymmetrical reconstruction (obtained with {\it{simple\_prime2}), the alignment document for all the particle images that have gone into the reconstruction, and the desired point-group symmetry. It then projects the reconstruction in 20 (default option) quasi-even directions, uses common lines-based optimisation to identify the principal symmetry axis, applies the rotational transformation to the inputted orientations, and produces a new alignment document. Input this document to \texttt{simple\_recvol} or \texttt{simple\_eo\_recvol} together with the images and the point-group symmetry to generate a symmetrised map. If you are unsure about the point-group, you should of course test many different point-groups and compare the asymmetric map with the symmetrised maps. SIMPLE now implements most point-groups: c- and d-groups, as well as tetrahedral, octahedral, and icosahedral groups.}\\
+{\it{SIMPLE\_SYMSRCH vol1=<vol.ext> smpd=<sampling distance(in A)> oritab=<input}}
+{\it{alignment doc> pgrp=<cn|dn|t|o|i\{c1\}> outfile=<output alignment doc>}}
+{\it{lp=<low-pass limit(in A)> [amsklp=<low-pass limit for cenetring mask(in}}
+{\it{A)\{50\}>] [hp=<high-pass limit(in A)>] [nthr=<nr openMP threads\{1\}>]}}
+{\it{[nspace=<nr of projs\{20\}>] [compare=<yes|no\{no\}>]}}
+\\\\
+\noindent\textbf{Comments:} The \texttt{state} parameter allows you to apply symmetry for the given state.
+
+\subsubsection{Utility Program: {\it{simple\_tseries\_split}}}
+\label{tseries_split}
+{\it{SIMPLE\_TSERIES\_SPLIT stk=<input particle stack> oritab=oritab=<alignment doc>}}
+{\it{chunksz=<size of contigous series> jumpsz=<time step size>}}
+
+\subsubsection{Utility Program: {\it{simple\_unblur\_movies}}}
+\label{unblur_movies}
+{\it{simple\_unblur\_movies} is a program for movie alignment or unblurring. Input is a textfile with absolute paths to movie files in addition to a few obvious input parameters. Output is (x,y) shift parameters for every frame of the movie.}\\
+{\it{SIMPLE\_UNBLUR\_MOVIES filetab=<movies.txt> smpd=<sampling distance(in A)>}}
+{\it{fbody=<body of output files> [lpstart=<low-pass limit\{15\}>] [lpstop=<low-pass}}
+{\it{limit\{8\}>] [trs=<maximum halfwidth shift(in pixels)\{5\}>] [pspecsz=<box size}}
+{\it{for boxcovolution(pixels)\{512\}>][nthr=<nr of OpenMP threads\{1\}>]}}
+{\it{[startit=<start from here>]}}
+
+\subsubsection{Utility Program: {\it{simple\_volassemble}}}
+\label{volassemble}
+{\it{simple\_volassemble} is a program that assembles volume(s) when the reconstruction program ({\it{simple\_recvol}) has been executed in distributed mode.}\\
+{\it{SIMPLE\_VOLASSEMBLE stk=<ptcls.ext> npart=<nr partitions> msk=<mask radius(in}}
+{\it{pixels)> smpd=<sampling distance(in A)> oritab=<algndoc.txt> [lp=<low-pass}}
+{\it{limit\{20\}>] [nthr=<nr openMP threads\{1\}>] [find=<Fourier index>]}}
+{\it{[inner=<inner mask radius(in pixels)>] [width=<pixels falloff inner}}
+{\it{mask\{10\}>] [even=<yes|no\{no\}>] [odd=<yes|no\{no\}>] [eo=<yes|no\{no\}>]}}
+{\it{[xfel=<yes|no\{no\}>]}}
+\\\\
+\noindent\textbf{Comments:} \texttt{lp} is used to low-pass filter the assembled volume to the given resolution. \texttt{find} allows for using the integer Fourier index instead of \texttt{lp}. The \texttt{find} option is used by {\it{distr\_simple.pl}, when PRIME is executed in initial model production mode. \texttt{inner} applies a soft-edged inner mask. An inner mask is used for icosahedral virus reconstruction, because the DNA or RNA core is often unordered, and if not removed it may negatively impact the alignment. The \texttt{width} parameter controls the fall-off of the edge of the \texttt{inner} mask. \texttt{even} is used to assemble the even reconstruction. \texttt{odd} is used to assemble the odd reconstruction, and \texttt{eo} is used to assemble both the even and the odd reconstruction. Normally, you don't fiddle with these parameters, but they are used internally by {\it{distr\_simple.pl}.
+
+\subsubsection{Utility Program: {\it{simple\_volaverager}}}
+\label{volaverager}
+{\it{SIMPLE\_VOLAVERAGER vollist=<list of volumes> oritab=oritab=<state labels>}}
+
+\subsubsection{Utility Program: {\it{simple\_volops}}}
+\label{volops}
+{\it{simple\_volops} provides standard single-particle image processing routines that are applied to MRC or SPIDER volumes.}\\
+{\it{SIMPLE\_VOLOPS [vol1=<invol.ext>] [vol2=<invol2.ext>] [smpd=<sampling}}
+{\it{distance(in A)>] [outvol=<outvol.ext>] [nthr=<nr of openMP threads\{1\}>]}}}
+{\it{[phrand=<yes|no\{no\}>] [msk=<mask radius(in pixels)>] [lp=<low-pass}}}
+{\it{limit\{20\}>] [hp=<high-pass limit\{100\}>] [snr=<signal-to-noise ratio>]}}
+{\it{[center=<yes|no\{no\}>] [soften=<yes|no\{no\}>] [guinier=<yes|no\{no\}>]}}
+{\it{[bfac=<bfactor(in A**2)\{200.\}>] [edge=<edge size for softening molecular}}
+{\it{envelope(in pixels)\{3\}>] [mskfile=<mask.ext>] [countvox=<yes|no\{no\}>]}}
+{\it{[newbox=<scaled box>] [scale=<scale factor\{1\}>] [msktype=<hard|soft\{soft\}>]}}
+{\it{[inner=<inner mask radius(in pixels)>] [width=<pixels falloff inner}}
+{\it{mask\{10\}>] [cube=<side (in pixels)\{0\}>] [e1=<1st Euler\{0\}>] [e2=<2nd}}
+{\it{Euler\{0\}>] [e3=<3d Euler\{0\}>] [arad=<atomic radius(in A)>] [corner=<corner}}
+{\it{size\{0\}>] [neg=<yes|no\{no\}>] [voltab=<file table>] [voltab2=<file table>]}}
+{\it{[bin=<yes|no\{no\}>] [nvox=<nr of voxels\{0\}>] [fracv=<yes|no\{no\}>]}}
+{\it{[dens=<density(e.g.9.368 Da/A3 4 gold clusters)\{0.\}>] [xsh=<x}}
+{\it{shift(pixels)\{0\}>] [ysh=<y shift(pixels)\{0\}>] [zsh=<z shift(pixels)\{0\}>]}}
+\\\\
+\noindent\textbf{Comments:} If you input two volumes and the sampling distance, the FSC is calculated between the volumes. The FSC plot is written to STDOUT together with resolution estimates at $FSC=0.5$ and $FSC=0.143$. The volumes subjected to FSC calculation should be masked with a soft-edged (not hard-edged) mask and they should not have been subjected to any "auto" or threshold masking. If \texttt{phrand} and \texttt{lp} are given, the Fourier phases of the input volume \texttt{vol1} are randomized. \texttt{msk} is used for spherical masking with a soft (cosine edge) fall-off. \texttt{lp} and \texttt{hp} are the low-pass and high-pass limits used for filtering. To add noise to a volume, give the desired signal-to-noise ratio via \texttt{snr}. Give \texttt{center=yes} and \texttt{lp} to center the input volume according to center of mass. The 3D origin shift vector is found by low-pass filtering the volume to \texttt{lp}, binarizing the density, identifying the center of mass, and calculating the vector needed to place the center of mass in the center of the box. \texttt{soften=yes} applies a real-space low-pass filter using pixel width \texttt{edge}. \texttt{mskfile} is used for masking a volume using an externally generated mask. \texttt{countvox=yes} counts the number of foreground voxels (the binarization method is k-means). \texttt{newbox} and \texttt{scale} are used for resizing the volume. \texttt{msktype} controls the mask type (\texttt{hard} or \texttt{soft}). \texttt{inner} controls the radius of the inner mask with fall-off \texttt{width}. \texttt{cube} is used to generate a binary cube (4 testing purposes). \texttt{e1,e2,e3} is the Euler triplet used to rotate the input volume using Kaiser-Bessel interpolation in Fourier space. \texttt{corner} is used for filling in the corners of the box with binary cubes (4 testing purposes). \texttt{neg} inverts the contrast of the input volume by multiplication with $-1$ in Fourier space. \texttt{voltab} and \texttt{voltab2} are used to give text files with the names of volume files that are correlated and the nearest neighbor structure of the comparison is written to STDOUT.
+
+\subsubsection{Utility Program: {\it{simple\_volume\_smat}}}
+%\label{volume_smat}
+%{\it{SIMPLE\_VOLUME\_SMAT vollist=<list of volumes> smpd=<sampling distance(in A)>}
+%{\it{[lp=<low-pass limit(in A)>] [msk=<mask radius(in pixels)>] [hp=<high-pass}
+%{\it{limit(in A)>] [nthr=<nr of OpenMP threads\{1\}>]}
+
+\section*{References}
+
+\bibliography{Prime2bibfile}
+
+\end{document}

@@ -1,0 +1,5 @@
+cuda_defs_code: cuda_defs ;
+
+cuda_defs: fortran.o              \
+           simple_fortran.o       \
+           simple_cudnn_fortran.o ;

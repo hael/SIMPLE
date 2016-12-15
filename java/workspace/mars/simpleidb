@@ -1,0 +1,310 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Example IDB file
+
+  For information on the possibilities, see http://www.unicore.eu/documentation
+  especially
+  http://www.unicore.eu/documentation/manuals/unicore6/unicorex/xnjs-idb.html
+
+  Frederic simpleidb for the simple library gridBeans this idb must be
+  added in the simpleidb file in order to have the server to detect
+  the GridBeans.
+
+ -->
+<idb:IDB xmlns:idb="http://www.fz-juelich.de/unicore/xnjs/idb">
+
+<!-- Applications -->
+<idb:IDBApplication>
+  <idb:ApplicationName>SimplePreProc</idb:ApplicationName>
+  <idb:ApplicationVersion>2.0</idb:ApplicationVersion>
+  <jsdl:POSIXApplication xmlns:jsdl="http://schemas.ggf.org/jsdl/2005/11/jsdl-posix">
+    <jsdl:Executable>/opt/Application_folder/bin/simplePreProcWrapper.sh</jsdl:Executable>
+  </jsdl:POSIXApplication>
+</idb:IDBApplication>
+
+<idb:IDBApplication>
+  <idb:ApplicationName>SimpleEoRecVol</idb:ApplicationName>
+  <idb:ApplicationVersion>2.0</idb:ApplicationVersion>
+  <jsdl:POSIXApplication xmlns:jsdl="http://schemas.ggf.org/jsdl/2005/11/jsdl-posix">
+    <jsdl:Executable>/opt/Application_folder/bin/simpleEoRecVolWrapper.sh</jsdl:Executable>
+  </jsdl:POSIXApplication>
+</idb:IDBApplication>
+
+<idb:IDBApplication>
+  <idb:ApplicationName>SimpleEoVolAssemble</idb:ApplicationName>
+  <idb:ApplicationVersion>2.0</idb:ApplicationVersion>
+  <jsdl:POSIXApplication xmlns:jsdl="http://schemas.ggf.org/jsdl/2005/11/jsdl-posix">
+    <jsdl:Executable>/opt/Application_folder/bin/simpleEoVolAssembleWrapper.sh</jsdl:Executable>
+  </jsdl:POSIXApplication>
+</idb:IDBApplication>
+
+<idb:IDBApplication>
+  <idb:ApplicationName>SimpleStackops</idb:ApplicationName>
+  <idb:ApplicationVersion>2.0</idb:ApplicationVersion>
+  <jsdl:POSIXApplication xmlns:jsdl="http://schemas.ggf.org/jsdl/2005/11/jsdl-posix">
+    <jsdl:Executable>/opt/Application_folder/bin/simpleStackopsWrapper.sh</jsdl:Executable>
+  </jsdl:POSIXApplication>
+</idb:IDBApplication>
+
+<idb:IDBApplication>
+  <idb:ApplicationName>SimplePrime</idb:ApplicationName>
+  <idb:ApplicationVersion>2.0</idb:ApplicationVersion>
+  <jsdl:POSIXApplication xmlns:jsdl="http://schemas.ggf.org/jsdl/2005/11/jsdl-posix">
+    <jsdl:Executable>/opt/Application_folder/bin/simplePrimeWrapper.sh</jsdl:Executable>
+  </jsdl:POSIXApplication>
+</idb:IDBApplication>
+
+<!-- Custom executable (used by the Generic gridbean) -->
+  <idb:IDBApplication>
+    <idb:ApplicationName>Custom executable</idb:ApplicationName>
+    <idb:ApplicationVersion>1.0</idb:ApplicationVersion>
+    <jsdl:POSIXApplication xmlns:jsdl="http://schemas.ggf.org/jsdl/2005/11/jsdl-posix">
+      <jsdl:Executable>$EXECUTABLE</jsdl:Executable>
+      <jsdl:Argument>$ARGUMENTS?</jsdl:Argument>
+      </jsdl:POSIXApplication>
+      <idb:PreCommand>chmod +x $EXECUTABLE</idb:PreCommand>
+      <idb:PreCommand>PATH=$PATH:. ; export PATH</idb:PreCommand>
+  </idb:IDBApplication>
+
+<!-- DATE -->
+  <idb:IDBApplication>
+    <idb:ApplicationName>Date</idb:ApplicationName>
+    <idb:ApplicationVersion>1.0</idb:ApplicationVersion>
+    <jsdl:POSIXApplication xmlns:jsdl="http://schemas.ggf.org/jsdl/2005/11/jsdl-posix">
+      <jsdl:Executable>/bin/date</jsdl:Executable>
+    </jsdl:POSIXApplication>
+  </idb:IDBApplication>
+
+
+  
+    <!-- POVRay -->
+  <idb:IDBApplication>
+    <idb:ApplicationName>POVRay</idb:ApplicationName>
+     <!-- please do not change the version (bug in povray gridbean) -->
+    <idb:ApplicationVersion>3.5</idb:ApplicationVersion>
+    <jsdl:POSIXApplication xmlns:jsdl="http://schemas.ggf.org/jsdl/2005/11/jsdl-posix">
+      <jsdl:Executable>/usr/bin/povray</jsdl:Executable>
+      <jsdl:Argument Type="filename" Description="The scene definition file" MimeType="model/x-pov">+I$SOURCE?</jsdl:Argument>
+      <jsdl:Argument MimeType="image/png" >+O$TARGET?</jsdl:Argument>
+      <jsdl:Argument Type="int" Default="320" Description="Width of the rendered image">+W$WIDTH?</jsdl:Argument>
+      <jsdl:Argument Type="int" Default="200" Description="Height of the rendered image">+H$HEIGHT?</jsdl:Argument>
+      <jsdl:Argument Type="int" Description="Do antialiasing on the pixels until the difference between adjacent pixels is less than one tenth of this value.">+A$ANTIALIASING_THRESHOLD?</jsdl:Argument>
+      <jsdl:Argument Type="int" Description="Specify the initial frame number for an animation.">+KFI$INITIAL_FRAME_NUMBER?</jsdl:Argument>
+      <jsdl:Argument Type="int" Description="Specify  the  final  frame number for an animation.  This must be set to a value other than 1 in order to render multiple frames at once." DependsOn="INITIAL_FRAME_NUMBER">+KFF$FINAL_FRAME_NUMBER?</jsdl:Argument>
+      <jsdl:Argument Type="int" Description="Render a subset of frames from an animation, starting at this frame." DependsOn="INITIAL_FRAME_NUMBER">+SF$SUBSET_START?</jsdl:Argument>
+      <jsdl:Argument Type="int" Description="Render a subset of frames from an animation, stopping at this frame." DependsOn="INITIAL_FRAME_NUMBER">+EF$SUBSET_END?</jsdl:Argument>
+      <jsdl:Argument Type="double" Description="Specify the clock value for the initial frame of an animation" DependsOn="INITIAL_FRAME_NUMBER">+KI$INITIAL_CLOCK_VALUE?</jsdl:Argument>
+      <jsdl:Argument Type="double" Description="Specify the clock value for the final frame of an animation" DependsOn="INITIAL_FRAME_NUMBER">+KF$FINAL_CLOCK_VALUE?</jsdl:Argument>
+    <jsdl:Argument>$ARGUMENTS?</jsdl:Argument>
+    </jsdl:POSIXApplication>
+  </idb:IDBApplication>
+
+
+<!-- Blender -->
+  <idb:IDBApplication>
+    <idb:ApplicationName>Blender</idb:ApplicationName>
+    <idb:ApplicationVersion>2.42</idb:ApplicationVersion>
+      <jsdl:POSIXApplication xmlns:jsdl="http://schemas.ggf.org/jsdl/2005/11/jsdl-posix">
+      <jsdl:Executable>/usr/bin/blender</jsdl:Executable>
+      <jsdl:Argument Type="filename" Description="The Blender source file" MimeType="">-b $SOURCE?</jsdl:Argument>
+      <jsdl:Argument Type="string" Description="The name of the scene to be rendered (leave empty for default scene)">-S $SCENE?</jsdl:Argument>
+      <jsdl:Argument Type="choice" ValidValues="PNG BMP TGA IRIS HAMX JPEG MOVIE IRIZ RAWTGA AVIRAW AVIJPEG FRAMESERVER" Description="Output format">-F $FORMAT?</jsdl:Argument>
+      <jsdl:Argument>-x 0</jsdl:Argument>
+      <jsdl:Argument>-o //out_####.$(echo $FORMAT|tr [A-Z] [a-z])</jsdl:Argument>
+      <jsdl:Argument Type="int" Default="1" Description="Frame to render as still image">-f $FRAME?</jsdl:Argument>
+      <jsdl:Argument Type="boolean" Default="false" Description="Render an animation?" Excludes="FRAME">-a $ANIMATE?</jsdl:Argument>
+      <jsdl:Argument Type="int" Default="1" Description="Start frame for animation" DependsOn="ANIMATE">-s $START?</jsdl:Argument>
+      <jsdl:Argument Type="int" Default="100" Description="End frame for animation" DependsOn="ANIMATE">-e $END?</jsdl:Argument>
+  </jsdl:POSIXApplication>
+  </idb:IDBApplication>
+
+
+<!-- SCRIPTS -->
+
+<!-- Bash shell -->
+  <idb:IDBApplication>
+    <idb:ApplicationName>Bash shell</idb:ApplicationName>
+    <idb:ApplicationVersion>3.1.16</idb:ApplicationVersion>
+    <jsdl:POSIXApplication xmlns:jsdl="http://schemas.ggf.org/jsdl/2005/11/jsdl-posix">
+      <jsdl:Executable>/bin/bash</jsdl:Executable>
+      <jsdl:Argument>--debugger$DEBUG?</jsdl:Argument>
+      <jsdl:Argument>-v$VERBOSE?</jsdl:Argument>
+      <jsdl:Argument>$OPTIONS?</jsdl:Argument>
+      <jsdl:Argument Type="filename">-- $SOURCE?</jsdl:Argument>
+      <jsdl:Argument>$ARGUMENTS?</jsdl:Argument>
+    </jsdl:POSIXApplication>
+  </idb:IDBApplication>
+
+<!-- C shell -->
+  <idb:IDBApplication>
+    <idb:ApplicationName>C shell</idb:ApplicationName>
+    <idb:ApplicationVersion>6.14.00</idb:ApplicationVersion>
+    <jsdl:POSIXApplication xmlns:jsdl="http://schemas.ggf.org/jsdl/2005/11/jsdl-posix">
+      <jsdl:Executable>/bin/csh</jsdl:Executable>
+      <jsdl:Argument>-x$DEBUG?</jsdl:Argument>
+      <jsdl:Argument>-v$VERBOSE?</jsdl:Argument>
+      <jsdl:Argument>$OPTIONS?</jsdl:Argument>
+      <jsdl:Argument Type="filename">$SOURCE?</jsdl:Argument>
+      <jsdl:Argument>$ARGUMENTS?</jsdl:Argument>
+   </jsdl:POSIXApplication>
+  </idb:IDBApplication>
+
+<!-- Korn Shell -->
+  <idb:IDBApplication>
+    <idb:ApplicationName>Korn shell</idb:ApplicationName>
+    <idb:ApplicationVersion>Version M 1993-12-28 q</idb:ApplicationVersion>
+    <jsdl:POSIXApplication xmlns:jsdl="http://schemas.ggf.org/jsdl/2005/11/jsdl-posix">
+      <jsdl:Executable>/usr/bin/ksh</jsdl:Executable>
+      <jsdl:Argument>$OPTIONS?</jsdl:Argument>
+      <jsdl:Argument Type="filename">$SOURCE?</jsdl:Argument>
+      <jsdl:Argument>$ARGUMENTS?</jsdl:Argument>
+    </jsdl:POSIXApplication>
+  </idb:IDBApplication>
+
+<!-- Perl script -->
+  <idb:IDBApplication>
+    <idb:ApplicationName>Perl</idb:ApplicationName>
+    <idb:ApplicationVersion>5.8.8</idb:ApplicationVersion>
+    <jsdl:POSIXApplication xmlns:jsdl="http://schemas.ggf.org/jsdl/2005/11/jsdl-posix">
+      <jsdl:Executable>/usr/bin/perl</jsdl:Executable>
+      <jsdl:Argument>-d$DEBUG?</jsdl:Argument>
+      <jsdl:Argument>-d:DProf$PROFILING?</jsdl:Argument>
+      <jsdl:Argument>-c$VERBOSE?</jsdl:Argument>
+      <jsdl:Argument>$OPTIONS?</jsdl:Argument>
+      <jsdl:Argument Type="filename">-- $SOURCE?</jsdl:Argument>
+      <jsdl:Argument>$ARGUMENTS?</jsdl:Argument>
+    </jsdl:POSIXApplication>
+  </idb:IDBApplication>
+
+<!-- Python script -->
+  <idb:IDBApplication>
+    <idb:ApplicationName>Python Script</idb:ApplicationName>
+    <idb:ApplicationVersion>2.4.2</idb:ApplicationVersion>
+    <jsdl:POSIXApplication xmlns:jsdl="http://schemas.ggf.org/jsdl/2005/11/jsdl-posix">
+      <jsdl:Executable>/usr/bin/python</jsdl:Executable>
+      <jsdl:Argument>-d$DEBUG?</jsdl:Argument>
+      <jsdl:Argument>-v$VERBOSE?</jsdl:Argument>
+      <jsdl:Argument>$OPTIONS?</jsdl:Argument>
+      <jsdl:Argument Type="filename">$SOURCE?</jsdl:Argument>
+      <jsdl:Argument>$ARGUMENTS?</jsdl:Argument>
+    </jsdl:POSIXApplication>
+  </idb:IDBApplication>
+
+<!-- Resources -->
+  <idb:TargetSystemProperties>
+
+    <jsdl:Resources xmlns:jsdl="http://schemas.ggf.org/jsdl/2005/11/jsdl">
+
+<!-- CPU architecture, e.g. x86, x86_64, ia64, powerpc, sparc or other -->
+      <jsdl:CPUArchitecture>
+        <jsdl:CPUArchitectureName>x86_64</jsdl:CPUArchitectureName>
+      </jsdl:CPUArchitecture>
+<!-- Operating system (as defined by JSDL), 
+e.g. LINUX, MACOS, WINNT, AIX, -->
+      <jsdl:OperatingSystem>
+       <jsdl:OperatingSystemType>
+         <jsdl:OperatingSystemName>LINUX</jsdl:OperatingSystemName>
+       </jsdl:OperatingSystemType>
+       <jsdl:OperatingSystemVersion>2.6.28</jsdl:OperatingSystemVersion>
+       <jsdl:Description>Ubuntu GNU/Linux</jsdl:Description>
+      </jsdl:OperatingSystem>
+
+<!-- wall time for the job in seconds -->
+      <jsdl:IndividualCPUTime>
+        <!-- the 'Exact' setting is the default value -->
+        <jsdl:Exact>3600</jsdl:Exact>
+        <jsdl:Range>
+          <jsdl:LowerBound>1</jsdl:LowerBound>
+          <jsdl:UpperBound>86400</jsdl:UpperBound>
+        </jsdl:Range>
+      </jsdl:IndividualCPUTime>
+
+<!-- Memory per node (bytes) -->
+      <jsdl:IndividualPhysicalMemory>
+        <!-- the 'Exact' setting is the default value -->
+        <jsdl:Exact>268435456</jsdl:Exact>
+        <jsdl:Range>
+          <jsdl:LowerBound>1048576</jsdl:LowerBound>
+          <jsdl:UpperBound>1073741824</jsdl:UpperBound>
+        </jsdl:Range>
+      </jsdl:IndividualPhysicalMemory>
+
+<!-- CPUs per node -->
+      <jsdl:IndividualCPUCount>
+        <!-- the 'Exact' setting is the default value -->
+        <jsdl:Exact>1</jsdl:Exact>
+        <jsdl:Range>
+          <jsdl:LowerBound>1</jsdl:LowerBound>
+          <jsdl:UpperBound>1</jsdl:UpperBound>
+        </jsdl:Range>
+      </jsdl:IndividualCPUCount>
+
+<!-- Nodes -->
+      <jsdl:TotalResourceCount>
+        <!-- the 'Exact' setting is the default value -->
+        <jsdl:Exact>1</jsdl:Exact>
+        <jsdl:Range>
+          <jsdl:LowerBound>1</jsdl:LowerBound>
+          <jsdl:UpperBound>1</jsdl:UpperBound>
+        </jsdl:Range>
+      </jsdl:TotalResourceCount>
+
+<!-- total CPUs -->
+      <jsdl:TotalCPUCount>
+        <!-- the 'Exact' setting is the default value 
+             Either this OR TotalResourceCount+IndividualCPUCount should
+             have a default value. -->
+        <!--jsdl:Exact>1</jsdl:Exact-->
+        <jsdl:Range>
+          <jsdl:LowerBound>1</jsdl:LowerBound>
+          <jsdl:UpperBound>1</jsdl:UpperBound>
+        </jsdl:Range>
+      </jsdl:TotalCPUCount>
+
+    </jsdl:Resources>
+
+  </idb:TargetSystemProperties>
+ 
+ <!-- Incarnation-related properties -->
+
+ <!-- limit on the runtime of interactive scripts (seconds) -->
+ <idb:Property name="CLASSICTSI.interactive_execution.maxtime" value="7200"/>
+
+ <!-- wrapper script for scp staging support -->
+ <idb:Property name="scp-wrapper.sh" value="/opt/tsi_selected/perl/scp-wrapper.sh"/>
+
+ <!-- path to curl or similar command for doing ftp stagings
+      the configured executable is called with <exec> <URL> -o <outfile> for 
+      stage-ins and <exec> -T <infile> <URL> for stage outs -->
+ <idb:Property name="curl" value="/usr/bin/curl"/>
+
+
+ <!-- Mail configuration for supporting mailto: stage-out -->
+
+ <!-- SMTP configuration
+      This is used to send the mail from the UNICORE/X server, 
+      To send mail from the TSI host, define the 'mail-wrapper.sh' 
+      property below.
+  -->
+ <idb:Property name="mail.smtp.host" value="localhost"/>
+ <idb:Property name="mail.smtp.port" value="25"/>
+ <!-- From: address, should use something meaningful to prevent
+      receiving SMTP server to think it is spam
+ -->
+ <idb:Property name="mail.smtp.from" value="frederic@localhost"/>
+
+ <!-- authenticate to the SMTP server -->
+ <!--idb:Property name="mail.smtp.user" value="..."/-->
+ <!--idb:Property name="mail.smtp.password" value="..."/-->
+ <!-- SSL (needs extra config in xnjs.xml/xnjs_legacy.xml) -->
+ <!--idb:Property name="mail.smtp.ssl" value="true or false"/-->
+
+ <!-- define a wrapper script instead to run the mailto: stage-out on the TSI 
+      the wrapper script is expected to take three arguments:
+      mail address, filename to attach, and the mail subject line
+      This script must be accessible on the TSI host and executable for all
+      UNICORE users
+ -->
+ <!--eng:Property name="mail-wrapper.sh" value="...."/-->
+
+</idb:IDB>

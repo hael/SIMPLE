@@ -1,0 +1,63 @@
+LOGON:
+>>> ssh hael@m2-login2.massive.org.au
+
+A TYPICAL COMMAND TO SYNCHRONISE FILES FROM MASSIVE:
+rsync -auv -e ssh somedir usernameatm2.massive.org.au:~/destinationfolder/
+
+For real-time cpu and memory usage, you can directly ssh to the node and do 'top' and 'free'. Normally if you are able to ssh to a compute node if you have job running on it. The top and free is quite lightweight and it won't affect the performance too much.
+
+For the job statistical data, e.g. Max_Memory_Usage you can try
+  sacct --job=<You_JOBID> --format=JOBID,MaxVMSize
+on login node. There are other options, please
+  man sacct
+
+sinteractive --ntasks=1 --ntasks-per-socket=1 --cpus-per-task=8 --mem=32000 --qos=vip_m2 --partition=cryoem
+
+CPU topology
+cat /proc/cpuinfo
+
+srun --ntasks=1 --ntasks-per-socket=1 --cpus-per-task=8 --mem=8000 --time=0-12:0:0 --output=outfile.%j --error=errfile.%j
+
+# SRUN FOR DISTR_SIMPLE
+srun -qos=vip_m2 --partition=cryoem --ntasks=1 --cpus-per-task=1 --mem=8000 --time=1-12:0:0 distr_simple.pl blahblah > MYOUT &
+
+user_info
+
+****************************************************************************
+*                              Disk Quota                                  *
+****************************************************************************
+User Home Directory:
+
+                      USED     QUOTA     LIMIT         STATUS      GRACE
+Home                1.041G        2G      100G             OK
+
+____________________________________________________________________________
+
+Project Directory:
+
+                      USED     QUOTA     LIMIT         STATUS      GRACE
+Monash084              16K        1T    1.074T             OK
+
+HELPDESK:
+Email: help@massive.org.au
+Phone: +61 3 9902 4845
+
+ssh hael@m2-login3.massive.org.au
+
+show_cluster
+
+/usr/local/training/samples/slurm
+
+scontrol update JobID=37739 qos=vip
+scontrol update JobID=37739 partition=cryoem
+
+M3
+Hi Hans,
+At the moment your options are
+partition=m3c # for the gpu nodes
+partition=m3d # for the cpu only nodes
+
+We don't have any other qos or reservations just yet.
+
+Cheers,
+Lance

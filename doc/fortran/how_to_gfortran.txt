@@ -1,0 +1,27 @@
+gfortran, some notes
+
+## F2003 status
+get_environment_variable, move_alloc
+FLUSH
+ALLOCATABLE dummy args
+ALLOCATABLE function results
+ALLOCATABLE components of derived types
+ACCESS='stream'
+PROTECTED attribute for module components
+VALUE
+VOLATILE
+IMPORT
+Renaming of operators in the USE statement
+C interoperability
+
+For Debugging under gfortran:
+gfortran -g -fbounds-check -Wuninitialized -O -ftrapv -fimplicit-none -fno-automatic -fbacktrace -finit-real=nan
+
+For optimized code under gfortran:
+gfortran -O3 -ftree-vectorize
+
+For Debugging under ifort:
+ifort -m64 -g -debug all -check all -implicitnone -warn unused -fp-stack-check -heap-arrays -ftrapuv -check pointers -check bounds
+
+For optimized code under ifort
+ifort -m64 -fast

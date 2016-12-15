@@ -1,0 +1,68 @@
+# Makefile_macros for the g95 fortran compiler.
+
+####### The project path #####
+
+PhysSim_source=/home/Frederic-PC.linux64/SourceCode/PhysSim
+
+####### The switches #####
+
+DLIB = -DCUDA
+#DLIB = -DMKL
+DMAGMA = -DMAGMA
+
+####### The compilers paths #####
+
+CCCOMP=/usr/bin/cc
+GCC=/usr/bin/gcc
+GFORTRAN=/usr/bin/gfortran
+
+####### Modules and objects directories. #####
+
+OBJDIR=obj/GFORTgpu
+MODDIR=obj/GFORTgpu
+
+##############
+# C compiler.#
+##############
+
+CC=$(CCCOMP)
+CFLAGS= -O3 -O -DADD_ -DBENCH $(DLIB)
+CCLIB=$(CC) -c $(CFLAGS) -I $(MODDIR)                                                            \
+                         -I $(PhysSim_source)/gpu
+
+################
+# C++ compiler.#
+################
+
+CPP=$(GCC)
+CPPFLAGS= -O3 -DADD_ $(DMAGMA) $(DLIB)
+CPPCLIB=$(CPP) -c $(CPPFLAGS) -I $(MODDIR)                                                             \
+                              -I $(PhysSim_source)/testCode
+
+
+#######################
+# Fortran 77 compiler.#
+#######################
+
+F77C=$(GFORTRAN)
+F77FLAGS=-O3 -cpp
+F77CLIB=$(F77C) -c $(F77FLAGS)
+
+#######################
+# Fortran 90 compiler.#
+#######################
+
+# $(DLIB)
+F90C=$(GFORTRAN)
+F90FLAGS=-ffree-form -cpp -O3  -fno-second-underscore  -DBENCH $(DMAGMA) $(DLIB)
+F90FLAGS77=-ffixed-form -cpp -O3 -fPIC -fno-second-underscore -DBENCH $(DMAGMA) $(DLIB)
+F90CLIB=$(F90C) -c $(F90FLAGS) -I .                        \
+                               -I $(MODDIR)                \
+                               -J $(MODDIR)
+
+
+F90CLIB77=$(F90C) -c $(F90FLAGS77) -I .                        \
+                                   -I $(MODDIR)                \
+                                   -J $(MODDIR)
+
+F90POST=

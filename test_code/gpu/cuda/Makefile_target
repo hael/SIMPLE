@@ -1,0 +1,50 @@
+cuda_test_code: cuda_test      \
+                testfunc       \
+                classes        \
+                corr_calc      \
+                error_handlers \
+                wavelets       \
+                corr_calc_opt  ;
+
+cuda_test: simple_polarft_gpu_c.o            \
+           zz2dgemm_ElmtWs_tesla_N_N.o       \
+           zz2dgemm_ElmtWs_tesla_T_N.o       \
+           zz2dgemm_ElmtWs_tesla_N_T.o       \
+           zz2dgemm_ElmtWs_tesla_T_T.o       \
+           zz2dgemm_ElmtWs_tesla_gpu.o       \
+           zz2dgemm_ElmtWs_tesla_sumsq_N_N.o \
+           zz2dgemm_ElmtWs_tesla_sumsq_T_T.o \
+           zz2dgemm_ElmtWs_tesla_sumsq_gpu.o ;
+
+testfunc: ;
+
+classes: ;
+
+corr_calc: simple_polarft_corr_gpu_c.o \
+           simple_polarft_corr_gpu.o   \
+           polarft_corr_Helpr_gpu.o    \
+           polarft_corr_Helpr_gpu_c.o  \
+           polarft_corr_Hadmr_gpu.o    \
+           polarft_corr_Hadmr_N_N.o    \
+           polarft_corr_Hadmr_F_N.o    \
+           polarft_corr_Hadmr_P_N.o    \
+           polarft_corr_Hadmr_X_N.o    \
+           polarft_gencorrAll_gpu.o    \
+           polarft_gencorrAll_Z_N.o    \
+           polarft_multi-GPUs_gpu.o    \
+           polarft_multi-GPUs_Z_M.o    ;
+
+error_handlers: simple_ErrorHandler.o  ;
+
+wavelets: Global_wavelets.o      \
+          waveletsD_c.o          \
+          waveletsD.o            \
+          wavelets_Coefficient.o \
+          wavelets_FilterCoefs.o \
+          wavelets_TransForm1D.o \
+          wavelets_TransForm2D.o \
+          wavelets_TransFormCm.o \
+          wavelets_Convoluters.o ;
+
+corr_calc_opt: polarft_krnl-Opti_gpu.o    \
+               polarft_krnl-Opti_O_N.o    ;

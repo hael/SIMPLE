@@ -1,0 +1,121 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">
+
+<!--Converted with LaTeX2HTML 2002-2-1 (1.71)
+original version by:  Nikos Drakos, CBLU, University of Leeds
+* revised and updated by:  Marcus Hennecke, Ross Moore, Herb Swan
+* with significant contributions from:
+  Jens Lippmann, Marek Rouchal, Martin Wilck and others -->
+<HTML>
+<HEAD>
+<TITLE>Program: simple_prime3D</TITLE>
+<META NAME="description" CONTENT="Program: simple_prime3D">
+<META NAME="keywords" CONTENT="simple21manual">
+<META NAME="resource-type" CONTENT="document">
+<META NAME="distribution" CONTENT="global">
+
+<META NAME="Generator" CONTENT="LaTeX2HTML v2002-2-1">
+<META HTTP-EQUIV="Content-Style-Type" CONTENT="text/css">
+
+<LINK REL="STYLESHEET" HREF="simple21manual.css">
+
+<LINK REL="next" HREF="node37.html">
+<LINK REL="previous" HREF="node35.html">
+<LINK REL="up" HREF="node33.html">
+<LINK REL="next" HREF="node37.html">
+</HEAD>
+
+<BODY >
+<!--Navigation Panel-->
+<A NAME="tex2html566"
+  HREF="node37.html">
+<IMG WIDTH="37" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="next"
+ SRC="file:/sw/share/lib/latex2html/icons/next.png"></A> 
+<A NAME="tex2html562"
+  HREF="node33.html">
+<IMG WIDTH="26" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="up"
+ SRC="file:/sw/share/lib/latex2html/icons/up.png"></A> 
+<A NAME="tex2html556"
+  HREF="node35.html">
+<IMG WIDTH="63" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="previous"
+ SRC="file:/sw/share/lib/latex2html/icons/prev.png"></A> 
+<A NAME="tex2html564"
+  HREF="node1.html">
+<IMG WIDTH="65" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="contents"
+ SRC="file:/sw/share/lib/latex2html/icons/contents.png"></A>  
+<BR>
+<B> Next:</B> <A NAME="tex2html567"
+  HREF="node37.html">Program: simple_symsrch</A>
+<B> Up:</B> <A NAME="tex2html563"
+  HREF="node33.html">Ab initio 3D reconstruction</A>
+<B> Previous:</B> <A NAME="tex2html557"
+  HREF="node35.html">Program: simple_prime3D_init</A>
+ &nbsp; <B>  <A NAME="tex2html565"
+  HREF="node1.html">Contents</A></B> 
+<BR>
+<BR>
+<!--End of Navigation Panel-->
+
+<H3><A NAME="SECTION00082300000000000000"></A>
+<A NAME="prime3D"></A>
+<BR>
+Program: <FONT COLOR="#0f75ff"><TT>simple_prime3D</TT></FONT>
+</H3>
+<FONT COLOR="#0f75ff"><TT>simple_prime3D</TT></FONT> is an <I>ab inito</I> reconstruction/refinement program based on probabilistic projection matching. PRIME is shorthand for PRobabilistic Initial 3D Model Generation for Single-Particle Cryo-Electron Microscopy. You should use phase-flipped images for initial model production with PRIME3D (phase flipping can be done with <FONT COLOR="#0f75ff"><TT>simple_stackops</TT></FONT>). Do not search the origin shifts initially, when the model is of very low quality. If your images are far off centre, use <FONT COLOR="#0f75ff"><TT>simple_stackops</TT></FONT> with option <TT>shalgn=yes</TT> instead to shiftalign the images beforehand (the algorithm implemented is the same as EMAN's <TT>cenalignint</TT> program). We recommend running the first round of PRIME with the default dynamic resolution stepping <TT>dynlp=yes</TT>. The <TT>dynlp</TT> option implements a heuristic resolution weighting/update scheme. The initial low-pass limit is set so that each image receives ten nonzero orientation weights. When quasi-convergence has been reached, the limit is updated one Fourier index at the time until PRIME reaches the condition where six nonzero orientation weights are assigned to each image. FSC-based filtering is unfortunately not possible to do in the ab initio reconstruction step, because when the orientations are mostly random, the FSC overestimates the resolution. Once the initial model has converged, we recommend start searching the shifts (by setting <TT>trs</TT> to some nonzero value), applying the FSC for resolution-weighting (by setting <TT>eo=yes</TT>). You should NOT give <TT>ctf=flip</TT> on the command line unless the model has converged. Giving <TT>ctf=flip</TT> on the command lines signal to PRIME that tou have obtain a reconstruction of decent resolution and you want to take it further by applying Wiener restoration by resolution-weighting the reocnstructed volume more accurately. In order to be able to use Wiener restoration you also need to input CTF parameters, for example via <TT>deftab=defocus_values.txt</TT>. Remember that the defocus values should be given in microns and the astigmatism angle in degrees (one row of the file <TT>defocus_values.txt</TT> may look like: <TT>dfx=3.5</TT> <TT>dfy=3.3</TT> <TT>angast=20.0</TT>).
+<PRE>
+    $ SIMPLE_PRIME3D stk=&lt;stack.ext&gt; vol1=&lt;invol.ext&gt; [vol2=&lt;refvol_2.ext&gt; etc.]}
+    smpd=&lt;sampling distance(in A)&gt; msk=&lt;mask radius(in pixels)&gt; [oritab=&lt;previous
+    alignment doc&gt;] [trs=&lt;origin shift(in pixels){0}&gt;] [lp=&lt;low-pass
+    limit{20}&gt;] [dynlp=&lt;yes|no{yes}&gt;] [nstates=&lt;nstates to reconstruct&gt;]
+    [frac=&lt;fraction of ptcls to include{1}&gt;] [mw=&lt;molecular weight(in kD)&gt;]
+    [nthr=&lt;nr of OpenMP threads{1}&gt;] [startit=&lt;start iteration&gt;]
+    [refine=&lt;no|shc|neigh|shcneigh{no}&gt;] [lpstop=&lt;stay at this low-pass limit (in
+    A)&gt;] [deftab=&lt;text file defocus values&gt;] [nspace=&lt;nr reference
+    sections{1000}&gt;] [eo=&lt;yes|no{no}&gt;] [amsklp=&lt;automask low-pass limit(in A)&gt;]
+    [pgrp=&lt;cn|dn|t|o|i{c1}&gt;] [ctf=&lt;yes|no|flip|mul{no}&gt;] [kv=&lt;acceleration
+    voltage(in kV){300.}&gt;] [cs=&lt;spherical aberration constant(in mm){2.7}&gt;]
+    [fraca=&lt;frac amp contrast{0.07}&gt;] [hp=&lt;high-pass limit(in A)&gt;]
+    [diversify=&lt;yes|no{yes}&gt;] [xfel=&lt;yes|no{no}&gt;]
+    ** less commonly used **
+    [maxits=&lt;max iterations{100}&gt;] [edge=&lt;edge size for softening molecular
+    envelope(in pixels){3}&gt;] [noise=&lt;yes|no{no}&gt;] [npeaks=&lt;number of nonzero
+    orientation weights&gt;] [dens=&lt;density(e.g. 9.368 Da/A3 4 gold clusters){0.}&gt;]
+    [nvox=&lt;nr of voxels in mask{0}&gt;] [inner=&lt;inner mask radius(in pixels)&gt;]
+    [width=&lt;pixels falloff inner mask{10}&gt;]
+</PRE>
+<B>Comments:</B> Note that we do not assume any point-group symmetry in the initial runs. However, the <FONT COLOR="#0f75ff"><TT>simple_symsrch</TT></FONT> program can be used to align the reconstruction to its symmetry axis so that future searches can be restricted to the asymmetric unit in refinement. Less commonly used and less obvious input parameters are <TT>nspace</TT>, which  controls the number of reference projections, <TT>amsklp</TT>, which controls the low-pass limit used in the automask routine, <TT>maxits</TT>, which controls the maximum number of iterations executed, <TT>pgrp</TT>, which controls the point-group symmetry, assuming that the starting volume is aligned to its principal symmetry axis, <TT>edge</TT>, which controls the size of the softening edge in the automask routine.
+
+<P>
+<HR>
+<!--Navigation Panel-->
+<A NAME="tex2html566"
+  HREF="node37.html">
+<IMG WIDTH="37" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="next"
+ SRC="file:/sw/share/lib/latex2html/icons/next.png"></A> 
+<A NAME="tex2html562"
+  HREF="node33.html">
+<IMG WIDTH="26" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="up"
+ SRC="file:/sw/share/lib/latex2html/icons/up.png"></A> 
+<A NAME="tex2html556"
+  HREF="node35.html">
+<IMG WIDTH="63" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="previous"
+ SRC="file:/sw/share/lib/latex2html/icons/prev.png"></A> 
+<A NAME="tex2html564"
+  HREF="node1.html">
+<IMG WIDTH="65" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="contents"
+ SRC="file:/sw/share/lib/latex2html/icons/contents.png"></A>  
+<BR>
+<B> Next:</B> <A NAME="tex2html567"
+  HREF="node37.html">Program: simple_symsrch</A>
+<B> Up:</B> <A NAME="tex2html563"
+  HREF="node33.html">Ab initio 3D reconstruction</A>
+<B> Previous:</B> <A NAME="tex2html557"
+  HREF="node35.html">Program: simple_prime3D_init</A>
+ &nbsp; <B>  <A NAME="tex2html565"
+  HREF="node1.html">Contents</A></B> 
+<!--End of Navigation Panel-->
+<ADDRESS>
+Hans Elmlund
+2016-05-24
+</ADDRESS>
+</BODY>
+</HTML>

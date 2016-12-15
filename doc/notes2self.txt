@@ -1,0 +1,13 @@
+rename deftab to addondoc and make it part of the make_cavgs command line
+when nr of commands are not sufficient the error message should tell what is missing
+when eo=yes is set the program should ask for fsc-file if missing & instruct better
+misspelled2mistyped & suggestion (how the fuck to parse that in Fortran???)
+make pairs from within distr_simple.pl
+print current time in distr_simple.pl output
+when similarities are merged, remove the subfiles
+implement cleanup for comlin_smat4
+should be able to start refine=shc without oritab (exhaustive projection matching)
+implement support for different modes of exection (comlin vs. prime) without having to modify user_input.pm
+rename fished oris depending on what's fished
+should be possible to start splitting from set part on cmdlin
+if there's already one distr_simple.pl running in the cwd drop out

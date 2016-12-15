@@ -1,0 +1,47 @@
+K 25
+svn:wc:ra_dav:version-url
+V 74
+/svn/mmmhpc/!svn/ver/1420/openmolgrid/common/trunk/src/test/resources/yaml
+END
+log.yaml
+K 25
+svn:wc:ra_dav:version-url
+V 82
+/svn/mmmhpc/!svn/ver/431/openmolgrid/common/trunk/src/test/resources/yaml/log.yaml
+END
+log_AgBulk.yaml
+K 25
+svn:wc:ra_dav:version-url
+V 89
+/svn/mmmhpc/!svn/ver/421/openmolgrid/common/trunk/src/test/resources/yaml/log_AgBulk.yaml
+END
+log_multiPt.yaml
+K 25
+svn:wc:ra_dav:version-url
+V 90
+/svn/mmmhpc/!svn/ver/400/openmolgrid/common/trunk/src/test/resources/yaml/log_multiPt.yaml
+END
+geometry_multiPt.cml
+K 25
+svn:wc:ra_dav:version-url
+V 95
+/svn/mmmhpc/!svn/ver/1420/openmolgrid/common/trunk/src/test/resources/yaml/geometry_multiPt.cml
+END
+time.yaml
+K 25
+svn:wc:ra_dav:version-url
+V 83
+/svn/mmmhpc/!svn/ver/421/openmolgrid/common/trunk/src/test/resources/yaml/time.yaml
+END
+input.kpt
+K 25
+svn:wc:ra_dav:version-url
+V 83
+/svn/mmmhpc/!svn/ver/475/openmolgrid/common/trunk/src/test/resources/yaml/input.kpt
+END
+log_singlePt.yaml
+K 25
+svn:wc:ra_dav:version-url
+V 91
+/svn/mmmhpc/!svn/ver/400/openmolgrid/common/trunk/src/test/resources/yaml/log_singlePt.yaml
+END

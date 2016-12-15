@@ -1,0 +1,4 @@
+utils_common_mpe_code: mpe_code ;
+
+mpe_code: mpe_log.o             \
+          clog_commset.o        ;

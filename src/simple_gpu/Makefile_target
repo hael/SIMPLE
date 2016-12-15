@@ -1,0 +1,46 @@
+src_gpu_code: cuda_gpu       \
+              invert_gpu     \
+              simple_gpu     \
+              math_gpu       \
+              polarft_gpu    \
+              genericClasses \
+              cartsian2D     \
+              deepLearning   ;
+
+cuda_gpu: simple_cuda.o ;
+
+invert_gpu: invert_gpu_utils.o            \
+            magma_zgetri_blocked_gpu-v2.o \
+            magma_dgetri_blocked_gpu-v2.o \
+            magma_get_getri_nb_gpu.o      \
+            magma_invert_gpu-v2.o         ;
+
+simple_gpu: ;
+
+math_gpu: matmul_cpu_utils.o      \
+          matmul_gpu_utils.o      \
+          matvec_gpu_utils.o      \
+          matvec_cpu_utils.o      \
+          invert_cpu_utils.o      \
+          matmul_cuda_transfers.o \
+          matmul_cuda_device.o    \
+          matvec_cuda_transfers.o \
+          matvec_cuda_device.o    \
+          simple_math_gpu.o       \
+          simple_math_gpu_c.o     \
+          gen_polar_coords_gpu.o  ;
+
+polarft_gpu: ;
+
+genericClasses: Global_polarft.o           \
+                simple_img_2D_cart_Sizes.o \
+                simple_mesh1D.o            \
+                simple_mesh1DV.o           \
+                simple_mesh3D.o            \
+                simple_pfts_Sizes.o        ;
+
+cartsian2D: carte2D_ftExt-corr_gpu.o \
+            carte2D_ftExt-corr_C_N.o \
+            carte2D_ftExt-corr_C_F.o ;
+
+deepLearning: simple_deepLearning.o  ;

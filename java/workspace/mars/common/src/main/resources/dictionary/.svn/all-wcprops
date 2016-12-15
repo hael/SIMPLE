@@ -1,0 +1,23 @@
+K 25
+svn:wc:ra_dav:version-url
+V 79
+/svn/mmmhpc/!svn/ver/465/openmolgrid/common/trunk/src/main/resources/dictionary
+END
+mmm_dictionary.xml
+K 25
+svn:wc:ra_dav:version-url
+V 98
+/svn/mmmhpc/!svn/ver/465/openmolgrid/common/trunk/src/main/resources/dictionary/mmm_dictionary.xml
+END
+dictionary.xsl
+K 25
+svn:wc:ra_dav:version-url
+V 94
+/svn/mmmhpc/!svn/ver/465/openmolgrid/common/trunk/src/main/resources/dictionary/dictionary.xsl
+END
+computationalChemistry_dictionary.xml
+K 25
+svn:wc:ra_dav:version-url
+V 117
+/svn/mmmhpc/!svn/ver/465/openmolgrid/common/trunk/src/main/resources/dictionary/computationalChemistry_dictionary.xml
+END

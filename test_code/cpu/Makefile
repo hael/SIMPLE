@@ -1,0 +1,238 @@
+##############################################
+# settings
+#
+# COMPILER = gfortran-4.9
+# CFLAGS   = -ffree-form -cpp -O3 -fno-second-underscore -fopenmp -DBENCH
+# LINK     = -lblas -llapack -lstdc++ -lpthread -lm
+#  
+# .SUFFIXES: .f90 .o 
+# .f90.o:
+#        $(COMPILER) $(CFLAGS) -c $< 
+# 
+##############################################
+# Massive settings
+# module load fftw/3.3.4-gcc ;
+# module load gcc/4.9.1 ;
+# module load lapack/3.4.2 ; 
+# module load openmpi ;
+#
+SIMPLE_SOURCE=../../
+#/home/frederic/Monash/SourceCode/Simple/Restructured/HansVersion/Simple_Restruct.projet
+XC_DIR=$(SIMPLE_SOURCE)/test_code/cpu
+
+COMDIR = $(SIMPLE_SOURCE)/obj/GFORTgpu
+OBJDIR = $(SIMPLE_SOURCE)/obj/GFORTgpu
+
+FFTW_LIB = /usr/lib/x86_64-linux-gnu
+
+COMPILER_GFORTRAN = gfortran-4.9
+CFLAGS   = -ffree-form -cpp -O3 -fno-second-underscore -fopenmp -DBENCH
+LINK     = -L $FFTW_LIB -lfftw3                   \
+           -L $FFTW_LIB -lfftw3f                  \
+           -L $FFTW_LIB -lfftw3_threads           \
+           -lblas -llapack -lstdc++ -lpthread -lm
+
+.SUFFIXES: .f90 .o 
+.f90.o:
+	$(COMPILER_GFORTRAN) $(CFLAGS) -I $(OBJDIR) -c $<
+
+COMMON = $(OBJDIR)/simple_defs.o \
+         $(OBJDIR)/matrixGetter.o \
+         $(OBJDIR)/simple_testfunction.o \
+         $(OBJDIR)/greeting_version.o \
+         $(OBJDIR)/simple_timing.o \
+         $(OBJDIR)/timming.o \
+         $(OBJDIR)/timming_c.o \
+         $(OBJDIR)/get_cpu_time_c.o \
+         $(OBJDIR)/timestamp.o \
+         $(OBJDIR)/initialu.o \
+         $(OBJDIR)/su3random.o \
+         $(OBJDIR)/su2random.o \
+         $(OBJDIR)/simple_sorting.o \
+         $(OBJDIR)/simple_textHandler.o \
+         $(OBJDIR)/get_systemQuery_cpu.o \
+         $(OBJDIR)/get_systemQuery_cpu_c.o \
+         $(OBJDIR)/simple_systemQuery_cpu.o \
+         $(OBJDIR)/simple_file_utils.o \
+         $(OBJDIR)/simple_yaml_output.o \
+         $(OBJDIR)/simple_yaml_strings.o \
+         $(OBJDIR)/simple_DataParallel_IO.o \
+         $(OBJDIR)/simple_file_defs.o \
+         $(OBJDIR)/simple_resources_defs.o \
+         $(OBJDIR)/simple_chash.o \
+         $(OBJDIR)/simple_map_reduce.o
+
+#Prarralle IO
+MAIN = testing_DataParallelIO.o
+#Inverstion Lapacks
+MAIN_SEGTRI = testing_sgetri_cpu.o
+MAIN_DEGTRI = testing_dgetri_cpu.o
+MAIN_ZEGTRI = testing_zgetri_cpu.o
+#FFT3W
+MAIN_FFT_3D_C2S_CPU = testing_FFT_3D_C2S_cpu.o
+MAIN_FFT_3D_S2C_CPU = testing_FFT_3D_S2C_cpu.o
+MAIN_FFT_3D_C2C_CPU = testing_FFT_3D_C2C_cpu.o
+
+MAIN_FFT_3D_Z2D_CPU = testing_FFT_3D_Z2D_cpu.o
+MAIN_FFT_3D_D2Z_CPU = testing_FFT_3D_D2Z_cpu.o
+MAIN_FFT_3D_Z2Z_CPU = testing_FFT_3D_Z2Z_cpu.o
+
+MAIN_FFT_2D_C2S_CPU = testing_FFT_2D_C2S_cpu.o
+MAIN_FFT_2D_S2C_CPU = testing_FFT_2D_S2C_cpu.o
+MAIN_FFT_2D_C2C_CPU = testing_FFT_2D_C2C_cpu.o
+
+MAIN_FFT_2D_Z2D_CPU = testing_FFT_2D_Z2D_cpu.o
+MAIN_FFT_2D_D2Z_CPU = testing_FFT_2D_D2Z_cpu.o
+MAIN_FFT_2D_Z2Z_CPU = testing_FFT_2D_Z2Z_cpu.o
+
+MAIN_FFT_1D_Z2Z_CPU = testing_FFT_1D_Z2Z_cpu.o
+
+#Executables
+XCS = mcDataParallelIO
+XCS_SEGTRI = mcsgetri_cpu
+XCS_DEGTRI = mcdgetri_cpu
+XCS_ZEGTRI = mczgetri_cpu
+
+XCS_FFT_3D_C2S_CPU = mcfft_3d_c2s_cpu
+XCS_FFT_3D_S2C_CPU = mcfft_3d_s2c_cpu
+XCS_FFT_3D_C2C_CPU = mcfft_3d_c2c_cpu
+
+XCS_FFT_3D_Z2D_CPU = mcfft_3d_z2d_cpu
+XCS_FFT_3D_D2Z_CPU = mcfft_3d_d2z_cpu
+XCS_FFT_3D_Z2Z_CPU = mcfft_3d_z2z_cpu
+
+XCS_FFT_2D_C2S_CPU = mcfft_2d_c2s_cpu
+XCS_FFT_2D_S2C_CPU = mcfft_2d_s2c_cpu
+XCS_FFT_2D_C2C_CPU = mcfft_2d_c2c_cpu
+
+XCS_FFT_2D_Z2D_CPU = mcfft_2d_z2d_cpu
+XCS_FFT_2D_D2Z_CPU = mcfft_2d_d2z_cpu
+XCS_FFT_2D_Z2Z_CPU = mcfft_2d_z2z_cpu
+
+XCS_FFT_1D_Z2Z_CPU = mcfft_1d_z2z_cpu
+
+#Compilations
+all: $(XCS) $(XCS_SEGTRI) $(XCS_DEGTRI) $(XCS_ZEGTRI)                  \
+     $(XCS_FFT_3D_C2S_CPU) $(XCS_FFT_3D_S2C_CPU) $(XCS_FFT_3D_C2C_CPU) \
+     $(XCS_FFT_3D_Z2D_CPU) $(XCS_FFT_3D_D2Z_CPU) $(XCS_FFT_3D_Z2Z_CPU) \
+     $(XCS_FFT_2D_C2S_CPU) $(XCS_FFT_2D_S2C_CPU) $(XCS_FFT_2D_C2C_CPU) \
+     $(XCS_FFT_2D_Z2D_CPU) $(XCS_FFT_2D_D2Z_CPU) $(XCS_FFT_2D_Z2Z_CPU) \
+     $(XCS_FFT_1D_Z2Z_CPU)
+
+mcDataParallelIO : $(COMMON) $(MAIN)
+	$(COMPILER_GFORTRAN) $(CFLAGS) -o $(XC_DIR)/mcDataParallelIO \
+        $(COMMON) $(MAIN) $(LINK)
+
+mcsgetri_cpu: $(COMMON) $(MAIN_SEGTRI)
+	$(COMPILER_GFORTRAN) $(CFLAGS) -o $(XC_DIR)/mcsgetri_cpu \
+        $(COMMON) $(MAIN) $(LINK)
+mcdgetri_cpu: $(COMMON) $(MAIN_DEGTRI)
+	$(COMPILER_GFORTRAN) $(CFLAGS) -o $(XC_DIR)/mcdgetri_cpu \
+        $(COMMON) $(MAIN) $(LINK)
+mczgetri_cpu: $(COMMON) $(MAIN_ZEGTRI)
+	$(COMPILER_GFORTRAN) $(CFLAGS) -o $(XC_DIR)/mczgetri_cpu \
+        $(COMMON) $(MAIN) $(LINK)
+
+mcfft_3d_c2s_cpu: $(COMMON) $(MAIN_FFT_3D_C2S_CPU)
+	$(COMPILER_GFORTRAN) $(CFLAGS) -o $(XC_DIR)/mcfft_3d_c2s_cpu \
+        $(COMMON) $(MAIN) $(LINK)
+mcfft_3d_s2c_cpu: $(COMMON) $(MAIN_FFT_3D_S2C_CPU)
+	$(COMPILER_GFORTRAN) $(CFLAGS) -o $(XC_DIR)/mcfft_3d_s2c_cpu \
+        $(COMMON) $(MAIN) $(LINK)
+mcfft_3d_c2c_cpu: $(COMMON) $(MAIN_FFT_3D_C2C_CPU)
+	$(COMPILER_GFORTRAN) $(CFLAGS) -o $(XC_DIR)/mcfft_3d_c2c_cpu \
+        $(COMMON) $(MAIN) $(LINK)
+
+mcfft_3d_z2d_cpu: $(COMMON) $(MAIN_FFT_3D_Z2D_CPU)
+	$(COMPILER_GFORTRAN) $(CFLAGS) -o $(XC_DIR)/mcfft_3d_z2d_cpu \
+        $(COMMON) $(MAIN) $(LINK)
+mcfft_3d_d2z_cpu: $(COMMON) $(MAIN_FFT_3D_D2Z_CPU)
+	$(COMPILER_GFORTRAN) $(CFLAGS) -o $(XC_DIR)/mcfft_3d_d2z_cpu \
+        $(COMMON) $(MAIN) $(LINK)
+mcfft_3d_z2z_cpu: $(COMMON) $(MAIN_FFT_3D_Z2Z_CPU)
+	$(COMPILER_GFORTRAN) $(CFLAGS) -o $(XC_DIR)/mcfft_3d_z2z_cpu \
+        $(COMMON) $(MAIN) $(LINK)
+
+mcfft_2d_c2s_cpu: $(COMMON) $(MAIN_FFT_2D_C2S_CPU)
+	$(COMPILER_GFORTRAN) $(CFLAGS) -o $(XC_DIR)/mcfft_2d_c2s_cpu \
+        $(COMMON) $(MAIN) $(LINK)
+mcfft_2d_s2c_cpu: $(COMMON) $(MAIN_FFT_2D_S2C_CPU)
+	$(COMPILER_GFORTRAN) $(CFLAGS) -o $(XC_DIR)/mcfft_2d_s2c_cpu \
+        $(COMMON) $(MAIN) $(LINK)
+mcfft_2d_c2c_cpu: $(COMMON) $(MAIN_FFT_2D_C2C_CPU)
+	$(COMPILER_GFORTRAN) $(CFLAGS) -o $(XC_DIR)/mcfft_2d_c2c_cpu \
+        $(COMMON) $(MAIN) $(LINK)
+
+mcfft_2d_z2d_cpu: $(COMMON) $(MAIN_FFT_2D_Z2D_CPU)
+	$(COMPILER_GFORTRAN) $(CFLAGS) -o $(XC_DIR)/mcfft_2d_z2d_cpu \
+        $(COMMON) $(MAIN) $(LINK)
+mcfft_2d_d2z_cpu: $(COMMON) $(MAIN_FFT_2D_D2Z_CPU)
+	$(COMPILER_GFORTRAN) $(CFLAGS) -o $(XC_DIR)/mcfft_2d_d2z_cpu \
+        $(COMMON) $(MAIN) $(LINK)
+mcfft_2d_z2z_cpu: $(COMMON) $(MAIN_FFT_2D_Z2Z_CPU)
+	$(COMPILER_GFORTRAN) $(CFLAGS) -o $(XC_DIR)/mcfft_2d_z2z_cpu \
+        $(COMMON) $(MAIN) $(LINK)
+
+mcfft_1d_z2z_cpu: $(COMMON) $(MAIN_FFT_1D_Z2Z_CPU)
+	$(COMPILER_GFORTRAN) $(CFLAGS) -o $(XC_DIR)/mcfft_1d_z2z_cpu \
+        $(COMMON) $(MAIN) $(LINK)
+
+clean :
+	rm -f *.o *.d *~* *#* \
+ $(XC_DIR)/$(XCS) $(XC_DIR)/$(XCS_SEGTRI) \
+ $(XC_DIR)/$(XCS_DEGTRI) $(XC_DIR)/$(XCS_ZEGTRI) \
+ $(XC_DIR)/$(XCS_FFT_3D_C2S_CPU) $(XC_DIR)/$(XCS_FFT_3D_S2C_CPU) \
+ $(XC_DIR)/$(XCS_FFT_3D_C2C_CPU) $(XC_DIR)/$(XCS_FFT_3D_Z2D_CPU) \
+ $(XC_DIR)/$(XCS_FFT_3D_D2Z_CPU) $(XC_DIR)/$(XCS_FFT_3D_Z2Z_CPU) \
+ $(XC_DIR)/$(XCS_FFT_2D_C2S_CPU) $(XC_DIR)/$(XCS_FFT_2D_S2C_CPU) \
+ $(XC_DIR)/$(XCS_FFT_2D_C2C_CPU) $(XC_DIR)/$(XCS_FFT_2D_Z2D_CPU) \
+ $(XC_DIR)/$(XCS_FFT_2D_D2Z_CPU) $(XC_DIR)/$(XCS_FFT_2D_Z2Z_CPU) \
+ $(XC_DIR)/$(XCS_FFT_1D_Z2Z_CPU)
+
+######################## Fortran Code ########################
+#./f90g95_local.csh ./test_code/cpu/testing_DataParallelIO.f90;
+
+#./f90g95_local.csh ./test_code/cpu/testing_sgetri_cpu.f90;
+#./f90g95_local.csh ./test_code/cpu/testing_dgetri_cpu.f90;
+#./f90g95_local.csh ./test_code/cpu/testing_zgetri_cpu.f90;
+
+#./f90g95_local.csh ./test_code/cpu/testing_FFT_3D_C2S_cpu.f90;
+#./f90g95_local.csh ./test_code/cpu/testing_FFT_3D_S2C_cpu.f90;
+#./f90g95_local.csh ./test_code/cpu/testing_FFT_3D_C2C_cpu.f90;
+#./f90g95_local.csh ./test_code/cpu/testing_FFT_3D_D2Z_cpu.f90;
+#./f90g95_local.csh ./test_code/cpu/testing_FFT_3D_Z2D_cpu.f90;
+#./f90g95_local.csh ./test_code/cpu/testing_FFT_3D_Z2Z_cpu.f90;
+
+#./f90g95_local.csh ./test_code/cpu/testing_FFT_2D_C2S_cpu.f90;
+#./f90g95_local.csh ./test_code/cpu/testing_FFT_2D_S2C_cpu.f90;
+#./f90g95_local.csh ./test_code/cpu/testing_FFT_2D_C2C_cpu.f90;
+#./f90g95_local.csh ./test_code/cpu/testing_FFT_2D_D2Z_cpu.f90;
+#./f90g95_local.csh ./test_code/cpu/testing_FFT_2D_Z2D_cpu.f90;
+#./f90g95_local.csh ./test_code/cpu/testing_FFT_2D_Z2Z_cpu.f90;
+
+#./f90g95_local.csh ./test_code/cpu/testing_FFT_1D_Z2Z_cpu.f90;
+############################
+#./f90g95_local.csh ./test_code/cpu/testing_systemQuery_cpu.f90;
+#./f90g95_local.csh ./test_code/cpu/testing_yaml.f90;
+
+#./f90g95_local.csh ./test_code/cpu/testing_summing.f90;
+#./f90g95_local.csh ./test_code/cpu/testing_RowColMajF90.f90;
+#./f90g95_local.csh ./test_code/cpu/testing_congruence.f90;
+#./f90g95_local.csh ./test_code/cpu/testing_BFGSNum_2D_cpu.f90;
+#./f90g95_local.csh ./test_code/cpu/testing_corr_cpu.f90;
+#./f90g95_local.csh ./test_code/cpu/testing_corr_gpu.f90;
+#./f90g95_local.csh ./test_code/cpu/testing_cshift.f90;
+#./f90g95_local.csh ./test_code/cpu/testing_NumDiff_1D_cpu.f90;
+#./f90g95_local.csh ./test_code/cpu/testing_NumGrad_2D_cpu.f90;
+#./f90g95_local.csh ./test_code/cpu/timer_tester_c.f90;
+#./f90g95_local.csh ./test_code/cpu/timer_tester.f90;
+
+#./f90g95_local.csh ./test_code/gpu/cuda/testing_SMatmult_cpu.f90;
+#./f90g95_local.csh ./test_code/gpu/cuda/testing_SMatvect_cpu.f90;
+
+############################## C++ Code ########################
+#./gccg++_local.csh ./test_code/cpu/testing_RowColMajCpp.cpp;
+
+
+
+

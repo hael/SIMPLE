@@ -1,0 +1,5 @@
+lapack95_code: lapack95_lib ;
+
+lapack95_lib: 
+
+	@make --makefile=src/lapack/lapack95/Makefile_lapack95

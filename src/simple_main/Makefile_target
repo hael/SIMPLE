@@ -1,0 +1,141 @@
+Simple_code: opt            \
+             general        \
+             simple         \
+             build          \
+             comlin_corr    \
+             comlin_srch    \
+             s_other        \
+             matcher        \
+             comlin_sym     \
+             cluster_cavg   \
+             qsys           \
+             masters        \
+             highlev        ;
+
+opt: simple_opt_spec.o               \
+     simple_optimizer.o              \
+     simple_opt_subs.o               \
+     simple_simplex_opt.o            \
+     simple_sa_opt.o                 \
+     simple_powell_opt.o             \
+     simple_oasis_opt.o              \
+     simple_particle_swarm_opt.o     \
+     simple_de_opt.o                 \
+     simple_bforce_opt.o             \
+     simple_bfgs_opt.o               \
+     simple_opt_factory.o            ;
+
+general: simple_hash.o            \
+         simple_chash.o           \
+         simple_softmax_weights.o \
+         simple_ori.o             \
+         simple_nrtxtfile.o       \
+         simple_args.o            \
+         simple_gen_doc.o         \
+         simple_cmd_dict.o        \
+         simple_cmdline.o         \
+         simple_AVratios.o        \
+         simple_map_reduce.o      \
+         simple_params.o          \
+         simple_oris.o            \
+         simple_ftiter.o          \
+         simple_arr.o             \
+         simple_sll.o             \
+         simple_winfuns.o         ;
+
+simple: simple_image.o                  \
+        simple_ft_expanded.o            \
+        simple_ctf.o                    \
+        simple_sym.o                    \
+        simple_corrmat.o                \
+        simple_gridding.o               \
+        simple_polarft.o                \
+        simple_polarft_corrcalc.o       \
+        simple_projector.o              \
+        simple_volpft_corrcalc.o        \
+        simple_ft_shsrch.o              \
+        simple_ftexp_shsrch.o           \
+        simple_polarft_shsrch.o         \
+        simple_volpft_srch.o            \
+        simple_pftcc_shsrch.o           \
+        simple_pftcc_inplsrch.o         \
+        simple_nnimgs.o                 \
+        simple_filterer.o               \
+        simple_unblur.o                 \
+        simple_convergence.o            \
+        simple_prime_srch.o             \
+        simple_prime2D_srch.o           \
+        simple_prime3D_srch.o           \
+        simple_procimgfile.o            ;
+
+build: simple_pair_dtab.o               \
+       simple_cluster_valid.o           \
+       simple_hac.o                     \
+       simple_comlin.o                  \
+       simple_kmeans.o                  \
+       simple_centre_clust.o            \
+       simple_shc_cluster.o             \
+       simple_denspeak_cluster.o        \
+       simple_aff_prop.o                \
+       simple_clusterer.o               \
+       simple_spatial_median.o          \
+       simple_ppca.o                    \
+       simple_estimate_ssnr.o           \
+       simple_reconstructor.o           \
+       simple_simulator.o               \
+       simple_eo_reconstructor.o        \
+       simple_build.o                   ;
+       
+
+comlin_corr: simple_comlin_corr.o       ;
+
+comlin_srch: simple_comlin_srch.o       ;
+
+matcher: simple_picker.o                \
+         simple_hadamard_common.o       \
+         simple_cartft_corrcalc.o       \
+         simple_hadamard2D_matcher.o    \
+         simple_hadamard3D_matcher.o    \
+         simple_crossover.o             \
+         simple_scatter_orisrch.o       \
+         simple_cftcc_srch.o            \
+         simple_cont3D_matcher.o        ;
+
+s_other: simple_masker.o                \
+         simple_spatial_median.o        ;
+         
+comlin_sym: simple_comlin_symsrch.o     \
+            simple_comlin_sym.o         ;
+
+cluster_cavg: simple_matchpursuit.o     \
+              simple_cavgppca.o         \
+              simple_refinecluster.o    \
+              simple_classrefine.o      \
+              simple_clustercavg.o      ;
+
+qsys: simple_qsys_base.o                \
+      simple_qsys_slurm.o               \
+      simple_qsys_local.o               \
+      simple_qsys_factory.o             \
+      simple_qsys_ctrl.o                \
+      simple_qsys_funs.o                ;
+
+masters: simple_rec_master.o             \
+         simple_symsrcher.o              \
+         simple_commander_base.o         \
+         simple_commander_checks.o       \
+         simple_commander_comlin.o       \
+         simple_commander_distr.o        \
+         simple_commander_imgproc.o      \
+         simple_commander_mask.o         \
+         simple_commander_misc.o         \
+         simple_commander_oris.o         \
+         simple_commander_preproc.o      \
+         simple_commander_prime2D.o      \
+         simple_commander_prime3D.o      \
+         simple_commander_rec.o          \
+         simple_commander_sim.o          \
+         simple_commander_volops.o       \
+         simple_commander_distr_wflows.o ;
+
+highlev: simple_highlev.o               ;

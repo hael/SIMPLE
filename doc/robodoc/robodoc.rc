@@ -1,0 +1,85 @@
+options:
+    --src ./
+    --doc ./robodoc
+    --multidoc
+    --html
+    --toc
+    --index
+    --sections
+    --nosort
+    --ignore_case_when_linking
+    --syntaxcolors_enable quotes,squotes,line_comments,non_alpha
+ignore files:
+    obsolete
+    .svn
+accept files:
+    *.f90
+    *.for
+    *.f
+    *.c
+    *.cu
+    *.cpp
+    *.pl
+header markers:
+    !****
+    c****
+    C****
+remark markers:
+    !
+    *
+    c
+    C
+end markers:
+    !***
+    c***
+    C***
+source line comments:
+    !
+headertypes:
+    e Examples robo_examples
+items:
+    NAME
+    COPYRIGHT
+    SYNOPSIS
+    USAGE
+    FUNCTION
+    DESCRIPTION
+    PURPOSE
+    AUTHOR
+    CREATION DATE 
+    MODIFICATION HISTORY
+    HISTORY
+    INPUTS
+    ARGUMENTS
+    OPTIONS
+    PARAMETERS
+    SWITCHES
+    OUTPUT
+    SIDE EFFECTS
+    RESULT
+    RETURN VALUE
+    EXAMPLE
+    NOTES
+    DIAGNOSTICS
+    WARNINGS
+    ERRORS
+    BUGS
+    TODO
+    IDEAS
+    PORTABILITY
+    SEE ALSO
+    METHODS
+    NEW METHODS
+    ATTRIBUTES
+    NEW ATTRIBUTES
+    TAGS
+    DERIVED FROM
+    DERIVED BY
+    USES
+    CHILDREN
+    USED BY
+    PARENTS
+    COMMANDS
+    SOURCE
+    REFERENCES
+    

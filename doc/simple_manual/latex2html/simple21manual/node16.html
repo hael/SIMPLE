@@ -1,0 +1,269 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">
+
+<!--Converted with LaTeX2HTML 2002-2-1 (1.71)
+original version by:  Nikos Drakos, CBLU, University of Leeds
+* revised and updated by:  Marcus Hennecke, Ross Moore, Herb Swan
+* with significant contributions from:
+  Jens Lippmann, Marek Rouchal, Martin Wilck and others -->
+<HTML>
+<HEAD>
+<TITLE>Parallel SIMPLE execution on laptops, workstations and heterogeneous clusters</TITLE>
+<META NAME="description" CONTENT="Parallel SIMPLE execution on laptops, workstations and heterogeneous clusters">
+<META NAME="keywords" CONTENT="simple21manual">
+<META NAME="resource-type" CONTENT="document">
+<META NAME="distribution" CONTENT="global">
+
+<META NAME="Generator" CONTENT="LaTeX2HTML v2002-2-1">
+<META HTTP-EQUIV="Content-Style-Type" CONTENT="text/css">
+
+<LINK REL="STYLESHEET" HREF="simple21manual.css">
+
+<LINK REL="next" HREF="node17.html">
+<LINK REL="previous" HREF="node7.html">
+<LINK REL="up" HREF="simple21manual.html">
+<LINK REL="next" HREF="node17.html">
+</HEAD>
+
+<BODY >
+<!--Navigation Panel-->
+<A NAME="tex2html281"
+  HREF="node17.html">
+<IMG WIDTH="37" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="next"
+ SRC="file:/sw/share/lib/latex2html/icons/next.png"></A> 
+<A NAME="tex2html277"
+  HREF="simple21manual.html">
+<IMG WIDTH="26" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="up"
+ SRC="file:/sw/share/lib/latex2html/icons/up.png"></A> 
+<A NAME="tex2html271"
+  HREF="node15.html">
+<IMG WIDTH="63" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="previous"
+ SRC="file:/sw/share/lib/latex2html/icons/prev.png"></A> 
+<A NAME="tex2html279"
+  HREF="node1.html">
+<IMG WIDTH="65" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="contents"
+ SRC="file:/sw/share/lib/latex2html/icons/contents.png"></A>  
+<BR>
+<B> Next:</B> <A NAME="tex2html282"
+  HREF="node17.html">Workflows</A>
+<B> Up:</B> <A NAME="tex2html278"
+  HREF="simple21manual.html">The SIMPLE 2.1 Manual</A>
+<B> Previous:</B> <A NAME="tex2html272"
+  HREF="node15.html">File Formats</A>
+ &nbsp; <B>  <A NAME="tex2html280"
+  HREF="node1.html">Contents</A></B> 
+<BR>
+<BR>
+<!--End of Navigation Panel-->
+
+<H1><A NAME="SECTION00060000000000000000"></A>
+<A NAME="paraexec"></A>
+<BR>
+Parallel SIMPLE execution on laptops, workstations and heterogeneous clusters
+</H1>
+On any machine with a single socket (laptop or workstation) it is seldom worth the effort to go beyond the shared-memory parallelisation that we provide using the OpenMP protocol. The shared-memory parallelisation is controlled by the <TT>nthr</TT> key (for number of threads). If your machine has six physical cores and no hyper-threading set <TT>nthr=6</TT> to use all the resources and <TT>nthr=3</TT> to use half the resources. If your machine is hyper-threaded, you may gain performance by increasing the number of threads, depending on the hardware architecture and current workload on the machine. If you have more than one CPU socket on the machine substantial performance enhancements will be gained by executing SIMPLE in distributed mode using the program <FONT COLOR="#0f75ff"><TT>distr_simple.pl</TT></FONT> in the <TT>SIMPLE/scripts</TT> folder. This program fetches machine-specific information that the system administrator (that may be you) is responsible for providing in the <TT>simple_user_input.pm</TT> file. This is how the configuration file looks for a workstation or cluster with any number of sockets, six CPUs per socket and 16GB RAM
+<PRE>
+    #####################################################################
+    # USER-DEFINED VARIABLES THAT CONTROL WHICH CLUSTER ENVIRONMENT TO  #
+    # USE AND HOW TO USE THE RESOURCES                                  #
+    #####################################################################
+    our$SIMPLESYS      = 'LOCAL';          # Name of system
+    our%DISTR_ENV      = %LOCAL_DISTR_ENV; # Defines the environment     
+    our$EMAIL          = 'myname@uni.edu'; # e-mail for failure report
+    our$NTHR           = 6;                # number of threads (CPUs per core)
+    our$MEMSTR         = '8000';           # string descriptor for memory
+    our$TIME_PER_IMAGE = 150;              # time per image (in seconds)
+</PRE>
+If we had eight CPUs per socket and 32GB RAM we would have changed the number of threads to <TT>$NTHR=8</TT> and the requested memory to <TT>$MEMSTR=16000</TT>. We will describe what the <TT>$SIMPLESYS</TT> and <TT>%DISTR_ENV</TT> variables control after we have discussed how to optimise distributed execution of SIMPLE on any heterogeneous computer cluster (Figure 1, below). 
+<BR>
+<IMG
+ WIDTH="121" HEIGHT="2847" BORDER="0"
+ SRC="img3.png"
+ ALT="\begin{SCfigure}
+% latex2html id marker 303
+[][h]
+\includegraphics[keepaspectrat...
+...ave two sockets per node that need to share the RAM between them}
+\end{SCfigure}">
+<BR>
+
+<BR>
+Every cluster is equipped with a job scheduler/workload manager that needs to be configured. The two most common job schedulers are SLURM (Simple Linux Utility for Resource Management) and PBS (Portable Batch System). We prefer SLURM, since it is a more modern and versatile job scheduler than PBS. All the instructions that need to be provided to the job scheduler have been separated out and put in the perl configuration module <TT>scripts/simple_clusterSpecs.pm</TT>. A typical SLURM configuration is defined as
+<PRE>
+    ####################################################################
+    # DEFINES DISTRIBUTED EXECUTION ON MYCLUSTER                       #
+    ####################################################################
+    our%MYCLUSTER_DISTR_ENV;
+    $MYCLUSTER_DISTR_ENV{'SUBMITCMD'}='sbatch';
+    $MYCLUSTER_DISTR_ENV{'SCRIPT'}="#!/bin/bash
+    #SBATCH --mail-user=&lt;&lt;&lt;&lt;EMAIL&gt;&gt;&gt;&gt;
+    #SBATCH --mail-type=FAIL
+    #SBATCH --job-name=$NAME_DISTR
+    #SBATCH --ntasks=1
+    #SBATCH --ntasks-per-socket=1
+    #SBATCH --cpus-per-task=&lt;&lt;&lt;NTHR&gt;&gt;&gt;
+    #SBATCH --mem=&lt;&lt;&lt;MEMSTR&gt;&gt;&gt;
+    #SBATCH --time=0-&lt;&lt;&lt;HOURS&gt;&gt;&gt;:&lt;&lt;&lt;MINUTES&gt;&gt;&gt;:0
+    #SBATCH --output=outfile.%j
+    #SBATCH --error=errfile.%j
+    cd &lt;&lt;&lt;EXECDIR&gt;&gt;&gt; 
+    &lt;&lt;&lt;CMDSTRING&gt;&gt;&gt; fromp=&lt;&lt;&lt;START&gt;&gt;&gt; top=&lt;&lt;&lt;STOP&gt;&gt;&gt; part=&lt;&lt;&lt;PART&gt;&gt;&gt;&amp;
+    &amp;nthr=&lt;&lt;&lt;NTHR&gt;&gt;&gt; outfile=$ALGNDOC_FBODY&lt;&lt;&lt;PART&gt;&gt;&gt;.txt &gt; OUT&lt;&lt;&lt;PART&gt;&gt;&gt;\nexit\n";
+    $MYCLUSTER_DISTR_ENV{'SHMEMSCRIPT'}="#!/bin/bash
+    #SBATCH --mail-user=&lt;&lt;&lt;&lt;EMAIL&gt;&gt;&gt;&gt;
+    #SBATCH --mail-type=FAIL
+    #SBATCH --job-name=$NAME_SHMEM_DISTR
+    #SBATCH --ntasks=1
+    #SBATCH --ntasks-per-socket=1
+    #SBATCH --cpus-per-task=&lt;&lt;&lt;NTHR&gt;&gt;&gt;
+    #SBATCH --mem=&lt;&lt;&lt;MEMSTR&gt;&gt;&gt;
+    #SBATCH --time=0-&lt;&lt;&lt;HOURS&gt;&gt;&gt;:&lt;&lt;&lt;MINUTES&gt;&gt;&gt;:0
+    #SBATCH --output=shmemoutfile.%j
+    #SBATCH --error=shmemerrfile.%j
+    cd &lt;&lt;&lt;EXECDIR&gt;&gt;&gt; 
+    &lt;&lt;&lt;CMDSTRING&gt;&gt;&gt; nthr=&lt;&lt;&lt;NTHR&gt;&gt;&gt; &gt; SHMEMJOBOUT\nexit\n";
+</PRE>
+The <TT>&amp;</TT> character denotes a line break and the substitution tags
+<PRE>
+    &lt;&lt;&lt;MYVARIABLE&gt;&gt;&gt;
+</PRE>
+describe variables that will be automatically substituted into the scripts. The variables <TT>$NAME_DISTR</TT> and <TT>$NAME_SHMEM_DISTR</TT> are local to the module and describe the hardcoded names of the distribution scripts. In order to make the newly defined distributed environment accessible to SIMPLE we need to export it by adding it to the export array in the header of the module, so that the line
+<PRE>
+    @EXPORT = qw($ALGNDOC_FBODY %LOCAL_DISTR_ENV %MASSIVE_DISTR_ENV&amp;
+    &amp;%MASSIVE2_DISTR_ENV %MONARCH_DISTR_ENV %OXFORD_DISTR_ENV&amp;
+    &amp;%OXFORD2_DISTR_ENV %OXFORD3_DISTR_ENV  $CVL_DISTR_ENV);
+</PRE>
+is updated to
+<PRE>
+    @EXPORT = qw($ALGNDOC_FBODY %LOCAL_DISTR_ENV %MASSIVE_DISTR_ENV&amp;
+    &amp;%MASSIVE2_DISTR_ENV %MONARCH_DISTR_ENV %OXFORD_DISTR_ENV&amp;
+    &amp;%OXFORD2_DISTR_ENV %OXFORD3_DISTR_ENV  $CVL_DISTR_ENV)&amp;
+    &amp;%MYCLUSTER_DISTR_ENV;
+</PRE>
+There are different versions of SLURM and PBS and different clusters may use different conventions for how to construct the script headers. For example on our <TT>MASSIVE2</TT> cluster we need to add to the headers
+<PRE>
+    #SBATCH --partition=cryoem
+    #SBATCH --qos=vip_m2
+</PRE>
+to indicate that we will use our dedicated <TT>cryoem</TT> partition and our dedicated queue <TT>vip_m2</TT>. In <TT>simple_clusterSpecs.pm</TT> there is also a template available for PBS
+<PRE>
+    ####################################################################
+    # DEFINES DISTRIBUTED EXECUTION ON THE MASSIVE 1 CLUSTER           #
+    ####################################################################
+    our%MASSIVE_DISTR_ENV;
+    $MASSIVE_DISTR_ENV{'SUBMITCMD'}='qsub';
+    $MASSIVE_DISTR_ENV{'SCRIPT'}="#!/bin/bash
+    #PBS -N $NAME_DISTR
+    #PBS -l nodes=1:ppn=&lt;&lt;&lt;NTHR&gt;&gt;&gt;,mem=&lt;&lt;&lt;MEMSTR&gt;&gt;&gt;
+    #PBS -l walltime=&lt;&lt;&lt;HOURS&gt;&gt;&gt;:&lt;&lt;&lt;MINUTES&gt;&gt;&gt;:0
+    #PBS -o outfile.\$PBS_JOBID
+    #PBS -e errfile.\$PBS_JOBID
+    cd &lt;&lt;&lt;EXECDIR&gt;&gt;&gt; 
+    &lt;&lt;&lt;CMDSTRING&gt;&gt;&gt; fromp=&lt;&lt;&lt;START&gt;&gt;&gt; top=&lt;&lt;&lt;STOP&gt;&gt;&gt; part=&lt;&lt;&lt;PART&gt;&gt;&gt;&amp;
+    &amp;nthr=&lt;&lt;&lt;NTHR&gt;&gt;&gt; outfile=$ALGNDOC_FBODY&lt;&lt;&lt;PART&gt;&gt;&gt;.txt &gt; OUT&lt;&lt;&lt;PART&gt;&gt;&gt;\nexit\n";
+    $MASSIVE_DISTR_ENV{'SHMEMSCRIPT'}="#!/bin/bash
+    #PBS -N $NAME_SHMEM_DISTR
+    #PBS -l nodes=1:ppn=&lt;&lt;&lt;NTHR&gt;&gt;&gt;,mem=&lt;&lt;&lt;MEMSTR&gt;&gt;&gt;
+    #PBS -l walltime=&lt;&lt;&lt;HOURS&gt;&gt;&gt;:&lt;&lt;&lt;MINUTES&gt;&gt;&gt;:0
+    #PBS -o outfile.\$PBS_JOBID
+    #PBS -e errfile.\$PBS_JOBID
+    cd &lt;&lt;&lt;EXECDIR&gt;&gt;&gt; 
+    &lt;&lt;&lt;CMDSTRING&gt;&gt;&gt; nthr=&lt;&lt;&lt;NTHR&gt;&gt;&gt; &gt; SHMEMJOBOUT\nexit\n";
+</PRE>
+but PBS does not provide any means to bind a set of threads to a particular socket. However, by utilising the <TT>mpirun</TT> command we can enforce this desired behaviour as exemplified below
+<PRE>
+    ####################################################################
+    # DEFINES DISTRIBUTED EXECUTION ON SUSANS CLUSTER IN OXFORD        #
+    ####################################################################
+    our%OXFORD_DISTR_ENV;
+    $OXFORD_DISTR_ENV{'SUBMITCMD'}='qsub';
+    $OXFORD_DISTR_ENV{'SCRIPT'}="#!/bin/bash
+    #PBS -N $NAME_DISTR
+    #PBS -l nodes=1:ppn=&lt;&lt;&lt;NTHR&gt;&gt;&gt;,mem=&lt;&lt;&lt;MEMSTR&gt;&gt;&gt;
+    #PBS -l walltime=&lt;&lt;&lt;HOURS&gt;&gt;&gt;:&lt;&lt;&lt;MINUTES&gt;&gt;&gt;:0
+    #PBS -o outfile.\$PBS_JOBID
+    #PBS -e errfile.\$PBS_JOBID
+    #PBS -V
+    #PBS -l naccesspolicy=UNIQUEUSER
+    cd &lt;&lt;&lt;EXECDIR&gt;&gt;&gt; 
+    mpirun -np 1 --bind-to-socket --cpus-per-proc &lt;&lt;&lt;NTHR&gt;&gt;&gt; &lt;&lt;&lt;CMDSTRING&gt;&gt;&gt;&amp;
+    &amp;fromp=&lt;&lt;&lt;START&gt;&gt;&gt; top=&lt;&lt;&lt;STOP&gt;&gt;&gt; part=&lt;&lt;&lt;PART&gt;&gt;&gt; nthr=&lt;&lt;&lt;NTHR&gt;&gt;&gt;&amp;
+    &amp;outfile=$ALGNDOC_FBODY&lt;&lt;&lt;PART&gt;&gt;&gt;.txt &gt; OUT&lt;&lt;&lt;PART&gt;&gt;&gt;\nexit\n";
+    $OXFORD_DISTR_ENV{'SHMEMSCRIPT'}="#!/bin/bash
+    #PBS -N $NAME_SHMEM_DISTR
+    #PBS -l nodes=1:ppn=&lt;&lt;&lt;NTHR&gt;&gt;&gt;,mem=&lt;&lt;&lt;MEMSTR&gt;&gt;&gt;
+    #PBS -l walltime=&lt;&lt;&lt;HOURS&gt;&gt;&gt;:&lt;&lt;&lt;MINUTES&gt;&gt;&gt;:0
+    #PBS -o outfile.\$PBS_JOBID
+    #PBS -e errfile.\$PBS_JOBID
+    #PBS -V
+    #PBS -l naccesspolicy=UNIQUEUSER
+    cd &lt;&lt;&lt;EXECDIR&gt;&gt;&gt; 
+    mpirun -np 1 --bind-to-socket --cpus-per-proc &lt;&lt;&lt;NTHR&gt;&gt;&gt; &lt;&lt;&lt;CMDSTRING&gt;&gt;&gt;&amp;
+    &amp;nthr=&lt;&lt;&lt;NTHR&gt;&gt;&gt; &gt; SHMEMJOBOUT\nexit\n";
+</PRE>
+Once our environment for distributed execution is established we use the Program: <FONT COLOR="#0f75ff"><TT>distr_simple.pl</TT></FONT>, which supports distributed execution of the programs:
+<PRE>
+    simple_prime2D
+    simple_prime3D
+    simple_eo_recvol
+    simple_recvol
+    simple_simemimgs
+</PRE>
+We normally let <FONT COLOR="#0f75ff"><TT>distr_simple.pl</TT></FONT> run in the background on the login node of our cluster. We will discuss the execution routes in more detail in the <TT>Workflows</TT> section but an example of how to distribute <FONT COLOR="#0f75ff"><TT>simple_prime2D</TT></FONT> using ten nodes is provided below. In order to reduce I/O latency we split the CTF phase-flipped image stack into as many partitions (<TT>npart</TT>) as we plan to execute
+<PRE>
+     $ simple_stackops stk=my_phaseflipped_ptcls.mrc split=npart
+</PRE>
+Then, we are ready to execute in distributed mode
+<PRE>
+     $ nohup distr_simple.pl prg=prime2D npart=10 stk=ptcls.mrc smpd=1.77 msk=100
+     ncls=600 refs=startcavgsmsk.mrc oritab=prime2D_startdoc.txt &gt;&gt; PRIME2DOUT &amp;
+</PRE>
+Another option available on clusters that use the SLURM scheduler is to use the <TT>srun</TT> command for <FONT COLOR="#0f75ff"><TT>distr_simple.pl</TT></FONT> via
+<PRE>
+    $ srun --ntasks=1 --ntasks-per-socket=1 --cpus-per-task=1 --mem=200 --time=2-0:0:0
+    --output=PRIME2DOUT.%j --error=PRIME2DERR.%j distr_simple.pl prg=prime2D 
+    npart=10 stk=ptcls.mrc smpd=1.77 msk=100 ncls=600 refs=startcavgsmsk.mrc 
+    oritab=prime2D_startdoc.txt &amp;
+</PRE>
+However, beta testers have reported that srun job sometimes dies with no warning, possibly because of the low tolerance for network errors. A more robust route may be to use <TT>sbatch</TT> as follows
+<PRE>
+    $ sbatch -p MYCLUSTER --wrap="distr_simple.pl prg=prime2D npart=10 stk=ptcls.mrc
+    smpd=1.77 msk=100 ncls=600 refs=startcavgsmsk.mrc oritab=prime2D_startdoc.txt 
+    &gt;&gt; PRIME2DOUT"
+</PRE>
+where the <TT>-wrap</TT> flag automatically generates a bash script for the given command.
+
+<P>
+<HR>
+<!--Navigation Panel-->
+<A NAME="tex2html281"
+  HREF="node17.html">
+<IMG WIDTH="37" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="next"
+ SRC="file:/sw/share/lib/latex2html/icons/next.png"></A> 
+<A NAME="tex2html277"
+  HREF="simple21manual.html">
+<IMG WIDTH="26" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="up"
+ SRC="file:/sw/share/lib/latex2html/icons/up.png"></A> 
+<A NAME="tex2html271"
+  HREF="node15.html">
+<IMG WIDTH="63" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="previous"
+ SRC="file:/sw/share/lib/latex2html/icons/prev.png"></A> 
+<A NAME="tex2html279"
+  HREF="node1.html">
+<IMG WIDTH="65" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="contents"
+ SRC="file:/sw/share/lib/latex2html/icons/contents.png"></A>  
+<BR>
+<B> Next:</B> <A NAME="tex2html282"
+  HREF="node17.html">Workflows</A>
+<B> Up:</B> <A NAME="tex2html278"
+  HREF="simple21manual.html">The SIMPLE 2.1 Manual</A>
+<B> Previous:</B> <A NAME="tex2html272"
+  HREF="node15.html">File Formats</A>
+ &nbsp; <B>  <A NAME="tex2html280"
+  HREF="node1.html">Contents</A></B> 
+<!--End of Navigation Panel-->
+<ADDRESS>
+Hans Elmlund
+2016-05-24
+</ADDRESS>
+</BODY>
+</HTML>

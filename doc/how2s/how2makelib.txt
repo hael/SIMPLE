@@ -1,0 +1,46 @@
+step-2
+
+Compile this sub-routine and make an object file. The fallowing steps uses f77 compiler under UNIX/Linux
+
+[name@xxxxx]$ f77 -c average.F
+
+this will give the object file average.o. Using the object file make a library
+
+[name@xxxxx]$ ar r libmylib.a average.o
+
+The command 'ar' is to make archives. This will give a library (libmylib.a).
+
+step-3
+
+To link this library into your programs, use the following command
+[name@xxxxx]$ f77 main.F -L/path/ -lmylib
+
+This step will compile the program main.F (or whatever), and link it to the library called 'libmylib.a'. The -L/path/ referes to the location of your library. You can put it in any directory in your machine or standard locations where the compiler is looking when a compilation takes place (e.g. /usr/lib /usr/local/lib etc.. ) In a similar manner, you can make 'as many general subroutine as you want', and make them object files and put it together in a library. It can be used simply by linking those libraries on your compilation. For many number of object files, (e.g.)
+
+[name@xxxxx]$ f77 -c average.F mean.F sort.F area_average.F climatology.F
+
+[name@xxxxx]$ ls *.o
+average.o mean.o sort.o area_average.o climatology.o
+
+[name@xxxxx]$ ar r libmylib.a average.o mean.o sort.o area_average.o climatology.o
+
+To append an object file into an existing library is the same as above
+[name@xxxxx]$ ar r libmylib.a daily_climatology.o
+
+This is the way, the libraries are making. We may be familiar in using NETCDF libraries. Actually it is a set of object files archived into a library. To list out the object files in a library, you can use
+
+[name@xxxxx]$ ar t libmylib.a
+
+mean.o
+sort.o
+area_average.o
+climatology.o
+daily_climatology.o
+
+These are 'so many standard libraries' are available for FORTRAN programs. for example BLAS (Basic Linear Algebra Subprograms), LAPACK (Linear Algebra Package) etc.. are popular libraries for FORTRAN programs. (It exist for C-programing as well), which do simple algebra to very complex matrix calculations.
+
+
+CAUTION! if you make your own library, and using other standard libraries like BLAS or LAPACK, care must be taken that your variables are not conflicting with the variables of other libraries. This may give erroneous results. Moreover, a pre-compliled library for one machine architecture may be conflict with
+other machines. The byte compatibility is different for different machines (like Sun, Alpha Linux, other Unix platforms)
+
+----------------------------------------------------------------------------------------------------------------------------- 

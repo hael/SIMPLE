@@ -1,0 +1,17 @@
+K 25
+svn:wc:ra_dav:version-url
+V 85
+/svn/mmmhpc/!svn/ver/1390/openmolgrid/common/trunk/src/test/java/org/openmolgrid/util
+END
+DistanceCalculatorTest.java
+K 25
+svn:wc:ra_dav:version-url
+V 113
+/svn/mmmhpc/!svn/ver/1390/openmolgrid/common/trunk/src/test/java/org/openmolgrid/util/DistanceCalculatorTest.java
+END
+CenterOfMassCalculatorTest.java
+K 25
+svn:wc:ra_dav:version-url
+V 117
+/svn/mmmhpc/!svn/ver/1390/openmolgrid/common/trunk/src/test/java/org/openmolgrid/util/CenterOfMassCalculatorTest.java
+END

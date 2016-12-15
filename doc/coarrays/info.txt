@@ -1,0 +1,61 @@
+COARRAYS
+
+GNU Fortran currently supports three coarray modes, which can be selected via the -fcoarray= flag:
+
+none: The default, which prints an error when a coarray construct is encountered
+single: Optimized version for a single image, which allows for fast serial programs
+lib: A communication-library-based coarray version, described on this page
+
+Compiling Coarray Programs
+
+Simply compile the Fortran files as usually using the -fcoarray=lib flag.
+
+For the single version, simply add -lcaf_single when linking the program. If you want to use your self-compiled version, you can also simply link single.o.
+For the MPI version, you need to also link the MPI library; the easiest is to run mpif90 to link the files. Example:
+  mpif90 *.o -lcaf_mpi
+
+  Running Coarray Programs
+
+  For the single version, simply run the program as usual.
+  For the MPI version and ARMCI with MPI backend: Start the program as you would start any other MPI program; for instance use
+  mpiexec -n 10  ./myCoarrayProgram
+  
+  ------------------------------------------------------------------------
+  Coarray Syntax and Further Reading                  <<<< WHAT IS IT >>>>
+  ------------------------------------------------------------------------
+
+  The crucial ingredient are coarrays, which are variables which are
+  visible on all images and have a codimension. They are declared using
+  for instance
+    CODIMENSION[1:4,5,*] :: variable
+  where the highest subscript needs to be a "*" (unless the variable is
+  allocatable - in this case, as usual, only ":" have to be used). A
+  remote coarray can be accessed using the bracket syntax, e.g.
+    A[4] = 5
+    A = 7
+  which writes "5" to the scalar coarray "A" on the (remote) image
+  corresponding to the cosubscript [4] and "7" to the local coarray
+  of the executing image.  Note that only a single image can be
+  addressed at a given time; e.g. simultaneously broadcasting to/
+  collecting from all images is not supported (as of Fortran 2008).
+
+  The image index can be obtained using the this_image() intrinsic,
+  the total number of images with num_images(). If an instruction
+  should only be performed on a single image, an explicit
+    if(this_image() == ...) then; ...; end if
+  has to be used.
+
+  Besides the coarrays themselves, there exist also image control
+  statements such as for barriers
+    SYNC ALL()
+    SYNC IMAGES(<array with image indexes or "*">)
+    SYNC MEMORY
+  or blocks which ensure that instructions are only executed on
+  one image at a time
+    CRITICAL; ...; END CRITICAL
+
+  Note that the  STOP  statements only terminates one image; if all
+  images should be stopped because of an error use  ERROR STOP.
+
+
+  More details can be found in

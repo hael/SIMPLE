@@ -1,0 +1,35 @@
+ SUBROUTINE ZGTSV1_F95( DL, D, DU, B, INFO )
+!
+!  -- LAPACK95 interface driver routine (version 3.0) --
+!     UNI-C, Denmark; Univ. of Tennessee, USA; NAG Ltd., UK
+!     September, 2000
+!
+!   .. USE STATEMENTS ..
+    USE LA_PRECISION, ONLY: WP => DP
+    USE LA_AUXMOD, ONLY: ERINFO
+    USE F77_LAPACK, ONLY: GTSV_F77 => LA_GTSV
+!   .. IMPLICIT STATEMENT ..
+    IMPLICIT NONE
+!   .. SCALAR ARGUMENTS ..
+    INTEGER, INTENT(OUT), OPTIONAL :: INFO
+!   .. ARRAY ARGUMENTS ..
+    COMPLEX(WP), INTENT(INOUT) :: DL(:), D(:), DU(:), B(:)
+!   .. PARAMETERS ..
+    CHARACTER(LEN=7), PARAMETER :: SRNAME = 'LA_GTSV'
+!   .. LOCAL SCALARS ..
+    INTEGER :: LINFO, N
+!   .. INTRINSIC FUNCTIONS ..
+    INTRINSIC SIZE
+!   .. EXECUTABLE STATEMENTS ..
+    LINFO = 0
+    N = SIZE(D)
+!   .. TEST THE ARGUMENTS
+    IF( SIZE( DL ) /= N-1 .AND. N/=0 ) THEN; LINFO = -1
+    ELSE IF( N < 0 ) THEN; LINFO = -2
+    ELSE IF( SIZE( DU ) /= N-1 .AND. N/=0 ) THEN; LINFO = -3
+    ELSE IF( SIZE( B ) /= N ) THEN; LINFO = -4
+    ELSE IF ( N > 0 ) THEN
+       CALL GTSV_F77( N, 1, DL, D, DU, B, N, LINFO )
+    END IF
+    CALL ERINFO( LINFO, SRNAME, INFO )
+ END SUBROUTINE ZGTSV1_F95

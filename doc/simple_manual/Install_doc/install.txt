@@ -1,0 +1,124 @@
+    1  17/05/16 14:42:40 bash
+    2  17/05/16 14:42:40 ls
+    3  17/05/16 14:42:40 ls -al 
+    4  17/05/16 14:42:40 cd /usr/local/
+    5  17/05/16 14:42:40 ls
+    6  17/05/16 14:42:40 gcc --version 
+    7  17/05/16 14:42:40 e
+    8  17/05/16 14:42:40 exit
+    9  17/05/16 14:42:40 ls
+   10  17/05/16 14:42:40 c
+   11  17/05/16 14:42:40 ls
+   12  17/05/16 14:42:40 clear 
+   13  17/05/16 14:42:40 exit
+   14  17/05/16 14:42:40 bash
+   15  17/05/16 14:42:40 ls
+   16  17/05/16 14:42:40 ls -al 
+   17  17/05/16 14:42:40 more .bash_history 
+   18  17/05/16 14:42:40 ls
+   19  17/05/16 14:42:40 bash
+   20  17/05/16 14:42:45 ls
+   21  17/05/16 14:46:55 ping 130.194.193.158
+   22  17/05/16 14:47:00 sshm2
+   23  17/05/16 14:47:02 ls
+   24  17/05/16 14:47:27 mkdir -p Monash/SourceCode/Simple
+   25  17/05/16 14:47:36 cd Monash/SourceCode/Simple/
+   26  17/05/16 14:47:37 ls
+   27  17/05/16 14:51:03 scp fbonnet@m2-login2.massive.org.au:/home/fbonnet/Monash084_scratch/fbonnet/MacOSX_binaries .
+   28  17/05/16 14:51:24 scp -r fbonnet@m2-login2.massive.org.au:/home/fbonnet/Monash084_scratch/fbonnet/MacOSX_binaries .
+   29  17/05/16 14:52:13 ls
+   30  17/05/16 14:52:15 cd MacOSX_binaries/
+   31  17/05/16 14:52:16 ls
+   32  17/05/16 14:52:19 csh 
+   33  17/05/16 14:52:36 ls
+   34  17/05/16 14:52:40 csh launch_checks.csh 
+   35  17/05/16 14:53:44 /usr/local/bin/
+   36  17/05/16 14:53:48 ls /usr/local/bin/
+   37  17/05/16 14:56:16 pwd
+   38  17/05/16 15:00:57 cd 
+   39  17/05/16 15:02:28 source ~/.bashrc
+   40  17/05/16 15:02:30 ls
+   41  17/05/16 15:02:47 emacs ~/.bashrc
+   42  17/05/16 15:04:21 source ~/.bashrc
+   43  17/05/16 15:04:23 ls
+   44  17/05/16 15:04:28 cd Monash/SourceCode/Simple/MacOSX_binaries/
+   45  17/05/16 15:04:29 ls
+   46  17/05/16 15:04:33 csh launch_checks.csh 
+   47  17/05/16 15:04:56 make 
+   48  17/05/16 15:05:01 ls
+   49  17/05/16 15:08:00 cd Down
+   50  17/05/16 15:08:05 cd ~/Downloads/
+   51  17/05/16 15:08:06 ls
+   52  17/05/16 15:08:16 mkdir temp
+   53  17/05/16 15:08:25 cp gcc-4.9-bin.tar.gz temp/
+   54  17/05/16 15:08:28 cd temp/
+   55  17/05/16 15:08:29 ls
+   56  17/05/16 15:08:35 tar xvfz gcc-4.9-bin.tar.gz 
+   57  17/05/16 15:08:44 ls /usr/local/bin/
+   58  17/05/16 15:08:48 cd ..
+   59  17/05/16 15:08:48 ls
+   60  17/05/16 15:08:55 rm -rf temp/
+   61  17/05/16 15:09:08 sudo tar xvfz gcc-4.9-bin.tar.gz 
+   62  17/05/16 15:09:19 ls /usr/local/lib/
+   63  17/05/16 15:09:36 ls /usr/local/bin
+   64  17/05/16 15:10:35 ls
+   65  17/05/16 15:10:44 rm -rf usr/
+   66  17/05/16 15:10:50 ls
+   67  17/05/16 15:11:01 sudo rm -rf usr/
+   68  17/05/16 15:11:03 ls
+   69  17/05/16 15:11:21 sudo cp gcc-4.9-bin.tar.gz gfortran-4.9-bin.tar.gz /
+   70  17/05/16 15:11:25 cd /
+   71  17/05/16 15:11:26 ls
+   72  17/05/16 15:11:39 sudo tar xvfz gcc-4.9-bin.tar.gz 
+   73  17/05/16 15:11:49 ls /usr/local/bin/
+   74  17/05/16 15:12:15 sudo tar xvfz gfortran-4.9-bin.tar.gz
+   75  17/05/16 15:12:20 ls
+   76  17/05/16 15:12:33 cd ~/Downloads/
+   77  17/05/16 15:12:34 ls
+   78  17/05/16 15:12:40 tar xvfz fftw-3.3.4.tar.gz 
+   79  17/05/16 15:12:42 ls
+   80  17/05/16 15:12:43 cd fftw-3.3.4
+   81  17/05/16 15:12:44 ls
+   82  17/05/16 15:12:54 ./configure 
+   83  17/05/16 15:13:21 ./configure CC=/usr/bin/gcc --enable-floats
+   84  17/05/16 15:13:48 ./configure CC=/usr/local/bin/gcc --enable-floats
+   85  17/05/16 15:15:26 gcc --version
+   86  17/05/16 15:15:37 gfortran --version
+   87  17/05/16 15:15:45 g++ --version
+   88  17/05/16 15:16:00 ./configure CC=/usr/local/bin/gcc --enable-floats
+   89  17/05/16 15:16:11 more config.log 
+   90  17/05/16 15:18:08 sudo ./configure CC=/usr/local/bin/gcc --enable-floats
+   91  17/05/16 15:18:54 ls
+   92  17/05/16 15:19:06 sudo ./configure CC=/usr/local/bin/gcc --enable-floats --enable_threads
+   93  17/05/16 15:19:21 sudo ./configure CC=/usr/local/bin/gcc --enable-floats --enable-threads --enable-openmp
+   94  17/05/16 15:19:58 sudo ./configure CC=/usr/local/bin/gcc --enable-float --enable-threads --enable-openmp
+   95  17/05/16 15:20:24 make
+   96  17/05/16 15:20:30 sudo make
+   97  17/05/16 15:26:08 sudo make install 
+   98  17/05/16 15:26:36 sudo ./configure CC=/usr/local/bin/gcc --enable-single --enable-threads --enable-openmp
+   99  17/05/16 15:27:09 sudo make
+  100  17/05/16 15:27:29 sudo make install 
+  101  17/05/16 15:28:03 sudo ./configure CC=/usr/local/bin/gcc --enable-double --enable-threads --enable-openmp
+  102  17/05/16 15:29:19 sudo make
+  103  17/05/16 15:37:14 sudo make install 
+  104  17/05/16 15:37:53 ./configure --help
+  105  17/05/16 15:38:15 sudo ./configure CC=/usr/local/bin/gcc --enable-long-double --enable-threads --enable-openmp
+  106  17/05/16 15:39:11 sudo make
+  107  17/05/16 15:41:18 sudo make install 
+  108  17/05/16 15:41:39 ./configure --help
+  109  17/05/16 15:42:35 sudo ./configure CC=/usr/local/bin/gcc --enable-quad-precision --enable-threads --enable-openmp
+  110  17/05/16 15:43:37 sudo make
+  111  17/05/16 15:46:06 sudo make install 
+  112  17/05/16 15:46:20 cd ..
+  113  17/05/16 15:46:24 ls
+  114  17/05/16 15:46:31 gcc --version 
+  115  17/05/16 15:46:33 ls
+  116  17/05/16 15:46:35 cd ../
+  117  17/05/16 15:46:35 ls
+  118  17/05/16 15:46:41 cd Monash/SourceCode/Simple/MacOSX_binaries/
+  119  17/05/16 15:46:42 ls
+  120  17/05/16 15:46:47 ./launch_checks.csh 
+  121  17/05/16 15:51:55 ls
+  122  17/05/16 15:52:18 ls -R 
+  123  17/05/16 15:52:46 history 
+  124  17/05/16 15:53:01 history > install.txt 

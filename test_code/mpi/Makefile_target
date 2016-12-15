@@ -1,0 +1,3 @@
+mpi_test_code: mpi_test      ;
+
+mpi_test: simple_matrixHandler_mpi_cpu.o;

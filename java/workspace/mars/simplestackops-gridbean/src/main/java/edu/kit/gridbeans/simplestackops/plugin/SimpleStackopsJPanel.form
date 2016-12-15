@@ -1,0 +1,1782 @@
+<?xml version="1.1" encoding="UTF-8" ?>
+
+<Form version="1.3" maxVersion="1.7" type="org.netbeans.modules.form.forminfo.JPanelFormInfo">
+  <NonVisualComponents>
+    <Component class="javax.swing.ButtonGroup" name="shiftAlignmentbuttonGroup">
+    </Component>
+    <Component class="javax.swing.ButtonGroup" name="roalgnbuttonGroup">
+    </Component>
+    <Component class="javax.swing.ButtonGroup" name="acfbuttonGroup">
+    </Component>
+    <Component class="javax.swing.ButtonGroup" name="masscenbuttonGroup">
+    </Component>
+    <Component class="javax.swing.ButtonGroup" name="phrandbuttonGroup">
+    </Component>
+    <Component class="javax.swing.ButtonGroup" name="visbuttonGroup">
+    </Component>
+    <Component class="javax.swing.ButtonGroup" name="ctfsqbuttonGroup">
+    </Component>
+    <Component class="javax.swing.ButtonGroup" name="binarizebuttonGroup">
+    </Component>
+    <Component class="javax.swing.ButtonGroup" name="hfunbuttonGroup">
+    </Component>
+    <Component class="javax.swing.ButtonGroup" name="normalisebuttonGroup">
+    </Component>
+    <Component class="javax.swing.ButtonGroup" name="normNoisebuttonGroup">
+    </Component>
+    <Component class="javax.swing.ButtonGroup" name="avgbuttonGroup">
+    </Component>
+    <Component class="javax.swing.ButtonGroup" name="ranktifybuttonGroup">
+    </Component>
+    <Component class="javax.swing.ButtonGroup" name="statsbuttonGroup">
+    </Component>
+    <Component class="javax.swing.ButtonGroup" name="comparebuttonGroup">
+    </Component>
+    <Component class="javax.swing.ButtonGroup" name="negbuttonGroup">
+    </Component>
+    <Component class="javax.swing.ButtonGroup" name="mergebuttonGroup">
+    </Component>
+    <Component class="javax.swing.ButtonGroup" name="ft2imgbuttonGroup">
+    </Component>
+    <Component class="javax.swing.ButtonGroup" name="ctfbuttonGroup">
+    </Component>
+    <Component class="javax.swing.ButtonGroup" name="symmetryGroupbuttonGroup">
+    </Component>
+  </NonVisualComponents>
+  <AuxValues>
+    <AuxValue name="FormSettings_autoResourcing" type="java.lang.Integer" value="0"/>
+    <AuxValue name="FormSettings_autoSetComponentName" type="java.lang.Boolean" value="false"/>
+    <AuxValue name="FormSettings_generateFQN" type="java.lang.Boolean" value="true"/>
+    <AuxValue name="FormSettings_generateMnemonicsCode" type="java.lang.Boolean" value="false"/>
+    <AuxValue name="FormSettings_i18nAutoMode" type="java.lang.Boolean" value="false"/>
+    <AuxValue name="FormSettings_layoutCodeTarget" type="java.lang.Integer" value="1"/>
+    <AuxValue name="FormSettings_listenerGenerationStyle" type="java.lang.Integer" value="0"/>
+    <AuxValue name="FormSettings_variablesLocal" type="java.lang.Boolean" value="false"/>
+    <AuxValue name="FormSettings_variablesModifier" type="java.lang.Integer" value="2"/>
+    <AuxValue name="designerSize" type="java.awt.Dimension" value="-84,-19,0,5,115,114,0,18,106,97,118,97,46,97,119,116,46,68,105,109,101,110,115,105,111,110,65,-114,-39,-41,-84,95,68,20,2,0,2,73,0,6,104,101,105,103,104,116,73,0,5,119,105,100,116,104,120,112,0,0,3,-6,0,0,2,-65"/>
+  </AuxValues>
+
+  <Layout class="org.netbeans.modules.form.compat2.layouts.DesignBoxLayout"/>
+  <SubComponents>
+    <Container class="javax.swing.JScrollPane" name="mainSimpleStackopsScrollPanel">
+
+      <Layout class="org.netbeans.modules.form.compat2.layouts.support.JScrollPaneSupportLayout"/>
+      <SubComponents>
+        <Container class="javax.swing.JPanel" name="mainSimpleStackopsPanel">
+
+          <Layout>
+            <DimensionLayout dim="0">
+              <Group type="103" groupAlignment="0" attributes="0">
+                  <Group type="102" alignment="0" attributes="0">
+                      <Group type="103" groupAlignment="1" attributes="0">
+                          <Group type="102" alignment="0" attributes="0">
+                              <Component id="acfOtherPanel" min="-2" max="-2" attributes="0"/>
+                              <EmptySpace max="-2" attributes="0"/>
+                              <Component id="optionalPanel" min="-2" max="-2" attributes="0"/>
+                          </Group>
+                          <Component id="optionalScrollPanel" alignment="0" min="-2" pref="647" max="-2" attributes="1"/>
+                          <Group type="103" alignment="0" groupAlignment="1" max="-2" attributes="0">
+                              <Component id="symmetryCTFScrollPanel" alignment="0" min="0" pref="0" max="32767" attributes="1"/>
+                              <Group type="102" alignment="0" attributes="0">
+                                  <Component id="stackDetailsPanel" min="-2" max="-2" attributes="1"/>
+                                  <EmptySpace max="-2" attributes="0"/>
+                                  <Component id="microscopeDetailsPanel" min="-2" max="-2" attributes="1"/>
+                              </Group>
+                          </Group>
+                          <Component id="fracSlider" alignment="0" min="-2" pref="609" max="-2" attributes="1"/>
+                      </Group>
+                      <EmptySpace min="-2" pref="886" max="-2" attributes="0"/>
+                  </Group>
+              </Group>
+            </DimensionLayout>
+            <DimensionLayout dim="1">
+              <Group type="103" groupAlignment="0" attributes="0">
+                  <Group type="102" alignment="0" attributes="0">
+                      <Group type="103" groupAlignment="0" max="-2" attributes="0">
+                          <Component id="microscopeDetailsPanel" min="0" pref="177" max="32767" attributes="1"/>
+                          <Component id="stackDetailsPanel" alignment="0" pref="177" max="32767" attributes="1"/>
+                      </Group>
+                      <EmptySpace max="-2" attributes="0"/>
+                      <Component id="fracSlider" min="-2" max="-2" attributes="1"/>
+                      <EmptySpace max="-2" attributes="0"/>
+                      <Component id="symmetryCTFScrollPanel" min="-2" pref="143" max="-2" attributes="0"/>
+                      <EmptySpace type="separate" max="-2" attributes="0"/>
+                      <Group type="103" groupAlignment="0" attributes="0">
+                          <Component id="acfOtherPanel" max="32767" attributes="1"/>
+                          <Component id="optionalPanel" alignment="0" min="-2" max="-2" attributes="1"/>
+                      </Group>
+                      <EmptySpace max="-2" attributes="0"/>
+                      <Component id="optionalScrollPanel" min="-2" max="-2" attributes="0"/>
+                      <EmptySpace min="-2" pref="466" max="-2" attributes="0"/>
+                  </Group>
+              </Group>
+            </DimensionLayout>
+          </Layout>
+          <SubComponents>
+            <Container class="javax.swing.JPanel" name="microscopeDetailsPanel">
+              <Properties>
+                <Property name="border" type="javax.swing.border.Border" editor="org.netbeans.modules.form.editors2.BorderEditor">
+                  <Border info="org.netbeans.modules.form.compat2.border.TitledBorderInfo">
+                    <TitledBorder title="MIcroscope details..."/>
+                  </Border>
+                </Property>
+              </Properties>
+
+              <Layout>
+                <DimensionLayout dim="0">
+                  <Group type="103" groupAlignment="0" attributes="0">
+                      <Group type="102" attributes="0">
+                          <Group type="103" groupAlignment="0" attributes="0">
+                              <Group type="102" alignment="0" attributes="0">
+                                  <Component id="smpdLabel" min="-2" max="-2" attributes="0"/>
+                                  <EmptySpace max="-2" attributes="0"/>
+                                  <Component id="smpdTextField" pref="168" max="32767" attributes="0"/>
+                              </Group>
+                              <Group type="102" alignment="0" attributes="0">
+                                  <Component id="accelerationVoltageLabel" min="-2" max="-2" attributes="0"/>
+                                  <EmptySpace max="-2" attributes="0"/>
+                                  <Component id="accelerationVoltageTextField" pref="139" max="32767" attributes="0"/>
+                              </Group>
+                              <Group type="102" alignment="0" attributes="0">
+                                  <Component id="csLabel" min="-2" max="-2" attributes="0"/>
+                                  <EmptySpace max="-2" attributes="0"/>
+                                  <Component id="csTextField" pref="173" max="32767" attributes="0"/>
+                              </Group>
+                              <Group type="102" alignment="0" attributes="0">
+                                  <Group type="103" groupAlignment="0" attributes="0">
+                                      <Component id="fracaLabel" min="-2" max="-2" attributes="0"/>
+                                      <Component id="nptclsLabel" min="-2" max="-2" attributes="0"/>
+                                  </Group>
+                                  <EmptySpace max="-2" attributes="0"/>
+                                  <Group type="103" groupAlignment="0" attributes="0">
+                                      <Component id="nptclsTextField" pref="184" max="32767" attributes="0"/>
+                                      <Component id="fracaTextField" alignment="0" pref="184" max="32767" attributes="0"/>
+                                  </Group>
+                              </Group>
+                          </Group>
+                          <EmptySpace max="-2" attributes="0"/>
+                      </Group>
+                  </Group>
+                </DimensionLayout>
+                <DimensionLayout dim="1">
+                  <Group type="103" groupAlignment="0" attributes="0">
+                      <Group type="102" alignment="0" attributes="0">
+                          <Group type="103" groupAlignment="3" attributes="0">
+                              <Component id="smpdLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                              <Component id="smpdTextField" alignment="3" min="-2" max="-2" attributes="0"/>
+                          </Group>
+                          <EmptySpace max="-2" attributes="0"/>
+                          <Group type="103" groupAlignment="3" attributes="0">
+                              <Component id="accelerationVoltageLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                              <Component id="accelerationVoltageTextField" alignment="3" min="-2" max="-2" attributes="0"/>
+                          </Group>
+                          <EmptySpace max="-2" attributes="0"/>
+                          <Group type="103" groupAlignment="3" attributes="0">
+                              <Component id="csTextField" alignment="3" min="-2" max="-2" attributes="0"/>
+                              <Component id="csLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                          </Group>
+                          <EmptySpace max="-2" attributes="0"/>
+                          <Group type="103" groupAlignment="3" attributes="0">
+                              <Component id="fracaTextField" alignment="3" min="-2" max="-2" attributes="0"/>
+                              <Component id="fracaLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                          </Group>
+                          <EmptySpace max="-2" attributes="0"/>
+                          <Group type="103" groupAlignment="3" attributes="0">
+                              <Component id="nptclsTextField" alignment="3" min="-2" max="-2" attributes="0"/>
+                              <Component id="nptclsLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                          </Group>
+                          <EmptySpace max="32767" attributes="0"/>
+                      </Group>
+                  </Group>
+                </DimensionLayout>
+              </Layout>
+              <SubComponents>
+                <Component class="javax.swing.JLabel" name="smpdLabel">
+                  <Properties>
+                    <Property name="text" type="java.lang.String" value="Sampling distance smpd:"/>
+                  </Properties>
+                </Component>
+                <Component class="javax.swing.JTextField" name="smpdTextField">
+                </Component>
+                <Component class="javax.swing.JLabel" name="accelerationVoltageLabel">
+                  <Properties>
+                    <Property name="text" type="java.lang.String" value="acceleration voltage(in kV) kv:"/>
+                  </Properties>
+                </Component>
+                <Component class="javax.swing.JTextField" name="accelerationVoltageTextField">
+                </Component>
+                <Component class="javax.swing.JLabel" name="csLabel">
+                  <Properties>
+                    <Property name="text" type="java.lang.String" value="Spherical Aberration cs:"/>
+                  </Properties>
+                </Component>
+                <Component class="javax.swing.JTextField" name="csTextField">
+                </Component>
+                <Component class="javax.swing.JLabel" name="fracaLabel">
+                  <Properties>
+                    <Property name="text" type="java.lang.String" value="Ampl. Contrast fraca:"/>
+                  </Properties>
+                </Component>
+                <Component class="javax.swing.JTextField" name="fracaTextField">
+                </Component>
+                <Component class="javax.swing.JLabel" name="nptclsLabel">
+                  <Properties>
+                    <Property name="text" type="java.lang.String" value="n particles nptcls:"/>
+                  </Properties>
+                </Component>
+                <Component class="javax.swing.JTextField" name="nptclsTextField">
+                </Component>
+              </SubComponents>
+            </Container>
+            <Container class="javax.swing.JPanel" name="stackDetailsPanel">
+              <Properties>
+                <Property name="border" type="javax.swing.border.Border" editor="org.netbeans.modules.form.editors2.BorderEditor">
+                  <Border info="org.netbeans.modules.form.compat2.border.TitledBorderInfo">
+                    <TitledBorder title="Stack and input details..."/>
+                  </Border>
+                </Property>
+              </Properties>
+
+              <Layout>
+                <DimensionLayout dim="0">
+                  <Group type="103" groupAlignment="0" attributes="0">
+                      <Group type="102" alignment="1" attributes="0">
+                          <Group type="103" groupAlignment="1" attributes="0">
+                              <Group type="102" alignment="0" attributes="0">
+                                  <Component id="deftabLabel" min="-2" max="-2" attributes="0"/>
+                                  <EmptySpace type="separate" max="-2" attributes="0"/>
+                                  <Component id="defTabTextField" pref="145" max="32767" attributes="0"/>
+                              </Group>
+                              <Group type="102" alignment="0" attributes="0">
+                                  <Component id="outstackLabel" min="-2" max="-2" attributes="0"/>
+                                  <EmptySpace type="separate" max="-2" attributes="0"/>
+                                  <Component id="outstackTextField" pref="145" max="32767" attributes="0"/>
+                              </Group>
+                              <Group type="102" alignment="1" attributes="0">
+                                  <Group type="103" groupAlignment="0" attributes="0">
+                                      <Component id="stakNameLabel" alignment="0" min="-2" max="-2" attributes="0"/>
+                                      <Component id="stak2NameLabel" alignment="0" min="-2" max="-2" attributes="0"/>
+                                      <Component id="oritabLabel" alignment="0" min="-2" max="-2" attributes="0"/>
+                                  </Group>
+                                  <EmptySpace max="-2" attributes="0"/>
+                                  <Group type="103" groupAlignment="0" attributes="0">
+                                      <Component id="oriTabTextField" alignment="0" pref="145" max="32767" attributes="0"/>
+                                      <Component id="stack2NameTextField" alignment="0" pref="145" max="32767" attributes="1"/>
+                                      <Component id="stackNameTextField" alignment="0" pref="145" max="32767" attributes="1"/>
+                                  </Group>
+                              </Group>
+                          </Group>
+                          <EmptySpace max="-2" attributes="0"/>
+                          <Group type="103" groupAlignment="0" attributes="0">
+                              <Component id="browseOriTabButton" alignment="0" min="-2" max="-2" attributes="0"/>
+                              <Component id="browseStkButton" min="-2" max="-2" attributes="0"/>
+                              <Component id="browseStk2Button" min="-2" max="-2" attributes="0"/>
+                              <Component id="browseOutStackButton" min="-2" max="-2" attributes="0"/>
+                              <Component id="browseDefTabButton" min="-2" max="-2" attributes="0"/>
+                          </Group>
+                          <EmptySpace min="-2" max="-2" attributes="0"/>
+                      </Group>
+                  </Group>
+                </DimensionLayout>
+                <DimensionLayout dim="1">
+                  <Group type="103" groupAlignment="0" attributes="0">
+                      <Group type="102" alignment="0" attributes="0">
+                          <Group type="103" groupAlignment="3" attributes="0">
+                              <Component id="stackNameTextField" alignment="3" min="-2" max="-2" attributes="0"/>
+                              <Component id="browseStkButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                              <Component id="stakNameLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                          </Group>
+                          <EmptySpace max="-2" attributes="0"/>
+                          <Group type="103" groupAlignment="3" attributes="0">
+                              <Component id="stack2NameTextField" alignment="3" min="-2" max="-2" attributes="0"/>
+                              <Component id="stak2NameLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                              <Component id="browseStk2Button" alignment="3" min="-2" max="-2" attributes="0"/>
+                          </Group>
+                          <EmptySpace max="-2" attributes="0"/>
+                          <Group type="103" groupAlignment="3" attributes="0">
+                              <Component id="oritabLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                              <Component id="browseOriTabButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                              <Component id="oriTabTextField" alignment="3" min="-2" max="-2" attributes="0"/>
+                          </Group>
+                          <EmptySpace max="-2" attributes="0"/>
+                          <Group type="103" groupAlignment="3" attributes="0">
+                              <Component id="outstackLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                              <Component id="outstackTextField" alignment="3" min="-2" max="-2" attributes="0"/>
+                              <Component id="browseOutStackButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                          </Group>
+                          <EmptySpace max="-2" attributes="0"/>
+                          <Group type="103" groupAlignment="3" attributes="0">
+                              <Component id="deftabLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                              <Component id="defTabTextField" alignment="3" min="-2" max="-2" attributes="0"/>
+                              <Component id="browseDefTabButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                          </Group>
+                      </Group>
+                  </Group>
+                </DimensionLayout>
+              </Layout>
+              <SubComponents>
+                <Component class="javax.swing.JLabel" name="stakNameLabel">
+                  <Properties>
+                    <Property name="text" type="java.lang.String" value="Stk name:"/>
+                  </Properties>
+                </Component>
+                <Component class="javax.swing.JTextField" name="stackNameTextField">
+                </Component>
+                <Component class="javax.swing.JButton" name="browseStkButton">
+                  <Properties>
+                    <Property name="text" type="java.lang.String" value="Browse"/>
+                  </Properties>
+                </Component>
+                <Component class="javax.swing.JLabel" name="oritabLabel">
+                  <Properties>
+                    <Property name="text" type="java.lang.String" value="Ori Table:"/>
+                  </Properties>
+                </Component>
+                <Component class="javax.swing.JTextField" name="oriTabTextField">
+                </Component>
+                <Component class="javax.swing.JButton" name="browseOriTabButton">
+                  <Properties>
+                    <Property name="text" type="java.lang.String" value="Browse"/>
+                  </Properties>
+                </Component>
+                <Component class="javax.swing.JLabel" name="deftabLabel">
+                  <Properties>
+                    <Property name="text" type="java.lang.String" value="Def Table:"/>
+                  </Properties>
+                </Component>
+                <Component class="javax.swing.JTextField" name="defTabTextField">
+                </Component>
+                <Component class="javax.swing.JButton" name="browseDefTabButton">
+                  <Properties>
+                    <Property name="text" type="java.lang.String" value="Browse"/>
+                  </Properties>
+                </Component>
+                <Component class="javax.swing.JLabel" name="stak2NameLabel">
+                  <Properties>
+                    <Property name="text" type="java.lang.String" value="Stk2 name:"/>
+                  </Properties>
+                </Component>
+                <Component class="javax.swing.JTextField" name="stack2NameTextField">
+                </Component>
+                <Component class="javax.swing.JButton" name="browseStk2Button">
+                  <Properties>
+                    <Property name="text" type="java.lang.String" value="Browse"/>
+                  </Properties>
+                </Component>
+                <Component class="javax.swing.JLabel" name="outstackLabel">
+                  <Properties>
+                    <Property name="text" type="java.lang.String" value="Outstack:"/>
+                  </Properties>
+                </Component>
+                <Component class="javax.swing.JTextField" name="outstackTextField">
+                </Component>
+                <Component class="javax.swing.JButton" name="browseOutStackButton">
+                  <Properties>
+                    <Property name="text" type="java.lang.String" value="Browse"/>
+                  </Properties>
+                </Component>
+              </SubComponents>
+            </Container>
+            <Container class="javax.swing.JPanel" name="optionalPanel">
+              <Properties>
+                <Property name="border" type="javax.swing.border.Border" editor="org.netbeans.modules.form.editors2.BorderEditor">
+                  <Border info="org.netbeans.modules.form.compat2.border.TitledBorderInfo">
+                    <TitledBorder title="Alignment parameter..."/>
+                  </Border>
+                </Property>
+              </Properties>
+
+              <Layout>
+                <DimensionLayout dim="0">
+                  <Group type="103" groupAlignment="0" attributes="0">
+                      <Group type="102" attributes="0">
+                          <Group type="103" groupAlignment="0" max="-2" attributes="0">
+                              <Group type="102" alignment="0" attributes="0">
+                                  <Component id="shalgnLabel" min="-2" max="-2" attributes="0"/>
+                                  <EmptySpace max="-2" attributes="0"/>
+                                  <Component id="yesShalgnRadioButton" min="-2" max="-2" attributes="0"/>
+                              </Group>
+                              <Group type="102" alignment="0" attributes="1">
+                                  <Component id="roalgnLabel" min="-2" max="-2" attributes="0"/>
+                                  <EmptySpace max="32767" attributes="0"/>
+                                  <Component id="yesRoalgnRadioButton" min="-2" max="-2" attributes="0"/>
+                              </Group>
+                          </Group>
+                          <EmptySpace max="-2" attributes="0"/>
+                          <Group type="103" groupAlignment="0" attributes="0">
+                              <Component id="noShalgnRadioButton" min="-2" max="-2" attributes="0"/>
+                              <Component id="noRoalgnRadioButton" min="-2" max="-2" attributes="0"/>
+                          </Group>
+                          <EmptySpace max="32767" attributes="0"/>
+                      </Group>
+                  </Group>
+                </DimensionLayout>
+                <DimensionLayout dim="1">
+                  <Group type="103" groupAlignment="0" attributes="0">
+                      <Group type="102" alignment="0" attributes="0">
+                          <Group type="103" groupAlignment="3" attributes="0">
+                              <Component id="shalgnLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                              <Component id="yesShalgnRadioButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                              <Component id="noShalgnRadioButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                          </Group>
+                          <EmptySpace max="-2" attributes="0"/>
+                          <Group type="103" groupAlignment="3" attributes="0">
+                              <Component id="roalgnLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                              <Component id="yesRoalgnRadioButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                              <Component id="noRoalgnRadioButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                          </Group>
+                          <EmptySpace pref="21" max="32767" attributes="0"/>
+                      </Group>
+                  </Group>
+                </DimensionLayout>
+              </Layout>
+              <SubComponents>
+                <Component class="javax.swing.JLabel" name="shalgnLabel">
+                  <Properties>
+                    <Property name="text" type="java.lang.String" value="Shift Algn shalgn:"/>
+                  </Properties>
+                </Component>
+                <Component class="javax.swing.JRadioButton" name="yesShalgnRadioButton">
+                  <Properties>
+                    <Property name="text" type="java.lang.String" value="Yes"/>
+                  </Properties>
+                  <Events>
+                    <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="yesShalgnRadioButtonActionPerformed"/>
+                  </Events>
+                </Component>
+                <Component class="javax.swing.JRadioButton" name="noShalgnRadioButton">
+                  <Properties>
+                    <Property name="text" type="java.lang.String" value="No"/>
+                  </Properties>
+                  <Events>
+                    <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="noShalgnRadioButtonActionPerformed"/>
+                  </Events>
+                </Component>
+                <Component class="javax.swing.JLabel" name="roalgnLabel">
+                  <Properties>
+                    <Property name="text" type="java.lang.String" value="Ro Algn roalgn:"/>
+                  </Properties>
+                </Component>
+                <Component class="javax.swing.JRadioButton" name="yesRoalgnRadioButton">
+                  <Properties>
+                    <Property name="text" type="java.lang.String" value="Yes"/>
+                  </Properties>
+                  <Events>
+                    <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="yesRoalgnRadioButtonActionPerformed"/>
+                  </Events>
+                </Component>
+                <Component class="javax.swing.JRadioButton" name="noRoalgnRadioButton">
+                  <Properties>
+                    <Property name="text" type="java.lang.String" value="No"/>
+                  </Properties>
+                  <Events>
+                    <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="noRoalgnRadioButtonActionPerformed"/>
+                  </Events>
+                </Component>
+              </SubComponents>
+            </Container>
+            <Container class="javax.swing.JPanel" name="acfOtherPanel">
+              <Properties>
+                <Property name="border" type="javax.swing.border.Border" editor="org.netbeans.modules.form.editors2.BorderEditor">
+                  <Border info="org.netbeans.modules.form.compat2.border.TitledBorderInfo">
+                    <TitledBorder title="Acf masscen phrand..."/>
+                  </Border>
+                </Property>
+              </Properties>
+
+              <Layout>
+                <DimensionLayout dim="0">
+                  <Group type="103" groupAlignment="0" attributes="0">
+                      <Group type="102" attributes="0">
+                          <Group type="103" groupAlignment="0" attributes="0">
+                              <Group type="102" alignment="0" attributes="0">
+                                  <Component id="acfLabel" min="-2" max="-2" attributes="0"/>
+                                  <EmptySpace pref="33" max="32767" attributes="0"/>
+                                  <Component id="yesAcfRadioButton" min="-2" max="-2" attributes="0"/>
+                                  <EmptySpace max="-2" attributes="0"/>
+                                  <Component id="noAcfRadioButton" min="-2" max="-2" attributes="0"/>
+                              </Group>
+                              <Group type="102" alignment="0" attributes="0">
+                                  <Component id="phrandLabel" min="-2" max="-2" attributes="0"/>
+                                  <EmptySpace max="-2" attributes="0"/>
+                                  <Component id="yesPhrandRadioButton" min="-2" max="-2" attributes="0"/>
+                                  <EmptySpace max="-2" attributes="0"/>
+                                  <Component id="noPhrandRadioButton" min="-2" max="-2" attributes="0"/>
+                              </Group>
+                          </Group>
+                          <EmptySpace max="-2" attributes="0"/>
+                          <Group type="103" groupAlignment="0" max="-2" attributes="0">
+                              <Group type="102" alignment="0" attributes="1">
+                                  <Component id="visLabel" min="-2" max="-2" attributes="0"/>
+                                  <EmptySpace max="32767" attributes="0"/>
+                                  <Component id="yesVisRadioButton" min="-2" max="-2" attributes="0"/>
+                                  <EmptySpace max="-2" attributes="0"/>
+                                  <Component id="noVisRadioButton" min="-2" max="-2" attributes="0"/>
+                              </Group>
+                              <Group type="102" alignment="1" attributes="0">
+                                  <Component id="masscenLabel" min="-2" max="-2" attributes="0"/>
+                                  <EmptySpace max="-2" attributes="0"/>
+                                  <Component id="yesMasscenRadioButton" min="-2" max="-2" attributes="0"/>
+                                  <EmptySpace max="-2" attributes="0"/>
+                                  <Component id="noMasscenRadioButton" min="-2" max="-2" attributes="0"/>
+                              </Group>
+                          </Group>
+                          <EmptySpace max="-2" attributes="0"/>
+                      </Group>
+                  </Group>
+                </DimensionLayout>
+                <DimensionLayout dim="1">
+                  <Group type="103" groupAlignment="0" attributes="0">
+                      <Group type="102" alignment="0" attributes="0">
+                          <Group type="103" groupAlignment="3" attributes="0">
+                              <Component id="acfLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                              <Component id="masscenLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                              <Component id="yesMasscenRadioButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                              <Component id="noMasscenRadioButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                              <Component id="yesAcfRadioButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                              <Component id="noAcfRadioButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                          </Group>
+                          <EmptySpace max="-2" attributes="0"/>
+                          <Group type="103" groupAlignment="3" attributes="0">
+                              <Component id="phrandLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                              <Component id="yesPhrandRadioButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                              <Component id="noPhrandRadioButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                              <Component id="visLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                              <Component id="yesVisRadioButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                              <Component id="noVisRadioButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                          </Group>
+                          <EmptySpace pref="21" max="32767" attributes="0"/>
+                      </Group>
+                  </Group>
+                </DimensionLayout>
+              </Layout>
+              <SubComponents>
+                <Component class="javax.swing.JLabel" name="acfLabel">
+                  <Properties>
+                    <Property name="font" type="java.awt.Font" editor="com.sun.beans.editors.FontEditor">
+                      <SerializedValue value="-84,-19,0,5,115,114,0,13,106,97,118,97,46,97,119,116,46,70,111,110,116,-59,-95,53,-26,-52,-34,86,115,3,0,6,73,0,25,102,111,110,116,83,101,114,105,97,108,105,122,101,100,68,97,116,97,86,101,114,115,105,111,110,70,0,9,112,111,105,110,116,83,105,122,101,73,0,4,115,105,122,101,73,0,5,115,116,121,108,101,76,0,20,102,82,101,113,117,101,115,116,101,100,65,116,116,114,105,98,117,116,101,115,116,0,21,76,106,97,118,97,47,117,116,105,108,47,72,97,115,104,116,97,98,108,101,59,76,0,4,110,97,109,101,116,0,18,76,106,97,118,97,47,108,97,110,103,47,83,116,114,105,110,103,59,120,112,0,0,0,1,65,32,0,0,0,0,0,10,0,0,0,1,112,116,0,6,68,105,97,108,111,103,120"/>
+                    </Property>
+                    <Property name="text" type="java.lang.String" value="Acf:"/>
+                  </Properties>
+                </Component>
+                <Component class="javax.swing.JRadioButton" name="yesAcfRadioButton">
+                  <Properties>
+                    <Property name="text" type="java.lang.String" value="Yes"/>
+                  </Properties>
+                  <Events>
+                    <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="yesAcfRadioButtonActionPerformed"/>
+                  </Events>
+                </Component>
+                <Component class="javax.swing.JRadioButton" name="noAcfRadioButton">
+                  <Properties>
+                    <Property name="text" type="java.lang.String" value="No"/>
+                  </Properties>
+                  <Events>
+                    <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="noAcfRadioButtonActionPerformed"/>
+                  </Events>
+                </Component>
+                <Component class="javax.swing.JLabel" name="masscenLabel">
+                  <Properties>
+                    <Property name="font" type="java.awt.Font" editor="com.sun.beans.editors.FontEditor">
+                      <SerializedValue value="-84,-19,0,5,115,114,0,13,106,97,118,97,46,97,119,116,46,70,111,110,116,-59,-95,53,-26,-52,-34,86,115,3,0,6,73,0,25,102,111,110,116,83,101,114,105,97,108,105,122,101,100,68,97,116,97,86,101,114,115,105,111,110,70,0,9,112,111,105,110,116,83,105,122,101,73,0,4,115,105,122,101,73,0,5,115,116,121,108,101,76,0,20,102,82,101,113,117,101,115,116,101,100,65,116,116,114,105,98,117,116,101,115,116,0,21,76,106,97,118,97,47,117,116,105,108,47,72,97,115,104,116,97,98,108,101,59,76,0,4,110,97,109,101,116,0,18,76,106,97,118,97,47,108,97,110,103,47,83,116,114,105,110,103,59,120,112,0,0,0,1,65,32,0,0,0,0,0,10,0,0,0,1,112,116,0,6,68,105,97,108,111,103,120"/>
+                    </Property>
+                    <Property name="text" type="java.lang.String" value="Masscen:"/>
+                  </Properties>
+                </Component>
+                <Component class="javax.swing.JRadioButton" name="yesMasscenRadioButton">
+                  <Properties>
+                    <Property name="text" type="java.lang.String" value="Yes"/>
+                  </Properties>
+                  <Events>
+                    <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="yesMasscenRadioButtonActionPerformed"/>
+                  </Events>
+                </Component>
+                <Component class="javax.swing.JRadioButton" name="noMasscenRadioButton">
+                  <Properties>
+                    <Property name="text" type="java.lang.String" value="No"/>
+                  </Properties>
+                  <Events>
+                    <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="noMasscenRadioButtonActionPerformed"/>
+                  </Events>
+                </Component>
+                <Component class="javax.swing.JLabel" name="phrandLabel">
+                  <Properties>
+                    <Property name="font" type="java.awt.Font" editor="com.sun.beans.editors.FontEditor">
+                      <SerializedValue value="-84,-19,0,5,115,114,0,13,106,97,118,97,46,97,119,116,46,70,111,110,116,-59,-95,53,-26,-52,-34,86,115,3,0,6,73,0,25,102,111,110,116,83,101,114,105,97,108,105,122,101,100,68,97,116,97,86,101,114,115,105,111,110,70,0,9,112,111,105,110,116,83,105,122,101,73,0,4,115,105,122,101,73,0,5,115,116,121,108,101,76,0,20,102,82,101,113,117,101,115,116,101,100,65,116,116,114,105,98,117,116,101,115,116,0,21,76,106,97,118,97,47,117,116,105,108,47,72,97,115,104,116,97,98,108,101,59,76,0,4,110,97,109,101,116,0,18,76,106,97,118,97,47,108,97,110,103,47,83,116,114,105,110,103,59,120,112,0,0,0,1,65,32,0,0,0,0,0,10,0,0,0,1,112,116,0,6,68,105,97,108,111,103,120"/>
+                    </Property>
+                    <Property name="text" type="java.lang.String" value="Phrand:"/>
+                  </Properties>
+                </Component>
+                <Component class="javax.swing.JRadioButton" name="yesPhrandRadioButton">
+                  <Properties>
+                    <Property name="text" type="java.lang.String" value="Yes"/>
+                  </Properties>
+                  <Events>
+                    <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="yesPhrandRadioButtonActionPerformed"/>
+                  </Events>
+                </Component>
+                <Component class="javax.swing.JRadioButton" name="noPhrandRadioButton">
+                  <Properties>
+                    <Property name="text" type="java.lang.String" value="No"/>
+                  </Properties>
+                  <Events>
+                    <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="noPhrandRadioButtonActionPerformed"/>
+                  </Events>
+                </Component>
+                <Component class="javax.swing.JLabel" name="visLabel">
+                  <Properties>
+                    <Property name="font" type="java.awt.Font" editor="com.sun.beans.editors.FontEditor">
+                      <SerializedValue value="-84,-19,0,5,115,114,0,13,106,97,118,97,46,97,119,116,46,70,111,110,116,-59,-95,53,-26,-52,-34,86,115,3,0,6,73,0,25,102,111,110,116,83,101,114,105,97,108,105,122,101,100,68,97,116,97,86,101,114,115,105,111,110,70,0,9,112,111,105,110,116,83,105,122,101,73,0,4,115,105,122,101,73,0,5,115,116,121,108,101,76,0,20,102,82,101,113,117,101,115,116,101,100,65,116,116,114,105,98,117,116,101,115,116,0,21,76,106,97,118,97,47,117,116,105,108,47,72,97,115,104,116,97,98,108,101,59,76,0,4,110,97,109,101,116,0,18,76,106,97,118,97,47,108,97,110,103,47,83,116,114,105,110,103,59,120,112,0,0,0,1,65,32,0,0,0,0,0,10,0,0,0,1,112,116,0,6,68,105,97,108,111,103,120"/>
+                    </Property>
+                    <Property name="text" type="java.lang.String" value="Vis:"/>
+                  </Properties>
+                </Component>
+                <Component class="javax.swing.JRadioButton" name="yesVisRadioButton">
+                  <Properties>
+                    <Property name="text" type="java.lang.String" value="Yes"/>
+                  </Properties>
+                  <Events>
+                    <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="yesVisRadioButtonActionPerformed"/>
+                  </Events>
+                </Component>
+                <Component class="javax.swing.JRadioButton" name="noVisRadioButton">
+                  <Properties>
+                    <Property name="text" type="java.lang.String" value="No"/>
+                  </Properties>
+                  <Events>
+                    <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="noVisRadioButtonActionPerformed"/>
+                  </Events>
+                </Component>
+              </SubComponents>
+            </Container>
+            <Container class="javax.swing.JScrollPane" name="optionalScrollPanel">
+
+              <Layout class="org.netbeans.modules.form.compat2.layouts.support.JScrollPaneSupportLayout"/>
+              <SubComponents>
+                <Container class="javax.swing.JPanel" name="optionalParametersPanel">
+                  <Properties>
+                    <Property name="border" type="javax.swing.border.Border" editor="org.netbeans.modules.form.editors2.BorderEditor">
+                      <Border info="org.netbeans.modules.form.compat2.border.TitledBorderInfo">
+                        <TitledBorder title="Optional parameters..."/>
+                      </Border>
+                    </Property>
+                  </Properties>
+
+                  <Layout>
+                    <DimensionLayout dim="0">
+                      <Group type="103" groupAlignment="0" attributes="0">
+                          <Group type="102" attributes="0">
+                              <Group type="103" groupAlignment="0" attributes="0">
+                                  <Group type="102" attributes="0">
+                                      <Group type="103" groupAlignment="0" attributes="0">
+                                          <Group type="102" alignment="0" attributes="0">
+                                              <Component id="binarizeLabel" min="-2" max="-2" attributes="0"/>
+                                              <EmptySpace max="-2" attributes="0"/>
+                                              <Component id="yesBinarizeRadioButton" min="-2" max="-2" attributes="0"/>
+                                              <EmptySpace max="-2" attributes="0"/>
+                                              <Component id="noBinarizeRadioButton" min="-2" max="-2" attributes="0"/>
+                                          </Group>
+                                          <Group type="103" alignment="0" groupAlignment="1" max="-2" attributes="0">
+                                              <Group type="102" alignment="0" attributes="1">
+                                                  <Component id="lpLabel" min="-2" max="-2" attributes="0"/>
+                                                  <EmptySpace type="separate" max="-2" attributes="0"/>
+                                                  <Component id="lpTextField" max="32767" attributes="0"/>
+                                              </Group>
+                                              <Group type="102" alignment="0" attributes="0">
+                                                  <Component id="hpLabel" min="-2" max="-2" attributes="0"/>
+                                                  <EmptySpace max="-2" attributes="0"/>
+                                                  <Component id="hpTextField" min="-2" pref="50" max="-2" attributes="0"/>
+                                              </Group>
+                                          </Group>
+                                      </Group>
+                                      <EmptySpace max="-2" attributes="0"/>
+                                      <Group type="103" groupAlignment="0" attributes="0">
+                                          <Component id="frompLabel" alignment="0" min="-2" max="-2" attributes="0"/>
+                                          <Component id="snrLabel" alignment="0" min="-2" max="-2" attributes="0"/>
+                                          <Component id="topLabel" alignment="0" min="-2" max="-2" attributes="0"/>
+                                      </Group>
+                                      <EmptySpace max="-2" attributes="0"/>
+                                      <Group type="103" groupAlignment="0" max="-2" attributes="0">
+                                          <Component id="snrTextField" max="32767" attributes="1"/>
+                                          <Component id="frompTextField" alignment="0" pref="42" max="32767" attributes="1"/>
+                                          <Component id="topTextField" alignment="0" max="32767" attributes="1"/>
+                                      </Group>
+                                  </Group>
+                                  <Group type="102" alignment="0" attributes="0">
+                                      <Component id="hfunLabel" min="-2" max="-2" attributes="0"/>
+                                      <EmptySpace max="-2" attributes="0"/>
+                                      <Component id="sigmHfunRadioButton" min="-2" max="-2" attributes="0"/>
+                                      <EmptySpace max="-2" attributes="0"/>
+                                      <Component id="tanhHfunRadioButton" min="-2" max="-2" attributes="0"/>
+                                      <EmptySpace max="-2" attributes="0"/>
+                                      <Component id="linHfunRadioButton" min="-2" max="-2" attributes="0"/>
+                                  </Group>
+                              </Group>
+                              <EmptySpace max="-2" attributes="0"/>
+                              <Group type="103" groupAlignment="0" attributes="0">
+                                  <Component id="mulLabel" alignment="0" min="-2" max="-2" attributes="0"/>
+                                  <Component id="stateLabel" alignment="0" min="-2" max="-2" attributes="0"/>
+                                  <Component id="nranLabel" alignment="0" min="-2" max="-2" attributes="0"/>
+                                  <Component id="scaleLabel" alignment="0" min="-2" max="-2" attributes="0"/>
+                              </Group>
+                              <EmptySpace max="-2" attributes="0"/>
+                              <Group type="103" groupAlignment="0" max="-2" attributes="0">
+                                  <Component id="scaleTextField" max="32767" attributes="1"/>
+                                  <Component id="nranTextField" max="32767" attributes="1"/>
+                                  <Component id="stateTextField" max="32767" attributes="1"/>
+                                  <Component id="mulTextField" alignment="0" pref="36" max="32767" attributes="1"/>
+                              </Group>
+                              <EmptySpace max="-2" attributes="0"/>
+                              <Group type="103" groupAlignment="0" max="-2" attributes="0">
+                                  <Group type="102" attributes="0">
+                                      <Group type="103" groupAlignment="0" attributes="0">
+                                          <Component id="trsLabel" alignment="0" min="-2" max="-2" attributes="0"/>
+                                          <Component id="mskLabel" alignment="0" min="-2" max="-2" attributes="0"/>
+                                      </Group>
+                                      <EmptySpace min="-2" pref="2" max="-2" attributes="0"/>
+                                      <Group type="103" groupAlignment="0" max="-2" attributes="0">
+                                          <Component id="mskTextField" max="32767" attributes="1"/>
+                                          <Component id="trsTextField" alignment="0" pref="39" max="32767" attributes="1"/>
+                                      </Group>
+                                  </Group>
+                                  <Group type="102" alignment="0" attributes="0">
+                                      <Component id="newBoxLabel" min="-2" max="-2" attributes="0"/>
+                                      <EmptySpace max="-2" attributes="0"/>
+                                      <Component id="newBoxTextField" max="32767" attributes="0"/>
+                                  </Group>
+                              </Group>
+                              <EmptySpace min="-2" pref="783" max="-2" attributes="0"/>
+                          </Group>
+                          <Group type="102" alignment="0" attributes="0">
+                              <Group type="103" groupAlignment="0" attributes="0">
+                                  <Component id="normaliseLabel" alignment="0" min="-2" max="-2" attributes="0"/>
+                                  <Component id="ranktifyLabel" alignment="0" min="-2" max="-2" attributes="0"/>
+                                  <Component id="statsLabel" alignment="0" min="-2" max="-2" attributes="0"/>
+                              </Group>
+                              <EmptySpace max="-2" attributes="0"/>
+                              <Group type="103" groupAlignment="0" max="-2" attributes="0">
+                                  <Group type="102" alignment="0" attributes="0">
+                                      <Component id="yesNormaliseRadioButton" min="-2" max="-2" attributes="0"/>
+                                      <EmptySpace max="-2" attributes="0"/>
+                                      <Component id="noNormaliseRadioButton" min="-2" max="-2" attributes="0"/>
+                                      <EmptySpace max="-2" attributes="0"/>
+                                      <Component id="norm_noiseLabel" min="-2" max="-2" attributes="0"/>
+                                      <EmptySpace max="-2" attributes="0"/>
+                                      <Component id="yesNormNoiseRadioButton" min="-2" max="-2" attributes="0"/>
+                                      <EmptySpace max="-2" attributes="0"/>
+                                      <Component id="noNormNoiseRadioButton" min="-2" max="-2" attributes="0"/>
+                                      <EmptySpace max="-2" attributes="0"/>
+                                      <Component id="avgLabel" min="-2" max="-2" attributes="0"/>
+                                      <EmptySpace max="-2" attributes="0"/>
+                                      <Component id="yesAvgRadioButton" min="-2" max="-2" attributes="0"/>
+                                      <EmptySpace max="-2" attributes="0"/>
+                                      <Component id="noAvgRadioButton" min="-2" max="-2" attributes="0"/>
+                                  </Group>
+                                  <Group type="102" attributes="0">
+                                      <Component id="yesRanktifyRadioButton" min="-2" max="-2" attributes="0"/>
+                                      <EmptySpace max="-2" attributes="0"/>
+                                      <Component id="noRanktifyRadioButton" min="-2" max="-2" attributes="0"/>
+                                      <EmptySpace max="-2" attributes="0"/>
+                                      <Component id="fileTabLabel" min="-2" max="-2" attributes="0"/>
+                                      <EmptySpace max="-2" attributes="0"/>
+                                      <Component id="fileTabTextField" min="-2" pref="227" max="-2" attributes="0"/>
+                                      <EmptySpace max="-2" attributes="0"/>
+                                      <Component id="browseFileTabButton" min="-2" max="-2" attributes="0"/>
+                                  </Group>
+                                  <Group type="102" alignment="0" attributes="0">
+                                      <Group type="103" groupAlignment="1" attributes="0">
+                                          <Group type="102" alignment="1" attributes="0">
+                                              <Component id="yesMergeRadioButton" min="-2" max="-2" attributes="0"/>
+                                              <EmptySpace max="-2" attributes="0"/>
+                                              <Component id="noMergeRadioButton" min="-2" max="-2" attributes="0"/>
+                                          </Group>
+                                          <Group type="102" alignment="1" attributes="1">
+                                              <Component id="yesStatsRadioButton1" min="-2" max="-2" attributes="0"/>
+                                              <EmptySpace max="-2" attributes="0"/>
+                                              <Component id="noStatsRadioButton" min="-2" max="-2" attributes="0"/>
+                                          </Group>
+                                      </Group>
+                                      <EmptySpace pref="53" max="32767" attributes="0"/>
+                                      <Group type="103" groupAlignment="1" attributes="0">
+                                          <Group type="102" attributes="0">
+                                              <Component id="compareLabel" min="-2" max="-2" attributes="0"/>
+                                              <EmptySpace max="-2" attributes="0"/>
+                                              <Component id="yesCompareRadioButton" min="-2" max="-2" attributes="0"/>
+                                              <EmptySpace max="-2" attributes="0"/>
+                                              <Component id="noCompareRadioButton" min="-2" max="-2" attributes="0"/>
+                                          </Group>
+                                          <Group type="102" attributes="0">
+                                              <Component id="ft2imgLabel" min="-2" max="-2" attributes="0"/>
+                                              <EmptySpace max="-2" attributes="0"/>
+                                              <Component id="yesFt2imgRadioButton" min="-2" max="-2" attributes="0"/>
+                                              <EmptySpace max="-2" attributes="0"/>
+                                              <Component id="noFt2imgRadioButton" min="-2" max="-2" attributes="0"/>
+                                          </Group>
+                                      </Group>
+                                      <EmptySpace max="-2" attributes="0"/>
+                                      <Component id="negLabel" min="-2" max="-2" attributes="0"/>
+                                      <EmptySpace max="-2" attributes="0"/>
+                                      <Component id="yesNegRadioButton" min="-2" max="-2" attributes="0"/>
+                                      <EmptySpace max="-2" attributes="0"/>
+                                      <Component id="noNegRadioButton" min="-2" max="-2" attributes="0"/>
+                                  </Group>
+                              </Group>
+                              <EmptySpace min="-2" pref="824" max="-2" attributes="0"/>
+                          </Group>
+                          <Group type="102" alignment="0" attributes="0">
+                              <Component id="mergeLabel" min="-2" max="-2" attributes="0"/>
+                              <EmptySpace min="-2" pref="1298" max="-2" attributes="0"/>
+                          </Group>
+                          <Group type="102" alignment="0" attributes="0">
+                              <Component id="frameAvgLabel" min="-2" max="-2" attributes="0"/>
+                              <EmptySpace max="-2" attributes="0"/>
+                              <Component id="frameAvgTextField" min="-2" pref="50" max="-2" attributes="0"/>
+                              <EmptySpace max="-2" attributes="0"/>
+                              <Component id="clipLabel" min="-2" max="-2" attributes="0"/>
+                              <EmptySpace max="-2" attributes="0"/>
+                              <Component id="clipTextField" min="-2" pref="50" max="-2" attributes="0"/>
+                              <EmptySpace max="-2" attributes="0"/>
+                              <Component id="boxLabel" min="-2" max="-2" attributes="0"/>
+                              <EmptySpace max="-2" attributes="0"/>
+                              <Component id="boxTextField" min="-2" pref="50" max="-2" attributes="0"/>
+                              <EmptySpace max="-2" attributes="0"/>
+                              <Component id="innerLabel" min="-2" max="-2" attributes="0"/>
+                              <EmptySpace max="-2" attributes="0"/>
+                              <Component id="innerTextField" pref="56" max="32767" attributes="0"/>
+                              <EmptySpace max="-2" attributes="0"/>
+                              <Component id="widthLabel" min="-2" max="-2" attributes="0"/>
+                              <EmptySpace max="-2" attributes="0"/>
+                              <Component id="widthTextField" min="-2" pref="50" max="-2" attributes="0"/>
+                              <EmptySpace min="-2" pref="802" max="-2" attributes="0"/>
+                          </Group>
+                          <Group type="102" alignment="0" attributes="0">
+                              <Component id="outputParameterFileLabel" min="-2" max="-2" attributes="0"/>
+                              <EmptySpace max="-2" attributes="0"/>
+                              <Component id="outputParameterFileTextField" min="-2" pref="227" max="-2" attributes="0"/>
+                              <EmptySpace max="-2" attributes="0"/>
+                              <Component id="browseOutputParameterFileButton" min="-2" max="-2" attributes="0"/>
+                              <EmptySpace max="-2" attributes="0"/>
+                          </Group>
+                          <Group type="102" alignment="0" attributes="0">
+                              <Component id="fracZeroSlider" min="-2" pref="288" max="-2" attributes="1"/>
+                              <EmptySpace max="-2" attributes="0"/>
+                              <Component id="threshold4BinSlider" min="-2" pref="288" max="-2" attributes="1"/>
+                              <EmptySpace pref="761" max="32767" attributes="0"/>
+                          </Group>
+                      </Group>
+                    </DimensionLayout>
+                    <DimensionLayout dim="1">
+                      <Group type="103" groupAlignment="0" attributes="0">
+                          <Group type="102" attributes="0">
+                              <EmptySpace max="-2" attributes="0"/>
+                              <Group type="103" groupAlignment="3" attributes="0">
+                                  <Component id="hpLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="hpTextField" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="frompLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="frompTextField" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="mulLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="mulTextField" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="trsLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="trsTextField" alignment="3" min="-2" max="-2" attributes="0"/>
+                              </Group>
+                              <EmptySpace max="-2" attributes="0"/>
+                              <Group type="103" groupAlignment="3" attributes="0">
+                                  <Component id="lpLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="lpTextField" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="snrLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="snrTextField" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="stateLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="stateTextField" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="mskLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="mskTextField" alignment="3" min="-2" max="-2" attributes="0"/>
+                              </Group>
+                              <EmptySpace type="unrelated" max="-2" attributes="0"/>
+                              <Group type="103" groupAlignment="3" attributes="0">
+                                  <Component id="binarizeLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="yesBinarizeRadioButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="noBinarizeRadioButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="topLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="topTextField" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="nranLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="nranTextField" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="newBoxLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="newBoxTextField" alignment="3" min="-2" max="-2" attributes="0"/>
+                              </Group>
+                              <EmptySpace max="-2" attributes="0"/>
+                              <Group type="103" groupAlignment="3" attributes="0">
+                                  <Component id="hfunLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="sigmHfunRadioButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="tanhHfunRadioButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="linHfunRadioButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="scaleLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="scaleTextField" alignment="3" min="-2" max="-2" attributes="0"/>
+                              </Group>
+                              <EmptySpace max="-2" attributes="0"/>
+                              <Group type="103" groupAlignment="3" attributes="0">
+                                  <Component id="normaliseLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="yesNormaliseRadioButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="noNormaliseRadioButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="norm_noiseLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="yesNormNoiseRadioButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="noNormNoiseRadioButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="avgLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="yesAvgRadioButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="noAvgRadioButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                              </Group>
+                              <EmptySpace max="-2" attributes="0"/>
+                              <Group type="103" groupAlignment="3" attributes="0">
+                                  <Component id="ranktifyLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="yesRanktifyRadioButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="noRanktifyRadioButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="fileTabLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="fileTabTextField" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="browseFileTabButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                              </Group>
+                              <EmptySpace max="-2" attributes="0"/>
+                              <Group type="103" groupAlignment="3" attributes="0">
+                                  <Component id="statsLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="yesStatsRadioButton1" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="noStatsRadioButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="noNegRadioButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="yesNegRadioButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="negLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="noCompareRadioButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="yesCompareRadioButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="compareLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                              </Group>
+                              <EmptySpace max="-2" attributes="0"/>
+                              <Group type="103" groupAlignment="3" attributes="0">
+                                  <Component id="mergeLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="yesMergeRadioButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="noMergeRadioButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="noFt2imgRadioButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="yesFt2imgRadioButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="ft2imgLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                              </Group>
+                              <EmptySpace max="-2" attributes="0"/>
+                              <Group type="103" groupAlignment="3" attributes="0">
+                                  <Component id="frameAvgLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="frameAvgTextField" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="clipLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="clipTextField" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="boxLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="boxTextField" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="innerLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="innerTextField" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="widthLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="widthTextField" alignment="3" min="-2" max="-2" attributes="0"/>
+                              </Group>
+                              <EmptySpace max="-2" attributes="0"/>
+                              <Group type="103" groupAlignment="3" attributes="0">
+                                  <Component id="outputParameterFileLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="outputParameterFileTextField" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="browseOutputParameterFileButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                              </Group>
+                              <EmptySpace max="-2" attributes="0"/>
+                              <Group type="103" groupAlignment="3" attributes="0">
+                                  <Component id="fracZeroSlider" alignment="3" min="-2" max="-2" attributes="1"/>
+                                  <Component id="threshold4BinSlider" alignment="3" min="-2" max="-2" attributes="1"/>
+                              </Group>
+                              <EmptySpace max="32767" attributes="0"/>
+                          </Group>
+                      </Group>
+                    </DimensionLayout>
+                  </Layout>
+                  <SubComponents>
+                    <Component class="javax.swing.JLabel" name="hpLabel">
+                      <Properties>
+                        <Property name="text" type="java.lang.String" value="High pass limit hp:"/>
+                      </Properties>
+                    </Component>
+                    <Component class="javax.swing.JTextField" name="hpTextField">
+                    </Component>
+                    <Component class="javax.swing.JLabel" name="frompLabel">
+                      <Properties>
+                        <Property name="text" type="java.lang.String" value="Start ptcl fromp:"/>
+                      </Properties>
+                    </Component>
+                    <Component class="javax.swing.JTextField" name="frompTextField">
+                    </Component>
+                    <Component class="javax.swing.JLabel" name="mulLabel">
+                      <Properties>
+                        <Property name="text" type="java.lang.String" value="Shifting Mul mul:"/>
+                      </Properties>
+                    </Component>
+                    <Component class="javax.swing.JTextField" name="mulTextField">
+                    </Component>
+                    <Component class="javax.swing.JLabel" name="trsLabel">
+                      <Properties>
+                        <Property name="text" type="java.lang.String" value="trs&lt;origin&gt;:"/>
+                      </Properties>
+                    </Component>
+                    <Component class="javax.swing.JTextField" name="trsTextField">
+                    </Component>
+                    <Component class="javax.swing.JLabel" name="lpLabel">
+                      <Properties>
+                        <Property name="text" type="java.lang.String" value="Low pass limit lp:"/>
+                      </Properties>
+                    </Component>
+                    <Component class="javax.swing.JTextField" name="lpTextField">
+                    </Component>
+                    <Component class="javax.swing.JLabel" name="snrLabel">
+                      <Properties>
+                        <Property name="text" type="java.lang.String" value="SNR:"/>
+                      </Properties>
+                    </Component>
+                    <Component class="javax.swing.JTextField" name="snrTextField">
+                    </Component>
+                    <Component class="javax.swing.JLabel" name="stateLabel">
+                      <Properties>
+                        <Property name="text" type="java.lang.String" value="State to extract:"/>
+                      </Properties>
+                    </Component>
+                    <Component class="javax.swing.JTextField" name="stateTextField">
+                    </Component>
+                    <Component class="javax.swing.JLabel" name="mskLabel">
+                      <Properties>
+                        <Property name="text" type="java.lang.String" value="Mask msk:"/>
+                      </Properties>
+                    </Component>
+                    <Component class="javax.swing.JTextField" name="mskTextField">
+                    </Component>
+                    <Component class="javax.swing.JLabel" name="binarizeLabel">
+                      <Properties>
+                        <Property name="font" type="java.awt.Font" editor="com.sun.beans.editors.FontEditor">
+                          <SerializedValue value="-84,-19,0,5,115,114,0,13,106,97,118,97,46,97,119,116,46,70,111,110,116,-59,-95,53,-26,-52,-34,86,115,3,0,6,73,0,25,102,111,110,116,83,101,114,105,97,108,105,122,101,100,68,97,116,97,86,101,114,115,105,111,110,70,0,9,112,111,105,110,116,83,105,122,101,73,0,4,115,105,122,101,73,0,5,115,116,121,108,101,76,0,20,102,82,101,113,117,101,115,116,101,100,65,116,116,114,105,98,117,116,101,115,116,0,21,76,106,97,118,97,47,117,116,105,108,47,72,97,115,104,116,97,98,108,101,59,76,0,4,110,97,109,101,116,0,18,76,106,97,118,97,47,108,97,110,103,47,83,116,114,105,110,103,59,120,112,0,0,0,1,65,32,0,0,0,0,0,10,0,0,0,1,112,116,0,6,68,105,97,108,111,103,120"/>
+                        </Property>
+                        <Property name="text" type="java.lang.String" value="Binarize:"/>
+                      </Properties>
+                    </Component>
+                    <Component class="javax.swing.JRadioButton" name="yesBinarizeRadioButton">
+                      <Properties>
+                        <Property name="text" type="java.lang.String" value="Yes"/>
+                      </Properties>
+                      <Events>
+                        <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="yesBinarizeRadioButtonActionPerformed"/>
+                      </Events>
+                    </Component>
+                    <Component class="javax.swing.JRadioButton" name="noBinarizeRadioButton">
+                      <Properties>
+                        <Property name="text" type="java.lang.String" value="No"/>
+                      </Properties>
+                      <Events>
+                        <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="noBinarizeRadioButtonActionPerformed"/>
+                      </Events>
+                    </Component>
+                    <Component class="javax.swing.JLabel" name="topLabel">
+                      <Properties>
+                        <Property name="font" type="java.awt.Font" editor="com.sun.beans.editors.FontEditor">
+                          <SerializedValue value="-84,-19,0,5,115,114,0,13,106,97,118,97,46,97,119,116,46,70,111,110,116,-59,-95,53,-26,-52,-34,86,115,3,0,6,73,0,25,102,111,110,116,83,101,114,105,97,108,105,122,101,100,68,97,116,97,86,101,114,115,105,111,110,70,0,9,112,111,105,110,116,83,105,122,101,73,0,4,115,105,122,101,73,0,5,115,116,121,108,101,76,0,20,102,82,101,113,117,101,115,116,101,100,65,116,116,114,105,98,117,116,101,115,116,0,21,76,106,97,118,97,47,117,116,105,108,47,72,97,115,104,116,97,98,108,101,59,76,0,4,110,97,109,101,116,0,18,76,106,97,118,97,47,108,97,110,103,47,83,116,114,105,110,103,59,120,112,0,0,0,1,65,64,0,0,0,0,0,12,0,0,0,0,112,116,0,6,68,105,97,108,111,103,120"/>
+                        </Property>
+                        <Property name="text" type="java.lang.String" value="Top:"/>
+                      </Properties>
+                    </Component>
+                    <Component class="javax.swing.JTextField" name="topTextField">
+                    </Component>
+                    <Component class="javax.swing.JLabel" name="nranLabel">
+                      <Properties>
+                        <Property name="font" type="java.awt.Font" editor="com.sun.beans.editors.FontEditor">
+                          <SerializedValue value="-84,-19,0,5,115,114,0,13,106,97,118,97,46,97,119,116,46,70,111,110,116,-59,-95,53,-26,-52,-34,86,115,3,0,6,73,0,25,102,111,110,116,83,101,114,105,97,108,105,122,101,100,68,97,116,97,86,101,114,115,105,111,110,70,0,9,112,111,105,110,116,83,105,122,101,73,0,4,115,105,122,101,73,0,5,115,116,121,108,101,76,0,20,102,82,101,113,117,101,115,116,101,100,65,116,116,114,105,98,117,116,101,115,116,0,21,76,106,97,118,97,47,117,116,105,108,47,72,97,115,104,116,97,98,108,101,59,76,0,4,110,97,109,101,116,0,18,76,106,97,118,97,47,108,97,110,103,47,83,116,114,105,110,103,59,120,112,0,0,0,1,65,64,0,0,0,0,0,12,0,0,0,0,112,116,0,6,68,105,97,108,111,103,120"/>
+                        </Property>
+                        <Property name="text" type="java.lang.String" value="nran:"/>
+                      </Properties>
+                    </Component>
+                    <Component class="javax.swing.JTextField" name="nranTextField">
+                    </Component>
+                    <Component class="javax.swing.JLabel" name="newBoxLabel">
+                      <Properties>
+                        <Property name="text" type="java.lang.String" value="NewBox:"/>
+                      </Properties>
+                    </Component>
+                    <Component class="javax.swing.JTextField" name="newBoxTextField">
+                    </Component>
+                    <Component class="javax.swing.JLabel" name="scaleLabel">
+                      <Properties>
+                        <Property name="text" type="java.lang.String" value="Scale:"/>
+                      </Properties>
+                    </Component>
+                    <Component class="javax.swing.JLabel" name="hfunLabel">
+                      <Properties>
+                        <Property name="font" type="java.awt.Font" editor="com.sun.beans.editors.FontEditor">
+                          <SerializedValue value="-84,-19,0,5,115,114,0,13,106,97,118,97,46,97,119,116,46,70,111,110,116,-59,-95,53,-26,-52,-34,86,115,3,0,6,73,0,25,102,111,110,116,83,101,114,105,97,108,105,122,101,100,68,97,116,97,86,101,114,115,105,111,110,70,0,9,112,111,105,110,116,83,105,122,101,73,0,4,115,105,122,101,73,0,5,115,116,121,108,101,76,0,20,102,82,101,113,117,101,115,116,101,100,65,116,116,114,105,98,117,116,101,115,116,0,21,76,106,97,118,97,47,117,116,105,108,47,72,97,115,104,116,97,98,108,101,59,76,0,4,110,97,109,101,116,0,18,76,106,97,118,97,47,108,97,110,103,47,83,116,114,105,110,103,59,120,112,0,0,0,1,65,32,0,0,0,0,0,10,0,0,0,1,112,116,0,6,68,105,97,108,111,103,120"/>
+                        </Property>
+                        <Property name="text" type="java.lang.String" value="Hfun:"/>
+                      </Properties>
+                    </Component>
+                    <Component class="javax.swing.JRadioButton" name="sigmHfunRadioButton">
+                      <Properties>
+                        <Property name="text" type="java.lang.String" value="sigm"/>
+                      </Properties>
+                      <Events>
+                        <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="sigmHfunRadioButtonActionPerformed"/>
+                      </Events>
+                    </Component>
+                    <Component class="javax.swing.JRadioButton" name="tanhHfunRadioButton">
+                      <Properties>
+                        <Property name="text" type="java.lang.String" value="tanh"/>
+                      </Properties>
+                      <Events>
+                        <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="tanhHfunRadioButtonActionPerformed"/>
+                      </Events>
+                    </Component>
+                    <Component class="javax.swing.JRadioButton" name="linHfunRadioButton">
+                      <Properties>
+                        <Property name="text" type="java.lang.String" value="lin"/>
+                      </Properties>
+                      <Events>
+                        <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="linHfunRadioButtonActionPerformed"/>
+                      </Events>
+                    </Component>
+                    <Component class="javax.swing.JTextField" name="scaleTextField">
+                    </Component>
+                    <Component class="javax.swing.JLabel" name="normaliseLabel">
+                      <Properties>
+                        <Property name="font" type="java.awt.Font" editor="com.sun.beans.editors.FontEditor">
+                          <SerializedValue value="-84,-19,0,5,115,114,0,13,106,97,118,97,46,97,119,116,46,70,111,110,116,-59,-95,53,-26,-52,-34,86,115,3,0,6,73,0,25,102,111,110,116,83,101,114,105,97,108,105,122,101,100,68,97,116,97,86,101,114,115,105,111,110,70,0,9,112,111,105,110,116,83,105,122,101,73,0,4,115,105,122,101,73,0,5,115,116,121,108,101,76,0,20,102,82,101,113,117,101,115,116,101,100,65,116,116,114,105,98,117,116,101,115,116,0,21,76,106,97,118,97,47,117,116,105,108,47,72,97,115,104,116,97,98,108,101,59,76,0,4,110,97,109,101,116,0,18,76,106,97,118,97,47,108,97,110,103,47,83,116,114,105,110,103,59,120,112,0,0,0,1,65,32,0,0,0,0,0,10,0,0,0,1,112,116,0,6,68,105,97,108,111,103,120"/>
+                        </Property>
+                        <Property name="text" type="java.lang.String" value="Normalise:"/>
+                      </Properties>
+                    </Component>
+                    <Component class="javax.swing.JRadioButton" name="yesNormaliseRadioButton">
+                      <Properties>
+                        <Property name="text" type="java.lang.String" value="Yes"/>
+                      </Properties>
+                      <Events>
+                        <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="yesNormaliseRadioButtonActionPerformed"/>
+                      </Events>
+                    </Component>
+                    <Component class="javax.swing.JRadioButton" name="noNormaliseRadioButton">
+                      <Properties>
+                        <Property name="text" type="java.lang.String" value="No"/>
+                      </Properties>
+                      <Events>
+                        <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="noNormaliseRadioButtonActionPerformed"/>
+                      </Events>
+                    </Component>
+                    <Component class="javax.swing.JLabel" name="norm_noiseLabel">
+                      <Properties>
+                        <Property name="font" type="java.awt.Font" editor="com.sun.beans.editors.FontEditor">
+                          <SerializedValue value="-84,-19,0,5,115,114,0,13,106,97,118,97,46,97,119,116,46,70,111,110,116,-59,-95,53,-26,-52,-34,86,115,3,0,6,73,0,25,102,111,110,116,83,101,114,105,97,108,105,122,101,100,68,97,116,97,86,101,114,115,105,111,110,70,0,9,112,111,105,110,116,83,105,122,101,73,0,4,115,105,122,101,73,0,5,115,116,121,108,101,76,0,20,102,82,101,113,117,101,115,116,101,100,65,116,116,114,105,98,117,116,101,115,116,0,21,76,106,97,118,97,47,117,116,105,108,47,72,97,115,104,116,97,98,108,101,59,76,0,4,110,97,109,101,116,0,18,76,106,97,118,97,47,108,97,110,103,47,83,116,114,105,110,103,59,120,112,0,0,0,1,65,32,0,0,0,0,0,10,0,0,0,1,112,116,0,6,68,105,97,108,111,103,120"/>
+                        </Property>
+                        <Property name="text" type="java.lang.String" value="Normalise Noise:"/>
+                      </Properties>
+                    </Component>
+                    <Component class="javax.swing.JRadioButton" name="yesNormNoiseRadioButton">
+                      <Properties>
+                        <Property name="text" type="java.lang.String" value="Yes"/>
+                      </Properties>
+                      <Events>
+                        <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="yesNormNoiseRadioButtonActionPerformed"/>
+                      </Events>
+                    </Component>
+                    <Component class="javax.swing.JRadioButton" name="noNormNoiseRadioButton">
+                      <Properties>
+                        <Property name="text" type="java.lang.String" value="No"/>
+                      </Properties>
+                      <Events>
+                        <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="noNormNoiseRadioButtonActionPerformed"/>
+                      </Events>
+                    </Component>
+                    <Component class="javax.swing.JLabel" name="avgLabel">
+                      <Properties>
+                        <Property name="font" type="java.awt.Font" editor="com.sun.beans.editors.FontEditor">
+                          <SerializedValue value="-84,-19,0,5,115,114,0,13,106,97,118,97,46,97,119,116,46,70,111,110,116,-59,-95,53,-26,-52,-34,86,115,3,0,6,73,0,25,102,111,110,116,83,101,114,105,97,108,105,122,101,100,68,97,116,97,86,101,114,115,105,111,110,70,0,9,112,111,105,110,116,83,105,122,101,73,0,4,115,105,122,101,73,0,5,115,116,121,108,101,76,0,20,102,82,101,113,117,101,115,116,101,100,65,116,116,114,105,98,117,116,101,115,116,0,21,76,106,97,118,97,47,117,116,105,108,47,72,97,115,104,116,97,98,108,101,59,76,0,4,110,97,109,101,116,0,18,76,106,97,118,97,47,108,97,110,103,47,83,116,114,105,110,103,59,120,112,0,0,0,1,65,32,0,0,0,0,0,10,0,0,0,1,112,116,0,6,68,105,97,108,111,103,120"/>
+                        </Property>
+                        <Property name="text" type="java.lang.String" value="Avg:"/>
+                      </Properties>
+                    </Component>
+                    <Component class="javax.swing.JRadioButton" name="yesAvgRadioButton">
+                      <Properties>
+                        <Property name="text" type="java.lang.String" value="Yes"/>
+                      </Properties>
+                      <Events>
+                        <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="yesAvgRadioButtonActionPerformed"/>
+                      </Events>
+                    </Component>
+                    <Component class="javax.swing.JRadioButton" name="noAvgRadioButton">
+                      <Properties>
+                        <Property name="text" type="java.lang.String" value="No"/>
+                      </Properties>
+                      <Events>
+                        <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="noAvgRadioButtonActionPerformed"/>
+                      </Events>
+                    </Component>
+                    <Component class="javax.swing.JLabel" name="ranktifyLabel">
+                      <Properties>
+                        <Property name="font" type="java.awt.Font" editor="com.sun.beans.editors.FontEditor">
+                          <SerializedValue value="-84,-19,0,5,115,114,0,13,106,97,118,97,46,97,119,116,46,70,111,110,116,-59,-95,53,-26,-52,-34,86,115,3,0,6,73,0,25,102,111,110,116,83,101,114,105,97,108,105,122,101,100,68,97,116,97,86,101,114,115,105,111,110,70,0,9,112,111,105,110,116,83,105,122,101,73,0,4,115,105,122,101,73,0,5,115,116,121,108,101,76,0,20,102,82,101,113,117,101,115,116,101,100,65,116,116,114,105,98,117,116,101,115,116,0,21,76,106,97,118,97,47,117,116,105,108,47,72,97,115,104,116,97,98,108,101,59,76,0,4,110,97,109,101,116,0,18,76,106,97,118,97,47,108,97,110,103,47,83,116,114,105,110,103,59,120,112,0,0,0,1,65,32,0,0,0,0,0,10,0,0,0,1,112,116,0,6,68,105,97,108,111,103,120"/>
+                        </Property>
+                        <Property name="text" type="java.lang.String" value="Ranktify:"/>
+                      </Properties>
+                    </Component>
+                    <Component class="javax.swing.JRadioButton" name="yesRanktifyRadioButton">
+                      <Properties>
+                        <Property name="text" type="java.lang.String" value="Yes"/>
+                      </Properties>
+                      <Events>
+                        <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="yesRanktifyRadioButtonActionPerformed"/>
+                      </Events>
+                    </Component>
+                    <Component class="javax.swing.JRadioButton" name="noRanktifyRadioButton">
+                      <Properties>
+                        <Property name="text" type="java.lang.String" value="No"/>
+                      </Properties>
+                      <Events>
+                        <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="noRanktifyRadioButtonActionPerformed"/>
+                      </Events>
+                    </Component>
+                    <Component class="javax.swing.JLabel" name="fileTabLabel">
+                      <Properties>
+                        <Property name="font" type="java.awt.Font" editor="com.sun.beans.editors.FontEditor">
+                          <SerializedValue value="-84,-19,0,5,115,114,0,13,106,97,118,97,46,97,119,116,46,70,111,110,116,-59,-95,53,-26,-52,-34,86,115,3,0,6,73,0,25,102,111,110,116,83,101,114,105,97,108,105,122,101,100,68,97,116,97,86,101,114,115,105,111,110,70,0,9,112,111,105,110,116,83,105,122,101,73,0,4,115,105,122,101,73,0,5,115,116,121,108,101,76,0,20,102,82,101,113,117,101,115,116,101,100,65,116,116,114,105,98,117,116,101,115,116,0,21,76,106,97,118,97,47,117,116,105,108,47,72,97,115,104,116,97,98,108,101,59,76,0,4,110,97,109,101,116,0,18,76,106,97,118,97,47,108,97,110,103,47,83,116,114,105,110,103,59,120,112,0,0,0,1,65,32,0,0,0,0,0,10,0,0,0,1,112,116,0,6,68,105,97,108,111,103,120"/>
+                        </Property>
+                        <Property name="text" type="java.lang.String" value="FileTab:"/>
+                      </Properties>
+                    </Component>
+                    <Component class="javax.swing.JTextField" name="fileTabTextField">
+                    </Component>
+                    <Component class="javax.swing.JButton" name="browseFileTabButton">
+                      <Properties>
+                        <Property name="text" type="java.lang.String" value="Browse"/>
+                      </Properties>
+                    </Component>
+                    <Component class="javax.swing.JLabel" name="statsLabel">
+                      <Properties>
+                        <Property name="font" type="java.awt.Font" editor="com.sun.beans.editors.FontEditor">
+                          <SerializedValue value="-84,-19,0,5,115,114,0,13,106,97,118,97,46,97,119,116,46,70,111,110,116,-59,-95,53,-26,-52,-34,86,115,3,0,6,73,0,25,102,111,110,116,83,101,114,105,97,108,105,122,101,100,68,97,116,97,86,101,114,115,105,111,110,70,0,9,112,111,105,110,116,83,105,122,101,73,0,4,115,105,122,101,73,0,5,115,116,121,108,101,76,0,20,102,82,101,113,117,101,115,116,101,100,65,116,116,114,105,98,117,116,101,115,116,0,21,76,106,97,118,97,47,117,116,105,108,47,72,97,115,104,116,97,98,108,101,59,76,0,4,110,97,109,101,116,0,18,76,106,97,118,97,47,108,97,110,103,47,83,116,114,105,110,103,59,120,112,0,0,0,1,65,32,0,0,0,0,0,10,0,0,0,1,112,116,0,6,68,105,97,108,111,103,120"/>
+                        </Property>
+                        <Property name="text" type="java.lang.String" value="Stats:"/>
+                      </Properties>
+                    </Component>
+                    <Component class="javax.swing.JRadioButton" name="yesStatsRadioButton1">
+                      <Properties>
+                        <Property name="text" type="java.lang.String" value="Yes"/>
+                      </Properties>
+                      <Events>
+                        <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="yesStatsRadioButton1ActionPerformed"/>
+                      </Events>
+                    </Component>
+                    <Component class="javax.swing.JRadioButton" name="noStatsRadioButton">
+                      <Properties>
+                        <Property name="text" type="java.lang.String" value="No"/>
+                      </Properties>
+                      <Events>
+                        <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="noStatsRadioButtonActionPerformed"/>
+                      </Events>
+                    </Component>
+                    <Component class="javax.swing.JLabel" name="compareLabel">
+                      <Properties>
+                        <Property name="font" type="java.awt.Font" editor="com.sun.beans.editors.FontEditor">
+                          <SerializedValue value="-84,-19,0,5,115,114,0,13,106,97,118,97,46,97,119,116,46,70,111,110,116,-59,-95,53,-26,-52,-34,86,115,3,0,6,73,0,25,102,111,110,116,83,101,114,105,97,108,105,122,101,100,68,97,116,97,86,101,114,115,105,111,110,70,0,9,112,111,105,110,116,83,105,122,101,73,0,4,115,105,122,101,73,0,5,115,116,121,108,101,76,0,20,102,82,101,113,117,101,115,116,101,100,65,116,116,114,105,98,117,116,101,115,116,0,21,76,106,97,118,97,47,117,116,105,108,47,72,97,115,104,116,97,98,108,101,59,76,0,4,110,97,109,101,116,0,18,76,106,97,118,97,47,108,97,110,103,47,83,116,114,105,110,103,59,120,112,0,0,0,1,65,32,0,0,0,0,0,10,0,0,0,1,112,116,0,6,68,105,97,108,111,103,120"/>
+                        </Property>
+                        <Property name="text" type="java.lang.String" value="Compare:"/>
+                      </Properties>
+                    </Component>
+                    <Component class="javax.swing.JRadioButton" name="yesCompareRadioButton">
+                      <Properties>
+                        <Property name="text" type="java.lang.String" value="Yes"/>
+                      </Properties>
+                      <Events>
+                        <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="yesCompareRadioButtonActionPerformed"/>
+                      </Events>
+                    </Component>
+                    <Component class="javax.swing.JRadioButton" name="noCompareRadioButton">
+                      <Properties>
+                        <Property name="text" type="java.lang.String" value="No"/>
+                      </Properties>
+                      <Events>
+                        <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="noCompareRadioButtonActionPerformed"/>
+                      </Events>
+                    </Component>
+                    <Component class="javax.swing.JLabel" name="negLabel">
+                      <Properties>
+                        <Property name="font" type="java.awt.Font" editor="com.sun.beans.editors.FontEditor">
+                          <SerializedValue value="-84,-19,0,5,115,114,0,13,106,97,118,97,46,97,119,116,46,70,111,110,116,-59,-95,53,-26,-52,-34,86,115,3,0,6,73,0,25,102,111,110,116,83,101,114,105,97,108,105,122,101,100,68,97,116,97,86,101,114,115,105,111,110,70,0,9,112,111,105,110,116,83,105,122,101,73,0,4,115,105,122,101,73,0,5,115,116,121,108,101,76,0,20,102,82,101,113,117,101,115,116,101,100,65,116,116,114,105,98,117,116,101,115,116,0,21,76,106,97,118,97,47,117,116,105,108,47,72,97,115,104,116,97,98,108,101,59,76,0,4,110,97,109,101,116,0,18,76,106,97,118,97,47,108,97,110,103,47,83,116,114,105,110,103,59,120,112,0,0,0,1,65,32,0,0,0,0,0,10,0,0,0,1,112,116,0,6,68,105,97,108,111,103,120"/>
+                        </Property>
+                        <Property name="text" type="java.lang.String" value="Neg:"/>
+                      </Properties>
+                    </Component>
+                    <Component class="javax.swing.JRadioButton" name="yesNegRadioButton">
+                      <Properties>
+                        <Property name="text" type="java.lang.String" value="Yes"/>
+                      </Properties>
+                      <Events>
+                        <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="yesNegRadioButtonActionPerformed"/>
+                      </Events>
+                    </Component>
+                    <Component class="javax.swing.JRadioButton" name="noNegRadioButton">
+                      <Properties>
+                        <Property name="text" type="java.lang.String" value="No"/>
+                      </Properties>
+                      <Events>
+                        <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="noNegRadioButtonActionPerformed"/>
+                      </Events>
+                    </Component>
+                    <Component class="javax.swing.JLabel" name="mergeLabel">
+                      <Properties>
+                        <Property name="font" type="java.awt.Font" editor="com.sun.beans.editors.FontEditor">
+                          <SerializedValue value="-84,-19,0,5,115,114,0,13,106,97,118,97,46,97,119,116,46,70,111,110,116,-59,-95,53,-26,-52,-34,86,115,3,0,6,73,0,25,102,111,110,116,83,101,114,105,97,108,105,122,101,100,68,97,116,97,86,101,114,115,105,111,110,70,0,9,112,111,105,110,116,83,105,122,101,73,0,4,115,105,122,101,73,0,5,115,116,121,108,101,76,0,20,102,82,101,113,117,101,115,116,101,100,65,116,116,114,105,98,117,116,101,115,116,0,21,76,106,97,118,97,47,117,116,105,108,47,72,97,115,104,116,97,98,108,101,59,76,0,4,110,97,109,101,116,0,18,76,106,97,118,97,47,108,97,110,103,47,83,116,114,105,110,103,59,120,112,0,0,0,1,65,32,0,0,0,0,0,10,0,0,0,1,112,116,0,6,68,105,97,108,111,103,120"/>
+                        </Property>
+                        <Property name="text" type="java.lang.String" value="Merge:"/>
+                      </Properties>
+                    </Component>
+                    <Component class="javax.swing.JRadioButton" name="yesMergeRadioButton">
+                      <Properties>
+                        <Property name="text" type="java.lang.String" value="Yes"/>
+                      </Properties>
+                      <Events>
+                        <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="yesMergeRadioButtonActionPerformed"/>
+                      </Events>
+                    </Component>
+                    <Component class="javax.swing.JRadioButton" name="noMergeRadioButton">
+                      <Properties>
+                        <Property name="text" type="java.lang.String" value="No"/>
+                      </Properties>
+                      <Events>
+                        <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="noMergeRadioButtonActionPerformed"/>
+                      </Events>
+                    </Component>
+                    <Component class="javax.swing.JLabel" name="ft2imgLabel">
+                      <Properties>
+                        <Property name="font" type="java.awt.Font" editor="com.sun.beans.editors.FontEditor">
+                          <SerializedValue value="-84,-19,0,5,115,114,0,13,106,97,118,97,46,97,119,116,46,70,111,110,116,-59,-95,53,-26,-52,-34,86,115,3,0,6,73,0,25,102,111,110,116,83,101,114,105,97,108,105,122,101,100,68,97,116,97,86,101,114,115,105,111,110,70,0,9,112,111,105,110,116,83,105,122,101,73,0,4,115,105,122,101,73,0,5,115,116,121,108,101,76,0,20,102,82,101,113,117,101,115,116,101,100,65,116,116,114,105,98,117,116,101,115,116,0,21,76,106,97,118,97,47,117,116,105,108,47,72,97,115,104,116,97,98,108,101,59,76,0,4,110,97,109,101,116,0,18,76,106,97,118,97,47,108,97,110,103,47,83,116,114,105,110,103,59,120,112,0,0,0,1,65,32,0,0,0,0,0,10,0,0,0,1,112,116,0,6,68,105,97,108,111,103,120"/>
+                        </Property>
+                        <Property name="text" type="java.lang.String" value="ft2img:"/>
+                      </Properties>
+                    </Component>
+                    <Component class="javax.swing.JRadioButton" name="yesFt2imgRadioButton">
+                      <Properties>
+                        <Property name="text" type="java.lang.String" value="Yes"/>
+                      </Properties>
+                      <Events>
+                        <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="yesFt2imgRadioButtonActionPerformed"/>
+                      </Events>
+                    </Component>
+                    <Component class="javax.swing.JRadioButton" name="noFt2imgRadioButton">
+                      <Properties>
+                        <Property name="text" type="java.lang.String" value="No"/>
+                      </Properties>
+                      <Events>
+                        <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="noFt2imgRadioButtonActionPerformed"/>
+                      </Events>
+                    </Component>
+                    <Component class="javax.swing.JLabel" name="frameAvgLabel">
+                      <Properties>
+                        <Property name="text" type="java.lang.String" value="Frames to avg:"/>
+                      </Properties>
+                    </Component>
+                    <Component class="javax.swing.JTextField" name="frameAvgTextField">
+                    </Component>
+                    <Component class="javax.swing.JLabel" name="clipLabel">
+                      <Properties>
+                        <Property name="text" type="java.lang.String" value="Clip:"/>
+                      </Properties>
+                    </Component>
+                    <Component class="javax.swing.JTextField" name="clipTextField">
+                    </Component>
+                    <Component class="javax.swing.JLabel" name="boxLabel">
+                      <Properties>
+                        <Property name="text" type="java.lang.String" value="Box:"/>
+                      </Properties>
+                    </Component>
+                    <Component class="javax.swing.JTextField" name="boxTextField">
+                    </Component>
+                    <Component class="javax.swing.JLabel" name="innerLabel">
+                      <Properties>
+                        <Property name="text" type="java.lang.String" value="Inner:"/>
+                      </Properties>
+                    </Component>
+                    <Component class="javax.swing.JTextField" name="innerTextField">
+                    </Component>
+                    <Component class="javax.swing.JLabel" name="widthLabel">
+                      <Properties>
+                        <Property name="text" type="java.lang.String" value="Width:"/>
+                      </Properties>
+                    </Component>
+                    <Component class="javax.swing.JTextField" name="widthTextField">
+                    </Component>
+                    <Component class="javax.swing.JLabel" name="outputParameterFileLabel">
+                      <Properties>
+                        <Property name="font" type="java.awt.Font" editor="com.sun.beans.editors.FontEditor">
+                          <SerializedValue value="-84,-19,0,5,115,114,0,13,106,97,118,97,46,97,119,116,46,70,111,110,116,-59,-95,53,-26,-52,-34,86,115,3,0,6,73,0,25,102,111,110,116,83,101,114,105,97,108,105,122,101,100,68,97,116,97,86,101,114,115,105,111,110,70,0,9,112,111,105,110,116,83,105,122,101,73,0,4,115,105,122,101,73,0,5,115,116,121,108,101,76,0,20,102,82,101,113,117,101,115,116,101,100,65,116,116,114,105,98,117,116,101,115,116,0,21,76,106,97,118,97,47,117,116,105,108,47,72,97,115,104,116,97,98,108,101,59,76,0,4,110,97,109,101,116,0,18,76,106,97,118,97,47,108,97,110,103,47,83,116,114,105,110,103,59,120,112,0,0,0,1,65,32,0,0,0,0,0,10,0,0,0,1,112,116,0,6,68,105,97,108,111,103,120"/>
+                        </Property>
+                        <Property name="text" type="java.lang.String" value="Output parameter file:"/>
+                      </Properties>
+                    </Component>
+                    <Component class="javax.swing.JTextField" name="outputParameterFileTextField">
+                    </Component>
+                    <Component class="javax.swing.JButton" name="browseOutputParameterFileButton">
+                      <Properties>
+                        <Property name="text" type="java.lang.String" value="Browse"/>
+                      </Properties>
+                    </Component>
+                    <Component class="javax.swing.JSlider" name="fracZeroSlider">
+                      <Properties>
+                        <Property name="font" type="java.awt.Font" editor="com.sun.beans.editors.FontEditor">
+                          <SerializedValue value="-84,-19,0,5,115,114,0,13,106,97,118,97,46,97,119,116,46,70,111,110,116,-59,-95,53,-26,-52,-34,86,115,3,0,6,73,0,25,102,111,110,116,83,101,114,105,97,108,105,122,101,100,68,97,116,97,86,101,114,115,105,111,110,70,0,9,112,111,105,110,116,83,105,122,101,73,0,4,115,105,122,101,73,0,5,115,116,121,108,101,76,0,20,102,82,101,113,117,101,115,116,101,100,65,116,116,114,105,98,117,116,101,115,116,0,21,76,106,97,118,97,47,117,116,105,108,47,72,97,115,104,116,97,98,108,101,59,76,0,4,110,97,109,101,116,0,18,76,106,97,118,97,47,108,97,110,103,47,83,116,114,105,110,103,59,120,112,0,0,0,1,65,0,0,0,0,0,0,8,0,0,0,0,112,116,0,6,68,105,97,108,111,103,120"/>
+                        </Property>
+                        <Property name="majorTickSpacing" type="int" value="10"/>
+                        <Property name="minorTickSpacing" type="int" value="2"/>
+                        <Property name="paintLabels" type="boolean" value="true"/>
+                        <Property name="paintTicks" type="boolean" value="true"/>
+                        <Property name="snapToTicks" type="boolean" value="true"/>
+                        <Property name="toolTipText" type="java.lang.String" value="Fraction of zeros to include "/>
+                        <Property name="value" type="int" value="80"/>
+                        <Property name="border" type="javax.swing.border.Border" editor="org.netbeans.modules.form.editors2.BorderEditor">
+                          <Border info="org.netbeans.modules.form.compat2.border.TitledBorderInfo">
+                            <TitledBorder title="Fraction of zeros to include..."/>
+                          </Border>
+                        </Property>
+                        <Property name="valueIsAdjusting" type="boolean" value="true"/>
+                      </Properties>
+                    </Component>
+                    <Component class="javax.swing.JSlider" name="threshold4BinSlider">
+                      <Properties>
+                        <Property name="font" type="java.awt.Font" editor="com.sun.beans.editors.FontEditor">
+                          <SerializedValue value="-84,-19,0,5,115,114,0,13,106,97,118,97,46,97,119,116,46,70,111,110,116,-59,-95,53,-26,-52,-34,86,115,3,0,6,73,0,25,102,111,110,116,83,101,114,105,97,108,105,122,101,100,68,97,116,97,86,101,114,115,105,111,110,70,0,9,112,111,105,110,116,83,105,122,101,73,0,4,115,105,122,101,73,0,5,115,116,121,108,101,76,0,20,102,82,101,113,117,101,115,116,101,100,65,116,116,114,105,98,117,116,101,115,116,0,21,76,106,97,118,97,47,117,116,105,108,47,72,97,115,104,116,97,98,108,101,59,76,0,4,110,97,109,101,116,0,18,76,106,97,118,97,47,108,97,110,103,47,83,116,114,105,110,103,59,120,112,0,0,0,1,65,0,0,0,0,0,0,8,0,0,0,0,112,116,0,6,68,105,97,108,111,103,120"/>
+                        </Property>
+                        <Property name="majorTickSpacing" type="int" value="10"/>
+                        <Property name="minorTickSpacing" type="int" value="2"/>
+                        <Property name="paintLabels" type="boolean" value="true"/>
+                        <Property name="paintTicks" type="boolean" value="true"/>
+                        <Property name="snapToTicks" type="boolean" value="true"/>
+                        <Property name="toolTipText" type="java.lang.String" value="Threshold for bin..."/>
+                        <Property name="value" type="int" value="60"/>
+                        <Property name="border" type="javax.swing.border.Border" editor="org.netbeans.modules.form.editors2.BorderEditor">
+                          <Border info="org.netbeans.modules.form.compat2.border.TitledBorderInfo">
+                            <TitledBorder title="Threshold for bins..."/>
+                          </Border>
+                        </Property>
+                        <Property name="valueIsAdjusting" type="boolean" value="true"/>
+                      </Properties>
+                    </Component>
+                  </SubComponents>
+                </Container>
+              </SubComponents>
+            </Container>
+            <Container class="javax.swing.JScrollPane" name="symmetryCTFScrollPanel">
+              <Properties>
+                <Property name="border" type="javax.swing.border.Border" editor="org.netbeans.modules.form.editors2.BorderEditor">
+                  <Border info="org.netbeans.modules.form.compat2.border.TitledBorderInfo">
+                    <TitledBorder title="Symmetry and CTF..."/>
+                  </Border>
+                </Property>
+              </Properties>
+
+              <Layout class="org.netbeans.modules.form.compat2.layouts.support.JScrollPaneSupportLayout"/>
+              <SubComponents>
+                <Container class="javax.swing.JPanel" name="symmetryCTFPanel">
+
+                  <Layout>
+                    <DimensionLayout dim="0">
+                      <Group type="103" groupAlignment="0" attributes="0">
+                          <Group type="102" alignment="0" attributes="0">
+                              <Component id="symmetryGroupPanel" min="-2" pref="322" max="-2" attributes="1"/>
+                              <EmptySpace max="-2" attributes="0"/>
+                              <Component id="ctfPanel" min="-2" max="-2" attributes="0"/>
+                              <EmptySpace pref="243" max="32767" attributes="0"/>
+                          </Group>
+                      </Group>
+                    </DimensionLayout>
+                    <DimensionLayout dim="1">
+                      <Group type="103" groupAlignment="0" attributes="0">
+                          <Group type="102" alignment="0" attributes="0">
+                              <Group type="103" groupAlignment="1" attributes="0">
+                                  <Component id="ctfPanel" alignment="0" max="32767" attributes="1"/>
+                                  <Component id="symmetryGroupPanel" alignment="0" min="-2" pref="94" max="-2" attributes="1"/>
+                              </Group>
+                              <EmptySpace pref="43" max="32767" attributes="0"/>
+                          </Group>
+                      </Group>
+                    </DimensionLayout>
+                  </Layout>
+                  <SubComponents>
+                    <Container class="javax.swing.JPanel" name="symmetryGroupPanel">
+                      <Properties>
+                        <Property name="border" type="javax.swing.border.Border" editor="org.netbeans.modules.form.editors2.BorderEditor">
+                          <Border info="org.netbeans.modules.form.compat2.border.TitledBorderInfo">
+                            <TitledBorder title="symmetry Group &lt;cn|dn|t|o|i&gt;..."/>
+                          </Border>
+                        </Property>
+                      </Properties>
+
+                      <Layout>
+                        <DimensionLayout dim="0">
+                          <Group type="103" groupAlignment="0" attributes="0">
+                              <Group type="102" alignment="0" attributes="0">
+                                  <Group type="103" groupAlignment="0" attributes="0">
+                                      <Component id="cSymmetryRadioButton" min="-2" max="-2" attributes="0"/>
+                                      <Component id="tSymmetryRadioButton" min="-2" max="-2" attributes="0"/>
+                                  </Group>
+                                  <EmptySpace max="-2" attributes="0"/>
+                                  <Component id="cSymmetryGroupComboBox" min="-2" pref="78" max="-2" attributes="0"/>
+                                  <EmptySpace max="-2" attributes="0"/>
+                                  <Group type="103" groupAlignment="0" attributes="0">
+                                      <Component id="dSymmetryRadioButton" min="-2" max="-2" attributes="0"/>
+                                      <Component id="iSymmetryRadioButton" min="-2" max="-2" attributes="0"/>
+                                  </Group>
+                                  <EmptySpace max="32767" attributes="0"/>
+                                  <Component id="dSymmetryGroupComboBox" min="-2" pref="78" max="-2" attributes="0"/>
+                                  <EmptySpace max="-2" attributes="0"/>
+                                  <Component id="oSymmetryRadioButton" min="-2" max="-2" attributes="0"/>
+                                  <EmptySpace min="-2" pref="72" max="-2" attributes="0"/>
+                              </Group>
+                          </Group>
+                        </DimensionLayout>
+                        <DimensionLayout dim="1">
+                          <Group type="103" groupAlignment="0" attributes="0">
+                              <Component id="cSymmetryGroupComboBox" alignment="0" min="-2" pref="46" max="-2" attributes="0"/>
+                              <Group type="102" alignment="0" attributes="0">
+                                  <Component id="cSymmetryRadioButton" min="-2" max="-2" attributes="0"/>
+                                  <EmptySpace type="separate" max="-2" attributes="0"/>
+                                  <Component id="tSymmetryRadioButton" min="-2" max="-2" attributes="0"/>
+                              </Group>
+                              <Component id="dSymmetryGroupComboBox" alignment="0" min="-2" pref="46" max="-2" attributes="0"/>
+                              <Group type="102" alignment="0" attributes="0">
+                                  <Component id="dSymmetryRadioButton" min="-2" max="-2" attributes="0"/>
+                                  <EmptySpace type="separate" max="-2" attributes="0"/>
+                                  <Component id="iSymmetryRadioButton" min="-2" max="-2" attributes="0"/>
+                              </Group>
+                              <Component id="oSymmetryRadioButton" alignment="0" min="-2" max="-2" attributes="0"/>
+                          </Group>
+                        </DimensionLayout>
+                      </Layout>
+                      <SubComponents>
+                        <Component class="javax.swing.JComboBox" name="cSymmetryGroupComboBox">
+                          <Properties>
+                            <Property name="maximumRowCount" type="int" value="10"/>
+                            <Property name="model" type="javax.swing.ComboBoxModel" editor="org.netbeans.modules.form.editors2.ComboBoxModelEditor">
+                              <StringArray count="9">
+                                <StringItem index="0" value="C1"/>
+                                <StringItem index="1" value="C2"/>
+                                <StringItem index="2" value="C3"/>
+                                <StringItem index="3" value="C4"/>
+                                <StringItem index="4" value="C5"/>
+                                <StringItem index="5" value="C6"/>
+                                <StringItem index="6" value="C7"/>
+                                <StringItem index="7" value="C8"/>
+                                <StringItem index="8" value="C9"/>
+                              </StringArray>
+                            </Property>
+                            <Property name="border" type="javax.swing.border.Border" editor="org.netbeans.modules.form.editors2.BorderEditor">
+                              <Border info="org.netbeans.modules.form.compat2.border.TitledBorderInfo">
+                                <TitledBorder title="C..."/>
+                              </Border>
+                            </Property>
+                          </Properties>
+                          <Events>
+                            <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="cSymmetryGroupComboBoxActionPerformed"/>
+                          </Events>
+                        </Component>
+                        <Component class="javax.swing.JComboBox" name="dSymmetryGroupComboBox">
+                          <Properties>
+                            <Property name="maximumRowCount" type="int" value="10"/>
+                            <Property name="model" type="javax.swing.ComboBoxModel" editor="org.netbeans.modules.form.editors2.ComboBoxModelEditor">
+                              <StringArray count="9">
+                                <StringItem index="0" value="D1"/>
+                                <StringItem index="1" value="D2"/>
+                                <StringItem index="2" value="D3"/>
+                                <StringItem index="3" value="D4"/>
+                                <StringItem index="4" value="D5"/>
+                                <StringItem index="5" value="D6"/>
+                                <StringItem index="6" value="D7"/>
+                                <StringItem index="7" value="D8"/>
+                                <StringItem index="8" value="D9"/>
+                              </StringArray>
+                            </Property>
+                            <Property name="border" type="javax.swing.border.Border" editor="org.netbeans.modules.form.editors2.BorderEditor">
+                              <Border info="org.netbeans.modules.form.compat2.border.TitledBorderInfo">
+                                <TitledBorder title="D..."/>
+                              </Border>
+                            </Property>
+                          </Properties>
+                          <Events>
+                            <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="dSymmetryGroupComboBoxActionPerformed"/>
+                          </Events>
+                        </Component>
+                        <Component class="javax.swing.JRadioButton" name="tSymmetryRadioButton">
+                          <Properties>
+                            <Property name="text" type="java.lang.String" value="t"/>
+                          </Properties>
+                          <Events>
+                            <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="tSymmetryRadioButtonActionPerformed"/>
+                          </Events>
+                        </Component>
+                        <Component class="javax.swing.JRadioButton" name="oSymmetryRadioButton">
+                          <Properties>
+                            <Property name="text" type="java.lang.String" value="o"/>
+                          </Properties>
+                          <Events>
+                            <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="oSymmetryRadioButtonActionPerformed"/>
+                          </Events>
+                        </Component>
+                        <Component class="javax.swing.JRadioButton" name="iSymmetryRadioButton">
+                          <Properties>
+                            <Property name="text" type="java.lang.String" value="i"/>
+                          </Properties>
+                          <Events>
+                            <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="iSymmetryRadioButtonActionPerformed"/>
+                          </Events>
+                        </Component>
+                        <Component class="javax.swing.JRadioButton" name="cSymmetryRadioButton">
+                          <Properties>
+                            <Property name="text" type="java.lang.String" value="C Sym"/>
+                          </Properties>
+                          <Events>
+                            <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="cSymmetryRadioButtonActionPerformed"/>
+                          </Events>
+                        </Component>
+                        <Component class="javax.swing.JRadioButton" name="dSymmetryRadioButton">
+                          <Properties>
+                            <Property name="text" type="java.lang.String" value="D"/>
+                          </Properties>
+                          <Events>
+                            <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="dSymmetryRadioButtonActionPerformed"/>
+                          </Events>
+                        </Component>
+                      </SubComponents>
+                    </Container>
+                    <Container class="javax.swing.JPanel" name="ctfPanel">
+                      <Properties>
+                        <Property name="border" type="javax.swing.border.Border" editor="org.netbeans.modules.form.editors2.BorderEditor">
+                          <Border info="org.netbeans.modules.form.compat2.border.TitledBorderInfo">
+                            <TitledBorder title="CTF setup..."/>
+                          </Border>
+                        </Property>
+                      </Properties>
+
+                      <Layout>
+                        <DimensionLayout dim="0">
+                          <Group type="103" groupAlignment="0" attributes="0">
+                              <Group type="102" attributes="0">
+                                  <Group type="103" groupAlignment="0" attributes="0">
+                                      <Group type="102" alignment="0" attributes="0">
+                                          <Component id="yesCTFRadioButton" min="-2" max="-2" attributes="0"/>
+                                          <EmptySpace max="-2" attributes="0"/>
+                                          <Component id="noCTFRadioButton" min="-2" max="-2" attributes="0"/>
+                                          <EmptySpace max="-2" attributes="0"/>
+                                          <Component id="flipCTFRadioButton" min="-2" max="-2" attributes="0"/>
+                                          <EmptySpace max="-2" attributes="0"/>
+                                          <Component id="mulCTFRadioButton" min="-2" max="-2" attributes="0"/>
+                                      </Group>
+                                      <Group type="102" alignment="0" attributes="0">
+                                          <Component id="ctfsqLabel" min="-2" max="-2" attributes="0"/>
+                                          <EmptySpace max="-2" attributes="0"/>
+                                          <Component id="yesCtfSqRadioButton" min="-2" max="-2" attributes="0"/>
+                                          <EmptySpace max="-2" attributes="0"/>
+                                          <Component id="noCtfSqRadioButton" min="-2" max="-2" attributes="0"/>
+                                      </Group>
+                                  </Group>
+                                  <EmptySpace max="32767" attributes="0"/>
+                              </Group>
+                          </Group>
+                        </DimensionLayout>
+                        <DimensionLayout dim="1">
+                          <Group type="103" groupAlignment="0" attributes="0">
+                              <Group type="102" alignment="0" attributes="0">
+                                  <Group type="103" groupAlignment="3" attributes="0">
+                                      <Component id="yesCTFRadioButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                                      <Component id="noCTFRadioButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                                      <Component id="flipCTFRadioButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                                      <Component id="mulCTFRadioButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  </Group>
+                                  <EmptySpace type="unrelated" max="-2" attributes="0"/>
+                                  <Group type="103" groupAlignment="3" attributes="0">
+                                      <Component id="ctfsqLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                                      <Component id="yesCtfSqRadioButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                                      <Component id="noCtfSqRadioButton" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  </Group>
+                                  <EmptySpace max="32767" attributes="0"/>
+                              </Group>
+                          </Group>
+                        </DimensionLayout>
+                      </Layout>
+                      <SubComponents>
+                        <Component class="javax.swing.JRadioButton" name="yesCTFRadioButton">
+                          <Properties>
+                            <Property name="text" type="java.lang.String" value="Yes"/>
+                          </Properties>
+                          <Events>
+                            <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="yesCTFRadioButtonActionPerformed"/>
+                          </Events>
+                        </Component>
+                        <Component class="javax.swing.JRadioButton" name="noCTFRadioButton">
+                          <Properties>
+                            <Property name="text" type="java.lang.String" value="No"/>
+                          </Properties>
+                          <Events>
+                            <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="noCTFRadioButtonActionPerformed"/>
+                          </Events>
+                        </Component>
+                        <Component class="javax.swing.JRadioButton" name="flipCTFRadioButton">
+                          <Properties>
+                            <Property name="text" type="java.lang.String" value="Flip"/>
+                          </Properties>
+                          <Events>
+                            <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="flipCTFRadioButtonActionPerformed"/>
+                          </Events>
+                        </Component>
+                        <Component class="javax.swing.JRadioButton" name="mulCTFRadioButton">
+                          <Properties>
+                            <Property name="text" type="java.lang.String" value="Mul"/>
+                          </Properties>
+                          <Events>
+                            <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="mulCTFRadioButtonActionPerformed"/>
+                          </Events>
+                        </Component>
+                        <Component class="javax.swing.JLabel" name="ctfsqLabel">
+                          <Properties>
+                            <Property name="font" type="java.awt.Font" editor="com.sun.beans.editors.FontEditor">
+                              <SerializedValue value="-84,-19,0,5,115,114,0,13,106,97,118,97,46,97,119,116,46,70,111,110,116,-59,-95,53,-26,-52,-34,86,115,3,0,6,73,0,25,102,111,110,116,83,101,114,105,97,108,105,122,101,100,68,97,116,97,86,101,114,115,105,111,110,70,0,9,112,111,105,110,116,83,105,122,101,73,0,4,115,105,122,101,73,0,5,115,116,121,108,101,76,0,20,102,82,101,113,117,101,115,116,101,100,65,116,116,114,105,98,117,116,101,115,116,0,21,76,106,97,118,97,47,117,116,105,108,47,72,97,115,104,116,97,98,108,101,59,76,0,4,110,97,109,101,116,0,18,76,106,97,118,97,47,108,97,110,103,47,83,116,114,105,110,103,59,120,112,0,0,0,1,65,32,0,0,0,0,0,10,0,0,0,1,112,116,0,6,68,105,97,108,111,103,120"/>
+                            </Property>
+                            <Property name="text" type="java.lang.String" value="Ctf sq:"/>
+                          </Properties>
+                        </Component>
+                        <Component class="javax.swing.JRadioButton" name="yesCtfSqRadioButton">
+                          <Properties>
+                            <Property name="text" type="java.lang.String" value="Yes"/>
+                          </Properties>
+                          <Events>
+                            <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="yesCtfSqRadioButtonActionPerformed"/>
+                          </Events>
+                        </Component>
+                        <Component class="javax.swing.JRadioButton" name="noCtfSqRadioButton">
+                          <Properties>
+                            <Property name="text" type="java.lang.String" value="No"/>
+                          </Properties>
+                          <Events>
+                            <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="noCtfSqRadioButtonActionPerformed"/>
+                          </Events>
+                        </Component>
+                      </SubComponents>
+                    </Container>
+                  </SubComponents>
+                </Container>
+              </SubComponents>
+            </Container>
+            <Component class="javax.swing.JSlider" name="fracSlider">
+              <Properties>
+                <Property name="font" type="java.awt.Font" editor="com.sun.beans.editors.FontEditor">
+                  <SerializedValue value="-84,-19,0,5,115,114,0,13,106,97,118,97,46,97,119,116,46,70,111,110,116,-59,-95,53,-26,-52,-34,86,115,3,0,6,73,0,25,102,111,110,116,83,101,114,105,97,108,105,122,101,100,68,97,116,97,86,101,114,115,105,111,110,70,0,9,112,111,105,110,116,83,105,122,101,73,0,4,115,105,122,101,73,0,5,115,116,121,108,101,76,0,20,102,82,101,113,117,101,115,116,101,100,65,116,116,114,105,98,117,116,101,115,116,0,21,76,106,97,118,97,47,117,116,105,108,47,72,97,115,104,116,97,98,108,101,59,76,0,4,110,97,109,101,116,0,18,76,106,97,118,97,47,108,97,110,103,47,83,116,114,105,110,103,59,120,112,0,0,0,1,65,0,0,0,0,0,0,8,0,0,0,0,112,116,0,6,68,105,97,108,111,103,120"/>
+                </Property>
+                <Property name="majorTickSpacing" type="int" value="10"/>
+                <Property name="minorTickSpacing" type="int" value="2"/>
+                <Property name="paintLabels" type="boolean" value="true"/>
+                <Property name="paintTicks" type="boolean" value="true"/>
+                <Property name="snapToTicks" type="boolean" value="true"/>
+                <Property name="toolTipText" type="java.lang.String" value="Fraction of particles to include{0.7}"/>
+                <Property name="value" type="int" value="70"/>
+                <Property name="border" type="javax.swing.border.Border" editor="org.netbeans.modules.form.editors2.BorderEditor">
+                  <Border info="org.netbeans.modules.form.compat2.border.TitledBorderInfo">
+                    <TitledBorder title="fraction of ptcls to include..."/>
+                  </Border>
+                </Property>
+                <Property name="valueIsAdjusting" type="boolean" value="true"/>
+              </Properties>
+            </Component>
+          </SubComponents>
+        </Container>
+      </SubComponents>
+    </Container>
+  </SubComponents>
+</Form>

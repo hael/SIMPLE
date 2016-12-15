@@ -1,0 +1,163 @@
+ *******************************************************************************
+ ** Site#: 2577            For non-commercial use only         Version 8.032L **
+ *******************************************************************************
+ ** Cite this work as: MOPAC2007, James J. P. Stewart, Stewart Computational  **
+ ** Chemistry, Version 8.032L web: HTTP://OpenMOPAC.net                       **
+ *******************************************************************************
+ **                                                                           **
+ **                                MOPAC2007                                  **
+ **                                                                           **
+ *******************************************************************************
+
+                            PM6 CALCULATION RESULTS
+
+
+ *******************************************************************************
+ *  CALCULATION DONE:                                Fri Mar 28 17:19:47 2008  *
+ *  T=       - A TIME OF 172800.0 SECONDS REQUESTED
+ *  DUMP=N   - RESTART FILE WRITTEN EVERY  7200.000 SECONDS
+ *  GRAPH    - GENERATE FILE FOR GRAPHICS
+ *******************************************************************************
+GRAPH
+ Formaldehyde
+
+   ATOM   CHEMICAL     X               Y              Z
+  NUMBER   SYMBOL (ANGSTROMS)     (ANGSTROMS)    (ANGSTROMS)
+
+     1       O          0.2000000  *    0.000000       0.000000   
+     2       C          1.2108000       0.000000       0.000000   
+     3       H          1.7928000       0.930500       0.000000   
+     4       H          1.7928000      -0.930500       0.000000   
+
+
+
+          CARTESIAN COORDINATES 
+
+    NO.       ATOM         X         Y         Z
+
+     1         O        0.2000    0.0000    0.0000
+     2         C        1.2108    0.0000    0.0000
+     3         H        1.7928    0.9305    0.0000
+     4         H        1.7928   -0.9305    0.0000
+	 
+	 
+	 
+
+
+                    Reference for PM6
+ "Optimization of Parameters for Semiempirical Methods V: Modification of NDDO Approximations
+ and Application to 70 Elements", J. J. P. Stewart, J. Mol. Mod., 13, 1173-1213 (2007)
+ URL: http://www.springerlink.com/content/ar33482301010477/fulltext.pdf
+
+           Empirical Formula: C H2 O
+
+
+
+      MOLECULAR POINT GROUP   :   C2v 
+
+
+      RHF CALCULATION, NO. OF DOUBLY OCCUPIED LEVELS =    6
+
+      Geometry optimization using BFGS
+ ONLY ONE VARIABLE, THEREFORE ENERGY A MINIMUM
+
+ -------------------------------------------------------------------------------
+GRAPH
+ Formaldehyde
+
+
+
+     HEAT OF FORMATION MINIMIZED IN ONE LINE SEARCH           
+     SCF FIELD WAS ACHIEVED                                   
+
+
+                               PM6     CALCULATION
+                                                       MOPAC2007 (Version: 8.032L)
+                                                       Fri Mar 28 17:19:47 2008
+
+
+
+
+          FINAL HEAT OF FORMATION =        -20.69774 KCAL =     -86.59935 KJ
+
+
+          TOTAL ENERGY            =       -440.23219 EV
+          ELECTRONIC ENERGY       =       -825.77357 EV  POINT GROUP:     C2v 
+          CORE-CORE REPULSION     =        385.54138 EV
+          COSMO AREA              =         60.76 SQUARE ANGSTROMS
+          COSMO VOLUME            =         42.60 CUBIC ANGSTROMS
+
+          IONIZATION POTENTIAL    =         10.20370
+          NO. OF FILLED LEVELS    =          6
+          MOLECULAR WEIGHT        =         30.026
+
+          MOLECULAR DIMENSIONS (Angstroms)
+
+            Atom       Atom       Distance
+            H     3    O     1     2.01984
+            H     4    H     3     1.65176
+            O     1    C     2     0.00000
+
+
+          SCF CALCULATIONS        =         11
+          COMPUTATION TIME        =          0.016 SECONDS
+
+
+
+
+   ATOM   CHEMICAL     X               Y              Z
+  NUMBER   SYMBOL (ANGSTROMS)     (ANGSTROMS)    (ANGSTROMS)
+
+     1       O          0.0000595  *    0.000000       0.000000   
+     2       C          1.2108000       0.000000       0.000000   
+     3       H          1.7928000       0.930500       0.000000   
+     4       H          1.7928000      -0.930500       0.000000   
+
+           Empirical Formula: C H2 O
+
+
+
+      MOLECULAR POINT GROUP   :   C2v 
+
+
+                  EIGENVALUES
+
+ -32.00559 -23.55734 -17.17567 -15.14012 -14.76010 -10.20370   0.03240   4.08551
+   4.46012   4.74261
+
+
+              NET ATOMIC CHARGES AND DIPOLE CONTRIBUTIONS
+
+  ATOM NO.   TYPE          CHARGE      No. of ELECS.   s-Pop       p-Pop       
+    1          O          -0.422518        6.4225     1.85386     4.56866
+    2          C           0.236533        3.7635     1.14505     2.61842
+    3          H           0.092993        0.9070     0.90701
+    4          H           0.092993        0.9070     0.90701
+ DIPOLE           X         Y         Z       TOTAL
+ POINT-CHG.     2.977     0.000     0.000     2.977
+ HYBRID        -0.160     0.000    -0.000     0.160
+ SUM            2.817     0.000    -0.000     2.817
+
+
+          CARTESIAN COORDINATES 
+
+    NO.       ATOM               X         Y         Z
+
+     1         O                  0.0001    0.0000    0.0000
+     2         C                  1.2108    0.0000    0.0000
+     3         H                  1.7928    0.9305    0.0000
+     4         H                  1.7928   -0.9305    0.0000
+
+
+          ATOMIC ORBITAL ELECTRON POPULATIONS
+
+   1.85386   1.29039   1.93512   1.34315   1.14505   0.89768   1.06389   0.65685
+   0.90701   0.90701
+
+           DATA FOR GRAPH WRITTEN TO DISK
+
+
+
+ TOTAL CPU TIME:             0.03 SECONDS
+
+ == MOPAC DONE ==

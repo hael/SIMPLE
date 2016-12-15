@@ -1,0 +1,146 @@
+---
+INIT:             #     % ,  Time (s)
+  Classes:
+    Communications: [   0.0,  1.46E-05]
+    Convolutions:   [  21.4,  1.37E+00]
+    Linear Algebra: [   0.0,  0.00E+00]
+    Other:          [  10.8,  6.95E-01]
+    Potential:      [   0.4,  2.59E-02]
+    Initialization: [  34.0,  2.18E+00]
+    Finalization:   [   0.0,  0.00E+00]
+    Total:          [  66.6,  6.42E+00]
+  Categories:
+    wavefunction:
+            Data:   [  30.7,  1.97E+00]
+            Class:  Initialization
+            Info:   Miscellaneous
+    ApplyLocPotKin:
+            Data:   [  18.7,  1.20E+00]
+            Class:  Convolutions
+            Info:   OpenCL ported
+    ApplyProj:
+            Data:   [   9.3,  5.96E-01]
+            Class:  Other
+            Info:   RMA pattern
+    CrtLocPot:
+            Data:   [   2.9,  1.83E-01]
+            Class:  Initialization
+            Info:   Miscellaneous
+    Rho_comput:
+            Data:   [   2.7,  1.71E-01]
+            Class:  Convolutions
+            Info:   OpenCL ported
+    Un-TransSwitch:
+            Data:   [   1.5,  9.89E-02]
+            Class:  Other
+            Info:   RMA pattern
+    Input_comput:
+            Data:   [   0.3,  2.15E-02]
+            Class:  Initialization
+            Info:   Miscellaneous
+    PSolv_comput:
+            Data:   [   0.3,  1.99E-02]
+            Class:  Potential
+            Info:   3D FFT
+    Exchangecorr:
+            Data:   [   0.1,  5.92E-03]
+            Class:  Potential
+            Info:   Miscellaneous
+    CrtDescriptors:
+            Data:   [   0.0,  2.56E-03]
+            Class:  Initialization
+            Info:   RMA Pattern
+    PSolvKernel:
+            Data:   [   0.0,  3.05E-04]
+            Class:  Initialization
+            Info:   Miscellaneous
+    Pot_commun:
+            Data:   [   0.0,  1.46E-05]
+            Class:  Communications
+            Info:   AllGathrv grid
+WFN_OPT:          #     % ,  Time (s)
+  Classes:
+    Communications: [   0.0,  1.04E-03]
+    Convolutions:   [  80.5,  1.19E+02]
+    Linear Algebra: [   0.8,  1.17E+00]
+    Other:          [  18.3,  2.71E+01]
+    Potential:      [   0.1,  1.23E-01]
+    Initialization: [   0.0,  0.00E+00]
+    Finalization:   [   0.0,  0.00E+00]
+    Total:          [  99.7,  1.48E+02]
+  Categories:
+    Precondition:
+            Data:   [  53.9,  7.97E+01]
+            Class:  Convolutions
+            Info:   OpenCL ported
+    ApplyLocPotKin:
+            Data:   [  26.2,  3.87E+01]
+            Class:  Convolutions
+            Info:   OpenCL ported
+    ApplyProj:
+            Data:   [  16.1,  2.38E+01]
+            Class:  Other
+            Info:   RMA pattern
+    Un-TransSwitch:
+            Data:   [   2.2,  3.18E+00]
+            Class:  Other
+            Info:   RMA pattern
+    LagrM_comput:
+            Data:   [   0.5,  7.62E-01]
+            Class:  Linear Algebra
+            Info:   DGEMM
+    Rho_comput:
+            Data:   [   0.5,  7.38E-01]
+            Class:  Convolutions
+            Info:   OpenCL ported
+    Chol_comput:
+            Data:   [   0.3,  4.08E-01]
+            Class:  Linear Algebra
+            Info:   ALLReduce orbs
+    Diis:
+            Data:   [   0.1,  1.22E-01]
+            Class:  Other
+            Info:   Other
+    PSolv_comput:
+            Data:   [   0.0,  7.13E-02]
+            Class:  Potential
+            Info:   3D FFT
+    Exchangecorr:
+            Data:   [   0.0,  5.16E-02]
+            Class:  Potential
+            Info:   Miscellaneous
+    Pot_commun:
+            Data:   [   0.0,  1.04E-03]
+            Class:  Communications
+            Info:   AllGathrv grid
+LAST:             #     % ,  Time (s)
+  Classes:
+    Communications: [   0.0,  0.00E+00]
+    Convolutions:   [   0.4,  9.62E-02]
+    Linear Algebra: [   0.0,  0.00E+00]
+    Other:          [   0.0,  0.00E+00]
+    Potential:      [   0.0,  6.99E-03]
+    Initialization: [   0.0,  0.00E+00]
+    Finalization:   [  99.5,  2.28E+01]
+    Total:          [ 100.0,  2.29E+01]
+  Categories:
+    Forces:
+            Data:   [  99.5,  2.28E+01]
+            Class:  Finalization
+            Info:   Miscellaneous
+    Rho_comput:
+            Data:   [   0.4,  9.62E-02]
+            Class:  Convolutions
+            Info:   OpenCL ported
+    PSolv_comput:
+            Data:   [   0.0,  6.99E-03]
+            Class:  Potential
+            Info:   3D FFT
+SUMMARY:        #     % ,  Time (s)
+  INIT:           [   3.6,  6.42E+00]
+  WFN_OPT:        [  83.5,  1.48E+02]
+  LAST:           [  12.9,  2.29E+01]
+  Total:          [ 100.0,  1.77E+02]
+  CPU Parallelism:
+         MPI procs:       1
+         OMP thrds:       0

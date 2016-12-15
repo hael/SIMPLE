@@ -1,0 +1,57 @@
+HelloI'm trying to build SIMPLE on a Centos 6 box
+(essentially RedHat 6 is you aren't familiar with it) and I'm having
+some issues with the compile. I'm getting errors such as :o
+obj/GFORTgpu/gen_polar_coords_gpu.o
+src/simple_gpu/gen_polar_coords_gpu.cumake[1]: o: Command not
+foundmake[1]: [gen_polar_coords_gpu.o] Error 127 (ignored)This looks
+to me that part of the argument is missing, like I'm missing a
+variable that is needed to fill out the beginning of the command.
+There are several of these, all involving .cu files which suggests I'm
+missing a variable that defines the cuda compiler.I'm also getting
+linking issues with undefined reference to `fftwf_alloc_complex',
+though this might be related to the failure of the cu files to compile
+earlier in the build.
+
+Dear Adian:
+
+Thank you for your interest in SIMPLE2.1. I'd like to work with you to
+get the compilation to work and then we'll provide a RedHat config file,
+because quite a few people have had issues on Centos/RedHat. First, you
+should not have problems related to CUDA as CUDA is NOT currently
+supported. The GPU code will be released with version 3.0. You need to
+use a CPU-only config file as a starting point, such as
+
+Template_FEDORA_21x64_CPU_simple_user_input.pm
+
+Make sure that
+
+our$DOPENMP = "-fopenmp";
+our$DCUDA = "";
+our$DOPENCL = "";
+our$DMAGMA = "";
+our$DMKL = "";
+our$DSIMPLE_MPI = "";
+our$DBENCH = "";
+
+and that the compilers (gfortran, gcc, g++)  come from the same and
+correct version of the GNU Toolchain (4.9.1 or higher)
+
+Give that a try and get back to me how it goes.
+
+/Hans
+
+Hello
+
+I've successfully compiled SIMPLE on Centos 6, please find attached the config file I used, though I didn't change much from the Fedora one.
+
+Only major change is that I had to build fftw myself from the latest source as the version shipped with Centos 6 was missing the function that was causing the linking issues. I just built it with ./configure --enable-float to get the correct functions and then set the paths for SIMPLE to point to it.
+
+I also had to get new compilers from the Centos software collections. The following commands were used to set that up as root:
+
+yum install centos-release-scl
+
+** the equivalent command on Redhad is apparently:
+yum-config-manager --enable rhel-server-rhscl-7-rpms
+
+yum install devtoolset-3-gcc devtoolset-3-gcc-c++ devtoolset-3-gcc \
+gfortran devtoolset-3-binutils

@@ -1,0 +1,40 @@
+Headings for manual:
+
+CTF convention
+
+Workflows
+  (a) Using PRIME3D for ab inition 3D recoinstruction straight from the individual particle images
+  (c) Using PRIME2D as a pre-processing step for PRIME3D
+  
+How to distribute PRIME2D/PRIME3D on heterogeneous clusters, workstations and laptops
+
+INFORMATION DUPLICATION
+simple_check3D_conv info should be under distr PRIME3D exec
+simple_check2D_conv info should be under distr PRIME2D exec
+
+HEADINGS FOR THE ACCORDIONS
+* 2D alignment/clustering
+    (1) prime2D_init
+    (2) prime2D
+    (3) rank_cavgs
+    (4) map2ptcls
+    (5) doc2cavgs
+* Ab initio 3D reconstruction
+    (1) resrange
+    (2) prime3D_init
+    (3) prime3D
+    (4) symsrch
+    (5) recvol
+    (6) eo_recvol
+* Standard image/volume operations (ops)
+    (1) automask 
+    (2) converter
+    (3) iminfo 
+    (4) simimgs
+    (5) stackops
+    (6) volops
+* Utility programs
+    (1) print_fsc
+    (2) res
+    (3) projvol
+    

@@ -1,0 +1,126 @@
+# Makefile_macros for the gfortran/ifort compilers.
+
+####### The project path #####
+
+Simple_source=/home/cyril/Simple
+
+####### The switches #####
+
+DOPENMP = -fopenmp
+DCUDA = 
+DOPENCL = 
+DMAGMA = 
+DMKL = 
+DSIMPLE_MPI = 
+DBENCH = 
+
+####### The MPI paths #####
+
+MPIDIR=/usr
+MPIDIR_INCLUDE=/usr/include/mpi
+
+####### The compilers paths #####
+
+CCCOMP=gcc
+GCC=g++
+MPIFORTRAN=/usr/bin/mpif90
+GFORTRAN=gfortran
+
+####### The CUDA and MAGMA paths #####
+
+CUDADIR=/usr/local/cuda
+
+MAGMADIR=/opt/Devel_tools/magma-1.6.1
+MAGMADIR_CONTROL=$(MAGMADIR)/control
+MAGMADIR_INCLUDE=$(MAGMADIR)/include
+
+####### The OpenCL paths #####
+
+OPT_DEV_TOOLS_NVIDIA = /opt/Devel_tools/NVIDIA_GPU_Computing_SDK
+
+####### Set MAGMA-ADDONS={Magma version} to compile Magma addons. #####
+
+GPU_MODEL=0.0     #0: tesla arch, 1: fermi arch 
+
+####### Modules and objects directories. #####
+
+OBJDIR=obj/GFORTgpu
+MODDIR=obj/GFORTgpu
+
+##############
+# C compiler.#
+##############
+
+CC=$(CCCOMP)
+CFLAGS=-DCUBLAS_GFORTRAN -DADD_ -O3 -O -DLINUX -fopenmp    
+CCLIB=$(CC) -c $(CFLAGS) -I $(MODDIR)                                            \
+                         -I $(Simple_source)/include                             \
+                         -I $(Simple_source)/include/simple                      \
+                         -I $(Simple_source)/include/OpenCL                      \
+                         -I $(Simple_source)/include/mpe                         \
+                         -I /usr/local/fftw/3.3.4-gcc/include/
+
+################
+# C++ compiler.#
+################
+
+CPP=$(GCC)
+CPPFLAGS=-DADD_ -O3 -DLINUX -fopenmp    
+CPPCLIB=$(CPP) -c $(CPPFLAGS) -I $(MODDIR)                                            \
+                              -I $(Simple_source)/include                             \
+                              -I $(Simple_source)/include/simple                      \
+                              -I $(Simple_source)/include/OpenCL                      \
+                              -I $(Simple_source)/include/mpe                         \
+                              -I $(Simple_source)/test_code                           \
+                              -I /usr/local/fftw/3.3.4-gcc/include/
+
+#######################
+# Fortran 77 compiler.#
+#######################
+
+F77C=$(GFORTRAN)
+F77FLAGS=-O3 -cpp
+F77CLIB=$(F77C) -c $(F77FLAGS)
+
+#######################
+# Fortran 90 compiler.#
+#######################
+
+# $(DLIB)
+F90C=$(GFORTRAN)
+F90FLAGS=-ffree-form -cpp -fno-second-underscore -O3 -DLINUX -fopenmp      
+F90FLAGS77=-ffixed-form -cpp -fPIC -fno-second-underscore -O3 -DLINUX -fopenmp      
+F90CLIB=$(F90C) -c $(F90FLAGS) -I .                                \
+                               -I $(MODDIR)                        \
+                               -J $(MODDIR)                        \
+                               -I $(Simple_source)/include/simple
+
+
+F90CLIB77=$(F90C) -c $(F90FLAGS77) -I .                                \
+                                   -I $(MODDIR)                        \
+                                   -J $(MODDIR)                        \
+                                   -I $(Simple_source)/include/simple
+
+F90POST=
+
+#######################
+# MPIF90 compiler.    #
+#######################
+
+MPIF90C=$(MPIFORTRAN)
+MPIF90FLAGS=-ffree-form -cpp -fno-second-underscore -O3 -DLINUX 
+MPIF90FLAGS77=-ffixed-form -cpp -fPIC -fno-second-underscore -O3 -DLINUX 
+MPIF90CLIB=$(MPIF90C) -c $(MPIF90FLAGS) -I .                      \
+                               -I $(MODDIR)                       \
+                               -J $(MODDIR)                       \
+                               -I $(MPIDIR_INCLUDE)               \
+                               -I $(Simple_source)/include/simple
+
+MPIF90CLIB77=$(MPIF90C) -c $(MPIF90FLAGS77) -I .                     \
+                                  -I $(MODDIR)                       \
+                                  -J $(MODDIR)                       \
+                                  -I $(MPIDIR_INCLUDE)               \
+                                  -I $(Simple_source)/include/simple
+
+MPIF90POST=
+

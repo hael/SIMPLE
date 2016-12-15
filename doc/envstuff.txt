@@ -1,0 +1,20 @@
+# ENVIRONMENT VARIABLES
+
+FFTWLIB     /sw/lib
+SIMPLEBIN   /Users/hael/src/fortran/lib/simple/bin/
+SIMPLESYS   'LOCAL'
+SIMPLEPATH  /Users/hael/src/fortran/lib/simple
+
+# PATHS
+
+${SIMPLEPATH}/apps
+${SIMPLEBIN}
+
+# FFTWLIBS 4 DIFFERENT ARCHITECTURES
+
+biox3: /home/hael/simple/fftw/lib
+ostry: /em6/users/hael/simple/fftw/lib
+piip:  /home/hael/simple/fftw/lib/
+
+
+ 

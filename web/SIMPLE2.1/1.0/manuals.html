@@ -1,0 +1,250 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html><!-- InstanceBegin template="/Templates/template.dwt" codeOutsideHTMLIsLocked="false" -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<!-- InstanceBeginEditable name="doctitle" -->
+<title>manuals for single-particle cryo-electron microscopy reconstruction with SIMPLE</title>
+<!-- InstanceEndEditable -->
+<style type="text/css">
+body,td,th {
+	color: #FFFFFF;
+}
+body {
+	background-image: url(../images/fractal.jpg);
+	background-attachment: fixed;
+	margin-top: 0px;
+	margin-right: 0px;
+	margin-bottom: 0px;
+	margin-left: 0px;
+	background-color: rgb(0,0,0);
+	background-repeat: repeat;
+}
+</style>
+<link href="../common_styles.css" rel="stylesheet" type="text/css">
+<script src="../SpryAssets/SpryMenuBar.js" type="text/javascript"></script>
+<link href="../SpryAssets/SpryMenuBarHorizontal.css" rel="stylesheet" type="text/css">
+<!-- InstanceBeginEditable name="head" -->
+<style type="text/css"></style>
+<script src="SpryAssets/SpryAccordion.js" type="text/javascript"></script>
+<link href="SpryAssets/SpryAccordion.css" rel="stylesheet" type="text/css">
+<!-- InstanceEndEditable -->
+<script type="text/xml">
+<!--
+<oa:widgets>
+  <oa:widget wid="2149022" binding="#OAWidget" />
+</oa:widgets>
+-->
+</script>
+<style type="text/css">
+a:link {
+	color: rgb(153,0,51);
+}
+a:visited {
+	color: rgb(187,0,62);
+}
+a:hover {
+	color: rgb(187,0,62);
+}
+a:active {
+	color: rgb(187,0,62);
+}
+h1,h2,h3,h4,h5,h6 {
+	font-family: Verdana, Geneva, sans-serif;
+}
+h1 {
+	color: rgb(0,0,0);
+}
+h2 {
+	font-size: 18px;
+	color: rgb(153,0,0);
+}
+</style>
+<script type="text/javascript">
+
+  var _gaq = _gaq || [];
+  _gaq.push(['_setAccount', 'UA-31924791-1']);
+  _gaq.push(['_trackPageview']);
+
+  (function() {
+    var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+    ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+    var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+  })();
+
+</script>
+<link rel="shortcut icon" href="http://simplecryoem.com/favicon.ico" >
+</head>
+
+<body bgcolor="#000000">
+<a name="top"></a>
+<div class="logo_div"><img src="../images/SIMPLE_banner.png" alt="SIMPLE banner" width="830" height="110" align="absmiddle"></div>
+<div class="nav_div">
+  <ul id="MenuBar1" class="MenuBarHorizontal">
+    <li><a href="../index.html">About</a>    </li>
+    <li><a href="../download_form.html">Download</a></li>
+    <li><a href="../workflow.html">Workflow</a></li>
+    <li><a href="../manuals.html">Manuals</a></li>
+    <li><a href="../structures.html">Structures</a></li>
+    <li><a href="../references.html">References</a></li>
+    <li><a href="../contact.html">Contact </a></li>
+  </ul>
+</div>
+<!-- InstanceBeginEditable name="EditRegion1" -->
+<div class="content_div">
+  <h1>How to do single-particle reconstruction with SIMPLE 1.0
+  </h1>
+  <h2 class="h2_manual" align="center"><a href="http://simple.stanford.edu/1.0/documents/SIMPLE_manuals.pdf" target="_new">SIMPLE 1.0_single_particle_reconstruction.pdf</a></h2>
+  <div id="Accordion1" class="Accordion" >
+    <div class="AccordionPanel">
+    <div class="AccordionPanelTab">Installation of SIMPLE 1.0
+    </div><div class="AccordionPanelContent">
+      <p>&gt;&gt;&gt; mv Downloads/simple_mac_Dec18_2011.tar.gz /usr/local</p>
+      <p>&gt;&gt;&gt; gunzip simple_mac_Dec18_2011.tar.gz</p>
+      <p>&gt;&gt;&gt; tar -xvf simple_mac_Dec18_2011.tar</p>
+      <p>&gt;&gt;&gt; cd simple</p>
+      <p>&gt;&gt;&gt; ./simple_config.pl</p>
+      <p>Installation on hopper/local/biox2?</p>
+      <p>Hopper and Biox2 are clusters that we use for distributed <strong>SIMPLE 1.0</strong> execution. If you want a distributed SIMPLE 1.0 version you will have to modify the <strong>cluster_exec.pm </strong>module in the <strong>lib </strong>folder.</p>
+      <p>&gt;&gt;&gt; local</p>
+      <p>The files <strong>'source_tcsh'</strong> and <strong>'source_bash'</strong> contain the two lines you need to add to your .cshrc or .bashrc file, respectively, in order to have prompt access to the <strong>SIMPLE 1.0</strong> programs. If you are compiling <strong>SIMPLE 1.0</strong> from source, the compiler options used by the compile script <strong>simple_compile.pl</strong> are valid for the Intel Fortran compiler, assumed to be executed from the prompt with the command <strong>ifort</strong>. Currently, no other compilers are supported. Execute the compile script to get instructions. </p>
+    </div>
+  </div>
+    <div class="AccordionPanel">
+      <div class="AccordionPanelTab">Program: cluster</div>
+      <div class="AccordionPanelContent">
+        <p>&nbsp; <strong>cluster</strong> is a program for image clustering based on reference-free in-plane rotational alignment (Penczek et al., 1992) and probabilistic principal component analysis (PCA) for generation of feature vectors (Tipping and Bishop, 1999). Agglomerative hierarchical clustering (AHC) with complete linkage is used for grouping of feature vectors (Murtagh, 1983). Refinement of the clustering solution is done with the center-based iterative k-means clustering. <strong>cluster</strong> in-plane aligns the input image stack. Bicubic interpolation is used for shifting and rotating the stack before extraction of the pixels within the circular mask defined by mask radius <em>ring2</em>. Next, the probabilistic PCA method generates feature vectors from the vectors of extracted pixels. The  'cluster.log' file describes what was done in each step and lists the output files. The minimum class population (<em>minp</em>) prevents clusters below population <em>minp </em>to be represented by an output average. Clean up the class averages stack before generation of a Fourier stack and input to program <strong>origami, </strong>described below.</p>
+        <p><span class="h2_manual">Usage:<br>
+        </span> &gt;&gt;&gt; <strong>cluster</strong> <em>stk</em>=ptclstk.spi <em>box=&lt;</em>box size(in pixels)&gt; <em>nptcls=</em>&lt;nr of images in stack&gt; <em>smpd=</em>&lt;sampling distance(in &Aring;)&gt; [<em>ring1</em>=&lt;first ring(in pixels){5}&gt;] [<em>ring2</em>=&lt;second ring(in pixels){box/2}&gt;] [<em>ncls</em>=&lt;nr clusters{500}&gt;] [<em>minp</em>=&lt;minimum nr ptcls cluster{10}&gt;] [<em>nvars</em>=&lt;nr eigenvectors{30/60}&gt;] [<em>nthr</em>=&lt;nr openMP threads{1}&gt;] [<em>nran</em>=&lt;size of random sample{nptcls}&gt;] [<em>oritab</em>=&lt;SIMPLE 1.0 alignment doc&gt;] [<em>clsdoc</em>=&lt;Spider clustering doc&gt;] [<em>dopca</em>=&lt;yes|no&gt;] [<em>doalign</em>=&lt;yes|no&gt;] [<em>debug</em>=&lt;yes|no&gt;]</p>
+        <p><span class="h2_manual">Comments:<br>
+        </span> The number of clusters is a critical parameter. The setup allows for quick testing of the number of clusters. One pass produces the file 'pdfile.bin' containing the matrix with all pair-wise feature vector distances. Using the optional parameter <em>dopca</em> set to 'no' in a second round of execution from the same directory will make the program read the previously generated distances and re-do the clustering using whatever settings inputted for parameters <em>ncls </em>&amp; <em>minp</em>. The optional parameter <em>oritab </em>is used to provide in-plane parameters for the clustering (provided by programs <strong>align </strong>or <strong>cycler</strong>, described below). This option is used for generating class averages that are going to be subjected to heterogeneity analysis by program <strong>origami</strong>, described below. The number of eigenvectors is also critical parameter. The default setting uses 30 eigenvectors if you are not inputting in-plane parameters via optional parameter <em>oritab, </em>and 60 eigenvectors if you do input in-plane parameters. Note that the distance matrix is kept in RAM, so for large data sets you need LOTS of internal memory. This quirk can be addressed by using a random sample of the data for initial clustering by HAC. This is done by setting <em>nran</em> to some number &lt; <em>nptcls</em>. In this setting, the HAC centers generated from the random sample are used to extend the clustering to the entire data set with k-means. This overcomes the well-known initialization problem of k-means and enables clustering of many hundreds of thousands of particle images. <strong>SIMPLE 1.0</strong> has been used to cluster 300,000 images with a box size of 100 using a random subset of 60,000 images on a machine with 96 GB RAM.</p>
+      </div>
+    </div>
+    <div class="AccordionPanel">
+      <div class="AccordionPanelTab">Program: spi_to_fim</div>
+      <div class="AccordionPanelContent">
+        <p><strong>&nbsp; spi_to_fim</strong> is a program for generating and stacking 2D Fourier transforms using a spider stack of real images as input. EMAN and Spider generate such image stacks. Output consists of the files <em>outbdy.fim </em>(stack of transforms) and <em>outbdy.hed </em>(header) that are used by virtually all other SIMPLE 1.0 programs. </p>
+        <p><span class="h2_manual">Usage:<br>
+        </span> &gt;&gt;&gt; <strong>spi_to_fim</strong> <em>stk</em>=spistackin.spi <em>box=&lt;</em>box size(in pixels)&gt; <em>nptcls=</em>&lt;nr of images in stack&gt; <em>smpd=</em>&lt;sampling distance(in &Aring;)&gt; <em>outbdy</em>=&lt;body of output files&gt; [<em>fromp</em>=&lt;start ptcl&gt;] [<em>top</em>=&lt;stop ptcl&gt;] [<em>msk</em>=&lt;mask radius(in pixels)&gt;] [pad=&lt;yes|no&gt;] [debug=&lt;yes|no&gt;]</p>
+        <p><span class="h2_manual">Comments:<br>
+        </span> Beware that the mask parameter is optional despite that the images subjected to Fourier transformation need to be masked with a soft mask to avoid edge-induced artifacts. If the input images to <strong>spi_to_fim </strong>are not masked beforehand, you must apply a soft mask here using the optional <em>msk </em>parameter. Setting the optional parameters <em>pad</em> to 'yes' will pad the images to twice the size before Fourier transformation. Padded Fourier stacks are used for reconstruction. It is indicated in the below described individual programs if the input Fourier stack is expected to be padded. It may be convenient for you to generate the padded stack now. Setting the optional parameter <em>debug</em> to 'yes' will not produce the full stack, but produce a spider stack (debug.spi) with one image with all transformations (masking, shifting &amp; padding) applied to the first image of the input stack. </p>
+      </div>
+    </div>
+<div class="AccordionPanel">
+      <div class="AccordionPanelTab">Program: fim_to_spi</div>
+      <div class="AccordionPanelContent">
+        <p>&nbsp; Since there is a program spi_to_fim for generating stacks of Fourier transforms there is naturally also a program for back transformation of the Fourier stack: <strong>fim_to_spi</strong>. Output consists of a spider image stack.</p>
+        <p><span class="h2_manual">Usage:<br>
+        </span> &gt;&gt;&gt; <strong>fim_to_spi</strong> <em>fstk</em>=fprojs.fim <em>outstk=</em>rprojs.spi [debug=&lt;yes|no&gt;]</p>
+        <p><span class="h2_manual">Comments:<br>
+        </span> Set the optional parameter debug to &ldquo;yes&rdquo; if you want to print the stack header. This may be useful for checking that the stack has been generated using the intended input parameters.</p>
+      </div>
+    </div>
+<div class="AccordionPanel">
+      <div class="AccordionPanelTab">Program: origami</div>
+      <div class="AccordionPanelContent">
+        <p>&nbsp; <strong>origami</strong> is a program for reference-free 3D alignment and heterogeneity analysis of class averages using optimization of a spectral ensemble common line correlation coefficient (<a href="http://www.ncbi.nlm.nih.gov/pubmed/20637414" target="_new">Elmlund et al., 2010</a>; <a href="http://www.ncbi.nlm.nih.gov/pubmed/18068723" target="_new">Elmlund et al., 2008</a>). The coefficient is called 'spectral' because it uses adaptive low-pass filtering methods for improved search behavior and noise robustness. The term 'ensemble' coefficient was coined to distinguish the method from angular reconstitution, which uses an anchor set of only a few <em>ab initio</em> aligned class averages to orient the remaining ones (van Heel, 1987). Projection direction assignment is done in a discrete space using the constraint that two class averages are not allowed to occupy the same direction. Simulated annealing is used for the combinatorial optimization. The first discrete alignment is restarted three times on random starting configurations, and the best solution is written to the first alignment document. Finally, the additional origin shift and conformational state parameters are included in a greedy adaptive local search based scheme. This scheme steers a mixed continuous-discrete differential evolution optimizer operating over the six degrees of freedom of one Fourier plane. Input to <strong>origami</strong> is a Fourier stack of class averages 'cavgstk.fim' generated by cluster. Output from <strong>origami</strong> consists of reconstructed volumes, with and without solvent flattening applied to reduce the background noise. The automatically generated 'origami.log' lists the output files.</p>
+        <p><span class="h2_manual">Usage:<br>
+        </span> &gt;&gt;&gt;<strong> origami</strong> <em>fstk</em>=cavgstk.fim <em>lp</em>=&lt;low-pass limit(in &Aring;){15-30}&gt; [<em>froms</em>=&lt;number of states from&gt;] [<em>tos</em>=&lt;number of states to&gt;] [<em>maxits</em>=&lt;nr of rounds{10}&gt;] [<em>msk</em>=&lt;mask radius(in pixels)&gt;] [<em>mw</em>=&lt;molecular weight(in kD){0}&gt;] [<em>frac</em>=&lt;fraction of ptcls to include{0.8}&gt;] [<em>amsklp=</em>&lt;auto mask low-pass limit(in &Aring;){50}&gt;] [<em>edge=</em>&lt;edge size for softening of molecular envelope(in pixels){3}&gt;] [<em>nthr</em>=&lt;nr of openMP threads{1}&gt;] [<em>trs</em>=&lt;origin shift(in pixels){3}&gt;] [<em>hp</em>=&lt;high-pass limit(in &Aring;){100}&gt;] [<em>oritab</em>=&lt;input alignment doc&gt;] [<em>pgrp</em>=&lt;cn|dn&gt;] [<em>debug</em>=&lt;yes|no&gt;] </p>
+        <p><span class="h2_manual">Comments:<br>
+        </span> The outcome of <strong>origami</strong> depends on the quality of the class averages. The low-pass limit should hence be set to reflect the information content in the averages. A limit of 20 &Aring; works for most purposes. Origami can be executed in three modes. (1) <em>Ab initio </em>reconstruction mode, (2) Early stage heterogeneity analysis mode, and (3) Late stage heterogeneity analysis mode. In mode (1) class averages have been obtained in <strong>cluster </strong>using the reference-free 2D alignment algorithm (not inputting model-based alignment document), and execution might look like:</p>
+        <p>&gt;&gt;&gt; <strong>origami </strong><em>fstk=</em>cavgstk.fim <em>lp=</em>20 <em>nthr=</em>8 <em>mw=</em>500</p>
+        <p>In mode (2) you have generated model-based in-plane parameters with <strong>cycler </strong>or <strong>align </strong>and inputted them to <strong>cluster </strong>to generate class averages. Still, you are somewhat concerned about bias to the low-resolution inital volume and want to determine projection directions <em>ab initio. </em>Execution might look like:</p>
+        <p>&gt;&gt;&gt; <strong>origami </strong><em>fstk=</em>cavgstk.fim <em>lp=</em>20 <em>nthr=</em>8 <em>mw=</em>500 <em>tos=</em>3</p>
+        <p>In mode (3) you are confident with the alignment obtained by <strong>cycler </strong>or <strong>align</strong>, and you have generated beautiful class averages with <strong>cluster </strong>using these in-plane parameters as input. Now, use <strong>align </strong>or <strong>cycler </strong>to align the class averages back to the best so far reconstruction(s). Input the class average alignment document to origami and turn off the reference-free orientation refinement:</p>
+        <p>&gt;&gt;&gt; <strong>origami </strong><em>fstk=</em>cavgstk.fim <em>lp=</em>20 <em>nthr=</em>8 <em>mw=</em>500 <em>tos=</em>3 <em>oritab=</em>algndoc.dat <em>doalign=</em>no</p>
+        <p><strong>origami</strong> tests different number of states, from <em>froms </em>to <em>tos</em>. The number of states is a critical parameter that needs to be carefully addressed. When the number of states is increased, the number of parameters in the model is increased and the correlation will always improve. This is an example of an over fitting problem. In attempt to determine weather the increase from <em>s</em> to <em>s</em>+1 number of states gives rise to a significant correlation gain, the two distributions of individual common line correlations are compared using a Kolmogorov-Smirnov (K-S) statistical test. The K-S statistic and the K-S probability are printed to the 'cluster.log' file. If the K-S probability value is small and the K-S statistic is relatively large, the two distributions differ significantly. A binary heterogeneity will give rise to a significant change in correlation going from one to two state groups, whereas the changes from two to three groups and three to four groups will be less significant. The K-S statistic may be informative, but it does not insure against lowly populated, poor quality state groups showing up. These groups are usually easy to identify and they should be excluded from further analysis.</p>
+      </div>
+    </div>
+<div class="AccordionPanel">
+  <div class="AccordionPanelTab">Program: align</div>
+    <div class="AccordionPanelContent">
+      <p>&nbsp; <strong>align</strong> is a program for continuous reference-based 3D alignment of individual images, given input reference volume(s). The algorithm is based on advanced differential evolution (DE) for continuous global optimization (<a href="http://www.ncbi.nlm.nih.gov/pubmed/19410651" target="_new">Elmlund and Elmlund, 2009</a>). Previously, <strong>SIMPLE 1.0</strong> used a Fourier-based interpolation scheme that extracted common lines between reference central sections and the particle section. In this release, the Fourier-based interpolation scheme is reconciled with that used in Frealign. The entire reference section used for matching is now interpolated directly from the 3D Fourier volume, which requires only little extra computation. The method of spectral self-adaptation is applied to estimate a particle dependent low-pass frequency limit.</p>
+      <p><span class="h2_manual">Usage:<br>
+      </span>  &gt;&gt;&gt;<strong> align</strong> <em>mode</em>=&lt;mode nr&gt; <em>fstk</em>=&lt;input Fourier stack(*.fim)&gt; <em>vol1</em>=&lt;refvol_1.spi&gt; [<em>vol2</em>=&lt;refvol_2.spi&gt;&#46;&#46;&#46;etc.] <em>outfile</em>=&lt;output alignment doc&gt; [<em>msk</em>=&lt;spherical mask radius(in pixels)&gt;] [<em>lp</em>=&lt;low-pass limit(in &Aring;){30}&gt;] [<em>trs</em>=&lt;origin shift(in pixels){3}&gt;] [<em>trsstep</em>=&lt;origin shift stepsize{1}&gt;] [<em>nthr</em>=&lt;nr openMP threads{1}&gt;] [<em>oritab</em>=&lt;input alignment doc&gt;] [<em>fromp</em>=&lt;start ptcl index&gt;] [<em>top</em>=&lt;stop ptcl index&gt;] [<em>nspace=</em>&lt;nr of projectionns in discrete search{500}&gt;] [<em>pgrp</em>=&lt;cn|dn&gt;] [<em>hp</em>=&lt;high-pass limit(in &Aring;)&gt;] [debug=&lt;yes|no&gt;]</p>
+      <p><span class="h2_manual">Comments:<br>
+      </span><strong>Available modes are:</strong><br>
+      </p>
+      <table width="805" border="0">
+        <tr>
+          <td width="137" class="modes"><strong>mode=20:</strong></td>
+          <td width="658" class="modes"><div align="justify">multi-reference alignment with fixed low-pass limit (<em>lp</em>), no input orientations </div></td>
+        </tr>
+        <tr>
+          <td class="modes">&nbsp;</td>
+          <td class="modes"><div align="justify">are required</div></td>
+        </tr>
+        <tr>
+          <td class="modes"><strong>mode=21:</strong></td>
+          <td class="modes"><div align="justify">multi-reference alignment with spectral self-adaptation, input orientations are </div></td>
+        </tr>
+        <tr>
+          <td class="modes">&nbsp;</td>
+          <td class="modes"><div align="justify">required</div></td>
+        </tr>
+        <tr>
+          <td class="modes"><strong>mode=23:</strong></td>
+          <td class="modes"><div align="justify">for finding filtering threshold or do spectral scoring, input orientations are </div></td>
+        </tr>
+        <tr>
+          <td class="modes">&nbsp;</td>
+          <td class="modes"><div align="justify">required</div></td>
+        </tr>
+      </table>
+      <p>The strategy is to <strong>begin with mode=20 alignment</strong> on the starting volume(s) using a low-resolution low-pass limit (<em>lp </em>typically set to 30 &Aring;). In the first rounds, the origin shift parameters will be far from optimal. The user should make sure that a significant portion of the solutions do not lie on the shift interval borders. If this is the case, the Fourier stack should be shifted (using program <strong>shift_fim</strong>, described below) and the mode=20 search re-run. This reduces the complexity of the optimization problem and improves the quality of the solutions obtained in later refinement rounds. After completing the shift alignment and the first orientation assignment, volumes are reconstructed with program <strong>reconstruct </strong>(described below). <strong>In subsequent refinement rounds, mode=21-based alignment</strong> is combined with reconstruction until quasi-convergence. The shift range should now be limited to around [-3,3]. The mode=21 refinement should be run until convergence, as measured by the Fourier Shell Correlation (FSC) plot calculated between reconstructions from successive rounds.</p>
+    </div>
+</div>
+  <div class="AccordionPanel">
+    <div class="AccordionPanelTab">Program: reconstruct</div>
+    <div class="AccordionPanelContent">
+      <p>&nbsp; <strong>reconstruct</strong> is a program for reconstructing volumes from a padded <strong>SIMPLE 1.0</strong> Fourier transform stack (*.fim) when given input orientations and state assignments (obtained by program <strong>align</strong>). The algorithm is based on Fourier gridding with a Gaussian window function. This window function reduces the real-space ripple artifacts associated with direct moving window sinc interpolation. The feature sought when implementing this algorithm was to enable quick, reliable reconstruction from aligned individual particle images. A bonus is that the gridding method is very easy to parallelize.</p>
+      <p><span class="h2_manual">Usage:<br>
+      </span>  &gt;&gt;&gt;<strong> reconstruct </strong><em>fstkpd</em>=fprojs.fim [<em>oritab</em>=algndoc.dat] [<em>msk</em>=&lt;mask radius(in pixels)&gt;] [<em>mw</em>=&lt;molecular weight(in kD){0}&gt;] [<em>frac</em>=&lt;fraction of ptcls to include{0.8}&gt;] [<em>lp=</em>&lt;auto mask low-pass limit(in &Aring;){40}&gt;] [<em>nthr</em>=&lt;nr of openMP threads{1}&gt;] [eo=&lt;yes|no&gt;] [<em>pgrp</em>=&lt;cn|dn&gt;] [debug=&lt;yes|no&gt;] [<em>part=</em>&lt;partition number&gt;] [<em>fromp</em>=&lt;start ptcl&gt;] [<em>top</em>=&lt;stop ptcl&gt;] [<em>state=</em>&lt;state to reconstruct&gt;]</p>
+      <p><span class="h2_manual">Comments:<br>
+      </span>        Random orientations are used to generate the reconstruction if no orientations are inputted. The optional parameter <em>eo </em>is used for generating even-odd reconstructions subjected to FSC analysis. The optional parameter <em>mw </em>is used to do solvent flattening of the output volumes to reduce the background noise. If you do not know the molecular weight of your complex or you study materials that are not protein (metallic nanoparticles, for example) then input 0 to indicate that the molecular weight is unknown. The defaiult <em>mw </em>value is set to 0.</p>
+    </div>
+  </div>
+  <div class="AccordionPanel">
+    <div class="AccordionPanelTab">Program: automask</div>
+    <div class="AccordionPanelContent">
+      <p><strong>&nbsp; automask</strong> is a program for doing solvent flattening of an input spider volume. The algorithm for background removal is based on low-pass filtering and binarization. First, the volume is low-pass filtered to <em>lp</em>. A binary volume is then generated by assigning foreground pixels (=1) based on the volume calculated from the molecular weight, assuming a protein density of 1.43 g/mL. The edge of the resulting binary volume is softened by a real-space low-pass filter before multiplying it with the 'raw' input volume to generate the flattened map.</p>
+      <p><span class="h2_manual">Usage:<br>
+      </span>  &gt;&gt;&gt;<strong> automask</strong> <em>vol1</em>=invol1.spi [<em>vol2</em>=invol2.spi&#46;&#46;&#46;etc.] <em>box=&lt;</em>box size(in pixels)&gt; <em>smpd=</em>&lt;sampling distance(in &Aring;)&gt; <em>mw</em>=&lt;molecular weight(in kD)&gt; [<em>lp=</em>&lt;low-pass limit(in &Aring;){40}&gt;] [<em>msk</em>=&lt;mask radius(in pixels)&gt;] [<em>edge</em>=&lt;edge size for softening of the molecular envelope(in pixels){3}&gt;] [debug=&lt;yes|no&gt;]</p>
+      <p><span class="h2_manual">Comments:<br>
+      </span>        No comments.</p>
+    </div>
+  </div>
+  <div class="AccordionPanel">
+    <div class="AccordionPanelTab">Program: cycler</div>
+    <div class="AccordionPanelContent">
+      <p><strong>&nbsp; cycler </strong>combines <strong>align</strong>, <strong>reconstruct</strong>, and <strong>automask</strong> into a single program for refinement that is suitable for shared-memory multi-processor architectures, since the parallelization is based on the OpenMP protocol. Not much else to say &#45; the individual components are described above.</p>
+      <p><span class="h2_manual">Usage:<br>
+      </span>        &gt;&gt;&gt;<strong> cycler</strong> <em>fstk</em>=&lt;input Fourier stack(*.fim)&gt; <em>fstkpd</em>=&lt;input padded Fourier stack(*.fim)&gt; <em>vol1</em>=&lt;refvol_1.spi&gt; [<em>vol2</em>=&lt;refvol_2.spi&gt;&#46;&#46;&#46;etc.] [<em>maxits</em>=&lt;nr of rounds{50}&gt;] [<em>msk</em>=&lt;spherical mask radius(in pixels)&gt;] [<em>mw</em>=&lt;molecular weight(in kD){0}&gt;] [<em>startit</em>=&lt;start iteration nr{1}&gt;] [<em>frac</em>=&lt;fraction of ptcls to include{0.8}&gt;] [<em>lp</em>=&lt;low-pass limit(in &Aring;){30}&gt;] [<em>amsklp</em>=&lt;automask low-pass limit(in &Aring;){40}&gt;] [<em>edge</em>=&lt;edge size for softening of the molecular envelope(in pixels){3}&gt;] [<em>trs</em>=&lt;origin shift(in pixels){3}&gt;] [<em>trsstep</em>=&lt;origin shift stepsize{1}&gt;] [<em>nthr</em>=&lt;nr openMP threads{1}&gt; [<em>oritab</em>=&lt;input alignment doc&gt;] [<em>pgrp</em>=&lt;cn|dn&gt;] [<em>specoff</em>=&lt;yes|no&gt;] [<em>hp</em>=&lt;high-pass limit(in &Aring;)&gt;] [<em>mskfile=</em>&lt;mask.spi&gt;] [debug=&lt;yes|no&gt;]</p>
+      <p><span class="h2_manual">Comments:<br>
+</span> Cycler can be run on class averages or on smaller data sets. If class averages are used, then turn off the spectral self-adaption (by setting specoff=yes) and set a fixed limit. For refinement of large data sets you need to do distributed execution in a cluster environment.</p>
+    </div>
+  </div>
+  <div class="AccordionPanel">
+    <div class="AccordionPanelTab">Program: shift_fim</div>
+    <div class="AccordionPanelContent">
+      <p><strong>&nbsp; shift_fim </strong>is a program for shifting a <strong>SIMPLE 1.0</strong> Fourier stack according to the origin shifts printed in the alignment document produced by programs <strong>cluster</strong>, <strong>align </strong>or <strong>cycle</strong>. A linear phase shift is applied in Fourier space, so there are no interpolation errors associated with this operation. Happy shifting! </p>
+      <p><span class="h2_manual">Usage:<br>
+      </span>  &gt;&gt;&gt; <strong>shift_fim</strong> <em>fstk</em>=fstack.fim <em>outfstk</em>=shifted_fstack.fim <em>oritab</em>=algndoc.dat [debug=&lt;yes|no&gt;]</p>
+      <p><span class="h2_manual">Comments:<br>
+      </span> No comments.     </p>
+    </div>
+  </div>
+</div>
+  <h2 class="h2_manual" align="center"><a href="#top">top</a></h2>
+  <p class="text">
+ </p>
+</div>
+<script type="text/javascript">
+var Accordion1 = new Spry.Widget.Accordion("Accordion1", { useFixedPanelHeights: false, defaultPanel: -1 });
+</script>
+<!-- InstanceEndEditable -->
+<h1>&nbsp;</h1>
+<script type="text/javascript">
+var MenuBar1 = new Spry.Widget.MenuBar("MenuBar1", {imgDown:"SpryAssets/SpryMenuBarDownHover.gif", imgRight:"SpryAssets/SpryMenuBarRightHover.gif"});
+</script>
+</body>
+<!-- InstanceEnd --></html>

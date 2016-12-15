@@ -1,0 +1,12 @@
+K 10
+svn:ignore
+V 35
+target
+
+bin
+
+.settings
+
+.classpath
+
+END

@@ -1,0 +1,445 @@
+!==Class simple_commander_volops
+!
+! This class contains the set of concrete volops (volume operations) commanders of the SIMPLE library. This class provides the glue between the reciver 
+! (main reciever is simple_exec program) and the abstract action, which is simply execute (defined by the base class: simple_commander_base). 
+! Later we can use the composite pattern to create MacroCommanders (or workflows)
+!
+! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
+! Redistribution and modification is regulated by the GNU General Public License.
+! *Authors:* Frederic Bonnet, Cyril Reboul & Hans Elmlund 2016
+!
+module simple_commander_volops
+use simple_defs            ! singleton
+use simple_jiffys          ! singleton
+use simple_timing          ! singleton
+use simple_cuda            ! singleton
+use simple_cuda_defs       ! singleton
+use simple_cmdline,        only: cmdline
+use simple_params,         only: params
+use simple_build,          only: build
+use simple_commander_base, only: commander_base
+implicit none
+
+public :: cenvol_commander
+public :: postproc_vol_commander
+public :: projvol_commander
+public :: volaverager_commander
+public :: volops_commander
+public :: volume_smat_commander
+private
+
+type, extends(commander_base) :: cenvol_commander
+  contains
+    procedure :: execute      => exec_cenvol
+end type cenvol_commander
+type, extends(commander_base) :: postproc_vol_commander
+ contains
+   procedure :: execute      => exec_postproc_vol
+end type postproc_vol_commander
+type, extends(commander_base) :: projvol_commander
+ contains
+   procedure :: execute      => exec_projvol
+end type projvol_commander
+type, extends(commander_base) :: volaverager_commander
+  contains
+    procedure :: execute      => exec_volaverager
+end type volaverager_commander
+type, extends(commander_base) :: volops_commander
+  contains
+    procedure :: execute      => exec_volops
+end type volops_commander
+type, extends(commander_base) :: volume_smat_commander
+  contains
+    procedure :: execute      => exec_volume_smat
+end type volume_smat_commander
+
+contains
+    
+    subroutine exec_cenvol( self, cline )
+        class(cenvol_commander), intent(inout) :: self
+        class(cmdline),          intent(inout) :: cline
+        type(params)         :: p
+        type(build)          :: b
+        real, allocatable    :: shvec(:,:)
+        integer              :: istate
+        logical, parameter   :: debug=.false.
+        p = params(cline)                           ! parameters generated
+        call b%build_general_tbox(p, cline, .true.) ! general objects built
+        ! center volume(s)
+        allocate(shvec(p%nstates,3))
+        do istate=1,p%nstates
+            call b%vol%read(p%vols(istate))
+            shvec(istate,:) = b%vol%center(p%cenlp,'no',p%msk)
+            if( istate == 1 ) call b%vol%write(p%outvol) 
+            if( debug )then
+                call b%vol%shift(-shvec(istate,1), -shvec(istate,2), -shvec(istate,3))
+                call b%vol%write('shifted_vol_state'//int2str(istate)//p%ext)
+            endif
+            ! transfer the 3D shifts to 2D
+            if( cline%defined('oritab') ) call b%a%map3dshift22d(-shvec(istate,:), state=istate)
+        end do
+        if( cline%defined('oritab') ) call b%a%write(p%outfile)
+        ! end gracefully
+        call simple_end('**** SIMPLE_CENVOL NORMAL STOP ****')
+    end subroutine exec_cenvol
+    
+    subroutine exec_postproc_vol(self,cline)
+        use simple_estimate_ssnr ! singleton
+        use simple_masker,       only: automask
+        class(postproc_vol_commander), intent(inout) :: self
+        class(cmdline),                intent(inout) :: cline
+        type(params)      :: p
+        type(build)       :: b
+        real, allocatable :: fsc(:), spec_count3D(:), tmparr(:), pssnr_ctfsq3D(:), pssnr3D(:), sqrtssnr(:), optlp(:)
+        integer           :: k, state=1
+        p = params(cline, checkdistr=.false.) ! constants & derived constants produced, mode=2
+        call b%build_general_tbox(p, cline)   ! general objects built
+        if( file_exists(p%fsc) )then
+            fsc = file2rarr(p%fsc)
+            optlp = fsc2optlp(fsc)
+        else
+            write(*,*) 'FSC file: ', trim(p%fsc), ' not in cwd'
+            stop
+        endif
+        call b%vol%read(p%vols(state))
+        call b%vol%fwd_ft
+        call b%vol%apply_filter(optlp)
+        if( cline%defined('bfac') )then
+            call b%vol%apply_bfac(p%bfac)
+        endif
+        call b%vol%bwd_ft
+        p%vols_msk(state) = add2fbody(trim(p%vols(state)), p%ext, 'msk')
+        if( p%automsk .eq. 'yes' )then
+            p%masks(state) = 'automask_state'//int2str_pad(state,2)//p%ext
+            call automask(b, p, cline, b%vol, b%mskvol, p%vols_msk(state), p%masks(state))
+        else
+            call b%vol%mask(p%msk, 'soft')
+        endif
+        p%outvol = add2fbody(trim(p%vols(state)), p%ext, 'pproc')
+        call b%vol%write(p%outvol)
+        call simple_end('**** SIMPLE_POSTPROC_VOL NORMAL STOP ****')
+    end subroutine exec_postproc_vol
+    
+    subroutine exec_projvol( self, cline )
+        use simple_image, only: image
+        class(projvol_commander), intent(inout) :: self
+        class(cmdline),           intent(inout) :: cline
+        type(params)             :: p
+        type(build)              :: b
+        type(image), allocatable :: imgs(:)
+        integer                  :: i, loop_end
+        real                     :: x, y, dfx, dfy, angast
+        logical, parameter       :: debug=.false.
+        if( .not. cline%defined('oritab') )then
+            if( .not. cline%defined('nspace') ) stop 'need nspace (for number of projections)!'
+        endif
+        p = params(cline) ! parameters generated
+        if( cline%defined('oritab') )then
+            p%nptcls = nlines(p%oritab)
+            call b%build_general_tbox(p, cline)
+            call b%a%read(p%oritab)
+            p%nspace = b%a%get_noris()
+        else if( p%rnd .eq. 'yes' )then
+            p%nptcls = p%nspace
+            call b%build_general_tbox(p, cline)
+            call b%a%rnd_oris(p%trs)
+        else
+            p%nptcls = p%nspace
+            call b%build_general_tbox(p, cline)
+            call b%a%spiral(p%nsym, p%eullims)
+            if( cline%defined('trs') ) call b%a%rnd_inpls(p%trs)
+        endif
+        ! fix volumes and stacks
+        if( p%xfel .eq. 'yes' )then
+            call b%vol%read(p%vols(1), isxfel=.true.)
+        else
+            call b%vol%read(p%vols(1))
+        endif
+        if( debug ) print *, 'read volume'
+        ! generate projections
+        if( p%swap .eq. 'yes' ) call b%a%swape1e3
+        if( p%mirr .eq. 'yes' ) call b%a%mirror2d
+        if( cline%defined('top') )then
+            imgs = b%proj%projvol(b%vol, b%a, p, p%top)
+            loop_end = p%top
+        else
+            imgs = b%proj%projvol(b%vol, b%a, p)
+            loop_end = p%nspace
+        endif
+        if( file_exists(p%outstk) ) call del_binfile(p%outstk)
+        do i=1,loop_end
+            if( cline%defined('oritab') .or. (p%rnd .eq. 'yes' .or. cline%defined('trs')) )then
+                x = b%a%get(i, 'x')
+                y = b%a%get(i, 'y')
+                call imgs(i)%shift(x, y)
+            endif
+            if( p%ctf .ne. 'no' )then
+                if( cline%defined('oritab') )then
+                    dfx = b%a%get(i, 'dfx')
+                    if( b%a%isthere('dfy') )then
+                        dfy    = b%a%get(i, 'dfy')
+                        angast = b%a%get(i, 'angast')
+                    else
+                        dfy    = dfx
+                        angast = 0.
+                    endif
+                else
+                    dfx    = p%defocus
+                    dfy    = p%defocus
+                    angast = 0.
+                    call b%a%set(i, 'dfx', dfx)
+                endif
+                if( cline%defined('bfac') )then
+                    if( p%neg .eq. 'yes' )then
+                        call b%tfun%apply(imgs(i), dfx, 'neg', dfy, angast, bfac=p%bfac)
+                    else
+                        call b%tfun%apply(imgs(i), dfx, 'ctf', dfy, angast, bfac=p%bfac)
+                    endif
+                else
+                    if( p%neg .eq. 'yes' )then
+                        call b%tfun%apply(imgs(i), dfx, 'neg', dfy, angast)
+                    else
+                        call b%tfun%apply(imgs(i), dfx, 'ctf', dfy, angast)
+                    endif
+                endif
+            else if( p%neg .eq. 'yes' )then
+                call imgs(i)%neg
+            endif
+            if( p%mirr .ne. 'no' )then
+                if( p%mirr .ne. 'yes' ) call imgs(i)%mirror(p%mirr)
+            endif
+            call imgs(i)%write(p%outstk,i)
+        end do
+        call b%a%write('projvol_oris.txt')
+        call simple_end('**** SIMPLE_PROJVOL NORMAL STOP ****')
+    end subroutine exec_projvol
+    
+    subroutine exec_volaverager( self, cline )
+        use simple_image, only: image
+        class(volaverager_commander), intent(inout) :: self
+        class(cmdline),               intent(inout) :: cline
+        type(params) :: p
+        type(build)  :: b
+        integer, allocatable               :: ptcls(:)
+        character(len=STDLEN), allocatable :: volnames(:)
+        type(image)                        :: vol_avg
+        integer                            :: istate, ivol, nvols, funit_vols, numlen, ifoo
+        character(len=:), allocatable      :: fname
+        character(len=1)                   :: fformat
+        logical, parameter                 :: debug=.true.
+        p = params(cline) ! parameters generated
+        ! read the volnames
+        nvols = nlines(p%vollist)
+        if( debug ) print *, 'number of volumes: ', nvols
+        allocate(volnames(nvols))
+        funit_vols = get_fileunit()
+        open(unit=funit_vols, status='old', file=p%vollist)
+        do ivol=1,nvols
+            read(funit_vols,'(a256)') volnames(ivol)
+            if( debug ) print *, 'read volname: ', volnames(ivol)
+        end do
+        close(funit_vols)
+        ! find logical dimension
+        call find_ldim_nptcls(volnames(1), p%ldim, ifoo)
+        p%box  = p%ldim(1)
+        ! build general toolbox
+        call b%build_general_tbox(p, cline) ! general objects built
+        ! figure out the file extension
+        fformat = fname2format(volnames(1))
+        select case(fformat)
+            case('M')
+                p%ext = '.mrc'
+            case('S')
+                p%ext = '.spi'
+            case('D')
+                p%ext = '.mrc'
+            case('B')
+                p%ext = '.mrc'
+            case DEFAULT
+                stop 'This file format is not supported by SIMPLE; simple_volaverager'
+        end select
+        if( debug ) print *, 'file extension: ', p%ext
+        ! average the states
+        call vol_avg%copy(b%vol)
+        p%nstates = b%a%get_nstates()
+        if( debug ) print *, 'number of states: ', p%nstates
+        numlen = len(int2str(p%nstates))
+        do istate=1,p%nstates
+            if( debug ) print *, 'processing state: ', istate
+            ptcls = nint(b%a%get_ptcls_in_state(istate))
+            vol_avg = 0.
+            do ivol=1,size(ptcls)
+                call b%vol%read(volnames(ptcls(ivol)))
+                if( debug ) print *, 'read volume: ', volnames(ptcls(ivol))
+                call vol_avg%add(b%vol)
+            end do
+            call vol_avg%div(real(size(ptcls)))
+            allocate(fname, source='sumvol_state'//int2str_pad(istate, numlen)//p%ext)
+            if( debug ) print *, 'trying to write volume to file: ', fname
+            call vol_avg%write(fname)
+            deallocate(ptcls,fname)
+        end do
+        ! end gracefully
+        call simple_end('**** SIMPLE_VOLAVERAGER NORMAL STOP ****')
+    end subroutine exec_volaverager
+    
+    subroutine exec_volops( self, cline )
+        class(volops_commander), intent(inout) :: self
+        class(cmdline),          intent(inout) :: cline
+        type(params) :: p
+        type(build)  :: b
+        logical      :: here 
+        p = params(cline,checkdistr=.false.)        ! constants & derived constants produced, mode=2
+        call b%build_general_tbox(p, cline)         ! general objects built
+        call b%vol%new([p%box,p%box,p%box], p%smpd) ! reallocate vol (boxmatch issue)
+        inquire(FILE=p%vols(1), EXIST=here)
+        if( here )then
+            call b%vol%read(p%vols(1))
+        else
+            stop 'vol1 does not exists in cwd'
+        endif
+        if( p%guinier .eq. 'yes' )then
+            if( .not. cline%defined('smpd') ) stop 'need smpd (sampling distance) input for Guinier plot'
+            if( .not. cline%defined('hp')   ) stop 'need hp (high-pass limit) input for Guinier plot'
+            if( .not. cline%defined('lp')   ) stop 'need lp (low-pass limit) input for Guinier plot'
+            p%bfac = b%vol%guinier_bfac(p%hp, p%lp)
+            write(*,'(A,1X,F8.2)') '>>> B-FACTOR DETERMINED TO:', p%bfac
+        else
+            if( cline%defined('neg')  ) call b%vol%neg
+            if( cline%defined('snr')  ) call b%vol%add_gauran(p%snr)
+            if( cline%defined('mirr') ) call b%vol%mirror(p%mirr)
+            call b%vol%write(p%outvol, del_if_exists=.true.)
+        endif
+        ! end gracefully
+        call simple_end('**** SIMPLE_VOLOPS NORMAL STOP ****')
+    end subroutine exec_volops
+    
+    subroutine exec_volume_smat( self, cline )
+        use simple_image, only: image
+        class(volume_smat_commander), intent(inout) :: self
+        class(cmdline),               intent(inout) :: cline
+        type(params), target               :: p
+        integer                            :: funit, io_stat, cnt, npairs, npix, nvols
+        integer                            :: ivol, jvol, ldim(3), alloc_stat, ipair, ifoo
+        real, allocatable                  :: corrmat(:,:), corrs(:)
+        integer, allocatable               :: pairs(:,:)
+        type(image)                        :: vol1, vol2, mskimg
+        character(len=STDLEN), allocatable :: vollist(:)
+        character(len=:), allocatable      :: fname
+        logical, parameter                 :: debug=.false.
+        p      = params(cline, .false.) ! constants & derived constants produced
+        nvols  = nlines(p%vollist)
+        npairs = (nvols*(nvols-1))/2
+        ! read in list of volumes
+        allocate(vollist(nvols))
+        funit = get_fileunit()
+        open(unit=funit, status='old', file=p%vollist)
+        do ivol=1,nvols
+            read(funit,'(a256)') vollist(ivol)
+            if( debug ) write(*,*) 'read volume: ', vollist(ivol)
+        end do
+        close(unit=funit)
+        ! find logical dimension & make volumes for matching
+        call find_ldim_nptcls(vollist(1), ldim, ifoo)
+        if( debug ) write(*,*) 'found logical dimension: ', ldim
+        call vol1%new(ldim,p%smpd)
+        call vol2%new(ldim,p%smpd)
+        if( debug ) write(*,*) 'allocated volumes'
+        if( cline%defined('part') )then
+            npairs = p%top-p%fromp+1
+            if( debug ) print *, 'allocating this number of similarities: ', npairs
+            allocate(corrs(p%fromp:p%top), pairs(p%fromp:p%top,2), stat=alloc_stat)
+            call alloc_err('In: simple_comlin_smat, 1', alloc_stat)
+            ! read the pairs
+            funit = get_fileunit()
+            allocate(fname, source='pairs_part'//int2str_pad(p%part,p%numlen)//'.bin')
+            if( .not. file_exists(fname) )then
+                write(*,*) 'file: ', fname, 'does not exist!'
+                write(*,*) 'If all pair_part* are not in cwd, please execute simple_split_pairs to generate the required files'
+                stop 'I/O error; simple_comlin_smat'
+            endif
+            open(unit=funit, status='OLD', action='READ', file=fname, access='STREAM')
+            if( debug ) print *, 'reading pairs in range: ', p%fromp, p%top
+            read(unit=funit,pos=1,iostat=io_stat) pairs(p%fromp:p%top,:)
+            ! Check if the read was successful
+            if( io_stat .ne. 0 )then
+                write(*,'(a,i0,2a)') '**ERROR(simple_volume_smat): I/O error ', io_stat, ' when reading file: ', fname
+                stop 'I/O error; simple_comlin_smat'
+            endif
+            close(funit)
+            deallocate(fname)
+            ! make real-space mask if needed
+            if( .not. cline%defined('lp') .and. cline%defined('msk') )then 
+                call mskimg%disc(vol1%get_ldim(), p%smpd, p%msk, npix)
+            endif
+            ! calculate the similarities
+            cnt = 0
+            do ipair=p%fromp,p%top
+                cnt = cnt+1
+                call progress(cnt, npairs)
+                ivol = pairs(ipair,1)
+                jvol = pairs(ipair,2)
+                call vol1%read(vollist(ivol))
+                call vol2%read(vollist(jvol))
+                if( cline%defined('lp') )then
+                    if( cline%defined('msk') )then
+                        ! apply a soft-edged mask
+                        call vol1%mask(p%msk, 'soft')
+                        call vol2%mask(p%msk, 'soft')
+                    endif
+                    corrs(ipair) = vol1%corr(vol2,lp_dyn=p%lp,hp_dyn=p%hp)
+                else
+                    if( cline%defined('msk') )then
+                        ! apply a hard-edged mask
+                        call vol1%mask(p%msk, 'hard')
+                        call vol2%mask(p%msk, 'hard')
+                    endif
+                   corrs(ipair) = vol1%real_corr(vol2)
+                endif
+            end do
+            if( debug ) print *, 'did set this number of similarities: ', cnt
+            ! write the similarities
+            funit = get_fileunit()
+            allocate(fname, source='similarities_part'//int2str_pad(p%part,p%numlen)//'.bin')
+            open(unit=funit, status='REPLACE', action='WRITE', file=fname, access='STREAM')
+            write(unit=funit,pos=1,iostat=io_stat) corrs(p%fromp:p%top)
+            ! Check if the write was successful
+            if( io_stat .ne. 0 )then
+                write(*,'(a,i0,2a)') '**ERROR(simple_volume_smat): I/O error ', io_stat, ' when writing to: ', fname
+                stop 'I/O error; simple_comlin_smat'
+            endif
+            close(funit)
+            deallocate(fname, corrs, pairs)
+        else
+            ! generate similarity matrix
+            allocate(corrmat(nvols,nvols))
+            corrmat = 1.
+            cnt = 0
+            do ivol=1,nvols-1
+                do jvol=ivol+1,nvols
+                    cnt = cnt+1
+                    call progress(cnt, npairs)
+                    call vol1%read(vollist(ivol))
+                    if( debug ) write(*,*) 'read vol1: ', vollist(ivol)
+                    call vol2%read(vollist(jvol))
+                    if( debug ) write(*,*) 'read vol1: ', vollist(ivol)
+                    corrmat(ivol,jvol) = vol1%corr(vol2,lp_dyn=p%lp,hp_dyn=p%hp)
+                    if( debug ) write(*,*) 'corr ', ivol, jvol, corrmat(ivol,jvol)
+                    corrmat(jvol,ivol) = corrmat(ivol,jvol)
+                end do
+            end do
+            funit = get_fileunit()
+            open(unit=funit, status='REPLACE', action='WRITE', file='vol_smat.bin', access='STREAM')
+            write(unit=funit,pos=1,iostat=io_stat) corrmat
+            if( io_stat .ne. 0 )then
+                write(*,'(a,i0,a)') 'I/O error ', io_stat, ' when writing to clin_smat.bin'
+                stop 'I/O error; simple_volume_smat'
+            endif
+            close(funit)
+            deallocate(corrmat)
+        endif     
+        ! end gracefully
+        call simple_end('**** SIMPLE_VOLUME_SMAT NORMAL STOP ****')        
+    end subroutine exec_volume_smat
+
+end module simple_commander_volops

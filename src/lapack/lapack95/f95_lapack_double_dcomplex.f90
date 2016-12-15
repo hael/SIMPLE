@@ -1,0 +1,2462 @@
+      MODULE F95_LAPACK
+!
+!  -- LAPACK95 interface driver routine (version 3.0) --
+!     UNI-C, Denmark; Univ. of Tennessee, USA; NAG Ltd., UK
+!     September, 2000
+!
+
+      INTERFACE LA_LAMCH
+
+       FUNCTION DLAMCH_F95( PRECISION, CMACH, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN) :: CMACH
+           REAL(WP), INTENT(IN) :: PRECISION
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP) :: DLAMCH_F95
+        END FUNCTION DLAMCH_F95
+
+      END INTERFACE
+
+      INTERFACE LA_GGSVD
+
+       SUBROUTINE DGGSVD_F95( A, B, ALPHA, BETA, K, L, U, V, Q, IWORK,  &
+     &                        INFO )
+          USE LA_PRECISION, ONLY: WP => DP
+          INTEGER, INTENT(OUT), OPTIONAL :: INFO, K, L
+          REAL(WP), INTENT(INOUT) :: A(:,:), B(:,:)
+          REAL(WP), INTENT(OUT) :: ALPHA(:), BETA(:)
+          REAL(WP), INTENT(OUT), OPTIONAL, TARGET :: U(:,:), V(:,:),    &
+     &                                               Q(:,:)
+          INTEGER, INTENT(OUT), OPTIONAL :: IWORK(:)
+        END SUBROUTINE DGGSVD_F95
+
+       SUBROUTINE ZGGSVD_F95( A, B, ALPHA, BETA, K, L, U, V, Q, IWORK,  &
+     &                        INFO )
+          USE LA_PRECISION, ONLY: WP => DP
+          INTEGER, INTENT(OUT), OPTIONAL :: INFO, K, L
+          COMPLEX(WP), INTENT(INOUT) :: A(:,:), B(:,:)
+          REAL(WP), INTENT(OUT) :: ALPHA(:), BETA(:)
+          COMPLEX(WP), INTENT(OUT), OPTIONAL, TARGET :: U(:,:), V(:,:), &
+     &                                                  Q(:,:)
+          INTEGER, INTENT(OUT), OPTIONAL :: IWORK(:)
+        END SUBROUTINE ZGGSVD_F95
+
+      END INTERFACE
+
+      INTERFACE LA_GEGV
+
+       SUBROUTINE DGEGV_F95( A, B, ALPHAR, ALPHAI, BETA, VL, VR, INFO )
+          USE LA_PRECISION, ONLY: WP => DP
+          INTEGER, INTENT(OUT), OPTIONAL :: INFO
+          REAL(WP), INTENT(INOUT) :: A(:,:), B(:,:)
+          REAL(WP), INTENT(OUT), OPTIONAL :: ALPHAR(:), ALPHAI(:),      &
+     &                                       BETA(:)
+          REAL(WP), INTENT(OUT), OPTIONAL, TARGET :: VL(:,:), VR(:,:)
+        END SUBROUTINE DGEGV_F95
+
+
+       SUBROUTINE ZGEGV_F95( A, B, ALPHA, BETA, VL, VR, INFO )
+          USE LA_PRECISION, ONLY: WP => DP
+          INTEGER, INTENT(OUT), OPTIONAL :: INFO
+          COMPLEX(WP), INTENT(INOUT) :: A(:,:), B(:,:)
+          COMPLEX(WP), INTENT(OUT), OPTIONAL :: ALPHA(:), BETA(:)
+          COMPLEX(WP), INTENT(OUT), OPTIONAL, TARGET :: VL(:,:), VR(:,:)
+        END SUBROUTINE ZGEGV_F95
+
+      END INTERFACE
+
+      INTERFACE LA_GEGS
+
+       SUBROUTINE DGEGS_F95( A, B, ALPHAR, ALPHAI, BETA, VSL, VSR,      &
+     &                       INFO )
+          USE LA_PRECISION, ONLY: WP => DP
+          INTEGER, INTENT(OUT), OPTIONAL :: INFO
+          REAL(WP), INTENT(INOUT) :: A(:,:), B(:,:)
+          REAL(WP), INTENT(OUT), OPTIONAL :: ALPHAR(:), ALPHAI(:),      &
+     &                                       BETA(:)
+          REAL(WP), INTENT(OUT), OPTIONAL, TARGET :: VSL(:,:), VSR(:,:)
+        END SUBROUTINE DGEGS_F95
+
+
+       SUBROUTINE ZGEGS_F95( A, B, ALPHA, BETA, VSL, VSR, INFO )
+          USE LA_PRECISION, ONLY: WP => DP
+          INTEGER, INTENT(OUT), OPTIONAL :: INFO
+          COMPLEX(WP), INTENT(INOUT) :: A(:,:), B(:,:)
+          COMPLEX(WP), INTENT(OUT), OPTIONAL :: ALPHA(:), BETA(:)
+          COMPLEX(WP), INTENT(OUT), OPTIONAL, TARGET :: VSL(:,:),       &
+     &                                                  VSR(:,:)
+        END SUBROUTINE ZGEGS_F95
+
+      END INTERFACE
+
+        INTERFACE LA_SBGVX
+
+        SUBROUTINE DSBGVX_F95( AB, BB, W, UPLO, Z, VL, VU, IL, IU, M,   &
+     &                         IFAIL, Q, ABSTOL, INFO )
+       USE LA_PRECISION, ONLY: WP => DP
+       REAL(WP), INTENT(INOUT) :: AB(:,:), BB(:,:)
+       REAL(WP), INTENT(OUT) :: W(:)
+       CHARACTER(LEN=1), INTENT(IN), OPTIONAL ::  UPLO
+       INTEGER, INTENT(OUT), OPTIONAL :: INFO
+       REAL(WP), INTENT(OUT), OPTIONAL, TARGET :: Z(:,:), Q(:,:)
+       REAL(WP), INTENT(IN), OPTIONAL :: ABSTOL, VL, VU
+       INTEGER, INTENT(IN), OPTIONAL :: IL, IU
+       INTEGER, INTENT(OUT), OPTIONAL :: M
+       INTEGER, INTENT(OUT), OPTIONAL, TARGET :: IFAIL(:)
+      END SUBROUTINE DSBGVX_F95
+
+       END INTERFACE
+	     
+       INTERFACE LA_HBGVX
+       
+       SUBROUTINE ZHBGVX_F95( AB, BB, W, UPLO, Z, VL, VU, IL, IU, M,    &
+     &                        IFAIL, Q, ABSTOL, INFO )
+         USE LA_PRECISION, ONLY: WP => DP
+         COMPLEX(WP), INTENT(INOUT) :: AB(:,:), BB(:,:)
+         REAL(WP), INTENT(OUT) :: W(:)
+         CHARACTER(LEN=1), INTENT(IN), OPTIONAL ::  UPLO
+         INTEGER, INTENT(OUT), OPTIONAL :: INFO
+         COMPLEX(WP), INTENT(OUT), OPTIONAL, TARGET :: Z(:,:),  Q(:,:)
+         REAL(WP), INTENT(IN), OPTIONAL :: ABSTOL, VL, VU
+         INTEGER, INTENT(IN), OPTIONAL :: IL, IU
+         INTEGER, INTENT(OUT), OPTIONAL :: M
+         INTEGER, INTENT(OUT), OPTIONAL, TARGET :: IFAIL(:)
+        END SUBROUTINE ZHBGVX_F95
+	
+        END INTERFACE
+
+        INTERFACE LA_SBGVD
+	
+
+        SUBROUTINE DSBGVD_F95( AB, BB, W, UPLO, Z, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           REAL(WP), INTENT(INOUT) :: AB(:,:), BB(:,:)
+           REAL(WP), INTENT(OUT) :: W(:)
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL ::  UPLO
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(OUT), OPTIONAL, TARGET :: Z(:,:)
+         END SUBROUTINE DSBGVD_F95
+	  
+         END INTERFACE
+		
+         INTERFACE LA_HBGVD
+	 
+       SUBROUTINE ZHBGVD_F95( AB, BB, W, UPLO, Z, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           COMPLEX(WP), INTENT(INOUT) :: AB(:,:), BB(:,:)
+           REAL(WP), INTENT(OUT) :: W(:)
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL ::  UPLO
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           COMPLEX(WP), INTENT(OUT), OPTIONAL,TARGET :: Z(:,:)
+          END SUBROUTINE ZHBGVD_F95
+	  
+        
+         END INTERFACE
+
+      INTERFACE LA_SBGV
+
+       SUBROUTINE DSBGV_F95( A, B, W, UPLO, Z, INFO )
+          USE LA_PRECISION, ONLY: WP => DP
+          CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+          INTEGER, INTENT(OUT), OPTIONAL :: INFO
+          REAL(WP), INTENT(INOUT) :: A(:,:), B(:,:)
+          REAL(WP), INTENT(OUT) :: W(:)
+          REAL(WP), INTENT(OUT), OPTIONAL :: Z(:,:)
+        END SUBROUTINE DSBGV_F95
+
+      END INTERFACE
+
+      INTERFACE LA_HBGV
+
+       SUBROUTINE ZHBGV_F95( A, B, W, UPLO, Z, INFO )
+          USE LA_PRECISION, ONLY: WP => DP
+          CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+          INTEGER, INTENT(OUT), OPTIONAL :: INFO
+          COMPLEX(WP), INTENT(INOUT) :: A(:,:), B(:,:)
+          REAL(WP), INTENT(OUT) :: W(:)
+          COMPLEX(WP), INTENT(OUT), OPTIONAL :: Z(:,:)
+        END SUBROUTINE ZHBGV_F95
+
+      END INTERFACE
+
+        INTERFACE LA_SPGVX
+ 
+        SUBROUTINE DSPGVX_F95( AP, BP, W, ITYPE, UPLO, Z, VL, VU, IL,   &
+     &                         IU, M, IFAIL, ABSTOL, INFO )
+         USE LA_PRECISION, ONLY: WP => DP
+         REAL(WP), INTENT(INOUT) :: AP(:), BP(:)
+         REAL(WP), INTENT(OUT) :: W(:)
+         CHARACTER(LEN=1), INTENT(IN), OPTIONAL ::  UPLO
+         INTEGER, INTENT(OUT), OPTIONAL :: INFO
+         REAL(WP), INTENT(OUT), OPTIONAL, TARGET :: Z(:,:)
+         REAL(WP), INTENT(IN), OPTIONAL :: ABSTOL, VL, VU
+         INTEGER, INTENT(IN), OPTIONAL :: IL, IU, ITYPE
+         INTEGER, INTENT(OUT), OPTIONAL :: M
+         INTEGER, INTENT(OUT), OPTIONAL, TARGET :: IFAIL(:)
+       END SUBROUTINE DSPGVX_F95
+
+       END INTERFACE
+	     
+       INTERFACE LA_HPGVX
+		    
+       SUBROUTINE ZHPGVX_F95( AP, BP, W, ITYPE, UPLO, Z, VL, VU, IL, IU,&
+     &                        M, IFAIL, ABSTOL, INFO )
+         USE LA_PRECISION, ONLY: WP => DP
+         COMPLEX(WP), INTENT(INOUT) :: AP(:), BP(:)
+         REAL(WP), INTENT(OUT) :: W(:)
+         CHARACTER(LEN=1), INTENT(IN), OPTIONAL ::  UPLO
+         INTEGER, INTENT(OUT), OPTIONAL :: INFO
+         COMPLEX(WP), INTENT(OUT), OPTIONAL, TARGET :: Z(:,:)
+         REAL(WP), INTENT(IN), OPTIONAL :: ABSTOL, VL, VU
+         INTEGER, INTENT(IN), OPTIONAL :: IL, IU, ITYPE
+         INTEGER, INTENT(OUT), OPTIONAL :: M
+         INTEGER, INTENT(OUT), OPTIONAL, TARGET :: IFAIL(:)
+       END SUBROUTINE ZHPGVX_F95
+
+        END INTERFACE
+
+      INTERFACE LA_SPGVD
+
+       SUBROUTINE DSPGVD_F95( AP, BP, W, ITYPE, UPLO, Z, INFO )
+        USE LA_PRECISION, ONLY: WP => DP
+        REAL(WP), INTENT(INOUT) :: AP(:), BP(:)
+        REAL(WP), INTENT(OUT) :: W(:)
+        CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+        INTEGER, INTENT(IN), OPTIONAL :: ITYPE
+        INTEGER, INTENT(OUT), OPTIONAL :: INFO
+        REAL(WP), INTENT(OUT), OPTIONAL, TARGET :: Z(:,:)
+       END SUBROUTINE DSPGVD_F95
+     
+        END INTERFACE
+	    
+        INTERFACE LA_HPGVD
+
+       SUBROUTINE ZHPGVD_F95( AP, BP, W, ITYPE, UPLO, Z, INFO )
+         USE LA_PRECISION, ONLY: WP => DP
+         COMPLEX(WP), INTENT(INOUT) :: AP(:), BP(:)
+         REAL(WP), INTENT(OUT) :: W(:)
+         CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+         INTEGER, INTENT(IN), OPTIONAL :: ITYPE 
+         INTEGER, INTENT(OUT), OPTIONAL :: INFO
+         COMPLEX(WP), INTENT(OUT), OPTIONAL, TARGET :: Z(:,:)
+        END SUBROUTINE ZHPGVD_F95
+
+       END INTERFACE
+
+      INTERFACE LA_SPGV
+
+       SUBROUTINE DSPGV_F95( A, B, W, ITYPE, UPLO, Z, INFO )
+          USE LA_PRECISION, ONLY: WP => DP
+          CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+          INTEGER, INTENT(IN), OPTIONAL :: ITYPE
+          INTEGER, INTENT(OUT), OPTIONAL :: INFO
+          REAL(WP), INTENT(INOUT) :: A(:), B(:)
+          REAL(WP), INTENT(OUT) :: W(:)
+          REAL(WP), INTENT(OUT), OPTIONAL :: Z(:,:)
+        END SUBROUTINE DSPGV_F95
+
+      END INTERFACE
+
+      INTERFACE LA_HPGV
+
+       SUBROUTINE ZHPGV_F95( A, B, W, ITYPE, UPLO, Z, INFO )
+          USE LA_PRECISION, ONLY: WP => DP
+          CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+          INTEGER, INTENT(IN), OPTIONAL :: ITYPE
+          INTEGER, INTENT(OUT), OPTIONAL :: INFO
+          COMPLEX(WP), INTENT(INOUT) :: A(:), B(:)
+          REAL(WP), INTENT(OUT) :: W(:)
+          COMPLEX(WP), INTENT(OUT), OPTIONAL :: Z(:,:)
+        END SUBROUTINE ZHPGV_F95
+
+      END INTERFACE
+
+      INTERFACE LA_GESVD
+
+       SUBROUTINE DGESVD_F95( A, S, U, VT, WW, JOB, INFO )
+          USE LA_PRECISION, ONLY: WP => DP
+          CHARACTER(LEN=1), OPTIONAL, INTENT(IN) :: JOB
+          INTEGER, INTENT(OUT), OPTIONAL :: INFO
+          REAL(WP), INTENT(INOUT) :: A(:,:)
+          REAL(WP), INTENT(OUT) :: S(:)
+          REAL(WP), INTENT(OUT), OPTIONAL, TARGET :: WW(:)
+         REAL(WP), INTENT(OUT), OPTIONAL, TARGET :: U(:,:), VT(:,:)
+        END SUBROUTINE DGESVD_F95
+
+       SUBROUTINE ZGESVD_F95( A, S, U, VT, WW, JOB, INFO )
+          USE LA_PRECISION, ONLY: WP => DP
+          CHARACTER(LEN=1), OPTIONAL, INTENT(IN) :: JOB
+          INTEGER, INTENT(OUT), OPTIONAL :: INFO
+          COMPLEX(WP), INTENT(INOUT) :: A(:,:)
+          REAL(WP), INTENT(OUT) :: S(:)
+          REAL(WP), INTENT(OUT), OPTIONAL, TARGET :: WW(:)
+         COMPLEX(WP), INTENT(OUT), OPTIONAL, TARGET :: U(:,:), VT(:,:)
+        END SUBROUTINE ZGESVD_F95
+
+      END INTERFACE
+
+      INTERFACE LA_GEEVX
+
+       SUBROUTINE DGEEVX_F95( A, WR, WI, VL, VR, BALANC, ILO, IHI,      &
+     &                        SCALE, ABNRM, RCONDE, RCONDV, INFO )
+          USE LA_PRECISION, ONLY: WP => DP
+          CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: BALANC
+          INTEGER, INTENT(OUT), OPTIONAL :: INFO, ILO, IHI
+          REAL(WP), INTENT(INOUT) :: A(:,:)
+          REAL(WP), INTENT(OUT), OPTIONAL :: ABNRM
+         REAL(WP), INTENT(OUT), OPTIONAL :: SCALE(:), RCONDE(:),        &
+     &                                      RCONDV(:)
+          REAL(WP), INTENT(OUT) :: WR(:), WI(:)
+          REAL(WP), INTENT(OUT), OPTIONAL :: VL(:,:), VR(:,:)
+       END SUBROUTINE DGEEVX_F95
+
+       SUBROUTINE ZGEEVX_F95( A, W, VL, VR, BALANC, ILO, IHI, SCALE,    &
+     &                        ABNRM, RCONDE, RCONDV, INFO )
+          USE LA_PRECISION, ONLY: WP => DP
+          CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: BALANC
+          INTEGER, INTENT(OUT), OPTIONAL :: INFO, ILO, IHI
+          COMPLEX(WP), INTENT(INOUT) :: A(:,:)
+          REAL(WP), INTENT(OUT), OPTIONAL :: ABNRM
+         REAL(WP), INTENT(OUT), OPTIONAL :: SCALE(:), RCONDE(:),        &
+     &                                      RCONDV(:)
+          COMPLEX(WP), INTENT(OUT) :: W(:)
+          COMPLEX(WP), INTENT(OUT), OPTIONAL :: VL(:,:), VR(:,:)
+       END SUBROUTINE ZGEEVX_F95
+
+      END INTERFACE
+
+         INTERFACE LA_GGEVX
+      
+       SUBROUTINE DGGEVX_F95( A, B, ALPHAR, ALPHAI, BETA, VL, VR,       &
+     &                        BALANC, ILO, IHI, LSCALE, RSCALE, ABNRM,  &
+     &                        BBNRM, RCONDE, RCONDV, INFO )
+         USE LA_PRECISION, ONLY: WP => DP
+         CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: BALANC
+         INTEGER, INTENT(OUT), OPTIONAL :: INFO
+         INTEGER, INTENT(OUT), OPTIONAL :: ILO,IHI
+         REAL(WP), INTENT(OUT), OPTIONAL :: ABNRM, BBNRM
+         REAL(WP), INTENT(INOUT) :: A(:,:), B(:,:)
+         REAL(WP), INTENT(OUT) :: ALPHAR(:), ALPHAI(:)
+         REAL(WP), INTENT(OUT) :: BETA(:)
+         REAL(WP), INTENT(OUT), OPTIONAL ::LSCALE(:), RSCALE(:),        &
+     &                                     RCONDE(:), RCONDV(:)
+         REAL(WP), INTENT(OUT), OPTIONAL, TARGET :: VL(:,:), VR(:,:)
+        END SUBROUTINE DGGEVX_F95
+
+       SUBROUTINE ZGGEVX_F95( A, B, ALPHA, BETA, VL, VR, BALANC, ILO,   &
+     &                        IHI, LSCALE, RSCALE, ABNRM, BBNRM, RCONDE,&
+     &                        RCONDV, INFO )
+         USE LA_PRECISION, ONLY: WP => DP
+         CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: BALANC
+         INTEGER, INTENT(OUT), OPTIONAL :: INFO
+         INTEGER, INTENT(OUT), OPTIONAL :: ILO,IHI
+         REAL(WP), INTENT(OUT), OPTIONAL :: ABNRM, BBNRM
+         COMPLEX(WP), INTENT(INOUT) :: A(:,:), B(:,:)
+         COMPLEX(WP), INTENT(OUT) :: ALPHA(:)
+         COMPLEX(WP), INTENT(OUT) :: BETA(:)
+         REAL(WP), INTENT(OUT), OPTIONAL :: LSCALE(:), RSCALE(:),       &
+     &                                      RCONDE(:), RCONDV(:)
+         COMPLEX(WP), INTENT(OUT), OPTIONAL :: VL(:,:), VR(:,:)
+       END SUBROUTINE ZGGEVX_F95
+
+       END INTERFACE
+
+       INTERFACE LA_GGEV
+      
+       SUBROUTINE DGGEV_F95( A, B, ALPHAR, ALPHAI, BETA, VL, VR, INFO )
+         USE LA_PRECISION, ONLY: WP => DP
+         INTEGER, INTENT(OUT), OPTIONAL :: INFO
+         REAL(WP), INTENT(INOUT) :: A(:,:), B(:,:)
+         REAL(WP), INTENT(OUT) :: ALPHAR(:), ALPHAI(:), BETA(:)
+         REAL(WP), INTENT(OUT), OPTIONAL, TARGET :: VL(:,:), VR(:,:)
+       END SUBROUTINE DGGEV_F95
+
+       SUBROUTINE ZGGEV_F95( A, B, ALPHA, BETA, VL, VR, INFO )
+         USE LA_PRECISION, ONLY: WP => DP
+         INTEGER, INTENT(OUT), OPTIONAL :: INFO
+         COMPLEX(WP), INTENT(INOUT) :: A(:,:), B(:,:)
+         COMPLEX(WP), INTENT(OUT) ::  ALPHA(:), BETA(:)
+         COMPLEX(WP), INTENT(OUT), OPTIONAL, TARGET :: VL(:,:), VR(:,:)
+        END SUBROUTINE ZGGEV_F95
+
+       END INTERFACE
+
+      INTERFACE LA_GEEV
+
+       SUBROUTINE DGEEV_F95( A, WR, WI, VL, VR, INFO )
+          USE LA_PRECISION, ONLY: WP => DP
+          INTEGER, INTENT(OUT), OPTIONAL :: INFO
+          REAL(WP), INTENT(INOUT) :: A(:,:)
+          REAL(WP), INTENT(OUT) :: WR(:), WI(:)
+          REAL(WP), INTENT(OUT), OPTIONAL :: VL(:,:), VR(:,:)
+       END SUBROUTINE DGEEV_F95
+
+       SUBROUTINE ZGEEV_F95( A, W, VL, VR, INFO )
+          USE LA_PRECISION, ONLY: WP => DP
+          INTEGER, INTENT(OUT), OPTIONAL :: INFO
+          COMPLEX(WP), INTENT(INOUT) :: A(:,:)
+          COMPLEX(WP), INTENT(OUT) :: W(:)
+          COMPLEX(WP), INTENT(OUT), OPTIONAL :: VL(:,:), VR(:,:)
+       END SUBROUTINE ZGEEV_F95
+
+      END INTERFACE
+
+      INTERFACE LA_GEESX
+
+       SUBROUTINE DGEESX_F95( A, WR, WI, VS, SELECT, SDIM, RCONDE,      &
+     &                        RCONDV, INFO )
+          USE LA_PRECISION, ONLY: WP => DP
+!         USE LA_EXTERNAL
+          INTERFACE
+             LOGICAL FUNCTION SELECT(WR, WI)
+                USE LA_PRECISION, ONLY: WP => DP
+                REAL(WP), INTENT(IN) :: WR, WI
+             END FUNCTION SELECT
+          END INTERFACE
+          INTEGER, INTENT(OUT), OPTIONAL :: INFO, SDIM
+          REAL(WP), INTENT(INOUT) :: A(:,:)
+          REAL(WP), INTENT(OUT) :: WR(:), WI(:)
+          REAL(WP), INTENT(OUT), OPTIONAL :: RCONDE, RCONDV
+          REAL(WP), INTENT(OUT), OPTIONAL :: VS(:,:)
+          OPTIONAL :: SELECT
+       END SUBROUTINE DGEESX_F95
+
+       SUBROUTINE ZGEESX_F95( A, W, VS, SELECT, SDIM, RCONDE, RCONDV,   &
+     &                        INFO )
+          USE LA_PRECISION, ONLY: WP => DP
+          INTERFACE
+             LOGICAL FUNCTION SELECT(W)
+                USE LA_PRECISION, ONLY: WP => DP
+                COMPLEX(WP), INTENT(IN) :: W
+             END FUNCTION SELECT
+          END INTERFACE
+          INTEGER, INTENT(OUT), OPTIONAL :: INFO, SDIM
+          COMPLEX(WP), INTENT(INOUT) :: A(:,:)
+          COMPLEX(WP), INTENT(OUT) :: W(:)
+          REAL(WP), INTENT(OUT), OPTIONAL :: RCONDE, RCONDV
+          COMPLEX(WP), INTENT(OUT), OPTIONAL :: VS(:,:)
+          OPTIONAL :: SELECT
+       END SUBROUTINE ZGEESX_F95
+
+      END INTERFACE
+
+        INTERFACE LA_GGESX
+
+       SUBROUTINE DGGESX_F95( A, B, ALPHAR, ALPHAI, BETA, VSL, VSR,     &
+     &                        SELECT, SDIM, RCONDE, RCONDV, INFO )
+          USE LA_PRECISION, ONLY: WP => DP
+          INTEGER, INTENT(OUT), OPTIONAL :: INFO
+          REAL(WP), INTENT(INOUT) :: A(:,:), B(:,:)
+          INTEGER, INTENT(OUT), OPTIONAL :: SDIM
+          REAL(WP), INTENT(OUT) :: ALPHAR(:), ALPHAI(:),  BETA(:)
+          REAL(WP), INTENT(OUT), OPTIONAL :: VSL(:,:), VSR(:,:)
+          INTERFACE
+           LOGICAL FUNCTION SELECT(ALPHAR, ALPHAI, BETA)
+            USE LA_PRECISION, ONLY: WP => DP
+            REAL(WP), INTENT(IN) :: ALPHAR, ALPHAI, BETA
+           END FUNCTION SELECT
+          END INTERFACE
+          OPTIONAL :: SELECT
+          REAL(WP), INTENT(OUT), OPTIONAL :: RCONDE(2), RCONDV(2)
+        END SUBROUTINE DGGESX_F95
+
+       SUBROUTINE ZGGESX_F95( A, B, ALPHA, BETA, VSL, VSR, SELECT, SDIM,&
+     &                        RCONDE, RCONDV, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           COMPLEX(WP), INTENT(INOUT) :: A(:,:), B(:,:)
+           INTEGER, INTENT(OUT), OPTIONAL :: SDIM
+           COMPLEX(WP), INTENT(OUT) :: ALPHA(:), BETA(:)
+           COMPLEX(WP), INTENT(OUT), OPTIONAL :: VSL(:,:), VSR(:,:)
+           INTERFACE
+            LOGICAL FUNCTION SELECT(ALPHA, BETA)
+              USE LA_PRECISION, ONLY: WP => DP
+              COMPLEX(WP), INTENT(IN) :: ALPHA, BETA
+           END FUNCTION SELECT
+          END INTERFACE
+          OPTIONAL :: SELECT
+          REAL(WP), INTENT(OUT), OPTIONAL :: RCONDE(2), RCONDV(2)
+         END SUBROUTINE  ZGGESX_F95
+	 
+        END INTERFACE 
+
+
+       INTERFACE LA_GGES
+      
+       SUBROUTINE DGGES_F95( A, B, ALPHAR, ALPHAI, BETA, VSL, VSR,      &
+     &                       SELECT, SDIM, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(INOUT) :: A(:,:), B(:,:)
+           INTEGER, INTENT(OUT), OPTIONAL :: SDIM
+           REAL(WP), INTENT(OUT) :: ALPHAR(:), ALPHAI(:), BETA(:)
+           REAL(WP), INTENT(OUT), OPTIONAL :: VSL(:,:), VSR(:,:)
+           INTERFACE
+             LOGICAL FUNCTION SELECT(ALPHAR, ALPHAI, BETA)
+               USE LA_PRECISION, ONLY: WP => DP
+               REAL(WP), INTENT(IN) :: ALPHAR, ALPHAI, BETA
+             END FUNCTION SELECT
+           END INTERFACE
+           OPTIONAL :: SELECT
+          END SUBROUTINE DGGES_F95
+
+       SUBROUTINE ZGGES_F95( A, B, ALPHA, BETA, VSL, VSR, SELECT, SDIM, &
+     &                       INFO )
+         USE LA_PRECISION, ONLY: WP => DP
+         INTEGER, INTENT(OUT), OPTIONAL :: INFO
+         COMPLEX(WP), INTENT(INOUT) :: A(:,:), B(:,:)
+         INTEGER, INTENT(OUT), OPTIONAL :: SDIM
+         COMPLEX(WP), INTENT(OUT) :: ALPHA(:),  BETA(:)
+         COMPLEX(WP), INTENT(OUT), OPTIONAL :: VSL(:,:), VSR(:,:)
+         INTERFACE
+           LOGICAL FUNCTION SELECT(ALPHA, BETA)
+             USE LA_PRECISION, ONLY: WP => DP
+             COMPLEX(WP), INTENT(IN) :: ALPHA, BETA
+           END FUNCTION SELECT
+         END INTERFACE
+         OPTIONAL :: SELECT
+       END SUBROUTINE ZGGES_F95
+
+       END INTERFACE
+
+      INTERFACE LA_GEES
+
+       SUBROUTINE DGEES_F95( A, WR, WI, VS, SELECT, SDIM, INFO )
+          USE LA_PRECISION, ONLY: WP => DP
+!         USE LA_EXTERNAL, ONLY: SELECT
+          INTERFACE
+             LOGICAL FUNCTION SELECT(WR, WI)
+                USE LA_PRECISION, ONLY: WP => DP
+                REAL(WP), INTENT(IN) :: WR, WI
+             END FUNCTION SELECT
+          END INTERFACE
+
+          INTEGER, INTENT(OUT), OPTIONAL :: INFO, SDIM
+          REAL(WP), INTENT(INOUT) :: A(:,:)
+          REAL(WP), INTENT(OUT) :: WR(:), WI(:)
+          REAL(WP), INTENT(OUT), OPTIONAL :: VS(:,:)
+          OPTIONAL :: SELECT
+       END SUBROUTINE DGEES_F95
+
+       SUBROUTINE ZGEES_F95( A, W, VS, SELECT, SDIM, INFO )
+          USE LA_PRECISION, ONLY: WP => DP
+          INTERFACE
+             LOGICAL FUNCTION SELECT(W)
+                USE LA_PRECISION, ONLY: WP => DP
+                COMPLEX(WP), INTENT(IN) :: W
+             END FUNCTION SELECT
+          END INTERFACE
+          INTEGER, INTENT(OUT), OPTIONAL :: INFO, SDIM
+          COMPLEX(WP), INTENT(INOUT) :: A(:,:)
+          COMPLEX(WP), INTENT(OUT) :: W(:)
+          COMPLEX(WP), INTENT(OUT), OPTIONAL :: VS(:,:)
+          OPTIONAL :: SELECT
+       END SUBROUTINE ZGEES_F95
+
+      END INTERFACE
+
+        INTERFACE LA_STEVR
+ 
+       SUBROUTINE DSTEVR_F95( D, E, W, Z, VL, VU, IL, IU, M, ISUPPZ,    &
+     &                        ABSTOL, INFO )
+         USE LA_PRECISION, ONLY: WP =>  DP
+          REAL(WP), INTENT(INOUT) :: D(:), E(:)
+          REAL(WP), INTENT(OUT) :: W(:)
+          INTEGER, INTENT(OUT), OPTIONAL :: INFO
+          REAL(WP), INTENT(IN), OPTIONAL:: ABSTOL, VL, VU
+          INTEGER, INTENT(IN), OPTIONAL :: IL, IU
+          INTEGER, INTENT(OUT), OPTIONAL :: M
+          REAL(WP), INTENT(OUT), OPTIONAL :: Z(:,:)
+          INTEGER, INTENT(OUT), OPTIONAL, TARGET :: ISUPPZ(:)
+         END SUBROUTINE DSTEVR_F95
+ 
+        END INTERFACE
+						
+      INTERFACE LA_STEVX
+
+       SUBROUTINE DSTEVX_F95( D, E, W, Z, VL, VU, IL, IU, M, IFAIL,     &
+     &                        ABSTOL, INFO )
+          USE LA_PRECISION, ONLY: WP => DP
+          INTEGER, INTENT(IN), OPTIONAL :: IL, IU
+          INTEGER, INTENT(OUT), OPTIONAL :: INFO, M
+          REAL(WP), INTENT(IN), OPTIONAL :: ABSTOL, VL, VU
+          INTEGER, INTENT(OUT), OPTIONAL :: IFAIL(:)
+          REAL(WP), INTENT(OUT), OPTIONAL :: Z(:,:)
+          REAL(WP), INTENT(INOUT) :: D(:), E(:)
+          REAL(WP), INTENT(OUT) :: W(:)
+       END SUBROUTINE DSTEVX_F95
+
+      END INTERFACE
+
+      INTERFACE LA_STEVD
+
+       SUBROUTINE DSTEVD_F95( D, E, Z, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           REAL(WP), INTENT(INOUT) :: D(:), E(:)
+           REAL(WP), INTENT(OUT), OPTIONAL :: Z(:,:)
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+      END SUBROUTINE DSTEVD_F95
+
+      END INTERFACE
+
+      INTERFACE LA_STEV
+
+       SUBROUTINE DSTEV_F95( D, E, Z, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           REAL(WP), INTENT(INOUT) :: D(:), E(:)
+           REAL(WP), INTENT(OUT), OPTIONAL :: Z(:,:)
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+        END SUBROUTINE DSTEV_F95
+
+      END INTERFACE
+
+      INTERFACE LA_SBEVX
+
+       SUBROUTINE DSBEVX_F95( AB, W, UPLO, Z, VL, VU, IL, IU, M, IFAIL, &
+     &                        Q, ABSTOL, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+           INTEGER, INTENT(IN), OPTIONAL :: IL, IU
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO, M
+           REAL(WP), INTENT(IN), OPTIONAL :: ABSTOL, VL, VU
+           INTEGER, INTENT(OUT), OPTIONAL :: IFAIL(:)
+           REAL(WP), INTENT(OUT), OPTIONAL :: Z(:,:), Q(:,:)
+           REAL(WP), INTENT(INOUT) :: AB(:,:)
+           REAL(WP), INTENT(OUT) :: W(:)
+        END SUBROUTINE DSBEVX_F95
+
+      END INTERFACE
+
+      INTERFACE LA_HBEVX
+
+       SUBROUTINE ZHBEVX_F95( AB, W, UPLO, Z, VL, VU, IL, IU, M, IFAIL, &
+     &                        Q, ABSTOL, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+           INTEGER, INTENT(IN), OPTIONAL :: IL, IU
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO, M
+           REAL(WP), INTENT(IN), OPTIONAL :: ABSTOL, VL, VU
+           INTEGER, INTENT(OUT), OPTIONAL :: IFAIL(:)
+           COMPLEX(WP), INTENT(OUT), OPTIONAL :: Z(:,:), Q(:,:)
+           COMPLEX(WP), INTENT(INOUT) :: AB(:,:)
+           REAL(WP), INTENT(OUT) :: W(:)
+        END SUBROUTINE ZHBEVX_F95
+
+      END INTERFACE
+
+      INTERFACE LA_SBEVD
+
+       SUBROUTINE DSBEVD_F95( AB, W, UPLO, Z, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(INOUT) :: AB(:,:)
+           REAL(WP), INTENT(OUT) :: W(:)
+           REAL(WP), INTENT(OUT), OPTIONAL :: Z(:,:)
+        END SUBROUTINE DSBEVD_F95
+
+      END INTERFACE
+
+      INTERFACE LA_HBEVD
+
+       SUBROUTINE ZHBEVD_F95( AB, W, UPLO, Z, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           COMPLEX(WP), INTENT(INOUT) :: AB(:,:)
+           REAL(WP), INTENT(OUT) :: W(:)
+           COMPLEX(WP), INTENT(OUT), OPTIONAL :: Z(:,:)
+        END SUBROUTINE ZHBEVD_F95
+
+      END INTERFACE
+
+      INTERFACE LA_SBEV
+
+       SUBROUTINE DSBEV_F95( AB, W, UPLO, Z, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(INOUT) :: AB(:,:)
+           REAL(WP), INTENT(OUT) :: W(:)
+           REAL(WP), INTENT(OUT), OPTIONAL :: Z(:,:)
+        END SUBROUTINE DSBEV_F95
+
+      END INTERFACE
+
+      INTERFACE LA_HBEV
+
+       SUBROUTINE ZHBEV_F95( AB, W, UPLO, Z, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           COMPLEX(WP), INTENT(INOUT) :: AB(:,:)
+           REAL(WP), INTENT(OUT) :: W(:)
+           COMPLEX(WP), INTENT(OUT), OPTIONAL :: Z(:,:)
+        END SUBROUTINE ZHBEV_F95
+
+      END INTERFACE
+
+      INTERFACE LA_SPEVX
+
+       SUBROUTINE DSPEVX_F95( AP, W, UPLO, Z, VL, VU, IL, IU, M, IFAIL, &
+     &                        ABSTOL, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+           INTEGER, INTENT(IN), OPTIONAL :: IL, IU
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO, M
+           REAL(WP), INTENT(IN), OPTIONAL :: ABSTOL, VL, VU
+           INTEGER, INTENT(OUT), OPTIONAL :: IFAIL(:)
+           REAL(WP), INTENT(OUT), OPTIONAL :: Z(:,:)
+           REAL(WP), INTENT(INOUT) :: AP(:)
+           REAL(WP), INTENT(OUT) :: W(:)
+        END SUBROUTINE DSPEVX_F95
+
+      END INTERFACE
+
+      INTERFACE LA_HPEVX
+
+       SUBROUTINE ZHPEVX_F95( AP, W, UPLO, Z, VL, VU, IL, IU, M, IFAIL, &
+     &                        ABSTOL, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+           INTEGER, INTENT(IN), OPTIONAL :: IL, IU
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO, M
+           REAL(WP), INTENT(IN), OPTIONAL :: ABSTOL, VL, VU
+           INTEGER, INTENT(OUT), OPTIONAL :: IFAIL(:)
+           COMPLEX(WP), INTENT(OUT), OPTIONAL :: Z(:,:)
+           COMPLEX(WP), INTENT(INOUT) :: AP(:)
+           REAL(WP), INTENT(OUT) :: W(:)
+        END SUBROUTINE ZHPEVX_F95
+
+      END INTERFACE
+
+      INTERFACE LA_SPEVD
+
+       SUBROUTINE DSPEVD_F95( AP, W, UPLO, Z, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(INOUT) :: AP(:)
+           REAL(WP), INTENT(OUT) :: W(:)
+           REAL(WP), INTENT(OUT), OPTIONAL :: Z(:,:)
+        END SUBROUTINE DSPEVD_F95
+
+      END INTERFACE
+
+      INTERFACE LA_HPEVD
+
+       SUBROUTINE ZHPEVD_F95( AP, W, UPLO, Z, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           COMPLEX(WP), INTENT(INOUT) :: AP(:)
+           REAL(WP), INTENT(OUT) :: W(:)
+           COMPLEX(WP), INTENT(OUT), OPTIONAL :: Z(:,:)
+        END SUBROUTINE ZHPEVD_F95
+
+      END INTERFACE
+
+      INTERFACE LA_SPEV
+
+       SUBROUTINE DSPEV_F95( AP, W, UPLO, Z, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(INOUT) :: AP(:)
+           REAL(WP), INTENT(OUT) :: W(:)
+           REAL(WP), INTENT(OUT), OPTIONAL :: Z(:,:)
+        END SUBROUTINE DSPEV_F95
+
+      END INTERFACE
+
+      INTERFACE LA_HPEV
+
+       SUBROUTINE ZHPEV_F95( AP, W, UPLO, Z, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           COMPLEX(WP), INTENT(INOUT) :: AP(:)
+           REAL(WP), INTENT(OUT) :: W(:)
+           COMPLEX(WP), INTENT(OUT), OPTIONAL :: Z(:,:)
+        END SUBROUTINE ZHPEV_F95
+
+      END INTERFACE
+
+      INTERFACE LA_GGGLM
+
+       SUBROUTINE DGGGLM_F95( A, B, D, X, Y, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           REAL(WP), INTENT( INOUT ) :: A( :, : ), B(:,:), D(:)
+           REAL(WP), INTENT( OUT ) :: X(:), Y(:)
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+        END SUBROUTINE DGGGLM_F95
+
+       SUBROUTINE ZGGGLM_F95( A, B, D, X, Y, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           COMPLEX(WP), INTENT( INOUT ) :: A( :, : ), B(:,:), D(:)
+           COMPLEX(WP), INTENT( OUT ) :: X(:), Y(:)
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+        END SUBROUTINE ZGGGLM_F95
+
+      END INTERFACE
+
+      INTERFACE LA_GGLSE
+
+       SUBROUTINE DGGLSE_F95( A, B, C, D, X, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           REAL(WP), INTENT( INOUT ) :: A( :, : ), B(:,:), C(:), D(:)
+           REAL(WP), INTENT( OUT ) :: X(:)
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+        END SUBROUTINE DGGLSE_F95
+
+       SUBROUTINE ZGGLSE_F95( A, B, C, D, X, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           COMPLEX(WP), INTENT( INOUT ) :: A( :, : ), B(:,:), C(:), D(:)
+           COMPLEX(WP), INTENT( OUT ) :: X(:)
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+        END SUBROUTINE ZGGLSE_F95
+
+      END INTERFACE
+
+         INTERFACE LA_GELSY
+
+       SUBROUTINE DGELSY_F95( A, B, RANK, JPVT, RCOND, INFO )
+       USE LA_PRECISION, ONLY: WP => DP
+       REAL(WP), INTENT(INOUT) :: A(:,:), B(:,:)
+       INTEGER, INTENT(OUT), OPTIONAL :: RANK
+       INTEGER, INTENT(INOUT), OPTIONAL, TARGET :: JPVT(:)
+       REAL(WP), INTENT(IN), OPTIONAL :: RCOND
+       INTEGER, INTENT(OUT), OPTIONAL :: INFO
+      END SUBROUTINE DGELSY_F95   
+
+       SUBROUTINE DGELSY1_F95( A, B, RANK, JPVT, RCOND, INFO )
+        USE LA_PRECISION, ONLY: WP => DP
+        REAL(WP), INTENT(INOUT) :: A(:,:), B(:)
+        INTEGER, INTENT(OUT), OPTIONAL :: RANK
+        INTEGER, INTENT(INOUT), OPTIONAL, TARGET :: JPVT(:)
+        REAL(WP), INTENT(IN), OPTIONAL :: RCOND
+        INTEGER, INTENT(OUT), OPTIONAL :: INFO
+       END SUBROUTINE DGELSY1_F95
+       
+       SUBROUTINE ZGELSY_F95( A, B, RANK, JPVT, RCOND, INFO )
+       USE LA_PRECISION, ONLY: WP => DP
+       COMPLEX(WP), INTENT(INOUT) :: A(:,:), B(:,:)
+       INTEGER, INTENT(OUT), OPTIONAL :: RANK
+       INTEGER, INTENT(INOUT), OPTIONAL, TARGET :: JPVT(:)
+       REAL(WP), INTENT(IN), OPTIONAL :: RCOND
+       INTEGER, INTENT(OUT), OPTIONAL :: INFO
+      END SUBROUTINE ZGELSY_F95   
+
+       SUBROUTINE ZGELSY1_F95( A, B, RANK, JPVT, RCOND, INFO )
+        USE LA_PRECISION, ONLY: WP => DP
+        COMPLEX(WP), INTENT(INOUT) :: A(:,:), B(:)
+        INTEGER, INTENT(OUT), OPTIONAL :: RANK
+        INTEGER, INTENT(INOUT), OPTIONAL, TARGET :: JPVT(:)
+        REAL(WP), INTENT(IN), OPTIONAL :: RCOND
+        INTEGER, INTENT(OUT), OPTIONAL :: INFO
+       END SUBROUTINE ZGELSY1_F95
+       
+      END INTERFACE 
+
+        INTERFACE LA_GELSD
+
+       SUBROUTINE DGELSD_F95( A, B, RANK, S, RCOND, INFO )
+         USE LA_PRECISION, ONLY: WP => DP
+         REAL(WP), INTENT( INOUT ) :: A( :, : ), B(:,:)
+         INTEGER, INTENT(IN), OPTIONAL :: RANK
+         REAL(WP), INTENT(OUT), OPTIONAL :: S(:)
+         REAL(WP), INTENT(IN), OPTIONAL :: RCOND
+         INTEGER, INTENT(OUT), OPTIONAL :: INFO
+       END SUBROUTINE DGELSD_F95
+       
+       SUBROUTINE DGELSD1_F95( A, B, RANK, S, RCOND, INFO )
+        USE LA_PRECISION, ONLY: WP => DP
+        REAL(WP), INTENT( INOUT ) :: A( :, : ), B(:)
+        INTEGER, INTENT(IN), OPTIONAL :: RANK
+        REAL(WP), INTENT(OUT), OPTIONAL :: S(:)
+        REAL(WP), INTENT(IN), OPTIONAL :: RCOND
+        INTEGER, INTENT(OUT), OPTIONAL :: INFO
+       END SUBROUTINE DGELSD1_F95
+
+       SUBROUTINE ZGELSD_F95( A, B, RANK, S, RCOND, INFO )
+         USE LA_PRECISION, ONLY: WP => DP
+         COMPLEX(WP), INTENT( INOUT ) :: A( :, : ), B(:,:)
+         INTEGER, INTENT(IN), OPTIONAL :: RANK
+         REAL(WP), INTENT(OUT), OPTIONAL :: S(:)
+         REAL(WP), INTENT(IN), OPTIONAL :: RCOND
+         INTEGER, INTENT(OUT), OPTIONAL :: INFO
+       END SUBROUTINE ZGELSD_F95
+       
+       SUBROUTINE ZGELSD1_F95( A, B, RANK, S, RCOND, INFO )
+        USE LA_PRECISION, ONLY: WP => DP
+        COMPLEX(WP), INTENT( INOUT ) :: A( :, : ), B(:)
+        INTEGER, INTENT(IN), OPTIONAL :: RANK
+        REAL(WP), INTENT(OUT), OPTIONAL :: S(:)
+        REAL(WP), INTENT(IN), OPTIONAL :: RCOND
+        INTEGER, INTENT(OUT), OPTIONAL :: INFO
+       END SUBROUTINE ZGELSD1_F95
+
+      END INTERFACE
+
+      INTERFACE LA_GELSX
+
+       SUBROUTINE DGELSX_F95( A, B, RANK, JPVT, RCOND, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           REAL(WP), INTENT( INOUT ) :: A( :, : ), B(:,:)
+           INTEGER, INTENT(IN), OPTIONAL :: RANK
+           INTEGER, INTENT(OUT), OPTIONAL :: JPVT(:)
+           REAL(WP), INTENT(IN), OPTIONAL :: RCOND
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+        END SUBROUTINE DGELSX_F95
+
+       SUBROUTINE DGELSX1_F95( A, B, RANK, JPVT, RCOND, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           REAL(WP), INTENT( INOUT ) :: A( :, : ), B(:)
+           INTEGER, INTENT(IN), OPTIONAL :: RANK
+           INTEGER, INTENT(OUT), OPTIONAL :: JPVT(:)
+           REAL(WP), INTENT(IN), OPTIONAL :: RCOND
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+        END SUBROUTINE DGELSX1_F95
+
+       SUBROUTINE ZGELSX_F95( A, B, RANK, JPVT, RCOND, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           COMPLEX(WP), INTENT( INOUT ) :: A( :, : ), B(:,:)
+           INTEGER, INTENT(IN), OPTIONAL :: RANK
+           INTEGER, INTENT(OUT), OPTIONAL :: JPVT(:)
+           REAL(WP), INTENT(IN), OPTIONAL :: RCOND
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+        END SUBROUTINE ZGELSX_F95
+
+       SUBROUTINE ZGELSX1_F95( A, B, RANK, JPVT, RCOND, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           COMPLEX(WP), INTENT( INOUT ) :: A( :, : ), B(:)
+           INTEGER, INTENT(IN), OPTIONAL :: RANK
+           INTEGER, INTENT(OUT), OPTIONAL :: JPVT(:)
+           REAL(WP), INTENT(IN), OPTIONAL :: RCOND
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+        END SUBROUTINE ZGELSX1_F95
+
+      END INTERFACE
+
+      INTERFACE LA_GELSS
+
+       SUBROUTINE DGELSS_F95( A, B, RANK, S, RCOND, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           REAL(WP), INTENT( INOUT ) :: A( :, : ), B(:,:)
+           INTEGER, INTENT(IN), OPTIONAL :: RANK
+           REAL(WP), INTENT(OUT), OPTIONAL :: S(:)
+           REAL(WP), INTENT(IN), OPTIONAL :: RCOND
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+        END SUBROUTINE DGELSS_F95
+
+       SUBROUTINE DGELSS1_F95( A, B, RANK, S, RCOND, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           REAL(WP), INTENT( INOUT ) :: A( :, : ), B(:)
+           INTEGER, INTENT(IN), OPTIONAL :: RANK
+           REAL(WP), INTENT(OUT), OPTIONAL :: S(:)
+           REAL(WP), INTENT(IN), OPTIONAL :: RCOND
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+        END SUBROUTINE DGELSS1_F95
+
+       SUBROUTINE ZGELSS_F95( A, B, RANK, S, RCOND, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           COMPLEX(WP), INTENT( INOUT ) :: A( :, : ), B(:,:)
+           INTEGER, INTENT(IN), OPTIONAL :: RANK
+           REAL(WP), INTENT(OUT), OPTIONAL :: S(:)
+           REAL(WP), INTENT(IN), OPTIONAL :: RCOND
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+        END SUBROUTINE ZGELSS_F95
+
+       SUBROUTINE ZGELSS1_F95( A, B, RANK, S, RCOND, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           COMPLEX(WP), INTENT( INOUT ) :: A( :, : ), B(:)
+           INTEGER, INTENT(IN), OPTIONAL :: RANK
+           REAL(WP), INTENT(OUT), OPTIONAL :: S(:)
+           REAL(WP), INTENT(IN), OPTIONAL :: RCOND
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+        END SUBROUTINE ZGELSS1_F95
+
+      END INTERFACE
+
+      INTERFACE LA_GELS
+
+       SUBROUTINE DGELS_F95( A, B, TRANS, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: TRANS
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT( INOUT ) :: A( :, : ), B(:,:)
+        END SUBROUTINE DGELS_F95
+
+       SUBROUTINE DGELS1_F95( A, B, TRANS, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: TRANS
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT( INOUT ) :: A( :, : ), B(:)
+        END SUBROUTINE DGELS1_F95
+
+       SUBROUTINE ZGELS_F95( A, B, TRANS, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: TRANS
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           COMPLEX(WP), INTENT( INOUT ) :: A( :, : ), B(:,:)
+        END SUBROUTINE ZGELS_F95
+
+       SUBROUTINE ZGELS1_F95( A, B, TRANS, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: TRANS
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           COMPLEX(WP), INTENT( INOUT ) :: A( :, : ), B(:)
+        END SUBROUTINE ZGELS1_F95
+
+      END INTERFACE
+
+      INTERFACE LA_SPSVX
+
+       SUBROUTINE DSPSVX_F95( AP, B, X, UPLO, AFP, IPIV, FACT, FERR,    &
+     &                        BERR, RCOND, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO, FACT
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(OUT), OPTIONAL :: RCOND
+           REAL(WP), INTENT(IN) :: AP(:), B(:,:)
+           REAL(WP), INTENT(OUT) :: X(:,:)
+           INTEGER, INTENT(INOUT), OPTIONAL :: IPIV(:)
+           REAL(WP), INTENT(INOUT), OPTIONAL :: AFP(:)
+           REAL(WP), INTENT(OUT), OPTIONAL :: FERR(:), BERR(:)
+        END SUBROUTINE DSPSVX_F95
+
+       SUBROUTINE DSPSVX1_F95( AP, B, X, UPLO, AFP, IPIV, FACT, FERR,   &
+     &                         BERR, RCOND, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO, FACT
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(OUT), OPTIONAL :: RCOND, FERR, BERR
+           REAL(WP), INTENT(IN) :: AP(:), B(:)
+           REAL(WP), INTENT(OUT) :: X(:)
+           INTEGER, INTENT(INOUT), OPTIONAL :: IPIV(:)
+           REAL(WP), INTENT(INOUT), OPTIONAL :: AFP(:)
+        END SUBROUTINE DSPSVX1_F95
+
+       SUBROUTINE ZSPSVX_F95( AP, B, X, UPLO, AFP, IPIV, FACT, FERR,    &
+     &                        BERR, RCOND, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO, FACT
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(OUT), OPTIONAL :: RCOND
+           COMPLEX(WP), INTENT(IN) :: AP(:), B(:,:)
+           COMPLEX(WP), INTENT(OUT) :: X(:,:)
+           INTEGER, INTENT(INOUT), OPTIONAL :: IPIV(:)
+           COMPLEX(WP), INTENT(INOUT), OPTIONAL :: AFP(:)
+           REAL(WP), INTENT(OUT), OPTIONAL :: FERR(:), BERR(:)
+        END SUBROUTINE ZSPSVX_F95
+
+       SUBROUTINE ZSPSVX1_F95( AP, B, X, UPLO, AFP, IPIV, FACT, FERR,   &
+     &                         BERR, RCOND, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO, FACT
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(OUT), OPTIONAL :: RCOND, FERR, BERR
+           COMPLEX(WP), INTENT(IN) :: AP(:), B(:)
+           COMPLEX(WP), INTENT(OUT) :: X(:)
+           INTEGER, INTENT(INOUT), OPTIONAL :: IPIV(:)
+           COMPLEX(WP), INTENT(INOUT), OPTIONAL :: AFP(:)
+        END SUBROUTINE ZSPSVX1_F95
+
+      END INTERFACE
+
+      INTERFACE LA_HPSVX
+
+       SUBROUTINE ZHPSVX_F95( A, B, X, UPLO, AFP, IPIV, FACT, FERR,     &
+     &                        BERR, RCOND, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO, FACT
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(OUT), OPTIONAL :: RCOND
+           COMPLEX(WP), INTENT(IN) :: A(:), B(:,:)
+           COMPLEX(WP), INTENT(OUT) :: X(:,:)
+           INTEGER, INTENT(INOUT), OPTIONAL :: IPIV(:)
+           COMPLEX(WP), INTENT(INOUT), OPTIONAL :: AFP(:)
+           REAL(WP), INTENT(OUT), OPTIONAL :: FERR(:), BERR(:)
+        END SUBROUTINE ZHPSVX_F95
+
+       SUBROUTINE ZHPSVX1_F95( A, B, X, UPLO, AFP, IPIV, FACT, FERR,    &
+     &                         BERR, RCOND, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO, FACT
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(OUT), OPTIONAL :: RCOND, FERR, BERR
+           COMPLEX(WP), INTENT(IN) :: A(:), B(:)
+           COMPLEX(WP), INTENT(OUT) :: X(:)
+           INTEGER, INTENT(INOUT), OPTIONAL :: IPIV(:)
+           COMPLEX(WP), INTENT(INOUT), OPTIONAL :: AFP(:)
+        END SUBROUTINE ZHPSVX1_F95
+
+      END INTERFACE
+
+      INTERFACE LA_SYSVX
+
+       SUBROUTINE DSYSVX_F95( A, B, X, UPLO, AF, IPIV, FACT, FERR, BERR,&
+     &                        RCOND, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO, FACT
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(OUT), OPTIONAL :: RCOND
+           REAL(WP), INTENT(IN) :: A(:,:), B(:,:)
+           REAL(WP), INTENT(OUT) :: X(:,:)
+           INTEGER, INTENT(INOUT), OPTIONAL :: IPIV(:)
+           REAL(WP), INTENT(INOUT), OPTIONAL :: AF(:,:)
+           REAL(WP), INTENT(OUT), OPTIONAL :: FERR(:), BERR(:)
+        END SUBROUTINE DSYSVX_F95
+
+       SUBROUTINE DSYSVX1_F95( A, B, X, UPLO, AF, IPIV, FACT, FERR,     &
+     &                         BERR, RCOND, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO, FACT
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(OUT), OPTIONAL :: RCOND, FERR, BERR
+           REAL(WP), INTENT(IN) :: A(:,:), B(:)
+           REAL(WP), INTENT(OUT) :: X(:)
+           INTEGER, INTENT(INOUT), OPTIONAL :: IPIV(:)
+           REAL(WP), INTENT(INOUT), OPTIONAL :: AF(:,:)
+        END SUBROUTINE DSYSVX1_F95
+
+       SUBROUTINE ZSYSVX_F95( A, B, X, UPLO, AF, IPIV, FACT, FERR, BERR,&
+     &                        RCOND, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO, FACT
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(OUT), OPTIONAL :: RCOND
+           COMPLEX(WP), INTENT(IN) :: A(:,:), B(:,:)
+           COMPLEX(WP), INTENT(OUT) :: X(:,:)
+           INTEGER, INTENT(INOUT), OPTIONAL :: IPIV(:)
+           COMPLEX(WP), INTENT(INOUT), OPTIONAL :: AF(:,:)
+           REAL(WP), INTENT(OUT), OPTIONAL :: FERR(:), BERR(:)
+        END SUBROUTINE ZSYSVX_F95
+
+       SUBROUTINE ZSYSVX1_F95( A, B, X, UPLO, AF, IPIV, FACT, FERR,     &
+     &                         BERR, RCOND, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO, FACT
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(OUT), OPTIONAL :: RCOND, FERR, BERR
+           COMPLEX(WP), INTENT(IN) :: A(:,:), B(:)
+           COMPLEX(WP), INTENT(OUT) :: X(:)
+           INTEGER, INTENT(INOUT), OPTIONAL :: IPIV(:)
+           COMPLEX(WP), INTENT(INOUT), OPTIONAL :: AF(:,:)
+        END SUBROUTINE ZSYSVX1_F95
+
+      END INTERFACE
+
+      INTERFACE LA_HESVX
+
+       SUBROUTINE ZHESVX_F95( A, B, X, UPLO, AF, IPIV, FACT, FERR, BERR,&
+     &                        RCOND, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO, FACT
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(OUT), OPTIONAL :: RCOND
+           COMPLEX(WP), INTENT(IN) :: A(:,:), B(:,:)
+           COMPLEX(WP), INTENT(OUT) :: X(:,:)
+           INTEGER, INTENT(INOUT), OPTIONAL :: IPIV(:)
+           COMPLEX(WP), INTENT(INOUT), OPTIONAL :: AF(:,:)
+           REAL(WP), INTENT(OUT), OPTIONAL :: FERR(:), BERR(:)
+        END SUBROUTINE ZHESVX_F95
+
+       SUBROUTINE ZHESVX1_F95( A, B, X, UPLO, AF, IPIV, FACT, FERR,     &
+     &                         BERR, RCOND, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO, FACT
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(OUT), OPTIONAL :: RCOND, FERR, BERR
+           COMPLEX(WP), INTENT(IN) :: A(:,:), B(:)
+           COMPLEX(WP), INTENT(OUT) :: X(:)
+           INTEGER, INTENT(INOUT), OPTIONAL :: IPIV(:)
+           COMPLEX(WP), INTENT(INOUT), OPTIONAL :: AF(:,:)
+        END SUBROUTINE ZHESVX1_F95
+
+      END INTERFACE
+
+      INTERFACE LA_PTSVX
+
+       SUBROUTINE DPTSVX_F95( D, E, B, X, DF, EF, FACT, FERR, BERR,     &
+     &                        RCOND, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: FACT
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(OUT), OPTIONAL :: RCOND
+           REAL(WP), INTENT(IN) :: D(:)
+           REAL(WP), INTENT(IN) :: E(:), B(:,:)
+           REAL(WP), INTENT(OUT) :: X(:,:)
+           REAL(WP), INTENT(OUT), OPTIONAL :: FERR(:), BERR(:)
+           REAL(WP), INTENT(INOUT), OPTIONAL :: DF(:)
+           REAL(WP), INTENT(INOUT), OPTIONAL :: EF(:)
+        END SUBROUTINE DPTSVX_F95
+
+       SUBROUTINE DPTSVX1_F95( D, E, B, X, DF, EF, FACT, FERR, BERR,    &
+     &                         RCOND, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: FACT
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(OUT), OPTIONAL :: RCOND, FERR, BERR
+           REAL(WP), INTENT(IN) :: D(:)
+           REAL(WP), INTENT(IN) :: E(:), B(:)
+           REAL(WP), INTENT(OUT) :: X(:)
+           REAL(WP), INTENT(INOUT), OPTIONAL :: DF(:)
+           REAL(WP), INTENT(INOUT), OPTIONAL :: EF(:)
+        END SUBROUTINE DPTSVX1_F95
+
+       SUBROUTINE ZPTSVX_F95( D, E, B, X, DF, EF, FACT, FERR, BERR,     &
+     &                        RCOND, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: FACT
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(OUT), OPTIONAL :: RCOND
+           REAL(WP), INTENT(IN) :: D(:)
+           COMPLEX(WP), INTENT(IN) :: E(:), B(:,:)
+           COMPLEX(WP), INTENT(OUT) :: X(:,:)
+           REAL(WP), INTENT(OUT), OPTIONAL :: FERR(:), BERR(:)
+           REAL(WP), INTENT(INOUT), OPTIONAL :: DF(:)
+           COMPLEX(WP), INTENT(INOUT), OPTIONAL :: EF(:)
+        END SUBROUTINE ZPTSVX_F95
+
+       SUBROUTINE ZPTSVX1_F95( D, E, B, X, DF, EF, FACT, FERR, BERR,    &
+     &                         RCOND, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: FACT
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(OUT), OPTIONAL :: RCOND, FERR, BERR
+           REAL(WP), INTENT(IN) :: D(:)
+           COMPLEX(WP), INTENT(IN) :: E(:), B(:)
+           COMPLEX(WP), INTENT(OUT) :: X(:)
+           REAL(WP), INTENT(INOUT), OPTIONAL :: DF(:)
+           COMPLEX(WP), INTENT(INOUT), OPTIONAL :: EF(:)
+        END SUBROUTINE ZPTSVX1_F95
+
+      END INTERFACE
+
+      INTERFACE LA_PBSVX
+
+       SUBROUTINE DPBSVX_F95( AB, B, X, UPLO, AFB, FACT, EQUED, S, FERR,&
+     &                        BERR, RCOND, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO, FACT
+           CHARACTER(LEN=1), INTENT(INOUT), OPTIONAL :: EQUED
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(OUT), OPTIONAL :: RCOND
+           REAL(WP), INTENT(INOUT) :: AB(:,:), B(:,:)
+           REAL(WP), INTENT(OUT) :: X(:,:)
+           REAL(WP), INTENT(OUT), OPTIONAL :: FERR(:), BERR(:)
+           REAL(WP), INTENT(INOUT), OPTIONAL :: S(:)
+           REAL(WP), INTENT(INOUT), OPTIONAL :: AFB(:,:)
+        END SUBROUTINE DPBSVX_F95
+
+       SUBROUTINE DPBSVX1_F95( AB, B, X, UPLO, AFB, FACT, EQUED, S,     &
+     &                         FERR, BERR, RCOND, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO, FACT
+           CHARACTER(LEN=1), INTENT(INOUT), OPTIONAL :: EQUED
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(OUT), OPTIONAL :: RCOND, FERR, BERR
+           REAL(WP), INTENT(INOUT) :: AB(:,:), B(:)
+           REAL(WP), INTENT(OUT) :: X(:)
+           REAL(WP), INTENT(INOUT), OPTIONAL :: S(:)
+           REAL(WP), INTENT(INOUT), OPTIONAL :: AFB(:,:)
+        END SUBROUTINE DPBSVX1_F95
+
+       SUBROUTINE ZPBSVX_F95( AB, B, X, UPLO, AFB, FACT, EQUED, S, FERR,&
+     &                        BERR, RCOND, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO, FACT
+           CHARACTER(LEN=1), INTENT(INOUT), OPTIONAL :: EQUED
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(OUT), OPTIONAL :: RCOND
+           COMPLEX(WP), INTENT(INOUT) :: AB(:,:), B(:,:)
+           COMPLEX(WP), INTENT(OUT) :: X(:,:)
+           REAL(WP), INTENT(OUT), OPTIONAL :: FERR(:), BERR(:)
+           REAL(WP), INTENT(INOUT), OPTIONAL :: S(:)
+           COMPLEX(WP), INTENT(INOUT), OPTIONAL :: AFB(:,:)
+        END SUBROUTINE ZPBSVX_F95
+
+       SUBROUTINE ZPBSVX1_F95( AB, B, X, UPLO, AFB, FACT, EQUED, S,     &
+     &                         FERR, BERR, RCOND, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO, FACT
+           CHARACTER(LEN=1), INTENT(INOUT), OPTIONAL :: EQUED
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(OUT), OPTIONAL :: RCOND, FERR, BERR
+           COMPLEX(WP), INTENT(INOUT) :: AB(:,:), B(:)
+           COMPLEX(WP), INTENT(OUT) :: X(:)
+           REAL(WP), INTENT(INOUT), OPTIONAL :: S(:)
+           COMPLEX(WP), INTENT(INOUT), OPTIONAL :: AFB(:,:)
+        END SUBROUTINE ZPBSVX1_F95
+
+      END INTERFACE
+
+      INTERFACE LA_PPSVX
+
+       SUBROUTINE DPPSVX_F95( AP, B, X, UPLO, AFP, FACT, EQUED, S, FERR,&
+     &                        BERR, RCOND, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO, FACT
+           CHARACTER(LEN=1), INTENT(INOUT), OPTIONAL :: EQUED
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(OUT), OPTIONAL :: RCOND
+           REAL(WP), INTENT(INOUT) :: AP(:), B(:,:)
+           REAL(WP), INTENT(OUT) :: X(:,:)
+           REAL(WP), INTENT(INOUT), OPTIONAL :: AFP(:)
+           REAL(WP), INTENT(INOUT), OPTIONAL :: S(:)
+           REAL(WP), INTENT(OUT), OPTIONAL :: FERR(:), BERR(:)
+        END SUBROUTINE DPPSVX_F95
+
+       SUBROUTINE DPPSVX1_F95( AP, B, X, UPLO, AFP, FACT, EQUED, S,     &
+     &                         FERR, BERR, RCOND, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO, FACT
+           CHARACTER(LEN=1), INTENT(INOUT), OPTIONAL :: EQUED
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(OUT), OPTIONAL :: RCOND, FERR, BERR
+           REAL(WP), INTENT(INOUT) :: AP(:), B(:)
+           REAL(WP), INTENT(OUT) :: X(:)
+           REAL(WP), INTENT(INOUT), OPTIONAL :: AFP(:)
+           REAL(WP), INTENT(INOUT), OPTIONAL :: S(:)
+        END SUBROUTINE DPPSVX1_F95
+
+       SUBROUTINE ZPPSVX_F95( AP, B, X, UPLO, AFP, FACT, EQUED, S, FERR,&
+     &                        BERR, RCOND, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO, FACT
+           CHARACTER(LEN=1), INTENT(INOUT), OPTIONAL :: EQUED
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(OUT), OPTIONAL :: RCOND
+           COMPLEX(WP), INTENT(INOUT) :: AP(:), B(:,:)
+           COMPLEX(WP), INTENT(OUT) :: X(:,:)
+           COMPLEX(WP), INTENT(INOUT), OPTIONAL :: AFP(:)
+           REAL(WP), INTENT(INOUT), OPTIONAL :: S(:)
+           REAL(WP), INTENT(OUT), OPTIONAL :: FERR(:), BERR(:)
+        END SUBROUTINE ZPPSVX_F95
+
+       SUBROUTINE ZPPSVX1_F95( AP, B, X, UPLO, AFP, FACT, EQUED, S,     &
+     &                         FERR, BERR, RCOND, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO, FACT
+           CHARACTER(LEN=1), INTENT(INOUT), OPTIONAL :: EQUED
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(OUT), OPTIONAL :: RCOND, FERR, BERR
+           COMPLEX(WP), INTENT(INOUT) :: AP(:), B(:)
+           COMPLEX(WP), INTENT(OUT) :: X(:)
+           COMPLEX(WP), INTENT(INOUT), OPTIONAL :: AFP(:)
+           REAL(WP), INTENT(INOUT), OPTIONAL :: S(:)
+        END SUBROUTINE ZPPSVX1_F95
+
+      END INTERFACE
+
+      INTERFACE LA_POSVX
+
+       SUBROUTINE DPOSVX_F95( A, B, X, UPLO, AF, FACT, EQUED, S, FERR,  &
+     &                        BERR, RCOND, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO, FACT
+           CHARACTER(LEN=1), INTENT(INOUT), OPTIONAL :: EQUED
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(OUT), OPTIONAL :: RCOND
+           REAL(WP), INTENT(INOUT) :: A(:,:), B(:,:)
+           REAL(WP), INTENT(OUT) :: X(:,:)
+           REAL(WP), INTENT(INOUT), OPTIONAL :: AF(:,:)
+           REAL(WP), INTENT(INOUT), OPTIONAL :: S(:)
+           REAL(WP), INTENT(OUT), OPTIONAL :: FERR(:), BERR(:)
+        END SUBROUTINE DPOSVX_F95
+
+       SUBROUTINE DPOSVX1_F95( A, B, X, UPLO, AF, FACT, EQUED, S, FERR, &
+     &                         BERR, RCOND, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO, FACT
+           CHARACTER(LEN=1), INTENT(INOUT), OPTIONAL :: EQUED
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(OUT), OPTIONAL :: RCOND, FERR, BERR
+           REAL(WP), INTENT(INOUT) :: A(:,:), B(:)
+           REAL(WP), INTENT(OUT) :: X(:)
+           REAL(WP), INTENT(INOUT), OPTIONAL :: AF(:,:)
+           REAL(WP), INTENT(INOUT), OPTIONAL :: S(:)
+        END SUBROUTINE DPOSVX1_F95
+
+       SUBROUTINE ZPOSVX_F95( A, B, X, UPLO, AF, FACT, EQUED, S, FERR,  &
+     &                        BERR, RCOND, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO, FACT
+           CHARACTER(LEN=1), INTENT(INOUT), OPTIONAL :: EQUED
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(OUT), OPTIONAL :: RCOND
+           COMPLEX(WP), INTENT(INOUT) :: A(:,:), B(:,:)
+           COMPLEX(WP), INTENT(OUT) :: X(:,:)
+           COMPLEX(WP), INTENT(INOUT), OPTIONAL :: AF(:,:)
+           REAL(WP), INTENT(INOUT), OPTIONAL :: S(:)
+           REAL(WP), INTENT(OUT), OPTIONAL :: FERR(:), BERR(:)
+        END SUBROUTINE ZPOSVX_F95
+
+       SUBROUTINE ZPOSVX1_F95( A, B, X, UPLO, AF, FACT, EQUED, S, FERR, &
+     &                         BERR, RCOND, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO, FACT
+           CHARACTER(LEN=1), INTENT(INOUT), OPTIONAL :: EQUED
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(OUT), OPTIONAL :: RCOND, FERR, BERR
+           COMPLEX(WP), INTENT(INOUT) :: A(:,:), B(:)
+           COMPLEX(WP), INTENT(OUT) :: X(:)
+           COMPLEX(WP), INTENT(INOUT), OPTIONAL :: AF(:,:)
+           REAL(WP), INTENT(INOUT), OPTIONAL :: S(:)
+        END SUBROUTINE ZPOSVX1_F95
+
+      END INTERFACE
+
+      INTERFACE LA_GTSVX
+
+       SUBROUTINE DGTSVX_F95( DL, D, DU, B, X, DLF, DF, DUF, DU2, IPIV, &
+     &                        FACT, TRANS, FERR, BERR, RCOND, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: TRANS, FACT
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(OUT), OPTIONAL :: RCOND
+           REAL(WP), INTENT(IN) :: DL(:), D(:), DU(:), B(:,:)
+           INTEGER, INTENT(INOUT), OPTIONAL :: IPIV(:)
+           REAL(WP), INTENT(INOUT), OPTIONAL :: DLF(:), DF(:), DUF(:),  &
+     &                                          DU2(:)
+           REAL(WP), INTENT(OUT), OPTIONAL :: FERR(:), BERR(:)
+           REAL(WP), INTENT(OUT) :: X(:,:)
+        END SUBROUTINE DGTSVX_F95
+
+       SUBROUTINE DGTSVX1_F95( DL, D, DU, B, X, DLF, DF, DUF, DU2, IPIV,&
+     &                         FACT, TRANS, FERR, BERR, RCOND, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: TRANS, FACT
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(OUT), OPTIONAL :: RCOND, FERR, BERR
+           REAL(WP), INTENT(IN) :: DL(:), D(:), DU(:), B(:)
+           INTEGER, INTENT(INOUT), OPTIONAL :: IPIV(:)
+           REAL(WP), INTENT(INOUT), OPTIONAL :: DLF(:), DF(:), DUF(:),  &
+     &                                          DU2(:)
+           REAL(WP), INTENT(OUT) :: X(:)
+        END SUBROUTINE DGTSVX1_F95
+
+       SUBROUTINE ZGTSVX_F95( DL, D, DU, B, X, DLF, DF, DUF, DU2, IPIV, &
+     &                        FACT, TRANS, FERR, BERR, RCOND, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: TRANS, FACT
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(OUT), OPTIONAL :: RCOND
+           COMPLEX(WP), INTENT(IN) :: DL(:), D(:), DU(:), B(:,:)
+           INTEGER, INTENT(INOUT), OPTIONAL :: IPIV(:)
+           COMPLEX(WP), INTENT(INOUT), OPTIONAL :: DLF(:), DF(:),       &
+     &                                             DUF(:), DU2(:)
+           REAL(WP), INTENT(OUT), OPTIONAL :: FERR(:), BERR(:)
+           COMPLEX(WP), INTENT(OUT) :: X(:,:)
+        END SUBROUTINE ZGTSVX_F95
+
+       SUBROUTINE ZGTSVX1_F95( DL, D, DU, B, X, DLF, DF, DUF, DU2, IPIV,&
+     &                         FACT, TRANS, FERR, BERR, RCOND, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: TRANS, FACT
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(OUT), OPTIONAL :: RCOND, FERR, BERR
+           COMPLEX(WP), INTENT(IN) :: DL(:), D(:), DU(:), B(:)
+           INTEGER, INTENT(INOUT), OPTIONAL :: IPIV(:)
+           COMPLEX(WP), INTENT(INOUT), OPTIONAL :: DLF(:), DF(:),       &
+     &                                             DUF(:), DU2(:)
+           COMPLEX(WP), INTENT(OUT) :: X(:)
+        END SUBROUTINE ZGTSVX1_F95
+
+      END INTERFACE
+
+      INTERFACE LA_GBSVX
+
+       SUBROUTINE DGBSVX_F95( A, B, X, KL, AFB, IPIV, FACT, TRANS,      &
+     &                        EQUED, R, C, FERR, BERR, RCOND, RPVGRW,   &
+     &                        INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: TRANS, FACT
+           CHARACTER(LEN=1), INTENT(INOUT), OPTIONAL :: EQUED
+           INTEGER, INTENT(IN), OPTIONAL :: KL
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(OUT), OPTIONAL :: RCOND, RPVGRW
+           REAL(WP), INTENT(INOUT) :: A(:,:), B(:,:)
+           REAL(WP), INTENT(OUT) :: X(:,:)
+           INTEGER, INTENT(INOUT), OPTIONAL :: IPIV(:)
+           REAL(WP), INTENT(INOUT), OPTIONAL :: AFB(:,:)
+           REAL(WP), INTENT(INOUT), OPTIONAL :: C(:), R(:)
+           REAL(WP), INTENT(OUT), OPTIONAL :: FERR(:), BERR(:)
+        END SUBROUTINE DGBSVX_F95
+
+       SUBROUTINE DGBSVX1_F95( A, B, X, KL, AFB, IPIV, FACT, TRANS,     &
+     &                         EQUED, R, C, FERR, BERR, RCOND, RPVGRW,  &
+     &                         INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: TRANS, FACT
+           CHARACTER(LEN=1), INTENT(INOUT), OPTIONAL :: EQUED
+           INTEGER, INTENT(IN), OPTIONAL :: KL
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(OUT), OPTIONAL :: RCOND, RPVGRW, FERR, BERR
+           REAL(WP), INTENT(INOUT) :: A(:,:), B(:)
+           REAL(WP), INTENT(OUT) :: X(:)
+           INTEGER, INTENT(INOUT), OPTIONAL :: IPIV(:)
+           REAL(WP), INTENT(INOUT), OPTIONAL :: AFB(:,:)
+           REAL(WP), INTENT(INOUT), OPTIONAL :: C(:), R(:)
+        END SUBROUTINE DGBSVX1_F95
+
+       SUBROUTINE ZGBSVX_F95( A, B, X, KL, AFB, IPIV, FACT, TRANS,      &
+     &                        EQUED, R, C, FERR, BERR, RCOND, RPVGRW,   &
+     &                        INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: TRANS, FACT
+           CHARACTER(LEN=1), INTENT(INOUT), OPTIONAL :: EQUED
+           INTEGER, INTENT(IN), OPTIONAL :: KL
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(OUT), OPTIONAL :: RCOND, RPVGRW
+           COMPLEX(WP), INTENT(INOUT) :: A(:,:), B(:,:)
+           COMPLEX(WP), INTENT(OUT) :: X(:,:)
+           INTEGER, INTENT(INOUT), OPTIONAL :: IPIV(:)
+           COMPLEX(WP), INTENT(INOUT), OPTIONAL :: AFB(:,:)
+           REAL(WP), INTENT(INOUT), OPTIONAL :: C(:), R(:)
+           REAL(WP), INTENT(OUT), OPTIONAL :: FERR(:), BERR(:)
+        END SUBROUTINE ZGBSVX_F95
+
+       SUBROUTINE ZGBSVX1_F95( A, B, X, KL, AFB, IPIV, FACT, TRANS,     &
+     &                         EQUED, R, C, FERR, BERR, RCOND, RPVGRW,  &
+     &                         INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: TRANS, FACT
+           CHARACTER(LEN=1), INTENT(INOUT), OPTIONAL :: EQUED
+           INTEGER, INTENT(IN), OPTIONAL :: KL
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(OUT), OPTIONAL :: RCOND, RPVGRW, FERR, BERR
+           COMPLEX(WP), INTENT(INOUT) :: A(:,:), B(:)
+           COMPLEX(WP), INTENT(OUT) :: X(:)
+           INTEGER, INTENT(INOUT), OPTIONAL :: IPIV(:)
+           COMPLEX(WP), INTENT(INOUT), OPTIONAL :: AFB(:,:)
+           REAL(WP), INTENT(INOUT), OPTIONAL :: C(:), R(:)
+        END SUBROUTINE ZGBSVX1_F95
+
+      END INTERFACE
+
+      INTERFACE LA_SPSV
+
+       SUBROUTINE DSPSV_F95( AP, B, UPLO, IPIV, INFO )
+            USE LA_PRECISION, ONLY: WP => DP
+            CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+            INTEGER, INTENT(OUT), OPTIONAL :: INFO
+            INTEGER, INTENT(OUT), OPTIONAL :: IPIV(:)
+            REAL(WP), INTENT(INOUT) :: AP(:), B(:,:)
+        END SUBROUTINE DSPSV_F95
+
+       SUBROUTINE DSPSV1_F95( AP, B, UPLO, IPIV, INFO )
+            USE LA_PRECISION, ONLY: WP => DP
+            CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+            INTEGER, INTENT(OUT), OPTIONAL :: INFO
+            INTEGER, INTENT(OUT), OPTIONAL :: IPIV(:)
+            REAL(WP), INTENT(INOUT) :: AP(:), B(:)
+        END SUBROUTINE DSPSV1_F95
+
+       SUBROUTINE ZSPSV_F95( AP, B, UPLO, IPIV, INFO )
+            USE LA_PRECISION, ONLY: WP => DP
+            CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+            INTEGER, INTENT(OUT), OPTIONAL :: INFO
+            INTEGER, INTENT(OUT), OPTIONAL :: IPIV(:)
+            COMPLEX(WP), INTENT(INOUT) :: AP(:), B(:,:)
+        END SUBROUTINE ZSPSV_F95
+
+       SUBROUTINE ZSPSV1_F95( AP, B, UPLO, IPIV, INFO )
+            USE LA_PRECISION, ONLY: WP => DP
+            CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+            INTEGER, INTENT(OUT), OPTIONAL :: INFO
+            INTEGER, INTENT(OUT), OPTIONAL :: IPIV(:)
+            COMPLEX(WP), INTENT(INOUT) :: AP(:), B(:)
+        END SUBROUTINE ZSPSV1_F95
+
+      END INTERFACE
+
+      INTERFACE LA_HPSV
+
+       SUBROUTINE ZHPSV_F95( AP, B, UPLO, IPIV, INFO )
+            USE LA_PRECISION, ONLY: WP => DP
+            CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+            INTEGER, INTENT(OUT), OPTIONAL :: INFO
+            INTEGER, INTENT(OUT), OPTIONAL :: IPIV(:)
+            COMPLEX(WP), INTENT(INOUT) :: AP(:), B(:,:)
+        END SUBROUTINE ZHPSV_F95
+
+       SUBROUTINE ZHPSV1_F95( AP, B, UPLO, IPIV, INFO )
+            USE LA_PRECISION, ONLY: WP => DP
+            CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+            INTEGER, INTENT(OUT), OPTIONAL :: INFO
+            INTEGER, INTENT(OUT), OPTIONAL :: IPIV(:)
+            COMPLEX(WP), INTENT(INOUT) :: AP(:), B(:)
+        END SUBROUTINE ZHPSV1_F95
+
+      END INTERFACE
+
+      INTERFACE LA_SYSV
+
+       SUBROUTINE DSYSV_F95( A, B, UPLO, IPIV, INFO )
+            USE LA_PRECISION, ONLY: WP => DP
+            CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+            INTEGER, INTENT(OUT), OPTIONAL :: INFO
+            INTEGER, INTENT(OUT), OPTIONAL :: IPIV(:)
+            REAL(WP), INTENT(INOUT) :: A(:,:), B(:,:)
+        END SUBROUTINE DSYSV_F95
+
+       SUBROUTINE DSYSV1_F95( A, B, UPLO, IPIV, INFO )
+            USE LA_PRECISION, ONLY: WP => DP
+            CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+            INTEGER, INTENT(OUT), OPTIONAL :: INFO
+            INTEGER, INTENT(OUT), OPTIONAL :: IPIV(:)
+            REAL(WP), INTENT(INOUT) :: A(:,:), B(:)
+        END SUBROUTINE DSYSV1_F95
+
+       SUBROUTINE ZSYSV_F95( A, B, UPLO, IPIV, INFO )
+            USE LA_PRECISION, ONLY: WP => DP
+            CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+            INTEGER, INTENT(OUT), OPTIONAL :: INFO
+            INTEGER, INTENT(OUT), OPTIONAL :: IPIV(:)
+            COMPLEX(WP), INTENT(INOUT) :: A(:,:), B(:,:)
+        END SUBROUTINE ZSYSV_F95
+
+       SUBROUTINE ZSYSV1_F95( A, B, UPLO, IPIV, INFO )
+            USE LA_PRECISION, ONLY: WP => DP
+            CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+            INTEGER, INTENT(OUT), OPTIONAL :: INFO
+            INTEGER, INTENT(OUT), OPTIONAL :: IPIV(:)
+            COMPLEX(WP), INTENT(INOUT) :: A(:,:), B(:)
+        END SUBROUTINE ZSYSV1_F95
+
+      END INTERFACE
+
+      INTERFACE LA_HESV
+
+       SUBROUTINE ZHESV_F95( A, B, UPLO, IPIV, INFO )
+            USE LA_PRECISION, ONLY: WP => DP
+            CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+            INTEGER, INTENT(OUT), OPTIONAL :: INFO
+            INTEGER, INTENT(OUT), OPTIONAL :: IPIV(:)
+            COMPLEX(WP), INTENT(INOUT) :: A(:,:), B(:,:)
+        END SUBROUTINE ZHESV_F95
+
+       SUBROUTINE ZHESV1_F95( A, B, UPLO, IPIV, INFO )
+            USE LA_PRECISION, ONLY: WP => DP
+            CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+            INTEGER, INTENT(OUT), OPTIONAL :: INFO
+            INTEGER, INTENT(OUT), OPTIONAL :: IPIV(:)
+            COMPLEX(WP), INTENT(INOUT) :: A(:,:), B(:)
+        END SUBROUTINE ZHESV1_F95
+
+      END INTERFACE
+
+      INTERFACE LA_PTSV
+
+       SUBROUTINE DPTSV_F95( D, E, B, INFO )
+            USE LA_PRECISION, ONLY: WP => DP
+            INTEGER, INTENT(OUT), OPTIONAL :: INFO
+            REAL(WP), INTENT(INOUT) :: D(:)
+            REAL(WP), INTENT(INOUT) :: E(:), B(:,:)
+        END SUBROUTINE DPTSV_F95
+
+       SUBROUTINE DPTSV1_F95( D, E, B, INFO )
+            USE LA_PRECISION, ONLY: WP => DP
+            INTEGER, INTENT(OUT), OPTIONAL :: INFO
+            REAL(WP), INTENT(INOUT) :: D(:)
+            REAL(WP), INTENT(INOUT) :: E(:), B(:)
+        END SUBROUTINE DPTSV1_F95
+
+       SUBROUTINE ZPTSV_F95( D, E, B, INFO )
+            USE LA_PRECISION, ONLY: WP => DP
+            INTEGER, INTENT(OUT), OPTIONAL :: INFO
+            REAL(WP), INTENT(INOUT) :: D(:)
+            COMPLEX(WP), INTENT(INOUT) :: E(:), B(:,:)
+        END SUBROUTINE ZPTSV_F95
+
+       SUBROUTINE ZPTSV1_F95( D, E, B, INFO )
+            USE LA_PRECISION, ONLY: WP => DP
+            INTEGER, INTENT(OUT), OPTIONAL :: INFO
+            REAL(WP), INTENT(INOUT) :: D(:)
+            COMPLEX(WP), INTENT(INOUT) :: E(:), B(:)
+        END SUBROUTINE ZPTSV1_F95
+
+      END INTERFACE
+
+      INTERFACE LA_PBSV
+
+       SUBROUTINE DPBSV_F95( AB, B, UPLO, INFO )
+            USE LA_PRECISION, ONLY: WP => DP
+            CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+            INTEGER, INTENT(OUT), OPTIONAL :: INFO
+            REAL(WP), INTENT(INOUT) :: AB(:,:), B(:,:)
+        END SUBROUTINE DPBSV_F95
+
+       SUBROUTINE DPBSV1_F95( AB, B, UPLO, INFO )
+            USE LA_PRECISION, ONLY: WP => DP
+            CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+            INTEGER, INTENT(OUT), OPTIONAL :: INFO
+            REAL(WP), INTENT(INOUT) :: AB(:,:), B(:)
+        END SUBROUTINE DPBSV1_F95
+
+       SUBROUTINE ZPBSV_F95( AB, B, UPLO, INFO )
+            USE LA_PRECISION, ONLY: WP => DP
+            CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+            INTEGER, INTENT(OUT), OPTIONAL :: INFO
+            COMPLEX(WP), INTENT(INOUT) :: AB(:,:), B(:,:)
+        END SUBROUTINE ZPBSV_F95
+
+       SUBROUTINE ZPBSV1_F95( AB, B, UPLO, INFO )
+            USE LA_PRECISION, ONLY: WP => DP
+            CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+            INTEGER, INTENT(OUT), OPTIONAL :: INFO
+            COMPLEX(WP), INTENT(INOUT) :: AB(:,:), B(:)
+        END SUBROUTINE ZPBSV1_F95
+
+      END INTERFACE
+
+      INTERFACE LA_PPSV
+
+       SUBROUTINE DPPSV_F95( AP, B, UPLO, INFO )
+            USE LA_PRECISION, ONLY: WP => DP
+            CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+            INTEGER, INTENT(OUT), OPTIONAL :: INFO
+            REAL(WP), INTENT(INOUT) :: AP(:), B(:,:)
+        END SUBROUTINE DPPSV_F95
+
+       SUBROUTINE DPPSV1_F95( AP, B, UPLO, INFO )
+            USE LA_PRECISION, ONLY: WP => DP
+            CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+            INTEGER, INTENT(OUT), OPTIONAL :: INFO
+            REAL(WP), INTENT(INOUT) :: AP(:), B(:)
+        END SUBROUTINE DPPSV1_F95
+
+       SUBROUTINE ZPPSV_F95( AP, B, UPLO, INFO )
+            USE LA_PRECISION, ONLY: WP => DP
+            CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+            INTEGER, INTENT(OUT), OPTIONAL :: INFO
+            COMPLEX(WP), INTENT(INOUT) :: AP(:), B(:,:)
+        END SUBROUTINE ZPPSV_F95
+
+       SUBROUTINE ZPPSV1_F95( AP, B, UPLO, INFO )
+            USE LA_PRECISION, ONLY: WP => DP
+            CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+            INTEGER, INTENT(OUT), OPTIONAL :: INFO
+            COMPLEX(WP), INTENT(INOUT) :: AP(:), B(:)
+        END SUBROUTINE ZPPSV1_F95
+
+      END INTERFACE
+
+      INTERFACE LA_POSV
+
+       SUBROUTINE DPOSV_F95( A, B, UPLO, INFO )
+            USE LA_PRECISION, ONLY: WP => DP
+            CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+            INTEGER, INTENT(OUT), OPTIONAL :: INFO
+            REAL(WP), INTENT(INOUT) :: A(:,:), B(:,:)
+        END SUBROUTINE DPOSV_F95
+
+       SUBROUTINE DPOSV1_F95( A, B, UPLO, INFO )
+            USE LA_PRECISION, ONLY: WP => DP
+            CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+            INTEGER, INTENT(OUT), OPTIONAL :: INFO
+            REAL(WP), INTENT(INOUT) :: A(:,:), B(:)
+        END SUBROUTINE DPOSV1_F95
+
+       SUBROUTINE ZPOSV_F95( A, B, UPLO, INFO )
+            USE LA_PRECISION, ONLY: WP => DP
+            CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+            INTEGER, INTENT(OUT), OPTIONAL :: INFO
+            COMPLEX(WP), INTENT(INOUT) :: A(:,:), B(:,:)
+        END SUBROUTINE ZPOSV_F95
+
+       SUBROUTINE ZPOSV1_F95( A, B, UPLO, INFO )
+            USE LA_PRECISION, ONLY: WP => DP
+            CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+            INTEGER, INTENT(OUT), OPTIONAL :: INFO
+            COMPLEX(WP), INTENT(INOUT) :: A(:,:), B(:)
+        END SUBROUTINE ZPOSV1_F95
+
+      END INTERFACE
+
+      INTERFACE LA_GTSV
+
+       SUBROUTINE DGTSV_F95( DL, D, DU, B, INFO )
+            USE LA_PRECISION, ONLY: WP => DP
+            INTEGER, INTENT(OUT), OPTIONAL :: INFO
+            REAL(WP), INTENT(INOUT) :: DL(:), D(:), DU(:), B(:,:)
+        END SUBROUTINE DGTSV_F95
+
+       SUBROUTINE DGTSV1_F95( DL, D, DU, B, INFO )
+            USE LA_PRECISION, ONLY: WP => DP
+            INTEGER, INTENT(OUT), OPTIONAL :: INFO
+            REAL(WP), INTENT(INOUT) :: DL(:), D(:), DU(:), B(:)
+        END SUBROUTINE DGTSV1_F95
+
+       SUBROUTINE ZGTSV_F95( DL, D, DU, B, INFO )
+            USE LA_PRECISION, ONLY: WP => DP
+            INTEGER, INTENT(OUT), OPTIONAL :: INFO
+            COMPLEX(WP), INTENT(INOUT) :: DL(:), D(:), DU(:), B(:,:)
+        END SUBROUTINE ZGTSV_F95
+
+       SUBROUTINE ZGTSV1_F95( DL, D, DU, B, INFO )
+            USE LA_PRECISION, ONLY: WP => DP
+            INTEGER, INTENT(OUT), OPTIONAL :: INFO
+            COMPLEX(WP), INTENT(INOUT) :: DL(:), D(:), DU(:), B(:)
+        END SUBROUTINE ZGTSV1_F95
+
+      END INTERFACE
+
+      INTERFACE LA_GBSV
+
+       SUBROUTINE DGBSV_F95( AB, B, KL, IPIV, INFO )
+            USE LA_PRECISION, ONLY: WP => DP
+            INTEGER, INTENT(IN), OPTIONAL :: KL
+            INTEGER, INTENT(OUT), OPTIONAL :: INFO
+            INTEGER, INTENT(OUT), OPTIONAL :: IPIV(:)
+            REAL(WP), INTENT(INOUT) :: AB(:,:), B(:,:)
+        END SUBROUTINE DGBSV_F95
+
+       SUBROUTINE DGBSV1_F95( AB, B, KL, IPIV, INFO )
+            USE LA_PRECISION, ONLY: WP => DP
+            INTEGER, INTENT(IN), OPTIONAL :: KL
+            INTEGER, INTENT(OUT), OPTIONAL :: INFO
+            INTEGER, INTENT(OUT), OPTIONAL :: IPIV(:)
+            REAL(WP), INTENT(INOUT) :: AB(:,:), B(:)
+        END SUBROUTINE DGBSV1_F95
+
+       SUBROUTINE ZGBSV_F95( AB, B, KL, IPIV, INFO )
+            USE LA_PRECISION, ONLY: WP => DP
+            INTEGER, INTENT(IN), OPTIONAL :: KL
+            INTEGER, INTENT(OUT), OPTIONAL :: INFO
+            INTEGER, INTENT(OUT), OPTIONAL :: IPIV(:)
+            COMPLEX(WP), INTENT(INOUT) :: AB(:,:), B(:,:)
+        END SUBROUTINE ZGBSV_F95
+
+       SUBROUTINE ZGBSV1_F95( AB, B, KL, IPIV, INFO )
+            USE LA_PRECISION, ONLY: WP => DP
+            INTEGER, INTENT(IN), OPTIONAL :: KL
+            INTEGER, INTENT(OUT), OPTIONAL :: INFO
+            INTEGER, INTENT(OUT), OPTIONAL :: IPIV(:)
+            COMPLEX(WP), INTENT(INOUT) :: AB(:,:), B(:)
+        END SUBROUTINE ZGBSV1_F95
+
+      END INTERFACE
+
+      INTERFACE LA_GESV
+
+       SUBROUTINE DGESV_F95( A, B, IPIV, INFO )
+            USE LA_PRECISION, ONLY: WP => DP
+            INTEGER, INTENT(OUT), OPTIONAL :: INFO
+            INTEGER, INTENT(OUT), OPTIONAL :: IPIV(:)
+            REAL(WP), INTENT(INOUT) :: A(:,:), B(:,:)
+        END SUBROUTINE DGESV_F95
+
+       SUBROUTINE DGESV1_F95( A, B, IPIV, INFO )
+            USE LA_PRECISION, ONLY: WP => DP
+            INTEGER, INTENT(OUT), OPTIONAL :: INFO
+            INTEGER, INTENT(OUT), OPTIONAL :: IPIV(:)
+            REAL(WP), INTENT(INOUT) :: A(:,:), B(:)
+        END SUBROUTINE DGESV1_F95
+
+       SUBROUTINE ZGESV_F95( A, B, IPIV, INFO )
+            USE LA_PRECISION, ONLY: WP => DP
+            INTEGER, INTENT(OUT), OPTIONAL :: INFO
+            INTEGER, INTENT(OUT), OPTIONAL :: IPIV(:)
+            COMPLEX(WP), INTENT(INOUT) :: A(:,:), B(:,:)
+        END SUBROUTINE ZGESV_F95
+
+       SUBROUTINE ZGESV1_F95( A, B, IPIV, INFO )
+            USE LA_PRECISION, ONLY: WP => DP
+            INTEGER, INTENT(OUT), OPTIONAL :: INFO
+            INTEGER, INTENT(OUT), OPTIONAL :: IPIV(:)
+            COMPLEX(WP), INTENT(INOUT) :: A(:,:), B(:)
+        END SUBROUTINE ZGESV1_F95
+
+      END INTERFACE
+
+      INTERFACE LA_GESVX
+
+       SUBROUTINE DGESVX_F95( A, B, X, AF, IPIV, FACT, TRANS, EQUED, R, &
+     &                        C, FERR, BERR, RCOND, RPVGRW, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: TRANS, FACT
+           CHARACTER(LEN=1), INTENT(INOUT), OPTIONAL :: EQUED
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(OUT), OPTIONAL :: RCOND, RPVGRW
+           REAL(WP), INTENT(INOUT) :: A(:,:), B(:,:)
+           REAL(WP), INTENT(OUT) :: X(:,:)
+           INTEGER, INTENT(INOUT), OPTIONAL :: IPIV(:)
+           REAL(WP), INTENT(INOUT), OPTIONAL :: AF(:,:)
+           REAL(WP), INTENT(INOUT), OPTIONAL :: C(:), R(:)
+           REAL(WP), INTENT(OUT), OPTIONAL :: FERR(:), BERR(:)
+        END SUBROUTINE DGESVX_F95
+
+       SUBROUTINE DGESVX1_F95( A, B, X, AF, IPIV, FACT, TRANS, EQUED, R,&
+     &                         C, FERR, BERR, RCOND, RPVGRW, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: TRANS, FACT
+           CHARACTER(LEN=1), INTENT(INOUT), OPTIONAL :: EQUED
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(OUT), OPTIONAL :: RCOND, RPVGRW
+           REAL(WP), INTENT(INOUT) :: A(:,:), B(:)
+           REAL(WP), INTENT(OUT) :: X(:)
+           INTEGER, INTENT(INOUT), OPTIONAL :: IPIV(:)
+           REAL(WP), INTENT(INOUT), OPTIONAL :: AF(:,:)
+           REAL(WP), INTENT(INOUT), OPTIONAL :: C(:), R(:)
+           REAL(WP), INTENT(OUT), OPTIONAL :: FERR, BERR
+        END SUBROUTINE DGESVX1_F95
+
+       SUBROUTINE ZGESVX_F95( A, B, X, AF, IPIV, FACT, TRANS, EQUED, R, &
+     &                        C, FERR, BERR, RCOND, RPVGRW, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: TRANS, FACT
+           CHARACTER(LEN=1), INTENT(INOUT), OPTIONAL :: EQUED
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(OUT), OPTIONAL :: RCOND, RPVGRW
+           COMPLEX(WP), INTENT(INOUT) :: A(:,:), B(:,:)
+           COMPLEX(WP), INTENT(OUT) :: X(:,:)
+           INTEGER, INTENT(INOUT), OPTIONAL :: IPIV(:)
+           COMPLEX(WP), INTENT(INOUT), OPTIONAL :: AF(:,:)
+           REAL(WP), INTENT(INOUT), OPTIONAL :: C(:), R(:)
+           REAL(WP), INTENT(OUT), OPTIONAL :: FERR(:), BERR(:)
+        END SUBROUTINE ZGESVX_F95
+
+       SUBROUTINE ZGESVX1_F95( A, B, X, AF, IPIV, FACT, TRANS, EQUED, R,&
+     &                         C, FERR, BERR, RCOND, RPVGRW, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: TRANS, FACT
+           CHARACTER(LEN=1), INTENT(INOUT), OPTIONAL :: EQUED
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(OUT), OPTIONAL :: RCOND, RPVGRW
+           COMPLEX(WP), INTENT(INOUT) :: A(:,:), B(:)
+           COMPLEX(WP), INTENT(OUT) :: X(:)
+           INTEGER, INTENT(INOUT), OPTIONAL :: IPIV(:)
+           COMPLEX(WP), INTENT(INOUT), OPTIONAL :: AF(:,:)
+           REAL(WP), INTENT(INOUT), OPTIONAL :: C(:), R(:)
+           REAL(WP), INTENT(OUT), OPTIONAL :: FERR, BERR
+        END SUBROUTINE ZGESVX1_F95
+
+      END INTERFACE
+
+      INTERFACE LA_GETRF
+
+       SUBROUTINE DGETRF_F95( A, IPIV, RCOND, NORM, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: NORM
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT( OUT ), OPTIONAL :: RCOND
+           INTEGER, INTENT( OUT ), OPTIONAL :: IPIV( : )
+           REAL(WP), INTENT( INOUT ) :: A( :, : )
+        END SUBROUTINE DGETRF_F95
+
+       SUBROUTINE ZGETRF_F95( A, IPIV, RCOND, NORM, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: NORM
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT( OUT ), OPTIONAL :: RCOND
+           INTEGER, INTENT( OUT ), OPTIONAL :: IPIV( : )
+           COMPLEX(WP), INTENT( INOUT ) :: A( :, : )
+        END SUBROUTINE ZGETRF_F95
+
+      END INTERFACE
+
+      INTERFACE LA_GETRS
+
+       SUBROUTINE DGETRS_F95( A, IPIV, B, TRANS, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: TRANS
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           INTEGER, INTENT(IN) :: IPIV(:)
+           REAL(WP), INTENT(INOUT) :: A(:,:), B(:,:)
+        END SUBROUTINE DGETRS_F95
+
+       SUBROUTINE DGETRS1_F95( A, IPIV, B, TRANS, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: TRANS
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           INTEGER, INTENT(IN) :: IPIV(:)
+           REAL(WP), INTENT(INOUT) :: A(:,:), B(:)
+        END SUBROUTINE DGETRS1_F95
+
+       SUBROUTINE ZGETRS_F95( A, IPIV, B, TRANS, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: TRANS
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           INTEGER, INTENT(IN) :: IPIV(:)
+           COMPLEX(WP), INTENT(INOUT) :: A(:,:), B(:,:)
+        END SUBROUTINE ZGETRS_F95
+
+       SUBROUTINE ZGETRS1_F95( A, IPIV, B, TRANS, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: TRANS
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           INTEGER, INTENT(IN) :: IPIV(:)
+           COMPLEX(WP), INTENT(INOUT) :: A(:,:), B(:)
+        END SUBROUTINE ZGETRS1_F95
+
+      END INTERFACE
+
+      INTERFACE LA_GETRI
+
+       SUBROUTINE DGETRI_F95( A, IPIV, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           INTEGER, INTENT(IN) :: IPIV(:)
+           REAL(WP), INTENT(INOUT) :: A(:,:)
+        END SUBROUTINE DGETRI_F95
+
+       SUBROUTINE ZGETRI_F95( A, IPIV, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           INTEGER, INTENT(IN) :: IPIV(:)
+           COMPLEX(WP), INTENT(INOUT) :: A(:,:)
+        END SUBROUTINE ZGETRI_F95
+
+      END INTERFACE
+
+      INTERFACE LA_GERFS
+
+       SUBROUTINE DGERFS_F95( A, AF, IPIV, B, X, TRANS, FERR, BERR,     &
+     &                        INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: TRANS
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           INTEGER, INTENT(IN) :: IPIV(:)
+           REAL(WP), INTENT(IN) :: A(:,:), AF(:,:), B(:,:)
+           REAL(WP), INTENT(INOUT) :: X(:,:)
+           REAL(WP), INTENT(OUT), OPTIONAL :: FERR(:), BERR(:)
+        END SUBROUTINE DGERFS_F95
+
+       SUBROUTINE DGERFS1_F95( A, AF, IPIV, B, X, TRANS, FERR, BERR,    &
+     &                         INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: TRANS
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           INTEGER, INTENT(IN) :: IPIV(:)
+           REAL(WP), INTENT(IN) :: A(:,:), AF(:,:)
+           REAL(WP), INTENT(IN) :: B(:)
+           REAL(WP), INTENT(INOUT) :: X(:)
+           REAL(WP), INTENT(OUT), OPTIONAL :: FERR, BERR
+        END SUBROUTINE DGERFS1_F95
+
+       SUBROUTINE ZGERFS_F95( A, AF, IPIV, B, X, TRANS, FERR, BERR,     &
+     &                        INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: TRANS
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           INTEGER, INTENT(IN) :: IPIV(:)
+           COMPLEX(WP), INTENT(IN) :: A(:,:), AF(:,:), B(:,:)
+           COMPLEX(WP), INTENT(INOUT) :: X(:,:)
+           REAL(WP), INTENT(OUT), OPTIONAL :: FERR(:), BERR(:)
+        END SUBROUTINE ZGERFS_F95
+
+       SUBROUTINE ZGERFS1_F95( A, AF, IPIV, B, X, TRANS, FERR, BERR,    &
+     &                         INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: TRANS
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           INTEGER, INTENT(IN) :: IPIV(:)
+           COMPLEX(WP), INTENT(IN) :: A(:,:), AF(:,:)
+           COMPLEX(WP), INTENT(IN) :: B(:)
+           COMPLEX(WP), INTENT(INOUT) :: X(:)
+           REAL(WP), INTENT(OUT), OPTIONAL :: FERR, BERR
+        END SUBROUTINE ZGERFS1_F95
+
+      END INTERFACE
+
+      INTERFACE LA_GEEQU
+
+       SUBROUTINE DGEEQU_F95( A, R, C, ROWCND, COLCND, AMAX, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT( OUT ), OPTIONAL :: AMAX, COLCND, ROWCND
+           REAL(WP), INTENT( IN ) :: A( :, : )
+           REAL(WP), INTENT( OUT ) :: C( : ), R( : )
+        END SUBROUTINE DGEEQU_F95
+
+       SUBROUTINE ZGEEQU_F95( A, R, C, ROWCND, COLCND, AMAX, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT( OUT ), OPTIONAL :: AMAX, COLCND, ROWCND
+           COMPLEX(WP), INTENT( IN ) :: A( :, : )
+           REAL(WP), INTENT( OUT ) :: C( : ), R( : )
+        END SUBROUTINE ZGEEQU_F95
+
+      END INTERFACE
+
+      INTERFACE LA_SYEV
+
+       SUBROUTINE DSYEV_F95( A, W, JOBZ, UPLO, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: JOBZ, UPLO
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(INOUT) :: A(:,:)
+           REAL(WP), INTENT(OUT) :: W(:)
+        END SUBROUTINE DSYEV_F95
+
+      END INTERFACE
+
+      INTERFACE LA_HEEV
+
+       SUBROUTINE ZHEEV_F95( A, W, JOBZ, UPLO, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: JOBZ, UPLO
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           COMPLEX(WP), INTENT(INOUT) :: A(:,:)
+           REAL(WP), INTENT(OUT) :: W(:)
+        END SUBROUTINE ZHEEV_F95
+
+      END INTERFACE
+
+      INTERFACE LA_SYEVD
+
+       SUBROUTINE DSYEVD_F95( A, W, JOBZ, UPLO, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: JOBZ, UPLO
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(INOUT) :: A(:,:)
+           REAL(WP), INTENT(OUT) :: W(:)
+        END SUBROUTINE DSYEVD_F95
+
+      END INTERFACE
+
+      INTERFACE LA_HEEVD
+
+       SUBROUTINE ZHEEVD_F95( A, W, JOBZ, UPLO, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: JOBZ, UPLO
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           COMPLEX(WP), INTENT(INOUT) :: A(:,:)
+           REAL(WP), INTENT(OUT) :: W(:)
+        END SUBROUTINE ZHEEVD_F95
+
+      END INTERFACE
+
+        INTERFACE LA_SYEVR
+
+       SUBROUTINE DSYEVR_F95( A, W, JOBZ, UPLO, VL, VU, IL, IU, M,      &
+     &                        ISUPPZ, ABSTOL, INFO )
+         USE LA_PRECISION, ONLY: WP => DP
+         REAL(WP), INTENT(INOUT) :: A(:,:)
+         REAL(WP), INTENT(OUT) :: W(:)
+         CHARACTER(LEN=1), INTENT(IN), OPTIONAL ::  JOBZ, UPLO
+         INTEGER, INTENT(OUT), OPTIONAL :: INFO
+         REAL(WP), INTENT(IN), OPTIONAL :: ABSTOL, VL, VU
+         INTEGER, INTENT(IN), OPTIONAL :: IL, IU
+         INTEGER, INTENT(OUT), OPTIONAL :: M
+         INTEGER, INTENT(OUT), OPTIONAL, TARGET :: ISUPPZ(:)
+       END SUBROUTINE DSYEVR_F95   
+
+       END INTERFACE
+	   
+       INTERFACE LA_HEEVR
+		 
+       SUBROUTINE ZHEEVR_F95( A, W, JOBZ, UPLO, VL, VU, IL, IU, M,      &
+     &                        ISUPPZ, ABSTOL, INFO )
+        USE LA_PRECISION, ONLY: WP => DP
+        COMPLEX(WP), INTENT(INOUT) :: A(:,:)
+        REAL(WP), INTENT(OUT) :: W(:)
+        CHARACTER(LEN=1), INTENT(IN), OPTIONAL ::  JOBZ, UPLO
+        INTEGER, INTENT(OUT), OPTIONAL :: INFO
+        REAL(WP), INTENT(IN), OPTIONAL :: ABSTOL, VL, VU
+        INTEGER, INTENT(IN), OPTIONAL :: IL, IU
+        INTEGER, INTENT(OUT), OPTIONAL :: M
+        INTEGER, INTENT(OUT), OPTIONAL, TARGET :: ISUPPZ(:) 
+       END SUBROUTINE ZHEEVR_F95
+       
+      END INTERFACE
+
+      INTERFACE LA_SYEVX
+
+       SUBROUTINE DSYEVX_F95( A, W, JOBZ, UPLO, VL, VU, IL, IU, M,      &
+     &                        IFAIL, ABSTOL, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: JOBZ, UPLO
+           INTEGER, INTENT(IN), OPTIONAL :: IL, IU
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO, M
+           REAL(WP), INTENT(IN), OPTIONAL :: ABSTOL, VL, VU
+           INTEGER, INTENT(OUT), OPTIONAL, TARGET :: IFAIL(:)
+           REAL(WP), INTENT(INOUT) :: A(:,:)
+           REAL(WP), INTENT(OUT) :: W(:)
+        END SUBROUTINE DSYEVX_F95
+
+      END INTERFACE
+
+      INTERFACE LA_HEEVX
+
+       SUBROUTINE ZHEEVX_F95( A, W, JOBZ, UPLO, VL, VU, IL, IU, M,      &
+     &                        IFAIL, ABSTOL, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: JOBZ, UPLO
+           INTEGER, INTENT(IN), OPTIONAL :: IL, IU
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO, M
+           REAL(WP), INTENT(IN), OPTIONAL :: ABSTOL, VL, VU
+           INTEGER, INTENT(OUT), OPTIONAL, TARGET :: IFAIL(:)
+           COMPLEX(WP), INTENT(INOUT) :: A(:,:)
+           REAL(WP), INTENT(OUT) :: W(:)
+        END SUBROUTINE ZHEEVX_F95
+
+      END INTERFACE
+
+      INTERFACE LA_SYGST
+
+       SUBROUTINE DSYGST_F95( A, B, ITYPE, UPLO, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+           INTEGER, INTENT(IN), OPTIONAL :: ITYPE
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(INOUT) :: A(:,:)
+           REAL(WP), INTENT(IN) :: B(:,:)
+        END SUBROUTINE DSYGST_F95
+
+      END INTERFACE
+
+      INTERFACE LA_HEGST
+
+       SUBROUTINE ZHEGST_F95( A, B, ITYPE, UPLO, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+           INTEGER, INTENT(IN), OPTIONAL :: ITYPE
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           COMPLEX(WP), INTENT(INOUT) :: A(:,:)
+           COMPLEX(WP), INTENT(IN) :: B(:,:)
+        END SUBROUTINE ZHEGST_F95
+
+      END INTERFACE
+
+      INTERFACE LA_SYGV
+
+       SUBROUTINE DSYGV_F95( A, B, W, ITYPE, JOBZ, UPLO, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: JOBZ, UPLO
+           INTEGER, INTENT(IN), OPTIONAL :: ITYPE
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(INOUT) :: A(:,:), B(:,:)
+           REAL(WP), INTENT(OUT) :: W(:)
+        END SUBROUTINE DSYGV_F95
+
+      END INTERFACE
+
+      INTERFACE LA_HEGV
+
+       SUBROUTINE ZHEGV_F95( A, B, W, ITYPE, JOBZ, UPLO, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: JOBZ, UPLO
+           INTEGER, INTENT(IN), OPTIONAL :: ITYPE
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           COMPLEX(WP), INTENT(INOUT) :: A(:,:), B(:,:)
+           REAL(WP), INTENT(OUT) :: W(:)
+        END SUBROUTINE ZHEGV_F95
+
+      END INTERFACE
+
+         INTERFACE LA_SYGVX
+
+        SUBROUTINE DSYGVX_F95( A, B, W, ITYPE, JOBZ, UPLO, VL, VU, IL,  &
+     &                         IU, M, IFAIL, ABSTOL, INFO )
+         USE LA_PRECISION, ONLY: WP => DP
+         REAL(WP), INTENT(INOUT) :: A(:,:), B(:,:)
+         REAL(WP), INTENT(OUT) :: W(:)
+         CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: JOBZ, UPLO
+         INTEGER, INTENT(OUT), OPTIONAL :: INFO
+         REAL(WP), INTENT(IN), OPTIONAL :: ABSTOL, VL, VU
+         INTEGER, INTENT(IN), OPTIONAL :: IL, IU, ITYPE
+         INTEGER, INTENT(OUT), OPTIONAL :: M
+         INTEGER, INTENT(OUT), OPTIONAL, TARGET :: IFAIL(:)
+        END SUBROUTINE DSYGVX_F95
+	
+       END INTERFACE
+		  
+       INTERFACE LA_HEGVX
+
+       SUBROUTINE ZHEGVX_F95( A, B, W, ITYPE, JOBZ, UPLO, VL, VU, IL,   &
+     &                        IU, M, IFAIL, ABSTOL, INFO )
+         USE LA_PRECISION, ONLY: WP => DP
+         COMPLEX(WP), INTENT(INOUT) :: A(:,:), B(:,:)
+         REAL(WP), INTENT(OUT) :: W(:)
+         CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: JOBZ, UPLO
+         INTEGER, INTENT(OUT), OPTIONAL :: INFO
+         REAL(WP), INTENT(IN), OPTIONAL :: ABSTOL, VL, VU
+         INTEGER, INTENT(IN), OPTIONAL :: IL, IU, ITYPE
+         INTEGER, INTENT(OUT), OPTIONAL :: M
+         INTEGER, INTENT(OUT), OPTIONAL, TARGET :: IFAIL(:)
+        END SUBROUTINE  ZHEGVX_F95
+
+        END INTERFACE
+
+         INTERFACE LA_SYGVD
+
+        SUBROUTINE DSYGVD_F95( A, B, W, ITYPE, JOBZ, UPLO, INFO )
+            USE LA_PRECISION, ONLY: WP => DP
+            REAL(WP), INTENT(INOUT) :: A(:,:), B(:,:)
+            REAL(WP), INTENT(OUT) :: W(:)
+            CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: JOBZ, UPLO
+            INTEGER, INTENT(IN), OPTIONAL :: ITYPE 
+            INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           END SUBROUTINE DSYGVD_F95
+
+            END INTERFACE
+	    
+          INTERFACE LA_HEGVD
+	  
+       SUBROUTINE ZHEGVD_F95( A, B, W, ITYPE, JOBZ, UPLO, INFO )
+          USE LA_PRECISION, ONLY: WP => DP
+          COMPLEX(WP), INTENT(INOUT) :: A(:,:), B(:,:)
+          REAL(WP), INTENT(OUT) :: W(:)
+          CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: JOBZ, UPLO
+          INTEGER, INTENT(OUT), OPTIONAL :: INFO
+          INTEGER, INTENT(IN), OPTIONAL :: ITYPE
+         END SUBROUTINE ZHEGVD_F95   
+
+
+        END INTERFACE
+      
+      INTERFACE LA_SYTRD
+
+       SUBROUTINE DSYTRD_F95( A, TAU, UPLO, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(INOUT) :: A(:,:)
+           REAL(WP), INTENT(OUT) :: TAU(:)
+        END SUBROUTINE DSYTRD_F95
+
+      END INTERFACE
+
+      INTERFACE LA_HETRD
+
+       SUBROUTINE ZHETRD_F95( A, TAU, UPLO, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           COMPLEX(WP), INTENT(INOUT) :: A(:,:)
+           COMPLEX(WP), INTENT(OUT) :: TAU(:)
+        END SUBROUTINE ZHETRD_F95
+
+      END INTERFACE
+
+      INTERFACE LA_ORGTR
+
+       SUBROUTINE DORGTR_F95( A, TAU, UPLO, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           REAL(WP), INTENT(IN) :: TAU(:)
+           REAL(WP), INTENT(INOUT) :: A(:,:)
+        END SUBROUTINE DORGTR_F95
+
+      END INTERFACE
+
+      INTERFACE LA_UNGTR
+
+       SUBROUTINE ZUNGTR_F95( A, TAU, UPLO, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: UPLO
+           INTEGER, INTENT(OUT), OPTIONAL :: INFO
+           COMPLEX(WP), INTENT(IN) :: TAU(:)
+           COMPLEX(WP), INTENT(INOUT) :: A(:,:)
+        END SUBROUTINE ZUNGTR_F95
+
+      END INTERFACE
+
+      INTERFACE LA_POTRF
+
+       SUBROUTINE DPOTRF_F95( A, UPLO, RCOND, NORM, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: NORM, UPLO
+           INTEGER, INTENT(OUT), OPTIONAL  :: INFO
+           REAL(WP), INTENT(OUT), OPTIONAL :: RCOND
+           REAL(WP), INTENT(INOUT) :: A(:,:)
+        END SUBROUTINE DPOTRF_F95
+
+       SUBROUTINE ZPOTRF_F95( A, UPLO, RCOND, NORM, INFO )
+           USE LA_PRECISION, ONLY: WP => DP
+           CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: NORM, UPLO
+           INTEGER, INTENT(OUT), OPTIONAL  :: INFO
+           REAL(WP), INTENT(OUT), OPTIONAL :: RCOND
+           COMPLEX(WP), INTENT(INOUT) :: A(:,:)
+        END SUBROUTINE ZPOTRF_F95
+
+      END INTERFACE
+
+      INTERFACE LA_LAGGE
+
+      SUBROUTINE DLAGGE_F95( A, KL, KU, D, ISEED, INFO )
+         USE LA_PRECISION, ONLY: WP => DP
+         INTEGER, INTENT(IN), OPTIONAL :: KL, KU
+         INTEGER, INTENT(OUT), OPTIONAL :: INFO
+         INTEGER, INTENT(INOUT), OPTIONAL, TARGET :: ISEED(4)
+         REAL(WP), INTENT(IN), OPTIONAL, TARGET :: D(:)
+         REAL(WP), INTENT(OUT) :: A(:,:)
+      END SUBROUTINE DLAGGE_F95
+
+      SUBROUTINE ZLAGGE_F95( A, KL, KU, D, ISEED, INFO )
+         USE LA_PRECISION, ONLY: WP => DP
+         INTEGER, INTENT(IN), OPTIONAL :: KL, KU
+         INTEGER, INTENT(OUT), OPTIONAL :: INFO
+         INTEGER, INTENT(INOUT), OPTIONAL, TARGET :: ISEED(4)
+         REAL(WP), INTENT(IN), OPTIONAL, TARGET :: D(:)
+         COMPLEX(WP), INTENT(OUT) :: A(:,:)
+      END SUBROUTINE ZLAGGE_F95
+
+      END INTERFACE
+
+      INTERFACE LA_LANGE
+
+      FUNCTION DLANGE_F95( A, NORM, INFO )
+         USE LA_PRECISION, ONLY: WP => DP
+         REAL(WP) :: DLANGE_F95
+         CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: NORM
+         INTEGER, INTENT(OUT), OPTIONAL :: INFO
+         REAL(WP), INTENT(IN) :: A(:,:)
+      END FUNCTION DLANGE_F95
+
+      FUNCTION DLANGE1_F95( A, NORM, INFO )
+         USE LA_PRECISION, ONLY: WP => DP
+         REAL(WP) :: DLANGE1_F95
+         CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: NORM
+         INTEGER, INTENT(OUT), OPTIONAL :: INFO
+         REAL(WP), INTENT(IN) :: A(:)
+      END FUNCTION DLANGE1_F95
+
+      FUNCTION ZLANGE_F95( A, NORM, INFO )
+         USE LA_PRECISION, ONLY: WP => DP
+         REAL(WP) :: ZLANGE_F95
+         CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: NORM
+         INTEGER, INTENT(OUT), OPTIONAL :: INFO
+         COMPLEX(WP), INTENT(IN) :: A(:,:)
+      END FUNCTION ZLANGE_F95
+
+      FUNCTION ZLANGE1_F95( A, NORM, INFO )
+         USE LA_PRECISION, ONLY: WP => DP
+         REAL(WP) :: ZLANGE1_F95
+         CHARACTER(LEN=1), INTENT(IN), OPTIONAL :: NORM
+         INTEGER, INTENT(OUT), OPTIONAL :: INFO
+         COMPLEX(WP), INTENT(IN) :: A(:)
+      END FUNCTION ZLANGE1_F95
+
+      END INTERFACE
+
+      INTERFACE LA_GESDD
+      
+       SUBROUTINE DGESDD_F95(A, S, U, VT, WW, JOB, INFO )
+      USE LA_PRECISION, ONLY: WP => DP
+      CHARACTER(LEN=1), OPTIONAL, INTENT(IN) :: JOB
+      INTEGER, INTENT(OUT), OPTIONAL :: INFO
+      REAL(WP), INTENT(INOUT) :: A(:,:)
+      REAL(WP), INTENT(OUT) :: S(:)
+      REAL(WP), INTENT(OUT), OPTIONAL, TARGET :: WW(:)
+      REAL(WP), INTENT(OUT), OPTIONAL, TARGET :: U(:,:), VT(:,:)
+      END SUBROUTINE DGESDD_F95
+      
+       SUBROUTINE ZGESDD_F95(A, S, U, VT, WW, JOB, INFO )
+      USE LA_PRECISION, ONLY: WP => DP
+      CHARACTER(LEN=1), OPTIONAL, INTENT(IN) :: JOB
+      INTEGER, INTENT(OUT), OPTIONAL :: INFO
+      COMPLEX(WP), INTENT(INOUT) :: A(:,:)
+      REAL(WP), INTENT(OUT) :: S(:)
+      REAL(WP), INTENT(OUT), OPTIONAL, TARGET :: WW(:)
+      COMPLEX(WP), INTENT(OUT), OPTIONAL, TARGET :: U(:,:), VT(:,:)
+      END SUBROUTINE ZGESDD_F95
+      
+        END INTERFACE                         
+
+      END MODULE F95_LAPACK

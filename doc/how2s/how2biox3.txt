@@ -1,0 +1,19 @@
+Please use biox2-action@cs.stanford.edu for any help requests for the time being.
+Login with your SUNETID
+ssh <username>@biox3.stanford.edu
+Home directories are currently in /home
+(/home is on NFS we are testing to see if this will work moving forward. )
+/scratch will be a symlink to the lustre mount in /biox3/scratch
+
+Queues
+The queues are set up in the same manner as the old cluster.
+For job submission and scheduling we are using torque/maui. 
+Job submission is covered at the following link.  
+
+Job Submission
+http://www.clusterresources.com/torquedocs21/2.1jobsubmission.shtml
+
+Old biox2 documentation outlining the queues jobs submission documentation.
+(needs to be updated but still has useful information):
+
+http://biox2mon.stanford.edu

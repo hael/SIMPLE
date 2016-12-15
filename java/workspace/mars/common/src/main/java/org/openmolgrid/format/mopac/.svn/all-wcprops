@@ -1,0 +1,23 @@
+K 25
+svn:wc:ra_dav:version-url
+V 93
+/svn/mmmhpc/!svn/ver/1390/openmolgrid/common/trunk/src/main/java/org/openmolgrid/format/mopac
+END
+MopacParser.java
+K 25
+svn:wc:ra_dav:version-url
+V 110
+/svn/mmmhpc/!svn/ver/1390/openmolgrid/common/trunk/src/main/java/org/openmolgrid/format/mopac/MopacParser.java
+END
+MopacInputWriter.java
+K 25
+svn:wc:ra_dav:version-url
+V 115
+/svn/mmmhpc/!svn/ver/1390/openmolgrid/common/trunk/src/main/java/org/openmolgrid/format/mopac/MopacInputWriter.java
+END
+MopacOutput.java
+K 25
+svn:wc:ra_dav:version-url
+V 110
+/svn/mmmhpc/!svn/ver/1390/openmolgrid/common/trunk/src/main/java/org/openmolgrid/format/mopac/MopacOutput.java
+END

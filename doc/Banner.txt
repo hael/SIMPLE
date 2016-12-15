@@ -1,0 +1,30 @@
+############### The Fortran and C/C++ logos ###############
+
+#Logo for the application of Physsym for the QCD part
+
+  ####      #    #    #  #####   #       ######
+ #          #    ##  ##  #    #  #       #
+  ####      #    # ## #  #    #  #       #####
+      #     #    #    #  #####   #       #
+ #    #     #    #    #  #       #       #
+  ####      #    #    #  #       ######  ######
+
+By Frederic Bonnet 4th of March 2015
+
+
+############### The Java logo #############################
+
+#Logo for the application of Physsym for the QCD part
+
+  ####      #    #    #  #####   #       ######
+ #          #    ##  ##  #    #  #       #
+  ####      #    # ## #  #    #  #       #####
+      #     #    #    #  #####   #       #
+ #    #     #    #    #  #       #       #
+  ####      #    #    #  #       ######  ######
+
+By Frederic Bonnet 4th of March 2015
+
+
+
+

@@ -1,0 +1,3 @@
+In extract please build in indexing particles by image so we can later see how the things we include map back to the data ! Maybe even image quadrant in case that later acts as a diagnostic for a marginally sick detector (ie you realise you never end up having good particles in one place)
+
+In the interface I want to start grabbing out all stats and plotting them by cycle in case we later realise there is information there that's helps us predict where to go next

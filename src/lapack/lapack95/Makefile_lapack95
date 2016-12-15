@@ -1,0 +1,105 @@
+#
+#     Author: Frederic D.R. Bonnet date: 18th of Jully 2013.
+#
+# Name:
+# Makefile_lapack95 - makefile to compile the lapack 95 library.
+#
+# Description:
+# library to provide linear algebra routines.
+# Makefile to compile the lapack95 routines the makefile is 
+# based on:
+#
+#  -- LAPACK95 SRC makefile (version 2.0) --
+#     UNI-C, Denmark; Univ. of Tennessee, USA; NAG Ltd., UK
+#     August, 2000
+#
+
+include Makefile_macros
+
+# Source directories.
+
+SRCDIRS = src/lapack/lapack95
+
+# Search directories.
+
+vpath %.f90 $(SRCDIRS)
+vpath %.o   $(OBJDIR)/lapack/lapack95
+
+DZDZOBJS   = la_auxmod.o $(DZOBMOD) $(OBJAU) $(DOBJ_LAPACK95) $(ZOBJ_LAPACK95)
+
+DZOBMOD  = f77_lapack_double_dcomplex.o f95_lapack_double_dcomplex.o
+
+OBJAU  = la_erinfo.o la_ws_gels.o la_ws_gelss.o
+
+DOBJ_LAPACK95 = la_dgesv.o la_dgesv1.o la_dgesvx.o la_dgesvx1.o \
+	la_dgetrf.o la_dlagge.o la_dlange.o la_dlange1.o \
+	la_dgetri.o la_dgetrs.o la_dgetrs1.o la_dgeequ.o \
+	la_dgerfs.o la_dgerfs1.o la_dsytrd.o la_dsygst.o \
+	la_dorgtr.o la_dpotrf.o la_dgbtrf.o la_dlamch.o \
+	la_dgbsv.o la_dgbsv1.o la_dgbsvx.o la_dgbsvx1.o \
+	la_dgtsv.o la_dgtsv1.o la_dgtsvx.o la_dgtsvx1.o \
+	la_dposv.o la_dposv1.o la_dposvx.o la_dposvx1.o \
+	la_dppsv.o la_dppsv1.o la_dppsvx.o la_dppsvx1.o \
+	la_dpbsv.o la_dpbsv1.o la_dpbsvx.o la_dpbsvx1.o \
+	la_dptsv.o la_dptsv1.o la_dptsvx.o la_dptsvx1.o \
+	la_dsysv.o la_dsysv1.o la_dsysvx.o la_dsysvx1.o \
+	la_dspsv.o la_dspsv1.o la_dspsvx.o la_dspsvx1.o \
+	la_dgels.o la_dgels1.o la_dgelsx.o la_dgelsx1.o \
+	la_dgelss.o la_dgelss1.o la_dgglse.o la_dggglm.o \
+	la_dsyev.o la_dsyevd.o la_dsyevx.o la_dspev.o \
+	la_dspevd.o la_dspevx.o la_dsbev.o la_dsbevd.o \
+	la_dsbevx.o la_dstev.o la_dstevd.o la_dstevx.o \
+	la_dgees.o la_dgeesx.o la_dgeev.o la_dgeevx.o \
+	la_dgesvd.o la_dsygv.o la_dspgv.o la_dsbgv.o \
+	la_dgegs.o la_dgegv.o la_dggsvd.o la_dgelsy.o \
+	la_dgelsy1.o la_dspgvd.o la_dsbgvd.o la_dsygvd.o \
+	la_dsbgvx.o la_dspgvx.o la_dggev.o la_dgges.o \
+	la_dstevr.o la_dgelsd.o la_dgelsd1.o la_dsyevr.o \
+	la_dggevx.o la_dsygvx.o la_dggesx.o la_dgesdd.o
+
+ZOBJ_LAPACK95 = la_zgesv.o la_zgesv1.o la_zgesvx.o la_zgesvx1.o \
+	la_zgetrf.o la_zlagge.o la_zlange.o la_zlange1.o \
+	la_zgetri.o la_zgetrs.o la_zgetrs1.o la_zgeequ.o \
+	la_zgerfs.o la_zgerfs1.o la_zhetrd.o la_zhegst.o \
+	la_zungtr.o la_zpotrf.o la_zgbtrf.o \
+	la_zgbsv.o la_zgbsv1.o la_zgbsvx.o la_zgbsvx1.o \
+	la_zgtsv.o la_zgtsv1.o la_zgtsvx.o la_zgtsvx1.o \
+	la_zposv.o la_zposv1.o la_zposvx.o la_zposvx1.o \
+	la_zppsv.o la_zppsv1.o la_zppsvx.o la_zppsvx1.o \
+	la_zpbsv.o la_zpbsv1.o la_zpbsvx.o la_zpbsvx1.o \
+	la_zptsv.o la_zptsv1.o la_zptsvx.o la_zptsvx1.o \
+	la_zsysv.o la_zsysv1.o la_zsysvx.o la_zsysvx1.o \
+	la_zspsv.o la_zspsv1.o la_zspsvx.o la_zspsvx1.o \
+	la_zhesv.o la_zhesv1.o la_zhesvx.o la_zhesvx1.o \
+	la_zhpsv.o la_zhpsv1.o la_zhpsvx.o la_zhpsvx1.o \
+	la_zgels.o la_zgels1.o la_zgelsx.o la_zgelsx1.o \
+	la_zgelss.o la_zgelss1.o la_zgglse.o la_zggglm.o \
+	la_zheev.o la_zheevd.o la_zheevx.o la_zhpev.o \
+	la_zhpevd.o la_zhpevx.o la_zhbev.o la_zhbevd.o \
+	la_zhbevx.o la_zhbgvx.o la_zhpgvx.o \
+	la_zgees.o la_zgeesx.o la_zgeev.o la_zgeevx.o \
+	la_zgesvd.o la_zhegv.o la_zhpgv.o la_zhbgv.o \
+	la_zgegs.o la_zgegv.o la_zggsvd.o la_zgelsy.o \
+	la_zgelsy1.o la_zhpgvd.o la_zhbgvd.o la_zhegvd.o \
+	la_zggev.o la_zgges.o la_zgelsd.o la_zgelsd1.o \
+	la_zheevr.o la_zggevx.o la_zhegvx.o la_zggesx.o \
+	la_zgesdd.o
+
+lapack95_lib: makedir $(DZDZOBJS);
+
+.PHONY: makedir;
+
+makedir:
+	@if [ ! -d $(OBJDIR)/lapack/lapack95 ]; \
+	then \
+		echo "Creating directory "$(OBJDIR)"/lapack/lapack95."; \
+		mkdir -p $(OBJDIR)/lapack/lapack95; \
+	fi
+
+# Implicit rules.
+
+%.o:%.f90
+	$(F90CLIB) -o $(OBJDIR)/lapack/lapack95/$@ $<; $(F90POST)
+
+clean_lapack95: 
+	'rm' -f *.a *.o *.mod *.l core

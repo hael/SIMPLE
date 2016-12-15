@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<molecule xmlns="http://www.xml-cml.org/schema" id="Ammonia">
+ <atomArray>
+  <atom id="a1" elementType="N" x3="0.000000" y3="0.000000" z3="0.000000"/>
+  <atom id="a2" elementType="H" x3="-0.800000" y3="0.000000" z3="0.000000"/>
+  <atom id="a3" elementType="H" x3="0.800000" y3="0.010000" z3="0.000000"/>
+  <atom id="a4" elementType="H" x3="0.000000" y3="0.800000" z3="0.000000"/>
+ </atomArray>
+ <bondArray>
+  <bond atomRefs2="a1 a2" order="1"/>
+  <bond atomRefs2="a1 a3" order="1"/>
+  <bond atomRefs2="a1 a4" order="1"/>
+ </bondArray>
+</molecule>

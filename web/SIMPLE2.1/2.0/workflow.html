@@ -1,0 +1,164 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html><!-- InstanceBegin template="/Templates/template.dwt" codeOutsideHTMLIsLocked="false" -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<!-- InstanceBeginEditable name="doctitle" -->
+<title>overview of single-particle cryo-electron microscopy reconstruction with SIMPLE</title>
+<!-- InstanceEndEditable -->
+<style type="text/css">
+body,td,th {
+	color: #FFFFFF;
+}
+body {
+	background-image: url(images/fractal.jpg);
+	background-attachment: fixed;
+	margin-top: 0px;
+	margin-right: 0px;
+	margin-bottom: 0px;
+	margin-left: 0px;
+	background-color: rgb(0,0,0);
+	background-repeat: repeat;
+}
+</style>
+<link href="common_styles.css" rel="stylesheet" type="text/css">
+<script src="SpryAssets/SpryMenuBar.js" type="text/javascript"></script>
+<link href="SpryAssets/SpryMenuBarHorizontal.css" rel="stylesheet" type="text/css">
+<!-- InstanceBeginEditable name="head" -->
+<style type="text/css">
+</style>
+<script src="SpryAssets/SpryAccordion.js" type="text/javascript"></script>
+<link href="SpryAssets/SpryAccordion.css" rel="stylesheet" type="text/css">
+<!-- InstanceEndEditable -->
+<script type="text/xml">
+<!--
+<oa:widgets>
+  <oa:widget wid="2149022" binding="#OAWidget" />
+</oa:widgets>
+-->
+</script>
+<style type="text/css">
+a:link {
+	color: rgb(153,0,51);
+}
+a:visited {
+	color: rgb(187,0,62);
+}
+a:hover {
+	color: rgb(187,0,62);
+}
+a:active {
+	color: rgb(187,0,62);
+}
+h1,h2,h3,h4,h5,h6 {
+	font-family: Verdana, Geneva, sans-serif;
+}
+h1 {
+	color: rgb(0,0,0);
+}
+h2 {
+	font-size: 18px;
+	color: rgb(153,0,0);
+}
+</style>
+<script type="text/javascript">
+
+  var _gaq = _gaq || [];
+  _gaq.push(['_setAccount', 'UA-31924791-1']);
+  _gaq.push(['_trackPageview']);
+
+  (function() {
+    var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+    ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+    var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+  })();
+
+</script>
+<link rel="shortcut icon" href="http://simplecryoem.com/favicon.ico" >
+</head>
+
+<body bgcolor="#000000">
+<a name="top"></a>
+<div class="logo_div"><img src="images/SIMPLE_banner.png" alt="SIMPLE banner" width="830" height="110" align="absmiddle"></div>
+<div class="nav_div">
+  <ul id="MenuBar1" class="MenuBarHorizontal">
+    <li><a href="index.html">About</a>    </li>
+    <li><a href="download_form.html">Download</a></li>
+    <li><a href="workflow.html">Workflow</a></li>
+    <li><a href="manuals.html">Manuals</a></li>
+    <li><a href="structures.html">Structures</a></li>
+    <li><a href="references.html">References</a></li>
+    <li><a href="contact.html">Contact </a></li>
+  </ul>
+</div>
+<!-- InstanceBeginEditable name="EditRegion1" -->
+<div class="content_div">
+  <h1>SIMPLE 2.0 workflow </h1>
+  <p class="text">&nbsp;</p>
+  <p class="text"><strong>SIMPLE 2.0</strong> is not a standalone suite for single-particle reconstruction, but complements available developments. It is assumed that the windowed single-particle images represent 2D projections, and therefore, that the projection slice theorem applies (Bracewell, 1956). This requires correction of the micrographs due to the contrast transfer function (CTF) of the electron microscope and particle windowing using other software. &ldquo;CTF-corrected images&rdquo; refers to images corrected using the simple heuristic of binary phase flipping, adopted in numerous image-processing packages. CTF-correction by phase flipping only corrects the resolution-dependent CTF phase inversions, disregarding the damping of Fourier amplitudes with increasing resolution. Phase-flipped images are noisier than images corrected with more accurate approaches, such as the reciprocal space adaptive Wiener filter (Penczek, 2010). We have been primarily concerned with the problem of reconstructing accurate low-resolution maps <em>ab initio </em>from very noisy images. More sophisticated approaches for dealing with the CTF will be implemented in the future. In addition, the windowed projections should be roughly centered in the box. Many program suites are available for dealing with these and other matters (Frank et al., 1996; Hohn et al., 2007; Ludtke et al., 1999; Sorzano et al., 2004). In EMAN, the envelope component of the CTF, describing the fall-off of the signal with resolution, is parameterized and then used in the class averaging procedure in the refinement. Some implementations only phase-corrects the micrographs, ignoring the envelope function initially. Instead, the final refined maps are B-factor sharpened. SIMPLE has so far been use in combination with the latter approach, assuming the same resolution fall-off for all micrographs. The SIMPLE workflow is divided into four phases:</p>
+  <p class="text">&nbsp;</p>
+  <div id="Accordion1">
+    <div class="AccordionPanel">
+      <div class="AccordionPanelTab">1) CTF correction and particle windowing</div>
+      <div class="AccordionPanelContent">
+        <p>&nbsp;We usually execute phase (1) by parameterizing the CTF with <a href="http://http://grigoriefflab.janelia.org/ctf" title="Ctffind3 software" target="_new">Ctffid3</a> (Mindell and Grigorieff, 2003), doing CTF phase correction of the micrographs in <a href="http://www.wadsworth.org/spider_doc/spider/docs/spider.html" title="Spider software" target="_new">Spider</a> (Frank et al., 1996), and using EMAN&rsquo;s (Ludtke et al., 1999) program <a href="http://blake.bcm.edu/emanwiki/EMAN1/Programs/Boxer" title="boxer software" target="_new">BOXER</a> for particle windowing. <a href="http://blake.bcm.edu/emanwiki/EMAN2" title="EMAN software" target="_new">EMAN</a>&rsquo;s graphical user interface is used for quick inspection of volumes and class averages. <a href="http://www.cgl.ucsf.edu/chimera/" title="chimera software" target="_new">UCSF Chimera</a> is used for more detailed analysis of the reconstructed volumes (Pettersen et al., 2004). Phases (2)-(4) are executed with <strong>SIMPLE 2.0</strong>.</p>
+      </div>
+    </div>
+    <div class="AccordionPanel">
+      <div class="AccordionPanelTab">2) <em>ab initio</em> reconstruction method<strong> PRIME</strong>
+        <p class="text"></p>
+      </div>
+      <div class="AccordionPanelContent">
+        <p><strong>PRIME</strong> is a powerfull <em>ab inito</em> reconstruction method that can:</p>
+        <p class="text"><strong>*) </strong><strong> in a single step,  generate an </strong> <strong>initial 3D map directly from the noisy images</strong></p>
+        <p class="text"><strong>*) overcome model bias introduced by an erroneous initial map</strong></p>
+        <p class="text"><strong>*) get the PRIME paper <a href="http://www.cell.com/structure/abstract/S0969-2126(13)00250-5" target="_new">here</a></strong> </p>
+<p class="h2_manual">Example: asymmetric reconstruction of 1000 images of the eukaryotic ribosome</p>
+        <p>Dowload the data:</p>
+        <p><a href="http://simplecryoem.com/2.0/data/STKrib.spi" target="_new"><strong>STKrib.spi</strong></a> - stack of single particle images with SNR=0.05<br>
+          nptcls=1000  <br>
+          box=120 <br>
+        smpd=3.54        </p>
+        <p><a href="http://simplecryoem.com/2.0/data/ribosome_rec.spi" target="_new"><strong>ribosome_rec.spi </strong></a>- the correct map to compare with your result, remembrer that your map can have a different hand, so you might need to mirror it </p>
+        <p><strong>1) generate a random reconstruction (a blob) - <a href="manuals.html#rndrec" target="_new">simple_rndrec</a></strong></p>
+        <p class="text"><strong>&gt;&gt; simple_rndrec</strong> stk=STKrib.spi box=120 smpd=3.54 nthr=16</p>
+        <p class="text">where nthr is the number of threads </p>
+        <p class="text"><strong>output:</strong></p>
+<p class="text">cmdline.txt - a file with your input parameters </p>
+<p class="text">rndoris.txt - random Euler angles </p>
+<p class="text">startvol_state1.spi - your blob</p>
+<p><strong>2) Execute  <a href="manuals.html#prime" target="_new">simple_prime</a></strong> - should converge in 7-10 rounds</p>
+<p><span class="text">run in the background with nohup &amp;</span></p>
+        <p><strong>&gt;&gt; </strong>nohup<strong> </strong>stk=STKrib.spi box=120 smpd=3.54  vol1=startvol_state1.spi dynlp=yes oritab=rndoris.txt ring2=50 nthr=16 &gt; OUTPUT &amp;</p>
+        <p class="text"><strong>output:</strong></p>
+        <p class="text">recvol_state_iter_X.spi - reconstructions from different rounds, the last one is your final map</p>
+<p class="text">prime_docX.txt - alignment file (Euler angles and translations)        </p>
+<p> <strong class="h2_manual">If you use the trs parameter:</strong> you can shift  the stack with:</p>
+<p>&gt;&gt;&gt;<strong>simple_stackops </strong>stk=STKrib.spi box=120 smpd=3.54 outstk=STKshifted.spi oritab=merged.txt shalgn=yes</p>
+<p>&nbsp;</p>
+</div>
+    </div>
+    <div class="AccordionPanel">
+      <div class="AccordionPanelTab">3) Heterogeneity analysis (coming soon)	</div>
+      <div class="AccordionPanelContent">
+      <p>&nbsp;</p></div>
+    </div>
+    <div class="AccordionPanel">
+      <div class="AccordionPanelTab">4) Refinement (coming soon)</div>
+      <div class="AccordionPanelContent">
+      <p>&nbsp;</p></div>
+    </div>
+  </div>
+  <p class="text">&nbsp;</p>
+  <h2 class="h2_manual" align="center"><a href="#top">top</a></h2>
+  <p>&nbsp;</p>
+</div>
+<script type="text/javascript">
+var Accordion1 = new Spry.Widget.Accordion("Accordion1", { useFixedPanelHeights: false, defaultPanel: -1 });
+</script>
+<!-- InstanceEndEditable -->
+<h1>&nbsp;</h1>
+<script type="text/javascript">
+var MenuBar1 = new Spry.Widget.MenuBar("MenuBar1", {imgDown:"SpryAssets/SpryMenuBarDownHover.gif", imgRight:"SpryAssets/SpryMenuBarRightHover.gif"});
+</script>
+</body>
+<!-- InstanceEnd --></html>
