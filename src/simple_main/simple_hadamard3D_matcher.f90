@@ -138,7 +138,7 @@ contains
         endif
 
         ! SETUP WEIGHTS FOR THE 3D RECONSTRUCTION
-        if( p%oritab .ne. '' .and. p%frac < 0.99 ) call b%a%calc_hard_ptcl_weights(p%frac)
+        if( p%oritab .ne. '' .and. p%frac < 0.99 ) call b%a%calc_hard_ptcl_weights(p%frac, bystate=.true.)
         filtsz_pad = b%img_pad%get_filtsz()
         call read_shellweights(b%img, b%img_pad, p%nptcls, doshellweight, res, res_pad, wmat)
 

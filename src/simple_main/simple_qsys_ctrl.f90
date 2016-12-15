@@ -178,13 +178,15 @@ contains
         else
             call self%myqsys%write_instr(job_descr, fhandle=funit)
         endif
-        write(funit,'(a)') 'cd '//trim(self%pwd)
+        write(funit,'(a)',advance='yes') 'cd '//trim(self%pwd)
+        write(funit,'(a)',advance='yes') ''
         ! compose the command line
         write(funit,'(a)',advance='no') trim(self%exec_binary)//' '//job_descr%chash2str() 
         ! direct output
-        write(funit,'(a)') ' > OUT'//int2str_pad(ipart,self%numlen)
+        write(funit,'(a)',advance='yes') ' > OUT'//int2str_pad(ipart,self%numlen)
         ! exit shell when done
-        write(funit,'(a)') 'exit'
+        write(funit,'(a)',advance='yes') ''
+        write(funit,'(a)',advance='yes') 'exit'
         close(funit)
         call chmod(self%script_names(ipart),'+x',ios)
         if( ios .ne. 0 )then

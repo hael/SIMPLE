@@ -90,7 +90,7 @@ contains
                 do i=1,o%get_noris()
                     s = nint(o%get(i, 'state'))
                     if( s == p%state )then
-                        call o%map3dshift22d(i, -shvec)
+                        call o%map3dshift22d(i, shvec)
                         call o%rot(i,orientation)
                     endif
                 end do

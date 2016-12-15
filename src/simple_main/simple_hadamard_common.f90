@@ -300,24 +300,28 @@ contains
         integer,        intent(in)    :: s
         real, allocatable :: filter(:)
         real :: shvec(3)
-        ! read & clip
+        ! read 
         if( p%boxmatch < p%box ) call b%vol%new([p%box,p%box,p%box],p%smpd) ! ensure correct dim
         call b%vol%read(p%vols(s), isxfel=p%l_xfel)
-        if( p%boxmatch < p%box )then
-            call b%vol%clip_inplace([p%boxmatch,p%boxmatch,p%boxmatch]) ! SQUARE DIMS ASSUMED
-        endif
-        ! take care of centering and masking
+        ! take care of centering
         if( p%l_xfel )then
-            ! no centering or masking
+            ! no centering
         else
             if( p%doshift )then
-                ! find center of mass shift
+                ! find center of mass shift & performs shift
                 shvec = b%vol%center(p%cenlp,'no',p%msk)
-                ! apply to volume
-                call b%vol%shift(-shvec(1), -shvec(2), -shvec(3))
                 ! map back to particle oritentations
                 if( cline%defined('oritab') ) call b%a%map3dshift22d(-shvec(:), state=s)
             endif
+        endif
+        ! Clip
+        if( p%boxmatch < p%box )then
+            call b%vol%clip_inplace([p%boxmatch,p%boxmatch,p%boxmatch]) ! SQUARE DIMS ASSUMED
+        endif
+        ! Masking
+        if( p%l_xfel )then
+            ! no centering or masking
+        else
             ! mask volume using a spherical soft-edged mask
             p%vols_msk(s) = add2fbody(p%vols(s), p%ext, 'msk')
             if( p%l_innermsk )then

@@ -437,7 +437,7 @@ contains
         call img%new([p%box,p%box,1],p%smpd,p%imgkind)
         call img_pad%new([p%boxpd,p%boxpd,1],p%smpd,p%imgkind)
         ! calculate weights
-        if( p%frac < 0.99 ) call o%calc_hard_ptcl_weights(p%frac)
+        if( p%frac < 0.99 ) call o%calc_hard_ptcl_weights(p%frac, bystate=.true.)
         filtsz_pad = img_pad%get_filtsz()
         call read_shellweights(img, img_pad, p%nptcls, doshellweight, res, res_pad, wmat)
         ! zero the Fourier volumes and rhos

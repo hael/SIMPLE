@@ -2289,11 +2289,19 @@ contains
         character(len=*), intent(in)    :: neg
         real, intent(in), optional      :: msk, thres
         type(image) :: tmp
-        real        :: xyz(3)
+        real        :: xyz(3), rmsk
+        integer     :: dims(3)
         if( self%imgkind .eq. 'xfel' ) stop 'centering not implemented for xfel patterns; center; simple_image'
         tmp = self
+        dims = tmp%get_ldim()
+        if( present(msk) )then
+            rmsk = msk
+        else
+            rmsk = real( dims(1) )/2. - 5. ! 5 pixels outer width
+        endif
         if( neg .eq. 'yes' ) call tmp%neg
         call tmp%bp(0.,lp)
+        call tmp%mask( rmsk, 'soft' )
         if( present(thres) )then
             call tmp%norm_bin
             call tmp%bin(thres)
@@ -2304,7 +2312,7 @@ contains
         if( self%is_2d() )then
             xyz(1:2) = tmp%masscen2D()
         else
-            if( present(msk) ) call tmp%mask(msk, 'hard')
+            if( present(msk) ) call tmp%mask(rmsk, 'hard')
             xyz = tmp%masscen()
         endif
         call self%shift(xyz(1),xyz(2),xyz(3))

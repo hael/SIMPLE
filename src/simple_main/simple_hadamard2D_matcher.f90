@@ -208,7 +208,6 @@ contains
             orientation = b%a%get_ori(iptcl)
             if( nint(orientation%get('state')) > 0 )then
                 icls = nint(orientation%get('class'))
-                call orientation%print
                 if( p%l_distr_exec )then
                     call b%img%read( p%stk_part, cnt )
                 else
