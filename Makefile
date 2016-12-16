@@ -2,7 +2,7 @@ include Makefile_macros
 
 # Source directories.
 
-SRCDIRS = checks defs/gpu/cuda defs/gpu/OpenCL defs/gpu defs production simple_utils/common/mpe simple_utils/common simple_utils src/lapack/clapack src/lapack/lapack95 src/lapack src/simple_gpu/cuda src/simple_gpu/OpenCL src/simple_gpu src/simple_main/extra src/simple_main src test_code/cpu test_code/gpu/cuda test_code/gpu/OpenCL test_code/gpu test_code/mpi test_code
+SRCDIRS = checks defs/gpu/OpenCL defs/gpu/cuda defs/gpu defs production simple_utils/common/mpe simple_utils/common simple_utils src/lapack/clapack src/lapack/lapack95 src/lapack src/simple_gpu/OpenCL src/simple_gpu/cuda src/simple_gpu src/simple_main/extra src/simple_main src test_code/cpu test_code/gpu/OpenCL test_code/gpu/cuda test_code/gpu test_code/mpi test_code
 
 # Search directories.
 
@@ -45,25 +45,25 @@ vpath %.o   $(OBJDIR)
 
 # Targets.
 
-.PHONY: checks_code cuda_defs_code OpenCL_defs_code gpu_code defs_code production_code utils_common_mpe_code utils_common_code utils_code clapack_code lapack95_code lapack_code src_gpu_kernel_cuda_code src_gpu_kernel_OpenCL_code src_gpu_code simple_extra_code Simple_code src_code cpu_test_code cuda_test_code openCL_test_code gpu_test_code mpi_test_code test_code default all makedir checkclean clean cleanall robodoc check_news finalCmpl wc tar detar;
+.PHONY: checks_code OpenCL_defs_code cuda_defs_code gpu_code defs_code production_code utils_common_mpe_code utils_common_code utils_code clapack_code lapack95_code lapack_code src_gpu_kernel_OpenCL_code src_gpu_kernel_cuda_code src_gpu_code simple_extra_code Simple_code src_code cpu_test_code openCL_test_code cuda_test_code gpu_test_code mpi_test_code test_code default all makedir checkclean clean cleanall robodoc check_news finalCmpl wc tar detar;
 
 default:
 	@./makemake > /dev/null; \
 	make --no-print-directory all
 
-all: makedir checkclean checks_code cuda_defs_code OpenCL_defs_code gpu_code defs_code production_code utils_common_mpe_code utils_common_code utils_code clapack_code lapack95_code lapack_code src_gpu_kernel_cuda_code src_gpu_kernel_OpenCL_code src_gpu_code simple_extra_code Simple_code src_code cpu_test_code cuda_test_code openCL_test_code gpu_test_code mpi_test_code test_code finalCmpl;
+all: makedir checkclean checks_code OpenCL_defs_code cuda_defs_code gpu_code defs_code production_code utils_common_mpe_code utils_common_code utils_code clapack_code lapack95_code lapack_code src_gpu_kernel_OpenCL_code src_gpu_kernel_cuda_code src_gpu_code simple_extra_code Simple_code src_code cpu_test_code openCL_test_code cuda_test_code gpu_test_code mpi_test_code test_code finalCmpl;
 
 checks_code: ;
+
+OpenCL_defs_code: OpenCL_cpp_defs ;
+
+OpenCL_cpp_defs: ;
 
 cuda_defs_code: cuda_defs ;
 
 cuda_defs: fortran.o              \
            simple_fortran.o       \
            simple_cudnn_fortran.o ;
-
-OpenCL_defs_code: OpenCL_cpp_defs ;
-
-OpenCL_cpp_defs: ;
 
 gpu_code: ;
 
@@ -236,13 +236,13 @@ lapack95_lib:
 
 lapack_code: ;
 
-src_gpu_kernel_cuda_code: kernel_cuda ;
-
-kernel_cuda: ;
-
 src_gpu_kernel_OpenCL_code: kernel_opencl_code ;
 
 kernel_opencl_code:  ;
+
+src_gpu_kernel_cuda_code: kernel_cuda ;
+
+kernel_cuda: ;
 
 src_gpu_code: cuda_gpu       \
               invert_gpu     \
@@ -453,6 +453,11 @@ cpu_test: simple_prime3D_srch_tester.o ;
 
 cpu_test:  ;
 
+openCL_test_code: openCL_test      ;
+
+openCL_test: getGPU_interface.o    \
+             testing_openCL_defs.o ;
+
 cuda_test_code: cuda_test      \
                 testfunc       \
                 classes        \
@@ -503,11 +508,6 @@ wavelets: Global_wavelets.o      \
 
 corr_calc_opt: polarft_krnl-Opti_gpu.o    \
                polarft_krnl-Opti_O_N.o    ;
-
-openCL_test_code: openCL_test      ;
-
-openCL_test: getGPU_interface.o    \
-             testing_openCL_defs.o ;
 
 gpu_test_code: ;
 
@@ -591,18 +591,18 @@ robodoc:
 	./makemdoc;
 check:
 	@echo "Running building in check scenarios for simple models."; \
-        export PYTHONPATH=/opt/EMAN2/lib:/opt/EMAN2/bin:/opt/EMAN/lib; \
-        export LD_LIBRARY_PATH=/opt/EMAN/lib:/usr/local/cuda/lib64:/opt/Devel_tools/magma-1.6.1/lib; \
+        export PYTHONPATH=/Applications/EMAN//EMAN.1.9/lib:/Applications/EMAN2//lib:/Applications/EMAN2//bin:/Applications/EMAN2//extlib/site-packages:/Applications/EMAN2//extlib/site-packages/ipython-1.2.1-py2.7.egg:; \
+        export LD_LIBRARY_PATH=; \
         python ./checks/simple_LibTests/report.py --use_gpu=$(use_gpu) --bench_gpu=$(bench_gpu) --help=$(help)
 bench:
 	@echo "Running building in check scenarios for simple models."; \
-        export PYTHONPATH=/opt/EMAN2/lib:/opt/EMAN2/bin:/opt/EMAN/lib; \
-        export LD_LIBRARY_PATH=/opt/EMAN/lib:/usr/local/cuda/lib64:/opt/Devel_tools/magma-1.6.1/lib; \
+        export PYTHONPATH=/Applications/EMAN//EMAN.1.9/lib:/Applications/EMAN2//lib:/Applications/EMAN2//bin:/Applications/EMAN2//extlib/site-packages:/Applications/EMAN2//extlib/site-packages/ipython-1.2.1-py2.7.egg:; \
+        export LD_LIBRARY_PATH=; \
         python ./checks/simple_LibTests/bench.py --use_gpu=$(use_gpu) --bench_gpu=$(bench_gpu) --fix_gpu=$(fix_gpu) --set_gpu=$(set_gpu) --help=$(help)
 check_help:
 	@echo "Running building in check scenarios for simple models."; \
-        export PYTHONPATH=/opt/EMAN2/lib:/opt/EMAN2/bin:/opt/EMAN/lib; \
-        export LD_LIBRARY_PATH=/opt/EMAN/lib:/usr/local/cuda/lib64:/opt/Devel_tools/magma-1.6.1/lib; python ./checks/simple_LibTests/report.py --help
+        export PYTHONPATH=/Applications/EMAN//EMAN.1.9/lib:/Applications/EMAN2//lib:/Applications/EMAN2//bin:/Applications/EMAN2//extlib/site-packages:/Applications/EMAN2//extlib/site-packages/ipython-1.2.1-py2.7.egg:; \
+        export LD_LIBRARY_PATH=; python ./checks/simple_LibTests/report.py --help
 check_cpu:
 	@echo "moving to directory: ./checks/simple_LibTests/cpu_test_code and compiling check codes..."; \
         cd ./checks/simple_LibTests/cpu_test_code; \

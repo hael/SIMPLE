@@ -26,59 +26,61 @@ contains
 
     subroutine cont3D_shellweight( b, p, cline )
         use simple_ori,  only: ori
-        use simple_stat, only: corrs2weights, moment, normalize_sigm
-        use gnufor2,     only: plot
+        use simple_stat, only: corrs2weights, normalize_sigm
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         class(cmdline), intent(inout) :: cline
         real, allocatable             :: res(:), corrs(:), weights_tmp(:), wmat(:,:), wsums(:)
         character(len=:), allocatable :: fname
         type(ori)                     :: orientation
-        integer                       :: iptcl, state, filtsz, recsz, alloc_stat
-        integer                       :: ishell, io_stat, filnum, i, fnr, file_stat
-        real                          :: shellstats(4), var
-        logical                       :: err, doprint=.false.
-        if( p%l_distr_exec )then
-            filtsz = b%img%get_filtsz()
-            allocate( wmat(p%top-p%fromp+1,filtsz), corrs(filtsz), stat=alloc_stat)
-            call alloc_err('In: simple_cont3D_matcher :: cont3D_shellweight, 1', alloc_stat)
-            wmat  = 0.
-            corrs = 0.
-            call cftcc%new( b, p, cline )
-            cnt_glob = 0
-            write(*,'(A)') '>>> CALCULATING FOURIER RING CORRELATIONS'
-            do iptcl=p%fromp,p%top
-                cnt_glob = cnt_glob + 1
-                call progress(cnt_glob, p%top-p%fromp+1)
-                orientation = b%a%get_ori(iptcl)
-                if( nint(orientation%get('state')) > 0 )then
-                    if( p%l_distr_exec )then
-                        call b%img%read(p%stk_part, cnt_glob, p%l_xfel)
-                    else
-                        call b%img%read(p%stk, iptcl, p%l_xfel)
-                    endif
-                    call prepimg4align(b, p, orientation)
-                    call cftcc%frc(orientation, 1, b%img, res, corrs)
-                    wmat(cnt_glob,:) = corrs(:)
+        integer                       :: iptcl, state, filtsz, alloc_stat
+        integer                       :: ishell, io_stat, filnum, fnr, file_stat
+        filtsz = b%img%get_filtsz()
+        allocate( wmat(p%top-p%fromp+1,filtsz), corrs(filtsz), stat=alloc_stat)
+        call alloc_err('In: simple_cont3D_matcher :: cont3D_shellweight, 1', alloc_stat)
+        wmat  = 0.
+        corrs = 0.
+        call cftcc%new( b, p, cline )
+        cnt_glob = 0
+        write(*,'(A)') '>>> CALCULATING FOURIER RING CORRELATIONS'
+        do iptcl=p%fromp,p%top
+            cnt_glob = cnt_glob + 1
+            call progress(cnt_glob, p%top-p%fromp+1)
+            orientation = b%a%get_ori(iptcl)
+            if( nint(orientation%get('state')) > 0 )then
+                if( p%l_distr_exec )then
+                    call b%img%read(p%stk_part, cnt_glob, p%l_xfel)
                 else
-                    ! weights should be zero
-                    if( .not. allocated(corrs) ) allocate(corrs(filtsz))
-                    corrs = 0.
-                    wmat(cnt_glob,:) = corrs
+                    call b%img%read(p%stk, iptcl, p%l_xfel)
                 endif
-            end do
-            ! write the weight matrix
-            filnum = get_fileunit()
-            open(unit=filnum, status='REPLACE', action='WRITE',&
-            file='cont3D_shellweights_part'//int2str_pad(p%part,p%numlen)//'.bin', access='STREAM')
-            write(unit=filnum,pos=1,iostat=io_stat) wmat
-            ! check if the write was successful
-            if( io_stat .ne. 0 )then
-                write(*,'(a,i0,2a)') '**ERROR(cont3D_shellweight): I/O error ',&
-                io_stat, ' when writing to cont3D_shellweights_partX.bin'
-                stop 'I/O error; cont3D_shellweight_part*; simple_cont3D_matcher'
+                call prepimg4align(b, p, orientation)
+                call cftcc%frc(orientation, 1, b%img, res, corrs)
+                wmat(cnt_glob,:) = corrs(:)
+            else
+                ! weights should be zero
+                if( .not. allocated(corrs) ) allocate(corrs(filtsz))
+                corrs = 0.
+                wmat(cnt_glob,:) = corrs
             endif
-            close(filnum)
+        end do
+        ! write the weight matrix
+        filnum = get_fileunit()
+        if( p%l_distr_exec )then
+            allocate(fname, source='shellweights_part'//int2str_pad(p%part,p%numlen)//'.bin')
+        else
+            allocate(fname, source='shellweights.bin')
+        endif
+        open(unit=filnum, status='REPLACE', action='WRITE', file=fname, access='STREAM')
+        write(unit=filnum,pos=1,iostat=io_stat) wmat
+        ! check if the write was successful
+        if( io_stat .ne. 0 )then
+            write(*,'(a,i0,2a)') '**ERROR(cont3D_shellweight): I/O error ',&
+            io_stat, ' when writing to cont3D_shellweights_partX.bin'
+            stop 'I/O error; cont3D_shellweight_part*; simple_cont3D_matcher'
+        endif
+        close(filnum)
+        deallocate(wmat, fname)
+        if( p%l_distr_exec )then
             ! generation of this file marks completion of the partition
             ! this file is empty 4 now but may contain run stats etc.
             fnr  = get_fileunit()
@@ -86,10 +88,6 @@ contains
             STATUS='REPLACE', action='WRITE', iostat=file_stat)
             call fopen_err( 'In: cont3D_shellweight; simple_cont3D_matcher.f90', file_stat )
             close(fnr)
-            deallocate(wmat)
-        else
-            write(*,*) 'simple_cont3D_matcher :: cont3D_shellweight'
-            stop 'not implemented for non-distributed mode'
         endif
     end subroutine cont3D_shellweight
     

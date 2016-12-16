@@ -167,9 +167,9 @@ contains
             call part_params(ipart)%set('filetab', trim(tomonames(ipart)))
             call part_params(ipart)%set('fbody', 'tomo'//int2str_pad(ipart,numlen))
             call real2str(exp_doc%get(ipart,'exp_time'), str)
-            call part_params(ipart)%set('exp_time', str)
+            call part_params(ipart)%set('exp_time', trim(str))
             call real2str(exp_doc%get(ipart,'dose_rate'), str)
-            call part_params(ipart)%set('dose_rate', str)
+            call part_params(ipart)%set('dose_rate', trim(str))
         end do
         ! setup the environment for distributed execution
         call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr)
@@ -231,7 +231,7 @@ contains
         ! merge matrices
         call xmerge_shellweights%execute(cline)
         call qsys_cleanup_iter
-        call execute_command_line('rm -rf cont3D_shellweights_part*', exitstat=estat, cmdstat=cstat, cmdmsg=cmsg)
+        call execute_command_line('rm -rf shellweights_part*', exitstat=estat, cmdstat=cstat, cmdmsg=cmsg)
         if( cstat > 0 )then
             print *, 'simple_commander_distr_wflows :: exec_find_nnimgs_distr; command execution failed with error ', trim(cmsg)
         elseif( cstat < 0 )then
@@ -313,7 +313,6 @@ contains
         type(params)                 :: p_master
         integer, allocatable         :: parts(:,:)
         type(qsys_ctrl)              :: qscripts
-        character(len=KEYLEN)        :: keys_required(MAXNKEYS)='', keys_optional(MAXNKEYS)=''
         character(len=STDLEN)        :: vol
         type(chash)                  :: myq_descr, job_descr
          type(qsys_factory)          :: qsys_fac
@@ -505,7 +504,7 @@ contains
             call sys_mkdir( trim(dir_iter) )
             call qsys_cleanup_iter
             ! PREPARE PRIME3D SCRIPTS
-            call job_descr%set( 'oritab', oritab ) 
+            call job_descr%set( 'oritab', trim(oritab) ) 
             call job_descr%set( 'startit', trim(int2str(iter)) )
             call qscripts%generate_scripts(job_descr, p_master%ext, myq_descr, ALGNFBODY)
             ! PRIMED3D JOB SCHEDULING
@@ -637,18 +636,15 @@ contains
         class(cmdline),                 intent(inout) :: cline
         ! constants
         logical, parameter                 :: DEBUG=.true.
-        integer, parameter                 :: MAXNKEYS=30, KEYLEN=32
         character(len=32), parameter       :: ALGNFBODY       = 'algndoc_'
         character(len=32), parameter       :: ITERFBODY       = 'prime2Ddoc_'
         character(len=32), parameter       :: CAVGS_ITERFBODY = 'cavgs_iter'
-        real,              parameter       :: FRACLIM_CREFINE = 50.
         real,              parameter       :: MSK_FRAC        = 0.06
         real,              parameter       :: MINSHIFT        = 2.0
         real,              parameter       :: MAXSHIFT        = 6.0
         ! commanders
         type(prime2D_init_distr_commander) :: xprime2D_init_distr
         type(find_nnimgs_distr_commander)  :: xfind_nnimgs_distr
-        type(classrefine_distr_commander)  :: xclassrefine_distr
         type(cavgassemble_commander)       :: xcavgassemble
         type(check2D_conv_commander)       :: xcheck2D_conv
         type(rank_cavgs_commander)         :: xrank_cavgs
@@ -663,7 +659,6 @@ contains
         type(cmdline)                      :: cline_automask2D
         type(cmdline)                      :: cline_prime2D_init
         type(cmdline)                      :: cline_find_nnimgs
-        type(cmdline)                      :: cline_classrefine
         ! other variables
         type(params)                       :: p_master
         integer, allocatable               :: parts(:,:)
@@ -671,7 +666,6 @@ contains
         character(len=STDLEN)              :: refs, oritab, str, str_iter
         integer                            :: iter
         type(chash)                        :: myq_descr, job_descr
-        type(oris)                         :: crefine_os
         type(qsys_factory)                 :: qsys_fac
         class(qsys_base), pointer          :: myqsys
         real                               :: frac_srch_space, trs, lplim
@@ -681,10 +675,6 @@ contains
         call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
-        ! create crefine oris object
-        call crefine_os%new(p_master%nptcls)
-        ! initialise low-pass limit
-        lplim = p_master%lp
         ! initialise starting references, orientations
         if( cline%defined('oritab') )then
             oritab=trim(p_master%oritab)
@@ -704,11 +694,9 @@ contains
         cline_automask2D     = cline
         cline_prime2D_init   = cline
         cline_find_nnimgs    = cline
-        cline_classrefine    = cline
         ! we need to set the prg flag for the command lines that control distributed workflows 
         call cline_prime2D_init%set('prg', 'prime2D_init')
         call cline_find_nnimgs%set('prg', 'find_nnimgs' )
-        call cline_classrefine%set('prg', 'classrefine' )
         ! initialise static command line parameters and static job description parameters
         call cline_merge_algndocs%set('fbody',  ALGNFBODY)
         call cline_merge_algndocs%set('nptcls', real(p_master%nptcls))
@@ -740,49 +728,25 @@ contains
                 call xfind_nnimgs_distr%execute(cline_find_nnimgs)
             endif
             ! prepare scripts
-            if( oritab .ne. '' ) call job_descr%set('oritab',  oritab)
-            call job_descr%set('refs',    refs)
+            if( oritab .ne. '' ) call job_descr%set('oritab',  trim(oritab))
+            call job_descr%set('refs',    trim(refs))
             call job_descr%set('startit', int2str(iter))
-            call real2str(lplim, str)
-            call job_descr%set('lp', trim(str))
             call qscripts%generate_scripts(job_descr, p_master%ext, myq_descr, ALGNFBODY)
             ! manage job scheduling
             call qscripts%schedule_jobs
             ! merge orientation documents
-            oritab=trim(ITERFBODY)// str_iter //'.txt'
-            call cline_merge_algndocs%set('outfile', oritab)
+            oritab=trim(ITERFBODY)// trim(str_iter) //'.txt'
+            call cline_merge_algndocs%set('outfile', trim(oritab))
             call xmerge_algndocs%execute(cline_merge_algndocs)
             ! assemble class averages
-            refs = trim(trim(CAVGS_ITERFBODY)// str_iter //p_master%ext)
-            call cline_cavgassemble%set('oritab',     oritab)
+            refs = trim(trim(CAVGS_ITERFBODY)// trim(str_iter) //p_master%ext)
+            call cline_cavgassemble%set('oritab', trim(oritab))
             call cline_cavgassemble%set('which_iter', real(iter))
             call xcavgassemble%execute(cline_cavgassemble)
             ! check convergence
-            call cline_check2D_conv%set('oritab', oritab)
+            call cline_check2D_conv%set('oritab', trim(oritab))
             call cline_check2D_conv%set('lp',     real(p_master%lp)) ! may be subjected to iter-dependent update in future
             call xcheck2D_conv%execute(cline_check2D_conv)
-            frac_srch_space = cline_check2D_conv%get_rarg('frac')
-            if( frac_srch_space >= FRACLIM_CREFINE )then
-                ! activate within class refinement
-                call cline_classrefine%set('refs',   refs  )
-                call cline_classrefine%set('oritab', oritab)
-                call real2str(lplim, str)
-                call cline_classrefine%set('lp', str)
-                if( cline_check2D_conv%defined('trs') )then
-                    trs = cline_check2D_conv%get_rarg('trs')
-                else
-                    ! determine shift bounds
-                    trs = MSK_FRAC*real(p_master%msk)
-                    trs = max(MINSHIFT,trs)
-                    trs = min(MAXSHIFT,trs)
-                endif
-                call cline_classrefine%set('trs', trs)
-                call cline_classrefine%set('ncunits', real(p_master%ncunits))
-                call xclassrefine_distr%execute(cline_classrefine)
-                oritab='classrefine_doc_merged.txt'
-                call crefine_os%read(oritab)
-                lplim = crefine_os%median('lp')
-            endif
             ! this activates shifting & automasking if frac >= 90
             if( cline_check2D_conv%defined('trs') .and. .not.job_descr%isthere('trs') )then
                 ! activates shift search
@@ -798,13 +762,13 @@ contains
         call qsys_cleanup_iter
         ! performs masking
         if( cline_automask2D%get_carg('automsk').eq.'cavg' )then
-            call cline_automask2D%set('stk', refs)
+            call cline_automask2D%set('stk', trim(refs))
             call xautomask2D%execute(cline_automask2D)
             refs = trim('cavgs_iter'//int2str_pad(iter,3)//'msk'//p_master%ext)
         endif
         ! ranking
-        call cline_rank_cavgs%set('oritab', oritab)
-        call cline_rank_cavgs%set('stk',    refs)
+        call cline_rank_cavgs%set('oritab', trim(oritab))
+        call cline_rank_cavgs%set('stk',    trim(refs))
         call cline_rank_cavgs%set('outstk', trim('cavgs_final_ranked'//p_master%ext))
         call xrank_cavgs%execute( cline_rank_cavgs )
         call simple_end('**** SIMPLE_DISTR_PRIME2D NORMAL STOP ****')

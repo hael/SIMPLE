@@ -8,6 +8,7 @@ use simple_cmdline,          only: cmdline
 use simple_gridding,         only: prep4cgrid
 use simple_masker,           only: automask
 use simple_rnd,              only: ran3
+use simple_cont3D_matcher    ! singleton
 use simple_hadamard_common   ! singleton
 use simple_defs              ! singleton
 use simple_cuda_defs         ! singleton
@@ -89,7 +90,7 @@ contains
 
     !>  \brief  is the prime3D algorithm
     subroutine prime3D_exec( b, p, cline, which_iter, update_res, converged )
-        use simple_filterer, only: resample_filter, read_shellweights
+        use simple_filterer, only: resample_filter
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         class(cmdline), intent(inout) :: cline
@@ -97,7 +98,7 @@ contains
         logical,        intent(inout) :: update_res, converged
         real, allocatable             :: wmat(:,:), wresamp(:), res(:), res_pad(:)
         real                          :: w, lptmp
-        integer                       :: iptcl, fnr, file_stat, s, filtsz_pad
+        integer                       :: iptcl, fnr, file_stat, s
         logical                       :: doshellweight
         double precision              :: elps_r
         double precision,dimension(2) :: st_r, et_r
@@ -138,12 +139,11 @@ contains
         endif
 
         ! SETUP WEIGHTS FOR THE 3D RECONSTRUCTION
-        if( p%oritab .ne. '' .and. p%frac < 0.99 ) call b%a%calc_hard_ptcl_weights(p%frac, bystate=.true.)
-        filtsz_pad = b%img_pad%get_filtsz()
-        call read_shellweights(b%img, b%img_pad, p%nptcls, doshellweight, res, res_pad, wmat)
+        if( p%oritab .ne. '' .and. p%frac < 0.99 )           call b%a%calc_hard_ptcl_weights(p%frac)
+        if( p%shellw .eq. 'yes' .and. .not. p%l_distr_exec ) call cont3D_shellweight(b, p, cline)
+        call setup_shellweights(b, p, doshellweight, wmat, res, res_pad)
 
         ! GENERATE PROJECTIONS (POLAR FTs)
-        
         call preppftcc4align( b, p, cline )
 
         ! INITIALIZE
@@ -225,7 +225,7 @@ contains
            if (b%s_bench%bench_i==1 .or. ibench .eqv. .true. ) call gettimeofday_c(st_r)
         end if
         do iptcl=p%fromp,p%top
-            cnt_glob = iptcl-p%fromp+1
+            cnt_glob = iptcl - p%fromp + 1
             call progress( cnt_glob, inptcls )
             orientation = b%a%get_ori(iptcl)
             prev_state  = nint( orientation%get('state') )

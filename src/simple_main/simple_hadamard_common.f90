@@ -12,9 +12,15 @@ use simple_prime3D_srch, only: prime3D_srch
 use simple_gridding,     only: prep4cgrid
 implicit none
 
-public :: set_bp_range, grid_ptcl, prepimg4align, eonorm_struct_facts, norm_struct_facts,&
-preprefs4align, preprefvol, reset_prev_defparms, prep2Dref
+public :: set_bp_range, setup_shellweights, grid_ptcl, prepimg4align,&
+eonorm_struct_facts, norm_struct_facts, preprefs4align, preprefvol, reset_prev_defparms, prep2Dref
 private
+
+interface prep2Dref
+    module procedure prep2Dref_1
+    module procedure prep2Dref_2
+end interface
+
 
 logical, parameter :: debug=.false.
 real, parameter    :: SHTHRESH=0.0001
@@ -111,6 +117,59 @@ contains
         end select
         if( debug ) write(*,*) '*** simple_hadamard_common ***: did set Fourier index range'
     end subroutine set_bp_range
+
+    !>  \brief  constructs the shellweight matrix for 3D search
+    subroutine setup_shellweights( b, p, doshellweight, wmat, res, res_pad )
+        use simple_map_reduce, only: merge_rmat_from_parts
+        use simple_filterer,   only: normalise_shellweights
+        class(build),                intent(inout) :: b
+        class(params),               intent(inout) :: p
+        logical,                     intent(out)   :: doshellweight
+        real,           allocatable, intent(out)   :: wmat(:,:)
+        real, optional, allocatable, intent(out)   :: res(:), res_pad(:)
+        logical, allocatable :: files_exist(:)
+        integer :: filtsz, filtsz_pad, alloc_stat, filnum, io_stat, ipart
+        filtsz     = b%img%get_filtsz() ! nr of resolution elements
+        filtsz_pad = b%img_pad%get_filtsz()
+        if( allocated(wmat) ) deallocate(wmat)
+        if( present(res) )then
+            if( allocated(res) ) deallocate(res)
+            res = b%img%get_res()
+        endif
+        if( present(res_pad) )then
+            if( allocated(res_pad) ) deallocate(res_pad)
+            res_pad = b%img_pad%get_res()
+        endif
+        doshellweight = .false.
+        if( p%l_distr_exec )then
+            allocate(files_exist(p%nparts))
+            do ipart=1,p%nparts
+                files_exist(ipart ) = file_exists('shellweights_part'//int2str_pad(ipart,p%numlen)//'.bin')
+            end do
+            if( all(files_exist))then
+                wmat = merge_rmat_from_parts(p%nptcls, p%nparts, filtsz, 'shellweights_part')
+                call normalise_shellweights(wmat)
+                doshellweight = .true.
+            endif
+            deallocate(files_exist)
+        else
+            if( file_exists('shellweights.bin') )then    
+                allocate( wmat(p%nptcls,filtsz), stat=alloc_stat)
+                filnum = get_fileunit()
+                open(unit=filnum, status='OLD', action='READ', file='shellweights.bin', access='STREAM')
+                read(unit=filnum,pos=1,iostat=io_stat) wmat
+                ! check if the read was successful
+                if( io_stat .ne. 0 )then
+                    write(*,'(a,i0,2a)') '**ERROR(setup_shellweights): I/O error ',&
+                    io_stat, ' when reading shellweights.bin'
+                    stop 'I/O error; setup_shellweights; simple_hadamard_common'
+                endif
+                close(filnum)
+                call normalise_shellweights(wmat)
+                doshellweight = .true.
+            endif
+        endif
+    end subroutine setup_shellweights
 
     !>  \brief  grids one particle image to the volume
     subroutine grid_ptcl( b, p, iptcl, cnt_glob, orientation, primesrch3D, shellweights )
@@ -275,7 +334,7 @@ contains
         if( debug ) write(*,*) '*** simple_hadamard_common ***: finished prepimg4align'
     end subroutine prepimg4align
 
-    subroutine prep2Dref( p, ref )
+    subroutine prep2Dref_1( p, ref )
         use simple_image, only: image
         class(params),  intent(in)    :: p
         class(image),   intent(inout) :: ref
@@ -290,7 +349,31 @@ contains
         if( p%l_automsk ) call automask2D(ref, p)
         ! move to Fourier space
         call ref%fwd_ft
-    end subroutine prep2Dref
+    end subroutine prep2Dref_1
+
+    subroutine prep2Dref_2( p, ref, os, icls )
+        use simple_image, only: image
+        use simple_oris,  only: oris
+        class(params),  intent(in)    :: p
+        class(image),   intent(inout) :: ref
+        class(oris),    intent(inout) :: os
+        integer,        intent(in)    :: icls
+        real :: xyz(3)
+        ! center the reference and update the corresponding class parameters
+        xyz    = ref%center(p%cenlp, 'no', p%msk)
+        call os%add_shift2class(icls, -xyz(1:2))
+        ! normalise
+        call ref%norm
+        ! apply mask
+        if( p%l_innermsk )then
+            call ref%mask(p%msk, 'soft', inner=p%inner, width=p%width)
+        else 
+            call ref%mask(p%msk, 'soft')
+        endif
+        if( p%l_automsk ) call automask2D(ref, p)
+        ! move to Fourier space
+        call ref%fwd_ft
+    end subroutine prep2Dref_2
 
     subroutine preprefvol( b, p, cline, s )
         use simple_estimate_ssnr, only: ssnr2optlp

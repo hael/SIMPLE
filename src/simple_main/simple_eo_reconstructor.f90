@@ -403,27 +403,28 @@ contains
     
     !> \brief  for reconstructing Fourier volumes according to the orientations 
     !!         and states in o, assumes that stack is open   
-    subroutine eorec( self, fname, p, o, se, state, vol, mul, part, fbody )
-        use simple_oris,     only: oris
-        use simple_sym,      only: sym
-        use simple_params,   only: params
-        use simple_gridding, only: prep4cgrid
-        use simple_imgfile,  only: imgfile
-        use simple_filterer, only: resample_filter, read_shellweights
-        class(eo_reconstructor),    intent(inout) :: self  !< object
-        character(len=*),           intent(in)    :: fname !< spider/MRC stack filename
-        class(params),              intent(in)    :: p     !< parameters
-        class(oris),                intent(inout) :: o     !< orientations
-        class(sym),                 intent(inout) :: se    !< symmetry element
-        integer,                    intent(in)    :: state !< state to reconstruct
-        type(image),                intent(inout) :: vol   !< reconstructed volume
-        real,             optional, intent(in)    :: mul   !< shift multiplication factor
-        integer,          optional, intent(in)    :: part  !< partition (4 parallel rec)
-        character(len=*), optional, intent(in)    :: fbody !< body of output file
+    subroutine eorec( self, fname, p, o, se, state, vol, mul, part, fbody, wmat )
+        use simple_oris,            only: oris
+        use simple_sym,             only: sym
+        use simple_params,          only: params
+        use simple_gridding,        only: prep4cgrid
+        use simple_imgfile,         only: imgfile
+        use simple_filterer,        only: resample_filter
+        class(eo_reconstructor),    intent(inout) :: self      !< object
+        character(len=*),           intent(in)    :: fname     !< spider/MRC stack filename
+        class(params),              intent(in)    :: p         !< parameters
+        class(oris),                intent(inout) :: o         !< orientations
+        class(sym),                 intent(inout) :: se        !< symmetry element
+        integer,                    intent(in)    :: state     !< state to reconstruct
+        type(image),                intent(inout) :: vol       !< reconstructed volume
+        real,             optional, intent(in)    :: mul       !< shift multiplication factor
+        integer,          optional, intent(in)    :: part      !< partition (4 parallel rec)
+        character(len=*), optional, intent(in)    :: fbody     !< body of output file
+        real,             optional, intent(in)    :: wmat(:,:) !< shellweights
         type(image)       :: img, img_pad
         integer           :: i, cnt, n, ldim(3), noris, filtsz, io_stat, filnum
         integer           :: filtsz_pad, statecnt(p%nstates), alloc_stat
-        real, allocatable :: wmat(:,:), res(:), res_pad(:), wresamp(:)
+        real, allocatable :: res(:), res_pad(:), wresamp(:)
         logical           :: doshellweight
         call find_ldim_nptcls(fname, ldim, n)
         noris = o%get_noris()
@@ -433,13 +434,16 @@ contains
             print *, 'nr of orientations: ', noris
             stop 'inconsistent nr entries; rec; simple_eo_reconstructor'
         endif
+        doshellweight = present(wmat)
         ! make the images
         call img%new([p%box,p%box,1],p%smpd,p%imgkind)
         call img_pad%new([p%boxpd,p%boxpd,1],p%smpd,p%imgkind)
-        ! calculate weights
-        if( p%frac < 0.99 ) call o%calc_hard_ptcl_weights(p%frac, bystate=.true.)
+        ! make the stuff needed for shellweighting
+        res        = img%get_res()
+        res_pad    = img_pad%get_res()
         filtsz_pad = img_pad%get_filtsz()
-        call read_shellweights(img, img_pad, p%nptcls, doshellweight, res, res_pad, wmat)
+        ! calculate weights
+        if( p%frac < 0.99 ) call o%calc_hard_ptcl_weights(p%frac)
         ! zero the Fourier volumes and rhos
         call self%reset_all
         ! dig holds the state digit
@@ -497,13 +501,12 @@ contains
                 pw = 1.
                 if( p%frac < 0.99 ) pw = o%get(i, 'w')
                 if( pw > 0. )then
-                    call o_sym%new
+                    orientation = o%get_ori(i)
                     if( p%l_distr_exec )then
                         call img%read(p%stk_part, cnt)
                     else
                         call img%read(fname, i)
                     endif
-                    orientation = o%get_ori(i)
                     if( p%l_xfel )then
                         call img%pad(img_pad)
                     else

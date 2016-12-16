@@ -1,5 +1,7 @@
 # MUSTDOS
 
+exception handling class that makes more sensible outputs when running the code in distributed mode
+
 when automsk is turned on in 2D we must force the next round to search all refs, or it will go to shit
 
 STRATEGY 4 DISTR_SIMPLE:

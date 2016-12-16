@@ -9,15 +9,16 @@
 ! *Authors:* Frederic Bonnet, Cyril Reboul & Hans Elmlund 2016
 !
 module simple_commander_rec
-use simple_defs            ! singleton
-use simple_jiffys          ! singleton
-use simple_timing          ! singleton
-use simple_cuda            ! singleton
-use simple_cuda_defs       ! singleton
-use simple_cmdline,        only: cmdline
-use simple_params,         only: params
-use simple_build,          only: build
-use simple_commander_base, only: commander_base
+use simple_defs             ! singleton
+use simple_jiffys           ! singleton
+use simple_timing           ! singleton
+use simple_cuda             ! singleton
+use simple_cuda_defs        ! singleton
+use simple_hadamard_common  ! singleton
+use simple_cmdline,         only: cmdline
+use simple_params,          only: params
+use simple_build,           only: build
+use simple_commander_base,  only: commander_base
 implicit none
 
 public :: eo_recvol_commander
@@ -49,12 +50,20 @@ contains
         use simple_rec_master, only: exec_eorec
         class(eo_recvol_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
-        type(params) :: p
-        type(build)  :: b
+        type(params)      :: p
+        type(build)       :: b
+        logical           :: doshellweight
+        real, allocatable :: wmat(:,:)
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         call b%build_eo_rec_tbox(p)         ! eo_reconstruction objs built
-        call exec_eorec(b, p, cline)
+        ! setup shellweights if needed
+        if( p%shellw .eq. 'yes' ) call setup_shellweights(b, p, doshellweight, wmat)
+        if( doshellweight )then
+            call exec_eorec(b, p, cline, wmat=wmat)
+        else
+            call exec_eorec(b, p, cline)
+        endif
         ! end gracefully
         call simple_end('**** SIMPLE_EO_RECVOL NORMAL STOP ****')    
     end subroutine exec_eo_recvol
@@ -141,12 +150,20 @@ contains
         use simple_rec_master, only: exec_rec
         class(recvol_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
-        type(params) :: p
-        type(build)  :: b
+        type(params)      :: p
+        type(build)       :: b
+        logical           :: doshellweight
+        real, allocatable :: wmat(:,:)
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         call b%build_rec_tbox(p)            ! reconstruction objects built
-        call exec_rec(b, p, cline)
+        ! setup shellweights if needed
+        if( p%shellw .eq. 'yes' ) call setup_shellweights(b, p, doshellweight, wmat)
+        if( doshellweight )then
+            call exec_rec(b, p, cline, wmat=wmat)
+        else
+            call exec_rec(b, p, cline)
+        endif
         ! end gracefully
         call simple_end('**** SIMPLE_RECVOL NORMAL STOP ****')    
     end subroutine exec_recvol

@@ -186,26 +186,28 @@ select case(prg)
         keys_required(5)  = 'snr'
         ! set optional keys
         keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'sherr'
-        keys_optional(3)  = 'oritab'
-        keys_optional(4)  = 'outfile'
-        keys_optional(5)  = 'outstk'
-        keys_optional(6)  = 'single'
-        keys_optional(7)  = 'ndiscrete'
+        keys_optional(2)  = 'xsh'
+        keys_optional(3)  = 'ysh'
+        keys_optional(4)  = 'sherr'
+        keys_optional(5)  = 'oritab'
+        keys_optional(6)  = 'outfile'
+        keys_optional(7)  = 'outstk'
+        keys_optional(8)  = 'single'
+        keys_optional(9)  = 'ndiscrete'
         ! set optional CTF-related keys
-        keys_optional(8)  = 'ctf'
-        keys_optional(9)  = 'kv'
-        keys_optional(10) = 'cs'
-        keys_optional(11) = 'fraca'
-        keys_optional(12) = 'deftab'
-        keys_optional(13) = 'defocus'
-        keys_optional(14) = 'dferr'
-        keys_optional(15) = 'astigerr'
-        keys_optional(16) = 'bfac'
-        keys_optional(17) = 'bfacerr'
+        keys_optional(10)  = 'ctf'
+        keys_optional(11)  = 'kv'
+        keys_optional(12) = 'cs'
+        keys_optional(13) = 'fraca'
+        keys_optional(14) = 'deftab'
+        keys_optional(15) = 'defocus'
+        keys_optional(16) = 'dferr'
+        keys_optional(17) = 'astigerr'
+        keys_optional(18) = 'bfac'
+        keys_optional(19) = 'bfacerr'
         ! parse command line
         if( describe ) call print_doc_simimgs
-        call cline%parse(keys_required(:5), keys_optional(:17))
+        call cline%parse(keys_required(:5), keys_optional(:19))
         ! set defaults
         call cline%set('nspace', cline%get_rarg('nptcls'))
         if( .not. cline%defined('sherr') .and. .not. cline%defined('oritab') ) call cline%set('sherr', 2.)
@@ -531,26 +533,28 @@ select case(prg)
         keys_optional(5)  = 'oritab'
         keys_optional(6)  = 'hp'
         keys_optional(7)  = 'lp'
-        keys_optional(8)  = 'trs'
-        keys_optional(9)  = 'automsk'
-        keys_optional(10) = 'amsklp'
-        keys_optional(11) = 'inner'
-        keys_optional(12) = 'width'
-        keys_optional(13) = 'startit'
-        keys_optional(14) = 'maxits'
-        keys_optional(15) = 'srch_inpl'
+        keys_optional(8)  = 'cenlp'
+        keys_optional(9)  = 'trs'
+        keys_optional(10)  = 'automsk'
+        keys_optional(11) = 'amsklp'
+        keys_optional(12) = 'inner'
+        keys_optional(13) = 'width'
+        keys_optional(14) = 'startit'
+        keys_optional(15) = 'maxits'
+        keys_optional(16) = 'srch_inpl'
         ! set optional CTF-related keys
-        keys_optional(16) = 'ctf'
-        keys_optional(17) = 'kv'
-        keys_optional(18) = 'cs'
-        keys_optional(19) = 'fraca'
-        keys_optional(20) = 'deftab'
+        keys_optional(17) = 'ctf'
+        keys_optional(18) = 'kv'
+        keys_optional(19) = 'cs'
+        keys_optional(20) = 'fraca'
+        keys_optional(21) = 'deftab'
         ! parse command line
         if( describe ) call print_doc_prime2D
-        call cline%parse(keys_required(:5), keys_optional(:20))
+        call cline%parse(keys_required(:5), keys_optional(:21))
         ! set defaults
         if( .not. cline%defined('lp')     ) call cline%set('lp',     20.)
         if( .not. cline%defined('amsklp') ) call cline%set('amsklp', 25.)
+        if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',  30.)
         if( .not. cline%defined('edge')   ) call cline%set('edge',   20.)
         if( .not. cline%defined('eo')     ) call cline%set('eo',    'no')
         ! execute
@@ -930,15 +934,16 @@ select case(prg)
         keys_optional(31) = 'xfel'
         keys_optional(32) = 'filter'
         keys_optional(33) = 'nnn'
+        keys_optional(34) = 'shellw'
         ! set optional CTF-related keys
-        keys_optional(34) = 'ctf'
-        keys_optional(35) = 'kv'
-        keys_optional(36) = 'cs'
-        keys_optional(37) = 'fraca'
-        keys_optional(38) = 'deftab'
+        keys_optional(35) = 'ctf'
+        keys_optional(36) = 'kv'
+        keys_optional(37) = 'cs'
+        keys_optional(38) = 'fraca'
+        keys_optional(39) = 'deftab'
         ! parse command line
         if( describe ) call print_doc_prime3D
-        call cline%parse(keys_required(:4), keys_optional(:38))
+        call cline%parse(keys_required(:4), keys_optional(:39))
         ! set defaults
         if( .not. cline%defined('nspace')                  ) call cline%set('nspace', 1000.)
         if( cline%defined('lp') .or. cline%defined('find') ) call cline%set('dynlp',   'no')
@@ -966,22 +971,23 @@ select case(prg)
         keys_optional(6)  = 'amsklp'
         keys_optional(7)  = 'edge'
         keys_optional(8)  = 'inner'
-        keys_optional(9) = 'width'
+        keys_optional(9)  = 'width'
         keys_optional(10) = 'hp'
         keys_optional(11) = 'lpstart'
         keys_optional(12) = 'lpstop'
         keys_optional(13) = 'startit'
         keys_optional(14) = 'maxits'
         keys_optional(15) = 'xfel'
+        keys_optional(16) = 'shellw'
         ! set optional CTF-related keys
-        keys_optional(16) = 'ctf'
-        keys_optional(17) = 'kv'
-        keys_optional(18) = 'cs'
-        keys_optional(19) = 'fraca'
-        keys_optional(20) = 'deftab'
+        keys_optional(17) = 'ctf'
+        keys_optional(18) = 'kv'
+        keys_optional(19) = 'cs'
+        keys_optional(20) = 'fraca'
+        keys_optional(21) = 'deftab'
         ! parse command line
         if( describe ) call print_doc_cont3D
-        call cline%parse(keys_required(:6), keys_optional(:20))
+        call cline%parse(keys_required(:6), keys_optional(:21))
         ! set defaults
         call cline%set('eo',     'yes')
         call cline%set('refine', 'yes')
@@ -1227,15 +1233,16 @@ select case(prg)
         keys_optional(4)  = 'pgrp'
         keys_optional(5)  = 'mul'
         keys_optional(6)  = 'state'
+        keys_optional(7)  = 'shellw'
         ! set optional CTF-related keys
-        keys_optional(7)  = 'ctf'
-        keys_optional(8)  = 'kv'
-        keys_optional(9)  = 'cs'
-        keys_optional(10) = 'fraca'
-        keys_optional(11) = 'deftab'
+        keys_optional(8)  = 'ctf'
+        keys_optional(9)  = 'kv'
+        keys_optional(10) = 'cs'
+        keys_optional(11) = 'fraca'
+        keys_optional(12) = 'deftab'
         ! parse command line
         if( describe ) call print_doc_eo_recvol
-        call cline%parse(keys_required(:4), keys_optional(:11))
+        call cline%parse(keys_required(:4), keys_optional(:12))
         ! set defaults
         if( .not. cline%defined('trs') ) call cline%set('trs', 5.) ! to assure that shifts are being used
         ! execute
@@ -1306,15 +1313,16 @@ select case(prg)
         keys_optional(4)  = 'pgrp'
         keys_optional(5)  = 'mul'
         keys_optional(6)  = 'state'
+        keys_optional(7)  = 'shellw'
         ! set optional CTF-related keys
-        keys_optional(7)  = 'ctf'
-        keys_optional(8)  = 'kv'
-        keys_optional(9)  = 'cs'
-        keys_optional(10) = 'fraca'
-        keys_optional(11) = 'deftab'
+        keys_optional(8)  = 'ctf'
+        keys_optional(9)  = 'kv'
+        keys_optional(10)  = 'cs'
+        keys_optional(11) = 'fraca'
+        keys_optional(12) = 'deftab'
         ! parse command line
         if( describe ) call print_doc_recvol
-        call cline%parse(keys_required(:4), keys_optional(:11))
+        call cline%parse(keys_required(:4), keys_optional(:12))
         ! set defaults
         if( .not. cline%defined('trs') ) call cline%set('trs', 5.) ! to assure that shifts are being used
         ! execute
@@ -1850,7 +1858,7 @@ select case(prg)
         call cline%parse(keys_required(:4), keys_optional(:1))
         ! execute
         call xcluster_smat%execute(cline)
-    case('find_nnimgs')
+    case( 'find_nnimgs' )
         !==Program find_nnimgs
         !
         ! <find_nnimgs/begin> is a program for cidentifying the nnn nearest neighbor
@@ -1967,7 +1975,7 @@ select case(prg)
 
     ! ORIENTATION DATA MANAGEMENT PROGRAMS
 
-    case('cluster_oris')
+    case( 'cluster_oris' )
         !==Program cluster_oris
         !
         ! <cluster_oris/begin> is a program for clustering orientations based on geodesic distance <cluster_oris/end>
@@ -2181,7 +2189,7 @@ select case(prg)
         call cline%parse( keys_required(:5))
         ! execute
         call xmerge_crefine_out%execute(cline)
-    case('merge_nnmat')
+    case( 'merge_nnmat' )
         !==Program merge_nnmat
         !
         ! <merge_nnmat/begin> is a program for merging partial nearest neighbour matrices calculated 
@@ -2196,7 +2204,7 @@ select case(prg)
         call cline%parse( keys_required(:3) )
         ! execute
         call xmerge_nnmat%execute(cline)
-    case('merge_shellweights')
+    case( 'merge_shellweights' )
         !==Program merge_shellweights
         !
         ! <merge_shellweights/begin> is a program for merging partial shellweight matrices calculated 

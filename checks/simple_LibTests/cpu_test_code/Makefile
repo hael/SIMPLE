@@ -16,9 +16,9 @@
 # module load lapack/3.4.2 ;
 # module load openmpi ;
 #
-COMPILER_GFORTRAN = gfortran
-FFTW_LIB = /usr/lib/x86_64-linux-gnu
-CFLAGS   = -ffree-form -cpp -O3 -fno-second-underscore -fopenmp -DLINUX 
+COMPILER_GFORTRAN = /sw/bin/gfortran
+FFTW_LIB = /sw/lib
+CFLAGS   = -ffree-form -cpp -O3 -fno-second-underscore -fopenmp -DMACOSX 
 LINK     = -L $(FFTW_LIB) -lfftw3                   \
            -L $(FFTW_LIB) -lfftw3f                  \
            -L $(FFTW_LIB) -lfftw3_threads           \

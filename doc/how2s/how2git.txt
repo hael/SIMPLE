@@ -1,9 +1,5 @@
-# DELETED AND RECREATED SIMPLE
-# WHAT I DID:
-
-git commit -m 'first commit'
-git remote add origin https://github.com/hael/SIMPLE.git
-git push -u origin master
+# THE REMOTE REPOSITORY
+https://github.com/hael/SIMPLE3.0.git
 
 # ADD NEW BRANCH TO REMOTE REPO
 # First, create a new branch locally
@@ -20,8 +16,9 @@ git commit
 git push <remote-name> <branch-name>
 
 # HOW TO CLONE THE REPO
-mkdir /Users/hael/src/fortran/lib/simple_wfrederic/Simple_Restruct.projet
-git clone git@130.194.198.11:/opt/git/Simple_Restruct.projet.git .
+mkdir simple3.0
+cd simple3.0
+git clone https://github.com/hael/SIMPLE3.0.git .
 
 # HOW TO OVERRIDE LOCAL CHANGES
 git fetch --all

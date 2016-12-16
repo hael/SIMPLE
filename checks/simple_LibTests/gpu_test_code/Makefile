@@ -2,7 +2,7 @@
 # settings
 #
 # COMPILER = gfortran-4.9
-# CFLAGS   = -ffree-form -cpp -O3 -fno-second-underscore -fopenmp -DLINUX -DBENCH
+# CFLAGS   = -ffree-form -cpp -O3 -fno-second-underscore -fopenmp -DMACOSX -DBENCH
 # LINK     = -lblas -llapack -lstdc++ -lpthread -lm
 #
 # .SUFFIXES: .f90 .o
@@ -16,16 +16,16 @@
 # module load lapack/3.4.2 ;
 # module load openmpi ;
 #
-COMPILER_GFORTRAN = gfortran
+COMPILER_GFORTRAN = /sw/bin/gfortran
 
-MAGMADIR     = /opt/Devel_tools/magma-1.6.1
-MAGMADIR_LIB = /opt/Devel_tools/magma-1.6.1/lib
-CUDADIR      = /usr/local/cuda
-SHARE_LIB    = /opt/Devel_tools/NVIDIA_GPU_Computing_SDKshared/lib/linux
-FFTW_LIB     = /usr/lib/x86_64-linux-gnu
+MAGMADIR     = 
+MAGMADIR_LIB = /lib
+CUDADIR      = 
+SHARE_LIB    = 
+FFTW_LIB     = /sw/lib
 
 CFLAGS = -ffree-form -cpp -O3 -fno-second-underscore -fopenmp \
-         -DLINUX    
+         -DMACOSX    
 LINK   = -L $(FFTW_LIB) -lfftw3                   \
          -L $(FFTW_LIB) -lfftw3f                  \
          -L $(FFTW_LIB) -lfftw3_threads           \

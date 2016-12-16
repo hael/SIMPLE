@@ -1,6 +1,6 @@
 #!/usr/bin/perl
-use lib '/home/cyril/Simple3/scripts';
-use lib '/home/cyril/Simple3';
+use lib '/Users/hael/src/fortran/simple3.0/scripts';
+use lib '/Users/hael/src/fortran/simple3.0';
 use strict;
 use warnings;
 our (@ISA, @EXPORT);

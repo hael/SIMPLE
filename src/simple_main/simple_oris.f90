@@ -153,6 +153,7 @@ type :: oris
     procedure, private :: map3dshift22d_1
     procedure, private :: map3dshift22d_2
     generic            :: map3dshift22d => map3dshift22d_1, map3dshift22d_2
+    procedure          :: add_shift2class
     procedure, nopass  :: corr_oris
     procedure          :: gen_diverse
     procedure          :: gen_diversity_score
@@ -2353,6 +2354,23 @@ contains
             call self%o(i)%map3dshift22d(sh3d)
         endif
     end subroutine map3dshift22d_2
+
+    !>  \brief  modulates the shifts (additive) within a class
+    subroutine add_shift2class( self, class, sh2d )
+        use simple_math, only: rotmat2d
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: class
+        real,        intent(in)    :: sh2d(2)
+        integer :: i
+        real    :: sh3d(3)
+        sh3d(1:2) = sh2d
+        sh3d(3)   = 0.
+        do i=1,self%n
+            if( nint(self%o(i)%get('class')) == class )then
+                call self%o(i)%map3dshift22d(sh3d)
+            endif
+        end do
+    end subroutine add_shift2class
 
     ! PRIVATE STUFF
     

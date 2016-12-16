@@ -1,10 +1,11 @@
 module simple_filterer
 use simple_defs       ! singleton
+use simple_jiffys     ! singleton
 use simple_image,     only: image
 use simple_projector, only: projector
 implicit none
 
-real, parameter :: SHTHRESH=0.0001
+real, private, parameter :: SHTHRESH=0.0001
 
 contains
 
@@ -45,37 +46,30 @@ contains
 
     ! SHELL-WEIGHT ROUTINES
 
-    !> \brief  read in shellweights from file
-    subroutine read_shellweights( img, img_pad, nptcls, doshellweight, res, res_pad, wmat )
-        use simple_jiffys, only: file_exists, get_fileunit
-        class(image),      intent(in)  :: img, img_pad
-        integer,           intent(in)  :: nptcls
-        logical,           intent(out) :: doshellweight
-        real, allocatable, intent(out) :: res(:), res_pad(:), wmat(:,:)
-        integer :: filtsz, filnum, io_stat, alloc_stat
-        if( file_exists('cont3D_shellweights.bin') )then
-            if( allocated(res)     ) deallocate(res)
-            if( allocated(res_pad) ) deallocate(res_pad)
-            if( allocated(wmat)    ) deallocate(wmat)
-            filtsz  = img%get_filtsz()
-            res     = img%get_res()
-            res_pad = img_pad%get_res()
-            allocate( wmat(nptcls,filtsz), stat=alloc_stat)
-            filnum = get_fileunit()
-            open(unit=filnum, status='OLD', action='READ', file='cont3D_shellweights.bin', access='STREAM')
-            read(unit=filnum,pos=1,iostat=io_stat) wmat
-            ! check if the read was successful
-            if( io_stat .ne. 0 )then
-                write(*,'(a,i0,2a)') '**ERROR(eorec): I/O error ',&
-                io_stat, ' when reading cont3D_shellweights.bin'
-                stop 'I/O error; read_shellweights; simple_filterer'
-            endif
-            close(filnum)
-            doshellweight = .true.
-        else
-            doshellweight = .false.
-        endif
-    end subroutine read_shellweights
+    !> \brief  normalises the shell-weights for the 3D case
+    subroutine normalise_shellweights( wmat )
+        use simple_stat, only: corrs2weights, normalize_sigm
+        real, intent(inout)  :: wmat(:,:)
+        real, allocatable    :: weights_tmp(:), wsums(:)
+        integer, allocatable :: pinds(:)
+        integer :: nptcls, filtsz, iptcl, ishell, alloc_stat
+        nptcls = size(wmat,1)
+        filtsz = size(wmat,2)
+        do ishell=1,filtsz
+            weights_tmp = corrs2weights(wmat(:,ishell))*real(nptcls)
+            wmat(:,ishell) = weights_tmp
+            deallocate(weights_tmp)
+        end do
+        allocate(wsums(nptcls), stat=alloc_stat)
+        call alloc_err('In: simple_filterer :: normalise_shellweights', alloc_stat)
+        do iptcl=1,nptcls
+            wsums(iptcl) = sum(wmat(iptcl,:))               
+        end do
+        call normalize_sigm(wsums)
+        do iptcl=1,nptcls
+            wmat(iptcl,:) = wmat(iptcl,:)*wsums(iptcl)
+        end do
+    end subroutine normalise_shellweights
 
     !> \brief  re-samples a filter array
     function resample_filter( filt_orig, res_orig, res_new ) result( filt_resamp )

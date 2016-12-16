@@ -16,7 +16,7 @@ contains
     subroutine init_cmd_dict
         call chdict%new(NMAX)
         call chdict%push('acf',           'calculate autocorrelation function(yes|no){no}')
-        call chdict%push('amsklp',        'low-pass limit for envelope mask/centering mask(in A)')
+        call chdict%push('amsklp',        'low-pass limit for envelope mask generation(in A)')
         call chdict%push('angerr',        'angular error(in degrees){0}')
         call chdict%push('append',        'append in context of files(yes|no){no}')
         call chdict%push('automsk',       'envelope masking(yes|no|cavg){no}')
@@ -195,6 +195,7 @@ contains
         call chdict%push('tomoseries',    'filetable of filetables of tomograms')
         call chdict%push('exp_doc',       'specifying exp_time and dose_rate per tomogram')
         call chdict%push('shellw',        'shell-weight reconstruction (yes|no){no}')
+        call chdict%push('cenlp',         'low-pass limit for binarisation in centering')
         initialised = .true.
     end subroutine init_cmd_dict
     

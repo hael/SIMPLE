@@ -80,6 +80,7 @@ type build
     type(reconstructor)                 :: recvol             !< object for reconstruction
     ! PRIME TOOLBOX
     type(image), allocatable            :: cavgs(:)           !< class averages (Wiener normalised references)
+    type(image), allocatable            :: refs(:)            !< referecnes
     type(image), allocatable            :: ctfsqsums(:)       !< CTF**2 sums for Wiener normalisation
     type(image), allocatable            :: refvols(:)         !< reference volumes for quasi-continuous search
     type(reconstructor), allocatable    :: recvols(:)         !< array of volumes for reconstruction
@@ -476,10 +477,11 @@ contains
         class(params), intent(in)    :: p
         integer :: icls, alloc_stat, funit, io_stat
         call self%kill_hadamard_prime2D_tbox
-        allocate( self%cavgs(p%ncls), self%ctfsqsums(p%ncls), stat=alloc_stat )
+        allocate( self%cavgs(p%ncls), self%refs(p%ncls), self%ctfsqsums(p%ncls), stat=alloc_stat )
         call alloc_err('build_hadamard_prime2D_tbox; simple_build, 1', alloc_stat)
         do icls=1,p%ncls
             call self%cavgs(icls)%new([p%box,p%box,1],p%smpd,p%imgkind)
+            call self%refs(icls)%new([p%box,p%box,1],p%smpd,p%imgkind)
             call self%ctfsqsums(icls)%new([p%box,p%box,1],p%smpd,p%imgkind)
         end do
         if( str_has_substr(p%refine,'neigh') )then
@@ -496,9 +498,10 @@ contains
         if( self%hadamard_prime2D_tbox_exists )then
             do i=1,size(self%cavgs)
                 call self%cavgs(i)%kill
+                call self%refs(i)%kill
                 call self%ctfsqsums(i)%kill
             end do
-            deallocate(self%cavgs, self%ctfsqsums)
+            deallocate(self%cavgs, self%refs, self%ctfsqsums)
             self%hadamard_prime2D_tbox_exists = .false.
         endif
     end subroutine kill_hadamard_prime2D_tbox

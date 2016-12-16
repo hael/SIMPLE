@@ -2,7 +2,7 @@
 
 ####### The project path #####
 
-Simple_source=/home/cyril/Simple3
+Simple_source=/Users/hael/src/fortran/simple3.0
 
 ####### The switches #####
 
@@ -16,27 +16,27 @@ DBENCH =
 
 ####### The MPI paths #####
 
-MPIDIR=/usr
-MPIDIR_INCLUDE=/usr/include/mpi
+MPIDIR=
+MPIDIR_INCLUDE=
 
 ####### The compilers paths #####
 
-CCCOMP=gcc
-GCC=g++
-MPIFORTRAN=/usr/bin/mpif90
-GFORTRAN=gfortran
+CCCOMP=/sw/bin/gcc-fsf-5
+GCC=/sw/bin/gcc-fsf-5
+MPIFORTRAN=/sw/bin/mpif90
+GFORTRAN=/sw/bin/gfortran
 
 ####### The CUDA and MAGMA paths #####
 
-CUDADIR=/usr/local/cuda
+CUDADIR=
 
-MAGMADIR=/opt/Devel_tools/magma-1.6.1
+MAGMADIR=
 MAGMADIR_CONTROL=$(MAGMADIR)/control
 MAGMADIR_INCLUDE=$(MAGMADIR)/include
 
 ####### The OpenCL paths #####
 
-OPT_DEV_TOOLS_NVIDIA = /opt/Devel_tools/NVIDIA_GPU_Computing_SDK
+OPT_DEV_TOOLS_NVIDIA = 
 
 ####### Set MAGMA-ADDONS={Magma version} to compile Magma addons. #####
 
@@ -52,27 +52,27 @@ MODDIR=obj/GFORTgpu
 ##############
 
 CC=$(CCCOMP)
-CFLAGS=-DCUBLAS_GFORTRAN -DADD_ -O3 -O -DLINUX -fopenmp    
+CFLAGS=-DCUBLAS_GFORTRAN -DADD_ -O3 -O -DMACOSX -fopenmp    
 CCLIB=$(CC) -c $(CFLAGS) -I $(MODDIR)                                            \
                          -I $(Simple_source)/include                             \
                          -I $(Simple_source)/include/simple                      \
                          -I $(Simple_source)/include/OpenCL                      \
                          -I $(Simple_source)/include/mpe                         \
-                         -I /usr/local/fftw/3.3.4-gcc/include/
+                         -I /sw/include/
 
 ################
 # C++ compiler.#
 ################
 
 CPP=$(GCC)
-CPPFLAGS=-DADD_ -O3 -DLINUX -fopenmp    
+CPPFLAGS=-DADD_ -O3 -DMACOSX -fopenmp    
 CPPCLIB=$(CPP) -c $(CPPFLAGS) -I $(MODDIR)                                            \
                               -I $(Simple_source)/include                             \
                               -I $(Simple_source)/include/simple                      \
                               -I $(Simple_source)/include/OpenCL                      \
                               -I $(Simple_source)/include/mpe                         \
                               -I $(Simple_source)/test_code                           \
-                              -I /usr/local/fftw/3.3.4-gcc/include/
+                              -I /sw/include/
 
 #######################
 # Fortran 77 compiler.#
@@ -88,8 +88,8 @@ F77CLIB=$(F77C) -c $(F77FLAGS)
 
 # $(DLIB)
 F90C=$(GFORTRAN)
-F90FLAGS=-ffree-form -cpp -fno-second-underscore -O3 -DLINUX -fopenmp      
-F90FLAGS77=-ffixed-form -cpp -fPIC -fno-second-underscore -O3 -DLINUX -fopenmp      
+F90FLAGS=-fimplicit-none -fall-intrinsics -ffree-form -cpp -fpic -fno-second-underscore -O3 -DMACOSX -fopenmp      
+F90FLAGS77=-fimplicit-none -fall-intrinsics -ffree-form -cpp -fpic -fno-second-underscore -O3 -DMACOSX -fopenmp      
 F90CLIB=$(F90C) -c $(F90FLAGS) -I .                                \
                                -I $(MODDIR)                        \
                                -J $(MODDIR)                        \
@@ -108,8 +108,8 @@ F90POST=
 #######################
 
 MPIF90C=$(MPIFORTRAN)
-MPIF90FLAGS=-ffree-form -cpp -fno-second-underscore -O3 -DLINUX 
-MPIF90FLAGS77=-ffixed-form -cpp -fPIC -fno-second-underscore -O3 -DLINUX 
+MPIF90FLAGS=-fimplicit-none -fall-intrinsics -ffree-form -cpp -fno-second-underscore -O3 -DMACOSX 
+MPIF90FLAGS77=-fimplicit-none -fall-intrinsics -ffree-form -cpp -fpic -fno-second-underscore -O3 -DMACOSX 
 MPIF90CLIB=$(MPIF90C) -c $(MPIF90FLAGS) -I .                      \
                                -I $(MODDIR)                       \
                                -J $(MODDIR)                       \

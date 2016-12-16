@@ -148,7 +148,6 @@ type :: image
     generic            :: bin => bin_1, bin_2, bin_3
     procedure          :: bin_filament
     procedure          :: masscen
-    procedure          :: masscen2D
     procedure          :: center
     procedure          :: bin_inv
     procedure          :: grow_bin
@@ -2250,38 +2249,6 @@ contains
         xyz(3) = xyz(3)/spix
     end function masscen
 
-    !>  \brief  is for determining the center of mass of a binarised 2D image
-    !!          only use this function for integer pixels shifting
-    function masscen2D( self ) result( xy )
-        class(image), intent(in) :: self
-        real                     :: xy(2), ci, cj, maxval, val
-        integer                  :: i, j
-        real, allocatable        :: xvec(:), yvec(:)
-        if( self%imgkind .eq. 'xfel' ) stop 'masscen2D not implemented for xfel patterns; masscen2D; simple_image'
-        if( self%ft                  ) stop 'masscen2D not implemented for FTs; masscen2D; simple_image'
-        if( self%is_3d()             ) stop 'masscen2D not for 3D images; masscen2D; simple_image'
-        ! integrate in x/y
-        allocate(xvec(self%ldim(1)), yvec(self%ldim(2)))
-        yvec = sum(self%rmat(:,:,1), dim=1)
-        xvec = sum(self%rmat(:,:,1), dim=2)   
-        ! find the maximum
-        maxval = minval(xvec) + minval(yvec)
-        ci = -real(self%ldim(1))/2.
-        do i=1,self%ldim(1)
-            cj = -real(self%ldim(2))/2.
-            do j=1,self%ldim(2)
-                val = xvec(i)+yvec(j)
-                if( val > maxval )then
-                    maxval = val
-                    xy(1) = ci
-                    xy(2) = cj
-                endif
-                cj = cj + 1.
-            end do
-            ci = ci + 1.
-        end do
-    end function masscen2D
-
     !>  \brief  is for centering an image based on center of mass
     function center( self, lp, neg, msk, thres ) result( xyz )
         class(image),     intent(inout) :: self
@@ -2308,14 +2275,12 @@ contains
         else
             call tmp%bin
         endif
-        xyz = 0.
+        xyz = tmp%masscen()
         if( self%is_2d() )then
-            xyz(1:2) = tmp%masscen2D()
+            call self%shift(xyz(1),xyz(2))
         else
-            if( present(msk) ) call tmp%mask(rmsk, 'hard')
-            xyz = tmp%masscen()
+            call self%shift(xyz(1),xyz(2),xyz(3))
         endif
-        call self%shift(xyz(1),xyz(2),xyz(3))
     end function center
 
     !>  \brief  inverts a binary image

@@ -250,7 +250,7 @@ contains
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built (assumes stk input)
         filtsz = b%img%get_filtsz()         ! nr of resolution elements
-        wmat   = merge_rmat_from_parts(p%nptcls, p%nparts, filtsz, 'cont3D_shellweights_part')
+        wmat   = merge_rmat_from_parts(p%nptcls, p%nparts, filtsz, 'shellweights_part')
         write(*,'(A)') '>>> CALCULATING SHELL-BY-SHELL WEIGHTS'
         ! create weights, shell-by-shell
         nptcls = size(wmat,1)
@@ -270,10 +270,10 @@ contains
             wmat(iptcl,:) = wmat(iptcl,:)*wsums(iptcl)
         end do
         filnum = get_fileunit()
-        open(unit=filnum, status='REPLACE', action='WRITE', file='cont3D_shellweights.bin', access='STREAM')
+        open(unit=filnum, status='REPLACE', action='WRITE', file='shellweights.bin', access='STREAM')
         write(unit=filnum,pos=1,iostat=io_stat) wmat
         if( io_stat .ne. 0 )then
-            write(*,'(a,i0,a)') 'I/O error ', io_stat, ' when writing to cont3D_shellweights.bin'
+            write(*,'(a,i0,a)') 'I/O error ', io_stat, ' when writing to shellweights.bin'
             stop 'I/O error; merge_shellweights'
         endif
         close(filnum)

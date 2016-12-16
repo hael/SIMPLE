@@ -54,7 +54,7 @@ type, extends(image) :: reconstructor
     procedure          :: rec
     ! DESTRUCTOR
     procedure          :: dealloc_rho
-end type
+end type reconstructor
 
 real            :: dfx=0., dfy=0., angast=0.
 logical         :: debug=.false.
@@ -458,32 +458,40 @@ contains
     
     !> \brief  for reconstructing Fourier volumes according to the orientations 
     !!         and states in o, assumes that stack is open   
-    subroutine rec( self, fname, p, o, se, state, mul, eo, part )
-        use simple_oris,     only: oris
-        use simple_sym,      only: sym
-        use simple_params,   only: params
-        use simple_ran_tabu, only: ran_tabu
-        use simple_gridding  ! singleton
-        class(reconstructor), intent(inout) :: self    !< object
-        character(len=*),     intent(inout) :: fname   !< spider/MRC stack filename
-        class(params),        intent(in)    :: p       !< parameters
-        class(oris),          intent(inout) :: o       !< orientations
-        class(sym),           intent(inout) :: se      !< symmetry element
-        integer,              intent(in)    :: state   !< state to reconstruct
-        real, optional,       intent(in)    :: mul     !< shift multiplication factor
-        integer, optional,    intent(in)    :: eo      !< even(2) or odd(1)
-        integer, optional,    intent(in)    :: part    !< partition (4 parallel rec)
-        type(image)                         :: img, img_pd
-        type(ran_tabu)                      :: rt
-        integer                             :: i, cnt, n, ldim(3)
-        integer                             :: statecnt(p%nstates)
+    subroutine rec( self, fname, p, o, se, state, mul, eo, part, wmat )
+        use simple_oris,      only: oris
+        use simple_sym,       only: sym
+        use simple_params,    only: params
+        use simple_ran_tabu,  only: ran_tabu
+         use simple_filterer, only: resample_filter
+        use simple_gridding   ! singleton
+        class(reconstructor), intent(inout) :: self      !< object
+        character(len=*),     intent(inout) :: fname     !< spider/MRC stack filename
+        class(params),        intent(in)    :: p         !< parameters
+        class(oris),          intent(inout) :: o         !< orientations
+        class(sym),           intent(inout) :: se        !< symmetry element
+        integer,              intent(in)    :: state     !< state to reconstruct
+        real,    optional,    intent(in)    :: mul       !< shift multiplication factor
+        integer, optional,    intent(in)    :: eo        !< even(2) or odd(1)
+        integer, optional,    intent(in)    :: part      !< partition (4 parallel rec)
+        real,    optional,    intent(in)    :: wmat(:,:) !< shellweights
+        type(image)       :: img, img_pd
+        type(ran_tabu)    :: rt
+        integer           :: statecnt(p%nstates), i, cnt, n, ldim(3), filtsz, filtsz_pad
+        real, allocatable :: res(:), res_pad(:), wresamp(:)
+        logical           :: doshellweight
         call find_ldim_nptcls(fname, ldim, n)
         if( n /= o%get_noris() ) stop 'inconsistent nr entries; rec; simple_reconstructor'
+        doshellweight = present(wmat)
         ! make random number generator
         rt = ran_tabu(n)
         ! make the images
         call img_pd%new([p%boxpd,p%boxpd,1],self%get_smpd(),p%imgkind)
         call img%new([p%box,p%box,1],self%get_smpd(),p%imgkind)
+        ! make the stuff needed for shellweighting
+        res        = img%get_res()
+        res_pad    = img_pd%get_res()
+        filtsz_pad = img_pd%get_filtsz()
         ! calculate particle weights
         if( p%frac < 0.99 ) call o%calc_hard_ptcl_weights(p%frac, bystate=.true.)
         ! zero the Fourier volume and rho
@@ -562,14 +570,21 @@ contains
                     else
                         call prep4cgrid(img, img_pd, p%msk, wfuns=self%wfuns)
                     endif
+                    if( doshellweight )then
+                        wresamp = resample_filter(wmat(i,:), res, res_pad)
+                    else
+                        allocate(wresamp(filtsz_pad))
+                        wresamp = 1.0
+                    endif
                     if( p%pgrp == 'c1' )then
-                        call self%inout_fplane(orientation, .true., img_pd, pwght=pw, mul=mul)
+                        call self%inout_fplane(orientation, .true., img_pd, pwght=pw, mul=mul, shellweights=wresamp)
                     else
                         do j=1,se%get_nsym()
                             o_sym = se%apply(orientation, j)
-                            call self%inout_fplane(o_sym, .true., img_pd, pwght=pw, mul=mul)
+                            call self%inout_fplane(o_sym, .true., img_pd, pwght=pw, mul=mul, shellweights=wresamp)
                         end do
                     endif
+                    deallocate(wresamp)
                 endif
             end subroutine rec_dens
             
