@@ -1,15 +1,9 @@
 !>  \brief  SIMPLE polarft_corrcalc class
 module simple_polarft_corrcalc
-use, intrinsic :: iso_c_binding
-use simple_defs
-use simple_cuda_defs
-use simple_cuda
+use simple_defs      ! singleton
 use simple_params,   only: params
 use simple_ran_tabu, only: ran_tabu
-!use simple_build, only: build !cannot bring in build because of dependencies
 use simple_jiffys
-use simple_timing
-use simple_deviceQuery_gpu
 implicit none
 
 public :: polarft_corrcalc, test_polarft_corrcalc
@@ -17,25 +11,9 @@ private
 
 ! CLASS PARAMETERS/VARIABLES
 complex, parameter :: zero=cmplx(0.,0.) !< just a complex zero
-! benchmark & debug control logicals
-!logical, parameter :: ibench=.true.      !< benchmark result or not
-!logical, parameter :: ibench_write=.true.!< write benchmark result or not
-! Debugging for both CPU and GPU logicals
-logical, parameter :: debug         = .false.
-logical, parameter :: debug_cpu     = .false.
-logical, parameter :: debug_high    = .true.
-logical, parameter :: debug_write   = .false.
-logical, parameter :: debug_write_C = .false.
 
 type :: polarft_corrcalc
     private
-    type(polar_corr_calc)            :: s_polar               !< data structure used in the GPU kernel
-    type(deviceQuery_gpu)            :: devQ
-    type(deviceDetails)              :: devD
-    type(deviceDetails), allocatable :: a_devD(:)
-    integer                          :: ndev
-    type(t_debug_gpu)                :: s_debug_gpu
-    type(t_bench)                    :: s_bench
     integer                          :: pfromto(2) = 1        !< from/to particle indices (in parallel execution)
     integer                          :: nptcls     = 1        !< the total number of particles in partition (logically indexded [fromp,top])
     integer                          :: nrefs      = 1        !< the number of references (logically indexded [1,nrefs])
@@ -102,7 +80,6 @@ type :: polarft_corrcalc
     procedure          :: prep_ctf4gpu
     ! CALCULATORS
     procedure, private :: create_polar_ctfmat
-    procedure          :: gencorrs_all_gpu
     procedure          :: gencorrs_all_cpu
     procedure, private :: gencorrs_all_tester_1
     procedure, private :: gencorrs_all_tester_2
@@ -112,8 +89,6 @@ type :: polarft_corrcalc
     procedure, private :: corr_1
     procedure, private :: corr_2
     generic            :: corr => corr_1, corr_2
-    ! ERROR HANDLERS
-    procedure, private :: gencorrs_all_gpu_logic_error
     ! DESTRUCTOR
     procedure          :: kill
 end type polarft_corrcalc
@@ -129,11 +104,11 @@ contains
         integer,                    intent(in)    :: nrefs, pfromto(2), ldim(3), kfromto(2), ring2
         character(len=*),           intent(in)    :: ctfflag
         character(len=*), optional, intent(in)    :: isxfel
-        integer     :: alloc_stat, irot, k, k_ind, err, idev
+        integer     :: alloc_stat, irot, k, k_ind, err!, idev
         logical     :: even_dims, test(3)
         real        :: ang
         ! function call
-        integer :: get_dev_count_c
+        ! integer :: get_dev_count_c
         ! kill possibly pre-existing object
         call self%kill
         ! error check
@@ -224,38 +199,6 @@ contains
             self%pfts_refs_ctf = zero
             ! we will allocate the congruent CTF matrix for GPU execution when we expand the dimensions
         endif
-#if defined (CUDA) && defined (MAGMA)
-        write(*,*)'************************************************************'
-        write(*,*)' Device fills in object(devQ) and the data structure(devD)  '
-        write(*,*)'************************************************************'
-        err       = get_dev_count_c(self%devD)
-        self%ndev = self%devD%ndev
-        allocate(self%a_devD(0:self%devD%ndev-1))
-        do idev = 0, self%ndev-1
-           call self%devQ%new_deviceQuery_gpu(self%devD,idev)
-           if( debug_cpu ) call Sanity_check_gpu(self%devQ, self%devD)
-           self%a_devD(idev) = self%devD
-        end do
-#endif
-        ! translate the Fortran logics for debugging and benchmarking into the C-world
-        if (        debug) self%s_debug_gpu%debug_i         = 1
-        if (    debug_cpu) self%s_debug_gpu%debug_cpu_i     = 1
-        if (   debug_high) self%s_debug_gpu%debug_high_i    = 1
-        if (  debug_write) self%s_debug_gpu%debug_write_i   = 1
-        if (debug_write_C) self%s_debug_gpu%debug_write_C_i = 1
-#if defined (BENCH)
-        if (ibench) self%s_bench%bench_i = 1
-        if (ibench_write) self%s_bench%bench_write_i = 1
-#endif
-        ! prepare the s_polar data structre
-        self%s_polar%r_polar         = R_POLAR_D
-        self%s_polar%sumasq_polar    = SUMASQ_POLAR_D
-        self%s_polar%sumbsq_polar    = SUMBSQ_POLAR_D
-        self%s_polar%ikrnl           = KERNEL_D
-        self%s_polar%threadsPerBlock = THREADSPERBLOCK_D
-        self%s_polar%nx              = NX_3D_D
-        self%s_polar%ny              = NY_3D_D
-        self%s_polar%nz              = NZ_3D_D
         self%dim_expanded = .false.
         self%existence    = .true.
     end subroutine new
@@ -748,181 +691,6 @@ contains
     !>  \brief  is for generating all rotational correlations for all nptcls particles and all nrefs
     !!          references (nptcls=nrefs) (assumes that the first and second dimensions of the particle
     !!          matrix pfts_ptcls have been expanded and that self%nptcls=self%nrefs)
-    subroutine gencorrs_all_gpu( self, p, corrmat3dout )
-        class(polarft_corrcalc), intent(inout) :: self !< instance class
-        type(params)                   :: p !< param class user input
-        real                           :: corrmat3dout(self%nptcls,self%nptcls,self%nrots)
-        ! error handlers
-        integer                        :: err, rc=RC_SUCCESS
-        ! kernel variables
-        real(sp), allocatable          :: sumb_vec(:)
-        integer                        :: lda,ldb,ldc
-        real(sp)                       :: alpha !< scaling param(optional) dflt=1.0
-        ! timing variables
-        double precision               :: elps_L
-        double precision, dimension(2) :: st_L_r, et_L_r
-        ! indexers
-        integer                        :: idev
-        ! function calls
-        integer                        :: get_polarft_gencorrall_gpu_c
-        integer                        :: get_warning_message_cuda_c
-        ! debugging values
-        integer :: i,ik,irot
-        ! infinity handler
-        integer :: inf
-        real    :: infinity
-        equivalence (inf,infinity) ! stores two variable at the same address
-        data inf/z'7f800000'/      ! hex for +Infinity
-        if( allocated(self%pfts_refs_ctf) )then
-            stop 'CTF modulation of the references not possible with simple_polarft_corrcalc :: gencorrs_all_gpu'
-        endif
-        if( .not. self%dim_expanded )&
-        stop 'expand dimension with expand_dim before calling simple_polarft_corrcalc :: gencorrs_all_gpu'
-        allocate(sumb_vec(self%nptcls))
-        corrmat3dout = 0.0
-        sumb_vec     = 0.0
-        alpha        = 1.0
-#if defined (CUDA) && defined (MAGMA)
-        lda = self%nptcls
-        ldb = self%nrots
-        ldc = self%nptcls
-        if ( has_gpu .eqv. .true.)then
-            if (use_gpu .eqv. .true. ) then
-                if (has_multi_gpu .eqv. .true.) then
-                    !TODO: will be replaced get_polarft_gencorrall_gpu_c_(...,Z,M,..)
-                    call self%gencorrs_all_gpu_logic_error(rc)
-                        err = get_polarft_gencorrall_gpu_c( &
-                        self%a_devD,                   &
-                        self%s_polar,"Z","N",          &
-                        sumb_vec,corrmat3dout,         &
-                        self%pfts_refs,                &!pft1
-                        self%pfts_ptcls,               &!pft2
-                        self%sqsums_refs,              &!sqsums_refs
-                        self%sqsums_ptcls,             &!sqsums_ptcls
-                        self%nptcls,self%nrots,        &!ipart,nrot
-                        self%nk,                       &!nk
-                        lda,ldb,ldc,alpha,             &
-                        self%s_bench, self%s_debug_gpu)
-                    if (err .ne. RC_SUCCESS ) write(*,*) 'gencorrall_gpu failed rc=',err
-                else
-                    err = get_polarft_gencorrall_gpu_c( &
-                        self%a_devD,                   &
-                        self%s_polar,"Z","N",          &
-                        sumb_vec,corrmat3dout,         &
-                        self%pfts_refs,                &!pft1
-                        self%pfts_ptcls,               &!pft2
-                        self%sqsums_refs,              &!sqsums_refs
-                        self%sqsums_ptcls,             &!sqsums_ptcls
-                        self%nptcls,self%nrots,        &!ipart,nrot
-                        self%nk,                       &!nk
-                        lda,ldb,ldc,alpha,             &
-                    self%s_bench, self%s_debug_gpu)
-                    if (err .ne. RC_SUCCESS ) write(*,*) 'gencorrall_gpu failed rc=',err
-                end if !* has_multi_gpu
-            else
-                if (has_multi_gpu .eqv. .true.) then
-                    call self%gencorrs_all_gpu_logic_error(rc)
-                    err = rc
-                else
-                    call self%gencorrs_all_gpu_logic_error(rc)
-                    err = rc
-                end if
-                call self%gencorrs_all_gpu_logic_error(rc)
-                err = rc
-            end if !* use_gpu
-        else !* has_gpu .eq. .false.
-            call self%gencorrs_all_gpu_logic_error(rc)
-            err = rc
-        end if !* has_gpu
-        ! take care of inf:s
-        where ( corrmat3dout ==  infinity ) corrmat3dout = 0.0
-        where ( corrmat3dout == -infinity ) corrmat3dout = 0.0
-        ! freeing ressources on CPU
-        deallocate(sumb_vec)
-#else
-        write(*,*)'************************************************************'
-        if( err .ne. RC_SUCCESS ) write(*,*) 'Return code rc = ', err
-        err = get_warning_message_cuda_c()
-        if( err .ne. RC_SUCCESS ) write(*,*) 'get_warning_message_cuda err = ', err
-        call self%gencorrs_all_gpu_logic_error(rc)
-#endif
-    end subroutine gencorrs_all_gpu
-    
-    !> logic error message
-    subroutine gencorrs_all_gpu_logic_error(self,rc)
-        class(polarft_corrcalc), intent(inout) :: self  !< instance
-        integer :: rc
-        if ( has_gpu .eqv. .true.)then
-            if (use_gpu .eqv. .true. ) then
-                if (has_multi_gpu .eqv. .true.) then
-                    call write_message_simple_pftcc(has_gpu,has_multi_gpu,use_gpu)
-                    call write_message("System has GPU has_gpu",has_gpu)
-                    call write_message("Not implemeted on Multi-GPU: ",has_multi_gpu)
-                    call write_message("Moving on to single GPU for now",use_gpu)
-                    call write_stars()
-                else
-                    ! here, all good using get_polarft_gencorrall_gpu_c_(...,Z,N,..)
-                endif
-            else
-                call write_message_simple_pftcc(has_gpu,has_multi_gpu,use_gpu)
-                if (has_multi_gpu .eqv. .true.) then
-                    call write_message("System has GPU has_gpu",has_gpu)
-                    call write_message("System has Multi-GPU",has_multi_gpu)
-                else
-                    call write_message("System has GPU has_gpu",has_gpu)
-                    call write_message("System has no Multi-GPU",has_multi_gpu)
-                end if
-                call write_message("Wrong user input use_gpu: ",use_gpu)
-                call write_message("gencorrs_all: simple_polarft_corrcalc not implemented for CPU use_gpu: ",use_gpu)
-                call write_stars()
-                call stop_code()
-            end if !* use_gpu
-        else !* has_gpu .eq. .false.
-            call write_message_simple_pftcc(has_gpu,has_multi_gpu,use_gpu)
-            call write_message("System has no GPU has_gpu",has_gpu)
-            if ( use_gpu .eqv. .true. ) then
-                call write_message("Wrong user input use_gpu: ",use_gpu)
-                call write_stars()
-                call stop_code()
-            else
-                call write_message("gencorrs_all: simple_polarft_corrcalc not implemented for CPU use_gpu: ",use_gpu)
-                call write_stars()
-                call stop_code()
-            end if
-        end if
-
-    contains
-
-        subroutine write_message(messg,l_in)
-            character(len=*) :: messg
-            logical :: l_in
-            write(*,*)messg,l_in
-        end subroutine write_message
-
-        subroutine write_message_simple_pftcc(h_in,m_in,u_in)
-            logical :: h_in,m_in,u_in
-            call write_stars()
-            write(*,*) "In simple_polarft_corrcalc.f90---> has_gpu: ",h_in
-            write(*,*) "In simple_polarft_corrcalc.f90---> has_multi_gpu: ",m_in
-            write(*,*) "In simple_polarft_corrcalc.f90---> use_gpu: ",u_in
-            write(*,*)
-        end subroutine write_message_simple_pftcc
-
-        subroutine write_stars
-            write(*,*)'************************************************************'
-        end subroutine write_stars
-
-        subroutine stop_code
-            write(*,*)"Program is being stopped check compilation and system"
-            write(*,*)"Hardware capabilities"
-            stop
-        end subroutine stop_code
-
-    end subroutine gencorrs_all_gpu_logic_error
-
-    !>  \brief  is for generating all rotational correlations for all nptcls particles and all nrefs
-    !!          references (nptcls=nrefs) (assumes that the first and second dimensions of the particle
-    !!          matrix pfts_ptcls have been expanded and that self%nptcls=self%nrefs)
     subroutine gencorrs_all_cpu( self, corrmat3dout )
         class(polarft_corrcalc), intent(inout) :: self !< instance
         real,                    intent(out)   :: corrmat3dout(self%nptcls,self%nptcls,self%nrots)
@@ -1141,7 +909,6 @@ contains
                         self%polar,        &
                         self%pfts_refs,    &
                         self%pfts_ptcls    )
-            if( allocated(self%a_devD)         ) deallocate(self%a_devD)
             if( allocated(self%pfts_refs_ctf)  ) deallocate(self%pfts_refs_ctf)
             if( allocated(self%pfts_ptcls_ctf) ) deallocate(self%pfts_ptcls_ctf)
             self%existence = .false.

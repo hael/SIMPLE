@@ -189,6 +189,11 @@ contains
         stop
     end subroutine print_doc_multiptcl_init
 
+    subroutine print_doc_het_init
+        write(*,'(A)') ''
+        stop
+    end subroutine print_doc_het_init
+
     subroutine print_doc_prime3D
         write(*,'(A)', advance='no') ' is an ab inito reconstruction/refinement program based on probabilistic project'
         write(*,'(A)', advance='no') 'ion matching. PRIME is short for PRobabilistic Initial 3D Model generation for S'
@@ -473,6 +478,11 @@ contains
         stop
     end subroutine print_doc_norm
 
+    subroutine print_doc_respimg
+        write(*,'(A)') ''
+        stop
+    end subroutine print_doc_respimg
+
     subroutine print_doc_scale
         write(*,'(A)', advance='no') ' is a program that provides re-scaling and clipping routines for MRC or SPIDER s'
         write(*,'(A)') 'tacks and volumes.'
@@ -619,10 +629,16 @@ contains
     end subroutine print_doc_rotmats2oris
 
     subroutine print_doc_merge_algndocs
-        write(*,'(A)', advance='no') ' is a program for merging alignment documents SIMPLE was run when run in distrib'
-        write(*,'(A)') 'uted mode.'
+        write(*,'(A)', advance='no') ' is a program for merging alignment documents from SIMPLE runs in distributed mo'
+        write(*,'(A)') 'de.'
         stop
     end subroutine print_doc_merge_algndocs
+
+    subroutine print_doc_merge_crefine_out
+        write(*,'(A)', advance='no') ' is a program for merging class-dependent output from SIMPLE prime2D runs in dis'
+        write(*,'(A)') 'tributed mode.'
+        stop
+    end subroutine print_doc_merge_crefine_out
 
     subroutine print_doc_merge_nnmat
         write(*,'(A)', advance='no') ' is a program for merging partial nearest neighbour matrices calculated in distr'
@@ -678,6 +694,7 @@ contains
         write(*,'(A)') 'simple_extract'
         write(*,'(A)') 'simple_filter'
         write(*,'(A)') 'simple_find_nnimgs'
+        write(*,'(A)') 'simple_het_init'
         write(*,'(A)') 'simple_image_smat'
         write(*,'(A)') 'simple_iminfo'
         write(*,'(A)') 'simple_integrate_movies'
@@ -686,6 +703,7 @@ contains
         write(*,'(A)') 'simple_mask'
         write(*,'(A)') 'simple_masscen'
         write(*,'(A)') 'simple_merge_algndocs'
+        write(*,'(A)') 'simple_merge_crefine_out'
         write(*,'(A)') 'simple_merge_nnmat'
         write(*,'(A)') 'simple_merge_shellweights'
         write(*,'(A)') 'simple_merge_similarities'
@@ -710,6 +728,7 @@ contains
         write(*,'(A)') 'simple_rank_cavgs'
         write(*,'(A)') 'simple_recvol'
         write(*,'(A)') 'simple_res'
+        write(*,'(A)') 'simple_respimg'
         write(*,'(A)') 'simple_resrange'
         write(*,'(A)') 'simple_rotmats2oris'
         write(*,'(A)') 'simple_scale'

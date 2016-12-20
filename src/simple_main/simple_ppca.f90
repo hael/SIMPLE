@@ -9,15 +9,8 @@
 !==Changes are documented below
 !
 module simple_ppca
-use simple_defs      ! singleton
-use simple_cuda_defs
+use simple_defs    ! singleton
 use simple_jiffys, only: alloc_err
-use invert_cpu_utils
-use matmul_cpu_utils
-use matmul_gpu_utils
-use invert_gpu_utils
-use simple_math_gpu
-
 implicit none
 
 public :: ppca
@@ -72,7 +65,7 @@ contains
         integer, intent(in)           :: N, D, Q
         type(ppca)                    :: self
         call self%new( N, D, Q, Dmat )
-    end function
+    end function constructor
 
     !>  \brief  is a constructor
     subroutine new( self, N, D, Q, Dmat, dorot, doprint )
@@ -113,7 +106,7 @@ contains
         self%X      = 0.
         self%E_znzn = 0.
         self%existence = .true.
-    end subroutine
+    end subroutine new
     
     ! GETTERS
     
@@ -130,14 +123,14 @@ contains
         integer, intent(in)        :: i
         real, allocatable          :: feat(:)
         allocate(feat(self%Q), source=self%E_zn(i,:,1))
-    end function
+    end function get_feat
     
     !>  \brief  is for getting a pointer to the features (that become exposed)
     function get_feats_ptr( self ) result( ptr )
         class(ppca), intent(inout), target :: self
         real, pointer :: ptr(:,:)
         ptr => self%E_zn(:,:,1)
-    end function
+    end function get_feats_ptr
 
     !>  \brief  is for getting a pointer to the loadings (that become exposed)
     function get_loadings_ptr( self ) result( ptr )
@@ -151,9 +144,9 @@ contains
     subroutine rotation( self )
         use simple_math, only: jacobi,eigsrt,svdcmp
         class(ppca), intent(inout) :: self
-        real, allocatable          :: TUt(:,:),evecs(:,:)
-        real                       :: tmp(self%D,1)
-        integer                    :: i,j,alloc_stat, nrot
+        real, allocatable :: TUt(:,:),evecs(:,:)
+        real    :: tmp(self%D,1)
+        integer :: i,j,alloc_stat, nrot
         if( .not.self%inplace )stop 'can only perform cumulative sampling from memory; simple_ppca; generate_cumul'
         allocate( TUt(self%Q,self%N),evecs(self%Q,self%Q), &
             stat=alloc_stat )
@@ -175,33 +168,33 @@ contains
     !>  \brief  is for sampling the generative model at a given image index for a subset of features
     !>  should only be used if rotation onto orthogonal basis has been performed
     function generate_cumul( self, i, feats, AVG ) result( dat ) 
-        class(ppca), intent(inout) :: self
-        integer, intent(in)        :: i, feats(2)
-        real, intent(in), optional :: AVG(self%D)
-        real, allocatable          :: dat(:)
-        real                       :: tmp(self%D,1)
+        class(ppca),    intent(inout) :: self
+        integer,        intent(in)    :: i, feats(2)
+        real, optional, intent(in)    :: AVG(self%D)
+        real, allocatable :: dat(:)
+        real :: tmp(self%D,1)
         tmp = matmul(self%W(:,feats(1):feats(2)),self%E_zn(i,feats(1):feats(2),:))
         allocate(dat(self%D), source=tmp(:,1))
         if( present(AVG) ) dat = dat+AVG
-    end function
+    end function generate_cumul
 
     !>  \brief  is for sampling the generative model at a given image index
     function generate_1( self, i, AVG ) result( dat ) 
-        class(ppca), intent(inout) :: self
-        integer, intent(in)        :: i
-        real, intent(in), optional :: AVG(self%D)
-        real, allocatable          :: dat(:)
-        real                       :: tmp(self%D,1)
+        class(ppca),    intent(inout) :: self
+        integer,        intent(in)    :: i
+        real, optional, intent(in)    :: AVG(self%D)
+        real, allocatable :: dat(:)
+        real :: tmp(self%D,1)
         tmp = matmul(self%W,self%E_zn(i,:,:))
         allocate(dat(self%D), source=tmp(:,1))
         if( present(AVG) ) dat = dat+AVG
-    end function
+    end function generate_1
 
     !>  \brief  produces the feature space average
     function generate_featavg( self,AVG )result( dat )
         class(ppca), intent(inout) :: self
-        real, intent(in)           :: AVG(self%D)
-        real, allocatable          :: dat(:),feat(:)
+        real,        intent(in)    :: AVG(self%D)
+        real, allocatable :: dat(:),feat(:)
         integer :: i
         allocate( dat(self%D),feat(self%Q) )
         feat = 0.
@@ -216,9 +209,9 @@ contains
     function generate_featmedian( self,AVG )result( dat )
         use simple_spatial_median, only:spatial_median
         class(ppca), intent(inout) :: self
-        type(spatial_median)       :: median
-        real, intent(in)           :: AVG(self%D)
-        real, allocatable          :: dat(:),feat(:)
+        real,        intent(in)    :: AVG(self%D)
+        type(spatial_median) :: median
+        real, allocatable    :: dat(:),feat(:)
         integer :: i
         allocate( dat(self%D),feat(self%Q) )
         call median%new( self%E_zn(:,:,1) )
@@ -231,12 +224,12 @@ contains
     !>  \brief  is for sampling the generative model at arbitrary feature
     !!          useful if doing averaging in feature space
     function generate_2( self, feat, AVG ) result( dat )
-        class(ppca), intent(in)    :: self
-        real, intent(in)           :: feat(self%Q)
-        real, intent(in), optional :: AVG(self%D)
-        real, allocatable          :: dat(:)
-        real                       :: tmp1(self%Q,1)
-        real                       :: tmp2(self%D,1)
+        class(ppca),    intent(in) :: self
+        real,           intent(in) :: feat(self%Q)
+        real, optional, intent(in) :: AVG(self%D)
+        real, allocatable :: dat(:)
+        real :: tmp1(self%Q,1)
+        real :: tmp2(self%D,1)
         tmp1(:,1) = feat
         tmp2 = matmul(self%W,tmp1)
         allocate( dat(self%D) )
@@ -245,19 +238,19 @@ contains
         else
             dat = tmp2(:,1)
         endif
-    end function
+    end function generate_2
     
     ! CALCULATORS
     
     !>  \brief  doing it all
     subroutine master( self, datastk, recsz, featstk, maxpcaits, feats_txt )
         use simple_jiffys, only: get_fileunit, fopen_err
-        class(ppca), intent(inout)             :: self
-        character(len=*), intent(in)           :: datastk, featstk
-        integer, intent(in)                    :: recsz, maxpcaits
-        character(len=*), intent(in), optional :: feats_txt
-        integer                                :: k, file_stat, funit2, recsz2, err, fhandle_txt
-        real                                   :: p, p_prev
+        class(ppca),                intent(inout) :: self
+        character(len=*),           intent(in)    :: datastk, featstk
+        integer,                    intent(in)    :: recsz, maxpcaits
+        character(len=*), optional, intent(in)    :: feats_txt
+        integer :: k, file_stat, funit2, recsz2, err, fhandle_txt
+        real    :: p, p_prev
         self%doprint = .true.
         write(*,'(A)') '>>> GENERATIVE ITERATIVE PCA'
         if( .not.self%inplace )then
@@ -307,7 +300,7 @@ contains
         endif
         ! subspace rotation for unconstrained algorithm
         if( self%dorot ) call self%rotation
-    end subroutine
+    end subroutine master
 
     subroutine init( self )
         use simple_rnd, only: mnorm_smp, ran3
@@ -330,7 +323,7 @@ contains
         end do
         ! transpose W
         self%Wt = transpose(self%W)
-    end subroutine
+    end subroutine init
 
     !>  \brief  EM algorithm
     subroutine em_opt( self, p, err )
@@ -338,27 +331,17 @@ contains
         !$ use omp_lib_kinds
         use simple_math, only: matinv
         class(ppca), intent(inout) :: self
-        integer, intent(out)       :: err
-        real, intent(out)          :: p
+        integer,     intent(out)   :: err
+        real,        intent(out)   :: p
         integer                    :: i
         real(sp)                   :: tmp(self%D,1)
         real(dp)                   :: mat_tmp(self%Q,self%Q)
         ! E-STEP
-        !self%M = matmul(self%Wt,self%W)
-        call my_SMatmul( "N","N", self%Q,self%Q,self%D, 1., &
-           self%Wt,self%Q, &
-           self%W, self%D, 0., &
-           self%M, self%Q)
-        !call matinv(self%M, self%Minv, self%Q, err)
-        !call matinv_S_gpu(self%M, self%Minv, self%Q, err)
-        call matinv_D_gpu( dble(self%M),mat_tmp, self%Q, err)
+        self%M = matmul(self%Wt,self%W)
+        call matinv(self%M, self%Minv, self%Q, err)
         self%Minv = real(mat_tmp)
         if( err == -1 ) return
-        !self%MinvWt = matmul(self%Minv,self%Wt)
-        call my_SMatmul( "N","N", self%Q,self%D,self%Q, 1., &
-            self%Minv,   self%Q, &
-            self%Wt,     self%Q, 0., &
-            self%Minvwt, self%Q)
+        self%MinvWt = matmul(self%Minv,self%Wt)
         self%W_1    = 0.
         self%W_2    = 0.
         do i=1,self%N
@@ -376,17 +359,11 @@ contains
            self%W_2 = self%W_2+self%E_znzn
         end do
         ! M-STEP
-        !call matinv(self%W_2, self%W_3, self%Q, err)
-        !call matinv_S_gpu(self%W_2, self%W_3, self%Q, err)
-        call matinv_D_gpu(dble(self%W_2), mat_tmp, self%Q, err)
+        call matinv(self%W_2, self%W_3, self%Q, err)
         self%W_3 = real(mat_tmp)
         if( err == -1 ) return
         ! update W
-        !self%W = matmul(self%W_1,self%W_3)
-        call my_SMatmul( "N","N", self%D,self%Q,self%Q, 1., &
-           self%W_1, self%D, &
-           self%W_3, self%Q, 0., &
-           self%W  , self%D)
+        self%W = matmul(self%W_1,self%W_3)
         ! update Wt
         self%Wt = transpose(self%W)
         ! EVAL REC ERR
@@ -413,7 +390,7 @@ contains
             end do
         endif
         if( isnan(p) )err=-1
-    end subroutine
+    end subroutine em_opt
 
     ! DESTRUCTOR
     
@@ -429,6 +406,6 @@ contains
             self%inplace   = .false.
             self%ptr_Dmat  => null()
         endif
-    end subroutine
+    end subroutine kill
     
 end module simple_ppca

@@ -11,9 +11,6 @@
 module simple_commander_preproc
 use simple_defs            ! singleton
 use simple_jiffys          ! singleton
-use simple_timing          ! singleton
-use simple_cuda            ! singleton
-use simple_cuda_defs       ! singleton
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
@@ -356,18 +353,12 @@ contains
         type(image)                        :: movie_sum_corrected, pspec_half_n_half
         integer                            :: nmovies, imovie, imovie_start, imovie_stop, file_stat
         integer                            :: funit_movies, frame_counter, numlen,  ntot, alloc_stat, fnr
-        character(len=:), allocatable      :: cpcmd, new_name
+        character(len=:),     allocatable  :: cpcmd, new_name
         character(len=STDLEN), allocatable :: movienames(:)
         character(len=STDLEN)              :: moviename
         real                               :: corr, time_per_frame
         logical                            :: debug=.false.
-        ! CUDA err variable for the return function calls
         integer                            :: err, lfoo(3), nframes, movie_counter
-        call timestamp()
-        ! call start_Alltimers_cpu()
-        ! starting the cuda environment
-        call simple_cuda_init(err)
-        if( err .ne. RC_SUCCESS ) write(*,*) 'cublas init failed'
         p = params(cline, checkdistr=.false.)           ! constants & derived constants produced
         if( p%scale > 1.05 )then
             stop 'scale cannot be > 1; simple_commander_preproc :: exec_unblur_movies'
@@ -473,14 +464,6 @@ contains
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_UNBLUR_MOVIES NORMAL STOP ****')
-        !*******************************************************************************
-        !    Environment shutdown
-        !
-        !*******************************************************************************
-        !shutting down the environment
-        call simple_cuda_shutdown()
-        !shutting down the timers
-        ! call stop_Alltimers_cpu()
     end subroutine exec_unblur_movies
 
     subroutine exec_select( self, cline )

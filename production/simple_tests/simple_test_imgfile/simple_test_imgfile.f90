@@ -2,7 +2,6 @@ program simple_test_imgfile
     use simple_image,   only: image
     use simple_imgfile, only: imgfile
     use simple_imghead, only: imghead, SpiImgHead, test_imghead
-    use simple_timing
     use simple_defs
     integer       :: ldim(3), i, j, cnt
     real          :: smpd=2., corr, corrs(20)

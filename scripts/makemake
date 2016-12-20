@@ -33,7 +33,7 @@ do
         subtarget_name=${subtarget%%:*}
         subtarget_name=${subtarget_name##*[[:space:]]}
 
-# Also scan the sub-subdirectories !
+# Also scan the sub-subdirectories.
 
         for subsubdir in ${subdir}*/;
         do
@@ -177,13 +177,13 @@ vpath %.o   \$(OBJDIR)
 
 # Targets.
 
-.PHONY:$all default all makedir checkclean clean cleanall robodoc checknews wc tar detar;
+.PHONY:$all default all makedir checkclean clean cleanall wc;
 
 default:
 	@./makemake > /dev/null; \\
 	make --no-print-directory all
 
-all: makedir checkclean$all checknews;
+all: makedir checkclean$all;
 $targets 
 makedir:
 	@if [ ! -d \$(OBJDIR) ]; \\
@@ -195,7 +195,7 @@ makedir:
 	then \\
 		echo "Creating directory "\$(MODDIR)"."; \\
 		mkdir \$(MODDIR); \\
-	fi
+	fi;
 
 checkclean:
 	@if [ -e CLEAN ]; \\
@@ -213,82 +213,39 @@ checkclean:
 			make -s clean; \\
 			cp CLEAN \$(OBJDIR)/LASTCLEAN; \\
 		fi \\
-	fi; \\
+	fi;
 
 clean:
 	@echo "Cleaning .o and .mod files in "\$(OBJDIR)"."; \\
 	rm -f \$(OBJDIR)/*.o; \\
 	rm -f \$(MODDIR)/*.mod; \\
-	rm -f \$(MODDIR)/*.h
+	rm -f \$(MODDIR)/*.h;
 
 cleanall:
-	@echo "Cleaning .o and .mod files in "\$(OBJDIR)" and "\$(OBJDIR)"/lapack/lapack95."; \\
-	rm -f \$(OBJDIR)/*.o; \\
-	rm -f \$(OBJDIR)/lapack/lapack95/*.o; \\
-	rm -f \$(MODDIR)/*.mod; \\
-	rm -f \$(MODDIR)/*.h
-
-robodoc:
-	@echo "Building RoBoDoc documentation."; \\
-	robodoc --rc robodoc/robodoc.rc; \\
-	cd robodoc; \\
-	./makemdoc; \\
-	cp ../news/news ../news/.lastnews
-
-checknews:
-	@news=1; \\
-	if [ -e news/.lastnews ]; \\
-	then \\
-		if cmp -s news/news news/.lastnews; \\
-		then \\
-			news=0; \\
-		fi; \\
-	fi; \\
-	if [ \$\$news -eq 1 ]; \\
-	then \\
-		echo ""; \\
-		echo "*********************************************************"; \\
-		echo "* The Makefile was created and                          *"; \\
-		echo "* Simple-v2.0 compiled properly                         *"; \\
-		echo "*********************************************************"; \\
-		echo ""; \\
-	fi; \\
+	@echo "Cleaning .o and .mod files in "\$(OBJDIR)"."; \\
+    rm -f \$(OBJDIR)/*.o; \\
+    rm -f \$(MODDIR)/*.mod; \\
+    rm -f \$(MODDIR)/*.h; \\
+    cd ./bin/bin_tests; \\
+    pwd; \\
+    rm simple_test_*; \\
+    pwd; \\
+    cd ../; \\
+    pwd; \\
+    rm simple_*; \\
+    pwd;
 
 wc:
 	@echo "Count the number of lines, words and characters in the modules."; \\
 	unset list; \\
 	DIRS="\$(SRCDIRS)"; \\
-	for dir in \$\${DIRS/lapack/}; \\
+	for dir in \$(SRCDIRS); \\
 	do \\
 		for ext in "*.c" "*.cpp" "*.cu" "*.h" "*.f90" "*.f" "*.for"; \\
 		do \\
 			list=\$\$list" "\$\$(find \$\$dir"/" -maxdepth 1 -name "\$\$ext"); \\
 		done; \\
 	done; \\
-	wc \$\$list
+	wc \$\$list;
 
-tar:
-	@echo "Creating a tar archive 'modules.tar.gz' with the modules."; \\
-	unset list; \\
-	for dir in \$(SRCDIRS); \\
-	do \\
-		for ext in "*.c" "*.cpp" "*.cu" "*.h" "*.f90" ".t90" "*.f" "*.for" "Makefile_*" "*.par*"; \\
-		do \\
-			list=\$\$list" "\$\$(find \$\$dir"/" -maxdepth 1 -name "\$\$ext"); \\
-		done; \\
-	done; \\
-	tar czvf modules.tar.gz makemake template macros/Makefile_macros* \$\$list
-
-detar:
-	@echo "Creating a tar backup 'modules.old.tar.gz' with the modules before unpacking the tar archive 'modules.tar.gz'."; \\
-	unset list; \\
-	for dir in \$(SRCDIRS); \\
-	do \\
-		for ext in "*.c" "*.cpp" "*.cu" "*.h" "*.f90" ".t90" "*.f" "*.for" "Makefile_*" "*.par*"; \\
-		do \\
-			list=\$\$list" "\$\$(find \$\$dir"/" -maxdepth 1 -name "\$\$ext"); \\
-		done; \\
-	done; \\
-	tar czvf modules.old.tar.gz makemake template macros/Makefile_macros* \$\$list; \\
-	tar xzvf modules.tar.gz
 END

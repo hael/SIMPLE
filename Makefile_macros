@@ -1,4 +1,4 @@
-# Makefile_macros for the gfortran/ifort compilers.
+# Makefile_macros
 
 ####### The project path #####
 
@@ -8,56 +8,30 @@ Simple_source=/Users/hael/src/fortran/simple3.0
 
 DOPENMP = -fopenmp
 DCUDA = 
-DOPENCL = 
-DMAGMA = 
-DMKL = 
-DSIMPLE_MPI = 
 DBENCH = 
-
-####### The MPI paths #####
-
-MPIDIR=
-MPIDIR_INCLUDE=
 
 ####### The compilers paths #####
 
-CCCOMP=/sw/bin/gcc-fsf-5
-GCC=/sw/bin/gcc-fsf-5
-MPIFORTRAN=/sw/bin/mpif90
+CCCOMP=
+GCC=
 GFORTRAN=/sw/bin/gfortran
 
-####### The CUDA and MAGMA paths #####
+####### The CUDA paths #####
 
 CUDADIR=
 
-MAGMADIR=
-MAGMADIR_CONTROL=$(MAGMADIR)/control
-MAGMADIR_INCLUDE=$(MAGMADIR)/include
-
-####### The OpenCL paths #####
-
-OPT_DEV_TOOLS_NVIDIA = 
-
-####### Set MAGMA-ADDONS={Magma version} to compile Magma addons. #####
-
-GPU_MODEL=0.0     #0: tesla arch, 1: fermi arch 
-
 ####### Modules and objects directories. #####
 
-OBJDIR=obj/GFORTgpu
-MODDIR=obj/GFORTgpu
+OBJDIR=obj/SIMPLEOFILES
+MODDIR=obj/SIMPLEOFILES
 
 ##############
 # C compiler.#
 ##############
 
 CC=$(CCCOMP)
-CFLAGS=-DCUBLAS_GFORTRAN -DADD_ -O3 -O -DMACOSX -fopenmp    
+CFLAGS=-DCUBLAS_GFORTRAN -DADD_ -O3 -O -DMACOSX -fopenmp  
 CCLIB=$(CC) -c $(CFLAGS) -I $(MODDIR)                                            \
-                         -I $(Simple_source)/include                             \
-                         -I $(Simple_source)/include/simple                      \
-                         -I $(Simple_source)/include/OpenCL                      \
-                         -I $(Simple_source)/include/mpe                         \
                          -I /sw/include/
 
 ################
@@ -65,22 +39,10 @@ CCLIB=$(CC) -c $(CFLAGS) -I $(MODDIR)                                           
 ################
 
 CPP=$(GCC)
-CPPFLAGS=-DADD_ -O3 -DMACOSX -fopenmp    
+CPPFLAGS=-DADD_ -O3 -DMACOSX -fopenmp  
 CPPCLIB=$(CPP) -c $(CPPFLAGS) -I $(MODDIR)                                            \
-                              -I $(Simple_source)/include                             \
-                              -I $(Simple_source)/include/simple                      \
-                              -I $(Simple_source)/include/OpenCL                      \
-                              -I $(Simple_source)/include/mpe                         \
                               -I $(Simple_source)/test_code                           \
                               -I /sw/include/
-
-#######################
-# Fortran 77 compiler.#
-#######################
-
-F77C=$(GFORTRAN)
-F77FLAGS=-O3 -cpp
-F77CLIB=$(F77C) -c $(F77FLAGS)
 
 #######################
 # Fortran 90 compiler.#
@@ -88,39 +50,15 @@ F77CLIB=$(F77C) -c $(F77FLAGS)
 
 # $(DLIB)
 F90C=$(GFORTRAN)
-F90FLAGS=-fimplicit-none -fall-intrinsics -ffree-form -cpp -fpic -fno-second-underscore -O3 -DMACOSX -fopenmp      
-F90FLAGS77=-fimplicit-none -fall-intrinsics -ffree-form -cpp -fpic -fno-second-underscore -O3 -DMACOSX -fopenmp      
+F90FLAGS=-fimplicit-none -fall-intrinsics -ffree-form -cpp -fpic -fno-second-underscore -O3 -DMACOSX -fopenmp  
 F90CLIB=$(F90C) -c $(F90FLAGS) -I .                                \
                                -I $(MODDIR)                        \
                                -J $(MODDIR)                        \
-                               -I $(Simple_source)/include/simple
 
 
 F90CLIB77=$(F90C) -c $(F90FLAGS77) -I .                                \
                                    -I $(MODDIR)                        \
                                    -J $(MODDIR)                        \
-                                   -I $(Simple_source)/include/simple
 
 F90POST=
-
-#######################
-# MPIF90 compiler.    #
-#######################
-
-MPIF90C=$(MPIFORTRAN)
-MPIF90FLAGS=-fimplicit-none -fall-intrinsics -ffree-form -cpp -fno-second-underscore -O3 -DMACOSX 
-MPIF90FLAGS77=-fimplicit-none -fall-intrinsics -ffree-form -cpp -fpic -fno-second-underscore -O3 -DMACOSX 
-MPIF90CLIB=$(MPIF90C) -c $(MPIF90FLAGS) -I .                      \
-                               -I $(MODDIR)                       \
-                               -J $(MODDIR)                       \
-                               -I $(MPIDIR_INCLUDE)               \
-                               -I $(Simple_source)/include/simple
-
-MPIF90CLIB77=$(MPIF90C) -c $(MPIF90FLAGS77) -I .                     \
-                                  -I $(MODDIR)                       \
-                                  -J $(MODDIR)                       \
-                                  -I $(MPIDIR_INCLUDE)               \
-                                  -I $(Simple_source)/include/simple
-
-MPIF90POST=
 

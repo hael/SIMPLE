@@ -11,10 +11,8 @@ use simple_rnd,              only: ran3
 use simple_cont3D_matcher    ! singleton
 use simple_hadamard_common   ! singleton
 use simple_defs              ! singleton
-use simple_cuda_defs         ! singleton
 use simple_jiffys,           ! singleton
 use simple_math              ! singleton
-use simple_timing            ! singleton
 implicit none
 
 public :: prime3D_exec, gen_random_model, prime3D_find_resrange, pftcc, primesrch3D
@@ -28,37 +26,6 @@ type(ori)              :: orientation, o_sym, o_tmp
 integer                :: cnt_glob=0
 integer, parameter     :: MAXNPEAKS=10
 logical, parameter     :: debug=.false.
-!timer string
-character(len=10) :: char_out
-character(len=80) :: tmr_name
-!CUDA err variable for the return function calls
-integer      :: err
-!integer,external      :: strlen
-!function calls
-!integer,external      :: get_length_of_string_c
-!integer,external      :: convert_int2char_pos_c
-integer      :: length
-
-interface external_c_function_timer
-   function get_length_of_string_c(int_in)
-     integer :: int_in
-     integer :: get_length_of_string_c
-   end function get_length_of_string_c
-   function convert_int2char_pos_c(char_out, int_in)
-     integer :: int_in
-     character(len=3) :: char_out
-     integer :: convert_int2char_pos_c
-   end function convert_int2char_pos_c
-   function convert_int2char_indexed_c(char_out, iter, iint, max_iter)
-     integer :: iter,iint,max_iter
-     character(len=3) :: char_out
-     integer :: convert_int2char_indexed_c
-   end function convert_int2char_indexed_c
-   function strlen(string)
-     character(len=*) string
-     integer :: strlen
-   end function strlen
-end interface external_c_function_timer
 
 contains
 
@@ -98,14 +65,8 @@ contains
         logical,        intent(inout) :: update_res, converged
         real, allocatable             :: wmat(:,:), wresamp(:), res(:), res_pad(:)
         real                          :: w, lptmp
-        integer                       :: iptcl, fnr, file_stat, s
+        integer                       :: iptcl, fnr, file_stat, s, inptcls, prev_state
         logical                       :: doshellweight
-        double precision              :: elps_r
-        double precision,dimension(2) :: st_r, et_r
-        !local variables
-        integer              :: inptcls, rc, prev_state
-        !function call
-        integer              :: setdevice_c
 
         inptcls = p%top - p%fromp + 1
 
@@ -162,48 +123,13 @@ contains
         endif
         if( which_iter > 0 ) p%outfile = 'prime3Ddoc_'//int2str_pad(which_iter,3)//'.txt'
 
-        length = get_length_of_string_c(which_iter)
-        !err = convert_int2char_pos_c(char_out,which_iter)
-        err = convert_int2char_indexed_c(char_out,which_iter,1,p%maxits)
-        tmr_name = 'y_primesrch3D_iter'
-        tmr_name = tmr_name(1:strlen(tmr_name))//char_out
-        tmr_name = tmr_name(1:strlen(tmr_name))
-!         write(*,*) "tmr_name: ",tmr_name
-!         write(*,*) "tmr_name: ",tmr_name
-!         write(*,*) "p%use_gpu: ",p%use_gpu
-!         write(*,*) "p%bench_gpu: ",p%bench_gpu
-!         write(*,*) "p%fix_gpu: ",p%fix_gpu
-!         write(*,*) "p%set_gpu: ",p%set_gpu
-!         write(*,*) "has_gpu: ",has_gpu
-!         write(*,*) "use_gpu: ",use_gpu
-!         write(*,*) "has_multi_gpu: ",has_multi_gpu
-#if defined (CUDA)
-         rc = setdevice_c(p%set_gpu)
-#endif
+        ! FOR BENCHMARKING (GPU LOGICS ON CPU) OR USE OF GPU WE CALCULATE CORRS BEFORHAND
         if( p%use_gpu .eq. 'yes' .or. p%bench_gpu .eq. 'yes' )then
-           if (b%s_bench%bench_i==1 .or. ibench .eqv. .true. ) call start_timer_cpu(tmr_name)
-           if (b%s_bench%bench_i==1 .or. ibench .eqv. .true. ) call gettimeofday_c(st_r)
-           ! IN GPU MODE WE CALCULATE ALL THE CORRELATIONS BEFORE THE SEARCH BEGINS
-!!!!           
-           !write(*,*) "TODO: need to fix the logix between the use_gpu and bench_gpu"
-!!!!
-           if( p%bench_gpu .eq. 'yes' .and. p%use_gpu .eq. 'no')then
+           if( p%bench_gpu .eq. 'yes' .and. p%use_gpu .eq. 'no' )then
               call primesrch3D%calc_corrs(pftcc, mode='bench')
            else
               call primesrch3D%calc_corrs(pftcc)
            endif
-           if (b%s_bench%bench_i==1 .or. ibench .eqv. .true. ) then
-              call stop_timer_cpu(tmr_name)
-              call gettimeofday_c(et_r)
-              call elapsed_time_c(st_r,et_r,elps_r)
-              write(*,'(a,x,f15.6,x,a)') "Elapsed time for primesrch3D: ",elps_r," secs"
-              write(100+which_iter,'(f7.4,x,f8.3,x,i5,x,i5,x,i5,x,i3)') &
-                   p%smpd,p%lp,p%ring2,p%nspace,round2even(twopi*real(p%ring2)),p%kfromto(2)-p%kfromto(1)+1
-              write(100+which_iter,'(a,x,f12.4,x,a)') "Elapsed time for primesrch3D: ",elps_r," secs"
-           end if
-           
-           if (b%s_bench%bench_i==1 .or. ibench .eqv. .true. ) call elapsed_time_c(st_r,et_r,elps_r)
-           !write(1500,*) elps_r
         endif
 
         ! RESET RECVOLS
@@ -220,10 +146,6 @@ contains
         call del_txtfile(p%outfile)
         cnt_glob = 0
         if( debug ) write(*,*) '*** hadamard3D_matcher ***: loop fromp/top:', p%fromp, p%top
-        if( p%use_gpu .eq. 'no' .and. p%bench_gpu .eq. 'no' )then
-           if (b%s_bench%bench_i==1 .or. ibench .eqv. .true. ) call start_timer_cpu(tmr_name)
-           if (b%s_bench%bench_i==1 .or. ibench .eqv. .true. ) call gettimeofday_c(st_r)
-        end if
         do iptcl=p%fromp,p%top
             cnt_glob = iptcl - p%fromp + 1
             call progress( cnt_glob, inptcls )
@@ -304,17 +226,6 @@ contains
             ! orientations output
             call b%a%write(iptcl, p%outfile)
         enddo
-        if( p%use_gpu .eq. 'no' .and. p%bench_gpu .eq. 'no' )then
-           if (b%s_bench%bench_i==1 .or. ibench .eqv. .true. ) then
-              call stop_timer_cpu(tmr_name)
-              call gettimeofday_c(et_r)
-              call elapsed_time_c(st_r,et_r,elps_r)
-              write(*,'(a,x,f15.6,x,a)') "Elapsed time for primesrch3D: ",elps_r," secs"
-              write(100+which_iter,'(f7.4,x,f8.3,x,i5,x,i5,x,i5,x,i3)') &
-                   p%smpd,p%lp,p%ring2,p%nspace,round2even(twopi*real(p%ring2)),p%kfromto(2)-p%kfromto(1)+1
-              write(100+which_iter,'(a,x,f12.4,x,a)') "Elapsed time for primesrch3D: ",elps_r," secs"
-           end if
-        end if
         p%oritab = p%outfile
         call pftcc%kill
         ! NORMALIZE STRUCTURE FACTORS
@@ -487,9 +398,9 @@ contains
             endif
             cnt = 0
             do iptcl=p%fromp,p%top
-                cnt    = cnt+1
-                o      = b%a%get_ori(iptcl)
-                istate = nint(o%get('state'))
+                cnt      = cnt+1
+                o        = b%a%get_ori(iptcl)
+                istate   = nint(o%get('state'))
                 cnt_glob = cnt_glob+1
                 call progress(cnt_glob, p%nstates*(p%top-p%fromp+1))
                 if( istate /= s )cycle
@@ -514,6 +425,5 @@ contains
         ! restores b%img dimensions for clean exit
         if( p%boxmatch < p%box )call b%img%new([p%box,p%box,1],p%smpd)
     end subroutine prep_ptcls_pftcc4align
-
 
 end module simple_hadamard3D_matcher

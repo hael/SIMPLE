@@ -827,7 +827,6 @@ contains
     
     !>  \brief  is a unit test for polarft
     subroutine test_polarft
-        use simple_timing
         use simple_jiffys, only: progress
         type(polarft) :: pft1, pft2
         integer, parameter :: NITER=3000
@@ -853,28 +852,21 @@ contains
         if( diff > 1e-6 )then
             stop 'the fast correlation does not conform with the old (slow) version; test_polarft'
         endif
-        ! time the correlation generators
-        call start_timer_cpu("gencorrs_slow")
         write(*,*) ">>> TESTING THE OLD SLOW CORRELATION GENERATOR"
         do i=1,NITER
             call progress(i,NITER)
             call pft1%gencorrs_slow(pft2, corrs )
         end do
-        call stop_timer_cpu("gencorrs_slow")
         write(*,*) ">>> TESTING THE NEW FAST CORRELATION GENERATOR"
-        call start_timer_cpu("gencorrs_fast")
         do i=1,NITER
             call progress(i,NITER)
             call pft1%gencorrs(pft2, corrs)
         end do
-        call stop_timer_cpu("gencorrs_fast")
         write(*,*) ">>> TESTING THE CSHIFTED CORRELATION GENERATOR"
-        call start_timer_cpu("gencorrs_cshifted")
         do i=1,NITER
             call progress(i,NITER)
             call pft1%simulate_cshifted_gencorrs
         end do
-        call stop_timer_cpu("gencorrs_cshifted")
     end subroutine
     
 end module simple_polarft

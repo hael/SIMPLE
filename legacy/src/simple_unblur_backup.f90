@@ -1,124 +1,284 @@
 module simple_unblur
-use simple_opt_factory, only: opt_factory
-use simple_opt_spec,    only: opt_spec
-use simple_optimizer,   only: optimizer
-use simple_image,       only: image
-use simple_imgfile,     only: imgfile
-use simple_params,      only: params, find_ldim
-use simple_jiffys,      only: alloc_err
-use simple_defs         ! singleton
+use simple_image,  only: image
+use simple_params, only: params
+use simple_jiffys   ! singleton
+use simple_filterer ! singleton
+use simple_defs     ! singleton
 implicit none
 
-public :: unblur_step1, unblur_step2
+public :: unblur_movie, unblur_calc_sums, unblur_calc_sums_tomo, test_unblur
 private
 
-type(opt_factory)         :: ofac                     !< optimizer factory
-type(opt_spec)            :: ospec                    !< optimizer specification object
-class(optimizer), pointer :: nlopt=>null()            !< pointer to nonlinear optimizer
-type(imgfile)             :: imgstk                   !< object to deal with image stacks
-type(image), allocatable  :: movie_frames(:)          !< movie frames
-type(image), allocatable  :: shmovie_frames(:)        !< shifted movie frames
-type(image)               :: movie_sum_global         !< global movie sum for refinement
-real, allocatable         :: lims(:,:)                !< limits for optimization (enforced by the barrier method)
-real, allocatable         :: corrmat(:,:)             !< matrix of correlations (to solve the exclusion problem)
-real, allocatable         :: corrs(:)                 !< per-frame correlations
-real, allocatable         :: frameweights(:)          !< array of frameweights
-real, allocatable         :: opt_shifts(:,:)          !< optimal shifts identified
-integer                   :: ndim         = 0         !< dimensionality of the problem
-integer                   :: npairs       = 0         !< number of frame pairs
-integer                   :: nframes      = 0         !< number of frames
-integer                   :: fixed_frame  = 0         !< fixed frame of reference (0,0)
-integer                   :: ldim(3)      = [0,0,0]   !< logical dimension of frame
-integer                   :: frame_global = 0         !< global frame index (used in avg-based refinement)
-integer                   :: mits         = 0         !< maximum number of iterations
-real                      :: maxshift     = 0.        !< maximum halfwidth shift
-real                      :: hp           = 0.        !< high-pass limit
-real                      :: lp           = 0.        !< low-pass limit
-real                      :: smpd         = 0.        !< sampling distance
-logical                   :: refine       = .false.   !< refinement flag
-logical                   :: doprint      = .true.    !< print out correlations
-logical                   :: debug        = .false.   !< debug or not
-logical                   :: existence    = .false.   !< to indicate existence
+type(image), allocatable  :: movie_frames(:)            !< movie frames
+type(image), allocatable  :: shmovie_frames(:)          !< shifted movie frames
+type(image)               :: movie_sum_global           !< global movie sum for refinement
+real, allocatable         :: corrmat(:,:)               !< matrix of correlations (to solve the exclusion problem)
+real, allocatable         :: corrs(:)                   !< per-frame correlations
+real, allocatable         :: frameweights(:)            !< array of frameweights
+real, allocatable         :: frameweights_saved(:)      !< array of frameweights
+real, allocatable         :: opt_shifts(:,:)            !< optimal shifts identified
+real, allocatable         :: opt_shifts_saved(:,:)      !< optimal shifts for local opt saved
+real, allocatable         :: acc_doses(:)               !< accumulated doses
+integer                   :: nframes        = 0         !< number of frames
+integer                   :: fixed_frame    = 0         !< fixed frame of reference (0,0)
+integer                   :: ldim(3)        = [0,0,0]   !< logical dimension of frame
+integer                   :: ldim_scaled(3) = [0,0,0]   !< shrunken logical dimension of frame
+real                      :: maxshift       = 0.        !< maximum halfwidth shift
+real                      :: hp             = 0.        !< high-pass limit
+real                      :: lp             = 0.        !< low-pass limit
+real                      :: resstep        = 0.        !< resolution step size (in Å)
+real                      :: smpd           = 0.        !< sampling distance
+real                      :: corr_saved     = 0.        !< opt corr for local opt saved
+real                      :: kV             = 300.      !< acceleration voltage
+real                      :: dose_rate      = 0.        !< dose rate
+logical                   :: do_dose_weight = .false.   !< dose weight or not
+logical                   :: doscale        = .false.   !< scale or not
+logical                   :: doprint        = .true.    !< print out correlations
+logical                   :: debug          = .false.   !< debug or not
+logical                   :: existence      = .false.   !< to indicate existence
 
-integer, parameter :: MITSREF   = 50 !< max nr iterations of refinement optimisation
-integer, parameter :: NRESTARTS = 3  !< nr restarts 4 initial simplex opt with randomised bounds
-
-interface shift_frames
-    module procedure shift_frames_1
-    module procedure shift_frames_2
-end interface
+integer, parameter :: MITSREF    = 30 !< max nr iterations of refinement optimisation
+integer, parameter :: SMALLSHIFT = 2. !< small initial shift to blur out fixed pattern noise
 
 contains
+    
+    subroutine unblur_movie( movie_stack_fname, p, corr )
+        use simple_oris,     only: oris
+        use simple_jiffys,   only: int2str
+        use simple_ft_shsrch ! singleton
+        use simple_rnd,      only: ran3
+        use simple_stat,     only: corrs2weights, moment
+        character(len=*), intent(in)    :: movie_stack_fname
+        class(params),    intent(inout) :: p
+        real,             intent(out)   :: corr
+        real    :: ave, sdev, var, minw, maxw
+        real    :: cxy(3), lims(2,2), corr_prev, frac_improved, corrfrac
+        integer :: iframe, iter, nimproved, ires, updateres, i
+        logical :: didsave, didupdateres, err
+        ! initialise
+        call unblur_init(movie_stack_fname, p)
+        ! make search object ready
+        lims(:,1) = -maxshift
+        lims(:,2) =  maxshift
+        call ft_shsrch_init(movie_sum_global, movie_frames(1), lims, lp, hp)
+        ! initialise with small random shifts (to average out dead/hot pixels)
+        do iframe=1,nframes
+            opt_shifts(iframe,1) = ran3()*2.*SMALLSHIFT-SMALLSHIFT
+            opt_shifts(iframe,2) = ran3()*2.*SMALLSHIFT-SMALLSHIFT
+        end do
+        ! generate movie sum for refinement
+        call shift_frames(opt_shifts)
+        call calc_corrmat
+        call corrmat2weights ! this should remove any possible extreme outliers
+        call wsum_movie_frames
+        ! calc avg corr to weighted avg
+        call calc_corrs
+        corr = sum(corrs)/real(nframes)
+        if( doprint ) write(*,'(a)') '>>> WEIGHTED AVERAGE-BASED REFINEMENT'
+        if( doprint ) write(*,'(a,7x,f7.4)') '>>> INITIAL CORRELATION:', corr
+        iter       = 0
+        corr_saved = -1.
+        didsave    = .false.
+        updateres  = 0
+        do i=1,MITSREF
+            iter = iter+1
+            nimproved = 0
+            do iframe=1,nframes
+                ! subtract the movie frame being aligned to reduce bias
+                call subtract_movie_frame( iframe )
+                call ft_shsrch_reset_ptrs(movie_sum_global, movie_frames(iframe))
+                cxy = ft_shsrch_minimize(corrs(iframe), opt_shifts(iframe,:))
+                if( cxy(1) > corrs(iframe) ) nimproved = nimproved+1
+                opt_shifts(iframe,:) = cxy(2:3)
+                corrs(iframe)        = cxy(1)
+                ! add the subtracted movie frame back to the weighted sum
+                call add_movie_frame( iframe )
+            end do            
+            frac_improved = real(nimproved)/real(nframes)*100.
+            if( doprint ) write(*,'(a,1x,f4.0)') 'This % of frames improved their alignment: ', frac_improved
+            call center_shifts(opt_shifts)
+            frameweights = corrs2weights(corrs)
+            call shift_frames(opt_shifts)
+            call wsum_movie_frames
+            corr_prev = corr
+            corr = sum(corrs)/real(nframes)
+            if( corr >= corr_saved )then ! save the local optimum
+                corr_saved         = corr
+                opt_shifts_saved   = opt_shifts
+                frameweights_saved = frameweights
+                didsave = .true.
+            endif
+            if( doprint )  write(*,'(a,7x,f7.4)') '>>> OPTIMAL CORRELATION:', corr
+            corrfrac = corr_prev/corr
+            didupdateres = .false.
+            select case(updateres)
+                case(0)
+                    call update_res( 0.96, 70., updateres )
+                case(1)
+                    call update_res( 0.97, 60., updateres )
+                case(2)
+                    call update_res( 0.98, 50., updateres )
+                case DEFAULT
+                    ! nothing to do
+            end select
+            if( updateres > 2 .and. .not. didupdateres )then ! at least one iteration with new lim
+                if( nimproved == 0 .and. i > 2 )  exit
+                if( i > 10 .and. corrfrac > 0.9999 ) exit
+            endif
+        end do
+        ! put the best local optimum back
+        corr         = corr_saved
+        opt_shifts   = opt_shifts_saved
+        frameweights = frameweights_saved        
+        call shift_frames(opt_shifts)
+        ! print
+        if( doprint ) write(*,'(a,7x,f7.4)') '>>> OPTIMAL CORRELATION:', corr
+        call moment(frameweights, ave, sdev, var, err)
+        minw = minval(frameweights)
+        maxw = maxval(frameweights)
+        if( doprint ) write(*,'(a,7x,f7.4)') '>>> AVERAGE WEIGHT     :', ave
+        if( doprint ) write(*,'(a,7x,f7.4)') '>>> SDEV OF WEIGHTS    :', sdev
+        if( doprint ) write(*,'(a,7x,f7.4)') '>>> MIN WEIGHT         :', minw
+        if( doprint ) write(*,'(a,7x,f7.4)') '>>> MAX WEIGHT         :', maxw
+        
+        contains
+            
+            subroutine update_res( thres_corrfrac, thres_frac_improved, which_update )
+                real,    intent(in) :: thres_corrfrac, thres_frac_improved
+                integer, intent(in) :: which_update
+                if( corrfrac > thres_corrfrac .and. frac_improved <= thres_frac_improved&
+                .and. updateres == which_update )then
+                    lp = lp - resstep
+                    if( doprint )  write(*,'(a,1x,f7.4)') '>>> LOW-PASS LIMIT UPDATED TO:', lp
+                    ! need to update correlation values
+                    call calc_corrs
+                    ! need to indicate that we updated resolution limit
+                    updateres  = updateres + 1
+                    ! need to destroy all previous knowledge about correlations
+                    corr       = sum(corrs)/real(nframes)
+                    corr_prev  = corr
+                    corr_saved = corr
+                    ! indicate that reslim was updated
+                    didupdateres = .true.
+                endif
+            end subroutine update_res
+                    
+    end subroutine unblur_movie
 
-    subroutine init_step1( movie_stack_fname, p, opt, nrestarts )
-        character(len=*), intent(in) :: movie_stack_fname
-        class(params), intent(inout) :: p
-        character(len=*), intent(in) :: opt
-        integer, intent(in)          :: nrestarts
-        real                         :: moldiam, dimo4
-        real, allocatable            :: vec(:)
-        integer                      :: i, alloc_stat
+    subroutine unblur_calc_sums( movie_sum, movie_sum_corrected, movie_sum_ctf )
+        type(image), intent(out) :: movie_sum, movie_sum_corrected, movie_sum_ctf
+        integer :: iframe
+        ! calculate the sum for CTF estimation
+        call sum_movie_frames
+        movie_sum_ctf = movie_sum_global
+        call movie_sum_ctf%bwd_ft
+        ! re-calculate the weighted sum
+        if( do_dose_weight ) call dose_weight_movie_frames
+        call wsum_movie_frames
+        movie_sum_corrected = movie_sum_global
+        call movie_sum_corrected%bwd_ft
+        ! generate straight integrated movie frame for comparison
+        do iframe=1,nframes
+            shmovie_frames(iframe) = movie_frames(iframe)
+        end do
+        call sum_movie_frames
+        movie_sum = movie_sum_global
+        call movie_sum%bwd_ft
+    end subroutine unblur_calc_sums
+
+    subroutine unblur_calc_sums_tomo( frame_counter, time_per_frame, movie_sum, movie_sum_corrected, movie_sum_ctf )
+        integer,     intent(inout) :: frame_counter
+        real,        intent(in)    :: time_per_frame
+        type(image), intent(out)   :: movie_sum, movie_sum_corrected, movie_sum_ctf
+        integer :: iframe
+        ! calculate the sum for CTF estimation
+        call sum_movie_frames
+        movie_sum_ctf = movie_sum_global
+        call movie_sum_ctf%bwd_ft
+        ! re-calculate the weighted sum
+        call dose_weight_movie_frames_tomo( frame_counter, time_per_frame )
+        call wsum_movie_frames
+        movie_sum_corrected = movie_sum_global
+        call movie_sum_corrected%bwd_ft
+        ! generate straight integrated movie frame for comparison
+        do iframe=1,nframes
+            shmovie_frames(iframe) = movie_frames(iframe)
+        end do
+        call sum_movie_frames
+        movie_sum = movie_sum_global
+        call movie_sum%bwd_ft
+    end subroutine unblur_calc_sums_tomo
+     
+    subroutine unblur_init( movie_stack_fname, p )
+        character(len=*), intent(in)    :: movie_stack_fname
+        class(params),    intent(inout) :: p
+        real        :: moldiam, dimo4
+        integer     :: alloc_stat, iframe
+        type(image) :: frame_tmp
+        real        :: time_per_frame, current_time
         call unblur_kill  
-        ! SET SAMPLING DISTANCE
-        smpd = p%smpd
         ! GET NUMBER OF FRAMES & DIM FROM STACK
-        call imgstk%open(movie_stack_fname)
-        nframes = imgstk%getStackSz()
-        call imgstk%close
-        if( debug ) write(*,*) 'number of frames: ', nframes
-        ldim = find_ldim(movie_stack_fname)
-        ldim(3) = 1 ! to correct for the stupide 3:d dim of mrc stacks
+        call find_ldim_nptcls(movie_stack_fname, ldim, nframes, endconv=endconv)
         if( debug ) write(*,*) 'logical dimension: ', ldim
-        if( debug ) write(*,*) 'logical dimension of frame: ', ldim
-        ndim   = 2*(nframes-1) ! because the center frame is kept fixed
-        npairs = ((nframes)*(nframes-1))/2 
-        mits   = 10*ndim ! maximum number of iterations for the refinement optimiser
-        if( debug ) print *, 'ndim: ', ndim
+        ldim(3) = 1 ! to correct for the stupide 3:d dim of mrc stacks
+        if( p%scale < 0.99 )then
+            ldim_scaled(1) = nint(real(ldim(1))*p%scale)
+            ldim_scaled(2) = nint(real(ldim(2))*p%scale)
+            ldim_scaled(3) = 1
+            doscale        = .true.
+        else
+            ldim_scaled = ldim
+            doscale     = .false.
+        endif
+        ! SET SAMPLING DISTANCE
+        smpd = p%smpd/p%scale
+        if( debug ) write(*,*) 'logical dimension of frame: ',        ldim
+        if( debug ) write(*,*) 'scaled logical dimension of frame: ', ldim_scaled
+        if( debug ) write(*,*) 'number of frames: ',                  nframes
         ! ALLOCATE
-        allocate( vec(ndim), movie_frames(nframes), shmovie_frames(nframes),&
-        lims(ndim,2), corrmat(nframes,nframes), corrs(nframes),&
-        opt_shifts(nframes,2), stat=alloc_stat )
-        call alloc_err('init; simple_unblur', alloc_stat)
-        vec     = 0.
-        lims    = 0.
+        allocate( movie_frames(nframes), shmovie_frames(nframes),&
+        corrs(nframes), opt_shifts(nframes,2), opt_shifts_saved(nframes,2),&
+        corrmat(nframes,nframes), frameweights(nframes),&
+        frameweights_saved(nframes), stat=alloc_stat )
+        call alloc_err('unblur_init; simple_unblur', alloc_stat)
         corrmat = 0.
-        corrs   = 0.        
+        corrs   = 0.
         ! read and FT frames
-        do i=1,nframes
-            call movie_frames(i)%new(ldim, smpd)
-            call movie_frames(i)%read(movie_stack_fname,i)
-            call movie_frames(i)%fwd_ft
-            shmovie_frames(i) = movie_frames(i)
+        do iframe=1,nframes
+            call frame_tmp%new(ldim, smpd)
+            call frame_tmp%read(movie_stack_fname,iframe)
+            call frame_tmp%fwd_ft
+            call movie_frames(iframe)%new(ldim_scaled, smpd)
+            call movie_frames(iframe)%set_ft(.true.)
+            call frame_tmp%clip(movie_frames(iframe))
+            call shmovie_frames(iframe)%copy(movie_frames(iframe))
         end do
-        ! INITIALIZE
-        ! set optimization limits
-        do i=1,ndim
-            lims(i,1) = -p%trs
-            lims(i,2) = p%trs
-        end do
-        maxshift = p%trs
+        maxshift = p%trs/p%scale
         ! set fixed frame (all others are shifted by reference to this at 0,0)
         fixed_frame = nint(real(nframes)/2.)
-        ! SET RESOLUTION LIMITS
-        dimo4   = real(minval(ldim(1:2)))/4.
-        moldiam = 0.7*real(p%box)*p%smpd
-        hp      = dimo4
-        lp      = moldiam/4.
-        ! MAKE THE OPTIMIZER READY
-        call ospec%specify(opt, ndim, ftol=1e-4, gtol=1e-4, limits=lims, nrestarts=nrestarts)
-        call ospec%set_costfun(costfun)
-        if( debug ) write(*,'(a,1x,f7.4)') '>>> START CORRELATION: ', -costfun(vec, ndim)
-        ! generate optimizer object with the factory
-        call ofac%new(ospec, nlopt)
-        deallocate(vec)
+        ! set reslims
+        dimo4     = (real(minval(ldim_scaled(1:2)))*p%smpd)/4.
+        moldiam   = 0.7*real(p%box)*p%smpd
+        hp        = min(dimo4,2000.)
+        lp        = p%lpstart
+        resstep   = (p%lpstart-p%lpstop)/3.
+        ! check if we are doing dose weighting
+        if( p%l_dose_weight )then
+            do_dose_weight = .true.
+            allocate( acc_doses(nframes), stat=alloc_stat )
+            call alloc_err('unblur_init; simple_unblur, 2', alloc_stat)
+            kV = p%kV
+            time_per_frame = p%exp_time/real(nframes)           ! unit: s
+            dose_rate      = p%dose_rate
+            do iframe=1,nframes
+                current_time      = real(iframe)*time_per_frame ! unit: s
+                acc_doses(iframe) = dose_rate*current_time      ! unit: e/A2/s * s = e/A2
+            end do
+        endif
         existence = .true.
-    end subroutine
-    
-    function get_shifts() result( shifts )
-        real, allocatable :: shifts(:,:)
-        shifts = vec2shifts( ospec%x, ndim ) 
-    end function
-    
+        if( debug ) write(*,*) 'unblur_init, done'
+    end subroutine unblur_init
+
     subroutine center_shifts( shifts )
         real, intent(inout) :: shifts(nframes,2)
         real    :: xsh, ysh
@@ -131,145 +291,16 @@ contains
             if( abs(shifts(iframe,1)) < 1e-6 ) shifts(iframe,1) = 0.
             if( abs(shifts(iframe,2)) < 1e-6 ) shifts(iframe,2) = 0.
         end do
-    end subroutine
+    end subroutine center_shifts
     
-    subroutine unblur_step1( movie_stack_fname, p, oind, oout, corr, movie_sum )
-        use simple_oris,   only: oris
-        use simple_jiffys, only: int2str
-        character(len=*), intent(in) :: movie_stack_fname
-        class(params), intent(inout) :: p
-        integer, intent(in)          :: oind
-        class(oris), intent(inout)   :: oout
-        real, intent(out)            :: corr
-        type(image), intent(out)     :: movie_sum
-        integer :: iframe
-        call init_step1(movie_stack_fname, p, 'simplex', NRESTARTS)
-!         corr = minimize()
-        ospec%x = 0.
-        opt_shifts = get_shifts()
-        do iframe=1,size(opt_shifts,1)
-            call oout%set(oind, 'x'//int2str(iframe), opt_shifts(iframe,1))
-            call oout%set(oind, 'y'//int2str(iframe), opt_shifts(iframe,2))
-        end do
-        call shift_frames(opt_shifts)
-        call calc_corrmat
-        call corrmat2weights
-        ! movie sum for refinement
-        call wsum_movie_frames
-        ! outputted movie sum (always in real space)
-        movie_sum = movie_sum_global
-        call movie_sum%bwd_ft 
-    end subroutine
-    
-    subroutine unblur_step2( oind, oout, corr, movie_sum )
-        use simple_oris,     only: oris
-        use simple_jiffys,   only: int2str
-        use simple_ft_shsrch ! singleton
-        use simple_stat,     only: corrs2weights
-        integer, intent(in)          :: oind
-        class(oris), intent(inout)   :: oout
-        real, intent(out)            :: corr
-        type(image), intent(out)     :: movie_sum
-        real    :: cxy(3), lims(2,2), corr_prev
-        integer :: iframe, iter, i, nimproved
-        ! make search object ready
-        lims(:,1) = -maxshift
-        lims(:,2) = maxshift
-        call ft_shsrch_init(movie_sum_global, movie_frames(1), lims, lp, hp)
-        ! calc avg corr to weighted avg
-        call shift_frames(opt_shifts)
-        call calc_corrs
-        corr = sum(corrs)/real(nframes)
-        if( doprint ) write(*,'(a,1x,f7.4)') '>>> INITIAL CORRELATION:', corr
-        iter = 0
-        do i=1,MITSREF
-            iter = iter+1
-            nimproved = 0
-            do iframe=1,nframes
-                call ft_shsrch_reset_ptrs(movie_sum_global, movie_frames(iframe))
-                cxy = ft_shsrch_minimize(corrs(iframe), opt_shifts(iframe,:))
-                if( cxy(1) > corrs(iframe) )  nimproved = nimproved+1
-                opt_shifts(iframe,:) = cxy(2:3)
-                corrs(iframe)        = cxy(1)
-            end do
-            if( doprint ) print *, 'This % of frames improved their alignment: ',&
-            real(nimproved)/real(nframes)*100.
-            call center_shifts(opt_shifts)
-            frameweights = corrs2weights(corrs)
-            call shift_frames(opt_shifts)
-            call wsum_movie_frames
-            corr_prev = corr
-            corr = sum(corrs)/real(nframes)
-            if( doprint )  write(*,'(a,1x,f7.4)') '>>> OPTIMAL CORRELATION:', corr
-            if( (nimproved == 0 .and. i > 2) .or. corr_prev/corr > 0.9999 ) exit
-        end do
-        ! outputted shift parameters
-        do iframe=1,size(opt_shifts,1)
-            call oout%set(oind, 'x'//int2str(iframe), opt_shifts(iframe,1))
-            call oout%set(oind, 'y'//int2str(iframe), opt_shifts(iframe,2))
-        end do
-        ! outputted movie sum (always in realspace)
-        movie_sum = movie_sum_global
-        call movie_sum%bwd_ft
-    end subroutine
-    
-    function minimize( ) result( corr )
-        real :: corr
-        ospec%x = 0.
-        call nlopt%minimize(ospec, corr)
-        corr  = -corr
-        if( debug ) write(*,'(a,1x,f7.4)') '>>> OPTIMAL CORRELATION:', corr
-    end function
-
-    function costfun( vec, D ) result( cost )
-        integer, intent(in) :: D
-        real, intent(in)    :: vec(D)
-        real                :: corr, corrsum, cost
-        integer             :: i, j, ncorrs
-        real, allocatable   :: shifts(:,:)
-        call shift_frames( vec, D, shifts )
-        ! IMPLEMENT THE BARRIER METHOD
-        if( any(abs(shifts(:,:)) > maxshift) )then
-            deallocate(shifts)
-            cost = 1.
-            return
-        endif
-        ncorrs = (nframes*(nframes-1))/2
-        corrsum = 0.
-        do i=1,nframes-1
-            do j=i+1,nframes
-                corr = shmovie_frames(i)%corr(shmovie_frames(j), lp, hp)
-                corrsum = corrsum+corr
-            end do
-        end do
-        cost = -corrsum/real(ncorrs)
-        deallocate(shifts)
-    end function
-    
-    subroutine shift_frames_1( shifts )
+    subroutine shift_frames( shifts )
         real, intent(in) :: shifts(nframes,2)
-        integer :: frame
-        do frame=1,nframes
-            call movie_frames(frame)%shift(-shifts(frame,1), -shifts(frame,2),&
-            lp_dyn=lp, imgout=shmovie_frames(frame))
+        integer :: iframe
+        do iframe=1,nframes
+            call movie_frames(iframe)%shift(-shifts(iframe,1), -shifts(iframe,2),&
+            lp_dyn=lp, imgout=shmovie_frames(iframe))
         end do
-    end subroutine
-    
-    subroutine shift_frames_2( vec, D, shifts_out )
-        integer, intent(in)                      :: D
-        real, intent(in)                         :: vec(D)
-        real, allocatable, intent(out), optional :: shifts_out(:,:)
-        real, allocatable                        :: shifts(:,:)
-        integer                                  :: alloc_stat        
-        shifts = vec2shifts( vec, D )
-        call shift_frames( shifts )
-        if( present(shifts_out) )then
-            if( allocated(shifts_out) ) deallocate(shifts_out)
-            allocate( shifts_out(nframes,2), source=shifts, stat=alloc_stat )
-            call alloc_err('In: simple_unblur::shift_frames_3', alloc_stat)
-        endif
-        deallocate(shifts)        
-    end subroutine
+    end subroutine shift_frames
     
     subroutine calc_corrmat
         integer :: iframe, jframe
@@ -280,14 +311,19 @@ contains
                 corrmat(jframe,iframe) = corrmat(iframe,jframe)
             end do
         end do
-    end subroutine
-    
+    end subroutine calc_corrmat
+
     subroutine calc_corrs
-        integer :: frame
-        do frame=1,nframes
-            corrs(frame) = movie_sum_global%corr(shmovie_frames(frame), lp, hp)
+        integer :: iframe
+        real    :: old_corr
+        do iframe=1,nframes
+            ! subtract the movie frame being correlated to reduce bias
+            call subtract_movie_frame( iframe )
+            corrs(iframe) = movie_sum_global%corr(shmovie_frames(iframe), lp, hp)
+            ! add the subtracted movie frame back to the weighted sum
+            call add_movie_frame( iframe )
         end do
-    end subroutine
+    end subroutine calc_corrs
 
     subroutine corrmat2weights
         use simple_stat, only: corrs2weights
@@ -301,62 +337,138 @@ contains
             corrs(iframe) = corrs(iframe)/real(nframes-1)
         end do
         frameweights = corrs2weights(corrs)
-    end subroutine
+    end subroutine corrmat2weights
+
+    subroutine dose_weight_movie_frames
+        integer           :: iframe
+        real, allocatable :: filter(:)
+        do iframe=1,nframes
+            filter = acc_dose2filter(shmovie_frames(iframe), acc_doses(iframe), kV)
+            call shmovie_frames(iframe)%apply_filter(filter)
+            deallocate(filter)
+        end do
+    end subroutine dose_weight_movie_frames
+
+    subroutine dose_weight_movie_frames_tomo( frame_counter, time_per_frame )
+        integer, intent(inout) :: frame_counter
+        real,    intent(in)    :: time_per_frame
+        real, allocatable      :: filter(:)
+        integer                :: iframe
+        real                   :: current_time, acc_dose
+        do iframe=1,nframes
+            frame_counter = frame_counter + 1
+            current_time  = real(frame_counter)*time_per_frame ! unit: s
+            acc_dose      = dose_rate*current_time             ! unit e/A2
+            filter        = acc_dose2filter(shmovie_frames(iframe), acc_dose, kV)
+            call shmovie_frames(iframe)%apply_filter(filter)
+            deallocate(filter)
+        end do
+    end subroutine dose_weight_movie_frames_tomo
+
+    subroutine sum_movie_frames
+        integer :: iframe
+        integer :: ldim_here(3)
+        real    :: w
+        ldim_here = shmovie_frames(1)%get_ldim()
+        call movie_sum_global%new(ldim_here, smpd)
+        call movie_sum_global%set_ft(.true.)
+        w = 1./real(nframes)
+        do iframe=1,nframes
+            call movie_sum_global%add(shmovie_frames(iframe), w=w)
+        end do
+    end subroutine sum_movie_frames
     
     subroutine wsum_movie_frames
-        integer     :: frame
-        call movie_sum_global%new(ldim, smpd)
+        integer :: iframe
+        integer :: ldim_here(3)
+        ldim_here = shmovie_frames(1)%get_ldim()
+        call movie_sum_global%new(ldim_here, smpd)
         call movie_sum_global%set_ft(.true.)
-        do frame=1,nframes
-            if( frameweights(frame) > 0. )then
-                call movie_sum_global%add(shmovie_frames(frame), w=frameweights(frame))
-            endif
+        do iframe=1,nframes
+            if( frameweights(iframe) > 0. )&
+            &call movie_sum_global%add(shmovie_frames(iframe), w=frameweights(iframe))
         end do
-    end subroutine
+    end subroutine wsum_movie_frames
+
+    subroutine add_movie_frame( iframe, w )
+        integer,        intent(in) :: iframe
+        real, optional, intent(in) :: w
+        real :: ww
+        ww = frameweights(iframe)
+        if( present(w) ) ww = w
+        if( frameweights(iframe) > 0. )&
+        &call movie_sum_global%add(shmovie_frames(iframe), w=ww)
+    end subroutine add_movie_frame
+
+    subroutine subtract_movie_frame( iframe )
+        integer, intent(in) :: iframe
+        if( frameweights(iframe) > 0. )&
+        &call movie_sum_global%subtr(shmovie_frames(iframe), w=frameweights(iframe))
+    end subroutine subtract_movie_frame
     
-    function vec2shifts( vec, D ) result( shifts )
-        integer, intent(in) :: D
-        real, intent(in)    :: vec(D)
-        real, allocatable   :: shifts(:,:)
-        integer :: frame, i, alloc_stat
-        logical :: reached_fixed_frame
-        allocate( shifts(nframes,2), stat=alloc_stat )
-        call alloc_err('In: simple_unblur::vec2shifts', alloc_stat)
-        frame = 0
-        reached_fixed_frame = .false.
-        do i=1,ndim+2,2
-            frame = frame+1
-            if( frame == fixed_frame )then
-                shifts(frame,:) = 0.
-                reached_fixed_frame = .true.
-                cycle
-            endif
-            if( reached_fixed_frame )then
-                shifts(frame,:) = [vec(i-2),vec(i-1)]
-            else
-                shifts(frame,:) = [vec(i),vec(i+1)]
-            endif
-            if( abs(shifts(frame,1)) < 1e-6 ) shifts(frame,1) = 0.
-            if( abs(shifts(frame,2)) < 1e-6 ) shifts(frame,2) = 0.
+    subroutine test_unblur
+        use simple_oris,    only: oris
+        use simple_cmdline, only: cmdline
+        real          :: shifts(7,2)
+        type(image)   :: squares(7), straight_sum, corrected , sum4ctf
+        type(params)  :: p_here 
+        type(cmdline) :: cline
+        real          :: corr
+        integer       :: i
+        shifts(1,1) = -3.
+        shifts(1,2) = -3.
+        shifts(2,1) = -2.
+        shifts(2,2) = -2.
+        shifts(3,1) = -1.
+        shifts(3,2) = -1.
+        shifts(4,1) =  0.
+        shifts(4,2) =  0.
+        shifts(5,1) =  1.
+        shifts(5,2) =  1.
+        shifts(6,1) =  2.
+        shifts(6,2) =  2.
+        shifts(7,1) =  3.
+        shifts(7,2) =  3.
+        do i=1,7
+            call squares(i)%new([100,100,1], 2.)
+            call squares(i)%square(30)
+            call squares(i)%shift(shifts(i,1),shifts(i,2))
+            call squares(i)%write('sugarcubes.mrc', i)
         end do
-        shifts = -shifts ! 2 fit shifting convention
-    end function
+        p_here         = params(cline)
+        p_here%smpd    = 2.0
+        p_here%trs     = 3.5
+        p_here%box     = 100
+        p_here%lpstart = 10.
+        p_here%lpstop  = 4.0
+        call unblur_movie('sugarcubes.mrc', p_here, corr)
+        call unblur_calc_sums(straight_sum, corrected, sum4ctf)
+        if( sum(abs(opt_shifts-shifts)) < 0.5 )then
+            write(*,'(a)') 'SIMPLE_UNBLUR_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
+        else
+            write(*,'(a)') 'SIMPLE_UNBLUR_UNIT_TEST FAILED :-('
+        endif
+        do i=1,7
+            call squares(i)%kill
+        end do
+        call straight_sum%kill
+        call corrected%kill
+        call sum4ctf%kill
+    end subroutine test_unblur
 
     subroutine unblur_kill
-        integer :: i
+        integer :: iframe
         if( existence )then
-            call ofac%kill
-            call ospec%kill
-            nlopt => null()
-            do i=1,nframes
-                call movie_frames(i)%kill
-                call shmovie_frames(i)%kill
+            do iframe=1,nframes
+                call movie_frames(iframe)%kill
+                call shmovie_frames(iframe)%kill
             end do
-            deallocate( movie_frames, shmovie_frames,&
-            lims, corrmat, frameweights, corrs, opt_shifts )
-            refine    = .false.
+            call movie_sum_global%kill
+            deallocate( movie_frames, shmovie_frames, frameweights,&
+            frameweights_saved, corrs, corrmat, opt_shifts, opt_shifts_saved )
+            if( allocated(acc_doses) ) deallocate(acc_doses)
             existence = .false.
         endif
-    end subroutine
+    end subroutine unblur_kill
 
 end module simple_unblur

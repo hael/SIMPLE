@@ -149,7 +149,7 @@ contains
                 ! we need to expand the dimensions in pftcc before calculating correlations using these modes
                 call pftcc%expand_dim
                 if( trim(mmode) .eq. 'gpu' )then
-                    call pftcc%gencorrs_all_gpu(self%pp, corrmat3d)
+                    stop 'simple_polarft_corrcalc :: gencorrs_all_gpu taken out at the moment'
                 else
                     call pftcc%gencorrs_all_cpu(corrmat3d)
                 endif

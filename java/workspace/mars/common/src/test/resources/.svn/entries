@@ -1,46 +1,0 @@
-10
-
-dir
-1768
-https://www.multiscale-modelling.eu/svn/mmmhpc/openmolgrid/common/trunk/src/test/resources
-https://www.multiscale-modelling.eu/svn/mmmhpc
-
-
-
-2013-05-23T09:31:41.323334Z
-1706
-bozic
-
-
-svn:special svn:externals svn:needs-lock
-
-
-
-
-
-
-
-
-
-
-
-0c2a405a-1443-4536-bae8-fb482100682b
-
-bigDFT
-dir
-
-cml
-dir
-
-deposit
-dir
-
-mopac
-dir
-
-xyz
-dir
-
-yaml
-dir
-

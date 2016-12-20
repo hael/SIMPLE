@@ -11,9 +11,6 @@
 module simple_commander_misc
 use simple_defs            ! singleton
 use simple_jiffys          ! singleton
-use simple_timing          ! singleton
-use simple_cuda            ! singleton
-use simple_cuda_defs       ! singleton
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build

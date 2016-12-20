@@ -3,7 +3,7 @@ use warnings;
 use strict;
 use Tie::File;
 if( scalar(@ARGV) < 2 ){
-    die "Need filetable as input 1 & npart as input 2\n";
+    die "Need filetable as input 1 & nparts as input 2\n";
 }
 my @files;
 tie @files, 'Tie::File', $ARGV[0] or die "Cannot tie to file: $ARGV[0]\n";

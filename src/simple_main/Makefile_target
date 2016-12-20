@@ -9,8 +9,7 @@ Simple_code: opt            \
              comlin_sym     \
              cluster_cavg   \
              qsys           \
-             masters        \
-             highlev        ;
+             masters        ;
 
 opt: simple_opt_spec.o               \
      simple_optimizer.o              \
@@ -94,12 +93,11 @@ comlin_srch: simple_comlin_srch.o       ;
 matcher: simple_picker.o                \
          simple_hadamard_common.o       \
          simple_cartft_corrcalc.o       \
-         simple_hadamard2D_matcher.o    \
-         simple_hadamard3D_matcher.o    \
-         simple_crossover.o             \
          simple_scatter_orisrch.o       \
          simple_cftcc_srch.o            \
-         simple_cont3D_matcher.o        ;
+         simple_cont3D_matcher.o        \
+         simple_hadamard2D_matcher.o    \
+         simple_hadamard3D_matcher.o    ;
 
 s_other: simple_masker.o                \
          simple_spatial_median.o        ;
@@ -138,4 +136,3 @@ masters: simple_rec_master.o             \
          simple_commander_volops.o       \
          simple_commander_distr_wflows.o ;
 
-highlev: simple_highlev.o               ;

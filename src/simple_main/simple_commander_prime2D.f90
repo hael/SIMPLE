@@ -11,9 +11,6 @@
 module simple_commander_prime2D
 use simple_defs            ! singleton
 use simple_jiffys          ! singleton
-use simple_timing          ! singleton
-use simple_cuda            ! singleton
-use simple_cuda_defs       ! singleton
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
@@ -121,12 +118,6 @@ contains
         type(build)  :: b
         integer      :: i, startit, ncls_from_refs, lfoo(3)
         logical      :: converged=.false.
-        integer      :: err ! CUDA err variable for the return function calls
-        call timestamp()
-        ! call start_Alltimers_cpu()
-        ! starting the cuda environment
-        call simple_cuda_init(err)
-        if( err .ne. RC_SUCCESS ) write(*,*) 'cublas init failed'
         p = params(cline)                     ! parameters generated
         p%boxmatch = p%box                    !!!!!!!!!!!!!!!!!! 4 NOW
         call b%build_general_tbox(p, cline)   ! general objects built
@@ -155,13 +146,6 @@ contains
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_PRIME2D NORMAL STOP ****')
-        !******************************************************
-        !    Environment shutdown
-        !******************************************************
-        ! shutting down CUDA
-        call simple_cuda_shutdown()
-        ! shutting down timers
-        ! call stop_Alltimers_cpu()
     end subroutine exec_prime2D
 
     subroutine exec_classrefine( self, cline )

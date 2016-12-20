@@ -21,6 +21,7 @@ use simple_map_reduce      ! singleton
 use simple_defs            ! singleton
 use simple_jiffys          ! singleton
 use simple_qsys_funs       ! singleton
+use simple_syscalls        ! singleton
 implicit none
 
 public :: unblur_movies_distr_commander
@@ -30,10 +31,8 @@ public :: prime3D_init_distr_commander
 public :: prime3D_distr_commander
 public :: prime2D_init_distr_commander
 public :: prime2D_distr_commander
-public :: classrefine_distr_commander
 public :: find_nnimgs_distr_commander
 public :: recvol_distr_commander
-public :: eo_recvol_distr_commander
 private
 
 type, extends(commander_base) :: unblur_movies_distr_commander
@@ -64,10 +63,6 @@ type, extends(commander_base) :: prime2D_distr_commander
   contains
     procedure :: execute      => exec_prime2D_distr
 end type prime2D_distr_commander
-type, extends(commander_base) :: classrefine_distr_commander
-  contains
-    procedure :: execute      => exec_classrefine_distr
-end type classrefine_distr_commander
 type, extends(commander_base) :: find_nnimgs_distr_commander
   contains
     procedure :: execute      => exec_find_nnimgs_distr
@@ -76,10 +71,6 @@ type, extends(commander_base) :: recvol_distr_commander
   contains
     procedure :: execute      => exec_recvol_distr
 end type recvol_distr_commander
-type, extends(commander_base) :: eo_recvol_distr_commander
-  contains
-    procedure :: execute      => exec_eo_recvol_distr
-end type eo_recvol_distr_commander
 
 integer, parameter :: MAXNKEYS=30, KEYLEN=32
 
@@ -89,7 +80,6 @@ contains
 
     subroutine exec_unblur_movies_distr( self, cline )
         use simple_commander_preproc
-        use simple_oris, only: oris
         class(unblur_movies_distr_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         character(len=STDLEN), allocatable :: movienames(:)
@@ -205,11 +195,10 @@ contains
         integer, allocatable               :: parts(:,:)
         type(qsys_ctrl)                    :: qscripts
         integer                            :: iter
-        integer                            :: cstat, estat
-        character(len=100)                 :: cmsg
         type(chash)                        :: myq_descr, job_descr
         type(qsys_factory)                 :: qsys_fac
         class(qsys_base), pointer          :: myqsys
+        character(len=STDLEN)              :: str
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! setup the environment for distributed execution
@@ -231,68 +220,10 @@ contains
         ! merge matrices
         call xmerge_shellweights%execute(cline)
         call qsys_cleanup_iter
-        call execute_command_line('rm -rf shellweights_part*', exitstat=estat, cmdstat=cstat, cmdmsg=cmsg)
-        if( cstat > 0 )then
-            print *, 'simple_commander_distr_wflows :: exec_find_nnimgs_distr; command execution failed with error ', trim(cmsg)
-        elseif( cstat < 0 )then
-            print *, 'simple_commander_distr_wflows :: exec_find_nnimgs_distr; command execution not supported'
-        endif
+        str = 'rm -rf shellweights_part*'
+        call exec_cmdline(str)
         call simple_end('**** SIMPLE_DISTR_SHELLWEIGHT3D NORMAL STOP ****')
     end subroutine exec_shellweight3D_distr
-
-    ! EO_RECVOL
-
-    subroutine exec_eo_recvol_distr( self, cline )
-        use simple_commander_rec
-        class(eo_recvol_distr_commander), intent(inout) :: self
-        class(cmdline),                   intent(inout) :: cline
-        ! constants
-        logical, parameter                  :: DEBUG=.false.
-        ! commanders
-        type(shellweight3D_distr_commander) :: xshellweight3D_distr
-        type(split_commander)               :: xsplit
-        type(eo_volassemble_commander)      :: xeo_volassemble
-        ! command lines
-        type(cmdline)                       :: cline_shellweight3D
-        ! other variables
-        type(params)                        :: p_master
-        integer, allocatable                :: parts(:,:)
-        type(qsys_ctrl)                     :: qscripts
-        type(chash)                         :: myq_descr, job_descr
-        type(qsys_factory)                  :: qsys_fac
-        class(qsys_base), pointer           :: myqsys
-        ! make master parameters
-        p_master = params(cline, checkdistr=.false.)
-        ! setup the environment for distributed execution
-        call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr)
-        if( p_master%shellw .eq. 'yes' )then
-            ! we need to set the prg flag for the command lines that control distributed workflows 
-            cline_shellweight3D = cline
-            call cline_shellweight3D%set('prg',     'shellweight3D'        )
-            call cline_shellweight3D%set('outfile', 'shellweight3D_doc.txt')
-            ! execute
-            call xshellweight3D_distr%execute(cline_shellweight3D)
-            call cline%set('oritab', 'shellweight3D_doc.txt')
-        endif
-        ! prepare job description
-        call cline%gen_job_descr(job_descr)
-        ! split stack
-        if( stack_is_split(p_master%ext, p_master%nparts) )then
-            ! check that the stack partitions are of correct sizes
-            call stack_parts_of_correct_sizes(p_master%ext, parts)
-        else
-            call xsplit%execute(cline)
-        endif
-        ! prepare scripts
-        call qsys_cleanup_iter
-        call qscripts%generate_scripts(job_descr, p_master%ext, myq_descr)
-        ! manage job scheduling
-        call qscripts%schedule_jobs
-        ! assemble volumes
-        call xeo_volassemble%execute(cline)
-        call qsys_cleanup_iter
-        call simple_end('**** SIMPLE_DISTR_EO_RECVOL NORMAL STOP ****')
-    end subroutine exec_eo_recvol_distr
 
     ! PRIME3D
 
@@ -356,43 +287,49 @@ contains
         use simple_commander_prime3D
         use simple_commander_mask
         use simple_commander_rec
-        use simple_syscalls
+        use simple_oris, only: oris
         class(prime3D_distr_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         ! constants
-        logical, parameter             :: DEBUG=.false.
-        character(len=32), parameter   :: DIRFBODY  = 'prime3Dround_'
-        character(len=32), parameter   :: ALGNFBODY = 'algndoc_'
-        character(len=32), parameter   :: ITERFBODY = 'prime3Ddoc_'
-        character(len=32), parameter   :: VOLFBODY  = 'recvol_state'
+        logical,           parameter :: DEBUG=.false.
+        character(len=32), parameter :: DIRFBODY  = 'prime3Dround_'
+        character(len=32), parameter :: ALGNFBODY = 'algndoc_'
+        character(len=32), parameter :: ITERFBODY = 'prime3Ddoc_'
+        character(len=32), parameter :: VOLFBODY  = 'recvol_state'
         ! commanders
-        type(prime3D_init_distr_commander) :: xprime3D_init_distr
-        type(recvol_distr_commander)       :: xrecvol_distr
-        type(prime3D_commander)        :: xprime3D
-        type(resrange_commander)       :: xresrange
-        type(merge_algndocs_commander) :: xmerge_algndocs
-        type(volassemble_commander)    :: xvolassemble
-        type(eo_volassemble_commander) :: xeo_volassemble
-        type(check3D_conv_commander)   :: xcheck3D_conv
-        type(split_commander)          :: xsplit
+        type(prime3D_init_distr_commander)  :: xprime3D_init_distr
+        type(shellweight3D_distr_commander) :: xshellweight3D_distr
+        type(recvol_distr_commander)        :: xrecvol_distr
+        type(prime3D_commander)             :: xprime3D
+        type(resrange_commander)            :: xresrange
+        type(merge_algndocs_commander)      :: xmerge_algndocs
+        type(volassemble_commander)         :: xvolassemble
+        type(eo_volassemble_commander)      :: xeo_volassemble
+        type(check3D_conv_commander)        :: xcheck3D_conv
+        type(split_commander)               :: xsplit
         ! command lines
-        type(cmdline)                  :: cline_recvol_distr
-        type(cmdline)                  :: cline_prime3D_init
-        type(cmdline)                  :: cline_resrange
-        type(cmdline)                  :: cline_check3D_conv
-        type(cmdline)                  :: cline_merge_algndocs
-        type(cmdline)                  :: cline_volassemble
+        type(cmdline)                       :: cline_recvol_distr
+        type(cmdline)                       :: cline_prime3D_init
+        type(cmdline)                       :: cline_resrange
+        type(cmdline)                       :: cline_check3D_conv
+        type(cmdline)                       :: cline_merge_algndocs
+        type(cmdline)                       :: cline_volassemble
+        type(cmdline)                       :: cline_shellweight3D
         ! other variables
-        type(params)                   :: p_master
-        integer, allocatable           :: parts(:,:)
-        type(qsys_ctrl)                :: qscripts
-        character(len=STDLEN)          :: vol, oritab, str, str_iter, dir_iter, str_state
-        integer                        :: state, iter, status, cnt
-        type(chash)                    :: myq_descr, job_descr
-        type(qsys_factory)             :: qsys_fac
-        class(qsys_base), pointer      :: myqsys
+        type(params)                        :: p_master
+        integer, allocatable                :: parts(:,:)
+        type(qsys_ctrl)                     :: qscripts
+        type(oris)                          :: os
+        character(len=STDLEN)               :: vol, oritab, str, str_iter, dir_iter, str_state
+        integer                             :: state, iter, status, cnt
+        real                                :: frac_srch_space
+        type(chash)                         :: myq_descr, job_descr
+        type(qsys_factory)                  :: qsys_fac
+        class(qsys_base), pointer           :: myqsys
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
+        ! make oritab
+        call os%new(p_master%nptcls)
         ! options check
         if( p_master%automsk.eq.'yes' )stop 'Automasking not supported yet' ! automask deactivated for now
         if( p_master%nstates>1 .and. p_master%dynlp.eq.'yes' )&
@@ -414,9 +351,11 @@ contains
         cline_check3D_conv   = cline
         cline_merge_algndocs = cline
         cline_volassemble    = cline
+        cline_shellweight3D  = cline
         ! initialise static command line parameters and static job description parameter
-        call cline_recvol_distr%set( 'prg', 'recvol' )          ! required for distributed call
-        call cline_prime3D_init%set( 'prg', 'prime3D_init' )    ! required for distributed call
+        call cline_recvol_distr%set( 'prg', 'recvol' )       ! required for distributed call
+        call cline_prime3D_init%set( 'prg', 'prime3D_init' ) ! required for distributed call
+        call cline_shellweight3D%set('prg', 'shellweight3D') ! required for distributed call
         call cline_merge_algndocs%set( 'nthr', 1. )
         call cline_merge_algndocs%set( 'fbody',  ALGNFBODY)
         call cline_merge_algndocs%set( 'nptcls', real(p_master%nptcls) )
@@ -445,6 +384,7 @@ contains
             ! ab-initio
             call xprime3D_init_distr%execute( cline_prime3D_init )
             call cline%set( 'vol1', trim('startvol_state01'//p_master%ext) )
+            call cline%set( 'oritab', oritab )
         else if( cline%defined('oritab') .and. .not.cline%defined('vol1') )then
             ! reconstructions needed
             call xrecvol_distr%execute( cline_recvol_distr )
@@ -459,7 +399,6 @@ contains
             enddo
         else if( .not.cline%defined('oritab') .and. cline%defined('vol1') )then
             if( p_master%nstates>1 )stop 'orientations doc at least must be provided for nstates>1'
-            if( p_master%refine .ne. 'greedy' )call cline%set('refine', 'greedy')
         else
             ! all good
         endif
@@ -504,13 +443,23 @@ contains
             call sys_mkdir( trim(dir_iter) )
             call qsys_cleanup_iter
             ! PREPARE PRIME3D SCRIPTS
-            call job_descr%set( 'oritab', trim(oritab) ) 
+            if( cline%defined('oritab') )then
+                call os%read(trim(cline%get_carg('oritab')))
+                frac_srch_space = os%get_avg('frac')
+                call job_descr%set( 'oritab', trim(oritab) )
+                call cline_shellweight3D%set( 'oritab', trim(oritab) )
+                if( p_master%shellw .eq. 'yes' .and. frac_srch_space >= 50. )then
+                    call xshellweight3D_distr%execute(cline_shellweight3D)
+                endif
+            endif
             call job_descr%set( 'startit', trim(int2str(iter)) )
             call qscripts%generate_scripts(job_descr, p_master%ext, myq_descr, ALGNFBODY)
             ! PRIMED3D JOB SCHEDULING
             call qscripts%schedule_jobs
             ! ASSEMBLE ALIGNMENT DOCS
             oritab = trim( dir_iter )//trim( ITERFBODY )//trim(str_iter)//'.txt'
+            call cline%set( 'oritab', oritab )
+            call cline_shellweight3D%set( 'oritab', trim(oritab) )
             call cline_merge_algndocs%set( 'outfile', trim(oritab) )
             call xmerge_algndocs%execute( cline_merge_algndocs )
             ! ASSEMBLE VOLUMES
@@ -530,6 +479,7 @@ contains
                 call rename( trim(vol), trim(str) )
                 vol = 'vol'//trim(int2str(state))
                 call job_descr%set( trim(vol), trim(str) )
+                call cline_shellweight3D%set( trim(vol), trim(str) )
             enddo
             if( p_master%eo.eq.'yes' )then
                 ! copy other files in binary format (fsc, ssnr, etc.)
@@ -774,98 +724,6 @@ contains
         call simple_end('**** SIMPLE_DISTR_PRIME2D NORMAL STOP ****')
     end subroutine exec_prime2D_distr
 
-    ! CLASSREFINE (within class refinement)
-
-    subroutine exec_classrefine_distr( self, cline )
-        use simple_commander_prime2D,  only: classrefine_commander
-        use simple_oris,               only: oris
-        use simple_image,              only: image
-        class(classrefine_distr_commander), intent(inout) :: self
-        class(cmdline),                     intent(inout) :: cline
-        ! constants
-        logical,           parameter :: DEBUG=.false.
-        character(len=32), parameter :: ALGNFBODY='classrefine_doc_class'
-        integer,           parameter :: NUMLEN=5
-        ! commanders
-        type(classrefine_commander)       :: xclassrefine
-        type(merge_crefine_out_commander) :: xmerge_crefine_out
-         ! command lines
-        type(cmdline)                     :: cline_merge_crefine_out
-        ! other variables
-        integer,          allocatable     :: parts(:,:)
-        type(chash),      allocatable     :: part_params(:)
-        character(len=:), allocatable     :: fname
-        class(qsys_base), pointer         :: myqsys
-        type(oris)                        :: os
-        type(params)                      :: p_master
-        type(qsys_ctrl)                   :: qscripts
-        type(chash)                       :: myq_descr, job_descr
-        type(qsys_factory)                :: qsys_fac
-        type(image)                       :: img
-        integer                           :: cstat, estat
-        character(len=100)                :: cmsg
-        integer                           :: ldim(3), ncls, icls
-        integer                           :: nl, cnt, alloc_stat, pop
-        ! make master parameters
-        p_master = params(cline, checkdistr=.false.)
-        ! read in oritab
-        nl = nlines(p_master%oritab)
-        call os%new(nl)
-        call os%read(p_master%oritab)
-        ! make the part_params array
-        ncls = os%get_ncls()
-        cnt  = 0
-        do icls=1,ncls
-            pop = os%get_clspop(icls)
-            if( pop >= p_master%minp ) cnt = cnt + 1
-        end do
-        allocate( part_params(cnt), stat=alloc_stat )
-        call alloc_err("In: simple_commander_distr_wflows :: exec_classrefine_distr", alloc_stat)
-        cnt  = 0
-        do icls=1,ncls
-            pop = os%get_clspop(icls)
-            if( pop >= p_master%minp )then
-                cnt = cnt + 1
-                call part_params(cnt)%new(1)
-                call part_params(cnt)%set('class', int2str(icls))
-            endif
-        end do
-        ! update p_master
-        p_master%nparts = cnt
-        ! setup the environment for distributed execution
-        call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr)
-        ! prepare job description
-        call cline%gen_job_descr(job_descr)
-        ! prepare merge_classdocs command line from prototype master
-        cline_merge_crefine_out = cline
-        call cline_merge_crefine_out%set('nptcls',  real(nl))
-        call cline_merge_crefine_out%set('outfile', 'classrefine_doc_merged.txt')
-        call cline_merge_crefine_out%set('box',     real(p_master%box))
-        ! prepare scripts
-        call qsys_cleanup_iter
-        call qscripts%generate_scripts(job_descr, p_master%ext,&
-        myq_descr, outfile_body=ALGNFBODY, part_params=part_params)
-        ! manage job scheduling
-        call qscripts%schedule_jobs
-        ! merge the ouput (file-bodies hardcoded)
-        call xmerge_crefine_out%execute(cline_merge_crefine_out)
-        ! update the references
-        call find_ldim_nptcls(p_master%refs, ldim, ncls)
-        ldim(3) = 1 ! correct for stupid mrc convention
-        call img%new(ldim, p_master%smpd)
-        do icls=1,ncls
-            allocate(fname, source='classrefine_avg_class'//int2str_pad(icls,NUMLEN)//p_master%ext)
-            if( file_exists(fname) )then
-                call img%read(fname, 1)
-                call img%write(p_master%refs, icls)
-                call del_binfile(fname)
-            endif
-            deallocate(fname)
-        end do
-        ! end gracefully
-        call simple_end('**** SIMPLE_DISTR_CLASSREFINE NORMAL STOP ****')
-    end subroutine exec_classrefine_distr
-
     ! FIND_NNIMGS (to find nearest neighbors in 2D)
 
     subroutine exec_find_nnimgs_distr( self, cline )
@@ -874,19 +732,18 @@ contains
         class(find_nnimgs_distr_commander), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         ! constants
-        logical, parameter            :: DEBUG=.false.
+        logical, parameter          :: DEBUG=.false.
         ! commanders
-        type(find_nnimgs_commander)   :: xfind_nnimgs
-        type(merge_nnmat_commander)   :: xmerge_nnmat
+        type(find_nnimgs_commander) :: xfind_nnimgs
+        type(merge_nnmat_commander) :: xmerge_nnmat
         ! other variables
-        type(params)                  :: p_master
-        integer, allocatable          :: parts(:,:)
-        type(qsys_ctrl)               :: qscripts
-        integer                       :: cstat, estat
-        character(len=100)            :: cmsg
-        type(chash)                   :: myq_descr, job_descr
-        type(qsys_factory)            :: qsys_fac
-        class(qsys_base), pointer     :: myqsys
+        type(params)                :: p_master
+        integer, allocatable        :: parts(:,:)
+        type(qsys_ctrl)             :: qscripts
+        type(chash)                 :: myq_descr, job_descr
+        type(qsys_factory)          :: qsys_fac
+        class(qsys_base), pointer   :: myqsys
+        character(len=STDLEN)       :: str
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! setup the environment for distributed execution
@@ -899,12 +756,8 @@ contains
         call qscripts%schedule_jobs
         call xmerge_nnmat%execute(cline)
         call qsys_cleanup_iter
-        call execute_command_line('rm -rf nnmat_part*', exitstat=estat, cmdstat=cstat, cmdmsg=cmsg)
-        if( cstat > 0 )then
-            print *, 'simple_commander_distr_wflows :: exec_find_nnimgs_distr; command execution failed with error ', trim(cmsg)
-        elseif( cstat < 0 )then
-            print *, 'simple_commander_distr_wflows :: exec_find_nnimgs_distr; command execution not supported'
-        endif
+        str = 'rm -rf nnmat_part*'
+        call exec_cmdline(str)
         call simple_end('**** SIMPLE_DISTR_FIND_NNIMGS NORMAL STOP ****')
     end subroutine exec_find_nnimgs_distr
 
@@ -916,20 +769,22 @@ contains
         logical, parameter                  :: debug=.false.
         ! commanders
         type(recvol_commander)              :: xrecvol
-        type(recvol_commander)              :: xeo_recvol
+        type(eo_recvol_commander)           :: xeo_recvol
         type(volassemble_commander)         :: xvolassemble
         type(eo_volassemble_commander)      :: xeo_volassemble
         type(split_commander)               :: xsplit
         type(shellweight3D_distr_commander) :: xshellweight3D_distr
         ! command lines
-        type(cmdline)                       :: cline_shellweight3D        ! other variables
+        type(cmdline)                       :: cline_shellweight3D
+        ! other variables
         type(params)                        :: p_master
         integer, allocatable                :: parts(:,:)
         type(qsys_ctrl)                     :: qscripts
         character(len=STDLEN)               :: vol
         type(chash)                         :: myq_descr, job_descr
-         type(qsys_factory)                 :: qsys_fac
+        type(qsys_factory)                  :: qsys_fac
         class(qsys_base), pointer           :: myqsys
+        integer                             :: istate
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! setup the environment for distributed execution
@@ -937,14 +792,19 @@ contains
         if( p_master%shellw .eq. 'yes' )then
             ! we need to set the prg flag for the command lines that control distributed workflows 
             cline_shellweight3D = cline
-            call cline_shellweight3D%set('prg',     'shellweight3D'        )
-            call cline_shellweight3D%set('outfile', 'shellweight3D_doc.txt')
+            call cline_shellweight3D%set('prg', 'shellweight3D')
+            do istate = 1,p_master%nstates
+                vol = 'vol'//trim(int2str(istate))
+                if( .not. cline%defined(vol) )then
+                    write(*,*) 'simple_commander_distr_wflows :: exec_recvol_distr'
+                    stop 'need input volume(s) for shell-weighted 3D reconstruction'
+                endif
+            end do
             ! execute
             call xshellweight3D_distr%execute(cline_shellweight3D)
-            call cline%set('oritab', 'shellweight3D_doc.txt')
         endif
         call cline%set( 'prg','recvol' )
-        if( p_master%eo .eq. 'yes' )call cline%set( 'prg','eo_recvol' )
+        if( p_master%eo .eq. 'yes' ) call cline%set( 'prg','eo_recvol' )
         call cline%gen_job_descr(job_descr)
         ! split stack
         if( stack_is_split(p_master%ext, p_master%nparts) )then
@@ -953,7 +813,6 @@ contains
         else
             call xsplit%execute( cline )
         endif
-        !call qsys_cleanup_iter
         call qscripts%generate_scripts(job_descr, p_master%ext, myq_descr)
         ! manage job scheduling
         call qscripts%schedule_jobs
@@ -965,7 +824,7 @@ contains
         endif
         ! termination
         call qsys_cleanup_iter
-        call simple_end('**** SIMPLE_RECVOL_INIT NORMAL STOP ****')
+        call simple_end('**** SIMPLE_RECVOL NORMAL STOP ****')
     end subroutine exec_recvol_distr
 
 end module simple_commander_distr_wflows

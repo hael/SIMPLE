@@ -32,6 +32,7 @@ contains
         ! ### QSYS PARAMETERS
         call self%env%push('qsys_partition',        '#SBATCH --partition')
         call self%env%push('qsys_qos',              '#SBATCH --qos')
+        call self%env%push('qsys_reservation',      '#SBATCH --reservation')
         call self%env%push('qsys_submit_cmd',       'sbatch')
         ! ### JOB PARAMETERS
         call self%env%push('job_name',              '#SBATCH --job-name')

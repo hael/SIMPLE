@@ -1,7 +1,5 @@
 program simple_test_units
 use simple_defs              ! singleton
-use simple_cuda_defs         ! cuda definitions
-use simple_cuda              ! cuda environment and shutdown
 use simple_testfuns          ! singleton
 use simple_rnd               ! singleton
 use simple_ctf,              only: test_ctf
@@ -25,21 +23,12 @@ use simple_jiffys,           only: simple_end
 use simple_ft_shsrch,        only: test_ft_shsrch
 use simple_ftexp_shsrch,     only: test_ftexp_shsrch
 use simple_unblur,           only: test_unblur
-use simple_timing
 implicit none
 character(8)          :: date
 character(len=STDLEN) :: folder
 character(len=300)    :: command
-integer               :: err=0
-call timestamp()
-! COMMENTED OUT BECAUSE WHEN COMPILING WITH DEBUG .EQ. YES =>
-! At line 61 of file simple_utils/common/simple_sorting.f90
-! Fortran runtime error: Index '0' of dimension 1 of array 'shell_sorted' below lower bound of 1
-! call start_Alltimers_cpu()
 call seed_rnd
 call date_and_time(date=date)
-call simple_cuda_init(err)
-if (err .ne. 0 ) write(*,*) 'cublas init failed'
 folder = './SIMPLE_UNIT_TEST'//date
 command = 'mkdir '//folder
 call system(command)
@@ -69,9 +58,6 @@ call test_testfuns
 call test_euler_shift
 call simple_test_fit_line
 call chdir('../')
-call stop_Alltimers_cpu()
-! shutting down the environment
-call simple_cuda_shutdown()
 call simple_end('**** SIMPLE_UNIT_TEST NORMAL STOP ****')
 
 contains

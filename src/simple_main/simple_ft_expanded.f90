@@ -2,10 +2,6 @@ module simple_ft_expanded
 use simple_image, only: image
 use simple_defs
 use simple_jiffys
-use simple_cuda_defs
-use simple_cuda
-use simple_timing
-use simple_deviceQuery_gpu
 implicit none
 
 public :: ft_expanded
@@ -317,73 +313,6 @@ contains
         r = calc_corr(r,sumasq*sumbsq)
     end function corr
 
-!     !>  \brief  is a correlation calculator
-!     function corr( self1, self2 ) result( r )
-!         use simple_math, only: csq, calc_corr
-!         class(ft_expanded), intent(in) :: self1, self2
-!         real     :: r,sumasq,sumbsq
-!         real(sp) :: r_gpu
-!         real(sp) :: alpha
-!         integer  :: vx,vy,vz
-!         integer  :: lda,ldb,ldc
-!         ! return code
-!         integer  :: rc = RC_SUCCESS
-!         ! function calls
-!         integer  :: get_polarft_corr_gpu_c
-!         ! initiliasing r to a non zero value, 1
-!         r_gpu = 1.0
-!         ! scaling factor alpha for the potential shifting
-!         alpha = 1.0
-!         ! setting up the volume values
-!         vx  = self1%lims(1,2) - self1%lims(1,1) + 1
-!         vy  = self1%lims(2,2) - self1%lims(2,1) + 1
-!         vz  = self1%lims(3,2) - self1%lims(3,1) + 1
-!         lda = self1%ldim(1)
-!         ldb = self1%ldim(2)
-!         ldc = self1%ldim(1)
-! #if defined (CUDA) && defined (MAGMA)
-!         if ( has_gpu .eqv. .true.)then
-!             if (use_gpu .eqv. .true. ) then
-!                 !r = calculator_cpu(self1, self2 )
-!                 !TODO: inserted, compiles, links and runs but needs to verify
-!                 !      result is 100% correctbe tested, logic works
-!                 !      using the simple_test_cartesian_corr.f90 tester code
-!                 rc = get_polarft_corr_gpu_c(self1%a_devD,       &!a_devD
-!                                         self1%s_carte,"F","N",  &!s_carte
-!                                         r_gpu,                  &
-!                                         self1%cmat,self2%cmat,  &!cmat1,cmat2
-!                                         vx,vy,vz,               &
-!                                         lda,ldb,ldc,alpha,      &
-!                                         self1%s_bench, self1%s_debug_gpu)
-!             else
-!                 r = calculator_cpu(self1, self2 )
-!             end if
-!         else
-!             !TODO: throw a warning message, to be common to gencorrs_all method
-!             r = calculator_cpu(self1, self2 )
-!         end if
-! #else
-!         !TODO: function must be checked for correctness
-!         r = calculator_cpu(self1, self2 )
-! #endif
-
-!         contains
-
-!             function calculator_cpu(self1, self2 ) result( r )
-!                 use simple_math, only: csq, calc_corr
-!                 class(ft_expanded), intent(in) :: self1, self2
-!                 real(sp) :: r,sumasq,sumbsq
-!                 ! corr is real part of the complex mult btw 1 and 2*
-!                 r = sum(real(self1%cmat*conjg(self2%cmat)))
-!                 ! normalisation terms
-!                 sumasq = sum(csq(self1%cmat))
-!                 sumbsq = sum(csq(self2%cmat))
-!                 ! finalise the correlation coefficient
-!                 r = calc_corr(r,sumasq*sumbsq)
-!             end function calculator_cpu
-
-!     end function corr
-
     !>  \brief  is a correlation calculator with origin shift of self2
     function corr_shifted( self1, self2, shvec ) result( r )
         use simple_math, only: csq, calc_corr
@@ -431,103 +360,6 @@ contains
             stop 'cannot correlate expanded_ft:s with different dims; ft_expanded::corr_shifted'
         endif ! end of if( self1.eqdims.self2 ) statement
     end function corr_shifted
-    
-    !>  \brief  is a correlation calculator with origin shift of self2
-!     function corr_shifted( self1, self2, shvec ) result( r )
-!         use simple_math, only: csq, calc_corr
-!         class(ft_expanded), intent(in) :: self1, self2 !< instances
-!         real,               intent(in) :: shvec(3)
-!         complex, allocatable :: shmat(:,:,:), cmat2sh(:,:,:)
-!         real     :: r,sumasq,sumbsq,arg,shvec_here(3)
-!         integer  :: alloc_stat,hind,kind,lind
-!         real(sp) :: rs_gpu
-!         real(sp) :: alpha
-!         integer  :: vx,vy,vz    ! volume values
-!         integer  :: lda,ldb,ldc ! leading order for the matrices
-!         ! return code
-!         integer :: rc = RC_SUCCESS
-!         ! function calls
-!         integer :: get_carte2d_ftext_corr_gpu_c
-!         if( self1.eqdims.self2 )then
-!             allocate(   shmat( self1%flims(1,1):self1%flims(1,2),   &
-!                                self1%flims(2,1):self1%flims(2,2),   &
-!                                self1%flims(3,1):self1%flims(3,2)  ),&
-!                       cmat2sh( self1%flims(1,1):self1%flims(1,2),   &
-!                                self1%flims(2,1):self1%flims(2,2),   &
-!                                self1%flims(3,1):self1%flims(3,2)),  &
-!                                stat=alloc_stat                      )
-!             call alloc_err("In: corr_shifted; simple_ft_expanded", alloc_stat)
-!             shvec_here = shvec
-!             if( self1%ldim(3) == 1 ) shvec_here(3) = 0.
-!             call start_timer_cpu("shifted_a")
-!             !$omp parallel do schedule(auto) default(shared) private(hind,kind,lind,arg)
-!             do hind=self1%flims(1,1),self1%flims(1,2)
-!                 do kind=self1%flims(2,1),self1%flims(2,2)
-!                     do lind=self1%flims(3,1),self1%flims(3,2)
-!                         arg = sum(shvec_here(:)*transfmat(hind,kind,lind,:))
-!                         shmat(hind,kind,lind) = cmplx(cos(arg),sin(arg))
-!                     end do
-!                 end do
-!             end do
-!             !$omp end parallel do
-!             call stop_timer_cpu("shifted_a")
-!             ! initiliasing r to a non zero value, 1
-!             rs_gpu = 1.0
-!             ! scaling factor alpha for the potential shifting
-!             alpha = 1.0
-!             ! setting up the volume values
-!             vx  = self1%lims(1,2) - self1%lims(1,1) + 1
-!             vy  = self1%lims(2,2) - self1%lims(2,1) + 1
-!             vz  = self1%lims(3,2) - self1%lims(3,1) + 1
-!             lda = self1%ldim(1)
-!             ldb = self1%ldim(2)
-!             ldc = self1%ldim(1)
-! #if defined (CUDA) && defined (MAGMA)
-!             if( has_gpu .eqv. .true.)then
-!                 if( use_gpu .eqv. .true. ) then
-!                     rc = get_carte2d_ftext_corr_gpu_c(self1%a_devD,           &!a_devD
-!                                                       self1%s_carte,"C","N",  &!s_carte2
-!                                                       rs_gpu, shmat,          &        
-!                                                       self1%cmat,self2%cmat,  &!cmat1,cmat2
-!                                                       vx,vy,vz,               &
-!                                                       lda,ldb,ldc,alpha,      &
-!                                                       self1%s_bench, self1%s_debug_gpu)
-!                 else
-!                     r = calculator_shifted_cpu()
-!                 end if
-!             else
-!                 r = calculator_shifted_cpu()
-!             end if
-! #else
-!             r = calculator_shifted_cpu()
-! #endif
-!             deallocate(shmat,cmat2sh)
-!         else
-!             write(*,*) 'self1 flims: ', self1%flims(1,1), self1%flims(1,2), self1%flims(2,1),&
-!             self1%flims(2,2), self1%flims(3,1), self1%flims(3,2)
-!             write(*,*) 'self2 flims: ', self2%flims(1,1), self2%flims(1,2), self2%flims(2,1),&
-!             self2%flims(2,2), self2%flims(3,1), self2%flims(3,2)
-!             stop 'cannot correlate expanded_ft:s with different dims; ft_expanded::corr_shifted'
-!         endif ! end of if( self1.eqdims.self2 ) statement
-        
-!         contains
-        
-!             !>  \brief  calculator
-!             function calculator_shifted_cpu() result( r )
-!                 use simple_math, only: csq, calc_corr
-!                 real(sp) :: r, sumasq, sumbsq
-!                 ! shift self2
-!                 cmat2sh = self2%cmat*shmat
-!                 ! corr is real part of the complex mult btw 1 and 2*
-!                 r      = sum(real(self1%cmat*conjg(cmat2sh)))
-!                 ! normalisation terms
-!                 sumasq = sum(csq(self1%cmat))
-!                 sumbsq = sum(csq(cmat2sh))
-!                 ! finalise the correlation coefficient
-!                 r      = calc_corr(r,sumasq*sumbsq)
-!             end function calculator_shifted_cpu
-
-!     end function corr_shifted
     
     ! DESTRUCTOR
 

@@ -11,9 +11,6 @@
 module simple_commander_rec
 use simple_defs             ! singleton
 use simple_jiffys           ! singleton
-use simple_timing           ! singleton
-use simple_cuda             ! singleton
-use simple_cuda_defs        ! singleton
 use simple_hadamard_common  ! singleton
 use simple_cmdline,         only: cmdline
 use simple_params,          only: params
@@ -58,6 +55,7 @@ contains
         call b%build_general_tbox(p, cline) ! general objects built
         call b%build_eo_rec_tbox(p)         ! eo_reconstruction objs built
         ! setup shellweights if needed
+        doshellweight = .false.
         if( p%shellw .eq. 'yes' ) call setup_shellweights(b, p, doshellweight, wmat)
         if( doshellweight )then
             call exec_eorec(b, p, cline, wmat=wmat)
@@ -158,6 +156,7 @@ contains
         call b%build_general_tbox(p, cline) ! general objects built
         call b%build_rec_tbox(p)            ! reconstruction objects built
         ! setup shellweights if needed
+         doshellweight = .false.
         if( p%shellw .eq. 'yes' ) call setup_shellweights(b, p, doshellweight, wmat)
         if( doshellweight )then
             call exec_rec(b, p, cline, wmat=wmat)

@@ -13,8 +13,6 @@
 !
 module simple_build
 use simple_defs              ! singleton
-use simple_cuda_defs         ! singleton
-use simple_cuda              ! singleton
 use simple_jiffys,           ! singleton
 use simple_cmdline,          only: cmdline
 use simple_comlin,           only: comlin
@@ -32,11 +30,6 @@ use simple_ctf,              only: ctf
 use simple_polarft,          only: polarft
 use simple_opt_spec,         only: opt_spec
 use simple_convergence,      only: convergence
-! CPU class for system call
-use simple_systemQuery_cpu
-! GPU class for device call
-use simple_deviceQuery_gpu
-
 implicit none
 
 public :: build, test_build
@@ -46,12 +39,6 @@ logical :: debug=.false.
 
 type build
     ! GENERAL TOOLBOX
-    type(systemQuery_cpu)               :: sysQ               !< CPU system query type
-    type(systemDetails)                 :: hstD               !< CPU system details type
-    type(deviceQuery_gpu)               :: devQ               !< GPU system query type
-    type(deviceDetails)                 :: devD               !< GPU system details type
-    type(deviceDetails),allocatable     :: a_devD(:)          !< array of devDs for multiple devices
-    type(t_bench)                       :: s_bench            !< benchmark control logicals data structure
     type(oris)                          :: a, e               !< aligndata, discrete space
     type(sym)                           :: se                 !< symmetry elements object
     type(ctf)                           :: tfun               !< contrast transfer function object
@@ -124,8 +111,6 @@ type build
     procedure                           :: kill_cont3D_tbox
     procedure                           :: read_features
     procedure                           :: read_nnmat
-    ! CHECKERS
-    procedure                           :: builder_Sanity_check_cpu
     procedure, private                  :: raise_hard_ctf_exception
 end type build
 
@@ -144,52 +129,7 @@ contains
         integer                       :: alloc_stat, lfny
         real                          :: slask(3)
         logical                       :: err, ddo3d
-        ! local variables
-        integer                       :: ndev
-        integer                       :: rc !return code
-        ! indexers
-        integer                       :: idev
-        ! counters
-        integer                       :: counter
-        ! function calls
-        integer :: get_dev_count_c
-        integer :: print_s_devD_struct_c
         call self%kill_general_tbox
-        if( debug ) write(*,'(a)') 'inside build_general_tbox'
-        ! flipping use_gpu logic: true/false according to user input
-        if( p%use_gpu .eq. 'yes' ) use_gpu = .true.
-        write(*,'(A,x,A3)') '>>> USER REQUESTED GPU: ', p%use_gpu
-        ! insertion of the data structure for the CPU system
-        write(*,'(A)') '>>> PREPARING THE DATA STRUCTURE IN BUILDER'
-        write(*,*)'************************************************************'
-        write(*,*)' System fills in object(sysQ) and the data structure(hstD)  '
-        write(*,*)'************************************************************'
-        call self%sysQ%new_systemQuery_cpu(self%hstD)
-        if (debug) call self%builder_Sanity_check_cpu(self%sysQ, self%hstD)
-        !GPU insertion of the data structure start here
-#if defined (CUDA)
-        rc   = get_dev_count_c(self%devD)
-        ndev = self%devD%ndev
-        if( allocated(self%a_devD) )then
-           write(*,*) "self%a_devD(0:ndev-1)) already allocated, moving on"
-        else
-           allocate(self%a_devD(0:ndev-1))
-        end if
-        call simple_cuda_get_a_devd(ndev,self%devQ,self%devD,self%a_devD)
-        if( debug ) write(*,*) "in bulder before logic check has_gpu: ", has_gpu
-        call simple_cuda_deviceQuery_logic(counter,ndev,self%a_devD)
-        if( counter /= 0 ) rc = print_s_devD_struct_c(self%a_devD)
-        if( counter == 0 ) write(*,*) "No GPU devices found, has_gpu: ", has_gpu
-        if( debug ) write(*,*) "in bulder after logic check has_gpu: ", has_gpu
-#endif        
-        !BenchMarking logical switcher and data structure filling from -DBENCH
-#if defined (BENCH)
-        ibench = .true.
-        ibench_write = .true.
-        if (ibench) self%s_bench%bench_i = 1
-        if (ibench_write) self%s_bench%bench_write_i = 1
-#endif
-        !GPU insertion of the data structure ends here
         ddo3d = .true.
         if( present(do3d) ) ddo3d = do3d
         ! seed the random number generator
@@ -311,8 +251,6 @@ contains
     subroutine kill_general_tbox( self )
         class(build), intent(inout)  :: self
         if( self%general_tbox_exists )then
-            call self%sysQ%kill_systemQuery_cpu
-            if( allocated(self%a_devD) ) deallocate(self%a_devD)
             call self%se%kill
             call self%a%kill
             call self%e%kill
@@ -667,41 +605,6 @@ contains
         endif
         close(funit)
     end subroutine read_nnmat
- 
-    ! CHECKERS
-    
-    subroutine builder_Sanity_check_cpu(self,sysQ, hstD)
-        use simple_defs
-        use greeting_version
-        use simple_systemQuery_cpu
-        class(build), intent(inout) :: self
-        type(systemQuery_cpu)       :: sysQ
-        type(systemDetails)         :: hstD
-        integer                     :: nCPU_cores
-        integer*8                   :: h_TotalMemSize
-        integer*8                   :: h_AvailMemSize
-        write(*,*)'                                                                  '
-        write(*,*)'******************************************************************'
-        write(*,*)'  Sanity checks on the object(sysQ) and the data structure(hstD)  '
-        write(*,*)'******************************************************************'
-        nCPU_cores = sysQ%get_ncpu_cores()
-        h_TotalMemSize = sysQ%get_SysTotalMem_size()
-        h_AvailMemSize = sysQ%get_SysAvailMem_size()
-        write(*,*)'Number of cores on system     (sysQ):',nCPU_cores
-        write(*,*)'Number of cores               (hstD):',hstD%nCPUcores
-        if ( nCPU_cores /= hstD%nCPUcores) call sysQ%get_warning_dataStruct()
-        write(*,*)'Total Mem on system           (sysQ):',h_TotalMemSize
-        write(*,*)'Total Mem on system           (hstD):',hstD%mem_Size
-        if(h_TotalMemSize /= hstD%mem_Size)call sysQ%get_warning_dataStruct()
-        write(*,*)'Total Available Mem on system (sysQ):',h_AvailMemSize
-#if defined (MACOSX)
-        write(*,*)'Total Mem on system           (hstD):',hstD%mem_User
-        if(h_AvailMemSize /= hstD%mem_User)call sysQ%get_warning_dataStruct()
-#elif defined (LINUX)
-        write(*,*)'Total Mem on system           (hstD):',hstD%avail_Mem
-        if(h_AvailMemSize /= hstD%avail_Mem)call sysQ%get_warning_dataStruct()
-#endif
-    end subroutine builder_Sanity_check_cpu
     
     !> \brief  for fall-over if CTF params are missing
     subroutine raise_hard_ctf_exception( self, p )

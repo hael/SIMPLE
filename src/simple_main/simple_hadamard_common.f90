@@ -21,7 +21,6 @@ interface prep2Dref
     module procedure prep2Dref_2
 end interface
 
-
 logical, parameter :: debug=.false.
 real, parameter    :: SHTHRESH=0.0001
 real               :: res, dfx_prev=0., dfy_prev=0., angast_prev=0.
@@ -142,17 +141,30 @@ contains
         endif
         doshellweight = .false.
         if( p%l_distr_exec )then
-            allocate(files_exist(p%nparts))
-            do ipart=1,p%nparts
-                files_exist(ipart ) = file_exists('shellweights_part'//int2str_pad(ipart,p%numlen)//'.bin')
-            end do
-            if( all(files_exist))then
-                wmat = merge_rmat_from_parts(p%nptcls, p%nparts, filtsz, 'shellweights_part')
-                call normalise_shellweights(wmat)
-                doshellweight = .true.
+            call wmat_from_single_file
+            if( doshellweight )then
+                ! we are done
+                return
+            else
+                ! we may need to merge partial shellweight files
+                allocate( files_exist(p%nparts) )
+                do ipart=1,p%nparts
+                    files_exist(ipart) = file_exists('shellweights_part'//int2str_pad(ipart,p%numlen)//'.bin')
+                end do
+                if( all(files_exist) )then
+                    wmat = merge_rmat_from_parts(p%nptcls, p%nparts, filtsz, 'shellweights_part')
+                    call normalise_shellweights(wmat)
+                    doshellweight = .true.
+                endif
+                deallocate(files_exist)
             endif
-            deallocate(files_exist)
         else
+            call wmat_from_single_file
+        endif
+
+      contains
+
+        subroutine wmat_from_single_file
             if( file_exists('shellweights.bin') )then    
                 allocate( wmat(p%nptcls,filtsz), stat=alloc_stat)
                 filnum = get_fileunit()
@@ -168,7 +180,8 @@ contains
                 call normalise_shellweights(wmat)
                 doshellweight = .true.
             endif
-        endif
+        end subroutine wmat_from_single_file
+
     end subroutine setup_shellweights
 
     !>  \brief  grids one particle image to the volume
@@ -360,7 +373,7 @@ contains
         integer,        intent(in)    :: icls
         real :: xyz(3)
         ! center the reference and update the corresponding class parameters
-        xyz    = ref%center(p%cenlp, 'no', p%msk)
+        xyz = ref%center(p%cenlp, 'no', p%msk)
         call os%add_shift2class(icls, -xyz(1:2))
         ! normalise
         call ref%norm

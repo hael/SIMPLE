@@ -5,10 +5,10 @@ use simple_cmdline, only: cmdline
 implicit none
 
 ! origin shift related parameters
-real, parameter :: MSK_FRAC     = 0.06
-real, parameter :: MINSHIFT     = 2.0
-real, parameter :: MAXSHIFT     = 6.0
-real, parameter :: FRAC_SH_LIM  = 90.0
+real, parameter :: MSK_FRAC    = 0.06
+real, parameter :: MINSHIFT    = 2.0
+real, parameter :: MAXSHIFT    = 6.0
+real, parameter :: FRAC_SH_LIM = 90.0
 ! convergence related parameters
 real, parameter :: MI_CLASS_LIM_3D = 0.80
 real, parameter :: MI_CLASS_LIM_2D = 0.98

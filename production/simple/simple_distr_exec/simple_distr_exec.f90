@@ -23,7 +23,7 @@ type(prime3D_init_distr_commander)       :: xprime3D_init_distr
 type(prime3D_distr_commander)            :: xprime3D_distr
 type(prime2D_init_distr_commander)       :: xprime2D_init_distr
 type(prime2D_distr_commander)            :: xprime2D_distr
-type(classrefine_distr_commander)        :: xclassrefine_distr
+! type(classrefine_distr_commander)        :: xclassrefine_distr
 type(find_nnimgs_distr_commander)        :: xfind_nnimgs_distr
 ! OTHER DECLARATIONS
 integer, parameter    :: MAXNKEYS=100, KEYLEN=32
@@ -108,7 +108,7 @@ select case(prg)
         ! execute
         call xunblur_tomo_movies_distr%execute(cline)
 
-    ! SHELLWEIGHT3D
+    ! PRIME3D
 
     case('shellweight3D')
         !==Program shellweight3D
@@ -146,9 +146,6 @@ select case(prg)
         call xshellweight3D_distr%execute(cline)
         ! set defaults
         call cline%set('outfile', 'shellweight3D_doc.txt')
-
-    ! PRIME3D_INIT
-
     case('prime3D_init')
         !==Program prime3D_init
         !
@@ -186,9 +183,6 @@ select case(prg)
         if( .not. cline%defined('nspace') ) call cline%set('nspace', 1000.)
         ! execute
         call xprime3D_init_distr%execute( cline )
-
-   ! PRIME3D
-
     case('prime3D')
         !==Program prime3D
         !
@@ -363,42 +357,6 @@ select case(prg)
         if( .not. cline%defined('edge')   ) call cline%set('edge',   20.)
         ! execute
         call xprime2D_distr%execute(cline)
-    case( 'classrefine' )
-        !==Program classrefine
-        !
-        ! <classrefine/begin> is a program for multi-resolution within class refinement with validation. 
-        ! Output is the refined class average and a doc with updated parameters. <classrefine/end>
-        !
-        ! set required keys
-        keys_required(1)  = 'stk'
-        keys_required(2)  = 'refs'
-        keys_required(3)  = 'smpd'
-        keys_required(4)  = 'msk'
-        keys_required(5)  = 'oritab'
-        keys_required(6)  = 'trs'
-        keys_required(7)  = 'nthr'
-        keys_required(8)  = 'ncunits'
-        ! set optional keys
-        keys_optional(1)  = 'minp'
-        keys_optional(2)  = 'hp'
-        keys_optional(3)  = 'automsk'
-        keys_optional(4)  = 'amsklp'
-        keys_optional(5)  = 'inner'
-        keys_optional(6)  = 'width'
-        ! set optional CTF-related keys
-        keys_optional(7)  = 'ctf'
-        keys_optional(8)  = 'kv'
-        keys_optional(9)  = 'cs'
-        keys_optional(10) = 'fraca'
-        keys_optional(11) = 'deftab'
-        ! parse command line
-        call cline%parse(keys_required(:8), keys_optional(:11))
-        ! set defaults
-        if( .not. cline%defined('amsklp') ) call cline%set('amsklp', 25.)
-        if( .not. cline%defined('edge')   ) call cline%set('edge',   20.)
-        if( .not. cline%defined('minp')   ) call cline%set('minp',   20.)
-        ! execute
-        call xclassrefine_distr%execute(cline)
     case( 'find_nnimgs' )
         !==Program find_nnimgs
         !
@@ -442,14 +400,15 @@ select case(prg)
         keys_optional(7)  = 'state'
         keys_optional(8)  = 'eo'
         keys_optional(9)  = 'shellw'
+        keys_required(10) = 'vol1'
         ! set optional CTF-related keys
-        keys_optional(10) = 'ctf'
-        keys_optional(11) = 'kv'
-        keys_optional(12) = 'cs'
-        keys_optional(13) = 'fraca'
-        keys_optional(14) = 'deftab'
+        keys_optional(11) = 'ctf'
+        keys_optional(12) = 'kv'
+        keys_optional(13) = 'cs'
+        keys_optional(14) = 'fraca'
+        keys_optional(15) = 'deftab'
         ! parse command line
-        call cline%parse(keys_required(:6), keys_optional(:14))
+        call cline%parse(keys_required(:6), keys_optional(:15))
         ! set defaults
         if( .not. cline%defined('trs') ) call cline%set('trs', 5.) ! to assure that shifts are being used
         if( .not. cline%defined('eo') ) call cline%set('eo', 'no')

@@ -11,9 +11,6 @@
 module simple_commander_imgproc
 use simple_defs            ! singleton
 use simple_jiffys          ! singleton
-use simple_timing          ! singleton
-use simple_cuda            ! singleton
-use simple_cuda_defs       ! singleton
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
@@ -307,6 +304,7 @@ contains
         call b%build_general_tbox(p, cline)   ! general objects built
         if( cline%defined('stk') )then
             ! 2D
+            if( .not.file_exists(p%stk) )stop 'Cannot find input stack (stk)'
             if( p%phrand .eq. 'no')then
                 ! Band pass
                 if( cline%defined('lp') .and. cline%defined('hp') )then
@@ -325,7 +323,7 @@ contains
             endif
         else
             ! 3D
-            if( .not.file_exists(p%vols(1)) )stop 'Cannot find input volume'
+            if( .not.file_exists(p%vols(1)) )stop 'Cannot find input volume (vol1)'
             call b%vol%read(p%vols(1))
             if( p%phrand.eq.'no')then
                 if( cline%defined('bfac') )then

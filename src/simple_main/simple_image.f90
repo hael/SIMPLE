@@ -7,7 +7,6 @@ use gnufor2          ! singleton
 use simple_rnd       ! singleton
 use simple_stat      ! singleton
 use simple_defs      ! singleton
-use simple_cuda_defs ! singleton
 implicit none
 
 public :: image, test_image
@@ -255,11 +254,11 @@ contains
 
     !>  \brief  is a constructor
     function constructor( ldim, smpd, imgkind, backgr ) result( self ) !(FAILS W PRESENT GFORTRAN)
-        integer, intent(in)                    :: ldim(:)
-        real, intent(in)                       :: smpd
-        character(len=*), intent(in), optional :: imgkind
-        real, intent(in), optional             :: backgr
-        type(image)                            :: self
+        integer,                    intent(in) :: ldim(:)
+        real,                       intent(in) :: smpd
+        character(len=*), optional, intent(in) :: imgkind
+        real,             optional, intent(in) :: backgr
+        type(image) :: self
         call self%new( ldim, smpd, imgkind, backgr )
     end function constructor
 
@@ -268,11 +267,11 @@ contains
     ! have to have a type-bound constructor here because we get a sigbus error with the function construct
     ! "program received signal sigbus: access to an undefined portion of a memory object."
     ! this seems to be related to how the cstyle-allocated matrix is referenced by the gfortran compiler
-        class(image), intent(inout)            :: self
-        integer, intent(in)                    :: ldim(3)
-        real, intent(in)                       :: smpd
-        real, intent(in), optional             :: backgr
-        character(len=*), intent(in), optional :: imgkind
+        class(image),               intent(inout) :: self
+        integer,                    intent(in)    :: ldim(3)
+        real,                       intent(in)    :: smpd
+        real,             optional, intent(in)    :: backgr
+        character(len=*), optional, intent(in)    :: imgkind
         integer(kind=c_int) :: rc
         integer :: i
         call self%kill
@@ -388,12 +387,12 @@ contains
     
     !>  \brief  calculates the average powerspectrum over a micrograph
     function mic2spec( self, box, speckind ) result( img_out )
-        class(image), intent(inout)  :: self
-        integer, intent(in)          :: box
-        character(len=*), intent(in) :: speckind
-        type(image)                  :: img_out, tmp, tmp2
-        integer                      :: xind, yind, cnt
-        logical                      :: didft
+        class(image),     intent(inout) :: self
+        integer,          intent(in)    :: box
+        character(len=*), intent(in)    :: speckind
+        type(image) :: img_out, tmp, tmp2
+        integer     :: xind, yind, cnt
+        logical     :: didft
         if( self%ldim(3) /= 1 ) stop 'only for 2D images; mic2spec; simple_image'
         if( self%ldim(1) <= box .or. self%ldim(2) <= box )then
             stop 'cannot boxconvolute using a box larger than the image; mic2spec; simple_image'
@@ -423,11 +422,11 @@ contains
     
     !>  \brief  calculates the average powerspectrum over a micrograph
     function boxconv( self, box ) result( img_out )
-        class(image), intent(inout)  :: self
-        integer, intent(in)          :: box
-        type(image)                  :: img_out, tmp
-        integer                      :: xind, yind, cnt
-        logical                      :: didft
+        class(image), intent(inout) :: self
+        integer,      intent(in)    :: box
+        type(image) :: img_out, tmp
+        integer     :: xind, yind, cnt
+        logical     :: didft
         if( self%ldim(3) /= 1 ) stop 'only for 2D images; boxconvolute; simple_image'
         if( self%ldim(1) <= box .or. self%ldim(2) <= box )then
             stop 'cannot boxconvolute using a box larger than the image; boxconvolute; simple_image'
@@ -504,8 +503,8 @@ contains
         use simple_math,   only: cyci_1d
         use simple_jiffys, only: alloc_err
         class(image), intent(inout) :: self
-        integer, intent(in)         :: i, j, k, winsz
-        real, allocatable           :: pixels(:)
+        integer,      intent(in)    :: i, j, k, winsz
+        real, allocatable :: pixels(:)
         integer :: s, ss, t, tt, u, uu, cnt, npix, alloc_stat
         if( self%is_ft() ) stop 'only 4 real images; win2arr; simple_image'
         if( self%is_3d() )then
@@ -537,9 +536,9 @@ contains
     !>  \brief  extracts the pixels under the mask
     function extr_pixels( self, mskimg ) result( pixels )
         use simple_jiffys, only: alloc_err
-        class(image), intent(in)       :: self
-        class(image), intent(in)       :: mskimg
-        real, allocatable              :: pixels(:)
+        class(image), intent(in) :: self
+        class(image), intent(in) :: mskimg
+        real, allocatable :: pixels(:)
         if( self%is_ft() ) stop 'only 4 real images; extr_pixels; simple_image'
         if( self.eqdims.mskimg )then
             pixels = pack( self%rmat, mskimg%rmat>0.5 )
@@ -550,9 +549,9 @@ contains
 
     !>  \brief  extracts a corner of a volume with size box
     subroutine corner( self_in, box, self_out )
-        class(image), intent(in)   :: self_in
-        integer, intent(in)        :: box
-        type(image), intent(inout) :: self_out
+        class(image), intent(in)    :: self_in
+        integer,      intent(in)    :: box
+        type(image),  intent(inout) :: self_out
         if( self_in%ldim(3) <= 1 ) stop 'only 4 3D images; corner; simple_image'
         if( self_in%is_ft() )      stop 'only 4 real images; corner; simple_image'
         call self_out%new([box,box,box], self_in%smpd)
@@ -572,14 +571,14 @@ contains
         character(len=1), optional, intent(in)    :: formatchar
         logical,          optional, intent(in)    :: readhead
         character(len=*), optional, intent(in)    :: rwaction
-        type(imgfile)               :: ioimg
-        character(len=1)            :: form
-        integer                     :: ldim(3), iform, first_slice, mode
-        integer                     :: last_slice, ii, alloc_stat
-        real                        :: smpd
-        logical                     :: isvol, err, iisxfel, debug=.false.
-        real(dp), allocatable       :: tmpmat1(:,:,:)
-        real(sp), allocatable       :: tmpmat2(:,:,:)
+        type(imgfile)         :: ioimg
+        character(len=1)      :: form
+        integer               :: ldim(3), iform, first_slice, mode
+        integer               :: last_slice, ii, alloc_stat
+        real                  :: smpd
+        logical               :: isvol, err, iisxfel, debug=.false.
+        real(dp), allocatable :: tmpmat1(:,:,:)
+        real(sp), allocatable :: tmpmat2(:,:,:)
         if( self%existence )then
             if( .not. file_exists(fname) )then
                 stop 'The file you are trying to read from does not exists; read; simple_image'
@@ -731,11 +730,11 @@ contains
 
     !>  \brief  for writing any kind of images to stack or volumes to volume files
     subroutine write( self, fname, i, del_if_exists, formatchar )
-        class(image), intent(inout)            :: self
-        character(len=*), intent(in)           :: fname
-        integer, intent(in), optional          :: i
-        logical, intent(in), optional          :: del_if_exists
-        character(len=1), intent(in), optional :: formatchar
+        class(image),               intent(inout) :: self
+        character(len=*),           intent(in)    :: fname
+        integer,          optional, intent(in)    :: i
+        logical,          optional, intent(in)    :: del_if_exists
+        character(len=1), optional, intent(in)    :: formatchar
         type(image) :: tmpimg
         if( self%imgkind .eq. 'xfel' )then
              call self%ft2img('real', tmpimg)
@@ -750,11 +749,11 @@ contains
     subroutine write_emkind( self, fname, i, del_if_exists, formatchar )
         use simple_imgfile, only: imgfile
         use simple_jiffys,  only: fname2format
-        class(image), intent(inout)            :: self
-        character(len=*), intent(in)           :: fname
-        integer, intent(in), optional          :: i
-        logical, intent(in), optional          :: del_if_exists
-        character(len=1), intent(in), optional :: formatchar
+        class(image),               intent(inout) :: self
+        character(len=*),           intent(in)    :: fname
+        integer,          optional, intent(in)    :: i
+        logical,          optional, intent(in)    :: del_if_exists
+        character(len=1), optional, intent(in)    :: formatchar
         type(imgfile)     :: ioimg
         character(len=1)  :: form
         integer           :: first_slice, last_slice, iform, ii
@@ -909,7 +908,7 @@ contains
     !> \brief  cyclic index generation
     function cyci( self, logi ) result( inds )
         class(image), intent(in) :: self
-        integer, intent(in)      :: logi(3)
+        integer,      intent(in) :: logi(3)
         integer                  :: inds(3), lims(3,2)
         if( self%is_ft() )then
             lims = self%loop_lims(3)
@@ -926,8 +925,8 @@ contains
 
     !>  \brief  is a getter
     function get( self, logi ) result( val )
-        class(image), intent(inout)   :: self
-        integer, intent(in)           :: logi(3)
+        class(image), intent(inout) :: self
+        integer,      intent(in)    :: logi(3)
         real :: val
         if( self%imgkind .eq. 'xfel' ) stop 'rmat not allocated for xfel-kind images; simple_image::get'
         if( logi(1) > self%ldim(1) .or. logi(1) < 1 )then
@@ -958,8 +957,8 @@ contains
     !>  \brief  is a setter
     subroutine set( self, logi, val )
         class(image), intent(inout) :: self
-        integer, intent(in)         :: logi(3)
-        real, intent(in)            ::  val
+        integer,      intent(in)    :: logi(3)
+        real,         intent(in)    ::  val
         if( self%imgkind .eq. 'xfel' ) stop 'rmat not allocated for xfel-kind images; simple_image::set'
         if( logi(1) <= self%ldim(1) .and. logi(1) >= 1 .and. logi(2) <= self%ldim(2)&
         .and. logi(2) >= 1 .and. logi(3) <= self%ldim(3) .and. logi(3) >= 1 )then
@@ -970,14 +969,14 @@ contains
     !>  \brief  for setting ldim
     subroutine set_ldim( self, ldim )
         class(image), intent(inout) :: self
-        integer, intent(in)         :: ldim(3)
+        integer,      intent(in)    :: ldim(3)
         self%ldim = ldim
     end subroutine set_ldim
 
     !>  \brief is for getting a slice from a volume
     function get_slice( self3d, slice ) result( self2d )
         class(image), intent(in) :: self3d
-        integer, intent(in)      :: slice
+        integer,      intent(in) :: slice
         type(image)              :: self2d
         if( self3d%imgkind .eq. 'xfel' .or. self2d%imgkind .eq. 'xfel' )&
         stop 'not intended for&xfel-kind images; simple_image::get_slice'
@@ -988,7 +987,7 @@ contains
     !>  \brief is for putting a slice into a volume
     subroutine set_slice( self3d, slice, self2d )
         class(image), intent(in)    :: self2d
-        integer, intent(in)         :: slice
+        integer,      intent(in)    :: slice
         class(image), intent(inout) :: self3d
         if( self3d%imgkind .eq. 'xfel' .or. self2d%imgkind .eq. 'xfel' )&
         stop 'not intended for&xfel-kind images; simple_image::set_slice'
@@ -998,7 +997,7 @@ contains
     !>  \brief is for getting the number of pixels for serialization
     function get_npix( self, mskrad ) result( npix )
         class(image), intent(in) :: self
-        real, intent(in)         :: mskrad
+        real,         intent(in) :: mskrad
         real                     :: ci, cj, ck, e
         integer                  :: npix, i, j, k
         npix = 0
@@ -1027,7 +1026,7 @@ contains
     !>  \brief  is a getter
     pure function get_lfny( self, which ) result( fnyl )
         class(image), intent(in) :: self
-        integer, intent(in) :: which
+        integer,      intent(in) :: which
         integer :: fnyl
         fnyl = self%fit%get_lfny(which)
     end function get_lfny
@@ -1035,7 +1034,7 @@ contains
     !>  \brief  is a getter
     pure function get_lhp( self, which ) result( hpl )
         class(image), intent(in) :: self
-        integer, intent(in) :: which
+        integer,      intent(in) :: which
         integer :: hpl
         hpl = self%fit%get_lhp(which)
     end function get_lhp
@@ -1043,7 +1042,7 @@ contains
     !>  \brief  is a getter
     pure function get_lp( self, ind ) result( lp )
         class(image), intent(in) :: self
-        integer, intent(in)      :: ind
+        integer,      intent(in) :: ind
         real                     :: lp
         lp = self%fit%get_lp(1, ind)
     end function get_lp
@@ -1051,7 +1050,7 @@ contains
     !>  \brief  is a getter
     pure function get_spat_freq( self, ind ) result( spat_freq )
         class(image), intent(in) :: self
-        integer, intent(in)      :: ind
+        integer,      intent(in) :: ind
         real                     :: spat_freq
         spat_freq = self%fit%get_spat_freq(1, ind)
     end function get_spat_freq
@@ -1059,7 +1058,7 @@ contains
     !>  \brief  is a getter
     pure function get_find( self, res ) result( ind )
         class(image), intent(in) :: self
-        real, intent(in)         :: res
+        real,         intent(in) :: res
         integer :: ind
         ind = self%fit%get_find(1, res)
     end function get_find
@@ -1067,7 +1066,7 @@ contains
     !>  \brief  is a getter
     function get_clin_lims( self, lp_dyn ) result( lims )
         class(image), intent(in) :: self
-        real, intent(in)         :: lp_dyn
+        real,         intent(in) :: lp_dyn
         integer                  :: lims(2)
         lims = self%fit%get_clin_lims(lp_dyn)
     end function get_clin_lims
@@ -1088,9 +1087,9 @@ contains
 
     !>  \brief is for packing/unpacking a serialized image vector for pca analysis
     subroutine serialize( self, pcavec, mskrad )
-        class(image), intent(inout)      :: self
-        real, intent(inout), allocatable :: pcavec(:)
-        real, intent(in), optional       :: mskrad
+        class(image),      intent(inout) :: self
+        real, allocatable, intent(inout) :: pcavec(:)
+        real, optional,    intent(in)    :: mskrad
         integer                          :: i, j, k, npix, alloc_stat
         real                             :: ci, cj, ck, e
         logical                          :: pack, usemsk = .false.
@@ -1124,7 +1123,6 @@ contains
                             e = hardedge(ci,cj,mskrad)
                         endif
                     endif
-                    !if( e > 0.5 )then
                     if( (e>0.5).or.(.not.usemsk) )then
                         npix = npix+1
                         if( pack )then
@@ -1143,11 +1141,11 @@ contains
 
     !>  \brief  is for packing/unpacking a serialized image vector for convolutional pca analysis
     subroutine winserialize( self, coord, winsz, pcavec )
-        class(image), intent(inout)      :: self
-        real, intent(inout), allocatable :: pcavec(:)
-        integer, intent(in)              :: coord(:), winsz
-        integer                          :: i, j, k, cnt, npix, alloc_stat
-        logical                          :: pack
+        class(image),      intent(inout) :: self
+        real, allocatable, intent(inout) :: pcavec(:)
+        integer,           intent(in)    :: coord(:), winsz
+        integer :: i, j, k, cnt, npix, alloc_stat
+        logical :: pack
         if( self%ft ) stop 'ERROR, winserialization not yet implemented for Fourier transforms; winserialize; simple_image'
         if( self%is_2d() )then
             npix = winsz**2
@@ -1228,10 +1226,10 @@ contains
 
     !>  \brief  for getting a Fourier component from the compact representation
     function get_fcomp( self, logi, phys_in, phys_out ) result( comp )
-        class(image), intent(in)       :: self
-        integer, intent(in)            :: logi(3)
-        integer, intent(in), optional  :: phys_in(3)
-        integer, intent(out), optional :: phys_out(3)
+        class(image),      intent(in)  :: self
+        integer,           intent(in)  :: logi(3)
+        integer, optional, intent(in)  :: phys_in(3)
+        integer, optional, intent(out) :: phys_out(3)
         integer                        :: phys(3)
         complex                        :: comp
         if( .not. self%ft ) stop 'cannot get Fourier component from real image! get_fcomp; simple_image'
@@ -1249,12 +1247,12 @@ contains
 
     !>  \brief  for setting a Fourier component in the compact representation
     subroutine set_fcomp( self, logi, comp, phys_in )
-        class(image), intent(inout)    :: self
-        integer, intent(in)            :: logi(3)
-        integer, intent(in), optional  :: phys_in(3)
-        complex, intent(in)            :: comp
-        integer                        :: phys(3)
-        complex                        :: comp_here
+        class(image),      intent(inout) :: self
+        integer,           intent(in)    :: logi(3)
+        complex,           intent(in)    :: comp
+        integer, optional, intent(in)    :: phys_in(3)
+        integer :: phys(3)
+        complex :: comp_here
         if( .not. self%ft ) stop 'cannot set Fourier component in real image! set_fcomp; simple_image'
         if( present(phys_in) )then
             phys = phys_in
@@ -1271,10 +1269,10 @@ contains
 
     !>  \brief  is for plotting an image
     subroutine vis( self, sect )
-        class(image), intent(in)      :: self
-        integer, intent(in), optional :: sect
-        complex, allocatable          :: fplane(:,:)
-        integer                       :: sect_here
+        class(image),      intent(in) :: self
+        integer, optional, intent(in) :: sect
+        complex, allocatable :: fplane(:,:)
+        integer              :: sect_here
         if( self%imgkind .eq. 'xfel' )then
             sect_here = 0
             if( present(sect) ) sect_here = sect
@@ -1298,7 +1296,7 @@ contains
     !>  \brief  sets image ft state
     subroutine set_ft( self, is )
         class(image), intent(inout) :: self
-        logical, intent(in) :: is
+        logical,      intent(in)    :: is
         self%ft = is
     end subroutine set_ft
 
@@ -1306,9 +1304,9 @@ contains
     !!          position in a 2D transform using windowed sinc interpolation
     function extr_fcomp( self, h, k, x, y ) result( comp )
         class(image), intent(inout) :: self
-        real, intent(in)            :: h, k, x, y
-        complex                     :: comp
-        integer                     :: win(2,2), i, j
+        real,         intent(in)    :: h, k, x, y
+        complex :: comp
+        integer :: win(2,2), i, j
         if( self%ldim(3) > 1 )         stop 'only 4 2D images; extr_fcomp; simple_image'
         if( .not. self%ft )            stop 'image need to be FTed; extr_fcomp; simple_image'
         if( self%imgkind .eq. 'xfel' ) stop 'this method not intended for xfel-kind images; simple_image::extr_fcomp'
@@ -1350,13 +1348,13 @@ contains
 
     !>  \brief  Checks whether the image is 2D
     pure logical function is_2d(self)
-        class(image),   intent(in)  ::  self
+        class(image), intent(in)  ::  self
         is_2d = count(self%ldim .eq. 1) .eq. 1
     end function is_2d
 
     !>  \brief  Checks whether the image is 3D
     pure logical function is_3d(self)
-        class(image),   intent(in)  ::  self
+        class(image), intent(in)  ::  self
         is_3d = .not. any(self%ldim .eq. 1)
     end function is_3d
 
@@ -1395,7 +1393,7 @@ contains
     !>  \brief  checks for same dimensions
     pure function same_dims( self1, ldim ) result( yep )
         class(image), intent(in) :: self1
-        integer, intent(in)      :: ldim(3)
+        integer,      intent(in) :: ldim(3)
         logical :: yep, test(3)
         test = .false.
         test(1) = self1%ldim(1) == ldim(1)
@@ -1430,14 +1428,14 @@ contains
     !>  \brief  polymorphic assignment (=)
     subroutine assign( selfout, selfin )
         class(image), intent(inout) :: selfout
-        class(image), intent(in) :: selfin
+        class(image), intent(in)    :: selfin
         call selfout%copy(selfin)
     end subroutine assign
 
     !>  \brief  real constant to image assignment(=) operation
     subroutine assign_r2img( self, realin )
         class(image), intent(inout) :: self
-        real, intent(in) :: realin
+        real,         intent(in)    :: realin
         if( self%imgkind .eq. 'xfel' ) stop 'rmat not allocated for xfel-kind images; simple_image::assign_r2img'
         self%rmat = realin
         self%ft = .false.
@@ -1446,7 +1444,7 @@ contains
     !>  \brief  complex constant to image assignment(=) operation
     subroutine assign_c2img( self, compin )
         class(image), intent(inout) :: self
-        complex, intent(in) :: compin
+        complex,      intent(in)    :: compin
         self%cmat = compin
         self%ft = .true.
     end subroutine assign_c2img
@@ -1510,8 +1508,8 @@ contains
 
     !>  \brief  is for l1 norm weight generation
     function l1weights( self1, self2, nvar ) result( self )
-        class(image), intent(in) :: self1, self2
-        real, intent(in), optional :: nvar
+        class(image),   intent(in) :: self1, self2
+        real, optional, intent(in) :: nvar
         type(image) :: self
         integer :: i, j, k
         real :: sumw, nnvar
@@ -1533,9 +1531,9 @@ contains
 
     !>  \brief  is for image summation, not overloaded
     subroutine add_1( self, self_to_add, w )
-        class(image), intent(inout) :: self
-        class(image), intent(in)    :: self_to_add
-        real, intent(in), optional  :: w
+        class(image),   intent(inout) :: self
+        class(image),   intent(in)    :: self_to_add
+        real, optional, intent(in)    :: w
         real :: ww=1.0
         if( present(w) ) ww = w
         if( self%exists() )then
@@ -1563,13 +1561,13 @@ contains
 
     !>  \brief  is for componentwise summation, not overloaded
     subroutine add_2( self, logi, comp, phys_in, phys_out )
-        class(image), intent(inout)    :: self
-        integer, intent(in)            :: logi(3)
-        complex, intent(in)            :: comp
-        integer, intent(out), optional :: phys_in(3)
-        integer, intent(out), optional :: phys_out(3)
-        integer                        :: phys(3)
-        complex                        :: comp_here
+        class(image),      intent(inout) :: self
+        integer,           intent(in)    :: logi(3)
+        complex,           intent(in)    :: comp
+        integer, optional, intent(out)   :: phys_in(3)
+        integer, optional, intent(out)   :: phys_out(3)
+        integer :: phys(3)
+        complex :: comp_here
         if( .not. self%ft ) stop 'cannot add complex number to real image; add_2; simple_image'
         if( present(phys_in) )then
             phys = phys_in
@@ -1587,21 +1585,21 @@ contains
 
     !>  \brief  is for componentwise summation, not overloaded
     subroutine add_3( self, rcomp, i, j, k )
-        class(image), intent(inout)    :: self
-        real, intent(in)               :: rcomp
-        integer, intent(in)            :: i, j, k
+        class(image), intent(inout) :: self
+        real,         intent(in)    :: rcomp
+        integer,      intent(in)    :: i, j, k
         if(  self%ft ) stop 'cannot add real number to transform; add_3; simple_image'
         self%rmat(i,j,k) = self%rmat(i,j,k)+rcomp
     end subroutine add_3
 
     !>  \brief  is for componentwise weighted summation with kernel division, not overloaded
     subroutine add_4( self, logi, comp, w, k )
-        class(image), intent(inout)    :: self
-        integer, intent(in)            :: logi(3)
-        complex, intent(in)            :: comp
-        real, intent(in)               :: w, k(:,:,:)
-        integer                        :: phys(3)
-        complex                        :: comp_here
+        class(image), intent(inout) :: self
+        integer,      intent(in)    :: logi(3)
+        complex,      intent(in)    :: comp
+        real,         intent(in)    :: w, k(:,:,:)
+        integer :: phys(3)
+        complex :: comp_here
         if( .not. self%ft ) stop 'cannot add complex number to real image; add_2; simple_image'
         phys = self%fit%comp_addr_phys(logi)
         if( logi(1) < 0 .and. self%imgkind .ne. 'xfel' )then
@@ -1617,7 +1615,7 @@ contains
     !>  \brief  is for adding a constant
     subroutine add_5( self, c )
         class(image), intent(inout) :: self
-        real, intent(in)            :: c
+        real,         intent(in)    :: c
         if( self%ft )then
             self%cmat = self%cmat+cmplx(c,0.)
         else
@@ -1649,9 +1647,9 @@ contains
 
     !>  \brief  is for image subtraction,  not overloaded
     subroutine subtr_1( self, self_to_subtr, w )
-        class(image), intent(inout) :: self
-        class(image), intent(in)    :: self_to_subtr
-        real, intent(in), optional  :: w
+        class(image),   intent(inout) :: self
+        class(image),   intent(in)    :: self_to_subtr
+        real, optional, intent(in)    :: w
         real :: ww
         ww = 1.0 
         if( present(w) ) ww = w
@@ -1676,13 +1674,13 @@ contains
 
     !>  \brief  is for componentwise subtraction, not overloaded
     subroutine subtr_2( self, logi, comp, phys_in, phys_out )
-        class(image), intent(inout)    :: self
-        integer, intent(in)            :: logi(3)
-        complex, intent(in)            :: comp
-        integer, intent(out), optional :: phys_in(3)
-        integer, intent(out), optional :: phys_out(3)
-        integer                        :: phys(3)
-        complex                        :: comp_here
+        class(image),      intent(inout) :: self
+        integer,           intent(in)    :: logi(3)
+        complex,           intent(in)    :: comp
+        integer, optional, intent(out)   :: phys_in(3)
+        integer, optional, intent(out)   :: phys_out(3)
+        integer :: phys(3)
+        complex :: comp_here
         if( .not. self%ft ) stop 'cannot subtract complex number from real image; subtr_2; simple_image'
         if( present(phys_in) )then
             phys = phys_in
@@ -1700,12 +1698,12 @@ contains
 
     !>  \brief  is for componentwise weighted subtraction with kernel division, not overloaded
     subroutine subtr_3( self, logi, comp, w, k )
-        class(image), intent(inout)    :: self
-        integer, intent(in)            :: logi(3)
-        complex, intent(in)            :: comp
-        real, intent(in)               :: w, k(:,:,:)
-        integer                        :: phys(3)
-        complex                        :: comp_here
+        class(image), intent(inout) :: self
+        integer,      intent(in)    :: logi(3)
+        complex,      intent(in)    :: comp
+        real,         intent(in)    :: w, k(:,:,:)
+        integer :: phys(3)
+        complex :: comp_here
         if( .not. self%ft ) stop 'cannot subtract complex number from real image; subtr_3; simple_image'
         phys = self%fit%comp_addr_phys(logi)
         if( logi(1) < 0 .and. self%imgkind .ne. 'xfel' )then
@@ -1721,7 +1719,7 @@ contains
     !>  \brief  is for subtracting a constant from a real image, not overloaded
     subroutine subtr_4( self, c )
         class(image), intent(inout) :: self
-        real, intent(in)            :: c
+        real,         intent(in)    :: c
         if( self%imgkind .eq. 'xfel' ) stop 'rmat not allocated for xfel-kind images; simple_image::subtr_4'
         self%rmat = self%rmat-c
     end subroutine subtr_4
@@ -1758,12 +1756,12 @@ contains
 
     !>  \brief  is for component-wise multiplication of an image with a real constant
     subroutine mul_1( self, logi, rc, phys_in, phys_out )
-         class(image), intent(inout)    :: self
-         integer, intent(in)            :: logi(3)
-         real, intent(in)               :: rc
-         integer, intent(in), optional  :: phys_in(3)
-         integer, intent(out), optional :: phys_out(3)
-         integer                        :: phys(3)
+         class(image),      intent(inout) :: self
+         integer,           intent(in)    :: logi(3)
+         real,              intent(in)    :: rc
+         integer, optional, intent(in)    :: phys_in(3)
+         integer, optional, intent(out)   :: phys_out(3)
+         integer :: phys(3)
          if( self%is_ft() )then
             if( present(phys_in) )then
                 phys = phys_in
@@ -1781,7 +1779,7 @@ contains
     !>  \brief  is for  multiplication of an image with a real constant
     subroutine mul_2( self, rc )
         class(image), intent(inout) :: self
-        real, intent(in) :: rc
+        real,         intent(in)    :: rc
         if( self%is_ft() )then
             !$omp parallel workshare
             self%cmat = self%cmat*rc
@@ -1833,7 +1831,7 @@ contains
     subroutine mul_4( self, self2mul, lp )
         class(image), intent(inout) :: self
         class(image), intent(in)    :: self2mul
-        real, intent(in)            :: lp
+        real,         intent(in)    :: lp
         integer                     :: lims(3,2),sqlim,h,hh,k,kk,l,ll,phys(3)
         if( .not. self%is_ft() )     stop 'low-pass limited multiplication requires self to be FT'
         if( .not. self2mul%is_ft() ) stop 'low-pass limited multiplication requires self2mul to be FT'
@@ -1925,7 +1923,7 @@ contains
     !>  \brief  is for dividing image with real constant, not overloaded
     subroutine div_1( self, c )
         class(image), intent(inout) :: self
-        real, intent(in) :: c
+        real,         intent(in)    :: c
         if( abs(c) < 1e-6 )then
             stop 'division with zero; div; simple_image'
         else
@@ -1940,10 +1938,10 @@ contains
     !>  \brief  is for component-wise matrix division of a Fourier transform with a real matrix, k
     subroutine div_2( self, logi, k, square )
         class(image), intent(inout) :: self
-        integer, intent(in)         :: logi(3)
-        real, intent(in)            :: k(:,:,:)
-        logical, intent(in)         :: square
-        integer                     :: phys(3)
+        integer,      intent(in)    :: logi(3)
+        real,         intent(in)    :: k(:,:,:)
+        logical,      intent(in)    :: square
+        integer :: phys(3)
         if( self%ft )then
             phys = self%fit%comp_addr_phys(logi)
             if( abs(k(phys(1),phys(2),phys(3))) > 1e-6 )then
@@ -1962,11 +1960,11 @@ contains
 
     !>  \brief  is for component-wise division of an image with a real number
     subroutine div_3( self, logi, k, phys_in )
-        class(image), intent(inout)   :: self
-        integer, intent(in)           :: logi(3)
-        real, intent(in)              :: k
-        integer, intent(in), optional :: phys_in(3)
-        integer                       :: phys(3)
+        class(image),      intent(inout) :: self
+        integer,           intent(in)    :: logi(3)
+        real,              intent(in)    :: k
+        integer, optional, intent(in)    :: phys_in(3)
+        integer :: phys(3)
         if( self%is_ft() )then
             if( present(phys_in) )then
                 phys = phys_in
@@ -2014,10 +2012,10 @@ contains
     
     !> \brief  for sampling density compensation & Wiener normalization
     subroutine ctf_dens_correct( self_sum, self_rho, self_out )
-        class(image), intent(inout)           :: self_sum
-        class(image), intent(inout)           :: self_rho
-        class(image), intent(inout), optional :: self_out
-        integer                               :: h, k, l, lims(3,2), phys(3)
+        class(image),           intent(inout) :: self_sum
+        class(image),           intent(inout) :: self_rho
+        class(image), optional, intent(inout) :: self_out
+        integer :: h, k, l, lims(3,2), phys(3)
         ! set constants
         lims = self_sum%loop_lims(2)
         if( present(self_out) ) self_out = self_sum
@@ -2129,7 +2127,7 @@ contains
     !!          binary normalization (norm_bin) assumed
     subroutine bin_1( self, thres )
         class(image), intent(inout) :: self
-        real, intent(in)            :: thres
+        real,         intent(in)     :: thres
         if( self%ft ) stop 'only for real images; bin_1; simple image'
         where( self%rmat >= thres )
             self%rmat = 1.
@@ -3129,7 +3127,7 @@ contains
                 end do
             end do
         end do
-    end function
+    end function contains_nans
     
     !>  \brief  is for checking the numerical soundness of an image
     subroutine checkimg4nans( self )
@@ -3139,7 +3137,7 @@ contains
         else
             call check4nans3D(self%rmat)
         endif
-    end subroutine
+    end subroutine checkimg4nans
     
     !>  \brief  is for checking the numerical soundness of an image and curing it if necessary
     subroutine cure_1( self )
@@ -3182,7 +3180,7 @@ contains
                 end do
             end do
         end do
-    end subroutine
+    end subroutine cure_1
 
     !>  \brief  is for checking the numerical soundness of an image and curing it if necessary
     subroutine cure_2( self, maxv, minv, ave, sdev, n_nans )
@@ -3245,7 +3243,7 @@ contains
         else
             lims = self%fit%loop_lims(mode)
         endif
-    end function
+    end function loop_lims
 
     !>  \brief  Convert logical address to physical address. Complex image.
     function comp_addr_phys(self,logi) result(phys)
@@ -3253,7 +3251,7 @@ contains
         integer,       intent(in) :: logi(3) !<  Logical address
         integer                   :: phys(3) !<  Physical address
         phys = self%fit%comp_addr_phys(logi)
-    end function
+    end function comp_addr_phys
 
     !>  \brief is for correlating two images
     function corr( self1, self2, lp_dyn, hp_dyn ) result( r )
@@ -3315,8 +3313,8 @@ contains
             write(*,*) 'self2%ldim:', self2%ldim
             stop 'images to be correlated need to have same dimensions; corr; simple_image'
         endif
-    end function
-    
+    end function corr
+     
     !>  \brief is for highly optimized correlation between 2D images, particle is shifted by shvec
     !!         so remember to take care of this properly in the calling module
     function corr_shifted( self_ref, self_ptcl, shvec, lp_dyn, hp_dyn ) result( r )
@@ -3367,7 +3365,7 @@ contains
         end do
         !$omp end parallel do        
         r = calc_corr(r,sumasq*sumbsq)
-    end function
+    end function corr_shifted
 
     !>  \brief is for calculating a real-space correlation coefficient between images
     function real_corr( self1, self2 ) result( r )
@@ -3448,7 +3446,7 @@ contains
         end do
         !$omp end parallel do
         r = 1.-(6.*sqsum)/(npixr**3.-npixr)
-    end function
+    end function rank_corr
 
     !>  \brief is for calculate a real-space distance between images within a mask
     !!         assumes that images are normalized
@@ -3472,7 +3470,7 @@ contains
         end do
         !$omp end parallel do
         r = sqrt(r)
-    end function
+    end function real_dist
 
     !>  \brief is for calculation of Fourier ring/shell correlation
     subroutine fsc( self1, self2, res, corrs )
@@ -3532,7 +3530,7 @@ contains
         deallocate(sumasq, sumbsq)
         if( didft1 ) call self1%bwd_ft
         if( didft2 ) call self2%bwd_ft
-    end subroutine
+    end subroutine fsc
 
     !>  \brief is for calculation of voxels per Fourier shell
     subroutine get_nvoxshell( self, voxs )
@@ -3565,7 +3563,7 @@ contains
         end do
         !$omp end parallel do
         if( didft ) call self%bwd_ft
-    end subroutine
+    end subroutine get_nvoxshell
 
     !>  \brief get array of resolution steps
     function get_res( self ) result( res )
@@ -3578,7 +3576,7 @@ contains
         do k=1,n
             res(k) = self%fit%get_lp(1,k)
         end do
-    end function
+    end function get_res
 
     !>  \brief  returns the real and imaginary parts of the phase shift at point
     !!          logi in a Fourier transform caused by the origin shift in shvec
@@ -3597,7 +3595,7 @@ contains
             arg = sum(logi*shvec_here*self%shconst)
         endif
         comp = cmplx(cos(arg),sin(arg))
-    end function
+    end function oshift_1
 
     !>  \brief  returns the real and imaginary parts of the phase shift at point
     !!          logi in a Fourier transform caused by the origin shift in shvec
@@ -3608,7 +3606,7 @@ contains
         integer, intent(in), optional :: ldim
         complex                       :: comp
         comp = self%oshift_1(real(logi), shvec, ldim)
-    end function
+    end function oshift_2
 
     !>  \brief  returns the real argument transfer matrix components at point logi in a Fourier transform
     function gen_argtransf_comp( self, logi, ldim ) result( arg )
@@ -3632,7 +3630,7 @@ contains
                 endif
             endif
         end do
-    end function
+    end function gen_argtransf_comp
 
     !>  \brief  is for generating the argument transfer matrix for fast shifting of a FT
     subroutine gen_argtransf_mats( self, transfmats )
@@ -3656,7 +3654,7 @@ contains
             end do
         end do
         !$omp end parallel do
-    end subroutine
+    end subroutine gen_argtransf_mats
 
     ! MODIFIERS
 
@@ -3690,14 +3688,14 @@ contains
         yulim = coord(2)+self_in%ldim(2)/2-1
         ! insert particle image matrix into micrograph image matrix
         self_out%rmat(xllim:xulim,yllim:yulim,1) = self_in%rmat(1:self_in%ldim(1),1:self_in%ldim(2),1)
-    end subroutine
+    end subroutine insert
 
     !>  \brief  is for inverting an image
     subroutine inv( self )
         class(image), intent(inout) :: self
         if( self%imgkind .eq. 'xfel' ) stop 'not intended for xfel-kind images; simple_image::inv'
         self%rmat = -1.*self%rmat
-    end subroutine
+    end subroutine inv
 
     !>  \brief  is for making a random image (0,1)
     subroutine ran( self )
@@ -3712,7 +3710,7 @@ contains
             end do
         end do
         self%ft = .false.
-    end subroutine
+    end subroutine ran
 
     !>  \brief  is for making a Gaussian random image (0,1)
     subroutine gauran( self, mean, sdev )
@@ -3728,7 +3726,7 @@ contains
             end do
         end do
         self%ft = .false.
-    end subroutine
+    end subroutine gauran
 
     !>  \brief  is for adding Gaussian noise to an image
     subroutine add_gauran( self, snr, noiseimg )
@@ -3750,7 +3748,7 @@ contains
                 end do
             end do
         end do
-    end subroutine
+    end subroutine add_gauran
     
     !>  \brief  is for generating dead/hot pixel positions in an image
     function dead_hot_positions( self, frac ) result( pos )
@@ -3769,7 +3767,7 @@ contains
                 endif
             end do
         end do
-    end function
+    end function dead_hot_positions
     
     !>  \brief  Taper edges of image so that there are no sharp discontinuities in real space
     !!          This is a re-implementation of the MRC program taperedgek.for (Richard Henderson, 1987)
@@ -3946,7 +3944,7 @@ contains
                 endif
             end do
         end do
-    end subroutine
+    end subroutine salt_n_pepper
 
     !>  \brief  just a binary square for testing purposes
     subroutine square( self, sqrad )
@@ -3973,7 +3971,7 @@ contains
             stop 'image is to small to fit the square; square; simple_image'
         endif
         self%ft = .false.
-    end subroutine
+    end subroutine square
 
     !>  \brief  just a corner filling fun for testing purposes
     subroutine corners( self, sqrad )
@@ -4003,7 +4001,7 @@ contains
             end do
         end do
         self%ft = .false.
-    end subroutine
+    end subroutine corners
     
     !>  \brief  to generate a before (left) and after (right) image
     function before_after( left, right ) result( ba )
@@ -4024,7 +4022,7 @@ contains
         else
             stop 'before (left) and after (right) not of same dim; before_after; simple_image'
         endif
-    end function
+    end function before_after
 
     !>  \brief  just a Gaussian fun for testing purposes
     subroutine gauimg( self, wsz)
@@ -4054,7 +4052,7 @@ contains
             x = x+1.
         end do
         self%ft = .false.
-    end subroutine
+    end subroutine gauimg
 
     !>  \brief  forward Fourier transform
     subroutine fwd_ft( self )
@@ -4067,7 +4065,7 @@ contains
         ! original image back, rather than a scaled version
         self%cmat = self%cmat/real(product(self%ldim))
         self%ft = .true.
-    end subroutine
+    end subroutine fwd_ft
 
     !>  \brief  backward Fourier transform
     subroutine bwd_ft( self )
@@ -4078,7 +4076,7 @@ contains
             self%ft = .false.
             if( shift_to_phase_origin ) call self%shift_phorig
         endif
-    end subroutine
+    end subroutine bwd_ft
 
     !>  \brief  converts a em-kind image into a xfel pattern
     subroutine em2xfel( self )
@@ -4100,7 +4098,7 @@ contains
         self%rmat => null()
         call tmp%kill
         deallocate(zeroes)
-    end subroutine
+    end subroutine em2xfel
 
     !>  \brief  generates images for visualization of a Fourier transform
     subroutine ft2img( self, which, img )
@@ -4164,7 +4162,7 @@ contains
             end do
         end do
         if( didft ) call self%bwd_ft
-    end subroutine
+    end subroutine ft2img
 
     !>  \brief  forward log Fourier transform
     subroutine fwd_logft( self )
@@ -4183,7 +4181,7 @@ contains
                 end do
             end do
         end do
-    end subroutine
+    end subroutine fwd_logft
 
     !>  \brief  forward log Fourier transform
     subroutine bwd_logft( self )
@@ -4202,7 +4200,7 @@ contains
             end do
             call self%bwd_ft
         endif
-    end subroutine
+    end subroutine bwd_logft
 
     !>  \brief  an image shifter to prepare for Fourier transformation
     subroutine shift_phorig( self )
@@ -4255,7 +4253,7 @@ contains
         else
             stop 'even dimensions assumed; shift_phorig; simple_image'
         endif
-    end subroutine
+    end subroutine shift_phorig
 
     !>  \brief  is for origin shifting an image
     subroutine shift( self, x, y, z, lp_dyn, imgout )
@@ -4391,7 +4389,7 @@ contains
             end do
             deallocate(rvals, rorder, indices)
         endif
-    end subroutine
+    end subroutine rankify
 
     !>  \brief  is for spherical masking
     subroutine mask( self, mskrad, which, inner, width, msksum )
@@ -4557,7 +4555,8 @@ contains
             end do
         endif
         if( didft ) call self%fwd_ft
-    end subroutine
+    end subroutine mask
+
     !>  \brief  is for calculating the fractional area/volume of the mask
     function fmaskv_1( self, mskrad, which, inner, width ) result( frac )
         class(image), intent(inout) :: self
@@ -4569,7 +4568,7 @@ contains
         sum_unmasked = product( self%get_ldim() )
         call self%mask(mskrad, which, inner=inner, width=width, msksum=sum_masked)
         frac = sum_masked/sum_unmasked
-    end function
+    end function fmaskv_1
 
     !>  \brief  is for calculating the fractional area/volume of the mask
     function fmaskv_2( self ) result( frac )
@@ -4589,7 +4588,7 @@ contains
         end do
         sum_masked = sum(self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))**2.)
         frac = sum_masked/sum_unmasked
-    end function
+    end function fmaskv_2
 
     !>  \brief  is for inverting the contrast
     subroutine neg( self )
@@ -4603,7 +4602,7 @@ contains
         endif
         call self%mul(-1.)
         if( didft ) call self%bwd_ft
-    end subroutine
+    end subroutine neg
 
     !>  \brief for image resizing using nearest neighbor interpolation
     subroutine resize_nn( self_in, self_out )
@@ -4633,7 +4632,7 @@ contains
         end do
         if( didft ) call self_in%fwd_ft
         self_out%ft = .false.
-    end subroutine
+    end subroutine resize_nn
 
     !>  \brief for image resizing using bilinear interpolation
     subroutine resize_bilin( self_in, self_out )
@@ -4674,7 +4673,7 @@ contains
         end do
         if( didft ) call self_in%fwd_ft
         self_out%ft = .false.
-    end subroutine
+    end subroutine resize_bilin
 
     !>  \brief is a constructor that pads the input image to input ldim
     subroutine pad( self_in, self_out, backgr )
@@ -4748,7 +4747,7 @@ contains
                 self_out%ft = .false.
             endif
         endif
-    end subroutine
+    end subroutine pad
 
     !>  \brief is a constructor that clips the input image to input ldim
     subroutine clip( self_in, self_out )
@@ -4801,7 +4800,7 @@ contains
                 self_out%ft = .false.
             endif
         endif
-    end subroutine
+    end subroutine clip
 
     !>  \brief is a constructor that clips the input image to input ldim
     subroutine clip_inplace( self, ldim )
@@ -4812,7 +4811,7 @@ contains
         call self%clip(tmp)
         self = tmp
         call tmp%kill
-    end subroutine
+    end subroutine clip_inplace
 
     !>  \brief  is for mirroring an image
     !!          mirror('x') corresponds to mirror2d
@@ -4849,7 +4848,7 @@ contains
             write(*,'(a)') 'Mode needs to be either x, y or z; mirror; simple_image'
         endif
         if( didft ) call self%fwd_ft
-    end subroutine
+    end subroutine mirror
 
     !>  \brief  is for statistical normalization of an image
     subroutine norm( self, hfun, err )
@@ -4874,7 +4873,7 @@ contains
             write(*,'(a)') 'WARNING, undefined variance; norm; simple_image'
             if( present(err) ) err = .true.
         endif
-    end subroutine
+    end subroutine norm
 
     !>  \brief  is for normalization of an image using inputted average and standard deviation
     subroutine norm_ext( self, avg, sdev )
@@ -4885,7 +4884,7 @@ contains
             return
         endif
         self%rmat = (self%rmat-avg)/sdev
-    end subroutine
+    end subroutine norm_ext
 
     !>  \brief  normalizes the image according to the background noise
     subroutine noise_norm( self, msk, errout )
@@ -4925,7 +4924,7 @@ contains
                 self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))/sdev
             endif
         endif
-    end subroutine
+    end subroutine noise_norm
 
     !>  \brief  normalizes the image based on a central sphere of input radius
     subroutine radius_norm( self, radius, errout )
@@ -4963,7 +4962,7 @@ contains
             endif
             if( sdev > 1e-6 )self%rmat = self%rmat / sdev
         endif
-    end subroutine
+    end subroutine radius_norm
 
     !>  \brief  is for [0,1] interval normalization of an image
     subroutine norm_bin( self )
@@ -5000,7 +4999,7 @@ contains
             end do
         end do
         if( didft ) call self%fwd_ft
-    end subroutine
+    end subroutine norm_bin
 
     !>  \brief  is for creating a rotation average of self
     subroutine roavg(self, angstep, avg)
@@ -5024,7 +5023,7 @@ contains
         end do
         call avg%div(div)
         call rotated%kill
-    end subroutine
+    end subroutine roavg
 
     !>  \brief  rotation of image by quadratic interpolation (from spider)
     subroutine rtsq(self_in, ang, shxi, shyi, self_out)
@@ -5112,7 +5111,7 @@ contains
         if( didft )then
             call self_in%bwd_ft
         endif
-    end subroutine
+    end subroutine rtsq
 
     ! TESTS
 
@@ -5140,7 +5139,7 @@ contains
                  if( kt > 2*ydim ) kt = 1
             end do
         end do
-    end function
+    end function get_fplane_simple
 
     !>  \brief  is for getting a Fourier plane using the old SIMPLE logics
     function get_fplane_frealix( self ) result( fplane )
@@ -5162,7 +5161,7 @@ contains
                  fplane(h,k) = self%get_fcomp([h,k,0])
             end do
         end do
-    end function
+    end function get_fplane_frealix
 
     !>  \brief  is the image class unit test
     subroutine test_image( doplot )
@@ -5617,9 +5616,9 @@ contains
                 test(2) = .not. img3d%exists()
                 passed = all(test)
                 if( .not. passed )  stop 'destructor test failed'
-            end subroutine
+            end subroutine test_image_local
 
-    end subroutine
+    end subroutine test_image
 
     !>  \brief  is a destructor
     subroutine kill( self )
@@ -5636,6 +5635,6 @@ contains
             call fftwf_destroy_plan(self%plan_bwd)
             self%existence = .false.
         endif
-    end subroutine
+    end subroutine kill
 
 end module simple_image

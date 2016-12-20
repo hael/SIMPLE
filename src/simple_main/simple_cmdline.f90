@@ -6,15 +6,6 @@ module simple_cmdline
 use simple_chash, only: chash
 use simple_defs     ! singleton
 use simple_cmd_dict ! singleton
-use simple_yaml_output
-use simple_yaml_strings
-use simple_file_utils
-use simple_file_defs
-use simple_err_defs
-use simple_eglossary
-use simple_eglossary_lowlev
-use simple_dynamic_memory
-
 implicit none
 
 public :: cmdline
@@ -47,7 +38,6 @@ type cmdline
     procedure             :: delete
     procedure             :: checkvar
     procedure             :: check
-    procedure, private    :: write
     procedure             :: print
     procedure             :: defined
     procedure             :: get_rarg
@@ -117,7 +107,6 @@ contains
             if( debug ) print *, 'DEBUG(simple_cmdline, L93), reached checker'
             call self%check
         endif
-        call self%write
         
         contains
         
@@ -281,39 +270,6 @@ contains
         endif
         deallocate( cmderr )
     end subroutine check
-    
-    !> \brief  for writing the command line
-    subroutine write( self )
-        use simple_jiffys, only: get_fileunit
-        class(cmdline), intent(inout) :: self
-        integer           :: funit, file_stat, i
-        integer           :: yunit
-        integer           :: err ! error code
-        !filename string
-        character(len=3)  :: char_out
-        character(len=80) :: tmr_name
-        !function calls
-        integer           :: convert_int2char_indexed_c
-        integer           :: strlen
-        yunit = 1
-        err = convert_int2char_indexed_c(char_out,yunit,1,1)
-        tmr_name = 'cmdline'
-        tmr_name = tmr_name(1:strlen(tmr_name))//char_out(1:strlen(char_out))
-        tmr_name = tmr_name(1:strlen(tmr_name))//".yaml"
-        call file_open(tmr_name,yunit,'unknown','asis','readwrite')
-        write(funit,*) trim(self%entire_line)
-        call yaml_comment('The comand line details')
-        call yaml_map('full command line',trim(self%entire_line))
-        do i=1,self%argcnt
-            if( self%cmds(i)%defined .and. self%cmds(i)%carg .eq. '' )then
-                call yaml_map(trim(self%cmds(i)%key),self%cmds(i)%rarg)
-             else if( self%cmds(i)%defined)then
-                call yaml_map(trim(self%cmds(i)%key),trim(self%cmds(i)%carg))
-            endif
-        end do
-        close(yunit)
-        return
-    end subroutine write
 
     !> \brief  for writing the command line
     subroutine print( self )

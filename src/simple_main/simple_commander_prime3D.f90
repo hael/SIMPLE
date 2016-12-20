@@ -11,9 +11,6 @@
 module simple_commander_prime3D
 use simple_defs            ! singleton
 use simple_jiffys          ! singleton
-use simple_timing          ! singleton
-use simple_cuda            ! singleton
-use simple_cuda_defs       ! singleton
 use simple_qsys_funs       ! singleton
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
@@ -142,6 +139,8 @@ contains
         type(build)           :: b
         type(cartft_corrcalc) :: cftcc
         p = params(cline)                    ! constants & derived constants produced
+        ! make sure boxmatch .eq. box
+        p%boxmatch = p%box
         call b%build_general_tbox(p, cline)  ! general objects built
         call cont3D_shellweight(b, p, cline)
     end subroutine exec_shellweight3D
@@ -153,8 +152,6 @@ contains
         type(params)       :: p
         type(build)        :: b
         integer, parameter :: MAXIMGS=1000
-        call timestamp()
-        call start_Alltimers_cpu()
         p = params(cline) ! parameters generated
         if( p%l_xfel )then
             if( cline%defined('msk') .or. cline%defined('mw') .or.&
@@ -185,8 +182,6 @@ contains
         ! end gracefully
         call qsys_job_finished( p, cline%get_carg('prg') )
         call simple_end('**** SIMPLE_PRIME3D_INIT NORMAL STOP ****')
-        ! shutting down the timers
-        call stop_Alltimers_cpu()
     end subroutine exec_prime3D_init
 
     subroutine exec_het_init( self, cline )
@@ -199,17 +194,17 @@ contains
         use simple_stat
         class(het_init_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
-        type(params)       :: p
-        type(build)        :: b
-        type(prime_srch)   :: srch_common             !< functionalities common to primesrch2D/3D
-        type(oris)         :: best_individual, winner, loser
+        type(params)            :: p
+        type(build)             :: b
+        type(prime_srch)        :: srch_common !< functionalities common to primesrch2D/3D
+        type(oris)              :: best_individual, winner, loser
         type(oris), allocatable :: individuals(:), individuals_opt(:)
         real,       allocatable :: probs(:,:), fitness(:)
-        real               :: best_fitness
-        integer            :: ind, it, i, alloc_stat, noris, loc(1), winner_ind
+        real                    :: best_fitness
+        integer                 :: ind, it, i, alloc_stat, noris, loc(1), winner_ind
         character(len=STDLEN), parameter :: fitfun    = 'avg'
         real,                  parameter :: prob_incr = 0.05
-        integer,               parameter :: tour_pop  = 3           ! Selection tournament size
+        integer,               parameter :: tour_pop  = 3 ! Selection tournament size
         p = params(cline) ! parameters generated
         if( p%nstates < 2 ) stop 'Nonsensical to have nstates < 2; simple_multiptcl_init'
         call b%build_general_tbox(p, cline)   ! general objects built
@@ -665,16 +660,6 @@ contains
     
     subroutine exec_prime3D( self, cline )
         use simple_hadamard3D_matcher, only: prime3D_exec, prime3D_find_resrange
-        use simple_file_utils
-        use simple_file_defs
-        !temporary
-        !use simple_err_defs
-        use simple_file_highlev
-        !use simple_eglossary
-        !use simple_error_handling
-        !use simple_dynamic_memory
-        !use simple_systemQuery_cpu
-        !use simple_deviceQuery_gpu
         class(prime3D_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(params)      :: p
@@ -682,29 +667,7 @@ contains
         integer           :: i, startit
         logical           :: update_res=.false., converged=.false.
         real              :: lpstart, lpstop
-        ! benchmark control logicals data structure
-        type(t_bench)     :: s_bench
-        ! filename string
-        character(len=10) :: char_out
-        character(len=80) :: tmr_name
-        ! file handlers
-        integer           :: unt
-        integer           :: length
-        ! CUDA err variable for the return function calls
-        integer           :: err
-        !function calls
-        integer           :: get_length_of_string_c
-        integer           :: convert_int2char_pos_c
-        integer           :: convert_int2char_indexed_c
-        integer           :: strlen
-        call timestamp()
-        call start_Alltimers_cpu()
-        call simple_file_lib_initialise()
-        ! starting the cuda environment
-        call simple_cuda_init(err)
-        if( err .ne. RC_SUCCESS ) write(*,*) 'cublas init failed'
         p = params(cline) ! parameters generated
-        ! p%boxmatch = p%box                    !!!!!!!!!!!!!!!!!! 4 NOW
         if( p%l_xfel )then
             if( cline%defined('msk') .or. cline%defined('mw') .or.&
             cline%defined('nvox') .or. cline%defined('automsk') )then
@@ -750,36 +713,17 @@ contains
             p%find = int((real(p%box-1)*p%smpd)/p%lp)
             startit = 1
             if( cline%defined('startit') ) startit = p%startit
-            call start_timer_cpu('z_prime3D_exec')
-            length = get_length_of_string_c(p%maxits)
-            unt = 1
             do i=startit,p%maxits
-                unt = 100 + i
-                !err = convert_int2char_pos_c(char_out,i)
-                err = convert_int2char_indexed_c(char_out,i,startit,p%maxits)
-                tmr_name = 'z_prime3D_iter'
-                tmr_name = tmr_name(1:strlen(tmr_name))//char_out(1:strlen(char_out))
-                tmr_name = tmr_name(1:strlen(tmr_name))//".asc"
-                !write(*,*) "tmr_name: ",tmr_name
-                if( b%s_bench%bench_write_i==1 .or. ibench_write.eqv..true. )&
-                call file_open(tmr_name,unt,'unknown','asis','readwrite')
-                if( b%s_bench%bench_i==1 .or. ibench.eqv..true. ) call start_timer_cpu(tmr_name)
                 call prime3D_exec(b, p, cline, i, update_res, converged)
-                if( b%s_bench%bench_i==1 .or. ibench.eqv..true. ) call stop_timer_cpu(tmr_name)
                 if( update_res )then
                     p%find = p%find+p%fstep
                     p%lp = max(p%lpstop,b%img%get_lp(p%find))
                 endif
                 if( converged ) exit
             end do
-            call stop_timer_cpu('z_prime3D_exec')
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_PRIME3D NORMAL STOP ****')
-        !shutting down the environment
-        call simple_cuda_shutdown()
-        !shutting down the timers
-        call stop_Alltimers_cpu()
     end subroutine exec_prime3D
 
     subroutine exec_cont3D( self, cline )
@@ -790,7 +734,7 @@ contains
         type(build)  :: b
         integer       :: i, startit
         logical       :: converged=.false.
-        p = params(cline)                     ! parameters generated
+        p = params(cline) ! parameters generated
         if( p%xfel .eq. 'yes' )then
             if( cline%defined('msk') .or. cline%defined('mw') .or.&
             cline%defined('nvox') .or. cline%defined('automsk') )then
@@ -874,7 +818,8 @@ contains
         else
             converged = b%conv%check_conv3D()
         endif
-        ! reports convergence, shift activation and resolution update to distr commander
+        ! reports convergence, shift activation, resolution update and
+        ! fraction of search space scanned to the distr commander
         if( p%doshift )then
             call cline%set('trs', p%trs)        ! activates shift serach
         endif
@@ -888,6 +833,7 @@ contains
         else
             call cline%set('update_res', 'no')
         endif
+        call cline%set('frac', b%conv%get('frac'))
         ! end gracefully
         call simple_end('**** SIMPLE_CHECK3D_CONV STOP ****')
     end subroutine exec_check3D_conv

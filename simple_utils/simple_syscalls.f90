@@ -66,7 +66,6 @@ contains
         character(len=*), intent(inout) :: cmdline
         integer               :: estat, cstat
         character(len=STDLEN) :: cmsg
-        !print *,trim(cmdline)
         call execute_command_line( trim(cmdline), exitstat=estat, cmdstat=cstat, cmdmsg=cmsg)
         call raise_sys_error( cmdline, estat, cstat, cmsg )
     end subroutine exec_cmdline
