@@ -17,7 +17,6 @@ type :: eo_reconstructor
     type(reconstructor)    :: odd
     type(reconstructor)    :: eosum
     class(params), pointer :: pp=>null()
-    real, allocatable      :: spec_ctfsq(:)
     character(len=4)       :: ext
     real                   :: fsc05, fsc0143, smpd, msk, fny, inner=0., width=10.
     integer                :: box=0, nstates=1, numlen=2, lfny=0
@@ -36,8 +35,6 @@ type :: eo_reconstructor
     ! GETTERS
     procedure          :: get_wfuns
     procedure          :: get_res
-    procedure          :: print_spec_ctfsq
-    procedure          :: get_spec_ctfsq
     ! I/O
     ! writers
     procedure          :: write_eos
@@ -65,10 +62,10 @@ contains
     !>  \brief  is a constructor
     subroutine new(self, p, tfun )
         use simple_ctf,    only: ctf
-        class(eo_reconstructor), intent(inout)   :: self !< instance
-        class(params), intent(in), target        :: p    !< parameters object (provides constants)
-        class(ctf), intent(in), target, optional :: tfun !< CTF object (adds a CTF model to the 
-                                                         !! reconstruction, assumes that oris have defocus vals set)
+        class(eo_reconstructor),      intent(inout) :: self !< instance
+        class(params), target,        intent(in)    :: p    !< parameters object (provides constants)
+        class(ctf), target, optional, intent(in)    :: tfun !< CTF object (adds a CTF model to the 
+                                                            !! reconstruction, assumes that oris have defocus vals set)
         type(image) :: imgtmp
         logical     :: neg  
         call self%kill
@@ -149,35 +146,18 @@ contains
     
     !> \brief  for gettign the resolution
     subroutine get_res( self, fsc05, fsc0143 )
-        class(eo_reconstructor), intent(in) :: self !< instance
-        real, intent(out) :: fsc05, fsc0143
+        class(eo_reconstructor), intent(in)  :: self !< instance
+        real,                    intent(out) :: fsc05, fsc0143
         fsc0143 = self%fsc0143
         fsc05   = self%fsc05
     end subroutine get_res
-    
-    !>  \brief  for getting the CTF**2 spectrum
-    function get_spec_ctfsq( self ) result( spec_ctfsq )
-        class(eo_reconstructor), intent(inout) :: self !< instance
-        real, allocatable                      :: spec_ctfsq(:)
-        spec_ctfsq = self%eosum%get_spec_ctfsq(self%lfny)
-    end function get_spec_ctfsq
-
-    subroutine print_spec_ctfsq( self, lfny )
-        class(eo_reconstructor), intent(inout) :: self !< instance
-        integer, intent(in)                    :: lfny
-        real, allocatable :: evenspec(:), oddspec(:)
-        evenspec = self%even%get_spec_ctfsq(lfny)
-        oddspec  = self%odd%get_spec_ctfsq(lfny)
-        print *, 'spec_ctfsq even: ', evenspec
-        print *, 'spec_ctfsq odd: ',  oddspec
-    end subroutine print_spec_ctfsq
      
     ! I/O
     
     !>  \brief  write the even and odd reconstructions
     subroutine write_eos( self, fbody )
         class(eo_reconstructor), intent(inout) :: self
-        character(len=*), intent(in)           :: fbody
+        character(len=*),        intent(in)    :: fbody
         call self%write_even(fbody)
         call self%write_odd(fbody)
     end subroutine write_eos
@@ -185,31 +165,23 @@ contains
     !>  \brief  write the even reconstruction
     subroutine write_even( self, fbody )
         class(eo_reconstructor), intent(inout) :: self
-        character(len=*), intent(in)           :: fbody
-        real, allocatable                      :: spec_ctfsq(:)
+        character(len=*),        intent(in)    :: fbody
         call self%even%write(trim(adjustl(fbody))//'_even'//self%ext, del_if_exists=.true.)
-        call self%even%write_rho('rho_'//trim(adjustl(fbody))//'_even'//self%ext)        
-        spec_ctfsq = self%even%get_spec_ctfsq_no_binning()
-        call arr2file(spec_ctfsq,'spec_ctfsq_'//trim(adjustl(fbody))//'_even.bin')
-        deallocate(spec_ctfsq)
+        call self%even%write_rho('rho_'//trim(adjustl(fbody))//'_even'//self%ext)
     end subroutine write_even
     
     !>  \brief  write the odd reconstruction
     subroutine write_odd( self, fbody )
         class(eo_reconstructor), intent(inout) :: self
-        character(len=*), intent(in)           :: fbody
-        real, allocatable                      :: spec_ctfsq(:)
+        character(len=*),        intent(in)    :: fbody
         call self%odd%write(trim(adjustl(fbody))//'_odd'//self%ext, del_if_exists=.true.)
         call self%odd%write_rho('rho_'//trim(adjustl(fbody))//'_odd'//self%ext)
-        spec_ctfsq = self%odd%get_spec_ctfsq_no_binning()
-        call arr2file(spec_ctfsq,'spec_ctfsq_'//trim(adjustl(fbody))//'_odd.bin')
-        deallocate(spec_ctfsq)
     end subroutine write_odd
     
     !>  \brief read the even and odd reconstructions
     subroutine read_eos( self, fbody )
         class(eo_reconstructor), intent(inout) :: self
-        character(len=*), intent(in)           :: fbody
+        character(len=*),        intent(in)    :: fbody
         call self%read_even(fbody)
         call self%read_odd(fbody)
     end subroutine read_eos
@@ -217,10 +189,9 @@ contains
     !>  \brief  read the even reconstruction
     subroutine read_even( self, fbody )
         class(eo_reconstructor), intent(inout) :: self
-        character(len=*), intent(in)           :: fbody
+        character(len=*),        intent(in)    :: fbody
         character(len=STDLEN)                  :: even_vol, even_rho
         logical                                :: here(2)
-        real, allocatable                      :: spec_ctfsq(:)
         even_vol = trim(adjustl(fbody))//'_even'//self%ext
         even_rho = 'rho_'//trim(adjustl(fbody))//'_even'//self%ext
         inquire(FILE=even_vol, EXIST=here(1))
@@ -231,18 +202,14 @@ contains
         else
             call self%reset_even
         endif
-        spec_ctfsq = file2rarr('spec_ctfsq_'//trim(adjustl(fbody))//'_even.bin') 
-        call self%even%set_spec_ctfsq_no_binning(spec_ctfsq)
-        deallocate(spec_ctfsq)
     end subroutine read_even
     
     !>  \brief  read the odd reconstruction
     subroutine read_odd( self, fbody )
         class(eo_reconstructor), intent(inout) :: self
-        character(len=*), intent(in)           :: fbody
+        character(len=*),        intent(in)    :: fbody
         character(len=STDLEN)                  :: odd_vol, odd_rho
         logical                                :: here(2)
-        real, allocatable                      :: spec_ctfsq(:)
         odd_vol = trim(adjustl(fbody))//'_odd'//self%ext
         odd_rho = 'rho_'//trim(adjustl(fbody))//'_odd'//self%ext
         inquire(FILE=odd_vol, EXIST=here(1))
@@ -253,9 +220,6 @@ contains
         else
             call self%reset_odd
         endif
-        spec_ctfsq = file2rarr('spec_ctfsq_'//trim(adjustl(fbody))//'_odd.bin') 
-        call self%odd%set_spec_ctfsq_no_binning(spec_ctfsq)
-        deallocate(spec_ctfsq)
     end subroutine read_odd
 
     ! INTERPOLATION
@@ -302,11 +266,9 @@ contains
     
     !> \brief  for sampling density correction of the eo pairs
     subroutine sampl_dens_correct_eos( self, state )
-        use simple_estimate_ssnr, only: estimate_pssnr2D, estimate_pssnr3D
         class(eo_reconstructor), intent(inout) :: self  !< instance
-        integer, intent(in)                    :: state !< state
-        real, allocatable                      :: res(:), spec_ctfsq(:), spec_count3D(:), corrs(:)
-        real, allocatable                      :: pssnr2D(:), pssnr3D(:), pssnr_ctfsq3D(:), pssnr_ctfsq2D(:)
+        integer,                 intent(in)    :: state !< state
+        real, allocatable                      :: res(:), corrs(:)
         type(image)                            :: even, odd
         integer        :: j
         ! make clipped volumes
@@ -347,9 +309,6 @@ contains
         ! calculate FSC
         call even%fsc(odd, res, corrs)
         call arr2file(corrs, 'fsc_state'//int2str_pad(state,2)//'.bin')
-        ! calculate CTF**2 spectrum
-        spec_ctfsq = self%get_spec_ctfsq()
-        call arr2file(spec_ctfsq, 'ctfsqspec_state'//int2str_pad(state,2)//'.bin')
         do j=1,size(res)
            write(*,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', corrs(j)
         end do
@@ -359,26 +318,8 @@ contains
         self%fsc0143 = max(self%fsc0143,self%fny)
         write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', self%fsc0143
         write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', self%fsc05
-        allocate(pssnr_ctfsq3D(even%get_lfny(1)))
-        if( self%pp%ctf .ne. 'no' )then
-            spec_count3D = even%spectrum('count')
-            ! calculate the CTF**2-dependent component of the PSSNR
-            where( spec_ctfsq > 1e-6 )
-                pssnr_ctfsq3D = spec_count3D/spec_ctfsq
-            else where
-                pssnr_ctfsq3D = 0.
-            end where
-            deallocate(spec_count3D)
-        else
-            pssnr_ctfsq3D = 1.
-        endif
-        ! calculate the PSSNRS used to design filters in 2D (particles) and 3D (volumes)
-        pssnr2D = estimate_pssnr2D(self%pp%avr, corrs)*pssnr_ctfsq3D
-        pssnr3D = estimate_pssnr3D(self%pp%avr, corrs)*pssnr_ctfsq3D
-        call arr2file(pssnr2D, 'pssnr2D_state'//int2str_pad(state,2)//'.bin')
-        call arr2file(pssnr3D, 'pssnr3D_state'//int2str_pad(state,2)//'.bin')
         ! the end
-        deallocate(corrs, res, spec_ctfsq, pssnr_ctfsq3D, pssnr2D, pssnr3D)
+        deallocate(corrs, res)
         call even%kill
         call odd%kill
     end subroutine sampl_dens_correct_eos
@@ -386,7 +327,7 @@ contains
     !> \brief  for sampling density correction, antialiasing, bwd_ft & normalization of the sum
     subroutine sampl_dens_correct_sum( self, reference )
         class(eo_reconstructor), intent(inout) :: self      !< instance
-        class(image), intent(inout)            :: reference !< reference volume
+        class(image),            intent(inout) :: reference !< reference volume
         integer :: filtsz
         write(*,'(A)') '>>> SAMPLING DENSITY (RHO) CORRECTION & WIENER NORMALIZATION'
         call self%eosum%sampl_dens_correct

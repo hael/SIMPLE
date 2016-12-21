@@ -6,7 +6,7 @@
 !
 ! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
 ! Redistribution and modification is regulated by the GNU General Public License.
-! *Authors:* Frederic Bonnet, Cyril Reboul & Hans Elmlund 2016
+! *Authors:* Cyril Reboul & Hans Elmlund 2016
 !
 module simple_commander_volops
 use simple_defs            ! singleton
@@ -87,7 +87,7 @@ contains
         class(cmdline),                intent(inout) :: cline
         type(params)      :: p
         type(build)       :: b
-        real, allocatable :: fsc(:), spec_count3D(:), tmparr(:), pssnr_ctfsq3D(:), pssnr3D(:), sqrtssnr(:), optlp(:)
+        real, allocatable :: fsc(:), optlp(:)
         integer           :: k, state=1
         p = params(cline, checkdistr=.false.) ! constants & derived constants produced, mode=2
         call b%build_general_tbox(p, cline)   ! general objects built

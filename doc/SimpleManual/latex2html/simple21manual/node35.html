@@ -1,0 +1,84 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">
+
+<!--Converted with LaTeX2HTML 2002-2-1 (1.71)
+original version by:  Nikos Drakos, CBLU, University of Leeds
+* revised and updated by:  Marcus Hennecke, Ross Moore, Herb Swan
+* with significant contributions from:
+  Jens Lippmann, Marek Rouchal, Martin Wilck and others -->
+<HTML>
+<HEAD>
+<TITLE>Program: simple_prime3D_init</TITLE>
+<META NAME="description" CONTENT="Program: simple_prime3D_init">
+<META NAME="keywords" CONTENT="simple21manual">
+<META NAME="resource-type" CONTENT="document">
+<META NAME="distribution" CONTENT="global">
+
+<META NAME="Generator" CONTENT="LaTeX2HTML v2002-2-1">
+<META HTTP-EQUIV="Content-Style-Type" CONTENT="text/css">
+
+<LINK REL="STYLESHEET" HREF="simple21manual.css">
+
+<LINK REL="next" HREF="node36.html">
+<LINK REL="previous" HREF="node34.html">
+<LINK REL="up" HREF="node33.html">
+<LINK REL="next" HREF="node36.html">
+</HEAD>
+
+<BODY >
+<!--Navigation Panel-->
+<A NAME="tex2html554"
+  HREF="node36.html">
+<IMG WIDTH="37" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="next"
+ SRC="file:/sw/share/lib/latex2html/icons/next.png"></A> 
+<A NAME="tex2html550"
+  HREF="node33.html">
+<IMG WIDTH="26" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="up"
+ SRC="file:/sw/share/lib/latex2html/icons/up.png"></A> 
+<A NAME="tex2html544"
+  HREF="node34.html">
+<IMG WIDTH="63" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="previous"
+ SRC="file:/sw/share/lib/latex2html/icons/prev.png"></A> 
+<A NAME="tex2html552"
+  HREF="node1.html">
+<IMG WIDTH="65" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="contents"
+ SRC="file:/sw/share/lib/latex2html/icons/contents.png"></A>  
+<BR>
+<B> Next:</B> <A NAME="tex2html555"
+  HREF="node36.html">Program: simple_prime3D</A>
+<B> Up:</B> <A NAME="tex2html551"
+  HREF="node33.html">Ab initio 3D reconstruction</A>
+<B> Previous:</B> <A NAME="tex2html545"
+  HREF="node34.html">Program: simple_resrange</A>
+ &nbsp; <B>  <A NAME="tex2html553"
+  HREF="node1.html">Contents</A></B> 
+<BR>
+<BR>
+<!--End of Navigation Panel-->
+
+<H3><A NAME="SECTION00082200000000000000"></A>
+<A NAME="prime3D_init"></A>
+<BR>
+Program: <FONT COLOR="#0f75ff"><TT>simple_prime3D_init</TT></FONT>
+</H3>
+<FONT COLOR="#0f75ff"><TT>simple_prime3D_init</TT></FONT> is a program for generating a random initial model for initialisation of PRIME3D when executed in distributed mode. It is assumed that the images have been phase flipped. If the data set is large (&gt;5000 images), generating a random model can be quite slow. To speedup, set <TT>nran</TT> to some smaller number, resulting in <TT>nran</TT> images selected randomly for reconstruction.
+<PRE>
+    $ SIMPLE_PRIME3D_INIT stk=&lt;stack.ext&gt; smpd=&lt;sampling distance(in A)&gt; msk=&lt;mask}
+    radius(in pixels)&gt; [nspace=&lt;nr reference sections{1000}&gt;] [nran=&lt;size of
+    random sample&gt;] [lp=&lt;low-pass limit(in A)&gt;] [nthr=&lt;nr OpenMP threads{1}&gt;]
+    ** less commonly used **
+    [pgrp=&lt;cn|dn|t|o|i{c1}&gt;] [npeaks=&lt;nr nonzero orientation weights{1}&gt;]
+    [ctf=&lt;yes|no|flip|mul{no}&gt;] [kv=&lt;acceleration voltage(in kV){300.}&gt;]
+    [fraca=&lt;frac amp contrast{0.07}&gt;] [cs=&lt;spherical aberration constant(in
+    mm){2.7}&gt;] [deftab=&lt;text file with defocus values&gt;] [inner=&lt;inner mask
+    radius(in pixels)&gt;] [width=&lt;pixels falloff inner mask{10}&gt;]
+    [xfel=&lt;yes|no{no}&gt;]
+</PRE>
+
+<P>
+<BR><HR>
+<ADDRESS>
+Hans Elmlund
+2016-05-24
+</ADDRESS>
+</BODY>
+</HTML>

@@ -1,0 +1,825 @@
+System requirements</br>
+Hardware
+<ul>CPU
+  <li>Linux (fully supported Debian-based distributions: Mint-17.1, Ubuntu (14.10, 15.04, 15.10, 16.04 LTS)), SUSE-13.2 (earlier SUSE versions are also supported but not tested)</li>
+  <li>MacOSX (Yosemite and El Capitan, i.e. 10.10 and above)</li>
+</ul></br>
+
+Sofware
+<ul>CPU
+  <li>GNU tool chain 4.9 and above</li>
+  <li>The linear algebra packages: Lapack and BLAS</li>
+  <li>FFTW-3 (The Fastest Fourier Transform in the West library)</li>
+</ul></br>
+
+<HTML>
+<HEAD>
+    
+HEADING: Installation
+
+<TITLE>Compiling SIMPLE from source on a Linux PC</TITLE>
+
+
+<H2><A NAME="SECTION00051000000000000000"></A>
+<A NAME="compilepc"></A>
+<BR>
+Compiling SIMPLE from source on a Linux PC
+</H2>
+
+<P>
+Here we will compile SIMPLE2.1 from source on a Linux PC. The manual states that  SIMPLE2.1 requires the GNU toolchain version 4.9.1 or later (see above). Although SIMPLE supports all newer versions of the GNU toolchain, it is safest to use version 4.9.X because later versions are currently incompatible with the CUDA7 compiler. GPU accelerated code is planned for SIMPLE v3 and it may not be supported unless 4.9.X is used. To check the compiler versions, we execute
+<PRE>
+    $ gfortran --version
+    GNU Fortran (GCC) 4.9.1
+    Copyright (C) 2014 Free Software Foundation, Inc.
+</PRE>
+To confirm that the gcc and g++ compilers are of the same version, we execute
+<PRE>
+    $ gcc --version
+    gcc (GCC) 4.9.1
+    Copyright (C) 2014 Free Software Foundation, Inc.
+    This is free software; see the source for copying conditions.  There is NO
+    warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+</PRE>
+<PRE>
+    $ g++ --version
+    g++ (GCC) 4.9.1
+    Copyright (C) 2014 Free Software Foundation, Inc.
+    This is free software; see the source for copying conditions.  There is NO
+    warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+</PRE>
+To check whether lapack is installed, we open the package manager installed on our system (in our case <TT>Synaptic</TT> but other systems may have others, such as <TT>YaST</TT>, <TT>apt</TT> etc.) and search for <TT>lapack</TT> and conclude that <TT>liblapack3</TT> is installed on the system. We also search for <TT>fftw</TT> and conclude that the <TT>libfftw3-single-3</TT> is installed on the system. We cd to the directory  where we have our software installed (<TT>&lt;my software location&gt;</TT>) and copy the tar ball there
+<PRE>
+    $ cd &lt;my software location&gt;
+    $ cp ~/Downloads/simple2.1.tar.gz .
+</PRE>
+Next, we unpack the tar ball and cd to the simple directory
+<PRE>
+    $ gunzip simple2.1.tar.gz
+    $ tar -xvf simple2.1.tar
+    $ cd simple2.1/
+</PRE>
+To check which Linux distribution we are running, we execute
+<PRE>
+    $ lsb_release -a
+    No LSB modules are available.
+    Distributor ID: Ubuntu
+    Description:    Ubuntu 15.10
+    Release:    15.10
+    Codename:   wily
+</PRE>
+Now we try to identify the configuration template file most suitable for our system by executing
+<PRE>
+    $ ls -1 scripts/Template_*
+    scripts/Template_FEDORA_21x64_CPU_simple_user_input.pm
+    scripts/Template_MacOSX_10.9.5x64_CPU_simple_user_input.pm
+    scripts/Template_MacOSXFINK_10.11.4x64_CPU_simple_user_input.pm
+    scripts/Template_MASSIVE_CPU_simple_user_input.pm
+    scripts/Template_Mint_17.1x64_CPU_simple_user_input.pm
+    scripts/Template_OXFORD_CPU_simple_user_input.pm
+    scripts/Template_SUSE_13.2x64_CPU_simple_user_input.pm
+    scripts/Template_Ubuntu_14.10x64_CPU_simple_user_input.pm
+    scripts/Template_Ubuntu_15.10x64_CPU_simple_user_input.pm
+    scripts/Template_Ubuntu_16.XXx64_CPU_simple_user_input.pm
+</PRE>
+
+<P>
+For this system, it looks like the <TT>Template_Ubuntu_15.10x64_CPU_simple_user_input.pm</TT> is the best fit, so we copy it to the root of the SIMPLE directory and rename it by executing
+<PRE>
+    $ cp ./scripts/Template_Ubuntu_15.10x64_CPU_simple_user_input.pm
+    simple_user_input.pm
+</PRE>
+
+<P>
+We open the <TT>simple_user_input.pm</TT> file in our favourite text editor (vim) and replace on line 30 <TT>our$SIMPLE_PATH<IMG
+ WIDTH="18" HEIGHT="16" ALIGN="BOTTOM" BORDER="0"
+ SRC="img2.png"
+ ALT="$ =$">
+"/mysimplepath/"</TT> with <TT>our$SIMPLE_PATH<IMG
+ WIDTH="18" HEIGHT="16" ALIGN="BOTTOM" BORDER="0"
+ SRC="img2.png"
+ ALT="$ =$">
+"/home/hael/software/simple2.1/"</TT>. This is the path in which the software will be installed. We close vim and execute
+<PRE>
+    $ ./Makefile_genAll.pl
+    SIMPLE library has finished compilation in dir:
+    /Users/hael/src/fortran/simple_wfrederic/Simple_Restruct.projet
+    *********************************************************
+    * Compilation and linkage is complete for Simple-v2.1   *
+    * You may run all simple checks  --- List check options *
+    * &gt; make check                   --- &gt; make check_help  *
+    *                                --- &gt; make check_cpu   *
+    * Cleaners: --- &gt; make {clean,cleanall,clean_check_cpu} *
+    * New Rel.: --- &gt; make checknews                        *
+    * Lne Cntr: --- &gt; make wc                               *
+    *********************************************************
+</PRE>
+
+<P>
+Compilation was succesful and we see that a new directory <TT>/bin</TT> has been created in the simple directory in addition to two text files <TT>add2.bashrc</TT> and <TT>add2.tcshrc</TT>
+<PRE>
+    $ cat add2.bashrc
+    export SIMPLEPATH=/home/hael/src/simple
+    export PATH=${SIMPLEPATH}/scripts:${SIMPLEPATH}/$PATH
+    $ cat add2.tcshrc
+    setenv SIMPLEPATH /home/hael/src/simple
+    set path=(${SIMPLEPATH}/scripts ${SIMPLEPATH}/bin $path)
+</PRE>
+
+<P>
+On this machine we use the bash shell, so we add the lines in <TT>add2.bashrc</TT> to the <TT>.bashrc</TT> file and when a new terminal window is opened we have access to all the <TT>simple_*</TT> programs.
+
+<H2><A NAME="SECTION00052000000000000000"></A>
+<A NAME="compilemac"></A>
+<BR>
+Compiling SIMPLE from source on MacOSX
+</H2>
+
+<P>
+This procedure is virtually identical to the one described for Linux above but we need to select the correct configuration file. If the <TT>fink</TT> package manager was used to install the GNU toolchain and the FFTW library, try the configuration file:
+<PRE>
+    scripts/Template_MacOSXFINK_10.11.4x64_CPU_simple_user_input.pm
+</PRE>
+ Otherwise, try the file:
+<PRE>
+    scripts/Template_MacOSX_10.9.5x64_CPU_simple_user_input.pm
+</PRE>
+
+HEADING : Compilation troubleshooting
+
+<H3><A NAME="SECTION00053100000000000000">
+FFTW</A>
+</H3>
+
+<P>
+If not installed, the FFTW-3 library needs to be installed. Most Linux package managers <TT>YaST</TT>, <TT>Synaptic</TT>, <TT>apt-get</TT> etc. provide the FFTW-3 library. On a Mac system the <TT>Fink</TT> and <TT>Macports</TT> package managers provide the FFTW-3 library or it can be obtained from: <TT><A NAME="tex2html1"
+  HREF="http://www.fftw.org/install/mac.html">http://www.fftw.org/install/mac.html</A></TT>. SIMPLE relies on the single-precision FFTW library. Typically we will need to
+<PRE>
+    $ ./configure --enable-floats
+    $ make
+    $ sudo make install
+</PRE>
+
+<P>
+The <TT>-enable floats</TT> directive is critical as the installer will otherwise only install the double-precision version of the library. We check that we have in the lib folder (typically: <TT>/usr/local/lib/</TT>):
+
+<P>
+<PRE>
+    libfftw3.a libfftw3.la
+    libfftw3f.a libfftw3f.la
+</PRE>
+
+<P>
+Similarly the <TT>lapack3</TT> and <TT>BLAS</TT> will need to be installed on the system.
+
+<H3><A NAME="SECTION00053200000000000000">
+Compilers</A>
+</H3>
+
+<P>
+One possible cause of failing compilation may be that the compiler paths are not correctly set in the <TT>simple_user_input.pm</TT> file. A typical configuration looks like
+
+<P>
+<PRE>
+    our$CC_COMPILER = "/usr/local/bin/gcc";
+    our$GCC_COMPILER = "/usr/local/bin/g++";
+    our$MPI_F_COMPILER = "/usr/local/bin/mpif90";
+    our$FCOMPILER = "/usr/local/bin/gfortran";
+</PRE>
+
+<P>
+If we are on MacOSX and used the <TT>Fink</TT> package manager to install the GNU toolchain, the configuration will typically look like:
+
+<P>
+<PRE>
+    our$CC_COMPILER = "/sw/bin/gcc-fsf-5";
+    our$GCC_COMPILER = "/sw/bin/g++-fsf-5";
+    our$MPI_F_COMPILER = "/sw/bin/mpif90";
+    our$FCOMPILER = "/sw/bin/gfortran";
+</PRE>
+
+<P>
+If we are on MacOSX and used the <TT>MacPorts</TT> package manager to install the GNU toolchain, the configuration will typically look like:
+
+<P>
+<PRE>
+    our$CC_COMPILER = "/opt/local/bin/gcc";
+    our$GCC_COMPILER = "/opt/local/bin/g++";
+    our$MPI_F_COMPILER = "/opt/local/bin/mpif90";
+    our$FCOMPILER = "/opt/local/bin/gfortran";
+</PRE>
+
+<P>
+On MacOSX it is required that the correct Command Line Tools for <TT>Xcode</TT> are installed. If we use the package managers <TT>Fink</TT> or <TT>MacPorts</TT> this is taken care of as part of the installation procedure. The <TT>gfortran-5</TT>,  <TT>gcc-5</TT> and <TT>g++-5</TT> compilers can be installed via the <TT>apt-get</TT>, <TT>Synaptic</TT> or <TT>YaST</TT> package managers on Linux systems. Beware that Apple have their own gcc compiler (for objective-C) which is different than the GNU one and will generate errors upon compilation.
+
+<P>
+<PRE>
+    $ gcc --version 
+    Configured with: --prefix=/Applications/Xcode.app/Contents/Developer/usr
+    --with-gxx-include-dir=/usr/include/c++/4.2.1
+    Apple LLVM version 6.0 (clang-600.0.54) (based on LLVM 3.5svn)
+    Target: x86_64-apple-darwin13.4.0
+    Thread model: posix
+</PRE>
+
+<P>
+The compilation needs to be using the GNU compiler and <B><I>not</I></B> the Apple one. Otherwise the compilation will not work. Make sure that the paths in <TT>simple_user_input.pm</TT> are pointing to the correct location
+
+<P>
+<PRE>
+    $SIMPLE_PATH= {path where simple will be installed}
+    $CC_COMPILER = {path to the gcc compiler on MacOSX,
+                     default: /usr/local/bin/gcc}
+    $GCC_COMPILER = {path to the g++ compiler on MacOSX,
+                     default: /usr/local/bin/g++}
+    $MPI_F_COMPILER = {path to the mpif90 compiler on MacOSX, 
+                       default:/usr/local/bin/mpif90}
+    $FCOMPILER = {path to the gfortran or ifort compiler on MacOSX,
+                   default: /usr/local/bin/gfortran}
+
+    $MPI_DIR={path to the mpi directory, default:/usr}
+    $MPI_DIR_INCLUDE="/usr/include/mpi";
+    $FFTW_LIB={path for to the FFTW lib, default: /usr/local/lib}
+    $FFTW_INC={path to the include for the FFTW, default:
+    /usr/local/fftw/3.3.4-gcc/include/} cluster dependent
+
+    $OBJDIR={path to the object compiled files, default: obj/GFORTgpu}
+    $MODDIR={path to the .mod files, default: obj/GFORTgpu}
+</PRE>
+All of the compilers must originate from the same version of the GNU toolchain. Installation of the dependencies on a Debian operating system such as Ubuntu or Mint is done using the <TT>apt-get install</TT> command as a super user
+<PRE>
+    #the compilers
+    $ sudo apt-get install gfortran gfortran-4.9 gcc-4.9 g++-4.9
+    #libraries (Lapack and BLAS)
+    $ sudo apt-get install scalapack-doc scalapack-mpi-test
+    scalapack-pvm-test scalapack-test-common  libscalapack-pvm1
+    libscalapack-pvm-dev libscalapack-openmpi1 libopenblas-base
+    libopenblas-dev libmlpack-dev libblas-dev libblas3 liblapack-dev
+    liblapack-doc liblapack-doc-man liblapack3 libopenmpi-dev
+    libmeep-mpich2-dev
+    #FFTW-3
+    $ sudo apt-get install libfftw3-bin libfftw3-dbg libfftw3-dev
+    libfftw3-doc libfftw3-double3 libfftw3-long3 libfftw3-quad3
+    libfftw3-single3 cl-fftw3 fftw-dev fftw-docs libfftw3-3
+    libfftw3-mpi-dev libfftw3-mpi3
+</PRE>
+
+<H2><A NAME="SECTION00054000000000000000"></A>
+<A NAME="inst_clusters_linux"></A>
+<BR>
+Installation of SIMPLE on a Linux cluster
+</H2>
+
+<P>
+Installation on a Linux cluster is essentially the same as on a Linux workstation with the exception that the appropriate modules need to be loaded before installation and execution. On a typical SLURM cluster
+
+<P>
+<PRE>
+    $ module load fftw/3.3.4-gcc
+    $ module load gcc/4.9.1
+    $ module load lapack/3.4.2
+</PRE>
+
+<P>
+The instructions for how to execute SIMPLE in distributed environments (clusters or workstations with more than one CPU socket) are described below <A NAME="distr"></A>.
+
+<H2><A NAME="SECTION00055000000000000000"></A>
+<A NAME="inst_auto_binaries_macosx"></A>
+<BR>
+Installation of SIMPLE binaries on MacOSX using an automated script
+</H2>
+
+<P>
+We also provide a script for automatic installation of pre-compiled binaries on MacOSX. Download the tar ball and untar it in the directory of your choice 
+<PRE>
+    $ tar -xvfz Install_Simple_MacOSX_binaries.tar
+</PRE>
+Change directory 
+<PRE>
+    $ cd &lt;path to&gt;/Install_Simple_MacOSX_binaries
+</PRE>
+This installation route requires administration rights, since the script will install GNU compilers version 4.9 and the FFTW library (v3.4.4) in <TT>/usr/local/bin</TT> and <TT>/usr/local/lib</TT> respectively. Don't use this script if you have other GNU compiler versions installed in these folders that you do not wish to have overwritten. To proceed with the installation specify the absolute path of the target location for the installation.
+<PRE>
+    $ csh sudo install_MacOSX_binaries_prod.csh /Users/&lt;username&gt;/Simple
+</PRE>
+Enter your admin user password and wait. This may take a while because the fftw-3.4.4 library needs to be compiled for the most commonly used precisions. The scripts installs and checks for the correctness of the installed compilers (i.e. gcc, g++ and gfortran) in the <TT>/usr/local/bin</TT> folder. It
+should look like
+<PRE>
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+-                       Checking installation ...                       -
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+-                                                                       -
+-                      fftw-3.3.4 library ...                           -
+-                                                                       -
+libfftw3.a	    libfftw3f.a	         libfftw3l.a	      libfftw3q.a
+libfftw3.la	    libfftw3f.la	 libfftw3l.la	      libfftw3q.la
+libfftw3_omp.a	    libfftw3f_omp.a	 libfftw3l_omp.a      libfftw3q_omp.a
+libfftw3_omp.la	    libfftw3f_omp.la     libfftw3l_omp.la     libfftw3q_omp.la
+libfftw3_threads.a  libfftw3f_threads.a  libfftw3l_threads.a  libfftw3q_threads.a
+libfftw3_threads.la libfftw3f_threads.la libfftw3l_threads.la libfftw3q_threads.la
+-                                                                       -
+-    GNU compilers /usr/local/bin/{gcc-4.9,g++-4.9, gfortran-4.9} ...   -
+-                                                                       -
+g++	gcc	gfortran {... plus other files ...}
+
+gcc (GCC) 4.9.2 20141029 (prerelease)
+Copyright (C) 2014 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+g++ (GCC) 4.9.2 20141029 (prerelease)
+Copyright (C) 2014 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+GNU Fortran (GCC) 4.9.2 20141029 (prerelease)
+Copyright (C) 2014 Free Software Foundation, Inc.
+
+GNU Fortran comes with NO WARRANTY, to the extent permitted by law.
+You may redistribute copies of GNU Fortran
+under the terms of the GNU General Public License.
+For more information about these matters, see the file named COPYING
+</PRE>
+A successful completion of script provides the final steps for
+successful installation and should show:
+<PRE>
+    ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! !
+    !                                                                       !
+    !            You now need to add the environment variable in            !
+    !                your ~/.bashrc or shell rc:                            !
+    !                                                                       !
+                                 in bash                                     
+    export SIMPLEPATH=/Users/&lt;username&gt;/Simple/MacOSX_binaries 
+    export PATH=${SIMPLEPATH}/scripts:${SIMPLEPATH}/bin:$PATH        
+                                                                                                                 
+                         in shell or cshell or tshell                        
+                                           
+    setenv SIMPLEPATH /Users/&lt;username&gt;/Simple/MacOSX_binaries
+    set path=(${SIMPLEPATH}/scripts ${SIMPLEPATH}/bin $path)
+    !                                                                       !
+        Check ownership of installation path: /Users/&lt;username&gt;/Simple                   
+             if it has root and not &lt;username&gt; then change it by:                 
+    !                                                                       !
+                    sudo chown -R &lt;username&gt; /Users/&lt;username&gt;/Simple                         
+    !                                                                       !
+    !          You may now start using SIMPLE from command line             !
+          and go to: /Users/&lt;username&gt;/Simple/MacOSX_binaries                            
+    !                       to launch the checks                             
+    !                                                                       !
+                            csh launch_checks.csh                            
+    !                                                                       !
+    ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! !
+</PRE>
+To check the owner ship of the target location
+<PRE>
+    $ ls -al /Users/&lt;username&gt;/Simple
+    total 0
+    drwxr-xr-x   3 root       staff  102 20 May 12:48 .
+    drwxr-xr-x+ 26 &lt;username&gt; staff  884 20 May 13:36 ..
+    drwxr-xr-x   7 root       staff  238 20 May 14:03 MacOSX_binaries
+</PRE>
+We recommend changing ownership to <TT>&lt;username&gt;</TT> via   
+<PRE>
+    $ sudo chown -R &lt;username&gt; /Users/&lt;username&gt;/Simple
+</PRE>
+and to confirm that the rights were changed, execute
+<PRE>
+    $ ls -al /Users/&lt;username&gt;/Simple
+    total 0
+    drwxr-xr-x   3 &lt;username&gt; staff  102 20 May 12:48 .
+    drwxr-xr-x+ 26 &lt;username&gt; staff  884 20 May 13:36 ..
+    drwxr-xr-x   7 &lt;username&gt; staff  238 20 May 14:03 MacOSX_binaries
+</PRE>
+Lastly, we need to add a few paths to our shell environment. This enables running simple commands from the prompt anywhere in the user directory structure and. If you are using the bash shell, add to your <TT>.bashrc</TT>
+<PRE>
+    export SIMPLEPATH=/Users/&lt;username&gt;/Simple/MacOSX_binaries
+    export PATH=${SIMPLEPATH}/scripts:${SIMPLEPATH}/bin:$PATH
+</PRE>
+and if you are using the c-shell or the tc-shell, add to your <TT>.cshrc</TT> or <TT>.tcshrc</TT>
+<PRE>
+    setenv SIMPLEPATH /Users/&lt;username&gt;/Simple/MacOSX_binaries
+    set path=(${SIMPLEPATH}/scripts ${SIMPLEPATH}/bin $path)
+</PRE>
+
+<H2><A NAME="SECTION00056000000000000000">
+File Formats</A>
+</H2>
+
+<P>
+SIMPLE2.1 supports both SPIDER (<TT>*.spi</TT>) and MRC (<TT>*.mrc</TT>) formats for image stacks and volumes. The MRC file handling classes are shared with the the Frealix program for helical reconstruction (<A
+ HREF="#rohou2014frealix">, </A>). Relion (<A
+ HREF="#Scheres:2012aa">, </A>) uses the convention that MRC stacks have the suffix <TT>*.mrcs</TT> and volumes the suffix <TT>*.mrc</TT>. This is to overcome the annoyance that it is not possible to tell from an MRC file header whether a MRC file is a volume or a stack. With SIMPLE you can select to use either the <TT>*.mrcs</TT> or <TT>*.mrc</TT> suffix for stacks. The way that we keep track of whether a file is a volume or stack is via the command line key value. The key-value pairs <TT>vol1=rec.mrc</TT> and <TT>vol2=rec2.mrc</TT> refer to volumes whereas the key-value pairs <TT>stk=ptcls.mrc</TT> and <TT>stk2=ptcls2.mrc</TT> refer to stacks. Another notable change is the text file format used to write per-particle information to disk. The SIMPLE text-files used for parameter input/output now use a <TT>key=value</TT> syntax of the form
+<PRE>
+    e1=80. e2=100. e3=5.5 x=1.23 y=4.25 dfx=2.56 dfy=2.54 angast=30.5 state=1
+</PRE>
+to represent per-particle information. Internally, the orientation information is stored in a dynamic hash data structure, which gives the file format high flexibility. Therefore, writing conversion scripts to allow interchange of parameters between SIMPLE and other packages is trivial. SIMPLE uses the same conventions as Frealign (<A
+ HREF="#Grigorieff:2007aa">, </A>) to represent orientations and CTF parameters. The CTF parameterization obtained by CTFFIND (<A
+ HREF="#Mindell:2003aa">, </A>) can be directly plugged into SIMPLE, for example by creating a file <TT>deftab.txt</TT>, looking like:
+<PRE>
+    dfx=2.56 dfy=2.76 angast=30.5
+    dfx=3.50 dfy=3.33 angast=60.0
+    dfx=1.98 dfy=2.02 angast=120.5
+    ...
+</PRE>
+and adding <TT>deftab=deftab.txt</TT> and <TT>ctf=yes</TT> to the PRIME command line (if the images are phase-flipped, this should be indicated by <TT>ctf=flip</TT>). The <TT>SIMPLE/scripts</TT> folder contains a perl-script (<TT>convert_frealign2simple.pl</TT>) to convert a Frealing parameter file to a SIMPLE parameter file. This is easy, since both software internally use the http://spider.wadsworth.org/spider_doc/spider/docs/euler.html<B><FONT COLOR="#ff7d00">Spider Euler angle convention</FONT></B>. Other packages may use other conventions.
+
+<H1><A NAME="SECTION00060000000000000000"></A>
+<A NAME="paraexec"></A>
+<BR>
+Parallel SIMPLE execution on laptops, workstations and heterogeneous clusters
+</H1>
+On any machine with a single socket (laptop or workstation) it is seldom worth the effort to go beyond the shared-memory parallelisation that we provide using the OpenMP protocol. The shared-memory parallelisation is controlled by the <TT>nthr</TT> key (for number of threads). If your machine has six physical cores and no hyper-threading set <TT>nthr=6</TT> to use all the resources and <TT>nthr=3</TT> to use half the resources. If your machine is hyper-threaded, you may gain performance by increasing the number of threads, depending on the hardware architecture and current workload on the machine. If you have more than one CPU socket on the machine substantial performance enhancements will be gained by executing SIMPLE in distributed mode using the program <FONT COLOR="#0f75ff"><TT>distr_simple.pl</TT></FONT> in the <TT>SIMPLE/scripts</TT> folder. This program fetches machine-specific information that the system administrator (that may be you) is responsible for providing in the <TT>simple_user_input.pm</TT> file. This is how the configuration file looks for a workstation or cluster with any number of sockets, six CPUs per socket and 16GB RAM
+<PRE>
+    #####################################################################
+    # USER-DEFINED VARIABLES THAT CONTROL WHICH CLUSTER ENVIRONMENT TO  #
+    # USE AND HOW TO USE THE RESOURCES                                  #
+    #####################################################################
+    our$SIMPLESYS      = 'LOCAL';          # Name of system
+    our%DISTR_ENV      = %LOCAL_DISTR_ENV; # Defines the environment     
+    our$EMAIL          = 'myname@uni.edu'; # e-mail for failure report
+    our$NTHR           = 6;                # number of threads (CPUs per core)
+    our$MEMSTR         = '8000';           # string descriptor for memory
+    our$TIME_PER_IMAGE = 150;              # time per image (in seconds)
+</PRE>
+If we had eight CPUs per socket and 32GB RAM we would have changed the number of threads to <TT>$NTHR=8</TT> and the requested memory to <TT>$MEMSTR=16000</TT>. We will describe what the <TT>$SIMPLESYS</TT> and <TT>%DISTR_ENV</TT> variables control after we have discussed how to optimise distributed execution of SIMPLE on any heterogeneous computer cluster (Figure 1, below).
+<BR>
+
+<BR>
+Every cluster is equipped with a job scheduler/workload manager that needs to be configured. The two most common job schedulers are SLURM (Simple Linux Utility for Resource Management) and PBS (Portable Batch System). We prefer SLURM, since it is a more modern and versatile job scheduler than PBS. All the instructions that need to be provided to the job scheduler have been separated out and put in the perl configuration module <TT>scripts/simple_clusterSpecs.pm</TT>. A typical SLURM configuration is defined as
+<PRE>
+    ####################################################################
+    # DEFINES DISTRIBUTED EXECUTION ON MYCLUSTER                       #
+    ####################################################################
+    our%MYCLUSTER_DISTR_ENV;
+    $MYCLUSTER_DISTR_ENV{'SUBMITCMD'}='sbatch';
+    $MYCLUSTER_DISTR_ENV{'SCRIPT'}="#!/bin/bash
+    #SBATCH --mail-user=&lt;&lt;&lt;&lt;EMAIL&gt;&gt;&gt;&gt;
+    #SBATCH --mail-type=FAIL
+    #SBATCH --job-name=$NAME_DISTR
+    #SBATCH --ntasks=1
+    #SBATCH --ntasks-per-socket=1
+    #SBATCH --cpus-per-task=&lt;&lt;&lt;NTHR&gt;&gt;&gt;
+    #SBATCH --mem=&lt;&lt;&lt;MEMSTR&gt;&gt;&gt;
+    #SBATCH --time=0-&lt;&lt;&lt;HOURS&gt;&gt;&gt;:&lt;&lt;&lt;MINUTES&gt;&gt;&gt;:0
+    #SBATCH --output=outfile.%j
+    #SBATCH --error=errfile.%j
+    cd &lt;&lt;&lt;EXECDIR&gt;&gt;&gt; 
+    &lt;&lt;&lt;CMDSTRING&gt;&gt;&gt; fromp=&lt;&lt;&lt;START&gt;&gt;&gt; top=&lt;&lt;&lt;STOP&gt;&gt;&gt; part=&lt;&lt;&lt;PART&gt;&gt;&gt;&amp;
+    &amp;nthr=&lt;&lt;&lt;NTHR&gt;&gt;&gt; outfile=$ALGNDOC_FBODY&lt;&lt;&lt;PART&gt;&gt;&gt;.txt &gt; OUT&lt;&lt;&lt;PART&gt;&gt;&gt;\nexit\n";
+    $MYCLUSTER_DISTR_ENV{'SHMEMSCRIPT'}="#!/bin/bash
+    #SBATCH --mail-user=&lt;&lt;&lt;&lt;EMAIL&gt;&gt;&gt;&gt;
+    #SBATCH --mail-type=FAIL
+    #SBATCH --job-name=$NAME_SHMEM_DISTR
+    #SBATCH --ntasks=1
+    #SBATCH --ntasks-per-socket=1
+    #SBATCH --cpus-per-task=&lt;&lt;&lt;NTHR&gt;&gt;&gt;
+    #SBATCH --mem=&lt;&lt;&lt;MEMSTR&gt;&gt;&gt;
+    #SBATCH --time=0-&lt;&lt;&lt;HOURS&gt;&gt;&gt;:&lt;&lt;&lt;MINUTES&gt;&gt;&gt;:0
+    #SBATCH --output=shmemoutfile.%j
+    #SBATCH --error=shmemerrfile.%j
+    cd &lt;&lt;&lt;EXECDIR&gt;&gt;&gt; 
+    &lt;&lt;&lt;CMDSTRING&gt;&gt;&gt; nthr=&lt;&lt;&lt;NTHR&gt;&gt;&gt; &gt; SHMEMJOBOUT\nexit\n";
+</PRE>
+The <TT>&amp;</TT> character denotes a line break and the substitution tags
+<PRE>
+    &lt;&lt;&lt;MYVARIABLE&gt;&gt;&gt;
+</PRE>
+describe variables that will be automatically substituted into the scripts. The variables <TT>$NAME_DISTR</TT> and <TT>$NAME_SHMEM_DISTR</TT> are local to the module and describe the hardcoded names of the distribution scripts. In order to make the newly defined distributed environment accessible to SIMPLE we need to export it by adding it to the export array in the header of the module, so that the line
+<PRE>
+    @EXPORT = qw($ALGNDOC_FBODY %LOCAL_DISTR_ENV %MASSIVE_DISTR_ENV&amp;
+    &amp;%MASSIVE2_DISTR_ENV %MONARCH_DISTR_ENV %OXFORD_DISTR_ENV&amp;
+    &amp;%OXFORD2_DISTR_ENV %OXFORD3_DISTR_ENV  $CVL_DISTR_ENV);
+</PRE>
+is updated to
+<PRE>
+    @EXPORT = qw($ALGNDOC_FBODY %LOCAL_DISTR_ENV %MASSIVE_DISTR_ENV&amp;
+    &amp;%MASSIVE2_DISTR_ENV %MONARCH_DISTR_ENV %OXFORD_DISTR_ENV&amp;
+    &amp;%OXFORD2_DISTR_ENV %OXFORD3_DISTR_ENV  $CVL_DISTR_ENV)&amp;
+    &amp;%MYCLUSTER_DISTR_ENV;
+</PRE>
+There are different versions of SLURM and PBS and different clusters may use different conventions for how to construct the script headers. For example on our <TT>MASSIVE2</TT> cluster we need to add to the headers
+<PRE>
+    #SBATCH --partition=cryoem
+    #SBATCH --qos=vip_m2
+</PRE>
+to indicate that we will use our dedicated <TT>cryoem</TT> partition and our dedicated queue <TT>vip_m2</TT>. In <TT>simple_clusterSpecs.pm</TT> there is also a template available for PBS
+<PRE>
+    ####################################################################
+    # DEFINES DISTRIBUTED EXECUTION ON THE MASSIVE 1 CLUSTER           #
+    ####################################################################
+    our%MASSIVE_DISTR_ENV;
+    $MASSIVE_DISTR_ENV{'SUBMITCMD'}='qsub';
+    $MASSIVE_DISTR_ENV{'SCRIPT'}="#!/bin/bash
+    #PBS -N $NAME_DISTR
+    #PBS -l nodes=1:ppn=&lt;&lt;&lt;NTHR&gt;&gt;&gt;,mem=&lt;&lt;&lt;MEMSTR&gt;&gt;&gt;
+    #PBS -l walltime=&lt;&lt;&lt;HOURS&gt;&gt;&gt;:&lt;&lt;&lt;MINUTES&gt;&gt;&gt;:0
+    #PBS -o outfile.\$PBS_JOBID
+    #PBS -e errfile.\$PBS_JOBID
+    cd &lt;&lt;&lt;EXECDIR&gt;&gt;&gt; 
+    &lt;&lt;&lt;CMDSTRING&gt;&gt;&gt; fromp=&lt;&lt;&lt;START&gt;&gt;&gt; top=&lt;&lt;&lt;STOP&gt;&gt;&gt; part=&lt;&lt;&lt;PART&gt;&gt;&gt;&amp;
+    &amp;nthr=&lt;&lt;&lt;NTHR&gt;&gt;&gt; outfile=$ALGNDOC_FBODY&lt;&lt;&lt;PART&gt;&gt;&gt;.txt &gt; OUT&lt;&lt;&lt;PART&gt;&gt;&gt;\nexit\n";
+    $MASSIVE_DISTR_ENV{'SHMEMSCRIPT'}="#!/bin/bash
+    #PBS -N $NAME_SHMEM_DISTR
+    #PBS -l nodes=1:ppn=&lt;&lt;&lt;NTHR&gt;&gt;&gt;,mem=&lt;&lt;&lt;MEMSTR&gt;&gt;&gt;
+    #PBS -l walltime=&lt;&lt;&lt;HOURS&gt;&gt;&gt;:&lt;&lt;&lt;MINUTES&gt;&gt;&gt;:0
+    #PBS -o outfile.\$PBS_JOBID
+    #PBS -e errfile.\$PBS_JOBID
+    cd &lt;&lt;&lt;EXECDIR&gt;&gt;&gt; 
+    &lt;&lt;&lt;CMDSTRING&gt;&gt;&gt; nthr=&lt;&lt;&lt;NTHR&gt;&gt;&gt; &gt; SHMEMJOBOUT\nexit\n";
+</PRE>
+but PBS does not provide any means to bind a set of threads to a particular socket. However, by utilising the <TT>mpirun</TT> command we can enforce this desired behaviour as exemplified below
+<PRE>
+    ####################################################################
+    # DEFINES DISTRIBUTED EXECUTION ON SUSANS CLUSTER IN OXFORD        #
+    ####################################################################
+    our%OXFORD_DISTR_ENV;
+    $OXFORD_DISTR_ENV{'SUBMITCMD'}='qsub';
+    $OXFORD_DISTR_ENV{'SCRIPT'}="#!/bin/bash
+    #PBS -N $NAME_DISTR
+    #PBS -l nodes=1:ppn=&lt;&lt;&lt;NTHR&gt;&gt;&gt;,mem=&lt;&lt;&lt;MEMSTR&gt;&gt;&gt;
+    #PBS -l walltime=&lt;&lt;&lt;HOURS&gt;&gt;&gt;:&lt;&lt;&lt;MINUTES&gt;&gt;&gt;:0
+    #PBS -o outfile.\$PBS_JOBID
+    #PBS -e errfile.\$PBS_JOBID
+    #PBS -V
+    #PBS -l naccesspolicy=UNIQUEUSER
+    cd &lt;&lt;&lt;EXECDIR&gt;&gt;&gt; 
+    mpirun -np 1 --bind-to-socket --cpus-per-proc &lt;&lt;&lt;NTHR&gt;&gt;&gt; &lt;&lt;&lt;CMDSTRING&gt;&gt;&gt;&amp;
+    &amp;fromp=&lt;&lt;&lt;START&gt;&gt;&gt; top=&lt;&lt;&lt;STOP&gt;&gt;&gt; part=&lt;&lt;&lt;PART&gt;&gt;&gt; nthr=&lt;&lt;&lt;NTHR&gt;&gt;&gt;&amp;
+    &amp;outfile=$ALGNDOC_FBODY&lt;&lt;&lt;PART&gt;&gt;&gt;.txt &gt; OUT&lt;&lt;&lt;PART&gt;&gt;&gt;\nexit\n";
+    $OXFORD_DISTR_ENV{'SHMEMSCRIPT'}="#!/bin/bash
+    #PBS -N $NAME_SHMEM_DISTR
+    #PBS -l nodes=1:ppn=&lt;&lt;&lt;NTHR&gt;&gt;&gt;,mem=&lt;&lt;&lt;MEMSTR&gt;&gt;&gt;
+    #PBS -l walltime=&lt;&lt;&lt;HOURS&gt;&gt;&gt;:&lt;&lt;&lt;MINUTES&gt;&gt;&gt;:0
+    #PBS -o outfile.\$PBS_JOBID
+    #PBS -e errfile.\$PBS_JOBID
+    #PBS -V
+    #PBS -l naccesspolicy=UNIQUEUSER
+    cd &lt;&lt;&lt;EXECDIR&gt;&gt;&gt; 
+    mpirun -np 1 --bind-to-socket --cpus-per-proc &lt;&lt;&lt;NTHR&gt;&gt;&gt; &lt;&lt;&lt;CMDSTRING&gt;&gt;&gt;&amp;
+    &amp;nthr=&lt;&lt;&lt;NTHR&gt;&gt;&gt; &gt; SHMEMJOBOUT\nexit\n";
+</PRE>
+Once our environment for distributed execution is established we use the Program: <FONT COLOR="#0f75ff"><TT>distr_simple.pl</TT></FONT>, which supports distributed execution of the programs:
+<PRE>
+    simple_prime2D
+    simple_prime3D
+    simple_eo_recvol
+    simple_recvol
+    simple_simemimgs
+</PRE>
+We normally let <FONT COLOR="#0f75ff"><TT>distr_simple.pl</TT></FONT> run in the background on the login node of our cluster. We will discuss the execution routes in more detail in the <TT>Workflows</TT> section but an example of how to distribute <FONT COLOR="#0f75ff"><TT>simple_prime2D</TT></FONT> using ten nodes is provided below. In order to reduce I/O latency we split the CTF phase-flipped image stack into as many partitions (<TT>npart</TT>) as we plan to execute
+<PRE>
+     $ simple_stackops stk=my_phaseflipped_ptcls.mrc split=npart
+</PRE>
+Then, we are ready to execute in distributed mode
+<PRE>
+     $ nohup distr_simple.pl prg=prime2D npart=10 stk=ptcls.mrc smpd=1.77 msk=100
+     ncls=600 refs=startcavgsmsk.mrc oritab=prime2D_startdoc.txt &gt;&gt; PRIME2DOUT &amp;
+</PRE>
+Another option available on clusters that use the SLURM scheduler is to use the <TT>srun</TT> command for <FONT COLOR="#0f75ff"><TT>distr_simple.pl</TT></FONT> via
+<PRE>
+    $ srun --ntasks=1 --ntasks-per-socket=1 --cpus-per-task=1 --mem=200 --time=2-0:0:0
+    --output=PRIME2DOUT.%j --error=PRIME2DERR.%j distr_simple.pl prg=prime2D 
+    npart=10 stk=ptcls.mrc smpd=1.77 msk=100 ncls=600 refs=startcavgsmsk.mrc 
+    oritab=prime2D_startdoc.txt &amp;
+</PRE>
+However, beta testers have reported that srun job sometimes dies with no warning, possibly because of the low tolerance for network errors. A more robust route may be to use <TT>sbatch</TT> as follows
+<PRE>
+    $ sbatch -p MYCLUSTER --wrap="distr_simple.pl prg=prime2D npart=10 stk=ptcls.mrc
+    smpd=1.77 msk=100 ncls=600 refs=startcavgsmsk.mrc oritab=prime2D_startdoc.txt 
+    &gt;&gt; PRIME2DOUT"
+</PRE>
+where the <TT>-wrap</TT> flag automatically generates a bash script for the given command.
+
+TITLE: Workflows
+
+<H2><A NAME="SECTION00071000000000000000"></A>
+<A NAME="ctfflip"></A>
+<BR>
+CTF phase flipping
+</H2>
+SIMPLE uses the same CTF convention as CTFFIND(<A
+ HREF="#Mindell:2003aa">, </A>) and Frealign(<A
+ HREF="#Grigorieff:2007aa">, </A>) with the exception that defocus values are inputted in microns rather than Angstroms. The astigmatism angles are in units of degree. If you have a particle stack of uncorrected windowed single-particle images and you wish to multiply them with the sign of the CTF (phase flipping), please create a text file looking like
+<PRE>
+    dfx=2.56 dfy=2.76 angast=30.5
+    dfx=3.50 dfy=3.33 angast=60.0
+    dfx=1.98 dfy=2.02 angast=120.5
+    ...
+</PRE>
+with the same number of lines as the number of images in the stack, so that there is a one-to-one correspondence between each line of CTF parameters in the text file and each particle image in the stack. Now, use the program <FONT COLOR="#0f75ff"><TT>simple_stackops</TT></FONT> to phase flip the stack
+<PRE>
+    $ simple_stackops stk=ptcls.mrc smpd=2 deftab=ctfparams.txt 
+    ctf=flip kv=300 cs=2.7 fraca=0.07 outstk=ptcls_phflip.mrc
+</PRE>
+and use the corrected stack <TT>ptcls_phflip.mrc</TT> as input for the remaining workflows. Save the <TT>ctfparams.txt</TT> file somewhere safe, you might need it for future Wiener restoration in the refinement.
+
+<H2><A NAME="SECTION00072000000000000000"></A>
+<A NAME="prime2D"></A>
+<BR>
+2D alignment/clustering with PRIME2D
+</H2>
+We provide a solver for the problem of simultaneous alignment and clustering of cryo-EM images (SAC) implemented in the program <FONT COLOR="#0f75ff"><TT>simple_prime2D</TT></FONT>. It is assumed that you have a SPIDER or MRC stack of phase flipped particle images (see section <A HREF="node18.html#ctfflip"><IMG  ALIGN="BOTTOM" BORDER="1" ALT="[*]"
+ SRC="file:/sw/share/lib/latex2html/icons/crossref.png"></A> above). The flowcharts of the workflows involving <FONT COLOR="#0f75ff"><TT>simple_prime2D</TT></FONT> are depicted in Figure 2. 
+
+There are two modes of execution: plain "2D alignment/clustering", assuming that you have a clean and nice data set with not too much junk, such as ice contaminations or particle aggregations. You begin executing <FONT COLOR="#0f75ff"><TT>simple_prime2D_init</TT></FONT> to produce the files <TT>startcavgsmsk.mrc</TT> and <TT>prime2D_startdoc.txt</TT> containing the random references and random clustering solution. These files are are next used as input to <FONT COLOR="#0f75ff"><TT>simple_prime2D</TT></FONT>. However, if you are planning on executing SIMPLE on a multi-socket workstation or cluster using <FONT COLOR="#0f75ff"><TT>distr_simple.pl</TT></FONT> you have to split the stack into as many partitions (nodes) you are planning to run your job on. This step is necessary for reducing I/O latency. On single-socket machines it is not necessary to split the stack. Next, the generated files are inputted to <FONT COLOR="#0f75ff"><TT>simple_prime2D</TT></FONT> together with the particle stack and a few control parameters, such as sampling distance (<TT>smpd</TT>), mask radius in pixels (<TT>msk</TT>), number of desired clusters (<TT>ncls</TT>) and low-pass limit (<TT>lp</TT>). The default low-pass limit is set to <TT>lp=20 &#197;</TT> which ought to be suitable for all particles with a molecular weight above 300 kDa. You may have to include higher frequency components to obtain a good clustering solution for smaller molecules but beware of the problem of overfitting. If too much high-frequency information is included in the search, the solution obtained may be dominated by noise.
+
+<P>
+We also provide a "cleanup" workflow for processing of more challenging data sets. Perhaps your particles were automatically boxed and the stack includes a lot of false positives, such as ice contaminations, particle aggregations, hole edges etc. The first part of the "cleanup" workflow is identical to the original workflow. Next, the final class averages obtained with the first pass of clustering are ranked according to decreasing population with <FONT COLOR="#0f75ff"><TT>simple_rank_cavgs</TT></FONT> and a GUI (we use EMAN(<A NAME="tex2html327"
+  HREF="#Tang:2007aa">, </A>,)) is used to remove unwanted class averages. The program <FONT COLOR="#0f75ff"><TT>simple_map2ptcls</TT></FONT> is then applied to map your manual selection of class averages back to the particle images. The selection is communicated via a text document named <TT>mapped_ptcls_params.txt</TT> by default. Every particle image receives a state assignment of one by default (<TT>state=1</TT>) and the particles corresponding to deleted class averages are assigned a state label of zero (<TT>state=0</TT>) in the outputted document. This prevents them from being considered in future processing steps. In order to obtain a "clean" clustering solution, execute the original workflow again but now inputting the <TT>mapped_ptcls_params.txt</TT> document to the <FONT COLOR="#0f75ff"><TT>simple_prime2D_init</TT></FONT> initialiser in order to propagate the selection.
+
+<H2><A NAME="SECTION00073000000000000000"></A>
+<A NAME="prime3D"></A>
+<BR>
+<I>Ab initio</I> 3D reconstruction with PRIME3D
+</H2>
+
+We provide an <I>ab initio 3D</I> reconstruction algorithm that operates either on class averages or on individual particle images. For small data sets (&lt;10,000) images it is usually a better idea to skip the 2D alignment/clustering step and go directly to PRIME3D. For larger data sets or data sets with a lot of contaminations, such as ice, particle aggregations etc. we advice running PRIME2D first in "cleanup" mode and calculating an <I>ab initio</I> map from "clean" class averages. The 3D PRIME algorithm is implemented in the program <FONT COLOR="#0f75ff"><TT>simple_prime3D</TT></FONT>. It is assumed that you have a SPIDER or MRC stack of class averages (see section <A HREF="node29.html#prime2D"><IMG  ALIGN="BOTTOM" BORDER="1" ALT="[*]"
+ SRC="file:/sw/share/lib/latex2html/icons/crossref.png"></A>) or phase flipped particle images (see section <A HREF="node18.html#ctfflip"><IMG  ALIGN="BOTTOM" BORDER="1" ALT="[*]"
+ SRC="file:/sw/share/lib/latex2html/icons/crossref.png"></A>). The flowchart for the PRIME3D <I>ab initio</I> reconstruction workflow is depicted in Figure 3. You begin executing <FONT COLOR="#0f75ff"><TT>simple_prime3D_init</TT></FONT> to produce the files <TT>startvol_state1.mrc</TT> and <TT>prime3D_startdoc.txt</TT> containing the initial random reference and the orientations used to obtain it. These files are are next used as input to <FONT COLOR="#0f75ff"><TT>simple_prime3D</TT></FONT>. However, if you are planning on executing SIMPLE on a multi-socket workstation or cluster using <FONT COLOR="#0f75ff"><TT>distr_simple.pl</TT></FONT> you have to split the stack into as many partitions (nodes) you are planning to run your job on. This step is necessary for reducing I/O latency. On single-socket machines it is not necessary to split the stack. Next, the generated files are inputted to <FONT COLOR="#0f75ff"><TT>simple_prime3D</TT></FONT> together with the particle stack and a few control parameters, such as sampling distance (<TT>smpd</TT>) and mask radius in pixels (<TT>msk</TT>). Details about how to run PRIME3D and how the initial low-pass limit is set and how it is updated throughout a PRIME3D run is described in the <FONT COLOR="#0f75ff"><TT>simple_prime3D</TT></FONT> section, below. To check the automatically determined low-pass limit range, use the <FONT COLOR="#0f75ff"><TT>simple_resrange</TT></FONT> program.
+
+<H2><A NAME="SECTION00074000000000000000">
+A comprehensive worked-out example for reconstruction of the D7 symmetrical GroEL chaperonin</A>
+</H2>
+
+<P>
+To further illustrate how to use the SIMPLE suite of programs, we provide the following comprehensive worked-out example, including all commands executed when reconstructing the D7 symmetric GroEL chaperonin. The same workflow was used to process a series of experimental datasets with high, low or no symmetry, described in our recent paper (<A
+ HREF="#reboul2016stochastic">, </A>). The workflow consists of four major steps
+
+<OL>
+<LI>2D alignment and clustering of the images using <FONT COLOR="#0f75ff"><TT>simple_prime2D</TT></FONT>
+</LI>
+<LI>asymmetric 3D reconstruction from the class averages using <FONT COLOR="#0f75ff"><TT>simple_prime3D</TT></FONT>
+</LI>
+<LI>symmetrisation of the volume using <FONT COLOR="#0f75ff"><TT>simple_symsrch</TT></FONT>
+</LI>
+<LI>refinement of the symmetrised volume using <FONT COLOR="#0f75ff"><TT>simple_prime3D</TT></FONT>
+</LI>
+</OL>
+The data set consisted of 10,000 phase flipped images with 140x140 pixels dimension, randomly selected from a larger publicly available data set (<A
+ HREF="#Stagg:2008aa">, </A>). Throughout the different steps of the workflow we used a a circular mask radius of <TT>msk=60</TT> pixels and sampling distance of <TT>smpd=1.62</TT>.
+ 
+ <H3><A NAME="SECTION00074100000000000000"></A>
+ <A NAME="2dclust"></A>
+ <BR>
+ 2D alignment and clustering of the images
+ </H3>
+
+ <P>
+ Prior to 2D alignment and clustering, we begin by minimising the effect that off-centre particles could have on the subsequent steps. The method is not aimed at determining the rotational origin shifts exactly but only to roughly centre the particles in the box. This is done by bringing all particle images into broad register with respect to their 2D shifts only, regardless of their in-plane rotation. <FONT COLOR="#0f75ff"><TT>simple_stackops</TT></FONT> with the argument <TT>shalgn=yes</TT> is used, providing our stack (<TT>stk=particles.spi</TT>), sampling distance (<TT>smpd=1.62</TT>) and mask radius in pixels (<TT>msk=60</TT> as input
+ <PRE>
+     $ simple_stackops stk=particles.spi smpd=1.62 msk=60 
+     shalgn=yes trs=3.5 lp=20 nthr=8 outstk=particles_sh.spi
+ </PRE>
+ The shift alignment is done with a hard low-pass limit of 20 &#197; (<TT>lp=20</TT>), as are most of the following steps. The iterative process will typically take a dozen iterations (a few minutes). The <TT>trs</TT> argument limits the shift search to the <!-- MATH
+  $[-trs,trs]$
+  -->
+ <IMG
+  WIDTH="81" HEIGHT="34" ALIGN="MIDDLE" BORDER="0"
+  SRC="img6.png"
+  ALT="$ [-trs,trs]$">
+  range. We typically set the <TT>trs</TT> argument to 2.5% of the image dimension (140). There are 8 CPUs on our machine so we set the number of threads <TT>nthr=8</TT>. A new centred stack (named according to the <TT>outstk</TT> argument) will be written to disk and we will use this one for the reminder of the workflow. A document named <TT>shiftdoc.txt</TT> by default that contains the calculated shifts is also created.
+
+ <P>
+ Next we generate random class averages to initiate the 2D clustering procedure. Given the modest size of our dataset (10,000 images) we choose <TT>ncls=200</TT> to obtain sufficiently populated classes. We recommended increasing this number to at least 500 for larger datasets (&gt;30,000 images).
+ <PRE>
+     $ simple_prime2D_init stk=particles_sh.spi smpd=1.62 msk=60 ncls=200 nthr=8
+ </PRE>
+ <FONT COLOR="#0f75ff"><TT>simple_prime2D_init</TT></FONT> will rapidly generate evenly populated class averages with random in-plane rotations. The stacks of 200 class averages are named <TT>startcavgsmsk.spi</TT> and <TT>startcavgs.spi</TT> (with and without mask). Next, we execute the 2D alignment and clustering in distributed mode
+ <PRE>
+     $ simple_stackops stk=particles_sh.spi split=1
+     $ nohup distr_simple.pl prg=prime2D stk=particles_sh.spi
+     oritab=prime2D_startdoc.txt refs=startcavgsmsk.spi ncls=200
+     srch_inpl=yes smpd=1.62 msk=60 lp=20 npart=1 &gt; PRIME2DOUT &amp;
+ </PRE>
+ The first instruction prepares the split stack for distributed execution. In our case we ran the clustering on a Linux workstation with 1 CPU chipset so we simply set <TT>split=1</TT>. If your machine has two chipsets, set split to 2 but keep in mind that the <TT>npart</TT> argument in the following instruction also needs to be set to 2. The second instruction starts the actual 2D clustering using the randomised classes as a starting point (<TT>refs</TT> argument). It will take approximately 15 iterations and little under 2 hours on a modern workstation with 8 CPUs. In the last lines of the log file <TT>PRIME2DOUT</TT> you should see something looking like
+ <PRE>
+     &gt;&gt;&gt; DISTRIBUTION OVERLAP:                 0.9589
+     &gt;&gt;&gt; PERCENTAGE OF SEARCH SPACE SCANNED:  99.6
+     &gt;&gt;&gt; CORRELATION:                          0.7521
+     &gt;&gt;&gt; CONVERGED: .YES.
+ </PRE>
+ Our criterion for convergence is based the stability of the clusters obtained. In other words, when the cluster assignments are nearly identical from one iteration to the next (distribution overlap  &gt;95% on average) and the particles cannot find a better matching average (fraction of search space scanned &gt;99%) the alignment and clustering stops. In addition, each run is structured as follows. Until near convergence (search space scanned &lt;90%) only cluster assignment and in-plane rotations are searched. After this, shifts are also searched and their limit is automatically set to 2.5% of the image dimension (see above). Every iteration produces a folder named <TT>prime2D_round_XX</TT> that contains all the information to continue a run: a document with the current in-plane parameters (<TT>prime2Ddoc_XX.txt</TT>) and two stacks of the current 200 class averages (masked and unmasked).
+
+ <P>
+ A number of temporary files are also created but they are only used internally and will be automatically deleted at the end of the run. As computer and network failures are part of using workstations and supercomputers you will be able to continue an interrupted run using the files present in these self-contained folders. You can also automatically remove the temporary files by simply typing: <FONT COLOR="#0f75ff"><TT>prime_cleanup.pl</TT></FONT>. Never do this while the application is running.  It is also necessary to keep the current folder organised to avoid data loss and confusion. We do not need the split stack anymore, so type
+ <PRE>
+     $ rm stack_part*.spi
+ </PRE>
+ Visual examination of the 200 class averages (<TT>prime2D_round_15/cavgs_iter15.spi</TT>) shows numerous images with distinctive features of GroEL such as the double ring structure and the heptameric C-symmetric rings on a uniform grey background. One can also note blurrier images with less contrast. Typically, these correspond to lowly populated classes where the weaker SNR is likely to contribute little to the subsequent 3D reconstruction. Consequently, we rank the class averages by decreasing order of their population
+ <PRE>
+     $ simple_rank_cavgs stk=prime2D_round_15/cavgs_iter15.spi 
+     oritab=prime2D_round_15/prime2Ddoc_15.txt outstk=ranked_cavgs.spi
+ </PRE>
+ After visual inspection of the ranked class averages (we use EMAN for this (<A NAME="tex2html367"
+   HREF="#Tang:2007aa">, </A>,)) we decide to discard the noisier/blurrier images by keeping the first 160 averages in the ranked stack. This discards clusters containing less than 30 images per class. We simply extract the top 160 averages using the command
+ <PRE>
+     $ simple_stackops stk=ranked_cavgs.spi fromp=1 top=160 outstk=selected_cavgs.spi
+ </PRE>
+ where <TT>fromp</TT> and <TT>top</TT> define the range of images to keep. With this reduced stack (<TT>selected_cavgs.spi</TT>) we will generate an <I>ab initio</I> 3D reconstruction of the molecule using <FONT COLOR="#0f75ff"><TT>simple_prime3D</TT></FONT>
+ 
+ <H3><A NAME="SECTION00074200000000000000">
+ <I>Ab initio</I> 3D reconstruction</A>
+ </H3>
+
+ <P>
+ We first need a random volume to initiate the search of the five in-plane and out-of-plane parameters of our selected class averages. As in the previous 2D analysis, we execute
+ <PRE>
+     $ simple_prime3D_init stk=selected_cavgs.spi smpd=1.62 msk=60 nthr=8 lp=20
+ </PRE>
+ Consistently with section <A HREF="node22.html#2dclust"><IMG  ALIGN="BOTTOM" BORDER="1" ALT="[*]"
+  SRC="file:/sw/share/lib/latex2html/icons/crossref.png"></A>, we use a low-pass limit of 20 &#197; (<TT>lp=20</TT>). This command will generate two files: a volume reconstructed from random orientation parameters (<TT>startvol_state1.spi</TT>) and the document containing these parameters (<TT>prime3D_startdoc.txt</TT>). We start the search with
+ <PRE>
+     $ simple_stackops stk=selected_cavgs.spi split=1
+     $ nohup distr_simple.pl prg=prime3D stk=selected_cavgs.spi 
+     vol1=startvol_state1.spi smpd=1.62 msk=60 lp=20 
+     oritab=prime3D_startdoc.txt npart=1 &gt; PRIME3DOUT &amp;
+ </PRE>
+ Again, we first split the stack for distributed execution. Then, we run PRIME3D providing the randomised orientations (<TT>oritab</TT> argument) and volume (<TT>vol1</TT> argument) that we have just prepared. After approximately 16 iterations the run converges. At the end of PRIME3DOUT you will find
+ <PRE>
+     &gt;&gt;&gt; ANGLE OF FEASIBLE REGION:            14.1
+     &gt;&gt;&gt; AVERAGE ANGULAR DISTANCE BTW ORIS:    2.4 
+     &gt;&gt;&gt; PERCENTAGE OF SEARCH SPACE SCANNED: 100.0
+     &gt;&gt;&gt; CORRELATION:                          0.9178
+     &gt;&gt;&gt; ANGULAR SDEV OF MODEL:               40.81
+     &gt;&gt;&gt; UPDATE LOW-PASS LIMIT: .NO.
+     &gt;&gt;&gt; CONVERGED: .YES.
+ </PRE>
+ The <TT>recvol_state1.spi</TT> volume and the corresponding orientation parameters (<TT>prime3Ddoc_16.txt</TT>) are produced in the <TT>prime3D_round_16</TT> folder. The volume is blobby but still captures the overall shape of GroEL. Keep in mind that we have so far made no assumption about symmetry and the volume has been reconstructed in the C1 symmetry group.
+ 
+ <H3><A NAME="SECTION00074300000000000000">
+ Symmetrisation of the volume</A>
+ </H3>
+
+ <P>
+ In order to symmetrise the volume, we need to identify the principal axis of symmetry given the known D7 point-group symmetry group of GroEL. This is done with <FONT COLOR="#0f75ff"><TT>simple_symsrch</TT></FONT>, given the C1 volume and orientation parameters (<TT>vol1</TT> and <TT>oritab</TT>) and using the same low-pass limit as previously (<TT>lp=20</TT>). The symmetrised orientations are outputted in the text file <TT>sym_d7.txt</TT> (<TT>outfile</TT> argument). We identify the principal symmetry axis of the volume by executing 
+ <PRE>
+     $ simple_symsrch vol1=prime3D_round_16/recvol_state1.spi smpd=1.62 msk=60 
+     oritab=prime3D_round_16/prime3Ddoc_16.txt pgrp=d7 outfile=sym_d7.txt nthr=8 
+     lp=20 &gt; SYMOUT
+ </PRE>
+ The program prints the identified symmetry axis
+ <PRE>
+     &gt;&gt;&gt; FOUND SYMMETRY AXIS ORIENTATION:
+     e1=276.596588 e2=80.9958649 e3=297.840454 x=0.00000000 y=0.00000000 
+     mi=0.00000000 mi_hard=0.00000000 dist=180.000000 state=1.00000000 
+     corr=0.787599325 w=1.00000000 class=1.00000000 mirr=0.00000000 frac=0.00000000
+ </PRE>
+ and we use <FONT COLOR="#0f75ff"><TT>simple_eo_recvol</TT></FONT> to reconstruct a symmetrised volume
+ <PRE>
+     $ simple_eo_recvol stk=selected_cavgs.spi 
+     oritab=sym_d7.txt smpd=1.62 msk=60 nthr=8 pgrp=d7
+ </PRE>
+ Output is the optimal principal axis of symmetry (<TT>e1</TT>, <TT>e2</TT> and <TT>e3</TT> are the phi,theta and psi angles) along with its correlation (<TT>corr</TT>). It is likely that you will obtain different values for the axis of symmetry upon different runs. This is because of the stochastic nature of the 2D/3D analyses, which cause the 3D reconstruction to be arbitrarily oriented with respect to the principal symmetry axis. Nonetheless, the final volume is reproducible and captures the structure of GroEL as judged by the numerous existing crystallographic and EM structures.
+
+ <P>
+ With the new symmetrised orientation parameters of the class averages we now want to map this information back to the individual particle images. To do this we first create a text file called <TT>doclist.txt</TT> that contains a single line
+ <PRE>
+     $ ls -1 sym_d7.txt &gt; doclist.txt
+ </PRE>
+ and then map the orientation parameters of the class averages to the particles (<TT>stk</TT>) by providing the selected class averages (<TT>stk2</TT>), all the original class averages (<TT>stk3</TT>) and the in-plane parameters obtained in the first <FONT COLOR="#0f75ff"><TT>simple_prime2D</TT></FONT> run (<TT>oritab</TT>) to the program <FONT COLOR="#0f75ff"><TT>simple_map2ptcls</TT></FONT><PRE>
+     $ simple_map2ptcls stk=particles_sh.spi stk2=selected_cavgs.spi 
+     stk3=cavgs_iter16.spi oritab=prime2D_round_16/prime2Ddoc_16.txt 
+     doclist=doclist.txt nthr=8
+ </PRE>
+ Next we reconstruct a symmetrised volume from the particles using the mapped orientation parameters (called <TT>mapped_ptcls_params.txt</TT> by default) and specifying the symmetry group (<TT>pgrp=d7</TT>)
+ <PRE>
+     $ simple_eo_recvol stk=particles_sh.spi oritab=mapped_ptcls_params.txt 
+     smpd=1.62 msk=60 nthr=8 pgrp=d7
+ </PRE>
+ After several minutes we obtain a new volume (<TT>recvol_state1msk.spi</TT>) and its resolution
+ <PRE>
+     &gt;&gt;&gt; RESOLUTION AT FSC=0.143 DETERMINED TO:  12.60
+     &gt;&gt;&gt; RESOLUTION AT FSC=0.500 DETERMINED TO:  17.45
+ </PRE>
+ As <TT>recvol_state1msk.spi</TT> is the default name used internally by <FONT COLOR="#0f75ff"><TT>simple_prime3D</TT></FONT> it is best to rename it to avoid having it overwritten
+ <PRE>
+     $ mv recvol_state1msk.spi sym_recvol_state1msk.spi
+ </PRE>
+ <FONT COLOR="#0f75ff"><TT>simple_eo_recvol</TT></FONT> and <FONT COLOR="#0f75ff"><TT>simple_prime3D</TT></FONT> also produce a file <TT>fsc_state1.bin</TT> that contains the FSC plot. Make sure to backup this file as  <FONT COLOR="#0f75ff"><TT>simple_prime3D</TT></FONT> will overwrite it if executed in the same folder. Here we just copy it because in the next step we will refine the volume and  <FONT COLOR="#0f75ff"><TT>simple_prime3D</TT></FONT>  will require the information contained in <TT>fsc_state1.bin</TT> to initiate the refinement
+ <PRE>
+     $ cp fsc_state1.bin eo_fsc_state1.bin
+ </PRE>
+ 
+ <H3><A NAME="SECTION00074400000000000000">
+ Refinement of the symmetrised volume using <FONT COLOR="#0f75ff"><TT>simple_prime3D</TT></FONT></A>
+ </H3>
+
+ <P>
+ Finally, we refine our initial model while applying D7 symmetry with  <FONT COLOR="#0f75ff"><TT>simple_prime3D</TT></FONT><PRE>
+     $ simple_stackops stk=particles_sh.mrc split=8
+     $ nohup distr_simple.pl prg=prime3D stk=groel-stk.spi
+     vol1=sym_recvol_state1msk.spi smpd=1.62 msk=60 
+     eo=yes oritab=mapped_ptcls_params.txt npart=8 &gt; 
+     PRIME3DOUT2 &amp;
+ </PRE>
+ With the first instruction we split the stack for distributed execution. Here the refinement run will be split over 8 different CPU sockets on a Linux cluster (<TT>split=8</TT>; see Section <A HREF="node16.html#paraexec"><IMG  ALIGN="BOTTOM" BORDER="1" ALT="[*]"
+  SRC="file:/sw/share/lib/latex2html/icons/crossref.png"></A> for more details). We use PRIME3D differently this time. Instead of setting a 20 &#197; low-pass limit, the resolution of the volume is calculated automatically at every iteration (<TT>eo=yes</TT>) and we are starting from our symmetrised volume (<TT>vol1=sym_recvol_state1msk.spi</TT>). After the 10 iterations required for convergence, the final resolution  (better than 8 &#197;) is printed in the end of the <TT>PRIME3DOUT2</TT> output (and also stored in the <TT>fsc_state1.bin</TT>). Examination of the volume shows helical features consistent with the GroEL X-ray structure.
+ <PRE>
+     &gt;&gt;&gt; RESOLUTION AT FSC=0.143 DETERMINED TO:   7.32
+     &gt;&gt;&gt; RESOLUTION AT FSC=0.500 DETERMINED TO:   8.10
+ </PRE>
+ <B>A note on overfitting:</B> In contrast to most other packages, the only exception being Frealign, SIMPLE does all of its interpolations and correlation calculations in the Fourier domain. Other packages may argue that they do as well but there are subtle important differences. For example, Spider, EMAN and SPARX interpolate polar coordinates in real space and then calculate one-dimensional Fourier transforms along concentric rings to obtain their "polar Fourier transforms", which are in fact polar real images. The advantage of doing it in this way is that you can use a hard mask in real space and avoid including too much background noise in the representation. However, the fundamental disadvantage is that you loose the ability to control which Fourier components are being used for the matching. Initially, it was assumed that the low-pass filtering of the volume based on the FSC ought to be sufficient to avoid overfitting. This has proven not to be true with this kind of representation, as both EMAN2 and SPARX now implement the "gold-standard approach". We instead use gridding interpolation <I>in Fourier space</I> to obtain our polar central sections. The minor disadvantage is that we have to apply a soft-edged mask in real space and risk introduce slightly more background noise in the representation. However, the major advantage is that we can control exactly which Fourier components we use for matching. The default high-pass limit is set to Fourier index 2 but if you think you have a lot of inelastic scattering at low resolution (this is typical for icosahedral viruses) you may want to change the high-pass limit via <TT>hp=X &#197;</TT>. The hard low-pass limit, when <FONT COLOR="#0f75ff"><TT>simple_prime3D</TT></FONT> is executed with <TT>eo=yes</TT> is set according to the <TT>FSC=0.143</TT> criterion. We have yet to detect any overfitting visually or using the noise substitution test (<A
+  HREF="#Chen:2013aa">, </A>) with this approach on standard EM data obtained with the underfocusing approach. However, while processing close-to-focus phase plate data we have observed severe overfitting and we recommend to battle it using hard low-pass limitation with <TT>lpstop=X &#197;</TT>. If you do all your analyses with a hard  low-pass limit of <TT>X</TT> and the resolution extends significantly beyond the limit, there should be no reason to worry about overfitting.
+
+</BODY>
+</HTML>

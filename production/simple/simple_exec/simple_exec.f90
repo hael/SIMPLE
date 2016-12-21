@@ -102,7 +102,7 @@ type(ctfops_commander)             :: xctfops
 type(filter_commander)             :: xfilter
 type(image_smat_commander)         :: ximage_smat
 type(norm_commander)               :: xnorm
-type(respimg_commander)               :: xrespimg
+type(respimg_commander)            :: xrespimg
 type(scale_commander)              :: xscale
 type(stack_commander)              :: xstack
 type(stackops_commander)           :: xstackops
@@ -819,16 +819,15 @@ select case(prg)
         keys_optional(10) = 'norec'
         keys_optional(11) = 'mul'
         keys_optional(12) = 'zero'
-        keys_optional(13) = 'filter'
         ! set optional CTF-related keys
-        keys_optional(14) = 'ctf'
-        keys_optional(15) = 'kv'
-        keys_optional(16) = 'cs'
-        keys_optional(17) = 'fraca'
-        keys_optional(18) = 'deftab'
+        keys_optional(13) = 'ctf'
+        keys_optional(14) = 'kv'
+        keys_optional(15) = 'cs'
+        keys_optional(16) = 'fraca'
+        keys_optional(17) = 'deftab'
         ! parse command line
         if( describe ) call print_doc_multiptcl_init
-        call cline%parse(keys_required(:3), keys_optional(:18))
+        call cline%parse(keys_required(:3), keys_optional(:17))
         ! set defaults
         if( .not. cline%defined('trs') ) call cline%set('trs', 3.) ! to assure that shifts are being used
         !execute
@@ -851,15 +850,14 @@ select case(prg)
         keys_optional(5)  = 'lp'
         keys_optional(6)  = 'eo'
         keys_optional(7)  = 'frac'
-        keys_optional(8)  = 'filter'
         ! set optional CTF-related keys
-        keys_optional(9)  = 'ctf'
-        keys_optional(10) = 'kv'
-        keys_optional(11) = 'cs'
-        keys_optional(12) = 'fraca'
-        keys_optional(13) = 'deftab'
+        keys_optional(8)  = 'ctf'
+        keys_optional(9)  = 'kv'
+        keys_optional(10) = 'cs'
+        keys_optional(11) = 'fraca'
+        keys_optional(12) = 'deftab'
         ! parse command line
-        call cline%parse(keys_required(:4), keys_optional(:13))
+        call cline%parse(keys_required(:4), keys_optional(:12))
         ! set defaults
         if( .not. cline%defined('eo') ) call cline%set('eo', 'no')
         !execute
@@ -932,18 +930,17 @@ select case(prg)
         keys_optional(29) = 'shbarrier'
         keys_optional(30) = 'noise'
         keys_optional(31) = 'xfel'
-        keys_optional(32) = 'filter'
-        keys_optional(33) = 'nnn'
-        keys_optional(34) = 'shellw'
+        keys_optional(32) = 'nnn'
+        keys_optional(33) = 'shellw'
         ! set optional CTF-related keys
-        keys_optional(35) = 'ctf'
-        keys_optional(36) = 'kv'
-        keys_optional(37) = 'cs'
-        keys_optional(38) = 'fraca'
-        keys_optional(39) = 'deftab'
+        keys_optional(34) = 'ctf'
+        keys_optional(35) = 'kv'
+        keys_optional(36) = 'cs'
+        keys_optional(37) = 'fraca'
+        keys_optional(38) = 'deftab'
         ! parse command line
         if( describe ) call print_doc_prime3D
-        call cline%parse(keys_required(:4), keys_optional(:39))
+        call cline%parse(keys_required(:4), keys_optional(:38))
         ! set defaults
         if( .not. cline%defined('nspace')                  ) call cline%set('nspace', 1000.)
         if( cline%defined('lp') .or. cline%defined('find') ) call cline%set('dynlp',   'no')

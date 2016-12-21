@@ -1,3 +1,0 @@
-YELLOW SHADED FOLDERS
-Files with write permissions for everyone show up as yellow.
-chmod 700 or chmod 770 will not be yellow.

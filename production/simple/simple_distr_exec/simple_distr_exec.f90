@@ -23,7 +23,6 @@ type(prime3D_init_distr_commander)       :: xprime3D_init_distr
 type(prime3D_distr_commander)            :: xprime3D_distr
 type(prime2D_init_distr_commander)       :: xprime2D_init_distr
 type(prime2D_distr_commander)            :: xprime2D_distr
-! type(classrefine_distr_commander)        :: xclassrefine_distr
 type(find_nnimgs_distr_commander)        :: xfind_nnimgs_distr
 ! OTHER DECLARATIONS
 integer, parameter    :: MAXNKEYS=100, KEYLEN=32
@@ -253,17 +252,16 @@ select case(prg)
         keys_optional(30) = 'shbarrier'
         keys_optional(31) = 'noise'
         keys_optional(32) = 'xfel'
-        keys_optional(33) = 'filter'
-        keys_optional(34) = 'nnn'
-        keys_optional(35) = 'shellw'
+        keys_optional(33) = 'nnn'
+        keys_optional(34) = 'shellw'
         ! set optional CTF-related keys
-        keys_optional(36) = 'ctf'
-        keys_optional(37) = 'kv'
-        keys_optional(38) = 'cs'
-        keys_optional(39) = 'fraca'
-        keys_optional(40) = 'deftab'
+        keys_optional(35) = 'ctf'
+        keys_optional(36) = 'kv'
+        keys_optional(37) = 'cs'
+        keys_optional(38) = 'fraca'
+        keys_optional(39) = 'deftab'
         ! parse command line
-        call cline%parse(keys_required(:5), keys_optional(:40))
+        call cline%parse(keys_required(:5), keys_optional(:39))
         ! set defaults
         if( .not. cline%defined('nspace')                  ) call cline%set('nspace', 1000.)
         if( cline%defined('lp') .or. cline%defined('find') ) call cline%set('dynlp',   'no')

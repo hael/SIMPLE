@@ -1,0 +1,110 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">
+
+<!--Converted with LaTeX2HTML 2002-2-1 (1.71)
+original version by:  Nikos Drakos, CBLU, University of Leeds
+* revised and updated by:  Marcus Hennecke, Ross Moore, Herb Swan
+* with significant contributions from:
+  Jens Lippmann, Marek Rouchal, Martin Wilck and others -->
+<HTML>
+<HEAD>
+<TITLE>Refinement of the symmetrised volume using simple_prime3D</TITLE>
+<META NAME="description" CONTENT="Refinement of the symmetrised volume using simple_prime3D">
+<META NAME="keywords" CONTENT="simple21manual">
+<META NAME="resource-type" CONTENT="document">
+<META NAME="distribution" CONTENT="global">
+
+<META NAME="Generator" CONTENT="LaTeX2HTML v2002-2-1">
+<META HTTP-EQUIV="Content-Style-Type" CONTENT="text/css">
+
+<LINK REL="STYLESHEET" HREF="simple21manual.css">
+
+<LINK REL="previous" HREF="node24.html">
+<LINK REL="up" HREF="node21.html">
+<LINK REL="next" HREF="node26.html">
+</HEAD>
+
+<BODY >
+<!--Navigation Panel-->
+<A NAME="tex2html401"
+  HREF="node26.html">
+<IMG WIDTH="37" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="next"
+ SRC="file:/sw/share/lib/latex2html/icons/next.png"></A> 
+<A NAME="tex2html397"
+  HREF="node21.html">
+<IMG WIDTH="26" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="up"
+ SRC="file:/sw/share/lib/latex2html/icons/up.png"></A> 
+<A NAME="tex2html393"
+  HREF="node24.html">
+<IMG WIDTH="63" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="previous"
+ SRC="file:/sw/share/lib/latex2html/icons/prev.png"></A> 
+<A NAME="tex2html399"
+  HREF="node1.html">
+<IMG WIDTH="65" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="contents"
+ SRC="file:/sw/share/lib/latex2html/icons/contents.png"></A>  
+<BR>
+<B> Next:</B> <A NAME="tex2html402"
+  HREF="node26.html">Individual SIMPLE programs</A>
+<B> Up:</B> <A NAME="tex2html398"
+  HREF="node21.html">A comprehensive worked-out example</A>
+<B> Previous:</B> <A NAME="tex2html394"
+  HREF="node24.html">Symmetrisation of the volume</A>
+ &nbsp; <B>  <A NAME="tex2html400"
+  HREF="node1.html">Contents</A></B> 
+<BR>
+<BR>
+<!--End of Navigation Panel-->
+
+<H3><A NAME="SECTION00074400000000000000">
+Refinement of the symmetrised volume using <FONT COLOR="#0f75ff"><TT>simple_prime3D</TT></FONT></A>
+</H3>
+
+<P>
+Finally, we refine our initial model while applying D7 symmetry with  <FONT COLOR="#0f75ff"><TT>simple_prime3D</TT></FONT><PRE>
+    $ simple_stackops stk=particles_sh.mrc split=8    $ nohup distr_simple.pl prg=prime3D stk=groel-stk.spi
+    vol1=sym_recvol_state1msk.spi smpd=1.62 msk=60 
+    eo=yes oritab=mapped_ptcls_params.txt npart=8 &gt; 
+    PRIME3DOUT2 &amp;
+</PRE>
+With the first instruction we split the stack for distributed execution. Here the refinement run will be split over 8 different CPU sockets on a Linux cluster (<TT>split=8</TT>; see Section <A HREF="node16.html#paraexec"><IMG  ALIGN="BOTTOM" BORDER="1" ALT="[*]"
+ SRC="file:/sw/share/lib/latex2html/icons/crossref.png"></A> for more details). We use PRIME3D differently this time. Instead of setting a 20 &#197; low-pass limit, the resolution of the volume is calculated automatically at every iteration (<TT>eo=yes</TT>) and we are starting from our symmetrised volume (<TT>vol1=sym_recvol_state1msk.spi</TT>). After the 10 iterations required for convergence, the final resolution  (better than 8 &#197;) is printed in the end of the <TT>PRIME3DOUT2</TT> output (and also stored in the <TT>fsc_state1.bin</TT>). Examination of the volume shows helical features consistent with the GroEL X-ray structure.
+<PRE>
+    &gt;&gt;&gt; RESOLUTION AT FSC=0.143 DETERMINED TO:   7.32    &gt;&gt;&gt; RESOLUTION AT FSC=0.500 DETERMINED TO:   8.10
+</PRE>
+<B>A note on overfitting:</B> In contrast to most other packages, the only exception being Frealign, SIMPLE does all of its interpolations and correlation calculations in the Fourier domain. Other packages may argue that they do as well but there are subtle important differences. For example, Spider, EMAN and SPARX interpolate polar coordinates in real space and then calculate one-dimensional Fourier transforms along concentric rings to obtain their "polar Fourier transforms", which are in fact polar real images. The advantage of doing it in this way is that you can use a hard mask in real space and avoid including too much background noise in the representation. However, the fundamental disadvantage is that you loose the ability to control which Fourier components are being used for the matching. Initially, it was assumed that the low-pass filtering of the volume based on the FSC ought to be sufficient to avoid overfitting. This has proven not to be true with this kind of representation, as both EMAN2 and SPARX now implement the "gold-standard approach". We instead use gridding interpolation <I>in Fourier space</I> to obtain our polar central sections. The minor disadvantage is that we have to apply a soft-edged mask in real space and risk introduce slightly more background noise in the representation. However, the major advantage is that we can control exactly which Fourier components we use for matching. The default high-pass limit is set to Fourier index 2 but if you think you have a lot of inelastic scattering at low resolution (this is typical for icosahedral viruses) you may want to change the high-pass limit via <TT>hp=X &#197;</TT>. The hard low-pass limit, when <FONT COLOR="#0f75ff"><TT>simple_prime3D</TT></FONT> is executed with <TT>eo=yes</TT> is set according to the <TT>FSC=0.143</TT> criterion. We have yet to detect any overfitting visually or using the noise substitution test (<A
+ HREF="#Chen:2013aa">, </A>) with this approach on standard EM data obtained with the underfocusing approach. However, while processing close-to-focus phase plate data we have observed severe overfitting and we recommend to battle it using hard low-pass limitation with <TT>lpstop=X &#197;</TT>. If you do all your analyses with a hard  low-pass limit of <TT>X</TT> and the resolution extends significantly beyond the limit, there should be no reason to worry about overfitting.
+
+<P>
+<HR>
+<!--Navigation Panel-->
+<A NAME="tex2html401"
+  HREF="node26.html">
+<IMG WIDTH="37" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="next"
+ SRC="file:/sw/share/lib/latex2html/icons/next.png"></A> 
+<A NAME="tex2html397"
+  HREF="node21.html">
+<IMG WIDTH="26" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="up"
+ SRC="file:/sw/share/lib/latex2html/icons/up.png"></A> 
+<A NAME="tex2html393"
+  HREF="node24.html">
+<IMG WIDTH="63" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="previous"
+ SRC="file:/sw/share/lib/latex2html/icons/prev.png"></A> 
+<A NAME="tex2html399"
+  HREF="node1.html">
+<IMG WIDTH="65" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="contents"
+ SRC="file:/sw/share/lib/latex2html/icons/contents.png"></A>  
+<BR>
+<B> Next:</B> <A NAME="tex2html402"
+  HREF="node26.html">Individual SIMPLE programs</A>
+<B> Up:</B> <A NAME="tex2html398"
+  HREF="node21.html">A comprehensive worked-out example</A>
+<B> Previous:</B> <A NAME="tex2html394"
+  HREF="node24.html">Symmetrisation of the volume</A>
+ &nbsp; <B>  <A NAME="tex2html400"
+  HREF="node1.html">Contents</A></B> 
+<!--End of Navigation Panel-->
+<ADDRESS>
+Hans Elmlund
+2016-05-24
+</ADDRESS>
+</BODY>
+</HTML>

@@ -1,0 +1,210 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">
+
+<!--Converted with LaTeX2HTML 2002-2-1 (1.71)
+original version by:  Nikos Drakos, CBLU, University of Leeds
+* revised and updated by:  Marcus Hennecke, Ross Moore, Herb Swan
+* with significant contributions from:
+  Jens Lippmann, Marek Rouchal, Martin Wilck and others -->
+<HTML>
+<HEAD>
+<TITLE>Installation of SIMPLE binaries on MacOSX using an automated script</TITLE>
+<META NAME="description" CONTENT="Installation of SIMPLE binaries on MacOSX using an automated script">
+<META NAME="keywords" CONTENT="simple21manual">
+<META NAME="resource-type" CONTENT="document">
+<META NAME="distribution" CONTENT="global">
+
+<META NAME="Generator" CONTENT="LaTeX2HTML v2002-2-1">
+<META HTTP-EQUIV="Content-Style-Type" CONTENT="text/css">
+
+<LINK REL="STYLESHEET" HREF="simple21manual.css">
+
+<LINK REL="next" HREF="node15.html">
+<LINK REL="previous" HREF="node13.html">
+<LINK REL="up" HREF="node7.html">
+<LINK REL="next" HREF="node15.html">
+</HEAD>
+
+<BODY >
+<!--Navigation Panel-->
+<A NAME="tex2html259"
+  HREF="node15.html">
+<IMG WIDTH="37" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="next"
+ SRC="file:/sw/share/lib/latex2html/icons/next.png"></A> 
+<A NAME="tex2html255"
+  HREF="node7.html">
+<IMG WIDTH="26" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="up"
+ SRC="file:/sw/share/lib/latex2html/icons/up.png"></A> 
+<A NAME="tex2html249"
+  HREF="node13.html">
+<IMG WIDTH="63" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="previous"
+ SRC="file:/sw/share/lib/latex2html/icons/prev.png"></A> 
+<A NAME="tex2html257"
+  HREF="node1.html">
+<IMG WIDTH="65" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="contents"
+ SRC="file:/sw/share/lib/latex2html/icons/contents.png"></A>  
+<BR>
+<B> Next:</B> <A NAME="tex2html260"
+  HREF="node15.html">File Formats</A>
+<B> Up:</B> <A NAME="tex2html256"
+  HREF="node7.html">Installation</A>
+<B> Previous:</B> <A NAME="tex2html250"
+  HREF="node13.html">Installation of SIMPLE on</A>
+ &nbsp; <B>  <A NAME="tex2html258"
+  HREF="node1.html">Contents</A></B> 
+<BR>
+<BR>
+<!--End of Navigation Panel-->
+
+<H2><A NAME="SECTION00055000000000000000"></A>
+<A NAME="inst_auto_binaries_macosx"></A>
+<BR>
+Installation of SIMPLE binaries on MacOSX using an automated script
+</H2>
+
+<P>
+We also provide a script for automatic installation of pre-compiled binaries on MacOSX. Download the tar ball and untar it in the directory of your choice 
+<PRE>
+    $ tar -xvfz Install_Simple_MacOSX_binaries.tar
+</PRE>
+Change directory 
+<PRE>
+    $ cd &lt;path to&gt;/Install_Simple_MacOSX_binaries
+</PRE>
+This installation route requires administration rights, since the script will install GNU compilers version 4.9 and the FFTW library (v3.4.4) in <TT>/usr/local/bin</TT> and <TT>/usr/local/lib</TT> respectively. Don't use this script if you have other GNU compiler versions installed in these folders that you do not wish to have overwritten. To proceed with the installation specify the absolute path of the target location for the installation.
+<PRE>
+    $ csh sudo install_MacOSX_binaries_prod.csh /Users/&lt;username&gt;/Simple
+</PRE>
+Enter your admin user password and wait. This may take a while because the fftw-3.4.4 library needs to be compiled for the most commonly used precisions. The scripts installs and checks for the correctness of the installed compilers (i.e. gcc, g++ and gfortran) in the <TT>/usr/local/bin</TT> folder. It
+should look like
+<PRE>
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+-                       Checking installation ...                       -
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+-                                                                       -
+-                      fftw-3.3.4 library ...                           -
+-                                                                       -
+libfftw3.a	    libfftw3f.a	         libfftw3l.a	      libfftw3q.a
+libfftw3.la	    libfftw3f.la	 libfftw3l.la	      libfftw3q.la
+libfftw3_omp.a	    libfftw3f_omp.a	 libfftw3l_omp.a      libfftw3q_omp.a
+libfftw3_omp.la	    libfftw3f_omp.la     libfftw3l_omp.la     libfftw3q_omp.la
+libfftw3_threads.a  libfftw3f_threads.a  libfftw3l_threads.a  libfftw3q_threads.a
+libfftw3_threads.la libfftw3f_threads.la libfftw3l_threads.la libfftw3q_threads.la
+-                                                                       -
+-    GNU compilers /usr/local/bin/{gcc-4.9,g++-4.9, gfortran-4.9} ...   -
+-                                                                       -
+g++	gcc	gfortran {... plus other files ...}
+
+gcc (GCC) 4.9.2 20141029 (prerelease)
+Copyright (C) 2014 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+g++ (GCC) 4.9.2 20141029 (prerelease)
+Copyright (C) 2014 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+GNU Fortran (GCC) 4.9.2 20141029 (prerelease)
+Copyright (C) 2014 Free Software Foundation, Inc.
+
+GNU Fortran comes with NO WARRANTY, to the extent permitted by law.
+You may redistribute copies of GNU Fortran
+under the terms of the GNU General Public License.
+For more information about these matters, see the file named COPYING
+</PRE>
+A successful completion of script provides the final steps for
+successful installation and should show:
+<PRE>
+    ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! !
+    !                                                                       !
+    !            You now need to add the environment variable in            !
+    !                your ~/.bashrc or shell rc:                            !
+    !                                                                       !
+                                 in bash                                     
+    export SIMPLEPATH=/Users/&lt;username&gt;/Simple/MacOSX_binaries 
+    export PATH=${SIMPLEPATH}/scripts:${SIMPLEPATH}/bin:$PATH        
+                                                                                                                 
+                         in shell or cshell or tshell                        
+                                           
+    setenv SIMPLEPATH /Users/&lt;username&gt;/Simple/MacOSX_binaries
+    set path=(${SIMPLEPATH}/scripts ${SIMPLEPATH}/bin $path)
+    !                                                                       !
+        Check ownership of installation path: /Users/&lt;username&gt;/Simple                   
+             if it has root and not &lt;username&gt; then change it by:                 
+    !                                                                       !
+                    sudo chown -R &lt;username&gt; /Users/&lt;username&gt;/Simple                         
+    !                                                                       !
+    !          You may now start using SIMPLE from command line             !
+          and go to: /Users/&lt;username&gt;/Simple/MacOSX_binaries                            
+    !                       to launch the checks                             
+    !                                                                       !
+                            csh launch_checks.csh                            
+    !                                                                       !
+    ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! !
+</PRE>
+To check the owner ship of the target location
+<PRE>
+    $ ls -al /Users/&lt;username&gt;/Simple
+    total 0
+    drwxr-xr-x   3 root       staff  102 20 May 12:48 .
+    drwxr-xr-x+ 26 &lt;username&gt; staff  884 20 May 13:36 ..
+    drwxr-xr-x   7 root       staff  238 20 May 14:03 MacOSX_binaries
+</PRE>
+We recommend changing ownership to <TT>&lt;username&gt;</TT> via   
+<PRE>
+    $ sudo chown -R &lt;username&gt; /Users/&lt;username&gt;/Simple
+</PRE>
+and to confirm that the rights were changed, execute
+<PRE>
+    $ ls -al /Users/&lt;username&gt;/Simple
+    total 0
+    drwxr-xr-x   3 &lt;username&gt; staff  102 20 May 12:48 .
+    drwxr-xr-x+ 26 &lt;username&gt; staff  884 20 May 13:36 ..
+    drwxr-xr-x   7 &lt;username&gt; staff  238 20 May 14:03 MacOSX_binaries
+</PRE>
+Lastly, we need to add a few paths to our shell environment. This enables running simple commands from the prompt anywhere in the user directory structure and. If you are using the bash shell, add to your <TT>.bashrc</TT>
+<PRE>
+    export SIMPLEPATH=/Users/&lt;username&gt;/Simple/MacOSX_binaries
+    export PATH=${SIMPLEPATH}/scripts:${SIMPLEPATH}/bin:$PATH
+</PRE>
+and if you are using the c-shell or the tc-shell, add to your <TT>.cshrc</TT> or <TT>.tcshrc</TT>
+<PRE>
+    setenv SIMPLEPATH /Users/&lt;username&gt;/Simple/MacOSX_binaries
+    set path=(${SIMPLEPATH}/scripts ${SIMPLEPATH}/bin $path)
+</PRE>
+
+<P>
+<HR>
+<!--Navigation Panel-->
+<A NAME="tex2html259"
+  HREF="node15.html">
+<IMG WIDTH="37" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="next"
+ SRC="file:/sw/share/lib/latex2html/icons/next.png"></A> 
+<A NAME="tex2html255"
+  HREF="node7.html">
+<IMG WIDTH="26" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="up"
+ SRC="file:/sw/share/lib/latex2html/icons/up.png"></A> 
+<A NAME="tex2html249"
+  HREF="node13.html">
+<IMG WIDTH="63" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="previous"
+ SRC="file:/sw/share/lib/latex2html/icons/prev.png"></A> 
+<A NAME="tex2html257"
+  HREF="node1.html">
+<IMG WIDTH="65" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="contents"
+ SRC="file:/sw/share/lib/latex2html/icons/contents.png"></A>  
+<BR>
+<B> Next:</B> <A NAME="tex2html260"
+  HREF="node15.html">File Formats</A>
+<B> Up:</B> <A NAME="tex2html256"
+  HREF="node7.html">Installation</A>
+<B> Previous:</B> <A NAME="tex2html250"
+  HREF="node13.html">Installation of SIMPLE on</A>
+ &nbsp; <B>  <A NAME="tex2html258"
+  HREF="node1.html">Contents</A></B> 
+<!--End of Navigation Panel-->
+<ADDRESS>
+Hans Elmlund
+2016-05-24
+</ADDRESS>
+</BODY>
+</HTML>

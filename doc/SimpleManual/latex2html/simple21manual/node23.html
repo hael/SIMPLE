@@ -1,0 +1,121 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">
+
+<!--Converted with LaTeX2HTML 2002-2-1 (1.71)
+original version by:  Nikos Drakos, CBLU, University of Leeds
+* revised and updated by:  Marcus Hennecke, Ross Moore, Herb Swan
+* with significant contributions from:
+  Jens Lippmann, Marek Rouchal, Martin Wilck and others -->
+<HTML>
+<HEAD>
+<TITLE>Ab initio 3D reconstruction</TITLE>
+<META NAME="description" CONTENT="Ab initio 3D reconstruction">
+<META NAME="keywords" CONTENT="simple21manual">
+<META NAME="resource-type" CONTENT="document">
+<META NAME="distribution" CONTENT="global">
+
+<META NAME="Generator" CONTENT="LaTeX2HTML v2002-2-1">
+<META HTTP-EQUIV="Content-Style-Type" CONTENT="text/css">
+
+<LINK REL="STYLESHEET" HREF="simple21manual.css">
+
+<LINK REL="next" HREF="node24.html">
+<LINK REL="previous" HREF="node22.html">
+<LINK REL="up" HREF="node21.html">
+<LINK REL="next" HREF="node24.html">
+</HEAD>
+
+<BODY >
+<!--Navigation Panel-->
+<A NAME="tex2html379"
+  HREF="node24.html">
+<IMG WIDTH="37" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="next"
+ SRC="file:/sw/share/lib/latex2html/icons/next.png"></A> 
+<A NAME="tex2html375"
+  HREF="node21.html">
+<IMG WIDTH="26" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="up"
+ SRC="file:/sw/share/lib/latex2html/icons/up.png"></A> 
+<A NAME="tex2html369"
+  HREF="node22.html">
+<IMG WIDTH="63" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="previous"
+ SRC="file:/sw/share/lib/latex2html/icons/prev.png"></A> 
+<A NAME="tex2html377"
+  HREF="node1.html">
+<IMG WIDTH="65" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="contents"
+ SRC="file:/sw/share/lib/latex2html/icons/contents.png"></A>  
+<BR>
+<B> Next:</B> <A NAME="tex2html380"
+  HREF="node24.html">Symmetrisation of the volume</A>
+<B> Up:</B> <A NAME="tex2html376"
+  HREF="node21.html">A comprehensive worked-out example</A>
+<B> Previous:</B> <A NAME="tex2html370"
+  HREF="node22.html">2D alignment and clustering</A>
+ &nbsp; <B>  <A NAME="tex2html378"
+  HREF="node1.html">Contents</A></B> 
+<BR>
+<BR>
+<!--End of Navigation Panel-->
+
+<H3><A NAME="SECTION00074200000000000000">
+<I>Ab initio</I> 3D reconstruction</A>
+</H3>
+
+<P>
+We first need a random volume to initiate the search of the five in-plane and out-of-plane parameters of our selected class averages. As in the previous 2D analysis, we execute
+<PRE>
+    $ simple_prime3D_init stk=selected_cavgs.spi smpd=1.62 msk=60 nthr=8 lp=20
+</PRE>
+Consistently with section <A HREF="node22.html#2dclust"><IMG  ALIGN="BOTTOM" BORDER="1" ALT="[*]"
+ SRC="file:/sw/share/lib/latex2html/icons/crossref.png"></A>, we use a low-pass limit of 20 &#197; (<TT>lp=20</TT>). This command will generate two files: a volume reconstructed from random orientation parameters (<TT>startvol_state1.spi</TT>) and the document containing these parameters (<TT>prime3D_startdoc.txt</TT>). We start the search with
+<PRE>
+    $ simple_stackops stk=selected_cavgs.spi split=1
+    $ nohup distr_simple.pl prg=prime3D stk=selected_cavgs.spi 
+    vol1=startvol_state1.spi smpd=1.62 msk=60 lp=20 
+    oritab=prime3D_startdoc.txt npart=1 &gt; PRIME3DOUT &amp;
+</PRE>
+Again, we first split the stack for distributed execution. Then, we run PRIME3D providing the randomised orientations (<TT>oritab</TT> argument) and volume (<TT>vol1</TT> argument) that we have just prepared. After approximately 16 iterations the run converges. At the end of PRIME3DOUT you will find
+<PRE>
+    &gt;&gt;&gt; ANGLE OF FEASIBLE REGION:            14.1
+    &gt;&gt;&gt; AVERAGE ANGULAR DISTANCE BTW ORIS:    2.4 
+    &gt;&gt;&gt; PERCENTAGE OF SEARCH SPACE SCANNED: 100.0
+    &gt;&gt;&gt; CORRELATION:                          0.9178
+    &gt;&gt;&gt; ANGULAR SDEV OF MODEL:               40.81
+    &gt;&gt;&gt; UPDATE LOW-PASS LIMIT: .NO.
+    &gt;&gt;&gt; CONVERGED: .YES.
+</PRE>
+The <TT>recvol_state1.spi</TT> volume and the corresponding orientation parameters (<TT>prime3Ddoc_16.txt</TT>) are produced in the <TT>prime3D_round_16</TT> folder. The volume is blobby but still captures the overall shape of GroEL. Keep in mind that we have so far made no assumption about symmetry and the volume has been reconstructed in the C1 symmetry group.
+
+<P>
+<HR>
+<!--Navigation Panel-->
+<A NAME="tex2html379"
+  HREF="node24.html">
+<IMG WIDTH="37" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="next"
+ SRC="file:/sw/share/lib/latex2html/icons/next.png"></A> 
+<A NAME="tex2html375"
+  HREF="node21.html">
+<IMG WIDTH="26" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="up"
+ SRC="file:/sw/share/lib/latex2html/icons/up.png"></A> 
+<A NAME="tex2html369"
+  HREF="node22.html">
+<IMG WIDTH="63" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="previous"
+ SRC="file:/sw/share/lib/latex2html/icons/prev.png"></A> 
+<A NAME="tex2html377"
+  HREF="node1.html">
+<IMG WIDTH="65" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="contents"
+ SRC="file:/sw/share/lib/latex2html/icons/contents.png"></A>  
+<BR>
+<B> Next:</B> <A NAME="tex2html380"
+  HREF="node24.html">Symmetrisation of the volume</A>
+<B> Up:</B> <A NAME="tex2html376"
+  HREF="node21.html">A comprehensive worked-out example</A>
+<B> Previous:</B> <A NAME="tex2html370"
+  HREF="node22.html">2D alignment and clustering</A>
+ &nbsp; <B>  <A NAME="tex2html378"
+  HREF="node1.html">Contents</A></B> 
+<!--End of Navigation Panel-->
+<ADDRESS>
+Hans Elmlund
+2016-05-24
+</ADDRESS>
+</BODY>
+</HTML>

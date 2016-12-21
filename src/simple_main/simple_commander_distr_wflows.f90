@@ -6,7 +6,7 @@
 !
 ! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
 ! Redistribution and modification is regulated by the GNU General Public License.
-! *Authors:* Frederic Bonnet, Cyril Reboul & Hans Elmlund 2016
+! *Authors:* Cyril Reboul & Hans Elmlund 2016
 !
 module simple_commander_distr_wflows
 use simple_cmdline,        only: cmdline
@@ -489,10 +489,7 @@ contains
                     if( cnt>30 )stop './fsc_state01.bin not found'  !
                     call sleep( 1 )                                 !
                 enddo                                               !
-                call copy_bin_files( 'fsc_',       dir_iter, p_master%nstates )
-                call copy_bin_files( 'pssnr2D_',   dir_iter, p_master%nstates )
-                call copy_bin_files( 'pssnr3D_',   dir_iter, p_master%nstates )
-                call copy_bin_files( 'ctfsqspec_', dir_iter, p_master%nstates )
+                call copy_bin_files( 'fsc_', dir_iter, p_master%nstates )
                 if( p_master%automsk.eq.'yes')call copy_bin_files( 'automask_', dir_iter, p_master%nstates )
             endif
             ! CONVERGENCE

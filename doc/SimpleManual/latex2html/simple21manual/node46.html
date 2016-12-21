@@ -1,0 +1,127 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">
+
+<!--Converted with LaTeX2HTML 2002-2-1 (1.71)
+original version by:  Nikos Drakos, CBLU, University of Leeds
+* revised and updated by:  Marcus Hennecke, Ross Moore, Herb Swan
+* with significant contributions from:
+  Jens Lippmann, Marek Rouchal, Martin Wilck and others -->
+<HTML>
+<HEAD>
+<TITLE>Program: simple_volops</TITLE>
+<META NAME="description" CONTENT="Program: simple_volops">
+<META NAME="keywords" CONTENT="simple21manual">
+<META NAME="resource-type" CONTENT="document">
+<META NAME="distribution" CONTENT="global">
+
+<META NAME="Generator" CONTENT="LaTeX2HTML v2002-2-1">
+<META HTTP-EQUIV="Content-Style-Type" CONTENT="text/css">
+
+<LINK REL="STYLESHEET" HREF="simple21manual.css">
+
+<LINK REL="previous" HREF="node45.html">
+<LINK REL="up" HREF="node40.html">
+<LINK REL="next" HREF="node47.html">
+</HEAD>
+
+<BODY >
+<!--Navigation Panel-->
+<A NAME="tex2html688"
+  HREF="node47.html">
+<IMG WIDTH="37" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="next"
+ SRC="file:/sw/share/lib/latex2html/icons/next.png"></A> 
+<A NAME="tex2html684"
+  HREF="node40.html">
+<IMG WIDTH="26" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="up"
+ SRC="file:/sw/share/lib/latex2html/icons/up.png"></A> 
+<A NAME="tex2html680"
+  HREF="node45.html">
+<IMG WIDTH="63" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="previous"
+ SRC="file:/sw/share/lib/latex2html/icons/prev.png"></A> 
+<A NAME="tex2html686"
+  HREF="node1.html">
+<IMG WIDTH="65" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="contents"
+ SRC="file:/sw/share/lib/latex2html/icons/contents.png"></A>  
+<BR>
+<B> Next:</B> <A NAME="tex2html689"
+  HREF="node47.html">Utility programs</A>
+<B> Up:</B> <A NAME="tex2html685"
+  HREF="node40.html">Standard image/volume operations (ops)</A>
+<B> Previous:</B> <A NAME="tex2html681"
+  HREF="node45.html">Program: simple_stackops</A>
+ &nbsp; <B>  <A NAME="tex2html687"
+  HREF="node1.html">Contents</A></B> 
+<BR>
+<BR>
+<!--End of Navigation Panel-->
+
+<H3><A NAME="SECTION00083600000000000000"></A>
+<A NAME="volops"></A>
+<BR>
+Program: <FONT COLOR="#0f75ff"><TT>simple_volops</TT></FONT>
+</H3>
+<FONT COLOR="#0f75ff"><TT>simple_volops</TT></FONT> provides standard single-particle image processing routines that are applied to MRC or SPIDER volumes.
+<PRE>
+    $ SIMPLE_VOLOPS [vol1=&lt;invol.ext&gt;] [vol2=&lt;invol2.ext&gt;] [smpd=&lt;sampling}
+    distance(in A)&gt;] [outvol=&lt;outvol.ext&gt;] [nthr=&lt;nr of openMP threads{1}&gt;]
+    [phrand=&lt;yes|no{no}&gt;] [msk=&lt;mask radius(in pixels)&gt;] [lp=&lt;low-pass
+    limit{20}&gt;] [hp=&lt;high-pass limit{100}&gt;] [snr=&lt;signal-to-noise ratio&gt;]
+    [center=&lt;yes|no{no}&gt;] [soften=&lt;yes|no{no}&gt;] [guinier=&lt;yes|no{no}&gt;]
+    [bfac=&lt;bfactor(in A**2){200.}&gt;] [edge=&lt;edge size for softening molecular
+    envelope(in pixels){3}&gt;] [mskfile=&lt;mask.ext&gt;] [countvox=&lt;yes|no{no}&gt;]
+    [newbox=&lt;scaled box&gt;] [scale=&lt;scale factor{1}&gt;] [msktype=&lt;hard|soft{soft}&gt;]
+    [inner=&lt;inner mask radius(in pixels)&gt;] [width=&lt;pixels falloff inner
+    mask{10}&gt;] [cube=&lt;side (in pixels){0}&gt;] [e1=&lt;1st Euler{0}&gt;] [e2=&lt;2nd
+    Euler{0}&gt;] [e3=&lt;3d Euler{0}&gt;] [corner=&lt;corner size{0}&gt;]
+    [neg=&lt;yes|no{no}&gt;] [voltab=&lt;file table&gt;] [voltab2=&lt;file table&gt;]
+    [bin=&lt;yes|no{no}&gt;] [nvox=&lt;nr of voxels{0}&gt;] [xsh=&lt;x shift(pixels){0}&gt;]
+    [ysh=&lt;y shift(pixels){0}&gt;] [zsh=&lt;z shift(pixels){0}&gt;]
+</PRE>
+<B>Comments:</B> If you input two volumes and the sampling distance, the FSC is calculated between the volumes. The FSC plot is written to STDOUT together with resolution estimates at <IMG
+ WIDTH="89" HEIGHT="15" ALIGN="BOTTOM" BORDER="0"
+ SRC="img8.png"
+ ALT="$ FSC=0.5$">
+ and <IMG
+ WIDTH="106" HEIGHT="15" ALIGN="BOTTOM" BORDER="0"
+ SRC="img9.png"
+ ALT="$ FSC=0.143$">
+. The volumes subjected to FSC calculation should be masked with a soft-edged (not hard-edged) mask and they should not have been subjected to any "auto" or threshold masking. If <TT>phrand</TT> and <TT>lp</TT> are given, the Fourier phases of the input volume <TT>vol1</TT> are randomized. <TT>msk</TT> is used for spherical masking with a soft (cosine edge) fall-off. <TT>lp</TT> and <TT>hp</TT> are the low-pass and high-pass limits used for filtering. To add noise to a volume, give the desired signal-to-noise ratio via <TT>snr</TT>. Give <TT>center=yes</TT> and <TT>lp</TT> to center the input volume according to center of mass. The 3D origin shift vector is found by low-pass filtering the volume to <TT>lp</TT>, binarizing the density, identifying the center of mass, and calculating the vector needed to place the center of mass in the center of the box. <TT>soften=yes</TT> applies a real-space low-pass filter using pixel width <TT>edge</TT>. <TT>mskfile</TT> is used for masking a volume using an externally generated mask. <TT>countvox=yes</TT> counts the number of foreground voxels (the binarization method is k-means). <TT>newbox</TT> and <TT>scale</TT> are used for resizing the volume. <TT>msktype</TT> controls the mask type (<TT>hard</TT> or <TT>soft</TT>). <TT>inner</TT> controls the radius of the inner mask with fall-off <TT>width</TT>. <TT>cube</TT> is used to generate a binary cube (4 testing purposes). <TT>e1,e2,e3</TT> is the Euler triplet used to rotate the input volume using Kaiser-Bessel interpolation in Fourier space. <TT>corner</TT> is used for filling in the corners of the box with binary cubes (4 testing purposes). <TT>neg</TT> inverts the contrast of the input volume by multiplication with <IMG
+ WIDTH="27" HEIGHT="30" ALIGN="MIDDLE" BORDER="0"
+ SRC="img10.png"
+ ALT="$ -1$">
+ in Fourier space. <TT>voltab</TT> and <TT>voltab2</TT> are used to give text files with the names of volume files that are correlated and the nearest neighbour structure of the comparison is written to STDOUT.
+
+<P>
+<HR>
+<!--Navigation Panel-->
+<A NAME="tex2html688"
+  HREF="node47.html">
+<IMG WIDTH="37" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="next"
+ SRC="file:/sw/share/lib/latex2html/icons/next.png"></A> 
+<A NAME="tex2html684"
+  HREF="node40.html">
+<IMG WIDTH="26" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="up"
+ SRC="file:/sw/share/lib/latex2html/icons/up.png"></A> 
+<A NAME="tex2html680"
+  HREF="node45.html">
+<IMG WIDTH="63" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="previous"
+ SRC="file:/sw/share/lib/latex2html/icons/prev.png"></A> 
+<A NAME="tex2html686"
+  HREF="node1.html">
+<IMG WIDTH="65" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="contents"
+ SRC="file:/sw/share/lib/latex2html/icons/contents.png"></A>  
+<BR>
+<B> Next:</B> <A NAME="tex2html689"
+  HREF="node47.html">Utility programs</A>
+<B> Up:</B> <A NAME="tex2html685"
+  HREF="node40.html">Standard image/volume operations (ops)</A>
+<B> Previous:</B> <A NAME="tex2html681"
+  HREF="node45.html">Program: simple_stackops</A>
+ &nbsp; <B>  <A NAME="tex2html687"
+  HREF="node1.html">Contents</A></B> 
+<!--End of Navigation Panel-->
+<ADDRESS>
+Hans Elmlund
+2016-05-24
+</ADDRESS>
+</BODY>
+</HTML>

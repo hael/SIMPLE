@@ -28,7 +28,7 @@ real               :: res, dfx_prev=0., dfy_prev=0., angast_prev=0.
 contains
     
     subroutine set_bp_range( b, p, cline )
-        use simple_estimate_ssnr, only: fsc2ssnr, estimate_pssnr2D, estimate_pssnr3D
+        use simple_estimate_ssnr, only: fsc2ssnr
         use simple_cmdline,       only: cmdline
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
@@ -48,30 +48,6 @@ contains
                         b%ssnr(s,:) = fsc2ssnr(b%fsc(s,:))
                         call get_resolution(b%fsc(s,:), resarr, fsc05, fsc0143)
                         mapres(s)   = fsc0143
-                        if( p%ctf .ne. 'no' )then
-                            ! get the ctfsq spectrum from the previous 3D reconstruction
-                            tmparr = file2rarr('ctfsqspec_state'//int2str_pad(s,2)//'.bin')
-                            ! calculate the CTF**2-dependent component of the PSSNR
-                            where( tmparr > 1e-6 )
-                                b%pssnr_ctfsq3D(s,:) = b%spec_count3D/tmparr
-                            else where
-                                b%pssnr_ctfsq3D(s,:) = 0.
-                            end where
-                            deallocate(tmparr)
-                        else
-                            b%pssnr_ctfsq3D(s,:) = 1.
-                        endif
-                        select case(p%filter)
-                            case('pssnr')
-                                ! calculate the PSSNRS used to design filters in 2D (particles) and 3D (volumes)
-                                b%pssnr2D(s,:) = estimate_pssnr2D(p%avr, b%fsc(s,:))*b%pssnr_ctfsq3D(s,:)
-                                b%pssnr3D(s,:) = estimate_pssnr3D(p%avr, b%fsc(s,:))*b%pssnr_ctfsq3D(s,:)
-                            case DEFAULT
-                                b%pssnr2D(s,:) = 1.
-                                b%pssnr3D(s,:) = fsc2ssnr(b%fsc(s,:))     
-                        end select
-                        call arr2file(b%pssnr2D(s,:), 'pssnr2D_state'//int2str_pad(s,2)//'.bin')
-                        call arr2file(b%pssnr3D(s,:), 'pssnr3D_state'//int2str_pad(s,2)//'.bin')
                     end do
                     loc = maxloc(mapres)
                     p%kfromto(2) = get_lplim(b%fsc(loc(1),:))
@@ -269,11 +245,10 @@ contains
         endif
     end subroutine grid_ptcl
     
-    subroutine prepimg4align( b, p, o, pssnr )
+    subroutine prepimg4align( b, p, o )
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         type(ori),      intent(inout) :: o
-        real, optional, intent(in)    :: pssnr(:)
         real      :: x, y, dfx, dfy, angast
         integer   :: icls, state
         if( p%l_xfel )then
@@ -389,7 +364,6 @@ contains
     end subroutine prep2Dref_2
 
     subroutine preprefvol( b, p, cline, s )
-        use simple_estimate_ssnr, only: ssnr2optlp
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         class(cmdline), intent(inout) :: cline
@@ -444,15 +418,6 @@ contains
         endif
         ! FT volume
         call b%vol%fwd_ft
-        ! filter volume (or not)
-        select case(p%filter)
-            case('pssnr','fom')
-                filter = ssnr2optlp(b%pssnr3D(s,:))
-                call b%vol%apply_filter(filter)
-                deallocate(filter)
-            case DEFAULT
-                ! do nothing 
-        end select
     end subroutine preprefvol
     
     subroutine eonorm_struct_facts( b, p, res, which_iter )

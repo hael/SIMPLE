@@ -1,0 +1,78 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">
+
+<!--Converted with LaTeX2HTML 2002-2-1 (1.71)
+original version by:  Nikos Drakos, CBLU, University of Leeds
+* revised and updated by:  Marcus Hennecke, Ross Moore, Herb Swan
+* with significant contributions from:
+  Jens Lippmann, Marek Rouchal, Martin Wilck and others -->
+<HTML>
+<HEAD>
+<TITLE>Program: simple_doc2cavgs</TITLE>
+<META NAME="description" CONTENT="Program: simple_doc2cavgs">
+<META NAME="keywords" CONTENT="simple21manual">
+<META NAME="resource-type" CONTENT="document">
+<META NAME="distribution" CONTENT="global">
+
+<META NAME="Generator" CONTENT="LaTeX2HTML v2002-2-1">
+<META HTTP-EQUIV="Content-Style-Type" CONTENT="text/css">
+
+<LINK REL="STYLESHEET" HREF="simple21manual.css">
+
+<LINK REL="previous" HREF="node31.html">
+<LINK REL="up" HREF="node27.html">
+<LINK REL="next" HREF="node33.html">
+</HEAD>
+
+<BODY >
+<!--Navigation Panel-->
+<A NAME="tex2html512"
+  HREF="node33.html">
+<IMG WIDTH="37" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="next"
+ SRC="file:/sw/share/lib/latex2html/icons/next.png"></A> 
+<A NAME="tex2html508"
+  HREF="node27.html">
+<IMG WIDTH="26" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="up"
+ SRC="file:/sw/share/lib/latex2html/icons/up.png"></A> 
+<A NAME="tex2html504"
+  HREF="node31.html">
+<IMG WIDTH="63" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="previous"
+ SRC="file:/sw/share/lib/latex2html/icons/prev.png"></A> 
+<A NAME="tex2html510"
+  HREF="node1.html">
+<IMG WIDTH="65" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="contents"
+ SRC="file:/sw/share/lib/latex2html/icons/contents.png"></A>  
+<BR>
+<B> Next:</B> <A NAME="tex2html513"
+  HREF="node33.html">Ab initio 3D reconstruction</A>
+<B> Up:</B> <A NAME="tex2html509"
+  HREF="node27.html">2D alignment/clustering</A>
+<B> Previous:</B> <A NAME="tex2html505"
+  HREF="node31.html">Program: simple_map2ptcls</A>
+ &nbsp; <B>  <A NAME="tex2html511"
+  HREF="node1.html">Contents</A></B> 
+<BR>
+<BR>
+<!--End of Navigation Panel-->
+
+<H3><A NAME="SECTION00081500000000000000"></A>
+<A NAME="doc2cavgs"></A>
+<BR>
+Program: <FONT COLOR="#0f75ff"><TT>simple_doc2cavgs</TT></FONT>
+</H3>
+<FONT COLOR="#0f75ff"><TT>simple_doc2cavgs</TT></FONT> is a program for generating class averages. We use it to to re-generate class averages when <FONT COLOR="#0f75ff"><TT>simple_prime2d</TT></FONT> has been run on downscaled images. If the images processed with PRIME2D were downscaled from 200x200 to 100x00, set <TT>mul=2</TT>.
+<PRE>
+    $ SIMPLE_DOC2CAVGS stk=&lt;stack.ext&gt; smpd=&lt;sampling distance(in A)&gt; msk=&lt;mask}
+    radius(in pixels)&gt; ncls=&lt;nr of clusters&gt; oritab=&lt;previous clustering doc&gt;
+    which_iter=&lt;iteration nr&gt; [mul=&lt;shift multiplication factor{1}&gt;] [nthr=&lt;nr
+    of OpenMP threads{1}&gt;]
+</PRE>
+<B>Comments:</B> The program assumes that the images have been phase-flipped, as no CTF correction by Wiener restoration is implemented yet.
+
+<P>
+<BR><HR>
+<ADDRESS>
+Hans Elmlund
+2016-05-24
+</ADDRESS>
+</BODY>
+</HTML>

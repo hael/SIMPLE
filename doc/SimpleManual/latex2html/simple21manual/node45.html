@@ -1,0 +1,131 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">
+
+<!--Converted with LaTeX2HTML 2002-2-1 (1.71)
+original version by:  Nikos Drakos, CBLU, University of Leeds
+* revised and updated by:  Marcus Hennecke, Ross Moore, Herb Swan
+* with significant contributions from:
+  Jens Lippmann, Marek Rouchal, Martin Wilck and others -->
+<HTML>
+<HEAD>
+<TITLE>Program: simple_stackops</TITLE>
+<META NAME="description" CONTENT="Program: simple_stackops">
+<META NAME="keywords" CONTENT="simple21manual">
+<META NAME="resource-type" CONTENT="document">
+<META NAME="distribution" CONTENT="global">
+
+<META NAME="Generator" CONTENT="LaTeX2HTML v2002-2-1">
+<META HTTP-EQUIV="Content-Style-Type" CONTENT="text/css">
+
+<LINK REL="STYLESHEET" HREF="simple21manual.css">
+
+<LINK REL="next" HREF="node46.html">
+<LINK REL="previous" HREF="node44.html">
+<LINK REL="up" HREF="node40.html">
+<LINK REL="next" HREF="node46.html">
+</HEAD>
+
+<BODY >
+<!--Navigation Panel-->
+<A NAME="tex2html678"
+  HREF="node46.html">
+<IMG WIDTH="37" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="next"
+ SRC="file:/sw/share/lib/latex2html/icons/next.png"></A> 
+<A NAME="tex2html674"
+  HREF="node40.html">
+<IMG WIDTH="26" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="up"
+ SRC="file:/sw/share/lib/latex2html/icons/up.png"></A> 
+<A NAME="tex2html668"
+  HREF="node44.html">
+<IMG WIDTH="63" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="previous"
+ SRC="file:/sw/share/lib/latex2html/icons/prev.png"></A> 
+<A NAME="tex2html676"
+  HREF="node1.html">
+<IMG WIDTH="65" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="contents"
+ SRC="file:/sw/share/lib/latex2html/icons/contents.png"></A>  
+<BR>
+<B> Next:</B> <A NAME="tex2html679"
+  HREF="node46.html">Program: simple_volops</A>
+<B> Up:</B> <A NAME="tex2html675"
+  HREF="node40.html">Standard image/volume operations (ops)</A>
+<B> Previous:</B> <A NAME="tex2html669"
+  HREF="node44.html">Program: simple_simimgs</A>
+ &nbsp; <B>  <A NAME="tex2html677"
+  HREF="node1.html">Contents</A></B> 
+<BR>
+<BR>
+<!--End of Navigation Panel-->
+
+<H3><A NAME="SECTION00083500000000000000"></A>
+<A NAME="stackops"></A>
+<BR>
+Program: <FONT COLOR="#0f75ff"><TT>simple_stackops</TT></FONT>
+</H3>
+<FONT COLOR="#0f75ff"><TT>simple_stackops</TT></FONT> is a program that provides standard single-particle image processing routines that are applied to MRC or SPIDER stacks.
+<PRE>
+    $ SIMPLE_STACKOPS [stk=&lt;stack.ext&gt;] [stk2=&lt;stack2.ext&gt;] [nptcls=&lt;nr of imgs&gt;]}
+    [smpd=&lt;sampling distance(in A)&gt;] [outstk=&lt;outstk.ext&gt;] [split=&lt;nr of partitions
+    to split the stack into&gt;] [oritab=&lt;SIMPLE alignment doc&gt;] [hp=&lt;high-pass
+    limit(in A)&gt;](in A)&gt;] [shalgn=&lt;yes|no{no}&gt;] [mul=&lt;shift multiplication
+    factor{1}&gt;] [trs=&lt;origin shift halfwidth(in pixels){0}] [lp=&lt;low-pass
+    limit(in A){20}&gt;] [state=&lt;state to extract&gt;] [frac=&lt;fraction of ptcls to
+    extract{1}&gt;] [class=&lt;cluster2extract&gt;] [snr=&lt;signal2noise ratio&gt;] [msk=&lt;mask
+    radius(in pixels){box/2}&gt;] [vis=&lt;yes|no&gt;] [bin=&lt;binarize{no}&gt;]
+    [acf=&lt;yes|no{no}&gt;] [phrand=&lt;yes|no{no}&gt;] [fromp=&lt;start ptcl&gt;] [top=&lt;stop
+    ptcl&gt;] [nran=&lt;number of random images to select&gt;] [newbox=&lt;scaled box&gt;]
+    [scale=&lt;scale factor{1}&gt;] [hfun=&lt;sigm|tanh|lin{sigm}&gt;]
+    [norm=&lt;yes|no{no}&gt;] [noise_norm=&lt;yes|no&gt;] [nthr=&lt;nr of openMP threads{1}&gt;]
+    [avg=&lt;yes|no&gt;] [filetab=&lt;filenames.txt&gt;] [stats=&lt;yes|no{yes}&gt;]
+    [ctf=&lt;yes|no|flip|mul|abs{no}&gt;] [kv=&lt;acceleration voltage(in kV){300.}&gt;]
+    [fraca=&lt;frac amp contrast{0.07}&gt;] [cs=&lt;spherical aberration constant(in
+    mm){2.7}&gt;] [deftab=&lt;text file with defocus values&gt;] [ft2img=&lt;yes|no{no}&gt;]
+    [frameavg=&lt;nr of frames to average{0}&gt;] [clip=&lt;clipped box size{box}&gt;]
+    [compare=&lt;yes|no{no}&gt;] [mirr=&lt;no|x|y{no}&gt;] [neg=&lt;yes|no{no}&gt;] [box=&lt;image
+    size(in pixels)&gt;] [outfile=&lt;output_params.txt&gt;] [ctfsq=&lt;yes|no{no}&gt;]
+    [masscen=&lt;yes|no{no}&gt;] [thres=&lt;threshold4bin[0,1]{0.6}&gt;] [inner=&lt;inner mask
+    radius(in pixels)&gt;] [width=&lt;pixels falloff inner mask{10}&gt;]
+    [append=&lt;yes|no{no}&gt;]
+</PRE>
+<B>Comments:</B> You can do many things with <FONT COLOR="#0f75ff"><TT>simple_stackops</TT></FONT>. Inputting two stacks of the same size results in the calculation of the joint Fourier Ring  Correlation (FRC) between the images. Inputting no stacks, but setting <TT>nptcls</TT>, results in production of <TT>nptcls</TT> pure noise images, unless <TT>ctf=yes</TT>, then CTF images are produced. Filtering is controlled by the <TT>hp</TT> and <TT>lp</TT> arguments. If you input an alignment document (via <TT>oritab</TT>) <TT>shalgn=yes</TT> will produce a shift-aligned stack based on the inputted orientations, whereas if you do <I>not</I> input an alignment document, the alignment will be done in a reference-free manner (remember to set <TT>trs</TT> to some nonzero value). If you want to centre the images based on their centre of mass, set <TT>masscen=yes</TT>. If you want to extract a particular state, give an alignment document (<TT>oritab</TT>) and set <TT>state</TT> to the state that you want to extract. If you want to select the fraction of best particles (according to the goal function), input an alignment doc (<TT>oritab</TT>) and set <TT>frac</TT>. You can combine the <TT>state</TT> and <TT>frac</TT> options. If you want to apply noise to images, give the desired signal-to-noise ratio via <TT>snr</TT>. If you want to mask your images with a spherical mask with a soft falloff, set <TT>msk</TT> to the radius in pixels. If you want to binarize your images, set <TT>bin=yes</TT>. If <TT>thres</TT> is defined, the images are sigmoid normalised to <!-- MATH
+ $\in{[0,1]}$
+ -->
+<IMG
+ WIDTH="56" HEIGHT="34" ALIGN="MIDDLE" BORDER="0"
+ SRC="img7.png"
+ ALT="$ \in{[0,1]}$">
+ and threshold binarized. If <TT>thres</TT> is not defined the foreground/background pixels are assigned by sort-means (a variant of the continuous k-means algorithm where the initial centres are obtained by sorting the real values). If you want to calculate the autocorrelation function of your images set <TT>acf=yes</TT>. If you want to randomise the phases of the Fourier transforms of your images, set <TT>phrand=yes</TT> and <TT>lp</TT> to the desired low-pass limit. If you want to extract a contiguous subset of particle images from the stack, set <TT>fromp</TT> and <TT>top</TT>. If you want to fish out a number of particle images from your stack at random, set <TT>nran</TT> to some nonzero integer number less than <TT>nptcls</TT>. If you want to resize you images, set the desired box to <TT>newbox</TT> or use the <TT>scale</TT> option. It is often convenient to use <TT>scale</TT> in combination with <TT>clip</TT> to resize images.  If you want to normalise your images, set <TT>norm=yes</TT>. <TT>hfun</TT> controls the normalisation function. With <TT>avg=yes</TT> the global average of the inputted stack is calculated. With <TT>ctf=flip</TT> the contrast inversions due to the CTF are corrected by the infamous (but effective) phase-flipping heuristic. This requires additional input of CTF-related parameters (<TT>kv</TT>, <TT>fraca</TT> and <TT>cs</TT>) in addition to the defocus and astigmatism angle values, communicated either via <TT>oritab</TT> or via <TT>deftab</TT>. Even if you do initially phase-flip the images, which you should do for initial model production with PRIME, you can turn on the Wiener restoration later anyway, to accomplish correct weighting of information around the CTF zeroes and maximal noise reduction. <TT>ft2img=yes</TT> produces images of the square power spectrum of the images in <TT>stk</TT>. If you define <TT>frameavg</TT> to some integer number larger than one averages with chunk sizes of <TT>frameavg</TT> are produced, which may be useful for analysis of dose-fractionated image series. <TT>clip</TT> can be used to re-window or pad the images to a different box size. When <TT>compare=yes</TT>, the two inputted stacks are Fourier ring correlated. <TT>neg</TT> inverts the contrast of the images. <TT>ctfsq</TT> applies the squared CTF to the inputted images. <TT>inner</TT> is for applying an inner mask with fall-off width <TT>width</TT>. Finally, <TT>append</TT> is for appending stack <TT>stk2</TT> with stack <TT>stk</TT>, so that the <TT>stk2</TT> images occur last in the series and the stk name is preserved.
+
+<P>
+<HR>
+<!--Navigation Panel-->
+<A NAME="tex2html678"
+  HREF="node46.html">
+<IMG WIDTH="37" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="next"
+ SRC="file:/sw/share/lib/latex2html/icons/next.png"></A> 
+<A NAME="tex2html674"
+  HREF="node40.html">
+<IMG WIDTH="26" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="up"
+ SRC="file:/sw/share/lib/latex2html/icons/up.png"></A> 
+<A NAME="tex2html668"
+  HREF="node44.html">
+<IMG WIDTH="63" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="previous"
+ SRC="file:/sw/share/lib/latex2html/icons/prev.png"></A> 
+<A NAME="tex2html676"
+  HREF="node1.html">
+<IMG WIDTH="65" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="contents"
+ SRC="file:/sw/share/lib/latex2html/icons/contents.png"></A>  
+<BR>
+<B> Next:</B> <A NAME="tex2html679"
+  HREF="node46.html">Program: simple_volops</A>
+<B> Up:</B> <A NAME="tex2html675"
+  HREF="node40.html">Standard image/volume operations (ops)</A>
+<B> Previous:</B> <A NAME="tex2html669"
+  HREF="node44.html">Program: simple_simimgs</A>
+ &nbsp; <B>  <A NAME="tex2html677"
+  HREF="node1.html">Contents</A></B> 
+<!--End of Navigation Panel-->
+<ADDRESS>
+Hans Elmlund
+2016-05-24
+</ADDRESS>
+</BODY>
+</HTML>

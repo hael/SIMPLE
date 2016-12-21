@@ -40,7 +40,6 @@ outside
 pad
 phrand
 plot
-pssnr
 readwrite
 remap
 restart
@@ -54,7 +53,6 @@ shbarrier
 single
 soften
 srch_inpl
-ssnr
 stats
 swap
 test
@@ -84,7 +82,6 @@ extrmode
 fbody
 featstk
 filetab
-filter
 fname
 fsc
 hfun

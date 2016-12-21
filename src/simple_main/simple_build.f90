@@ -74,13 +74,6 @@ type build
     type(eo_reconstructor), allocatable :: eorecvols(:)       !< array of volumes for eo-reconstruction
     real, allocatable                   :: ssnr(:,:)          !< spectral signal to noise rations
     real, allocatable                   :: fsc(:,:)           !< Fourier shell correlation
-    real, allocatable                   :: spec_noise2D(:,:)  !< noise power spectra (2D)
-    real, allocatable                   :: spec_count2D(:)    !< number of Fourier components per shell (2D)
-    real, allocatable                   :: spec_count3D(:)    !< number of Fourier components per shell (3D)
-    real, allocatable                   :: pssnr_ctfsq2D(:,:) !< the ctfsq-dependent part of the pssnr (2D)
-    real, allocatable                   :: pssnr_ctfsq3D(:,:) !< the ctfsq-dependent part of the pssnr (3D)
-    real, allocatable                   :: pssnr2D(:,:)       !< the full pssnr (2D)
-    real, allocatable                   :: pssnr3D(:,:)       !< the full pssnr (3D)
     integer, allocatable                :: nnmat(:,:)         !< matrix with nearest neighbor indices
     ! PRIVATE EXISTENCE VARIABLES
     logical, private                    :: general_tbox_exists          = .false.
@@ -230,8 +223,7 @@ contains
             if( debug ) write(*,'(a)') 'did build boxpd-sized image objects'
             ! build arrays
             lfny = self%img%get_lfny(1)            
-            allocate( self%ssnr(p%nstates,lfny), self%fsc(p%nstates,lfny),&
-            self%pssnr2D(p%nstates,lfny), self%pssnr3D(p%nstates,lfny), stat=alloc_stat )
+            allocate( self%ssnr(p%nstates,lfny), self%fsc(p%nstates,lfny), stat=alloc_stat )
             call alloc_err("In: build_general_tbox; simple_build, 1", alloc_stat)
             ! set default amsklp
             if( .not. cline%defined('amsklp') .and. cline%defined('lp') )then
@@ -264,7 +256,7 @@ contains
             call self%mskvol%kill
             call self%vol_pad%kill
             if( allocated(self%ssnr) )then
-                deallocate(self%ssnr, self%fsc, self%pssnr2D, self%pssnr3D)
+                deallocate(self%ssnr, self%fsc)
             endif
             self%general_tbox_exists = .false.
         endif
@@ -477,10 +469,6 @@ contains
                 end do
             endif
         endif
-        self%spec_count2D = self%img%spectrum('count')
-        self%spec_count3D = self%vol%spectrum('count')
-        allocate( self%pssnr_ctfsq3D(p%nstates,self%img%get_lfny(1)), stat=alloc_stat )
-        call alloc_err('build_hadamard_prime3D_tbox; simple_build, 3', alloc_stat)    
         if( str_has_substr(p%refine,'qcont') )then
             allocate( self%refvols(p%nstates), stat=alloc_stat)
             call alloc_err('build_hadamard_prime3D_tbox; simple_build, 4', alloc_stat)
@@ -513,7 +501,6 @@ contains
                 end do
                 deallocate(self%recvols)
             endif
-            deallocate(self%spec_count2D, self%spec_count3D, self%pssnr_ctfsq3D)
             if( allocated(self%refvols) )then
                 do i=1,size(self%refvols)
                     call self%refvols(i)%kill
@@ -545,10 +532,6 @@ contains
                 endif
             end do
         endif
-        self%spec_count2D = self%img%spectrum('count')
-        self%spec_count3D = self%vol%spectrum('count')
-        allocate( self%pssnr_ctfsq3D(p%nstates,self%img%get_lfny(1)), stat=alloc_stat )
-        call alloc_err('build_hadamard_prime3D_tbox; simple_build, 3', alloc_stat)
         write(*,'(A)') '>>> DONE BUILDING HADAMARD PRIME3D TOOLBOX'
         self%cont3D_tbox_exists = .true.
     end subroutine build_cont3D_tbox
@@ -564,7 +547,6 @@ contains
                 end do
                 deallocate(self%eorecvols)
             endif
-            deallocate(self%spec_count2D, self%spec_count3D, self%pssnr_ctfsq3D)
             self%cont3D_tbox_exists = .false.
         endif
     end subroutine kill_cont3D_tbox

@@ -414,11 +414,7 @@ contains
                 else
                     call b%img%read(p%stk, iptcl, p%l_xfel)
                 endif
-                if( p%eo .eq. 'yes' )then
-                    call prepimg4align(b, p, o, pssnr=b%pssnr2D(istate,:))
-                else
-                    call prepimg4align(b, p, o)
-                endif
+                call prepimg4align(b, p, o)
                 call b%proj%img2polarft(iptcl, b%img, pftcc)
             end do
         end do

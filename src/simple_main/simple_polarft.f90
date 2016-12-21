@@ -469,7 +469,7 @@ contains
     !>  \brief  is for correlating two polar images of which one (self_ref) 
     !!          is fixed at rotation index 1 and one is parameterized (self)
     !!          over in-plane rotation index rot. This routine is optimized to
-    !!          remove any index permutations (as Frederic says: do it in one hit!)
+    !!          remove any index permutations (do it in one hit!)
     function corr( self_ref, self, r ) result( cc )
         class(polarft), intent(in)    :: self_ref
         class(polarft), intent(inout) :: self

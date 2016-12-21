@@ -6,7 +6,7 @@
 !
 ! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
 ! Redistribution and modification is regulated by the GNU General Public License.
-! *Authors:* Frederic Bonnet, Cyril Reboul & Hans Elmlund 2016
+! *Authors:* Cyril Reboul & Hans Elmlund 2016
 !
 module simple_commander_sim
 use simple_defs            ! singleton

@@ -60,7 +60,6 @@ contains
         call chdict%push('even',          'calculate even eo-pair(yes|no){no}')
         call chdict%push('fbody',         'file body')
         call chdict%push('filetab',       'list of files(*.txt/*.asc)')
-        call chdict%push('filter',        'volume filtering options (fom|pssnr|no){no}')
         call chdict%push('find',          'Fourier index')
         call chdict%push('fix_gpu',       'fix GPU execution to one device(yes|no){no}')
         call chdict%push('fname',         'file name')

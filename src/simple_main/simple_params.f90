@@ -69,7 +69,6 @@ type :: params
     character(len=3) :: pad='no'
     character(len=3) :: phrand='no'
     character(len=3) :: plot='no'
-    character(len=3) :: pssnr='no'
     character(len=3) :: readwrite='no'
     character(len=3) :: remap='no'
     character(len=3) :: restart='no'
@@ -83,7 +82,6 @@ type :: params
     character(len=3) :: single='no'
     character(len=3) :: soften='no'
     character(len=3) :: srch_inpl='yes'
-    character(len=3) :: ssnr='no'
     character(len=3) :: stats='no'
     character(len=3) :: swap='no'
     character(len=3) :: test='no'
@@ -114,7 +112,6 @@ type :: params
     character(len=STDLEN) :: fbody=''
     character(len=STDLEN) :: featstk='expecstk.bin'
     character(len=STDLEN) :: filetab=''
-    character(len=STDLEN) :: filter='no'
     character(len=STDLEN) :: fname=''
     character(len=STDLEN) :: fsc='fsc_state01.bin'
     character(len=STDLEN) :: hfun='sigm'
@@ -396,7 +393,6 @@ contains
         call check_carg('exp_doc',        self%exp_doc)
         call check_carg('extrmode',       self%extrmode)
         call check_carg('fbody',          self%fbody)
-        call check_carg('filter',         self%filter)
         call check_carg('fix_gpu',        self%fix_gpu)
         call check_carg('ft2img',         self%ft2img)
         call check_carg('guinier',        self%guinier)
@@ -424,7 +420,6 @@ contains
         call check_carg('pgrp',           self%pgrp)
         call check_carg('phrand',         self%phrand)
         call check_carg('prg',            self%prg)
-        call check_carg('pssnr',          self%pssnr)
         call check_carg('readwrite',      self%readwrite)
         call check_carg('refine',         self%refine)
         call check_carg('refs',           self%refs)
@@ -442,7 +437,6 @@ contains
         call check_carg('speckind',       self%speckind)
         call check_carg('split_mode',     self%split_mode)
         call check_carg('srch_inpl',      self%srch_inpl)
-        call check_carg('ssnr',           self%ssnr)
         call check_carg('stats',          self%stats)
         call check_carg('swap',           self%swap)
         call check_carg('test',           self%test)
