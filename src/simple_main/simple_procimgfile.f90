@@ -356,7 +356,7 @@ contains
     end subroutine noise_norm_imgfile
 
     !>  \brief  is for noise normalization
-    subroutine shell_norm_imgfile( fname2norm, fname )
+    subroutine shellnorm_imgfile( fname2norm, fname )
         character(len=*), intent(in) :: fname2norm, fname !< filenames
         type(image)      :: img
         integer          :: i, n, ldim(3)
@@ -373,7 +373,7 @@ contains
             call img%write(fname, i)
         end do
         call img%kill
-    end subroutine shell_norm_imgfile
+    end subroutine shellnorm_imgfile
 
     !>  \brief  is for calculating statistics
     subroutine stats_imgfile( fname, which, ave, sdev, var, med, msk )
@@ -704,28 +704,29 @@ contains
     end subroutine phase_rand_imgfile
     
     !>  \brief  is for applying CTF
-    subroutine apply_ctf_imgfile( fname2process, fname, o, smpd, tfun, mode, bfac )
+    subroutine apply_ctf_imgfile( fname2process, fname, o, smpd, mode, bfac )
         use simple_math,  only: deg2rad
         use simple_oris,  only: oris
         use simple_ctf,   only: ctf
-        character(len=*), intent(in) :: fname2process, fname !< filenames
-        class(oris), intent(inout)   :: o                    !< orientations object
-        real, intent(in)             :: smpd                 !< sampling distance, a/pix
-        class(ctf), intent(inout)    :: tfun                 !< transfer function 
-        character(len=*), intent(in) :: mode                 !< abs, ctf, flip, flipneg, neg, square
-        real, intent(in), optional   :: bfac                 !< bfactor
+        character(len=*), intent(in)    :: fname2process, fname !< filenames
+        class(oris),      intent(inout) :: o                    !< orientations object
+        real,             intent(in)    :: smpd                 !< sampling distance, a/pix
+        character(len=*), intent(in)    :: mode                 !< abs, ctf, flip, flipneg, neg, square
+        real, optional,   intent(in)    :: bfac                 !< bfactor
         type(image)   :: img
         integer       :: i, n, ldim(3)
+        type(ctf)     :: tfun
         call find_ldim_nptcls(fname2process, ldim, n)
         ldim(3)    = 1
         call raise_exception_imgfile( n, ldim, 'apply_ctf_imgfile' )
         ! do the work
         if( n /= o%get_noris() ) stop 'inconsistent nr entries; apply_ctf; simple_procimgfile'
         call img%new(ldim,smpd)
-        write(*,'(a)') '>>> APPLYING CTF TO IMAGES' 
+        write(*,'(a)') '>>> APPLYING CTF TO IMAGES'
         do i=1,n
             call progress(i,n)
             call img%read(fname2process, i)
+            tfun = ctf(smpd, o%get(i,'kv'), o%get(i,'cs'), o%get(i,'fraca'))
             if( o%isthere('dfy') )then ! astigmatic CTF
                 call tfun%apply(img, o%get(i,'dfx'), mode, dfy=o%get(i,'dfy'), angast=o%get(i,'angast'), bfac=bfac)
             else ! non-astigmatic CTF

@@ -448,7 +448,7 @@ contains
                 frac_srch_space = os%get_avg('frac')
                 call job_descr%set( 'oritab', trim(oritab) )
                 call cline_shellweight3D%set( 'oritab', trim(oritab) )
-                if( p_master%shellw .eq. 'yes' .and. frac_srch_space >= 50. )then
+                if( frac_srch_space >= 50. )then
                     call xshellweight3D_distr%execute(cline_shellweight3D)
                 endif
             endif
@@ -766,7 +766,6 @@ contains
         logical, parameter                  :: debug=.false.
         ! commanders
         type(recvol_commander)              :: xrecvol
-        type(eo_recvol_commander)           :: xeo_recvol
         type(volassemble_commander)         :: xvolassemble
         type(eo_volassemble_commander)      :: xeo_volassemble
         type(split_commander)               :: xsplit
@@ -800,8 +799,6 @@ contains
             ! execute
             call xshellweight3D_distr%execute(cline_shellweight3D)
         endif
-        call cline%set( 'prg','recvol' )
-        if( p_master%eo .eq. 'yes' ) call cline%set( 'prg','eo_recvol' )
         call cline%gen_job_descr(job_descr)
         ! split stack
         if( stack_is_split(p_master%ext, p_master%nparts) )then

@@ -18,8 +18,8 @@ private :: raise_sys_error
 
 contains
 
+    !> is the fortran 90 variant of the classical dtime
     real function dtime( time )
-    ! is the fortran 90 variant of the classical dtime
         real                  :: time(2)
         double precision,save :: last_time = 0
         double precision      :: this_time
@@ -31,16 +31,16 @@ contains
         last_time = this_time
     end function dtime
 
+    !> is the fortran 90 variant of the classical etime
     real function etime( time )
-    ! is the fortran 90 variant of the classical etime
         real :: time(2)
         call cpu_time(etime)
         time(1) = etime
         time(2) = 0
-    end function
+    end function etime
 
+    !> is for getting the actual cputime
     function getabscpu( lprint ) result( actual )
-    ! is for getting the actual cputime
         logical, intent(in) :: lprint
         real                :: tarray(2)
         real                :: actual
@@ -48,10 +48,10 @@ contains
         if( lprint )then
             write(*,'(A,2X,F9.2)') 'Actual cpu-time:', actual
         endif
-    end function
+    end function getabscpu
 
-    function getdiffcpu( lprint ) result( delta )
-    ! is for getting the relative cpu-time
+    !> is for getting the relative cpu-time
+    function getdiffcpu( lprint ) result( delta )   
         logical, intent(in) :: lprint
         real                :: tarray(2)
         real                :: delta
@@ -59,7 +59,7 @@ contains
         if( lprint )then
             write(*,'(A,F9.2)') 'Relative cpu-time:', delta
         endif
-    end function
+    end function getdiffcpu
 
     !>  Wrapper for system call
     subroutine exec_cmdline( cmdline )

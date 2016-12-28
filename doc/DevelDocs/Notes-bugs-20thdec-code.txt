@@ -1,0 +1,47 @@
+Message from Susan:
+
+bugs in 20th december code. The killer seems to be that there is something that feels a bit like the memory clash that we had before impacting on the 3D with shellw that is kiling jobs in nparts > 1 when more than a few hundred particles....This is the error I thought was happening when I turn eo on, but its actually just that I moved from 1000 cavgs to 70000 particles. Any version of the command line runs with 500 particles but as the particle number increases the probability of failure increases (all tests done with nparts=20). The 70k particle job has been running for 12 hours with nparts=1 (4 cycles). I do get (very occasionally) an error if I re-run the scripts - this is in the log.
+
+
+Notes & Bugs 20.12.16 code
+
+Prime3D workflow in automatic update of resolution mode - says lpstop calculated as 8.9A, but keeps on updating low pass limit when FIND equates to resolution substantially below this (went to 5.16A)
+-----------------------
+Prime3D workflow - if giving input oritab/vol volume must not be called recvol_state01.mrc or it gets cleaned up when it is still needed and causes job to fail
+-------------------------
+some sort of I/O nasty???
+so running distr_workflow in 20 parts on full particle file (doesn't happen if I take top 500 particles and run in 20 parts)- some number of the parts go to 100% particles built but then just die silently (no outputs written)
+
+if go and manually re-run the distr_script
+
+first time of running (in ~50% of the cases???)
+runs for a while then:
+
+Program received signal SIGSEGV: Segmentation fault - invalid memory reference.
+
+Backtrace for this error:
+#0  0x7EFD4CC83BB7
+#1  0x7EFD4CC82DB0
+#2  0x7EFD4BF564AF
+#3  0x562A7B in __simple_filterer_MOD_resample_filter
+#4  0x729CBB in __simple_hadamard3d_matcher_MOD_prime3d_exec
+#5  0x6FA945 in __simple_commander_prime3d_MOD_exec_prime3d
+#6  0x4085E8 in MAIN__ at simple_exec.f90:?
+./distr_simple_script_10: line 15: 26738 Segmentation fault      (core dumped) /software/electron_microscopy/simple/simple4m2-16.12.20/bin/simple_exec prg=prime3D stk=sumstack.mrc eo=yes oritab=mapped_ptcls_params.txt nparts=20 ctf=yes shellw=yes nthr=16.0000000 frac=0.800000012 smpd=1.05999994 msk=55.0000000 nspace=2000.00000 refine=shc vol1=startvol_state01.mrc dynlp=no box=152.000000 startit=1 fromp=42148 top=46829 part=10 outfile=algndoc_10.txt > OUT10
+
+re-run exact same script a second time (and for the other 50% of cases) and it runs to completion
+most of the time... on one occasion, repeatedly failed???
+
+Try running with nparts=1
+----------------
+
+
+To Note:
+
+Seem to be able to squash falcon 79 frame movies without frame averaging with current version of unblur
+
+2D classrefine seems to be back in the 20th december version of the code....?
+
+
+
+

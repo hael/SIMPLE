@@ -256,37 +256,24 @@ contains
             stop 'oritab/deftab with CTF info needed for phase flipping/multiplication'
         endif
         if( p%ctf .ne. 'no' )then
-            if( debug )then
-                write(*,*) 'CTF parameters used in simple_ctfops'
-                write(*,*) 'kv = ', p%kv
-                write(*,*) 'cs = ', p%cs
-                write(*,*) 'fraca = ', p%fraca
-            endif
             select case( p%ctf )
                 case( 'flip' )
                     if( p%neg .eq. 'yes' )then
-                        call apply_ctf_imgfile(p%stk, p%outstk, b%a, p%smpd, b%tfun, 'flipneg')
+                        call apply_ctf_imgfile(p%stk, p%outstk, b%a, p%smpd, 'flipneg')
                     else
-                        call apply_ctf_imgfile(p%stk, p%outstk, b%a, p%smpd, b%tfun, 'flip')
+                        call apply_ctf_imgfile(p%stk, p%outstk, b%a, p%smpd, 'flip')
                     endif
                 case( 'mul' )
                     if( p%neg .eq. 'yes' )then
-                        call apply_ctf_imgfile(p%stk, p%outstk, b%a, p%smpd, b%tfun, 'neg')
+                        call apply_ctf_imgfile(p%stk, p%outstk, b%a, p%smpd, 'neg')
                     else
-                        call apply_ctf_imgfile(p%stk, p%outstk, b%a, p%smpd, b%tfun, 'ctf')
+                        call apply_ctf_imgfile(p%stk, p%outstk, b%a, p%smpd, 'ctf')
                     endif
                 case( 'abs' )
-                    call apply_ctf_imgfile(p%stk, p%outstk, b%a, p%smpd, b%tfun, 'abs')
+                    call apply_ctf_imgfile(p%stk, p%outstk, b%a, p%smpd, 'abs')
                 case DEFAULT
                     stop 'Unknown ctf argument'
             end select
-        else if( p%ctfsq .eq. 'yes' )then
-            ! APPLY CFTSQ
-            if( cline%defined('bfac') )then
-                call apply_ctf_imgfile(p%stk, p%outstk, b%a, p%smpd, b%tfun, 'square', bfac=p%bfac)
-            else
-                call apply_ctf_imgfile(p%stk, p%outstk, b%a, p%smpd, b%tfun, 'square')
-            endif
         else
             stop 'Nothing to do!'
         endif
@@ -393,7 +380,7 @@ contains
     end subroutine exec_image_smat
 
     subroutine exec_norm( self, cline )
-        use simple_procimgfile,   only: norm_imgfile, noise_norm_imgfile, shell_norm_imgfile
+        use simple_procimgfile,   only: norm_imgfile, noise_norm_imgfile, shellnorm_imgfile
         class(norm_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(build)       :: b
@@ -404,8 +391,8 @@ contains
         call b%build_general_tbox(p, cline)         ! general objects built
         if( cline%defined('stk') .and. cline%defined('vol1') )stop 'Cannot operate on images AND volume at once'
         if( p%norm.eq.'yes' .and. p%noise_norm.eq.'yes' )stop 'Invalid normalization type'
-        if( p%norm.eq.'yes' .and. p%shell_norm.eq.'yes' )stop 'Invalid normalization type'
-        if( p%noise_norm.eq.'yes' .and. p%shell_norm.eq.'yes' )stop 'Invalid normalization type'
+        if( p%norm.eq.'yes' .and. p%shellnorm.eq.'yes' )stop 'Invalid normalization type'
+        if( p%noise_norm.eq.'yes' .and. p%shellnorm.eq.'yes' )stop 'Invalid normalization type'
         call b%vol%new([p%box,p%box,p%box], p%smpd) ! reallocate vol (boxmatch issue)
         if( cline%defined('stk') )then
             ! 2D
@@ -423,16 +410,16 @@ contains
                 else
                     stop 'need msk parameter for noise normalization'
                 endif
-            else if( p%shell_norm.eq.'yes' )then
+            else if( p%shellnorm.eq.'yes' )then
                 ! shell normalization
                 print *,'in'
-                call shell_norm_imgfile( p%stk, p%outstk )
+                call shellnorm_imgfile( p%stk, p%outstk )
             endif
         else if( cline%defined('vol1') )then
             ! 3D
             if( .not.file_exists(p%vols(1)) )stop 'Cannot find input volume'
             call b%vol%read(p%vols(1))
-            if( p%shell_norm.eq.'yes' )then
+            if( p%shellnorm.eq.'yes' )then
                 ! shell normalization
                 call b%vol%shellnorm
                 spec = b%vol%spectrum('power')
@@ -952,14 +939,15 @@ contains
     end subroutine exec_tseries_split
 
     subroutine exec_respimg( self, cline )
-        use simple_stat,     only: pearsn, normalize_sigm, corrs2weights
-        use simple_aff_prop, only: aff_prop
-        use simple_ori,      only: ori
-        use simple_image,    only: image
+        use simple_stat,             only: pearsn, normalize_sigm, corrs2weights
+        use simple_aff_prop,         only: aff_prop
+        use simple_ori,              only: ori
+        use simple_image,            only: image
         use simple_polarft_corrcalc, only: polarft_corrcalc
-        use simple_hadamard_common, only: preprefs4align, reset_prev_defparms
+        use simple_hadamard_common,  only: preprefs4align, reset_prev_defparms
+        use simple_ctf,              only: ctf
         class(respimg_commander), intent(inout) :: self
-        class(cmdline),                 intent(inout) :: cline
+        class(cmdline),           intent(inout) :: cline
         type(params)                  :: p
         type(build)                   :: b
         type(ori)                     :: o
@@ -1131,16 +1119,19 @@ contains
         enddo
         call b%a%write( p%outfile )
         call simple_end('**** SIMPLE_RESPIMG NORMAL STOP ****')
+
         contains
 
         subroutine prep_img4align( img, o )
             type(image), intent(inout) :: img
             type(ori),   intent(inout) :: o
             type(image) :: rotimg
+            type(ctf)   :: tfun
             real        :: x, y, dfx, dfy, angast
             !call rotimg%new( img%get_ldim(), img%get_smpd() )
-            ! set CTF parameters
             if( p%ctf .ne. 'no' )then
+                ! create ctf object
+                tfun = ctf(img%get_smpd(),o%get('kv'),o%get('cs'),o%get('fraca'))
                 select case(p%tfplan%mode)
                     case('astig') ! astigmatic CTF
                         dfx    = o%get('dfx')
@@ -1162,7 +1153,7 @@ contains
                 case('no')   ! do nothing
                 case('yes')  ! do nothing
                 case('flip') ! flip back
-                    call b%tfun%apply( img, dfx, 'flip', dfy, angast )
+                    call tfun%apply( img, dfx, 'flip', dfy, angast )
                 case DEFAULT
                     stop 'Unsupported ctf mode; simple_hadamard_common :: prepimg4align'
             end select
@@ -1183,26 +1174,29 @@ contains
             type(image), intent(inout) :: img
             type(ori),   intent(inout) :: o
             type(image) :: rotimg
+            type(ctf)   :: tfun
             real :: x, y, dfx, dfy, angast
             call rotimg%new( img%get_ldim(), img%get_smpd() )
-            ! move to Fourier space
-            select case(p%tfplan%mode)
-                case('astig') ! astigmatic CTF
-                    dfx    = o%get('dfx')
-                    dfy    = o%get('dfy')
-                    angast = o%get('angast')
-                case('noastig') ! non-astigmatic CTF
-                    dfx    = o%get('dfx')
-                    dfy    = dfx
-                    angast = 0.
-            end select
-            ! take care of the nominator
+            if( p%ctf .ne. 'no' )then
+                ! create ctf object
+                tfun = ctf(img%get_smpd(),o%get('kv'),o%get('cs'),o%get('fraca'))
+                select case(p%tfplan%mode)
+                    case('astig') ! astigmatic CTF
+                        dfx    = o%get('dfx')
+                        dfy    = o%get('dfy')
+                        angast = o%get('angast')
+                    case('noastig') ! non-astigmatic CTF
+                        dfx    = o%get('dfx')
+                        dfy    = dfx
+                        angast = 0.
+                end select
+            endif
             call img%fwd_ft
             select case(p%tfplan%flag)
                 case('yes')  ! multiply with CTF
-                    call b%tfun%apply(img, dfx, 'ctf', dfy, angast)
+                    call tfun%apply(img, dfx, 'ctf', dfy, angast)
                 case('flip') ! multiply with abs(CTF)
-                    call b%tfun%apply(img, dfx, 'abs', dfy, angast)
+                    call tfun%apply(img, dfx, 'abs', dfy, angast)
                 case('mul','no')  ! do nothing
                     ! doing nothing
                 case DEFAULT
@@ -1223,19 +1217,22 @@ contains
         subroutine prep_ctfsq( img, o )
             type(image), intent(inout) :: img
             type(ori),   intent(inout) :: o
-            real :: dfx, dfy, angast
-            select case(p%tfplan%mode)
-                case('astig') ! astigmatic CTF
-                    dfx    = o%get('dfx')
-                    dfy    = o%get('dfy')
-                    angast = o%get('angast')
-                case('noastig') ! non-astigmatic CTF
-                    dfx    = o%get('dfx')
-                    dfy    = dfx
-                    angast = 0.
-            end select
+            type(ctf) :: tfun
+            real      :: dfx, dfy, angast
             if( p%tfplan%flag .ne. 'no' )then
-                call b%tfun%ctf2img( img, dfx, 'square', dfy, angast)
+                ! create ctf object
+                tfun = ctf(img%get_smpd(),o%get('kv'),o%get('cs'),o%get('fraca'))
+                select case(p%tfplan%mode)
+                    case('astig') ! astigmatic CTF
+                        dfx    = o%get('dfx')
+                        dfy    = o%get('dfy')
+                        angast = o%get('angast')
+                    case('noastig') ! non-astigmatic CTF
+                        dfx    = o%get('dfx')
+                        dfy    = dfx
+                        angast = 0.
+                end select
+                call tfun%ctf2img( img, dfx, 'square', dfy, angast)
             else
                 img = cmplx(1.,0.)
             endif

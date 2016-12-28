@@ -189,7 +189,7 @@ contains
         use simple_hadamard_common    ! singleton
         use simple_prime_srch
         use simple_hadamard3D_matcher ! singleton
-        use simple_rec_master, only: exec_rec, exec_eorec
+        use simple_rec_master, only: exec_rec_master
         use simple_oris,       only: oris
         use simple_stat
         class(het_init_commander), intent(inout) :: self
@@ -285,13 +285,9 @@ contains
                 type(oris)  :: os
                 os  = b%a
                 b%a = individual
-                if( cline%defined('lp') )then
-                    call exec_rec(b, p, cline )
-                else
-                    call exec_eorec(b, p, cline )
-                endif
+                call exec_rec_master(b, p, cline )
                 b%a = os
-            end subroutine
+            end subroutine rec_individual
 
             function calc_fitness( individual, method )result( val )
                 class(oris),           intent(inout) :: individual
@@ -399,7 +395,7 @@ contains
     !     use simple_hadamard_common    ! singleton
     !     use simple_prime_srch
     !     use simple_hadamard3D_matcher ! singleton
-    !     use simple_rec_master, only: exec_rec, exec_eorec
+    !     use simple_rec_master, only: exec_rec_master
     !     use simple_oris,       only: oris
     !     class(het_init_commander), intent(inout) :: self
     !     class(cmdline),            intent(inout) :: cline
@@ -533,11 +529,7 @@ contains
     !             enddo
     !             print *,'final pop', pop
     !             ! reconstruction
-    !             if( cline%defined('lp') )then
-    !                 call exec_rec(b, p, cline )
-    !             else
-    !                 call exec_eorec(b, p, cline )
-    !             endif
+    !             call exec_rec_master(b, p, cline )
     !             b%a = backup
     !             call backup%kill
     !         end subroutine
@@ -624,7 +616,7 @@ contains
     ! end subroutine exec_het_init
 
     subroutine exec_multiptcl_init( self, cline )
-        use simple_rec_master, only: exec_rec, exec_eorec
+        use simple_rec_master, only: exec_rec_master
         class(multiptcl_init_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(params) :: p
@@ -646,11 +638,10 @@ contains
         if( p%norec .eq. 'no' )then
             if( cline%defined('lp') )then
                 call b%build_rec_tbox(p)
-                call exec_rec(b, p, cline, 'startvol')
             else
                 call b%build_eo_rec_tbox(p)
-                call exec_eorec(b, p, cline, 'startvol')
             endif
+            call exec_rec_master(b, p, cline, 'startvol')
         endif
         if( p%zero .eq. 'yes' ) call b%a%set_all2single('corr', 0.)
         call b%a%write('multiptcl_startdoc.txt')

@@ -283,8 +283,8 @@ contains
     
     !>  \brief  for generating a random Euler angle
     subroutine rnd_euler_1( self, eullims )
-        class(ori), intent(inout)           :: self
-        real,       intent(inout), optional :: eullims(3,2)
+        class(ori),     intent(inout) :: self
+        real, optional, intent(inout) :: eullims(3,2)
         logical :: found
         if( present(eullims) )then
             found = .false.
@@ -358,9 +358,9 @@ contains
     !>  \brief  for generating random ori
     subroutine rnd_ori( self, trs, eullims )
         use simple_rnd, only: ran3
-        class(ori), intent(inout)           :: self
-        real,       intent(in), optional    :: trs
-        real,       intent(inout), optional :: eullims(3,2)
+        class(ori),     intent(inout) :: self
+        real, optional, intent(in)    :: trs
+        real, optional, intent(inout) :: eullims(3,2)
         real :: x, y, z
         if( present(trs) )then
             if( abs(trs) < 1e-3 )then

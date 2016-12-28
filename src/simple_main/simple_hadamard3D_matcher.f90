@@ -22,6 +22,7 @@ private
 type(polarft_corrcalc) :: pftcc
 type(prime3D_srch)     :: primesrch3D
 real                   :: reslim
+real                   :: frac_srch_space
 type(ori)              :: orientation, o_sym, o_tmp
 integer                :: cnt_glob=0
 integer, parameter     :: MAXNPEAKS=10
@@ -70,6 +71,9 @@ contains
 
         inptcls = p%top - p%fromp + 1
 
+        ! SET FRACTION OF SEARCH SPACE
+        frac_srch_space = b%a%get_avg('frac')
+
         ! SET BAND-PASS LIMIT RANGE 
         call set_bp_range( b, p, cline )
 
@@ -100,8 +104,12 @@ contains
         endif
 
         ! SETUP WEIGHTS FOR THE 3D RECONSTRUCTION
-        if( p%oritab .ne. '' .and. p%frac < 0.99 )           call b%a%calc_hard_ptcl_weights(p%frac)
-        if( p%shellw .eq. 'yes' .and. .not. p%l_distr_exec ) call cont3D_shellweight(b, p, cline)
+        if( p%oritab .ne. '' .and. p%frac < 0.99 ) call b%a%calc_hard_ptcl_weights(p%frac)
+        if( p%l_distr_exec )then
+            ! nothing to do
+        else
+            if( frac_srch_space >= 50. ) call cont3D_shellweight(b, p, cline)
+        endif
         call setup_shellweights(b, p, doshellweight, wmat, res, res_pad)
 
         ! GENERATE PROJECTIONS (POLAR FTs)
@@ -196,10 +204,10 @@ contains
                             call primesrch3D%exec_prime3D_shc_srch(pftcc, iptcl, p%lp, orientation, nnmat=b%nnmat)
                         case('qcont')
                             if( p%oritab .eq. '' ) stop 'cannot run the refine=qcont mode without input oridoc (oritab)'
-                            call primesrch3D%exec_prime3D_qcont_srch(b%refvols, b%proj, b%tfun, pftcc, iptcl, p%lp, orientation)
+                            call primesrch3D%exec_prime3D_qcont_srch(b%refvols, b%proj, pftcc, iptcl, p%lp, orientation)
                         case('qcontneigh')
                             if( p%oritab .eq. '' ) stop 'cannot run the refine=qcontneigh mode without input oridoc (oritab)'
-                            call primesrch3D%exec_prime3D_qcont_srch(b%refvols, b%proj, b%tfun,&
+                            call primesrch3D%exec_prime3D_qcont_srch(b%refvols, b%proj,&
                             pftcc, iptcl, p%lp, orientation, athres=max(10.,2.*p%athres))
                         case('shift')
                             if( p%oritab .eq. '' ) stop 'cannot run the refine=shift mode without input oridoc (oritab)'

@@ -19,7 +19,6 @@ use simple_commander_base, only: commander_base
 implicit none
 
 public :: merge_algndocs_commander
-public :: merge_crefine_out_commander
 public :: merge_nnmat_commander
 public :: merge_shellweights_commander
 public :: merge_similarities_commander
@@ -31,10 +30,6 @@ type, extends(commander_base) :: merge_algndocs_commander
   contains
     procedure :: execute      => exec_merge_algndocs
 end type merge_algndocs_commander
-type, extends(commander_base) :: merge_crefine_out_commander
-  contains
-    procedure :: execute      => exec_merge_crefine_out
-end type merge_crefine_out_commander
 type, extends(commander_base) :: merge_nnmat_commander
   contains
     procedure :: execute      => exec_merge_nnmat
@@ -138,81 +133,6 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_MERGE_ALGNDOCS NORMAL STOP ****')
     end subroutine exec_merge_algndocs
-
-    subroutine exec_merge_crefine_out( self, cline )
-        use simple_oris,       only: oris
-        use simple_ori,        only: ori
-        use simple_math,       only: calc_lowpass_lim
-        use simple_online_var, only: online_var
-        class(merge_crefine_out_commander), intent(inout) :: self
-        class(cmdline),                     intent(inout) :: cline
-        type(params)                  :: p
-        type(oris)                    :: o, o_read
-        type(ori)                     :: osingle
-        type(online_var), allocatable :: resvars(:)
-        integer, allocatable          :: pinds(:)
-        real,    allocatable          :: shweights(:,:)
-        integer                       :: icls, nentries, ncls, ipind, find, filtsz, iimg
-        character(len=STDLEN)         :: fname_doc, fname_shweights
-        integer, parameter            :: NUMLEN=5
-        real                          :: mv(2), sdev
-        p = params(cline) ! parameters generated
-        if( nlines(p%oritab) /= p%nptcls )then
-            stop 'the inputted nptcls is not consistent with the nptcls in oritab!'
-        endif
-        ! create object for orientations
-        o = oris(p%nptcls)
-        ! read previous orientations
-        call o%read(p%oritab)
-        ! get number of classes 
-        ncls = o%get_ncls()
-        ! loop over classes
-        do icls=1,ncls
-            fname_doc  = 'classrefine_doc_class'//int2str_pad(icls,NUMLEN)//'.txt'
-            if( file_exists(fname_doc) )then
-                nentries = nlines(fname_doc)
-                ! extract the particle indices of icls
-                pinds = o%get_cls_pinds(icls)
-                if( size(pinds) .eq. nentries )then
-                    ! replace the corresponding oris in the mother doc
-                    call o_read%new(nentries)
-                    call o_read%read(fname_doc)
-                    do ipind=1,nentries
-                        osingle = o_read%get_ori(ipind)
-                        call o%set_ori(pinds(ipind),osingle)
-                    end do
-                    call del_txtfile(fname_doc)
-                else
-                    write(*,*) 'doc: ', trim(fname_doc)
-                    stop 'nr of entries in classdoc not equal to class population in mother doc, aborting'
-                endif
-            endif
-            fname_shweights = 'classrefine_shweights_class'//int2str_pad(icls,NUMLEN)//'.bin'
-            if( file_exists(fname_shweights) )then
-                shweights = file2arr2D(fname_shweights)
-                filtsz    = size(shweights,2)
-                if( .not. allocated(resvars) ) allocate(resvars(filtsz))
-                do find=1,filtsz
-                    do iimg=1,size(shweights,1)
-                        call resvars(find)%add(shweights(iimg,find))
-                    end do
-                end do
-                call del_binfile(fname_shweights)
-            endif
-        end do
-        ! finalize and print the weight variances (per-resolution-shell)
-        do find=1,filtsz
-            call resvars(find)%finalize
-            sdev = 0.
-            mv = resvars(find)%get_mean_var()
-            if( mv(2) > TINY ) sdev = sqrt(mv(2))
-            write(*,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:',&
-            calc_lowpass_lim(find, p%box, p%smpd), '>>> SDEV(WEIGHT):', sdev
-        end do
-        call o%write(p%outfile)
-        ! end gracefully
-        call simple_end('**** SIMPLE_MERGE_CLASSDOCS NORMAL STOP ****')
-    end subroutine exec_merge_crefine_out
 
     subroutine exec_merge_nnmat( self, cline )
         use simple_map_reduce, only: merge_nnmat_from_parts

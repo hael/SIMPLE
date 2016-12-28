@@ -186,7 +186,6 @@ comlin_sym: simple_comlin_symsrch.o     \
 cluster_cavg: simple_matchpursuit.o     \
               simple_cavgppca.o         \
               simple_refinecluster.o    \
-              simple_classrefine.o      \
               simple_clustercavg.o      ;
 
 qsys: simple_qsys_base.o                \
@@ -223,7 +222,6 @@ cpu_test_code: simple_optimiser_tester.o       \
                simple_inpl_srch_tester.o       \
                simple_ft_expanded_tester.o     \
                simple_volpft_srch_tester.o     \
-               simple_classrefine_tester.o     \
                simple_prime3D_srch_tester.o    ;
 
 test_code: ;

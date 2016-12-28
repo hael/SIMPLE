@@ -90,6 +90,7 @@ type :: oris
     procedure          :: rnd_cls
     procedure          :: rnd_oris_discrete
     procedure          :: rnd_inpls
+    procedure          :: rnd_trs
     procedure          :: rnd_ctf
     procedure          :: rnd_states
     procedure          :: rnd_classes
@@ -823,7 +824,7 @@ contains
         integer :: nparams, cnt, iptcl
         logical :: astig
         nparams = pfromto(2)-pfromto(1)+1
-        allocate(ctfparams(nparams,3))
+        allocate(ctfparams(nparams,6))
         ctfparams = 0.
         astig = .false.
         if( self%isthere('dfx') )then
@@ -834,14 +835,17 @@ contains
         endif
         cnt = 0
         do iptcl=pfromto(1),pfromto(2)
-            cnt = cnt+1
-            ctfparams(cnt,1) = self%get(iptcl,'dfx')
+            cnt = cnt + 1
+            ctfparams(cnt,1) = self%get(iptcl,'kv')
+            ctfparams(cnt,2) = self%get(iptcl,'cs')
+            ctfparams(cnt,3) = self%get(iptcl,'fraca')
+            ctfparams(cnt,4) = self%get(iptcl,'dfx')
             if( astig )then
-                ctfparams(cnt,2) = self%get(iptcl,'dfy')
-                ctfparams(cnt,3) = self%get(iptcl,'angast')
+                ctfparams(cnt,5) = self%get(iptcl,'dfy')
+                ctfparams(cnt,6) = self%get(iptcl,'angast')
             else
-                ctfparams(cnt,2) = self%get(iptcl,'dfx')
-                ctfparams(cnt,3) = 0.
+                ctfparams(cnt,5) = self%get(iptcl,'dfx')
+                ctfparams(cnt,6) = 0.
             endif
         end do
     end function get_ctfparams
@@ -1012,12 +1016,13 @@ contains
     end subroutine mul_shifts
 
     !>  \brief  randomizes eulers in oris
-    subroutine rnd_oris( self, trs )
-        class(oris), intent(inout) :: self
-        real, intent(in), optional :: trs
+    subroutine rnd_oris( self, trs, eullims)
+        class(oris),    intent(inout) :: self
+        real, optional, intent(in)    :: trs
+        real, optional, intent(inout) :: eullims(3,2)
         integer :: i
         do i=1,self%n
-            call self%rnd_ori(i, trs)
+            call self%rnd_ori(i, trs, eullims)
         end do 
     end subroutine rnd_oris
     
@@ -1159,16 +1164,34 @@ contains
             call self%o(i)%set('y', y)
         end do
     end subroutine rnd_inpls
-    
-    !>  \brief  randomizes the CTF parameters
-    subroutine rnd_ctf( self, defocus, deferr, astigerr )
+
+    !>  \brief  randomizes the origin shifts
+    subroutine rnd_trs( self, trs )
         use simple_rnd, only: ran3
         class(oris), intent(inout) :: self
-        real, intent(in)           :: defocus, deferr
-        real, intent(in), optional :: astigerr
+        real,        intent(in)    :: trs
+        integer :: i
+        real :: x, y
+        do i=1,self%n
+            x = ran3()*2.0*trs-trs
+            y = ran3()*2.0*trs-trs
+            call self%o(i)%set('x', x)
+            call self%o(i)%set('y', y)
+        end do
+    end subroutine rnd_trs
+    
+    !>  \brief  randomizes the CTF parameters
+    subroutine rnd_ctf( self, kv, cs, fraca, defocus, deferr, astigerr )
+        use simple_rnd, only: ran3
+        class(oris),    intent(inout) :: self
+        real,           intent(in)    :: kv, cs, fraca, defocus, deferr
+        real, optional, intent(in)    :: astigerr
         integer :: i
         real    :: dfx, dfy, angast, err
         do i=1,self%n
+            call self%o(i)%set('kv',    kv   )
+            call self%o(i)%set('cs',    cs   )
+            call self%o(i)%set('fraca', fraca)
             do
                 err = ran3()*deferr
                 if( ran3() < 0.5 )then

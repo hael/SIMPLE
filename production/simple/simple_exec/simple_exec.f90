@@ -8,7 +8,7 @@
 !
 ! The code is distributed with the hope that it will be useful, but WITHOUT ANY WARRANTY.
 ! Redistribution and modification is regulated by the GNU General Public License.
-! Authors: Frederic Bonnet, Cyril Reboul & Hans Elmlund 2016
+! Authors: Cyril Reboul & Hans Elmlund 2016
 !
 program exec
 use simple_cmdline,  only: cmdline
@@ -42,6 +42,7 @@ type(boxconvs_commander)           :: xboxconvs
 type(integrate_movies_commander)   :: xintegrate_movies
 type(powerspecs_commander)         :: xpowerspecs
 type(unblur_movies_commander)      :: xunblur_movies
+type(ctffind_commander)            :: xctffind
 type(select_commander)             :: xselect
 type(pick_commander)               :: xpick
 type(extract_commander)            :: xextract
@@ -49,7 +50,6 @@ type(extract_commander)            :: xextract
 ! PRIME2D PROGRAMS
 type(prime2D_init_commander)       :: xprime2D_init
 type(prime2D_commander)            :: xprime2D
-type(classrefine_commander)        :: xclassrefine
 type(cavgassemble_commander)       :: xcavgassemble
 type(check2D_conv_commander)       :: xcheck2D_conv
 type(rank_cavgs_commander)         :: xrank_cavgs
@@ -76,7 +76,6 @@ type(automask2D_commander)         :: xautomask2D
 type(automask3D_commander)         :: xautomask3D
     
 ! RECONSTRUCTION PROGRAMS
-type(eo_recvol_commander)          :: xeo_recvol
 type(eo_volassemble_commander)     :: xeo_volassemble
 type(recvol_commander)             :: xrecvol
 type(volassemble_commander)        :: xvolassemble
@@ -120,6 +119,7 @@ type(shift_commander)              :: xshift
 
 ! ORIENTATION DATA MANAGEMENT PROGRAMS
 type(cluster_oris_commander)       :: xcluster_oris
+type(makedeftab_commander)         :: xmakedeftab
 type(makeoris_commander)           :: xmakeoris
 type(map2ptcls_commander)          :: xmap2ptcls
 type(orisops_commander)            :: xorisops
@@ -128,7 +128,6 @@ type(rotmats2oris_commander)       :: xrotmats2oris
     
 ! PARALLEL PROCESSING PROGRAMS
 type(merge_algndocs_commander)     :: xmerge_algndocs
-type(merge_crefine_out_commander)  :: xmerge_crefine_out
 type(merge_nnmat_commander)        :: xmerge_nnmat
 type(merge_shellweights_commander) :: xmerge_shellweights
 type(merge_similarities_commander) :: xmerge_similarities  
@@ -157,13 +156,13 @@ select case(prg)
     case( 'noiseimgs' )
         !==Program noiseimgs
         !
-        ! <noiseimgs/begin> is a program for generating noise images<noiseimgs/end>
+        ! <noiseimgs/begin> is a program for generating noise images <noiseimgs/end>
         !
         ! set required keys
         keys_required(1) = 'box'
         keys_required(2) = 'nptcls'
         ! parse command line
-        ! if( describe ) call print_doc_noiseimgs
+        if( describe ) call print_doc_noiseimgs
         call cline%parse(keys_required(:2))
         ! execute
         call xnoiseimgs%execute(cline)
@@ -194,20 +193,22 @@ select case(prg)
         keys_optional(7)  = 'outstk'
         keys_optional(8)  = 'single'
         keys_optional(9)  = 'ndiscrete'
+        keys_optional(10) = 'diverse'
+        keys_optional(11) = 'pgrp'
         ! set optional CTF-related keys
-        keys_optional(10)  = 'ctf'
-        keys_optional(11)  = 'kv'
-        keys_optional(12) = 'cs'
-        keys_optional(13) = 'fraca'
-        keys_optional(14) = 'deftab'
-        keys_optional(15) = 'defocus'
-        keys_optional(16) = 'dferr'
-        keys_optional(17) = 'astigerr'
-        keys_optional(18) = 'bfac'
-        keys_optional(19) = 'bfacerr'
+        keys_optional(12) = 'ctf'
+        keys_optional(13) = 'kv'
+        keys_optional(14) = 'cs'
+        keys_optional(15) = 'fraca'
+        keys_optional(16) = 'deftab'
+        keys_optional(17) = 'defocus'
+        keys_optional(18) = 'dferr'
+        keys_optional(19) = 'astigerr'
+        keys_optional(20) = 'bfac'
+        keys_optional(21) = 'bfacerr'
         ! parse command line
         if( describe ) call print_doc_simimgs
-        call cline%parse(keys_required(:5), keys_optional(:19))
+        call cline%parse(keys_required(:5), keys_optional(:21))
         ! set defaults
         call cline%set('nspace', cline%get_rarg('nptcls'))
         if( .not. cline%defined('sherr') .and. .not. cline%defined('oritab') ) call cline%set('sherr', 2.)
@@ -375,29 +376,58 @@ select case(prg)
         keys_required(2)  = 'smpd'
         ! set optional keys
         keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'use_gpu'
-        keys_optional(3)  = 'fbody'
-        keys_optional(4)  = 'lpstart'
-        keys_optional(5)  = 'lpstop'
-        keys_optional(6)  = 'trs'
-        keys_optional(7)  = 'exp_time'
-        keys_optional(8)  = 'dose_rate'
-        keys_optional(9)  = 'kv'
-        keys_optional(10) = 'pspecsz'
-        keys_optional(11) = 'numlen'
-        keys_optional(12) = 'startit'
-        keys_optional(13) = 'scale'
-        keys_optional(14) = 'frameavg'
-        keys_optional(15) = 'tomo'
+        keys_optional(2)  = 'fbody'
+        keys_optional(3)  = 'lpstart'
+        keys_optional(4)  = 'lpstop'
+        keys_optional(5)  = 'trs'
+        keys_optional(6)  = 'exp_time'
+        keys_optional(7)  = 'dose_rate'
+        keys_optional(8)  = 'kv'
+        keys_optional(9)  = 'pspecsz'
+        keys_optional(10) = 'numlen'
+        keys_optional(11) = 'startit'
+        keys_optional(12) = 'scale'
+        keys_optional(13) = 'frameavg'
+        keys_optional(14) = 'tomo'
         ! parse command line
         if( describe ) call print_doc_unblur_movies
-        call cline%parse(keys_required(:2), keys_optional(:15))
+        call cline%parse(keys_required(:2), keys_optional(:14))
         ! set defaults
         if( .not. cline%defined('trs')     ) call cline%set('trs',      5.)
         if( .not. cline%defined('lpstart') ) call cline%set('lpstart', 15.)
         if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',   8.)
         ! execute
         call xunblur_movies%execute(cline)
+    case( 'ctffind' )
+        !==Program ctffind
+        !
+        ! <ctffind/begin> is a wrapper program for CTFFIND4 (Grigorieff lab) <ctffind/end> 
+        !
+        ! set required keys
+        keys_required(1) = 'filetab'
+        keys_required(2) = 'smpd'
+        keys_required(3) = 'kv'
+        keys_required(4) = 'cs'
+        keys_required(5) = 'fraca'
+        keys_required(6) = 'deftab'
+        ! set optional keys
+        keys_optional(1) = 'pspecsz'
+        keys_optional(2) = 'hp'
+        keys_optional(3) = 'lp'
+        keys_optional(4) = 'dfmin'
+        keys_optional(5) = 'dfmax'
+        keys_optional(6) = 'astigstep'
+        keys_optional(7) = 'expastig'
+        keys_optional(8) = 'phaseplate'
+        ! parse command line
+        if( describe ) call print_doc_ctffind
+        call cline%parse(keys_required(:6), keys_optional(:8))
+        ! set defaults
+        if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz', 1024.)
+        if( .not. cline%defined('hp')      ) call cline%set('hp',        30.)
+        if( .not. cline%defined('lp')      ) call cline%set('lp',         5.)
+        ! execute
+        call xctffind%execute(cline)
     case( 'select' )
         !==Program select
         !
@@ -488,24 +518,20 @@ select case(prg)
         ! (startcavgs.ext) to execute prime2D. <prime2D_init/end> 
         !
         ! set required keys
-        keys_required(1)  = 'stk'
-        keys_required(2)  = 'smpd'
-        keys_required(3)  = 'ncls'
+        keys_required(1) = 'stk'
+        keys_required(2) = 'smpd'
+        keys_required(3) = 'ncls'
+        keys_required(4) = 'ctf'
         ! set optional keys
-        keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'oritab'
-        keys_optional(3)  = 'filwidth'
-        keys_optional(4)  = 'mul'
-        keys_optional(5)  = 'srch_inpl'
-        ! set optional CTF-related keys
-        keys_optional(6)  = 'ctf'
-        keys_optional(7)  = 'kv'
-        keys_optional(8)  = 'cs'
-        keys_optional(9)  = 'fraca'
-        keys_optional(10) = 'deftab'
+        keys_optional(1) = 'nthr'
+        keys_optional(2) = 'deftab'
+        keys_optional(3) = 'oritab'
+        keys_optional(4) = 'filwidth'
+        keys_optional(5) = 'mul'
+        keys_optional(6) = 'srch_inpl'
         ! parse command line
         if( describe ) call print_doc_prime2D_init
-        call cline%parse(keys_required(:3), keys_optional(:10))
+        call cline%parse(keys_required(:4), keys_optional(:6))
         ! set defaults
         if( .not. cline%defined('eo') ) call cline%set('eo', 'no')
         ! execute
@@ -525,32 +551,25 @@ select case(prg)
         keys_required(3)  = 'msk'
         keys_required(4)  = 'ncls'
         keys_required(5)  = 'refs'
+        keys_required(6)  = 'ctf'
         ! set optional keys
         keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'use_gpu'
-        keys_optional(3)  = 'fix_gpu'
-        keys_optional(4)  = 'set_gpu'
-        keys_optional(5)  = 'oritab'
-        keys_optional(6)  = 'hp'
-        keys_optional(7)  = 'lp'
-        keys_optional(8)  = 'cenlp'
-        keys_optional(9)  = 'trs'
-        keys_optional(10)  = 'automsk'
-        keys_optional(11) = 'amsklp'
-        keys_optional(12) = 'inner'
-        keys_optional(13) = 'width'
-        keys_optional(14) = 'startit'
-        keys_optional(15) = 'maxits'
-        keys_optional(16) = 'srch_inpl'
-        ! set optional CTF-related keys
-        keys_optional(17) = 'ctf'
-        keys_optional(18) = 'kv'
-        keys_optional(19) = 'cs'
-        keys_optional(20) = 'fraca'
-        keys_optional(21) = 'deftab'
+        keys_optional(2)  = 'deftab'
+        keys_optional(3)  = 'oritab'
+        keys_optional(4)  = 'hp'
+        keys_optional(5)  = 'lp'
+        keys_optional(6)  = 'cenlp'
+        keys_optional(7)  = 'trs'
+        keys_optional(8)  = 'automsk'
+        keys_optional(9)  = 'amsklp'
+        keys_optional(10) = 'inner'
+        keys_optional(11) = 'width'
+        keys_optional(12) = 'startit'
+        keys_optional(13) = 'maxits'
+        keys_optional(14) = 'srch_inpl'
         ! parse command line
         if( describe ) call print_doc_prime2D
-        call cline%parse(keys_required(:5), keys_optional(:21))
+        call cline%parse(keys_required(:6), keys_optional(:14))
         ! set defaults
         if( .not. cline%defined('lp')     ) call cline%set('lp',     20.)
         if( .not. cline%defined('amsklp') ) call cline%set('amsklp', 25.)
@@ -559,40 +578,6 @@ select case(prg)
         if( .not. cline%defined('eo')     ) call cline%set('eo',    'no')
         ! execute
         call xprime2D%execute(cline)
-    case( 'classrefine' )
-        !==Program classrefine
-        !
-        ! <classrefine/begin> is a program for multi-resolution within class refinement with validation. 
-        ! Output is the refined class average and a doc with updated parameters. <classrefine/end>
-        !
-        ! set required keys
-        keys_required(1)  = 'stk'
-        keys_required(2)  = 'smpd'
-        keys_required(3)  = 'msk'
-        keys_required(4)  = 'class'
-        keys_required(5)  = 'oritab'
-        keys_required(6)  = 'trs'
-        ! set optional keys
-        keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'hp'
-        keys_optional(3)  = 'automsk'
-        keys_optional(4)  = 'amsklp'
-        keys_optional(5)  = 'inner'
-        keys_optional(6)  = 'width'
-        ! set optional CTF-related keys
-        keys_optional(7)  = 'ctf'
-        keys_optional(8)  = 'kv'
-        keys_optional(9)  = 'cs'
-        keys_optional(10) = 'fraca'
-        keys_optional(11) = 'deftab'
-        ! parse command line
-        if( describe ) call print_doc_classrefine
-        call cline%parse(keys_required(:6), keys_optional(:11))
-        ! set defaults
-        if( .not. cline%defined('amsklp') ) call cline%set('amsklp', 25.)
-        if( .not. cline%defined('edge')   ) call cline%set('edge',   20.)
-        ! execute
-        call xclassrefine%execute(cline)
     case( 'cavgassemble' )
         !==Program cavgassemble
         !
@@ -605,20 +590,16 @@ select case(prg)
         keys_required(3) = 'ncls'
         keys_required(4) = 'oritab'
         keys_required(5) = 'nparts'
+        keys_required(6) = 'ctf'
         ! set optional keys
         keys_optional(1) = 'nthr'
-        keys_optional(2) = 'inner'
-        keys_optional(3) = 'width'
-        keys_optional(4) = 'which_iter'
-        ! set optional CTF-related keys
-        keys_optional(5) = 'ctf'
-        keys_optional(6) = 'kv'
-        keys_optional(7) = 'cs'
-        keys_optional(8) = 'fraca'
-        keys_optional(9) = 'deftab'
+        keys_optional(2) = 'deftab'
+        keys_optional(3) = 'inner'
+        keys_optional(4) = 'width'
+        keys_optional(5) = 'which_iter'        
         ! parse command line
         if( describe ) call print_doc_cavgassemble
-        call cline%parse(keys_required(:5), keys_optional(:9))
+        call cline%parse(keys_required(:6), keys_optional(:5))
         ! execute
         call xcavgassemble%execute(cline)
     case( 'check2D_conv' )
@@ -748,16 +729,12 @@ select case(prg)
         keys_required(3) = 'smpd'
         keys_required(4) = 'msk' 
         keys_required(5) = 'oritab'
-        keys_required(6) = 'outfile'
+        keys_required(6) = 'ctf'
         ! set optional CTF-related keys
-        keys_optional(1) = 'ctf'
-        keys_optional(2) = 'kv'
-        keys_optional(3) = 'cs'
-        keys_optional(4) = 'fraca'
-        keys_optional(5) = 'deftab'
+        keys_optional(1) = 'deftab'
         ! parse command line
         if( describe ) call print_doc_shellweight3D
-        call cline%parse(keys_required(:6), keys_optional(:5))
+        call cline%parse(keys_required(:6), keys_optional(:1))
         ! execute
         call xshellweight3D%execute(cline)
     case( 'prime3D_init' )
@@ -769,28 +746,24 @@ select case(prg)
         ! reconstruction. <prime3D_init/end> 
         !
         ! set required keys
-        keys_required(1)  = 'stk'
-        keys_required(2)  = 'smpd'
-        keys_required(3)  = 'msk' 
+        keys_required(1) = 'stk'
+        keys_required(2) = 'smpd'
+        keys_required(3) = 'msk'
+        keys_required(4) = 'ctf'
+        keys_required(5) = 'pgrp'
         ! set optional keys
-        keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'lp'
-        keys_optional(3)  = 'pgrp'
-        keys_optional(4)  = 'inner'
-        keys_optional(5)  = 'width'
-        keys_optional(6)  = 'nspace'
-        keys_optional(7)  = 'nran'
-        keys_optional(8)  = 'npeaks'
-        keys_optional(9)  = 'xfel'
-        ! set optional CTF-related keys
-        keys_optional(10) = 'ctf'
-        keys_optional(11) = 'kv'
-        keys_optional(12) = 'cs'
-        keys_optional(13) = 'fraca'
-        keys_optional(14) = 'deftab'
+        keys_optional(1) = 'nthr'
+        keys_optional(2) = 'deftab'
+        keys_optional(3) = 'lp'
+        keys_optional(4) = 'inner'
+        keys_optional(5) = 'width'
+        keys_optional(6) = 'nspace'
+        keys_optional(7) = 'nran'
+        keys_optional(8) = 'npeaks'
+        keys_optional(9) = 'xfel'        
         ! parse command line
         if( describe ) call print_doc_prime3D_init
-        call cline%parse(keys_required(:3), keys_optional(:14))
+        call cline%parse(keys_required(:5), keys_optional(:9))
         ! set defaults
         if( .not. cline%defined('eo')     ) call cline%set('eo',      'no')
         if( .not. cline%defined('nspace') ) call cline%set('nspace', 1000.)
@@ -806,28 +779,24 @@ select case(prg)
         keys_required(1)  = 'stk'
         keys_required(2)  = 'smpd'
         keys_required(3)  = 'oritab'
+        keys_required(4)  = 'ctf'
         ! set optionnal keys
         keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'nstates'
-        keys_optional(3)  = 'msk'
-        keys_optional(4)  = 'inner'
-        keys_optional(5)  = 'width'
-        keys_optional(6)  = 'lp'
-        keys_optional(7)  = 'eo'
-        keys_optional(8)  = 'frac'
-        keys_optional(9)  = 'state2split'
-        keys_optional(10) = 'norec'
-        keys_optional(11) = 'mul'
-        keys_optional(12) = 'zero'
-        ! set optional CTF-related keys
-        keys_optional(13) = 'ctf'
-        keys_optional(14) = 'kv'
-        keys_optional(15) = 'cs'
-        keys_optional(16) = 'fraca'
-        keys_optional(17) = 'deftab'
+        keys_optional(2)  = 'deftab'
+        keys_optional(3)  = 'nstates'
+        keys_optional(4)  = 'msk'
+        keys_optional(5)  = 'inner'
+        keys_optional(6)  = 'width'
+        keys_optional(7)  = 'lp'
+        keys_optional(8)  = 'eo'
+        keys_optional(9)  = 'frac'
+        keys_optional(10) = 'state2split'
+        keys_optional(11) = 'norec'
+        keys_optional(12) = 'mul'
+        keys_optional(13) = 'zero'        
         ! parse command line
         if( describe ) call print_doc_multiptcl_init
-        call cline%parse(keys_required(:3), keys_optional(:17))
+        call cline%parse(keys_required(:4), keys_optional(:13))
         ! set defaults
         if( .not. cline%defined('trs') ) call cline%set('trs', 3.) ! to assure that shifts are being used
         !execute
@@ -838,26 +807,22 @@ select case(prg)
         ! <het_init/begin> <het_init/end> 
         !
         ! set required keys
-        keys_required(1)  = 'stk'
-        keys_required(2)  = 'smpd'
-        keys_required(3)  = 'oritab'
-        keys_required(4)  = 'nstates'
+        keys_required(1) = 'stk'
+        keys_required(2) = 'smpd'
+        keys_required(3) = 'oritab'
+        keys_required(4) = 'nstates'
+        keys_required(5) = 'ctf'
         ! set optionnal keys
-        keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'msk'
-        keys_optional(3)  = 'inner'
-        keys_optional(4)  = 'width'
-        keys_optional(5)  = 'lp'
-        keys_optional(6)  = 'eo'
-        keys_optional(7)  = 'frac'
-        ! set optional CTF-related keys
-        keys_optional(8)  = 'ctf'
-        keys_optional(9)  = 'kv'
-        keys_optional(10) = 'cs'
-        keys_optional(11) = 'fraca'
-        keys_optional(12) = 'deftab'
+        keys_optional(1) = 'nthr'
+        keys_optional(2) = 'deftab'
+        keys_optional(3) = 'msk'
+        keys_optional(4) = 'inner'
+        keys_optional(5) = 'width'
+        keys_optional(6) = 'lp'
+        keys_optional(7) = 'eo'
+        keys_optional(8) = 'frac'        
         ! parse command line
-        call cline%parse(keys_required(:4), keys_optional(:12))
+        call cline%parse(keys_required(:5), keys_optional(:8))
         ! set defaults
         if( .not. cline%defined('eo') ) call cline%set('eo', 'no')
         !execute
@@ -898,49 +863,41 @@ select case(prg)
         keys_required(2)  = 'vol1'
         keys_required(3)  = 'smpd'
         keys_required(4)  = 'msk'
+        keys_required(5)  = 'ctf'
+        keys_required(6)  = 'pgrp'
         ! set optional keys
         keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'use_gpu'
-        keys_optional(3)  = 'fix_gpu'
-        keys_optional(4)  = 'set_gpu'
-        keys_optional(5)  = 'vol2'
-        keys_optional(6)  = 'oritab'
-        keys_optional(7)  = 'trs'
-        keys_optional(8)  = 'hp'
-        keys_optional(9)  = 'lp'
-        keys_optional(10) = 'dynlp'
-        keys_optional(11) = 'lpstart'
-        keys_optional(12) = 'lpstop'
-        keys_optional(13) = 'eo'
-        keys_optional(14) = 'pgrp'
-        keys_optional(15) = 'refine'
-        keys_optional(16) = 'frac'
-        keys_optional(17) = 'automsk'
-        keys_optional(18) = 'mw'
-        keys_optional(19) = 'amsklp'
-        keys_optional(20) = 'edge'
-        keys_optional(21) = 'binwidth'
-        keys_optional(22) = 'inner'
-        keys_optional(23) = 'width'
-        keys_optional(24) = 'nspace'
-        keys_optional(25) = 'nstates'
-        keys_optional(26) = 'npeaks'
-        keys_optional(27) = 'startit'
-        keys_optional(28) = 'maxits'
-        keys_optional(29) = 'shbarrier'
-        keys_optional(30) = 'noise'
-        keys_optional(31) = 'xfel'
-        keys_optional(32) = 'nnn'
-        keys_optional(33) = 'shellw'
-        ! set optional CTF-related keys
-        keys_optional(34) = 'ctf'
-        keys_optional(35) = 'kv'
-        keys_optional(36) = 'cs'
-        keys_optional(37) = 'fraca'
-        keys_optional(38) = 'deftab'
+        keys_optional(2)  = 'vol2'
+        keys_optional(3)  = 'oritab'
+        keys_optional(4)  = 'deftab'
+        keys_optional(5)  = 'trs'
+        keys_optional(6)  = 'hp'
+        keys_optional(7)  = 'lp'
+        keys_optional(8)  = 'dynlp'
+        keys_optional(9)  = 'lpstart'
+        keys_optional(10) = 'lpstop'
+        keys_optional(11) = 'eo'
+        keys_optional(12) = 'refine'
+        keys_optional(13) = 'frac'
+        keys_optional(14) = 'automsk'
+        keys_optional(15) = 'mw'
+        keys_optional(16) = 'amsklp'
+        keys_optional(17) = 'edge'
+        keys_optional(18) = 'binwidth'
+        keys_optional(19) = 'inner'
+        keys_optional(20) = 'width'
+        keys_optional(21) = 'nspace'
+        keys_optional(22) = 'nstates'
+        keys_optional(23) = 'npeaks'
+        keys_optional(24) = 'startit'
+        keys_optional(25) = 'maxits'
+        keys_optional(26) = 'shbarrier'
+        keys_optional(27) = 'noise'
+        keys_optional(28) = 'xfel'
+        keys_optional(29) = 'nnn'
         ! parse command line
         if( describe ) call print_doc_prime3D
-        call cline%parse(keys_required(:4), keys_optional(:38))
+        call cline%parse(keys_required(:6), keys_optional(:29))
         ! set defaults
         if( .not. cline%defined('nspace')                  ) call cline%set('nspace', 1000.)
         if( cline%defined('lp') .or. cline%defined('find') ) call cline%set('dynlp',   'no')
@@ -959,10 +916,12 @@ select case(prg)
         keys_required(4)  = 'msk'
         keys_required(5)  = 'oritab'
         keys_required(6)  = 'trs'
+        keys_required(7)  = 'ctf'
+        keys_required(8)  = 'pgrp'
         ! set optional keys
         keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'frac'
-        keys_optional(3)  = 'pgrp'
+        keys_optional(2)  = 'deftab'
+        keys_optional(3)  = 'frac'
         keys_optional(4)  = 'automsk'
         keys_optional(5)  = 'mw'
         keys_optional(6)  = 'amsklp'
@@ -975,16 +934,9 @@ select case(prg)
         keys_optional(13) = 'startit'
         keys_optional(14) = 'maxits'
         keys_optional(15) = 'xfel'
-        keys_optional(16) = 'shellw'
-        ! set optional CTF-related keys
-        keys_optional(17) = 'ctf'
-        keys_optional(18) = 'kv'
-        keys_optional(19) = 'cs'
-        keys_optional(20) = 'fraca'
-        keys_optional(21) = 'deftab'
         ! parse command line
         if( describe ) call print_doc_cont3D
-        call cline%parse(keys_required(:6), keys_optional(:21))
+        call cline%parse(keys_required(:8), keys_optional(:15))
         ! set defaults
         call cline%set('eo',     'yes')
         call cline%set('refine', 'yes')
@@ -1011,17 +963,17 @@ select case(prg)
         keys_required(2) = 'box'
         keys_required(3) = 'oritab'
         keys_required(4) = 'nptcls'
+        keys_required(5) = 'pgrp'
         ! set optional keys
         keys_optional(1) = 'lp'
         keys_optional(2) = 'nstates'
         keys_optional(3) = 'eo'
-        keys_optional(4) = 'pgrp'
-        keys_optional(5) = 'nspace'
-        keys_optional(6) = 'find'
-        keys_optional(7) = 'refine'
+        keys_optional(4) = 'nspace'
+        keys_optional(5) = 'find'
+        keys_optional(6) = 'refine'
         ! parse command line
         if( describe ) call print_doc_check3D_conv
-        call cline%parse(keys_required(:4), keys_optional(:7))
+        call cline%parse(keys_required(:5), keys_optional(:6))
         ! set defaults
         if( .not. cline%defined('lp') )     call cline%set('lp', 20.)
         if( .not. cline%defined('nspace') ) call cline%set('nspace', 1000.)
@@ -1063,7 +1015,7 @@ select case(prg)
         ! is then projected in 20 (default option) even directions, common lines-based optimisation is 
         ! used to identify the principal symmetry axis, the rotational transformation is applied to the 
         ! inputted orientations, and a new alignment document is produced. Input this document to 
-        ! recvol or eo_recvol together with the images and the 
+        ! recvol together with the images and the 
         ! point-group symmetry to generate a symmetrised map. If you are unsure about the point-group, 
         ! you should use the compare=yes mode and input the highest conceviable point-group. The program
         ! then calculates probabilities for all lower groups inclusive. The class average/particle option
@@ -1082,7 +1034,7 @@ select case(prg)
         keys_optional(2) = 'vol1'
         keys_optional(3) = 'stk'
         keys_optional(4) = 'oritab'
-        keys_optional(5) = 'amsklp'
+        keys_optional(5) = 'cenlp'
         keys_optional(6) = 'hp'
         keys_optional(7) = 'nspace'
         keys_optional(8) = 'compare'
@@ -1101,7 +1053,7 @@ select case(prg)
         else
             call cline%set('nptcls', cline%get_rarg('nspace'))
         endif
-        if( .not. cline%defined('amsklp')  ) call cline%set('amsklp',   50.)
+        if( .not. cline%defined('cenlp')   ) call cline%set('cenlp',    50.)
         if( .not. cline%defined('compare') ) call cline%set('compare', 'no')
         ! execute
         call xsymsrch%execute(cline)
@@ -1194,91 +1146,6 @@ select case(prg)
 
     ! RECONSTRUCTION PROGRAMS
 
-    case( 'eo_recvol' )
-        !==Program eo_recvol
-        !
-        ! <eo_recvol/begin> is a program for reconstructing volumes from MRC or SPIDER stacks,
-        ! given input orientations and state assignments (obtained by program prime3D).
-        ! The algorithm is based on direct Fourier inversion with a Kaiser-Bessel (KB) interpolation
-        ! kernel. This window function reduces the real-space ripple artefacts associated with direct
-        ! moving windowed-sinc interpolation. The feature sought when implementing this algorithm
-        ! was to enable quick, reliable reconstruction from aligned individual particle images.
-        ! The even and odd pairs are automatically reconstructed, the FSC calculated, and the Wiener
-        ! filter formalism used for image restoration (CTF correction). mul is used to scale the origin shifts
-        ! if down-sampled images were used for alignment and the original images are used for
-        ! reconstruction. ctf, kv, fraca, cs and deftab
-        ! are used to communicate CTF information to the program. ctf=yes, ctf=flip or
-        ! ctf=mul turns on the Wiener restoration. If you input CTF info to the program,
-        ! please ensure that the correct kV, Cs and fraca (fraction of amplitude contrast) parameters
-        ! are inputted as well. If the images were pre-multiplied with the CTF, set ctf=mul
-        ! or if the images were phase-flipped set ctf=flip. amsklp and mw 
-        ! parameters control the solvent mask: the low-pass limit used to generate the envelope;
-        ! the molecular weight of the molecule (protein assumed but it works reasonably well also
-        ! for RNA; slight modification of mw might be needed). The inner parameter
-        ! controls the radius of the soft-edged mask used to remove the unordered DNA/RNA core of
-        ! spherical icosahedral viruses. <eo_recvol/end>
-        !
-        ! set required keys
-        keys_required(1)  = 'stk'
-        keys_required(2)  = 'smpd'
-        keys_required(3)  = 'msk'
-        keys_required(4)  = 'oritab'
-        ! set optional keys
-        keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'frac'
-        keys_optional(3)  = 'mw'
-        keys_optional(4)  = 'pgrp'
-        keys_optional(5)  = 'mul'
-        keys_optional(6)  = 'state'
-        keys_optional(7)  = 'shellw'
-        ! set optional CTF-related keys
-        keys_optional(8)  = 'ctf'
-        keys_optional(9)  = 'kv'
-        keys_optional(10) = 'cs'
-        keys_optional(11) = 'fraca'
-        keys_optional(12) = 'deftab'
-        ! parse command line
-        if( describe ) call print_doc_eo_recvol
-        call cline%parse(keys_required(:4), keys_optional(:12))
-        ! set defaults
-        if( .not. cline%defined('trs') ) call cline%set('trs', 5.) ! to assure that shifts are being used
-        ! execute
-        call xeo_recvol%execute(cline)
-    case( 'eo_volassemble' )
-        !==Program eo_volassemble
-        !
-        ! <eo_volassemble/begin> is a program that assembles volume(s) when the reconstruction
-        ! program (eo_recvol) has been executed in distributed mode using
-        ! distr_simple.pl. inner applies a soft-edged 
-        ! inner mask. An inner mask is used for icosahedral virus reconstruction, because the
-        ! DNA or RNA core is often unordered and  if not removed it may negatively impact the
-        ! alignment. The width parameter controls the fall-off of the edge of the 
-        ! inner mask. <eo_volassemble/end>
-        !
-        ! set required keys
-        keys_required(1)  = 'stk'
-        keys_required(2)  = 'nparts'
-        keys_required(3)  = 'smpd'
-        keys_required(4)  = 'msk'
-        keys_required(5)  = 'oritab'
-        ! set optional keys
-        keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'mul'
-        keys_optional(3)  = 'state'
-        keys_optional(4)  = 'nstates'
-        ! set optional CTF-related keys
-        keys_optional(5)  = 'ctf'
-        keys_optional(6)  = 'kv'
-        keys_optional(7)  = 'cs'
-        keys_optional(8)  = 'fraca'
-        keys_optional(9)  = 'deftab'
-        ! parse command line
-        if( describe ) call print_doc_eo_volassemble
-        call cline%parse(keys_required(:5), keys_optional(:9))
-        ! set defaults
-        if( cline%defined('state') ) call cline%set('nstates', 1.) ! to assure that shifts are being used
-        ! execute
-        call xeo_volassemble%execute(cline)
     case( 'recvol' )
         !==Program recvol
         !
@@ -1295,35 +1162,62 @@ select case(prg)
         ! the solvent mask: the low-pass limit used to generate the envelope; the molecular weight of the 
         ! molecule (protein assumed but it works reasonably well also for RNA; slight modification of mw 
         ! might be needed). The inner parameter controls the radius of the soft-edged mask used to remove 
-        ! the unordered DNA/RNA core of spherical icosahedral viruses. The even and odd 
-        ! parameters allow you to reconstruct either the even or the odd pair. <recvol/end>
+        ! the unordered DNA/RNA core of spherical icosahedral viruses. <recvol/end>
+        !
+        ! set required keys
+        keys_required(1) = 'stk'
+        keys_required(2) = 'smpd'
+        keys_required(3) = 'oritab'
+        keys_required(4) = 'msk'
+        keys_required(5) = 'ctf'
+        keys_required(6) = 'pgrp'
+        ! set optional keys
+        keys_optional(1) = 'nthr'
+        keys_optional(2) = 'eo'
+        keys_optional(3) = 'deftab'
+        keys_optional(4) = 'frac'
+        keys_optional(5) = 'mw'
+        keys_optional(6) = 'mul'
+        keys_optional(7) = 'state'
+        ! parse command line
+        if( describe ) call print_doc_recvol
+        call cline%parse(keys_required(:6), keys_optional(:7))
+        ! set defaults
+        if( .not. cline%defined('trs') ) call cline%set('trs', 5.) ! to assure that shifts are being used
+        if( .not. cline%defined('eo')  ) call cline%set('eo', 'no')
+        ! execute
+        call xrecvol%execute(cline)
+    case( 'eo_volassemble' )
+        !==Program eo_volassemble
+        !
+        ! <eo_volassemble/begin> is a program that assembles volume(s) when the reconstruction
+        ! program (recvol with eo=yes) has been executed in distributed mode using
+        ! distr_simple.pl. inner applies a soft-edged 
+        ! inner mask. An inner mask is used for icosahedral virus reconstruction, because the
+        ! DNA or RNA core is often unordered and  if not removed it may negatively impact the
+        ! alignment. The width parameter controls the fall-off of the edge of the 
+        ! inner mask. <eo_volassemble/end>
         !
         ! set required keys
         keys_required(1)  = 'stk'
-        keys_required(2)  = 'smpd'
-        keys_required(3)  = 'oritab'
+        keys_required(2)  = 'nparts'
+        keys_required(3)  = 'smpd'
         keys_required(4)  = 'msk'
+        keys_required(5)  = 'oritab'
+        keys_required(6)  = 'ctf'
         ! set optional keys
         keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'frac'
-        keys_optional(3)  = 'mw'
-        keys_optional(4)  = 'pgrp'
-        keys_optional(5)  = 'mul'
-        keys_optional(6)  = 'state'
-        keys_optional(7)  = 'shellw'
-        ! set optional CTF-related keys
-        keys_optional(8)  = 'ctf'
-        keys_optional(9)  = 'kv'
-        keys_optional(10)  = 'cs'
-        keys_optional(11) = 'fraca'
-        keys_optional(12) = 'deftab'
+        keys_optional(2)  = 'deftab'
+        keys_optional(3)  = 'mul'
+        keys_optional(4)  = 'state'
+        keys_optional(5)  = 'nstates'        
         ! parse command line
-        if( describe ) call print_doc_recvol
-        call cline%parse(keys_required(:4), keys_optional(:12))
+        if( describe ) call print_doc_eo_volassemble
+        call cline%parse(keys_required(:6), keys_optional(:5))
         ! set defaults
-        if( .not. cline%defined('trs') ) call cline%set('trs', 5.) ! to assure that shifts are being used
+        if( cline%defined('state') ) call cline%set('nstates', 1.) ! to assure that shifts are being used
         ! execute
-        call xrecvol%execute(cline)
+        call xeo_volassemble%execute(cline)
     case( 'volassemble' )
         !==Program volassemble
         !
@@ -1428,22 +1322,25 @@ select case(prg)
         ! execute
         call xcenvol%execute(cline)
     case( 'postproc_vol' )
+        !==Program postproc_vol
+        !
+        ! <postproc_vol/begin> is a program for post-processing of raw volumes <postproc_vol/end>
+        !
         ! set required keys
         keys_required(1)  = 'vol1'
         keys_required(2)  = 'smpd'
         keys_required(3)  = 'fsc'
         keys_required(4)  = 'msk'
         ! set optional keys
-        keys_optional(1)  = 'ctfsqspec'
-        keys_optional(2)  = 'mw'
-        keys_optional(3)  = 'bfac'
-        keys_optional(4)  = 'automsk'
-        keys_optional(5)  = 'amsklp'
-        keys_optional(6)  = 'edge'
-        keys_optional(7)  = 'binwidth'
+        keys_optional(1)  = 'mw'
+        keys_optional(2)  = 'bfac'
+        keys_optional(3)  = 'automsk'
+        keys_optional(4)  = 'amsklp'
+        keys_optional(5)  = 'edge'
+        keys_optional(6)  = 'binwidth'
         ! parse command line
-        ! if( describe ) call print_doc_postproc_vol
-        call cline%parse(keys_required(:4), keys_optional(:7))
+        if( describe ) call print_doc_postproc_vol
+        call cline%parse(keys_required(:4), keys_optional(:6))
         ! execute
         call xpostproc_vol%execute(cline)
     case( 'projvol' )
@@ -1474,19 +1371,13 @@ select case(prg)
         keys_optional(5)  = 'rnd'
         keys_optional(6)  = 'trs'
         keys_optional(7)  = 'pgrp'
-        keys_optional(8)  = 'ctf'
-        keys_optional(9)  = 'kv'
-        keys_optional(10)  = 'fraca'
-        keys_optional(11)  = 'cs'
-        keys_optional(12)  = 'defocus'
-        keys_optional(13)  = 'bfac'
-        keys_optional(14)  = 'neg'
-        keys_optional(15)  = 'mirr'
-        keys_optional(16)  = 'top'
-        keys_optional(17)  = 'xfel'
+        keys_optional(8)  = 'neg'
+        keys_optional(9)  = 'mirr'
+        keys_optional(10) = 'top'
+        keys_optional(11) = 'xfel'
         ! parse command line
         if( describe ) call print_doc_projvol
-        call cline%parse(keys_required(:2), keys_optional(:17))
+        call cline%parse(keys_required(:2), keys_optional(:11))
         ! set defaults
         if( .not. cline%defined('wfun')  ) call cline%set('wfun', 'kb')
         if( .not. cline%defined('winsz') ) call cline%set('winsz', 1.5)
@@ -1617,23 +1508,18 @@ select case(prg)
         ! <ctfops/end> 
         !
         ! Required keys
-        keys_required(1)  = 'stk'
-        keys_required(2)  = 'smpd'
+        keys_required(1) = 'stk'
+        keys_required(2) = 'smpd'
+        keys_required(3) = 'ctf'
         ! Optional keys
-        keys_optional(1)  = 'outstk'
-        keys_optional(2)  = 'neg'
-        keys_optional(3)  = 'oritab'
-        ! set optional CTF-related keys
-        keys_optional(4)  = 'ctfsq'
-        keys_optional(5)  = 'ctf'
-        keys_optional(6)  = 'kv'
-        keys_optional(7)  = 'cs'
-        keys_optional(8)  = 'fraca'
-        keys_optional(9)  = 'deftab'
-        keys_optional(10) = 'bfac'        
+        keys_optional(1) = 'outstk'
+        keys_optional(2) = 'neg'
+        keys_optional(3) = 'oritab'
+        keys_optional(4) = 'deftab'
+        keys_optional(5) = 'bfac'        
         ! parse command line
         if( describe ) call print_doc_ctfops
-        call cline%parse(keys_required(:2), keys_optional(:10))
+        call cline%parse(keys_required(:3), keys_optional(:5))
         ! execute
         call xctfops%execute(cline)
     case( 'filter' )
@@ -1690,15 +1576,15 @@ select case(prg)
         !
         ! set optional keys
         keys_optional(1)  = 'stk'
-        keys_optional(3)  = 'msk'
-        keys_optional(4)  = 'norm'
-        keys_optional(5)  = 'noise_norm'
-        keys_optional(6)  = 'shell_norm'
-        keys_optional(7)  = 'hfun'
-        keys_optional(8)  = 'nthr'
+        keys_optional(2)  = 'msk'
+        keys_optional(3)  = 'norm'
+        keys_optional(4)  = 'noise_norm'
+        keys_optional(5)  = 'shell_norm'
+        keys_optional(6)  = 'hfun'
+        keys_optional(7)  = 'nthr'
         ! parse command line
         if( describe ) call print_doc_norm
-        call cline%parse(keys_optional=keys_optional(:8))
+        call cline%parse(keys_optional=keys_optional(:7))
         ! execute
         call xnorm%execute(cline)
     case( 'respimg' )
@@ -1707,24 +1593,19 @@ select case(prg)
         ! <respimg/begin> 
         ! <respimg/end> 
         !
-
         ! set required keys
         keys_required(1)  = 'stk'
         keys_required(2)  = 'smpd'
         keys_required(3)  = 'msk'
         keys_required(4)  = 'oritab'
+        keys_required(5)  = 'ctf'
         ! set optional keys
         keys_optional(1)  = 'outstk'
-        keys_optional(2)  = 'nthr'
-        ! CTF
-        keys_optional(3)  = 'ctf'
-        keys_optional(4)  = 'kv'
-        keys_optional(5)  = 'cs'
-        keys_optional(6)  = 'fraca'
-        keys_optional(7)  = 'deftab'
+        keys_optional(2)  = 'deftab'
+        keys_optional(3)  = 'nthr'
         ! parse command line
-        !if( describe ) call print_doc_respimg
-        call cline%parse( keys_required(:4), keys_optional(:7))
+        if( describe ) call print_doc_respimg
+        call cline%parse( keys_required(:5), keys_optional(:3))
         ! execute
         call xrespimg%execute(cline)
     case( 'scale' )
@@ -1987,6 +1868,31 @@ select case(prg)
         call cline%parse(keys_required(:2), keys_optional(:1))
         ! execute
         call xcluster_oris%execute(cline)
+    case( 'makedeftab' )
+        !==Program makedeftab
+        !
+        ! <makedeftab/begin> is a program for creatign a SIMPLE conformant file of CTF parameter values (deftab).
+        ! Input is either an earlier SIMPLE deftab/oritab. The purpose is to get the kv, cs, and fraca parameters
+        ! as part of the CTF input doc as that is the new convention. The other alternative is to input a plain text
+        ! file with CTF parameters dfx, dfy, angast according to the Frealign convention. Unit conversions are dealt 
+        ! with using optional variables. The units refer to the units in the inputted document. <makedeftab/end>
+        !
+        ! Required keys
+        keys_required(1) = 'kv'
+        keys_required(2) = 'cs'
+        keys_required(3) = 'fraca'
+        keys_required(4) = 'outfile'
+        ! set optional keys
+        keys_optional(1) = 'plaintexttab'
+        keys_optional(2) = 'oritab'
+        keys_optional(3) = 'deftab'
+        keys_optional(4) = 'dfunit'
+        keys_optional(5) = 'angastunit'
+        ! parse command line
+        if( describe ) call print_doc_makedeftab
+        call cline%parse(keys_required(:4),keys_optional(:5))
+        ! execute
+        call xmakedeftab%execute(cline)
     case( 'makeoris' )
         !==Program makeoris
         !
@@ -2169,23 +2075,6 @@ select case(prg)
         call cline%parse( keys_required(:4), keys_optional(:1) )
         ! execute
         call xmerge_algndocs%execute(cline)
-     case( 'merge_crefine_out' )
-        !==Program mmerge_crefine_out
-        !
-        ! <merge_crefine_out/begin> is a program for merging class-dependent output from SIMPLE
-        ! prime2D runs in distributed mode. <merge_crefine_out/end>
-        !
-        ! set required keys
-        keys_required(1) = 'nptcls'
-        keys_required(2) = 'oritab'
-        keys_required(3) = 'outfile'
-        keys_required(4) = 'box'
-        keys_required(5) = 'smpd'
-        ! parse command line
-        ! if( describe ) call print_doc_merge_crefine_out
-        call cline%parse( keys_required(:5))
-        ! execute
-        call xmerge_crefine_out%execute(cline)
     case( 'merge_nnmat' )
         !==Program merge_nnmat
         !

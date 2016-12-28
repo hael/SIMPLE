@@ -37,7 +37,7 @@ contains
         integer                       :: ishell, io_stat, filnum, fnr, file_stat
         filtsz = b%img%get_filtsz()
         allocate( wmat(p%top-p%fromp+1,filtsz), corrs(filtsz), stat=alloc_stat)
-        call alloc_err('In: simple_cont3D_matcher :: cont3D_shellweight, 1', alloc_stat)
+        call alloc_err('In: simple_cont3D_matcher :: cont3D_shellweight', alloc_stat)
         wmat  = 0.
         corrs = 0.
         call cftcc%new( b, p, cline )

@@ -37,7 +37,6 @@ type :: params
     character(len=3) :: clustvalid='no'
     character(len=3) :: compare='no'
     character(len=3) :: countvox='no'
-    character(len=3) :: ctfsq='no'
     character(len=3) :: ctfstats='no'
     character(len=3) :: cure='no'
     character(len=3) :: debug='no'
@@ -67,6 +66,7 @@ type :: params
     character(len=3) :: order='no'
     character(len=3) :: outside='yes'
     character(len=3) :: pad='no'
+    character(len=3) :: phaseplate='no'
     character(len=3) :: phrand='no'
     character(len=3) :: plot='no'
     character(len=3) :: readwrite='no'
@@ -76,7 +76,7 @@ type :: params
     character(len=3) :: roalgn='no'
     character(len=3) :: round='no'
     character(len=3) :: shalgn='no'
-    character(len=3) :: shell_norm='no'
+    character(len=3) :: shellnorm='no'
     character(len=3) :: shellw='no'
     character(len=3) :: shbarrier='yes'
     character(len=3) :: single='no'
@@ -94,15 +94,14 @@ type :: params
     character(len=3) :: xfel='no'
     character(len=3) :: zero='no'
     ! other fixed length character variables in ascending alphabetical order
+    character(len=STDLEN) :: angastunit='degrees'
     character(len=STDLEN) :: boxtab=''
     character(len=STDLEN) :: clsdoc=''
     character(len=STDLEN) :: comlindoc=''
     character(len=STDLEN) :: ctf='no'
-    character(len=STDLEN) :: crf_name1='name1'
-    character(len=STDLEN) :: crf_name2='name2'
-    character(len=STDLEN) :: ctfsqspec='ctfsqspec_state01.bin'
     character(len=STDLEN) :: cwd=''
     character(len=STDLEN) :: deftab=''
+    character(len=STDLEN) :: dfunit='microns'
     character(len=STDLEN) :: dir='selected'
     character(len=STDLEN) :: doclist=''
     character(len=STDLEN) :: endian='native'
@@ -132,6 +131,7 @@ type :: params
     character(len=STDLEN) :: pcastk='pcavecinstk.bin'
     character(len=STDLEN) :: pdfile='pdfile.bin'
     character(len=STDLEN) :: pgrp='c1'
+    character(len=STDLEN) :: plaintexttab=''
     character(len=STDLEN) :: prg=''
     character(len=STDLEN) :: refine='no'
     character(len=STDLEN) :: refs_msk=''
@@ -187,7 +187,7 @@ type :: params
     integer :: nboot=0
     integer :: ncls=500
     integer :: ncomps=0
-    integer :: ndim=0
+    ! integer :: ndim=0
     integer :: ndiscrete=0
     integer :: ndocs=0
     integer :: newbox=0
@@ -240,6 +240,7 @@ type :: params
     real    :: angerr=0.
     real    :: ares=7.
     real    :: astigerr=0.
+    real    :: astigstep=0.05
     real    :: athres=0.
     real    :: bfac=200
     real    :: bfacerr=50.
@@ -251,6 +252,8 @@ type :: params
     real    :: defocus=3.
     real    :: dens=0.
     real    :: dferr=1.
+    real    :: dfmax=7.0
+    real    :: dfmin=0.5
     real    :: dfsdev=0.1
     real    :: dose_rate=30.0
     real    :: dstep=0.
@@ -260,6 +263,7 @@ type :: params
     real    :: e3=0.
     real    :: eps=0.003
     real    :: eullims(3,2)=0.
+    real    :: expastig=0.1
     real    :: exp_time=2.0
     real    :: filwidth=0.
     real    :: fny=0.
@@ -360,6 +364,7 @@ contains
         cwd_local = self%cwd
         ! checkers in ascending alphabetical order
         call check_carg('acf',            self%acf)
+        call check_carg('angastunit',     self%angastunit)
         call check_carg('append',         self%append)
         call check_carg('automsk',        self%automsk)
         call check_carg('avg',            self%avg)
@@ -369,16 +374,13 @@ contains
         call check_carg('clustvalid',     self%clustvalid)
         call check_carg('compare',        self%compare)
         call check_carg('countvox',       self%countvox)
-        call check_carg('crf_name1',      self%crf_name1)
-        call check_carg('crf_name2',      self%crf_name2)
         call check_carg('ctf',            self%ctf)
-        call check_carg('ctfsq',          self%ctfsq)
-        call check_carg('ctfsqspec',      self%ctfsqspec)
         call check_carg('ctfstats',       self%ctfstats)
         call check_carg('cure',           self%cure)
         call check_carg('debug',          self%debug)
         debug_local = self%debug
         call check_carg('deftab',         self%deftab)
+        call check_carg('dfunit',         self%dfunit)
         call check_carg('dir',            self%dir)
         call check_carg('discrete',       self%discrete)
         call check_carg('diverse',        self%diverse)
@@ -418,6 +420,7 @@ contains
         call check_carg('pad',            self%pad)
         call check_carg('paramtab',       self%paramtab)
         call check_carg('pgrp',           self%pgrp)
+        call check_carg('phaseplate',     self%phaseplate)
         call check_carg('phrand',         self%phrand)
         call check_carg('prg',            self%prg)
         call check_carg('readwrite',      self%readwrite)
@@ -430,7 +433,7 @@ contains
         call check_carg('round',          self%round)
         call check_carg('shalgn',         self%shalgn)
         call check_carg('shbarrier',      self%shbarrier)
-        call check_carg('shell_norm',     self%shell_norm)
+        call check_carg('shellnorm',      self%shellnorm)
         call check_carg('shellw',         self%shellw)
         call check_carg('single',         self%single)
         call check_carg('soften',         self%soften)
@@ -464,6 +467,7 @@ contains
         call check_file('oritab2',        self%oritab2,'T')
         call check_file('outstk',         self%outstk,   notAllowed='T')
         call check_file('outvol',         self%outvol,   notAllowed='T')
+        call check_file('plaintexttab',   self%plaintexttab,'T')
         call check_file('stk',            self%stk,  notAllowed='T')
         call check_file('stk2',           self%stk2, notAllowed='T')
         call check_file('stk3',           self%stk3, notAllowed='T')
@@ -539,6 +543,7 @@ contains
         call check_rarg('angerr',         self%angerr)
         call check_rarg('ares',           self%ares)
         call check_rarg('astigerr',       self%astigerr)
+        call check_rarg('astigstep',      self%astigstep)
         call check_rarg('athres',         self%athres)
         call check_rarg('bfac',           self%bfac)
         call check_rarg('bfacerr',        self%bfacerr)
@@ -550,12 +555,15 @@ contains
         call check_rarg('defocus',        self%defocus)
         call check_rarg('dens',           self%dens)
         call check_rarg('dferr',          self%dferr)
+        call check_rarg('dfmax',          self%dfmax)
+        call check_rarg('dfmin',          self%dfmin)
         call check_rarg('dfsdev',         self%dfsdev)
         call check_rarg('dose_rate',      self%dose_rate)
         call check_rarg('e1',             self%e1)
         call check_rarg('e2',             self%e2)
         call check_rarg('e3',             self%e3)
         call check_rarg('eps',            self%eps)
+        call check_rarg('expastig',       self%expastig)
         call check_rarg('exp_time',       self%exp_time)
         call check_rarg('filwidth',       self%filwidth)
         call check_rarg('frac',           self%frac)

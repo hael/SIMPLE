@@ -122,8 +122,7 @@ if( $doc eq 'tex' ){
     print "    subroutine list_all_simple_programs\n";
     my @labels_sorted = sort @labels;
     foreach my $label (@labels_sorted){
-        my $prg = 'simple_'.$label;
-        print "        write(*,'(A)') '$prg'\n";
+        print "        write(*,'(A)') '$label'\n";
     }
     print "        stop\n";
     print "    end subroutine list_all_simple_programs\n\n";

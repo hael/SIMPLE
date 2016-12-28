@@ -22,6 +22,7 @@ public :: boxconvs_commander
 public :: integrate_movies_commander
 public :: powerspecs_commander
 public :: unblur_movies_commander
+public :: ctffind_commander
 public :: select_commander
 public :: pick_commander
 public :: extract_commander
@@ -41,12 +42,16 @@ type, extends(commander_base) :: integrate_movies_commander
 end type integrate_movies_commander
 type, extends(commander_base) :: powerspecs_commander
  contains
-   procedure :: execute      => exec_powerspecs
+   procedure :: execute       => exec_powerspecs
 end type powerspecs_commander
 type, extends(commander_base) :: unblur_movies_commander
   contains
     procedure :: execute      => exec_unblur_movies
 end type unblur_movies_commander
+type, extends(commander_base) :: ctffind_commander
+  contains
+    procedure :: execute      => exec_ctffind
+end type ctffind_commander
 type, extends(commander_base) :: select_commander
   contains
     procedure :: execute      => exec_select
@@ -391,7 +396,7 @@ contains
             imovie_stop  = nmovies
         endif
         if( debug ) write(*,*) 'fromto: ', imovie_start, imovie_stop
-        ntot = imovie_stop-imovie_start+1
+        ntot = imovie_stop - imovie_start + 1
         if( cline%defined('numlen') )then
             numlen = p%numlen
         else
@@ -465,6 +470,100 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_UNBLUR_MOVIES NORMAL STOP ****')
     end subroutine exec_unblur_movies
+
+    subroutine exec_ctffind( self, cline )
+        use simple_syscalls
+        use simple_nrtxtfile, only: nrtxtfile
+        use simple_oris,      only: oris
+        class(ctffind_commander), intent(inout) :: self
+        class(cmdline),           intent(inout) :: cline
+        type(params)                       :: p
+        character(len=STDLEN), allocatable :: intg_movienames(:)
+        character(len=:),      allocatable :: ctrl_fname, diag_fname, output_fname
+        real,                  allocatable :: ctfparams(:,:) 
+        type(nrtxtfile)                    :: ctfparamfile
+        type(oris) :: os                         
+        character(len=STDLEN) :: cmd_str, param_fname
+        integer :: nintg_movies, funit, fromto(2), imovie, ntot, numlen, movie_counter
+        integer :: ndatlines, nrecs, j
+        p = params(cline, checkdistr=.false.)           ! constants & derived constants produced
+        call read_filetable(p%filetab, intg_movienames)
+        nintg_movies = size(intg_movienames)
+        if( p%l_distr_exec )then
+            allocate(ctrl_fname,  source='ctffind_ctrl_file_part'//int2str_pad(p%part,p%numlen)//'.txt')
+            allocate(output_fname, source='ctffind_output_part'//int2str_pad(p%part,p%numlen)//'.txt')
+            ! determine loop range
+            if( cline%defined('fromp') .and. cline%defined('top') )then
+                fromto(1) = p%fromp
+                fromto(2) = p%top
+            else
+                stop 'fromp & top args need to be defined in parallel execution; simple_ctffind'
+            endif
+        else
+            allocate(ctrl_fname,  source='ctffind_ctrl_file.txt')
+            allocate(output_fname, source='ctffind_output.txt')
+            ! determine loop range
+            fromto(1) = 1
+            fromto(2) = nintg_movies
+        endif
+        ntot = fromto(2) - fromto(1) + 1
+        call os%new(ntot)
+        if( cline%defined('numlen') )then
+            numlen = p%numlen
+        else
+            numlen = len(int2str(nintg_movies))
+        endif
+        ! loop over exposures (movies)
+        movie_counter = 0
+        do imovie=fromto(1),fromto(2)
+            if( .not. file_exists(intg_movienames(imovie)) )&
+            & write(*,*) 'inputted micrograph does not exist: ', trim(adjustl(intg_movienames(imovie)))
+            movie_counter = movie_counter + 1
+            funit         = get_fileunit()
+            diag_fname    = add2fbody(intg_movienames(imovie), p%ext, '_ctffind_diag')
+            param_fname   = fname_new_ext(diag_fname, 'txt')
+            open(unit=funit, status='REPLACE', action='WRITE', file=ctrl_fname)
+            write(funit,'(a)')    trim(intg_movienames(imovie))
+            write(funit,'(a)')    trim(diag_fname)
+            write(funit,'(f9.3)') p%smpd
+            write(funit,'(f9.3)') p%kv
+            write(funit,'(f9.3)') p%cs
+            write(funit,'(f9.3)') p%fraca
+            write(funit,'(I4)')   p%pspecsz
+            write(funit,'(f9.3)') p%hp
+            write(funit,'(f9.3)') p%lp
+            write(funit,'(f9.3)') 1.0e4*p%dfmin
+            write(funit,'(f9.3)') 1.0e4*p%dfmax
+            write(funit,'(f9.3)') 1.0e4*p%astigstep
+            ! write(funit,*) "no"
+            ! write(funit,*) "no"
+            ! write(funit,*) "yes"
+            write(funit,'(f9.3)') 1.0e4*p%expastig
+            write(funit,'(a)')    trim(p%phaseplate)
+            ! write(funit,*) "no";
+            close(funit)
+            cmd_str = 'cat ' // ctrl_fname//' | ctffind'! > ' // output_fname
+            call exec_cmdline(cmd_str)
+            call ctfparamfile%new(param_fname, 1)
+            ndatlines = ctfparamfile%get_ndatalines()
+            nrecs     = ctfparamfile%get_nrecs_per_line()
+            allocate( ctfparams(ndatlines,nrecs) )
+            do j=1,ndatlines
+                call ctfparamfile%readNextDataLine(ctfparams(j,:))
+            end do
+            call os%set(movie_counter, 'dfx',    ctfparams(1,2)/1.0e4)
+            call os%set(movie_counter, 'dfy',    ctfparams(1,3)/1.0e4)
+            call os%set(movie_counter, 'angast', ctfparams(1,4))
+            write(*,'(f4.0,1x,a)') 100.*(real(movie_counter)/real(ntot)), 'percent of the micrographs processed'
+            deallocate(ctfparams)
+            call ctfparamfile%kill
+        end do
+        call os%write(output_fname)
+        call os%kill
+        deallocate(ctrl_fname,output_fname)
+        ! end gracefully
+        call simple_end('**** SIMPLE_CTFFIND NORMAL STOP ****')
+    end subroutine exec_ctffind
 
     subroutine exec_select( self, cline )
         use simple_image,  only: image

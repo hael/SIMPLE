@@ -733,20 +733,20 @@ contains
     end subroutine exec_prime3D_srch
     
     !>  \brief a master prime search routine 4 CPU
-    subroutine exec_prime3D_qcont_srch( self, refvols, proj, tfun, pftcc, iptcl, lp, o, athres )
+    subroutine exec_prime3D_qcont_srch( self, refvols, proj, pftcc, iptcl, lp, o, athres )
         use simple_image,     only: image
         use simple_projector, only: projector
         use simple_ctf,       only: ctf
         class(prime3D_srch),     intent(inout) :: self
         class(image),            intent(inout) :: refvols(self%nstates)
         class(projector),        intent(inout) :: proj
-        class(ctf),              intent(inout) :: tfun
         class(ori),              intent(inout) :: o
         class(polarft_corrcalc), intent(inout) :: pftcc
         real,                    intent(in)    :: lp
         integer,                 intent(in)    :: iptcl
         real, optional,          intent(in)    :: athres
-        real :: cc, wcorr
+        type(ctf) :: tfun
+        real      :: cc, wcorr
         if( present(athres) )then
             if( athres <= 0.)then
                 write(*,*)'Invalid athres value: ',athres,' in simple_prime3D_srch; exec_prime3D_qcont_srch'
@@ -754,6 +754,9 @@ contains
             endif
             self%athres = athres
         endif
+        ! we here need to re-create the CTF object as kV/cs/fraca are now per-particle params
+        ! that these parameters are part of the doc is checked in the params class
+        tfun = ctf(self%pp%smpd, o%get('kv'), o%get('cs'), o%get('fraca'))
         call self%prep4srch( o )
         call self%prep_ctfparms( o )
         cc = self%calc_qcont_corr( iptcl, o, pftcc, proj, tfun, refvols)

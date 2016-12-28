@@ -12,8 +12,8 @@ use simple_prime3D_srch, only: prime3D_srch
 use simple_gridding,     only: prep4cgrid
 implicit none
 
-public :: set_bp_range, setup_shellweights, grid_ptcl, prepimg4align,&
-eonorm_struct_facts, norm_struct_facts, preprefs4align, preprefvol, reset_prev_defparms, prep2Dref
+public :: set_bp_range, setup_shellweights, grid_ptcl, prepimg4align, eonorm_struct_facts,&
+norm_struct_facts, preprefs4align, preprefvol, reset_prev_defparms, prep2Dref
 private
 
 interface prep2Dref
@@ -21,9 +21,14 @@ interface prep2Dref
     module procedure prep2Dref_2
 end interface
 
-logical, parameter :: debug=.false.
-real, parameter    :: SHTHRESH=0.0001
-real               :: res, dfx_prev=0., dfy_prev=0., angast_prev=0.
+logical, parameter :: debug       = .false.
+real,    parameter :: SHTHRESH    = 0.0001
+real               :: dfx_prev    = 0.
+real               :: dfy_prev    = 0.
+real               :: angast_prev = 0.
+real               :: kV_prev     = 0.
+real               :: cs_prev     = 0.
+real               :: fraca_prev  = 0.
     
 contains
     
@@ -246,9 +251,11 @@ contains
     end subroutine grid_ptcl
     
     subroutine prepimg4align( b, p, o )
+        use simple_ctf, only: ctf
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         type(ori),      intent(inout) :: o
+        type(ctf) :: tfun
         real      :: x, y, dfx, dfy, angast
         integer   :: icls, state
         if( p%l_xfel )then
@@ -272,6 +279,9 @@ contains
             call b%img%fwd_ft
             ! set CTF parameters
             if( p%ctf .ne. 'no' )then
+                ! we here need to re-create the CTF object as kV/cs/fraca are now per-particle params
+                ! that these parameters are part of the doc is checked in the params class
+                tfun = ctf(p%smpd, o%get('kv'), o%get('cs'), o%get('fraca'))
                 select case(p%tfplan%mode)
                     case('astig') ! astigmatic CTF
                         dfx    = o%get('dfx')
@@ -293,7 +303,7 @@ contains
                 case('no')   ! do nothing
                 case('yes')  ! do nothing
                 case('flip') ! flip back
-                    call b%tfun%apply(b%img, dfx, 'flip', dfy, angast)
+                    call tfun%apply(b%img, dfx, 'flip', dfy, angast)
                 case DEFAULT
                     stop 'Unsupported ctf mode; simple_hadamard_common :: prepimg4align'
             end select
@@ -519,12 +529,14 @@ contains
     subroutine preprefs4align( b, p, iptcl, pftcc, ref )
         use simple_math,             only: euclid
         use simple_polarft_corrcalc, only: polarft_corrcalc
+        use simple_ctf,              only: ctf
         class(build),            intent(inout) :: b
         class(params),           intent(inout) :: p
         integer,                 intent(in)    :: iptcl
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer, optional,       intent(inout) :: ref
-        real    :: dfx, dfy, angast, dist
+        type(ctf) :: tfun
+        real      :: kV, cs, fraca, dfx, dfy, angast, dist
         if( p%ctf .ne. 'no' )then
             if( present(ref) )then
                 if( ref<1 .or. ref>pftcc%get_nrefs() )&
@@ -541,17 +553,24 @@ contains
             else
                 stop 'Unsupported ctf mode; preprefs4align; simple_hadamard_common'
             endif
-            dist = euclid([dfx,dfy,angast],[dfx_prev,dfy_prev,angast_prev])
+            kV    = b%a%get(iptcl,'kv')
+            cs    = b%a%get(iptcl,'cs')
+            fraca = b%a%get(iptcl,'fraca')
+            dist = euclid([kV,cs,fraca,dfx,dfy,angast],[kV_prev,cs_prev,fraca_prev,dfx_prev,dfy_prev,angast_prev])
             if( dist < 0.001 )then
                 ! CTF parameters are the same as for the previous particle & no update is needed
             else
-                ! CTF parameters have changed and the reference central sections need to be updated
+                ! CTF parameters have changed and ctf object &the reference central sections need to be updated
+                tfun = ctf(p%smpd, kV, cs, fraca)
                 if( present(ref) )then
-                    call pftcc%apply_ctf(p%smpd, b%tfun, dfx, dfy, angast, ref=ref)
+                    call pftcc%apply_ctf(p%smpd, tfun, dfx, dfy, angast, ref=ref)
                 else
-                    call pftcc%apply_ctf(p%smpd, b%tfun, dfx, dfy, angast)
+                    call pftcc%apply_ctf(p%smpd, tfun, dfx, dfy, angast)
                 endif
             endif
+            kV_prev     = kV
+            cs_prev     = cs
+            fraca_prev  = fraca
             dfx_prev    = dfx
             dfy_prev    = dfy
             angast_prev = angast
@@ -559,6 +578,9 @@ contains
     end subroutine preprefs4align
 
     subroutine reset_prev_defparms
+        kV_prev     = 0.
+        cs_prev     = 0.
+        fraca_prev  = 0.
         dfx_prev    = 0.
         dfy_prev    = 0.
         angast_prev = 0.

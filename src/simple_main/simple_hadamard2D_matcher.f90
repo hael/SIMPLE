@@ -22,7 +22,7 @@ type(ori)              :: orientation
 integer                :: cnt_glob = 0
 real                   :: frac_srch_space
 real, allocatable      :: wmat(:,:)
-logical, parameter     :: debug=.true.
+logical, parameter     :: debug=.false.
 real,    parameter     :: SHWLIM=50.
 
 contains
@@ -136,15 +136,15 @@ contains
                 if( allocated(wmat) )then
                     ! the wiener_restore2D_online modifies b%img
                     call wiener_restore2D_online(b%img, orientation,&
-                    b%tfun, p%tfplan, b%cavgs(icls), p%msk, wmat(iptcl,:))
+                    p%tfplan, b%cavgs(icls), p%msk, wmat(iptcl,:))
                     call assemble_ctfsqsum_online(b%img, orientation,&
-                    b%tfun, p%tfplan, b%ctfsqsums(icls), wmat(iptcl,:))
+                    p%tfplan, b%ctfsqsums(icls), wmat(iptcl,:))
                 else
                     ! the wiener_restore2D_online modifies b%img
                     call wiener_restore2D_online(b%img, orientation,&
-                    b%tfun, p%tfplan, b%cavgs(icls), p%msk)
+                    p%tfplan, b%cavgs(icls), p%msk)
                     call assemble_ctfsqsum_online(b%img, orientation,&
-                    b%tfun, p%tfplan, b%ctfsqsums(icls))
+                    p%tfplan, b%ctfsqsums(icls))
                 endif
             endif
         end do
@@ -205,6 +205,7 @@ contains
     end subroutine prime2D_init_sums
     
     subroutine prime2D_assemble_sums( b, p )
+        use simple_ctf, only: ctf
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         type(ori) :: orientation
@@ -231,9 +232,9 @@ contains
                     call b%img%read(p%stk, iptcl)
                 endif
                 call wiener_restore2D_online(b%img, orientation,&
-                b%tfun, p%tfplan, b%cavgs(icls), p%msk)
+                p%tfplan, b%cavgs(icls), p%msk)
                 call assemble_ctfsqsum_online(b%img, orientation,&
-                b%tfun, p%tfplan, b%ctfsqsums(icls))             
+                p%tfplan, b%ctfsqsums(icls))             
             endif
         end do
         if( .not. p%l_distr_exec ) call prime2D_norm_sums( b, p )
@@ -400,6 +401,7 @@ contains
     !>  \brief  calculates the FRC between the prepared reference
     !!          image and the prepared particle image
     subroutine calc_frc( b, p, o, icls, cnt_glob, wmat )
+        use simple_ctf, only: ctf
         class(build),  intent(inout) :: b
         class(params), intent(in)    :: p 
         integer,       intent(in)    :: icls, cnt_glob
@@ -407,6 +409,7 @@ contains
         real,          intent(inout) :: wmat(:,:)
         real, allocatable :: res(:), corrs(:)
         type(image)       :: ref_local
+        type(ctf)         :: tfun
         real              :: dfx, dfy, angast
         if( icls == 0 )then
             wmat(cnt_glob,:) = -1.
@@ -423,9 +426,10 @@ contains
                 dfy    = dfx
                 angast = 0.
             else
-                stop 'Unsupported ctf mode; simple_classrefine :: calc_shellweights'
+                stop 'Unsupported ctf mode; simple_hadamard2D_matcher :: calc_frc'
             endif
-            call b%tfun%apply(ref_local, dfx, 'ctf', dfy, angast)
+            tfun = ctf(p%smpd, o%get('kv'), o%get('cs'), o%get('fraca'))
+            call tfun%apply(ref_local, dfx, 'ctf', dfy, angast)
         endif
         ! calculate FRC    
         call ref_local%fsc(b%img, res, corrs)

@@ -13,7 +13,7 @@ $deftab  = 'ctffind_output.txt'; # file with output parameters
 unlink $deftab;
 unlink "Diag.mrc";
 # CONSTANTS
-$Sze_Pwr_Spc = 1024;      # 512x512 2D FT
+$Sze_Pwr_Spc = 1024;     # 1024x512 2D FT
 $Min_Res     = 30.0;     # Angstroms
 $Max_Res     = 5.0;      # Angstroms
 $Min_Dfc     = 5000.0;   # Angstroms
@@ -51,8 +51,8 @@ foreach $file (@files){
 	print $ctffind_handle "$Max_Dfc\n";
 	print $ctffind_handle "$Dfc_Srh\n";
 	print $ctffind_handle "no\n";
-        print $ctffind_handle "no\n";
-        print $ctffind_handle "yes\n";
+    print $ctffind_handle "no\n";
+    print $ctffind_handle "yes\n";
 	print $ctffind_handle "$Exp_Atg\n";
 	print $ctffind_handle "$Add_Phs\n";
 	print $ctffind_handle "no\n";

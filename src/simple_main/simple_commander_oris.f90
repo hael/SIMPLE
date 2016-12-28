@@ -18,6 +18,7 @@ use simple_commander_base, only: commander_base
 implicit none
 
 public :: cluster_oris_commander
+public :: makedeftab_commander
 public :: makeoris_commander
 public :: map2ptcls_commander
 public :: orisops_commander
@@ -29,6 +30,10 @@ type, extends(commander_base) :: cluster_oris_commander
  contains
    procedure :: execute      => exec_cluster_oris
 end type cluster_oris_commander
+type, extends(commander_base) :: makedeftab_commander
+ contains
+   procedure :: execute      => exec_makedeftab
+end type makedeftab_commander
 type, extends(commander_base) :: makeoris_commander
  contains
    procedure :: execute      => exec_makeoris
@@ -86,6 +91,88 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_CLUSTER_ORIS NORMAL STOP ****')
     end subroutine exec_cluster_oris
+
+    subroutine exec_makedeftab( self, cline )
+        use simple_nrtxtfile, only: nrtxtfile
+        use simple_math,      only: rad2deg
+        class(makedeftab_commander), intent(inout) :: self
+        class(cmdline),              intent(inout) :: cline
+        type(build)       :: b
+        type(params)      :: p
+        integer           :: nptcls, iptcl, ndatlines, nrecs
+        type(nrtxtfile)   :: ctfparamfile
+        real, allocatable :: line(:)
+        p = params(cline)
+        call b%build_general_tbox(p, cline)
+        if( cline%defined('oritab') .or. cline%defined('deftab')  )then
+            if( cline%defined('oritab') )then
+                nptcls = nlines(p%oritab)
+                call b%a%new(nptcls)
+                call b%a%read(p%oritab)
+            endif
+            if( cline%defined('deftab') )then
+                nptcls = nlines(p%deftab)
+                call b%a%new(nptcls)
+                call b%a%read(p%deftab)
+            endif
+            if( b%a%isthere('dfx') .and. b%a%isthere('dfy') .and. b%a%isthere('angast') )then
+                ! all ok, astigmatic CTF
+            else if( b%a%isthere('dfx') )then
+                ! all ok, non-astigmatic CTF
+            else
+                write(*,*) 'defocus params (dfx, dfy, anagst) need to be in inputted via oritab/deftab'
+                stop 'simple_commander_oris :: exec_makedeftab'
+            endif
+            do iptcl=1,nptcls
+                call b%a%set(iptcl, 'kv',    p%kv   )
+                call b%a%set(iptcl, 'cs',    p%cs   )
+                call b%a%set(iptcl, 'fraca', p%fraca)
+            end do
+        else if( cline%defined('plaintexttab') )then
+            call ctfparamfile%new(p%plaintexttab, 1)
+            ndatlines = ctfparamfile%get_ndatalines()
+            nrecs     = ctfparamfile%get_nrecs_per_line()
+            if( nrecs < 1 .or. nrecs > 3 .or. nrecs == 2 )then
+                write(*,*) 'unsupported nr of rec:s in plaintexttab'
+                stop 'simple_commander_oris :: exec_makedeftab'
+            endif
+            call b%a%new(ndatlines)
+            allocate( line(nrecs) )
+            do iptcl=1,ndatlines
+                call ctfparamfile%readNextDataLine(line)
+                select case(p%dfunit)
+                    case( 'A' )
+                        line(1) = line(1)/1.0e4
+                        if( nrecs > 1 )  line(2) = line(2)/1.0e4
+                    case( 'microns' )
+                        ! nothing to do
+                    case DEFAULT 
+                        stop 'unsupported dfunit; simple_commander_oris :: exec_makedeftab'
+                end select
+                select case(p%angastunit)
+                    case( 'radians' )
+                        if( nrecs == 3 ) line(3) = rad2deg(line(3))
+                    case( 'degrees' )
+                        ! nothing to do
+                    case DEFAULT 
+                        stop 'unsupported angastunit; simple_commander_oris :: exec_makedeftab'
+                end select
+                call b%a%set(iptcl, 'kv',    p%kv   )
+                call b%a%set(iptcl, 'cs',    p%cs   )
+                call b%a%set(iptcl, 'fraca', p%fraca)
+                call b%a%set(iptcl, 'dfx',   line(1))
+                if( nrecs > 1 )then
+                    call b%a%set(iptcl, 'dfy',    line(2))
+                    call b%a%set(iptcl, 'angast', line(3))
+                endif
+            end do
+        else
+            write(*,*) 'Nothing to do!'
+        endif
+        call b%a%write(p%outfile)
+        ! end gracefully
+        call simple_end('**** SIMPLE_MAKEDEFTAB NORMAL STOP ****')
+    end subroutine exec_makedeftab
 
     subroutine exec_makeoris( self, cline )
         use simple_ori,  only: ori
@@ -170,11 +257,12 @@ contains
         endif
         if( p%nstates > 1 ) call b%a%rnd_states(p%nstates)
         if( cline%defined('astigerr') )then
-            if( p%ctf .eq. 'yes' ) call b%a%rnd_ctf(p%defocus, p%dferr)
+            if( p%ctf .eq. 'yes' ) call b%a%rnd_ctf(p%kv, p%cs, p%fraca, p%defocus, p%dferr, p%astigerr)
         else
-            if( p%ctf .eq. 'yes' ) call b%a%rnd_ctf(p%defocus, p%dferr)
+            if( p%ctf .eq. 'yes' ) call b%a%rnd_ctf(p%kv, p%cs, p%fraca, p%defocus, p%dferr)
         endif
         call b%a%write(p%outfile)
+        ! end gracefully
         call simple_end('**** SIMPLE_MAKEORIS NORMAL STOP ****')
     end subroutine exec_makeoris
     

@@ -28,7 +28,7 @@ contains
         if( cline%defined('vol1') )then              
             ! center volume
             call b%vol%read(p%vols(1))
-            shvec = b%vol%center(p%amsklp,'no',p%msk)
+            shvec = b%vol%center(p%cenlp,'no',p%msk)
         endif
         ! main fork
         if( p%compare .eq. 'no' )then

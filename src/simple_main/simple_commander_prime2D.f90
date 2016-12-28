@@ -19,7 +19,6 @@ implicit none
 
 public :: prime2D_init_commander
 public :: prime2D_commander
-public :: classrefine_commander
 public :: cavgassemble_commander
 public :: check2D_conv_commander
 public :: rank_cavgs_commander
@@ -33,10 +32,6 @@ type, extends(commander_base) :: prime2D_commander
   contains
     procedure :: execute      => exec_prime2D
 end type prime2D_commander
-type, extends(commander_base) :: classrefine_commander
-  contains
-    procedure :: execute      => exec_classrefine
-end type classrefine_commander
 type, extends(commander_base) :: cavgassemble_commander
   contains
     procedure :: execute      => exec_cavgassemble
@@ -147,46 +142,6 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_PRIME2D NORMAL STOP ****')
     end subroutine exec_prime2D
-
-    subroutine exec_classrefine( self, cline )
-        use simple_classrefine, only: classrefine
-        use simple_oris,        only: oris
-        class(classrefine_commander), intent(inout) :: self
-        class(cmdline),               intent(inout) :: cline
-        type(params)         :: p
-        type(build)          :: b
-        type(classrefine)    :: crefine
-        type(oris)           :: clsoris
-        integer, parameter   :: NUMLEN=5
-        integer              :: fnr, file_stat
-        p = params(cline, checkdistr=.false.) ! parameters generated
-        p%boxmatch = p%box                   !!!!!!!!!!!!!!!!!! 4 NOW
-        call b%build_general_tbox(p, cline)  ! general objects built
-        call crefine%new(b, p, cline, p%stk, p%class, p%msk, p%ctf)
-        call crefine%refine_master(p%lp)
-        call crefine%update_parent_oritab
-        b%img = crefine%get_avg()
-        call b%img%write('classrefine_avg_class'//int2str_pad(p%class,NUMLEN)//p%ext)
-        if( cline%defined('part') )then
-            ! distributed execution, one part is one class
-            clsoris = b%a%get_cls_oris(p%class)
-            call clsoris%write('classrefine_doc_class'//int2str_pad(p%class,NUMLEN)//'.txt')
-            call crefine%write_shellweights('classrefine_shweights_class'//int2str_pad(p%class,NUMLEN)//'.bin')
-        else
-            call b%a%write('classrefine_doc.txt')
-        endif
-        if( p%l_distr_exec )then
-            ! generation of this file marks completion of the partition
-            ! this file is empty 4 now but may contain run stats etc.
-            fnr = get_fileunit()
-            open(unit=fnr, FILE='JOB_FINISHED_'//int2str_pad(p%part,p%numlen),&
-            STATUS='REPLACE', action='WRITE', iostat=file_stat)
-            call fopen_err( 'In: exec_classrefine; simple_commander_prime2D', file_stat )
-            close(fnr)
-        endif
-        ! end gracefully
-        call simple_end('**** SIMPLE_CLASSREFINE NORMAL STOP ****')
-    end subroutine exec_classrefine
     
     subroutine exec_cavgassemble( self, cline )
         use simple_hadamard2D_matcher, only: prime2D_assemble_sums_from_parts, prime2D_write_sums

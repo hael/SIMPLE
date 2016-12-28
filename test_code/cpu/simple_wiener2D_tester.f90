@@ -98,7 +98,7 @@ contains
         if( verbose ) write(*,*) 'testing simple_filterer :: wiener_restore2D'
         tfplan%mode = 'astig'
         tfplan%flag = 'yes'
-        call wiener_restore2D(imgs, oset, b%tfun, tfplan, img_rec, p%msk)
+        call wiener_restore2D(imgs, oset, tfplan, img_rec, p%msk)
         ! check if test passed
         call img_ref(1)%mask(p%msk, 'soft')
         call img_rec%mask(p%msk, 'soft')

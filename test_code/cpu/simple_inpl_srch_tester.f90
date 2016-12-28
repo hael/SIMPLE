@@ -8,6 +8,7 @@ use simple_ori,              only: ori
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_rnd,              only: ran3
 use simple_oris,             only: oris
+use simple_ctf,              only: ctf
 use simple_jiffys            ! singleton
 use simple_hadamard_common   ! singleton
 use simple_pftcc_inplsrch    ! singleton
@@ -21,7 +22,7 @@ private
 
 ! module global constants
 integer, parameter           :: NPROJS=100
-real, parameter              :: TRS=5.0, DFX=2.2, DFY=2.5, ANGAST=30., BFAC=50.
+real, parameter              :: KV=300., CS=2.7, FRACA=0.07, TRS=5.0, DFX=2.2, DFY=2.5, ANGAST=30., BFAC=50.
 real, parameter              :: SNR=0.2, SNR_PINK=SNR/0.2, SNR_DETECTOR=SNR/0.8, LPLIM=8.
 real, parameter              :: ROERR_LIM=5., SHERR_LIM=0.5, SHSHERR_LIM=0.8
 character(len=32), parameter :: refsname  = 'inpl_srch_test_refs.mrc'
@@ -35,6 +36,7 @@ type(build)              :: b
 type(oris)               :: o_refs, o_ptcls
 type(image), allocatable :: imgs_refs(:), imgs_ptcls(:)
 type(ori)                :: orientation, orientation_opt
+type(ctf)                :: tfun
 real                     :: shlims(2,2), crxy(4), cxy(3)
 real                     :: sherr, roerr, sherr_avg, roerr_avg
 type(cmdline)            :: cline_here
@@ -89,6 +91,8 @@ contains
         ! set shift limits
         shlims(:,1) = -TRS
         shlims(:,2) =  TRS
+        ! generate CTF object
+        tfun = ctf(p%smpd, KV,CS, FRACA)
     end subroutine setup_testenv
 
     subroutine test_pftcc_inplsrch
@@ -115,13 +119,13 @@ contains
             do iproj=1,NPROJS
                 b%img_copy = imgs_refs(iproj)
                 call insert_ref(b%img_copy)
-                call pftcc%apply_ctf(p%smpd, b%tfun, DFX, DFY, ANGAST)
+                call pftcc%apply_ctf(p%smpd, tfun, DFX, DFY, ANGAST)
                 b%img = imgs_ptcls(iproj)
                 orientation = o_ptcls%get_ori(iproj) 
                 call orientation%set('dfx',       DFX)
                 call orientation%set('dfy',       DFY)
                 call orientation%set('angast', ANGAST)
-                call simimg(b%img, orientation, b%tfun, 'ctf', SNR, SNR_PINK, SNR_DETECTOR, BFAC)
+                call simimg(b%img, orientation, tfun, 'ctf', SNR, SNR_PINK, SNR_DETECTOR, BFAC)
                 call prepimg4align(b, p, orientation)
                 call b%proj%img2polarft(1, b%img, pftcc)
                 corrs = pftcc%gencorrs(1,1)
@@ -166,13 +170,13 @@ contains
             do iproj=1,NPROJS
                 b%img_copy = imgs_refs(iproj)
                 call insert_ref(b%img_copy)
-                call pftcc%apply_ctf(p%smpd, b%tfun, DFX, DFY, ANGAST)
+                call pftcc%apply_ctf(p%smpd, tfun, DFX, DFY, ANGAST)
                 b%img = imgs_ptcls(iproj)
                 orientation = o_ptcls%get_ori(iproj) 
                 call orientation%set('dfx',       DFX)
                 call orientation%set('dfy',       DFY)
                 call orientation%set('angast', ANGAST)
-                call simimg(b%img, orientation, b%tfun, 'ctf', SNR, SNR_PINK, SNR_DETECTOR, BFAC)
+                call simimg(b%img, orientation, tfun, 'ctf', SNR, SNR_PINK, SNR_DETECTOR, BFAC)
                 call prepimg4align(b, p, orientation)
                 call b%proj%img2polarft(1, b%img, pftcc)
                 corrs = pftcc%gencorrs(1,1)

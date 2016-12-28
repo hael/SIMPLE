@@ -108,7 +108,6 @@ comlin_sym: simple_comlin_symsrch.o     \
 cluster_cavg: simple_matchpursuit.o     \
               simple_cavgppca.o         \
               simple_refinecluster.o    \
-              simple_classrefine.o      \
               simple_clustercavg.o      ;
 
 qsys: simple_qsys_base.o                \

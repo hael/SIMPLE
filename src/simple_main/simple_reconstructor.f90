@@ -13,8 +13,8 @@ type, extends(image) :: reconstructor
     private
     type(winfuns)               :: wfuns                 !< window functions object
     type(c_ptr)                 :: kp                    !< c pointer for fftw allocation
+    type(ctf)                   :: tfun                  !< CTF object
     real(kind=c_float), pointer :: rho(:,:,:)=>null()    !< sampling+CTF**2 density
-    class(ctf), pointer         :: tfun=>null()          !< pointer to CTF object, if associated: we use Wiener filtered rec
     integer                     :: rhosz                 !< size of the sampling density matrix
     character(len=STDLEN)       :: wfun_str='kb'         !< window function, string descriptor
     real                        :: winsz=1.              !< window half-width
@@ -23,8 +23,6 @@ type, extends(image) :: reconstructor
     integer                     :: lfny=0                !< Nyqvist Fourier index
     character(len=STDLEN)       :: ctfflag=''            !< ctf flag <yes|no|mul|flip>
     character(len=STDLEN)       :: ikind                 !< image kind (em/xfel)
-    real, allocatable           :: spec_ctfsq(:)         !< CTF**2 spectrum
-    real, allocatable           :: spec_count(:)         !< count spectrum for normalisation
     logical                     :: tfneg=.false.         !< invert contrast or not
     logical                     :: tfastig=.false.       !< astigmatic CTF or not
     logical                     :: rho_allocated=.false. !< existence of rho matrix
@@ -33,18 +31,15 @@ type, extends(image) :: reconstructor
     procedure          :: alloc_rho
     ! SETTERS
     procedure          :: reset
-    procedure          :: set_spec_ctfsq_no_binning
     ! GETTER
     procedure          :: get_wfuns
-    procedure          :: get_spec_ctfsq
-    procedure          :: get_spec_ctfsq_no_binning
     ! CHECKERS
     procedure          :: rho_contains_nans
     ! I/O
     procedure          :: write_rho
     procedure          :: read_rho
     ! INTERPOLATION
-    procedure          :: inout_fcomp
+    procedure, private :: inout_fcomp
     procedure, private :: calc_tfun_vals
     procedure          :: inout_fplane
     procedure          :: sampl_dens_correct
@@ -65,13 +60,11 @@ contains
     ! CONSTRUCTOR
 
     !>  \brief  allocates the sampling density matrix
-    subroutine alloc_rho( self, p, tfun )
+    subroutine alloc_rho( self, p )
         use simple_params, only: params
         use simple_math,   only: fdim
         class(reconstructor),         intent(inout) :: self  !< instance
         class(params),                intent(in)    :: p     !< parameters
-        class(ctf), target, optional, intent(in)    :: tfun  !< CTF object (adds a CTF model to the reconstruction, 
-                                                             !! assumes that oris have defocus vals set)
         integer                       :: ld_here(3)          !< logical dimension here
         integer                       :: rho_shape(3)        !< shape of the rho matrix
         integer                       :: rho_lims(3,2)       !< bounds of the rho matrix (xfel-kind images)
@@ -84,8 +77,6 @@ contains
         self%winsz      = p%winsz
         self%alpha      = p%alpha
         self%ctfflag    = p%ctf
-        self%tfun       => null()
-        if( present(tfun) ) self%tfun => tfun
         self%tfneg = .false.
         if( p%neg .eq. 'yes' ) self%tfneg = .true.
         self%tfastig = .false.
@@ -104,10 +95,6 @@ contains
             self%kp = fftwf_alloc_real(int(product(rho_shape),c_size_t))
             ! Set up the rho array which will point at the allocated memory
             call c_f_pointer(self%kp,self%rho,rho_shape)
-            self%lfny = self%get_lfny(1)
-            allocate(self%spec_ctfsq(self%lfny), self%spec_count(self%lfny))
-            self%spec_ctfsq = 0.
-            self%spec_count = 0.
         endif
         ! Set the record size of stack entry
         inquire(iolength=self%rhosz) self%rho
@@ -122,16 +109,7 @@ contains
         class(reconstructor), intent(inout) :: self
         self     = cmplx(0.,0.)
         self%rho = 0.
-        if( allocated(self%spec_ctfsq) ) self%spec_ctfsq = 0.
-        if( allocated(self%spec_count) ) self%spec_count = 0.
     end subroutine reset
-    
-    !>  \brief  set spec_ctfsq without binning (used in parallel exec)
-    subroutine set_spec_ctfsq_no_binning( self, spec_ctfsq )
-        class(reconstructor), intent(inout) :: self
-        real,                 intent(in)    :: spec_ctfsq(self%lfny)
-        self%spec_ctfsq = spec_ctfsq
-    end subroutine set_spec_ctfsq_no_binning
     
     ! GETTERS
     
@@ -141,35 +119,6 @@ contains
         type(winfuns) :: wfs
         wfs = self%wfuns
     end function get_wfuns
-    
-    !>  \brief  bin spec_ctfsq to generate spectrum with the same sampling as 
-    !!          the non-padded images
-    function get_spec_ctfsq( self, lfny ) result( spec_ctfsq )
-        class(reconstructor), intent(inout) :: self
-        integer,              intent(in)    :: lfny
-        real, allocatable :: spec_ctfsq(:)
-        integer           :: k, l
-        if( nint(self%alpha) == 2 )then            
-            allocate(spec_ctfsq(lfny))
-            spec_ctfsq = 0.
-            l = 0
-            do k=1,self%lfny,2
-                l = l+1                               
-                spec_ctfsq(l) = (self%spec_ctfsq(k)+self%spec_ctfsq(k+1))/2.
-                if( l == lfny ) exit
-            end do
-        else
-            write(*,*) 'Oversampling factor (alpha) is: ', self%alpha
-            stop 'simple_reconstructor :: get_spec_ctfsq assumes alpha=2'
-        endif
-    end function get_spec_ctfsq
-    
-    !>  \brief  get pec_ctfsq without binning (used in parallel exec)
-    function get_spec_ctfsq_no_binning( self ) result( spec_ctfsq )
-        class(reconstructor), intent(inout) :: self
-        real, allocatable                   :: spec_ctfsq(:)
-        allocate(spec_ctfsq(self%lfny), source=self%spec_ctfsq) 
-    end function get_spec_ctfsq_no_binning
     
     ! CHECKERS
     
@@ -302,15 +251,6 @@ contains
                 end do
             end do
         end do
-        if( allocated(self%spec_ctfsq) )then
-            sh = nint(hyp(real(nn(1)),real(nn(2)),real(nn(3))))
-            if( sh == 0 .or. sh > self%lfny )then
-                ! nothing to do
-            else
-                self%spec_ctfsq(sh) = self%spec_ctfsq(sh)+tvalsq
-                self%spec_count(sh) = self%spec_count(sh)+1.0
-            endif
-        endif
         deallocate(kw1,kw2,kw3,cyci1,cyci2,cyci3)   
     end subroutine inout_fcomp
    
@@ -318,12 +258,13 @@ contains
     subroutine calc_tfun_vals( self, vec, tval, tvalsq )
         use simple_ori,  only: ori
         use simple_math, only: hyp
-        class(reconstructor), intent(in)  :: self         !< instance
-        real,                 intent(in)  :: vec(3)       !< nonuniform sampling location
-        real,                 intent(out) :: tval, tvalsq !< CTF and CTF**2.
+        use simple_ctf,  only: ctf
+        class(reconstructor), intent(inout) :: self         !< instance
+        real,                 intent(in)    :: vec(3)       !< nonuniform sampling location
+        real,                 intent(out)   :: tval, tvalsq !< CTF and CTF**2.
         real    :: sqSpatFreq,ang,inv1,inv2
         integer :: ldim(3)
-        if( associated(self%tfun) )then
+        if( self%ctfflag .ne. 'no' )then
             ldim       = self%get_ldim()
             inv1       = vec(1)*(1./real(ldim(1)))
             inv2       = vec(2)*(1./real(ldim(2)))
@@ -363,8 +304,9 @@ contains
         if( .not. fpl%is_ft() )       stop 'image need to be FTed; inout_fplane; simple_reconstructor'
         if( .not. (self.eqsmpd.fpl) ) stop 'scaling not yet implemented; inout_fplane; simple_reconstructor'
         pwght_present = present(pwght)
-        if( associated(self%tfun) )then ! get CTF info
-            dfx = o%get('dfx')
+        if( self%ctfflag .ne. 'no' )then ! make CTF object & get CTF info
+            self%tfun = ctf(self%get_smpd(), o%get('kv'), o%get('cs'), o%get('fraca'))
+            dfx  = o%get('dfx')
             if( self%tfastig )then ! astigmatic CTF model
                 dfy = o%get('dfy')
                 angast = o%get('angast')
@@ -449,8 +391,6 @@ contains
          call self%add(self_in)
          !$omp parallel workshare
          self%rho = self%rho+self_in%rho
-         self%spec_ctfsq = self%spec_ctfsq+self_in%spec_ctfsq
-         self%spec_count = self%spec_count+self_in%spec_count
          !$omp end parallel workshare
     end subroutine sum
     
@@ -483,6 +423,9 @@ contains
         call find_ldim_nptcls(fname, ldim, n)
         if( n /= o%get_noris() ) stop 'inconsistent nr entries; rec; simple_reconstructor'
         doshellweight = present(wmat)
+
+        if( doshellweight ) print *, 'SHELLWEIGHTED 3D REC'
+
         ! make random number generator
         rt = ran_tabu(n)
         ! make the images
@@ -595,10 +538,7 @@ contains
         class(reconstructor), intent(inout) :: self  
         if( self%rho_allocated )then
             call fftwf_free(self%kp)
-            if( allocated(self%spec_ctfsq) ) deallocate(self%spec_ctfsq)
-            if( allocated(self%spec_count) ) deallocate(self%spec_count)
             self%rho  => null()
-            self%tfun => null()
         endif
     end subroutine dealloc_rho
     

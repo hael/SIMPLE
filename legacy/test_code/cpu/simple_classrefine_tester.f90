@@ -14,7 +14,7 @@ private
 
 ! module global constants
 integer, parameter :: NIMGS=50
-real, parameter    :: TRS=5.0, DEFOCUS=2.5, DFERR=1.0, ASTIGERR=0.2, BFAC=50.
+real, parameter    :: TRS=5.0, KV=300., CS=2.7, FRACA=0.07, DEFOCUS=2.5, DFERR=1.0, ASTIGERR=0.2, BFAC=50.
 real, parameter    :: ROERR=10.0, SNR=0.2, SNR_PINK=SNR/0.2, SNR_DETECTOR=SNR/0.8, LPLIM=20.
 character(len=3),      parameter :: CTFFLAG='yes'
 character(len=STDLEN), parameter :: CTFMODE='astig'
@@ -55,7 +55,7 @@ contains
         call b%img%read(p%stk, 1)
         ! simulate orientations
         call b%a%new(NIMGS)
-        call b%a%rnd_ctf(DEFOCUS, DFERR, ASTIGERR)
+        call b%a%rnd_ctf(KV, CS, FRACA, DEFOCUS, DFERR, ASTIGERR)
         do i=1,NIMGS
             e3 = ran3()*2.*ROERR-ROERR
             x  = ran3()*2.0*TRS-TRS

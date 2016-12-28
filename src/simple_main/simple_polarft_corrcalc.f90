@@ -611,7 +611,7 @@ contains
     end subroutine expand_dim
 
     !>  \brief  prepare the real CTF matrix for GPU-based corr calc
-    subroutine prep_ctf4gpu( self, smpd, a, tfun )
+    subroutine prep_ctf4gpu( self, smpd, a )
         !$ use omp_lib
         !$ use omp_lib_kinds
         use simple_ctf,   only: ctf
@@ -620,8 +620,8 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         real,                    intent(in)    :: smpd
         class(oris),             intent(inout) :: a
-        class(ctf),              intent(inout) :: tfun
         type(image)       :: img
+        type(ctf)         :: tfun
         real, allocatable :: ctfparams(:,:), ctfmat(:,:)
         integer           :: alloc_stat, iptcl
         ! create template image
@@ -632,12 +632,14 @@ contains
         if( allocated(self%pfts_ptcls_ctf) ) deallocate(self%pfts_ptcls_ctf)
         allocate( self%pfts_ptcls_ctf(2*self%nptcls,self%ptclsz,self%nk), stat=alloc_stat )
         call alloc_err("In: prep_ctf4gpu, simple_polarft_corrcalc, self%pfts_ptcls_ctf", alloc_stat)
-        !$omp parallel default(shared) private(iptcl,ctfmat)
+        !$omp parallel default(shared) private(iptcl,tfun,ctfmat)
         !$omp do schedule(auto)
         do iptcl=1,self%nptcls
+            ! we here need to create the CTF object online as kV/cs/fraca are now per-particle params
+            tfun = ctf(smpd, ctfparams(iptcl,1), ctfparams(iptcl,2), ctfparams(iptcl,3))
             ! create the congruent polar matrix of real CTF values
-            ctfmat = self%create_polar_ctfmat(tfun, ctfparams(iptcl,1),&
-                     ctfparams(iptcl,2), ctfparams(iptcl,3), self%nrots)
+            ctfmat = self%create_polar_ctfmat(tfun, ctfparams(iptcl,4),&
+                     ctfparams(iptcl,5), ctfparams(iptcl,6), self%nrots)
             ! set it
             self%pfts_ptcls_ctf(iptcl,:self%nrots,:)   = ctfmat
             ! expand in in-plane rotation dimension

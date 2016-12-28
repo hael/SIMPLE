@@ -61,6 +61,11 @@ contains
         stop
     end subroutine print_doc_unblur_movies
 
+    subroutine print_doc_ctffind
+        write(*,'(A)') ' is a wrapper program for CTFFIND4 (Grigorieff lab)'
+        stop
+    end subroutine print_doc_ctffind
+
     subroutine print_doc_select
         write(*,'(A)') ' is a program for selecting files based on image correlation matching.'
         stop
@@ -103,12 +108,6 @@ contains
         write(*,'(A)') 'gram).'
         stop
     end subroutine print_doc_prime2D
-
-    subroutine print_doc_classrefine
-        write(*,'(A)', advance='no') ' is a program for multi-resolution within class refinement with validation. Outp'
-        write(*,'(A)') 'ut is the refined class average and a doc with updated parameters.'
-        stop
-    end subroutine print_doc_classrefine
 
     subroutine print_doc_cavgassemble
         write(*,'(A)', advance='no') ' is a program that assembles class averages when the clustering program (prime2D'
@@ -269,14 +268,14 @@ contains
         write(*,'(A)', advance='no') 'efault option) even directions, common lines-based optimisation is used to ident'
         write(*,'(A)', advance='no') 'ify the principal symmetry axis, the rotational transformation is applied to the'
         write(*,'(A)', advance='no') ' inputted orientations, and a new alignment document is produced. Input this doc'
-        write(*,'(A)', advance='no') 'ument to recvol or eo_recvol together with the images and the point-group symmet'
-        write(*,'(A)', advance='no') 'ry to generate a symmetrised map. If you are unsure about the point-group, you s'
-        write(*,'(A)', advance='no') 'hould use the compare=yes mode and input the highest conceviable point-group. Th'
-        write(*,'(A)', advance='no') 'e program then calculates probabilities for all lower groups inclusive. The clas'
-        write(*,'(A)', advance='no') 's average/particle option operates in an equivalent fashion but with individual'
-        write(*,'(A)', advance='no') 'images. The output is then a per-image correlation value that informs about how'
-        write(*,'(A)', advance='no') 'well the image conforms to to inputted point-group. The state parameter allows y'
-        write(*,'(A)') 'ou to apply symmetry for the given state.'
+        write(*,'(A)', advance='no') 'ument to recvol together with the images and the point-group symmetry to generat'
+        write(*,'(A)', advance='no') 'e a symmetrised map. If you are unsure about the point-group, you should use the'
+        write(*,'(A)', advance='no') ' compare=yes mode and input the highest conceviable point-group. The program the'
+        write(*,'(A)', advance='no') 'n calculates probabilities for all lower groups inclusive. The class average/par'
+        write(*,'(A)', advance='no') 'ticle option operates in an equivalent fashion but with individual images. The o'
+        write(*,'(A)', advance='no') 'utput is then a per-image correlation value that informs about how well the imag'
+        write(*,'(A)', advance='no') 'e conforms to to inputted point-group. The state parameter allows you to apply s'
+        write(*,'(A)') 'ymmetry for the given state.'
         stop
     end subroutine print_doc_symsrch
 
@@ -306,40 +305,6 @@ contains
         stop
     end subroutine print_doc_automask3D
 
-    subroutine print_doc_eo_recvol
-        write(*,'(A)', advance='no') ' is a program for reconstructing volumes from MRC or SPIDER stacks, given input'
-        write(*,'(A)', advance='no') 'orientations and state assignments (obtained by program prime3D). The algorithm'
-        write(*,'(A)', advance='no') 'is based on direct Fourier inversion with a Kaiser-Bessel (KB) interpolation ker'
-        write(*,'(A)', advance='no') 'nel. This window function reduces the real-space ripple artefacts associated wit'
-        write(*,'(A)', advance='no') 'h direct moving windowed-sinc interpolation. The feature sought when implementin'
-        write(*,'(A)', advance='no') 'g this algorithm was to enable quick, reliable reconstruction from aligned indiv'
-        write(*,'(A)', advance='no') 'idual particle images. The even and odd pairs are automatically reconstructed, t'
-        write(*,'(A)', advance='no') 'he FSC calculated, and the Wiener filter formalism used for image restoration (C'
-        write(*,'(A)', advance='no') 'TF correction). mul is used to scale the origin shifts if down-sampled images we'
-        write(*,'(A)', advance='no') 're used for alignment and the original images are used for reconstruction. ctf,'
-        write(*,'(A)', advance='no') 'kv, fraca, cs and deftab are used to communicate CTF information to the program.'
-        write(*,'(A)', advance='no') ' ctf=yes, ctf=flip or ctf=mul turns on the Wiener restoration. If you input CTF'
-        write(*,'(A)', advance='no') 'info to the program, please ensure that the correct kV, Cs and fraca (fraction o'
-        write(*,'(A)', advance='no') 'f amplitude contrast) parameters are inputted as well. If the images were pre-mu'
-        write(*,'(A)', advance='no') 'ltiplied with the CTF, set ctf=mul or if the images were phase-flipped set ctf=f'
-        write(*,'(A)', advance='no') 'lip. amsklp and mw parameters control the solvent mask: the low-pass limit used'
-        write(*,'(A)', advance='no') 'to generate the envelope; the molecular weight of the molecule (protein assumed'
-        write(*,'(A)', advance='no') 'but it works reasonably well also for RNA; slight modification of mw might be ne'
-        write(*,'(A)', advance='no') 'eded). The inner parameter controls the radius of the soft-edged mask used to re'
-        write(*,'(A)') 'move the unordered DNA/RNA core of spherical icosahedral viruses.'
-        stop
-    end subroutine print_doc_eo_recvol
-
-    subroutine print_doc_eo_volassemble
-        write(*,'(A)', advance='no') ' is a program that assembles volume(s) when the reconstruction program (eo_recvo'
-        write(*,'(A)', advance='no') 'l) has been executed in distributed mode using distr_simple.pl. inner applies a'
-        write(*,'(A)', advance='no') 'soft-edged inner mask. An inner mask is used for icosahedral virus reconstructio'
-        write(*,'(A)', advance='no') 'n, because the DNA or RNA core is often unordered and  if not removed it may neg'
-        write(*,'(A)', advance='no') 'atively impact the alignment. The width parameter controls the fall-off of the e'
-        write(*,'(A)') 'dge of the inner mask.'
-        stop
-    end subroutine print_doc_eo_volassemble
-
     subroutine print_doc_recvol
         write(*,'(A)', advance='no') ' is a program for reconstructing volumes from MRC and SPIDER stacks, given input'
         write(*,'(A)', advance='no') ' orientations and state assignments. The algorithm is based on direct Fourier in'
@@ -355,10 +320,19 @@ contains
         write(*,'(A)', advance='no') 'nvelope; the molecular weight of the molecule (protein assumed but it works reas'
         write(*,'(A)', advance='no') 'onably well also for RNA; slight modification of mw might be needed). The inner'
         write(*,'(A)', advance='no') 'parameter controls the radius of the soft-edged mask used to remove the unordere'
-        write(*,'(A)', advance='no') 'd DNA/RNA core of spherical icosahedral viruses. The even and odd parameters all'
-        write(*,'(A)') 'ow you to reconstruct either the even or the odd pair.'
+        write(*,'(A)') 'd DNA/RNA core of spherical icosahedral viruses.'
         stop
     end subroutine print_doc_recvol
+
+    subroutine print_doc_eo_volassemble
+        write(*,'(A)', advance='no') ' is a program that assembles volume(s) when the reconstruction program (recvol w'
+        write(*,'(A)', advance='no') 'ith eo=yes) has been executed in distributed mode using distr_simple.pl. inner a'
+        write(*,'(A)', advance='no') 'pplies a soft-edged inner mask. An inner mask is used for icosahedral virus reco'
+        write(*,'(A)', advance='no') 'nstruction, because the DNA or RNA core is often unordered and  if not removed i'
+        write(*,'(A)', advance='no') 't may negatively impact the alignment. The width parameter controls the fall-off'
+        write(*,'(A)') ' of the edge of the inner mask.'
+        stop
+    end subroutine print_doc_eo_volassemble
 
     subroutine print_doc_volassemble
         write(*,'(A)', advance='no') ' is a program that assembles volume(s) when the reconstruction program (recvol)'
@@ -395,6 +369,11 @@ contains
         write(*,'(A)') 're volumes.'
         stop
     end subroutine print_doc_cenvol
+
+    subroutine print_doc_postproc_vol
+        write(*,'(A)') ' is a program for post-processing of raw volumes'
+        stop
+    end subroutine print_doc_postproc_vol
 
     subroutine print_doc_projvol
         write(*,'(A)', advance='no') ' is a program for projecting a volume using interpolation in Fourier space. Inpu'
@@ -567,6 +546,17 @@ contains
         stop
     end subroutine print_doc_cluster_oris
 
+    subroutine print_doc_makedeftab
+        write(*,'(A)', advance='no') ' is a program for creatign a SIMPLE conformant file of CTF parameter values (def'
+        write(*,'(A)', advance='no') 'tab). Input is either an earlier SIMPLE deftab/oritab. The purpose is to get the'
+        write(*,'(A)', advance='no') ' kv, cs, and fraca parameters as part of the CTF input doc as that is the new co'
+        write(*,'(A)', advance='no') 'nvention. The other alternative is to input a plain text file with CTF parameter'
+        write(*,'(A)', advance='no') 's dfx, dfy, angast according to the Frealign convention. Unit conversions are de'
+        write(*,'(A)', advance='no') 'alt with using optional variables. The units refer to the units in the inputted'
+        write(*,'(A)') 'document.'
+        stop
+    end subroutine print_doc_makedeftab
+
     subroutine print_doc_makeoris
         write(*,'(A)', advance='no') ' is a program for analyzing SIMPLE orientation/parameter files (text files conta'
         write(*,'(A)', advance='no') 'ining input parameters and/or parameters estimated by prime2D or prime3D). The p'
@@ -634,12 +624,6 @@ contains
         stop
     end subroutine print_doc_merge_algndocs
 
-    subroutine print_doc_merge_crefine_out
-        write(*,'(A)', advance='no') ' is a program for merging class-dependent output from SIMPLE prime2D runs in dis'
-        write(*,'(A)') 'tributed mode.'
-        stop
-    end subroutine print_doc_merge_crefine_out
-
     subroutine print_doc_merge_nnmat
         write(*,'(A)', advance='no') ' is a program for merging partial nearest neighbour matrices calculated in distr'
         write(*,'(A)') 'ibuted mode'
@@ -671,85 +655,84 @@ contains
     end subroutine print_doc_split
 
     subroutine list_all_simple_programs
-        write(*,'(A)') 'simple_automask2D'
-        write(*,'(A)') 'simple_automask3D'
-        write(*,'(A)') 'simple_binarise'
-        write(*,'(A)') 'simple_boxconvs'
-        write(*,'(A)') 'simple_cavgassemble'
-        write(*,'(A)') 'simple_cenvol'
-        write(*,'(A)') 'simple_check2D_conv'
-        write(*,'(A)') 'simple_check3D_conv'
-        write(*,'(A)') 'simple_check_box'
-        write(*,'(A)') 'simple_check_nptcls'
-        write(*,'(A)') 'simple_classrefine'
-        write(*,'(A)') 'simple_cluster_oris'
-        write(*,'(A)') 'simple_cluster_smat'
-        write(*,'(A)') 'simple_comlin_smat'
-        write(*,'(A)') 'simple_cont3D'
-        write(*,'(A)') 'simple_convert'
-        write(*,'(A)') 'simple_corrcompare'
-        write(*,'(A)') 'simple_ctfops'
-        write(*,'(A)') 'simple_eo_recvol'
-        write(*,'(A)') 'simple_eo_volassemble'
-        write(*,'(A)') 'simple_extract'
-        write(*,'(A)') 'simple_filter'
-        write(*,'(A)') 'simple_find_nnimgs'
-        write(*,'(A)') 'simple_het_init'
-        write(*,'(A)') 'simple_image_smat'
-        write(*,'(A)') 'simple_iminfo'
-        write(*,'(A)') 'simple_integrate_movies'
-        write(*,'(A)') 'simple_makeoris'
-        write(*,'(A)') 'simple_map2ptcls'
-        write(*,'(A)') 'simple_mask'
-        write(*,'(A)') 'simple_masscen'
-        write(*,'(A)') 'simple_merge_algndocs'
-        write(*,'(A)') 'simple_merge_crefine_out'
-        write(*,'(A)') 'simple_merge_nnmat'
-        write(*,'(A)') 'simple_merge_shellweights'
-        write(*,'(A)') 'simple_merge_similarities'
-        write(*,'(A)') 'simple_multiptcl_init'
-        write(*,'(A)') 'simple_noiseimgs'
-        write(*,'(A)') 'simple_norm'
-        write(*,'(A)') 'simple_npeaks'
-        write(*,'(A)') 'simple_nspace'
-        write(*,'(A)') 'simple_orisops'
-        write(*,'(A)') 'simple_oristats'
-        write(*,'(A)') 'simple_pick'
-        write(*,'(A)') 'simple_postproc_vol'
-        write(*,'(A)') 'simple_powerspecs'
-        write(*,'(A)') 'simple_prime2D'
-        write(*,'(A)') 'simple_prime2D_init'
-        write(*,'(A)') 'simple_prime3D'
-        write(*,'(A)') 'simple_prime3D_init'
-        write(*,'(A)') 'simple_print_cmd_dict'
-        write(*,'(A)') 'simple_print_dose_weights'
-        write(*,'(A)') 'simple_print_fsc'
-        write(*,'(A)') 'simple_projvol'
-        write(*,'(A)') 'simple_rank_cavgs'
-        write(*,'(A)') 'simple_recvol'
-        write(*,'(A)') 'simple_res'
-        write(*,'(A)') 'simple_respimg'
-        write(*,'(A)') 'simple_resrange'
-        write(*,'(A)') 'simple_rotmats2oris'
-        write(*,'(A)') 'simple_scale'
-        write(*,'(A)') 'simple_select'
-        write(*,'(A)') 'simple_select_frames'
-        write(*,'(A)') 'simple_shellweight3D'
-        write(*,'(A)') 'simple_shift'
-        write(*,'(A)') 'simple_simimgs'
-        write(*,'(A)') 'simple_simmovie'
-        write(*,'(A)') 'simple_simsubtomo'
-        write(*,'(A)') 'simple_split'
-        write(*,'(A)') 'simple_split_pairs'
-        write(*,'(A)') 'simple_stack'
-        write(*,'(A)') 'simple_stackops'
-        write(*,'(A)') 'simple_symsrch'
-        write(*,'(A)') 'simple_tseries_split'
-        write(*,'(A)') 'simple_unblur_movies'
-        write(*,'(A)') 'simple_volassemble'
-        write(*,'(A)') 'simple_volaverager'
-        write(*,'(A)') 'simple_volops'
-        write(*,'(A)') 'simple_volume_smat'
+        write(*,'(A)') 'automask2D'
+        write(*,'(A)') 'automask3D'
+        write(*,'(A)') 'binarise'
+        write(*,'(A)') 'boxconvs'
+        write(*,'(A)') 'cavgassemble'
+        write(*,'(A)') 'cenvol'
+        write(*,'(A)') 'check2D_conv'
+        write(*,'(A)') 'check3D_conv'
+        write(*,'(A)') 'check_box'
+        write(*,'(A)') 'check_nptcls'
+        write(*,'(A)') 'cluster_oris'
+        write(*,'(A)') 'cluster_smat'
+        write(*,'(A)') 'comlin_smat'
+        write(*,'(A)') 'cont3D'
+        write(*,'(A)') 'convert'
+        write(*,'(A)') 'corrcompare'
+        write(*,'(A)') 'ctffind'
+        write(*,'(A)') 'ctfops'
+        write(*,'(A)') 'eo_volassemble'
+        write(*,'(A)') 'extract'
+        write(*,'(A)') 'filter'
+        write(*,'(A)') 'find_nnimgs'
+        write(*,'(A)') 'het_init'
+        write(*,'(A)') 'image_smat'
+        write(*,'(A)') 'iminfo'
+        write(*,'(A)') 'integrate_movies'
+        write(*,'(A)') 'makedeftab'
+        write(*,'(A)') 'makeoris'
+        write(*,'(A)') 'map2ptcls'
+        write(*,'(A)') 'mask'
+        write(*,'(A)') 'masscen'
+        write(*,'(A)') 'merge_algndocs'
+        write(*,'(A)') 'merge_nnmat'
+        write(*,'(A)') 'merge_shellweights'
+        write(*,'(A)') 'merge_similarities'
+        write(*,'(A)') 'multiptcl_init'
+        write(*,'(A)') 'noiseimgs'
+        write(*,'(A)') 'norm'
+        write(*,'(A)') 'npeaks'
+        write(*,'(A)') 'nspace'
+        write(*,'(A)') 'orisops'
+        write(*,'(A)') 'oristats'
+        write(*,'(A)') 'pick'
+        write(*,'(A)') 'postproc_vol'
+        write(*,'(A)') 'powerspecs'
+        write(*,'(A)') 'prime2D'
+        write(*,'(A)') 'prime2D_init'
+        write(*,'(A)') 'prime3D'
+        write(*,'(A)') 'prime3D_init'
+        write(*,'(A)') 'print_cmd_dict'
+        write(*,'(A)') 'print_dose_weights'
+        write(*,'(A)') 'print_fsc'
+        write(*,'(A)') 'projvol'
+        write(*,'(A)') 'rank_cavgs'
+        write(*,'(A)') 'recvol'
+        write(*,'(A)') 'res'
+        write(*,'(A)') 'respimg'
+        write(*,'(A)') 'resrange'
+        write(*,'(A)') 'rotmats2oris'
+        write(*,'(A)') 'scale'
+        write(*,'(A)') 'select'
+        write(*,'(A)') 'select_frames'
+        write(*,'(A)') 'shellweight3D'
+        write(*,'(A)') 'shift'
+        write(*,'(A)') 'simimgs'
+        write(*,'(A)') 'simmovie'
+        write(*,'(A)') 'simsubtomo'
+        write(*,'(A)') 'split'
+        write(*,'(A)') 'split_pairs'
+        write(*,'(A)') 'stack'
+        write(*,'(A)') 'stackops'
+        write(*,'(A)') 'symsrch'
+        write(*,'(A)') 'tseries_split'
+        write(*,'(A)') 'unblur_movies'
+        write(*,'(A)') 'volassemble'
+        write(*,'(A)') 'volaverager'
+        write(*,'(A)') 'volops'
+        write(*,'(A)') 'volume_smat'
         stop
     end subroutine list_all_simple_programs
 

@@ -13,6 +13,7 @@ type :: cartft_corrcalc
     type(image),   allocatable :: refvols(:)
     type(image),   allocatable :: img_refs(:)
     type(image)                :: img_ctf
+    real    :: kv_prev=0., cs_prev=0., fraca_prev=0.
     real    :: dfx_prev=0., dfy_prev=0., angast_prev=0.
     integer :: nstates   = 0
     logical :: existence = .false.
@@ -67,9 +68,11 @@ contains
     subroutine create_ctf_image( self, o )
         use simple_math, only: euclid
         use simple_ori,  only: ori
+        use simple_ctf,  only: ctf
         class(cartft_corrcalc), intent(inout) :: self
-        class(ori),             intent(inout) :: o 
-        real :: dfx, dfy, angast, dist
+        class(ori),             intent(inout) :: o
+        type(ctf) :: tfun
+        real      :: kV, cs, fraca, dfx, dfy, angast, dist
         if( self%pp%tfplan%mode .eq. 'astig' )then ! astigmatic CTF
             dfx    = o%get('dfx')
             dfy    = o%get('dfy')
@@ -81,13 +84,21 @@ contains
         else
             stop 'unsupported ctf mode; create_ctf_image; simple_cartft_corrcalc'
         endif
-        dist = euclid([dfx,dfy,angast],[self%dfx_prev,self%dfy_prev,self%angast_prev])
+        kV    = o%get('kv')
+        cs    = o%get('cs')
+        fraca = o%get('fraca')
+        dist = euclid([kV,cs,fraca,dfx,dfy,angast],&
+            [self%kv_prev,self%cs_prev,self%fraca_prev,self%dfx_prev,self%dfy_prev,self%angast_prev])
         if( dist < 0.001 )then
             return
         else
             ! CTF parameters have changed, update CTF image
+            tfun = ctf(self%pp%smpd, kV, cs, fraca)
             call self%img_ctf%new([self%pp%boxmatch,self%pp%boxmatch,1],self%pp%smpd)
-            call self%bp%tfun%ctf2img(self%img_ctf, dfx, 'ctf', dfy, angast)
+            call tfun%ctf2img(self%img_ctf, dfx, 'ctf', dfy, angast)
+            self%kv_prev     = kV 
+            self%cs_prev     = cs
+            self%fraca_prev  = fraca
             self%dfx_prev    = dfx
             self%dfy_prev    = dfy
             self%angast_prev = angast

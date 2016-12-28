@@ -275,7 +275,7 @@ contains
             do_dose_weight = .true.
             allocate( acc_doses(nframes), stat=alloc_stat )
             call alloc_err('unblur_init; simple_unblur, 2', alloc_stat)
-            kV = p%kV
+            kV = p%kv
             time_per_frame = p%exp_time/real(nframes)           ! unit: s
             dose_rate      = p%dose_rate
             do iframe=1,nframes

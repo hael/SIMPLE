@@ -8,12 +8,28 @@ use simple_math     ! singleton
 use simple_filterer ! singleton
 implicit none
 
-public :: exec_rec, exec_eorec
+public :: exec_rec_master
 private
 
 logical :: debug=.false.
 
 contains
+
+    subroutine exec_rec_master( b, p, cline, fbody_in, wmat )
+        class(build),               intent(inout) :: b
+        class(params),              intent(inout) :: p
+        class(cmdline),             intent(inout) :: cline
+        character(len=*), optional, intent(in)    :: fbody_in
+        real,             optional, intent(in)    :: wmat(:,:)
+        select case(p%eo)
+            case( 'yes' )
+                call exec_eorec( b, p, cline, fbody_in, wmat )
+            case( 'no' )
+                call exec_rec( b, p, cline, fbody_in, wmat )
+            case DEFAULT
+                stop 'unknonw eo flag; simple_rec_master :: exec_rec_master'
+        end select
+    end subroutine exec_rec_master
     
     subroutine exec_rec( b, p, cline, fbody_in, wmat )
         class(build),               intent(inout) :: b

@@ -32,17 +32,17 @@ contains
 
     subroutine new( self, fname, access_type, wanted_recs_per_line )
         use simple_jiffys, only: get_fileunit, strIsComment, strIsBlank, cntRecsPerLine
-        class(nrtxtfile), intent(inout) :: self
-        character(len=*), intent(in)    :: fname
-        integer, intent(in)             :: access_type !< Either OPEN_TO_READ or OPEN_TO_WRITE
-        integer, optional, intent(in)   :: wanted_recs_per_line
-        character(len=line_max_len)     :: buffer      !< will hold a line from the file
-        integer                         :: recs_on_curr_line
-        integer                         :: tot_nr_of_recs
-        integer                         :: ios         !< ios is negative if an end of record condition is encountered or if
-                                                       !! an endfile condition was detected. It is positive if an error was
-                                                       !! detected. ios is zero otherwise.
-        character(len=512)              :: io_msg
+        class(nrtxtfile),  intent(inout) :: self
+        character(len=*),  intent(in)    :: fname
+        integer,           intent(in)    :: access_type !< Either OPEN_TO_READ or OPEN_TO_WRITE
+        integer, optional, intent(in)    :: wanted_recs_per_line
+        character(len=line_max_len)      :: buffer      !< will hold a line from the file
+        integer                          :: recs_on_curr_line
+        integer                          :: tot_nr_of_recs
+        integer                          :: ios         !< ios is negative if an end of record condition is encountered or if
+                                                        !! an endfile condition was detected. It is positive if an error was
+                                                        !! detected. ios is zero otherwise.
+        character(len=512)               :: io_msg
         ! always destruct first
         call self%kill
         tot_nr_of_recs   = 0
@@ -101,7 +101,7 @@ contains
             endif
             self%ndatalines = 0
         endif
-    end subroutine
+    end subroutine new
     
     subroutine readNextDataLine( self, read_data )
         use simple_jiffys, only: strIsComment, strIsBlank
@@ -131,7 +131,7 @@ contains
                 exit
             endif
         enddo
-    end subroutine
+    end subroutine readNextDataLine
 
     subroutine writeDataLineReal( self, data_to_write )
         class(nrtxtfile), intent(inout) :: self
@@ -150,7 +150,7 @@ contains
         write(self%funit,*)
         ! increase the number of data lines
         self%ndatalines = self%ndatalines+1
-    end subroutine
+    end subroutine writeDataLineReal
 
     subroutine writeDataLineInt( self, data_to_write )
         class(nrtxtfile), intent(inout) :: self
@@ -172,7 +172,7 @@ contains
         write(self%funit,*)
         ! increase the number of data lines
         self%ndatalines = self%ndatalines + 1
-    end subroutine
+    end subroutine writeDataLineInt
 
     subroutine writeCommentLine( self, comment_to_write )
         class(nrtxtfile), intent(inout) :: self
@@ -183,17 +183,17 @@ contains
         endif
         ! write out the line..
         write(self%funit, '(2a)') '# ', trim(adjustl(comment_to_write))
-    end subroutine
+    end subroutine writeCommentLine
 
     pure integer function get_nrecs_per_line( self )
         class(nrtxtfile), intent(in) :: self
         get_nrecs_per_line = self%recs_per_line
-    end function
+    end function get_nrecs_per_line
     
     pure integer function get_ndatalines( self )
         class(nrtxtfile), intent(in) :: self
         get_ndatalines = self%ndatalines
-    end function
+    end function get_ndatalines
 
     subroutine kill(self)
         use simple_jiffys, only: is_open
@@ -201,6 +201,6 @@ contains
         if( is_open(self%funit) ) close(self%funit)
         self%recs_per_line = 0
         self%ndatalines = 0
-    end subroutine
+    end subroutine kill
 
-end module
+end module simple_nrtxtfile

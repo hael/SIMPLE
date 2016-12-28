@@ -139,7 +139,7 @@ contains
         else if( p%rnd .eq. 'yes' )then
             p%nptcls = p%nspace
             call b%build_general_tbox(p, cline)
-            call b%a%rnd_oris(p%trs)
+            call b%a%rnd_oris(p%trs, p%eullims)
         else
             p%nptcls = p%nspace
             call b%build_general_tbox(p, cline)
@@ -155,7 +155,6 @@ contains
         if( debug ) print *, 'read volume'
         ! generate projections
         if( p%swap .eq. 'yes' ) call b%a%swape1e3
-        if( p%mirr .eq. 'yes' ) call b%a%mirror2d
         if( cline%defined('top') )then
             imgs = b%proj%projvol(b%vol, b%a, p, p%top)
             loop_end = p%top
@@ -170,41 +169,8 @@ contains
                 y = b%a%get(i, 'y')
                 call imgs(i)%shift(x, y)
             endif
-            if( p%ctf .ne. 'no' )then
-                if( cline%defined('oritab') )then
-                    dfx = b%a%get(i, 'dfx')
-                    if( b%a%isthere('dfy') )then
-                        dfy    = b%a%get(i, 'dfy')
-                        angast = b%a%get(i, 'angast')
-                    else
-                        dfy    = dfx
-                        angast = 0.
-                    endif
-                else
-                    dfx    = p%defocus
-                    dfy    = p%defocus
-                    angast = 0.
-                    call b%a%set(i, 'dfx', dfx)
-                endif
-                if( cline%defined('bfac') )then
-                    if( p%neg .eq. 'yes' )then
-                        call b%tfun%apply(imgs(i), dfx, 'neg', dfy, angast, bfac=p%bfac)
-                    else
-                        call b%tfun%apply(imgs(i), dfx, 'ctf', dfy, angast, bfac=p%bfac)
-                    endif
-                else
-                    if( p%neg .eq. 'yes' )then
-                        call b%tfun%apply(imgs(i), dfx, 'neg', dfy, angast)
-                    else
-                        call b%tfun%apply(imgs(i), dfx, 'ctf', dfy, angast)
-                    endif
-                endif
-            else if( p%neg .eq. 'yes' )then
-                call imgs(i)%neg
-            endif
-            if( p%mirr .ne. 'no' )then
-                if( p%mirr .ne. 'yes' ) call imgs(i)%mirror(p%mirr)
-            endif
+            if( p%neg .eq. 'yes' ) call imgs(i)%neg
+            if( p%mirr .ne. 'no' ) call imgs(i)%mirror(p%mirr)
             call imgs(i)%write(p%outstk,i)
         end do
         call b%a%write('projvol_oris.txt')

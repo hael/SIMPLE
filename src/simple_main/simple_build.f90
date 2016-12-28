@@ -26,7 +26,6 @@ use simple_reconstructor,    only: reconstructor
 use simple_eo_reconstructor, only: eo_reconstructor
 use simple_params,           only: params
 use simple_sym,              only: sym
-use simple_ctf,              only: ctf
 use simple_polarft,          only: polarft
 use simple_opt_spec,         only: opt_spec
 use simple_convergence,      only: convergence
@@ -41,7 +40,6 @@ type build
     ! GENERAL TOOLBOX
     type(oris)                          :: a, e               !< aligndata, discrete space
     type(sym)                           :: se                 !< symmetry elements object
-    type(ctf)                           :: tfun               !< contrast transfer function object
     type(projector)                     :: proj               !< projector object
     type(convergence)                   :: conv               !< object for convergence checking of the PRIME2D/3D approaches
     type(image)                         :: img                !< individual image objects
@@ -114,14 +112,14 @@ contains
         use simple_ran_tabu, only: ran_tabu
         use simple_math,     only: nvoxfind, rad2deg
         use simple_rnd,      only: seed_rnd
-        class(build), intent(inout)   :: self
-        class(params), intent(inout)  :: p
-        class(cmdline), intent(inout) :: cline
-        logical, intent(in), optional :: do3d, nooritab
-        type(ran_tabu)                :: rt
-        integer                       :: alloc_stat, lfny
-        real                          :: slask(3)
-        logical                       :: err, ddo3d
+        class(build),      intent(inout) :: self
+        class(params),     intent(inout) :: p
+        class(cmdline),    intent(inout) :: cline
+        logical, optional, intent(in)    :: do3d, nooritab
+        type(ran_tabu) :: rt
+        integer        :: alloc_stat, lfny
+        real           :: slask(3)
+        logical        :: err, ddo3d
         call self%kill_general_tbox
         ddo3d = .true.
         if( present(do3d) ) ddo3d = do3d
@@ -138,7 +136,7 @@ contains
         if( present(nooritab) )then            
             call self%a%spiral(p%nsym, p%eullims)
         else
-            ! we need the oritab to override the deftab latter in order not to loose parameters
+            ! we need the oritab to override the deftab in order not to loose parameters
             if( p%deftab /= '' ) call self%a%read(p%deftab)
             if( p%oritab /= '' )then
                 if( .not. cline%defined('nstates') .and. p%vols(1) .eq. '' )then
@@ -157,16 +155,6 @@ contains
         endif
         if( debug ) write(*,'(a)') 'created & filled object for orientations'  
         if( debug ) write(*,'(a)') 'read deftab'
-        if( p%tfplan%flag .eq.'no' .and. p%ctfsq.eq.'no' )then
-            if( self%a%isthere('dfx') )then
-                write(*,'(a)') 'WARNING! Your alignment doc has CTF params but you are not using them'
-            endif
-        endif
-        if( p%tfplan%flag.ne.'no' )then
-            if( .not. self%a%isthere('dfx') )then
-                write(*,'(a)') 'WARNING! You want to use the CTF but the alignment doc lacks defocus values'
-            endif
-        endif
         if( self%a%isthere('dfx') .and. self%a%isthere('dfy'))then
             p%tfplan%mode = 'astig'
         else if( self%a%isthere('dfx') )then
@@ -178,28 +166,11 @@ contains
             write(*,'(a)') 'WARNING! It looks like you want to do Wiener restoration (p%ctf .ne. no)'
             write(*,'(a)') 'but your input orientation table lacks defocus values'
         endif
-        p%ndim = 5
-        if( p%tfplan%flag .eq. 'refine' )then
-            if( self%a%isthere('dfx') )then
-                p%ndim = 6
-            else
-                stop 'There is no x-axis defocus value to refine; onflyft_srch_init; simple_onflyft_srch'
-            endif
-            if( self%a%isthere('dfy') )then
-                p%ndim = 7
-                if( .not. self%a%isthere('angast') )then
-                    stop 'There is no angle of astigmatism, required 4 CTF refinement; onflyft_srch_init; simple_onflyft_srch'
-                endif
-            endif
-        endif
         if( debug ) write(*,'(a)') 'did set number of dimensions and ctfmode'
         ! generate discrete projection direction space
         call self%e%new( p%nspace )
         call self%e%spiral( p%nsym, p%eullims )
         if( debug ) write(*,'(a)') 'generated discrete projection direction space'
-        ! build CTF objects
-        self%tfun = ctf(p%smpd, p%kV, p%Cs, p%fraca)            
-        if( debug ) write(*,'(a)') 'did build CTF object'
         if( p%box > 0 )then
             ! build image objects
             ! box-sized ones
@@ -264,7 +235,7 @@ contains
     
     !> \brief  constructs the cluster toolbox
     subroutine build_cluster_tbox( self, p )
-        class(build), intent(inout)  :: self
+        class(build),  intent(inout) :: self
         class(params), intent(inout) :: p
         type(image)                  :: img
         integer                      :: alloc_stat
@@ -295,8 +266,8 @@ contains
     
     !> \brief  constructs the common lines toolbox
     subroutine build_comlin_tbox( self, p )
-        class(build), intent(inout)   :: self
-        class(params), intent(in)     :: p
+        class(build),  intent(inout) :: self
+        class(params), intent(in)    :: p
         integer :: alloc_stat, i
         call self%kill_comlin_tbox
         if( p%pgrp /= 'c1' )then ! set up symmetry functionality
@@ -353,16 +324,12 @@ contains
     
     !> \brief  constructs the reconstruction toolbox
     subroutine build_rec_tbox( self, p )
-        class(build), intent(inout) :: self
-        class(params), intent(in)   :: p
+        class(build),  intent(inout) :: self
+        class(params), intent(in)    :: p
         call self%kill_rec_tbox
         call self%raise_hard_ctf_exception(p)
         call self%recvol%new([p%boxpd,p%boxpd,p%boxpd],p%smpd,p%imgkind)
-        if( p%tfplan%flag .eq. 'no' .or. p%tfplan%mode .eq. 'no' )then
-            call self%recvol%alloc_rho(p)
-        else
-            call self%recvol%alloc_rho(p, tfun=self%tfun)
-        endif
+        call self%recvol%alloc_rho(p)
         write(*,'(A)') '>>> DONE BUILDING RECONSTRUCTION TOOLBOX'
         self%rec_tbox_exists = .true.
     end subroutine build_rec_tbox
@@ -379,15 +346,11 @@ contains
     
     !> \brief  constructs the eo reconstruction toolbox
     subroutine build_eo_rec_tbox( self, p )
-        class(build), intent(inout) :: self
-        class(params), intent(in)   :: p
+        class(build),  intent(inout) :: self
+        class(params), intent(in)    :: p
         call self%kill_eo_rec_tbox
         call self%raise_hard_ctf_exception(p)
-        if( p%tfplan%flag .eq. 'no' .or. p%tfplan%mode .eq. 'no' )then
-            call self%eorecvol%new(p)
-        else
-            call self%eorecvol%new(p, tfun=self%tfun)
-        endif
+        call self%eorecvol%new(p)
         write(*,'(A)') '>>> DONE BUILDING EO RECONSTRUCTION TOOLBOX'
         self%eo_rec_tbox_exists = .true.
     end subroutine build_eo_rec_tbox
@@ -407,6 +370,7 @@ contains
         class(params), intent(in)    :: p
         integer :: icls, alloc_stat, funit, io_stat
         call self%kill_hadamard_prime2D_tbox
+        call self%raise_hard_ctf_exception(p)
         allocate( self%cavgs(p%ncls), self%refs(p%ncls), self%ctfsqsums(p%ncls), stat=alloc_stat )
         call alloc_err('build_hadamard_prime2D_tbox; simple_build, 1', alloc_stat)
         do icls=1,p%ncls
@@ -450,22 +414,14 @@ contains
                 allocate( self%eorecvols(p%nstates), stat=alloc_stat )
                 call alloc_err('build_hadamard_prime3D_tbox; simple_build, 1', alloc_stat)
                 do s=1,p%nstates
-                    if( p%tfplan%flag .eq. 'no' )then
-                        call self%eorecvols(s)%new(p)
-                    else
-                        call self%eorecvols(s)%new(p, tfun=self%tfun)
-                    endif
+                    call self%eorecvols(s)%new(p)
                 end do
             else
                 allocate( self%recvols(p%nstates), stat=alloc_stat )
                 call alloc_err('build_hadamard_prime3D_tbox; simple_build, 2', alloc_stat)
                 do s=1,p%nstates
                     call self%recvols(s)%new([p%boxpd,p%boxpd,p%boxpd],p%smpd,p%imgkind)
-                    if( p%ctf .eq. 'no' )then
-                        call self%recvols(s)%alloc_rho(p)
-                    else
-                       call self%recvols(s)%alloc_rho(p, tfun=self%tfun)
-                    endif
+                    call self%recvols(s)%alloc_rho(p)
                 end do
             endif
         endif
@@ -514,8 +470,8 @@ contains
     
     !> \brief  constructs the toolbox for continuous Cartesian sampling refinement
     subroutine build_cont3D_tbox( self, p )
-        class(build), intent(inout) :: self
-        class(params), intent(in)   :: p
+        class(build),  intent(inout) :: self
+        class(params), intent(in)    :: p
         integer :: s, alloc_stat, i
         call self%kill_cont3D_tbox
         call self%raise_hard_ctf_exception(p)
@@ -525,11 +481,7 @@ contains
             allocate( self%eorecvols(p%nstates), stat=alloc_stat )
             call alloc_err('build_cont3D_tbox; simple_build, 1', alloc_stat)
             do s=1,p%nstates
-                if( p%tfplan%flag .eq. 'no' .or. p%tfplan%mode .eq. 'no' )then
-                    call self%eorecvols(s)%new(p)
-                else
-                    call self%eorecvols(s)%new(p, tfun=self%tfun)
-                endif
+                call self%eorecvols(s)%new(p)
             end do
         endif
         write(*,'(A)') '>>> DONE BUILDING HADAMARD PRIME3D TOOLBOX'
@@ -588,13 +540,24 @@ contains
         close(funit)
     end subroutine read_nnmat
     
-    !> \brief  for fall-over if CTF params are missing
+    !> \brief  fall-over if CTF params are missing
     subroutine raise_hard_ctf_exception( self, p )
-        class(build), intent(inout) :: self
-        class(params), intent(in)   :: p
+        class(build),  intent(inout) :: self
+        class(params), intent(in)    :: p
+        logical :: params_present(4)
         if( p%tfplan%flag.ne.'no' )then
-            if( .not. self%a%isthere('dfx') )then
-                stop 'ERROR! You want to use the CTF but the alignment doc lacks defocus values'
+            params_present(1) = self%a%isthere('kv')
+            params_present(2) = self%a%isthere('cs')
+            params_present(3) = self%a%isthere('fraca')
+            params_present(4) = self%a%isthere('dfx') 
+            if( all(params_present) )then
+                ! alles ok
+            else
+                if( .not. params_present(1) ) write(*,*) 'ERROR! ctf .ne. no and input doc lacks kv'
+                if( .not. params_present(2) ) write(*,*) 'ERROR! ctf .ne. no and input doc lacks cs'
+                if( .not. params_present(3) ) write(*,*) 'ERROR! ctf .ne. no and input doc lacks fraca'
+                if( .not. params_present(4) ) write(*,*) 'ERROR! ctf .ne. no and input doc lacks defocus'
+                stop
             endif
         endif
     end subroutine raise_hard_ctf_exception

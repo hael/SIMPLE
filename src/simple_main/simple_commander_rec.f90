@@ -18,24 +18,19 @@ use simple_build,           only: build
 use simple_commander_base,  only: commander_base
 implicit none
 
-public :: eo_recvol_commander
-public :: eo_volassemble_commander
 public :: recvol_commander
+public :: eo_volassemble_commander
 public :: volassemble_commander
 private
 
-type, extends(commander_base) :: eo_recvol_commander
-  contains
-    procedure :: execute      => exec_eo_recvol
-end type eo_recvol_commander
-type, extends(commander_base) :: eo_volassemble_commander
-  contains
-    procedure :: execute      => exec_eo_volassemble
-end type eo_volassemble_commander
 type, extends(commander_base) :: recvol_commander
   contains
     procedure :: execute      => exec_recvol
 end type recvol_commander
+type, extends(commander_base) :: eo_volassemble_commander
+  contains
+    procedure :: execute      => exec_eo_volassemble
+end type eo_volassemble_commander
 type, extends(commander_base) :: volassemble_commander
   contains
     procedure :: execute      => exec_volassemble
@@ -43,28 +38,33 @@ end type volassemble_commander
 
 contains
 
-    subroutine exec_eo_recvol( self, cline )
-        use simple_rec_master, only: exec_eorec
-        class(eo_recvol_commander), intent(inout) :: self
-        class(cmdline),             intent(inout) :: cline
+    subroutine exec_recvol( self, cline )
+        use simple_rec_master, only: exec_rec_master
+        class(recvol_commander), intent(inout) :: self
+        class(cmdline),          intent(inout) :: cline
         type(params)      :: p
         type(build)       :: b
         logical           :: doshellweight
         real, allocatable :: wmat(:,:)
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
-        call b%build_eo_rec_tbox(p)         ! eo_reconstruction objs built
-        ! setup shellweights if needed
-        doshellweight = .false.
-        if( p%shellw .eq. 'yes' ) call setup_shellweights(b, p, doshellweight, wmat)
+        select case(p%eo)
+            case( 'yes' )
+                call b%build_eo_rec_tbox(p) ! eo_reconstruction objs built
+            case( 'no' )
+                call b%build_rec_tbox(p)    ! reconstruction objects built
+            case DEFAULT
+                stop 'unknonw eo flag; simple_commander_rec :: exec_recvol'
+        end select
+        call setup_shellweights(b, p, doshellweight, wmat) ! shell-weights setup
         if( doshellweight )then
-            call exec_eorec(b, p, cline, wmat=wmat)
+            call exec_rec_master(b, p, cline, wmat=wmat)
         else
-            call exec_eorec(b, p, cline)
+            call exec_rec_master(b, p, cline)
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_EO_RECVOL NORMAL STOP ****')    
-    end subroutine exec_eo_recvol
+    end subroutine exec_recvol
 
     subroutine exec_eo_volassemble( self, cline )
         use simple_eo_reconstructor, only: eo_reconstructor
@@ -143,29 +143,6 @@ contains
             end subroutine
 
     end subroutine exec_eo_volassemble
-    
-    subroutine exec_recvol( self, cline )
-        use simple_rec_master, only: exec_rec
-        class(recvol_commander), intent(inout) :: self
-        class(cmdline),          intent(inout) :: cline
-        type(params)      :: p
-        type(build)       :: b
-        logical           :: doshellweight
-        real, allocatable :: wmat(:,:)
-        p = params(cline)                   ! parameters generated
-        call b%build_general_tbox(p, cline) ! general objects built
-        call b%build_rec_tbox(p)            ! reconstruction objects built
-        ! setup shellweights if needed
-         doshellweight = .false.
-        if( p%shellw .eq. 'yes' ) call setup_shellweights(b, p, doshellweight, wmat)
-        if( doshellweight )then
-            call exec_rec(b, p, cline, wmat=wmat)
-        else
-            call exec_rec(b, p, cline)
-        endif
-        ! end gracefully
-        call simple_end('**** SIMPLE_RECVOL NORMAL STOP ****')    
-    end subroutine exec_recvol
     
     subroutine exec_volassemble( self, cline )
         use simple_reconstructor, only: reconstructor

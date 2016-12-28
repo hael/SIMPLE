@@ -60,12 +60,10 @@ contains
     ! CONSTRUCTOR
     
     !>  \brief  is a constructor
-    subroutine new(self, p, tfun )
+    subroutine new(self, p )
         use simple_ctf,    only: ctf
         class(eo_reconstructor),      intent(inout) :: self !< instance
         class(params), target,        intent(in)    :: p    !< parameters object (provides constants)
-        class(ctf), target, optional, intent(in)    :: tfun !< CTF object (adds a CTF model to the 
-                                                            !! reconstruction, assumes that oris have defocus vals set)
         type(image) :: imgtmp
         logical     :: neg  
         call self%kill
@@ -85,13 +83,13 @@ contains
         self%xfel    =  p%l_xfel
         ! create composites
         call self%even%new([p%boxpd,p%boxpd,p%boxpd], p%smpd, p%imgkind)
-        call self%even%alloc_rho(p, tfun)
+        call self%even%alloc_rho(p)
         call self%even%set_ft(.true.)
         call self%odd%new([p%boxpd,p%boxpd,p%boxpd], p%smpd, p%imgkind)
-        call self%odd%alloc_rho(p, tfun)
+        call self%odd%alloc_rho(p)
         call self%odd%set_ft(.true.)
         call self%eosum%new([p%boxpd,p%boxpd,p%boxpd], p%smpd, p%imgkind)
-        call self%eosum%alloc_rho(p, tfun)
+        call self%eosum%alloc_rho(p)
         ! set lfny
         call imgtmp%new([self%box,self%box,self%box], self%smpd)
         self%lfny = imgtmp%get_lfny(1)
@@ -268,9 +266,9 @@ contains
     subroutine sampl_dens_correct_eos( self, state )
         class(eo_reconstructor), intent(inout) :: self  !< instance
         integer,                 intent(in)    :: state !< state
-        real, allocatable                      :: res(:), corrs(:)
-        type(image)                            :: even, odd
-        integer        :: j
+        real, allocatable :: res(:), corrs(:)
+        type(image)       :: even, odd
+        integer           :: j
         ! make clipped volumes
         if( self%xfel )then
             call even%new([self%box,self%box,self%box],self%smpd,imgkind='xfel')
@@ -363,18 +361,12 @@ contains
         character(len=*), optional, intent(in)    :: fbody     !< body of output file
         real,             optional, intent(in)    :: wmat(:,:) !< shellweights
         type(image)       :: img, img_pad
-        integer           :: i, cnt, n, ldim(3), noris, filtsz, io_stat, filnum
+        integer           :: i, cnt, n, ldim(3), filtsz, io_stat, filnum
         integer           :: filtsz_pad, statecnt(p%nstates), alloc_stat
         real, allocatable :: res(:), res_pad(:), wresamp(:)
         logical           :: doshellweight
         call find_ldim_nptcls(fname, ldim, n)
-        noris = o%get_noris()
-        if( n /= noris )then
-            print *, 'filename: ', fname
-            print *, 'nr of particles read from stack: ', n
-            print *, 'nr of orientations: ', noris
-            stop 'inconsistent nr entries; rec; simple_eo_reconstructor'
-        endif
+        if( n /= o%get_noris() ) stop 'inconsistent nr entries; eorec; simple_eo_reconstructor'
         doshellweight = present(wmat)
         ! make the images
         call img%new([p%box,p%box,1],p%smpd,p%imgkind)
@@ -444,9 +436,9 @@ contains
                 if( pw > 0. )then
                     orientation = o%get_ori(i)
                     if( p%l_distr_exec )then
-                        call img%read(p%stk_part, cnt)
+                        call img%read(p%stk_part, cnt, p%l_xfel)
                     else
-                        call img%read(fname, i)
+                        call img%read(fname, i, p%l_xfel)
                     endif
                     if( p%l_xfel )then
                         call img%pad(img_pad)

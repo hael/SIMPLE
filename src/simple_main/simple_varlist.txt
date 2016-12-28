@@ -8,7 +8,6 @@ center
 clustvalid
 compare
 countvox
-ctfsq
 ctfstats
 cure
 debug
@@ -38,6 +37,7 @@ odd
 order
 outside
 pad
+phaseplate
 phrand
 plot
 readwrite
@@ -47,7 +47,7 @@ rnd
 roalgn
 round
 shalgn
-shell_norm
+shellnorm
 shellw
 shbarrier
 single
@@ -64,15 +64,14 @@ verbose
 vis
 xfel
 zero
+angastunit
 boxtab
 clsdoc
 comlindoc
 ctf
-crf_name1
-crf_name2
-ctfsqspec
 cwd
 deftab
+dfunit
 dir
 doclist
 endian
@@ -101,6 +100,7 @@ paramtab
 pcastk
 pdfile
 pgrp
+plaintexttab
 prg
 refine
 refs_msk
@@ -151,7 +151,6 @@ nbest
 nboot
 ncls
 ncomps
-ndim
 ndiscrete
 ndocs
 newbox
@@ -203,6 +202,7 @@ amsklp
 angerr
 ares
 astigerr
+astigstep
 athres
 bfac
 bfacerr
@@ -214,6 +214,8 @@ deflim
 defocus
 dens
 dferr
+dfmax
+dfmin
 dfsdev
 dose_rate
 dstep
@@ -222,6 +224,7 @@ e1
 e2
 e3
 eps
+expastig
 exp_time
 filwidth
 fny

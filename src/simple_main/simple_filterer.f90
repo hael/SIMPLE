@@ -51,7 +51,6 @@ contains
         use simple_stat, only: corrs2weights, normalize_sigm
         real, intent(inout)  :: wmat(:,:)
         real, allocatable    :: weights_tmp(:), wsums(:)
-        integer, allocatable :: pinds(:)
         integer :: nptcls, filtsz, iptcl, ishell, alloc_stat
         nptcls = size(wmat,1)
         filtsz = size(wmat,2)
@@ -82,7 +81,7 @@ contains
         filtsz_resamp = size(res_new)
         allocate(filt_resamp(filtsz_resamp))
         do k=1,filtsz_resamp
-            call find(res_orig, filtsz_resamp, res_new(k), ind, dist)
+            call find(res_orig, filtsz_orig, res_new(k), ind, dist)
             filt_resamp(k) = filt_orig(ind)
         end do
     end function resample_filter
@@ -90,18 +89,16 @@ contains
     ! WIENER RESTORATION ROUTINES
     
     !>  \brief does the Wiener restoration of aligned images in 2D 
-    subroutine wiener_restore2D( img_set, o_set, tfun, tfplan, img_rec, msk, shellw )
+    subroutine wiener_restore2D( img_set, o_set, tfplan, img_rec, msk, shellw )
         use simple_oris,  only: oris
         use simple_ori,   only: ori
-        use simple_ctf,   only: ctf
         class(image),     intent(inout) :: img_set(:)
         class(oris),      intent(inout) :: o_set
-        class(ctf),       intent(inout) :: tfun
         type(ctfplan),    intent(in)    :: tfplan
         class(image),     intent(out)   :: img_rec
         real,             intent(in)    :: msk
         real, optional,   intent(in)    :: shellw(:,:)
-        integer           :: ldim(3), nimgs, iptcl, k
+        integer           :: ldim(3), nimgs, iptcl
         type(ori)         :: o
         type(image)       :: ctfsqsum
         real              :: smpd
@@ -121,11 +118,11 @@ contains
         do iptcl=1,nimgs
             o = o_set%get_ori(iptcl)
             if( doshellw )then
-                call wiener_restore2D_online(img_set(iptcl), o, tfun, tfplan, img_rec, msk, shellw(iptcl,:))
-                call assemble_ctfsqsum_online(img_set(iptcl), o, tfun, tfplan, ctfsqsum, shellw(iptcl,:))
+                call wiener_restore2D_online(img_set(iptcl), o, tfplan, img_rec, msk, shellw(iptcl,:))
+                call assemble_ctfsqsum_online(img_set(iptcl), o, tfplan, ctfsqsum, shellw(iptcl,:))
             else
-                call wiener_restore2D_online(img_set(iptcl), o, tfun, tfplan, img_rec, msk)
-                call assemble_ctfsqsum_online(img_set(iptcl), o, tfun, tfplan, ctfsqsum)
+                call wiener_restore2D_online(img_set(iptcl), o, tfplan, img_rec, msk)
+                call assemble_ctfsqsum_online(img_set(iptcl), o, tfplan, ctfsqsum)
             endif
         end do
         ! do the density correction
@@ -138,13 +135,12 @@ contains
 
     !>  \brief does the online Wiener restoration of 2D images, including shift+rotations
     !!         the image is left shifted and Fourier transformed on output
-    subroutine wiener_restore2D_online( img, o, tfun, tfplan, img_rec, msk, shellw, add )
+    subroutine wiener_restore2D_online( img, o, tfplan, img_rec, msk, shellw, add )
         use simple_ori,       only: ori
         use simple_ctf,       only: ctf
         use simple_projector, only: projector
         class(image),      intent(inout) :: img
         class(ori),        intent(inout) :: o
-        class(ctf),        intent(inout) :: tfun
         type(ctfplan),     intent(in)    :: tfplan
         class(image),      intent(inout) :: img_rec
         real,              intent(in)    :: msk
@@ -152,11 +148,15 @@ contains
         logical, optional, intent(in)    :: add
         type(projector) :: proj
         type(image)     :: roimg
+        type(ctf)       :: tfun
         real            :: angast, dfx, dfy, x, y
         logical         :: aadd
         aadd = .true.
         if( present(add) ) aadd = add
+        ! make projector and ctf objects
         proj = projector('kb')
+        if( tfplan%flag .ne. 'no' )&
+        tfun = ctf(img%get_smpd(), o%get('kv'), o%get('cs'), o%get('fraca'))
         ! set CTF parameters
         select case(tfplan%mode)
             case('astig') ! astigmatic CTF
@@ -198,18 +198,18 @@ contains
     end subroutine wiener_restore2D_online
     
     !>  \brief assembles the ctfsqsums in an online fashion
-    subroutine assemble_ctfsqsum_online( img, o, tfun, tfplan, ctfsqsum, shellw, add )
+    subroutine assemble_ctfsqsum_online( img, o, tfplan, ctfsqsum, shellw, add )
         use simple_ori, only: ori
         use simple_ctf, only: ctf
         class(image),      intent(inout) :: img
         class(ori),        intent(inout) :: o
-        class(ctf),        intent(inout) :: tfun
         type(ctfplan),     intent(in)    :: tfplan
         class(image),      intent(inout) :: ctfsqsum
         real,    optional, intent(in)    :: shellw(:)
         logical, optional, intent(in)    :: add
-        integer     :: ldim(3)
         type(image) :: ctfsq
+        type(ctf)   :: tfun
+        integer     :: ldim(3)
         real        :: angast, dfx, dfy, smpd
         logical     :: aadd
         aadd = .true.
@@ -218,6 +218,8 @@ contains
         ldim = img%get_ldim()
         smpd = img%get_smpd()
         ! create & init objs
+        if( tfplan%flag .ne. 'no' )&
+        tfun = ctf(img%get_smpd(), o%get('kv'), o%get('cs'), o%get('fraca'))
         call ctfsq%new(ldim, smpd)
         ! set CTF parameters
         select case(tfplan%mode)

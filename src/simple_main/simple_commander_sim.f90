@@ -71,16 +71,19 @@ contains
         use simple_math,      only: deg2rad
         use simple_gridding,  only: prep4cgrid
         use simple_simulator, only: simimg
+        use simple_ctf,       only: ctf
         class(simimgs_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(params)       :: p
         type(build)        :: b
         type(ori)          :: orientation
+        type(ctf)          :: tfun
         real               :: snr_pink, snr_detector, bfac, bfacerr, dfx, dfy, angast
         integer            :: i, cnt, ntot
         logical, parameter :: debug=.false.
         p = params(cline, .false.)          ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
+        tfun = ctf(p%smpd, p%kv, p%cs, p%fraca)
         if( .not. cline%defined('outstk') ) p%outstk = 'simimgs'//p%ext
         if( cline%defined('part') )then
             if( .not. cline%defined('outfile') ) stop 'need unique output file for parallel jobs'
@@ -94,8 +97,11 @@ contains
                 call b%a%rnd_oris_discrete(p%ndiscrete, p%nsym, p%eullims)
             endif
             call b%a%rnd_inpls(p%trs)
+        else if( p%diverse .eq. 'yes' )then
+            call b%a%gen_diverse
+            call b%a%rnd_trs(p%trs)
         else if( .not. cline%defined('oritab') .and. p%single .eq. 'no' )then
-            call b%a%rnd_oris(p%sherr)
+            call b%a%rnd_oris(p%sherr, p%eullims)
         endif
         if( debug )then
             write(*,*) 'CTF parameters used'
@@ -104,7 +110,7 @@ contains
             write(*,*) 'fraca = ', p%fraca
         endif
         if( .not. b%a%isthere('dfx') )then
-            if( p%ctf .ne. 'no' ) call b%a%rnd_ctf(p%defocus, p%dferr, p%astigerr)
+            if( p%ctf .ne. 'no' ) call b%a%rnd_ctf(p%kv, p%cs, p%fraca, p%defocus, p%dferr, p%astigerr)
         endif
         if( debug ) write(*,'(A)') '>>> DONE GENERATING ORIENTATION/CTF PARAMETERS'
         call b%a%write(p%outfile)
@@ -140,9 +146,9 @@ contains
                 else
                     bfac = p%bfac+bfacerr
                 endif
-                call simimg(b%img_pad, orientation, b%tfun, p%ctf, p%snr, snr_pink, snr_detector)
+                call simimg(b%img_pad, orientation, tfun, p%ctf, p%snr, snr_pink, snr_detector)
             else
-                call simimg(b%img_pad, orientation, b%tfun, p%ctf, p%snr, snr_pink, snr_detector, bfac)
+                call simimg(b%img_pad, orientation, tfun, p%ctf, p%snr, snr_pink, snr_detector, bfac)
             endif
             ! clip
             call b%img_pad%clip(b%img)
@@ -156,18 +162,20 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_SIMIMGS NORMAL STOP ****')
     end subroutine exec_simimgs
-    
+
     subroutine exec_simmovie( self, cline )
         use simple_ori,         only: ori
         use simple_math,        only: deg2rad, gen_ptcl_pos
         use simple_image,       only: image
         use simple_rnd,         only: ran3
         use simple_procimgfile, only: stats_imgfile
+        use simple_ctf,         only: ctf
         class(simmovie_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(params)         :: p
         type(build)          :: b
         type(image)          :: base_image, shifted_base_image
+        type(ctf)            :: tfun
         real                 :: snr_pink, snr_detector, ave, sdev, var, med, fracarea, x, y, sherr, dfx, dfy, deferr, angast
         integer              :: i, ptclarea, mgrapharea, fixed_frame, alloc_stat
         integer, allocatable :: ptcl_positions(:,:)
@@ -177,6 +185,7 @@ contains
         p = params(cline)                     ! parameters generated
         if( p%box == 0 ) stop 'box=0, something is fishy!'
         call b%build_general_tbox(p, cline)   ! general objects built
+        tfun = ctf(p%smpd, p%kv, p%cs, p%fraca)
         ! set fixed frame
         fixed_frame = nint(real(p%nframes)/2.)
         ! remake the alignment doc
@@ -278,9 +287,9 @@ contains
             ! multiply with CTF
             call shifted_base_image%fwd_ft
             if( p%neg .eq. 'yes' )then
-                call b%tfun%apply(shifted_base_image, dfx, 'neg', dfy, angast, p%bfac)
+                call tfun%apply(shifted_base_image, dfx, 'neg', dfy, angast, p%bfac)
             else
-                call b%tfun%apply(shifted_base_image, dfx, 'ctf', dfy, angast, p%bfac)
+                call tfun%apply(shifted_base_image, dfx, 'ctf', dfy, angast, p%bfac)
             endif
             call shifted_base_image%bwd_ft
             ! add the detector noise

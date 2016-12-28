@@ -29,7 +29,7 @@ type ctf
     real    :: ampliq      = 0.    !< amplitude contrast weight (derived constant)
   contains
     ! INITIALISER
-    procedure          :: init
+    procedure, private :: init
     ! CTF EVALUATION
     procedure          :: eval
     procedure, private :: evalPhSh
@@ -38,10 +38,8 @@ type ctf
     procedure          :: ctf2img
     procedure          :: ctf2spec
     procedure          :: apply
-    procedure          :: ctf1stzero
     ! CALCULATORS
     procedure          :: freqOfAZero
-    procedure          :: cntNrExtremaBeforeSqSpatFreq
     procedure, private :: solve4PhSh
     procedure, private :: sqFreq4PhSh
     procedure, private :: sqSf4PhSh
@@ -290,49 +288,6 @@ contains
         endif
         call ctfimg%kill
     end subroutine apply
-
-    !>  \brief  return the Fourier index of the zero1 boundary 
-    function ctf1stzero( self, img, dfx, dfy, angast ) result( zero1ind )
-        use gnufor2
-        use simple_image, only: image
-        use simple_math,  only: round2even
-        class(ctf),   intent(inout) :: self   !< instance
-        class(image), intent(in)    :: img    !< image template
-        real,         intent(in)    :: dfx    !< defocus (in x, microns)
-        real,         intent(in)    :: dfy    !< defocus (in x, microns)
-        real,         intent(in)    :: angast !< angle of astigmatism (degrees)
-        real, allocatable :: findtab(:)
-        integer :: lims(3,2),h,k,ldim(3),sh,nradial_lines,i,zero1ind
-        real    :: ang,inv_ldim(3),dang,tval
-        if( img%is_3d() )then
-            print *, 'ldim: ', img%get_ldim()
-            stop 'Only 4 2D images; ctf1stzeromap; simple_ctf'
-        endif
-        if( .not. img%square_dims() )then
-            stop 'Only 4 square images; ctf1stzeromap; simple_ctf'
-        endif
-        ! set constants
-        lims     = img%loop_lims(2)
-        ldim     = img%get_ldim()
-        inv_ldim = 1./real(ldim)
-        ! make the polar map of angles (in radians) and Fourier indices at zero crossing boundary
-        nradial_lines = round2even(twopi*real(ldim(1)/2))
-        allocate(findtab(nradial_lines))
-        findtab = 0
-        dang    = twopi/real(nradial_lines)
-        do i=1,nradial_lines
-            ang = real(i-1)*dang ! angle (in radians)
-            do k=0,lims(1,2)
-                tval = self%eval((real(k)*inv_ldim(1))**2.0, dfx, dfy, angast, ang)
-                if( tval < 0. )then
-                    findtab(i) = k-1 ! Fourier index at bundary
-                    exit
-                endif
-            end do
-        end do
-        zero1ind = minval(findtab)
-        deallocate(findtab)
-    end function ctf1stzero
     
     ! CALCULATORS        
     
@@ -357,43 +312,6 @@ contains
         call self%sqFreq4PhSh(phase_shifts_of_zeroes,ang,sq_sfs_of_zeroes,num_freqs)
         freqOfAZero = sqrt(sq_sfs_of_zeroes(which_zero))
     end function freqOfAZero
-    
-    !>  \brief  Count how many extrema the CTF goes through before reaching the given spatial frequency at the given ang
-    function cntNrExtremaBeforeSqSpatFreq( self, sqSpatFreq, dfx, dfy, angast, ang ) result( number_of_extrema )
-        class(ctf),intent(inout) :: self                      !< instance
-        real,      intent(in)    :: sqSpatFreq                !< squared reciprocal pixels
-        real,      intent(in)    :: dfx                       !< defocus along first axis (micrometers)
-        real,      intent(in)    :: dfy                       !< defocus along second axis (for astigmatic CTF, dfx .ne. dfy) (micrometers)
-        real,      intent(in)    :: angast                    !< azimuth of first axis. 0.0 means axis is at 3 o'clock. (radians)
-        real,      intent(in)    :: ang                       !< radians. ang at which to evalulate the ctf
-        integer, parameter       :: maximum_number_of_rings = 128
-        real, allocatable        :: phase_shifts_of_minima(:) ! phase shifts at which minima (-1.0) occur
-        real, allocatable        :: phase_shifts_of_maxima(:) ! phase shifts at which maxima (+1.0) occur
-        real, allocatable        :: sq_sfs_of_minima(:)       ! squared spa freqs at which minima (-1.0) occur
-        real, allocatable        :: sq_sfs_of_maxima(:)       ! squared spa freqs at which maxima (+1.0) occur
-        integer                  :: num_minima, num_maxima, number_of_extrema, i
-        ! initialize the CTF object, using the input parameters
-        call self%init(dfx, dfy, angast)
-        ! Allocate memory for temporary results
-        allocate(phase_shifts_of_minima(maximum_number_of_rings))
-        allocate(phase_shifts_of_maxima(maximum_number_of_rings))
-        allocate(sq_sfs_of_maxima(maximum_number_of_rings*2))
-        allocate(sq_sfs_of_minima(maximum_number_of_rings*2))
-        ! Solve the CTF equation for phase shifts
-        call self%solve4PhSh(phase_shifts_of_minima,-1.)
-        call self%solve4PhSh(phase_shifts_of_maxima,+1.)
-        ! Convert phase shifts to squared spatial frequencies
-        call self%sqFreq4PhSh(phase_shifts_of_minima,ang,sq_sfs_of_minima,num_minima)
-        call self%sqFreq4PhSh(phase_shifts_of_maxima,ang,sq_sfs_of_maxima,num_maxima)
-        ! Let's count (note that now, phase_shifts_of_minima actually store squared spatial frequencies)
-        number_of_extrema = count(sq_sfs_of_minima(1:num_minima) .le. sqSpatFreq &
-                            .and. sq_sfs_of_minima(1:num_minima) .gt. 0.)
-        number_of_extrema = count(sq_sfs_of_maxima(1:num_maxima) .le. sqSpatFreq &
-                            .and. sq_sfs_of_maxima(1:num_maxima) .gt. 0.) &
-                            + number_of_extrema
-        ! We get pairs of solutions for sq sp freq, so let's divide by 2
-        number_of_extrema = number_of_extrema/2
-    end function cntNrExtremaBeforeSqSpatFreq
     
     !>  \brief  Find the ctf argument (phase shift) values at which CTF=ctf_value
     !!
