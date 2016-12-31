@@ -228,7 +228,7 @@ contains
     !>  \brief  returns the i:th third Euler angle 
     pure function e3get( self, i ) result( e3 )
         class(oris), intent(in) :: self
-        integer, intent(in)     :: i
+        integer,     intent(in) :: i
         real                    :: e3
         e3 = self%o(i)%e3get()
     end function e3get
@@ -236,7 +236,7 @@ contains
     !>  \brief  returns the i:th Euler triplet
     pure function get_euler( self, i ) result( euls )
         class(oris), intent(in) :: self
-        integer, intent(in)     :: i
+        integer,     intent(in) :: i
         real                    :: euls(3)
         euls = self%o(i)%get_euler()
     end function get_euler
@@ -1423,15 +1423,19 @@ contains
     end subroutine read
     
     !>  \brief  writes orientation info to file
-    subroutine write_1( self, orifile )
+    subroutine write_1( self, orifile, fromto )
         use simple_jiffys, only: get_fileunit
-        class(oris), intent(inout)   :: self
-        character(len=*), intent(in) :: orifile
-        integer                      :: file_stat, fnr, i
+        class(oris),       intent(inout) :: self
+        character(len=*),  intent(in)    :: orifile
+        integer, optional, intent(in)    :: fromto(2)
+        integer :: file_stat, fnr, i, ffromto(2)
+        ffromto(1) = 1
+        ffromto(2) = self%n
+        if( present(fromto) ) ffromto = fromto
         fnr = get_fileunit( )
         open(unit=fnr, FILE=orifile, STATUS='REPLACE', action='WRITE', iostat=file_stat)
         call fopen_err( 'In: write_1, module: simple_oris.f90', file_stat )
-        do i=1,self%n
+        do i=ffromto(1),ffromto(2)
             call self%o(i)%write(fnr)
         end do
         close(fnr)

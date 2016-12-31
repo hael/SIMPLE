@@ -63,7 +63,7 @@ contains
             call exec_rec_master(b, p, cline)
         endif
         ! end gracefully
-        call simple_end('**** SIMPLE_EO_RECVOL NORMAL STOP ****')    
+        call simple_end('**** SIMPLE_RECVOL NORMAL STOP ****')    
     end subroutine exec_recvol
 
     subroutine exec_eo_volassemble( self, cline )

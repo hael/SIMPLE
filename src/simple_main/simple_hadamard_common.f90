@@ -171,14 +171,16 @@ contains
         class(params),                 intent(inout) :: p
         integer,                       intent(in)    :: iptcl, cnt_glob
         class(ori),                    intent(inout) :: orientation
-        real,                optional, intent(in)    :: shellweights(:)
         class(prime3D_srch), optional, intent(inout) :: primesrch3D
+        real,                optional, intent(in)    :: shellweights(:)
         real      :: pw, ran, w
-        integer   :: jpeak, s, k, nbetter, filtsz_pad
+        integer   :: jpeak, s, k
         type(ori) :: orisoft, o_sym
-        logical   :: doshellweight
-        pw            = orientation%get('w')
-        doshellweight = present(shellweights)
+        logical   :: primesrch3D_present
+        primesrch3D_present = present(primesrch3D)
+        if( p%npeaks > 1 .and. .not. primesrch3D_present )&
+        stop 'need optional primesrch3D input when npeaks > 1; simple_hadamard_common :: grid_ptcl'
+        pw = orientation%get('w')
         if( pw > 0. )then
             if( p%l_distr_exec )then
                 call b%img_copy%read(p%stk_part, cnt_glob, p%l_xfel)
@@ -202,45 +204,30 @@ contains
             do jpeak=1,p%npeaks
                 if( debug ) write(*,*) '*** simple_hadamard_common ***: gridding, iteration:', jpeak
                 ! get ori info
-                select case(p%refine)
-                    case('no', 'qcont', 'qcontneigh')
-                        if( present(primesrch3D) )then
-                            call primesrch3D%get_ori(jpeak, orisoft)
-                            w = orisoft%get('ow')
-                            s = nint(orisoft%get('state'))
-                        else
-                            stop 'need primesrch3D object input for this mode of execution; simple_hadamard_common :: grid_ptcl'
-                        endif
-                    case DEFAULT
-                        orisoft = b%a%get_ori(iptcl)
-                        w = 1.
-                        s = nint(orisoft%get('state'))
-                end select
+                if( primesrch3D_present )then
+                    call primesrch3D%get_ori(jpeak, orisoft)
+                    w = orisoft%get('ow')
+                    s = nint(orisoft%get('state'))
+                else
+                    w = 1.
+                    s = nint(orisoft%get('state'))
+                endif
                 if( debug ) write(*,*) '*** simple_hadamard_common ***: got orientation'
                 if( p%frac < 0.99 ) w = w*pw
                 if( w > 0. )then
-                    ! grid
                     if( p%pgrp == 'c1' )then
                         if( p%eo .eq. 'yes' )then
-                            if( doshellweight )then
-                                call b%eorecvols(s)%grid_fplane(orisoft, b%img_pad, pwght=w, ran=ran, shellweights=shellweights)
-                            else
-                                call b%eorecvols(s)%grid_fplane(orisoft, b%img_pad, pwght=w, ran=ran)
-                            endif
+                            call b%eorecvols(s)%grid_fplane(orisoft, b%img_pad, pwght=w, ran=ran, shellweights=shellweights)
                         else
-                            call b%recvols(s)%inout_fplane(orisoft, .true., b%img_pad, pwght=w)
+                            call b%recvols(s)%inout_fplane(orisoft, .true., b%img_pad, pwght=w, shellweights=shellweights)
                         endif
                     else
                         do k=1,b%se%get_nsym()
                             o_sym = b%se%apply(orisoft, k)
                             if( p%eo .eq. 'yes' )then
-                                if( doshellweight )then
-                                    call b%eorecvols(s)%grid_fplane(o_sym, b%img_pad, pwght=w, ran=ran, shellweights=shellweights)
-                                else
-                                    call b%eorecvols(s)%grid_fplane(o_sym, b%img_pad, pwght=w, ran=ran)
-                                endif
+                                call b%eorecvols(s)%grid_fplane(o_sym, b%img_pad, pwght=w, ran=ran, shellweights=shellweights)
                             else
-                                call b%recvols(s)%inout_fplane(o_sym, .true., b%img_pad, pwght=w)
+                                call b%recvols(s)%inout_fplane(o_sym, .true., b%img_pad, pwght=w, shellweights=shellweights)
                             endif
                         end do
                     endif

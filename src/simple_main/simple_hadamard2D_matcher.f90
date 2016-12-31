@@ -124,7 +124,6 @@ contains
                 call orientation%reject
             endif
             call b%a%set_ori(iptcl,orientation)
-            call b%a%write(iptcl, p%outfile)
             ! read back the image again 4 shift, rotation and cavg update
             if( p%l_distr_exec )then
                 call b%img%read(p%stk_part, cnt_glob)
@@ -148,6 +147,8 @@ contains
                 endif
             endif
         end do
+        ! orientations output
+        call b%a%write(p%outfile, [p%fromp,p%top])
         p%oritab = p%outfile
         call pftcc%kill
         

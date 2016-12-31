@@ -108,7 +108,7 @@ contains
         if( p%l_distr_exec )then
             ! nothing to do
         else
-            if( frac_srch_space >= 50. ) call cont3D_shellweight(b, p, cline)
+            if( cline%defined('oritab') .and. frac_srch_space >= 50. ) call cont3D_shellweight(b, p, cline)
         endif
         call setup_shellweights(b, p, doshellweight, wmat, res, res_pad)
 
@@ -230,10 +230,8 @@ contains
                 call b%a%set_ori(iptcl,orientation)
             endif
         end do
-        do iptcl=p%fromp,p%top
-            ! orientations output
-            call b%a%write(iptcl, p%outfile)
-        enddo
+        ! orientations output
+        call b%a%write(p%outfile, [p%fromp,p%top])
         p%oritab = p%outfile
         call pftcc%kill
         ! NORMALIZE STRUCTURE FACTORS

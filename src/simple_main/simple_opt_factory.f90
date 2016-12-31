@@ -26,8 +26,8 @@ contains
 
     !> \brief  is a constructor
     subroutine new( self, spec, ptr )
-        class(opt_factory), intent(inout), target :: self !< instance 
-        class(opt_spec), intent(inout)            :: spec !< specification
+        class(opt_factory), target, intent(inout) :: self !< instance 
+        class(opt_spec),            intent(inout) :: spec !< specification
         class(optimizer), pointer                 :: ptr  !< pointer to constructed object
         ptr => null()
         call self%kill

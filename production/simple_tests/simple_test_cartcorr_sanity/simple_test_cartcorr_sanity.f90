@@ -15,6 +15,7 @@ real                 :: cxy(3), x, y, diff_old, diff_recast, diff_corr, old_corr
 ! make a square for testing the shift alignment
 call img1%new([200,200,1], 1.77)
 call img1%square(40)
+call img1%fwd_ft
 img2 = img1
 tmp  = img1
 ! prepare objects for corrcalc
@@ -38,7 +39,6 @@ do i=1,nits
     if( debug ) print *, 'neg(recast): ', -cxy(2:3)
     diff_recast = diff_recast+sum(abs(-cxy(2:3)-[x,y]))
     diff_corr   = diff_corr+abs(old_corr-cxy(1))
-    
 end do
 write(*,*) 'diff_old:    ', diff_old
 write(*,*) 'diff_recast: ', diff_recast
@@ -61,7 +61,7 @@ contains
                 endif
             end do
         end do
-    end function
+    end function find_shift_old
     
     function find_shift_recast() result( cxy )
         integer :: sh,xsh,ysh
@@ -79,6 +79,6 @@ contains
                 endif
             end do
         end do
-    end function
+    end function find_shift_recast
 
 end program simple_test_cartcorr_sanity

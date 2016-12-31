@@ -130,11 +130,13 @@ contains
         end do
         actual = getabscpu(.true.)
         delta  = getdiffcpu(.true.) 
+        write(*,'(a)') '>>> PROFILING STANDARD CORRELATOR' 
         do itst=1,NTST
             corr = img_ref%corr_shifted(img_ptcl, shvecs(itst,:), lp_dyn=LP)
         end do
         actual = getabscpu(.true.)
         delta  = getdiffcpu(.true.)
+        write(*,'(a)') '>>> PROFILING FTEXP CORRELATOR' 
         !$omp parallel do schedule(auto) default(shared) private(itst)
         do itst=1,NTST
             corr = ftexp_ref%corr_shifted(ftexp_ptcl, shvecs(itst,:))

@@ -423,9 +423,6 @@ contains
         call find_ldim_nptcls(fname, ldim, n)
         if( n /= o%get_noris() ) stop 'inconsistent nr entries; rec; simple_reconstructor'
         doshellweight = present(wmat)
-
-        if( doshellweight ) print *, 'SHELLWEIGHTED 3D REC'
-
         ! make random number generator
         rt = ran_tabu(n)
         ! make the images

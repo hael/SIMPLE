@@ -246,10 +246,10 @@ contains
     ! GETTERS & SETTERS
     
     !>  \brief  to get the best orientation from the discrete space
-    subroutine get_ori_best( self, o_prev )
+    subroutine get_ori_best( self, o2update )
         use simple_math, only: myacos, rotmat2d, rad2deg
         class(prime3D_srch), intent(inout) :: self
-        class(ori),          intent(inout) :: o_prev
+        class(ori),          intent(inout) :: o2update
         type(ori) :: o
         real      :: euldist, mi_joint, mi_class, mi_inpl, mi_state
         real      :: mat(2,2), u(2), x1(2), x2(2)
@@ -258,14 +258,14 @@ contains
         u(1) = 0.
         u(2) = 1.
         ! calculate previous vec
-        mat  = rotmat2d(o_prev%e3get())
+        mat  = rotmat2d(o2update%e3get())
         x1   = matmul(u,mat)
         ! get new orientation
         o = self%o_npeaks%get_ori( self%npeaks )
         ! calculate new vec
         mat     = rotmat2d(o%e3get())
         x2      = matmul(u,mat)
-        euldist = rad2deg( o_prev.euldist.o )
+        euldist = rad2deg( o2update.euldist.o )
         roind   = self%srch_common%roind( 360.-o%e3get() )
         state   = nint( o%get('state') )
         ! calculate overlap between distributions
@@ -291,36 +291,48 @@ contains
             mi_joint = mi_joint/2.
         endif
         ! set the overlaps
-        call o_prev%set('mi_class', mi_class)
-        call o_prev%set('mi_inpl',  mi_inpl)
-        call o_prev%set('mi_state', mi_state)
-        call o_prev%set('mi_joint', mi_joint)
+        call o2update%set('mi_class', mi_class)
+        call o2update%set('mi_inpl',  mi_inpl)
+        call o2update%set('mi_state', mi_state)
+        call o2update%set('mi_joint', mi_joint)
         ! set the distances before we update the orientation
-        call o_prev%set('dist', 0.5*euldist + 0.5*o_prev%get('dist'))
-        call o_prev%set('dist_inpl', rad2deg(myacos(dot_product(x1,x2))))
+        call o2update%set('dist', 0.5*euldist + 0.5*o2update%get('dist'))
+        call o2update%set('dist_inpl', rad2deg(myacos(dot_product(x1,x2))))
         ! all the other stuff
-        call o_prev%set_euler( o%get_euler() )
-        call o_prev%set_shift( o%get_shift() )
-        call o_prev%set( 'state',   real(state) )
-        call o_prev%set( 'frac',    o%get('frac') )
-        call o_prev%set( 'corr',    o%get('corr') )
-        call o_prev%set( 'ow',      o%get('ow') )
-        call o_prev%set( 'mirr',    0. )
-        call o_prev%set( 'class',   o%get('class') )
-        call o_prev%set( 'sdev',    o%get('sdev') )
+        call o2update%set_euler( o%get_euler() )
+        call o2update%set_shift( o%get_shift() )
+        call o2update%set( 'state',   real(state) )
+        call o2update%set( 'frac',    o%get('frac') )
+        call o2update%set( 'corr',    o%get('corr') )
+        call o2update%set( 'ow',      o%get('ow') )
+        call o2update%set( 'mirr',    0. )
+        call o2update%set( 'class',   o%get('class') )
+        call o2update%set( 'sdev',    o%get('sdev') )
         ! stash and return
-        call self%o_npeaks%set_ori( self%npeaks,o_prev )
+        call self%o_npeaks%set_ori( self%npeaks,o2update )
         if( debug ) write(*,'(A)') '>>> PRIME3D_SRCH::GOT BEST ORI'
     end subroutine get_ori_best
 
     !>  \brief  to get one orientation from the discrete space
-    subroutine get_ori( self, i, o )
+    subroutine get_ori( self, i, o2update )
         class(prime3D_srch), intent(inout) :: self
-        type(ori),           intent(inout) :: o
+        class(ori),          intent(inout) :: o2update
         integer,             intent(in)    :: i
+        type(ori) :: o
+        real      :: euls(3), x, y, rstate, ow
         if( str_has_substr(self%refine,'shc') .and. i /= 1 )stop 'get_ori not for shc-modes; simple_prime3D_srch'
         if( i < 1 .or. i > self%npeaks )stop 'Invalid index in simple_prime3D_srch::get_ori'
-        call o%copy( self%o_npeaks%get_ori( self%npeaks-i+1 ) )
+        ! call o%copy( self%o_npeaks%get_ori( self%npeaks-i+1 ) )
+        euls   = self%o_npeaks%get_euler( self%npeaks - i + 1 )
+        x      = self%o_npeaks%get( self%npeaks - i + 1, 'x'    )
+        y      = self%o_npeaks%get( self%npeaks - i + 1, 'y'    )
+        rstate = self%o_npeaks%get( self%npeaks - i + 1, 'state')
+        ow     = self%o_npeaks%get( self%npeaks - i + 1, 'ow'   )
+        call o2update%set_euler( euls )
+        call o2update%set( 'x',     x      )
+        call o2update%set( 'y',     y      )
+        call o2update%set( 'state', rstate )
+        call o2update%set( 'ow',    ow     )
     end subroutine get_ori
 
     !>  \brief  standard deviation

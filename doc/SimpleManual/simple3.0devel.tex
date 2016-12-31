@@ -109,7 +109,6 @@ If the coders don't feel responsible for the model, or don't understand how to m
 
 \subsection{The Layered SIMPLE Architecture}
 Partition a complex program into layers. Develop a design within each layer that is cohesive and that depends only on the layers below. Follow standard architectural patterns to provide loose coupling to the layers above. Concentrate all the code related to the domain model in one layer and isolate it from the user interface, application and infrastructure code. The domain objects, free of the responsibility of displaying themselves, storing themselves, managing application tasks, and so forth, can be focused on expressing the domain model. This allows a model to evolve to be rich enough and clear enough to capture essential research knowledge and put it into work. SIMPLE was designed in a layered fashion.
-\newpage{}
 \begin{SCfigure}[][h]
 \includegraphics[keepaspectratio=true,scale=0.6]{./LayeredArch/layered_arch}
 \end{SCfigure}
@@ -136,7 +135,7 @@ simple_prime_srch.f90     ! search routines common to PRIME2D/3D
 simple_symsrcher.f90      ! symmetry axis search routines
 simple_volpft_srch.f90    ! volume registration search routines
 \end{verbatim}
-The most prominent role of these classes is to put together the correlators with the classes responsible for the optimisation. The most important and highest level aggregate classes in this group are the \texttt{prime2D\_srch} and \texttt{prime3D\_srch} classes who shares common functionality via the \texttt{prime\_srch} class. In order to understand the algorithmic details of the stochastic optimisation implemented in the PRIME algorithm, look in the \texttt{prime2D\_srch} and \texttt{prime3D\_srch} classes. In the next level we find the classes executing the projection-matching-based algorithms.
+The most prominent role of these classes is to put together the correlators with the classes responsible for the optimisation. The most important classes in this group are the \texttt{prime2D\_srch} and \texttt{prime3D\_srch} classes who shares common functionality via the \texttt{prime\_srch} class. In order to understand the algorithmic details of the stochastic optimisation implemented in the PRIME algorithm, look in the \texttt{prime2D\_srch} and \texttt{prime3D\_srch} classes. In the next level we find the modules executing the projection-matching-based algorithms.
 \begin{verbatim}
 simple_cont3D_matcher.f90      ! continuous projection matching
 simple_hadamard2D_matcher.f90  ! discrete 2D clustering and alignment
@@ -170,22 +169,289 @@ The distinction between these two execution routes will be explained in detail b
 \section{The Building Blocks of SIMPLE}
 
 \subsection{SIMPLE Classes}
-<input>
+
+\subsubsection{Classes are a Special Kind of Modules}
+Fortran has three main design elements: subroutines, functions and modules. Fortran does not have a specific unit implementing a class but uses the module construct  to make classes that instantiate objects.
+\begin{verbatim}
+!==Class simple_example
+!
+! simple_example is just a dummy example for how to implement a generic class
+!
+module simple_example
+use simple_defs                           ! module with parameters
+use simple_other_class, only: other_class ! type(other_class)
+implicit none                             ! no implicit variable declaration
+
+! we only make the instance and the unit test public; everything else is private
+public :: example, test_example 
+private                         
+
+! class parameter
+integer, parameter :: my_class_variable=10
+
+! the abstract data type (instance definition)
+type example
+    private                                      ! data encapsulation
+    type(other_class) :: my_other_class_instance ! this is composition
+    real, allocatable :: my_real_arr(:)          ! allocatable array declaration
+    logical           :: exists = .false.        ! to indicate existence
+contains                                         ! after contains comes the methods
+    procedure :: new                             ! conventional name of constructor
+    procedure, private :: method1                ! this is generic programming
+    procedure, private :: method2                ! within the class
+    generic :: method => method1, method2 
+    procedure :: kill                            ! conventional name of destructor
+end type example
+
+interface example
+    module procedure constructor
+end interface example
+
+! after the contains statement comes the implementation of the methods
+contains
+\end{verbatim}
+The first statements after the \texttt{module} statement are the \texttt{use} statements. Only modules that are required by most methods in the class should be declared here, otherwise we put them with the relevant methods (subroutines/function after last contains statement). Also, classes that are components of the example class need to be declared here. Inheritance by composition is almost always preferable to inheritance by type extension, but later we will look at examples where inheritance between abstract base classes and concrete implementing classes provides powerful means for run-time polymorphism. The following \texttt{implicit none} statement is a leftover from the olden days when Fortran used implicit variable declaration based on the first character of the variable name. Don't scatter implicit none statements all over the shop\textemdash{}it is sufficient to have them in the \texttt{program} units and in the top of the \texttt{module}. In SIMPLE, we use the convention that all code-containing files start with \texttt{simple\_} and if they are bona-fide classes, they are followed by the name of the abstract data type \texttt{simple\_example}. If they are modules rather than classes (we will come to this distinction later)  they are named according to the domain specific functionality that the module implements, for example \texttt{simple\_hadamard2D\_matcher}. Next, we declare class variables or parameters that are available throughout the scope of the module but inaccessible to the outside world. The abstract data type is declared just as an ordinary derived type with two exceptions:
+\begin{enumerate}
+\item The data is encapsulated (hidden to the outside world) via the \texttt{private} statement. This is one of the most important aspects of object-oriented programming. It allows the namespace of the abstract data type to be public in the instantiated object rather than the data itself. There are instances where it is practical to violate encapsulation, but we'll come to that later.
+\item There's a \texttt{contains} section within the abstract data type that declares the names of the methods creating or in other ways operating on the data declared in the type. This is the mechanism whereby an instance of the example class carries the namespace of the methods. Methods are public by default (visible to the using unit) and made private (callable only within the scope of the module) via the \texttt{private} statement.
+\end{enumerate}
+\texttt{new} is the name convention we use for the constructor. We can do generic programming within the class for methods that are so closely related that they should have the same name, assuming that they have unique interfaces. \texttt{kill} is the name convention we use for the destructor. The  code snippet
+\begin{verbatim}
+interface example
+    module procedure constructor
+end interface example
+\end{verbatim}
+wlll allow us to create instances in the using unit with the syntax
+\begin{verbatim}
+my_example_instance = example( <dummy arguments> )
+\end{verbatim}
+as we shall see shortly. Now to the implementation of the constructors:
+\begin{verbatim}
+...
+interface example
+    module procedure constructor
+end interface example
+
+! after the contains statement comes the implementation of the methods
+contains
+
+    subroutine new( self, other_specs, n )
+        use simple_jiffys, only: alloc_err
+        ! dummy variables are dealt with first
+        class(example), intent(inout) :: self
+        integer,        intent(in)    :: other_specs(:)
+        integer,        intent(in)    :: n
+        ! here comes the local variable declarations
+        integer :: alloc_stat
+        ! we always start with destructing a possibly pre-existing instance
+        call self%kill
+        ! construct the composite
+        call self%my_other_class_instance%new(other_specs)
+        ! allocate the array
+        allocate( self%my_real_array(n), stat=alloc_stat)
+        call alloc_err( "In: simple_example :: new", alloc_stat)
+        ! indicate existence of the instance
+        self%exists = .true.
+    end subroutine new
+\end{verbatim}
+Methods in a class are implemented as standard subroutines or functions that have been part of the language specification since Fortran 77. We begin with declaring the units we need to use via \texttt{use simple\_jiffys, only: alloc\_err}. Even though the \texttt{simple\_jiffy} module contains a large number of subroutines and functions it is good programming practice to only declare exactly what is being used via the \texttt{only} directive. Following the use statements, we deal with the input dummy variables, which include the instance (named \texttt{self} by convention), the specification for creating the composite object \texttt{other\_specs} and the size of the array \texttt{n}. Note that we declare self as a polymoprhic variable by using \texttt{class} rather than \texttt{type} directive. The reason for this is that we may later use \textit{inheritance} for extending the example type, creating child classes that would need to use the example constructor.  The \texttt{intent} directive gives the intent of the dummy variables \texttt{in}, \texttt{out} or \texttt{inout} (see Fortran language reference). After input specification, we declare local variables. The execution section in a constructor always start with destructing the possibly pre-existing instance before proceeding with constructing the composite, allocating the array and indicating existence. Note that the symbol used to access instances and methods is \texttt{\%} in contrast to the \texttt{.} used in C++, Java, Ruby, Python and most other object-oriented languages. Often we also implement a function-based constructor:
+\begin{verbatim}
+...
+interface example
+    module procedure constructor
+end interface example
+
+! after the contains statement comes the implementation of the methods
+contains
+
+    function constructor( other_specs, n ) result( self )
+        integer, intent(in) :: other_specs(:)
+        integer, intent(in) :: n
+        type(example)       :: self
+        call sefl%new( other_specs, n )
+    end function constructor
+
+    subroutine new( self, other_specs, n )
+        use simple_jiffys, only: alloc_err
+        ! dummy variables are dealt with first
+        class(example), intent(inout) :: self
+        integer,        intent(in)    :: other_specs(:)
+        integer,        intent(in)    :: n
+        ! here comes the local variable declarations
+        integer :: alloc_stat
+        ! we always start with destructing a possibly pre-existing instance
+        call self%kill
+        ! construct the composite
+        call self%my_other_class_instance%new(other_specs)
+        ! allocate the array
+        allocate( self%my_real_array(n), stat=alloc_stat)
+        call alloc_err( "In: simple_example :: new", alloc_stat)
+        ! indicate existence of the instance
+        self%exists = .true.
+    end subroutine new
+\end{verbatim}
+In the function-based constructor we re-use the polymorphic constructor. Importantly, \texttt{self} is now declared as \texttt{type(example)} rather than \texttt{class(example)} since the language standard prevent us from returning a polymorphic variable from a function. We will see later how polymorphic variables can be returned via pointers and allocatable polymorphic objects when we discuss the factory design pattern (below). Before we discuss generic programming, let's have a look at the destructor that we by convention put last in the module.
+\begin{verbatim}
+...
+    subroutine kill( self )
+        class(example), intent(inout) :: self
+        if( self%exists )then
+            call self%my_other_class_instance%kill
+            deallocate( self%my_real_array )
+            self%exists = .false.
+        endif
+    end subroutine kill
+
+end module example
+\end{verbatim}
+All simple classes use the \texttt{exists} logical variable to flag existence. It is therefore always safe to call the destructor (even on non-existing objects), which is very convenient (trying to deallocate an unallocated array would lead to a bug). It also prevents us from having to test the allocation status of every allocatable variable in the destructor itself. Generic programming is a powerful technique. Let's say we have two random array generating classes: \texttt{simple\_gauran} and \texttt{simple\_uniran} and we'd like to randomly set the real array in one instance of our example class using the same interface but automatically select the method used depending on what class is inputted as a dummy argument. The private methods (that we called \texttt{method1} and \texttt{method2}, above) are implemented as follows
+\begin{verbatim}
+...
+    subroutine method1( self, rangau )
+        use simple_gauran, only: gauran
+        class(example), intent(inout) :: self
+        class(gauran),  intent(inout) :: rangau
+        self%my_real_array = rangau%ranarr(self%n)
+    end subroutine method1
+
+    subroutine method1( self, ranuni )
+        use simple_uniran, only: uniran
+        class(example), intent(inout) :: self
+        class(uniran),  intent(inout) :: ranuni
+        self%my_real_array = ranuni%ranarr(self%n)
+    end subroutine method1
+\end{verbatim}
+An example program using this class could look as follows
+\begin{verbatim}
+program simple_test_example
+    use simple_gauran,  only: gauran
+    use simple_uniran,  only: uniran
+    use simple_example, only: example
+    implicit none
+    type(gauran)  :: gr
+    type(uniran)  :: ur
+    type(example) :: ex
+    ! construct random number generators
+    call gr%new 
+    call ur%new
+    ! construct the example
+    ex = example( [1,2,3], 10 )
+    ! randomize the array with Gaussian random numbers
+    call ex%method(gr)
+    ! randomize the array with uniform random numbers 
+    call ex%method(ur)
+    ! destruct
+    call gr%kill
+    call ur%kill
+    call ex%kill
+end program simple_test_example
+\end{verbatim}
+
+
+
+
+
+
+
+
+
+
 
 \subsection{SIMPLE Design Patterns}
-In every area of design\textemdash{}houses, cars, rowboats, or software\textemdash{}we build on patterns that have been found to work in the past, improvising within established themes. Sometimes we have to invent something completely new. But by basing standard elements on patterns, we avoid wasting our energy on problems with known solutions so that we can focus on our unusual needs. Also, building from conventional patterns helps us avoid creating a design so idiosyncratic that it is difficult to talk about it.
+In every area of design\textemdash{}houses, cars, rowboats, or software\textemdash{}we build on patterns that have been found to work in the past, improvising within established themes. Sometimes we have to invent something completely new. But by basing standard elements on patterns, we avoid wasting our energy on problems with known solutions so that we can focus on our unusual needs. Also, building from conventional patterns helps us avoid creating a design so idiosyncratic that it is difficult to talk about it. It all boils down to three essential points:
+\begin{itemize}
+    \item[--] Separate out the things that change from those that stay the same
+    \item[--] Prefer composition over inheritance
+    \item[--] Delegate, delegate, delegate
+\end{itemize}
+Instead of creating classes that inherit most of their talents from a parent class (via type extension in Fortran), we can assemble functionality from the bottom up. To do so, we equip our objects with references to other objects\textemdash{}namely, objects that supply the functionality we need. Creating aggregates of this kind tightens up the model itself by defining clear ownership and boundaries, avoiding a chaotic, tangled web of objects. This is crucial to maintaining model integrity in all phases of the life cycle of an object.
 
-<check Ruby book for descriptions>
-<aggregate>
 
-Aggregates tighten up the model itself by defining clear ownership and boundaries, avoiding a chaotic, tangled web of objects. This pattern is crucial to maintaining integrity in all phases of the life cycle of a domain object. 
+\subsubsection{The Builder Pattern}
 
-<builder>
-<factory>
-<commander>
-<decorator>
-<singleton>
- 
+
+
+
+\subsubsection{The Abstract Factory Pattern}
+How do you create families of compatible objects? In SIMPLE, we have many optimisation classes and are using an \textbf{Abstract Factory} to create the optimiser object we need at run-time. 
+
+
+\subsubsection{The Commander Pattern}
+\begin{SCfigure}[][h]
+\includegraphics[keepaspectratio=true,scale=0.4]{./Commander/Commander}
+\end{SCfigure}
+Sometimes we need to wrap a snippet of code in a container to be executed later at a given instruction. The \textbf{Commander} pattern is tailored for this situation. When you use this pattern, you are no longer telling, ``Do this''; instead you are saying, ``Remember how to do this,'' and, sometime later ``Do that thing I told you to remember''. The two-part aspect of this pattern adds some serious complexity to the code and we have to make sure that we really need that additional complexity. Before we introduced commanders in the SIMPLE library, SIMPLE was a scattered mess of little command-line-driven programs that were really only usable by us (the developers) and a few other brave souls that needed to use it because nothing else worked. I wanted to preserve the flexibility that finely chopped functionality gives and in the same time allow creation of higher level workflows, all within the Fortran environment. The solution came from the commander pattern. By making every little program a commander and splitting up many of the most aggregated programs into smaller units, we preserved (and even increased) the flexibility while simultaneously allowing the creation of higher level workflows via execution of many commanders in sequence. This is how it works:
+\begin{verbatim}
+module simple_commander_base
+implicit none
+
+public :: commander_base
+private
+
+type, abstract :: commander_base
+  contains
+    procedure(generic_execute), deferred :: execute
+end type commander_base
+
+abstract interface
+
+    !>  \brief  executes the commander
+    subroutine generic_execute( self, cline )
+        use simple_cmdline, only: cmdline
+        import :: commander_base
+        class(commander_base), intent(inout) :: self
+        class(cmdline), intent(inout)        :: cline
+    end subroutine generic_execute
+
+end interface
+
+end module simple_commander_base
+\end{verbatim}
+The abstract base class defines the common interface, consisting of the instance (self) and a command line implemented as object. The command line may now come from parsing the actual command line or creating command line objects from within the environment to control execution. The single method \texttt{execute} executes the code that is implemented in the concrete commander (a type extension of this abstract base class). This is an example of a concrete commander:
+\begin{verbatim}
+module simple_commander_imgproc
+use simple_defs            ! singleton
+use simple_jiffys          ! singleton
+use simple_cmdline,        only: cmdline
+use simple_params,         only: params
+use simple_build,          only: build
+use simple_commander_base, only: commander_base
+implicit none
+
+public :: convert_commander
+private
+
+type, extends(commander_base) :: convert_commander
+  contains
+    procedure :: execute      => exec_convert
+end type convert_commander
+
+    subroutine exec_convert( self, cline )
+        class(convert_commander), intent(inout) :: self
+        class(cmdline),           intent(inout) :: cline
+        type(params), target :: p
+        type(build),  target :: b
+        integer              :: iptcl
+        p = params(cline, allow_mix=.true.) ! parameters generated
+        call b%build_general_tbox(p, cline) ! general objects built
+        if( cline%defined('stk') )then
+            do iptcl=1,p%nptcls
+                call progress(iptcl, p%nptcls)
+                call b%img%read(p%stk, iptcl)
+                call b%img%write(p%outstk, iptcl)
+            end do 
+        else if( cline%defined('vol1') )then
+            call b%vol%read(p%vols(1))
+            call b%img%write(p%outvol)
+        else
+            stop 'either vol1 or stk argument required to execute simple_convert'
+        endif
+        ! end gracefully
+        call simple_end('**** SIMPLE_CONVERT NORMAL STOP ****')
+    end subroutine exec_convert
+\end{verbatim}
+This commander converts between SPIDER and MRC format files and vice versa.
+
 \subsection{SIMPLE Modules}
 Modules are an old, established design element that plays a key role in modern Fortran. The Fortran module is technically implementing a singleton design pattern, \textit{i.e.} there can be only one instance of a module, it does not need to be instantiated and the data declared in the header of the module (not in the subroutines and functions) exist throughout the execution of the program. Everyone uses modules but few treat them as a full-fledged part of the model. Code gets broken down into all sorts of categories, from aspects of the technical architecture to developers' work assignments. Even developers who refactor a lot tend to content themselves with modules conceived early in the project.
 
@@ -209,7 +475,7 @@ Supple is an adjective that means ``bending and moving easily and gracefully; fl
 
 \textbf{When software doesn't have a clean design, developers dread even looking at the existing mess or making a change that could aggravate the tangle or break something through an unforeseen dependency. To have a project accelerate as development proceeds\textemdash{}rather than get weighted down by its own legacy\textemdash{}demands a design that is a pleasure to work with, inviting to change. A supple design.}
 
-A lot of overengineering has been justified in the name of flexibility. But more often than not, excessive layers of abstraction and indirection get in the way. Look at the design of software that really empowers the people who handle it; you will usually see something simple. Simple is not easy. To create elements that can be assembled into elaborate systems and still be understandable, a dedication to \textit{model-driven design} has to be joined with a moderately rigorous design style.
+A lot of overengineering has been justified in the name of flexibility. How do you structure an application or a framework so that it is extensible, so that other engineers can easily add bits to it as the program evolves over time? As we construct an even more ambitious system, the problem of making it configurable and extensible looms even larger. Look at the design of software that really empowers the people who handle it; you will usually see something simple. Simple is not easy. To create elements that can be assembled into elaborate systems and still be understandable, a dedication to \textit{model-driven design} has to be joined with a moderately rigorous design style. Good programmers value simplicity, and the simple thing to do here is to rigorously cancel out all unnecessary flexibility. If you have no use for it, flexibility becomes a danger. We want to preserve the essential extensibility of our framework, yet get rid of the extraneous configuration. The idea with this document and the object-oriented SIMPLE design is to provide you\textemdash{}the developer\textemdash{}with a template that emphasises convention over configuration.
 
 \begin{SCfigure}[][h]
 \includegraphics[keepaspectratio=true,scale=0.6]{./SuppleDesign/SuppleDesign}
@@ -245,7 +511,6 @@ pure real function geodesic_dist( self1, self2 )
     endif
 end function geodesic_dist
 \end{verbatim}
-
 
 Strictly segregate commands (methods that result in modifications to observable state) into very simple operations that do not return domain information. Further control side effects by moving complex logic into \textit{value objects} when a concept fitting the responsibility presents itself.
 
@@ -318,8 +583,129 @@ Although we seldom think about it explicitly, the most fundamental requirement o
 It is very hard to maintain the level of communication needed to develop a unified system of any size. We need ways of increasing communication and reducing complexity. We also need safety nets that prevent overcautious behaviour, such as developers duplicating functionality because they are afraid that they will break existing code. Of equal importance to prevent such undesired behaviours is that all developers are reaching a certain level of understanding of the system. Naturally, certain developers will have areas where they excel but there is a knowledge threshold that all the developers in the team must pass. We also need to respect the rules of the framework and in the same time not being afraid of introducing changes. It is a delicate balance. The team must cultivate a shared understanding of the ever-changing model. Practices may help, but the most fundamental one is to constantly update the \textit{ubiquitous language} definition. SIMPLE developers use Git for step-by-step, reproducible merge/build and automated test suites (both described below). Development sometimes occurs in spurts and sometimes stagnates, depending on the current workload of the team. However, we must strive to merge all code frequently and relentlessly exercise the  \textit{ubiquitous language} to hammer out a shared view of the model as the concepts evolve in different people's heads.
 
 \section{The SIMPLE Compilation Environment}
+Although seldomly discussed in length in any programming books, an effective method for code compilation is crucial. The developer that repeatedly needs to re-compile/test/re-compile/test/re-compile... would soon go mad with a clumsy time-consuming compilation environment. Fortran is particularly tricky to compile as order matters to a much larger extent than in C or C++ and circular references are not supported. We have therefore developed our own compilation environment based on a combo of shellscripts, makefiles and perl. 
+
+\subsection{\texttt{Makefile\_target} Files and Makefile Generation with \texttt{makemake}}
+If you execute \texttt{ls} is the SIMPLE root directory, you see something like
+\begin{verbatim}
+@!#> ls
+Makefile                 compileSIMPLE.pl*        obj/                     src/
+Makefile_macros          defs/                    production/              test_code/
+README.txt               doc/                     scripts/                 web/
+add2.bashrc              examples/                simple_distr_config.env
+add2.tcshrc              legacy/                  simple_user_input.pm*
+bin/                     makemake*                simple_utils/
+\end{verbatim}
+Every folder that contains code that should be part of the build or folders with code that should be part of the build contains a file called \texttt{Makefile\_target}. The simplest example is the \texttt{defs/} folder
+\begin{verbatim}
+@!#> cd defs/
+@!#> ls
+Makefile_target   simple_defs.f90   simple_fftw3.f90
+@!#> cat Makefile_target 
+defs_code: simple_defs.o   \
+           simple_fftw3.o  ;
+\end{verbatim}
+Now, say that I develop a new module with definitions for cuda \texttt{simple\_cuda\_defs} that uses (depends on) \texttt{simple\_defs} but does not use \texttt{simple\_fftw3}. I would then update \texttt{Makefile\_target} to either
+\begin{verbatim}
+defs_code: simple_defs.o      \
+           simple_cuda_defs.o \
+           simple_fftw3.o     ;
+\end{verbatim}
+or
+\begin{verbatim}
+defs_code: simple_defs.o      \
+           simple_fftw3.o     \
+           simple_cuda_defs.o ;
+\end{verbatim}
+but NOT to
+\begin{verbatim}
+defs_code: simple_cuda_defs.o \
+           simple_defs.o      \
+           simple_fftw3.o     ;
+\end{verbatim}
+as compilation would fail. There are more complex examples, such as the \texttt{src/simple\_main} folder (the curious reader may now have a look). However, the principle is the same. We define a compilation hierarchy that ensures that all dependencies are satisfied. The \texttt{makemake} shellscript uses all the \texttt{Makefile\_target} files in the library to create a common makefile. \texttt{makemake} scans directories, sub-directories and sub-sub-directories, so we never make directory structures more than three levels deep. If you introduce new code and update the \texttt{Makefile\_target} files, you need to re-make the make file by executing \texttt{makemake} in the SIMPLE root directory. The \texttt{makemake} script should not be modified by others than Hans.
+
+\subsection{The \texttt{compileSIMPLE.pl} script}
+In addition to the makefile we need to define compilation macros informing the makefile about the SIMPLE root directory, which compilation switches to use, which compilers to use, if there are paths that contains libraries to link to, where the object and module files are going to be located, which compilers to use and what compiler flags to include. Moreover, we have scripts that autogenerate code and/or modify code that need to be executed. All of this is taken care of by \texttt{compileSIMPLE.pl} located in the SIMPLE root directory. Once you have a healthy makefile, you execute \texttt{compileSIMPLE.pl} to compile the suite and following succesful compilation you see something like
+\begin{verbatim}
+@!#> ./compileSIMPLE.pl 
+*********************************************************
+* Checking and printing the input directories...        *
+*********************************************************
+SIMPLE_PATH          : /Users/hael/src/fortran/simple3.0
+SIMPLE_SRC_PATH      : /Users/hael/src/fortran/simple3.0/src/simple_main
+SIMPLE_PROD_PATH     : /Users/hael/src/fortran/simple3.0/production
+SIMPLE_TEST_PROD_PATH: /Users/hael/src/fortran/simple3.0/production/simple_tests
+SIMPLE_SCRIPTS_PATH  : /Users/hael/src/fortran/simple3.0/scripts
+*********************************************************
+Moving to dir: /Users/hael/src/fortran/simple3.0/src/simple_main
+Executing simple_args_generator.pl in dir: /Users/hael/src/fortran/simple3.0...
+Moving to dir: /Users/hael/src/fortran/simple3.0
+Generating Makefile_macros: /Users/hael/src/fortran/simple3.0
+/sw/bin/gfortran -c -fimplicit-none -fall-intrinsics -ffree-form -cpp -fpic...
+...
+sw/bin/gfortran -c -fimplicit-none -fall-intrinsics -ffree-form -cpp -fpic... 
+
+darwin, Platform = 0
+Architecture: darwin-thread-multi-2level
+
+Moving to dir: /Users/hael/src/fortran/simple3.0/production
+Generating compile_and_link: /Users/hael/src/fortran/simple3.0/production
+Moving to dir: /Users/hael/src/fortran/simple3.0
+Compiling production codes:
+>>> COMPILING & LINKING: simple_test_volpft_srch
+>>> COMPILING & LINKING: simple_test_cartcorr_sanity
+>>> COMPILING & LINKING: simple_test_ft_expanded
+>>> COMPILING & LINKING: simple_test_sysparse
+>>> COMPILING & LINKING: simple_test_units
+>>> COMPILING & LINKING: simple_distr_exec
+>>> COMPILING & LINKING: simple_test_picker
+>>> COMPILING & LINKING: simple_test_clineparse
+>>> COMPILING & LINKING: simple_test_srch
+>>> COMPILING & LINKING: simple_test_shelliter
+>>> COMPILING & LINKING: simple_exec
+>>> COMPILING & LINKING: simple_test_imgfile
+>>> COMPILING & LINKING: simple_test_scatsrch
+Compilation of SIMPLE completed in dir: /Users/hael/src/fortran/simple3.0
+\end{verbatim}
+The \texttt{compileSIMPLE.pl} script should not be modified by others than Hans. However, the perl module \texttt{simple\_user\_input.pm} containing all the definitions that \texttt{compileSIMPLE.pl} uses needs to be modified to suit the architecture that SIMPLE is being compiled on. Editing \texttt{simple\_user\_input.pm} should be straightforward, but if you have questions talk to Cyril or Hans.
 
 \section{The SIMPLE Test Environment}
+Test-driven development is a key component of the extreme programming paradigm, which advocates writing the test code before you are writing the code that passes the test. I have never fully adopted this idea, because scientific programming often involves a defined enough problem to solve that you can just get on with it. We are certainly not going to try to live up to the software industry in terms of test rigour, but we have a few SIMPLE test guidelines. 
+
+\subsection{One Class, One Unit Test}
+When you implement a new class, implement a unit test for that class in the end of the module, after the destructor. Fortran allows you to implement subroutines and functions that are not type-bound within the module that defines the class, which can be very convenient but should not be abused (unit tests is an acceptable reason). Take the \texttt{simple\_ori} (orientation) class as example:
+\begin{verbatim}
+module simple_ori
+use simple_defs  ! singleton
+use simple_hash,   only: hash
+use simple_jiffys, only: alloc_err
+implicit none
+
+public :: ori, test_ori, test_ori_dists
+private
+
+real, parameter    :: zvec(3)=[0.,0.,1.]
+
+!>  \brief  orientation parameters
+type :: ori
+    private
+    real                        :: euls(3)=0.        !< Euler angle
+    real                        :: normal(3)=0.      !< Fourier plane normal
+    real                        :: rmat(3,3)=0.      !< rotation matrix
+    type(hash)                  :: htab              !< hash table for the parameters
+    logical                     :: existence=.false. !< to indicate existence
+  contains
+    ! CONSTRUCTOR
+    procedure          :: new_ori
+    procedure          :: new => new_ori
+    ...
+\end{verbatim}
+\texttt{simple\_ori} implements two unit tests: \texttt{test\_ori} and \texttt{test\_ori\_dists} that are made public together with object. All unit tests come together in the executable \texttt{simple\_test\_units}, located in  \texttt{/production/simple\_tests/simple\_test\_units}, which represents the low-level test routine in SIMPLE. 
+
+\subsection{The High-Level Test Environment}
+In addition to the low-level unit tests, we need a high-level testing environment that can test modules and interactions between classes. This environment is located in the \texttt{test\_code/} folder.
+
 
 \section{Creating A SIMPLE Application}
 
