@@ -22,7 +22,7 @@ type, extends(optimizer) :: simplex_opt
     procedure :: new      => new_simplex_opt
     procedure :: minimize => simplex_minimize
     procedure :: kill     => kill_simplex_opt
-end type
+end type simplex_opt
 
 contains
 
@@ -40,7 +40,7 @@ contains
         ! initialize best cost to huge number
         self%yb = huge(x)
         self%exists = .true. ! indicates existence
-    end subroutine
+    end subroutine new_simplex_opt
     
     !> \brief  restarted simplex minimization
     subroutine simplex_minimize( self, spec, lowest_cost )
@@ -106,9 +106,9 @@ contains
                 do i=1,spec%ndim+1
                     self%y(i) = spec%costfun(self%p(i,:), spec%ndim)
                 end do
-            end subroutine
+            end subroutine init
         
-    end subroutine
+    end subroutine simplex_minimize
     
     !> \brief  is a destructor
     subroutine kill_simplex_opt( self )
@@ -117,6 +117,6 @@ contains
         if( allocated(self%y) )  deallocate(self%y)
         if( allocated(self%pb) ) deallocate(self%pb)
         self%exists = .false.
-    end subroutine
+    end subroutine kill_simplex_opt
     
 end module simple_simplex_opt

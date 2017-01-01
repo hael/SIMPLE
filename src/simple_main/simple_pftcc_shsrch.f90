@@ -6,7 +6,8 @@ use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_defs
 implicit none
 
-public :: pftcc_shsrch_init, pftcc_shsrch_set_indices, pftcc_shsrch_minimize, pftcc_shsrch_get_nevals
+public :: pftcc_shsrch_init, pftcc_shsrch_set_indices, pftcc_shsrch_minimize, pftcc_shsrch_get_nevals,&
+pftcc_shsrch_cost
 private
 
 type(opt_factory)                :: ofac                 !< optimizer factory
@@ -87,20 +88,26 @@ contains
     
     function pftcc_shsrch_minimize( ) result( cxy )
         use simple_math, only: rotmat2d
-        real :: cxy(3)
+        real :: cxy(3), cost, cost_init
         ! set rotmat for boudary checking and final rotation
         rotmat = rotmat2d( pftcc_ptr%get_rot(rot) )
         ! minimisation
         ospec%x = 0.
         ospec%nevals = 0
-        call nlopt%minimize(ospec, cxy(1))
-        cxy(1)  = -cxy(1) ! correlation
-        ! rotate the shift vector to the frame of reference
-        cxy(2:) = ospec%x ! shift
-        cxy(2:) = matmul(cxy(2:),rotmat)
-        if( any(cxy(2:) > maxshift) .or. any(cxy(2:) < -maxshift) )then
-            cxy(1)  = -1.
-            cxy(2:) = 0.
+        cost_init = pftcc_shsrch_cost( ospec%x, ospec%ndim )
+        call nlopt%minimize(ospec, cost)
+        if( cost < cost_init )then
+            cxy(1)  = -cost ! correlation
+            ! rotate the shift vector to the frame of reference
+            cxy(2:) = ospec%x ! shift
+            cxy(2:) = matmul(cxy(2:),rotmat)
+            if( any(cxy(2:) > maxshift) .or. any(cxy(2:) < -maxshift) )then
+                cxy(1)  = -1.
+                cxy(2:) = 0.
+            endif
+        else
+             cxy(1)  = -cost_init ! correlation
+             cxy(2:) = 0.
         endif
         call init_rotmat ! clean exit
     end function pftcc_shsrch_minimize

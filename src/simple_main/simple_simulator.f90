@@ -24,20 +24,12 @@ contains
             dfx = orientation%get('dfx')
             dfy = orientation%get('dfy')
             angast = orientation%get('angast')
-            if( present(bfac) )then
-                call tfun%apply(img, dfx, 'ctf', dfy, angast, bfac=bfac)
-            else
-                call tfun%apply(img, dfx, 'ctf', dfy, angast)
-            endif
+            call tfun%apply(img, dfx, 'ctf', dfy, angast, bfac=bfac)
         else if( orientation%isthere('dfx') )then
             dfx = orientation%get('dfx')
             dfy = dfx
             angast = 0.
-            if( present(bfac) )then
-                call tfun%apply(img, orientation%get('dfx'), 'ctf', bfac=bfac)
-            else
-                call tfun%apply(img, orientation%get('dfx'), 'ctf')
-            endif
+            call tfun%apply(img, orientation%get('dfx'), 'ctf', bfac=bfac)
         else
             if( present(bfac) ) call img%apply_bfac(bfac)
         endif

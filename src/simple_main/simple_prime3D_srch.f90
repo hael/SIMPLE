@@ -216,7 +216,7 @@ contains
         inpl_ind = self%srch_common%roind( 360. )
         call proj%fproject_polar( 1, refvols(state), o, self%pp, pftcc ) ! on-the-fly polar projection
         if( self%ctf .ne. 'no' )then
-            call pftcc%apply_ctf(self%pp%smpd, tfun, self%dfx, self%dfy, self%angast)
+            call pftcc%apply_ctf(tfun, self%dfx, self%dfy, self%angast)
         endif
         corr = pftcc%corr( 1, iptcl, inpl_ind )
         if( debug ) write(*,'(A)') '>>> PRIME3D_SRCH::EXECUTED CALC_QCONT_CORR'
@@ -938,7 +938,7 @@ contains
                 state = nint( o_ref%get('state') )
                 call proj%fproject_polar( 1, refvols( state ), o_ref, self%pp, pftcc )    ! online generation of polar central section
                 if( self%ctf .ne. 'no' )then
-                    call pftcc%apply_ctf(self%pp%smpd, tfun, self%dfx, self%dfy, self%angast)
+                    call pftcc%apply_ctf(tfun, self%dfx, self%dfy, self%angast)
                 endif
                 ! In-plane
                 corrs     = pftcc%gencorrs(1, iptcl)                                      ! in-plane correlations
@@ -1192,7 +1192,7 @@ contains
                 call o_zero_e3%e3set(0.)
                 call proj%fproject_polar(1, refvols(state), o_zero_e3, self%pp, pftcc )
                 if( self%ctf .ne. 'no' )then
-                    call pftcc%apply_ctf(self%pp%smpd, tfun, self%dfx, self%dfy, self%angast)
+                    call pftcc%apply_ctf(tfun, self%dfx, self%dfy, self%angast)
                 endif
                 ! in-plane search
                 if( self%greedy_inpl )then

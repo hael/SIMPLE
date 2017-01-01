@@ -491,13 +491,12 @@ contains
     ! MODIFIERS
 
     !>  \brief  is for applying CTF to references and updating the memoized ref sqsums
-    subroutine apply_ctf( self, smpd, tfun, dfx, dfy, angast, ref )
+    subroutine apply_ctf( self, tfun, dfx, dfy, angast, ref )
         !$ use omp_lib
         !$ use omp_lib_kinds
         use simple_ctf,   only: ctf
         use simple_image, only: image
         class(polarft_corrcalc), intent(inout) :: self
-        real,                    intent(in)    :: smpd
         class(ctf),              intent(inout) :: tfun
         real,                    intent(in)    :: dfx
         real,    optional,       intent(in)    :: dfy, angast
@@ -665,16 +664,12 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         class(ctf),              intent(inout) :: tfun
         real,                    intent(in)    :: dfx
-        real, optional,          intent(in)    :: dfy, angast
+        real,                    intent(in)    :: dfy, angast
         integer,                 intent(in)    :: endrot
         real, allocatable :: ctfmat(:,:)
-        real              :: inv_ldim(3),hinv,kinv,spaFreqSq,ddfy,aangast,ang
+        real              :: inv_ldim(3),hinv,kinv,spaFreqSq,ang
         integer           :: irot,k,k_ind
         allocate( ctfmat(endrot,self%nk) )
-        ddfy = dfx
-        if( present(dfy) ) ddfy = dfy
-        aangast = 0.
-        if( present(angast) ) aangast = angast    
         inv_ldim = 1./real(self%ldim)
         !$omp parallel do default(shared) private(irot,k,k_ind,hinv,kinv,spaFreqSq,ang) schedule(auto)
         do irot=1,endrot
@@ -684,7 +679,7 @@ contains
                 kinv               = self%polar(irot+self%nrots,k_ind)*inv_ldim(2)
                 spaFreqSq          = hinv*hinv+kinv*kinv
                 ang                = atan2(self%polar(irot+self%nrots,k_ind),self%polar(irot,k_ind))
-                ctfmat(irot,k_ind) = tfun%eval(spaFreqSq,dfx,ddfy,aangast,ang)
+                ctfmat(irot,k_ind) = tfun%eval(spaFreqSq,dfx,dfy,angast,ang)
             end do
         end do
         !$omp end parallel do

@@ -550,9 +550,9 @@ contains
                 ! CTF parameters have changed and ctf object &the reference central sections need to be updated
                 tfun = ctf(p%smpd, kV, cs, fraca)
                 if( present(ref) )then
-                    call pftcc%apply_ctf(p%smpd, tfun, dfx, dfy, angast, ref=ref)
+                    call pftcc%apply_ctf(tfun, dfx, dfy, angast, ref=ref)
                 else
-                    call pftcc%apply_ctf(p%smpd, tfun, dfx, dfy, angast)
+                    call pftcc%apply_ctf(tfun, dfx, dfy, angast)
                 endif
             endif
             kV_prev     = kV
