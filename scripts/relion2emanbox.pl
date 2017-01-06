@@ -3,13 +3,12 @@ use warnings;
 use strict;
 use Tie::File;
 if( scalar(@ARGV) < 2 ){
-    die "Need (1) filetable of Relion star files, (2) box size in pixels and (3) file body as input 2\n";
+    die "Need (1) filetable of Relion star files (2) box size in pixels\n";
 }
 my @starfiles;
 tie @starfiles, 'Tie::File', $ARGV[0] or die "Cannot tie to file: $ARGV[0]\n";
 my$box   = $ARGV[1];
 my$boxo2 = int($box/2);
-my$fbody = $ARGV[2];
 foreach my$file (@starfiles){
     if( -e $file ){
         my@starfile;

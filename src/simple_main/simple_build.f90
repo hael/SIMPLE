@@ -108,21 +108,23 @@ end type build
 contains
 
     !> \brief  constructs the general toolbox
-    subroutine build_general_tbox( self, p, cline, do3d, nooritab )
+    subroutine build_general_tbox( self, p, cline, do3d, nooritab, force_ctf )
         use simple_ran_tabu, only: ran_tabu
         use simple_math,     only: nvoxfind, rad2deg
         use simple_rnd,      only: seed_rnd
         class(build),      intent(inout) :: self
         class(params),     intent(inout) :: p
         class(cmdline),    intent(inout) :: cline
-        logical, optional, intent(in)    :: do3d, nooritab
+        logical, optional, intent(in)    :: do3d, nooritab, force_ctf
         type(ran_tabu) :: rt
-        integer        :: alloc_stat, lfny
+        integer        :: alloc_stat, lfny, nl_def
         real           :: slask(3)
-        logical        :: err, ddo3d
+        logical        :: err, ddo3d, fforce_ctf
         call self%kill_general_tbox
         ddo3d = .true.
         if( present(do3d) ) ddo3d = do3d
+        fforce_ctf = .false.
+        if( present(force_ctf) ) fforce_ctf = force_ctf
         ! seed the random number generator
         call seed_rnd
         if( debug ) write(*,'(a)') 'seeded random number generator'
@@ -137,7 +139,15 @@ contains
             call self%a%spiral(p%nsym, p%eullims)
         else
             ! we need the oritab to override the deftab in order not to loose parameters
-            if( p%deftab /= '' ) call self%a%read(p%deftab)
+            if( p%deftab /= '' )then
+                nl_def = nlines(p%deftab)
+                if(  nl_def /= p%nptcls )then
+                    write(*,*) 'nonconforming deftab, number of entries .ne. nptcls; build_general_tbox'
+                    write(*,*) 'nptcls: ', p%nptcls
+                    write(*,*) 'nr of lines in deftab: ', nl_def
+                endif
+                call self%a%read(p%deftab)
+            endif
             if( p%oritab /= '' )then
                 if( .not. cline%defined('nstates') .and. p%vols(1) .eq. '' )then
                     call self%a%read(p%oritab, p%nstates)
@@ -167,6 +177,7 @@ contains
             write(*,'(a)') 'but your input orientation table lacks defocus values'
         endif
         if( debug ) write(*,'(a)') 'did set number of dimensions and ctfmode'
+        if( fforce_ctf ) call self%raise_hard_ctf_exception(p)
         ! generate discrete projection direction space
         call self%e%new( p%nspace )
         call self%e%spiral( p%nsym, p%eullims )

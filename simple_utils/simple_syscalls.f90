@@ -66,8 +66,18 @@ contains
         character(len=*), intent(inout) :: cmdline
         integer               :: estat, cstat
         character(len=STDLEN) :: cmsg
-        call execute_command_line( trim(cmdline), exitstat=estat, cmdstat=cstat, cmdmsg=cmsg)
-        call raise_sys_error( cmdline, estat, cstat, cmsg )
+        integer, parameter    :: NTRY = 10, SHORTTIME = 1
+        integer :: itry
+        do itry=1,NTRY
+            call execute_command_line( trim(cmdline), exitstat=estat, cmdstat=cstat, cmdmsg=cmsg)
+            if( cstat /= 0 )then
+                call sleep(SHORTTIME)
+                cycle
+            else
+                exit
+            endif
+            call raise_sys_error( cmdline, estat, cstat, cmsg )
+        end do
     end subroutine exec_cmdline
 
     !>  Handles error from system call
@@ -77,16 +87,14 @@ contains
         logical :: dostop
         dostop = .false.
         if( exitstat /= 0 )then
-            print *, 'System error', exitstat,' for command: ', cmd
             write(*,*)'System error', exitstat,' for command: ', cmd
             !dostop = .true.
         endif 
         if( cmdstat /= 0 )then
-            print *, 'Command could not be executed: ', cmd
             write(*,*)'Command could not be executed: ', cmd
             !dostop = .true.
         endif 
-        if( dostop )stop
+        if( dostop ) stop
     end subroutine raise_sys_error
 
     !> interface to unix mkdir
@@ -118,5 +126,18 @@ contains
             call exec_cmdline( cmd )
         endif
     end subroutine sys_cp
+
+    function sys_get_env_var( name ) result( varval )
+        character(len=*), intent(in)  :: name
+        character(len=STDLEN)         :: value
+        character(len=:), allocatable :: varval
+        integer :: length, status
+        call get_environment_variable( trim(name), value=value, length=length, status=status)
+        if( status == -1 ) write(*,*) 'value string too short; simple_syscalls :: get_env_var'
+        if( status ==  1 ) write(*,*) 'environment variable: ', trim(name), ' is not defined; simple_syscalls :: get_env_var'
+        if( status ==  2 ) write(*,*) 'environment variables not supported by system; simple_syscalls :: get_env_var'
+        if( length ==  0 .or. status /= 0 ) return
+        allocate(varval, source=trim(value))
+    end function sys_get_env_var
 
 end module simple_syscalls

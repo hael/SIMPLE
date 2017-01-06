@@ -409,7 +409,6 @@ select case(prg)
         keys_required(3) = 'kv'
         keys_required(4) = 'cs'
         keys_required(5) = 'fraca'
-        keys_required(6) = 'deftab'
         ! set optional keys
         keys_optional(1) = 'pspecsz'
         keys_optional(2) = 'hp'
@@ -421,7 +420,7 @@ select case(prg)
         keys_optional(8) = 'phaseplate'
         ! parse command line
         if( describe ) call print_doc_ctffind
-        call cline%parse(keys_required(:6), keys_optional(:8))
+        call cline%parse(keys_required(:5), keys_optional(:8))
         ! set defaults
         if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz', 1024.)
         if( .not. cline%defined('hp')      ) call cline%set('hp',        30.)
@@ -499,9 +498,11 @@ select case(prg)
         keys_optional(4) = 'box'
         keys_optional(5) = 'noise_norm'
         keys_optional(6) = 'outside'
+        keys_optional(7) = 'mul'
+        keys_optional(8) = 'boxtype'
         ! parse command line
         if( describe ) call print_doc_extract
-        call cline%parse( keys_required(:3), keys_optional(:6))
+        call cline%parse( keys_required(:3), keys_optional(:8))
         ! parse command line
         if( .not. cline%defined('neg') )call cline%set('neg', 'yes')
         ! execute

@@ -16,6 +16,7 @@ use simple_qsys_factory,   only: qsys_factory
 use simple_qsys_ctrl,      only: qsys_ctrl
 use simple_params,         only: params
 use simple_commander_base, only: commander_base
+use simple_strings,        only: real2str
 use simple_commander_distr ! use all in there
 use simple_map_reduce      ! singleton
 use simple_defs            ! singleton
@@ -26,6 +27,7 @@ implicit none
 
 public :: unblur_movies_distr_commander
 public :: unblur_tomo_movies_distr_commander
+public :: ctffind_distr_commander
 public :: shellweight3D_distr_commander
 public :: prime3D_init_distr_commander
 public :: prime3D_distr_commander
@@ -43,6 +45,10 @@ type, extends(commander_base) :: unblur_tomo_movies_distr_commander
   contains
     procedure :: execute      => exec_unblur_tomo_movies_distr
 end type unblur_tomo_movies_distr_commander
+type, extends(commander_base) :: ctffind_distr_commander
+  contains
+    procedure :: execute      => exec_ctffind_distr
+end type ctffind_distr_commander
 type, extends(commander_base) :: shellweight3D_distr_commander
   contains
     procedure :: execute      => exec_shellweight3D_distr
@@ -107,6 +113,8 @@ contains
         call qscripts%generate_scripts(job_descr, p_master%ext, myq_descr)
         ! manage job scheduling
         call qscripts%schedule_jobs
+        call qsys_cleanup_iter
+        call simple_end('**** SIMPLE_DISTR_UNBLUR_MOVIES NORMAL STOP ****')
     end subroutine exec_unblur_movies_distr
 
     ! UNBLUR TOMOGRAPHIC DDDs
@@ -156,9 +164,9 @@ contains
             call part_params(ipart)%new(4)
             call part_params(ipart)%set('filetab', trim(tomonames(ipart)))
             call part_params(ipart)%set('fbody', 'tomo'//int2str_pad(ipart,numlen))
-            call real2str(exp_doc%get(ipart,'exp_time'), str)
+            str = real2str(exp_doc%get(ipart,'exp_time'))
             call part_params(ipart)%set('exp_time', trim(str))
-            call real2str(exp_doc%get(ipart,'dose_rate'), str)
+            str = real2str(exp_doc%get(ipart,'dose_rate'))
             call part_params(ipart)%set('dose_rate', trim(str))
         end do
         ! setup the environment for distributed execution
@@ -170,7 +178,63 @@ contains
         call qscripts%generate_scripts(job_descr, p_master%ext, myq_descr, part_params=part_params)
         ! manage job scheduling
         call qscripts%schedule_jobs
+        call qsys_cleanup_iter
+        call simple_end('**** SIMPLE_DISTR_UNBLUR_TOMO_MOVIES NORMAL STOP ****')
     end subroutine exec_unblur_tomo_movies_distr
+
+    ! CTFFIND
+
+    subroutine exec_ctffind_distr( self, cline )
+        class(ctffind_distr_commander), intent(inout) :: self
+        class(cmdline),                 intent(inout) :: cline
+        character(len=STDLEN), allocatable :: filenames(:)
+        ! commanders
+        type(merge_algndocs_commander) :: xmerge_algndocs
+        ! command lines
+        type(cmdline)                  :: cline_merge_algndocs
+        ! other variables
+        type(params)                   :: p_master
+        type(qsys_ctrl)                :: qscripts
+        character(len=KEYLEN)          :: str
+        type(chash)                    :: myq_descr, job_descr
+        integer, allocatable           :: parts(:,:)
+        type(qsys_factory)             :: qsys_fac
+        class(qsys_base), pointer      :: myqsys
+        ! make master parameters
+        p_master = params(cline, checkdistr=.false.)
+        p_master%nptcls = nlines(p_master%filetab)
+        if( p_master%nparts > p_master%nptcls ) stop 'nr of partitions (nparts) mjust be < number of entries in filetable'
+        ! setup the environment for distributed execution
+        call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr)
+        ! prepare job description
+        call cline%gen_job_descr(job_descr)
+        ! prepare command lines from prototype master
+        cline_merge_algndocs = cline
+        cline_merge_algndocs = cline
+        call cline_merge_algndocs%set( 'nthr', 1. )
+        call cline_merge_algndocs%set( 'fbody',  'ctffind_output_part')
+        call cline_merge_algndocs%set( 'nptcls', real(p_master%nptcls) )
+        call cline_merge_algndocs%set( 'ndocs',  real(p_master%nparts) )
+        call cline_merge_algndocs%set( 'outfile', 'ctffind_output_merged.txt' )
+        ! setup the environment for distributed execution
+        call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr)
+        ! prepare job description
+        call cline%gen_job_descr(job_descr)
+        ! prepare scripts
+        call qsys_cleanup_iter
+        call qscripts%generate_scripts(job_descr, p_master%ext, myq_descr)
+        ! manage job scheduling
+        call qscripts%schedule_jobs
+        ! merge docs
+        call xmerge_algndocs%execute( cline_merge_algndocs )
+        ! clean
+        call qsys_cleanup_iter
+        str = 'rm -f ctffind_ctrl_file_part*'
+        call exec_cmdline(str)
+        str = 'rm -f ctffind_output_part*'
+        call exec_cmdline(str)
+        call simple_end('**** SIMPLE_DISTR_CTFFIND NORMAL STOP ****')
+    end subroutine exec_ctffind_distr
 
     ! SHELLWEIGHT3D
 
@@ -220,7 +284,7 @@ contains
         ! merge matrices
         call xmerge_shellweights%execute(cline)
         call qsys_cleanup_iter
-        str = 'rm -rf shellweights_part*'
+        str = 'rm -f shellweights_part*'
         call exec_cmdline(str)
         call simple_end('**** SIMPLE_DISTR_SHELLWEIGHT3D NORMAL STOP ****')
     end subroutine exec_shellweight3D_distr
@@ -503,7 +567,7 @@ contains
             ! ITERATION DEPENDENT UPDATES
             if( cline_check3D_conv%defined('trs') .and. .not.job_descr%isthere('trs') )then
                 ! activates shift search if frac >= 90
-                call real2str(cline_check3D_conv%get_rarg('trs'), str)
+                str = real2str(cline_check3D_conv%get_rarg('trs'))
                 call job_descr%set( 'trs', trim(str) )
             endif
             if( p_master%dynlp.eq.'yes' )then
@@ -697,7 +761,7 @@ contains
             ! this activates shifting & automasking if frac >= 90
             if( cline_check2D_conv%defined('trs') .and. .not.job_descr%isthere('trs') )then
                 ! activates shift search
-                call real2str(cline_check2D_conv%get_rarg('trs'), str)
+                str = real2str(cline_check2D_conv%get_rarg('trs'))
                 call job_descr%set('trs', trim(str) )
                 if( cline%defined('automsk') )then
                     ! activates masking
@@ -753,7 +817,7 @@ contains
         call qscripts%schedule_jobs
         call xmerge_nnmat%execute(cline)
         call qsys_cleanup_iter
-        str = 'rm -rf nnmat_part*'
+        str = 'rm -f nnmat_part*'
         call exec_cmdline(str)
         call simple_end('**** SIMPLE_DISTR_FIND_NNIMGS NORMAL STOP ****')
     end subroutine exec_find_nnimgs_distr

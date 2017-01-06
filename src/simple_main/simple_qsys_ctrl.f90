@@ -8,7 +8,7 @@ implicit none
 public :: qsys_ctrl
 private
 
-integer, parameter :: SHORTTIME = 10
+integer, parameter :: SHORTTIME = 5
 
 type qsys_ctrl
     private

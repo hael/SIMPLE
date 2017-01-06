@@ -66,6 +66,7 @@ xfel
 zero
 angastunit
 boxtab
+boxtype
 clsdoc
 comlindoc
 ctf

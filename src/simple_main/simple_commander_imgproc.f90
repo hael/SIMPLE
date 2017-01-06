@@ -440,6 +440,7 @@ contains
     subroutine exec_scale( self, cline )
         use simple_procimgfile, only: resize_and_clip_imgfile, resize_imgfile, clip_imgfile
         use simple_image,       only: image
+        use simple_math,        only: round2even
         class(scale_commander), intent(inout) :: self
         class(cmdline),         intent(inout) :: cline
         type(params) :: p
@@ -521,7 +522,8 @@ contains
             if( cline%defined('scale') )then
                 call find_ldim_nptcls(filenames(1),ldim,nframes)
                 ldim(3)          = 1 ! to correct for the stupide 3:d dim of mrc stacks
-                ldim_scaled(1:2) = nint(real(ldim(1:2))*p%scale)
+                ldim_scaled(1) = round2even(real(ldim(1))*p%scale)
+                ldim_scaled(2) = round2even(real(ldim(2))*p%scale)
                 ldim_scaled(3)   = 1
             else
                 stop 'need scale factor for this mode of execution; simple_commander_imgproc :: exec_scale'

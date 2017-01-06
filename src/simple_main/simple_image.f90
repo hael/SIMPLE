@@ -4251,6 +4251,7 @@ contains
                 end do
             end do
         else
+            write(*,*) 'ldim: ', self%ldim
             stop 'even dimensions assumed; shift_phorig; simple_image'
         endif
     end subroutine shift_phorig

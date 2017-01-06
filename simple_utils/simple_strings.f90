@@ -132,8 +132,12 @@ contains
     !> \brief  converts number string to a single precision real number
     function str2real(str) result(rval)
         character(len=*), intent(in) ::str
-        real :: rval
-        read(str,*) rval        
+        real    :: rval
+        integer :: io_stat
+        read(str, *, iostat=io_stat) rval
+        if( io_stat .ne. 0 )then
+            stop 'ERROR(I/O); simple_strings :: str2real'
+        endif
     end function str2real
     
     !> \brief  converts a real number to a string

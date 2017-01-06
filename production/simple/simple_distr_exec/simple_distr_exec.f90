@@ -17,6 +17,7 @@ implicit none
 ! DISTRIBUTED COMMANDERS
 type(unblur_movies_distr_commander)      :: xunblur_movies_distr
 type(unblur_tomo_movies_distr_commander) :: xunblur_tomo_movies_distr
+type(ctffind_distr_commander)            :: xctffind_distr
 type(shellweight3D_distr_commander)      :: xshellweight3D_distr
 type(recvol_distr_commander)             :: xrecvol_distr
 type(prime3D_init_distr_commander)       :: xprime3D_init_distr
@@ -82,21 +83,22 @@ select case(prg)
         ! parameters. <unblur_movies/end>
         !
         ! set required keys
-        keys_required(1) = 'tomoseries'
-        keys_required(2) = 'exp_doc'
-        keys_required(3) = 'smpd'
-        keys_required(4) = 'nthr'
-        keys_required(5) = 'ncunits'
+        keys_required(1)  = 'tomoseries'
+        keys_required(2)  = 'exp_doc'
+        keys_required(3)  = 'smpd'
+        keys_required(4)  = 'nthr'
+        keys_required(5)  = 'nparts'
         ! set optional keys
-        keys_optional(1) = 'lpstart'
-        keys_optional(2) = 'lpstop'
-        keys_optional(3) = 'trs'
-        keys_optional(4) = 'kv'
-        keys_optional(5) = 'pspecsz'
-        keys_optional(6) = 'numlen'
-        keys_optional(7) = 'startit'
-        keys_optional(8) = 'scale'
-        keys_optional(9) = 'frameavg'
+        keys_optional(1)  = 'ncunits'
+        keys_optional(2)  = 'lpstart'
+        keys_optional(3)  = 'lpstop'
+        keys_optional(4)  = 'trs'
+        keys_optional(5)  = 'kv'
+        keys_optional(6)  = 'pspecsz'
+        keys_optional(7)  = 'numlen'
+        keys_optional(8)  = 'startit'
+        keys_optional(9)  = 'scale'
+        keys_optional(10) = 'frameavg'
         ! parse command line
         call cline%parse(keys_required(:5), keys_optional(:9))
         ! set defaults
@@ -106,6 +108,37 @@ select case(prg)
         if( .not. cline%defined('tomo')    ) call cline%set('tomo',  'yes')
         ! execute
         call xunblur_tomo_movies_distr%execute(cline)
+    case( 'ctffind' )
+        !==Program ctffind
+        !
+        ! <ctffind/begin> is a wrapper program for CTFFIND4 (Grigorieff lab) <ctffind/end> 
+        !
+        ! set required keys
+        keys_required(1) = 'filetab'
+        keys_required(2) = 'smpd'
+        keys_required(3) = 'kv'
+        keys_required(4) = 'cs'
+        keys_required(5) = 'fraca'
+        keys_required(6) = 'nthr'
+        keys_required(7) = 'nparts'
+        ! set optional keys
+        keys_optional(1) = 'ncunits'
+        keys_optional(2) = 'pspecsz'
+        keys_optional(3) = 'hp'
+        keys_optional(4) = 'lp'
+        keys_optional(5) = 'dfmin'
+        keys_optional(6) = 'dfmax'
+        keys_optional(7) = 'astigstep'
+        keys_optional(8) = 'expastig'
+        keys_optional(9) = 'phaseplate'
+        ! parse command line
+        call cline%parse(keys_required(:7), keys_optional(:8))
+        ! set defaults
+        if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz', 1024.)
+        if( .not. cline%defined('hp')      ) call cline%set('hp',        30.)
+        if( .not. cline%defined('lp')      ) call cline%set('lp',         5.)
+        ! execute
+        call xctffind_distr%execute(cline)
 
     ! PRIME3D
 

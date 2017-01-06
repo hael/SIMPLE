@@ -110,7 +110,8 @@ contains
         
         contains
         
-            subroutine parse_local( arg ) 
+            subroutine parse_local( arg )
+                use simple_strings, only: str2real
                 character(len=*) :: arg
                 integer          :: pos1
                 pos1 = index(arg, '=') ! position of '='
@@ -123,38 +124,36 @@ contains
                         stop
                     endif
                     if( index(arg(pos1+1:), '.spi') /= 0 )then
-                        self%cmds(i)%carg =arg(pos1+1:)
+                        self%cmds(i)%carg = trim(arg(pos1+1:))
                     else if( index(arg(pos1+1:), '.mrc') /= 0 )then
-                        self%cmds(i)%carg =arg(pos1+1:)
+                        self%cmds(i)%carg = trim(arg(pos1+1:))
                     else if( index(arg(pos1+1:), '.map') /= 0 )then
-                        self%cmds(i)%carg =arg(pos1+1:)
+                        self%cmds(i)%carg = trim(arg(pos1+1:))
                     else if( index(arg(pos1+1:), '.ctf') /= 0 )then
-                        self%cmds(i)%carg =arg(pos1+1:)
+                        self%cmds(i)%carg = trim(arg(pos1+1:))
                     else if( index(arg(pos1+1:), '.bin') /= 0 )then
-                        self%cmds(i)%carg =arg(pos1+1:)
+                        self%cmds(i)%carg = trim(arg(pos1+1:))
                     else if( index(arg(pos1+1:), '.txt') /= 0 )then
                         cnttxt = cnttxt+1
-                        self%cmds(i)%carg =arg(pos1+1:)
+                        self%cmds(i)%carg = trim(arg(pos1+1:))
                     else if( index(arg(pos1+1:), '.asc') /= 0 )then
                         cnttxt = cnttxt+1
-                        self%cmds(i)%carg =arg(pos1+1:)
+                        self%cmds(i)%carg = trim(arg(pos1+1:))
                     else if( index(arg(pos1+1:), '.log') /= 0 )then
                          stop '.log files are obsolete!'
                     else if( index(arg(pos1+1:), '.dat') /= 0 )then
-                         stop '.dat files are obsolete! Use .txt files exclusively!'
+                        cnttxt = cnttxt+1
+                        self%cmds(i)%carg = trim(arg(pos1+1:))
                     else if( index(arg(pos1+1:), '.box') /= 0 )then
-                        self%cmds(i)%carg =arg(pos1+1:)
+                        self%cmds(i)%carg = trim(arg(pos1+1:))
                     else if( index(arg(pos1+1:), '.') /= 0 )then
-                        call str2real(arg(pos1+1:), io_stat, self%cmds(i)%rarg)
-                        if( io_stat .ne. 0 )then
-                            stop 'ERROR(I/O), str2real; simple_cmdline :: parse_local'
-                        endif
+                        self%cmds(i)%rarg = str2real(trim(arg(pos1+1:)))
                     else
-                        call str2int(arg(pos1+1:), io_stat, ri )
+                        call str2int(trim(arg(pos1+1:)), io_stat, ri )
                         if( io_stat==0 )then 
                             self%cmds(i)%rarg = real(ri)
                         else
-                            self%cmds(i)%carg = arg(pos1+1:)
+                            self%cmds(i)%carg = trim(arg(pos1+1:))
                         endif
                     endif
                     self%cmds(i)%defined = .true.
@@ -345,18 +344,16 @@ contains
 
     !> \brief  for generating a job description (prg overrides prg in cline)
     subroutine gen_job_descr( self, hash, prg )
-        use simple_jiffys, only: real2str
+        use simple_strings, only: real2str
         class(cmdline),             intent(in)    :: self
         class(chash),               intent(inout) :: hash
         character(len=*), optional, intent(in)    :: prg
-        character(len=STDLEN) :: str
         integer               :: i
         call hash%new(self%NMAX)
         do i=1,self%argcnt
             if( self%cmds(i)%carg .eq. '' )then
                 ! value is real
-                call real2str(self%cmds(i)%rarg, str)
-                call hash%push(trim(self%cmds(i)%key), trim(str))
+                call hash%push(trim(self%cmds(i)%key), real2str(self%cmds(i)%rarg))
             else
                 ! value is char
                 call hash%push(trim(self%cmds(i)%key), trim(self%cmds(i)%carg))

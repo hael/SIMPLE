@@ -3,6 +3,7 @@ utils_code: s_utes  \
 
 s_utes: simple_imgheadrec.o \
         simple_imghead.o    \
+        simple_strings.o    \
         simple_jiffys.o     \
         simple_rnd.o        \
         simple_math.o       \
@@ -11,7 +12,6 @@ s_utes: simple_imgheadrec.o \
         simple_stat.o       \
         simple_online_var.o \
         simple_ran_tabu.o   \
-        simple_strings.o    \
         simple_testfuns.o   ;
 
 s_utils: simple_syscalls.o  ;

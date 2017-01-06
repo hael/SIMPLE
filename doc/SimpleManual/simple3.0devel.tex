@@ -254,7 +254,7 @@ contains
         self%exists = .true.
     end subroutine new
 \end{verbatim}
-Methods in a class are implemented as standard subroutines or functions that have been part of the language specification since Fortran 77. We begin with declaring the units we need to use via \texttt{use simple\_jiffys, only: alloc\_err}. Even though the \texttt{simple\_jiffy} module contains a large number of subroutines and functions it is good programming practice to only declare exactly what is being used via the \texttt{only} directive. Following the use statements, we deal with the input dummy variables, which include the instance (named \texttt{self} by convention), the specification for creating the composite object \texttt{other\_specs} and the size of the array \texttt{n}. Note that we declare self as a polymoprhic variable by using \texttt{class} rather than \texttt{type} directive. The reason for this is that we may later use \textit{inheritance} for extending the example type, creating child classes that would need to use the example constructor.  The \texttt{intent} directive gives the intent of the dummy variables \texttt{in}, \texttt{out} or \texttt{inout} (see Fortran language reference). After input specification, we declare local variables. The execution section in a constructor always start with destructing the possibly pre-existing instance before proceeding with constructing the composite, allocating the array and indicating existence. Note that the symbol used to access instances and methods is \texttt{\%} in contrast to the \texttt{.} used in C++, Java, Ruby, Python and most other object-oriented languages. Often we also implement a function-based constructor:
+Methods in a class are implemented as standard subroutines or functions that have been part of the language specification since Fortran 77. We begin with declaring the units we need to use via \texttt{use simple\_jiffys, only: alloc\_err}. Even though the \texttt{simple\_jiffy} module contains a large number of subroutines and functions it is good programming practice to only declare exactly what is being used via the \texttt{only} directive. Following the use statements, we deal with the input dummy variables, which include the instance (named \texttt{self} by convention), the specification for creating the composite object \texttt{other\_specs} and the size of the array \texttt{n}. Note that we declare self as a polymoprhic variable by using \texttt{class} rather than \texttt{type} directive. The reason for this is that we may later use \textit{inheritance} for extending the example type, creating child classes that would need to use the example constructor.  The \texttt{intent} directive gives the intent of the dummy variables \texttt{in}, \texttt{out} or \texttt{inout} (see Fortran language reference). After input specification, we declare local variables. The execution section in a constructor always start with destructing the possibly pre-existing instance before proceeding with constructing the composite, allocating the array and indicating existence. Note that the symbol used to access the object's methods is \texttt{\%} in contrast to the \texttt{.} used in C++, Java, Ruby, Python and most other object-oriented languages. Often we also implement a function-based constructor:
 \begin{verbatim}
 ...
 interface example
@@ -290,7 +290,7 @@ contains
         self%exists = .true.
     end subroutine new
 \end{verbatim}
-In the function-based constructor we re-use the polymorphic constructor. Importantly, \texttt{self} is now declared as \texttt{type(example)} rather than \texttt{class(example)} since the language standard prevent us from returning a polymorphic variable from a function. We will see later how polymorphic variables can be returned via pointers and allocatable polymorphic objects when we discuss the factory design pattern (below). Before we discuss generic programming, let's have a look at the destructor that we by convention put last in the module.
+In the function-based constructor we re-use the polymorphic constructor. Importantly, \texttt{self} is now declared as \texttt{type(example)} rather than \texttt{class(example)} since the language standard prevents us from returning a polymorphic variable from a function. We will see later how polymorphic variables can be returned via pointers and allocatable polymorphic objects when we discuss the factory design pattern (below). Before we discuss generic programming, let's have a look at the destructor that we by convention put last in the module.
 \begin{verbatim}
 ...
     subroutine kill( self )
@@ -306,7 +306,7 @@ end module example
 \end{verbatim}
 All simple classes use the \texttt{exists} logical variable to flag existence. It is therefore always safe to call the destructor (even on non-existing objects), which is very convenient (trying to deallocate an unallocated array would lead to a bug). It also prevents us from having to test the allocation status of every allocatable variable in the destructor itself. 
 
-Generic programming is a powerful technique. Let's say we have two random array generating classes: \texttt{simple\_gauran} and \texttt{simple\_uniran} and we'd like to randomly set the real array in one instance of our example class using the same interface but automatically select the method used depending on what class is inputted as a dummy argument. The private methods (that we called \texttt{method1} and \texttt{method2}, above) are implemented as follows
+Generic programming is a powerful technique. Let's say we have two random array generating classes: \texttt{simple\_gauran} and \texttt{simple\_uniran} and we'd like to randomly set the real array in one instance of our example class using the same interface but automatically select the method used depending on what class is inputted as a dummy argument. The private methods (that we called \texttt{method1} and \texttt{method2}, above) are implemented as follows:
 \begin{verbatim}
 ...
     subroutine method1( self, rangau )
@@ -349,16 +349,6 @@ program simple_test_example
 end program simple_test_example
 \end{verbatim}
 
-
-
-
-
-
-
-
-
-
-
 \subsection{SIMPLE Design Patterns}
 In every area of design\textemdash{}houses, cars, rowboats, or software\textemdash{}we build on patterns that have been found to work in the past, improvising within established themes. Sometimes we have to invent something completely new. But by basing standard elements on patterns, we avoid wasting our energy on problems with known solutions so that we can focus on our unusual needs. Also, building from conventional patterns helps us avoid creating a design so idiosyncratic that it is difficult to talk about it. It all boils down to three essential points:
 \begin{itemize}
@@ -368,15 +358,94 @@ In every area of design\textemdash{}houses, cars, rowboats, or software\textemda
 \end{itemize}
 Instead of creating classes that inherit most of their talents from a parent class (via type extension in Fortran), we can assemble functionality from the bottom up. To do so, we equip our objects with references to other objects\textemdash{}namely, objects that supply the functionality we need. Creating aggregates of this kind tightens up the model itself by defining clear ownership and boundaries, avoiding a chaotic, tangled web of objects. This is crucial to maintaining model integrity in all phases of the life cycle of an object.
 
-
 \subsubsection{The Builder Pattern}
-
-
-
+The intent of the builder is to separate the construction of a complex object from its representation so that the same construction process can create different representations. At one point in the SIMPLE development we found that we placed redundant use statements for a a bunch of classes all over the shop and that many of the instances shared common names. In order to reduce this repetition and to defer the often time-consuming activity of constructing and destructing data heavy objects, we created a builder that is used by virtually every program in the SIMPLE suite. The builder pattern is used when the algorithm for creating a complex object needs to be independent of the parts that make up the object and how they're assembled. This pattern reduces complex dependencies into a single dependency\textemdash{}the builder. The SIMPLE builder construction process allows different set of objects to be created for different execution routes. We call the different parts toolboxes. Checkout the \texttt{simple\_build.f90} file and its dependencies to see how it works.
 
 \subsubsection{The Abstract Factory Pattern}
-How do you create families of compatible objects? In SIMPLE, we have many optimisation classes and are using an \textbf{Abstract Factory} to create the optimiser object we need at run-time. 
+How do you create families of compatible objects? The \textbf{Abstract Factory} provides an interface for creating families of related or dependent objects without specifying their concrete classes. In SIMPLE, we have many optimisation classes and are using an abstract factory to create the optimiser object we need at run-time. The base class \texttt{simple\_optimizer} defines the common interface:
+\begin{verbatim}
+!==Class simple_optimizer
+!
+! Is the abstract simple optimizer class.
+! The code is distributed with the hope that it will be useful, 
+! but _WITHOUT_ _ANY_ _WARRANTY_. 
+! Redistribution or modification is regulated by the GNU General Public License. 
+! *Author:* Hans Elmlund, 2014-01-07
 
+module simple_optimizer
+implicit none
+
+public :: optimizer
+private
+
+type, abstract :: optimizer
+  contains
+    procedure(generic_new),      deferred :: new
+    procedure(generic_minimize), deferred :: minimize
+    procedure(generic_kill),     deferred :: kill 
+end type
+
+abstract interface
+
+    !>  \brief  is a constructor
+    subroutine generic_new( self, spec ) 
+        use simple_opt_spec, only: opt_spec
+        import :: optimizer
+        class(optimizer), intent(inout) :: self
+        class(opt_spec), intent(inout)  :: spec
+    end subroutine generic_new
+    
+    !> \brief  minimization of the costfunction
+    subroutine generic_minimize( self, spec, lowest_cost )
+        use simple_opt_spec, only: opt_spec
+        import :: optimizer
+        class(optimizer), intent(inout) :: self
+        class(opt_spec), intent(inout)  :: spec
+        real, intent(out)               :: lowest_cost
+    end subroutine generic_minimize
+    
+    !>  \brief  is a destructor
+    subroutine generic_kill( self ) 
+        import :: optimizer
+        class(optimizer), intent(inout) :: self
+    end subroutine generic_kill
+ 
+end interface
+
+end module simple_optimizer
+\end{verbatim}
+and the concrete classes implement the various optimisers
+\begin{verbatim}
+!==Class simple_simplex_opt
+!
+! Minimization of an externally defined function by the simplex method 
+! of Nelder and Mead. The code is distributed with the hope that it will 
+! be useful, but _WITHOUT_ _ANY_ _WARRANTY_. 
+! Redistribution or modification is regulated by the GNU General Public License. 
+! *Author:* Hans Elmlund, 2013-10-15
+module simple_simplex_opt
+use simple_optimizer, only: optimizer
+implicit none
+
+public :: simplex_opt
+private
+
+type, extends(optimizer) :: simplex_opt
+    private
+    real, allocatable :: p(:,:)         !< vertices of the simplex
+    real, allocatable :: y(:)           !< cost function vals
+    real, allocatable :: pb(:)          !< best point
+    real              :: yb=0.          !< best cost function value
+    logical           :: exists=.false. !< to indicate existence
+  contains
+    procedure :: new      => new_simplex_opt
+    procedure :: minimize => simplex_minimize
+    procedure :: kill     => kill_simplex_opt
+end type simplex_opt
+
+contains
+...
+\end{verbatim}
 
 \subsubsection{The Commander Pattern}
 \begin{SCfigure}[][h]
@@ -459,21 +528,89 @@ Modules are an old, established design element that plays a key role in modern F
 
 It is a truism that there should be low coupling between modules and high cohesion within them. Explanations of coupling and cohesion tend to make them sound like technical metrics, to be judged mechanically based on the distributions of associations and interactions. Yet it isn't just code being divided into modules, but concepts. There is a limit to how many things a person can think about at once (hence low coupling). Incoherent fragments of ideas are as hard to understand as an undifferentiated soup of ideas (hence high cohesion). Well-chosen modules bring together elements of the model with particularly rich conceptual relationships. This high cohesion of objects with related responsibilities allows modelling and design work to concentrate within a single module, a scale of complexity a human mind can easily handle. When you place some classes together in a module, you are telling the next developer who looks at your design to think about them together, as a team working together toward a common goal. If your model is telling a story (about how to process single-particle images), the modules are chapters.
 
-\textbf{Choose modules that tell a story about the system and contain a cohesive set of concepts. This often yield low coupling between modules, but if it doesn't, look for a way to change the model to disentangle the concepts, or search for an overlooked concept that might be the basis of a module that would bring elements together in a meaningful way. Seek low coupling in the sense of concepts that can be understood and reasoned about independently of each other. Refine the model until it partitions according to high-level domain concepts and the corresponding code is decoupled as well.}
+\textbf{Choose modules that tell a story about the system and contain a cohesive set of concepts. This often yields low coupling between modules, but if it doesn't, look for a way to change the model to disentangle the concepts, or search for an overlooked concept that might be the basis of a module that would bring elements together in a meaningful way. Seek low coupling in the sense of concepts that can be understood and reasoned about independently of each other. Refine the model until it partitions according to high-level domain concepts and the corresponding code is decoupled as well.}
 
-Give modules names that become part of the \textit{ubiquitous language}. Modules and their names should reflect insight into the domain.
+Give modules names that become part of the \textit{ubiquitous language}. Modules and their names should reflect insight into the domain. In SIMPLE, we have two kinds of modules. (1) Modules defining constants that need to be available via the \texttt{use} statement, for example:
+\begin{verbatim}
+module simple_defs
+use, intrinsic :: iso_c_binding
+implicit none
+! 'I', 'M' or 'S' for imagic, mrc, spider
+character(len=1), parameter :: default_file_format = 'M' 
+integer, parameter  :: IMPORTANT=10 ! number of solutions considered important
+integer, parameter  :: MAXS=20      ! maximum number of states
+integer, parameter  :: STDLEN=256   ! standard string length
+integer, parameter  :: short = selected_int_kind(4)
+integer, parameter  :: long  = selected_int_kind(9)
+integer, parameter  :: longer  = selected_int_kind(16)
+integer, parameter  :: I4B = SELECTED_INT_KIND(9)
+integer, parameter  :: I2B = SELECTED_INT_KIND(4)
+integer, parameter  :: I1B = SELECTED_INT_KIND(2)
+integer, parameter  :: SP = KIND(1.0)
+integer, parameter  :: DP = KIND(1.0D0)
+integer, parameter  :: DOUBLE = KIND(1.0D0)
+integer, parameter  :: SPC = KIND((1.0,1.0))
+integer, parameter  :: DPC = KIND((1.0D0,1.0D0))
+integer, parameter  :: LGT = KIND(.true.)
+integer, parameter  :: line_max_len = 8192 !< Max number of characters on line
+real(sp), parameter :: PI=acos(-1.)
+real(sp), parameter :: PIO2=acos(-1.)/2.
+real(sp), parameter :: TWOPI=2.*acos(-1.)
+real(sp), parameter :: FOURPI=4.*acos(-1.)
+real(sp), parameter :: SQRT2=sqrt(2.)
+real(sp), parameter :: EUL=0.5772156649015328606065120900824024310422_sp
+real(sp), parameter :: um2a = 10000.
+real(sp), parameter :: TINY=1e-10
+real(sp), parameter :: SMALL=1e-6
+real(sp), parameter :: MINEULSDEV=3.
+real(sp), parameter :: MINTRSSDEV=0.5
+real(sp), parameter :: FTOL=1e-4
+real(dp), parameter :: DTINY=1e-10
+real(dp), parameter :: DSMALL=1e-6
+real(dp), parameter :: pisqr = PI*PI   ! PI^2.
+
+! plan for the CTF
+type :: ctfplan
+    character(len=STDLEN) :: mode='' !< astig/noastig
+    character(len=STDLEN) :: flag='' !< flag: <mul|flip|no> 
+end type ctfplan
+
+! the c binding derived type for the system query module
+type, bind(c) :: systemDetails
+   integer(c_int) :: n_phys_proc
+   integer(c_int) :: nCPUcores
+#if defined (MACOSX)   
+   integer(c_int64_t) :: mem_Size
+   integer(c_int) :: mem_User
+#elif defined (LINUX)
+   integer(c_long_long) :: mem_Size
+   integer(c_long_long) :: avail_Mem
+#else
+   integer(c_int)     :: mem_size
+#endif
+end type systemDetails
+
+! endianness conversion
+character(len=:), allocatable :: endconv
+
+! number of threads global variable
+integer(kind=c_int):: nthr_glob
+
+end module simple_defs
+\end{verbatim}
+and (2) modules that implement high-level functionalities (look at the \texttt{simple\_hadamard2D\_matcher} and \texttt{simple\_hadamard3D\_matcher} for examples).
 
 \section{Refactoring Toward Deeper Insight}
 
 \subsection{Making Implicit Concepts Explicit}
 A deep, well-constructed model has power because it contains the central concepts and abstractions that can succinctly and flexibly express essential knowledge of the user's activities, their problems, and their solutions. The first step is to somehow represent the essential concepts of the domain in the model. Refinement comes later, after successive iterations of knowledge crunching and refactoring. But this process really gets into gear when an important concept is recognised and made explicit in the model and design.
 
-\textbf{Many transformations of domain models and the corresponding code happen when developers recognise a concept that has been hinted at in discussion or present implicitly in the design, and they then represent it explicitly in the model with one or more objects or relationships.}
+\textbf{Many transformations of domain models and the corresponding code happens when developers recognise a concept that has been hinted at in discussion or present implicitly in the design, and they then represent it explicitly in the model with one or more objects or relationships.}
 
 Listen to the language the domain experts (the electron microscopists) use. Are there terms that succinctly state something complicated? Are they correcting your word choice (perhaps diplomatically)? Do the puzzled looks on their faces go away when you use a particular phrase? These are hints of a concept that will for sure benefit the model. When the users or domain experts use vocabulary that is nowhere in the design, that's a warning sign. It is a doubly strong warning when both the developers and the domain experts are using terms that are not in the design.
 
 \subsection{Supple Design}
-Supple is an adjective that means ``bending and moving easily and gracefully; flexible''. The ultimate purpose of software is to serve users. But first, that same software has to serve developers. This is especially true in a process that emphasises refactoring. I assume here that the reader knows that refactoring entails much more than simply renaming functions and subroutines. Refactoring is the process of moving bits and pieces of code around, making it logically consistent, readable and with naming consistent with the domain model. This should be done without changing the program's external behaviour. Succesful refactoring strongly depends on having well-designed automatic unit tests (discussed below). Ruthless refactoring is a key component of the extreme programming paradigm and it is best done in paris, with one coder overlooking the shoulder of the other.
+Supple is an adjective that means ``bending and moving easily and gracefully; flexible''. The ultimate purpose of software is to serve users. But first, that same software has to serve developers. This is especially true in a process that emphasises refactoring. I assume here that the reader knows that refactoring entails much more than simply renaming functions and subroutines. Refactoring is the process of moving bits and pieces of code around, making it logically consistent, readable and naming consistent with the domain model. This should be done without changing the program's external behaviour. Succesful refactoring strongly depends on having well-designed automatic unit tests (discussed below). Ruthless refactoring is a key component of the extreme programming paradigm and it is best done in paris, with one coder overlooking the shoulder of the other.
 
 \textbf{When software doesn't have a clean design, developers dread even looking at the existing mess or making a change that could aggravate the tangle or break something through an unforeseen dependency. To have a project accelerate as development proceeds\textemdash{}rather than get weighted down by its own legacy\textemdash{}demands a design that is a pleasure to work with, inviting to change. A supple design.}
 
@@ -520,7 +657,7 @@ Strictly segregate commands (methods that result in modifications to observable 
 In contrast to for example Java or C++, Fortran isn't really equipped with any good tools to deal with assertions and Fortran programmers generally feel uneasy when plowing through code scattered with assert statements. In SIMPLE, we have never coded assertions directly into our classes. Instead, we rely on a set of automated unit tests (described below) which admittedly needs to be extended to test more code than it currently does. 
 
 \subsection{Conceptual Contours}
-Sometimes developers chop functionality fine to allow flexible combination. Sometimes they lump it large to encapsulate complexity. Sometimes they seek a consistent granularity, making all classes and operations to a similar scale. These are oversimplifications that don't work well as a general rule. As a rule of thumb, if you method call has more than three arguments (excluding the object instance), chances are you are lumping it too large. On the other hand, when performance is important and the embedded algorithm will be subjected to parallelisation, substantial performance gains may follow from merging operations and reduce overheads due to thread creation, data transfer to devices etc. However, remember the famous quote by Donald Knuth ``Premature optimisation is the root of all evil''. Therefore:
+Sometimes developers chop functionality fine to allow flexible combination. Sometimes they lump it large to encapsulate complexity. Sometimes they seek a consistent granularity, making all classes and operations to a similar scale. These are oversimplifications that don't work well as a general rule. As a rule of thumb, if your method call has more than three arguments (excluding the object instance), chances are you are lumping it too large. On the other hand, when performance is important and the embedded algorithm will be subjected to parallelisation, substantial performance gains may follow from merging operations and reduce overheads due to thread creation, data transfer to devices etc. However, remember the famous quote by Donald Knuth ``Premature optimisation is the root of all evil''. Therefore:
 
 \textbf{Decompose design elements (operations, interfaces, classes and aggregates) into cohesive units, taking into consideration your intuition of the important divisions in the domain. Observe the axes of change and stability through successive refactorings and look for the underlying \textit{conceptual contours} that explain these shearing patterns. Align the model with the consistent aspects of the domain that make it a viable area of knowledge in the first place.}
 
@@ -579,7 +716,7 @@ Refined models are distilled until every remaining connection between concepts r
 Dependencies on other classes within the same module is less harmful than those outside. Likewise, when two objects are naturally tightly coupled, multiple operations involving the same pair can actually clarify the relationship. The goal is not to eliminate all dependencies, but to eliminate all nonessential ones.
 
 \section{Maintaining Model Integrity}
-Although we seldom think about it explicitly, the most fundamental requirement of a model is that it be internally consistent; that its terms always have the same meaning, and that it contain no contradictory rules. The internal consistency of a model, such that each term is unambiguous and no rules contradict, is called \textit{unification}. A model is meaningless unless it is logically consistent. In an ideal world, we would have a single model spanning the whole domain of the research field. This model would be unified, without any contradictory or overlapping definitions of terms. Every logical statement about the domain would be consistent. 
+Although we seldom think about it explicitly, the most fundamental requirement of a model is that it be internally consistent; that its terms always have the same meaning, and that it contains no contradictory rules. The internal consistency of a model, such that each term is unambiguous and no rules contradict, is called \textit{unification}. A model is meaningless unless it is logically consistent. In an ideal world, we would have a single model spanning the whole domain of the research field. This model would be unified, without any contradictory or overlapping definitions of terms. Every logical statement about the domain would be consistent. 
 
 \subsection{Continuous Integration}
 It is very hard to maintain the level of communication needed to develop a unified system of any size. We need ways of increasing communication and reducing complexity. We also need safety nets that prevent overcautious behaviour, such as developers duplicating functionality because they are afraid that they will break existing code. Of equal importance to prevent such undesired behaviours is that all developers are reaching a certain level of understanding of the system. Naturally, certain developers will have areas where they excel but there is a knowledge threshold that all the developers in the team must pass. We also need to respect the rules of the framework and in the same time not being afraid of introducing changes. It is a delicate balance. The team must cultivate a shared understanding of the ever-changing model. Practices may help, but the most fundamental one is to constantly update the \textit{ubiquitous language} definition. SIMPLE developers use Git for step-by-step, reproducible merge/build and automated test suites (both described below). Development sometimes occurs in spurts and sometimes stagnates, depending on the current workload of the team. However, we must strive to merge all code frequently and relentlessly exercise the  \textit{ubiquitous language} to hammer out a shared view of the model as the concepts evolve in different people's heads.
@@ -628,7 +765,7 @@ defs_code: simple_cuda_defs.o \
 as compilation would fail. There are more complex examples, such as the \texttt{src/simple\_main} folder (the curious reader may now have a look). However, the principle is the same. We define a compilation hierarchy that ensures that all dependencies are satisfied. The \texttt{makemake} shellscript uses all the \texttt{Makefile\_target} files in the library to create a common makefile. \texttt{makemake} scans directories, sub-directories and sub-sub-directories, so we never make directory structures more than three levels deep. If you introduce new code and update the \texttt{Makefile\_target} files, you need to re-make the make file by executing \texttt{makemake} in the SIMPLE root directory. The \texttt{makemake} script should not be modified by others than Hans.
 
 \subsection{The \texttt{compileSIMPLE.pl} script}
-In addition to the makefile we need to define compilation macros informing the makefile about the SIMPLE root directory, which compilation switches to use, which compilers to use, if there are paths that contains libraries to link to, where the object and module files are going to be located, which compilers to use and what compiler flags to include. Moreover, we have scripts that autogenerate code and/or modify code that need to be executed. All of this is taken care of by \texttt{compileSIMPLE.pl} located in the SIMPLE root directory. Once you have a healthy makefile, you execute \texttt{compileSIMPLE.pl} to compile the suite and following succesful compilation you see something like
+In addition to the makefile we need to define compilation macros informing the makefile about the SIMPLE root directory, which compilation switches to use, which compilers to use, if there are paths that contain libraries to link to, where the object and module files are going to be located, which compilers to use and what compiler flags to include. Moreover, we have scripts that autogenerate code and/or modify code that needs to be executed. All of this is taken care of by \texttt{compileSIMPLE.pl} located in the SIMPLE root directory. Once you have a healthy makefile, you execute \texttt{compileSIMPLE.pl} to compile the suite and following succesful compilation you see something like
 \begin{verbatim}
 @!#> ./compileSIMPLE.pl 
 *********************************************************
@@ -706,17 +843,249 @@ type :: ori
 \texttt{simple\_ori} implements two unit tests: \texttt{test\_ori} and \texttt{test\_ori\_dists} that are made public together with object. All unit tests come together in the executable \texttt{simple\_test\_units}, located in  \texttt{/production/simple\_tests/simple\_test\_units}, which represents the low-level test routine in SIMPLE. 
 
 \subsection{The High-Level Test Environment}
-In addition to the low-level unit tests, we need a high-level testing environment that can test modules and interactions between classes. This environment is located in the \texttt{test\_code/} folder.
-
-
-\section{Creating A SIMPLE Application}
-
-\section{Debugging in SIMPLE}
+In addition to the low-level unit tests, we need a high-level testing environment that can test modules and interactions between classes. This environment is located in the \texttt{test\_code/} folder. High-level tests are implemented as modules. The cpu test code is located in \texttt{test\_code/cpu}
+\begin{verbatim}
+@!#> cd test_code/cpu/
+@!#> ls
+Makefile_target                    simple_prime2D_srch_tester.f90
+simple_ft_expanded_tester.f90      simple_prime3D_srch_tester.f90
+simple_optimiser_tester.f90        simple_scatter_orisrch_tester.f90
+\end{verbatim}
+Please study these modules to understand how high-level tester code is implemented. Often, high-level tests require input, such as images or volumes, and a binary executable needs to be created. For example:
+\begin{verbatim}
+@!#> cd production/simple_tests/simple_test_srch/
+@!#> cat simple_test_srch.f90 
+program simple_test_srch
+use simple_prime2D_srch_tester
+use simple_wiener2D_tester
+use simple_optimiser_tester
+use simple_prime3D_srch_tester
+use simple_volpft_srch_tester
+use simple_cmdline, only: cmdline
+implicit none
+type(cmdline) :: cline
+logical       :: be_verbose=.false.
+if( command_argument_count() < 3 )then
+    write(*,'(a)',advance='no') 'simple_test_srch vol1=<volume.mrc> msk=<mask radius(in pixels)>'
+    write(*,'(a)') ' smpd=<sampling distance(in A)> [nthr=<number of threads{1}>] [verbose=<yes|no{no}>]'
+    stop
+endif
+call cline%parse
+call cline%checkvar('vol1', 1)
+call cline%checkvar('msk',  2)
+call cline%checkvar('smpd', 3)
+call cline%check
+be_verbose = .false.
+if( cline%defined('verbose') )then
+    if( trim(cline%get_carg('verbose')) .eq. 'yes' )then
+        be_verbose = .true.
+    endif
+endif
+call exec_prime2D_srch_test( cline, be_verbose )
+call exec_prime3D_srch_test( cline, be_verbose )
+call exec_wiener2D_test    ( cline, be_verbose )
+call exec_optimiser_test   (        be_verbose )
+end program simple_test_srch
+\end{verbatim}
+implements the high-level search tests.
 
 \section{Distributing SIMPLE on Workstations and Clusters}
+We never had any dedicated distributing computing environment to run our code on but were always part of multi-user queue systems. Creating an MPI applications that asks for a large number of processors for a long time was therefore not an option for us, as our job would have spent most of the time idling. Instead, we hacked the job submission system. The original environment was built in perl, but we have now transferred it all into the Fortran environment. Most simple executables (executed with \texttt{simple\_exec}) accepts the command line parameters \texttt{nparts}, \texttt{part}, \texttt{fromp} and \texttt{top} indicating the number of partitions, the partition number and the from/to range of particles to be processed by the \texttt{part} partition. The driver code creates balanced partitions and scripts that are executed by the queue system. Currently we support PBS, SLURM and local, where local is the execution method for workstations without any job submission system installed. To understand how it is done, please study the \texttt{simple\_qsys*} classes. \texttt{simple\_qsys\_ctrl} is the scheduler that supports asynchronous execution of \texttt{nparts} partitions over a given number of computational units \texttt{ncunits}. We use an abstract factory for defining the different environments. This is a good example of the principle of separating the things that change from the ones that stay the same. The abstract base class defines the interface (remember the gang of four's advice ``code to an interface, not to an implementation'')
+\begin{verbatim}
+module simple_qsys_base
+implicit none
+
+public :: qsys_base
+private
+
+type, abstract :: qsys_base
+  contains
+    procedure(generic_new),         deferred :: new
+    procedure(generic_submit_cmd),  deferred :: submit_cmd
+    procedure(generic_write_instr), deferred :: write_instr
+    procedure(generic_kill),        deferred :: kill
+end type qsys_base
+
+abstract interface
+
+    !>  \brief  constructor
+    subroutine generic_new( self )
+        import :: qsys_base
+        class(qsys_base), intent(inout) :: self
+    end subroutine generic_new
+    
+    !>  \brief  getter that returns the submit command of the qsys
+    function generic_submit_cmd( self ) result ( submit_cmd )
+        import :: qsys_base
+        class(qsys_base), intent(in)  :: self
+        character(len=:), allocatable :: submit_cmd
+    end function generic_submit_cmd
+    
+    !>  \brief  writes a header instruction for the submit script
+    subroutine generic_write_instr( self, job_descr, fhandle )
+        use simple_chash, only: chash
+        import :: qsys_base
+        class(qsys_base),  intent(in) :: self
+        class(chash),      intent(in) :: job_descr
+        integer, optional, intent(in) :: fhandle   
+    end subroutine generic_write_instr
+
+    !>  \brief  destructor
+    subroutine generic_kill( self )
+        import :: qsys_base
+        class(qsys_base), intent(inout) :: self
+    end subroutine generic_kill
+    
+end interface
+
+end module simple_qsys_base
+\end{verbatim}
+and the concrete type extended classes define the different job submission environments (see class for SLURM-based execution below).
+\begin{verbatim}
+module simple_qsys_slurm
+use simple_qsys_base, only: qsys_base
+use simple_chash,     only: chash
+implicit none
+
+public :: qsys_slurm
+private
+
+integer, parameter :: MAXENVITEMS=100
+
+type, extends(qsys_base) :: qsys_slurm
+    private
+    type(chash) :: env !< defines the SLURM environment
+  contains
+    procedure :: new         => new_slurm_env
+    procedure :: submit_cmd  => get_slurm_submit_cmd
+    procedure :: write_instr => write_slurm_header
+    procedure :: kill        => kill_slurm_env
+end type qsys_slurm
+
+contains
+    
+    !> \brief  is a constructor
+    subroutine new_slurm_env( self )
+        class(qsys_slurm), intent(inout) :: self
+        ! make the container
+        call self%env%new(MAXENVITEMS)
+        ! define the environment:
+        ! ### USER PARAMETERS
+        call self%env%push('user_account',          '#SBATCH --account')
+        call self%env%push('user_email',            '#SBATCH --mail-user')
+        ! ### QSYS PARAMETERS
+        call self%env%push('qsys_partition',        '#SBATCH --partition')
+        call self%env%push('qsys_qos',              '#SBATCH --qos')
+        call self%env%push('qsys_reservation',      '#SBATCH --reservation')
+        call self%env%push('qsys_submit_cmd',       'sbatch')
+        ! ### JOB PARAMETERS
+        call self%env%push('job_name',              '#SBATCH --job-name')
+        call self%env%push('job_ntasks',            '#SBATCH --ntasks')
+        call self%env%push('job_ntasks_per_socket', '#SBATCH --ntasks-per-socket')
+        call self%env%push('job_cpus_per_task',     '#SBATCH --cpus-per-task') 
+        call self%env%push('job_memory_per_task',   '#SBATCH --mem')
+        call self%env%push('job_time',              '#SBATCH --time')
+    end subroutine new_slurm_env
+
+    !> \brief  is a getter
+    function get_slurm_submit_cmd( self ) result( cmd )
+        class(qsys_slurm), intent(in) :: self
+        character(len=:), allocatable :: cmd
+        cmd = self%env%get('qsys_submit_cmd')
+    end function get_slurm_submit_cmd
+
+    !> \brief  writes the header instructions
+    subroutine write_slurm_header( self, job_descr, fhandle )
+        class(qsys_slurm), intent(in) :: self
+        class(chash),      intent(in) :: job_descr
+        integer, optional, intent(in) :: fhandle
+        character(len=:), allocatable :: key, sbatch_cmd, sbatch_val
+        integer :: i, which
+        logical :: write2file
+        write2file = .false.
+        if( present(fhandle) ) write2file = .true.
+        do i=1,job_descr%size_of_chash()
+            key   = job_descr%get_key(i)
+            which = self%env%lookup(key)
+            if( which > 0 )then
+                sbatch_cmd = self%env%get(which)
+                sbatch_val = job_descr%get(i)
+                if( write2file )then
+                    write(fhandle,'(a)') sbatch_cmd//'='//sbatch_val
+                else
+                    write(*,'(a)') sbatch_cmd//'='//sbatch_val
+                endif
+                deallocate(sbatch_cmd,sbatch_val)
+            endif
+            deallocate(key)
+        end do
+        ! write default instructions
+        if( write2file )then
+            write(fhandle,'(a)') '#SBATCH --output=outfile.%j'
+            write(fhandle,'(a)') '#SBATCH --error=errfile.%j'
+            write(fhandle,'(a)') '#SBATCH --mail-type=FAIL'
+        else
+            write(*,'(a)') '#SBATCH --output=outfile.%j'
+            write(*,'(a)') '#SBATCH --error=errfile.%j'
+            write(*,'(a)') '#SBATCH --mail-type=FAIL'
+        endif
+    end subroutine write_slurm_header
+    
+    !> \brief  is a destructor
+    subroutine kill_slurm_env( self )
+        class(qsys_slurm), intent(inout) :: self
+        call self%env%kill
+    end subroutine kill_slurm_env
+
+end module simple_qsys_slurm
+\end{verbatim}
+
+\section{Creating a SIMPLE Application}
+The development process typically consist of identifying the new classes and modifications to existing classes that need to be implemented to supply the required functionality, writing the code and the tester code. After the initial test passes,  we implement the commander required by \texttt{simple\_exec} in the fitting commander class and finally we update \texttt{simple\_exec} to support the case that the program implements, as shown below
+\begin{verbatim}
+case( 'select_frames' )
+        !==Program select_frames
+        !
+        ! <select_frames/begin> is a program for selecting contiguous segments 
+        ! of frames from DDD movies. <select_frames/end>
+        !
+        ! set required keys
+        keys_required(1) = 'filetab'
+        keys_required(2) = 'fbody'
+        keys_required(3) = 'fromf'
+        keys_required(4) = 'tof'
+        keys_required(5) = 'smpd'
+        ! set optional keys
+        keys_optional(1) = 'startit'
+        ! parse command line
+        if( describe ) call print_doc_select_frames
+        call cline%parse(keys_required(:5), keys_optional(:1))
+        ! execute
+        call xselect_frames%execute(cline)
+\end{verbatim}
+
+\section{SIMPLE Debugging}
+I am pretty old-school when it comes to debugging. My most advanced trick is to turn on the debug flag in \texttt{simple\_user\_input.pm}
+\begin{verbatim}
+# no debug mode: no, dubug mode: yes default: no
+# if debug = yes the opmization level = null
+our$DEBUG = "no";
+# debugging level "low" or "high"
+our$DEBUG_LEVEL = "low";
+\end{verbatim}
+This catches most common errors, such as out of bounds array indices etc. If you have hairy floating-point exceptions haunting you it may pay off to increase the debug level to \texttt{high}. However, beware that this mode will take ages to compile and execute. Often, simply printing and backtracking works as well. I have yet to find a good symbolic debugger for Fortran. If you find one, please let me know.
 
 \section{The SIMPLE Git Repository}
-
-\section{Concluding Remarks}
-
+We mostly try to keep the distributed version control system out of our way. All SIMPLE developers code in the same branch (the master branch). I prefer regular communication and regular push/pulls over fancy source code control procedures. Commit messages are of course important but I don't feel I need to read a novel for every commit (the repo will anyway tell me what has changed). We use a remote private repository (https://github.com/hael/SIMPLE3.0.git) and the recommended push/pull procedure is as follows:
+\begin{enumerate}
+\item make a tar ball backup of current project (your safety net, to be stashed away)
+\item execute \texttt{git status} in the SIMPLE root directory
+\item add untracked files using \texttt{git add}
+\item execute \texttt{git stash} in the SIMPLE root directory (this creates a temporary branch with your changes)
+\item execute \texttt{git pull} in the SIMPLE root directory (resolve conflicts, if any)
+\item execute \texttt{git stash pop} in the SIMPLE root directory (to merge your temporary branch with the current master)
+\item compile and run tests
+\item commit your changes via \texttt{git commit -a} (make sensible comments, no epopeia)
+\item push your changes to the remote repository via \texttt{git push}
+\end{enumerate}
 \end{document}

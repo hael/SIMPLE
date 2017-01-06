@@ -203,6 +203,7 @@ contains
         call chdict%push('dfunit',        'defocus unit (A|microns){microns}')
         call chdict%push('angastunit',    'angle of astigmatism unit (radians|degrees){degrees}')
         call chdict%push('plaintexttab',  'plain text file of input parameters')
+        call chdict%push('boxtype',       'box coordinate convention (eman|relion){eman}')
         initialised = .true.
     end subroutine init_cmd_dict
     

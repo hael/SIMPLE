@@ -96,6 +96,7 @@ type :: params
     ! other fixed length character variables in ascending alphabetical order
     character(len=STDLEN) :: angastunit='degrees'
     character(len=STDLEN) :: boxtab=''
+    character(len=STDLEN) :: boxtype='eman'
     character(len=STDLEN) :: clsdoc=''
     character(len=STDLEN) :: comlindoc=''
     character(len=STDLEN) :: ctf='no'
@@ -370,6 +371,7 @@ contains
         call check_carg('avg',            self%avg)
         call check_carg('bench_gpu',      self%bench_gpu)
         call check_carg('bin',            self%bin)
+        call check_carg('boxtype',        self%boxtype)
         call check_carg('center',         self%center)
         call check_carg('clustvalid',     self%clustvalid)
         call check_carg('compare',        self%compare)
@@ -785,7 +787,7 @@ contains
         ! set newbox if scale is defined
         if( .not. cline%defined('newbox') )then
             if( cline%defined('scale') )then
-                self%newbox = nint(self%scale*real(self%box))
+                self%newbox = round2even(self%scale*real(self%box))
             endif
         endif
         self%kfromto(1) = max(2,int(self%dstep/self%hp)) ! high-pass Fourier index set according to hp

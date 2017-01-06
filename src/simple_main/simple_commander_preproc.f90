@@ -124,7 +124,7 @@ contains
             cnt = 0
             do frame=p%fromp,p%top
                 cnt = cnt+1
-                call img_frame%read(movienames(movie),frame)
+                call img_frame%read(movienames(movie),frame,rwaction='READ')
                 call img_frame%write(new_name,cnt)
             end do
             deallocate(new_name)
@@ -157,7 +157,7 @@ contains
             call b%img%new(p%ldim, p%smpd) ! img re-generated (to account for possible non-square)
             tmp = 0.0
             do iimg=1,p%nptcls
-                call b%img%read(p%stk, iimg)
+                call b%img%read(p%stk, iimg, rwaction='READ')
                 tmp = b%img%boxconv(p%boxconvsz)
                 call tmp%write(trim(adjustl(p%fbody))//p%ext, iimg)
                 call progress(iimg, p%nptcls)
@@ -182,7 +182,7 @@ contains
                 if( .not. file_exists(imgnames(iimg)) )then
                     write(*,*) 'inputted img file does not exist: ', trim(adjustl(imgnames(iimg)))
                 endif
-                call b%img%read(imgnames(iimg), 1)
+                call b%img%read(imgnames(iimg), 1, rwaction='READ')
                 tmp = b%img%boxconv(p%boxconvsz)
                 call tmp%write(trim(adjustl(p%fbody))//p%ext, iimg)
                 call progress(iimg, nimgs)
@@ -203,6 +203,7 @@ contains
         type(build)                        :: b
         integer                            :: nmovies, nframes, frame, alloc_stat, lfoo(3)
         integer                            :: numlen, ldim(3), fromto(2), movie, ifoo, ldim_scaled(3)
+        integer                            :: movie_counter, ntot
         character(len=STDLEN), allocatable :: movienames(:)
         character(len=:), allocatable      :: cpcmd
         real                               :: x, y, smpd, smpd_scaled
@@ -242,11 +243,15 @@ contains
             fromto(1) = 1
             fromto(2) = nmovies
         endif
+        ntot = fromto(2) - fromto(1) + 1
         if( debug ) write(*,*) 'fromto: ', fromto(1), fromto(2)
         ! create sum
         call img_sum%new([ldim_scaled(1),ldim_scaled(2),1], p%smpd)
         ! loop over exposures (movies)
+        movie_counter = 0
         do movie=fromto(1),fromto(2)
+            movie_counter = movie_counter + 1
+            call progress(movie_counter, ntot)
             if( .not. file_exists(movienames(movie)) )&
             & write(*,*) 'inputted movie stack does not exist: ', trim(adjustl(movienames(movie)))
             ! get number of frames from stack
@@ -258,7 +263,7 @@ contains
             img_sum = 0.
             do frame=1,nframes
                 call frame_tmp%new(ldim, smpd)
-                call frame_tmp%read(movienames(movie),frame)
+                call frame_tmp%read(movienames(movie),frame, rwaction='READ')
                 call img_frames(frame)%new([ldim_scaled(1),ldim_scaled(2),1], smpd_scaled)
                 call frame_tmp%clip(img_frames(frame))
                 call img_sum%add(img_frames(frame))
@@ -307,7 +312,7 @@ contains
             call b%img%new(p%ldim, p%smpd) ! img re-generated (to account for possible non-square)
             tmp = 0.0
             do iimg=1,p%nptcls
-                call b%img%read(p%stk, iimg)
+                call b%img%read(p%stk, iimg, rwaction='READ')
                 powspec = b%img%mic2spec(p%pspecsz, trim(adjustl(p%speckind)))
                 call powspec%clip(tmp)
                 call tmp%write(trim(adjustl(p%fbody))//p%ext, iimg)
@@ -333,7 +338,7 @@ contains
                 if( .not. file_exists(imgnames(iimg)) )then
                     write(*,*) 'inputted img file does not exist: ', trim(adjustl(imgnames(iimg)))
                 endif
-                call b%img%read(imgnames(iimg), 1)
+                call b%img%read(imgnames(iimg), 1, rwaction='READ')
                 powspec = b%img%mic2spec(p%pspecsz, trim(adjustl(p%speckind)))
                 call powspec%clip(tmp)
                 call tmp%write(trim(adjustl(p%fbody))//p%ext, iimg)
@@ -436,10 +441,10 @@ contains
             if( debug ) print *, 'ldim of output movie_sum_ctf      : ', movie_sum_ctf%get_ldim()
             if( cline%defined('fbody') )then
                 call movie_sum_corrected%write(trim(adjustl(p%fbody))//'_intg'//int2str_pad(imovie, numlen)//p%ext)
-                call movie_sum_ctf%write(trim(adjustl(p%fbody))//'_ctf'//int2str_pad(imovie, numlen)//p%ext)
+                call movie_sum_ctf%write(trim(adjustl(p%fbody))//'_forctf'//int2str_pad(imovie, numlen)//p%ext)
             else
                 call movie_sum_corrected%write(int2str_pad(imovie, numlen)//'_intg'//p%ext)
-                call movie_sum_ctf%write(int2str_pad(imovie, numlen)//'_ctf'//p%ext)
+                call movie_sum_ctf%write(int2str_pad(imovie, numlen)//'_forctf'//p%ext)
             endif
             pspec_sum         = movie_sum%mic2spec(p%pspecsz,     trim(adjustl(p%speckind)))
             pspec_ctf         = movie_sum_ctf%mic2spec(p%pspecsz, trim(adjustl(p%speckind)))
@@ -475,6 +480,7 @@ contains
         use simple_syscalls
         use simple_nrtxtfile, only: nrtxtfile
         use simple_oris,      only: oris
+        use simple_strings,   only: real2str
         class(ctffind_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(params)                       :: p
@@ -485,7 +491,7 @@ contains
         type(oris) :: os                         
         character(len=STDLEN) :: cmd_str, param_fname
         integer :: nintg_movies, funit, fromto(2), imovie, ntot, numlen, movie_counter
-        integer :: ndatlines, nrecs, j
+        integer :: ndatlines, nrecs, j, file_stat
         p = params(cline, checkdistr=.false.)           ! constants & derived constants produced
         call read_filetable(p%filetab, intg_movienames)
         nintg_movies = size(intg_movienames)
@@ -523,24 +529,24 @@ contains
             diag_fname    = add2fbody(intg_movienames(imovie), p%ext, '_ctffind_diag')
             param_fname   = fname_new_ext(diag_fname, 'txt')
             open(unit=funit, status='REPLACE', action='WRITE', file=ctrl_fname)
-            write(funit,'(a)')    trim(intg_movienames(imovie))
-            write(funit,'(a)')    trim(diag_fname)
-            write(funit,'(f9.3)') p%smpd
-            write(funit,'(f9.3)') p%kv
-            write(funit,'(f9.3)') p%cs
-            write(funit,'(f9.3)') p%fraca
-            write(funit,'(I4)')   p%pspecsz
-            write(funit,'(f9.3)') p%hp
-            write(funit,'(f9.3)') p%lp
-            write(funit,'(f9.3)') 1.0e4*p%dfmin
-            write(funit,'(f9.3)') 1.0e4*p%dfmax
-            write(funit,'(f9.3)') 1.0e4*p%astigstep
-            ! write(funit,*) "no"
-            ! write(funit,*) "no"
-            ! write(funit,*) "yes"
-            write(funit,'(f9.3)') 1.0e4*p%expastig
-            write(funit,'(a)')    trim(p%phaseplate)
-            ! write(funit,*) "no";
+            write(funit,'(a)') trim(intg_movienames(imovie))
+            write(funit,'(a)') trim(diag_fname)
+            write(funit,'(a)') real2str(p%smpd)
+            write(funit,'(a)') real2str(p%kv)
+            write(funit,'(a)') real2str(p%cs)
+            write(funit,'(a)') real2str(p%fraca)
+            write(funit,'(a)') real2str(real(p%pspecsz))
+            write(funit,'(a)') real2str(p%hp)
+            write(funit,'(a)') real2str(p%lp)
+            write(funit,'(a)') real2str(1.0e4*p%dfmin)
+            write(funit,'(a)') real2str(1.0e4*p%dfmax)
+            write(funit,'(a)') real2str(1.0e4*p%astigstep)
+            write(funit,'(a)') 'no'
+            write(funit,'(a)') 'no'
+            write(funit,'(a)') 'yes'
+            write(funit,'(a)') real2str(1.0e4*p%expastig)
+            write(funit,'(a)') trim(p%phaseplate)
+            write(funit,'(a)') 'no';
             close(funit)
             cmd_str = 'cat ' // ctrl_fname//' | ctffind'! > ' // output_fname
             call exec_cmdline(cmd_str)
@@ -551,9 +557,12 @@ contains
             do j=1,ndatlines
                 call ctfparamfile%readNextDataLine(ctfparams(j,:))
             end do
+            call os%set(movie_counter, 'kv',     p%kv                )
+            call os%set(movie_counter, 'cs',     p%cs                )
+            call os%set(movie_counter, 'fraca',  p%fraca             )
             call os%set(movie_counter, 'dfx',    ctfparams(1,2)/1.0e4)
             call os%set(movie_counter, 'dfy',    ctfparams(1,3)/1.0e4)
-            call os%set(movie_counter, 'angast', ctfparams(1,4))
+            call os%set(movie_counter, 'angast', ctfparams(1,4)      )
             write(*,'(f4.0,1x,a)') 100.*(real(movie_counter)/real(ntot)), 'percent of the micrographs processed'
             deallocate(ctfparams)
             call ctfparamfile%kill
@@ -561,6 +570,13 @@ contains
         call os%write(output_fname)
         call os%kill
         deallocate(ctrl_fname,output_fname)
+        if( cline%defined('part') )then
+            funit = get_fileunit()
+            open(unit=funit, FILE='JOB_FINISHED_'//int2str_pad(p%part,p%numlen), STATUS='REPLACE', action='WRITE', iostat=file_stat)
+            call fopen_err( 'In: simple_ctffind', file_stat )
+            write(funit,'(A)') '**** SIMPLE_CTFFIND NORMAL STOP ****'
+            close(funit)
+        endif
         ! end gracefully
         call simple_end('**** SIMPLE_CTFFIND NORMAL STOP ****')
     end subroutine exec_ctffind
@@ -726,10 +742,11 @@ contains
         character(len=STDLEN), allocatable :: movienames(:), boxfilenames(:)
         real, allocatable                  :: boxdata(:,:)
         integer, allocatable               :: pinds(:)
-        real                               :: x, y, dfx, dfy, angast, ctfres, med, ave,sdev, var
+        real                               :: x, y, kv, cs, fraca, dfx, dfy, angast, ctfres
+        real                               :: med, ave,sdev, var, box_o_2, particle_position(2)
         type(image)                        :: img_frame
         type(oris)                         :: outoris
-        logical                            :: err
+        logical                            :: err, params_present(3)
         logical, parameter                 :: debug = .false.
         p = params(cline, checkdistr=.false.) ! constants & derived constants produced
         if( p%noise_norm .eq. 'yes' )then
@@ -738,7 +755,7 @@ contains
         
         ! check file inout existence
         if( .not. file_exists(p%filetab) ) stop 'inputted filetab does not exist in cwd'
-        if( .not. file_exists(p%boxtab) )  stop 'inputted boxtab does not exist in cwd'
+        if( .not. file_exists(p%boxtab)  ) stop 'inputted boxtab does not exist in cwd'
         nmovies = nlines(p%filetab)
         if( debug ) write(*,*) 'nmovies: ', nmovies
         nboxfiles = nlines(p%boxtab)
@@ -832,6 +849,8 @@ contains
     
             ! create particle index list and set movie index
             if( .not. cline%defined('box') ) p%box = nint(boxdata(1,3)) ! use the box size from the box file
+            box_o_2 = real(p%box)/2.0
+
             do j=1,ndatlines
                 if( box_inside(ldim, nint(boxdata(j,1:2)), p%box) )then
                     pind     = pind+1
@@ -866,13 +885,27 @@ contains
             if( debug ) write(*,*) 'number of frames: ', nframes
     
             ! build general objects
-            if( niter == 1 ) call b%build_general_tbox(p,cline,do3d=.false.)
+            if( niter == 1 )call b%build_general_tbox(p,cline,do3d=.false.)
 
             ! extract ctf info
             if( b%a%isthere('dfx') )then
-                dfx = b%a%get(movie,'dfx')
+                params_present(1) = b%a%isthere('kv')
+                params_present(2) = b%a%isthere('cs')
+                params_present(3) = b%a%isthere('fraca')
+                if( all(params_present) )then
+                    ! alles ok
+                else
+                    if( .not. params_present(1) ) write(*,*) 'ERROR! input doc lacks kv'
+                    if( .not. params_present(2) ) write(*,*) 'ERROR! input doc lacks cs'
+                    if( .not. params_present(3) ) write(*,*) 'ERROR! input doc lacks fraca'
+                    stop
+                endif                
+                kv     = b%a%get(movie,'kv')
+                cs     = b%a%get(movie,'cs')
+                fraca  = b%a%get(movie,'fraca')
+                dfx    = b%a%get(movie,'dfx')
                 ctfres = b%a%get(movie,'ctfres')
-                angast= 0.
+                angast = 0.
                 if( b%a%isthere('dfy') )then ! astigmatic CTF
                     if( .not. b%a%isthere('angast') ) stop 'need angle of astigmatism for CTF correction'
                     dfy = b%a%get(movie,'dfy')
@@ -881,11 +914,14 @@ contains
                 ! set CTF info in outoris
                 do i=1,ndatlines
                     if( pinds(i) > 0 )then
-                        call outoris%set(pinds(i), 'dfx', dfx)
+                        call outoris%set(pinds(i), 'kv',         kv)
+                        call outoris%set(pinds(i), 'cs',         cs)
+                        call outoris%set(pinds(i), 'fraca',   fraca)
+                        call outoris%set(pinds(i), 'dfx',       dfx)
                         call outoris%set(pinds(i), 'ctfres', ctfres)
                         if( b%a%isthere('dfy') )then
                             call outoris%set(pinds(i), 'angast', angast)
-                            call outoris%set(pinds(i), 'dfy', dfy)
+                            call outoris%set(pinds(i), 'dfy',       dfy)
                         endif
                     endif
                 end do
@@ -896,7 +932,7 @@ contains
             do frame=1,nframes
         
                 ! read frame
-                call img_frame%read(movienames(movie),frame)
+                call img_frame%read(movienames(movie),frame,rwaction='READ')
         
                 if( nframes > 1 )then
                     ! shift frame according to global shift (drift correction)
@@ -925,8 +961,17 @@ contains
                         if( debug ) print *, 'original coordinate: ', boxdata(j,1:2) 
                         if( orig_box /= p%box ) boxdata(j,1:2) = boxdata(j,1:2)-real(p%box-orig_box)/2.
                         if( debug ) print *, 'shifted coordinate: ', boxdata(j,1:2) 
-                        ! extract the window    
-                        call img_frame%window(nint(boxdata(j,1:2)), p%box, b%img, noutside)
+                        ! extract the window
+                        particle_position = boxdata(j,1:2)*p%mul
+                        select case( p%boxtype )
+                            case('eman')
+                                ! nothing to do
+                            case('relion')
+                                particle_position = particle_position-[box_o_2,box_o_2]
+                            case DEFAULT
+                                write(*,*) 'unsupported boxtype: ', trim(p%boxtype)
+                        end select
+                        call img_frame%window(nint(particle_position), p%box, b%img, noutside)
                         if( p%neg .eq. 'yes' ) call b%img%neg
                         if( p%noise_norm .eq. 'yes' )then
                             call b%img%noise_norm(p%msk)
@@ -947,7 +992,7 @@ contains
                         b%img_copy = 0.
                         do frame=1,nframes ! loop over frames
                             framestack = 'framestack'//int2str_pad(frame,numlen)//p%ext
-                            call b%img%read(trim(adjustl(framestack)), pinds(j))
+                            call b%img%read(trim(adjustl(framestack)), pinds(j), rwaction='READ')
                             call b%img_copy%add(b%img)
                         end do
                         if( p%noise_norm .eq. 'yes' )then

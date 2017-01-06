@@ -120,7 +120,7 @@ contains
         character(len=STDLEN) :: env_file, qsys_name
         integer               :: i,funit, nl, file_stat
         env_file = './simple_distr_config.env'
-        if( .not. file_exists(trim(env_file)) )stop 'MISSING ENV CONFIG FILE IN WORKING DIRECTORY'
+        if( .not. file_exists(trim(env_file)) ) call autogen_env_file(env_file)
         call env%read( trim(env_file) )
         ! User keys
         if( .not. env%isthere('simple_path') )stop 'Path to SIMPLE directory is required in simple_distr_config.env (simple_path)'        
@@ -143,6 +143,47 @@ contains
             if( .not. env%isthere('job_ntasks_per_socket') )call env%push('job_ntasks_per_socket', '1')
         endif
     end subroutine parse_env_file
+
+    subroutine autogen_env_file( env_file )
+        use simple_syscalls, only: sys_get_env_var
+        character(len=*), intent(in)  :: env_file
+        integer                       :: funit, file_stat
+        character(len=:), allocatable :: simple_path, simple_email, simple_qsys
+        simple_path = sys_get_env_var('SIMPLE_PATH')
+        if( .not. allocated(simple_path) )&
+        stop 'need SIMPLE_PATH env var to auto-generate simple_distr_config.env; simple_qsys_funs :: autogen_env_file'
+        simple_qsys = sys_get_env_var('SIMPLE_QSYS')
+        if( .not. allocated(simple_qsys) )&
+        stop 'need SIMPLE_QSYS env var to auto-generate simple_distr_config.env; simple_qsys_funs :: autogen_env_file'
+        simple_email = sys_get_env_var('SIMPLE_EMAIL')
+        if( .not. allocated(simple_email) ) allocate(simple_email, source='me.myself@uni.edu')
+        open(unit=funit, status='replace', action='write', file=trim(env_file), iostat=file_stat)
+        write(funit,'(a)') '# CONFIGURATION FILE FOR DISTRIBUTED SIMPLE EXECUTION'
+        write(funit,'(a)') ''
+        write(funit,'(a)') '# ABSOLUTE PATH TO SIMPLE ROOT DIRECTORY'
+        write(funit,'(a)') 'simple_path           ='//simple_path
+        write(funit,'(a)') ''
+        write(funit,'(a)') '# ESTIMATED TIME PER IMAGE (IN SECONDS)'
+        write(funit,'(a)')  'time_per_image        = 400'
+        write(funit,'(a)') ''
+        write(funit,'(a)') '# USER DETAILS'
+        write(funit,'(a)') 'user_account          =' 
+        write(funit,'(a)') 'user_email            ='//simple_email
+        write(funit,'(a)') 'user_project          ='
+        write(funit,'(a)') ''
+        write(funit,'(a)') '# QSYS DETAILS (qsys_name=<local|slurm|pbs>)'
+        write(funit,'(a)') 'qsys_name             ='//simple_qsys
+        write(funit,'(a)') 'qsys_partition        ='
+        write(funit,'(a)') 'qsys_qos              ='
+        write(funit,'(a)') 'qsys_reservation      ='
+        write(funit,'(a)') ''
+        write(funit,'(a)') '# JOB DETAILS'
+        write(funit,'(a)') 'job_ntasks            = 1'
+        write(funit,'(a)') 'job_memory_per_task   = 32000'
+        write(funit,'(a)') 'job_name              = default'
+        write(funit,'(a)') 'job_ntasks_per_socket = 1'
+        close(funit)
+    end subroutine autogen_env_file
 
     subroutine setup_qsys_env( p, qsys_fac, myqsys, parts, qscripts, myq_descr )
         use simple_params,       only: params

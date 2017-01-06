@@ -573,7 +573,7 @@ contains
                 fname2format = 'B'
             case('dbin')
                 fname2format = 'D'
-            case ('txt', 'asc', 'box')
+            case ('txt', 'asc', 'box','dat')
                 fname2format = 'T'
             case DEFAULT
                 fname2format = 'N'
@@ -836,20 +836,6 @@ contains
         endif
         deallocate(str_tmp)
     end function int2str_pad
-    
-    !>  \brief  turn real variable into character variable
-    subroutine real2str( rval, str )
-        real,             intent(in)  :: rval
-        character(len=*), intent(out) :: str
-        write(str,*) rval
-    end subroutine real2str
-    
-    subroutine str2real( string, io_stat, rvar )
-        character(len=*), intent(in) :: string
-        integer, intent(out)         :: io_stat
-        real, intent(out)            :: rvar
-        read(string, *, iostat=io_stat) rvar
-    end subroutine str2real
     
     !>  \brief  number of digits in an integer
     pure integer function ndigs_int(intg)
