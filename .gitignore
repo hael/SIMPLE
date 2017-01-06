@@ -17,7 +17,6 @@ SIMPLE_UNIT*
 *.hed
 *.spi
 Makefile_macros
-simple_user_input.pm
 junk*
 *.dSYM
 bin/
