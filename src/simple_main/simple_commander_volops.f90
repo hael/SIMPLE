@@ -89,21 +89,30 @@ contains
         type(build)       :: b
         real, allocatable :: fsc(:), optlp(:)
         integer           :: k, state=1
+        ! pre-proc
         p = params(cline, checkdistr=.false.) ! constants & derived constants produced, mode=2
         call b%build_general_tbox(p, cline)   ! general objects built
-        if( file_exists(p%fsc) )then
-            fsc = file2rarr(p%fsc)
-            optlp = fsc2optlp(fsc)
-        else
-            write(*,*) 'FSC file: ', trim(p%fsc), ' not in cwd'
-            stop
-        endif
         call b%vol%read(p%vols(state))
         call b%vol%fwd_ft
-        call b%vol%apply_filter(optlp)
-        if( cline%defined('bfac') )then
-            call b%vol%apply_bfac(p%bfac)
+        ! lp filt
+        if( cline%defined('fsc') )then
+            if( file_exists(p%fsc) )then
+                fsc = file2rarr(p%fsc)
+                optlp = fsc2optlp(fsc)
+            else
+                write(*,*) 'FSC file: ', trim(p%fsc), ' not in cwd'
+                stop
+            endif
+            call b%vol%apply_filter(optlp)
+        else if( cline%defined('lp') )then
+            call b%vol%bp(0., p%lp)
+        else
+            write(*,*) 'no method for low-pass filtering defined; give fsc or lp on command line'
+            stop 'comple_commander_volops :: exec_postproc_vol'
         endif
+        ! B-fact
+        if( cline%defined('bfac') ) call b%vol%apply_bfac(p%bfac)
+        ! masking
         call b%vol%bwd_ft
         p%vols_msk(state) = add2fbody(trim(p%vols(state)), p%ext, 'msk')
         if( p%automsk .eq. 'yes' )then
@@ -112,6 +121,7 @@ contains
         else
             call b%vol%mask(p%msk, 'soft')
         endif
+        ! output
         p%outvol = add2fbody(trim(p%vols(state)), p%ext, 'pproc')
         call b%vol%write(p%outvol)
         call simple_end('**** SIMPLE_POSTPROC_VOL NORMAL STOP ****')

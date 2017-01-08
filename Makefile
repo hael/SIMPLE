@@ -211,7 +211,8 @@ masters: simple_rec_master.o             \
          simple_commander_rec.o          \
          simple_commander_sim.o          \
          simple_commander_volops.o       \
-         simple_commander_distr_wflows.o ;
+         simple_commander_distr_wflows.o \
+         simple_generic_exec.o           ;
 
 src_code: ;
 

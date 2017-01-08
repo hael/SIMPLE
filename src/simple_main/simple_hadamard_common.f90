@@ -109,6 +109,8 @@ contains
         real, optional, allocatable, intent(out)   :: res(:), res_pad(:)
         logical, allocatable :: files_exist(:)
         integer :: filtsz, filtsz_pad, alloc_stat, filnum, io_stat, ipart
+        doshellweight = .false.
+        if( .not. p%l_shellw ) return
         filtsz     = b%img%get_filtsz() ! nr of resolution elements
         filtsz_pad = b%img_pad%get_filtsz()
         if( allocated(wmat) ) deallocate(wmat)
@@ -120,7 +122,7 @@ contains
             if( allocated(res_pad) ) deallocate(res_pad)
             res_pad = b%img_pad%get_res()
         endif
-        doshellweight = .false.
+        
         if( p%l_distr_exec )then
             call wmat_from_single_file
             if( doshellweight )then

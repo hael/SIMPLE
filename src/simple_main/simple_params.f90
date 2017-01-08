@@ -316,6 +316,7 @@ type :: params
     logical :: l_automsk     = .false.
     logical :: l_dose_weight = .false. 
     logical :: l_innermsk    = .false. 
+    logical :: l_shellw      = .false.
     logical :: l_xfel        = .false.
   contains
     procedure :: new
@@ -932,7 +933,13 @@ contains
         endif
         ! prepare CTF plan
         self%tfplan%flag = self%ctf
-
+        ! set logical shellw flag
+        self%l_shellw = .false.
+        if( cline%defined('shellw') )then
+            if( self%shellw .eq. 'yes'     ) self%l_shellw = .true.
+        else
+            if( self%tfplan%flag .ne. 'no' ) self%l_shellw = .true.
+        endif
         write(*,'(A)') '>>> DONE PROCESSING PARAMETERS'
         
       contains

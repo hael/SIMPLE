@@ -477,7 +477,7 @@ contains
     end subroutine exec_unblur_movies
 
     subroutine exec_ctffind( self, cline )
-        use simple_syscalls
+        use simple_syscalls,  only: exec_cmdline
         use simple_nrtxtfile, only: nrtxtfile
         use simple_oris,      only: oris
         use simple_strings,   only: real2str
@@ -582,8 +582,9 @@ contains
     end subroutine exec_ctffind
 
     subroutine exec_select( self, cline )
-        use simple_image,  only: image
-        use simple_corrmat ! singleton
+        use simple_image,    only: image
+        use simple_syscalls, only: exec_cmdline, sys_mkdir
+        use simple_corrmat   ! singleton
         class(select_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(params)                       :: p
@@ -591,6 +592,7 @@ contains
         type(image), allocatable           :: imgs_sel(:), imgs_all(:)
         type(image)                        :: stk3_img
         character(len=STDLEN), allocatable :: imgnames(:)
+        character(len=STDLEN)              :: cmd_str
         integer                            :: iimg, isel, nall, nsel, loc(1), ios, funit, ldim(3), ifoo, lfoo(3)
         integer, allocatable               :: selected(:)
         real, allocatable                  :: correlations(:,:)
@@ -636,11 +638,12 @@ contains
                 write(*,*) "Error opening file name", trim(adjustl(p%outfile))
                 stop
             endif
-            call execute_command_line('mkdir '//trim(adjustl(p%dir)))
+            call sys_mkdir(trim(adjustl(p%dir)))
             ! write outoput & move files
             do isel=1,nsel
                 write(funit,'(a)') trim(adjustl(imgnames(selected(isel))))
-                call execute_command_line('mv '//trim(adjustl(imgnames(selected(isel))))//' '//trim(adjustl(p%dir)))
+                cmd_str = 'mv '//trim(adjustl(imgnames(selected(isel))))//' '//trim(adjustl(p%dir))
+                call exec_cmdline(cmd_str)
             end do
             close(funit)
             deallocate(imgnames)

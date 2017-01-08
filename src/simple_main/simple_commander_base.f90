@@ -16,7 +16,7 @@ abstract interface
         use simple_cmdline, only: cmdline
         import :: commander_base
         class(commander_base), intent(inout) :: self
-        class(cmdline), intent(inout)        :: cline
+        class(cmdline),        intent(inout) :: cline
     end subroutine generic_execute
 
 end interface

@@ -550,6 +550,19 @@ contains
         call str2int(str_copy, io_stat, ivar)
         deallocate(pos,str_copy)
     end subroutine fname2ind
+
+    !>  \brief  returns numbered names (body) with 0-padded integer strings 
+    function make_numbered_names( body, n ) result( names )
+        character(len=*), intent(in) :: body
+        integer,          intent(in) :: n
+        character(len=STDLEN), allocatable :: names(:)
+        integer :: numlen, i
+        numlen = len(int2str(n))
+        allocate(names(n))
+        do i=1,n
+            names(i) = trim(body)//int2str_pad(i, numlen)
+        end do
+    end function make_numbered_names
     
     !>  \brief Return a one letter code for the file format designated by the extension in the fname
     !!         if .mrc: M
@@ -821,7 +834,7 @@ contains
         integer :: str_tmp_len
         str_tmp = int2str(intg)
         if( len(str_tmp) > numlen )then
-            stop 'length of number > than desired length; simple_jiffys::in2str_zero_padded'
+            stop 'length of number > than desired length; simple_jiffys::in2str_pad'
         else if( len(str_tmp) == numlen )then
             allocate(string, source=str_tmp)
         else

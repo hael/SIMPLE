@@ -1,44 +1,102 @@
 module simple_qsys_funs
-use simple_jiffys ! singleton
-use simple_defs   ! singleton
+use simple_jiffys   ! singleton
+use simple_defs     ! singleton
+use simple_syscalls ! singleton
 implicit none
 
 contains
 
     subroutine qsys_cleanup_all
-        integer                       :: cstat, estat
-        character(len=100)            :: cmsg
-        character(len=:), allocatable :: cleanup_exec_cmd, tmp1, tmp2, tmp3
-        allocate(tmp1,source='rm -rf FOO OUT* algndoc_* distr_script_* rho* fort.0 primedoc_* recvol*' )
-        allocate(tmp2,source=' JOB_FINISHED_* errfile.* outfile.* shdistr_script SHMEMJOBOUT shmemerrfile.* shmemoutfile.*')
-        allocate(tmp3,source=' ctfsqsums_part* noisespecs_part*')
-        allocate(cleanup_exec_cmd, source=tmp1//tmp2//tmp3)
-        call execute_command_line(cleanup_exec_cmd, exitstat=estat, cmdstat=cstat, cmdmsg=cmsg)
-        if( cstat > 0 )then
-            print *, 'simple_qsys_funs :: qsys_cleanup_all; command execution failed with error ', trim(cmsg)
-        elseif( cstat < 0 )then
-            print *, 'simple_qsys_funs :: qsys_cleanup_all; command execution not supported'
-        endif
-        deallocate(cleanup_exec_cmd, tmp1, tmp2, tmp3)
+        character(len=:), allocatable :: cleanup_exec_cmd
+        integer, parameter :: SHORTTIME = 5
+        call sleep(SHORTTIME)
+        allocate(cleanup_exec_cmd, source='rm -f FOO' )
+        call exec_cmdline(cleanup_exec_cmd)
+        deallocate(cleanup_exec_cmd)
+        allocate(cleanup_exec_cmd, source='rm -f OUT*')
+        call exec_cmdline(cleanup_exec_cmd)
+        deallocate(cleanup_exec_cmd)
+        allocate(cleanup_exec_cmd, source='rm -f algndoc_*')
+        call exec_cmdline(cleanup_exec_cmd)
+        deallocate(cleanup_exec_cmd)
+        allocate(cleanup_exec_cmd, source='rm -f distr_script_*')
+        call exec_cmdline(cleanup_exec_cmd)
+        deallocate(cleanup_exec_cmd)
+        allocate(cleanup_exec_cmd, source='rm -f rho*')
+        call exec_cmdline(cleanup_exec_cmd)
+        deallocate(cleanup_exec_cmd)
+        allocate(cleanup_exec_cmd, source='rm -f fort.0')
+        call exec_cmdline(cleanup_exec_cmd)
+        deallocate(cleanup_exec_cmd)
+        allocate(cleanup_exec_cmd, source='rm -f primedoc_*')
+        call exec_cmdline(cleanup_exec_cmd)
+        deallocate(cleanup_exec_cmd)
+        allocate(cleanup_exec_cmd, source='rm -f recvol*')
+        call exec_cmdline(cleanup_exec_cmd)
+        deallocate(cleanup_exec_cmd)
+        allocate(cleanup_exec_cmd, source='rm -f JOB_FINISHED_*')
+        call exec_cmdline(cleanup_exec_cmd)
+        deallocate(cleanup_exec_cmd)
+        allocate(cleanup_exec_cmd, source='rm -f errfile.*')
+        call exec_cmdline(cleanup_exec_cmd)
+        deallocate(cleanup_exec_cmd)
+        allocate(cleanup_exec_cmd, source='rm -f outfile.*')
+        call exec_cmdline(cleanup_exec_cmd)
+        deallocate(cleanup_exec_cmd)
+        allocate(cleanup_exec_cmd, source='rm -f ctfsqsums_part*')
+        call exec_cmdline(cleanup_exec_cmd)
+        deallocate(cleanup_exec_cmd)
     end subroutine qsys_cleanup_all
 
     subroutine qsys_cleanup_iter()
-        integer                       :: cstat, estat
-        character(len=100)            :: cmsg
-        character(len=:), allocatable :: cleanup_exec_cmd, tmp1, tmp2, tmp3, tmp4
-        allocate(tmp1,source='rm -rf FOO OUT* algndoc_* distr_*script_* recvol_state*_part* rho* fort.0' )
-        allocate(tmp2,source=' JOB_FINISHED_* errfile.* outfile.* shdistr_script SHMEMJOBOUT shmemerrfile.* shmemoutfile.*')
-        allocate(tmp3,source=' ctfsqsums_part* noisespecs_part* cavgs_part* spec_ctfsq_recvol_state*part*')
-        allocate(tmp4,source=' *_recvol_state*_even* *_recvol_state*_odd*')
-        allocate(cleanup_exec_cmd, source=tmp1//tmp2//tmp3//tmp4)
-        call execute_command_line( trim(cleanup_exec_cmd), exitstat=estat, cmdstat=cstat, cmdmsg=cmsg)
-        if( cstat > 0 )then
-            print *, 'simple_qsys_funs :: qsys_cleanup_iter; command execution failed with error: ', trim(cmsg)
-            print *, 'simple_qsys_funs :: qsys_cleanup_iter; command execution failed: ', trim(cleanup_exec_cmd)
-        elseif( cstat < 0 )then
-            print *, 'simple_qsys_funs :: qsys_cleanup_iter; command execution not supported'
-        endif
-        deallocate(cleanup_exec_cmd, tmp1, tmp2, tmp3)
+        character(len=:), allocatable :: cleanup_exec_cmd
+        integer, parameter :: SHORTTIME = 5
+        call sleep(SHORTTIME)
+        allocate(cleanup_exec_cmd, source='rm -f FOO' )
+        call exec_cmdline(cleanup_exec_cmd)
+        deallocate(cleanup_exec_cmd)
+        allocate(cleanup_exec_cmd, source='rm -f OUT*')
+        call exec_cmdline(cleanup_exec_cmd)
+        deallocate(cleanup_exec_cmd)
+        allocate(cleanup_exec_cmd, source='rm -f algndoc_*')
+        call exec_cmdline(cleanup_exec_cmd)
+        deallocate(cleanup_exec_cmd)
+        allocate(cleanup_exec_cmd, source='rm -f distr_*script_*')
+        call exec_cmdline(cleanup_exec_cmd)
+        deallocate(cleanup_exec_cmd)
+        allocate(cleanup_exec_cmd, source='rm -f rho*')
+        call exec_cmdline(cleanup_exec_cmd)
+        deallocate(cleanup_exec_cmd)
+        allocate(cleanup_exec_cmd, source='rm -f fort.0')
+        call exec_cmdline(cleanup_exec_cmd)
+        deallocate(cleanup_exec_cmd)
+        allocate(cleanup_exec_cmd, source='rm -f recvol_state*_part*')
+        call exec_cmdline(cleanup_exec_cmd)
+        deallocate(cleanup_exec_cmd)
+        allocate(cleanup_exec_cmd, source='rm -f JOB_FINISHED_*')
+        call exec_cmdline(cleanup_exec_cmd)
+        deallocate(cleanup_exec_cmd)
+        allocate(cleanup_exec_cmd, source='rm -f errfile.*')
+        call exec_cmdline(cleanup_exec_cmd)
+        deallocate(cleanup_exec_cmd)
+        allocate(cleanup_exec_cmd, source='rm -f outfile.*')
+        call exec_cmdline(cleanup_exec_cmd)
+        deallocate(cleanup_exec_cmd)
+        allocate(cleanup_exec_cmd, source='rm -f ctfsqsums_part*')
+        call exec_cmdline(cleanup_exec_cmd)
+        deallocate(cleanup_exec_cmd)
+        allocate(cleanup_exec_cmd, source='rm -f ctfsqsums_part*')
+        call exec_cmdline(cleanup_exec_cmd)
+        deallocate(cleanup_exec_cmd)
+        allocate(cleanup_exec_cmd, source='rm -f cavgs_part*')
+        call exec_cmdline(cleanup_exec_cmd)
+        deallocate(cleanup_exec_cmd)
+        allocate(cleanup_exec_cmd, source='rm -f *_recvol_state*_even*')
+        call exec_cmdline(cleanup_exec_cmd)
+        deallocate(cleanup_exec_cmd)
+        allocate(cleanup_exec_cmd, source='rm -f *_recvol_state*_odd*')
+        call exec_cmdline(cleanup_exec_cmd)
+        deallocate(cleanup_exec_cmd)
     end subroutine qsys_cleanup_iter
 
     function stack_is_split( stkext, npart ) result( is_split )
@@ -79,24 +137,18 @@ contains
 
     subroutine terminate_if_prg_in_cwd( prg )
         character(len=*), intent(in) :: prg
-        integer                      :: cstat, estat, file_stat, funit, ios, file_rec, i, pos
-        character(len=STDLEN)        :: cmsg, pid, pid_dir, pwd
-        ! pgrep to find process id (pid) of prg
-        call execute_command_line('pgrep '//trim(prg)//' > pid_from_fortran.txt',&
-        exitstat=estat, cmdstat=cstat, cmdmsg=cmsg)
-        if( cstat > 0 )then
-            print *, 'simple_qsys_funs :: terminate_if_prg_in_cwd; command execution failed with error ', trim(cmsg)
-        elseif( cstat < 0 )then
-            print *, 'simple_qsys_funs :: terminate_if_prg_in_cwd; command execution not supported'
-        endif
+        integer                      :: file_stat, funit, ios, file_rec, i, pos
+        character(len=STDLEN)        :: pid, pid_dir, pwd, cmd
+        cmd = 'pgrep '//trim(prg)//' > pid_from_fortran.txt'
+        call exec_cmdline(cmd)
         ! read in the pid
         funit = get_fileunit()
         open(unit=funit, status='old', action='read', file='pid_from_fortran.txt', iostat=file_stat)
         read(funit,'(a)') pid
         close(funit)
         ! get a string that contains the directory it is running in with lsof -p
-        call execute_command_line('lsof -p '//trim(pid)//' | grep cwd > pid_dir_from_fortran.txt',&
-        exitstat=estat, cmdstat=cstat, cmdmsg=cmsg)
+        cmd = 'lsof -p '//trim(pid)//' | grep cwd > pid_dir_from_fortran.txt'
+        call exec_cmdline(cmd)
         open(unit=funit, status='old', action='read', file='pid_dir_from_fortran.txt', iostat=file_stat)
         read(funit,'(a)') pid_dir
         close(funit)
@@ -161,18 +213,18 @@ contains
         write(funit,'(a)') '# CONFIGURATION FILE FOR DISTRIBUTED SIMPLE EXECUTION'
         write(funit,'(a)') ''
         write(funit,'(a)') '# ABSOLUTE PATH TO SIMPLE ROOT DIRECTORY'
-        write(funit,'(a)') 'simple_path           ='//simple_path
+        write(funit,'(a)') 'simple_path           = '//simple_path
         write(funit,'(a)') ''
         write(funit,'(a)') '# ESTIMATED TIME PER IMAGE (IN SECONDS)'
         write(funit,'(a)')  'time_per_image        = 400'
         write(funit,'(a)') ''
         write(funit,'(a)') '# USER DETAILS'
         write(funit,'(a)') 'user_account          =' 
-        write(funit,'(a)') 'user_email            ='//simple_email
+        write(funit,'(a)') 'user_email            = '//simple_email
         write(funit,'(a)') 'user_project          ='
         write(funit,'(a)') ''
         write(funit,'(a)') '# QSYS DETAILS (qsys_name=<local|slurm|pbs>)'
-        write(funit,'(a)') 'qsys_name             ='//simple_qsys
+        write(funit,'(a)') 'qsys_name             = '//simple_qsys
         write(funit,'(a)') 'qsys_partition        ='
         write(funit,'(a)') 'qsys_qos              ='
         write(funit,'(a)') 'qsys_reservation      ='

@@ -279,12 +279,16 @@ foreach my $j(0 .. $#prod_dirs){
 # produce addonfiles for the bash (.bashrc) and tcsh (.tcshrc) shells
 chdir($SIMPLE_PATH);
 open(BASH, ">add2.bashrc") or die "Cannot open file add2.bashrc for writing: $!\n";
-print BASH "export SIMPLEPATH=$SIMPLE_PATH\n";
-print BASH 'export PATH=${SIMPLEPATH}/scripts:${SIMPLEPATH}/bin:$PATH', "\n";
+print BASH "export SIMPLE_EMAIL=\"my.name\@uni.edu\"\n";
+print BASH "export SIMPLE_QSYS=\"local\"\n";
+print BASH "export SIMPLE_PATH=$SIMPLE_PATH\n";
+print BASH 'export PATH=${SIMPLE_PATH}/scripts:${SIMPLE_PATH}/bin:$PATH', "\n";
 close(BASH);
 open(TCSH, ">add2.tcshrc") or die "Cannot open file add2.tcshrc for writing: $!\n";
-print TCSH "setenv SIMPLEPATH $SIMPLE_PATH\n";
-print TCSH 'set path=(${SIMPLEPATH}/scripts ${SIMPLEPATH}/bin $path)', "\n";
+print TCSH "setenv SIMPLE_EMAIL=\"my.name\@uni.edu\"\n";
+print TCSH "setenv SIMPLE_QSYS=\"local\"\n";
+print TCSH "setenv SIMPLE_PATH $SIMPLE_PATH\n";
+print TCSH 'set path=(${SIMPLE_PATH}/scripts ${SIMPLE_PATH}/bin $path)', "\n";
 close(TCSH);
 my $finishdir = getcwd();
 finish_message($finishdir);

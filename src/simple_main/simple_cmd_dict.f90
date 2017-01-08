@@ -193,7 +193,7 @@ contains
         call chdict%push('astigerr',      'astigmatism error(in microns)')
         call chdict%push('tomoseries',    'filetable of filetables of tomograms')
         call chdict%push('exp_doc',       'specifying exp_time and dose_rate per tomogram')
-        call chdict%push('shellw',        'shell-weight reconstruction (yes|no){no}')
+        call chdict%push('shellw',        'shell-weight reconstruction (yes|no)')
         call chdict%push('cenlp',         'low-pass limit for binarisation in centering')
         call chdict%push('dfmin',         'minimum expected defocus(in microns)')
         call chdict%push('dfmax',         'maximum expected defocus(in microns)')

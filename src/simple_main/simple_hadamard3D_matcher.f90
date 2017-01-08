@@ -108,7 +108,7 @@ contains
         if( p%l_distr_exec )then
             ! nothing to do
         else
-            if( cline%defined('oritab') .and. frac_srch_space >= 50. ) call cont3D_shellweight(b, p, cline)
+            if( p%l_shellw .and. frac_srch_space >= 50. ) call cont3D_shellweight(b, p, cline)
         endif
         call setup_shellweights(b, p, doshellweight, wmat, res, res_pad)
 

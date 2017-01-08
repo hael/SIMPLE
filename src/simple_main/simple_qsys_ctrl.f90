@@ -213,11 +213,10 @@ contains
 
     subroutine submit_script( self, ipart )
         use simple_qsys_local, only: qsys_local
+        use simple_syscalls,   only: exec_cmdline
         class(qsys_ctrl), intent(inout) :: self
         integer,          intent(in)    :: ipart
         class(qsys_base), pointer       :: pmyqsys
-        integer                         :: cstat, estat
-        character(len=100)              :: cmsg
         character(len=:), allocatable   :: exec_script
         select type( pmyqsys => self%myqsys )
             class is(qsys_local)
@@ -225,13 +224,7 @@ contains
             class DEFAULT
                 allocate(exec_script, source=self%myqsys%submit_cmd()//' ./'//trim(self%script_names(ipart)))
         end select
-        call execute_command_line(exec_script, exitstat=estat, cmdstat=cstat, cmdmsg=cmsg)
-        if( cstat > 0 )then
-            write(*,'(a,a)') 'simple_qsys_ctrl :: submit_scripts; command execution failed with error ', trim(cmsg)
-        elseif( cstat < 0 )then
-            write(*,'(a)') 'simple_qsys_ctrl :: submit_scripts; command execution not supported'
-        endif
-        deallocate(exec_script)
+        call exec_cmdline(exec_script)
         ! flag job submitted
         self%jobs_submitted(ipart) = .true.
         ! decrement ncomputing_units_avail

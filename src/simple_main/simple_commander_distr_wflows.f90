@@ -78,7 +78,7 @@ type, extends(commander_base) :: recvol_distr_commander
     procedure :: execute      => exec_recvol_distr
 end type recvol_distr_commander
 
-integer, parameter :: MAXNKEYS=30, KEYLEN=32
+integer, parameter :: KEYLEN=32
 
 contains
 
@@ -512,7 +512,7 @@ contains
                 frac_srch_space = os%get_avg('frac')
                 call job_descr%set( 'oritab', trim(oritab) )
                 call cline_shellweight3D%set( 'oritab', trim(oritab) )
-                if( frac_srch_space >= 50. )then
+                if( p_master%l_shellw .and. frac_srch_space >= 50.  )then
                     call xshellweight3D_distr%execute(cline_shellweight3D)
                 endif
             endif

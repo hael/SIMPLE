@@ -274,6 +274,7 @@ doshift
 l_automsk
 l_dose_weight
 l_innermsk
+l_shellw
 l_xfel
 vol1
 vol2

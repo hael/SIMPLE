@@ -1330,18 +1330,19 @@ select case(prg)
         ! set required keys
         keys_required(1)  = 'vol1'
         keys_required(2)  = 'smpd'
-        keys_required(3)  = 'fsc'
-        keys_required(4)  = 'msk'
+        keys_required(3)  = 'msk'
         ! set optional keys
-        keys_optional(1)  = 'mw'
-        keys_optional(2)  = 'bfac'
-        keys_optional(3)  = 'automsk'
-        keys_optional(4)  = 'amsklp'
-        keys_optional(5)  = 'edge'
-        keys_optional(6)  = 'binwidth'
+        keys_optional(1)  = 'fsc'
+        keys_optional(2)  = 'lp'
+        keys_optional(3)  = 'mw'
+        keys_optional(4)  = 'bfac'
+        keys_optional(5)  = 'automsk'
+        keys_optional(6)  = 'amsklp'
+        keys_optional(7)  = 'edge'
+        keys_optional(8)  = 'binwidth'
         ! parse command line
         if( describe ) call print_doc_postproc_vol
-        call cline%parse(keys_required(:4), keys_optional(:6))
+        call cline%parse(keys_required(:3), keys_optional(:8))
         ! execute
         call xpostproc_vol%execute(cline)
     case( 'projvol' )
