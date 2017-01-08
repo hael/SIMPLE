@@ -7,7 +7,6 @@
 use lib './';
 use warnings;
 use strict;
-use warnings;
 use Term::ANSIColor;
 our (@ISA, @EXPORT);
 use Exporter;

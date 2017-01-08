@@ -8,7 +8,7 @@
 !
 module simple_sym
 use simple_oris,   only: oris
-use simple_defs  ! singleton
+use simple_defs    ! singleton
 use simple_jiffys, only: alloc_err
 implicit none
 
@@ -43,11 +43,11 @@ type sym
     procedure, private :: set_subgrps
     procedure, private :: get_all_cd_subgrps
     procedure :: kill
-end type
+end type sym
 
 interface sym
     module procedure constructor
-end interface
+end interface sym
 
 integer, parameter          :: ntet=12 ! number of tetahedral symmetry operations
 integer, parameter          :: noct=24 ! number of octahedral symmetry operations
@@ -67,7 +67,7 @@ contains
         character(len=*), intent(in) :: pgrp
         type(sym)                    :: self
         call self%new(pgrp)
-    end function
+    end function constructor
 
     !>  \brief  is a constructor
     subroutine new( self, pgrp )
@@ -119,7 +119,7 @@ contains
         endif
         call self%e_sym%swape1e3
         call self%set_subgrps
-    end subroutine
+    end subroutine new
 
     !>  \brief  returns the search range for the point-group
     function srchrange( self ) result( eullims )
@@ -144,35 +144,35 @@ contains
             eullims(1,2) = 180.
             eullims(2,2) = 31.7
         endif
-    end function
+    end function srchrange
     
     !>  \brief  to check which point-group symmetry 
     pure function which( self ) result( pgrp )
         class(sym), intent(in) :: self
         character(len=3) :: pgrp
         pgrp = self%pgrp
-    end function
+    end function which
     
     !>  \brief  is a getter 
     pure function get_nsym( self ) result( n )
         class(sym), intent(in) :: self
         integer :: n
         n = self%n
-    end function
+    end function get_nsym
 
     !>  \brief  is a getter 
     pure function get_pgrp( self ) result( pgrp_str )
         class(sym), intent(in) :: self
         character(len=3) :: pgrp_str
         pgrp_str = self%pgrp
-    end function
+    end function get_pgrp
 
     !>  \brief  is a getter 
     function get_nsubgrp( self )result( n )
         class(sym) :: self
         integer :: n
         n = size(self%subgrps)
-    end function
+    end function get_nsubgrp
 
     !>  \brief  is a getter 
     function get_subgrp( self, i )result( symobj )
@@ -181,11 +181,11 @@ contains
         integer   :: i, n
         n = size(self%subgrps)
         if( (i>n).or.(i<1) )then
-            write(6,*)'Index out of bonds on simple_sym; get_subgroup'
+            write(*,*)'Index out of bonds on simple_sym; get_subgroup'
             stop
         endif
         symobj = sym(self%subgrps(i))
-    end function
+    end function get_subgrp
 
     !>  \brief  is a 
     subroutine get_all_cd_subgrps( self, subgrps )
@@ -230,9 +230,9 @@ contains
                 character(len=3)              :: ostr
                 write(ord,'(I2)') iord
                 write(ostr,'(A1,A2)') symtype, adjustl(ord) 
-            end function
+            end function fmtsymstr
             
-    end subroutine
+    end subroutine get_all_cd_subgrps
 
     !>  \brief  Returns array of all symmetry subgroups in c &/| d
     function get_all_subgrps( self )result( subgrps )
@@ -259,7 +259,7 @@ contains
             subgrps(2)  = 'o'
             subgrps(3)  = 'i'
         endif
-    end function
+    end function get_all_subgrps
 
     !>  \brief  is a symmetry adaptor
     function apply( self, e_in, symop ) result( e_sym )
@@ -272,7 +272,7 @@ contains
         e_symop = self%e_sym%get_ori(symop)
         e_tmp   = e_symop.compose.e_in
         call e_sym%set_euler(e_tmp%get_euler())
-    end function
+    end function apply
     
     !>  \brief  is a getter 
     function get_symori( self, symop ) result( e_sym )
@@ -281,7 +281,7 @@ contains
         integer, intent(in)       :: symop
         type(ori) :: e_sym
         e_sym = self%e_sym%get_ori(symop)
-    end function
+    end function get_symori
     
     !>  \brief  is a symmetry adaptor
     subroutine apply2all( self, e_in )
@@ -297,16 +297,16 @@ contains
             call e_in%set_ori(j, self%apply(orientation, cnt))
             if( cnt == self%n ) cnt = 0
         end do
-    end subroutine
+    end subroutine apply2all
     
     !>  \brief  4 writing the symmetry orientations 2 file
     subroutine write( self, orifile )
         class(sym), intent(inout)    :: self
         character(len=*), intent(in) :: orifile
         call self%e_sym%write(orifile)
-    end subroutine
+    end subroutine write
     
-    !>  \brief  Spider code for making c and d symmetries
+    !>  \brief  SPIDER code for making c and d symmetries
     subroutine make_c_and_d( self )
         class(sym), intent(inout) :: self
         double precision :: delta, degree
@@ -326,15 +326,11 @@ contains
            end do
            if(self%pgrp(1:1).ne.'d' .and. self%pgrp(1:1).ne.'D') return
         end do 
-    end subroutine
+    end subroutine make_c_and_d
     
-    !>  \brief  hardcoded euler angles taken from sparx
+    !>  \brief  hardcoded euler angles taken from SPARX
     subroutine make_o( self )
         class(sym), intent(inout) :: self
-        !double precision :: degree, deltan
-        !double precision, dimension(3,3) :: a,b,ab,ba,c,d,e,f,g
-        !integer   :: i,j,k,cnt
-        !double precision :: psi, theta, phi
         integer   :: i,j,cnt
         double precision :: psi, phi
         cnt = 0
@@ -350,41 +346,9 @@ contains
             cnt = cnt + 1
             call self%e_sym%set_euler(cnt,real([0.d0, 180.d0, phi]))
         enddo
-        ! Produced inaccurate euler symmetry operators due to mishandling of
-        ! singular rotation matrices in matcreate. Replaced with above
-        ! ! create the x(gamma)z(45) matrix
-        ! a = matcreate(0, gamma)
-        ! degree = 45.d0
-        ! b = matcreate(1, degree)
-        ! ab = matmul(a,b)
-        ! ba = transpose(ab)
-        ! cnt = 0
-        ! do i=0,1
-        !     degree = i*delta2
-        !     c = matcreate(0, degree)
-        !     do j=0,self%t_or_o
-        !         deltan= 360.d0/(self%t_or_o+1.d0)
-        !         degree = j*deltan
-        !         d = matcreate(1, degree)
-        !         do k=0,2
-        !             cnt = cnt+1
-        !             degree = k*delta3
-        !             e = matcreate(1,degree)
-        !             ! calc zi*xgamma*z45
-        !             f = matmul(e,ab)
-        !             ! calc xgamma'*z45'*zi*xgamma*z45 =pi
-        !             e = matmul(ba,f)
-        !             ! calc changeablez * pi
-        !             f = matmul(d,e)
-        !             ! calc xdelta2*changeablez * pi
-        !             g = matmul(c,f)
-        !             call self%e_sym%set_euler(cnt,real(matextract(g)))
-        !         end do
-        !     end do
-        ! end do
-    end subroutine
+    end subroutine make_o
     
-    !>  \brief  Spider code for making tetahedral symmetry
+    !>  \brief  SPIDER code for making tetahedral symmetry
     !!          tetrahedral, with 3axis align w/z axis, point on +ve x axis
     subroutine make_t( self )
         class(sym), intent(inout) :: self
@@ -412,7 +376,7 @@ contains
         end do
     end subroutine make_t
 
-    !>  \brief  Spider code for making icosahedral symmetry
+    !>  \brief  SPIDER code for making icosahedral symmetry
     subroutine make_i( self )
         class(sym), intent(inout) :: self
         double precision :: deltan, psi, theta, phi
@@ -446,7 +410,7 @@ contains
                 call self%e_sym%set_euler(cnt, real([psi,theta,phi]))
             end do 
         end do
-    end subroutine
+    end subroutine make_i
     
     !>  \brief Sets the array of subgroups (character identifier) including itself
     subroutine set_subgrps( self )
@@ -523,7 +487,7 @@ contains
                         pgrps(cnt) = fmtsymstr(cstr, i)
                     endif
                 enddo                    
-            end subroutine
+            end subroutine getevensym
 
             function fmtsymstr( symtype, iord )result( ostr )
                 integer, intent(in)           :: iord
@@ -532,20 +496,20 @@ contains
                 character(len=3)              :: ostr
                 write(ord,'(I2)') iord
                 write(ostr,'(A1,A2)') symtype, adjustl(ord) 
-            end function
+            end function fmtsymstr
             
-    end subroutine
+    end subroutine set_subgrps
 
     !>  \brief  is a destructor
     subroutine kill( self )
         class(sym) :: self
         if( allocated(self%subgrps) )deallocate( self%subgrps )
         call self%e_sym%kill
-    end subroutine
+    end subroutine kill
     
     ! PRIVATE STUFF
     
-    !>  \brief  from Spider, creates a rotation matrix around either x or z assumes
+    !>  \brief  from SPIDER, creates a rotation matrix around either x or z assumes
     !!          rotation ccw looking towards 0 from +axis accepts 2 arguments, 
     !!          0=x or 1=z (first reg.)and rot angle in deg.(second reg.)
     function matcreate( inxorz, indegr ) result( newmat )
@@ -574,11 +538,11 @@ contains
         else
             stop 'Unsupported matrix spec; matcreate; simple_ori'
         endif
-    end function
+    end function matcreate
     
-    !>  \brief  from spider, used to calculate angles spider expects from rot. matrix.
+    !>  \brief  from SPIDER, used to calculate the angles SPIDER expects from rot. matrix.
     !!          assumes sin(theta) is positive (0-180 deg), euls(3) is returned in the 
-    !!          Spider convention psi, theta, phi
+    !!          SPIDER convention psi, theta, phi
     function matextract( rotmat ) result( euls ) 
         double precision, intent(inout) :: rotmat(3,3)
         double precision :: euls(3),radtha,sintha
@@ -648,6 +612,6 @@ contains
         if(abs(1.-((euls(3)+1.)/1.)).lt.(1.e-4))then
             euls(3) = 0.d0
         endif
-    end function
+    end function matextract
 
 end module simple_sym

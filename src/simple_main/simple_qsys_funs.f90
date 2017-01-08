@@ -7,96 +7,69 @@ implicit none
 contains
 
     subroutine qsys_cleanup_all
-        character(len=:), allocatable :: cleanup_exec_cmd
-        integer, parameter :: SHORTTIME = 5
+        character(len=STDLEN) :: cleanup_exec_cmd
+        integer, parameter    :: SHORTTIME = 5
         call sleep(SHORTTIME)
-        allocate(cleanup_exec_cmd, source='rm -f FOO' )
+        cleanup_exec_cmd = 'rm -f FOO'
         call exec_cmdline(cleanup_exec_cmd)
-        deallocate(cleanup_exec_cmd)
-        allocate(cleanup_exec_cmd, source='rm -f OUT*')
+        cleanup_exec_cmd = 'rm -f OUT*'
         call exec_cmdline(cleanup_exec_cmd)
-        deallocate(cleanup_exec_cmd)
-        allocate(cleanup_exec_cmd, source='rm -f algndoc_*')
+        cleanup_exec_cmd = 'rm -f algndoc_*'
         call exec_cmdline(cleanup_exec_cmd)
-        deallocate(cleanup_exec_cmd)
-        allocate(cleanup_exec_cmd, source='rm -f distr_script_*')
+        cleanup_exec_cmd = 'rm -f distr_script_*'
         call exec_cmdline(cleanup_exec_cmd)
-        deallocate(cleanup_exec_cmd)
-        allocate(cleanup_exec_cmd, source='rm -f rho*')
+        cleanup_exec_cmd = 'rm -f rho*'
         call exec_cmdline(cleanup_exec_cmd)
-        deallocate(cleanup_exec_cmd)
-        allocate(cleanup_exec_cmd, source='rm -f fort.0')
+        cleanup_exec_cmd = 'rm -f fort.0'
         call exec_cmdline(cleanup_exec_cmd)
-        deallocate(cleanup_exec_cmd)
-        allocate(cleanup_exec_cmd, source='rm -f primedoc_*')
+        cleanup_exec_cmd = 'rm -f primedoc_*'
         call exec_cmdline(cleanup_exec_cmd)
-        deallocate(cleanup_exec_cmd)
-        allocate(cleanup_exec_cmd, source='rm -f recvol*')
+        cleanup_exec_cmd = 'rm -f recvol*'
         call exec_cmdline(cleanup_exec_cmd)
-        deallocate(cleanup_exec_cmd)
-        allocate(cleanup_exec_cmd, source='rm -f JOB_FINISHED_*')
+        cleanup_exec_cmd = 'rm -f JOB_FINISHED_*'
         call exec_cmdline(cleanup_exec_cmd)
-        deallocate(cleanup_exec_cmd)
-        allocate(cleanup_exec_cmd, source='rm -f errfile.*')
+        cleanup_exec_cmd = 'rm -f errfile.*'
         call exec_cmdline(cleanup_exec_cmd)
-        deallocate(cleanup_exec_cmd)
-        allocate(cleanup_exec_cmd, source='rm -f outfile.*')
+        cleanup_exec_cmd = 'rm -f outfile.*'
         call exec_cmdline(cleanup_exec_cmd)
-        deallocate(cleanup_exec_cmd)
-        allocate(cleanup_exec_cmd, source='rm -f ctfsqsums_part*')
+        cleanup_exec_cmd = 'rm -f ctfsqsums_part*'
         call exec_cmdline(cleanup_exec_cmd)
-        deallocate(cleanup_exec_cmd)
     end subroutine qsys_cleanup_all
 
     subroutine qsys_cleanup_iter()
-        character(len=:), allocatable :: cleanup_exec_cmd
-        integer, parameter :: SHORTTIME = 5
+        character(len=STDLEN) :: cleanup_exec_cmd
+        integer, parameter    :: SHORTTIME = 5
         call sleep(SHORTTIME)
-        allocate(cleanup_exec_cmd, source='rm -f FOO' )
+        cleanup_exec_cmd = 'rm -f FOO'
         call exec_cmdline(cleanup_exec_cmd)
-        deallocate(cleanup_exec_cmd)
-        allocate(cleanup_exec_cmd, source='rm -f OUT*')
+        cleanup_exec_cmd = 'rm -f OUT*'
         call exec_cmdline(cleanup_exec_cmd)
-        deallocate(cleanup_exec_cmd)
-        allocate(cleanup_exec_cmd, source='rm -f algndoc_*')
+        cleanup_exec_cmd = 'rm -f algndoc_*'
         call exec_cmdline(cleanup_exec_cmd)
-        deallocate(cleanup_exec_cmd)
-        allocate(cleanup_exec_cmd, source='rm -f distr_*script_*')
+        cleanup_exec_cmd = 'rm -f distr_*script_*'
         call exec_cmdline(cleanup_exec_cmd)
-        deallocate(cleanup_exec_cmd)
-        allocate(cleanup_exec_cmd, source='rm -f rho*')
+        cleanup_exec_cmd = 'rm -f rho*'
         call exec_cmdline(cleanup_exec_cmd)
-        deallocate(cleanup_exec_cmd)
-        allocate(cleanup_exec_cmd, source='rm -f fort.0')
+        cleanup_exec_cmd = 'rm -f fort.0'
         call exec_cmdline(cleanup_exec_cmd)
-        deallocate(cleanup_exec_cmd)
-        allocate(cleanup_exec_cmd, source='rm -f recvol_state*_part*')
+        cleanup_exec_cmd = 'rm -f recvol_state*_part*'
         call exec_cmdline(cleanup_exec_cmd)
-        deallocate(cleanup_exec_cmd)
-        allocate(cleanup_exec_cmd, source='rm -f JOB_FINISHED_*')
+        cleanup_exec_cmd = 'rm -f JOB_FINISHED_*'
         call exec_cmdline(cleanup_exec_cmd)
-        deallocate(cleanup_exec_cmd)
-        allocate(cleanup_exec_cmd, source='rm -f errfile.*')
+        cleanup_exec_cmd = 'rm -f errfile.*'
         call exec_cmdline(cleanup_exec_cmd)
-        deallocate(cleanup_exec_cmd)
-        allocate(cleanup_exec_cmd, source='rm -f outfile.*')
+        cleanup_exec_cmd = 'rm -f outfile.*'
         call exec_cmdline(cleanup_exec_cmd)
-        deallocate(cleanup_exec_cmd)
-        allocate(cleanup_exec_cmd, source='rm -f ctfsqsums_part*')
+        cleanup_exec_cmd = 'rm -f ctfsqsums_part*'
         call exec_cmdline(cleanup_exec_cmd)
-        deallocate(cleanup_exec_cmd)
-        allocate(cleanup_exec_cmd, source='rm -f ctfsqsums_part*')
+        cleanup_exec_cmd = 'rm -f ctfsqsums_part*'
         call exec_cmdline(cleanup_exec_cmd)
-        deallocate(cleanup_exec_cmd)
-        allocate(cleanup_exec_cmd, source='rm -f cavgs_part*')
+        cleanup_exec_cmd = 'rm -f cavgs_part*'
         call exec_cmdline(cleanup_exec_cmd)
-        deallocate(cleanup_exec_cmd)
-        allocate(cleanup_exec_cmd, source='rm -f *_recvol_state*_even*')
+        cleanup_exec_cmd = 'rm -f *_recvol_state*_even*'
         call exec_cmdline(cleanup_exec_cmd)
-        deallocate(cleanup_exec_cmd)
-        allocate(cleanup_exec_cmd, source='rm -f *_recvol_state*_odd*')
+        cleanup_exec_cmd = 'rm -f *_recvol_state*_odd*'
         call exec_cmdline(cleanup_exec_cmd)
-        deallocate(cleanup_exec_cmd)
     end subroutine qsys_cleanup_iter
 
     function stack_is_split( stkext, npart ) result( is_split )

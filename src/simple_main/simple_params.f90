@@ -188,7 +188,6 @@ type :: params
     integer :: nboot=0
     integer :: ncls=500
     integer :: ncomps=0
-    ! integer :: ndim=0
     integer :: ndiscrete=0
     integer :: ndocs=0
     integer :: newbox=0
@@ -201,12 +200,14 @@ type :: params
     integer :: npix=0
     integer :: nptcls=1
     integer :: nran=0
+    integer :: nrepeats=1
     integer :: nrestarts=1
     integer :: nrots=0
     integer :: nspace=1000
     integer :: nstates=1
     integer :: nsym=1
     integer :: nthr=1
+    integer :: nthr_master=1
     integer :: numlen=0
     integer :: nvalid=0
     integer :: nvars=30
@@ -511,6 +512,7 @@ contains
         call check_iarg('nnn',            self%nnn)
         call check_iarg('noris',          self%noris)
         call check_iarg('nran',           self%nran)
+        call check_iarg('nrepeats',       self%nrepeats)
         call check_iarg('nrestarts',      self%nrestarts)
         call check_iarg('nspace',         self%nspace)
         call check_iarg('nstates',        self%nstates)
@@ -522,6 +524,7 @@ contains
         call check_iarg('npix',           self%npix)
         call check_iarg('nptcls',         self%nptcls)
         call check_iarg('nthr',           self%nthr)
+        call check_iarg('nthr_master',    self%nthr_master)
         call check_iarg('numlen',         self%numlen)
         call check_iarg('nvars',          self%nvars)
         call check_iarg('nvox',           self%nvox)
@@ -734,6 +737,11 @@ contains
             self%lpstop = self%fny                                ! deafult lpstop
         endif
         if( self%fny > 0. ) self%tofny = int(self%dstep/self%fny) ! Nyqvist Fourier index
+        if( cline%defined('lp') )then                             ! override dynlp=yes and lpstop
+            self%dynlp = 'no'
+            if( self%lp < self%lpstop )  self%lpstop  = self%lp
+            if( self%lpstart > self%lp ) self%lpstart = self%lp
+        endif
         ! set default ring2 value
         if( .not. cline%defined('ring2') )then
             if( cline%defined('msk') )then

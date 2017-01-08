@@ -109,6 +109,7 @@ contains
         call chdict%push('nspace',        'nr of projection directions{20}')
         call chdict%push('nstates',       'nr of states to reconstruct')
         call chdict%push('nthr',          'nr of OpenMP threads{1}')
+        call chdict%push('nthr_master',   'nr of OpenMP threads on master node{1}')
         call chdict%push('numlen',        'length of number string')
         call chdict%push('nvox',          'number of voxels{0}')
         call chdict%push('odd',           'calculate odd eo-pair(yes|no){no}')
@@ -203,7 +204,7 @@ contains
         call chdict%push('dfunit',        'defocus unit (A|microns){microns}')
         call chdict%push('angastunit',    'angle of astigmatism unit (radians|degrees){degrees}')
         call chdict%push('plaintexttab',  'plain text file of input parameters')
-        call chdict%push('boxtype',       'box coordinate convention (eman|relion){eman}')
+        call chdict%push('nrepeats',      'nr of times to restart workflow{1}')
         initialised = .true.
     end subroutine init_cmd_dict
     

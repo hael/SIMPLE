@@ -62,7 +62,7 @@ type(shellweight3D_commander)      :: xshellweight3D
 type(prime3D_init_commander)       :: xprime3D_init
 type(het_init_commander)           :: xhet_init
 type(multiptcl_init_commander)     :: xmultiptcl_init
-type(prime3D_commander)            :: xprime3D    
+type(prime3D_commander)            :: xprime3D
 type(cont3D_commander)             :: xcont3D
 type(check3D_conv_commander)       :: xcheck3D_conv
     
@@ -794,7 +794,7 @@ select case(prg)
         keys_optional(10) = 'state2split'
         keys_optional(11) = 'norec'
         keys_optional(12) = 'mul'
-        keys_optional(13) = 'zero'        
+        keys_optional(13) = 'zero'
         ! parse command line
         if( describe ) call print_doc_multiptcl_init
         call cline%parse(keys_required(:4), keys_optional(:13))
@@ -896,9 +896,10 @@ select case(prg)
         keys_optional(27) = 'noise'
         keys_optional(28) = 'xfel'
         keys_optional(29) = 'nnn'
+        keys_optional(30) = 'shellw'
         ! parse command line
         if( describe ) call print_doc_prime3D
-        call cline%parse(keys_required(:6), keys_optional(:29))
+        call cline%parse(keys_required(:6), keys_optional(:30))
         ! set defaults
         if( .not. cline%defined('nspace')                  ) call cline%set('nspace', 1000.)
         if( cline%defined('lp') .or. cline%defined('find') ) call cline%set('dynlp',   'no')
@@ -935,9 +936,10 @@ select case(prg)
         keys_optional(13) = 'startit'
         keys_optional(14) = 'maxits'
         keys_optional(15) = 'xfel'
+        keys_optional(16) = 'shellw'
         ! parse command line
         if( describe ) call print_doc_cont3D
-        call cline%parse(keys_required(:8), keys_optional(:15))
+        call cline%parse(keys_required(:8), keys_optional(:16))
         ! set defaults
         call cline%set('eo',     'yes')
         call cline%set('refine', 'yes')

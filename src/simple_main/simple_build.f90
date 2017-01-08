@@ -117,7 +117,7 @@ contains
         class(cmdline),    intent(inout) :: cline
         logical, optional, intent(in)    :: do3d, nooritab, force_ctf
         type(ran_tabu) :: rt
-        integer        :: alloc_stat, lfny, nl_def
+        integer        :: alloc_stat, lfny
         real           :: slask(3)
         logical        :: err, ddo3d, fforce_ctf
         call self%kill_general_tbox
@@ -139,15 +139,7 @@ contains
             call self%a%spiral(p%nsym, p%eullims)
         else
             ! we need the oritab to override the deftab in order not to loose parameters
-            if( p%deftab /= '' )then
-                nl_def = nlines(p%deftab)
-                if(  nl_def /= p%nptcls )then
-                    write(*,*) 'nonconforming deftab, number of entries .ne. nptcls; build_general_tbox'
-                    write(*,*) 'nptcls: ', p%nptcls
-                    write(*,*) 'nr of lines in deftab: ', nl_def
-                endif
-                call self%a%read(p%deftab)
-            endif
+            if( p%deftab /= '' ) call self%a%read(p%deftab)
             if( p%oritab /= '' )then
                 if( .not. cline%defined('nstates') .and. p%vols(1) .eq. '' )then
                     call self%a%read(p%oritab, p%nstates)

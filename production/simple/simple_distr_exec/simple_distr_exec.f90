@@ -8,10 +8,11 @@
 !
 program simple_distr_exec
 use simple_cmdline,  only: cmdline
-use simple_jiffys    ! singleton
-use simple_defs      ! singleton
-use simple_gen_doc   ! singleton
+use simple_jiffys       ! singleton
+use simple_defs         ! singleton
+use simple_gen_doc      ! singleton
 use simple_commander_distr_wflows
+use simple_commander_hlev_wflows
 implicit none
 
 ! DISTRIBUTED COMMANDERS
@@ -25,6 +26,8 @@ type(prime3D_distr_commander)            :: xprime3D_distr
 type(prime2D_init_distr_commander)       :: xprime2D_init_distr
 type(prime2D_distr_commander)            :: xprime2D_distr
 type(find_nnimgs_distr_commander)        :: xfind_nnimgs_distr
+type(ini3D_from_cavgs_commander)         :: xini3D_from_cavgs
+
 ! OTHER DECLARATIONS
 integer, parameter    :: MAXNKEYS=100, KEYLEN=32
 character(len=KEYLEN) :: keys_required(MAXNKEYS)='', keys_optional(MAXNKEYS)=''
@@ -252,9 +255,9 @@ select case(prg)
         keys_optional(4)  = 'oritab'
         keys_optional(5)  = 'trs'
         keys_optional(6)  = 'hp'
-        keys_optional(7) = 'lp'
-        keys_optional(8) = 'dynlp'
-        keys_optional(9) = 'lpstart'
+        keys_optional(7)  = 'lp'
+        keys_optional(8)  = 'dynlp'
+        keys_optional(9)  = 'lpstart'
         keys_optional(10) = 'lpstop'
         keys_optional(11) = 'eo'
         keys_optional(12) = 'refine'
@@ -275,8 +278,9 @@ select case(prg)
         keys_optional(27) = 'noise'
         keys_optional(28) = 'xfel'
         keys_optional(29) = 'nnn'
+        keys_optional(30) = 'shellw'  
         ! parse command line
-        call cline%parse(keys_required(:7), keys_optional(:29))
+        call cline%parse(keys_required(:7), keys_optional(:30))
         ! set defaults
         if( .not. cline%defined('nspace')                  ) call cline%set('nspace', 1000.)
         if( cline%defined('lp') .or. cline%defined('find') ) call cline%set('dynlp',   'no')
@@ -412,6 +416,29 @@ select case(prg)
         if( .not. cline%defined('eo')  ) call cline%set('eo', 'no')
         ! execute
         call xrecvol_distr%execute( cline )
+
+    ! HIGH-LEVEL DISTRIBUTED WORKFLOWS
+
+    case( 'ini3D_from_cavgs' )
+        !==Program ini3D_from_cavgs
+        !
+        ! <ini3D_from_cavgs/begin>  <ini3D_from_cavgs/end> 
+        !
+        ! set required keys
+        keys_required(1) = 'stk'
+        keys_required(2) = 'smpd'
+        keys_required(3) = 'msk'
+        keys_required(4) = 'pgrp'
+        keys_required(5) = 'nthr'
+        keys_required(6) = 'nparts'
+        ! set optional keys
+        keys_optional(1) = 'ncunits'
+        keys_optional(2) = 'nthr_master'
+        keys_optional(3) = 'nrepeats'
+        ! parse command line
+        call cline%parse(keys_required(:6), keys_optional(:3))
+        ! execute
+        call xini3D_from_cavgs%execute( cline )
     case DEFAULT
         write(*,'(a,a)') 'program key (prg) is: ', trim(prg)
         stop 'unsupported program'

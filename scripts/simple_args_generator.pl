@@ -59,7 +59,7 @@ implicit none
 public :: args, test_args
 private
 
-integer, parameter :: NARGMAX=300
+integer, parameter :: NARGMAX=500
 
 type args
     private

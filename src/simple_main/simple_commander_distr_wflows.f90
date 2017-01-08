@@ -35,6 +35,7 @@ public :: prime2D_init_distr_commander
 public :: prime2D_distr_commander
 public :: find_nnimgs_distr_commander
 public :: recvol_distr_commander
+
 private
 
 type, extends(commander_base) :: unblur_movies_distr_commander
@@ -580,7 +581,12 @@ contains
             endif
         end do
         call qsys_cleanup_iter
+
         ! POST PROCESSING ?
+
+        ! report the last iteration on exit
+        call cline%set('endit', real(iter))
+        ! end gracefully
         call simple_end('**** SIMPLE_DISTR_PRIME3D NORMAL STOP ****')
     end subroutine exec_prime3D_distr
 

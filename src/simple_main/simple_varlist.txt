@@ -164,12 +164,14 @@ npeaks
 npix
 nptcls
 nran
+nrepeats
 nrestarts
 nrots
 nspace
 nstates
 nsym
 nthr
+nthr_master
 numlen
 nvalid
 nvars
