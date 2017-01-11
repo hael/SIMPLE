@@ -10,11 +10,12 @@
 ! Redistribution and modification is regulated by the GNU General Public License.
 ! Authors: Cyril Reboul & Hans Elmlund 2016
 !
-program exec
-use simple_cmdline,  only: cmdline
-use simple_jiffys    ! singleton
-use simple_defs      ! singleton
-use simple_gen_doc   ! singleton
+program simple_exec
+use simple_defs
+use simple_cmdline, only: cmdline
+use simple_strings, only: str_has_substr
+use simple_jiffys,  only: cmdline_err
+use simple_gen_doc
 use simple_commander_checks
 use simple_commander_comlin
 use simple_commander_distr
@@ -498,11 +499,9 @@ select case(prg)
         keys_optional(4) = 'box'
         keys_optional(5) = 'noise_norm'
         keys_optional(6) = 'outside'
-        keys_optional(7) = 'mul'
-        keys_optional(8) = 'boxtype'
         ! parse command line
         if( describe ) call print_doc_extract
-        call cline%parse( keys_required(:3), keys_optional(:8))
+        call cline%parse( keys_required(:3), keys_optional(:6))
         ! parse command line
         if( .not. cline%defined('neg') )call cline%set('neg', 'yes')
         ! execute
@@ -1047,8 +1046,8 @@ select case(prg)
         ! set defaults
         if( .not. cline%defined('nspace') )then
             if( cline%defined('vol1') )then
-                call cline%set('nptcls', 20.) ! 20 projections 4 symsrch
-                call cline%set('nspace', 20.) ! 20 projections 4 symsrch
+                call cline%set('nptcls', 50.) ! 50 projections 4 symsrch
+                call cline%set('nspace', 50.) ! 50 projections 4 symsrch
             else
                 call cline%set('nptcls', 1.) ! single-particle search
                 call cline%set('nspace', 1.) ! single-particle search
@@ -2072,11 +2071,9 @@ select case(prg)
         keys_required(2) = 'nptcls'
         keys_required(3) = 'ndocs'
         keys_required(4) = 'outfile'
-        ! set optional keys
-        keys_optional(1) = 'oritab'
         ! parse command line
         if( describe ) call print_doc_merge_algndocs
-        call cline%parse( keys_required(:4), keys_optional(:1) )
+        call cline%parse(keys_required(:4))
         ! execute
         call xmerge_algndocs%execute(cline)
     case( 'merge_nnmat' )
@@ -2162,4 +2159,4 @@ select case(prg)
         write(*,'(a,a)') 'program key (prg) is: ', trim(prg)
         stop 'unsupported program'
     end select
-end program exec
+end program simple_exec

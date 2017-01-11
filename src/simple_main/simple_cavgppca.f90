@@ -1,7 +1,7 @@
 !==Class simple_
 !
 module simple_cavgppca
-use simple_defs              ! singleton
+use simple_defs
 use simple_oris,             only: oris
 use simple_ori,              only: ori
 use simple_jiffys,           only: alloc_err
@@ -99,7 +99,8 @@ contains
     end subroutine new
 
     subroutine write_mat( self )
-        use simple_jiffys,   only: alloc_err, progress, get_fileunit
+        use simple_jiffys,       only: alloc_err, progress
+        use simple_filehandling, only: get_fileunit
         class(cavgppca), intent(inout)   :: self
         integer :: i,j,filnum
         character(len=STDLEN) :: str

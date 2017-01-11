@@ -240,7 +240,6 @@ contains
         use simple_pair_dtab, only: pair_dtab
         use simple_math
         use simple_hac
-        use simple_jiffys
         real :: datavecs(900,5)
         type(pair_dtab) :: pd
         type(oris)      :: o

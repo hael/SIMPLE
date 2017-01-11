@@ -1,11 +1,11 @@
 module simple_rec_master
-use simple_build,   only: build
-use simple_params,  only: params
-use simple_cmdline, only: cmdline
-use simple_jiffys   ! singleton
-use simple_defs     ! singleton
-use simple_math     ! singleton
-use simple_filterer ! singleton
+use simple_defs
+use simple_build,     only: build
+use simple_params,    only: params
+use simple_cmdline,   only: cmdline
+use simple_qsys_funs, only: qsys_job_finished
+use simple_math       ! use all in there
+use simple_filterer   ! use all in there
 implicit none
 
 public :: exec_rec_master
@@ -32,6 +32,7 @@ contains
     end subroutine exec_rec_master
     
     subroutine exec_rec( b, p, cline, fbody_in, wmat )
+        use simple_strings, only: int2str_pad
         class(build),               intent(inout) :: b
         class(params),              intent(inout) :: p
         class(cmdline),             intent(inout) :: cline
@@ -90,16 +91,11 @@ contains
             deallocate(fbody)
         end do
         write(*,'(a)') "GENERATED VOLUMES: recvol*.ext"
-        if( p%l_distr_exec )then
-            fnr = get_fileunit()
-            open(unit=fnr, FILE='JOB_FINISHED_'//int2str_pad(p%part,p%numlen),&
-            &STATUS='REPLACE', action='WRITE', iostat=file_stat)
-            call fopen_err( 'In: simple_recvol', file_stat )
-            close(unit=fnr)
-        endif
+        call qsys_job_finished( p, 'simple_rec_master :: exec_rec')
     end subroutine exec_rec
     
     subroutine exec_eorec( b, p, cline, fbody_in, wmat )
+        use simple_strings, only: int2str_pad
         class(build),               intent(inout) :: b
         class(params),              intent(inout) :: p
         class(cmdline),             intent(inout) :: cline    
@@ -139,13 +135,7 @@ contains
             endif
             deallocate(fbody)
         end do
-        if( p%l_distr_exec )then
-            fnr = get_fileunit()
-            open(unit=fnr, FILE='JOB_FINISHED_'//int2str_pad(p%part,p%numlen),&
-            &STATUS='REPLACE', action='WRITE', iostat=file_stat)
-            call fopen_err( 'In: simple_recvol', file_stat )
-            close(unit=fnr)
-        endif   
+        call qsys_job_finished( p, 'simple_rec_master :: exec_eorec')   
         write(*,'(a,1x,a)') "GENERATED VOLUMES: recvol*.ext"
     end subroutine exec_eorec
     

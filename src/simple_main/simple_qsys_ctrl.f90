@@ -1,8 +1,8 @@
 module simple_qsys_ctrl
-use simple_jiffys     ! singleton
-use simple_defs       ! singleton
+use simple_defs
 use simple_qsys_base, only: qsys_base
 use simple_chash,     only: chash
+use simple_strings,   only: int2str, int2str_pad
 implicit none
 
 public :: qsys_ctrl
@@ -64,6 +64,7 @@ contains
     
     !>  \brief  is a constructor
     subroutine new( self, exec_binary, qsys_obj, parts, fromto_part, ncomputing_units )
+        use simple_jiffys, only: alloc_err
         class(qsys_ctrl),         intent(inout) :: self             !< the instance
         character(len=*),         intent(in)    :: exec_binary      !< the binary that we want to execute in parallel
         class(qsys_base), target, intent(in)    :: qsys_obj         !< the object that defines the qeueuing system
@@ -155,6 +156,7 @@ contains
 
     !>  \brief  private part script generator
     subroutine generate_script( self, job_descr, ipart, q_descr )
+        use simple_filehandling, only: get_fileunit
         class(qsys_ctrl), intent(inout) :: self
         class(chash),     intent(in)    :: job_descr
         integer,          intent(in)    :: ipart
@@ -234,6 +236,7 @@ contains
     ! QUERIES
 
     subroutine update_queue( self )
+        use simple_filehandling, only: file_exists
         class(qsys_ctrl), intent(inout) :: self
         character(len=:), allocatable   :: job_done_fname
         integer :: ipart, njobs_in_queue

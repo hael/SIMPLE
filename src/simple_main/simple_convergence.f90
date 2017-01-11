@@ -19,7 +19,7 @@ real, parameter :: FRAC_LIM        = 98.0
 type convergence
     private
     class(oris),    pointer :: bap    => null() !< pointer to alignment oris object (a) part of build (b)
-    class(params),  pointer :: pp     => null() !< pointer parameters singleton object
+    class(params),  pointer :: pp     => null() !< pointer to parameters object
     class(cmdline), pointer :: pcline => null() !< pointer to command line object
     real :: corr      = 0.                      !< average correlation
     real :: dist      = 0.                      !< average angular distance
@@ -45,8 +45,8 @@ contains
     !>  \brief  is a constructor
     function constructor( ba, p, cline ) result( self )
         class(oris),    target, intent(in) :: ba    !< alignment oris object (a) part of build (b)
-        class(params),  target, intent(in) :: p     !< parameters singleton object
-        class(cmdline), target, intent(in) :: cline !< parameters singleton object
+        class(params),  target, intent(in) :: p     !< parameters object
+        class(cmdline), target, intent(in) :: cline !< command line object
         type(convergence) :: self
         self%bap    => ba
         self%pp     => p

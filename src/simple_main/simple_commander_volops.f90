@@ -9,12 +9,14 @@
 ! *Authors:* Cyril Reboul & Hans Elmlund 2016
 !
 module simple_commander_volops
-use simple_defs            ! singleton
-use simple_jiffys          ! singleton
+use simple_defs
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
+use simple_strings,        only: int2str, int2str_pad
+use simple_jiffys,         ! use all in there
+use simple_filehandling    ! use all in there
 implicit none
 
 public :: cenvol_commander
@@ -81,7 +83,7 @@ contains
     end subroutine exec_cenvol
     
     subroutine exec_postproc_vol(self,cline)
-        use simple_estimate_ssnr ! singleton
+        use simple_estimate_ssnr ! use all in there
         use simple_masker,       only: automask
         class(postproc_vol_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
@@ -172,7 +174,7 @@ contains
             imgs = b%proj%projvol(b%vol, b%a, p)
             loop_end = p%nspace
         endif
-        if( file_exists(p%outstk) ) call del_binfile(p%outstk)
+        if( file_exists(p%outstk) ) call del_file(p%outstk)
         do i=1,loop_end
             if( cline%defined('oritab') .or. (p%rnd .eq. 'yes' .or. cline%defined('trs')) )then
                 x = b%a%get(i, 'x')

@@ -1,8 +1,8 @@
 !>  \brief  SIMPLE stack image processing routines for SPIDER/MRC files
 module simple_procimgfile
-use simple_defs     ! singleton
-use simple_jiffys   ! singleton
-use simple_image,   only: image
+use simple_defs
+use simple_image,  only: image
+use simple_jiffys, only: find_ldim_nptcls, progress
 implicit none
 
 private :: raise_exception_imgfile
@@ -65,22 +65,23 @@ contains
     
     !>  \brief  is for making a stack of normalized vectors for PCA analysis    
     subroutine make_pattern_stack( fnameStack, fnamePatterns, mskrad, D, recsz, avg, otab, hfun )
-        use simple_jiffys, only: get_fileunit
-        use simple_stat,   only: normalize, normalize_sigm
-        use simple_oris,   only: oris
-        use simple_math,   only: check4nans
-        character(len=*), intent(in)             :: fnameStack, fnamePatterns !< filenames
-        real, intent(in)                         :: mskrad                    !< mask radius
-        integer, intent(out)                     :: D, recsz                  !< D=number of pixels and recsz=record size 
-        real, allocatable, intent(out), optional :: avg(:)                    !< average
-        class(oris), intent(inout), optional     :: otab                      !< orientation table
-        character(len=*), intent(in), optional   :: hfun                      !< hidden unit function descriptor
-        type(image)                              :: img
-        real, allocatable                        :: pcavec(:)
-        real                                     :: x, y
-        integer                                  :: n, fnum, ier, i, alloc_stat, ldim(3)
-        logical                                  :: err
-        logical, parameter                       :: debug=.false.        
+        use simple_filehandling, only: get_fileunit, fopen_err
+        use simple_stat,         only: normalize, normalize_sigm
+        use simple_oris,         only: oris
+        use simple_math,         only: check4nans
+        use simple_jiffys,       only: alloc_err
+        character(len=*),            intent(in)    :: fnameStack, fnamePatterns !< filenames
+        real,                        intent(in)    :: mskrad                    !< mask radius
+        integer,                     intent(out)   :: D, recsz                  !< D=number of pixels and recsz=record size 
+        real, allocatable, optional, intent(out)   :: avg(:)                    !< average
+        class(oris),       optional, intent(inout) :: otab                      !< orientation table
+        character(len=*),  optional, intent(in)    :: hfun                      !< hidden unit function descriptor
+        type(image)        :: img
+        real, allocatable  :: pcavec(:)
+        real               :: x, y
+        integer            :: n, fnum, ier, i, alloc_stat, ldim(3)
+        logical            :: err
+        logical, parameter :: debug=.false.        
         call find_ldim_nptcls(fnameStack, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'make_pattern_stack' )
@@ -455,8 +456,8 @@ contains
     
     !>  \brief  is for curing
     subroutine cure_imgfile( fname2cure, fname )
-        use simple_image,  only: image
-        use simple_jiffys, only: get_fileunit
+        use simple_image,        only: image
+        use simple_filehandling, only: get_fileunit
         character(len=*), intent(in) :: fname2cure, fname
         type(image) :: img
         integer     :: i, n, n_nans, filnum, ldim(3)

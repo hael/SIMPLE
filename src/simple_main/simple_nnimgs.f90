@@ -1,6 +1,6 @@
 module simple_nnimgs
 use simple_polarft_corrcalc, only: polarft_corrcalc
-use simple_jiffys            ! singleton
+use simple_jiffys,           only: progress
 implicit none
 
 public :: img_nearest_neighbors, init_nn_srch, conduct_nn_srch, kill_nn_srch
@@ -22,6 +22,7 @@ contains
     function img_nearest_neighbors( p, imgs ) result( nnmat )
         use simple_image,  only: image
         use simple_params, only: params
+        use simple_jiffys, only: alloc_err
         class(params), intent(in)    :: p
         class(image),  intent(inout) :: imgs(:)
         integer, allocatable :: nnmat(:,:)

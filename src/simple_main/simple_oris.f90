@@ -10,10 +10,11 @@
 !* all methods tested
 !
 module simple_oris
-use simple_ori,    only: ori
-use simple_math,   only: hpsort
-use simple_defs    ! singleton
-use simple_jiffys  ! singleton
+use simple_defs
+use simple_ori,         only: ori
+use simple_math,        only: hpsort
+use simple_jiffys,      only: alloc_err
+use simple_filehandling ! use all in there
 implicit none
 
 public :: oris, test_oris
@@ -469,7 +470,7 @@ contains
         integer              :: alloc_stat, n, nmembers, iptcl
         nmembers = self%get_ncls()
         if( which < 1 .or. which > nmembers )then
-            stop 'which (member is out of range; simple_oris::split_class'
+            stop 'which member is out of range; simple_oris :: split_class'
         endif
         ptcls_in_which = self%get_cls_pinds(which)
         n = size(ptcls_in_which)
@@ -1372,9 +1373,8 @@ contains
     
     !>  \brief  for merging two oris files into one object
     subroutine merge_files( self, fname1, fname2 )
-        use simple_jiffys, only: nlines, file_exists
-        class(oris), intent(inout)   :: self
-        character(len=*), intent(in) :: fname1, fname2
+        class(oris),      intent(inout) :: self
+        character(len=*), intent(in)    :: fname1, fname2
         integer    :: nl1, nl2
         type(oris) :: o2
         logical    :: here1, here2
@@ -1403,11 +1403,10 @@ contains
     
     !>  \brief  reads orientation info from file
     subroutine read( self, orifile, nst )
-        use simple_jiffys, only: get_fileunit
-        class(oris), intent(inout)     :: self
-        character(len=*), intent(in)   :: orifile
-        integer, optional, intent(out) :: nst
-        integer                        :: file_stat, i, fnr, state
+        class(oris),       intent(inout) :: self
+        character(len=*),  intent(in)    :: orifile
+        integer, optional, intent(out)   :: nst
+        integer :: file_stat, i, fnr, state
         fnr = get_fileunit( )
         open(unit=fnr, FILE=orifile, STATUS='OLD', action='READ', iostat=file_stat)
         call fopen_err( 'In: read_oris, module: simple_oris.f90', file_stat )
@@ -1424,17 +1423,22 @@ contains
     
     !>  \brief  writes orientation info to file
     subroutine write_1( self, orifile, fromto )
-        use simple_jiffys, only: get_fileunit
         class(oris),       intent(inout) :: self
         character(len=*),  intent(in)    :: orifile
         integer, optional, intent(in)    :: fromto(2)
-        integer :: file_stat, fnr, i, ffromto(2)
+        character(len=100) :: io_message
+        integer            :: file_stat, fnr, i, ffromto(2)
         ffromto(1) = 1
         ffromto(2) = self%n
         if( present(fromto) ) ffromto = fromto
         fnr = get_fileunit( )
-        open(unit=fnr, FILE=orifile, STATUS='REPLACE', action='WRITE', iostat=file_stat)
-        call fopen_err( 'In: write_1, module: simple_oris.f90', file_stat )
+        open(unit=fnr, FILE=orifile, STATUS='REPLACE', action='WRITE', iostat=file_stat, iomsg=io_message)
+        if( file_stat .ne. 0 )then
+            close(fnr)
+            write(*,'(a)') 'In: write_1, module: simple_oris.f90; Error when opening file for writing: '&
+            //trim(orifile)//' ; '//trim(io_message)
+            stop 
+        endif
         do i=ffromto(1),ffromto(2)
             call self%o(i)%write(fnr)
         end do
@@ -1443,11 +1447,10 @@ contains
     
     !>  \brief  writes orientation info to file
     subroutine write_2( self, i, orifile  )
-        use simple_jiffys, only: get_fileunit
-        class(oris), intent(inout)   :: self
-        character(len=*), intent(in) :: orifile
-        integer, intent(in)          :: i
-        integer                      :: fnr, file_stat
+        class(oris),      intent(inout) :: self
+        character(len=*), intent(in)    :: orifile
+        integer,          intent(in)    :: i
+        integer :: fnr, file_stat
         fnr = get_fileunit( )
         open(unit=fnr, FILE=orifile, STATUS='UNKNOWN', action='WRITE', position='APPEND', iostat=file_stat)
         call fopen_err( 'In: write_2, module: simple_oris.f90', file_stat )
@@ -2466,6 +2469,7 @@ contains
     !!          orientations by maximizing the geodesic distance upon every 
     !!          addition to the growing set
     subroutine gen_diverse( self )
+        use simple_jiffys, only: progress
         class(oris), intent(inout) :: self
         logical, allocatable       :: o_is_set(:)
         integer                    :: i

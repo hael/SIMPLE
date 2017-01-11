@@ -1,5 +1,6 @@
 module simple_hash
-use simple_defs ! singleton
+use simple_defs
+use simple_strings ! use all in there
 implicit none
 
 public :: hash, test_hash
@@ -121,7 +122,6 @@ contains
     
     !>  \brief  prints the hash
     subroutine print( self )
-        use simple_strings
         class(hash), intent(inout) :: self
         integer :: i
         do i=1,self%hash_index-1
@@ -134,7 +134,6 @@ contains
     
     !>  \brief  writes the hash to file
     subroutine write( self, fnr )
-        use simple_strings
         class(hash), intent(inout) :: self
         integer, intent(in)        :: fnr
         integer                    :: i
@@ -148,7 +147,6 @@ contains
     
     !>  \brief  reads a row of a text-file into the inputted hash, assuming key=value pairs
     subroutine read( self, fnr )
-        use simple_strings
         class(hash), intent(inout) :: self
         integer, intent(in)        :: fnr
         character(len=1024)        :: line
@@ -182,7 +180,7 @@ contains
     
     !>  \brief  is the hash unit test
     subroutine test_hash
-        use simple_jiffys, only: get_fileunit
+        use simple_filehandling, only: get_fileunit
         type(hash) :: htab, htab2
         integer    :: fnr, file_stat
         write(*,'(a)') '**info(simple_hash_unit_test: testing all functionality'

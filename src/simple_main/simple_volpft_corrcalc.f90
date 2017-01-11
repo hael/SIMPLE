@@ -1,9 +1,9 @@
 module simple_volpft_corrcalc
+use simple_defs
 use simple_image,     only: image
 use simple_projector, only: projector
 use simple_sym,       only: sym
 use simple_ori,       only: ori
-use simple_defs       ! singleton
 implicit none
 
 real, parameter :: ico_alpha = 37.38     !< face-vertex angle, leads to ~4% oversampling, from Baldwin & Penczek JSB2007

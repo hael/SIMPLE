@@ -9,7 +9,7 @@
 !* all methods tested
 !
 module simple_ori
-use simple_defs  ! singleton
+use simple_defs
 use simple_hash,   only: hash
 use simple_jiffys, only: alloc_err
 implicit none

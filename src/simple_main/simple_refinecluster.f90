@@ -1,4 +1,5 @@
 module simple_refinecluster
+use simple_defs
 use simple_params,           only: params
 use simple_build,            only: build
 use simple_polarft_corrcalc, only: polarft_corrcalc
@@ -7,9 +8,7 @@ use simple_ori,              only: ori
 use simple_image,            only: image
 use simple_jiffys,           only: alloc_err, progress
 use simple_math,             only: rad2deg, round2even
-use simple_pftcc_shsrch      ! singleton
-use simple_defs              ! singleton
-
+use simple_pftcc_shsrch      ! use all in there
 implicit none
 
 public :: refinecluster

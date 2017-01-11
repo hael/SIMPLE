@@ -5,7 +5,7 @@
 ! that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_. Redistribution or modification 
 ! is regulated by the GNU General Public License. *Author:* Hans Elmlund, 2009-06-11.
 module simple_comlin_srch
-use simple_comlin_corr ! singleton
+use simple_comlin_corr
 use simple_build,      only: build
 use simple_sa_opt,     only: sa_opt
 use simple_ran_tabu,   only: ran_tabu

@@ -7,10 +7,10 @@
 ! Authors: Cyril Reboul & Hans Elmlund 2016
 !
 program simple_distr_exec
-use simple_cmdline,  only: cmdline
-use simple_jiffys       ! singleton
-use simple_defs         ! singleton
-use simple_gen_doc      ! singleton
+use simple_defs  
+use simple_cmdline, only: cmdline
+use simple_strings, only: str_has_substr
+use simple_jiffys,  only: cmdline_err
 use simple_commander_distr_wflows
 use simple_commander_hlev_wflows
 implicit none
@@ -434,9 +434,8 @@ select case(prg)
         ! set optional keys
         keys_optional(1) = 'ncunits'
         keys_optional(2) = 'nthr_master'
-        keys_optional(3) = 'nrepeats'
         ! parse command line
-        call cline%parse(keys_required(:6), keys_optional(:3))
+        call cline%parse(keys_required(:6), keys_optional(:2))
         ! execute
         call xini3D_from_cavgs%execute( cline )
     case DEFAULT

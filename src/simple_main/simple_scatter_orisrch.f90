@@ -1,7 +1,7 @@
 module simple_scatter_orisrch
+use simple_defs
 use simple_oris, only: oris
 use simple_ori,  only: ori
-use simple_defs  ! singleton
 implicit none
 
 public :: scatter_orisrch

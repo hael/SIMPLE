@@ -1,5 +1,4 @@
 module simple_gridding
-use simple_jiffys   ! singleton
 use simple_image,   only: image
 use simple_winfuns, only: winfuns
 implicit none
@@ -18,15 +17,16 @@ contains
         call img%pad(img4grid, backgr=med)                        ! padding in real space                     
         if( present(wfuns) ) call divide_w_instr(img4grid, wfuns) ! division w instr in real space
         call img4grid%fwd_ft                                      ! return the Fourier transform
-    end subroutine
+    end subroutine prep4cgrid
     
     !> \brief  for dividing a real or complex image with the instrument function
     subroutine divide_w_instr( img, wfuns )
-        class(image), intent(inout) :: img
-        class(winfuns), intent(in)  :: wfuns
-        integer                     :: ldim(3), i, j, k, alloc_stat, lims(3,2)
-        real                        :: ci, cj, ck, arg
-        real, allocatable           :: w1(:), w2(:), w3(:)
+        use simple_jiffys, only: alloc_err
+        class(image),   intent(inout) :: img
+        class(winfuns), intent(in)    :: wfuns
+        real, allocatable :: w1(:), w2(:), w3(:)
+        integer :: ldim(3), i, j, k, alloc_stat, lims(3,2)
+        real    :: ci, cj, ck, arg
         ! get the limits
         ldim = img%get_ldim()      
         if( img%is_ft() )then
@@ -94,6 +94,6 @@ contains
         end do
         !$omp end parallel do
         deallocate(w1,w2,w3)
-    end subroutine
+    end subroutine divide_w_instr
     
 end module simple_gridding

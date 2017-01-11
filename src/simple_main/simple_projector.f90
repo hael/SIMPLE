@@ -1,7 +1,6 @@
 !>  \brief  SIMPLE projector class
 module simple_projector
-use simple_winfuns   ! singleton
-use simple_defs      ! singleton
+use simple_defs
 use simple_image,    only: image
 use simple_ori,      only: ori
 use simple_oris,     only: oris
@@ -9,6 +8,7 @@ use simple_params,   only: params
 use simple_gridding, only: prep4cgrid
 use simple_jiffys,   only: alloc_err, progress
 use simple_math,     only: recwin_3d, euclid
+use simple_winfuns,  only: winfuns
 implicit none
 
 public :: projector

@@ -61,18 +61,19 @@ production_code: ;
 utils_code: s_utes  \
             s_utils ;
 
-s_utes: simple_imgheadrec.o \
-        simple_imghead.o    \
-        simple_strings.o    \
-        simple_jiffys.o     \
-        simple_rnd.o        \
-        simple_math.o       \
-        gnufor2.o           \
-        simple_imgfile.o    \
-        simple_stat.o       \
-        simple_online_var.o \
-        simple_ran_tabu.o   \
-        simple_testfuns.o   ;
+s_utes: simple_imgheadrec.o   \
+        simple_imghead.o      \
+        simple_strings.o      \
+        simple_filehandling.o \
+        simple_jiffys.o       \
+        simple_rnd.o          \
+        simple_math.o         \
+        gnufor2.o             \
+        simple_imgfile.o      \
+        simple_stat.o         \
+        simple_online_var.o   \
+        simple_ran_tabu.o     \
+        simple_testfuns.o     ;
 
 s_utils: simple_syscalls.o  ;
 
@@ -83,10 +84,10 @@ Simple_code: opt            \
              comlin_corr    \
              comlin_srch    \
              s_other        \
+             qsys           \
              matcher        \
              comlin_sym     \
              cluster_cavg   \
-             qsys           \
              masters        ;
 
 opt: simple_opt_spec.o               \

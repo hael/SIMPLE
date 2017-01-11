@@ -7,7 +7,6 @@
 !
 module simple_bfgs_opt
 use simple_optimizer, only: optimizer
-use simple_jiffys     ! singleton
 implicit none
 
 public :: bfgs_opt
@@ -28,6 +27,7 @@ contains
     !> \brief  is a constructor
     subroutine new_bfgs_opt( self, spec )
         use simple_opt_spec, only: opt_spec
+        use simple_jiffys,   only: alloc_err
         class(bfgs_opt), intent(inout) :: self !< instance
         class(opt_spec), intent(inout) :: spec !< specification
         integer :: alloc_stat

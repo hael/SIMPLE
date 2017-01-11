@@ -1,5 +1,6 @@
 module simple_corrmat
-use simple_image, only: image
+use simple_image,  only: image
+use simple_jiffys, only: alloc_err, progress
 implicit none
 
 public :: calc_cartesian_corrmat, project_corrmat3D_greedy, project_corrmat3D_shc
@@ -18,7 +19,6 @@ logical              :: debug=.false.
 contains
     
     subroutine calc_cartesian_corrmat_1( imgs, corrmat, msk, lp )
-        use simple_jiffys, only: alloc_err, progress
         type(image),       intent(inout) :: imgs(:)
         real, allocatable, intent(out)   :: corrmat(:,:)
         real, optional,    intent(in)    :: msk, lp 
@@ -74,7 +74,6 @@ contains
     end subroutine calc_cartesian_corrmat_1
     
     subroutine calc_cartesian_corrmat_2( imgs_sel, imgs_orig, corrmat, msk, lp )
-        use simple_jiffys, only: alloc_err, progress
         type(image),       intent(inout) :: imgs_sel(:), imgs_orig(:)
         real, allocatable, intent(out)   :: corrmat(:,:)
         real, optional,    intent(in)    :: msk, lp
@@ -124,7 +123,6 @@ contains
     end subroutine calc_cartesian_corrmat_2
 
     subroutine project_corrmat3D_greedy( n, nr, corrmat3d, corrmat2d, inplmat )
-        use simple_jiffys, only: alloc_err
         integer, intent(in)  :: n, nr
         real,    intent(in)  :: corrmat3d(n,n,nr)
         real,    intent(out) :: corrmat2d(n,n)
@@ -149,8 +147,7 @@ contains
     end subroutine project_corrmat3D_greedy
     
     subroutine project_corrmat3D_shc( n, nr, corrmat3d, pcorrs, corrmat2d, inplmat )
-        use simple_jiffys, only: alloc_err
-        use simple_rnd,    only: shcloc
+        use simple_rnd, only: shcloc
         integer, intent(in)  :: n, nr
         real,    intent(in)  :: corrmat3d(n,n,nr), pcorrs(n)
         real,    intent(out) :: corrmat2d(n,n)

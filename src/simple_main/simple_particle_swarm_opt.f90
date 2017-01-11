@@ -1,8 +1,8 @@
 module simple_particle_swarm_opt
+use simple_defs
 use simple_optimizer, only: optimizer
 use simple_opt_spec,  only: opt_spec
 use simple_rnd,       only: ran3, irnd_uni
-use simple_defs       ! singleton
 implicit none
 
 public :: particle_swarm_opt

@@ -9,13 +9,14 @@
 ! *Authors:* Cyril Reboul & Hans Elmlund 2016
 !
 module simple_commander_prime3D
-use simple_defs            ! singleton
-use simple_jiffys          ! singleton
-use simple_qsys_funs       ! singleton
+use simple_defs
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
+use simple_qsys_funs       ! use all in there
+use simple_filehandling    ! use all in there
+use simple_jiffys          ! use all in there
 implicit none
 
 public :: resrange_commander
@@ -132,7 +133,7 @@ contains
 
     subroutine exec_shellweight3D(self,cline)
         use simple_cartft_corrcalc, only: cartft_corrcalc
-        use simple_cont3D_matcher   ! singleton
+        use simple_cont3D_matcher   ! use all in there
         class(shellweight3D_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(params)          :: p
@@ -185,13 +186,13 @@ contains
     end subroutine exec_prime3D_init
 
     subroutine exec_het_init( self, cline )
-        use simple_math              ! singleton
-        use simple_hadamard_common    ! singleton
-        use simple_prime_srch
-        use simple_hadamard3D_matcher ! singleton
+        use simple_prime_srch, only: prime_srch
         use simple_rec_master, only: exec_rec_master
         use simple_oris,       only: oris
-        use simple_stat
+        use simple_stat               ! use all in there
+        use simple_hadamard3D_matcher ! use all in there
+        use simple_math               ! use all in there
+        use simple_hadamard_common    ! use all in there
         class(het_init_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(params)            :: p
@@ -651,6 +652,7 @@ contains
     
     subroutine exec_prime3D( self, cline )
         use simple_hadamard3D_matcher, only: prime3D_exec, prime3D_find_resrange
+        use simple_strings,            only: str_has_substr
         class(prime3D_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(params)      :: p

@@ -1,5 +1,4 @@
 module simple_opt_subs
-use simple_jiffys ! singleton
 implicit none
 
 logical :: warn=.false.
@@ -322,6 +321,7 @@ contains
         contains
        
             subroutine amoeba_private
+                 use simple_jiffys, only: assert_eq, swap
                 integer :: i,ilo,inhi,loc(1)
                 real :: rtol,ysave,ytry,ytmp    
                 ndim=assert_eq(size(p,2),size(p,1)-1,size(y)-1,size(pb),'amoeba; simple_opt_subs')
@@ -438,6 +438,7 @@ contains
         contains
            
         subroutine amebsa_private
+            use simple_jiffys, only: assert_eq, swap
             integer :: i,ilo,inhi,loc(1)
             real :: rtol,ylo,ynhi,ysave,ytry
             real, dimension(size(y)) :: yt,harvest

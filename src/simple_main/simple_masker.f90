@@ -17,7 +17,7 @@ contains
     subroutine automask_1(img, p, img_msk, nvox )
         use simple_image,  only: image
         use simple_params, only: params
-        use simple_math    ! singleton
+        use simple_math    ! use all in there
         class(image), intent(in)      :: img
         class(params), intent(in)     :: p
         class(image), intent(inout)   :: img_msk
@@ -50,7 +50,7 @@ contains
             end do
         endif
         call img_msk%cos_edge(p%edge) ! real-space filter based softening of the edge
-    end subroutine
+    end subroutine automask_1
     
     !>  \brief  is for generating and applying a mask for 
     !!          solvent flattening of an image
@@ -71,7 +71,7 @@ contains
         call img%mul(mask)
         call mask%kill
         if( didft ) call img%fwd_ft
-    end subroutine
+    end subroutine automask_2
     
     !>  \brief  is for generating, applying, and writing to file 
     !!           a mask for solvent flattening of an image
@@ -96,7 +96,7 @@ contains
             call maskvol%write(p%mskfile, del_if_exists=.true.)
         endif
         call recvol%write(volnam, del_if_exists=.true.)
-    end subroutine
+    end subroutine automask_3
     
     !>  \brief  is for generating & applying a mask for solvent flattening of an image
     subroutine automask_4( b, p, cline, recvol, maskvol )
@@ -122,7 +122,7 @@ contains
             call maskvol%mask(p%msk,'soft')
             call recvol%mul(maskvol) 
         endif
-    end subroutine
+    end subroutine automask_4
     
     !>  \brief  is for automasking in 2D
     subroutine automask2D( img, p, img_msk_out )
@@ -158,6 +158,6 @@ contains
         call img_copy%kill
         call img_pad%kill
         call img_msk%kill
-    end subroutine
+    end subroutine automask2D
 
 end module simple_masker

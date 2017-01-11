@@ -1,15 +1,15 @@
 module simple_prime3D_srch
+use simple_defs
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_prime_srch,       only: prime_srch
 use simple_ran_tabu,         only: ran_tabu
 use simple_oris,             only: oris
 use simple_ori,              only: ori
 use simple_params,           only: params
-use simple_pftcc_shsrch      ! singleton
-use simple_pftcc_inplsrch    ! singleton
-use simple_defs              ! singleton
-use simple_jiffys            ! singleton
-use simple_math              ! singleton
+use simple_strings,          only: str_has_substr
+use simple_pftcc_shsrch      ! use all in there
+use simple_pftcc_inplsrch    ! use all in there
+use simple_math              ! use all in there
 implicit none
 
 public :: prime3D_srch
@@ -19,7 +19,7 @@ logical, parameter :: debug = .false.
 
 type prime3D_srch
     private
-    class(params), pointer :: pp => null()            !< pointer to parameters singleton
+    class(params), pointer :: pp => null()            !< pointer to parameters
     class(oris),   pointer :: pe => null()            !< pointer to orientations of references in proj_space
     type(prime_srch)       :: srch_common             !< functionalities common to primesrch2D/3D
     type(oris)             :: o_refs                  !< projection directions search space
@@ -439,7 +439,7 @@ contains
 
     !>  \brief  prepares the search space (ref oris) & search order per particle
     subroutine prep_reforis( self, o_prev, nnvec )
-        use simple_jiffys, only: int2str_pad
+        use simple_strings, only: int2str_pad
         class(prime3D_srch), intent(inout) :: self
         type(ori), optional, intent(inout) :: o_prev
         integer,   optional, intent(in)    :: nnvec(self%nnn)

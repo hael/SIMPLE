@@ -1,5 +1,5 @@
 module simple_denspeak_cluster
-use simple_jiffys
+use simple_jiffys, only: alloc_err
 implicit none
 
 type denspeak_cluster

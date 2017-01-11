@@ -9,11 +9,13 @@
 !* rewrote as a proper class, HE June 7 2012
 !
 module simple_params
-use simple_defs      ! singleton
-use simple_jiffys    ! singleton
-use simple_ori,      only: ori
-use simple_AVratios, only: AVratios
-use simple_cmdline,  only: cmdline
+use simple_defs
+use simple_ori,         only: ori
+use simple_AVratios,    only: AVratios
+use simple_cmdline,     only: cmdline
+use simple_strings      ! use all in there
+use simple_filehandling ! use all in there
+use simple_jiffys,      only: find_ldim_nptcls
 implicit none
 
 public :: params
@@ -103,7 +105,9 @@ type :: params
     character(len=STDLEN) :: cwd=''
     character(len=STDLEN) :: deftab=''
     character(len=STDLEN) :: dfunit='microns'
-    character(len=STDLEN) :: dir='selected'
+    character(len=STDLEN) :: dir=''
+    character(len=STDLEN) :: dir_reject='rejected'
+    character(len=STDLEN) :: dir_select='selected'
     character(len=STDLEN) :: doclist=''
     character(len=STDLEN) :: endian='native'
     character(len=STDLEN) :: exp_doc=''
@@ -200,7 +204,6 @@ type :: params
     integer :: npix=0
     integer :: nptcls=1
     integer :: nran=0
-    integer :: nrepeats=1
     integer :: nrestarts=1
     integer :: nrots=0
     integer :: nspace=1000
@@ -342,7 +345,7 @@ contains
         !$ use omp_lib
         !$ use omp_lib_kinds
         use simple_math, only: round2even
-        use simple_map_reduce  ! singleton
+        use simple_map_reduce  ! use all in there
         class(params),     intent(inout) :: self
         class(cmdline),    intent(inout) :: cline
         logical, optional, intent(in)    :: checkdistr, allow_mix
@@ -386,6 +389,8 @@ contains
         call check_carg('deftab',         self%deftab)
         call check_carg('dfunit',         self%dfunit)
         call check_carg('dir',            self%dir)
+        call check_carg('dir_reject',     self%dir_reject)
+        call check_carg('dir_select',     self%dir_select)
         call check_carg('discrete',       self%discrete)
         call check_carg('diverse',        self%diverse)
         call check_carg('doalign',        self%doalign)
@@ -512,7 +517,6 @@ contains
         call check_iarg('nnn',            self%nnn)
         call check_iarg('noris',          self%noris)
         call check_iarg('nran',           self%nran)
-        call check_iarg('nrepeats',       self%nrepeats)
         call check_iarg('nrestarts',      self%nrestarts)
         call check_iarg('nspace',         self%nspace)
         call check_iarg('nstates',        self%nstates)
@@ -720,7 +724,7 @@ contains
         call check_file_formats(aamix)
         call double_check_file_formats
         ! make file names
-        call make_filenames
+        call mkfnames
         ! check box
         if( self%box > 0 .and. self%box < 26 ) stop 'box size need to be larger than 26; simple_params'
 !$      call omp_set_num_threads(self%nthr)
@@ -1101,7 +1105,7 @@ contains
               endif
           end subroutine double_check_file_formats
 
-          subroutine make_filenames
+          subroutine mkfnames
               integer :: i
               do i=1,self%nstates
                   self%vols_msk(i) = add2fbody(self%vols(i), self%ext, 'msk')
@@ -1109,7 +1113,7 @@ contains
               end do
               if( .not. cline%defined('outstk') ) self%outstk = 'outstk'//self%ext
               if( .not. cline%defined('outvol') ) self%outvol = 'outvol'//self%ext
-          end subroutine make_filenames
+          end subroutine mkfnames
 
           subroutine check_carg( carg, var )
               character(len=*), intent(in)  :: carg

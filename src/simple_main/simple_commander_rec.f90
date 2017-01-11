@@ -9,13 +9,15 @@
 ! *Authors:* Cyril Reboul & Hans Elmlund 2016
 !
 module simple_commander_rec
-use simple_defs             ! singleton
-use simple_jiffys           ! singleton
-use simple_hadamard_common  ! singleton
+use simple_defs
 use simple_cmdline,         only: cmdline
 use simple_params,          only: params
 use simple_build,           only: build
 use simple_commander_base,  only: commander_base
+use simple_strings,         only: int2str_pad
+use simple_hadamard_common  ! use all in there
+use simple_filehandling    ! use all in there
+use simple_jiffys          ! use all in there
 implicit none
 
 public :: recvol_commander
@@ -107,7 +109,7 @@ contains
                 else
                     state4name = s
                 endif
-                allocate(fname, source='recvol'//'_state'//int2str_pad(state4name,2)//'_part'//int2str_pad(part,p%numlen))
+                allocate(fname, source='recvol_state'//int2str_pad(state4name,2)//'_part'//int2str_pad(part,p%numlen))
                 if( debug ) write(*,*) 'processing file: ', fname
                 call assemble(fname)
                 deallocate(fname)
@@ -185,7 +187,7 @@ contains
                 else
                     state4name = s
                 endif
-                allocate(fbody, source='recvol'//'_state'//int2str_pad(state4name,2)//'_part'//int2str_pad(part,p%numlen))
+                allocate(fbody, source='recvol_state'//int2str_pad(state4name,2)//'_part'//int2str_pad(part,p%numlen))
                 if( debug ) write(*,*) 'processing fbody: ', fbody
                 do i=1,endit
                     if( cline%defined('even') .or. cline%defined('odd') )then

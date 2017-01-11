@@ -1,11 +1,9 @@
 module simple_eo_reconstructor
+use simple_defs
 use simple_reconstructor, only: reconstructor
 use simple_image,         only: image
 use simple_params,        only: params
-use simple_defs           ! singleton
-use simple_cmdline        ! singleton
-use simple_jiffys         ! singleton
-use simple_math           ! singleton
+use simple_cmdline,       only: cmdline
 implicit none
 
 public :: eo_reconstructor
@@ -264,6 +262,9 @@ contains
     
     !> \brief  for sampling density correction of the eo pairs
     subroutine sampl_dens_correct_eos( self, state )
+        use simple_strings,      only: int2str_pad
+        use simple_filehandling, only: arr2file
+        use simple_math,         only: get_resolution
         class(eo_reconstructor), intent(inout) :: self  !< instance
         integer,                 intent(in)    :: state !< state
         real, allocatable :: res(:), corrs(:)
@@ -343,12 +344,14 @@ contains
     !> \brief  for reconstructing Fourier volumes according to the orientations 
     !!         and states in o, assumes that stack is open   
     subroutine eorec( self, fname, p, o, se, state, vol, mul, part, fbody, wmat )
-        use simple_oris,            only: oris
-        use simple_sym,             only: sym
-        use simple_params,          only: params
-        use simple_gridding,        only: prep4cgrid
-        use simple_imgfile,         only: imgfile
-        use simple_filterer,        only: resample_filter
+        use simple_oris,     only: oris
+        use simple_sym,      only: sym
+        use simple_params,   only: params
+        use simple_gridding, only: prep4cgrid
+        use simple_imgfile,  only: imgfile
+        use simple_filterer, only: resample_filter
+        use simple_strings,  only: int2str_pad
+        use simple_jiffys,   only: find_ldim_nptcls, progress
         class(eo_reconstructor),    intent(inout) :: self      !< object
         character(len=*),           intent(in)    :: fname     !< spider/MRC stack filename
         class(params),              intent(in)    :: p         !< parameters

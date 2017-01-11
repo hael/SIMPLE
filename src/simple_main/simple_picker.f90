@@ -2,11 +2,12 @@ module simple_picker
 !$ use omp_lib
 !$ use omp_lib_kinds
 use simple_defs
-use simple_jiffys
 use simple_math,             only: hpsort
 use simple_image,            only: image
 use simple_math,             only: euclid
 use simple_denspeak_cluster, only: denspeak_cluster
+use simple_filehandling,     only: get_fileunit, remove_abspath, fname_new_ext
+use simple_jiffys,           only: alloc_err, find_ldim_nptcls
 implicit none
 
 public :: init_picker, pick_particles, kill_picker

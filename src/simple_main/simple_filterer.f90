@@ -1,6 +1,5 @@
 module simple_filterer
-use simple_defs       ! singleton
-use simple_jiffys     ! singleton
+use simple_defs
 use simple_image,     only: image
 use simple_projector, only: projector
 implicit none
@@ -48,7 +47,8 @@ contains
 
     !> \brief  normalises the shell-weights for the 3D case
     subroutine normalise_shellweights( wmat )
-        use simple_stat, only: corrs2weights, normalize_sigm
+        use simple_stat,   only: corrs2weights, normalize_sigm
+        use simple_jiffys, only: alloc_err
         real, intent(inout)  :: wmat(:,:)
         real, allocatable    :: weights_tmp(:), wsums(:)
         integer :: nptcls, filtsz, iptcl, ishell, alloc_stat

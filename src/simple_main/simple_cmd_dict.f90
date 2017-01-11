@@ -1,6 +1,6 @@
 module simple_cmd_dict
 use simple_chash, only: chash
-use simple_defs ! singleton
+use simple_defs
 implicit none
 
 public :: print_cmdline, test_cmd_dict, print_cmd_key_descr
@@ -46,7 +46,9 @@ contains
         call chdict%push('defocus',       'defocus(in microns){3.}')
         call chdict%push('deftab',        'text file with CTF info(*.txt/*.asc)')
         call chdict%push('dferr',         'defocus error(in microns){1.0}')
-        call chdict%push('dir',           'move selected files to here{selected}')
+        call chdict%push('dir',           'directory')
+        call chdict%push('dir_select',    'move selected files to here{selected}')
+        call chdict%push('dir_reject',    'move rejected files to here{rejected}')
         call chdict%push('discrete',      'discrete(yes|no){no}')
         call chdict%push('doclist',       'list of oritabs for different states')
         call chdict%push('dynlp',         'automatic resolution limit update(yes|no){yes}')
@@ -209,7 +211,7 @@ contains
     end subroutine init_cmd_dict
     
     subroutine print_cmd_key_descr( fname )
-        use simple_jiffys, only: lexSort
+        use simple_strings, only: lexSort
         character(len=*), intent(in) :: fname
         ! initialise if needed
         if( .not. initialised ) call init_cmd_dict
@@ -220,7 +222,7 @@ contains
     end subroutine print_cmd_key_descr
         
     subroutine print_cmdline( keys_required, keys_optional, fhandle )
-        use simple_jiffys, only: str_has_substr
+        use simple_strings, only: str_has_substr
         character(len=*), optional, intent(in) :: keys_required(:), keys_optional(:)
         integer,          optional, intent(in) :: fhandle
         integer :: nreq, nopt

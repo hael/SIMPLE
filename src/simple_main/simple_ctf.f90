@@ -9,7 +9,7 @@
 !! license terms ( http://license.janelia.org/license/jfrc_copyright_1_1.html )
 !!
 module simple_ctf
-use simple_defs ! singleton
+use simple_defs
 implicit none
 
 public :: ctf, test_ctf

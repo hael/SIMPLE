@@ -9,12 +9,13 @@
 ! *Authors:* Cyril Reboul & Hans Elmlund 2016
 !
 module simple_commander_prime2D
-use simple_defs            ! singleton
-use simple_jiffys          ! singleton
+use simple_defs
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
+use simple_filehandling    ! use all in there
+use simple_jiffys          ! use all in there
 implicit none
 
 public :: prime2D_init_commander
@@ -50,6 +51,7 @@ contains
     subroutine exec_prime2D_init( self, cline )
         use simple_hadamard2D_matcher, only: prime2D_assemble_sums, prime2D_write_sums, &
         & prime2D_write_partial_sums
+        use simple_qsys_funs, only: qsys_job_finished
         class(prime2D_init_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(params)  :: p
@@ -92,11 +94,7 @@ contains
             call prime2D_assemble_sums(b, p)
             if( p%l_distr_exec)then
                 call prime2D_write_partial_sums( b, p )
-                fnr = get_fileunit()
-                open(unit=fnr, FILE='JOB_FINISHED_'//int2str_pad(p%part,p%numlen),&
-                STATUS='REPLACE', action='WRITE', iostat=file_stat)
-                call fopen_err( 'In: simple_commander_prime2D :: exec_prime2D_init', file_stat )
-                close(fnr)
+                call qsys_job_finished( p, 'simple_commander_prime2D :: exec_prime2D_init' )
             else
                 call prime2D_write_sums(b, p)
             endif

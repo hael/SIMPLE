@@ -1,9 +1,9 @@
 module simple_reconstructor
+use simple_fftw3
+use simple_defs
 use simple_image,   only: image
 use simple_winfuns, only: winfuns
 use simple_ctf,     only: ctf
-use simple_fftw3    ! singleton
-use simple_defs     ! singleton
 implicit none
 
 public :: reconstructor
@@ -143,7 +143,7 @@ contains
 
     !>  \brief  is for writing the sampling density (rho)
     subroutine write_rho( self, kernam )
-        use simple_jiffys, only: get_fileunit, fopen_err
+        use simple_filehandling, only: get_fileunit, fopen_err
         class(reconstructor), intent(in) :: self
         character(len=*),     intent(in) :: kernam
         integer                          :: filnum, ier
@@ -157,7 +157,7 @@ contains
     
     !>  \brief  is for reading the sampling density (rho)
     subroutine read_rho( self, kernam )
-        use simple_jiffys, only: get_fileunit, fopen_err
+        use simple_filehandling, only: get_fileunit, fopen_err
         class(reconstructor), intent(inout) :: self
         character(len=*),     intent(in)    :: kernam
         integer                             :: filnum, ier
@@ -399,12 +399,13 @@ contains
     !> \brief  for reconstructing Fourier volumes according to the orientations 
     !!         and states in o, assumes that stack is open   
     subroutine rec( self, fname, p, o, se, state, mul, eo, part, wmat )
-        use simple_oris,      only: oris
-        use simple_sym,       only: sym
-        use simple_params,    only: params
-        use simple_ran_tabu,  only: ran_tabu
-         use simple_filterer, only: resample_filter
-        use simple_gridding   ! singleton
+        use simple_oris,     only: oris
+        use simple_sym,      only: sym
+        use simple_params,   only: params
+        use simple_ran_tabu, only: ran_tabu
+        use simple_filterer, only: resample_filter
+        use simple_jiffys,   only: find_ldim_nptcls, progress
+        use simple_gridding  ! use all in there
         class(reconstructor), intent(inout) :: self      !< object
         character(len=*),     intent(inout) :: fname     !< spider/MRC stack filename
         class(params),        intent(in)    :: p         !< parameters

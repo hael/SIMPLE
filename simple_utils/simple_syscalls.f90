@@ -18,7 +18,7 @@ private :: raise_sys_error
 
 contains
 
-    !> is the fortran 90 variant of the classical dtime
+    !> is the fortran 90 variant of the classic dtime
     real function dtime( time )
         real                  :: time(2)
         double precision,save :: last_time = 0
@@ -31,7 +31,7 @@ contains
         last_time = this_time
     end function dtime
 
-    !> is the fortran 90 variant of the classical etime
+    !> is the fortran 90 variant of the classic etime
     real function etime( time )
         real :: time(2)
         call cpu_time(etime)
@@ -63,7 +63,7 @@ contains
 
     !>  Wrapper for system call
     subroutine exec_cmdline( cmdline )
-        character(len=*), intent(inout) :: cmdline
+        character(len=*), intent(in) :: cmdline
         integer               :: estat, cstat
         character(len=STDLEN) :: cmsg
         integer, parameter    :: NTRY = 10, SHORTTIME = 1
@@ -76,56 +76,30 @@ contains
             else
                 exit
             endif
-            call raise_sys_error( cmdline, estat, cstat, cmsg )
         end do
+        call raise_sys_error( cmdline, estat, cstat, cmsg )
     end subroutine exec_cmdline
 
     !>  Handles error from system call
     subroutine raise_sys_error( cmd, exitstat, cmdstat, cmdmsg )
         integer,               intent(in) :: exitstat, cmdstat
         character(len=STDLEN), intent(in) :: cmd, cmdmsg
-        logical :: dostop
+        logical :: dostop, err
+        err    = .false.
         dostop = .false.
         if( exitstat /= 0 )then
             write(*,*)'System error', exitstat,' for command: ', cmd
+            err = .true.
             !dostop = .true.
         endif 
         if( cmdstat /= 0 )then
-            write(*,*)'Command could not be executed: ', cmd
+            write(*,*)'cmdstat /= 0, command could not be executed: ', cmd
+            err = .true.
             !dostop = .true.
-        endif 
+        endif
+        if( err ) write(*,*) trim(cmdmsg)
         if( dostop ) stop
     end subroutine raise_sys_error
-
-    !> interface to unix mkdir
-    subroutine sys_mkdir( dir, args )
-        character(len=*),           intent(in) :: dir
-        character(len=*), optional, intent(in) :: args
-        character(len=STDLEN) :: cmd
-        if( .not. file_exists( trim(dir) ) )then
-            if( present(args) )then
-                cmd = 'mkdir '//trim(args)//' '//trim(dir)
-            else
-                cmd = 'mkdir '//trim(dir)
-            endif
-            call exec_cmdline( cmd )
-        endif
-    end subroutine sys_mkdir
-
-    !> interface to unix mkdir
-    subroutine sys_cp( source, dest, args )
-        character(len=*),           intent(in) :: source, dest
-        character(len=*), optional, intent(in) :: args
-        character(len=STDLEN) :: cmd
-        if( file_exists( source ) )then
-            if( present(args) )then
-                cmd = 'cp '//trim(args)//' '//trim(source)//' '//trim(dest)
-            else
-                cmd = 'cp '//' '//trim(source)//' '//trim(dest)
-            endif
-            call exec_cmdline( cmd )
-        endif
-    end subroutine sys_cp
 
     function sys_get_env_var( name ) result( varval )
         character(len=*), intent(in)  :: name

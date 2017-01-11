@@ -1,5 +1,5 @@
 module simple_opt_spec
-use simple_defs ! singleton
+use simple_defs
 implicit none
 
 public :: opt_spec

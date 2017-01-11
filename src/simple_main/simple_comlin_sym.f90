@@ -5,13 +5,13 @@
 ! that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_. Redistribution or modification 
 ! is regulated by the GNU General Public License. *Author:* Hans Elmlund, 2009-06-11.
 module simple_comlin_sym
+use simple_defs
 use simple_build,  only: build
 use simple_params, only: params
 use simple_jiffys, only: progress
 use simple_ori,    only: ori
 use simple_oris,   only: oris
-use simple_defs
-use simple_sym
+use simple_sym,    only: sym
 use simple_comlin_symsrch
 implicit none
 

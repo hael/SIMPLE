@@ -9,7 +9,7 @@
 !==Changes are documented below
 !
 module simple_ppca
-use simple_defs    ! singleton
+use simple_defs
 use simple_jiffys, only: alloc_err
 implicit none
 
@@ -244,7 +244,7 @@ contains
     
     !>  \brief  doing it all
     subroutine master( self, datastk, recsz, featstk, maxpcaits, feats_txt )
-        use simple_jiffys, only: get_fileunit, fopen_err
+        use simple_filehandling, only: get_fileunit, fopen_err
         class(ppca),                intent(inout) :: self
         character(len=*),           intent(in)    :: datastk, featstk
         integer,                    intent(in)    :: recsz, maxpcaits

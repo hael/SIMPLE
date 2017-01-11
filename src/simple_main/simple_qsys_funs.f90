@@ -1,75 +1,40 @@
 module simple_qsys_funs
-use simple_jiffys   ! singleton
-use simple_defs     ! singleton
-use simple_syscalls ! singleton
+use simple_defs     
+use simple_syscalls ! use all in there
+use simple_strings, only: int2str, int2str_pad
 implicit none
 
 contains
 
-    subroutine qsys_cleanup_all
-        character(len=STDLEN) :: cleanup_exec_cmd
-        integer, parameter    :: SHORTTIME = 5
-        call sleep(SHORTTIME)
-        cleanup_exec_cmd = 'rm -f FOO'
-        call exec_cmdline(cleanup_exec_cmd)
-        cleanup_exec_cmd = 'rm -f OUT*'
-        call exec_cmdline(cleanup_exec_cmd)
-        cleanup_exec_cmd = 'rm -f algndoc_*'
-        call exec_cmdline(cleanup_exec_cmd)
-        cleanup_exec_cmd = 'rm -f distr_script_*'
-        call exec_cmdline(cleanup_exec_cmd)
-        cleanup_exec_cmd = 'rm -f rho*'
-        call exec_cmdline(cleanup_exec_cmd)
-        cleanup_exec_cmd = 'rm -f fort.0'
-        call exec_cmdline(cleanup_exec_cmd)
-        cleanup_exec_cmd = 'rm -f primedoc_*'
-        call exec_cmdline(cleanup_exec_cmd)
-        cleanup_exec_cmd = 'rm -f recvol*'
-        call exec_cmdline(cleanup_exec_cmd)
-        cleanup_exec_cmd = 'rm -f JOB_FINISHED_*'
-        call exec_cmdline(cleanup_exec_cmd)
-        cleanup_exec_cmd = 'rm -f errfile.*'
-        call exec_cmdline(cleanup_exec_cmd)
-        cleanup_exec_cmd = 'rm -f outfile.*'
-        call exec_cmdline(cleanup_exec_cmd)
-        cleanup_exec_cmd = 'rm -f ctfsqsums_part*'
-        call exec_cmdline(cleanup_exec_cmd)
-    end subroutine qsys_cleanup_all
-
-    subroutine qsys_cleanup_iter()
-        character(len=STDLEN) :: cleanup_exec_cmd
-        integer, parameter    :: SHORTTIME = 5
-        call sleep(SHORTTIME)
-        cleanup_exec_cmd = 'rm -f FOO'
-        call exec_cmdline(cleanup_exec_cmd)
-        cleanup_exec_cmd = 'rm -f OUT*'
-        call exec_cmdline(cleanup_exec_cmd)
-        cleanup_exec_cmd = 'rm -f algndoc_*'
-        call exec_cmdline(cleanup_exec_cmd)
-        cleanup_exec_cmd = 'rm -f distr_*script_*'
-        call exec_cmdline(cleanup_exec_cmd)
-        cleanup_exec_cmd = 'rm -f rho*'
-        call exec_cmdline(cleanup_exec_cmd)
-        cleanup_exec_cmd = 'rm -f fort.0'
-        call exec_cmdline(cleanup_exec_cmd)
-        cleanup_exec_cmd = 'rm -f recvol_state*_part*'
-        call exec_cmdline(cleanup_exec_cmd)
-        cleanup_exec_cmd = 'rm -f JOB_FINISHED_*'
-        call exec_cmdline(cleanup_exec_cmd)
-        cleanup_exec_cmd = 'rm -f errfile.*'
-        call exec_cmdline(cleanup_exec_cmd)
-        cleanup_exec_cmd = 'rm -f outfile.*'
-        call exec_cmdline(cleanup_exec_cmd)
-        cleanup_exec_cmd = 'rm -f ctfsqsums_part*'
-        call exec_cmdline(cleanup_exec_cmd)
-        cleanup_exec_cmd = 'rm -f ctfsqsums_part*'
-        call exec_cmdline(cleanup_exec_cmd)
-        cleanup_exec_cmd = 'rm -f cavgs_part*'
-        call exec_cmdline(cleanup_exec_cmd)
-        cleanup_exec_cmd = 'rm -f *_recvol_state*_even*'
-        call exec_cmdline(cleanup_exec_cmd)
-        cleanup_exec_cmd = 'rm -f *_recvol_state*_odd*'
-        call exec_cmdline(cleanup_exec_cmd)
+    subroutine qsys_cleanup_iter( p )
+        use simple_params,       only: params
+        use simple_filehandling, only: del_file, del_files
+        class(params),     intent(in) :: p
+        character(len=:), allocatable :: rec_base_str, rho_base_str
+        integer, parameter :: NUMLEN_STATE = 2
+        integer :: istate
+        ! individual files
+        call del_file('FOO')
+        call del_file('fort.0')
+        ! part numbered files
+        call del_files('OUT',                    p%nparts)
+        call del_files('algndoc_',               p%nparts, ext='.txt')
+        call del_files('cavgs_part',             p%nparts, ext=p%ext )
+        call del_files('JOB_FINISHED_',          p%nparts)
+        call del_files('ctfsqsums_part',         p%nparts, ext=p%ext )
+        call del_files('distr_simple_script_',   p%nparts)
+        call del_files('ctffind_output_part',    p%nparts, ext='.txt')
+        call del_files('ctffind_ctrl_file_part', p%nparts, ext='.txt')
+        ! state and part numbered files
+        do istate=1,p%nstates
+            allocate(rec_base_str, source='recvol_state'//int2str_pad(istate,NUMLEN_STATE)//'_part')
+            allocate(rho_base_str, source='rho_'//rec_base_str)
+            call del_files(rec_base_str//'_even', p%nparts, ext=p%ext)
+            call del_files(rec_base_str//'_odd',  p%nparts, ext=p%ext)
+            call del_files(rho_base_str//'_even', p%nparts, ext=p%ext)
+            call del_files(rho_base_str//'_odd',  p%nparts, ext=p%ext)
+            deallocate(rec_base_str,rho_base_str)
+        end do
     end subroutine qsys_cleanup_iter
 
     function stack_is_split( stkext, npart ) result( is_split )
@@ -135,8 +100,8 @@ contains
             stop 
         endif
         ! remove temporary files
-        call del_txtfile('pid_from_fortran.txt')
-        call del_txtfile('pid_dir_from_fortran.txt')
+        call del_file('pid_from_fortran.txt')
+        call del_file('pid_dir_from_fortran.txt')
     end subroutine terminate_if_prg_in_cwd
 
     subroutine parse_env_file( env )
@@ -216,7 +181,7 @@ contains
         use simple_qsys_base,    only: qsys_base
         use simple_qsys_ctrl,    only: qsys_ctrl
         use simple_chash,        only: chash
-        use simple_map_reduce   ! singleton
+        use simple_map_reduce   ! use all in there
         class(params),             intent(in)  :: p          !< parameters
         class(qsys_factory),       intent(out) :: qsys_fac   !< qsystem factory instance
         class(qsys_base), pointer, intent(out) :: myqsys     !< pointer to constructed object
@@ -256,9 +221,9 @@ contains
     subroutine qsys_job_finished( p, source )
         ! generation of this file marks completion of the partition
         ! this file is empty 4 now but may contain run stats etc.
-        use simple_params,       only: params
-        class(params),         intent(in)    :: p
-        character(len=STDLEN), intent(in) :: source 
+        use simple_params, only: params
+        class(params),    intent(in) :: p
+        character(len=*), intent(in) :: source 
         integer :: fnr, file_stat
         if( p%l_distr_exec )then
             fnr = get_fileunit()
@@ -268,19 +233,5 @@ contains
             close( unit=fnr )
         endif
     end subroutine qsys_job_finished
-
-    subroutine copy_bin_files( source, destination, nstates )
-        use simple_syscalls, only: sys_cp
-        character(len=*), intent(in) :: source, destination
-        integer, intent(in)          :: nstates
-        integer                      :: s
-        character(len=STDLEN) :: from, to, file, str_state
-        do s=1,nstates
-            str_state = 'state'//int2str_pad(s,2)
-            from = trim(source)//trim(str_state)//'.bin'
-            to   = trim(destination)//'/'
-            call sys_cp( trim(from), trim(to) )
-        enddo
-    end subroutine copy_bin_files
 
 end module simple_qsys_funs

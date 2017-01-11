@@ -9,12 +9,14 @@
 ! *Authors:* Cyril Reboul & Hans Elmlund 2016
 !
 module simple_commander_sim
-use simple_defs            ! singleton
-use simple_jiffys          ! singleton
+use simple_defs
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
+use simple_strings,        only: int2str, int2str_pad
+use simple_filehandling    ! use all in there
+use simple_jiffys          ! use all in there
 implicit none
 
 public :: noiseimgs_commander

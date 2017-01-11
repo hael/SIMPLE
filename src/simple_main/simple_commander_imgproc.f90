@@ -9,12 +9,14 @@
 ! *Authors:* Cyril Reboul & Hans Elmlund 2016
 !
 module simple_commander_imgproc
-use simple_defs            ! singleton
-use simple_jiffys          ! singleton
+use simple_defs
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
+use simple_strings,        only: int2str, int2str_pad
+use simple_filehandling    ! use all in there
+use simple_jiffys          ! use all in there
 implicit none
 
 public :: binarise_commander
@@ -337,7 +339,7 @@ contains
     end subroutine exec_filter
     
     subroutine exec_image_smat(self, cline)
-        use simple_corrmat  ! singleton
+        use simple_corrmat  ! use all in there
         use simple_ori,     only: ori
         use simple_imgfile, only: imgfile
         use simple_image,   only: image
@@ -439,8 +441,8 @@ contains
     
     subroutine exec_scale( self, cline )
         use simple_procimgfile, only: resize_and_clip_imgfile, resize_imgfile, clip_imgfile
-        use simple_image,       only: image
-        use simple_math,        only: round2even
+        use simple_image,        only: image
+        use simple_math,         only: round2even
         class(scale_commander), intent(inout) :: self
         class(cmdline),         intent(inout) :: cline
         type(params) :: p
@@ -554,8 +556,8 @@ contains
     end subroutine exec_scale
     
     subroutine exec_stack( self, cline )
-        use simple_imgfile, only: imgfile
-        use simple_image,   only: image
+        use simple_imgfile,      only: imgfile
+        use simple_image,        only: image
         class(stack_commander), intent(inout) :: self
         class(cmdline),         intent(inout) :: cline
         type(params)                          :: p
@@ -599,7 +601,7 @@ contains
             ifile = 0
             do imovie=1,nmovies
                 allocate(moviename, source=trim(adjustl(p%fbody))//int2str_pad(imovie, numlen)//'.mrcs')
-                call del_binfile(moviename)
+                call del_file(moviename)
                 do iframe=1,p%nframes
                     ifile = ifile+1
                     call progress(ifile, nfiles)
@@ -680,7 +682,7 @@ contains
             rt = ran_tabu(p%nptcls)
             call rt%ne_ran_iarr(pinds)
             if( cline%defined('oritab') .or. cline%defined('deftab') )then
-                call del_txtfile(p%outfile)
+                call del_file(p%outfile)
             endif
             do i=1,p%nran
                 call progress(i, p%nran)
@@ -896,8 +898,8 @@ contains
     end subroutine exec_stackops
 
     subroutine exec_tseries_split( self, cline )
-        use simple_oris, only: oris
-        use simple_ori,  only: ori
+        use simple_oris,    only: oris
+        use simple_ori,     only: ori
         class(tseries_split_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(params)                  :: p

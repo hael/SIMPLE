@@ -9,12 +9,13 @@
 ! *Authors:* Cyril Reboul & Hans Elmlund 2016
 !
 module simple_commander_oris
-use simple_defs            ! singleton
-use simple_jiffys          ! singleton
+use simple_defs
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
+use simple_filehandling    ! use all in there
+use simple_jiffys          ! use all in there
 implicit none
 
 public :: cluster_oris_commander
@@ -61,6 +62,7 @@ contains
         use simple_shc_cluster, only: shc_cluster
         use simple_math,        only: rad2deg
         use simple_clusterer,   only: shc_cluster_oris
+        use simple_strings,     only: int2str, int2str_pad
         class(cluster_oris_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(build)          :: b
@@ -270,7 +272,7 @@ contains
         use simple_oris,    only: oris
         use simple_ori,     only: ori
         use simple_image,   only: image
-        use simple_corrmat  ! singleton
+        use simple_corrmat  ! use all in there
         class(map2ptcls_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         type state_organiser

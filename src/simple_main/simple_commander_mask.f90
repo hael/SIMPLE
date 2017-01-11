@@ -9,12 +9,13 @@
 ! *Authors:* Cyril Reboul & Hans Elmlund 2016
 !
 module simple_commander_mask
-use simple_defs            ! singleton
-use simple_jiffys          ! singleton
+use simple_defs
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
+use simple_filehandling    ! use all in there
+use simple_jiffys          ! use all in there
 implicit none
 
 public :: mask_commander
@@ -129,7 +130,8 @@ contains
     end subroutine exec_automask2D
     
     subroutine exec_automask3D( self, cline )
-        use simple_masker, only: automask
+        use simple_masker,  only: automask
+        use simple_strings, only: int2str_pad
         class(automask3D_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         type(params) :: p

@@ -1,5 +1,5 @@
 module simple_cartft_corrcalc
-use simple_defs       ! singleton
+use simple_defs
 use simple_params,    only: params
 use simple_build,     only: build
 use simple_image,     only: image

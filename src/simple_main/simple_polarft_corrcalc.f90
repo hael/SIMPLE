@@ -1,9 +1,9 @@
 !>  \brief  SIMPLE polarft_corrcalc class
 module simple_polarft_corrcalc
-use simple_defs      ! singleton
+use simple_defs
 use simple_params,   only: params
 use simple_ran_tabu, only: ran_tabu
-use simple_jiffys
+use simple_jiffys,   only: alloc_err
 implicit none
 
 public :: polarft_corrcalc, test_polarft_corrcalc

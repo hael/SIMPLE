@@ -1,15 +1,15 @@
 module simple_hadamard_common
-use simple_cmdline       ! singleton
-use simple_jiffys        ! singleton
-use simple_math          ! singleton
-use simple_defs          ! singleton
-use simple_masker        ! singleton
+use simple_defs
+use simple_cmdline,      only: cmdline
 use simple_build,        only: build
 use simple_params,       only: params
 use simple_ori,          only: ori
 use simple_rnd,          only: ran3
 use simple_prime3D_srch, only: prime3D_srch
 use simple_gridding,     only: prep4cgrid
+use simple_strings,      only: int2str_pad
+use simple_math          ! use all in there
+use simple_masker        ! use all in there
 implicit none
 
 public :: set_bp_range, setup_shellweights, grid_ptcl, prepimg4align, eonorm_struct_facts,&
@@ -431,16 +431,16 @@ contains
         character(len=STDLEN) :: pprocvol
         do s=1,p%nstates
             if( p%l_distr_exec )then
-                call b%eorecvols(s)%write_eos('recvol'//'_state'//int2str_pad(s,2)//'_part'//int2str_pad(p%part,p%numlen))
+                call b%eorecvols(s)%write_eos('recvol_state'//int2str_pad(s,2)//'_part'//int2str_pad(p%part,p%numlen))
             else
                 if( present(which_iter) )then
                     if( which_iter <= 0 )then
-                        p%vols(s) = 'recvol'//'_state'//int2str_pad(s,2)//p%ext
+                        p%vols(s) = 'recvol_state'//int2str_pad(s,2)//p%ext
                     else
-                        p%vols(s) = 'recvol'//'_state'//int2str_pad(s,2)//'_iter'//int2str_pad(which_iter,3)//p%ext
+                        p%vols(s) = 'recvol_state'//int2str_pad(s,2)//'_iter'//int2str_pad(which_iter,3)//p%ext
                     endif
                 else
-                     p%vols(s) = 'startvol'//'_state'//int2str_pad(s,2)//p%ext
+                     p%vols(s) = 'startvol_state'//int2str_pad(s,2)//p%ext
                 endif
                 call b%eorecvols(s)%sum_eos
                 call b%eorecvols(s)%sampl_dens_correct_eos(s)

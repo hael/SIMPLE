@@ -1,15 +1,16 @@
 !==Class simple_clustercavg
 !
 module simple_clustercavg
-use simple_defs         ! singleton
-use simple_build
-use simple_oris,        only: oris
-use simple_ori,         only: ori
-use simple_jiffys,      only: alloc_err, progress, get_fileunit
-use simple_image,       only: image
-use simple_params,      only: params
-use simple_shc_cluster, only: shc_cluster
-use simple_cavgppca
+use simple_defs
+use simple_build,        only: build
+use simple_oris,         only: oris
+use simple_ori,          only: ori
+use simple_jiffys,       only: alloc_err, progress
+use simple_filehandling, only: get_fileunit
+use simple_image,        only: image
+use simple_params,       only: params
+use simple_shc_cluster,  only: shc_cluster
+use simple_cavgppca,     only: cavgppca
 
 implicit none
 

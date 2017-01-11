@@ -11,9 +11,9 @@
 !* re-implemented with new comlin data struct and truly OOD, HE June 14 2012
 !
 module simple_comlin
+use simple_defs
 use simple_image,  only: image 
 use simple_oris,   only: oris
-use simple_defs    ! singleton
 use simple_math,   only: csq, calc_corr
 implicit none
 
@@ -98,7 +98,7 @@ contains
     
     !>  \brief  is for extracting common lines (for debugging purposes)
     subroutine extr_lines( self, pind, lp_dyn )
-        use simple_jiffys, only: get_fileunit
+        use simple_filehandling, only: get_fileunit
         class(comlin), intent(inout) :: self
         integer, intent(in)          :: pind 
         real, intent(in)             :: lp_dyn

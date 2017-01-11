@@ -9,12 +9,13 @@
 ! *Authors:* Cyril Reboul & Hans Elmlund 2016
 !
 module simple_commander_comlin
-use simple_defs            ! singleton
-use simple_jiffys          ! singleton
+use simple_defs
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
+use simple_filehandling    ! use all in there
+use simple_jiffys          ! use all in there
 implicit none
 
 public :: comlin_smat_commander
@@ -33,11 +34,13 @@ end type symsrch_commander
 contains
     
     subroutine exec_comlin_smat( self, cline )
-        use simple_comlin_sym  ! singleton
-        use simple_comlin_corr ! singleton
-        use simple_ori,        only: ori
-        use simple_imgfile,    only: imgfile
-        use simple_comlin,     only: comlin
+        use simple_comlin_sym    ! use all in there
+        use simple_comlin_corr   ! use all in there
+        use simple_ori,          only: ori
+        use simple_imgfile,      only: imgfile
+        use simple_comlin,       only: comlin
+        use simple_qsys_funs,    only: qsys_job_finished
+        use simple_strings,      only: int2str_pad
         class(comlin_smat_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(params), target          :: p
@@ -110,11 +113,7 @@ contains
             endif
             close(funit)
             deallocate(fname, corrs, pairs)
-            fnr = get_fileunit()
-            open(unit=fnr, FILE='JOB_FINISHED_'//int2str_pad(p%part,p%numlen), STATUS='REPLACE', action='WRITE', iostat=io_stat)
-            call fopen_err( 'In: simple_comlin_smat', io_stat )
-            write(fnr,'(A)') '**** SIMPLE_COMLIN_SMAT NORMAL STOP ****'
-            close(fnr)
+            call qsys_job_finished(p,'simple_commander_comlin :: exec_comlin_smat')
         else
             allocate(corrmat(p%nptcls,p%nptcls), stat=alloc_stat)
             call alloc_err('In: simple_comlin_smat, 3', alloc_stat)

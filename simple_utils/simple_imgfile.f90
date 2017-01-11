@@ -158,7 +158,7 @@ contains
     
     !>  \brief open the file(s) for the imgfile
     subroutine open_local( self, del_if_exists, rwaction )
-        use simple_jiffys, only: fname_new_ext, get_fileunit, file_exists, del_binfile
+        use simple_jiffys, only: fname_new_ext, get_fileunit, file_exists, del_file
         class(imgfile),             intent(inout) :: self
         logical, optional,          intent(in) :: del_if_exists
         character(len=*), optional, intent(in) :: rwaction
@@ -177,10 +177,10 @@ contains
                 if( self%head_format .eq. 'I' )then
                     self%fname = fname_new_ext(self%fname,'hed')
                 endif
-                call del_binfile(self%fname)
+                call del_file(self%fname)
                 if( self%head_format .eq. 'I' )then
                     self%fname = fname_new_ext(self%fname,'img')
-                    call del_binfile(self%fname)
+                    call del_file(self%fname)
                 endif
             endif
         endif
@@ -464,7 +464,7 @@ contains
     !>  \brief  read/write a set of contiguous slices of the image file from disk into memory.
     !!          The array of reals should have +2 elements in the first dimension.
     subroutine rwSlices( self, mode, first_slice, last_slice, rarr, ldim, is_ft, smpd )
-        use simple_jiffys, only: int2str
+        use simple_strings, only: int2str
         use simple_math, only: is_odd
         use, intrinsic :: iso_c_binding
         use simple_imghead, only: ImgHead, SpiImgHead, MrcImgHead, dataRbytes, dataRinteger, dataRfloat

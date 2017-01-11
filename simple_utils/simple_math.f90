@@ -12,9 +12,9 @@ use simple_defs
 use simple_jiffys
 implicit none
 
-private :: pi, cosedge_1, cosedge_2, cosedge_3, hardedge_1, hardedge_2,&
-find_1, find_2, locate_1, locate_2, selec, selec_1, selec_2,&
-hpsort_1, hpsort_2, hpsort_3, reverse_iarr, reverse_rarr, reverse_carr
+private :: warn, pi, cosedge_1, cosedge_2, cosedge_3, hardedge_1, hardedge_2,&
+find_1, find_2, locate_1, locate_2, selec, selec_1, selec_2, hpsort_1, hpsort_2,&
+hpsort_3, reverse_iarr, reverse_rarr, reverse_carr
 public
 
 logical, parameter :: warn=.false.

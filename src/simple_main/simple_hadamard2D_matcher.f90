@@ -1,4 +1,5 @@
 module simple_hadamard2D_matcher
+use simple_defs
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_prime_srch,       only: prime_srch
 use simple_prime2D_srch,     only: prime2D_srch
@@ -6,10 +7,11 @@ use simple_ori,              only: ori
 use simple_build,            only: build
 use simple_params,           only: params
 use simple_cmdline,          only: cmdline
-use simple_hadamard_common   ! singleton
-use simple_defs              ! singleton
-use simple_jiffys            ! singleton
-use simple_filterer          ! singleton
+use simple_strings,          only: int2str_pad
+use simple_jiffys,           only: progress
+use simple_filehandling      ! use all in there
+use simple_hadamard_common   ! use all in there
+use simple_filterer          ! use all in there
 implicit none
 
 public :: prime2D_exec, prime2D_assemble_sums, prime2D_norm_sums, prime2D_assemble_sums_from_parts,&
@@ -29,6 +31,8 @@ contains
     
     !>  \brief  is the prime2D algorithm
     subroutine prime2D_exec( b, p, cline, which_iter, converged )
+        use simple_qsys_funs, only: qsys_job_finished
+        use simple_strings,   only: str_has_substr
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         class(cmdline), intent(inout) :: cline     
@@ -83,7 +87,7 @@ contains
         call prime2D_init_sums( b, p )
 
         ! ALIGN & GRID
-        call del_txtfile(p%outfile)
+        call del_file(p%outfile)
         cnt_glob = 0
         if( debug ) write(*,*) '*** hadamard2D_matcher ***: loop fromp/top:', p%fromp, p%top
         do iptcl=p%fromp,p%top
@@ -165,13 +169,7 @@ contains
         endif
 
         if( p%l_distr_exec )then
-            ! generation of this file marks completion of the partition
-            ! this file is empty 4 now but may contain run stats etc.
-            fnr = get_fileunit()
-            open(unit=fnr, FILE='JOB_FINISHED_'//int2str_pad(p%part,p%numlen),&
-            STATUS='REPLACE', action='WRITE', iostat=file_stat)
-            call fopen_err( 'In: prime_ini; simple_hadamard2D_matcher.f90', file_stat )
-            close(fnr)
+            call qsys_job_finished(p, 'simple_hadamard2D_matcher :: prime2D_exec')
         else
             ! CONVERGENCE TEST
             converged = b%conv%check_conv2D()
@@ -179,7 +177,6 @@ contains
     end subroutine prime2D_exec
     
     subroutine prime2D_read_sums( b, p )
-        use simple_jiffys, only: file_exists
         class(build),  intent(inout) :: b
         class(params), intent(inout) :: p
         integer :: icls
@@ -242,7 +239,6 @@ contains
     end subroutine prime2D_assemble_sums
     
     subroutine prime2D_assemble_sums_from_parts( b, p )
-        use simple_jiffys, only: file_exists
         class(build),  intent(inout) :: b
         class(params), intent(inout) :: p
         character(len=STDLEN) :: fname_cavgs, fname_ctfsqsums
@@ -323,8 +319,9 @@ contains
 
     !>  \brief  prepares the polarft corrcalc object for search
     subroutine preppftcc4align( b, p )
-        use simple_image,  only: image
-        use simple_masker, only: automask2D
+        use simple_image,        only: image
+        use simple_masker,       only: automask2D
+        use simple_jiffys,       only: alloc_err
         class(build),  intent(inout) :: b
         class(params), intent(inout) :: p
         type(ori) :: o

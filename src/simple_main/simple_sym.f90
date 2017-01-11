@@ -7,8 +7,8 @@
 !==Changes are documented below
 !
 module simple_sym
+use simple_defs
 use simple_oris,   only: oris
-use simple_defs    ! singleton
 use simple_jiffys, only: alloc_err
 implicit none
 

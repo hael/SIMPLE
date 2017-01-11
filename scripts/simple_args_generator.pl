@@ -53,7 +53,7 @@ print MODULE "!==Class simple_args
 !==Changes are documented below
 !
 module simple_args
-use simple_defs ! singleton
+use simple_defs
 implicit none
 
 public :: args, test_args
@@ -101,7 +101,7 @@ print MODULE  "    end function
     end function
     
     subroutine test_args
-        use simple_jiffys
+        use simple_filehandling, only: get_fileunit, nlines
         type(args) :: as
         character(len=STDLEN) :: arg, errarg1, errarg2, errarg3, vlist, spath
         integer :: funit, n, i

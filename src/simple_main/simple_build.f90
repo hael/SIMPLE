@@ -1,6 +1,6 @@
 !==Class simple_build
 !
-! simple_build is the builder singleton class for the methods in _SIMPLE_. Access is global in the
+! simple_build is the builder class for the methods in _SIMPLE_. Access is global in the
 ! using unit. The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
 ! Redistribution or modification is regulated by the GNU General Public License. 
 ! *Author:* Hans Elmlund, 2009-06-11.
@@ -12,8 +12,7 @@
 !* rewritten with the new language features, HE 2012-06-18
 !
 module simple_build
-use simple_defs              ! singleton
-use simple_jiffys,           ! singleton
+use simple_defs
 use simple_cmdline,          only: cmdline
 use simple_comlin,           only: comlin
 use simple_image,            only: image
@@ -29,6 +28,8 @@ use simple_sym,              only: sym
 use simple_polarft,          only: polarft
 use simple_opt_spec,         only: opt_spec
 use simple_convergence,      only: convergence
+use simple_jiffys,           only: alloc_err
+use simple_filehandling      ! use all in there
 implicit none
 
 public :: build, test_build
@@ -369,6 +370,7 @@ contains
     
     !> \brief  constructs the prime2D toolbox
     subroutine build_hadamard_prime2D_tbox( self, p )
+        use simple_strings, only: str_has_substr
         class(build),  intent(inout) :: self
         class(params), intent(in)    :: p
         integer :: icls, alloc_stat, funit, io_stat
@@ -405,6 +407,7 @@ contains
 
     !> \brief  constructs the prime3D toolbox
     subroutine build_hadamard_prime3D_tbox( self, p )
+        use simple_strings, only: str_has_substr
         class(build),  intent(inout) :: self
         class(params), intent(in)    :: p
         integer :: s, alloc_stat, i

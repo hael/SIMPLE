@@ -1,11 +1,12 @@
-!>  \brief  SIMPLE command line parsing singleton
+!>  \brief  SIMPLE command line parsing class
 !! The code is distributed with the hope that it will be useful, but WITHOUT ANY WARRANTY. 
 !! Redistribution or modification is regulated by the GNU General Public License.
 !! Hans Elmlund, 2011-08-17.
 module simple_cmdline
-use simple_chash, only: chash
-use simple_defs     ! singleton
-use simple_cmd_dict ! singleton
+use simple_defs
+use simple_cmd_dict
+use simple_chash,   only: chash
+use simple_strings, only: str2int, str2real, str_has_substr, real2str
 implicit none
 
 public :: cmdline
@@ -50,7 +51,6 @@ contains
     !> \brief  for parsing the command line arguments passed as key=val 
     subroutine parse( self, keys_required, keys_optional )
         use simple_args, only: args
-        use simple_jiffys
         class(cmdline),             intent(inout) :: self
         character(len=*), optional, intent(in)    :: keys_required(:), keys_optional(:)
         character(len=STDLEN) :: arg
@@ -111,7 +111,6 @@ contains
         contains
         
             subroutine parse_local( arg )
-                use simple_strings, only: str2real
                 character(len=*) :: arg
                 integer          :: pos1
                 pos1 = index(arg, '=') ! position of '='
@@ -344,11 +343,10 @@ contains
 
     !> \brief  for generating a job description (prg overrides prg in cline)
     subroutine gen_job_descr( self, hash, prg )
-        use simple_strings, only: real2str
         class(cmdline),             intent(in)    :: self
         class(chash),               intent(inout) :: hash
         character(len=*), optional, intent(in)    :: prg
-        integer               :: i
+        integer :: i
         call hash%new(self%NMAX)
         do i=1,self%argcnt
             if( self%cmds(i)%carg .eq. '' )then

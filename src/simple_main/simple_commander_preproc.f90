@@ -9,12 +9,14 @@
 ! *Authors:* Cyril Reboul & Hans Elmlund 2016
 !
 module simple_commander_preproc
-use simple_defs            ! singleton
-use simple_jiffys          ! singleton
+use simple_defs
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
+use simple_strings,        only: int2str, int2str_pad
+use simple_jiffys,         ! use all in there
+use simple_filehandling    ! use all in there
 implicit none
 
 public :: select_frames_commander
@@ -350,11 +352,12 @@ contains
     end subroutine exec_powerspecs
     
     subroutine exec_unblur_movies( self, cline )
-        use simple_unblur      ! singleton
-        use simple_procimgfile ! singleton
+        use simple_unblur      ! use all in there
+        use simple_procimgfile ! use all in there
         use simple_imgfile,    only: imgfile
         use simple_oris,       only: oris
         use simple_image,      only: image
+        use simple_qsys_funs,  only: qsys_job_finished
         class(unblur_movies_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(params)                       :: p
@@ -465,13 +468,7 @@ contains
             call pspec_half_n_half%kill
             write(*,'(f4.0,1x,a)') 100.*(real(movie_counter)/real(ntot)), 'percent of the movies processed'
         end do
-        if( cline%defined('part') )then
-            fnr = get_fileunit()
-            open(unit=fnr, FILE='JOB_FINISHED_'//int2str_pad(p%part,p%numlen), STATUS='REPLACE', action='WRITE', iostat=file_stat)
-            call fopen_err( 'In: simple_unblur_movies', file_stat )
-            write(fnr,'(A)') '**** SIMPLE_COMLIN_SMAT NORMAL STOP ****'
-            close(fnr)
-        endif
+        call qsys_job_finished( p, 'simple_commander_preproc :: exec_unblur_movies' )
         ! end gracefully
         call simple_end('**** SIMPLE_UNBLUR_MOVIES NORMAL STOP ****')
     end subroutine exec_unblur_movies
@@ -481,6 +478,7 @@ contains
         use simple_nrtxtfile, only: nrtxtfile
         use simple_oris,      only: oris
         use simple_strings,   only: real2str
+        use simple_qsys_funs, only: qsys_job_finished
         class(ctffind_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(params)                       :: p
@@ -570,21 +568,15 @@ contains
         call os%write(output_fname)
         call os%kill
         deallocate(ctrl_fname,output_fname)
-        if( cline%defined('part') )then
-            funit = get_fileunit()
-            open(unit=funit, FILE='JOB_FINISHED_'//int2str_pad(p%part,p%numlen), STATUS='REPLACE', action='WRITE', iostat=file_stat)
-            call fopen_err( 'In: simple_ctffind', file_stat )
-            write(funit,'(A)') '**** SIMPLE_CTFFIND NORMAL STOP ****'
-            close(funit)
-        endif
+        call qsys_job_finished( p, 'simple_commander_preproc :: exec_ctffind' )
         ! end gracefully
         call simple_end('**** SIMPLE_CTFFIND NORMAL STOP ****')
     end subroutine exec_ctffind
 
     subroutine exec_select( self, cline )
         use simple_image,    only: image
-        use simple_syscalls, only: exec_cmdline, sys_mkdir
-        use simple_corrmat   ! singleton
+        use simple_syscalls, only: exec_cmdline
+        use simple_corrmat   ! use all in there
         class(select_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(params)                       :: p
@@ -595,7 +587,8 @@ contains
         character(len=STDLEN)              :: cmd_str
         integer                            :: iimg, isel, nall, nsel, loc(1), ios, funit, ldim(3), ifoo, lfoo(3)
         integer, allocatable               :: selected(:)
-        real, allocatable                  :: correlations(:,:)
+        real,    allocatable               :: correlations(:,:)
+        logical, allocatable               :: lselected(:)
         logical, parameter                 :: debug=.false.
         ! error check
         if( cline%defined('stk3') .or. cline%defined('filetab') )then
@@ -622,10 +615,13 @@ contains
         write(*,'(a)') '>>> CALCULATING CORRELATIONS'
         call calc_cartesian_corrmat(imgs_sel, imgs_all, correlations)
         ! find selected
-        allocate(selected(nsel))
+        ! in addition to the index array, also make a logical array encoding the selection (to be able to reject)
+        allocate(selected(nsel), lselected(nall))
+        lselected = .false.
         do isel=1,nsel
             loc = maxloc(correlations(isel,:))
             selected(isel) = loc(1)
+            lselected(selected(isel)) = .true.
             if( debug ) print *, 'selected: ', loc(1), ' with corr: ', correlations(isel,loc(1))
         end do
         if( cline%defined('filetab') )then
@@ -638,12 +634,18 @@ contains
                 write(*,*) "Error opening file name", trim(adjustl(p%outfile))
                 stop
             endif
-            call sys_mkdir(trim(adjustl(p%dir)))
+            call exec_cmdline('mkdir -p '//trim(adjustl(p%dir_select)))
+            call exec_cmdline('mkdir -p '//trim(adjustl(p%dir_reject)))
             ! write outoput & move files
-            do isel=1,nsel
-                write(funit,'(a)') trim(adjustl(imgnames(selected(isel))))
-                cmd_str = 'mv '//trim(adjustl(imgnames(selected(isel))))//' '//trim(adjustl(p%dir))
-                call exec_cmdline(cmd_str)
+            do iimg=1,nall
+                if( lselected(iimg) )then
+                    write(funit,'(a)') trim(adjustl(imgnames(iimg)))
+                    cmd_str = 'mv '//trim(adjustl(imgnames(iimg)))//' '//trim(adjustl(p%dir_select))
+                    call exec_cmdline(cmd_str)
+                else
+                    cmd_str = 'mv '//trim(adjustl(imgnames(iimg)))//' '//trim(adjustl(p%dir_reject))
+                    call exec_cmdline(cmd_str)
+                endif
             end do
             close(funit)
             deallocate(imgnames)
@@ -772,7 +774,7 @@ contains
         call alloc_err('In: simple_extract; boxdata etc., 1', alloc_stat)
 
         ! remove output file
-        call del_txtfile('extract_params.txt')
+        call del_file('extract_params.txt')
 
         ! read the filenames
         do movie=1,nmovies
@@ -965,15 +967,7 @@ contains
                         if( orig_box /= p%box ) boxdata(j,1:2) = boxdata(j,1:2)-real(p%box-orig_box)/2.
                         if( debug ) print *, 'shifted coordinate: ', boxdata(j,1:2) 
                         ! extract the window
-                        particle_position = boxdata(j,1:2)*p%mul
-                        select case( p%boxtype )
-                            case('eman')
-                                ! nothing to do
-                            case('relion')
-                                particle_position = particle_position-[box_o_2,box_o_2]
-                            case DEFAULT
-                                write(*,*) 'unsupported boxtype: ', trim(p%boxtype)
-                        end select
+                        particle_position = boxdata(j,1:2)
                         call img_frame%window(nint(particle_position), p%box, b%img, noutside)
                         if( p%neg .eq. 'yes' ) call b%img%neg
                         if( p%noise_norm .eq. 'yes' )then

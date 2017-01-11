@@ -9,9 +9,9 @@
 !==Changes are documented below
 !
 module simple_aff_prop
-use simple_math ! singleton
-use simple_rnd  ! singleton
-use simple_stat ! singleton
+use simple_math
+use simple_rnd
+use simple_stat
 implicit none
 
 public :: aff_prop, test_aff_prop
@@ -219,8 +219,6 @@ contains
     
     !>  \brief  is the aff_prop unit test
     subroutine test_aff_prop
-        use simple_math
-        use simple_jiffys
         real                 :: datavecs(900,5)
         type(aff_prop)       :: apcls
         real                 :: simmat(900,900), simsum

@@ -1,6 +1,8 @@
 module simple_map_reduce
-use simple_defs   ! singleton
-use simple_jiffys ! singleton
+use simple_defs
+use simple_strings,      only: int2str, int2str_pad
+use simple_filehandling, only: get_fileunit
+use simple_jiffys,       only: alloc_err
 implicit none
 
 public :: split_nobjs_even, split_nobjs_in_chunks, split_pairs_in_parts, merge_similarities_from_parts,&
@@ -95,6 +97,7 @@ contains
     
     !>  \brief  for generating balanced partitions for pairwise calculations on nobjs ojects
     subroutine split_pairs_in_parts( nobjs, nparts )
+        use simple_jiffys, only: progress
         integer, intent(in) :: nobjs !< number objects to analyse in pairs
         integer, intent(in) :: nparts !< number of partitions (nodes) for parallel execution
         integer :: npairs, alloc_stat, cnt, funit, i, j

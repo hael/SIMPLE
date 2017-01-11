@@ -5,14 +5,14 @@
 ! that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_. Redistribution or modification 
 ! is regulated by the GNU General Public License. *Author:* Hans Elmlund, 2009-06-11.
 module simple_comlin_symsrch
-use simple_comlin_corr  ! singleton
+use simple_defs
+use simple_comlin_corr  ! use all in there
 use simple_build,       only: build
 use simple_opt_factory, only: opt_factory
 use simple_opt_spec,    only: opt_spec
 use simple_ori,         only: ori
 use simple_oris,        only: oris
 use simple_optimizer,   only: optimizer
-use simple_defs
 implicit none
 
 public :: comlin_symsrch_init, comlin_symsrch_minimize, comlin_symsrch_get_nevals, comlin_pairsrch_minimize

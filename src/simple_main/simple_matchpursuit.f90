@@ -1,8 +1,8 @@
 !==Class simple_matchingpursuit
 !
 module simple_matchpursuit
-use simple_defs              ! singleton
-use simple_jiffys,           only: alloc_err
+use simple_defs
+use simple_jiffys, only: alloc_err
 
 implicit none
 

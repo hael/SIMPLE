@@ -1,37 +1,38 @@
 !>  \brief  Class to deal with text files of numbers
 module simple_nrtxtfile
-    use simple_defs
-    implicit none
-    
-    public :: nrtxtfile
+use simple_defs
+use simple_strings ! use all in there
+implicit none
+
+public :: nrtxtfile
+private
+
+integer, parameter :: OPEN_TO_READ  = 1
+integer, parameter :: OPEN_TO_WRITE = 2
+
+type :: nrtxtfile
     private
-
-    integer, parameter :: OPEN_TO_READ  = 1
-    integer, parameter :: OPEN_TO_WRITE = 2
-
-    type :: nrtxtfile
-        private
-        integer               :: funit
-        character(len=STDLEN) :: fname
-        integer               :: recs_per_line = 0
-        integer               :: ndatalines    = 0
-        integer               :: access_type
-    contains
-        procedure          :: new
-        procedure          :: readNextDataLine
-        procedure, private :: writeDataLineReal
-        procedure, private :: writeDataLineInt
-        generic            :: write => writeDataLineReal, writeDataLineInt
-        procedure          :: writeCommentLine
-        procedure          :: get_nrecs_per_line
-        procedure          :: get_ndatalines
-        procedure          :: kill
-    end type
+    integer               :: funit
+    character(len=STDLEN) :: fname
+    integer               :: recs_per_line = 0
+    integer               :: ndatalines    = 0
+    integer               :: access_type
+contains
+    procedure          :: new
+    procedure          :: readNextDataLine
+    procedure, private :: writeDataLineReal
+    procedure, private :: writeDataLineInt
+    generic            :: write => writeDataLineReal, writeDataLineInt
+    procedure          :: writeCommentLine
+    procedure          :: get_nrecs_per_line
+    procedure          :: get_ndatalines
+    procedure          :: kill
+end type
 
 contains
 
     subroutine new( self, fname, access_type, wanted_recs_per_line )
-        use simple_jiffys, only: get_fileunit, strIsComment, strIsBlank, cntRecsPerLine
+        use simple_filehandling, only: get_fileunit
         class(nrtxtfile),  intent(inout) :: self
         character(len=*),  intent(in)    :: fname
         integer,           intent(in)    :: access_type !< Either OPEN_TO_READ or OPEN_TO_WRITE
@@ -104,12 +105,11 @@ contains
     end subroutine new
     
     subroutine readNextDataLine( self, read_data )
-        use simple_jiffys, only: strIsComment, strIsBlank
         class(nrtxtfile), intent(inout) :: self
-        real, intent(inout)             :: read_data(:)
-        character(len=line_max_len)     :: buffer
-        integer                         :: ios
-        character(len=256)              :: io_message
+        real,             intent(inout) :: read_data(:)
+        character(len=line_max_len) :: buffer
+        integer                     :: ios
+        character(len=256)          :: io_message
         ! Check we are open to read
         if( self%access_type .ne. OPEN_TO_READ )then
             stop 'simple_nrtxtfile::readNextDataLine; File is not OPEN_TO_READ'
@@ -196,7 +196,7 @@ contains
     end function get_ndatalines
 
     subroutine kill(self)
-        use simple_jiffys, only: is_open
+        use simple_filehandling, only: is_open
         class(nrtxtfile), intent(inout) :: self
         if( is_open(self%funit) ) close(self%funit)
         self%recs_per_line = 0

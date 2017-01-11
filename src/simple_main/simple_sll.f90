@@ -11,8 +11,8 @@
 !* incorporated in the _SIMPLE_ library, HE 2009-06-25
 !
 module simple_sll
+use simple_defs
 use simple_arr, only: arr
-use simple_defs ! singleton 
 implicit none
 
 public :: sll

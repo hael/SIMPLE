@@ -1,5 +1,5 @@
 module simple_chash
-use simple_defs ! singleton
+use simple_defs
 implicit none
 
 public :: chash
@@ -274,7 +274,7 @@ contains
 
     !>  \brief  sort chash lexographically based on the keys
     subroutine sort( self )
-        use simple_jiffys, only: lexSort
+        use simple_strings, only: lexSort
         class(chash), intent(inout)    :: self
         character(len=32), allocatable :: keys_sorted(:)
         character(len=:), allocatable  :: val
@@ -413,7 +413,8 @@ contains
     
     !>  \brief  for reading key-vals from a text file
     subroutine read( self, fname )
-        use simple_jiffys, only: get_fileunit, strIsComment, strIsBlank
+        use simple_filehandling, only: get_fileunit
+        use simple_strings,      only: strIsComment, strIsBlank
         class(chash), intent(inout)  :: self   !< instance
         character(len=*), intent(in) :: fname  !< name of file
         character(len=line_max_len)  :: buffer !< will hold a line from the file
@@ -447,7 +448,7 @@ contains
     
     !>  \brief  for writing key-vals to a text file
     subroutine write( self, fname )
-        use simple_jiffys, only: get_fileunit
+        use simple_filehandling, only: get_fileunit
         class(chash), intent(inout)  :: self   !< instance
         character(len=*), intent(in) :: fname  !< name of file
         character(len=line_max_len)  :: buffer !< will hold a line from the file

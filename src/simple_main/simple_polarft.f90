@@ -1,6 +1,6 @@
 !>  \brief  SIMPLE polarft class
 module simple_polarft
-use simple_defs ! singleton
+use simple_defs
 use simple_jiffys, only: alloc_err
 implicit none
 

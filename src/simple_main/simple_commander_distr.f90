@@ -10,12 +10,14 @@
 ! *Authors:* Cyril Reboul & Hans Elmlund 2016
 !
 module simple_commander_distr
-use simple_defs            ! singleton
-use simple_jiffys          ! singleton
+use simple_defs
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
+use simple_strings,        only: int2str, int2str_pad
+use simple_filehandling    ! use all in there
+use simple_jiffys          ! use all in there
 implicit none
 
 public :: merge_algndocs_commander
@@ -55,7 +57,7 @@ contains
     
     subroutine exec_merge_algndocs( self, cline )
         use simple_oris, only: oris
-        use simple_map_reduce  ! singleton
+        use simple_map_reduce ! use all in there
         class(merge_algndocs_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(params)          :: p
@@ -63,21 +65,8 @@ contains
         integer               :: i, j, nentries, cnt, nentries_all, numlen
         integer, allocatable  :: parts(:,:)
         character(len=STDLEN) :: fname
-        logical               :: here, useoritab
+        logical               :: here
         p = params(cline) ! parameters generated
-        useoritab = .false.
-        if( cline%defined('oritab') )then
-            if( file_exists(p%oritab) ) useoritab = .true.
-        endif
-        if( useoritab )then
-            if( nlines(p%oritab) /= p%nptcls )then
-                stop 'the inputted nptcls is not consistent with the nptcls in oritab!'
-            endif
-            ! create object for orientations
-            o = oris(p%nptcls)
-            ! read previous orientations
-            call o%read(p%oritab)
-        endif
         select case(p%split_mode)
             case('chunk')
                 parts = split_nobjs_in_chunks(p%nptcls, p%chunksz)
@@ -103,30 +92,14 @@ contains
             if( nentries < nentries_all )then
                 write(*,*) 'nentries: ',     nentries
                 write(*,*) 'nentries_all: ', nentries_all
-                if( .not. useoritab )then
-                    stop 'need previous oritab to fill-in blanks; simple_merge_algndocs'
-                endif
+                write(*,*) 'number of entries in the doc to be merged not equal to the expected number'
+                stop 'simple_commander_distr :: exec_merge_algndocs'
             endif
             ! print partition info
             write(*,'(a,1x,i3,1x,a,1x,i6,1x,i6)') 'partition:', i, 'from/to:', parts(i,1), parts(i,2)
-            if( nentries > 0 )then
-                o_read = oris(nentries)
-                call o_read%read(fname)
-            endif
-            ! read
-            if( useoritab )then ! read and fill-in from oritab
-                cnt = 0
-                do j= parts(i,1),parts(i,2)
-                    cnt = cnt+1
-                    if( cnt <= nentries )then
-                        call o%set_ori(j,o_read%get_ori(cnt))
-                    else
-                        exit
-                    endif
-                end do
-            else ! just merge (all ptcls is there)
-                call o%merge(o_read)
-            endif
+            o_read = oris(nentries)
+            call o_read%read(fname)
+            call o%merge(o_read)
         end do
         call o%write(p%outfile)
         deallocate(parts)
@@ -231,7 +204,7 @@ contains
     end subroutine exec_split_pairs
 
     subroutine exec_split( self, cline )
-        use simple_map_reduce   ! singleton
+        use simple_map_reduce ! use all in there
         use simple_image, only: image
         class(split_commander), intent(inout) :: self
         class(cmdline),         intent(inout) :: cline

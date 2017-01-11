@@ -25,7 +25,6 @@
 !
 module simple_winfuns
 use simple_defs
-use simple_jiffys
 implicit none
 
 public :: winfuns

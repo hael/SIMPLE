@@ -1,12 +1,13 @@
 !>  \brief  SIMPLE image class
 module simple_image
-use simple_ftiter,   only: ftiter
-use simple_fftw3     ! singleton
-use simple_math      ! singleton
-use gnufor2          ! singleton
-use simple_rnd       ! singleton
-use simple_stat      ! singleton
-use simple_defs      ! singleton
+use simple_ftiter, only: ftiter
+use simple_jiffys, only: alloc_err
+use simple_fftw3
+use simple_math
+use gnufor2
+use simple_rnd
+use simple_stat
+use simple_defs
 implicit none
 
 public :: image, test_image
@@ -500,8 +501,7 @@ contains
 
     !>  \brief  extracts a small window into an array (circular indexing)
     function win2arr( self, i, j, k, winsz ) result( pixels )
-        use simple_math,   only: cyci_1d
-        use simple_jiffys, only: alloc_err
+        use simple_math, only: cyci_1d
         class(image), intent(inout) :: self
         integer,      intent(in)    :: i, j, k, winsz
         real, allocatable :: pixels(:)
@@ -535,7 +535,6 @@ contains
 
     !>  \brief  extracts the pixels under the mask
     function extr_pixels( self, mskimg ) result( pixels )
-        use simple_jiffys, only: alloc_err
         class(image), intent(in) :: self
         class(image), intent(in) :: mskimg
         real, allocatable :: pixels(:)
@@ -562,8 +561,9 @@ contains
 
     !>  \brief  for reading 2D images from stack or volumes from volume files
     subroutine read( self, fname, i, isxfel, formatchar, readhead, rwaction )
-        use simple_imgfile, only: imgfile
-        use simple_jiffys,  only: fname2format, file_exists, read_raw_image, alloc_err
+        use simple_imgfile,       only: imgfile
+        use simple_jiffys,        only: read_raw_image
+        use simple_filehandling,  only: fname2format, file_exists
         class(image),               intent(inout) :: self
         character(len=*),           intent(in)    :: fname
         integer,          optional, intent(in)    :: i
@@ -747,8 +747,8 @@ contains
 
     !>  \brief  for writing emkind images to stack or volumes to volume files
     subroutine write_emkind( self, fname, i, del_if_exists, formatchar )
-        use simple_imgfile, only: imgfile
-        use simple_jiffys,  only: fname2format
+        use simple_imgfile,      only: imgfile
+        use simple_filehandling, only: fname2format
         class(image),               intent(inout) :: self
         character(len=*),           intent(in)    :: fname
         integer,          optional, intent(in)    :: i
@@ -4080,7 +4080,6 @@ contains
 
     !>  \brief  converts a em-kind image into a xfel pattern
     subroutine em2xfel( self )
-        use simple_jiffys, only: alloc_err
         class(image), intent(inout) :: self
         type(image) :: tmp
         real, allocatable :: zeroes(:,:,:)
@@ -4889,10 +4888,9 @@ contains
 
     !>  \brief  normalizes the image according to the background noise
     subroutine noise_norm( self, msk, errout )
-        use simple_jiffys, only: alloc_err
-        class(image), intent(inout)    :: self
-        real, intent(in)               :: msk
-        logical, intent(out), optional :: errout
+        class(image),      intent(inout) :: self
+        real,              intent(in)    :: msk
+        logical, optional, intent(out)   :: errout
         type(image)       :: maskimg
         integer           :: npix,nbackgr,npix_tot
         real              :: med,ave,sdev,var
@@ -4929,7 +4927,6 @@ contains
 
     !>  \brief  normalizes the image based on a central sphere of input radius
     subroutine radius_norm( self, radius, errout )
-        use simple_jiffys, only: alloc_err
         class(image),      intent(inout) :: self
         real,    optional, intent(in)    :: radius
         logical, optional, intent(out)   :: errout

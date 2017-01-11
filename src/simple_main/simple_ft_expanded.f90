@@ -1,7 +1,7 @@
 module simple_ft_expanded
-use simple_image, only: image
 use simple_defs
-use simple_jiffys
+use simple_image,  only: image
+use simple_jiffys, only: alloc_err
 implicit none
 
 public :: ft_expanded

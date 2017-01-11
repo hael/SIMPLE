@@ -9,12 +9,14 @@
 ! *Authors:* Cyril Reboul & Hans Elmlund 2016
 !
 module simple_commander_misc
-use simple_defs            ! singleton
-use simple_jiffys          ! singleton
+use simple_defs
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
+use simple_strings,        only: int2str, int2str_pad
+use simple_filehandling    ! use all in there
+use simple_jiffys          ! use all in there
 implicit none
 
 public :: cluster_smat_commander
@@ -145,8 +147,9 @@ contains
     end subroutine exec_cluster_smat
 
     subroutine exec_find_nnimgs( self, cline )
-        use simple_nnimgs ! singleton
-        use simple_image, only: image
+        use simple_nnimgs      ! use all in there
+        use simple_image,      only: image
+        use simple_qsys_funs,  only: qsys_job_finished
         class(find_nnimgs_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(params)                  :: p
@@ -186,11 +189,7 @@ contains
             endif
             close(funit)
             deallocate(fname, nnmat_part)
-            fnr = get_fileunit()
-            open(unit=fnr, FILE='JOB_FINISHED_'//int2str_pad(p%part,p%numlen), STATUS='REPLACE', action='WRITE', iostat=io_stat)
-            call fopen_err( 'In: commander_misc :: exec_find_nnimgs', io_stat )
-            write(fnr,'(A)') '**** SIMPLE_FIND_NNIMGS NORMAL STOP ****'
-            close(fnr)
+            call qsys_job_finished( p, 'commander_misc :: exec_find_nnimg' )
         else
             nnmat = img_nearest_neighbors( p, imgs )
             do iptcl=1,p%nptcls

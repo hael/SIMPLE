@@ -74,6 +74,8 @@ cwd
 deftab
 dfunit
 dir
+dir_reject
+dir_select
 doclist
 endian
 exp_doc
@@ -164,7 +166,6 @@ npeaks
 npix
 nptcls
 nran
-nrepeats
 nrestarts
 nrots
 nspace

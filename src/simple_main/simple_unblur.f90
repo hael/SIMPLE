@@ -1,10 +1,9 @@
 module simple_unblur
+use simple_defs
 use simple_ft_expanded, only: ft_expanded
 use simple_image,       only: image
 use simple_params,      only: params
-use simple_jiffys       ! singleton
-use simple_filterer     ! singleton
-use simple_defs         ! singleton
+use simple_filterer     ! use all in there
 implicit none
 
 public :: unblur_movie, unblur_calc_sums, unblur_calc_sums_tomo, test_unblur
@@ -50,10 +49,10 @@ contains
     
     subroutine unblur_movie( movie_stack_fname, p, corr )
         use simple_oris,        only: oris
-        use simple_jiffys,      only: int2str
-        use simple_ftexp_shsrch ! singleton
+        use simple_strings,     only: int2str
         use simple_rnd,         only: ran3
         use simple_stat,        only: corrs2weights, moment
+        use simple_ftexp_shsrch ! use all in there
         character(len=*), intent(in)    :: movie_stack_fname
         class(params),    intent(inout) :: p
         real,             intent(out)   :: corr
@@ -215,6 +214,7 @@ contains
     end subroutine unblur_calc_sums_tomo
      
     subroutine unblur_init( movie_stack_fname, p )
+        use simple_jiffys, only: find_ldim_nptcls, alloc_err, progress
         character(len=*), intent(in)    :: movie_stack_fname
         class(params),    intent(inout) :: p
         real        :: moldiam, dimo4

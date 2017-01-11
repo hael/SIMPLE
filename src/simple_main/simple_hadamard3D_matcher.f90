@@ -1,4 +1,5 @@
 module simple_hadamard3D_matcher
+use simple_defs
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_prime3D_srch,     only: prime3D_srch
 use simple_ori,              only: ori
@@ -8,11 +9,10 @@ use simple_cmdline,          only: cmdline
 use simple_gridding,         only: prep4cgrid
 use simple_masker,           only: automask
 use simple_rnd,              only: ran3
-use simple_cont3D_matcher    ! singleton
-use simple_hadamard_common   ! singleton
-use simple_defs              ! singleton
-use simple_jiffys,           ! singleton
-use simple_math              ! singleton
+use simple_strings,          only: str_has_substr
+use simple_cont3D_matcher    ! use all in there
+use simple_hadamard_common   ! use all in there
+use simple_math              ! use all in there
 implicit none
 
 public :: prime3D_exec, gen_random_model, prime3D_find_resrange, pftcc, primesrch3D
@@ -58,7 +58,9 @@ contains
 
     !>  \brief  is the prime3D algorithm
     subroutine prime3D_exec( b, p, cline, which_iter, update_res, converged )
-        use simple_filterer, only: resample_filter
+        use simple_filterer,  only: resample_filter
+        use simple_qsys_funs, only: qsys_job_finished
+        use simple_strings,   only: int2str_pad
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         class(cmdline), intent(inout) :: cline
@@ -151,7 +153,7 @@ contains
         if( debug ) write(*,*) '*** hadamard3D_matcher ***: did reset recvols'
 
         ! ALIGN & GRID
-        call del_txtfile(p%outfile)
+        call del_file(p%outfile)
         cnt_glob = 0
         if( debug ) write(*,*) '*** hadamard3D_matcher ***: loop fromp/top:', p%fromp, p%top
         do iptcl=p%fromp,p%top
@@ -242,12 +244,7 @@ contains
         endif
         ! REPORT CONVERGENCE
         if( p%l_distr_exec )then
-            ! generation of this file marks completion of the partition
-            ! this file is empty 4 now but may contain run stats etc.
-            fnr  = get_fileunit()
-            open(unit=fnr, FILE='JOB_FINISHED_'//int2str_pad(p%part,p%numlen), STATUS='REPLACE', action='WRITE', iostat=file_stat)
-            call fopen_err( 'In: prime3D_exec; simple_hadamard3D_matcher.f90', file_stat )
-            close(fnr)
+            call qsys_job_finished( p, 'simple_hadamard3D_matcher :: prime3D_exec')
         else
             ! CONVERGENCE TEST
             converged = b%conv%check_conv3D(update_res)

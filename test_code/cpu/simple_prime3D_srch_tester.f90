@@ -110,6 +110,7 @@ contains
     end subroutine exec_prime3D_srch_test
 
     subroutine setup_testenv( cline, be_verbose )
+        use simple_strings, only: str_has_substr
         class(cmdline),    intent(inout) :: cline
         logical, optional, intent(in)    :: be_verbose
         type(ori)          :: o

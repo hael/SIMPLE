@@ -1,12 +1,12 @@
 module simple_prime_srch
-use simple_defs    ! singleton
-use simple_jiffys  ! singleton
+use simple_defs
 use simple_params, only: params
+use simple_jiffys, only: alloc_err
 implicit none
 
 type prime_srch
     private
-    class(params), pointer :: pp => null()     !< pointer to parameters singleton
+    class(params), pointer :: pp => null()     !< pointer to parameters
     integer                :: nrefs = 0        !< total number of references (nstates*nprojs)
     integer                :: nrots = 0        !< number of in-plane rotations in polar representation    
     integer, allocatable   :: inplmat(:,:)     !< in-plane rotation index matrix for GPU-based search

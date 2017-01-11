@@ -6,10 +6,10 @@
 ! Redistribution or modification is regulated by the GNU General Public License.
 ! *Author:* Hans Elmlund, 2013-10-15
 module simple_oasis_opt
+use simple_defs 
 use simple_optimizer,   only: optimizer
 use simple_online_var,  only: online_var
 use simple_opt_spec,    only: opt_spec
-use simple_defs         ! singleton
 implicit none
 
 public :: oasis_opt, test_oasis_opt

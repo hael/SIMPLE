@@ -1,11 +1,11 @@
 module simple_symsrcher
-use simple_jiffys   ! singleton
 use simple_cmdline, only: cmdline
 use simple_params,  only: params
 use simple_build,   only: build
 use simple_oris,    only: oris
 use simple_ori,     only: ori
 use simple_sym,     only: sym
+use simple_jiffys,  only: alloc_err, find_ldim_nptcls
 implicit none
 
 public :: symsrch_master
@@ -21,6 +21,7 @@ real                          :: shvec(3)
 contains
 
     subroutine symsrch_master( cline, p, b, o )
+        use simple_filehandling, only: nlines
         class(cmdline), intent(inout) :: cline
         class(params),  intent(inout) :: p
         class(build),   intent(inout) :: b
@@ -136,15 +137,15 @@ contains
             end do 
             b%clins = comlin(b%a, b%imgs_sym)
         endif
-    end subroutine
+    end subroutine updates_tboxs
     
     !>  \brief does common lines symmetry search over one symmetry pointgroup
     subroutine single_symsrch( b, p, best_o)
-        use simple_comlin_sym  ! singleton
-        type(build)          :: b
-        type(params)         :: p
-        type(ori), intent(inout)        :: best_o
-        integer          :: i,j,cnt
+        use simple_comlin_sym  ! use all in there
+        type(build)              :: b
+        type(params)             :: p
+        type(ori), intent(inout) :: best_o
+        integer :: i, j, cnt
         ! expand over symmetry group
         cnt = 0
         do i=1,p%nptcls
@@ -157,7 +158,7 @@ contains
         ! search for the axis
         call comlin_sym_init( b, p )
         call comlin_sym_axis( best_o, 'sym', .true.)
-    end subroutine
+    end subroutine single_symsrch
     
     !>  \brief  calculates probabilities and returns best axis index
     subroutine sym_probs( bestind )
@@ -195,6 +196,6 @@ contains
             endif
         enddo
         deallocate(probs)
-    end subroutine
+    end subroutine sym_probs
     
 end module simple_symsrcher

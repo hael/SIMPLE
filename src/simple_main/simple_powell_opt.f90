@@ -8,7 +8,7 @@
 module simple_powell_opt
 use simple_optimizer, only: optimizer
 use simple_opt_spec,  only: opt_spec
-use simple_jiffys     ! singleton
+use simple_jiffys,    only: alloc_err
 implicit none
 
 public :: powell_opt

@@ -1,5 +1,5 @@
 module simple_estimate_ssnr
-use simple_defs   ! singleton
+use simple_defs
 use simple_image, only: image
 implicit none
 
