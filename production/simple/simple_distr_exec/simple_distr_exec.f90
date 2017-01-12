@@ -425,17 +425,28 @@ select case(prg)
         ! <ini3D_from_cavgs/begin>  <ini3D_from_cavgs/end> 
         !
         ! set required keys
-        keys_required(1) = 'stk'
-        keys_required(2) = 'smpd'
-        keys_required(3) = 'msk'
-        keys_required(4) = 'pgrp'
-        keys_required(5) = 'nthr'
-        keys_required(6) = 'nparts'
+        keys_required(1)  = 'stk'
+        keys_required(2)  = 'smpd'
+        keys_required(3)  = 'msk'
+        keys_required(4)  = 'pgrp'
+        keys_required(5)  = 'nthr'
+        keys_required(6)  = 'nparts'
         ! set optional keys
-        keys_optional(1) = 'ncunits'
-        keys_optional(2) = 'nthr_master'
+        keys_optional(1)  = 'ncunits'
+        keys_optional(2)  = 'nthr_master'
+        keys_optional(3)  = 'hp'
+        keys_optional(4)  = 'lp'
+        keys_optional(5)  = 'frac'
+        keys_optional(6)  = 'automsk'
+        keys_optional(7)  = 'mw'
+        keys_optional(8)  = 'amsklp'
+        keys_optional(9)  = 'edge'
+        keys_optional(10) = 'binwidth'
+        keys_optional(11) = 'inner'
+        keys_optional(12) = 'width'
+        keys_optional(13) = 'shbarrier'
         ! parse command line
-        call cline%parse(keys_required(:6), keys_optional(:2))
+        call cline%parse(keys_required(:6), keys_optional(:13))
         ! execute
         call xini3D_from_cavgs%execute( cline )
     case DEFAULT

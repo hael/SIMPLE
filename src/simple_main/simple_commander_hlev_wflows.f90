@@ -99,7 +99,11 @@ contains
         call cline_prime3D_refine1%set('ctf', 'no')
         call cline_prime3D_refine1%set('maxits', real(MAXITS_REFINE))
         call cline_prime3D_refine1%set('dynlp', 'no') ! better be explicit about the dynlp
-        call cline_prime3D_refine1%set('lp', LPLIMS(1))
+        if( cline%defined('lp') )then
+            call cline_prime3D_refine1%set('lp', p_master%lp)
+        else
+            call cline_prime3D_refine1%set('lp', LPLIMS(1))
+        endif
         call cline_prime3D_refine1%set('refine', 'shc')
         ! (3) SYMMETRY AXIS SEARCH
         if( srch4symaxis )then
@@ -113,7 +117,11 @@ contains
             call cline_symsrch%set('nspace', real(NPROJS_SYMSRCH))
             call cline_symsrch%set('cenlp', CENLP)
             call cline_symsrch%set('outfile', 'symdoc.txt')
-            call cline_symsrch%set('lp', LPLIMS(1))
+            if( cline%defined('lp') )then
+                call cline_symsrch%set('lp', p_master%lp)
+            else
+                call cline_symsrch%set('lp', LPLIMS(1))
+            endif
             if( cline%defined('nthr_master') )then
                 call cline_symsrch%set('nthr', real(p_master%nthr_master))
             endif
@@ -135,6 +143,14 @@ contains
         call cline_prime3D_refine2%set('maxits', real(MAXITS_REFINE))
         call cline_prime3D_refine2%set('dynlp', 'no') ! better be explicit about the dynlp
         call cline_prime3D_refine2%set('lp', LPLIMS(2))
+        if( cline%defined('lp') )then
+            if( LPLIMS(2) < p_master%lp )then
+                ! nothing to do
+            else
+                ! put back the inputted limit
+                call cline_prime3D_refine2%set('lp', LPLIMS(2))
+            endif
+        endif
         call cline_prime3D_refine2%set('refine', 'shc')
         ! (5) RE-PROJECT VOLUME
         call cline_projvol%set('prg', 'projvol')
