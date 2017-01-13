@@ -150,8 +150,10 @@ contains
         character(len=*), intent(in) ::str
         real    :: rval
         integer :: io_stat
-        read(str, *, iostat=io_stat) rval
+        character(len=100) :: io_msg
+        read(str, *, iostat=io_stat, iomsg=io_msg) rval
         if( io_stat .ne. 0 )then
+            write(*,*) 'iomsg: ', trim(io_msg) 
             stop 'ERROR(I/O); simple_strings :: str2real'
         endif
     end function str2real
@@ -169,7 +171,9 @@ contains
         integer, intent(in)           :: intg
         character(len=:), allocatable :: string
         integer :: ndigs_int
-        if (intg .eq. 0) then
+	    if( intg < 0 )then
+            stop 'cannot convert negative intg 2 str; simple_strings :: int2str'
+        else if (intg .eq. 0) then
             ndigs_int = 1
         else
             ndigs_int = int(log10(real(intg))) + 1

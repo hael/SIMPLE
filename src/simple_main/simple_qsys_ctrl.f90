@@ -219,12 +219,12 @@ contains
         class(qsys_ctrl), intent(inout) :: self
         integer,          intent(in)    :: ipart
         class(qsys_base), pointer       :: pmyqsys
-        character(len=:), allocatable   :: exec_script
+        character(len=STDLEN)           :: exec_script
         select type( pmyqsys => self%myqsys )
             class is(qsys_local)
-                allocate(exec_script, source=self%myqsys%submit_cmd()//' ./'//trim(self%script_names(ipart))//' &')
+                exec_script = self%myqsys%submit_cmd()//' ./'//trim(adjustl(self%script_names(ipart)))//' &'
             class DEFAULT
-                allocate(exec_script, source=self%myqsys%submit_cmd()//' ./'//trim(self%script_names(ipart)))
+                exec_script = self%myqsys%submit_cmd()//' ./'//trim(adjustl(self%script_names(ipart)))
         end select
         call exec_cmdline(exec_script)
         ! flag job submitted

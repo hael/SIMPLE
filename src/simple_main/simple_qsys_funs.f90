@@ -1,7 +1,7 @@
 module simple_qsys_funs
 use simple_defs     
 use simple_syscalls ! use all in there
-use simple_strings, only: int2str, int2str_pad
+use simple_strings, only: int2str, int2str_pad, str2real
 implicit none
 
 contains
@@ -11,7 +11,7 @@ contains
         use simple_filehandling, only: del_file, del_files
         class(params),     intent(in) :: p
         character(len=:), allocatable :: rec_base_str, rho_base_str
-        integer, parameter :: NUMLEN_STATE = 2
+        integer, parameter :: NUMLEN_STATE = 2, NUMLEN_ITER = 3
         integer :: istate
         ! individual files
         call del_file('FOO')
@@ -29,10 +29,10 @@ contains
         do istate=1,p%nstates
             allocate(rec_base_str, source='recvol_state'//int2str_pad(istate,NUMLEN_STATE)//'_part')
             allocate(rho_base_str, source='rho_'//rec_base_str)
-            call del_files(rec_base_str//'_even', p%nparts, ext=p%ext)
-            call del_files(rec_base_str//'_odd',  p%nparts, ext=p%ext)
-            call del_files(rho_base_str//'_even', p%nparts, ext=p%ext)
-            call del_files(rho_base_str//'_odd',  p%nparts, ext=p%ext)
+            call del_files(rec_base_str//'_even', p%nparts, ext=p%ext, numlen=NUMLEN_ITER)
+            call del_files(rec_base_str//'_odd',  p%nparts, ext=p%ext, numlen=NUMLEN_ITER)
+            call del_files(rho_base_str//'_even', p%nparts, ext=p%ext, numlen=NUMLEN_ITER)
+            call del_files(rho_base_str//'_odd',  p%nparts, ext=p%ext, numlen=NUMLEN_ITER)
             deallocate(rec_base_str,rho_base_str)
         end do
     end subroutine qsys_cleanup_iter
@@ -127,7 +127,8 @@ contains
         if( qsys_name.ne.'local' )then
             if( .not. env%isthere('job_memory_per_task') )stop 'Job memory is required in simple_distr_config.env (job_memory)'
             if( .not. env%isthere('job_name') )             call env%push('job_name','simple_job')
-            if( .not. env%isthere('job_time') )             call env%push('job_time', '0-23:59:0') ! TODO: use time_per_image
+            ! if( .not. env%isthere('job_time') )             call env%push('job_time', '0-23:59:0') ! TODO: use time_per_image
+            if( .not. env%isthere('job_time') )             call env%push('job_time', '0-2:0:0') ! TODO: use time_per_image
             if( .not. env%isthere('job_ntasks') )           call env%push('job_ntasks', '1')
             if( .not. env%isthere('job_cpus_per_task') )    call env%push('job_cpus_per_task', '1')
             if( .not. env%isthere('job_ntasks_per_socket') )call env%push('job_ntasks_per_socket', '1')
@@ -188,16 +189,21 @@ contains
         integer, allocatable,      intent(out) :: parts(:,:) !< indices of partitions
         class(qsys_ctrl),          intent(out) :: qscripts   !< qsys controller
         class(chash),              intent(out) :: myq_descr  !< user-provided queue and job specifics from simple_distr_config.env
-        character(len=:), allocatable :: qsnam
         character(len=STDLEN)         :: simplepath_exec
-        integer, parameter            :: MAXNKEYS=30
+        character(len=:), allocatable :: qsnam, tpi, hrs_str, mins_str, secs_str
+        integer                       :: io_stat, partsz, hrs, mins, secs
+        real                          :: rtpi, tot_time_sec
+        integer, parameter            :: MAXNKEYS = 30
+        logical, parameter            :: DEBUG = .true.
         if( .not. allocated(parts) )then
             ! generate partitions
             select case(p%split_mode)
                 case('even')
-                    parts = split_nobjs_even(p%nptcls, p%nparts)
+                    parts  = split_nobjs_even(p%nptcls, p%nparts)
+                    partsz = parts(1,2) - parts(1,1) + 1
                 case('chunk')
-                    parts = split_nobjs_in_chunks(p%nptcls, p%chunksz)
+                    parts  = split_nobjs_in_chunks(p%nptcls, p%chunksz)
+                    partsz = p%chunksz
                 case DEFAULT
                     write(*,*) 'split_mode: ', trim(p%split_mode)
                     stop 'Unsupported split_mode'
@@ -207,6 +213,23 @@ contains
         ! retrieve environment variables from file
         call myq_descr%new(MAXNKEYS)
         call parse_env_file(myq_descr) ! parse .env file
+        ! deal with time
+        if( myq_descr%isthere('time_per_image') )then
+            tpi          = myq_descr%get('time_per_image')
+            rtpi         = str2real(tpi)
+            tot_time_sec = rtpi*real(partsz)
+            hrs          = int(tot_time_sec/3600.)
+            hrs_str      = int2str(hrs)
+            mins         = int((tot_time_sec - 3600.*real(hrs))/60.)
+            mins_str     = int2str(mins)
+            secs         = int(tot_time_sec - 3600.*real(hrs) - 60.*real(mins))
+            secs_str     = int2str(secs)
+            if( hrs > 23 )then
+                call myq_descr%set('job_time', '0-23:59:0')
+            else
+                call myq_descr%set('job_time','0-'//hrs_str//':'//mins_str//':'//secs_str)
+            endif
+        endif
         qsnam = myq_descr%get('qsys_name')
         call qsys_fac%new(qsnam, myqsys)
         ! create the user specific qsys and qsys controller (script generator)
