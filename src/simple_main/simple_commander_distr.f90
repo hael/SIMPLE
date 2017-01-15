@@ -66,6 +66,7 @@ contains
         integer, allocatable  :: parts(:,:)
         character(len=STDLEN) :: fname
         logical               :: here
+        logical, parameter    :: print_part_info = .false.
         p = params(cline) ! parameters generated
         select case(p%split_mode)
             case('chunk')
@@ -95,8 +96,9 @@ contains
                 write(*,*) 'number of entries in the doc to be merged not equal to the expected number'
                 stop 'simple_commander_distr :: exec_merge_algndocs'
             endif
-            ! print partition info
-            write(*,'(a,1x,i3,1x,a,1x,i6,1x,i6)') 'partition:', i, 'from/to:', parts(i,1), parts(i,2)
+            if( print_part_info )then
+                write(*,'(a,1x,i3,1x,a,1x,i6,1x,i6)') 'partition:', i, 'from/to:', parts(i,1), parts(i,2)
+            endif
             o_read = oris(nentries)
             call o_read%read(fname)
             call o%merge(o_read)
@@ -104,7 +106,7 @@ contains
         call o%write(p%outfile)
         deallocate(parts)
         ! end gracefully
-        call simple_end('**** SIMPLE_MERGE_ALGNDOCS NORMAL STOP ****')
+        call simple_end('**** SIMPLE_MERGE_ALGNDOCS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_merge_algndocs
 
     subroutine exec_merge_nnmat( self, cline )
@@ -125,7 +127,7 @@ contains
         endif
         close(filnum)
         ! end gracefully
-        call simple_end('**** SIMPLE_MERGE_NNMAT NORMAL STOP ****')
+        call simple_end('**** SIMPLE_MERGE_NNMAT NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_merge_nnmat
 
     subroutine exec_merge_shellweights( self, cline )
@@ -169,7 +171,7 @@ contains
         close(filnum)
         deallocate(wsums,wmat)
         ! end gracefully
-        call simple_end('**** SIMPLE_MERGE_SHELLWEIGHTS NORMAL STOP ****')
+        call simple_end('**** SIMPLE_MERGE_SHELLWEIGHTS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_merge_shellweights
     
     subroutine exec_merge_similarities( self, cline )
@@ -190,7 +192,7 @@ contains
         endif
         close(filnum)
         ! end gracefully
-        call simple_end('**** SIMPLE_MERGE_SIMILARITIES NORMAL STOP ****')
+        call simple_end('**** SIMPLE_MERGE_SIMILARITIES NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_merge_similarities
 
     subroutine exec_split_pairs( self, cline )
@@ -200,7 +202,7 @@ contains
         type(params) :: p
         p = params(cline) ! parameters generated
         call split_pairs_in_parts(p%nptcls, p%nparts)
-        call simple_end('**** SIMPLE_SPLIT_PAIRS NORMAL STOP ****')
+        call simple_end('**** SIMPLE_SPLIT_PAIRS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_split_pairs
 
     subroutine exec_split( self, cline )
@@ -241,7 +243,7 @@ contains
         end do
         deallocate(parts)
         call img%kill
-        call simple_end('**** SIMPLE_SPLIT NORMAL STOP ****')
+        call simple_end('**** SIMPLE_SPLIT NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_split
 
 end module simple_commander_distr

@@ -95,7 +95,7 @@ contains
             stop 'need either box size or moldiam to estimate resrange; simple_resrange'
         endif
         ! end gracefully
-        call simple_end('**** SIMPLE_RESRANGE NORMAL STOP ****')
+        call simple_end('**** SIMPLE_RESRANGE NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_resrange
     
     subroutine exec_npeaks( self, cline )
@@ -144,6 +144,7 @@ contains
         p%boxmatch = p%box
         call b%build_general_tbox(p, cline)  ! general objects built
         call cont3D_shellweight(b, p, cline)
+        call simple_end('**** SIMPLE_SHELLWEIGHT3D NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_shellweight3D
     
     subroutine exec_prime3D_init( self, cline )
@@ -182,7 +183,7 @@ contains
         endif
         ! end gracefully
         call qsys_job_finished( p, cline%get_carg('prg') )
-        call simple_end('**** SIMPLE_PRIME3D_INIT NORMAL STOP ****')
+        call simple_end('**** SIMPLE_PRIME3D_INIT NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_prime3D_init
 
     subroutine exec_het_init( self, cline )
@@ -278,7 +279,7 @@ contains
         call best_individual%write( p%outfile )
         call rec_individual( best_individual )
         ! end gracefully
-        call simple_end('**** SIMPLE_HET_INIT NORMAL STOP ****')
+        call simple_end('**** SIMPLE_HET_INIT NORMAL STOP ****', print_simple=.false.)
         contains
 
             subroutine rec_individual( individual )
@@ -647,7 +648,7 @@ contains
         if( p%zero .eq. 'yes' ) call b%a%set_all2single('corr', 0.)
         call b%a%write('multiptcl_startdoc.txt')
         ! end gracefully
-        call simple_end('**** SIMPLE_MULTIPTCL_INIT NORMAL STOP ****')
+        call simple_end('**** SIMPLE_MULTIPTCL_INIT NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_multiptcl_init
     
     subroutine exec_prime3D( self, cline )
@@ -828,7 +829,7 @@ contains
         endif
         call cline%set('frac', b%conv%get('frac'))
         ! end gracefully
-        call simple_end('**** SIMPLE_CHECK3D_CONV STOP ****')
+        call simple_end('**** SIMPLE_CHECK3D_CONV NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_check3D_conv
 
 end module simple_commander_prime3D

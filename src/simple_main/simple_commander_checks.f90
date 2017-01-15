@@ -51,7 +51,7 @@ contains
         call cline%set('box', real(p%box))
         write(*,'(A,1X,I7)') '>>> BOX:', p%box
         ! end gracefully
-        call simple_end('**** SIMPLE_CHECK_BOX NORMAL STOP ****')
+        call simple_end('**** SIMPLE_CHECK_BOX NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_check_box
 
     subroutine exec_check_nptcls( self, cline )
@@ -62,7 +62,7 @@ contains
         call cline%set('nptcls', real(p%nptcls))
         write(*,'(A,1X,I7)') '>>> NPTCLS:', p%nptcls
         ! end gracefully
-        call simple_end('**** SIMPLE_CHECK_NPTCLS NORMAL STOP ****')
+        call simple_end('**** SIMPLE_CHECK_NPTCLS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_check_nptcls
     
     subroutine exec_iminfo( self, cline)

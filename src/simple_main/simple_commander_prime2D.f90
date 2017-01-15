@@ -100,7 +100,7 @@ contains
             endif
         endif
         ! end gracefully
-        call simple_end('**** SIMPLE_PRIME2D_INIT NORMAL STOP ****')
+        call simple_end('**** SIMPLE_PRIME2D_INIT NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_prime2D_init
     
     subroutine exec_prime2D( self, cline )
@@ -157,7 +157,7 @@ contains
             call prime2D_write_sums( b, p )
         endif
         ! end gracefully
-        call simple_end('**** SIMPLE_CAVGASSEMBLE NORMAL STOP ****')
+        call simple_end('**** SIMPLE_CAVGASSEMBLE NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_cavgassemble
     
     subroutine exec_check2D_conv( self, cline )
@@ -181,7 +181,7 @@ contains
             call cline%set('converged', 'no')
         endif
         ! end gracefully
-        call simple_end('**** SIMPLE_CHECK2D_CONV STOP ****')
+        call simple_end('**** SIMPLE_CHECK2D_CONV NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_check2D_conv
     
     subroutine exec_rank_cavgs( self, cline )
@@ -204,7 +204,7 @@ contains
             call b%img%read(p%stk, order(iclass))
             call b%img%write(p%outstk, iclass)
         end do
-        call simple_end('**** SIMPLE_RANK_CAVGS NORMAL STOP ****')
+        call simple_end('**** SIMPLE_RANK_CAVGS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_rank_cavgs
 
 end module simple_commander_prime2D

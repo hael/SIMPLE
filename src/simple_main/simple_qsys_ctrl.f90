@@ -34,7 +34,7 @@ type qsys_ctrl
     procedure, private :: generate_script
     ! SUBMISSION TO QSYS
     procedure, private :: submit_scripts
-    procedure, private :: submit_script
+    ! procedure, private :: submit_script
     ! QUERIES
     procedure, private :: update_queue
     ! THE MASTER SCHEDULER
@@ -203,35 +203,83 @@ contains
     
     ! SUBMISSION TO QSYS
     
+    ! subroutine submit_scripts( self )
+    !     class(qsys_ctrl), intent(inout) :: self
+    !     integer :: ipart
+    !     do ipart=self%fromto_part(1),self%fromto_part(2)
+    !         if( .not. self%jobs_submitted(ipart) .and. self%ncomputing_units_avail > 0 )then
+    !             call self%submit_script(ipart)
+    !         endif
+    !     end do
+    ! end subroutine submit_scripts
+
+    ! subroutine submit_script( self, ipart )
+    !     use simple_qsys_local, only: qsys_local
+    !     use simple_syscalls,   only: exec_cmdline
+    !     class(qsys_ctrl), intent(inout) :: self
+    !     integer,          intent(in)    :: ipart
+    !     class(qsys_base), pointer       :: pmyqsys
+    !     character(len=STDLEN)           :: exec_script
+    !     select type( pmyqsys => self%myqsys )
+    !         class is(qsys_local)
+    !             exec_script = self%myqsys%submit_cmd()//' ./'//trim(adjustl(self%script_names(ipart)))//' &'
+    !         class DEFAULT
+    !             exec_script = self%myqsys%submit_cmd()//' ./'//trim(adjustl(self%script_names(ipart)))
+    !     end select
+    !     call exec_cmdline(exec_script)
+    !     ! flag job submitted
+    !     self%jobs_submitted(ipart) = .true.
+    !     ! decrement ncomputing_units_avail
+    !     self%ncomputing_units_avail = self%ncomputing_units_avail-1
+    ! end subroutine submit_script
+
     subroutine submit_scripts( self )
-        class(qsys_ctrl), intent(inout) :: self
-        integer :: ipart
+        use simple_filehandling, only: get_fileunit, fopen_err
+        use simple_syscalls,     only: exec_cmdline
+        use simple_qsys_local,   only: qsys_local
+        class(qsys_ctrl),      intent(inout) :: self
+        class(qsys_base),      pointer       :: pmyqsys
+        character(len=STDLEN), parameter     :: master_submit_script = './qsys_submit_jobs'
+        integer :: ipart, fnr, file_stat, chmod_stat, ios
+        logical :: submit_or_not(self%fromto_part(1):self%fromto_part(2)), err
+        ! make a submission mask
+        submit_or_not = .false.
         do ipart=self%fromto_part(1),self%fromto_part(2)
             if( .not. self%jobs_submitted(ipart) .and. self%ncomputing_units_avail > 0 )then
-                call self%submit_script(ipart)
+                submit_or_not(ipart) = .true.
+                ! flag job submitted
+                self%jobs_submitted(ipart) = .true.
+                ! decrement ncomputing_units_avail
+                self%ncomputing_units_avail = self%ncomputing_units_avail - 1
             endif
         end do
+        if( .not. any(submit_or_not) ) return
+        ! make the master submission script
+        fnr = get_fileunit()
+        open(unit=fnr, FILE=master_submit_script, STATUS='REPLACE', action='WRITE', iostat=file_stat)
+        call fopen_err('simple_qsys_ctrl :: submit_scripts', file_stat )
+        write(fnr,'(a)') '#!/bin/bash'
+        do ipart=self%fromto_part(1),self%fromto_part(2)
+            if( submit_or_not(ipart) )then
+                select type( pmyqsys => self%myqsys )
+                    class is(qsys_local)
+                        write(fnr,'(a)') self%myqsys%submit_cmd()//' ./'//trim(adjustl(self%script_names(ipart)))//' &'
+                    class DEFAULT
+                        write(fnr,'(a)') self%myqsys%submit_cmd()//' ./'//trim(adjustl(self%script_names(ipart)))
+                end select
+            endif
+        end do
+        write(fnr,'(a)') 'exit'
+        close( unit=fnr )
+        call chmod(master_submit_script,'+x',ios)
+        if( ios .ne. 0 )then
+            write(*,'(a)',advance='no') 'ERROR, simple_qsys_ctrl :: submit_scripts :: make_master_submit_script, '
+            write(*,'(a)') 'chmoding master submit script '//trim(master_submit_script)
+            stop
+        endif
+        ! execute the master submission script
+        call exec_cmdline(master_submit_script)
     end subroutine submit_scripts
-
-    subroutine submit_script( self, ipart )
-        use simple_qsys_local, only: qsys_local
-        use simple_syscalls,   only: exec_cmdline
-        class(qsys_ctrl), intent(inout) :: self
-        integer,          intent(in)    :: ipart
-        class(qsys_base), pointer       :: pmyqsys
-        character(len=STDLEN)           :: exec_script
-        select type( pmyqsys => self%myqsys )
-            class is(qsys_local)
-                exec_script = self%myqsys%submit_cmd()//' ./'//trim(adjustl(self%script_names(ipart)))//' &'
-            class DEFAULT
-                exec_script = self%myqsys%submit_cmd()//' ./'//trim(adjustl(self%script_names(ipart)))
-        end select
-        call exec_cmdline(exec_script)
-        ! flag job submitted
-        self%jobs_submitted(ipart) = .true.
-        ! decrement ncomputing_units_avail
-        self%ncomputing_units_avail = self%ncomputing_units_avail-1
-    end subroutine submit_script
     
     ! QUERIES
 

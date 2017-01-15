@@ -260,14 +260,21 @@ contains
     end subroutine alloc_err
         
     ! PRETTY PROGRESS & ENDING JIFFYS
+
+    subroutine progress( i, n )
+        integer, intent(in) :: i, n
+        write(*,'(a1,a,t21,f6.2,a)',advance="no") achar(13),&
+        &"Percent Complete: ", (real(i)/real(n))*100.0, "%"
+        if( i >= n ) write(*,*) ''
+    end subroutine progress
     
     !> \brief is for printing a progress bar
-    subroutine progress(i, imax)
+    subroutine progress_bar(i, imax)
         integer, intent(in) :: i, imax
         integer :: k, curr, prev
         character(len=1) :: back
         back = char(8)
-        if( i>= imax )then
+        if( i >= imax )then
             ! delete the bar and the percentage
             write(6,'(256a1)', advance='no') (back, k =1,59)
             ! write new bar and percentage
@@ -285,19 +292,25 @@ contains
                 flush 6
             endif
         endif
-    end subroutine progress
+    end subroutine progress_bar
 
     !> \brief  is for pretty ending
-    subroutine simple_end( str )
-        character(len=*), intent(in) :: str
-        write(*,'(A)') "       _______ _____ _______  _____         _______"
-        write(*,'(A)') "       |______   |   |  |  | |_____] |      |______"
-        write(*,'(A)') "       ______| __|__ |  |  | |       |_____ |______"      
-        write(*,'(A)') " "                                                            
-        write(*,'(A)') " _)_ ( _   _     ) o  _             _   _   _   o  _   _"  
-        write(*,'(A)') " (_   ) ) )_)   (  ( ) ) (_( \)    )_) ) ) (_(  ( ) ) )_)"   
-        write(*,'(A)') "         (_                  (\   (_         _)      (_"
-        write(*,'(A)') ""
+    subroutine simple_end( str, print_simple )
+        character(len=*),  intent(in) :: str
+        logical, optional, intent(in) :: print_simple
+        logical :: pprint_simple
+        pprint_simple = .true.
+        if( present(print_simple) ) pprint_simple = print_simple
+        if( pprint_simple )then
+            write(*,'(A)') "       _______ _____ _______  _____         _______"
+            write(*,'(A)') "       |______   |   |  |  | |_____] |      |______"
+            write(*,'(A)') "       ______| __|__ |  |  | |       |_____ |______"      
+            write(*,'(A)') " "                                                            
+            write(*,'(A)') " _)_ ( _   _     ) o  _             _   _   _   o  _   _"  
+            write(*,'(A)') " (_   ) ) )_)   (  ( ) ) (_( \)    )_) ) ) (_(  ( ) ) )_)"   
+            write(*,'(A)') "         (_                  (\   (_         _)      (_"
+            write(*,'(A)') ""
+        endif
         write(*,'(A)') str
     end subroutine simple_end
   

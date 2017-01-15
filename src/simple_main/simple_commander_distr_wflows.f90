@@ -283,7 +283,7 @@ contains
         call xmerge_shellweights%execute(cline)
         call qsys_cleanup_iter(p_master)
         call del_files('shellweights_part', p_master%nparts, ext='.bin')
-        call simple_end('**** SIMPLE_DISTR_SHELLWEIGHT3D NORMAL STOP ****')
+        call simple_end('**** SIMPLE_DISTR_SHELLWEIGHT3D NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_shellweight3D_distr
 
     ! PRIME3D
@@ -341,7 +341,7 @@ contains
         call xvolassemble%execute( cline_volassemble )
         ! termination
         call qsys_cleanup_iter(p_master)
-        call simple_end('**** SIMPLE_DISTR_PRIME3D_INIT NORMAL STOP ****')
+        call simple_end('**** SIMPLE_DISTR_PRIME3D_INIT NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_prime3D_init_distr
 
     subroutine exec_prime3D_distr( self, cline )
@@ -619,7 +619,7 @@ contains
         ! assemble class averages
         call xcavgassemble%execute(cline_cavgassemble)
         call qsys_cleanup_iter(p_master)
-        call simple_end('**** SIMPLE_DISTR_PRIME2D_INIT NORMAL STOP ****')
+        call simple_end('**** SIMPLE_DISTR_PRIME2D_INIT NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_prime2D_init_distr
 
     ! PRIME2D
@@ -805,7 +805,7 @@ contains
         call xmerge_nnmat%execute(cline)
         call qsys_cleanup_iter(p_master)
         call del_files('nnmat_part', p_master%nparts, ext='.bin')
-        call simple_end('**** SIMPLE_DISTR_FIND_NNIMGS NORMAL STOP ****')
+        call simple_end('**** SIMPLE_DISTR_FIND_NNIMGS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_find_nnimgs_distr
 
     subroutine exec_recvol_distr( self, cline )

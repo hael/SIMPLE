@@ -122,7 +122,7 @@ contains
         write(*,'(a,1x,F6.2)') '>>> LOW-PASS LIMIT:', p%lp
         write(0,'(a)') "GENERATED VOLUMES: recvol*.ext"
         ! end gracefully
-        call simple_end('**** SIMPLE_EO_VOLASSEMBLE NORMAL STOP ****')
+        call simple_end('**** SIMPLE_EO_VOLASSEMBLE NORMAL STOP ****', print_simple=.false.)
         
         contains
 
@@ -234,7 +234,7 @@ contains
             call normalize( trim(recvolname) )
         end do
         ! end gracefully
-        call simple_end('**** SIMPLE_VOLASSEMBLE NORMAL STOP ****')
+        call simple_end('**** SIMPLE_VOLASSEMBLE NORMAL STOP ****', print_simple=.false.)
 
         contains
 

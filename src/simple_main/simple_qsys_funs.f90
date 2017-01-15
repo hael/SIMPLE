@@ -16,6 +16,7 @@ contains
         ! individual files
         call del_file('FOO')
         call del_file('fort.0')
+        call del_file('qsys_submit_jobs')
         ! part numbered files
         call del_files('OUT',                    p%nparts)
         call del_files('algndoc_',               p%nparts, ext='.txt')

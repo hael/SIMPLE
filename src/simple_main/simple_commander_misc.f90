@@ -222,6 +222,8 @@ contains
         else
             call masscen_imgfile(p%stk, p%outstk, p%smpd, p%lp, p%neg, p%msk)
         endif
+        ! end gracefully
+        call simple_end('**** SIMPLE_MASSCEN NORMAL STOP ****')
     end subroutine exec_masscen
 
     subroutine exec_print_cmd_dict( self, cline )
@@ -257,6 +259,7 @@ contains
             end do
         end do
         call dummy_img%kill
+        call simple_end('**** SIMPLE_PRINT_DOSE_WEIGHTS NORMAL STOP ****')
     end subroutine exec_print_dose_weights
 
     subroutine exec_print_fsc( self, cline )
@@ -292,6 +295,7 @@ contains
         p  = params(cline)
         lp = (real(p%box-1)*p%smpd)/real(p%find)
         write(*,'(A,1X,f7.2)') '>>> LOW-PASS LIMIT:', lp
+        call simple_end('**** SIMPLE_RES NORMAL STOP ****')
     end subroutine exec_res
 
     subroutine exec_shift( self, cline )
@@ -305,6 +309,7 @@ contains
         call shift_imgfile(p%stk, p%outstk, b%a, p%smpd, p%mul)
         call b%a%zero_shifts
         call b%a%write('shiftdoc.txt')
+        call simple_end('**** SIMPLE_SHIFT NORMAL STOP ****')
     end subroutine exec_shift
 
 end module simple_commander_misc

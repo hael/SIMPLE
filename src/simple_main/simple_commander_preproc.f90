@@ -363,13 +363,14 @@ contains
         type(params)                       :: p
         type(build)                        :: b
         type(image)                        :: movie_sum, pspec_sum, pspec_ctf, movie_sum_ctf
-        type(image)                        :: movie_sum_corrected, pspec_half_n_half
+        type(image)                        :: movie_sum_corrected, pspec_half_n_half, thumbnail
         integer                            :: nmovies, imovie, imovie_start, imovie_stop, file_stat
         integer                            :: funit_movies, frame_counter, numlen,  ntot, alloc_stat, fnr
+        integer                            :: ldim(3), ldim_thumb(3)
         character(len=:),     allocatable  :: cpcmd, new_name
         character(len=STDLEN), allocatable :: movienames(:)
         character(len=STDLEN)              :: moviename
-        real                               :: corr, time_per_frame
+        real                               :: corr, time_per_frame, scale
         logical                            :: debug=.false.
         integer                            :: err, lfoo(3), nframes, movie_counter
         p = params(cline, checkdistr=.false.)           ! constants & derived constants produced
@@ -449,16 +450,27 @@ contains
                 call movie_sum_corrected%write(int2str_pad(imovie, numlen)//'_intg'//p%ext)
                 call movie_sum_ctf%write(int2str_pad(imovie, numlen)//'_forctf'//p%ext)
             endif
+            ! generate power-spectra
             pspec_sum         = movie_sum%mic2spec(p%pspecsz,     trim(adjustl(p%speckind)))
             pspec_ctf         = movie_sum_ctf%mic2spec(p%pspecsz, trim(adjustl(p%speckind)))
             pspec_half_n_half = pspec_sum%before_after(pspec_ctf)
-            if( debug ) print *, 'ldim of pspec_sum:         ', pspec_sum%get_ldim()
-            if( debug ) print *, 'ldim of pspec_ctf:         ', pspec_ctf%get_ldim()
-            if( debug ) print *, 'ldim of pspec_half_n_half: ', pspec_half_n_half%get_ldim()
+            ! generate thumbnail
+            ldim          = movie_sum_corrected%get_ldim()
+            scale         = real(p%pspecsz)/real(ldim(1))
+            ldim_thumb(1) = nint(real(ldim(1))*scale)
+            ldim_thumb(2) = nint(real(ldim(2))*scale)
+            ldim_thumb(3) = 1
+            call thumbnail%new(ldim_thumb, p%smpd)
+            call movie_sum_corrected%fwd_ft
+            call movie_sum_corrected%clip(thumbnail)
+            call thumbnail%bwd_ft
+            ! write pows and thumbs
             if( cline%defined('fbody') )then
                 call pspec_half_n_half%write(trim(adjustl(p%fbody))//'_pspec'//int2str_pad(imovie, numlen)//p%ext)
+                call thumbnail%write(trim(adjustl(p%fbody))//'_thumb'//int2str_pad(imovie, numlen)//p%ext)
             else
                 call pspec_half_n_half%write(int2str_pad(imovie, numlen)//'_pspec'//p%ext)
+                call thumbnail%write(int2str_pad(imovie, numlen)//'_thumb'//p%ext)
             endif
             call movie_sum%kill
             call movie_sum_corrected%kill

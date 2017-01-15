@@ -62,6 +62,15 @@ contains
     end function getdiffcpu
 
     !>  Wrapper for system call
+    subroutine exec_cmdline( cmdline )
+        character(len=*), intent(in) :: cmdline
+        integer               :: estat, cstat
+        character(len=STDLEN) :: cmsg
+        call execute_command_line( trim(adjustl(cmdline)), exitstat=estat, cmdstat=cstat, cmdmsg=cmsg)
+        call raise_sys_error( cmdline, estat, cstat, cmsg )
+    end subroutine exec_cmdline
+
+    !>  Wrapper for system call
     ! subroutine exec_cmdline( cmdline )
     !     character(len=*), intent(in) :: cmdline
     !     integer               :: estat, cstat
@@ -80,45 +89,60 @@ contains
     !     call raise_sys_error( cmdline, estat, cstat, cmsg )
     ! end subroutine exec_cmdline
 
-    !>  Wrapper for system call
-    subroutine exec_cmdline( cmdline )
-        character(len=*), intent(in) :: cmdline
-        integer               :: estat, cstat
-        character(len=STDLEN) :: cmsg
-        integer, parameter    :: NTRY = 10, SHORTTIME = 3
-        integer :: itry, sys_stat
-        do itry=1,NTRY
-            sys_stat = system(trim(adjustl(cmdline)))
-            if( sys_stat == 0 )then
-                return
-            else
-                call sleep(SHORTTIME)
-                cycle
-            endif
-        end do
-        write(*,*) 'System error: ', sys_stat,' for command: ', trim(cmdline)
-        write(*,*) 'simple_syscalls :: exec_cmdline'
-    end subroutine exec_cmdline
+    ! !>  Wrapper for system call
+    ! subroutine exec_cmdline( cmdline )
+    !     character(len=*), intent(in) :: cmdline
+    !     integer               :: estat, cstat
+    !     character(len=STDLEN) :: cmsg
+    !     integer, parameter    :: NTRY = 10, SHORTTIME = 3
+    !     integer :: itry
+    !     do itry=1,NTRY
+    !         call execute_command_line( trim(adjustl(cmdline)), exitstat=estat, cmdstat=cstat, cmdmsg=cmsg)
+    !         if( cstat /= 0 )then
+    !             call sleep(SHORTTIME)
+    !             cycle
+    !         else
+    !             exit
+    !         endif
+    !     end do
+    !     call raise_sys_error( cmdline, estat, cstat, cmsg )
+    ! end subroutine exec_cmdline
+
+    ! !>  Wrapper for system call
+    ! subroutine exec_cmdline( cmdline )
+    !     character(len=*), intent(in) :: cmdline
+    !     integer               :: estat, cstat
+    !     character(len=STDLEN) :: cmsg
+    !     integer, parameter    :: NTRY = 10, SHORTTIME = 3
+    !     integer :: itry, sys_stat
+    !     do itry=1,NTRY
+    !         sys_stat = system(trim(adjustl(cmdline)))
+    !         if( sys_stat == 0 )then
+    !             return
+    !         else
+    !             call sleep(SHORTTIME)
+    !             cycle
+    !         endif
+    !     end do
+    !     write(*,*) 'System error: ', sys_stat,' for command: ', trim(cmdline)
+    !     write(*,*) 'simple_syscalls :: exec_cmdline'
+    ! end subroutine exec_cmdline
 
     !>  Handles error from system call
     subroutine raise_sys_error( cmd, exitstat, cmdstat, cmdmsg )
         integer,               intent(in) :: exitstat, cmdstat
         character(len=STDLEN), intent(in) :: cmd, cmdmsg
-        logical :: dostop, err
-        err    = .false.
-        dostop = .false.
+        logical :: err
+        err = .false.
         if( exitstat /= 0 )then
             write(*,*)'System error', exitstat,' for command: ', cmd
             err = .true.
-            !dostop = .true.
         endif 
         if( cmdstat /= 0 )then
             write(*,*)'cmdstat /= 0, command could not be executed: ', cmd
             err = .true.
-            !dostop = .true.
         endif
         if( err ) write(*,*) trim(cmdmsg)
-        if( dostop ) stop
     end subroutine raise_sys_error
 
     function sys_get_env_var( name ) result( varval )
