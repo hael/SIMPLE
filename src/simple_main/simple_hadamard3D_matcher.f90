@@ -324,10 +324,9 @@ contains
         class(params),  intent(inout) :: p
         class(cmdline), intent(inout) :: cline
         integer :: nrefs
-        write(*,'(A)') '>>> BUILDING PRIME3D SEARCH ENGINE'
+        if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PRIME3D SEARCH ENGINE'
         ! must be done here since constants in p are dynamically set
         call primesrch3D%new( b%a, b%e, p )
-        write(*,'(A)') '>>> BUILDING DATA STRUCTURE FOR POLARFT CORRELATION CALCULATION'
         ! must be done here since p%kfromto is dynamically set based on FSC from previous round
         ! or based on dynamic resolution limit update
         nrefs = p%nspace*p%nstates
@@ -358,7 +357,7 @@ contains
         ! read reference volumes and create polar projections
         nrefs = p%nspace*p%nstates
         cnt = 0
-        write(*,'(A)') '>>> BUILDING REFERENCES'
+        if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING REFERENCES'
         do s=1,p%nstates
             call preprefvol( b, p, cline, s )
             if( str_has_substr(p%refine,'qcont') )then
@@ -386,7 +385,7 @@ contains
         integer :: cnt, s, iptcl, istate, ntot
         ! PREPARATION OF PARTICLES IN PFTCC
         ! read particle images and create polar projections
-        write(*,'(A)') '>>> BUILDING PARTICLES'
+        if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PARTICLES'
         cnt_glob = 0
         ntot     = (p%top-p%fromp+1)*p%nstates
         do s=1,p%nstates

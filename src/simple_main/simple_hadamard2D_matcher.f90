@@ -208,7 +208,7 @@ contains
         class(params),  intent(inout) :: p
         type(ori) :: orientation
         integer   :: icls, iptcl, cnt, istart, iend
-        write(*,'(a)') '>>> ASSEMBLING CLASS SUMS'
+        if( .not. p%l_distr_exec ) write(*,'(a)') '>>> ASSEMBLING CLASS SUMS'
         call prime2D_init_sums( b, p )
         if( p%l_distr_exec )then
             istart  = p%fromp
@@ -327,7 +327,7 @@ contains
         type(ori) :: o
         integer   :: cnt, iptcl, icls, sz, pop, istate
         integer   :: filtsz, alloc_stat, filnum, io_stat
-        write(*,'(A)') '>>> BUILDING PRIME2D SEARCH ENGINE'
+        if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PRIME2D SEARCH ENGINE'
         if( frac_srch_space >= SHWLIM )then
             filtsz = b%img%get_filtsz()
             if( allocated(wmat) ) deallocate(wmat)
@@ -337,11 +337,10 @@ contains
         endif
         ! must be done here since constants in p are dynamically set
         call primesrch2D%new(p)
-        write(*,'(A)') '>>> BUILDING DATA STRUCTURE FOR POLARFT CORRELATION CALCULATION'
         call pftcc%new(p%ncls, [p%fromp,p%top], [p%box,p%box,1], p%kfromto, p%ring2, p%ctf)
         ! PREPARATION OF REFERENCES IN PFTCC
         ! read references and transform into polar coordinates
-        write(*,'(A)') '>>> BUILDING REFERENCES'
+        if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING REFERENCES'
         sz = b%img%get_lfny(1)
         do icls=1,p%ncls
             call progress(icls, p%ncls)
@@ -357,7 +356,7 @@ contains
         end do
         ! PREPARATION OF PARTICLES IN PFTCC
         ! read particle images and create polar projections
-        write(*,'(A)') '>>> BUILDING PARTICLES'
+        if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PARTICLES'
         cnt = 0
         do iptcl=p%fromp,p%top
             cnt = cnt+1

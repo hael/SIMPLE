@@ -894,6 +894,8 @@ contains
         else
             self%l_distr_exec = .false.
         endif
+        ! set global distributed execution flag
+        l_distr_exec_glob = self%l_distr_exec
         ! set lenght of number string for zero padding
         if( .not. cline%defined('numlen') )then
             if( nparts_set ) self%numlen = len(int2str(self%nparts))

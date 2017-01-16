@@ -6,14 +6,14 @@ implicit none
 
 contains
 
-    subroutine qsys_cleanup_iter( p )
+    subroutine qsys_cleanup( p )
         use simple_params,       only: params
         use simple_filehandling, only: del_file, del_files
         class(params),     intent(in) :: p
         character(len=:), allocatable :: rec_base_str, rho_base_str
         integer, parameter :: NUMLEN_STATE = 2, NUMLEN_ITER = 3
-        integer :: istate
-        ! individual files
+        integer :: istate        
+        ! single files
         call del_file('FOO')
         call del_file('fort.0')
         call del_file('qsys_submit_jobs')
@@ -30,13 +30,15 @@ contains
         do istate=1,p%nstates
             allocate(rec_base_str, source='recvol_state'//int2str_pad(istate,NUMLEN_STATE)//'_part')
             allocate(rho_base_str, source='rho_'//rec_base_str)
-            call del_files(rec_base_str//'_even', p%nparts, ext=p%ext, numlen=NUMLEN_ITER)
-            call del_files(rec_base_str//'_odd',  p%nparts, ext=p%ext, numlen=NUMLEN_ITER)
-            call del_files(rho_base_str//'_even', p%nparts, ext=p%ext, numlen=NUMLEN_ITER)
-            call del_files(rho_base_str//'_odd',  p%nparts, ext=p%ext, numlen=NUMLEN_ITER)
+            call del_files(rec_base_str, p%nparts, ext=p%ext)
+            call del_files(rho_base_str, p%nparts, ext=p%ext)
+            call del_files(rec_base_str//'_even', p%nparts, ext=p%ext)
+            call del_files(rec_base_str//'_odd',  p%nparts, ext=p%ext)
+            call del_files(rho_base_str//'_even', p%nparts, ext=p%ext)
+            call del_files(rho_base_str//'_odd',  p%nparts, ext=p%ext)
             deallocate(rec_base_str,rho_base_str)
         end do
-    end subroutine qsys_cleanup_iter
+    end subroutine qsys_cleanup
 
     function stack_is_split( stkext, npart ) result( is_split )
         character(len=4),  intent(in) :: stkext

@@ -72,4 +72,7 @@ character(len=:), allocatable :: endconv
 ! number of threads global variable
 integer(kind=c_int):: nthr_glob
 
+! global distributed execution flag
+logical :: l_distr_exec_glob
+
 end module simple_defs

@@ -135,7 +135,10 @@ contains
         frameweights = frameweights_saved        
         call shift_frames(opt_shifts)
         ! print
-        if( doprint ) write(*,'(a,7x,f7.4)') '>>> OPTIMAL CORRELATION:', corr
+        if( corr < 0. )then 
+            if( doprint ) write(*,'(a)') '>>> WARNING! OPTIMAL CORREALTION < 0.0'
+            if( doprint ) write(*,'(a,7x,f7.4)') '>>> OPTIMAL CORRELATION:', corr
+        endif
         call moment(frameweights, ave, sdev, var, err)
         minw = minval(frameweights)
         maxw = maxval(frameweights)

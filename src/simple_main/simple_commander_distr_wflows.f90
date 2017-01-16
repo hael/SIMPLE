@@ -111,11 +111,11 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! prepare scripts
-        call qsys_cleanup_iter(p_master)
+        call qsys_cleanup(p_master)
         call qscripts%generate_scripts(job_descr, p_master%ext, myq_descr)
         ! manage job scheduling
         call qscripts%schedule_jobs
-        call qsys_cleanup_iter(p_master)
+        call qsys_cleanup(p_master)
         call simple_end('**** SIMPLE_DISTR_UNBLUR_MOVIES NORMAL STOP ****')
     end subroutine exec_unblur_movies_distr
 
@@ -176,11 +176,11 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! prepare scripts
-        call qsys_cleanup_iter(p_master)
+        call qsys_cleanup(p_master)
         call qscripts%generate_scripts(job_descr, p_master%ext, myq_descr, part_params=part_params)
         ! manage job scheduling
         call qscripts%schedule_jobs
-        call qsys_cleanup_iter(p_master)
+        call qsys_cleanup(p_master)
         call simple_end('**** SIMPLE_DISTR_UNBLUR_TOMO_MOVIES NORMAL STOP ****')
     end subroutine exec_unblur_tomo_movies_distr
 
@@ -223,14 +223,14 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! prepare scripts
-        call qsys_cleanup_iter(p_master)
+        call qsys_cleanup(p_master)
         call qscripts%generate_scripts(job_descr, p_master%ext, myq_descr)
         ! manage job scheduling
         call qscripts%schedule_jobs
         ! merge docs
         call xmerge_algndocs%execute( cline_merge_algndocs )
         ! clean
-        call qsys_cleanup_iter(p_master)
+        call qsys_cleanup(p_master)
         call simple_end('**** SIMPLE_DISTR_CTFFIND NORMAL STOP ****')
     end subroutine exec_ctffind_distr
 
@@ -275,13 +275,13 @@ contains
             call xsplit%execute( cline )
         endif
         ! prepare scripts
-        call qsys_cleanup_iter(p_master)
+        call qsys_cleanup(p_master)
         call qscripts%generate_scripts(job_descr, p_master%ext, myq_descr, ALGNFBODY)
         ! manage job scheduling
         call qscripts%schedule_jobs
         ! merge matrices
         call xmerge_shellweights%execute(cline)
-        call qsys_cleanup_iter(p_master)
+        call qsys_cleanup(p_master)
         call del_files('shellweights_part', p_master%nparts, ext='.bin')
         call simple_end('**** SIMPLE_DISTR_SHELLWEIGHT3D NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_shellweight3D_distr
@@ -333,14 +333,14 @@ contains
         call cline_volassemble%set( 'outvol', vol )
         call cline_volassemble%set( 'eo', 'no' )
         ! prepare scripts
-        call qsys_cleanup_iter(p_master)
+        call qsys_cleanup(p_master)
         call qscripts%generate_scripts(job_descr, p_master%ext, myq_descr)
         ! manage job scheduling
         call qscripts%schedule_jobs
         ! assemble volumes
         call xvolassemble%execute( cline_volassemble )
         ! termination
-        call qsys_cleanup_iter(p_master)
+        call qsys_cleanup(p_master)
         call simple_end('**** SIMPLE_DISTR_PRIME3D_INIT NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_prime3D_init_distr
 
@@ -498,7 +498,7 @@ contains
             write(*,'(A)')   '>>>'
             write(*,'(A,I6)')'>>> ITERATION ', iter
             write(*,'(A)')   '>>>'
-            call qsys_cleanup_iter(p_master)
+            call qsys_cleanup(p_master)
             ! PREPARE PRIME3D SCRIPTS
             if( cline%defined('oritab') )then
                 call os%read(trim(cline%get_carg('oritab')))
@@ -560,7 +560,7 @@ contains
                endif
             endif
         end do
-        call qsys_cleanup_iter(p_master)
+        call qsys_cleanup(p_master)
 
         ! POST PROCESSING ?
 
@@ -612,13 +612,13 @@ contains
             call xsplit%execute(cline)
         endif
         ! prepare scripts
-        call qsys_cleanup_iter(p_master)
+        call qsys_cleanup(p_master)
         call qscripts%generate_scripts(job_descr, p_master%ext, myq_descr)
         ! manage job scheduling
         call qscripts%schedule_jobs
         ! assemble class averages
         call xcavgassemble%execute(cline_cavgassemble)
-        call qsys_cleanup_iter(p_master)
+        call qsys_cleanup(p_master)
         call simple_end('**** SIMPLE_DISTR_PRIME2D_INIT NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_prime2D_init_distr
 
@@ -714,12 +714,16 @@ contains
             call xprime2D_init_distr%execute(cline_prime2D_init)
             oritab='prime2D_startdoc.txt'
         endif
+
         ! main loop
         iter = p_master%startit-1
         do
-            iter     = iter+1
-            str_iter = trim( int2str_pad(iter,3) )
-            call qsys_cleanup_iter(p_master)
+            iter = iter+1
+            str_iter = int2str_pad(iter,3)
+            write(*,'(A)')   '>>>'
+            write(*,'(A,I6)')'>>> ITERATION ', iter
+            write(*,'(A)')   '>>>'
+            call qsys_cleanup(p_master)
             ! identify nearest neighbors in parallel, if needed
             if( str_has_substr(p_master%refine,'neigh') )then
                 call cline_find_nnimgs%set('stk', refs)
@@ -757,7 +761,7 @@ contains
             endif
             if( cline_check2D_conv%get_carg('converged').eq.'yes' .or. iter==p_master%maxits ) exit
         end do
-        call qsys_cleanup_iter(p_master)
+        call qsys_cleanup(p_master)
         ! performs masking
         if( cline_automask2D%get_carg('automsk').eq.'cavg' )then
             call cline_automask2D%set('stk', trim(refs))
@@ -799,11 +803,11 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! main functionality
-        call qsys_cleanup_iter(p_master)
+        call qsys_cleanup(p_master)
         call qscripts%generate_scripts(job_descr, p_master%ext, myq_descr)
         call qscripts%schedule_jobs
         call xmerge_nnmat%execute(cline)
-        call qsys_cleanup_iter(p_master)
+        call qsys_cleanup(p_master)
         call del_files('nnmat_part', p_master%nparts, ext='.bin')
         call simple_end('**** SIMPLE_DISTR_FIND_NNIMGS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_find_nnimgs_distr
@@ -867,7 +871,7 @@ contains
             call xvolassemble%execute( cline )
         endif
         ! termination
-        call qsys_cleanup_iter(p_master)
+        call qsys_cleanup(p_master)
         call simple_end('**** SIMPLE_RECVOL NORMAL STOP ****')
     end subroutine exec_recvol_distr
 

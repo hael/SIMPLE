@@ -108,13 +108,14 @@ scale     = image scale factor{1}
 frameavg  = nr of frames to average{0}
 tomo      = tomography mode(yes|no){no}
 \end{verbatim}
-Output consists of three files per movie (\texttt{movie1.mrc} in this example):
+Output consists of four files per movie (\texttt{movie1.mrc} in this example):
 \begin{enumerate}
 \item \texttt{<fbody>\_intg1.mrc} is the frame-weighted, motion-corrected and dose-weighted sum
 \item \texttt{<fbody>\_forctf1.mrc} is the un-weighted sum of the aligned individual frames
 \item \texttt{<fbody>\_pspec1.mrc} is the power-spectrum of the uncorrected unweighted movie sum (left) and the corrected weighted movie sum (right)
+\item \texttt{<fbody>\_thumb1.mrc} is ta down-scaled version of  \texttt{<fbody>\_intg1.mrc}
 \end{enumerate}
-The \texttt{*forctf*} output is created because,  even though frame- and dose-weighting improves the SNR, it may degrade the contrast transfer function (CTF) signal and this file will therefore later be used to determine the CTF parameters of the integrated movie. The \texttt{*intg*} image is the one you will use for particle picking and extract your identified individual particle images from. The \texttt{*pspec*} output is diagnostic. Please, check so that the Thon rings are concentric and have similar radial intensity distribution in any given resolution shell after alignment (right part of power-spectrum)\textemdash{}if not, trash the image. Please, execute:
+The \texttt{*forctf*} output is created because,  even though frame- and dose-weighting improves the SNR, it may degrade the contrast transfer function (CTF) signal and this file will therefore later be used to determine the CTF parameters of the integrated movie. The \texttt{*intg*} image is the one you will use for particle picking and extract your identified individual particle images from. The \texttt{*pspec*} and \texttt{*thumb*} outputs are diagnostic. Please, check so that the Thon rings are concentric and have similar radial intensity distribution in any given resolution shell after alignment (right part of power-spectrum)\textemdash{}if not, trash the image. Please, execute:
 \begin{verbatim}
 @!#> cd ~/workshop/SIMPLE
 @!#> ls
@@ -122,8 +123,74 @@ The \texttt{*forctf*} output is created because,  even though frame- and dose-we
 \end{verbatim}
 You see that we have one directory for each step. Each folder contains a subfolder \texttt{data} that contains the experimental cryo-EM data that we will process in addition to its associated parameters.
 \begin{verbatim}
-
+@!#> cd 1_DDD-movie-proc/
+@!#> ls
+data/
+@!#> ls data/
+info.txt   movie1.mrc movie2.mrc
 \end{verbatim}
+The \texttt{info.txt} file lists the parameters associated with the data.
+\begin{verbatim}
+@!#> cat ./data/info.txt 
+molecule: proteasome
+exp_time=7.6s
+dose_rate=7e/A2/s
+kv=300
+cs=2.7
+smpd=5.26
+fraca=0.1
+\end{verbatim}
+These movies are of proteasome molecules in ice, exposed for \texttt{exp\_time=7.6} s with a dose rate of \texttt{dose\_rate=7} e/A2/s. The  electron microscope used to acquire these images has an acceleration voltage of \texttt{kv=300} kV and a spherical aberration constant of \texttt{cs=2.7} mm. We have downscaled these images for more rapid processing to a sampling distance of \texttt{smpd=5.26} A and we will assume 10\% amplitude contrast when fitting the CTF \texttt{fraca=0.1}. First, we need to create a file table, listing the movies to be processed with  \prgname{unblur\_movies}.
+\begin{verbatim}
+@!#> ls data/movie* > movies.txt
+\end{verbatim}
+Next, we execute the program.
+\begin{verbatim}
+@!#> simple_exec prg=unblur_movies filetab=movies.txt smpd=5.26 nthr=8
+fbody=proteasome exp_time=7.6 dose_rate=7 kv=300
+\end{verbatim}
+and we expect to see the following output in the terminal
+\begin{verbatim}
+>>> DONE PROCESSING PARAMETERS
+>>> DONE BUILDING GENERAL TOOLBOX
+>>> PROCESSING MOVIE:     1
+>>> READING AND FOURIER TRANSFORMING FRAMES
+  100%  |==================================================| done.
+>>> WEIGHTED AVERAGE-BASED REFINEMENT
+This % of frames improved their alignment:  100.
+This % of frames improved their alignment:  100.
+This % of frames improved their alignment:  100.
+This % of frames improved their alignment:  100.
+This % of frames improved their alignment:   47.
+>>> LOW-PASS LIMIT UPDATED TO: 12.6667
+This % of frames improved their alignment:    8.
+>>> LOW-PASS LIMIT UPDATED TO: 10.3333
+This % of frames improved their alignment:    8.
+This % of frames improved their alignment:   53.
+This % of frames improved their alignment:   42.
+>>> LOW-PASS LIMIT UPDATED TO:  8.0000
+This % of frames improved their alignment:    3.
+This % of frames improved their alignment:    8.
+>>> AVERAGE WEIGHT     :        0.0263
+>>> SDEV OF WEIGHTS    :        0.0048
+>>> MIN WEIGHT         :        0.0120
+>>> MAX WEIGHT         :        0.0327
+ 50. percent of the movies processed
+\end{verbatim}
+The first thing that happens is that all individual movie frames are read in and Fourier transformed. The algorithm is iterative and based on registration of the individual frames to a weighted average, where the weights are determined based on the agreement between the frames and the average. The algorithm automatically updates the resolution limit as the alignment accuracy improves, \textit{i.e.} using only low-resolution Fourier components when the alignment errors are large and large movements need to be identified. It then successively updates the resolution limit as the alignment accuracy improves. When no improvements can be identified, the procedure stops. The average, standard deviation, minimum and maximum frame weight in the image series is reported upon completion of the alignment. The outputted image files are:
+\begin{verbatim}
+@!#> ls
+data/                   proteasome_intg1.mrc    proteasome_thumb1.mrc
+movies.txt              proteasome_intg2.mrc    proteasome_thumb2.mrc
+proteasome_forctf1.mrc  proteasome_pspec1.mrc
+proteasome_forctf2.mrc  proteasome_pspec2.mrc
+\end{verbatim}
+The first images we inspect are the power spectra. For visualisation, we use \texttt{e2display.py}. Execute \texttt{e2display.py} in the current working directory, click on one of the \texttt{*pspec*} files and then \texttt{Show 2D}.
+\begin{SCfigure}[][h]
+\includegraphics[keepaspectratio=true,scale=0.3]{./pspec/pspec}
+\caption{The left part of the power spectrum represents the movie integrated without applying the alignment parameters, whereas the right part is the aligned integrated movie. We see that the motion correction restores coherence, giving radially symmetric Thon rings extending to much higher resolution.}
+\end{SCfigure}
+To get an idea of the effect of the movie pre-processing in real-space, expand the data folder from within \texttt{e2display.py}, then expand \texttt{4comparison} and click on the \texttt{proteasome_straight_intg1.mrc} file, followed by \texttt{Show 2D+}. Do the same for the corrected movie \texttt{proteasome_intg1.mrc}.
 
 
 

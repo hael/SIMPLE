@@ -123,36 +123,36 @@ contains
                         stop
                     endif
                     if( index(arg(pos1+1:), '.spi') /= 0 )then
-                        self%cmds(i)%carg = trim(arg(pos1+1:))
+                        self%cmds(i)%carg = adjustl(arg(pos1+1:))
                     else if( index(arg(pos1+1:), '.mrc') /= 0 )then
-                        self%cmds(i)%carg = trim(arg(pos1+1:))
+                        self%cmds(i)%carg = adjustl(arg(pos1+1:))
                     else if( index(arg(pos1+1:), '.map') /= 0 )then
-                        self%cmds(i)%carg = trim(arg(pos1+1:))
+                        self%cmds(i)%carg = adjustl(arg(pos1+1:))
                     else if( index(arg(pos1+1:), '.ctf') /= 0 )then
-                        self%cmds(i)%carg = trim(arg(pos1+1:))
+                        self%cmds(i)%carg = adjustl(arg(pos1+1:))
                     else if( index(arg(pos1+1:), '.bin') /= 0 )then
-                        self%cmds(i)%carg = trim(arg(pos1+1:))
+                        self%cmds(i)%carg = adjustl(arg(pos1+1:))
                     else if( index(arg(pos1+1:), '.txt') /= 0 )then
                         cnttxt = cnttxt+1
-                        self%cmds(i)%carg = trim(arg(pos1+1:))
+                        self%cmds(i)%carg = adjustl(arg(pos1+1:))
                     else if( index(arg(pos1+1:), '.asc') /= 0 )then
                         cnttxt = cnttxt+1
-                        self%cmds(i)%carg = trim(arg(pos1+1:))
+                        self%cmds(i)%carg = adjustl(arg(pos1+1:))
                     else if( index(arg(pos1+1:), '.log') /= 0 )then
                          stop '.log files are obsolete!'
                     else if( index(arg(pos1+1:), '.dat') /= 0 )then
                         cnttxt = cnttxt+1
-                        self%cmds(i)%carg = trim(arg(pos1+1:))
+                        self%cmds(i)%carg = adjustl(arg(pos1+1:))
                     else if( index(arg(pos1+1:), '.box') /= 0 )then
-                        self%cmds(i)%carg = trim(arg(pos1+1:))
+                        self%cmds(i)%carg = adjustl(arg(pos1+1:))
                     else if( index(arg(pos1+1:), '.') /= 0 )then
-                        self%cmds(i)%rarg = str2real(trim(arg(pos1+1:)))
+                        self%cmds(i)%rarg = str2real(adjustl(arg(pos1+1:)))
                     else
-                        call str2int(trim(arg(pos1+1:)), io_stat, ri )
+                        call str2int(adjustl(arg(pos1+1:)), io_stat, ri )
                         if( io_stat==0 )then 
                             self%cmds(i)%rarg = real(ri)
                         else
-                            self%cmds(i)%carg = trim(arg(pos1+1:))
+                            self%cmds(i)%carg = adjustl(arg(pos1+1:))
                         endif
                     endif
                     self%cmds(i)%defined = .true.

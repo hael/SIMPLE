@@ -34,7 +34,6 @@ type qsys_ctrl
     procedure, private :: generate_script
     ! SUBMISSION TO QSYS
     procedure, private :: submit_scripts
-    ! procedure, private :: submit_script
     ! QUERIES
     procedure, private :: update_queue
     ! THE MASTER SCHEDULER
@@ -107,14 +106,6 @@ contains
         character(len=:), allocatable :: outfile_body_local, key, val
         integer :: ipart, iadd
         logical :: isthere_part_params
-        !file stuff
-        character(len=10) :: char_out
-        character(len=80) :: tmr_name
-        !function calls
-        integer           :: convert_int2char_indexed_c
-        integer           :: strlen
-        !error code variable for the return function callsls
-        integer           :: err
         if( present(outfile_body) )then
             allocate(outfile_body_local, source=trim(outfile_body))
         endif
@@ -165,7 +156,7 @@ contains
         integer :: ios, funit
         funit = get_fileunit()
         self%script_names(ipart) = 'distr_simple_script_'//int2str_pad(ipart,self%numlen)
-        open(unit=funit, file=self%script_names(ipart), iostat=ios, status='replace', iomsg=io_msg)
+        open(unit=funit, file=self%script_names(ipart), iostat=ios, STATUS='REPLACE', action='WRITE', iomsg=io_msg)
         if( ios .ne. 0 )then
             close(funit)
             write(*,'(a)') 'simple_qsys_ctrl :: gen_qsys_script; Error when opening file for writing: '&
@@ -200,38 +191,8 @@ contains
         self%jobs_done(ipart)      = .false.
         self%jobs_submitted(ipart) = .false.
     end subroutine generate_script
-    
-    ! SUBMISSION TO QSYS
-    
-    ! subroutine submit_scripts( self )
-    !     class(qsys_ctrl), intent(inout) :: self
-    !     integer :: ipart
-    !     do ipart=self%fromto_part(1),self%fromto_part(2)
-    !         if( .not. self%jobs_submitted(ipart) .and. self%ncomputing_units_avail > 0 )then
-    !             call self%submit_script(ipart)
-    !         endif
-    !     end do
-    ! end subroutine submit_scripts
 
-    ! subroutine submit_script( self, ipart )
-    !     use simple_qsys_local, only: qsys_local
-    !     use simple_syscalls,   only: exec_cmdline
-    !     class(qsys_ctrl), intent(inout) :: self
-    !     integer,          intent(in)    :: ipart
-    !     class(qsys_base), pointer       :: pmyqsys
-    !     character(len=STDLEN)           :: exec_script
-    !     select type( pmyqsys => self%myqsys )
-    !         class is(qsys_local)
-    !             exec_script = self%myqsys%submit_cmd()//' ./'//trim(adjustl(self%script_names(ipart)))//' &'
-    !         class DEFAULT
-    !             exec_script = self%myqsys%submit_cmd()//' ./'//trim(adjustl(self%script_names(ipart)))
-    !     end select
-    !     call exec_cmdline(exec_script)
-    !     ! flag job submitted
-    !     self%jobs_submitted(ipart) = .true.
-    !     ! decrement ncomputing_units_avail
-    !     self%ncomputing_units_avail = self%ncomputing_units_avail-1
-    ! end subroutine submit_script
+    ! SUBMISSION TO QSYS
 
     subroutine submit_scripts( self )
         use simple_filehandling, only: get_fileunit, fopen_err
@@ -277,6 +238,8 @@ contains
             write(*,'(a)') 'chmoding master submit script '//trim(master_submit_script)
             stop
         endif
+        call exec_cmdline('echo DISTRIBUTED MODE :: submitting scripts:')
+        call exec_cmdline('ls -1 distr_simple_script_*')
         ! execute the master submission script
         call exec_cmdline(master_submit_script)
     end subroutine submit_scripts

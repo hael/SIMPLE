@@ -261,38 +261,42 @@ contains
         
     ! PRETTY PROGRESS & ENDING JIFFYS
 
-    subroutine progress( i, n )
+     subroutine progress_percen( i, n )
         integer, intent(in) :: i, n
-        write(*,'(a1,a,t21,f6.2,a)',advance="no") achar(13),&
-        &"Percent Complete: ", (real(i)/real(n))*100.0, "%"
-        if( i >= n ) write(*,*) ''
-    end subroutine progress
+        if( .not. l_distr_exec_glob )then
+            write(*,'(a1,a,t21,f6.2,a)',advance="no") achar(13),&
+            &"Percent Complete: ", (real(i)/real(n))*100.0, "%"
+            if( i >= n ) write(*,*) ''
+        endif
+    end subroutine progress_percen
     
     !> \brief is for printing a progress bar
-    subroutine progress_bar(i, imax)
+    subroutine progress(i, imax)
         integer, intent(in) :: i, imax
         integer :: k, curr, prev
         character(len=1) :: back
-        back = char(8)
-        if( i >= imax )then
-            ! delete the bar and the percentage
-            write(6,'(256a1)', advance='no') (back, k =1,59)
-            ! write new bar and percentage
-            write(6,'(2x,1a4,2x,1a1,256a1)', advance='no') '100%','|', ('=', k=1,50)
-            write(6,'(a)') '| done.'
-            flush 6            
-        else
-            prev = nint( 100.*real(i-1)/real(imax) )
-            curr = nint( 100.*real(i)/real(imax) )
-            if( curr>prev )then
+        if( .not. l_distr_exec_glob )then
+            back = char(8)
+            if( i >= imax )then
                 ! delete the bar and the percentage
-                write(6,'(256a1)', advance='no') (back, k =1,(50*i/imax)+9)
+                write(6,'(256a1)', advance='no') (back, k =1,59)
                 ! write new bar and percentage
-                write(6,'(2x,1i3,1a1,2x,1a1,256a1)', advance='no') curr,'%','|', ('=', k=1,50*i/imax)
-                flush 6
+                write(6,'(2x,1a4,2x,1a1,256a1)', advance='no') '100%','|', ('=', k=1,50)
+                write(6,'(a)') '| done.'
+                flush 6            
+            else
+                prev = nint( 100.*real(i-1)/real(imax) )
+                curr = nint( 100.*real(i)/real(imax) )
+                if( curr>prev )then
+                    ! delete the bar and the percentage
+                    write(6,'(256a1)', advance='no') (back, k =1,(50*i/imax)+9)
+                    ! write new bar and percentage
+                    write(6,'(2x,1i3,1a1,2x,1a1,256a1)', advance='no') curr,'%','|', ('=', k=1,50*i/imax)
+                    flush 6
+                endif
             endif
         endif
-    end subroutine progress_bar
+    end subroutine progress
 
     !> \brief  is for pretty ending
     subroutine simple_end( str, print_simple )
