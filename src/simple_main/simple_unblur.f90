@@ -218,6 +218,7 @@ contains
      
     subroutine unblur_init( movie_stack_fname, p )
         use simple_jiffys, only: find_ldim_nptcls, alloc_err, progress
+        use simple_math,   only: round2even
         character(len=*), intent(in)    :: movie_stack_fname
         class(params),    intent(inout) :: p
         real        :: moldiam, dimo4
@@ -227,10 +228,10 @@ contains
         ! GET NUMBER OF FRAMES & DIM FROM STACK
         call find_ldim_nptcls(movie_stack_fname, ldim, nframes, endconv=endconv)
         if( debug ) write(*,*) 'logical dimension: ', ldim
-        ldim(3) = 1 ! to correct for the stupide 3:d dim of mrc stacks
+        ldim(3) = 1 ! to correct for the stupid 3:d dim of mrc stacks
         if( p%scale < 0.99 )then
-            ldim_scaled(1) = nint(real(ldim(1))*p%scale)
-            ldim_scaled(2) = nint(real(ldim(2))*p%scale)
+            ldim_scaled(1) = round2even(real(ldim(1))*p%scale)
+            ldim_scaled(2) = round2even(real(ldim(2))*p%scale)
             ldim_scaled(3) = 1
             doscale        = .true.
         else

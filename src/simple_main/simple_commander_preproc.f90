@@ -358,6 +358,7 @@ contains
         use simple_oris,       only: oris
         use simple_image,      only: image
         use simple_qsys_funs,  only: qsys_job_finished
+        use simple_math,       only: round2even
         class(unblur_movies_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(params)                       :: p
@@ -457,8 +458,8 @@ contains
             ! generate thumbnail
             ldim          = movie_sum_corrected%get_ldim()
             scale         = real(p%pspecsz)/real(ldim(1))
-            ldim_thumb(1) = nint(real(ldim(1))*scale)
-            ldim_thumb(2) = nint(real(ldim(2))*scale)
+            ldim_thumb(1) = round2even(real(ldim(1))*scale)
+            ldim_thumb(2) = round2even(real(ldim(2))*scale)
             ldim_thumb(3) = 1
             call thumbnail%new(ldim_thumb, p%smpd)
             call movie_sum_corrected%fwd_ft
@@ -516,7 +517,7 @@ contains
                 stop 'fromp & top args need to be defined in parallel execution; simple_ctffind'
             endif
         else
-            allocate(ctrl_fname,  source='ctffind_ctrl_file.txt')
+            allocate(ctrl_fname,   source='ctffind_ctrl_file.txt')
             allocate(output_fname, source='ctffind_output.txt')
             ! determine loop range
             fromto(1) = 1
@@ -558,8 +559,8 @@ contains
             write(funit,'(a)') trim(p%phaseplate)
             write(funit,'(a)') 'no';
             close(funit)
-            cmd_str = 'cat ' // ctrl_fname//' | ctffind'! > ' // output_fname
-            call exec_cmdline(cmd_str)
+            cmd_str = 'cat ' // ctrl_fname//' | ctffind'
+            call system(cmd_str)
             call ctfparamfile%new(param_fname, 1)
             ndatlines = ctfparamfile%get_ndatalines()
             nrecs     = ctfparamfile%get_nrecs_per_line()

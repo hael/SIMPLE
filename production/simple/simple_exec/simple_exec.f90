@@ -1511,18 +1511,20 @@ select case(prg)
         ! <ctfops/end> 
         !
         ! Required keys
-        keys_required(1) = 'stk'
-        keys_required(2) = 'smpd'
-        keys_required(3) = 'ctf'
+        keys_required(1) = 'smpd'
+        keys_required(2) = 'ctf'
         ! Optional keys
-        keys_optional(1) = 'outstk'
-        keys_optional(2) = 'neg'
-        keys_optional(3) = 'oritab'
-        keys_optional(4) = 'deftab'
-        keys_optional(5) = 'bfac'        
+        keys_optional(1) = 'stk'
+        keys_optional(2) = 'outstk'
+        keys_optional(3) = 'neg'
+        keys_optional(4) = 'oritab'
+        keys_optional(5) = 'deftab'
+        keys_optional(6) = 'bfac'        
         ! parse command line
         if( describe ) call print_doc_ctfops
-        call cline%parse(keys_required(:3), keys_optional(:5))
+        call cline%parse(keys_required(:2), keys_optional(:6))
+        ! set defaults
+        if( .not. cline%defined('stk') ) call cline%set('box', 256.)
         ! execute
         call xctfops%execute(cline)
     case( 'filter' )

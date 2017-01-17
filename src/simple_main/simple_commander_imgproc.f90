@@ -245,17 +245,35 @@ contains
 
     subroutine exec_ctfops( self, cline )
         use simple_procimgfile, only: apply_ctf_imgfile
+        use simple_ctf,         only: ctf
         class(ctfops_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(params) :: p
         type(build)  :: b
+        type(ctf)    :: tfun
         logical      :: debug = .false.
+        real         :: dfx, dfy, angast
         p = params(cline)                     ! parameters generated
         call b%build_general_tbox(p, cline)   ! general objects built
         if( cline%defined('oritab') .or. cline%defined('deftab') )then
-            if( .not. b%a%isthere('dfx') ) stop 'need at least dfx to be set if ctf is going to be used!'
+            call b%raise_hard_ctf_exception(p)
         else
-            stop 'oritab/deftab with CTF info needed for phase flipping/multiplication'
+            stop 'oritab/deftab with CTF info needed for phase flipping/multiplication/CTF image generation'
+        endif
+        if( .not. cline%defined('stk') )then
+            dfx = b%a%get(1,'dfx')
+            if( b%a%isthere('dfy') )then
+                dfy    = b%a%get(1,'dfy')
+                angast = b%a%get(1,'angast')
+            else
+                dfy = dfx
+                angast = 0.
+            endif
+            tfun = ctf(p%smpd, b%a%get(1,'kv'), b%a%get(1,'cs'), b%a%get(1,'fraca'))
+            call tfun%ctf2img(b%img, dfx, 'ctf', dfy, angast)
+            call b%img%ft2img('real', b%img_copy)
+            call b%img_copy%write(p%outstk, 1)
+            return
         endif
         if( p%ctf .ne. 'no' )then
             select case( p%ctf )
@@ -273,6 +291,7 @@ contains
                     endif
                 case( 'abs' )
                     call apply_ctf_imgfile(p%stk, p%outstk, b%a, p%smpd, 'abs')
+                
                 case DEFAULT
                     stop 'Unknown ctf argument'
             end select
@@ -441,8 +460,8 @@ contains
     
     subroutine exec_scale( self, cline )
         use simple_procimgfile, only: resize_and_clip_imgfile, resize_imgfile, clip_imgfile
-        use simple_image,        only: image
-        use simple_math,         only: round2even
+        use simple_image,       only: image
+        use simple_math,        only: round2even
         class(scale_commander), intent(inout) :: self
         class(cmdline),         intent(inout) :: cline
         type(params) :: p

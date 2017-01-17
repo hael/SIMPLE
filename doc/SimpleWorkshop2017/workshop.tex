@@ -80,6 +80,8 @@ This part of the workshop will cover
 with the SIMPLE program package. We will use the latest unreleased version of SIMPLE, available to the workshop participants for downloading and beta-testing on the SIMPLE homepage \url{http://simplecryoem.com/beta.html}.
 
 \section{DDD Movie Pre-Processing}
+
+\subsection{Motion Correction and Dose Weighting}
 During image acquisition, beam induced motion, charging and stage drift introduce blurring in the integrated movies. The individual frames need to be aligned with respect to one another in order to restore high-resolution information. Because of radiation damage, the electron dose is kept low during image acquisition, resulting in a very low signal-to-noise ratio (SNR) of the individual movie frames. Until recently, our understanding of damage processes in cryo-EM was based primarily on results obtained with 2D protein crystals (REFS 44,45 REVIEW). The use of 2D crystals provides direct means for assessing the degree of damage by looking at the rate by which high-resolution diffraction spots are fading as a function of the accumulative electron dose. The disadvantage here is that it is impossible to separate spot fading due to loss of crystalline order from intrinsic molecular damage. Images of single rotavirus VP6 particles recorded with a total exposure of 100 electrons/Å2 indicated that single-particles are more robust to damage at low and intermediate resolution than previously thought (REF 46 REVIEW). In the same study, a dose-weighting scheme was introduced that maximizes the SNR of the integrated movie in a dose-dependent manner. This dose-weighting strategy has been adopted by most software packages and proven to be a powerful addition to the ever-growing set of single-particle analysis tools.
 
 SIMPLE implements a program called \prgname{unblur\_movies} for simultaneous motion-correction and dose-weighting, with the objective of maximising the SNR of the integrated movie in a motion- and dose-dependent manner. Input is a text file \texttt{filetab}, simply listing the individual movies in \texttt{*.mrc} format, the pixel-to-pixel (or sampling) distance \texttt{smpd} (in A), the number of CPU threads to use \texttt{nthr}, the body of the outputted files \texttt{fbody}, the exposure time of the movie \texttt{exp\_time} (in s), the dose-rate at which the movie was acquired \texttt{dose\_rate} (in e/A2/s) and the acceleration voltage of the electron microscope \texttt{kv} (in kV), in addition to a number of other optional parameters that we will not be concerned with here. If we execute \texttt{simple\_exec prg=unblur\_movies} in the prompt, we obtain brief instructions for how to run the program:
@@ -185,12 +187,28 @@ movies.txt              proteasome_intg2.mrc    proteasome_thumb2.mrc
 proteasome_forctf1.mrc  proteasome_pspec1.mrc
 proteasome_forctf2.mrc  proteasome_pspec2.mrc
 \end{verbatim}
-The first images we inspect are the power spectra. For visualisation, we use \texttt{e2display.py}. Execute \texttt{e2display.py} in the current working directory, click on one of the \texttt{*pspec*} files and then \texttt{Show 2D}.
+The first images we inspect are the power spectra. For visualisation, use \texttt{e2display.py}. Execute \texttt{e2display.py} in the current working directory, click on one of the \texttt{*pspec*} files and then \texttt{Show 2D}.
 \begin{SCfigure}[][h]
 \includegraphics[keepaspectratio=true,scale=0.3]{./pspec/pspec}
 \caption{The left part of the power spectrum represents the movie integrated without applying the alignment parameters, whereas the right part is the aligned integrated movie. We see that the motion correction restores coherence, giving radially symmetric Thon rings extending to much higher resolution.}
 \end{SCfigure}
-To get an idea of the effect of the movie pre-processing in real-space, expand the data folder from within \texttt{e2display.py}, then expand \texttt{4comparison} and click on the \texttt{proteasome_straight_intg1.mrc} file, followed by \texttt{Show 2D+}. Do the same for the corrected movie \texttt{proteasome_intg1.mrc}.
+To get an idea of the effect of the movie pre-processing in real-space, expand the data folder from within \texttt{e2display.py}, then expand the \texttt{4comparison} folder and click on the \texttt{proteasome\_straight\_intg1.mrc} file, followed by \texttt{Show 2D+}. Do the same for the corrected movie \texttt{proteasome\_intg1.mrc} and compare the two images.
+\begin{figure}
+\includegraphics[keepaspectratio=true,scale=0.7]{./straightvsintg/straightvsintg}
+\caption{The uncorrected movie, integrated without alignment, is blurred and lacks high-resolution contrast, whereas the corrected movie has much higher contrast and better definition.}
+\end{figure}
+
+\subsection{CTF Parameter Determination}
+The contrast transfer function (CTF) mathematically describes how aberrations in a transmission electron microscope modify the image of the sample. The assumption we rely on is that the image is a projection of the Coulomb potential distribution of the specimen, convoluted (multiplied in Fourier space) with the CTF and with Gaussian noise added. All 3D reconstruction methodology rely on this or slight variations of this assumption. The CTF is an oscillatory function (we saw the effect of it in the power spectrum in Figure 1) and the frequency of the oscillations depends on the spherical aberration constant \texttt{cs} in mm, which is an instrument specific constant, and  the defocus in microns, which we systematically vary during image acquisition. The reason that we vary the defocus during data collection is that we want to avoid systematic lack of information in certain resolution regions, as no information other than noise is present in the zero crossings of the CTF. By varying the defocus we shift the positions of the zero crossings of the CTF. If astigmatism is present in the image, the Thon rings are no longer radially symmetric but elliptical and we need to take this into account as well.
+\begin{SCfigure}[][h]
+\includegraphics[keepaspectratio=true,scale=0.5]{./astigctf/astigctf}
+\caption{Non-astigmatic CTF (left) vs. astigmatic CTF (right)}
+\end{SCfigure}
+
+
+
+
+SIMPLE implements a wrapper program called \prgname{ctffind} that executes CTFFIND4 (REF) version 4.1.X, producing a SIMPLE conforming CTF parameter document \texttt{deftab}. Input is a text file \texttt{filetab}, simply listing the individual integrated movies in \texttt{*.mrc} format.
 
 
 

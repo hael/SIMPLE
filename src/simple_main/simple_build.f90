@@ -103,7 +103,7 @@ type build
     procedure                           :: kill_cont3D_tbox
     procedure                           :: read_features
     procedure                           :: read_nnmat
-    procedure, private                  :: raise_hard_ctf_exception
+    procedure                           :: raise_hard_ctf_exception
 end type build
 
 contains
