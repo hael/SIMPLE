@@ -38,8 +38,13 @@
 \DeclareMathSymbol{\Sha}{\mathalpha}{cyrletters}{"58}
 \DeclareMathSymbol{\sha}{\mathalpha}{cyrletters}{"57}
 % Defined commands
- \newcommand{\prgname}[1]{\textcolor{NavyBlue}{\texttt{#1}}}
- \newcommand{\linkfont}[1]{\textcolor{BurntOrange}{\textbf{#1}}}
+\newcommand{\nc}{\newcommand}
+\nc{\be}{\begin{equation}}
+\nc{\ee}{\end{equation}}
+\nc{\bea}{\begin{eqnarray}}
+\nc{\eea}{\end{eqnarray}}
+\newcommand{\prgname}[1]{\textcolor{NavyBlue}{\texttt{#1}}}
+\newcommand{\linkfont}[1]{\textcolor{BurntOrange}{\textbf{#1}}}
 \newcommand{\shellcmd}[1]{\\\indent\indent\texttt{\$ #1}}
 \newcommand{\shellctd}[1]{\\\indent\indent\texttt{#1}}
 \newcommand{\ra}[1]{\renewcommand{\arraystretch}{#1}}
@@ -193,6 +198,7 @@ The first images we inspect are the power spectra. For visualisation, use \textt
 \caption{The left part of the power spectrum represents the movie integrated without applying the alignment parameters, whereas the right part is the aligned integrated movie. We see that the motion correction restores coherence, giving radially symmetric Thon rings extending to much higher resolution.}
 \end{SCfigure}
 To get an idea of the effect of the movie pre-processing in real-space, expand the data folder from within \texttt{e2display.py}, then expand the \texttt{4comparison} folder and click on the \texttt{proteasome\_straight\_intg1.mrc} file, followed by \texttt{Show 2D+}. Do the same for the corrected movie \texttt{proteasome\_intg1.mrc} and compare the two images.
+\newpage{}
 \begin{figure}
 \includegraphics[keepaspectratio=true,scale=0.7]{./straightvsintg/straightvsintg}
 \caption{The uncorrected movie, integrated without alignment, is blurred and lacks high-resolution contrast, whereas the corrected movie has much higher contrast and better definition.}
@@ -204,13 +210,229 @@ The contrast transfer function (CTF) mathematically describes how aberrations in
 \includegraphics[keepaspectratio=true,scale=0.5]{./astigctf/astigctf}
 \caption{Non-astigmatic CTF (left) vs. astigmatic CTF (right)}
 \end{SCfigure}
+The CTF has two components: one phase contrast component (giving rise to the same kind of contrast as in a medical X-ray image)  and one amplitude contrast component (giving rise to the same kind of contrast as when you put your hand on a projector, omitting photons to create a shadow image). Most of the contrast in biological cryo-EM are due to change in phase. In fact, the fraction of amplitude contrast has been measured to be around 10\% for proteins. In summary, we need six parameters to determine the parameters of the CTF: the acceleration voltage \texttt{kv}, the spherical aberration constant \texttt{cs}, the fraction of amplitude contrast \texttt{fraca}, the defocus in the x-direction \texttt{dfx}, the defocus in the y-direction \texttt{dfy} and the angle of astigmatism \texttt{angast}. The constants \texttt{kv}, \texttt{cs}, and \texttt{fraca} we can can fix and not worry about. Although we measure the defocus and astigmatism during data acquisition, the accuracies of these measurements are too crude to be useful for image processing. However, the protein itself, the carbon support and the ice scatters sufficiently for us to be able to generate a power spectrum that accurately represents the CTF power. This is typically done by extracting overlapping boxes from the micrograph, for every box calculating a power spectrum and averaging all power spectra over a micrograph to enhance the CTF signal. Using a parametric model for the CTF of the form
+\bea
+CTF=A_{phase}sin(\phi)+A_{amp}cos(\phi)
+\eea
+where $A_{phase}=0.9$, $A_{amp}=0.1$ and the phase shift $\phi$
+\bea
+\phi=\pi{}\lambda{}s^{2}(D-\frac{\lambda{}^{2}s^{2}C_{s}}{2})
+\eea
+where $\lambda{}$ is the electron wavelength, $s$ is spatial frequency, $D$ is defocus and $C_{s}$ is the spherical aberration constant, we can determine  the parameters we need.
 
+SIMPLE implements a wrapper program called \prgname{ctffind} that executes CTFFIND4 (REF) version 4.1.X, producing a SIMPLE conforming CTF parameter document \texttt{deftab}. Input is a text file \texttt{filetab}, simply listing the individual integrated movies in \texttt{*.mrc} format, the pixel-to-pixel (or sampling) distance \texttt{smpd} (in A), the acceleration voltage of the electron microscope \texttt{kv} (in kV), the spherical aberration constant \texttt{cs} in mm and the fraction of amplitude contrast \texttt{fraca} in addition to a number of other optional parameters that we will not be concerned with here. If we execute \texttt{simple\_exec prg=ctffind} in the prompt, we obtain brief instructions for how to run the program:
+\begin{verbatim}
+@!#> simple_exec prg=ctffind
+USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
 
+REQUIRED
+filetab = list of files(*.txt/*.asc)
+smpd    = sampling distance, same as EMANs apix(in A)
+kv      = acceleration voltage(in kV){300.}
+cs      = spherical aberration constant(in mm){2.7}
+fraca   = fraction of amplitude contrast used for fitting CTF{0.07}
 
+OPTIONAL
+pspecsz    = size of power spectrum(in pixels)
+hp         = high-pass limit(in A)
+lp         = low-pass limit(in A)
+dfmin      = minimum expected defocus(in microns)
+dfmax      = maximum expected defocus(in microns)
+astigstep  = step size for astigamtism search(in microns)
+expastig   = expected astigmatism(in microns)
+phaseplate = images obtained with phaseplate(yes|no){no}
+\end{verbatim}
+Output is a text file with defocus parameters \texttt{ctffind\_output.txt}. First, we need to create a file table, listing the integrated movies to be processed with  \prgname{ctffind}.
+\begin{verbatim}
+@!#> ls proteasome_forctf* > ctf_movies.txt
+\end{verbatim}
+Next, we execute the program.
+\begin{verbatim}
+@!#> simple_exec prg=ctffind filetab=ctf_movies.txt smpd=5.26 kv=300 cs=2.7 fraca=0.1
+\end{verbatim}
+and we expect to see the following output in the terminal
+\begin{verbatim}
+        **   Welcome to Ctffind   **
 
-SIMPLE implements a wrapper program called \prgname{ctffind} that executes CTFFIND4 (REF) version 4.1.X, producing a SIMPLE conforming CTF parameter document \texttt{deftab}. Input is a text file \texttt{filetab}, simply listing the individual integrated movies in \texttt{*.mrc} format.
+            Version : 4.1.5
+           Compiled : Sep  9 2016
+               Mode : Scripted
 
+Input image file name                              : proteasome_forctf1.mrc
+Output diagnostic image file name                  : proteasome_forctf1_ctffind_diag.mrc
+Pixel size                                         : 5.26000023                      
+Acceleration voltage                               : 300.000000                      
+Spherical aberration                               : 2.70000005                      
+Amplitude contrast                                 : 0.100000001                     
+Size of amplitude spectrum to compute              : 1024.00000                      
+Minimum resolution                                 : 30.0000000                      
+Maximum resolution                                 : 10.5200005                      
+Minimum defocus                                    : 5000.00000                      
+Maximum defocus                                    : 70000.0000                      
+Defocus search step                                : 500.000000                      
+Do you know what astigmatism is present?           : no
+Slower, more exhaustive search?                    : no
+Use a restraint on astigmatism?                    : yes
+Expected (tolerated) astigmatism                   : 1000.00000                      
+Find additional phase shift?                       : no
+Do you want to set expert options?                 : no
 
+Summary information for file proteasome_forctf1.mrc
+Number of columns, rows, sections: 1854, 1918, 1
+MRC data mode: 2
+Bit depth: 32
+Pixel size: 5.260 5.260 5.260
+Bytes in symmetry header: 0
+
+Working on micrograph 1 of 1
+\end{verbatim}
+In SIMPLE, we have yet to implement any particle picker but rely on EMAN1.9 and EMAN2 for particle identification. However, if you have \texttt{*.box} files obtained with EMAN you can extract the particle images and their associated CTF parameters using SIMPLE. To illustrate this functionality, we have prepared box files in the \texttt{data} folder for use in conjunction with SIMPLE program \prgname{extract}. As before, we need to prepare file tables. First, we prepare a file table for the motion corrected and dose-weighted integrated movies:
+\begin{verbatim}
+@!#> ls proteasome_intg* > intg_movies.txt
+\end{verbatim}
+Second, for the box files:
+\begin{verbatim}
+@!#> ls ./data/boxfiles/*box > boxfiles.txt
+\end{verbatim}
+Finally, we execute the program:
+\begin{verbatim}
+@!#> simple_exec prg=extract filetab=intg_movies.txt boxtab=boxfiles.txt
+smpd=5.26 paramtab=ctffind_output.txt 
+>>> DONE PROCESSING PARAMETERS
+>>> DONE BUILDING GENERAL TOOLBOX
+  100%  |==================================================| done.
+       _______ _____ _______  _____         _______
+       |______   |   |  |  | |_____] |      |______
+       ______| __|__ |  |  | |       |_____ |______
+ 
+ _)_ ( _   _     ) o  _             _   _   _   o  _   _
+ (_   ) ) )_)   (  ( ) ) (_( \)    )_) ) ) (_(  ( ) ) )_)
+         (_                  (\   (_         _)      (_
+
+**** SIMPLE_EXTRACT NORMAL STOP ****
+\end{verbatim}
+Output is a particle stack \texttt{sumstack.mrc} and its associated parameter file \texttt{extract\_params.txt}.
+
+\section{2D analysis with PRIME2D}
+Algorithms that can rapidly discover clusters corresponding to sets of images with similar projection direction and conformational state play an important role in single-particle analysis. Identification of such clusters allows for enhancement of the signal-to-noise ratio (SNR) by averaging and gives a first glimpse into the character of a dataset. Therefore, clustering algorithms play a pivotal role in initial data quality assessment, \textit{ab initio} 3D reconstruction and analysis of heterogeneous single-particle populations. SIMPLE implements a probabilistic algorithm for simultaneous 2D alignment and clustering, called \prgname{prime2D}. The version we are going to use here is an improved version of the published code (REF) that incorporates a new scheme for Wiener reconstitution (CTF correction) and resolution weighting of the data (unpublished). Grouping tens of thousands of images into several hundred clusters is a computationally intensive job. Therefore, we will now introduce the execution route for running SIMPLE jobs in a distributed computing environment.
+
+\subsection{Distributed execution of SIMPLE on workstations and clusters}
+SIMPLE is executed either via \texttt{simple\_exec}, which implements all individual SIMPLE programs and runs in shared-memory parallelisation mode, or via \texttt{simple\_distr\_exec} that implements higher-level workflows intended for distributed execution on workstations and clusters using a hybrid parallelisation model (distributed \textit{and} shared memory). In cluster environments using a job scheduler (PBS and SLURM are supported by SIMPLE) the file \texttt{simple\_distr\_config.env} in the current working directory controls the execution.
+\begin{verbatim}
+@!#> cat simple_distr_config.env 
+# CONFIGURATION FILE FOR DISTRIBUTED SIMPLE EXECUTION
+
+# ABSOLUTE PATH TO SIMPLE ROOT DIRECTORY
+simple_path           = /scratch/m3earlyadopters/simple/simple_devel/
+
+# ESTIMATED TIME PER IMAGE (IN SECONDS)
+time_per_image        = 400
+
+# USER DETAILS
+user_account          = 
+user_email            = hans.elmlund@monash.edu
+user_project          = 
+
+# QSYS DETAILS (qsys_name=<local|slurm|pbs>)
+qsys_name             = slurm
+qsys_partition        = m3a
+qsys_qos              =
+qsys_reservation      = simple
+
+# JOB DETAILS
+job_ntasks            = 1
+job_memory_per_task   = 32000
+job_name              = dummy
+job_ntasks_per_socket = 1
+\end{verbatim}
+We do not need to worry about this file for now as it will be automatically generated when we execute \texttt{simple\_distr\_exec} but if you need help configuring distributed SIMPLE execution, please consult the manual or file a help ticket on the webpage. The two most important parameters for distributed execution is the number of partitions \texttt{nparts} and the number of shared-memory CPU threads \texttt{nthr}. To obtain maximum performance, we need to select sensible values for these parameters, which requires some knowledge about the computer architecture that we are running SIMPLE on.  Consider a heterogeneous cluster with N nodes, two CPU sockets per node and six CPUs per socket.
+\begin{SCfigure}[][h]
+\includegraphics[keepaspectratio=true,scale=0.6]{./CPUtopo/cputopo}
+\caption{\textbf{Configuration of the parallel PRIME-2D/3D execution on a heterogeneous cluster.} We here represent the nodes in  a heterogeneous cluster by two sockets with six CPUs each and 32Gb RAM/node. The best performance of PRIME--2D/3D is going to be obtained by partitioning  the jobs into \texttt{npart=2N} partitions, where \texttt{N} is the number of nodes. Each partition will then execute six threads \texttt{nthr=6} and these six threads will get access to half the RAM on the node (\texttt{memstr=16000}) because we have two sockets per node that need to share the RAM between them}
+\end{SCfigure}
+It rarely pays off to increase the number of shared-memory CPU threads \texttt{nthr} above 10 because the overhead for thread creation with respect to the gain in parallelism is unfavourable. Therefore, if you have a system with say 20 CPUs per socket, then execute 4N partitions instead of increasing \texttt{nthr} to 20. This is a bit technical, but it matters for performance so if you are unsure how to configure your SIMPLE execution please file a help ticket.
+
+\subsection{PRIME2D analysis of TRPV1 membrane receptor images}
+The computers we are currently using have four i7 processors in a single socket, hyper-threaded so it looks like we have eight. We are now going to pretend that we have two CPU sockets with four CPUs each for the purpose of demonstration. Goto the \texttt{PRIME2D} directory and check things out.
+\begin{verbatim}
+@!#> cd ../2_PRIME2D/
+@!#> ls
+data/
+@!#> ls data/
+info.txt                 trpv1_extract_params.txt trpv1_ptcls.mrc
+@!#> cat data/info.txt 
+smpd=2.43
+kv=300.
+cs=2.0
+fraca=0.1
+ctf=flip
+msk=36
+box=128
+\end{verbatim}
+The individual particle images are quite noisy and it is difficult to gain any understanding about the imaged structure from these images.
+\begin{SCfigure}[][h]
+\includegraphics[keepaspectratio=true,scale=0.3]{./trpv1ptcls}
+\caption{Individual TRPV1 particle images.}
+\end{SCfigure}
+These images represent a subset of particles from a larger TRPV1 data set. In order to cluster the images, execute:
+\begin{verbatim}
+@!#> simple_distr_exec prg=prime2D stk=./data/trpv1_ptcls.mrc smpd=2.43 msk=36 
+ncls=5 ctf=flip nparts=2 nthr=4 deftab=./data/trpv1_extract_params.txt
+\end{verbatim}
+For every iteration, we expect to see the following output in the terminal:
+\begin{verbatim}
+>>>
+>>> ITERATION     10
+>>>
+DISTRIBUTED MODE :: submitting scripts:
+distr_simple_script_1
+distr_simple_script_2
+appending output to nohup.out
+appending output to nohup.out
+>>> DONE PROCESSING PARAMETERS
+**** SIMPLE_MERGE_ALGNDOCS NORMAL STOP ****
+>>> DONE PROCESSING PARAMETERS
+>>> DONE BUILDING GENERAL TOOLBOX
+>>> DONE BUILDING HADAMARD PRIME2D TOOLBOX
+**** SIMPLE_CAVGASSEMBLE NORMAL STOP ****
+>>> DONE PROCESSING PARAMETERS
+>>> DONE BUILDING GENERAL TOOLBOX
+>>> JOINT    DISTRIBUTION OVERLAP:       0.6757
+>>> CLASS    DISTRIBUTION OVERLAP:       0.8030
+>>> IN-PLANE DISTRIBUTION OVERLAP:       0.5485
+>>> AVERAGE IN-PLANE ANGULAR DISTANCE:     13.8
+>>> PERCENTAGE OF SEARCH SPACE SCANNED:    89.6
+>>> CORRELATION:                         0.5618
+>>> CONVERGED: .NO.
+**** SIMPLE_CHECK2D_CONV NORMAL STOP ****
+\end{verbatim}
+The distribution overlaps represents the agreement between the alignment and clustering parameters from the present and previous iteration. The most important metric, however, is the fraction of search space scanned. \prgname{prime2D} is based on stochastic hill climbing optimisation, which relies on the so-called first improvement heuristic. This means that not all references are matched for each particle in each round but only as many as is required to find an improving solution, which is instantly accepted. This means that in the beginning of the search only few references need to be evaluated to find improving configurations (percentage of search space is low) whereas when convergence to a local (or global) optimum has been achieved most if not all references need to be evaluated (percentage of search space is high). Convergence is defined based on the class overlap and the fraction of search space scanned. Upon completion of the calculation, we see
+\begin{verbatim}
+>>> CONVERGED: .YES.
+**** SIMPLE_CHECK2D_CONV NORMAL STOP ****
+>>> DONE PROCESSING PARAMETERS
+>>> DONE BUILDING GENERAL TOOLBOX
+CLASS:     4 POP:  489
+CLASS:     2 POP:  433
+CLASS:     3 POP:  301
+CLASS:     5 POP:  202
+CLASS:     1 POP:  194
+**** SIMPLE_RANK_CAVGS NORMAL STOP ****
+       _______ _____ _______  _____         _______
+       |______   |   |  |  | |_____] |      |______
+       ______| __|__ |  |  | |       |_____ |______
+ 
+ _)_ ( _   _     ) o  _             _   _   _   o  _   _
+ (_   ) ) )_)   (  ( ) ) (_( \)    )_) ) ) (_(  ( ) ) )_)
+         (_                  (\   (_         _)      (_
+
+**** SIMPLE_DISTR_PRIME2D NORMAL STOP ****
+\end{verbatim}
+\begin{SCfigure}[][h]
+\includegraphics[keepaspectratio=true,scale=0.8]{./trpv1iters/trpv1iters}
+\caption{TRPV1 class averages from the 0:th (random initialisation), 8:th, and and 16:th (final) iteration of simultaneous 2D alignment and clustering with \prgname{prime2D}. Good class averages with clearly discernible projected secondary structure are marked with a green dot and class averages of lower quality are marked with a red dot.}
+\end{SCfigure}
 
 
 

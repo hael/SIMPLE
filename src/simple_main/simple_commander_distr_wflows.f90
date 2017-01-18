@@ -380,7 +380,7 @@ contains
         integer, allocatable                :: parts(:,:)
         type(qsys_ctrl)                     :: qscripts
         type(oris)                          :: os
-        character(len=STDLEN)               :: vol, vol_iter, oritab, str, str_iter, str_state
+        character(len=STDLEN)               :: vol, vol_iter, oritab, str, str_iter, str_state, cmd_str
         integer                             :: state, iter, status, cnt
         real                                :: frac_srch_space
         type(chash)                         :: myq_descr, job_descr
@@ -525,7 +525,12 @@ contains
                 call del_file('fsc_state01.bin')
                 call xeo_volassemble%execute( cline_volassemble )
             else
+                ! TAKEN OUT FOR DEBUGGING PURPOSES, TO SEE IF THIS IS WHAT STRESSES THE FILE-SYSTEM OUT
                 call xvolassemble%execute( cline_volassemble )
+                ! str_state = int2str_pad(1,2)
+                ! cmd_str = 'cp '//trim(cline%get_carg('vol1'))//' '//trim(VOLFBODY)//trim(str_state)//p_master%ext
+                ! call exec_cmdline(cmd_str)
+                ! JUST COPYING THE VOLUME TO SEE IF THAT REDUCES I/O STRESS
             endif
             ! rename volumes and update job_descr
             do state = 1,p_master%nstates

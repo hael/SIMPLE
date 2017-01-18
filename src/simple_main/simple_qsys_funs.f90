@@ -4,6 +4,8 @@ use simple_syscalls ! use all in there
 use simple_strings, only: int2str, int2str_pad, str2real
 implicit none
 
+integer, parameter, private :: SHORTTIME = 5
+
 contains
 
     subroutine qsys_cleanup( p )
@@ -38,6 +40,12 @@ contains
             call del_files(rho_base_str//'_odd',  p%nparts, ext=p%ext)
             deallocate(rec_base_str,rho_base_str)
         end do
+        ! flush all filehandles
+        call flush
+        ! synchronize data on disk with memory
+        call system('sync')
+        ! sleep for a while to let the file-sys catch up
+        call sleep(SHORTTIME)
     end subroutine qsys_cleanup
 
     function stack_is_split( stkext, npart ) result( is_split )

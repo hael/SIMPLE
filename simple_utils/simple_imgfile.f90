@@ -16,7 +16,7 @@
 !! license terms ( http://license.janelia.org/license/jfrc_copyright_1_1.html )
 !!
 module simple_imgfile
-use simple_jiffys
+use simple_filehandling
 use simple_imghead
 use simple_defs
 use gnufor2
@@ -32,7 +32,7 @@ type imgfile
     private
     class(imghead), allocatable :: overall_head              !< Overall image head object
     character(len=STDLEN)       :: fname          = ''       !< Filename
-    character(len=1)            :: head_format    = ''       !< 'I' (IMAGIC),'M' (MRC), 'S' (SPIDER) file format
+    character(len=1)            :: head_format    = ''       !< 'M' (MRC), 'S' (SPIDER) file format
     integer                     :: lun_img        = 0        !< Unit number for the image file. Set to 0 unless the file is currently open.
     integer                     :: lun_hed        = 0        !< Unit number for the head file.
     logical                     :: was_written_to = .false.  !< Indicates whether data was written to the file since it was opened
@@ -75,7 +75,7 @@ contains
     
     !>  \brief  constructs an imgfile object (file-handle)
     subroutine open( self, fname, ldim, smpd, del_if_exists, formatchar, readhead, rwaction )
-        use simple_jiffys, only: alloc_err, file_exists
+        use simple_jiffys, only: alloc_err
         class(imgfile),             intent(inout) :: self          !< Imagefile object to be created
         character(len=*),           intent(in)    :: fname         !< Filename
         integer,                    intent(in)    :: ldim(3)       !< logical dimension of image/stack
@@ -152,13 +152,12 @@ contains
     subroutine print_header( self )
         class(imgfile), intent(in) :: self
         call self%overall_head%print
-    end subroutine
+    end subroutine print_header
     
     ! CORE FUNCTIONALITY
     
     !>  \brief open the file(s) for the imgfile
     subroutine open_local( self, del_if_exists, rwaction )
-        use simple_jiffys, only: fname_new_ext, get_fileunit, file_exists, del_file
         class(imgfile),             intent(inout) :: self
         logical, optional,          intent(in) :: del_if_exists
         character(len=*), optional, intent(in) :: rwaction
@@ -174,92 +173,53 @@ contains
         stat_str = 'UNKNOWN'
         if( present(del_if_exists) )then
             if( del_if_exists )then
-                if( self%head_format .eq. 'I' )then
-                    self%fname = fname_new_ext(self%fname,'hed')
-                endif
                 call del_file(self%fname)
-                if( self%head_format .eq. 'I' )then
-                    self%fname = fname_new_ext(self%fname,'img')
-                    call del_file(self%fname)
-                endif
             endif
         endif
         ! Get an IO unit number for the head file
-        self%lun_hed = get_fileunit()        
-        if( self%head_format .eq. 'I' )then
-            self%fname = fname_new_ext(self%fname,'hed')
-        endif
+        self%lun_hed = get_fileunit()
         open(unit=self%lun_hed,access='STREAM',file=self%fname,action=rw_str,status=stat_str,convert=endconv)        
-        if( self%head_format .eq. 'I' )then
-            self%fname = fname_new_ext(self%fname,'img')
-            self%lun_img = get_fileunit()
-            open(unit=self%lun_img,access='STREAM',file=self%fname,action=rw_str,status=stat_str,convert=endconv)
-        else
-           self%lun_img = self%lun_hed
-        endif
+        self%lun_img = self%lun_hed
         self%was_written_to = .false.
-    end subroutine
+    end subroutine open_local
 
     !>  \brief  close the file(s) and "de-initialise" the imgfile object
     subroutine close( self )
-        use simple_jiffys, only: is_open
         class(imgfile), intent(inout) :: self
-        if( self%existence )then
-            if( is_open(self%lun_hed) )then
-                if( self%was_written_to )then
-                    call self%overall_head%write(self%lun_hed)                    
-                    if( debug ) write(*,*) '(simple_imgfile::close) wrote overall_head'
-                endif
-                close(self%lun_hed)
+        if( is_open(self%lun_hed) )then
+            if( self%was_written_to )then
+                call self%overall_head%write(self%lun_hed)                    
+                if( debug ) write(*,*) '(simple_imgfile::close) wrote overall_head'
             endif
-            if( self%head_format .eq. 'I' )then
-                if( is_open(self%lun_img) )then
-                    close(self%lun_img)
-                endif
-            endif
+            close(self%lun_hed)
+            call flush(self%lun_hed)
         endif
         if( allocated(self%overall_head) ) call self%overall_head%kill
         if( allocated(self%overall_head) ) deallocate(self%overall_head)
         self%was_written_to = .false.   
         self%existence = .false.
-    end subroutine
+    end subroutine close
     
     !>  \brief  close the file(s)
     subroutine close_nowrite( self )
-        use simple_jiffys, only: is_open
         class(imgfile), intent(inout) :: self
-        if( self%existence )then
-            if( is_open(self%lun_hed) )then
-                close(self%lun_hed)
-            endif
-            if( self%head_format .eq. 'I' )then
-                if( is_open(self%lun_img) )then
-                    close(self%lun_img)
-                endif
-            endif
+        if( is_open(self%lun_hed) )then
+            close(self%lun_hed)
+            call flush(self%lun_hed)
         endif
         if( allocated(self%overall_head) ) call self%overall_head%kill
         if( allocated(self%overall_head) ) deallocate(self%overall_head)
         self%was_written_to = .false.   
         self%existence = .false.
-    end subroutine
+    end subroutine close_nowrite
 
     !>  \brief  Check whether the file exists on disk
     logical function exists( self )
-        use simple_jiffys, only: file_exists, file_size
-        use simple_jiffys, only: fname_new_ext
         class(imgfile), intent(inout) :: self
         character(len=STDLEN)         :: new_fname
-        if( self%head_format .eq. 'I' )then
-            new_fname = fname_new_ext(self%fname,'img')
-            exists = file_exists(new_fname) .and. file_size(new_fname) .gt. 0
-            new_fname = fname_new_ext(self%fname,'hed')
-            exists = file_exists(new_fname) .and. file_size(new_fname) .gt. 0 .and. exists
-        else
-            exists = file_exists(self%fname)
-            if( exists) exists = exists .and. file_size(self%fname) .gt. 0
-        endif
-    end function
+        exists = file_exists(self%fname)
+        if( exists) exists = exists .and. file_size(self%fname) .gt. 0
+    end function exists
 
     !>  \brief Return a one letter code for the file format designated by the extension in the fname
     !!         if .mrc: M
@@ -268,11 +228,10 @@ contains
     !!         if .hed: I
     !!         else: N
     pure function get_format( self )
-        use simple_jiffys, only: fname2format
         class(imgfile), intent(in) :: self
         character(len=1)           :: get_format
         get_format = self%head_format
-    end function
+    end function get_format
 
     !>  \brief  for translating an image index to record indices in the stack
     subroutine slice2recpos( self, nr, hedinds, iminds )
@@ -307,7 +266,7 @@ contains
             class DEFAULT
                 stop 'Format not supported; slice2recpos; simle_imgfile'
         end select
-    end subroutine
+    end subroutine slice2recpos
     
     !>  \brief  for translating an image index to record indices in the stack
     subroutine slice2bytepos( self, nr, hedinds, iminds )
@@ -328,7 +287,7 @@ contains
             iminds(1)  = (iminds(1)-1)*self%overall_head%getLenbyt()+1
             iminds(2)  = iminds(2)*self%overall_head%getLenbyt()
         endif
-    end subroutine
+    end subroutine slice2bytepos
     
     subroutine print_slice2bytepos( self, n )
         class(imgfile), intent(in) :: self
@@ -341,7 +300,7 @@ contains
             'first imgpos: ', iminds(1), 'last imgpos: ', iminds(2), 'hedsz: ',  hedinds(2)- hedinds(1)+1,&
             'imgsz: ',  iminds(2)- iminds(1)+1
         end do
-    end subroutine
+    end subroutine print_slice2bytepos
     
     ! SLICE & HEADER I/O
     
@@ -352,7 +311,7 @@ contains
         real, intent(inout), allocatable :: rarr(:,:,:) !< Array of reals. Will be (re)allocated if needed
         call self%rwSlices('r',slice_nr,slice_nr,rarr)
         if( debug ) write(*,*) '(imgfile::rSlice) read slice: ', slice_nr
-    end subroutine
+    end subroutine rSlice
 
     !>  \brief  write a slice of the image file from memory to disk
     subroutine wSlice( self, slice_nr, rarr, ldim )
@@ -362,7 +321,7 @@ contains
         integer, intent(in)           :: ldim(3)     !<  Logical size of the array. This will be written to disk: rarr(1:ldim_1,:,:)
         call self%rwSlices('w',slice_nr,slice_nr,rarr,ldim)
         if( debug ) write(*,*) '(imgfile::wSlice) wrote slice: ', slice_nr
-    end subroutine
+    end subroutine wSlice
 
     !>  \brief  reads an image or stack header
     subroutine rHead( self, slice, head, ldim )
@@ -421,7 +380,7 @@ contains
             end select
         endif
         if( debug ) write(*,*) '(simple_imgfile::rHead) read header from file'
-    end subroutine
+    end subroutine rHead
 
     !>  \brief  writes an image or stack header
     subroutine wHead( self, slice, head )
@@ -459,7 +418,7 @@ contains
                     stop 'unsupported type; wHead; simple_imgfile'
             end select
         endif
-    end subroutine
+    end subroutine wHead
     
     !>  \brief  read/write a set of contiguous slices of the image file from disk into memory.
     !!          The array of reals should have +2 elements in the first dimension.
@@ -759,14 +718,14 @@ contains
         write(*,'(/2a)') 'Summary information for file ', trim(adjustl(self%fname))
         call self%overall_head%print
         write(*,'(a)') ' '
-    end subroutine
+    end subroutine print
 
     !>  \brief  Return the dimension of the image stack
     function getDims( self )
         class(imgfile), intent(in) :: self
         integer :: getDims(3)
         getDims = self%overall_head%getDims()
-    end function
+    end function getDims
 
     !>  \brief  Return one of the dimensio of the image stack
     function getDim( self, which_dim )
@@ -774,32 +733,32 @@ contains
         integer, intent(in)        :: which_dim
         integer :: getDim
         getDim = self%overall_head%getDim(which_dim)
-    end function
+    end function getDim
 
     !>  \brief Return the fname
     function getFname( self )
         class(imgfile), intent(in) :: self
         character(len=STDLEN)      :: getFname
         getFname = self%fname
-    end function
+    end function getFname
 
     !>  \brief  Return the pixel size of the image data (in Angstroms)
     real function getPixSz( self )
         class(imgfile), intent(in) :: self
         getPixSz = self%overall_head%getPixSz()
-    end function
+    end function getPixSz
 
     !>  \brief  Return the format descriptor of the stack
     integer function getIform( self )
         class(imgfile), intent(in) :: self
         getIform = self%overall_head%getIform()
-    end function
-    
+    end function getIform
+     
     !>  \brief  Return the format descriptor of the stack
     integer function getMode( self )
         class(imgfile), intent(in) :: self
         getMode = self%overall_head%getMode()
-    end function
+    end function getMode
 
     !>  \brief  Set the format descriptor of the stack
     subroutine setIform( self, iform )
@@ -807,7 +766,7 @@ contains
         integer, intent(in)           :: iform
         call self%overall_head%setIform(iform)
         self%was_written_to = .true.
-    end subroutine
+    end subroutine setIform
     
     !>  \brief  Set the pixel size of the stack
     subroutine setPixSz( self, smpd )
@@ -815,7 +774,7 @@ contains
         real, intent(in)              :: smpd
         call self%overall_head%setPixSz(smpd)
         self%was_written_to = .true.
-    end subroutine
+    end subroutine setPixSz
     
     !>  \brief  Set the mode of the MRC file
     subroutine setMode( self, mode )
@@ -823,7 +782,7 @@ contains
         integer, intent(in)           :: mode
         call self%overall_head%setMode(mode)
         self%was_written_to = .true.
-    end subroutine
+    end subroutine setMode
     
     !>  \brief  for setting the logical dimensions
     subroutine setDims( self, ldim )
@@ -831,6 +790,6 @@ contains
         integer, intent(in)           :: ldim(3)
         call self%overall_head%setDims(ldim)
         self%was_written_to = .true.
-    end subroutine
+    end subroutine setDims
     
 end module simple_imgfile

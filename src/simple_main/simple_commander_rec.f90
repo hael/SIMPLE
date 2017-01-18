@@ -245,26 +245,8 @@ contains
                 inquire(FILE=kernam, EXIST=here(2))
                 if( all(here) )then     
                     call recvol_read%read(recnam)
-                    if( debug )then
-                        if( recvol_read%contains_nans() )then
-                            write(*,*) 'WARNING! recvol: ', recnam, 'contains NaN:s'
-                        endif
-                    endif
                     call recvol_read%read_rho(kernam)
-                    if( debug )then
-                        if( recvol_read%rho_contains_nans() )then
-                            write(*,*) 'WARNING! kernel: ', kernam, 'contains NaN:s'
-                        endif
-                    endif
                     call b%recvol%sum(recvol_read)
-                    if( debug )then
-                        if( b%recvol%contains_nans() )then
-                            write(*,*) 'WARRNING! summed image part contains NaN:s'
-                        endif 
-                        if( b%recvol%rho_contains_nans() )then
-                            write(*,*) 'WARNING! summed kernel part contains NaN:s'
-                        endif
-                    endif
                 else
                     if( .not. here(1) ) write(*,'(A,A,A)') 'WARNING! ', adjustl(trim(recnam)), ' missing'
                     if( .not. here(2) ) write(*,'(A,A,A)') 'WARNING! ', adjustl(trim(kernam)), ' missing'
