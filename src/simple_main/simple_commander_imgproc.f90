@@ -485,16 +485,16 @@ contains
                 if( cline%defined('clip') )then
                     if( cline%defined('part') )then
                         p%outstk = 'outstk_part'//int2str_pad(p%part, p%numlen)//p%ext
-                        call resize_and_clip_imgfile(p%stk,p%outstk,ldim_scaled,[p%clip,p%clip,1],[p%fromp,p%top])
+                        call resize_and_clip_imgfile(p%stk,p%outstk,p%smpd,ldim_scaled,[p%clip,p%clip,1],[p%fromp,p%top])
                     else
-                        call resize_and_clip_imgfile(p%stk,p%outstk,ldim_scaled,[p%clip,p%clip,1])
+                        call resize_and_clip_imgfile(p%stk,p%outstk,p%smpd,ldim_scaled,[p%clip,p%clip,1])
                     endif
                 else
                     if( cline%defined('part') )then
                         p%outstk = 'outstk_part'//int2str_pad(p%part, p%numlen)//p%ext
-                        call resize_imgfile(p%stk,p%outstk,ldim_scaled,[p%fromp,p%top])
+                        call resize_imgfile(p%stk,p%outstk,p%smpd,ldim_scaled,[p%fromp,p%top])
                     else
-                        call resize_imgfile(p%stk,p%outstk,ldim_scaled)
+                        call resize_imgfile(p%stk,p%outstk,p%smpd,ldim_scaled)
                     endif
                 endif
             else if( cline%defined('clip') )then
@@ -571,7 +571,7 @@ contains
             stop 'SIMPLE_SCALE needs input image(s) or volume or filetable!'          
         endif
         ! end gracefully
-        call simple_end('**** SIMPLE_SCALE NORMAL STOP ****')
+        call simple_end('**** SIMPLE_SCALE NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_scale
     
     subroutine exec_stack( self, cline )

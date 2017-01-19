@@ -141,7 +141,8 @@ contains
             call self%overall_head%write(self%lun_hed)
             if( debug ) print *, 'did write header'
         endif
-        call self%overall_head%setPixSz(smpd)
+        ! call self%overall_head%setPixSz(smpd)
+        call self%setPixSz(smpd)
         if( debug ) call self%overall_head%print
         ! The file-handle now exists
         self%existence = .true.
@@ -186,6 +187,7 @@ contains
     !>  \brief  close the file(s) and "de-initialise" the imgfile object
     subroutine close( self )
         class(imgfile), intent(inout) :: self
+        integer :: ret
         if( is_open(self%lun_hed) )then
             if( self%was_written_to )then
                 call self%overall_head%write(self%lun_hed)                    
@@ -193,6 +195,7 @@ contains
             endif
             close(self%lun_hed)
             call flush(self%lun_hed)
+            ret = fsync(fnum(self%lun_hed))
         endif
         if( allocated(self%overall_head) ) call self%overall_head%kill
         if( allocated(self%overall_head) ) deallocate(self%overall_head)
@@ -203,9 +206,11 @@ contains
     !>  \brief  close the file(s)
     subroutine close_nowrite( self )
         class(imgfile), intent(inout) :: self
+        integer :: ret
         if( is_open(self%lun_hed) )then
             close(self%lun_hed)
             call flush(self%lun_hed)
+            ret = fsync(fnum(self%lun_hed))
         endif
         if( allocated(self%overall_head) ) call self%overall_head%kill
         if( allocated(self%overall_head) ) deallocate(self%overall_head)

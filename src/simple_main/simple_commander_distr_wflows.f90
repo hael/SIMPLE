@@ -29,12 +29,12 @@ implicit none
 public :: unblur_movies_distr_commander
 public :: unblur_tomo_movies_distr_commander
 public :: ctffind_distr_commander
-public :: shellweight3D_distr_commander
-public :: prime3D_init_distr_commander
-public :: prime3D_distr_commander
 public :: prime2D_init_distr_commander
 public :: prime2D_distr_commander
 public :: find_nnimgs_distr_commander
+public :: prime3D_init_distr_commander
+public :: prime3D_distr_commander
+public :: shellweight3D_distr_commander
 public :: recvol_distr_commander
 
 private
@@ -51,18 +51,6 @@ type, extends(commander_base) :: ctffind_distr_commander
   contains
     procedure :: execute      => exec_ctffind_distr
 end type ctffind_distr_commander
-type, extends(commander_base) :: shellweight3D_distr_commander
-  contains
-    procedure :: execute      => exec_shellweight3D_distr
-end type shellweight3D_distr_commander
-type, extends(commander_base) :: prime3D_init_distr_commander
-  contains
-    procedure :: execute      => exec_prime3D_init_distr
-end type prime3D_init_distr_commander
-type, extends(commander_base) :: prime3D_distr_commander
-  contains
-    procedure :: execute      => exec_prime3D_distr
-end type prime3D_distr_commander
 type, extends(commander_base) :: prime2D_init_distr_commander
   contains
     procedure :: execute      => exec_prime2D_init_distr
@@ -75,6 +63,18 @@ type, extends(commander_base) :: find_nnimgs_distr_commander
   contains
     procedure :: execute      => exec_find_nnimgs_distr
 end type find_nnimgs_distr_commander
+type, extends(commander_base) :: prime3D_init_distr_commander
+  contains
+    procedure :: execute      => exec_prime3D_init_distr
+end type prime3D_init_distr_commander
+type, extends(commander_base) :: prime3D_distr_commander
+  contains
+    procedure :: execute      => exec_prime3D_distr
+end type prime3D_distr_commander
+type, extends(commander_base) :: shellweight3D_distr_commander
+  contains
+    procedure :: execute      => exec_shellweight3D_distr
+end type shellweight3D_distr_commander
 type, extends(commander_base) :: recvol_distr_commander
   contains
     procedure :: execute      => exec_recvol_distr
@@ -233,347 +233,6 @@ contains
         call qsys_cleanup(p_master)
         call simple_end('**** SIMPLE_DISTR_CTFFIND NORMAL STOP ****')
     end subroutine exec_ctffind_distr
-
-    ! SHELLWEIGHT3D
-
-    subroutine exec_shellweight3D_distr( self, cline )
-        use simple_commander_prime3D
-        use simple_commander_distr
-        class(shellweight3D_distr_commander), intent(inout) :: self
-        class(cmdline),                       intent(inout) :: cline
-        ! constants
-        logical, parameter                 :: DEBUG=.false.
-        character(len=32), parameter       :: ALGNFBODY = 'algndoc_'
-        ! commanders
-        type(split_commander)              :: xsplit
-        type(shellweight3D_commander)      :: xshellweight3D
-        type(merge_algndocs_commander)     :: xmerge_algndocs
-        type(merge_shellweights_commander) :: xmerge_shellweights
-        ! command lines
-        type(cmdline)                      :: cline_merge_algndocs
-        type(cmdline)                      :: cline_merge_shellweights
-        ! other variables
-        type(params)                       :: p_master
-        integer, allocatable               :: parts(:,:)
-        type(qsys_ctrl)                    :: qscripts
-        integer                            :: iter
-        type(chash)                        :: myq_descr, job_descr
-        type(qsys_factory)                 :: qsys_fac
-        class(qsys_base), pointer          :: myqsys
-        character(len=STDLEN)              :: str
-        ! make master parameters
-        p_master = params(cline, checkdistr=.false.)
-        ! setup the environment for distributed execution
-        call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr)
-        ! prepare job description
-        call cline%gen_job_descr(job_descr)
-        ! split stack
-        if( stack_is_split(p_master%ext, p_master%nparts) )then
-            ! check that the stack partitions are of correct sizes
-            call stack_parts_of_correct_sizes(p_master%ext, parts)
-        else
-            call xsplit%execute( cline )
-        endif
-        ! prepare scripts
-        call qsys_cleanup(p_master)
-        call qscripts%generate_scripts(job_descr, p_master%ext, myq_descr, ALGNFBODY)
-        ! manage job scheduling
-        call qscripts%schedule_jobs
-        ! merge matrices
-        call xmerge_shellweights%execute(cline)
-        call qsys_cleanup(p_master)
-        call del_files('shellweights_part', p_master%nparts, ext='.bin')
-        call simple_end('**** SIMPLE_DISTR_SHELLWEIGHT3D NORMAL STOP ****', print_simple=.false.)
-    end subroutine exec_shellweight3D_distr
-
-    ! PRIME3D
-
-    subroutine exec_prime3D_init_distr( self, cline )
-        use simple_commander_prime3D
-        use simple_commander_rec
-        class(prime3D_init_distr_commander), intent(inout) :: self
-        class(cmdline),                      intent(inout) :: cline
-        ! constants
-        logical, parameter           :: debug=.false.
-        ! commanders
-        type(prime3D_init_commander) :: xprime3D_init
-        type(volassemble_commander)  :: xvolassemble
-        type(split_commander)        :: xsplit
-        ! command lines
-        type(cmdline)                :: cline_volassemble
-        ! other variables
-        type(params)                 :: p_master
-        integer, allocatable         :: parts(:,:)
-        type(qsys_ctrl)              :: qscripts
-        character(len=STDLEN)        :: vol
-        type(chash)                  :: myq_descr, job_descr
-         type(qsys_factory)          :: qsys_fac
-        class(qsys_base), pointer    :: myqsys
-        ! make master parameters
-        p_master = params(cline, checkdistr=.false.)
-        ! setup the environment for distributed execution
-        call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr)
-        ! prepare job description
-        call cline%gen_job_descr(job_descr)
-        ! init
-        if( cline%defined('vol1') )then
-           vol = trim(p_master%vols(1))
-        else
-           vol = trim('startvol_state01'//p_master%ext)
-        endif
-        ! split stack
-        if( stack_is_split(p_master%ext, p_master%nparts) )then
-            ! check that the stack partitions are of correct sizes
-            call stack_parts_of_correct_sizes(p_master%ext, parts)
-        else
-            call xsplit%execute( cline )
-        endif
-        ! prepare command lines from prototype master
-        cline_volassemble = cline
-        call cline_volassemble%set( 'outvol', vol )
-        call cline_volassemble%set( 'eo', 'no' )
-        ! prepare scripts
-        call qsys_cleanup(p_master)
-        call qscripts%generate_scripts(job_descr, p_master%ext, myq_descr)
-        ! manage job scheduling
-        call qscripts%schedule_jobs
-        ! assemble volumes
-        call xvolassemble%execute( cline_volassemble )
-        ! termination
-        call qsys_cleanup(p_master)
-        call simple_end('**** SIMPLE_DISTR_PRIME3D_INIT NORMAL STOP ****', print_simple=.false.)
-    end subroutine exec_prime3D_init_distr
-
-    subroutine exec_prime3D_distr( self, cline )
-        use simple_commander_prime3D
-        use simple_commander_mask
-        use simple_commander_rec
-        use simple_oris, only: oris
-        class(prime3D_distr_commander), intent(inout) :: self
-        class(cmdline),                 intent(inout) :: cline
-        ! constants
-        logical,           parameter :: DEBUG=.false.
-        character(len=32), parameter :: ALGNFBODY = 'algndoc_'
-        character(len=32), parameter :: ITERFBODY = 'prime3Ddoc_'
-        character(len=32), parameter :: VOLFBODY  = 'recvol_state'
-        ! commanders
-        type(prime3D_init_distr_commander)  :: xprime3D_init_distr
-        type(shellweight3D_distr_commander) :: xshellweight3D_distr
-        type(recvol_distr_commander)        :: xrecvol_distr
-        type(prime3D_commander)             :: xprime3D
-        type(resrange_commander)            :: xresrange
-        type(merge_algndocs_commander)      :: xmerge_algndocs
-        type(volassemble_commander)         :: xvolassemble
-        type(eo_volassemble_commander)      :: xeo_volassemble
-        type(check3D_conv_commander)        :: xcheck3D_conv
-        type(split_commander)               :: xsplit
-        ! command lines
-        type(cmdline)                       :: cline_recvol_distr
-        type(cmdline)                       :: cline_prime3D_init
-        type(cmdline)                       :: cline_resrange
-        type(cmdline)                       :: cline_check3D_conv
-        type(cmdline)                       :: cline_merge_algndocs
-        type(cmdline)                       :: cline_volassemble
-        type(cmdline)                       :: cline_shellweight3D
-        ! other variables
-        type(params)                        :: p_master
-        integer, allocatable                :: parts(:,:)
-        type(qsys_ctrl)                     :: qscripts
-        type(oris)                          :: os
-        character(len=STDLEN)               :: vol, vol_iter, oritab, str, str_iter, str_state, cmd_str
-        integer                             :: state, iter, status, cnt
-        real                                :: frac_srch_space
-        type(chash)                         :: myq_descr, job_descr
-        type(qsys_factory)                  :: qsys_fac
-        class(qsys_base), pointer           :: myqsys
-        ! make master parameters
-        p_master = params(cline, checkdistr=.false.)
-        ! make oritab
-        call os%new(p_master%nptcls)
-        ! options check
-        if( p_master%automsk.eq.'yes' )stop 'Automasking not supported yet' ! automask deactivated for now
-        if( p_master%nstates>1 .and. p_master%dynlp.eq.'yes' )&
-            &stop 'Incompatible options: nstates>1 and dynlp=yes'
-        if( p_master%automsk.eq.'yes' .and. p_master%dynlp.eq.'yes' )&
-            &stop 'Incompatible options: automsk=yes and dynlp=yes'
-        if( p_master%eo.eq.'yes' .and. p_master%dynlp.eq.'yes' )&
-            &stop 'Incompatible options: eo=yes and dynlp=yes'
-        ! setup the environment for distributed execution
-        call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr)
-
-        ! initialise
-        if( .not. cline%defined('nspace') ) call cline%set('nspace', 1000.)
-        call cline%set( 'box', real(p_master%box) )
-        ! prepare command lines from prototype master
-        cline_recvol_distr   = cline
-        cline_prime3D_init   = cline
-        cline_resrange       = cline
-        cline_check3D_conv   = cline
-        cline_merge_algndocs = cline
-        cline_volassemble    = cline
-        cline_shellweight3D  = cline
-        ! initialise static command line parameters and static job description parameter
-        call cline_recvol_distr%set( 'prg', 'recvol' )       ! required for distributed call
-        call cline_prime3D_init%set( 'prg', 'prime3D_init' ) ! required for distributed call
-        call cline_shellweight3D%set('prg', 'shellweight3D') ! required for distributed call
-        call cline_merge_algndocs%set( 'nthr', 1. )
-        call cline_merge_algndocs%set( 'fbody',  ALGNFBODY)
-        call cline_merge_algndocs%set( 'nptcls', real(p_master%nptcls) )
-        call cline_merge_algndocs%set( 'ndocs',  real(p_master%nparts) )
-        call cline_check3D_conv%set( 'box',    real(p_master%box))
-        call cline_check3D_conv%set( 'nptcls', real(p_master%nptcls))
-        call cline_volassemble%set( 'nthr', 1. )
-
-        ! SPLIT STACK
-        if( stack_is_split(p_master%ext, p_master%nparts) )then
-            ! check that the stack partitions are of correct sizes
-            call stack_parts_of_correct_sizes(p_master%ext, parts)
-        else
-            call xsplit%execute( cline )
-        endif
-
-        ! GENERATE STARTING MODELS & ORIENTATIONS
-        ! Orientations
-        if( cline%defined('oritab') )then
-            oritab=trim(p_master%oritab)
-        else
-            oritab='prime3D_startdoc.txt'
-        endif
-        ! Models
-        if( .not.cline%defined('oritab') .and. .not.cline%defined('vol1') )then
-            ! ab-initio
-            call xprime3D_init_distr%execute( cline_prime3D_init )
-            call cline%set( 'vol1', trim('startvol_state01'//p_master%ext) )
-            call cline%set( 'oritab', oritab )
-        else if( cline%defined('oritab') .and. .not.cline%defined('vol1') )then
-            ! reconstructions needed
-            call xrecvol_distr%execute( cline_recvol_distr )
-            do state = 1,p_master%nstates
-                ! rename volumes and updates cline
-                str_state = int2str_pad(state,2)
-                vol = trim( VOLFBODY )//trim(str_state)//p_master%ext
-                str = 'startvol_state'//trim(str_state)//p_master%ext
-                call rename( trim(vol), trim(str) )
-                vol = 'vol'//trim(int2str(state))
-                call cline%set( trim(vol), trim(str) )
-            enddo
-        else if( .not.cline%defined('oritab') .and. cline%defined('vol1') )then
-            if( p_master%nstates > 1 )stop 'orientations doc at least must be provided for nstates>1'
-        else
-            ! all good
-        endif
-
-        ! DYNAMIC LOW-PASS
-        if( p_master%dynlp.eq.'yes' )then
-            if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
-                ! all good
-            else
-                call xresrange%execute( cline_resrange )
-                ! initial low-pass
-                if( .not. cline%defined('lpstart') )then
-                    call cline%set('lpstart', cline_resrange%get_rarg('lpstart') )
-                    p_master%lpstart = cline%get_rarg('lpstart')
-                endif
-                ! final low-pass
-                if( .not.cline%defined('lpstop') )then
-                    call cline%set('lpstop', cline_resrange%get_rarg('lpstop') )
-                    p_master%lpstop = cline%get_rarg('lpstop')
-                endif
-            endif
-            ! initial fourier index
-            p_master%find = int( ( real(p_master%box-1)*p_master%smpd ) / p_master%lpstart )
-            call cline_check3D_conv%set( 'update_res', 'no' )
-            call cline_check3D_conv%set( 'find', real(p_master%find) )
-            call cline%set( 'find', real(p_master%find) )
-        endif
-
-        ! prepare Prime3D job description
-        call cline%gen_job_descr(job_descr)
-
-        ! MAIN LOOP
-        iter = p_master%startit-1
-        do
-            iter = iter+1
-            str_iter = int2str_pad(iter,3)
-            write(*,'(A)')   '>>>'
-            write(*,'(A,I6)')'>>> ITERATION ', iter
-            write(*,'(A)')   '>>>'
-            call qsys_cleanup(p_master)
-            ! PREPARE PRIME3D SCRIPTS
-            if( cline%defined('oritab') )then
-                call os%read(trim(cline%get_carg('oritab')))
-                frac_srch_space = os%get_avg('frac')
-                call job_descr%set( 'oritab', trim(oritab) )
-                call cline_shellweight3D%set( 'oritab', trim(oritab) )
-                if( p_master%l_shellw .and. frac_srch_space >= 50.  )then
-                    call xshellweight3D_distr%execute(cline_shellweight3D)
-                endif
-            endif
-            call job_descr%set( 'startit', trim(int2str(iter)) )
-            call qscripts%generate_scripts(job_descr, p_master%ext, myq_descr, ALGNFBODY)
-            ! PRIMED3D JOB SCHEDULING
-            call qscripts%schedule_jobs
-            ! ASSEMBLE ALIGNMENT DOCS
-            oritab = trim(ITERFBODY)//trim(str_iter)//'.txt'    
-            call cline%set( 'oritab', oritab )
-            call cline_shellweight3D%set( 'oritab', trim(oritab) )
-            call cline_merge_algndocs%set( 'outfile', trim(oritab) )
-            call xmerge_algndocs%execute( cline_merge_algndocs )
-            ! ASSEMBLE VOLUMES
-            call cline_volassemble%set( 'oritab', trim(oritab) )
-            if( p_master%eo.eq.'yes' )then            
-                call del_file('fsc_state01.bin')
-                call xeo_volassemble%execute( cline_volassemble )
-            else
-                ! TAKEN OUT FOR DEBUGGING PURPOSES, TO SEE IF THIS IS WHAT STRESSES THE FILE-SYSTEM OUT
-                call xvolassemble%execute( cline_volassemble )
-                ! str_state = int2str_pad(1,2)
-                ! cmd_str = 'cp '//trim(cline%get_carg('vol1'))//' '//trim(VOLFBODY)//trim(str_state)//p_master%ext
-                ! call exec_cmdline(cmd_str)
-                ! JUST COPYING THE VOLUME TO SEE IF THAT REDUCES I/O STRESS
-            endif
-            ! rename volumes and update job_descr
-            do state = 1,p_master%nstates
-                str_state = int2str_pad(state,2)
-                vol      = trim(VOLFBODY)//trim(str_state)//p_master%ext
-                vol_iter = trim(VOLFBODY)//trim(str_state)//'_iter'//trim(str_iter)//p_master%ext
-                call rename( trim(vol), trim(vol_iter) )
-                vol = 'vol'//trim(int2str(state))
-                call job_descr%set( trim(vol), trim(vol_iter) )
-                call cline_shellweight3D%set( trim(vol), trim(vol_iter) )
-            enddo
-            ! CONVERGENCE
-            call cline_check3D_conv%set( 'oritab', trim(oritab) )
-            call xcheck3D_conv%execute( cline_check3D_conv )
-            if( iter >= p_master%startit+2 )then
-                ! after a minimum of 2 iterations
-                if( cline_check3D_conv%get_carg('converged') .eq. 'yes' ) exit
-            endif
-            if( iter >= p_master%maxits ) exit
-            ! ITERATION DEPENDENT UPDATES
-            if( cline_check3D_conv%defined('trs') .and. .not.job_descr%isthere('trs') )then
-                ! activates shift search if frac >= 90
-                str = real2str(cline_check3D_conv%get_rarg('trs'))
-                call job_descr%set( 'trs', trim(str) )
-            endif
-            if( p_master%dynlp.eq.'yes' )then
-                ! dynamic resolution update
-                if( cline_check3D_conv%get_carg('update_res').eq.'yes' )then
-                    p_master%find = p_master%find + p_master%fstep  ! fourier index update
-                    call job_descr%set( 'find', int2str(p_master%find) )
-                    call cline_check3D_conv%set( 'find', real(p_master%find) )
-               endif
-            endif
-        end do
-        call qsys_cleanup(p_master)
-
-        ! POST PROCESSING ?
-
-        ! report the last iteration on exit
-        call cline%set('endit', real(iter))
-        ! end gracefully
-        call simple_end('**** SIMPLE_DISTR_PRIME3D NORMAL STOP ****')
-    end subroutine exec_prime3D_distr
 
     ! PRIME2D_INIT
 
@@ -816,6 +475,346 @@ contains
         call del_files('nnmat_part', p_master%nparts, ext='.bin')
         call simple_end('**** SIMPLE_DISTR_FIND_NNIMGS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_find_nnimgs_distr
+
+    ! PRIME3D_INIT
+
+    subroutine exec_prime3D_init_distr( self, cline )
+        use simple_commander_prime3D
+        use simple_commander_rec
+        class(prime3D_init_distr_commander), intent(inout) :: self
+        class(cmdline),                      intent(inout) :: cline
+        ! constants
+        logical, parameter           :: debug=.false.
+        ! commanders
+        type(prime3D_init_commander) :: xprime3D_init
+        type(volassemble_commander)  :: xvolassemble
+        type(split_commander)        :: xsplit
+        ! command lines
+        type(cmdline)                :: cline_volassemble
+        ! other variables
+        type(params)                 :: p_master
+        integer, allocatable         :: parts(:,:)
+        type(qsys_ctrl)              :: qscripts
+        character(len=STDLEN)        :: vol
+        type(chash)                  :: myq_descr, job_descr
+         type(qsys_factory)          :: qsys_fac
+        class(qsys_base), pointer    :: myqsys
+        ! make master parameters
+        p_master = params(cline, checkdistr=.false.)
+        ! setup the environment for distributed execution
+        call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr)
+        ! prepare job description
+        call cline%gen_job_descr(job_descr)
+        ! init
+        if( cline%defined('vol1') )then
+           vol = trim(p_master%vols(1))
+        else
+           vol = trim('startvol_state01'//p_master%ext)
+        endif
+        ! split stack
+        if( stack_is_split(p_master%ext, p_master%nparts) )then
+            ! check that the stack partitions are of correct sizes
+            call stack_parts_of_correct_sizes(p_master%ext, parts)
+        else
+            call xsplit%execute( cline )
+        endif
+        ! prepare command lines from prototype master
+        cline_volassemble = cline
+        call cline_volassemble%set( 'outvol', vol )
+        call cline_volassemble%set( 'eo', 'no' )
+        ! prepare scripts
+        call qsys_cleanup(p_master)
+        call qscripts%generate_scripts(job_descr, p_master%ext, myq_descr)
+        ! manage job scheduling
+        call qscripts%schedule_jobs
+        ! assemble volumes
+        call xvolassemble%execute( cline_volassemble )
+        ! termination
+        call qsys_cleanup(p_master)
+        call simple_end('**** SIMPLE_DISTR_PRIME3D_INIT NORMAL STOP ****', print_simple=.false.)
+    end subroutine exec_prime3D_init_distr
+
+    ! PRIME3D
+
+    subroutine exec_prime3D_distr( self, cline )
+        use simple_commander_prime3D
+        use simple_commander_mask
+        use simple_commander_rec
+        use simple_oris, only: oris
+        class(prime3D_distr_commander), intent(inout) :: self
+        class(cmdline),                 intent(inout) :: cline
+        ! constants
+        logical,           parameter :: DEBUG=.false.
+        character(len=32), parameter :: ALGNFBODY = 'algndoc_'
+        character(len=32), parameter :: ITERFBODY = 'prime3Ddoc_'
+        character(len=32), parameter :: VOLFBODY  = 'recvol_state'
+        ! commanders
+        type(prime3D_init_distr_commander)  :: xprime3D_init_distr
+        type(shellweight3D_distr_commander) :: xshellweight3D_distr
+        type(recvol_distr_commander)        :: xrecvol_distr
+        type(prime3D_commander)             :: xprime3D
+        type(resrange_commander)            :: xresrange
+        type(merge_algndocs_commander)      :: xmerge_algndocs
+        type(volassemble_commander)         :: xvolassemble
+        type(eo_volassemble_commander)      :: xeo_volassemble
+        type(check3D_conv_commander)        :: xcheck3D_conv
+        type(split_commander)               :: xsplit
+        ! command lines
+        type(cmdline)                       :: cline_recvol_distr
+        type(cmdline)                       :: cline_prime3D_init
+        type(cmdline)                       :: cline_resrange
+        type(cmdline)                       :: cline_check3D_conv
+        type(cmdline)                       :: cline_merge_algndocs
+        type(cmdline)                       :: cline_volassemble
+        type(cmdline)                       :: cline_shellweight3D
+        ! other variables
+        type(params)                        :: p_master
+        integer, allocatable                :: parts(:,:)
+        type(qsys_ctrl)                     :: qscripts
+        type(oris)                          :: os
+        character(len=STDLEN)               :: vol, vol_iter, oritab, str, str_iter, str_state, cmd_str
+        integer                             :: state, iter, status, cnt
+        real                                :: frac_srch_space
+        type(chash)                         :: myq_descr, job_descr
+        type(qsys_factory)                  :: qsys_fac
+        class(qsys_base), pointer           :: myqsys
+        ! make master parameters
+        p_master = params(cline, checkdistr=.false.)
+        ! make oritab
+        call os%new(p_master%nptcls)
+        ! options check
+        if( p_master%automsk.eq.'yes' )stop 'Automasking not supported yet' ! automask deactivated for now
+        if( p_master%nstates>1 .and. p_master%dynlp.eq.'yes' )&
+            &stop 'Incompatible options: nstates>1 and dynlp=yes'
+        if( p_master%automsk.eq.'yes' .and. p_master%dynlp.eq.'yes' )&
+            &stop 'Incompatible options: automsk=yes and dynlp=yes'
+        if( p_master%eo.eq.'yes' .and. p_master%dynlp.eq.'yes' )&
+            &stop 'Incompatible options: eo=yes and dynlp=yes'
+        ! setup the environment for distributed execution
+        call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr)
+
+        ! initialise
+        if( .not. cline%defined('nspace') ) call cline%set('nspace', 1000.)
+        call cline%set( 'box', real(p_master%box) )
+        ! prepare command lines from prototype master
+        cline_recvol_distr   = cline
+        cline_prime3D_init   = cline
+        cline_resrange       = cline
+        cline_check3D_conv   = cline
+        cline_merge_algndocs = cline
+        cline_volassemble    = cline
+        cline_shellweight3D  = cline
+        ! initialise static command line parameters and static job description parameter
+        call cline_recvol_distr%set( 'prg', 'recvol' )       ! required for distributed call
+        call cline_prime3D_init%set( 'prg', 'prime3D_init' ) ! required for distributed call
+        call cline_shellweight3D%set('prg', 'shellweight3D') ! required for distributed call
+        call cline_merge_algndocs%set( 'nthr', 1. )
+        call cline_merge_algndocs%set( 'fbody',  ALGNFBODY)
+        call cline_merge_algndocs%set( 'nptcls', real(p_master%nptcls) )
+        call cline_merge_algndocs%set( 'ndocs',  real(p_master%nparts) )
+        call cline_check3D_conv%set( 'box',    real(p_master%box))
+        call cline_check3D_conv%set( 'nptcls', real(p_master%nptcls))
+        call cline_volassemble%set( 'nthr', 1. )
+
+        ! SPLIT STACK
+        if( stack_is_split(p_master%ext, p_master%nparts) )then
+            ! check that the stack partitions are of correct sizes
+            call stack_parts_of_correct_sizes(p_master%ext, parts)
+        else
+            call xsplit%execute( cline )
+        endif
+
+        ! GENERATE STARTING MODELS & ORIENTATIONS
+        ! Orientations
+        if( cline%defined('oritab') )then
+            oritab=trim(p_master%oritab)
+        else
+            oritab='prime3D_startdoc.txt'
+        endif
+        ! Models
+        if( .not.cline%defined('oritab') .and. .not.cline%defined('vol1') )then
+            ! ab-initio
+            call xprime3D_init_distr%execute( cline_prime3D_init )
+            call cline%set( 'vol1', trim('startvol_state01'//p_master%ext) )
+            call cline%set( 'oritab', oritab )
+        else if( cline%defined('oritab') .and. .not.cline%defined('vol1') )then
+            ! reconstructions needed
+            call xrecvol_distr%execute( cline_recvol_distr )
+            do state = 1,p_master%nstates
+                ! rename volumes and updates cline
+                str_state = int2str_pad(state,2)
+                vol = trim( VOLFBODY )//trim(str_state)//p_master%ext
+                str = 'startvol_state'//trim(str_state)//p_master%ext
+                call rename( trim(vol), trim(str) )
+                vol = 'vol'//trim(int2str(state))
+                call cline%set( trim(vol), trim(str) )
+            enddo
+        else if( .not.cline%defined('oritab') .and. cline%defined('vol1') )then
+            if( p_master%nstates > 1 )stop 'orientations doc at least must be provided for nstates>1'
+        else
+            ! all good
+        endif
+
+        ! DYNAMIC LOW-PASS
+        if( p_master%dynlp.eq.'yes' )then
+            if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
+                ! all good
+            else
+                call xresrange%execute( cline_resrange )
+                ! initial low-pass
+                if( .not. cline%defined('lpstart') )then
+                    call cline%set('lpstart', cline_resrange%get_rarg('lpstart') )
+                    p_master%lpstart = cline%get_rarg('lpstart')
+                endif
+                ! final low-pass
+                if( .not.cline%defined('lpstop') )then
+                    call cline%set('lpstop', cline_resrange%get_rarg('lpstop') )
+                    p_master%lpstop = cline%get_rarg('lpstop')
+                endif
+            endif
+            ! initial fourier index
+            p_master%find = int( ( real(p_master%box-1)*p_master%smpd ) / p_master%lpstart )
+            call cline_check3D_conv%set( 'update_res', 'no' )
+            call cline_check3D_conv%set( 'find', real(p_master%find) )
+            call cline%set( 'find', real(p_master%find) )
+        endif
+
+        ! prepare Prime3D job description
+        call cline%gen_job_descr(job_descr)
+
+        ! MAIN LOOP
+        iter = p_master%startit-1
+        do
+            iter = iter+1
+            str_iter = int2str_pad(iter,3)
+            write(*,'(A)')   '>>>'
+            write(*,'(A,I6)')'>>> ITERATION ', iter
+            write(*,'(A)')   '>>>'
+            call qsys_cleanup(p_master)
+            ! PREPARE PRIME3D SCRIPTS
+            if( cline%defined('oritab') )then
+                call os%read(trim(cline%get_carg('oritab')))
+                frac_srch_space = os%get_avg('frac')
+                call job_descr%set( 'oritab', trim(oritab) )
+                call cline_shellweight3D%set( 'oritab', trim(oritab) )
+                if( p_master%l_shellw .and. frac_srch_space >= 50.  )then
+                    call xshellweight3D_distr%execute(cline_shellweight3D)
+                endif
+            endif
+            call job_descr%set( 'startit', trim(int2str(iter)) )
+            call qscripts%generate_scripts(job_descr, p_master%ext, myq_descr, ALGNFBODY)
+            ! PRIMED3D JOB SCHEDULING
+            call qscripts%schedule_jobs
+            ! ASSEMBLE ALIGNMENT DOCS
+            oritab = trim(ITERFBODY)//trim(str_iter)//'.txt'    
+            call cline%set( 'oritab', oritab )
+            call cline_shellweight3D%set( 'oritab', trim(oritab) )
+            call cline_merge_algndocs%set( 'outfile', trim(oritab) )
+            call xmerge_algndocs%execute( cline_merge_algndocs )
+            ! ASSEMBLE VOLUMES
+            call cline_volassemble%set( 'oritab', trim(oritab) )
+            if( p_master%eo.eq.'yes' )then            
+                call del_file('fsc_state01.bin')
+                call xeo_volassemble%execute( cline_volassemble )
+            else
+                call xvolassemble%execute( cline_volassemble )
+            endif
+            ! rename volumes and update job_descr
+            do state = 1,p_master%nstates
+                str_state = int2str_pad(state,2)
+                vol      = trim(VOLFBODY)//trim(str_state)//p_master%ext
+                vol_iter = trim(VOLFBODY)//trim(str_state)//'_iter'//trim(str_iter)//p_master%ext
+                call rename( trim(vol), trim(vol_iter) )
+                vol = 'vol'//trim(int2str(state))
+                call job_descr%set( trim(vol), trim(vol_iter) )
+                call cline_shellweight3D%set( trim(vol), trim(vol_iter) )
+            enddo
+            ! CONVERGENCE
+            call cline_check3D_conv%set( 'oritab', trim(oritab) )
+            call xcheck3D_conv%execute( cline_check3D_conv )
+            if( iter >= p_master%startit+2 )then
+                ! after a minimum of 2 iterations
+                if( cline_check3D_conv%get_carg('converged') .eq. 'yes' ) exit
+            endif
+            if( iter >= p_master%maxits ) exit
+            ! ITERATION DEPENDENT UPDATES
+            if( cline_check3D_conv%defined('trs') .and. .not.job_descr%isthere('trs') )then
+                ! activates shift search if frac >= 90
+                str = real2str(cline_check3D_conv%get_rarg('trs'))
+                call job_descr%set( 'trs', trim(str) )
+            endif
+            if( p_master%dynlp.eq.'yes' )then
+                ! dynamic resolution update
+                if( cline_check3D_conv%get_carg('update_res').eq.'yes' )then
+                    p_master%find = p_master%find + p_master%fstep  ! fourier index update
+                    call job_descr%set( 'find', int2str(p_master%find) )
+                    call cline_check3D_conv%set( 'find', real(p_master%find) )
+               endif
+            endif
+        end do
+        call qsys_cleanup(p_master)
+
+        ! POST PROCESSING ?
+
+        ! report the last iteration on exit
+        call cline%set('endit', real(iter))
+        ! end gracefully
+        call simple_end('**** SIMPLE_DISTR_PRIME3D NORMAL STOP ****')
+    end subroutine exec_prime3D_distr
+
+    ! SHELLWEIGHT3D
+
+    subroutine exec_shellweight3D_distr( self, cline )
+        use simple_commander_prime3D
+        use simple_commander_distr
+        class(shellweight3D_distr_commander), intent(inout) :: self
+        class(cmdline),                       intent(inout) :: cline
+        ! constants
+        logical, parameter                 :: DEBUG=.false.
+        character(len=32), parameter       :: ALGNFBODY = 'algndoc_'
+        ! commanders
+        type(split_commander)              :: xsplit
+        type(shellweight3D_commander)      :: xshellweight3D
+        type(merge_algndocs_commander)     :: xmerge_algndocs
+        type(merge_shellweights_commander) :: xmerge_shellweights
+        ! command lines
+        type(cmdline)                      :: cline_merge_algndocs
+        type(cmdline)                      :: cline_merge_shellweights
+        ! other variables
+        type(params)                       :: p_master
+        integer, allocatable               :: parts(:,:)
+        type(qsys_ctrl)                    :: qscripts
+        integer                            :: iter
+        type(chash)                        :: myq_descr, job_descr
+        type(qsys_factory)                 :: qsys_fac
+        class(qsys_base), pointer          :: myqsys
+        character(len=STDLEN)              :: str
+        ! make master parameters
+        p_master = params(cline, checkdistr=.false.)
+        ! setup the environment for distributed execution
+        call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr)
+        ! prepare job description
+        call cline%gen_job_descr(job_descr)
+        ! split stack
+        if( stack_is_split(p_master%ext, p_master%nparts) )then
+            ! check that the stack partitions are of correct sizes
+            call stack_parts_of_correct_sizes(p_master%ext, parts)
+        else
+            call xsplit%execute( cline )
+        endif
+        ! prepare scripts
+        call qsys_cleanup(p_master)
+        call qscripts%generate_scripts(job_descr, p_master%ext, myq_descr, ALGNFBODY)
+        ! manage job scheduling
+        call qscripts%schedule_jobs
+        ! merge matrices
+        call xmerge_shellweights%execute(cline)
+        call qsys_cleanup(p_master)
+        call del_files('shellweights_part', p_master%nparts, ext='.bin')
+        call simple_end('**** SIMPLE_DISTR_SHELLWEIGHT3D NORMAL STOP ****', print_simple=.false.)
+    end subroutine exec_shellweight3D_distr
+
+    ! RECVOL
 
     subroutine exec_recvol_distr( self, cline )
         use simple_commander_rec

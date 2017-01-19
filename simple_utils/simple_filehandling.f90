@@ -7,6 +7,15 @@ interface arr2file
     module procedure arr2file_2
 end interface arr2file
 
+! Declare the interface for POSIX fsync function
+interface
+    function fsync (fd) bind(c,name="fsync")
+    use iso_c_binding, only: c_int
+        integer(c_int), value :: fd
+        integer(c_int) :: fsync
+    end function fsync
+end interface
+
 contains
 
     !> \brief  is for counting the number of lines in a textfile

@@ -16,16 +16,20 @@ use simple_commander_hlev_wflows
 implicit none
 
 ! DISTRIBUTED COMMANDERS
+! pre-processing
 type(unblur_movies_distr_commander)      :: xunblur_movies_distr
 type(unblur_tomo_movies_distr_commander) :: xunblur_tomo_movies_distr
 type(ctffind_distr_commander)            :: xctffind_distr
-type(shellweight3D_distr_commander)      :: xshellweight3D_distr
-type(recvol_distr_commander)             :: xrecvol_distr
-type(prime3D_init_distr_commander)       :: xprime3D_init_distr
-type(prime3D_distr_commander)            :: xprime3D_distr
+! PRIME2D
 type(prime2D_init_distr_commander)       :: xprime2D_init_distr
 type(prime2D_distr_commander)            :: xprime2D_distr
 type(find_nnimgs_distr_commander)        :: xfind_nnimgs_distr
+! PRIME3D
+type(prime3D_init_distr_commander)       :: xprime3D_init_distr
+type(prime3D_distr_commander)            :: xprime3D_distr
+type(shellweight3D_distr_commander)      :: xshellweight3D_distr
+type(recvol_distr_commander)             :: xrecvol_distr
+! high-level workflows
 type(ini3D_from_cavgs_commander)         :: xini3D_from_cavgs
 
 ! OTHER DECLARATIONS
@@ -111,6 +115,9 @@ select case(prg)
         if( .not. cline%defined('tomo')    ) call cline%set('tomo',  'yes')
         ! execute
         call xunblur_tomo_movies_distr%execute(cline)
+
+    ! CTFFIND
+
     case( 'ctffind' )
         !==Program ctffind
         !
@@ -143,40 +150,101 @@ select case(prg)
         ! execute
         call xctffind_distr%execute(cline)
 
-    ! PRIME3D
+    ! PRIME2D
 
-    case('shellweight3D')
-        !==Program shellweight3D
+    case( 'prime2D_init' )
+        !==Program simple_prime2D_init
         !
-        ! <shellweight3D/begin> is a program for calculating the shell-by-shell resolution weights in a global sense, so that 
-        ! particles that do contribute with higher resolution information (as measure by the FRC) are given the appropriate 
-        ! weight. <shellweight3D/end>
+        ! <prime2D/begin> is a reference-free 2D alignment/clustering algorithm adopted from the prime3D 
+        ! probabilistic  ab initio 3D reconstruction algorithm. Do not search the origin shifts initially,
+        ! when the cluster centers are of low quality. If your images are far off centre, use XXX
+        ! instead to shiftalign the images beforehand. <prime2D/end>
         !
-        ! set required keys     
+        ! set required keys
         keys_required(1) = 'stk'
-        keys_required(2) = 'vol1'
-        keys_required(3) = 'smpd'
-        keys_required(4) = 'msk' 
-        keys_required(5) = 'oritab'
-        keys_required(6) = 'ctf'
-        keys_required(7) = 'nthr'
-        keys_required(8) = 'nparts'
+        keys_required(2) = 'smpd'
+        keys_required(3) = 'ncls'
+        keys_required(4) = 'ctf'
+        keys_required(5) = 'nthr'
+        keys_required(6) = 'nparts'
         ! set optional keys
         keys_optional(1) = 'ncunits'
-        keys_optional(2) = 'deftab'
-        keys_optional(3) = 'automsk'
-        keys_optional(4) = 'mw'
-        keys_optional(5) = 'amsklp'
-        keys_optional(6) = 'edge'
-        keys_optional(7) = 'binwidth'
-        keys_optional(8) = 'inner'
-        keys_optional(9) = 'width'        
+        keys_optional(2) = 'oritab'
+        keys_optional(3) = 'deftab'
+        keys_optional(4) = 'filwidth'
+        keys_optional(5) = 'srch_inpl'        
         ! parse command line
-        call cline%parse(keys_required(:8), keys_optional(:9))
+        call cline%parse(keys_required(:6), keys_optional(:5))
         ! execute
-        call xshellweight3D_distr%execute(cline)
+        call xprime2D_init_distr%execute(cline)
+    case( 'prime2D' )
+        !==Program simple_prime2D
+        !
+        ! <prime2D/begin> is a reference-free 2D alignment/clustering algorithm adopted from the prime3D 
+        ! probabilistic  ab initio 3D reconstruction algorithm. Do not search the origin shifts initially,
+        ! when the cluster centers are of low quality. If your images are far off centre, use XXX
+        ! instead to shiftalign the images beforehand. <prime2D/end>
+        !
+        ! set required keys
+        keys_required(1)  = 'stk'
+        keys_required(2)  = 'smpd'
+        keys_required(3)  = 'msk'
+        keys_required(4)  = 'ncls'
+        keys_required(5)  = 'ctf'
+        keys_required(6)  = 'nparts'
+        keys_required(7)  = 'nthr'
+        ! set optional keys
+        keys_optional(1)  = 'ncunits'
+        keys_optional(2)  = 'deftab'
+        keys_optional(3)  = 'refine'
+        keys_optional(4)  = 'refs'
+        keys_optional(5)  = 'oritab'
+        keys_optional(6)  = 'hp'
+        keys_optional(7)  = 'lp'
+        keys_optional(8)  = 'trs'
+        keys_optional(9)  = 'automsk'
+        keys_optional(10) = 'amsklp'
+        keys_optional(11) = 'inner'
+        keys_optional(12) = 'width'
+        keys_optional(13) = 'startit'
+        keys_optional(14) = 'maxits'
+        keys_optional(15) = 'filwidth'
+        keys_optional(16) = 'srch_inpl'
+        keys_optional(17) = 'nnn'
+        keys_optional(18) = 'minp'        
+        ! parse command line
+        call cline%parse(keys_required(:7), keys_optional(:18))
         ! set defaults
-        call cline%set('outfile', 'shellweight3D_doc.txt')
+        if( .not. cline%defined('lp')     ) call cline%set('lp',     20.)
+        if( .not. cline%defined('eo')     ) call cline%set('eo',    'no')
+        if( .not. cline%defined('amsklp') ) call cline%set('amsklp', 25.)
+        if( .not. cline%defined('edge')   ) call cline%set('edge',   20.)
+        ! execute
+        call xprime2D_distr%execute(cline)
+    case( 'find_nnimgs' )
+        !==Program find_nnimgs
+        !
+        ! <find_nnimgs/begin> is a program for cidentifying the nnn nearest neighbor
+        ! images for each image in the inputted stack. <find_nnimgs/end>
+        !
+        ! set required keys
+        keys_required(1) = 'stk'
+        keys_required(2) = 'smpd'
+        keys_required(3) = 'msk'
+        keys_required(4) = 'nthr'
+        keys_required(5) = 'nparts'
+        ! set optional keys
+        keys_optional(1) = 'ncunits'
+        keys_optional(2) = 'nnn'
+        keys_optional(3) = 'lp'
+        keys_optional(4) = 'hp'
+        ! parse command line
+        call cline%parse(keys_required(:5), keys_optional(:4))
+        ! execute
+        call xfind_nnimgs_distr%execute(cline)
+
+    ! PRIME3D
+
     case('prime3D_init')
         !==Program prime3D_init
         !
@@ -292,99 +360,38 @@ select case(prg)
         endif
         ! execute
         call xprime3D_distr%execute(cline)
-
-    ! PRIME2D
-
-    case( 'prime2D_init' )
-        !==Program simple_prime2D_init
+    case('shellweight3D')
+        !==Program shellweight3D
         !
-        ! <prime2D/begin> is a reference-free 2D alignment/clustering algorithm adopted from the prime3D 
-        ! probabilistic  ab initio 3D reconstruction algorithm. Do not search the origin shifts initially,
-        ! when the cluster centers are of low quality. If your images are far off centre, use XXX
-        ! instead to shiftalign the images beforehand. <prime2D/end>
+        ! <shellweight3D/begin> is a program for calculating the shell-by-shell resolution weights in a global sense, so that 
+        ! particles that do contribute with higher resolution information (as measure by the FRC) are given the appropriate 
+        ! weight. <shellweight3D/end>
         !
-        ! set required keys
+        ! set required keys     
         keys_required(1) = 'stk'
-        keys_required(2) = 'smpd'
-        keys_required(3) = 'ncls'
-        keys_required(4) = 'ctf'
-        keys_required(5) = 'nthr'
-        keys_required(6) = 'nparts'
+        keys_required(2) = 'vol1'
+        keys_required(3) = 'smpd'
+        keys_required(4) = 'msk' 
+        keys_required(5) = 'oritab'
+        keys_required(6) = 'ctf'
+        keys_required(7) = 'nthr'
+        keys_required(8) = 'nparts'
         ! set optional keys
         keys_optional(1) = 'ncunits'
-        keys_optional(2) = 'oritab'
-        keys_optional(3) = 'deftab'
-        keys_optional(4) = 'filwidth'
-        keys_optional(5) = 'srch_inpl'        
+        keys_optional(2) = 'deftab'
+        keys_optional(3) = 'automsk'
+        keys_optional(4) = 'mw'
+        keys_optional(5) = 'amsklp'
+        keys_optional(6) = 'edge'
+        keys_optional(7) = 'binwidth'
+        keys_optional(8) = 'inner'
+        keys_optional(9) = 'width'        
         ! parse command line
-        call cline%parse(keys_required(:6), keys_optional(:5))
+        call cline%parse(keys_required(:8), keys_optional(:9))
         ! execute
-        call xprime2D_init_distr%execute(cline)
-    case( 'prime2D' )
-        !==Program simple_prime2D
-        !
-        ! <prime2D/begin> is a reference-free 2D alignment/clustering algorithm adopted from the prime3D 
-        ! probabilistic  ab initio 3D reconstruction algorithm. Do not search the origin shifts initially,
-        ! when the cluster centers are of low quality. If your images are far off centre, use XXX
-        ! instead to shiftalign the images beforehand. <prime2D/end>
-        !
-        ! set required keys
-        keys_required(1)  = 'stk'
-        keys_required(2)  = 'smpd'
-        keys_required(3)  = 'msk'
-        keys_required(4)  = 'ncls'
-        keys_required(5)  = 'ctf'
-        keys_required(6)  = 'nparts'
-        keys_required(7)  = 'nthr'
-        ! set optional keys
-        keys_optional(1)  = 'ncunits'
-        keys_optional(2)  = 'deftab'
-        keys_optional(3)  = 'refine'
-        keys_optional(4)  = 'refs'
-        keys_optional(5)  = 'oritab'
-        keys_optional(6)  = 'hp'
-        keys_optional(7)  = 'lp'
-        keys_optional(8)  = 'trs'
-        keys_optional(9)  = 'automsk'
-        keys_optional(10) = 'amsklp'
-        keys_optional(11) = 'inner'
-        keys_optional(12) = 'width'
-        keys_optional(13) = 'startit'
-        keys_optional(14) = 'maxits'
-        keys_optional(15) = 'filwidth'
-        keys_optional(16) = 'srch_inpl'
-        keys_optional(17) = 'nnn'
-        keys_optional(18) = 'minp'        
-        ! parse command line
-        call cline%parse(keys_required(:7), keys_optional(:18))
+        call xshellweight3D_distr%execute(cline)
         ! set defaults
-        if( .not. cline%defined('lp')     ) call cline%set('lp',     20.)
-        if( .not. cline%defined('eo')     ) call cline%set('eo',    'no')
-        if( .not. cline%defined('amsklp') ) call cline%set('amsklp', 25.)
-        if( .not. cline%defined('edge')   ) call cline%set('edge',   20.)
-        ! execute
-        call xprime2D_distr%execute(cline)
-    case( 'find_nnimgs' )
-        !==Program find_nnimgs
-        !
-        ! <find_nnimgs/begin> is a program for cidentifying the nnn nearest neighbor
-        ! images for each image in the inputted stack. <find_nnimgs/end>
-        !
-        ! set required keys
-        keys_required(1) = 'stk'
-        keys_required(2) = 'smpd'
-        keys_required(3) = 'msk'
-        keys_required(4) = 'nthr'
-        keys_required(5) = 'nparts'
-        ! set optional keys
-        keys_optional(1) = 'ncunits'
-        keys_optional(2) = 'nnn'
-        keys_optional(3) = 'lp'
-        keys_optional(4) = 'hp'
-        ! parse command line
-        call cline%parse(keys_required(:5), keys_optional(:4))
-        ! execute
-        call xfind_nnimgs_distr%execute(cline)
+        call cline%set('outfile', 'shellweight3D_doc.txt')
     case( 'recvol' )
         !==Program recvol
         !
@@ -444,9 +451,10 @@ select case(prg)
         keys_optional(10) = 'binwidth'
         keys_optional(11) = 'inner'
         keys_optional(12) = 'width'
-        keys_optional(13) = 'shbarrier'
+        keys_optional(13) = 'nspace'
+        keys_optional(14) = 'shbarrier'
         ! parse command line
-        call cline%parse(keys_required(:6), keys_optional(:13))
+        call cline%parse(keys_required(:6), keys_optional(:14))
         ! execute
         call xini3D_from_cavgs%execute( cline )
     case DEFAULT

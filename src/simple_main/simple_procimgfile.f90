@@ -184,18 +184,19 @@ contains
     end subroutine pad_imgfile
     
     !>  \brief  is for resizing
-    subroutine resize_imgfile( fname2resize, fname, ldim_new, fromptop )
-        character(len=*), intent(in)  :: fname2resize, fname !< filenames
-        integer, intent(in)           :: ldim_new(3)         !< desired dimensions
-        integer, intent(in), optional :: fromptop(2)         !< particle range
+    subroutine resize_imgfile( fname2resize, fname, smpd, ldim_new, fromptop )
+        character(len=*),  intent(in) :: fname2resize, fname !< filenames
+        real,              intent(in) :: smpd                !< original sampling distance
+        integer,           intent(in) :: ldim_new(3)         !< desired dimensions
+        integer, optional, intent(in) :: fromptop(2)         !< particle range
         type(image)                   :: img, img_resized
         integer                       :: n, i, ldim(3), prange(2), cnt, sz
         call find_ldim_nptcls(fname2resize, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'resize_imgfile' )
         ! do the work
-        call img%new(ldim,1.)
-        call img_resized%new(ldim_new,1.)
+        call img%new(ldim,smpd)
+        call img_resized%new(ldim_new,smpd) ! this sampling distance will be overwritten
         write(*,'(a)') '>>> RESIZING IMAGES'
         if( present(fromptop) )then
             prange = fromptop
@@ -250,11 +251,12 @@ contains
     end subroutine clip_imgfile
     
     !>  \brief  is for resizing and clipping
-    subroutine resize_and_clip_imgfile( fname2resize, fname, ldim_new, ldim_clip, fromptop )
-        character(len=*), intent(in)  :: fname2resize, fname !< filenames
-        integer, intent(in)           :: ldim_new(3)         !< scaled dimensions
-        integer, intent(in)           :: ldim_clip(3)        !< clipped (final) dimensions
-        integer, intent(in), optional :: fromptop(2)         !< particle range
+    subroutine resize_and_clip_imgfile( fname2resize, fname, smpd, ldim_new, ldim_clip, fromptop )
+        character(len=*),  intent(in) :: fname2resize, fname !< filenames
+        real,              intent(in) :: smpd                !< original sampling distance
+        integer,           intent(in) :: ldim_new(3)         !< scaled dimensions
+        integer,           intent(in) :: ldim_clip(3)        !< clipped (final) dimensions
+        integer, optional, intent(in) :: fromptop(2)         !< particle range
         type(image)                   :: img, img_resized, img_clip
         integer                       :: n, i, ldim(3), prange(2), cnt, sz
         call find_ldim_nptcls(fname2resize, ldim, n)
@@ -262,8 +264,7 @@ contains
         call raise_exception_imgfile( n, ldim, 'resize_imgfile' )
         ! do the work
         call img%new(ldim,1.)
-        call img_resized%new(ldim_new,1.)
-        call img_clip%new(ldim_clip,1.)
+        call img_resized%new(ldim_new,smpd) ! this sampling distance will be overwritten
         write(*,'(a)') '>>> RESIZING IMAGES'
         if( present(fromptop) )then
             prange = fromptop
@@ -285,6 +286,7 @@ contains
                 call img%pad(img_resized)
             endif
             call img_resized%bwd_ft
+            call img_clip%new(ldim_clip,img_resized%get_smpd()) 
             call img_resized%clip(img_clip)
             call img_clip%write(fname, cnt)
         end do

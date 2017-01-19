@@ -108,7 +108,7 @@ contains
         call chdict%push('npeaks',        'nr of nonzero orientation weights{1}')
         call chdict%push('nptcls',        'nr of images in stk/nr of orientations in oritab')
         call chdict%push('nran',          'number of random images to select')
-        call chdict%push('nspace',        'nr of projection directions{20}')
+        call chdict%push('nspace',        'nr of projection directions')
         call chdict%push('nstates',       'nr of states to reconstruct')
         call chdict%push('nthr',          'nr of OpenMP threads{1}')
         call chdict%push('nthr_master',   'nr of OpenMP threads on master node{1}')

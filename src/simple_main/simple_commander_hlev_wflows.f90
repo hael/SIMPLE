@@ -31,26 +31,32 @@ contains
     ! GENERATE INITIAL 3D MODEL FROM CLASS AVERAGES
 
     subroutine exec_ini3D_from_cavgs( self, cline )
-        use simple_commander_comlin, only: symsrch_commander
-        use simple_commander_volops, only: projvol_commander
-        use simple_commander_rec,    only: recvol_commander
-        use simple_strings,          only: int2str_pad, str2int
+        use simple_commander_imgproc, only: scale_commander
+        use simple_commander_comlin,  only: symsrch_commander
+        use simple_commander_volops,  only: projvol_commander
+        use simple_commander_rec,     only: recvol_commander
+        use simple_strings,           only: int2str_pad, str2int
+        use simple_math,              only: autoscale
+        use simple_oris,              only: oris
         class(ini3D_from_cavgs_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         ! constants
-        logical,           parameter  :: DEBUG=.false.
-        real,              parameter  :: LPLIMS(2) = [20.,10.], CENLP=50.
-        integer,           parameter  :: MAXITS_INIT=50, MAXITS_REFINE=100
-        integer,           parameter  :: STATE=1, NPROJS_SYMSRCH=50
-        character(len=32), parameter  :: ITERFBODY = 'prime3Ddoc_'
-        character(len=32), parameter  :: VOLFBODY  = 'recvol_state'
+        logical,               parameter :: DEBUG=.false.
+        real,                  parameter :: LPLIMS(2) = [20.,10.], CENLP=50.
+        integer,               parameter :: MAXITS_INIT=50, MAXITS_REFINE=100
+        integer,               parameter :: STATE=1, NPROJS_SYMSRCH=150
+        character(len=32),     parameter :: ITERFBODY     = 'prime3Ddoc_'
+        character(len=32),     parameter :: VOLFBODY      = 'recvol_state'
+        character(len=STDLEN), parameter :: STKSCALEDBODY = 'stk_sc_ini3D_from_cavgs'
         ! distributed commanders
         type(prime3D_distr_commander) :: xprime3D_distr
         ! shared-mem commanders
+        type(scale_commander)         :: xscale
         type(symsrch_commander)       :: xsymsrch
         type(recvol_commander)        :: xrecvol
         type(projvol_commander)       :: xprojvol
         ! command lines
+        type(cmdline)                 :: cline_scale
         type(cmdline)                 :: cline_prime3D_init
         type(cmdline)                 :: cline_prime3D_refine1
         type(cmdline)                 :: cline_prime3D_refine2
@@ -59,11 +65,12 @@ contains
         type(cmdline)                 :: cline_projvol
         ! other variables
         type(params)                  :: p_master
-        real                          :: iter
+        type(oris)                    :: os
+        real                          :: iter, scale, smpd_sc, msk_sc
         character(len=2)              :: str_state
         character(len=STDLEN)         :: oritab, vol_iter
         logical                       :: srch4symaxis
-        integer                       :: io_stat, pgrp_nr
+        integer                       :: io_stat, pgrp_nr, box_sc
 
         ! set cline defaults
         call cline%set('eo', 'no')
@@ -81,6 +88,7 @@ contains
         endif
 
         ! prepare command lines from prototype master
+        cline_scale           = cline
         cline_prime3D_init    = cline
         cline_prime3D_refine1 = cline
         cline_prime3D_refine2 = cline
@@ -89,46 +97,52 @@ contains
         cline_projvol         = cline
 
         ! initialise command line parameters
-        ! (1) PRIME3D_INIT
+        ! (1) SCALING
+        call autoscale( p_master%box, p_master%msk, p_master%smpd, box_sc, msk_sc, smpd_sc, scale )
+        call cline_scale%set('scale',  scale)
+        call cline_scale%set('clip',   real(box_sc))
+        call cline_scale%set('outstk', trim(STKSCALEDBODY)//p_master%ext)
+        ! (2) PRIME3D_INIT
         call cline_prime3D_init%set('prg', 'prime3D')
+        call cline_prime3D_init%set('stk',  trim(STKSCALEDBODY)//p_master%ext)
+        call cline_prime3D_init%set('smpd', smpd_sc)
+        call cline_prime3D_init%set('msk',  real(msk_sc))
         call cline_prime3D_init%set('ctf', 'no')
         call cline_prime3D_init%set('maxits', real(MAXITS_INIT))
         call cline_prime3D_init%set('dynlp', 'yes') ! better be explicit about the dynlp
-        ! (2) PRIME3D REFINE STEP 1
+        ! (3) PRIME3D REFINE STEP 1
         call cline_prime3D_refine1%set('prg', 'prime3D')
+        call cline_prime3D_refine1%set('stk',  trim(STKSCALEDBODY)//p_master%ext)
+        call cline_prime3D_refine1%set('smpd', smpd_sc)
+        call cline_prime3D_refine1%set('msk',  real(msk_sc))
         call cline_prime3D_refine1%set('ctf', 'no')
         call cline_prime3D_refine1%set('maxits', real(MAXITS_REFINE))
         call cline_prime3D_refine1%set('dynlp', 'no') ! better be explicit about the dynlp
-        if( cline%defined('lp') )then
-            call cline_prime3D_refine1%set('lp', p_master%lp)
-        else
-            call cline_prime3D_refine1%set('lp', LPLIMS(1))
-        endif
         call cline_prime3D_refine1%set('refine', 'shc')
-        ! (3) SYMMETRY AXIS SEARCH
+        ! (4) SYMMETRY AXIS SEARCH
         if( srch4symaxis )then
             ! need to replace original point-group flag with c1
             call cline_prime3D_init%set('pgrp', 'c1') 
             call cline_prime3D_refine1%set('pgrp', 'c1')
             ! symsrch
             call cline_symsrch%set('prg', 'symsrch')
-            call cline_symsrch%delete('stk') ! volumetric symsrch
-            call cline_symsrch%set('nptcls', real(NPROJS_SYMSRCH))
-            call cline_symsrch%set('nspace', real(NPROJS_SYMSRCH))
-            call cline_symsrch%set('cenlp', CENLP)
+            call cline_symsrch%delete('stk')  ! volumetric symsrch
+            call cline_symsrch%set('smpd',    smpd_sc)
+            call cline_symsrch%set('msk',     real(msk_sc))
+            call cline_symsrch%set('nptcls',  real(NPROJS_SYMSRCH))
+            call cline_symsrch%set('nspace',  real(NPROJS_SYMSRCH))
+            call cline_symsrch%set('cenlp',   CENLP)
             call cline_symsrch%set('outfile', 'symdoc.txt')
-            if( cline%defined('lp') )then
-                call cline_symsrch%set('lp', p_master%lp)
-            else
-                call cline_symsrch%set('lp', LPLIMS(1))
-            endif
             if( cline%defined('nthr_master') )then
                 call cline_symsrch%set('nthr', real(p_master%nthr_master))
             endif
-            ! (3.5) RECONSTRUCT SYMMETRISED VOLUME
+            ! (4.5) RECONSTRUCT SYMMETRISED VOLUME
             call cline_recvol%set('prg', 'recvol')
-            call cline_recvol%set('trs', 5.) ! to assure that shifts are being used
-            call cline_recvol%set('ctf', 'no')
+            call cline_recvol%set('stk',  trim(STKSCALEDBODY)//p_master%ext)
+            call cline_recvol%set('smpd', smpd_sc)
+            call cline_recvol%set('msk',  real(msk_sc))
+            call cline_recvol%set('trs',  5.) ! to assure that shifts are being used
+            call cline_recvol%set('ctf',  'no')
             call cline_recvol%set('oritab', 'symdoc.txt')
             if( cline%defined('nthr_master') )then
                 call cline_recvol%set('nthr', real(p_master%nthr_master))
@@ -137,26 +151,25 @@ contains
             call cline_prime3D_refine2%set('oritab', 'symdoc.txt')
             call cline_prime3D_refine2%set('vol1', 'rec_sym'//p_master%ext)
         endif
-        ! (4) PRIME3D REFINE STEP 2
+        ! (5) PRIME3D REFINE STEP 2
         call cline_prime3D_refine2%set('prg', 'prime3D')
+        call cline_prime3D_refine2%set('stk',  trim(STKSCALEDBODY)//p_master%ext)
+        call cline_prime3D_refine2%set('smpd', smpd_sc)
+        call cline_prime3D_refine2%set('msk',  real(msk_sc))
         call cline_prime3D_refine2%set('ctf', 'no')
         call cline_prime3D_refine2%set('maxits', real(MAXITS_REFINE))
         call cline_prime3D_refine2%set('dynlp', 'no') ! better be explicit about the dynlp
         call cline_prime3D_refine2%set('lp', LPLIMS(2))
-        if( cline%defined('lp') )then
-            if( LPLIMS(2) < p_master%lp )then
-                ! nothing to do
-            else
-                ! put back the inputted limit
-                call cline_prime3D_refine2%set('lp', LPLIMS(2))
-            endif
-        endif
         call cline_prime3D_refine2%set('refine', 'shc')
-        ! (5) RE-PROJECT VOLUME
+        ! (6) RE-PROJECT VOLUME
         call cline_projvol%set('prg', 'projvol')
         call cline_projvol%set('outstk', 'reprojs'//p_master%ext)
 
         ! execute commanders
+        write(*,'(A)') '>>>'
+        write(*,'(A)') '>>> AUTO-SCALING CLASS AVERAGES'
+        write(*,'(A)') '>>>'
+        call xscale%execute(cline_scale)
         write(*,'(A)') '>>>'
         write(*,'(A)') '>>> INITIAL 3D MODEL GENERATION WITH PRIME3D'
         write(*,'(A)') '>>>'
@@ -164,11 +177,12 @@ contains
         iter = cline_prime3D_init%get_rarg('endit')
         call set_iter_dependencies
         write(*,'(A)') '>>>'
-        write(*,'(A)') '>>> FIRST PRIME3D REFINEMENT STEP, LP=20, REFINE=SHC'
+        write(*,'(A)') '>>> FIRST PRIME3D REFINEMENT STEP, REFINE=SHC'
         write(*,'(A)') '>>>'
         call cline_prime3D_refine1%set('startit', iter + 1.0)
         call cline_prime3D_refine1%set('oritab', trim(oritab))
         call cline_prime3D_refine1%set('vol1', trim(vol_iter))
+        call update_lp(cline_prime3D_refine1, 1)
         call xprime3D_distr%execute(cline_prime3D_refine1)
         iter = cline_prime3D_refine1%get_rarg('endit')
         call set_iter_dependencies
@@ -178,29 +192,51 @@ contains
             write(*,'(A)') '>>>'
             call cline_symsrch%set('oritab', trim(oritab))
             call cline_symsrch%set('vol1', trim(vol_iter))
+            call update_lp(cline_symsrch, 1)
             call xsymsrch%execute(cline_symsrch)
             write(*,'(A)') '>>>'
-            write(*,'(A)') '>>> RECONSTRUCTION OF SYMMETRISED VOLUME'
+            write(*,'(A)') '>>> 3D RECONSTRUCTION OF SYMMETRISED VOLUME'
             write(*,'(A)') '>>>'
             call xrecvol%execute(cline_recvol)
-            call rename(trim(volfbody)//trim(str_state)//p_master%ext, 'rec_sym'//p_master%ext)  
+            call rename(trim(volfbody)//trim(str_state)//p_master%ext, 'rec_sym'//p_master%ext)
         else
             ! 2nd refinement step needs to use iter dependent vol/oritab
             call cline_prime3D_refine2%set('oritab', trim(oritab))
             call cline_prime3D_refine2%set('vol1', trim(vol_iter))
         endif
+        write(*,'(A)') '>>>'
+        write(*,'(A)') '>>> SECOND PRIME3D REFINEMENT STEP, REFINE=SHC'
+        write(*,'(A)') '>>>'
         call cline_prime3D_refine2%set('startit', iter + 1.0)
+        call update_lp(cline_prime3D_refine2, 2)
         call xprime3D_distr%execute(cline_prime3D_refine2)
         iter = cline_prime3D_refine2%get_rarg('endit')
         call set_iter_dependencies
         write(*,'(A)') '>>>'
+        write(*,'(A)') '>>> 3D RECONSTRUCTION AT NATIVE SAMPLING'
+        write(*,'(A)') '>>>'
+        ! modulate shifts
+        call os%new(p_master%nptcls)
+        call os%read(oritab)
+        call os%mul_shifts(1./scale)
+        call os%write(oritab)
+        ! prepare recvol command line
+        call cline_recvol%set('stk',    p_master%stk)
+        call cline_recvol%set('smpd',   p_master%smpd)
+        call cline_recvol%set('msk',    p_master%msk)
+        call cline_recvol%set('oritab', trim(oritab))
+        ! re-reconstruct volume
+        call xrecvol%execute(cline_recvol)
+        call rename(trim(volfbody)//trim(str_state)//p_master%ext, 'rec_final'//p_master%ext)
+        write(*,'(A)') '>>>'
         write(*,'(A)') '>>> RE-PROJECTION OF THE FINAL VOLUME'
         write(*,'(A)') '>>>'
-        call cline_projvol%set('vol1', trim(vol_iter))
+        call cline_projvol%set('vol1', 'rec_final'//p_master%ext)
         call cline_projvol%set('oritab', trim(oritab))
         call xprojvol%execute(cline_projvol)
 
         ! end gracefully
+        call del_file(trim(STKSCALEDBODY)//p_master%ext)
         call simple_end('**** SIMPLE_INI3D_FROM_CAVGS NORMAL STOP ****')
 
         contains
@@ -211,6 +247,25 @@ contains
                 oritab   = trim(ITERFBODY)//trim(str_iter)//'.txt'
                 vol_iter = trim(VOLFBODY)//trim(str_state)//'_iter'//trim(str_iter)//p_master%ext                
             end subroutine set_iter_dependencies
+
+            subroutine update_lp( cl, refine_step )
+                class(cmdline), intent(inout) :: cl
+                integer,        intent(in)    :: refine_step
+                real :: lpstop, lplim_new
+                if( cline%defined('lp') )then
+                    call cl%set('lp', p_master%lp)
+                else
+                    if( cline_prime3D_init%defined('lpstop') )then
+                        lpstop = cline_prime3D_init%get_rarg('lpstop')
+                        call cl%set('lp', min(LPLIMS(refine_step),lpstop))
+                    else
+                        call cl%set('lp', LPLIMS(refine_step))
+                    endif
+                endif
+                lplim_new = cl%get_rarg('lp')
+                write(*,'(A,1X,F6.2)') '>>> UPDATED LOW-PASS LIMIT TO:', lplim_new
+                write(*,'(A)') '>>>'
+            end subroutine update_lp
 
     end subroutine exec_ini3D_from_cavgs
 

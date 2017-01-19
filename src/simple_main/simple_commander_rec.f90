@@ -78,7 +78,7 @@ contains
         character(len=:), allocatable :: fname
         real, allocatable             :: res05s(:), res0143s(:)
         real                          :: res
-        integer                       :: part, s, alloc_stat, cnt, n, ss, state4name
+        integer                       :: part, s, alloc_stat, n, ss, state4name
         logical                       :: debug=.false.
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
@@ -92,7 +92,6 @@ contains
         call b%vol%new([p%box,p%box,p%box], p%smpd, p%imgkind)
         call eorecvol_read%new(p)
         n = p%nstates*p%nparts
-        cnt = 0
         do ss=1,p%nstates
             if( cline%defined('state') )then
                 s = 1
@@ -102,8 +101,6 @@ contains
             if( debug ) write(*,*) 'processing state: ', s
             call b%eorecvol%reset_all
             do part=1,p%nparts
-                cnt = cnt+1
-                call progress(cnt,n)
                 if( cline%defined('state') )then
                     state4name = p%state
                 else
@@ -154,7 +151,7 @@ contains
         type(build)                   :: b
         character(len=:), allocatable :: fbody
         character(len=STDLEN)         :: recvolname
-        integer                       :: part, s, ss, endit, i, cnt, state4name
+        integer                       :: part, s, ss, endit, i, state4name
         type(reconstructor)           :: recvol_read
         logical                       :: here(2)
         logical, parameter            :: debug=.false.
@@ -170,7 +167,6 @@ contains
         call recvol_read%alloc_rho(p)
         endit = 1
         if( p%eo .eq. 'yes' ) endit = 2
-        cnt = 0
         do ss=1,p%nstates
             if( cline%defined('state') )then
                 s = 1
@@ -180,8 +176,6 @@ contains
             if( debug ) write(*,*) 'processing state: ', s
             call b%recvol%reset
             do part=1,p%nparts
-                cnt = cnt+1
-                call progress(cnt,p%nstates*p%nparts)
                 if( cline%defined('state') )then
                     state4name = p%state
                 else
