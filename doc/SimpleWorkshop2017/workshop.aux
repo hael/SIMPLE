@@ -19,18 +19,21 @@
 \@writefile{toc}{\contentsline {section}{\numberline {1}What Will Be Covered}{1}{section.1}}
 \@writefile{toc}{\contentsline {section}{\numberline {2}DDD Movie Pre-Processing}{1}{section.2}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {2.1}Motion Correction and Dose Weighting}{1}{subsection.2.1}}
-\newlabel{SC@1}{{\caption@xref {??}{ on input line 199}}{4}{Motion Correction and Dose Weighting}{figure.caption.2}{}}
+\newlabel{SC@1}{{\caption@xref {??}{ on input line 205}}{4}{Motion Correction and Dose Weighting}{figure.caption.2}{}}
 \@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces The left part of the power spectrum represents the movie integrated without applying the alignment parameters, whereas the right part is the aligned integrated movie. We see that the motion correction restores coherence, giving radially symmetric Thon rings extending to much higher resolution.\relax }}{4}{figure.caption.2}}
 \@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces The uncorrected movie, integrated without alignment, is blurred and lacks high-resolution contrast, whereas the corrected movie has much higher contrast and better definition.\relax }}{5}{figure.caption.3}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {2.2}CTF Parameter Determination}{5}{subsection.2.2}}
-\newlabel{SC@2}{{\caption@xref {??}{ on input line 212}}{5}{CTF Parameter Determination}{figure.caption.4}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Non-astigmatic CTF (left) vs. astigmatic CTF (right)\relax }}{5}{figure.caption.4}}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Non-astigmatic CTF (left) vs. astigmatic CTF (middle) and schematic 1D CTF profile (right)\relax }}{6}{figure.caption.4}}
 \@writefile{toc}{\contentsline {section}{\numberline {3}2D analysis with PRIME2D}{8}{section.3}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {3.1}Distributed execution of SIMPLE on workstations and clusters}{8}{subsection.3.1}}
-\newlabel{SC@3}{{\caption@xref {??}{ on input line 353}}{9}{Distributed execution of SIMPLE on workstations and clusters}{figure.caption.5}{}}
+\newlabel{SC@2}{{\caption@xref {??}{ on input line 362}}{9}{Distributed execution of SIMPLE on workstations and clusters}{figure.caption.5}{}}
 \@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces \textbf  {Configuration of the parallel PRIME-2D/3D execution on a heterogeneous cluster.} We here represent the nodes in a heterogeneous cluster by two sockets with six CPUs each and 32Gb RAM/node. The best performance of PRIME--2D/3D is going to be obtained by partitioning the jobs into \texttt  {npart=2N} partitions, where \texttt  {N} is the number of nodes. Each partition will then execute six threads \texttt  {nthr=6} and these six threads will get access to half the RAM on the node (\texttt  {memstr=16000}) because we have two sockets per node that need to share the RAM between them\relax }}{9}{figure.caption.5}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {3.2}PRIME2D analysis of TRPV1 membrane receptor images}{9}{subsection.3.2}}
-\newlabel{SC@4}{{\caption@xref {??}{ on input line 377}}{10}{PRIME2D analysis of TRPV1 membrane receptor images}{figure.caption.6}{}}
+\newlabel{SC@3}{{\caption@xref {??}{ on input line 386}}{10}{PRIME2D analysis of TRPV1 membrane receptor images}{figure.caption.6}{}}
 \@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces Individual TRPV1 particle images.\relax }}{10}{figure.caption.6}}
-\newlabel{SC@5}{{\caption@xref {??}{ on input line 435}}{11}{PRIME2D analysis of TRPV1 membrane receptor images}{figure.caption.7}{}}
+\newlabel{SC@4}{{\caption@xref {??}{ on input line 444}}{11}{PRIME2D analysis of TRPV1 membrane receptor images}{figure.caption.7}{}}
 \@writefile{lof}{\contentsline {figure}{\numberline {6}{\ignorespaces TRPV1 class averages from the 0:th (random initialisation), 8:th, and and 16:th (final) iteration of simultaneous 2D alignment and clustering with \leavevmode {\color  {NavyBlue}\texttt  {prime2D}}. Good class averages with clearly discernible projected secondary structure are marked with a green dot and class averages of lower quality are marked with a red dot.\relax }}{11}{figure.caption.7}}
+\@writefile{toc}{\contentsline {section}{\numberline {4}\textit  {Ab initio} 3D reconstruction from class averages using PRIME3D}{11}{section.4}}
+\@writefile{lof}{\contentsline {figure}{\numberline {7}{\ignorespaces Ribosome class averages obtained with PRIME2D.\relax }}{12}{figure.caption.8}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Analysis of ribosome class averages using the \leavevmode {\color  {NavyBlue}\texttt  {ini3D\_from\_cavgs}} program}{12}{subsection.4.1}}
+\@writefile{lof}{\contentsline {figure}{\numberline {8}{\ignorespaces Progress of the 3D model throughout the stochastic PRIME3D search (top). Class averages vs. re-projections of the converged 3D reconstruction (bottom).\relax }}{14}{figure.caption.9}}

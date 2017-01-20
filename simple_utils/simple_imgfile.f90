@@ -141,8 +141,7 @@ contains
             call self%overall_head%write(self%lun_hed)
             if( debug ) print *, 'did write header'
         endif
-        ! call self%overall_head%setPixSz(smpd)
-        call self%setPixSz(smpd)
+        call self%overall_head%setPixSz(smpd)
         if( debug ) call self%overall_head%print
         ! The file-handle now exists
         self%existence = .true.

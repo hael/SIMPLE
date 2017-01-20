@@ -4,4 +4,6 @@ traceback selection
 need output to enable this (to be able to trace from original micographs)
 state=1/0
 
-where did particles come from: index file for original 
+where did particles come from: index file for original
+
+It would be very helpful to have a sense of stage drift ....could unblur output an average value for shifts in x and y after processing an entire data set? Presumably ice movement should be somewhat random but what was left might be the stage?

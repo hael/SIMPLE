@@ -5,3 +5,5 @@
 \BOOKMARK [1][-]{section.3}{2D analysis with PRIME2D}{}% 5
 \BOOKMARK [2][-]{subsection.3.1}{Distributed execution of SIMPLE on workstations and clusters}{section.3}% 6
 \BOOKMARK [2][-]{subsection.3.2}{PRIME2D analysis of TRPV1 membrane receptor images}{section.3}% 7
+\BOOKMARK [1][-]{section.4}{Ab initio 3D reconstruction from class averages using PRIME3D}{}% 8
+\BOOKMARK [2][-]{subsection.4.1}{Analysis of ribosome class averages using the ini3D\137from\137cavgs program}{section.4}% 9
