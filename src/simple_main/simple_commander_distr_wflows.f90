@@ -88,16 +88,23 @@ contains
 
     subroutine exec_unblur_movies_distr( self, cline )
         use simple_commander_preproc
+        use simple_commander_imgproc
         class(unblur_movies_distr_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
+        ! commanders
+        type(stack_commander)              :: xstack
+        ! command lines
+        type(cmdline)                      :: cline_stack
+        ! other vars
         character(len=STDLEN), allocatable :: movienames(:)
-        type(params)              :: p_master
-        type(qsys_ctrl)           :: qscripts
-        character(len=KEYLEN)     :: str
-        type(chash)               :: myq_descr, job_descr
-        integer, allocatable      :: parts(:,:)
-        type(qsys_factory)        :: qsys_fac
-        class(qsys_base), pointer :: myqsys
+        type(params)                       :: p_master
+        type(qsys_ctrl)                    :: qscripts
+        character(len=KEYLEN)              :: str
+        type(chash)                        :: myq_descr, job_descr
+        integer, allocatable               :: parts(:,:)
+        type(qsys_factory)                 :: qsys_fac
+        class(qsys_base), pointer          :: myqsys
+        integer                            :: numlen
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         p_master%nptcls = nlines(p_master%filetab)
@@ -116,6 +123,25 @@ contains
         ! manage job scheduling
         call qscripts%schedule_jobs
         call qsys_cleanup(p_master)
+        ! stack power spectra and thumbnails
+        if( cline%defined('numlen') )then
+            numlen = p_master%numlen
+        else
+            numlen = len(int2str(p_master%nptcls))
+        endif
+        if( cline%defined('fbody') )then
+            call make_filetable('unblur_pspecs.txt', trim(adjustl(p_master%fbody))//'_pspec', p_master%nptcls, p_master%ext, numlen)
+            call make_filetable('unblur_thumbs.txt', trim(adjustl(p_master%fbody))//'_thumb', p_master%nptcls, p_master%ext, numlen)
+        else
+            call make_filetable('unblur_pspecs.txt', '', p_master%nptcls, p_master%ext, numlen, suffix='_pspec')
+            call make_filetable('unblur_thumbs.txt', '', p_master%nptcls, p_master%ext, numlen, suffix='_thumb')
+        endif
+        call cline_stack%set('filetab', 'unblur_pspecs.txt')
+        call cline_stack%set('outstk',  'unblur_pspecs'//p_master%ext)
+        call xstack%execute(cline_stack)
+        call cline_stack%set('filetab', 'unblur_thumbs.txt')
+        call cline_stack%set('outstk',  'unblur_thumbs'//p_master%ext)
+        call xstack%execute(cline_stack)
         call simple_end('**** SIMPLE_DISTR_UNBLUR_MOVIES NORMAL STOP ****')
     end subroutine exec_unblur_movies_distr
 
@@ -271,7 +297,7 @@ contains
         ! split stack
         if( stack_is_split(p_master%ext, p_master%nparts) )then
             ! check that the stack partitions are of correct sizes
-            call stack_parts_of_correct_sizes(p_master%ext, parts)
+            call stack_parts_of_correct_sizes(p_master%ext, parts, p_master%box)
         else
             call xsplit%execute(cline)
         endif
@@ -369,7 +395,7 @@ contains
         ! split stack
         if( stack_is_split(p_master%ext, p_master%nparts) )then
             ! check that the stack partitions are of correct sizes
-            call stack_parts_of_correct_sizes(p_master%ext, parts)
+            call stack_parts_of_correct_sizes(p_master%ext, parts, p_master%box)
         else
             call xsplit%execute(cline)
         endif
@@ -514,7 +540,7 @@ contains
         ! split stack
         if( stack_is_split(p_master%ext, p_master%nparts) )then
             ! check that the stack partitions are of correct sizes
-            call stack_parts_of_correct_sizes(p_master%ext, parts)
+            call stack_parts_of_correct_sizes(p_master%ext, parts, p_master%box)
         else
             call xsplit%execute( cline )
         endif
@@ -540,7 +566,9 @@ contains
         use simple_commander_prime3D
         use simple_commander_mask
         use simple_commander_rec
+        use simple_commander_volops
         use simple_oris, only: oris
+        use simple_math, only: calc_fourier_index, calc_lowpass_lim
         class(prime3D_distr_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         ! constants
@@ -559,6 +587,7 @@ contains
         type(eo_volassemble_commander)      :: xeo_volassemble
         type(check3D_conv_commander)        :: xcheck3D_conv
         type(split_commander)               :: xsplit
+        type(postproc_vol_commander)        :: xpostproc_vol
         ! command lines
         type(cmdline)                       :: cline_recvol_distr
         type(cmdline)                       :: cline_prime3D_init
@@ -567,12 +596,14 @@ contains
         type(cmdline)                       :: cline_merge_algndocs
         type(cmdline)                       :: cline_volassemble
         type(cmdline)                       :: cline_shellweight3D
+        type(cmdline)                       :: cline_postproc_vol
         ! other variables
         type(params)                        :: p_master
         integer, allocatable                :: parts(:,:)
         type(qsys_ctrl)                     :: qscripts
         type(oris)                          :: os
-        character(len=STDLEN)               :: vol, vol_iter, oritab, str, str_iter, str_state, cmd_str
+        character(len=STDLEN)               :: vol, vol_iter, oritab, str, str_iter
+        character(len=STDLEN)               :: str_state, cmd_str, fsc_file
         integer                             :: state, iter, status, cnt
         real                                :: frac_srch_space
         type(chash)                         :: myq_descr, job_descr
@@ -604,6 +635,7 @@ contains
         cline_merge_algndocs = cline
         cline_volassemble    = cline
         cline_shellweight3D  = cline
+        cline_postproc_vol   = cline
         ! initialise static command line parameters and static job description parameter
         call cline_recvol_distr%set( 'prg', 'recvol' )       ! required for distributed call
         call cline_prime3D_init%set( 'prg', 'prime3D_init' ) ! required for distributed call
@@ -619,7 +651,7 @@ contains
         ! SPLIT STACK
         if( stack_is_split(p_master%ext, p_master%nparts) )then
             ! check that the stack partitions are of correct sizes
-            call stack_parts_of_correct_sizes(p_master%ext, parts)
+            call stack_parts_of_correct_sizes(p_master%ext, parts, p_master%box)
         else
             call xsplit%execute( cline )
         endif
@@ -673,7 +705,8 @@ contains
                 endif
             endif
             ! initial fourier index
-            p_master%find = int( ( real(p_master%box-1)*p_master%smpd ) / p_master%lpstart )
+            p_master%find = calc_fourier_index(p_master%lpstart, p_master%box, p_master%smpd)
+            p_master%lp   = p_master%lpstart
             call cline_check3D_conv%set( 'update_res', 'no' )
             call cline_check3D_conv%set( 'find', real(p_master%find) )
             call cline%set( 'find', real(p_master%find) )
@@ -719,14 +752,29 @@ contains
             else
                 call xvolassemble%execute( cline_volassemble )
             endif
-            ! rename volumes and update job_descr
+            ! rename volumes, postprocess & update job_descr
             do state = 1,p_master%nstates
+                ! rename
                 str_state = int2str_pad(state,2)
                 vol      = trim(VOLFBODY)//trim(str_state)//p_master%ext
                 vol_iter = trim(VOLFBODY)//trim(str_state)//'_iter'//trim(str_iter)//p_master%ext
                 call rename( trim(vol), trim(vol_iter) )
+                ! post-process
+                call cline_postproc_vol%set('vol1', trim(vol_iter))
+                fsc_file = 'fsc_state'//trim(str_state)//'.bin'
+                if( file_exists(fsc_file) )then
+                    call cline_postproc_vol%delete('lp')
+                    call cline_postproc_vol%set('fsc', trim(fsc_file))
+                else
+                    call cline_postproc_vol%delete('fsc')
+                    call cline_postproc_vol%set('lp', p_master%lp)
+                endif
+                call xpostproc_vol%execute(cline_postproc_vol)
+
+                ! update job description
                 vol = 'vol'//trim(int2str(state))
                 call job_descr%set( trim(vol), trim(vol_iter) )
+                ! update shell-weight command line
                 call cline_shellweight3D%set( trim(vol), trim(vol_iter) )
             enddo
             ! CONVERGENCE
@@ -747,8 +795,10 @@ contains
                 ! dynamic resolution update
                 if( cline_check3D_conv%get_carg('update_res').eq.'yes' )then
                     p_master%find = p_master%find + p_master%fstep  ! fourier index update
+                    p_master%lp   = calc_lowpass_lim(p_master%find , p_master%box, p_master%smpd)
                     call job_descr%set( 'find', int2str(p_master%find) )
                     call cline_check3D_conv%set( 'find', real(p_master%find) )
+
                endif
             endif
         end do
@@ -798,7 +848,7 @@ contains
         ! split stack
         if( stack_is_split(p_master%ext, p_master%nparts) )then
             ! check that the stack partitions are of correct sizes
-            call stack_parts_of_correct_sizes(p_master%ext, parts)
+            call stack_parts_of_correct_sizes(p_master%ext, parts, p_master%box)
         else
             call xsplit%execute( cline )
         endif
@@ -861,7 +911,7 @@ contains
         ! split stack
         if( stack_is_split(p_master%ext, p_master%nparts) )then
             ! check that the stack partitions are of correct sizes
-            call stack_parts_of_correct_sizes(p_master%ext, parts)
+            call stack_parts_of_correct_sizes(p_master%ext, parts, p_master%box)
         else
             call xsplit%execute( cline )
         endif

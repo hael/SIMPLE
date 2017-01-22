@@ -32,10 +32,10 @@ contains
             allocate(rho_base_str, source='rho_'//rec_base_str)
             call del_files(rec_base_str, p%nparts, ext=p%ext)
             call del_files(rho_base_str, p%nparts, ext=p%ext)
-            call del_files(rec_base_str//'_even', p%nparts, ext=p%ext)
-            call del_files(rec_base_str//'_odd',  p%nparts, ext=p%ext)
-            call del_files(rho_base_str//'_even', p%nparts, ext=p%ext)
-            call del_files(rho_base_str//'_odd',  p%nparts, ext=p%ext)
+            call del_files(rec_base_str, p%nparts, ext=p%ext, suffix='_even')
+            call del_files(rec_base_str, p%nparts, ext=p%ext, suffix='_odd')
+            call del_files(rho_base_str, p%nparts, ext=p%ext, suffix='_even')
+            call del_files(rho_base_str, p%nparts, ext=p%ext, suffix='_odd')
             deallocate(rec_base_str,rho_base_str)
         end do
         ! flush all filehandles
@@ -61,9 +61,10 @@ contains
         is_split = all(stack_parts_exist)
     end function stack_is_split
 
-    subroutine stack_parts_of_correct_sizes( stkext, parts )
+    subroutine stack_parts_of_correct_sizes( stkext, parts, box )
         character(len=4),  intent(in) :: stkext
         integer,           intent(in) :: parts(:,:)
+        integer,           intent(in) :: box
         character(len=:), allocatable :: stack_part_fname
         integer :: ipart, numlen, sz_correct, sz, ldim(3), npart
         npart  = size(parts,1)
@@ -74,6 +75,12 @@ contains
             call find_ldim_nptcls(stack_part_fname, ldim, sz)
             if( sz /= sz_correct )then
                 write(*,*) 'size of ', stack_part_fname, ' is ', sz, ' not ', sz_correct, 'as expected'
+                stop 'simple_qsys_funs :: stack_parts_of_correct_sizes'
+            endif
+            if( ldim(1) == box .and. ldim(2) == box )then
+                ! dimension ok
+            else
+                write(*,*) 'ldim of ', stack_part_fname, ' is ', [ldim(1),ldim(2),1], ' not ', [box,box,1], 'as expected'
                 stop 'simple_qsys_funs :: stack_parts_of_correct_sizes'
             endif
             deallocate(stack_part_fname)
@@ -134,8 +141,7 @@ contains
         if( qsys_name.ne.'local' )then
             if( .not. env%isthere('job_memory_per_task') )stop 'Job memory is required in simple_distr_config.env (job_memory)'
             if( .not. env%isthere('job_name') )             call env%push('job_name','simple_job')
-            ! if( .not. env%isthere('job_time') )             call env%push('job_time', '0-23:59:0') ! TODO: use time_per_image
-            if( .not. env%isthere('job_time') )             call env%push('job_time', '0-2:0:0') ! TODO: use time_per_image
+            if( .not. env%isthere('job_time') )             call env%push('job_time', '0-2:0:0')
             if( .not. env%isthere('job_ntasks') )           call env%push('job_ntasks', '1')
             if( .not. env%isthere('job_cpus_per_task') )    call env%push('job_cpus_per_task', '1')
             if( .not. env%isthere('job_ntasks_per_socket') )call env%push('job_ntasks_per_socket', '1')

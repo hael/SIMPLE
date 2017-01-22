@@ -98,22 +98,44 @@ contains
     end subroutine del_file
 
     !> \brief  is for deleting consequtively numbered files with padded number strings
-    subroutine del_files( body, n, ext, numlen )
+    subroutine del_files( body, n, ext, numlen, suffix )
         character(len=*),           intent(in) :: body
         integer,                    intent(in) :: n
         character(len=*), optional, intent(in) :: ext
         integer,          optional, intent(in) :: numlen
+        character(len=*), optional, intent(in) :: suffix
         character(len=STDLEN), allocatable :: names(:)
         integer :: ifile
         if( present(ext) )then
-            names = make_filenames( body, ext, n, numlen ) 
+            names = make_filenames( body, n, ext, numlen=numlen, suffix=suffix )
         else
-            names = make_dirnames( body, n, numlen ) 
+            names = make_dirnames( body, n, numlen=numlen) 
         endif
         do ifile=1,n
             if( file_exists(names(ifile)) ) call del_file(names(ifile))
         end do
     end subroutine del_files
+
+    !> \brief  is for making a file-table (to be able to commander execute programs that depend on them)
+    subroutine make_filetable( tabname, body, n, ext, numlen, suffix )
+        character(len=*),           intent(in) :: tabname
+        character(len=*),           intent(in) :: body
+        integer,                    intent(in) :: n
+        character(len=*),           intent(in) :: ext
+        integer,          optional, intent(in) :: numlen
+        character(len=*), optional, intent(in) :: suffix
+        character(len=STDLEN), allocatable :: names(:)
+        integer :: ifile, fnr, file_stat
+        names = make_filenames( body, n, ext, numlen=numlen, suffix=suffix )
+        fnr = get_fileunit()
+        open(unit=fnr, status='replace', action='write', file=tabname, iostat=file_stat)
+        call fopen_err('simple_filehandling :: make_filetable', file_stat)
+        do ifile=1,n
+            write(fnr,'(a)') trim(names(ifile))
+        end do 
+        close(unit=fnr)
+        call flush(unit=fnr)
+    end subroutine make_filetable
 
     !> \brief  is for getting a free fileunit
     function get_fileunit( ) result( iunit )
@@ -271,18 +293,25 @@ contains
     end function make_dirnames
 
     !>  \brief  returns numbered file-names with 0-padded integer strings 
-    function make_filenames( body, ext, n, numlen ) result( names )
-         use simple_strings, only: int2str, int2str_pad
-        character(len=*),  intent(in) :: body, ext
-        integer,           intent(in) :: n
-        integer, optional, intent(in) :: numlen
+    function make_filenames( body, n, ext, numlen, suffix ) result( names )
+        use simple_strings, only: int2str, int2str_pad
+        character(len=*),           intent(in) :: body, ext
+        integer,                    intent(in) :: n
+        integer,          optional, intent(in) :: numlen
+        character(len=*), optional, intent(in) :: suffix
         character(len=STDLEN), allocatable :: names(:)
         integer :: nnumlen, i
+        logical :: suffix_present
         nnumlen = len(int2str(n))
         if( present(numlen) ) nnumlen = numlen
+        suffix_present = present(suffix)
         allocate(names(n))
         do i=1,n
-            names(i) = trim(body)//int2str_pad(i, nnumlen)//ext
+            if( suffix_present )then
+                names(i) = trim(body)//int2str_pad(i,nnumlen)//trim(suffix)//ext
+            else
+                names(i) = trim(body)//int2str_pad(i,nnumlen)//ext
+            endif
         end do
     end function make_filenames
 

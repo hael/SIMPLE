@@ -4,21 +4,19 @@ use warnings;
 use strict;
 use Env;
 use simple_user_input;
-my $maxlen = 80;           # maximum string length of shell commands
-my $maxlc  = 53;           # maximum line count (LaTEX table)
-my @cmdlinkeys;            # command line keys
-my %cmdlindict;            # command line dictonary
-my %prginstr;              # program instructions
-my %prgcmdlineinstr;       # program command line instructions
-my @prgclasses;            # program classes
-my @prgkeys;               # program keys
-my @event_indices;         # critical events that define program classification
-my %when2print_prgclasses; # controls timing of printing 
+my $maxlen = 80;     # maximum string length of shell commands
+my $maxlc  = 53;     # maximum line count (LaTEX table)
+my @cmdlinkeys;      # command line keys
+my %cmdlindict;      # command line dictonary
+my %prginstr;        # program instructions
+my %prgcmdlineinstr; # program command line instructions
+my @prgkeys;         # program keys
 if( scalar(@ARGV) < 1 ){
     die "Need to know which kind of documentation to generate (tex|web|f90)\n";
 }
 my $doc = $ARGV[0];
 my $simple_exec_abspath = "$SIMPLE_PATH/production/simple/simple_exec/simple_exec.f90";
+my $simple_distr_exec_abspath = "$SIMPLE_PATH/production/simple/simple_distr_exec/simple_distr_exec.f90";
 
 # PARSERS
 
@@ -32,44 +30,42 @@ while(my$line=<EXEC>){
 }
 close(EXEC);
 
-# generate labels
-my @labels = @prgnames;
-foreach my $label (@labels){
-    $label =~ s/simple_//;
+# extract (unique) distributed program names
+my @prgnames_distr;
+my @prgnames_distr_all;
+open( EXEC, "<$simple_distr_exec_abspath", ) or die "Cannot open: $!\n";
+while(my$line=<EXEC>){
+    if( $line =~ /case\(\s*\'(\w+)\'\s*\)/ ){
+        push(@prgnames_distr_all,$1);
+        if( $1 ~~ @prgnames ){
+        }else{
+            push(@prgnames_distr,$1);
+        }        
+    }
 }
+close(EXEC);
 
 # extract comments
-my $comments = extract_comments($simple_exec_abspath);
-chomp($comments);
+my $tmp1 = extract_comments($simple_exec_abspath);
+chomp($tmp1);
+my $tmp2 = extract_comments($simple_distr_exec_abspath);
+chomp($tmp2);
+my $comments = $tmp1.$tmp2;
 
-# extract program instructions and program classes
+# extract program instructions
 my @comments_split = split('==', $comments);
-my $passed = 0;
 my $cnt = 0;
 foreach my $comment (@comments_split){
-    if( $comment =~ /make all programs have the simple_ prefix/ ){
-        $passed = 1
-    }
-    if( $passed == 1 ){
-        if( $comment =~ /([A-Z2-3]+[-]*\s*[A-Z2-3]*\s*[A-Z2-3]+\sPROGRAMS)/ ){
-            push(@prgclasses,$1);
-            push(@event_indices,$cnt)
-        }
-    }
     if( $comment =~ /\s*\<(.+)\/begin\>((.+))\<.+\/end\>/ ){
         $cnt++;
         my $key = remove_simple($1);
         my $val = remove_simple($2);
         $prginstr{$key} = $val;
-        push(@prgkeys,$key);
+        if( $key ~~ @prgkeys ){
+        }else{
+            push(@prgkeys,$key);
+        }
     }
-}
-foreach my $i (0 .. $#event_indices){
-    $prgclasses[$i] = lc $prgclasses[$i];
-    $prgclasses[$i] =~ s/2d/2D/;
-    $prgclasses[$i] =~ s/3d/3D/;
-    $prgclasses[$i] = ucfirst $prgclasses[$i];
-    $when2print_prgclasses{$prgkeys[$event_indices[$i]]} = $prgclasses[$i];
 }
 
 # generate command-line dictonary
@@ -88,44 +84,59 @@ while(my $keyval=<CMDDICT>){
 }
 
 # generate per-program command line dictonaries
-foreach my $label (@labels){
-    $prgcmdlineinstr{$label} = `$SIMPLE_PATH/bin/simple_exec prg=$label`;
-    $prgcmdlineinstr{$label} =~ s/\n$//; # removes trailing newline character
+foreach my $prg (@prgnames){
+    $prgcmdlineinstr{$prg} = `$SIMPLE_PATH/bin/simple_exec prg=$prg`;
+    $prgcmdlineinstr{$prg} =~ s/\n$//; # removes trailing newline character
+}
+foreach my $prg (@prgnames_distr){
+    $prgcmdlineinstr{$prg} = `$SIMPLE_PATH/bin/simple_distr_exec prg=$prg`;
+    $prgcmdlineinstr{$prg} =~ s/\n$//; # removes trailing newline character
 }
 
 # CODE GENERATORS
 
 if( $doc eq 'tex' ){
-    # print the command-line dictonary precursor
     print_full_latex_cmdlindict();
-    # generate instruction precursors for insertion into the latex manual
-    print_latex_subsection($prgclasses[0]);
-    foreach my $label (@labels){
-        print_latex_instr($label);
-        print_latex_usage($label);
-        if( defined($when2print_prgclasses{$label}) ){
-            print_latex_subsection($when2print_prgclasses{$label});
-        }
+    foreach my $prg (@prgnames){
+        print_latex_instr($prg);
+        print_latex_usage($prg);
+    }
+    foreach my $prg (@prgnames_distr){
+        print_latex_instr($prg);
+        print_latex_usage($prg);
     }
 }elsif( $doc eq 'web' ){
-    # generate accordion precursors for insertion into the webpage
-    foreach my $label (@labels){
-        print_html_instr($label);
+    foreach my $prg (@prgnames){
+        print_html_instr($prg);
+    }
+    foreach my $prg (@prgnames_distr){
+        print_html_instr($prg);
     }
 }elsif( $doc eq 'f90' ){
     print "module simple_gen_doc\n";
     print "implicit none\n\n";
     print "contains\n\n";
-    foreach my $label (@labels){
-        prginstr2f90($label);
+    foreach my $prg (@prgnames){
+        prginstr2f90($prg);
+    }
+    foreach my $prg (@prgnames_distr){
+        prginstr2f90($prg);
     }
     print "    subroutine list_all_simple_programs\n";
-    my @labels_sorted = sort @labels;
-    foreach my $label (@labels_sorted){
-        print "        write(*,'(A)') '$label'\n";
+    my @prgnames_sorted = sort @prgnames;
+    foreach my $prg (@prgnames_sorted){
+        print "        write(*,'(A)') '$prg'\n";
     }
     print "        stop\n";
     print "    end subroutine list_all_simple_programs\n\n";
+    print "    subroutine list_all_simple_distr_programs\n";
+    my @prgnames_distr_sorted = sort @prgnames_distr_all;
+    foreach my $prg (@prgnames_distr_sorted){
+        print "        write(*,'(A)') '$prg'\n";
+    }
+    print "        stop\n";
+    print "    end subroutine list_all_simple_distr_programs\n\n";
+
     print "end module simple_gen_doc\n";
 }else{
     die "Unknown doc type inputted!\n";
@@ -167,11 +178,6 @@ sub print_latex_usage{
     print '\begin{verbatim}', "\n";
     print $prgcmdlineinstr{$label};
     print '\end{verbatim}', "\n\n";
-}
-
-sub print_latex_subsection{
-    my $heading = shift;
-    print '\subsection{'."$heading}\n\n";
 }
 
 sub print_html_instr{

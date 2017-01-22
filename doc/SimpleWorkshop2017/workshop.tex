@@ -32,6 +32,8 @@
 \usepackage{verbatim}
 \usepackage{wrapfig}
 \usepackage{xcolor}
+\usepackage[most]{tcolorbox}
+\usepackage{lipsum}
 % Declarations
 \DeclarePairedDelimiter\floor{\lfloor}{\rfloor}
 \DeclareSymbolFont{cyrletters}{OT2}{wncyr}{m}{n}
@@ -87,9 +89,9 @@ with the SIMPLE program package. We will use the latest unreleased version of SI
 \section{DDD Movie Pre-Processing}
 
 \subsection{Motion Correction and Dose Weighting}
-During image acquisition, beam induced motion, charging and stage drift introduce blurring in the integrated movies. The individual frames need to be aligned with respect to one another in order to restore high-resolution information. Because of radiation damage, the electron dose is kept low during image acquisition, resulting in a very low signal-to-noise ratio (SNR) of the individual movie frames. Until recently, our understanding of damage processes in cryo-EM was based primarily on results obtained with 2D protein crystals (REFS 44,45 REVIEW). The use of 2D crystals provides direct means for assessing the degree of damage by looking at the rate by which high-resolution diffraction spots are fading as a function of the accumulative electron dose. The disadvantage here is that it is impossible to separate spot fading due to loss of crystalline order from intrinsic molecular damage. Images of single rotavirus VP6 particles recorded with a total exposure of 100 electrons/Å2 indicated that single-particles are more robust to damage at low and intermediate resolution than previously thought (REF 46 REVIEW). In the same study, a dose-weighting scheme was introduced that maximizes the SNR of the integrated movie in a dose-dependent manner. This dose-weighting strategy has been adopted by most software packages and proven to be a powerful addition to the ever-growing set of single-particle analysis tools.
+During image acquisition, beam induced motion, charging and stage drift introduce blurring in the integrated movies. The individual frames need to be aligned with respect to one another in order to restore high-resolution information. Because of radiation damage, the electron dose is kept low during image acquisition, resulting in a very low signal-to-noise ratio (SNR) of the individual movie frames. Until recently, our understanding of damage processes in cryo-EM was based primarily on results obtained with 2D protein crystals \citep{baker2010resolution,hayward1979radiation}. The use of 2D crystals provides direct means for assessing the degree of damage by looking at the rate by which high-resolution diffraction spots are fading as a function of the accumulative electron dose. The disadvantage here is that it is impossible to separate spot fading due to loss of crystalline order from intrinsic molecular damage. Images of single rotavirus VP6 particles recorded with a total exposure of 100 electrons/Å2 indicated that single-particles are more robust to damage at low and intermediate resolution than previously thought \citep{grant2015measuring}. In the same study, a dose-weighting scheme was introduced that maximizes the SNR of the integrated movie in a dose-dependent manner. This dose-weighting strategy has been adopted by most software packages and proven to be a powerful addition to the ever-growing set of single-particle analysis tools.
 
-SIMPLE implements a program called \prgname{unblur\_movies} for simultaneous motion-correction and dose-weighting, with the objective of maximising the SNR of the integrated movie in a motion- and dose-dependent manner. Input is a text file \texttt{filetab}, simply listing the individual movies in \texttt{*.mrc} format, the pixel-to-pixel (or sampling) distance \texttt{smpd} (in A), the number of CPU threads to use \texttt{nthr}, the body of the outputted files \texttt{fbody}, the exposure time of the movie \texttt{exp\_time} (in s), the dose-rate at which the movie was acquired \texttt{dose\_rate} (in e/A2/s) and the acceleration voltage of the electron microscope \texttt{kv} (in kV), in addition to a number of other optional parameters that we will not be concerned with here. If we execute \texttt{simple\_exec prg=unblur\_movies} in the prompt, we obtain brief instructions for how to run the program:
+SIMPLE implements a program called \prgname{unblur\_movies} for simultaneous motion-correction and dose-weighting, with the objective of maximising the SNR of the integrated movie in a motion- and dose-dependent manner. Input is a text file \texttt{filetab}, simply listing the individual movies in \texttt{*.mrc} format, the pixel-to-pixel (or sampling) distance \texttt{smpd} (in A), the number of CPU threads to use \texttt{nthr}, the body of the outputted files \texttt{fbody}, the exposure time of the movie \texttt{exp\_time} (in s), the dose-rate at which the movie was acquired \texttt{dose\_rate} (in e/A2/s) and the acceleration voltage of the electron microscope \texttt{kv} (in kV), in addition to a number of other optional parameters that we will not be concerned with here. Please, beware that the \texttt{dose\_rate} is not normally written in any file-headers and you will have to consult with the microscopists acquiring the data about an 'optimal' dosing scheme. There's is no harm in having a total accumulated dose of up to 100 e/A2 since we will apply resolution-dependent dose-weights to the individual frames, but as a rule of thumb the \texttt{dose\_rate} for optimal K2 detector performance should be kept below 5 e/A2/s so you may end up with a very large number of frames per movie and long exposures.  If we execute \texttt{simple\_exec prg=unblur\_movies} in the prompt, we obtain brief instructions for how to run the program:
 \begin{verbatim}
 bash-3.2$ simple_exec prg=unblur_movies
 USAGE:
@@ -210,6 +212,58 @@ To get an idea of the effect of the movie pre-processing in real-space, expand t
 \caption{The uncorrected movie, integrated without alignment, is blurred and lacks high-resolution contrast, whereas the corrected movie has much higher contrast and better definition.}
 \end{figure}
 
+\begin{tcolorbox}[breakable,colback=white,colframe=orange,width=\dimexpr\textwidth+12mm\relax,enlarge left by=-6mm]
+\subsection{Using SIMPLE in the wild\textemdash{}Power Spectrum Analysis and Movie Selection}
+In a real-life scenario, all images in a data set are never perfect. A truck may come driving by the EM suite and cause drift, someone may pass the EM room transporting a big piece of metal, causing the energy filter to become misaligned, or the pump of the autoloader may have been accidentally turned on. The list could be made long. Therefore, it is important that we take a good look at our data. The first round of screening is usually done by looking at power spectra\textemdash{}the \texttt{*pspec*} files produced by \prgname{unblur\_movies}. Typically, you will have executed \texttt{unblur\_movies} in distributed mode in a cluster environment (described below) and a stack of power spectra called \texttt{unblur\_pspecs.mrc} has then been produced. We use EMAN2 to look at the power spectra and Steve will introduce you to EMAN2 in the next session but you can use whatever GUI you like to make the selection. SIMPLE supports MRC and SPIDER files but does not allow you to mix formats, so if you need to convert between MRC and SPIDER file formats, use SIMPLE program \prgname{convert}
+\begin{verbatim}
+bash-3.2$ simple_exec prg=convert
+USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+OPTIONAL
+stk    = particle stack with all images(ptcls.ext)
+vol1   = input volume no1(invol1.ext)
+outstk = output image stack
+outvol = output volume{outvol.ext}
+\end{verbatim}
+Once you have made the selection and have the two stacks \texttt{unblur\_pspecs.mrc} and \texttt{good\_pspecs.mrc} or whatever you select to call them you can propagate the selection to your \texttt{*intg*} and \texttt{*forctf*} files using SIMPLE program \prgname{select}
+\begin{verbatim}
+bash-3.2$ simple_exec prg=select
+USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+stk  = particle stack with all images(ptcls.ext)
+stk2 = 2nd stack(in map2ptcls/select: selected(cavgs).ext)
+
+OPTIONAL
+nthr       = nr of OpenMP threads{1}
+stk3       = 3d stack (in map2ptcls/select: (cavgs)2selectfrom.ext)
+filetab    = list of files(*.txt/*.asc)
+outfile    = output document
+outstk     = output image stack
+dir_select = move selected files to here{selected}
+dir_reject = move rejected files to here{rejected}
+\end{verbatim}
+You would then execute \prgname{select} twice. In the first pass to select your \texttt{*intg*} files:
+\begin{verbatim}
+bash-3.2$ ls *intg* > intg_movies.txt
+bash-3.2$ simple_exec prg=select stk=unblur_pspecs.mrc stk2=good_pspecs.mrc nthr=8 
+filetab=intg_movies.txt dir_select=intg_selected dir_reject=intg_rejected
+\end{verbatim}
+and in the second pass to select your \texttt{*forctf*} files:
+\begin{verbatim}
+bash-3.2$ ls *forctf* > forctf_movies.txt
+bash-3.2$ simple_exec prg=select stk=unblur_pspecs.mrc stk2=good_pspecs.mrc nthr=8 
+filetab=forctf_movies.txt dir_select=forctf_selected dir_reject=forctf_rejected
+\end{verbatim}
+\end{tcolorbox}
+
+\begin{SCfigure}[][h]
+\includegraphics[keepaspectratio=true,scale=0.6]{./spectra/pspecs}
+\caption{Examples of good power spectra (left) and bad power spectra (right)}
+\end{SCfigure}
+
 \subsection{CTF Parameter Determination}
 The contrast transfer function (CTF) mathematically describes how aberrations in a transmission electron microscope modify the recorded image. The assumption we rely on is that the image is a projection of the Coulomb potential distribution of the specimen, convoluted (multiplied in Fourier space) with the CTF and with Gaussian noise added. All 3D reconstruction methodology rely on this or slight variations of this assumption. The CTF is an oscillatory function (we saw the effect of it in the power spectrum in Figure 1) and the frequency of the oscillations depends on the spherical aberration constant \texttt{cs} in mm, which is an instrument specific constant, and  the defocus in microns, which we systematically vary during image acquisition. The reason that we vary the defocus during data collection is that we want to avoid systematic lack of information in certain resolution regions, as no information other than noise is present in the zero crossings of the CTF. By varying the defocus we shift the positions of the zero crossings of the CTF. If astigmatism is present in the image, the Thon rings are no longer radially symmetric but elliptical and we need to take this into account as well.
 
@@ -228,7 +282,7 @@ where $\lambda{}$ is the electron wavelength, $s$ is spatial frequency, $D$ is d
 \caption{Non-astigmatic CTF (left) vs. astigmatic CTF (middle) and schematic 1D CTF profile (right)}
 \end{figure}
 
-SIMPLE implements a wrapper program called \prgname{ctffind} that executes CTFFIND4 (REF) version 4.1.X, producing a SIMPLE conforming CTF parameter document \texttt{deftab}. Input is a text file \texttt{filetab}, simply listing the individual integrated movies in \texttt{*.mrc} format, the pixel-to-pixel (or sampling) distance \texttt{smpd} (in A), the acceleration voltage of the electron microscope \texttt{kv} (in kV), the spherical aberration constant \texttt{cs} in mm and the fraction of amplitude contrast \texttt{fraca} in addition to a number of other optional parameters that we will not be concerned with here. If we execute \texttt{simple\_exec prg=ctffind} in the prompt, we obtain brief instructions for how to run the program:
+SIMPLE implements a wrapper program called \prgname{ctffind} that executes CTFFIND4 \citep{rohou2015ctffind4} version 4.1.X, producing a SIMPLE conforming CTF parameter document \texttt{deftab}. Input is a text file \texttt{filetab}, simply listing the individual integrated movies in \texttt{*.mrc} format, the pixel-to-pixel (or sampling) distance \texttt{smpd} (in A), the acceleration voltage of the electron microscope \texttt{kv} (in kV), the spherical aberration constant \texttt{cs} in mm and the fraction of amplitude contrast \texttt{fraca} in addition to a number of other optional parameters that we will not be concerned with here. If we execute \texttt{simple\_exec prg=ctffind} in the prompt, we obtain brief instructions for how to run the program:
 \begin{verbatim}
 bash-3.2$ simple_exec prg=ctffind
 USAGE:
@@ -296,7 +350,9 @@ Bytes in symmetry header: 0
 
 Working on micrograph 1 of 1
 \end{verbatim}
-In SIMPLE, we have yet to implement any particle picker but rely on EMAN1.9 and EMAN2 for particle identification (Prof Steven Ludtke will cover this). However, if you have \texttt{*.box} files obtained with EMAN you can extract the particle images and their associated CTF parameters using SIMPLE. To illustrate this functionality, we have prepared box files in the \texttt{data} folder for use in conjunction with SIMPLE program \prgname{extract}. As before, we need to prepare file tables. First, we prepare a file table for the motion corrected and dose-weighted integrated movies:
+Output is the file \texttt{ctffind\_output.txt}.
+
+In SIMPLE, we have yet to implement a particle picker but rely on EMAN1.9 and EMAN2 for particle identification (Steve will cover this in the next session). However, if you have \texttt{*.box} files obtained with EMAN you can extract the particle images and their associated CTF parameters using SIMPLE. To illustrate this functionality, we have prepared box files in the \texttt{data} folder for use in conjunction with SIMPLE program \prgname{extract}. As before, we need to prepare file tables. First, we prepare a file table for the motion corrected and dose-weighted integrated movies:
 \begin{verbatim}
 bash-3.2$ ls proteasome_intg* > intg_movies.txt
 \end{verbatim}
@@ -324,7 +380,7 @@ smpd=5.26 paramtab=ctffind_output.txt
 Output is a particle stack \texttt{sumstack.mrc} and its associated parameter file \texttt{extract\_params.txt}.
 
 \section{2D analysis with PRIME2D}
-Algorithms that can rapidly discover clusters corresponding to sets of images with similar projection direction and conformational state play an important role in single-particle analysis. Identification of such clusters allows for enhancement of the signal-to-noise ratio (SNR) by averaging and gives a first glimpse into the character of a dataset. Therefore, clustering algorithms play a pivotal role in initial data quality assessment, \textit{ab initio} 3D reconstruction and analysis of heterogeneous single-particle populations. SIMPLE implements a probabilistic algorithm for simultaneous 2D alignment and clustering, called \prgname{prime2D}. The version we are going to use here is an improved version of the published code (REF) that incorporates a new scheme for Wiener reconstitution (CTF correction) and resolution weighting of the data (unpublished). Grouping tens of thousands of images into several hundred clusters is a computationally intensive job. Therefore, we will now introduce the execution route for running SIMPLE jobs in a distributed computing environment.
+Algorithms that can rapidly discover clusters corresponding to sets of images with similar projection direction and conformational state play an important role in single-particle analysis. Identification of such clusters allows for enhancement of the signal-to-noise ratio (SNR) by averaging and gives a first glimpse into the character of a dataset. Therefore, clustering algorithms play a pivotal role in initial data quality assessment, \textit{ab initio} 3D reconstruction and analysis of heterogeneous single-particle populations. SIMPLE implements a probabilistic algorithm for simultaneous 2D alignment and clustering, called \prgname{prime2D}. The version we are going to use here is an improved version of the published code \citep{reboul2016stochastic} that incorporates a new scheme for Wiener reconstitution (CTF correction) and resolution weighting of the data (unpublished). Grouping tens of thousands of images into several hundred clusters is a computationally intensive job. Therefore, we will now introduce the execution route for running SIMPLE jobs in a distributed computing environment.
 
 \subsection{Distributed execution of SIMPLE on workstations and clusters}
 SIMPLE is executed either via \texttt{simple\_exec}, which implements all individual SIMPLE programs and runs in shared-memory parallelisation mode, or via \texttt{simple\_distr\_exec} that implements higher-level workflows intended for distributed execution on workstations and clusters using a hybrid parallelisation model (distributed \textit{and} shared memory). In cluster environments using a job scheduler (PBS and SLURM are supported by SIMPLE) the file \texttt{simple\_distr\_config.env} in the current working directory controls the execution.
@@ -358,7 +414,7 @@ job_ntasks_per_socket = 1
 We do not need to worry about this file for now as it will be automatically generated when we execute \texttt{simple\_distr\_exec} but if you need help configuring distributed SIMPLE execution, please consult the manual or file a help ticket on the webpage. The two most important parameters for distributed execution is the number of partitions \texttt{nparts} and the number of shared-memory CPU threads \texttt{nthr}. To obtain maximum performance, we need to select sensible values for these parameters, which requires some knowledge about the computer architecture that we are running SIMPLE on.  Consider a heterogeneous cluster with N nodes, two CPU sockets per node and six CPUs per socket.
 \begin{SCfigure}[][h]
 \includegraphics[keepaspectratio=true,scale=0.6]{./CPUtopo/cputopo}
-\caption{\textbf{Configuration of the parallel PRIME-2D/3D execution on a heterogeneous cluster.} We here represent the nodes in  a heterogeneous cluster by two sockets with six CPUs each and 32Gb RAM/node. The best performance of PRIME--2D/3D is going to be obtained by partitioning  the jobs into \texttt{npart=2N} partitions, where \texttt{N} is the number of nodes. Each partition will then execute six threads \texttt{nthr=6} and these six threads will get access to half the RAM on the node (\texttt{memstr=16000}) because we have two sockets per node that need to share the RAM between them}
+\caption{\textbf{Configuration of the parallel PRIME-2D/3D execution on a heterogeneous cluster.} We here represent the nodes in  a heterogeneous cluster by two sockets with six CPUs each and 32Gb RAM/node. The best performance of PRIME--2D/3D is going to be obtained by partitioning  the jobs into \texttt{npart=2N} partitions, where \texttt{N} is the number of nodes. Each partition will then execute six threads \texttt{nthr=6} and these six threads will get access to half the RAM on the node (\texttt{memory=16000}) because we have two sockets per node that need to share the RAM between them}
 \end{SCfigure}
 It rarely pays off to increase the number of shared-memory CPU threads \texttt{nthr} above 10 because the overhead for thread creation with respect to the gain in parallelism is unfavourable. Therefore, if you have a system with say 20 CPUs per socket, then execute 4N partitions instead of increasing \texttt{nthr} to 20. This is a bit technical, but it matters for performance so if you are unsure how to configure your SIMPLE execution please file a help ticket.
 
@@ -379,7 +435,7 @@ ctf=flip
 msk=36
 box=128
 \end{verbatim}
-The individual particle images are quite noisy and it is difficult to gain any understanding about the imaged structure from these images.
+The key-value pair \texttt{ctf=flip} means that the images have been "phase-flipped", \textit{i.e.} the contrast bands inverted by the CTF have been reverted simply by multiplying the Fourier transform of the image with the sign of the CTF. The individual particle images are quite noisy and it is difficult to gain any understanding about the imaged structure from these images.
 \begin{SCfigure}[][h]
 \includegraphics[keepaspectratio=true,scale=0.3]{./trpv1ptcls}
 \caption{Individual TRPV1 particle images.}
@@ -443,8 +499,39 @@ CLASS:     1 POP:  194
 \caption{TRPV1 class averages from the 0:th (random initialisation), 8:th, and and 16:th (final) iteration of simultaneous 2D alignment and clustering with \prgname{prime2D}. Good class averages with clearly discernible projected secondary structure are marked with a green dot and class averages of lower quality are marked with a red dot.}
 \end{SCfigure}
 
+\begin{tcolorbox}[breakable,colback=white,colframe=orange,width=\dimexpr\textwidth+12mm\relax,enlarge left by=-6mm]
+\subsection{Using SIMPLE in the wild\textemdash{}Selecting Good Class Averages and Mapping the Selection to the Particles}
+Most data sets contain images other than perfect particle images (false positives). Sometimes the particles tend to form micro-aggregations and are lying too close to each other or on top of each other. When automatic or semi-automatic particle identification procedures are used, ice-contaminations and carbon edges are often mistaken for particles. Therefore, it is good practice to first cluster the images into 100-200 classes and clean out the unwanted images before proceeding with grouping the data into a larger number of classes and calculating an initial 3D model. You can map the selection done on class averages back to the particle images using the SIMPLE program \prgname{map2ptcls}.
+\begin{verbatim}
+bash-3.2$ simple_exec prg=map2ptcls
+USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+stk    = particle stack with all images(ptcls.ext)
+stk2   = 2nd stack(in map2ptcls/select: selected(cavgs).ext)
+stk3   = 3d stack (in map2ptcls/select: (cavgs)2selectfrom.ext)
+oritab = table (text file) of orientations(*.asc/*.txt)
+
+OPTIONAL
+oritab2   = 2nd table (text file) of orientations(*.asc/*.txt)
+comlindoc = shc_clustering_nclsX.txt
+doclist   = list of oritabs for different states
+deftab    = text file with CTF info(*.txt/*.asc)
+outfile   = output document
+mul       = origin shift multiplication factor{1}
+nthr      = nr of OpenMP threads{1}
+\end{verbatim}
+If your converged class averages from \prgname{prime2D} are \texttt{cavgs\_iter021.mrc} and your selected ones are \texttt{selected.mrc}, then you map the selection back to the particle images with the command:
+\begin{verbatim}
+bash-3.2$ simple_exec prg=map2ptcls stk=sumstack.mrc stk2=selected.mrc
+stk3=cavgs_iter21.mrc oritab=prime2Ddoc_021.txt nthr=8
+\end{verbatim}
+creating a file \texttt{mapped\_ptcls\_params.txt} that you can input with flag \texttt{oritab} to \texttt{simple\_distr\_exec prg=prime2D} to execute a second pass of clustering using the clean set of particles.
+\end{tcolorbox}
+
 \section{\textit{Ab initio} 3D reconstruction from class averages using PRIME3D}
-A major obstacle to achieving near-atomic resolution with single-particle cryo-EM is the problem of generating an accurate \textit{de novo} 3D reconstruction. Many cryo-EM structures are therefore solved by alignment of the images to \textit{a priori} models. The use of prior information, in the form of either a starting model from an independent source or an assumption of a particular point-group symmetry, is associated with the risk of introducing model bias. The model bias phenomenon is often illustrated by alignment of pure noise images to an image of Einstein. The image of Einstein is almost perfectly reproduced when the aligned noise images are averaged (REF 82 ANNREV). It is often stated that low-pass filtering of X-ray maps, before they are used as starting models, eliminates model bias. This is a misunderstanding, as any model can be convincingly reproduced from noisy images (REF 82 ANNREV). Most refinement software, such as FREALIGN (REF 59 ANNREV), RELION (REF 19 ANNREV), or projection matching (REFS 58, 83, 84 ANNREV), depends on an accurate starting model for convergence to a high-resolution map. If the starting model is not supported by the images, there is a potent risk of introducing model bias. To what degree a starting model can bias the final 3D structure needs to be better characterised by methodological studies. We introduced the PRIME3D algorithm to remove the requirement for \textit{a priori} structural knowledge and open the method to  the study of particles with novel structure. Robust algorithms for \textit{ab initio} 3D reconstruction are particularly important for the analysis of small particles with low symmetry.
+A major obstacle to achieving near-atomic resolution with single-particle cryo-EM is the problem of generating an accurate \textit{de novo} 3D reconstruction. Many cryo-EM structures are therefore solved by alignment of the images to \textit{a priori} models. The use of prior information, in the form of either a starting model from an independent source or an assumption of a particular point-group symmetry, is associated with the risk of introducing model bias. The model bias phenomenon is often illustrated by alignment of pure noise images to an image of Einstein. The image of Einstein is almost perfectly reproduced when the aligned noise images are averaged. It is often stated that low-pass filtering of X-ray maps, before they are used as starting models, eliminates model bias. This is a misunderstanding, as any model can be convincingly reproduced from noisy images \citep{henderson2013avoiding}. Most refinement software, such as FREALIGN \citep{Grigorieff:2007aa}, RELION \citep{Scheres:2012aa}, or projection matching \citep{penczek1994ribosome, Hohn:2007aa, Tang:2007aa}, depends on an accurate starting model for convergence to a high-resolution map. If the starting model is not supported by the images, there is a potent risk of introducing model bias. To what degree a starting model can bias the final 3D structure needs to be better characterised by methodological studies. We introduced the PRIME3D algorithm \citep{Elmlund:2013aa} to remove the requirement for \textit{a priori} structural knowledge and open the method to  the study of particles with novel structure. Robust algorithms for \textit{ab initio} 3D reconstruction are particularly important for the analysis of small particles with low symmetry.
 
 \subsection{Analysis of ribosome class averages using the \prgname{ini3D\_from\_cavgs} program}
 SIMPLE was designed primarily for processing single-particle images of molecules with low or no internal symmetry. There are not an awful lot of data sets of asymmetric molecules publicly available, but one of the most popular specimens\textemdash{}one that we all recognise the structure of\textemdash{}is the ribosome. Although the initial idea with PRIME3D was to overcome the need for 2D clustering and generate an accurate 3D map straight from the noisy individual images, we have found that 2D analysis is extremely useful for weeding out bad data and enhance SNR prior to 3D analysis. Processing class averages also makes 3D model validation easier as we can simply compare re-projections of the 3D map with the signal-enhanced class averages used to obtain the 3D reconstruction. We pre-calculated 2D class averages with PRIME 2D from a publicly available ribosome data set (EMPAIR-10028). These are located in the \texttt{3\_PRIME3D/data} folder. Please \texttt{cd} to this folder and have a look at the class averages with EMAN2.
@@ -459,7 +546,7 @@ smpd=2.68
 msk=80
 pgrp=c1
 \end{verbatim}
-Input to \prgname{ini3D\_from\_cavgs} is a stack of class averages \texttt{stk}, sampling distance \texttt{smpd} in A, mask radius \texttt{msk} in pixels, point-group symmetry \texttt{pgrp} (\texttt{c1} in this case), the number of CPU threads \texttt{nthr} and the number of partitions to divide the job into \texttt{nparts}. There are many additional optional parameters but we will only be concerned with one of them here: \texttt{nthr\_master}. \prgname{ini3D\_from\_cavgs} mixes shared-memory parallelisation on the master node with distributed-memory parallelisation on the slave nodes. \texttt{nthr\_master} is used to specify the number of CPU threads to execute on the master node. The output from \prgname{ini3D\_from\_cavgs} is a 3D model ]\texttt{rec\_final.mrc} and re-projections of this model in the orientations assigned to the class averages \texttt{reprojs.mrc}. If we execute \texttt{simple\_distr\_exec prg=ini3D\_from\_cavgs} in the prompt, we obtain brief instructions for how to run the program:
+Input to \prgname{ini3D\_from\_cavgs} is a stack of class averages \texttt{stk}, sampling distance \texttt{smpd} in A, mask radius \texttt{msk} in pixels, point-group symmetry \texttt{pgrp} (\texttt{c1} in this case), the number of CPU threads \texttt{nthr} and the number of partitions to divide the job into \texttt{nparts}. There are many additional optional parameters but we will only be concerned with one of them here: \texttt{nthr\_master}. \prgname{ini3D\_from\_cavgs} mixes shared-memory parallelisation on the master node with distributed-memory parallelisation on the slave nodes. \texttt{nthr\_master} is used to specify the number of CPU threads to execute on the master node. The output from \prgname{ini3D\_from\_cavgs} is a 3D model \texttt{rec\_final.mrc} and re-projections of this model in the orientations assigned to the class averages \texttt{reprojs.mrc}. If we execute \texttt{simple\_distr\_exec prg=ini3D\_from\_cavgs} in the prompt, we obtain brief instructions for how to run the program:
 \begin{verbatim}
 bash-3.2$ simple_distr_exec prg=ini3D_from_cavgs
 USAGE:
@@ -529,30 +616,23 @@ appending output to nohup.out
 \includegraphics[keepaspectratio=true,scale=0.6]{./Pfrib3D/Pfrib3D}
 \caption{Progress of the 3D model throughout the stochastic PRIME3D search (top). Class averages vs. re-projections of the converged 3D reconstruction (bottom).}
 \end{figure}
-%\begin{wrapfigure}{l}{01.0\textwidth}
-%\includegraphics[keepaspectratio=true,scale=0.8]{./Pfrib3D/Pfrib3D}
-%\caption{Progress of the 3D model throughout the stochastic PRIME3D search (top). Class averages vs. re-projections of the converged 3D reconstruction (bottom).}
-%\end{wrapfigure}
-
-
 The overlap parameters are very similar to those in \prgname{prime2D} but the \texttt{CLASS DISTRIBUTION OVERLAP} now corresponds to projection directions rather than 2D classes. New statistics include \texttt{AVERAGE ANGULAR DISTANCE BTW ORIS}, which is the average angular distance (in degrees) between the present and the previous sets of best orientations. Since every particle image is assigned a distribution of orientations with associated weight factors, there is also an estimate of the angular standard deviation of the model \texttt{ANGULAR SDEV OF MODEL}. For asymmetric molecules, we expect the angular standard deviation to decrease as the procedure approaches convergence. However, if we reconstruct symmetric molecules with \texttt{pgrp=c1} or asymmetric molecules with pseudo symmetries, the angular standard deviation may increase with the number of iterations as the orientations become randomly  distributed over the symmetry related configurations.
 
+\begin{tcolorbox}[breakable,colback=white,colframe=orange,width=\dimexpr\textwidth+12mm\relax,enlarge left by=-6mm]
+\subsection{Using SIMPLE in the wild\textemdash{}Mapping Class Orientations and Selection to the Particles}
+In a real-life scenario, you would have used a carefully selected set of class averages \texttt{selected} to obtain your initial 3D model. In order to map this selection and to compose the 3D orientations assigned to the class averages with the 2D orientations/class parameters obtained with \prgname{prime2D} and produce a 3D alignment/selection at the particle level, use \prgname{map2ptcls}. The command is similar to that introduced above. If your converged class averages from \prgname{prime2D} are \texttt{cavgs\_iter021.mrc}, your selected ones are \texttt{selected.mrc}, and your 3D alignment doc is \texttt{prime3Ddoc\_030.txt} then you do the mapping with the command:
+\begin{verbatim}
+bash-3.2$ simple_exec prg=map2ptcls stk=sumstack.mrc stk2=selected.mrc
+stk3=cavgs_iter21.mrc oritab=prime2Ddoc_021.txt oritab2=prime3Ddoc_030.txt nthr=8
+\end{verbatim}
+creating a file \texttt{mapped\_ptcls\_params.txt} that you can input with flag \texttt{oritab} to \texttt{simple\_distr\_exec prg=recvol} to reconstruct a volume from particle images. 
 
 
 
+\end{tcolorbox}
 
 
-
-
-
-
-
-
-
-
-
-
-
-
+\bibliographystyle{elsarticle-harv}
+\bibliography{Prime2bibfile}
 
 \end{document}

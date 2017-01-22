@@ -11,6 +11,7 @@ use simple_defs
 use simple_cmdline, only: cmdline
 use simple_strings, only: str_has_substr
 use simple_jiffys,  only: cmdline_err
+use simple_gen_doc
 use simple_commander_distr_wflows
 use simple_commander_hlev_wflows
 implicit none
@@ -38,8 +39,11 @@ character(len=KEYLEN) :: keys_required(MAXNKEYS)='', keys_optional(MAXNKEYS)=''
 character(len=STDLEN) :: arg, prg, entire_line
 type(cmdline)         :: cline
 integer               :: cmdstat, cmdlen, pos
+logical               :: describe
 call get_command_argument(1, arg, cmdlen, cmdstat)
 call get_command(entire_line)
+if( str_has_substr(entire_line, 'prg=list') ) call list_all_simple_distr_programs
+describe = str_has_substr(entire_line, 'describe=yes')
 pos = index(arg, '=') ! position of '='
 call cmdline_err( cmdstat, cmdlen, arg, pos )
 prg = arg(pos+1:) ! this is the program name
@@ -51,9 +55,9 @@ select case(prg)
     case( 'unblur_movies' )
         !==Program unblur_movies
         !
-        ! <unblur_movies/begin> is a program for movie alignment or unblurring.
+        ! <unblur_movies/begin>is a program for movie alignment or unblurring.
         ! Input is a textfile with absolute paths to movie files in addition to a few obvious input
-        ! parameters. <unblur_movies/end>
+        ! parameters<unblur_movies/end>
         !
         ! set required keys
         keys_required(1)  = 'filetab'
@@ -75,6 +79,7 @@ select case(prg)
         keys_optional(12) = 'scale'
         keys_optional(13) = 'frameavg'
         ! parse command line
+        if( describe ) call print_doc_unblur_movies
         call cline%parse(keys_required(:4), keys_optional(:13))
         ! set defaults
         if( .not. cline%defined('trs')     ) call cline%set('trs',      5.)
@@ -85,9 +90,9 @@ select case(prg)
     case( 'unblur_tomo_movies' )
         !==Program unblur_movies
         !
-        ! <unblur_tomo_movies/begin> is a program for movie alignment or unblurring of tomographic movies.
+        ! <unblur_tomo_movies/begin>is a program for movie alignment or unblurring of tomographic movies.
         ! Input is a textfile with absolute paths to movie files in addition to a few obvious input
-        ! parameters. <unblur_movies/end>
+        ! parameters<unblur_movies/end>
         !
         ! set required keys
         keys_required(1)  = 'tomoseries'
@@ -107,6 +112,7 @@ select case(prg)
         keys_optional(9)  = 'scale'
         keys_optional(10) = 'frameavg'
         ! parse command line
+        if( describe ) call print_doc_unblur_tomo_movies
         call cline%parse(keys_required(:5), keys_optional(:9))
         ! set defaults
         if( .not. cline%defined('trs')     ) call cline%set('trs',      5.)
@@ -121,7 +127,7 @@ select case(prg)
     case( 'ctffind' )
         !==Program ctffind
         !
-        ! <ctffind/begin> is a wrapper program for CTFFIND4 (Grigorieff lab) <ctffind/end> 
+        ! <ctffind/begin>is a wrapper program for CTFFIND4 (Grigorieff lab)<ctffind/end> 
         !
         ! set required keys
         keys_required(1) = 'filetab'
@@ -142,6 +148,7 @@ select case(prg)
         keys_optional(8) = 'expastig'
         keys_optional(9) = 'phaseplate'
         ! parse command line
+        if( describe ) call print_doc_ctffind
         call cline%parse(keys_required(:7), keys_optional(:8))
         ! set defaults
         if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz', 1024.)
@@ -153,12 +160,12 @@ select case(prg)
     ! PRIME2D
 
     case( 'prime2D_init' )
-        !==Program simple_prime2D_init
+        !==Program prime2D_init
         !
-        ! <prime2D/begin> is a reference-free 2D alignment/clustering algorithm adopted from the prime3D 
-        ! probabilistic  ab initio 3D reconstruction algorithm. Do not search the origin shifts initially,
-        ! when the cluster centers are of low quality. If your images are far off centre, use XXX
-        ! instead to shiftalign the images beforehand. <prime2D/end>
+        ! <prime2D_init/begin>is used to produce the initial random references for prime2D execution.
+        ! The random clustering and in-plane alignment is printed in the file
+        ! prime2D_startdoc.txt produced by the program. This file is used together with the initial references
+        ! (startcavgs.ext) to execute prime2D<prime2D_init/end> 
         !
         ! set required keys
         keys_required(1) = 'stk'
@@ -169,21 +176,21 @@ select case(prg)
         keys_required(6) = 'nparts'
         ! set optional keys
         keys_optional(1) = 'ncunits'
-        keys_optional(2) = 'oritab'
-        keys_optional(3) = 'deftab'
+        keys_optional(2) = 'deftab'
+        keys_optional(3) = 'oritab'
         keys_optional(4) = 'filwidth'
-        keys_optional(5) = 'srch_inpl'        
+        keys_optional(5) = 'mul'
+        keys_optional(6) = 'srch_inpl'        
         ! parse command line
-        call cline%parse(keys_required(:6), keys_optional(:5))
+        if( describe ) call print_doc_prime2D_init
+        call cline%parse(keys_required(:6), keys_optional(:6))
         ! execute
         call xprime2D_init_distr%execute(cline)
     case( 'prime2D' )
-        !==Program simple_prime2D
+        !==Program prime2D
         !
-        ! <prime2D/begin> is a reference-free 2D alignment/clustering algorithm adopted from the prime3D 
-        ! probabilistic  ab initio 3D reconstruction algorithm. Do not search the origin shifts initially,
-        ! when the cluster centers are of low quality. If your images are far off centre, use XXX
-        ! instead to shiftalign the images beforehand. <prime2D/end>
+        ! <prime2D/begin>is a reference-free 2D alignment/clustering algorithm adopted from the prime3D 
+        ! probabilistic ab initio 3D reconstruction algorithm<prime2D/end>
         !
         ! set required keys
         keys_required(1)  = 'stk'
@@ -201,31 +208,34 @@ select case(prg)
         keys_optional(5)  = 'oritab'
         keys_optional(6)  = 'hp'
         keys_optional(7)  = 'lp'
-        keys_optional(8)  = 'trs'
-        keys_optional(9)  = 'automsk'
-        keys_optional(10) = 'amsklp'
-        keys_optional(11) = 'inner'
-        keys_optional(12) = 'width'
-        keys_optional(13) = 'startit'
-        keys_optional(14) = 'maxits'
-        keys_optional(15) = 'filwidth'
-        keys_optional(16) = 'srch_inpl'
-        keys_optional(17) = 'nnn'
-        keys_optional(18) = 'minp'        
+        keys_optional(8)  = 'cenlp'
+        keys_optional(9)  = 'trs'
+        keys_optional(10) = 'automsk'
+        keys_optional(11) = 'amsklp'
+        keys_optional(12) = 'inner'
+        keys_optional(13) = 'width'
+        keys_optional(14) = 'startit'
+        keys_optional(15) = 'maxits'
+        keys_optional(16) = 'filwidth'
+        keys_optional(17) = 'srch_inpl'
+        keys_optional(18) = 'nnn'
+        keys_optional(19) = 'minp'        
         ! parse command line
-        call cline%parse(keys_required(:7), keys_optional(:18))
+        if( describe ) call print_doc_prime2D
+        call cline%parse(keys_required(:7), keys_optional(:19))
         ! set defaults
         if( .not. cline%defined('lp')     ) call cline%set('lp',     20.)
         if( .not. cline%defined('eo')     ) call cline%set('eo',    'no')
         if( .not. cline%defined('amsklp') ) call cline%set('amsklp', 25.)
+        if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',  30.)
         if( .not. cline%defined('edge')   ) call cline%set('edge',   20.)
         ! execute
         call xprime2D_distr%execute(cline)
     case( 'find_nnimgs' )
         !==Program find_nnimgs
         !
-        ! <find_nnimgs/begin> is a program for cidentifying the nnn nearest neighbor
-        ! images for each image in the inputted stack. <find_nnimgs/end>
+        ! <find_nnimgs/begin>is a program for cidentifying the nnn nearest neighbor
+        ! images for each image in the inputted stack<find_nnimgs/end>
         !
         ! set required keys
         keys_required(1) = 'stk'
@@ -239,6 +249,7 @@ select case(prg)
         keys_optional(3) = 'lp'
         keys_optional(4) = 'hp'
         ! parse command line
+        if( describe ) call print_doc_find_nnimgs
         call cline%parse(keys_required(:5), keys_optional(:4))
         ! execute
         call xfind_nnimgs_distr%execute(cline)
@@ -248,10 +259,8 @@ select case(prg)
     case('prime3D_init')
         !==Program prime3D_init
         !
-        ! <prime3D_init/begin> is a program for generating a random initial model for initialisation of PRIME3D.
-        ! If the data set is large (>5000 images), generating a random model can be slow. To speedup, set 
-        ! nran to some smaller number, resulting in nran images selected randomly for 
-        ! reconstruction. <prime3D_init/end> 
+        ! <prime3D_init/begin>is a program for generating a random initial model for initialisation of PRIME3D
+        ! <prime3D_init/end> 
         !
         ! set required keys
         keys_required(1) = 'stk'
@@ -272,6 +281,7 @@ select case(prg)
         keys_optional(8) = 'npeaks'
         keys_optional(9) = 'xfel'        
         ! parse command line
+        if( describe ) call print_doc_prime3D_init
         call cline%parse(keys_required(:7), keys_optional(:9))
         ! set defaults
         if( .not. cline%defined('nspace') ) call cline%set('nspace', 1000.)
@@ -280,7 +290,7 @@ select case(prg)
     case('prime3D')
         !==Program prime3D
         !
-        ! <prime3D/begin> is an ab inito reconstruction/refinement program based on probabilistic
+        ! <prime3D/begin>is an ab inito reconstruction/refinement program based on probabilistic
         ! projection matching. PRIME is short for PRobabilistic Initial 3D Model generation for Single-
         ! particle cryo-Electron microscopy. Do not search the origin shifts initially, when the model is 
         ! of very low quality. If your images are far off centre, use stackops with option
@@ -294,19 +304,7 @@ select case(prg)
         ! to do in the ab initio reconstruction step, because when the orientations are mostly random, the 
         ! FSC overestimates the resolution. Once the initial model has converged, we recommend start searching 
         ! the shifts (by setting trs to some nonzero value) and applying the FSC for resolution-
-        ! weighting (by setting eo=yes). In order to be able to use Wiener restoration, give the 
-        ! ctf flag on the command line to indicate what has been done to the images. You then also 
-        ! need to input CTF parameters, for example via deftab=defocus_values.txt. Remember that the 
-        ! defocus values should be given in microns and the astigmatism angle in degrees (one row of the file
-        ! defocus_values.txt may look like: dfx=3.5 dfy=3.3 angast=20.0).
-        ! Note that we do not assume any point-group symmetry in the initial runs. However, the 
-        ! symsrch program can be used to align the 3D reconstruction to its symmetry axis so that 
-        ! future searches can be restricted to the asymmetric unit. Less commonly used and less obvious input 
-        ! parameters are nspace, which  controls the number of reference projections, 
-        ! amsklp, which controls the low-pass limit used in the automask routine, maxits, 
-        ! which controls the maximum number of iterations executed, pgrp, which controls the point-
-        ! group symmetry, assuming that the starting volume is aligned to its principal symmetry axis, 
-        ! edge, which controls the size of the softening edge in the automask routine. <prime3D/end>
+        ! weighting (by setting eo=yes)<prime3D/end>
         !
         ! set required keys
         keys_required(1)  = 'stk'
@@ -319,39 +317,42 @@ select case(prg)
         ! set optional keys
         keys_optional(1)  = 'ncunits'
         keys_optional(2)  = 'deftab'
-        keys_optional(3)  = 'vol2'
+        keys_optional(3)  = 'vol1'
         keys_optional(4)  = 'oritab'
         keys_optional(5)  = 'trs'
         keys_optional(6)  = 'hp'
         keys_optional(7)  = 'lp'
-        keys_optional(8)  = 'dynlp'
-        keys_optional(9)  = 'lpstart'
-        keys_optional(10) = 'lpstop'
-        keys_optional(11) = 'eo'
-        keys_optional(12) = 'refine'
-        keys_optional(13) = 'frac'
-        keys_optional(14) = 'automsk'
-        keys_optional(15) = 'mw'
-        keys_optional(16) = 'amsklp'
-        keys_optional(17) = 'edge'
-        keys_optional(18) = 'binwidth'
-        keys_optional(19) = 'inner'
-        keys_optional(20) = 'width'
-        keys_optional(21) = 'nspace'
-        keys_optional(22) = 'nstates'
-        keys_optional(23) = 'npeaks'
-        keys_optional(24) = 'startit'
-        keys_optional(25) = 'maxits'
-        keys_optional(26) = 'shbarrier'
-        keys_optional(27) = 'noise'
-        keys_optional(28) = 'xfel'
-        keys_optional(29) = 'nnn'
-        keys_optional(30) = 'shellw'  
+        keys_optional(8)  = 'cenlp'
+        keys_optional(9)  = 'dynlp'
+        keys_optional(10)  = 'lpstart'
+        keys_optional(11) = 'lpstop'
+        keys_optional(12) = 'eo'
+        keys_optional(13) = 'refine'
+        keys_optional(14) = 'frac'
+        keys_optional(15) = 'automsk'
+        keys_optional(16) = 'mw'
+        keys_optional(17) = 'amsklp'
+        keys_optional(18) = 'edge'
+        keys_optional(19) = 'binwidth'
+        keys_optional(20) = 'inner'
+        keys_optional(21) = 'width'
+        keys_optional(22) = 'nspace'
+        keys_optional(23) = 'nstates'
+        keys_optional(24) = 'npeaks'
+        keys_optional(25) = 'startit'
+        keys_optional(26) = 'maxits'
+        keys_optional(27) = 'shbarrier'
+        keys_optional(28) = 'noise'
+        keys_optional(29) = 'xfel'
+        keys_optional(30) = 'nnn'
+        keys_optional(31) = 'shellw'  
         ! parse command line
-        call cline%parse(keys_required(:7), keys_optional(:30))
+        if( describe ) call print_doc_prime3D
+        call cline%parse(keys_required(:7), keys_optional(:31))
         ! set defaults
         if( .not. cline%defined('nspace')                  ) call cline%set('nspace', 1000.)
         if( cline%defined('lp') .or. cline%defined('find') ) call cline%set('dynlp',   'no')
+        if( .not. cline%defined('cenlp')  )                  call cline%set('cenlp',    30.)
         if( .not. cline%defined('refine')                  ) call cline%set('refine',  'no')
         if( .not. cline%defined('eo') )then
             call cline%set('eo', 'no')
@@ -363,9 +364,9 @@ select case(prg)
     case('shellweight3D')
         !==Program shellweight3D
         !
-        ! <shellweight3D/begin> is a program for calculating the shell-by-shell resolution weights in a global sense, so that 
+        ! <shellweight3D/begin>is a program for calculating the shell-by-shell resolution weights in a global sense, so that 
         ! particles that do contribute with higher resolution information (as measure by the FRC) are given the appropriate 
-        ! weight. <shellweight3D/end>
+        ! weight<shellweight3D/end>
         !
         ! set required keys     
         keys_required(1) = 'stk'
@@ -387,6 +388,7 @@ select case(prg)
         keys_optional(8) = 'inner'
         keys_optional(9) = 'width'        
         ! parse command line
+        if( describe ) call print_doc_shellweight3D
         call cline%parse(keys_required(:8), keys_optional(:9))
         ! execute
         call xshellweight3D_distr%execute(cline)
@@ -395,7 +397,18 @@ select case(prg)
     case( 'recvol' )
         !==Program recvol
         !
-        ! <recvol/begin>  <recvol/end> 
+        ! <recvol/begin>is a program for reconstructing volumes from MRC and SPIDER stacks, given input 
+        ! orientations and state assignments. The algorithm is based on direct Fourier inversion with a 
+        ! Kaiser-Bessel (KB) interpolation kernel. This window function reduces the real-space ripple 
+        ! artifacts associated with direct moving windowed-sinc interpolation. The feature sought when 
+        ! implementing this algorithm was to enable quick, reliable reconstruction from aligned individual 
+        ! particle images. mul is used to scale the origin shifts if down-sampled 
+        ! were used for alignment and the original images are used for reconstruction. ctf=yes or ctf=flip 
+        ! turns on the Wiener restoration. If the images were phase-flipped set ctf=flip. amsklp, mw, and edge 
+        ! control the solvent mask: the low-pass limit used to generate the envelope; the molecular weight of the 
+        ! molecule (protein assumed but it works reasonably well also for RNA; slight modification of mw 
+        ! might be needed). The inner parameter controls the radius of the soft-edged mask used to remove 
+        ! the unordered DNA/RNA core of spherical icosahedral viruses<recvol/end>
         !
         ! set required keys
         keys_required(1) = 'stk'
@@ -417,6 +430,7 @@ select case(prg)
         keys_optional(8) = 'shellw'
         keys_optional(9) = 'vol1'        
         ! parse command line
+        if( describe ) call print_doc_recvol
         call cline%parse(keys_required(:8), keys_optional(:9))
         ! set defaults
         if( .not. cline%defined('trs') ) call cline%set('trs', 5.) ! to assure that shifts are being used
@@ -429,7 +443,8 @@ select case(prg)
     case( 'ini3D_from_cavgs' )
         !==Program ini3D_from_cavgs
         !
-        ! <ini3D_from_cavgs/begin>  <ini3D_from_cavgs/end> 
+        ! <ini3D_from_cavgs/begin>is a program for generating an initial 3D model from class averages
+        ! obtained with prime2D<ini3D_from_cavgs/end> 
         !
         ! set required keys
         keys_required(1)  = 'stk'
@@ -454,6 +469,7 @@ select case(prg)
         keys_optional(13) = 'nspace'
         keys_optional(14) = 'shbarrier'
         ! parse command line
+        if( describe ) call print_doc_ini3D_from_cavgs
         call cline%parse(keys_required(:6), keys_optional(:14))
         ! execute
         call xini3D_from_cavgs%execute( cline )

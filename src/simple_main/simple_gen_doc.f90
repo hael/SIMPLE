@@ -4,7 +4,7 @@ implicit none
 contains
 
     subroutine print_doc_noiseimgs
-        write(*,'(A)') ' is a program for generating noise images'
+        write(*,'(A)') ' is a program for generating pure noise images'
         stop
     end subroutine print_doc_noiseimgs
 
@@ -56,8 +56,7 @@ contains
 
     subroutine print_doc_unblur_movies
         write(*,'(A)', advance='no') ' is a program for movie alignment or unblurring. Input is a textfile with absolu'
-        write(*,'(A)', advance='no') 'te paths to movie files in addition to a few obvious input parameters. Output is'
-        write(*,'(A)') ' (x,y) shift parameters for every frame of the movie.'
+        write(*,'(A)') 'te paths to movie files in addition to a few obvious input parameters.'
         stop
     end subroutine print_doc_unblur_movies
 
@@ -85,9 +84,9 @@ contains
         write(*,'(A)', advance='no') 'h Relion. The program creates one stack per movie frame as well as a stack of co'
         write(*,'(A)', advance='no') 'rrected framesums. In addition to single-particle image stacks, the program prod'
         write(*,'(A)', advance='no') 'uces a parameter file extract_params.txt that can be used in conjunction with ot'
-        write(*,'(A)', advance='no') 'her SIMPLE programs. We obtain CTF parameters with CTFFIND4 using the script (ex'
-        write(*,'(A)', advance='no') 'ec_ctffind.pl) but if you have already obtained CTF parameters from CTFFIND4, pl'
-        write(*,'(A)') 'ease see section "CTF parameters convention" in the manual.'
+        write(*,'(A)', advance='no') 'her SIMPLE programs. We obtain CTF parameters with CTFFIND4 but if you have alre'
+        write(*,'(A)', advance='no') 'ady obtained CTF parameters from CTFFIND4, please see section "CTF parameters co'
+        write(*,'(A)') 'nvention" in the manual.'
         stop
     end subroutine print_doc_extract
 
@@ -101,11 +100,7 @@ contains
 
     subroutine print_doc_prime2D
         write(*,'(A)', advance='no') ' is a reference-free 2D alignment/clustering algorithm adopted from the prime3D'
-        write(*,'(A)', advance='no') 'probabilistic  ab initio 3D reconstruction algorithm. Do not search the origin s'
-        write(*,'(A)', advance='no') 'hifts initially, when the cluster centers are of low quality. If your images are'
-        write(*,'(A)', advance='no') ' far off centre, use stackops with option shalgn=yes instead to shiftalign the i'
-        write(*,'(A)', advance='no') 'mages beforehand (the algorithm implemented is the same as EMANs cenalignint pro'
-        write(*,'(A)') 'gram).'
+        write(*,'(A)') 'probabilistic ab initio 3D reconstruction algorithm.'
         stop
     end subroutine print_doc_prime2D
 
@@ -176,9 +171,7 @@ contains
 
     subroutine print_doc_prime3D_init
         write(*,'(A)', advance='no') ' is a program for generating a random initial model for initialisation of PRIME3'
-        write(*,'(A)', advance='no') 'D. If the data set is large (>5000 images), generating a random model can be slo'
-        write(*,'(A)', advance='no') 'w. To speedup, set nran to some smaller number, resulting in nran images selecte'
-        write(*,'(A)') 'd randomly for reconstruction.'
+        write(*,'(A)') 'D.'
         stop
     end subroutine print_doc_prime3D_init
 
@@ -210,20 +203,7 @@ contains
         write(*,'(A)', advance='no') ' the orientations are mostly random, the FSC overestimates the resolution. Once'
         write(*,'(A)', advance='no') 'the initial model has converged, we recommend start searching the shifts (by set'
         write(*,'(A)', advance='no') 'ting trs to some nonzero value) and applying the FSC for resolution- weighting ('
-        write(*,'(A)', advance='no') 'by setting eo=yes). In order to be able to use Wiener restoration, give the ctf'
-        write(*,'(A)', advance='no') 'flag on the command line to indicate what has been done to the images. You then'
-        write(*,'(A)', advance='no') 'also need to input CTF parameters, for example via deftab=defocus_values.txt. Re'
-        write(*,'(A)', advance='no') 'member that the defocus values should be given in microns and the astigmatism an'
-        write(*,'(A)', advance='no') 'gle in degrees (one row of the file defocus_values.txt may look like: dfx=3.5 df'
-        write(*,'(A)', advance='no') 'y=3.3 angast=20.0). Note that we do not assume any point-group symmetry in the i'
-        write(*,'(A)', advance='no') 'nitial runs. However, the symsrch program can be used to align the 3D reconstruc'
-        write(*,'(A)', advance='no') 'tion to its symmetry axis so that future searches can be restricted to the asymm'
-        write(*,'(A)', advance='no') 'etric unit. Less commonly used and less obvious input parameters are nspace, whi'
-        write(*,'(A)', advance='no') 'ch  controls the number of reference projections, amsklp, which controls the low'
-        write(*,'(A)', advance='no') '-pass limit used in the automask routine, maxits, which controls the maximum num'
-        write(*,'(A)', advance='no') 'ber of iterations executed, pgrp, which controls the point- group symmetry, assu'
-        write(*,'(A)', advance='no') 'ming that the starting volume is aligned to its principal symmetry axis, edge, w'
-        write(*,'(A)') 'hich controls the size of the softening edge in the automask routine.'
+        write(*,'(A)') 'by setting eo=yes).'
         stop
     end subroutine print_doc_prime3D
 
@@ -264,18 +244,18 @@ contains
         write(*,'(A)', advance='no') 'The program takes as input an asymmetrical reconstruction or stack of class aver'
         write(*,'(A)', advance='no') 'ages/individual particles. For volumes, the alignment document for all the parti'
         write(*,'(A)', advance='no') 'cle images that have gone into the 3D reconstruction and the desired point-group'
-        write(*,'(A)', advance='no') ' symmetry needs to be inputted. The 3D reconstruction is then projected in 20 (d'
-        write(*,'(A)', advance='no') 'efault option) even directions, common lines-based optimisation is used to ident'
-        write(*,'(A)', advance='no') 'ify the principal symmetry axis, the rotational transformation is applied to the'
-        write(*,'(A)', advance='no') ' inputted orientations, and a new alignment document is produced. Input this doc'
-        write(*,'(A)', advance='no') 'ument to recvol together with the images and the point-group symmetry to generat'
-        write(*,'(A)', advance='no') 'e a symmetrised map. If you are unsure about the point-group, you should use the'
-        write(*,'(A)', advance='no') ' compare=yes mode and input the highest conceviable point-group. The program the'
-        write(*,'(A)', advance='no') 'n calculates probabilities for all lower groups inclusive. The class average/par'
-        write(*,'(A)', advance='no') 'ticle option operates in an equivalent fashion but with individual images. The o'
-        write(*,'(A)', advance='no') 'utput is then a per-image correlation value that informs about how well the imag'
-        write(*,'(A)', advance='no') 'e conforms to to inputted point-group. The state parameter allows you to apply s'
-        write(*,'(A)') 'ymmetry for the given state.'
+        write(*,'(A)', advance='no') ' symmetry needs to be inputted. The 3D reconstruction is then projected in 150 ('
+        write(*,'(A)', advance='no') 'default option) even directions, common lines-based optimisation is used to iden'
+        write(*,'(A)', advance='no') 'tify the principal symmetry axis, the rotational transformation is applied to th'
+        write(*,'(A)', advance='no') 'e inputted orientations, and a new alignment document is produced. Input this do'
+        write(*,'(A)', advance='no') 'cument to recvol together with the images and the point-group symmetry to genera'
+        write(*,'(A)', advance='no') 'te a symmetrised map. If you are unsure about the point-group, you should use th'
+        write(*,'(A)', advance='no') 'e compare=yes mode and input the highest conceviable point-group. The program th'
+        write(*,'(A)', advance='no') 'en calculates probabilities for all lower groups inclusive. The class average/pa'
+        write(*,'(A)', advance='no') 'rticle option operates in an equivalent fashion but with individual images. The'
+        write(*,'(A)', advance='no') 'output is then a per-image correlation value that informs about how well the ima'
+        write(*,'(A)', advance='no') 'ge conforms to to inputted point-group. The state parameter allows you to apply'
+        write(*,'(A)') 'symmetry for the given state.'
         stop
     end subroutine print_doc_symsrch
 
@@ -313,24 +293,23 @@ contains
         write(*,'(A)', advance='no') ' interpolation. The feature sought when implementing this algorithm was to enabl'
         write(*,'(A)', advance='no') 'e quick, reliable reconstruction from aligned individual particle images. mul is'
         write(*,'(A)', advance='no') ' used to scale the origin shifts if down-sampled were used for alignment and the'
-        write(*,'(A)', advance='no') ' original images are used for reconstruction. ctf, kv, fraca, cs and deftab are'
-        write(*,'(A)', advance='no') 'used to communicate CTF information to the program. ctf=yes or ctf=flip turns on'
-        write(*,'(A)', advance='no') ' the Wiener restoration. If the images were phase-flipped set ctf=flip. amsklp,'
-        write(*,'(A)', advance='no') 'mw, and edge control the solvent mask: the low-pass limit used to generate the e'
-        write(*,'(A)', advance='no') 'nvelope; the molecular weight of the molecule (protein assumed but it works reas'
-        write(*,'(A)', advance='no') 'onably well also for RNA; slight modification of mw might be needed). The inner'
-        write(*,'(A)', advance='no') 'parameter controls the radius of the soft-edged mask used to remove the unordere'
-        write(*,'(A)') 'd DNA/RNA core of spherical icosahedral viruses.'
+        write(*,'(A)', advance='no') ' original images are used for reconstruction. ctf=yes or ctf=flip turns on the W'
+        write(*,'(A)', advance='no') 'iener restoration. If the images were phase-flipped set ctf=flip. amsklp, mw, an'
+        write(*,'(A)', advance='no') 'd edge control the solvent mask: the low-pass limit used to generate the envelop'
+        write(*,'(A)', advance='no') 'e; the molecular weight of the molecule (protein assumed but it works reasonably'
+        write(*,'(A)', advance='no') ' well also for RNA; slight modification of mw might be needed). The inner parame'
+        write(*,'(A)', advance='no') 'ter controls the radius of the soft-edged mask used to remove the unordered DNA/'
+        write(*,'(A)') 'RNA core of spherical icosahedral viruses.'
         stop
     end subroutine print_doc_recvol
 
     subroutine print_doc_eo_volassemble
         write(*,'(A)', advance='no') ' is a program that assembles volume(s) when the reconstruction program (recvol w'
-        write(*,'(A)', advance='no') 'ith eo=yes) has been executed in distributed mode using distr_simple.pl. inner a'
-        write(*,'(A)', advance='no') 'pplies a soft-edged inner mask. An inner mask is used for icosahedral virus reco'
-        write(*,'(A)', advance='no') 'nstruction, because the DNA or RNA core is often unordered and  if not removed i'
-        write(*,'(A)', advance='no') 't may negatively impact the alignment. The width parameter controls the fall-off'
-        write(*,'(A)') ' of the edge of the inner mask.'
+        write(*,'(A)', advance='no') 'ith eo=yes) has been executed in distributed mode. inner applies a soft-edged in'
+        write(*,'(A)', advance='no') 'ner mask. An inner mask is used for icosahedral virus reconstruction, because th'
+        write(*,'(A)', advance='no') 'e DNA or RNA core is often unordered and  if not removed it may negatively impac'
+        write(*,'(A)', advance='no') 't the alignment. The width parameter controls the fall-off of the edge of the in'
+        write(*,'(A)') 'ner mask.'
         stop
     end subroutine print_doc_eo_volassemble
 
@@ -363,10 +342,7 @@ contains
 
     subroutine print_doc_cenvol
         write(*,'(A)', advance='no') ' is a program for centering a volume and mapping the shift parameters back to th'
-        write(*,'(A)', advance='no') 'e particle images, Often, when class averages are used for 3D processing and the'
-        write(*,'(A)', advance='no') ' paramaters are mapped back to the particles, the reconstructed volume is off-ce'
-        write(*,'(A)', advance='no') 'ntre. This program is useful for making sure that the mask does not cut off-cent'
-        write(*,'(A)') 're volumes.'
+        write(*,'(A)') 'e particle images.'
         stop
     end subroutine print_doc_cenvol
 
@@ -381,18 +357,15 @@ contains
         write(*,'(A)', advance='no') 'format as the inputted volume. Projections are generated by extraction of centra'
         write(*,'(A)', advance='no') 'l sections from the Fourier volume and back transformation of the 2D FTs. nspace'
         write(*,'(A)', advance='no') ' controls the number of projection images generated with quasi-even projection d'
-        write(*,'(A)', advance='no') 'irections.The oritab parameter allows you to input the orientations that you wis'
-        write(*,'(A)', advance='no') 'h to have your volume projected in. If rnd=yes, random rather than quasi-even pr'
-        write(*,'(A)', advance='no') 'ojections are generated, trs then controls the halfwidth of the random origin sh'
-        write(*,'(A)', advance='no') 'ift. Less commonly used parameters are pgrp, which controls the point-group symm'
-        write(*,'(A)', advance='no') 'etry c (rotational), d (dihedral), t (tetrahedral), o (octahedral) or i (icosahe'
-        write(*,'(A)', advance='no') 'dral). The point-group symmetry is used to restrict the set of projections to wi'
-        write(*,'(A)', advance='no') 'thin the asymmetric unit. ctf=yes allows you to apply CTF to the images, using c'
-        write(*,'(A)', advance='no') 'onstant defocus and no astigmatism. If you want to do this you need to define th'
-        write(*,'(A)', advance='no') 'e parameters kv, fraca, cs, defocus and bfac. neg inverts the contrast of the pr'
-        write(*,'(A)', advance='no') 'ojections. mirr=yes mirrors the projection by modifying the Euler angles. If mir'
-        write(*,'(A)', advance='no') 'r=x or mirr=y the projection is physically mirrored after it has been generated.'
-        write(*,'(A)') ''
+        write(*,'(A)', advance='no') 'irections. The oritab parameter allows you to input the orientations that you wi'
+        write(*,'(A)', advance='no') 'sh to have your volume projected in. If rnd=yes, random rather than quasi-even p'
+        write(*,'(A)', advance='no') 'rojections are generated, trs then controls the halfwidth of the random origin s'
+        write(*,'(A)', advance='no') 'hift. Less commonly used parameters are pgrp, which controls the point-group sym'
+        write(*,'(A)', advance='no') 'metry c (rotational), d (dihedral), t (tetrahedral), o (octahedral) or i (icosah'
+        write(*,'(A)', advance='no') 'edral). The point-group symmetry is used to restrict the set of projections to w'
+        write(*,'(A)', advance='no') 'ithin the asymmetric unit. neg inverts the contrast of the projections. mirr=yes'
+        write(*,'(A)', advance='no') ' mirrors the projection by modifying the Euler angles. If mirr=x or mirr=y the p'
+        write(*,'(A)') 'rojection is physically mirrored after it has been generated.'
         stop
     end subroutine print_doc_projvol
 
@@ -558,19 +531,19 @@ contains
     end subroutine print_doc_makedeftab
 
     subroutine print_doc_makeoris
-        write(*,'(A)', advance='no') ' is a program for analyzing SIMPLE orientation/parameter files (text files conta'
-        write(*,'(A)', advance='no') 'ining input parameters and/or parameters estimated by prime2D or prime3D). The p'
-        write(*,'(A)', advance='no') 'rogram generates random Euler angles e1.in.[0,360], e2.in.[0,180], and e3.in.[0,'
-        write(*,'(A)', advance='no') '360] and random origin shifts x.in.[-trs,yrs] and y.in.[-trs,yrs]. If ndiscrete'
-        write(*,'(A)', advance='no') 'is set to an integer number > 0, the orientations produced are randomly sampled'
-        write(*,'(A)', advance='no') 'from the set of ndiscrete quasi-even projection directions, and the in-plane par'
-        write(*,'(A)', advance='no') 'ameters are assigned randomly. If even=yes, then all nptcls orientations are ass'
-        write(*,'(A)', advance='no') 'igned quasi-even projection directions,and random in-plane parameters. If nstate'
-        write(*,'(A)', advance='no') 's is set to some integer number > 0, then states are assigned randomly .in.[1,ns'
-        write(*,'(A)', advance='no') 'tates]. If zero=yes in this mode of execution, the projection directions are zer'
-        write(*,'(A)', advance='no') 'oed and only the in-plane parameters are kept intact. If errify=yes and astigerr'
-        write(*,'(A)', advance='no') ' is defined, then uniform random astigmatism errors are introduced .in.[-astiger'
-        write(*,'(A)') 'r,astigerr].'
+        write(*,'(A)', advance='no') ' is a program for making SIMPLE orientation/parameter files (text files containi'
+        write(*,'(A)', advance='no') 'ng input parameters and/or parameters estimated by prime2D or prime3D). The prog'
+        write(*,'(A)', advance='no') 'ram generates random Euler angles e1.in.[0,360], e2.in.[0,180], and e3.in.[0,360'
+        write(*,'(A)', advance='no') '] and random origin shifts x.in.[-trs,yrs] and y.in.[-trs,yrs]. If ndiscrete is'
+        write(*,'(A)', advance='no') 'set to an integer number > 0, the orientations produced are randomly sampled fro'
+        write(*,'(A)', advance='no') 'm the set of ndiscrete quasi-even projection directions, and the in-plane parame'
+        write(*,'(A)', advance='no') 'ters are assigned randomly. If even=yes, then all nptcls orientations are assign'
+        write(*,'(A)', advance='no') 'ed quasi-even projection directions,and random in-plane parameters. If nstates i'
+        write(*,'(A)', advance='no') 's set to some integer number > 0, then states are assigned randomly .in.[1,nstat'
+        write(*,'(A)', advance='no') 'es]. If zero=yes in this mode of execution, the projection directions are zeroed'
+        write(*,'(A)', advance='no') ' and only the in-plane parameters are kept intact. If errify=yes and astigerr is'
+        write(*,'(A)', advance='no') ' defined, then uniform random astigmatism errors are introduced .in.[-astigerr,a'
+        write(*,'(A)') 'stigerr].'
         stop
     end subroutine print_doc_makeoris
 
@@ -654,6 +627,19 @@ contains
         stop
     end subroutine print_doc_split
 
+    subroutine print_doc_unblur_tomo_movies
+        write(*,'(A)', advance='no') ' is a program for movie alignment or unblurring of tomographic movies. Input is'
+        write(*,'(A)', advance='no') 'a textfile with absolute paths to movie files in addition to a few obvious input'
+        write(*,'(A)') ' parameters.'
+        stop
+    end subroutine print_doc_unblur_tomo_movies
+
+    subroutine print_doc_ini3D_from_cavgs
+        write(*,'(A)', advance='no') ' is a program for generating an initial 3D model from class averages obtained wi'
+        write(*,'(A)') 'th prime2D.'
+        stop
+    end subroutine print_doc_ini3D_from_cavgs
+
     subroutine list_all_simple_programs
         write(*,'(A)') 'automask2D'
         write(*,'(A)') 'automask3D'
@@ -735,5 +721,20 @@ contains
         write(*,'(A)') 'volume_smat'
         stop
     end subroutine list_all_simple_programs
+
+    subroutine list_all_simple_distr_programs
+        write(*,'(A)') 'ctffind'
+        write(*,'(A)') 'find_nnimgs'
+        write(*,'(A)') 'ini3D_from_cavgs'
+        write(*,'(A)') 'prime2D'
+        write(*,'(A)') 'prime2D_init'
+        write(*,'(A)') 'prime3D'
+        write(*,'(A)') 'prime3D_init'
+        write(*,'(A)') 'recvol'
+        write(*,'(A)') 'shellweight3D'
+        write(*,'(A)') 'unblur_movies'
+        write(*,'(A)') 'unblur_tomo_movies'
+        stop
+    end subroutine list_all_simple_distr_programs
 
 end module simple_gen_doc
