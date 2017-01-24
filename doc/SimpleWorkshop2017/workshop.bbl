@@ -1,0 +1,70 @@
+\begin{thebibliography}{12}
+\expandafter\ifx\csname natexlab\endcsname\relax\def\natexlab#1{#1}\fi
+\expandafter\ifx\csname url\endcsname\relax
+  \def\url#1{\texttt{#1}}\fi
+\expandafter\ifx\csname urlprefix\endcsname\relax\def\urlprefix{URL }\fi
+
+\bibitem[{Baker et~al.(2010)Baker, Smith, Bueler, and
+  Rubinstein}]{baker2010resolution}
+Baker, L.~A., Smith, E.~A., Bueler, S.~A., Rubinstein, J.~L., 2010. The
+  resolution dependence of optimal exposures in liquid nitrogen temperature
+  electron cryomicroscopy of catalase crystals. Journal of structural biology
+  169~(3), 431--437.
+
+\bibitem[{Elmlund et~al.(2013)Elmlund, Elmlund, and Bengio}]{Elmlund:2013aa}
+Elmlund, H., Elmlund, D., Bengio, S., Aug 2013. Prime: probabilistic initial 3d
+  model generation for single-particle cryo-electron microscopy. Structure
+  21~(8), 1299--306.
+
+\bibitem[{Grant and Grigorieff(2015)}]{grant2015measuring}
+Grant, T., Grigorieff, N., 2015. Measuring the optimal exposure for single
+  particle cryo-em using a 2.6 {\aa} reconstruction of rotavirus vp6. Elife 4,
+  e06980.
+
+\bibitem[{Grigorieff(2007)}]{Grigorieff:2007aa}
+Grigorieff, N., Jan 2007. Frealign: high-resolution refinement of single
+  particle structures. J Struct Biol 157~(1), 117--25.
+
+\bibitem[{Hayward and Glaeser(1979)}]{hayward1979radiation}
+Hayward, S.~B., Glaeser, R.~M., 1979. Radiation damage of purple membrane at
+  low temperature. Ultramicroscopy 4~(2), 201--210.
+
+\bibitem[{Henderson(2013)}]{henderson2013avoiding}
+Henderson, R., 2013. Avoiding the pitfalls of single particle cryo-electron
+  microscopy: Einstein from noise. Proceedings of the National Academy of
+  Sciences 110~(45), 18037--18041.
+
+\bibitem[{Hohn et~al.(2007)Hohn, Tang, Goodyear, Baldwin, Huang, Penczek, Yang,
+  Glaeser, Adams, and Ludtke}]{Hohn:2007aa}
+Hohn, M., Tang, G., Goodyear, G., Baldwin, P.~R., Huang, Z., Penczek, P.~A.,
+  Yang, C., Glaeser, R.~M., Adams, P.~D., Ludtke, S.~J., Jan 2007. Sparx, a new
+  environment for cryo-em image processing. J Struct Biol 157~(1), 47--55.
+
+\bibitem[{Penczek et~al.(1994)Penczek, Grassucci, and
+  Frank}]{penczek1994ribosome}
+Penczek, P.~A., Grassucci, R.~A., Frank, J., 1994. The ribosome at improved
+  resolution: new techniques for merging and orientation refinement in 3d
+  cryo-electron microscopy of biological particles. Ultramicroscopy 53~(3),
+  251--270.
+
+\bibitem[{Reboul et~al.(2016)Reboul, Bonnet, Elmlund, and
+  Elmlund}]{reboul2016stochastic}
+Reboul, C.~F., Bonnet, F., Elmlund, D., Elmlund, H., 2016. A stochastic hill
+  climbing approach for simultaneous 2d alignment and clustering of cryogenic
+  electron microscopy images. Structure 24~(6), 988--996.
+
+\bibitem[{Rohou and Grigorieff(2015)}]{rohou2015ctffind4}
+Rohou, A., Grigorieff, N., 2015. Ctffind4: Fast and accurate defocus estimation
+  from electron micrographs. Journal of Structural Biology 192~(2), 216--221.
+
+\bibitem[{Scheres(2012)}]{Scheres:2012aa}
+Scheres, S. H.~W., Dec 2012. Relion: implementation of a bayesian approach to
+  cryo-em structure determination. J Struct Biol 180~(3), 519--30.
+
+\bibitem[{Tang et~al.(2007)Tang, Peng, Baldwin, Mann, Jiang, Rees, and
+  Ludtke}]{Tang:2007aa}
+Tang, G., Peng, L., Baldwin, P.~R., Mann, D.~S., Jiang, W., Rees, I., Ludtke,
+  S.~J., Jan 2007. Eman2: an extensible image processing suite for electron
+  microscopy. J Struct Biol 157~(1), 38--46.
+
+\end{thebibliography}

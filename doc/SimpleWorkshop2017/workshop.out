@@ -1,0 +1,12 @@
+\BOOKMARK [1][-]{section.1}{What Will Be Covered}{}% 1
+\BOOKMARK [1][-]{section.2}{DDD Movie Pre-processing}{}% 2
+\BOOKMARK [2][-]{subsection.2.1}{Motion Correction and Dose Weighting}{section.2}% 3
+\BOOKMARK [2][-]{subsection.2.2}{Using SIMPLE in the Wild\204Power Spectrum Analysis and Movie Selection}{section.2}% 4
+\BOOKMARK [2][-]{subsection.2.3}{CTF Parameter Determination}{section.2}% 5
+\BOOKMARK [1][-]{section.3}{2D Analysis with PRIME2D}{}% 6
+\BOOKMARK [2][-]{subsection.3.1}{Distributed Execution of SIMPLE on Workstations and Clusters}{section.3}% 7
+\BOOKMARK [2][-]{subsection.3.2}{PRIME2D Analysis of TRPV1 Membrane Receptor Images}{section.3}% 8
+\BOOKMARK [2][-]{subsection.3.3}{Using SIMPLE in the Wild\204Selecting Good Class Averages and Mapping the Selection to the Particles}{section.3}% 9
+\BOOKMARK [1][-]{section.4}{Ab initio 3D Reconstruction from Class Averages Using PRIME3D}{}% 10
+\BOOKMARK [2][-]{subsection.4.1}{Analysis of Ribosome Class Averages Using the ini3D\137from\137cavgs Program}{section.4}% 11
+\BOOKMARK [2][-]{subsection.4.2}{Using SIMPLE in the Wild\204Mapping Class Orientations and Selection to the Particles}{section.4}% 12

@@ -4,13 +4,16 @@ use warnings;
 use strict;
 use Env;
 use simple_user_input;
-my $maxlen = 80;     # maximum string length of shell commands
-my $maxlc  = 53;     # maximum line count (LaTEX table)
-my @cmdlinkeys;      # command line keys
-my %cmdlindict;      # command line dictonary
-my %prginstr;        # program instructions
-my %prgcmdlineinstr; # program command line instructions
-my @prgkeys;         # program keys
+my $maxlen = 80;           # maximum string length of shell commands
+my $maxlc  = 53;           # maximum line count (LaTEX table)
+my @cmdlinkeys;            # command line keys
+my %cmdlindict;            # command line dictonary
+my %prginstr;              # program instructions
+my %prginstr_distr;        # distributed program instructions
+my %prgcmdlineinstr;       # program command line instructions
+my %prgcmdlineinstr_distr; # distributed program command line instructions
+my @prgkeys;               # program keys
+my @prgkeys_distr;         # distributed program keys
 if( scalar(@ARGV) < 1 ){
     die "Need to know which kind of documentation to generate (tex|web|f90)\n";
 }
@@ -29,28 +32,20 @@ while(my$line=<EXEC>){
     }
 }
 close(EXEC);
-
-# extract (unique) distributed program names
 my @prgnames_distr;
-my @prgnames_distr_all;
 open( EXEC, "<$simple_distr_exec_abspath", ) or die "Cannot open: $!\n";
 while(my$line=<EXEC>){
     if( $line =~ /case\(\s*\'(\w+)\'\s*\)/ ){
-        push(@prgnames_distr_all,$1);
-        if( $1 ~~ @prgnames ){
-        }else{
-            push(@prgnames_distr,$1);
-        }        
+        push(@prgnames_distr,$1);     
     }
 }
 close(EXEC);
 
 # extract comments
-my $tmp1 = extract_comments($simple_exec_abspath);
-chomp($tmp1);
-my $tmp2 = extract_comments($simple_distr_exec_abspath);
-chomp($tmp2);
-my $comments = $tmp1.$tmp2;
+my $comments = extract_comments($simple_exec_abspath);
+chomp($comments);
+my $comments_distr = extract_comments($simple_distr_exec_abspath);
+chomp($comments_distr);
 
 # extract program instructions
 my @comments_split = split('==', $comments);
@@ -58,13 +53,17 @@ my $cnt = 0;
 foreach my $comment (@comments_split){
     if( $comment =~ /\s*\<(.+)\/begin\>((.+))\<.+\/end\>/ ){
         $cnt++;
-        my $key = remove_simple($1);
-        my $val = remove_simple($2);
-        $prginstr{$key} = $val;
-        if( $key ~~ @prgkeys ){
-        }else{
-            push(@prgkeys,$key);
-        }
+        $prginstr{$1} = $2;
+        push(@prgkeys,$1);
+    }
+}
+@comments_split = split('==', $comments_distr);
+$cnt = 0;
+foreach my $comment (@comments_split){
+    if( $comment =~ /\s*\<(.+)\/begin\>((.+))\<.+\/end\>/ ){
+        $cnt++;
+        $prginstr_distr{$1} = $2;
+        push(@prgkeys_distr,$1);
     }
 }
 
@@ -76,8 +75,8 @@ while(my $keyval=<CMDDICT>){
     chomp($keyval);
     if( $keyval =~ /^(.+)\=((.+))$/ ){
         push(@cmdlinkeys,$1);
-        my $key = str2latex(remove_simple($1));
-        my $val = str2latex(remove_simple($2));
+        my $key = str2latex($1);
+        my $val = str2latex($2);
         $cmdlindict{$key} = $val;
         $nparams++; # number of command line parameters
     }
@@ -89,48 +88,49 @@ foreach my $prg (@prgnames){
     $prgcmdlineinstr{$prg} =~ s/\n$//; # removes trailing newline character
 }
 foreach my $prg (@prgnames_distr){
-    $prgcmdlineinstr{$prg} = `$SIMPLE_PATH/bin/simple_distr_exec prg=$prg`;
-    $prgcmdlineinstr{$prg} =~ s/\n$//; # removes trailing newline character
+    $prgcmdlineinstr_distr{$prg} = `$SIMPLE_PATH/bin/simple_distr_exec prg=$prg`;
+    $prgcmdlineinstr_distr{$prg} =~ s/\n$//; # removes trailing newline character
 }
 
 # CODE GENERATORS
-
+my @prgnames_sorted       = sort @prgnames;
+my @prgnames_distr_sorted = sort @prgnames_distr;
 if( $doc eq 'tex' ){
     print_full_latex_cmdlindict();
-    foreach my $prg (@prgnames){
-        print_latex_instr($prg);
-        print_latex_usage($prg);
+    print '\section{SIMPLE Programs}'."\n";
+    foreach my $prg (@prgnames_sorted){
+        print_latex_instr($prg, %prginstr);
+        print_latex_usage($prg, %prgcmdlineinstr);
     }
-    foreach my $prg (@prgnames_distr){
-        print_latex_instr($prg);
-        print_latex_usage($prg);
+    print '\section{Distributed SIMPLE Workflows}'."\n";
+    foreach my $prg (@prgnames_distr_sorted){
+        print_latex_instr($prg, %prginstr_distr);
+        print_latex_usage($prg, %prgcmdlineinstr_distr);
     }
 }elsif( $doc eq 'web' ){
-    foreach my $prg (@prgnames){
-        print_html_instr($prg);
+    foreach my $prg (@prgnames_sorted){
+        print_html_instr($prg, %prginstr);
     }
-    foreach my $prg (@prgnames_distr){
-        print_html_instr($prg);
+    foreach my $prg (@prgnames_distr_sorted){
+        print_html_instr($prg, %prginstr_distr);
     }
 }elsif( $doc eq 'f90' ){
     print "module simple_gen_doc\n";
     print "implicit none\n\n";
     print "contains\n\n";
-    foreach my $prg (@prgnames){
-        prginstr2f90($prg);
+    foreach my $prg (@prgnames_sorted){
+        prginstr2f90($prg, %prginstr);
     }
-    foreach my $prg (@prgnames_distr){
-        prginstr2f90($prg);
+    foreach my $prg (@prgnames_distr_sorted){
+        prginstr2f90($prg, %prginstr_distr);
     }
     print "    subroutine list_all_simple_programs\n";
-    my @prgnames_sorted = sort @prgnames;
     foreach my $prg (@prgnames_sorted){
         print "        write(*,'(A)') '$prg'\n";
     }
     print "        stop\n";
     print "    end subroutine list_all_simple_programs\n\n";
     print "    subroutine list_all_simple_distr_programs\n";
-    my @prgnames_distr_sorted = sort @prgnames_distr_all;
     foreach my $prg (@prgnames_distr_sorted){
         print "        write(*,'(A)') '$prg'\n";
     }
@@ -162,28 +162,34 @@ sub print_full_latex_cmdlindict{
 }
 
 sub print_latex_instr{
+    # input is label and prginstr
     my $label = shift;
+    my %instr = @_;
     my $label_latex = $label;
     $label_latex =~ s/\_/\\_/g;
-    print '\subsubsection{Program: \prgname{'."$label_latex}}\n";
+    print '\subsection{Program: \prgname{'."$label_latex}}\n";
     print '\label{'."$label}\n";
-    if( defined($prginstr{$label}) ){
-        my $prginstr_latex = str2latex($prginstr{$label});
+    if( defined($instr{$label}) ){
+        my $prginstr_latex = str2latex($instr{$label});
         print '\prgname{'."$label_latex} ".$prginstr_latex."\n\n";
     }
 }
 
 sub print_latex_usage{
-    my $label = shift;
+    # input is label and prgcmdlineinstr
+    my $label        = shift;
+    my %cmdlineinstr = @_;
     print '\begin{verbatim}', "\n";
-    print $prgcmdlineinstr{$label};
+    print $cmdlineinstr{$label};
     print '\end{verbatim}', "\n\n";
 }
 
 sub print_html_instr{
+    # input is label and prginstr
     my $label = shift;
-    if( defined($prginstr{$label}) ){
-        my $instr_html = latex2html(str2latex($prginstr{$label}));
+    my %instr = @_;
+    if( defined($instr{$label}) ){
+        my $instr_html = latex2html(str2latex($instr{$label}));
         my $prg2print = '************'.$label.'************';
         print "$prg2print\n\n";
         print qq[<div class="AccordionPanel">\n];
@@ -244,9 +250,11 @@ sub latex2html{
 }
 
 sub prginstr2f90{
-    my $key = shift;
-    if( defined($prginstr{$key}) ){
-        my @lines    = unpack("(A80)*", $prginstr{$key});
+    # input is label and prginstr
+    my $key   = shift;
+    my %instr = @_;
+    if( defined($instr{$key}) ){
+        my @lines    = unpack("(A80)*", $instr{$key});
         my $sub_name = 'print_doc_'.$key;
         print "    subroutine $sub_name\n";
         if( $#lines > 0 ){
@@ -269,20 +277,15 @@ sub extract_comments{
         if( $line =~ /^\s*!\s*(.+)$/ ){
             my $line_clean = $1;
             $line_clean =~ s/\s+$//; # removes trailing whitespace
-            # $line_clean =~ s/^\s+//; # removes leading whitespace
+            $line_clean =~ s/^\s+//; # removes leading whitespace
             if( defined($comments) ){
                 $comments = $comments.' '.$line_clean;
             }else{
-                $comments = $line_clean;
+                $comments = ' '.$line_clean;
             }
+           
         }
     }
     close(FORFILE);
     return $comments;
-}
-
-sub remove_simple{
-    my $str = shift;
-    $str    =~ s/simple_//g; # removes all simple_ prefixes
-    return $str;
 }
