@@ -3,44 +3,44 @@ Capacity: max_strings=35307, hash_size=35307, hash_prime=30011
 The top-level auxiliary file: workshop.aux
 The style file: elsarticle-harv.bst
 Database file #1: Prime2bibfile.bib
-You've used 12 entries,
+You've used 9 entries,
             2821 wiz_defined-function locations,
-            716 strings with 7051 characters,
-and the built_in function-call counts, 6438 in all, are:
-= -- 650
-> -- 353
-< -- 6
-+ -- 138
-- -- 120
-* -- 604
-:= -- 1164
-add.period$ -- 36
-call.type$ -- 12
-change.case$ -- 100
-chr.to.int$ -- 12
-cite$ -- 12
-duplicate$ -- 210
-empty$ -- 418
-format.name$ -- 156
-if$ -- 1276
+            698 strings with 6449 characters,
+and the built_in function-call counts, 4905 in all, are:
+= -- 487
+> -- 280
+< -- 4
++ -- 109
+- -- 96
+* -- 465
+:= -- 893
+add.period$ -- 27
+call.type$ -- 9
+change.case$ -- 77
+chr.to.int$ -- 9
+cite$ -- 9
+duplicate$ -- 156
+empty$ -- 315
+format.name$ -- 119
+if$ -- 969
 int.to.chr$ -- 1
 int.to.str$ -- 1
-missing$ -- 12
-newline$ -- 43
-num.names$ -- 48
-pop$ -- 82
+missing$ -- 9
+newline$ -- 34
+num.names$ -- 36
+pop$ -- 62
 preamble$ -- 1
-purify$ -- 88
+purify$ -- 68
 quote$ -- 0
-skip$ -- 158
+skip$ -- 117
 stack$ -- 0
-substring$ -- 408
-swap$ -- 29
+substring$ -- 305
+swap$ -- 21
 text.length$ -- 0
 text.prefix$ -- 0
 top$ -- 0
-type$ -- 108
+type$ -- 81
 warning$ -- 0
-while$ -- 54
+while$ -- 40
 width$ -- 0
-write$ -- 138
+write$ -- 105

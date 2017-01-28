@@ -74,8 +74,25 @@ Monash University, Bldg. 77\\
 Clayton, VIC, Australia, 3800\\
 \textbf{Webpage:}\\
 www.simplecryoem.com\\
+\textbf{Contact:}\\
+\url{http://simplecryoem.com/contact.html}\\
+dominika@simplecryoem.com\\
 \end{minipage}
 \vspace{20pt}
+
+\section{From Movies to Structure}
+These steps describe a typical SIMPLE workflow.
+\begin{enumerate}
+\item DDD (Direct Detector Device) movie alignment and frame-weighting using SIMPLE program \prgname{unblur\_movies}
+\item CTF parameter identification with the SIMPLE program \prgname{ctffind}, wrapping CTFFIND4 \citep{rohou2015ctffind4}
+\item Particle identification using EMAN2 \citep{Tang:2007aa} to generate \texttt{*.box} files
+\item Particle extraction with SIMPLE program \prgname{extract}
+\item 2D analysis using SIMPLE program \prgname{prime2D}
+\item \textit{Ab initio} 3D reconstruction from class averages using the SIMPLE \prgname{ini3D\_from\_cavgs} high-level workflow
+\item Mapping of class average selection and 3D class orientations to the particles using SIMPLE program \prgname{map2ptcls}
+\item Reconstruction of a 3D map from the individual particle images with SIMPLE program \prgname{recvol}
+\item Map refinement using SIMPLE program \prgname{prime3D}
+\end{enumerate}
 
 \section{What Will Be Covered}
 This part of the workshop will cover 
@@ -88,10 +105,8 @@ with the SIMPLE program package. We will use the latest unreleased version of SI
 
 \section{DDD Movie Pre-processing}
 
-\subsection{Motion Correction and Dose Weighting}
-During image acquisition, beam induced motion, charging and stage drift introduce blurring in the integrated movies. The individual frames need to be aligned with respect to one another in order to restore high-resolution information. Because of radiation damage, the electron dose is kept low during image acquisition, resulting in a very low signal-to-noise ratio (SNR) of the individual movie frames. Until recently, our understanding of damage processes in cryo-EM was based primarily on results obtained with 2D protein crystals \citep{baker2010resolution,hayward1979radiation}. The use of 2D crystals provides direct means for assessing the degree of damage by looking at the rate by which high-resolution diffraction spots are fading as a function of the accumulative electron dose. The disadvantage here is that it is impossible to separate spot fading due to loss of crystalline order from intrinsic molecular damage. Images of single rotavirus VP6 particles recorded with a total exposure of 100 electrons/Å2 indicated that single-particles are more robust to damage at low and intermediate resolutions than previously thought \citep{grant2015measuring}. In the same study, a dose-weighting scheme was introduced that maximizes the SNR of the integrated movie in a dose-dependent manner. This dose-weighting strategy has been adopted by most software packages and proven to be a powerful addition to the ever-growing set of single-particle analysis tools.
-
-SIMPLE implements a program called \prgname{unblur\_movies} for simultaneous motion-correction and dose-weighting, with the objective of maximising the SNR of the integrated movie in a motion- and dose-dependent manner. Input is a text file \texttt{filetab}, simply listing the individual movies in \texttt{*.mrc} format, the pixel-to-pixel (or sampling) distance \texttt{smpd} (in A), the number of CPU threads to use \texttt{nthr}, the template name of the outputted files \texttt{fbody}, the exposure time of the movie \texttt{exp\_time} (in s), the dose-rate at which the movie was acquired \texttt{dose\_rate} (in e/A2/s) and the acceleration voltage of the electron microscope \texttt{kv} (in kV), in addition to a number of other optional parameters that we will not be concerned with here. Please, beware that the \texttt{dose\_rate} is not normally written in any file-headers and you will have to consult with the microscopists acquiring the data about an 'optimal' dosing scheme. There's is no harm in having a total accumulated dose of up to 100 e/A2 since we will apply resolution-dependent dose-weights to the individual frames, but as a rule of thumb the \texttt{dose\_rate} for optimal K2 detector performance should be kept below 5 e/A2/s so you may end up with a very large number of frames per movie and long exposures.  If we execute \texttt{simple\_exec prg=unblur\_movies} in the prompt, we obtain brief instructions for how to run the program:
+\subsection{Motion Correction}
+During image acquisition, beam induced motion, charging and stage drift introduce blurring in the integrated movies. The individual frames need to be aligned with respect to one another in order to restore high-resolution information. Because of radiation damage, the electron dose is kept low during image acquisition, resulting in a very low signal-to-noise ratio (SNR) of the individual movie frames. SIMPLE implements a program called \prgname{unblur\_movies} for simultaneous motion-correction and frame-weighting, with the objective of maximising the SNR of the integrated movie in a motion-dependent manner. Input is a text file \texttt{filetab}, simply listing the individual movies in \texttt{*.mrc} format, the pixel-to-pixel (or sampling) distance \texttt{smpd} (in \AA{}), the number of CPU threads to use \texttt{nthr}, the template name of the outputted files \texttt{fbody}, in addition to a number of other optional parameters that we will not be concerned with here. If we execute \texttt{simple\_exec prg=unblur\_movies} in the prompt, we obtain brief instructions for how to run the program:
 \begin{verbatim}
 bash-3.2$ simple_exec prg=unblur_movies
 USAGE:
@@ -107,24 +122,20 @@ fbody     = file body
 lpstart   = start low-pass limit{15}
 lpstop    = stop low-pass limit{8}
 trs       = maximum halfwidth shift(in pixels)
-exp_time  = expusure time(in s)
-dose_rate = dose rate(in e/A2/s)
-kv        = acceleration voltage(in kV){300.}
 pspecsz   = size of power spectrum(in pixels)
 numlen    = length of number string
 startit   = start iterating from here
-scale     = image scale factor{1}
 frameavg  = nr of frames to average{0}
 tomo      = tomography mode(yes|no){no}
 \end{verbatim}
 Output consists of four files per movie (\texttt{movie1.mrc} in this example):
 \begin{enumerate}
-\item \texttt{<fbody>\_intg1.mrc} is the frame-weighted, motion-corrected and dose-weighted sum
+\item \texttt{<fbody>\_intg1.mrc} is the frame-weighted, motion-corrected sum
 \item \texttt{<fbody>\_forctf1.mrc} is the un-weighted sum of the aligned individual frames
 \item \texttt{<fbody>\_pspec1.mrc} is the power-spectrum of the uncorrected unweighted movie sum (left) and the corrected weighted movie sum (right)
 \item \texttt{<fbody>\_thumb1.mrc} is a down-scaled version of  \texttt{<fbody>\_intg1.mrc}
 \end{enumerate}
-The \texttt{*forctf*} output is created because,  even though frame- and dose-weighting improves the SNR, it may degrade the contrast transfer function (CTF) signal and this file will therefore later be used to determine the CTF parameters of the integrated movie. The \texttt{*intg*} image is the one you will use for particle picking and extract your identified individual particle images from. The \texttt{*pspec*} and \texttt{*thumb*} outputs are diagnostic. Please, check so that the Thon rings are concentric and have similar radial intensity distribution in any given resolution shell after alignment (right part of power-spectrum)\textemdash{}if not, trash the image. Please, execute:
+The \texttt{*forctf*} output is created because weighting the frames may degrade the contrast transfer function (CTF) signal and this file will therefore later be used to determine the CTF parameters of the integrated movie. The \texttt{*intg*} image is the one you will use for particle picking and extract your identified individual particle images from. The \texttt{*pspec*} and \texttt{*thumb*} outputs are diagnostic. Please, check so that the Thon rings are concentric and have similar radial intensity distribution in any given resolution shell after alignment (right part of power-spectrum)\textemdash{}if not, trash the image. Please, execute:
 \begin{verbatim}
 bash-3.2$ cd ~/workshop/SIMPLE
 bash-3.2$ ls
@@ -149,7 +160,7 @@ cs=2.7
 smpd=5.26
 fraca=0.1
 \end{verbatim}
-These movies are of proteasome molecules in ice (EMPIAR-10025), exposed for \texttt{exp\_time=7.6} s with a dose rate of \texttt{dose\_rate=7} e/A2/s. The  electron microscope used to acquire these images has an acceleration voltage of \texttt{kv=300} kV and a spherical aberration constant of \texttt{cs=2.7} mm. We have downscaled these images for more rapid processing to a sampling distance of \texttt{smpd=5.26} A and we will assume 10\% amplitude contrast when fitting the CTF \texttt{fraca=0.1}. First, we need to create a file table, listing the movies to be processed with  \prgname{unblur\_movies}.
+These movies are of proteasome molecules in ice (EMPIAR-10025), exposed for \texttt{exp\_time=7.6} s with a dose rate of \texttt{dose\_rate=7} e/\AA{}$^2$/s. The  electron microscope used to acquire these images has an acceleration voltage of \texttt{kv=300} kV and a spherical aberration constant of \texttt{cs=2.7} mm. We have downscaled these images for more rapid processing to a sampling distance of \texttt{smpd=5.26} A and we will assume 10\% amplitude contrast when fitting the CTF \texttt{fraca=0.1}. First, we need to create a file table, listing the movies to be processed with  \prgname{unblur\_movies}.
 \begin{verbatim}
 bash-3.2$ ls data/movie* > movies.txt
 \end{verbatim}
@@ -162,7 +173,7 @@ data/movie2.mrc
 Next, we execute the program.
 \begin{verbatim}
 bash-3.2$ simple_exec prg=unblur_movies filetab=movies.txt smpd=5.26 nthr=8
-fbody=proteasome exp_time=7.6 dose_rate=7 kv=300
+fbody=proteasome
 \end{verbatim}
 and we expect to see the following output in the terminal
 \begin{verbatim}
@@ -282,7 +293,7 @@ where $\lambda{}$ is the electron wavelength, $s$ is spatial frequency, $D$ is d
 \caption{Non-astigmatic CTF (left) vs. astigmatic CTF (middle) and schematic 1D CTF profile (right)}
 \end{figure}
 
-SIMPLE implements a wrapper program called \prgname{ctffind} that executes CTFFIND4 \citep{rohou2015ctffind4} version 4.1.X, producing a SIMPLE conforming CTF parameter document \texttt{deftab}. Input is a text file \texttt{filetab}, simply listing the individual integrated movies in \texttt{*.mrc} format, the pixel-to-pixel (or sampling) distance \texttt{smpd} (in A), the acceleration voltage of the electron microscope \texttt{kv} (in kV), the spherical aberration constant \texttt{cs} in mm and the fraction of amplitude contrast \texttt{fraca} in addition to a number of other optional parameters that we will not be concerned with here. If we execute \texttt{simple\_exec prg=ctffind} in the prompt, we obtain brief instructions for how to run the program:
+SIMPLE implements a wrapper program called \prgname{ctffind} that executes CTFFIND4 \citep{rohou2015ctffind4} version 4.1.X, producing a SIMPLE conforming CTF parameter document \texttt{deftab}. Input is a text file \texttt{filetab}, simply listing the individual integrated movies in \texttt{*.mrc} format, the pixel-to-pixel (or sampling) distance \texttt{smpd} (in \AA{}), the acceleration voltage of the electron microscope \texttt{kv} (in kV), the spherical aberration constant \texttt{cs} in mm and the fraction of amplitude contrast \texttt{fraca} in addition to a number of other optional parameters that we will not be concerned with here. If we execute \texttt{simple\_exec prg=ctffind} in the prompt, we obtain brief instructions for how to run the program:
 \begin{verbatim}
 bash-3.2$ simple_exec prg=ctffind
 USAGE:
@@ -309,7 +320,7 @@ Output is a text file with defocus parameters \texttt{ctffind\_output.txt}. Firs
 \begin{verbatim}
 bash-3.2$ ls proteasome_forctf* > ctf_movies.txt
 \end{verbatim}
-As explained above, the \texttt{*forctf*} output is created because,  even though frame- and dose-weighting improves the SNR, it may degrade the contrast transfer function (CTF) signal and this un-weighted average is therefore used to determine the CTF parameters of the integrated movie. Next, we execute the program.
+As explained above, the \texttt{*forctf*} output is created because weighted averaging may degrade the contrast transfer function (CTF) signal and this un-weighted average is therefore used to determine the CTF parameters of the integrated movie. Next, we execute the program.
 \begin{verbatim}
 bash-3.2$ simple_exec prg=ctffind filetab=ctf_movies.txt smpd=5.26
 kv=300 cs=2.7 fraca=0.1
@@ -352,7 +363,7 @@ Working on micrograph 1 of 1
 \end{verbatim}
 Output is the file \texttt{ctffind\_output.txt}.
 
-In SIMPLE, we have yet to implement a particle picker but rely on EMAN1.9 and EMAN2 for particle identification (Steve will cover this in the next session). However, if you have \texttt{*.box} files obtained with EMAN you can extract the particle images and their associated CTF parameters using SIMPLE. To illustrate this functionality, we have prepared box files in the \texttt{data} folder for use in conjunction with SIMPLE program \prgname{extract}. As before, we need to prepare file tables. First, we prepare a file table for the motion corrected and dose-weighted integrated movies:
+In SIMPLE, we have yet to implement a particle picker but rely on EMAN1.9 and EMAN2 for particle identification (Steve will cover this in the next session). However, if you have \texttt{*.box} files obtained with EMAN you can extract the particle images and their associated CTF parameters using SIMPLE. To illustrate this functionality, we have prepared box files in the \texttt{data} folder for use in conjunction with SIMPLE program \prgname{extract}. As before, we need to prepare file tables. First, we prepare a file table for the motion corrected integrated movies:
 \begin{verbatim}
 bash-3.2$ ls proteasome_intg* > intg_movies.txt
 \end{verbatim}
@@ -419,7 +430,7 @@ We do not need to worry about this file for now as it will be automatically gene
 It rarely pays off to increase the number of shared-memory CPU threads \texttt{nthr} above 10 because the overhead for thread creation with respect to the gain in parallelism is unfavourable. Therefore, if you have a system with say 20 CPUs per socket, then execute 4N partitions instead of increasing \texttt{nthr} to 20. This is a bit technical, but it matters for performance so if you are unsure how to configure your SIMPLE execution please file a help ticket.
 
 \subsection{PRIME2D Analysis of TRPV1 Membrane Receptor Images}
-The computers we are currently using have four i7 processors in a single socket, hyper-threaded so it looks like we have eight. We are now going to pretend that we have two CPU sockets with four CPUs each for the purpose of demonstration. Goto the \texttt{PRIME2D} directory and check things out.
+The computers we are currently using have four i7 processors in a single socket, hyper-threaded so it looks like we have eight. We are now going to pretend that we have two CPU sockets with four CPUs each for the purpose of demonstration. Go to the \texttt{PRIME2D} directory and check things out.
 \begin{verbatim}
 bash-3.2$ cd ../2_PRIME2D/
 bash-3.2$ ls
@@ -435,7 +446,7 @@ ctf=flip
 msk=36
 box=128
 \end{verbatim}
-The key-value pair \texttt{ctf=flip} means that the images have been "phase-flipped", \textit{i.e.} the contrast bands inverted by the CTF have been reverted simply by multiplying the Fourier transform of the image with the sign of the CTF. The individual particle images are quite noisy and it is difficult to gain any understanding about the imaged structure from these images.
+The key-value pair \texttt{ctf=flip} means that the images have been ``phase-flipped'', \textit{i.e.} the contrast bands inverted by the CTF have been reverted simply by multiplying the Fourier transform of the image with the sign of the CTF. The individual particle images are quite noisy and it is difficult to gain any understanding about the imaged structure from these images.
 \begin{SCfigure}[][h]
 \includegraphics[keepaspectratio=true,scale=0.3]{./trpv1ptcls}
 \caption{Individual TRPV1 particle images.}
@@ -472,7 +483,7 @@ appending output to nohup.out
 >>> CONVERGED: .NO.
 **** SIMPLE_CHECK2D_CONV NORMAL STOP ****
 \end{verbatim}
-The distribution overlaps represents the agreement between the alignment and clustering parameters from the present and previous iteration. The most important metric, however, is the fraction of search space scanned. \prgname{prime2D} is based on stochastic hill climbing optimisation, which relies on the so-called first improvement heuristic. This means that not all references are matched for each particle in each round but only as many as is required to find an improving solution, which is instantly accepted. This means that in the beginning of the search only few references need to be evaluated to find improving configurations (percentage of search space is low) whereas when convergence to a local (or global) optimum has been achieved most if not all references need to be evaluated (percentage of search space is high). Convergence is based on the class overlap and the fraction of search space scanned. Upon completion of the calculation, we see
+The distribution overlap represents the agreement between the alignment and clustering parameters from the present and previous iteration. The most important metric, however, is the fraction of search space scanned. \prgname{prime2D} is based on stochastic hill climbing optimisation, which relies on the so-called first improvement heuristic. This means that not all references are matched for each particle in each round but only as many as is required to find an improving solution, which is instantly accepted. Therefore, in the beginning of the search only few references need to be evaluated to find improving configurations (percentage of search space is low) whereas when convergence to a local (or global) optimum has been achieved most if not all references need to be evaluated (percentage of search space is high). Convergence is based on the class overlap and the fraction of search space scanned. Upon completion of the calculation, we see
 \begin{verbatim}
 >>> CONVERGED: .YES.
 **** SIMPLE_CHECK2D_CONV NORMAL STOP ****
@@ -496,7 +507,7 @@ CLASS:     1 POP:  194
 \end{verbatim}
 \begin{SCfigure}[][h]
 \includegraphics[keepaspectratio=true,scale=0.8]{./trpv1iters/trpv1iters}
-\caption{TRPV1 class averages from the 0:th (random initialisation), 8:th, and and 16:th (final) iteration of simultaneous 2D alignment and clustering with \prgname{prime2D}. Good class averages with clearly discernible projected secondary structure are marked with a green dot and class averages of lower quality are marked with a red dot.}
+\caption{TRPV1 class averages from the 0th (random initialisation), 8th, and and 16th (final) iteration of simultaneous 2D alignment and clustering with \prgname{prime2D}. Good class averages with clearly discernible projected secondary structure are marked with a green dot and class averages of lower quality are marked with a red dot.}
 \end{SCfigure}
 
 \begin{tcolorbox}[breakable,colback=white,colframe=orange,width=\dimexpr\textwidth+12mm\relax,enlarge left by=-6mm]
@@ -534,7 +545,7 @@ creating a file \texttt{mapped\_ptcls\_params.txt} that you can input with flag 
 A major obstacle to achieving near-atomic resolution with single-particle cryo-EM is the problem of generating an accurate \textit{de novo} 3D reconstruction. Many cryo-EM structures are therefore solved by alignment of the images to \textit{a priori} models. The use of prior information, in the form of either a starting model from an independent source or an assumption of a particular point-group symmetry, is associated with the risk of introducing model bias. The model bias phenomenon is often illustrated by alignment of pure noise images to an image of Einstein. The image of Einstein is almost perfectly reproduced when the aligned noise images are averaged. It is often stated that low-pass filtering of X-ray maps, before they are used as starting models, eliminates model bias. This is a misunderstanding, as any model can be convincingly reproduced from noisy images \citep{henderson2013avoiding}. Most refinement software, such as FREALIGN \citep{Grigorieff:2007aa}, RELION \citep{Scheres:2012aa}, or projection matching \citep{penczek1994ribosome, Hohn:2007aa, Tang:2007aa}, depends on an accurate starting model for convergence to a high-resolution map. If the starting model is not supported by the images, there is a potent risk of introducing model bias. To what degree a starting model can bias the final 3D structure needs to be better characterised by methodological studies. We introduced the PRIME3D algorithm \citep{Elmlund:2013aa} to remove the requirement for \textit{a priori} structural knowledge and open the method to  the study of particles with novel structure. Robust algorithms for \textit{ab initio} 3D reconstruction are particularly important for the analysis of small particles with low symmetry.
 
 \subsection{Analysis of Ribosome Class Averages Using the \prgname{ini3D\_from\_cavgs} Program}
-SIMPLE was designed primarily for processing single-particle images of molecules with low or no internal symmetry. There are not an awful lot of data sets of asymmetric molecules publicly available, but one of the most popular specimens\textemdash{}one that we all recognise the structure of\textemdash{}is the ribosome. Although the initial idea with PRIME3D was to overcome the need for 2D clustering and generate an accurate 3D map straight from the noisy individual images, we have found that 2D analysis is extremely useful for weeding out bad data and enhance SNR prior to 3D analysis. Processing class averages also makes 3D model validation easier as we can simply compare re-projections of the 3D map with the signal-enhanced class averages used to obtain the 3D reconstruction. We pre-calculated 2D class averages with PRIME 2D from a publicly available ribosome data set (EMPIAR-10028). These are located in the \texttt{3\_PRIME3D/data} folder. Please \texttt{cd} to this folder and have a look at the class averages with EMAN2.
+SIMPLE was designed primarily for processing single-particle images of molecules with low or no internal symmetry. There are not an awful lot of data sets of asymmetric molecules publicly available, but one of the most popular specimens\textemdash{}one that we all recognise the structure of\textemdash{}is the ribosome. Although the initial idea with PRIME3D was to overcome the need for 2D clustering and generate an accurate 3D map straight from the noisy individual images, we have found that 2D analysis is extremely useful for weeding out bad data and enhancing SNR prior to 3D analysis. Processing class averages also makes 3D model validation easier as we can simply compare re-projections of the 3D map with the signal-enhanced class averages used to obtain the 3D reconstruction. We pre-calculated 2D class averages with PRIME 2D from a publicly available ribosome data set (EMPIAR-10028). These are located in the \texttt{3\_PRIME3D/data} folder. Please \texttt{cd} to this folder and have a look at the class averages with EMAN2.
 \begin{figure}
 \includegraphics[keepaspectratio=true,scale=0.4]{./ribocavgs}
 \caption{Ribosome class averages obtained with PRIME2D.}
@@ -546,7 +557,7 @@ smpd=2.68
 msk=80
 pgrp=c1
 \end{verbatim}
-Input to \prgname{ini3D\_from\_cavgs} is a stack of class averages \texttt{stk}, sampling distance \texttt{smpd} in A, mask radius \texttt{msk} in pixels, point-group symmetry \texttt{pgrp} (\texttt{c1} in this case), the number of CPU threads \texttt{nthr} and the number of partitions to divide the job into \texttt{nparts}. There are many additional optional parameters but we will only be concerned with one of them here: \texttt{nthr\_master}. \prgname{ini3D\_from\_cavgs} mixes shared-memory parallelisation on the master node with distributed-memory parallelisation on the slave nodes. \texttt{nthr\_master} is used to specify the number of CPU threads to execute on the master node. The output from \prgname{ini3D\_from\_cavgs} is a 3D model \texttt{rec\_final.mrc} and re-projections of this model in the orientations assigned to the class averages \texttt{reprojs.mrc}. If we execute \texttt{simple\_distr\_exec prg=ini3D\_from\_cavgs} in the prompt, we obtain brief instructions for how to run the program:
+Input to \prgname{ini3D\_from\_cavgs} is a stack of class averages \texttt{stk}, sampling distance \texttt{smpd} in \AA{}, mask radius \texttt{msk} in pixels, point-group symmetry \texttt{pgrp} (\texttt{c1} in this case), the number of CPU threads \texttt{nthr} and the number of partitions to divide the job into \texttt{nparts}. There are many additional optional parameters but we will only be concerned with one of them here: \texttt{nthr\_master}. \prgname{ini3D\_from\_cavgs} mixes shared-memory parallelisation on the master node with distributed-memory parallelisation on the slave nodes. \texttt{nthr\_master} is used to specify the number of CPU threads to execute on the master node. The output from \prgname{ini3D\_from\_cavgs} is a 3D model \texttt{rec\_final.mrc} and re-projections of this model in the orientations assigned to the class averages \texttt{reprojs.mrc}. If we execute \texttt{simple\_distr\_exec prg=ini3D\_from\_cavgs} in the prompt, we obtain brief instructions for how to run the program:
 \begin{verbatim}
 bash-3.2$ simple_distr_exec prg=ini3D_from_cavgs
 USAGE:
@@ -616,11 +627,7 @@ appending output to nohup.out
 \includegraphics[keepaspectratio=true,scale=0.6]{./Pfrib3D/Pfrib3D}
 \caption{Progress of the 3D model throughout the stochastic PRIME3D search (top). Class averages vs. re-projections of the converged 3D reconstruction (bottom).}
 \end{figure}
-The overlap parameters are very similar to those in \prgname{prime2D} but the \texttt{CLASS DISTRIBUTION OVERLAP} now corresponds to projection directions rather than 2D classes. New statistics include \texttt{AVERAGE ANGULAR DISTANCE BTW ORIS}, which is the average angular distance (in degrees) between the present and the previous sets of best orientations. Since every particle image is assigned a distribution of orientations with associated weight factors, there is also an estimate of the angular standard deviation of the model \texttt{ANGULAR SDEV OF MODEL}. For asymmetric molecules, we expect the angular standard deviation to decrease as the procedure approaches convergence. However, if we reconstruct symmetric molecules with \texttt{pgrp=c1} or asymmetric molecules with pseudo symmetries, the angular standard deviation may increase with the number of iterations as the orientations become randomly  distributed over the symmetry related configurations.
-
-<how to view models in chimera>
-<pproc output>
-<how to view model in eman1.9>
+The overlap parameters are very similar to those in \prgname{prime2D} but the \texttt{CLASS DISTRIBUTION OVERLAP} now corresponds to projection directions rather than 2D classes. New statistics include \texttt{AVERAGE ANGULAR DISTANCE BTW ORIS}, which is the average angular distance (in degrees) between the present and the previous sets of best orientations. Since every particle image is assigned a distribution of orientations with associated weight factors, there is also an estimate of the angular standard deviation of the model \texttt{ANGULAR SDEV OF MODEL}. For asymmetric molecules, we expect the angular standard deviation to decrease as the procedure approaches convergence. However, if we reconstruct symmetric molecules with \texttt{pgrp=c1} or asymmetric molecules with pseudo symmetries, the angular standard deviation may increase with the number of iterations as the orientations become randomly  distributed over the symmetry related configurations. Please, use UCSF Chimera to view the reconstructed density (icon on desktop). The \texttt{*pproc*} output is the post-processed volume (for initial model generation this is simply the volume low-pass filtered with the low-pass limit used for alignment).
 
 \begin{tcolorbox}[breakable,colback=white,colframe=orange,width=\dimexpr\textwidth+12mm\relax,enlarge left by=-6mm]
 \subsection{Using SIMPLE in the Wild\textemdash{}Mapping Class Orientations and Selection to the Particles}

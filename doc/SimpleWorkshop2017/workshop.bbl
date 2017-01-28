@@ -1,33 +1,17 @@
-\begin{thebibliography}{12}
+\begin{thebibliography}{9}
 \expandafter\ifx\csname natexlab\endcsname\relax\def\natexlab#1{#1}\fi
 \expandafter\ifx\csname url\endcsname\relax
   \def\url#1{\texttt{#1}}\fi
 \expandafter\ifx\csname urlprefix\endcsname\relax\def\urlprefix{URL }\fi
-
-\bibitem[{Baker et~al.(2010)Baker, Smith, Bueler, and
-  Rubinstein}]{baker2010resolution}
-Baker, L.~A., Smith, E.~A., Bueler, S.~A., Rubinstein, J.~L., 2010. The
-  resolution dependence of optimal exposures in liquid nitrogen temperature
-  electron cryomicroscopy of catalase crystals. Journal of structural biology
-  169~(3), 431--437.
 
 \bibitem[{Elmlund et~al.(2013)Elmlund, Elmlund, and Bengio}]{Elmlund:2013aa}
 Elmlund, H., Elmlund, D., Bengio, S., Aug 2013. Prime: probabilistic initial 3d
   model generation for single-particle cryo-electron microscopy. Structure
   21~(8), 1299--306.
 
-\bibitem[{Grant and Grigorieff(2015)}]{grant2015measuring}
-Grant, T., Grigorieff, N., 2015. Measuring the optimal exposure for single
-  particle cryo-em using a 2.6 {\aa} reconstruction of rotavirus vp6. Elife 4,
-  e06980.
-
 \bibitem[{Grigorieff(2007)}]{Grigorieff:2007aa}
 Grigorieff, N., Jan 2007. Frealign: high-resolution refinement of single
   particle structures. J Struct Biol 157~(1), 117--25.
-
-\bibitem[{Hayward and Glaeser(1979)}]{hayward1979radiation}
-Hayward, S.~B., Glaeser, R.~M., 1979. Radiation damage of purple membrane at
-  low temperature. Ultramicroscopy 4~(2), 201--210.
 
 \bibitem[{Henderson(2013)}]{henderson2013avoiding}
 Henderson, R., 2013. Avoiding the pitfalls of single particle cryo-electron

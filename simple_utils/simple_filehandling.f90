@@ -212,15 +212,18 @@ contains
         character(len=*), intent(in) :: fname, suffix
         character(len=STDLEN)        :: fbody
         integer :: pos
-        pos = index(fname, suffix) ! position of suffix
+        pos = index(fname, '.'//suffix) ! position of suffix
         fbody = fname(:pos-1)
     end function get_fbody
     
     !> \brief  is for putting a new extension on filename
     function fname_new_ext( fname, suffix ) result( new_fname )
-        character(len=*), intent(in) :: fname, suffix
-        character(len=STDLEN)        :: new_fname
-        new_fname = trim(get_fbody(trim(fname), fname2ext(trim(fname))))//suffix
+        character(len=*), intent(in)  :: fname, suffix
+        character(len=STDLEN)         :: fbody, new_fname
+        character(len=:), allocatable :: ext
+        ext   = fname2ext(trim(fname))
+        fbody = get_fbody(trim(fname), ext)
+        new_fname = trim(fbody)//'.'//trim(suffix)
     end function fname_new_ext
     
     !>  \brief  Return the 3-letter extension of a fname if present (without the period)

@@ -67,6 +67,9 @@ Monash University, Bldg. 77\\
 Clayton, VIC, Australia, 3800\\
 \textbf{Webpage:}\\
 www.simplecryoem.com\\
+\textbf{Contact:}\\
+\url{http://simplecryoem.com/contact.html}\\
+dominika@simplecryoem.com\\
 \end{minipage}
 \vspace{20pt}
 
@@ -94,7 +97,7 @@ SIMPLE is free software: you can redistribute it and/or modify it under the term
 
 \subsection{What is new in SIMPLE release 3.0?}
 \begin{itemize}
-    \item[--] A new DDD movie pre-processing program \prgname{unblur\_movies} that implements motion correction, dose-weighting \citep{grant2015measuring} and automatic frame weighting using a correlation-based M-estimator. 
+    \item[--] A new DDD movie pre-processing program \prgname{unblur\_movies} that implements motion correction, dose-weighting \citep{grant2015measuring} and automatic correlation-based frame weighting . 
     \item[--] A new Fourier shell-weighting scheme for resolution-dependent data weighting that when used in conjunction with Wiener restoration in \prgname{prime2D} and \prgname{prime3D} enables near-atomic resolution \textit{ab initio} 3D reconstruction.
     \item[--] High-level workflows for 2D analysis and initial 3D model production.
 \end{itemize}
@@ -102,8 +105,7 @@ SIMPLE is free software: you can redistribute it and/or modify it under the term
 \section{File Formats}
 
 \subsection{Image File Formats}
-SIMPLE supports SPIDER (\texttt{*.spi}) and MRC (\texttt{*.mrc}) formats for image stacks and volumes. The MRC file handling classes are shared with the the FREALIX program for helical reconstruction \citep{Rohou:2014aa}. RELION \citep{Scheres:2012aa} uses the convention that MRC stacks have the suffix \texttt{*.mrcs} and volumes the suffix \texttt{*.mrc}. This is to overcome the annoyance that it is not possible to tell from an MRC file header whether a MRC file is a volume or a stack. With SIMPLE you can select to use either the \texttt{*.mrcs} or \texttt{*.mrc} suffix for stacks. The way that we keep track of whether a file is a volume or stack is via the command line key value. The key-value pairs \texttt{vol1=rec.mrc} and \texttt{vol2=rec2.mrc} refer to volumes whereas the key-value pairs \texttt{stk=ptcls.mrc} and \texttt{stk2=ptcls2.mrc} refer to stacks. 
-
+SIMPLE supports SPIDER (\texttt{*.spi}) and MRC (\texttt{*.mrc}) formats for image stacks and volumes. The MRC file handling classes are shared with the the FREALIX program for helical reconstruction \citep{Rohou:2014aa}. RELION \citep{Scheres:2012aa} uses the convention that MRC stacks have the suffix \texttt{*.mrcs} and volumes the suffix \texttt{*.mrc}. This is to overcome the annoyance that it is not possible to tell from an MRC file header whether a MRC file is a volume or a stack. With SIMPLE you can select to use either the \texttt{*.mrcs} or \texttt{*.mrc} suffix for stacks. The way that we keep track of whether a file is a volume or stack is via the command line key value. The key-value pairs \texttt{vol1=rec.mrc} and \texttt{vol2=rec2.mrc} refer to volumes whereas the key-value pairs \texttt{stk=ptcls.mrc} and \texttt{stk2=ptcls2.mrc} refer to stacks.
 
 \subsection{SIMPLE Parameter File Format}
 The SIMPLE text-files used for parameter input/output use a \texttt{key=value} syntax of the form
@@ -199,24 +201,24 @@ Lines 51 and 53 specify the FFTW library and include directories. On a mac, usin
 *********************************************************
 * Checking and printing the input directories...        *
 *********************************************************
-SIMPLE_PATH          : /Users/hael/src/fortran/simple3.0
-SIMPLE_SRC_PATH      : /Users/hael/src/fortran/simple3.0/src/simple_main
-SIMPLE_PROD_PATH     : /Users/hael/src/fortran/simple3.0/production
-SIMPLE_TEST_PROD_PATH: /Users/hael/src/fortran/simple3.0/production/simple_tests
-SIMPLE_SCRIPTS_PATH  : /Users/hael/src/fortran/simple3.0/scripts
+SIMPLE_PATH          : /Users/hael/src/fortran/simple
+SIMPLE_SRC_PATH      : /Users/hael/src/fortran/simple/src/simple_main
+SIMPLE_PROD_PATH     : /Users/hael/src/fortran/simple/production
+SIMPLE_TEST_PROD_PATH: /Users/hael/src/fortran/simple/production/simple_tests
+SIMPLE_SCRIPTS_PATH  : /Users/hael/src/fortran/simple/scripts
 *********************************************************
-Moving to dir: /Users/hael/src/fortran/simple3.0/src/simple_main
-Executing simple_args_generator.pl in dir: /Users/hael/src/fortran/simple3.0...
-Moving to dir: /Users/hael/src/fortran/simple3.0
-Generating Makefile_macros: /Users/hael/src/fortran/simple3.0
+Moving to dir: /Users/hael/src/fortran/simple/src/simple_main
+Executing simple_args_generator.pl in dir: /Users/hael/src/fortran/simple...
+Moving to dir: /Users/hael/src/fortran/simple
+Generating Makefile_macros: /Users/hael/src/fortran/simple
 /sw/bin/gfortran -c -fimplicit-none -fall-intrinsics -ffree-form -cpp -fpic...
 ...
 darwin, Platform = 0
 Architecture: darwin-thread-multi-2level
 
-Moving to dir: /Users/hael/src/fortran/simple3.0/production
-Generating compile_and_link: /Users/hael/src/fortran/simple3.0/production
-Moving to dir: /Users/hael/src/fortran/simple3.0
+Moving to dir: /Users/hael/src/fortran/simple/production
+Generating compile_and_link: /Users/hael/src/fortran/simple/production
+Moving to dir: /Users/hael/src/fortran/simple
 Compiling production codes:
 >>> COMPILING & LINKING: simple_test_shelliter
 >>> COMPILING & LINKING: simple_test_autoscale
@@ -229,22 +231,26 @@ Compiling production codes:
 >>> COMPILING & LINKING: simple_test_cartcorr_sanity
 >>> COMPILING & LINKING: simple_test_imgfile
 >>> COMPILING & LINKING: simple_distr_exec
-Compilation of SIMPLE completed in dir: /Users/hael/src/fortran/simple3.0
+Compilation of SIMPLE completed in dir: /Users/hael/src/fortran/simple
 \end{verbatim}
 Compilation was succesful and we see that a new directory \texttt{/bin} has been created in the simple directory in addition to two text files \texttt{add2.bashrc} and \texttt{add2.tcshrc}
 \begin{verbatim}
 @!#> cat add2.bashrc 
 export SIMPLE_EMAIL="my.name@uni.edu"
 export SIMPLE_QSYS="local"
-export SIMPLE_PATH=/Users/hael/src/fortran/simple3.0
+export SIMPLE_PATH=/Users/hael/src/fortran/simple
 export PATH=${SIMPLE_PATH}/scripts:${SIMPLE_PATH}/bin:$PATH
 @!#> cat add2.tcshrc 
 setenv SIMPLE_EMAIL="my.name@uni.edu"
 setenv SIMPLE_QSYS="local"
-setenv SIMPLE_PATH /Users/hael/src/fortran/simple3.0
+setenv SIMPLE_PATH /Users/hael/src/fortran/simple
 set path=(${SIMPLE_PATH}/scripts ${SIMPLE_PATH}/bin $path)
 \end{verbatim}
-On this machine we use the bash shell, so we add the lines in \texttt{add2.bashrc} to the \texttt{.bashrc} file.
+On this machine we use the bash shell, so we add the lines in \texttt{add2.bashrc} to the \texttt{.bashrc} file. This is done by using a text editor, such as \texttt{gedit}, to edit the hidden file \texttt{.bashrc} located in your home folder.
+\begin{verbatim}
+@!#> cd
+@!#> gedit .bashrc 
+\end{verbatim}
 
 \subsection{Compilation troubleshooting}
 \label{compiletrouble}
@@ -276,7 +282,6 @@ The instructions for how to execute SIMPLE in distributed environments (clusters
 
 \subsection{Testing the SIMPLE Installation}
 <2 be inputted>
-
 
 \subsection{SIMPLE Help Tools}
 In attempt to reduce the dependency on the manual, we have packaged a lot of the documentation in the software itself. For example
@@ -360,7 +365,7 @@ minp      = minimum cluster population
 
 \section{Workflows}
 
-\subsection{Distributed Execution of SIMPLE on Workstations and Clusters}
+\subsection{Distributed Execution of SIMPLE on Multi-socket Workstations and Clusters}
 SIMPLE is executed either via \texttt{simple\_exec}, which implements all individual SIMPLE programs and runs in shared-memory parallelisation mode, or via \texttt{simple\_distr\_exec} that implements higher-level workflows intended for distributed execution on workstations and clusters using a hybrid parallelisation model (distributed \textit{and} shared memory). In cluster environments using a job scheduler (PBS and SLURM are supported by SIMPLE) the file \texttt{simple\_distr\_config.env} in the current working directory controls the execution.
 \begin{verbatim}
 bash-3.2$ cat simple_distr_config.env 
@@ -429,6 +434,28 @@ These steps describe a typical SIMPLE workflow.
 \item Map refinement using SIMPLE program \prgname{prime3D}
 \end{enumerate}
 For hands-on descriptions for how to execute the individual steps, please refer to the documentation of each program (below) and the SIMPLE workshop material, available at (INSERTREF).
+
+\subsection{Unresolved Bugs}
+On certain systems the file-system and/or the master node becomes overloaded by the volassemble step when executing \prgname{prime3D} and gives odd errors. For example, it fails to open the submit script files for writing and then goes on trying to submit non-existing scripts. We have tried to add a linux \texttt{sync} command in the \texttt{qsys\_cleanup} subroutine and we are flushing all the file-handles every iteration, but the error nevertheless occurs. The problem has been nailed down to a being volassemble-related, as if the volassemble step is taken out and the current map is simply copied to the \texttt{vol\_iter} name, the problem never occurs. The error looks as follows
+\begin{verbatim}
+ System error        4096  for command: echo DISTRIBUTED MODE :: submitting scripts:ls -1  
+ distr_simple_script_*REPLACEWRITEsimple_qsys_ctrl :: submit_scripts#!/bin/bashdistr_
+ simple_script_simple_qsys_ctrl :: gen_qsys_script; Error when opening file for writing:  ;  
+ qsys_namelocalyescd cmdstat /= 0, command could not be executed: echo DISTRIBUTED  
+ MODE :: submitting scripts:ls -1 distr_simple_script_*REPLACEWRITEsimple_qsys_ctrl :: 
+ submit_scripts#!/bin/bashdistr_simple_script_simple_qsys_ctrl :: gen_qsys_script; Error 
+ when opening file for writing:  ; qsys_namelocalyescd
+ Termination status of the command-language interpreter cannot be obtained
+ System error        4096  for command: ls -1 distr_simple_script_*REPLACEWRITE
+ simple_qsys_ctrl :: submit_scripts#!/bin/bashdistr_simple_script_simple_qsys_ctrl :: 
+ gen_qsys_script; Error when opening file for writing:  ; qsys_namelocalyescd   > OUT
+ simple_qsys_scripts :: gen_qsys_scri cmdstat /= 0, command could not be executed: 
+ ls -1 distr_simple_script_*REPLACEWRITEsimple_qsys_ctrl :: submit_scripts
+ #!/bin/bashdistr_simple_script_simple_qsys_ctrl :: gen_qsys_script; Error when opening 
+ file for writing:  ; qsys_namelocalyescd   > OUTsimple_qsys_scripts :: gen_qsys_scri
+ Termination status of the command-language interpreter cannot be obtained
+\end{verbatim}
+and when it occurs, you need to restart \prgname{prime3D} from the last completed iteration.
 
 \section{Command Line Dictionary}
 \begin{tabular}{ll}
