@@ -18,7 +18,7 @@ private
 
 ! module global constants
 integer,           parameter :: NPROJS      = 15
-integer,           parameter :: NSTATES     = 4
+integer,           parameter :: NSTATES     = 3
 integer,           parameter :: MAXNPEAKS   = 10
 character(len=32), parameter :: ptclsname   = 'prime3D_srch_test_ptcls.mrc'
 character(len=32), parameter :: orisname    = 'prime3D_srch_test_oris.txt'
@@ -100,7 +100,7 @@ contains
         call test_prep_reforis
         call shutdown_testenv
         ! refine = qcontneigh; nstates=4;
-        write(*,*)'>>> REFINE=QCONTNEIGH; NSTATES=4'
+        write(*,*)'>>> REFINE=QCONTNEIGH; NSTATES=',NSTATES
         cline_local = cline
         call cline_local%set('refine', 'qcontneigh')
         call cline_local%set('nstates',real(NSTATES))
@@ -237,10 +237,10 @@ contains
                     call primesrch3D%prep4srch( o )
                     call primesrch3D%prep_corr4srch(  pftcc, i, p%lp, o )
                     if( p%nstates==1 )then
-                        if( abs(2.*primesrch3D%get_prevcorr()-prev_corr-1.)>0.005 ) &
+                        if( abs(2.*primesrch3D%get_prevcorr()-prev_corr-1.)>0.01 ) &
                             & stop 'Failed in test_prepcorr4srch::simple_prime3D_srch_tester 1'
                     else
-                        if( primesrch3D%get_prevcorr()<0.995 ) &
+                        if( primesrch3D%get_prevcorr()<0.99 ) &
                             & stop 'Failed in test_prepcorr4srch::simple_prime3D_srch_tester 2'
                     endif
                 enddo
@@ -252,7 +252,7 @@ contains
                 call o%set('corr',prev_corr)
                 call primesrch3D%prep4srch( o )
                 call primesrch3D%prep_corr4srch(  pftcc, i, p%lp, o )
-                if( primesrch3D%get_prevcorr()<0.995 ) &
+                if( primesrch3D%get_prevcorr()<0.99 ) &
                     & stop 'Failed in test_prepcorr4srch::simple_prime3D_srch_tester 3'
             enddo
         endif

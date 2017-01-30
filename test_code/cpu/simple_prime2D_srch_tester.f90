@@ -39,7 +39,7 @@ contains
         write(*,*) '****prime2D_srch_test, init'
         call test_calc_corrs2D
         call test_prepcorrs4gpusrch
-        call test_greedy_srch
+        !call test_greedy_srch
         call shutdown_testenv
         write(*,*) '****prime2D_srch_test, completed'
     end subroutine exec_prime2D_srch_test
@@ -218,6 +218,7 @@ contains
             call primesrch2D%greedy_srch(pftcc, iptcl)
             call primesrch2D%get_cls(one_ori)
             assignments_correct(iptcl) = nint(one_ori%get('class')) == iptcl
+            print *,iptcl, nint(one_ori%get('class')) 
         end do
         if( all(assignments_correct) )then
             ! the test passed

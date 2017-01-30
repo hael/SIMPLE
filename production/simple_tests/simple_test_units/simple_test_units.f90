@@ -31,7 +31,7 @@ call seed_rnd
 call date_and_time(date=date)
 folder = './SIMPLE_UNIT_TEST'//date
 command = 'mkdir '//folder
-call system(command)
+call execute_command_line( trim(command) )
 call chdir(folder)
 call test_cmd_dict
 call test_build

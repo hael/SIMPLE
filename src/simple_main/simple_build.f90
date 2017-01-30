@@ -136,7 +136,7 @@ contains
         if( debug ) write(*,'(a)') 'did setup symmetry functionality'
         ! create object for orientations
         call self%a%new(p%nptcls)
-        if( present(nooritab) )then            
+        if( present(nooritab) )then
             call self%a%spiral(p%nsym, p%eullims)
         else
             ! we need the oritab to override the deftab in order not to loose parameters
