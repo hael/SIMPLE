@@ -446,12 +446,12 @@ ctf=flip
 msk=36
 box=128
 \end{verbatim}
-The key-value pair \texttt{ctf=flip} means that the images have been ``phase-flipped'', \textit{i.e.} the contrast bands inverted by the CTF have been reverted simply by multiplying the Fourier transform of the image with the sign of the CTF. The individual particle images are quite noisy and it is difficult to gain any understanding about the imaged structure from these images.
+The key-value pair \texttt{ctf=flip} means that the images have been ``phase-flipped'', \textit{i.e.} the contrast bands inverted by the CTF have been reverted simply by multiplying the Fourier transform of the image with the sign of the CTF. The individual particle images are quite noisy and it is difficult to gain any understanding about the imaged structure from these images, which represent a subset of particles from a larger TRPV1 data set (EMPIAR-10005). 
 \begin{SCfigure}[][h]
 \includegraphics[keepaspectratio=true,scale=0.3]{./trpv1ptcls}
 \caption{Individual TRPV1 particle images.}
 \end{SCfigure}
-These images represent a subset of particles from a larger TRPV1 data set (EMPIAR-10005). In order to cluster the images, execute:
+In order to cluster the images, execute:
 \begin{verbatim}
 bash-3.2$ simple_distr_exec prg=prime2D stk=./data/trpv1_ptcls.mrc smpd=2.43 msk=36 
 ncls=5 ctf=flip nparts=2 nthr=4 deftab=./data/trpv1_extract_params.txt

@@ -97,7 +97,7 @@ SIMPLE is free software: you can redistribute it and/or modify it under the term
 
 \subsection{What is new in SIMPLE release 3.0?}
 \begin{itemize}
-    \item[--] A new DDD movie pre-processing program \prgname{unblur\_movies} that implements motion correction, dose-weighting \citep{grant2015measuring} and automatic correlation-based frame weighting . 
+    \item[--] A new DDD movie pre-processing program \prgname{unblur\_movies} that implements motion correction and automatic correlation-based frame weighting. 
     \item[--] A new Fourier shell-weighting scheme for resolution-dependent data weighting that when used in conjunction with Wiener restoration in \prgname{prime2D} and \prgname{prime3D} enables near-atomic resolution \textit{ab initio} 3D reconstruction.
     \item[--] High-level workflows for 2D analysis and initial 3D model production.
 \end{itemize}
@@ -423,7 +423,7 @@ where the \texttt{--wrap} flag automatically generates a bash script for the giv
 \subsection{From Movies to Structure}
 These steps describe a typical SIMPLE workflow.
 \begin{enumerate}
-\item DDD (Direct Detector Device) movie alignment, dose- and frame-weighting using SIMPLE program \prgname{unblur\_movies}
+\item DDD (Direct Detector Device) movie alignment and frame-weighting using SIMPLE program \prgname{unblur\_movies}
 \item CTF parameter identification with the SIMPLE program \prgname{ctffind}, wrapping CTFFIND4 \citep{rohou2015ctffind4}
 \item Particle identification using EMAN2 \citep{Tang:2007aa} to generate \texttt{*.box} files
 \item Particle extraction with SIMPLE program \prgname{extract}
@@ -2257,13 +2257,9 @@ fbody     = file body
 lpstart   = start low-pass limit{15}
 lpstop    = stop low-pass limit{8}
 trs       = maximum halfwidth shift(in pixels)
-exp_time  = expusure time(in s)
-dose_rate = dose rate(in e/A2/s)
-kv        = acceleration voltage(in kV){300.}
 pspecsz   = size of power spectrum(in pixels)
 numlen    = length of number string
 startit   = start iterating from here
-scale     = image scale factor{1}
 frameavg  = nr of frames to average{0}
 tomo      = tomography mode(yes|no){no}
 \end{verbatim}
@@ -2657,13 +2653,9 @@ fbody     = file body
 lpstart   = start low-pass limit{15}
 lpstop    = stop low-pass limit{8}
 trs       = maximum halfwidth shift(in pixels)
-exp_time  = expusure time(in s)
-dose_rate = dose rate(in e/A2/s)
-kv        = acceleration voltage(in kV){300.}
 pspecsz   = size of power spectrum(in pixels)
 numlen    = length of number string
 startit   = start iterating from here
-scale     = image scale factor{1}
 frameavg  = nr of frames to average{0}
 \end{verbatim}
 
