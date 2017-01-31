@@ -573,9 +573,10 @@ contains
         class(cmdline),                 intent(inout) :: cline
         ! constants
         logical,           parameter :: DEBUG=.false.
-        character(len=32), parameter :: ALGNFBODY = 'algndoc_'
-        character(len=32), parameter :: ITERFBODY = 'prime3Ddoc_'
-        character(len=32), parameter :: VOLFBODY  = 'recvol_state'
+        character(len=32), parameter :: ALGNFBODY    = 'algndoc_'
+        character(len=32), parameter :: ITERFBODY    = 'prime3Ddoc_'
+        character(len=32), parameter :: VOLFBODY     = 'recvol_state'
+        character(len=32), parameter :: RESTARTFBODY = 'prime3D_restart'
         ! commanders
         type(prime3D_init_distr_commander)  :: xprime3D_init_distr
         type(shellweight3D_distr_commander) :: xshellweight3D_distr
@@ -603,7 +604,7 @@ contains
         type(qsys_ctrl)                     :: qscripts
         type(oris)                          :: os
         character(len=STDLEN)               :: vol, vol_iter, oritab, str, str_iter
-        character(len=STDLEN)               :: str_state, cmd_str, fsc_file
+        character(len=STDLEN)               :: str_state, cmd_str, fsc_file, restart_file
         integer                             :: state, iter, status, cnt
         real                                :: frac_srch_space
         type(chash)                         :: myq_descr, job_descr
@@ -681,9 +682,7 @@ contains
                 vol = 'vol'//trim(int2str(state))
                 call cline%set( trim(vol), trim(str) )
             enddo
-        else if( .not.cline%defined('oritab') .and. cline%defined('vol1') )then
-            if( p_master%nstates > 1 )stop 'orientations doc at least must be provided for nstates>1'
-        else
+        else 
             ! all good
         endif
 
@@ -735,6 +734,7 @@ contains
                 endif
             endif
             call job_descr%set( 'startit', trim(int2str(iter)) )
+            call cline%set( 'startit', real(iter) )
             call qscripts%generate_scripts(job_descr, p_master%ext, myq_descr, ALGNFBODY)
             ! PRIMED3D JOB SCHEDULING
             call qscripts%schedule_jobs
@@ -760,7 +760,7 @@ contains
                 vol_iter = trim(VOLFBODY)//trim(str_state)//'_iter'//trim(str_iter)//p_master%ext
                 call rename( trim(vol), trim(vol_iter) )
                 ! post-process
-                call cline_postproc_vol%set('vol1', trim(vol_iter))
+                call cline_postproc_vol%set('vol1', trim(vol_iter))   ! should be volstate not vol1 ??
                 fsc_file = 'fsc_state'//trim(str_state)//'.bin'
                 if( file_exists(fsc_file) )then
                     call cline_postproc_vol%delete('lp')
@@ -770,10 +770,10 @@ contains
                     call cline_postproc_vol%set('lp', p_master%lp)
                 endif
                 call xpostproc_vol%execute(cline_postproc_vol)
-
-                ! update job description
+                ! update cline & job description
                 vol = 'vol'//trim(int2str(state))
                 call job_descr%set( trim(vol), trim(vol_iter) )
+                call cline%set( trim(vol), trim(vol_iter) )
                 ! update shell-weight command line
                 call cline_shellweight3D%set( trim(vol), trim(vol_iter) )
             enddo
@@ -790,23 +790,26 @@ contains
                 ! activates shift search if frac >= 90
                 str = real2str(cline_check3D_conv%get_rarg('trs'))
                 call job_descr%set( 'trs', trim(str) )
+                call cline%set( 'trs', cline_check3D_conv%get_rarg('trs') )
             endif
             if( p_master%dynlp.eq.'yes' )then
                 ! dynamic resolution update
                 if( cline_check3D_conv%get_carg('update_res').eq.'yes' )then
                     p_master%find = p_master%find + p_master%fstep  ! fourier index update
                     p_master%lp   = calc_lowpass_lim(p_master%find , p_master%box, p_master%smpd)
+                    call cline%set( 'lp', real(p_master%lp) )
                     call job_descr%set( 'find', int2str(p_master%find) )
+                    call cline%set( 'find', real(p_master%find) )
                     call cline_check3D_conv%set( 'find', real(p_master%find) )
-
                endif
             endif
+            ! RESTART
+            restart_file = trim(RESTARTFBODY)//'_iter'//int2str_pad( iter, 3)//'.txt'
+            !call cline%write( trim(restart_file) )
         end do
         call qsys_cleanup(p_master)
-
-        ! POST PROCESSING ?
-
         ! report the last iteration on exit
+        call cline%delete( 'startit' )
         call cline%set('endit', real(iter))
         ! end gracefully
         call simple_end('**** SIMPLE_DISTR_PRIME3D NORMAL STOP ****')

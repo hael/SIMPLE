@@ -40,6 +40,8 @@ type cmdline
     procedure             :: checkvar
     procedure             :: check
     procedure             :: print
+    procedure             :: write
+    procedure             :: read
     procedure             :: defined
     procedure             :: get_rarg
     procedure             :: get_carg
@@ -281,6 +283,25 @@ contains
             endif
         end do
     end subroutine print
+
+    !>  \brief  for writing key-vals to a text file
+    subroutine write( self, fname )
+        class(cmdline),             intent(in)    :: self
+        character(len=*),           intent(in)    :: fname  !< name of file
+        type(chash) :: hash
+        call self%gen_job_descr( hash )
+        call hash%write( fname )
+        call hash%kill
+    end subroutine write
+
+    !>  \brief  for reading key-vals from a text file
+    subroutine read( self, fname )
+        class(cmdline),             intent(in)    :: self
+        character(len=*),           intent(in)    :: fname  !< name of file
+        type(chash) :: hash
+        call hash%read( fname )
+        call hash%kill
+    end subroutine read
 
     !> \brief  for checking the existence of of arg
     function defined( self, key ) result( def )

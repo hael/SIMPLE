@@ -9,7 +9,7 @@
 program simple_distr_exec
 use simple_defs  
 use simple_cmdline, only: cmdline
-use simple_strings, only: str_has_substr
+use simple_strings, only: str_has_substr, parse, split
 use simple_jiffys,  only: cmdline_err
 use simple_gen_doc
 use simple_commander_distr_wflows
@@ -36,9 +36,9 @@ type(ini3D_from_cavgs_commander)         :: xini3D_from_cavgs
 ! OTHER DECLARATIONS
 integer, parameter    :: MAXNKEYS=100, KEYLEN=32
 character(len=KEYLEN) :: keys_required(MAXNKEYS)='', keys_optional(MAXNKEYS)=''
-character(len=STDLEN) :: arg, prg, entire_line
+character(len=STDLEN) :: arg, prg, entire_line, restart
 type(cmdline)         :: cline
-integer               :: cmdstat, cmdlen, pos
+integer               :: cmdstat, cmdlen, pos, nargs
 logical               :: describe
 call get_command_argument(1, arg, cmdlen, cmdstat)
 call get_command(entire_line)
@@ -345,10 +345,21 @@ select case(prg)
         keys_optional(28) = 'noise'
         keys_optional(29) = 'xfel'
         keys_optional(30) = 'nnn'
-        keys_optional(31) = 'shellw'  
+        keys_optional(31) = 'shellw'
         ! parse command line
         if( describe ) call print_doc_prime3D
         call cline%parse(keys_required(:7), keys_optional(:31))
+        ! restart
+        ! call parse( entire_line, ' ', args, nargs )
+        ! if( nargs == 2 )then
+        !     if( .not.str_has_substr( args(2), 'startit=') )stop 'needs startit argument for restart'
+        !     call split( restart, '=', arg )
+        !     restart = 'prime3D_restart_iter' // int2strpad( args(2), 3 )
+        !     call cline%read( trim(restart) )
+        ! else
+        !     ! parse command line
+        !     call cline%parse(keys_required(:7), keys_optional(:31))
+        ! endif
         ! set defaults
         if( .not. cline%defined('nspace')                  ) call cline%set('nspace', 1000.)
         if( cline%defined('lp') .or. cline%defined('find') ) call cline%set('dynlp',   'no')

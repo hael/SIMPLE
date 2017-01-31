@@ -199,8 +199,12 @@ contains
                             if( p%oritab .eq. '' ) stop 'cannot run the refine=neigh mode without input oridoc (oritab)'
                             call primesrch3D%exec_prime3D_srch(pftcc, iptcl, p%lp, orientation, nnmat=b%nnmat)
                         case('shc')
-                            if( p%oritab .eq. '' ) stop 'cannot run the refine=shc mode without input oridoc (oritab)'
-                            call primesrch3D%exec_prime3D_shc_srch(pftcc, iptcl, p%lp, orientation)
+                            !if( p%oritab .eq. '' ) stop 'cannot run the refine=shc mode without input oridoc (oritab)'
+                            if( p%oritab .eq. '' )then
+                                call primesrch3D%exec_prime3D_shc_srch(pftcc, iptcl, p%lp)
+                            else
+                                call primesrch3D%exec_prime3D_shc_srch(pftcc, iptcl, p%lp, orientation)
+                            endif
                         case('shcneigh')
                             if( p%oritab .eq. '' ) stop 'cannot run the refine=shcneigh mode without input oridoc (oritab)'
                             call primesrch3D%exec_prime3D_shc_srch(pftcc, iptcl, p%lp, orientation, nnmat=b%nnmat)

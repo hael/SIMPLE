@@ -431,10 +431,10 @@ contains
                     stop 'Unknown refinement mode; simple_prime3D_srch; prep4srch'
             end select
             self%prev_ref = self%o_refs%find_closest_proj( o_prev, self%prev_state )    ! find closest ori with same state
-         else
+        else
             call self%prep_reforis
-         endif
-         if( debug ) write(*,'(A)') '>>> PRIME3D_SRCH::PREPARED FOR SIMPLE_PRIME3D_SRCH'
+        endif
+        if( debug ) write(*,'(A)') '>>> PRIME3D_SRCH::PREPARED FOR SIMPLE_PRIME3D_SRCH'
     end subroutine prep4srch
 
     !>  \brief  prepares the search space (ref oris) & search order per particle
