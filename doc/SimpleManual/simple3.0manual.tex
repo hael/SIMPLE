@@ -281,7 +281,15 @@ Installation on a Linux cluster is essentially the same as on a Linux workstatio
 The instructions for how to execute SIMPLE in distributed environments (clusters or workstations with more than one CPU socket) are described below \label{distr}.
 
 \subsection{Testing the SIMPLE Installation}
-<2 be inputted>
+To ensure that SIMPLE has been correctly installed, we recommend running the application \prgname{simple\_test\_install}. It will test the most important components in the SIMPLE library  (those used by \prgname{prime2D} and \prgname{prime3D}). Execute
+\begin{verbatim}
+@!#> simple_test_install 
+\end{verbatim}
+The program will create its own folder (\texttt{SIMPLE\_TEST\_INSTALL*date*}) where temporary files and information about each test are stored. Upon succesful completion you should see
+\begin{verbatim}
+**** SIMPLE_TEST_INSTALL NORMAL STOP ****
+\end{verbatim}
+\prgname{simple\_test\_install} can be executed anywhere. After execution, the folder created can be safely removed. If any of the individual tests fail an error message will be displayed. If you detect an error, please carefully check the SIMPLE and FFTW installations and the \texttt{gfortran} version used (section 3). If you still have issues, please file a help ticket on the webpage.
 
 \subsection{SIMPLE Help Tools}
 In attempt to reduce the dependency on the manual, we have packaged a lot of the documentation in the software itself. For example
