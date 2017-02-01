@@ -604,7 +604,8 @@ contains
         type(qsys_ctrl)                     :: qscripts
         type(oris)                          :: os
         character(len=STDLEN)               :: vol, vol_iter, oritab, str, str_iter
-        character(len=STDLEN)               :: str_state, cmd_str, fsc_file, restart_file
+        character(len=STDLEN)               :: str_state, cmd_str, fsc_file
+        character(len=STDLEN)               :: simple_exec_bin, restart_file
         integer                             :: state, iter, status, cnt
         real                                :: frac_srch_space
         type(chash)                         :: myq_descr, job_descr
@@ -624,6 +625,7 @@ contains
             &stop 'Incompatible options: eo=yes and dynlp=yes'
         ! setup the environment for distributed execution
         call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr)
+        simple_exec_bin = qscripts%get_exec_bin()
 
         ! initialise
         if( .not. cline%defined('nspace') ) call cline%set('nspace', 1000.)
@@ -748,9 +750,17 @@ contains
             call cline_volassemble%set( 'oritab', trim(oritab) )
             if( p_master%eo.eq.'yes' )then            
                 call del_file('fsc_state01.bin')
-                call xeo_volassemble%execute( cline_volassemble )
+                call cline_volassemble%set(  'prg', 'eo_volassemble' )   ! required for cmdline exec
+                ! call xeo_volassemble%execute( cline_volassemble )
+                ! replaced the above with command line execution as giving the volassemble setup
+                ! its own process id seem to resolve the system instabilities on fast cpu systems
+                call exec_simple_prg(simple_exec_bin, cline_volassemble)
             else
-                call xvolassemble%execute( cline_volassemble )
+                call cline_volassemble%set(  'prg', 'volassemble' ) ! required for cmdline exec
+                ! call xvolassemble%execute( cline_volassemble )
+                ! replaced the above with command line execution as giving the volassemble setup
+                ! its own process id seem to resolve the system instabilities on fast cpu systems
+                call exec_simple_prg(simple_exec_bin, cline_volassemble)
             endif
             ! rename volumes, postprocess & update job_descr
             do state = 1,p_master%nstates

@@ -16,8 +16,8 @@ use simple_build,           only: build
 use simple_commander_base,  only: commander_base
 use simple_strings,         only: int2str_pad
 use simple_hadamard_common  ! use all in there
-use simple_filehandling    ! use all in there
-use simple_jiffys          ! use all in there
+use simple_filehandling     ! use all in there
+use simple_jiffys           ! use all in there
 implicit none
 
 public :: recvol_commander
@@ -78,7 +78,7 @@ contains
         character(len=:), allocatable :: fname
         real, allocatable             :: res05s(:), res0143s(:)
         real                          :: res
-        integer                       :: part, s, alloc_stat, n, ss, state4name
+        integer                       :: part, s, alloc_stat, n, ss, state4name, ffunit, file_stat
         logical                       :: debug=.false.
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
@@ -128,7 +128,7 @@ contains
                 call eorecvol_read%read_eos(fbody)
                 ! sum the Fourier coefficients
                 call b%eorecvol%sum(eorecvol_read)
-            end subroutine
+            end subroutine assemble
             
             subroutine normalize( recnam )
                 use simple_image, only: image
@@ -139,7 +139,7 @@ contains
                 call b%eorecvol%sampl_dens_correct_sum(b%vol)
                 call b%eorecvol%write_eos(recnam)
                 call b%vol%write(recnam//p%ext, del_if_exists=.true.)
-            end subroutine
+            end subroutine normalize
 
     end subroutine exec_eo_volassemble
     
@@ -151,7 +151,7 @@ contains
         type(build)                   :: b
         character(len=:), allocatable :: fbody
         character(len=STDLEN)         :: recvolname
-        integer                       :: part, s, ss, endit, i, state4name
+        integer                       :: part, s, ss, endit, i, state4name, ffunit, file_stat
         type(reconstructor)           :: recvol_read
         logical                       :: here(2)
         logical, parameter            :: debug=.false.
@@ -246,7 +246,7 @@ contains
                     if( .not. here(2) ) write(*,'(A,A,A)') 'WARNING! ', adjustl(trim(kernam)), ' missing'
                     return
                 endif
-            end subroutine
+            end subroutine assemble
     
             subroutine normalize( recnam )
                 character(len=*), intent(in) :: recnam
@@ -254,7 +254,8 @@ contains
                 call b%recvol%bwd_ft
                 call b%recvol%clip(b%vol)
                 call b%vol%write(recnam, del_if_exists=.true.)
-            end subroutine
+            end subroutine normalize
+
     end subroutine exec_volassemble
 
 end module simple_commander_rec

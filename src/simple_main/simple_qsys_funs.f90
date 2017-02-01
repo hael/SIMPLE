@@ -238,7 +238,7 @@ contains
             secs         = int(tot_time_sec - 3600.*real(hrs) - 60.*real(mins))
             secs_str     = int2str(secs)
             if( hrs > 23 )then
-                call myq_descr%set('job_time', '0-23:59:0')
+                call myq_descr%set('job_time', '1-23:59:0')
             else
                 call myq_descr%set('job_time','0-'//hrs_str//':'//mins_str//':'//secs_str)
             endif
@@ -269,5 +269,28 @@ contains
             close( unit=fnr )
         endif
     end subroutine qsys_job_finished
+
+    !>  returns when the inputted file exists in cwd
+    subroutine qsys_watcher( fname )
+        character(len=*), intent(in) :: fname
+        integer, parameter :: SHORTTIME = 5
+        do
+            if( file_exists(trim(fname)) ) exit
+            call sleep(SHORTTIME)
+        end do
+    end subroutine qsys_watcher
+
+    subroutine exec_simple_prg( exec_bin, cline )
+        use simple_cmdline, only: cmdline
+        use simple_chash,   only: chash
+        character(len=*), intent(in) :: exec_bin
+        class(cmdline),   intent(in) :: cline
+        type(chash) :: job_descr
+        character(len=1024) :: exec_str
+        ! prepare job description
+        call cline%gen_job_descr(job_descr)
+        exec_str = trim(exec_bin)//' '//job_descr%chash2str()
+        call exec_cmdline(exec_str)
+    end subroutine exec_simple_prg
 
 end module simple_qsys_funs

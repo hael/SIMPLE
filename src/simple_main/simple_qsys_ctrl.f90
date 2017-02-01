@@ -29,6 +29,8 @@ type qsys_ctrl
   contains
     ! CONSTRUCTOR
     procedure          :: new
+    ! GETTER
+    procedure          :: get_exec_bin
     ! SCRIPT GENERATORS
     procedure          :: generate_scripts
     procedure, private :: generate_script
@@ -92,6 +94,15 @@ contains
         call get_environment_variable('PWD', self%pwd)
         self%exists = .true.
     end subroutine new
+
+    ! GETTER
+
+    !>  \brief  for getting the execute simple binary
+    function get_exec_bin( self ) result( exec_bin )
+        class(qsys_ctrl), intent(in) :: self
+        character(len=STDLEN)        :: exec_bin
+        exec_bin = self%exec_binary
+    end function get_exec_bin
     
     ! SCRIPT GENERATORS
     
@@ -181,6 +192,7 @@ contains
         write(funit,'(a)',advance='yes') ''
         write(funit,'(a)',advance='yes') 'exit'
         close(funit)
+        call flush(funit)
         call chmod(self%script_names(ipart),'+x',ios)
         if( ios .ne. 0 )then
             write(*,'(a)',advance='no') 'simple_qsys_scripts :: gen_qsys_script; Error'

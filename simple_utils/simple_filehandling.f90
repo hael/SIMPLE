@@ -263,20 +263,26 @@ contains
         integer :: j, lstr, io_stat, nrrange(2)
         lstr = len(str)
         pos = map_str_nrs(str)
-        do j=lstr,1,-1
-            if( pos(j) )then
-                nrrange(1) = j
-                nrrange(2) = j
-                do while( pos(nrrange(1)) )
-                    nrrange(1) = nrrange(1)-1
-                end do
-                nrrange(1) = nrrange(1)+1
-                exit
-            endif
-        end do
-        allocate(str_copy, source=str(nrrange(1):nrrange(2)))
-        call str2int(str_copy, io_stat, ivar)
-        deallocate(pos,str_copy)
+        if( any(pos) )then
+            do j=lstr,1,-1
+                if( pos(j) )then
+                    nrrange(1) = j
+                    nrrange(2) = j
+                    do while( pos(nrrange(1)) )
+                        nrrange(1) = nrrange(1)-1
+                    end do
+                    nrrange(1) = nrrange(1)+1
+                    exit
+                endif
+            end do
+            allocate(str_copy, source=str(nrrange(1):nrrange(2)))
+            call str2int(str_copy, io_stat, ivar)
+        else
+            allocate(str_copy, source='1')
+            call str2int(str_copy, io_stat, ivar)
+        endif
+        if( allocated(pos)      ) deallocate(pos)
+        if( allocated(str_copy) ) deallocate(str_copy)
     end subroutine fname2ind
 
     !>  \brief  returns numbered names (body) with 0-padded integer strings 

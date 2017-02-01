@@ -33,8 +33,7 @@ type imgfile
     class(imghead), allocatable :: overall_head              !< Overall image head object
     character(len=STDLEN)       :: fname          = ''       !< Filename
     character(len=1)            :: head_format    = ''       !< 'M' (MRC), 'S' (SPIDER) file format
-    integer                     :: lun_img        = 0        !< Unit number for the image file. Set to 0 unless the file is currently open.
-    integer                     :: lun_hed        = 0        !< Unit number for the head file.
+    integer                     :: funit          = 0        !< Unit number
     logical                     :: was_written_to = .false.  !< Indicates whether data was written to the file since it was opened
     logical                     :: isvol          = .false.  !< Indicates if SPIDER file is volume or stack
     logical                     :: existence      = .false.  !< Set to true when the object exists, false when it's closed
@@ -133,12 +132,12 @@ contains
         if( file_exists(self%fname) )then
             ! read header
             if( rreadhead )then
-                call self%overall_head%read(self%lun_hed)
+                call self%overall_head%read(self%funit)
                 if( debug ) print *, 'did read header'
             endif
         else
             ! write header
-            call self%overall_head%write(self%lun_hed)
+            call self%overall_head%write(self%funit)
             if( debug ) print *, 'did write header'
         endif
         call self%overall_head%setPixSz(smpd)
@@ -177,9 +176,8 @@ contains
             endif
         endif
         ! Get an IO unit number for the head file
-        self%lun_hed = get_fileunit()
-        open(unit=self%lun_hed,access='STREAM',file=self%fname,action=rw_str,status=stat_str,convert=endconv)        
-        self%lun_img = self%lun_hed
+        self%funit = get_fileunit()
+        open(unit=self%funit,access='STREAM',file=self%fname,action=rw_str,status=stat_str,convert=endconv)
         self%was_written_to = .false.
     end subroutine open_local
 
@@ -187,14 +185,14 @@ contains
     subroutine close( self )
         class(imgfile), intent(inout) :: self
         integer :: ret
-        if( is_open(self%lun_hed) )then
+        if( is_open(self%funit) )then
             if( self%was_written_to )then
-                call self%overall_head%write(self%lun_hed)                    
+                call self%overall_head%write(self%funit)                    
                 if( debug ) write(*,*) '(simple_imgfile::close) wrote overall_head'
             endif
-            close(self%lun_hed)
-            call flush(self%lun_hed)
-            ret = fsync(fnum(self%lun_hed))
+            close(self%funit)
+            call flush(self%funit)
+            ret = fsync(fnum(self%funit))
         endif
         if( allocated(self%overall_head) ) call self%overall_head%kill
         if( allocated(self%overall_head) ) deallocate(self%overall_head)
@@ -206,10 +204,10 @@ contains
     subroutine close_nowrite( self )
         class(imgfile), intent(inout) :: self
         integer :: ret
-        if( is_open(self%lun_hed) )then
-            close(self%lun_hed)
-            call flush(self%lun_hed)
-            ret = fsync(fnum(self%lun_hed))
+        if( is_open(self%funit) )then
+            close(self%funit)
+            call flush(self%funit)
+            ret = fsync(fnum(self%funit))
         endif
         if( allocated(self%overall_head) ) call self%overall_head%kill
         if( allocated(self%overall_head) ) deallocate(self%overall_head)
@@ -353,9 +351,9 @@ contains
             end select
             ! read overall stack header
             if( debug )then
-                call head%read(self%lun_hed, print_entire=.true.)
+                call head%read(self%funit, print_entire=.true.)
             else
-                call head%read(self%lun_hed)
+                call head%read(self%funit)
             endif
         else
             select type(ptr)
@@ -375,9 +373,9 @@ contains
                     call head%new( ldim=ldim )
                     ! read image header
                     if( debug )then
-                        call head%read(self%lun_hed, pos=first_byte, print_entire=.true.)
+                        call head%read(self%funit, pos=first_byte, print_entire=.true.)
                     else
-                        call head%read(self%lun_hed, pos=first_byte)
+                        call head%read(self%funit, pos=first_byte)
                     endif
                 class DEFAULT
                     stop 'Format not supported; rHead; simle_imgfile'
@@ -395,9 +393,9 @@ contains
         integer(kind=8) :: hedbyteinds(2), imbyteinds(2), first_byte
         if( slice == 0 )then
             if( present(head) )then
-                call head%write(self%lun_hed)
+                call head%write(self%funit)
             else
-                call self%overall_head%write(self%lun_hed)
+                call self%overall_head%write(self%funit)
             endif
         else
             ptr => self%overall_head
@@ -411,12 +409,12 @@ contains
                     first_byte = hedbyteinds(1)
                     if( present(head) )then
                         if( same_type_as(head,self%overall_head) )then
-                            call head%write(self%lun_hed, pos=first_byte)
+                            call head%write(self%funit, pos=first_byte)
                         else
                             stop 'Inconsistent header types; wHead; simple_imgfile'
                         endif
                     else
-                        call self%overall_head%write(self%lun_hed, pos=first_byte)
+                        call self%overall_head%write(self%funit, pos=first_byte)
                     endif
                 class DEFAULT
                     stop 'unsupported type; wHead; simple_imgfile'
@@ -555,7 +553,7 @@ contains
             select case(self%overall_head%bytesPerPix())
                 case(1) ! Byte data
                     allocate(tmp_byte_array(dims(1),dims(2),dims(3)))
-                    read(unit=self%lun_img,pos=first_byte,iostat=io_stat,iomsg=io_message) tmp_byte_array
+                    read(unit=self%funit,pos=first_byte,iostat=io_stat,iomsg=io_message) tmp_byte_array
                     ! Conversion from unsigned byte integer (which MRC appears to be) is tricky because Fortran doesn't do unsigned integer natively.
                     ! The following IAND trick is courtesy of Jim Dempsey at http://software.intel.com/en-us/forums/showthread.php?t=64400
                     ! Confusingly, the MRC format documentation implies that one should expect signed integers, which seems to be incorrect: http://www2.mrc-lmb.cam.ac.uk/image2000.html
@@ -570,7 +568,7 @@ contains
                     select case (self%overall_head%getPixType())
                         case(dataRinteger)
                             allocate(tmp_16bit_int_array(dims(1),dims(2),dims(3)))
-                            read(unit=self%lun_img,pos=first_byte,iostat=io_stat,iomsg=io_message) tmp_16bit_int_array
+                            read(unit=self%funit,pos=first_byte,iostat=io_stat,iomsg=io_message) tmp_16bit_int_array
                             if( self%overall_head%pixIsSigned() )then
                                 rarr(1:dims(1),:,:) = real(tmp_16bit_int_array(:,:,:))
                             else
@@ -583,7 +581,7 @@ contains
                     end select
                 case(4) ! 32-bit data (SPIDER data always has 4 bytes per pixel)
                     allocate(tmp_32bit_float_array(dims(1),dims(2),dims(3)))
-                    read(unit=self%lun_img,pos=first_byte,iostat=io_stat,iomsg=io_message) tmp_32bit_float_array
+                    read(unit=self%funit,pos=first_byte,iostat=io_stat,iomsg=io_message) tmp_32bit_float_array
                     rarr(1:dims(1),:,:) = tmp_32bit_float_array
                     deallocate(tmp_32bit_float_array)
                 case DEFAULT
@@ -647,12 +645,12 @@ contains
                                     stop 'need optional logical dimension (ldim) to make SPIDER image&
                                     &header; rwSlices; simple_imgfile'
                                 endif
-                                call imghed%write(self%lun_hed, pos=first_hedbyte)
+                                call imghed%write(self%funit, pos=first_hedbyte)
                                 call imghed%kill
                                 deallocate(imghed)
                             endif
                     end select
-                    write(unit=self%lun_img,pos=first_byte,iostat=io_stat) rarr(1:dims(1),:,:)
+                    write(unit=self%funit,pos=first_byte,iostat=io_stat) rarr(1:dims(1),:,:)
                 case DEFAULT
                     print *, 'bit depth: ', int2str(self%overall_head%bytesPerPix())
                     stop 'Unsupported bit-depth; rwSlices; simple_imgfile' 

@@ -863,12 +863,13 @@ contains
                 if( nint(boxdata(j,3)) /= nint(boxdata(j,4)) )then
                     stop 'Only square windows are currently allowed!'
                 endif
+                if( j ==1 .and. .not. cline%defined('box') ) p%box = nint(boxdata(1,3)) ! use the box size from the box file
+                ! modify coordinates if change in box (shift by half)
+                if( orig_box /= p%box ) boxdata(j,1:2) = boxdata(j,1:2)-real(p%box-orig_box)/2.
             end do
+            box_o_2 = real(p%box)/2.0
     
             ! create particle index list and set movie index
-            if( .not. cline%defined('box') ) p%box = nint(boxdata(1,3)) ! use the box size from the box file
-            box_o_2 = real(p%box)/2.0
-
             do j=1,ndatlines
                 if( box_inside(ldim, nint(boxdata(j,1:2)), p%box) )then
                     pind     = pind+1
@@ -975,10 +976,6 @@ contains
                 cnt = 0
                 do j=1,ndatlines ! loop over boxes
                     if( pinds(j) > 0 )then
-                        ! modify coordinates if change in box (shift by half)
-                        if( debug ) print *, 'original coordinate: ', boxdata(j,1:2) 
-                        if( orig_box /= p%box ) boxdata(j,1:2) = boxdata(j,1:2)-real(p%box-orig_box)/2.
-                        if( debug ) print *, 'shifted coordinate: ', boxdata(j,1:2) 
                         ! extract the window
                         particle_position = boxdata(j,1:2)
                         call img_frame%window(nint(particle_position), p%box, b%img, noutside)

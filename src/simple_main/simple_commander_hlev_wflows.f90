@@ -48,6 +48,7 @@ contains
         character(len=32),     parameter :: ITERFBODY     = 'prime3Ddoc_'
         character(len=32),     parameter :: VOLFBODY      = 'recvol_state'
         character(len=STDLEN), parameter :: STKSCALEDBODY = 'stk_sc_ini3D_from_cavgs'
+        logical,               parameter :: DOSCALE=.true.
         ! distributed commanders
         type(prime3D_distr_commander) :: xprime3D_distr
         ! shared-mem commanders
@@ -78,6 +79,8 @@ contains
         p_master = params(cline, checkdistr=.false.)
         ! set global state string
         str_state = int2str_pad(STATE,2)
+        ! delete possibly pre-existing stack_parts
+        call del_files('stack_part', p_master%nparts, ext=p_master%ext)
         ! decide wether to search for the symmetry axis or put the point-group in from the start
         srch4symaxis = .false.
         if( p_master%pgrp .ne. 'c1' )then
@@ -97,38 +100,48 @@ contains
         cline_projvol         = cline
 
         ! initialise command line parameters
-        ! (1) SCALING
-        call autoscale( p_master%box, p_master%msk, p_master%smpd, box_sc, msk_sc, smpd_sc, scale )
-        call cline_scale%set('scale',  scale)
-        call cline_scale%set('clip',   real(box_sc))
-        call cline_scale%set('outstk', trim(STKSCALEDBODY)//p_master%ext)
+        if( DOSCALE )then
+            ! (1) SCALING
+            call autoscale( p_master%box, p_master%msk, p_master%smpd, box_sc, msk_sc, smpd_sc, scale )
+            call cline_scale%set('scale',  scale)
+            call cline_scale%set('clip',   real(box_sc))
+            call cline_scale%set('outstk', trim(STKSCALEDBODY)//p_master%ext)
+            call cline_prime3D_init%set('stk',  trim(STKSCALEDBODY)//p_master%ext)
+            call cline_prime3D_init%set('smpd', smpd_sc)
+            call cline_prime3D_init%set('msk',  real(msk_sc))
+            call cline_prime3D_refine1%set('stk',  trim(STKSCALEDBODY)//p_master%ext)
+            call cline_prime3D_refine1%set('smpd', smpd_sc)
+            call cline_prime3D_refine1%set('msk',  real(msk_sc))
+            call cline_prime3D_refine2%set('stk',  trim(STKSCALEDBODY)//p_master%ext)
+            call cline_prime3D_refine2%set('smpd', smpd_sc)
+            call cline_prime3D_refine2%set('msk',  real(msk_sc))
+        endif
         ! (2) PRIME3D_INIT
         call cline_prime3D_init%set('prg', 'prime3D')
-        call cline_prime3D_init%set('stk',  trim(STKSCALEDBODY)//p_master%ext)
-        call cline_prime3D_init%set('smpd', smpd_sc)
-        call cline_prime3D_init%set('msk',  real(msk_sc))
         call cline_prime3D_init%set('ctf', 'no')
         call cline_prime3D_init%set('maxits', real(MAXITS_INIT))
         call cline_prime3D_init%set('dynlp', 'yes') ! better be explicit about the dynlp
         ! (3) PRIME3D REFINE STEP 1
         call cline_prime3D_refine1%set('prg', 'prime3D')
-        call cline_prime3D_refine1%set('stk',  trim(STKSCALEDBODY)//p_master%ext)
-        call cline_prime3D_refine1%set('smpd', smpd_sc)
-        call cline_prime3D_refine1%set('msk',  real(msk_sc))
         call cline_prime3D_refine1%set('ctf', 'no')
         call cline_prime3D_refine1%set('maxits', real(MAXITS_REFINE))
         call cline_prime3D_refine1%set('dynlp', 'no') ! better be explicit about the dynlp
         call cline_prime3D_refine1%set('refine', 'shc')
         ! (4) SYMMETRY AXIS SEARCH
         if( srch4symaxis )then
+            if( DOSCALE )then
+                call cline_symsrch%set('smpd',    smpd_sc)
+                call cline_symsrch%set('msk',     real(msk_sc))
+                call cline_recvol%set('stk',  trim(STKSCALEDBODY)//p_master%ext)
+                call cline_recvol%set('smpd', smpd_sc)
+                call cline_recvol%set('msk',  real(msk_sc))
+            endif
             ! need to replace original point-group flag with c1
             call cline_prime3D_init%set('pgrp', 'c1') 
             call cline_prime3D_refine1%set('pgrp', 'c1')
             ! symsrch
             call cline_symsrch%set('prg', 'symsrch')
             call cline_symsrch%delete('stk')  ! volumetric symsrch
-            call cline_symsrch%set('smpd',    smpd_sc)
-            call cline_symsrch%set('msk',     real(msk_sc))
             call cline_symsrch%set('nptcls',  real(NPROJS_SYMSRCH))
             call cline_symsrch%set('nspace',  real(NPROJS_SYMSRCH))
             call cline_symsrch%set('cenlp',   CENLP)
@@ -138,9 +151,6 @@ contains
             endif
             ! (4.5) RECONSTRUCT SYMMETRISED VOLUME
             call cline_recvol%set('prg', 'recvol')
-            call cline_recvol%set('stk',  trim(STKSCALEDBODY)//p_master%ext)
-            call cline_recvol%set('smpd', smpd_sc)
-            call cline_recvol%set('msk',  real(msk_sc))
             call cline_recvol%set('trs',  5.) ! to assure that shifts are being used
             call cline_recvol%set('ctf',  'no')
             call cline_recvol%set('oritab', 'symdoc.txt')
@@ -153,9 +163,6 @@ contains
         endif
         ! (5) PRIME3D REFINE STEP 2
         call cline_prime3D_refine2%set('prg', 'prime3D')
-        call cline_prime3D_refine2%set('stk',  trim(STKSCALEDBODY)//p_master%ext)
-        call cline_prime3D_refine2%set('smpd', smpd_sc)
-        call cline_prime3D_refine2%set('msk',  real(msk_sc))
         call cline_prime3D_refine2%set('ctf', 'no')
         call cline_prime3D_refine2%set('maxits', real(MAXITS_REFINE))
         call cline_prime3D_refine2%set('dynlp', 'no') ! better be explicit about the dynlp
