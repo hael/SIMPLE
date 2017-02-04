@@ -72,7 +72,6 @@ contains
         character(len=STDLEN)         :: oritab, vol_iter
         logical                       :: srch4symaxis
         integer                       :: io_stat, pgrp_nr, box_sc
-
         ! set cline defaults
         call cline%set('eo', 'no')
         ! make master parameters
@@ -89,7 +88,6 @@ contains
                 srch4symaxis = .true.
             endif
         endif
-
         ! prepare command lines from prototype master
         cline_scale           = cline
         cline_prime3D_init    = cline
@@ -98,7 +96,6 @@ contains
         cline_symsrch         = cline
         cline_recvol          = cline
         cline_projvol         = cline
-
         ! initialise command line parameters
         if( DOSCALE )then
             ! (1) SCALING
@@ -171,11 +168,12 @@ contains
         ! (6) RE-PROJECT VOLUME
         call cline_projvol%set('prg', 'projvol')
         call cline_projvol%set('outstk', 'reprojs'//p_master%ext)
-
         ! execute commanders
-        write(*,'(A)') '>>>'
-        write(*,'(A)') '>>> AUTO-SCALING CLASS AVERAGES'
-        write(*,'(A)') '>>>'
+        if( DOSCALE )then
+            write(*,'(A)') '>>>'
+            write(*,'(A)') '>>> AUTO-SCALING CLASS AVERAGES'
+            write(*,'(A)') '>>>'
+        endif
         call xscale%execute(cline_scale)
         write(*,'(A)') '>>>'
         write(*,'(A)') '>>> INITIAL 3D MODEL GENERATION WITH PRIME3D'
@@ -219,29 +217,32 @@ contains
         call xprime3D_distr%execute(cline_prime3D_refine2)
         iter = cline_prime3D_refine2%get_rarg('endit')
         call set_iter_dependencies
-        write(*,'(A)') '>>>'
-        write(*,'(A)') '>>> 3D RECONSTRUCTION AT NATIVE SAMPLING'
-        write(*,'(A)') '>>>'
-        ! modulate shifts
-        call os%new(p_master%nptcls)
-        call os%read(oritab)
-        call os%mul_shifts(1./scale)
-        call os%write(oritab)
-        ! prepare recvol command line
-        call cline_recvol%set('stk',    p_master%stk)
-        call cline_recvol%set('smpd',   p_master%smpd)
-        call cline_recvol%set('msk',    p_master%msk)
-        call cline_recvol%set('oritab', trim(oritab))
-        ! re-reconstruct volume
-        call xrecvol%execute(cline_recvol)
-        call rename(trim(volfbody)//trim(str_state)//p_master%ext, 'rec_final'//p_master%ext)
+        if( DOSCALE )then
+            write(*,'(A)') '>>>'
+            write(*,'(A)') '>>> 3D RECONSTRUCTION AT NATIVE SAMPLING'
+            write(*,'(A)') '>>>'
+            ! modulate shifts
+            call os%new(p_master%nptcls)
+            call os%read(oritab)
+            call os%mul_shifts(1./scale)
+            call os%write(oritab)
+            ! prepare recvol command line
+            call cline_recvol%set('stk',    p_master%stk)
+            call cline_recvol%set('smpd',   p_master%smpd)
+            call cline_recvol%set('msk',    p_master%msk)
+            call cline_recvol%set('oritab', trim(oritab))
+            ! re-reconstruct volume
+            call xrecvol%execute(cline_recvol)
+            call rename(trim(volfbody)//trim(str_state)//p_master%ext, 'rec_final'//p_master%ext)
+        else
+            call rename(vol_iter, 'rec_final'//p_master%ext)
+        endif
         write(*,'(A)') '>>>'
         write(*,'(A)') '>>> RE-PROJECTION OF THE FINAL VOLUME'
         write(*,'(A)') '>>>'
         call cline_projvol%set('vol1', 'rec_final'//p_master%ext)
         call cline_projvol%set('oritab', trim(oritab))
         call xprojvol%execute(cline_projvol)
-
         ! end gracefully
         call del_file(trim(STKSCALEDBODY)//p_master%ext)
         call simple_end('**** SIMPLE_INI3D_FROM_CAVGS NORMAL STOP ****')

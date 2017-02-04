@@ -22,6 +22,7 @@ type :: hash
     procedure :: set
     procedure :: isthere
     procedure :: get
+    procedure :: hash2str
     procedure :: print
     procedure :: write
     procedure :: read
@@ -41,14 +42,14 @@ contains
             end do
             self_out%hash_index = self_in%hash_index
         endif
-    end subroutine
+    end subroutine copy
     
     !>  \brief  is a polymorphic assigner
     subroutine assign( self_out, self_in )
         class(hash), intent(inout) :: self_out
         class(hash), intent(in)    :: self_in 
         call self_out%copy(self_in)
-    end subroutine
+    end subroutine assign
     
     !>  \brief  pushes values to the hash
     subroutine push( self, key, val )
@@ -62,7 +63,7 @@ contains
         endif
         self%keys(self%hash_index) = trim(key)
         self%vals(self%hash_index) = val
-    end subroutine
+    end subroutine push
     
     !>  \brief  returns size of hash
     function size_of_hash( self ) result( sz )
@@ -86,7 +87,7 @@ contains
             end do
         endif
         call self%push(key, val)
-    end subroutine 
+    end subroutine set
     
     !>  \brief  check for presence of key in the hash
     function isthere( self, key ) result( found )
@@ -103,7 +104,7 @@ contains
                 endif
             end do
         endif
-    end function
+    end function isthere
     
     !>  \brief  gets a value in the hash
     function get( self, key ) result( val ) 
@@ -118,7 +119,29 @@ contains
                 return
             endif
         end do
-    end function
+    end function get
+
+    !>  \brief  convert hash to string
+    function hash2str( self ) result( str )
+        class(hash), intent(inout)    :: self
+        character(len=:), allocatable :: str, str_moving
+        integer :: i
+        if( self%hash_index == 1 )then
+            allocate(str, source=trim(self%keys(1))//'='//trim(real2str(self%vals(1))))
+            return
+        endif
+        allocate(str_moving, source=trim(self%keys(1))//'='//trim(real2str(self%vals(1)))//' ') 
+        if( self%hash_index > 2 )then
+            do i=2,self%hash_index-1
+                allocate(str, source=str_moving//trim(self%keys(i))//'='//trim(real2str(self%vals(i)))//' ')
+                deallocate(str_moving)
+                allocate(str_moving,source=str)
+                deallocate(str)
+            end do
+        endif
+        allocate(str,source=trim(str_moving//trim(self%keys(self%hash_index))&
+        &//'='//trim(real2str(self%vals(self%hash_index)))))
+    end function hash2str
     
     !>  \brief  prints the hash
     subroutine print( self )
@@ -144,11 +167,13 @@ contains
         write(fnr,"(1X,A,A)", advance="no") trim(self%keys(self%hash_index)), '='
         write(fnr,"(A)") trim(real2str(self%vals(self%hash_index)))
     end subroutine write
+
+    
     
     !>  \brief  reads a row of a text-file into the inputted hash, assuming key=value pairs
     subroutine read( self, fnr )
         class(hash), intent(inout) :: self
-        integer, intent(in)        :: fnr
+        integer,     intent(in)    :: fnr
         character(len=1024)        :: line
         character(len=64)          :: keyvalpairs(NMAX)
         character(len=64)          :: keyvalpair
@@ -200,6 +225,6 @@ contains
         close(fnr)
         call htab2%print
         write(*,'(a)') 'SIMPLE_HASH_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
-    end subroutine
+    end subroutine test_hash
     
 end module simple_hash

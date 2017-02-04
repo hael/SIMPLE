@@ -60,13 +60,13 @@ contains
         integer, intent(in) :: nmax !< max nr of entries in hash table
         type(chash)         :: self
         call self%new(nmax)
-    end function
+    end function constructor
     
     !>  \brief  is a constructor
     subroutine new( self, nmax )
         use simple_jiffys, only: alloc_err
         class(chash), intent(inout) :: self !< instance
-        integer, intent(in)         :: nmax !< max nr of entries in hash table
+        integer,      intent(in)    :: nmax !< max nr of entries in hash table
         integer :: alloc_stat
         call self%kill
         self%nmax = nmax
@@ -79,15 +79,15 @@ contains
     subroutine copy( self_out, self_in )
         class(chash), intent(inout) :: self_out
         class(chash), intent(in)    :: self_in
-        integer :: i
+        integer :: i        
+        call self_out%new(self_in%nmax)
         if( self_in%chash_index > 0 )then
-            call self_out%new(self_in%nmax)
             do i=1,self_in%chash_index
                 self_out%keys(i)   = self_in%keys(i)
                 self_out%values(i) = self_in%values(i)
             end do
-            self_out%chash_index = self_in%chash_index
         endif
+        self_out%chash_index = self_in%chash_index
     end subroutine copy
     
     !>  \brief  is a polymorphic assigner
@@ -137,6 +137,8 @@ contains
         character(len=*), intent(in)    :: val
         self%chash_index = self%chash_index+1
         if( self%chash_index > self%nmax )then
+            write(*,*) 'nmax: ', self%nmax
+            write(*,*) 'chash_index: ', self%chash_index
             write(*,*) 'chash table full; push; simple_chash, nentries:', self%chash_index
             stop
         endif
@@ -396,16 +398,18 @@ contains
                 end do
             endif
         else
-            ! find max key len among all keys in chash
-            maxlen = 0
-            do ikey=1,self%chash_index
-                keylen = len_trim(self%keys(ikey))
-                if( keylen > maxlen ) maxlen = keylen 
-            end do
-            ! print all key-value pairs
-            do ikey=1,self%chash_index
-                call self%print_key_val_pair_2(ikey, maxlen, fhandle )
-            end do
+            if( self%chash_index > 0 )then
+                ! find max key len among all keys in chash
+                maxlen = 0
+                do ikey=1,self%chash_index
+                    keylen = len_trim(self%keys(ikey))
+                    if( keylen > maxlen ) maxlen = keylen 
+                end do
+                ! print all key-value pairs
+                do ikey=1,self%chash_index
+                    call self%print_key_val_pair_2(ikey, maxlen, fhandle )
+                end do
+            endif
         endif
     end subroutine print_key_val_pairs
     

@@ -772,14 +772,19 @@ contains
                 ! post-process
                 call cline_postproc_vol%set('vol1', trim(vol_iter))   ! should be volstate not vol1 ??
                 fsc_file = 'fsc_state'//trim(str_state)//'.bin'
-                if( file_exists(fsc_file) )then
-                    call cline_postproc_vol%delete('lp')
-                    call cline_postproc_vol%set('fsc', trim(fsc_file))
+                if( p_master%eo .eq. 'yes' )then
+                    if( file_exists(fsc_file) )then
+                        call cline_postproc_vol%delete('lp')
+                        call cline_postproc_vol%set('fsc', trim(fsc_file))
+                        call xpostproc_vol%execute(cline_postproc_vol)
+                    else
+                        write(*,*) 'WARNING! no fsc file available for post-processing'
+                    endif
                 else
                     call cline_postproc_vol%delete('fsc')
                     call cline_postproc_vol%set('lp', p_master%lp)
+                    call xpostproc_vol%execute(cline_postproc_vol)
                 endif
-                call xpostproc_vol%execute(cline_postproc_vol)
                 ! update cline & job description
                 vol = 'vol'//trim(int2str(state))
                 call job_descr%set( trim(vol), trim(vol_iter) )

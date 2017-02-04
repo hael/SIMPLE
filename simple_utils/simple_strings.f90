@@ -19,6 +19,46 @@ public
 
 contains
 
+    !> \brief  assesses whether a string represents a filename
+    function str2format( str) result( format )
+        character(len=*), intent(in)  :: str
+        character(len=:), allocatable :: format
+        integer :: io_stat, ifoo
+        logical :: str_is_file
+        str_is_file = .true.
+        if( index(str, '.spi') /= 0 )then
+        else if( index(str, '.mrc') /= 0 )then
+        else if( index(str, '.map') /= 0 )then
+        else if( index(str, '.ctf') /= 0 )then
+        else if( index(str, '.bin') /= 0 )then
+        else if( index(str, '.txt') /= 0 )then
+        else if( index(str, '.asc') /= 0 )then
+        else if( index(str, '.log') /= 0 )then
+        else if( index(str, '.dat') /= 0 )then
+        else if( index(str, '.box') /= 0 )then
+        else if( index(str, '.raw') /= 0 )then
+        else if( index(str, '.hed') /= 0 )then
+        else if( index(str, '.img') /= 0 )then
+        else if( index(str, '.ccp') /= 0 )then
+        else
+            str_is_file = .false.
+        endif
+        if( str_is_file )then
+            allocate( format, source='file' )
+            return
+        endif
+        if( index(str, '.') /= 0 )then
+            allocate( format, source='real' )
+            return
+        endif
+        call str2int(str, io_stat, ifoo )
+        if( io_stat==0 )then 
+            allocate( format, source='int' )
+            return
+        endif
+        allocate( format, source='char' )
+    end function str2format
+
     !> \brief  parses the string 'str' into arguments args(1), ..., args(nargs) based on
     !!         the delimiters contained in the string 'delim'. The integer output variable 
     !!         nargs contains the number of arguments found.

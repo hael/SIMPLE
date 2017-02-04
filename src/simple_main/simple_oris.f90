@@ -36,7 +36,13 @@ type :: oris
     procedure          :: get_noris
     procedure          :: get_ori
     procedure          :: get
+    procedure, private :: getter_1
+    procedure, private :: getter_2
+    generic            :: getter => getter_1, getter_2
     procedure          :: get_all
+    procedure, private :: getter_all_1
+    procedure, private :: getter_all_2
+    generic            :: getter_all => getter_all_1, getter_all_2
     procedure          :: get_mat
     procedure          :: get_normal
     procedure, private :: isthere_1
@@ -66,7 +72,6 @@ type :: oris
     procedure          :: get_ctfparams
     procedure          :: print
     procedure          :: print_mats
-    ! procedure          :: distance_transform
     ! SETTERS
     procedure, private :: assign
     generic            :: assignment(=) => assign
@@ -74,10 +79,16 @@ type :: oris
     procedure          :: e1set
     procedure          :: e2set
     procedure          :: e3set
-    procedure          :: set
+    procedure, private :: set_1
+    procedure, private :: set_2
+    generic            :: set => set_1, set_2
     procedure          :: set_ori
-    procedure          :: set_all
-    procedure          :: set_all2single
+    procedure, private :: set_all_1
+    procedure, private :: set_all_2
+    generic            :: set_all => set_all_1, set_all_2
+    procedure, private :: set_all2single_1
+    procedure, private :: set_all2single_2
+    generic            :: set_all2single => set_all2single_1, set_all2single_2
     procedure          :: e3swapsgn
     procedure          :: swape1e3
     procedure          :: zero
@@ -197,7 +208,7 @@ contains
     !>  \brief  is a constructor
     subroutine new( self, n )
         class(oris), intent(inout) :: self
-        integer, intent(in) :: n
+        integer,     intent(in)    :: n
         integer :: alloc_stat, i
         call self%kill
         self%n = n
@@ -213,16 +224,16 @@ contains
     !>  \brief  returns the i:th first Euler angle 
     pure function e1get( self, i ) result( e1 )
         class(oris), intent(in) :: self
-        integer, intent(in)     :: i
-        real                    :: e1
+        integer,     intent(in) :: i
+        real :: e1
         e1 = self%o(i)%e1get()
     end function e1get
     
     !>  \brief  returns the i:th second Euler angle 
     pure function e2get( self, i ) result( e2 )
         class(oris), intent(in) :: self
-        integer, intent(in)     :: i
-        real                    :: e2
+        integer,     intent(in) :: i
+        real :: e2
         e2 = self%o(i)%e2get()
     end function e2get
     
@@ -230,7 +241,7 @@ contains
     pure function e3get( self, i ) result( e3 )
         class(oris), intent(in) :: self
         integer,     intent(in) :: i
-        real                    :: e3
+        real :: e3
         e3 = self%o(i)%e3get()
     end function e3get
     
@@ -238,7 +249,7 @@ contains
     pure function get_euler( self, i ) result( euls )
         class(oris), intent(in) :: self
         integer,     intent(in) :: i
-        real                    :: euls(3)
+        real :: euls(3)
         euls = self%o(i)%get_euler()
     end function get_euler
     
@@ -252,8 +263,8 @@ contains
     !>  \brief  returns an individual orientation
     function get_ori( self, i ) result( o )
         class(oris), intent(inout) :: self
-        integer, intent(in)        :: i
-        type(ori)                  :: o
+        integer,     intent(in)    :: i
+        type(ori) :: o
         if( self%n == 0 ) stop 'oris object does not exist; get_ori; simple_oris'
         if( i > self%n .or. i < 1 )then
             write(*,*) 'trying to get ori: ', i, ' among: ', self%n, ' oris'
@@ -264,30 +275,78 @@ contains
     
     !>  \brief  is a multiparameter getter
     function get( self, i, key ) result( val ) 
-        class(oris), intent(inout)     :: self
-        integer, intent(in)            :: i
-        character(len=*), intent(in)   :: key
-        real                           :: val
+        class(oris),      intent(inout) :: self
+        integer,          intent(in)    :: i
+        character(len=*), intent(in)    :: key
+        real :: val
         val = self%o(i)%get(key)
     end function get
+
+    !>  \brief  is a getter   
+    subroutine getter_1( self, i, key, val )
+        class(oris),                    intent(inout) :: self
+        integer,                       intent(in)    :: i
+        character(len=*),              intent(in)    :: key
+        character(len=:), allocatable, intent(inout) :: val
+        call self%o(i)%getter(key, val)
+    end subroutine getter_1
+
+    !>  \brief  is a getter   
+    subroutine getter_2( self, i, key, val )
+        class(oris),       intent(inout) :: self
+        integer,          intent(in)    :: i
+        character(len=*), intent(in)    :: key
+        real,             intent(inout) :: val
+        call self%o(i)%getter(key, val)
+    end subroutine getter_2
 
     !>  \brief  is for getting an array of 'key' values
     function get_all( self, key ) result( arr ) 
         class(oris),      intent(inout) :: self
         character(len=*), intent(in)    :: key
         real, allocatable :: arr(:)
-        integer           :: i, alloc_stat
+        integer :: i, alloc_stat
         allocate( arr(self%n), stat=alloc_stat)
         call alloc_err('get_all; simple_oris', alloc_stat)
         do i=1,self%n
             arr(i) = self%o(i)%get(key)
         enddo
     end function get_all
+
+    !>  \brief  is for getting an array of 'key' values
+    subroutine getter_all_1( self, key, vals )
+        class(oris),       intent(inout) :: self
+        character(len=*),  intent(in)    :: key
+        real, allocatable, intent(out)   :: vals(:)
+        integer :: i, alloc_stat
+        if( allocated(vals) ) deallocate(vals)
+        allocate( vals(self%n), stat=alloc_stat)
+        call alloc_err('getter_all_1; simple_oris', alloc_stat)
+        do i=1,self%n
+            call self%o(i)%getter(key, vals(i))
+        enddo
+    end subroutine getter_all_1
+
+    !>  \brief  is for getting an array of 'key' values
+    subroutine getter_all_2( self, key, vals )
+        class(oris),                        intent(inout) :: self
+        character(len=*),                   intent(in)    :: key
+        character(len=STDLEN), allocatable, intent(out)   :: vals(:)
+        integer :: i, alloc_stat
+        character(len=:), allocatable :: tmp
+        if( allocated(vals) ) deallocate(vals)
+        allocate( vals(self%n), stat=alloc_stat)
+        call alloc_err('getter_all_2; simple_oris', alloc_stat)
+        do i=1,self%n
+            call self%o(i)%getter(key, tmp)
+            vals(i) = tmp
+        enddo
+    end subroutine getter_all_2
     
     !>  \brief  is for getting the i:th rotation matrix
     pure function get_mat( self, i ) result( mat )
         class(oris), intent(in) :: self
-        integer, intent(in)     :: i
+        integer,     intent(in) :: i
         real :: mat(3,3)
         mat = self%o(i)%get_mat()
     end function get_mat
@@ -295,17 +354,17 @@ contains
     !>  \brief  is for getting the i:th normal
     pure function get_normal( self, i ) result( normal )
         class(oris), intent(in) :: self
-        integer, intent(in)     :: i
+        integer,     intent(in) :: i
         real :: normal(3)
         normal = self%o(i)%get_normal()
     end function get_normal
     
     !>  \brief  is for checking if parameter is present
     function isthere_1( self, key ) result( is )
-        class(oris), intent(inout)   :: self
-        character(len=*), intent(in) :: key
-        logical                      :: is
-        integer                      :: i
+        class(oris),      intent(inout) :: self
+        character(len=*), intent(in)    :: key
+        logical :: is
+        integer :: i
         is = .false.
         do i=1,self%n
             is = self%o(i)%isthere(key)
@@ -315,17 +374,17 @@ contains
     
     !>  \brief  is for checking if parameter is present
     function isthere_2( self, i, key ) result( is )
-        class(oris), intent(inout)   :: self
-        integer, intent(in)          :: i 
-        character(len=*), intent(in) :: key
-        logical                      :: is
+        class(oris),      intent(inout) :: self
+        integer,          intent(in)    :: i 
+        character(len=*), intent(in)    :: key
+        logical :: is
         is = self%o(i)%isthere(key)
     end function isthere_2
     
     !>  \brief  is for checking the number of classes
     function get_ncls( self, minpop ) result( ncls )
-        class(oris), intent(inout)    :: self
-        integer, intent(in), optional :: minpop
+        class(oris),       intent(inout) :: self
+        integer, optional, intent(in)    :: minpop
         integer :: i, ncls, mycls, ncls_here
         ncls = 1
         do i=1,self%n
@@ -343,9 +402,9 @@ contains
     
     !>  \brief  is for checking label population
     function get_pop( self, ind, label ) result( pop )
-        class(oris), intent(inout)   :: self
-        integer, intent(in)          :: ind
-        character(len=*), intent(in) :: label
+        class(oris),      intent(inout) :: self
+        integer,          intent(in)    :: ind
+        character(len=*), intent(in)    :: label
         integer :: mycls, pop, i, mystate
         pop = 0
         do i=1,self%n
@@ -362,7 +421,7 @@ contains
     !>  \brief  is for checking class population
     function get_clspop( self, class ) result( pop )
         class(oris), intent(inout) :: self
-        integer, intent(in) :: class
+        integer,     intent(in)    :: class
         integer :: mycls, pop, i, mystate
         pop = 0
         do i=1,self%n
@@ -379,7 +438,7 @@ contains
     !>  \brief  is for checking state population
     function get_statepop( self, state ) result( pop )
         class(oris), intent(inout) :: self
-        integer, intent(in)        :: state
+        integer,     intent(in)    :: state
         integer :: mystate, pop, i
         pop = 0
         do i=1,self%n
@@ -391,9 +450,9 @@ contains
     !>  \brief  4 getting the particle indices corresponding to state
     function get_ptcls_in_state( self, state ) result( ptcls )
         class(oris), intent(inout) :: self
-        integer, intent(in)        :: state
-        real, allocatable          :: ptcls(:)
-        integer                    :: pop, mystate, cnt, alloc_stat, i
+        integer,     intent(in)    :: state
+        real, allocatable :: ptcls(:)
+        integer :: pop, mystate, cnt, alloc_stat, i
         pop = self%get_statepop(state)
         allocate( ptcls(pop), stat=alloc_stat )
         call alloc_err("In: get_ptcls_in_state; simple_oris", alloc_stat)
@@ -410,7 +469,7 @@ contains
     !>  \brief  is for getting the number of states
     function get_nstates( self ) result( nstates )
         class(oris), intent(inout) :: self
-        integer                    :: nstates, i, mystate
+        integer :: nstates, i, mystate
         nstates = 1
         do i=1,self%n
             mystate = nint(self%o(i)%get('state'))
@@ -421,7 +480,7 @@ contains
     !>  \brief  is for getting the number of labels
     function get_nlabels( self ) result( nlabels )
         class(oris), intent(inout) :: self
-        integer                    :: nlabels, i, mylabel
+        integer :: nlabels, i, mylabel
         nlabels = 1
         do i=1,self%n
             mylabel = nint(self%o(i)%get('label'))
@@ -433,7 +492,7 @@ contains
     subroutine split_state( self, which )
         use simple_ran_tabu, only: ran_tabu
         class(oris), intent(inout) :: self
-        integer, intent(in)        :: which
+        integer,     intent(in)    :: which
         integer, allocatable :: ptcls_in_which(:)
         integer, allocatable :: states(:)
         type(ran_tabu)       :: rt
@@ -463,7 +522,7 @@ contains
     subroutine split_class( self, which )
         use simple_ran_tabu, only: ran_tabu
         class(oris), intent(inout) :: self
-        integer, intent(in)        :: which
+        integer,     intent(in)    :: which
         integer, allocatable :: ptcls_in_which(:)
         integer, allocatable :: members(:)
         type(ran_tabu)       :: rt
@@ -492,7 +551,7 @@ contains
     !>  \brief  for expanding the number of classes using balanced splitting 
     subroutine expand_classes( self, ncls_target )
         class(oris), intent(inout) :: self
-        integer, intent(in)        :: ncls_target
+        integer,     intent(in)    :: ncls_target
         integer, allocatable       :: pops(:)
         integer :: ncls, loc(1), myncls, icls
         ncls = self%get_ncls()
@@ -557,7 +616,7 @@ contains
     !>  \brief  is for getting an allocatable array with ptcl indices of the class 'class'
     function get_cls_pinds( self, class ) result( clsarr )
         class(oris), intent(inout) :: self
-        integer, intent(in)        :: class
+        integer,     intent(in)    :: class
         integer, allocatable       :: clsarr(:)
         integer                    :: clsnr, i, pop, alloc_stat, cnt
         pop = self%get_clspop( class )
@@ -598,7 +657,7 @@ contains
     !>  \brief  is for getting an allocatable array with ptcl indices of the stategroup 'state'
     function get_state( self, state ) result( statearr )
         class(oris), intent(inout) :: self
-        integer, intent(in)        :: state
+        integer,     intent(in)    :: state
         integer, allocatable       :: statearr(:)
         integer                    :: statenr, i, pop, alloc_stat, cnt
         pop = self%get_statepop( state )
@@ -619,13 +678,13 @@ contains
     !>  \brief  is for getting an array of 'which' variables with 
     !!          filtering based on class/state
     function get_arr( self, which, class, state ) result( vals )
-        class(oris), intent(inout)    :: self
-        character(len=*), intent(in)  :: which 
-        integer, intent(in), optional :: class
-        integer, intent(in), optional :: state
-        real, allocatable             :: vals(:)
-        integer                       :: pop, cnt, clsnr, i, alloc_stat, mystate
-        real                          :: val
+        class(oris),       intent(inout) :: self
+        character(len=*),  intent(in)    :: which 
+        integer, optional, intent(in)    :: class
+        integer, optional, intent(in)    :: state
+        real, allocatable :: vals(:)
+        integer :: pop, cnt, clsnr, i, alloc_stat, mystate
+        real    :: val
         if( present(class) )then
             pop = self%get_clspop(class)
         else if( present(state) )then
@@ -638,6 +697,8 @@ contains
             call alloc_err('get_arr; simple_oris', alloc_stat)
             cnt = 0
             do i=1,self%n
+                if( .not. self%o(i)%key_is_real(which) )&
+                &stop 'ERROR! only for real keys; simple_oris :: get_arr'
                 val = self%get(i, which)
                 if( present(class) )then
                     mystate = nint(self%get( i, 'state'))
@@ -664,17 +725,17 @@ contains
     !>  \brief  is for calculating the sum of 'which' variables with 
     !!          filtering based on class/state/fromto
     subroutine calc_sum( self, which, sum, cnt, class, state, fromto, mask )
-        class(oris), intent(inout)    :: self
-        character(len=*), intent(in)  :: which
-        real, intent(out)             :: sum
-        integer, intent(out)          :: cnt
-        integer, intent(in), optional :: class
-        integer, intent(in), optional :: state
-        integer, intent(in), optional :: fromto(2)
-        logical, intent(in), optional :: mask(self%n)
-        integer                       :: clsnr, i, mystate, istart, istop
-        real                          :: val
-        logical                       :: proceed
+        class(oris),       intent(inout) :: self
+        character(len=*),  intent(in)    :: which
+        real,              intent(out)   :: sum
+        integer,           intent(out)   :: cnt
+        integer, optional, intent(in)    :: class
+        integer, optional, intent(in)    :: state
+        integer, optional, intent(in)    :: fromto(2)
+        logical, optional, intent(in)    :: mask(self%n)
+        integer :: clsnr, i, mystate, istart, istop
+        real    :: val
+        logical :: proceed
         cnt = 0
         sum = 0.
         if( present(fromto) )then
@@ -685,6 +746,8 @@ contains
             istop  = self%n
         endif
         do i=istart,istop
+            if( .not. self%o(i)%key_is_real(which) )&
+            &stop 'ERROR! only for real keys; simple_oris :: calc_sum'
             mystate = nint(self%get( i, 'state'))
             if( mystate == 0 ) cycle
             if( present(mask) )then
@@ -717,28 +780,28 @@ contains
     !>  \brief  is for getting the sum of 'which' variables with 
     !!          filtering based on class/state/fromto
     function get_sum( self, which, class, state, fromto, mask) result( sum )
-        class(oris), intent(inout)    :: self
-        character(len=*), intent(in)  :: which 
-        integer, intent(in), optional :: class
-        integer, intent(in), optional :: state
-        integer, intent(in), optional :: fromto(2)
-        logical, intent(in), optional :: mask(self%n)
-        integer                       :: cnt
-        real                          :: sum
+        class(oris),       intent(inout) :: self
+        character(len=*),  intent(in)    :: which 
+        integer, optional, intent(in)    :: class
+        integer, optional, intent(in)    :: state
+        integer, optional, intent(in)    :: fromto(2)
+        logical, optional, intent(in)    :: mask(self%n)
+        integer :: cnt
+        real    :: sum
         call self%calc_sum(which, sum, cnt, class, state, fromto, mask)
     end function get_sum
     
     !>  \brief  is for getting the average of 'which' variables with 
     !!          filtering based on class/state/fromto
     function get_avg( self, which, class, state, fromto, mask ) result( avg )
-        class(oris), intent(inout)    :: self
-        character(len=*), intent(in)  :: which 
-        integer, intent(in), optional :: class
-        integer, intent(in), optional :: state
-        integer, intent(in), optional :: fromto(2)
-        logical, intent(in), optional :: mask(self%n)
-        integer                       :: cnt
-        real                          :: avg, sum
+        class(oris),       intent(inout) :: self
+        character(len=*),  intent(in)    :: which 
+        integer, optional, intent(in)    :: class
+        integer, optional, intent(in)    :: state
+        integer, optional, intent(in)    :: fromto(2)
+        logical, optional, intent(in)    :: mask(self%n)
+        integer :: cnt
+        real    :: avg, sum
         call self%calc_sum(which, sum, cnt, class, state, fromto, mask)
         avg = sum/real(cnt)
     end function get_avg
@@ -746,15 +809,15 @@ contains
     !>  \brief  is for calculating the nonzero sum of 'which' variables with 
     !!          filtering based on class/state/fromto
     subroutine calc_nonzero_sum( self, which, sum, cnt, class, state, fromto )
-        class(oris), intent(inout)    :: self
-        character(len=*), intent(in)  :: which
-        real, intent(out)             :: sum
-        integer, intent(out)          :: cnt
-        integer, intent(in), optional :: class
-        integer, intent(in), optional :: state
-        integer, intent(in), optional :: fromto(2)
-        integer                       :: clsnr, i, mystate, istart, istop
-        real                          :: val
+        class(oris),       intent(inout) :: self
+        character(len=*),  intent(in)    :: which
+        real,              intent(out)   :: sum
+        integer,           intent(out)   :: cnt
+        integer, optional, intent(in)    :: class
+        integer, optional, intent(in)    :: state
+        integer, optional, intent(in)    :: fromto(2)
+        integer :: clsnr, i, mystate, istart, istop
+        real    :: val
         cnt = 0
         sum = 0.
         if( present(fromto) )then
@@ -765,6 +828,8 @@ contains
             istop  = self%n
         endif
         do i=istart,istop
+             if( .not. self%o(i)%key_is_real(which) )&
+            &stop 'ERROR! only for real keys; simple_oris :: calc_nonzero_sum'
             mystate = nint(self%get( i, 'state'))
             if( mystate == 0 ) cycle
             val = self%get(i, which)
@@ -793,26 +858,26 @@ contains
     !>  \brief  is for getting the sum of 'which' variables with 
     !!          filtering based on class/state/fromto
     function get_nonzero_sum( self, which, class, state, fromto ) result( sum )
-        class(oris), intent(inout)    :: self
-        character(len=*), intent(in)  :: which 
-        integer, intent(in), optional :: class
-        integer, intent(in), optional :: state
-        integer, intent(in), optional :: fromto(2)
-        integer                       :: cnt
-        real                          :: sum
+        class(oris),       intent(inout) :: self
+        character(len=*),  intent(in)    :: which 
+        integer, optional, intent(in)    :: class
+        integer, optional, intent(in)    :: state
+        integer, optional, intent(in)    :: fromto(2)
+        integer :: cnt
+        real    :: sum
         call self%calc_nonzero_sum(which, sum, cnt, class, state, fromto)
     end function get_nonzero_sum
     
     !>  \brief  is for getting the average of 'which' variables with 
     !!          filtering based on class/state/fromto
     function get_nonzero_avg( self, which, class, state, fromto ) result( avg )
-        class(oris), intent(inout)    :: self
-        character(len=*), intent(in)  :: which 
-        integer, intent(in), optional :: class
-        integer, intent(in), optional :: state
-        integer, intent(in), optional :: fromto(2)
-        integer                       :: cnt
-        real                          :: avg, sum
+        class(oris),       intent(inout) :: self
+        character(len=*),  intent(in)    :: which 
+        integer, optional, intent(in)    :: class
+        integer, optional, intent(in)    :: state
+        integer, optional, intent(in)    :: fromto(2)
+        integer :: cnt
+        real    :: avg, sum
         call self%calc_nonzero_sum(which, sum, cnt, class, state, fromto)
         avg = sum/real(cnt)
     end function get_nonzero_avg
@@ -854,7 +919,7 @@ contains
     !>  \brief  is for printing
     subroutine print( self, i )
         class(oris), intent(inout) :: self
-        integer, intent(in) :: i
+        integer,     intent(in)    :: i
         call self%o(i)%print
     end subroutine print
     
@@ -884,54 +949,63 @@ contains
     !>  \brief  is a setter
     subroutine set_euler( self, i, euls )
         class(oris), intent(inout) :: self
-        integer, intent(in)        :: i
-        real, intent(in)           :: euls(3)
+        integer,     intent(in)    :: i
+        real,        intent(in)    :: euls(3)
         call self%o(i)%set_euler(euls)
     end subroutine set_euler
     
     !>  \brief  is a setter
     subroutine e1set( self, i, e1 )
         class(oris), intent(inout) :: self
-        integer, intent(in)        :: i
-        real, intent(in)           :: e1
+        integer,     intent(in)    :: i
+        real,        intent(in)    :: e1
         call self%o(i)%e1set(e1)
     end subroutine e1set
     
     !>  \brief  is a setter
     subroutine e2set( self, i, e2 )
         class(oris), intent(inout) :: self
-        integer, intent(in)        :: i
-        real, intent(in)           :: e2
+        integer,     intent(in)    :: i
+        real,        intent(in)    :: e2
         call self%o(i)%e2set(e2)
     end subroutine e2set
     
     !>  \brief  is a setter 
     subroutine e3set( self, i, e3 )
         class(oris), intent(inout) :: self
-        integer, intent(in)        :: i
-        real, intent(in)           :: e3
+        integer,     intent(in)    :: i
+        real,        intent(in)    :: e3
         call self%o(i)%e3set(e3)
     end subroutine e3set
     
     !>  \brief  is a setter
-    subroutine set( self, i, key, val )
-        class(oris), intent(inout)   :: self
-        integer, intent(in)          :: i
-        character(len=*), intent(in) :: key
-        real, intent(in)             :: val
+    subroutine set_1( self, i, key, val )
+        class(oris),      intent(inout) :: self
+        integer,          intent(in)    :: i
+        character(len=*), intent(in)    :: key
+        real,             intent(in)    :: val
         call self%o(i)%set(key, val)
-    end subroutine set
-    
+    end subroutine set_1
+
+    !>  \brief  is a setter
+    subroutine set_2( self, i, key, val )
+        class(oris),      intent(inout) :: self
+        integer,          intent(in)    :: i
+        character(len=*), intent(in)    :: key
+        character(len=*), intent(in)    :: val
+        call self%o(i)%set(key, val)
+    end subroutine set_2
+
     !>  \brief  is a setter
     subroutine set_ori( self, i, o )
         class(oris), intent(inout) :: self
-        integer, intent(in)        :: i
-        class(ori), intent(in)     :: o
+        integer,     intent(in)    :: i
+        class(ori),  intent(in)    :: o
         self%o(i) = o
     end subroutine set_ori
     
     !>  \brief  is a setter
-    subroutine set_all( self, which, vals )
+    subroutine set_all_1( self, which, vals )
         class(oris),      intent(inout) :: self
         character(len=*), intent(in)    :: which
         real,             intent(in)    :: vals(self%n)
@@ -939,10 +1013,21 @@ contains
         do i=1,self%n
             call self%o(i)%set(which, vals(i))
         enddo
-    end subroutine set_all
+    end subroutine set_all_1
 
-     !>  \brief  is a setter
-    subroutine set_all2single( self, which, val )
+    !>  \brief  is a setter
+    subroutine set_all_2( self, which, vals )
+        class(oris),           intent(inout) :: self
+        character(len=*),      intent(in)    :: which
+        character(len=STDLEN), intent(in)    :: vals(self%n)
+        integer :: i
+        do i=1,self%n
+            call self%o(i)%set(which, vals(i))
+        enddo
+    end subroutine set_all_2
+
+    !>  \brief  is a setter
+    subroutine set_all2single_1( self, which, val )
         class(oris),      intent(inout) :: self
         character(len=*), intent(in)    :: which
         real,             intent(in)    :: val
@@ -950,7 +1035,18 @@ contains
         do i=1,self%n
             call self%o(i)%set(which, val)
         end do
-    end subroutine set_all2single
+    end subroutine set_all2single_1
+
+    !>  \brief  is a setter
+    subroutine set_all2single_2( self, which, val )
+        class(oris),      intent(inout) :: self
+        character(len=*), intent(in)    :: which
+        character(len=*), intent(in)    :: val
+        integer :: i
+        do i=1,self%n
+            call self%o(i)%set(which, val)
+        end do
+    end subroutine set_all2single_2
 
     !>  \brief  is a setter
     subroutine e3swapsgn( self )
@@ -977,8 +1073,8 @@ contains
     
     !>  \brief  zero the 'which' var
     subroutine zero( self, which )
-        class(oris), intent(inout)   :: self
-        character(len=*), intent(in) :: which
+        class(oris),      intent(inout) :: self
+        character(len=*), intent(in)    :: which
         integer :: i
         do i=1,self%n
             call self%o(i)%set(which, 0.)
@@ -1008,7 +1104,7 @@ contains
     !>  \brief  zero the shifts
     subroutine mul_shifts( self, mul )
         class(oris), intent(inout) :: self
-        real, intent(in)           :: mul
+        real,        intent(in)    :: mul
         integer :: i
         do i=1,self%n
             call self%o(i)%set('x', mul*self%o(i)%get('x'))
@@ -1048,11 +1144,11 @@ contains
     !>  \brief  generate random projection direction space around a given one
     subroutine rnd_proj_space( self, nsample, o_prev, thres, eullims )
         use simple_math, only: rad2deg
-        class(oris), intent(inout)           :: self
-        integer,     intent(in)              :: nsample
-        class(ori),  intent(inout), optional :: o_prev
-        real,        intent(inout), optional :: eullims(3,2)
-        real,        intent(in),    optional :: thres
+        class(oris),          intent(inout) :: self
+        integer,              intent(in)    :: nsample
+        class(ori), optional, intent(inout) :: o_prev
+        real,       optional, intent(inout) :: eullims(3,2)
+        real,       optional, intent(in)    :: thres
         type(ori) :: o_stoch
         integer   :: i
         logical   :: within_lims, found
@@ -1095,18 +1191,18 @@ contains
     !>  \brief  randomizes eulers in oris
     subroutine rnd_ori( self, i, trs, eullims )
         use simple_rnd, only: ran3
-        class(oris), intent(inout)         :: self
-        integer,     intent(in)            :: i
-        real,        intent(in), optional  :: trs
-        real,        intent(inout), optional  :: eullims(3,2)
+        class(oris),    intent(inout) :: self
+        integer,        intent(in)    :: i
+        real, optional, intent(in)    :: trs
+        real, optional, intent(inout) :: eullims(3,2)
         call self%o(i)%rnd_ori( trs, eullims )
     end subroutine rnd_ori
     
     !>  \brief  for generating random clustering
     subroutine rnd_cls( self, ncls, srch_inpl )
-        class(oris), intent(inout)    :: self
-        integer, intent(in)           :: ncls
-        logical, intent(in), optional :: srch_inpl
+        class(oris),       intent(inout) :: self
+        integer,           intent(in)    :: ncls
+        logical, optional, intent(in)    :: srch_inpl
         logical :: ssrch_inpl
         integer :: i
         call self%rnd_classes(ncls)
@@ -1123,11 +1219,11 @@ contains
     subroutine rnd_oris_discrete( self, discrete, nsym, eullims )
         use simple_rnd, only: irnd_uni
         class(oris), intent(inout) :: self
-        integer, intent(in)        :: discrete, nsym
-        real, intent(in)           :: eullims(3,2)
-        type(oris)                 :: tmp
-        real                       :: euls(3)
-        integer                    :: i, irnd
+        integer,     intent(in)    :: discrete, nsym
+        real,        intent(in)    :: eullims(3,2)
+        type(oris) :: tmp
+        real       :: euls(3)
+        integer    :: i, irnd
         euls(3) = 0.
         tmp = oris(discrete)
         call tmp%spiral(nsym, eullims)
@@ -1143,8 +1239,8 @@ contains
     !>  \brief  randomizes the in-plane degrees of freedom
     subroutine rnd_inpls( self, trs )
         use simple_rnd, only: ran3
-        class(oris), intent(inout) :: self
-        real, intent(in), optional :: trs
+        class(oris),    intent(inout) :: self
+        real, optional, intent(in)    :: trs
         integer :: i
         real :: x, y
         do i=1,self%n
@@ -1224,7 +1320,7 @@ contains
     subroutine rnd_states( self, nstates )
         use simple_ran_tabu, only: ran_tabu
         class(oris), intent(inout) :: self
-        integer, intent(in)        :: nstates
+        integer,     intent(in)    :: nstates
         integer, allocatable       :: states(:)
         type(ran_tabu)             :: rt
         integer :: alloc_stat, i, state
@@ -1256,7 +1352,7 @@ contains
     subroutine rnd_classes( self, ncls )
         use simple_ran_tabu, only: ran_tabu
         class(oris), intent(inout) :: self
-        integer, intent(in)        :: ncls
+        integer,     intent(in)    :: ncls
         integer, allocatable       :: classes(:)
         type(ran_tabu)             :: rt
         integer :: alloc_stat, i
@@ -1320,7 +1416,7 @@ contains
     !>  \brief  is for merging class class into class_merged
     subroutine merge_classes( self, class_merged, class )
         class(oris), intent(inout) :: self
-        integer, intent(in)        :: class_merged, class
+        integer,     intent(in)    :: class_merged, class
         integer                    :: i, clsnr
         do i=1,self%n
             clsnr = nint(self%get(i, 'class'))
@@ -1331,7 +1427,7 @@ contains
     !>  \brief  for extending algndoc according to nr of symmetry ops
     subroutine symmetrize( self, nsym )
         class(oris), intent(inout) :: self
-        integer, intent(in)        :: nsym
+        integer,     intent(in)    :: nsym
         type(oris)                 :: tmp
         integer                    :: cnt, i, j
         tmp = oris(self%get_noris()*nsym)
@@ -1349,8 +1445,8 @@ contains
     !>  \brief  for merging two oris objects into one
     subroutine merge( self1, self2add )
         class(oris), intent(inout) :: self1, self2add
-        type(oris)                 :: self
-        integer                    :: ntot, cnt, i
+        type(oris) :: self
+        integer    :: ntot, cnt, i
         ntot = self1%n+self2add%n
         self = oris(ntot)
         cnt  = 0
@@ -1406,13 +1502,19 @@ contains
         class(oris),       intent(inout) :: self
         character(len=*),  intent(in)    :: orifile
         integer, optional, intent(out)   :: nst
-        integer :: file_stat, i, fnr, state
+        character(len=100) :: io_message
+        integer :: file_stat, i, fnr, state, recsz
         fnr = get_fileunit( )
         open(unit=fnr, FILE=orifile, STATUS='OLD', action='READ', iostat=file_stat)
-        call fopen_err( 'In: read_oris, module: simple_oris.f90', file_stat )
+        if( file_stat .ne. 0 )then
+            close(fnr)
+            write(*,'(a)') 'In: write_1, module: simple_oris.f90; Error when opening file for reading: '&
+            //trim(orifile)//' ; '//trim(io_message)
+            stop 
+        endif
         if( present(nst) ) nst = 0
         do i=1,self%n
-            call self%o(i)%read(fnr)
+             call self%o(i)%read(fnr)
             if( present(nst) )then
                 state = int(self%o(i)%get('state'))
                 nst = max(1,max(state,nst))
@@ -1427,19 +1529,22 @@ contains
         character(len=*),  intent(in)    :: orifile
         integer, optional, intent(in)    :: fromto(2)
         character(len=100) :: io_message
-        integer            :: file_stat, fnr, i, ffromto(2)
+        integer            :: file_stat, fnr, i, ffromto(2), recsz, cnt
         ffromto(1) = 1
         ffromto(2) = self%n
         if( present(fromto) ) ffromto = fromto
         fnr = get_fileunit( )
-        open(unit=fnr, FILE=orifile, STATUS='REPLACE', action='WRITE', iostat=file_stat, iomsg=io_message)
+        open(unit=fnr, FILE=orifile, STATUS='REPLACE', action='WRITE',&
+        &iostat=file_stat, iomsg=io_message)
         if( file_stat .ne. 0 )then
             close(fnr)
             write(*,'(a)') 'In: write_1, module: simple_oris.f90; Error when opening file for writing: '&
             //trim(orifile)//' ; '//trim(io_message)
             stop 
         endif
+        cnt = 0
         do i=ffromto(1),ffromto(2)
+            cnt = cnt + 1
             call self%o(i)%write(fnr)
         end do
         close(fnr)
@@ -1462,17 +1567,17 @@ contains
     
     !>  \brief  for calculating homogeneity of labels within a state group or class
     subroutine homogeneity_1( self, icls, which, minp, thres, cnt, homo_cnt, homo_avg )
-        class(oris), intent(inout)   :: self
-        integer, intent(in)          :: icls
-        character(len=*), intent(in) :: which
-        integer, intent(in)          :: minp
-        real, intent(in)             :: thres
-        real, intent(inout)          :: cnt, homo_cnt, homo_avg
-        integer                      :: pop, i, nlabels, medlab(1)
-        real                         :: homo_cls
-        real, allocatable            :: vals(:)
-        integer, allocatable         :: labelpops(:)
-        logical, parameter           :: debug=.false.
+        class(oris),      intent(inout) :: self
+        integer,          intent(in)    :: icls
+        character(len=*), intent(in)    :: which
+        integer,          intent(in)    :: minp
+        real,             intent(in)    :: thres
+        real,             intent(inout) :: cnt, homo_cnt, homo_avg
+        integer              :: pop, i, nlabels, medlab(1)
+        real                 :: homo_cls
+        real, allocatable    :: vals(:)
+        integer, allocatable :: labelpops(:)
+        logical, parameter   :: debug=.false.
         nlabels = self%get_nlabels()
         if( debug ) print *, 'number of labels: ', nlabels
         allocate(labelpops(nlabels))
@@ -1512,14 +1617,14 @@ contains
     
     !>  \brief  for calculating homogeneity of labels within a state group or class
     subroutine homogeneity_2( self, which, minp, thres, homo_cnt, homo_avg )
-        class(oris), intent(inout)   :: self
-        character(len=*), intent(in) :: which
-        integer, intent(in)          :: minp
-        real, intent(in)             :: thres
-        real, intent(out)            :: homo_cnt, homo_avg
-        integer                      :: k, ncls
-        real                         :: cnt
-        logical, parameter           :: debug=.false.
+        class(oris),      intent(inout) :: self
+        character(len=*), intent(in)    :: which
+        integer,          intent(in)    :: minp
+        real,             intent(in)    :: thres
+        real,             intent(out)   :: homo_cnt, homo_avg
+        integer :: k, ncls
+        real    :: cnt
+        logical, parameter :: debug=.false.
         if( which .eq. 'class' )then
             ncls = self%get_ncls()
         else if( which .eq. 'state' )then
@@ -1542,18 +1647,18 @@ contains
     
     !>  \brief  for calculating clustering cohesion (normalised)
     function cohesion_norm( self, which, ncls ) result( coh_norm )
-        class(oris), intent(inout)   :: self
-        character(len=*), intent(in) :: which
-        integer, intent(in)          :: ncls
+        class(oris),      intent(inout) :: self
+        character(len=*), intent(in)    :: which
+        integer,          intent(in)    :: ncls
         real :: coh_norm
         coh_norm = real(self%cohesion(which))/real(self%cohesion_ideal(ncls))
     end function cohesion_norm
     
     !>  \brief  for calculating clustering cohesion 
     function cohesion( self, which ) result( coh )
-        class(oris), intent(inout)   :: self
-        character(len=*), intent(in) :: which
-        real, allocatable            :: vals(:)
+        class(oris),      intent(inout) :: self
+        character(len=*), intent(in)    :: which
+        real, allocatable :: vals(:)
         integer :: coh, ncls, pop, ival, jval, i, j, k
         if( which .eq. 'class' )then
             ncls = self%get_ncls()
@@ -1593,7 +1698,7 @@ contains
     !>  \brief  for calculating the ideal clustering cohesion
     function cohesion_ideal( self, ncls ) result( coh )
         class(oris), intent(inout) :: self
-        integer, intent(in)        :: ncls
+        integer,     intent(in)    :: ncls
         integer :: coh, pop, i, j, k
         pop = nint(real(self%n)/real(ncls))
         coh = 0
@@ -1608,18 +1713,18 @@ contains
     
     !>  \brief  for calculating the degree of separation between all classes based on label (normalised)
     function separation_norm( self, which, ncls ) result( sep_norm )
-        class(oris), intent(inout)   :: self
-        character(len=*), intent(in) :: which
-        integer, intent(in)          :: ncls
+        class(oris),      intent(inout) :: self
+        character(len=*), intent(in)    :: which
+        integer,          intent(in)    :: ncls
         real :: sep_norm
         sep_norm = real(self%separation(which))/real(self%separation_ideal(ncls))
     end function separation_norm
     
     !>  \brief  for calculating the degree of separation between all classes based on label
     function separation( self, which ) result( sep )
-        class(oris), intent(inout)   :: self
-        character(len=*), intent(in) :: which
-        integer, allocatable         :: iclsarr(:), jclsarr(:)
+        class(oris),      intent(inout) :: self
+        character(len=*), intent(in)    :: which
+        integer, allocatable :: iclsarr(:), jclsarr(:)
         integer :: iclass, jclass, ncls, sep
         integer :: i, j, ilab, jlab, ipop, jpop
         if( which .eq. 'class' )then
@@ -1670,7 +1775,7 @@ contains
     !>  \brief  for calculating the degree of separation between all classes based on label
     function separation_ideal( self, ncls ) result( sep )
         class(oris), intent(inout) :: self
-        integer, intent(in)        :: ncls
+        integer,     intent(in)    :: ncls
         integer :: iclass, jclass, sep
         integer :: i, j, pop
         pop = nint(real(self%n)/real(ncls))
@@ -1693,11 +1798,11 @@ contains
     !>  \brief  plots a histogram using gnuplot
     subroutine histogram( self, which, class, state )
         use simple_stat, only: plot_hist
-        class(oris), intent(inout)    :: self
-        character(len=*), intent(in)  :: which 
-        integer, intent(in), optional :: class
-        integer, intent(in), optional :: state
-        real, allocatable             :: vals(:)
+        class(oris),       intent(inout) :: self
+        character(len=*),  intent(in)    :: which 
+        integer, optional, intent(in)    :: class
+        integer, optional, intent(in)    :: state
+        real, allocatable :: vals(:)
         vals = self%get_arr( which, class, state )
         call plot_hist(vals, 100, 10)
         deallocate(vals)
@@ -1716,8 +1821,8 @@ contains
     subroutine introd_alig_err( self, angerr, sherr )
         use simple_rnd, only: ran3
         class(oris), intent(inout) :: self
-        real, intent(in) :: angerr, sherr
-        real :: x, y, e1, e2, e3
+        real,        intent(in)    :: angerr, sherr
+        real    :: x, y, e1, e2, e3
         integer :: i
         do i=1,self%n
             e1 = self%e1get(i)+ran3()*angerr-angerr/2.
@@ -1745,7 +1850,7 @@ contains
     subroutine introd_ctf_err( self, dferr )
         use simple_rnd, only: ran3
         class(oris), intent(inout) :: self
-        real, intent(in) :: dferr
+        real,        intent(in)    :: dferr
         real    :: dfx, dfy
         integer :: i
         do i=1,self%n
@@ -1769,9 +1874,9 @@ contains
     !>  \brief  is an Euler angle composer
     subroutine rot_1( self, e )
         class(oris), intent(inout) :: self
-        class(ori), intent(in)     :: e
-        type(ori)                  :: o_tmp
-        integer                    :: i
+        class(ori),  intent(in)    :: e
+        type(ori) :: o_tmp
+        integer   :: i
         do i=1,self%n
              o_tmp = e.compose.self%o(i)
              call self%o(i)%set_euler(o_tmp%get_euler())
@@ -1781,8 +1886,8 @@ contains
     !>  \brief  is an Euler angle composer
     subroutine rot_2( self, i, e )
         class(oris), intent(inout) :: self
-        integer, intent(in)        :: i
-        class(ori), intent(in)     :: e
+        integer,     intent(in)    :: i
+        class(ori),  intent(in)    :: e
         type(ori)                  :: o_tmp
         o_tmp = e.compose.self%o(i)
         call self%o(i)%set_euler(o_tmp%get_euler())
@@ -1791,10 +1896,10 @@ contains
     !>  \brief  for identifying the median value of parameter which within the cluster class
     function median_1( self, which, class ) result( med )
         use simple_math, only: median_nocopy
-        class(oris), intent(inout)    :: self
-        character(len=*), intent(in)  :: which 
-        integer, intent(in), optional :: class
-        real, allocatable             :: vals(:)
+        class(oris),       intent(inout) :: self
+        character(len=*),  intent(in)    :: which 
+        integer, optional, intent(in)    :: class
+        real, allocatable :: vals(:)
         integer :: pop, alloc_stat, i
         real :: med
         if( present(class) )then        
@@ -1826,12 +1931,12 @@ contains
     !>  \brief  is for calculating variable statistics
     subroutine stats( self, which, ave, sdev, var, err )
         use simple_stat, only: moment
-        class(oris), intent(inout)   :: self
-        character(len=*), intent(in) :: which
-        real, intent(out)            :: ave, sdev, var
-        logical, intent(out)         :: err
-        real, allocatable            :: vals(:)
-        integer                      :: alloc_stat, i, cnt, mystate
+        class(oris),      intent(inout) :: self
+        character(len=*), intent(in)    :: which
+        real,             intent(out)   :: ave, sdev, var
+        logical,          intent(out)   :: err
+        real, allocatable :: vals(:)
+        integer           :: alloc_stat, i, cnt, mystate
         allocate( vals(self%n), stat=alloc_stat )
         call alloc_err('In: stat_1, module: simple_oris', alloc_stat)
         vals = 0.
@@ -1852,11 +1957,11 @@ contains
     !>  \brief  is for calculating the minimum/maximum values of a variable
     subroutine minmax( self, which, minv, maxv )
         use simple_stat, only: moment
-        class(oris), intent(inout)   :: self
-        character(len=*), intent(in) :: which
-        real, intent(out)            :: minv, maxv
-        real, allocatable            :: vals(:)
-        integer                      :: alloc_stat, i, cnt, mystate
+        class(oris),      intent(inout) :: self
+        character(len=*), intent(in)    :: which
+        real,             intent(out)   :: minv, maxv
+        real, allocatable :: vals(:)
+        integer           :: alloc_stat, i, cnt, mystate
         allocate( vals(self%n), stat=alloc_stat )
         call alloc_err('In: minmax, module: simple_oris', alloc_stat)
         vals = 0.
@@ -1878,8 +1983,8 @@ contains
     subroutine spiral_1( self )
         use simple_math, only: rad2deg
         class(oris), intent(inout) :: self
-        real                       :: h, theta, psi
-        integer                    :: k
+        real    :: h, theta, psi
+        integer :: k
         if( self%n == 1 )then
             call self%o(1)%set_euler([0.,0.,0.])
         else if( self%n > 1 )then
@@ -1905,8 +2010,8 @@ contains
     !!          within the asymetric unit
     subroutine spiral_2( self, nsym, eullims )
         class(oris), intent(inout) :: self
-        integer, intent(in)        :: nsym
-        real, intent(in)           :: eullims(3,2)
+        integer,     intent(in)    :: nsym
+        real,        intent(in)    :: eullims(3,2)
         type(oris) :: tmp
         integer    :: cnt, i
         real       :: e1lim, e2lim
@@ -1988,10 +2093,10 @@ contains
         class(oris),       intent(inout) :: self
         real,              intent(in)    :: frac
         logical, optional, intent(in)    :: bystate
-        type(oris)            :: os
-        integer, allocatable  :: order(:), inds(:)
-        integer               :: i, lim, n, nstates, s, pop
-        logical               :: ibystate
+        integer, allocatable :: order(:), inds(:)
+        type(oris) :: os
+        integer    :: i, lim, n, nstates, s, pop
+        logical    :: ibystate
         ibystate = .false.
         if( present(bystate) )ibystate = bystate
         if( .not.ibystate )then
@@ -2039,8 +2144,8 @@ contains
         class(oris),       intent(inout) :: self
         class(ori),        intent(in) :: o_in
         integer, optional, intent(in) :: state
-        real     :: dists(self%n), large
-        integer  :: loc(1), closest, i
+        real    :: dists(self%n), large
+        integer :: loc(1), closest, i
         if( present(state) )then
             if( state<0 )stop 'Invalid state in simple_oris%find_closest_proj'
             dists(:) = huge(large)
@@ -2059,8 +2164,8 @@ contains
         class(oris), intent(in)  :: self
         class(ori),  intent(in)  :: o_in
         integer,     intent(out) :: pdirinds(:)
-        real                     :: dists(self%n)
-        integer                  :: inds(self%n), i
+        real    :: dists(self%n)
+        integer :: inds(self%n), i
         do i=1,self%n
             dists(i) = self%o(i).euldist.o_in
             inds(i)  = i 
@@ -2096,8 +2201,8 @@ contains
         class(oris), intent(in)  :: self
         class(ori),  intent(in)  :: o_in
         integer,     intent(out) :: oriinds(:)
-        real                     :: dists(self%n)
-        integer                  :: inds(self%n), i
+        real    :: dists(self%n)
+        integer :: inds(self%n), i
         do i=1,self%n
             dists(i) = self%o(i).geod.o_in
             inds(i)  = i 
@@ -2111,7 +2216,7 @@ contains
     !>  \brief  method for discretization of the projection directions
     subroutine discretize( self, n )
         class(oris), intent(inout) :: self
-        integer, intent(in)        :: n
+        integer,     intent(in)    :: n
         type(oris) :: d
         integer    :: closest, i
         if( n < self%n )then
@@ -2128,16 +2233,14 @@ contains
         endif
     end subroutine discretize
 
-    
-    
     !>  \brief  to identify the indices of the k nearest neighbors (inclusive)
     function nearest_neighbors( self, k ) result( nnmat ) 
         class(oris), intent(inout) :: self
-        integer, intent(in)        :: k
-        integer, allocatable       :: nnmat(:,:)
-        real                       :: dists(self%n)
-        integer                    :: inds(self%n), i, j, alloc_stat
-        type(ori)                  :: o
+        integer,     intent(in)    :: k
+        integer, allocatable :: nnmat(:,:)
+        real      :: dists(self%n)
+        integer   :: inds(self%n), i, j, alloc_stat
+        type(ori) :: o
         if( k >= self%n ) stop 'need to identify fewer nearest_neighbors; simple_oris'
         if( allocated(nnmat) ) deallocate(nnmat)
         allocate( nnmat(self%n,k), stat=alloc_stat )
@@ -2204,7 +2307,7 @@ contains
     !>  \brief  to find the neighborhood size for weighted orientation assignment
     function find_npeaks( self, res, moldiam ) result( npeaks )
         class(oris), intent(in) :: self
-        real, intent(in)        :: res, moldiam
+        real,        intent(in) :: res, moldiam
         real                    :: dists(self%n), tres, npeaksum
         integer                 :: i, j, npeaks
         tres = atan(res/(moldiam/2.))
@@ -2230,7 +2333,7 @@ contains
     !>  \brief  calculate fraction of ptcls in class within lims
     function class_calc_frac( self, class, lims ) result( frac )
         class(oris), intent(inout) :: self
-        integer, intent(in)        :: class, lims(2)
+        integer,     intent(in)    :: class, lims(2)
         integer, allocatable       :: clsarr(:)
         integer                    :: i, cnt, pop
         real                       :: frac
@@ -2253,8 +2356,8 @@ contains
         use simple_math, only: rad2deg
         use simple_stat, only: moment
         class(oris), intent(inout) :: self
-        integer, intent(in)        :: class
-        real, intent(out)          :: distavg, distsdev 
+        integer,     intent(in)    :: class
+        real,        intent(out)   :: distavg, distsdev 
         integer, allocatable       :: clsarr(:)
         integer                    :: i, j, cnt, npairs, alloc_stat, pop
         real, allocatable          :: dists(:)
@@ -2283,7 +2386,7 @@ contains
     !>  \brief  for calculating the average correlation within a class
     function class_corravg( self, class ) result( avg )
         class(oris), intent(inout) :: self
-        integer, intent(in)        :: class
+        integer,     intent(in)    :: class
         integer                    :: i, cnt, clsnr
         real                       :: corr, avg
         avg = 0.
@@ -2302,7 +2405,7 @@ contains
     !>  \brief  for finding the best (highest correlating) member in a class
     function best_in_class( self, class ) result( best )
         class(oris), intent(inout) :: self
-        integer, intent(in)        :: class
+        integer,     intent(in)    :: class
         integer                    :: i, best, clsnr
         real                       :: corr, best_corr
         best_corr = -1.
@@ -2361,9 +2464,9 @@ contains
     
     !>  \brief  for mapping a 3D shift of volume to 2D shifts of the projections
     subroutine map3dshift22d_1( self, sh3d, state )
-        class(oris), intent(inout)    :: self
-        real, intent(in)              :: sh3d(3)
-        integer, optional, intent(in) :: state
+        class(oris),       intent(inout) :: self
+        real,              intent(in)    :: sh3d(3)
+        integer, optional, intent(in)    :: state
         integer :: i
         do i=1,self%n
             call self%map3dshift22d_2(i, sh3d, state)
@@ -2372,10 +2475,10 @@ contains
     
     !>  \brief  for mapping a 3D shift of volume to 2D shifts of the projections
     subroutine map3dshift22d_2( self, i, sh3d, state )
-        class(oris), intent(inout)    :: self
-        integer, intent(in)           :: i
-        real, intent(in)              :: sh3d(3)
-        integer, optional, intent(in) :: state
+        class(oris),       intent(inout) :: self
+        integer,           intent(in)    :: i
+        real,              intent(in)    :: sh3d(3)
+        integer, optional, intent(in)    :: state
         integer :: mystate
         if( present(state) )then
             mystate = nint(self%o(i)%get('state'))
@@ -2671,8 +2774,8 @@ contains
     !>  \brief  for calculating statistics of distances within a single distribution
     subroutine diststat_1( self, sumd, avgd, sdevd, mind, maxd )
         use simple_stat, only: moment
-        class(oris), intent(in) :: self
-        real, intent(out)       :: mind, maxd, avgd, sdevd, sumd
+        class(oris), intent(in)  :: self
+        real,        intent(out) :: mind, maxd, avgd, sdevd, sumd
         integer :: i, j
         real    :: dists((self%n*(self%n-1))/2), vard, x
         logical :: err
@@ -2693,8 +2796,8 @@ contains
     !>  \brief  for calculating statistics of distances between two equally sized distributions
     subroutine diststat_2( self1, self2, sumd, avgd, sdevd, mind, maxd )
         use simple_stat, only: moment
-        class(oris), intent(in) :: self1, self2
-        real, intent(out)       :: mind, maxd, avgd, sdevd, sumd
+        class(oris), intent(in)  :: self1, self2
+        real,        intent(out) :: mind, maxd, avgd, sdevd, sumd
         integer :: i
         real    :: dists(self1%n), vard, x
         logical :: err
@@ -2784,9 +2887,9 @@ contains
     end subroutine mirror2d
     
     !>  \brief  returns cluster population overlap between two already clustered orientations sets
-    function cls_overlap( self, os, key )result( overlap )
-        class(oris), intent(inout)        :: self ! previous oris
-        type(oris), intent(inout)         :: os   ! new oris (eg number of clusters clusters > number of self clusters)
+    function cls_overlap( self, os, key ) result( overlap )
+        class(oris),      intent(inout)   :: self ! previous oris
+        type(oris),       intent(inout)   :: os   ! new oris (eg number of clusters clusters > number of self clusters)
         character(len=*), intent(in)      :: key
         integer, allocatable              :: cls_pop(:), pop_spawn(:)
         real                              :: overlap, ov
@@ -2952,6 +3055,9 @@ contains
         class(oris), intent(inout) :: self
         integer :: i
         if( allocated(self%o) )then
+            do i=1,self%n
+                call self%o(i)%kill
+            end do
             deallocate( self%o )
         endif
     end subroutine kill

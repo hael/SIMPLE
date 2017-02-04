@@ -30,7 +30,8 @@ type :: params
     type(ctfplan)    :: tfplan
     ! yes/no decision variables in ascending alphabetical order
     character(len=3) :: acf='no'
-    character(len=3) :: append='no'     
+    character(len=3) :: append='no'
+    character(len=3) :: async='no'
     character(len=3) :: automsk='no'   
     character(len=3) :: avg='no'
     character(len=3) :: bench_gpu='no'
@@ -372,6 +373,7 @@ contains
         call check_carg('acf',            self%acf)
         call check_carg('angastunit',     self%angastunit)
         call check_carg('append',         self%append)
+        call check_carg('async',          self%async)
         call check_carg('automsk',        self%automsk)
         call check_carg('avg',            self%avg)
         call check_carg('bench_gpu',      self%bench_gpu)

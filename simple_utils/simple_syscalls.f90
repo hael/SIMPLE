@@ -62,18 +62,22 @@ contains
     end function getdiffcpu
 
     !>  Wrapper for system call
-    subroutine exec_cmdline( cmdline )
-        character(len=*), intent(in) :: cmdline
+    subroutine exec_cmdline( cmdline, wait )
+        character(len=*),  intent(in) :: cmdline
+        logical, optional, intent(in) :: wait
         integer               :: estat, cstat
         character(len=STDLEN) :: cmsg
-        call execute_command_line( trim(adjustl(cmdline)), exitstat=estat, cmdstat=cstat, cmdmsg=cmsg)
+        logical               :: wwait
+        wwait = .true.
+        if( present(wait) ) wwait = wait
+        call execute_command_line( trim(adjustl(cmdline)), wait=wwait, exitstat=estat, cmdstat=cstat, cmdmsg=cmsg)
         call raise_sys_error( cmdline, estat, cstat, cmsg )
     end subroutine exec_cmdline
 
     !>  Handles error from system call
     subroutine raise_sys_error( cmd, exitstat, cmdstat, cmdmsg )
-        integer,               intent(in) :: exitstat, cmdstat
-        character(len=STDLEN), intent(in) :: cmd, cmdmsg
+        integer,          intent(in) :: exitstat, cmdstat
+        character(len=*), intent(in) :: cmd, cmdmsg
         logical :: err
         err = .false.
         if( exitstat /= 0 )then

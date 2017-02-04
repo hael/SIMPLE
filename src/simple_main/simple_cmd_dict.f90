@@ -207,6 +207,7 @@ contains
         call chdict%push('angastunit',    'angle of astigmatism unit (radians|degrees){degrees}')
         call chdict%push('plaintexttab',  'plain text file of input parameters')
         call chdict%push('nrepeats',      'nr of times to restart workflow{1}')
+        call chdict%push('async',         'asynchronous mode of operation(yes|no){no}')
         initialised = .true.
     end subroutine init_cmd_dict
     

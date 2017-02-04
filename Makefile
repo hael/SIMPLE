@@ -105,6 +105,7 @@ opt: simple_opt_spec.o               \
 
 general: simple_hash.o            \
          simple_chash.o           \
+         simple_sauron.o          \
          simple_softmax_weights.o \
          simple_ori.o             \
          simple_nrtxtfile.o       \

@@ -1200,7 +1200,7 @@ select case(prg)
         keys_optional(2)  = 'deftab'
         keys_optional(3)  = 'mul'
         keys_optional(4)  = 'state'
-        keys_optional(5)  = 'nstates'        
+        keys_optional(5)  = 'nstates'
         ! parse command line
         if( describe ) call print_doc_eo_volassemble
         call cline%parse(keys_required(:6), keys_optional(:5))
@@ -1237,7 +1237,7 @@ select case(prg)
         if( .not. cline%defined('eo') ) call cline%set('eo', 'no')
         ! execute
         call xvolassemble%execute(cline)
-        
+
     ! CHECKER PROGRAMS
         
     case( 'check_box' )

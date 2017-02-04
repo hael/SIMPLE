@@ -11,13 +11,15 @@
 module simple_ori
 use simple_defs
 use simple_hash,   only: hash
+use simple_chash,  only: chash
 use simple_jiffys, only: alloc_err
 implicit none
 
 public :: ori, test_ori, test_ori_dists
 private
 
-real, parameter    :: zvec(3)=[0.,0.,1.]
+real,    parameter :: zvec(3)  = [0.,0.,1.]
+integer, parameter :: NNAMES   = 10
 
 !>  \brief  orientation parameters
 type :: ori
@@ -26,6 +28,7 @@ type :: ori
     real                        :: normal(3)=0.      !< Fourier plane normal
     real                        :: rmat(3,3)=0.      !< rotation matrix
     type(hash)                  :: htab              !< hash table for the parameters
+    type(chash)                 :: chtab             !< hash table for the filenames etc.
     logical                     :: existence=.false. !< to indicate existence
   contains
     ! CONSTRUCTOR
@@ -44,7 +47,9 @@ type :: ori
     procedure          :: e3set
     procedure          :: swape1e3
     procedure          :: set_shift
-    procedure          :: set
+    procedure, private :: set_1
+    procedure, private :: set_2
+    generic            :: set => set_1, set_2
     procedure, private :: rnd_romat
     procedure, private :: rnd_euler_1
     procedure, private :: rnd_euler_2
@@ -61,14 +66,20 @@ type :: ori
     procedure          :: get_normal
     procedure          :: get_mat
     procedure          :: get
+    procedure, private :: getter_1
+    procedure, private :: getter_2
+    generic            :: getter => getter_1, getter_2
     procedure          :: get_shift
     procedure          :: hash_size
+    procedure          :: chash_size
     procedure          :: isthere
+    procedure          :: key_is_real
+    procedure          :: ori2str
     ! PRINTING & I/O
     procedure          :: print_mat
     procedure          :: print
     procedure          :: write
-    procedure          :: read 
+    procedure          :: read
     ! CALCULATORS
     procedure          :: round_shifts
     procedure, private :: shift
@@ -90,6 +101,8 @@ type :: ori
     generic            :: operator(.euldist.)     => euldist
     generic            :: operator(.inpldist.)    => inpldist
     generic            :: operator(.inplrotdist.) => inplrotdist
+    ! DESTRUCTOR
+    procedure          :: kill
 end type
 
 interface ori
@@ -124,6 +137,7 @@ contains
         call self%htab%set('class',1.)
         call self%htab%set('mirr',0.)
         call self%htab%set('frac',0.)
+        self%chtab = chash(NNAMES)
         self%existence = .true.
     end subroutine new_ori
     
@@ -178,6 +192,7 @@ contains
         self_out%normal = self_in%normal
         self_out%rmat   = self_in%rmat
         self_out%htab   = self_in%htab
+        self_out%chtab  = self_in%chtab
     end subroutine copy_ori
     
     !>  \brief  is a setter
@@ -232,10 +247,10 @@ contains
     end subroutine set_shift
 
     !>  \brief  is a setter
-    subroutine set( self, key, val )
-        class(ori), intent(inout)    :: self
-        character(len=*), intent(in) :: key
-        real, intent(in)             :: val
+    subroutine set_1( self, key, val )
+        class(ori),       intent(inout) :: self
+        character(len=*), intent(in)    :: key
+        real,             intent(in)    :: val
         select case(key)
             case('e1')
                 call self%e1set(val)
@@ -246,7 +261,14 @@ contains
             case DEFAULT
                 call self%htab%set(key, val)
         end select
-    end subroutine set
+    end subroutine set_1
+
+    !>  \brief  is a setter
+    subroutine set_2( self, key, val )
+        class(ori),       intent(inout) :: self
+        character(len=*), intent(in)    :: key, val
+        call self%chtab%set(key, val)
+    end subroutine set_2
 
     !>  \brief  for generating a random rotation matrix
     subroutine rnd_romat( self )
@@ -308,29 +330,6 @@ contains
         call self%set('e3',self%euls(3))
         self%normal = matmul(zvec, self%rmat)
     end subroutine rnd_euler_1
-    
-    !>  \brief  for generating a random Euler angle neighbor to o_prev 
-    ! subroutine rnd_euler_2( self, o_prev, athres, proj )
-    !     use simple_math, only: deg2rad
-    !     class(ori),        intent(inout) :: self   !< instance
-    !     class(ori),        intent(in)    :: o_prev !< template ori
-    !     real,              intent(in)    :: athres !< angle threshold in degrees
-    !     logical, optional, intent(in)    :: proj   !< projection only thres or not
-    !     logical :: pproj
-    !     real    :: athres_rad, dist
-    !     pproj = .false.
-    !     if( present(proj) ) pproj = proj
-    !     athres_rad = deg2rad(athres)
-    !     dist = 2.*athres_rad
-    !     do while( dist > athres_rad )
-    !         call self%rnd_euler_1
-    !         if( pproj )then
-    !             dist = self.euldist.o_prev
-    !         else
-    !             dist = self.inpldist.o_prev
-    !         endif
-    !     end do
-    ! end subroutine rnd_euler_2
 
     !>  \brief  for generating a random Euler angle neighbor to o_prev 
     subroutine rnd_euler_2( self, o_prev, athres, proj )
@@ -420,7 +419,7 @@ contains
         class(ori), intent(in) :: self
         logical :: t
         t = self%existence
-    end function
+    end function exists
     
     !>  \brief  is a getter
     pure function get_euler( self ) result( euls )
@@ -473,6 +472,23 @@ contains
     end function get
 
     !>  \brief  is a getter   
+    subroutine getter_1( self, key, val )
+        class(ori),                    intent(inout) :: self
+        character(len=*),              intent(in)    :: key
+        character(len=:), allocatable, intent(inout) :: val
+        if( allocated(val) ) deallocate(val)
+        val = self%chtab%get(key)
+    end subroutine getter_1
+
+    !>  \brief  is a getter   
+    subroutine getter_2( self, key, val )
+        class(ori),       intent(inout) :: self
+        character(len=*), intent(in)    :: key
+        real,             intent(inout) :: val
+        val = self%htab%get(key)
+    end subroutine getter_2
+
+    !>  \brief  is a getter   
     function get_shift( self ) result( vec )
         class(ori), intent(inout) :: self
         real :: vec(2)
@@ -486,14 +502,55 @@ contains
         integer :: sz 
         sz = self%htab%size_of_hash()
     end function hash_size
-    
+
+    !>  \brief  returns size of chash
+    function chash_size( self ) result( sz )
+        class(ori), intent(in) :: self
+        integer :: sz 
+        sz = self%chtab%size_of_chash()
+    end function chash_size
+
     !>  \brief  check for presence of key in the ori hash
     function isthere( self, key ) result( found )
-        class(ori), intent(inout)   :: self
-        character(len=*), intent(in) :: key
-        logical :: found
-        found = self%htab%isthere(key)
+        class(ori),       intent(inout) :: self
+        character(len=*), intent(in)    :: key
+        logical :: hash_found, chash_found, found
+        hash_found  = self%htab%isthere(key)
+        chash_found = self%chtab%isthere(key)
+        found = .false.
+        if( hash_found .or. chash_found ) found = .true.
     end function isthere
+
+    !>  \brief  is for checking whether key maps to a real value or not
+    function key_is_real( self, key ) result( is )
+        class(ori),       intent(inout) :: self
+        character(len=*), intent(in)    :: key
+        logical :: hash_found, chash_found, is
+        hash_found  = self%htab%isthere(key)
+        chash_found = self%chtab%isthere(key)
+        is = .false.
+        if( hash_found )then
+            is = .true.
+            if( chash_found ) stop 'ERROR, ambigous keys; simple_ori :: key_is_real'
+        endif
+    end function key_is_real
+
+    
+    !>  \brief  joins the hashes into a string that represent the ori
+    function ori2str( self ) result( str )
+        class(ori), intent(inout) :: self
+        character(len=:), allocatable :: str, str_chtab, str_htab
+        str_chtab = self%chtab%chash2str()
+        str_htab  = self%htab%hash2str()
+        if( allocated(str_chtab) .and. allocated(str_htab) )then
+            allocate( str, source=str_chtab//' '//str_htab )
+        else if( allocated(str_htab) )then
+            allocate( str, source=str_htab )
+        else if( allocated(str_chtab) )then
+            allocate( str, source=str_chtab )
+        endif
+        deallocate(str_chtab, str_htab)
+    end function ori2str
     
     !<  \brief  to print the rotation matrix
     subroutine print_mat( self )
@@ -510,22 +567,28 @@ contains
     subroutine print( self ) 
         class(ori), intent(inout) :: self
         call self%htab%print
+        call self%chtab%print_key_val_pairs
     end subroutine print
     
-    !>  \brief  writes the hash with all orientation info
+    !>  \brief  writes orientation info
     subroutine write( self, fhandle )
         class(ori), intent(inout) :: self
-        integer, intent(in)       :: fhandle
-        call self%htab%write(fhandle)
+        integer,    intent(in)    :: fhandle
+        character(len=:), allocatable :: str
+        str = self%ori2str()
+        if( allocated(str) ) write(fhandle,"(A)") str
     end subroutine write
-    
-    !>  \brief  reads all orientation info (by line) into the hash
+
+    !>  \brief  reads all orientation info (by line) into the hash-tables
     subroutine read( self, fhandle )
+        use simple_sauron, only: sauron_line_parser
         class(ori), intent(inout) :: self
-        integer, intent(in)       :: fhandle
-        integer                   :: istate
-        istate = nint( self%get('state') )            ! to make sure that state=0 is preserved
-        call self%htab%read(fhandle)
+        integer,    intent(in)    :: fhandle
+        character(len=1024) :: line
+        integer :: istate
+        read(fhandle,fmt='(A)') line
+        call sauron_line_parser( line, self%htab, self%chtab )
+        istate = nint( self%get('state') )           ! to make sure that state=0 is preserved
         call self%set_euler([self%htab%get('e1'),self%htab%get('e2'),self%htab%get('e3')])
         if( istate == 0 ) call self%set('state', 0.) ! to make sure that state=0 is preserved
     end subroutine read
@@ -749,7 +812,6 @@ contains
         end select
         call opt%minimize(ospec, dist)
         call oout%set_euler(ospec%x)
-        ! call otst%kill
         call ospec%kill
         call opt%kill
 
@@ -848,6 +910,14 @@ contains
         x2   = matmul(u,mat)
         dist = myacos(dot_product(x1,x2))
     end function inplrotdist
+
+    ! DESTRUCTOR
+
+    !>  \brief  is a destructor
+    subroutine kill( self )
+        class(ori), intent(inout) :: self
+        call self%chtab%kill
+    end subroutine kill
   
     ! PRIVATE STUFF
     

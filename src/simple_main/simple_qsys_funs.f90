@@ -4,6 +4,11 @@ use simple_syscalls ! use all in there
 use simple_strings, only: int2str, int2str_pad, str2real
 implicit none
 
+interface qsys_watcher
+    module procedure qsys_watcher_1
+    module procedure qsys_watcher_2
+end interface
+
 contains
 
     subroutine qsys_cleanup( p )
@@ -271,26 +276,61 @@ contains
     end subroutine qsys_job_finished
 
     !>  returns when the inputted file exists in cwd
-    subroutine qsys_watcher( fname )
-        character(len=*), intent(in) :: fname
+    subroutine qsys_watcher_1( fname, wtime )
+        character(len=*),  intent(in) :: fname
+        integer, optional, intent(in) :: wtime
+        integer :: wwtime
         integer, parameter :: SHORTTIME = 5
+        wwtime = SHORTTIME
+        if( present(wtime) ) wwtime = wtime
         do
             if( file_exists(trim(fname)) ) exit
-            call sleep(SHORTTIME)
+            call sleep(wtime)
         end do
-    end subroutine qsys_watcher
+    end subroutine qsys_watcher_1
 
-    subroutine exec_simple_prg( exec_bin, cline )
+    !>  returns when the inputted file exists in cwd
+    subroutine qsys_watcher_2( fnames, files_exist, wtime )
+        character(len=STDLEN), intent(in)    :: fnames(:)
+        logical,               intent(inout) :: files_exist(:)
+        integer, optional,     intent(in)    :: wtime
+        integer, parameter :: SHORTTIME = 5, MAXITS=1000
+        integer            :: wwtime, nfiles, ifile, nlogic, i
+        logical            :: fexists, doreturn
+        wwtime = SHORTTIME
+        if( present(wtime) ) wwtime = wtime
+        nfiles = size(fnames)
+        nlogic = size(files_exist)
+        if( nlogic .ne. nfiles ) stop 'nonconforming arrays in simple_qsys_funs :: qsys_watcher_2' 
+        do i=1,MAXITS
+            doreturn = .false.
+            do ifile=1,nfiles
+                fexists = file_exists(trim(fnames(ifile)))
+                if( fexists .neqv. files_exist(ifile) )then
+                    files_exist(ifile) = fexists
+                    doreturn = .true.
+                endif
+            end do
+            if( all(files_exist) .or. doreturn )then
+                return
+            else
+                call sleep(wtime)
+            endif
+        end do
+    end subroutine qsys_watcher_2
+
+    subroutine exec_simple_prg( exec_bin, cline, wait )
         use simple_cmdline, only: cmdline
         use simple_chash,   only: chash
-        character(len=*), intent(in) :: exec_bin
-        class(cmdline),   intent(in) :: cline
+        character(len=*),  intent(in) :: exec_bin
+        class(cmdline),    intent(in) :: cline
+        logical, optional, intent(in) :: wait
         type(chash) :: job_descr
         character(len=1024) :: exec_str
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         exec_str = trim(exec_bin)//' '//job_descr%chash2str()
-        call exec_cmdline(exec_str)
+        call exec_cmdline(exec_str, wait)
     end subroutine exec_simple_prg
 
 end module simple_qsys_funs
