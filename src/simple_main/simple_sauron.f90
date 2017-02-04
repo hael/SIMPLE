@@ -14,10 +14,12 @@ contains
         class(chash),     intent(inout)    :: chtab
         character(len=32),     allocatable :: keys(:)
         character(len=STDLEN), allocatable :: vals(:)
+        character(len=:),      allocatable :: line_trimmed
         character(len=STDLEN) :: args(100), args_pair(5), format
         integer :: nargs, iarg, nargs_pair, ival, io_stat
         real    :: rval
-        call parse(line,' ',args,nargs)
+        allocate(line_trimmed, source=trim(line))
+        call parse(line_trimmed,' ',args,nargs)
         allocate(keys(nargs), vals(nargs))
         do iarg=1,nargs
             call parse(args(iarg),'=',args_pair,nargs_pair)
@@ -29,19 +31,19 @@ contains
             vals(iarg) = args_pair(2)
             select case(str2format(vals(iarg)))
                 case( 'file' )
-                    call chtab%set(keys(iarg), vals(iarg))
+                    call chtab%set(trim(keys(iarg)), trim(vals(iarg)))
                 case( 'real' )
                     rval = str2real(trim(vals(iarg)))
-                    call htab%set(keys(iarg), rval)
+                    call htab%set(trim(keys(iarg)), rval)
                 case( 'int'  )
                     call str2int(trim(vals(iarg)), io_stat, ival)
                     rval = real(ival)
-                    call htab%set(keys(iarg), rval)
+                    call htab%set(trim(keys(iarg)), rval)
                 case( 'char' )
-                    call chtab%set(keys(iarg), vals(iarg))
+                    call chtab%set(trim(keys(iarg)), trim(vals(iarg)))
             end select
         end do
-        deallocate(keys, vals)
+        deallocate(keys, vals, line_trimmed)
     end subroutine sauron_line_parser
 
 end module simple_sauron

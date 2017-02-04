@@ -697,8 +697,6 @@ contains
             call alloc_err('get_arr; simple_oris', alloc_stat)
             cnt = 0
             do i=1,self%n
-                if( .not. self%o(i)%key_is_real(which) )&
-                &stop 'ERROR! only for real keys; simple_oris :: get_arr'
                 val = self%get(i, which)
                 if( present(class) )then
                     mystate = nint(self%get( i, 'state'))
@@ -746,8 +744,6 @@ contains
             istop  = self%n
         endif
         do i=istart,istop
-            if( .not. self%o(i)%key_is_real(which) )&
-            &stop 'ERROR! only for real keys; simple_oris :: calc_sum'
             mystate = nint(self%get( i, 'state'))
             if( mystate == 0 ) cycle
             if( present(mask) )then
@@ -828,8 +824,6 @@ contains
             istop  = self%n
         endif
         do i=istart,istop
-             if( .not. self%o(i)%key_is_real(which) )&
-            &stop 'ERROR! only for real keys; simple_oris :: calc_nonzero_sum'
             mystate = nint(self%get( i, 'state'))
             if( mystate == 0 ) cycle
             val = self%get(i, which)
@@ -841,8 +835,7 @@ contains
                         cnt = cnt+1
                         sum = sum+val
                     endif
-                else if( present(state) )then
-                    
+                else if( present(state) )then 
                     if( mystate == state )then
                         cnt = cnt+1
                         sum = sum+val

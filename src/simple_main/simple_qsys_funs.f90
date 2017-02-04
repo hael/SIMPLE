@@ -330,6 +330,8 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         exec_str = trim(exec_bin)//' '//job_descr%chash2str()
+        write(*,'(a)') '>>> EXECUTING COMMAND:'
+        write(*,'(a)') trim(exec_str)
         call exec_cmdline(exec_str, wait)
     end subroutine exec_simple_prg
 

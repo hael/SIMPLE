@@ -249,20 +249,22 @@ contains
         class(chash), intent(in)      :: self
         character(len=:), allocatable :: str, str_moving
         integer :: i
-        if( self%chash_index == 1 )then
-            allocate(str, source=trim(self%keys(1))//'='//trim(self%values(1)))
-            return
+        if( self%chash_index > 0 )then
+            if( self%chash_index == 1 )then
+                allocate(str, source=trim(self%keys(1))//'='//trim(self%values(1)))
+                return
+            endif
+            allocate(str_moving, source=trim(self%keys(1))//'='//trim(self%values(1))//' ') 
+            if( self%chash_index > 2 )then
+                do i=2,self%chash_index-1
+                    allocate(str, source=str_moving//trim(self%keys(i))//'='//trim(self%values(i))//' ')
+                    deallocate(str_moving)
+                    allocate(str_moving,source=str)
+                    deallocate(str)
+                end do
+            endif
+            allocate(str,source=trim(str_moving//trim(self%keys(self%chash_index))//'='//trim(self%values(self%chash_index))))
         endif
-        allocate(str_moving, source=trim(self%keys(1))//'='//trim(self%values(1))//' ') 
-        if( self%chash_index > 2 )then
-            do i=2,self%chash_index-1
-                allocate(str, source=str_moving//trim(self%keys(i))//'='//trim(self%values(i))//' ')
-                deallocate(str_moving)
-                allocate(str_moving,source=str)
-                deallocate(str)
-            end do
-        endif
-        allocate(str,source=trim(str_moving//trim(self%keys(self%chash_index))//'='//trim(self%values(self%chash_index))))
     end function chash2str
     
     !>  \brief  returns size of chash

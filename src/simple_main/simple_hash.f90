@@ -126,21 +126,23 @@ contains
         class(hash), intent(inout)    :: self
         character(len=:), allocatable :: str, str_moving
         integer :: i
-        if( self%hash_index == 1 )then
-            allocate(str, source=trim(self%keys(1))//'='//trim(real2str(self%vals(1))))
-            return
+        if( self%hash_index > 0 )then
+            if( self%hash_index == 1 )then
+                allocate(str, source=trim(self%keys(1))//'='//trim(real2str(self%vals(1))))
+                return
+            endif
+            allocate(str_moving, source=trim(self%keys(1))//'='//trim(real2str(self%vals(1)))//' ') 
+            if( self%hash_index > 2 )then
+                do i=2,self%hash_index-1
+                    allocate(str, source=str_moving//trim(self%keys(i))//'='//trim(real2str(self%vals(i)))//' ')
+                    deallocate(str_moving)
+                    allocate(str_moving,source=str)
+                    deallocate(str)
+                end do
+            endif
+            allocate(str,source=trim(str_moving//trim(self%keys(self%hash_index))&
+            &//'='//trim(real2str(self%vals(self%hash_index)))))
         endif
-        allocate(str_moving, source=trim(self%keys(1))//'='//trim(real2str(self%vals(1)))//' ') 
-        if( self%hash_index > 2 )then
-            do i=2,self%hash_index-1
-                allocate(str, source=str_moving//trim(self%keys(i))//'='//trim(real2str(self%vals(i)))//' ')
-                deallocate(str_moving)
-                allocate(str_moving,source=str)
-                deallocate(str)
-            end do
-        endif
-        allocate(str,source=trim(str_moving//trim(self%keys(self%hash_index))&
-        &//'='//trim(real2str(self%vals(self%hash_index)))))
     end function hash2str
     
     !>  \brief  prints the hash
