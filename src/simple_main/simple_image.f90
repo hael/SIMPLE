@@ -59,8 +59,10 @@ type :: image
     procedure          :: get_cmat_lims
     procedure          :: cyci
     procedure          :: get
+    procedure          :: get_rmat
     procedure          :: get_cmat
     procedure          :: set
+    procedure          :: set_rmat
     procedure          :: set_ldim
     procedure          :: get_slice
     procedure          :: set_slice
@@ -324,7 +326,7 @@ contains
             stop 'Unsupported image kind; smple_image::new'
         endif
         ! make fftw plans
-        if( any(ldim > 500) .and. nthr_glob > 1 )then
+        if( (any(ldim > 500) .or. ldim(3) > 200) .and. nthr_glob > 1 )then
             rc = fftwf_init_threads()
             call fftwf_plan_with_nthreads(nthr_glob)
         endif
@@ -945,6 +947,15 @@ contains
     end function get
 
     !>  \brief  is a getter
+    function get_rmat( self ) result( rmat )
+        class(image), intent(in) :: self
+        real, allocatable :: rmat(:,:,:)
+        integer :: ldim(3)
+        ldim = self%ldim
+        allocate(rmat(ldim(1),ldim(2),ldim(3)), source=self%rmat(:ldim(1),:ldim(2),:ldim(3)))
+    end function get_rmat
+
+    !>  \brief  is a getter
     function get_cmat( self ) result( cmat )
         class(image), intent(in) :: self
         integer :: array_shape(3)
@@ -958,13 +969,32 @@ contains
     subroutine set( self, logi, val )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: logi(3)
-        real,         intent(in)    ::  val
+        real,         intent(in)    :: val
         if( self%imgkind .eq. 'xfel' ) stop 'rmat not allocated for xfel-kind images; simple_image::set'
         if( logi(1) <= self%ldim(1) .and. logi(1) >= 1 .and. logi(2) <= self%ldim(2)&
         .and. logi(2) >= 1 .and. logi(3) <= self%ldim(3) .and. logi(3) >= 1 )then
             self%rmat(logi(1),logi(2),logi(3)) = val
         endif
     end subroutine set
+
+    !>  \brief  is a setter
+    subroutine set_rmat( self, rmat )
+        class(image), intent(inout) :: self
+        real,         intent(in)    :: rmat(:,:,:)
+        integer :: ldim(3)
+        ldim(1) = size(rmat,1)
+        ldim(2) = size(rmat,2)
+        ldim(3) = size(rmat,3)
+        if( all(self%ldim .eq. ldim) )then
+            self%ft   = .false.
+            self%rmat = 0.
+            self%rmat(:ldim(1),:ldim(2),:ldim(3)) = rmat
+        else
+            write(*,*) 'ldim(rmat): ', ldim
+            write(*,*) 'ldim(img): ', self%ldim
+            stop 'nonconforming dims; simple_image :: set_rmat'
+        endif
+    end subroutine set_rmat
 
     !>  \brief  for setting ldim
     subroutine set_ldim( self, ldim )
@@ -2507,14 +2537,14 @@ contains
 
     !>  \brief generates the rotationally averaged spectrum of an image
     function spectrum( self, which, norm ) result( spec )
-        class(image), intent(inout)   :: self
-        character(len=*), intent(in)  :: which
-        logical, intent(in), optional :: norm
-        real, allocatable             :: spec(:)
-        real, allocatable             :: counts(:)
-        integer                       :: lfny, h, k, l
-        integer                       :: alloc_stat, sh, lims(3,2), phys(3)
-        logical                       :: didft, nnorm
+        class(image),      intent(inout) :: self
+        character(len=*),  intent(in)    :: which
+        logical, optional, intent(in)    :: norm
+        real, allocatable :: spec(:)
+        real, allocatable :: counts(:)
+        integer :: lfny, h, k, l
+        integer :: alloc_stat, sh, lims(3,2), phys(3)
+        logical :: didft, nnorm
         nnorm = .true.
         if( present(norm) ) nnorm = norm
         if( self%imgkind .eq. 'xfel' )then
@@ -2537,8 +2567,6 @@ contains
         spec   = 0.
         counts = 0.
         lims   = self%fit%loop_lims(2)
-        !$omp parallel do default(shared) private(h,k,l,phys,sh) &
-        !$omp reduction(+:spec,counts) schedule(auto)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 do l=lims(3,1),lims(3,2)
@@ -2571,7 +2599,6 @@ contains
                 end do
             end do
         end do
-        !$omp end parallel do
         if( which .ne. 'count' .and. nnorm )then
             where(counts > 0.)
                 spec = spec/counts

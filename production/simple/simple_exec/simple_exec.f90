@@ -42,9 +42,10 @@ type(select_frames_commander)      :: xselect_frames
 type(boxconvs_commander)           :: xboxconvs
 type(integrate_movies_commander)   :: xintegrate_movies
 type(powerspecs_commander)         :: xpowerspecs
-type(unblur_movies_commander)      :: xunblur_movies
+type(unblur_commander)             :: xunblur
 type(ctffind_commander)            :: xctffind
 type(select_commander)             :: xselect
+type(makepickrefs_commander)       :: xmakepickrefs
 type(pick_commander)               :: xpick
 type(extract_commander)            :: xextract
 
@@ -365,12 +366,12 @@ select case(prg)
         if( .not. cline%defined('clip')    ) call cline%set('clip',    256.)
         ! execute
         call xpowerspecs%execute(cline)
-    case( 'unblur_movies' )
-        !==Program unblur_movies
+    case( 'unblur' )
+        !==Program unblur
         !
-        ! <unblur_movies/begin>is a program for movie alignment or unblurring.
+        ! <unblur/begin>is a program for movie alignment or unblurring.
         ! Input is a textfile with absolute paths to movie files in addition to a few obvious input
-        ! parameters<unblur_movies/end>
+        ! parameters<unblur/end>
         !
         ! set required keys
         keys_required(1)  = 'filetab'
@@ -381,24 +382,24 @@ select case(prg)
         keys_optional(3)  = 'lpstart'
         keys_optional(4)  = 'lpstop'
         keys_optional(5)  = 'trs'
-        ! keys_optional(6)  = 'exp_time'
-        ! keys_optional(7)  = 'dose_rate'
-        ! keys_optional(8)  = 'kv'
-        keys_optional(6)  = 'pspecsz'
-        keys_optional(7)  = 'numlen'
-        keys_optional(8)  = 'startit'
-        ! keys_optional(12) = 'scale'
-        keys_optional(9)  = 'frameavg'
-        keys_optional(10) = 'tomo'
+        keys_optional(6)  = 'exp_time'
+        keys_optional(7)  = 'dose_rate'
+        keys_optional(8)  = 'kv'
+        keys_optional(9)  = 'pspecsz'
+        keys_optional(10) = 'numlen'
+        keys_optional(11) = 'startit'
+        keys_optional(12) = 'scale'
+        keys_optional(13) = 'frameavg'
+        keys_optional(14) = 'tomo'
         ! parse command line
-        if( describe ) call print_doc_unblur_movies
-        call cline%parse(keys_required(:2), keys_optional(:10))
+        if( describe ) call print_doc_unblur
+        call cline%parse(keys_required(:2), keys_optional(:14))
         ! set defaults
         if( .not. cline%defined('trs')     ) call cline%set('trs',      5.)
         if( .not. cline%defined('lpstart') ) call cline%set('lpstart', 15.)
         if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',   8.)
         ! execute
-        call xunblur_movies%execute(cline)
+        call xunblur%execute(cline)
     case( 'ctffind' )
         !==Program ctffind
         !
@@ -451,26 +452,42 @@ select case(prg)
         if( .not. cline%defined('outfile') )  call cline%set('outfile', 'selected_lines.txt')
         ! execute
         call xselect%execute(cline)
+    case( 'makepickrefs' )
+        !==Program pickrefs
+        !
+        ! <pickrefs/begin>is a program for generating references for template-based particle picking<pickrefs/end> 
+        !
+        ! set required keys
+        keys_required(1) = 'pgrp'
+        keys_required(2) = 'shrink'
+        ! set optional keys
+        keys_optional(1) = 'nthr'
+        keys_optional(2) = 'vol1'
+        keys_optional(3) = 'stk'
+        keys_optional(4) = 'smpd'
+        keys_optional(5) = 'msk'
+        ! parse command line
+        ! if( describe ) call print_doc_makepickrefs
+        call cline%parse(keys_required(:2), keys_optional(:5))
+        ! execute
+        call xmakepickrefs%execute(cline)
     case( 'pick' )
         !==Program pick
         !
-        ! <pick/begin>is a template-based picker program under development<pick/end> 
+        ! <pick/begin>is a template-based picker program<pick/end> 
         !
         ! set required keys
         keys_required(1) = 'filetab'
         keys_required(2) = 'refs'
         keys_required(3) = 'smpd'
-        keys_required(4) = 'msk'
+        keys_required(4) = 'shrink'
         ! set optional keys
         keys_optional(1) = 'nthr'
         keys_optional(2) = 'lp'
-        keys_optional(3) = 'offset'
-        keys_optional(4) = 'shrink'
-        keys_optional(5) = 'thres'
-        keys_optional(6) = 'dcrit_rel'
+        keys_optional(3) = 'thres'
         ! parse command line
         if( describe ) call print_doc_pick
-        call cline%parse(keys_required(:4), keys_optional(:6))
+        call cline%parse(keys_required(:4), keys_optional(:3))
         ! execute
         call xpick%execute(cline)
     case( 'extract' )

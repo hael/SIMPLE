@@ -23,9 +23,10 @@ public :: select_frames_commander
 public :: boxconvs_commander
 public :: integrate_movies_commander
 public :: powerspecs_commander
-public :: unblur_movies_commander
+public :: unblur_commander
 public :: ctffind_commander
 public :: select_commander
+public :: makepickrefs_commander
 public :: pick_commander
 public :: extract_commander
 private
@@ -46,10 +47,10 @@ type, extends(commander_base) :: powerspecs_commander
  contains
    procedure :: execute       => exec_powerspecs
 end type powerspecs_commander
-type, extends(commander_base) :: unblur_movies_commander
+type, extends(commander_base) :: unblur_commander
   contains
-    procedure :: execute      => exec_unblur_movies
-end type unblur_movies_commander
+    procedure :: execute      => exec_unblur
+end type unblur_commander
 type, extends(commander_base) :: ctffind_commander
   contains
     procedure :: execute      => exec_ctffind
@@ -58,6 +59,10 @@ type, extends(commander_base) :: select_commander
   contains
     procedure :: execute      => exec_select
 end type select_commander
+type, extends(commander_base) :: makepickrefs_commander
+  contains
+    procedure :: execute      => exec_makepickrefs
+end type makepickrefs_commander
 type, extends(commander_base) :: pick_commander
   contains
     procedure :: execute      => exec_pick
@@ -351,7 +356,7 @@ contains
         call simple_end('**** SIMPLE_POWERSPECS NORMAL STOP ****')
     end subroutine exec_powerspecs
     
-    subroutine exec_unblur_movies( self, cline )
+    subroutine exec_unblur( self, cline )
         use simple_unblur      ! use all in there
         use simple_procimgfile ! use all in there
         use simple_imgfile,    only: imgfile
@@ -359,7 +364,7 @@ contains
         use simple_image,      only: image
         use simple_qsys_funs,  only: qsys_job_finished
         use simple_math,       only: round2even
-        class(unblur_movies_commander), intent(inout) :: self
+        class(unblur_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(params)                       :: p
         type(build)                        :: b
@@ -376,7 +381,7 @@ contains
         integer                            :: err, lfoo(3), nframes, movie_counter
         p = params(cline, checkdistr=.false.)           ! constants & derived constants produced
         if( p%scale > 1.05 )then
-            stop 'scale cannot be > 1; simple_commander_preproc :: exec_unblur_movies'
+            stop 'scale cannot be > 1; simple_commander_preproc :: exec_unblur'
         endif
         call b%build_general_tbox(p,cline,do3d=.false.) ! general objects built
         if( p%tomo .eq. 'yes' )then
@@ -394,7 +399,7 @@ contains
                     imovie_start = p%fromp
                     imovie_stop  = p%top
                 else
-                    stop 'fromp & top args need to be defined in parallel execution; simple_unblur_movies'
+                    stop 'fromp & top args need to be defined in parallel execution; simple_unblur'
                 endif
             else
                 imovie_start = 1
@@ -481,10 +486,10 @@ contains
             call pspec_half_n_half%kill
             write(*,'(f4.0,1x,a)') 100.*(real(movie_counter)/real(ntot)), 'percent of the movies processed'
         end do
-        call qsys_job_finished( p, 'simple_commander_preproc :: exec_unblur_movies' )
+        call qsys_job_finished( p, 'simple_commander_preproc :: exec_unblur' )
         ! end gracefully
-        call simple_end('**** SIMPLE_UNBLUR_MOVIES NORMAL STOP ****')
-    end subroutine exec_unblur_movies
+        call simple_end('**** SIMPLE_unblur NORMAL STOP ****')
+    end subroutine exec_unblur
 
     subroutine exec_ctffind( self, cline )
         use simple_syscalls,  only: exec_cmdline
@@ -676,6 +681,60 @@ contains
         call simple_end('**** SIMPLE_SELECT NORMAL STOP ****')
     end subroutine exec_select
 
+    subroutine exec_makepickrefs( self, cline )
+        use simple_commander_volops,  only: projvol_commander
+        use simple_commander_imgproc, only: stackops_commander, scale_commander
+        class(makepickrefs_commander), intent(inout) :: self
+        class(cmdline),                intent(inout) :: cline
+        character(STDLEN), parameter :: ORIFILE='pickrefs_oris.txt'
+        integer,           parameter :: NREFS=100
+        type(params)                 :: p
+        type(build)                  :: b
+        type(cmdline)                :: cline_projvol, cline_stackops, cline_scale
+        type(projvol_commander)      :: xprojvol
+        type(stackops_commander)     :: xstackops
+        type(scale_commander)        :: xscale
+        p = params(cline)                   ! parameters generated
+        call b%build_general_tbox(p, cline) ! general objects built
+        if( cline%defined('stk') .or. cline%defined('vol1') )then
+            p = params(cline, checkdistr=.false.) ! constants & derived constants produced
+            if( cline%defined('vol1') )then
+                call b%a%new(NREFS)
+                call b%a%gen_diverse
+                call b%a%write(trim(ORIFILE))
+                cline_scale = cline
+                call cline_scale%set('scale', 1.0/p%shrink)
+                call cline_scale%set('outvol', 'scaled_from_makepickrefs'//p%ext)
+                call xscale%execute(cline_scale)
+                cline_projvol = cline
+                call cline_projvol%delete('msk')
+                call cline_projvol%set('vol1', 'scaled_from_makepickrefs'//p%ext)
+                call cline_projvol%set('nspace', real(NREFS))
+                call cline_projvol%set('outstk', 'pickrefs'//p%ext)
+                call cline_projvol%set('oritab', trim(ORIFILE))
+                call cline_projvol%set('neg', 'yes')
+                call cline_projvol%set('smpd', p%shrink*p%smpd)
+                call xprojvol%execute(cline_projvol)
+            else
+                cline_scale = cline
+                call cline_scale%set('scale', 1.0/p%shrink)
+                call cline_scale%set('outstk', 'scaled_from_makepickrefs'//p%ext)
+                call xscale%execute(cline_scale)
+                cline_stackops = cline
+                call cline_stackops%set('stk', 'scaled_from_makepickrefs'//p%ext)
+                call cline_stackops%set('outstk', 'pickrefs'//p%ext)
+                call cline_stackops%set('neg', 'yes')
+                call cline_stackops%set('smpd', p%shrink*p%smpd)
+                call xstackops%execute(cline_stackops)
+            endif
+        else
+            stop 'need input volume (vol1) or class averages (stk) to generate picking references'
+        endif
+        call del_file('scaled_from_makepickrefs'//p%ext)
+        ! end gracefully
+        call simple_end('**** SIMPLE_MAKEPICKREFS NORMAL STOP ****')
+    end subroutine exec_makepickrefs
+
     subroutine exec_pick( self, cline)
         use simple_picker
         class(pick_commander), intent(inout) :: self
@@ -684,15 +743,13 @@ contains
         integer                              :: nmicrographs, funit, alloc_stat, imic
         integer                              :: imic_start, imic_stop, ntot, imic_cnt
         integer                              :: offset
-        real                                 :: shrink, dcrit_rel
+        real                                 :: shrink
         character(len=STDLEN), allocatable   :: micrographnames(:)
         p = params(cline, checkdistr=.false.) ! constants & derived constants produced
         offset    = 3
-        if( cline%defined('offset') )    offset = p%offset
+        if( cline%defined('offset') ) offset = p%offset
         shrink    = 4.0
-        if( cline%defined('shrink') )    shrink = p%shrink
-        dcrit_rel = 0.5
-        if( cline%defined('dcrit_rel') ) dcrit_rel = p%dcrit_rel
+        if( cline%defined('shrink') ) shrink = p%shrink
         ! check filetab existence
         if( .not. file_exists(p%filetab) ) stop 'inputted filetab does not exist in cwd'
         ! set number of micrographs
@@ -728,14 +785,13 @@ contains
             endif
             write(*,'(a,1x,i5)') '>>> PROCESSING MICROGRAPH:', imic, trim(adjustl(micrographnames(imic)))
             if( cline%defined('thres') )then
-                call init_picker(micrographnames(imic), p%refs, p%smpd, p%msk, offset_in=offset,&
-                shrink_in=shrink, lp_in=p%lp, dcrit_rel_in=dcrit_rel, distthr_in=p%thres)
+                call init_picker(micrographnames(imic), p%refs, p%smpd, p%msk, p%shrink,&
+                offset_in=offset, lp_in=p%lp, distthr_in=p%thres)
             else
-                call init_picker(micrographnames(imic), p%refs, p%smpd, p%msk, offset_in=offset,&
-                shrink_in=shrink, lp_in=p%lp, dcrit_rel_in=dcrit_rel)
+                call init_picker(micrographnames(imic), p%refs, p%smpd, p%msk, p%shrink,&
+                offset_in=offset, lp_in=p%lp)
             endif
-            call pick_particles
-            call kill_picker
+            call pick_tester
             write(*,'(f4.0,1x,a)') 100.*(real(imic_cnt)/real(ntot)), 'percent of the micrographs processed'
         end do
     end subroutine exec_pick
@@ -963,7 +1019,7 @@ contains
                         call img_frame%bwd_ft
                     else
                         write(*,*) 'no shift parameters available for alignment of frames'
-                        stop 'use simple_unblur_movies if you want to integrate frames'
+                        stop 'use simple_unblur if you want to integrate frames'
                     endif
                 endif
         

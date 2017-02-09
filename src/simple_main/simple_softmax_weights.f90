@@ -25,8 +25,8 @@ contains
     
     function constructor( n, t ) result( self )
         use simple_jiffys, only: alloc_err
-        integer, intent(in)        :: n
-        real, intent(in), optional :: t
+        integer,        intent(in) :: n
+        real, optional, intent(in) :: t
         integer                    :: alloc_stat, i
         real                       :: wsum, a
         type(softmax_weights)      :: self

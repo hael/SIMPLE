@@ -26,7 +26,7 @@ use simple_filehandling    ! use all in there
 use simple_jiffys          ! use all in there
 implicit none
 
-public :: unblur_movies_distr_commander
+public :: unblur_distr_commander
 public :: unblur_tomo_movies_distr_commander
 public :: ctffind_distr_commander
 public :: prime2D_init_distr_commander
@@ -39,10 +39,10 @@ public :: recvol_distr_commander
 
 private
 
-type, extends(commander_base) :: unblur_movies_distr_commander
+type, extends(commander_base) :: unblur_distr_commander
   contains
-    procedure :: execute      => exec_unblur_movies_distr
-end type unblur_movies_distr_commander
+    procedure :: execute      => exec_unblur_distr
+end type unblur_distr_commander
 type, extends(commander_base) :: unblur_tomo_movies_distr_commander
   contains
     procedure :: execute      => exec_unblur_tomo_movies_distr
@@ -86,10 +86,10 @@ contains
 
     ! UNBLUR SINGLE-PARTICLE DDDs
 
-    subroutine exec_unblur_movies_distr( self, cline )
+    subroutine exec_unblur_distr( self, cline )
         use simple_commander_preproc
         use simple_commander_imgproc
-        class(unblur_movies_distr_commander), intent(inout) :: self
+        class(unblur_distr_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         ! commanders
         type(stack_commander)              :: xstack
@@ -142,8 +142,8 @@ contains
         call cline_stack%set('filetab', 'unblur_thumbs.txt')
         call cline_stack%set('outstk',  'unblur_thumbs'//p_master%ext)
         call xstack%execute(cline_stack)
-        call simple_end('**** SIMPLE_DISTR_UNBLUR_MOVIES NORMAL STOP ****')
-    end subroutine exec_unblur_movies_distr
+        call simple_end('**** SIMPLE_DISTR_unblur NORMAL STOP ****')
+    end subroutine exec_unblur_distr
 
     ! UNBLUR TOMOGRAPHIC DDDs
 
@@ -164,7 +164,7 @@ contains
         type(qsys_factory)                 :: qsys_fac
         class(qsys_base), pointer          :: myqsys
         ! make master parameters
-        call cline%set('prg', 'unblur_movies')
+        call cline%set('prg', 'unblur')
         p_master = params(cline, checkdistr=.false.)
         if( cline%defined('tomoseries') )then
             call read_filetable(p_master%tomoseries, tomonames)

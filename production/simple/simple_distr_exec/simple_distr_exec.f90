@@ -18,8 +18,8 @@ implicit none
 
 ! DISTRIBUTED COMMANDERS
 ! pre-processing
-type(unblur_movies_distr_commander)      :: xunblur_movies_distr
-type(unblur_tomo_movies_distr_commander) :: xunblur_tomo_movies_distr
+type(unblur_distr_commander)             :: xunblur_distr
+type(unblur_tomo_movies_distr_commander) :: xunblur_tomo_distr
 type(ctffind_distr_commander)            :: xctffind_distr
 ! PRIME2D
 type(prime2D_init_distr_commander)       :: xprime2D_init_distr
@@ -52,12 +52,12 @@ select case(prg)
 
     ! UNBLUR_MOVIES
 
-    case( 'unblur_movies' )
-        !==Program unblur_movies
+    case( 'unblur' )
+        !==Program unblur
         !
-        ! <unblur_movies/begin>is a program for movie alignment or unblurring.
+        ! <unblur/begin>is a program for movie alignment or unblurring.
         ! Input is a textfile with absolute paths to movie files in addition to a few obvious input
-        ! parameters<unblur_movies/end>
+        ! parameters<unblur/end>
         !
         ! set required keys
         keys_required(1)  = 'filetab'
@@ -70,29 +70,29 @@ select case(prg)
         keys_optional(3)  = 'lpstart'
         keys_optional(4)  = 'lpstop'
         keys_optional(5)  = 'trs'
-        ! keys_optional(6)  = 'exp_time'
-        ! keys_optional(7)  = 'dose_rate'
-        ! keys_optional(8)  = 'kv'
-        keys_optional(6) = 'pspecsz'
-        keys_optional(7) = 'numlen'
-        keys_optional(8) = 'startit'
-        ! keys_optional(12) = 'scale'
-        keys_optional(9) = 'frameavg'
+        keys_optional(6)  = 'exp_time'
+        keys_optional(7)  = 'dose_rate'
+        keys_optional(8)  = 'kv'
+        keys_optional(6)  = 'pspecsz'
+        keys_optional(7)  = 'numlen'
+        keys_optional(8)  = 'startit'
+        keys_optional(12) = 'scale'
+        keys_optional(9)  = 'frameavg'
         ! parse command line
-        if( describe ) call print_doc_unblur_movies
+        if( describe ) call print_doc_unblur
         call cline%parse(keys_required(:4), keys_optional(:9))
         ! set defaults
         if( .not. cline%defined('trs')     ) call cline%set('trs',      5.)
         if( .not. cline%defined('lpstart') ) call cline%set('lpstart', 15.)
         if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',   8.)
         ! execute
-        call xunblur_movies_distr%execute(cline)
-    case( 'unblur_tomo_movies' )
-        !==Program unblur_movies
+        call xunblur_distr%execute(cline)
+    case( 'unblur_tomo' )
+        !==Program unblur
         !
-        ! <unblur_tomo_movies/begin>is a program for movie alignment or unblurring of tomographic movies.
+        ! <unblur_tomo/begin>is a program for movie alignment or unblurring of tomographic movies.
         ! Input is a textfile with absolute paths to movie files in addition to a few obvious input
-        ! parameters<unblur_movies/end>
+        ! parameters<unblur/end>
         !
         ! set required keys
         keys_required(1)  = 'tomoseries'
@@ -112,7 +112,7 @@ select case(prg)
         keys_optional(9)  = 'scale'
         keys_optional(10) = 'frameavg'
         ! parse command line
-        if( describe ) call print_doc_unblur_tomo_movies
+        if( describe ) call print_doc_unblur_tomo
         call cline%parse(keys_required(:5), keys_optional(:9))
         ! set defaults
         if( .not. cline%defined('trs')     ) call cline%set('trs',      5.)
@@ -120,7 +120,7 @@ select case(prg)
         if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',   8.)
         if( .not. cline%defined('tomo')    ) call cline%set('tomo',  'yes')
         ! execute
-        call xunblur_tomo_movies_distr%execute(cline)
+        call xunblur_tomo_distr%execute(cline)
 
     ! CTFFIND
 

@@ -167,6 +167,7 @@ npeaks
 npix
 nptcls
 nran
+nrefs
 nrestarts
 nrots
 nspace

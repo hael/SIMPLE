@@ -205,6 +205,7 @@ type :: params
     integer :: npix=0
     integer :: nptcls=1
     integer :: nran=0
+    integer :: nrefs=100
     integer :: nrestarts=1
     integer :: nrots=0
     integer :: nspace=1000
@@ -519,6 +520,7 @@ contains
         call check_iarg('nnn',            self%nnn)
         call check_iarg('noris',          self%noris)
         call check_iarg('nran',           self%nran)
+        call check_iarg('nrefs',          self%nrefs)
         call check_iarg('nrestarts',      self%nrestarts)
         call check_iarg('nspace',         self%nspace)
         call check_iarg('nstates',        self%nstates)
@@ -765,8 +767,8 @@ contains
             else
                 self%msk = self%box/2
             endif
-        else
-            if( self%box /= 0 ) self%msk = min(real(self%box/2),self%msk)
+        ! else
+        !     if( self%box /= 0 ) self%msk = min(real(self%box/2),self%msk)
         endif
         ! set mode of masking
         if( cline%defined('inner') )then

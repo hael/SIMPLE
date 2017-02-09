@@ -200,6 +200,7 @@ qsys: simple_qsys_base.o                \
 masters: simple_rec_master.o             \
          simple_symsrcher.o              \
          simple_commander_base.o         \
+         simple_commander_volops.o       \
          simple_commander_checks.o       \
          simple_commander_comlin.o       \
          simple_commander_distr.o        \
@@ -212,7 +213,6 @@ masters: simple_rec_master.o             \
          simple_commander_prime3D.o      \
          simple_commander_rec.o          \
          simple_commander_sim.o          \
-         simple_commander_volops.o       \
          simple_commander_distr_wflows.o \
          simple_commander_hlev_wflows.o  ;
 

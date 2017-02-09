@@ -44,11 +44,11 @@ type centre_clust
     procedure, private :: sq_dist
     procedure, private :: cost
     procedure :: kill
-end type
+end type centre_clust
 
 interface centre_clust
     module procedure constructor
-end interface
+end interface centre_clust
 
 contains
 
@@ -56,21 +56,21 @@ contains
     function constructor( vecs, o, N, D, ncls ) result( self )
         use simple_oris,  only: oris
         class(oris), intent(in), target :: o          !< for storing cluster info
-        integer, intent(in)             :: N, D, ncls !< params
-        real, intent(in), target        :: vecs(N,D)  !< data vectors
+        integer,     intent(in)         :: N, D, ncls !< params
+        real,        intent(in), target :: vecs(N,D)  !< data vectors
         type(centre_clust)              :: self
         call self%new( vecs, o, N, D, ncls ) 
-    end function
+    end function constructor
 
     !>  \brief  is a constructor
     subroutine new( self, vecs, o, N, D, ncls )
         use simple_oris,  only: oris
-        class(centre_clust), intent(inout)     :: self       !< object
-        integer, intent(in)                    :: N, D, ncls !< params
-        real, intent(in), target               :: vecs(N,D)  !< data vectors
-        class(oris), intent(in), target        :: o          !< for storing cluster info
-        integer                                :: alloc_stat
-        real                                   :: x
+        class(centre_clust), intent(inout)      :: self       !< object
+        integer,             intent(in)         :: N, D, ncls !< params
+        real,                intent(in), target :: vecs(N,D)  !< data vectors
+        class(oris),         intent(in), target :: o          !< for storing cluster info
+        integer :: alloc_stat
+        real    :: x
         call self%kill
         self%vecs  => vecs
         self%o_ptr => o
@@ -88,7 +88,7 @@ contains
         self%avgs       = 0.
         self%rt = ran_tabu(ncls)
         self%existence = .true.
-    end subroutine
+    end subroutine new
     
     ! GETTERS/SETTERS
     
@@ -100,23 +100,23 @@ contains
         allocate(avgs(size(self%avgs,1),size(self%avgs,2)), stat=alloc_stat)
         call alloc_err('get_avgs; simple_centre_clust', alloc_stat)
         avgs = self%avgs
-    end function
+    end function get_avgs
     
     !>  \brief  is for setting the averages
     subroutine set_avgs( self, avgs )
         class(centre_clust), intent(inout) :: self
-        real, intent(in)                   :: avgs(self%ncls,self%D)
+        real,                intent(in)    :: avgs(self%ncls,self%D)
         self%avgs = avgs
-    end subroutine
+    end subroutine set_avgs
     
     ! PUBLIC
     
     !>  \brief  does the k-means clustering
     subroutine srch_greedy( self, maxits )
         class(centre_clust), intent(inout) :: self
-        integer, intent(in)                :: maxits
-        integer                            :: i, it, cls, loc(1)
-        real                               :: adist, adist_prev, x
+        integer,             intent(in)    :: maxits
+        integer :: i, it, cls, loc(1)
+        real    :: adist, adist_prev, x
         write(*,'(A)') '>>> K-MEANS CLUSTERING'
         it = 1
         adist = huge(x)
@@ -124,9 +124,9 @@ contains
         do
             adist_prev = adist
             adist = self%cost()
-!             if( it == 1 .or. mod(it,5) == 0 )then
+            ! if( it == 1 .or. mod(it,5) == 0 )then
                 write(*,"(1X,A,1X,I3,1X,A,1X,F7.3)") 'Iteration:', it, 'Cost:', adist
-!             endif
+            ! endif
             do i=1,self%N
                 cls = nint(self%o_ptr%get(i, 'class'))
                 call self%subtr_ptcl(i,cls)
@@ -138,13 +138,13 @@ contains
             if( abs(adist_prev-adist) < 0.0001 .or. it == maxits ) exit
             it = it+1
         end do
-    end subroutine
+    end subroutine srch_greedy
     
     !>  \brief  does the shc clustering
     subroutine srch_shc( self, maxits )
         use simple_opt_subs, only: shc_selector
         class(centre_clust), intent(inout) :: self
-        integer, intent(in)                :: maxits
+        integer,             intent(in)    :: maxits
         integer                            :: i, it, cls, loc(1)
         real                               :: adist, adist_prev, x
         write(*,'(A)') '>>> SHC CLUSTERING'
@@ -154,9 +154,9 @@ contains
         do
             adist_prev = adist
             adist = self%cost()
-!             if( it == 1 .or. mod(it,5) == 0 )then
+            ! if( it == 1 .or. mod(it,5) == 0 )then
                 write(*,"(1X,A,1X,I3,1X,A,1X,F7.3)") 'Iteration:', it, 'Cost:', adist
-!             endif
+            ! endif
             do i=1,self%N
                 cls = nint(self%o_ptr%get(i, 'class'))
                 call self%subtr_ptcl(i,cls)
@@ -168,7 +168,7 @@ contains
             if( abs(adist_prev-adist) < 0.0001 .or. it == maxits ) exit
             it = it+1
         end do
-    end subroutine
+    end subroutine srch_shc
 
     ! PRIVATE
     
@@ -193,32 +193,32 @@ contains
                 self%avgs(k,:) = 0.
             endif
         end do
-    end subroutine
+    end subroutine calc_avgs
   
     !>  \brief  is for subtracting the contribution from ptcl, assumes that ptcl is read
     subroutine subtr_ptcl( self, i, cls )
         class(centre_clust), intent(inout) :: self
-        integer, intent(in)                :: i, cls
+        integer,             intent(in)    :: i, cls
         if( cls /= 0 )then
             self%sums(cls,:) = self%sums(cls,:)-self%vecs(i,:)
             self%pops(cls)   = self%pops(cls)-1
             self%avgs(cls,:) = self%sums(cls,:)/real(self%pops(cls))
         endif
-    end subroutine
+    end subroutine subtr_ptcl
     
     !>  \brief  is for adding the contribution from ptcl i, assumes that ptcl is read
     subroutine add_ptcl( self, i, cls )
         class(centre_clust), intent(inout) :: self
-        integer, intent(in)                :: i, cls
+        integer,             intent(in)    :: i, cls
         self%sums(cls,:) = self%sums(cls,:)+self%vecs(i,:)
         self%pops(cls)   = self%pops(cls)+1
         self%avgs(cls,:) = self%sums(cls,:)/real(self%pops(cls))
-    end subroutine
+    end subroutine add_ptcl
     
     !>  \brief  is for calculating all distances, assumes that  ptcl is read
     subroutine calc_dists( self, i )
         class(centre_clust), intent(inout) :: self
-        integer, intent(in) :: i
+        integer,             intent(in)    :: i
         integer :: k
         real :: x
         !$omp parallel do schedule(auto) default(shared) private(k,x)
@@ -230,17 +230,17 @@ contains
             endif
         end do
         !$omp end parallel do
-    end subroutine
+    end subroutine calc_dists
     
     !>  \brief  is for calculating the square distance between data vec and average
     function sq_dist( self, i, k ) result( dist )
         use simple_math, only: euclid
         class(centre_clust), intent(in) :: self
-        integer, intent(in)       :: i
-        integer, intent(in)       :: k
+        integer,             intent(in) :: i
+        integer,             intent(in) :: k
         real :: dist
         dist = euclid(self%vecs(i,:),self%avgs(k,:))**2.
-    end function
+    end function sq_dist
 
     !>  \brief  is the cost function being minimized
     function cost( self ) result( adist )
@@ -259,7 +259,7 @@ contains
             endif
         end do
         adist = adist/real(cnt)
-    end function
+    end function cost
     
     !>  \brief  is a destructor
     subroutine kill( self )
@@ -269,6 +269,6 @@ contains
             call self%rt%kill 
             self%existence = .false.
         endif
-    end subroutine
+    end subroutine kill
 
 end module simple_centre_clust

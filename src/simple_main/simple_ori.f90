@@ -535,21 +535,22 @@ contains
         endif
     end function key_is_real
 
-    
     !>  \brief  joins the hashes into a string that represent the ori
     function ori2str( self ) result( str )
         class(ori), intent(inout) :: self
         character(len=:), allocatable :: str, str_chtab, str_htab
-        str_chtab = self%chtab%chash2str()
-        str_htab  = self%htab%hash2str()
-        if( allocated(str_chtab) .and. allocated(str_htab) )then
+        integer :: sz_chash, sz_hash
+        sz_chash = self%chtab%size_of_chash()
+        sz_hash  = self%htab%size_of_hash()
+        if( sz_chash > 0 ) str_chtab = self%chtab%chash2str()
+        if( sz_hash  > 0 ) str_htab  = self%htab%hash2str()
+        if( sz_chash > 0 .and. sz_hash > 0 )then
             allocate( str, source=str_chtab//' '//str_htab )
-        else if( allocated(str_htab) )then
+        else if( sz_hash > 0 )then
             allocate( str, source=str_htab )
-        else if( allocated(str_chtab) )then
+        else if( sz_chash > 0 )then
             allocate( str, source=str_chtab )
         endif
-        deallocate(str_chtab, str_htab)
     end function ori2str
     
     !<  \brief  to print the rotation matrix
@@ -576,7 +577,7 @@ contains
         integer,    intent(in)    :: fhandle
         character(len=:), allocatable :: str
         str = self%ori2str()
-        if( allocated(str) ) write(fhandle,"(A)") str
+        if( allocated(str) ) write(fhandle,'(a)') str
     end subroutine write
 
     !>  \brief  reads all orientation info (by line) into the hash-tables

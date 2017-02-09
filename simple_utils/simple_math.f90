@@ -472,78 +472,52 @@ contains
     end subroutine
     
     !> \brief  implements the sortmeans algorithm       
-    subroutine sortmeans( dat, means, labels )
-        real, intent(inout)               :: dat(:)
-        real, intent(inout)               :: means(:)
-        integer, intent(out), allocatable :: labels(:)
-        integer                           :: ncls, ndat, alloc_stat, clssz, i, cnt_means
-        real, allocatable                 :: dat_copy(:)
-        integer, allocatable              :: labels_copy(:) 
-        if( size(dat) /= size(labels) )then
-            stop 'size of lables .ne. size of dat; sortmeans; simple_math'
-        endif
+    subroutine sortmeans( dat, maxits, means, labels )
+        real,                 intent(in)  :: dat(:)
+        integer,              intent(in)  :: maxits
+        real,                 intent(out) :: means(:)
+        integer, allocatable, intent(out) :: labels(:)
+        logical, allocatable :: mask(:)
+        integer :: ncls, ndat, alloc_stat, clssz, i, j, cnt_means, loc(1), changes
+        real, allocatable :: dat_sorted(:)
         ncls = size(means)
         ndat = size(dat)
         if( allocated(labels) ) deallocate(labels)
-        allocate( dat_copy(ndat), labels(ndat), labels_copy(ndat), stat=alloc_stat )
+        allocate( dat_sorted(ndat), mask(ndat), labels(ndat), stat=alloc_stat )
         call alloc_err("sortmeans; simple_math", alloc_stat)
-        dat_copy = dat
         ! initialization by sorting
-        call hpsort(ndat, dat_copy)
-        clssz     = nint(real(ndat)/real(ncls))
+        dat_sorted = dat
+        call hpsort(ndat, dat_sorted)
+        clssz = int(real(ndat)/real(ncls))
         cnt_means = 0
         do i=1,ndat,clssz
-            cnt_means = cnt_means+1
-            means(cnt_means) = dat_copy(i)
+            cnt_means = cnt_means + 1
+            means(cnt_means) = dat_sorted(i)
             if( cnt_means == ncls ) exit
         end do
         ! the kmeans step
         labels = 1
-        do 
-            labels_copy = labels
+        do j=1,maxits
+            changes = 0
+            ! find closest
             do i=1,ndat
-                labels(i) = find_closest(dat(i))
+                loc = minloc((means-dat(i))**2.0)
+                if( labels(i) /= loc(1) ) changes = changes + 1 
+                labels(i) = loc(1)
             end do
-            call update_means
-            if( all(labels.eq.labels_copy) ) exit
+            ! update means
+            do i=1,ncls
+                where( labels == i )
+                    mask = .true.
+                else where
+                    mask = .false.
+                end where
+                means(i) = sum(dat, mask=mask)/real(count(mask))
+            end do
+            if( changes == 0 ) exit
         end do
-        deallocate(dat_copy, labels_copy)
-        
-        
-        contains
-        
-            ! for finding the closest mean
-            function find_closest( var ) result( label )
-                real, intent(in) :: var
-                integer          :: i, loc(1), label
-                real             :: dists(ncls)
-                do i=1,ncls
-                    dists(i) = (var-means(i))**2.
-                end do
-                loc = minloc(dists)
-                label = loc(1)
-            end function
-            
-            ! for updating the means
-            subroutine update_means
-                integer :: i, j
-                integer :: pops(ncls)
-                pops  = 0
-                means = 0.
-                do i=1,ncls
-                    do j=1,ndat
-                        if( i == labels(j) )then
-                            means(i) = means(i)+dat(j)
-                            pops(i)  = pops(i)+1
-                        endif
-                    end do
-                end do
-                do i=1,ncls
-                    means(i) = means(i)/real(pops(i))
-                end do 
-            end subroutine
-
-    end subroutine
+        deallocate(dat_sorted, mask)
+    end subroutine sortmeans
     
     !> \brief  generate mutually exclusive positions
     function gen_ptcl_pos( npos, xdim, ydim, box ) result( pos )
