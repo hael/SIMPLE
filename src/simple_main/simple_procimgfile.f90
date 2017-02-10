@@ -279,15 +279,15 @@ contains
             call progress(cnt,sz)
             call img%read(fname2resize, i)
             call img%fwd_ft
-            if( ldim_new(1) <= ldim(1) .and. ldim_new(2) <= ldim(2)&
-            .and. ldim_new(3) <= ldim(3) )then
-                call img%clip(img_resized)
-            else
-                call img%pad(img_resized)
-            endif
+            call img%clip(img_resized)
             call img_resized%bwd_ft
-            call img_clip%new(ldim_clip,img_resized%get_smpd()) 
-            call img_resized%clip(img_clip)
+            call img_clip%new(ldim_clip,img_resized%get_smpd())
+            if( ldim_clip(1) <= ldim_new(1) .and. ldim_clip(2) <= ldim_new(2)&
+            .and. ldim_clip(3) <= ldim_new(3) )then
+                call img_resized%clip(img_clip)
+            else
+                call img_resized%pad(img_clip)
+            endif
             call img_clip%write(fname, cnt)
         end do
         call img%kill

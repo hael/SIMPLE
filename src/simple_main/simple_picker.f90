@@ -9,13 +9,13 @@ use simple_filehandling, only: get_fileunit, remove_abspath, fname_new_ext
 use simple_jiffys,       only: alloc_err, find_ldim_nptcls
 implicit none
 
-public :: init_picker, pick_tester
+public :: init_picker, exec_picker, kill_picker
 private
 
 integer,          parameter   :: MAXKMIT  = 20
 integer,          parameter   :: SPECNCLS = 10
 real,             parameter   :: BOXFRAC  = 0.5
-logical,          parameter   :: DEBUG    = .true.
+logical,          parameter   :: DEBUG=.true., DOPRINT=.true.
 type(image)                   :: micrograph, mic_shrunken, ptcl_target
 type(image),      allocatable :: refs(:)
 logical,          allocatable :: selected_peak_positions(:), is_a_peak(:,:)
@@ -30,6 +30,8 @@ real                          :: smpd_shrunken, corrmax, corrmin
 real                          :: smpd, msk, shrink, lp, distthr
 
 contains
+
+    
 
     subroutine init_picker( micfname, refsfname, smpd_in, msk_in, shrink_in, offset_in, lp_in, distthr_in )
         character(len=*),  intent(in) :: micfname, refsfname
@@ -83,7 +85,7 @@ contains
         if( DEBUG ) call mic_shrunken%write('shrunken.mrc')
     end subroutine init_picker
 
-    subroutine pick_tester
+    subroutine exec_picker
         call extract_peaks_and_background
         call distance_filter
         call refine_positions
@@ -93,7 +95,7 @@ contains
         backgr_positions = shrink*backgr_positions
         ! write output
         call write_boxfile
-    end subroutine pick_tester
+    end subroutine exec_picker
 
     subroutine extract_peaks_and_background
         real    :: means(2), corrs(nrefs), spec_thresh
@@ -293,10 +295,10 @@ contains
     subroutine estimate_ssnr
         real,    allocatable :: sig_spec(:), noise_spec(:), spec(:)
         real,    allocatable :: ssnr(:), res(:), pscores(:)
-        integer, allocatable :: labels(:)
+        integer, allocatable :: labels(:), labels_bin(:)
         integer :: nsig, nnoise, ipeak, xind, yind, k, n
         integer, parameter :: NMEANS=10
-        real    :: means(NMEANS)
+        real    :: means(NMEANS), means_bin(2)
         n = count(selected_peak_positions)
         allocate(pscores(n))
         nsig = 0
@@ -319,12 +321,23 @@ contains
         sig_spec = sig_spec/real(nsig)
         if( nsig > NMEANS )then
             call sortmeans(pscores, MAXKMIT, means, labels)
+            call sortmeans(means,   MAXKMIT, means_bin, labels_bin)
+            if( DOPRINT )then
+               do k=1,NMEANS
+                  write(*,*) 'quanta: ', k, 'mean: ', means(k), 'pop: ', count(labels == k), 'bin: ', labels_bin(k)
+               end do
+            endif
             ! delete the outliers
             nsig = 0
             do ipeak=1,npeaks
                 if( selected_peak_positions(ipeak) )then
                     nsig = nsig + 1
+                    ! remove outliers
                     if( labels(nsig) == 1 .or. labels(nsig) == NMEANS )then
+                        selected_peak_positions(ipeak) = .false.
+                    endif
+                    ! remove too high contrast stuff
+                    if( labels_bin(labels(nsig)) == 2 )then
                         selected_peak_positions(ipeak) = .false.
                     endif
                 endif
@@ -389,5 +402,17 @@ contains
             end do
         end do
     end subroutine write_backgr_coords
+
+    subroutine kill_picker
+        integer :: iref
+        if( allocated(micname) )then
+            deallocate(selected_peak_positions,is_a_peak,sxx,corrmat,specscores)
+            deallocate(peak_positions,refmat,backgr_positions,micname,refsname)
+            do iref=1,nrefs
+                call refs(iref)%kill
+            end do
+            deallocate(refs)
+        endif
+    end subroutine kill_picker
 
 end module simple_picker

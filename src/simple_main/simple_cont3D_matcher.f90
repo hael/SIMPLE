@@ -84,7 +84,7 @@ contains
         call qsys_job_finished( p, 'simple_cont3D_matcher :: cont3D_shellweight' )
     end subroutine cont3D_shellweight
     
-    !>  \brief  is the prime3D algorithm
+    !>  \brief  is the continuous refinement algorithm
     subroutine cont3D_exec( b, p, cline, which_iter, converged )
         use simple_ori, only: ori
         class(build),   intent(inout) :: b

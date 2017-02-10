@@ -791,7 +791,8 @@ contains
                 call init_picker(micrographnames(imic), p%refs, p%smpd, p%msk, p%shrink,&
                 offset_in=offset, lp_in=p%lp)
             endif
-            call pick_tester
+            call exec_picker 
+            call kill_picker
             write(*,'(f4.0,1x,a)') 100.*(real(imic_cnt)/real(ntot)), 'percent of the micrographs processed'
         end do
     end subroutine exec_pick

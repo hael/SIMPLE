@@ -6,10 +6,8 @@ use simple_jiffys,           only: simple_end
 use simple_image,            only: image
 use simple_commander_volops, only: projvol_commander
 use simple_strings,          only: real2str, int2str
-
 implicit none
-type( projvol_commander) :: xprojvol
-type( image )            :: cube, img
+type( image )         :: cube, img
 real                  :: smpd
 integer               :: box, nspace, msk
 character(8)          :: date
