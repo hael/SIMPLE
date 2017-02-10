@@ -76,8 +76,9 @@ contains
 
     !>  Handles error from system call
     subroutine raise_sys_error( cmd, exitstat, cmdstat, cmdmsg )
-        integer,          intent(in) :: exitstat, cmdstat
-        character(len=*), intent(in) :: cmd, cmdmsg
+        integer,               intent(in) :: exitstat, cmdstat
+        character(len=*),      intent(in) :: cmd
+        character(len=STDLEN), intent(in) :: cmdmsg
         logical :: err
         err = .false.
         if( exitstat /= 0 )then

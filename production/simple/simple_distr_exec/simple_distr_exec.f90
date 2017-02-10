@@ -9,9 +9,10 @@
 program simple_distr_exec
 use simple_defs  
 use simple_cmdline, only: cmdline
-use simple_strings, only: str_has_substr, parse, split
+use simple_strings, only: str_has_substr
 use simple_jiffys,  only: cmdline_err
 use simple_gen_doc
+use simple_restart
 use simple_commander_distr_wflows
 use simple_commander_hlev_wflows
 implicit none
@@ -36,10 +37,10 @@ type(ini3D_from_cavgs_commander)         :: xini3D_from_cavgs
 ! OTHER DECLARATIONS
 integer, parameter    :: MAXNKEYS=100, KEYLEN=32
 character(len=KEYLEN) :: keys_required(MAXNKEYS)='', keys_optional(MAXNKEYS)=''
-character(len=STDLEN) :: arg, prg, entire_line, restart
+character(len=STDLEN) :: arg, prg, entire_line
 type(cmdline)         :: cline
-integer               :: cmdstat, cmdlen, pos, nargs
-logical               :: describe
+integer               :: cmdstat, cmdlen, pos
+logical               :: describe, is_restart
 call get_command_argument(1, arg, cmdlen, cmdstat)
 call get_command(entire_line)
 if( str_has_substr(entire_line, 'prg=list') ) call list_all_simple_distr_programs
@@ -220,9 +221,16 @@ select case(prg)
         keys_optional(17) = 'srch_inpl'
         keys_optional(18) = 'nnn'
         keys_optional(19) = 'minp'        
-        ! parse command line
+        ! documentation
         if( describe ) call print_doc_prime2D
-        call cline%parse(keys_required(:7), keys_optional(:19))
+        ! parse command line
+        ! call check_restart( entire_line, is_restart )
+        ! if( is_restart )then
+        !     call parse_restart('prime2D', entire_line, cline, keys_required(:7), keys_optional(:19))
+        ! else
+        !     call cline%parse( keys_required(:7), keys_optional(:19) )
+        ! endif
+        call cline%parse( keys_required(:7), keys_optional(:19) )
         ! set defaults
         if( .not. cline%defined('lp')     ) call cline%set('lp',     20.)
         if( .not. cline%defined('eo')     ) call cline%set('eo',    'no')
@@ -346,24 +354,19 @@ select case(prg)
         keys_optional(29) = 'xfel'
         keys_optional(30) = 'nnn'
         keys_optional(31) = 'shellw'
-        ! parse command line
+        ! documentation
         if( describe ) call print_doc_prime3D
-        call cline%parse(keys_required(:7), keys_optional(:31))
-        ! restart
-        ! call parse( entire_line, ' ', args, nargs )
-        ! if( nargs == 2 )then
-        !     if( .not.str_has_substr( args(2), 'startit=') )stop 'needs startit argument for restart'
-        !     call split( restart, '=', arg )
-        !     restart = 'prime3D_restart_iter' // int2strpad( args(2), 3 )
-        !     call cline%read( trim(restart) )
-        ! else
-        !     ! parse command line
-        !     call cline%parse(keys_required(:7), keys_optional(:31))
-        ! endif
+        ! parse command line
+        call check_restart( entire_line, is_restart )
+        if( is_restart )then
+            call parse_restart('prime3D', entire_line, cline, keys_required(:7), keys_optional(:31))
+        else
+            call cline%parse( keys_required(:7), keys_optional(:31) )
+        endif
         ! set defaults
         if( .not. cline%defined('nspace')                  ) call cline%set('nspace', 1000.)
         if( cline%defined('lp') .or. cline%defined('find') ) call cline%set('dynlp',   'no')
-        if( .not. cline%defined('cenlp')  )                  call cline%set('cenlp',    30.)
+        if( .not. cline%defined('cenlp')                   ) call cline%set('cenlp',    30.)
         if( .not. cline%defined('refine')                  ) call cline%set('refine',  'no')
         if( .not. cline%defined('eo') )then
             call cline%set('eo', 'no')

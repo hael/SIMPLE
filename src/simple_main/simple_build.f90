@@ -200,6 +200,8 @@ contains
             lfny = self%img%get_lfny(1)            
             allocate( self%ssnr(p%nstates,lfny), self%fsc(p%nstates,lfny), stat=alloc_stat )
             call alloc_err("In: build_general_tbox; simple_build, 1", alloc_stat)
+            self%ssnr = 0.
+            self%fsc  = 0.
             ! set default amsklp
             if( .not. cline%defined('amsklp') .and. cline%defined('lp') )then
                 p%amsklp = self%img%get_lp(self%img%get_find(p%lp)-2)
@@ -413,6 +415,7 @@ contains
         integer :: s, alloc_stat, i
         call self%kill_hadamard_prime3D_tbox
         call self%raise_hard_ctf_exception(p)
+        ! reconstruction objects
         if( p%norec .eq. 'yes' )then
             ! no reconstruction objects needed
         else

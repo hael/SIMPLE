@@ -52,7 +52,8 @@ contains
         endif
         do s=fri,toi ! state loop
             if( debug ) write(*,*) 'processing state: ', s
-            if( p%l_distr_exec )then ! embarrasingly parallel rec
+            if( b%a%get_statepop(s) == 0 )cycle     ! empty state
+            if( p%l_distr_exec )then                ! embarrasingly parallel rec
                 if( present(fbody_in) )then
                     allocate(fbody, source=trim(adjustl(fbody_in))//&
                     &'_state'//int2str_pad(s,2)//'_part'//int2str_pad(p%part,p%numlen))
@@ -115,7 +116,8 @@ contains
         endif
         do s=fri,toi ! state loop
             if( debug ) write(*,*) 'processing state: ', s
-            if( p%l_distr_exec )then ! embarrasingly parallel exec
+            if( b%a%get_statepop(s) == 0 )cycle     ! empty state
+            if( p%l_distr_exec )then                ! embarrasingly parallel exec
                 if( present(fbody_in) )then
                     allocate(fbody, source=trim(adjustl(fbody_in))//'_state')
                 else

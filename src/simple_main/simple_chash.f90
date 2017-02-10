@@ -169,7 +169,7 @@ contains
         integer :: i, ind
         ind = self%lookup( key )
         if( ind==0 .or. ind>self%chash_index )then
-            write(*,*)'Nothing to delete; key:',key,'; simple_chash::delete'
+            !write(*,*)'Nothing to delete; key:',key,'; simple_chash::delete'
             return
         endif
         do i=ind,self%chash_index-1

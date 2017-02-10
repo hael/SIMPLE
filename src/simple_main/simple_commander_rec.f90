@@ -82,11 +82,14 @@ contains
         logical                       :: debug=.false.
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
-        if( cline%defined('nstates') )then
-            if( p%nstates /= b%a%get_nstates() ) stop 'Inconsistent number of states between command-line and oritab'
-        endif
+        ! warning incompatible with empty states
+        !if( cline%defined('nstates') )then
+        !    if( p%nstates /= b%a%get_nstates() ) stop 'Inconsistent number of states between command-line and oritab'
+        !endif
         call b%build_eo_rec_tbox(p)   ! reconstruction toolbox built
         allocate(res05s(p%nstates), res0143s(p%nstates), stat=alloc_stat)
+        res0143s = 0.
+        res05s   = 0.
         call alloc_err("In: simple_eo_volassemble", alloc_stat)
         ! rebuild b%vol according to box size (beacuse it is otherwise boxmatch)
         call b%vol%new([p%box,p%box,p%box], p%smpd, p%imgkind)
@@ -99,6 +102,7 @@ contains
                 s = ss
             endif
             if( debug ) write(*,*) 'processing state: ', s
+            if( b%a%get_statepop( s ) == 0 )cycle           ! Empty state
             call b%eorecvol%reset_all
             do part=1,p%nparts
                 if( cline%defined('state') )then
@@ -175,6 +179,7 @@ contains
                 s = ss
             endif
             if( debug ) write(*,*) 'processing state: ', s
+            if( b%a%get_statepop( s ) == 0 )cycle           ! Empty state
             call b%recvol%reset
             do part=1,p%nparts
                 if( cline%defined('state') )then

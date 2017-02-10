@@ -358,6 +358,7 @@ contains
         character(len=:), allocatable    :: conv
         integer, allocatable             :: parts(:,:)
         logical                          :: nparts_set=.false.
+        logical                          :: vol_defined=.false.
         ! take care of optionals
         ccheckdistr = .true.
         if( present(checkdistr) ) ccheckdistr = checkdistr
@@ -627,6 +628,19 @@ contains
         if( cline%defined('prg') )then
             if( .not. str_has_substr(self%prg, 'simple_') ) self%prg = 'simple_'//trim(self%prg)
         endif
+        ! check nr of states
+        if( cline%defined('nstates') )then
+            self%nstates = nint(cline%get_rarg('nstates'))
+            if( self%nstates > MAXS )then
+                write(*,'(a)') 'ERROR, the number of states is limited to 20!'
+                write(*,'(a)') 'In: constructor, module: simple_params.f90'
+                stop
+            endif
+        endif
+        ! determines whether at least one volume is on the cmdline
+        do i=1,self%nstates
+            if( cline%defined( trim('vol')//int2str(i) ))vol_defined = .true.
+        enddo
         ! check inputted vols
         if( cline%defined('vollist') )then
             if( nlines(self%vollist)< MAXS )then
@@ -636,7 +650,7 @@ contains
             if( cline%defined('vol') )then
                 self%vols(1) = self%vol
             endif
-            if( cline%defined('vol') .or. cline%defined('vol1') )then
+            if( cline%defined('vol') .or. vol_defined )then
                 do i=1,MAXS
                     call check_vol( i )
                 end do
@@ -714,15 +728,6 @@ contains
         if( .not. cline%defined('ncunits') )then
             ! we assume that the number of computing units is equal to the number of partitions
             self%ncunits = self%nparts
-        endif
-        ! check nr of states
-        if( cline%defined('nstates') )then
-            self%nstates = nint(cline%get_rarg('nstates'))
-            if( self%nstates > MAXS )then
-                write(*,'(a)') 'ERROR, the number of states is limited to 20!'
-                write(*,'(a)') 'In: constructor, module: simple_params.f90'
-                stop
-            endif
         endif
         ! check file formats
         call check_file_formats(aamix)
@@ -959,7 +964,7 @@ contains
             if( self%tfplan%flag .ne. 'no' ) self%l_shellw = .true.
         endif
         write(*,'(A)') '>>> DONE PROCESSING PARAMETERS'
-        
+
       contains
           
           subroutine check_vol( i )
@@ -974,7 +979,7 @@ contains
                       write(*,*) 'Input volume:', self%vols(i), 'does not exist!'
                       stop
                   endif
-                  self%nstates = i
+                  !self%nstates = i
                   if( self%debug == 'yes' ) write(*,*) nam, '=', self%vols(i)
               endif
           end subroutine check_vol
@@ -990,7 +995,7 @@ contains
                   read(fnr,*) nam
                   if( nam .ne. '' )then
                       self%vols(i) = nam
-                      self%nstates = i
+                      !self%nstates = i
                   endif
               end do
               close(fnr)

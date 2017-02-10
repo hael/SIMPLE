@@ -658,7 +658,7 @@ contains
         class(cmdline),           intent(inout) :: cline
         type(params)      :: p
         type(build)       :: b
-        integer           :: i, startit
+        integer           :: i, startit, s, n_states, cnt
         logical           :: update_res=.false., converged=.false.
         real              :: lpstart, lpstop
         p = params(cline) ! parameters generated
@@ -710,10 +710,11 @@ contains
             do i=startit,p%maxits
                 call prime3D_exec(b, p, cline, i, update_res, converged)
                 if( update_res )then
+                    ! dynamic low-pass
                     p%find = p%find+p%fstep
                     p%lp = max(p%lpstop,b%img%get_lp(p%find))
                 endif
-                if( converged ) exit
+                if( converged )exit
             end do
         endif
         ! end gracefully
@@ -764,13 +765,16 @@ contains
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         ! nstates consistency check
-        if( cline%defined('nstates') )then
-            if( p%nstates /= b%a%get_nstates() ) stop 'Inconsistent number of states between command-line and oritab'
-        endif
+        ! Now incompatible with empty states
+        !if( cline%defined('nstates') )then
+        !    if( p%nstates /= b%a%get_nstates() ) stop 'Inconsistent number of states between command-line and oritab'
+        !endif
         limset = .false.
         if( p%eo .eq. 'yes' )then
             allocate( maplp(p%nstates) )
+            maplp = 0.
             do istate=1,p%nstates
+                if( b%a%get_statepop( istate ) == 0 )cycle ! empty state
                 p%fsc = 'fsc_state'//int2str_pad(istate,2)//'.bin'
                 inquire(file=p%fsc, exist=here)
                 if( here )then

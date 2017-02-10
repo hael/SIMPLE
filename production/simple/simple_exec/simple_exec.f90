@@ -985,7 +985,7 @@ select case(prg)
         if( describe ) call print_doc_check3D_conv
         call cline%parse(keys_required(:5), keys_optional(:6))
         ! set defaults
-        if( .not. cline%defined('lp') )     call cline%set('lp', 20.)
+        if( .not. cline%defined('lp') .and. .not.cline%defined('lp') )call cline%set('lp', 20.)
         if( .not. cline%defined('nspace') ) call cline%set('nspace', 1000.)
         ! execute
         call xcheck3D_conv%execute(cline)

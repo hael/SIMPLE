@@ -38,21 +38,41 @@ contains
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         class(cmdline), intent(inout) :: cline
-        real, allocatable :: resarr(:), tmparr(:)
-        real              :: fsc0143, fsc05, mapres(p%nstates)
-        integer :: s, loc(1)
+        real, allocatable     :: resarr(:), tmparr(:)
+        real                  :: fsc0143, fsc05, mapres(p%nstates)
+        integer               :: s, loc(1)
+        character(len=STDLEN) :: fsc_fname
+        logical               :: fsc_bin_exists(p%nstates), all_fsc_bin_exist
         select case(p%eo)
             case('yes')
+                ! check all fsc_state*.bin exist
+                all_fsc_bin_exist = .true.
+                fsc_bin_exists    = .false.
+                do s=1,p%nstates
+                    fsc_fname = adjustl('fsc_state'//int2str_pad(s,2)//'.bin')
+                    if( file_exists(trim(fsc_fname)) )fsc_bin_exists( s ) = .true.
+                    if( b%a%get_statepop( s )>0 .and. .not.fsc_bin_exists(s))&
+                        & all_fsc_bin_exist = .false.
+                enddo
+                if( p%oritab.eq.'')all_fsc_bin_exist = ( count(fsc_bin_exists)==p%nstates )
                 ! set low-pass Fourier index limit
-                if( file_exists('fsc_state01.bin') )then
+                if( all_fsc_bin_exist )then
                     ! we need the worst resolved fsc
                     resarr = b%img%get_res()
                     do s=1,p%nstates
-                        ! these are the 'classical' resolution measures
-                        b%fsc(s,:)  = file2rarr('fsc_state'//int2str_pad(s,2)//'.bin')
-                        b%ssnr(s,:) = fsc2ssnr(b%fsc(s,:))
-                        call get_resolution(b%fsc(s,:), resarr, fsc05, fsc0143)
-                        mapres(s)   = fsc0143
+                        if( fsc_bin_exists(s) )then
+                            ! these are the 'classical' resolution measures
+                            fsc_fname   = adjustl('fsc_state'//int2str_pad(s,2)//'.bin')
+                            b%fsc(s,:)  = file2rarr( trim(fsc_fname) )
+                            b%ssnr(s,:) = fsc2ssnr(b%fsc(s,:))
+                            call get_resolution(b%fsc(s,:), resarr, fsc05, fsc0143)
+                            mapres(s)   = fsc0143
+                        else
+                            ! empty state
+                            mapres(s)   = 0.
+                            b%fsc(s,:)  = 0.
+                            b%ssnr(s,:) = 0.
+                        endif
                     end do
                     loc = maxloc(mapres)
                     p%kfromto(2) = get_lplim(b%fsc(loc(1),:))
@@ -246,14 +266,14 @@ contains
         type(ori),      intent(inout) :: o
         type(ctf) :: tfun
         real      :: x, y, dfx, dfy, angast
-        integer   :: icls, state
+        integer   :: icls!, state
         if( p%l_xfel )then
             ! nothing to do 4 now
             return
         else
             x     = o%get('x')
             y     = o%get('y')
-            state = nint(o%get('state'))
+            !state = nint(o%get('state'))
             icls  = nint(o%get('class'))
             if( p%doautomsk )then
                 ! make sure that img_msk is of the correct dimension
@@ -369,6 +389,18 @@ contains
         integer,        intent(in)    :: s
         real, allocatable :: filter(:)
         real :: shvec(3)
+        if( p%oritab.ne.'' )then
+            if( b%a%get_statepop(s) == 0 )then
+                ! empty state
+                if( p%boxmatch < p%box )then
+                    call b%vol%new([p%boxmatch,p%boxmatch,p%boxmatch],p%smpd)
+                else
+                    call b%vol%new([p%box,p%box,p%box],p%smpd)
+                endif
+                call b%vol%fwd_ft                
+                return
+            endif
+        endif
         ! read 
         if( p%boxmatch < p%box ) call b%vol%new([p%box,p%box,p%box],p%smpd) ! ensure correct dim
         call b%vol%read(p%vols(s), isxfel=p%l_xfel)
@@ -429,7 +461,16 @@ contains
         integer               :: s, s_loc
         real                  :: res05s(p%nstates), res0143s(p%nstates)
         character(len=STDLEN) :: pprocvol
+        ! init
+        res0143s = 0.
+        res05s   = 0.
+        ! cycle through states
         do s=1,p%nstates
+            if( b%a%get_statepop(s) == 0 )then
+                ! empty state
+                if( present(which_iter) )b%fsc(s,:) = 0.
+                cycle
+            endif
             if( p%l_distr_exec )then
                 call b%eorecvols(s)%write_eos('recvol_state'//int2str_pad(s,2)//'_part'//int2str_pad(p%part,p%numlen))
             else
@@ -475,6 +516,10 @@ contains
         character(len=:), allocatable :: fbody
         character(len=STDLEN) :: pprocvol
         do s=1,p%nstates
+            if( b%a%get_statepop(s) == 0 )then
+                ! empty space
+                cycle
+            endif
             if( p%l_distr_exec )then
                 allocate(fbody, source='recvol_state'//int2str_pad(s,2)//'_part'//int2str_pad(p%part,p%numlen))
                 p%vols(s)  = trim(adjustl(fbody))//p%ext

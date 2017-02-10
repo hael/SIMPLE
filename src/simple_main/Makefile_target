@@ -41,7 +41,8 @@ general: simple_hash.o            \
          simple_ftiter.o          \
          simple_arr.o             \
          simple_sll.o             \
-         simple_winfuns.o         ;
+         simple_winfuns.o         \
+         simple_restart.o         ;
 
 simple: simple_image.o                  \
         simple_ft_expanded.o            \

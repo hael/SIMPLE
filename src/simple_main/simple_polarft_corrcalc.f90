@@ -362,7 +362,7 @@ contains
     function get_roind( self, rot ) result( ind )
         class(polarft_corrcalc), intent(in) :: self
         real,                    intent(in) :: rot
-        integer :: ind, irot, alloc_stat, loc(1)
+        integer :: ind, irot, loc(1)
         real    :: dists(self%nrots)
         do irot=1,self%nrots
             dists(irot) = sqrt((self%angtab(irot)-rot)**2.)
@@ -495,7 +495,6 @@ contains
         !$ use omp_lib
         !$ use omp_lib_kinds
         use simple_ctf,   only: ctf
-        use simple_image, only: image
         class(polarft_corrcalc), intent(inout) :: self
         class(ctf),              intent(inout) :: tfun
         real,                    intent(in)    :: dfx
@@ -503,7 +502,6 @@ contains
         integer, optional,       intent(in)    :: ref
         real, allocatable :: ctfmat(:,:)
         integer           :: iref
-        type(image)       :: img
         ! create the congruent polar matrix of real CTF values
         ctfmat = self%create_polar_ctfmat(tfun, dfx, dfy, angast, self%refsz)
         ! multiply the references with the CTF
@@ -772,9 +770,13 @@ contains
     function corr_1( self, iref, iptcl, irot ) result( cc )
         class(polarft_corrcalc), intent(inout) :: self              !< instance
         integer, intent(in)                    :: iref, iptcl, irot !< reference, particle, rotation
-        real    :: cc, ptcl_sqsum_tmp, ref_sqsum_tmp, ptcl_mean_tmp, ref_mean_tmp
+        real    :: cc, ptcl_sqsum_tmp, ref_sqsum_tmp
         integer :: ptcl_ind, kcount, k, kind
         ptcl_ind = self%ptcl_ind(iptcl)
+        if( self%sqsums_refs(iref)<TINY .or. self%sqsums_ptcls(ptcl_ind)<TINY )then
+            cc = 0.
+            return
+        endif
         if( allocated(self%pfts_refs_ctf) )then
            cc = sum( real(self%pfts_refs_ctf(iref,:,:) * &
                      conjg(  self%pfts_ptcls(ptcl_ind,irot:irot+self%refsz-1,:))))
@@ -815,14 +817,10 @@ contains
             !
             ! cc = cc/sqrt(ref_sqsum_tmp * ptcl_sqsum_tmp)
         else 
-            if( self%sqsums_refs(iref)<TINY .or. self%sqsums_ptcls(ptcl_ind)<TINY )then
-                cc = 0.
-            else
-                cc = cc/sqrt(self%sqsums_refs(iref)*self%sqsums_ptcls(ptcl_ind))
-            endif
+            cc = cc/sqrt(self%sqsums_refs(iref)*self%sqsums_ptcls(ptcl_ind))
         endif
     end function corr_1
-    
+
     !>  \brief  for calculating the on-fly shifted correlation between reference iref and particle iptcl in rotation irot
     function corr_2( self, iref, iptcl, irot, shvec ) result( cc )
         !$ use omp_lib
@@ -923,7 +921,7 @@ contains
         type(polarft)          :: pfts1(3,5), pfts2(3,5)
         type(polarft_corrcalc) :: pftcc
         integer, parameter     :: NITER=3000
-        real                   :: corr1, corr2, diff, lscape_dist, lscape_corr
+        real                   :: diff, lscape_dist, lscape_corr
         integer                :: i, j, nrots, r
         real, allocatable      :: corrs1(:), corrs2(:)
         complex, allocatable   :: pft(:,:)

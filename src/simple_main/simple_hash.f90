@@ -156,7 +156,7 @@ contains
         write(*,"(1X,A,A)", advance="no") trim(self%keys(self%hash_index)), '='
         write(*,"(A)") trim(real2str(self%vals(self%hash_index)))
     end subroutine print
-    
+
     !>  \brief  writes the hash to file
     subroutine write( self, fnr )
         class(hash), intent(inout) :: self

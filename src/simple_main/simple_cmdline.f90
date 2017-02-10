@@ -6,7 +6,7 @@ module simple_cmdline
 use simple_defs
 use simple_cmd_dict
 use simple_chash,   only: chash
-use simple_strings, only: str2int, str2real, str_has_substr, real2str
+use simple_strings, only: str2int, str2real, str_has_substr, real2str, int2str
 implicit none
 
 public :: cmdline
@@ -57,9 +57,8 @@ contains
         character(len=*), optional, intent(in)    :: keys_required(:), keys_optional(:)
         character(len=STDLEN) :: arg
         type(args)            :: allowed_args
-        integer               :: i, ri, ierr, cmdstat, cmdlen, cntbin, ikey
-        integer               :: cnttxt, n, fnr, file_stat, io_stat, nreq, cmdargcnt
-        logical               :: here
+        integer               :: i, ri, cmdstat, cmdlen, cntbin, ikey
+        integer               :: cnttxt, io_stat, nreq, cmdargcnt
         cmdargcnt = command_argument_count()
         call get_command(self%entire_line)
         if( debug ) print *, 'DEBUG(simple_cmdline, L61), command_argument_count: ', cmdargcnt
@@ -98,7 +97,7 @@ contains
             if( cmdstat == -1 )then
                 write(*,*) 'ERROR! while parsing the command line; simple_cmdline :: parse'
                 write(*,*) 'The string length of argument: ', arg, 'is: ', cmdlen
-                write(*,*) 'which likely exeeds the length limit STDLEN'
+                write(*,*) 'which likely exceeds the length limit STDLEN'
                 write(*,*) 'Create a symbolic link with shorter name in the cwd'
                 stop
             endif
@@ -166,12 +165,11 @@ contains
             end subroutine
             
     end subroutine parse
-    
+
     !>  \brief  private copier
     subroutine copy( self, self2copy )
         class(cmdline), intent(inout) :: self
         class(cmdline), intent(in)    :: self2copy
-        integer :: i
         ! copy cmds
         self%cmds(:)%key     = self2copy%cmds(:)%key
         self%cmds(:)%carg    = self2copy%cmds(:)%carg
@@ -256,14 +254,39 @@ contains
     subroutine check( self )
         use simple_jiffys, only: alloc_err
         class(cmdline), intent(inout) :: self
-        logical, allocatable :: cmderr(:)
-        integer :: i, alloc_stat 
+        logical, allocatable  :: cmderr(:)
+        integer               :: i, alloc_stat, nstates
+        character(len=STDLEN) :: str
+        logical               :: vol_defined
         allocate( cmderr(self%ncheck), stat=alloc_stat )
         call alloc_err('check; simple_cmdline', alloc_stat)
         cmderr = .false.
         do i=1,self%ncheck
             cmderr(i) = .not. self%defined(self%checker(i))
         end do
+        ! to care of the case where the first state has vanished (eg vol1 key absent)
+        if( self%defined('nstates') )then
+            nstates = nint( self%get_rarg('nstates') )
+            if( nstates>1 .and. .not.self%defined('vol1') )then
+                ! if 'vol1' absent...
+                vol_defined = .false.
+                do i=1,nstates
+                    str = 'vol'//int2str(i)
+                    if( self%lookup(str) > 0) then
+                        ! ...and another volX key is defined
+                        vol_defined = .true.
+                    endif
+                enddo
+                ! ...then there is no error
+                if( vol_defined )then
+                do i=1,self%ncheck
+                    str = self%checker(i)
+                    if( self%checker(i) .eq. 'vol1' )cmderr(i) = .false.
+                enddo
+                endif
+            endif
+        endif
+        ! output
         if( any(cmderr) )then
             write(*,'(a)') 'ERROR, not enough input variables defined!'
             stop
@@ -284,23 +307,70 @@ contains
         end do
     end subroutine print
 
-    !>  \brief  for writing key-vals to a text file
+    !>  \brief  writes the hash to file
     subroutine write( self, fname )
-        class(cmdline),             intent(in)    :: self
-        character(len=*),           intent(in)    :: fname  !< name of file
+        use simple_chash
+        class(cmdline),   intent(inout) :: self
+        character(len=*), intent(inout) :: fname
         type(chash) :: hash
         call self%gen_job_descr( hash )
-        call hash%write( fname )
+        call hash%write( trim(fname) )
         call hash%kill
     end subroutine write
-
-    !>  \brief  for reading key-vals from a text file
-    subroutine read( self, fname )
-        class(cmdline),             intent(in)    :: self
-        character(len=*),           intent(in)    :: fname  !< name of file
-        type(chash) :: hash
-        call hash%read( fname )
+    
+    !>  \brief  reads a row of a text-file into the inputted hash, assuming key=value pairs
+    subroutine read( self, fname, keys_required, keys_optional )
+        use simple_chash
+        class(cmdline),             intent(inout) :: self
+        character(len=*),           intent(inout) :: fname
+        character(len=*), optional, intent(in)    :: keys_required(:), keys_optional(:)
+        type(chash)           :: hash
+        character(len=32)     :: key,arg
+        real                  :: rval
+        integer               :: i, io_stat, ri, ikey, nreq
+        call hash%new( self%NMAX )
+        call hash%read( trim(fname) )
+        self%entire_line = hash%chash2str()
+        self%argcnt = hash%size_of_chash()
+        if( self%argcnt < 2 )then
+            call print_cmdline(keys_required, keys_optional)
+            stop
+        endif
+        do i=1,self%argcnt
+            key = hash%get_key( i )
+            arg = hash%get( i )
+            call str2int(adjustl(arg), io_stat, ri )
+            if( io_stat == 0 )then 
+                self%cmds(i)%rarg = real(ri)
+            else
+                read(arg, *, iostat=io_stat) rval
+                if( io_stat == 0 )then
+                    self%cmds(i)%rarg = rval
+                else
+                    self%cmds(i)%carg = adjustl(arg)
+                endif
+            endif
+            self%cmds(i)%key = trim(key)
+            self%totlen = self%totlen + len_trim( adjustl(arg) )
+            self%cmds(i)%defined = .true.
+        enddo
         call hash%kill
+        if( present(keys_required) )then
+            if( str_has_substr(self%entire_line,'prg=') )then
+                nreq = size(keys_required)+1 ! +1 because prg part of command line
+            else
+                nreq = size(keys_required)
+            endif
+            if( self%argcnt < nreq )then
+                call print_cmdline(keys_required, keys_optional)
+                stop
+            else
+            do ikey=1,size(keys_required)
+                call self%checkvar(keys_required(ikey), ikey)
+            end do
+            call self%check
+        endif
+        endif
     end subroutine read
 
     !> \brief  for checking the existence of of arg

@@ -45,7 +45,7 @@ contains
         frac_srch_space = b%a%get_avg('frac')
 
         ! SETUP SHELLWEIGHTS
-        if( p%l_distr_exec )  call setup_shellweights( b, p, doshellweight, wmat )
+        if( p%l_distr_exec ) call setup_shellweights( b, p, doshellweight, wmat )
         
         ! SET FOURIER INDEX RANGE
         call set_bp_range( b, p, cline )

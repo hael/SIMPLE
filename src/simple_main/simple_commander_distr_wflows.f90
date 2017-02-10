@@ -99,7 +99,6 @@ contains
         character(len=STDLEN), allocatable :: movienames(:)
         type(params)                       :: p_master
         type(qsys_ctrl)                    :: qscripts
-        character(len=KEYLEN)              :: str
         type(chash)                        :: myq_descr, job_descr
         integer, allocatable               :: parts(:,:)
         type(qsys_factory)                 :: qsys_fac
@@ -215,7 +214,6 @@ contains
     subroutine exec_ctffind_distr( self, cline )
         class(ctffind_distr_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        character(len=STDLEN), allocatable :: filenames(:)
         ! commanders
         type(merge_algndocs_commander) :: xmerge_algndocs
         ! command lines
@@ -279,8 +277,6 @@ contains
         type(params)                 :: p_master
         integer, allocatable         :: parts(:,:)
         type(qsys_ctrl)              :: qscripts
-        character(len=STDLEN)        :: refs, oritab
-        integer                      :: iter
         type(chash)                  :: myq_descr, job_descr
         type(qsys_factory)           :: qsys_fac
         class(qsys_base), pointer    :: myqsys
@@ -356,7 +352,6 @@ contains
         type(chash)                        :: myq_descr, job_descr
         type(qsys_factory)                 :: qsys_fac
         class(qsys_base), pointer          :: myqsys
-        real                               :: frac_srch_space, trs, lplim
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! setup the environment for distributed execution
@@ -485,7 +480,6 @@ contains
         type(chash)                 :: myq_descr, job_descr
         type(qsys_factory)          :: qsys_fac
         class(qsys_base), pointer   :: myqsys
-        character(len=STDLEN)       :: str
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! setup the environment for distributed execution
@@ -512,7 +506,6 @@ contains
         ! constants
         logical, parameter           :: debug=.false.
         ! commanders
-        type(prime3D_init_commander) :: xprime3D_init
         type(volassemble_commander)  :: xvolassemble
         type(split_commander)        :: xsplit
         ! command lines
@@ -581,11 +574,8 @@ contains
         type(prime3D_init_distr_commander)  :: xprime3D_init_distr
         type(shellweight3D_distr_commander) :: xshellweight3D_distr
         type(recvol_distr_commander)        :: xrecvol_distr
-        type(prime3D_commander)             :: xprime3D
         type(resrange_commander)            :: xresrange
         type(merge_algndocs_commander)      :: xmerge_algndocs
-        type(volassemble_commander)         :: xvolassemble
-        type(eo_volassemble_commander)      :: xeo_volassemble
         type(check3D_conv_commander)        :: xcheck3D_conv
         type(split_commander)               :: xsplit
         type(postproc_vol_commander)        :: xpostproc_vol
@@ -600,17 +590,18 @@ contains
         type(cmdline)                       :: cline_postproc_vol
         ! other variables
         type(params)                        :: p_master
+        type(chash)                         :: myq_descr, job_descr
+        type(qsys_factory)                  :: qsys_fac
+        class(qsys_base), pointer           :: myqsys
         integer, allocatable                :: parts(:,:)
         type(qsys_ctrl)                     :: qscripts
         type(oris)                          :: os
         character(len=STDLEN)               :: vol, vol_iter, oritab, str, str_iter
-        character(len=STDLEN)               :: str_state, cmd_str, fsc_file
+        character(len=STDLEN)               :: str_state, fsc_file
         character(len=STDLEN)               :: simple_exec_bin, restart_file
-        integer                             :: state, iter, status, cnt
         real                                :: frac_srch_space
-        type(chash)                         :: myq_descr, job_descr
-        type(qsys_factory)                  :: qsys_fac
-        class(qsys_base), pointer           :: myqsys
+        integer                             :: s, state, iter
+        logical                             :: vol_defined
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! make oritab
@@ -650,6 +641,14 @@ contains
         call cline_check3D_conv%set( 'box',    real(p_master%box))
         call cline_check3D_conv%set( 'nptcls', real(p_master%nptcls))
         call cline_volassemble%set( 'nthr', 1. )
+        call cline_postproc_vol%set( 'nstates', 1. )
+        ! removes unnecessary volume keys
+        do state = 1,p_master%nstates
+            vol = 'vol'//int2str( state )
+            call cline_check3D_conv%delete( trim(vol) )
+            call cline_merge_algndocs%delete( trim(vol) )
+            call cline_volassemble%delete( trim(vol) )
+        enddo
 
         ! SPLIT STACK
         if( stack_is_split(p_master%ext, p_master%nparts) )then
@@ -667,12 +666,17 @@ contains
             oritab='prime3D_startdoc.txt'
         endif
         ! Models
-        if( .not.cline%defined('oritab') .and. .not.cline%defined('vol1') )then
+        vol_defined = .false.
+        do state = 1,p_master%nstates
+            vol = 'vol' // int2str(state)
+            if( cline%defined(trim(vol)) )vol_defined = .true.
+        enddo
+        if( .not.cline%defined('oritab') .and. .not.vol_defined )then
             ! ab-initio
             call xprime3D_init_distr%execute( cline_prime3D_init )
             call cline%set( 'vol1', trim('startvol_state01'//p_master%ext) )
             call cline%set( 'oritab', oritab )
-        else if( cline%defined('oritab') .and. .not.cline%defined('vol1') )then
+        else if( cline%defined('oritab') .and. .not.vol_defined )then
             ! reconstructions needed
             call xrecvol_distr%execute( cline_recvol_distr )
             do state = 1,p_master%nstates
@@ -684,7 +688,15 @@ contains
                 vol = 'vol'//trim(int2str(state))
                 call cline%set( trim(vol), trim(str) )
             enddo
-        else 
+        else if( .not.cline%defined('oritab') .and. vol_defined )then
+            ! projection matching
+            select case( p_master%refine )
+                case( 'neigh', 'shcneigh', 'qcont', 'qcontneigh', 'shift' )
+                    stop 'refinement method requires input orientation document'
+                case DEFAULT
+                    ! refine=no|shc, all good?
+            end select
+        else
             ! all good
         endif
 
@@ -748,49 +760,62 @@ contains
             call xmerge_algndocs%execute( cline_merge_algndocs )
             ! ASSEMBLE VOLUMES
             call cline_volassemble%set( 'oritab', trim(oritab) )
-            if( p_master%eo.eq.'yes' )then            
-                call del_file('fsc_state01.bin')
-                call cline_volassemble%set(  'prg', 'eo_volassemble' )   ! required for cmdline exec
+            if( p_master%eo.eq.'yes' )then
+                do state = 1,p_master%nstates
+                    str_state = int2str_pad(state,2)
+                    call del_file('fsc_state'//trim(str_state)//'.bin')
+                enddo
+                call cline_volassemble%set( 'prg', 'eo_volassemble' )   ! required for cmdline exec
                 ! call xeo_volassemble%execute( cline_volassemble )
                 ! replaced the above with command line execution as giving the volassemble setup
                 ! its own process id seem to resolve the system instabilities on fast cpu systems
                 call exec_simple_prg(simple_exec_bin, cline_volassemble)
             else
-                call cline_volassemble%set(  'prg', 'volassemble' ) ! required for cmdline exec
+                call cline_volassemble%set( 'prg', 'volassemble' ) ! required for cmdline exec
                 ! call xvolassemble%execute( cline_volassemble )
                 ! replaced the above with command line execution as giving the volassemble setup
                 ! its own process id seem to resolve the system instabilities on fast cpu systems
                 call exec_simple_prg(simple_exec_bin, cline_volassemble)
             endif
             ! rename volumes, postprocess & update job_descr
+            call os%read(trim(oritab))
             do state = 1,p_master%nstates
-                ! rename
                 str_state = int2str_pad(state,2)
-                vol      = trim(VOLFBODY)//trim(str_state)//p_master%ext
-                vol_iter = trim(VOLFBODY)//trim(str_state)//'_iter'//trim(str_iter)//p_master%ext
-                call rename( trim(vol), trim(vol_iter) )
-                ! post-process
-                call cline_postproc_vol%set('vol1', trim(vol_iter))   ! should be volstate not vol1 ??
-                fsc_file = 'fsc_state'//trim(str_state)//'.bin'
-                if( p_master%eo .eq. 'yes' )then
+                if( os%get_statepop( state ) == 0 )then
+                    ! cleanup for empty state
+                    vol = 'vol'//trim(int2str(state))
+                    call cline%delete( vol )
+                    call job_descr%delete( trim(vol) )
+                    call cline_shellweight3D%delete( trim(vol) )
+                else
+                    if( p_master%nstates>1 )then
+                        ! cleanup postprocessing cmdline as it only takes one volume at a time
+                        do s = 1,p_master%nstates
+                            vol = 'vol'//int2str(s)
+                            call cline_postproc_vol%delete( trim(vol) )
+                        enddo
+                    endif
+                    ! rename state volume
+                    vol       = trim(VOLFBODY)//trim(str_state)//p_master%ext
+                    vol_iter  = trim(VOLFBODY)//trim(str_state)//'_iter'//trim(str_iter)//p_master%ext
+                    call rename( trim(vol), trim(vol_iter) )
+                    ! post-process
+                    vol = 'vol'//trim(int2str(state))
+                    call cline_postproc_vol%set( 'vol1' , trim(vol_iter))
+                    fsc_file = 'fsc_state'//trim(str_state)//'.bin'
                     if( file_exists(fsc_file) )then
                         call cline_postproc_vol%delete('lp')
                         call cline_postproc_vol%set('fsc', trim(fsc_file))
-                        call xpostproc_vol%execute(cline_postproc_vol)
                     else
-                        write(*,*) 'WARNING! no fsc file available for post-processing'
+                        call cline_postproc_vol%delete('fsc')
+                        call cline_postproc_vol%set('lp', p_master%lp)
                     endif
-                else
-                    call cline_postproc_vol%delete('fsc')
-                    call cline_postproc_vol%set('lp', p_master%lp)
                     call xpostproc_vol%execute(cline_postproc_vol)
+                    ! updates cmdlines & job description
+                    call job_descr%set( trim(vol), trim(vol_iter) )
+                    call cline%set( trim(vol), trim(vol_iter) )
+                    call cline_shellweight3D%set( trim(vol), trim(vol_iter) )
                 endif
-                ! update cline & job description
-                vol = 'vol'//trim(int2str(state))
-                call job_descr%set( trim(vol), trim(vol_iter) )
-                call cline%set( trim(vol), trim(vol_iter) )
-                ! update shell-weight command line
-                call cline_shellweight3D%set( trim(vol), trim(vol_iter) )
             enddo
             ! CONVERGENCE
             call cline_check3D_conv%set( 'oritab', trim(oritab) )
@@ -820,7 +845,7 @@ contains
             endif
             ! RESTART
             restart_file = trim(RESTARTFBODY)//'_iter'//int2str_pad( iter, 3)//'.txt'
-            !call cline%write( trim(restart_file) )
+            call cline%write( restart_file )
         end do
         call qsys_cleanup(p_master)
         ! report the last iteration on exit
@@ -846,17 +871,14 @@ contains
         type(merge_algndocs_commander)     :: xmerge_algndocs
         type(merge_shellweights_commander) :: xmerge_shellweights
         ! command lines
-        type(cmdline)                      :: cline_merge_algndocs
-        type(cmdline)                      :: cline_merge_shellweights
+        ! type(cmdline)                      :: cline_merge_shellweights
         ! other variables
         type(params)                       :: p_master
         integer, allocatable               :: parts(:,:)
         type(qsys_ctrl)                    :: qscripts
-        integer                            :: iter
         type(chash)                        :: myq_descr, job_descr
         type(qsys_factory)                 :: qsys_fac
         class(qsys_base), pointer          :: myqsys
-        character(len=STDLEN)              :: str
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! setup the environment for distributed execution
@@ -891,7 +913,6 @@ contains
         ! constants
         logical, parameter                  :: debug=.false.
         ! commanders
-        type(recvol_commander)              :: xrecvol
         type(volassemble_commander)         :: xvolassemble
         type(eo_volassemble_commander)      :: xeo_volassemble
         type(split_commander)               :: xsplit

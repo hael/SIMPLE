@@ -195,7 +195,7 @@ contains
             state_mi_joint = 0.
             statepops      = 0.
             do iptcl=1,self%bap%get_noris()
-                istate                 = nint(self%bap%get(iptcl,'state'))
+                istate = nint(self%bap%get(iptcl,'state'))
                 if( istate==0 )cycle
                 ! it doesn't make sense to include the state overlap here
                 ! as the overall state overlap is already provided above
@@ -204,12 +204,19 @@ contains
                 ! 2.0 because we include two mi-values
                 statepops(istate)      = statepops(istate) + 2.0
             end do
+            ! ! normalise the overlap
+            ! state_mi_joint     = state_mi_joint/statepops
+            ! ! bring back the correct statepops
+            ! statepops          = statepops/2.0
+            ! ! the minumum overlap is in charge of convergence
+            ! min_state_mi_joint = minval(state_mi_joint)
             ! normalise the overlap
-            state_mi_joint     = state_mi_joint/statepops
+            forall( istate=1:self%pp%nstates, statepops(istate)>0. )&
+                &state_mi_joint(istate) = state_mi_joint(istate)/statepops(istate)
             ! bring back the correct statepops
-            statepops          = statepops/2.0
+            statepops = statepops/2.0
             ! the minumum overlap is in charge of convergence
-            min_state_mi_joint = minval(state_mi_joint)
+            min_state_mi_joint = minval(state_mi_joint, MASK=statepops>0.)
             ! print the overlaps and pops for the different states
             do istate=1,self%pp%nstates
                 write(*,'(A,1X,I3,1X,A,1X,F7.4,1X,A,1X,I5)') '>>> STATE', istate,&
