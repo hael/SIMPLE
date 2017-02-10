@@ -82,7 +82,7 @@ contains
                 end do
             endif
         else
-            if( cmdargcnt < 2 )then
+            if( cmdargcnt < 1 )then
                 call print_cmdline(keys_required, keys_optional)
                 stop
             endif

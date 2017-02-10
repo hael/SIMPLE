@@ -305,10 +305,10 @@ contains
         real, intent(in)                      :: loc(3)
         real,    allocatable :: w1(:), w2(:), w3(:)
         integer, allocatable :: cyc1(:), cyc2(:), cyc3(:)
-        integer           :: alloc_stat, i, j, m
-        integer           :: lims(3,2), win(3,2)
-        complex           :: comp, comp_sum, zero
-        real              :: harwin_here
+        integer :: alloc_stat, i, j, m
+        integer :: lims(3,2), win(3,2)
+        complex :: comp, comp_sum, zero
+        real    :: harwin_here
         harwin_here = 2.
         zero        = cmplx(0.,0.)
         comp_sum    = zero

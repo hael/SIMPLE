@@ -308,8 +308,8 @@ contains
         class(cmdline),          intent(inout) :: cline
         type(params) :: p
         type(build)  :: b
-        p = params(cline)                     ! parameters generated
-        call b%build_general_tbox(p, cline)   ! general objects built
+        p = params(cline)                   ! parameters generated
+        call b%build_general_tbox(p, cline) ! general objects built
         if( cline%defined('stk') )then
             ! 2D
             if( .not.file_exists(p%stk) )stop 'Cannot find input stack (stk)'

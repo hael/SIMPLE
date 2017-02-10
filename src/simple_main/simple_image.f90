@@ -3976,7 +3976,7 @@ contains
     !>  \brief  just a binary square for testing purposes
     subroutine square( self, sqrad )
         class(image), intent(inout) :: self
-        integer, intent(in)         :: sqrad
+        integer,      intent(in)    :: sqrad
         integer :: i, j, k
         if( self%imgkind .eq. 'xfel' ) stop 'not intended for xfel-kind images; simple_image::square'
         self%rmat = 0.
