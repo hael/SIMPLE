@@ -707,7 +707,6 @@ contains
                 call cline_scale%set('outvol', 'scaled_from_makepickrefs'//p%ext)
                 call xscale%execute(cline_scale)
                 cline_projvol = cline
-                call cline_projvol%delete('msk')
                 call cline_projvol%set('vol1', 'scaled_from_makepickrefs'//p%ext)
                 call cline_projvol%set('nspace', real(NREFS))
                 call cline_projvol%set('outstk', 'pickrefs'//p%ext)
@@ -739,12 +738,12 @@ contains
         use simple_picker
         class(pick_commander), intent(inout) :: self
         class(cmdline),        intent(inout) :: cline
-        type(params)                         :: p
-        integer                              :: nmicrographs, funit, alloc_stat, imic
-        integer                              :: imic_start, imic_stop, ntot, imic_cnt
-        integer                              :: offset
-        real                                 :: shrink
-        character(len=STDLEN), allocatable   :: micrographnames(:)
+        type(params) :: p
+        integer      :: nmicrographs, funit, alloc_stat, imic
+        integer      :: imic_start, imic_stop, ntot, imic_cnt
+        integer      :: offset
+        real         :: shrink
+        character(len=STDLEN), allocatable :: micrographnames(:)
         p = params(cline, checkdistr=.false.) ! constants & derived constants produced
         offset    = 3
         if( cline%defined('offset') ) offset = p%offset

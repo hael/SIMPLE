@@ -22,6 +22,7 @@ implicit none
 type(unblur_distr_commander)             :: xunblur_distr
 type(unblur_tomo_movies_distr_commander) :: xunblur_tomo_distr
 type(ctffind_distr_commander)            :: xctffind_distr
+type(pick_distr_commander)               :: xpick_distr
 ! PRIME2D
 type(prime2D_init_distr_commander)       :: xprime2D_init_distr
 type(prime2D_distr_commander)            :: xprime2D_distr
@@ -157,6 +158,29 @@ select case(prg)
         if( .not. cline%defined('lp')      ) call cline%set('lp',         5.)
         ! execute
         call xctffind_distr%execute(cline)
+
+    ! PARTICLE PICKER
+
+    case( 'pick' )
+        !==Program pick
+        !
+        ! <pick/begin>is a template-based picker program<pick/end> 
+        !
+        ! set required keys
+        keys_required(1) = 'filetab'
+        keys_required(2) = 'refs'
+        keys_required(3) = 'smpd'
+        keys_required(4) = 'shrink'
+        keys_required(5) = 'nthr'
+        keys_required(6) = 'nparts'
+        ! set optional keys
+        keys_optional(1) = 'lp'
+        keys_optional(2) = 'thres'
+        ! parse command line
+        if( describe ) call print_doc_pick
+        call cline%parse(keys_required(:6), keys_optional(:2))
+        ! execute
+        call xpick_distr%execute(cline)
 
     ! PRIME2D
 

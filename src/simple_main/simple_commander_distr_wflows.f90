@@ -29,6 +29,7 @@ implicit none
 public :: unblur_distr_commander
 public :: unblur_tomo_movies_distr_commander
 public :: ctffind_distr_commander
+public :: pick_distr_commander
 public :: prime2D_init_distr_commander
 public :: prime2D_distr_commander
 public :: find_nnimgs_distr_commander
@@ -51,6 +52,10 @@ type, extends(commander_base) :: ctffind_distr_commander
   contains
     procedure :: execute      => exec_ctffind_distr
 end type ctffind_distr_commander
+type, extends(commander_base) :: pick_distr_commander
+  contains
+    procedure :: execute      => exec_pick_distr
+end type pick_distr_commander
 type, extends(commander_base) :: prime2D_init_distr_commander
   contains
     procedure :: execute      => exec_prime2D_init_distr
@@ -90,7 +95,7 @@ contains
         use simple_commander_preproc
         use simple_commander_imgproc
         class(unblur_distr_commander), intent(inout) :: self
-        class(cmdline),                       intent(inout) :: cline
+        class(cmdline),                intent(inout) :: cline
         ! commanders
         type(stack_commander)              :: xstack
         ! command lines
@@ -108,10 +113,6 @@ contains
         p_master = params(cline, checkdistr=.false.)
         p_master%nptcls = nlines(p_master%filetab)
         if( p_master%nparts > p_master%nptcls ) stop 'nr of partitions (nparts) mjust be < number of entries in filetable'
-        ! setup the environment for distributed execution
-        call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr)
-        ! prepare job description
-        call cline%gen_job_descr(job_descr)
         ! setup the environment for distributed execution
         call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr)
         ! prepare job description
@@ -141,7 +142,7 @@ contains
         call cline_stack%set('filetab', 'unblur_thumbs.txt')
         call cline_stack%set('outstk',  'unblur_thumbs'//p_master%ext)
         call xstack%execute(cline_stack)
-        call simple_end('**** SIMPLE_DISTR_unblur NORMAL STOP ****')
+        call simple_end('**** SIMPLE_DISTR_UNBLUR NORMAL STOP ****')
     end subroutine exec_unblur_distr
 
     ! UNBLUR TOMOGRAPHIC DDDs
@@ -257,6 +258,37 @@ contains
         call qsys_cleanup(p_master)
         call simple_end('**** SIMPLE_DISTR_CTFFIND NORMAL STOP ****')
     end subroutine exec_ctffind_distr
+
+    ! PICKER
+
+    subroutine exec_pick_distr( self, cline )
+        use simple_commander_preproc
+        class(pick_distr_commander), intent(inout) :: self
+        class(cmdline),              intent(inout) :: cline
+        ! other vars
+        type(params)              :: p_master
+        type(qsys_ctrl)           :: qscripts
+        type(chash)               :: myq_descr, job_descr
+        integer, allocatable      :: parts(:,:)
+        type(qsys_factory)        :: qsys_fac
+        class(qsys_base), pointer :: myqsys
+        integer                   :: numlen
+        ! make master parameters
+        p_master = params(cline, checkdistr=.false.)
+        p_master%nptcls = nlines(p_master%filetab)
+        if( p_master%nparts > p_master%nptcls ) stop 'nr of partitions (nparts) mjust be < number of entries in filetable'
+        ! setup the environment for distributed execution
+        call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr)
+        ! prepare job description
+        call cline%gen_job_descr(job_descr)
+        ! prepare scripts
+        call qsys_cleanup(p_master)
+        call qscripts%generate_scripts(job_descr, p_master%ext, myq_descr)
+        ! manage job scheduling
+        call qscripts%schedule_jobs
+        call qsys_cleanup(p_master)
+        call simple_end('**** SIMPLE_DISTR_PICK NORMAL STOP ****')
+    end subroutine exec_pick_distr
 
     ! PRIME2D_INIT
 

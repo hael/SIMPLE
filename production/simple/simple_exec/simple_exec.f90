@@ -465,10 +465,9 @@ select case(prg)
         keys_optional(2) = 'vol1'
         keys_optional(3) = 'stk'
         keys_optional(4) = 'smpd'
-        keys_optional(5) = 'msk'
         ! parse command line
         ! if( describe ) call print_doc_makepickrefs
-        call cline%parse(keys_required(:2), keys_optional(:5))
+        call cline%parse(keys_required(:2), keys_optional(:4))
         ! execute
         call xmakepickrefs%execute(cline)
     case( 'pick' )
