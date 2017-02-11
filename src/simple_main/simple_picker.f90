@@ -15,7 +15,7 @@ private
 integer,          parameter   :: MAXKMIT  = 20
 integer,          parameter   :: SPECNCLS = 10
 real,             parameter   :: BOXFRAC  = 0.5
-logical,          parameter   :: DEBUG=.true., DOPRINT=.true.
+logical,          parameter   :: DEBUG=.true., DOPRINT=.false.
 type(image)                   :: micrograph, mic_shrunken, ptcl_target
 type(image),      allocatable :: refs(:)
 logical,          allocatable :: selected_peak_positions(:), is_a_peak(:,:)
@@ -30,8 +30,6 @@ real                          :: smpd_shrunken, corrmax, corrmin
 real                          :: smpd, msk, shrink, lp, distthr
 
 contains
-
-    
 
     subroutine init_picker( micfname, refsfname, smpd_in, msk_in, shrink_in, offset_in, lp_in, distthr_in )
         character(len=*),  intent(in) :: micfname, refsfname

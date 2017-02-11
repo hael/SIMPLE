@@ -184,6 +184,8 @@ part
 pcasz
 ppca
 pspecsz
+pspecsz_unblur
+pspecsz_ctffind
 ptcl
 ring1
 ring2
@@ -241,11 +243,14 @@ fraczero
 ftol
 gw
 hp
+hp_ctffind
 inner
 kv
 lam
 lp_dyn
 lp
+lp_ctffind
+lp_pick
 lpmed
 lpstart
 lpstop
@@ -266,6 +271,7 @@ smpd
 snr
 thres
 time_per_image
+time_per_frame
 trs
 var
 width

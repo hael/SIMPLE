@@ -31,6 +31,10 @@ public :: pick_commander
 public :: extract_commander
 private
 
+type, extends(commander_base) :: preproc_commander
+  contains
+    procedure :: execute      => exec_preproc
+end type preproc_commander
 type, extends(commander_base) :: select_frames_commander 
   contains
     procedure :: execute      => exec_select_frames
@@ -73,6 +77,94 @@ type, extends(commander_base) :: extract_commander
 end type extract_commander
 
 contains
+
+    subroutine exec_preproc( self, cline )
+        use simple_unblur_iter,  only: unblur_iter
+        use simple_ctffind_iter, only: ctffind_iter
+        use simple_pick_iter,    only: pick_iter
+        use simple_oris,         only: oris
+        use simple_math,         only: round2even
+        use simple_qsys_funs,    only: qsys_job_finished
+        class(preproc_commander), intent(inout) :: self
+        class(cmdline),           intent(inout) :: cline
+        type(ctffind_iter) :: cfiter
+        type(unblur_iter)  :: ubiter
+        type(pick_iter)    :: piter
+        character(len=STDLEN), allocatable :: movienames(:)
+        character(len=:),      allocatable :: fname_ctffind_ctrl, fname_ctffind_output
+        character(len=:),      allocatable :: moviename_forctf, moviename_intg
+        type(params) :: p
+        type(oris)   :: os
+        integer      :: nmovies, fromto(2), imovie, ntot, movie_counter
+        integer      :: frame_counter, lfoo(3), nframes, offset, i
+        real         :: shrink
+        p = params(cline, checkdistr=.false.) ! constants & derived constants produced
+        if( p%scale > 1.05 )then
+            stop 'scale cannot be > 1; simple_commander_preproc :: exec_preproc'
+        endif
+        if( p%tomo .eq. 'yes' )then
+            stop 'tomography mode (tomo=yes) not yet supported!'
+        endif
+        offset    = 3
+        if( cline%defined('offset') ) offset = p%offset
+        shrink    = 4.0
+        if( cline%defined('shrink') ) shrink = p%shrink
+        call read_filetable(p%filetab, movienames)
+        nmovies = size(movienames)
+        if( cline%defined('numlen') )then
+            ! nothing to do
+        else
+            p%numlen = len(int2str(nmovies))
+        endif
+        if( p%l_distr_exec )then
+            allocate(fname_ctffind_ctrl,  source='ctffind_ctrl_file_part'//int2str_pad(p%part,p%numlen)//'.txt')
+            allocate(fname_ctffind_output, source='ctffind_output_part'//int2str_pad(p%part,p%numlen)//'.txt')
+            ! determine loop range
+            if( cline%defined('fromp') .and. cline%defined('top') )then
+                fromto(1) = p%fromp
+                fromto(2) = p%top
+            else
+                stop 'fromp & top args need to be defined in parallel execution; exec_preproc'
+            endif
+        else
+            allocate(fname_ctffind_ctrl,   source='ctffind_ctrl_file.txt')
+            allocate(fname_ctffind_output, source='ctffind_output.txt')
+            ! determine loop range
+            fromto(1) = 1
+            if( cline%defined('startit') ) fromto(1) = p%startit
+            fromto(2) = nmovies
+        endif
+        ntot = fromto(2) - fromto(1) + 1
+        call os%new(ntot)
+        ! loop over exposures (movies)
+        frame_counter = 0
+        movie_counter = 0
+        do imovie=fromto(1),fromto(2)
+            p%pspecsz = p%pspecsz_unblur
+            call ubiter%iterate(cline, p, imovie, movie_counter, frame_counter, movienames(imovie))
+            movie_counter = movie_counter - 1
+            moviename_forctf = ubiter%get_moviename('forctf')
+            moviename_intg   = ubiter%get_moviename('intg')
+            p%pspecsz = p%pspecsz_ctffind
+            p%hp      = p%hp_ctffind
+            p%lp      = p%lp_ctffind 
+            call cfiter%iterate(p, imovie, movie_counter, moviename_forctf,&
+            &fname_ctffind_ctrl, fname_ctffind_output, os)
+            p%lp      = p%lp_pick
+            call piter%iterate(cline, p, imovie, movie_counter, moviename_intg, offset)
+            write(*,'(f4.0,1x,a)') 100.*(real(movie_counter)/real(ntot)), 'percent of the movies processed'
+        end do
+        ! write CTF parameters in append mode
+        do i=1,os%get_noris()
+            call os%write(i,fname_ctffind_output)
+        end do
+        ! destruct
+        call os%kill
+        deallocate(fname_ctffind_ctrl,fname_ctffind_output)
+        call qsys_job_finished( p, 'simple_commander_preproc :: exec_preproc' )
+        ! end gracefully
+        call simple_end('**** SIMPLE_PREPROC NORMAL STOP ****')
+    end subroutine exec_preproc
 
     subroutine exec_select_frames( self, cline )
         use simple_imgfile, only: imgfile
@@ -288,7 +380,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_INTEGRATE_MOVIES NORMAL STOP ****')
     end subroutine exec_integrate_movies
-    
+
     subroutine exec_powerspecs( self, cline )
         use simple_imgfile, only: imgfile
         use simple_image,   only: image
@@ -355,35 +447,23 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_POWERSPECS NORMAL STOP ****')
     end subroutine exec_powerspecs
-    
+
     subroutine exec_unblur( self, cline )
-        use simple_unblur      ! use all in there
-        use simple_procimgfile ! use all in there
-        use simple_imgfile,    only: imgfile
-        use simple_oris,       only: oris
-        use simple_image,      only: image
-        use simple_qsys_funs,  only: qsys_job_finished
-        use simple_math,       only: round2even
+        use simple_unblur_iter, only: unblur_iter
+        use simple_oris,        only: oris
+        use simple_math,        only: round2even
+        use simple_qsys_funs,   only: qsys_job_finished
         class(unblur_commander), intent(inout) :: self
-        class(cmdline),                 intent(inout) :: cline
+        class(cmdline),          intent(inout) :: cline
         type(params)                       :: p
-        type(build)                        :: b
-        type(image)                        :: movie_sum, pspec_sum, pspec_ctf, movie_sum_ctf
-        type(image)                        :: movie_sum_corrected, pspec_half_n_half, thumbnail
-        integer                            :: nmovies, imovie, imovie_start, imovie_stop, file_stat
-        integer                            :: funit_movies, frame_counter, numlen,  ntot, alloc_stat, fnr
-        integer                            :: ldim(3), ldim_thumb(3)
-        character(len=:),     allocatable  :: cpcmd, new_name
+        type(unblur_iter)                  :: ubiter
         character(len=STDLEN), allocatable :: movienames(:)
-        character(len=STDLEN)              :: moviename
-        real                               :: corr, time_per_frame, scale
-        logical                            :: debug=.false.
-        integer                            :: err, lfoo(3), nframes, movie_counter
-        p = params(cline, checkdistr=.false.)           ! constants & derived constants produced
+        integer :: nmovies, fromto(2), imovie, ntot, movie_counter
+        integer :: frame_counter, lfoo(3), nframes
+        p = params(cline, checkdistr=.false.) ! constants & derived constants produced
         if( p%scale > 1.05 )then
             stop 'scale cannot be > 1; simple_commander_preproc :: exec_unblur'
         endif
-        call b%build_general_tbox(p,cline,do3d=.false.) ! general objects built
         if( p%tomo .eq. 'yes' )then
             if( .not. p%l_dose_weight )then
                 write(*,*) 'tomo=yes only supported with dose weighting!'
@@ -392,128 +472,199 @@ contains
         endif
         call read_filetable(p%filetab, movienames)
         nmovies = size(movienames)
+        if( cline%defined('numlen') )then
+            ! nothing to do
+        else
+            p%numlen = len(int2str(nmovies))
+        endif
         ! determine loop range
-        if( cline%defined('part') )then
+        if( p%l_distr_exec )then
             if( p%tomo .eq. 'no' )then
                 if( cline%defined('fromp') .and. cline%defined('top') )then
-                    imovie_start = p%fromp
-                    imovie_stop  = p%top
+                    fromto(1) = p%fromp
+                    fromto(2) = p%top
                 else
                     stop 'fromp & top args need to be defined in parallel execution; simple_unblur'
                 endif
             else
-                imovie_start = 1
-                imovie_stop  = nmovies
+                fromto(1) = 1
+                fromto(2) = nmovies
             endif
         else
-            imovie_start = 1
-            if( cline%defined('startit') ) imovie_start = p%startit
-            imovie_stop  = nmovies
+            fromto(1) = 1
+            if( cline%defined('startit') ) fromto(1) = p%startit
+            fromto(2)  = nmovies
         endif
-        if( debug ) write(*,*) 'fromto: ', imovie_start, imovie_stop
-        ntot = imovie_stop - imovie_start + 1
-        if( cline%defined('numlen') )then
-            numlen = p%numlen
-        else
-            numlen = len(int2str(nmovies))
-        endif
-        if( debug ) write(*,*) 'length of number string: ', numlen
+        ntot = fromto(2) - fromto(1) + 1
         ! for series of tomographic movies we need to calculate the time_per_frame
         if( p%tomo .eq. 'yes' )then
             ! get number of frames & dim from stack
             call find_ldim_nptcls(movienames(1), lfoo, nframes, endconv=endconv)
             ! calculate time_per_frame
-            time_per_frame = p%exp_time/real(nframes*nmovies)
+            p%time_per_frame = p%exp_time/real(nframes*nmovies)
         endif
         ! align
         frame_counter = 0
         movie_counter = 0
-        do imovie=imovie_start,imovie_stop
-            if( .not. file_exists(movienames(imovie)) )then
-                write(*,*) 'inputted movie stack does not exist: ', trim(adjustl(movienames(imovie)))
-            endif
-            movie_counter = movie_counter + 1
-            write(*,'(a,1x,i5)') '>>> PROCESSING MOVIE:', imovie
-            if( p%frameavg > 0 )then
-                moviename = 'tmpframeavgmovie'//p%ext
-                call frameavg_imgfile(movienames(imovie), moviename, p%frameavg)
-            else
-                moviename = movienames(imovie)
-            endif
-            call unblur_movie(moviename, p, corr)
-            if( p%tomo .eq. 'yes' )then
-                call unblur_calc_sums_tomo(frame_counter, time_per_frame, movie_sum, movie_sum_corrected, movie_sum_ctf)
-            else
-                call unblur_calc_sums(movie_sum, movie_sum_corrected, movie_sum_ctf)
-            endif
-            if( debug ) print *, 'ldim of output movie_sum:           ', movie_sum%get_ldim()
-            if( debug ) print *, 'ldim of output movie_sum_corrected: ', movie_sum_corrected%get_ldim()
-            if( debug ) print *, 'ldim of output movie_sum_ctf      : ', movie_sum_ctf%get_ldim()
-            if( cline%defined('fbody') )then
-                call movie_sum_corrected%write(trim(adjustl(p%fbody))//'_intg'//int2str_pad(imovie, numlen)//p%ext)
-                call movie_sum_ctf%write(trim(adjustl(p%fbody))//'_forctf'//int2str_pad(imovie, numlen)//p%ext)
-            else
-                call movie_sum_corrected%write(int2str_pad(imovie, numlen)//'_intg'//p%ext)
-                call movie_sum_ctf%write(int2str_pad(imovie, numlen)//'_forctf'//p%ext)
-            endif
-            ! generate power-spectra
-            pspec_sum         = movie_sum%mic2spec(p%pspecsz,     trim(adjustl(p%speckind)))
-            pspec_ctf         = movie_sum_ctf%mic2spec(p%pspecsz, trim(adjustl(p%speckind)))
-            pspec_half_n_half = pspec_sum%before_after(pspec_ctf)
-            ! generate thumbnail
-            ldim          = movie_sum_corrected%get_ldim()
-            scale         = real(p%pspecsz)/real(ldim(1))
-            ldim_thumb(1) = round2even(real(ldim(1))*scale)
-            ldim_thumb(2) = round2even(real(ldim(2))*scale)
-            ldim_thumb(3) = 1
-            call thumbnail%new(ldim_thumb, p%smpd)
-            call movie_sum_corrected%fwd_ft
-            call movie_sum_corrected%clip(thumbnail)
-            call thumbnail%bwd_ft
-            ! write pows and thumbs
-            if( cline%defined('fbody') )then
-                call pspec_half_n_half%write(trim(adjustl(p%fbody))//'_pspec'//int2str_pad(imovie, numlen)//p%ext)
-                call thumbnail%write(trim(adjustl(p%fbody))//'_thumb'//int2str_pad(imovie, numlen)//p%ext)
-            else
-                call pspec_half_n_half%write(int2str_pad(imovie, numlen)//'_pspec'//p%ext)
-                call thumbnail%write(int2str_pad(imovie, numlen)//'_thumb'//p%ext)
-            endif
-            call movie_sum%kill
-            call movie_sum_corrected%kill
-            call movie_sum_ctf%kill
-            call pspec_sum%kill
-            call pspec_ctf%kill
-            call pspec_half_n_half%kill
+        do imovie=fromto(1),fromto(2)
+            call ubiter%iterate(cline, p, imovie, movie_counter, frame_counter, movienames(imovie))
             write(*,'(f4.0,1x,a)') 100.*(real(movie_counter)/real(ntot)), 'percent of the movies processed'
         end do
         call qsys_job_finished( p, 'simple_commander_preproc :: exec_unblur' )
         ! end gracefully
-        call simple_end('**** SIMPLE_unblur NORMAL STOP ****')
+        call simple_end('**** SIMPLE_UNBLUR NORMAL STOP ****')
     end subroutine exec_unblur
+    
+    ! subroutine exec_unblur( self, cline )
+    !     use simple_unblur      ! use all in there
+    !     use simple_procimgfile ! use all in there
+    !     use simple_imgfile,    only: imgfile
+    !     use simple_oris,       only: oris
+    !     use simple_image,      only: image
+    !     use simple_qsys_funs,  only: qsys_job_finished
+    !     use simple_math,       only: round2even
+    !     class(unblur_commander), intent(inout) :: self
+    !     class(cmdline),          intent(inout) :: cline
+    !     type(params)                       :: p
+    !     type(build)                        :: b
+    !     type(image)                        :: movie_sum, pspec_sum, pspec_ctf, movie_sum_ctf
+    !     type(image)                        :: movie_sum_corrected, pspec_half_n_half, thumbnail
+    !     integer                            :: nmovies, imovie, imovie_start, imovie_stop, file_stat
+    !     integer                            :: funit_movies, frame_counter,  ntot, alloc_stat, fnr
+    !     integer                            :: ldim(3), ldim_thumb(3)
+    !     character(len=:),      allocatable :: cpcmd, new_name
+    !     character(len=STDLEN), allocatable :: movienames(:)
+    !     character(len=STDLEN)              :: moviename
+    !     real                               :: corr, scale
+    !     logical                            :: debug=.false.
+    !     integer                            :: err, lfoo(3), nframes, movie_counter
+    !     p = params(cline, checkdistr=.false.)           ! constants & derived constants produced
+    !     if( p%scale > 1.05 )then
+    !         stop 'scale cannot be > 1; simple_commander_preproc :: exec_unblur'
+    !     endif
+    !     call b%build_general_tbox(p,cline,do3d=.false.) ! general objects built
+    !     if( p%tomo .eq. 'yes' )then
+    !         if( .not. p%l_dose_weight )then
+    !             write(*,*) 'tomo=yes only supported with dose weighting!'
+    !             stop 'give total exposure time: exp_time (in seconds) and dose_rate (in e/A2/s)'
+    !         endif
+    !     endif
+    !     call read_filetable(p%filetab, movienames)
+    !     nmovies = size(movienames)
+    !     ! determine loop range
+    !     if( cline%defined('part') )then
+    !         if( p%tomo .eq. 'no' )then
+    !             if( cline%defined('fromp') .and. cline%defined('top') )then
+    !                 imovie_start = p%fromp
+    !                 imovie_stop  = p%top
+    !             else
+    !                 stop 'fromp & top args need to be defined in parallel execution; simple_unblur'
+    !             endif
+    !         else
+    !             imovie_start = 1
+    !             imovie_stop  = nmovies
+    !         endif
+    !     else
+    !         imovie_start = 1
+    !         if( cline%defined('startit') ) imovie_start = p%startit
+    !         imovie_stop  = nmovies
+    !     endif
+    !     if( debug ) write(*,*) 'fromto: ', imovie_start, imovie_stop
+    !     ntot = imovie_stop - imovie_start + 1
+    !     if( cline%defined('numlen') )then
+    !         ! nothing to do
+    !     else
+    !         p%numlen = len(int2str(nmovies))
+    !     endif
+    !     if( debug ) write(*,*) 'length of number string: ', p%numlen
+    !     ! for series of tomographic movies we need to calculate the time_per_frame
+    !     if( p%tomo .eq. 'yes' )then
+    !         ! get number of frames & dim from stack
+    !         call find_ldim_nptcls(movienames(1), lfoo, nframes, endconv=endconv)
+    !         ! calculate time_per_frame
+    !         p%time_per_frame = p%exp_time/real(nframes*nmovies)
+    !     endif
+    !     ! align
+    !     frame_counter = 0
+    !     movie_counter = 0
+    !     do imovie=imovie_start,imovie_stop
+    !         if( .not. file_exists(movienames(imovie)) )then
+    !             write(*,*) 'inputted movie stack does not exist: ', trim(adjustl(movienames(imovie)))
+    !         endif
+    !         movie_counter = movie_counter + 1
+    !         write(*,'(a,1x,i5)') '>>> PROCESSING MOVIE:', imovie
+    !         if( p%frameavg > 0 )then
+    !             moviename = 'tmpframeavgmovie'//p%ext
+    !             call frameavg_imgfile(movienames(imovie), moviename, p%frameavg)
+    !         else
+    !             moviename = movienames(imovie)
+    !         endif
+    !         call unblur_movie(moviename, p, corr)
+    !         if( p%tomo .eq. 'yes' )then
+    !             call unblur_calc_sums_tomo(frame_counter, p%time_per_frame, movie_sum, movie_sum_corrected, movie_sum_ctf)
+    !         else
+    !             call unblur_calc_sums(movie_sum, movie_sum_corrected, movie_sum_ctf)
+    !         endif
+    !         if( cline%defined('fbody') )then
+    !             call movie_sum_corrected%write(trim(adjustl(p%fbody))//'_intg'//int2str_pad(imovie, p%numlen)//p%ext)
+    !             call movie_sum_ctf%write(trim(adjustl(p%fbody))//'_forctf'//int2str_pad(imovie, p%numlen)//p%ext)
+    !         else
+    !             call movie_sum_corrected%write(int2str_pad(imovie, p%numlen)//'_intg'//p%ext)
+    !             call movie_sum_ctf%write(int2str_pad(imovie, p%numlen)//'_forctf'//p%ext)
+    !         endif
+    !         ! generate power-spectra
+    !         pspec_sum         = movie_sum%mic2spec(p%pspecsz,     trim(adjustl(p%speckind)))
+    !         pspec_ctf         = movie_sum_ctf%mic2spec(p%pspecsz, trim(adjustl(p%speckind)))
+    !         pspec_half_n_half = pspec_sum%before_after(pspec_ctf)
+    !         ! generate thumbnail
+    !         ldim          = movie_sum_corrected%get_ldim()
+    !         scale         = real(p%pspecsz)/real(ldim(1))
+    !         ldim_thumb(1) = round2even(real(ldim(1))*scale)
+    !         ldim_thumb(2) = round2even(real(ldim(2))*scale)
+    !         ldim_thumb(3) = 1
+    !         call thumbnail%new(ldim_thumb, p%smpd)
+    !         call movie_sum_corrected%fwd_ft
+    !         call movie_sum_corrected%clip(thumbnail)
+    !         call thumbnail%bwd_ft
+    !         ! write pows and thumbs
+    !         if( cline%defined('fbody') )then
+    !             call pspec_half_n_half%write(trim(adjustl(p%fbody))//'_pspec'//int2str_pad(imovie, p%numlen)//p%ext)
+    !             call thumbnail%write(trim(adjustl(p%fbody))//'_thumb'//int2str_pad(imovie, p%numlen)//p%ext)
+    !         else
+    !             call pspec_half_n_half%write(int2str_pad(imovie, p%numlen)//'_pspec'//p%ext)
+    !             call thumbnail%write(int2str_pad(imovie, p%numlen)//'_thumb'//p%ext)
+    !         endif
+    !         call movie_sum%kill
+    !         call movie_sum_corrected%kill
+    !         call movie_sum_ctf%kill
+    !         call pspec_sum%kill
+    !         call pspec_ctf%kill
+    !         call pspec_half_n_half%kill
+    !         write(*,'(f4.0,1x,a)') 100.*(real(movie_counter)/real(ntot)), 'percent of the movies processed'
+    !     end do
+    !     call qsys_job_finished( p, 'simple_commander_preproc :: exec_unblur' )
+    !     ! end gracefully
+    !     call simple_end('**** SIMPLE_unblur NORMAL STOP ****')
+    ! end subroutine exec_unblur
 
     subroutine exec_ctffind( self, cline )
-        use simple_syscalls,  only: exec_cmdline
-        use simple_nrtxtfile, only: nrtxtfile
-        use simple_oris,      only: oris
-        use simple_strings,   only: real2str
-        use simple_qsys_funs, only: qsys_job_finished
+        use simple_ctffind_iter, only: ctffind_iter
+        use simple_oris,         only: oris
+        use simple_qsys_funs,    only: qsys_job_finished
         class(ctffind_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(params)                       :: p
-        character(len=STDLEN), allocatable :: intg_movienames(:)
-        character(len=:),      allocatable :: ctrl_fname, diag_fname, output_fname
-        real,                  allocatable :: ctfparams(:,:) 
-        type(nrtxtfile)                    :: ctfparamfile
-        type(oris) :: os                         
-        character(len=STDLEN) :: cmd_str, param_fname
-        integer :: nintg_movies, funit, fromto(2), imovie, ntot, numlen, movie_counter
-        integer :: ndatlines, nrecs, j, file_stat
-        p = params(cline, checkdistr=.false.)           ! constants & derived constants produced
-        call read_filetable(p%filetab, intg_movienames)
-        nintg_movies = size(intg_movienames)
+        type(ctffind_iter)                 :: cfiter
+        character(len=STDLEN), allocatable :: movienames_forctf(:)
+        character(len=:),      allocatable :: fname_ctffind_ctrl, fname_ctffind_output      
+        type(oris) :: os       
+        integer    :: nmovies, fromto(2), imovie, ntot, movie_counter
+        p = params(cline, checkdistr=.false.) ! constants & derived constants produced
+        call read_filetable(p%filetab, movienames_forctf)
+        nmovies = size(movienames_forctf)
         if( p%l_distr_exec )then
-            allocate(ctrl_fname,  source='ctffind_ctrl_file_part'//int2str_pad(p%part,p%numlen)//'.txt')
-            allocate(output_fname, source='ctffind_output_part'//int2str_pad(p%part,p%numlen)//'.txt')
+            allocate(fname_ctffind_ctrl,  source='ctffind_ctrl_file_part'//int2str_pad(p%part,p%numlen)//'.txt')
+            allocate(fname_ctffind_output, source='ctffind_output_part'//int2str_pad(p%part,p%numlen)//'.txt')
             ! determine loop range
             if( cline%defined('fromp') .and. cline%defined('top') )then
                 fromto(1) = p%fromp
@@ -522,74 +673,129 @@ contains
                 stop 'fromp & top args need to be defined in parallel execution; simple_ctffind'
             endif
         else
-            allocate(ctrl_fname,   source='ctffind_ctrl_file.txt')
-            allocate(output_fname, source='ctffind_output.txt')
+            allocate(fname_ctffind_ctrl,   source='ctffind_ctrl_file.txt')
+            allocate(fname_ctffind_output, source='ctffind_output.txt')
             ! determine loop range
             fromto(1) = 1
-            fromto(2) = nintg_movies
+            if( cline%defined('startit') ) fromto(1) = p%startit
+            fromto(2) = nmovies
         endif
         ntot = fromto(2) - fromto(1) + 1
         call os%new(ntot)
-        if( cline%defined('numlen') )then
-            numlen = p%numlen
-        else
-            numlen = len(int2str(nintg_movies))
-        endif
         ! loop over exposures (movies)
         movie_counter = 0
         do imovie=fromto(1),fromto(2)
-            if( .not. file_exists(intg_movienames(imovie)) )&
-            & write(*,*) 'inputted micrograph does not exist: ', trim(adjustl(intg_movienames(imovie)))
-            movie_counter = movie_counter + 1
-            funit         = get_fileunit()
-            diag_fname    = add2fbody(intg_movienames(imovie), p%ext, '_ctffind_diag')
-            param_fname   = fname_new_ext(diag_fname, 'txt')
-            open(unit=funit, status='REPLACE', action='WRITE', file=ctrl_fname)
-            write(funit,'(a)') trim(intg_movienames(imovie))
-            write(funit,'(a)') trim(diag_fname)
-            write(funit,'(a)') real2str(p%smpd)
-            write(funit,'(a)') real2str(p%kv)
-            write(funit,'(a)') real2str(p%cs)
-            write(funit,'(a)') real2str(p%fraca)
-            write(funit,'(a)') real2str(real(p%pspecsz))
-            write(funit,'(a)') real2str(p%hp)
-            write(funit,'(a)') real2str(p%lp)
-            write(funit,'(a)') real2str(1.0e4*p%dfmin)
-            write(funit,'(a)') real2str(1.0e4*p%dfmax)
-            write(funit,'(a)') real2str(1.0e4*p%astigstep)
-            write(funit,'(a)') 'no'
-            write(funit,'(a)') 'no'
-            write(funit,'(a)') 'yes'
-            write(funit,'(a)') real2str(1.0e4*p%expastig)
-            write(funit,'(a)') trim(p%phaseplate)
-            write(funit,'(a)') 'no';
-            close(funit)
-            cmd_str = 'cat ' // ctrl_fname//' | ctffind'
-            call system(cmd_str)
-            call ctfparamfile%new(param_fname, 1)
-            ndatlines = ctfparamfile%get_ndatalines()
-            nrecs     = ctfparamfile%get_nrecs_per_line()
-            allocate( ctfparams(ndatlines,nrecs) )
-            do j=1,ndatlines
-                call ctfparamfile%readNextDataLine(ctfparams(j,:))
-            end do
-            call os%set(movie_counter, 'kv',     p%kv                )
-            call os%set(movie_counter, 'cs',     p%cs                )
-            call os%set(movie_counter, 'fraca',  p%fraca             )
-            call os%set(movie_counter, 'dfx',    ctfparams(1,2)/1.0e4)
-            call os%set(movie_counter, 'dfy',    ctfparams(1,3)/1.0e4)
-            call os%set(movie_counter, 'angast', ctfparams(1,4)      )
+            call cfiter%iterate(p, imovie, movie_counter, movienames_forctf(imovie),&
+            &fname_ctffind_ctrl, fname_ctffind_output, os)
             write(*,'(f4.0,1x,a)') 100.*(real(movie_counter)/real(ntot)), 'percent of the micrographs processed'
-            deallocate(ctfparams)
-            call ctfparamfile%kill
         end do
-        call os%write(output_fname)
+        call os%write(fname_ctffind_output)
         call os%kill
-        deallocate(ctrl_fname,output_fname)
+        deallocate(fname_ctffind_ctrl,fname_ctffind_output)
         call qsys_job_finished( p, 'simple_commander_preproc :: exec_ctffind' )
         ! end gracefully
         call simple_end('**** SIMPLE_CTFFIND NORMAL STOP ****')
     end subroutine exec_ctffind
+
+    ! subroutine exec_ctffind( self, cline )
+    !     use simple_syscalls,  only: exec_cmdline
+    !     use simple_nrtxtfile, only: nrtxtfile
+    !     use simple_oris,      only: oris
+    !     use simple_strings,   only: real2str
+    !     use simple_qsys_funs, only: qsys_job_finished
+    !     class(ctffind_commander), intent(inout) :: self
+    !     class(cmdline),           intent(inout) :: cline
+    !     type(params)                       :: p
+    !     character(len=STDLEN), allocatable :: intg_movienames(:)
+    !     character(len=:),      allocatable :: ctrl_fname, diag_fname, output_fname
+    !     real,                  allocatable :: ctfparams(:,:) 
+    !     type(nrtxtfile)                    :: ctfparamfile
+    !     type(oris) :: os                         
+    !     character(len=STDLEN) :: cmd_str, param_fname
+    !     integer :: nintg_movies, funit, fromto(2), imovie, ntot, numlen, movie_counter
+    !     integer :: ndatlines, nrecs, j, file_stat
+    !     p = params(cline, checkdistr=.false.)           ! constants & derived constants produced
+    !     call read_filetable(p%filetab, intg_movienames)
+    !     nintg_movies = size(intg_movienames)
+    !     if( p%l_distr_exec )then
+    !         allocate(ctrl_fname,  source='ctffind_ctrl_file_part'//int2str_pad(p%part,p%numlen)//'.txt')
+    !         allocate(output_fname, source='ctffind_output_part'//int2str_pad(p%part,p%numlen)//'.txt')
+    !         ! determine loop range
+    !         if( cline%defined('fromp') .and. cline%defined('top') )then
+    !             fromto(1) = p%fromp
+    !             fromto(2) = p%top
+    !         else
+    !             stop 'fromp & top args need to be defined in parallel execution; simple_ctffind'
+    !         endif
+    !     else
+    !         allocate(ctrl_fname,   source='ctffind_ctrl_file.txt')
+    !         allocate(output_fname, source='ctffind_output.txt')
+    !         ! determine loop range
+    !         fromto(1) = 1
+    !         fromto(2) = nintg_movies
+    !     endif
+    !     ntot = fromto(2) - fromto(1) + 1
+    !     call os%new(ntot)
+    !     if( cline%defined('numlen') )then
+    !         numlen = p%numlen
+    !     else
+    !         numlen = len(int2str(nintg_movies))
+    !     endif
+    !     ! loop over exposures (movies)
+    !     movie_counter = 0
+    !     do imovie=fromto(1),fromto(2)
+    !         if( .not. file_exists(intg_movienames(imovie)) )&
+    !         & write(*,*) 'inputted micrograph does not exist: ', trim(adjustl(intg_movienames(imovie)))
+    !         movie_counter = movie_counter + 1
+    !         funit         = get_fileunit()
+    !         diag_fname    = add2fbody(intg_movienames(imovie), p%ext, '_ctffind_diag')
+    !         param_fname   = fname_new_ext(diag_fname, 'txt')
+    !         open(unit=funit, status='REPLACE', action='WRITE', file=ctrl_fname)
+    !         write(funit,'(a)') trim(intg_movienames(imovie))
+    !         write(funit,'(a)') trim(diag_fname)
+    !         write(funit,'(a)') real2str(p%smpd)
+    !         write(funit,'(a)') real2str(p%kv)
+    !         write(funit,'(a)') real2str(p%cs)
+    !         write(funit,'(a)') real2str(p%fraca)
+    !         write(funit,'(a)') real2str(real(p%pspecsz))
+    !         write(funit,'(a)') real2str(p%hp)
+    !         write(funit,'(a)') real2str(p%lp)
+    !         write(funit,'(a)') real2str(1.0e4*p%dfmin)
+    !         write(funit,'(a)') real2str(1.0e4*p%dfmax)
+    !         write(funit,'(a)') real2str(1.0e4*p%astigstep)
+    !         write(funit,'(a)') 'no'
+    !         write(funit,'(a)') 'no'
+    !         write(funit,'(a)') 'yes'
+    !         write(funit,'(a)') real2str(1.0e4*p%expastig)
+    !         write(funit,'(a)') trim(p%phaseplate)
+    !         write(funit,'(a)') 'no';
+    !         close(funit)
+    !         cmd_str = 'cat ' // ctrl_fname//' | ctffind'
+    !         call system(cmd_str)
+    !         call ctfparamfile%new(param_fname, 1)
+    !         ndatlines = ctfparamfile%get_ndatalines()
+    !         nrecs     = ctfparamfile%get_nrecs_per_line()
+    !         allocate( ctfparams(ndatlines,nrecs) )
+    !         do j=1,ndatlines
+    !             call ctfparamfile%readNextDataLine(ctfparams(j,:))
+    !         end do
+    !         call os%set(movie_counter, 'kv',     p%kv                )
+    !         call os%set(movie_counter, 'cs',     p%cs                )
+    !         call os%set(movie_counter, 'fraca',  p%fraca             )
+    !         call os%set(movie_counter, 'dfx',    ctfparams(1,2)/1.0e4)
+    !         call os%set(movie_counter, 'dfy',    ctfparams(1,3)/1.0e4)
+    !         call os%set(movie_counter, 'angast', ctfparams(1,4)      )
+    !         write(*,'(f4.0,1x,a)') 100.*(real(movie_counter)/real(ntot)), 'percent of the micrographs processed'
+    !         deallocate(ctfparams)
+    !         call ctfparamfile%kill
+    !     end do
+    !     call os%write(output_fname)
+    !     call os%kill
+    !     deallocate(ctrl_fname,output_fname)
+    !     call qsys_job_finished( p, 'simple_commander_preproc :: exec_ctffind' )
+    !     ! end gracefully
+    !     call simple_end('**** SIMPLE_CTFFIND NORMAL STOP ****')
+    ! end subroutine exec_ctffind
 
     subroutine exec_select( self, cline )
         use simple_image,    only: image
@@ -735,64 +941,40 @@ contains
     end subroutine exec_makepickrefs
 
     subroutine exec_pick( self, cline)
-        use simple_picker
+        use simple_pick_iter, only: pick_iter
         class(pick_commander), intent(inout) :: self
         class(cmdline),        intent(inout) :: cline
-        type(params) :: p
-        integer      :: nmicrographs, funit, alloc_stat, imic
-        integer      :: imic_start, imic_stop, ntot, imic_cnt
-        integer      :: offset
-        real         :: shrink
-        character(len=STDLEN), allocatable :: micrographnames(:)
+        type(params)    :: p
+        type(pick_iter) :: piter
+        character(len=STDLEN), allocatable :: movienames_intg(:)
+        integer :: nmovies, fromto(2), imovie, ntot, movie_counter, offset
+        real    :: shrink
         p = params(cline, checkdistr=.false.) ! constants & derived constants produced
         offset    = 3
         if( cline%defined('offset') ) offset = p%offset
         shrink    = 4.0
         if( cline%defined('shrink') ) shrink = p%shrink
         ! check filetab existence
-        if( .not. file_exists(p%filetab) ) stop 'inputted filetab does not exist in cwd'
-        ! set number of micrographs
-        nmicrographs = nlines(p%filetab)
-        ! read the filenames
-        funit = get_fileunit()
-        open(unit=funit, status='old', file=p%filetab)
-        allocate( micrographnames(nmicrographs), stat=alloc_stat )
-        call alloc_err('In: simple_commander_preproc :: exec_pick', alloc_stat)
-        do imic=1,nmicrographs
-            read(funit, '(a256)') micrographnames(imic)
-        end do
-        close(funit)
+        call read_filetable(p%filetab, movienames_intg)
+        nmovies = size(movienames_intg)
         ! determine loop range
         if( cline%defined('part') )then
             if( cline%defined('fromp') .and. cline%defined('top') )then
-                imic_start = p%fromp
-                imic_stop  = p%top
+                fromto(1) = p%fromp
+                fromto(2) = p%top
             else
                 stop 'fromp & top args need to be defined in parallel execution; simple_pick'
             endif
         else
-            imic_start = 1
-            if( cline%defined('startit') ) imic_start = p%startit
-            imic_stop  = nmicrographs
+            fromto(1) = 1
+            if( cline%defined('startit') ) fromto(1) = p%startit
+            fromto(2)  = nmovies
         endif
-        ntot     = imic_stop-imic_start+1
-        imic_cnt = 0
-        do imic=imic_start,imic_stop
-            imic_cnt = imic_cnt + 1
-            if( .not. file_exists(micrographnames(imic)) )then
-                write(*,*) 'inputted micrograph does not exist: ', trim(adjustl(micrographnames(imic)))
-            endif
-            write(*,'(a,1x,i5)') '>>> PROCESSING MICROGRAPH:', imic, trim(adjustl(micrographnames(imic)))
-            if( cline%defined('thres') )then
-                call init_picker(micrographnames(imic), p%refs, p%smpd, p%msk, p%shrink,&
-                offset_in=offset, lp_in=p%lp, distthr_in=p%thres)
-            else
-                call init_picker(micrographnames(imic), p%refs, p%smpd, p%msk, p%shrink,&
-                offset_in=offset, lp_in=p%lp)
-            endif
-            call exec_picker 
-            call kill_picker
-            write(*,'(f4.0,1x,a)') 100.*(real(imic_cnt)/real(ntot)), 'percent of the micrographs processed'
+        ntot          = fromto(2) - fromto(1) + 1
+        movie_counter = 0
+        do imovie=fromto(1),fromto(2)
+            call piter%iterate(cline, p, imovie, movie_counter, movienames_intg(imovie), offset)
+            write(*,'(f4.0,1x,a)') 100.*(real(movie_counter)/real(ntot)), 'percent of the micrographs processed'
         end do
     end subroutine exec_pick
     

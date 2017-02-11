@@ -284,6 +284,61 @@ select case(prg)
 
     ! PRE-PROCESSING PROGRAMS
 
+    case( 'preproc' )
+        !==Program preproc
+        !
+        ! <preproc/begin>is a program that executes unblur, ctffind & pick in sequence
+        ! <preproc/end>
+        !
+        ! set required keys
+        keys_required(1)   = 'filetab'
+        keys_required(2)   = 'smpd'
+        keys_required(3)   = 'kv'
+        keys_required(4)   = 'cs'
+        keys_required(5)   = 'fraca'
+        keys_required(6)   = 'refs'
+        keys_required(7)   = 'shrink'
+        ! set optional keys
+        keys_optional(1)   = 'nthr'
+        keys_optional(2)   = 'fbody'
+        keys_optional(3)   = 'lpstart'
+        keys_optional(4)   = 'lpstop'
+        keys_optional(5)   = 'trs'
+        keys_optional(6)   = 'exp_time'
+        keys_optional(7)   = 'dose_rate'
+        keys_optional(8)   = 'pspecsz_unblur'
+        keys_optional(9)   = 'pspecsz_ctffind'
+        keys_optional(10)  = 'numlen'
+        keys_optional(11)  = 'startit'
+        keys_optional(12)  = 'scale'
+        keys_optional(13)  = 'frameavg'
+        keys_optional(14)  = 'tomo'
+        keys_optional(15)  = 'hp_ctffind'
+        keys_optional(16)  = 'lp_ctffind'
+        keys_optional(17)  = 'lp_pick'
+        keys_optional(18)  = 'dfmin'
+        keys_optional(19)  = 'dfmax'
+        keys_optional(20)  = 'astigstep'
+        keys_optional(21)  = 'expastig'
+        keys_optional(22)  = 'phaseplate'
+        keys_optional(23)  = 'thres'
+        ! parse command line
+        ! if( describe ) call print_doc_preproc
+        call cline%parse(keys_required(:7), keys_optional(:23))
+        ! set defaults
+        if( .not. cline%defined('trs')             ) call cline%set('trs',        5.)
+        if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',   15.)
+        if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',     8.)
+        if( .not. cline%defined('pspecsz_unblur')  ) call cline%set('pspecsz',  512.)
+        if( .not. cline%defined('pspecsz_ctffind') ) call cline%set('pspecsz', 1024.)
+        if( .not. cline%defined('hp_ctffind')      ) call cline%set('hp',        30.)
+        if( .not. cline%defined('lp_ctffind')      ) call cline%set('lp',         5.)
+        if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',   20.)
+
+
+        
+        
+
     case( 'select_frames' )
         !==Program select_frames
         !
@@ -797,23 +852,23 @@ select case(prg)
         keys_required(2)  = 'smpd'
         keys_required(3)  = 'oritab'
         keys_required(4)  = 'ctf'
+        keys_required(5)  = 'nstates'
+        keys_required(6)  = 'msk'
         ! set optionnal keys
         keys_optional(1)  = 'nthr'
         keys_optional(2)  = 'deftab'
-        keys_optional(3)  = 'nstates'
-        keys_optional(4)  = 'msk'
-        keys_optional(5)  = 'inner'
-        keys_optional(6)  = 'width'
-        keys_optional(7)  = 'lp'
-        keys_optional(8)  = 'eo'
-        keys_optional(9)  = 'frac'
-        keys_optional(10) = 'state2split'
-        keys_optional(11) = 'norec'
-        keys_optional(12) = 'mul'
-        keys_optional(13) = 'zero'
+        keys_optional(3)  = 'inner'
+        keys_optional(4)  = 'width'
+        keys_optional(5)  = 'lp'
+        keys_optional(6)  = 'eo'
+        keys_optional(7)  = 'frac'
+        keys_optional(8)  = 'state2split'
+        keys_optional(9)  = 'norec'
+        keys_optional(10) = 'mul'
+        keys_optional(11) = 'zero'
         ! parse command line
         if( describe ) call print_doc_multiptcl_init
-        call cline%parse(keys_required(:4), keys_optional(:13))
+        call cline%parse(keys_required(:6), keys_optional(:11))
         ! set defaults
         if( .not. cline%defined('trs') ) call cline%set('trs', 3.) ! to assure that shifts are being used
         !execute

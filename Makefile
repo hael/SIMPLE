@@ -165,7 +165,6 @@ build: simple_pair_dtab.o               \
        simple_simulator.o               \
        simple_eo_reconstructor.o        \
        simple_build.o                   ;
-       
 
 comlin_corr: simple_comlin_corr.o       ;
 
@@ -209,6 +208,9 @@ masters: simple_rec_master.o             \
          simple_commander_mask.o         \
          simple_commander_misc.o         \
          simple_commander_oris.o         \
+         simple_unblur_iter.o            \
+         simple_ctffind_iter.o           \
+         simple_pick_iter.o           \
          simple_commander_preproc.o      \
          simple_commander_prime2D.o      \
          simple_commander_prime3D.o      \

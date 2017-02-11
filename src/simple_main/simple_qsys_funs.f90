@@ -289,7 +289,7 @@ contains
         end do
     end subroutine qsys_watcher_1
 
-    !>  returns when the inputted file exists in cwd
+    !>  returns when the inputted files exist in cwd
     subroutine qsys_watcher_2( fnames, files_exist, wtime )
         character(len=STDLEN), intent(in)    :: fnames(:)
         logical,               intent(inout) :: files_exist(:)

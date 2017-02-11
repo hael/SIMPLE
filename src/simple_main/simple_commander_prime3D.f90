@@ -629,19 +629,21 @@ contains
             if( cline%defined('oritab') )then
                 p%nstates = b%a%get_nstates()
                 call b%a%split_state(p%state2split)
-                p%nstates = p%nstates+1
+                p%nstates = p%nstates + 1
             else
                 stop 'Need oritab to be defined when state2split is defined on command line; simple_multiptcl_init'
             endif
-        else
-            if( p%nstates < 2 ) stop 'Nonsensical to have nstates < 2; simple_multiptcl_init'
+        else     
             call b%a%rnd_states(p%nstates)
+            if( p%nstates < 2 ) stop 'Nonsensical to have nstates < 2; simple_multiptcl_init'
         endif
         if( p%norec .eq. 'no' )then
             if( cline%defined('lp') )then
                 call b%build_rec_tbox(p)
+                p%eo = 'no'
             else
                 call b%build_eo_rec_tbox(p)
+                p%eo = 'yes'
             endif
             call exec_rec_master(b, p, cline, 'startvol')
         endif

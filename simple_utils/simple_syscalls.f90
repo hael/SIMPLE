@@ -105,4 +105,11 @@ contains
         allocate(varval, source=trim(value))
     end function sys_get_env_var
 
+    subroutine sys_gen_filetab( fbody, ext, filetabname )
+        character(len=*),      intent(in)  :: fbody, ext, filetabname
+        character(len=STDLEN), allocatable :: cmd
+        cmd = 'ls '//trim(fbody)//'*'//trim(ext)//' > '//trim(filetabname)
+        call exec_cmdline(cmd)
+    end subroutine sys_gen_filetab
+
 end module simple_syscalls

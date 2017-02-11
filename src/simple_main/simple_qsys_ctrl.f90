@@ -61,7 +61,7 @@ contains
         integer,                  intent(in) :: ncomputing_units !< number of computing units (<= the number of parts controlled)
         type(qsys_ctrl) :: self
         call self%new(exec_binary, qsys_obj, parts, fromto_part, ncomputing_units)
-    end function
+    end function constructor
     
     !>  \brief  is a constructor
     subroutine new( self, exec_binary, qsys_obj, parts, fromto_part, ncomputing_units )

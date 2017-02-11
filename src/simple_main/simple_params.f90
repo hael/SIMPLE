@@ -67,7 +67,7 @@ type :: params
     character(len=3) :: norm='no'
     character(len=3) :: odd='no'
     character(len=3) :: order='no'
-    character(len=3) :: outside='yes'
+    character(len=3) :: outside='no'
     character(len=3) :: pad='no'
     character(len=3) :: phaseplate='no'
     character(len=3) :: phrand='no'
@@ -222,6 +222,8 @@ type :: params
     integer :: pcasz=0
     integer :: ppca=0
     integer :: pspecsz=512
+    integer :: pspecsz_unblur=512
+    integer :: pspecsz_ctffind=1024
     integer :: ptcl=1
     integer :: ring1=2
     integer :: ring2=0
@@ -281,11 +283,14 @@ type :: params
     real    :: ftol=1e-6
     real    :: gw=0.5
     real    :: hp=100.
+    real    :: hp_ctffind=30.
     real    :: inner=0.
     real    :: kv=300.
     real    :: lam=0.5
     real    :: lp_dyn=20.
     real    :: lp=20.
+    real    :: lp_ctffind=5.0
+    real    :: lp_pick=20.
     real    :: lpmed=20.
     real    :: lpstart=0.
     real    :: lpstop=7.0
@@ -307,6 +312,7 @@ type :: params
     real    :: snr
     real    :: thres=0.
     real    :: time_per_image=200.
+    real    :: time_per_frame=0.
     real    :: trs=0.
     real    :: var=1.
     real    :: width=10.
@@ -540,6 +546,8 @@ contains
         call check_iarg('part',           self%part)
         call check_iarg('ppca',           self%ppca)
         call check_iarg('pspecsz',        self%pspecsz)
+        call check_iarg('pspecsz_unblur', self%pspecsz_unblur)
+        call check_iarg('pspecsz_ctffind', self%pspecsz_ctffind)
         call check_iarg('ring1',          self%ring1)
         call check_iarg('ring2',          self%ring2)
         call check_iarg('startit',        self%startit)
@@ -588,10 +596,13 @@ contains
         call check_rarg('ftol',           self%ftol)
         call check_rarg('gw',             self%gw)
         call check_rarg('hp',             self%hp)
+        call check_rarg('hp_ctffind',     self%hp_ctffind)
         call check_rarg('inner',          self%inner)
         call check_rarg('kv',             self%kv)
         call check_rarg('lam',            self%lam)
         call check_rarg('lp',             self%lp)
+        call check_rarg('lp_ctffind',     self%lp_ctffind)
+        call check_rarg('lp_pick',        self%lp_pick)
         call check_rarg('lpstart',        self%lpstart)
         call check_rarg('lpstop',         self%lpstop)
         call check_rarg('lpvalid',        self%lpvalid)
