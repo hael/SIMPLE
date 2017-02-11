@@ -38,6 +38,7 @@ type(simmovie_commander)           :: xsimmovie
 type(simsubtomo_commander)         :: xsimsubtomo
 
 ! PRE-PROCESSING PROGRAMS
+type(preproc_commander)            :: xpreproc
 type(select_frames_commander)      :: xselect_frames
 type(boxconvs_commander)           :: xboxconvs
 type(integrate_movies_commander)   :: xintegrate_movies
@@ -334,11 +335,7 @@ select case(prg)
         if( .not. cline%defined('hp_ctffind')      ) call cline%set('hp',        30.)
         if( .not. cline%defined('lp_ctffind')      ) call cline%set('lp',         5.)
         if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',   20.)
-
-
-        
-        
-
+        call xpreproc%execute(cline)
     case( 'select_frames' )
         !==Program select_frames
         !

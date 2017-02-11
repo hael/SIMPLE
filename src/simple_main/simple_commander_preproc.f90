@@ -19,6 +19,7 @@ use simple_jiffys,         ! use all in there
 use simple_filehandling    ! use all in there
 implicit none
 
+public :: preproc_commander
 public :: select_frames_commander
 public :: boxconvs_commander
 public :: integrate_movies_commander
