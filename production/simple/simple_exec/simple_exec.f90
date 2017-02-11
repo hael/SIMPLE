@@ -298,7 +298,6 @@ select case(prg)
         keys_required(4)   = 'cs'
         keys_required(5)   = 'fraca'
         keys_required(6)   = 'refs'
-        keys_required(7)   = 'shrink'
         ! set optional keys
         keys_optional(1)   = 'nthr'
         keys_optional(2)   = 'fbody'
@@ -324,8 +323,8 @@ select case(prg)
         keys_optional(22)  = 'phaseplate'
         keys_optional(23)  = 'thres'
         ! parse command line
-        ! if( describe ) call print_doc_preproc
-        call cline%parse(keys_required(:7), keys_optional(:23))
+        if( describe ) call print_doc_preproc
+        call cline%parse(keys_required(:6), keys_optional(:23))
         ! set defaults
         if( .not. cline%defined('trs')             ) call cline%set('trs',        5.)
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',   15.)
@@ -511,7 +510,6 @@ select case(prg)
         !
         ! set required keys
         keys_required(1) = 'pgrp'
-        keys_required(2) = 'shrink'
         ! set optional keys
         keys_optional(1) = 'nthr'
         keys_optional(2) = 'vol1'
@@ -519,7 +517,7 @@ select case(prg)
         keys_optional(4) = 'smpd'
         ! parse command line
         ! if( describe ) call print_doc_makepickrefs
-        call cline%parse(keys_required(:2), keys_optional(:4))
+        call cline%parse(keys_required(:1), keys_optional(:4))
         ! execute
         call xmakepickrefs%execute(cline)
     case( 'pick' )
@@ -531,14 +529,13 @@ select case(prg)
         keys_required(1) = 'filetab'
         keys_required(2) = 'refs'
         keys_required(3) = 'smpd'
-        keys_required(4) = 'shrink'
         ! set optional keys
         keys_optional(1) = 'nthr'
         keys_optional(2) = 'lp'
         keys_optional(3) = 'thres'
         ! parse command line
         if( describe ) call print_doc_pick
-        call cline%parse(keys_required(:4), keys_optional(:3))
+        call cline%parse(keys_required(:3), keys_optional(:3))
         ! execute
         call xpick%execute(cline)
     case( 'extract' )

@@ -97,8 +97,7 @@ contains
         type(params) :: p
         type(oris)   :: os
         integer      :: nmovies, fromto(2), imovie, ntot, movie_counter
-        integer      :: frame_counter, lfoo(3), nframes, offset, i
-        real         :: shrink
+        integer      :: frame_counter, lfoo(3), nframes, i
         p = params(cline, checkdistr=.false.) ! constants & derived constants produced
         if( p%scale > 1.05 )then
             stop 'scale cannot be > 1; simple_commander_preproc :: exec_preproc'
@@ -106,10 +105,6 @@ contains
         if( p%tomo .eq. 'yes' )then
             stop 'tomography mode (tomo=yes) not yet supported!'
         endif
-        offset    = 3
-        if( cline%defined('offset') ) offset = p%offset
-        shrink    = 4.0
-        if( cline%defined('shrink') ) shrink = p%shrink
         call read_filetable(p%filetab, movienames)
         nmovies = size(movienames)
         if( cline%defined('numlen') )then
@@ -152,7 +147,7 @@ contains
             call cfiter%iterate(p, imovie, movie_counter, moviename_forctf,&
             &fname_ctffind_ctrl, fname_ctffind_output, os)
             p%lp      = p%lp_pick
-            call piter%iterate(cline, p, imovie, movie_counter, moviename_intg, offset)
+            call piter%iterate(cline, p, imovie, movie_counter, moviename_intg)
             write(*,'(f4.0,1x,a)') 100.*(real(movie_counter)/real(ntot)), 'percent of the movies processed'
         end do
         ! write CTF parameters in append mode
@@ -527,7 +522,7 @@ contains
     !     class(unblur_commander), intent(inout) :: self
     !     class(cmdline),          intent(inout) :: cline
     !     type(params)                       :: p
-    !     type(build)                        :: b
+    !     ! type(build)                        :: b
     !     type(image)                        :: movie_sum, pspec_sum, pspec_ctf, movie_sum_ctf
     !     type(image)                        :: movie_sum_corrected, pspec_half_n_half, thumbnail
     !     integer                            :: nmovies, imovie, imovie_start, imovie_stop, file_stat
@@ -543,7 +538,7 @@ contains
     !     if( p%scale > 1.05 )then
     !         stop 'scale cannot be > 1; simple_commander_preproc :: exec_unblur'
     !     endif
-    !     call b%build_general_tbox(p,cline,do3d=.false.) ! general objects built
+    !     ! call b%build_general_tbox(p,cline,do3d=.false.) ! general objects built
     !     if( p%tomo .eq. 'yes' )then
     !         if( .not. p%l_dose_weight )then
     !             write(*,*) 'tomo=yes only supported with dose weighting!'
@@ -891,16 +886,18 @@ contains
     subroutine exec_makepickrefs( self, cline )
         use simple_commander_volops,  only: projvol_commander
         use simple_commander_imgproc, only: stackops_commander, scale_commander
+        use simple_procimgfile,       only: neg_imgfile
         class(makepickrefs_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         character(STDLEN), parameter :: ORIFILE='pickrefs_oris.txt'
-        integer,           parameter :: NREFS=100
+        integer, parameter           :: NREFS=100
         type(params)                 :: p
         type(build)                  :: b
         type(cmdline)                :: cline_projvol, cline_stackops, cline_scale
         type(projvol_commander)      :: xprojvol
         type(stackops_commander)     :: xstackops
-        type(scale_commander)        :: xscale
+        integer                      :: nrots, cnt, iref, irot
+        real                         :: ang, rot, rclip
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         if( cline%defined('stk') .or. cline%defined('vol1') )then
@@ -909,34 +906,37 @@ contains
                 call b%a%new(NREFS)
                 call b%a%gen_diverse
                 call b%a%write(trim(ORIFILE))
-                cline_scale = cline
-                call cline_scale%set('scale', 1.0/p%shrink)
-                call cline_scale%set('outvol', 'scaled_from_makepickrefs'//p%ext)
-                call xscale%execute(cline_scale)
                 cline_projvol = cline
-                call cline_projvol%set('vol1', 'scaled_from_makepickrefs'//p%ext)
                 call cline_projvol%set('nspace', real(NREFS))
                 call cline_projvol%set('outstk', 'pickrefs'//p%ext)
                 call cline_projvol%set('oritab', trim(ORIFILE))
                 call cline_projvol%set('neg', 'yes')
-                call cline_projvol%set('smpd', p%shrink*p%smpd)
+                call cline_projvol%set('smpd', PICKER_SHRINK)
                 call xprojvol%execute(cline_projvol)
             else
-                cline_scale = cline
-                call cline_scale%set('scale', 1.0/p%shrink)
-                call cline_scale%set('outstk', 'scaled_from_makepickrefs'//p%ext)
-                call xscale%execute(cline_scale)
-                cline_stackops = cline
-                call cline_stackops%set('stk', 'scaled_from_makepickrefs'//p%ext)
-                call cline_stackops%set('outstk', 'pickrefs'//p%ext)
-                call cline_stackops%set('neg', 'yes')
-                call cline_stackops%set('smpd', p%shrink*p%smpd)
-                call xstackops%execute(cline_stackops)
+                ! expand in in-plane rotation
+                nrots = NREFS/p%nptcls
+                if( nrots > 1 )then
+                    ang = 360./real(nrots)
+                    rot = 0.
+                    cnt  = 0
+                    do iref=1,p%nptcls
+                        call b%img%read(p%stk, iref)
+                        do irot=1,nrots
+                            cnt = cnt + 1
+                            call b%img%rtsq(rot, 0., 0., b%img_copy)
+                            call b%img_copy%write('rotated_from_makepickrefs'//p%ext, cnt)
+                            rot = rot + ang
+                        end do
+                    end do
+                    call cline%set('stk', 'rotated_from_makepickrefs'//p%ext)
+                endif
+                call neg_imgfile('rotated_from_makepickrefs'//p%ext, 'pickrefs'//p%ext)
             endif
         else
             stop 'need input volume (vol1) or class averages (stk) to generate picking references'
         endif
-        call del_file('scaled_from_makepickrefs'//p%ext)
+        call del_file('rotated_from_makepickrefs'//p%ext)
         ! end gracefully
         call simple_end('**** SIMPLE_MAKEPICKREFS NORMAL STOP ****')
     end subroutine exec_makepickrefs
@@ -948,13 +948,8 @@ contains
         type(params)    :: p
         type(pick_iter) :: piter
         character(len=STDLEN), allocatable :: movienames_intg(:)
-        integer :: nmovies, fromto(2), imovie, ntot, movie_counter, offset
-        real    :: shrink
+        integer :: nmovies, fromto(2), imovie, ntot, movie_counter
         p = params(cline, checkdistr=.false.) ! constants & derived constants produced
-        offset    = 3
-        if( cline%defined('offset') ) offset = p%offset
-        shrink    = 4.0
-        if( cline%defined('shrink') ) shrink = p%shrink
         ! check filetab existence
         call read_filetable(p%filetab, movienames_intg)
         nmovies = size(movienames_intg)
@@ -974,7 +969,7 @@ contains
         ntot          = fromto(2) - fromto(1) + 1
         movie_counter = 0
         do imovie=fromto(1),fromto(2)
-            call piter%iterate(cline, p, imovie, movie_counter, movienames_intg(imovie), offset)
+            call piter%iterate(cline, p, imovie, movie_counter, movienames_intg(imovie))
             write(*,'(f4.0,1x,a)') 100.*(real(movie_counter)/real(ntot)), 'percent of the micrographs processed'
         end do
     end subroutine exec_pick

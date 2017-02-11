@@ -2,7 +2,7 @@ module simple_picker
 !$ use omp_lib
 !$ use omp_lib_kinds
 use simple_defs
-use simple_math,         only: sortmeans
+use simple_math,         only: sortmeans, round2even
 use simple_image,        only: image
 use simple_math,         only: euclid, hpsort
 use simple_filehandling, only: get_fileunit, remove_abspath, fname_new_ext
@@ -15,71 +15,93 @@ private
 integer,          parameter   :: MAXKMIT  = 20
 integer,          parameter   :: SPECNCLS = 10
 real,             parameter   :: BOXFRAC  = 0.5
-logical,          parameter   :: DEBUG=.true., DOPRINT=.false.
-type(image)                   :: micrograph, mic_shrunken, ptcl_target
-type(image),      allocatable :: refs(:)
+logical,          parameter   :: DEBUG=.true., DOPRINT=.true.
+type(image)                   :: micrograph, mic_shrunken, mic_shrunken_refine, ptcl_target
+type(image),      allocatable :: refs(:), refs_refine(:)
 logical,          allocatable :: selected_peak_positions(:), is_a_peak(:,:)
-real,             allocatable :: sxx(:), corrmat(:,:), specscores(:,:)
-integer,          allocatable :: peak_positions(:,:), refmat(:,:), backgr_positions(:,:)
+real,             allocatable :: sxx(:), sxx_refine(:), corrmat(:,:), specscores(:,:)
+integer,          allocatable :: peak_positions(:,:), peak_positions_refined(:,:)
+integer,          allocatable :: refmat(:,:), backgr_positions(:,:)
 character(len=:), allocatable :: micname, refsname
 character(len=STDLEN)         :: boxname
-integer                       :: ldim(3), ldim_refs(3), ldim_shrink(3)
-integer                       :: ntargets, nx, ny, nrefs, npeaks, offset
-integer                       :: orig_box, lfny, ncls, nbackgr
-real                          :: smpd_shrunken, corrmax, corrmin
-real                          :: smpd, msk, shrink, lp, distthr
+integer                       :: ldim(3), ldim_refs(3), ldim_refs_refine(3), ldim_shrink(3)
+integer                       :: ldim_shrink_refine(3), ntargets, nx, ny, nx_refine, ny_refine
+integer                       :: nrefs, npeaks, orig_box, lfny, ncls, nbackgr
+real                          :: smpd, smpd_shrunken, smpd_shrunken_refine, corrmax, corrmin
+real                          :: msk, msk_refine, lp, distthr
 
 contains
 
-    subroutine init_picker( micfname, refsfname, smpd_in, msk_in, shrink_in, offset_in, lp_in, distthr_in )
-        character(len=*),  intent(in) :: micfname, refsfname
-        real,              intent(in) :: smpd_in, msk_in, shrink_in
-        integer, optional, intent(in) :: offset_in
-        real,    optional, intent(in) :: lp_in, distthr_in
-        integer :: alloc_stat, ifoo, iref
+    subroutine init_picker( micfname, refsfname, smpd_in, lp_in, distthr_in )
+        character(len=*), intent(in) :: micfname, refsfname
+        real,             intent(in) :: smpd_in
+        real,optional,    intent(in) :: lp_in, distthr_in
+        type(image) :: refimg
+        integer     :: alloc_stat, ifoo, iref
         allocate(micname,  source=trim(micfname))
         allocate(refsname, source=trim(refsfname))
-        boxname   = remove_abspath(fname_new_ext(micname,'box'))
-        smpd      = smpd_in
-        msk       = msk_in
-        shrink    = shrink_in
-        offset    = 3
-        if( present(offset_in)) offset = offset_in
-        lp        = 20.0
-        if( present(lp_in)    ) lp     = lp_in
+        boxname = remove_abspath(fname_new_ext(micname,'box'))
+        smpd    = smpd_in
+        lp      = 20.0
+        if( present(lp_in) ) lp = lp_in
         ! read micrograph
         call find_ldim_nptcls(micname, ldim, ifoo)
         call micrograph%new(ldim, smpd)
         call micrograph%read(micname)
-        ! find out reference dimensions
+        ! find reference dimensions
         call find_ldim_nptcls(refsname, ldim_refs, nrefs)
-        orig_box     = nint(shrink)*ldim_refs(1)
-        ldim_refs(3) = 1 ! correct 4 stupid mrc convention
-        ! set constants
-        ldim_shrink(1) = nint(real(ldim(1))/shrink)
-        ldim_shrink(2) = nint(real(ldim(2))/shrink)
-        ldim_shrink(3) = 1
-        nx             = ldim_shrink(1)-ldim_refs(1)
-        ny             = ldim_shrink(2)-ldim_refs(2)
-        smpd_shrunken  = shrink*smpd
-        msk            = min(msk/shrink,real(ldim_refs(1)/2-5)) ! mask parameter need to be modulated by shrink
-        distthr = BOXFRAC*real(ldim_refs(1))
-        if( present(distthr_in) ) distthr = distthr_in/shrink ! inputted dist thresh need to be modulated by shrink
-        ! read references
-        allocate( refs(nrefs), sxx(nrefs), stat=alloc_stat )
+        orig_box              = ldim_refs(1)
+        ! modify according to PICKER_SHRINK & PICKER_SHRINK_REFINE
+        ldim_refs_refine      = ldim_refs
+        ldim_refs(1)          = round2even(real(ldim_refs(1))/PICKER_SHRINK)
+        ldim_refs(2)          = round2even(real(ldim_refs(2))/PICKER_SHRINK)
+        ldim_refs(3)          = 1
+        ldim_refs_refine(1)   = round2even(real(ldim_refs_refine(1))/PICKER_SHRINK_REFINE)
+        ldim_refs_refine(2)   = round2even(real(ldim_refs_refine(2))/PICKER_SHRINK_REFINE)
+        ldim_refs_refine(3)   = 1
+        ldim_shrink(1)        = round2even(real(ldim(1))/PICKER_SHRINK)
+        ldim_shrink(2)        = round2even(real(ldim(2))/PICKER_SHRINK)
+        ldim_shrink(3)        = 1
+        ldim_shrink_refine(1) = round2even(real(ldim(1))/PICKER_SHRINK_REFINE)
+        ldim_shrink_refine(2) = round2even(real(ldim(2))/PICKER_SHRINK_REFINE)
+        ldim_shrink_refine(3) = 1
+        nx                    = ldim_shrink(1)-ldim_refs(1)
+        ny                    = ldim_shrink(2)-ldim_refs(2)
+        nx_refine             = ldim_shrink_refine(1)-ldim_refs_refine(1)
+        ny_refine             = ldim_shrink_refine(2)-ldim_refs_refine(2)
+        smpd_shrunken         = PICKER_SHRINK*smpd
+        smpd_shrunken_refine  = PICKER_SHRINK_REFINE*smpd
+        msk                   = real(ldim_refs(1)/2-5)
+        msk_refine            = real(ldim_refs_refine(1)/2-5)
+        distthr               = BOXFRAC*real(ldim_refs(1))
+        if( present(distthr_in) ) distthr = distthr_in/PICKER_SHRINK
+        ! read and shrink references
+        allocate( refs(nrefs), refs_refine(nrefs), sxx(nrefs), sxx_refine(nrefs), stat=alloc_stat )
         call alloc_err( "In: simple_picker :: init_picker, 1", alloc_stat)
         do iref=1,nrefs
             call refs(iref)%new(ldim_refs, smpd_shrunken)
-            call refs(iref)%read(refsname, iref)
+            call refs_refine(iref)%new(ldim_refs_refine, smpd_shrunken_refine)
+            call refimg%new([orig_box,orig_box,1], smpd)
+            call refimg%read(refsname, iref)
+            call refimg%fwd_ft
+            call refimg%clip(refs(iref))
+            call refimg%clip(refs_refine(iref))
+            call refs(iref)%bwd_ft
+            call refs_refine(iref)%bwd_ft
             call refs(iref)%mask(msk, 'hard')
+            call refs_refine(iref)%mask(msk_refine, 'hard')
             call refs(iref)%prenorm4real_corr(sxx(iref))
+            call refs_refine(iref)%prenorm4real_corr(sxx_refine(iref))
         end do
         ! pre-process micrograph
         call micrograph%fwd_ft
         call micrograph%bp(0., lp)
         call mic_shrunken%new(ldim_shrink, smpd_shrunken)
+        call mic_shrunken_refine%new(ldim_shrink_refine, smpd_shrunken_refine)
         call micrograph%clip(mic_shrunken)
+        call micrograph%clip(mic_shrunken_refine)
         call mic_shrunken%bwd_ft
+        call mic_shrunken_refine%bwd_ft
         if( DEBUG ) call mic_shrunken%write('shrunken.mrc')
     end subroutine init_picker
 
@@ -89,9 +111,8 @@ contains
         call refine_positions
         call estimate_ssnr
         ! bring back coordinates to original sampling
-        peak_positions   = shrink*peak_positions
-        backgr_positions = shrink*backgr_positions
-        ! write output
+        peak_positions_refined = nint(PICKER_SHRINK_REFINE)*peak_positions_refined
+        backgr_positions       = nint(PICKER_SHRINK_REFINE)*backgr_positions
         call write_boxfile
     end subroutine exec_picker
 
@@ -102,8 +123,8 @@ contains
         real,    allocatable :: target_corrs(:), spec(:)
         write(*,'(a)') '>>> EXTRACTING PEAKS & BACKGROUND'
         ntargets = 0
-        do xind=0,nx,offset
-            do yind=0,ny,offset
+        do xind=0,nx,PICKER_OFFSET
+            do yind=0,ny,PICKER_OFFSET
                 ntargets = ntargets + 1
             end do
         end do
@@ -118,8 +139,8 @@ contains
         ntargets         = 0
         corrmax          = -1.
         corrmin          = 1.
-        do xind=0,nx,offset
-            do yind=0,ny,offset
+        do xind=0,nx,PICKER_OFFSET
+            do yind=0,ny,PICKER_OFFSET
                 ntargets = ntargets + 1
                 target_positions(ntargets,:) = [xind,yind]
                 call mic_shrunken%window([xind,yind], ldim_refs(1), ptcl_target)
@@ -244,36 +265,48 @@ contains
         integer                  :: ipeak, xrange(2), yrange(2), xind, yind, ref
         type(image), allocatable :: target_imgs(:,:)
         real,        allocatable :: target_corrs(:,:)
-        real                     :: corr
+        real                     :: corr, prev_corr
         write(*,'(a)') '>>> REFINING POSITIONS'
+        ! bring back coordinates to refinement sampling
+        allocate( peak_positions_refined(npeaks,2), source=nint(PICKER_SHRINK/PICKER_SHRINK_REFINE)*peak_positions)
+        backgr_positions = nint(PICKER_SHRINK/PICKER_SHRINK_REFINE)*backgr_positions
         do ipeak=1,npeaks
             if( selected_peak_positions(ipeak) )then
-                call srch_range(peak_positions(ipeak,:))
-                ref = refmat(peak_positions(ipeak,1),peak_positions(ipeak,2))
+                ! best match in crude first scan
+                ref       = refmat(peak_positions(ipeak,1),peak_positions(ipeak,2))
+                prev_corr = corrmat(peak_positions(ipeak,1),peak_positions(ipeak,2))
+                ! refinement range
+                call srch_range(peak_positions_refined(ipeak,:))
                 allocate(target_imgs(xrange(1):xrange(2),yrange(1):yrange(2)),&
                          target_corrs(xrange(1):xrange(2),yrange(1):yrange(2)))
+                ! extract image matrix
                 do xind=xrange(1),xrange(2)
                     do yind=yrange(1),yrange(2)
-                        call mic_shrunken%window([xind,yind], ldim_refs(1), target_imgs(xind,yind))
+                        call mic_shrunken_refine%window([xind,yind], ldim_refs_refine(1), target_imgs(xind,yind))
                     end do
                 end do
+                ! correlate
                 !$omp parallel do schedule(auto) default(shared) private(xind,yind)
                 do xind=xrange(1),xrange(2)
                     do yind=yrange(1),yrange(2)
-                        target_corrs(xind,yind) = refs(ref)%real_corr_prenorm(target_imgs(xind,yind), sxx(ref))
+                        target_corrs(xind,yind) =&
+                        &refs_refine(ref)%real_corr_prenorm(target_imgs(xind,yind), sxx_refine(ref))
                     end do
                 end do
                 !$omp end parallel do
+                ! find peak
                 corr = -1
                 do xind=xrange(1),xrange(2)
                     do yind=yrange(1),yrange(2)
                         call target_imgs(xind,yind)%kill
                         if( target_corrs(xind,yind) > corr )then
-                            peak_positions(ipeak,:) = [xind,yind]
+                            peak_positions_refined(ipeak,:) = [xind,yind]
                             corr = target_corrs(xind,yind)
                         endif
                     end do
                 end do
+                ! exclude peak if corr does not improve with refinement
+                if( corr < prev_corr ) selected_peak_positions(ipeak) = .false.
                 deallocate(target_imgs, target_corrs)
             endif
         end do
@@ -282,10 +315,10 @@ contains
 
             subroutine srch_range( pos )
                 integer, intent(in) :: pos(2)
-                xrange(1) = max(0,  pos(1) - offset)
-                xrange(2) = min(nx, pos(1) + offset)
-                yrange(1) = max(0,  pos(2) - offset)
-                yrange(2) = min(ny, pos(2) + offset)
+                xrange(1) = max(0,         pos(1) - PICKER_OFFSET*nint(PICKER_SHRINK/PICKER_SHRINK_REFINE))
+                xrange(2) = min(nx_refine, pos(1) + PICKER_OFFSET*nint(PICKER_SHRINK/PICKER_SHRINK_REFINE))
+                yrange(1) = max(0,         pos(2) - PICKER_OFFSET*nint(PICKER_SHRINK/PICKER_SHRINK_REFINE))
+                yrange(2) = min(ny_refine, pos(2) + PICKER_OFFSET*nint(PICKER_SHRINK/PICKER_SHRINK_REFINE))
             end subroutine srch_range
 
     end subroutine refine_positions
@@ -302,8 +335,8 @@ contains
         nsig = 0
         do ipeak=1,npeaks
             if( selected_peak_positions(ipeak) )then
-                nsig = nsig + 1            
-                call mic_shrunken%window(peak_positions(ipeak,:), ldim_refs(1), ptcl_target)
+                nsig = nsig + 1      
+                call mic_shrunken_refine%window(peak_positions_refined(ipeak,:), ldim_refs_refine(1), ptcl_target)
                 call ptcl_target%fwd_ft
                 spec = ptcl_target%spectrum('power')
                 pscores(nsig) = sum(spec)
@@ -342,32 +375,6 @@ contains
             end do
             write(*,'(a,1x,I5)') 'peak positions left after outlier exclusion: ', count(selected_peak_positions)
         endif
-        ! ! second, estimate noise spectrum
-        ! nnoise = 0
-        ! do xind=0,nx,ldim_refs(1)/2
-        !     do yind=0,ny,ldim_refs(1)/2
-        !         if( is_a_peak(xind,yind) )then
-        !         else
-        !             nnoise = nnoise + 1
-        !             call mic_shrunken%window(backgr_positions(nnoise,:), ldim_refs(1), ptcl_target)
-        !             call ptcl_target%fwd_ft
-        !             spec = ptcl_target%spectrum('power')
-        !             if( allocated(noise_spec) )then
-        !                 noise_spec = noise_spec + spec
-        !             else
-        !                 allocate(noise_spec(size(spec)), source=spec)
-        !             endif
-        !             call ptcl_target%kill
-        !             deallocate(spec)
-        !         endif
-        !     end do
-        ! end do
-        ! noise_spec = noise_spec/real(nnoise)
-        ! allocate(ssnr(size(noise_spec)))
-        ! ssnr = 0.
-        ! where(noise_spec > 0.)
-        !     ssnr = sig_spec/noise_spec
-        ! end where
         write(*,'(a,1x,f7.3)') '>>> SPECTRAL SCORE:', sum(sig_spec)/real(size(sig_spec))
     end subroutine estimate_ssnr
 
@@ -377,8 +384,8 @@ contains
         open(unit=funit, status='REPLACE', action='WRITE', file=boxname)
         do ipeak=1,npeaks
             if( selected_peak_positions(ipeak) )then             
-                write(funit,'(I7,I7,I7,I7,I7)') peak_positions(ipeak,1),&
-                peak_positions(ipeak,2), orig_box, orig_box, -3
+                write(funit,'(I7,I7,I7,I7,I7)') peak_positions_refined(ipeak,1),&
+                peak_positions_refined(ipeak,2), orig_box, orig_box, -3
             endif
         end do
         close(funit)
@@ -389,8 +396,8 @@ contains
         funit = get_fileunit()
         open(unit=funit, status='REPLACE', action='WRITE', file='background.box')
         nbackgr = 0
-        do xind=0,nx,ldim_refs(1)/2
-            do yind=0,ny,ldim_refs(1)/2
+        do xind=0,nx,ldim_refs_refine(1)/2
+            do yind=0,ny,ldim_refs_refine(1)/2
                 if( is_a_peak(xind,yind) )then
                 else
                     nbackgr = nbackgr + 1
@@ -404,12 +411,17 @@ contains
     subroutine kill_picker
         integer :: iref
         if( allocated(micname) )then
-            deallocate(selected_peak_positions,is_a_peak,sxx,corrmat,specscores)
-            deallocate(peak_positions,refmat,backgr_positions,micname,refsname)
+            call micrograph%kill
+            call mic_shrunken%kill
+            call mic_shrunken_refine%kill
+            call ptcl_target%kill
+            deallocate(selected_peak_positions,is_a_peak,sxx,sxx_refine,corrmat,specscores)
+            deallocate(peak_positions,peak_positions_refined,refmat,backgr_positions,micname,refsname)
             do iref=1,nrefs
                 call refs(iref)%kill
+                call refs_refine(iref)%kill
             end do
-            deallocate(refs)
+            deallocate(refs, refs_refine)
         endif
     end subroutine kill_picker
 

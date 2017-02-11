@@ -5052,9 +5052,9 @@ contains
 
     !>  \brief  rotation of image by quadratic interpolation (from spider)
     subroutine rtsq(self_in, ang, shxi, shyi, self_out)
-        class(image), intent(inout)           :: self_in
-        class(image), intent(inout), optional :: self_out
-        real, intent(in)                      :: ang,shxi,shyi
+        class(image),           intent(inout) :: self_in
+        real,                   intent(in)    :: ang,shxi,shyi
+        class(image), optional, intent(inout) :: self_out
         type(image) :: self_here
         real    :: shx,shy,ry1,rx1,ry2,rx2,cod,sid,xi
         real    :: fixcenmshx,fiycenmshy

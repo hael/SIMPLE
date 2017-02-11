@@ -8,6 +8,8 @@ implicit none
 public :: unblur_iter
 private
 
+logical, parameter :: DEBUG = .true.
+
 type :: unblur_iter
     private
     character(len=4)      :: speckind = 'sqrt'
@@ -68,11 +70,20 @@ contains
             call unblur_calc_sums_tomo(frame_counter, p%time_per_frame, self%moviesum, self%moviesum_corrected, self%moviesum_ctf)
         else
             call unblur_calc_sums(self%moviesum, self%moviesum_corrected, self%moviesum_ctf)
+            if( DEBUG )then
+                print *, 'ldim(moviesum):           ', self%moviesum%get_ldim()
+                print *, 'ldim(moviesum_corrected): ', self%moviesum_corrected%get_ldim()
+                print *, 'ldim(moviesum_ctf):       ', self%moviesum_ctf%get_ldim()
+            endif
         endif
         ! generate power-spectra
         self%pspec_sum         = self%moviesum%mic2spec(p%pspecsz, self%speckind)
         self%pspec_ctf         = self%moviesum_ctf%mic2spec(p%pspecsz, self%speckind)
         self%pspec_half_n_half = self%pspec_sum%before_after(self%pspec_ctf)
+        ! write output
+        call self%moviesum_corrected%write(self%moviename_intg)
+        call self%moviesum_ctf%write(self%moviename_forctf)
+        call self%pspec_half_n_half%write(self%moviename_pspec)
         ! generate thumbnail
         ldim          = self%moviesum_corrected%get_ldim()
         scale         = real(p%pspecsz)/real(ldim(1))
@@ -83,10 +94,6 @@ contains
         call self%moviesum_corrected%fwd_ft
         call self%moviesum_corrected%clip(self%thumbnail)
         call self%thumbnail%bwd_ft
-        ! write output
-        call self%moviesum_corrected%write(self%moviename_intg)
-        call self%moviesum_ctf%write(self%moviename_forctf)
-        call self%pspec_half_n_half%write(self%moviename_pspec)
         call self%thumbnail%write(self%moviename_thumb)
         ! destruct
         call self%moviesum%kill

@@ -179,7 +179,6 @@ numlen
 nvalid
 nvars
 nvox
-offset
 part
 pcasz
 ppca
@@ -266,7 +265,6 @@ phranlp
 power
 scale
 sherr
-shrink
 smpd
 snr
 thres

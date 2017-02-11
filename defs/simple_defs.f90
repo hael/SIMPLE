@@ -66,6 +66,11 @@ type, bind(c) :: systemDetails
 #endif
 end type systemDetails
 
+! constants for picker
+real,    parameter :: PICKER_SHRINK        = 4.
+real,    parameter :: PICKER_SHRINK_REFINE = 2.
+integer, parameter :: PICKER_OFFSET        = 3
+
 ! endianness conversion
 character(len=:), allocatable :: endconv
 

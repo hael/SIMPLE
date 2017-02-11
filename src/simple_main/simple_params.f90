@@ -217,7 +217,6 @@ type :: params
     integer :: nvalid=0
     integer :: nvars=30
     integer :: nvox=0
-    integer :: offset=3
     integer :: part=1
     integer :: pcasz=0
     integer :: ppca=0
@@ -307,7 +306,6 @@ type :: params
     real    :: power=2.
     real    :: scale=1.
     real    :: sherr=0.
-    real    :: shrink=1.0
     real    :: smpd=2.
     real    :: snr
     real    :: thres=0.
@@ -531,7 +529,6 @@ contains
         call check_iarg('nrestarts',      self%nrestarts)
         call check_iarg('nspace',         self%nspace)
         call check_iarg('nstates',        self%nstates)
-        call check_iarg('offset',         self%offset)
         call check_iarg('set_gpu',        self%set_gpu)
         call check_iarg('class',          self%class)
         call check_iarg('nparts',         self%nparts)
@@ -616,7 +613,6 @@ contains
         call check_rarg('power',          self%power)
         call check_rarg('scale',          self%scale)
         call check_rarg('sherr',          self%sherr)
-        call check_rarg('shrink',         self%shrink)
         call check_rarg('smpd',           self%smpd)
         call check_rarg('snr',            self%snr)
         call check_rarg('thres',          self%thres)

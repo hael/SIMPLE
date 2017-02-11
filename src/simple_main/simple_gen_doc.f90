@@ -324,7 +324,7 @@ contains
     end subroutine print_doc_oristats
 
     subroutine print_doc_pick
-        write(*,'(A)') 'is a template-based picker program under development'
+        write(*,'(A)') 'is a template-based picker program'
         stop
     end subroutine print_doc_pick
 
@@ -337,6 +337,11 @@ contains
         write(*,'(A)') 'is a program for generating powerspectra from a stack or filetable'
         stop
     end subroutine print_doc_powerspecs
+
+    subroutine print_doc_preproc
+        write(*,'(A)') 'is a program that executes unblur, ctffind & pick in sequence'
+        stop
+    end subroutine print_doc_preproc
 
     subroutine print_doc_prime2D
         write(*,'(A)', advance='no') 'is a reference-free 2D alignment/clustering algorithm adopted from the prime3D p'
@@ -665,6 +670,7 @@ contains
         write(*,'(A)') 'integrate_movies'
         write(*,'(A)') 'makedeftab'
         write(*,'(A)') 'makeoris'
+        write(*,'(A)') 'makepickrefs'
         write(*,'(A)') 'map2ptcls'
         write(*,'(A)') 'mask'
         write(*,'(A)') 'masscen'
@@ -682,6 +688,7 @@ contains
         write(*,'(A)') 'pick'
         write(*,'(A)') 'postproc_vol'
         write(*,'(A)') 'powerspecs'
+        write(*,'(A)') 'preproc'
         write(*,'(A)') 'prime2D'
         write(*,'(A)') 'prime2D_init'
         write(*,'(A)') 'prime3D'
@@ -722,6 +729,7 @@ contains
         write(*,'(A)') 'ctffind'
         write(*,'(A)') 'find_nnimgs'
         write(*,'(A)') 'ini3D_from_cavgs'
+        write(*,'(A)') 'pick'
         write(*,'(A)') 'prime2D'
         write(*,'(A)') 'prime2D_init'
         write(*,'(A)') 'prime3D'
