@@ -305,8 +305,6 @@ contains
                         endif
                     end do
                 end do
-                ! exclude peak if corr does not improve with refinement
-                if( corr < prev_corr ) selected_peak_positions(ipeak) = .false.
                 deallocate(target_imgs, target_corrs)
             endif
         end do

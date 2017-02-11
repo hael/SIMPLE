@@ -46,7 +46,7 @@ end type qsys_ctrl
 
 interface qsys_ctrl
     module procedure constructor
-end interface 
+end interface qsys_ctrl
 
 contains
     
@@ -206,18 +206,23 @@ contains
 
     ! SUBMISSION TO QSYS
 
-    subroutine submit_scripts( self )
+    subroutine submit_scripts( self, lmask_streaming )
         use simple_filehandling, only: get_fileunit, fopen_err
         use simple_syscalls,     only: exec_cmdline
         use simple_qsys_local,   only: qsys_local
-        class(qsys_ctrl),      intent(inout) :: self
-        class(qsys_base),      pointer       :: pmyqsys
-        character(len=STDLEN), parameter     :: master_submit_script = './qsys_submit_jobs'
+        class(qsys_ctrl),  intent(inout) :: self
+        logical, optional, intent(in)    :: lmask_streaming(self%fromto_part(1):self%fromto_part(2))
+        class(qsys_base),      pointer   :: pmyqsys
+        character(len=STDLEN), parameter :: master_submit_script = './qsys_submit_jobs'
         integer :: ipart, fnr, file_stat, chmod_stat, ios
-        logical :: submit_or_not(self%fromto_part(1):self%fromto_part(2)), err
+        logical :: submit_or_not(self%fromto_part(1):self%fromto_part(2)), err, lmask_streaming_present
+        lmask_streaming_present = present(lmask_streaming)
         ! make a submission mask
         submit_or_not = .false.
         do ipart=self%fromto_part(1),self%fromto_part(2)
+            if( lmask_streaming_present )then
+                if( lmask_streaming(ipart) ) cycle
+            endif
             if( .not. self%jobs_submitted(ipart) .and. self%ncomputing_units_avail > 0 )then
                 submit_or_not(ipart) = .true.
                 ! flag job submitted
@@ -274,12 +279,13 @@ contains
 
     ! THE MASTER SCHEDULER
 
-    subroutine schedule_jobs( self )
-        class(qsys_ctrl), intent(inout) :: self
+    subroutine schedule_jobs( self, lmask_streaming )
+        class(qsys_ctrl),  intent(inout) :: self
+        logical, optional, intent(in)    :: lmask_streaming(self%fromto_part(1):self%fromto_part(2))
         do
             if( all(self%jobs_done) ) exit
             call self%update_queue
-            call self%submit_scripts
+            call self%submit_scripts(lmask_streaming)
             call sleep(SHORTTIME)
         end do
     end subroutine schedule_jobs

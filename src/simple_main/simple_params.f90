@@ -759,8 +759,9 @@ contains
         if( self%fny > 0. ) self%tofny = int(self%dstep/self%fny) ! Nyqvist Fourier index
         if( cline%defined('lp') )then                             ! override dynlp=yes and lpstop
             self%dynlp = 'no'
-            if( self%lp < self%lpstop )  self%lpstop  = self%lp
-            if( self%lpstart > self%lp ) self%lpstart = self%lp
+            ! TAKEN OUT BECAUSE THE PREPROC IS UNHAPPY
+            ! if( self%lp < self%lpstop )  self%lpstop  = self%lp
+            ! if( self%lpstart > self%lp ) self%lpstart = self%lp
         endif
         ! set default ring2 value
         if( .not. cline%defined('ring2') )then
