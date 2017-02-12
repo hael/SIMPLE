@@ -33,9 +33,7 @@ contains
         ! constants
         logical,               parameter   :: DEBUG = .true.
         character(len=STDLEN), parameter   :: FILETABNAME='movieftab_preproc_stream.txt'
-        integer,               parameter   :: SHORTTIME = 5
-        ! commanders
-        type(preproc_commander)            :: xpreproc
+        integer,               parameter   :: SHORTTIME = 15
         ! other vars
         character(len=STDLEN), allocatable :: movienames(:)
         type(params)                       :: p_master
@@ -52,6 +50,7 @@ contains
         ! set defaults
         p_master%split_mode = 'singles'
         p_master%numlen     = 5
+        call cline%set('numlen', real(p_master%numlen))
         if( cline%defined('fbody') )then
             call cline%set('fbody', trim(p_master%dir_target)//'/'//trim(p_master%fbody))
         else
@@ -74,9 +73,11 @@ contains
             call create_individual_filetables       ! 1-of-1 ftab but index comes from part
             call setup_distr_env                    ! just to reduce complexity
             ! manage job scheduling
-            call qscripts%update_queue
-            call qscripts%submit_scripts
-            ! call qsys_cleanup(p_master)
+            if( qscripts%exists() )then
+                call qscripts%update_queue
+                call qscripts%submit_scripts
+                call qscripts%print_jobs_status
+            endif
             call sleep(SHORTTIME)
         end do
 
@@ -104,18 +105,14 @@ contains
                 ! get the old jobs status
                 if( qscripts%exists() ) call qscripts%get_jobs_status( jobs_done, jobs_submitted )
                 ! setup the environment for distributed execution
-                call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr)
+                call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr, stream=.true.)
                 ! put back the old jobs status
                 if( allocated(jobs_done) ) call qscripts%set_jobs_status( jobs_done, jobs_submitted )
                 ! prepare job description
                 call cline%gen_job_descr(job_descr)
                 ! prepare scripts
-
-                ! call qsys_cleanup(p_master)
-
                 if( nmovies > nmovies_prev )then
                     call qscripts%generate_scripts(job_descr, p_master%ext, myq_descr, part_params=part_params)
-                    call qscripts%print_jobs_status
                 endif
             end subroutine setup_distr_env
 

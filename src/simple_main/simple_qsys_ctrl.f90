@@ -26,7 +26,8 @@ type qsys_ctrl
     integer                        :: ncomputing_units       = 0 !< number of computing units
     integer                        :: ncomputing_units_avail = 0 !< number of available units
     integer                        :: numlen = 0                 !< length of padded number string
-    logical                        :: existence = .false.           !< indicates existence
+    logical                        :: stream = .false.           !< stream flag
+    logical                        :: existence = .false.        !< indicates existence
   contains
     ! CONSTRUCTOR
     procedure          :: new
@@ -60,18 +61,19 @@ contains
     ! CONSTRUCTORS
     
     !>  \brief  is a constructor
-    function constructor( exec_binary, qsys_obj, parts, fromto_part, ncomputing_units ) result( self )
+    function constructor( exec_binary, qsys_obj, parts, fromto_part, ncomputing_units, stream ) result( self )
         character(len=*),          intent(in)    :: exec_binary      !< the binary that we want to execute in parallel
         class(qsys_base),  target, intent(in)    :: qsys_obj         !< the object that defines the qeueuing system
         integer,           target, intent(in)    :: parts(:,:)       !< defines the start_ptcl/stop_ptcl ranges  
         integer,                   intent(in)    :: fromto_part(2)   !< defines the range of partitions controlled by this object
         integer,                   intent(in)    :: ncomputing_units !< number of computing units (<= the number of parts controlled)
+        logical,                   intent(in)    :: stream           !< stream flag
         type(qsys_ctrl) :: self
-        call self%new(exec_binary, qsys_obj, parts, fromto_part, ncomputing_units)
+        call self%new(exec_binary, qsys_obj, parts, fromto_part, ncomputing_units, stream )
     end function constructor
     
     !>  \brief  is a constructor
-    subroutine new( self, exec_binary, qsys_obj, parts, fromto_part, ncomputing_units )
+    subroutine new( self, exec_binary, qsys_obj, parts, fromto_part, ncomputing_units, stream )
         use simple_jiffys, only: alloc_err
         class(qsys_ctrl),          intent(inout) :: self             !< the instance
         character(len=*),          intent(in)    :: exec_binary      !< the binary that we want to execute in parallel
@@ -79,16 +81,22 @@ contains
         integer,           target, intent(in)    :: parts(:,:)       !< defines the start_ptcl/stop_ptcl ranges  
         integer,                   intent(in)    :: fromto_part(2)   !< defines the range of partitions controlled by this object
         integer,                   intent(in)    :: ncomputing_units !< number of computing units (<= the number of parts controlled)
+        logical,                   intent(in)    :: stream           !< stream flag
         integer :: alloc_stat, ipart
         call self%kill
+        self%stream                 = stream
         self%exec_binary            =  exec_binary
         self%myqsys                 => qsys_obj
         self%parts                  => parts
         self%fromto_part            =  fromto_part
         self%nparts_tot             =  size(parts,1)
-        self%numlen                 =  len(int2str(self%nparts_tot))
         self%ncomputing_units       =  ncomputing_units        
         self%ncomputing_units_avail =  ncomputing_units
+        if( stream )then
+            self%numlen = 5
+        else
+            self%numlen =  len(int2str(self%nparts_tot))
+        endif
         ! allocate
         allocate(   self%jobs_done(fromto_part(1):fromto_part(2)),&
                     self%jobs_submitted(fromto_part(1):fromto_part(2)),&
@@ -96,7 +104,10 @@ contains
         call alloc_err("In: simple_qsys_ctrl :: new", alloc_stat)
         self%jobs_done      = .false.
         self%jobs_submitted = .false.
-        self%script_names   = ''
+        ! create script names
+        do ipart=fromto_part(1),fromto_part(2)
+            self%script_names(ipart) = 'distr_simple_script_'//int2str_pad(ipart,self%numlen)
+        end do
         ! get pwd
         call get_environment_variable('PWD', self%pwd)
         self%existence = .true.
@@ -126,7 +137,7 @@ contains
         class(qsys_ctrl), intent(in) :: self
         integer :: i
         do i=1,size(self%jobs_submitted)
-            print *, i, 'submitted: ', self%jobs_submitted, 'done: ', self%jobs_done
+            print *, i, 'submitted: ', self%jobs_submitted(i), 'done: ', self%jobs_done(i)
         end do
     end subroutine print_jobs_status
 
@@ -201,13 +212,12 @@ contains
             end do
         endif
         ! when we generate the scripts we also reset the number of available computing units
-!!!!!!!!!!! COMMENTED OUT 4 NOW
-        ! self%ncomputing_units_avail = self%ncomputing_units
+        if( .not. self%stream ) self%ncomputing_units_avail = self%ncomputing_units
     end subroutine generate_scripts
 
     !>  \brief  private part script generator
     subroutine generate_script( self, job_descr, ipart, q_descr )
-        use simple_filehandling, only: get_fileunit
+        use simple_filehandling, only: get_fileunit, file_exists
         class(qsys_ctrl), intent(inout) :: self
         class(chash),     intent(in)    :: job_descr
         integer,          intent(in)    :: ipart
@@ -215,7 +225,9 @@ contains
         character(len=512) :: io_msg
         integer :: ios, funit
         funit = get_fileunit()
-        self%script_names(ipart) = 'distr_simple_script_'//int2str_pad(ipart,self%numlen)
+        if( self%stream )then
+            if( file_exists(self%script_names(ipart)) ) return
+        endif
         open(unit=funit, file=self%script_names(ipart), iostat=ios, STATUS='REPLACE', action='WRITE', iomsg=io_msg)
         if( ios .ne. 0 )then
             close(funit)
@@ -267,7 +279,11 @@ contains
         ! make a submission mask
         submit_or_not = .false.
         do ipart=self%fromto_part(1),self%fromto_part(2)
-            if( .not. self%jobs_submitted(ipart) .and. self%ncomputing_units_avail > 0 )then
+            if( self%jobs_submitted(ipart) )then
+                ! do nothing
+                cycle
+            endif
+            if( self%ncomputing_units_avail > 0 )then
                 submit_or_not(ipart) = .true.
                 ! flag job submitted
                 self%jobs_submitted(ipart) = .true.
