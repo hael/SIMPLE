@@ -594,7 +594,7 @@ contains
             if( dist < 0.001 )then
                 ! CTF parameters are the same as for the previous particle & no update is needed
             else
-                ! CTF parameters have changed and ctf object &the reference central sections need to be updated
+                ! CTF parameters have changed and ctf object and the reference central sections need to be updated
                 tfun = ctf(p%smpd, kV, cs, fraca)
                 if( present(ref) )then
                     call pftcc%apply_ctf(tfun, dfx, dfy, angast, ref=ref)

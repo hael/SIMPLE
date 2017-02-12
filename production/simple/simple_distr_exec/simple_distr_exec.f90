@@ -13,12 +13,14 @@ use simple_strings, only: str_has_substr
 use simple_jiffys,  only: cmdline_err
 use simple_gen_doc
 use simple_restart
+use simple_commander_stream_wflows
 use simple_commander_distr_wflows
 use simple_commander_hlev_wflows
 implicit none
 
 ! DISTRIBUTED COMMANDERS
 ! pre-processing
+type(preproc_stream_commander)           :: xpreproc_stream
 type(unblur_distr_commander)             :: xunblur_distr
 type(unblur_tomo_movies_distr_commander) :: xunblur_tomo_distr
 type(ctffind_distr_commander)            :: xctffind_distr
@@ -51,6 +53,62 @@ call cmdline_err( cmdstat, cmdlen, arg, pos )
 prg = arg(pos+1:) ! this is the program name
 if( str_has_substr(prg, 'simple_') ) stop 'giving program names with simple_* prefix is depreciated'
 select case(prg)
+
+    ! PRE-PROCESSING STREAM, LINKING UNBLUR + CTFFIND + PICK
+
+    case( 'preproc' )
+        !==Program preproc
+        !
+        ! <preproc/begin>is a program that executes unblur, ctffind & pick in sequence
+        ! and in streaming mode as the microscope collects the data <preproc/end>
+        !
+        ! set required keys
+        keys_required(1)   = 'fbody'
+        keys_required(2)   = 'ext'
+        keys_required(3)   = 'smpd'
+        keys_required(4)   = 'kv'
+        keys_required(5)   = 'cs'
+        keys_required(6)   = 'fraca'
+        keys_required(7)   = 'refs'
+        keys_required(8)   = 'nthr'
+        keys_required(9)   = 'nparts'
+        ! set optional keys
+        keys_optional(1)   = 'nthr'
+        keys_optional(2)   = 'fbody'
+        keys_optional(3)   = 'lpstart'
+        keys_optional(4)   = 'lpstop'
+        keys_optional(5)   = 'trs'
+        keys_optional(6)   = 'exp_time'
+        keys_optional(7)   = 'dose_rate'
+        keys_optional(8)   = 'pspecsz_unblur'
+        keys_optional(9)   = 'pspecsz_ctffind'
+        keys_optional(10)  = 'numlen'
+        keys_optional(11)  = 'startit'
+        keys_optional(12)  = 'scale'
+        keys_optional(13)  = 'frameavg'
+        keys_optional(14)  = 'tomo'
+        keys_optional(15)  = 'hp_ctffind'
+        keys_optional(16)  = 'lp_ctffind'
+        keys_optional(17)  = 'lp_pick'
+        keys_optional(18)  = 'dfmin'
+        keys_optional(19)  = 'dfmax'
+        keys_optional(20)  = 'astigstep'
+        keys_optional(21)  = 'expastig'
+        keys_optional(22)  = 'phaseplate'
+        keys_optional(23)  = 'thres'
+        ! parse command line
+        if( describe ) call print_doc_preproc
+        call cline%parse(keys_required(:9), keys_optional(:23))
+        ! set defaults
+        if( .not. cline%defined('trs')             ) call cline%set('trs',        5.)
+        if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',   15.)
+        if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',     8.)
+        if( .not. cline%defined('pspecsz_unblur')  ) call cline%set('pspecsz',  512.)
+        if( .not. cline%defined('pspecsz_ctffind') ) call cline%set('pspecsz', 1024.)
+        if( .not. cline%defined('hp_ctffind')      ) call cline%set('hp',        30.)
+        if( .not. cline%defined('lp_ctffind')      ) call cline%set('lp',         5.)
+        if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',   20.)
+        call xpreproc_stream%execute(cline)
 
     ! UNBLUR_MOVIES
 

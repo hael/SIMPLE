@@ -79,6 +79,8 @@ end type extract_commander
 
 contains
 
+    ! UNBLUR + CTFFIND + PICK IN SEQUENCE
+
     subroutine exec_preproc( self, cline )
         use simple_unblur_iter,  only: unblur_iter
         use simple_ctffind_iter, only: ctffind_iter
@@ -148,7 +150,6 @@ contains
             &fname_ctffind_ctrl, fname_ctffind_output, os)
             p%lp      = p%lp_pick
             call piter%iterate(cline, p, imovie, movie_counter, moviename_intg)
-            write(*,'(f4.0,1x,a)') 100.*(real(movie_counter)/real(ntot)), 'percent of the movies processed'
         end do
         ! write CTF parameters in append mode
         do i=1,os%get_noris()

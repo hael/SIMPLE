@@ -42,6 +42,7 @@ type :: image
     procedure          :: mic2spec
     procedure          :: boxconv
     procedure          :: window
+    procedure          :: window_slim
     procedure          :: win2arr
     procedure          :: extr_pixels
     procedure          :: corner
@@ -500,6 +501,19 @@ contains
         self_out%rmat = 0.
         self_out%rmat(xboxrange(1):xboxrange(2),yboxrange(1):yboxrange(2),1) = self_in%rmat(fromc(1):toc(1),fromc(2):toc(2),1)
     end subroutine window
+
+    !>  \brief  extracts a particle image from a box as defined by EMAN 1.9
+    subroutine window_slim( self_in, coord, box, self_out, noutside )
+        class(image),      intent(in)    :: self_in
+        integer,           intent(in)    :: coord(2), box
+        type(image),       intent(inout) :: self_out
+        integer, optional, intent(inout) :: noutside
+        integer :: fromc(2), toc(2)
+        fromc = coord + 1         ! compensate for the c-range that starts at 0
+        toc   = fromc + (box - 1) ! the lower left corner is 1,1
+        self_out%rmat = 0.
+        self_out%rmat(1:box,1:box,1) = self_in%rmat(fromc(1):toc(1),fromc(2):toc(2),1)
+    end subroutine window_slim
 
     !>  \brief  extracts a small window into an array (circular indexing)
     function win2arr( self, i, j, k, winsz ) result( pixels )

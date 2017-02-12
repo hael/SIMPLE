@@ -37,7 +37,6 @@ public :: prime3D_init_distr_commander
 public :: prime3D_distr_commander
 public :: shellweight3D_distr_commander
 public :: recvol_distr_commander
-
 private
 
 type, extends(commander_base) :: unblur_distr_commander

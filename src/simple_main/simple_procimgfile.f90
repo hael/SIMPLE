@@ -299,8 +299,8 @@ contains
     subroutine norm_imgfile( fname2norm, fname, hfun )
         character(len=*), intent(in) :: fname2norm, fname !< filenames
         character(len=*), intent(in), optional :: hfun    !< hidden unit function for initialization
-        type(image)   :: img
-        integer       :: i, n, ldim(3)
+        type(image) :: img
+        integer     :: i, n, ldim(3)
         call find_ldim_nptcls(fname2norm, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'norm_imgfile' )

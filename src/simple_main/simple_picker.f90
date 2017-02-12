@@ -139,11 +139,12 @@ contains
         ntargets         = 0
         corrmax          = -1.
         corrmin          = 1.
+        call ptcl_target%new(ldim_refs, smpd_shrunken)
         do xind=0,nx,PICKER_OFFSET
             do yind=0,ny,PICKER_OFFSET
                 ntargets = ntargets + 1
                 target_positions(ntargets,:) = [xind,yind]
-                call mic_shrunken%window([xind,yind], ldim_refs(1), ptcl_target)
+                call mic_shrunken%window_slim([xind,yind], ldim_refs(1), ptcl_target)
                 !$omp parallel do schedule(auto) default(shared) private(iref)
                 do iref=1,nrefs
                     corrs(iref) = refs(iref)%real_corr_prenorm(ptcl_target, sxx(iref))
@@ -173,17 +174,18 @@ contains
             endif
         end do
         ! calculate spectral scores for background images
+        call ptcl_target%new(ldim_refs, smpd_shrunken)
         do xind=0,nx,ldim_refs(1)/2
             do yind=0,ny,ldim_refs(1)/2
                 if( is_a_peak(xind,yind) )then
                     ! this is a box with signal
                 else
                     ! this is a background candidate
-                    call mic_shrunken%window([xind,yind], ldim_refs(1), ptcl_target)
+                    call mic_shrunken%window_slim([xind,yind], ldim_refs(1), ptcl_target)
                     call ptcl_target%fwd_ft
                     spec = ptcl_target%spectrum('power')
                     specscores(xind,yind) = sum(spec)
-                    call ptcl_target%kill
+                    call ptcl_target%set_ft(.false.)
                     deallocate(spec)
                 endif
             end do
@@ -282,7 +284,8 @@ contains
                 ! extract image matrix
                 do xind=xrange(1),xrange(2)
                     do yind=yrange(1),yrange(2)
-                        call mic_shrunken_refine%window([xind,yind], ldim_refs_refine(1), target_imgs(xind,yind))
+                        call target_imgs(xind,yind)%new(ldim_refs_refine, smpd_shrunken_refine)
+                        call mic_shrunken_refine%window_slim([xind,yind], ldim_refs_refine(1), target_imgs(xind,yind))
                     end do
                 end do
                 ! correlate
@@ -331,10 +334,11 @@ contains
         n = count(selected_peak_positions)
         allocate(pscores(n))
         nsig = 0
+        call ptcl_target%new(ldim_refs_refine, smpd_shrunken_refine)
         do ipeak=1,npeaks
             if( selected_peak_positions(ipeak) )then
                 nsig = nsig + 1      
-                call mic_shrunken_refine%window(peak_positions_refined(ipeak,:), ldim_refs_refine(1), ptcl_target)
+                call mic_shrunken_refine%window_slim(peak_positions_refined(ipeak,:), ldim_refs_refine(1), ptcl_target)
                 call ptcl_target%fwd_ft
                 spec = ptcl_target%spectrum('power')
                 pscores(nsig) = sum(spec)
@@ -343,7 +347,7 @@ contains
                 else
                     allocate(sig_spec(size(spec)), source=spec)
                 endif
-                call ptcl_target%kill
+                call ptcl_target%set_ft(.false.)
                 deallocate(spec)
             endif
         end do
@@ -352,9 +356,10 @@ contains
             call sortmeans(pscores, MAXKMIT, means, labels)
             call sortmeans(means,   MAXKMIT, means_bin, labels_bin)
             if( DOPRINT )then
-               do k=1,NMEANS
-                  write(*,*) 'quanta: ', k, 'mean: ', means(k), 'pop: ', count(labels == k), 'bin: ', labels_bin(k)
-               end do
+                write(*,'(a)') '>>> SIGNAL STATISTICS'
+                do k=1,NMEANS
+                    write(*,*) 'quanta: ', k, 'mean: ', means(k), 'pop: ', count(labels == k), 'bin: ', labels_bin(k)
+                end do
             endif
             ! delete the outliers
             nsig = 0

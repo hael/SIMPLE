@@ -170,54 +170,55 @@ comlin_corr: simple_comlin_corr.o       ;
 
 comlin_srch: simple_comlin_srch.o       ;
 
-matcher: simple_picker.o                \
-         simple_hadamard_common.o       \
-         simple_cartft_corrcalc.o       \
-         simple_scatter_orisrch.o       \
-         simple_cftcc_srch.o            \
-         simple_cont3D_matcher.o        \
-         simple_hadamard2D_matcher.o    \
-         simple_hadamard3D_matcher.o    ;
+matcher: simple_picker.o                  \
+         simple_hadamard_common.o         \
+         simple_cartft_corrcalc.o         \
+         simple_scatter_orisrch.o         \
+         simple_cftcc_srch.o              \
+         simple_cont3D_matcher.o          \
+         simple_hadamard2D_matcher.o      \
+         simple_hadamard3D_matcher.o      ;
 
-s_other: simple_masker.o                \
-         simple_spatial_median.o        ;
+s_other: simple_masker.o                  \
+         simple_spatial_median.o          ;
          
-comlin_sym: simple_comlin_symsrch.o     \
-            simple_comlin_sym.o         ;
+comlin_sym: simple_comlin_symsrch.o       \
+            simple_comlin_sym.o           ;
 
-cluster_cavg: simple_matchpursuit.o     \
-              simple_cavgppca.o         \
-              simple_refinecluster.o    \
-              simple_clustercavg.o      ;
+cluster_cavg: simple_matchpursuit.o       \
+              simple_cavgppca.o           \
+              simple_refinecluster.o      \
+              simple_clustercavg.o        ;
 
-qsys: simple_qsys_base.o                \
-      simple_qsys_slurm.o               \
-      simple_qsys_local.o               \
-      simple_qsys_factory.o             \
-      simple_qsys_ctrl.o                \
-      simple_qsys_funs.o                ;
+qsys: simple_qsys_base.o                  \
+      simple_qsys_slurm.o                 \
+      simple_qsys_local.o                 \
+      simple_qsys_factory.o               \
+      simple_qsys_ctrl.o                  \
+      simple_qsys_funs.o                  ;
 
-masters: simple_rec_master.o             \
-         simple_symsrcher.o              \
-         simple_commander_base.o         \
-         simple_commander_volops.o       \
-         simple_commander_checks.o       \
-         simple_commander_comlin.o       \
-         simple_commander_distr.o        \
-         simple_commander_imgproc.o      \
-         simple_commander_mask.o         \
-         simple_commander_misc.o         \
-         simple_commander_oris.o         \
-         simple_unblur_iter.o            \
-         simple_ctffind_iter.o           \
-         simple_pick_iter.o           \
-         simple_commander_preproc.o      \
-         simple_commander_prime2D.o      \
-         simple_commander_prime3D.o      \
-         simple_commander_rec.o          \
-         simple_commander_sim.o          \
-         simple_commander_distr_wflows.o \
-         simple_commander_hlev_wflows.o  ;
+masters: simple_rec_master.o              \
+         simple_symsrcher.o               \
+         simple_commander_base.o          \
+         simple_commander_volops.o        \
+         simple_commander_checks.o        \
+         simple_commander_comlin.o        \
+         simple_commander_distr.o         \
+         simple_commander_imgproc.o       \
+         simple_commander_mask.o          \
+         simple_commander_misc.o          \
+         simple_commander_oris.o          \
+         simple_unblur_iter.o             \
+         simple_ctffind_iter.o            \
+         simple_pick_iter.o               \
+         simple_commander_preproc.o       \
+         simple_commander_prime2D.o       \
+         simple_commander_prime3D.o       \
+         simple_commander_rec.o           \
+         simple_commander_sim.o           \
+         simple_commander_stream_wflows.o \
+         simple_commander_distr_wflows.o  \
+         simple_commander_hlev_wflows.o   ;
 
 src_code: ;
 

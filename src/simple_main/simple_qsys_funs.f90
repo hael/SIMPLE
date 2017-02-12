@@ -194,27 +194,29 @@ contains
         close(funit)
     end subroutine autogen_env_file
 
-    subroutine setup_qsys_env( p, qsys_fac, myqsys, parts, qscripts, myq_descr )
+    subroutine setup_qsys_env( p, qsys_fac, myqsys, parts, qscripts, myq_descr, lmask_stream )
         use simple_params,       only: params
         use simple_qsys_factory, only: qsys_factory
         use simple_qsys_base,    only: qsys_base
         use simple_qsys_ctrl,    only: qsys_ctrl
         use simple_chash,        only: chash
         use simple_map_reduce   ! use all in there
-        class(params),             intent(in)  :: p          !< parameters
-        class(qsys_factory),       intent(out) :: qsys_fac   !< qsystem factory instance
-        class(qsys_base), pointer, intent(out) :: myqsys     !< pointer to constructed object
-        integer, allocatable,      intent(out) :: parts(:,:) !< indices of partitions
-        class(qsys_ctrl),          intent(out) :: qscripts   !< qsys controller
-        class(chash),              intent(out) :: myq_descr  !< user-provided queue and job specifics from simple_distr_config.env
+        class(params),             intent(in)    :: p               !< parameters
+        class(qsys_factory),       intent(out)   :: qsys_fac        !< qsystem factory instance
+        class(qsys_base), pointer, intent(out)   :: myqsys          !< pointer to constructed object
+        integer, allocatable,      intent(out)   :: parts(:,:)      !< indices of partitions
+        class(qsys_ctrl),          intent(out)   :: qscripts        !< qsys controller
+        class(chash),              intent(out)   :: myq_descr       !< user-provided queue and job specifics from simple_distr_config.env
+        logical, optional,         intent(inout) :: lmask_stream(:) !< logical mask for streaming processing
         character(len=STDLEN)         :: simplepath_exec
         character(len=:), allocatable :: qsnam, tpi, hrs_str, mins_str, secs_str
-        integer                       :: io_stat, partsz, hrs, mins, secs
+        integer                       :: io_stat, partsz, hrs, mins, secs, ipart
         real                          :: rtpi, tot_time_sec
         integer, parameter            :: MAXNKEYS = 30
         logical, parameter            :: DEBUG = .true.
         if( .not. allocated(parts) )then
             ! generate partitions
+            if( allocated(parts) ) deallocate(parts)
             select case(p%split_mode)
                 case('even')
                     parts  = split_nobjs_even(p%nptcls, p%nparts)
@@ -222,6 +224,12 @@ contains
                 case('chunk')
                     parts  = split_nobjs_in_chunks(p%nptcls, p%chunksz)
                     partsz = p%chunksz
+                case('singles')
+                    allocate(parts(p%nptcls,2))
+                    do ipart=1,p%nptcls
+                        parts(ipart,:) = ipart
+                    end do
+                    partsz = 1
                 case DEFAULT
                     write(*,*) 'split_mode: ', trim(p%split_mode)
                     stop 'Unsupported split_mode'
@@ -252,7 +260,7 @@ contains
         call qsys_fac%new(qsnam, myqsys)
         ! create the user specific qsys and qsys controller (script generator)
         simplepath_exec = trim(myq_descr%get('simple_path'))//'/bin/simple_exec'
-        call qscripts%new( simplepath_exec, myqsys, parts, [1,p%nparts], p%ncunits )
+        call qscripts%new(simplepath_exec, myqsys, parts, [1,p%nparts], p%ncunits, lmask_stream)
         call myq_descr%set('job_cpus_per_task', int2str(p%nthr))   ! overrides env file
         call myq_descr%set('job_nparts',        int2str(p%nparts)) ! overrides env file
         deallocate(qsnam)

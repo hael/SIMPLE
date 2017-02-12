@@ -88,8 +88,8 @@ contains
         cs    = o%get('cs')
         fraca = o%get('fraca')
         dist = euclid([kV,cs,fraca,dfx,dfy,angast],&
-            [self%kv_prev,self%cs_prev,self%fraca_prev,self%dfx_prev,self%dfy_prev,self%angast_prev])
-        if( dist < 0.001 )then
+        [self%kv_prev,self%cs_prev,self%fraca_prev,self%dfx_prev,self%dfy_prev,self%angast_prev])
+        if( abs(dist) < 0.001 )then
             return
         else
             ! CTF parameters have changed, update CTF image
@@ -102,7 +102,8 @@ contains
             self%dfx_prev    = dfx
             self%dfy_prev    = dfy
             self%angast_prev = angast
-        endif   
+        endif
+
     end subroutine create_ctf_image
 
     !>  \brief  is for projecting a set
