@@ -40,7 +40,7 @@ contains
         integer     :: alloc_stat, ifoo, iref
         allocate(micname,  source=trim(micfname))
         allocate(refsname, source=trim(refsfname))
-        boxname = remove_abspath(fname_new_ext(micname,'box'))
+        boxname = fname_new_ext(micname,'box')
         smpd    = smpd_in
         lp      = 20.0
         if( present(lp_in) ) lp = lp_in

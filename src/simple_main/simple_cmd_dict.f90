@@ -49,6 +49,8 @@ contains
         call chdict%push('dir',           'directory')
         call chdict%push('dir_select',    'move selected files to here{selected}')
         call chdict%push('dir_reject',    'move rejected files to here{rejected}')
+        call chdict%push('dir_movies',    'grab *.mrc/*.mrcs files from here')
+        call chdict%push('dir_target',    'put output here')
         call chdict%push('discrete',      'discrete(yes|no){no}')
         call chdict%push('doclist',       'list of oritabs for different states')
         call chdict%push('dynlp',         'automatic resolution limit update(yes|no){yes}')

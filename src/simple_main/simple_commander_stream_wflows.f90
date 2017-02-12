@@ -26,9 +26,6 @@ contains
 
     ! PRE-PROCESS SINGLE-PARTICLE DDDs IN STREAMING MODE
 
-    ! fbody
-    ! ext
-
     subroutine exec_preproc_stream( self, cline )
         use simple_commander_preproc, only: preproc_commander
         class(preproc_stream_commander), intent(inout) :: self
@@ -55,6 +52,16 @@ contains
         ! set defaults
         p_master%split_mode = 'singles'
         p_master%numlen     = 5
+        if( cline%defined('fbody') )then
+            call cline%set('fbody', trim(p_master%dir_target)//'/'//trim(p_master%fbody))
+        else
+            call cline%set('fbody', trim(p_master%dir_target)//'/')
+        endif
+        ! make target directory
+        call exec_cmdline('mkdir -p '//trim(adjustl(p_master%dir_target)))
+
+        
+
         nmovies = 0
         do
             call create_stream_filetable
@@ -94,7 +101,7 @@ contains
 
             subroutine create_stream_filetable
                 ! generate the filetable via system call
-                call sys_gen_filetab(p_master%fbody, p_master%ext, FILETABNAME)
+                call sys_gen_mrcfiletab(p_master%dir_movies, FILETABNAME)
                 nmovies_prev = nmovies
                 nmovies      = nlines(FILETABNAME)
                 ! read the movienames back in

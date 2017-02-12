@@ -107,8 +107,10 @@ type :: params
     character(len=STDLEN) :: deftab=''
     character(len=STDLEN) :: dfunit='microns'
     character(len=STDLEN) :: dir=''
+    character(len=STDLEN) :: dir_movies=''
     character(len=STDLEN) :: dir_reject='rejected'
     character(len=STDLEN) :: dir_select='selected'
+    character(len=STDLEN) :: dir_target=''
     character(len=STDLEN) :: doclist=''
     character(len=STDLEN) :: endian='native'
     character(len=STDLEN) :: exp_doc=''
@@ -397,8 +399,10 @@ contains
         call check_carg('deftab',         self%deftab)
         call check_carg('dfunit',         self%dfunit)
         call check_carg('dir',            self%dir)
+        call check_carg('dir_movies',     self%dir_movies)
         call check_carg('dir_reject',     self%dir_reject)
         call check_carg('dir_select',     self%dir_select)
+        call check_carg('dir_target',     self%dir_target)
         call check_carg('discrete',       self%discrete)
         call check_carg('diverse',        self%diverse)
         call check_carg('doalign',        self%doalign)

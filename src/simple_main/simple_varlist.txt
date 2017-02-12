@@ -75,8 +75,10 @@ cwd
 deftab
 dfunit
 dir
+dir_movies
 dir_reject
 dir_select
+dir_target
 doclist
 endian
 exp_doc

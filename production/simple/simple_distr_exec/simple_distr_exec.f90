@@ -63,15 +63,16 @@ select case(prg)
         ! and in streaming mode as the microscope collects the data <preproc/end>
         !
         ! set required keys
-        keys_required(1)   = 'fbody'
-        keys_required(2)   = 'ext'
-        keys_required(3)   = 'smpd'
-        keys_required(4)   = 'kv'
-        keys_required(5)   = 'cs'
-        keys_required(6)   = 'fraca'
-        keys_required(7)   = 'refs'
-        keys_required(8)   = 'nthr'
-        keys_required(9)   = 'nparts'
+        keys_required(1)   = 'ext'
+        keys_required(2)   = 'smpd'
+        keys_required(3)   = 'kv'
+        keys_required(4)   = 'cs'
+        keys_required(5)   = 'fraca'
+        keys_required(6)   = 'refs'
+        keys_required(7)   = 'dir_movies'
+        keys_required(8)   = 'dir_target'
+        keys_required(9)   = 'nthr'
+        keys_required(10)  = 'nparts'
         ! set optional keys
         keys_optional(1)   = 'nthr'
         keys_optional(2)   = 'fbody'

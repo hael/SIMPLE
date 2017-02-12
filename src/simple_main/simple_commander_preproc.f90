@@ -115,8 +115,17 @@ contains
             p%numlen = len(int2str(nmovies))
         endif
         if( p%l_distr_exec )then
-            allocate(fname_ctffind_ctrl,  source='ctffind_ctrl_file_part'//int2str_pad(p%part,p%numlen)//'.txt')
-            allocate(fname_ctffind_output, source='ctffind_output_part'//int2str_pad(p%part,p%numlen)//'.txt')
+            if( cline%defined('dir_target') )then
+                allocate(fname_ctffind_ctrl,  source=trim(p%dir_target)//&
+                &'ctffind_ctrl_file_part'//int2str_pad(p%part,p%numlen)//'.txt')
+                allocate(fname_ctffind_output, source=trim(p%dir_target)//&
+                &'ctffind_output_part'//int2str_pad(p%part,p%numlen)//'.txt')
+            else
+                allocate(fname_ctffind_ctrl,  source='ctffind_ctrl_file_part'//&
+                &int2str_pad(p%part,p%numlen)//'.txt')
+                allocate(fname_ctffind_output, source='ctffind_output_part'//&
+                &int2str_pad(p%part,p%numlen)//'.txt')
+            endif
             ! determine loop range
             if( cline%defined('fromp') .and. cline%defined('top') )then
                 fromto(1) = p%fromp
