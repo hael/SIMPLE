@@ -47,7 +47,7 @@ contains
         type(qsys_factory)                 :: qsys_fac
         logical                            :: proceed
         class(qsys_base), pointer          :: myqsys
-        integer                            :: nmovies, nmovies_prev, i, nmovies_in_lmask_stream
+        integer                            :: nmovies, i, nmovies_in_lmask_stream
         integer                            :: imovies, iupdate
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
@@ -65,45 +65,37 @@ contains
         iupdate = 0
         do
             call create_stream_filetable
-            if( nmovies > nmovies_prev )then
-                ! there are new movies to process
-                if( DEBUG ) print *, 'nmovies updated to: ', nmovies
-                ! prepare stream mask
-                if( allocated(lmask_stream) )then
-                    nmovies_in_lmask_stream = size(lmask_stream)
-                else
-                    nmovies_in_lmask_stream = 0
-                endif
-                proceed = .false.
-                if( iupdate == 0 ) proceed = .true.
-                if( allocated(jobs_done) )then
-                    if( any(jobs_done) ) proceed = .true.
-                endif
-                if( proceed )then
-                    iupdate = iupdate + 1
-                    allocate(ltmp(nmovies))
-                    ltmp = .true.
-                    ltmp(1:nmovies_in_lmask_stream) = lmask_stream(1:nmovies_in_lmask_stream)
-                    if( allocated(lmask_stream) ) deallocate(lmask_stream)
-                    allocate(lmask_stream(1:nmovies), source=ltmp)
-                    deallocate(ltmp)
-                    if( DEBUG )then
-                        do i=1,nmovies
-                            print *, i, 'lmask: ', lmask_stream(i)
-                        end do
-                    endif
-                    call cline%set('nparts', real(nmovies)) ! need dyn update of nparts 4 stream
-                    p_master%nparts = nmovies               ! need dyn update of nparts 4 stream
-                    p_master%nptcls = nmovies               ! need dyn update of nparts 4 stream
-                    call create_individual_filetables       ! 1-of-1 ftab but index comes from part
-                    call setup_distr_env                    ! just to reduce complexity
-                    ! on the first update we free all computing units before scheduling begins
-                    if( iupdate == 1 ) call qscripts%free_all_cunits
-                    call qscripts%submit_scripts            ! stream scheduler
-                endif
+            ! prepare stream mask indicating existence of necessary files
+            if( allocated(lmask_stream) )then
+                nmovies_in_lmask_stream = size(lmask_stream)
+            else
+                nmovies_in_lmask_stream = 0
             endif
-            call sleep(SHORTTIME)
-            call qscripts%update_queue
+            ! decide whether to proceed with updating the queue
+            proceed = .false.
+            if( iupdate == 0 ) proceed = .true.       ! always update on the first iteration
+            if( allocated(jobs_done) )then            ! this is not the first iteration
+                if( any(jobs_done) ) proceed = .true. ! but if jobs are done proceed
+            endif
+            if( proceed )then
+                iupdate = iupdate + 1   ! indicate thate we are updating the queue
+                allocate(ltmp(nmovies)) ! need this to transfer info from previous rounds
+                ltmp = .true.
+                ltmp(1:nmovies_in_lmask_stream) = lmask_stream(1:nmovies_in_lmask_stream)
+                if( allocated(lmask_stream) ) deallocate(lmask_stream)
+                allocate(lmask_stream(1:nmovies), source=ltmp) ! lmask_stream now memorises all history
+                deallocate(ltmp)
+                call cline%set('nparts', real(nmovies)) ! need dyn update of nparts 4 stream
+                p_master%nparts = nmovies               ! need dyn update of nparts 4 stream
+                p_master%nptcls = nmovies               ! need dyn update of nparts 4 stream
+                call create_individual_filetables       ! 1-of-1 ftab but index comes from part
+                call setup_distr_env                    ! just to reduce complexity
+                ! on the first update we free all computing units before scheduling begins
+                if( iupdate == 1 ) call qscripts%free_all_cunits
+                call qscripts%update_queue   ! update queue
+                call qscripts%submit_scripts ! submit scripts
+            endif
+            call sleep(SHORTTIME)  
         end do
 
         contains
@@ -111,14 +103,9 @@ contains
             subroutine create_stream_filetable
                 ! generate the filetable via system call
                 call sys_gen_mrcfiletab(p_master%dir_movies, FILETABNAME)
-                nmovies_prev = nmovies
-                nmovies      = nlines(FILETABNAME)
                 ! read the movienames back in
                 call read_filetable(FILETABNAME, movienames)
-                ! sanity check
-                if( size(movienames) /= nmovies ) print *, 'WEIRD! nlines of streaming filetable .ne. size of arr'
-                ! need to set p_master%nptcls = nmovies
-                p_master%nptcls = nmovies
+                nmovies = size(movienames)
             end subroutine create_stream_filetable
 
             subroutine create_individual_filetables
@@ -144,11 +131,11 @@ contains
             end subroutine create_individual_filetables
 
             subroutine setup_distr_env
-                ! get the old jobs statuses
+                ! get the old jobs status
                 if( qscripts%exists() ) call qscripts%get_jobs_status( jobs_done, jobs_submitted )
                 ! setup the environment for distributed execution
                 call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr, lmask_stream)
-                ! put back the old jobs statuses
+                ! put back the old jobs status
                 call qscripts%set_jobs_status( jobs_done, jobs_submitted )
                 ! prepare job description
                 call cline%gen_job_descr(job_descr)
