@@ -194,7 +194,7 @@ contains
         close(funit)
     end subroutine autogen_env_file
 
-    subroutine setup_qsys_env( p, qsys_fac, myqsys, parts, qscripts, myq_descr, lmask_stream )
+    subroutine setup_qsys_env( p, qsys_fac, myqsys, parts, qscripts, myq_descr )
         use simple_params,       only: params
         use simple_qsys_factory, only: qsys_factory
         use simple_qsys_base,    only: qsys_base
@@ -207,7 +207,6 @@ contains
         integer, allocatable,      intent(out)   :: parts(:,:)      !< indices of partitions
         class(qsys_ctrl),          intent(out)   :: qscripts        !< qsys controller
         class(chash),              intent(out)   :: myq_descr       !< user-provided queue and job specifics from simple_distr_config.env
-        logical, optional,         intent(inout) :: lmask_stream(:) !< logical mask for streaming processing
         character(len=STDLEN)         :: simplepath_exec
         character(len=:), allocatable :: qsnam, tpi, hrs_str, mins_str, secs_str
         integer                       :: io_stat, partsz, hrs, mins, secs, ipart
@@ -258,7 +257,7 @@ contains
         call qsys_fac%new(qsnam, myqsys)
         ! create the user specific qsys and qsys controller (script generator)
         simplepath_exec = trim(myq_descr%get('simple_path'))//'/bin/simple_exec'
-        call qscripts%new(simplepath_exec, myqsys, parts, [1,p%nparts], p%ncunits, lmask_stream)
+        call qscripts%new(simplepath_exec, myqsys, parts, [1,p%nparts], p%ncunits)
         call myq_descr%set('job_cpus_per_task', int2str(p%nthr))   ! overrides env file
         call myq_descr%set('job_nparts',        int2str(p%nparts)) ! overrides env file
         deallocate(qsnam)
