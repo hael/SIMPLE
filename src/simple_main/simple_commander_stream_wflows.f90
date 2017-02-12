@@ -45,8 +45,9 @@ contains
         integer, allocatable               :: parts(:,:)
         logical, allocatable               :: lmask_stream(:), ltmp(:), jobs_done(:), jobs_submitted(:)
         type(qsys_factory)                 :: qsys_fac
+        logical                            :: proceed
         class(qsys_base), pointer          :: myqsys
-        integer                            :: nmovies, nmovies_prev, i, nmovies_in_queue
+        integer                            :: nmovies, nmovies_prev, i, nmovies_in_lmask_stream
         integer                            :: imovies, iupdate
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
@@ -69,15 +70,20 @@ contains
                 if( DEBUG ) print *, 'nmovies updated to: ', nmovies
                 ! prepare stream mask
                 if( allocated(lmask_stream) )then
-                    nmovies_in_queue = size(lmask_stream)
+                    nmovies_in_lmask_stream = size(lmask_stream)
                 else
-                    nmovies_in_queue = 0
+                    nmovies_in_lmask_stream = 0
                 endif
-                if( nmovies > nmovies_in_queue )then
+                proceed = .false.
+                if( iupdate == 0 ) proceed = .true.
+                if( allocated(jobs_done) )then
+                    if( any(jobs_done) ) proceed = .true.
+                endif
+                if( proceed )then
                     iupdate = iupdate + 1
                     allocate(ltmp(nmovies))
                     ltmp = .true.
-                    ltmp(1:nmovies_in_queue) = lmask_stream(1:nmovies_in_queue)
+                    ltmp(1:nmovies_in_lmask_stream) = lmask_stream(1:nmovies_in_lmask_stream)
                     if( allocated(lmask_stream) ) deallocate(lmask_stream)
                     allocate(lmask_stream(1:nmovies), source=ltmp)
                     deallocate(ltmp)
@@ -93,10 +99,7 @@ contains
                     call setup_distr_env                    ! just to reduce complexity
                     ! on the first update we free all computing units before scheduling begins
                     if( iupdate == 1 ) call qscripts%free_all_cunits
-                    call qscripts%submit_scripts             ! stream scheduler
-                else
-                    write(*,'(a)') 'WEIRD! nmovies <= nmovies_in_queue, despite that&
-                    &there are new movies in filetab'
+                    call qscripts%submit_scripts            ! stream scheduler
                 endif
             endif
             call sleep(SHORTTIME)
