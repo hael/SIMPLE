@@ -46,7 +46,8 @@ contains
         logical, allocatable               :: lmask_stream(:), ltmp(:)
         type(qsys_factory)                 :: qsys_fac
         class(qsys_base), pointer          :: myqsys
-        integer                            :: nmovies, nmovies_prev, i, nmovies_in_queue, imovies
+        integer                            :: nmovies, nmovies_prev, i, nmovies_in_queue
+        integer                            :: imovies, iupdate
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! set defaults
@@ -59,10 +60,8 @@ contains
         endif
         ! make target directory
         call exec_cmdline('mkdir -p '//trim(adjustl(p_master%dir_target)))
-
-        
-
         nmovies = 0
+        iupdate = 0
         do
             call create_stream_filetable
             if( nmovies > nmovies_prev )then
@@ -75,6 +74,7 @@ contains
                     nmovies_in_queue = 0
                 endif
                 if( nmovies > nmovies_in_queue )then
+                    iupdate = iupdate + 1
                     allocate(ltmp(nmovies))
                     ltmp = .true.
                     ltmp(1:nmovies_in_queue) = lmask_stream(1:nmovies_in_queue)
@@ -87,8 +87,12 @@ contains
                         end do
                     endif
                     call cline%set('nparts', real(nmovies)) ! need dyn update of nparts 4 stream
+                    p_master%nparts = nmovies               ! need dyn update of nparts 4 stream
+                    p_master%nptcls = nmovies               ! need dyn update of nparts 4 stream
                     call create_individual_filetables       ! 1-of-1 ftab but index comes from part
-                    call setup_distr_env                    ! just to reduce complexity 
+                    call setup_distr_env                    ! just to reduce complexity
+                    ! on the first update we free all computing units before scheduling begins
+                    if( iupdate == 1 ) call qscripts%free_all_cunits
                     call qscripts%schedule_jobs             ! stream scheduler
                 else
                     write(*,'(a)') 'WEIRD! nmovies <= nmovies_in_queue, despite that&

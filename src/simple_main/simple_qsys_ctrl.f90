@@ -32,6 +32,8 @@ type qsys_ctrl
     procedure          :: new
     ! GETTER
     procedure          :: get_exec_bin
+    ! SETTER
+    procedure          :: free_all_cunits
     ! SCRIPT GENERATORS
     procedure          :: generate_scripts
     procedure, private :: generate_script
@@ -85,7 +87,6 @@ contains
         self%numlen                 =  len(int2str(self%nparts_tot))
         self%ncomputing_units       =  ncomputing_units
         if( present(lmask_stream) )then
-            self%ncomputing_units_avail =  ncomputing_units - count(lmask_stream)
             self%lmask_stream           => lmask_stream
         else
             self%ncomputing_units_avail =  ncomputing_units
@@ -112,6 +113,14 @@ contains
         character(len=STDLEN)        :: exec_bin
         exec_bin = self%exec_binary
     end function get_exec_bin
+
+    ! SETTER
+
+    !> \brief for freeing all available computing units
+    subroutine free_all_cunits( self )
+        class(qsys_ctrl), intent(inout) :: self
+        self%ncomputing_units_avail = self%ncomputing_units
+    end subroutine free_all_cunits
     
     ! SCRIPT GENERATORS
     
