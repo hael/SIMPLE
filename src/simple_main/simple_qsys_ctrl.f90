@@ -233,7 +233,7 @@ contains
         submit_or_not = .false.
         do ipart=self%fromto_part(1),self%fromto_part(2)
             if( associated(self%lmask_stream) )then
-                if( self%lmask_stream(ipart) ) cycle
+                if( .not. self%lmask_stream(ipart) ) cycle
             endif
             if( .not. self%jobs_submitted(ipart) .and. self%ncomputing_units_avail > 0 )then
                 submit_or_not(ipart) = .true.

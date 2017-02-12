@@ -219,17 +219,15 @@ contains
             if( allocated(parts) ) deallocate(parts)
             select case(p%split_mode)
                 case('even')
-                    parts  = split_nobjs_even(p%nptcls, p%nparts)
-                    partsz = parts(1,2) - parts(1,1) + 1
+                    parts      = split_nobjs_even(p%nptcls, p%nparts)
+                    partsz     = parts(1,2) - parts(1,1) + 1
                 case('chunk')
-                    parts  = split_nobjs_in_chunks(p%nptcls, p%chunksz)
-                    partsz = p%chunksz
+                    parts      = split_nobjs_in_chunks(p%nptcls, p%chunksz)
+                    partsz     = p%chunksz
                 case('singles')
                     allocate(parts(p%nptcls,2))
-                    do ipart=1,p%nptcls
-                        parts(ipart,:) = ipart
-                    end do
-                    partsz = 1
+                    parts(:,:) = 1
+                    partsz     = 1
                 case DEFAULT
                     write(*,*) 'split_mode: ', trim(p%split_mode)
                     stop 'Unsupported split_mode'

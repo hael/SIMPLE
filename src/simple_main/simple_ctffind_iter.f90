@@ -33,13 +33,8 @@ contains
         & write(*,*) 'inputted micrograph does not exist: ', trim(adjustl(moviename_forctf))
         movie_counter = movie_counter + 1
         funit         = get_fileunit()
-        if( p%dir_target .ne. '' )then
-            fname_diag    = trim(p%dir_target)//'/'//add2fbody(moviename_forctf, p%ext, '_ctffind_diag')
-            fname_param   = trim(p%dir_target)//'/'//fname_new_ext(fname_diag, 'txt')
-        else
-            fname_diag    = add2fbody(moviename_forctf, p%ext, '_ctffind_diag')
-            fname_param   = fname_new_ext(fname_diag, 'txt')
-        endif
+        fname_diag    = add2fbody(moviename_forctf, p%ext, '_ctffind_diag')
+        fname_param   = fname_new_ext(fname_diag, 'txt')
         open(unit=funit, status='REPLACE', action='WRITE', file=fname_ctrl)
         write(funit,'(a)') trim(moviename_forctf)
         write(funit,'(a)') trim(fname_diag)

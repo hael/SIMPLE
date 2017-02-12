@@ -86,9 +86,10 @@ contains
                             print *, i, 'lmask: ', lmask_stream(i)
                         end do
                     endif
-                    call create_individual_filetables
-                    call setup_distr_env
-                    call qscripts%schedule_jobs
+                    call cline%set('nparts', real(nmovies)) ! need dyn update of nparts 4 stream
+                    call create_individual_filetables       ! 1-of-1 ftab but index comes from part
+                    call setup_distr_env                    ! just to reduce complexity 
+                    call qscripts%schedule_jobs             ! stream scheduler
                 else
                     write(*,'(a)') 'WEIRD! nmovies <= nmovies_in_queue, despite that&
                     &there are new movies in filetab'

@@ -99,7 +99,7 @@ contains
         type(params) :: p
         type(oris)   :: os
         integer      :: nmovies, fromto(2), imovie, ntot, movie_counter
-        integer      :: frame_counter, lfoo(3), nframes, i
+        integer      :: frame_counter, lfoo(3), nframes, i, movie_ind
         p = params(cline, checkdistr=.false.) ! constants & derived constants produced
         if( p%scale > 1.05 )then
             stop 'scale cannot be > 1; simple_commander_preproc :: exec_preproc'
@@ -116,9 +116,9 @@ contains
         endif
         if( p%l_distr_exec )then
             if( cline%defined('dir_target') )then
-                allocate(fname_ctffind_ctrl,  source=trim(p%dir_target)//&
+                allocate(fname_ctffind_ctrl,  source=trim(p%dir_target)//'/'//&
                 &'ctffind_ctrl_file_part'//int2str_pad(p%part,p%numlen)//'.txt')
-                allocate(fname_ctffind_output, source=trim(p%dir_target)//&
+                allocate(fname_ctffind_output, source=trim(p%dir_target)//'/'//&
                 &'ctffind_output_part'//int2str_pad(p%part,p%numlen)//'.txt')
             else
                 allocate(fname_ctffind_ctrl,  source='ctffind_ctrl_file_part'//&
@@ -148,6 +148,11 @@ contains
         movie_counter = 0
         do imovie=fromto(1),fromto(2)
             p%pspecsz = p%pspecsz_unblur
+            if( ntot == 1 )then
+                movie_ind = p%part ! streaming mode
+            else
+                movie_ind = imovie ! standard mode
+            endif 
             call ubiter%iterate(cline, p, imovie, movie_counter, frame_counter, movienames(imovie))
             movie_counter = movie_counter - 1
             moviename_forctf = ubiter%get_moviename('forctf')
@@ -155,10 +160,10 @@ contains
             p%pspecsz = p%pspecsz_ctffind
             p%hp      = p%hp_ctffind
             p%lp      = p%lp_ctffind 
-            call cfiter%iterate(p, imovie, movie_counter, moviename_forctf,&
+            call cfiter%iterate(p, movie_ind, movie_counter, moviename_forctf,&
             &fname_ctffind_ctrl, fname_ctffind_output, os)
             p%lp      = p%lp_pick
-            call piter%iterate(cline, p, imovie, movie_counter, moviename_intg)
+            call piter%iterate(cline, p, movie_ind, movie_counter, moviename_intg)
         end do
         ! write CTF parameters in append mode
         do i=1,os%get_noris()
