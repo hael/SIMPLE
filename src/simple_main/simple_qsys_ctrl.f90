@@ -27,14 +27,17 @@ type qsys_ctrl
     integer                        :: ncomputing_units       = 0 !< number of computing units
     integer                        :: ncomputing_units_avail = 0 !< number of available units
     integer                        :: numlen = 0                 !< length of padded number string
-    logical                        :: exists = .false.           !< indicates existence
+    logical                        :: existence = .false.           !< indicates existence
   contains
     ! CONSTRUCTOR
     procedure          :: new
     ! GETTER
     procedure          :: get_exec_bin
+    procedure          :: get_jobs_status
+    procedure          :: exists
     ! SETTER
     procedure          :: free_all_cunits
+    procedure          :: set_jobs_status
     ! SCRIPT GENERATORS
     procedure          :: generate_scripts
     procedure, private :: generate_script
@@ -103,7 +106,7 @@ contains
         self%script_names   = ''
         ! get pwd
         call get_environment_variable('PWD', self%pwd)
-        self%exists = .true.
+        self%existence = .true.
     end subroutine new
 
     ! GETTER
@@ -115,6 +118,22 @@ contains
         exec_bin = self%exec_binary
     end function get_exec_bin
 
+    !>  \brief  for getting jobs status logical flags
+    subroutine get_jobs_status( self, jobs_done, jobs_submitted )
+        class(qsys_ctrl), intent(in) :: self
+        logical, allocatable :: jobs_done(:), jobs_submitted(:)
+        if( allocated(jobs_done) )      deallocate(jobs_done)
+        if( allocated(jobs_submitted) ) deallocate(jobs_submitted)
+        allocate(jobs_done(size(self%jobs_done)), source=self%jobs_done)
+        allocate(jobs_submitted(size(self%jobs_submitted)), source=self%jobs_submitted)
+    end subroutine get_jobs_status
+
+    !>  \brief  for checking existence
+    logical function exists( self )
+        class(qsys_ctrl), intent(in) :: self
+        exists = self%existence
+    end function exists
+
     ! SETTER
 
     !> \brief for freeing all available computing units
@@ -122,6 +141,14 @@ contains
         class(qsys_ctrl), intent(inout) :: self
         self%ncomputing_units_avail = self%ncomputing_units
     end subroutine free_all_cunits
+
+    !>  \brief  for setting jobs status logical flags
+    subroutine set_jobs_status( self, jobs_done, jobs_submitted )
+        class(qsys_ctrl), intent(inout) :: self
+        logical,          intent(in)    :: jobs_done(:), jobs_submitted(:)
+        self%jobs_done(:size(jobs_done)) = jobs_done
+        self%jobs_submitted(:size(jobs_submitted)) = jobs_submitted
+    end subroutine set_jobs_status
     
     ! SCRIPT GENERATORS
     
@@ -332,7 +359,7 @@ contains
     !>  \brief  is a destructor
     subroutine kill( self )
         class(qsys_ctrl), intent(inout) :: self
-        if( self%exists )then
+        if( self%existence )then
             self%exec_binary            =  ''
             self%pwd                    =  ''
             self%myqsys                 => null()
@@ -343,7 +370,7 @@ contains
             self%ncomputing_units_avail =  0
             self%numlen                 =  0
             deallocate(self%script_names, self%jobs_done, self%jobs_submitted)
-            self%exists = .false.
+            self%existence = .false.
         endif
     end subroutine kill
 

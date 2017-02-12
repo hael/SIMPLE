@@ -43,7 +43,7 @@ contains
         type(chash)                        :: myq_descr, job_descr
         type(chash), allocatable           :: part_params(:)
         integer, allocatable               :: parts(:,:)
-        logical, allocatable               :: lmask_stream(:), ltmp(:)
+        logical, allocatable               :: lmask_stream(:), ltmp(:), jobs_done(:), jobs_submitted(:)
         type(qsys_factory)                 :: qsys_fac
         class(qsys_base), pointer          :: myqsys
         integer                            :: nmovies, nmovies_prev, i, nmovies_in_queue
@@ -141,8 +141,12 @@ contains
             end subroutine create_individual_filetables
 
             subroutine setup_distr_env
+                ! get the old jobs statuses
+                if( qscripts%exists() ) call qscripts%get_jobs_status( jobs_done, jobs_submitted )
                 ! setup the environment for distributed execution
                 call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr, lmask_stream)
+                ! put back the old jobs statuses
+                call qscripts%set_jobs_status( jobs_done, jobs_submitted )
                 ! prepare job description
                 call cline%gen_job_descr(job_descr)
                 ! prepare scripts
