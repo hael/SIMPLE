@@ -9,6 +9,7 @@ public :: qsys_ctrl
 private
 
 integer, parameter :: SHORTTIME = 5
+logical, parameter :: DEBUG     = .false.
 
 type qsys_ctrl
     private
@@ -38,9 +39,9 @@ type qsys_ctrl
     procedure          :: generate_scripts
     procedure, private :: generate_script
     ! SUBMISSION TO QSYS
-    procedure, private :: submit_scripts
+    procedure          :: submit_scripts
     ! QUERIES
-    procedure, private :: update_queue
+    procedure          :: update_queue
     ! THE MASTER SCHEDULER
     procedure          :: schedule_jobs
     ! DESTRUCTOR
@@ -276,8 +277,10 @@ contains
             write(*,'(a)') 'chmoding master submit script '//trim(master_submit_script)
             stop
         endif
-        call exec_cmdline('echo DISTRIBUTED MODE :: submitting scripts:')
-        call exec_cmdline('ls -1 distr_simple_script_*')
+        if( DEBUG )then
+            call exec_cmdline('echo DISTRIBUTED MODE :: submitting scripts:')
+            call exec_cmdline('ls -1 distr_simple_script_*')
+        endif
         ! execute the master submission script
         call exec_cmdline(master_submit_script)
     end subroutine submit_scripts
@@ -313,8 +316,7 @@ contains
     subroutine schedule_jobs( self )
         class(qsys_ctrl),  intent(inout) :: self
         if( associated(self%lmask_stream) )then
-            call self%update_queue
-            call self%submit_scripts
+            stop 'ERROR! simple_qsys_ctrl :: schedule_jobs not intended for stream processing'
         else
             do
                 if( all(self%jobs_done) ) exit

@@ -93,13 +93,14 @@ contains
                     call setup_distr_env                    ! just to reduce complexity
                     ! on the first update we free all computing units before scheduling begins
                     if( iupdate == 1 ) call qscripts%free_all_cunits
-                    call qscripts%schedule_jobs             ! stream scheduler
+                    call qscripts%submit_scripts             ! stream scheduler
                 else
                     write(*,'(a)') 'WEIRD! nmovies <= nmovies_in_queue, despite that&
                     &there are new movies in filetab'
                 endif
             endif
             call sleep(SHORTTIME)
+            call qscripts%update_queue
         end do
 
         contains

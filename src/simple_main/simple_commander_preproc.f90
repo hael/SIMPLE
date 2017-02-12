@@ -153,7 +153,7 @@ contains
             else
                 movie_ind = imovie ! standard mode
             endif 
-            call ubiter%iterate(cline, p, imovie, movie_counter, frame_counter, movienames(imovie))
+            call ubiter%iterate(cline, p, movie_ind, movie_counter, frame_counter, movienames(imovie))
             movie_counter = movie_counter - 1
             moviename_forctf = ubiter%get_moviename('forctf')
             moviename_intg   = ubiter%get_moviename('intg')
@@ -162,8 +162,9 @@ contains
             p%lp      = p%lp_ctffind 
             call cfiter%iterate(p, movie_ind, movie_counter, moviename_forctf,&
             &fname_ctffind_ctrl, fname_ctffind_output, os)
+            movie_counter = movie_counter - 1
             p%lp      = p%lp_pick
-            call piter%iterate(cline, p, movie_ind, movie_counter, moviename_intg)
+            call piter%iterate(cline, p, movie_counter, moviename_intg)
         end do
         ! write CTF parameters in append mode
         do i=1,os%get_noris()
@@ -984,7 +985,7 @@ contains
         ntot          = fromto(2) - fromto(1) + 1
         movie_counter = 0
         do imovie=fromto(1),fromto(2)
-            call piter%iterate(cline, p, imovie, movie_counter, movienames_intg(imovie))
+            call piter%iterate(cline, p, movie_counter, movienames_intg(imovie))
             write(*,'(f4.0,1x,a)') 100.*(real(movie_counter)/real(ntot)), 'percent of the micrographs processed'
         end do
     end subroutine exec_pick

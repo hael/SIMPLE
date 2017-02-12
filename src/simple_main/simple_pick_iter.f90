@@ -12,7 +12,7 @@ end type pick_iter
 
 contains
 
-    subroutine iterate( self, cline, p, imovie, movie_counter, moviename_intg )
+    subroutine iterate( self, cline, p, movie_counter, moviename_intg )
         use simple_params,       only: params
         use simple_oris,         only: oris
         use simple_cmdline,      only: cmdline
@@ -20,14 +20,13 @@ contains
         class(pick_iter),   intent(inout) :: self
         class(cmdline),     intent(in)    :: cline
         class(params),      intent(inout) :: p
-        integer,            intent(in)    :: imovie
         integer,            intent(inout) :: movie_counter
         character(len=*),   intent(in)    :: moviename_intg
         movie_counter = movie_counter + 1
         if( .not. file_exists(moviename_intg) )then
             write(*,*) 'inputted micrograph does not exist: ', trim(adjustl(moviename_intg))
         endif
-        write(*,'(a,1x,i5)') '>>> PICKING MICROGRAPH:', imovie, trim(adjustl(moviename_intg))
+        write(*,'(a,1x,a)') '>>> PICKING MICROGRAPH:', trim(adjustl(moviename_intg))
         if( cline%defined('thres') )then
             call init_picker(moviename_intg, p%refs, p%smpd, lp_in=p%lp, distthr_in=p%thres)
         else

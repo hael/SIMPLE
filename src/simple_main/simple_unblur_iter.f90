@@ -8,7 +8,7 @@ implicit none
 public :: unblur_iter
 private
 
-logical, parameter :: DEBUG = .true.
+logical, parameter :: DEBUG = .false.
 
 type :: unblur_iter
     private
