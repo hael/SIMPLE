@@ -212,6 +212,7 @@ contains
         call chdict%push('nrepeats',      'nr of times to restart workflow{1}')
         call chdict%push('async',         'asynchronous mode of operation(yes|no){no}')
         call chdict%push('nrefs',         'number of references used for picking{100}')
+        call chdict%push('ext',           'file extension{.mrc}')
         initialised = .true.
     end subroutine init_cmd_dict
     

@@ -475,6 +475,7 @@ contains
         call check_file('clsdoc',         self%clsdoc,'S','T')
         call check_file('comlindoc',      self%comlindoc,'T')
         call check_file('doclist',        self%doclist,'T')
+        call check_file('ext',            self%ext,  notAllowed='T')
         call check_file('filetab',        self%filetab,'T')
         call check_file('fname',          self%fname)
         call check_file('fsc',            self%fsc,'B')
