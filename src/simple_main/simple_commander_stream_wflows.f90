@@ -74,8 +74,10 @@ contains
             call create_individual_filetables       ! 1-of-1 ftab but index comes from part
             call setup_distr_env                    ! just to reduce complexity
             ! manage job scheduling
-            call qscripts%schedule_jobs
-            call qsys_cleanup(p_master)
+            call qscripts%update_queue
+            call qscripts%submit_scripts
+            ! call qsys_cleanup(p_master)
+            call sleep(SHORTTIME)
         end do
 
         contains
@@ -108,9 +110,12 @@ contains
                 ! prepare job description
                 call cline%gen_job_descr(job_descr)
                 ! prepare scripts
-                call qsys_cleanup(p_master)
+
+                ! call qsys_cleanup(p_master)
+
                 if( nmovies > nmovies_prev )then
                     call qscripts%generate_scripts(job_descr, p_master%ext, myq_descr, part_params=part_params)
+                    call qscripts%print_jobs_status
                 endif
             end subroutine setup_distr_env
 

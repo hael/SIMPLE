@@ -33,6 +33,7 @@ type qsys_ctrl
     ! GETTER
     procedure          :: get_exec_bin
     procedure          :: get_jobs_status
+    procedure          :: print_jobs_status
     procedure          :: exists
     ! SETTER
     procedure          :: free_all_cunits
@@ -120,6 +121,15 @@ contains
         allocate(jobs_submitted(size(self%jobs_submitted)), source=self%jobs_submitted)
     end subroutine get_jobs_status
 
+    !>  \brief  for printing jobs status logical flags
+    subroutine print_jobs_status( self )
+        class(qsys_ctrl), intent(in) :: self
+        integer :: i
+        do i=1,size(self%jobs_submitted)
+            print *, i, 'submitted: ', self%jobs_submitted, 'done: ', self%jobs_done
+        end do
+    end subroutine print_jobs_status
+
     !>  \brief  for checking existence
     logical function exists( self )
         class(qsys_ctrl), intent(in) :: self
@@ -191,7 +201,8 @@ contains
             end do
         endif
         ! when we generate the scripts we also reset the number of available computing units
-        self%ncomputing_units_avail = self%ncomputing_units
+!!!!!!!!!!! COMMENTED OUT 4 NOW
+        ! self%ncomputing_units_avail = self%ncomputing_units
     end subroutine generate_scripts
 
     !>  \brief  private part script generator
