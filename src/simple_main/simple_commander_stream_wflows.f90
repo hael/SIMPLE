@@ -76,7 +76,6 @@ contains
             if( qscripts%exists() )then
                 call qscripts%update_queue
                 call qscripts%submit_scripts
-                call qscripts%print_jobs_status
             endif
             call sleep(SHORTTIME)
         end do

@@ -9,6 +9,7 @@ public :: unblur_iter
 private
 
 logical, parameter :: DEBUG = .false.
+real               :: native_smpd
 
 type :: unblur_iter
     private
@@ -32,13 +33,18 @@ contains
         use simple_strings, only: int2str_pad
         use simple_math,    only: round2even
         class(unblur_iter),         intent(inout) :: self
-        class(cmdline),             intent(in)    :: cline
+        class(cmdline),             intent(inout) :: cline
         class(params),              intent(inout) :: p
         integer,                    intent(in)    :: imovie
         integer,                    intent(inout) :: movie_counter, frame_counter
         character(len=*),           intent(in)    :: moviename
         integer :: ldim(3), ldim_thumb(3)
         real    :: corr, scale
+        native_smpd = p%smpd
+        if( cline%defined('scale') )then
+            p%smpd = native_smpd
+            call cline%set('scale', native_smpd)
+        endif
         ! make names
         if( cline%defined('fbody') )then
             self%moviename_intg   = trim(adjustl(p%fbody))//'_intg'//int2str_pad(imovie,p%numlen)//p%ext
@@ -102,6 +108,11 @@ contains
         call self%pspec_sum%kill
         call self%pspec_ctf%kill
         call self%pspec_half_n_half%kill
+        ! update sampling distance if scaling
+        if( cline%defined('scale') )then
+            p%smpd = p%smpd/p%scale
+            call cline%set('scale', p%smpd)
+        endif
     end subroutine iterate
 
     function get_moviename( self, which ) result( moviename )

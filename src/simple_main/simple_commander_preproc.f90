@@ -96,6 +96,7 @@ contains
         character(len=STDLEN), allocatable :: movienames(:)
         character(len=:),      allocatable :: fname_ctffind_ctrl, fname_ctffind_output
         character(len=:),      allocatable :: moviename_forctf, moviename_intg
+        logical, parameter :: DEBUG = .true.
         type(params) :: p
         type(oris)   :: os
         integer      :: nmovies, fromto(2), imovie, ntot, movie_counter
@@ -147,6 +148,7 @@ contains
         frame_counter = 0
         movie_counter = 0
         do imovie=fromto(1),fromto(2)
+            if( DEBUG ) print *, 'smpd before unblur: ', p%smpd
             p%pspecsz = p%pspecsz_unblur
             if( ntot == 1 )then
                 movie_ind = p%part ! streaming mode
@@ -154,12 +156,13 @@ contains
                 movie_ind = imovie ! standard mode
             endif 
             call ubiter%iterate(cline, p, movie_ind, movie_counter, frame_counter, movienames(imovie))
+            if( DEBUG ) print *, 'smpd after unblur: ', p%smpd
             movie_counter = movie_counter - 1
             moviename_forctf = ubiter%get_moviename('forctf')
             moviename_intg   = ubiter%get_moviename('intg')
-            p%pspecsz = p%pspecsz_ctffind
-            p%hp      = p%hp_ctffind
-            p%lp      = p%lp_ctffind 
+            p%pspecsz        = p%pspecsz_ctffind
+            p%hp             = p%hp_ctffind
+            p%lp             = p%lp_ctffind 
             call cfiter%iterate(p, movie_ind, movie_counter, moviename_forctf,&
             &fname_ctffind_ctrl, fname_ctffind_output, os)
             movie_counter = movie_counter - 1
