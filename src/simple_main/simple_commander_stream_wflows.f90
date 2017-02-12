@@ -112,6 +112,7 @@ contains
                 if( allocated(part_params) ) deallocate(part_params)
                 allocate(part_params(size(individual_filetabs)))
                 do imovie=1,nmovies
+                    call part_params(imovie)%new(1)
                     call part_params(imovie)%set('filetab', trim(individual_filetabs(imovie)))
                     if( lmask_stream(imovie) )then
                         fnr = get_fileunit()
