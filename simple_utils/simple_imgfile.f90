@@ -595,7 +595,7 @@ contains
             ! Check the read was successful
             if( io_stat .ne. 0 )then
                 if( present(read_failure) )then
-                    read_failure = .false.
+                    read_failure = .true.
                 endif
                 write(*,'(a,i0,2a)') '**ERROR(rwSlices): I/O error ', io_stat, ' when reading from: ', self%fname
                 write(*,'(2a)') 'IO error message was: ', io_message

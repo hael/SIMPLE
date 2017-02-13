@@ -45,7 +45,7 @@ contains
         logical, allocatable               :: jobs_done(:), jobs_submitted(:), file_sanity(:), tmp(:)
         type(qsys_factory)                 :: qsys_fac
         class(qsys_base), pointer          :: myqsys
-        integer                            :: nmovies, nmovies_prev, imovie, nmovies_sane, nsane
+        integer                            :: nmovies, nmovies_prev, imovie
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! set defaults
@@ -68,43 +68,18 @@ contains
             call read_filetable(FILETABNAME, movienames)
             nmovies_prev = nmovies
             nmovies      = size(movienames)
-            ! check file sanity
-            if( allocated(file_sanity) )then
-                nsane = size(file_sanity)
-                allocate(tmp(nmovies))
-                tmp         = .false.
-                tmp(:nsane) = file_sanity(:)
-                deallocate(file_sanity)
-                allocate(file_sanity(nmovies), source=tmp)
-                deallocate(tmp)
-                do imovie=1,nmovies
-                    if( file_sanity(imovie) )then
-                        ! do nothing
-                    else
-                        ! check sanity
-                        file_sanity(imovie) = file_written2disk(movienames(imovie))
-                    endif
-                end do
-            else
-                allocate(file_sanity(nmovies))
-                do imovie=1,nmovies
-                    ! check sanity
-                    file_sanity(imovie) = file_written2disk(movienames(imovie))
+            ! check that the new file is written to disk
+            if( nmovies > nmovies_prev )then
+                do 
+                    if( file_written2disk(movienames(nmovies)) ) exit
+                    call sleep(SHORTTIME)
                 end do
             endif
-            do imovie=1,nmovies
-                if( all(file_sanity(:imovie)) )then
-                    nmovies_sane = imovie
-                    if( nmovies_sane == nmovies ) exit
-                else
-                    exit
-                end if
-            end do
-            call cline%set('nparts', real(nmovies_sane)) ! need dyn update of nparts 4 stream
-            p_master%nparts = nmovies_sane               ! need dyn update of nparts 4 stream
-            p_master%nptcls = nmovies_sane               ! need dyn update of nparts 4 stream
-            call create_individual_filetables            ! 1-of-1 ftab but index comes from part
-            call setup_distr_env                         ! just to reduce complexity
+            call cline%set('nparts', real(nmovies)) ! need dyn update of nparts 4 stream
+            p_master%nparts = nmovies               ! need dyn update of nparts 4 stream
+            p_master%nptcls = nmovies               ! need dyn update of nparts 4 stream
+            call create_individual_filetables       ! 1-of-1 ftab but index comes from part
+            call setup_distr_env                    ! just to reduce complexity
             ! manage job scheduling
             if( qscripts%exists() )then
                 call qscripts%update_queue
@@ -118,10 +93,10 @@ contains
             subroutine create_individual_filetables
                 integer :: imovie, fnr, file_stat
                 character(len=STDLEN), allocatable :: individual_filetabs(:)
-                individual_filetabs = make_filenames('movie_to_process', nmovies_sane, '.txt', p_master%numlen)
+                individual_filetabs = make_filenames('movie_to_process', nmovies, '.txt', p_master%numlen)
                 if( allocated(part_params) ) deallocate(part_params)
                 allocate(part_params(size(individual_filetabs)))
-                do imovie=1,nmovies_sane
+                do imovie=1,nmovies
                     call part_params(imovie)%new(1)
                     call part_params(imovie)%set('filetab', trim(individual_filetabs(imovie)))
                     fnr = get_fileunit()
