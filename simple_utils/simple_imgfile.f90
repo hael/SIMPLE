@@ -424,31 +424,32 @@ contains
     
     !>  \brief  read/write a set of contiguous slices of the image file from disk into memory.
     !!          The array of reals should have +2 elements in the first dimension.
-    subroutine rwSlices( self, mode, first_slice, last_slice, rarr, ldim, is_ft, smpd )
+    subroutine rwSlices( self, mode, first_slice, last_slice, rarr, ldim, is_ft, smpd, read_failure )
         use simple_strings, only: int2str
         use simple_math, only: is_odd
         use, intrinsic :: iso_c_binding
         use simple_imghead, only: ImgHead, SpiImgHead, MrcImgHead, dataRbytes, dataRinteger, dataRfloat
         use simple_math, only: is_even
-        class(imgfile), intent(inout), target :: self         !< instance
-        character(len=1), intent(in)          :: mode         !< read (r) or write (w)
-        integer, intent(in)                   :: first_slice  !< First slice (the first slice in the file is numbered 1)
-        integer, intent(in)                   :: last_slice   !< Last slice
-        real, intent(inout)                   :: rarr(:,:,:)  !< Array of reals. Will be (re)allocated if needed
-        integer, intent(in), optional         :: ldim(3)      !< Logical size of the array. This will be written to disk: rarr(1:ldim(1),:,:)
-        logical, intent(in), optional         :: is_ft        !< to indicate FT status of image
-        real, intent(in), optional            :: smpd         !< sampling distance  
-        real(kind=4), allocatable             :: tmp_32bit_float_array(:,:,:)
-        integer(kind=1), allocatable          :: tmp_byte_array(:,:,:)
-        integer(kind=2), allocatable          :: tmp_16bit_int_array(:,:,:)
-        character(len=100)                    :: io_message
-        integer                               :: io_stat, dims(3),i,j,k,itmp,cnt,ldim_here(3),iform,maxim
-        integer(kind=8)                       :: first_byte,hedbyteinds(2),imbyteinds(2),first_hedbyte
-        logical                               :: arr_is_ready, ft_indic
-        real                                  :: min_val,max_val,smpd_here
-        class(imghead), pointer               :: ptr=>null()
-        class(imghead), allocatable           :: imghed
-        character(len=20)                     :: conv
+        class(imgfile), target, intent(inout) :: self         !< instance
+        character(len=1),       intent(in)    :: mode         !< read (r) or write (w)
+        integer,                intent(in)    :: first_slice  !< First slice (the first slice in the file is numbered 1)
+        integer,                intent(in)    :: last_slice   !< Last slice
+        real,                   intent(inout) :: rarr(:,:,:)  !< Array of reals. Will be (re)allocated if needed
+        integer, optional,      intent(in)    :: ldim(3)      !< Logical size of the array. This will be written to disk: rarr(1:ldim(1),:,:)
+        logical, optional,      intent(in)    :: is_ft        !< to indicate FT status of image
+        real,    optional,      intent(in)    :: smpd         !< sampling distance
+        logical, optional,      intent(out)   :: read_failure
+        real(kind=4),    allocatable :: tmp_32bit_float_array(:,:,:)
+        integer(kind=1), allocatable :: tmp_byte_array(:,:,:)
+        integer(kind=2), allocatable :: tmp_16bit_int_array(:,:,:)
+        character(len=100)           :: io_message
+        integer                      :: io_stat, dims(3),i,j,k,itmp,cnt,ldim_here(3),iform,maxim
+        integer(kind=8)              :: first_byte,hedbyteinds(2),imbyteinds(2),first_hedbyte
+        logical                      :: arr_is_ready, ft_indic
+        real                         :: min_val,max_val,smpd_here
+        class(imghead), pointer      :: ptr=>null()
+        class(imghead), allocatable  :: imghed
+        character(len=20)            :: conv
         ! Check that the first and last slice numbers given make sense
         if( first_slice > 0 .and. (first_slice .gt. last_slice) ) stop 'Last < first slice; rwSlices; simple_imgfile'
         if( present(ldim) ) dims = ldim
@@ -593,9 +594,16 @@ contains
             if( .not. self%overall_head%pixIsComplex() ) rarr(dims(1)+1:,:,:) = 0.
             ! Check the read was successful
             if( io_stat .ne. 0 )then
+                if( present(read_failure) )then
+                    read_failure = .false.
+                endif
                 write(*,'(a,i0,2a)') '**ERROR(rwSlices): I/O error ', io_stat, ' when reading from: ', self%fname
                 write(*,'(2a)') 'IO error message was: ', io_message
                 stop 'I/O error; rwSlices; simple_imgfile'
+            endif
+            if( present(read_failure) )then
+                read_failure = .false.
+                return
             endif
             if( self%head_format .eq. 'M' .or. self%head_format .eq. 'F' )then
                 ! Is this file from a machine with opposite endinaness?

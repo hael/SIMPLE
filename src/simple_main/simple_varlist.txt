@@ -55,6 +55,7 @@ single
 soften
 srch_inpl
 stats
+stream
 swap
 test
 tomo
@@ -102,7 +103,7 @@ oritab2
 outfile
 outstk
 outvol
-paramtab
+ctffind_doc
 pcastk
 pdfile
 pgrp

@@ -23,6 +23,22 @@ contains
         endif
     end subroutine raise_exception_imgfile
 
+    !> \brief  for checking if file is completely written to disk
+    logical function file_written2disk( fname )
+        use simple_image, only: image
+        character(len=*), intent(in) :: fname
+        integer     :: ldim(3), nframes
+        type(image) :: testimg
+        logical     :: read_failure
+        ! get_number of frames and dim from stack
+        ! this assumes that the header IS written to disk
+        ! it should be because it is small
+        call find_ldim_nptcls(fname, ldim, nframes, endconv=endconv)
+        call testimg%new(ldim, 1.0)
+        call testimg%read(fname, read_failure=read_failure)
+        file_written2disk = .not. read_failure
+    end function file_written2disk
+
     !>  \brief  is for copying
     subroutine copy_imgfile( fname2copy, fname, fromto , smpd_in)
         character(len=*), intent(in)  :: fname2copy, fname !< filenames

@@ -556,7 +556,7 @@ select case(prg)
         keys_required(3) = 'smpd'
         ! set optional keys
         keys_optional(1) = 'msk'
-        keys_optional(2) = 'paramtab'
+        keys_optional(2) = 'ctffind_doc'
         keys_optional(3) = 'neg'
         keys_optional(4) = 'box'
         keys_optional(5) = 'noise_norm'

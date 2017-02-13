@@ -1004,24 +1004,31 @@ contains
         class(cmdline),           intent(inout) :: cline
         type(params)                       :: p
         type(build)                        :: b
-        integer                            :: nmovies, nboxfiles, funit_movies, funit_box, nframes, frame, pind
+        integer                            :: nmovies, nboxfiles, funit_movies, funit_box, nframes, pind
         integer                            :: i, j, k, alloc_stat, ldim(3), box_current, movie, ndatlines, nptcls
         integer                            :: cnt, niter, fromto(2), orig_box
-        integer                            :: movie_ind, numlen, ntot, lfoo(3), ifoo, noutside=0
+        integer                            :: movie_ind, ntot, lfoo(3), ifoo, noutside=0
         type(nrtxtfile)                    :: boxfile
-        character(len=STDLEN)              :: mode, framestack, sumstack
+        character(len=STDLEN)              :: mode, sumstack
         character(len=STDLEN), allocatable :: movienames(:), boxfilenames(:)
         real, allocatable                  :: boxdata(:,:)
         integer, allocatable               :: pinds(:)
         real                               :: x, y, kv, cs, fraca, dfx, dfy, angast, ctfres
-        real                               :: med, ave,sdev, var, box_o_2, particle_position(2)
-        type(image)                        :: img_frame
+        real                               :: med, ave, sdev, var, box_o_2, particle_position(2)
+        type(image)                        :: micrograph
         type(oris)                         :: outoris
         logical                            :: err, params_present(3)
         logical, parameter                 :: debug = .false.
         p = params(cline, checkdistr=.false.) ! constants & derived constants produced
         if( p%noise_norm .eq. 'yes' )then
             if( .not. cline%defined('msk') ) stop 'need rough mask radius as input (msk) for noise normalisation'
+        endif
+        if( p%stream .eq. 'yes' )then
+            if( cline%defined('outstk') )then
+                ! all ok
+            else
+                stop 'need output stack (outstk) to be part of the command line in stream=yes mode'
+            endif
         endif
         
         ! check file inout existence
@@ -1075,8 +1082,8 @@ contains
         call find_ldim_nptcls(movienames(1), ldim, ifoo)
         if( debug ) write(*,*) 'number of particles: ', nptcls
 
-        ! create frame
-        call img_frame%new([ldim(1),ldim(2),1], p%smpd)
+        ! create 
+        call micrograph%new([ldim(1),ldim(2),1], p%smpd)
 
         ! initialize
         call outoris%new(nptcls)
@@ -1153,11 +1160,10 @@ contains
     
             ! get number of frames from stack
             call find_ldim_nptcls(movienames(movie), lfoo, nframes )
-            numlen  = len(int2str(nframes))
-            if( debug ) write(*,*) 'number of frames: ', nframes
+            if( nframes > 1 ) stop 'multi-frame extraction no longer supported; simple_extract'
     
             ! build general objects
-            if( niter == 1 )call b%build_general_tbox(p,cline,do3d=.false.)
+            if( niter == 1 ) call b%build_general_tbox(p,cline,do3d=.false.)
 
             ! extract ctf info
             if( b%a%isthere('dfx') )then
@@ -1200,70 +1206,30 @@ contains
                 if( debug ) write(*,*) 'did set CTF parameters dfx/dfy/angast/ctfres: ', dfx, dfy, angast, ctfres
             endif
     
-            ! loop over frames
-            do frame=1,nframes
-        
-                ! read frame
-                call img_frame%read(movienames(movie),frame,rwaction='READ')
-        
-                if( nframes > 1 )then
-                    ! shift frame according to global shift (drift correction)
-                    if( b%a%isthere(movie, 'x'//int2str(frame)) .and. b%a%isthere(movie, 'y'//int2str(frame))  )then
-                        call img_frame%fwd_ft
-                        x = b%a%get(movie, 'x'//int2str(frame))
-                        y = b%a%get(movie, 'y'//int2str(frame))
-                        call img_frame%shift(-x,-y)
-                        call img_frame%bwd_ft
-                    else
-                        write(*,*) 'no shift parameters available for alignment of frames'
-                        stop 'use simple_unblur if you want to integrate frames'
-                    endif
-                endif
-        
-                ! extract the particle images & normalize
-                if( nframes > 1 )then
-                    framestack = 'framestack'//int2str_pad(frame,numlen)//p%ext
-                else
-                    framestack = 'sumstack'//p%ext
-                endif
-                cnt = 0
-                do j=1,ndatlines ! loop over boxes
-                    if( pinds(j) > 0 )then
-                        ! extract the window
-                        particle_position = boxdata(j,1:2)
-                        call img_frame%window(nint(particle_position), p%box, b%img, noutside)
-                        if( p%neg .eq. 'yes' ) call b%img%neg
-                        if( p%noise_norm .eq. 'yes' )then
-                            call b%img%noise_norm(p%msk)
-                        else
-                            call b%img%norm
-                        endif
-                        call b%img%write(trim(adjustl(framestack)), pinds(j))
-                    endif
-                end do
-            end do
-    
-            if( nframes > 1 )then
-                ! create the sum and normalize it
+            ! read integrated movie
+            call micrograph%read(movienames(movie),1,rwaction='READ')
+
+            if( cline%defined('outstk') )then
+                sumstack = trim(p%outstk)
+            else
                 sumstack = 'sumstack'//p%ext
-                cnt = 0
-                do j=1,ndatlines ! loop over boxes
-                    if( pinds(j) > 0 )then
-                        b%img_copy = 0.
-                        do frame=1,nframes ! loop over frames
-                            framestack = 'framestack'//int2str_pad(frame,numlen)//p%ext
-                            call b%img%read(trim(adjustl(framestack)), pinds(j), rwaction='READ')
-                            call b%img_copy%add(b%img)
-                        end do
-                        if( p%noise_norm .eq. 'yes' )then
-                            call b%img_copy%noise_norm(p%msk)
-                        else
-                            call b%img_copy%norm
-                        endif
-                        call b%img_copy%write(trim(adjustl(sumstack)), pinds(j))
-                    endif
-                end do
             endif
+            ! endif
+            cnt = 0
+            do j=1,ndatlines ! loop over boxes
+                if( pinds(j) > 0 )then
+                    ! extract the window
+                    particle_position = boxdata(j,1:2)
+                    call micrograph%window(nint(particle_position), p%box, b%img, noutside)
+                    if( p%neg .eq. 'yes' ) call b%img%neg
+                    if( p%noise_norm .eq. 'yes' )then
+                        call b%img%noise_norm(p%msk)
+                    else
+                        call b%img%norm
+                    endif
+                    call b%img%write(trim(adjustl(sumstack)), pinds(j))
+                endif
+            end do
     
             ! write output
             do j=1,ndatlines ! loop over boxes

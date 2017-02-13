@@ -183,7 +183,7 @@ contains
         call chdict%push('grow',          'number of binary layers to grow(in pixels)')
         call chdict%push('npix',          'number of pixles/voxels in binary representation')
         call chdict%push('shell_norm',    'normalise based on power spectrum (yes|no){no}')
-        call chdict%push('paramtab',      'per-micrograph parameters to transfer (CTF/movie shifts)')
+        call chdict%push('ctffind_doc',   'per-micrograph CTF parameters to transfer')
         call chdict%push('outer',         'outer mask radius(in pixels)')
         call chdict%push('split_mode',    'mode of splitting for distributed execution(even|chunk){even}')
         call chdict%push('ncunits',       'number of computing units, can be < nparts {nparts}')
@@ -215,6 +215,7 @@ contains
         call chdict%push('async',         'asynchronous mode of operation(yes|no){no}')
         call chdict%push('nrefs',         'number of references used for picking{100}')
         call chdict%push('ext',           'file extension{.mrc}')
+        call chdict%push('stream',        'sream (real time) execution mode(yes|no){no}')
         initialised = .true.
     end subroutine init_cmd_dict
     

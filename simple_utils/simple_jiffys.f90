@@ -71,12 +71,12 @@ contains
     !>  \brief is for gettign a part of the info in a MRC image header
     subroutine get_mrcfile_info( fname, ldim, form, smpd, doprint )
         use simple_imghead, only: ImgHead, MrcImgHead, MrcFeiImgHead
-        character(len=*), intent(in) :: fname
-        character(len=1), intent(in) :: form
-        integer, intent(out)         :: ldim(3)
-        real, intent(out)            :: smpd
-        logical, intent(in)          :: doprint
-        class(imghead), allocatable  :: hed
+        character(len=*), intent(in)  :: fname
+        character(len=1), intent(in)  :: form
+        integer,          intent(out) :: ldim(3)
+        real,             intent(out) :: smpd
+        logical,          intent(in)  :: doprint
+        class(imghead), allocatable   :: hed
         integer :: filnum
         ldim = 0
         smpd = 0.

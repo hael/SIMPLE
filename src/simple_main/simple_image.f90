@@ -576,7 +576,7 @@ contains
     ! I/O
 
     !>  \brief  for reading 2D images from stack or volumes from volume files
-    subroutine read( self, fname, i, isxfel, formatchar, readhead, rwaction )
+    subroutine read( self, fname, i, isxfel, formatchar, readhead, rwaction, read_failure )
         use simple_imgfile,       only: imgfile
         use simple_jiffys,        only: read_raw_image
         use simple_filehandling,  only: fname2format, file_exists
@@ -587,6 +587,7 @@ contains
         character(len=1), optional, intent(in)    :: formatchar
         logical,          optional, intent(in)    :: readhead
         character(len=*), optional, intent(in)    :: rwaction
+        logical,          optional, intent(out)   :: read_failure
         type(imgfile)         :: ioimg
         character(len=1)      :: form
         integer               :: ldim(3), iform, first_slice, mode
@@ -727,7 +728,8 @@ contains
                 first_slice = ii
                 last_slice = ii
             endif
-            call ioimg%rwSlices('r',first_slice,last_slice,self%rmat,self%ldim,self%ft,self%smpd)
+            call ioimg%rwSlices('r',first_slice,last_slice,self%rmat,&
+            &self%ldim,self%ft,self%smpd,read_failure=read_failure)
             call ioimg%close
         else
             stop 'ERROR, image need to be constructed before read; read; simple_image'

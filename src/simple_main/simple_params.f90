@@ -86,6 +86,7 @@ type :: params
     character(len=3) :: soften='no'
     character(len=3) :: srch_inpl='yes'
     character(len=3) :: stats='no'
+    character(len=3) :: stream='no'
     character(len=3) :: swap='no'
     character(len=3) :: test='no'
     character(len=3) :: tomo='no'
@@ -135,7 +136,7 @@ type :: params
     character(len=STDLEN) :: outfile='outfile.txt'
     character(len=STDLEN) :: outstk=''
     character(len=STDLEN) :: outvol=''
-    character(len=STDLEN) :: paramtab=''
+    character(len=STDLEN) :: ctffind_doc=''
     character(len=STDLEN) :: pcastk='pcavecinstk.bin'
     character(len=STDLEN) :: pdfile='pdfile.bin'
     character(len=STDLEN) :: pgrp='c1'
@@ -439,7 +440,7 @@ contains
         call check_carg('outfile',        self%outfile)
         call check_carg('outside',        self%outside)
         call check_carg('pad',            self%pad)
-        call check_carg('paramtab',       self%paramtab)
+        call check_carg('ctffind_doc',    self%ctffind_doc)
         call check_carg('pgrp',           self%pgrp)
         call check_carg('phaseplate',     self%phaseplate)
         call check_carg('phrand',         self%phrand)
@@ -462,6 +463,7 @@ contains
         call check_carg('split_mode',     self%split_mode)
         call check_carg('srch_inpl',      self%srch_inpl)
         call check_carg('stats',          self%stats)
+        call check_carg('stream',         self%stream)
         call check_carg('swap',           self%swap)
         call check_carg('test',           self%test)
         call check_carg('time',           self%time)
@@ -629,11 +631,11 @@ contains
         call check_rarg('xsh',            self%xsh)
         call check_rarg('ysh',            self%ysh)
         call check_rarg('zsh',            self%zsh)
-        ! put paramtab (if defined) as oritab
-        if( cline%defined('paramtab') )then
+        ! put ctffind_doc (if defined) as oritab
+        if( cline%defined('ctffind_doc') )then
             if( .not. cline%defined('oritab') )then
-                call cline%set('oritab', self%paramtab)
-                self%oritab = self%paramtab
+                call cline%set('oritab', self%ctffind_doc)
+                self%oritab = self%ctffind_doc
             endif
         endif
         ! make all programs have the simple_ prefix
