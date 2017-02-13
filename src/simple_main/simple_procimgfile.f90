@@ -27,15 +27,20 @@ contains
     logical function file_written2disk( fname )
         use simple_image, only: image
         character(len=*), intent(in) :: fname
-        integer     :: ldim(3), nframes
+        integer     :: ldim(3), nframes, iframe
         type(image) :: testimg
         logical     :: read_failure
         ! get_number of frames and dim from stack
         ! this assumes that the header IS written to disk
         ! it should be because it is small
         call find_ldim_nptcls(fname, ldim, nframes, endconv=endconv)
+        ldim(3) = 1
         call testimg%new(ldim, 1.0)
-        call testimg%read(fname, read_failure=read_failure)
+        do iframe=1,nframes
+            call testimg%read(fname, iframe, read_failure=read_failure)
+            if( read_failure ) exit
+        end do
+        call testimg%kill
         file_written2disk = .not. read_failure
     end function file_written2disk
 

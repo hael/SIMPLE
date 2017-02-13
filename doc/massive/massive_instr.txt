@@ -61,3 +61,11 @@ We don't have any other qos or reservations just yet.
 
 Cheers,
 Lance
+
+strudle
+
+vglrun e2display.py
+
+It it throws an error about missing vglrun please run:
+
+module load virtualgl

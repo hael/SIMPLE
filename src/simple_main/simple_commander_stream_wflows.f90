@@ -95,6 +95,7 @@ contains
             do imovie=1,nmovies
                 if( all(file_sanity(:imovie)) )then
                     nmovies_sane = imovie
+                    if( nmovies_sane == nmovies ) exit
                 else
                     exit
                 end if

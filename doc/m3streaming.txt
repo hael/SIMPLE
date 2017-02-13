@@ -23,8 +23,9 @@ nohup simple_distr_exec prg=preproc smpd=0.43 kv=300 cs=2.7 fraca=0.07 refs=pick
 
 
 # FILE COPY
-robocopy /s /z /XO /XN /MOT:2 X:\Users\Susan M:\
+robocopy /s /z /XO /XN /MOT:1 X:\Users\Susan M:\
 
+X is from M is to
 
 and that is with the M3 drive mapped as
 
