@@ -32,6 +32,7 @@ type(find_nnimgs_distr_commander)        :: xfind_nnimgs_distr
 ! PRIME3D
 type(prime3D_init_distr_commander)       :: xprime3D_init_distr
 type(prime3D_distr_commander)            :: xprime3D_distr
+type(cont3D_distr_commander)             :: xcont3D_distr
 type(shellweight3D_distr_commander)      :: xshellweight3D_distr
 type(recvol_distr_commander)             :: xrecvol_distr
 ! high-level workflows
@@ -457,6 +458,52 @@ select case(prg)
         endif
         ! execute
         call xprime3D_distr%execute(cline)
+    case('cont3D')
+        !==Program prime3D
+        !
+        ! <cont3D/begin><cont3D/end>
+        !
+        ! set required keys
+        keys_required(1)  = 'stk'
+        keys_required(2)  = 'smpd'
+        keys_required(3)  = 'msk'
+        keys_required(4)  = 'ctf'
+        keys_required(5)  = 'pgrp'
+        keys_required(6)  = 'oritab'
+        keys_required(7)  = 'trs'
+        keys_required(8)  = 'nthr'
+        keys_required(9)  = 'nparts'
+        ! set optional keys
+        keys_optional(1)  = 'deftab'
+        keys_optional(2)  = 'vol1'
+        keys_optional(3)  = 'hp'
+        keys_optional(4)  = 'lpstart'
+        keys_optional(5)  = 'lpstop'
+        keys_optional(6)  = 'frac'
+        keys_optional(7)  = 'automsk'
+        keys_optional(8)  = 'mw'
+        keys_optional(9)  = 'amsklp'
+        keys_optional(10) = 'edge'
+        keys_optional(11) = 'inner'
+        keys_optional(12) = 'width'
+        keys_optional(13) = 'startit'
+        keys_optional(14) = 'maxits'
+        keys_optional(15) = 'xfel'
+        keys_optional(16) = 'shellw'
+        ! documentation
+        if( describe ) call print_doc_cont3D
+        ! parse command line
+        call check_restart( entire_line, is_restart )
+        if( is_restart )then
+            call parse_restart('cont3D', entire_line, cline, keys_required(:9), keys_optional(:16))
+        else
+            call cline%parse( keys_required(:9), keys_optional(:16) )
+        endif
+        ! set defaults
+        if( .not. cline%defined('refine') ) call cline%set('refine',  'yes')
+        if( .not. cline%defined('eo') )     call cline%set('eo', 'yes')
+        ! execute
+        call xcont3D_distr%execute(cline)
     case('shellweight3D')
         !==Program shellweight3D
         !

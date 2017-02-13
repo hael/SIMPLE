@@ -31,6 +31,7 @@ public :: unblur_tomo_movies_distr_commander
 public :: ctffind_distr_commander
 public :: pick_distr_commander
 public :: prime2D_init_distr_commander
+public :: cont3D_distr_commander
 public :: prime2D_distr_commander
 public :: find_nnimgs_distr_commander
 public :: prime3D_init_distr_commander
@@ -71,6 +72,10 @@ type, extends(commander_base) :: prime3D_init_distr_commander
   contains
     procedure :: execute      => exec_prime3D_init_distr
 end type prime3D_init_distr_commander
+type, extends(commander_base) :: cont3D_distr_commander
+  contains
+    procedure :: execute      => exec_cont3D_distr
+end type cont3D_distr_commander
 type, extends(commander_base) :: prime3D_distr_commander
   contains
     procedure :: execute      => exec_prime3D_distr
@@ -885,6 +890,237 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_DISTR_PRIME3D NORMAL STOP ****')
     end subroutine exec_prime3D_distr
+
+    ! PRIME3D
+
+    subroutine exec_cont3D_distr( self, cline )
+        use simple_commander_prime3D
+        use simple_commander_mask
+        use simple_commander_rec
+        use simple_commander_volops
+        use simple_oris, only: oris
+        use simple_math, only: calc_fourier_index, calc_lowpass_lim
+        class(cont3D_distr_commander), intent(inout) :: self
+        class(cmdline),                 intent(inout) :: cline
+        ! constants
+        logical,           parameter :: DEBUG=.false.
+        character(len=32), parameter :: ALGNFBODY    = 'algndoc_'
+        character(len=32), parameter :: ITERFBODY    = 'cont3Ddoc_'
+        character(len=32), parameter :: VOLFBODY     = 'recvol_state'
+        character(len=32), parameter :: RESTARTFBODY = 'cont3D_restart'
+        ! ! commanders
+        type(prime3D_init_distr_commander)  :: xprime3D_init_distr
+        type(shellweight3D_distr_commander) :: xshellweight3D_distr
+        type(recvol_distr_commander)        :: xrecvol_distr
+        type(merge_algndocs_commander)      :: xmerge_algndocs
+        type(check3D_conv_commander)        :: xcheck3D_conv
+        type(split_commander)               :: xsplit
+        type(postproc_vol_commander)        :: xpostproc_vol
+        ! command lines
+        type(cmdline)                       :: cline_recvol_distr
+        type(cmdline)                       :: cline_prime3D_init
+        type(cmdline)                       :: cline_check3D_conv
+        type(cmdline)                       :: cline_merge_algndocs
+        type(cmdline)                       :: cline_volassemble
+        type(cmdline)                       :: cline_shellweight3D
+        type(cmdline)                       :: cline_postproc_vol
+        ! other variables
+        type(params)                        :: p_master
+        type(chash)                         :: myq_descr, job_descr
+        type(qsys_factory)                  :: qsys_fac
+        class(qsys_base), pointer           :: myqsys
+        integer, allocatable                :: parts(:,:)
+        type(qsys_ctrl)                     :: qscripts
+        type(oris)                          :: os
+        character(len=STDLEN)               :: vol, vol_iter, oritab, str, str_iter
+        character(len=STDLEN)               :: str_state, fsc_file
+        character(len=STDLEN)               :: simple_exec_bin, restart_file
+        real                                :: frac_srch_space
+        integer                             :: s, state, iter
+        logical                             :: vol_defined
+        ! ! make master parameters
+        p_master = params(cline, checkdistr=.false.)
+        ! make oritab
+        call os%new(p_master%nptcls)
+        ! options check
+        if( p_master%automsk.eq.'yes' )stop 'Automasking not supported yet' ! automask deactivated for now
+        if( p_master%nstates>1 .and. p_master%dynlp.eq.'yes' )&
+            &stop 'Incompatible options: nstates>1 and dynlp=yes'
+        if( p_master%automsk.eq.'yes' .and. p_master%dynlp.eq.'yes' )&
+            &stop 'Incompatible options: automsk=yes and dynlp=yes'
+        !if( p_master%eo.eq.'yes' .and. p_master%dynlp.eq.'yes' )&
+        !    &stop 'Incompatible options: eo=yes and dynlp=yes'
+        ! setup the environment for distributed execution
+        call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr)
+        simple_exec_bin = qscripts%get_exec_bin()
+
+        ! initialise
+        if( .not. cline%defined('nspace') ) call cline%set('nspace', 1000.)
+        call cline%set( 'box', real(p_master%box) )
+        ! prepare command lines from prototype master
+        cline_recvol_distr   = cline
+        cline_prime3D_init   = cline
+        cline_check3D_conv   = cline
+        cline_merge_algndocs = cline
+        cline_volassemble    = cline
+        cline_shellweight3D  = cline
+        cline_postproc_vol   = cline
+        ! initialise static command line parameters and static job description parameter
+        call cline_recvol_distr%set( 'prg', 'recvol' )       ! required for distributed call
+        call cline_prime3D_init%set( 'prg', 'prime3D_init' ) ! required for distributed call
+        call cline_shellweight3D%set('prg', 'shellweight3D') ! required for distributed call
+        call cline_merge_algndocs%set( 'nthr', 1. )
+        call cline_merge_algndocs%set( 'fbody',  ALGNFBODY)
+        call cline_merge_algndocs%set( 'nptcls', real(p_master%nptcls) )
+        call cline_merge_algndocs%set( 'ndocs',  real(p_master%nparts) )
+        call cline_check3D_conv%set( 'box',    real(p_master%box))
+        call cline_check3D_conv%set( 'nptcls', real(p_master%nptcls))
+        call cline_volassemble%set( 'nthr', 1. )
+        call cline_postproc_vol%set( 'nstates', 1. )
+        ! removes unnecessary volume keys
+        do state = 1,p_master%nstates
+            vol = 'vol'//int2str( state )
+            call cline_check3D_conv%delete( trim(vol) )
+            call cline_merge_algndocs%delete( trim(vol) )
+            call cline_volassemble%delete( trim(vol) )
+        enddo
+
+        ! SPLIT STACK
+        if( stack_is_split(p_master%ext, p_master%nparts) )then
+            ! check that the stack partitions are of correct sizes
+            call stack_parts_of_correct_sizes(p_master%ext, parts, p_master%box)
+        else
+            call xsplit%execute( cline )
+        endif
+
+        ! GENERATE STARTING MODELS & ORIENTATIONS
+        ! Orientations
+        if( cline%defined('oritab') )then
+            oritab=trim(p_master%oritab)
+        else
+            oritab='cont3D_startdoc.txt'
+        endif
+        ! Models
+        vol_defined = .false.
+        do state = 1,p_master%nstates
+            vol = 'vol' // int2str(state)
+            if( cline%defined(trim(vol)) )vol_defined = .true.
+        enddo
+        if( cline%defined('oritab') .and. .not.vol_defined )then
+            ! reconstructions needed
+            call xrecvol_distr%execute( cline_recvol_distr )
+            do state = 1,p_master%nstates
+                ! rename volumes and updates cline
+                str_state = int2str_pad(state,2)
+                vol = trim( VOLFBODY )//trim(str_state)//p_master%ext
+                str = 'startvol_state'//trim(str_state)//p_master%ext
+                call rename( trim(vol), trim(str) )
+                vol = 'vol'//trim(int2str(state))
+                call cline%set( trim(vol), trim(str) )
+            enddo
+        else
+            ! all good
+        endif
+
+        ! prepare Cont3D job description
+        call cline%gen_job_descr(job_descr)
+
+        ! MAIN LOOP
+        iter = p_master%startit-1
+        do
+            iter = iter+1
+            str_iter = int2str_pad(iter,3)
+            write(*,'(A)')   '>>>'
+            write(*,'(A,I6)')'>>> ITERATION ', iter
+            write(*,'(A)')   '>>>'
+            call qsys_cleanup(p_master)
+            ! PREPARE PRIME3D SCRIPTS
+            call os%read(trim(cline%get_carg('oritab')))
+            frac_srch_space = os%get_avg('frac')
+            call job_descr%set( 'oritab', trim(oritab) )
+            call cline_shellweight3D%set( 'oritab', trim(oritab) )
+            if( p_master%l_shellw .and. frac_srch_space >= 50.  )then
+                call xshellweight3D_distr%execute(cline_shellweight3D)
+            endif
+            call job_descr%set( 'startit', trim(int2str(iter)) )
+            call cline%set( 'startit', real(iter) )
+            call qscripts%generate_scripts(job_descr, p_master%ext, myq_descr, ALGNFBODY)
+            ! PRIMED3D JOB SCHEDULING
+            call qscripts%schedule_jobs
+            ! ASSEMBLE ALIGNMENT DOCS
+            oritab = trim(ITERFBODY)//trim(str_iter)//'.txt'    
+            call cline%set( 'oritab', oritab )
+            call cline_shellweight3D%set( 'oritab', trim(oritab) )
+            call cline_merge_algndocs%set( 'outfile', trim(oritab) )
+            call xmerge_algndocs%execute( cline_merge_algndocs )
+            ! ASSEMBLE VOLUMES
+            call cline_volassemble%set( 'oritab', trim(oritab) )
+            do state = 1,p_master%nstates
+                str_state = int2str_pad(state,2)
+                call del_file('fsc_state'//trim(str_state)//'.bin')
+            enddo
+            call cline_volassemble%set( 'prg', 'eo_volassemble' )   ! required for cmdline exec
+            ! call xeo_volassemble%execute( cline_volassemble )
+            ! replaced the above with command line execution as giving the volassemble setup
+            ! its own process id seem to resolve the system instabilities on fast cpu systems
+            call exec_simple_prg(simple_exec_bin, cline_volassemble)
+
+            ! rename volumes, postprocess & update job_descr
+            call os%read(trim(oritab))
+            do state = 1,p_master%nstates
+                str_state = int2str_pad(state,2)
+                if( os%get_statepop( state ) == 0 )then
+                    ! cleanup for empty state
+                    vol = 'vol'//trim(int2str(state))
+                    call cline%delete( vol )
+                    call job_descr%delete( trim(vol) )
+                    call cline_shellweight3D%delete( trim(vol) )
+                else
+                    if( p_master%nstates>1 )then
+                        ! cleanup postprocessing cmdline as it only takes one volume at a time
+                        do s = 1,p_master%nstates
+                            vol = 'vol'//int2str(s)
+                            call cline_postproc_vol%delete( trim(vol) )
+                        enddo
+                    endif
+                    ! rename state volume
+                    vol       = trim(VOLFBODY)//trim(str_state)//p_master%ext
+                    vol_iter  = trim(VOLFBODY)//trim(str_state)//'_iter'//trim(str_iter)//p_master%ext
+                    call rename( trim(vol), trim(vol_iter) )
+                    ! post-process
+                    vol = 'vol'//trim(int2str(state))
+                    call cline_postproc_vol%set( 'vol1' , trim(vol_iter))
+                    fsc_file = 'fsc_state'//trim(str_state)//'.bin'
+                    call cline_postproc_vol%delete('lp')
+                    call cline_postproc_vol%set('fsc', trim(fsc_file))
+                    call xpostproc_vol%execute(cline_postproc_vol)
+                    ! updates cmdlines & job description
+                    call job_descr%set( trim(vol), trim(vol_iter) )
+                    call cline%set( trim(vol), trim(vol_iter) )
+                    call cline_shellweight3D%set( trim(vol), trim(vol_iter) )
+                endif
+            enddo
+            ! CONVERGENCE
+            call cline_check3D_conv%set( 'oritab', trim(oritab) )
+            call xcheck3D_conv%execute( cline_check3D_conv )
+            if( iter >= p_master%startit+2 )then
+                ! after a minimum of 2 iterations
+                if( cline_check3D_conv%get_carg('converged') .eq. 'yes' ) exit
+            endif
+            if( iter >= p_master%maxits ) exit
+            ! ITERATION DEPENDENT UPDATES
+            ! nothing so far
+            ! RESTART
+            restart_file = trim(RESTARTFBODY)//'_iter'//int2str_pad( iter, 3)//'.txt'
+            call cline%write( restart_file )
+        end do
+        call qsys_cleanup(p_master)
+        ! report the last iteration on exit
+        call cline%delete( 'startit' )
+        call cline%set('endit', real(iter))
+        ! end gracefully
+        call simple_end('**** SIMPLE_DISTR_CONT3D NORMAL STOP ****')
+    end subroutine exec_cont3D_distr
 
     ! SHELLWEIGHT3D
 

@@ -98,6 +98,7 @@ contains
         
         ! CREATE THE CARTESIAN CORRELATOR
         call cftcc%new( b, p, cline )
+        if( p%boxmatch < p%box )call b%vol%new([p%box,p%box,p%box],p%smpd) ! ensures correct dimensions
         
         ! SET BAND-PASS LIMIT RANGE 
         call set_bp_range( b, p, cline )
@@ -136,14 +137,15 @@ contains
             cnt_glob = cnt_glob+1
             call progress(cnt_glob, p%top-p%fromp+1)
             orientation = b%a%get_ori(iptcl)
-            if( nint(orientation%get('state')) > 0 )then
+            state = nint(orientation%get('state'))
+            if( s > 0 )then
+                if( p%boxmatch < p%box )call b%img%new([p%box,p%box,1],p%smpd) ! ensures correct dimensions
                 if( p%l_distr_exec )then
                     call b%img%read(p%stk_part, cnt_glob, p%l_xfel)
                 else
                     call b%img%read(p%stk, iptcl, p%l_xfel)
                 endif
                 call prepimg4align(b, p, orientation)
-                state = nint(orientation%get('state'))
                 call cftcc_srch_set_state(state)
                 call cftcc_srch_minimize(orientation)
                 call b%a%set_ori(iptcl,orientation)
