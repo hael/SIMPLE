@@ -998,6 +998,7 @@ select case(prg)
         ! set defaults
         call cline%set('eo',     'yes')
         call cline%set('refine', 'yes')
+        call cline%set('dynlp',  'no')
         ! execute
         call xcont3D%execute(cline)        
     case( 'check3D_conv' )

@@ -55,7 +55,7 @@ contains
         type(ori) :: o
         real      :: cost, shvec(3)
         integer   :: i
-        ! enfoce the barrier constraint for the shifts
+        ! enforce the barrier constraint for the shifts
         do i=4,5
             if( vec(i) < ospec%limits(i,1) .or. vec(i) > ospec%limits(i,2) )then
                 cost = 1.

@@ -499,8 +499,9 @@ select case(prg)
             call cline%parse( keys_required(:9), keys_optional(:16) )
         endif
         ! set defaults
-        if( .not. cline%defined('refine') ) call cline%set('refine',  'yes')
-        if( .not. cline%defined('eo') )     call cline%set('eo', 'yes')
+        call cline%set('dynlp', 'no')
+        call cline%set('eo',    'yes')
+        call cline%set('refine','yes')
         ! execute
         call xcont3D_distr%execute(cline)
     case('shellweight3D')

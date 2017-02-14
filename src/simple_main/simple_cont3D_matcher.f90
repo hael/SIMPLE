@@ -49,6 +49,7 @@ contains
             call progress(cnt_glob, p%top-p%fromp+1)
             orientation = b%a%get_ori(iptcl)
             if( nint(orientation%get('state')) > 0 )then
+                if( p%boxmatch < p%box )call b%img%new([p%box,p%box,1],p%smpd) ! ensures correct dimensions
                 if( p%l_distr_exec )then
                     call b%img%read(p%stk_part, cnt_glob, p%l_xfel)
                 else
@@ -86,15 +87,18 @@ contains
     
     !>  \brief  is the continuous refinement algorithm
     subroutine cont3D_exec( b, p, cline, which_iter, converged )
-        use simple_ori, only: ori
+        use simple_ori,       only: ori
+        use simple_filterer,  only: resample_filter
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         class(cmdline), intent(inout) :: cline
         integer, intent(in)           :: which_iter
         logical, intent(inout)        :: converged
-        type(ori) :: orientation
-        integer   :: state, file_stat, fnr, iptcl, s
-        real      :: corr, dist
+        type(ori)         :: orientation
+        real, allocatable :: wmat(:,:), wresamp(:), res(:), res_pad(:)
+        real              :: corr, dist, frac_srch_space, reslim
+        integer           :: state, file_stat, fnr, iptcl, s
+        logical           :: doshellweight
         
         ! CREATE THE CARTESIAN CORRELATOR
         call cftcc%new( b, p, cline )
@@ -105,10 +109,22 @@ contains
         
         ! CALCULATE ANGULAR THRESHOLD
         p%athres = rad2deg(atan(max(p%fny,p%lp)/(p%moldiam/2.)))
+        reslim   = p%lp
+
+        ! SET FRACTION OF SEARCH SPACE
+        frac_srch_space = b%a%get_avg('frac')
         
         ! GENERATE PARTICLE WEIGHTS
         if( p%oritab .ne. '' .and. p%frac < 0.99 ) call b%a%calc_hard_ptcl_weights(p%frac)
-        
+        if( p%l_distr_exec )then
+            ! nothing to do
+        else
+            if( p%l_shellw .and. frac_srch_space >= 50. )then
+                call cont3D_shellweight(b, p, cline)
+            endif
+        endif
+        call setup_shellweights(b, p, doshellweight, wmat, res, res_pad)
+
         ! INITIALIZE
         call cftcc_srch_init(cftcc, b%img, OPT_STR, p%optlims(:5,:), NRESTARTS)
         
@@ -149,7 +165,12 @@ contains
                 call cftcc_srch_set_state(state)
                 call cftcc_srch_minimize(orientation)
                 call b%a%set_ori(iptcl,orientation)
-                call grid_ptcl( b, p, iptcl, cnt_glob, orientation)
+                if( doshellweight )then
+                    wresamp = resample_filter(wmat(iptcl,:), res, res_pad)
+                    call grid_ptcl(b, p, iptcl, cnt_glob, orientation, shellweights=wresamp)
+                else
+                    call grid_ptcl(b, p, iptcl, cnt_glob, orientation)
+                endif
             else
                 call orientation%reject
                 call b%a%set_ori(iptcl,orientation)
@@ -160,7 +181,7 @@ contains
         
         ! NORMALIZE STRUCTURE FACTORS
         if( p%eo .eq. 'yes' )then
-            call eonorm_struct_facts(b, p, res, which_iter)
+            call eonorm_struct_facts(b, p, reslim, which_iter)
         else
             call norm_struct_facts(b, p, which_iter)
         endif
@@ -172,6 +193,11 @@ contains
             converged = b%conv%check_conv3D()
         endif
 
+        ! DEALLOCATE
+        if( allocated(wmat)    ) deallocate(wmat)
+        if( allocated(wresamp) ) deallocate(wresamp)
+        if( allocated(res)     ) deallocate(res)
+        if( allocated(res_pad) ) deallocate(res_pad)
     end subroutine cont3D_exec
 
 end module simple_cont3D_matcher

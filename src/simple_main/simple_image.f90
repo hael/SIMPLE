@@ -3389,7 +3389,7 @@ contains
         do h=lims(1,1),lims(1,2)
             hh = h*h
             do k=lims(2,1),lims(2,2)
-                kk = k*k*self_ptcl%oshift([h,k,l], shvec)
+                kk = k*k
                 do l=lims(3,1),lims(3,2)
                     ll = l*l
                     sqarg = hh+kk+ll
