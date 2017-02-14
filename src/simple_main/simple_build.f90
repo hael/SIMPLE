@@ -35,7 +35,7 @@ implicit none
 public :: build, test_build
 private
 
-logical :: debug=.false.
+logical :: debug=.true.
 
 type build
     ! GENERAL TOOLBOX
@@ -144,6 +144,7 @@ contains
             if( p%oritab /= '' )then
                 if( .not. cline%defined('nstates') .and. p%vols(1) .eq. '' )then
                     call self%a%read(p%oritab, p%nstates)
+                    if( DEBUG ) print *, 'updated nstates to: ', p%nstates
                 else
                     call self%a%read(p%oritab)
                 endif

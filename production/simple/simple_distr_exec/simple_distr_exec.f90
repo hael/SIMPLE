@@ -229,15 +229,14 @@ select case(prg)
         keys_required(1) = 'filetab'
         keys_required(2) = 'refs'
         keys_required(3) = 'smpd'
-        keys_required(4) = 'shrink'
-        keys_required(5) = 'nthr'
-        keys_required(6) = 'nparts'
+        keys_required(4) = 'nthr'
+        keys_required(5) = 'nparts'
         ! set optional keys
         keys_optional(1) = 'lp'
         keys_optional(2) = 'thres'
         ! parse command line
         if( describe ) call print_doc_pick
-        call cline%parse(keys_required(:6), keys_optional(:2))
+        call cline%parse(keys_required(:5), keys_optional(:2))
         ! execute
         call xpick_distr%execute(cline)
 

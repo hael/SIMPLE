@@ -9,7 +9,6 @@ use simple_params,            only: params
 use simple_commander_base,    only: commander_base
 use simple_strings,           only: real2str
 use simple_commander_preproc, only: preproc_commander
-use simple_procimgfile,       only: file_written2disk
 use simple_filehandling       ! use all in there
 use simple_qsys_funs          ! use all in there
 use simple_syscalls           ! use all in there
@@ -42,10 +41,12 @@ contains
         type(chash)                        :: myq_descr, job_descr
         type(chash), allocatable           :: part_params(:)
         integer, allocatable               :: parts(:,:)
-        logical, allocatable               :: jobs_done(:), jobs_submitted(:), file_sanity(:), tmp(:)
+        logical, allocatable               :: jobs_done(:), jobs_submitted(:)
         type(qsys_factory)                 :: qsys_fac
         class(qsys_base), pointer          :: myqsys
         integer                            :: nmovies, nmovies_prev, imovie
+        integer, parameter                 :: TRAILING=5
+
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! set defaults
@@ -68,13 +69,8 @@ contains
             call read_filetable(FILETABNAME, movienames)
             nmovies_prev = nmovies
             nmovies      = size(movienames)
-            ! check that the new file is written to disk
-            if( nmovies > nmovies_prev )then
-                do 
-                    if( file_written2disk(movienames(nmovies)) ) exit
-                    call sleep(SHORTTIME)
-                end do
-            endif
+            print *, 'sz of 1:    ', file_size(movienames(1))
+            print *, 'sz of last: ', file_size(movienames(nmovies))
             call cline%set('nparts', real(nmovies)) ! need dyn update of nparts 4 stream
             p_master%nparts = nmovies               ! need dyn update of nparts 4 stream
             p_master%nptcls = nmovies               ! need dyn update of nparts 4 stream

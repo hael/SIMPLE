@@ -112,6 +112,7 @@ type :: params
     character(len=STDLEN) :: dir_reject='rejected'
     character(len=STDLEN) :: dir_select='selected'
     character(len=STDLEN) :: dir_target=''
+    character(len=STDLEN) :: dir_ptcls=''
     character(len=STDLEN) :: doclist=''
     character(len=STDLEN) :: endian='native'
     character(len=STDLEN) :: exp_doc=''
@@ -401,6 +402,7 @@ contains
         call check_carg('dfunit',         self%dfunit)
         call check_carg('dir',            self%dir)
         call check_carg('dir_movies',     self%dir_movies)
+        call check_carg('dir_ptcls',      self%dir_ptcls)
         call check_carg('dir_reject',     self%dir_reject)
         call check_carg('dir_select',     self%dir_select)
         call check_carg('dir_target',     self%dir_target)
@@ -653,7 +655,7 @@ contains
         endif
         ! determines whether at least one volume is on the cmdline
         do i=1,self%nstates
-            if( cline%defined( trim('vol')//int2str(i) ))vol_defined = .true.
+            if( cline%defined( trim('vol')//int2str(i) )) vol_defined = .true.
         enddo
         ! check inputted vols
         if( cline%defined('vollist') )then
