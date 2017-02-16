@@ -12,7 +12,7 @@ use simple_online_var,  only: online_var
 use simple_opt_spec,    only: opt_spec
 implicit none
 
-public :: oasis_opt, test_oasis_opt
+public :: oasis_opt!, test_oasis_opt
 private
 
 type, extends(optimizer) :: oasis_opt
@@ -215,34 +215,34 @@ contains
     end subroutine
 
     !> \brief  unit test
-    subroutine test_oasis_opt
-        use simple_rnd,      only: ran3
-        use simple_math,     only: euclid
-        use simple_testfuns
-        type(opt_spec)              :: ospec
-        type(oasis_opt)             :: illusion
-        procedure(testfun), pointer :: costfun_ptr  !< pointer 2 test function
-        integer, parameter          :: TSTFUN=3,DIMS=8
-        real                        :: limits(DIMS,2),lowest_cost, gmin, range(2)
-        integer                     :: i
-        ! generate the cost function (here: 1)
-        costfun_ptr = get_testfun(TSTFUN, DIMS, gmin, range) ! get testfun, gmin is the global min, range is limits
-        limits(:,1) = range(1)
-        limits(:,2) = range(2)
-        ! specify the optimizer
-        call ospec%specify('oasis',DIMS,limits=limits,nrestarts=1) ! make optimizer spec
-        call ospec%set_costfun(costfun_ptr)                        ! set pointer to costfun
-        ! initialize with randomized bounds
-        do i=1,DIMS
-            ospec%x(i) = limits(i,1)+ran3()*(limits(i,2)-limits(i,1))
-        end do
-        ! generate the optimizer
-        call illusion%new(ospec)
-        call illusion%minimize(ospec,lowest_cost)
-        ! minimize
-        print *, 'minimum found:', lowest_cost
-        print *, 'correct global minimum:', gmin
-        print *, 'solution:', ospec%x
-    end subroutine
+    ! subroutine test_oasis_opt
+    !     use simple_rnd,      only: ran3
+    !     use simple_math,     only: euclid
+    !     use simple_testfuns
+    !     type(opt_spec)              :: ospec
+    !     type(oasis_opt)             :: illusion
+    !     procedure(testfun), pointer :: costfun_ptr  !< pointer 2 test function
+    !     integer, parameter          :: TSTFUN=3,DIMS=8
+    !     real                        :: limits(DIMS,2),lowest_cost, gmin, range(2)
+    !     integer                     :: i
+    !     ! generate the cost function (here: 1)
+    !     costfun_ptr = get_testfun(TSTFUN, DIMS, gmin, range) ! get testfun, gmin is the global min, range is limits
+    !     limits(:,1) = range(1)
+    !     limits(:,2) = range(2)
+    !     ! specify the optimizer
+    !     call ospec%specify('oasis',DIMS,limits=limits,nrestarts=1) ! make optimizer spec
+    !     call ospec%set_costfun(costfun_ptr)                        ! set pointer to costfun
+    !     ! initialize with randomized bounds
+    !     do i=1,DIMS
+    !         ospec%x(i) = limits(i,1)+ran3()*(limits(i,2)-limits(i,1))
+    !     end do
+    !     ! generate the optimizer
+    !     call illusion%new(ospec)
+    !     call illusion%minimize(ospec,lowest_cost)
+    !     ! minimize
+    !     print *, 'minimum found:', lowest_cost
+    !     print *, 'correct global minimum:', gmin
+    !     print *, 'solution:', ospec%x
+    ! end subroutine
 
 end module simple_oasis_opt

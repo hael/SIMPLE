@@ -134,7 +134,7 @@ contains
             write(fnr,'(a)') trim(names(ifile))
         end do 
         close(unit=fnr)
-        call flush(unit=fnr)
+        call flush(fnr)
     end subroutine make_filetable
 
     !> \brief  is for getting a free fileunit

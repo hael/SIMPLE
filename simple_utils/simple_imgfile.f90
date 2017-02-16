@@ -184,7 +184,6 @@ contains
     !>  \brief  close the file(s) and "de-initialise" the imgfile object
     subroutine close( self )
         class(imgfile), intent(inout) :: self
-        integer :: ret
         if( is_open(self%funit) )then
             if( self%was_written_to )then
                 call self%overall_head%write(self%funit)                    
@@ -192,7 +191,6 @@ contains
             endif
             close(self%funit)
             call flush(self%funit)
-            ret = fsync(fnum(self%funit))
         endif
         if( allocated(self%overall_head) ) call self%overall_head%kill
         if( allocated(self%overall_head) ) deallocate(self%overall_head)
@@ -207,7 +205,6 @@ contains
         if( is_open(self%funit) )then
             close(self%funit)
             call flush(self%funit)
-            ret = fsync(fnum(self%funit))
         endif
         if( allocated(self%overall_head) ) call self%overall_head%kill
         if( allocated(self%overall_head) ) deallocate(self%overall_head)
