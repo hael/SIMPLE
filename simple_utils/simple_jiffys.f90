@@ -261,39 +261,31 @@ contains
         
     ! PRETTY PROGRESS & ENDING JIFFYS
 
-     subroutine progress_percen( i, n )
+     subroutine progress( i, n )
         integer, intent(in) :: i, n
         if( .not. l_distr_exec_glob )then
-            write(*,'(a1,a,t21,f6.2,a)',advance="no") achar(13),&
-            &"Percent Complete: ", (real(i)/real(n))*100.0, "%"
+            write(6,'(a1,a,t21,i3,a)',advance="no") achar(13),&
+            &"Percent Complete: ", nint((real(i)/real(n))*100.0), "%"
+            flush 6
             if( i >= n ) write(*,*) ''
         endif
-    end subroutine progress_percen
+    end subroutine progress
     
     !> \brief is for printing a progress bar
-    subroutine progress(i, imax)
+    subroutine progress_gfortran(i, imax)
         integer, intent(in) :: i, imax
-        integer :: curr, prev
+        integer :: k, curr, prev
         character(len=1) :: back
-        integer(kind=4)   :: j=0, k
-        character(len=17) :: bar="???% |      |"
-
         if( .not. l_distr_exec_glob )then
-            
-            ! write(unit=bar(1:3),fmt="(i3)") 10*j
-            ! do k=1,j
-            !    bar(6+k:6+k)="="
-            ! end do
-            ! write(unit=6,fmt="(a1,a1,a17)") '+', char(13), bar
             back = char(8)
-            ! if( i >= imax )then
-            !     ! delete the bar and the percentage
-            !     write(6,'(256a1)', advance='no') (back, k =1,59)
-            !     ! write new bar and percentage
-            !     write(6,'(2x,1a4,2x,1a1,256a1)', advance='no') '100%','|', ('=', k=1,50)
-            !     write(6,'(a)') '| done.'
-            !     flush 6            
-            ! else
+            if( i >= imax )then
+                ! delete the bar and the percentage
+                write(6,'(256a1)', advance='no') (back, k =1,59)
+                ! write new bar and percentage
+                write(6,'(2x,1a4,2x,1a1,256a1)', advance='no') '100%','|', ('=', k=1,50)
+                write(6,'(a)') '| done.'
+                flush 6            
+            else
                 prev = nint( 100.*real(i-1)/real(imax) )
                 curr = nint( 100.*real(i)/real(imax) )
                 if( curr>prev )then
@@ -303,9 +295,9 @@ contains
                     write(6,'(2x,1i3,1a1,2x,1a1,256a1)', advance='no') curr,'%','|', ('=', k=1,50*i/imax)
                     flush 6
                 endif
-            ! endif
+            endif
         endif
-    end subroutine progress
+    end subroutine progress_gfortran
 
     !> \brief  is for pretty ending
     subroutine simple_end( str, print_simple )

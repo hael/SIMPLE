@@ -1452,7 +1452,11 @@ contains
     pure  function same_smpd( self1, self2 ) result( yep )
         class(image), intent(in) :: self1, self2
         logical :: yep
-        if( abs(self1%smpd-self2%smpd) < 0.0001 ) yep = .true.
+        if( abs(self1%smpd-self2%smpd) < 0.0001 )then
+            yep = .true.
+        else
+            yep = .false.
+        endif
     end function same_smpd
 
     !>  \brief  checks if image are of the same kind

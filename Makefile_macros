@@ -2,11 +2,11 @@
 
 ####### The project path #####
 
-Simple_source=/home/cyril/Simple3
+Simple_source=/home/hael/src/simple
 
 ####### The switches #####
 
-DOPENMP = -fopenmp
+DOPENMP = -qopenmp
 DCUDA = 
 DBENCH = 
 
@@ -14,7 +14,7 @@ DBENCH =
 
 CCCOMP=
 GCC=
-GFORTRAN=gfortran
+GFORTRAN=ifort
 
 ####### The CUDA paths #####
 
@@ -30,19 +30,19 @@ MODDIR=obj/SIMPLEOFILES
 ##############
 
 CC=$(CCCOMP)
-CFLAGS=-DCUBLAS_GFORTRAN -DADD_ -O3 -O -DLINUX -fopenmp  
+CFLAGS= -O3 -no-prec-div -static -fp-model fast=2 -xHost -O -DLINUX -qopenmp  
 CCLIB=$(CC) -c $(CFLAGS) -I $(MODDIR)                                            \
-                         -I /usr/local/fftw/3.3.4-gcc/include/
+                         -I /usr/include/
 
 ################
 # C++ compiler.#
 ################
 
 CPP=$(GCC)
-CPPFLAGS=-DADD_ -O3 -DLINUX -fopenmp  
+CPPFLAGS=-DADD_ -O3 -no-prec-div -static -fp-model fast=2 -xHost -DLINUX -qopenmp  
 CPPCLIB=$(CPP) -c $(CPPFLAGS) -I $(MODDIR)                                            \
                               -I $(Simple_source)/test_code                           \
-                              -I /usr/local/fftw/3.3.4-gcc/include/
+                              -I /usr/include/
 
 #######################
 # Fortran 90 compiler.#
@@ -50,9 +50,8 @@ CPPCLIB=$(CPP) -c $(CPPFLAGS) -I $(MODDIR)                                      
 
 # $(DLIB)
 F90C=$(GFORTRAN)
-F90FLAGS=-ffree-form -cpp -fno-second-underscore -O3 -DLINUX -fopenmp  
+F90FLAGS=-implicitnone -80 -cpp -fPIC -module obj/SIMPLEOFILES/ -O3 -no-prec-div -static -fp-model fast=2 -xHost -DLINUX -qopenmp  
 F90CLIB=$(F90C) -c $(F90FLAGS) -I $(MODDIR)                      \
-                             -J $(MODDIR)                      \
 
 
 F90CLIB77=$(F90C) -c $(F90FLAGS77) -I .                                \

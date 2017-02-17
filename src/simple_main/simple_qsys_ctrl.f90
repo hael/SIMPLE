@@ -254,7 +254,7 @@ contains
         write(funit,'(a)',advance='yes') 'exit'
         close(funit)
         call flush(funit)
-        call chmod(self%script_names(ipart),'+x',ios)
+        call chmod(trim(self%script_names(ipart)),'+x')
         if( ios .ne. 0 )then
             write(*,'(a)',advance='no') 'simple_qsys_scripts :: gen_qsys_script; Error'
             write(*,'(a)') 'chmoding submit script'//trim(self%script_names(ipart))
@@ -309,12 +309,7 @@ contains
         end do
         write(fnr,'(a)') 'exit'
         close( unit=fnr )
-        call chmod(master_submit_script,'+x',ios)
-        if( ios .ne. 0 )then
-            write(*,'(a)',advance='no') 'ERROR, simple_qsys_ctrl :: submit_scripts :: make_master_submit_script, '
-            write(*,'(a)') 'chmoding master submit script '//trim(master_submit_script)
-            stop
-        endif
+        call chmod(master_submit_script,'+x')
         if( DEBUG )then
             call exec_cmdline('echo DISTRIBUTED MODE :: submitting scripts:')
             call exec_cmdline('ls -1 distr_simple_script_*')

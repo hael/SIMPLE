@@ -600,14 +600,16 @@ sub make_Makefile_macros {
     print $mkma qq[F90C=\$(GFORTRAN)\n];
     print $mkma qq[F90FLAGS=$mkma_f90_flags\n];
     print $mkma qq[F90CLIB=\$(F90C) -c \$(F90FLAGS) -I \$(MODDIR)                      \\\n];
-    if( $FCOMPILER =~ /gfortran/ ) {
-        print $mkma qq[                             -J \$(MODDIR)                      \\\n];
+    if( $FCOMPILER =~ /gfortran/ ){
+    print $mkma qq[                             -J \$(MODDIR)                      \\\n];
     }
     print $mkma qq[\n];
     print $mkma qq[\n];
     print $mkma qq[F90CLIB77=\$(F90C) -c \$(F90FLAGS77) -I .                                \\\n];
     print $mkma qq[                                   -I \$(MODDIR)                        \\\n];
-    # print $mkma qq[                                   -J \$(MODDIR)                        \\\n];
+    if( $FCOMPILER =~ /gfortran/ ){
+    print $mkma qq[                                   -J \$(MODDIR)                        \\\n];
+    }
     print $mkma qq[\n];
     print $mkma qq[F90POST=\n];
     print $mkma qq[\n];

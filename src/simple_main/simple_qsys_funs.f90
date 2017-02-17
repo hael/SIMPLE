@@ -162,6 +162,7 @@ contains
         stop 'need SIMPLE_QSYS env var to auto-generate simple_distr_config.env; simple_qsys_funs :: autogen_env_file'
         simple_email = sys_get_env_var('SIMPLE_EMAIL')
         if( .not. allocated(simple_email) ) allocate(simple_email, source='me.myself@uni.edu')
+        funit = get_fileunit()
         open(unit=funit, status='replace', action='write', file=trim(env_file), iostat=file_stat)
         write(funit,'(a)') '# CONFIGURATION FILE FOR DISTRIBUTED SIMPLE EXECUTION'
         write(funit,'(a)') ''

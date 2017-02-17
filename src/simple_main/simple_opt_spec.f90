@@ -197,7 +197,7 @@ contains
         real,               intent(in) :: lims(self%ndim,2) !< new limits
         integer  :: i,alloc_stat
         do i=1,self%ndim
-            if(lims(i,2) > lims(i,1)) then
+            if(lims(i,2) >= lims(i,1)) then
             else
                 write(*,*) 'Bad limits for the constrained optimization!'
                 write(*,*) 'set_limits; simple_opt_spec'
