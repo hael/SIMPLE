@@ -19,7 +19,7 @@ private
 type(cartft_corrcalc) :: cftcc
 real                  :: res
 integer               :: cnt_glob=0
-integer, parameter    :: MAXNPEAKS=10, NRESTARTS=3
+integer, parameter    :: MAXNPEAKS=10, NRESTARTS=5
 logical, parameter    :: debug=.false.
 character(len=STDLEN) :: OPT_STR='simplex'
 
@@ -97,7 +97,7 @@ contains
         type(ori)         :: orientation
         real, allocatable :: wmat(:,:), wresamp(:), res(:), res_pad(:)
         real              :: corr, dist, frac_srch_space, reslim
-        integer           :: state, file_stat, fnr, iptcl, s
+        integer           :: state, file_stat, fnr, iptcl
         logical           :: doshellweight
         
         ! CREATE THE CARTESIAN CORRELATOR
@@ -115,18 +115,19 @@ contains
         frac_srch_space = b%a%get_avg('frac')
         
         ! GENERATE PARTICLE WEIGHTS
-        if( p%oritab .ne. '' .and. p%frac < 0.99 ) call b%a%calc_hard_ptcl_weights(p%frac)
+        if( p%oritab .ne. '' .and. p%frac < 0.99 )call b%a%calc_hard_ptcl_weights(p%frac)
         if( p%l_distr_exec )then
             ! nothing to do
         else
-            if( p%l_shellw .and. frac_srch_space >= 50. )then
+            if( p%l_shellw )then
                 call cont3D_shellweight(b, p, cline)
+                if( p%boxmatch < p%box )call b%vol%new([p%box,p%box,p%box],p%smpd) ! ensures correct dimensions
             endif
         endif
         call setup_shellweights(b, p, doshellweight, wmat, res, res_pad)
 
         ! INITIALIZE
-        call cftcc_srch_init(cftcc, b%img, OPT_STR, p%optlims(:5,:), NRESTARTS)
+        call cftcc_srch_init(cftcc, b%img, OPT_STR, p%optlims(:5,:), NRESTARTS, syme=b%se )
         
         if( which_iter <= 0 )then
             write(*,'(A)') '>>> CONTINUOUS ORIENTATION SEARCH'
@@ -136,11 +137,11 @@ contains
         if( which_iter > 0 ) p%outfile = 'cont3Ddoc_'//int2str_pad(which_iter,3)//'.txt'
         
         ! RESET RECVOLS
-        do s=1,p%nstates
+        do state=1,p%nstates
             if( p%eo .eq. 'yes' )then
-                call b%eorecvols(s)%reset_all
+                call b%eorecvols(state)%reset_all
             else
-                call b%recvols(s)%reset
+                call b%recvols(state)%reset
             endif
         end do
         if( debug ) write(*,*) '*** cont3D_matcher ***: did reset recvols'
@@ -154,7 +155,7 @@ contains
             call progress(cnt_glob, p%top-p%fromp+1)
             orientation = b%a%get_ori(iptcl)
             state = nint(orientation%get('state'))
-            if( s > 0 )then
+            if( state > 0 )then
                 if( p%boxmatch < p%box )call b%img%new([p%box,p%box,1],p%smpd) ! ensures correct dimensions
                 if( p%l_distr_exec )then
                     call b%img%read(p%stk_part, cnt_glob, p%l_xfel)

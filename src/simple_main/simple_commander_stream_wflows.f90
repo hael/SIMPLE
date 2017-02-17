@@ -100,7 +100,6 @@ contains
                     call fopen_err('exec_preproc_stream :: create_individual_filetables', file_stat)
                     write(fnr,'(a)') trim(movienames(imovie))
                     close(unit=fnr)
-                    call flush(unit=fnr)
                 end do
             end subroutine create_individual_filetables
 

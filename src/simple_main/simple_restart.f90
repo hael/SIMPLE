@@ -9,7 +9,7 @@
 module simple_restart
 use simple_defs 
 use simple_strings, only: str_has_substr, parse, split, int2str_pad, str2int
-use simple_cmdline,
+use simple_cmdline, only: cmdline
 implicit none
 
 public  :: check_restart, parse_restart

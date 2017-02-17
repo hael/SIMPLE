@@ -23,6 +23,7 @@ end interface
 
 logical, parameter :: debug       = .false.
 real,    parameter :: SHTHRESH    = 0.0001
+real,    parameter :: VOLSHTHRESH = 0.01
 real               :: dfx_prev    = 0.
 real               :: dfy_prev    = 0.
 real               :: angast_prev = 0.
@@ -409,10 +410,16 @@ contains
             ! no centering
         else
             if( p%doshift )then
-                ! find center of mass shift & performs shift
-                shvec = b%vol%center(p%cenlp,'no',p%msk)
-                ! map back to particle oritentations
-                if( cline%defined('oritab') ) call b%a%map3dshift22d(-shvec(:), state=s)
+                ! centering only for asymmetric and circular symmetric cases
+                if( p%pgrp(:1).eq.'c' )then
+                    shvec = b%vol%center(p%cenlp,'no',p%msk,doshift=.false.) ! find center of mass shift
+                    if( arg(shvec) > VOLSHTHRESH )then
+                        if( p%pgrp.ne.'c1' )shvec(1:2) = 0.          ! shifts only along z-axis for C2 and above
+                        call b%vol%shift(shvec(1),shvec(2),shvec(3)) ! performs shift
+                        ! map back to particle oritentations
+                        if( cline%defined('oritab') ) call b%a%map3dshift22d(-shvec(:), state=s)
+                    endif
+                endif
             endif
         endif
         ! Clip

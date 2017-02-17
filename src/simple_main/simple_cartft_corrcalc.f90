@@ -89,7 +89,7 @@ contains
         fraca = o%get('fraca')
         dist = euclid([kV,cs,fraca,dfx,dfy,angast],&
         [self%kv_prev,self%cs_prev,self%fraca_prev,self%dfx_prev,self%dfy_prev,self%angast_prev])
-        if( abs(dist) < 0.001 )then
+        if( dist < 0.001 )then
             return
         else
             ! CTF parameters have changed, update CTF image

@@ -96,7 +96,7 @@ contains
         logical :: success
         success = .false.
         do i=1,20
-            ptr = get_testfun(i, 2, gmin, range)
+            call get_testfun(i, 2, gmin, range, ptr)
             select case(i)
                 case(1)
                     if( abs(ptr([0.,0.],2)-gmin) < 1e-5 ) success = .true.
@@ -182,7 +182,7 @@ contains
             ! generate the line
             slope = 5.*ran3()
             if( ran3() < 0.5 ) slope = -slope
-            intercept = 10.*ran(3)
+            intercept = 10.*ran3()
             if( ran3() < 0.5 ) intercept = -intercept
 !            write(*,*) '***********************************'
 !            write(*,*) 'Slope/Intercept:', slope, intercept

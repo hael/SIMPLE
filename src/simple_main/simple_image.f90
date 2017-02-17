@@ -2294,15 +2294,19 @@ contains
     end function masscen
 
     !>  \brief  is for centering an image based on center of mass
-    function center( self, lp, neg, msk, thres ) result( xyz )
+    function center( self, lp, neg, msk, thres, doshift ) result( xyz )
         class(image),     intent(inout) :: self
         real,             intent(in)    :: lp
         character(len=*), intent(in)    :: neg
-        real, intent(in), optional      :: msk, thres
+        real,    intent(in), optional   :: msk, thres
+        logical, intent(in), optional   :: doshift
         type(image) :: tmp
         real        :: xyz(3), rmsk
         integer     :: dims(3)
+        logical     :: l_doshift
         if( self%imgkind .eq. 'xfel' ) stop 'centering not implemented for xfel patterns; center; simple_image'
+        l_doshift = .true.
+        if( present(doshift) )l_doshift = doshift
         tmp = self
         dims = tmp%get_ldim()
         if( present(msk) )then
@@ -2320,10 +2324,12 @@ contains
             call tmp%bin
         endif
         xyz = tmp%masscen()
-        if( self%is_2d() )then
-            call self%shift(xyz(1),xyz(2))
-        else
-            call self%shift(xyz(1),xyz(2),xyz(3))
+        if( l_doshift )then
+            if( self%is_2d() )then
+                call self%shift(xyz(1),xyz(2))
+            else
+                call self%shift(xyz(1),xyz(2),xyz(3))
+            endif
         endif
     end function center
 

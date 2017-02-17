@@ -665,7 +665,7 @@ contains
         euls(3) = e3
         call o_out%set_euler(euls)
     end subroutine compose3d2d
-    
+
     subroutine map3dshift22d( self, sh3d )
         use simple_math, only: deg2rad
         class(ori), intent(inout) :: self

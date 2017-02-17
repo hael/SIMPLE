@@ -43,10 +43,6 @@ contains
             call del_files(rho_base_str, p%nparts, ext=p%ext, suffix='_odd')
             deallocate(rec_base_str,rho_base_str)
         end do
-        ! flush all filehandles
-        call flush
-        ! synchronize data on disk with memory (DID NOT SORT THE ISSUE)
-        ! call system('sync')
     end subroutine qsys_cleanup
 
     function stack_is_split( stkext, npart ) result( is_split )

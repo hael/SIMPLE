@@ -502,6 +502,7 @@ select case(prg)
         call cline%set('dynlp', 'no')
         call cline%set('eo',    'yes')
         call cline%set('refine','yes')
+        if( .not.cline%defined('shellw') )call cline%set('shellw','no')
         ! execute
         call xcont3D_distr%execute(cline)
     case('shellweight3D')

@@ -28,7 +28,7 @@ type(params)             :: p
 type(oris)               :: o_refs, o_ptcls
 type(image), allocatable :: imgs_refs(:), imgs_ptcls(:)
 type(cmdline)            :: cline_here
-logical                  :: verbose=.false.
+logical                  :: verbose=.true.
 
 contains
 
@@ -116,6 +116,7 @@ contains
         call pftcc%gencorrs_all_tester(corrmat2d_tst, inplmat_tst)
         if( .not. test_passed() ) stop '****prime2D_srch_tester FAILURE polarft_corrcalc :: gencorrs_all_tester_1'
 
+        verbose = .true.
         if( verbose ) write(*,*) 'testing polarft_corrcalc :: gencorrs_all_cpu'
         call pftcc%expand_dim
         call pftcc%gencorrs_all_cpu(corrmat3d)
@@ -156,10 +157,12 @@ contains
             passed = .false.
             ce_corr = compare_corrmats(corrmat2d_ref, corrmat2d_tst)
             ce_inpl = compare_inplmats(inplmat_ref, inplmat_tst)
-            if( verbose ) write(*,*) 'corr, corr/euclid: ', ce_corr(1), ce_corr(2)
-            if( verbose ) write(*,*) 'inpl, corr/euclid: ', ce_inpl(1), ce_inpl(2)
-            if(       ce_corr(1) > 0.999999 .and. ce_corr(2) < 0.000001&
-                .and. ce_inpl(1) > 0.999999 .and. ce_inpl(2) < 0.000001 )&
+            !if( verbose ) write(*,*) 'corr, corr/euclid: ', ce_corr(1), ce_corr(2)
+            !if( verbose ) write(*,*) 'inpl, corr/euclid: ', ce_inpl(1), ce_inpl(2)
+            write(*,*) 'corr, corr/euclid: ', ce_corr(1), ce_corr(2)
+            write(*,*) 'inpl, corr/euclid: ', ce_inpl(1), ce_inpl(2)
+            if(       ce_corr(1) > 0.999999 .and. ce_corr(2) < 0.00001&
+                .and. ce_inpl(1) > 0.999999 .and. ce_inpl(2) < 0.00001 )&
             passed = .true.
         end function test_passed
 

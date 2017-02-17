@@ -210,8 +210,8 @@ contains
     !> \brief  for writing raw images using stream access
     subroutine write_raw_image( fname, mat, first_byte )
         character(len=*), intent(in) :: fname
-        real, intent(out)            :: mat(:,:,:)
-        integer, intent(in)          :: first_byte
+        real,             intent(in) :: mat(:,:,:)
+        integer,          intent(in) :: first_byte
         integer :: filnum, io_stat
         character(len=100) :: io_message
         filnum = get_fileunit()
@@ -273,18 +273,27 @@ contains
     !> \brief is for printing a progress bar
     subroutine progress(i, imax)
         integer, intent(in) :: i, imax
-        integer :: k, curr, prev
+        integer :: curr, prev
         character(len=1) :: back
+        integer(kind=4)   :: j=0, k
+        character(len=17) :: bar="???% |      |"
+
         if( .not. l_distr_exec_glob )then
+            
+            ! write(unit=bar(1:3),fmt="(i3)") 10*j
+            ! do k=1,j
+            !    bar(6+k:6+k)="="
+            ! end do
+            ! write(unit=6,fmt="(a1,a1,a17)") '+', char(13), bar
             back = char(8)
-            if( i >= imax )then
-                ! delete the bar and the percentage
-                write(6,'(256a1)', advance='no') (back, k =1,59)
-                ! write new bar and percentage
-                write(6,'(2x,1a4,2x,1a1,256a1)', advance='no') '100%','|', ('=', k=1,50)
-                write(6,'(a)') '| done.'
-                flush 6            
-            else
+            ! if( i >= imax )then
+            !     ! delete the bar and the percentage
+            !     write(6,'(256a1)', advance='no') (back, k =1,59)
+            !     ! write new bar and percentage
+            !     write(6,'(2x,1a4,2x,1a1,256a1)', advance='no') '100%','|', ('=', k=1,50)
+            !     write(6,'(a)') '| done.'
+            !     flush 6            
+            ! else
                 prev = nint( 100.*real(i-1)/real(imax) )
                 curr = nint( 100.*real(i)/real(imax) )
                 if( curr>prev )then
@@ -294,7 +303,7 @@ contains
                     write(6,'(2x,1i3,1a1,2x,1a1,256a1)', advance='no') curr,'%','|', ('=', k=1,50*i/imax)
                     flush 6
                 endif
-            endif
+            ! endif
         endif
     end subroutine progress
 

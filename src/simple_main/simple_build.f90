@@ -35,7 +35,7 @@ implicit none
 public :: build, test_build
 private
 
-logical :: debug=.true.
+logical :: debug=.false.
 
 type build
     ! GENERAL TOOLBOX

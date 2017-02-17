@@ -15,7 +15,7 @@ use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
 use simple_strings,        only: int2str, int2str_pad
-use simple_jiffys,         ! use all in there
+use simple_jiffys          ! use all in there
 use simple_filehandling    ! use all in there
 implicit none
 

@@ -999,6 +999,7 @@ select case(prg)
         call cline%set('eo',     'yes')
         call cline%set('refine', 'yes')
         call cline%set('dynlp',  'no')
+        if( .not.cline%defined('shellw') )call cline%set('shellw','no')
         ! execute
         call xcont3D%execute(cline)        
     case( 'check3D_conv' )

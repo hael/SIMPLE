@@ -90,25 +90,28 @@ if( $FCOMPILER =~ /gfortran/ ) {
     }
 } elsif( $FCOMPILER =~ /ifort/ ) {
     if( $PLATFORM == 0 ){
-    	# debugging options
-    	if( $DEBUG eq 'yes' ) {
-    	    $dbg_lvl_f = "-g -O0 -check bounds";
-    	    if( $DEBUG_LEVEL =~ /high/ ) {
-    		    $dbg_lvl_f = $dbg_lvl_f." -traceback -check all -check pointers -debug all";
-    	    }
-	    } else {
-            $dbg_lvl_f = "";
-        }
-    	# for [MacOSX]
-    	$option_in                = '-fimplicit-none -fall-intrinsics -free-form -cpp -fpic -assume no2underscores';
-    	# compiling options for the Makefile_macros
-    	$option_mkma_gcc_flags    = '-DCUBLAS_GFORTRAN -DADD_';
-    	$option_mkma_gpp_flags    = '-DADD_';
-    	$option_mkma_f90_flags    = '-fimplicit-none -fall-intrinsics -free-form -cpp -fpic -assume no2underscores';
+
+        die "ifort compilation on Mac not yet supported";
+
+    	# # debugging options
+    	# if( $DEBUG eq 'yes' ) {
+    	#     $dbg_lvl_f = "-g -O0 -check bounds";
+    	#     if( $DEBUG_LEVEL =~ /high/ ) {
+    	# 	    $dbg_lvl_f = $dbg_lvl_f." -traceback -check all -check pointers -debug all";
+    	#     }
+	    # } else {
+     #        $dbg_lvl_f = "";
+     #    }
+    	# # for [MacOSX]
+    	# $option_in                = '-fimplicit-none -fall-intrinsics -free-form -cpp -fpic -assume no2underscores';
+    	# # compiling options for the Makefile_macros
+    	# $option_mkma_gcc_flags    = '-DCUBLAS_GFORTRAN -DADD_';
+    	# $option_mkma_gpp_flags    = '-DADD_';
+    	# $option_mkma_f90_flags    = '-fimplicit-none -fall-intrinsics -free-form -cpp -fpic -assume no2underscores';
     } elsif( $PLATFORM == 1 ) {
-    	#debuging options
+    	# debuging options
     	if( $DEBUG eq 'yes' ) {
-    	    $dbg_lvl_f = "-debug -O0";
+    	    $dbg_lvl_f = "-g -debug -O0 -check bounds -traceback -check uninit";
     	    if( $DEBUG_LEVEL =~ /high/ ) {
     		    $dbg_lvl_f = $dbg_lvl_f."";
     	    }
@@ -116,11 +119,10 @@ if( $FCOMPILER =~ /gfortran/ ) {
             $dbg_lvl_f = "";
         }
     	#for [Linux]
-    	$option_in                = '-implicitnone -132 -ffree-form -cpp -fPIC -nus';
+    	$option_in                = '-implicitnone -80 -cpp -fPIC -module obj/SIMPLEOFILES/';
     	#compiling options for the Makefile_macros
-    	$option_mkma_gcc_flags    = '-DCUBLAS_GFORTRAN -DADD_';
     	$option_mkma_gpp_flags    = '-DADD_';
-    	$option_mkma_f90_flags    = '-implicitnone -132 -ffree-form -cpp -fPIC -nus';
+    	$option_mkma_f90_flags    = '-implicitnone -80 -cpp -fPIC -module obj/SIMPLEOFILES/';
     }
 }
 # setting up the options for both Makefile_macros and compile_and_link_local.csh
@@ -411,7 +413,7 @@ sub setCompiling_options {
 	    if( $FCOMPILER =~ /gfortran/ ) {
 	        $opti = "-O3";
 	    } elsif( $FCOMPILER =~ /ifort/ ) {
-	        $opti = "-fast";
+            $opti = "-O3 -no-prec-div -static -fp-model fast=2 -xHost";
 	    }
     } elsif( $DEBUG eq 'yes' ) {
 	    $opti = "";
@@ -599,12 +601,12 @@ sub make_Makefile_macros {
     print $mkma qq[F90FLAGS=$mkma_f90_flags\n];
     print $mkma qq[F90CLIB=\$(F90C) -c \$(F90FLAGS) -I .                                \\\n];
     print $mkma qq[                               -I \$(MODDIR)                        \\\n];
-    print $mkma qq[                               -J \$(MODDIR)                        \\\n];
+    # print $mkma qq[                               -J \$(MODDIR)                        \\\n];
     print $mkma qq[\n];
     print $mkma qq[\n];
     print $mkma qq[F90CLIB77=\$(F90C) -c \$(F90FLAGS77) -I .                                \\\n];
     print $mkma qq[                                   -I \$(MODDIR)                        \\\n];
-    print $mkma qq[                                   -J \$(MODDIR)                        \\\n];
+    # print $mkma qq[                                   -J \$(MODDIR)                        \\\n];
     print $mkma qq[\n];
     print $mkma qq[F90POST=\n];
     print $mkma qq[\n];

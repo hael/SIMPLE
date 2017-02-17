@@ -2,7 +2,7 @@ module simple_prime3D_srch_tester
 use simple_hadamard_common    ! singleton
 use simple_hadamard3D_matcher ! singleton
 use simple_defs               ! singleton
-use simple_jiffys,            ! singleton
+use simple_jiffys             ! singleton
 use simple_cmdline            ! singleton
 use simple_math               ! singleton
 use simple_oris,               only: oris

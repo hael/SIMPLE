@@ -147,6 +147,7 @@ type :: oris
     procedure          :: order
     procedure          :: order_cls
     procedure          :: calc_hard_ptcl_weights
+    procedure, private :: calc_hard_ptcl_weights_single
     procedure          :: find_closest_proj
     procedure          :: find_closest_projs
     procedure          :: find_closest_ori
@@ -2086,7 +2087,7 @@ contains
         class(oris),       intent(inout) :: self
         real,              intent(in)    :: frac
         logical, optional, intent(in)    :: bystate
-        integer, allocatable :: order(:), inds(:)
+        integer, allocatable :: inds(:)
         type(oris) :: os
         integer    :: i, lim, n, nstates, s, pop
         logical    :: ibystate
@@ -2094,25 +2095,12 @@ contains
         if( present(bystate) )ibystate = bystate
         if( .not.ibystate )then
             ! treated as single state
-            order = self%order()
-            n = 0
-            do i=1,self%n
-                if( self%o(i)%get("state") > 0 ) n = n+1
-            end do        
-            lim = nint(frac*real(n))
-            do i=1,self%n
-                if( i <= lim )then
-                    call self%o(order(i))%set('w', 1.)
-                else
-                    call self%o(order(i))%set('w', 0.)
-                endif           
-            end do
-            deallocate(order)
+            call self%calc_hard_ptcl_weights_single( frac )
         else
             ! per state frac
             nstates = self%get_nstates()
             if( nstates==1 )then
-                call self%calc_hard_ptcl_weights( frac, bystate=.false. )
+                call self%calc_hard_ptcl_weights_single( frac )
             else
                 do s=1,nstates
                     pop = self%get_statepop( s )
@@ -2122,7 +2110,7 @@ contains
                     do i=1,pop
                         call os%set_ori( i, self%get_ori( inds(i) ))
                     enddo
-                    call os%calc_hard_ptcl_weights( frac, bystate=.false. )
+                    call os%calc_hard_ptcl_weights_single( frac )
                     do i=1,pop
                         call self%set_ori( inds(i), os%get_ori( i ))
                     enddo
@@ -2131,6 +2119,29 @@ contains
             endif
         endif
     end subroutine calc_hard_ptcl_weights
+
+    !>  \brief  calculates hard weights based on ptcl ranking      
+    subroutine calc_hard_ptcl_weights_single( self, frac )
+        class(oris),       intent(inout) :: self
+        real,              intent(in)    :: frac
+        integer, allocatable :: order(:), inds(:)
+        integer    :: i, lim, n
+        ! treated as single state
+        order = self%order()
+        n = 0
+        do i=1,self%n
+            if( self%o(i)%get("state") > 0 ) n = n+1
+        end do        
+        lim = nint(frac*real(n))
+        do i=1,self%n
+            if( i <= lim )then
+                call self%o(order(i))%set('w', 1.)
+            else
+                call self%o(order(i))%set('w', 0.)
+            endif           
+        end do
+        deallocate(order)
+    end subroutine calc_hard_ptcl_weights_single
 
     !>  \brief  to find the closest matching projection direction
     function find_closest_proj( self, o_in, state ) result( closest )

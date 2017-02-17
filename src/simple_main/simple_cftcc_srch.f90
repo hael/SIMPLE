@@ -5,6 +5,7 @@ use simple_optimizer,       only: optimizer
 use simple_cartft_corrcalc, only: cartft_corrcalc
 use simple_image,           only: image
 use simple_ori,             only: ori
+use simple_sym,             only: sym
 use simple_defs
 implicit none
 
@@ -21,14 +22,22 @@ type(ori)                       :: o_glob            !< global orientation
 
 contains
 
-    subroutine cftcc_srch_init( cftcc, img, opt_str, lims, nrestarts )
+    subroutine cftcc_srch_init( cftcc, img, opt_str, lims, nrestarts, syme )
         class(cartft_corrcalc), target, intent(in) :: cftcc
         class(image),           target, intent(in) :: img
         character(len=*),               intent(in) :: opt_str
         real,                           intent(in) :: lims(5,2)
         integer,                        intent(in) :: nrestarts
+        class(sym),           optional, intent(inout) :: syme
+        real :: lims_here(5,2)
         ! make optimizer spec
-        call ospec%specify(opt_str, 5, ftol=1e-4, gtol=1e-4, limits=lims, nrestarts=nrestarts)
+        if( present(syme) )then
+            lims_here(1:3,:) = syme%srchrange()
+            lims_here(4:5,:) = lims(4:5,:)
+        else
+            lims_here = lims
+        endif
+        call ospec%specify(opt_str, 5, ftol=1e-4, gtol=1e-4, limits=lims_here, nrestarts=nrestarts)
         ! set optimizer cost function
         call ospec%set_costfun(cftcc_srch_cost)
         ! generate optimizer object with the factory
@@ -74,12 +83,13 @@ contains
     end function cftcc_srch_cost
     
     subroutine cftcc_srch_minimize( o )
-        use simple_math, only: rad2deg
+        use simple_math, only: rad2deg, rotmat2d
         class(ori), intent(inout) :: o
-        real :: corr, cost, x_prev, y_prev, dist
+        real :: corr, cost, x_prev, y_prev, dist, corr_prev
+        real :: rotmat(2,2), shvec(2), prev_shvec(2)
+        prev_shvec = o%get_shift()
+        call o%e3set( 360. - o%e3get() )
         ! copy the input orientation
-        x_prev = o%get('x')
-        y_prev = o%get('y')
         o_glob = o
         ! initialise optimiser
         ospec%x = 0.
@@ -90,9 +100,13 @@ contains
         corr = -cost
         call o%set('corr', corr)
         call o%set_euler(ospec%x(1:3))
-        ! shifts must be obtained by vector addition
-        call o%set('x', ospec%x(4)+x_prev)
-        call o%set('y', ospec%x(5)+y_prev)
+        call o%e3set( 360. - o%e3get() )
+        ! shifts must be obtained by vector addition after in-plane rotation
+        shvec  = -ospec%x(4:5)
+        rotmat = rotmat2d(ospec%x(3)) 
+        shvec  = prev_shvec + matmul(shvec, rotmat)
+        call o%set_shift( shvec )
+        ! distance
         dist = 0.5*rad2deg(o_glob.euldist.o)+0.5*o_glob%get('dist')
         call o%set('dist',dist)
     end subroutine cftcc_srch_minimize

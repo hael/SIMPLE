@@ -27,9 +27,9 @@ end interface
 contains
 
     !>  \brief  for getting global minimum value, search domain (range), and pointer to testfun i
-    function get_testfun( i, d, gmin, range ) result( ptr )
+    subroutine get_testfun( i, d, gmin, range, ptr )
         integer, intent(in)         :: i, d
-        real, intent(out)           :: gmin, range(2)
+        real,    intent(out)        :: gmin, range(2)
         procedure(testfun), pointer :: ptr
         if( d < 2 ) stop 'none of these functions are defined for d < 2; get_testfun; simple_testfuns'
         if( i < 20 ) then
@@ -311,7 +311,7 @@ contains
             case DEFAULT
                 stop 'Unknown function index; get_testfun; simple_testfuns'
         end select
-    end function
+    end subroutine
     
     ! GENERALIZED TEST FUNCTIONS
     

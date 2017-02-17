@@ -37,12 +37,12 @@ contains
         rot = r
     end subroutine
 
-    function polarft_shsrch_grad_cost( vec, D ) result( grad_cost )
-      integer, intent(in) :: D
-      real, intent(in)    :: vec(D)
-      real :: grad_cost
-      !TODO: later or never
-    end function polarft_shsrch_grad_cost
+    ! function polarft_shsrch_grad_cost( vec, D ) result( grad_cost )
+    !   integer, intent(in) :: D
+    !   real, intent(in)    :: vec(D)
+    !   real :: grad_cost
+    !   !TODO: later or never
+    ! end function polarft_shsrch_grad_cost
     
     function polarft_shsrch_cost( vec, D ) result( cost )
         integer, intent(in) :: D

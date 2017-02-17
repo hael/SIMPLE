@@ -207,7 +207,7 @@ contains
         procedure(testfun), pointer :: costfun_ptr      !< pointer 2 test function
         real :: h(ndim), gmin, range(2), lowest_cost, lims(ndim,2), rtol
         h = 1.      
-        costfun_ptr = get_testfun(wfun, ndim, gmin, range) ! get testfun, gmin is the global min, range is limits
+        call get_testfun(wfun, ndim, gmin, range, costfun_ptr) ! get testfun, gmin is the global min, range is limits
         lims(:,1) = range(1)
         lims(:,2) = range(2)
         call spec%specify(str_opts(wopt),ndim,limits=lims,nrestarts=NRESTARTS) ! make optimizer spec
@@ -244,7 +244,7 @@ contains
         type(bforce_opt)            :: bforce
         real                        :: lowest_cost, limits(2,2), range(2), gmin, dist
         procedure(testfun), pointer :: pfun
-        pfun = get_testfun(7, 2, gmin, range)
+        call get_testfun(7, 2, gmin, range, pfun)
         limits(1,1) = range(1)
         limits(1,2) = range(2)
         limits(2,1) = range(1)

@@ -4,7 +4,7 @@ use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_prime_srch,       only: prime_srch
 use simple_ran_tabu,         only: ran_tabu
 use simple_strings,          only: str_has_substr
-use simple_math,             ! use all in there
+use simple_math              ! use all in there
 use simple_pftcc_shsrch      ! use all in there
 use simple_pftcc_inplsrch    ! use all in there
 implicit none
