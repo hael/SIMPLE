@@ -28,8 +28,8 @@ our$SIMPLE_PATH="/home/cyril/Simple3";
 # specifying the compiling directives
 # with OpenMP:  -fopenmp, CUDA: -DCUDA
 # Benchmarking: -DBENCH
-our$DOPENMP = "-qopenmp"; # INTEL ifort
-#our$DOPENMP = "-fpenmp"; # GNU gfortran
+#our$DOPENMP = "-qopenmp"; # INTEL ifort
+our$DOPENMP = "-fopenmp"; # GNU gfortran
 our$DCUDA = "";
 our$DBENCH = "";
 # getting the platform details
@@ -38,13 +38,13 @@ getPlatform();
 # would you like to compile the library from scracth?
 # make cleanall before make and link: 0   make only and generate scripts : 2
 # make clean before make and link   : 1   link, compile production only  : 3 
-our$ICOMPILE = 2;
+our$ICOMPILE = 1;
 # the name compiler default(linux): cc, gcc, gfortran
 # the name compiler default(MacOSX): /usr/local/bin/gcc, /usr/local/bin/gcc,
 #                                    /usr/local/bin/gfortran
 our$CC_COMPILER = "";
 our$GCC_COMPILER = "";
-our$FCOMPILER = "ifort";
+our$FCOMPILER = "gfortran";
 # enter the CUDA libary path default: /usr/local/cuda
 our$CUDADIR="";
 # enter the fftw lib default: /usr/lib/x86_64-linux-gnu for [linux]

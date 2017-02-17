@@ -111,7 +111,7 @@ if( $FCOMPILER =~ /gfortran/ ) {
     } elsif( $PLATFORM == 1 ) {
     	# debuging options
     	if( $DEBUG eq 'yes' ) {
-    	    $dbg_lvl_f = "-g -debug -O0 -check bounds -traceback -check uninit";
+    	    $dbg_lvl_f = "-g -debug -O0 -check bounds -traceback -check uninit -ftrapuv -debug all";
     	    if( $DEBUG_LEVEL =~ /high/ ) {
     		    $dbg_lvl_f = $dbg_lvl_f."";
     	    }
@@ -599,9 +599,10 @@ sub make_Makefile_macros {
     print $mkma qq[# \$(DLIB)\n];
     print $mkma qq[F90C=\$(GFORTRAN)\n];
     print $mkma qq[F90FLAGS=$mkma_f90_flags\n];
-    print $mkma qq[F90CLIB=\$(F90C) -c \$(F90FLAGS) -I .                                \\\n];
-    print $mkma qq[                               -I \$(MODDIR)                        \\\n];
-    # print $mkma qq[                               -J \$(MODDIR)                        \\\n];
+    print $mkma qq[F90CLIB=\$(F90C) -c \$(F90FLAGS) -I \$(MODDIR)                      \\\n];
+    if( $FCOMPILER =~ /gfortran/ ) {
+        print $mkma qq[                             -J \$(MODDIR)                      \\\n];
+    }
     print $mkma qq[\n];
     print $mkma qq[\n];
     print $mkma qq[F90CLIB77=\$(F90C) -c \$(F90FLAGS77) -I .                                \\\n];

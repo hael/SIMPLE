@@ -371,7 +371,7 @@ contains
                                 if( (orefs.euldist.oref)>.001)stop 'Failed test_prep_reforis 21'
                             enddo
                         enddo
-                        nnmat = test_os%nearest_neighbors( NSTATES )
+                        call test_os%nearest_neighbors( NSTATES, nnmat )
                         do ref=1,p%nspace
                             oref = test_os%get_ori(ref)
                             do s=1,NSTATES

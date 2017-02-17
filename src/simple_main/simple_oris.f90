@@ -2238,10 +2238,10 @@ contains
     end subroutine discretize
 
     !>  \brief  to identify the indices of the k nearest neighbors (inclusive)
-    function nearest_neighbors( self, k ) result( nnmat ) 
+    subroutine nearest_neighbors( self, k, nnmat ) 
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: k
-        integer, allocatable :: nnmat(:,:)
+        integer, allocatable, intent(inout) :: nnmat(:,:)
         real      :: dists(self%n)
         integer   :: inds(self%n), i, j, alloc_stat
         type(ori) :: o
@@ -2264,8 +2264,8 @@ contains
                 nnmat(i,j) = inds(j)
             end do
         end do
-    end function nearest_neighbors
-    
+    end subroutine nearest_neighbors
+   
     !>  \brief  to find angular resolution of an even orientation distribution (in degrees)
     function find_angres( self ) result( res )
         use simple_math, only: rad2deg

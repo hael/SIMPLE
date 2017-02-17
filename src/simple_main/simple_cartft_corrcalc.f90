@@ -148,6 +148,7 @@ contains
         integer :: s
         s = nint(o%get('state'))
         call self%bp%proj%fproject(self%refvols(s), o, self%img_refs(iref), self%pp%lp)
+        !call self%bp%proj%fproject(self%refvols(s), o, self%img_refs(iref) )
         if( self%pp%ctf .ne. 'no' )then
             call self%create_ctf_image(o)
             call self%img_refs(iref)%mul(self%img_ctf)

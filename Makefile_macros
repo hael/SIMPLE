@@ -6,7 +6,7 @@ Simple_source=/home/cyril/Simple3
 
 ####### The switches #####
 
-DOPENMP = -qopenmp
+DOPENMP = -fopenmp
 DCUDA = 
 DBENCH = 
 
@@ -14,7 +14,7 @@ DBENCH =
 
 CCCOMP=
 GCC=
-GFORTRAN=ifort
+GFORTRAN=gfortran
 
 ####### The CUDA paths #####
 
@@ -30,7 +30,7 @@ MODDIR=obj/SIMPLEOFILES
 ##############
 
 CC=$(CCCOMP)
-CFLAGS= -O3 -no-prec-div -static -fp-model fast=2 -xHost -O -DLINUX -qopenmp  
+CFLAGS=-DCUBLAS_GFORTRAN -DADD_ -O3 -O -DLINUX -fopenmp  
 CCLIB=$(CC) -c $(CFLAGS) -I $(MODDIR)                                            \
                          -I /usr/local/fftw/3.3.4-gcc/include/
 
@@ -39,7 +39,7 @@ CCLIB=$(CC) -c $(CFLAGS) -I $(MODDIR)                                           
 ################
 
 CPP=$(GCC)
-CPPFLAGS=-DADD_ -O3 -no-prec-div -static -fp-model fast=2 -xHost -DLINUX -qopenmp  
+CPPFLAGS=-DADD_ -O3 -DLINUX -fopenmp  
 CPPCLIB=$(CPP) -c $(CPPFLAGS) -I $(MODDIR)                                            \
                               -I $(Simple_source)/test_code                           \
                               -I /usr/local/fftw/3.3.4-gcc/include/
@@ -50,9 +50,9 @@ CPPCLIB=$(CPP) -c $(CPPFLAGS) -I $(MODDIR)                                      
 
 # $(DLIB)
 F90C=$(GFORTRAN)
-F90FLAGS=-implicitnone -80 -cpp -fPIC -module obj/SIMPLEOFILES/ -O3 -no-prec-div -static -fp-model fast=2 -xHost -DLINUX -qopenmp  
-F90CLIB=$(F90C) -c $(F90FLAGS) -I .                                \
-                               -I $(MODDIR)                        \
+F90FLAGS=-ffree-form -cpp -fno-second-underscore -O3 -DLINUX -fopenmp  
+F90CLIB=$(F90C) -c $(F90FLAGS) -I $(MODDIR)                      \
+                             -J $(MODDIR)                      \
 
 
 F90CLIB77=$(F90C) -c $(F90FLAGS77) -I .                                \

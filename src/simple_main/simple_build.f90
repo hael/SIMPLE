@@ -443,9 +443,12 @@ contains
             end do
         endif    
         if( str_has_substr(p%refine,'neigh') )then
-            if( .not. str_has_substr(p%refine,'qcont') ) self%nnmat = self%e%nearest_neighbors(p%nnn)
+            if( .not. str_has_substr(p%refine,'qcont') )then
+                call self%e%nearest_neighbors( p%nnn, self%nnmat)
+            endif
         endif
         write(*,'(A)') '>>> DONE BUILDING HADAMARD PRIME3D TOOLBOX'
+        call flush(6)
         self%hadamard_prime3D_tbox_exists = .true.
     end subroutine build_hadamard_prime3D_tbox
     
