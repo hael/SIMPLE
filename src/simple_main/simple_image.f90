@@ -2248,7 +2248,7 @@ contains
         class(image), intent(inout) :: self
         real, allocatable           :: forsort(:)
         real                        :: cen1, cen2, sum1, sum2, val1, val2, sum_rmat
-        integer                     :: cnt, cnt1, cnt2, i, l,npix
+        integer                     :: cnt1, cnt2, i, l,npix
         if( self%ft ) stop 'only for real images; bin_2; simple image'
         ! sort the pixels to initialize k-means
         npix = product(self%ldim)
@@ -5030,7 +5030,7 @@ contains
         real,    optional, intent(in)    :: radius
         logical, optional, intent(out)   :: errout
         type(image)       :: maskimg
-        integer           :: npix,alloc_stat,i,j,k,cnt
+        integer           :: npix
         real              :: ave,sdev,var,irad
         real, allocatable :: pixels(:)
         logical           :: err

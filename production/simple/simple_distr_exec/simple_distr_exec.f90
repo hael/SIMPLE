@@ -500,7 +500,7 @@ select case(prg)
         ! set defaults
         call cline%set('dynlp', 'no')
         call cline%set('eo',    'yes')
-        call cline%set('refine','yes')
+        !call cline%set('refine','yes')
         if( .not.cline%defined('shellw') )call cline%set('shellw','no')
         ! execute
         call xcont3D_distr%execute(cline)

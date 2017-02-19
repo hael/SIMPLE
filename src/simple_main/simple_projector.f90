@@ -111,7 +111,7 @@ contains
             if( .not. fplane%exists() ) stop 'fplane needs to exists before call; fproject_1; simple_projector'
             ldim = fvol%get_ldim()
             ldim_ptcl = fplane%get_ldim()
-            if( ldim(3) == 1 )          stop 'only for interpolation from 3D mages; fproject_1; simple_projector'
+            if( ldim(3) == 1 )          stop 'only for interpolation from 3D images; fproject_1; simple_projector'
             if( ldim(1) == ldim_ptcl(1) .and. ldim(2) == ldim_ptcl(2) )then
             else
                 print *, 'ldim1 vol/ptcl:', ldim(1), ldim_ptcl(1)
@@ -360,7 +360,7 @@ contains
             deallocate(w1,w2,w3,cyc1,cyc2,cyc3)
         endif
     end function extr_gridfcomp
-    
+
     ! REAL-SPACE PROJECTOR
     
     !>  \brief  project a 3d volume onto a 2d slice (real-space projection from Frealix)

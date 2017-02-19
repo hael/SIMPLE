@@ -31,6 +31,9 @@ type :: cartft_corrcalc
     procedure, private :: correlate_1
     procedure, private :: correlate_2
     generic            :: correlate => correlate_1, correlate_2
+    ! GETTERS
+    procedure          :: get_ref
+    procedure          :: get_ctf_img
     ! DESTRUCTOR
     procedure          :: kill
 end type cartft_corrcalc
@@ -145,13 +148,14 @@ contains
         class(cartft_corrcalc), intent(inout) :: self
         class(ori),             intent(inout) :: o
         integer,                intent(in)    :: iref
-        integer :: s
+        real :: e3
+        integer   :: s
         s = nint(o%get('state'))
         call self%bp%proj%fproject(self%refvols(s), o, self%img_refs(iref), self%pp%lp)
         !call self%bp%proj%fproject(self%refvols(s), o, self%img_refs(iref) )
         if( self%pp%ctf .ne. 'no' )then
             call self%create_ctf_image(o)
-            call self%img_refs(iref)%mul(self%img_ctf)
+            call self%img_refs(iref)%mul( self%img_ctf )
         endif
     end subroutine project_2
 
@@ -192,7 +196,7 @@ contains
     !!          parameterised over one rotational orientation + state + shift
     function correlate_2( self, pimg, iref, shvec ) result( cc )
         class(cartft_corrcalc), intent(inout) :: self
-         class(image),          intent(inout) :: pimg
+        class(image),           intent(inout) :: pimg
         integer,                intent(in)    :: iref
         real,                   intent(in)    :: shvec(3)
         real :: cc
@@ -200,6 +204,23 @@ contains
         cc = self%img_refs(iref)%corr_shifted(pimg, shvec, self%pp%lp, self%pp%hp)
     end function correlate_2
     
+    !>  \brief for getting the current fwd ft CTF img
+    function get_ctf_img( self )result( img )
+        class(cartft_corrcalc), intent(inout) :: self
+        type(image) :: img
+        img = self%img_ctf
+    end function get_ctf_img
+
+    !>  \brief for getting a reference fwd ft img
+    function get_ref( self, ind )result( img )
+        class(cartft_corrcalc), intent(inout) :: self
+        integer,                intent(in)    :: ind
+        type(image) :: img
+        if( ind<1 .or. ind>size(self%img_refs) )&
+            & stop 'Index out of bounds in simple_cartft_corrcalc%get_ref'
+        img = self%img_refs( ind )
+    end function get_ref
+
     !>  \brief  is a destructor
     subroutine kill( self )
         class(cartft_corrcalc), intent(inout) :: self

@@ -366,7 +366,7 @@ contains
         character(len=:), allocatable    :: conv
         integer, allocatable             :: parts(:,:)
         logical                          :: nparts_set=.false.
-        logical                          :: vol_defined=.false.
+        logical                          :: vol_defined(MAXS)=.false.
         ! take care of optionals
         ccheckdistr = .true.
         if( present(checkdistr) ) ccheckdistr = checkdistr
@@ -655,7 +655,7 @@ contains
         endif
         ! determines whether at least one volume is on the cmdline
         do i=1,self%nstates
-            if( cline%defined( trim('vol')//int2str(i) )) vol_defined = .true.
+            if( cline%defined( trim('vol')//int2str(i) ))vol_defined(i) = .true.
         enddo
         ! check inputted vols
         if( cline%defined('vollist') )then
@@ -666,7 +666,7 @@ contains
             if( cline%defined('vol') )then
                 self%vols(1) = self%vol
             endif
-            if( cline%defined('vol') .or. vol_defined )then
+            if( cline%defined('vol') .or. any( vol_defined) )then
                 do i=1,MAXS
                     call check_vol( i )
                 end do

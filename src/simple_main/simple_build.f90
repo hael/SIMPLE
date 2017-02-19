@@ -142,9 +142,12 @@ contains
             ! we need the oritab to override the deftab in order not to loose parameters
             if( p%deftab /= '' ) call self%a%read(p%deftab)
             if( p%oritab /= '' )then
-                if( .not. cline%defined('nstates') .and. p%vols(1) .eq. '' )then
+                if( .not. cline%defined('nstates') )then
                     call self%a%read(p%oritab, p%nstates)
-                    if( DEBUG ) print *, 'updated nstates to: ', p%nstates
+                    if( p%nstates>1 )then
+                        print *,'Multiple states detected, please input the NSTATES key'
+                        stop
+                    endif
                 else
                     call self%a%read(p%oritab)
                 endif

@@ -997,7 +997,7 @@ select case(prg)
         call cline%parse(keys_required(:8), keys_optional(:16))
         ! set defaults
         call cline%set('eo',     'yes')
-        call cline%set('refine', 'yes')
+        !call cline%set('refine', 'yes')
         call cline%set('dynlp',  'no')
         if( .not.cline%defined('shellw') )call cline%set('shellw','no')
         ! execute

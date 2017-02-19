@@ -11,13 +11,13 @@ use simple_strings,         only: int2str_pad
 use simple_hadamard_common  ! us all in there
 use simple_math             ! us all in there
 use simple_cftcc_srch       ! us all in there
+use simple_cftcc_shsrch     ! us all in there
 implicit none
 
 public :: cont3D_exec, cont3D_shellweight
 private
 
 type(cartft_corrcalc) :: cftcc
-real                  :: res
 integer               :: cnt_glob=0
 integer, parameter    :: MAXNPEAKS=10, NRESTARTS=5
 logical, parameter    :: debug=.false.
@@ -31,11 +31,11 @@ contains
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         class(cmdline), intent(inout) :: cline
-        real, allocatable             :: res(:), corrs(:), weights_tmp(:), wmat(:,:), wsums(:)
+        real, allocatable             :: res(:), corrs(:), wmat(:,:)
         character(len=:), allocatable :: fname
         type(ori)                     :: orientation
-        integer                       :: iptcl, state, filtsz, alloc_stat
-        integer                       :: ishell, io_stat, filnum, fnr, file_stat
+        integer                       :: iptcl, filtsz, alloc_stat
+        integer                       :: io_stat, filnum
         filtsz = b%img%get_filtsz()
         allocate( wmat(p%top-p%fromp+1,filtsz), corrs(filtsz), stat=alloc_stat)
         call alloc_err('In: simple_cont3D_matcher :: cont3D_shellweight', alloc_stat)
@@ -96,8 +96,8 @@ contains
         logical, intent(inout)        :: converged
         type(ori)         :: orientation
         real, allocatable :: wmat(:,:), wresamp(:), res(:), res_pad(:)
-        real              :: corr, dist, frac_srch_space, reslim
-        integer           :: state, file_stat, fnr, iptcl
+        real              :: frac_srch_space, reslim
+        integer           :: state, iptcl
         logical           :: doshellweight
         
         ! CREATE THE CARTESIAN CORRELATOR
@@ -108,7 +108,7 @@ contains
         call set_bp_range( b, p, cline )
         
         ! CALCULATE ANGULAR THRESHOLD
-        p%athres = rad2deg(atan(max(p%fny,p%lp)/(p%moldiam/2.)))
+        !p%athres = rad2deg(atan(max(p%fny,p%lp)/(p%moldiam/2.)))
         reslim   = p%lp
 
         ! SET FRACTION OF SEARCH SPACE
@@ -127,8 +127,15 @@ contains
         call setup_shellweights(b, p, doshellweight, wmat, res, res_pad)
 
         ! INITIALIZE
-        call cftcc_srch_init(cftcc, b%img, OPT_STR, p%optlims(:5,:), NRESTARTS, syme=b%se )
-        
+        select case( p%refine )
+            case('yes')
+                call cftcc_srch_init(cftcc, b%img, OPT_STR, p%optlims(:5,:), NRESTARTS, syme=b%se )
+            case('shift')
+                call cftcc_shsrch_init(cftcc, b%img, OPT_STR, p%trs, NRESTARTS)
+            case DEFAULT
+                stop 'Unkwnon refinement mode; simple_cont3D_matcher'
+        end select
+
         if( which_iter <= 0 )then
             write(*,'(A)') '>>> CONTINUOUS ORIENTATION SEARCH'
         else
@@ -163,8 +170,16 @@ contains
                     call b%img%read(p%stk, iptcl, p%l_xfel)
                 endif
                 call prepimg4align(b, p, orientation)
-                call cftcc_srch_set_state(state)
-                call cftcc_srch_minimize(orientation)
+                select case( p%refine )
+                    case('yes')
+                        call cftcc_srch_set_state(state)
+                        call cftcc_srch_minimize(orientation)
+                    case('shift')
+                        call cftcc_shsrch_set_state(state)
+                        call cftcc_shsrch_minimize(orientation)
+                    case DEFAULT
+                        stop 'Unkwnon refinement mode; simple_cont3D_matcher'
+                end select
                 call b%a%set_ori(iptcl,orientation)
                 if( doshellweight )then
                     wresamp = resample_filter(wmat(iptcl,:), res, res_pad)

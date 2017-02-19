@@ -626,7 +626,7 @@ contains
         c = d
     end subroutine
     
-    !>  \brief  one-dimensional hard window
+    ! !>  \brief  one-dimensional hard window
     function recwin_1d( x, winsz ) result( win )
         real, intent(in) :: x       !< input point
         real, intent(in) :: winsz   !< window size
