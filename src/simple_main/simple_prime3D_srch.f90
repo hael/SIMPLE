@@ -590,6 +590,7 @@ contains
 
     !>  \brief  prepares correlation target (previous best) for the search
     subroutine prep_corr4srch( self, pftcc, iptcl, lp, o_prev, corr_t )
+        use ieee_arithmetic
         class(prime3D_srch),        intent(inout) :: self
         class(polarft_corrcalc),    intent(inout) :: pftcc
         integer,                    intent(in)    :: iptcl
@@ -617,7 +618,7 @@ contains
             else
                 cc_t = corr_t
             endif
-            if( cc_t > 1. .or. cc_t < -1. .or. isnan(cc_t) )then
+            if( cc_t > 1. .or. cc_t < -1. .or. ieee_is_nan(cc_t) )then
                 stop 'Invalid correlation value in simple_prime3d_srch::prep_corr4srch'
             endif
             self%prev_corr = cc_t                                                        ! default
@@ -678,6 +679,7 @@ contains
 
     !>  \brief retrieves and preps npeaks orientations for reconstruction
     subroutine prep_npeaks_oris( self )
+        use ieee_arithmetic
         class(prime3D_srch), intent(inout) :: self
         type(ori) :: o, o_new
         real      :: euls(3), shvec(2)
@@ -703,7 +705,7 @@ contains
             endif
             class = nint( o%get('class') )
             corr  = o%get('corr')
-            if( isnan(corr) ) stop 'correlation is NaN in simple_prime3D_srch::prep_npeaks_oris'
+            if( ieee_is_nan(corr) ) stop 'correlation is NaN in simple_prime3D_srch::prep_npeaks_oris'
             ow    = o%get('ow')
             euls  = o%get_euler()
             ! Add shift

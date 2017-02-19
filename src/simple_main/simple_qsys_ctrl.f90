@@ -328,6 +328,8 @@ contains
         do ipart=self%fromto_part(1),self%fromto_part(2)
             allocate(job_done_fname, source='JOB_FINISHED_'//int2str_pad(ipart,self%numlen))
             self%jobs_done(ipart) = file_exists(job_done_fname)
+            ! this one is for streaming
+            if( self%jobs_done(ipart) ) self%jobs_submitted(ipart) = .true.
             deallocate(job_done_fname)
         end do
         njobs_in_queue = count(self%jobs_submitted .eqv. (.not. self%jobs_done))

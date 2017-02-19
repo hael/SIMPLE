@@ -61,17 +61,29 @@ contains
         endif
     end function getdiffcpu
 
+    !>  Wrapper for system call (FAILS WITH THE PGI COMPILER)
+    ! subroutine exec_cmdline( cmdline, wait )
+    !     character(len=*),  intent(in) :: cmdline
+    !     logical, optional, intent(in) :: wait
+    !     integer               :: estat, cstat
+    !     character(len=STDLEN) :: cmsg
+    !     logical               :: wwait
+    !     wwait = .true.
+    !     if( present(wait) ) wwait = wait
+    !     call execute_command_line( trim(adjustl(cmdline)), wait=wwait, exitstat=estat, cmdstat=cstat, cmdmsg=cmsg)
+    !     call raise_sys_error( cmdline, estat, cstat, cmsg )
+    ! end subroutine exec_cmdline
+
     !>  Wrapper for system call
-    subroutine exec_cmdline( cmdline, wait )
+    subroutine exec_cmdline( cmdline )
         character(len=*),  intent(in) :: cmdline
-        logical, optional, intent(in) :: wait
-        integer               :: estat, cstat
-        character(len=STDLEN) :: cmsg
-        logical               :: wwait
-        wwait = .true.
-        if( present(wait) ) wwait = wait
-        call execute_command_line( trim(adjustl(cmdline)), wait=wwait, exitstat=estat, cmdstat=cstat, cmdmsg=cmsg)
-        call raise_sys_error( cmdline, estat, cstat, cmsg )
+        integer :: exec_stat
+        logical :: doprint = .true.
+        call system(trim(adjustl(cmdline)), exec_stat)
+        if( doprint )then
+            write(*,*) 'command: ', trim(adjustl(cmdline))
+            write(*,*) 'status of execution: ', exec_stat
+        endif
     end subroutine exec_cmdline
 
     !>  Handles error from system call

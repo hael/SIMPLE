@@ -15,7 +15,7 @@ use simple_ran_tabu,  only: ran_tabu
 use simple_jiffys,    only: alloc_err
 implicit none
 
-public :: sa_opt, test_sa_opt
+public :: sa_opt
 private
 
 type sa_opt
@@ -58,7 +58,7 @@ abstract interface
 end interface
 
 interface sa_opt
-    module procedure :: constructor
+    module procedure constructor
 end interface
 
 contains
@@ -406,45 +406,6 @@ contains
                 endif
             end subroutine
         
-    end subroutine
-    
-    !>  \brief  is the sa_opt class unit test
-    subroutine test_sa_opt
-        integer        :: optimal(100), trial(100), isol(100,1), i
-        type(ran_tabu) :: rt
-        type(sa_opt)   :: metro
-        real           :: cost, final_cost
-        logical        :: passed
-        write(*,'(a)') '**info(simple_sa_opt_unit_test): using an oracle to test the annealing'
-        passed = .false.
-        rt = ran_tabu(10000)
-        call rt%ne_ran_iarr(optimal)
-        call metro%new( [10000], [.true.], 100, 1, costfun, acceptfun )
-        call metro%minimize( 0.0001, 1000000., 0.9, 500, 0.01, isol, cost )
-        final_cost = 0.
-        do i=1,100
-            final_cost = final_cost+abs(trial(i)-optimal(i))
-        end do
-        call rt%kill
-        if( final_cost > 1.5 )then
-            stop 'sa_opt test failed'
-        else
-            write(*,'(a)') 'SA_OPT_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
-        endif
-        
-        contains
-        
-            subroutine acceptfun( vec, i, L )
-                integer, intent(in) :: L, vec(L), i
-                trial(i) = vec(1)
-            end subroutine
-        
-            function costfun( vec, i, N, L ) result( cost )
-                integer, intent(in) :: N, L, vec(N,L), i
-                real                :: cost
-                cost = abs(vec(i,1)-optimal(i))
-            end function
-            
     end subroutine
     
     !> \brief is a destructor

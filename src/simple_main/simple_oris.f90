@@ -140,8 +140,8 @@ type :: oris
     generic            :: median => median_1
     procedure          :: stats
     procedure          :: minmax
-    procedure, private :: spiral_1
-    procedure, private :: spiral_2
+    procedure          :: spiral_1
+    procedure          :: spiral_2
     generic            :: spiral => spiral_1, spiral_2
     procedure          :: qspiral
     procedure          :: order
@@ -194,6 +194,10 @@ end interface
 type(ori), pointer   :: op(:)=>null()
 type(oris), pointer  :: ops  =>null()
 integer, allocatable :: classpops(:)
+logical, allocatable :: class_part_of_set(:)
+real, allocatable    :: class_weights(:)
+type(ori)            :: o_glob
+
 
 contains
 
@@ -724,6 +728,7 @@ contains
     !>  \brief  is for calculating the sum of 'which' variables with 
     !!          filtering based on class/state/fromto
     subroutine calc_sum( self, which, sum, cnt, class, state, fromto, mask )
+        use ieee_arithmetic
         class(oris),       intent(inout) :: self
         character(len=*),  intent(in)    :: which
         real,              intent(out)   :: sum
@@ -754,7 +759,7 @@ contains
             endif
             if( proceed )then
                 val = self%get(i, which)
-                if( isnan(val) ) val=0.
+                if( ieee_is_nan(val) ) val=0.
                 if( present(class) )then
                     clsnr = nint(self%get( i, 'class'))
                     if( clsnr == class )then
@@ -806,6 +811,7 @@ contains
     !>  \brief  is for calculating the nonzero sum of 'which' variables with 
     !!          filtering based on class/state/fromto
     subroutine calc_nonzero_sum( self, which, sum, cnt, class, state, fromto )
+        use ieee_arithmetic
         class(oris),       intent(inout) :: self
         character(len=*),  intent(in)    :: which
         real,              intent(out)   :: sum
@@ -828,7 +834,7 @@ contains
             mystate = nint(self%get( i, 'state'))
             if( mystate == 0 ) cycle
             val = self%get(i, which)
-            if( isnan(val) ) val=0.
+            if( ieee_is_nan(val) ) val=0.
             if( val > 0. )then
                 if( present(class) )then
                     clsnr = nint(self%get( i, 'class'))
@@ -1113,7 +1119,7 @@ contains
         real, optional, intent(inout) :: eullims(3,2)
         integer :: i
         do i=1,self%n
-            call self%rnd_ori(i, trs, eullims)
+            call self%o(i)%rnd_ori(trs, eullims)
         end do 
     end subroutine rnd_oris
     
@@ -2639,30 +2645,36 @@ contains
     function ori_generator( self, mode, part_of_set, weights ) result( oout )
         use simple_simplex_opt, only: simplex_opt
         use simple_opt_spec,    only: opt_spec
-        class(oris),       intent(in) :: self
-        character(len=*),  intent(in) :: mode
-        logical, optional, intent(in) :: part_of_set(self%n)
-        real,    optional, intent(in) :: weights(self%n)
-        real, parameter               :: TOL=1e-6
-        type(ori)                     :: oout, otst
-        type(opt_spec)                :: ospec
-        type(simplex_opt)             :: opt
-        real                          :: dist, lims(3,2)
-        logical                       :: ppart_of_set(self%n)
-        real                          :: wweights(self%n)
+        class(oris), target, intent(in) :: self
+        character(len=*),    intent(in) :: mode
+        logical, optional,   intent(in) :: part_of_set(self%n)
+        real,    optional,   intent(in) :: weights(self%n)
+        real, parameter   :: TOL=1e-6
+        type(ori)         :: oout
+        type(opt_spec)    :: ospec
+        type(simplex_opt) :: opt
+        real              :: dist, lims(3,2)
+        ! manage class vars
+        if( allocated(class_part_of_set) ) deallocate(class_part_of_set)
+        if( allocated(class_weights)     ) deallocate(class_weights)
         if( present(part_of_set) )then
-            ppart_of_set = part_of_set
+            allocate(class_part_of_set(self%n), source=part_of_set)
         else
-            ppart_of_set = .true.
+            allocate(class_part_of_set(self%n))
+            class_part_of_set = .true.
         endif
         if( present(weights) )then
-            wweights = weights
+            allocate(class_weights(self%n), source=weights)
         else
-            wweights = 1.0
+            allocate(class_weights(self%n))
+            class_weights = 1.0
         endif
+        ! set globals
+        ops => self
+        call o_glob%new
+        call o_glob%rnd_euler
+        ! init
         call oout%new
-        call otst%new
-        call otst%rnd_euler
         lims(1,1) = 0.
         lims(1,2) = 359.99
         lims(2,1) = 0.
@@ -2670,9 +2682,9 @@ contains
         lims(3,1) = 0.
         lims(3,2) = 359.99
         call ospec%specify('simplex', 3, ftol=TOL, limits=lims)
-        ospec%x(1) = otst%e1get()
-        ospec%x(2) = otst%e2get()
-        ospec%x(3) = otst%e3get()
+        ospec%x(1) = o_glob%e1get()
+        ospec%x(2) = o_glob%e2get()
+        ospec%x(3) = o_glob%e3get()
         call opt%new(ospec)
         select case(mode)
             case('median')
@@ -2686,27 +2698,6 @@ contains
         call oout%set_euler(ospec%x)
         call ospec%kill
         call opt%kill
-
-        contains
-
-            function costfun_median( vec, D ) result( dist )
-                integer, intent(in) :: D
-                real,    intent(in) :: vec(D)
-                real :: dist
-                call otst%set_euler(vec)
-                ! we are minimizing the distance 
-                dist = self%geodesic_dist(otst,ppart_of_set,wweights)
-            end function costfun_median
-
-            function costfun_diverse( vec, D ) result( dist )
-                integer, intent(in) :: D
-                real,    intent(in) :: vec(D)
-                real :: dist
-                call otst%set_euler(vec)
-                ! we are maximizing the distance 
-                dist = -self%geodesic_dist(otst,ppart_of_set,wweights)
-            end function costfun_diverse
-
     end function ori_generator
 
     !>  \brief  generates a similarity matrix for the oris in self
@@ -2736,17 +2727,19 @@ contains
         real,    optional, intent(in) :: weights(self%n)
         integer :: i
         real    :: dists(self%n)
-        logical :: ppart_of_set(self%n)
-        real    :: wweights(self%n)
+        if( allocated(class_part_of_set) ) deallocate(class_part_of_set)
+        if( allocated(class_weights)     ) deallocate(class_weights)
         if( present(part_of_set) )then
-            ppart_of_set = part_of_set
+            allocate(class_part_of_set(self%n), source=part_of_set)
         else
-            ppart_of_set = .true.
+            allocate(class_part_of_set(self%n))
+            class_part_of_set = .true.
         endif
         if( present(weights) )then
-            wweights = weights
+            allocate(class_weights(self%n), source=weights)
         else
-            wweights = 1.0
+            allocate(class_weights(self%n))
+            class_weights = 1.0
         endif
         dists = 0.
         !$omp parallel do schedule(auto) default(shared) private(i)
@@ -2754,7 +2747,7 @@ contains
             dists(i) = self%o(i).geod.o
         end do
         !$omp end parallel do
-        geodesic_dist = sum(dists*wweights,mask=ppart_of_set)/sum(wweights,mask=ppart_of_set)
+        geodesic_dist = sum(dists*class_weights,mask=class_part_of_set)/sum(class_weights,mask=class_part_of_set)
     end function geodesic_dist
 
     !>  \brief  for generation a subset of orientations (spatial medians of all pairs)
@@ -2935,6 +2928,26 @@ contains
         overlap = overlap/real(ncls_prev)
         deallocate(cls_pop,pop_spawn)
     end function cls_overlap
+
+    ! PRIVATE ROUTINES
+
+    function costfun_median( vec, D ) result( dist )
+        integer, intent(in) :: D
+        real,    intent(in) :: vec(D)
+        real :: dist
+        call o_glob%set_euler(vec)
+        ! we are minimizing the distance 
+        dist = ops%geodesic_dist(o_glob,class_part_of_set,class_weights)
+    end function costfun_median
+
+    function costfun_diverse( vec, D ) result( dist )
+        integer, intent(in) :: D
+        real,    intent(in) :: vec(D)
+        real :: dist
+        call o_glob%set_euler(vec)
+        ! we are maximizing the distance 
+        dist = -ops%geodesic_dist(o_glob,class_part_of_set,class_weights)
+    end function costfun_diverse
     
     ! UNIT TESTS
     

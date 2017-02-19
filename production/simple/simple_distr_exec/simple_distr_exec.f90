@@ -160,7 +160,6 @@ select case(prg)
         keys_required(2)  = 'exp_doc'
         keys_required(3)  = 'smpd'
         keys_required(4)  = 'nthr'
-        keys_required(5)  = 'nparts'
         ! set optional keys
         keys_optional(1)  = 'ncunits'
         keys_optional(2)  = 'lpstart'
@@ -174,7 +173,7 @@ select case(prg)
         keys_optional(10) = 'frameavg'
         ! parse command line
         if( describe ) call print_doc_unblur_tomo
-        call cline%parse(keys_required(:5), keys_optional(:9))
+        call cline%parse(keys_required(:4), keys_optional(:9))
         ! set defaults
         if( .not. cline%defined('trs')     ) call cline%set('trs',      5.)
         if( .not. cline%defined('lpstart') ) call cline%set('lpstart', 15.)

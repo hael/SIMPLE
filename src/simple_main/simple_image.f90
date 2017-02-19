@@ -145,9 +145,9 @@ type :: image
     ! BINARY IMAGE METHODS
     procedure          :: nforeground
     procedure          :: nbackground
-    procedure, private :: bin_1
-    procedure, private :: bin_2
-    procedure, private :: bin_3
+    procedure          :: bin_1
+    procedure          :: bin_2
+    procedure          :: bin_3
     generic            :: bin => bin_1, bin_2, bin_3
     procedure          :: bin_filament
     procedure          :: masscen
@@ -166,7 +166,8 @@ type :: image
     procedure          :: apply_bfac
     procedure          :: bp
     procedure          :: gen_lpfilt
-    procedure, private :: apply_filter_1, apply_filter_2
+    procedure, private :: apply_filter_1
+    procedure, private :: apply_filter_2
     generic            :: apply_filter => apply_filter_1, apply_filter_2
     procedure          :: phase_rand
     procedure          :: hannw
@@ -3166,6 +3167,7 @@ contains
 
     !>  \brief  is for checking the numerical soundness of an image
     logical function contains_nans( self )
+        use ieee_arithmetic
         class(image), intent(in) :: self
         integer :: i, j, k
         if( self%imgkind .eq. 'xfel' ) stop 'routine not implemented for xfel-kind images; simple_image::contains_nans'
@@ -3173,7 +3175,7 @@ contains
         do i=1,size(self%rmat,1)
             do j=1,size(self%rmat,2)
                 do k=1,size(self%rmat,3)
-                    if( isnan(self%rmat(i,j,k)) )then
+                    if( ieee_is_nan(self%rmat(i,j,k)) )then
                         contains_nans = .true.
                         return
                     endif
@@ -3237,6 +3239,7 @@ contains
 
     !>  \brief  is for checking the numerical soundness of an image and curing it if necessary
     subroutine cure_2( self, maxv, minv, ave, sdev, n_nans )
+        use ieee_arithmetic
         class(image), intent(inout) :: self
         real, intent(out)           :: maxv, minv, ave, sdev
         integer, intent(out)        :: n_nans
@@ -3253,7 +3256,7 @@ contains
         do i=1,self%ldim(1)
             do j=1,self%ldim(2)
                 do k=1,self%ldim(3)
-                    if( isnan(self%rmat(i,j,k)) )then
+                    if( ieee_is_nan(self%rmat(i,j,k)) )then
                         n_nans = n_nans+1
                     else
                         ave = ave+self%rmat(i,j,k)

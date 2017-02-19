@@ -19,7 +19,7 @@ type AVratios
 end type
 
 interface AVratios
-    module procedure :: constructor
+    module procedure constructor
 end interface
 
 contains

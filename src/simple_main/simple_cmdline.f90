@@ -32,8 +32,8 @@ type cmdline
     procedure, private    :: copy
     procedure, private    :: assign
     generic               :: assignment(=) => assign
-    procedure, private    :: set_1
-    procedure, private    :: set_2
+    procedure             :: set_1
+    procedure             :: set_2
     procedure, private    :: lookup
     generic               :: set => set_1, set_2
     procedure             :: delete

@@ -174,6 +174,7 @@ contains
     
     !>  \brief  reads a row of a text-file into the inputted hash, assuming key=value pairs
     subroutine read( self, fnr )
+        use ieee_arithmetic
         class(hash), intent(inout) :: self
         integer,     intent(in)    :: fnr
         character(len=1024)        :: line
@@ -200,7 +201,7 @@ contains
                     stop 'I/O error; read; simple_hash'
                 endif
             endif
-            if( isnan(val) ) val = 0.
+            if( ieee_is_nan(val) ) val = 0.
             call self%set(key, val)
         end do
     end subroutine read

@@ -385,7 +385,17 @@ contains
         ! dig holds the state digit
         write(*,'(A)') '>>> KAISER-BESSEL INTERPOLATION'
         statecnt = 0
-        call iterator(rec_dens)
+        cnt = 0
+        do i=1,p%nptcls
+            call progress(i, p%nptcls)
+            if( i <= p%top .and. i >= p%fromp )then
+                cnt = cnt+1
+                if( nint(o%get(i,'state')) == state )then
+                    statecnt(state) = statecnt(state)+1
+                    call rec_dens
+                endif
+            endif
+        end do
         if( present(part) )then
             if( present(fbody) )then
                 call self%write_eos(fbody//int2str_pad(state,2)//'_part'//int2str_pad(part,self%numlen))
@@ -406,24 +416,24 @@ contains
         
         contains
         
-            !> \brief  reconstruction iterator
-            subroutine iterator( sub )
-                interface
-                    subroutine sub
-                    end subroutine
-                end interface
-                cnt = 0
-                do i=1,p%nptcls
-                    call progress(i, p%nptcls)
-                    if( i <= p%top .and. i >= p%fromp )then
-                        cnt = cnt+1
-                        if( nint(o%get(i,'state')) == state )then
-                            statecnt(state) = statecnt(state)+1
-                            call sub
-                        endif
-                    endif
-                end do
-            end subroutine iterator
+            ! !> \brief  reconstruction iterator
+            ! subroutine iterator( sub )
+            !     interface
+            !         subroutine sub
+            !         end subroutine
+            !     end interface
+            !     cnt = 0
+            !     do i=1,p%nptcls
+            !         call progress(i, p%nptcls)
+            !         if( i <= p%top .and. i >= p%fromp )then
+            !             cnt = cnt+1
+            !             if( nint(o%get(i,'state')) == state )then
+            !                 statecnt(state) = statecnt(state)+1
+            !                 call sub
+            !             endif
+            !         endif
+            !     end do
+            ! end subroutine iterator
         
             !> \brief  the density reconstruction functionality
             subroutine rec_dens

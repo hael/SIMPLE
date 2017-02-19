@@ -423,7 +423,8 @@ contains
     !!          The array of reals should have +2 elements in the first dimension.
     subroutine rwSlices( self, mode, first_slice, last_slice, rarr, ldim, is_ft, smpd, read_failure )
         use simple_strings, only: int2str
-        use simple_math, only: is_odd
+        use simple_math,    only: is_odd
+        use ieee_arithmetic
         use, intrinsic :: iso_c_binding
         use simple_imghead, only: ImgHead, SpiImgHead, MrcImgHead, dataRbytes, dataRinteger, dataRfloat
         use simple_math, only: is_even
@@ -615,7 +616,7 @@ contains
             do k=1,size(rarr,3)
                 do j=1,size(rarr,2)
                     do i=1,ldim(1)
-                        if( .not. isnan(rarr(i,j,k)) )then
+                        if( .not. ieee_is_nan(rarr(i,j,k)) )then
                             if( rarr(i,j,k) .gt. max_val) max_val = rarr(i,j,k)
                             if( rarr(i,j,k) .lt. min_val) min_val = rarr(i,j,k)
                         endif

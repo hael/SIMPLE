@@ -79,7 +79,6 @@ build: simple_pair_dtab.o               \
        simple_denspeak_cluster.o        \
        simple_aff_prop.o                \
        simple_clusterer.o               \
-       simple_spatial_median.o          \
        simple_ppca.o                    \
        simple_estimate_ssnr.o           \
        simple_reconstructor.o           \
@@ -100,8 +99,7 @@ matcher: simple_picker.o                  \
          simple_hadamard2D_matcher.o      \
          simple_hadamard3D_matcher.o      ;
 
-s_other: simple_masker.o                  \
-         simple_spatial_median.o          ;
+s_other: simple_masker.o                  ;
          
 comlin_sym: simple_comlin_symsrch.o       \
             simple_comlin_sym.o           ;

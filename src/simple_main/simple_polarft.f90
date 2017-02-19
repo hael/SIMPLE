@@ -4,7 +4,7 @@ use simple_defs
 use simple_jiffys, only: alloc_err
 implicit none
 
-public :: polarft, test_polarft
+public :: polarft
 private
 
 type :: polarft
@@ -49,16 +49,13 @@ type :: polarft
     procedure :: cpsh2unsh
     ! CALCULATORS
     procedure :: memoize_sqsums
-    procedure :: corr_slow
     procedure :: corr
     procedure :: corr_external
     procedure, private :: corr_shifted_1
     procedure, private :: corr_shifted_2
     generic :: corr_shifted => corr_shifted_1, corr_shifted_2
-    procedure :: rotsrch_slow
     procedure :: rotsrch
     procedure :: rotsrch_shifted
-    procedure :: gencorrs_slow
     procedure :: gencorrs
     procedure :: simulate_cshifted_gencorrs
     procedure :: gencorrs_shifted
@@ -432,40 +429,6 @@ contains
         endif
     end subroutine
     
-    !>  \brief  is the original PRIME function for correlating two polar images,
-    !!          parameterization is over rotations
-    function corr_slow( self1, rot1, self2, rot2 ) result( r )
-        use simple_math, only: calc_corr, csq
-        class(polarft), intent(in) :: self1
-        class(polarft), intent(in) :: self2
-        integer, intent(in)        :: rot1, rot2
-        real                       :: r, sumasq, sumbsq
-        integer                    :: i, j, i1, i2
-        if( self1.eqdims.self2 )then
-            i1     = rot1
-            i2     = rot2
-            sumasq = 0.
-            sumbsq = 0.
-            r      = 0.
-            do i=1,self1%nrots/2
-                do j=self1%khp,self1%klp
-                    r = r+real(self1%pft(i1,j))*real(self2%pft(i2,j))+aimag(self1%pft(i1,j))*aimag(self2%pft(i2,j))
-                    sumasq = sumasq+csq(self1%pft(i1,j))
-                    sumbsq = sumbsq+csq(self2%pft(i2,j))
-                end do
-                i1 = i1+1
-                if( i1 > self1%nrots ) i1 = 1
-                i2 = i2+1
-                if( i2 > self2%nrots ) i2 = 1
-            end do
-            r = calc_corr(r,sumasq*sumbsq)
-        else
-            write(*,*) self1%ring2, self1%khp, self1%klp
-            write(*,*) self2%ring2, self2%khp, self2%klp
-            stop 'not equal dims; corr'
-        endif
-    end function
-    
     !>  \brief  is for correlating two polar images of which one (self_ref) 
     !!          is fixed at rotation index 1 and one is parameterized (self)
     !!          over in-plane rotation index rot. This routine is optimized to
@@ -510,24 +473,6 @@ contains
         call self_ref%shift(shvec)
         cc = self_ref%corr_shifted_1(self, r)
     end function
-    
-    !>  \brief  is the original suboruitne for in-plane rotational correlation search used in PRIME
-    subroutine rotsrch_slow( self_ref, self, ang, corr, iang )
-        class(polarft), intent(in)     :: self_ref
-        class(polarft), intent(inout)  :: self
-        real, intent(out)              :: ang, corr
-        integer, intent(out), optional :: iang
-        real                           :: corrs(self%nrots)
-        integer                        :: r, loc(1)
-        if( .not. (self_ref.eqdims.self) )then
-            stop 'images need to have same dimensions; rotsrch; polarft'
-        endif
-        call self_ref%gencorrs_slow(self, corrs)
-        loc  = maxloc(corrs)
-        corr = corrs(loc(1))
-        ang  = polar_angtab(loc(1))
-        if( present(iang) ) iang = loc(1)
-    end subroutine
 
     !>  \brief  is for FAST in-plane rotational correlation search
     !!          This rouitne is about 10 times faster than the original one
@@ -540,11 +485,6 @@ contains
         integer                        :: r, loc(1)
         if( .not. self%ptcl )then
             stop 'the rotating pft needs to be constructed as a particle pft; rotsrch; simple_polarft'
-        endif
-        if( .not. (self_ref.eqdims.self) )then
-            print *, 'refdim: ', self_ref%get_dims()
-            print *, 'ptcldim: ', self%get_dims()
-            stop 'images need to have same dimensions; rotsrch; polarft'
         endif
         call self_ref%gencorrs(self, corrs)
         loc  = maxloc(corrs)
@@ -565,28 +505,11 @@ contains
         if( .not. self%ptcl )then
             stop 'the rotating pft needs to be constructed as a particle pft; rotsrch; simple_polarft'
         endif
-        if( .not. (self_ref.eqdims.self) )then
-            print *, 'refdim: ', self_ref%get_dims()
-            print *, 'ptcldim: ', self%get_dims()
-            stop 'images need to have same dimensions; rotsrch; polarft'
-        endif
         call self_ref%gencorrs_shifted(self, corrs)
         loc  = maxloc(corrs)
         corr = corrs(loc(1))
         ang  = polar_angtab(loc(1))
         if( present(iang) ) iang = loc(1)
-    end subroutine
-    
-    !>  \brief  is the original subroutine for generating 
-    !!          correlation values between polar FTs in PRIME
-    subroutine gencorrs_slow( self_ref, self, corrs )
-        class(polarft), intent(in)    :: self_ref
-        class(polarft), intent(inout) :: self
-        real, intent(out)             :: corrs(self%nrots)
-        integer                       :: r
-        do r=1,self_ref%nrots
-            corrs(r) = self_ref%corr_slow(1,self, r)
-        end do
     end subroutine
     
     !>  \brief  is for FAST generation of correlation values between polar FTs
@@ -603,9 +526,6 @@ contains
         integer                       :: r
         if( .not. self%ptcl )then
             stop 'the rotating pft needs to be constructed as a particle pft; gencorrs; simple_polarft'
-        endif
-        if( .not. (self_ref.eqdims.self) )then
-            stop 'images need to have same dimensions; gencorrs; polarft'
         endif
         do r=1,self_ref%nrots
             corrs(r) = self_ref%corr(self, r)
@@ -639,9 +559,6 @@ contains
         integer                       :: r
         if( .not. self%ptcl )then
             stop 'the rotating pft needs to be constructed as a particle pft; gencorrs; simple_polarft'
-        endif
-        if( .not. (self_ref.eqdims.self) )then
-            stop 'images need to have same dimensions; gencorrs; polarft'
         endif
         do r=1,self_ref%nrots
             corrs(r) = self_ref%corr_shifted(self, r)
@@ -720,7 +637,7 @@ contains
         class(polarft), intent(in) :: self2
         type(polarft)              :: self
         call self%copy(self1)
-        call self%mul(self2)
+        call self%mul_1(self2)
     end function
     
     !> \brief  overloaded division(/)
@@ -729,21 +646,17 @@ contains
         class(polarft), intent(in) :: self2
         type(polarft)              :: self
         call self%copy(self1)
-        call self%div(self2)
+        call self%div_1(self2)
     end function
     
     !> \brief  summation, not overloaded
     subroutine add( self, self2add )
         class(polarft), intent(inout) :: self
         class(polarft), intent(in)    :: self2add
-        if( self.eqdims.self2add )then
-            if( self%ptcl.eqv.self2add%ptcl )then
-                self%pft = self%pft+self2add%pft
-            else
-                stop 'polarfts with different ptcl status cannot be added; add; polarft'
-            endif
+        if( self%ptcl.eqv.self2add%ptcl )then
+            self%pft = self%pft+self2add%pft
         else
-            stop 'cannot add polarfts of different dims; add; polarft'
+            stop 'polarfts with different ptcl status cannot be added; add; polarft'
         endif
     end subroutine
     
@@ -751,14 +664,10 @@ contains
     subroutine subtr( self, self2subtr )
         class(polarft), intent(inout) :: self
         class(polarft), intent(in)    :: self2subtr
-        if( self.eqdims.self2subtr )then
-            if( self%ptcl.eqv.self2subtr%ptcl )then
-                self%pft = self%pft-self2subtr%pft
-            else
-                stop 'polarfts with different ptcl status cannot be subtracted; add; polarft'
-            endif
+        if( self%ptcl.eqv.self2subtr%ptcl )then
+            self%pft = self%pft-self2subtr%pft
         else
-            stop 'cannot subtract polarfts of different dims; subtr; polarft'
+            stop 'polarfts with different ptcl status cannot be subtracted; add; polarft'
         endif
     end subroutine
     
@@ -766,14 +675,10 @@ contains
     subroutine mul_1( self, self2mul )
         class(polarft), intent(inout) :: self
         class(polarft), intent(in)    :: self2mul
-        if( self.eqdims.self2mul )then
-            if( self%ptcl.eqv.self2mul%ptcl )then
-                self%pft = self%pft*self2mul%pft
-            else
-                 stop 'polarfts with different ptcl status cannot be multiplied; add; polarft'
-            endif
+        if( self%ptcl.eqv.self2mul%ptcl )then
+            self%pft = self%pft*self2mul%pft
         else
-            stop 'cannot multiply polarfts of different dims; mul_1; polarft'
+             stop 'polarfts with different ptcl status cannot be multiplied; add; polarft'
         endif
     end subroutine
     
@@ -788,14 +693,10 @@ contains
     subroutine div_1( self, self2div )
         class(polarft), intent(inout) :: self
         class(polarft), intent(in)    :: self2div
-        if( self.eqdims.self2div )then
-            if( self%ptcl.eqv.self2div%ptcl )then
-                self%pft = self%pft/self2div%pft
-            else
-                stop 'polarfts with different ptcl status cannot be divided; add; polarft'
-            endif
+        if( self%ptcl.eqv.self2div%ptcl )then
+            self%pft = self%pft/self2div%pft
         else
-            stop 'cannot divide polarfts of different dims; div_1; polarft'
+            stop 'polarfts with different ptcl status cannot be divided; add; polarft'
         endif
     end subroutine
     
@@ -823,50 +724,6 @@ contains
         if( allocated(self%pft)     ) deallocate(self%pft)
         if( allocated(self%sqsums)  ) deallocate(self%sqsums)
         self%existence = .false.
-    end subroutine
-    
-    !>  \brief  is a unit test for polarft
-    subroutine test_polarft
-        use simple_jiffys, only: progress
-        type(polarft) :: pft1, pft2
-        integer, parameter :: NITER=3000
-        real               :: corr, diff, corr_slow
-        integer            :: i, j, nrots, r
-        real, allocatable  :: corrs(:), corrs2(:)
-        call pft1%new([2,11], 45)
-        call pft2%new([2,11], 45)
-        nrots = pft1%get_nrots()
-        allocate(corrs(nrots), corrs2(nrots))
-        call pft1%noise_fill
-        call pft2%noise_fill
-        call pft1%memoize_sqsums
-        call pft2%memoize_sqsums
-        ! compare the two correlation functions
-        diff = 0.
-        do r=1,nrots
-            corr_slow = pft1%corr_slow(1, pft2, r)
-            corr = pft1%corr(pft2, r)
-            diff = diff+abs(corr-corr_slow)
-        end do
-        diff = diff/real(nrots)
-        if( diff > 1e-6 )then
-            stop 'the fast correlation does not conform with the old (slow) version; test_polarft'
-        endif
-        write(*,*) ">>> TESTING THE OLD SLOW CORRELATION GENERATOR"
-        do i=1,NITER
-            call progress(i,NITER)
-            call pft1%gencorrs_slow(pft2, corrs )
-        end do
-        write(*,*) ">>> TESTING THE NEW FAST CORRELATION GENERATOR"
-        do i=1,NITER
-            call progress(i,NITER)
-            call pft1%gencorrs(pft2, corrs)
-        end do
-        write(*,*) ">>> TESTING THE CSHIFTED CORRELATION GENERATOR"
-        do i=1,NITER
-            call progress(i,NITER)
-            call pft1%simulate_cshifted_gencorrs
-        end do
     end subroutine
     
 end module simple_polarft

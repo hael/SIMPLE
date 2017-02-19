@@ -37,8 +37,7 @@ type :: winfuns
     procedure(ifun), pointer, nopass :: instr_fun=>null() !< instrument function
     real :: Whalf=0.                                      !< window halfwidth
     real :: alpha=0.                                      !< oversampling (padding) fatcor
-    real :: W=0.                                          !< window fullwidth
-    real :: var=0.                                        !< variance Gaussian window        
+    real :: W=0.                                          !< window fullwidth      
     real :: beta=0.                                       !< KB shape factor
     real :: betasq, twooW, twoW, oneoW, piW, pioW
     real :: bmanc1, bmanc2, bmanc3, bmanc4, bmanc5, bmanc6, bmanc7
@@ -49,8 +48,6 @@ type :: winfuns
     procedure :: eval_instr
     procedure, private :: bman_apod
     procedure, private :: bman_instr
-    procedure, private :: gau_apod
-    procedure, private :: gau_instr
     procedure, private :: hann_apod
     procedure, private :: hann_instr
     procedure, private :: kb_apod
@@ -84,7 +81,7 @@ abstract interface
 end interface
 
 interface winfuns
-    module procedure :: constructor
+    module procedure constructor
 end interface
 
 contains
@@ -117,14 +114,6 @@ contains
         self%bmanc5=21./25.
         self%bmanc6=9./25.
         self%bmanc7=twopi*self%Whalf
-        ! set Gaussian variance according to Jackson 1991
-        if( self%W <= 3. )then
-            self%var = 0.5
-        else if( self%W <= 4. )then
-            self%var = 0.4927
-        else
-            self%var = 0.4839
-        endif
         ! set window function pointers
         select case(self%wfun_str)
             case('')
@@ -133,9 +122,6 @@ contains
             case('bman')
                 self%apod_fun  => bman_apod
                 self%instr_fun => bman_instr
-            case('gau')
-                self%apod_fun  => gau_apod
-                self%instr_fun => gau_instr
             case('hann')
                 self%apod_fun  => hann_apod
                 self%instr_fun => hann_instr
@@ -222,42 +208,6 @@ contains
         else
             r = (self%Whalf*(self%bmanc5-self%bmanc6*arg)*r)/div
         endif
-    end function
-    
-    ! GAUSSIAN
-    
-    !>  \brief  is a Gaussian apodization function as defined in Jackson 1991
-    function gau_apod( self, x ) result( r ) ! OK
-        class(winfuns), intent(in) :: self
-        real, intent(in) :: x
-        real :: r, arg
-        if( abs(x) > self%Whalf )then
-            r = 0.
-            return
-        endif
-        arg = x/self%var
-        arg = arg*arg
-        r = exp(-0.5*arg)
-    end function
-    
-    !>  \brief  is a Gaussian instrument function as defined in http://mathworld.wolfram.com/ApodizationFunction.html
-    function gau_instr( self, x ) result( r )
-        use simple_math, only: qsimp
-        class(winfuns), intent(in) :: self
-        real, intent(in) :: x
-        real :: r
-        r = 2.*qsimp(fun, 0., self%Whalf)
-        
-        contains
-        
-            function fun( z ) result( r )
-                real, intent(in) :: z
-                real :: r, arg
-                arg = z/self%var
-                arg = arg*arg
-                r = cos(twopi*x*z)*exp(-0.5*arg)
-            end function
-            
     end function
     
     ! HANNING

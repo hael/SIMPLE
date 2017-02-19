@@ -9,7 +9,7 @@ public :: exec_optimiser_test
 private
 
 ! module global constants
-integer, parameter        :: NOPTS=6         ! nr of optimizers
+integer, parameter        :: NOPTS=5         ! nr of optimizers
 integer, parameter        :: NRFUNS=19       ! nr of general test functions
 integer, parameter        :: LAST2DFUN=32    ! index of last 2D function
 integer, parameter        :: NTESTS=50       ! nr of independent tests
@@ -136,12 +136,11 @@ contains
         integer :: i, j, k, mval, cnt, nfuns
         real    :: maxeval, neval
         logical :: err
-        str_opts(1) = 'bfgs'
-        str_opts(2) = 'powell'
-        str_opts(3) = 'simplex'
-        str_opts(4) = 'oasis'
-        str_opts(5) = 'pso'
-        str_opts(6) = 'de'
+        str_opts(1) = 'powell'
+        str_opts(2) = 'simplex'
+        str_opts(3) = 'oasis'
+        str_opts(4) = 'pso'
+        str_opts(5) = 'de'
         if( NRDIMS == 2 )then
             nfuns = LAST2DFUN
         else
@@ -200,7 +199,6 @@ contains
 
     !>  \brief  optimizer test routine, parameterized with respect to optimizer & testfunction
     subroutine test_optimizer( wopt, wfun, ndim )
-        use simple_math, only: numgrad
         use simple_rnd,  only: ran3
         use simple_testfuns
         integer, intent(in)         :: wopt, wfun, ndim !< which optimizer, which test function, dimension of problem
@@ -212,7 +210,6 @@ contains
         lims(:,2) = range(2)
         call spec%specify(str_opts(wopt),ndim,limits=lims,nrestarts=NRESTARTS) ! make optimizer spec
         call spec%set_costfun(costfun_ptr)                                     ! set pointer to costfun
-        call spec%set_gcostfun(gcostfun)                                       ! set pointer to gradient
         call ofac%new(spec, opt_ptr)                                           ! generate optimizer object with the factory
         ! generate starting point
         spec%x(1) = spec%limits(1,1)+ran3()*(spec%limits(1,2)-spec%limits(1,1))
@@ -222,17 +219,7 @@ contains
         if( sqrt((lowest_cost-gmin)**2.) <= TOL )then
             success(wopt,wfun) = success(wopt,wfun)+1
             nevals(wopt,wfun)  = nevals(wopt,wfun)+spec%nevals
-        end if
-        
-        contains
-            
-            function gcostfun( x, D ) result( grad )
-                integer, intent(in) :: D
-                real, intent(inout) :: x(D)
-                real                :: grad(D)
-                grad = numgrad(costfun_ptr, x, D, h)
-            end function 
-    
+        end if    
     end subroutine test_optimizer
 
     subroutine simple_test_bforce_opt

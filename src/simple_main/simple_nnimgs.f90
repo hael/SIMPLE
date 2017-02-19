@@ -7,9 +7,9 @@ public :: img_nearest_neighbors, init_nn_srch, conduct_nn_srch, kill_nn_srch
 private
 
 interface conduct_nn_srch
-    module procedure :: conduct_nn_srch_1
-    module procedure :: conduct_nn_srch_2
-    module procedure :: conduct_nn_srch_3
+    module procedure conduct_nn_srch_1
+    module procedure conduct_nn_srch_2
+    module procedure conduct_nn_srch_3
 end interface conduct_nn_srch
 
 ! module global variables

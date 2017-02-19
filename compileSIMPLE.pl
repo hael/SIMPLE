@@ -3,7 +3,6 @@
 ################################################################################
 # Setup the perl env                                                           #
 ################################################################################
-
 use lib './';
 use warnings;
 use strict;
@@ -19,7 +18,6 @@ use simple_user_input;
 ################################################################################
 # Declare variables                                                            #
 ################################################################################
-
 my @modnames_all;
 my @prgnames_all;
 my @prgnames_all_short;
@@ -45,7 +43,6 @@ my $option_mkma_f90_flags;
 ################################################################################
 # Set compiler options                                                         #
 ################################################################################
-
 # optimization level
 my $DPLAT;     # platform, from setCompiling_options
 my $opti;      # compiler optimisation variable
@@ -54,7 +51,23 @@ my $dbg_lvl_f; # debugging directives
 check_lib_paths();
 # make sure that the object folder is created
 make_path("$SIMPLE_PATH/obj/SIMPLEOFILES/");
-if( $FCOMPILER =~ /gfortran/ ) {
+if( $FCOMPILER =~ /pgfortran/ ){
+    # PGI is supposedly platform in-dependent, so no need for diferent options for MacOSX/Linux
+    # debugging options
+    if( $DEBUG eq 'yes' ) {
+        $dbg_lvl_f = "-g -debug -O0 -C -traceback";
+        if( $DEBUG_LEVEL =~ /high/ ) {
+            $dbg_lvl_f = $dbg_lvl_f."";
+        }
+    } else { 
+        $dbg_lvl_f = "";
+    }
+    $option_in = '-fPIC -Mfree -Mpreprocess -DPGI -module obj/SIMPLEOFILES/';
+    # compiling options for the Makefile_macros
+    $option_mkma_gcc_flags = '';
+    $option_mkma_gpp_flags = '-DADD_';
+    $option_mkma_f90_flags = '-fPIC -Mfree -Mpreprocess -DPGI -module obj/SIMPLEOFILES/';
+}elsif( $FCOMPILER =~ /gfortran/ ){
     if ( $PLATFORM == 0 ) {
     	# debugging options
     	if( $DEBUG eq 'yes' ) {
@@ -66,12 +79,12 @@ if( $FCOMPILER =~ /gfortran/ ) {
             $dbg_lvl_f = "";
         }
     	# for [MacOSX]
-    	$option_in                = '-fimplicit-none -fall-intrinsics -ffree-form -cpp -fpic -fno-second-underscore';
+    	$option_in = '-fimplicit-none -fall-intrinsics -ffree-form -cpp -fpic -fno-second-underscore';
     	# compiling options for the Makefile_macros
-    	$option_mkma_gcc_flags    = '-DCUBLAS_GFORTRAN -DADD_';
-    	$option_mkma_gpp_flags    = '-DADD_';
-    	$option_mkma_f90_flags    = '-fimplicit-none -fall-intrinsics -ffree-form -cpp -fpic -fno-second-underscore';
-    } elsif ( $PLATFORM == 1 ) {
+    	$option_mkma_gcc_flags = '';
+    	$option_mkma_gpp_flags = '-DADD_';
+    	$option_mkma_f90_flags = '-fimplicit-none -fall-intrinsics -ffree-form -cpp -fpic -fno-second-underscore';
+    } elsif ( $PLATFORM == 1 ){
     	# debugging options
     	if( $DEBUG eq 'yes' ) {
     	    $dbg_lvl_f = "-g -Og -Wall -fbounds-check";
@@ -82,32 +95,17 @@ if( $FCOMPILER =~ /gfortran/ ) {
             $dbg_lvl_f = "";
         }
         #for [Linux]
-        $option_in                = '-ffree-form -cpp -fPIC -fno-second-underscore';
+        $option_in = '-ffree-form -cpp -fPIC -fno-second-underscore';
     	#compiling options for the Makefile_macros
-    	$option_mkma_gcc_flags    = '-DCUBLAS_GFORTRAN -DADD_';
-    	$option_mkma_gpp_flags    = '-DADD_';
-    	$option_mkma_f90_flags    = '-ffree-form -cpp -fno-second-underscore';
+    	$option_mkma_gcc_flags = '';
+    	$option_mkma_gpp_flags = '-DADD_';
+    	$option_mkma_f90_flags = '-ffree-form -cpp -fPIC -fno-second-underscore';
     }
 } elsif( $FCOMPILER =~ /ifort/ ) {
     if( $PLATFORM == 0 ){
 
         die "ifort compilation on Mac not yet supported";
 
-    	# # debugging options
-    	# if( $DEBUG eq 'yes' ) {
-    	#     $dbg_lvl_f = "-g -O0 -check bounds";
-    	#     if( $DEBUG_LEVEL =~ /high/ ) {
-    	# 	    $dbg_lvl_f = $dbg_lvl_f." -traceback -check all -check pointers -debug all";
-    	#     }
-	    # } else {
-     #        $dbg_lvl_f = "";
-     #    }
-    	# # for [MacOSX]
-    	# $option_in                = '-fimplicit-none -fall-intrinsics -free-form -cpp -fpic -assume no2underscores';
-    	# # compiling options for the Makefile_macros
-    	# $option_mkma_gcc_flags    = '-DCUBLAS_GFORTRAN -DADD_';
-    	# $option_mkma_gpp_flags    = '-DADD_';
-    	# $option_mkma_f90_flags    = '-fimplicit-none -fall-intrinsics -free-form -cpp -fpic -assume no2underscores';
     } elsif( $PLATFORM == 1 ) {
     	# debuging options
     	if( $DEBUG eq 'yes' ) {
@@ -119,10 +117,11 @@ if( $FCOMPILER =~ /gfortran/ ) {
             $dbg_lvl_f = "";
         }
     	#for [Linux]
-    	$option_in                = '-implicitnone -80 -cpp -fPIC -module obj/SIMPLEOFILES/';
+    	$option_in = '-implicitnone -80 -cpp -fPIC -module obj/SIMPLEOFILES/';
     	#compiling options for the Makefile_macros
-    	$option_mkma_gpp_flags    = '-DADD_';
-    	$option_mkma_f90_flags    = '-implicitnone -80 -cpp -fPIC -module obj/SIMPLEOFILES/';
+        $option_mkma_gcc_flags = '';
+    	$option_mkma_gpp_flags = '-DADD_';
+    	$option_mkma_f90_flags = '-implicitnone -80 -cpp -fPIC -module obj/SIMPLEOFILES/';
     }
 }
 # setting up the options for both Makefile_macros and compile_and_link_local.csh
@@ -131,7 +130,6 @@ setCompiling_options();
 ################################################################################
 # Execute SIMPLE code generators/modifiers                                     #
 ################################################################################
-
 # goto src directory of the repo
 print color('bold blue');
 print"Moving to dir: "; print color('bold green'); 
@@ -156,7 +154,6 @@ untie @simple_args;
 # Generate the Makefile_macros compilation script using the variables          #
 # inputed by the user (in simple_user_input.pm)                                #
 ################################################################################
-
 # goto root directory of the repo
 print color('bold blue');
 print"Moving to dir: "; print color('bold green'); 
@@ -173,7 +170,6 @@ close $mkma;
 ################################################################################
 # Compile the library codes using the Makefile_macros script                   #
 ################################################################################
-
 if( $ICOMPILE == 0 ){
     system("make cleanall");
     system("make");
@@ -190,7 +186,6 @@ if( $ICOMPILE == 0 ){
 # Set up the environment for compile_and_link script generation                #
 # for the production codes                                                     #
 ################################################################################
-
 print "\n";
 print "$op_sys, Platform = $PLATFORM\n";
 print "Architecture: $architecture\n";
@@ -222,7 +217,6 @@ foreach my $i (0 .. $#prgnames_all){
 ################################################################################
 # Compile the production codes                                                 #
 ################################################################################
-
 # Generate the database of all modules in the library
 print color('bold blue');
 print"Moving to dir: "; print color('bold green'); 
@@ -297,7 +291,6 @@ finish_message($finishdir);
 ################################################################################
 # Subroutines                                                                  #
 ################################################################################
-
 sub finish_message{
     my $finishdir_in = shift;
     print color('bold blue');
@@ -410,9 +403,11 @@ sub setCompiling_options {
     } elsif ($SET_OPTIMIZATION == 2) {
 	    $opti = "-O2";
     } elsif ($SET_OPTIMIZATION == 3) {
-	    if( $FCOMPILER =~ /gfortran/ ) {
+        if( $FCOMPILER =~ /pgfortran/ ){
+            $opti = "-fast -Mipa=fast,inline"; 
+	    }elsif( $FCOMPILER =~ /gfortran/ ){
 	        $opti = "-O3";
-	    } elsif( $FCOMPILER =~ /ifort/ ) {
+	    }elsif( $FCOMPILER =~ /ifort/ ){
             $opti = "-O3 -no-prec-div -static -fp-model fast=2 -xHost";
 	    }
     } elsif( $DEBUG eq 'yes' ) {
@@ -423,7 +418,7 @@ sub setCompiling_options {
     } elsif ( $PLATFORM == 1 ) {
 	    $DPLAT = "-DLINUX";
     }
-    if( $FCOMPILER =~ /gfortran/ || $FCOMPILER =~ /ifort/ ) {
+    if( $FCOMPILER =~ /gfortran/ || $FCOMPILER =~ /ifort/ || $FCOMPILER =~ /pgfortran/ ) {
     	if( $DEBUG eq 'yes' ) {
     	    $option            = $option_in." $dbg_lvl_f $DPLAT $DOPENMP $DBENCH $DCUDA";
     	    $mkma_gcc_flags    = $option_mkma_gcc_flags." -g $DPLAT $DOPENMP $DBENCH $DCUDA";
@@ -600,14 +595,14 @@ sub make_Makefile_macros {
     print $mkma qq[F90C=\$(GFORTRAN)\n];
     print $mkma qq[F90FLAGS=$mkma_f90_flags\n];
     print $mkma qq[F90CLIB=\$(F90C) -c \$(F90FLAGS) -I \$(MODDIR)                      \\\n];
-    if( $FCOMPILER =~ /gfortran/ ){
+    if( $FCOMPILER !~ /pgfortran/ and $FCOMPILER !~ /ifort/ ){
     print $mkma qq[                             -J \$(MODDIR)                      \\\n];
     }
     print $mkma qq[\n];
     print $mkma qq[\n];
     print $mkma qq[F90CLIB77=\$(F90C) -c \$(F90FLAGS77) -I .                                \\\n];
     print $mkma qq[                                   -I \$(MODDIR)                        \\\n];
-    if( $FCOMPILER =~ /gfortran/ ){
+    if( $FCOMPILER !~ /pgfortran/ and $FCOMPILER !~ /ifort/ ){
     print $mkma qq[                                   -J \$(MODDIR)                        \\\n];
     }
     print $mkma qq[\n];

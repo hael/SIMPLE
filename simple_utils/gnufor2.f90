@@ -1168,26 +1168,26 @@
  if (present(style)) then
   write ( file_unit, '(a,i2,a)' ) 'plot "' // trim (data_file_name) &
   &//'" using 1:2 with ' // trim(my_line_type1) // ' pointtype ' // &
-  & style(1:2) // ' linecolor rgb ' // trim(my_color1) // ' linewidth '// trim(my_linewidth) // ',\' 
+  & style(1:2) // ' linecolor rgb ' // trim(my_color1) // ' linewidth '// trim(my_linewidth) // ',\\' 
   write ( file_unit, '(a,i2,a)' ) '     "'// trim (data_file_name) &
   &//'" using 3:4 with ' // trim(my_line_type2) // ' pointtype ' &
-  &// style(4:5) // ' linecolor rgb ' // trim(my_color2) // ' linewidth '// trim(my_linewidth) //',\' 
+  &// style(4:5) // ' linecolor rgb ' // trim(my_color2) // ' linewidth '// trim(my_linewidth) //',\\' 
   write ( file_unit, '(a,i2,a)' ) '     "'// trim (data_file_name) &
   &//'" using 5:6 with ' // trim(my_line_type3) // ' pointtype ' &
-  &// style(7:8) // ' linecolor rgb ' // trim(my_color3) // ' linewidth '// trim(my_linewidth) // ',\' 
+  &// style(7:8) // ' linecolor rgb ' // trim(my_color3) // ' linewidth '// trim(my_linewidth) // ',\\' 
   write ( file_unit, '(a,i2,a)' ) '     "'// trim (data_file_name) &
   &//'" using 7:8 with ' // trim(my_line_type4) // ' pointtype ' &
   &// style(10:11) // ' linecolor rgb '// trim(my_color4)// ' linewidth '// trim(my_linewidth) 
  else 
   write ( file_unit, '(a,i2,a)' ) 'plot "' // trim (data_file_name) &
   & //'" using 1:2 with ' // trim(my_line_type1)  // ' linecolor rgb '&
-  & // trim(my_color1) // ' linewidth '// trim(my_linewidth) // ',\' 
+  & // trim(my_color1) // ' linewidth '// trim(my_linewidth) // ',\\' 
   write ( file_unit, '(a,i2,a)' ) '     "'// trim (data_file_name) &
   & //'" using 3:4 with ' // trim(my_line_type2)  // ' linecolor rgb '&
-  & // trim(my_color2) // ' linewidth '// trim(my_linewidth) // ',\' 
+  & // trim(my_color2) // ' linewidth '// trim(my_linewidth) // ',\\' 
   write ( file_unit, '(a,i2,a)' ) '     "'// trim (data_file_name) &
   & //'" using 5:6 with ' // trim(my_line_type3)  // ' linecolor rgb '&
-  & // trim(my_color3) // ' linewidth '// trim(my_linewidth) // ',\' 
+  & // trim(my_color3) // ' linewidth '// trim(my_linewidth) // ',\\' 
   write ( file_unit, '(a,i2,a)' ) '     "'// trim (data_file_name) &
   & //'" using 7:8 with ' // trim(my_line_type4)  // ' linecolor rgb '&
   & // trim(my_color4) // ' linewidth '// trim(my_linewidth) 
@@ -1362,20 +1362,20 @@
  if (present(style)) then
   write ( file_unit, '(a,i2,a)' ) 'plot "' // trim (data_file_name) &
   &//'" using 1:2 with ' // trim(my_line_type1) // ' pointtype ' // &
-  & style(1:2) // ' linecolor rgb ' // trim(my_color1) // ' linewidth '// trim(my_linewidth) // ',\' 
+  & style(1:2) // ' linecolor rgb ' // trim(my_color1) // ' linewidth '// trim(my_linewidth) // ',\\' 
   write ( file_unit, '(a,i2,a)' ) '     "'// trim (data_file_name) &
   &//'" using 3:4 with ' // trim(my_line_type2) // ' pointtype ' &
-  &// style(4:5) // ' linecolor rgb ' // trim(my_color2) // ' linewidth '// trim(my_linewidth) //',\' 
+  &// style(4:5) // ' linecolor rgb ' // trim(my_color2) // ' linewidth '// trim(my_linewidth) //',\\' 
   write ( file_unit, '(a,i2,a)' ) '     "'// trim (data_file_name) &
   &//'" using 5:6 with ' // trim(my_line_type3) // ' pointtype ' &
   &// style(7:8) // ' linecolor rgb ' // trim(my_color3) // ' linewidth '// trim(my_linewidth) 
  else 
   write ( file_unit, '(a,i2,a)' ) 'plot "' // trim (data_file_name) &
   & //'" using 1:2 with ' // trim(my_line_type1)  // ' linecolor rgb '&
-  & // trim(my_color1) // ' linewidth '// trim(my_linewidth) // ',\' 
+  & // trim(my_color1) // ' linewidth '// trim(my_linewidth) // ',\\' 
   write ( file_unit, '(a,i2,a)' ) '     "'// trim (data_file_name) &
   & //'" using 3:4 with ' // trim(my_line_type2)  // ' linecolor rgb '&
-  & // trim(my_color2) // ' linewidth '// trim(my_linewidth) // ',\' 
+  & // trim(my_color2) // ' linewidth '// trim(my_linewidth) // ',\\' 
   write ( file_unit, '(a,i2,a)' ) '     "'// trim (data_file_name) &
   & //'" using 5:6 with ' // trim(my_line_type3)  // ' linecolor rgb '&
   & // trim(my_color3) // ' linewidth '// trim(my_linewidth) 
@@ -1535,14 +1535,14 @@
  if (present(style)) then
   write ( file_unit, '(a,i2,a)' ) 'plot "' // trim (data_file_name) &
   &//'" using 1:2 with ' // trim(my_line_type1) // ' pointtype ' // &
-  & style(1:2) // ' linecolor rgb ' // trim(my_color1) // ' linewidth '// trim(my_linewidth) // ',\' 
+  & style(1:2) // ' linecolor rgb ' // trim(my_color1) // ' linewidth '// trim(my_linewidth) // ',\\' 
   write ( file_unit, '(a,i2,a)' ) '     "'// trim (data_file_name) &
   &//'" using 3:4 with ' // trim(my_line_type2) // ' pointtype ' &
   &// style(4:5) // ' linecolor rgb ' // trim(my_color2) // ' linewidth '// trim(my_linewidth) 
  else 
   write ( file_unit, '(a,i2,a)' ) 'plot "' // trim (data_file_name) &
   & //'" using 1:2 with ' // trim(my_line_type1)  // ' linecolor rgb '&
-  & // trim(my_color1) // ' linewidth '// trim(my_linewidth) // ',\' 
+  & // trim(my_color1) // ' linewidth '// trim(my_linewidth) // ',\\' 
   write ( file_unit, '(a,i2,a)' ) '     "'// trim (data_file_name) &
   & //'" using 3:4 with ' // trim(my_line_type2)  // ' linecolor rgb '&
   & // trim(my_color2) // ' linewidth '// trim(my_linewidth) 
@@ -1760,4 +1760,5 @@ call system(trim(command))
  return
  end subroutine get_unit
 !***********************************************************************************
- end module gnufor2
+end module gnufor2
+

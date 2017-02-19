@@ -1256,8 +1256,6 @@ contains
                         angast = 0.
                 end select
                 call tfun%ctf2img( img, dfx, 'square', dfy, angast)
-            else
-                img = cmplx(1.,0.)
             endif
         end subroutine prep_ctfsq
 

@@ -6,7 +6,7 @@ use simple_params,      only: params
 use simple_filterer     ! use all in there
 implicit none
 
-public :: unblur_movie, unblur_calc_sums, unblur_calc_sums_tomo, test_unblur
+public :: unblur_movie, unblur_calc_sums, unblur_calc_sums_tomo
 private
 
 type(ft_expanded), allocatable  :: movie_frames_ftexp(:)      !< movie frames
@@ -458,56 +458,6 @@ contains
         &call movie_sum_global_ftexp%subtr(movie_frames_ftexp_sh(iframe), w=frameweights(iframe))
     end subroutine subtract_movie_frame
     
-    subroutine test_unblur
-        use simple_oris,    only: oris
-        use simple_cmdline, only: cmdline
-        real          :: shifts(7,2)
-        type(image)   :: squares(7), straight_sum, corrected , sum4ctf
-        type(params)  :: p_here 
-        type(cmdline) :: cline
-        real          :: corr
-        integer       :: i
-        shifts(1,1) = -3.
-        shifts(1,2) = -3.
-        shifts(2,1) = -2.
-        shifts(2,2) = -2.
-        shifts(3,1) = -1.
-        shifts(3,2) = -1.
-        shifts(4,1) =  0.
-        shifts(4,2) =  0.
-        shifts(5,1) =  1.
-        shifts(5,2) =  1.
-        shifts(6,1) =  2.
-        shifts(6,2) =  2.
-        shifts(7,1) =  3.
-        shifts(7,2) =  3.
-        do i=1,7
-            call squares(i)%new([100,100,1], 2.)
-            call squares(i)%square(30)
-            call squares(i)%shift(shifts(i,1),shifts(i,2))
-            call squares(i)%write('sugarcubes.mrc', i)
-        end do
-        p_here         = params(cline)
-        p_here%smpd    = 2.0
-        p_here%trs     = 3.5
-        p_here%box     = 100
-        p_here%lpstart = 10.
-        p_here%lpstop  = 4.0
-        call unblur_movie('sugarcubes.mrc', p_here, corr)
-        call unblur_calc_sums(straight_sum, corrected, sum4ctf)
-        if( sum(abs(opt_shifts-shifts)) < 0.5 )then
-            write(*,'(a)') 'SIMPLE_UNBLUR_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
-        else
-            write(*,'(a)') 'SIMPLE_UNBLUR_UNIT_TEST FAILED :-('
-        endif
-        do i=1,7
-            call squares(i)%kill
-        end do
-        call straight_sum%kill
-        call corrected%kill
-        call sum4ctf%kill
-    end subroutine test_unblur
-
     subroutine unblur_kill
         integer :: iframe
         if( existence )then

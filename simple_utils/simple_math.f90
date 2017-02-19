@@ -324,9 +324,10 @@ contains
     
     !> \brief  validity check of real number (so that it is not nan)
     pure function is_a_number_1( number ) result( is )
+        use ieee_arithmetic
         real, intent(in) :: number
         logical          :: is
-        is = .not. isnan(number) 
+        is = .not. ieee_is_nan(number)
     end function
     
     !> \brief  validity check of complex number (so that it is not nan)
@@ -1023,25 +1024,25 @@ contains
     end function
 
     !> \brief calculates a corr coeff based on cross prod sum and denominator in double precision
-    function calc_corr_dble( sxy, den ) result( corr )
-        real(dp), intent(in) :: sxy, den
-        real(dp) :: corr
-        if( den > 0.d0 )then
-            corr = sxy/sqrt(den)
-            if( is_a_number(real(corr)) )then
-                if( corr > 1. )then
-                    write(*,*) 'WARNING! corr > 1, numerical errors', corr
-                else if( corr < -1. )then
-                    write(*,*) 'WARNING! corr < -1, numerical errors', corr
-                endif
-                corr = min(1.,max(-1.,corr))
-            else
-                corr = 0.
-            endif
-        else
-            corr = 0.
-        endif
-    end function
+    ! function calc_corr_dble( sxy, den ) result( corr )
+    !     real(dp), intent(in) :: sxy, den
+    !     real(dp) :: corr
+    !     if( den > 0.d0 )then
+    !         corr = sxy/sqrt(den)
+    !         if( is_a_number(real(corr)) )then
+    !             if( corr > 1. )then
+    !                 write(*,*) 'WARNING! corr > 1, numerical errors', corr
+    !             else if( corr < -1. )then
+    !                 write(*,*) 'WARNING! corr < -1, numerical errors', corr
+    !             endif
+    !             corr = min(1.,max(-1.,corr))
+    !         else
+    !             corr = 0.
+    !         endif
+    !     else
+    !         corr = 0.
+    !     endif
+    ! end function
     
     ! NUMERICAL STUFF
     
@@ -1106,45 +1107,6 @@ contains
             ost = st
         end do
         !write(*,'(a)') 'too many steps in qsimp; simple_math'
-    end function
-    
-    !>  \brief  Returns the gradient of a multidimensional function 
-    !!          func at a point x by Ridders' method of polynomial extrapolation.
-    !!          See the below numderiv routine
-    function numgrad( func, x, D, h ) result( grad )
-        interface
-            function func( x, D ) result( r )
-                integer, intent(in) :: D
-                real, intent(in)    :: x(D)
-                real                :: r
-            end function
-        end interface
-        integer, intent(in) :: D
-        real, intent(inout) :: x(D)
-        real, intent(in)    :: h(D)
-        real                :: grad(D), err(D)
-        integer             :: which_dim, i
-        do i=1,D
-            which_dim = i
-            call numderiv(func_onedim, x(i), h(i), err(i), grad(i))
-        end do
-
-        contains
-        
-            !>  \brief  one-dimensional version of the multidimensional func
-            function func_onedim( t ) result( r )
-                real, intent(in) :: t
-                real :: r, s
-                ! store the old parameter value
-                s = x(which_dim)
-                ! replace
-                x(which_dim) = t
-                ! evaluate func
-                r = func( x, D ) 
-                ! put old val back
-                x(which_dim) = s
-            end function
-
     end function
 
     !>  \brief  Returns the derivative of a function func at a point x by Ridders' 

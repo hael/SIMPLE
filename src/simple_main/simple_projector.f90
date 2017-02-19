@@ -47,7 +47,7 @@ type :: projector
 end type projector
 
 interface projector
-    module procedure :: constructor
+    module procedure constructor
 end interface
 
 contains
@@ -500,12 +500,12 @@ contains
             call imgs(i)%new([p%box,p%box,1], p%smpd, self%imgkind)
             call self%fproject(vol_pad, o%get_ori(i), img_pad)
             if( self%imgkind .eq. 'xfel' )then
-                ! no back transformation or normalisation, just clipping
                 call img_pad%clip(imgs(i))
             else
                 call img_pad%bwd_ft
                 call img_pad%clip(imgs(i))
-                call imgs(i)%norm
+                ! HAD TO TAKE OUT BECAUSE PGI COMPILER BAILS
+                ! call imgs(i)%norm
             endif
         end do
         call vol_pad%kill
@@ -546,8 +546,9 @@ contains
         end do
         !$omp end parallel do
         call rovol_pad%bwd_ft
-        call rovol_pad%clip(rovol)     
-        call rovol%norm
+        call rovol_pad%clip(rovol)
+        ! HAD TO TAKE OUT BECAUSE PGI COMPILER BAILS
+        ! call rovol%norm
         call vol_pad%kill
         call rovol_pad%kill
     end function rotvol

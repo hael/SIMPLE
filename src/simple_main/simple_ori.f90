@@ -18,9 +18,6 @@ implicit none
 public :: ori, test_ori, test_ori_dists
 private
 
-real,    parameter :: zvec(3)  = [0.,0.,1.]
-integer, parameter :: NNAMES   = 10
-
 !>  \brief  orientation parameters
 type :: ori
     private
@@ -51,8 +48,8 @@ type :: ori
     procedure, private :: set_2
     generic            :: set => set_1, set_2
     procedure, private :: rnd_romat
-    procedure, private :: rnd_euler_1
-    procedure, private :: rnd_euler_2
+    procedure          :: rnd_euler_1
+    procedure          :: rnd_euler_2
     generic            :: rnd_euler => rnd_euler_1, rnd_euler_2
     procedure          :: rnd_ori
     procedure          :: rnd_inpl
@@ -108,6 +105,10 @@ end type
 interface ori
     module procedure constructor
 end interface
+
+real,       parameter :: zvec(3)  = [0.,0.,1.]
+integer,    parameter :: NNAMES   = 10
+class(ori), pointer   :: class_self1=>null(), class_self2=>null(), class_self3=>null()
 
 contains
     
@@ -737,15 +738,18 @@ contains
     subroutine oripair_diverse( self1, self2 )
         use simple_simplex_opt, only: simplex_opt
         use simple_opt_spec,    only: opt_spec
-        class(ori),       intent(inout) :: self1, self2
-        real, parameter              :: TOL=1e-6
-        type(opt_spec)               :: ospec
-        type(simplex_opt)            :: opt
-        real                         :: dist, lims(3,2)
+        class(ori), target, intent(inout) :: self1, self2
+        real, parameter   :: TOL=1e-6
+        type(opt_spec)    :: ospec
+        type(simplex_opt) :: opt
+        real :: dist, lims(3,2)
         if( .not. self1%exists() ) call self1%new_ori
         if( .not. self2%exists() ) call self2%new_ori
         call self1%rnd_euler ! fixed
         call self2%rnd_euler ! changing
+        ! associate class pointers
+        class_self1 => self1
+        class_self2 => self2
         lims(1,1) = 0.
         lims(1,2) = 359.99
         lims(2,1) = 0.
@@ -755,24 +759,12 @@ contains
         ospec%x(1) = self2%e1get()
         ospec%x(2) = self2%e2get()
         ospec%x(3) = self2%e3get()
-        call ospec%set_costfun(costfun_diverse)
+        call ospec%set_costfun(costfun_diverse_1)
         call opt%new(ospec)
         call opt%minimize(ospec, dist)
         call self2%set_euler(ospec%x)
         call ospec%kill
         call opt%kill
-
-        contains
-
-            function costfun_diverse( vec, D ) result( dist )
-                integer, intent(in) :: D
-                real,    intent(in) :: vec(D)
-                real :: d1, d2, dist
-                call self2%set_euler(vec)
-                ! negation because we try to maximize the distance
-                dist = -self1%geodesic_dist(self2)
-            end function costfun_diverse
-
     end subroutine oripair_diverse
 
     !>  \brief  if mode='median' this function creates a spatial median rotation matrix 
@@ -782,16 +774,22 @@ contains
     function ori_generator( self1, self2, mode ) result( oout )
         use simple_simplex_opt, only: simplex_opt
         use simple_opt_spec,    only: opt_spec
-        class(ori),       intent(in) :: self1, self2
-        character(len=*), intent(in) :: mode
-        real, parameter              :: TOL=1e-6
-        type(ori)                    :: oout, otst
-        type(opt_spec)               :: ospec
-        type(simplex_opt)            :: opt
-        real                         :: dist, lims(3,2)
+        class(ori), target, intent(in) :: self1, self2
+        character(len=*),   intent(in) :: mode
+        real, parameter   :: TOL=1e-6
+        type(ori)         :: oout
+        type(ori), target ::otst
+        type(opt_spec)    :: ospec
+        type(simplex_opt) :: opt
+        real              :: dist, lims(3,2)
         call oout%new_ori
         call otst%new_ori
         call otst%rnd_euler
+        ! set class pointers
+        class_self1 => self1
+        class_self2 => self2
+        class_self3 => otst
+        ! init
         lims(1,1) = 0.
         lims(1,2) = 359.99
         lims(2,1) = 0.
@@ -807,7 +805,7 @@ contains
             case('median')
                 call ospec%set_costfun(costfun_median)
             case('diverse')
-                call ospec%set_costfun(costfun_diverse)
+                call ospec%set_costfun(costfun_diverse_2)
             case DEFAULT
                 stop 'unsupported mode inputted; simple_ori :: ori_generator'
         end select
@@ -815,29 +813,6 @@ contains
         call oout%set_euler(ospec%x)
         call ospec%kill
         call opt%kill
-
-        contains
-
-            function costfun_median( vec, D ) result( dist )
-                integer, intent(in) :: D
-                real,    intent(in) :: vec(D)
-                real :: d1, d2, dist
-                call otst%set_euler(vec)
-                d1   = otst%geodesic_dist(self1)
-                d2   = otst%geodesic_dist(self2)
-                dist = abs(d1-d2)
-            end function costfun_median
-
-            function costfun_diverse( vec, D ) result( dist )
-                integer, intent(in) :: D
-                real,    intent(in) :: vec(D)
-                real :: d1, d2, dist
-                call otst%set_euler(vec)
-                d1   = otst%geodesic_dist(self1)
-                d2   = otst%geodesic_dist(self2)
-                dist = -d1-d2
-            end function costfun_diverse
-
     end function ori_generator
 
     ! GEODESIC DISTANCE METRIC
@@ -1030,6 +1005,35 @@ contains
             ! beware of the signs:z-rot is really negative
         endif
     end function rotmat
+
+    function costfun_diverse_1( vec, D ) result( dist )
+        integer, intent(in) :: D
+        real,    intent(in) :: vec(D)
+        real :: d1, d2, dist
+        call class_self2%set_euler(vec)
+        ! negation because we try to maximize the distance
+        dist = -class_self1%geodesic_dist(class_self2)
+    end function costfun_diverse_1
+
+    function costfun_diverse_2( vec, D ) result( dist )
+        integer, intent(in) :: D
+        real,    intent(in) :: vec(D)
+        real :: d1, d2, dist
+        call class_self3%set_euler(vec)
+        d1   = class_self3%geodesic_dist(class_self1)
+        d2   = class_self3%geodesic_dist(class_self2)
+        dist = -d1-d2
+    end function costfun_diverse_2
+
+    function costfun_median( vec, D ) result( dist )
+        integer, intent(in) :: D
+        real,    intent(in) :: vec(D)
+        real :: d1, d2, dist
+        call class_self3%set_euler(vec)
+        d1   = class_self3%geodesic_dist(class_self1)
+        d2   = class_self3%geodesic_dist(class_self2)
+        dist = abs(d1-d2)
+    end function costfun_median
 
     ! UNIT TESTS
 

@@ -42,7 +42,6 @@ type ppca
     procedure          :: get_evals
     procedure          :: generate_cumul
     procedure          :: generate_featavg
-    procedure          :: generate_featmedian
     procedure, private :: rotation
     procedure, private :: generate_1
     procedure, private :: generate_2
@@ -205,22 +204,6 @@ contains
         deallocate( feat )
     end function generate_featavg
 
-    !>  \brief  produces the feature space average
-    function generate_featmedian( self,AVG )result( dat )
-        use simple_spatial_median, only:spatial_median
-        class(ppca), intent(inout) :: self
-        real,        intent(in)    :: AVG(self%D)
-        type(spatial_median) :: median
-        real, allocatable    :: dat(:),feat(:)
-        integer :: i
-        allocate( dat(self%D),feat(self%Q) )
-        call median%new( self%E_zn(:,:,1) )
-        feat = median%find_median()
-        call median%kill
-        dat  = self%generate_2( feat,AVG )
-        deallocate( feat )
-    end function generate_featmedian
-
     !>  \brief  is for sampling the generative model at arbitrary feature
     !!          useful if doing averaging in feature space
     function generate_2( self, feat, AVG ) result( dat )
@@ -327,6 +310,7 @@ contains
 
     !>  \brief  EM algorithm
     subroutine em_opt( self, p, err )
+        use ieee_arithmetic
         !$ use omp_lib
         !$ use omp_lib_kinds
         use simple_math, only: matinv
@@ -389,7 +373,7 @@ contains
                 p = p+sqrt(sum((self%X(:,1)-tmp(:,1))**2.))
             end do
         endif
-        if( isnan(p) )err=-1
+        if( ieee_is_nan(p) )err=-1
     end subroutine em_opt
 
     ! DESTRUCTOR

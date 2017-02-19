@@ -124,13 +124,14 @@ contains
     
     !>  \brief  is for checking the numerical soundness of rho
     logical function rho_contains_nans( self )
+        use ieee_arithmetic
         class(reconstructor), intent(in) :: self
         integer :: i, j ,k
         rho_contains_nans = .false.
         do i=1,size(self%rho,1)
             do j=1,size(self%rho,2)
                 do k=1,size(self%rho,3)
-                    if( isnan(self%rho(i,j,k)) )then
+                    if( ieee_is_nan(self%rho(i,j,k)) )then
                         rho_contains_nans = .true.
                         return
                     endif
@@ -439,7 +440,25 @@ contains
         call self%reset
         write(*,'(A)') '>>> KAISER-BESSEL INTERPOLATION'
         statecnt = 0
-        call iterator(rec_dens)
+        cnt = 0
+        do i=1,p%nptcls
+            call progress(i, p%nptcls) 
+            if( i <= p%top .and. i >= p%fromp )then
+                cnt = cnt+1
+                if( nint(o%get(i,'state')) == state )then
+                    statecnt(state) = statecnt(state)+1
+                    if( present(eo) )then
+                        if( mod(cnt,2) == 0 .and. eo == 2 )then
+                            call rec_dens
+                        else if( mod(cnt,2) /= 0 .and. eo == 1 )then
+                            call rec_dens
+                        endif
+                    else
+                        call rec_dens
+                    endif
+                endif
+            endif
+        end do
         if( present(part) )then
             return
         else
@@ -450,7 +469,8 @@ contains
             ! no bwd_ft or normalisation
         else
             call self%bwd_ft
-            call self%norm
+            ! HAD TO TAKE OUT BECAUSE PGI COMPILER BAILS
+            ! call self%norm
         endif
         call img%kill
         call img_pd%kill
@@ -461,33 +481,6 @@ contains
         endif
         
         contains
-        
-            !> \brief  reconstruction iterator
-            subroutine iterator( sub )
-                interface
-                    subroutine sub
-                    end subroutine
-                end interface
-                cnt = 0
-                do i=1,p%nptcls
-                    call progress(i, p%nptcls) 
-                    if( i <= p%top .and. i >= p%fromp )then
-                        cnt = cnt+1
-                        if( nint(o%get(i,'state')) == state )then
-                            statecnt(state) = statecnt(state)+1
-                            if( present(eo) )then
-                                if( mod(cnt,2) == 0 .and. eo == 2 )then
-                                    call sub
-                                else if( mod(cnt,2) /= 0 .and. eo == 1 )then
-                                    call sub
-                                endif
-                            else
-                                call sub
-                            endif
-                        endif
-                    endif
-                end do
-            end subroutine iterator
         
             !> \brief  the densty reconstruction functionality
             subroutine rec_dens

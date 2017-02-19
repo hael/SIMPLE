@@ -25,10 +25,12 @@ type :: spatial_median
 end type
 
 interface spatial_median
-    module procedure :: constructor
+    module procedure constructor
 end interface
 
 real, parameter :: TOL=1e-10
+real, pointer   :: ptr_points(:,:) => null()
+integer         :: n_glob
 
 contains
 
@@ -37,7 +39,7 @@ contains
         type(spatial_median) :: self
         real, intent(in), target :: points(:,:)
         call self%new(points)
-    end function
+    end function constructor
     
     !>  \brief  constructor
     subroutine new( self, points )
@@ -48,49 +50,24 @@ contains
         self%points => points      ! set pointer to point cloud
         call self%ospec%specify('bfgs', self%ndim, ftol=TOL, gtol=TOL)
         call self%opt%new(self%ospec)
-    end subroutine
+    end subroutine new
     
     !>  \brief  does the hard work
     function find_median( self ) result( median )
-        use simple_math, only: euclid
         class(spatial_median), intent(inout) :: self
         real, allocatable :: median(:)
         real :: dist
+        ! set globals
+        ptr_points => self%points
+        n_glob     = self%n
+        ! specify 
         call self%ospec%set_costfun(dist2points)
         call self%ospec%set_gcostfun(gdist2points)
         ! initialize with point closest to median
         self%ospec%x = self%points(self%closest2median(),:)
         call self%opt%minimize(self%ospec, dist)
         allocate(median(self%ndim), source=self%ospec%x)
-        
-        contains
-        
-            !>  \brief  distance between vec and the point cloud
-            function dist2points( vec, D ) result( dist ) 
-                integer, intent(in) :: D
-                real, intent(in)    :: vec(D)
-                real    :: dist
-                integer :: i
-                dist = 0.
-                do i=1,self%n
-                    dist = dist+euclid(vec,self%points(i,:))
-                end do
-            end function
-            
-            !>  \brief  gradient of the above function 
-            function gdist2points( vec, D ) result( grad ) 
-                integer, intent(in) :: D
-                real, intent(inout) :: vec(D)
-                real    :: grad(D), dist
-                integer :: i
-                grad = 0.
-                do i=1,self%n
-                    dist = euclid(vec,self%points(i,:))
-                    if( dist > TOL ) grad(:) = grad(:)+(vec(:)-self%points(i,:))/dist
-                end do
-            end function
-        
-    end function
+    end function find_median
 
     !>  \brief  returns the point closest to the spatial median
     !!          can be used as a starting point 4 optimization
@@ -109,7 +86,7 @@ contains
         end do
         loc = minloc(dists)
         this = loc(1)
-    end function
+    end function closest2median
   
     !>  \brief  destructor
     subroutine kill( self )
@@ -122,7 +99,36 @@ contains
             self%ndim = 0
             self%existence = .false.
         endif
-    end subroutine
+    end subroutine kill
+
+    ! PRIVATES
+
+    !>  \brief  distance between vec and the point cloud
+    function dist2points( vec, D ) result( dist ) 
+        use simple_math, only: euclid
+        integer, intent(in) :: D
+        real,    intent(in) :: vec(D)
+        real    :: dist
+        integer :: i
+        dist = 0.
+        do i=1,n_glob
+            dist = dist+euclid(vec,ptr_points(i,:))
+        end do
+    end function dist2points
+    
+    !>  \brief  gradient of the above function 
+    function gdist2points( vec, D ) result( grad )
+        use simple_math, only: euclid
+        integer, intent(in)    :: D
+        real,    intent(inout) :: vec(D)
+        real    :: grad(D), dist
+        integer :: i
+        grad = 0.
+        do i=1,n_glob
+            dist = euclid(vec,ptr_points(i,:))
+            if( dist > TOL ) grad(:) = grad(:)+(vec(:)-ptr_points(i,:))/dist
+        end do
+    end function gdist2points
     
     ! UNIT TEST
     
@@ -156,6 +162,6 @@ contains
             endif
         end do
         write(*,'(a)') 'SIMPLE_SPATIAL_MEDIAN UNIT TEST COMPLETED ;-)'
-    end subroutine
+    end subroutine test_spatial_median
   
 end module simple_spatial_median

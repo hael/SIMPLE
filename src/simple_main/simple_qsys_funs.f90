@@ -325,12 +325,11 @@ contains
         end do
     end subroutine qsys_watcher_2
 
-    subroutine exec_simple_prg( exec_bin, cline, wait )
+    subroutine exec_simple_prg( exec_bin, cline )
         use simple_cmdline, only: cmdline
         use simple_chash,   only: chash
         character(len=*),  intent(in) :: exec_bin
         class(cmdline),    intent(in) :: cline
-        logical, optional, intent(in) :: wait
         type(chash) :: job_descr
         character(len=1024) :: exec_str
         ! prepare job description
@@ -338,7 +337,7 @@ contains
         exec_str = trim(exec_bin)//' '//job_descr%chash2str()
         write(*,'(a)') '>>> EXECUTING COMMAND:'
         write(*,'(a)') trim(exec_str)
-        call exec_cmdline(exec_str, wait)
+        call exec_cmdline(exec_str)
     end subroutine exec_simple_prg
 
 end module simple_qsys_funs

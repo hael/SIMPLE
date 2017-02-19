@@ -17,12 +17,10 @@ use simple_args,             only: test_args
 use simple_online_var,       only: test_online_var
 use simple_hash,             only: test_hash
 use simple_imghead,          only: test_imghead
-use simple_polarft,          only: test_polarft
 use simple_polarft_corrcalc, only: test_polarft_corrcalc
 use simple_jiffys,           only: simple_end
 use simple_ft_shsrch,        only: test_ft_shsrch
 use simple_ftexp_shsrch,     only: test_ftexp_shsrch
-use simple_unblur,           only: test_unblur
 implicit none
 character(8)          :: date
 character(len=STDLEN) :: folder
@@ -51,7 +49,6 @@ call test_online_var
 call test_hash
 call test_ft_shsrch
 call test_ftexp_shsrch
-call test_unblur
 ! LOCAL TESTFUNCTIONS
 call test_multinomal
 call test_testfuns

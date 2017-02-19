@@ -24,11 +24,11 @@ use Config;
 #####################################################################
 
 # enter the SIMPLE root path
-our$SIMPLE_PATH="/home/hael/src/simple";
+our$SIMPLE_PATH="/Users/hael/src/fortran/simple3.0";
 # specifying the compiling directives
 # with OpenMP:  -fopenmp, CUDA: -DCUDA
 # Benchmarking: -DBENCH
-our$DOPENMP = "-qopenmp";
+our$DOPENMP = "-fopenmp";
 our$DCUDA = "";
 our$DBENCH = "";
 # getting the platform details
@@ -43,14 +43,14 @@ our$ICOMPILE = 2;
 #                                    /usr/local/bin/gfortran
 our$CC_COMPILER = "";
 our$GCC_COMPILER = "";
-our$FCOMPILER = "ifort";
+our$FCOMPILER = "gfortran";
 # enter the CUDA libary path default: /usr/local/cuda
 our$CUDADIR="";
 # enter the fftw lib default: /usr/lib/x86_64-linux-gnu for [linux]
 #                             /usr/local/lib for [MacOSX]
-our$FFTW_LIB="/usr/lib/x86_64-linux-gnu";
+our$FFTW_LIB="/sw/lib";
 # on clusters we need extra path after module load fftw/3.3.4-gcc to identify the FFTW header
-our$FFTW_INC="/usr/include/";
+our$FFTW_INC="/sw/include/";
 # Modules and objects directories. default: obj/SIMPLEOFILES
 our$OBJDIR="obj/SIMPLEOFILES";
 our$MODDIR="obj/SIMPLEOFILES";
@@ -59,7 +59,7 @@ our$SET_OPTIMIZATION = 3;
 # debug mode
 # no debug mode: no, dubug mode: yes default: no
 # if debug = yes the opmization level = null
-our$DEBUG = "yes";
+our$DEBUG = "no";
 # debugging level "low" or "high"
 our$DEBUG_LEVEL = "low";
 

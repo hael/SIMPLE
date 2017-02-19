@@ -51,21 +51,6 @@ type :: ctfplan
     character(len=STDLEN) :: flag='' !< flag: <mul|flip|no> 
 end type ctfplan
 
-! the c binding derived type for the system query module
-type, bind(c) :: systemDetails
-   integer(c_int) :: n_phys_proc
-   integer(c_int) :: nCPUcores
-#if defined (MACOSX)   
-   integer(c_int64_t) :: mem_Size
-   integer(c_int) :: mem_User
-#elif defined (LINUX)
-   integer(c_long_long) :: mem_Size
-   integer(c_long_long) :: avail_Mem
-#else
-   integer(c_int)     :: mem_size
-#endif
-end type systemDetails
-
 ! constants for picker
 real,    parameter :: PICKER_SHRINK        = 4.
 real,    parameter :: PICKER_SHRINK_REFINE = 2.

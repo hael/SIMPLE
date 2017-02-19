@@ -181,14 +181,14 @@ contains
         end select
         self%x  = 0.
         self%exists = .true.
-    end subroutine
+    end subroutine specify
     
     !>  \brief  to change optimizer
     subroutine change_opt( self, str_opt )
         class(opt_spec), intent(inout) :: self    !< instance
         character(len=*), intent(in)   :: str_opt !< string descriptor (of optimization routine to be used)
         self%str_opt = str_opt
-    end subroutine
+    end subroutine change_opt
 
     !>  \brief  sets the optimizer limits
     subroutine set_limits( self, lims )
@@ -213,30 +213,42 @@ contains
     end subroutine set_limits
     
     !>  \brief  sets the cost function in the spec object
-    subroutine set_costfun( self, costfun )
-        class(opt_spec), intent(inout) :: self !< instance
-        interface                              !< defines cost function interface
-            function costfun( vec, D ) result(cost)
-                integer, intent(in)    :: D
-                real, intent(in)       :: vec(D)
-                real                   :: cost
+    subroutine set_costfun( self, fun )
+        class(opt_spec), intent(inout) :: self !< instance        
+#if defined (PGI)
+        ! GNU COMPILER DOES NOT COPE W EXTERNAL
+        real, external :: fun
+#else
+        ! PGI COMPILER DOES NOT COPE W INTERFACE
+        interface !< defines cost function interface
+            function fun( vec, D ) result(cost)
+                integer, intent(in) :: D
+                real,    intent(in) :: vec(D)
+                real :: cost
             end function 
         end interface
-        self%costfun => costfun
-    end subroutine
+#endif
+        self%costfun => fun
+    end subroutine set_costfun
     
     !>  \brief  sets the gradient function in the spec object
-    subroutine set_gcostfun( self, gcostfun )
+    subroutine set_gcostfun( self, fun )
         class(opt_spec), intent(inout) :: self !< instance
-        interface                              !< defines cost function gradient interface
-            function gcostfun( vec, D ) result(grad)
-                integer, intent(in) :: D
-                real, intent(inout) :: vec(D)
-                real                :: grad(D)
+#if defined (PGI)
+        ! GNU COMPILER DOES NOT COPE W EXTERNAL
+        real, external  :: fun
+#else
+        ! PGI COMPILER DOES NOT COPE W INTERFACE
+        interface !< defines cost function gradient interface
+            function fun( vec, D ) result( grad )
+                integer, intent(in)    :: D
+                real,    intent(inout) :: vec( D )
+                real :: grad( D )
             end function 
         end interface
-        self%gcostfun => gcostfun
-    end subroutine
+#endif
+        self%gcostfun => fun
+    end subroutine set_gcostfun
     
     !>  \brief  is a destructor
     subroutine kill( self )
@@ -255,6 +267,6 @@ contains
             self%gcostfun => null()
             self%exists = .false.
         endif
-    end subroutine
+    end subroutine kill
     
-end module
+end module simple_opt_spec
