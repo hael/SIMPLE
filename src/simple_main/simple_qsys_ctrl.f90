@@ -339,12 +339,13 @@ contains
     ! THE MASTER SCHEDULER
 
     subroutine schedule_jobs( self )
+        use simple_syscalls, only: simple_sleep
         class(qsys_ctrl),  intent(inout) :: self
         do
             if( all(self%jobs_done) ) exit
             call self%update_queue
             call self%submit_scripts
-            call sleep(SHORTTIME)
+            call simple_sleep(SHORTTIME)
         end do
     end subroutine schedule_jobs
     

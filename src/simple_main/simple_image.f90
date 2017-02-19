@@ -84,6 +84,7 @@ type :: image
     procedure          :: vis
     procedure          :: set_ft
     procedure          :: extr_fcomp
+    procedure          :: packer
     ! CHECKUPS
     procedure          :: exists
     procedure          :: is_2d
@@ -557,6 +558,7 @@ contains
         real, allocatable :: pixels(:)
         if( self%is_ft() ) stop 'only 4 real images; extr_pixels; simple_image'
         if( self.eqdims.mskimg )then
+            ! pixels = self%packer(mskimg) ! Intel hickup
             pixels = pack( self%rmat, mskimg%rmat>0.5 )
         else
             stop 'mask and image of different dims; extr_pixels; simple_image'
@@ -1384,6 +1386,42 @@ contains
 
     end function extr_fcomp
 
+    !>  \brief  replaces the pack intrinsic because the Intel compiler bugs out
+    function packer( self, mskimg ) result( pixels )
+        class(image),           intent(in) :: self
+        class(image), optional, intent(in) :: mskimg
+        real, allocatable :: pixels(:)
+        integer :: nsel,i,j,k,cnt
+        if( present(mskimg) )then
+            nsel = count(mskimg%rmat<0.5)
+            allocate(pixels(nsel))
+            cnt = 0
+            do i=1,self%ldim(1)
+                do j=1,self%ldim(2)
+                    do k=1,self%ldim(3)
+                        if( mskimg%rmat(i,j,k) > 0.5 )then
+                            cnt = cnt + 1
+                            pixels(cnt) = self%rmat(i,j,k)
+                        endif
+                    end do
+                end do
+            end do
+        else
+            nsel = product(self%ldim)
+            allocate(pixels(nsel))
+            cnt = 0
+            do i=1,self%ldim(1)
+                do j=1,self%ldim(2)
+                    do k=1,self%ldim(3)
+                        cnt = cnt + 1
+                        pixels(cnt) = self%rmat(i,j,k)
+                    end do
+                end do
+            end do
+        endif
+        
+    end function packer
+
     ! CHECKUPS
 
     !>  \brief  Checks for existence
@@ -2196,6 +2234,7 @@ contains
         integer                     :: npixtot
         if( self%ft ) stop 'only for real images; bin_2; simple image'
         npixtot = product(self%ldim)
+        ! forsort = self%packer() ! Intel hickup
         forsort = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), .true.)
         call hpsort( npixtot, forsort)
         thres = forsort(npixtot-npix-1) ! everyting above this value 1 else 0
@@ -2213,6 +2252,7 @@ contains
         if( self%ft ) stop 'only for real images; bin_2; simple image'
         ! sort the pixels to initialize k-means
         npix = product(self%ldim)
+        ! forsort = self%packer() ! Intel hickup
         forsort = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), .true.)
         call hpsort(npix, forsort)
         cen1 = sum(forsort(1:npix/2))/real(npix/2)
@@ -2242,6 +2282,8 @@ contains
             val2 = 1.
         endif
         ! last pass to binarize the image
+        print *, 'cen1: ', cen1
+        print *, 'cen2: ', cen2
         where( (cen1-self%rmat)**2. < (cen2-self%rmat)**2. )
             self%rmat = val1
         elsewhere
@@ -4959,6 +5001,7 @@ contains
         call maskimg%disc(self%ldim, self%smpd, msk, npix)
         npix_tot = product(self%ldim)
         nbackgr = npix_tot-npix
+        ! pixels = self%packer(maskimg) ! Intel hickup
         pixels = pack( self%rmat, maskimg%rmat<0.5 )
         med = median_nocopy(pixels)
         call moment(pixels, ave, sdev, var, err)
@@ -5002,6 +5045,7 @@ contains
         endif
         if( irad<=0. )stop 'Invalid radius value in rad_norm'
         call maskimg%disc(self%ldim, self%smpd, irad, npix)
+        ! pixels = self%packer(maskimg) ! Intel hickup
         pixels = pack( self%rmat, maskimg%rmat > 0.5 )
         call moment( pixels, ave, sdev, var, err )
         deallocate(pixels)

@@ -61,9 +61,9 @@ production_code: ;
 utils_code: s_utes  \
             s_utils ;
 
-s_utes: simple_imgheadrec.o   \
+s_utes: simple_strings.o      \
+        simple_imgheadrec.o   \
         simple_imghead.o      \
-        simple_strings.o      \
         simple_filehandling.o \
         simple_jiffys.o       \
         simple_rnd.o          \

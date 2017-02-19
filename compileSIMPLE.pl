@@ -55,7 +55,7 @@ if( $FCOMPILER =~ /pgfortran/ ){
     # PGI is supposedly platform in-dependent, so no need for diferent options for MacOSX/Linux
     # debugging options
     if( $DEBUG eq 'yes' ) {
-        $dbg_lvl_f = "-g -debug -O0 -C -traceback";
+        $dbg_lvl_f = "-C -g -Mbounds -Mchkptr -Mnodwarf -Mpgicoff -traceback";
         if( $DEBUG_LEVEL =~ /high/ ) {
             $dbg_lvl_f = $dbg_lvl_f."";
         }
@@ -117,11 +117,11 @@ if( $FCOMPILER =~ /pgfortran/ ){
             $dbg_lvl_f = "";
         }
     	#for [Linux]
-    	$option_in = '-implicitnone -80 -cpp -fPIC -module obj/SIMPLEOFILES/';
+    	$option_in = '-implicitnone -80 -cpp -fPIC -DINTEL -module obj/SIMPLEOFILES/';
     	#compiling options for the Makefile_macros
         $option_mkma_gcc_flags = '';
     	$option_mkma_gpp_flags = '-DADD_';
-    	$option_mkma_f90_flags = '-implicitnone -80 -cpp -fPIC -module obj/SIMPLEOFILES/';
+    	$option_mkma_f90_flags = '-implicitnone -80 -cpp -fPIC -DINTEL -module obj/SIMPLEOFILES/';
     }
 }
 # setting up the options for both Makefile_macros and compile_and_link_local.csh
@@ -404,7 +404,8 @@ sub setCompiling_options {
 	    $opti = "-O2";
     } elsif ($SET_OPTIMIZATION == 3) {
         if( $FCOMPILER =~ /pgfortran/ ){
-            $opti = "-fast -Mipa=fast,inline"; 
+            # $opti = "-fast -Mipa=fast,inline";
+            $opti = "-fast"; 
 	    }elsif( $FCOMPILER =~ /gfortran/ ){
 	        $opti = "-O3";
 	    }elsif( $FCOMPILER =~ /ifort/ ){

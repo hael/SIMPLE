@@ -12,7 +12,7 @@ character(STDLEN) :: time
 call date_and_time(TIME=time)
 starttime = str2real(time)
 if( command_argument_count() < 1 )then
-    write(*,'(a)') 'simple_speedtest nthr=<number of threads> [verbose=<yes|no{no}>]'
+    write(*,'(a)') 'simple_test_speed nthr=<number of threads> [verbose=<yes|no{no}>]'
     stop
 endif
 call cline%parse

@@ -104,13 +104,14 @@ contains
         end do
         !$omp end parallel do
         var = (var-ep**2./nr)/(nr-1.) ! corrected two-pass formula
-        sdev = sqrt(var)
+        sdev = 0.
+        if( var > 0. ) sdev = sqrt(var)
         if( abs(var) < TINY )then
             err  = .true.
             ave  = 0.
             sdev = 0.
             var  = 0.
-        endif    
+        endif   
     end subroutine moment_1
     
     !>  \brief  given a 2D real array of data, this routine returns its mean: _ave_,
@@ -148,7 +149,8 @@ contains
         end do
         !$omp end parallel do
         var = (var-ep**2./nr)/(nr-1.) ! corrected two-pass formula
-        sdev = sqrt(var)
+        sdev = 0.
+        if( var > 0. ) sdev = sqrt(var)
         if( abs(var) < TINY )then
             err  = .true.
             ave  = 0.
@@ -194,7 +196,8 @@ contains
         end do
         !$omp end parallel do
         var = (var-ep**2./nr)/(nr-1.) ! corrected two-pass formula
-        sdev = sqrt(var)
+        sdev = 0.
+        if( var > 0. ) sdev = sqrt(var)  
         if( abs(var) < TINY )then
             err  = .true.
             ave  = 0.

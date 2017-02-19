@@ -16,6 +16,7 @@ program simple_test_imgfile
     ldim = [120,120,1]
     call img%new(ldim, smpd)
     call img%square(20)
+    call img%write('squares_mrc.mrc',1)
     ! write stacks of 5 squares 
     do i=1,5
         if( ft ) call img%fwd_ft

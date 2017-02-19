@@ -1,7 +1,8 @@
 program simple_test_install
-use simple_defs              ! singleton
-use simple_testfuns          ! singleton
-use simple_rnd               ! singleton
+use simple_defs              ! use all in there
+use simple_testfuns          ! use all in there
+use simple_rnd               ! use all in there
+use simple_syscalls          ! use all in there
 use simple_jiffys,           only: simple_end
 use simple_image,            only: image
 use simple_commander_volops, only: projvol_commander
@@ -17,7 +18,7 @@ call seed_rnd
 call date_and_time(date=date)
 folder = './SIMPLE_TEST_INSTALL_'//date
 command = 'mkdir ' // trim( folder )
-call execute_command_line( trim(command) )
+call exec_cmdline( trim(command) )
 call chdir( trim(folder) )
 ! dummy data
 box    = 96
@@ -41,11 +42,11 @@ call img%kill
 write(*,*)'>>> WROTE TEST VOLUME cubes.mrc'
 ! test units
 command = 'simple_test_units'
-call execute_command_line( trim(command) )
+call exec_cmdline( trim(command) )
 ! test search
 command = 'simple_test_srch vol1=cubes.mrc msk='//int2str(msk)//&
     & ' smpd='//real2str(smpd)//' verbose=no'
-call execute_command_line( trim(command) )
+call exec_cmdline( trim(command) )
 ! end
 call chdir('../')
 call simple_end('**** SIMPLE_TEST_INSTALL NORMAL STOP ****')

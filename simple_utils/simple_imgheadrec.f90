@@ -114,28 +114,13 @@ contains
     end subroutine
 
     subroutine SetChar(self,value)
+        use simple_strings, only: int2str
         class(char_imgheadrec), intent(inout) :: self !<  header record
         character(len=*), intent(in)          :: value   !<  value to be written to header
         character(len=:), allocatable         :: tmp_string
         allocate(character(len=self%length) :: tmp_string)
         write(tmp_string,'(a'//int2str(self%length)//')') value
-        self%byte_array(self%byte_position:self%byte_position+self%length-1) = transfer(tmp_string,self%byte_array)
-        
-        contains
-            
-            function int2str( intg ) result( string )
-                integer, intent(in) :: intg
-                character(len=:), allocatable :: string
-                integer :: ndigs_int
-                if( intg .eq. 0 )then
-                    ndigs_int = 1
-                else
-                    ndigs_int = int(log10(real(intg)))+1
-                endif
-                allocate(character(len=ndigs_int) :: string)
-                write(string,'(i0)') intg
-            end function
-            
+        self%byte_array(self%byte_position:self%byte_position+self%length-1) = transfer(tmp_string,self%byte_array)            
     end subroutine
 
     !>  \brief  read value from header record (to be used on RHS of assignments)

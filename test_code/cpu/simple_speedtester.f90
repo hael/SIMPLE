@@ -5,9 +5,10 @@ use simple_commander_volops,       only: projvol_commander
 use simple_cmdline,                only: cmdline
 implicit none
 
+
+integer, parameter            :: BOX=200, SQRAD=40, NSPACE=50
+real,    parameter            :: SMPD=1.1, MSK=50., TRS=5.0
 type(image)                   :: cube, square
-integer, parameter            :: BOX=200, SQRAD=nint(real(box)/12.), NSPACE=50
-real,    parameter            :: SMPD=1.1, MSK=nint(real(box)/3.), TRS=5.0
 type(projvol_commander)       :: xprojvol
 type(prime3D_distr_commander) :: xprime3D
 type(cmdline)                 :: cline_projvol, cline_prime3D
@@ -22,18 +23,20 @@ contains
         
     subroutine setup_testenv( cline )
         class(cmdline), intent(inout) :: cline
-        real :: nthr
-        call cube%new([BOX,BOX,BOX], SMPD)
+        real    :: nthr
+        integer :: ldim(3)
+        ldim = [BOX,BOX,BOX]
+        call cube%new(ldim, smpd)
         call cube%square(SQRAD)
         call cube%write('speedtester_cube.mrc')
         nthr = cline%get_rarg('nthr')
         call cline_projvol%set('vol1',   'speedtester_cube.mrc')
-        call cline_projvol%set('outstk', 'speedtester_imgs.mrc')
+        call cline_projvol%set('outstk', 'speedtester_cubes.mrc')
         call cline_projvol%set('nspace',  real(NSPACE))
         call cline_projvol%set('nthr',    nthr)
         call xprojvol%execute(cline_projvol)
         call cline_prime3D%set('prg',    'prime3D')
-        call cline_prime3D%set('stk',    'speedtester_imgs.mrc')
+        call cline_prime3D%set('stk',    'speedtester_cubes.mrc')
         call cline_prime3D%set('smpd',    real(SMPD))
         call cline_prime3D%set('msk',     real(MSK))
         call cline_prime3D%set('ctf',    'no')

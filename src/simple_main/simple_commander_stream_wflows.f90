@@ -81,7 +81,7 @@ contains
                 call qscripts%update_queue
                 call qscripts%submit_scripts
             endif
-            call sleep(SHORTTIME)
+            call simple_sleep(SHORTTIME)
         end do
 
         contains

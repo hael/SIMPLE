@@ -473,6 +473,9 @@ contains
             class DEFAULT
                 stop 'Format not supported; rwSlices; simle_imgfile'
         end select
+
+        ! stop
+
         if( mode .eq. 'r' )then
             dims(3) = last_slice-first_slice+1
         else if( mode .eq. 'w' )then
@@ -507,6 +510,9 @@ contains
         else
             stop 'unsupported mode; rwSlices; simple_imgfile'
         endif
+
+        ! stop
+
         ! Check so that the array is properly allocated
         if( is_odd(dims(1)) )then
             arr_is_ready = size(rarr,1) .eq. dims(1)+1
@@ -547,6 +553,9 @@ contains
             case DEFAULT
                 stop 'Format not supported; rwSlices; simple_imgfile'
         end select
+
+        ! stop
+
         ! process data on disk
         if( mode .eq. 'r' )then
             select case(self%overall_head%bytesPerPix())
@@ -623,6 +632,9 @@ contains
                     enddo
                 enddo
             enddo
+
+            ! stop
+
             select case(self%overall_head%bytesPerPix())
                 case(4)
                     select case(self%head_format)
@@ -656,11 +668,24 @@ contains
                                 deallocate(imghed)
                             endif
                     end select
-                    write(unit=self%funit,pos=first_byte,iostat=io_stat) rarr(1:dims(1),:,:)
+
+                    if( DEBUG )then
+                        print *, 'size(rarr, dim1): ', size(rarr,1)
+                        print *, 'size(rarr, dim2): ', size(rarr,2)
+                        print *, 'size(rarr, dim3): ', size(rarr,3)
+                        print *, 'range of 1st dim: ', 1, dims(1)
+                        print *, 'first byte:       ', first_byte
+                    endif
+                    tmp_32bit_float_array = rarr(1:dims(1),:,:)
+                    write(unit=self%funit,pos=first_byte,iostat=io_stat) tmp_32bit_float_array
+                    deallocate(tmp_32bit_float_array)
                 case DEFAULT
                     print *, 'bit depth: ', int2str(self%overall_head%bytesPerPix())
                     stop 'Unsupported bit-depth; rwSlices; simple_imgfile' 
             end select
+
+            ! stop
+
             ! Check the write was successful
             if( io_stat .ne. 0 )then
                 write(*,'(a,i0,2a)') '**ERROR(wSlices): I/O error ', io_stat, ' when writing to: ', self%fname

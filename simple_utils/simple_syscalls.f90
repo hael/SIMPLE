@@ -61,29 +61,30 @@ contains
         endif
     end function getdiffcpu
 
-    !>  Wrapper for system call (FAILS WITH THE PGI COMPILER)
-    ! subroutine exec_cmdline( cmdline, wait )
-    !     character(len=*),  intent(in) :: cmdline
-    !     logical, optional, intent(in) :: wait
-    !     integer               :: estat, cstat
-    !     character(len=STDLEN) :: cmsg
-    !     logical               :: wwait
-    !     wwait = .true.
-    !     if( present(wait) ) wwait = wait
-    !     call execute_command_line( trim(adjustl(cmdline)), wait=wwait, exitstat=estat, cmdstat=cstat, cmdmsg=cmsg)
-    !     call raise_sys_error( cmdline, estat, cstat, cmsg )
-    ! end subroutine exec_cmdline
-
     !>  Wrapper for system call
-    subroutine exec_cmdline( cmdline )
+    subroutine exec_cmdline( cmdline, wait )
+#if defined(INTEL)
+        use ifport
+#endif
         character(len=*),  intent(in) :: cmdline
-        integer :: exec_stat
-        logical :: doprint = .true.
-        call system(trim(adjustl(cmdline)), exec_stat)
+        logical, optional, intent(in) :: wait
+        character(len=STDLEN) :: cmsg
+        integer :: estat, cstat, exec_stat
+        logical :: doprint = .true., wwait = .true.
+#if defined(PGI)
+        call system(trim(adjustl(cmdline)))
+#elif defined(INTEL)
+        exec_stat = system(trim(adjustl(cmdline)))
         if( doprint )then
             write(*,*) 'command: ', trim(adjustl(cmdline))
             write(*,*) 'status of execution: ', exec_stat
         endif
+#else
+        wwait = .true.
+        if( present(wait) ) wwait = wait
+        call execute_command_line( trim(adjustl(cmdline)), wait=wwait, exitstat=estat, cmdstat=cstat, cmdmsg=cmsg)
+        call raise_sys_error( cmdline, estat, cstat, cmsg )
+#endif
     end subroutine exec_cmdline
 
     !>  Handles error from system call
@@ -123,5 +124,19 @@ contains
         cmd = 'ls '//trim(dir)//'/*.mrc*'//' > '//trim(filetabname)
         call exec_cmdline(cmd)
     end subroutine sys_gen_mrcfiletab
+
+    subroutine simple_sleep( secs )
+#if defined(INTEL)
+        use ifport
+#endif
+        integer, intent(in) :: secs
+        integer  :: msecs
+        msecs = 1000*secs
+#if defined(INTEL)
+        call sleepqq(msecs)
+#else
+        call sleep(secs)
+#endif        
+    end subroutine simple_sleep
 
 end module simple_syscalls
