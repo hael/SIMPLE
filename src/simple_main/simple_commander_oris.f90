@@ -525,13 +525,15 @@ contains
     subroutine exec_orisops(self,cline)
         use simple_ori,  only: ori
         use simple_math, only: normvec
+        use simple_math, only: hpsort
         class(orisops_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
-        type(build)  :: b
-        type(ori)    :: orientation
-        type(params) :: p
-        real         :: normal(3)
-        integer      :: s, i
+        type(build)       :: b
+        type(ori)         :: orientation
+        type(params)      :: p
+        real              :: normal(3), thresh, corr
+        integer           :: s, i, nincl, ind
+        real, allocatable :: corrs(:)
         p = params(cline)
         call b%build_general_tbox(p, cline)
         if( p%errify .eq. 'yes' )then   ! introduce error in input orientations
@@ -575,6 +577,27 @@ contains
         endif
         if( cline%defined('xsh') )     call b%a%map3dshift22d([p%xsh,p%ysh,p%zsh])
         if( cline%defined('nstates') ) call b%a%rnd_states(p%nstates)
+        if( cline%defined('frac') )then
+            if( p%oritab == '' ) stop 'need input orientation doc for fishing expedition; simple_orisops'
+            ! determine how many particles to include
+            nincl = nint(real(p%nptcls)*p%frac)
+            ! extract the correlations
+            corrs = b%a%get_all('corr')
+            ! order them from low to high
+            call hpsort(p%nptcls, corrs)
+            ! figure out the threshold
+            ind = p%nptcls - nincl + 1
+            thresh = corrs(ind)
+            ! print inlcusion/exclusion stats
+            do i=1,p%nptcls
+                corr = b%a%get(i, 'corr')
+                if( corr >= thresh )then
+                    write(*,*) 'particle: ', i, 'included: ', 1
+                else
+                    write(*,*) 'particle: ', i, 'included: ', 0
+                endif
+            end do
+        endif
         call b%a%write(p%outfile)
         call simple_end('**** SIMPLE_ORISOPS NORMAL STOP ****')
     end subroutine exec_orisops

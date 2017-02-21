@@ -68,6 +68,7 @@ vis
 xfel
 zero
 angastunit
+boxfile
 boxtab
 boxtype
 clsdoc
@@ -184,6 +185,7 @@ numlen
 nvalid
 nvars
 nvox
+offset
 part
 pcasz
 ppca

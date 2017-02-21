@@ -28,6 +28,7 @@ contains
         call chdict%push('box',           'square image size(in pixels)')
         call chdict%push('boxconvsz',     'size of box used for box-convolution(in pixels)')
         call chdict%push('boxtab',        'table (text file) of files with EMAN particle coordinates(*.txt/*.asc)')
+        call chdict%push('boxfile',       'file with EMAN particle coordinates(*.txt/*.asc)')
         call chdict%push('center',        'center image(s)(yes|no){no}')
         call chdict%push('chunksz',       'number of images/orientations in chunk')
         call chdict%push('class',         'cluster identity')
@@ -217,6 +218,7 @@ contains
         call chdict%push('ext',           'file extension{.mrc}')
         call chdict%push('stream',        'sream (real time) execution mode(yes|no){no}')
         call chdict%push('tseries',       'images represent a time-series(yes|no){no}')
+        call chdict%push('offset',       'pixels offset{7}')
         initialised = .true.
     end subroutine init_cmd_dict
     

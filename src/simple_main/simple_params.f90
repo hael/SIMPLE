@@ -100,6 +100,7 @@ type :: params
     character(len=3) :: zero='no'
     ! other fixed length character variables in ascending alphabetical order
     character(len=STDLEN) :: angastunit='degrees'
+    character(len=STDLEN) :: boxfile=''
     character(len=STDLEN) :: boxtab=''
     character(len=STDLEN) :: boxtype='eman'
     character(len=STDLEN) :: clsdoc=''
@@ -222,6 +223,7 @@ type :: params
     integer :: nvalid=0
     integer :: nvars=30
     integer :: nvox=0
+    integer :: offset=7
     integer :: part=1
     integer :: pcasz=0
     integer :: ppca=0
@@ -481,6 +483,7 @@ contains
         call check_carg('wfun',           self%wfun)
         call check_carg('xfel',           self%xfel)
         call check_carg('zero',           self%zero)
+        call check_file('boxfile',        self%boxfile,'T')
         call check_file('boxtab',         self%boxtab,'T')
         call check_file('clsdoc',         self%clsdoc,'S','T')
         call check_file('comlindoc',      self%comlindoc,'T')
@@ -551,6 +554,7 @@ contains
         call check_iarg('numlen',         self%numlen)
         call check_iarg('nvars',          self%nvars)
         call check_iarg('nvox',           self%nvox)
+        call check_iarg('offset',         self%offset)
         call check_iarg('part',           self%part)
         call check_iarg('ppca',           self%ppca)
         call check_iarg('pspecsz',        self%pspecsz)

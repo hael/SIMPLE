@@ -29,6 +29,7 @@ use simple_commander_prime3D
 use simple_commander_rec
 use simple_commander_sim
 use simple_commander_volops
+use simple_commander_tseries
 implicit none
 
 ! SIMULATOR PROGRAMS
@@ -1758,7 +1759,7 @@ select case(prg)
     case( 'tseries_extract' )
         !==Program tseries_extract
         !
-        ! <tseries_extract/begin>is a program for splitting time series
+        ! <tseries_extract/begin>is a program for creating overlapping chunks of frameavg frames from time-series data
         ! <tseries_extract/end> 
         !
         ! set required keys

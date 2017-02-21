@@ -170,6 +170,7 @@ comlin_corr: simple_comlin_corr.o       ;
 comlin_srch: simple_comlin_srch.o       ;
 
 matcher: simple_picker.o                  \
+         simple_tseries_tracker.o         \
          simple_hadamard_common.o         \
          simple_cartft_corrcalc.o         \
          simple_scatter_orisrch.o         \
@@ -216,6 +217,7 @@ masters: simple_rec_master.o              \
          simple_commander_prime3D.o       \
          simple_commander_rec.o           \
          simple_commander_sim.o           \
+         simple_commander_tseries.o       \
          simple_commander_stream_wflows.o \
          simple_commander_distr_wflows.o  \
          simple_commander_hlev_wflows.o   ;
