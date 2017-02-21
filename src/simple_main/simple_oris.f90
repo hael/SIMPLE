@@ -12,7 +12,7 @@
 module simple_oris
 use simple_defs
 use simple_ori,         only: ori
-use simple_math,        only: hpsort
+use simple_math,        only: hpsort, is_a_number
 use simple_jiffys,      only: alloc_err
 use simple_filehandling ! use all in there
 implicit none
@@ -100,6 +100,7 @@ type :: oris
     procedure          :: rnd_neighbors
     procedure          :: rnd_ori
     procedure          :: rnd_cls
+    procedure          :: ini_tseries
     procedure          :: rnd_oris_discrete
     procedure          :: rnd_inpls
     procedure          :: rnd_trs
@@ -728,7 +729,6 @@ contains
     !>  \brief  is for calculating the sum of 'which' variables with 
     !!          filtering based on class/state/fromto
     subroutine calc_sum( self, which, sum, cnt, class, state, fromto, mask )
-        use ieee_arithmetic
         class(oris),       intent(inout) :: self
         character(len=*),  intent(in)    :: which
         real,              intent(out)   :: sum
@@ -759,7 +759,7 @@ contains
             endif
             if( proceed )then
                 val = self%get(i, which)
-                if( ieee_is_nan(val) ) val=0.
+                if( .not. is_a_number(val) ) val=0.
                 if( present(class) )then
                     clsnr = nint(self%get( i, 'class'))
                     if( clsnr == class )then
@@ -811,7 +811,6 @@ contains
     !>  \brief  is for calculating the nonzero sum of 'which' variables with 
     !!          filtering based on class/state/fromto
     subroutine calc_nonzero_sum( self, which, sum, cnt, class, state, fromto )
-        use ieee_arithmetic
         class(oris),       intent(inout) :: self
         character(len=*),  intent(in)    :: which
         real,              intent(out)   :: sum
@@ -834,7 +833,7 @@ contains
             mystate = nint(self%get( i, 'state'))
             if( mystate == 0 ) cycle
             val = self%get(i, which)
-            if( ieee_is_nan(val) ) val=0.
+            if( .not. is_a_number(val) ) val=0.
             if( val > 0. )then
                 if( present(class) )then
                     clsnr = nint(self%get( i, 'class'))
@@ -1214,6 +1213,23 @@ contains
             endif
         end do
     end subroutine rnd_cls
+
+    !>  \brief  for generating an initial clustering of time series
+    subroutine ini_tseries( self, nsplit, state_or_class )
+        use simple_map_reduce, only: split_nobjs_even
+        class(oris),      intent(inout) :: self
+        integer,          intent(in)    :: nsplit
+        character(len=*), intent(in)    :: state_or_class
+        integer, allocatable :: parts(:,:)
+        integer :: ipart, iptcl
+        parts = split_nobjs_even(self%n, nsplit)
+        do ipart=1,nsplit
+            do iptcl=parts(ipart,1),parts(ipart,2)
+                call self%o(iptcl)%set(trim(state_or_class), real(ipart))
+            end do
+        end do
+        deallocate(parts)
+    end subroutine ini_tseries
     
     !>  \brief  randomizes eulers in oris
     subroutine rnd_oris_discrete( self, discrete, nsym, eullims )

@@ -124,14 +124,14 @@ contains
     
     !>  \brief  is for checking the numerical soundness of rho
     logical function rho_contains_nans( self )
-        use ieee_arithmetic
+        use simple_math, only: is_a_number
         class(reconstructor), intent(in) :: self
         integer :: i, j ,k
         rho_contains_nans = .false.
         do i=1,size(self%rho,1)
             do j=1,size(self%rho,2)
                 do k=1,size(self%rho,3)
-                    if( ieee_is_nan(self%rho(i,j,k)) )then
+                    if( .not. is_a_number(self%rho(i,j,k)) )then
                         rho_contains_nans = .true.
                         return
                     endif

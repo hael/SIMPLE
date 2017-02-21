@@ -69,6 +69,8 @@ contains
             if( p%ncls > ncls_in_oritab )then
                 call b%a%expand_classes(p%ncls)
             endif
+        else if( p%tseries .eq. 'yes' )then
+            call b%a%ini_tseries(p%ncls, 'class')
         else
             if( p%srch_inpl .eq. 'yes' )then
                 call b%a%rnd_cls(p%ncls)

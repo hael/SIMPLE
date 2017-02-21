@@ -321,13 +321,17 @@ contains
         real :: res
         res = (ang/360.)*(pi*diam)
     end function
-    
-    !> \brief  validity check of real number (so that it is not nan)
+
+     !> \brief  checking for is_a_number
     pure function is_a_number_1( number ) result( is )
-        use ieee_arithmetic
         real, intent(in) :: number
-        logical          :: is
-        is = .not. ieee_is_nan(number)
+        logical :: is
+        is = .true.
+        if( number > 0. )then
+        else if( number <= 0. )then
+        else
+            is = .false.
+        endif
     end function
     
     !> \brief  validity check of complex number (so that it is not nan)

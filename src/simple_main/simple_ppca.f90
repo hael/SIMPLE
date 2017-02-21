@@ -310,10 +310,9 @@ contains
 
     !>  \brief  EM algorithm
     subroutine em_opt( self, p, err )
-        use ieee_arithmetic
         !$ use omp_lib
         !$ use omp_lib_kinds
-        use simple_math, only: matinv
+        use simple_math, only: matinv, is_a_number
         class(ppca), intent(inout) :: self
         integer,     intent(out)   :: err
         real,        intent(out)   :: p
@@ -373,7 +372,7 @@ contains
                 p = p+sqrt(sum((self%X(:,1)-tmp(:,1))**2.))
             end do
         endif
-        if( ieee_is_nan(p) )err=-1
+        if( .not. is_a_number(p) )err=-1
     end subroutine em_opt
 
     ! DESTRUCTOR

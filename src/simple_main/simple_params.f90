@@ -92,6 +92,7 @@ type :: params
     character(len=3) :: tomo='no'
     character(len=3) :: time='no'
     character(len=3) :: trsstats='no'
+    character(len=3) :: tseries='no'
     character(len=3) :: use_gpu='no'
     character(len=3) :: verbose='no'
     character(len=3) :: vis='no'
@@ -472,6 +473,7 @@ contains
         call check_carg('tomo',           self%tomo)
         call check_carg('tomoseries',     self%tomoseries)
         call check_carg('trsstats',       self%trsstats)
+        call check_carg('tseries',        self%tseries)
         call check_carg('use_gpu',        self%use_gpu)
         call check_carg('verbose',        self%verbose)
         call check_carg('vis',            self%vis)

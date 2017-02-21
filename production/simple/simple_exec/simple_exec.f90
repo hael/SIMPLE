@@ -108,7 +108,7 @@ type(respimg_commander)            :: xrespimg
 type(scale_commander)              :: xscale
 type(stack_commander)              :: xstack
 type(stackops_commander)           :: xstackops
-type(tseries_split_commander)      :: xtseries_split
+type(tseries_extract_commander)    :: xtseries_extract
     
 ! MISCELLANOUS PROGRAMS
 type(cluster_smat_commander)       :: xcluster_smat
@@ -591,9 +591,10 @@ select case(prg)
         keys_optional(4) = 'filwidth'
         keys_optional(5) = 'mul'
         keys_optional(6) = 'srch_inpl'
+        keys_optional(7) = 'tseries'
         ! parse command line
         if( describe ) call print_doc_prime2D_init
-        call cline%parse(keys_required(:4), keys_optional(:6))
+        call cline%parse(keys_required(:4), keys_optional(:7))
         ! set defaults
         if( .not. cline%defined('eo') ) call cline%set('eo', 'no')
         ! execute
@@ -826,7 +827,7 @@ select case(prg)
         keys_optional(6) = 'nspace'
         keys_optional(7) = 'nran'
         keys_optional(8) = 'npeaks'
-        keys_optional(9) = 'xfel'        
+        keys_optional(9) = 'xfel'      
         ! parse command line
         if( describe ) call print_doc_prime3D_init
         call cline%parse(keys_required(:5), keys_optional(:9))
@@ -860,9 +861,10 @@ select case(prg)
         keys_optional(9)  = 'norec'
         keys_optional(10) = 'mul'
         keys_optional(11) = 'zero'
+        keys_optional(12) = 'tseries'
         ! parse command line
         if( describe ) call print_doc_multiptcl_init
-        call cline%parse(keys_required(:6), keys_optional(:11))
+        call cline%parse(keys_required(:6), keys_optional(:12))
         ! set defaults
         if( .not. cline%defined('trs') ) call cline%set('trs', 3.) ! to assure that shifts are being used
         !execute
@@ -1753,22 +1755,23 @@ select case(prg)
         call cline%parse( keys_required(:1),keys_optional(:21) )
         ! execute
         call xstackops%execute(cline)
-    case( 'tseries_split' )
-        !==Program tseries_split
+    case( 'tseries_extract' )
+        !==Program tseries_extract
         !
-        ! <tseries_split/begin>is a program for splitting time series
-        ! <tseries_split/end> 
+        ! <tseries_extract/begin>is a program for splitting time series
+        ! <tseries_extract/end> 
         !
         ! set required keys
-        keys_required(1) = 'stk'
-        keys_required(2) = 'oritab'
-        keys_required(3) = 'chunksz'
-        keys_required(4) = 'jumpsz'
+        keys_required(1) = 'filetab'
+        keys_required(2) = 'smpd'
+        keys_required(3) = 'frameavg'
+        ! set optional keys
+        keys_optional(1)  = 'fbody'
         ! parse command line
-        if( describe ) call print_doc_tseries_split
-        call cline%parse(keys_required(:4))
+        ! if( describe ) call print_doc_tseries_extract
+        call cline%parse(keys_required(:3), keys_optional(:1))
         ! execute
-        call xtseries_split%execute(cline)
+        call xtseries_extract%execute(cline)
         
     ! MISCELLANOUS PROGRAMS
         

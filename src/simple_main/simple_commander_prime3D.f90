@@ -339,7 +339,12 @@ contains
             else
                 stop 'Need oritab to be defined when state2split is defined on command line; simple_multiptcl_init'
             endif
-        else     
+        else if( p%tseries .eq. 'yes' )then
+
+            print *, 'nstates: ', p%nstates
+
+            call b%a%ini_tseries(p%nstates, 'state')
+        else
             call b%a%rnd_states(p%nstates)
             if( p%nstates < 2 ) stop 'Nonsensical to have nstates < 2; simple_multiptcl_init'
         endif

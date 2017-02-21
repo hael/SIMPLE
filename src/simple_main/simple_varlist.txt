@@ -61,6 +61,7 @@ test
 tomo
 time
 trsstats
+tseries
 use_gpu
 verbose
 vis

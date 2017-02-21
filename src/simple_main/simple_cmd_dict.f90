@@ -216,6 +216,7 @@ contains
         call chdict%push('nrefs',         'number of references used for picking{100}')
         call chdict%push('ext',           'file extension{.mrc}')
         call chdict%push('stream',        'sream (real time) execution mode(yes|no){no}')
+        call chdict%push('tseries',       'images represent a time-series(yes|no){no}')
         initialised = .true.
     end subroutine init_cmd_dict
     

@@ -30,7 +30,7 @@ public :: respimg_commander
 public :: scale_commander
 public :: stack_commander
 public :: stackops_commander
-public :: tseries_split_commander
+public :: tseries_extract_commander
 private
 
 type, extends(commander_base) :: binarise_commander
@@ -73,10 +73,10 @@ type, extends(commander_base) :: stackops_commander
   contains
     procedure :: execute      => exec_stackops
 end type stackops_commander
-type, extends(commander_base) :: tseries_split_commander
+type, extends(commander_base) :: tseries_extract_commander
   contains
-    procedure :: execute      => exec_tseries_split
-end type tseries_split_commander
+    procedure :: execute      => exec_tseries_extract
+end type tseries_extract_commander
 type, extends(commander_base) :: respimg_commander
   contains
     procedure :: execute      => exec_respimg
@@ -916,50 +916,64 @@ contains
     999 call simple_end('**** SIMPLE_STACKOPS NORMAL STOP ****')
     end subroutine exec_stackops
 
-    subroutine exec_tseries_split( self, cline )
-        use simple_oris,    only: oris
-        use simple_ori,     only: ori
-        class(tseries_split_commander), intent(inout) :: self
-        class(cmdline),                 intent(inout) :: cline
-        type(params)                  :: p
-        type(build)                   :: b
-        integer                       :: iptcl, istart, istop, cnt, chunkcnt, numlen
-        type(oris)                    :: oset
-        type(ori)                     :: o
-        character(len=:), allocatable :: fname, oname
-        p = params(cline)                   ! parameters generated
-        call b%build_general_tbox(p, cline) ! general objects built
-        istart   = 1
-        istop    = istart+p%chunksz-1
-        chunkcnt = 0
-        numlen   = len(int2str(p%nptcls/p%chunksz+1))
-        do while( istop <= p%nptcls )
-            chunkcnt = chunkcnt+1
-            allocate(fname, source='stack_chunk'//int2str_pad(chunkcnt,numlen)//p%ext)
-            allocate(oname, source='oris_chunk'//int2str_pad(chunkcnt,numlen)//'.txt')
-            cnt = 0
-            oset = oris(istop-istart+1)
-            do iptcl=istart,istop
-                cnt = cnt+1
-                call b%img%read(p%stk, iptcl)
-                call b%img%write(fname, cnt)
-                o = b%a%get_ori(iptcl)
-                call oset%set_ori(cnt, o)
-            end do
-            if( cnt == oset%get_noris() )then
-                ! all ok
-            else
-                stop 'wrong number of oris allocated'
+    subroutine exec_tseries_extract( self, cline )
+        use simple_image, only: image
+        class(tseries_extract_commander), intent(inout) :: self
+        class(cmdline),                   intent(inout) :: cline
+        type(params) :: p
+        type(build)  :: b       
+        character(len=STDLEN), allocatable :: filenames(:)
+        character(len=STDLEN)              :: outfname
+        integer      :: ldim(3), nframes, frame_from, frame_to, numlen, cnt
+        integer      :: iframe, jframe, nfiles
+        type(image)  :: frame_img
+        p = params(cline)                                 ! parameters generated
+        call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
+        if( cline%defined('filetab') )then
+            call read_filetable(p%filetab, filenames)
+            nfiles = size(filenames)
+            numlen = len(int2str(nfiles))
+        else
+            stop 'need filetab input, listing all the individual frames of&
+            &the time series; simple_commander_imgproc :: exec_tseries_extract'
+        endif
+        call find_ldim_nptcls(filenames(1),ldim,nframes)
+        if( nframes == 1 .and. ldim(3) == 1 )then
+            ! all ok
+            call frame_img%new(ldim, p%smpd)
+        else
+            write(*,*) 'ldim(3): ', ldim(3)
+            write(*,*) 'nframes: ', nframes
+            stop 'simple_commander_imgproc :: exec_tseries_extract assumes one frame per file' 
+        endif
+        if( cline%defined('frameavg') )then
+            if( p%frameavg < 3 )then
+                stop 'frameavg integer (nr of frames to average) needs to be >= 3; &
+                &simple_commander_imgproc :: exec_tseries_extract'
             endif
-            call oset%write(oname)
-            call oset%kill
-            istart = istart+p%jumpsz
-            istop  = istop+p%jumpsz
-            deallocate(fname, oname)
+        else
+            stop 'need frameavg integer input = nr of frames to average; &
+            &simple_commander_imgproc :: exec_tseries_extract'
+        endif
+        do iframe=1,nfiles - p%frameavg + 1
+            if( cline%defined('fbody') )then
+                outfname = 'tseries_frames'//int2str_pad(iframe,numlen)//p%ext
+            else
+                outfname = trim(p%fbody)//'tseries_frames'//int2str_pad(iframe,numlen)//p%ext
+            endif
+            frame_from = iframe
+            frame_to   = iframe + p%frameavg - 1
+            cnt = 0
+            do jframe=frame_from,frame_to
+                cnt = cnt + 1
+                call frame_img%read(filenames(jframe),1)
+                call frame_img%write(outfname,cnt)
+            end do
         end do
+        call frame_img%kill
         ! end gracefully
-        call simple_end('**** SIMPLE_TSERIES_SPLIT NORMAL STOP ****')
-    end subroutine exec_tseries_split
+        call simple_end('**** SIMPLE_TSERIES_EXTRACT NORMAL STOP ****')
+    end subroutine exec_tseries_extract
 
     subroutine exec_respimg( self, cline )
         use simple_stat,             only: pearsn, normalize_sigm, corrs2weights
