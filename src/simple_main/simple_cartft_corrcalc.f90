@@ -116,7 +116,7 @@ contains
         class(cartft_corrcalc), intent(inout) :: self
         class(oris),            intent(inout) :: os
         type(ori) :: o
-        integer   :: noris, nrefs, iref, s
+        integer   :: noris, nrefs, iref
         logical   :: alloc_new
         ! make the container
         alloc_new = .false.
@@ -148,7 +148,6 @@ contains
         class(cartft_corrcalc), intent(inout) :: self
         class(ori),             intent(inout) :: o
         integer,                intent(in)    :: iref
-        real :: e3
         integer   :: s
         s = nint(o%get('state'))
         call self%bp%proj%fproject(self%refvols(s), o, self%img_refs(iref), self%pp%lp)

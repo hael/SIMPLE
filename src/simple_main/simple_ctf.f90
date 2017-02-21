@@ -126,6 +126,7 @@ contains
         real,       intent(in) :: ang       !< angle at which to compute the ctf (radians)
         real :: df ! defocus at point at which we're evaluating the ctf
         ! compute the defocus
+
         df = self%eval_df(ang)
         ! compute the ctf argument
         phase_shift = pi * self%wl * spaFreqSq * (df - 0.5 * self%wl**2 * spaFreqSq * self%Cs)

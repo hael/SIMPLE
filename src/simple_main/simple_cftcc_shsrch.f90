@@ -73,7 +73,7 @@ contains
         use simple_math, only: rad2deg, arg
         class(ori), intent(inout) :: o
         real :: corr, cost, dist
-        real :: shvec(2), prev_shvec(2)
+        real :: prev_shvec(2)
         prev_shvec = o%get_shift()
         ! project the input orientation
         call cftcc_ptr%project(o, 1)
@@ -86,10 +86,9 @@ contains
         call o%set('corr', corr)
         ! shifts must be obtained by vector addition
         ! the reference is rotated upon projection: no need to rotate the shift
-        shvec = -ospec%x
-        call o%set_shift( prev_shvec + shvec )
+        call o%set_shift( prev_shvec - ospec%x )
         ! distance
-        dist = arg( shvec )
+        dist = arg( ospec%x )
         call o%set('dist',dist)
     end subroutine cftcc_shsrch_minimize
 

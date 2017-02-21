@@ -206,8 +206,8 @@ contains
         integer                 :: noris_state, it, i, alloc_stat, noris, n_excl, n_incl
         integer                 :: ntot_excl, ntot_excl_prev
         logical                 :: minp_reached = .false.
-        integer,      parameter :: nbins  = 10
-        integer,      parameter :: maxits = 50
+        integer,               parameter :: nbins  = 10
+        integer,               parameter :: maxits = 50
         p = params(cline)                     ! parameters generated
         call b%build_general_tbox(p, cline)   ! general objects built
         call b%build_hadamard_prime3D_tbox(p) ! prime3D objects built
@@ -215,7 +215,7 @@ contains
         if( .not.cline%defined('minp') )p%minp = nint( real(b%a%get_noris())/100. )
         call set_bp_range( b, p, cline )
         srch_common = prime_srch(p, p%nspace, round2even(twopi*real(p%ring2)))
-        ! initial correlations
+        ! initial states, volumes & correlations
         do i = 1,b%a%get_noris()
             if( nint(b%a%get(i,'state')).ne.p%state )call b%a%set(i,'state',0.)
         enddo
@@ -239,15 +239,14 @@ contains
                 exit
             endif
             if( frac_lim > .95 )exit
+            call write_docs
             call exec_rec_master( b, p, cline )
             if( it==1 )then
                 call primesrch3D%kill
             else
                 call prep_refs_pftcc4align( b, p, cline )
             endif
-            call calc_corrs( b%a )
-            ! shift search here
-            call b%a%write('currentdoc.txt')
+            call calc_corrs( b%a ) ! shift search here
         enddo
         b%a = prev_a
         ntot_excl = ntot_excl_prev
@@ -259,6 +258,29 @@ contains
         endif
 
         contains
+
+            subroutine write_docs
+                use simple_strings, only: int2str_pad
+                type(oris)            :: os
+                character(len=STDLEN) :: fname
+                integer               :: i, state, curr_state
+                ! included ptcls
+                fname = 'included_'//int2str_pad(it,3)//'.txt'
+                call b%a%write( trim(fname) )
+                ! rejected
+                os = a_backup
+                do i=1,os%get_noris()
+                    curr_state = nint(b%a%get(i,'state'))
+                    state = nint( os%get(i,'state') )
+                    if( curr_state==0 .and. state>0 )then
+                        call os%set(i,'state',1.)
+                    else
+                        call os%set(i,'state',0.)
+                    endif
+                enddo
+                fname = 'excluded_'//int2str_pad(it,3)//'.txt'
+                call os%write( trim(fname) )
+            end subroutine write_docs
 
             subroutine exclude_ptcls( os, state, in_incl, in_excl )
                 class(oris), intent(inout) :: os
@@ -443,6 +465,7 @@ contains
         integer       :: i, startit
         logical       :: converged=.false.
         p = params(cline) ! parameters generated
+        p%boxmatch = p%box   ! FOR NOW !!!!
         if( p%xfel .eq. 'yes' )then
             if( cline%defined('msk') .or. cline%defined('mw') .or.&
             cline%defined('nvox') .or. cline%defined('automsk') )then

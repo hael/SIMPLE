@@ -79,7 +79,7 @@ type :: polarft_corrcalc
     procedure          :: expand_dim
     procedure          :: prep_ctf4gpu
     ! CALCULATORS
-    procedure, private :: create_polar_ctfmat
+    procedure          :: create_polar_ctfmat
     procedure          :: gencorrs_all_cpu
     procedure, private :: gencorrs_all_tester_1
     procedure, private :: gencorrs_all_tester_2
@@ -491,7 +491,7 @@ contains
     ! MODIFIERS
 
     !>  \brief  is for applying CTF to references and updating the memoized ref sqsums
-    subroutine apply_ctf( self, tfun, dfx, dfy, angast, ref )
+    subroutine apply_ctf( self, tfun, dfx, dfy, angast, ref, ctfmat )
         !$ use omp_lib
         !$ use omp_lib_kinds
         use simple_ctf,   only: ctf
@@ -500,27 +500,32 @@ contains
         real,                    intent(in)    :: dfx
         real,    optional,       intent(in)    :: dfy, angast
         integer, optional,       intent(in)    :: ref
-        real, allocatable :: ctfmat(:,:)
+        real,    optional,       intent(in)    :: ctfmat(:,:)
+        real, allocatable :: ctfmat_here(:,:)
         integer           :: iref
-        ! create the congruent polar matrix of real CTF values
-        ctfmat = self%create_polar_ctfmat(tfun, dfx, dfy, angast, self%refsz)
+        if( .not.present(ctfmat) )then
+            ! create the congruent polar matrix of real CTF values
+            ctfmat_here = self%create_polar_ctfmat(tfun, dfx, dfy, angast, self%refsz)
+        else
+            ctfmat_here = ctfmat
+        endif
         ! multiply the references with the CTF
         if( present(ref) )then
             ! apply to single reference
             if( ref<1 .or. ref>self%nrefs )stop 'reference index out of bounds; simple_polarft_corrcalc::apply_ctf'
             iref = ref
-            self%pfts_refs_ctf(iref,:,:) = self%pfts_refs(iref,:,:)*ctfmat
+            self%pfts_refs_ctf(iref,:,:) = self%pfts_refs(iref,:,:)*ctfmat_here
             call self%memoize_sqsum_ref_ctf(iref)
         else
             ! apply to all references
             !$omp parallel do default(shared) schedule(auto) private(iref)
             do iref=1,self%nrefs
-                self%pfts_refs_ctf(iref,:,:) = self%pfts_refs(iref,:,:)*ctfmat
+                self%pfts_refs_ctf(iref,:,:) = self%pfts_refs(iref,:,:)*ctfmat_here
                 call self%memoize_sqsum_ref_ctf(iref)
             end do
             !$omp end parallel do
         endif
-        deallocate(ctfmat)
+        if( .not.present(ctfmat) )deallocate(ctfmat_here)
     end subroutine apply_ctf
 
     !>  \brief  is for preparing for XFEL pattern corr calc
@@ -669,6 +674,7 @@ contains
         integer           :: irot,k,k_ind
         allocate( ctfmat(endrot,self%nk) )
         inv_ldim = 1./real(self%ldim)
+        ! print *,dfx,dfy,angast,endrot,self%nk,self%kfromto(1),self%kfromto(2),inv_ldim
         !$omp parallel do default(shared) private(irot,k,k_ind,hinv,kinv,spaFreqSq,ang) schedule(auto)
         do irot=1,endrot
             do k=self%kfromto(1),self%kfromto(2)

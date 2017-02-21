@@ -12,9 +12,9 @@ simple_doc = sys.argv[1]   # simple doc
 stack_name = sys.argv[2]   # name of stack
 
 # hack to manually add cs,kv,frac (also see below)
-#ctf_str  = ' cs={:3.1f}'.format(2.7)
-#ctf_str += ' kv={:5.1f}'.format(300)
-#ctf_str += ' fraca={:5.3f}'.format(.07)
+# ctf_str  = ' cs={:3.1f}'.format(2.7)
+# ctf_str += ' kv={:5.1f}'.format(300.)
+# ctf_str += ' fraca={:5.3f}'.format(.07)
 # end hack
 
 # PARSE DOC

@@ -2282,8 +2282,6 @@ contains
             val2 = 1.
         endif
         ! last pass to binarize the image
-        print *, 'cen1: ', cen1
-        print *, 'cen2: ', cen2
         where( (cen1-self%rmat)**2. < (cen2-self%rmat)**2. )
             self%rmat = val1
         elsewhere

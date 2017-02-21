@@ -1,27 +1,28 @@
 module simple_cont3D_matcher
 use simple_defs
-use simple_cartft_corrcalc, only: cartft_corrcalc
-use simple_ori,             only: ori
-use simple_build,           only: build
-use simple_params,          only: params
-use simple_masker,          only: automask
-use simple_cmdline,         only: cmdline
-use simple_qsys_funs,       only: qsys_job_finished
-use simple_strings,         only: int2str_pad
+use simple_cartft_corrcalc,  only: cartft_corrcalc
+use simple_ori,              only: ori
+use simple_build,            only: build
+use simple_params,           only: params
+use simple_masker,           only: automask
+use simple_cmdline,          only: cmdline
+use simple_qsys_funs,        only: qsys_job_finished
+use simple_strings,          only: int2str_pad
 use simple_hadamard_common  ! us all in there
 use simple_math             ! us all in there
 use simple_cftcc_srch       ! us all in there
 use simple_cftcc_shsrch     ! us all in there
+use simple_pftcc_contsrch   ! us all in there
 implicit none
 
 public :: cont3D_exec, cont3D_shellweight
 private
 
-type(cartft_corrcalc) :: cftcc
-integer               :: cnt_glob=0
-integer, parameter    :: MAXNPEAKS=10, NRESTARTS=5
-logical, parameter    :: debug=.false.
-character(len=STDLEN) :: OPT_STR='simplex'
+type(cartft_corrcalc)   :: cftcc
+integer                 :: cnt_glob=0
+integer, parameter      :: MAXNPEAKS=10, NRESTARTS=5
+logical, parameter      :: debug=.false.
+character(len=STDLEN)   :: OPT_STR='simplex'
 
 contains
 
@@ -101,7 +102,7 @@ contains
         logical           :: doshellweight
         
         ! CREATE THE CARTESIAN CORRELATOR
-        call cftcc%new( b, p, cline )
+        if( p%refine.ne.'qcont' )call cftcc%new( b, p, cline )
         if( p%boxmatch < p%box )call b%vol%new([p%box,p%box,p%box],p%smpd) ! ensures correct dimensions
         
         ! SET BAND-PASS LIMIT RANGE 
@@ -129,9 +130,11 @@ contains
         ! INITIALIZE
         select case( p%refine )
             case('yes')
-                call cftcc_srch_init(cftcc, b%img, OPT_STR, p%optlims(:5,:), NRESTARTS, syme=b%se )
+                call cftcc_srch_init(cftcc, b%img, OPT_STR, p%optlims(:5,:), NRESTARTS)
             case('shift')
                 call cftcc_shsrch_init(cftcc, b%img, OPT_STR, p%trs, NRESTARTS)
+            case('qcont')
+                call pftcc_contsrch_init( b, p, cline, b%img, OPT_STR, NRESTARTS )
             case DEFAULT
                 stop 'Unkwnon refinement mode; simple_cont3D_matcher'
         end select
@@ -177,6 +180,9 @@ contains
                     case('shift')
                         call cftcc_shsrch_set_state(state)
                         call cftcc_shsrch_minimize(orientation)
+                    case('qcont')
+                        call pftcc_contsrch_set_state(state)
+                        call pftcc_contsrch_minimize( orientation)
                     case DEFAULT
                         stop 'Unkwnon refinement mode; simple_cont3D_matcher'
                 end select

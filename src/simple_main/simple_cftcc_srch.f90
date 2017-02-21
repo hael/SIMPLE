@@ -62,7 +62,7 @@ contains
         integer, intent(in) :: D
         real,    intent(in) :: vec(D)
         type(ori) :: o
-        real      :: cost, shvec(3), dist
+        real      :: cost, shvec(3)
         integer   :: i
         ! enforce the barrier constraint for the shifts
         do i=4,5
@@ -85,11 +85,11 @@ contains
         use simple_math, only: rad2deg
         class(ori), intent(inout) :: o
         real :: corr, cost, dist
-        real :: shvec(2), prev_shvec(2)
+        real :: prev_shvec(2)
         prev_shvec = o%get_shift()
         ! copy the input orientation
         o_glob = o
-        ! initialise optimiser
+        ! initialise optimiser to current projdir & in-plane rotation
         ospec%x = 0.
         ospec%x(1:3) = o%get_euler()
         ! search
@@ -101,10 +101,9 @@ contains
         ! shifts must be obtained by vector addition
         ! the reference is rotated upon projection
         ! the ptcl is shifted only: no need to rotate the shift
-        shvec = -ospec%x(4:5)
-        call o%set_shift( prev_shvec + shvec )
+        call o%set_shift( prev_shvec - ospec%x(4:5) )
         ! distance
-        dist = 0.5*rad2deg(o_glob.euldist.o)+0.5*o_glob%get('dist')
+        dist = 0.5*rad2deg(o_glob.euldist.o)+0.5*rad2deg(o_glob.inpldist.o)
         call o%set('dist',dist)
     end subroutine cftcc_srch_minimize
 
