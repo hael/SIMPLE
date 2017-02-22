@@ -128,7 +128,7 @@ contains
                 endif
                 call init_tracker(p%filetab, nint(boxdata(j,1:2)), orig_box, p%offset, p%smpd, p%lp)
                 call track_particle
-                call write_tracked_series(p%fbody//int2str_pad(j,numlen))
+                call write_tracked_series(trim(p%fbody)//int2str_pad(j,numlen))
                 call kill_tracker
             end do
         else

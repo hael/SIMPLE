@@ -53,13 +53,16 @@ contains
     end subroutine init_tracker
 
     subroutine track_particle
+        use simple_jiffys, only: progress
         integer :: pos(2), pos_refined(2), iframe
         ! extract first reference
         call update_frame(1)
         pos = particle_locations(1,:)
         call update_reference(pos)
         ! track
+        write(*,'(a)') ">>> TRACKING PARTICLE"
         do iframe=2,nframes
+            call progress(iframe,nframes)
             ! update frame & refine position
             call update_frame(iframe)
             call refine_position( pos, pos_refined )
@@ -75,7 +78,7 @@ contains
         character(len=*), intent(in) :: fbody
         integer :: funit, iframe, xind, yind
         funit = get_fileunit()
-        open(unit=funit, status='REPLACE', action='WRITE', file= trim(fbody)//'.box')
+        open(unit=funit, status='REPLACE', action='WRITE', file=trim(fbody)//'.box')
         do iframe=1,nframes
             xind = particle_locations(iframe,1)
             yind = particle_locations(iframe,2)
@@ -124,14 +127,12 @@ contains
             end do
         end do
         ! correlate
-        !$omp parallel do schedule(auto) default(shared) private(xind,yind)
         do xind=xrange(1),xrange(2)
             do yind=yrange(1),yrange(2)
                 target_corrs(xind,yind) =&
                 &reference%real_corr_prenorm(target_imgs(xind,yind), sxx)
             end do
         end do
-        !$omp end parallel do
         ! find peak
         pos_refined = pos
         corr        = target_corrs(pos(1),pos(2))
