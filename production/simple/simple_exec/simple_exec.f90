@@ -109,7 +109,6 @@ type(respimg_commander)            :: xrespimg
 type(scale_commander)              :: xscale
 type(stack_commander)              :: xstack
 type(stackops_commander)           :: xstackops
-type(tseries_extract_commander)    :: xtseries_extract
     
 ! MISCELLANOUS PROGRAMS
 type(cluster_smat_commander)       :: xcluster_smat
@@ -129,7 +128,11 @@ type(map2ptcls_commander)          :: xmap2ptcls
 type(orisops_commander)            :: xorisops
 type(oristats_commander)           :: xoristats
 type(rotmats2oris_commander)       :: xrotmats2oris
-    
+
+! TIME-SERIES ANALYSIS PROGRAMS
+type(tseries_extract_commander)    :: xtseries_extract
+type(tseries_track_commander)      :: xtseries_track
+
 ! PARALLEL PROCESSING PROGRAMS
 type(merge_algndocs_commander)     :: xmerge_algndocs
 type(merge_nnmat_commander)        :: xmerge_nnmat
@@ -137,6 +140,7 @@ type(merge_shellweights_commander) :: xmerge_shellweights
 type(merge_similarities_commander) :: xmerge_similarities  
 type(split_pairs_commander)        :: xsplit_pairs
 type(split_commander)              :: xsplit
+
     
 ! OTHER DECLARATIONS
 integer, parameter    :: MAXNKEYS=100, KEYLEN=32
@@ -1756,23 +1760,6 @@ select case(prg)
         call cline%parse( keys_required(:1),keys_optional(:21) )
         ! execute
         call xstackops%execute(cline)
-    case( 'tseries_extract' )
-        !==Program tseries_extract
-        !
-        ! <tseries_extract/begin>is a program for creating overlapping chunks of frameavg frames from time-series data
-        ! <tseries_extract/end> 
-        !
-        ! set required keys
-        keys_required(1) = 'filetab'
-        keys_required(2) = 'smpd'
-        keys_required(3) = 'frameavg'
-        ! set optional keys
-        keys_optional(1)  = 'fbody'
-        ! parse command line
-        ! if( describe ) call print_doc_tseries_extract
-        call cline%parse(keys_required(:3), keys_optional(:1))
-        ! execute
-        call xtseries_extract%execute(cline)
         
     ! MISCELLANOUS PROGRAMS
         
@@ -2113,7 +2100,46 @@ select case(prg)
         call cline%parse( keys_required(:1), keys_optional(:1) )
         ! execute
         call xrotmats2oris%execute(cline)
-        
+
+    ! TIME-SERIES ANALYSIS PROGRAMS
+
+     case( 'tseries_extract' )
+        !==Program tseries_extract
+        !
+        ! <tseries_extract/begin>is a program for creating overlapping chunks of frameavg frames from time-series data
+        ! <tseries_extract/end> 
+        !
+        ! set required keys
+        keys_required(1) = 'filetab'
+        keys_required(2) = 'smpd'
+        keys_required(3) = 'frameavg'
+        ! set optional keys
+        keys_optional(1)  = 'fbody'
+        ! parse command line
+        ! if( describe ) call print_doc_tseries_extract
+        call cline%parse(keys_required(:3), keys_optional(:1))
+        ! execute
+        call xtseries_extract%execute(cline)
+    case( 'tseries_track' )
+         !==Program tseries_track
+        !
+        ! <tseries_extract/begin>is a program for particle tracking in time-series data
+        ! <tseries_extract/end> 
+        !
+        ! set required keys
+        keys_required(1) = 'filetab'
+        keys_required(2) = 'boxfile'
+        keys_required(3) = 'fbody'
+        keys_required(4) = 'smpd'
+        keys_required(5) = 'lp'
+        ! set optional keys
+        keys_optional(1)  = 'offset'
+        ! parse command line
+        ! if( describe ) call print_doc_tseries_track
+        call cline%parse(keys_required(:5), keys_optional(:1))
+        ! execute
+        call xtseries_track%execute(cline)
+
     ! PARALLEL PROCESSING PROGRAMS
     
     case( 'merge_algndocs' )
