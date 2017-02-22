@@ -62,6 +62,7 @@ type :: image
     procedure          :: get
     procedure          :: get_rmat
     procedure          :: get_cmat
+    procedure          :: get_cmat_expanded
     procedure          :: set
     procedure          :: set_rmat
     procedure          :: set_ldim
@@ -983,6 +984,55 @@ contains
         array_shape(2:3) = self%ldim(2:3)
         allocate(cmat(array_shape(1),array_shape(2),array_shape(3)), source=self%cmat)
     end function get_cmat
+
+    subroutine get_cmat_expanded( self, cmat_exp, exp_lims, rharwin )
+        !$ use omp_lib
+        !$ use omp_lib_kinds
+        use simple_math, only: cyci_1d
+        class(image),         intent(in)    :: self
+        complex, allocatable, intent(inout) :: cmat_exp(:,:,:)
+        integer,allocatable,  intent(inout) :: exp_lims(:,:)
+        real,                 intent(in)    :: rharwin
+        integer, allocatable :: cyck(:), cycm(:)
+        integer :: h, hh, k, kk, m, cych, i, alloc_stat
+        integer :: lims(3,2), ldim(3)
+        if( .not.self%is_ft() )stop 'volume needs to be FTed before call; get_cmat_expanded; simple_image'
+        if( self%ldim(3) == 1 )stop 'only for volume; get_cmat_expanded; simple_image'
+        ! init
+        lims = self%loop_lims(3)
+        allocate(exp_lims(3,2), stat=alloc_stat)
+        call alloc_err("In: get_cmat_expanded; simple_image 1", alloc_stat)
+        exp_lims(:,2) = maxval(abs(lims)) + ceiling(rharwin)
+        exp_lims(:,1) = -exp_lims(:,2)
+        allocate( cmat_exp(exp_lims(1,1):exp_lims(1,2),exp_lims(2,1):exp_lims(2,2),&
+            &exp_lims(3,1):exp_lims(3,2)), cyck(exp_lims(1,1):exp_lims(1,2)),&
+            &cycm(exp_lims(1,1):exp_lims(1,2)), stat=alloc_stat  )
+        call alloc_err("In: get_cmat_expanded; simple_image 2", alloc_stat)
+        ! pre-compute addresses in 2nd and 3rd dimension
+        do k = exp_lims(2,1),exp_lims(2,2)
+            cyck(k) = k
+            if( k<lims(2,1) .or. k>lims(2,2) )cyck(k) = cyci_1d( lims(2,:),k )
+        enddo
+        do m = exp_lims(3,1),exp_lims(3,2)
+            cycm(m) = m
+            if( m<lims(3,1) .or. m>lims(3,2) )cycm(m) = cyci_1d( lims(3,:),m )
+        enddo
+        ! build expanded fourier components matrix
+        cmat_exp = cmplx(0.,0.)
+        !$omp parallel do schedule(auto) shared(lims,exp_lims,cmat_exp,cyck,cycm)&
+        !$omp private(h,k,m,cych)
+        do h = exp_lims(1,1),exp_lims(1,2)
+            cych = h
+            if( h<lims(1,1) .or. h>lims(1,2) )cych = cyci_1d( lims(1,:),h )
+            do k = exp_lims(2,1),exp_lims(2,2)
+                do m = exp_lims(3,1),exp_lims(3,2)
+                    cmat_exp(h,k,m) = self%get_fcomp( [cych,cyck(k),cycm(m)] )
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+        deallocate( cyck,cycm )
+    end subroutine get_cmat_expanded
 
     !>  \brief  is a setter
     subroutine set( self, logi, val )

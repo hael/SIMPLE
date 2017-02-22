@@ -629,9 +629,39 @@ contains
         b = c
         c = d
     end subroutine
-    
+
+    ! !>  \brief  one-dimensional symmetric hard window
+    pure function sqwin_1d( x, winsz ) result( win )
+        real, intent(in) :: x       !< input point
+        real, intent(in) :: winsz   !< window size
+        integer          :: iwinsz, win(2) !< starts & stops
+        win(:) = nint(x)
+        iwinsz = ceiling(winsz)
+        win(1) = win(1)-iwinsz
+        win(2) = win(2)+iwinsz
+    end function
+
+    ! !>  \brief  three-dimensional symmetric hard window
+    pure function sqwin_2d( x, y, winsz ) result( win )
+        real, intent(in) :: x,y      !< input point
+        real, intent(in) :: winsz    !< window size
+        integer          :: win(2,2) !< starts & stops
+        win(1,:) = sqwin_1d(x,winsz)
+        win(2,:) = sqwin_1d(y,winsz)
+    end function
+
+    ! !>  \brief  three-dimensional symmetric hard window
+    pure function sqwin_3d( x, y, z, winsz ) result( win )
+        real, intent(in) :: x,y,z    !< input point
+        real, intent(in) :: winsz    !< window size
+        integer          :: win(3,2) !< starts & stops
+        win(1,:) = sqwin_1d(x,winsz)
+        win(2,:) = sqwin_1d(y,winsz)
+        win(3,:) = sqwin_1d(z,winsz)
+    end function
+
     ! !>  \brief  one-dimensional hard window
-    function recwin_1d( x, winsz ) result( win )
+    pure function recwin_1d( x, winsz ) result( win )
         real, intent(in) :: x       !< input point
         real, intent(in) :: winsz   !< window size
         integer          :: win(2) !< starts & stops
@@ -640,7 +670,7 @@ contains
     end function
     
     !>  \brief  two-dimensional hard window
-    function recwin_2d( x, y, winsz ) result( win )
+    pure function recwin_2d( x, y, winsz ) result( win )
         real, intent(in) :: x, y      !< input point
         real, intent(in) :: winsz     !< window size
         integer          :: win(2,2) !< starts & stops
@@ -649,7 +679,7 @@ contains
     end function
     
     !>  \brief  three-dimensional hard window
-    function recwin_3d( x, y, z, winsz ) result( win )
+    pure function recwin_3d( x, y, z, winsz ) result( win )
         real, intent(in) :: x, y, z   !< input point
         real, intent(in) :: winsz     !< window size
         integer          :: win(3,2) !< starts & stops

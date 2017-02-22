@@ -71,9 +71,9 @@ if( $FCOMPILER =~ /pgfortran/ ){
     if ( $PLATFORM == 0 ) {
     	# debugging options
     	if( $DEBUG eq 'yes' ) {
-    	    $dbg_lvl_f = "-g -Og -Wall -fbounds-check";
+    	    $dbg_lvl_f = "-g -Og -Wall -fbounds-check -fbacktrace";
     	    if( $DEBUG_LEVEL =~ /high/ ) {
-                $dbg_lvl_f = $dbg_lvl_f." -Wextra -pedantic -fbacktrace -fdump-parse-tree -fdump-core -frecord-marker=4 -ffpe-summary=all -ffpe-trap=zero,overflow,underflow";
+                $dbg_lvl_f = $dbg_lvl_f." -Wextra -pedantic -fdump-parse-tree -fdump-core -frecord-marker=4 -ffpe-summary=all -ffpe-trap=zero,overflow,underflow";
     	    }
     	} else { 
             $dbg_lvl_f = "";

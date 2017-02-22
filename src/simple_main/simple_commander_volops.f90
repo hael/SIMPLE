@@ -168,10 +168,10 @@ contains
         ! generate projections
         if( p%swap .eq. 'yes' ) call b%a%swape1e3
         if( cline%defined('top') )then
-            imgs = b%proj%projvol(b%vol, b%a, p, p%top)
+            imgs = b%proj%projvol_expanded(b%vol, b%a, p, p%top)
             loop_end = p%top
         else
-            imgs = b%proj%projvol(b%vol, b%a, p)
+            imgs = b%proj%projvol_expanded(b%vol, b%a, p)
             loop_end = p%nspace
         endif
         if( file_exists(p%outstk) ) call del_file(p%outstk)

@@ -467,11 +467,16 @@ contains
     end subroutine memoize_sqsum_ref
     
     !>  \brief  is for memoization of the complex square sums reqired for correlation calculation
-    subroutine memoize_sqsum_ref_ctf( self, iref )
+    subroutine memoize_sqsum_ref_ctf( self, iref, irot )
         use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref
-        self%sqsums_refs(iref) = sum(csq(self%pfts_refs_ctf(iref,:,:)))
+        integer,       optional, intent(in)    :: irot
+        if( present(irot) )then
+            self%sqsums_refs(iref) = sum(csq(self%pfts_refs_ctf(iref,irot:irot+self%refsz-1,:)))
+        else
+            self%sqsums_refs(iref) = sum(csq(self%pfts_refs_ctf(iref,:,:)))
+        endif
     end subroutine memoize_sqsum_ref_ctf
 
     !>  \brief  is for memoization of the complex square sums reqired for correlation calculation
@@ -491,7 +496,7 @@ contains
     ! MODIFIERS
 
     !>  \brief  is for applying CTF to references and updating the memoized ref sqsums
-    subroutine apply_ctf( self, tfun, dfx, dfy, angast, ref, ctfmat )
+    subroutine apply_ctf( self, tfun, dfx, dfy, angast, ref, rot, ctfmat )
         !$ use omp_lib
         !$ use omp_lib_kinds
         use simple_ctf,   only: ctf
@@ -500,9 +505,10 @@ contains
         real,                    intent(in)    :: dfx
         real,    optional,       intent(in)    :: dfy, angast
         integer, optional,       intent(in)    :: ref
+        integer, optional,       intent(in)    :: rot
         real,    optional,       intent(in)    :: ctfmat(:,:)
         real, allocatable :: ctfmat_here(:,:)
-        integer           :: iref
+        integer           :: iref, irot
         if( .not.present(ctfmat) )then
             ! create the congruent polar matrix of real CTF values
             ctfmat_here = self%create_polar_ctfmat(tfun, dfx, dfy, angast, self%refsz)
@@ -514,9 +520,20 @@ contains
             ! apply to single reference
             if( ref<1 .or. ref>self%nrefs )stop 'reference index out of bounds; simple_polarft_corrcalc::apply_ctf'
             iref = ref
-            self%pfts_refs_ctf(iref,:,:) = self%pfts_refs(iref,:,:)*ctfmat_here
-            call self%memoize_sqsum_ref_ctf(iref)
+            if( present(rot) )then
+                irot = rot
+                self%pfts_refs_ctf(iref,irot:irot+self%refsz-1,:) = &
+                    &self%pfts_refs(iref,irot:irot+self%refsz-1,:)*ctfmat_here
+                call self%memoize_sqsum_ref_ctf(iref, irot=irot)
+            else
+                self%pfts_refs_ctf(iref,:,:) = self%pfts_refs(iref,:,:)*ctfmat_here
+                call self%memoize_sqsum_ref_ctf(iref)
+            endif
         else
+            if( present(rot) )then
+                print *,'application of ctf to multiple refs in a single rotation not implemeted;'
+                stop 'simple_polarft_corrcalc::apply_ctf'
+            endif
             ! apply to all references
             !$omp parallel do default(shared) schedule(auto) private(iref)
             do iref=1,self%nrefs

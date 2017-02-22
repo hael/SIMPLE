@@ -7,7 +7,7 @@ use simple_oris,     only: oris
 use simple_params,   only: params
 use simple_gridding, only: prep4cgrid
 use simple_jiffys,   only: alloc_err, progress
-use simple_math,     only: recwin_3d, euclid
+use simple_math,     only: recwin_3d, euclid, sqwin_3d
 use simple_winfuns,  only: winfuns
 implicit none
 
@@ -25,11 +25,13 @@ type :: projector
     real                  :: winsz=1.5     !< window half-width
     real                  :: alpha=2.      !< oversampling ratio
     real                  :: harwin=2.     !< rounded window half-width
+    real                  :: harwin_exp=1. !< rounded window half-width in expanded routines
   contains
     ! GETTER
     procedure :: get_wfuns
     ! FOURIER PROJECTORS
     procedure          :: fproject
+    procedure          :: fproject_expanded
     procedure, private :: fproject_polar_1
     procedure, private :: fproject_polar_2
     generic            :: fproject_polar => fproject_polar_1, fproject_polar_2
@@ -41,6 +43,7 @@ type :: projector
     procedure          :: rproject
     ! HIGH-LEVEL PROJECTORS
     procedure          :: projvol
+    procedure          :: projvol_expanded
     procedure          :: rotvol
     procedure          :: rotimg
     procedure          :: fprojvol_polar
@@ -92,7 +95,80 @@ contains
     end function get_wfuns
     
     ! FOURIER PROJECTORS
-    
+
+   !> \brief  extracts a Fourier plane from the expanded FT matrix of a volume
+    subroutine fproject_expanded( self, fvol, fvol_cmat_exp, exp_lims, e, fplane )
+        !$ use omp_lib
+        !$ use omp_lib_kinds
+        class(projector), intent(inout) :: self
+        class(image),     intent(inout) :: fvol
+        integer,          intent(in)    :: exp_lims(3,2)
+        complex,          intent(in)    :: fvol_cmat_exp(exp_lims(1,1):exp_lims(1,2),&
+            &exp_lims(2,1):exp_lims(2,2),exp_lims(3,1):exp_lims(3,2))
+        class(ori),       intent(in)    :: e
+        class(image),     intent(inout) :: fplane
+        real, allocatable :: w(:,:,:)
+        complex           :: comp
+        real              :: vec(3), loc(3)
+        integer           :: h, hh, k, kk, sqarg, sqlp, i, wdim, wlen, alloc_stat, iharwin
+        integer           :: lims(3,2), ldim(3), ldim_ptcl(3), win(3,2)
+        if( warn)then
+            if( .not. fvol%exists() )   stop 'fvol needs to exists before call; fproject_expanded; simple_projector'
+            if( .not. fplane%exists() ) stop 'fplane needs to exists before call; fproject_expanded; simple_projector'
+            ldim      = fvol%get_ldim()
+            ldim_ptcl = fplane%get_ldim()
+            if( ldim(3) == 1 )stop 'only for interpolation from 3D images; fproject_1; simple_projector'
+            if( ldim(1) == ldim_ptcl(1) .and. ldim(2) == ldim_ptcl(2) )then
+            else
+               print *, 'ldim1 vol/ptcl:', ldim(1), ldim_ptcl(1)
+               print *, 'ldim2 vol/ptcl:', ldim(2), ldim_ptcl(2)
+               stop 'nonconformable dims btw vol & ptcl; fproject_1; simple_projector'
+            endif
+        endif
+        ! init
+        fplane = cmplx(0.,0.)
+        iharwin = ceiling(self%harwin_exp)
+        wdim = 2*iharwin + 1   ! interpolation kernel window size
+        wlen = wdim**3
+        allocate( w(wdim,wdim,wdim), stat=alloc_stat )
+        call alloc_err("In: fproject_expanded; simple_projector", alloc_stat)
+        ! build expanded fourier components matrix
+        lims = fvol%loop_lims(3)
+        sqlp = (maxval(lims(:,2)))**2
+        !$omp parallel do schedule(auto) shared(lims,sqlp,fvol_cmat_exp,iharwin,wdim,wlen)&
+        !$omp private(h,k,hh,kk,sqarg,vec,loc,comp,win,i,w)
+        do h=lims(1,1),lims(1,2)
+            hh = h*h
+            do k=lims(2,1),lims(2,2)
+                kk = k*k
+                sqarg = hh+kk
+                if( sqarg <= sqlp )then
+                    ! address
+                    vec(1) = real(h)
+                    vec(2) = real(k)
+                    vec(3) = 0.
+                    loc    = matmul(vec,e%get_mat())
+                    ! interpolation kernel window
+                    win = sqwin_3d(loc(1), loc(2), loc(3), real(iharwin))
+                    ! interpolation kernel matrix
+                    w = 1.
+                    do i=1,wdim
+                        w(i,:,:) = w(i,:,:) * self%wfuns%eval_apod( real(win(1,1)+i-1)-loc(1) )
+                        w(:,i,:) = w(:,i,:) * self%wfuns%eval_apod( real(win(2,1)+i-1)-loc(2) )
+                        w(:,:,i) = w(:,:,i) * self%wfuns%eval_apod( real(win(3,1)+i-1)-loc(3) )
+                    end do
+                    ! SUM( kernel x components )
+                    comp = dot_product( reshape(w,(/wlen/)), reshape( fvol_cmat_exp( win(1,1):win(1,2),&
+                        &win(2,1):win(2,2),win(3,1):win(3,2)), (/wlen/) ) )
+                    ! set fourier component
+                    call fplane%set_fcomp([h,k,0],comp)
+                endif
+            end do
+        end do
+        !$omp end parallel do
+        deallocate( w )
+    end subroutine fproject_expanded
+
     !> \brief  extracts a Fourier plane from a volume
     subroutine fproject( self, fvol, e, fplane, lp_dyn )
         !$ use omp_lib
@@ -511,7 +587,59 @@ contains
         call vol_pad%kill
         call img_pad%kill
     end function projvol
-    
+
+    !>  \brief  generates an array of projection images of volume vol in orientations o
+    function projvol_expanded( self, vol, o, p, top ) result( imgs )
+        use simple_image,    only: image
+        use simple_oris,     only: oris
+        use simple_params,   only: params
+        use simple_gridding, only: prep4cgrid
+        class(projector),  intent(inout) :: self    !< projector instance
+        class(image),      intent(inout) :: vol     !< volume to project
+        class(oris),       intent(inout) :: o       !< orientations
+        class(params),     intent(in)    :: p       !< parameters
+        integer, optional, intent(in)    :: top     !< stop index
+        type(image),         allocatable :: imgs(:) !< resulting images
+        complex,             allocatable :: cmat_exp(:,:,:) !< volume expanded complex matrix
+        integer,             allocatable :: pad_lims(:,:)
+        type(image)                      :: vol_pad, img_pad
+        real                             :: rharwin
+        integer                          :: n, i, alloc_stat
+        rharwin = self%harwin_exp
+        call vol_pad%new([p%boxpd,p%boxpd,p%boxpd], p%smpd, self%imgkind)
+        if( self%imgkind .eq. 'xfel' )then
+            call vol%pad(vol_pad)
+        else
+            call prep4cgrid(vol, vol_pad, p%msk, wfuns=self%wfuns)
+        endif
+        call img_pad%new([p%boxpd,p%boxpd,1], p%smpd, self%imgkind)
+        if( present(top) )then
+            n = top
+        else
+            n = o%get_noris()
+        endif
+        allocate( imgs(n), stat=alloc_stat )
+        call vol_pad%get_cmat_expanded( cmat_exp, pad_lims, rharwin )
+        call alloc_err('projvol; simple_projector', alloc_stat)
+        write(*,'(A)') '>>> GENERATES PROJECTIONS' 
+        do i=1,n
+            call progress(i, n)
+            call imgs(i)%new([p%box,p%box,1], p%smpd, self%imgkind)
+            call self%fproject_expanded(vol_pad, cmat_exp, pad_lims, o%get_ori(i), img_pad )
+            if( self%imgkind .eq. 'xfel' )then
+                call img_pad%clip(imgs(i))
+            else
+                call img_pad%bwd_ft
+                call img_pad%clip(imgs(i))
+                ! HAD TO TAKE OUT BECAUSE PGI COMPILER BAILS
+                ! call imgs(i)%norm
+            endif
+        end do
+        deallocate( cmat_exp )
+        call vol_pad%kill
+        call img_pad%kill
+    end function projvol_expanded
+
     !>  \brief  rotates a volume by Euler angle o using Fourier gridding
     function rotvol( self, vol, o, p ) result( rovol )
         use simple_image,    only: image

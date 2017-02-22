@@ -134,14 +134,14 @@ select case(prg)
         keys_optional(6)  = 'exp_time'
         keys_optional(7)  = 'dose_rate'
         keys_optional(8)  = 'kv'
-        keys_optional(6)  = 'pspecsz'
-        keys_optional(7)  = 'numlen'
-        keys_optional(8)  = 'startit'
+        keys_optional(9)  = 'pspecsz'
+        keys_optional(10)  = 'numlen'
+        keys_optional(11)  = 'startit'
         keys_optional(12) = 'scale'
-        keys_optional(9)  = 'frameavg'
+        keys_optional(13)  = 'frameavg'
         ! parse command line
         if( describe ) call print_doc_unblur
-        call cline%parse(keys_required(:4), keys_optional(:9))
+        call cline%parse(keys_required(:4), keys_optional(:13))
         ! set defaults
         if( .not. cline%defined('trs')     ) call cline%set('trs',      5.)
         if( .not. cline%defined('lpstart') ) call cline%set('lpstart', 15.)
