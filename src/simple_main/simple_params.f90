@@ -513,6 +513,7 @@ contains
         call check_iarg('binwidth',       self%binwidth)
         call check_iarg('box',            self%box)
         call check_iarg('boxconvsz',      self%boxconvsz)
+        call check_iarg('chunksz',        self%chunksz)
         call check_iarg('clip',           self%clip)
         call check_iarg('corner',         self%corner)
         call check_iarg('cube',           self%cube)

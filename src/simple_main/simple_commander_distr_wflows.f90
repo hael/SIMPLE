@@ -38,6 +38,7 @@ public :: prime3D_init_distr_commander
 public :: prime3D_distr_commander
 public :: shellweight3D_distr_commander
 public :: recvol_distr_commander
+public :: tseries_track_distr_commander
 private
 
 type, extends(commander_base) :: unblur_distr_commander
@@ -88,6 +89,10 @@ type, extends(commander_base) :: recvol_distr_commander
   contains
     procedure :: execute      => exec_recvol_distr
 end type recvol_distr_commander
+type, extends(commander_base) :: tseries_track_distr_commander
+  contains
+    procedure :: execute      => exec_tseries_track_distr
+end type tseries_track_distr_commander
 
 integer, parameter :: KEYLEN=32
 
@@ -1234,5 +1239,72 @@ contains
         call qsys_cleanup(p_master)
         call simple_end('**** SIMPLE_RECVOL NORMAL STOP ****')
     end subroutine exec_recvol_distr
+
+    ! TIME-SERIES ROUTINES
+
+    subroutine exec_tseries_track_distr( self, cline )
+        use simple_commander_tseries, only: tseries_track_commander
+        use simple_nrtxtfile,         only: nrtxtfile 
+        class(tseries_track_distr_commander), intent(inout) :: self
+        class(cmdline),                       intent(inout) :: cline
+        ! constants
+        logical, parameter            :: debug=.false.
+        ! commanders
+        type(tseries_track_commander) :: xtseries_track
+        ! other stuff
+        type(params)                  :: p_master
+        type(qsys_ctrl)               :: qscripts
+        type(chash)                   :: myq_descr, job_descr
+        integer, allocatable          :: parts(:,:)
+        type(qsys_factory)            :: qsys_fac
+        class(qsys_base), pointer     :: myqsys
+        type(nrtxtfile)               :: boxfile
+        real,        allocatable      :: boxdata(:,:)
+        type(chash), allocatable      :: part_params(:)
+        integer :: ndatlines, numlen, alloc_stat, j, orig_box, ipart
+        ! make master parameters
+        p_master = params(cline, checkdistr=.false.)
+        if( .not. file_exists(p_master%boxfile)  ) stop 'inputted boxfile does not exist in cwd'
+        if( nlines(p_master%boxfile) > 0 )then
+            call boxfile%new(p_master%boxfile, 1)
+            ndatlines = boxfile%get_ndatalines()
+            numlen    = len(int2str(ndatlines))
+            allocate( boxdata(ndatlines,boxfile%get_nrecs_per_line()), stat=alloc_stat)
+            call alloc_err('In: simple_commander_tseries :: exec_tseries_track', alloc_stat)
+            do j=1,ndatlines
+                call boxfile%readNextDataLine(boxdata(j,:))
+                orig_box = nint(boxdata(j,3))
+                if( nint(boxdata(j,3)) /= nint(boxdata(j,4)) )then
+                    stop 'Only square windows are currently allowed!'
+                endif
+            end do
+        else
+            stop 'inputted boxfile is empty; simple_commander_tseries :: exec_tseries_track'
+        endif
+        p_master%nptcls = nlines(p_master%boxfile)
+        p_master%nparts = p_master%nptcls
+        if( p_master%ncunits > p_master%nparts )&
+        &stop 'nr of computational units (ncunits) mjust be <= number of entries in boxfiles'
+        ! box and numlen need to be part of command line
+        call cline%set('box',    real(orig_box))
+        call cline%set('numlen', real(numlen)  )
+        ! prepare part-dependent parameters
+        allocate(part_params(p_master%nparts))
+        do ipart=1,p_master%nparts
+            call part_params(ipart)%new(2)
+            call part_params(ipart)%set('xcoord', real2str(boxdata(ndatlines,1)))
+            call part_params(ipart)%set('ycoord', real2str(boxdata(ndatlines,2)))
+        end do
+        ! setup the environment for distributed execution
+        call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr)
+        ! prepare job description
+        call cline%gen_job_descr(job_descr)
+        ! prepare scripts
+        call qsys_cleanup(p_master)
+        call qscripts%generate_scripts(job_descr, p_master%ext, myq_descr, part_params=part_params)
+        ! manage job scheduling
+        call qscripts%schedule_jobs
+        call qsys_cleanup(p_master)
+    end subroutine exec_tseries_track_distr
 
 end module simple_commander_distr_wflows

@@ -85,9 +85,13 @@ contains
         logical,          optional, intent(in)    :: readhead      !< header read indicator
         character(len=*), optional, intent(in)    :: rwaction      !< action flag
         character(len=1) :: format_descriptor
-        logical          :: rreadhead
+        logical          :: rreadhead, write_enabled
         rreadhead = .true.
         if( present(readhead) ) rreadhead = readhead
+        write_enabled = .true.
+        if( present(rwaction) )then
+            if( rwaction .eq. 'READ' ) write_enabled = .false. 
+        endif
         call self%close_nowrite
         ! Remove leading blanks in fname
         self%fname = adjustl(fname)
@@ -141,10 +145,13 @@ contains
             call self%overall_head%write(self%funit)
             if( debug ) print *, 'did write header'
         endif
-        ! call self%overall_head%setPixSz(smpd)
-        ! REPLACED WITH THIS ONE TO MAKE THE FLAG WAS_WRITTEN TO TRUE
-        ! NEEDED FOR GETTING THE HEADER INFORMATION CORRECT
-        call self%setPixSz(smpd)
+        if( write_enabled )then
+            ! REPLACED WITH THIS ONE TO MAKE THE FLAG WAS_WRITTEN TO TRUE
+            ! NEEDED FOR GETTING THE HEADER INFORMATION CORRECT
+            call self%setPixSz(smpd)
+        else
+            call self%overall_head%setPixSz(smpd)
+        endif
         if( debug ) call self%overall_head%print
         ! The file-handle now exists
         self%existence = .true.

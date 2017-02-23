@@ -133,6 +133,7 @@ type(rotmats2oris_commander)       :: xrotmats2oris
 ! TIME-SERIES ANALYSIS PROGRAMS
 type(tseries_extract_commander)    :: xtseries_extract
 type(tseries_track_commander)      :: xtseries_track
+type(tseries_split_commander)      :: xtseries_split
 
 ! PARALLEL PROCESSING PROGRAMS
 type(merge_algndocs_commander)     :: xmerge_algndocs
@@ -2135,7 +2136,7 @@ select case(prg)
         ! execute
         call xtseries_extract%execute(cline)
     case( 'tseries_track' )
-         !==Program tseries_track
+        !==Program tseries_track
         !
         ! <tseries_extract/begin>is a program for particle tracking in time-series data
         ! <tseries_extract/end> 
@@ -2156,6 +2157,23 @@ select case(prg)
         call cline%parse(keys_required(:4), keys_optional(:4))
         ! execute
         call xtseries_track%execute(cline)
+    case( 'tseries_split' )
+        !==Program tseries_split
+        !
+        ! <tseries_split/begin>is a program for splitting a time-series stack and its associated orientations 
+        ! <tseries_split/end>
+        !
+        ! set required keys
+        keys_required(1) = 'stk'
+        keys_required(2) = 'oritab'
+        keys_required(3) = 'smpd'
+        keys_required(4) = 'chunksz'
+        keys_required(5) = 'stepsz'
+        ! parse command line
+        ! if( describe ) call print_doc_tseries_split
+        call cline%parse(keys_required(:5))
+        ! execute
+        call xtseries_split%execute(cline)
 
     ! PARALLEL PROCESSING PROGRAMS
     

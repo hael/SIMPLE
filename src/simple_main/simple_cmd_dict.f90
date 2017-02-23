@@ -221,6 +221,7 @@ contains
         call chdict%push('offset',        'pixels offset{7}')
         call chdict%push('xcoord',        'x coordinate{0}')
         call chdict%push('ycoord',        'y coordinate{0}')
+        call chdict%push('stepsz',        'size of step{0}')
         initialised = .true.
     end subroutine init_cmd_dict
     

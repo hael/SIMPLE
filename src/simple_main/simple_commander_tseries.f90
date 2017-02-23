@@ -21,6 +21,7 @@ implicit none
 
 public :: tseries_extract_commander
 public :: tseries_track_commander
+public :: tseries_split_commander
 private
 
 type, extends(commander_base) :: tseries_extract_commander
@@ -31,6 +32,10 @@ type, extends(commander_base) :: tseries_track_commander
   contains
     procedure :: execute      => exec_tseries_track
 end type tseries_track_commander
+type, extends(commander_base) :: tseries_split_commander
+  contains
+    procedure :: execute      => exec_tseries_split
+end type tseries_split_commander
 
 contains
 
@@ -91,14 +96,6 @@ contains
         call simple_end('**** SIMPLE_TSERIES_EXTRACT NORMAL STOP ****')
     end subroutine exec_tseries_extract
 
-    ! filetab
-    ! boxfile
-    ! fbody
-    ! smpd
-    ! lp
-    ! offset (7 pix)
-    ! FROM BOX FILE: xccoord, ycoord, box
-
     subroutine exec_tseries_track( self, cline )
         use simple_tseries_tracker
         use simple_nrtxtfile, only: nrtxtfile
@@ -155,5 +152,55 @@ contains
             call kill_tracker
         end do
     end subroutine exec_tseries_track
+
+    subroutine exec_tseries_split( self, cline )
+        use simple_oris,     only: oris
+        use simple_ori,      only: ori
+        use simple_syscalls, only: exec_cmdline
+        class(tseries_split_commander), intent(inout) :: self
+        class(cmdline),                 intent(inout) :: cline
+        type(params) :: p
+        type(build)  :: b
+        type(ori)    :: o
+        type(oris)   :: os
+        character(len=:), allocatable :: stkname, oriname
+        integer :: i, iptcl, numlen, istart, istop, cnt, cnt2, ntot
+        p = params(cline) ! parameters generated
+        call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
+        numlen = len(int2str(p%nptcls))
+        ! count the number of chunks
+        ntot = 0
+        do i=1,p%nptcls,p%stepsz
+            istart = i
+            istop  = i + p%chunksz - 1
+            if( istop > p%nptcls ) exit
+            ntot = ntot + 1
+        end do
+        ! split
+        do i=1,p%nptcls,p%stepsz
+            istart = i
+            istop  = i + p%chunksz - 1
+            if( istop > p%nptcls ) exit
+            cnt    = cnt + 1
+            call progress(cnt,ntot)
+            call os%new(p%chunksz)
+            call exec_cmdline('mkdir -p '//'tseries_chunk'//int2str_pad(cnt,numlen))
+            allocate( stkname, source='./tseries_chunk'//int2str_pad(cnt,numlen)//'/imgs'//p%ext )
+            allocate( oriname, source='tseries_chunk'//int2str_pad(cnt,numlen)//'/oris'//'.txt' )
+            call del_file( stkname )
+            call del_file( oriname )
+            cnt2 = 0
+            do iptcl=istart,istop
+                cnt2 = cnt2 + 1
+                o = b%a%get_ori(iptcl)
+                call os%set_ori(cnt2, o)
+                call b%img%read(p%stk, iptcl)
+                call b%img%write(stkname,cnt2)
+            end do
+            call os%write(oriname)
+            call os%kill
+            deallocate(stkname, oriname)
+        end do
+    end subroutine exec_tseries_split
 
 end module simple_commander_tseries
