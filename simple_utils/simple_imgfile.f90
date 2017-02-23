@@ -65,6 +65,7 @@ contains
     procedure          :: getMode
     procedure          :: setIform
     procedure          :: setPixSz
+    procedure          :: setRMSD
     procedure          :: setMode
 end type
 
@@ -140,7 +141,10 @@ contains
             call self%overall_head%write(self%funit)
             if( debug ) print *, 'did write header'
         endif
-        call self%overall_head%setPixSz(smpd)
+        ! call self%overall_head%setPixSz(smpd)
+        ! REPLACED WITH THIS ONE TO MAKE THE FLAG WAS_WRITTEN TO TRUE
+        ! NEEDED FOR GETTING THE HEADER INFORMATION CORRECT
+        call self%setPixSz(smpd)
         if( debug ) call self%overall_head%print
         ! The file-handle now exists
         self%existence = .true.
@@ -472,9 +476,6 @@ contains
             class DEFAULT
                 stop 'Format not supported; rwSlices; simle_imgfile'
         end select
-
-        ! stop
-
         if( mode .eq. 'r' )then
             dims(3) = last_slice-first_slice+1
         else if( mode .eq. 'w' )then
@@ -509,9 +510,6 @@ contains
         else
             stop 'unsupported mode; rwSlices; simple_imgfile'
         endif
-
-        ! stop
-
         ! Check so that the array is properly allocated
         if( is_odd(dims(1)) )then
             arr_is_ready = size(rarr,1) .eq. dims(1)+1
@@ -807,7 +805,15 @@ contains
         call self%overall_head%setPixSz(smpd)
         self%was_written_to = .true.
     end subroutine setPixSz
-    
+
+    !>  \brief  Set the pixel size of the stack
+    subroutine setRMSD( self, dev )
+        class(imgfile), intent(inout) :: self
+        real,           intent(in)    :: dev
+        call self%overall_head%setRMSD(dev)
+        self%was_written_to = .true.
+    end subroutine setRMSD
+
     !>  \brief  Set the mode of the MRC file
     subroutine setMode( self, mode )
         class(imgfile), intent(inout) :: self

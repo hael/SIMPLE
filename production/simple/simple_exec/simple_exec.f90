@@ -109,6 +109,7 @@ type(respimg_commander)            :: xrespimg
 type(scale_commander)              :: xscale
 type(stack_commander)              :: xstack
 type(stackops_commander)           :: xstackops
+type(fixmapheader_commander)       :: xfixmapheader
     
 ! MISCELLANOUS PROGRAMS
 type(cluster_smat_commander)       :: xcluster_smat
@@ -1760,7 +1761,20 @@ select case(prg)
         call cline%parse( keys_required(:1),keys_optional(:21) )
         ! execute
         call xstackops%execute(cline)
-        
+    case( 'fixmapheader' )
+        !==Program fixmapheader
+        !
+        ! <fixmapheader/begin> is a program for curing the header and setting rmsd <fixmapheader/end>
+        ! Required keys
+        keys_required(1) = 'vol1'
+        keys_required(2) = 'smpd'
+        keys_required(3) = 'outvol'
+        ! parse command line
+        ! if( describe ) call print_doc_fixmapheader
+        call cline%parse( keys_required(:3) )
+        ! execute
+        call xfixmapheader%execute(cline)
+
     ! MISCELLANOUS PROGRAMS
         
     case( 'cluster_smat' )
@@ -2128,15 +2142,18 @@ select case(prg)
         !
         ! set required keys
         keys_required(1) = 'filetab'
-        keys_required(2) = 'boxfile'
-        keys_required(3) = 'fbody'
-        keys_required(4) = 'smpd'
-        keys_required(5) = 'lp'
+        keys_required(2) = 'fbody'
+        keys_required(3) = 'smpd'
+        keys_required(4) = 'lp'
         ! set optional keys
-        keys_optional(1)  = 'offset'
+        keys_optional(1)  = 'boxfile'
+        keys_optional(2)  = 'xcoord'
+        keys_optional(3)  = 'ycoord'
+        keys_optional(4)  = 'offset'
+        keys_optional(5)  = 'box'
         ! parse command line
         ! if( describe ) call print_doc_tseries_track
-        call cline%parse(keys_required(:5), keys_optional(:1))
+        call cline%parse(keys_required(:4), keys_optional(:4))
         ! execute
         call xtseries_track%execute(cline)
 

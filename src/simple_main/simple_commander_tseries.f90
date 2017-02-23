@@ -108,32 +108,52 @@ contains
         type(nrtxtfile)   :: boxfile
         integer           :: ndatlines, alloc_stat, j, orig_box, numlen
         real, allocatable :: boxdata(:,:)
-
         p = params(cline) ! parameters generated
+        numlen = 5 ! default value
+        orig_box = p%box
         ! check file inout existence and read filetables
-        if( .not. file_exists(p%filetab) ) stop 'inputted filetab does not exist in cwd'
-        if( .not. file_exists(p%boxfile)  ) stop 'inputted boxfile does not exist in cwd'
-
-        if( nlines(p%boxfile) > 0 )then
-            call boxfile%new(p%boxfile, 1)
-            ndatlines = boxfile%get_ndatalines()
-            numlen    = len(int2str(ndatlines))
-            allocate( boxdata(ndatlines,boxfile%get_nrecs_per_line()), stat=alloc_stat)
-            call alloc_err('In: simple_commander_tseries :: exec_tseries_track', alloc_stat)
-            do j=1,ndatlines
-                call boxfile%readNextDataLine(boxdata(j,:))
-                orig_box = nint(boxdata(j,3))
-                if( nint(boxdata(j,3)) /= nint(boxdata(j,4)) )then
-                    stop 'Only square windows are currently allowed!'
-                endif
-                call init_tracker(p%filetab, nint(boxdata(j,1:2)), orig_box, p%offset, p%smpd, p%lp)
-                call track_particle
-                call write_tracked_series(trim(p%fbody)//int2str_pad(j,numlen))
-                call kill_tracker
-            end do
+        if( .not. file_exists(p%filetab)  ) stop 'inputted filetab does not exist in cwd'
+        if( cline%defined('boxfile') )then
+            if( .not. file_exists(p%boxfile)  ) stop 'inputted boxfile does not exist in cwd'
+            if( nlines(p%boxfile) > 0 )then
+                call boxfile%new(p%boxfile, 1)
+                ndatlines = boxfile%get_ndatalines()
+                numlen    = len(int2str(ndatlines))
+                allocate( boxdata(ndatlines,boxfile%get_nrecs_per_line()), stat=alloc_stat)
+                call alloc_err('In: simple_commander_tseries :: exec_tseries_track', alloc_stat)
+                do j=1,ndatlines
+                    call boxfile%readNextDataLine(boxdata(j,:))
+                    orig_box = nint(boxdata(j,3))
+                    if( nint(boxdata(j,3)) /= nint(boxdata(j,4)) )then
+                        stop 'Only square windows are currently allowed!'
+                    endif
+                end do
+            else
+                stop 'inputted boxfile is empty; simple_commander_tseries :: exec_tseries_track'
+            endif
+        else if( cline%defined('xcoord') .and. cline%defined('ycoord') )then
+            if( .not. cline%defined('box') ) stop 'need box to be part of command linefor this mode of&
+            execution; simple_commander_tseries :: exec_tseries_track'
+            allocate( boxdata(1,2) )
+            boxdata(1,1) = real(p%xcoord)
+            boxdata(1,2) = real(p%ycoord)
+            ndatlines = 1
         else
-            stop 'inputted boxfile is empty; simple_commander_tseries :: exec_tseries_track'
+            stop 'need either boxfile or xcoord/ycoord to be part of command line&
+            &; simple_commander_tseries :: exec_tseries_track'
         endif
+        do j=1,ndatlines
+            call init_tracker(p%filetab, nint(boxdata(j,1:2)), orig_box, p%offset, p%smpd, p%lp)
+            call track_particle
+            if( cline%defined('ind') )then
+                if( .not. cline%defined('numlen') ) stop 'need numlen to be part of command line if ind is&
+                &; simple_commander_tseries :: exec_tseries_track'
+                call write_tracked_series(trim(p%fbody)//int2str_pad(p%ind,p%numlen))
+            else
+                call write_tracked_series(trim(p%fbody)//int2str_pad(j,numlen))
+            endif
+            call kill_tracker
+        end do
     end subroutine exec_tseries_track
 
 end module simple_commander_tseries

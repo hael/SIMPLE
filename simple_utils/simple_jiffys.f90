@@ -92,6 +92,7 @@ contains
                     ldim = hed%getDims()
                     smpd = hed%getPixSz()
                     if( doprint )then
+                        call hed%print
                         write(*,'(a,3(i0,1x))') 'Number of columns, rows, sections: ', ldim(1), ldim(2), ldim(3)
                         write(*,'(a,1x,f15.8)')  'Pixel size: ', smpd
                     endif

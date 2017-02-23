@@ -177,6 +177,7 @@ type :: image
     procedure          :: square_root
     procedure          :: maxcoord
     procedure          :: minmax
+    procedure          :: rmsd
     procedure          :: stats
     procedure          :: noisesdev
     procedure          :: est_noise_pow
@@ -751,24 +752,25 @@ contains
     end subroutine read
 
     !>  \brief  for writing any kind of images to stack or volumes to volume files
-    subroutine write( self, fname, i, del_if_exists, formatchar )
+    subroutine write( self, fname, i, del_if_exists, formatchar, rmsd )
         class(image),               intent(inout) :: self
         character(len=*),           intent(in)    :: fname
         integer,          optional, intent(in)    :: i
         logical,          optional, intent(in)    :: del_if_exists
         character(len=1), optional, intent(in)    :: formatchar
+        real,             optional, intent(in)    :: rmsd
         type(image) :: tmpimg
         if( self%imgkind .eq. 'xfel' )then
              call self%ft2img('real', tmpimg)
-             call tmpimg%write_emkind(fname, i, del_if_exists, formatchar=formatchar)
+             call tmpimg%write_emkind(fname, i, del_if_exists, formatchar=formatchar, rmsd=rmsd)
              call tmpimg%kill
         else
-            call self%write_emkind(fname, i, del_if_exists, formatchar=formatchar)
+            call self%write_emkind(fname, i, del_if_exists, formatchar=formatchar, rmsd=rmsd)
         endif
     end subroutine write
 
     !>  \brief  for writing emkind images to stack or volumes to volume files
-    subroutine write_emkind( self, fname, i, del_if_exists, formatchar )
+    subroutine write_emkind( self, fname, i, del_if_exists, formatchar, rmsd )
         use simple_imgfile,      only: imgfile
         use simple_filehandling, only: fname2format
         class(image),               intent(inout) :: self
@@ -776,6 +778,7 @@ contains
         integer,          optional, intent(in)    :: i
         logical,          optional, intent(in)    :: del_if_exists
         character(len=1), optional, intent(in)    :: formatchar
+        real,             optional, intent(in)    :: rmsd
         type(imgfile)     :: ioimg
         character(len=1)  :: form
         integer           :: first_slice, last_slice, iform, ii
@@ -818,6 +821,7 @@ contains
                     else
                         call ioimg%setMode(2)
                     endif
+                    if( present(rmsd) ) call ioimg%setRMSD(rmsd)
                 case('S')
                     ! pixel size of object overrides pixel size in header
                     call ioimg%open(fname, self%ldim, self%smpd, del_if_exists=die,&
@@ -3158,6 +3162,21 @@ contains
         mm(1) = minval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
         mm(2) = maxval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
     end function minmax
+
+    !>  \brief  for calculating the RMSD of a map
+    function rmsd( self ) result( dev )
+        class(image), intent(inout) :: self
+        real :: devmat(self%ldim(1),self%ldim(2),self%ldim(3)), dev, avg
+        if( self%ft ) stop 'rmsd not intended for Fourier transforms; simple_image :: rmsd'
+        avg    = self%mean()
+        devmat = self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - avg
+        dev    = sum(devmat**2.0)/real(product(self%ldim))
+        if( dev > 0. )then
+            dev = sqrt(dev)
+        else
+            dev = 0.
+        endif
+    end function rmsd
 
     !>  \brief  is for estimating the noise variance of an image
     !!          by online estimation of the variance of the background pixels

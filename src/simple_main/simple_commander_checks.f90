@@ -79,7 +79,7 @@ contains
             call find_ldim_nptcls(p%fname, ldim, maxim, doprint=.true.)
         endif
         p%box  = ldim(1)
-        p%smpd = smpd          !! UNDEFINED
+        ! p%smpd = smpd          !! UNDEFINED
         call img%new([ldim(1),ldim(2),1],p%smpd)
         if( p%vis .eq. 'yes' .or. p%stats .ne. 'no' )then
             do i=1,maxim

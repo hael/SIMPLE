@@ -30,6 +30,7 @@ public :: respimg_commander
 public :: scale_commander
 public :: stack_commander
 public :: stackops_commander
+public :: fixmapheader_commander
 private
 
 type, extends(commander_base) :: binarise_commander
@@ -76,6 +77,10 @@ type, extends(commander_base) :: respimg_commander
   contains
     procedure :: execute      => exec_respimg
 end type respimg_commander
+type, extends(commander_base) :: fixmapheader_commander
+  contains
+    procedure :: execute      => exec_fixmapheader
+end type fixmapheader_commander
 
 contains
     
@@ -1210,5 +1215,30 @@ contains
         end subroutine prep_ctfsq
 
     end subroutine exec_respimg
+
+    ! vol1
+    ! smpd
+    ! outvol
+
+    subroutine exec_fixmapheader( self, cline )
+        use simple_image,   only: image
+        use simple_imgfile, only: imgfile
+        class(fixmapheader_commander), intent(inout) :: self
+        class(cmdline),                intent(inout) :: cline
+        type(params) :: p
+        type(image)  :: img 
+        real         :: dev
+        integer      :: ldim(3), maxim
+        p = params(cline) ! parameters generated
+        ! read vol
+        call find_ldim_nptcls(p%vols(1), ldim, maxim)
+        call img%new(ldim, p%smpd)
+        call img%read(p%vols(1))
+        ! set RMSD
+        dev = img%rmsd()
+        ! header will be sorted on write
+        call img%write(p%outvol, rmsd=dev)
+    end subroutine exec_fixmapheader
+
 
 end module simple_commander_imgproc

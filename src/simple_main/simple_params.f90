@@ -184,6 +184,7 @@ type :: params
     integer :: fstep=1
     integer :: grow=0
     integer :: iares=10
+    integer :: ind=0
     integer :: iptcl=1
     integer :: jptcl=1
     integer :: jumpsz=0
@@ -246,6 +247,8 @@ type :: params
     integer :: trsstep=1
     integer :: update=1000
     integer :: which_iter=0
+    integer :: xcoord=0
+    integer :: ycoord=0
     integer :: xdim=0
     integer :: xdimpd=0
     integer :: ydim=0
@@ -521,6 +524,7 @@ contains
         call check_iarg('fstep',          self%fstep)
         call check_iarg('grow',           self%grow)
         call check_iarg('iares',          self%iares)
+        call check_iarg('ind',            self%ind)
         call check_iarg('jumpsz',         self%jumpsz)
         call check_iarg('maxits',         self%maxits)
         call check_iarg('maxp',           self%maxp)
@@ -572,6 +576,8 @@ contains
         call check_iarg('update',         self%update)
         call check_iarg('which_iter',     self%which_iter)
         call check_iarg('xdim',           self%xdim)
+        call check_iarg('xcoord',         self%xcoord)
+        call check_iarg('ycoord',         self%ycoord)
         call check_iarg('ydim',           self%ydim)
         call check_rarg('alpha',          self%alpha)
         call check_rarg('amsklp',         self%amsklp)

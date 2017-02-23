@@ -218,7 +218,9 @@ contains
         call chdict%push('ext',           'file extension{.mrc}')
         call chdict%push('stream',        'sream (real time) execution mode(yes|no){no}')
         call chdict%push('tseries',       'images represent a time-series(yes|no){no}')
-        call chdict%push('offset',       'pixels offset{7}')
+        call chdict%push('offset',        'pixels offset{7}')
+        call chdict%push('xcoord',        'x coordinate{0}')
+        call chdict%push('ycoord',        'y coordinate{0}')
         initialised = .true.
     end subroutine init_cmd_dict
     

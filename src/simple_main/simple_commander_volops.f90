@@ -201,7 +201,7 @@ contains
         integer                            :: istate, ivol, nvols, funit_vols, numlen, ifoo
         character(len=:), allocatable      :: fname
         character(len=1)                   :: fformat
-        logical, parameter                 :: debug=.true.
+        logical, parameter                 :: debug=.false.
         p = params(cline) ! parameters generated
         ! read the volnames
         nvols = nlines(p%vollist)

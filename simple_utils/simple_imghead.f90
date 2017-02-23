@@ -71,6 +71,7 @@ contains
     procedure :: getMaxim
     procedure :: setMaxim
     procedure :: setMode
+    procedure :: setRMSD
     procedure :: getIform
     procedure :: getMode
     procedure :: setIform
@@ -381,7 +382,7 @@ contains
                 self%originz = 0
                 self%map     = 'MAP '
                 self%machst  = 0
-                self%rms     = 0.0
+                self%rms     = 1.0
                 self%nlabl   = 0
                 do i=1,NLABL
                     self%label(i) = ' '
@@ -1310,6 +1311,16 @@ contains
                 self%mode = mode
         end select
     end subroutine
+
+    !>  \brief  Set the root-mean-square deviation
+    subroutine setRMSD( self, RMSD )
+        class(ImgHead), intent(inout) :: self
+        real,           intent(in)    :: RMSD
+        select type( self )
+            type is( MrcImgHead )
+                self%rms = RMSD
+        end select
+    end subroutine setRMSD
     
     ! POLYMORPHIC DESTRUCTOR
 

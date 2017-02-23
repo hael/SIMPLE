@@ -148,6 +148,7 @@ froms
 fstep
 grow
 iares
+ind
 iptcl
 jptcl
 jumpsz
@@ -208,6 +209,8 @@ tos
 trsstep
 update
 which_iter
+xcoord
+ycoord
 xdim
 xdimpd
 ydim
