@@ -63,6 +63,7 @@ contains
         do s=1,self%pp%nstates
             call preprefvol( b, p, cline, s )
             self%refvols(s) = b%vol
+            call self%refvols(s)%build_cmat_expanded( b%proj%get_harwin_exp() )
         end do
         self%existence = .true.
     end subroutine new
@@ -150,8 +151,7 @@ contains
         integer,                intent(in)    :: iref
         integer   :: s
         s = nint(o%get('state'))
-        call self%bp%proj%fproject(self%refvols(s), o, self%img_refs(iref), self%pp%lp)
-        !call self%bp%proj%fproject(self%refvols(s), o, self%img_refs(iref) )
+        call self%bp%proj%fproject_expanded(self%refvols(s), o, self%img_refs(iref) )
         if( self%pp%ctf .ne. 'no' )then
             call self%create_ctf_image(o)
             call self%img_refs(iref)%mul( self%img_ctf )

@@ -221,32 +221,30 @@ contains
         enddo
         noris_state = b%a%get_statepop( p%state )
         a_backup = b%a
-        call exec_rec_master( b, p, cline )
+        if( .not.cline%defined('vol1') )call exec_rec_master( b, p, cline )
         call preppftcc4align( b, p, cline )
+        call primesrch3D%kill
         call calc_corrs( b%a )
         ! Main loop
         ntot_excl = 0
+        frac_lim  = 1.
         do it = 1, maxits
             ntot_excl_prev = ntot_excl
-            prev_a = b%a
-            prev_frac_lim = frac_lim
+            prev_a         = b%a
+            prev_frac_lim  = frac_lim
             call exclude_ptcls( b%a, p%state, n_incl, n_excl )
             ntot_excl = ntot_excl + n_excl
-            frac_lim  = real(ntot_excl_prev)/real(ntot_excl)*100.
-            print *, 'IT ',it,ntot_excl, frac_lim
+            frac_lim  = real(ntot_excl_prev)/real(ntot_excl)
+            print *, 'IT ',it,ntot_excl, frac_lim, n_incl, p%minp, frac_lim/prev_frac_lim, prev_frac_lim
             if( n_incl <= p%minp )then
                 minp_reached = .true.
                 exit
             endif
-            if( frac_lim > .95 )exit
+            if( frac_lim/prev_frac_lim > .90 )exit
             call write_docs
             call exec_rec_master( b, p, cline )
-            if( it==1 )then
-                call primesrch3D%kill
-            else
-                call prep_refs_pftcc4align( b, p, cline )
-            endif
-            call calc_corrs( b%a ) ! shift search here
+            call prep_refs_pftcc4align( b, p, cline )
+            call shift_srch( b%a ) ! shift search here
         enddo
         b%a = prev_a
         ntot_excl = ntot_excl_prev
@@ -285,7 +283,7 @@ contains
             subroutine exclude_ptcls( os, state, in_incl, in_excl )
                 class(oris), intent(inout) :: os
                 integer, intent(in)        :: state
-                integer, intent(inout)     ::in_incl, in_excl
+                integer, intent(inout)     :: in_incl, in_excl
                 real, allocatable    :: corrs(:)
                 integer, allocatable :: states(:), labels(:)
                 real    :: means(nbins)
@@ -302,7 +300,10 @@ contains
                         corrs( cnt ) = os%get( i,'corr' )
                     endif
                 enddo
-                call sortmeans(corrs, 20, means, labels)
+                call sortmeans(corrs, nbins, means, labels)
+                do i=1,nbins
+                    print *,i,count( labels==i )
+                enddo
                 cnt     = 0
                 in_excl = 0
                 in_incl = 0
@@ -325,23 +326,51 @@ contains
                 class(oris), intent(inout) :: os
                 type(ori) :: o
                 real      :: corr
-                integer   :: iptcl, roind, ref, proj, state, noris
+                integer   :: iptcl, roind, proj, state, noris
                 write(*,'(A)')'>>> CORRELATIONS CALCULATION'
                 call os%set_all2single( 'corr',-1.)
                 noris = b%a%get_noris()
                 do iptcl = 1, noris
-                    call progress( iptcl, noris )
-                    call preprefs4align(b, p, iptcl, pftcc)
                     o     = os%get_ori( iptcl )
                     state = nint( o%get( 'state' ) )
                     if( state.eq.0 .or. state.ne.p%state )cycle
+                    call preprefs4align(b, p, iptcl, pftcc)
                     roind = srch_common%roind( 360.-o%e3get() )
                     proj  = b%e%find_closest_proj( o )
-                    ref   = proj                              ! previous reference
-                    corr  = pftcc%corr( ref, iptcl, roind )   ! previous correlation
+                    corr  = pftcc%corr( proj, iptcl, roind )
                     call os%set( iptcl, 'corr', corr )
+                    call progress( iptcl, noris )
                 enddo
             end subroutine calc_corrs
+
+            subroutine shift_srch( os )
+                use simple_pftcc_shsrch
+                class(oris), intent(inout) :: os
+                type(ori) :: o
+                real      :: corr, lims(2,2), cxy(3)
+                integer   :: iptcl, roind, proj, state, noris
+                write(*,'(A)')'>>> SHIFT SEARCH & CORRELATIONS CALCULATION'
+                lims(1,:) = -p%trs
+                lims(2,:) =  p%trs
+                call pftcc_shsrch_init( pftcc, lims)
+                noris = b%a%get_noris()
+                do iptcl = 1, noris
+                    o     = os%get_ori( iptcl )
+                    state = nint( o%get( 'state' ) )
+                    if( state.eq.0 )cycle
+                    corr  = o%get('corr')
+                    call preprefs4align(b, p, iptcl, pftcc)
+                    proj  = b%e%find_closest_proj( o )
+                    roind = srch_common%roind( 360.-o%e3get() )
+                    call pftcc_shsrch_set_indices( proj, iptcl, roind )
+                    cxy = pftcc_shsrch_minimize()
+                    if( cxy(1) >= corr )then
+                        call o%set('corr', cxy(1))
+                        call o%set_shift( o%get_shift() + cxy(2:3) )
+                    endif
+                    call progress( iptcl, noris )
+                enddo
+            end subroutine shift_srch
 
     end subroutine exec_het_init
 
