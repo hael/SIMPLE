@@ -605,6 +605,7 @@ select case(prg)
         call cline%parse(keys_required(:6), keys_optional(:1))
         ! set defaults
         call cline%set('nthr', 1.0)
+        if( .not. cline%defined('neg') ) call cline%set('neg', 'yes')
         ! execute
         call xtseries_track_distr%execute( cline )
 

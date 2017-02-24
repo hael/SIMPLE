@@ -2156,6 +2156,8 @@ select case(prg)
         ! parse command line
         ! if( describe ) call print_doc_tseries_track
         call cline%parse(keys_required(:4), keys_optional(:6))
+        ! set defaults
+        if( .not. cline%defined('neg') ) call cline%set('neg', 'yes')
         ! execute
         call xtseries_track%execute(cline)
     case( 'tseries_split' )
