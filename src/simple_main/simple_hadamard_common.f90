@@ -143,7 +143,6 @@ contains
             if( allocated(res_pad) ) deallocate(res_pad)
             res_pad = b%img_pad%get_res()
         endif
-        
         if( p%l_distr_exec )then
             call wmat_from_single_file
             if( doshellweight )then

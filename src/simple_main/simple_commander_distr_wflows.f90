@@ -1281,7 +1281,9 @@ contains
         else
             stop 'inputted boxfile is empty; simple_commander_tseries :: exec_tseries_track'
         endif
-        p_master%nptcls = nlines(p_master%boxfile)
+        call boxfile%kill
+        call cline%delete('boxfile')
+        p_master%nptcls = ndatlines
         p_master%nparts = p_master%nptcls
         if( p_master%ncunits > p_master%nparts )&
         &stop 'nr of computational units (ncunits) mjust be <= number of entries in boxfiles'
@@ -1291,9 +1293,10 @@ contains
         ! prepare part-dependent parameters
         allocate(part_params(p_master%nparts))
         do ipart=1,p_master%nparts
-            call part_params(ipart)%new(2)
-            call part_params(ipart)%set('xcoord', real2str(boxdata(ndatlines,1)))
-            call part_params(ipart)%set('ycoord', real2str(boxdata(ndatlines,2)))
+            call part_params(ipart)%new(3)
+            call part_params(ipart)%set('xcoord', real2str(boxdata(ipart,1)))
+            call part_params(ipart)%set('ycoord', real2str(boxdata(ipart,2)))
+            call part_params(ipart)%set('ind',    int2str(ipart))
         end do
         ! setup the environment for distributed execution
         call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr)

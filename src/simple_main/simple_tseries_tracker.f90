@@ -73,9 +73,10 @@ contains
         end do
     end subroutine track_particle
 
-    subroutine write_tracked_series( fbody )
+    subroutine write_tracked_series( fbody, neg )
         use simple_filehandling, only: get_fileunit
         character(len=*), intent(in) :: fbody
+        character(len=*), intent(in) :: neg
         integer :: funit, iframe, xind, yind
         funit = get_fileunit()
         open(unit=funit, status='REPLACE', action='WRITE', file=trim(fbody)//'.box')
@@ -85,6 +86,8 @@ contains
             write(funit,'(I7,I7,I7,I7,I7)') xind, yind, box, box, -3
             call frame_img%read(framenames(iframe),1)
             call frame_img%window_slim([xind,yind,1], box, reference)
+            if( neg .eq. 'yes' ) call reference%neg
+            call reference%norm
             call reference%write(trim(fbody)//'.mrc', iframe)
         end do
         close(funit)

@@ -987,11 +987,9 @@ contains
         ! prepare CTF plan
         self%tfplan%flag = self%ctf
         ! set logical shellw flag
-        self%l_shellw = .false.
+        self%l_shellw = .true.
         if( cline%defined('shellw') )then
-            if( self%shellw .eq. 'yes'     ) self%l_shellw = .true.
-        else
-            if( self%tfplan%flag .ne. 'no' ) self%l_shellw = .true.
+            if( self%shellw .eq. 'no' ) self%l_shellw = .false.
         endif
         write(*,'(A)') '>>> DONE PROCESSING PARAMETERS'
 

@@ -105,7 +105,7 @@ contains
         type(nrtxtfile)   :: boxfile
         integer           :: ndatlines, alloc_stat, j, orig_box, numlen
         real, allocatable :: boxdata(:,:)
-        p = params(cline) ! parameters generated
+        p = params(cline, checkdistr=.false.) ! parameters generated
         numlen = 5 ! default value
         orig_box = p%box
         ! check file inout existence and read filetables
@@ -145,9 +145,9 @@ contains
             if( cline%defined('ind') )then
                 if( .not. cline%defined('numlen') ) stop 'need numlen to be part of command line if ind is&
                 &; simple_commander_tseries :: exec_tseries_track'
-                call write_tracked_series(trim(p%fbody)//int2str_pad(p%ind,p%numlen))
+                call write_tracked_series(trim(p%fbody)//int2str_pad(p%ind,p%numlen), p%neg)
             else
-                call write_tracked_series(trim(p%fbody)//int2str_pad(j,numlen))
+                call write_tracked_series(trim(p%fbody)//int2str_pad(j,numlen), p%neg)
             endif
             call kill_tracker
         end do

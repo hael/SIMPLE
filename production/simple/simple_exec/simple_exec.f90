@@ -2152,9 +2152,10 @@ select case(prg)
         keys_optional(3)  = 'ycoord'
         keys_optional(4)  = 'offset'
         keys_optional(5)  = 'box'
+        keys_optional(6)  = 'neg'
         ! parse command line
         ! if( describe ) call print_doc_tseries_track
-        call cline%parse(keys_required(:4), keys_optional(:4))
+        call cline%parse(keys_required(:4), keys_optional(:6))
         ! execute
         call xtseries_track%execute(cline)
     case( 'tseries_split' )

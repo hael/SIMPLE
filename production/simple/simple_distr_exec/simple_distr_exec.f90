@@ -35,6 +35,8 @@ type(prime3D_distr_commander)            :: xprime3D_distr
 type(cont3D_distr_commander)             :: xcont3D_distr
 type(shellweight3D_distr_commander)      :: xshellweight3D_distr
 type(recvol_distr_commander)             :: xrecvol_distr
+! time-series workflows
+type(tseries_track_distr_commander)      :: xtseries_track_distr
 ! high-level workflows
 type(ini3D_from_cavgs_commander)         :: xini3D_from_cavgs
 
@@ -580,6 +582,31 @@ select case(prg)
         if( .not. cline%defined('eo')  ) call cline%set('eo', 'no')
         ! execute
         call xrecvol_distr%execute( cline )
+
+    ! TIME-SERIES DISTRIBUTED WORKFLOWS
+
+    case( 'tseries_track' )
+        !==Program tseries_track
+        !
+        ! <tseries_extract/begin>is a program for particle tracking in time-series data
+        ! <tseries_extract/end> 
+        !
+        ! set required keys
+        keys_required(1) = 'filetab'
+        keys_required(2) = 'fbody'
+        keys_required(3) = 'smpd'
+        keys_required(4) = 'lp'
+        keys_required(5) = 'boxfile'
+        keys_required(6) = 'ncunits'
+        ! set optional keys
+        keys_optional(1)  = 'offset'
+        ! parse command line
+        ! if( describe ) call print_doc_tseries_track
+        call cline%parse(keys_required(:6), keys_optional(:1))
+        ! set defaults
+        call cline%set('nthr', 1.0)
+        ! execute
+        call xtseries_track_distr%execute( cline )
 
     ! HIGH-LEVEL DISTRIBUTED WORKFLOWS
 
