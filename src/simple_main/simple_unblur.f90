@@ -180,15 +180,16 @@ contains
                     
     end subroutine unblur_movie
 
-    subroutine unblur_calc_sums( movie_sum, movie_sum_corrected, movie_sum_ctf )
-        type(image), intent(out) :: movie_sum, movie_sum_corrected, movie_sum_ctf
+    subroutine unblur_calc_sums( movie_sum, movie_sum_corrected, movie_sum_ctf, fromto )
+        type(image),       intent(out) :: movie_sum, movie_sum_corrected, movie_sum_ctf
+        integer, optional, intent(in)  :: fromto(2)
         integer :: iframe
         ! calculate the sum for CTF estimation
         call sum_movie_frames(opt_shifts)
         movie_sum_ctf = movie_sum_global
         call movie_sum_ctf%bwd_ft
         ! re-calculate the weighted sum
-        call wsum_movie_frames(opt_shifts)
+        call wsum_movie_frames(opt_shifts, fromto)
         movie_sum_corrected = movie_sum_global
         call movie_sum_corrected%bwd_ft
         ! generate straight integrated movie frame for comparison
@@ -398,14 +399,18 @@ contains
         end do
     end subroutine wsum_movie_frames_ftexp
 
-    subroutine wsum_movie_frames( shifts )
-        real, intent(in)  :: shifts(nframes,2)
+    subroutine wsum_movie_frames( shifts, fromto )
+        real,              intent(in) :: shifts(nframes,2)
+        integer, optional, intent(in) :: fromto(2)
         real, allocatable :: filter(:)
-        integer :: iframe
+        integer :: iframe, ffromto(2)
         call movie_sum_global%new(ldim_scaled, smpd_scaled)
         call movie_sum_global%set_ft(.true.)
         call frame_tmp%new(ldim_scaled, smpd_scaled)
-        do iframe=1,nframes
+        ffromto(1) = 1
+        ffromto(2) = nframes
+        if( present(fromto) ) ffromto = fromto
+        do iframe=ffromto(1),ffromto(2)
             if( frameweights(iframe) > 0. )then
                 call movie_frames_scaled(iframe)%shift(-shifts(iframe,1), -shifts(iframe,2), imgout=frame_tmp)
                 if( do_dose_weight )then

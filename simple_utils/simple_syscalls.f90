@@ -121,7 +121,7 @@ contains
     subroutine sys_gen_mrcfiletab( dir, filetabname )
         character(len=*),      intent(in)  :: dir, filetabname
         character(len=STDLEN), allocatable :: cmd
-        cmd = 'ls '//trim(dir)//'/*.mrc*'//' > '//trim(filetabname)
+        cmd = 'ls -tr '//trim(dir)//'/*.mrc*'//' > '//trim(filetabname)
         call exec_cmdline(cmd)
     end subroutine sys_gen_mrcfiletab
 

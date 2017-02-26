@@ -449,9 +449,11 @@ select case(prg)
         keys_optional(12) = 'scale'
         keys_optional(13) = 'frameavg'
         keys_optional(14) = 'tomo'
+        keys_optional(15) = 'fromf'
+        keys_optional(16) = 'tof'
         ! parse command line
         if( describe ) call print_doc_unblur
-        call cline%parse(keys_required(:2), keys_optional(:14))
+        call cline%parse(keys_required(:2), keys_optional(:16))
         ! set defaults
         if( .not. cline%defined('trs')     ) call cline%set('trs',      5.)
         if( .not. cline%defined('lpstart') ) call cline%set('lpstart', 15.)
@@ -2049,7 +2051,7 @@ select case(prg)
         keys_optional(7)  = 'e3'
         keys_optional(8)  = 'trs'
         keys_optional(9)  = 'nstates'
-        keys_optional(10)  = 'pgrp'
+        keys_optional(10) = 'pgrp'
         keys_optional(11) = 'defocus'
         keys_optional(12) = 'deftab'
         keys_optional(13) = 'angerr'

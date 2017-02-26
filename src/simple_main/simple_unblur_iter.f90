@@ -75,7 +75,13 @@ contains
         if( p%tomo .eq. 'yes' )then
             call unblur_calc_sums_tomo(frame_counter, p%time_per_frame, self%moviesum, self%moviesum_corrected, self%moviesum_ctf)
         else
-            call unblur_calc_sums(self%moviesum, self%moviesum_corrected, self%moviesum_ctf)
+            if( cline%defined('fromf') )then
+                if( .not. cline%defined('tof') ) stop 'need tof to be part of the command line in conjunction with fromf;&
+                & simple_unblur_iter :: iterate'
+                call unblur_calc_sums(self%moviesum, self%moviesum_corrected, self%moviesum_ctf, fromto=[p%fromf,p%tof])
+            else
+                call unblur_calc_sums(self%moviesum, self%moviesum_corrected, self%moviesum_ctf)
+            endif
             if( DEBUG )then
                 print *, 'ldim(moviesum):           ', self%moviesum%get_ldim()
                 print *, 'ldim(moviesum_corrected): ', self%moviesum_corrected%get_ldim()
