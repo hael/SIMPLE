@@ -2147,19 +2147,20 @@ select case(prg)
         keys_required(1) = 'filetab'
         keys_required(2) = 'fbody'
         keys_required(3) = 'smpd'
-        keys_required(4) = 'lp'
         ! set optional keys
-        keys_optional(1)  = 'boxfile'
-        keys_optional(2)  = 'xcoord'
-        keys_optional(3)  = 'ycoord'
-        keys_optional(4)  = 'offset'
-        keys_optional(5)  = 'box'
-        keys_optional(6)  = 'neg'
+        keys_optional(1)  = 'lp'
+        keys_optional(2)  = 'boxfile'
+        keys_optional(3)  = 'xcoord'
+        keys_optional(4)  = 'ycoord'
+        keys_optional(5)  = 'offset'
+        keys_optional(6)  = 'box'
+        keys_optional(7)  = 'neg'
         ! parse command line
         ! if( describe ) call print_doc_tseries_track
-        call cline%parse(keys_required(:4), keys_optional(:6))
+        call cline%parse(keys_required(:3), keys_optional(:7))
         ! set defaults
         if( .not. cline%defined('neg') ) call cline%set('neg', 'yes')
+        if( .not. cline%defined('lp')  ) call cline%set('lp',    2.0)
         ! execute
         call xtseries_track%execute(cline)
     case( 'tseries_split' )

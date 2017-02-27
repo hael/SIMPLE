@@ -443,27 +443,30 @@ These steps describe a typical SIMPLE workflow.
 \end{enumerate}
 For hands-on descriptions for how to execute the individual steps, please refer to the documentation of each program (below) and the SIMPLE workshop material, available at (INSERTREF).
 
-\subsection{Unresolved Bugs}
-On certain systems the file-system and/or the master node becomes overloaded by the volassemble step when executing \prgname{prime3D} and gives odd errors. For example, it fails to open the submit script files for writing and then goes on trying to submit non-existing scripts. We have tried to add a linux \texttt{sync} command in the \texttt{qsys\_cleanup} subroutine and we are flushing all the file-handles every iteration, but the error nevertheless occurs. The problem has been nailed down to a being volassemble-related, as if the volassemble step is taken out and the current map is simply copied to the \texttt{vol\_iter} name, the problem never occurs. The error looks as follows
-\begin{verbatim}
- System error        4096  for command: echo DISTRIBUTED MODE :: submitting scripts:ls -1  
- distr_simple_script_*REPLACEWRITEsimple_qsys_ctrl :: submit_scripts#!/bin/bashdistr_
- simple_script_simple_qsys_ctrl :: gen_qsys_script; Error when opening file for writing:  ;  
- qsys_namelocalyescd cmdstat /= 0, command could not be executed: echo DISTRIBUTED  
- MODE :: submitting scripts:ls -1 distr_simple_script_*REPLACEWRITEsimple_qsys_ctrl :: 
- submit_scripts#!/bin/bashdistr_simple_script_simple_qsys_ctrl :: gen_qsys_script; Error 
- when opening file for writing:  ; qsys_namelocalyescd
- Termination status of the command-language interpreter cannot be obtained
- System error        4096  for command: ls -1 distr_simple_script_*REPLACEWRITE
- simple_qsys_ctrl :: submit_scripts#!/bin/bashdistr_simple_script_simple_qsys_ctrl :: 
- gen_qsys_script; Error when opening file for writing:  ; qsys_namelocalyescd   > OUT
- simple_qsys_scripts :: gen_qsys_scri cmdstat /= 0, command could not be executed: 
- ls -1 distr_simple_script_*REPLACEWRITEsimple_qsys_ctrl :: submit_scripts
- #!/bin/bashdistr_simple_script_simple_qsys_ctrl :: gen_qsys_script; Error when opening 
- file for writing:  ; qsys_namelocalyescd   > OUTsimple_qsys_scripts :: gen_qsys_scri
- Termination status of the command-language interpreter cannot be obtained
-\end{verbatim}
-and when it occurs, you need to restart \prgname{prime3D} from the last completed iteration.
+\subsection{Workflows for Analysis of Time-series data of Nanoparticles Spinning in Solution}
+In addition to providing algorithms for analysis of electron microscopic projection images of biological molecules, SIMPLE also provides support for time-series analysis of nanoparticles spinning in solution.
+\subsubsection{Time-series Pre-processing}
+\begin{enumerate}
+\item Convert the time-series from \texttt{*.dm4} format to the \texttt{*.mrc} format using the \prgname{dm42mrc.pl} script. This script assumes that you have \texttt{EMAN2} installed on your system.
+\item Use the \prgname{tseries\_extract} program to generate overlapping windows of frames in the time series. We recommend a window size of 5. This program is executed via \texttt{simple\_exec prg=tseries\_extract}. The \texttt{frameavg} flag controls the size of the time-window.
+\item Correct for stage drift and global beam-induced motion by processing the \texttt{*tseries\_frames*} stacks with \prgname{unblur}. It is important that you set \texttt{lpstart=5} and \texttt{lpstop=3} in addition to the required input parameters.
+\item Use \texttt{EMAN1.9} or \texttt{EMAN2} to identify, in the first motion corrected frame, the particles that you want to track throughout the time-series. Write out a \texttt{*.box} file with the particle coordinates.
+\item Use the \texttt{*.box} file created in the previous step in conjunction with the motion-corrected frames as input to the program \prgname{tseries\_track} to generate individual stacks of images representing the windowed nanoparticles as a function of time from the first to the last frame. Please execute \prgname{tseries\_track} using the \texttt{simple\_distr\_exec} binary. This will run the tracker in parallel mode with one CPU allocated per particle. The \texttt{ncunit} parameter controls the number of CPUs being used and this number cannot be larger than the number of particles to track in parallel.
+Once the pre-processing workflow has been finalised, the problem becomes a standard single-particle reconstruction problem (one per particle stack). However, as SIMPLE was originally designed for biological single-particle EM image processing, there are a few parameter tuning strategies to consider (described below).
+
+
+
+\end{enumerate}
+
+
+\subsubsection{Time-series \textit{Ab Initio} 3D Reconstruction}
+
+
+
+
+\subsubsection{Time-resolved State Sorting}
+
+
 
 \section{Command Line Dictionary}
 \begin{tabular}{ll}

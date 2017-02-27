@@ -597,17 +597,18 @@ select case(prg)
         keys_required(1) = 'filetab'
         keys_required(2) = 'fbody'
         keys_required(3) = 'smpd'
-        keys_required(4) = 'lp'
-        keys_required(5) = 'boxfile'
-        keys_required(6) = 'ncunits'
+        keys_required(4) = 'boxfile'
+        keys_required(5) = 'ncunits'
         ! set optional keys
-        keys_optional(1)  = 'offset'
+        keys_optional(1) = 'lp'
+        keys_optional(2) = 'offset'
         ! parse command line
         ! if( describe ) call print_doc_tseries_track
-        call cline%parse(keys_required(:6), keys_optional(:1))
+        call cline%parse(keys_required(:5), keys_optional(:2))
         ! set defaults
         call cline%set('nthr', 1.0)
         if( .not. cline%defined('neg') ) call cline%set('neg', 'yes')
+        if( .not. cline%defined('lp')  ) call cline%set('lp',    2.0)
         ! execute
         call xtseries_track_distr%execute( cline )
 
