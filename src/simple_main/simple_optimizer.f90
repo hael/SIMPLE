@@ -13,9 +13,10 @@ private
 
 type, abstract :: optimizer
   contains
-    procedure(generic_new),      deferred :: new
-    procedure(generic_minimize), deferred :: minimize
-    procedure(generic_kill),     deferred :: kill 
+    procedure(generic_new),          deferred :: new
+    procedure(generic_minimize),     deferred :: minimize
+    procedure(generic_get_vertices), deferred :: get_vertices
+    procedure(generic_kill),         deferred :: kill
 end type
 
 abstract interface
@@ -36,12 +37,22 @@ abstract interface
         class(opt_spec), intent(inout)  :: spec
         real, intent(out)               :: lowest_cost
     end subroutine generic_minimize
-    
+
+    !> \brief  getter of vertices and their cost for simplex only
+    subroutine generic_get_vertices( self, spec, vertices, costs )
+        use simple_opt_spec, only: opt_spec
+        import :: optimizer
+        class(optimizer),  intent(inout) :: self
+        class(opt_spec),   intent(inout) :: spec
+        real, allocatable ,intent(inout) :: vertices(:,:), costs(:)
+    end subroutine generic_get_vertices
+
     !>  \brief  is a destructor
     subroutine generic_kill( self ) 
         import :: optimizer
         class(optimizer), intent(inout) :: self
     end subroutine generic_kill
+
  
 end interface
 

@@ -24,9 +24,10 @@ type, extends(optimizer) :: bforce_opt
     real                 :: yb=0.          !< best cost function value
     logical              :: exists=.false. !< to indicate existence
   contains
-    procedure :: new      => new_bforce_opt
-    procedure :: minimize => bforce_minimize
-    procedure :: kill     => kill_bforce_opt
+    procedure :: new          => new_bforce_opt
+    procedure :: minimize     => bforce_minimize
+    procedure :: get_vertices => bforce_get_vertices
+    procedure :: kill         => kill_bforce_opt
 end type
 
 contains
@@ -117,7 +118,16 @@ contains
             end function
             
     end subroutine
-    
+
+    !> \brief  dummy procedure, only defined in simplex
+    subroutine bforce_get_vertices( self, spec, vertices, costs )
+        use simple_opt_spec,           only: opt_spec
+        class(bforce_opt), intent(inout) :: self
+        class(opt_spec),    intent(inout) :: spec
+        real, allocatable,  intent(inout) :: vertices(:,:), costs(:)
+        stop 'procedure only defined for simplex optimisation'
+    end subroutine bforce_get_vertices
+
     !> \brief  is a destructor
     subroutine kill_bforce_opt( self )
         class(bforce_opt), intent(inout) :: self

@@ -18,9 +18,10 @@ type, extends(optimizer) :: particle_swarm_opt
     real              :: gamma   = 1.5    !< control parameter [1.5,2.5]
     logical           :: exists = .false. !< to indicate existence
   contains
-    procedure :: new      => new_particle_swarm
-    procedure :: minimize => particle_swarm_minimize
-    procedure :: kill     => kill_particle_swarm
+    procedure :: new          => new_particle_swarm
+    procedure :: minimize     => particle_swarm_minimize
+    procedure :: get_vertices => particle_get_vertices
+    procedure :: kill         => kill_particle_swarm
 end type particle_swarm_opt
 
 logical, parameter :: debug=.false.
@@ -147,7 +148,16 @@ contains
         end subroutine update_particle
     
     end subroutine particle_swarm_minimize
-    
+
+    !> \brief  dummy procedure, only defined in simplex
+    subroutine particle_get_vertices( self, spec, vertices, costs )
+        use simple_opt_spec,           only: opt_spec
+        class(particle_swarm_opt), intent(inout) :: self
+        class(opt_spec),    intent(inout) :: spec
+        real, allocatable,  intent(inout) :: vertices(:,:), costs(:)
+        stop 'procedure only defined for simplex optimisation'
+    end subroutine particle_get_vertices
+
     !> \brief  is a destructor
     subroutine kill_particle_swarm( self )
         class(particle_swarm_opt), intent(inout) :: self !< instance

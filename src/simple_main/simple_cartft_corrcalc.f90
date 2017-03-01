@@ -63,7 +63,7 @@ contains
         do s=1,self%pp%nstates
             call preprefvol( b, p, cline, s )
             self%refvols(s) = b%vol
-            call self%refvols(s)%build_cmat_expanded( b%proj%get_harwin_exp() )
+            call self%refvols(s)%cmat2expanded( b%proj%get_harwin_exp() )
         end do
         self%existence = .true.
     end subroutine new

@@ -171,11 +171,14 @@ type :: oris
     procedure          :: add_shift2class
     procedure, nopass  :: corr_oris
     procedure          :: gen_diverse
+    procedure          :: gen_diverse_projdir
     procedure          :: gen_diversity_score
     procedure          :: gen_diversity_scores
     procedure          :: ori_generator
+    procedure          :: ori_generator_projdir
     procedure          :: gen_smat
     procedure          :: geodesic_dist
+    procedure          :: eul_dist
     procedure          :: gen_subset
     procedure, private :: diststat_1
     procedure, private :: diststat_2
@@ -198,6 +201,7 @@ integer, allocatable :: classpops(:)
 logical, allocatable :: class_part_of_set(:)
 real, allocatable    :: class_weights(:)
 type(ori)            :: o_glob
+real                 :: angthres = 0.
 
 
 contains
@@ -2621,6 +2625,37 @@ contains
         deallocate(o_is_set)
     end subroutine gen_diverse
 
+    !>  \brief  uses a greedy approach to generate a maximally diverse set of 
+    !!          orientations by maximizing the geodesic distance upon every 
+    !!          addition to the growing set
+    subroutine gen_diverse_projdir( self, o_fix, athres )
+        use simple_jiffys, only: progress
+        class(oris), intent(inout) :: self
+        class(ori),  intent(inout) :: o_fix
+        real,        intent(inout) :: athres
+        logical, allocatable       :: o_is_set(:)
+        integer                    :: i
+        type(ori)                  :: o
+        angthres = athres
+        ! create the first diverse ori
+        call o_fix%oripair_diverse_projdir(o, athres)
+        allocate(o_is_set(self%n))
+        o_is_set = .false.
+        call self%set_ori(1,o_fix)
+        call self%set_ori(2,o)
+        o_is_set(1) = .true.
+        o_is_set(2) = .true.
+        ! use a greedy approach to generate the maximally diverse set
+        do i=3,self%n
+            call progress(i,self%n)
+            o = self%ori_generator_projdir(o_is_set)
+            call self%set_ori(i,o)
+            o_is_set(i) = .true.
+        end do
+        deallocate(o_is_set)
+        angthres = 0.
+    end subroutine gen_diverse_projdir
+
     !>  \brief  scores the orientation (o) according to diversity with 
     !!          respect to the orientations in self
     function gen_diversity_score( self, o ) result( diversity_score )
@@ -2716,6 +2751,56 @@ contains
         call opt%kill
     end function ori_generator
 
+    !>  \brief  it creates the rotation matrix that is maximally diverse in terms of
+    !!          euler distance to the rotation matrices in the instance
+    function ori_generator_projdir( self, part_of_set, weights ) result( oout )
+        use simple_simplex_opt, only: simplex_opt
+        use simple_opt_spec,    only: opt_spec
+        class(oris), target, intent(inout) :: self
+        logical, optional,   intent(in)    :: part_of_set(self%n)
+        real,    optional,   intent(in)    :: weights(self%n)
+        real, parameter   :: TOL=1e-6
+        type(ori)         :: oout, o1
+        type(opt_spec)    :: ospec
+        type(simplex_opt) :: opt
+        real              :: dist, lims(2,2)
+        ! manage class vars
+        if( allocated(class_part_of_set) ) deallocate(class_part_of_set)
+        if( allocated(class_weights)     ) deallocate(class_weights)
+        if( present(part_of_set) )then
+            allocate(class_part_of_set(self%n), source=part_of_set)
+        else
+            allocate(class_part_of_set(self%n))
+            class_part_of_set = .true.
+        endif
+        if( present(weights) )then
+            allocate(class_weights(self%n), source=weights)
+        else
+            allocate(class_weights(self%n))
+            class_weights = 1.0
+        endif
+        ! set globals
+        ops => self
+        call o_glob%new
+        call o_glob%rnd_euler_2( self%o(1), angthres, .true.)
+        !call o_glob%e3set(0.)
+        ! init
+        call oout%new
+        lims(1,1) = 0.
+        lims(1,2) = 359.99
+        lims(2,1) = 0.
+        lims(2,2) = 180.
+        call ospec%specify('simplex', 2, ftol=TOL, limits=lims)
+        ospec%x(1) = o_glob%e1get()
+        ospec%x(2) = o_glob%e2get()
+        call opt%new(ospec)
+        call ospec%set_costfun(costfun_diverse_projdir)
+        call opt%minimize(ospec, dist)
+        call oout%set_euler([ospec%x(1),ospec%x(2),0.])
+        call ospec%kill
+        call opt%kill
+    end function ori_generator_projdir
+
     !>  \brief  generates a similarity matrix for the oris in self
     function gen_smat( self ) result( smat )
         class(oris), intent(in) :: self
@@ -2765,6 +2850,44 @@ contains
         !$omp end parallel do
         geodesic_dist = sum(dists*class_weights,mask=class_part_of_set)/sum(class_weights,mask=class_part_of_set)
     end function geodesic_dist
+
+    !>  \brief  calculates the average euler distance between the input orientation
+    !!          and all other orientations in the instance, part_of_set acts as mask
+    real function eul_dist( self, o, part_of_set, weights, within )
+        use simple_math,           only: deg2rad
+        class(oris),       intent(in) :: self
+        class(ori),        intent(in) :: o
+        logical, optional, intent(in) :: part_of_set(self%n)
+        real,    optional, intent(in) :: weights(self%n), within
+        integer :: i
+        real    :: dists(self%n)
+        if( allocated(class_part_of_set) ) deallocate(class_part_of_set)
+        if( allocated(class_weights)     ) deallocate(class_weights)
+        if( present(part_of_set) )then
+            allocate(class_part_of_set(self%n), source=part_of_set)
+        else
+            allocate(class_part_of_set(self%n))
+            class_part_of_set = .true.
+        endif
+        if( present(weights) )then
+            allocate(class_weights(self%n), source=weights)
+        else
+            allocate(class_weights(self%n))
+            class_weights = 1.0
+        endif
+        dists = 0.
+        !$omp parallel do schedule(auto) default(shared) private(i)
+        do i=1,self%n
+            dists(i) = self%o(i).euldist.o
+        end do
+        !$omp end parallel do
+        if( .not.present(within) )then
+            eul_dist = sum(dists*class_weights,mask=class_part_of_set)/sum(class_weights,mask=class_part_of_set)
+        else
+            eul_dist = sum(dists*class_weights)/sum(class_weights)
+            if( dists(1) > deg2rad(within) )eul_dist = 0.
+        endif
+    end function eul_dist
 
     !>  \brief  for generation a subset of orientations (spatial medians of all pairs)
     function gen_subset( self ) result( os )
@@ -2964,7 +3087,16 @@ contains
         ! we are maximizing the distance 
         dist = -ops%geodesic_dist(o_glob,class_part_of_set,class_weights)
     end function costfun_diverse
-    
+
+    function costfun_diverse_projdir( vec, D ) result( dist )
+        integer, intent(in) :: D
+        real,    intent(in) :: vec(D)
+        real :: dist
+        call o_glob%set_euler([vec(1),vec(2),0.])
+        ! we are maximizing the distance
+        dist = -ops%eul_dist(o_glob,class_part_of_set,class_weights,angthres)
+    end function costfun_diverse_projdir
+
     ! UNIT TESTS
     
     !>  \brief  oris class unit test

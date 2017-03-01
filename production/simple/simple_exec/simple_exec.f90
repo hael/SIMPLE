@@ -889,6 +889,7 @@ select case(prg)
         keys_required(3) = 'oritab'
         keys_required(4) = 'nstates'
         keys_required(5) = 'ctf'
+        keys_required(6) = 'trs'
         ! set optionnal keys
         keys_optional(1) = 'nthr'
         keys_optional(2) = 'deftab'
@@ -899,7 +900,7 @@ select case(prg)
         keys_optional(7) = 'eo'
         keys_optional(8) = 'frac'        
         ! parse command line
-        call cline%parse(keys_required(:5), keys_optional(:8))
+        call cline%parse(keys_required(:6), keys_optional(:8))
         ! set defaults
         if( .not. cline%defined('eo') ) call cline%set('eo', 'no')
         !execute

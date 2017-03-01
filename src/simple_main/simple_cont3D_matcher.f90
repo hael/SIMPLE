@@ -2,6 +2,7 @@ module simple_cont3D_matcher
 use simple_defs
 use simple_cartft_corrcalc,  only: cartft_corrcalc
 use simple_ori,              only: ori
+use simple_oris,              only: oris
 use simple_build,            only: build
 use simple_params,           only: params
 use simple_masker,           only: automask
@@ -93,8 +94,9 @@ contains
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         class(cmdline), intent(inout) :: cline
-        integer, intent(in)           :: which_iter
-        logical, intent(inout)        :: converged
+        integer,        intent(in)    :: which_iter
+        logical,        intent(inout) :: converged
+        type(oris)        :: soft_oris
         type(ori)         :: orientation
         real, allocatable :: wmat(:,:), wresamp(:), res(:), res_pad(:)
         real              :: frac_srch_space, reslim
@@ -130,10 +132,13 @@ contains
         ! INITIALIZE
         select case( p%refine )
             case('yes')
+                p%npeaks = 6
                 call cftcc_srch_init(cftcc, b%img, OPT_STR, p%optlims(:5,:), NRESTARTS)
             case('shift')
+                p%npeaks = 3
                 call cftcc_shsrch_init(cftcc, b%img, OPT_STR, p%trs, NRESTARTS)
             case('qcont')
+                p%npeaks = 6
                 call pftcc_contsrch_init( b, p, cline, b%img, OPT_STR, NRESTARTS )
             case DEFAULT
                 stop 'Unkwnon refinement mode; simple_cont3D_matcher'
@@ -176,10 +181,10 @@ contains
                 select case( p%refine )
                     case('yes')
                         call cftcc_srch_set_state(state)
-                        call cftcc_srch_minimize(orientation)
+                        call cftcc_srch_minimize(orientation, soft_oris)
                     case('shift')
                         call cftcc_shsrch_set_state(state)
-                        call cftcc_shsrch_minimize(orientation)
+                        call cftcc_shsrch_minimize(orientation, soft_oris)
                     case('qcont')
                         call pftcc_contsrch_set_state(state)
                         call pftcc_contsrch_minimize( orientation)
@@ -191,7 +196,11 @@ contains
                     wresamp = resample_filter(wmat(iptcl,:), res, res_pad)
                     call grid_ptcl(b, p, iptcl, cnt_glob, orientation, shellweights=wresamp)
                 else
-                    call grid_ptcl(b, p, iptcl, cnt_glob, orientation)
+                    if( p%refine.eq.'qcont')then
+                        call grid_ptcl(b, p, iptcl, cnt_glob, orientation)
+                    else
+                        call grid_ptcl(b, p, iptcl, cnt_glob, orientation, soft_oris)
+                    endif
                 endif
             else
                 call orientation%reject

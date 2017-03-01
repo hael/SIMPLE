@@ -22,6 +22,8 @@ type, extends(optimizer) :: simplex_opt
     procedure :: new      => new_simplex_opt
     procedure :: minimize => simplex_minimize
     procedure :: kill     => kill_simplex_opt
+    ! GETTERS
+    procedure :: get_vertices => get_simplex_vertices
 end type simplex_opt
 
 contains
@@ -50,8 +52,8 @@ contains
         use simple_opt_subs, only: amoeba
         use simple_rnd,      only: ran3
         class(simplex_opt), intent(inout) :: self        !< instance
-        class(opt_spec), intent(inout)    :: spec        !< specification
-        real, intent(out)                 :: lowest_cost !< lowest cost
+        class(opt_spec),    intent(inout) :: spec        !< specification
+        real,               intent(out)   :: lowest_cost !< lowest cost
         integer                           :: i, avgniter
         integer                           :: niters(spec%nrestarts)
         logical                           :: arezero(spec%ndim)
@@ -87,7 +89,7 @@ contains
         spec%nevals = spec%nevals/spec%nrestarts
         spec%x      = self%pb
         lowest_cost = self%yb
-        
+
         contains
         
             !> \brief  initializes the simplex using randomized bounds
@@ -110,6 +112,29 @@ contains
         
     end subroutine simplex_minimize
     
+    ! GETTERS
+
+    !> \brief  returns all polytope vertices & costs of solution
+    subroutine get_simplex_vertices( self, spec, vertices, costs )
+        use simple_opt_spec, only: opt_spec
+        use simple_jiffys,   only: alloc_err
+        class(simplex_opt), intent(inout) :: self
+        class(opt_spec),    intent(inout) :: spec
+        real, allocatable,  intent(inout) :: vertices(:,:), costs(:)
+        integer           :: n, alloc_stat
+        if( spec%str_opt .ne. 'simplex' )then
+            stop 'subroutine only defined fot the simplex optimizer; simple_simplex_opt::get_simplex_vertices'
+        endif
+        if( .not.self%exists )then
+            stop 'simplex optmization object does not exist; simple_simplex_opt::get_vertices'
+        endif
+        n = size(self%y)
+        allocate( vertices(n+1,n), costs(n+1), stat=alloc_stat )
+        call alloc_err('In simple_simplex_opt; get_simplex_vertices', alloc_stat)
+        vertices = self%p
+        costs    = self%y
+    end subroutine get_simplex_vertices
+
     !> \brief  is a destructor
     subroutine kill_simplex_opt( self )
         class(simplex_opt), intent(inout) :: self

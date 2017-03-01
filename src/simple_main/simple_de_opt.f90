@@ -22,9 +22,10 @@ type, extends(optimizer) :: de_opt
     real              :: CR = X_multimodal !< cross-over rate
     logical           :: exists = .false.  !< to indicate existence
   contains
-    procedure :: new      => new_de
-    procedure :: minimize => de_minimize
-    procedure :: kill     => kill_de
+    procedure :: new          => new_de
+    procedure :: minimize     => de_minimize
+    procedure :: get_vertices => de_get_vertices
+    procedure :: kill         => kill_de
 end type de_opt
 
 contains
@@ -171,6 +172,17 @@ contains
         end subroutine update_agent
         
     end subroutine de_minimize
+
+    ! GETTERS
+
+    !> \brief  dummy procedure, only defined in simplex
+    subroutine de_get_vertices( self, spec, vertices, costs )
+        use simple_opt_spec,           only: opt_spec
+        class(de_opt), intent(inout) :: self
+        class(opt_spec),    intent(inout) :: spec
+        real, allocatable,  intent(inout) :: vertices(:,:), costs(:)
+        stop 'procedure only defined for simplex optimisation'
+    end subroutine de_get_vertices
 
     !> \brief  is a destructor
     subroutine kill_de( self )

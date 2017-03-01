@@ -35,8 +35,8 @@ type :: image
     integer                                :: lims(3,2)           !< physical limits for the XFEL patterns
     character(len=STDLEN)                  :: imgkind='em'        !< indicates image kind (different representation 4 EM/XFEL)
     logical                                :: existence=.false.   !< indicates existence
-    complex, allocatable, public           :: cmat_exp(:,:,:)         !< expanded complex matrix
-    integer,              public           :: ldim_exp(3,2)=0         !< expanded complex matrix limits
+    complex, allocatable                   :: cmat_exp(:,:,:)         !< expanded complex matrix
+    integer                                :: ldim_exp(3,2)=0         !< expanded complex matrix limits
     logical                                :: expanded_exists=.false. !< indicates expanded matrix existence
 
   contains
@@ -90,7 +90,8 @@ type :: image
     procedure          :: set_ft
     procedure          :: extr_fcomp
     procedure          :: packer
-    procedure          :: build_cmat_expanded
+    procedure          :: cmat2expanded
+    procedure          :: expanded2cmat
     procedure          :: kill_expanded
     procedure          :: interp_fcomp_expanded
     ! CHECKUPS
@@ -1435,7 +1436,7 @@ contains
     end function packer
 
     !>  \brief is a constructor of the expanded 3d complex matrix
-    subroutine build_cmat_expanded( self, rharwin )
+    subroutine cmat2expanded( self, rharwin )
         !$ use omp_lib
         !$ use omp_lib_kinds
         use simple_math, only: cyci_1d
@@ -1457,7 +1458,7 @@ contains
             &self%ldim_exp(3,1):self%ldim_exp(3,2) ),&
             &cyck(self%ldim_exp(2,1):self%ldim_exp(2,2)),&
             &cycm(self%ldim_exp(3,1):self%ldim_exp(3,2)), stat=alloc_stat  )
-        call alloc_err("In: get_cmat_expanded; simple_image 1", alloc_stat)
+        call alloc_err("In: cmat2expanded; simple_image 1", alloc_stat)
         ! pre-compute addresses in 2nd and 3rd dimension
         do k = self%ldim_exp(2,1),self%ldim_exp(2,2)
             cyck(k) = k
@@ -1483,7 +1484,49 @@ contains
         !$omp end parallel do
         deallocate( cyck,cycm )
         self%expanded_exists = .true.
-    end subroutine build_cmat_expanded
+    end subroutine cmat2expanded
+
+    !>  \brief converts the expanded matrix to standard imaginary representation
+    !! to double check
+    subroutine expanded2cmat( self )
+        class(image), intent(inout) :: self
+        integer, allocatable :: cyck(:), cycm(:)
+        complex              :: comp
+        integer              :: h, k, m, cych, alloc_stat, max_dim
+        integer              :: lims(3,2), phys(3)
+        if( .not.self%expanded_exists )then
+            stop 'expanded complex matrix does not exist; simple_image%expanded2cmat'
+        endif
+        allocate( cyck(self%ldim_exp(2,1):self%ldim_exp(2,2)),&
+            &cycm(self%ldim_exp(3,1):self%ldim_exp(3,2)), stat=alloc_stat  )
+        call alloc_err("In: expanded2cmat; simple_image 1", alloc_stat)
+        ! pre-compute addresses in 2nd and 3rd dimension
+        do k = self%ldim_exp(2,1),self%ldim_exp(2,2)
+            cyck(k) = k
+            if( k<lims(2,1) .or. k>lims(2,2) )cyck(k) = cyci_1d( lims(2,:),k )
+        enddo
+        do m = self%ldim_exp(3,1),self%ldim_exp(3,2)
+            cycm(m) = m
+            if( m<lims(3,1) .or. m>lims(3,2) )cycm(m) = cyci_1d( lims(3,:),m )
+        enddo
+        ! contract fourier components matrix
+        self%cmat = cmplx(0.,0.)
+        !$omp parallel do schedule(auto) shared(lims,cyck,cycm)&
+        !$omp private(h,k,m,cych,comp)
+        do h = self%ldim_exp(1,1),self%ldim_exp(1,2)
+            cych = h
+            if( h<lims(1,1) .or. h>lims(1,2) )cych = cyci_1d( lims(1,:),h )
+            do k = self%ldim_exp(2,1),self%ldim_exp(2,2)
+                do m = self%ldim_exp(3,1),self%ldim_exp(3,2)
+                    comp = self%get_fcomp( [cych,cyck(k),cycm(m)], phys_out=phys )
+                    comp = comp + self%cmat_exp(h,k,m)
+                    call self%set_fcomp( [h,k,m], comp, phys )
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+        deallocate( cyck,cycm )        
+    end subroutine expanded2cmat
 
     subroutine kill_expanded( self )
         class(image), intent(inout) :: self
@@ -1503,7 +1546,9 @@ contains
         integer,      intent(in)    :: wdim
         complex :: comp
         integer :: i, wlen, win(3,2)
-        if( .not. self%expanded_exists )stop 'Expanded complex matrix does not exists'
+        if( .not. self%expanded_exists )then
+            stop 'Expanded complex matrix does not exists;simple_image%cmat2expanded'
+        endif
         wlen = wdim**3
         ! interpolation kernel window
         win = sqwin_3d(loc(1), loc(2), loc(3), harwin)

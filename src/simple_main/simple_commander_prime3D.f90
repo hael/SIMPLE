@@ -192,186 +192,178 @@ contains
         use simple_oris,       only: oris
         use simple_ori,        only: ori
         use simple_math,       only: sortmeans, round2even
-        use simple_stat               ! use all in there
         use simple_hadamard3D_matcher ! use all in there
         use simple_hadamard_common    ! use all in there
-        use simple_pftcc_shsrch      ! singleton
+        use simple_pftcc_shsrch       ! singleton
         class(het_init_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(params)            :: p
         type(build)             :: b
         type(prime_srch)        :: srch_common !< functionalities common to primesrch2D/3D
         type(oris)              :: a_backup, prev_a
-        real                    :: frac_lim, prev_frac_lim
-        integer                 :: noris_state, it, i, alloc_stat, noris, n_excl, n_incl
+        integer                 :: it, i, alloc_stat, noris, n_excl, n_incl
         integer                 :: ntot_excl, ntot_excl_prev
         logical                 :: minp_reached = .false.
-        integer,               parameter :: nbins  = 10
-        integer,               parameter :: maxits = 50
+        integer,      parameter :: NBINS = 10
         p = params(cline)                     ! parameters generated
         call b%build_general_tbox(p, cline)   ! general objects built
         call b%build_hadamard_prime3D_tbox(p) ! prime3D objects built
         call b%build_rec_tbox(p)
-        if( .not.cline%defined('minp') )p%minp = nint( real(b%a%get_noris())/100. )
+        if(.not.cline%defined('minp'))p%minp = nint( real(b%a%get_noris())/100. )
         call set_bp_range( b, p, cline )
         srch_common = prime_srch(p, p%nspace, round2even(twopi*real(p%ring2)))
         ! initial states, volumes & correlations
         do i = 1,b%a%get_noris()
-            if( nint(b%a%get(i,'state')).ne.p%state )call b%a%set(i,'state',0.)
+            if(nint(b%a%get(i,'state')).ne.p%state)call b%a%set(i,'state',0.)
         enddo
-        noris_state = b%a%get_statepop( p%state )
+        !call b%a%write('init.txt')
         a_backup = b%a
-        if( .not.cline%defined('vol1') )call exec_rec_master( b, p, cline )
-        call preppftcc4align( b, p, cline )
+        if(.not.cline%defined('vol1'))call exec_rec_master(b, p, cline)
+        call preppftcc4align(b, p, cline)
         call primesrch3D%kill
-        call calc_corrs( b%a )
         ! Main loop
         ntot_excl = 0
-        frac_lim  = 1.
-        do it = 1, maxits
+        do it = p%startit,p%maxits
+            write(*,'(A)')   '>>>'
+            write(*,'(A,I4)')'>>> ITERATION ',it
+            write(*,'(A)')   '>>>'
             ntot_excl_prev = ntot_excl
             prev_a         = b%a
-            prev_frac_lim  = frac_lim
-            call exclude_ptcls( b%a, p%state, n_incl, n_excl )
+            call shift_srch(b%a, .true., it)
+            call exclude_ptcls(b%a, p%state, n_incl, n_excl, p%startit)
             ntot_excl = ntot_excl + n_excl
-            frac_lim  = real(ntot_excl_prev)/real(ntot_excl)
-            print *, 'IT ',it,ntot_excl, frac_lim, n_incl, p%minp, frac_lim/prev_frac_lim, prev_frac_lim
-            if( n_incl <= p%minp )then
+            write(*,'(A,I8)')'>>> CURRENT NUMBER OF PARTICLES: ', n_incl
+            write(*,'(A,I8)')'>>> NUMBER OF REJECTED PARTICLES:', ntot_excl_prev
+            if(n_incl <= p%minp)then
                 minp_reached = .true.
                 exit
             endif
-            if( frac_lim/prev_frac_lim > .90 )exit
-            call write_docs
-            call exec_rec_master( b, p, cline )
-            call prep_refs_pftcc4align( b, p, cline )
-            call shift_srch( b%a ) ! shift search here
+            if(ntot_excl_prev > .9*ntot_excl)exit
+            call write_docs( it )
+            call exec_rec_master(b, p, cline)
         enddo
         b%a = prev_a
         ntot_excl = ntot_excl_prev
-        frac_lim = prev_frac_lim
         if( minp_reached )then
             ! most likely trouble
         else
             ! graceful
         endif
-
+        call simple_end('**** SIMPLE_HET_INIT NORMAL STOP ****', print_simple=.true.)
         contains
 
-            subroutine write_docs
+            subroutine write_docs( iter )
                 use simple_strings, only: int2str_pad
+                integer, intent(in)   :: iter
                 type(oris)            :: os
                 character(len=STDLEN) :: fname
                 integer               :: i, state, curr_state
                 ! included ptcls
-                fname = 'included_'//int2str_pad(it,3)//'.txt'
+                fname = 'included_'//int2str_pad(iter,3)//'.txt'
                 call b%a%write( trim(fname) )
                 ! rejected
                 os = a_backup
                 do i=1,os%get_noris()
                     curr_state = nint(b%a%get(i,'state'))
-                    state = nint( os%get(i,'state') )
+                    state      = nint(os%get(i,'state'))
                     if( curr_state==0 .and. state>0 )then
                         call os%set(i,'state',1.)
                     else
                         call os%set(i,'state',0.)
                     endif
                 enddo
-                fname = 'excluded_'//int2str_pad(it,3)//'.txt'
+                fname = 'excluded_'//int2str_pad(iter,3)//'.txt'
                 call os%write( trim(fname) )
             end subroutine write_docs
 
-            subroutine exclude_ptcls( os, state, in_incl, in_excl )
+            subroutine exclude_ptcls( os, state, in_incl, in_excl, iter )
                 class(oris), intent(inout) :: os
-                integer, intent(in)        :: state
-                integer, intent(inout)     :: in_incl, in_excl
-                real, allocatable    :: corrs(:)
+                integer,     intent(in)    :: state
+                integer,     intent(inout) :: in_incl, in_excl, iter
+                real,    allocatable :: corrs(:)
                 integer, allocatable :: states(:), labels(:)
-                real    :: means(nbins)
-                integer :: i,n,n_incl,cnt
-                states  = nint( os%get_all('state') )
+                real                 :: means(NBINS)
+                integer              :: i,n,n_incl,cnt
+                states  = nint(os%get_all('state'))
                 n       = size(states)
-                in_incl = count( states==state )
-                if( in_incl < nbins )stop 'not enough ptcls!'
-                allocate( corrs(in_incl) )
+                in_incl = count(states==state)
+                if(in_incl < NBINS)stop 'not enough ptcls!'
+                allocate(corrs(in_incl))
                 cnt = 0
                 do i=1,n
                     if( states(i)==state )then
                         cnt = cnt+1
-                        corrs( cnt ) = os%get( i,'corr' )
+                        corrs(cnt) = os%get(i, 'corr')
                     endif
                 enddo
-                call sortmeans(corrs, nbins, means, labels)
-                do i=1,nbins
-                    print *,i,count( labels==i )
-                enddo
+                call sortmeans(corrs, NBINS, means, labels)
                 cnt     = 0
                 in_excl = 0
                 in_incl = 0
                 do i=1,n
                     if( states(i)==state )then
                         cnt = cnt+1
-                        if( labels(cnt)==1 )then
-                            states(i) = 0
-                            in_excl = in_excl + 1
+                        if(iter==p%startit)then
+                            if(labels(cnt)==1 .or. labels(cnt)==2)then
+                                states(i) = 0
+                                in_excl = in_excl+1
+                            else
+                                in_incl = in_incl+1
+                            endif
                         else
-                            in_incl = in_incl + 1
+                            if(labels(cnt)==1)then
+                                states(i) = 0
+                                in_excl = in_excl+1
+                            else
+                                in_incl = in_incl+1
+                            endif
                         endif
                     endif
                 enddo
-                call os%set_all( 'state', real(states) )
-                deallocate( states, corrs )
+                call os%set_all('state', real(states))
+                deallocate(states, corrs)
             end subroutine exclude_ptcls
 
-            subroutine calc_corrs( os )
+            subroutine shift_srch( os, dosrch, iter )
                 class(oris), intent(inout) :: os
-                type(ori) :: o
-                real      :: corr
-                integer   :: iptcl, roind, proj, state, noris
-                write(*,'(A)')'>>> CORRELATIONS CALCULATION'
-                call os%set_all2single( 'corr',-1.)
-                noris = b%a%get_noris()
-                do iptcl = 1, noris
+                logical,     intent(in)    :: dosrch
+                integer,     intent(in)    :: iter
+                type(ori)  :: o
+                real       :: corr, lims(2,2), cxy(3)
+                integer    :: iptcl, roind, proj, state, noris
+                if( iter>p%startit )call prep_refs_pftcc4align( b, p, cline )
+                if( dosrch )then
+                    write(*,'(A)')'>>> SHIFT SEARCH & CORRELATIONS CALCULATION'
+                else
+                    write(*,'(A)')'>>> CORRELATIONS CALCULATION'
+                endif
+                if( dosrch )then
+                    lims(:,1) = -p%trs
+                    lims(:,2) =  p%trs
+                    call pftcc_shsrch_init( pftcc, lims)
+                endif
+                noris = os%get_noris()
+                do iptcl=1, noris
                     o     = os%get_ori( iptcl )
-                    state = nint( o%get( 'state' ) )
-                    if( state.eq.0 .or. state.ne.p%state )cycle
-                    call preprefs4align(b, p, iptcl, pftcc)
-                    roind = srch_common%roind( 360.-o%e3get() )
-                    proj  = b%e%find_closest_proj( o )
-                    corr  = pftcc%corr( proj, iptcl, roind )
-                    call os%set( iptcl, 'corr', corr )
-                    call progress( iptcl, noris )
-                enddo
-            end subroutine calc_corrs
-
-            subroutine shift_srch( os )
-                use simple_pftcc_shsrch
-                class(oris), intent(inout) :: os
-                type(ori) :: o
-                real      :: corr, lims(2,2), cxy(3)
-                integer   :: iptcl, roind, proj, state, noris
-                write(*,'(A)')'>>> SHIFT SEARCH & CORRELATIONS CALCULATION'
-                lims(1,:) = -p%trs
-                lims(2,:) =  p%trs
-                call pftcc_shsrch_init( pftcc, lims)
-                noris = b%a%get_noris()
-                do iptcl = 1, noris
-                    o     = os%get_ori( iptcl )
-                    state = nint( o%get( 'state' ) )
+                    state = nint(o%get('state'))
                     if( state.eq.0 )cycle
-                    corr  = o%get('corr')
-                    call preprefs4align(b, p, iptcl, pftcc)
-                    proj  = b%e%find_closest_proj( o )
-                    roind = srch_common%roind( 360.-o%e3get() )
-                    call pftcc_shsrch_set_indices( proj, iptcl, roind )
-                    cxy = pftcc_shsrch_minimize()
-                    if( cxy(1) >= corr )then
-                        call o%set('corr', cxy(1))
-                        call o%set_shift( o%get_shift() + cxy(2:3) )
+                    proj = b%e%find_closest_proj(o)
+                    call preprefs4align(b, p, iptcl, pftcc, proj)
+                    roind = srch_common%roind(360.-o%e3get())
+                    corr  = pftcc%corr(proj, iptcl, roind)
+                    if( dosrch )then
+                        call pftcc_shsrch_set_indices(proj, iptcl, roind)
+                        cxy = pftcc_shsrch_minimize()
+                        if( cxy(1) >= corr )then
+                            corr = cxy(1)
+                            call o%set_shift(o%get_shift()+cxy(2:3))
+                        endif
                     endif
-                    call progress( iptcl, noris )
+                    call o%set('corr', corr)
+                    call os%set_ori(iptcl, o)
+                    call progress(iptcl, noris)
                 enddo
             end subroutine shift_srch
-
     end subroutine exec_het_init
 
     subroutine exec_multiptcl_init( self, cline )

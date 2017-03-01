@@ -71,6 +71,7 @@ type prime3D_srch
     ! GETTERS
     procedure          :: get_ori_best
     procedure          :: get_ori
+    procedure          :: get_oris
     procedure          :: ang_sdev
     ! PREPARATION ROUTINES
     procedure          :: prep4srch
@@ -332,6 +333,21 @@ contains
         if( debug ) write(*,'(A)') '>>> PRIME3D_SRCH::GOT BEST ORI'
     end subroutine get_ori_best
 
+    !>  \brief  to produce resulting oris object for reconstruction
+    subroutine get_oris( self, os, o )
+        class(prime3D_srch), intent(inout) :: self
+        class(oris),         intent(inout) :: os
+        class(ori),          intent(inout) :: o
+        type(ori) :: o_new
+        integer   :: i
+        call os%new( self%npeaks )
+        do i=1,self%npeaks
+            o_new = o
+            call self%get_ori(i, o_new)
+            call os%set_ori(i, o_new)
+        enddo
+    end subroutine get_oris
+
     !>  \brief  to get one orientation from the discrete space
     subroutine get_ori( self, i, o2update )
         class(prime3D_srch), intent(inout) :: self
@@ -342,7 +358,6 @@ contains
         integer   :: ind
         if( str_has_substr(self%refine,'shc') .and. i /= 1 )stop 'get_ori not for shc-modes; simple_prime3D_srch'
         if( i < 1 .or. i > self%npeaks )stop 'Invalid index in simple_prime3D_srch::get_ori'
-        ! call o%copy( self%o_npeaks%get_ori( self%npeaks-i+1 ) )
         ind    = self%npeaks - i + 1
         euls   = self%o_npeaks%get_euler( ind )
         x      = self%o_npeaks%get( ind, 'x'    )
@@ -352,7 +367,7 @@ contains
             print *,'Empty state in simple_prime3d_srch; get_ori'
             stop
         endif
-        ow     = self%o_npeaks%get( ind, 'ow'   )
+        ow     = self%o_npeaks%get( ind, 'ow' )
         call o2update%set_euler( euls )
         call o2update%set( 'x',     x      )
         call o2update%set( 'y',     y      )
@@ -723,11 +738,6 @@ contains
             call self%o_npeaks%set_ori( ipeak, o_new )
         enddo
         ! other variables
-        ! if( str_has_substr(self%refine, 'neigh') )then
-        !     frac = 100.*real(self%nrefs_eval) / real(self%nnnrefs)
-        ! else
-        !     frac = 100.*real(self%nrefs_eval) / real(self%nrefs)
-        ! endif
         if( str_has_substr(self%refine, 'neigh') )then
             frac = 100.*real(self%nrefs_eval) / real(self%nnn * neff_states)
         else

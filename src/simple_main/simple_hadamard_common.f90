@@ -188,20 +188,98 @@ contains
     end subroutine setup_shellweights
 
     !>  \brief  grids one particle image to the volume
-    subroutine grid_ptcl( b, p, iptcl, cnt_glob, orientation, primesrch3D, shellweights )
-        class(build),                  intent(inout) :: b
-        class(params),                 intent(inout) :: p
-        integer,                       intent(in)    :: iptcl, cnt_glob
-        class(ori),                    intent(inout) :: orientation
-        class(prime3D_srch), optional, intent(inout) :: primesrch3D
-        real,                optional, intent(in)    :: shellweights(:)
+    ! subroutine grid_ptcl( b, p, iptcl, cnt_glob, orientation, primesrch3D, shellweights )
+    !     class(build),                  intent(inout) :: b
+    !     class(params),                 intent(inout) :: p
+    !     integer,                       intent(in)    :: iptcl, cnt_glob
+    !     class(ori),                    intent(inout) :: orientation
+    !     class(prime3D_srch), optional, intent(inout) :: primesrch3D
+    !     real,                optional, intent(in)    :: shellweights(:)
+    !     real      :: pw, ran, w
+    !     integer   :: jpeak, s, k
+    !     type(ori) :: orisoft, o_sym
+    !     logical   :: primesrch3D_present
+    !     primesrch3D_present = present(primesrch3D)
+    !     if( p%npeaks > 1 .and. .not. primesrch3D_present )&
+    !     stop 'need optional primesrch3D input when npeaks > 1; simple_hadamard_common :: grid_ptcl'
+    !     pw = orientation%get('w')
+    !     if( pw > 0. )then
+    !         if( p%l_distr_exec )then
+    !             call b%img_copy%read(p%stk_part, cnt_glob, p%l_xfel)
+    !         else
+    !             call b%img_copy%read(p%stk, iptcl, p%l_xfel)
+    !         endif
+    !         ! prepare image for gridding
+    !         ! using the uncorrected/unmodified image as input
+    !         if( p%l_xfel )then
+    !             call b%img_copy%pad(b%img_pad)
+    !         else
+    !             if( p%eo .eq. 'yes' )then
+    !                 call prep4cgrid(b%img_copy, b%img_pad, p%msk, b%eorecvols(1)%get_wfuns())
+    !             else
+    !                 call prep4cgrid(b%img_copy, b%img_pad, p%msk, b%recvols(1)%get_wfuns())
+    !             endif
+    !         endif
+    !         if( debug ) write(*,*) '*** simple_hadamard_common ***: prepared image for gridding'
+    !         ran = ran3()
+    !         orisoft = orientation
+    !         do jpeak=1,p%npeaks
+    !             if( debug ) write(*,*) '*** simple_hadamard_common ***: gridding, iteration:', jpeak
+    !             ! get ori info
+    !             if( primesrch3D_present )then
+    !                 call primesrch3D%get_ori(jpeak, orisoft)
+    !                 w = orisoft%get('ow')
+    !                 s = nint(orisoft%get('state'))
+    !             else
+    !                 w = 1.
+    !                 s = nint(orisoft%get('state'))
+    !             endif
+    !             if( debug ) write(*,*) '*** simple_hadamard_common ***: got orientation'
+    !             if( p%frac < 0.99 ) w = w*pw
+    !             if( w > 0. )then
+    !                 if( p%pgrp == 'c1' )then
+    !                     if( p%eo .eq. 'yes' )then
+    !                         call b%eorecvols(s)%grid_fplane(orisoft, b%img_pad, pwght=w, ran=ran, shellweights=shellweights)
+    !                     else
+    !                         call b%recvols(s)%inout_fplane(orisoft, .true., b%img_pad, pwght=w, shellweights=shellweights)
+    !                     endif
+    !                 else
+    !                     do k=1,b%se%get_nsym()
+    !                         o_sym = b%se%apply(orisoft, k)
+    !                         if( p%eo .eq. 'yes' )then
+    !                             call b%eorecvols(s)%grid_fplane(o_sym, b%img_pad, pwght=w, ran=ran, shellweights=shellweights)
+    !                         else
+    !                             call b%recvols(s)%inout_fplane(o_sym, .true., b%img_pad, pwght=w, shellweights=shellweights)
+    !                         endif
+    !                     end do
+    !                 endif
+    !             endif
+    !             if( debug ) write(*,*) '*** simple_hadamard_common ***: gridded ptcl'
+    !         end do
+    !     endif
+    ! end subroutine grid_ptcl
+
+    !>  \brief  grids one particle image to the volume
+    subroutine grid_ptcl( b, p, iptcl, cnt_glob, orientation, os, shellweights )
+        use simple_oris, only: oris
+        class(build),              intent(inout) :: b
+        class(params),             intent(inout) :: p
+        integer,                   intent(in)    :: iptcl, cnt_glob
+        class(ori),                intent(inout) :: orientation
+        class(oris),     optional, intent(inout) :: os
+        real,            optional, intent(in)    :: shellweights(:)
         real      :: pw, ran, w
         integer   :: jpeak, s, k
         type(ori) :: orisoft, o_sym
-        logical   :: primesrch3D_present
-        primesrch3D_present = present(primesrch3D)
-        if( p%npeaks > 1 .and. .not. primesrch3D_present )&
-        stop 'need optional primesrch3D input when npeaks > 1; simple_hadamard_common :: grid_ptcl'
+        logical   :: softrec
+        softrec = .false.
+        if( present(os) )then
+            softrec = .true.
+            if( p%npeaks /= os%get_noris() )&
+                &stop 'non-congruent number of orientations.simple_hadamard_common :: grid_ptcl'
+        endif
+        if( p%npeaks>1 .and. .not.softrec )&
+            stop 'need optional primesrch3D input when npeaks > 1; simple_hadamard_common :: grid_ptcl'
         pw = orientation%get('w')
         if( pw > 0. )then
             if( p%l_distr_exec )then
@@ -226,14 +304,13 @@ contains
             do jpeak=1,p%npeaks
                 if( debug ) write(*,*) '*** simple_hadamard_common ***: gridding, iteration:', jpeak
                 ! get ori info
-                if( primesrch3D_present )then
-                    call primesrch3D%get_ori(jpeak, orisoft)
+                if( softrec )then
+                    orisoft =  os%get_ori(jpeak)
                     w = orisoft%get('ow')
-                    s = nint(orisoft%get('state'))
                 else
                     w = 1.
-                    s = nint(orisoft%get('state'))
                 endif
+                s = nint(orisoft%get('state'))
                 if( debug ) write(*,*) '*** simple_hadamard_common ***: got orientation'
                 if( p%frac < 0.99 ) w = w*pw
                 if( w > 0. )then
@@ -258,7 +335,7 @@ contains
             end do
         endif
     end subroutine grid_ptcl
-    
+
     subroutine prepimg4align( b, p, o )
         use simple_ctf, only: ctf
         class(build),   intent(inout) :: b

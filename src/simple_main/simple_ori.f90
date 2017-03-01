@@ -88,6 +88,7 @@ type :: ori
     procedure, private :: geodesic_dist
     procedure, private :: geodesic_dist_scaled
     procedure          :: oripair_diverse
+    procedure          :: oripair_diverse_projdir
     procedure          :: ori_generator
     generic            :: operator(.geod.)   => geodesic_dist
     generic            :: operator(.geodsc.) => geodesic_dist_scaled
@@ -109,6 +110,7 @@ end interface
 real,       parameter :: zvec(3)  = [0.,0.,1.]
 integer,    parameter :: NNAMES   = 10
 class(ori), pointer   :: class_self1=>null(), class_self2=>null(), class_self3=>null()
+real                  :: angthres = 0.
 
 contains
     
@@ -755,6 +757,7 @@ contains
         lims(2,1) = 0.
         lims(2,2) = 180.
         lims(3,1) = 0.
+        lims(3,2) = 359.99
         call ospec%specify('simplex', 3, ftol=TOL, limits=lims)
         ospec%x(1) = self2%e1get()
         ospec%x(2) = self2%e2get()
@@ -766,6 +769,39 @@ contains
         call ospec%kill
         call opt%kill
     end subroutine oripair_diverse
+
+    subroutine oripair_diverse_projdir( self1, self2, rangthres )
+        use simple_simplex_opt, only: simplex_opt
+        use simple_opt_spec,    only: opt_spec
+        class(ori), target, intent(inout) :: self1, self2
+        real,               intent(in)    :: rangthres
+        real, parameter   :: TOL=1e-6
+        type(opt_spec)    :: ospec
+        type(simplex_opt) :: opt
+        real :: e3,dist,lims(2,2)
+        if( .not. self1%exists() )stop 'need a fixed ori! simple_oris::oripair_diverse_projdir'
+        if( .not. self2%exists() )call self2%new_ori
+        angthres = rangthres
+        e3 = self1%e3get()
+        call self2%rnd_euler_2( self1, angthres, .true. )
+        ! associate class pointers
+        class_self1 => self1
+        class_self2 => self2
+        lims(1,1) = 0.
+        lims(1,2) = 359.99
+        lims(2,1) = 0.
+        lims(2,2) = 180.
+        call ospec%specify('simplex', 2, ftol=TOL, limits=lims)
+        ospec%x(1) = self2%e1get()
+        ospec%x(2) = self2%e2get()
+        call ospec%set_costfun(costfun_diverse_projdir)
+        call opt%new(ospec)
+        call opt%minimize(ospec, dist)
+        call self2%set_euler([ospec%x(1),ospec%x(2),e3])
+        call ospec%kill
+        call opt%kill
+        angthres = 0.
+    end subroutine oripair_diverse_projdir
 
     !>  \brief  if mode='median' this function creates a spatial median rotation matrix 
     !!          that is "in between" the two inputted rotation matrices in a geodesic 
@@ -1009,7 +1045,7 @@ contains
     function costfun_diverse_1( vec, D ) result( dist )
         integer, intent(in) :: D
         real,    intent(in) :: vec(D)
-        real :: d1, d2, dist
+        real :: dist
         call class_self2%set_euler(vec)
         ! negation because we try to maximize the distance
         dist = -class_self1%geodesic_dist(class_self2)
@@ -1024,6 +1060,20 @@ contains
         d2   = class_self3%geodesic_dist(class_self2)
         dist = -d1-d2
     end function costfun_diverse_2
+
+    !>  \brief  uses an angular threshold
+    function costfun_diverse_projdir( vec, D ) result( dist )
+        use simple_math, only: rad2deg
+        integer, intent(in) :: D
+        real,    intent(in) :: vec(D)
+        real :: dist
+        call class_self2%e1set(vec(1))
+        call class_self2%e2set(vec(2))
+        dist = class_self1.euldist.class_self2
+        if(rad2deg(dist) > angthres) dist=0.
+        ! negation because we try to maximize the distance
+        dist = -dist
+    end function costfun_diverse_projdir
 
     function costfun_median( vec, D ) result( dist )
         integer, intent(in) :: D

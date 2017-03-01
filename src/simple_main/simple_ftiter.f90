@@ -89,7 +89,7 @@ contains
             self%dsteps = (real(self%lfnys)*2.+1.)*self%smpd
         endif
         self%llps   = self%lfnys ! default low-pass limits
-        self%lhps   = 2          ! default high-pass limits
+        self%lhps   = 0          ! default high-pass limits
         do d=1,3
             if (is_even(self%ldim(d))) then
                 self%rlogi_lbounds(d)     = -self%ldim(d)/2

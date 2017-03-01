@@ -21,9 +21,10 @@ type, extends(optimizer) :: powell_opt
     real              :: yb=0.              !< best cost function value
     logical           :: exists=.false.     !< to indicate existence
   contains
-    procedure :: new      => new_powell_opt
-    procedure :: minimize => powell_minimize
-    procedure :: kill     => kill_powell_opt
+    procedure :: new          => new_powell_opt
+    procedure :: minimize     => powell_minimize
+    procedure :: get_vertices => powell_get_vertices
+    procedure :: kill         => kill_powell_opt
 end type
 
 logical :: warn=.false.
@@ -182,7 +183,18 @@ contains
             end subroutine
 
     end subroutine
-        
+    
+    ! GETTERS
+
+    !> \brief  dummy procedure, only defined in simplex
+    subroutine powell_get_vertices( self, spec, vertices, costs )
+        use simple_opt_spec,           only: opt_spec
+        class(powell_opt), intent(inout) :: self
+        class(opt_spec),    intent(inout) :: spec
+        real, allocatable,  intent(inout) :: vertices(:,:), costs(:)
+        stop 'procedure only defined for simplex optimisation'
+    end subroutine powell_get_vertices
+
     ! DESTRUCTOR
     
     !> \brief  is a destructor

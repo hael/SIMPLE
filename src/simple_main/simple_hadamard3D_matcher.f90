@@ -60,12 +60,14 @@ contains
     subroutine prime3D_exec( b, p, cline, which_iter, update_res, converged )
         use simple_filterer,  only: resample_filter
         use simple_qsys_funs, only: qsys_job_finished
+        use simple_oris,      only: oris
         use simple_strings,   only: int2str_pad
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: update_res, converged
+        type(oris)                    :: prime3D_oris
         real, allocatable             :: wmat(:,:), wresamp(:), res(:), res_pad(:)
         real                          :: w, lptmp
         integer                       :: iptcl, fnr, file_stat, s, inptcls, prev_state
@@ -224,11 +226,12 @@ contains
                 endif
                 call primesrch3D%get_ori_best(orientation)
                 call b%a%set_ori(iptcl,orientation)
+                call primesrch3D%get_oris(prime3D_oris, orientation)
                 if( doshellweight )then
                     wresamp = resample_filter(wmat(iptcl,:), res, res_pad)
-                    call grid_ptcl(b, p, iptcl, cnt_glob, orientation, primesrch3D, shellweights=wresamp)
+                    call grid_ptcl(b, p, iptcl, cnt_glob, orientation, prime3D_oris, shellweights=wresamp)
                 else
-                    call grid_ptcl(b, p, iptcl, cnt_glob, orientation, primesrch3D)
+                    call grid_ptcl(b, p, iptcl, cnt_glob, orientation, prime3D_oris)
                 endif
             else
                 call orientation%reject
