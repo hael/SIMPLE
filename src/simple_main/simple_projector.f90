@@ -141,6 +141,7 @@ contains
             endif
         endif
         ! init
+        lims = fvol%loop_lims(2) 
         if( present(lp) )then
             sqlp = fplane%get_find(lp)**2
         else
@@ -151,7 +152,6 @@ contains
         allocate( w(wdim,wdim,wdim), stat=alloc_stat )
         call alloc_err("In: fproject_expanded; simple_projector", alloc_stat)
         ! build expanded fourier components matrix
-        lims = fvol%loop_lims(2) 
         !$omp parallel do schedule(auto) shared(lims,sqlp,wdim)&
         !$omp private(h,k,hh,kk,sqarg,vec,loc,comp,i,w)
         do h=lims(1,1),lims(1,2)
