@@ -32,7 +32,7 @@ contains
         call del_files('ctffind_output_part',    p%nparts, ext='.txt')
         call del_files('ctffind_ctrl_file_part', p%nparts, ext='.txt')
         ! state and part numbered files
-        do istate=1,p%nstates
+        do istate=1,MAXS
             allocate(rec_base_str, source='recvol_state'//int2str_pad(istate,NUMLEN_STATE)//'_part')
             allocate(rho_base_str, source='rho_'//rec_base_str)
             call del_files(rec_base_str, p%nparts, ext=p%ext)

@@ -343,7 +343,7 @@ contains
     
     !> \brief  for reconstructing Fourier volumes according to the orientations 
     !!         and states in o, assumes that stack is open   
-    subroutine eorec( self, fname, p, o, se, state, vol, mul, part, fbody, wmat )
+    subroutine eorec( self, fname, p, o, se, state, vol, mul, part, fbody, wmat, wmat_states )
         use simple_oris,     only: oris
         use simple_sym,      only: sym
         use simple_params,   only: params
@@ -352,25 +352,31 @@ contains
         use simple_filterer, only: resample_filter
         use simple_strings,  only: int2str_pad
         use simple_jiffys,   only: find_ldim_nptcls, progress
-        class(eo_reconstructor),    intent(inout) :: self      !< object
-        character(len=*),           intent(in)    :: fname     !< spider/MRC stack filename
-        class(params),              intent(in)    :: p         !< parameters
-        class(oris),                intent(inout) :: o         !< orientations
-        class(sym),                 intent(inout) :: se        !< symmetry element
-        integer,                    intent(in)    :: state     !< state to reconstruct
-        type(image),                intent(inout) :: vol       !< reconstructed volume
-        real,             optional, intent(in)    :: mul       !< shift multiplication factor
-        integer,          optional, intent(in)    :: part      !< partition (4 parallel rec)
-        character(len=*), optional, intent(in)    :: fbody     !< body of output file
-        real,             optional, intent(in)    :: wmat(:,:) !< shellweights
+        class(eo_reconstructor),    intent(inout) :: self               !< object
+        character(len=*),           intent(in)    :: fname              !< spider/MRC stack filename
+        class(params),              intent(in)    :: p                  !< parameters
+        class(oris),                intent(inout) :: o                  !< orientations
+        class(sym),                 intent(inout) :: se                 !< symmetry element
+        integer,                    intent(in)    :: state              !< state to reconstruct
+        type(image),                intent(inout) :: vol                !< reconstructed volume
+        real,             optional, intent(in)    :: mul                !< shift multiplication factor
+        integer,          optional, intent(in)    :: part               !< partition (4 parallel rec)
+        character(len=*), optional, intent(in)    :: fbody              !< body of output file
+        real,             optional, intent(in)    :: wmat(:,:)          !< shellweights
+        real,             optional, intent(in)    :: wmat_states(:,:,:) !< shellweights for multi-particle analysis
         type(image)       :: img, img_pad
-        integer           :: i, cnt, n, ldim(3), filtsz, io_stat, filnum
-        integer           :: filtsz_pad, statecnt(p%nstates), alloc_stat
+        integer           :: i, cnt, n, ldim(3), filtsz, io_stat, filnum, state_glob
+        integer           :: filtsz_pad, statecnt(p%nstates), alloc_stat, state_here
         real, allocatable :: res(:), res_pad(:), wresamp(:)
-        logical           :: doshellweight
+        logical           :: doshellweight, doshellweight_states
         call find_ldim_nptcls(fname, ldim, n)
         if( n /= o%get_noris() ) stop 'inconsistent nr entries; eorec; simple_eo_reconstructor'
-        doshellweight = present(wmat)
+        doshellweight        = present(wmat)
+        doshellweight_states = present(wmat_states)
+        if( doshellweight .and. doshellweight_states ) stop 'only one mode of shellweighting allowed&
+        &(wmat or wmat_states); eorec; simple_eo_reconstructor'
+        ! stash global state index
+        state_glob = state 
         ! make the images
         call img%new([p%box,p%box,1],p%smpd,p%imgkind)
         call img_pad%new([p%boxpd,p%boxpd,1],p%smpd,p%imgkind)
@@ -385,12 +391,13 @@ contains
         ! dig holds the state digit
         write(*,'(A)') '>>> KAISER-BESSEL INTERPOLATION'
         statecnt = 0
-        cnt = 0
+        cnt      = 0
         do i=1,p%nptcls
             call progress(i, p%nptcls)
             if( i <= p%top .and. i >= p%fromp )then
                 cnt = cnt+1
-                if( nint(o%get(i,'state')) == state )then
+                state_here = nint(o%get(i,'state')) 
+                if( state_here > 0 .and. (state_here == state .or. doshellweight_states) )then
                     statecnt(state) = statecnt(state)+1
                     call rec_dens
                 endif
@@ -416,25 +423,6 @@ contains
         
         contains
         
-            ! !> \brief  reconstruction iterator
-            ! subroutine iterator( sub )
-            !     interface
-            !         subroutine sub
-            !         end subroutine
-            !     end interface
-            !     cnt = 0
-            !     do i=1,p%nptcls
-            !         call progress(i, p%nptcls)
-            !         if( i <= p%top .and. i >= p%fromp )then
-            !             cnt = cnt+1
-            !             if( nint(o%get(i,'state')) == state )then
-            !                 statecnt(state) = statecnt(state)+1
-            !                 call sub
-            !             endif
-            !         endif
-            !     end do
-            ! end subroutine iterator
-        
             !> \brief  the density reconstruction functionality
             subroutine rec_dens
                 use simple_ori, only: ori
@@ -458,7 +446,9 @@ contains
                     else
                         call prep4cgrid(img, img_pad, p%msk, wfuns=self%get_wfuns())
                     endif
-                    if( doshellweight )then
+                    if( doshellweight_states )then
+                        wresamp = resample_filter(wmat_states(state_glob,i,:), res, res_pad)
+                    else if( doshellweight )then
                         wresamp = resample_filter(wmat(i,:), res, res_pad)
                     else
                         allocate(wresamp(filtsz_pad))

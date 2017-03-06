@@ -195,11 +195,11 @@ interface oris
     module procedure constructor
 end interface
 
-type(ori), pointer   :: op(:)=>null()
+type(ori),  pointer  :: op(:)=>null()
 type(oris), pointer  :: ops  =>null()
 integer, allocatable :: classpops(:)
 logical, allocatable :: class_part_of_set(:)
-real, allocatable    :: class_weights(:)
+real,    allocatable :: class_weights(:)
 type(ori)            :: o_glob
 real                 :: angthres = 0.
 

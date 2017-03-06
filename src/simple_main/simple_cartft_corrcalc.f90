@@ -45,6 +45,7 @@ contains
         use simple_jiffys,          only: alloc_err
         use simple_hadamard_common, only: preprefvol
         use simple_cmdline,         only: cmdline
+        use simple_strings,         only: int2str
         class(cartft_corrcalc), intent(inout) :: self
         class(build),  target,  intent(inout) :: b
         class(params), target,  intent(inout) :: p

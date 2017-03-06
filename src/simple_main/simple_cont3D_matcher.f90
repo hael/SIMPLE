@@ -16,7 +16,7 @@ use simple_cftcc_shsrch     ! us all in there
 use simple_pftcc_contsrch   ! us all in there
 implicit none
 
-public :: cont3D_exec, cont3D_shellweight
+public :: cont3D_exec, cont3D_shellweight, cont3D_shellweight_states
 private
 
 type(cartft_corrcalc)   :: cftcc
@@ -62,9 +62,7 @@ contains
                 wmat(cnt_glob,:) = corrs(:)
             else
                 ! weights should be zero
-                if( .not. allocated(corrs) ) allocate(corrs(filtsz))
-                corrs = 0.
-                wmat(cnt_glob,:) = corrs
+                wmat(cnt_glob,:) = 0.
             endif
         end do
         ! write the weight matrix
@@ -86,6 +84,67 @@ contains
         deallocate(wmat, fname)
         call qsys_job_finished( p, 'simple_cont3D_matcher :: cont3D_shellweight' )
     end subroutine cont3D_shellweight
+
+    subroutine cont3D_shellweight_states( b, p, cline )
+        use simple_ori,  only: ori
+        use simple_stat, only: corrs2weights, normalize_sigm
+        class(build),   intent(inout) :: b
+        class(params),  intent(inout) :: p
+        class(cmdline), intent(inout) :: cline
+        real, allocatable             :: res(:), corrs(:), wmat(:,:,:)
+        character(len=:), allocatable :: fname
+        type(ori)                     :: orientation
+        integer                       :: iptcl, filtsz, alloc_stat
+        integer                       :: io_stat, filnum, istate
+        filtsz = b%img%get_filtsz()
+        allocate( wmat(p%nstates,p%top-p%fromp+1,filtsz), corrs(filtsz), stat=alloc_stat)
+        call alloc_err('In: simple_cont3D_matcher :: cont3D_shellweight_states', alloc_stat)
+        wmat  = 0.
+        corrs = 0.
+        call cftcc%new( b, p, cline )
+        cnt_glob = 0
+        write(*,'(A)') '>>> CALCULATING FOURIER RING CORRELATIONS'
+        do iptcl=p%fromp,p%top
+            cnt_glob = cnt_glob + 1
+            call progress(cnt_glob, p%top-p%fromp+1)
+            orientation = b%a%get_ori(iptcl)
+            if( p%boxmatch < p%box )call b%img%new([p%box,p%box,1],p%smpd) ! ensures correct dimensions
+            if( p%l_distr_exec )then
+                call b%img%read(p%stk_part, cnt_glob, p%l_xfel)
+            else
+                call b%img%read(p%stk, iptcl, p%l_xfel)
+            endif
+            call prepimg4align(b, p, orientation)
+            if( nint(orientation%get('state')) > 0 )then
+                do istate=1,p%nstates
+                    call orientation%set('state', real(istate))
+                    call cftcc%frc(orientation, 1, b%img, res, corrs)
+                    wmat(istate,cnt_glob,:) = corrs(:)
+                end do
+            else
+                ! weights should be zero
+                wmat(:,cnt_glob,:) = 0.
+            endif
+        end do
+        ! write the weight matrix
+        filnum = get_fileunit()
+        if( p%l_distr_exec )then
+            allocate(fname, source='shellweights_part'//int2str_pad(p%part,p%numlen)//'.bin')
+        else
+            allocate(fname, source='shellweights.bin')
+        endif
+        open(unit=filnum, status='REPLACE', action='WRITE', file=fname, access='STREAM')
+        write(unit=filnum,pos=1,iostat=io_stat) wmat
+        ! check if the write was successful
+        if( io_stat .ne. 0 )then
+            write(*,'(a,i0,2a)') '**ERROR(cont3D_shellweight_states): I/O error ',&
+            io_stat, ' when writing to cont3D_shellweights_partX.bin'
+            stop 'I/O error; cont3D_shellweight_part*; simple_cont3D_matcher'
+        endif
+        close(filnum)
+        deallocate(wmat, fname)
+        call qsys_job_finished( p, 'simple_cont3D_matcher :: cont3D_shellweight_states' )
+    end subroutine cont3D_shellweight_states
     
     !>  \brief  is the continuous refinement algorithm
     subroutine cont3D_exec( b, p, cline, which_iter, converged )

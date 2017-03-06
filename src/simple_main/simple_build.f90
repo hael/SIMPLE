@@ -437,18 +437,9 @@ contains
                     call self%recvols(s)%alloc_rho(p)
                 end do
             endif
-        endif
-        if( str_has_substr(p%refine,'qcont') )then
-            allocate( self%refvols(p%nstates), stat=alloc_stat)
-            call alloc_err('build_hadamard_prime3D_tbox; simple_build, 4', alloc_stat)
-            do s=1,p%nstates 
-                call self%refvols(s)%new([p%boxmatch,p%boxmatch,p%boxmatch],p%smpd,p%imgkind)
-            end do
-        endif    
+        endif   
         if( str_has_substr(p%refine,'neigh') )then
-            if( .not. str_has_substr(p%refine,'qcont') )then
-                call self%e%nearest_neighbors( p%nnn, self%nnmat)
-            endif
+            call self%e%nearest_neighbors( p%nnn, self%nnmat)
         endif
         write(*,'(A)') '>>> DONE BUILDING HADAMARD PRIME3D TOOLBOX'
         call flush(6)

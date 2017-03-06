@@ -807,10 +807,11 @@ select case(prg)
         keys_optional(5) = 'edge'
         keys_optional(6) = 'binwidth'
         keys_optional(7) = 'inner'
-        keys_optional(8) = 'width'        
+        keys_optional(8) = 'width'
+        keys_optional(9) = 'refine'       
         ! parse command line
         if( describe ) call print_doc_shellweight3D
-        call cline%parse(keys_required(:6), keys_optional(:8))
+        call cline%parse(keys_required(:6), keys_optional(:9))
         ! execute
         call xshellweight3D%execute(cline)
     case( 'prime3D_init' )
@@ -1249,9 +1250,11 @@ select case(prg)
         keys_optional(5) = 'mw'
         keys_optional(6) = 'mul'
         keys_optional(7) = 'state'
+        keys_optional(8) = 'refine'
+        keys_optional(9) = 'npeaks'
         ! parse command line
         if( describe ) call print_doc_recvol
-        call cline%parse(keys_required(:6), keys_optional(:7))
+        call cline%parse(keys_required(:6), keys_optional(:9))
         ! set defaults
         if( .not. cline%defined('trs') ) call cline%set('trs', 5.) ! to assure that shifts are being used
         if( .not. cline%defined('eo')  ) call cline%set('eo', 'no')
@@ -2010,13 +2013,13 @@ select case(prg)
        keys_required(3)  = 'stk3'
        keys_required(4)  = 'oritab'
        ! set optional keys
-       keys_optional(1)  = 'oritab2'
-       keys_optional(2)  = 'comlindoc'
-       keys_optional(3)  = 'doclist'
-       keys_optional(4)  = 'deftab'
-       keys_optional(5)  = 'outfile'
-       keys_optional(6)  = 'mul'
-       keys_optional(7)  = 'nthr'
+       keys_optional(1)  = 'nthr'
+       keys_optional(2)  = 'oritab2'
+       keys_optional(3)  = 'comlindoc'
+       keys_optional(4)  = 'doclist'
+       keys_optional(5)  = 'deftab'
+       keys_optional(6)  = 'outfile'
+       keys_optional(7)  = 'mul'
        ! parse command line
        if( describe ) call print_doc_map2ptcls
        call cline%parse(keys_required(:4), keys_optional(:7))
@@ -2225,8 +2228,9 @@ select case(prg)
         keys_required(1) = 'stk'
         keys_required(2) = 'nparts'
         ! parse command line
+        keys_optional(1) = 'refine'
         if( describe ) call print_doc_merge_shellweights
-        call cline%parse(keys_required(:2))
+        call cline%parse(keys_required(:2), keys_optional(:1))
         ! set defaults
         call cline%set('outfile', 'shellweight3D_doc.txt')
         ! execute

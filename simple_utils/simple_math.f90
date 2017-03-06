@@ -2255,6 +2255,22 @@ contains
     end subroutine
     
     ! SORTING
+
+    function peakfinder( vals, npeaks ) result( peakpos )
+        real,    intent(in)  :: vals(:)
+        integer, intent(in)  :: npeaks
+        integer, allocatable :: peakpos(:)
+        logical, allocatable :: mask(:)
+        integer :: n, ipeak, loc(1)
+        n = size(vals)
+        allocate(peakpos(npeaks), mask(n))
+        mask = .true.
+        do ipeak=1,npeaks
+            loc = maxloc(vals, mask=mask)
+            peakpos(ipeak) = loc(1)
+            mask(loc(1)) = .false.
+        end do
+    end function peakfinder
     
     !> \brief  rheapsort from numerical recepies (largest last)
     subroutine hpsort_1( n, rarr, iarr )

@@ -65,7 +65,6 @@ type prime3D_srch
     ! CONSTRUCTOR
     procedure          :: new
     ! CALCULATORS
-    procedure, private :: calc_qcont_corr
     procedure          :: prep_npeaks_oris
     procedure          :: sort_shifted_npeaks
     ! GETTERS
@@ -78,19 +77,17 @@ type prime3D_srch
     procedure          :: prep_corr4srch
     procedure          :: prep_reforis
     procedure, private :: prep_inpl_srch
-    procedure          :: prep_ctfparms
     procedure          :: calc_corrs
     ! SEARCH ROUTINES
     procedure          :: exec_prime3D_srch
-    procedure          :: exec_prime3D_qcont_srch
     procedure          :: exec_prime3D_shc_srch
     procedure          :: exec_prime3D_inpl_srch
+    procedure          :: exec_prime3D_het_srch
     procedure, private :: stochastic_srch
-    procedure, private :: stochastic_srch_qcont
     procedure, private :: stochastic_srch_shc
     procedure, private :: stochastic_srch_inpl
+    procedure, private :: stochastic_srch_het
     procedure          :: inpl_srch
-    procedure          :: inpl_srch_qcont
     procedure, private :: greedy_srch
     procedure          :: stochastic_weights
     ! GETTERS & SETTERS
@@ -210,33 +207,6 @@ contains
     end subroutine new
     
     ! CALCULATORS
-
-    !>  \brief  calculates correlation to previous volume in previous orientation
-    function calc_qcont_corr( self, iptcl, o, pftcc, proj, tfun, refvols )result( corr )
-        use simple_image,     only: image
-        use simple_projector, only: projector
-        use simple_ctf,       only: ctf
-        class(prime3D_srch),     intent(inout) :: self
-        class(image),            intent(inout) :: refvols( self%nstates )
-        class(projector),        intent(inout) :: proj
-        class(polarft_corrcalc), intent(inout) :: pftcc
-        class(ori),              intent(inout) :: o
-        class(ctf),              intent(inout) :: tfun
-        integer,                 intent(in)    :: iptcl
-        real    :: corr
-        integer :: state, inpl_ind
-        state    = nint( o%get('state') )
-        if( .not.self%state_exists( state ) )then
-            stop 'empty state projection in calc_qcont_corr; simple_prime3d_srch'
-        endif
-        inpl_ind = self%srch_common%roind( 360. )
-        call proj%fproject_polar( 1, refvols(state), o, self%pp, pftcc ) ! on-the-fly polar projection
-        if( self%ctf .ne. 'no' )then
-            call pftcc%apply_ctf(tfun, self%dfx, self%dfy, self%angast)
-        endif
-        corr = pftcc%corr( 1, iptcl, inpl_ind )
-        if( debug ) write(*,'(A)') '>>> PRIME3D_SRCH::EXECUTED CALC_QCONT_CORR'
-    end function calc_qcont_corr
 
     !> \brief  for sorting already shifted npeaks oris
     subroutine sort_shifted_npeaks( self, os )
@@ -465,9 +435,6 @@ contains
                     call self%prep_reforis                                              ! search space & order prep
                 case( 'neigh', 'shcneigh' )                                             ! DISCRETE CASE WITH NEIGHBOURHOOD
                     call self%prep_reforis( nnvec=nnmat(self%prev_proj,:) )             ! search space & order prep
-                case( 'qcont', 'qcontneigh' )                                           ! QUASI-CONTINUOUS CASE
-                    call self%prep_reforis( o_prev=o_prev )                             ! search space & order prep
-                    !call self%o_refs%set_ori( self%prev_ref, o_prev )  ! necessary???  ! replaces closest ref with previous best
                 case DEFAULT
                     stop 'Unknown refinement mode; simple_prime3D_srch; prep4srch'
             end select
@@ -565,20 +532,7 @@ contains
                 ! Search space
                 call prep_discrete_reforis
             case( 'shift' )
-                call prep_discrete_reforis      
-            case( 'qcont' )
-                ! QUASI-CONTINUOUS
-                ! TODO: PREVIOUS STATE LAST
-                call self%o_refs%new( self%nrefs )
-                call self%o_refs%rnd_proj_space( self%nrefs, eullims=self%eullims ) ! stochastic search space
-                if( self%nstates > 1 )call self%o_refs%rnd_states( self%nstates )   ! randomise states
-            case( 'qcontneigh' )
-                ! QUASI-CONTINUOUS & NEIHGBORHOOD
-                ! TODO: PREVIOUS STATE LAST
-                if( .not.present(o_prev) )stop 'Previous orientation must be provided; simple_prime3D_srch;prep_ref_oris'
-                call self%o_refs%new( self%nnnrefs )
-                call self%o_refs%rnd_proj_space( self%nnnrefs, o_prev, self%athres, self%eullims ) ! neighborhood stochastic search space
-                if( self%nstates > 1 )call self%o_refs%rnd_states( self%nstates )                  ! randomise states
+                call prep_discrete_reforis
             case DEFAULT
                 stop 'Unknown refinement method; prime3D_srch; prep_reforis'                
         end select
@@ -620,8 +574,6 @@ contains
         !
         calc_corr = .true.
         if( present(corr_t) )calc_corr = .false.
-        if( (self%refine.eq.'qcont'.or.self%refine.eq.'qcontneigh' ).and. &
-        & .not.present(corr_t) )stop 'corr to be provided with qcont-/neigh; prep_corr4srch; simple_prime3D_srch'
         ! DEFAULT VALUE
         self%prev_corr = 1.
         if( present(o_prev) )then
@@ -667,29 +619,6 @@ contains
             endif
         endif
     end subroutine prep_inpl_srch
-
-    !>  \brief  fetches ctf params for online application (quasi-continuous only)
-    subroutine prep_ctfparms( self, o )
-        class(prime3D_srch), intent(inout) :: self
-        type(ori), optional, intent(inout) :: o
-        self%dfx    = 0.
-        self%dfy    = 0.
-        self%angast = 0.
-        if( present(o) )then
-            if( self%ctf.ne.'no' )then
-                self%dfx = o%get('dfx')
-                if( self%pp%tfplan%mode.eq.'astig' )then ! astigmatic CTF
-                    self%dfy    = o%get('dfy')
-                    self%angast = o%get('angast')
-                else if( self%pp%tfplan%mode.eq.'noastig' )then
-                    self%dfy    = self%dfx
-                    self%angast = 0.
-                else
-                    stop 'Unsupported ctf mode; prep_ctfparms; simple_prime3D_srch'
-                endif
-            endif
-        endif
-    end subroutine prep_ctfparms
 
     !>  \brief retrieves and preps npeaks orientations for reconstruction
     subroutine prep_npeaks_oris( self )
@@ -791,44 +720,6 @@ contains
         if( self%doshift ) call self%sort_shifted_npeaks( self%o_npeaks )
         if( debug ) write(*,'(A)') '>>> PRIME3D_SRCH::EXECUTED PRIME3D_SRCH'
     end subroutine exec_prime3D_srch
-    
-    !>  \brief a master prime search routine 4 CPU
-    subroutine exec_prime3D_qcont_srch( self, refvols, proj, pftcc, iptcl, lp, o, athres )
-        use simple_image,     only: image
-        use simple_projector, only: projector
-        use simple_ctf,       only: ctf
-        class(prime3D_srch),     intent(inout) :: self
-        class(image),            intent(inout) :: refvols(self%nstates)
-        class(projector),        intent(inout) :: proj
-        class(ori),              intent(inout) :: o
-        class(polarft_corrcalc), intent(inout) :: pftcc
-        real,                    intent(in)    :: lp
-        integer,                 intent(in)    :: iptcl
-        real, optional,          intent(in)    :: athres
-        type(ctf) :: tfun
-        real      :: cc, wcorr
-        if( present(athres) )then
-            if( athres <= 0.)then
-                write(*,*)'Invalid athres value: ',athres,' in simple_prime3D_srch; exec_prime3D_qcont_srch'
-                stop
-            endif
-            self%athres = athres
-        endif
-        ! we here need to re-create the CTF object as kV/cs/fraca are now per-particle params
-        ! that these parameters are part of the doc is checked in the params class
-        tfun = ctf(self%pp%smpd, o%get('kv'), o%get('cs'), o%get('fraca'))
-        call self%prep4srch( o )
-        call self%prep_ctfparms( o )
-        cc = self%calc_qcont_corr( iptcl, o, pftcc, proj, tfun, refvols)
-        call self%prep_corr4srch( pftcc, iptcl, lp, o, cc )
-        call self%prep_inpl_srch( pftcc )
-        call self%stochastic_srch_qcont(refvols, proj, tfun, pftcc, iptcl)
-        call self%prep_npeaks_oris
-        call self%stochastic_weights(wcorr, self%o_npeaks)
-        call o%set('corr', wcorr)
-        if( self%doshift )call self%sort_shifted_npeaks( self%o_npeaks )
-        if( debug ) write(*,'(A)') '>>> PRIME3D_SRCH::EXECUTED PRIME3D_SRCH'
-    end subroutine exec_prime3D_qcont_srch
 
     !>  \brief a master prime search routine 4 CPU
     subroutine exec_prime3D_shc_srch( self, pftcc, iptcl, lp, o, nnmat, cnt_glob )
@@ -849,16 +740,16 @@ contains
         endif
         call self%prep_npeaks_oris
         if( present(o) ) call o%set('corr', self%o_npeaks%get( self%npeaks,'corr'))
-        if( debug ) write(*,'(A)') '>>> PRIME3D_SHC_SRCH::EXECUTED PRIME3D_SRCH'
+        if( debug ) write(*,'(A)') '>>> PRIME3D_SRCH::EXECUTED PRIME3D_SHC_SRCH'
     end subroutine exec_prime3D_shc_srch
 
     !>  \brief a master shift/in-plane prime search routine 4 CPU
     subroutine exec_prime3D_inpl_srch( self, pftcc, iptcl, lp, o, greedy )
         class(prime3D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
-        class(ori),              intent(inout) :: o
-        real,                    intent(in)    :: lp
         integer,                 intent(in)    :: iptcl
+        real,                    intent(in)    :: lp
+        class(ori),              intent(inout) :: o
         logical,    optional,    intent(in)    :: greedy
         logical :: doshift, dogreedy, greedy_inpl, found_better
         if( .not.self%doshift )stop 'In-plane search not activated yet; simple_prime3D_srch%exec_prime3D_inpl_srch'
@@ -876,8 +767,20 @@ contains
         call self%prep_npeaks_oris
         call o%set('corr', self%o_npeaks%get( self%npeaks,'corr'))
         self%greedy_inpl = greedy_inpl ! restores setting
-        if( debug ) write(*,'(A)') '>>> PRIME3D_SHC_SRCH::EXECUTED PRIME3D_INPL_SRCH'
+        if( debug ) write(*,'(A)') '>>> PRIME3D_SRCH::EXECUTED PRIME3D_INPL_SRCH'
     end subroutine exec_prime3D_inpl_srch
+
+    !>  \brief state labeler
+    subroutine exec_prime3D_het_srch( self, pftcc, iptcl, o_in )
+        class(prime3D_srch),     intent(inout) :: self
+        class(polarft_corrcalc), intent(inout) :: pftcc
+        integer,                 intent(in)    :: iptcl
+        class(ori),              intent(inout) :: o_in
+        type(ori) :: o
+        o = o_in
+        call self%stochastic_srch_het( pftcc, iptcl, o )
+        if( debug ) write(*,'(A)') '>>> PRIME3D_SRCH::EXECUTED PRIME3D_HET_SRCH'
+    end subroutine exec_prime3D_het_srch
 
     !>  \brief  executes the stochastic soft orientation search on CPU
     subroutine stochastic_srch( self, pftcc, iptcl, cnt_glob )
@@ -943,75 +846,6 @@ contains
             end subroutine per_ref_srch
 
     end subroutine stochastic_srch
-
-    !>  \brief  executes the stochastic quasi-continuous soft orientation search on CPU
-    subroutine stochastic_srch_qcont( self, refvols, proj, tfun, pftcc, iptcl )
-        use simple_image,     only: image
-        use simple_projector, only: projector
-        use simple_ctf,       only: ctf
-        class(prime3D_srch),     intent(inout) :: self
-        class(image),            intent(inout) :: refvols(self%nstates)
-        class(projector),        intent(inout) :: proj
-        class(ctf),              intent(inout) :: tfun
-        class(polarft_corrcalc), intent(inout) :: pftcc
-        integer,                 intent(in)    :: iptcl
-        integer :: iref, nrefs
-        real    :: projspace_corrs(self%nrefs)
-        ! INIT
-        self%nbetter         = 0
-        self%nrefs_eval      = 0
-        self%proj_space_inds = 0
-        projspace_corrs = -1.
-        ! ANGULAR SEARCH
-        nrefs = self%nrefs
-        if( self%refine.eq.'qcontneigh' )nrefs=self%nnnrefs
-        do iref=1,nrefs
-            if( iref==self%prev_ref )cycle                                ! skips previous reference
-            call per_ref_srch( iref )                                     ! do thy thing
-            if( self%nbetter>=self%npeaks ) exit   ! exit condition
-        end do
-        if( self%nbetter<self%npeaks )call per_ref_srch( self%prev_ref )  ! evaluate previous reference last
-        call hpsort(self%nrefs, projspace_corrs, self%proj_space_inds)    ! sort in projection direction space
-        ! SHIFT SEARCH
-        call self%inpl_srch_qcont(refvols, proj, tfun, pftcc, iptcl)
-        if( debug ) write(*,'(A)') '>>> PRIME3D_SRCH::FINISHED QUASI-CONTINUOUS STOCHASTIC SEARCH'
-
-        contains
-            
-            ! per random reference calculation
-            subroutine per_ref_srch( iref )
-                integer, intent(in) :: iref
-                type(ori)           :: o_ref
-                real                :: corrs(self%nrots), inpl_corr
-                integer             :: state, loc(1), inpl_ind
-                ! Info is stashed on orientation object except for index and correlation
-                ! Out-of-plane
-                o_ref = self%o_refs%get_ori( iref )                                       ! get reference ori
-                state = nint( o_ref%get('state') )
-                if( self%state_exists( state ) )then                                          ! skips empty states
-                    call proj%fproject_polar( 1, refvols( state ), o_ref, self%pp, pftcc )    ! online generation of polar central section
-                    if( self%ctf .ne. 'no' )then
-                        call pftcc%apply_ctf(tfun, self%dfx, self%dfy, self%angast)
-                    endif
-                    ! In-plane
-                    corrs     = pftcc%gencorrs(1, iptcl)                                      ! in-plane correlations
-                    loc       = maxloc(corrs)                                                 ! greedy in-plane
-                    inpl_ind  = loc(1)                                                        ! in-plane index
-                    inpl_corr = corrs( inpl_ind )
-                    call self%store_solution( iref, iref, inpl_ind, inpl_corr )
-                    projspace_corrs( iref ) = inpl_corr                                       ! stash correlation for sorting
-                    ! keeps track of how many improving solutions identified
-                    if( self%npeaks == 1 )then
-                        if( inpl_corr > self%prev_corr )self%nbetter = self%nbetter+1
-                    else
-                        if( inpl_corr >= self%prev_corr )self%nbetter = self%nbetter+1
-                    endif
-                    ! keeps track of how many references have been evaluated
-                    self%nrefs_eval = self%nrefs_eval+1
-                endif
-            end subroutine per_ref_srch
-
-    end subroutine stochastic_srch_qcont
     
     !>  \brief  executes the stochastic hard orientation search using pure stochastic hill climbing
     !!          (no probabilistic weighting + stochastic search of in-plane angles) on CPU
@@ -1142,6 +976,48 @@ contains
         call self%inpl_srch( iptcl )                                    ! performs in-plane search
     end subroutine stochastic_srch_inpl
 
+     subroutine stochastic_srch_het( self, pftcc, iptcl, o )
+        use simple_rnd,         only: irnd_uni
+        use simple_fsc_compare, only: fsc_compare
+        class(prime3D_srch),     intent(inout) :: self
+        class(polarft_corrcalc), intent(inout) :: pftcc
+        integer,                 intent(in)    :: iptcl
+        class(ori),              intent(inout) :: o
+        type(fsc_compare) :: fcompare
+        integer           :: istate, iref, irot, prev_state, state
+        real, allocatable :: frc(:), frcs(:,:)
+        logical           :: shcmask(self%nstates)
+        self%prev_proj = self%pe%find_closest_proj(o, 1)     ! previous projection direction
+        do istate=1,self%nstates
+            if( .not. self%state_exists(istate) ) cycle      ! empty state
+            iref  = (istate-1)*self%nprojs + self%prev_proj  ! reference index to state projection direction
+            irot  = self%srch_common%roind(360. - o%e3get()) ! in-plane rotation index
+            frc   = pftcc%genfrc(iref, iptcl, irot)          ! Fourier Ring Correlation
+            if( allocated(frcs) )then
+                frcs(istate,:) = frc
+            else
+                allocate(frcs(self%nstates,size(frc)))
+                frcs = 0.0
+                frcs(istate,:) = frc
+            endif
+        end do
+        ! prepare to compare
+        fcompare   = fsc_compare(frcs)
+        prev_state = nint(o%get('state'))
+        shcmask    = fcompare%shc_mask(prev_state)
+        if( any(shcmask) )then
+            do 
+                state = irnd_uni(self%nstates)
+                if( shcmask(state) ) exit
+            end do
+        else
+            state = fcompare%best_match()
+        endif
+        call o%set('state', real(state))
+        call o%set('ow', 1.)
+        call o%set('frac', 50.)
+        call self%o_npeaks%set_ori( self%npeaks, o )
+    end subroutine stochastic_srch_het
 
     !>  \brief  greedy hill climbing (4 initialisation)
     subroutine greedy_srch( self, pftcc, iptcl, cnt_glob )
@@ -1228,53 +1104,6 @@ contains
         if( debug ) write(*,'(A)') '>>> PRIME3D_SRCH::FINISHED INPL SEARCH'
     end subroutine inpl_srch
 
-    !>  \brief  executes the in-plane search for quasi-continuous mode
-    subroutine inpl_srch_qcont( self, refvols, proj, tfun, pftcc, iptcl )
-        use simple_image,     only: image
-        use simple_projector, only: projector
-        use simple_ctf,       only: ctf
-        class(prime3D_srch),     intent(inout) :: self
-        class(image),            intent(inout) :: refvols(self%nstates)
-        class(projector),        intent(inout) :: proj
-        class(polarft_corrcalc), intent(inout) :: pftcc
-        class(ctf),              intent(inout) :: tfun
-        integer,                 intent(in)    :: iptcl
-        type(ori) :: o, o_zero_e3
-        integer   :: i, ref, state, inpl_ind
-        real      :: cxy(3), crxy(4)
-        if( self%doshift )then
-            ! inpl_ind = self%srch_common%roind( 360. ) ! the in-plane angle is taken care of at the projection level
-            do i=self%nrefs,self%nrefs-self%npeaks+1,-1
-                ref      = self%proj_space_inds(i)
-                o        = self%o_refs%get_ori(ref)
-                inpl_ind = self%srch_common%roind( o%e3get() )
-                state    = nint( o%get('state') )
-                ! online generation of polar central section
-                o_zero_e3 = o
-                call o_zero_e3%e3set(0.)
-                call proj%fproject_polar(1, refvols(state), o_zero_e3, self%pp, pftcc )
-                if( self%ctf .ne. 'no' )then
-                    call pftcc%apply_ctf(tfun, self%dfx, self%dfy, self%angast)
-                endif
-                ! in-plane search
-                if( self%greedy_inpl )then
-                    call pftcc_inplsrch_set_indices(1, iptcl)
-                    crxy = pftcc_inplsrch_minimize(inpl_ind)
-                    call o%set( 'corr', crxy(1) )
-                    call o%e3set( 360.-crxy(2) )
-                    call o%set_shift( crxy(3:4) )
-                    call self%o_refs%set_ori( ref, o )
-                else
-                    call pftcc_shsrch_set_indices(1, iptcl, inpl_ind )
-                    cxy = pftcc_shsrch_minimize()
-                    call o%set( 'corr', cxy(1) )
-                    call o%set_shift( cxy(2:3) )
-                    call self%o_refs%set_ori( ref, o )
-                endif
-            end do
-        endif
-    end subroutine inpl_srch_qcont
-
     subroutine stochastic_weights( self, wcorr, os )
         class(prime3D_srch), intent(inout) :: self
         type(oris),          intent(inout) :: os
@@ -1340,18 +1169,12 @@ contains
         if( present(n) )then
             if( n < 1 )then
                 stop 'invalid index in prime3D_srch::get_o_refs, 1'
-            elseif( self%refine.eq.'qcontneigh' .and. n>self%nnnrefs )then
-                stop 'invalid index in prime3D_srch::get_o_refs, 2'
             elseif( n>self%nrefs)then
                 stop 'invalid index in prime3D_srch::get_o_refs, 3'
             endif
             in = n
         else
-            if( self%refine.eq.'qcontneigh' )then
-                in = self%nnnrefs
-            else
-                in = self%nrefs
-            endif
+            in = self%nrefs
         endif
         out_os = oris(n)
         cnt = 0

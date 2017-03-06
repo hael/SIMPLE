@@ -4,6 +4,11 @@ use simple_image,     only: image
 use simple_projector, only: projector
 implicit none
 
+interface normalise_shellweights
+    module procedure normalise_shellweights_1
+    module procedure normalise_shellweights_2
+end interface
+
 real, private, parameter :: SHTHRESH=0.0001
 
 contains
@@ -46,7 +51,7 @@ contains
     ! SHELL-WEIGHT ROUTINES
 
     !> \brief  normalises the shell-weights for the 3D case
-    subroutine normalise_shellweights( wmat )
+    subroutine normalise_shellweights_1( wmat )
         use simple_stat,   only: corrs2weights, normalize_sigm
         use simple_jiffys, only: alloc_err
         real, intent(inout)  :: wmat(:,:)
@@ -55,12 +60,15 @@ contains
         nptcls = size(wmat,1)
         filtsz = size(wmat,2)
         do ishell=1,filtsz
+            ! remove negative values
+            where( wmat(:,ishell) < 0. ) wmat(:,ishell) = 0.
+            ! calculate weights
             weights_tmp = corrs2weights(wmat(:,ishell))*real(nptcls)
             wmat(:,ishell) = weights_tmp
             deallocate(weights_tmp)
         end do
         allocate(wsums(nptcls), stat=alloc_stat)
-        call alloc_err('In: simple_filterer :: normalise_shellweights', alloc_stat)
+        call alloc_err('In: simple_filterer :: normalise_shellweights_1', alloc_stat)
         do iptcl=1,nptcls
             wsums(iptcl) = sum(wmat(iptcl,:))               
         end do
@@ -68,7 +76,57 @@ contains
         do iptcl=1,nptcls
             wmat(iptcl,:) = wmat(iptcl,:)*wsums(iptcl)
         end do
-    end subroutine normalise_shellweights
+    end subroutine normalise_shellweights_1
+
+    !> \brief  normalises the shell-weights for the multi-ptcl 3D case
+    subroutine normalise_shellweights_2( wmat, npeaks )
+        use simple_stat,   only: corrs2weights, normalize_sigm
+        use simple_jiffys, only: alloc_err
+        use simple_math,   only: peakfinder
+        real,    intent(inout) :: wmat(:,:,:)
+        integer, intent(in)    :: npeaks
+        real,    allocatable   :: wmat_states(:,:,:), weights_tmp(:), wsums_states(:)
+        integer, allocatable   :: peakpos(:)
+        integer :: nstates, nptcls, filtsz, istate, alloc_stat, iptcl, ishell
+        nstates = size(wmat,1)
+        nptcls  = size(wmat,2)
+        filtsz  = size(wmat,3)
+        ! calculate state-dependent shell-weights
+        allocate( wmat_states(nstates,nptcls,filtsz), wsums_states(nstates), stat=alloc_stat )
+        call alloc_err( 'In: simple_filterer :: normalise_shellweights_2', alloc_stat )
+        do iptcl=1,nptcls
+            do ishell=1,filtsz
+                ! remove negative values
+                where( wmat(:,iptcl,ishell) < 0. ) wmat(:,iptcl,ishell) = 0.
+                ! calculate weights
+                weights_tmp = corrs2weights(wmat(:,iptcl,ishell))*real(nstates)
+                wmat_states(:,iptcl,ishell) = weights_tmp
+                deallocate(weights_tmp)
+            end do
+            do istate=1,nstates
+                wsums_states(istate) = sum(wmat_states(istate,iptcl,:))               
+            end do
+            call normalize_sigm(wsums_states)
+            peakpos = peakfinder(wsums_states, npeaks)
+            do istate=1,nstates
+                if( wsums_states(istate) >= wsums_states(peakpos(npeaks)) )then
+                    ! this is a valid peak
+                else
+                    ! destroy
+                    wsums_states(istate) = 0.
+                endif         
+            end do
+            do istate=1,nstates
+                wmat_states(istate,iptcl,:) = wmat_states(istate,iptcl,:)*wsums_states(istate)       
+            end do
+        end do
+        ! normalize the original FRC values per-state using the original shellw normaliser
+        do istate=1,nstates
+            call normalise_shellweights_1(wmat(istate,:,:))
+        end do
+        ! multiply in the state weights
+        wmat = wmat*wmat_states
+    end subroutine normalise_shellweights_2
 
     !> \brief  re-samples a filter array
     function resample_filter( filt_orig, res_orig, res_new ) result( filt_resamp )

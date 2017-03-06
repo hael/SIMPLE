@@ -167,10 +167,8 @@ contains
             p%lp      = p%lp_pick
             call piter%iterate(cline, p, movie_counter, moviename_intg)
         end do
-        ! write CTF parameters in append mode
-        do i=1,os%get_noris()
-            call os%write(i,fname_ctffind_output)
-        end do
+        ! write CTF parameters
+        call os%write(fname_ctffind_output)
         ! destruct
         call os%kill
         deallocate(fname_ctffind_ctrl,fname_ctffind_output)

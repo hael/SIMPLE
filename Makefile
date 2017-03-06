@@ -121,6 +121,7 @@ general: simple_hash.o            \
          simple_arr.o             \
          simple_sll.o             \
          simple_winfuns.o         \
+         simple_fsc_compare.o     \
          simple_restart.o         ;
 
 simple: simple_image.o                  \

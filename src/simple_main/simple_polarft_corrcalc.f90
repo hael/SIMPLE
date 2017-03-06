@@ -85,6 +85,7 @@ type :: polarft_corrcalc
     procedure, private :: gencorrs_all_tester_2
     generic            :: gencorrs_all_tester => gencorrs_all_tester_1, gencorrs_all_tester_2
     procedure          :: gencorrs
+    procedure          :: genfrc
     procedure          :: rosrch_shc
     procedure, private :: corr_1
     procedure, private :: corr_2
@@ -437,19 +438,18 @@ contains
       
     !>  \brief  for printing info about the object
     subroutine print( self )
-      class(polarft_corrcalc), intent(in) :: self
-      write(*,*) "from/to particle indices              (self%pfromto): ", self%pfromto
-      write(*,*) "total n particles in partition         (self%nptcls): ", self%nptcls
-      write(*,*) "number of references                    (self%nrefs): ", self%nrefs
-      write(*,*) "number of rotations                     (self%nrots): ", self%nrots
-      write(*,*) "number of nk                               (self%nk): ", self%nk
-      write(*,*) "radius of molecule                      (self%ring2): ", self%ring2
-      write(*,*) "nr of rots for ref (2nd dim of pftmat)  (self%refsz): ", self%refsz
-      write(*,*) "n rots for ptcl (2nd dim of pftmat)    (self%ptclsz): ", self%ptclsz 
-      write(*,*) "logical dim. of original Cartesian image (self%ldim): ", self%ldim
-      write(*,*) "high-pass limit Fourier index      (self%kfromto(1)): ", self%kfromto(1)
-      write(*,*) "low-pass limit Fourier index       (self%kfromto(2)): ", self%kfromto(2)
-      return
+        class(polarft_corrcalc), intent(in) :: self
+        write(*,*) "from/to particle indices              (self%pfromto): ", self%pfromto
+        write(*,*) "total n particles in partition         (self%nptcls): ", self%nptcls
+        write(*,*) "number of references                    (self%nrefs): ", self%nrefs
+        write(*,*) "number of rotations                     (self%nrots): ", self%nrots
+        write(*,*) "number of nk                               (self%nk): ", self%nk
+        write(*,*) "radius of molecule                      (self%ring2): ", self%ring2
+        write(*,*) "nr of rots for ref (2nd dim of pftmat)  (self%refsz): ", self%refsz
+        write(*,*) "n rots for ptcl (2nd dim of pftmat)    (self%ptclsz): ", self%ptclsz 
+        write(*,*) "logical dim. of original Cartesian image (self%ldim): ", self%ldim
+        write(*,*) "high-pass limit Fourier index      (self%kfromto(1)): ", self%kfromto(1)
+        write(*,*) "low-pass limit Fourier index       (self%kfromto(2)): ", self%kfromto(2)
     end subroutine print
    
     ! MEMOIZERS
@@ -788,6 +788,41 @@ contains
         end do
         !$omp end parallel do
     end function gencorrs
+
+    !>  \brief  is for generating resolution dependent correlations
+    function genfrc( self, iref, iptcl, irot ) result( frc )
+        !$ use omp_lib
+        !$ use omp_lib_kinds
+        use simple_math, only: csq
+        class(polarft_corrcalc), intent(inout) :: self              !< instance
+        integer,                 intent(in)    :: iref, iptcl, irot !< reference, particle, rotation
+        real, allocatable :: frc(:)
+        real :: sumsqref, sumsqptcl
+        integer :: ptcl_ind, kind, k
+        allocate( frc(self%kfromto(1):self%kfromto(2)) )
+        ptcl_ind = self%ptcl_ind(iptcl)
+        if( allocated(self%pfts_refs_ctf) )then
+            !$omp parallel do default(shared) private(k,kind,sumsqref,sumsqptcl)
+            do k=self%kfromto(1),self%kfromto(2)
+                kind      = self%k_ind(k)
+                frc(k)    = sum(self%pfts_refs_ctf(iref,:,kind)*conjg(self%pfts_ptcls(ptcl_ind,irot:irot+self%refsz-1,kind)))
+                sumsqref  = sum(csq(self%pfts_refs_ctf(iref,:,kind)))
+                sumsqptcl = sum(csq(self%pfts_ptcls(ptcl_ind,:self%refsz,kind)))
+                frc(k)    = frc(k)/sqrt(sumsqref*sumsqptcl)
+            end do
+            !$omp end parallel do
+        else
+            !$omp parallel do default(shared) private(k,kind,sumsqref,sumsqptcl)
+            do k=self%kfromto(1),self%kfromto(2)
+                kind      = self%k_ind(k)
+                frc(k)    = sum(self%pfts_refs(iref,:,kind)*conjg(self%pfts_ptcls(ptcl_ind,irot:irot+self%refsz-1,kind)))
+                sumsqref  = sum(csq(self%pfts_refs(iref,:,kind)))
+                sumsqptcl = sum(csq(self%pfts_ptcls(ptcl_ind,:self%refsz,kind)))
+                frc(k)    = frc(k)/sqrt(sumsqref*sumsqptcl)
+            end do
+            !$omp end parallel do
+        endif
+    end function genfrc
 
     !>  \brief  for calculating the correlation between reference iref and particle iptcl in rotation irot
     function corr_1( self, iref, iptcl, irot ) result( cc )

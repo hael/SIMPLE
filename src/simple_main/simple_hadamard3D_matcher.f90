@@ -89,7 +89,7 @@ contains
         ! DETERMINE THE NUMBER OF PEAKS
         if( .not. cline%defined('npeaks') )then
             select case(p%refine)
-                case('no', 'qcont', 'qcontneigh')
+                case('no', 'neigh')
                     p%npeaks = min(MAXNPEAKS,b%e%find_npeaks(p%lp, p%moldiam))
                 case DEFAULT
                     p%npeaks = 1
@@ -121,17 +121,9 @@ contains
 
         ! INITIALIZE
         if( which_iter <= 0 )then
-            if( str_has_substr(p%refine,'qcont') )then
-                write(*,'(A)') '>>> PRIME3D QUASI-CONTINUOUS STOCHASTIC SEARCH'
-            else
-                write(*,'(A)') '>>> PRIME3D DISCRETE STOCHASTIC SEARCH'
-            endif
+            write(*,'(A)') '>>> PRIME3D DISCRETE STOCHASTIC SEARCH'
         else
-            if( str_has_substr(p%refine,'qcont') )then
-                write(*,'(A,1X,I3)') '>>> PRIME3D QUASI-CONTINUOUS STOCHASTIC SEARCH, ITERATION:', which_iter
-            else
-                write(*,'(A,1X,I3)') '>>> PRIME3D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
-            endif
+            write(*,'(A,1X,I3)') '>>> PRIME3D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
         endif
         if( which_iter > 0 ) p%outfile = 'prime3Ddoc_'//int2str_pad(which_iter,3)//'.txt'
 
@@ -164,7 +156,7 @@ contains
             orientation = b%a%get_ori(iptcl)
             prev_state  = nint( orientation%get('state') )
             if( prev_state > 0 )then
-                if( .not. str_has_substr(p%refine,'qcont') ) call preprefs4align(b, p, iptcl, pftcc)
+                call preprefs4align(b, p, iptcl, pftcc)
                 ! execute the high-level routines in prime3D_srch
                 if( p%use_gpu .eq. 'yes' .or. p%bench_gpu .eq. 'yes' )then
                     select case(p%refine)
@@ -209,16 +201,12 @@ contains
                         case('shcneigh')
                             if( p%oritab .eq. '' ) stop 'cannot run the refine=shcneigh mode without input oridoc (oritab)'
                             call primesrch3D%exec_prime3D_shc_srch(pftcc, iptcl, p%lp, orientation, nnmat=b%nnmat)
-                        case('qcont')
-                            if( p%oritab .eq. '' ) stop 'cannot run the refine=qcont mode without input oridoc (oritab)'
-                            call primesrch3D%exec_prime3D_qcont_srch(b%refvols, b%proj, pftcc, iptcl, p%lp, orientation)
-                        case('qcontneigh')
-                            if( p%oritab .eq. '' ) stop 'cannot run the refine=qcontneigh mode without input oridoc (oritab)'
-                            call primesrch3D%exec_prime3D_qcont_srch(b%refvols, b%proj,&
-                            pftcc, iptcl, p%lp, orientation, athres=max(10.,2.*p%athres))
                         case('shift')
                             if( p%oritab .eq. '' ) stop 'cannot run the refine=shift mode without input oridoc (oritab)'
                             call primesrch3D%exec_prime3D_inpl_srch(pftcc, iptcl, p%lp, orientation, greedy=.false.)
+                        case('het')
+                            if( p%oritab .eq. '' ) stop 'cannot run the refine=het mode without input oridoc (oritab)'
+                            call primesrch3D%exec_prime3D_het_srch(pftcc, iptcl, orientation)
                         case DEFAULT
                             write(*,*) 'The refinement mode: ', trim(p%refine), ' is unsupported on CPU'
                             stop 
@@ -336,7 +324,6 @@ contains
         ! must be done here since p%kfromto is dynamically set based on FSC from previous round
         ! or based on dynamic resolution limit update
         nrefs = p%nspace*p%nstates
-        if( str_has_substr(p%refine,'qcont') ) nrefs = 1 ! on-line update of the reference section
         if( p%l_xfel )then
             call pftcc%new(nrefs, [p%fromp,p%top], [p%boxmatch,p%boxmatch,1],&
             p%kfromto, p%ring2, p%ctf, isxfel='yes')
@@ -375,18 +362,13 @@ contains
                 endif
             endif
             call preprefvol( b, p, cline, s )
-            if( str_has_substr(p%refine,'qcont') )then
-                ! store reference volume
-                b%refvols(s) = b%vol
-            else 
-                ! generate discrete projections
-                do iref=1,p%nspace
-                    cnt = cnt+1
-                    call progress(cnt, nrefs)
-                    o = b%e%get_ori(iref)
-                    call b%proj%fproject_polar(cnt, b%vol, o, p, pftcc)
-                end do
-            endif
+            ! generate discrete projections
+            do iref=1,p%nspace
+                cnt = cnt+1
+                call progress(cnt, nrefs)
+                o = b%e%get_ori(iref)
+                call b%proj%fproject_polar(cnt, b%vol, o, p, pftcc)
+            end do
         end do
         ! bring back the original b%vol size
         if( p%boxmatch < p%box ) call b%vol%new([p%box,p%box,p%box], p%smpd)

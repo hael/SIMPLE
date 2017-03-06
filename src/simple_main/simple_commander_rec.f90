@@ -46,8 +46,8 @@ contains
         class(cmdline),          intent(inout) :: cline
         type(params)      :: p
         type(build)       :: b
-        logical           :: doshellweight
-        real, allocatable :: wmat(:,:)
+        logical           :: doshellweight, doshellweight_states
+        real, allocatable :: wmat(:,:), wmat_states(:,:,:)
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         select case(p%eo)
@@ -58,14 +58,24 @@ contains
             case DEFAULT
                 stop 'unknonw eo flag; simple_commander_rec :: exec_recvol'
         end select
-        call setup_shellweights(b, p, doshellweight, wmat) ! shell-weights setup
-        if( doshellweight )then
+        doshellweight        = .false.
+        doshellweight_states = .false.
+        if( p%refine .eq. 'isw' )then
+            ! shell-weights for multi-particle setup
+            call setup_shellweights(b, p, doshellweight_states, wmat_states, p%npeaks)
+        else
+            ! shell-weights setup
+            call setup_shellweights(b, p, doshellweight, wmat)               
+        endif
+        if( doshellweight_states )then
+            call exec_rec_master(b, p, cline, wmat_states=wmat_states)
+        else if( doshellweight )then
             call exec_rec_master(b, p, cline, wmat=wmat)
         else
             call exec_rec_master(b, p, cline)
         endif
         ! end gracefully
-        call simple_end('**** SIMPLE_RECVOL NORMAL STOP ****')    
+        call simple_end('**** SIMPLE_RECVOL NORMAL STOP ****', print_simple=.false.)    
     end subroutine exec_recvol
 
     subroutine exec_eo_volassemble( self, cline )
@@ -222,13 +232,13 @@ contains
                 recvolname = trim(p%outvol)
             else
                 if( p%even .eq. 'yes' .and. p%odd .eq. 'no' )then
-                    recvolname = 'recvol_state'//int2str_pad(s,2)//'_even'//p%ext
+                    recvolname = 'recvol_state'//int2str_pad(state4name,2)//'_even'//p%ext
                 else if( p%odd .eq. 'yes' .and. p%even .eq. 'no' )then
-                    recvolname = 'recvol_state'//int2str_pad(s,2)//'_odd'//p%ext
+                    recvolname = 'recvol_state'//int2str_pad(state4name,2)//'_odd'//p%ext
                 else if( p%odd .eq. 'yes' .and. p%even .eq. 'yes' )then
                     stop 'ERROR! Cannot have even=yes and odd=yes simultaneously'
                 else
-                    recvolname = 'recvol_state'//int2str_pad(s,2)//p%ext
+                    recvolname = 'recvol_state'//int2str_pad(state4name,2)//p%ext
                 endif
             endif
             call normalize( trim(recvolname) )

@@ -732,7 +732,7 @@ contains
         else if( .not.cline%defined('oritab') .and. vol_defined )then
             ! projection matching
             select case( p_master%refine )
-                case( 'neigh', 'shcneigh', 'qcont', 'qcontneigh', 'shift' )
+                case( 'neigh', 'shcneigh', 'shift' )
                     stop 'refinement method requires input orientation document'
                 case DEFAULT
                     ! refine=no|shc, all good?
@@ -1142,8 +1142,6 @@ contains
         type(shellweight3D_commander)      :: xshellweight3D
         type(merge_algndocs_commander)     :: xmerge_algndocs
         type(merge_shellweights_commander) :: xmerge_shellweights
-        ! command lines
-        ! type(cmdline)                      :: cline_merge_shellweights
         ! other variables
         type(params)                       :: p_master
         integer, allocatable               :: parts(:,:)
@@ -1208,13 +1206,14 @@ contains
             ! we need to set the prg flag for the command lines that control distributed workflows 
             cline_shellweight3D = cline
             call cline_shellweight3D%set('prg', 'shellweight3D')
-            do istate = 1,p_master%nstates
-                vol = 'vol'//trim(int2str(istate))
-                if( .not. cline%defined(vol) )then
-                    write(*,*) 'simple_commander_distr_wflows :: exec_recvol_distr'
-                    stop 'need input volume(s) for shell-weighted 3D reconstruction'
-                endif
-            end do
+            ! NEEDED TO REMOVE THIS FOR ISW
+            ! do istate = 1,p_master%nstates
+            !     vol = 'vol'//trim(int2str(istate))
+            !     if( .not. cline%defined(vol) )then
+            !         write(*,*) 'simple_commander_distr_wflows :: exec_recvol_distr'
+            !         stop 'need input volume(s) for shell-weighted 3D reconstruction'
+            !     endif
+            ! end do
             ! execute
             call xshellweight3D_distr%execute(cline_shellweight3D)
         endif
@@ -1237,7 +1236,7 @@ contains
         endif
         ! termination
         call qsys_cleanup(p_master)
-        call simple_end('**** SIMPLE_RECVOL NORMAL STOP ****')
+        call simple_end('**** SIMPLE_RECVOL NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_recvol_distr
 
     ! TIME-SERIES ROUTINES
@@ -1307,7 +1306,9 @@ contains
         call qscripts%generate_scripts(job_descr, p_master%ext, myq_descr, part_params=part_params)
         ! manage job scheduling
         call qscripts%schedule_jobs
+        ! termination
         call qsys_cleanup(p_master)
+        call simple_end('**** SIMPLE_TSERIES_TRACK NORMAL STOP ****')
     end subroutine exec_tseries_track_distr
 
 end module simple_commander_distr_wflows

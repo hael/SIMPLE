@@ -399,7 +399,7 @@ contains
     
     !> \brief  for reconstructing Fourier volumes according to the orientations 
     !!         and states in o, assumes that stack is open   
-    subroutine rec( self, fname, p, o, se, state, mul, eo, part, wmat )
+    subroutine rec( self, fname, p, o, se, state, mul, eo, part, wmat, wmat_states )
         use simple_oris,     only: oris
         use simple_sym,      only: sym
         use simple_params,   only: params
@@ -407,24 +407,31 @@ contains
         use simple_filterer, only: resample_filter
         use simple_jiffys,   only: find_ldim_nptcls, progress
         use simple_gridding  ! use all in there
-        class(reconstructor), intent(inout) :: self      !< object
-        character(len=*),     intent(inout) :: fname     !< spider/MRC stack filename
-        class(params),        intent(in)    :: p         !< parameters
-        class(oris),          intent(inout) :: o         !< orientations
-        class(sym),           intent(inout) :: se        !< symmetry element
-        integer,              intent(in)    :: state     !< state to reconstruct
-        real,    optional,    intent(in)    :: mul       !< shift multiplication factor
-        integer, optional,    intent(in)    :: eo        !< even(2) or odd(1)
-        integer, optional,    intent(in)    :: part      !< partition (4 parallel rec)
-        real,    optional,    intent(in)    :: wmat(:,:) !< shellweights
+        class(reconstructor), intent(inout) :: self               !< object
+        character(len=*),     intent(inout) :: fname              !< spider/MRC stack filename
+        class(params),        intent(in)    :: p                  !< parameters
+        class(oris),          intent(inout) :: o                  !< orientations
+        class(sym),           intent(inout) :: se                 !< symmetry element
+        integer,              intent(in)    :: state              !< state to reconstruct
+        real,    optional,    intent(in)    :: mul                !< shift multiplication factor
+        integer, optional,    intent(in)    :: eo                 !< even(2) or odd(1)
+        integer, optional,    intent(in)    :: part               !< partition (4 parallel rec)
+        real,    optional,    intent(in)    :: wmat(:,:)          !< shellweights
+        real,    optional,    intent(in)    :: wmat_states(:,:,:) !< shellweights for multi-particle analysis
         type(image)       :: img, img_pd
         type(ran_tabu)    :: rt
-        integer           :: statecnt(p%nstates), i, cnt, n, ldim(3), filtsz, filtsz_pad
+        integer           :: statecnt(p%nstates), i, cnt, n, ldim(3), filtsz
+        integer           :: filtsz_pad, state_here, state_glob
         real, allocatable :: res(:), res_pad(:), wresamp(:)
-        logical           :: doshellweight
+        logical           :: doshellweight, doshellweight_states
         call find_ldim_nptcls(fname, ldim, n)
         if( n /= o%get_noris() ) stop 'inconsistent nr entries; rec; simple_reconstructor'
-        doshellweight = present(wmat)
+        doshellweight        = present(wmat)
+        doshellweight_states = present(wmat_states)
+        if( doshellweight .and. doshellweight_states ) stop 'only one mode of shellweighting allowed&
+        &(wmat or wmat_states); rec; simple_reconstructor'
+        ! stash global state index
+        state_glob = state 
         ! make random number generator
         rt = ran_tabu(n)
         ! make the images
@@ -440,12 +447,13 @@ contains
         call self%reset
         write(*,'(A)') '>>> KAISER-BESSEL INTERPOLATION'
         statecnt = 0
-        cnt = 0
+        cnt      = 0
         do i=1,p%nptcls
             call progress(i, p%nptcls) 
             if( i <= p%top .and. i >= p%fromp )then
                 cnt = cnt+1
-                if( nint(o%get(i,'state')) == state )then
+                state_here = nint(o%get(i,'state')) 
+                if( state_here > 0 .and. (state_here == state .or. doshellweight_states) )then
                     statecnt(state) = statecnt(state)+1
                     if( present(eo) )then
                         if( mod(cnt,2) == 0 .and. eo == 2 )then
@@ -489,7 +497,7 @@ contains
                 integer   :: j, state
                 real      :: pw
                 state = nint(o%get(i, 'state'))
-                if( state == 0 )return
+                if( state == 0 ) return
                 pw = 1.
                 if( p%frac < 0.99 ) pw = o%get(i, 'w')
                 if( pw > 0. )then
@@ -504,7 +512,9 @@ contains
                     else
                         call prep4cgrid(img, img_pd, p%msk, wfuns=self%wfuns)
                     endif
-                    if( doshellweight )then
+                    if( doshellweight_states )then
+                        wresamp = resample_filter(wmat_states(state_glob,i,:), res, res_pad)
+                    else if( doshellweight )then
                         wresamp = resample_filter(wmat(i,:), res, res_pad)
                     else
                         allocate(wresamp(filtsz_pad))

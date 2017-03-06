@@ -133,7 +133,7 @@ contains
         call chdict%push('pspecsz',       'size of power spectrum(in pixels)')
         call chdict%push('pspecsz_unblur','size of power spectrum 4 unblur(in pixels)')
         call chdict%push('pspecsz_ctffind','size of power spectrum 4 ctffind(in pixels)')
-        call chdict%push('refine',        'refinement mode(no|shc|neigh|shcneigh|qcont|qcontneigh|shift){no}')
+        call chdict%push('refine',        'refinement mode(no|shc|neigh|shcneigh|isw|shift){no}')
         call chdict%push('refs',          'initial2Dreferences.ext')
         call chdict%push('remap',         'adjust the number of clusters by splitting(yes|no){no}')
         call chdict%push('rnd',           'random(yes|no){no}')

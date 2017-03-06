@@ -438,7 +438,8 @@ contains
             return
         endif
         corrmin = minval(corrs_copy)
-        maxminratio = corrmax/corrmin
+        maxminratio = 2.0
+        if( corrmin > 0. ) maxminratio = corrmax/corrmin
         if( maxminratio >= THRESHOLD )then
            ! min/max normalise the correlations
            call normalize_sigm(corrs_copy)

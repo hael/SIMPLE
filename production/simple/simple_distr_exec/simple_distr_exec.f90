@@ -20,25 +20,26 @@ implicit none
 
 ! DISTRIBUTED COMMANDERS
 ! pre-processing
-type(preproc_stream_commander)           :: xpreproc_stream
-type(unblur_distr_commander)             :: xunblur_distr
-type(unblur_tomo_movies_distr_commander) :: xunblur_tomo_distr
-type(ctffind_distr_commander)            :: xctffind_distr
-type(pick_distr_commander)               :: xpick_distr
+type(preproc_stream_commander)            :: xpreproc_stream
+type(unblur_distr_commander)              :: xunblur_distr
+type(unblur_tomo_movies_distr_commander)  :: xunblur_tomo_distr
+type(ctffind_distr_commander)             :: xctffind_distr
+type(pick_distr_commander)                :: xpick_distr
 ! PRIME2D
-type(prime2D_init_distr_commander)       :: xprime2D_init_distr
-type(prime2D_distr_commander)            :: xprime2D_distr
-type(find_nnimgs_distr_commander)        :: xfind_nnimgs_distr
+type(prime2D_init_distr_commander)        :: xprime2D_init_distr
+type(prime2D_distr_commander)             :: xprime2D_distr
+type(find_nnimgs_distr_commander)         :: xfind_nnimgs_distr
 ! PRIME3D
-type(prime3D_init_distr_commander)       :: xprime3D_init_distr
-type(prime3D_distr_commander)            :: xprime3D_distr
-type(cont3D_distr_commander)             :: xcont3D_distr
-type(shellweight3D_distr_commander)      :: xshellweight3D_distr
-type(recvol_distr_commander)             :: xrecvol_distr
+type(prime3D_init_distr_commander)        :: xprime3D_init_distr
+type(prime3D_distr_commander)             :: xprime3D_distr
+type(cont3D_distr_commander)              :: xcont3D_distr
+type(shellweight3D_distr_commander)       :: xshellweight3D_distr
+type(recvol_distr_commander)              :: xrecvol_distr
 ! time-series workflows
-type(tseries_track_distr_commander)      :: xtseries_track_distr
+type(tseries_track_distr_commander)       :: xtseries_track_distr
 ! high-level workflows
-type(ini3D_from_cavgs_commander)         :: xini3D_from_cavgs
+type(iterated_spectral_weights_commander) :: xisw_distr
+type(ini3D_from_cavgs_commander)          :: xini3D_from_cavgs
 
 ! OTHER DECLARATIONS
 integer, parameter    :: MAXNKEYS=100, KEYLEN=32
@@ -199,8 +200,7 @@ select case(prg)
         keys_required(3) = 'kv'
         keys_required(4) = 'cs'
         keys_required(5) = 'fraca'
-        keys_required(6) = 'nthr'
-        keys_required(7) = 'nparts'
+        keys_required(6) = 'nparts'
         ! set optional keys
         keys_optional(1) = 'ncunits'
         keys_optional(2) = 'pspecsz'
@@ -213,8 +213,9 @@ select case(prg)
         keys_optional(9) = 'phaseplate'
         ! parse command line
         if( describe ) call print_doc_ctffind
-        call cline%parse(keys_required(:7), keys_optional(:8))
+        call cline%parse(keys_required(:6), keys_optional(:8))
         ! set defaults
+        call cline%set('nthr', 1.0)
         if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz', 1024.)
         if( .not. cline%defined('hp')      ) call cline%set('hp',        30.)
         if( .not. cline%defined('lp')      ) call cline%set('lp',         5.)
@@ -516,27 +517,28 @@ select case(prg)
         ! weight<shellweight3D/end>
         !
         ! set required keys     
-        keys_required(1) = 'stk'
-        keys_required(2) = 'vol1'
-        keys_required(3) = 'smpd'
-        keys_required(4) = 'msk' 
-        keys_required(5) = 'oritab'
-        keys_required(6) = 'ctf'
-        keys_required(7) = 'nthr'
-        keys_required(8) = 'nparts'
+        keys_required(1)  = 'stk'
+        keys_required(2)  = 'vol1'
+        keys_required(3)  = 'smpd'
+        keys_required(4)  = 'msk' 
+        keys_required(5)  = 'oritab'
+        keys_required(6)  = 'ctf'
+        keys_required(7)  = 'nthr'
+        keys_required(8)  = 'nparts'
         ! set optional keys
-        keys_optional(1) = 'ncunits'
-        keys_optional(2) = 'deftab'
-        keys_optional(3) = 'automsk'
-        keys_optional(4) = 'mw'
-        keys_optional(5) = 'amsklp'
-        keys_optional(6) = 'edge'
-        keys_optional(7) = 'binwidth'
-        keys_optional(8) = 'inner'
-        keys_optional(9) = 'width'        
+        keys_optional(1)  = 'ncunits'
+        keys_optional(2)  = 'deftab'
+        keys_optional(3)  = 'automsk'
+        keys_optional(4)  = 'mw'
+        keys_optional(5)  = 'amsklp'
+        keys_optional(6)  = 'edge'
+        keys_optional(7)  = 'binwidth'
+        keys_optional(8)  = 'inner'
+        keys_optional(9)  = 'width'
+        keys_optional(10) = 'refine'       
         ! parse command line
         if( describe ) call print_doc_shellweight3D
-        call cline%parse(keys_required(:8), keys_optional(:9))
+        call cline%parse(keys_required(:8), keys_optional(:10))
         ! execute
         call xshellweight3D_distr%execute(cline)
         ! set defaults
@@ -558,27 +560,28 @@ select case(prg)
         ! the unordered DNA/RNA core of spherical icosahedral viruses<recvol/end>
         !
         ! set required keys
-        keys_required(1) = 'stk'
-        keys_required(2) = 'smpd'
-        keys_required(3) = 'oritab'
-        keys_required(4) = 'msk'
-        keys_required(5) = 'ctf'
-        keys_required(6) = 'pgrp'
-        keys_required(7) = 'nthr'
-        keys_required(8) = 'nparts'
+        keys_required(1)  = 'stk'
+        keys_required(2)  = 'smpd'
+        keys_required(3)  = 'oritab'
+        keys_required(4)  = 'msk'
+        keys_required(5)  = 'ctf'
+        keys_required(6)  = 'pgrp'
+        keys_required(7)  = 'nthr'
+        keys_required(8)  = 'nparts'
         ! set optional keys
-        keys_optional(1) = 'ncunits'
-        keys_optional(2) = 'eo'
-        keys_optional(3) = 'deftab'
-        keys_optional(4) = 'frac'
-        keys_optional(5) = 'mw'
-        keys_optional(6) = 'mul'
-        keys_optional(7) = 'state'
-        keys_optional(8) = 'shellw'
-        keys_optional(9) = 'vol1'        
+        keys_optional(1)  = 'ncunits'
+        keys_optional(2)  = 'eo'
+        keys_optional(3)  = 'deftab'
+        keys_optional(4)  = 'frac'
+        keys_optional(5)  = 'mw'
+        keys_optional(6)  = 'mul'
+        keys_optional(7)  = 'state'
+        keys_optional(8)  = 'shellw'
+        keys_optional(9)  = 'vol1'
+        keys_optional(10) = 'npeaks'
         ! parse command line
         if( describe ) call print_doc_recvol
-        call cline%parse(keys_required(:8), keys_optional(:9))
+        call cline%parse(keys_required(:8), keys_optional(:10))
         ! set defaults
         if( .not. cline%defined('trs') ) call cline%set('trs', 5.) ! to assure that shifts are being used
         if( .not. cline%defined('eo')  ) call cline%set('eo', 'no')
@@ -614,6 +617,36 @@ select case(prg)
 
     ! HIGH-LEVEL DISTRIBUTED WORKFLOWS
 
+    case( 'isw' )
+        !==Program isw
+        !
+        ! <isw/begin>is a program for multi-particle 3D reconstruction by iterated spectral weights,
+        ! a blind deconvolution approach for weighted state sorting<isw/end> 
+        !
+        ! set required keys
+        keys_required(1)  = 'stk'
+        keys_required(2)  = 'smpd'
+        keys_required(3)  = 'oritab'
+        keys_required(4)  = 'msk'
+        keys_required(5)  = 'ctf'
+        keys_required(6)  = 'pgrp'
+        keys_required(7)  = 'nstates'
+        keys_required(8)  = 'npeaks'
+        keys_required(9)  = 'lp'
+        keys_required(10) = 'nthr'
+        keys_required(11) = 'nparts'
+        ! set optional keys
+        keys_optional(1)  = 'ncunits'
+        keys_optional(2)  = 'deftab'
+        keys_optional(3)  = 'frac'
+        keys_optional(4)  = 'maxits'
+        ! parse command line
+        ! if( describe ) call print_doc_isw
+        call cline%parse(keys_required(:11), keys_optional(:4))
+        ! set defaults
+        call cline%set('refine', 'isw')
+        ! execute
+        call xisw_distr%execute( cline )
     case( 'ini3D_from_cavgs' )
         !==Program ini3D_from_cavgs
         !

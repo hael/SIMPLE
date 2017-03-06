@@ -44,7 +44,6 @@ contains
         call cline_local%set('refine', 'no')
         call cline_local%set('nstates',1.)
         call setup_testenv( cline_local, be_verbose )
-        call test_ctfparms
         call test_stochastic_weights
         call test_sort_shifted_npeaks
         call test_prep4srch
@@ -57,7 +56,6 @@ contains
         call cline_local%set('refine', 'shc')
         call cline_local%set('nstates',1.)
         call setup_testenv( cline_local, be_verbose )
-        call test_ctfparms
         call test_prep4srch
         call test_prepcorr4srch
         call test_prep_reforis
@@ -68,7 +66,6 @@ contains
         call cline_local%set('refine', 'no')
         call cline_local%set('nstates',real(NSTATES))
         call setup_testenv( cline_local, be_verbose )
-        call test_ctfparms
         call test_stochastic_weights
         call test_sort_shifted_npeaks
         call test_prep4srch
@@ -296,37 +293,6 @@ contains
             call test_os%kill
         enddo
     end subroutine test_sort_shifted_npeaks
-
-    subroutine test_ctfparms
-        use simple_rnd, only: ran3
-        real      :: ctf_vals( p%npeaks,3 )
-        type(ori) :: o
-        real      :: dfx,dfy,angast
-        integer   :: i, j
-        p%ctf         = 'flip'
-        p%tfplan%flag = p%ctf
-        p%tfplan%mode = 'astig'
-        do j=1,3
-            call primesrch3D%new( b%a, b%e, p )
-            do i=1,p%npeaks
-                call o%rnd_ori
-                dfx    = (ran3()-.5)*2.
-                dfy    = (ran3()-.5)*2.
-                angast = (ran3()-.5)*179.99
-                call o%set('dfx'   , dfx)
-                call o%set('dfy'   , dfy)
-                call o%set('angast', angast)
-                call primesrch3D%prep_ctfparms( o )
-                if( primesrch3D%get_angast() .ne. angast)stop 'Failed in simple_prime3D_srch_tester::test_ctfparms 1'
-                if( primesrch3D%get_dfx() .ne. dfx)stop 'Failed in simple_prime3D_srch_tester::test_ctfparms 2'
-                if( primesrch3D%get_dfy() .ne. dfy)stop 'Failed in simple_prime3D_srch_tester::test_ctfparms 3'
-            enddo
-        enddo
-        p%ctf         = 'no'
-        p%tfplan%flag = p%ctf
-        p%tfplan%mode = 'no'
-        call primesrch3D%set_ctf('no')
-    end subroutine test_ctfparms
 
     subroutine test_prep_reforis
         type(oris) :: test_os

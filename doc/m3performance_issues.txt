@@ -1,0 +1,4 @@
+What we do know is that it has something to do with the TLB (translation look aside buffer). In particular the virtualisation process (qemu) was configured to use hugepages. Unfortunately while we anticipated that if simple used hugepages we could correct the performance issue, we don't fully understand why having qemu use hugepages should fix the performance issue.
+
+ M2 nodes have transparent huge pages enabled by default. M3 bare metal did not. After enabling THP on M3 BM it gives the same speeds as M2 nodes.
+

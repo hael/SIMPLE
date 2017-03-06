@@ -21,6 +21,11 @@ interface prep2Dref
     module procedure prep2Dref_2
 end interface
 
+interface setup_shellweights
+    module procedure setup_shellweights_1
+    module procedure setup_shellweights_2
+end interface
+
 logical, parameter :: debug       = .false.
 real,    parameter :: SHTHRESH    = 0.0001
 real,    parameter :: VOLSHTHRESH = 0.01
@@ -120,7 +125,7 @@ contains
     end subroutine set_bp_range
 
     !>  \brief  constructs the shellweight matrix for 3D search
-    subroutine setup_shellweights( b, p, doshellweight, wmat, res, res_pad )
+    subroutine setup_shellweights_1( b, p, doshellweight, wmat, res, res_pad )
         use simple_map_reduce, only: merge_rmat_from_parts
         use simple_filterer,   only: normalise_shellweights
         class(build),                intent(inout) :: b
@@ -175,9 +180,11 @@ contains
                 read(unit=filnum,pos=1,iostat=io_stat) wmat
                 ! check if the read was successful
                 if( io_stat .ne. 0 )then
-                    write(*,'(a,i0,2a)') '**ERROR(setup_shellweights): I/O error ',&
-                    io_stat, ' when reading shellweights.bin'
-                    stop 'I/O error; setup_shellweights; simple_hadamard_common'
+                    ! write(*,'(a,i0,2a)') '**ERROR(setup_shellweights_2): I/O error ',&
+                    ! io_stat, ' when reading shellweights.bin'
+                    ! stop 'I/O error; setup_shellweights_2; simple_hadamard_common'
+                    doshellweight = .false.
+                    return  
                 endif
                 close(filnum)
                 call normalise_shellweights(wmat)
@@ -185,7 +192,76 @@ contains
             endif
         end subroutine wmat_from_single_file
 
-    end subroutine setup_shellweights
+    end subroutine setup_shellweights_1
+
+    !>  \brief  constructs the shellweight matrix for 3D search
+    subroutine setup_shellweights_2( b, p, doshellweight, wmat, npeaks, res, res_pad )
+        use simple_map_reduce, only: merge_rmat_from_parts
+        use simple_filterer,   only: normalise_shellweights
+        class(build),                intent(inout) :: b
+        class(params),               intent(inout) :: p
+        logical,                     intent(out)   :: doshellweight
+        real,           allocatable, intent(out)   :: wmat(:,:,:)
+        integer,                     intent(in)    :: npeaks
+        real, optional, allocatable, intent(out)   :: res(:), res_pad(:)
+        logical, allocatable :: files_exist(:)
+        integer :: filtsz, filtsz_pad, alloc_stat, filnum, io_stat, ipart
+        doshellweight = .false.
+        if( .not. p%l_shellw ) return
+        filtsz     = b%img%get_filtsz() ! nr of resolution elements
+        filtsz_pad = b%img_pad%get_filtsz()
+        if( allocated(wmat) ) deallocate(wmat)
+        if( present(res) )then
+            if( allocated(res) ) deallocate(res)
+            res = b%img%get_res()
+        endif
+        if( present(res_pad) )then
+            if( allocated(res_pad) ) deallocate(res_pad)
+            res_pad = b%img_pad%get_res()
+        endif
+        if( p%l_distr_exec )then
+            call wmat_from_single_file
+            if( doshellweight )then
+                ! we are done
+                return
+            else
+                ! we may need to merge partial shellweight files
+                allocate( files_exist(p%nparts) )
+                do ipart=1,p%nparts
+                    files_exist(ipart) = file_exists('shellweights_part'//int2str_pad(ipart,p%numlen)//'.bin')
+                end do
+                if( all(files_exist) )then
+                    wmat = merge_rmat_from_parts(p%nstates, p%nptcls, p%nparts, filtsz, 'shellweights_part')
+                    call normalise_shellweights(wmat, npeaks)
+                    doshellweight = .true.
+                endif
+                deallocate(files_exist)
+            endif
+        else
+            call wmat_from_single_file
+        endif
+
+      contains
+
+        subroutine wmat_from_single_file
+            if( file_exists('shellweights.bin') )then    
+                allocate( wmat(p%nstates,p%nptcls,filtsz), stat=alloc_stat)
+                filnum = get_fileunit()
+                open(unit=filnum, status='OLD', action='READ', file='shellweights.bin', access='STREAM')
+                read(unit=filnum,pos=1,iostat=io_stat) wmat
+                ! check if the read was successful
+                if( io_stat .ne. 0 )then
+                    write(*,'(a,i0,2a)') '**ERROR(setup_shellweights_2): I/O error ',&
+                    io_stat, ' when reading shellweights.bin'
+                    stop 'I/O error; setup_shellweights_2; simple_hadamard_common'
+                endif
+                close(filnum)
+                call normalise_shellweights(wmat, npeaks)
+                doshellweight = .true.
+            endif
+        end subroutine wmat_from_single_file
+
+    end subroutine setup_shellweights_2
 
     !>  \brief  grids one particle image to the volume
     subroutine grid_ptcl( b, p, iptcl, cnt_glob, orientation, os, shellweights )
@@ -391,21 +467,22 @@ contains
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         class(cmdline), intent(inout) :: cline
-        integer,        intent(in)    :: s
+        integer,        intent(in)    :: s  
         real, allocatable :: filter(:)
         real :: shvec(3)
-        if( p%oritab.ne.'' )then
-            if( b%a%get_statepop(s) == 0 )then
-                ! empty state
-                if( p%boxmatch < p%box )then
-                    call b%vol%new([p%boxmatch,p%boxmatch,p%boxmatch],p%smpd)
-                else
-                    call b%vol%new([p%box,p%box,p%box],p%smpd)
-                endif
-                call b%vol%fwd_ft                
-                return
-            endif
-        endif
+        ! TOOK OUT AS IT CONFLICTS WITH ISW
+        ! if( p%oritab .ne. '' )then
+        !     if( b%a%get_statepop(s) == 0 )then
+        !         ! empty state
+        !         if( p%boxmatch < p%box )then
+        !             call b%vol%new([p%boxmatch,p%boxmatch,p%boxmatch],p%smpd)
+        !         else
+        !             call b%vol%new([p%box,p%box,p%box],p%smpd)
+        !         endif
+        !         call b%vol%fwd_ft                
+        !         return
+        !     endif
+        ! endif
         ! read 
         if( p%boxmatch < p%box ) call b%vol%new([p%box,p%box,p%box],p%smpd) ! ensure correct dim
         call b%vol%read(p%vols(s), isxfel=p%l_xfel)
@@ -418,7 +495,7 @@ contains
                 if( p%pgrp(:1).eq.'c' )then
                     shvec = b%vol%center(p%cenlp,'no',p%msk,doshift=.false.) ! find center of mass shift
                     if( arg(shvec) > VOLSHTHRESH )then
-                        if( p%pgrp.ne.'c1' )shvec(1:2) = 0.          ! shifts only along z-axis for C2 and above
+                        if( p%pgrp.ne.'c1' ) shvec(1:2) = 0.         ! shifts only along z-axis for C2 and above
                         call b%vol%shift(shvec(1),shvec(2),shvec(3)) ! performs shift
                         ! map back to particle oritentations
                         if( cline%defined('oritab') ) call b%a%map3dshift22d(-shvec(:), state=s)
@@ -426,11 +503,11 @@ contains
                 endif
             endif
         endif
-        ! Clip
+        ! clip
         if( p%boxmatch < p%box )then
             call b%vol%clip_inplace([p%boxmatch,p%boxmatch,p%boxmatch]) ! SQUARE DIMS ASSUMED
         endif
-        ! Masking
+        ! masking
         if( p%l_xfel )then
             ! no centering or masking
         else

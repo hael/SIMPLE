@@ -132,44 +132,36 @@ contains
 
     subroutine exec_merge_shellweights( self, cline )
         use simple_map_reduce, only: merge_rmat_from_parts
-        use simple_stat,       only: corrs2weights, moment, normalize_sigm
+        use simple_filterer,   only: normalise_shellweights
         class(merge_shellweights_commander), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
         type(params)      :: p
         type(build)       :: b
-        real, allocatable :: wmat(:,:),  weights_tmp(:), wsums(:)
-        integer :: filnum, io_stat, filtsz, ishell, nptcls, alloc_stat, iptcl
+        real, allocatable :: wmat(:,:), wmat_states(:,:,:)
+        integer :: filnum, io_stat, filtsz
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built (assumes stk input)
         filtsz = b%img%get_filtsz()         ! nr of resolution elements
-        wmat   = merge_rmat_from_parts(p%nptcls, p%nparts, filtsz, 'shellweights_part')
-        write(*,'(A)') '>>> CALCULATING SHELL-BY-SHELL WEIGHTS'
-        ! create weights, shell-by-shell
-        nptcls = size(wmat,1)
-        do ishell=1,filtsz
-            weights_tmp = corrs2weights(wmat(:,ishell))*real(nptcls)
-            wmat(:,ishell) = weights_tmp
-            deallocate(weights_tmp)
-        end do
-        ! set and write the per-particle wsums
-        allocate(wsums(nptcls), stat=alloc_stat)
-        call alloc_err('In: simple_commander_distr :: exec_merge_shellweights', alloc_stat)
-        do iptcl=1,nptcls
-            wsums(iptcl) = sum(wmat(iptcl,:))               
-        end do
-        call normalize_sigm(wsums)
-        do iptcl=1,nptcls
-            wmat(iptcl,:) = wmat(iptcl,:)*wsums(iptcl)
-        end do
-        filnum = get_fileunit()
-        open(unit=filnum, status='REPLACE', action='WRITE', file='shellweights.bin', access='STREAM')
-        write(unit=filnum,pos=1,iostat=io_stat) wmat
+        if( p%refine .eq. 'isw' )then
+            wmat_states = merge_rmat_from_parts(p%nstates, p%nptcls, p%nparts, filtsz, 'shellweights_part')
+            call normalise_shellweights(wmat_states, p%npeaks)
+            filnum = get_fileunit()
+            open(unit=filnum, status='REPLACE', action='WRITE', file='shellweights.bin', access='STREAM')
+            write(unit=filnum,pos=1,iostat=io_stat) wmat_states
+            deallocate(wmat_states)
+        else
+            wmat = merge_rmat_from_parts(p%nptcls, p%nparts, filtsz, 'shellweights_part')
+            call normalise_shellweights(wmat)
+            filnum = get_fileunit()
+            open(unit=filnum, status='REPLACE', action='WRITE', file='shellweights.bin', access='STREAM')
+            write(unit=filnum,pos=1,iostat=io_stat) wmat
+            deallocate(wmat)
+        endif
         if( io_stat .ne. 0 )then
             write(*,'(a,i0,a)') 'I/O error ', io_stat, ' when writing to shellweights.bin'
             stop 'I/O error; merge_shellweights'
         endif
         close(filnum)
-        deallocate(wsums,wmat)
         ! end gracefully
         call simple_end('**** SIMPLE_MERGE_SHELLWEIGHTS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_merge_shellweights

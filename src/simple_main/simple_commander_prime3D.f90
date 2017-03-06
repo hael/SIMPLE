@@ -143,7 +143,11 @@ contains
         ! make sure boxmatch .eq. box
         p%boxmatch = p%box
         call b%build_general_tbox(p, cline)  ! general objects built
-        call cont3D_shellweight(b, p, cline)
+        if( p%refine .eq. 'isw' )then
+            call cont3D_shellweight_states( b, p, cline )
+        else
+            call cont3D_shellweight(b, p, cline)
+        endif
         call simple_end('**** SIMPLE_SHELLWEIGHT3D NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_shellweight3D
     
@@ -424,8 +428,7 @@ contains
                 stop 'no mask allowed when processing XFEL patterns; simple_prime3D'
             endif
         endif
-        if( str_has_substr(p%refine,'neigh') .or. str_has_substr(p%refine,'qcont') &
-            &.or. p%refine.eq.'shift' .or. p%refine.eq.'anneal' )then
+        if( str_has_substr(p%refine,'neigh') .or. p%refine .eq. 'shift' )then
             if( .not. cline%defined('oritab') )then
                 stop 'need oritab input for execution of prime3D with refine mode'
             endif
