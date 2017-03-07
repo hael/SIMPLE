@@ -472,18 +472,10 @@ contains
         real :: shvec(3)
         ! TOOK OUT AS IT CONFLICTS WITH ISW
         ! if( p%oritab .ne. '' )then
-        !     if( b%a%get_statepop(s) == 0 )then
-        !         ! empty state
-        !         if( p%boxmatch < p%box )then
-        !             call b%vol%new([p%boxmatch,p%boxmatch,p%boxmatch],p%smpd)
-        !         else
-        !             call b%vol%new([p%box,p%box,p%box],p%smpd)
-        !         endif
-        !         call b%vol%fwd_ft                
+        !     if( b%a%get_statepop(s) == 0 )return              
         !         return
         !     endif
         ! endif
-        ! read 
         if( p%boxmatch < p%box ) call b%vol%new([p%box,p%box,p%box],p%smpd) ! ensure correct dim
         call b%vol%read(p%vols(s), isxfel=p%l_xfel)
         ! take care of centering
@@ -492,7 +484,7 @@ contains
         else
             if( p%doshift )then
                 ! centering only for asymmetric and circular symmetric cases
-                if( p%pgrp(:1).eq.'c' )then
+                if( p%pgrp(:1).eq.'c' .and. p%refine.ne.'het' )then
                     shvec = b%vol%center(p%cenlp,'no',p%msk,doshift=.false.) ! find center of mass shift
                     if( arg(shvec) > VOLSHTHRESH )then
                         if( p%pgrp.ne.'c1' ) shvec(1:2) = 0.         ! shifts only along z-axis for C2 and above

@@ -771,14 +771,15 @@ contains
     end subroutine exec_prime3D_inpl_srch
 
     !>  \brief state labeler
-    subroutine exec_prime3D_het_srch( self, pftcc, iptcl, o_in )
+    subroutine exec_prime3D_het_srch( self, pftcc, iptcl, o_in, statecnt )
         class(prime3D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: iptcl
         class(ori),              intent(inout) :: o_in
+        integer,                 intent(inout) :: statecnt(self%nstates)
         type(ori) :: o
         o = o_in
-        call self%stochastic_srch_het( pftcc, iptcl, o )
+        call self%stochastic_srch_het( pftcc, iptcl, o, statecnt )
         if( debug ) write(*,'(A)') '>>> PRIME3D_SRCH::EXECUTED PRIME3D_HET_SRCH'
     end subroutine exec_prime3D_het_srch
 
@@ -976,16 +977,18 @@ contains
         call self%inpl_srch( iptcl )                                    ! performs in-plane search
     end subroutine stochastic_srch_inpl
 
-     subroutine stochastic_srch_het( self, pftcc, iptcl, o )
+     subroutine stochastic_srch_het( self, pftcc, iptcl, o, statecnt )
         use simple_rnd,         only: irnd_uni
         use simple_fsc_compare, only: fsc_compare
         class(prime3D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: iptcl
         class(ori),              intent(inout) :: o
+        integer,                 intent(inout) :: statecnt(self%nstates)
         type(fsc_compare) :: fcompare
-        integer           :: istate, iref, irot, prev_state, state
+        integer           :: istate, iref, irot, state, loc(1), cnt
         real, allocatable :: frc(:), frcs(:,:)
+        real              :: mi_state, frac, weights(self%nstates)
         logical           :: shcmask(self%nstates)
         self%prev_proj = self%pe%find_closest_proj(o, 1)     ! previous projection direction
         do istate=1,self%nstates
@@ -1001,22 +1004,63 @@ contains
                 frcs(istate,:) = frc
             endif
         end do
-        ! prepare to compare
-        fcompare   = fsc_compare(frcs)
-        prev_state = nint(o%get('state'))
-        shcmask    = fcompare%shc_mask(prev_state)
-        if( any(shcmask) )then
-            do 
-                state = irnd_uni(self%nstates)
-                if( shcmask(state) ) exit
-            end do
-        else
-            state = fcompare%best_match()
-        endif
+        fcompare = fsc_compare(frcs)
+        self%prev_state = nint(o%get('state'))
+
+        ! HARD STOCHASTIC APPROACH
+        ! shcmask         = fcompare%shc_mask(self%prev_state)
+        ! if( any(shcmask) )then
+        !     frac = 100.- real(count(shcmask))/real(self%nstates)
+        !     do 
+        !         state = irnd_uni(self%nstates)
+        !         if( shcmask(state) ) exit
+        !     end do
+        ! else
+        !     frac           = 100.
+        !     state          = fcompare%best_match()
+        ! endif
+
+        ! WEIGHTED STOCHASTIC APPROACH
+        ! shcmask         = fcompare%shc_mask(self%prev_state)
+        ! if( any(shcmask) )then
+        !     frac = 100.- real(count(shcmask))/real(self%nstates)
+        !     call fcompare%calc_weights(shcmask, weights)
+        ! else
+        !     frac           = 100.
+        !     state          = fcompare%best_match()
+        !     weights        = 0.
+        !     weights(state) = 1.0 
+        ! endif
+
+        ! DETERMINISTIC WEIGHTING APPROACH
+        call fcompare%calc_weights(weights)
+        loc = maxloc(weights)
+        state = loc(1)
+        statecnt(state) = statecnt(state) + 1
         call o%set('state', real(state))
-        call o%set('ow', 1.)
-        call o%set('frac', 50.)
-        call self%o_npeaks%set_ori( self%npeaks, o )
+        frac = 100. * (real(count(weights<TINY)+1.)/real(self%nstates) )
+        call o%set('frac', frac)
+        call o%set('mi_class', 1.)
+        call o%set('mi_inpl',  1.)
+        if( self%prev_state.ne.state)then
+            mi_state = 0.
+        else
+            mi_state = 1.
+        endif
+        call o%set('mi_state', mi_state)
+        call o%set('mi_joint', mi_state)
+        ! the below is to make the outputted oritab sensible
+        cnt = 0
+        do istate=1,self%nstates
+            if(istate == state)cycle
+            cnt = cnt+1
+            call self%o_npeaks%set_ori( cnt, o )
+            call self%o_npeaks%set(cnt,'state',real(istate))
+            call self%o_npeaks%set(cnt,'ow', weights(istate))
+        enddo
+        call self%o_npeaks%set_ori( self%nstates, o )
+        call self%o_npeaks%set(self%nstates,'state', real(state))
+        call self%o_npeaks%set(self%nstates,'ow', weights(state))
     end subroutine stochastic_srch_het
 
     !>  \brief  greedy hill climbing (4 initialisation)

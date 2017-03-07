@@ -69,8 +69,9 @@ contains
         logical,        intent(inout) :: update_res, converged
         type(oris)                    :: prime3D_oris
         real, allocatable             :: wmat(:,:), wresamp(:), res(:), res_pad(:)
-        real                          :: w, lptmp
-        integer                       :: iptcl, fnr, file_stat, s, inptcls, prev_state
+        real                          :: w, lptmp, norm
+        integer                       :: iptcl, fnr, file_stat, s, inptcls, prev_state, istate
+        integer                       :: statecnt(p%nstates)
         logical                       :: doshellweight
 
         inptcls = p%top - p%fromp + 1
@@ -89,6 +90,8 @@ contains
         ! DETERMINE THE NUMBER OF PEAKS
         if( .not. cline%defined('npeaks') )then
             select case(p%refine)
+                case('het')
+                    p%npeaks = p%nstates
                 case('no', 'neigh')
                     p%npeaks = min(MAXNPEAKS,b%e%find_npeaks(p%lp, p%moldiam))
                 case DEFAULT
@@ -149,6 +152,7 @@ contains
         ! ALIGN & GRID
         call del_file(p%outfile)
         cnt_glob = 0
+        statecnt = 0
         if( debug ) write(*,*) '*** hadamard3D_matcher ***: loop fromp/top:', p%fromp, p%top
         do iptcl=p%fromp,p%top
             cnt_glob = iptcl - p%fromp + 1
@@ -206,7 +210,11 @@ contains
                             call primesrch3D%exec_prime3D_inpl_srch(pftcc, iptcl, p%lp, orientation, greedy=.false.)
                         case('het')
                             if( p%oritab .eq. '' ) stop 'cannot run the refine=het mode without input oridoc (oritab)'
-                            call primesrch3D%exec_prime3D_het_srch(pftcc, iptcl, orientation)
+                            call primesrch3D%exec_prime3D_het_srch(pftcc, iptcl, orientation, statecnt)
+                            norm = real(sum(statecnt))
+                            do istate=1,p%nstates
+                                print *, '% state ', istate, ' is ', 100.*(real(statecnt(istate))/norm)
+                            end do
                         case DEFAULT
                             write(*,*) 'The refinement mode: ', trim(p%refine), ' is unsupported on CPU'
                             stop 
@@ -241,7 +249,11 @@ contains
             call qsys_job_finished( p, 'simple_hadamard3D_matcher :: prime3D_exec')
         else
             ! CONVERGENCE TEST
-            converged = b%conv%check_conv3D(update_res)
+            if( p%refine .eq. 'het' )then
+                converged = b%conv%check_conv_het()
+            else
+                converged = b%conv%check_conv3D(update_res)
+            endif
         endif
         ! DEALLOCATE
         if( allocated(wmat)    ) deallocate(wmat)

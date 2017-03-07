@@ -33,6 +33,7 @@ type convergence
   contains
     procedure :: check_conv2D
     procedure :: check_conv3D
+    procedure :: check_conv_het
     procedure :: get
 end type convergence
 
@@ -235,6 +236,42 @@ contains
             deallocate( state_mi_joint, statepops )
         endif
     end function check_conv3D
+
+   !>  \brief  checks convergence for the 3D case
+    function check_conv_het( self ) result( converged )
+        use simple_math, only: rad2deg
+        class(convergence), intent(inout) :: self
+        real, allocatable :: statepops(:)
+        logical           :: converged
+        integer           :: iptcl, istate
+        self%frac      = self%bap%get_avg('frac')
+        self%mi_state  = self%bap%get_avg('mi_state')
+        write(*,'(A,1X,F7.4)') '>>> STATE DISTRIBUTION OVERLAP:        ', self%mi_state
+        write(*,'(A,1X,F7.1)') '>>> PERCENTAGE OF SEARCH SPACE SCANNED:', self%frac
+        ! provides convergence stats for multiple states
+        ! by calculating mi_joint for individual states
+        allocate( statepops(self%pp%nstates) )
+        statepops      = 0.
+        do iptcl=1,self%bap%get_noris()
+            istate = nint(self%bap%get(iptcl,'state'))
+            if( istate==0 )cycle
+            statepops(istate) = statepops(istate) + 1.0
+        end do
+        ! print the overlaps and pops for the different states
+        do istate=1,self%pp%nstates
+            write(*,'(A,1X,I5)') '>>> STATE POPULATION:', nint(statepops(istate))
+        end do
+        if( self%mi_state      > MI_STATE_LIM      .and.&
+            self%frac          > FRAC_LIM                )then
+            write(*,'(A)') '>>> CONVERGED: .YES.'
+            converged = .true.
+        else
+            write(*,'(A)') '>>> CONVERGED: .NO.'
+            converged = .false.
+        endif
+        deallocate( statepops )
+    end function check_conv_het
+
 
     !>  \brief  is a getter
     real function get( self, which )

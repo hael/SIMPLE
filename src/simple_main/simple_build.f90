@@ -113,6 +113,7 @@ contains
         use simple_ran_tabu, only: ran_tabu
         use simple_math,     only: nvoxfind, rad2deg
         use simple_rnd,      only: seed_rnd
+        use simple_strings,  only: str_has_substr
         class(build),      intent(inout) :: self
         class(params),     intent(inout) :: p
         class(cmdline),    intent(inout) :: cline
@@ -144,7 +145,7 @@ contains
             if( p%oritab /= '' )then
                 if( .not. cline%defined('nstates') )then
                     call self%a%read(p%oritab, p%nstates)
-                    if( p%nstates>1 )then
+                    if( p%nstates>1 .and. str_has_substr(p%refine,'shc') )then
                         print *,'Multiple states detected, please input the NSTATES key'
                         stop
                     endif
