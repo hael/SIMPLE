@@ -631,7 +631,6 @@ contains
             call progress(i, n)
             call imgs(i)%new([p%box,p%box,1], p%smpd, self%imgkind)
             call self%fproject(vol_pad, o%get_ori(i), img_pad )
-            call img_pad%vis
             if( self%imgkind .eq. 'xfel' )then
                 call img_pad%clip(imgs(i))
             else

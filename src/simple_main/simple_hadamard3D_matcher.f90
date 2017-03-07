@@ -211,10 +211,10 @@ contains
                         case('het')
                             if( p%oritab .eq. '' ) stop 'cannot run the refine=het mode without input oridoc (oritab)'
                             call primesrch3D%exec_prime3D_het_srch(pftcc, iptcl, orientation, statecnt)
-                            norm = real(sum(statecnt))
-                            do istate=1,p%nstates
-                                print *, '% state ', istate, ' is ', 100.*(real(statecnt(istate))/norm)
-                            end do
+                            !norm = real(sum(statecnt))
+                            !do istate=1,p%nstates
+                            !    print *, '% state ', istate, ' is ', 100.*(real(statecnt(istate))/norm)
+                            !end do
                         case DEFAULT
                             write(*,*) 'The refinement mode: ', trim(p%refine), ' is unsupported on CPU'
                             stop 
