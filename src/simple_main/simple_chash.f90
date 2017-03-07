@@ -338,7 +338,7 @@ contains
                 ! print table (for easy to read instructions)
                 key_padded = trim(self%keys(which))
                 do while(len(key_padded) < maxlen)
-                    key_padded = key_padded//' '
+                    key_padded = trim(key_padded)//' '
                 end do
                 if( present(fhandle) )then
                     write(fhandle,'(a,1x,a)') key_padded, '= '//trim(self%values(which))
@@ -361,7 +361,7 @@ contains
         character(len=maxlen) :: key_padded
         key_padded = trim(self%keys(ikey))
         do while(len(key_padded) < maxlen)
-            key_padded = key_padded//' '
+            key_padded = trim(key_padded)//' '
         end do
         if( present(fhandle) )then
             write(fhandle,'(a,1x,a)') key_padded, '= '//trim(self%values(ikey))
