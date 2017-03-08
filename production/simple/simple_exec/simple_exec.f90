@@ -524,9 +524,12 @@ select case(prg)
         keys_optional(2) = 'vol1'
         keys_optional(3) = 'stk'
         keys_optional(4) = 'smpd'
+        keys_optional(5) = 'neg'
         ! parse command line
         ! if( describe ) call print_doc_makepickrefs
         call cline%parse(keys_required(:1), keys_optional(:4))
+        ! set defaults
+        if( .not. cline%defined('neg') )  call cline%set('neg', 'yes')
         ! execute
         call xmakepickrefs%execute(cline)
     case( 'pick' )

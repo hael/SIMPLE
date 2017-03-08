@@ -265,13 +265,14 @@ contains
 
     subroutine refine_positions
         integer                  :: ipeak, xrange(2), yrange(2), xind, yind, ref
-        type(image), allocatable :: target_imgs(:,:)
-        real,        allocatable :: target_corrs(:,:)
-        real                     :: corr, prev_corr
+        ! type(image), allocatable :: target_imgs(:,:)
+        ! real,        allocatable :: target_corrs(:,:)
+        real                     :: corr, prev_corr, target_corr
         write(*,'(a)') '>>> REFINING POSITIONS'
         ! bring back coordinates to refinement sampling
         allocate( peak_positions_refined(npeaks,2), source=nint(PICKER_SHRINK/PICKER_SHRINK_REFINE)*peak_positions)
         backgr_positions = nint(PICKER_SHRINK/PICKER_SHRINK_REFINE)*backgr_positions
+        call ptcl_target%new(ldim_refs_refine, smpd_shrunken_refine)
         do ipeak=1,npeaks
             if( selected_peak_positions(ipeak) )then
                 ! best match in crude first scan
@@ -279,36 +280,41 @@ contains
                 prev_corr = corrmat(peak_positions(ipeak,1),peak_positions(ipeak,2))
                 ! refinement range
                 call srch_range(peak_positions_refined(ipeak,:))
-                allocate(target_imgs(xrange(1):xrange(2),yrange(1):yrange(2)),&
-                         target_corrs(xrange(1):xrange(2),yrange(1):yrange(2)))
-                ! extract image matrix
-                do xind=xrange(1),xrange(2)
-                    do yind=yrange(1),yrange(2)
-                        call target_imgs(xind,yind)%new(ldim_refs_refine, smpd_shrunken_refine)
-                        call mic_shrunken_refine%window_slim([xind,yind], ldim_refs_refine(1), target_imgs(xind,yind))
-                    end do
-                end do
-                ! correlate
-                !$omp parallel do schedule(auto) default(shared) private(xind,yind)
-                do xind=xrange(1),xrange(2)
-                    do yind=yrange(1),yrange(2)
-                        target_corrs(xind,yind) =&
-                        &refs_refine(ref)%real_corr_prenorm(target_imgs(xind,yind), sxx_refine(ref))
-                    end do
-                end do
-                !$omp end parallel do
-                ! find peak
+                ! allocate(target_imgs(xrange(1):xrange(2),yrange(1):yrange(2)),&
+                !          target_corrs(xrange(1):xrange(2),yrange(1):yrange(2)))
                 corr = -1
+                ! extract image, correlate, find peak
                 do xind=xrange(1),xrange(2)
                     do yind=yrange(1),yrange(2)
-                        call target_imgs(xind,yind)%kill
-                        if( target_corrs(xind,yind) > corr )then
+                        ! call target_imgs(xind,yind)%new(ldim_refs_refine, smpd_shrunken_refine)
+                        ! call mic_shrunken_refine%window_slim([xind,yind], ldim_refs_refine(1), target_imgs(xind,yind))
+                        call mic_shrunken_refine%window_slim([xind,yind], ldim_refs_refine(1), ptcl_target)
+                        target_corr = refs_refine(ref)%real_corr_prenorm(ptcl_target, sxx_refine(ref))
+                        if( target_corr > corr )then
                             peak_positions_refined(ipeak,:) = [xind,yind]
-                            corr = target_corrs(xind,yind)
+                            corr = target_corr
                         endif
                     end do
                 end do
-                deallocate(target_imgs, target_corrs)
+                ! correlate
+                ! do xind=xrange(1),xrange(2)
+                !     do yind=yrange(1),yrange(2)
+                !         target_corrs(xind,yind) =&
+                !         &refs_refine(ref)%real_corr_prenorm(target_imgs(xind,yind), sxx_refine(ref))
+                !     end do
+                ! end do
+                ! find peak
+                ! corr = -1
+                ! do xind=xrange(1),xrange(2)
+                !     do yind=yrange(1),yrange(2)
+                !         call target_imgs(xind,yind)%kill
+                !         if( target_corrs(xind,yind) > corr )then
+                !             peak_positions_refined(ipeak,:) = [xind,yind]
+                !             corr = target_corrs(xind,yind)
+                !         endif
+                !     end do
+                ! end do
+                ! deallocate(target_imgs, target_corrs)
             endif
         end do
 

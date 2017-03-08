@@ -693,7 +693,7 @@ contains
                 call cline_projvol%set('nspace', real(NREFS))
                 call cline_projvol%set('outstk', 'pickrefs'//p%ext)
                 call cline_projvol%set('oritab', trim(ORIFILE))
-                call cline_projvol%set('neg', 'yes')
+                call cline_projvol%set('neg', trim(p%neg))
                 call cline_projvol%set('smpd', PICKER_SHRINK)
                 call xprojvol%execute(cline_projvol)
             else
@@ -714,7 +714,11 @@ contains
                     end do
                     call cline%set('stk', 'rotated_from_makepickrefs'//p%ext)
                 endif
-                call neg_imgfile('rotated_from_makepickrefs'//p%ext, 'pickrefs'//p%ext)
+                if( p%neg .eq. 'yes' )then
+                    call neg_imgfile('rotated_from_makepickrefs'//p%ext, 'pickrefs'//p%ext)
+                else
+                     call rename('rotated_from_makepickrefs'//p%ext, 'pickrefs'//p%ext)
+                endif
             endif
         else
             stop 'need input volume (vol1) or class averages (stk) to generate picking references'

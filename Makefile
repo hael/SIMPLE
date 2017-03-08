@@ -159,6 +159,7 @@ build: simple_pair_dtab.o               \
        simple_denspeak_cluster.o        \
        simple_aff_prop.o                \
        simple_clusterer.o               \
+       simple_combinatorics.o           \
        simple_ppca.o                    \
        simple_estimate_ssnr.o           \
        simple_reconstructor.o           \

@@ -387,9 +387,6 @@ contains
                 stop 'Need oritab to be defined when state2split is defined on command line; simple_multiptcl_init'
             endif
         else if( p%tseries .eq. 'yes' )then
-
-            print *, 'nstates: ', p%nstates
-
             call b%a%ini_tseries(p%nstates, 'state')
         else
             call b%a%rnd_states(p%nstates)
