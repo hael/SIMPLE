@@ -14,28 +14,28 @@ complex, parameter :: zero=cmplx(0.,0.) !< just a complex zero
 
 type :: polarft_corrcalc
     private
-    integer                          :: pfromto(2) = 1        !< from/to particle indices (in parallel execution)
-    integer                          :: nptcls     = 1        !< the total number of particles in partition (logically indexded [fromp,top])
-    integer                          :: nrefs      = 1        !< the number of references (logically indexded [1,nrefs])
-    integer                          :: nrots      = 0        !< number of in-plane rotations for one pft (determined by radius of molecule)
-    integer                          :: ring2      = 0        !< radius of molecule
-    integer                          :: refsz      = 0        !< size of reference (nrots/2) (number of vectors used for matching)
-    integer                          :: ptclsz     = 0        !< size of particle (2*nrots)
-    integer                          :: ldim(3)    = 0        !< logical dimensions of original cartesian image
-    integer                          :: kfromto(2) = 0        !< Fourier index range
-    integer                          :: nk         = 0        !< number of resolution elements (Fourier components)
-    real,        allocatable         :: sqsums_refs(:)        !< memoized square sums for the correlation calculations
-    real,        allocatable         :: sqsums_ptcls(:)       !< memoized square sums for the correlation calculations
-    real,        allocatable         :: angtab(:)             !< table of in-plane angles (in degrees)
-    real,        allocatable         :: argtransf(:,:)        !< argument transfer constants for shifting the references
-    real,        allocatable         :: polar(:,:)            !< table of polar coordinates (in Cartesian coordinates)
-    complex(sp), allocatable         :: pfts_refs(:,:,:)      !< 3D complex matrix of polar reference sections (nrefs,refsz,nk)
-    complex(sp), allocatable         :: pfts_refs_ctf(:,:,:)  !< 3D complex matrix of polar reference sections with CTF applied
-    complex(sp), allocatable         :: pfts_ptcls(:,:,:)     !< 3D complex matrix of particle sections
-    real,        allocatable         :: pfts_ptcls_ctf(:,:,:) !< real valued CTF values for implementation of the CTF on GPU 
-    logical                          :: xfel=.false.          !< to indicate whether we process xfel patterns or not
-    logical                          :: dim_expanded=.false.  !< to indicate whether dim has been expanded or not
-    logical                          :: existence=.false.     !< to indicate existence
+    integer                  :: pfromto(2) = 1        !< from/to particle indices (in parallel execution)
+    integer                  :: nptcls     = 1        !< the total number of particles in partition (logically indexded [fromp,top])
+    integer                  :: nrefs      = 1        !< the number of references (logically indexded [1,nrefs])
+    integer                  :: nrots      = 0        !< number of in-plane rotations for one pft (determined by radius of molecule)
+    integer                  :: ring2      = 0        !< radius of molecule
+    integer                  :: refsz      = 0        !< size of reference (nrots/2) (number of vectors used for matching)
+    integer                  :: ptclsz     = 0        !< size of particle (2*nrots)
+    integer                  :: ldim(3)    = 0        !< logical dimensions of original cartesian image
+    integer                  :: kfromto(2) = 0        !< Fourier index range
+    integer                  :: nk         = 0        !< number of resolution elements (Fourier components)
+    real,        allocatable :: sqsums_refs(:)        !< memoized square sums for the correlation calculations
+    real,        allocatable :: sqsums_ptcls(:)       !< memoized square sums for the correlation calculations
+    real,        allocatable :: angtab(:)             !< table of in-plane angles (in degrees)
+    real,        allocatable :: argtransf(:,:)        !< argument transfer constants for shifting the references
+    real,        allocatable :: polar(:,:)            !< table of polar coordinates (in Cartesian coordinates)
+    complex(sp), allocatable :: pfts_refs(:,:,:)      !< 3D complex matrix of polar reference sections (nrefs,refsz,nk)
+    complex(sp), allocatable :: pfts_refs_ctf(:,:,:)  !< 3D complex matrix of polar reference sections with CTF applied
+    complex(sp), allocatable :: pfts_ptcls(:,:,:)     !< 3D complex matrix of particle sections
+    real,        allocatable :: pfts_ptcls_ctf(:,:,:) !< real valued CTF values for implementation of the CTF on GPU 
+    logical                  :: xfel=.false.          !< to indicate whether we process xfel patterns or not
+    logical                  :: dim_expanded=.false.  !< to indicate whether dim has been expanded or not
+    logical                  :: existence=.false.     !< to indicate existence
   contains
     ! CONSTRUCTOR
     procedure          :: new
@@ -72,6 +72,9 @@ type :: polarft_corrcalc
     procedure          :: memoize_sqsum_ref
     procedure          :: memoize_sqsum_ref_ctf
     procedure, private :: memoize_sqsum_ptcl
+    ! I/O
+    procedure          :: write_pfts_ptcls
+    procedure          :: read_pfts_ptcls
     ! MODIFIERS
     procedure          :: apply_ctf
     procedure          :: xfel_subtract_shell_mean
@@ -492,6 +495,48 @@ contains
             self%sqsums_ptcls(ptcl_ind) = sum(csq(self%pfts_ptcls(ptcl_ind,:self%refsz,:self%nk)))
         endif
     end subroutine memoize_sqsum_ptcl
+
+    ! I/O
+
+    !>  \brief  is for writing particle pfts to file
+    subroutine write_pfts_ptcls( self, fname )
+        use simple_filehandling, only: get_fileunit
+        class(polarft_corrcalc), intent(in) :: self
+        character(len=*),        intent(in) :: fname
+        integer :: funit, io_stat
+        funit = get_fileunit()
+        open(unit=funit, status='REPLACE', action='WRITE', file=trim(fname), access='STREAM')
+        write(unit=funit,pos=1,iostat=io_stat) self%pfts_ptcls
+        ! Check if the write was successful
+        if( io_stat .ne. 0 )then
+            write(*,'(a,i0,2a)') '**ERROR(simple_polarft_corrcalc): I/O error ', io_stat, ' when writing file: ', trim(fname)
+            stop 'I/O error; write_pfts_ptcls'
+        endif
+        close(funit)
+    end subroutine write_pfts_ptcls
+
+    !>  \brief  is for reading particle pfts from file
+    subroutine read_pfts_ptcls( self, fname )
+        use simple_filehandling, only: get_fileunit
+        class(polarft_corrcalc), intent(inout) :: self
+        character(len=*),        intent(in)    :: fname
+        integer :: funit, io_stat, iptcl
+        funit = get_fileunit()
+        open(unit=funit, status='OLD', action='READ', file=trim(fname), access='STREAM')
+        read(unit=funit,pos=1,iostat=io_stat) self%pfts_ptcls
+        ! Check if the read was successful
+        if( io_stat .ne. 0 )then
+            write(*,'(a,i0,2a)') '**ERROR(simple_polarft_corrcalc): I/O error ', io_stat, ' when reading file: ', trim(fname)
+            stop 'I/O error; read_pfts_ptcls'
+        endif
+        close(funit)
+        ! memoize sqsum_ptcls
+        !$omp parallel do schedule(auto) default(shared) private(iptcl)
+        do iptcl=self%pfromto(1),self%pfromto(2)
+            call self%memoize_sqsum_ptcl(iptcl)
+        end do
+        !$omp end parallel do
+    end subroutine read_pfts_ptcls
     
     ! MODIFIERS
 

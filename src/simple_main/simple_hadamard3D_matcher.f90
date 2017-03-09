@@ -325,10 +325,11 @@ contains
         endif
     end subroutine gen_random_model
 
-    subroutine preppftcc4align( b, p, cline )
-        class(build),   intent(inout) :: b
-        class(params),  intent(inout) :: p
-        class(cmdline), intent(inout) :: cline
+    subroutine preppftcc4align( b, p, cline, ppfts_fname )
+        class(build),               intent(inout) :: b
+        class(params),              intent(inout) :: p
+        class(cmdline),             intent(inout) :: cline
+        character(len=*), optional, intent(in)    :: ppfts_fname
         integer :: nrefs
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PRIME3D SEARCH ENGINE'
         ! must be done here since constants in p are dynamically set
@@ -346,7 +347,7 @@ contains
         ! PREPARATION OF REFERENCES IN PFTCC
         call prep_refs_pftcc4align( b, p, cline )
         ! PREPARATION OF PARTICLES IN PFTCC
-        call prep_ptcls_pftcc4align( b, p, cline )
+        call prep_ptcls_pftcc4align( b, p, cline, ppfts_fname )
         ! subtract the mean shell values for xfel correlations
         if( p%l_xfel ) call pftcc%xfel_subtract_shell_mean()
         if( debug ) write(*,*) '*** hadamard3D_matcher ***: finished preppftcc4align'
@@ -386,58 +387,75 @@ contains
         if( p%boxmatch < p%box ) call b%vol%new([p%box,p%box,p%box], p%smpd)
     end subroutine prep_refs_pftcc4align
 
-    subroutine prep_ptcls_pftcc4align( b, p, cline )
-        class(build),   intent(inout) :: b
-        class(params),  intent(inout) :: p
-        class(cmdline), intent(inout) :: cline
-        type(ori)                     :: o
-        integer :: cnt, s, iptcl, istate, ntot, progress_cnt
+    subroutine prep_ptcls_pftcc4align( b, p, cline, ppfts_fname )
+        class(build),               intent(inout) :: b
+        class(params),              intent(inout) :: p
+        class(cmdline),             intent(inout) :: cline
+        character(len=*), optional, intent(in)    :: ppfts_fname
+        type(ori) :: o
+        integer   :: cnt, s, iptcl, istate, ntot, progress_cnt
         ! PREPARATION OF PARTICLES IN PFTCC
-        ! read particle images and create polar projections
-        if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PARTICLES'
-        progress_cnt = 0
-        cnt_glob = 0
-        ntot     = p%top-p%fromp+1
-        do s=1,p%nstates
-            if( b%a%get_statepop(s) ==0 )then
-                ! empty state
-                cnt_glob = cnt_glob + p%top-p%fromp+1
-                cycle
+        if( present(ppfts_fname) )then
+            if( file_exists(ppfts_fname) )then
+                call pftcc%read_pfts_ptcls(ppfts_fname)
+            else
+                call prep_pftcc_local
+                call pftcc%write_pfts_ptcls(ppfts_fname)
             endif
-            if( p%doautomsk )then
-                ! read & pre-process mask volume
-                call b%mskvol%read(p%masks(s))
-                if( p%eo .eq. 'yes' )then
-                    call prep4cgrid(b%mskvol, b%vol_pad, p%msk, b%eorecvols(1)%get_wfuns())
-                else
-                    call prep4cgrid(b%mskvol, b%vol_pad, p%msk, b%recvols(1)%get_wfuns())
-                endif
-            endif
-            cnt = 0
-            do iptcl=p%fromp,p%top
-                cnt      = cnt+1
-                o        = b%a%get_ori(iptcl)
-                istate   = nint(o%get('state'))
-                cnt_glob = cnt_glob+1
-                if( istate /= s )cycle
-                progress_cnt = progress_cnt + 1
-                call progress( progress_cnt, ntot )
-                if( p%boxmatch < p%box )then
-                    ! back to the original size as b%img has been
-                    ! and will be clipped/padded in prepimg4align
-                    call b%img%new([p%box,p%box,1],p%smpd)
-                endif
-                if( p%l_distr_exec )then
-                    call b%img%read(p%stk_part, cnt, p%l_xfel)
-                else
-                    call b%img%read(p%stk, iptcl, p%l_xfel)
-                endif
-                call prepimg4align(b, p, o)
-                call b%proj%img2polarft(iptcl, b%img, pftcc)
-            end do
-        end do
-        ! restores b%img dimensions for clean exit
-        if( p%boxmatch < p%box )call b%img%new([p%box,p%box,1],p%smpd)
+        else
+            call prep_pftcc_local
+        endif
+
+        contains
+
+            subroutine prep_pftcc_local
+                ! read particle images and create polar projections
+                if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PARTICLES'
+                progress_cnt = 0
+                cnt_glob     = 0
+                ntot         = p%top-p%fromp+1
+                do s=1,p%nstates
+                    if( b%a%get_statepop(s) ==0 )then
+                        ! empty state
+                        cnt_glob = cnt_glob + p%top-p%fromp + 1
+                        cycle
+                    endif
+                    if( p%doautomsk )then
+                        ! read & pre-process mask volume
+                        call b%mskvol%read(p%masks(s))
+                        if( p%eo .eq. 'yes' )then
+                            call prep4cgrid(b%mskvol, b%vol_pad, p%msk, b%eorecvols(1)%get_wfuns())
+                        else
+                            call prep4cgrid(b%mskvol, b%vol_pad, p%msk, b%recvols(1)%get_wfuns())
+                        endif
+                    endif
+                    cnt = 0
+                    do iptcl=p%fromp,p%top
+                        cnt      = cnt + 1
+                        o        = b%a%get_ori(iptcl)
+                        istate   = nint(o%get('state'))
+                        cnt_glob = cnt_glob+1
+                        if( istate /= s ) cycle
+                        progress_cnt = progress_cnt + 1
+                        call progress( progress_cnt, ntot )
+                        if( p%boxmatch < p%box )then
+                            ! back to the original size as b%img has been
+                            ! and will be clipped/padded in prepimg4align
+                            call b%img%new([p%box,p%box,1],p%smpd)
+                        endif
+                        if( p%l_distr_exec )then
+                            call b%img%read(p%stk_part, cnt, p%l_xfel)
+                        else
+                            call b%img%read(p%stk, iptcl, p%l_xfel)
+                        endif
+                        call prepimg4align(b, p, o)
+                        call b%proj%img2polarft(iptcl, b%img, pftcc)
+                    end do
+                end do
+                ! restores b%img dimensions for clean exit
+                if( p%boxmatch < p%box )call b%img%new([p%box,p%box,1],p%smpd)
+            end subroutine prep_pftcc_local
+        
     end subroutine prep_ptcls_pftcc4align
 
 end module simple_hadamard3D_matcher

@@ -1,0 +1,6 @@
+implement support for memoized particle pfts
+decide whether we need a restart procedure and implement it
+get the distributed implementation in shape
+make a distributed version of multiptcl_init
+discuss what to test this code on
+swap the corr with frc-based metric and see if it makes a difference

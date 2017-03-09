@@ -24,6 +24,8 @@ interface fsc_compare
 end interface fsc_compare
 
 integer, parameter :: CNT_THRESH = 6
+real, pointer      :: ppfscs_class(:,:) => null()
+integer            :: filtsz_class = 0
 
 contains
 
@@ -119,25 +121,25 @@ contains
         use simple_math, only: hpsort
         class(fsc_compare), intent(inout) :: self
         integer :: i, alloc_stat
+        ! set class variables (needed for ranking)
+        filtsz_class =  self%filtsz
+        ppfscs_class => self%pfscs
         self%order = (/(i,i=1,self%n)/)
         call hpsort( self%n, self%order, fsc1_gt_fsc2 )
         self%ranked = .true.
-
-        contains
-
-            logical function fsc1_gt_fsc2( fsc1, fsc2 )
-                integer, intent(in) :: fsc1, fsc2
-                integer :: count1, count2
-                count1 = count(self%pfscs(fsc1,:) > self%pfscs(fsc2,:))
-                count2 = self%filtsz - count1
-                if( count1 > count2 )then
-                    fsc1_gt_fsc2 = .true.
-                else
-                    fsc1_gt_fsc2 = .false.
-                endif
-            end function fsc1_gt_fsc2
-
     end subroutine rank
+
+    logical function fsc1_gt_fsc2( fsc1, fsc2 )
+        integer, intent(in) :: fsc1, fsc2
+        integer :: count1, count2
+        count1 = count(ppfscs_class(fsc1,:) > ppfscs_class(fsc2,:))
+        count2 = filtsz_class - count1
+        if( count1 > count2 )then
+            fsc1_gt_fsc2 = .true.
+        else
+            fsc1_gt_fsc2 = .false.
+        endif
+    end function fsc1_gt_fsc2
 
     subroutine kill( self )
         class(fsc_compare), intent(inout) :: self

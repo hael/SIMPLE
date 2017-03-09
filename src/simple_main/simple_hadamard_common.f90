@@ -180,9 +180,6 @@ contains
                 read(unit=filnum,pos=1,iostat=io_stat) wmat
                 ! check if the read was successful
                 if( io_stat .ne. 0 )then
-                    ! write(*,'(a,i0,2a)') '**ERROR(setup_shellweights_2): I/O error ',&
-                    ! io_stat, ' when reading shellweights.bin'
-                    ! stop 'I/O error; setup_shellweights_2; simple_hadamard_common'
                     doshellweight = .false.
                     return  
                 endif
