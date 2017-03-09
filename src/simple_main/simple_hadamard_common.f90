@@ -7,7 +7,7 @@ use simple_ori,          only: ori
 use simple_rnd,          only: ran3
 use simple_prime3D_srch, only: prime3D_srch
 use simple_gridding,     only: prep4cgrid
-use simple_strings,      only: int2str_pad
+use simple_strings,      ! use all in there
 use simple_math          ! use all in there
 use simple_masker        ! use all in there
 implicit none
@@ -315,7 +315,7 @@ contains
                 if( debug ) write(*,*) '*** simple_hadamard_common ***: got orientation'
                 if( p%frac < 0.99 ) w = w*pw
                 if( w > 0. )then
-                    if( p%pgrp == 'c1' )then
+                    if( p%pgrp == 'c1' .or. str_has_substr(p%refine,'adasym') )then
                         if( p%eo .eq. 'yes' )then
                             call b%eorecvols(s)%grid_fplane(orisoft, b%img_pad, pwght=w, ran=ran, shellweights=shellweights)
                         else
@@ -460,11 +460,12 @@ contains
         call ref%fwd_ft
     end subroutine prep2Dref_2
 
-    subroutine preprefvol( b, p, cline, s )
+    subroutine preprefvol( b, p, cline, s, snr )
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: s  
+        real, optional, intent(in)    :: snr  
         real, allocatable :: filter(:)
         real :: shvec(3)
         ! TOOK OUT AS IT CONFLICTS WITH ISW
@@ -481,13 +482,15 @@ contains
         else
             if( p%doshift )then
                 ! centering only for asymmetric and circular symmetric cases
-                if( p%pgrp(:1).eq.'c' .and. p%refine.ne.'het' )then
-                    shvec = b%vol%center(p%cenlp,'no',p%msk,doshift=.false.) ! find center of mass shift
-                    if( arg(shvec) > VOLSHTHRESH )then
-                        if( p%pgrp.ne.'c1' ) shvec(1:2) = 0.         ! shifts only along z-axis for C2 and above
-                        call b%vol%shift(shvec(1),shvec(2),shvec(3)) ! performs shift
-                        ! map back to particle oritentations
-                        if( cline%defined('oritab') ) call b%a%map3dshift22d(-shvec(:), state=s)
+                if( p%refine.ne.'het' )then
+                    if( p%pgrp(:1).eq.'c' )then
+                        shvec = b%vol%center(p%cenlp,'no',p%msk,doshift=.false.) ! find center of mass shift
+                        if( arg(shvec) > VOLSHTHRESH )then
+                            if( p%pgrp.ne.'c1' ) shvec(1:2) = 0.         ! shifts only along z-axis for C2 and above
+                            call b%vol%shift(shvec(1),shvec(2),shvec(3)) ! performs shift
+                            ! map back to particle oritentations
+                            if( cline%defined('oritab') ) call b%a%map3dshift22d(-shvec(:), state=s)
+                        endif
                     endif
                 endif
             endif
@@ -496,6 +499,8 @@ contains
         if( p%boxmatch < p%box )then
             call b%vol%clip_inplace([p%boxmatch,p%boxmatch,p%boxmatch]) ! SQUARE DIMS ASSUMED
         endif
+        ! noise
+        if( present(snr) ) call b%vol%add_gauran( snr )
         ! masking
         if( p%l_xfel )then
             ! no centering or masking

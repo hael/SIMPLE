@@ -7,6 +7,7 @@ use simple_oris,             only: oris
 use simple_ori,              only: ori
 use simple_params,           only: params
 use simple_strings,          only: str_has_substr
+use simple_sym,              only: sym
 use simple_pftcc_shsrch      ! use all in there
 use simple_pftcc_inplsrch    ! use all in there
 use simple_math              ! use all in there
@@ -25,6 +26,7 @@ type prime3D_srch
     type(oris)             :: o_refs                  !< projection directions search space
     type(oris)             :: o_npeaks                !< orientations of best npeaks oris
     type(ran_tabu)         :: rt                      !< object for random number generation
+    type(sym)              :: se
     integer                :: nrefs          = 0      !< total number of references (nstates*nprojs)
     integer                :: nnnrefs        = 0      !< total number of neighboring references (nstates*nnn)
     integer                :: nstates        = 0      !< number of states
@@ -49,6 +51,7 @@ type prime3D_srch
     real                   :: angast         = 0.     !< ctf astigmatism
     integer, allocatable   :: proj_space_inds(:)      !< projection space index array
     integer, allocatable   :: srch_order(:)           !< stochastic search order
+    integer, allocatable   :: nnmat_sym(:,:)
     real,    allocatable   :: prev_corrs(:)           !< previous particle-reference correlations for GPU-based search
     logical, allocatable   :: state_exists(:)         !< indicates whether each state is populated
     character(len=STDLEN)  :: refine        = ''      !< refinement flag
@@ -87,6 +90,8 @@ type prime3D_srch
     procedure, private :: stochastic_srch_shc
     procedure, private :: stochastic_srch_inpl
     procedure, private :: stochastic_srch_het
+    procedure, private :: stochastic_adasym_srch
+    procedure, private :: gen_symneigh
     procedure          :: inpl_srch
     procedure, private :: greedy_srch
     procedure          :: stochastic_weights
@@ -115,14 +120,15 @@ end type prime3D_srch
 contains
 
     !>  \brief  is a constructor
-    subroutine new( self, a, e, p )
-        use simple_sym,   only: sym
+    subroutine new( self, a, e, p, threshold)
         class(prime3D_srch),   intent(inout) :: self  !< instance
         class(params), target, intent(in)    :: p     !< parameters
         class(oris),   target, intent(in)    :: e     !< reference oris
         class(oris),           intent(inout) :: a     !< ptcls oris
-        type(sym) :: symobj
-        integer   :: alloc_stat, s
+        real,        optional, intent(inout) :: threshold !< general purpose threshold
+        real,    allocatable :: corrs(:)
+        integer, allocatable :: inds(:)
+        integer  :: alloc_stat, s, ind, thresh_ind
         ! destroy possibly pre-existing instance
         call self%kill
         ! set constants
@@ -191,10 +197,10 @@ contains
         ! generate oris oject in which the best npeaks refs will be stored
         call self%o_npeaks%new( self%npeaks )
         ! symmetry-related variables
-        call symobj%new( self%pp%pgrp )
-        self%nsym    = symobj%get_nsym()
-        self%eullims = symobj%srchrange()
-        call symobj%kill
+        call self%se%new( self%pp%pgrp )
+        self%nsym    = self%se%get_nsym()
+        self%eullims = self%se%srchrange()
+        if(self%refine.eq.'adasym')call self%gen_symneigh
         ! Updates option to search shift
         self%doshift = self%pp%doshift
         if( self%doshift )then
@@ -431,14 +437,17 @@ contains
             if( self%prev_state>self%nstates ) stop 'previous best state outside boundary; prep4srch; simple_prime3D_srch'
             if( .not.self%state_exists(self%prev_state) )stop 'empty previous state; prep4srch; simple_prime3D_srch'
             select case( self%refine )
-                case( 'no', 'shc', 'shift')                                             ! DISCRETE CASE
+                case( 'no', 'shc', 'shift','adasym')                                    ! DISCRETE CASE
                     call self%prep_reforis                                              ! search space & order prep
+                    self%prev_ref = self%o_refs%find_closest_proj( o_prev, self%prev_state )    ! find closest ori with same state
                 case( 'neigh', 'shcneigh' )                                             ! DISCRETE CASE WITH NEIGHBOURHOOD
                     call self%prep_reforis( nnvec=nnmat(self%prev_proj,:) )             ! search space & order prep
+                    self%prev_ref = self%o_refs%find_closest_proj( o_prev, self%prev_state )    ! find closest ori with same state
+                case( 'het' )
+                    self%prev_ref = (self%prev_state-1)*self%nprojs+self%prev_proj
                 case DEFAULT
                     stop 'Unknown refinement mode; simple_prime3D_srch; prep4srch'
             end select
-            self%prev_ref = self%o_refs%find_closest_proj( o_prev, self%prev_state )    ! find closest ori with same state
         else
             call self%prep_reforis
         endif
@@ -457,7 +466,7 @@ contains
         ! on exit all the oris are clean and only the out-of-planes, 
         ! state & class fields are present
         select case( self%refine )
-            case( 'no', 'shc', 'neigh', 'shcneigh' )
+            case( 'no', 'shc', 'neigh', 'shcneigh', 'adasym' )
                 ! DISCRETE
                 ! Search order
                 call self%rt%reset
@@ -588,7 +597,8 @@ contains
                 stop 'Invalid correlation value in simple_prime3d_srch::prep_corr4srch'
             endif
             self%prev_corr = cc_t                                                        ! default
-            if( (self%refine.eq.'no') .and. self%nstates==1 .and. self%ctf.eq.'no' )then ! moving average for single state only
+            if( (self%refine.eq.'no' .or. self%refine.eq.'adasym') .and. self%nstates==1 )then ! the ctf=no condition has been removed
+                ! moving average for single state only
                 cc_t_min_1 = -1.
                 if( o_prev%isthere('corr') ) cc_t_min_1 = o_prev%get('corr')
                 if( o_prev%isthere('lp') )then
@@ -713,7 +723,11 @@ contains
         call self%prep4srch( o, nnmat )
         call self%prep_corr4srch( pftcc, iptcl, lp, o )
         call self%prep_inpl_srch( pftcc )
-        call self%stochastic_srch( pftcc, iptcl, cnt_glob )
+        if( str_has_substr(self%pp%refine,'adasym') )then
+            call self%stochastic_adasym_srch( pftcc, iptcl, cnt_glob )
+        else
+            call self%stochastic_srch( pftcc, iptcl, cnt_glob )
+        endif
         call self%prep_npeaks_oris
         call self%stochastic_weights( wcorr, self%o_npeaks )
         if( present(o)   ) call o%set('corr', wcorr)
@@ -771,15 +785,17 @@ contains
     end subroutine exec_prime3D_inpl_srch
 
     !>  \brief state labeler
-    subroutine exec_prime3D_het_srch( self, pftcc, iptcl, o_in, statecnt )
+    subroutine exec_prime3D_het_srch( self, pftcc, iptcl, o_in, statecnt, do_rnd )
         class(prime3D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: iptcl
         class(ori),              intent(inout) :: o_in
         integer,                 intent(inout) :: statecnt(self%nstates)
+        logical, optional,       intent(inout) :: do_rnd
         type(ori) :: o
         o = o_in
-        call self%stochastic_srch_het( pftcc, iptcl, o, statecnt )
+        call self%prep4srch( o )
+        call self%stochastic_srch_het( pftcc, iptcl, o, statecnt, do_rnd )
         if( debug ) write(*,'(A)') '>>> PRIME3D_SRCH::EXECUTED PRIME3D_HET_SRCH'
     end subroutine exec_prime3D_het_srch
 
@@ -977,69 +993,47 @@ contains
         call self%inpl_srch( iptcl )                                    ! performs in-plane search
     end subroutine stochastic_srch_inpl
 
-     subroutine stochastic_srch_het( self, pftcc, iptcl, o, statecnt )
-        use simple_rnd,         only: irnd_uni
-        use simple_fsc_compare, only: fsc_compare
+     subroutine stochastic_srch_het( self, pftcc, iptcl, o, statecnt, do_rnd )
+        use simple_rnd, only: shcloc, irnd_uni
         class(prime3D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: iptcl
         class(ori),              intent(inout) :: o
         integer,                 intent(inout) :: statecnt(self%nstates)
-        type(fsc_compare) :: fcompare
-        integer           :: istate, iref, irot, state, loc(1), cnt
-        real, allocatable :: frc(:), frcs(:,:)
-        real              :: mi_state, frac, weights(self%nstates)
-        logical           :: shcmask(self%nstates)
-        self%prev_proj = self%pe%find_closest_proj(o, 1)     ! previous projection direction
-        do istate=1,self%nstates
-            if( .not. self%state_exists(istate) ) cycle      ! empty state
-            iref  = (istate-1)*self%nprojs + self%prev_proj  ! reference index to state projection direction
-            irot  = self%srch_common%roind(360. - o%e3get()) ! in-plane rotation index
-            frc   = pftcc%genfrc(iref, iptcl, irot)          ! Fourier Ring Correlation
-            if( allocated(frcs) )then
-                frcs(istate,:) = frc
-            else
-                allocate(frcs(self%nstates,size(frc)))
-                frcs = 0.0
-                frcs(istate,:) = frc
-            endif
-        end do
-        fcompare = fsc_compare(frcs)
-        self%prev_state = nint(o%get('state'))
-
-        ! HARD STOCHASTIC APPROACH
-        ! shcmask         = fcompare%shc_mask(self%prev_state)
-        ! if( any(shcmask) )then
-        !     frac = 100.- real(count(shcmask))/real(self%nstates)
-        !     do 
-        !         state = irnd_uni(self%nstates)
-        !         if( shcmask(state) ) exit
-        !     end do
-        ! else
-        !     frac           = 100.
-        !     state          = fcompare%best_match()
-        ! endif
-
-        ! WEIGHTED STOCHASTIC APPROACH
-        ! shcmask         = fcompare%shc_mask(self%prev_state)
-        ! if( any(shcmask) )then
-        !     frac = 100.- real(count(shcmask))/real(self%nstates)
-        !     call fcompare%calc_weights(shcmask, weights)
-        ! else
-        !     frac           = 100.
-        !     state          = fcompare%best_match()
-        !     weights        = 0.
-        !     weights(state) = 1.0 
-        ! endif
-
-        ! DETERMINISTIC WEIGHTING APPROACH
-        call fcompare%calc_weights(weights)
-        loc = maxloc(weights)
-        state = loc(1)
+        logical, optional,       intent(inout) :: do_rnd
+        integer           :: istate, iref, state, refs( self%nstates )
+        real              :: corr, mi_state, frac, corrs(self%nstates), loc(1)
+        logical :: l_rnd
+        l_rnd=.false.
+        if(present(do_rnd))l_rnd = do_rnd
+        if( .not.l_rnd )then
+            ! SHC
+            refs = 0
+            do istate=1,self%nstates
+                refs(istate) =  (istate-1)*self%nprojs + self%prev_proj 
+                if( .not.self%state_exists(istate) ) refs(istate) = 0
+            enddo
+            corrs           = pftcc%corrs(refs, self%nstates, iptcl, self%prev_roind)
+            self%prev_corr  = corrs(self%prev_state)
+            loc             = shcloc(self%nstates, corrs, self%prev_corr)
+            state           = loc(1)
+            corr            = corrs(state)
+            self%nrefs_eval = count(corrs<=self%prev_corr)
+        else
+            ! state randomization
+            self%nrefs_eval = 1
+            state = irnd_uni(self%nstates)
+            do while( state == self%prev_state )
+                state = irnd_uni(self%nstates)
+            enddo
+            iref = (state-1)*self%nprojs+self%prev_proj
+            corr = pftcc%corr(iref, iptcl, self%prev_roind)
+        endif
         statecnt(state) = statecnt(state) + 1
-        call o%set('state', real(state))
-        frac = 100. * (real(count(weights<TINY)+1.)/real(self%nstates) )
+        frac = 100.*real(self%nrefs_eval)/real(self%nstates)
         call o%set('frac', frac)
+        call o%set('state', real(state))
+        call o%set('corr', corr)
         call o%set('mi_class', 1.)
         call o%set('mi_inpl',  1.)
         if( self%prev_state.ne.state)then
@@ -1049,19 +1043,176 @@ contains
         endif
         call o%set('mi_state', mi_state)
         call o%set('mi_joint', mi_state)
-        ! the below is to make the outputted oritab sensible
-        cnt = 0
-        do istate=1,self%nstates
-            if(istate == state)cycle
-            cnt = cnt+1
-            call self%o_npeaks%set_ori( cnt, o )
-            call self%o_npeaks%set(cnt,'state',real(istate))
-            call self%o_npeaks%set(cnt,'ow', weights(istate))
-        enddo
-        call self%o_npeaks%set_ori( self%nstates, o )
-        call self%o_npeaks%set(self%nstates,'state', real(state))
-        call self%o_npeaks%set(self%nstates,'ow', weights(state))
+        call o%set('w', 1.)
+        call self%o_npeaks%set_ori( 1,o )
     end subroutine stochastic_srch_het
+
+    !  subroutine stochastic_srch_het( self, pftcc, iptcl, o, statecnt )
+    !     use simple_rnd,         only: irnd_uni
+    !     use simple_fsc_compare, only: fsc_compare
+    !     class(prime3D_srch),     intent(inout) :: self
+    !     class(polarft_corrcalc), intent(inout) :: pftcc
+    !     integer,                 intent(in)    :: iptcl
+    !     class(ori),              intent(inout) :: o
+    !     integer,                 intent(inout) :: statecnt(self%nstates)
+    !     type(fsc_compare) :: fcompare
+    !     integer           :: istate, iref, irot, state, loc(1), cnt
+    !     real, allocatable :: frc(:), frcs(:,:)
+    !     real              :: mi_state, frac, weights(self%nstates)
+    !     logical           :: shcmask(self%nstates)
+    !     self%prev_proj = self%pe%find_closest_proj(o, 1)     ! previous projection direction
+    !     do istate=1,self%nstates
+    !         if( .not. self%state_exists(istate) ) cycle      ! empty state
+    !         iref  = (istate-1)*self%nprojs + self%prev_proj  ! reference index to state projection direction
+    !         irot  = self%srch_common%roind(360. - o%e3get()) ! in-plane rotation index
+    !         frc   = pftcc%genfrc(iref, iptcl, irot)          ! Fourier Ring Correlation
+    !         if( allocated(frcs) )then
+    !             frcs(istate,:) = frc
+    !         else
+    !             allocate(frcs(self%nstates,size(frc)))
+    !             frcs = 0.0
+    !             frcs(istate,:) = frc
+    !         endif
+    !     end do
+    !     fcompare = fsc_compare(frcs)
+    !     self%prev_state = nint(o%get('state'))
+    !     ! HARD STOCHASTIC APPROACH
+    !     ! shcmask         = fcompare%shc_mask(self%prev_state)
+    !     ! if( any(shcmask) )then
+    !     !     frac = 100.- real(count(shcmask))/real(self%nstates)
+    !     !     do 
+    !     !         state = irnd_uni(self%nstates)
+    !     !         if( shcmask(state) ) exit
+    !     !     end do
+    !     ! else
+    !     !     frac           = 100.
+    !     !     state          = fcompare%best_match()
+    !     ! endif
+
+    !     ! WEIGHTED STOCHASTIC APPROACH
+    !     ! shcmask         = fcompare%shc_mask(self%prev_state)
+    !     ! if( any(shcmask) )then
+    !     !     frac = 100.- real(count(shcmask))/real(self%nstates)
+    !     !     call fcompare%calc_weights(shcmask, weights)
+    !     ! else
+    !     !     frac           = 100.
+    !     !     state          = fcompare%best_match()
+    !     !     weights        = 0.
+    !     !     weights(state) = 1.0 
+    !     ! endif
+    !     ! DETERMINISTIC WEIGHTING APPROACH
+    !     call fcompare%calc_weights(weights)
+    !     loc = maxloc(weights)
+    !     state = loc(1)
+    !     statecnt(state) = statecnt(state) + 1
+    !     call o%set('state', real(state))
+    !     frac = 100. * (real(count(weights<TINY)+1.)/real(self%nstates) )
+    !     call o%set('frac', frac)
+    !     call o%set('mi_class', 1.)
+    !     call o%set('mi_inpl',  1.)
+    !     if( self%prev_state.ne.state)then
+    !         mi_state = 0.
+    !     else
+    !         mi_state = 1.
+    !     endif
+    !     call o%set('mi_state', mi_state)
+    !     call o%set('mi_joint', mi_state)
+    !     ! the below is to make the outputted oritab sensible
+    !     cnt = 0
+    !     do istate=1,self%nstates
+    !         if(istate == state)cycle
+    !         cnt = cnt+1
+    !         call self%o_npeaks%set_ori( cnt, o )
+    !         call self%o_npeaks%set(cnt,'state',real(istate))
+    !         call self%o_npeaks%set(cnt,'ow', weights(istate))
+    !     enddo
+    !     call self%o_npeaks%set_ori( self%nstates, o )
+    !     call self%o_npeaks%set(self%nstates,'state', real(state))
+    !     call self%o_npeaks%set(self%nstates,'ow', weights(state))
+    ! end subroutine stochastic_srch_het
+
+    !>  \brief  executes the stochastic soft orientation search on CPU
+    subroutine stochastic_adasym_srch( self, pftcc, iptcl, cnt_glob )
+        class(prime3D_srch),     intent(inout) :: self
+        class(polarft_corrcalc), intent(inout) :: pftcc
+        integer,                 intent(in)    :: iptcl
+        integer, optional,       intent(in)    :: cnt_glob
+        real    :: projspace_corrs( self%nrefs )
+        integer :: ref, isample, nrefs
+        if( present(cnt_glob) )then
+            if( self%use_cpu ) stop 'cnt_glob dummy not required for CPU execution; simple_prime3D :: stochastic_srch'
+        endif
+        ! initialize
+        self%nbetter         = 0
+        self%nrefs_eval      = 0
+        self%proj_space_inds = 0
+        projspace_corrs      = -1.
+        ! search
+        nrefs = self%nrefs
+        if( str_has_substr(self%refine,'neigh') )nrefs=self%nnnrefs
+        do isample=1,nrefs
+            ref = self%srch_order( isample )                             ! set the stochastic reference index
+            if( ref==self%prev_ref )cycle                                ! previous best considered last
+            if( ref < 1 .or. ref > self%nrefs ) stop 'ref index out of bound; simple_prime3D_srch::stochastic_srch'
+            call per_ref_srch( ref )                                     ! actual search
+            if( self%nbetter >= self%npeaks ) exit                       ! exit condition
+        end do
+        if( self%nbetter<self%npeaks/self%nsym )call per_ref_srch( self%prev_ref ) ! evaluate previous best ref last
+        call hpsort(self%nrefs, projspace_corrs, self%proj_space_inds)   ! sort in correlation projection direction space
+        call self%inpl_srch( iptcl )                                     ! search shifts
+        if( debug ) write(*,'(A)') '>>> PRIME3D_SRCH::FINISHED STOCHASTIC SEARCH'
+
+        contains
+
+            ! align using best improving
+            subroutine per_ref_srch( iref )
+                integer, intent(in) :: iref
+                real                :: corrs(self%nrots), inpl_corr
+                integer             :: loc(1), inpl_ind, state, iref_sym, isym
+                state = 1
+                if( self%nstates>1 ) state = nint( self%o_refs%get(iref, 'state') )
+                if( self%state_exists( state ) )then
+                    if( self%use_cpu )then
+                        corrs     = pftcc%gencorrs(iref, iptcl)             ! In-plane correlations
+                        loc       = maxloc(corrs)                           ! greedy in-plane
+                        inpl_ind  = loc(1)                                  ! in-plane angle index
+                        inpl_corr = corrs(loc(1))                           ! max in plane correlation
+                    else
+                        inpl_ind  = self%srch_common%inpl(cnt_glob,iref)
+                        inpl_corr = self%srch_common%corr(cnt_glob,iref)
+                    endif
+                    call self%store_solution( iref, iref, inpl_ind, inpl_corr )
+                    projspace_corrs( iref ) = inpl_corr                     ! stash in-plane correlation for sorting
+                    ! update nbetter to keep track of how many improving solutions we have identified
+                    if( self%npeaks == 1 )then
+                        if( inpl_corr > self%prev_corr ) self%nbetter = self%nbetter+1
+                    else
+                        if( inpl_corr >= self%prev_corr ) self%nbetter = self%nbetter+1
+                    endif
+                    ! keep track of how many references we are evaluating
+                    self%nrefs_eval = self%nrefs_eval+1
+                    if( inpl_corr >= self%prev_corr )then
+                        ! evaluate symmetry-related orientations
+                        do isym=1,self%nsym - 1
+                            iref_sym = self%nnmat_sym(iref,isym)
+                            if( self%proj_space_inds(iref_sym) /= 0 ) cycle
+                            if( self%use_cpu )then
+                                corrs     = pftcc%gencorrs(iref_sym, iptcl) ! In-plane correlations
+                                loc       = maxloc(corrs)                   ! greedy in-plane
+                                inpl_ind  = loc(1)                          ! in-plane angle index
+                                inpl_corr = corrs(loc(1))                   ! max in plane correlation
+                            else
+                                inpl_ind  = self%srch_common%inpl(cnt_glob,iref_sym)
+                                inpl_corr = self%srch_common%corr(cnt_glob,iref_sym)
+                            endif
+                            call self%store_solution( iref_sym, iref_sym, inpl_ind, inpl_corr )
+                            projspace_corrs( iref_sym ) = inpl_corr         ! stash in-plane correlation for sorting
+                        end do
+                    endif
+                endif
+            end subroutine per_ref_srch
+
+    end subroutine stochastic_adasym_srch
 
     !>  \brief  greedy hill climbing (4 initialisation)
     subroutine greedy_srch( self, pftcc, iptcl, cnt_glob )
@@ -1147,6 +1298,22 @@ contains
         endif
         if( debug ) write(*,'(A)') '>>> PRIME3D_SRCH::FINISHED INPL SEARCH'
     end subroutine inpl_srch
+
+    subroutine gen_symneigh( self )
+        class(prime3D_srch), intent(inout) :: self
+        type(ori) :: oref,osym
+        integer :: i, isym,iref
+        if( allocated(self%nnmat_sym) )deallocate(self%nnmat_sym)
+        allocate( self%nnmat_sym(self%nrefs,self%nsym-1) )
+        do iref = 1,self%nrefs
+            oref = self%pe%get_ori( iref )
+            do isym=2,self%nsym
+                osym = self%se%apply(oref, isym)
+                self%nnmat_sym(iref,isym-1) = self%pe%find_closest_proj( osym )
+            enddo
+        enddo
+    end subroutine gen_symneigh
+
 
     subroutine stochastic_weights( self, wcorr, os )
         class(prime3D_srch), intent(inout) :: self
@@ -1322,6 +1489,7 @@ contains
             if( allocated( self%srch_order )     ) deallocate(self%srch_order)
             if( allocated( self%prev_corrs )     ) deallocate(self%prev_corrs)
             if( allocated( self%state_exists )   ) deallocate(self%state_exists)
+            if( allocated(self%nnmat_sym) )deallocate(self%nnmat_sym)
             call self%srch_common%kill
             call self%rt%kill
             call self%o_refs%kill

@@ -19,14 +19,18 @@ public :: prime3D_exec, gen_random_model, prime3D_find_resrange, pftcc, primesrc
 public :: preppftcc4align, prep_refs_pftcc4align
 private
 
+real,    parameter     :: RANDOMIZATION_RATE=0.8
+integer, parameter     :: MAXNPEAKS=10
+logical, parameter     :: debug=.false.
+
 type(polarft_corrcalc) :: pftcc
 type(prime3D_srch)     :: primesrch3D
 real                   :: reslim
 real                   :: frac_srch_space
+real                   :: snr_glob=0.02
+real                   :: het_thresh=0.5/RANDOMIZATION_RATE
 type(ori)              :: orientation, o_sym, o_tmp
 integer                :: cnt_glob=0
-integer, parameter     :: MAXNPEAKS=10
-logical, parameter     :: debug=.false.
 
 contains
 
@@ -68,10 +72,12 @@ contains
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: update_res, converged
         type(oris)                    :: prime3D_oris
-        real, allocatable             :: wmat(:,:), wresamp(:), res(:), res_pad(:)
+        real, allocatable             :: wmat(:,:), wresamp(:), res(:), res_pad(:), corrs(:)
+        integer, allocatable          :: inds(:)
+        logical, allocatable          :: randomize(:)
         real                          :: w, lptmp, norm
         integer                       :: iptcl, fnr, file_stat, s, inptcls, prev_state, istate
-        integer                       :: statecnt(p%nstates)
+        integer                       :: statecnt(p%nstates), ind, thresh_ind
         logical                       :: doshellweight
 
         inptcls = p%top - p%fromp + 1
@@ -90,13 +96,15 @@ contains
         ! DETERMINE THE NUMBER OF PEAKS
         if( .not. cline%defined('npeaks') )then
             select case(p%refine)
-                case('het')
-                    p%npeaks = p%nstates
-                case('no', 'neigh')
+                ! case('het')
+                !     p%npeaks = p%nstates
+                case('no', 'neigh', 'adasym')
                     p%npeaks = min(MAXNPEAKS,b%e%find_npeaks(p%lp, p%moldiam))
+                    if( str_has_substr(p%refine,'adasym') ) p%npeaks = p%npeaks * p%nsym
                 case DEFAULT
                     p%npeaks = 1
             end select
+            print *,'npeaks:',p%npeaks
             if( debug ) write(*,*) '*** hadamard3D_matcher ***: determined the number of peaks'
         endif
 
@@ -118,6 +126,21 @@ contains
             if( p%l_shellw .and. frac_srch_space >= 50. ) call cont3D_shellweight(b, p, cline)
         endif
         call setup_shellweights(b, p, doshellweight, wmat, res, res_pad)
+
+        ! HETEROGEINITY
+        if( p%refine.eq.'het' )then
+            het_thresh = RANDOMIZATION_RATE*het_thresh
+            corrs = b%a%get_all('corr')
+            allocate( inds(size(corrs)), randomize(size(corrs)) )
+            inds = (/ (ind,ind=1,size(inds)) /)
+            randomize = .false.
+            call hpsort( size(inds), corrs, inds)
+            thresh_ind = nint( size(inds)*het_thresh )
+            randomize( inds(1:thresh_ind) ) = .true.
+            write(*,'(A,F8.2)')'>>> STATE RANDOMIZATION %:', 100.*het_thresh
+            write(*,'(A,F8.2)')'>>> CORRELATION THRESHOLD:', corrs( inds(thresh_ind) )
+            deallocate( inds, corrs)
+        endif
 
         ! GENERATE PROJECTIONS (POLAR FTs)
         call preppftcc4align( b, p, cline )
@@ -210,11 +233,17 @@ contains
                             call primesrch3D%exec_prime3D_inpl_srch(pftcc, iptcl, p%lp, orientation, greedy=.false.)
                         case('het')
                             if( p%oritab .eq. '' ) stop 'cannot run the refine=het mode without input oridoc (oritab)'
-                            call primesrch3D%exec_prime3D_het_srch(pftcc, iptcl, orientation, statecnt)
-                            !norm = real(sum(statecnt))
-                            !do istate=1,p%nstates
+                            call primesrch3D%exec_prime3D_het_srch(pftcc, iptcl, orientation, statecnt, do_rnd=randomize(iptcl))
+                            ! norm = real(sum(statecnt))
+                            ! do istate=1,p%nstates
                             !    print *, '% state ', istate, ' is ', 100.*(real(statecnt(istate))/norm)
-                            !end do
+                            ! end do
+                        case('adasym')
+                            if( p%oritab .eq. '' )then
+                                call primesrch3D%exec_prime3D_srch(pftcc, iptcl, p%lp)
+                            else
+                                call primesrch3D%exec_prime3D_srch(pftcc, iptcl, p%lp, orientation)
+                            endif
                         case DEFAULT
                             write(*,*) 'The refinement mode: ', trim(p%refine), ' is unsupported on CPU'
                             stop 
@@ -272,7 +301,7 @@ contains
         integer, allocatable :: sample(:)
         if( p%vols(1) == '' )then
             p%oritab = 'prime3D_startdoc.txt'
-            if( p%refine .eq. 'no')then
+            if( p%refine .eq. 'no' .or. p%refine.eq.'adasym')then
                 call b%a%rnd_oris
                 call b%a%zero_shifts
                 if( p%l_distr_exec .and. p%part.ne.1 )then
@@ -333,7 +362,11 @@ contains
         integer :: nrefs
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PRIME3D SEARCH ENGINE'
         ! must be done here since constants in p are dynamically set
-        call primesrch3D%new( b%a, b%e, p )
+        if( str_has_substr(p%refine,'het') )then
+            call primesrch3D%new( b%a, b%e, p, het_thresh )
+        else
+            call primesrch3D%new( b%a, b%e, p )            
+        endif
         ! must be done here since p%kfromto is dynamically set based on FSC from previous round
         ! or based on dynamic resolution limit update
         nrefs = p%nspace*p%nstates
@@ -374,6 +407,20 @@ contains
                     cycle
                 endif
             endif
+            ! FAILED ATTEMPT TO ADD NOISE TO REF VOLS IN HET MODE
+            ! if( p%refine .eq. 'het' )then
+            !     if( s==1 )then
+            !         snr_glob = snr_glob / 0.7
+            !         write(*,'(A,f8.3)')'>>> SNR:',snr_glob
+            !     endif
+            !     if( snr_glob < 2.0 )then
+            !         call preprefvol( b, p, cline, s, snr_glob )
+            !     else
+            !         call preprefvol( b, p, cline, s )
+            !     endif
+            ! else
+            !     call preprefvol( b, p, cline, s )
+            ! endif
             call preprefvol( b, p, cline, s )
             ! generate discrete projections
             do iref=1,p%nspace

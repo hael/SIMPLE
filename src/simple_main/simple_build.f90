@@ -178,7 +178,11 @@ contains
         if( fforce_ctf ) call self%raise_hard_ctf_exception(p)
         ! generate discrete projection direction space
         call self%e%new( p%nspace )
-        call self%e%spiral( p%nsym, p%eullims )
+        if( str_has_substr(p%refine,'adasym') )then
+            call self%e%spiral
+        else
+            call self%e%spiral( p%nsym, p%eullims )
+        endif
         if( debug ) write(*,'(a)') 'generated discrete projection direction space'
         if( p%box > 0 )then
             ! build image objects

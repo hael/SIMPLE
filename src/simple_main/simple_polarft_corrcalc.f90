@@ -90,6 +90,7 @@ type :: polarft_corrcalc
     procedure          :: gencorrs
     procedure          :: genfrc
     procedure          :: rosrch_shc
+    procedure          :: corrs
     procedure, private :: corr_1
     procedure, private :: corr_2
     generic            :: corr => corr_1, corr_2
@@ -833,6 +834,24 @@ contains
         end do
         !$omp end parallel do
     end function gencorrs
+
+    !>  \brief  is for generating rotational correlations
+    function corrs( self, refvec, nrefs, iptcl, irot) result( cc )
+        !$ use omp_lib
+        !$ use omp_lib_kinds
+        class(polarft_corrcalc), intent(inout) :: self        !< instance
+        integer, intent(in)                    :: refvec(nrefs)      !< ref & ptcl indices
+        integer, intent(in)                    :: irot, iptcl, nrefs !< ref & ptcl indices
+        real    :: cc(nrefs)
+        integer :: i, iref
+        cc = -1.
+        !$omp parallel do default(shared) private(i,iref)
+        do i=1,nrefs
+            iref = refvec(i)
+            if(iref>0 .and. iref<=self%nrefs )cc(i) = self%corr_1(iref, iptcl, irot)
+        end do
+        !$omp end parallel do
+    end function corrs
 
     !>  \brief  is for generating resolution dependent correlations
     function genfrc( self, iref, iptcl, irot ) result( frc )

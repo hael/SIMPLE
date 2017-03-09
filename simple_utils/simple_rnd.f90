@@ -242,7 +242,7 @@ contains
         else if( NP == 1 )then
             irnd = 1
         else
-            irnd = nint(ran3()*(real(NP)))
+            irnd = ceiling( ran3()*real(NP) )
             irnd = max(1,irnd)
             irnd = min(NP,irnd)
         endif
