@@ -796,7 +796,6 @@ contains
             if( p_master%refine.eq.'het' )then
                 ! exponential cooling of the randomization rate
                 p_master%het_thresh = p_master%het_thresh * p_master%rrate
-                write(*,'(A,F8.2)')'>>> STATE RANDOMIZATION %:', 100.*p_master%het_thresh
                 call job_descr%set('het_thresh', real2str(p_master%het_thresh))
                 call cline%set('het_thresh', p_master%het_thresh)
             endif

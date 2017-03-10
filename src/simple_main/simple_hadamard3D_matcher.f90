@@ -72,8 +72,7 @@ contains
         type(oris)                    :: prime3D_oris
         real, allocatable             :: wmat(:,:), wresamp(:), res(:), res_pad(:), corrs(:)
         integer, allocatable          :: inds(:)
-        logical, allocatable          :: randomize(:)
-        real                          :: w, lptmp, norm
+        real                          :: w, lptmp, norm, het_corr_thresh
         integer                       :: iptcl, fnr, file_stat, s, inptcls, prev_state, istate
         integer                       :: statecnt(p%nstates), ind, thresh_ind
         logical                       :: doshellweight
@@ -126,16 +125,17 @@ contains
 
         ! HETEROGEINITY
         if( p%refine.eq.'het' )then
-            corrs = b%a%get_all('corr')
-            allocate( inds(size(corrs)), randomize(size(corrs)) )
-            inds = (/ (ind,ind=1,size(inds)) /)
-            randomize = .false.
-            call hpsort( size(inds), corrs, inds)
-            thresh_ind = nint( size(inds)*p%het_thresh )
-            randomize( inds(1:thresh_ind) ) = .true.
-            write(*,'(A,F8.2)')'>>> STATE RANDOMIZATION %:', 100.*p%het_thresh
-            write(*,'(A,F8.2)')'>>> CORRELATION THRESHOLD:', corrs( inds(thresh_ind) )
-            deallocate( inds, corrs)
+            if( frac_srch_space<0.98 .or. p%het_thresh>0.02 )then
+                corrs = b%a%get_all('corr')
+                allocate( inds(size(corrs)) )
+                inds = (/ (ind,ind=1,size(inds)) /)
+                call hpsort( size(inds), corrs, inds)
+                thresh_ind = nint( size(inds)*p%het_thresh )
+                het_corr_thresh = corrs( inds(thresh_ind) )
+                write(*,'(A,F8.2)')'>>> STATE RANDOMIZATION %:', 100.*p%het_thresh
+                write(*,'(A,F8.2)')'>>> CORRELATION THRESHOLD:', het_corr_thresh
+                deallocate( inds, corrs)
+            endif
             ! generate filename for memoization of particle pfts
             if( allocated(ppfts_fname) ) deallocate(ppfts_fname)
             if( p%l_distr_exec )then
@@ -238,7 +238,11 @@ contains
                             call primesrch3D%exec_prime3D_inpl_srch(pftcc, iptcl, p%lp, orientation, greedy=.false.)
                         case('het')
                             if( p%oritab .eq. '' ) stop 'cannot run the refine=het mode without input oridoc (oritab)'
-                            call primesrch3D%exec_prime3D_het_srch(pftcc, iptcl, orientation, statecnt, do_rnd=randomize(iptcl))
+                            if( orientation%get('corr') < het_corr_thresh )then
+                                call primesrch3D%exec_prime3D_het_srch(pftcc, iptcl, orientation, statecnt, do_rnd=.true.)
+                            else
+                                call primesrch3D%exec_prime3D_het_srch(pftcc, iptcl, orientation, statecnt, do_rnd=.false.)
+                            endif
                         case('adasym')
                             if( p%oritab .eq. '' )then
                                 call primesrch3D%exec_prime3D_srch(pftcc, iptcl, p%lp)

@@ -791,11 +791,14 @@ contains
         integer,                 intent(in)    :: iptcl
         class(ori),              intent(inout) :: o_in
         integer,                 intent(inout) :: statecnt(self%nstates)
-        logical, optional,       intent(inout) :: do_rnd
+        logical, optional,       intent(in)    :: do_rnd
         type(ori) :: o
+        logical   :: l_do_rnd
+        l_do_rnd = .false.
+        if( present(do_rnd) )l_do_rnd = do_rnd
         o = o_in
         call self%prep4srch( o )
-        call self%stochastic_srch_het( pftcc, iptcl, o, statecnt, do_rnd )
+        call self%stochastic_srch_het( pftcc, iptcl, o, statecnt, l_do_rnd )
         if( debug ) write(*,'(A)') '>>> PRIME3D_SRCH::EXECUTED PRIME3D_HET_SRCH'
     end subroutine exec_prime3D_het_srch
 
