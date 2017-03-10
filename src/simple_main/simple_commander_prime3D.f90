@@ -461,9 +461,11 @@ contains
                 endif
             endif
             p%find = int((real(p%box-1)*p%smpd)/p%lp)
+            if( p%refine.eq.'het' ) p%het_thresh = HETINITTHRESH / p%rrate
             startit = 1
             if( cline%defined('startit') ) startit = p%startit
             do i=startit,p%maxits
+                if( p%refine.eq.'het' ) p%het_thresh = p%het_thresh * p%rrate
                 call prime3D_exec(b, p, cline, i, update_res, converged)
                 if( update_res )then
                     ! dynamic low-pass
@@ -569,9 +571,17 @@ contains
         if( cline%defined('update_res') )then
             update_res = .false.
             if( cline%get_carg('update_res').eq.'yes' )update_res = .true.
-            converged = b%conv%check_conv3D( update_res )
+            if(  cline%get_carg('update_res').eq.'no' .and. p%refine.eq.'het')then
+                converged = b%conv%check_conv_het()
+            else
+                converged = b%conv%check_conv3D( update_res )
+            endif
         else
-            converged = b%conv%check_conv3D()
+            if( p%refine.eq.'het')then
+                converged = b%conv%check_conv_het()
+            else
+                converged = b%conv%check_conv3D()
+            endif
         endif
         ! reports convergence, shift activation, resolution update and
         ! fraction of search space scanned to the distr commander

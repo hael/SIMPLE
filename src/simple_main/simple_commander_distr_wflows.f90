@@ -766,6 +766,11 @@ contains
             call cline%set( 'find', real(p_master%find) )
         endif
 
+        ! HETEROGEINITY SPECIFICS
+        if( p_master%refine.eq.'het' )then
+            p_master%het_thresh = HETINITTHRESH / p_master%rrate
+        endif
+
         ! prepare Prime3D job description
         call cline%gen_job_descr(job_descr)
 
@@ -787,6 +792,13 @@ contains
                 if( p_master%l_shellw .and. frac_srch_space >= 50.  )then
                     call xshellweight3D_distr%execute(cline_shellweight3D)
                 endif
+            endif
+            if( p_master%refine.eq.'het' )then
+                ! exponential cooling of the randomization rate
+                p_master%het_thresh = p_master%het_thresh * p_master%rrate
+                write(*,'(A,F8.2)')'>>> STATE RANDOMIZATION %:', 100.*p_master%het_thresh
+                call job_descr%set('het_thresh', real2str(p_master%het_thresh))
+                call cline%set('het_thresh', p_master%het_thresh)
             endif
             call job_descr%set( 'startit', trim(int2str(iter)) )
             call cline%set( 'startit', real(iter) )
@@ -896,7 +908,7 @@ contains
         call simple_end('**** SIMPLE_DISTR_PRIME3D NORMAL STOP ****')
     end subroutine exec_prime3D_distr
 
-    ! PRIME3D
+    ! CONT3D
 
     subroutine exec_cont3D_distr( self, cline )
         use simple_commander_prime3D
@@ -1044,7 +1056,7 @@ contains
             frac_srch_space = os%get_avg('frac')
             call job_descr%set( 'oritab', trim(oritab) )
             call cline_shellweight3D%set( 'oritab', trim(oritab) )
-            if( p_master%l_shellw .and. frac_srch_space >= 50.  )then
+            if( p_master%l_shellw .and. (frac_srch_space >= 50. .or. p_master%refine .eq. 'het') )then
                 call xshellweight3D_distr%execute(cline_shellweight3D)
             endif
             call job_descr%set( 'startit', trim(int2str(iter)) )
@@ -1069,7 +1081,6 @@ contains
             ! replaced the above with command line execution as giving the volassemble setup
             ! its own process id seem to resolve the system instabilities on fast cpu systems
             call exec_simple_prg(simple_exec_bin, cline_volassemble)
-
             ! rename volumes, postprocess & update job_descr
             call os%read(trim(oritab))
             do state = 1,p_master%nstates

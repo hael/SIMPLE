@@ -110,7 +110,7 @@ contains
             if( cmdstat == -1 )then
                 write(*,*) 'ERROR! while parsing the command line; simple_chash :: parse_cmdline'
                 write(*,*) 'The string length of argument: ', arg, 'is: ', cmdlen
-                write(*,*) 'which likely exeeds the length limit STDLEN'
+                write(*,*) 'which likely exceeds the length limit STDLEN'
                 write(*,*) 'Create a symbolic link with shorter name in the cwd'
                 stop
             endif

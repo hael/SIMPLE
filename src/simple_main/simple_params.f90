@@ -291,6 +291,7 @@ type :: params
     real    :: fraczero=0.
     real    :: ftol=1e-6
     real    :: gw=0.5
+    real    :: het_thresh=HETINITTHRESH
     real    :: hp=100.
     real    :: hp_ctffind=30.
     real    :: inner=0.
@@ -314,6 +315,7 @@ type :: params
     real    :: outer=0.
     real    :: phranlp=35.
     real    :: power=2.
+    real    :: rrate=0.8
     real    :: scale=1.
     real    :: sherr=0.
     real    :: smpd=2.
@@ -635,6 +637,7 @@ contains
         call check_rarg('outer',          self%outer)
         call check_rarg('phranlp',        self%phranlp)
         call check_rarg('power',          self%power)
+        call check_rarg('rrate',          self%rrate)
         call check_rarg('scale',          self%scale)
         call check_rarg('sherr',          self%sherr)
         call check_rarg('smpd',           self%smpd)

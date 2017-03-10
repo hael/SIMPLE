@@ -19,15 +19,12 @@ public :: prime3D_exec, gen_random_model, prime3D_find_resrange, pftcc, primesrc
 public :: preppftcc4align, prep_refs_pftcc4align
 private
 
-real,    parameter            :: RANDOMIZATION_RATE=0.8
 integer, parameter            :: MAXNPEAKS=10
 logical, parameter            :: debug=.false.
-
 type(polarft_corrcalc)        :: pftcc
 type(prime3D_srch)            :: primesrch3D
 real                          :: reslim
 real                          :: frac_srch_space
-real                          :: het_thresh=0.5/RANDOMIZATION_RATE
 type(ori)                     :: orientation, o_sym, o_tmp
 integer                       :: cnt_glob=0
 character(len=:), allocatable :: ppfts_fname
@@ -104,7 +101,6 @@ contains
                 case DEFAULT
                     p%npeaks = 1
             end select
-            print *,'npeaks:',p%npeaks
             if( debug ) write(*,*) '*** hadamard3D_matcher ***: determined the number of peaks'
         endif
 
@@ -129,16 +125,16 @@ contains
 
         ! HETEROGEINITY
         if( p%refine.eq.'het' )then
-            het_thresh = RANDOMIZATION_RATE*het_thresh
             corrs = b%a%get_all('corr')
             allocate( inds(size(corrs)), randomize(size(corrs)) )
             inds = (/ (ind,ind=1,size(inds)) /)
             randomize = .false.
             call hpsort( size(inds), corrs, inds)
-            thresh_ind = nint( size(inds)*het_thresh )
+            thresh_ind = nint( size(inds)*p%het_thresh )
             randomize( inds(1:thresh_ind) ) = .true.
-            write(*,'(A,F8.2)')'>>> STATE RANDOMIZATION %:', 100.*het_thresh
+            write(*,'(A,F8.2)')'>>> STATE RANDOMIZATION %:', 100.*p%het_thresh
             write(*,'(A,F8.2)')'>>> CORRELATION THRESHOLD:', corrs( inds(thresh_ind) )
+            call flush(6)
             deallocate( inds, corrs)
             ! generate filename for memoization of particle pfts
             if( allocated(ppfts_fname) ) deallocate(ppfts_fname)
@@ -153,6 +149,19 @@ contains
             ! generate projections (polar FTs)
             call preppftcc4align( b, p, cline )
         endif
+        ! if( p%refine.eq.'het' )then
+        !     ! ptcls to randomize are selected by state
+        !     corrs = b%a%get_all('corr')
+        !     allocate( inds(size(corrs)), randomize(size(corrs)) )
+        !     inds = (/ (ind,ind=1,size(inds)) /)
+        !     randomize = .false.
+        !     call hpsort( size(inds), corrs, inds)
+        !     thresh_ind = nint( size(inds)*p%het_thresh )
+        !     randomize( inds(1:thresh_ind) ) = .true.
+        !     write(*,'(A,F8.2)')'>>> STATE RANDOMIZATION %:', 100.*p%het_thresh
+        !     write(*,'(A,F8.2)')'>>> CORRELATION THRESHOLD:', corrs( inds(thresh_ind) )
+        !     deallocate( inds, corrs)
+        ! endif
 
         ! INITIALIZE
         if( which_iter <= 0 )then
@@ -371,11 +380,7 @@ contains
         integer :: nrefs
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PRIME3D SEARCH ENGINE'
         ! must be done here since constants in p are dynamically set
-        if( str_has_substr(p%refine,'het') )then
-            call primesrch3D%new( b%a, b%e, p, het_thresh )
-        else
-            call primesrch3D%new( b%a, b%e, p )            
-        endif
+        call primesrch3D%new( b%a, b%e, p )
         ! must be done here since p%kfromto is dynamically set based on FSC from previous round
         ! or based on dynamic resolution limit update
         nrefs = p%nspace*p%nstates

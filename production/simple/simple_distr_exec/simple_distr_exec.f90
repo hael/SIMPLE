@@ -440,14 +440,15 @@ select case(prg)
         keys_optional(29) = 'xfel'
         keys_optional(30) = 'nnn'
         keys_optional(31) = 'shellw'
+        keys_optional(32) = 'rrate'
         ! documentation
         if( describe ) call print_doc_prime3D
         ! parse command line
         call check_restart( entire_line, is_restart )
         if( is_restart )then
-            call parse_restart('prime3D', entire_line, cline, keys_required(:7), keys_optional(:31))
+            call parse_restart('prime3D', entire_line, cline, keys_required(:7), keys_optional(:32))
         else
-            call cline%parse( keys_required(:7), keys_optional(:31) )
+            call cline%parse( keys_required(:7), keys_optional(:32) )
         endif
         ! set defaults
         if( .not. cline%defined('nspace')                  ) call cline%set('nspace', 1000.)
@@ -507,6 +508,14 @@ select case(prg)
         call cline%set('eo',    'yes')
         !call cline%set('refine','yes')
         if( .not.cline%defined('shellw') )call cline%set('shellw','no')
+        if( .not. cline%defined('refine') )then
+             call cline%set('refine', 'no')
+        else
+            if( cline%get_carg('refine').eq.'het' )then
+                if( .not. cline%defined('nstates') ) stop 'refine=HET requires specification of NSTATES'
+                if( .not. cline%defined('oritab')  ) stop 'refine=HET requires ORITAB input'
+            endif
+        endif
         ! execute
         call xcont3D_distr%execute(cline)
     case('shellweight3D')
