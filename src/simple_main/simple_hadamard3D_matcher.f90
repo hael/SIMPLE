@@ -21,6 +21,7 @@ private
 
 integer, parameter            :: MAXNPEAKS=10
 logical, parameter            :: debug=.false.
+
 type(polarft_corrcalc)        :: pftcc
 type(prime3D_srch)            :: primesrch3D
 real                          :: reslim
@@ -134,34 +135,20 @@ contains
             randomize( inds(1:thresh_ind) ) = .true.
             write(*,'(A,F8.2)')'>>> STATE RANDOMIZATION %:', 100.*p%het_thresh
             write(*,'(A,F8.2)')'>>> CORRELATION THRESHOLD:', corrs( inds(thresh_ind) )
-            call flush(6)
             deallocate( inds, corrs)
             ! generate filename for memoization of particle pfts
             if( allocated(ppfts_fname) ) deallocate(ppfts_fname)
             if( p%l_distr_exec )then
-                allocate( ppfts_fname, source='ppfts_memoized_part'//int2str_pad(p%part,p%numlen)//'bin' )
+                allocate( ppfts_fname, source='ppfts_memoized_part'//int2str_pad(p%part,p%numlen)//'.bin' )
             else
-                allocate( ppfts_fname, source='ppfts_memoized'//'bin' )
+                allocate( ppfts_fname, source='ppfts_memoized'//'.bin' )
             endif
             ! generate projections (polar FTs)
-            call preppftcc4align( b, p, cline )
+            call preppftcc4align( b, p, cline, ppfts_fname )
         else
             ! generate projections (polar FTs)
             call preppftcc4align( b, p, cline )
         endif
-        ! if( p%refine.eq.'het' )then
-        !     ! ptcls to randomize are selected by state
-        !     corrs = b%a%get_all('corr')
-        !     allocate( inds(size(corrs)), randomize(size(corrs)) )
-        !     inds = (/ (ind,ind=1,size(inds)) /)
-        !     randomize = .false.
-        !     call hpsort( size(inds), corrs, inds)
-        !     thresh_ind = nint( size(inds)*p%het_thresh )
-        !     randomize( inds(1:thresh_ind) ) = .true.
-        !     write(*,'(A,F8.2)')'>>> STATE RANDOMIZATION %:', 100.*p%het_thresh
-        !     write(*,'(A,F8.2)')'>>> CORRELATION THRESHOLD:', corrs( inds(thresh_ind) )
-        !     deallocate( inds, corrs)
-        ! endif
 
         ! INITIALIZE
         if( which_iter <= 0 )then
@@ -252,10 +239,6 @@ contains
                         case('het')
                             if( p%oritab .eq. '' ) stop 'cannot run the refine=het mode without input oridoc (oritab)'
                             call primesrch3D%exec_prime3D_het_srch(pftcc, iptcl, orientation, statecnt, do_rnd=randomize(iptcl))
-                            ! norm = real(sum(statecnt))
-                            ! do istate=1,p%nstates
-                            !    print *, '% state ', istate, ' is ', 100.*(real(statecnt(istate))/norm)
-                            ! end do
                         case('adasym')
                             if( p%oritab .eq. '' )then
                                 call primesrch3D%exec_prime3D_srch(pftcc, iptcl, p%lp)
@@ -281,6 +264,14 @@ contains
                 call b%a%set_ori(iptcl,orientation)
             endif
         end do
+        ! DEV
+        if( p%refine.eq.'het')then
+            norm = real(sum(statecnt))
+            do istate=1,p%nstates
+               print *, '% state ', istate, ' is ', 100.*(real(statecnt(istate))/norm)
+            end do
+        endif
+        ! END DEV
         ! orientations output
         call b%a%write(p%outfile, [p%fromp,p%top])
         p%oritab = p%outfile

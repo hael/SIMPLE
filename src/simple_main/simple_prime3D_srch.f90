@@ -1020,6 +1020,7 @@ contains
             corr            = corrs(state)
             self%nrefs_eval = count(corrs<=self%prev_corr)
         else
+            statecnt(self%prev_state) = statecnt(self%prev_state) + 1
             ! state randomization
             self%nrefs_eval = 1
             state = irnd_uni(self%nstates)
@@ -1029,7 +1030,6 @@ contains
             iref = (state-1)*self%nprojs+self%prev_proj
             corr = pftcc%corr(iref, iptcl, self%prev_roind)
         endif
-        statecnt(state) = statecnt(state) + 1
         frac = 100.*real(self%nrefs_eval)/real(self%nstates)
         call o%set('frac', frac)
         call o%set('state', real(state))
