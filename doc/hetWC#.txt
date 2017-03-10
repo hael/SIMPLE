@@ -1,6 +1,8 @@
 implement support for memoized particle pfts
+draw random samples from a correlation biased distribution
 decide whether we need a restart procedure and implement it
 get the distributed implementation in shape
 make a distributed version of multiptcl_init
 discuss what to test this code on
 swap the corr with frc-based metric and see if it makes a difference
+test with shell-weights

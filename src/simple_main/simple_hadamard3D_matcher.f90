@@ -19,18 +19,18 @@ public :: prime3D_exec, gen_random_model, prime3D_find_resrange, pftcc, primesrc
 public :: preppftcc4align, prep_refs_pftcc4align
 private
 
-real,    parameter     :: RANDOMIZATION_RATE=0.8
-integer, parameter     :: MAXNPEAKS=10
-logical, parameter     :: debug=.false.
+real,    parameter            :: RANDOMIZATION_RATE=0.8
+integer, parameter            :: MAXNPEAKS=10
+logical, parameter            :: debug=.false.
 
-type(polarft_corrcalc) :: pftcc
-type(prime3D_srch)     :: primesrch3D
-real                   :: reslim
-real                   :: frac_srch_space
-real                   :: snr_glob=0.02
-real                   :: het_thresh=0.5/RANDOMIZATION_RATE
-type(ori)              :: orientation, o_sym, o_tmp
-integer                :: cnt_glob=0
+type(polarft_corrcalc)        :: pftcc
+type(prime3D_srch)            :: primesrch3D
+real                          :: reslim
+real                          :: frac_srch_space
+real                          :: het_thresh=0.5/RANDOMIZATION_RATE
+type(ori)                     :: orientation, o_sym, o_tmp
+integer                       :: cnt_glob=0
+character(len=:), allocatable :: ppfts_fname
 
 contains
 
@@ -140,10 +140,19 @@ contains
             write(*,'(A,F8.2)')'>>> STATE RANDOMIZATION %:', 100.*het_thresh
             write(*,'(A,F8.2)')'>>> CORRELATION THRESHOLD:', corrs( inds(thresh_ind) )
             deallocate( inds, corrs)
+            ! generate filename for memoization of particle pfts
+            if( allocated(ppfts_fname) ) deallocate(ppfts_fname)
+            if( p%l_distr_exec )then
+                allocate( ppfts_fname, source='ppfts_memoized_part'//int2str_pad(p%part,p%numlen)//'bin' )
+            else
+                allocate( ppfts_fname, source='ppfts_memoized'//'bin' )
+            endif
+            ! generate projections (polar FTs)
+            call preppftcc4align( b, p, cline )
+        else
+            ! generate projections (polar FTs)
+            call preppftcc4align( b, p, cline )
         endif
-
-        ! GENERATE PROJECTIONS (POLAR FTs)
-        call preppftcc4align( b, p, cline )
 
         ! INITIALIZE
         if( which_iter <= 0 )then
@@ -407,20 +416,6 @@ contains
                     cycle
                 endif
             endif
-            ! FAILED ATTEMPT TO ADD NOISE TO REF VOLS IN HET MODE
-            ! if( p%refine .eq. 'het' )then
-            !     if( s==1 )then
-            !         snr_glob = snr_glob / 0.7
-            !         write(*,'(A,f8.3)')'>>> SNR:',snr_glob
-            !     endif
-            !     if( snr_glob < 2.0 )then
-            !         call preprefvol( b, p, cline, s, snr_glob )
-            !     else
-            !         call preprefvol( b, p, cline, s )
-            !     endif
-            ! else
-            !     call preprefvol( b, p, cline, s )
-            ! endif
             call preprefvol( b, p, cline, s )
             ! generate discrete projections
             do iref=1,p%nspace
