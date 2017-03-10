@@ -76,6 +76,7 @@ type :: params
     character(len=3) :: remap='no'
     character(len=3) :: restart='no'
     character(len=3) :: rnd='no'
+    character(len=3) :: rm_outliers='yes'
     character(len=3) :: roalgn='no'
     character(len=3) :: round='no'
     character(len=3) :: shalgn='no'
@@ -460,6 +461,7 @@ contains
         call check_carg('refs',           self%refs)
         call check_carg('remap',          self%remap)
         call check_carg('restart',        self%restart)
+        call check_carg('rm_outliers',    self%rm_outliers)
         call check_carg('rnd',            self%rnd)
         call check_carg('roalgn',         self%roalgn)
         call check_carg('round',          self%round)

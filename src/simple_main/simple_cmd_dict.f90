@@ -136,6 +136,7 @@ contains
         call chdict%push('refine',        'refinement mode(no|shc|neigh|shcneigh|isw|shift){no}')
         call chdict%push('refs',          'initial2Dreferences.ext')
         call chdict%push('remap',         'adjust the number of clusters by splitting(yes|no){no}')
+        call chdict%push('rm_outliers',   'remove outliers{yes}')
         call chdict%push('rnd',           'random(yes|no){no}')
         call chdict%push('rrate',         'randomization rate{0.8}')
         call chdict%push('scale',         'image scale factor{1}')
@@ -223,6 +224,7 @@ contains
         call chdict%push('xcoord',        'x coordinate{0}')
         call chdict%push('ycoord',        'y coordinate{0}')
         call chdict%push('stepsz',        'size of step{0}')
+
         initialised = .true.
     end subroutine init_cmd_dict
     

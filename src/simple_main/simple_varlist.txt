@@ -45,6 +45,7 @@ readwrite
 remap
 restart
 rnd
+rm_outliers
 roalgn
 round
 shalgn

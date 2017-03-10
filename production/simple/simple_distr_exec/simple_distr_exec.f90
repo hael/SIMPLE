@@ -100,9 +100,10 @@ select case(prg)
         keys_optional(21)  = 'expastig'
         keys_optional(22)  = 'phaseplate'
         keys_optional(23)  = 'thres'
+        keys_optional(24)  = 'rm_outliers'
         ! parse command line
         if( describe ) call print_doc_preproc
-        call cline%parse(keys_required(:9), keys_optional(:23))
+        call cline%parse(keys_required(:9), keys_optional(:24))
         ! set defaults
         if( .not. cline%defined('trs')             ) call cline%set('trs',        5.)
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',   15.)
@@ -238,9 +239,10 @@ select case(prg)
         ! set optional keys
         keys_optional(1) = 'lp'
         keys_optional(2) = 'thres'
+        keys_optional(3) = 'rm_outliers'
         ! parse command line
         if( describe ) call print_doc_pick
-        call cline%parse(keys_required(:5), keys_optional(:2))
+        call cline%parse(keys_required(:5), keys_optional(:3))
         ! execute
         call xpick_distr%execute(cline)
 
