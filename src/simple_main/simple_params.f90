@@ -618,6 +618,7 @@ contains
         call check_rarg('fraczero',       self%fraczero)
         call check_rarg('ftol',           self%ftol)
         call check_rarg('gw',             self%gw)
+        call check_rarg('het_thresh',     self%het_thresh)
         call check_rarg('hp',             self%hp)
         call check_rarg('hp_ctffind',     self%hp_ctffind)
         call check_rarg('inner',          self%inner)

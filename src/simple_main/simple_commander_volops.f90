@@ -126,7 +126,7 @@ contains
         ! output
         p%outvol = add2fbody(trim(p%vols(state)), p%ext, 'pproc')
         call b%vol%write(p%outvol)
-        call simple_end('**** SIMPLE_POSTPROC_VOL NORMAL STOP ****')
+        call simple_end('**** SIMPLE_POSTPROC_VOL NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_postproc_vol
     
     subroutine exec_projvol( self, cline )

@@ -93,8 +93,6 @@ contains
         ! DETERMINE THE NUMBER OF PEAKS
         if( .not. cline%defined('npeaks') )then
             select case(p%refine)
-                ! case('het')
-                !     p%npeaks = p%nstates
                 case('no', 'neigh', 'adasym')
                     p%npeaks = min(MAXNPEAKS,b%e%find_npeaks(p%lp, p%moldiam))
                     if( str_has_substr(p%refine,'adasym') ) p%npeaks = p%npeaks * p%nsym
@@ -126,15 +124,16 @@ contains
         ! HETEROGEINITY
         if( p%refine.eq.'het' )then
             if( frac_srch_space<0.98 .or. p%het_thresh>0.02 )then
+                write(*,'(A,F8.2)')'>>> STATE RANDOMIZATION %:', 100.*p%het_thresh
                 corrs = b%a%get_all('corr')
                 allocate( inds(size(corrs)) )
                 inds = (/ (ind,ind=1,size(inds)) /)
                 call hpsort( size(inds), corrs, inds)
                 thresh_ind = nint( size(inds)*p%het_thresh )
                 het_corr_thresh = corrs( inds(thresh_ind) )
-                write(*,'(A,F8.2)')'>>> STATE RANDOMIZATION %:', 100.*p%het_thresh
                 write(*,'(A,F8.2)')'>>> CORRELATION THRESHOLD:', het_corr_thresh
                 deallocate( inds, corrs)
+                call flush(6)
             endif
             ! generate filename for memoization of particle pfts
             if( allocated(ppfts_fname) ) deallocate(ppfts_fname)
