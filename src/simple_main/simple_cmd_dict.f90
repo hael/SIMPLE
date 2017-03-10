@@ -137,6 +137,7 @@ contains
         call chdict%push('refs',          'initial2Dreferences.ext')
         call chdict%push('remap',         'adjust the number of clusters by splitting(yes|no){no}')
         call chdict%push('rnd',           'random(yes|no){no}')
+        call chdict%push('rrate',         'randomization rate{0.8}')
         call chdict%push('scale',         'image scale factor{1}')
         call chdict%push('set_gpu',       'index of GPU device used(1-MAX_N_GPU){0}')
         call chdict%push('shalgn',        'do 2D shift alignment(yes|no){no}')

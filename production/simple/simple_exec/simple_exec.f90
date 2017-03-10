@@ -967,14 +967,22 @@ select case(prg)
         keys_optional(29) = 'xfel'
         keys_optional(30) = 'nnn'
         keys_optional(31) = 'shellw'
+        keys_optional(32) = 'rrate'
         ! parse command line
         if( describe ) call print_doc_prime3D
-        call cline%parse(keys_required(:6), keys_optional(:31))
+        call cline%parse(keys_required(:6), keys_optional(:32))
         ! set defaults
         if( .not. cline%defined('nspace')                  ) call cline%set('nspace', 1000.)
         if( cline%defined('lp') .or. cline%defined('find') ) call cline%set('dynlp',   'no')
         if( .not. cline%defined('cenlp')  )                  call cline%set('cenlp',    30.)
-        if( .not. cline%defined('refine')                  ) call cline%set('refine',  'no')
+        if( .not. cline%defined('refine') )then
+             call cline%set('refine',  'no')
+        else
+            if( cline%get_carg('refine').eq.'het' )then
+                if( .not. cline%defined('nstates') ) stop 'refine=HET requires specification of NSTATES'
+                if( .not. cline%defined('oritab')  ) stop 'refine=HET requires ORITAB input'
+            endif
+        endif
         ! execute
         call xprime3D%execute(cline)
     case( 'cont3D' )
