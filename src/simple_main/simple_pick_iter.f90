@@ -28,9 +28,11 @@ contains
         endif
         write(*,'(a,1x,a)') '>>> PICKING MICROGRAPH:', trim(adjustl(moviename_intg))
         if( cline%defined('thres') )then
-            call init_picker(moviename_intg, p%refs, p%smpd, lp_in=p%lp, distthr_in=p%thres)
+            call init_picker(moviename_intg, p%refs, p%smpd, lp_in=p%lp,&
+            distthr_in=p%thres, rm_outliers_in=p%rm_outliers)
         else
-            call init_picker(moviename_intg, p%refs, p%smpd, lp_in=p%lp)
+            call init_picker(moviename_intg, p%refs, p%smpd, lp_in=p%lp,&
+            rm_outliers_in=p%rm_outliers)
         endif
         call exec_picker 
         call kill_picker

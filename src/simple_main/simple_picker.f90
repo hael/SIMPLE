@@ -29,13 +29,15 @@ integer                       :: ldim_shrink_refine(3), ntargets, nx, ny, nx_ref
 integer                       :: nrefs, npeaks, orig_box, lfny, ncls, nbackgr
 real                          :: smpd, smpd_shrunken, smpd_shrunken_refine, corrmax, corrmin
 real                          :: msk, msk_refine, lp, distthr
+logical                       :: rm_outliers = .true.
 
 contains
 
-    subroutine init_picker( micfname, refsfname, smpd_in, lp_in, distthr_in )
-        character(len=*), intent(in) :: micfname, refsfname
-        real,             intent(in) :: smpd_in
-        real,optional,    intent(in) :: lp_in, distthr_in
+    subroutine init_picker( micfname, refsfname, smpd_in, lp_in, distthr_in, rm_outliers_in )
+        character(len=*),           intent(in) :: micfname, refsfname
+        real,                       intent(in) :: smpd_in
+        real,             optional, intent(in) :: lp_in, distthr_in
+        character(len=*), optional, intent(in) :: rm_outliers_in
         type(image) :: refimg
         integer     :: alloc_stat, ifoo, iref
         allocate(micname,  source=trim(micfname))
@@ -44,6 +46,10 @@ contains
         smpd    = smpd_in
         lp      = 20.0
         if( present(lp_in) ) lp = lp_in
+        rm_outliers = .true.
+        if( present(rm_outliers_in) )then
+            if( rm_outliers_in .eq. 'no' ) rm_outliers = .false.
+        endif
         ! read micrograph
         call find_ldim_nptcls(micname, ldim, ifoo)
         call micrograph%new(ldim, smpd)
@@ -109,7 +115,7 @@ contains
         call extract_peaks_and_background
         call distance_filter
         call refine_positions
-        call estimate_ssnr
+        if( rm_outliers ) call remove_outliers
         ! bring back coordinates to original sampling
         peak_positions_refined = nint(PICKER_SHRINK_REFINE)*peak_positions_refined
         backgr_positions       = nint(PICKER_SHRINK_REFINE)*backgr_positions
@@ -286,8 +292,6 @@ contains
                 ! extract image, correlate, find peak
                 do xind=xrange(1),xrange(2)
                     do yind=yrange(1),yrange(2)
-                        ! call target_imgs(xind,yind)%new(ldim_refs_refine, smpd_shrunken_refine)
-                        ! call mic_shrunken_refine%window_slim([xind,yind], ldim_refs_refine(1), target_imgs(xind,yind))
                         call mic_shrunken_refine%window_slim([xind,yind], ldim_refs_refine(1), ptcl_target)
                         target_corr = refs_refine(ref)%real_corr_prenorm(ptcl_target, sxx_refine(ref))
                         if( target_corr > corr )then
@@ -296,25 +300,6 @@ contains
                         endif
                     end do
                 end do
-                ! correlate
-                ! do xind=xrange(1),xrange(2)
-                !     do yind=yrange(1),yrange(2)
-                !         target_corrs(xind,yind) =&
-                !         &refs_refine(ref)%real_corr_prenorm(target_imgs(xind,yind), sxx_refine(ref))
-                !     end do
-                ! end do
-                ! find peak
-                ! corr = -1
-                ! do xind=xrange(1),xrange(2)
-                !     do yind=yrange(1),yrange(2)
-                !         call target_imgs(xind,yind)%kill
-                !         if( target_corrs(xind,yind) > corr )then
-                !             peak_positions_refined(ipeak,:) = [xind,yind]
-                !             corr = target_corrs(xind,yind)
-                !         endif
-                !     end do
-                ! end do
-                ! deallocate(target_imgs, target_corrs)
             endif
         end do
 
@@ -330,7 +315,7 @@ contains
 
     end subroutine refine_positions
 
-    subroutine estimate_ssnr
+    subroutine remove_outliers
         real,    allocatable :: sig_spec(:), noise_spec(:), spec(:)
         real,    allocatable :: ssnr(:), res(:), pscores(:)
         integer, allocatable :: labels(:), labels_bin(:)
@@ -385,7 +370,7 @@ contains
             write(*,'(a,1x,I5)') 'peak positions left after outlier exclusion: ', count(selected_peak_positions)
         endif
         write(*,'(a,1x,f7.3)') '>>> SPECTRAL SCORE:', sum(sig_spec)/real(size(sig_spec))
-    end subroutine estimate_ssnr
+    end subroutine remove_outliers
 
     subroutine write_boxfile
         integer :: funit, ipeak
