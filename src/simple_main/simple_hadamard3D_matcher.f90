@@ -123,6 +123,7 @@ contains
 
         ! HETEROGEINITY
         if( p%refine.eq.'het' )then
+            het_corr_thresh = -1.
             if( frac_srch_space<0.98 .or. p%het_thresh>0.02 )then
                 write(*,'(A,F8.2)')'>>> STATE RANDOMIZATION %:', 100.*p%het_thresh
                 corrs = b%a%get_all('corr')
@@ -237,7 +238,7 @@ contains
                             call primesrch3D%exec_prime3D_inpl_srch(pftcc, iptcl, p%lp, orientation, greedy=.false.)
                         case('het')
                             if( p%oritab .eq. '' ) stop 'cannot run the refine=het mode without input oridoc (oritab)'
-                            if( orientation%get('corr') < het_corr_thresh )then
+                            if(orientation%get('corr') < het_corr_thresh)then
                                 call primesrch3D%exec_prime3D_het_srch(pftcc, iptcl, orientation, statecnt, do_rnd=.true.)
                             else
                                 call primesrch3D%exec_prime3D_het_srch(pftcc, iptcl, orientation, statecnt, do_rnd=.false.)
