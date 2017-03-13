@@ -56,9 +56,12 @@ real,    parameter :: PICKER_SHRINK        = 4.
 real,    parameter :: PICKER_SHRINK_REFINE = 2.
 integer, parameter :: PICKER_OFFSET        = 3
 
+! constants for interpolation
+real, parameter :: KBWINSZ = 1.5
+real, parameter :: KBALPHA = 2.0
+
 ! constants for heterogeinity
 real, parameter    :: HETINITTHRESH = 0.5
-
 
 ! endianness conversion
 character(len=:), allocatable :: endconv

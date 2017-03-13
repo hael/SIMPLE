@@ -45,6 +45,7 @@ contains
     end subroutine exec_prime2D_srch_test
 
     subroutine setup_testenv( cline, be_verbose )
+        use simple_projector_hlev, only: projvol
         class(cmdline),    intent(inout) :: cline
         logical, optional, intent(in)    :: be_verbose
         integer :: iproj
@@ -72,8 +73,8 @@ contains
         p%kfromto(2) = b%img%get_find(p%lp)
         ! generate images
         call b%vol%read(p%vols(1))
-        imgs_refs  = b%proj%projvol(b%vol, o_refs,  p)
-        imgs_ptcls = b%proj%projvol(b%vol, o_ptcls, p)
+        imgs_refs  = projvol(b%vol, o_refs,  p)
+        imgs_ptcls = projvol(b%vol, o_ptcls, p)
         do iproj=1,NPROJS
             call imgs_refs(iproj)%write(refsname, iproj)
             call imgs_ptcls(iproj)%write(ptclsname, iproj)

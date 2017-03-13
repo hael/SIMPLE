@@ -329,7 +329,7 @@ contains
         integer, allocatable :: sample(:)
         if( p%vols(1) == '' )then
             p%oritab = 'prime3D_startdoc.txt'
-            if( p%refine .eq. 'no' .or. p%refine.eq.'adasym')then
+            if( p%refine .eq. 'no' .or. p%refine .eq. 'adasym' )then
                 call b%a%rnd_oris
                 call b%a%zero_shifts
                 if( p%l_distr_exec .and. p%part.ne.1 )then
@@ -365,7 +365,7 @@ contains
                 if( p%l_xfel )then
                     call b%img%pad(b%img_pad)
                 else
-                    call prep4cgrid(b%img, b%img_pad, p%msk, b%recvols(1)%get_wfuns())
+                    call prep4cgrid(b%img, b%img_pad, p%msk)
                 endif
                 if( p%pgrp == 'c1' )then
                     call b%recvols(1)%inout_fplane(orientation, .true., b%img_pad)
@@ -437,7 +437,7 @@ contains
                 cnt = cnt+1
                 call progress(cnt, nrefs)
                 o = b%e%get_ori(iref)
-                call b%proj%fproject_polar(cnt, b%vol, o, p, pftcc)
+                call b%vol%fproject_polar(cnt, o, p, pftcc)
             end do
         end do
         ! bring back the original b%vol size
@@ -480,11 +480,7 @@ contains
                     if( p%doautomsk )then
                         ! read & pre-process mask volume
                         call b%mskvol%read(p%masks(s))
-                        if( p%eo .eq. 'yes' )then
-                            call prep4cgrid(b%mskvol, b%vol_pad, p%msk, b%eorecvols(1)%get_wfuns())
-                        else
-                            call prep4cgrid(b%mskvol, b%vol_pad, p%msk, b%recvols(1)%get_wfuns())
-                        endif
+                        call prep4cgrid(b%mskvol, b%vol_pad, p%msk)
                     endif
                     cnt = 0
                     do iptcl=p%fromp,p%top
@@ -506,7 +502,7 @@ contains
                             call b%img%read(p%stk, iptcl, p%l_xfel)
                         endif
                         call prepimg4align(b, p, o)
-                        call b%proj%img2polarft(iptcl, b%img, pftcc)
+                        call b%img%img2polarft(iptcl, pftcc)
                     end do
                 end do
                 ! restores b%img dimensions for clean exit

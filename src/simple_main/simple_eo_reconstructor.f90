@@ -358,7 +358,7 @@ contains
         class(oris),                intent(inout) :: o                  !< orientations
         class(sym),                 intent(inout) :: se                 !< symmetry element
         integer,                    intent(in)    :: state              !< state to reconstruct
-        type(image),                intent(inout) :: vol                !< reconstructed volume
+        class(image),               intent(inout) :: vol                !< reconstructed volume
         real,             optional, intent(in)    :: mul                !< shift multiplication factor
         integer,          optional, intent(in)    :: part               !< partition (4 parallel rec)
         character(len=*), optional, intent(in)    :: fbody              !< body of output file
@@ -444,7 +444,7 @@ contains
                     if( p%l_xfel )then
                         call img%pad(img_pad)
                     else
-                        call prep4cgrid(img, img_pad, p%msk, wfuns=self%get_wfuns())
+                        call prep4cgrid(img, img_pad, p%msk)
                     endif
                     if( doshellweight_states )then
                         wresamp = resample_filter(wmat_states(state_glob,i,:), res, res_pad)

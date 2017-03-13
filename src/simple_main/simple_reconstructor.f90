@@ -563,7 +563,7 @@ contains
                     if( p%l_xfel )then
                         call img%pad(img_pd)
                     else
-                        call prep4cgrid(img, img_pd, p%msk, wfuns=self%wfuns)
+                        call prep4cgrid(img, img_pd, p%msk)
                     endif
                     if( doshellweight_states )then
                         wresamp = resample_filter(wmat_states(state_glob,i,:), res, res_pad)

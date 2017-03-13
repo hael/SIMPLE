@@ -20,7 +20,6 @@ use simple_centre_clust,     only: centre_clust
 use simple_oris,             only: oris
 use simple_pair_dtab,        only: pair_dtab
 use simple_ppca,             only: ppca
-use simple_projector,        only: projector
 use simple_reconstructor,    only: reconstructor
 use simple_eo_reconstructor, only: eo_reconstructor
 use simple_params,           only: params
@@ -29,7 +28,9 @@ use simple_polarft,          only: polarft
 use simple_opt_spec,         only: opt_spec
 use simple_convergence,      only: convergence
 use simple_jiffys,           only: alloc_err
+use simple_projector,        only: projector
 use simple_filehandling      ! use all in there
+use simple_kbinterpol        ! use all in there
 implicit none
 
 public :: build, test_build
@@ -41,16 +42,15 @@ type build
     ! GENERAL TOOLBOX
     type(oris)                          :: a, e               !< aligndata, discrete space
     type(sym)                           :: se                 !< symmetry elements object
-    type(projector)                     :: proj               !< projector object
     type(convergence)                   :: conv               !< object for convergence checking of the PRIME2D/3D approaches
-    type(image)                         :: img                !< individual image objects
+    type(projector)                     :: img                !< individual image objects
     type(image)                         :: img_pad            !< -"-
     type(image)                         :: img_tmp            !< -"-
     type(image)                         :: img_msk            !< -"-
     type(image)                         :: img_filt           !< -"-
     type(image)                         :: img_copy           !< -"-
-    type(image)                         :: vol                !< -"-
-    type(image)                         :: vol_pad            !< -"-
+    type(projector)                     :: vol                !< -"-
+    type(projector)                     :: vol_pad            !< -"-
     type(image)                         :: mskvol             !< mask volume
     ! CLUSTER TOOLBOX
     type(ppca)                          :: pca                !< 4 probabilistic pca
@@ -66,9 +66,9 @@ type build
     type(reconstructor)                 :: recvol             !< object for reconstruction
     ! PRIME TOOLBOX
     type(image), allocatable            :: cavgs(:)           !< class averages (Wiener normalised references)
-    type(image), allocatable            :: refs(:)            !< referecnes
+    type(projector), allocatable        :: refs(:)            !< referecnes
     type(image), allocatable            :: ctfsqsums(:)       !< CTF**2 sums for Wiener normalisation
-    type(image), allocatable            :: refvols(:)         !< reference volumes for quasi-continuous search
+    type(projector), allocatable        :: refvols(:)         !< reference volumes for quasi-continuous search
     type(reconstructor), allocatable    :: recvols(:)         !< array of volumes for reconstruction
     type(eo_reconstructor), allocatable :: eorecvols(:)       !< array of volumes for eo-reconstruction
     real, allocatable                   :: ssnr(:,:)          !< spectral signal to noise rations
@@ -217,8 +217,8 @@ contains
             endif
             if( debug ) write(*,'(a)') 'did set default values'
         endif
-        ! build projector 
-        self%proj = projector(p%wfun,imgkind=p%imgkind)
+        ! initialize Kaiser-Bessel kernel
+        call init_kbiterpol(KBWINSZ, KBALPHA)
         ! build convergence checker
         self%conv = convergence(self%a, p, cline)
         write(*,'(A)') '>>> DONE BUILDING GENERAL TOOLBOX'
@@ -240,6 +240,7 @@ contains
             call self%img_pad%kill
             call self%vol%kill
             call self%mskvol%kill
+            call self%vol_pad%kill_expanded
             call self%vol_pad%kill
             if( allocated(self%ssnr) )then
                 deallocate(self%ssnr, self%fsc)

@@ -351,7 +351,7 @@ contains
                 b%refs(icls) = b%cavgs(icls)
                 call prep2Dref(p, b%refs(icls), b%a, icls)
                 ! transfer to polar coordinates
-                call b%proj%img2polarft(icls, b%refs(icls), pftcc, isptcl=.false.)
+                call b%refs(icls)%img2polarft(icls, pftcc, isptcl=.false.)
             endif
         end do
         ! PREPARATION OF PARTICLES IN PFTCC
@@ -372,7 +372,7 @@ contains
             if( istate == 0 ) icls = 0
             call prepimg4align(b, p, o)
             if( allocated(wmat) ) call calc_frc( b, p, o, icls, cnt, wmat )
-            call b%proj%img2polarft(iptcl, b%img, pftcc)
+            call b%img%img2polarft(iptcl, pftcc)
         end do
         if( allocated(wmat) )then
             if( p%l_distr_exec )then

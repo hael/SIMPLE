@@ -21,7 +21,8 @@ real                          :: shvec(3)
 contains
 
     subroutine symsrch_master( cline, p, b, o )
-        use simple_filehandling, only: nlines
+        use simple_filehandling,   only: nlines
+        use simple_projector_hlev, only: projvol
         class(cmdline), intent(inout) :: cline
         class(params),  intent(inout) :: p
         class(build),   intent(inout) :: b
@@ -39,7 +40,7 @@ contains
                 ! single symmetry search
                 ! generate projections
                 call b%vol%mask(p%msk, 'soft')
-                b%ref_imgs(1,:) = b%proj%projvol(b%vol, b%e, p)
+                b%ref_imgs(1,:) = projvol(b%vol, b%e, p)
                 ! do the symmetry search
                 call single_symsrch( b, p, orientation )
             else if( cline%defined('stk') )then
@@ -62,7 +63,7 @@ contains
             ! projection generation does not have to be inside the loop over subgroups
             ! generate projections
             call b%vol%mask(p%msk, 'soft')
-            b%ref_imgs(1,:) = b%proj%projvol(b%vol, b%e, p)
+            b%ref_imgs(1,:) = projvol(b%vol, b%e, p)
             ! symmetry subgroup scan
             ! get subgroups
             subgrps      = b%se%get_all_subgrps()

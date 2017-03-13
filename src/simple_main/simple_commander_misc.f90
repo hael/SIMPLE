@@ -149,12 +149,13 @@ contains
     subroutine exec_find_nnimgs( self, cline )
         use simple_nnimgs      ! use all in there
         use simple_image,      only: image
+        use simple_projector,  only: projector
         use simple_qsys_funs,  only: qsys_job_finished
         class(find_nnimgs_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(params)                  :: p
         integer,          allocatable :: nnmat(:,:), nnmat_part(:,:)
-        type(image),      allocatable :: imgs(:)
+        type(projector),  allocatable :: imgs(:)
         character(len=:), allocatable :: fname
         integer :: iptcl, ineigh, alloc_stat, funit, io_stat, fnr
         p = params(cline, checkdistr=.false.) ! parameters generated, we don't split stack

@@ -1,39 +1,43 @@
 !>  \brief  SIMPLE projector class
 module simple_projector
-use simple_defs
-use simple_image,    only: image
-use simple_ori,      only: ori
-use simple_oris,     only: oris
-use simple_params,   only: params
-use simple_gridding, only: prep4cgrid
-use simple_jiffys,   only: alloc_err, progress
-use simple_math,     only: recwin_3d, euclid, sqwin_3d
-use simple_winfuns,  only: winfuns
+use simple_defs       ! use all in there
+use simple_kbinterpol ! use all in there
+use simple_image,     only: image
+use simple_ori,       only: ori
+use simple_oris,      only: oris
+use simple_params,    only: params
+use simple_gridding,  only: prep4cgrid
+use simple_jiffys,    only: alloc_err, progress
+use simple_math,      only: recwin_3d, euclid, sqwin_3d
 implicit none
 
 public :: projector
 private
 
 logical, parameter :: debug = .false.
-logical, parameter :: warn  = .false.
 
-type :: projector
+type, extends(image) :: projector
     private
-    type(winfuns)         :: wfuns                 !< window functions object
-    character(len=STDLEN) :: wfun_str='kb'         !< window function, string descriptor
-    character(len=STDLEN) :: imgkind='em'          !< image kind descriptor
-    real,    allocatable  :: polweights_mat(:,:,:) !< polar weights matrix for the image to polar transformer
-    integer, allocatable  :: polcyc1_mat(:,:,:)    !< image cyclic adresses for the image to polar transformer
-    integer, allocatable  :: polcyc2_mat(:,:,:)    !< image cyclic adresses for the image to polar transformer
-    real                  :: winsz     = 1.5       !< window half-width
-    real                  :: alpha     = 2.        !< oversampling ratio
-    real                  :: harwin    = 2.        !< rounded window half-width
-    real                  :: harwin_exp= 1.        !< rounded window half-width in expanded routines
+    integer               :: ldim_exp(3,2)=0         !< expanded FT matrix limits
+    complex, allocatable  :: cmat_exp(:,:,:)         !< expanded FT matrix
+    real,    allocatable  :: polweights_mat(:,:,:)   !< polar weights matrix for the image to polar transformer
+    integer, allocatable  :: polcyc1_mat(:,:,:)      !< image cyclic adresses for the image to polar transformer
+    integer, allocatable  :: polcyc2_mat(:,:,:)      !< image cyclic adresses for the image to polar transformer
+    real                  :: winsz     = 1.5         !< window half-width
+    real                  :: alpha     = 2.          !< oversampling ratio
+    real                  :: harwin    = 2.          !< rounded window half-width
+    real                  :: harwin_exp= 1.          !< rounded window half-width in expanded routines
+    logical               :: expanded_exists=.false. !< indicates FT matrix existence
   contains
-    ! GETTER
-    procedure          :: get_wfuns
+    ! CONSTRUCTORS
+    procedure          :: expand_cmat
+    procedure          :: compress_cmat
+    ! GETTERS
     procedure          :: get_harwin
     procedure          :: get_harwin_exp
+    procedure          :: exp_exists
+    ! SETTERS
+    procedure          :: reset_expanded
     ! FOURIER PROJECTORS
     procedure          :: fproject
     procedure          :: fproject_expanded
@@ -45,64 +49,95 @@ type :: projector
     procedure, private :: img2polarft_2
     generic            :: img2polarft => img2polarft_1, img2polarft_2
     procedure          :: extr_gridfcomp
-    ! REAL-SPACE PROJECTOR
-    procedure          :: rproject
-    ! HIGH-LEVEL PROJECTORS
-    procedure          :: projvol
-    procedure          :: projvol_expanded
-    procedure          :: rotvol
-    procedure          :: rotimg
-    procedure          :: fprojvol_polar
+    procedure          :: interp_fcomp_expanded
     ! IMAGE TO POLAR TRANSFORMER
     procedure          :: init_imgpolarizer
     procedure          :: imgpolarizer
-    procedure          :: kill_imgpolarizer
+    procedure, private :: kill_imgpolarizer
+    procedure          :: kill_expanded
 end type projector
-
-interface projector
-    module procedure constructor
-end interface
 
 contains
 
     ! CONSTRUCTOR
 
-    !> \brief  is a constructor
-    function constructor( wfun, winsz, alpha, imgkind ) result( self )
-        use simple_params, only: params
-        character(len=*), optional, intent(in) :: wfun    !< window function, string descriptor
-        real,             optional, intent(in) :: winsz   !< window half-width
-        real,             optional, intent(in) :: alpha   !< oversampling ratio
-        character(len=*), optional, intent(in) :: imgkind !< image kind (em/xfel) 
-        type(projector)                        :: self    !< instance
-        if( present(wfun) )then
-            self%wfun_str = wfun
-            if( self%wfun_str .eq. 'nn' )then
-                self%winsz  = 0.5
-                self%harwin = real(ceiling(self%winsz))
-            endif
-        endif
-        if( present(winsz) )then
-            self%winsz = winsz
-            self%harwin = real(ceiling(winsz))
-        endif
-        if( present(alpha) )then
-            self%alpha = alpha
-        endif
-        if( present(imgkind) )then
-            self%imgkind = imgkind
-        endif
-        self%wfuns = winfuns(self%wfun_str,self%winsz,self%alpha)
-    end function constructor
-
-    ! GETTER
-    
-    !>  \brief  return the window functions used by reconstructor
-    function get_wfuns( self ) result( wfs )
+     !>  \brief  is a constructor of the expanded Fourier matrix
+    subroutine expand_cmat( self )
+        !$ use omp_lib
+        !$ use omp_lib_kinds
+        use simple_math, only: cyci_1d
         class(projector), intent(inout) :: self
-        type(winfuns) :: wfs
-        wfs = self%wfuns
-    end function get_wfuns
+        integer, allocatable :: cyck(:), cycm(:), cych(:)
+        integer :: h, k, m, alloc_stat, max_dim
+        integer :: lims(3,2), ldim(3)
+        ldim = self%get_ldim()
+        if( .not.self%is_ft() ) stop 'volume needs to be FTed before call; expand_cmat; simple_image'
+        if( ldim(3) == 1      ) stop 'only for volumes; expand_cmat; simple_image'
+        self%winsz  = get_kb_winsz()
+        self%harwin = real(ceiling(self%winsz))
+        self%alpha  = get_kb_alpha()
+        lims               = self%loop_lims(3)
+        max_dim            = maxval(abs(lims))
+        self%ldim_exp(:,2) = max_dim + ceiling(self%harwin_exp)
+        self%ldim_exp(:,1) = -self%ldim_exp(:,2)
+        if( allocated(self%cmat_exp) ) deallocate( self%cmat_exp )
+        allocate( self%cmat_exp( self%ldim_exp(1,1):self%ldim_exp(1,2),&
+                                &self%ldim_exp(2,1):self%ldim_exp(2,2),&
+                                &self%ldim_exp(3,1):self%ldim_exp(3,2)),&
+                                &cych(self%ldim_exp(1,1):self%ldim_exp(1,2)),&
+                                &cyck(self%ldim_exp(2,1):self%ldim_exp(2,2)),&
+                                &cycm(self%ldim_exp(3,1):self%ldim_exp(3,2)), stat=alloc_stat)
+        call alloc_err("In: expand_cmat; simple_projector", alloc_stat)
+        ! pre-compute addresses in 2nd and 3rd dimension
+        do h = self%ldim_exp(1,1),self%ldim_exp(1,2)
+            cych(h) = h
+            if( h < lims(1,1) .or. h > lims(1,2) ) cych(h) = cyci_1d( lims(1,:),h )
+        enddo
+        do k = self%ldim_exp(2,1),self%ldim_exp(2,2)
+            cyck(k) = k
+            if( k < lims(2,1) .or. k > lims(2,2) ) cyck(k) = cyci_1d( lims(2,:),k )
+        enddo
+        do m = self%ldim_exp(3,1),self%ldim_exp(3,2)
+            cycm(m) = m
+            if( m < lims(3,1) .or. m > lims(3,2) ) cycm(m) = cyci_1d( lims(3,:),m )
+        enddo
+        ! build expanded fourier components matrix
+        self%cmat_exp = cmplx(0.,0.)
+        !$omp parallel do collapse(3) schedule(auto) default(shared) private(h,k,m)
+        do h = self%ldim_exp(1,1),self%ldim_exp(1,2)
+            do k = self%ldim_exp(2,1),self%ldim_exp(2,2)
+                do m = self%ldim_exp(3,1),self%ldim_exp(3,2)
+                    self%cmat_exp(h,k,m) = self%get_fcomp( [cych(h),cyck(k),cycm(m)] )
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+        deallocate( cych,cyck,cycm )
+        self%expanded_exists = .true.
+    end subroutine expand_cmat
+
+    !>  \brief converts the expanded matrix to standard imaginary representation
+    subroutine compress_cmat( self )
+        class(projector), intent(inout) :: self
+        integer :: h, k, m
+        integer :: lims(3,2)
+        if( .not. self%expanded_exists )then
+            stop 'expanded complex matrix does not exist; simple_projector :: compress_cmat'
+        endif
+        lims = self%loop_lims(2) ! excluding redundant Friedel mates
+        self = cmplx(0.,0.)
+        !$omp parallel do collapse(3) schedule(auto) default(shared) private(h,k,m)
+        do h = lims(1,1),lims(1,2)
+            do k = lims(2,1),lims(2,2)
+                do m = lims(3,1),lims(3,2)
+                    call self%set_fcomp([h,k,m],self%cmat_exp(h,k,m))
+                end do
+            end do 
+        end do
+        !$omp end parallel do     
+    end subroutine compress_cmat
+
+    ! GETTERS
 
     !>  \brief  returns the hard window size for projection
     function get_harwin( self ) result( winsz )
@@ -118,37 +153,38 @@ contains
         winsz = self%harwin_exp
     end function get_harwin_exp
 
+    !>  \brief  indicates expanded fourier matix existance
+    function exp_exists( self )result( answer )
+        class(projector), intent(inout) :: self
+        logical :: answer
+        answer = self%expanded_exists
+    end function exp_exists
+
+    ! SETTERS
+
+    !>  \brief  sets the expanded Fourier matrix to zero
+    subroutine reset_expanded( self )
+        class(projector), intent(inout) :: self
+        if( .not.self%expanded_exists )&
+            &stop 'expanded fourier matrix does not exist; simple_image::reset_expanded'
+        self%cmat_exp = cmplx(0.,0.)
+    end subroutine reset_expanded
+
     ! FOURIER PROJECTORS
 
-   !> \brief  extracts a Fourier plane from the expanded FT matrix of a volume
-    subroutine fproject_expanded( self, fvol, e, fplane, lp )
+   !> \brief  extracts a Fourier plane from the expanded FT matrix of a volume (self)
+    subroutine fproject_expanded( self, e, fplane, lp )
         !$ use omp_lib
         !$ use omp_lib_kinds
         class(projector), intent(inout) :: self
-        class(image),     intent(inout) :: fvol
         class(ori),       intent(in)    :: e
         class(image),     intent(inout) :: fplane
         real,   optional, intent(inout) :: lp
-        real, allocatable :: w(:,:,:)
-        complex           :: comp
-        real              :: vec(3), loc(3)
-        integer           :: h, hh, k, kk, sqarg, sqlp, i, wdim, alloc_stat, halflim
-        integer           :: lims(3,2), ldim(3), ldim_ptcl(3)
-        if( warn)then
-            if( .not. fvol%exists() )   stop 'fvol needs to exists before call; fproject_expanded; simple_projector'
-            if( .not. fplane%exists() ) stop 'fplane needs to exists before call; fproject_expanded; simple_projector'
-            ldim      = fvol%get_ldim()
-            ldim_ptcl = fplane%get_ldim()
-            if( ldim(3) == 1 )stop 'only for interpolation from 3D images; fproject_1; simple_projector'
-            if( ldim(1) == ldim_ptcl(1) .and. ldim(2) == ldim_ptcl(2) )then
-            else
-               print *, 'ldim1 vol/ptcl:', ldim(1), ldim_ptcl(1)
-               print *, 'ldim2 vol/ptcl:', ldim(2), ldim_ptcl(2)
-               stop 'nonconformable dims btw vol & ptcl; fproject_1; simple_projector'
-            endif
-        endif
+        complex :: comp
+        real    :: vec(3), loc(3)
+        integer :: h, k, sqarg, sqlp, wdim, halflim, lims(3,2)
         ! init
-        lims = fvol%loop_lims(2) 
+        lims = self%loop_lims(2) 
         if( present(lp) )then
             sqlp = fplane%get_find(lp)**2
         else
@@ -156,95 +192,69 @@ contains
         endif
         fplane = cmplx(0.,0.)
         wdim = 2*ceiling(self%harwin_exp) + 1   ! interpolation kernel window size
-        allocate( w(wdim,wdim,wdim), stat=alloc_stat )
-        call alloc_err("In: fproject_expanded; simple_projector", alloc_stat)
-        ! build expanded fourier components matrix
-        !$omp parallel do schedule(auto) shared(lims,sqlp,wdim,halflim)&
-        !$omp private(h,k,hh,kk,sqarg,vec,loc,comp,i,w)
+        !$omp parallel do collapse(2) schedule(auto) default(shared) private(h,k,sqarg,vec,loc,comp)
         do h=lims(1,1),lims(1,2)
-            hh = h*h
             do k=lims(2,1),lims(2,2)
-                kk = k*k
-                sqarg = hh+kk
+                sqarg = h*h+k*k
                 if( sqarg <= sqlp )then
                     ! address
                     vec(1) = real(h)
                     vec(2) = real(k)
                     vec(3) = 0.
                     loc    = matmul(vec,e%get_mat())
-                    comp   = fvol%interp_fcomp_expanded( w, wdim, loc, self%wfuns, self%harwin_exp )
+                    comp   = self%interp_fcomp_expanded(wdim, loc)
                     ! set fourier component
                     call fplane%set_fcomp([h,k,0],comp)
                 endif
             end do
         end do
         !$omp end parallel do
-        deallocate( w )
     end subroutine fproject_expanded
 
-    !> \brief  extracts a Fourier plane from a volume
-    subroutine fproject( self, fvol, e, fplane, lp_dyn )
+    !> \brief  extracts a Fourier plane from a volume (self)
+    subroutine fproject( self, e, fplane, lp )
         !$ use omp_lib
         !$ use omp_lib_kinds
         class(projector), intent(inout) :: self
-        class(image),     intent(inout) :: fvol
         class(ori),       intent(in)    :: e
         class(image),     intent(inout) :: fplane
-        real, optional,   intent(in)    :: lp_dyn
+        real, optional,   intent(in)    :: lp
         complex :: comp
-        integer :: h, hh, k, kk, lims(3,2), ldim(3), ldim_ptcl(3), sqarg, sqlp
+        integer :: h, hh, k, kk, lims(3,2), sqarg, sqlp
         real    :: vec(3), loc(3)
-        if( warn)then
-            if( .not. fvol%exists() )   stop 'fvol needs to exists before call; fproject_1; simple_projector'
-            if( .not. fvol%is_ft() )    stop 'volume needs to be FTed before call; fproject_1; simple_projector'
-            if( .not. fplane%exists() ) stop 'fplane needs to exists before call; fproject_1; simple_projector'
-            ldim = fvol%get_ldim()
-            ldim_ptcl = fplane%get_ldim()
-            if( ldim(3) == 1 )          stop 'only for interpolation from 3D images; fproject_1; simple_projector'
-            if( ldim(1) == ldim_ptcl(1) .and. ldim(2) == ldim_ptcl(2) )then
-            else
-                print *, 'ldim1 vol/ptcl:', ldim(1), ldim_ptcl(1)
-                print *, 'ldim2 vol/ptcl:', ldim(2), ldim_ptcl(2)
-                stop 'nonconformable dims btw vol & ptcl; fproject_1; simple_projector'
-            endif
-        endif
         fplane = cmplx(0.,0.)
-        call fplane%set_ft(.true.)
-        if( present(lp_dyn) )then
-            lims = fvol%loop_lims(1,lp_dyn)
+        if( present(lp) )then
+            lims = self%loop_lims(1,lp)
         else
-            lims = fvol%loop_lims(2) ! Nyqvist default low-pass limit
+            lims = self%loop_lims(2) ! Nyqvist default low-pass limit
         endif
         sqlp = (maxval(lims(:,2)))**2
-        !$omp parallel do schedule(auto) shared(lims,sqlp) private(h,k,hh,kk,sqarg,vec,loc,comp)
+        !$omp parallel do collapse(2) schedule(auto) default(shared) private(h,k,sqarg,vec,loc,comp)
         do h=lims(1,1),lims(1,2)
-            hh = h*h
             do k=lims(2,1),lims(2,2)
-                kk = k*k
-                sqarg = hh+kk
+                sqarg = h*h+k*k
                 if( sqarg <= sqlp )then
+                    ! address
                     vec(1) = real(h)
                     vec(2) = real(k)
                     vec(3) = 0.
                     loc = matmul(vec,e%get_mat())
-                    comp = self%extr_gridfcomp(fvol,loc)
-                else
-                    comp = cmplx(0.,0.)
+                    comp = self%extr_gridfcomp(loc)
+                    ! set fourier component
+                    call fplane%set_fcomp([h,k,0],comp)
                 endif
-                call fplane%set_fcomp([h,k,0],comp)
             end do
         end do
         !$omp end parallel do
     end subroutine fproject
 
-    !> \brief  extracts a polar FT from a volume
-    subroutine fproject_polar_1( self, fvol, e, pimg, memoize )
+    !> \brief  extracts a polar FT from a volume (self)
+    subroutine fproject_polar_1( self, e, pimg, memoize )
         use simple_polarft, only: polarft
         use simple_math,    only: deg2rad
         !$ use omp_lib
         !$ use omp_lib_kinds
         class(projector),  intent(inout) :: self    !< projector object
-        class(image),      intent(inout) :: fvol    !< Fourier volume
         class(ori),        intent(inout) :: e       !< orientation
         class(polarft),    intent(inout) :: pimg    !< polar image
         logical, optional, intent(in)    :: memoize !< memoize or not
@@ -252,9 +262,9 @@ contains
         real    :: vec(3), loc(3)
         complex :: comp
         logical :: mmemoize
-        ldim = fvol%get_ldim()
+        ldim = self%get_ldim()
         if( ldim(3) == 1 )        stop 'only for interpolation from 3D images; fproject_polar_1; simple_projector'
-        if( .not. fvol%is_ft() )  stop 'volume needs to be FTed before call; fproject_polar_1; simple_projector'
+        if( .not. self%is_ft() )  stop 'volume needs to be FTed before call; fproject_polar_1; simple_projector'
         if( .not. pimg%exists() ) stop 'polarft object needs to be created; fproject_polar_1; simple_projector'
         mmemoize = .true.
         if( present(memoize) ) mmemoize = memoize
@@ -262,13 +272,13 @@ contains
         ldim_polft(3)   = 1
         call pimg%set_ldim(ldim_polft)
         pdims = pimg%get_dims()
-        !$omp parallel do schedule(auto) default(shared) private(i,k,vec,loc,comp)
+        !$omp parallel do collapse(2) schedule(auto) default(shared) private(i,k,vec,loc,comp)
         do i=1,pdims(1)
             do k=pdims(2),pdims(3)
                 vec(:2) = pimg%get_coord(i,k)
                 vec(3)  = 0.
                 loc     = matmul(vec,e%get_mat())
-                comp    = self%extr_gridfcomp(fvol,loc)
+                comp    = self%extr_gridfcomp(loc)
                 call pimg%set_fcomp(i, k, comp)
             end do
         end do
@@ -277,67 +287,66 @@ contains
         if( mmemoize ) call pimg%memoize_sqsums
     end subroutine fproject_polar_1
 
-    !> \brief  extracts a polar FT from a volume
-    subroutine fproject_polar_2( self, iref, fvol, e, p, pftcc, expanded )
+    !> \brief  extracts a polar FT from a volume (self)
+    subroutine fproject_polar_2( self, iref, e, p, pftcc, expanded )
         use simple_polarft, only: polarft
         use simple_polarft_corrcalc, only: polarft_corrcalc
         use simple_params, only: params
         class(projector),        intent(inout) :: self  !< projector instance
         integer,                 intent(in)    :: iref  !< logical reference index [1,nrefs]
-        class(image),            intent(inout) :: fvol  !< Fourier volume
         class(ori),              intent(inout) :: e     !< orientation
         class(params),           intent(in)    :: p     !< parameters class
         class(polarft_corrcalc), intent(inout) :: pftcc !< polarft_corrcalc object to be filled
         logical,       optional, intent(in)    :: expanded
         type(polarft) :: pimg
-        complex :: comp
-        integer :: irot, k, ldim_fvol(3), ldim_pft(3), refsz
-        logical :: l_exp
+        complex       :: comp
+        integer       :: irot, k, ldim_fvol(3), ldim_pft(3), refsz
+        logical       :: l_exp
         l_exp = .false.
         if( present(expanded) )then
             l_exp = expanded
-            if( l_exp .and. .not.fvol%exp_exists() )&
+            if( l_exp .and. .not. self%exp_exists() )&
                 &stop 'expanded fourier components matrix does not exists; fproject_polar_2; simple_projector'
         endif
-        ldim_fvol = fvol%get_ldim()
-        ldim_pft = pftcc%get_ldim()
+        ldim_fvol = self%get_ldim()
+        ldim_pft  = pftcc%get_ldim()
         if( .not. all(ldim_fvol(1:2) == ldim_pft(1:2)) ) stop 'nonconforming logical dimensions; fproject_polar_2; simple_projector'
-        call pimg%new([p%kfromto(1),p%kfromto(2)],p%ring2,ptcl=.false.)
-        if( .not.l_exp )then
-            call self%fproject_polar_1(fvol, e, pimg, memoize=.false.)
+        call pimg%new([p%kfromto(1),p%kfromto(2)],p%ring2, ptcl=.false.)
+        if( l_exp )then
+            call self%fproject_polar_expanded(e, pimg, memoize=.false.)
         else
-            call self%fproject_polar_expanded(fvol, e, pimg, memoize=.false.)
+            call self%fproject_polar_1(e, pimg, memoize=.false.)
         endif
         refsz = pftcc%get_refsz()
+        !$omp parallel do collapse(2) schedule(auto) default(shared) private(irot,k,comp)
         do irot=1,refsz
             do k=p%kfromto(1),p%kfromto(2)
                 comp = pimg%get_fcomp(irot,k)
                 call pftcc%set_ref_fcomp(iref, irot, k, comp)
             end do
         end do
+        !$omp end parallel do
         call pftcc%memoize_sqsum_ref(iref)
         call pimg%kill
     end subroutine fproject_polar_2
 
-    !> \brief  extracts a polar FT from a volume's expanded FT
-    subroutine fproject_polar_expanded( self, fvol, e, pimg, memoize )
+    !> \brief  extracts a polar FT from a volume's expanded FT (self)
+    subroutine fproject_polar_expanded( self, e, pimg, memoize )
         use simple_polarft, only: polarft
         use simple_math,    only: deg2rad
         !$ use omp_lib
         !$ use omp_lib_kinds
         class(projector),  intent(inout) :: self    !< projector object
-        class(image),      intent(inout) :: fvol    !< Fourier volume
         class(ori),        intent(inout) :: e       !< orientation
         class(polarft),    intent(inout) :: pimg    !< polar image
         logical, optional, intent(in)    :: memoize !< memoize or not
-        real, allocatable :: w(:,:,:)
         integer :: i, k, alloc_stat, wdim, ldim(3), pdims(3), ldim_polft(3)
         real    :: vec(3), loc(3)
         complex :: comp
         logical :: mmemoize
-        ldim = fvol%get_ldim()
+        ldim = self%get_ldim()
         if( ldim(3) == 1 )        stop 'only for interpolation from 3D images; fproject_polar_1; simple_projector'
-        if( .not. fvol%is_ft() )  stop 'volume needs to be FTed before call; fproject_polar_1; simple_projector'
+        if( .not. self%is_ft() )  stop 'volume needs to be FTed before call; fproject_polar_1; simple_projector'
         if( .not. pimg%exists() ) stop 'polarft object needs to be created; fproject_polar_1; simple_projector'
         mmemoize = .true.
         if( present(memoize) ) mmemoize = memoize
@@ -345,16 +354,14 @@ contains
         ldim_polft(3)   = 1
         call pimg%set_ldim(ldim_polft)
         pdims = pimg%get_dims()
-        wdim = 2*ceiling(self%harwin_exp) + 1   ! interpolation kernel window size
-        allocate( w(1:wdim,1:wdim,1:wdim), stat=alloc_stat )
-        call alloc_err("In: fproject_polar_expanded; simple_projector", alloc_stat)
-        !$omp parallel do collapse(2) schedule(auto) default(shared) private(i,k,vec,loc,comp,w)
+        wdim = 2*ceiling(self%harwin_exp) + 1 ! interpolation kernel window size
+        !$omp parallel do collapse(2) schedule(auto) default(shared) private(i,k,vec,loc,comp)
         do i=1,pdims(1)
             do k=pdims(2),pdims(3)
                 vec(:2) = pimg%get_coord(i,k)
                 vec(3)  = 0.
                 loc     = matmul(vec,e%get_mat())
-                comp    = fvol%interp_fcomp_expanded( w, wdim, loc, self%wfuns, self%harwin_exp)
+                comp    = self%interp_fcomp_expanded( wdim, loc )
                 call pimg%set_fcomp(i, k, comp)
             end do
         end do
@@ -363,29 +370,28 @@ contains
         if( mmemoize ) call pimg%memoize_sqsums
     end subroutine fproject_polar_expanded
     
-    !> \brief  transfers a 2D Cartesian image to polar coordinates Fourier coordinatess
-    subroutine img2polarft_1( self, img, pimg )
+    !> \brief  transfers a 2D Cartesian image (self) to polar Fourier
+    subroutine img2polarft_1( self, pimg )
         use simple_polarft,  only: polarft
         !$ use omp_lib
         !$ use omp_lib_kinds
         class(projector), intent(inout) :: self !< instance
-        class(image),     intent(inout) :: img  !< image to be transformed
         class(polarft),   intent(inout) :: pimg !< polarft ouput
         integer :: i, k, ldim(3), pdims(3)
         real    :: vec(3)
         complex :: comp
-        ldim = img%get_ldim()
+        ldim = self%get_ldim()
         call pimg%set_ldim(ldim)
         if( ldim(3) > 1 )         stop 'only for interpolation from 2D images; img2polarft_1; simple_projector'
-        if( .not. img%is_ft() )   stop 'image needs to FTed before this operation; simple_projector::img2polarft_1'
+        if( .not. self%is_ft() )  stop 'image needs to FTed before this operation; simple_projector::img2polarft_1'
         if( .not. pimg%exists() ) stop 'polarft object needs to be created before call; img2polarft_1; simple_projector'
         pdims = pimg%get_dims()
-        !$omp parallel do schedule(auto) default(shared) private(i,k,vec,comp)
+        !$omp parallel do collapse(2) schedule(auto) default(shared) private(i,k,vec,comp)
         do i=1,pdims(1)
             do k=pdims(2),pdims(3)
                 vec(:2) = pimg%get_coord(i,k)
                 vec(3)  = 0.
-                comp    = self%extr_gridfcomp(img,vec)
+                comp    = self%extr_gridfcomp(vec)
                 call pimg%set_fcomp(i, k, comp)
             end do
         end do
@@ -394,15 +400,14 @@ contains
         call pimg%memoize_sqsums
     end subroutine img2polarft_1
     
-    !> \brief  transfers a 2D Cartesian image to polar coordinates Fourier coordinatess
-    subroutine img2polarft_2( self, ind, img, pftcc, isptcl )
+    !> \brief  transfers a 2D Cartesian image (self) to polar Fourier
+    subroutine img2polarft_2( self, ind, pftcc, isptcl )
         use simple_polarft_corrcalc, only: polarft_corrcalc
         use gnufor2
         !$ use omp_lib
         !$ use omp_lib_kinds
         class(projector),        intent(inout) :: self   !< instance
         integer,                 intent(in)    :: ind    !< logical particle index [fromp,top]
-        class(image),            intent(inout) :: img    !< Cartesian image
         class(polarft_corrcalc), intent(inout) :: pftcc  !< polarft_corrcalc object to be filled
         logical, optional,       intent(in)    :: isptcl !< to indicate whether particle or reference
         complex, allocatable :: pft(:,:)
@@ -410,8 +415,8 @@ contains
         real    :: vec(3)
         logical :: iisptcl
         iisptcl = .true.
-        if( present(isptcl) )iisptcl = isptcl
-        ldim_img    = img%get_ldim()
+        if( present(isptcl) ) iisptcl = isptcl
+        ldim_img = self%get_ldim()
         if( ldim_img(3) > 1 )      stop 'only for interpolation from 2D images; img2polarft_2; simple_projector'
         if( .not. pftcc%exists() ) stop 'polarft_corrcalc object needs to be created; img2polarft_2; simple_projector'
         ldim_pft = pftcc%get_ldim()
@@ -420,17 +425,17 @@ contains
             print *, 'ldim_pft: ', ldim_pft
             stop 'logical dimensions do not match; img2polarft_2; simple_projector'
         endif
-        if( .not. img%is_ft() ) stop 'image needs to FTed before this operation; simple_projector::img2polarft_2'
+        if( .not. self%is_ft() ) stop 'image needs to FTed before this operation; simple_projector::img2polarft_2'
         pdims(1)   = pftcc%get_nrots()
         pdims(2:3) = pftcc%get_kfromto()
         allocate( pft(pdims(1),pdims(2):pdims(3)), stat=alloc_stat )
         call alloc_err("In: img2polarft_2; simple_projector", alloc_stat)
-        !$omp parallel do schedule(auto) default(shared) private(i,k,vec)
+        !$omp parallel do collapse(2) schedule(auto) default(shared) private(i,k,vec)
         do i=1,pdims(1)
             do k=pdims(2),pdims(3)
                 vec(:2)  = pftcc%get_coord(i,k)
                 vec(3)   = 0.
-                pft(i,k) = self%extr_gridfcomp(img,vec)
+                pft(i,k) = self%extr_gridfcomp(vec)
             end do
         end do
         !$omp end parallel do
@@ -442,13 +447,14 @@ contains
         ! kill the remains
         deallocate(pft)
     end subroutine img2polarft_2
+
+    ! INTERPOLATORS
     
-    !> \brief  extracts a Fourier component from a transform by gridding
-    function extr_gridfcomp( self, fimg, loc ) result( comp_sum )
+    !> \brief  extracts a Fourier component from a transform (self) by gridding
+    function extr_gridfcomp( self, loc ) result( comp_sum )
         use simple_math, only: cyci_1d
-        class(projector), intent(inout)       :: self
-        class(image), intent(inout)           :: fimg
-        real, intent(in)                      :: loc(3)
+        class(projector), intent(inout) :: self
+        real,             intent(in)    :: loc(3)
         real,    allocatable :: w1(:), w2(:), w3(:)
         integer, allocatable :: cyc1(:), cyc2(:), cyc3(:)
         integer :: alloc_stat, i, j, m
@@ -459,25 +465,25 @@ contains
         zero        = cmplx(0.,0.)
         comp_sum    = zero
         win         = recwin_3d(loc(1),loc(2),loc(3),harwin_here)
-        lims        = fimg%loop_lims(3)
+        lims        = self%loop_lims(3)
         allocate( w1(win(1,1):win(1,2)), w2(win(2,1):win(2,2)), &
             & cyc1(win(1,1):win(1,2)), cyc2(win(2,1):win(2,2)), stat=alloc_stat)
         call alloc_err("In: extr_gridfcomp; simple_projector, 1", alloc_stat)
         do i=win(1,1),win(1,2)
-            w1(i)   = self%wfuns%eval_apod(real(i)-loc(1))
+            w1(i)   = kb_apod(real(i)-loc(1))
             cyc1(i) = cyci_1d( lims(1,:),i )
         end do
         do j=win(2,1),win(2,2)
-            w2(j)   = self%wfuns%eval_apod(real(j)-loc(2))
+            w2(j)   = kb_apod(real(j)-loc(2))
             cyc2(j) = cyci_1d( lims(2,:),j )
         end do
-        if( fimg%is_2d() )then
+        if( self%is_2d() )then
             ! 2D
             do i=win(1,1),win(1,2)
                 if( w1(i) == 0. ) cycle
                 do j=win(2,1),win(2,2)
                     if( w2(j) == 0. ) cycle
-                    comp = fimg%get_fcomp( [cyc1(i),cyc2(j),0] )
+                    comp = self%get_fcomp( [cyc1(i),cyc2(j),0] )
                     if( comp .eq. zero ) cycle
                     comp_sum = comp_sum+comp*w1(i)*w2(j)
                 end do
@@ -488,7 +494,7 @@ contains
             allocate( w3(win(3,1):win(3,2)), cyc3(win(3,1):win(3,2)), stat=alloc_stat)
             call alloc_err("In: extr_gridfcomp; simple_projector, 2", alloc_stat)
             do m=win(3,1),win(3,2)
-                w3(m)   = self%wfuns%eval_apod(real(m)-loc(3))
+                w3(m)   = kb_apod(real(m)-loc(3))
                 cyc3(m) = cyci_1d( lims(3,:),m )
             end do
             do i=win(1,1),win(1,2)
@@ -497,7 +503,7 @@ contains
                     if( w2(j) == 0. ) cycle
                     do m=win(3,1),win(3,2)
                         if( w3(m) == 0. ) cycle
-                        comp = fimg%get_fcomp( [cyc1(i),cyc2(j),cyc3(m)] )
+                        comp = self%get_fcomp( [cyc1(i),cyc2(j),cyc3(m)] )
                         if( comp .eq. zero ) cycle
                         comp_sum = comp_sum+comp*w1(i)*w2(j)*w3(m)
                     end do
@@ -507,334 +513,33 @@ contains
         endif
     end function extr_gridfcomp
 
-    ! REAL-SPACE PROJECTOR
-    
-    !>  \brief  project a 3d volume onto a 2d slice (real-space projection from Frealix)
-    subroutine rproject(self, vol, e, img, maxrad )
-        use simple_math,  only: recwin_3d, hyp
-        !$ use omp_lib
-        !$ use omp_lib_kinds
-        class(projector), intent(inout) :: self   !< projector instance
-        type(image),      intent(inout) :: vol    !< volume to be projected
-        class(ori),       intent(in)    :: e      !< Euler angle
-        type(image),      intent(inout) :: img    !< resulting projection image
-        real,             intent(in)    :: maxrad !< project inside this radius
-        real, parameter :: harwin_here=1.5
-        integer :: i, j, k, orig(3), win(3,2), s, t, u, ldim(3), sosh, tosh, uosh
-        real    :: inp_coos(3), out_coos(3), rcomp, rcomp_sum
-        real    :: voxval, w, mmaxrad, sqmaxrad, rad(3)
-        logical :: didft
-        if( self%imgkind .eq. 'xfel' ) stop 'routine not intended for xfel-kind images; simple_projector::rproject'
-        ldim = vol%get_ldim()
-        if( ldim(3) == 1 )             stop 'only for interpolation from 3D mages; project; simple_projector'
-        if( .not. vol%even_dims() )    stop 'even dimensions assumed; project; simple_projector'
-        didft = .false.
-        if( vol%is_ft() )then
-            call vol%bwd_ft
-            didft = .true.
-        endif
-        call img%new([ldim(1),ldim(2),1],vol%get_smpd())
-        ! initialize
-        orig(1) = ldim(1)/2+1
-        orig(2) = ldim(2)/2+1
-        orig(3) = ldim(3)/2+1
-        inp_coos = 0.
-        out_coos = 0.
-        mmaxrad = min(maxrad,real(ldim(1))/2-1-harwin_here)
-        sqmaxrad = mmaxrad**2
-        rad = 0.
-        !$omp parallel default(shared) private(j,out_coos,rad,i,k,inp_coos,voxval,win,rcomp_sum,s,sosh,t,tosh,u,uosh,rcomp,w)
-        !$omp do schedule(auto)
-        do j=1,ldim(2)
-            out_coos(2) = real(j-orig(2))
-            rad(2) = out_coos(2)**2.
-            do i=1,ldim(1)
-                out_coos(1) = real(i-orig(1))
-                rad(1) = rad(2)+out_coos(1)**2
-                ! check whether we are within the radius
-                if( rad(1) .le. sqmaxrad )then
-                    ! iterate over all the voxels in the ray which lands on the current pixel
-                    do k=1,ldim(3)
-                        out_coos(3) = real(k-orig(3))
-                        rad(3) = rad(1)+out_coos(3)**2
-                        ! check that we are within the radius
-                        if(rad(3) .le. sqmaxrad) then
-                            inp_coos = matmul(out_coos,e%get_mat())
-                            ! get the value at the present point
-                            voxval = vol%get([nint(inp_coos(1)+orig(1)),&
-                            nint(inp_coos(2)+orig(2)),nint(inp_coos(3)+orig(3))])
-                            ! check whether the we are at a 0. voxel 
-                            ! (this introduces slight artefacts near boundary of mask)
-                            if( voxval .ne. 0. )then
-                                win = recwin_3d(inp_coos(1), inp_coos(2), inp_coos(3), harwin_here)
-                                rcomp_sum = 0.
-                                do s=win(1,1),win(1,2)
-                                    sosh = s+orig(1)
-                                    do t=win(2,1),win(2,2)
-                                        tosh = t+orig(2)
-                                        do u=win(3,1),win(3,2)
-                                            uosh = u+orig(3)
-                                            rcomp = vol%get([sosh,tosh,uosh])
-                                            w = wfun_here(hyp(inp_coos(1)-real(s),inp_coos(2)-&
-                                            real(t),inp_coos(3)-real(u)))
-                                            rcomp_sum = rcomp_sum+rcomp*w
-                                        end do
-                                    end do
-                                end do
-                                call img%add(rcomp_sum**2.,i,j,1) 
-                            endif                    
-                        endif
-                    enddo
-                endif
-            enddo
-        enddo
-        !$omp end do nowait
-        !$omp end parallel
-        if( didft )then
-            call vol%fwd_ft
-        endif
-        
-        contains
-        
-            !>  \brief  linear interpolation with window halfwidth=1
-            function wfun_here( x ) result( r )
-                real, intent(in) :: x
-                real ::  ax, r
-                ax = abs(x)
-                if( ax .gt. 1. )then
-                    r = 0.
-                else
-                    r = 1.-ax/harwin_here
-                endif
-            end function
-            
-    end subroutine rproject
-    
-    ! HIGH-LEVEL PROJECTORS
-    
-    !>  \brief  generates an array of projection images of volume vol in orientations o
-    function projvol( self, vol, o, p, top ) result( imgs )
-        use simple_image,    only: image
-        use simple_oris,     only: oris
-        use simple_params,   only: params
-        use simple_gridding, only: prep4cgrid
-        class(projector),  intent(inout) :: self    !< projector instance
-        class(image),      intent(inout) :: vol     !< volume to project
-        class(oris),       intent(inout) :: o       !< orientations
-        class(params),     intent(in)    :: p       !< parameters
-        integer, optional, intent(in)    :: top     !< stop index
-        type(image), allocatable         :: imgs(:) !< resulting images
-        type(image)                      :: vol_pad, img_pad
-        integer                          :: n, i, alloc_stat
-        call vol_pad%new([p%boxpd,p%boxpd,p%boxpd], p%smpd, self%imgkind)
-        if( self%imgkind .eq. 'xfel' )then
-            call vol%pad(vol_pad)
-        else
-            call prep4cgrid(vol, vol_pad, p%msk, wfuns=self%wfuns)
-        endif
-        call img_pad%new([p%boxpd,p%boxpd,1], p%smpd, self%imgkind)
-        if( present(top) )then
-            n = top
-        else
-            n = o%get_noris()
-        endif
-        allocate( imgs(n), stat=alloc_stat )
-        call alloc_err('projvol; simple_projector', alloc_stat)
-        write(*,'(A)') '>>> GENERATES PROJECTIONS' 
-        do i=1,n
-            call progress(i, n)
-            call imgs(i)%new([p%box,p%box,1], p%smpd, self%imgkind)
-            call self%fproject(vol_pad, o%get_ori(i), img_pad )
-            if( self%imgkind .eq. 'xfel' )then
-                call img_pad%clip(imgs(i))
-            else
-                call img_pad%bwd_ft
-                call img_pad%clip(imgs(i))
-                ! HAD TO TAKE OUT BECAUSE PGI COMPILER BAILS
-                ! call imgs(i)%norm
-            endif
+    !>  \brief is to interpolate from the expanded complex matrix 
+    function interp_fcomp_expanded( self, wdim, loc )result( comp )
+        class(projector), intent(inout) :: self
+        integer,          intent(in)    :: wdim
+        real,             intent(in)    :: loc(3)
+        complex :: comp
+        real    :: w(1:wdim,1:wdim,1:wdim)
+        integer :: i, wlen, win(3,2)
+        ! interpolation kernel window
+        win = sqwin_3d(loc(1), loc(2), loc(3), self%harwin_exp)
+        ! 3D
+        wlen = wdim**3
+        ! interpolation kernel matrix
+        w = 1.
+        do i=1,wdim
+            w(i,:,:) = w(i,:,:) * kb_apod( real(win(1,1)+i-1)-loc(1) )
+            w(:,i,:) = w(:,i,:) * kb_apod( real(win(2,1)+i-1)-loc(2) )
+            w(:,:,i) = w(:,:,i) * kb_apod( real(win(3,1)+i-1)-loc(3) )
         end do
-        call vol_pad%kill
-        call img_pad%kill
-    end function projvol
-
-    !>  \brief  generates an array of projection images of volume vol in orientations o
-    function projvol_expanded( self, vol, o, p, top, lp ) result( imgs )
-        use simple_image,    only: image
-        use simple_oris,     only: oris
-        use simple_params,   only: params
-        use simple_gridding, only: prep4cgrid
-        class(projector),  intent(inout) :: self    !< projector instance
-        class(image),      intent(inout) :: vol     !< volume to project
-        class(oris),       intent(inout) :: o       !< orientations
-        class(params),     intent(inout) :: p       !< parameters
-        integer, optional, intent(in)    :: top     !< stop index
-        real,    optional, intent(inout) :: lp      !< low-pass
-        type(image),         allocatable :: imgs(:) !< resulting images
-        type(image)                      :: vol_pad, img_pad
-        integer                          :: n, i, alloc_stat
-        call vol_pad%new([p%boxpd,p%boxpd,p%boxpd], p%smpd, self%imgkind)
-        if( self%imgkind .eq. 'xfel' )then
-            call vol%pad(vol_pad)
-        else
-            call prep4cgrid(vol, vol_pad, p%msk, wfuns=self%wfuns)
-        endif
-        call img_pad%new([p%boxpd,p%boxpd,1], p%smpd, self%imgkind)
-        if( present(top) )then
-            n = top
-        else
-            n = o%get_noris()
-        endif
-        allocate( imgs(n), stat=alloc_stat )
-        call vol_pad%cmat2expanded( self%harwin_exp )
-        call alloc_err('projvol; simple_projector', alloc_stat)
-        write(*,'(A)') '>>> GENERATES PROJECTIONS' 
-        do i=1,n
-            call progress(i, n)
-            call imgs(i)%new([p%box,p%box,1], p%smpd, self%imgkind)
-            if( present(lp) )then
-                call self%fproject_expanded( vol_pad, o%get_ori(i), img_pad, lp=lp )
-            else
-                call self%fproject_expanded( vol_pad, o%get_ori(i), img_pad )
-            endif
-            if( self%imgkind .eq. 'xfel' )then
-                call img_pad%clip(imgs(i))
-            else
-                call img_pad%bwd_ft
-                call img_pad%clip(imgs(i))
-                ! HAD TO TAKE OUT BECAUSE PGI COMPILER BAILS
-                ! call imgs(i)%norm
-            endif
-        end do
-        call vol_pad%kill
-        call img_pad%kill
-    end function projvol_expanded
-
-    !>  \brief  rotates a volume by Euler angle o using Fourier gridding
-    function rotvol( self, vol, o, p ) result( rovol )
-        use simple_image,    only: image
-        use simple_ori,      only: ori
-        use simple_params,   only: params
-        use simple_gridding, only: prep4cgrid
-        !$ use omp_lib
-        !$ use omp_lib_kinds
-        class(projector), intent(inout) :: self !< projector instance
-        class(image),     intent(inout) :: vol  !< volume to project
-        class(ori),       intent(inout) :: o    !< orientation
-        class(params),    intent(in)    :: p    !< parameters
-        type(image)                     :: vol_pad, rovol_pad, rovol  
-        integer                         :: h,k,l,lims(3,2)
-        real                            :: loc(3)
-         if( self%imgkind .eq. 'xfel' ) stop 'routine not intended for xfel-kind images; simple_projector::rotvol'
-        call vol_pad%new([p%boxpd,p%boxpd,p%boxpd], p%smpd)
-        rovol_pad = vol_pad
-        call rovol_pad%set_ft(.true.)
-        call rovol%new([p%box,p%box,p%box], p%smpd)
-        call prep4cgrid(vol, vol_pad, p%msk, wfuns=self%wfuns)
-        lims = vol_pad%loop_lims(2)
-        write(*,'(A)') '>>> ROTATING VOLUME'
-        !$omp parallel do default(shared) private(h,k,l,loc) schedule(auto)
-        do h=lims(1,1),lims(1,2)
-            do k=lims(2,1),lims(2,2)
-                do l=lims(3,1),lims(3,2)
-                    loc  = matmul(real([h,k,l]),o%get_mat())
-                    call rovol_pad%set_fcomp([h,k,l], self%extr_gridfcomp(vol_pad, loc))
-                end do 
-            end do
-        end do
-        !$omp end parallel do
-        call rovol_pad%bwd_ft
-        call rovol_pad%clip(rovol)
-        ! HAD TO TAKE OUT BECAUSE PGI COMPILER BAILS
-        ! call rovol%norm
-        call vol_pad%kill
-        call rovol_pad%kill
-    end function rotvol
+        ! SUM( kernel x components )
+        comp = dot_product( reshape(w,(/wlen/)), reshape(self%cmat_exp( win(1,1):win(1,2),&
+            &win(2,1):win(2,2),win(3,1):win(3,2)), (/wlen/)) )
+    end function interp_fcomp_expanded
     
-    !>  \brief  rotates an image by angle ang using Fourier gridding
-    subroutine rotimg( self, img, ang, msk, roimg )
-        use simple_image,    only: image
-        use simple_params,   only: params
-        use simple_gridding, only: prep4cgrid
-        use simple_math,     only: rotmat2d
-        !$ use omp_lib
-        !$ use omp_lib_kinds
-        class(projector), intent(inout) :: self  !< projector instance
-        class(image),     intent(inout) :: img   !< image to rotate
-        real,             intent(in)    :: ang   !< angle of rotation
-        real,             intent(in)    :: msk   !< mask radius (in pixels)
-        class(image),     intent(out)   :: roimg !< rotated image
-        type(image)                     :: img_pad, roimg_pad, img_copy
-        integer                         :: h,k,lims(3,2),ldim(3),ldim_pd(3) 
-        real                            :: loc(3),mat(2,2),smpd
-        if( self%imgkind .eq. 'xfel' ) stop 'routine not intended for xfel-kind images; simple_projector::rotimg'
-        ldim       = img%get_ldim()
-        ldim_pd    = nint(self%alpha)*ldim
-        ldim_pd(3) = 1
-        smpd       = img%get_smpd()
-        call roimg%new(ldim, smpd)
-        call img_pad%new(ldim_pd, smpd)
-        call roimg_pad%new(ldim_pd, smpd)
-        roimg_pad = cmplx(0.,0.)
-        img_copy  = img
-        call img_copy%mask(msk, 'soft')
-        call prep4cgrid(img, img_pad, msk, wfuns=self%wfuns)
-        lims = img_pad%loop_lims(2)
-        mat = rotmat2d(ang)
-        !$omp parallel do default(shared) private(h,k,loc) schedule(auto)
-        do h=lims(1,1),lims(1,2)
-            do k=lims(2,1),lims(2,2)                
-                loc(:2) = matmul(real([h,k]),mat)
-                loc(3)  = 0.
-                call roimg_pad%set_fcomp([h,k,0], self%extr_gridfcomp(img_pad, loc))
-            end do
-        end do
-        !$omp end parallel do
-        call roimg_pad%bwd_ft
-        call roimg_pad%clip(roimg)
-        call img_pad%kill
-        call roimg_pad%kill
-        call img_copy%kill
-    end subroutine rotimg
-    
-    !>  \brief  generates an array of polar Fourier transforms of volume vol in orientations o
-    subroutine fprojvol_polar( self, vol, oset, p, pimgs, s )
-        use simple_image,    only: image
-        use simple_oris,     only: oris
-        use simple_params,   only: params
-        use simple_gridding, only: prep4cgrid
-        use simple_polarft,  only: polarft
-        use simple_ori,      only: ori
-        class(projector), intent(inout) :: self                      !< projector instance
-        class(image),     intent(inout) :: vol                       !< volume to project
-        class(oris),      intent(inout) :: oset                      !< orientations
-        class(params),    intent(in)    :: p                         !< parameters
-        class(polarft),   intent(inout) :: pimgs(p%nstates,p%nspace) !< resulting polar FTs
-        integer,          intent(in)    :: s                         !< state
-        type(image) :: vol4grid
-        type(ori)   :: o
-        integer     :: n, i, ldim(3)
-        ldim = vol%get_ldim()
-        call vol4grid%new(ldim, p%smpd, self%imgkind)
-        if( self%imgkind .eq. 'xfel' )then
-            call vol%pad(vol4grid)
-        else
-            call prep4cgrid(vol, vol4grid, p%msk, wfuns=self%wfuns)
-        endif
-        n = oset%get_noris()
-        write(*,'(A)') '>>> GENERATES PROJECTIONS' 
-        do i=1,n
-            call progress(i, n)
-            call pimgs(s,i)%new([p%kfromto(1),p%kfromto(2)],p%ring2,ptcl=.false.)
-            o = oset%get_ori(i)
-            call self%fproject_polar(vol4grid, o, pimgs(s,i))
-        end do
-        call vol4grid%kill
-    end subroutine fprojvol_polar
-
     ! IMAGE TO POLAR FT TRANSFORMER
 
-    !> \brief  
+    !> \brief  initialises the image polarizer
     subroutine init_imgpolarizer( self, pftcc, smpd )
         !$ use omp_lib
         !$ use omp_lib_kinds
@@ -842,7 +547,7 @@ contains
         use simple_polarft_corrcalc, only: polarft_corrcalc
         class(projector),        intent(inout) :: self   !< projector instance
         class(polarft_corrcalc), intent(inout) :: pftcc  !< polarft_corrcalc object to be filled
-        real,                    intent(in)    :: smpd  !< sampling distance
+        real,                    intent(in)    :: smpd   !< sampling distance
         real, allocatable :: w(:,:)
         type(image) :: img
         real        :: loc(2)
@@ -857,15 +562,12 @@ contains
         call img%new( pftcc%get_ldim(), smpd)
         lims = img%loop_lims(3)
         call img%kill
-        allocate( self%polcyc1_mat(1:pdims(1), pdims(2):pdims(3), 1:wdim), stat=alloc_stat)        
-        call alloc_err('in simple_projector::init_imgpolarizer 1', alloc_stat)
-        allocate( self%polcyc2_mat(1:pdims(1), pdims(2):pdims(3), 1:wdim), stat=alloc_stat)
-        call alloc_err('in simple_projector::init_imgpolarizer 2', alloc_stat)
-        allocate( self%polweights_mat(1:pdims(1), pdims(2):pdims(3), 1:wlen),&
-            &w(1:wdim,1:wdim), stat=alloc_stat)
-        call alloc_err('in simple_projector::init_imgpolarizer 3', alloc_stat)
-        !$omp parallel do schedule(auto) default(shared)&
-        !$omp private(i,k,l,w,loc,cnt,win)
+        allocate( self%polcyc1_mat(1:pdims(1), pdims(2):pdims(3), 1:wdim),&
+                  &self%polcyc2_mat(1:pdims(1), pdims(2):pdims(3), 1:wdim),&
+                  &self%polweights_mat(1:pdims(1), pdims(2):pdims(3), 1:wlen),&
+                  &w(1:wdim,1:wdim), stat=alloc_stat)
+        call alloc_err('in simple_projector :: init_imgpolarizer', alloc_stat)
+        !$omp parallel do schedule(auto) default(shared) private(i,k,l,w,loc,cnt,win)
         do i=1,pdims(1)
             do k=pdims(2),pdims(3)
                 ! polar coordinates
@@ -876,8 +578,8 @@ contains
                 do l=1,wdim
                     cnt = cnt + 1
                     ! interpolation weights
-                    w(l,:) = w(l,:) * self%wfuns%eval_apod( real(win(1,1)+l-1)-loc(1) )
-                    w(:,l) = w(:,l) * self%wfuns%eval_apod( real(win(2,1)+l-1)-loc(2) )
+                    w(l,:) = w(l,:) * kb_apod( real(win(1,1)+l-1)-loc(1) )
+                    w(:,l) = w(:,l) * kb_apod( real(win(2,1)+l-1)-loc(2) )
                     ! cyclic addresses
                     self%polcyc1_mat(i, k, cnt) = cyci_1d(lims(1,:), win(1,1)+l-1)
                     self%polcyc2_mat(i, k, cnt) = cyci_1d(lims(2,:), win(2,1)+l-1)
@@ -889,25 +591,25 @@ contains
         deallocate(w)
     end subroutine init_imgpolarizer
 
-    !> \brief  
-    subroutine imgpolarizer( self, pftcc, img, img_ind, isptcl )
+    !> \brief  creates the polar Fourier transform
+    subroutine imgpolarizer( self, pftcc, img_ind, isptcl )
         !$ use omp_lib
         !$ use omp_lib_kinds
         use simple_math, only: sqwin_2d, cyci_1d
         use simple_polarft_corrcalc, only: polarft_corrcalc
         class(projector),        intent(inout) :: self   !< projector instance
         class(polarft_corrcalc), intent(inout) :: pftcc  !< polarft_corrcalc object to be filled
-        class(image),            intent(inout) :: img
         integer,                 intent(in)    :: img_ind
         logical, optional,       intent(in)    :: isptcl
         complex, allocatable :: pft(:,:), comps(:,:)
         integer :: i, k, l, m, alloc_stat, windim, vecdim, addr_l
         integer :: lims(3,2), ldim_img(3), ldim_pft(3), pdims(3)
         logical :: iisptcl
-        if( .not.allocated(self%polweights_mat) )stop 'the imgpolarizer has not been initialized!; simple_projector::imgpolarizer'
+        if( .not. allocated(self%polweights_mat) )&
+        &stop 'the imgpolarizer has not been initialized!; simple_projector :: imgpolarizer'
         iisptcl = .true.
-        if( present(isptcl) )iisptcl = isptcl
-        ldim_img = img%get_ldim()
+        if( present(isptcl) ) iisptcl = isptcl
+        ldim_img = self%get_ldim()
         if( ldim_img(3) > 1 )      stop 'only for interpolation from 2D images; imgpolarizer; simple_projector'
         if( .not. pftcc%exists() ) stop 'polarft_corrcalc object needs to be created; imgpolarizer; simple_projector'
         ldim_pft = pftcc%get_ldim()
@@ -916,22 +618,21 @@ contains
             print *, 'ldim_pft: ', ldim_pft
             stop 'logical dimensions do not match; imgpolarizer; simple_projector'
         endif
-        if( .not.img%is_ft() ) stop 'image needs to FTed before this operation; simple_projector::imgpolarizer'
+        if( .not.self%is_ft() ) stop 'image needs to FTed before this operation; simple_projector :: imgpolarizer'
         pdims(1)   = pftcc%get_nrots()
         pdims(2:3) = pftcc%get_kfromto()
         windim = 2*ceiling(self%harwin_exp) + 1
         vecdim = windim**2
         allocate( pft(pdims(1),pdims(2):pdims(3)), comps(1:windim,1:windim), stat=alloc_stat )
-        call alloc_err("In: imgpolarizer; simple_projector 1", alloc_stat)
-        lims = img%loop_lims(3)
-        !$omp parallel do collapse(2) schedule(auto) default(shared)&
-        !$omp private(i, k, l, m, comps, addr_l)
+        call alloc_err("In: imgpolarizer; simple_projector", alloc_stat)
+        lims = self%loop_lims(3)
+        !$omp parallel do collapse(2) schedule(auto) default(shared) private(i,k,l,m,comps,addr_l)
         do i=1,pdims(1)
             do k=pdims(2),pdims(3)
                 do l=1,windim
                     addr_l = self%polcyc1_mat(i,k,l)
                     do m=1,windim
-                        comps(l,m) = img%get_fcomp( [addr_l,self%polcyc2_mat(i,k,m),0] )
+                        comps(l,m) = self%get_fcomp( [addr_l,self%polcyc2_mat(i,k,m),0] )
                     enddo
                 enddo
                 pft(i,k) = dot_product(self%polweights_mat(i,k,:), reshape(comps,(/vecdim/)))
@@ -947,12 +648,23 @@ contains
         deallocate(pft, comps)
     end subroutine imgpolarizer
 
-    !> \brief  
+    ! DESTRUCTORS
+
+    !>  \brief  is a detructor 
     subroutine kill_imgpolarizer( self )
-        class(projector),        intent(inout) :: self   !< projector instance
-        if( allocated(self%polweights_mat) )deallocate(self%polweights_mat)
-        if( allocated(self%polcyc1_mat) )deallocate(self%polcyc1_mat)
-        if( allocated(self%polcyc2_mat) )deallocate(self%polcyc2_mat)
+        class(projector), intent(inout) :: self !< projector instance
+        if( allocated(self%polweights_mat) ) deallocate(self%polweights_mat)
+        if( allocated(self%polcyc1_mat)    ) deallocate(self%polcyc1_mat)
+        if( allocated(self%polcyc2_mat)    ) deallocate(self%polcyc2_mat)
     end subroutine kill_imgpolarizer
+
+    !>  \brief  is a detructor 
+    subroutine kill_expanded( self )
+        class(projector), intent(inout) :: self !< projector instance
+        call self%kill_imgpolarizer
+        if( allocated(self%cmat_exp) ) deallocate( self%cmat_exp )    
+        self%ldim_exp        = 0
+        self%expanded_exists = .false.
+    end subroutine kill_expanded
 
 end module simple_projector

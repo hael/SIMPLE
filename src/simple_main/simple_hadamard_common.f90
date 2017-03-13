@@ -293,11 +293,7 @@ contains
             if( p%l_xfel )then
                 call b%img_copy%pad(b%img_pad)
             else
-                if( p%eo .eq. 'yes' )then
-                    call prep4cgrid(b%img_copy, b%img_pad, p%msk, b%eorecvols(1)%get_wfuns())
-                else
-                    call prep4cgrid(b%img_copy, b%img_pad, p%msk, b%recvols(1)%get_wfuns())
-                endif
+                call prep4cgrid(b%img_copy, b%img_pad, p%msk)
             endif
             if( debug ) write(*,*) '*** simple_hadamard_common ***: prepared image for gridding'
             ran = ran3()
@@ -357,7 +353,7 @@ contains
                 ! make sure that img_msk is of the correct dimension
                 call b%img_msk%new([p%boxmatch,p%boxmatch,1],p%smpd)
                 ! create 2D envelope
-                call b%proj%fproject(b%vol_pad, o, b%img_pad)
+                call b%vol_pad%fproject(o, b%img_pad)
                 call b%img_pad%bwd_ft
                 call b%img_pad%clip(b%img_msk)
                 call b%img_msk%norm('sigm')

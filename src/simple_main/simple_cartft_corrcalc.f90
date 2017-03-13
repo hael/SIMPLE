@@ -8,11 +8,10 @@ implicit none
 
 type :: cartft_corrcalc
     private
-    class(build),  pointer     :: bp=>null()
-    class(params), pointer     :: pp=>null()
-    type(image),   allocatable :: refvols(:)
-    type(image),   allocatable :: img_refs(:)
-    type(image)                :: img_ctf
+    class(params), pointer       :: pp=>null()
+    type(projector), allocatable :: refvols(:)
+    type(image),     allocatable :: img_refs(:)
+    type(image)                  :: img_ctf
     real    :: kv_prev=0., cs_prev=0., fraca_prev=0.
     real    :: dfx_prev=0., dfy_prev=0., angast_prev=0.
     integer :: nstates   = 0
@@ -54,7 +53,6 @@ contains
         call self%kill
         ! set constants
         self%nstates =  p%nstates
-        self%bp      => b
         self%pp      => p
         ! allocate reference volumes & one reference image
         allocate(self%refvols(self%pp%nstates), self%img_refs(1), stat=alloc_stat)
@@ -64,7 +62,7 @@ contains
         do s=1,self%pp%nstates
             call preprefvol( b, p, cline, s )
             self%refvols(s) = b%vol
-            call self%refvols(s)%cmat2expanded( b%proj%get_harwin_exp() )
+            call self%refvols(s)%expand_cmat
         end do
         self%existence = .true.
     end subroutine new
@@ -152,7 +150,7 @@ contains
         integer,                intent(in)    :: iref
         integer   :: s
         s = nint(o%get('state'))
-        call self%bp%proj%fproject_expanded(self%refvols(s), o, self%img_refs(iref),lp=self%pp%lp )
+        call self%refvols(s)%fproject_expanded(o, self%img_refs(iref), lp=self%pp%lp)
         if( self%pp%ctf .ne. 'no' )then
             call self%create_ctf_image(o)
             call self%img_refs(iref)%mul( self%img_ctf )
@@ -170,7 +168,7 @@ contains
         real, allocatable,      intent(out)   :: res(:), corrs(:)
         integer :: s
         s = nint(o%get('state'))
-        call self%bp%proj%fproject(self%refvols(s), o, self%img_refs(iref))
+        call self%refvols(s)%fproject(o, self%img_refs(iref))
         if( self%pp%ctf .ne. 'no' )then
             call self%create_ctf_image(o)
             call self%img_refs(iref)%mul(self%img_ctf)
@@ -226,9 +224,9 @@ contains
         class(cartft_corrcalc), intent(inout) :: self
         integer :: s, nrefs, iref
         if( self%existence )then
-            self%bp => null()
             self%pp => null()
             do s=1,self%nstates
+                call self%refvols(s)%kill_expanded
                 call self%refvols(s)%kill
             end do
             deallocate(self%refvols)

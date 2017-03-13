@@ -1056,27 +1056,6 @@ contains
             corr = 0.
         endif
     end function
-
-    !> \brief calculates a corr coeff based on cross prod sum and denominator in double precision
-    ! function calc_corr_dble( sxy, den ) result( corr )
-    !     real(dp), intent(in) :: sxy, den
-    !     real(dp) :: corr
-    !     if( den > 0.d0 )then
-    !         corr = sxy/sqrt(den)
-    !         if( is_a_number(real(corr)) )then
-    !             if( corr > 1. )then
-    !                 write(*,*) 'WARNING! corr > 1, numerical errors', corr
-    !             else if( corr < -1. )then
-    !                 write(*,*) 'WARNING! corr < -1, numerical errors', corr
-    !             endif
-    !             corr = min(1.,max(-1.,corr))
-    !         else
-    !             corr = 0.
-    !         endif
-    !     else
-    !         corr = 0.
-    !     endif
-    ! end function
     
     ! NUMERICAL STUFF
     

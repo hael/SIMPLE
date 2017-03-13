@@ -20,25 +20,21 @@ logical, parameter :: debug=.false.
 
 type :: image
     private
-    logical                                :: ft=.false.          !< FTed or not
-    integer                                :: ldim(3)=[1,1,1]     !< logical image dimensions
-    integer                                :: nc                  !< number of F-comps
-    real                                   :: smpd                !< sampling distance
-    type(ftiter)                           :: fit                 !< Fourier iterator object
-    type(c_ptr)                            :: p                   !< c pointer for fftw allocation
-    real(kind=c_float), pointer            :: rmat(:,:,:)=>null() !< image pixels/voxels (in data)
-    complex(kind=c_float_complex), pointer :: cmat(:,:,:)=>null() !< Fourier components
-    real                                   :: shconst(3)          !< shift constant
-    type(c_ptr)                            :: plan_fwd            !< fftw plan for the image (fwd)
-    type(c_ptr)                            :: plan_bwd            !< fftw plan for the image (bwd)
-    integer                                :: array_shape(3)      !< shape of complex array
-    integer                                :: lims(3,2)           !< physical limits for the XFEL patterns
-    character(len=STDLEN)                  :: imgkind='em'        !< indicates image kind (different representation 4 EM/XFEL)
-    logical                                :: existence=.false.   !< indicates existence
-    complex, allocatable                   :: cmat_exp(:,:,:)         !< expanded FT matrix
-    integer                                :: ldim_exp(3,2)=0         !< expanded FT matrix limits
-    logical                                :: expanded_exists=.false. !< indicates FT matrix existence
-
+    logical                                :: ft=.false.              !< FTed or not
+    integer                                :: ldim(3)=[1,1,1]         !< logical image dimensions
+    integer                                :: nc                      !< number of F-comps
+    real                                   :: smpd                    !< sampling distance
+    type(ftiter)                           :: fit                     !< Fourier iterator object
+    type(c_ptr)                            :: p                       !< c pointer for fftw allocation
+    real(kind=c_float), pointer            :: rmat(:,:,:)=>null()     !< image pixels/voxels (in data)
+    complex(kind=c_float_complex), pointer :: cmat(:,:,:)=>null()     !< Fourier components
+    real                                   :: shconst(3)              !< shift constant
+    type(c_ptr)                            :: plan_fwd                !< fftw plan for the image (fwd)
+    type(c_ptr)                            :: plan_bwd                !< fftw plan for the image (bwd)
+    integer                                :: array_shape(3)          !< shape of complex array
+    integer                                :: lims(3,2)               !< physical limits for the XFEL patterns
+    character(len=STDLEN)                  :: imgkind='em'            !< indicates image kind (different representation 4 EM/XFEL)
+    logical                                :: existence=.false.       !< indicates existence
   contains
     ! CONSTRUCTORS
     procedure          :: new
@@ -90,12 +86,6 @@ type :: image
     procedure          :: set_ft
     procedure          :: extr_fcomp
     procedure          :: packer
-    procedure          :: exp_exists
-    procedure          :: cmat2expanded
-    procedure          :: expanded2cmat
-    procedure          :: reset_expanded
-    procedure          :: kill_expanded
-    procedure          :: interp_fcomp_expanded
     ! CHECKUPS
     procedure          :: exists
     procedure          :: is_2d
@@ -473,7 +463,7 @@ contains
     subroutine window( self_in, coord, box, self_out, noutside )
         class(image),      intent(in)    :: self_in
         integer,           intent(in)    :: coord(2), box
-        type(image),       intent(inout) :: self_out
+        class(image),      intent(inout) :: self_out
         integer, optional, intent(inout) :: noutside
         integer :: fromc(2), toc(2), xoshoot, yoshoot, xushoot, yushoot, xboxrange(2), yboxrange(2)
         if( self_in%ldim(3) > 1 ) stop 'only 4 2D images; window; simple_image'
@@ -521,7 +511,7 @@ contains
     subroutine window_slim( self_in, coord, box, self_out, noutside )
         class(image),      intent(in)    :: self_in
         integer,           intent(in)    :: coord(2), box
-        type(image),       intent(inout) :: self_out
+        class(image),      intent(inout) :: self_out
         integer, optional, intent(inout) :: noutside
         integer :: fromc(2), toc(2)
         fromc = coord + 1         ! compensate for the c-range that starts at 0
@@ -1437,155 +1427,6 @@ contains
         endif
         
     end function packer
-
-    ! EXPANDED FOURIER COMPONENTS MATRIX RELATED ROUTINES
-
-    !>  \brief  indicates expanded fourier matix existance
-    function exp_exists( self )result( answer )
-        class(image), intent(inout) :: self
-        logical :: answer
-        answer = self%expanded_exists
-    end function exp_exists
-
-    !>  \brief  is a constructor of the expanded Fourier matrix
-    subroutine cmat2expanded( self, rharwin )
-        !$ use omp_lib
-        !$ use omp_lib_kinds
-        use simple_math, only: cyci_1d
-        class(image), intent(inout) :: self
-        real,         intent(in)    :: rharwin
-        integer, allocatable :: cyck(:), cycm(:)
-        integer              :: h, k, m, cych, alloc_stat, max_dim
-        integer              :: lims(3,2)
-        if( .not.self%is_ft() )stop 'volume needs to be FTed before call; cmat2expanded; simple_image'
-        if( self%ldim(3)==1 )stop 'only for volumes; cmat2expanded; simple_image'
-        lims = self%loop_lims(3)
-        max_dim = maxval(abs(lims))
-        self%ldim_exp(:,2) = max_dim + ceiling(rharwin)
-        self%ldim_exp(:,1) = -self%ldim_exp(:,2)
-        if( allocated(self%cmat_exp) )deallocate( self%cmat_exp )
-        allocate( self%cmat_exp( self%ldim_exp(1,1):self%ldim_exp(1,2), &
-            &self%ldim_exp(2,1):self%ldim_exp(2,2),&
-            &self%ldim_exp(3,1):self%ldim_exp(3,2) ),&
-            &cyck(self%ldim_exp(2,1):self%ldim_exp(2,2)),&
-            &cycm(self%ldim_exp(3,1):self%ldim_exp(3,2)), stat=alloc_stat)
-        call alloc_err("In: cmat2expanded; simple_image 1", alloc_stat)
-        ! pre-compute addresses in 2nd and 3rd dimension
-        do k = self%ldim_exp(2,1),self%ldim_exp(2,2)
-            cyck(k) = k
-            if( k<lims(2,1) .or. k>lims(2,2) )cyck(k) = cyci_1d( lims(2,:),k )
-        enddo
-        do m = self%ldim_exp(3,1),self%ldim_exp(3,2)
-            cycm(m) = m
-            if( m<lims(3,1) .or. m>lims(3,2) )cycm(m) = cyci_1d( lims(3,:),m )
-        enddo
-        ! build expanded fourier components matrix
-        self%cmat_exp = cmplx(0.,0.)
-        !$omp parallel do schedule(auto) shared(lims,cyck,cycm)&
-        !$omp private(h,k,m,cych)
-        do h = self%ldim_exp(1,1),self%ldim_exp(1,2)
-            cych = h
-            if( h<lims(1,1) .or. h>lims(1,2) )cych = cyci_1d( lims(1,:),h )
-            do k = self%ldim_exp(2,1),self%ldim_exp(2,2)
-                do m = self%ldim_exp(3,1),self%ldim_exp(3,2)
-                    self%cmat_exp(h,k,m) = self%get_fcomp( [cych,cyck(k),cycm(m)] )
-                enddo
-            enddo
-        enddo
-        !$omp end parallel do
-        deallocate( cyck,cycm )
-        self%expanded_exists = .true.
-    end subroutine cmat2expanded
-
-    !>  \brief converts the expanded matrix to standard imaginary representation
-    !! to double check
-    subroutine expanded2cmat( self )
-        class(image), intent(inout) :: self
-        integer, allocatable :: cyck(:), cycm(:)
-        complex              :: comp
-        integer              :: h, k, m, cych, alloc_stat, max_dim
-        integer              :: lims(3,2), phys(3)
-        if( .not.self%expanded_exists )then
-            stop 'expanded complex matrix does not exist; simple_image%expanded2cmat'
-        endif
-        lims = self%loop_lims(3)
-        allocate( cyck(self%ldim_exp(2,1):self%ldim_exp(2,2)),&
-            &cycm(self%ldim_exp(3,1):self%ldim_exp(3,2)), stat=alloc_stat  )
-        call alloc_err("In: expanded2cmat; simple_image 1", alloc_stat)
-        ! pre-compute addresses in 2nd and 3rd dimension
-        do k = self%ldim_exp(2,1),self%ldim_exp(2,2)
-            cyck(k) = k
-            if( k<lims(2,1) .or. k>lims(2,2) )cyck(k) = cyci_1d( lims(2,:),k )
-        enddo
-        do m = self%ldim_exp(3,1),self%ldim_exp(3,2)
-            cycm(m) = m
-            if( m<lims(3,1) .or. m>lims(3,2) )cycm(m) = cyci_1d( lims(3,:),m )
-        enddo
-        ! contract fourier components matrix
-        self%cmat = cmplx(0.,0.)
-        !$omp parallel do schedule(auto) shared(lims,cyck,cycm)&
-        !$omp private(h,k,m,cych,comp)
-        do h = lims(1,1),lims(1,2)
-            cych = h
-            if( h<lims(1,1) .or. h>lims(1,2) )cych = cyci_1d( lims(1,:),h )
-            do k = self%ldim_exp(2,1),self%ldim_exp(2,2)
-                do m = self%ldim_exp(3,1),self%ldim_exp(3,2)
-                    comp = self%get_fcomp( [cych,cyck(k),cycm(m)], phys_out=phys )
-                    comp = comp + self%cmat_exp(h,k,m)
-                    call self%set_fcomp( [h,k,m], comp, phys )
-                enddo
-            enddo
-        enddo
-        !$omp end parallel do
-        deallocate( cyck,cycm )        
-    end subroutine expanded2cmat
-
-    !>  \brief  sets the expanded Fourier matrix to zero
-    subroutine reset_expanded( self )
-        class(image), intent(inout) :: self
-        if( .not.self%expanded_exists )&
-            &stop 'expanded fourier matrix does not exist; simple_image::reset_expanded'
-        self%cmat_exp = cmplx(0.,0.)
-    end subroutine reset_expanded
-
-    !>  \brief  is a detructor of the expanded Fourier matrix
-    subroutine kill_expanded( self )
-        class(image), intent(inout) :: self
-        if( allocated(self%cmat_exp) )deallocate( self%cmat_exp )
-        self%ldim_exp = 0
-        self%expanded_exists = .false.
-    end subroutine kill_expanded
-
-    !>  \brief is to interpolate from the expanded complex matrix 
-    function interp_fcomp_expanded( self, w, wdim, loc, wfun, harwin )result( comp )
-        use simple_winfuns,  only: winfuns
-        class(image), intent(inout) :: self
-        class(winfuns), intent(in)  :: wfun
-        real,         intent(in)    :: loc(3)
-        real,         intent(inout) :: w(1:wdim,1:wdim,1:wdim)
-        real,         intent(in)    :: harwin
-        integer,      intent(in)    :: wdim
-        complex :: comp
-        integer :: i, wlen, win(3,2)
-        if( .not. self%expanded_exists )then
-            stop 'Expanded complex matrix does not exists;simple_image%cmat2expanded'
-        endif
-        if( self%ldim(3)==1 )stop 'only for volumes; interp_fcomp_expanded; simple_image'
-        ! interpolation kernel window
-        win = sqwin_3d(loc(1), loc(2), loc(3), harwin)
-        ! 3D
-        wlen = wdim**3
-        ! interpolation kernel matrix
-        w = 1.
-        do i=1,wdim
-            w(i,:,:) = w(i,:,:) * wfun%eval_apod( real(win(1,1)+i-1)-loc(1) )
-            w(:,i,:) = w(:,i,:) * wfun%eval_apod( real(win(2,1)+i-1)-loc(2) )
-            w(:,:,i) = w(:,:,i) * wfun%eval_apod( real(win(3,1)+i-1)-loc(3) )
-        end do
-        ! SUM( kernel x components )
-        comp = dot_product( reshape(w,(/wlen/)), reshape(self%cmat_exp( win(1,1):win(1,2),&
-            &win(2,1):win(2,2),win(3,1):win(3,2)), (/wlen/)) )
-    end function interp_fcomp_expanded
 
     ! CHECKUPS
 
@@ -5960,7 +5801,6 @@ contains
             self%cmat=>null()
             call fftwf_destroy_plan(self%plan_fwd)
             call fftwf_destroy_plan(self%plan_bwd)
-            if( allocated(self%cmat_exp) )deallocate(self%cmat_exp)
             self%existence = .false.
         endif
     end subroutine kill

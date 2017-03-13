@@ -194,9 +194,9 @@ contains
     !>  \brief does the online Wiener restoration of 2D images, including shift+rotations
     !!         the image is left shifted and Fourier transformed on output
     subroutine wiener_restore2D_online( img, o, tfplan, img_rec, msk, shellw, add )
-        use simple_ori,       only: ori
-        use simple_ctf,       only: ctf
-        use simple_projector, only: projector
+        use simple_ori,            only: ori
+        use simple_ctf,            only: ctf
+        use simple_projector_hlev, only: rotimg
         class(image),      intent(inout) :: img
         class(ori),        intent(inout) :: o
         type(ctfplan),     intent(in)    :: tfplan
@@ -211,8 +211,7 @@ contains
         logical         :: aadd
         aadd = .true.
         if( present(add) ) aadd = add
-        ! make projector and ctf objects
-        proj = projector('kb')
+        ! make ctf objects
         if( tfplan%flag .ne. 'no' )&
         tfun = ctf(img%get_smpd(), o%get('kv'), o%get('cs'), o%get('fraca'))
         ! set CTF parameters
@@ -244,7 +243,7 @@ contains
         y = o%get('y')
         if( abs(x) > SHTHRESH .or. abs(y) > SHTHRESH )call img%shift(-x, -y)
         ! griding-based image rotation
-        call proj%rotimg(img, -o%e3get(), msk, roimg)
+        call rotimg(img, -o%e3get(), msk, roimg)
         if( present(shellw) ) call roimg%apply_filter(shellw)
         ! assemble img_rec sum
         if( aadd )then

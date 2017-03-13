@@ -7,6 +7,7 @@ use simple_image,           only: image
 use simple_rnd,             only: ran3
 use simple_math,            only: euclid
 use simple_cmdline,         only: cmdline
+use simple_projector,       only: projector
 use simple_volpft_srch      ! singleton
 use simple_defs             ! singleton
 use simple_gridding         ! singleton
@@ -17,7 +18,7 @@ type(build)           :: b
 type(cmdline)         :: cline
 type(volpft_corrcalc) :: vpftcc
 type(ori)             :: o_best, e, ranori
-type(image)           :: vol_ref
+type(projector)       :: vol_ref
 real                  :: corr_best, shvec(3), x, y, z, dist, sumdist, sherr, xf, yf, zf
 integer, parameter    :: NTESTS=10, NPEAKS=3
 real, parameter       :: TRS=5.

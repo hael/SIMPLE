@@ -107,7 +107,8 @@ contains
     end subroutine exec_prime3D_srch_test
 
     subroutine setup_testenv( cline, be_verbose )
-        use simple_strings, only: str_has_substr
+        use simple_strings,        only: str_has_substr
+        use simple_projector_hlev, only: projvol
         class(cmdline),    intent(inout) :: cline
         logical, optional, intent(in)    :: be_verbose
         type(ori)          :: o
@@ -152,7 +153,7 @@ contains
         p%kfromto(2) = b%img%get_find(p%lp)
         ! simulate images
         call b%vol%read(p%vols(1))
-        imgs_ptcls = b%proj%projvol(b%vol, o_ptcls, p)
+        imgs_ptcls = projvol(b%vol, o_ptcls, p)
         do i=1,NPROJS
             call imgs_ptcls(i)%write(ptclsname, i)
         end do

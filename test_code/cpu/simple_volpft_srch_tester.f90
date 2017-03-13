@@ -7,6 +7,7 @@ use simple_image,           only: image
 use simple_rnd,             only: ran3
 use simple_math,            only: euclid
 use simple_cmdline,         only: cmdline
+use simple_projector,       only: projector
 use simple_volpft_srch      ! singleton
 use simple_defs             ! singleton
 use simple_gridding         ! singleton
@@ -23,7 +24,7 @@ real, parameter       :: TRS=5., SNR=0.1, LPLIM=20.0, SHERR_LIM=0.5, ROERR_LIM=2
 ! module global variables
 type(params)          :: p
 type(build)           :: b
-type(image)           :: vol_ref
+type(projector)       :: vol_ref
 type(volpft_corrcalc) :: vpftcc
 type(cmdline)         :: cline_here
 logical               :: verbose=.false.
@@ -40,6 +41,7 @@ contains
     end subroutine exec_volpft_srch_test
 
     subroutine setup_testenv( cline, be_verbose )
+        use simple_projector_hlev, only: rotvol
         class(cmdline),    intent(inout) :: cline
         logical, optional, intent(in)    :: be_verbose
         type(ori)   :: ranori
@@ -66,7 +68,7 @@ contains
         call vol_tmp%new([p%box,p%box,p%box], p%smpd)
         call vol_tmp%read(p%vols(1))
         call ranori%rnd_ori
-        b%vol = b%proj%rotvol(vol_tmp, ranori, p)
+        b%vol = rotvol(vol_tmp, ranori, p)
         call b%vol%add_gauran(p%snr)
         call b%vol%mask(p%msk,'soft')
         call b%vol%fwd_ft

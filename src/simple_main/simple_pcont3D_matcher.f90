@@ -111,7 +111,7 @@ contains
         else
             call pftcc%new(nrefs_per_ptcl, [1,1], [p%boxmatch,p%boxmatch,1],p%kfromto, p%ring2, p%ctf)
         endif
-        call b%proj%init_imgpolarizer(pftcc, p%smpd)
+        call b%img%init_imgpolarizer(pftcc, p%smpd)
 
         ! INITIALIZE
         if( which_iter <= 0 )then
@@ -151,7 +151,6 @@ contains
         enddo
         ! cleanup
         call pftcc%kill
-        call b%proj%kill_imgpolarizer
 
         ! orientations output
         call del_file(p%outfile)
@@ -188,7 +187,7 @@ contains
             if( state_exists(state) )then
                 call preprefvol( b, p, cline, state )
                 b%refvols(state) = b%vol
-                call b%refvols(state)%cmat2expanded( b%proj%get_harwin_exp() )
+                call b%refvols(state)%expand_cmat
             endif
         enddo
         if( debug )write(*,*)'prep volumes done'
@@ -221,7 +220,7 @@ contains
         do iref=1,nrefs_per_ptcl
             oref  = orefs%get_ori(iref)
             state = nint(oref%get('state'))
-            call b%proj%fproject_polar(iref, b%refvols(state), oref, p, pftcc, expanded=.true.)
+            call b%refvols(state)%fproject_polar(iref, oref, p, pftcc, expanded=.true.)
         enddo
         ! PREP PARTICLE
         if( p%boxmatch < p%box )then
@@ -236,7 +235,7 @@ contains
             call b%img%read(p%stk, iptcl, p%l_xfel)
         endif
         call prepimg4align(b, p, optcl)
-        call b%proj%imgpolarizer( pftcc, b%img, 1, isptcl=.true.)
+        call b%img%imgpolarizer( pftcc, 1, isptcl=.true.)
         !call b%proj%img2polarft(1, b%img, pftcc)
         ! restores b%img dimensions for clean exit
         if( p%boxmatch < p%box )call b%img%new([p%box,p%box,1],p%smpd)

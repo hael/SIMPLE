@@ -13,24 +13,23 @@ real, parameter :: delta3    = 36.       !< 2pi/5/2; icosahedral inplane symmetr
 
 type :: volpft_corrcalc
     private
-    class(image), pointer :: vol_ref=>null()    !< pointer to reference volume 
-    class(image), pointer :: vol_target=>null() !< pointer to target volume
-    type(projector)       :: proj               !< projector object
-    type(sym)             :: ico                !< defines the icosahedral group
-    integer               :: nspace     = 0     !< number of vec:s in representation
-    integer               :: ldim(3)    = 0     !< logical dimensions of original cartesian volume
-    integer               :: kfromto(2) = 0     !< Fourier index range
-    integer               :: nk         = 0     !< number of resolution elements (Fourier components)
-    real                  :: hp                 !< high-pass limit
-    real                  :: lp                 !< low-pass limit
-    real                  :: sqsum_ref          !< memoized square sum 4 corrcalc (ref)
-    real                  :: sqsum_ref_sh       !< memoized square sum 4 corrcalc (shifted ref)
-    real                  :: sqsum_target       !< memoized square sum 4 corrcalc (target)
-    complex, allocatable  :: vpft_ref(:,:)      !< reference lines 4 matching
-    complex, allocatable  :: vpft_ref_sh(:,:)   !< reference lines 4 matching
-    complex, allocatable  :: vpft_target(:,:)   !< target lines 4 matching
-    real, allocatable     :: locs_ref(:,:,:)    !< nspace x nk x 3 matrix of positions (reference)
-    logical               :: existence=.false.  !< to indicate existence
+    class(projector), pointer :: vol_ref=>null()    !< pointer to reference volume 
+    class(projector), pointer :: vol_target=>null() !< pointer to target volume
+    type(sym)             :: ico                    !< defines the icosahedral group
+    integer               :: nspace     = 0         !< number of vec:s in representation
+    integer               :: ldim(3)    = 0         !< logical dimensions of original cartesian volume
+    integer               :: kfromto(2) = 0         !< Fourier index range
+    integer               :: nk         = 0         !< number of resolution elements (Fourier components)
+    real                  :: hp                     !< high-pass limit
+    real                  :: lp                     !< low-pass limit
+    real                  :: sqsum_ref              !< memoized square sum 4 corrcalc (ref)
+    real                  :: sqsum_ref_sh           !< memoized square sum 4 corrcalc (shifted ref)
+    real                  :: sqsum_target           !< memoized square sum 4 corrcalc (target)
+    complex, allocatable  :: vpft_ref(:,:)          !< reference lines 4 matching
+    complex, allocatable  :: vpft_ref_sh(:,:)       !< reference lines 4 matching
+    complex, allocatable  :: vpft_target(:,:)       !< target lines 4 matching
+    real, allocatable     :: locs_ref(:,:,:)        !< nspace x nk x 3 matrix of positions (reference)
+    logical               :: existence=.false.      !< to indicate existence
   contains
     ! CONSTRUCTOR
     procedure          :: new
@@ -65,12 +64,12 @@ contains
     subroutine new( self, vol_ref, vol_target, hp, lp )
         use simple_jiffys, only: alloc_err
         use simple_math,   only: is_even
-        class(volpft_corrcalc), intent(inout) :: self
-        class(image), intent(in), target      :: vol_ref, vol_target
-        real, intent(in)                      :: hp, lp
-        integer                               :: alloc_stat, isym, k, i
-        real                                  :: vec(3)
-        type(ori)                             :: e
+        class(volpft_corrcalc),    intent(inout) :: self
+        class(projector), target , intent(in)    :: vol_ref, vol_target
+        real,                      intent(in)    :: hp, lp
+        integer    :: alloc_stat, isym, k, i
+        real       :: vec(3)
+        type(ori)  :: e
         call self%kill
         if( vol_ref.eqdims.vol_target )then
             ! all good
@@ -83,8 +82,6 @@ contains
         self%vol_target => vol_target
         self%hp         =  hp
         self%lp         =  lp
-        ! make projector functionality
-        self%proj = projector()
         ! make the icosahedral group
         call self%ico%new('ico')
         self%nspace = self%ico%get_nsym()
@@ -184,8 +181,7 @@ contains
                 do k=self%kfromto(1),self%kfromto(2)
                     kind = self%k_ind(k)
                     loc  = matmul(self%locs_ref(ispace,kind,:),mat)
-                    self%vpft_ref(ispace,kind) =&
-                    self%proj%extr_gridfcomp(self%vol_ref, loc)
+                    self%vpft_ref(ispace,kind) = self%vol_ref%extr_gridfcomp(loc)
                 end do
             end do
             !$omp end parallel do
@@ -195,7 +191,7 @@ contains
                 do k=self%kfromto(1),self%kfromto(2)
                     kind = self%k_ind(k)
                     self%vpft_ref(ispace,kind) =&
-                    self%proj%extr_gridfcomp(self%vol_ref, self%locs_ref(ispace,kind,:))
+                    self%vol_ref%extr_gridfcomp(self%locs_ref(ispace,kind,:))
                 end do
             end do
             !$omp end parallel do
@@ -259,8 +255,7 @@ contains
                 do k=self%kfromto(1),self%kfromto(2)
                     kind = self%k_ind(k)
                     loc  = matmul(self%locs_ref(ispace,kind,:),mat)
-                    self%vpft_target(ispace,kind) =&
-                    self%proj%extr_gridfcomp(self%vol_target, loc)
+                    self%vpft_target(ispace,kind) = self%vol_target%extr_gridfcomp(loc)
                 end do
             end do
             !$omp end parallel do
@@ -270,7 +265,7 @@ contains
                 do k=self%kfromto(1),self%kfromto(2)
                     kind = self%k_ind(k)
                     self%vpft_target(ispace,kind) =&
-                    self%proj%extr_gridfcomp(self%vol_target, self%locs_ref(ispace,kind,:))
+                    self%vol_target%extr_gridfcomp(self%locs_ref(ispace,kind,:))
                 end do
             end do
             !$omp end parallel do
@@ -292,8 +287,7 @@ contains
             do k=self%kfromto(1),self%kfromto(2)
                 kind = self%k_ind(k)
                 loc  = matmul(self%locs_ref(ispace,kind,:),mat)
-                self%vpft_target(ispace,kind) =&
-                self%proj%extr_gridfcomp(self%vol_target, loc)
+                self%vpft_target(ispace,kind) = self%vol_target%extr_gridfcomp(loc)
             end do
         end do
         !$omp end parallel do

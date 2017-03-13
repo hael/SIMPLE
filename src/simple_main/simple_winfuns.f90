@@ -84,6 +84,12 @@ interface winfuns
     module procedure constructor
 end interface
 
+! parameters for the bessel function evaluaation
+double precision, parameter :: ps(7) = [1.0d0,3.5156229d0,3.0899424d0,1.2067492d0,0.2659732d0,0.360768d-1,0.45813d-2]
+double precision, parameter :: qs(9) = [0.39894228d0,0.1328592d-1,0.225319d-2,-0.157565d-2,0.916281d-2,&
+                                      &-0.2057706d-1,0.2635537d-1,-0.1647633d-1,0.392377d-2]
+double precision, parameter :: thresh = 3.75d0
+
 contains
 
     !> \brief  is a constructor
@@ -352,7 +358,7 @@ contains
     !>  \brief  returns the instrument function to sinc, which is a rectangle
     function sinc_instr( self, x ) result( r )
         class(winfuns), intent(in) :: self
-        real, intent(in) :: x
+        real,           intent(in) :: x
         real :: r
         if( abs(x) .gt. self%Whalf )then
             r = 0
@@ -361,43 +367,60 @@ contains
         endif
     end function
     
-    ! BESSEL FUNCTIONS FOR THE KAISER-BESSEL WINDOW
+    ! BESSEL FUNCTION FOR THE KAISER-BESSEL WINDOW
+
+    !>  \brief returns the modified Bessel function I0(x) for any real x
+    elemental function bessi0(x) result(bess)
+        real, intent(in) :: x
+        real             :: bess
+        double precision :: y, ax ! accumulate polynomials in double precision
+        if( abs(x) .lt. thresh)then
+            y = x/thresh
+            y = y*y
+            bess = real(ps(1)+y*(ps(3)+y*(ps(4)+y*(ps(5)+y*(ps(6)+y*ps(7))))))
+        else
+            ax = dble(abs(x))
+            y = thresh/ax
+            bess = real(exp(ax)/sqrt(ax))*(qs(1)+y*(qs(2)+y*(qs(3)+&
+                &y*(qs(4)+y*(qs(5)+y*(qs(6)+y*(qs(7)+y*(qs(8)+y*qs(9)))))))))
+        endif
+    end function bessi0
     
     !>  \brief returns the modified Bessel function I0(x) for any real x
-    function bessi0(x) result(bess)
-        real, intent(in) :: x
-        real :: bess, ax
-        double precision :: p1,p2,p3,p4,p5,p6,p7,q1,q2,q3,q4,q5,q6,q7,q8,q9,y ! accumulate polynomials in double precision
-        save p1,p2,p3,p4,p5,p6,p7,q1,q2,q3,q4,q5,q6,q7,q8,q9
-        data p1,p2,p3,p4,p5,p6,p7/1.0d0,3.5156229d0,3.0899424d0,1.2067492d0,0.2659732d0,0.360768d-1,0.45813d-2/
-        data q1,q2,q3,q4,q5,q6,q7,q8,q9/0.39894228d0,0.1328592d-1,0.225319d-2,-0.157565d-2,0.916281d-2,&
-        -0.2057706d-1,0.2635537d-1,-0.1647633d-1,0.392377d-2/
-        if( abs(x) .lt. 3.75 )then
-            y = x/3.75
-            y = y*y
-            bess = p1+y*(p3+y*(p4+y*(p5+y*(p6+y*p7))))
-        else
-            ax = abs(x)
-            y = 3.75/ax
-            bess = (exp(ax)/sqrt(ax))*(q1+y*(q2+y*(q3+y*(q4+y*(q5+y*(q6+y*(q7+y*(q8+y*q9))))))))
-        endif
-    end function
+    ! function bessi0(x) result(bess)
+    !     real, intent(in) :: x
+    !     real :: bess, ax
+    !     double precision :: p1,p2,p3,p4,p5,p6,p7,q1,q2,q3,q4,q5,q6,q7,q8,q9,y ! accumulate polynomials in double precision
+    !     save p1,p2,p3,p4,p5,p6,p7,q1,q2,q3,q4,q5,q6,q7,q8,q9
+    !     data p1,p2,p3,p4,p5,p6,p7/1.0d0,3.5156229d0,3.0899424d0,1.2067492d0,0.2659732d0,0.360768d-1,0.45813d-2/
+    !     data q1,q2,q3,q4,q5,q6,q7,q8,q9/0.39894228d0,0.1328592d-1,0.225319d-2,-0.157565d-2,0.916281d-2,&
+    !     -0.2057706d-1,0.2635537d-1,-0.1647633d-1,0.392377d-2/
+    !     if( abs(x) .lt. 3.75 )then
+    !         y = x/3.75
+    !         y = y*y
+    !         bess = p1+y*(p3+y*(p4+y*(p5+y*(p6+y*p7))))
+    !     else
+    !         ax = abs(x)
+    !         y = 3.75/ax
+    !         bess = (exp(ax)/sqrt(ax))*(q1+y*(q2+y*(q3+y*(q4+y*(q5+y*(q6+y*(q7+y*(q8+y*q9))))))))
+    !     endif
+    ! end function
     
     !>  \brief returns the modified Bessel function I0(x) for positive real x
-    function bessk0(x) result(bess)
-        real, intent(in) :: x
-        real :: bess
-        double precision :: p1,p2,p3,p4,p5,p6,p7,q1,q2,q3,q4,q5,q6,q7,y ! accumulate polynomials in double precision
-        save p1,p2,p3,p4,p5,p6,p7,q1,q2,q3,q4,q5,q6,q7
-        data p1,p2,p3,p4,p5,p6,p7/-0.57721566d0,0.42278420d0,0.23069756d0,0.3488590d-1,0.262698d-2,0.10750d-3,0.74d-5/
-        data q1,q2,q3,q4,q5,q6,q7/1.25331414d0,-0.7832358d-1,0.2189568d-1,-0.1062446d-1,0.587872d-2,-0.251540d-2,0.53208d-3/
-        if( x .le. 2.0 )then ! polynomial fit
-            y = x*x/4.0
-            bess = (-log(x/2.0)*bessi0(x))+(p1+y*(p2+y*(p3+y*(p4+y*(p5+y*(p6+y*p7))))))
-        else
-            y = (2.0/x)
-            bess = (exp(-x)/sqrt(x))*(q1+y*(q2+y*(q3+y*(q4+y*(q5+y*(q6+y*(q7)))))))
-        endif
-    end function
+    ! function bessk0(x) result(bess)
+    !     real, intent(in) :: x
+    !     real :: bess
+    !     double precision :: p1,p2,p3,p4,p5,p6,p7,q1,q2,q3,q4,q5,q6,q7,y ! accumulate polynomials in double precision
+    !     save p1,p2,p3,p4,p5,p6,p7,q1,q2,q3,q4,q5,q6,q7
+    !     data p1,p2,p3,p4,p5,p6,p7/-0.57721566d0,0.42278420d0,0.23069756d0,0.3488590d-1,0.262698d-2,0.10750d-3,0.74d-5/
+    !     data q1,q2,q3,q4,q5,q6,q7/1.25331414d0,-0.7832358d-1,0.2189568d-1,-0.1062446d-1,0.587872d-2,-0.251540d-2,0.53208d-3/
+    !     if( x .le. 2.0 )then ! polynomial fit
+    !         y = x*x/4.0
+    !         bess = (-log(x/2.0)*bessi0(x))+(p1+y*(p2+y*(p3+y*(p4+y*(p5+y*(p6+y*p7))))))
+    !     else
+    !         y = (2.0/x)
+    !         bess = (exp(-x)/sqrt(x))*(q1+y*(q2+y*(q3+y*(q4+y*(q5+y*(q6+y*(q7)))))))
+    !     endif
+    ! end function
   
 end module simple_winfuns

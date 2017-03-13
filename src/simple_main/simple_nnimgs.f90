@@ -20,11 +20,11 @@ integer                :: nimgs = 0 ! number of images
 contains
 
     function img_nearest_neighbors( p, imgs ) result( nnmat )
-        use simple_image,  only: image
-        use simple_params, only: params
-        use simple_jiffys, only: alloc_err
-        class(params), intent(in)    :: p
-        class(image),  intent(inout) :: imgs(:)
+        use simple_projector, only: projector
+        use simple_params,    only: params
+        use simple_jiffys,    only: alloc_err
+        class(params),     intent(in)    :: p
+        class(projector),  intent(inout) :: imgs(:)
         integer, allocatable :: nnmat(:,:)
         integer              :: alloc_stat
         real                 :: nncorr
@@ -41,20 +41,17 @@ contains
         use simple_params,    only: params
         use simple_projector, only: projector
         class(params), intent(in)    :: p
-        class(image),  intent(inout) :: imgs(:)
-        type(projector) :: proj
+        class(projector),  intent(inout) :: imgs(:)
         integer         :: iimg
         nimgs = size(imgs)
         nnn   = p%nnn
         call pftcc%new(nimgs, [1,nimgs], [p%box,p%box,1], p%kfromto, p%ring2, 'no')
-        ! build projector 
-        proj = projector(p%wfun,imgkind=p%imgkind)
         ! set the "particles" first
         do iimg=1,nimgs
             ! move to Fourier space
             call imgs(iimg)%fwd_ft
             ! transfer to polar coordinates
-            call proj%img2polarft(iimg, imgs(iimg), pftcc, isptcl=.true.)
+            call imgs(iimg)%img2polarft(iimg, pftcc, isptcl=.true.)
         end do
         ! copy in the references
         call pftcc%cp_ptcls2refs

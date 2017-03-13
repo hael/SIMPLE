@@ -130,7 +130,8 @@ contains
     end subroutine exec_postproc_vol
     
     subroutine exec_projvol( self, cline )
-        use simple_image, only: image
+        use simple_image,          only: image
+        use simple_projector_hlev, only: projvol_expanded
         class(projvol_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(params)             :: p
@@ -168,10 +169,10 @@ contains
         ! generate projections
         if( p%swap .eq. 'yes' ) call b%a%swape1e3
         if( cline%defined('top') )then
-            imgs = b%proj%projvol_expanded(b%vol, b%a, p, p%top)
+            imgs = projvol_expanded(b%vol, b%a, p, p%top)
             loop_end = p%top
         else
-            imgs = b%proj%projvol_expanded(b%vol, b%a, p)
+            imgs = projvol_expanded(b%vol, b%a, p)
             loop_end = p%nspace
         endif
         if( file_exists(p%outstk) ) call del_file(p%outstk)

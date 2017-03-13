@@ -1,29 +1,27 @@
 module simple_gridding
 use simple_image,   only: image
-use simple_winfuns, only: winfuns
+use simple_kbinterpol ! use all in there
 implicit none
 
 contains
     
     !>  \brief  prepare image for gridding interpolation in Fourier space
-    subroutine prep4cgrid( img, img4grid, msk, wfuns )
-        class(image), intent(inout)          :: img, img4grid
-        real, intent(in)                     :: msk
-        class(winfuns), intent(in), optional :: wfuns
-        real                                 :: ave, sdev, var, med
-        logical                              :: err
+    subroutine prep4cgrid( img, img4grid, msk )
+        class(image), intent(inout)  :: img, img4grid
+        real,         intent(in)     :: msk
+        real                         :: ave, sdev, var, med
+        logical                      :: err
         call img%bwd_ft                                           ! make sure not FTed
         call img%stats('background', ave, sdev, var, msk, med=med, errout=err) ! get background statistics
         call img%pad(img4grid, backgr=med)                        ! padding in real space                     
-        if( present(wfuns) ) call divide_w_instr(img4grid, wfuns) ! division w instr in real space
+        call divide_w_instr(img4grid)                             ! division w instr in real space
         call img4grid%fwd_ft                                      ! return the Fourier transform
     end subroutine prep4cgrid
     
     !> \brief  for dividing a real or complex image with the instrument function
-    subroutine divide_w_instr( img, wfuns )
+    subroutine divide_w_instr( img )
         use simple_jiffys, only: alloc_err
-        class(image),   intent(inout) :: img
-        class(winfuns), intent(in)    :: wfuns
+        class(image), intent(inout) :: img
         real, allocatable :: w1(:), w2(:), w3(:)
         integer :: ldim(3), i, j, k, alloc_stat, lims(3,2)
         real    :: ci, cj, ck, arg
@@ -51,7 +49,7 @@ contains
             else
                 arg = ci/real(ldim(1))
             endif
-            w1(i) = wfuns%eval_instr(arg)
+            w1(i) = kb_instr(arg)
             ci = ci+1.
         end do
         if( img%square_dims() )then
@@ -65,7 +63,7 @@ contains
                 else
                     arg = cj/real(ldim(2))
                 endif
-                w2(j) = wfuns%eval_instr(arg)
+                w2(j) = kb_instr(arg)
                 cj = cj+1.
             end do
             ck = -real(ldim(3))/2.
@@ -75,7 +73,7 @@ contains
                 else
                     arg = ck/real(ldim(3))
                 endif
-                w3(k) = wfuns%eval_instr(arg)
+                w3(k) = kb_instr(arg)
                 ck = ck+1.
             end do
         endif

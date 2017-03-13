@@ -123,7 +123,7 @@ contains
         ! prepare for image generation
         call b%vol%read(p%vols(1))
         if( debug ) write(*,'(A)') '>>> DID READ VOL'
-        call prep4cgrid(b%vol, b%vol_pad, p%msk, wfuns=b%proj%get_wfuns())
+        call prep4cgrid(b%vol, b%vol_pad, p%msk)
         if( debug ) write(*,'(A)') '>>> DONE PREPARING FOR IMAGE GENERATION'
         write(*,'(A)') '>>> GENERATING IMAGES'
         cnt = 0
@@ -137,7 +137,7 @@ contains
             ! extract ori
             orientation = b%a%get_ori(i)
             ! project vol
-            call b%proj%fproject(b%vol_pad, orientation, b%img_pad)
+            call b%vol_pad%fproject(orientation, b%img_pad)
             ! shift
             call b%img_pad%shift(orientation%get('x'),orientation%get('y'))
             if( cline%defined('bfac') )then
@@ -327,8 +327,9 @@ contains
     end subroutine exec_simmovie
     
     subroutine exec_simsubtomo( self, cline )
-        use simple_image, only: image
-        use simple_ori,   only: ori
+        use simple_image,          only: image
+        use simple_ori,            only: ori
+        use simple_projector_hlev, only: rotvol
         class(simsubtomo_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         type(params) :: p
@@ -346,7 +347,7 @@ contains
         numlen = len(int2str(p%nptcls))
         do iptcl=1,p%nptcls
             call o%rnd_ori
-            vol_rot = b%proj%rotvol(b%vol, o, p)
+            vol_rot = rotvol(b%vol, o, p)
             call vol_rot%write('subtomo'//int2str_pad(iptcl,numlen)//p%ext)
         end do
         ! end gracefully

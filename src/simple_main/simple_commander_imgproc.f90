@@ -924,6 +924,7 @@ contains
         use simple_polarft_corrcalc, only: polarft_corrcalc
         use simple_hadamard_common,  only: preprefs4align, reset_prev_defparms
         use simple_ctf,              only: ctf
+        use simple_projector_hlev,   only: rotimg
         class(respimg_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(params)                  :: p
@@ -980,8 +981,8 @@ contains
                     imgs(i) = b%img
                     ! prep for correlation
                     call prep_img4align( b%img, o )
-                    call b%proj%img2polarft(i, b%img, pftcc, isptcl=.true. )
-                    call b%proj%img2polarft(i, b%img, pftcc, isptcl=.false. )
+                    call b%img%img2polarft(i, pftcc, isptcl=.true. )
+                    call b%img%img2polarft(i, pftcc, isptcl=.false. )
                 enddo
                 ! build similarity matrix
                 do i=1,proj_pop-1
@@ -1101,12 +1102,11 @@ contains
         contains
 
         subroutine prep_img4align( img, o )
-            type(image), intent(inout) :: img
-            type(ori),   intent(inout) :: o
-            type(image) :: rotimg
+            class(image), intent(inout) :: img
+            type(ori),    intent(inout) :: o
+            type(image) :: img_rot
             type(ctf)   :: tfun
             real        :: x, y, dfx, dfy, angast
-            !call rotimg%new( img%get_ldim(), img%get_smpd() )
             if( p%ctf .ne. 'no' )then
                 ! create ctf object
                 tfun = ctf(img%get_smpd(),o%get('kv'),o%get('cs'),o%get('fraca'))
@@ -1140,21 +1140,21 @@ contains
             y = o%get('y')
             if( abs(x) > SHTHRESH .or. abs(y) > SHTHRESH ) call img%shift(-x, -y)
             ! rotation
-            call b%proj%rotimg( img, -o%e3get(), p%msk, rotimg )
-            img = rotimg
-            call rotimg%kill
+            call rotimg( img, -o%e3get(), p%msk, img_rot )
+            img = img_rot
+            call img_rot%kill
             call img%bwd_ft
             call img%mask(p%msk, 'soft')
             call img%fwd_ft
         end subroutine
 
         subroutine prep4rec( img, o )
-            type(image), intent(inout) :: img
+            class(image), intent(inout) :: img
             type(ori),   intent(inout) :: o
-            type(image) :: rotimg
+            type(image) :: img_rot
             type(ctf)   :: tfun
             real :: x, y, dfx, dfy, angast
-            call rotimg%new( img%get_ldim(), img%get_smpd() )
+            call img_rot%new( img%get_ldim(), img%get_smpd() )
             if( p%ctf .ne. 'no' )then
                 ! create ctf object
                 tfun = ctf(img%get_smpd(),o%get('kv'),o%get('cs'),o%get('fraca'))
@@ -1186,10 +1186,10 @@ contains
             y = o%get('y')
             if( abs(x) > SHTHRESH .or. abs(y) > SHTHRESH ) call img%shift(-x, -y)
             ! rotation
-            call b%proj%rotimg(img, -o%e3get(), p%msk, rotimg )
-            img = rotimg
+            call rotimg(img, -o%e3get(), p%msk, img_rot )
+            img = img_rot
             !call img%bwd_ft
-            call rotimg%kill
+            call img_rot%kill
         end subroutine prep4rec
 
         subroutine prep_ctfsq( img, o )
@@ -1216,10 +1216,6 @@ contains
 
     end subroutine exec_respimg
 
-    ! vol1
-    ! smpd
-    ! outvol
-
     subroutine exec_fixmapheader( self, cline )
         use simple_image,   only: image
         use simple_imgfile, only: imgfile
@@ -1239,6 +1235,5 @@ contains
         ! header will be sorted on write
         call img%write(p%outvol, rmsd=dev)
     end subroutine exec_fixmapheader
-
 
 end module simple_commander_imgproc

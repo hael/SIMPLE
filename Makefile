@@ -120,6 +120,7 @@ general: simple_hash.o            \
          simple_ftiter.o          \
          simple_arr.o             \
          simple_sll.o             \
+         simple_kbinterpol.o      \
          simple_winfuns.o         \
          simple_fsc_compare.o     \
          simple_restart.o         ;
@@ -133,6 +134,7 @@ simple: simple_image.o                  \
         simple_polarft.o                \
         simple_polarft_corrcalc.o       \
         simple_projector.o              \
+        simple_projector_hlev.o         \
         simple_volpft_corrcalc.o        \
         simple_ft_shsrch.o              \
         simple_ftexp_shsrch.o           \
@@ -190,9 +192,7 @@ comlin_sym: simple_comlin_symsrch.o       \
             simple_comlin_sym.o           ;
 
 cluster_cavg: simple_matchpursuit.o       \
-              simple_cavgppca.o           \
-              simple_refinecluster.o      \
-              simple_clustercavg.o        ;
+              simple_cavgppca.o           ;
 
 qsys: simple_qsys_base.o                  \
       simple_qsys_slurm.o                 \
