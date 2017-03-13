@@ -456,20 +456,13 @@ contains
         call ref%fwd_ft
     end subroutine prep2Dref_2
 
-    subroutine preprefvol( b, p, cline, s, snr )
+    subroutine preprefvol( b, p, cline, s )
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         class(cmdline), intent(inout) :: cline
-        integer,        intent(in)    :: s  
-        real, optional, intent(in)    :: snr  
+        integer,        intent(in)    :: s
         real, allocatable :: filter(:)
         real :: shvec(3)
-        ! TOOK OUT AS IT CONFLICTS WITH ISW
-        ! if( p%oritab .ne. '' )then
-        !     if( b%a%get_statepop(s) == 0 )return              
-        !         return
-        !     endif
-        ! endif
         if( p%boxmatch < p%box ) call b%vol%new([p%box,p%box,p%box],p%smpd) ! ensure correct dim
         call b%vol%read(p%vols(s), isxfel=p%l_xfel)
         ! take care of centering
@@ -495,8 +488,6 @@ contains
         if( p%boxmatch < p%box )then
             call b%vol%clip_inplace([p%boxmatch,p%boxmatch,p%boxmatch]) ! SQUARE DIMS ASSUMED
         endif
-        ! noise
-        if( present(snr) ) call b%vol%add_gauran( snr )
         ! masking
         if( p%l_xfel )then
             ! no centering or masking
@@ -527,6 +518,8 @@ contains
         endif
         ! FT volume
         call b%vol%fwd_ft
+        ! expand for fast interpolation
+        call b%vol%expand_cmat
     end subroutine preprefvol
     
     subroutine eonorm_struct_facts( b, p, res, which_iter )

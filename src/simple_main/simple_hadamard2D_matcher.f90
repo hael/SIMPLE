@@ -338,6 +338,8 @@ contains
         ! must be done here since constants in p are dynamically set
         call primesrch2D%new(p)
         call pftcc%new(p%ncls, [p%fromp,p%top], [p%box,p%box,1], p%kfromto, p%ring2, p%ctf)
+        ! prepare the polarizer
+        call b%img%init_imgpolarizer(pftcc, p%smpd)
         ! PREPARATION OF REFERENCES IN PFTCC
         ! read references and transform into polar coordinates
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING REFERENCES'
@@ -349,9 +351,10 @@ contains
             if( pop > 1 )then
                 ! prepare the reference
                 b%refs(icls) = b%cavgs(icls)
-                call prep2Dref(p, b%refs(icls), b%a, icls)
+                b%img        = b%cavgs(icls)
+                call prep2Dref(p, b%img, b%a, icls)
                 ! transfer to polar coordinates
-                call b%refs(icls)%img2polarft(icls, pftcc, isptcl=.false.)
+                call b%img%imgpolarizer(pftcc, icls, isptcl=.false.)
             endif
         end do
         ! PREPARATION OF PARTICLES IN PFTCC
@@ -372,7 +375,8 @@ contains
             if( istate == 0 ) icls = 0
             call prepimg4align(b, p, o)
             if( allocated(wmat) ) call calc_frc( b, p, o, icls, cnt, wmat )
-            call b%img%img2polarft(iptcl, pftcc)
+            ! transfer to polar coordinates
+            call b%img%imgpolarizer(pftcc, iptcl)
         end do
         if( allocated(wmat) )then
             if( p%l_distr_exec )then

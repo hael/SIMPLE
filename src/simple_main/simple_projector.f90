@@ -549,19 +549,16 @@ contains
         class(polarft_corrcalc), intent(inout) :: pftcc  !< polarft_corrcalc object to be filled
         real,                    intent(in)    :: smpd   !< sampling distance
         real, allocatable :: w(:,:)
-        type(image) :: img
-        real        :: loc(2)
-        integer     :: pdims(3), win(2,2), lims(3,2)
-        integer     :: i, k, l, wdim, wlen, alloc_stat, cnt
+        real              :: loc(2)
+        integer           :: pdims(3), win(2,2), lims(3,2)
+        integer           :: i, k, l, wdim, wlen, alloc_stat, cnt
         if( .not. pftcc%exists() ) stop 'polarft_corrcalc object needs to be created; init_imgpolarizer; simple_projector'
         call self%kill_imgpolarizer
-        wdim = 2*ceiling(self%harwin_exp) + 1
-        wlen = wdim**2
+        wdim       = 2*ceiling(self%harwin_exp) + 1
+        wlen       = wdim**2
         pdims(1)   = pftcc%get_nrots()
         pdims(2:3) = pftcc%get_kfromto()
-        call img%new( pftcc%get_ldim(), smpd)
-        lims = img%loop_lims(3)
-        call img%kill
+        lims       = self%loop_lims(3)
         allocate( self%polcyc1_mat(1:pdims(1), pdims(2):pdims(3), 1:wdim),&
                   &self%polcyc2_mat(1:pdims(1), pdims(2):pdims(3), 1:wdim),&
                   &self%polweights_mat(1:pdims(1), pdims(2):pdims(3), 1:wlen),&

@@ -437,7 +437,7 @@ contains
                 cnt = cnt+1
                 call progress(cnt, nrefs)
                 o = b%e%get_ori(iref)
-                call b%vol%fproject_polar(cnt, o, p, pftcc)
+                call b%vol%fproject_polar(cnt, o, p, pftcc, expanded=.true.)
             end do
         end do
         ! bring back the original b%vol size
@@ -451,7 +451,6 @@ contains
         character(len=*), optional, intent(in)    :: ppfts_fname
         type(ori) :: o
         integer   :: cnt, s, iptcl, istate, ntot, progress_cnt
-        ! PREPARATION OF PARTICLES IN PFTCC
         if( present(ppfts_fname) )then
             if( file_exists(ppfts_fname) )then
                 call pftcc%read_pfts_ptcls(ppfts_fname)
@@ -468,6 +467,8 @@ contains
             subroutine prep_pftcc_local
                 ! read particle images and create polar projections
                 if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PARTICLES'
+                ! initialize
+                call b%img%init_imgpolarizer(pftcc, p%smpd)
                 progress_cnt = 0
                 cnt_glob     = 0
                 ntot         = p%top-p%fromp+1
@@ -502,7 +503,7 @@ contains
                             call b%img%read(p%stk, iptcl, p%l_xfel)
                         endif
                         call prepimg4align(b, p, o)
-                        call b%img%img2polarft(iptcl, pftcc)
+                        call b%img%imgpolarizer(pftcc, iptcl)
                     end do
                 end do
                 ! restores b%img dimensions for clean exit
