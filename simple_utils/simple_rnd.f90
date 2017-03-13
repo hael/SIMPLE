@@ -319,50 +319,6 @@ contains
         xtmp = matmul(xtmp,r)
         x = xtmp(1,:)+means
     end function mnorm_smp
-
-    !>  \brief  samples a rank-based polynomial distribution (no re-drawing)
-    function rankpoly_smp( k, n, tau )result( inds )
-        integer, intent(in) :: k   ! number of draws
-        integer, intent(in) :: n   ! rank
-        real,    intent(in) :: tau ! power
-        real,    allocatable :: probs(:)
-        integer, allocatable :: ranks(:), inds(:)
-        logical, allocatable :: avail(:)
-        real    :: ran
-        integer :: i, j, ind
-        logical :: found
-        if( n<=0 )stop 'rank must be > 0; simple_rnd%rankpoly_smp'
-        if( k>=n )stop 'nonsensical number of samples; simple_rnd%rankpoly_smp'
-        allocate(ranks(n),avail(n),probs(n),inds(k))
-        ranks = (/ (i,i=1,n) /)
-        avail = .true.
-        probs = ranks**(-tau)
-        do i=2,n
-            probs(i) = probs(i)+probs(i-1)
-        enddo
-        probs = probs / sum(probs)
-        probs(n) = 1.
-        do i=1,k
-            found = .false.
-            do while( .not. found)
-                ! individual drawing
-                call random_number(ran)
-                do j=1,n
-                    if(ran<=probs(j))then
-                        ind = j
-                        exit
-                    endif
-                enddo
-                ! check if already drawn
-                if( avail(ind) )then
-                    avail = .false.
-                    found = .true.
-                endif
-            enddo
-            inds(i) = ind
-        enddo
-        deallocate(ranks,avail,probs)
-    end function rankpoly_smp
     
     !>  \brief  R8PO_FA factors an R8PO matrix. The R8PO storage format is used for a symmetric 
     !!          positive definite matrix and its inverse.  (The Cholesky factor of an R8PO matrix is an

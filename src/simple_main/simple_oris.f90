@@ -70,6 +70,7 @@ type :: oris
     procedure          :: get_nonzero_sum
     procedure          :: get_nonzero_avg
     procedure          :: get_ctfparams
+    procedure          :: included
     procedure          :: print
     procedure          :: print_mats
     ! SETTERS
@@ -918,6 +919,20 @@ contains
             endif
         end do
     end function get_ctfparams
+
+    !>  \brief  is for printing
+    function included( self )result( incl )
+        class(oris), intent(inout) :: self
+        logical, allocatable :: incl(:)
+        integer :: i, istate
+        allocate(incl(self%n))
+        incl = .false.
+        do i=1,self%n
+            istate = nint(self%o(i)%get('state'))
+            if( istate > 0 ) incl(i) = .true.
+        end do
+    end function included
+
     
     !>  \brief  is for printing
     subroutine print( self, i )
