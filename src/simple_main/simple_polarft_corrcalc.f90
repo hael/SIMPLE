@@ -60,6 +60,7 @@ type :: polarft_corrcalc
     procedure          :: get_kfromto
     procedure          :: get_rot
     procedure          :: get_roind
+    procedure          :: get_win_roind
     procedure          :: get_coord
     procedure          :: get_ptcl_pft
     procedure          :: get_ref_pft
@@ -170,7 +171,7 @@ contains
         call alloc_err('polar coordinate arrays; new; simple_polarft_corrcalc', alloc_stat)
         ang = twopi/real(self%nrots)
         do irot=1,self%nrots
-            self%angtab(irot) = (irot-1)*ang
+            self%angtab(irot) = real(irot-1)*ang
             do k=self%kfromto(1),self%kfromto(2)
                 k_ind = self%k_ind(k) 
                 self%polar(irot,k_ind)            = cos(self%angtab(irot))*real(k) ! x-coordinate
@@ -368,13 +369,41 @@ contains
         class(polarft_corrcalc), intent(in) :: self
         real,                    intent(in) :: rot
         integer :: ind, irot, loc(1)
-        real    :: dists(self%nrots)
+        real    :: dists_sq(self%nrots)
         do irot=1,self%nrots
-            dists(irot) = sqrt((self%angtab(irot)-rot)**2.)
+            dists_sq(irot) = (self%angtab(irot)-rot)**2.
         end do
-        loc = minloc(dists)
+        loc = minloc(dists_sq)
         ind = loc(1)
     end function get_roind
+
+    !>  \brief is for getting the discrete in-plane rotational
+    !!         indices within a window of +-winsz degrees of ang
+    !!         For use together with gencorrs
+    function get_win_roind( self, ang, winsz )result( roind_vec )
+        use simple_math, only: rad2deg
+        class(polarft_corrcalc), intent(in) :: self
+        real,                    intent(in) :: ang, winsz
+        integer, allocatable :: roind_vec(:)
+        real    :: dist(self%nrots)
+        integer :: i, irot, nrots, alloc_stat
+        if(ang>360. .or. ang<TINY)stop 'input angle outside of the conventional range; simple_polarft_corrcalc::get_win_roind'
+        if(winsz<0. .or. winsz>180.)stop 'invalid window size; simple_polarft_corrcalc::get_win_roind'
+        if(winsz < 360./real(self%nrots))stop 'too small window size; simple_polarft_corrcalc::get_win_roind'
+        i    = self%get_roind( ang )
+        dist = abs(self%angtab(i) - self%angtab)
+        where( dist>180. )dist = 360.-dist
+        nrots = count(dist <= winsz)
+        allocate( roind_vec(nrots), stat=alloc_stat )
+        call alloc_err("In: get_win_roind; simple_polarft_corrcalc", alloc_stat)
+        irot = 0
+        do i = 1,self%nrots
+            if( dist(i)<=winsz )then
+                irot = irot+1
+                roind_vec(irot) = i
+            endif
+        enddo
+    end function get_win_roind
 
     !>  \brief returns polar coordinate for rotation rot
     !!         and Fourier index k
@@ -542,7 +571,7 @@ contains
     ! MODIFIERS
 
     !>  \brief  is for applying CTF to references and updating the memoized ref sqsums
-    subroutine apply_ctf( self, tfun, dfx, dfy, angast, ref, rot, ctfmat )
+    subroutine apply_ctf( self, tfun, dfx, dfy, angast, refvec, ctfmat )
         !$ use omp_lib
         !$ use omp_lib_kinds
         use simple_ctf,   only: ctf
@@ -550,11 +579,10 @@ contains
         class(ctf),              intent(inout) :: tfun
         real,                    intent(in)    :: dfx
         real,    optional,       intent(in)    :: dfy, angast
-        integer, optional,       intent(in)    :: ref
-        integer, optional,       intent(in)    :: rot
+        integer, optional,       intent(in)    :: refvec(2)
         real,    optional,       intent(in)    :: ctfmat(:,:)
         real, allocatable :: ctfmat_here(:,:)
-        integer           :: iref, irot
+        integer           :: iref, ref_start, ref_end
         if( .not.present(ctfmat) )then
             ! create the congruent polar matrix of real CTF values
             ctfmat_here = self%create_polar_ctfmat(tfun, dfx, dfy, angast, self%refsz)
@@ -562,33 +590,25 @@ contains
             ctfmat_here = ctfmat
         endif
         ! multiply the references with the CTF
-        if( present(ref) )then
-            ! apply to single reference
-            if( ref<1 .or. ref>self%nrefs )stop 'reference index out of bounds; simple_polarft_corrcalc::apply_ctf'
-            iref = ref
-            if( present(rot) )then
-                irot = rot
-                self%pfts_refs_ctf(iref,irot:irot+self%refsz-1,:) = &
-                    &self%pfts_refs(iref,irot:irot+self%refsz-1,:)*ctfmat_here
-                call self%memoize_sqsum_ref_ctf(iref, irot=irot)
-            else
-                self%pfts_refs_ctf(iref,:,:) = self%pfts_refs(iref,:,:)*ctfmat_here
-                call self%memoize_sqsum_ref_ctf(iref)
+        if( present(refvec) )then
+            ! slice of references
+            if( any(refvec<1) .or. any(refvec>self%nrefs) .or. refvec(1)>refvec(2) )then
+                stop 'invalid reference indices; simple_polarft_corrcalc::apply_ctf:'
             endif
+            ref_start = refvec(1)
+            ref_end   = refvec(2)
         else
-            if( present(rot) )then
-                print *,'application of ctf to multiple refs in a single rotation not implemeted;'
-                stop 'simple_polarft_corrcalc::apply_ctf'
-            endif
-            ! apply to all references
-            !$omp parallel do default(shared) schedule(auto) private(iref)
-            do iref=1,self%nrefs
-                self%pfts_refs_ctf(iref,:,:) = self%pfts_refs(iref,:,:)*ctfmat_here
-                call self%memoize_sqsum_ref_ctf(iref)
-            end do
-            !$omp end parallel do
+            ! all references
+            ref_start = 1
+            ref_end   = self%nrefs
         endif
-        if( .not.present(ctfmat) )deallocate(ctfmat_here)
+        !$omp parallel do default(shared) schedule(auto) private(iref)
+        do iref=ref_start,ref_end
+            self%pfts_refs_ctf(iref,:,:) = self%pfts_refs(iref,:,:)*ctfmat_here
+            call self%memoize_sqsum_ref_ctf(iref)
+        end do
+        !$omp end parallel do
+        if( allocated(ctfmat_here) )deallocate(ctfmat_here)
     end subroutine apply_ctf
 
     !>  \brief  is for preparing for XFEL pattern corr calc
@@ -737,7 +757,6 @@ contains
         integer           :: irot,k,k_ind
         allocate( ctfmat(endrot,self%nk) )
         inv_ldim = 1./real(self%ldim)
-        ! print *,dfx,dfy,angast,endrot,self%nk,self%kfromto(1),self%kfromto(2),inv_ldim
         !$omp parallel do default(shared) private(irot,k,k_ind,hinv,kinv,spaFreqSq,ang) schedule(auto)
         do irot=1,endrot
             do k=self%kfromto(1),self%kfromto(2)
@@ -821,18 +840,35 @@ contains
     end subroutine gencorrs_all_tester_2
 
     !>  \brief  is for generating rotational correlations
-    function gencorrs( self, iref, iptcl ) result( cc )
+    function gencorrs( self, iref, iptcl, roind_vec ) result( cc )
         !$ use omp_lib
         !$ use omp_lib_kinds
         class(polarft_corrcalc), intent(inout) :: self        !< instance
-        integer, intent(in)                    :: iref, iptcl !< ref & ptcl indices
-        real    :: cc(self%nrots)
-        integer :: irot
-        !$omp parallel do default(shared) private(irot)
-        do irot=1,self%nrots
-            cc(irot) = self%corr_1(iref, iptcl, irot)
-        end do
-        !$omp end parallel do
+        integer,                 intent(in)    :: iref, iptcl !< ref & ptcl indices
+        integer,       optional, intent(in)    :: roind_vec(:)
+        real      :: cc(self%nrots)
+        integer   :: irot, i, nrots
+        if( present(roind_vec) )then
+            ! calculates only corrs for rotational indices provided in roind_vec
+            ! see get_win_roind. returns -1.0 when not calculated
+            if( any(roind_vec<=0) .or. any(roind_vec>self%nrots) )&
+                &stop'index out of range; simple_polarft_corrcalc::gencorrs'
+            cc    = -1.
+            nrots = size(roind_vec)
+            !$omp parallel do default(shared) private(i,irot)
+            do i=1,nrots
+                irot = roind_vec(i)
+                cc(irot) = self%corr_1(iref, iptcl, irot)
+            end do
+            !$omp end parallel do
+        else
+            ! all correlations
+            !$omp parallel do default(shared) private(irot)
+            do irot=1,self%nrots
+                cc(irot) = self%corr_1(iref, iptcl, irot)
+            end do
+            !$omp end parallel do
+        endif
     end function gencorrs
 
     !>  \brief  is for generating rotational correlations

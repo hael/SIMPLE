@@ -106,7 +106,7 @@ contains
         call o%set('state', real(state))
         call proj_ptr%fproject_polar( 1, refvols(state), o, p_ptr, pftcc )
         if( p_ptr%ctf .ne. 'no' )then
-            call pftcc%apply_ctf(tfun, dfx, dfy=dfy, angast=angast, ref=1,&
+            call pftcc%apply_ctf(tfun, dfx, dfy=dfy, angast=angast, refvec=[1,1],&
                 &rot=1, ctfmat=ctfmat)
         endif
         cost = -pftcc%corr( 1, 1, 1, vec(4:5) )

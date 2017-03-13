@@ -262,12 +262,21 @@ contains
                 endif
                 call primesrch3D%get_ori_best(orientation)
                 call b%a%set_ori(iptcl,orientation)
-                call primesrch3D%get_oris(prime3D_oris, orientation)
-                if( doshellweight )then
-                    wresamp = resample_filter(wmat(iptcl,:), res, res_pad)
-                    call grid_ptcl(b, p, iptcl, cnt_glob, orientation, prime3D_oris, shellweights=wresamp)
+                if( p%npeaks>1 )then
+                    call primesrch3D%get_oris(prime3D_oris, orientation)
+                    if( doshellweight )then
+                        wresamp = resample_filter(wmat(iptcl,:), res, res_pad)
+                        call grid_ptcl(b, p, iptcl, cnt_glob, orientation, prime3D_oris, shellweights=wresamp)
+                    else
+                        call grid_ptcl(b, p, iptcl, cnt_glob, orientation, prime3D_oris)
+                    endif
                 else
-                    call grid_ptcl(b, p, iptcl, cnt_glob, orientation, prime3D_oris)
+                    if( doshellweight )then
+                        wresamp = resample_filter(wmat(iptcl,:), res, res_pad)
+                        call grid_ptcl(b, p, iptcl, cnt_glob, orientation, shellweights=wresamp)
+                    else
+                        call grid_ptcl(b, p, iptcl, cnt_glob, orientation)
+                    endif
                 endif
             else
                 call orientation%reject

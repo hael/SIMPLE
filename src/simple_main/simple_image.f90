@@ -35,9 +35,9 @@ type :: image
     integer                                :: lims(3,2)           !< physical limits for the XFEL patterns
     character(len=STDLEN)                  :: imgkind='em'        !< indicates image kind (different representation 4 EM/XFEL)
     logical                                :: existence=.false.   !< indicates existence
-    complex, allocatable                   :: cmat_exp(:,:,:)         !< expanded complex matrix
-    integer                                :: ldim_exp(3,2)=0         !< expanded complex matrix limits
-    logical                                :: expanded_exists=.false. !< indicates expanded matrix existence
+    complex, allocatable                   :: cmat_exp(:,:,:)         !< expanded FT matrix
+    integer                                :: ldim_exp(3,2)=0         !< expanded FT matrix limits
+    logical                                :: expanded_exists=.false. !< indicates FT matrix existence
 
   contains
     ! CONSTRUCTORS
@@ -90,8 +90,10 @@ type :: image
     procedure          :: set_ft
     procedure          :: extr_fcomp
     procedure          :: packer
+    procedure          :: exp_exists
     procedure          :: cmat2expanded
     procedure          :: expanded2cmat
+    procedure          :: reset_expanded
     procedure          :: kill_expanded
     procedure          :: interp_fcomp_expanded
     ! CHECKUPS
@@ -253,6 +255,7 @@ type :: image
     procedure          :: bwd_logft
     procedure          :: shift
     procedure          :: rankify
+    procedure          :: cure_outliers
     ! TESTS
     procedure, private :: get_fplane_simple
     procedure, private :: get_fplane_frealix
@@ -1435,7 +1438,16 @@ contains
         
     end function packer
 
-    !>  \brief is a constructor of the expanded 3d complex matrix
+    ! EXPANDED FOURIER COMPONENTS MATRIX RELATED ROUTINES
+
+    !>  \brief  indicates expanded fourier matix existance
+    function exp_exists( self )result( answer )
+        class(image), intent(inout) :: self
+        logical :: answer
+        answer = self%expanded_exists
+    end function exp_exists
+
+    !>  \brief  is a constructor of the expanded Fourier matrix
     subroutine cmat2expanded( self, rharwin )
         !$ use omp_lib
         !$ use omp_lib_kinds
@@ -1445,9 +1457,8 @@ contains
         integer, allocatable :: cyck(:), cycm(:)
         integer              :: h, k, m, cych, alloc_stat, max_dim
         integer              :: lims(3,2)
-        if( .not.self%is_ft() )stop 'volume needs to be FTed before call; get_cmat_expanded; simple_image'
-        if( self%ldim(3) == 1 )stop 'only for volume; get_cmat_expanded; simple_image'
-        ! init
+        if( .not.self%is_ft() )stop 'volume needs to be FTed before call; cmat2expanded; simple_image'
+        if( self%ldim(3)==1 )stop 'only for volumes; cmat2expanded; simple_image'
         lims = self%loop_lims(3)
         max_dim = maxval(abs(lims))
         self%ldim_exp(:,2) = max_dim + ceiling(rharwin)
@@ -1457,7 +1468,7 @@ contains
             &self%ldim_exp(2,1):self%ldim_exp(2,2),&
             &self%ldim_exp(3,1):self%ldim_exp(3,2) ),&
             &cyck(self%ldim_exp(2,1):self%ldim_exp(2,2)),&
-            &cycm(self%ldim_exp(3,1):self%ldim_exp(3,2)), stat=alloc_stat  )
+            &cycm(self%ldim_exp(3,1):self%ldim_exp(3,2)), stat=alloc_stat)
         call alloc_err("In: cmat2expanded; simple_image 1", alloc_stat)
         ! pre-compute addresses in 2nd and 3rd dimension
         do k = self%ldim_exp(2,1),self%ldim_exp(2,2)
@@ -1497,6 +1508,7 @@ contains
         if( .not.self%expanded_exists )then
             stop 'expanded complex matrix does not exist; simple_image%expanded2cmat'
         endif
+        lims = self%loop_lims(3)
         allocate( cyck(self%ldim_exp(2,1):self%ldim_exp(2,2)),&
             &cycm(self%ldim_exp(3,1):self%ldim_exp(3,2)), stat=alloc_stat  )
         call alloc_err("In: expanded2cmat; simple_image 1", alloc_stat)
@@ -1513,7 +1525,7 @@ contains
         self%cmat = cmplx(0.,0.)
         !$omp parallel do schedule(auto) shared(lims,cyck,cycm)&
         !$omp private(h,k,m,cych,comp)
-        do h = self%ldim_exp(1,1),self%ldim_exp(1,2)
+        do h = lims(1,1),lims(1,2)
             cych = h
             if( h<lims(1,1) .or. h>lims(1,2) )cych = cyci_1d( lims(1,:),h )
             do k = self%ldim_exp(2,1),self%ldim_exp(2,2)
@@ -1528,6 +1540,15 @@ contains
         deallocate( cyck,cycm )        
     end subroutine expanded2cmat
 
+    !>  \brief  sets the expanded Fourier matrix to zero
+    subroutine reset_expanded( self )
+        class(image), intent(inout) :: self
+        if( .not.self%expanded_exists )&
+            &stop 'expanded fourier matrix does not exist; simple_image::reset_expanded'
+        self%cmat_exp = cmplx(0.,0.)
+    end subroutine reset_expanded
+
+    !>  \brief  is a detructor of the expanded Fourier matrix
     subroutine kill_expanded( self )
         class(image), intent(inout) :: self
         if( allocated(self%cmat_exp) )deallocate( self%cmat_exp )
@@ -1541,7 +1562,7 @@ contains
         class(image), intent(inout) :: self
         class(winfuns), intent(in)  :: wfun
         real,         intent(in)    :: loc(3)
-        real,         intent(inout) :: w(wdim,wdim,wdim)
+        real,         intent(inout) :: w(1:wdim,1:wdim,1:wdim)
         real,         intent(in)    :: harwin
         integer,      intent(in)    :: wdim
         complex :: comp
@@ -1549,9 +1570,11 @@ contains
         if( .not. self%expanded_exists )then
             stop 'Expanded complex matrix does not exists;simple_image%cmat2expanded'
         endif
-        wlen = wdim**3
+        if( self%ldim(3)==1 )stop 'only for volumes; interp_fcomp_expanded; simple_image'
         ! interpolation kernel window
         win = sqwin_3d(loc(1), loc(2), loc(3), harwin)
+        ! 3D
+        wlen = wdim**3
         ! interpolation kernel matrix
         w = 1.
         do i=1,wdim
@@ -1560,8 +1583,8 @@ contains
             w(:,:,i) = w(:,:,i) * wfun%eval_apod( real(win(3,1)+i-1)-loc(3) )
         end do
         ! SUM( kernel x components )
-        comp = dot_product( reshape(w,(/wlen/)), reshape( self%cmat_exp( win(1,1):win(1,2),&
-            &win(2,1):win(2,2),win(3,1):win(3,2)), (/wlen/) ) ) 
+        comp = dot_product( reshape(w,(/wlen/)), reshape(self%cmat_exp( win(1,1):win(1,2),&
+            &win(2,1):win(2,2),win(3,1):win(3,2)), (/wlen/)) )
     end function interp_fcomp_expanded
 
     ! CHECKUPS
@@ -5363,6 +5386,59 @@ contains
             call self_in%bwd_ft
         endif
     end subroutine rtsq
+
+    !>  \brief  for replacing extreme outliers with median of a 13x13 neighbourhood window
+    !!          only done on negative values, assuming white ptcls on black bkgr
+    subroutine cure_outliers( self, ncured, sigma )
+        !$ use omp_lib
+        !$ use omp_lib_kinds
+        use simple_stat,           only: moment
+        class(image),   intent(inout) :: self
+        integer,        intent(inout) :: ncured
+        real, optional, intent(in)    :: sigma
+        real, allocatable :: win(:,:), rmat_pad(:,:)
+        real    :: ave, sdev, var, sigma_here, lthresh, uthresh
+        integer :: i, j, alloc_stat, hwinsz, winsz
+        logical :: was_fted, err
+        if( self%ldim(3)>1 )stop 'for images only; simple_image::cure_outliers'
+        if( was_fted )stop 'for real space images only'
+        sigma_here = 6.
+        if( present(sigma) )then
+            if(sigma<=TINY)stop 'invalid sigma value; simple_image::cure_outliers'
+            sigma_here = sigma
+        endif
+        ncured   = 0
+        hwinsz   = 6
+        was_fted = self%is_ft()
+        call moment( self%rmat, ave, sdev, var, err )
+        if( sdev<TINY )return
+        lthresh = ave - sigma_here * sdev
+        uthresh = ave + sigma_here * sdev
+        !if( any(self%rmat<=lthresh) .or. any(self%rmat>=uthresh) )then
+        if( any(self%rmat<=lthresh) )then
+            winsz = 2*hwinsz+1
+            allocate(rmat_pad(1-hwinsz:self%ldim(1)+hwinsz,1-hwinsz:self%ldim(2)+hwinsz),&
+                &win(winsz,winsz), stat=alloc_stat)
+            call alloc_err('In: cure_outliers; simple_image 1', alloc_stat)
+            rmat_pad(:,:) = median( reshape(self%rmat(:,:,1), (/(self%ldim(1)*self%ldim(2))/)) )
+            rmat_pad(1:self%ldim(1), 1:self%ldim(2)) = &
+                &self%rmat(1:self%ldim(1),1:self%ldim(2),1)
+            !$omp parallel do schedule(auto) default(shared) private(i,j,win)&
+            !$omp reduction(+:ncured)
+            do i=1,self%ldim(1)
+                do j=1,self%ldim(2)
+                    !if( self%rmat(i,j,1)<lthresh .or. self%rmat(i,j,1)>uthresh )then
+                    if( self%rmat(i,j,1)<lthresh )then
+                        win = rmat_pad( i-hwinsz:i+hwinsz, j-hwinsz:j+hwinsz )
+                        self%rmat(i,j,1) = median( reshape(win,(/winsz**2/)) )
+                        ncured = ncured+1
+                    endif
+                enddo
+            enddo
+            !$omp end parallel do
+            deallocate( win, rmat_pad )
+        endif
+    end subroutine cure_outliers
 
     ! TESTS
 

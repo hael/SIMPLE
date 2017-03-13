@@ -2110,14 +2110,14 @@ contains
         call alloc_err("In: gen_polar_coords_1; simple_math", alloc_stat)
         dang = twopi/real(nradial_lines)
         do i=1,nradial_lines
-            angtab(i) = (i-1)*dang
+            angtab(i) = real(i-1)*dang
             do j=kfromto(1),kfromto(2)
                 coords(i,j,1) = cos(angtab(i))*real(j)
                 coords(i,j,2) = sin(angtab(i))*real(j)
             end do
             angtab(i) = rad2deg(angtab(i))
         end do
-    end subroutine
+    end subroutine gen_polar_coords
     
     ! INTERPOLATION
     

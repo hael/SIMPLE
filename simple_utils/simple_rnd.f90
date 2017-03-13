@@ -233,6 +233,7 @@ contains
     !>  \brief  generate a uniformly distributed random integer [_1_,_NP_]
     function irnd_uni( NP ) result( irnd )
         integer, intent(in) :: NP
+        real                :: rrnd
         integer             :: irnd
         irnd = 1
         if( NP == 0 )then
@@ -242,7 +243,7 @@ contains
         else if( NP == 1 )then
             irnd = 1
         else
-            irnd = ceiling( ran3()*real(NP) )
+            irnd = ceiling(ran3()*real(NP))
             irnd = max(1,irnd)
             irnd = min(NP,irnd)
         endif

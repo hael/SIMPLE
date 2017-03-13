@@ -40,6 +40,7 @@ type, extends(image) :: reconstructor
     procedure          :: read_rho
     ! INTERPOLATION
     procedure, private :: inout_fcomp
+    !procedure, private :: inout_fcomp_expanded
     procedure, private :: calc_tfun_vals
     procedure          :: inout_fplane
     procedure          :: sampl_dens_correct
@@ -172,7 +173,7 @@ contains
     
     ! INTERPOLATION
     
-    ! !> \brief  inserts or uninserts a Fourier plane component to the Fourier volume
+    !> \brief  inserts or uninserts a Fourier plane component to the Fourier volume
     subroutine inout_fcomp( self, h, k, e, inoutmode, comp, oshift, pwght )
         use simple_ori,    only: ori
         use simple_math,   only: recwin_3d, euclid, hyp, cyci_1d
@@ -184,10 +185,10 @@ contains
         complex,              intent(in)    :: comp      !< input component, if not given only sampling density calculation
         complex,              intent(in)    :: oshift    !< origin shift
         real, optional,       intent(in)    :: pwght     !< external particle weight (affects both fplane and rho)
-        integer              :: i,j,m,kwin(3,2),phys(3),alloc_stat,inds(3),nn(3),lims(3,2), sh
-        real                 :: w,vec(3),loc(3),tval,tvalsq,x,dist,mindist
+        integer              :: i,j,m,kwin(3,2),phys(3),alloc_stat,inds(3),nn(3),lims(3,2)
+        real                 :: w,vec(3),loc(3),tval,tvalsq
         real, allocatable    :: kw1(:),kw2(:),kw3(:)
-        integer, allocatable :: cyci1(:),cyci2(:),cyci3(:)
+        integer, allocatable :: cyci2(:),cyci3(:)
         complex              :: mod_comp
         if( comp == cmplx(0.,0.) ) return
         lims = self%loop_lims(3)
@@ -201,12 +202,11 @@ contains
         ! calculate kernel values
         kwin = recwin_3d(loc(1), loc(2), loc(3), self%winsz)
         allocate( kw1(kwin(1,1):kwin(1,2)), kw2(kwin(2,1):kwin(2,2)), kw3(kwin(3,1):kwin(3,2)), &
-            & cyci1(kwin(1,1):kwin(1,2)), cyci2(kwin(2,1):kwin(2,2)), cyci3(kwin(3,1):kwin(3,2)), &
+            & cyci2(kwin(2,1):kwin(2,2)), cyci3(kwin(3,1):kwin(3,2)), &
             & stat=alloc_stat )
         call alloc_err("In: inout_fcomp; simple_reconstructor", alloc_stat)
         do i=kwin(1,1),kwin(1,2)
             kw1(i) = self%wfuns%eval_apod(real(i)-loc(1))
-            cyci1(i) = cyci_1d( lims(1,:),i )
         end do
         do j=kwin(2,1),kwin(2,2)
             kw2(j) = self%wfuns%eval_apod(real(j)-loc(2))
@@ -216,11 +216,11 @@ contains
             kw3(m) = self%wfuns%eval_apod(real(m)-loc(3))
             cyci3(m) = cyci_1d( lims(3,:),m )
         end do
-        mindist = huge(x)   
+        !mindist = huge(x)   
         ! convolution interpolation
         do i=kwin(1,1),kwin(1,2)
             if( kw1(i) == 0. ) cycle
-            inds(1) = cyci1(i)
+            inds(1) = cyci_1d( lims(1,:),i )
             do j=kwin(2,1),kwin(2,2)
                 if( kw2(j) == 0. ) cycle
                 inds(2) = cyci2(j)
@@ -233,11 +233,11 @@ contains
                     ! calculate weight
                     w = kw1(i)*kw2(j)*kw3(m)*self%dens_const
                     ! keep track of the nearest neighbor
-                    dist = euclid(loc,real([i,j,m]))
-                    if( dist < mindist )then
-                        mindist = dist
-                        nn = [i,j,m]
-                    endif
+                    ! dist = euclid(loc,real([i,j,m]))
+                    ! if( dist < mindist )then
+                    !     mindist = dist
+                    !     nn = [i,j,m]
+                    ! endif
                     if( present(pwght) ) w = w*pwght
                     mod_comp = (comp*tval*w)*oshift ! CTF and w modulates the component before origin shift
                     if( inoutmode )then ! add
@@ -252,8 +252,61 @@ contains
                 end do
             end do
         end do
-        deallocate(kw1,kw2,kw3,cyci1,cyci2,cyci3)   
+        deallocate(kw1,kw2,kw3,cyci2,cyci3)   
     end subroutine inout_fcomp
+
+    ! ! !> \brief  inserts or uninserts a Fourier plane component to the Fourier volume
+    ! subroutine inout_fcomp_exanded( self, h, k, e, inoutmode, comp, oshift, pwght )
+    !     use simple_ori,    only: ori
+    !     use simple_math,   only: sqwin_3d, euclid, hyp, cyci_1d
+    !     use simple_jiffys, only: alloc_err
+    !     class(reconstructor), intent(inout) :: self      !< the objetc
+    !     integer,              intent(in)    :: h, k      !< Fourier indices
+    !     class(ori),           intent(inout) :: e         !< orientation
+    !     logical,              intent(in)    :: inoutmode !< add = .true., subtract = .false.
+    !     complex,              intent(in)    :: comp      !< input component, if not given only sampling density calculation
+    !     complex,              intent(in)    :: oshift    !< origin shift
+    !     real, optional,       intent(in)    :: pwght     !< external particle weight (affects both fplane and rho)
+    !     complex, allocatable :: mod_comps(:,:,:)
+    !     real, allocatable    :: w(:,:,:)
+    !     integer              :: i, win(3,2), alloc_stat, lims(3,2), wdim
+    !     real                 :: vec(3), loc(3), tval, tvalsq
+    !     if( comp == cmplx(0.,0.) ) return
+    !     lims = self%loop_lims(3)
+    !     ! calculate nonuniform sampling location
+    !     vec(1) = real(h)
+    !     vec(2) = real(k)
+    !     vec(3) = 0.
+    !     loc  = matmul(vec,e%get_mat())
+    !     ! evaluate the transfer function
+    !     call self%calc_tfun_vals(vec, tval, tvalsq)
+    !     ! calculate kernel values
+    !     win = sqwin_3d(loc(1), loc(2), loc(3), self%winsz)
+    !     wdim = 2*ceiling(1.)+1 ! for now, needs be replaced by the projector harwin_exp
+    !     allocate( w(wdim,wdim,wdim), mod_comps(wdim,wdim,wdim), stat=alloc_stat )
+    !     w = self%dens_const
+    !     do i=1,wdim
+    !         w(i,:,:) = w(i,:,:) * wfun%eval_apod( real(win(1,1)+i-1)-loc(1) )
+    !         w(:,i,:) = w(:,i,:) * wfun%eval_apod( real(win(2,1)+i-1)-loc(2) )
+    !         w(:,:,i) = w(:,:,i) * wfun%eval_apod( real(win(3,1)+i-1)-loc(3) )
+    !     enddo
+    !     if( present(pwght) ) w = w*pwght
+    !     ! CTF and w modulates the component before origin shift
+    !     mod_comps = (comp*tval*w)*oshift
+    !     if( inoutmode )then
+    !         ! addition
+    !         self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
+    !             &self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) + mod_comps
+    !         self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
+    !             &self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) + tvalsq*w
+    !     else
+    !         ! substraction
+    !         self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
+    !             &self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) - mod_comps
+    !         self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
+    !             &self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) - tvalsq*w
+    !     endif
+    ! end subroutine inout_fcomp_expanded
    
     !> \brief  for evaluating the transfer function
     subroutine calc_tfun_vals( self, vec, tval, tvalsq )

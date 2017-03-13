@@ -480,7 +480,8 @@ contains
     end subroutine exec_prime3D
 
     subroutine exec_cont3D( self, cline )
-        use simple_cont3D_matcher, only: cont3D_exec
+        use simple_pcont3D_matcher, only: pcont3D_exec
+        !use simple_cont3D_matcher, only: cont3D_exec
         class(cont3D_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(params) :: p
@@ -499,12 +500,12 @@ contains
         call b%build_cont3D_tbox(p)
         if( cline%defined('part') )then
             if( .not. cline%defined('outfile') ) stop 'need unique output file for parallel jobs'
-            call cont3D_exec(b, p, cline, 0, converged) ! partition or not, depending on 'part'
+            call pcont3D_exec(b, p, cline, 0, converged) ! partition or not, depending on 'part'
         else
             startit = 1
             if( cline%defined('startit') ) startit = p%startit
             do i=startit,p%maxits
-                call cont3D_exec(b, p, cline, i, converged)
+                call pcont3D_exec(b, p, cline, i, converged )
                 if(converged) exit
             end do
         endif

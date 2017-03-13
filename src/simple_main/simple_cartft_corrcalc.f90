@@ -152,7 +152,7 @@ contains
         integer,                intent(in)    :: iref
         integer   :: s
         s = nint(o%get('state'))
-        call self%bp%proj%fproject_expanded(self%refvols(s), o, self%img_refs(iref) )
+        call self%bp%proj%fproject_expanded(self%refvols(s), o, self%img_refs(iref),lp=self%pp%lp )
         if( self%pp%ctf .ne. 'no' )then
             call self%create_ctf_image(o)
             call self%img_refs(iref)%mul( self%img_ctf )

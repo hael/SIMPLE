@@ -1022,9 +1022,9 @@ select case(prg)
         if( describe ) call print_doc_cont3D
         call cline%parse(keys_required(:8), keys_optional(:16))
         ! set defaults
-        call cline%set('eo',     'yes')
-        !call cline%set('refine', 'yes')
-        call cline%set('dynlp',  'no')
+        call cline%set('eo',    'yes')
+        call cline%set('dynlp', 'no')
+        if( .not.cline%defined('nspace') )call cline%set('nspace',100.)
         if( .not.cline%defined('shellw') )call cline%set('shellw','no')
         ! execute
         call xcont3D%execute(cline)        

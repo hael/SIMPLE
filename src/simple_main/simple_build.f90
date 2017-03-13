@@ -495,8 +495,13 @@ contains
             do s=1,p%nstates
                 call self%eorecvols(s)%new(p)
             end do
+            allocate( self%refvols(p%nstates), stat=alloc_stat)
+            call alloc_err('build_cont3D_tbox; simple_build, 2', alloc_stat)
+            do s=1,p%nstates 
+                call self%refvols(s)%new([p%boxmatch,p%boxmatch,p%boxmatch],p%smpd,p%imgkind)
+            end do
         endif
-        write(*,'(A)') '>>> DONE BUILDING HADAMARD PRIME3D TOOLBOX'
+        write(*,'(A)') '>>> DONE BUILDING CONT3D TOOLBOX'
         self%cont3D_tbox_exists = .true.
     end subroutine build_cont3D_tbox
     
@@ -510,6 +515,12 @@ contains
                     call self%eorecvols(i)%kill
                 end do
                 deallocate(self%eorecvols)
+            endif
+            if( allocated(self%refvols) )then
+                do i=1,size(self%refvols)
+                    call self%refvols(i)%kill
+                end do
+                deallocate(self%refvols)
             endif
             self%cont3D_tbox_exists = .false.
         endif

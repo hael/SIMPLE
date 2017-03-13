@@ -32,7 +32,7 @@ type(find_nnimgs_distr_commander)         :: xfind_nnimgs_distr
 ! PRIME3D
 type(prime3D_init_distr_commander)        :: xprime3D_init_distr
 type(prime3D_distr_commander)             :: xprime3D_distr
-type(cont3D_distr_commander)              :: xcont3D_distr
+type(cont3D_distr_commander)             ::  xcont3D_distr
 type(shellweight3D_distr_commander)       :: xshellweight3D_distr
 type(recvol_distr_commander)              :: xrecvol_distr
 ! time-series workflows
@@ -506,9 +506,9 @@ select case(prg)
             call cline%parse( keys_required(:9), keys_optional(:16) )
         endif
         ! set defaults
-        call cline%set('dynlp', 'no')
         call cline%set('eo',    'yes')
-        !call cline%set('refine','yes')
+        call cline%set('dynlp', 'no')
+        if( .not.cline%defined('nspace') )call cline%set('nspace',100.)
         if( .not.cline%defined('shellw') )call cline%set('shellw','no')
         if( .not. cline%defined('refine') )then
              call cline%set('refine', 'no')

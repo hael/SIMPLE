@@ -847,7 +847,7 @@ contains
                         corrs     = pftcc%gencorrs(iref, iptcl)             ! In-plane correlations
                         loc       = maxloc(corrs)                           ! greedy in-plane
                         inpl_ind  = loc(1)                                  ! in-plane angle index
-                        inpl_corr = corrs(loc(1))                           ! max in plane correlation
+                        inpl_corr = corrs(inpl_ind)                         ! max in plane correlation
                     else
                         inpl_ind  = self%srch_common%inpl(cnt_glob,iref)
                         inpl_corr = self%srch_common%corr(cnt_glob,iref)
@@ -1032,6 +1032,7 @@ contains
             enddo
             iref = (state-1)*self%nprojs+self%prev_proj
             corr = pftcc%corr(iref, iptcl, self%prev_roind)
+            statecnt(state) = statecnt(state) + 1
         endif
         frac = 100.*real(self%nrefs_eval)/real(self%nstates)
         call o%set('frac', frac)

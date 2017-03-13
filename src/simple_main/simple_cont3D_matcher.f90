@@ -13,7 +13,6 @@ use simple_hadamard_common  ! us all in there
 use simple_math             ! us all in there
 use simple_cftcc_srch       ! us all in there
 use simple_cftcc_shsrch     ! us all in there
-use simple_pftcc_contsrch   ! us all in there
 implicit none
 
 public :: cont3D_exec, cont3D_shellweight, cont3D_shellweight_states
@@ -163,7 +162,7 @@ contains
         logical           :: doshellweight
         
         ! CREATE THE CARTESIAN CORRELATOR
-        if( p%refine.ne.'qcont' )call cftcc%new( b, p, cline )
+        call cftcc%new( b, p, cline )
         if( p%boxmatch < p%box )call b%vol%new([p%box,p%box,p%box],p%smpd) ! ensures correct dimensions
         
         ! SET BAND-PASS LIMIT RANGE 
@@ -196,9 +195,6 @@ contains
             case('shift')
                 p%npeaks = 3
                 call cftcc_shsrch_init(cftcc, b%img, OPT_STR, p%trs, NRESTARTS)
-            case('qcont')
-                p%npeaks = 6
-                call pftcc_contsrch_init( b, p, cline, b%img, OPT_STR, NRESTARTS )
             case DEFAULT
                 stop 'Unkwnon refinement mode; simple_cont3D_matcher'
         end select
@@ -244,9 +240,6 @@ contains
                     case('shift')
                         call cftcc_shsrch_set_state(state)
                         call cftcc_shsrch_minimize(orientation, soft_oris)
-                    case('qcont')
-                        call pftcc_contsrch_set_state(state)
-                        call pftcc_contsrch_minimize( orientation)
                     case DEFAULT
                         stop 'Unkwnon refinement mode; simple_cont3D_matcher'
                 end select
@@ -255,11 +248,7 @@ contains
                     wresamp = resample_filter(wmat(iptcl,:), res, res_pad)
                     call grid_ptcl(b, p, iptcl, cnt_glob, orientation, shellweights=wresamp)
                 else
-                    if( p%refine.eq.'qcont')then
-                        call grid_ptcl(b, p, iptcl, cnt_glob, orientation)
-                    else
-                        call grid_ptcl(b, p, iptcl, cnt_glob, orientation, soft_oris)
-                    endif
+                    call grid_ptcl(b, p, iptcl, cnt_glob, orientation, soft_oris)
                 endif
             else
                 call orientation%reject

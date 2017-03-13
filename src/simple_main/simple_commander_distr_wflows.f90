@@ -917,7 +917,7 @@ contains
         use simple_oris, only: oris
         use simple_math, only: calc_fourier_index, calc_lowpass_lim
         class(cont3D_distr_commander), intent(inout) :: self
-        class(cmdline),                 intent(inout) :: cline
+        class(cmdline),                intent(inout) :: cline
         ! constants
         logical,           parameter :: DEBUG=.false.
         character(len=32), parameter :: ALGNFBODY    = 'algndoc_'
@@ -925,7 +925,6 @@ contains
         character(len=32), parameter :: VOLFBODY     = 'recvol_state'
         character(len=32), parameter :: RESTARTFBODY = 'cont3D_restart'
         ! ! commanders
-        type(prime3D_init_distr_commander)  :: xprime3D_init_distr
         type(shellweight3D_distr_commander) :: xshellweight3D_distr
         type(recvol_distr_commander)        :: xrecvol_distr
         type(merge_algndocs_commander)      :: xmerge_algndocs
@@ -934,7 +933,6 @@ contains
         type(postproc_vol_commander)        :: xpostproc_vol
         ! command lines
         type(cmdline)                       :: cline_recvol_distr
-        type(cmdline)                       :: cline_prime3D_init
         type(cmdline)                       :: cline_check3D_conv
         type(cmdline)                       :: cline_merge_algndocs
         type(cmdline)                       :: cline_volassemble
@@ -971,11 +969,10 @@ contains
         simple_exec_bin = qscripts%get_exec_bin()
 
         ! initialise
-        if( .not. cline%defined('nspace') ) call cline%set('nspace', 1000.)
+        if( .not. cline%defined('nspace') ) call cline%set('nspace', 100.)
         call cline%set( 'box', real(p_master%box) )
         ! prepare command lines from prototype master
         cline_recvol_distr   = cline
-        cline_prime3D_init   = cline
         cline_check3D_conv   = cline
         cline_merge_algndocs = cline
         cline_volassemble    = cline
@@ -983,7 +980,6 @@ contains
         cline_postproc_vol   = cline
         ! initialise static command line parameters and static job description parameter
         call cline_recvol_distr%set( 'prg', 'recvol' )       ! required for distributed call
-        call cline_prime3D_init%set( 'prg', 'prime3D_init' ) ! required for distributed call
         call cline_shellweight3D%set('prg', 'shellweight3D') ! required for distributed call
         call cline_merge_algndocs%set( 'nthr', 1. )
         call cline_merge_algndocs%set( 'fbody',  ALGNFBODY)
@@ -1011,18 +1007,14 @@ contains
 
         ! GENERATE STARTING MODELS & ORIENTATIONS
         ! Orientations
-        if( cline%defined('oritab') )then
-            oritab=trim(p_master%oritab)
-        else
-            oritab='cont3D_startdoc.txt'
-        endif
+        oritab=trim(p_master%oritab)
         ! Models
         vol_defined = .false.
         do state = 1,p_master%nstates
             vol = 'vol' // int2str(state)
             if( cline%defined(trim(vol)) )vol_defined = .true.
         enddo
-        if( cline%defined('oritab') .and. .not.vol_defined )then
+        if( .not.vol_defined )then
             ! reconstructions needed
             call xrecvol_distr%execute( cline_recvol_distr )
             do state = 1,p_master%nstates
@@ -1061,7 +1053,7 @@ contains
             call job_descr%set( 'startit', trim(int2str(iter)) )
             call cline%set( 'startit', real(iter) )
             call qscripts%generate_scripts(job_descr, p_master%ext, myq_descr, ALGNFBODY)
-            ! PRIMED3D JOB SCHEDULING
+            ! CONT3D JOB SCHEDULING
             call qscripts%schedule_jobs
             ! ASSEMBLE ALIGNMENT DOCS
             oritab = trim(ITERFBODY)//trim(str_iter)//'.txt'    

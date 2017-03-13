@@ -277,7 +277,7 @@ contains
         if( present(os) )then
             softrec = .true.
             if( p%npeaks /= os%get_noris() )&
-                &stop 'non-congruent number of orientations.simple_hadamard_common :: grid_ptcl'
+                &stop 'non-congruent number of orientations; simple_hadamard_common :: grid_ptcl'
         endif
         if( p%npeaks>1 .and. .not.softrec )&
             stop 'need optional primesrch3D input when npeaks > 1; simple_hadamard_common :: grid_ptcl'
@@ -679,7 +679,7 @@ contains
                 ! CTF parameters have changed and ctf object and the reference central sections need to be updated
                 tfun = ctf(p%smpd, kV, cs, fraca)
                 if( present(ref) )then
-                    call pftcc%apply_ctf(tfun, dfx, dfy, angast, ref=ref)
+                    call pftcc%apply_ctf(tfun, dfx, dfy, angast, refvec=[ref,ref])
                 else
                     call pftcc%apply_ctf(tfun, dfx, dfy, angast)
                 endif
