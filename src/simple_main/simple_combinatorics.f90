@@ -138,6 +138,8 @@ contains
         real    :: scores(nrepeats), s, naccepted, norm
         nlabels = maxval(labels)
         norm    = real((nrepeats-1)*nptcls)
+        ! obtain an initial solution using a greedy appraoch
+        call greedy_init
         ! initialize scores
         do irep=1,nrepeats
             scores = score( irep )
@@ -175,14 +177,39 @@ contains
                 counts(ilab) = count(labels(:,iptcl) == ilab)
             end do
             loc = maxloc(counts)
-            do ilab=1,nlabels
-                if( ilab == loc(1) ) cycle
-                if( counts(ilab) == loc(1) ) write(*,*) 'WARNING! ambigous aggregation solution'
-            end do
             consensus(iptcl) = loc(1)
         end do
 
         contains
+
+            subroutine greedy_init
+                integer :: irep, iswap, jswap, swap_best(2)
+                real    :: smax, s
+                ! (1) we fix the first solution in its original configuration
+                ! (2) we loop over the remainding solutions
+                do irep=2,nrepeats
+                    swap_best = 0
+                    smax      = 0.
+                    ! (3) we evaluate all possible swaps for the current labeling solution (irep)
+                    do iswap=1,nlabels-1
+                        do jswap=iswap+1,nlabels
+                            call swap_labels( irep, [iswap,jswap] )
+                            ! the score is now over all pairs of solutions included in the set
+                            ! this is the greedy aspect of the initialisation
+                            s = score_pairs( irep )
+                            if( s > smax )then
+                                ! search update
+                                swap_best = [iswap,jswap]
+                                smax      = s
+                            endif
+                            ! put back labels
+                            call swap_labels( irep, [iswap,jswap] )
+                        end do
+                    end do
+                    ! (4) store the best greedy solution obtained
+                    call swap_labels( irep, swap_best )
+                end do
+            end subroutine greedy_init
 
             subroutine swap_labels( irep, rp_in )
                 integer,           intent(in) :: irep
@@ -222,6 +249,21 @@ contains
                 end do
                 !$omp end parallel do
             end function score
+
+            real function score_pairs( n )
+                integer, intent(in) :: n
+                integer :: irep, jrep, npairs
+                npairs = n*(n-1)/2
+                score_pairs = 0.
+                !$omp parallel do default(shared) private(irep,jrep) reduction(+:score_pairs) schedule(auto)
+                do irep=1,n-1
+                    do jrep=irep+1,n
+                        score_pairs = score_pairs + count(labels(irep,:) == labels(jrep,:))
+                    end do
+                end do
+                !$omp end parallel do
+                score_pairs = score_pairs/real(npairs)
+            end function score_pairs
 
     end subroutine shc_aggregation
 

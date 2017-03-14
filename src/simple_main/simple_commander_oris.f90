@@ -281,6 +281,7 @@ contains
                 call o%set(i,'state', real(consensus(i)))
             end do
             call o%write('aggregate_oris.txt')
+            return
         else
             call b%a%rnd_oris(p%trs) 
         endif
