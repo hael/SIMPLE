@@ -177,18 +177,22 @@ contains
     end subroutine exec_makedeftab
 
     subroutine exec_makeoris( self, cline )
-        use simple_ori,  only: ori
-        use simple_oris, only: oris
-        use simple_math, only: normvec
-        use simple_rnd,  only: irnd_uni, ran3
+        use simple_ori,           only: ori
+        use simple_oris,          only: oris
+        use simple_math,          only: normvec
+        use simple_rnd,           only: irnd_uni, ran3
+        use simple_combinatorics, only: aggregate
         class(makeoris_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
+        character(len=STDLEN), allocatable :: oritabs(:)
+        integer, allocatable :: labels(:,:)
         type(build)  :: b
         type(ori)    :: orientation
         type(oris)   :: o, o_even
         type(params) :: p
         real         :: e3, x, y
         integer      :: i, j, cnt, ispace, irot, class
+        integer      :: ioritab, noritabs, nl, nl1
         p = params(cline)
         call b%build_general_tbox(p, cline)
         if( cline%defined('ncls') )then
@@ -254,6 +258,26 @@ contains
                     call b%a%set_ori(cnt, orientation)
                 end do
             end do
+        else if( cline%defined('doclist') )then
+            call read_filetable(p%doclist, oritabs)
+            noritabs = size(oritabs)
+            do ioritab=1,noritabs
+                nl = nlines(oritabs(ioritab))
+                if( ioritab == 1 )then
+                    nl1 = nl
+                else
+                    if( nl /= nl1 ) stop 'nonconfoming nr of oris in oritabs;&
+                    &simple_commander_oris :: makeoris'
+                endif
+            end do
+            allocate( labels(noritabs,nl) )
+            call o%new(nl)
+            do ioritab=1,noritabs
+                call o%read(oritabs(ioritab))
+                labels(ioritab,:) = nint(o%get_all('state'))
+            end do
+            call aggregate(nl, noritabs, labels, o)
+            call o%write('aggregate_oris.txt')
         else
             call b%a%rnd_oris(p%trs) 
         endif

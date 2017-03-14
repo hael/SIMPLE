@@ -72,7 +72,7 @@ contains
         type(oris)                    :: prime3D_oris, exist_oris
         real, allocatable             :: wmat(:,:), wresamp(:), res(:), res_pad(:), corrs(:), corrs_incl(:)
         integer, allocatable          :: smpl_inds(:), inds(:), inds_incl(:)
-        logical, allocatable          :: is_rnd(:), incl(:)
+        logical, allocatable          :: incl(:)
         real                          :: w, lptmp, norm, het_corr_thresh
         integer                       :: iptcl, fnr, file_stat, s, inptcls, prev_state, istate
         integer                       :: statecnt(p%nstates), ind, thresh_ind, n_samples
@@ -132,21 +132,17 @@ contains
                 inds       = b%a%order()
                 inds_incl  = pack(inds, mask=incl)
                 corrs_incl = pack(corrs, mask=incl)
-                thresh_ind = nint( size(inds_incl)*p%het_thresh )
+                thresh_ind = nint( size(inds_incl)*(1.-p%het_thresh) )
                 het_corr_thresh = corrs_incl( inds_incl(thresh_ind) )
                 write(*,'(A,F8.2)')'>>> CORRELATION THRESHOLD:', het_corr_thresh
-                allocate(is_rnd(p%nptcls))
-                is_rnd = .false.
-                where( corrs <= het_corr_thresh )is_rnd = .true.
                 deallocate(corrs, inds, incl, inds_incl, corrs_incl)
             endif
-
             ! generate filename for memoization of particle pfts
             if( allocated(ppfts_fname) ) deallocate(ppfts_fname)
             if( p%l_distr_exec )then
                 allocate( ppfts_fname, source='ppfts_memoized_part'//int2str_pad(p%part,p%numlen)//'.bin' )
             else
-                allocate( ppfts_fname, source='ppfts_memoized'//'.bin' )
+                allocate( ppfts_fname, source='ppfts_memoized.bin' )
             endif
             ! generate projections (polar FTs)
             call preppftcc4align( b, p, cline, ppfts_fname )
@@ -243,12 +239,11 @@ contains
                             call primesrch3D%exec_prime3D_inpl_srch(pftcc, iptcl, p%lp, orientation, greedy=.false.)
                         case('het')
                             if( p%oritab .eq. '' ) stop 'cannot run the refine=het mode without input oridoc (oritab)'
-                            ! if(orientation%get('corr') < het_corr_thresh)then
-                            !     call primesrch3D%exec_prime3D_het_srch(pftcc, iptcl, orientation, statecnt, do_rnd=.true.)
-                            ! else
-                            !     call primesrch3D%exec_prime3D_het_srch(pftcc, iptcl, orientation, statecnt, do_rnd=.false.)
-                            ! endif
-                            call primesrch3D%exec_prime3D_het_srch(pftcc, iptcl, orientation, statecnt, do_rnd=is_rnd(iptcl))
+                            if(orientation%get('corr') < het_corr_thresh)then
+                                call primesrch3D%exec_prime3D_het_srch(pftcc, iptcl, orientation, statecnt, do_rnd=.true.)
+                            else
+                                call primesrch3D%exec_prime3D_het_srch(pftcc, iptcl, orientation, statecnt, do_rnd=.false.)
+                            endif
                         case('adasym')
                             if( p%oritab .eq. '' )then
                                 call primesrch3D%exec_prime3D_srch(pftcc, iptcl, p%lp)
@@ -288,6 +283,7 @@ contains
             norm = real(sum(statecnt))
             do istate=1,p%nstates
                print *, '% state ', istate, ' is ', 100.*(real(statecnt(istate))/norm)
+               print *, 'rand nptcls for state ', istate, ' is ', statecnt(istate)
             end do
         endif
         ! END DEV
@@ -439,6 +435,8 @@ contains
                 o = b%e%get_ori(iref)
                 call b%vol%fproject_polar(cnt, o, p, pftcc, expanded=.true.)
             end do
+            ! cleanup
+            call b%vol%kill_expanded
         end do
         ! bring back the original b%vol size
         if( p%boxmatch < p%box ) call b%vol%new([p%box,p%box,p%box], p%smpd)
@@ -470,12 +468,10 @@ contains
                 ! initialize
                 call b%img%init_imgpolarizer(pftcc, p%smpd)
                 progress_cnt = 0
-                cnt_glob     = 0
                 ntot         = p%top-p%fromp+1
                 do s=1,p%nstates
                     if( b%a%get_statepop(s) ==0 )then
                         ! empty state
-                        cnt_glob = cnt_glob + p%top-p%fromp + 1
                         cycle
                     endif
                     if( p%doautomsk )then
@@ -488,7 +484,6 @@ contains
                         cnt      = cnt + 1
                         o        = b%a%get_ori(iptcl)
                         istate   = nint(o%get('state'))
-                        cnt_glob = cnt_glob+1
                         if( istate /= s ) cycle
                         progress_cnt = progress_cnt + 1
                         call progress( progress_cnt, ntot )

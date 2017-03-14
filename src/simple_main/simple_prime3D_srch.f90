@@ -1032,7 +1032,6 @@ contains
             enddo
             iref = (state-1)*self%nprojs+self%prev_proj
             corr = pftcc%corr(iref, iptcl, self%prev_roind)
-            statecnt(state) = statecnt(state) + 1
         endif
         frac = 100.*real(self%nrefs_eval)/real(self%nstates)
         call o%set('frac', frac)
