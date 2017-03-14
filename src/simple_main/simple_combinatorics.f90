@@ -126,61 +126,84 @@ contains
     !     deallocate(simmat)
     ! end subroutine aggregate
 
-    subroutine shc_aggregation( nrepeats, nptcls, labels, consensus, score_out )
+    subroutine shc_aggregation( nrepeats, nptcls, labels, consensus )
         use simple_rnd, only: irnd_uni, irnd_uni_pair
         integer, intent(in)    :: nrepeats, nptcls
         integer, intent(inout) :: labels(nrepeats,nptcls), consensus(nptcls)
-        real,    intent(out)   :: score_out
         integer, parameter     :: MAXITS=1000
         real,    parameter     :: TINYTINY=1e-40
-        integer, allocatable   :: counts(:)
-        integer :: nlabels, loc(1), rp(2), it, irnd, irep, ilab, iptcl
-        real    :: scores(nrepeats), s, naccepted, norm
-        nlabels = maxval(labels)
-        norm    = real((nrepeats-1)*nptcls)
-        ! obtain an initial solution using a greedy appraoch
-        call greedy_init
-        ! initialize scores
-        do irep=1,nrepeats
-            scores = score( irep )
-        end do
-        ! stochastic hill-climbing
-        naccepted = 0.
-        do it=1,MAXITS
-            ! pick a random solution
-            irnd = irnd_uni( nrepeats )
-            ! swap a random pair of labels
-            call swap_labels( irnd )
-            ! evaluate the score
-            s = score(irnd)
-            if( s >= scores(irnd) )then
-                ! solution accepted, update scores
-                scores(irnd) = s
-                do irep=1,nrepeats
-                    if( irep == irnd ) cycle
-                    scores = score( irep )
-                end do
-                naccepted = 0.95*naccepted + 0.05
-            else
-                ! swap back
-                call swap_labels( irnd, rp )
-                naccepted = 0.95*naccepted
+        integer, allocatable   :: counts(:), labels_consensus(:,:)
+        integer :: nlabels, loc(1), rp(2), it, irnd
+        integer :: irep, ilab, iptcl, irestart
+        real    :: scores(nrepeats), s, naccepted, norm, score_best, score_curr
+        nlabels    = maxval(labels)
+        norm       = real((nrepeats-1)*nptcls)
+        score_best = 0.0
+        allocate(labels_consensus(nrepeats,nptcls),counts(nlabels))
+        do irestart=1,nrepeats
+            write(*,'(a,1x,I5)') '>>> SHC AGGREGATION, RESTART ROUND:', irestart
+            ! change the first solution in the row (will affect the greedy initial solution)
+            call change_first( irestart )
+            ! obtain an initial solution using a greedy appraoch
+            call greedy_init
+            ! initialize scores
+            do irep=1,nrepeats
+                scores = score( irep )
+            end do
+            ! stochastic hill-climbing
+            naccepted = 0.
+            do it=1,MAXITS
+                ! pick a random solution
+                irnd = irnd_uni( nrepeats )
+                ! swap a random pair of labels
+                call swap_labels( irnd )
+                ! evaluate the score
+                s = score(irnd)
+                if( s >= scores(irnd) )then
+
+                    print *, 'shc found a better solution'
+
+                    ! solution accepted, update scores
+                    scores(irnd) = s
+                    do irep=1,nrepeats
+                        if( irep == irnd ) cycle
+                        scores = score( irep )
+                    end do
+                    naccepted = 0.95*naccepted + 0.05
+                else
+                    ! swap back
+                    call swap_labels( irnd, rp )
+                    naccepted = 0.95*naccepted
+                endif
+                if( naccepted <= TINYTINY ) exit
+            end do
+            score_curr = sum(scores)/norm
+            if( score_curr > score_best )then
+                score_best = score_curr
+                labels_consensus = labels
             endif
-            if( naccepted <= TINYTINY ) exit
+            write(*,'(a,1x,f7.2)') '>>> SHC AGGREGATION, SCORE:', score_curr
         end do
-        score_out = sum(scores)/norm
-        write(*,'(a,1x,f7.2)') '>>> SHC AGGREGATION, FINAL SCORE:', score_out
+        write(*,'(a,1x,f7.2)') '>>> SHC AGGREGATION, FINAL SCORE:', score_best
         ! report the consensus solution
-        allocate(counts(nlabels))
         do iptcl=1,nptcls
             do ilab=1,nlabels
-                counts(ilab) = count(labels(:,iptcl) == ilab)
+                counts(ilab) = count(labels_consensus(:,iptcl) == ilab)
             end do
             loc = maxloc(counts)
             consensus(iptcl) = loc(1)
         end do
 
         contains
+
+            subroutine change_first( irep )
+                integer, intent(in) :: irep
+                integer :: tmp(nptcls)
+                if( irep == 1 ) return
+                tmp            = labels(1,:)
+                labels(1,:)    = labels(irep,:)
+                labels(irep,:) = tmp
+            end subroutine change_first
 
             subroutine greedy_init
                 integer :: irep, iswap, jswap, swap_best(2)
@@ -210,6 +233,21 @@ contains
                     call swap_labels( irep, swap_best )
                 end do
             end subroutine greedy_init
+
+            real function score_pairs( n )
+                integer, intent(in) :: n
+                integer :: irep, jrep, npairs
+                npairs = n*(n-1)/2
+                score_pairs = 0.
+                !$omp parallel do default(shared) private(irep,jrep) reduction(+:score_pairs) schedule(auto)
+                do irep=1,n-1
+                    do jrep=irep+1,n
+                        score_pairs = score_pairs + count(labels(irep,:) == labels(jrep,:))
+                    end do
+                end do
+                !$omp end parallel do
+                score_pairs = score_pairs/real(npairs)
+            end function score_pairs
 
             subroutine swap_labels( irep, rp_in )
                 integer,           intent(in) :: irep
@@ -249,21 +287,6 @@ contains
                 end do
                 !$omp end parallel do
             end function score
-
-            real function score_pairs( n )
-                integer, intent(in) :: n
-                integer :: irep, jrep, npairs
-                npairs = n*(n-1)/2
-                score_pairs = 0.
-                !$omp parallel do default(shared) private(irep,jrep) reduction(+:score_pairs) schedule(auto)
-                do irep=1,n-1
-                    do jrep=irep+1,n
-                        score_pairs = score_pairs + count(labels(irep,:) == labels(jrep,:))
-                    end do
-                end do
-                !$omp end parallel do
-                score_pairs = score_pairs/real(npairs)
-            end function score_pairs
 
     end subroutine shc_aggregation
 
