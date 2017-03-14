@@ -181,11 +181,11 @@ contains
         use simple_oris,          only: oris
         use simple_math,          only: normvec
         use simple_rnd,           only: irnd_uni, ran3
-        use simple_combinatorics, only: aggregate
+        use simple_combinatorics, only: shc_aggregation
         class(makeoris_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         character(len=STDLEN), allocatable :: oritabs(:)
-        integer, allocatable :: labels(:,:)
+        integer, allocatable :: labels(:,:), consensus(:)
         type(build)  :: b
         type(ori)    :: orientation
         type(oris)   :: o, o_even
@@ -270,13 +270,16 @@ contains
                     &simple_commander_oris :: makeoris'
                 endif
             end do
-            allocate( labels(noritabs,nl) )
+            allocate(labels(noritabs,nl), consensus(nl))
             call o%new(nl)
             do ioritab=1,noritabs
                 call o%read(oritabs(ioritab))
                 labels(ioritab,:) = nint(o%get_all('state'))
             end do
-            call aggregate(nl, noritabs, labels, o)
+            call shc_aggregation(noritabs, nl, labels, consensus)
+            do i=1,nl
+                call o%set(i,'state', real(consensus(i)))
+            end do
             call o%write('aggregate_oris.txt')
         else
             call b%a%rnd_oris(p%trs) 

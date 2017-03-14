@@ -641,6 +641,17 @@ contains
         win(2) = win(2)+iwinsz
     end function
 
+
+    ! iwinsz        = ceiling(winsz)
+    ! xyzrange(:,1) = nint(loc)
+    ! xyzrange(:,2) = xyzrange(:,1)
+    ! xyzrange(:,1) = xyzrange(:,1) - iwinsz
+    ! xyzrange(:,2) = xyzrange(:,2) + iwinsz
+    ! allocate(gridpoints(xyzrange(1,1):xyzrange(1,2),xyzrange(2,1):xyzrange(2,2),xyzrange(3,1):xyzrange(3,2),3))
+    ! forall(ix=xyzrange(1,1):xyzrange(1,2), iy=xyzrange(2,1):xyzrange(2,2), iz=xyzrange(3,1):xyzrange(3,2) )&
+    ! gridpoints(ix,iy,iz,:) = real([ix,iy,iz])-loc
+
+
     ! !>  \brief  three-dimensional symmetric hard window
     pure function sqwin_2d( x, y, winsz ) result( win )
         real, intent(in) :: x,y      !< input point
