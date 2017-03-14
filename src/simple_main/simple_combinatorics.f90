@@ -126,15 +126,18 @@ contains
     !     deallocate(simmat)
     ! end subroutine aggregate
 
-    subroutine shc_aggregation( nrepeats, nptcls, labels, consensus )
+    subroutine shc_aggregation( nrepeats, nptcls, labels, consensus, score_out )
         use simple_rnd, only: irnd_uni, irnd_uni_pair
         integer, intent(in)    :: nrepeats, nptcls
         integer, intent(inout) :: labels(nrepeats,nptcls), consensus(nptcls)
-        integer, parameter   :: MAXITS=1000
-        integer, allocatable :: counts(:)
+        real,    intent(out)   :: score_out
+        integer, parameter     :: MAXITS=1000
+        real,    parameter     :: TINYTINY=1e-40
+        integer, allocatable   :: counts(:)
         integer :: nlabels, loc(1), rp(2), it, irnd, irep, ilab, iptcl
-        real    :: scores(nrepeats), s, naccepted
+        real    :: scores(nrepeats), s, naccepted, norm
         nlabels = maxval(labels)
+        norm    = real((nrepeats-1)*nptcls)
         ! initialize scores
         do irep=1,nrepeats
             scores = score( irep )
@@ -155,15 +158,16 @@ contains
                     if( irep == irnd ) cycle
                     scores = score( irep )
                 end do
-                naccepted = 0.5*naccepted + 0.5
+                naccepted = 0.95*naccepted + 0.05
             else
                 ! swap back
                 call swap_labels( irnd, rp )
-                naccepted = 0.5*naccepted
+                naccepted = 0.95*naccepted
             endif
-            print *, 'naccepted: ', naccepted
-            print *, 'score: ', sum(scores)/real(nrepeats*nptcls)
+            if( naccepted <= TINYTINY ) exit
         end do
+        score_out = sum(scores)/norm
+        write(*,'(a,1x,f7.2)') '>>> SHC AGGREGATION, FINAL SCORE:', score_out
         ! report the consensus solution
         allocate(counts(nlabels))
         do iptcl=1,nptcls
@@ -171,6 +175,10 @@ contains
                 counts(ilab) = count(labels(:,iptcl) == ilab)
             end do
             loc = maxloc(counts)
+            do ilab=1,nlabels
+                if( ilab == loc(1) ) cycle
+                if( counts(ilab) == loc(1) ) write(*,*) 'WARNING! ambigous aggregation solution'
+            end do
             consensus(iptcl) = loc(1)
         end do
 
@@ -207,12 +215,12 @@ contains
             real function score( irep )
                 integer, intent(in) :: irep
                 integer :: jrep
+                score = 0.
                 !$omp parallel do default(shared) private(jrep) reduction(+:score) schedule(auto)
                 do jrep=1,nrepeats
-                    score = score + count(labels(irep,:) == labels(jrep,:))
+                    if( jrep /= irep ) score = score + count(labels(irep,:) == labels(jrep,:))
                 end do
                 !$omp end parallel do
-                score = score - nptcls
             end function score
 
     end subroutine shc_aggregation

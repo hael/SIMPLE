@@ -190,7 +190,7 @@ contains
         type(ori)    :: orientation
         type(oris)   :: o, o_even
         type(params) :: p
-        real         :: e3, x, y
+        real         :: e3, x, y, score
         integer      :: i, j, cnt, ispace, irot, class
         integer      :: ioritab, noritabs, nl, nl1
         p = params(cline)
@@ -276,7 +276,7 @@ contains
                 call o%read(oritabs(ioritab))
                 labels(ioritab,:) = nint(o%get_all('state'))
             end do
-            call shc_aggregation(noritabs, nl, labels, consensus)
+            call shc_aggregation(noritabs, nl, labels, consensus, score)
             do i=1,nl
                 call o%set(i,'state', real(consensus(i)))
             end do
