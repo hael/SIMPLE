@@ -52,96 +52,25 @@ contains
         deallocate(configs_trial, rmat, dists, tmp)
     end function diverse_labeling
 
-    ! subroutine aggregate( nptcls, nrepeats, labels, oris_out )
-    !     use simple_shc_cluster
-    !     use simple_oris, only: oris
-    !     integer,              intent(in)    :: nptcls, nrepeats, labels(nrepeats,nptcls)
-    !     class(oris),          intent(inout) :: oris_out
-    !     type(shc_cluster) :: cluster
-    !     type(oris) :: myoris
-    !     real,    allocatable :: simmat(:,:)
-    !     real    :: sim
-    !     integer :: inds(nptcls)
-    !     integer :: iptcl, jptcl, irep, icnt, jcnt, nexisting, nlabels, label
-    !     logical :: zeroes(nptcls)
-    !     ! sanity check
-    !     if( oris_out%get_noris() /= nptcls ) stop 'nonconforming number of&
-    !     &oris (oris_out); simple_combinatorics :: aggregate'
-    !     zeroes  = labels(1,:) == 0
-    !     nlabels = maxval(labels)
-    !     do iptcl=1,nptcls
-    !         icnt = count(labels(:,iptcl) == 0)
-    !         if( icnt == 0 .or. icnt == nrepeats )then
-    !             ! all good
-    !         else
-    !             stop 'the pattern of zeroes (exclusions) not consistent&
-    !             &between solutions; simple_combinatorics :: aggregate'
-    !         endif
-    !     end do
-    !     ! similarity matrix init
-    !     inds      = 0
-    !     nexisting = 0
-    !     do iptcl=1,nptcls
-    !         if( labels(1,iptcl) > 0 )then
-    !             nexisting = nexisting + 1
-    !             inds(iptcl) = nexisting
-    !         endif
-    !     enddo
-    !     allocate( simmat(nexisting,nexisting) )
-    !     simmat = 0.
-    !     icnt = 0
-    !     do iptcl=1,nptcls-1
-    !         if(inds(iptcl)==0)cycle
-    !         icnt = icnt + 1
-    !         jcnt = 0
-    !         do jptcl=iptcl+1,nptcls
-    !             if(inds(jptcl)==0)cycle
-    !             jcnt = jcnt + 1
-    !             do irep = 1,nrepeats
-    !                 if( labels(irep,iptcl) == labels(irep,jptcl) )simmat(icnt,jcnt) =simmat(icnt,jcnt)+1.
-    !             enddo
-    !         enddo
-    !     enddo
-    !     simmat = simmat / real(nrepeats)
-    !     forall(iptcl=1:nexisting)simmat(iptcl,iptcl)=1.
-    !     do iptcl=1,nexisting-1
-    !         do jptcl=iptcl+1,nexisting
-    !             simmat(jptcl,iptcl) =simmat(iptcl,jptcl)
-    !         enddo
-    !     enddo        
-    !     ! clustering
-    !     call myoris%new(nexisting)
-    !     call cluster%new( nexisting, nlabels, simmat, myoris )
-    !     call cluster%shc( .true.,'state',sim )
-    !     call cluster%kill
-    !     ! reporting
-    !     icnt = 0
-    !     do iptcl=1,nptcls
-    !         if(inds(iptcl) > 0)then
-    !             icnt = icnt + 1
-    !             label = nint(myoris%get(icnt,'state'))
-    !             call oris_out%set(iptcl,'state',real(label))
-    !         endif
-    !     enddo
-    !     deallocate(simmat)
-    ! end subroutine aggregate
-
     subroutine shc_aggregation( nrepeats, nptcls, labels, consensus )
-        use simple_rnd, only: irnd_uni, irnd_uni_pair
+        use simple_rnd,  only: irnd_uni, irnd_uni_pair
+        use simple_math, only: hpsort
         integer, intent(in)    :: nrepeats, nptcls
         integer, intent(inout) :: labels(nrepeats,nptcls), consensus(nptcls)
-        integer, parameter     :: MAXITS=1000
-        real,    parameter     :: TINYTINY=1e-40
+        integer, parameter     :: MAXITS   = 1000
+        real,    parameter     :: TINYTINY = 1e-40
+        logical, parameter     :: DOPRINT  = .false.
         integer, allocatable   :: counts(:), labels_consensus(:,:)
-        integer :: nlabels, loc(1), rp(2), it, irnd
-        integer :: irep, ilab, iptcl, irestart
-        real    :: scores(nrepeats), s, naccepted, norm, score_best, score_curr
+        integer :: nlabels, loc(1), rp(2), it, irnd, inds(nrepeats)
+        integer :: irep, ilab, iptcl, irestart, restart_winner
+        real    :: scores(nrepeats), s, naccepted, norm, score_best
+        real    :: score_curr, dists(nrepeats)
         nlabels    = maxval(labels)
         norm       = real((nrepeats-1)*nptcls)
         score_best = 0.0
         allocate(labels_consensus(nrepeats,nptcls),counts(nlabels))
         do irestart=1,nrepeats
-            write(*,'(a,1x,I5)') '>>> SHC AGGREGATION, RESTART ROUND:', irestart
+            if( DOPRINT ) write(*,'(a,1x,I5)') '>>> SHC AGGREGATION, RESTART ROUND:', irestart
             ! change the first solution in the row (will affect the greedy initial solution)
             call change_first( irestart )
             ! obtain an initial solution using a greedy appraoch
@@ -160,10 +89,7 @@ contains
                 ! evaluate the score
                 s = score(irnd)
                 if( s >= scores(irnd) )then
-
-                    print *, 'shc found a better solution'
-
-                    ! solution accepted, update scores
+                   ! solution accepted, update scores
                     scores(irnd) = s
                     do irep=1,nrepeats
                         if( irep == irnd ) cycle
@@ -179,12 +105,13 @@ contains
             end do
             score_curr = sum(scores)/norm
             if( score_curr > score_best )then
-                score_best = score_curr
+                score_best       = score_curr
                 labels_consensus = labels
+                restart_winner   = irestart
             endif
-            write(*,'(a,1x,f7.2)') '>>> SHC AGGREGATION, SCORE:', score_curr
+            if( DOPRINT ) write(*,'(a,1x,f7.2)') '>>> SHC AGGREGATION, SCORE:', score_curr
         end do
-        write(*,'(a,1x,f7.2)') '>>> SHC AGGREGATION, FINAL SCORE:', score_best
+        if( DOPRINT ) write(*,'(a,1x,f7.2)') '>>> SHC AGGREGATION, FINAL SCORE:', score_best
         ! report the consensus solution
         do iptcl=1,nptcls
             do ilab=1,nlabels
@@ -239,13 +166,11 @@ contains
                 integer :: irep, jrep, npairs
                 npairs = n*(n-1)/2
                 score_pairs = 0.
-                !$omp parallel do default(shared) private(irep,jrep) reduction(+:score_pairs) schedule(auto)
                 do irep=1,n-1
                     do jrep=irep+1,n
                         score_pairs = score_pairs + count(labels(irep,:) == labels(jrep,:))
                     end do
                 end do
-                !$omp end parallel do
                 score_pairs = score_pairs/real(npairs)
             end function score_pairs
 
@@ -262,30 +187,22 @@ contains
                             count(labels(irep,:) == rp(2)) > 0 ) exit
                     end do
                 endif
-                !$omp parallel default(shared) private(iptcl)
-                !$omp do schedule(auto)
                 do iptcl=1,nptcls
                     if( labels(irep,iptcl) == rp(2) ) labels(irep,iptcl) = nlabels + 1
                     if( labels(irep,iptcl) == rp(1) ) labels(irep,iptcl) = rp(2)
                 end do
-                !$omp end do nowait
-                !$omp do
                 do iptcl=1,nptcls
                     if( labels(irep,iptcl) == nlabels + 1 ) labels(irep,iptcl) = rp(1)
                 end do
-                !$omp end do nowait
-                !$omp end parallel
             end subroutine swap_labels
 
             real function score( irep )
                 integer, intent(in) :: irep
                 integer :: jrep
                 score = 0.
-                !$omp parallel do default(shared) private(jrep) reduction(+:score) schedule(auto)
                 do jrep=1,nrepeats
                     if( jrep /= irep ) score = score + count(labels(irep,:) == labels(jrep,:))
                 end do
-                !$omp end parallel do
             end function score
 
     end subroutine shc_aggregation
