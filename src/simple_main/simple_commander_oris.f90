@@ -190,7 +190,7 @@ contains
         type(ori)    :: orientation
         type(oris)   :: o, o_even
         type(params) :: p
-        real         :: e3, x, y, score
+        real         :: e3, x, y!, score
         integer      :: i, j, cnt, ispace, irot, class
         integer      :: ioritab, noritabs, nl, nl1
         p = params(cline)
@@ -276,7 +276,7 @@ contains
                 call o%read(oritabs(ioritab))
                 labels(ioritab,:) = nint(o%get_all('state'))
             end do
-            call shc_aggregation(noritabs, nl, labels, consensus, score)
+            call shc_aggregation(noritabs, nl, labels, consensus)
             do i=1,nl
                 call o%set(i,'state', real(consensus(i)))
             end do
@@ -536,7 +536,7 @@ contains
                     if( statepops(istate) > 0 )then
                         cnt = cnt+1
                         write(*,'(a,1x,i3,1x,a,1x,i3)') '>>> THE STATE THAT WAS FORMERLY:', istate, 'IS NOW:', cnt
-                        state_particles = nint(a_copy%get_ptcls_in_state(istate))
+                        state_particles = a_copy%get_ptcls_in_state(istate)
                         do iptcl=1,size(state_particles)
                             call b%a%set(state_particles(iptcl),'state',real(cnt))
                         end do

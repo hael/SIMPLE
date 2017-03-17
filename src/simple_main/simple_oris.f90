@@ -459,7 +459,7 @@ contains
     function get_ptcls_in_state( self, state ) result( ptcls )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: state
-        real, allocatable :: ptcls(:)
+        integer, allocatable :: ptcls(:)
         integer :: pop, mystate, cnt, alloc_stat, i
         pop = self%get_statepop(state)
         allocate( ptcls(pop), stat=alloc_stat )

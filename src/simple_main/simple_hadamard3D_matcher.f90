@@ -76,7 +76,7 @@ contains
         real                          :: w, lptmp, norm, het_corr_thresh
         integer                       :: iptcl, fnr, file_stat, s, inptcls, prev_state, istate
         integer                       :: statecnt(p%nstates), ind, thresh_ind, n_samples
-        logical                       :: doshellweight
+        logical                       :: doshellweight, dohet
 
         inptcls = p%top - p%fromp + 1
 
@@ -123,9 +123,11 @@ contains
         call setup_shellweights(b, p, doshellweight, wmat, res, res_pad)
 
         ! HETEROGEINITY
+        dohet = .false.
         if( p%refine.eq.'het' )then
             het_corr_thresh = -1.
             if( frac_srch_space<0.98 .or. p%het_thresh>0.02 )then
+                dohet = .true.
                 write(*,'(A,F8.2)')'>>> STATE RANDOMIZATION %:', 100.*p%het_thresh
                 corrs      = b%a%get_all('corr')
                 incl       = b%a%included()
@@ -279,7 +281,7 @@ contains
             endif
         end do
         ! DEV
-        if( p%refine.eq.'het')then
+        if( dohet )then
             norm = real(sum(statecnt))
             do istate=1,p%nstates
                print *, '% state ', istate, ' is ', 100.*(real(statecnt(istate))/norm)

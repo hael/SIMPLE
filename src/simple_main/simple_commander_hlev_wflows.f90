@@ -20,6 +20,7 @@ implicit none
 
 public :: iterated_spectral_weights_commander
 public :: ini3D_from_cavgs_commander
+public :: het_ensemble_commander
 private
 
 type, extends(commander_base) :: iterated_spectral_weights_commander
@@ -30,6 +31,10 @@ type, extends(commander_base) :: ini3D_from_cavgs_commander
   contains
     procedure :: execute      => exec_ini3D_from_cavgs
 end type ini3D_from_cavgs_commander
+type, extends(commander_base) :: het_ensemble_commander
+  contains
+    procedure :: execute      => exec_het_ensemble
+end type het_ensemble_commander
 
 contains
 
@@ -366,5 +371,156 @@ contains
             end subroutine update_lp
 
     end subroutine exec_ini3D_from_cavgs
+
+
+    ! ENSEMBLE HETEROGEINITY ANALYSIS
+
+    subroutine exec_het_ensemble( self, cline )
+        !use simple_commander_rec,     only: recvol_commander
+        use simple_strings,           only: int2str_pad
+        use simple_oris,              only: oris
+        use simple_combinatorics,     only: diverse_labeling, shc_aggregation
+        use simple_filehandling,      only: file_exists, del_file
+        class(het_ensemble_commander), intent(inout) :: self
+        class(cmdline),                intent(inout) :: cline
+        ! constants
+        logical,               parameter :: DEBUG=.false.
+        integer,               parameter :: MAXITS_INIT=50, NREPEATS=2
+        character(len=32),     parameter :: HETFBODY    = 'hetrep_'
+        character(len=32),     parameter :: REPEATFBODY = 'hetdoc_'
+        character(len=32),     parameter :: VOLFBODY    = 'recvol_state'
+        ! distributed commanders
+        type(prime3D_distr_commander) :: xprime3D_distr
+        ! shared-mem commanders
+        ! type(recvol_commander)        :: xrecvol
+        ! command lines
+        type(cmdline)                 :: cline_prime3D_master
+        type(cmdline)                 :: cline_prime3D
+        !type(cmdline)                 :: cline_recvol
+        ! other variables
+        type(params)                  :: p_master
+        type(oris)                    :: os, rep_os
+        integer, allocatable          :: labels(:,:), labels_incl(:,:), consensus(:)
+        logical, allocatable          :: included(:)
+        character(len=STDLEN)         :: oritab, vol1, vol2, fname
+        integer                       :: irepeat, state, iter, n_incl, cnt, iptcl, it
+        ! set cline defaults
+        call cline%set('eo', 'no')
+        if(nint(cline%get_rarg('nstates')) <= 1)stop 'Non-sensical NSTATES argument for heterogeinity analysis!'
+
+        ! make master parameters
+        p_master = params(cline, checkdistr=.false.)
+
+        ! delete possibly pre-existing stack & pft parts
+        call del_files('stack_part', p_master%nparts, ext=p_master%ext)
+        call del_files('ppfts_memoized_part', p_master%nparts, ext='.bin')
+
+        ! prepare command lines from prototype master
+        cline_prime3D_master = cline
+        call cline_prime3D_master%set('prg', 'prime3D')
+        call cline_prime3D_master%set('startit', 1.)
+        !call cline_prime3D_master%set('maxits', real(MAXITS_INIT))
+        call cline_prime3D_master%set('maxits', 1.)
+        call cline_prime3D_master%set('refine', 'het')
+        call cline_prime3D_master%set('dynlp', 'no')
+        call cline_prime3D_master%set('lp', p_master%lp) 
+        !cline_recvol         = cline
+
+        ! GENERATE DIVERSE INITIAL LABELS
+        write(*,'(A)') '>>>'
+        write(*,'(A)') '>>> GENERATE DIVERSE LABELING'
+        write(*,'(A)') '>>>'
+        call os%new(p_master%nptcls)
+        call os%read(p_master%oritab)
+        labels   = diverse_labeling( p_master%nptcls, p_master%nstates, NREPEATS)
+        included = os%included()
+        n_incl   = count(included)
+        do irepeat=1,NREPEATS
+            where( .not.included )labels(irepeat,:) = 0
+        enddo
+
+        ! GENERATE CANDIDATE SOLUTIONS
+        do irepeat = 1,NREPEATS
+            write(*,'(A)') '>>>'
+            write(*,'(A,I3)') '>>> PRIME3D REPEAT ', irepeat
+            write(*,'(A)') '>>>'
+            ! GENERATE ORIENTATIONS
+            rep_os = os
+            call rep_os%set_all('state', real(labels(irepeat,:)))
+            oritab = trim(REPEATFBODY)//'init_rep'//int2str_pad(irepeat,2)//'.txt'
+            call rep_os%write(trim(oritab))
+            ! RUN PRIME3D
+            cline_prime3D = cline_prime3D_master
+            call cline_prime3D%set('oritab',oritab)
+            call xprime3D_distr%execute(cline_prime3D)
+            ! HARVEST OUTCOME
+            iter   = nint(cline_prime3D%get_rarg('endit'))
+            oritab = 'prime3Ddoc_'//int2str_pad(iter,3)//'.txt'
+            call rep_os%read(trim(oritab))
+            ! updates labels
+            labels(irepeat,:) = nint(rep_os%get_all('state'))
+            ! stash candidate solution
+            fname = trim(REPEATFBODY)//'rep'//int2str_pad(irepeat,2)//'.txt'
+            call rename(trim(oritab), trim(fname))
+            ! STASH FINAL VOLUMES
+            call stash_volumes
+            ! CLEANUP
+            call prime3d_cleanup
+        enddo
+
+        ! GENERATE CONSENSUS DOCUMENT
+        oritab = trim(REPEATFBODY)//'consensus.txt'
+        write(*,'(A)') '>>>'
+        write(*,'(A,A)') '>>> GENERATE ENSEMBLE SOLUTION: ', trim(oritab)
+        write(*,'(A)') '>>>'
+        allocate( labels_incl(NREPEATS,n_incl), consensus(n_incl) )
+        do irepeat=1,NREPEATS
+            labels_incl(irepeat,:) = pack(labels(irepeat,:), mask=included)
+        enddo
+        labels(1,:) = 0
+        call shc_aggregation( NREPEATS, n_incl, labels_incl, consensus )
+        call os%set_all('state', real(unpack(consensus, included, labels(1,:))) )
+        call os%write(trim(oritab))
+        ! should reconstruct here?
+
+        contains
+
+            subroutine prime3d_cleanup
+                ! delete starting volumes
+                do state=1,p_master%nstates
+                    vol1 = 'startvol_state'//int2str_pad(state,2)//p_master%ext
+                    if(file_exists(vol1))call del_file(vol1)
+                enddo
+                ! delete iterations volumes & documents
+                do it=1,iter-1
+                    do state=1,p_master%nstates
+                        vol1 = trim(VOLFBODY)//int2str_pad(state,2)//'_iter'//int2str_pad(it,3)//p_master%ext
+                        if(file_exists(vol1))call del_file(vol1)
+                        vol1 = trim(VOLFBODY)//int2str_pad(state,2)//'_iter'//int2str_pad(it,3)//'pproc'//p_master%ext
+                        if(file_exists(vol1))call del_file(vol1)
+                    enddo
+                    oritab = 'prime3Ddoc_'//int2str_pad(it,3)//'.txt'
+                    if(file_exists(oritab))call del_file(oritab)
+                enddo
+                ! delete restart documents
+                do it=1,iter
+                    fname = 'prime3D_restart_iter'//int2str_pad(it,3)//'.txt'
+                    if(file_exists(fname))call del_file(fname)
+                enddo
+            end subroutine prime3d_cleanup
+
+            subroutine stash_volumes
+                ! renames final volumes of each repeat for all states
+                do state=1,p_master%nstates
+                    vol1 = trim(VOLFBODY)//int2str_pad(state,2)//'_iter'//int2str_pad(iter,3)//p_master%ext
+                    vol2 = trim(HETFBODY)//int2str_pad(irepeat,2)//'_'//trim(VOLFBODY)//int2str_pad(state,2)//p_master%ext
+                    call rename(trim(vol1), trim(vol2))
+                    vol1 = trim(VOLFBODY)//int2str_pad(state,2)//'_iter'//int2str_pad(iter,3)//'pproc'//p_master%ext
+                    vol2 = trim(HETFBODY)//int2str_pad(irepeat,2)//'_'//trim(VOLFBODY)//int2str_pad(state,2)//'pproc'//p_master%ext
+                    call rename(trim(vol1), trim(vol2))
+                enddo
+            end subroutine stash_volumes
+
+    end subroutine exec_het_ensemble
 
 end module simple_commander_hlev_wflows

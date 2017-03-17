@@ -461,7 +461,14 @@ contains
                 endif
             endif
             p%find = int((real(p%box-1)*p%smpd)/p%lp)
-            if( p%refine.eq.'het' ) p%het_thresh = HETINITTHRESH / p%rrate
+            if( p%refine.eq.'het' )then
+                if( cline%defined('het_thresh'))then
+                    ! all is well
+                else
+                    ! starts from the top
+                    p%het_thresh = HETINITTHRESH / p%rrate
+                endif        
+            endif
             startit = 1
             if( cline%defined('startit') ) startit = p%startit
             do i=startit,p%maxits

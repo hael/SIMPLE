@@ -242,7 +242,7 @@ contains
         numlen = len(int2str(p%nstates))
         do istate=1,p%nstates
             if( debug ) print *, 'processing state: ', istate
-            ptcls = nint(b%a%get_ptcls_in_state(istate))
+            ptcls = b%a%get_ptcls_in_state(istate)
             vol_avg = 0.
             do ivol=1,size(ptcls)
                 call b%vol%read(volnames(ptcls(ivol)))

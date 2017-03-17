@@ -768,7 +768,12 @@ contains
 
         ! HETEROGEINITY SPECIFICS
         if( p_master%refine.eq.'het' )then
-            p_master%het_thresh = HETINITTHRESH / p_master%rrate
+            if( cline%defined('het_thresh') )then
+                ! all is well
+            else
+                ! start from the top
+                p_master%het_thresh = HETINITTHRESH / p_master%rrate
+            endif
         endif
 
         ! prepare Prime3D job description
@@ -900,6 +905,9 @@ contains
             call cline%write( restart_file )
         end do
         call qsys_cleanup(p_master)
+        ! RESTART
+        restart_file = trim(RESTARTFBODY)//'_iter'//int2str_pad( iter, 3)//'.txt'
+        call cline%write( restart_file )
         ! report the last iteration on exit
         call cline%delete( 'startit' )
         call cline%set('endit', real(iter))

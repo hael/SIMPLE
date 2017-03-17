@@ -40,6 +40,7 @@ type(tseries_track_distr_commander)       :: xtseries_track_distr
 ! high-level workflows
 type(iterated_spectral_weights_commander) :: xisw_distr
 type(ini3D_from_cavgs_commander)          :: xini3D_from_cavgs
+type(het_ensemble_commander)              :: xhet_ensemble
 
 ! OTHER DECLARATIONS
 integer, parameter    :: MAXNKEYS=100, KEYLEN=32
@@ -691,6 +692,36 @@ select case(prg)
         call cline%parse(keys_required(:6), keys_optional(:14))
         ! execute
         call xini3D_from_cavgs%execute( cline )
+    case( 'het_ensemble' )
+        !==Program het_ensemble
+        !
+        ! <het_ensemble/begin><het_ensemble/end> 
+        !
+        ! set required keys
+        keys_required(1)  = 'stk'
+        keys_required(2)  = 'smpd'
+        keys_required(3)  = 'msk'
+        keys_required(4)  = 'pgrp'
+        keys_required(5)  = 'nthr'
+        keys_required(6)  = 'nparts'
+        keys_required(7)  = 'ctf'
+        keys_required(8)  = 'nstates'
+        keys_required(9)  = 'lp'
+        ! set optional keys
+        keys_optional(1)  = 'frac'
+        keys_optional(2)  = 'automsk'
+        keys_optional(3)  = 'mw'
+        keys_optional(4)  = 'amsklp'
+        keys_optional(5)  = 'edge'
+        keys_optional(6) = 'binwidth'
+        keys_optional(7) = 'inner'
+        keys_optional(8) = 'width'
+        keys_optional(9) = 'nspace'
+        ! parse command line
+        ! if( describe ) call print_doc_ini3D_from_cavgs
+        call cline%parse(keys_required(:9), keys_optional(:9))
+        ! execute
+        call xhet_ensemble%execute( cline )
     case DEFAULT
         write(*,'(a,a)') 'program key (prg) is: ', trim(prg)
         stop 'unsupported program'
