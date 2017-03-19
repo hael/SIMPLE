@@ -20,7 +20,7 @@ implicit none
 public :: oris, test_oris
 private
 
-!>  \brief  aggregates ori obejcts
+!>  \brief  aggregates ori objects
 type :: oris
     private
     type(ori), allocatable :: o(:)
@@ -2218,7 +2218,7 @@ contains
         end do
     end subroutine find_closest_projs
 
-    !>  \brief  to find the closest matching orientation
+    !>  \brief  to find the closest matching orientation with respect to state
     function find_closest_ori( self, o_in, state ) result( closest )
         class(oris),       intent(inout) :: self
         class(ori),        intent(in) :: o_in

@@ -944,7 +944,6 @@ contains
                     self%nrefs_eval = self%nrefs_eval+1                       ! updates fractional search space
                 endif
             end subroutine per_ref_srch
-
     end subroutine stochastic_srch_shc
 
     subroutine stochastic_srch_inpl( self, pftcc, iptcl, o )
@@ -996,7 +995,7 @@ contains
         call self%inpl_srch( iptcl )                                    ! performs in-plane search
     end subroutine stochastic_srch_inpl
 
-     subroutine stochastic_srch_het( self, pftcc, iptcl, o, statecnt, do_rnd )
+    subroutine stochastic_srch_het( self, pftcc, iptcl, o, statecnt, do_rnd )
         use simple_rnd, only: shcloc, irnd_uni
         class(prime3D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
@@ -1316,7 +1315,6 @@ contains
             enddo
         enddo
     end subroutine gen_symneigh
-
 
     subroutine stochastic_weights( self, wcorr, os )
         class(prime3D_srch), intent(inout) :: self

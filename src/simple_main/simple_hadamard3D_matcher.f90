@@ -69,11 +69,11 @@ contains
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: update_res, converged
-        type(oris)                    :: prime3D_oris, exist_oris
+        type(oris)                    :: prime3D_oris
         real, allocatable             :: wmat(:,:), wresamp(:), res(:), res_pad(:), corrs(:), corrs_incl(:)
-        integer, allocatable          :: smpl_inds(:), inds(:), inds_incl(:)
+        integer, allocatable          :: inds(:), inds_incl(:)
         logical, allocatable          :: incl(:)
-        real                          :: w, lptmp, norm, het_corr_thresh
+        real                          :: norm, het_corr_thresh
         integer                       :: iptcl, fnr, file_stat, s, inptcls, prev_state, istate
         integer                       :: statecnt(p%nstates), ind, thresh_ind, n_samples
         logical                       :: doshellweight, dohet

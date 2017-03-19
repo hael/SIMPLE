@@ -1022,9 +1022,17 @@ select case(prg)
         if( describe ) call print_doc_cont3D
         call cline%parse(keys_required(:8), keys_optional(:16))
         ! set defaults
-        call cline%set('eo',    'yes')
         call cline%set('dynlp', 'no')
-        if( .not.cline%defined('nspace') )call cline%set('nspace',100.)
+        if( cline%defined('eo') )then
+            if( cline%get_carg('eo').eq.'yes')then
+                if( cline%defined('lp') )stop 'Low-pass cannot be set with EO=YES'
+            else
+                if( .not.cline%defined('lp'))stop 'Low-pass must be defined with EO=NO'
+            endif
+        else
+            call cline%set('eo','no')
+        endif
+        if( .not.cline%defined('nspace') )call cline%set('nspace',10000.)
         if( .not.cline%defined('shellw') )call cline%set('shellw','no')
         ! execute
         call xcont3D%execute(cline)        

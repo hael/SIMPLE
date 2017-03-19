@@ -137,7 +137,6 @@ contains
         call o%set('dist_inpl', 0.) ! todo
         ! all the other stuff
         call o%set( 'frac',  100. ) ! todo
-        call o%set( 'mirr',  0. )
         call o%set( 'sdev',  0. ) !todo
     end subroutine cftcc_srch_minimize
 

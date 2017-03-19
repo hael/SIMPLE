@@ -17,12 +17,13 @@ private
 
 type sym
     private
-    character(len=3)              :: pgrp='c1'             !< point-group symmetry
-    integer                       :: n=1, ncsym=1, ndsym=1 !< nr of symmetry ops
-    integer                       :: t_or_o=0              !< tetahedral or octahedral symmetry
-    logical                       :: c_or_d=.false.        !< c- or d-symmetry
     type(oris)                    :: e_sym                 !< symmetry eulers
     character(len=3), allocatable :: subgrps(:)            !< subgroups
+    real                          :: eullims(3,2)= 0.      !< euler angles limits (asymetric unit)
+    integer                       :: n=1, ncsym=1, ndsym=1 !< nr of symmetry ops
+    integer                       :: t_or_o=0              !< tetahedral or octahedral symmetry
+    character(len=3)              :: pgrp='c1'             !< point-group symmetry
+    logical                       :: c_or_d=.false.        !< c- or d-symmetry
   contains
     procedure          :: new
     procedure          :: srchrange
@@ -30,12 +31,15 @@ type sym
     procedure          :: get_nsym
     procedure          :: get_pgrp
     procedure          :: apply
-    procedure          :: get_symori
     procedure          :: apply2all
+    procedure          :: rot_to_asym
+    procedure          :: get_symori
     procedure          :: get_nsubgrp
     procedure          :: get_subgrp
     procedure          :: get_all_subgrps
+    procedure          :: within_asymunit
     procedure          :: write
+    procedure, private :: build_srchrange
     procedure, private :: make_c_and_d
     procedure, private :: make_t
     procedure, private :: make_o
@@ -119,10 +123,11 @@ contains
         endif
         call self%e_sym%swape1e3
         call self%set_subgrps
+        self%eullims = self%build_srchrange()
     end subroutine new
 
-    !>  \brief  returns the search range for the point-group
-    function srchrange( self ) result( eullims )
+    !>  \brief  builds the search range for the point-group
+    function build_srchrange( self ) result( eullims )
         use simple_ori, only: ori
         class(sym), intent(inout) :: self
         real                      :: eullims(3,2)
@@ -144,6 +149,14 @@ contains
             eullims(1,2) = 180.
             eullims(2,2) = 31.7
         endif
+    end function build_srchrange
+
+    !>  \brief  returns the search range for the point-group
+    function srchrange( self ) result( eullims )
+        use simple_ori, only: ori
+        class(sym), intent(inout) :: self
+        real                      :: eullims(3,2)
+        eullims = self%eullims
     end function srchrange
     
     !>  \brief  to check which point-group symmetry 
@@ -273,7 +286,25 @@ contains
         e_tmp   = e_symop.compose.e_in
         call e_sym%set_euler(e_tmp%get_euler())
     end function apply
-    
+
+    !>  \brief  rotates any orientation to the asymmetric unit
+    subroutine rot_to_asym( self, osym )
+        use simple_ori, only: ori
+        class(sym), intent(inout) :: self
+        class(ori), intent(inout) :: osym
+        type(ori) :: oasym
+        integer   :: nsym
+        if( self%within_asymunit(osym) )then
+            ! already in asymetric unit
+        else
+            do nsym=2,self%n     ! nsym=1 is the identity operator
+                oasym = self%apply(osym, nsym)
+                if( self%within_asymunit(oasym) )exit
+            enddo
+            osym = oasym
+        endif
+    end subroutine rot_to_asym
+
     !>  \brief  is a getter 
     function get_symori( self, symop ) result( e_sym )
         use simple_ori, only: ori
@@ -286,7 +317,7 @@ contains
     !>  \brief  is a symmetry adaptor
     subroutine apply2all( self, e_in )
         use simple_ori, only: ori
-        class(sym), intent(inout)  :: self
+        class(sym),  intent(inout) :: self
         class(oris), intent(inout) :: e_in
         type(ori)                  :: orientation
         integer                    :: j, cnt
@@ -298,7 +329,25 @@ contains
             if( cnt == self%n ) cnt = 0
         end do
     end subroutine apply2all
-    
+
+    !>  \brief  whether or not an orientation falls within the asymetric unit
+    function within_asymunit( self, o )result( is_within )
+        use simple_ori, only: ori
+        class(sym), intent(inout) :: self
+        class(ori), intent(in)    :: o
+        logical :: is_within
+        real    :: euls(3)
+        euls = o%get_euler()
+        is_within = .false.
+        if( euls(1)<self%eullims(1,1) )return
+        if( euls(1)>=self%eullims(1,2) )return
+        if( euls(2)<self%eullims(2,1) )return
+        if( euls(2)>=self%eullims(2,2) )return
+        if( euls(3)<self%eullims(3,1) )return
+        if( euls(3)>=self%eullims(3,2) )return
+        is_within = .true.
+    end function within_asymunit
+
     !>  \brief  4 writing the symmetry orientations 2 file
     subroutine write( self, orifile )
         class(sym), intent(inout)    :: self

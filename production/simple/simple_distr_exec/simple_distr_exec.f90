@@ -507,18 +507,13 @@ select case(prg)
             call cline%parse( keys_required(:9), keys_optional(:16) )
         endif
         ! set defaults
-        call cline%set('eo',    'yes')
-        call cline%set('dynlp', 'no')
-        if( .not.cline%defined('nspace') )call cline%set('nspace',100.)
-        if( .not.cline%defined('shellw') )call cline%set('shellw','no')
-        if( .not. cline%defined('refine') )then
-             call cline%set('refine', 'no')
-        else
-            if( cline%get_carg('refine').eq.'het' )then
-                if( .not. cline%defined('nstates') ) stop 'refine=HET requires specification of NSTATES'
-                if( .not. cline%defined('oritab')  ) stop 'refine=HET requires ORITAB input'
-            endif
+        if( .not. cline%defined('eo') )then
+            call cline%set('eo', 'no')
         endif
+        call cline%set('dynlp', 'no')
+        if(.not.cline%defined('nspace'))call cline%set('nspace', 10000.)
+        if(.not.cline%defined('shellw'))call cline%set('shellw', 'no')
+        if(.not.cline%defined('refine'))call cline%set('refine', 'no')
         ! execute
         call xcont3D_distr%execute(cline)
     case('shellweight3D')

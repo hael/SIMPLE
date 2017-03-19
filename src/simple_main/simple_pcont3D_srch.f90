@@ -3,36 +3,36 @@ use simple_defs
 use simple_params,           only: params
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_pftcc_shsrch      ! use all in there
-use simple_prime_srch,       only: prime_srch
 use simple_oris,             only: oris
 use simple_ori,              only: ori
-use simple_ctf,              only: ctf
 use simple_math              ! use all in there
 implicit none
 
 public :: pcont3D_srch
 private
 
-real,    parameter :: E3HALFWINSZ = 60.      !< in-plane angle half window size 
+real,    parameter :: E3HALFWINSZ = 90. !< in-plane angle half window size
 logical, parameter :: debug = .false.
 
 type pcont3D_srch
     private
-    class(params),           pointer :: pp     => null()            !< pointer to parameters
-    class(oris),             pointer :: pe     => null()            !< references orientations
-    class(polarft_corrcalc), pointer :: ppftcc => null()
-    type(prime_srch) :: srch_common             !< functionalities common to primesrch2D/3D
-    type(oris)       :: reforis                 !< per ptcl search space and result of euler angles search
-    type(oris)       :: softoris
-    type(oris)       :: shiftedoris
-    type(ori)        :: orientation_in
-    type(ori)        :: orientation_out
-    real             :: lims(2,2)      = 0.
-    integer          :: nstates        = 0      !< number states
-    integer          :: neff_states    = 0      !< number of existing states (eg non empty)
-    integer          :: npeaks         = 0
-    integer          :: nrefs_per_ptcl = 0      !< number of references per particle
-    logical          :: exists = .false.
+    class(polarft_corrcalc), pointer :: ppftcc => null()    !< polar fourier correlation calculator
+    type(oris) :: reforis             !< per ptcl search space and result of euler angles search
+    type(oris) :: softoris            !< reference returned
+    type(oris) :: shiftedoris         !< reference whise shifts are searched
+    type(ori)  :: orientation_in      !< input orientation
+    type(ori)  :: orientation_out     !< best orientation found
+    real       :: lims(2,2)  = 0.     !< shift search limits
+    real       :: prev_corr  = -1.    !< previous correlation
+    integer    :: prev_ref   = 0      !< previous reference
+    integer    :: prev_roind = 0      !< previous in-plane rotational index
+    integer    :: nstates    = 0      !< number states
+    integer    :: nbetter    = 0      !< number of improving references found
+    integer    :: neval      = 0      !< number of references evaluated
+    integer    :: npeaks     = 0      !< number of references returned
+    integer    :: nrefs      = 0      !< number of references in search space
+    integer    :: nrots      = 0      !< number of in-plane rotations
+    logical    :: exists = .false.
   contains
     ! CONSTRUCTOR
     procedure          :: new
@@ -54,29 +54,31 @@ contains
     !>  \brief  is a constructor
     subroutine new( self, p, o_in, e, pftcc )
         class(pcont3D_srch),             intent(inout) :: self  !< instance
-        class(params),           target, intent(in)    :: p     !< parameters
-        class(ori),              target, intent(inout) :: o_in  !< builder
-        class(oris),             target, intent(in)    :: e     !< builder
+        class(params),                   intent(in)    :: p     !< parameters
+        class(ori),                      intent(in)    :: o_in  !< 
+        class(oris),                     intent(in)    :: e     !< 
         class(polarft_corrcalc), target, intent(in)    :: pftcc
         ! destroy possibly pre-existing instance
         call self%kill
         ! set constants
-        self%pp     => p 
-        self%pe     => e
-        self%ppftcc => pftcc
-        self%npeaks         = self%pp%npeaks
-        self%lims(:,1)      = -self%pp%trs
-        self%lims(:,2)      = self%pp%trs
-        self%nstates        = self%pp%nstates
-        self%nrefs_per_ptcl = self%ppftcc%get_nrefs()
+        self%ppftcc    => pftcc
+        self%reforis   = e
+        self%npeaks    = p%npeaks
+        self%lims(:,1) = -p%trs
+        self%lims(:,2) =  p%trs
+        self%nstates   = p%nstates
+        self%nrefs     = self%ppftcc%get_nrefs()
+        self%nrots     = self%ppftcc%get_nrots()
+        if( self%reforis%get_noris().ne.self%nrefs )&
+            &stop 'Inconsistent number of references & orientations'
         ! orientations
         self%orientation_in  = o_in
-        self%orientation_out = self%orientation_in
-        call self%reforis%new( self%nrefs_per_ptcl )
         call self%shiftedoris%new(self%npeaks)
-        call self%softoris%new( self%npeaks )
+        call self%softoris%new(self%npeaks)
         ! other stuff
-        self%srch_common = prime_srch(self%pp, self%nrefs_per_ptcl, self%ppftcc%get_nrots())
+        self%prev_roind = self%ppftcc%get_roind(360.-o_in%e3get())
+        self%prev_ref   = self%reforis%find_closest_proj(self%orientation_in) ! state not taken into account
+        self%prev_corr  = self%ppftcc%corr(self%prev_ref, 1, self%prev_roind) ! state not taken into account
         ! done
         self%exists = .true.
         if( debug ) write(*,'(A)') '>>> PCONT3D_SRCH::CONSTRUCTED NEW SIMPLE_PCONT3D_SRCH OBJECT'
@@ -98,26 +100,46 @@ contains
 
     !>  \brief  performs euler angles search
     subroutine do_refs_srch( self )
+        use simple_ran_tabu
         class(pcont3D_srch), intent(inout) :: self
         integer, allocatable :: roind_vec(:)    ! slice of in-plane angles
-        type(ori) :: o
-        real      :: corrs( self%ppftcc%get_nrots() )
-        integer   :: loc(1), iref, inpl_ind
+        type(ran_tabu) :: rt
+        real           :: corrs(self%nrots), e3, inpl_corr
+        integer        :: loc(1), i, iref, inpl_ind, srch_order(self%nrefs)
         ! init
-        corrs = -1.
-        !roind_vec = self%ppftcc%get_win_roind(360.-self%orientation_in%e3get(), E3HALFWINSZ)
+        self%nbetter = 0
+        self%neval   = 0
+        srch_order   = (/ (i,i=1,self%nrefs) /)
+        rt = ran_tabu(self%nrefs)
+        call rt%shuffle( srch_order )
+        roind_vec = self%ppftcc%get_win_roind(360.-self%orientation_in%e3get(), E3HALFWINSZ)
         ! search
-        do iref = 1,self%nrefs_per_ptcl
-            o        = self%pe%get_ori( iref )
-            corrs    = self%ppftcc%gencorrs(iref, 1)
-            loc      = maxloc(corrs)     
-            inpl_ind = loc(1)                                  
-            call o%set( 'corr', corrs(inpl_ind) )
-            call o%e3set( 360.-self%srch_common%rot(inpl_ind) )
-            call self%reforis%set_ori( iref, o )
+        do i = 1,self%nrefs
+            iref = srch_order(i)
+            if(iref == self%prev_ref)cycle
+            self%neval = self%neval+1
+            corrs      = self%ppftcc%gencorrs(iref, 1, roind_vec=roind_vec)
+            loc        = maxloc(corrs)     
+            inpl_ind   = loc(1)
+            inpl_corr  = corrs(inpl_ind)
+            e3         = 360. - self%ppftcc%get_rot(inpl_ind)
+            call self%reforis%set(iref, 'corr', inpl_corr)
+            call self%reforis%e3set(iref, e3)
+            if(inpl_corr >= self%prev_corr)self%nbetter = self%nbetter+1
+            if(self%nbetter >= self%npeaks)exit
         enddo
-        ! done
-        !deallocate( roind_vec )
+        if( self%nbetter<self%npeaks )then
+            ! add previous reference to the list
+            corrs     = self%ppftcc%gencorrs(self%prev_ref, 1, roind_vec=roind_vec)
+            loc       = maxloc(corrs)     
+            inpl_ind  = loc(1)
+            e3        = 360. - self%ppftcc%get_rot(inpl_ind)
+            call self%reforis%set(self%prev_ref, 'corr', corrs(inpl_ind))
+            call self%reforis%e3set(self%prev_ref, e3)
+            self%nbetter = self%nbetter+1
+            self%neval   = self%nrefs
+        endif            
+        deallocate( roind_vec )
         if(debug)write(*,*)'simple_pcont3d_srch::do_refs_srch done'
     end subroutine do_refs_srch
 
@@ -125,40 +147,36 @@ contains
     subroutine do_shift_srch( self )
         use simple_pftcc_shsrch      ! use all in there
         class(pcont3D_srch), intent(inout) :: self
-        integer, allocatable :: inds(:)
-        real,    allocatable :: corrs(:)
-        type(ori) :: o
-        real      :: cxy(3), shift_vec(2), corr
-        integer   :: i, iref, inpl_ind
-        shift_vec = self%orientation_in%get_shift()
-        call pftcc_shsrch_init(self%ppftcc, self%lims)
-        ! SELECT BEST NPEAKS ORIENTATIONS
-        allocate(inds(self%nrefs_per_ptcl))
-        inds  = (/ (i, i=1,self%nrefs_per_ptcl) /)
+        real, allocatable :: corrs(:)
+        type(ori)         :: o
+        real              :: cxy(3), prev_shift_vec(2), corr
+        integer           :: ref_inds(self%nrefs), i, iref, inpl_ind, cnt
+        ! SORT ORIENTATIONS
+        ref_inds = (/ (i,i=1,self%nrefs) /)
         corrs = self%reforis%get_all('corr')
-        if( any(corrs<-.5) )then
-            print *, 'Invalid correlation in simple_pcont3D_srch::do_shift_srch', corrs
-        endif
-        call hpsort( self%nrefs_per_ptcl, corrs, inds )
+        call hpsort(self%nrefs, corrs, ref_inds)
         ! SHIFT SEARCH
-        do i = 1,self%npeaks
-            iref     = inds( self%nrefs_per_ptcl-i+1 )   ! per ptcl ref index
-            o        = self%reforis%get_ori( iref )
+        call pftcc_shsrch_init(self%ppftcc, self%lims)
+        prev_shift_vec = self%orientation_in%get_shift()
+        cnt = 0
+        do i = self%nrefs-self%npeaks+1,self%nrefs
+            cnt      = cnt+1
+            iref     = ref_inds(i)
+            o        = self%reforis%get_ori(iref)
             corr     = o%get('corr')
-            !inpl_ind = self%srch_common%roind( o%e3get() )
-            inpl_ind = self%srch_common%roind( 360.-o%e3get() )
+            inpl_ind = self%ppftcc%get_roind(360.-o%e3get())
             call pftcc_shsrch_set_indices(iref, 1, inpl_ind)
             cxy = pftcc_shsrch_minimize()
-            if( cxy(1) >= corr )then
+            if(cxy(1) >= corr)then
                 call o%set('corr', cxy(1))
-                call o%set_shift(cxy(2:) + shift_vec)
+                call o%set_shift(cxy(2:) + prev_shift_vec)
             else
-                call o%set_shift(shift_vec)
+                call o%set_shift(prev_shift_vec)
             endif
-            call self%shiftedoris%set_ori( i, o )
+            call self%shiftedoris%set_ori(cnt, o)
         enddo
-        ! done
-        deallocate( inds, corrs )
+        ! done        
+        deallocate(corrs)
         if(debug)write(*,*)'simple_pcont3d_src::do_shift_srch done'
     end subroutine do_shift_srch
 
@@ -168,74 +186,69 @@ contains
         real,    allocatable :: corrs(:)
         integer, allocatable :: inds(:)
         type(ori) :: o
-        real      :: ws(self%npeaks)
-        real      :: frac, dist, maxdist, wcorr, euldist, sdev
-        real      :: mi_class, mi_inpl, mi_state, mi_joint
-        integer   :: i, cnt, state, roind, prev_roind, prev_state
+        real      :: ws(self%npeaks), u(2), mat(2,2), x1(2), x2(2)
+        real      :: frac, wcorr, euldist, mi_class, mi_inpl, mi_state, mi_joint
+        integer   :: i, state, roind, prev_state
         ! sort oris
-        allocate( inds(self%npeaks) )
-        inds  = (/ (i, i=1,self%npeaks) /)
-        corrs = self%shiftedoris%get_all('corr')
-        call hpsort(self%npeaks, corrs, inds)
-        do i = 1,self%npeaks
-            o = self%shiftedoris%get_ori( inds(i) )
-            call self%softoris%set_ori(i, o)
-        enddo
-        deallocate( corrs, inds )
+        if(self%npeaks > 1)then
+            allocate(inds(self%npeaks))
+            inds  = (/ (i, i=1,self%npeaks) /)
+            corrs = self%shiftedoris%get_all('corr')
+            call hpsort(self%npeaks, corrs, inds)
+            do i = 1,self%npeaks
+                o = self%shiftedoris%get_ori(inds(i))
+                call self%softoris%set_ori(i, o)
+            enddo
+            deallocate(corrs, inds)
+        else
+            self%softoris = self%shiftedoris
+        endif
         ! stochastic weights and weighted correlation
-        ws = 0.
-        corrs = self%softoris%get_all('corr')
-        where( corrs > TINY ) ws = exp(corrs)
-        ws    = ws/sum(ws)
-        wcorr = sum(ws*corrs) 
-        call self%softoris%set_all( 'ow', ws )
+        if(self%npeaks > 1)then
+            ws    = 0.
+            corrs = self%softoris%get_all('corr')
+            where(corrs > TINY)ws = exp(corrs)
+            ws    = ws/sum(ws)
+            wcorr = sum(ws*corrs) 
+            call self%softoris%set_all('ow', ws)
+            deallocate( corrs )
+        else
+            call self%softoris%set(1, 'ow', 1.)
+            wcorr = self%softoris%get(1, 'corr')
+        endif
+        ! variables inherited from input ori: CTF, w, lp
+        o = self%orientation_in
+        if(o%isthere('dfx'))   call self%softoris%set_all2single('dfx',o%get('dfx'))
+        if(o%isthere('dfy'))   call self%softoris%set_all2single('dfy',o%get('dfy'))
+        if(o%isthere('angast'))call self%softoris%set_all2single('angast',o%get('angast'))
+        if(o%isthere('cs'))    call self%softoris%set_all2single('cs',o%get('cs'))
+        if(o%isthere('kv'))    call self%softoris%set_all2single('kv',o%get('kv'))
+        if(o%isthere('fraca')) call self%softoris%set_all2single('fraca',o%get('fraca'))
+        if(o%isthere('lp'))    call self%softoris%set_all2single('lp',o%get('lp'))
+        call self%softoris%set_all2single('w',o%get('w'))
+        call o%kill
         ! best orientation
-        o = self%softoris%get_ori(self%npeaks)
-        call self%orientation_out%set('corr', wcorr )  
-        call self%orientation_out%set('ow', o%get('ow') )
-        call self%orientation_out%set_euler( o%get_euler() )
-        call self%orientation_out%set_shift( o%get_shift() )
-        call self%orientation_out%set('state', o%get('state') )
+        self%orientation_out = self%softoris%get_ori(self%npeaks) ! best ori
+        call self%orientation_out%set('corr', wcorr)  
         ! angular standard deviation
-        sdev = self%ang_sdev()
-        call self%orientation_out%set('sdev', sdev)
-        call self%softoris%set_all2single('sdev', sdev)
-        !
-        ! make unit vector
-        ! u(1) = 0.
-        ! u(2) = 1.
-        ! ! calculate previous vec
-        ! mat  = rotmat2d(o2update%e3get())
-        ! x1   = matmul(u,mat)
-        ! ! get new orientation
-        ! o = self%o_npeaks%get_ori( self%npeaks )
-        ! ! calculate new vec
-        ! mat     = rotmat2d(o%e3get())
-        ! x2      = matmul(u,mat)
-        ! state   = nint( o%get('state') )
-        ! if( .not.self%state_exists(state) )then
-        !     print *,'Empty state in simple_prime3d_srch; get_ori_best'
-        !     stop
-        ! endif
+        call self%orientation_out%set('sdev', self%ang_sdev())
         ! dist
-        euldist = rad2deg( self%orientation_in.euldist.self%orientation_out )
+        euldist = rad2deg(self%orientation_in.euldist.self%orientation_out)
         call self%orientation_out%set('dist',euldist)
-        call self%softoris%set_all2single('sdev', sdev)
-        ! calculate overlap between distributions
-        roind      = self%srch_common%roind(360.-self%orientation_out%e3get() )
-        prev_roind = self%srch_common%roind(360.-self%orientation_in%e3get())
-        state      = nint( self%orientation_out%get('state') )
-        prev_state = nint( self%orientation_in%get('state') )
+        ! overlap between distributions
+        roind    = self%ppftcc%get_roind(360.-self%orientation_out%e3get())
         mi_class = 1.
         mi_inpl  = 0.
         mi_state = 0.
         mi_joint = 1.
-        if( prev_roind == roind )then
+        if(self%prev_roind == roind)then
             mi_inpl  = mi_inpl  + 1.
             mi_joint = mi_joint + 1.
         endif
-        if( self%nstates > 1 )then
-            if( prev_state == state )then
+        if(self%nstates > 1)then
+            state      = nint(self%orientation_out%get('state'))
+            prev_state = nint(self%orientation_in%get('state'))
+            if(prev_state == state)then
                 mi_state = mi_state + 1.
                 mi_joint = mi_joint + 1.
             endif
@@ -248,37 +261,22 @@ contains
         call self%orientation_out%set('mi_inpl',  mi_inpl)
         call self%orientation_out%set('mi_state', mi_state)
         call self%orientation_out%set('mi_joint', mi_joint)
-        ! ! set the distances before we update the orientation
-        ! call o2update%set('dist', 0.5*euldist + 0.5*o2update%get('dist'))
-        ! call o2update%set('dist_inpl', rad2deg(myacos(dot_product(x1,x2))))
+        ! in-plane distance
+        ! make in-plane unit vector
+        u(1) = 0.
+        u(2) = 1.
+        ! calculate previous vec
+        mat  = rotmat2d(self%orientation_in%e3get())
+        x1   = matmul(u,mat)
+        ! calculate new vec
+        mat     = rotmat2d(self%orientation_out%e3get())
+        x2      = matmul(u,mat)
+        call self%orientation_out%set('dist_inpl', rad2deg(myacos(dot_product(x1,x2))))
         ! frac
-        maxdist = -huge(maxdist)
-        do i=1,self%npeaks-1
-            o = self%softoris%get_ori(i)
-            dist = o.euldist.self%orientation_out
-            if( dist>maxdist )maxdist = dist
-        enddo
-        cnt = 0
-        do i=1,self%nrefs_per_ptcl
-            o = self%reforis%get_ori(i)
-            dist = o.euldist.self%orientation_out
-            if( dist<=maxdist )cnt = cnt + 1
-        enddo
-        cnt  = cnt - self%npeaks
-        frac = 100.*real(self%nrefs_per_ptcl-cnt)/real(self%nrefs_per_ptcl)
+        frac = 100. * (real(self%neval)/real(self%nrefs))
         call self%orientation_out%set('frac', frac)
-        call self%softoris%set_all2single('frac', frac)
-        ! CTF
-        o = self%orientation_out
-        if(o%isthere('dfx'))call self%softoris%set_all2single('dfx',o%get('dfx'))
-        if(o%isthere('dfy'))call self%softoris%set_all2single('dfy',o%get('dfy'))
-        if(o%isthere('angast'))call self%softoris%set_all2single('angast',o%get('anagst'))
-        if(o%isthere('cs'))call self%softoris%set_all2single('cs',o%get('cs'))
-        if(o%isthere('kv'))call self%softoris%set_all2single('kv',o%get('kv'))
-        if(o%isthere('fraca'))call self%softoris%set_all2single('fraca',o%get('fraca'))
         ! done
-        deallocate( corrs )
-        if(debug)write(*,*)'simple_pcont3d_src::prep_softoris done'
+        if(debug)write(*,*)'simple_pcont3d_srch::prep_softoris done'
     end subroutine prep_softoris
 
     !>  \brief  standard deviation
@@ -290,9 +288,9 @@ contains
         if(self%npeaks < 3)return
         nstates = 0
         do state=1,self%nstates
-            pop = self%softoris%get_statepop( state )
+            pop = self%softoris%get_statepop(state)
             if( pop > 0 )then
-                sdev = sdev + ang_sdev_state( state )
+                sdev = sdev + ang_sdev_state(state)
                 nstates = nstates + 1
             endif
         enddo
@@ -312,7 +310,7 @@ contains
                 integer              :: loc(1), alloc_stat, i, ind, n, cnt
                 logical              :: err
                 isdev = 0.
-                inds = self%softoris%get_state( istate )
+                inds = self%softoris%get_state(istate)
                 n = size(inds)
                 if( n < 3 )return ! because one is excluded in the next step & moment needs at least 2 objs
                 call os%new( n )
@@ -324,20 +322,20 @@ contains
                 do i=1,n
                     ind = inds(i)
                     ws(i) = self%softoris%get( ind,'ow')
-                    call os%set_ori( i, self%softoris%get_ori(ind) )
+                    call os%set_ori(i, self%softoris%get_ori(ind))
                 enddo
-                loc    = maxloc( ws )
-                o_best = os%get_ori( loc(1) )
+                loc    = maxloc(ws)
+                o_best = os%get_ori(loc(1))
                 ! build distance vector
                 cnt = 0
                 do i=1,n
                     if( i==loc(1) )cycle
                     cnt = cnt+1
-                    o = os%get_ori( i )
-                    dists( cnt ) = rad2deg( o.euldist.o_best )
+                    o = os%get_ori(i)
+                    dists(cnt) = rad2deg(o.euldist.o_best)
                 enddo
                 call moment(dists, ave, isdev, var, err)
-                deallocate( ws, dists, inds )
+                deallocate(ws, dists, inds)
                 call os%kill
             end function ang_sdev_state
     end function ang_sdev
@@ -363,10 +361,7 @@ contains
     !>  \brief  is the destructor
     subroutine kill( self )
         class(pcont3D_srch), intent(inout) :: self
-        self%pp     => null()
-        self%pe     => null()
         self%ppftcc => null()
-        call self%srch_common%kill
         call self%shiftedoris%kill
         call self%softoris%kill
         call self%reforis%kill

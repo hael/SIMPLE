@@ -1050,7 +1050,7 @@ contains
             write(*,'(A,I6)')'>>> ITERATION ', iter
             write(*,'(A)')   '>>>'
             call qsys_cleanup(p_master)
-            ! PREPARE PRIME3D SCRIPTS
+            ! PREPARE CONT3D SCRIPTS
             call os%read(trim(cline%get_carg('oritab')))
             frac_srch_space = os%get_avg('frac')
             call job_descr%set( 'oritab', trim(oritab) )
@@ -1110,11 +1110,14 @@ contains
                     call cline_postproc_vol%set('fsc', trim(fsc_file))
                     call xpostproc_vol%execute(cline_postproc_vol)
                     ! updates cmdlines & job description
-                    call job_descr%set( trim(vol), trim(vol_iter) )
-                    call cline%set( trim(vol), trim(vol_iter) )
+                    call job_descr%set(trim(vol), trim(vol_iter))
+                    call cline%set(trim(vol), trim(vol_iter))
                     call cline_shellweight3D%set( trim(vol), trim(vol_iter) )
                 endif
             enddo
+            ! RESTART
+            restart_file = trim(RESTARTFBODY)//'_iter'//int2str_pad( iter, 3)//'.txt'
+            call cline%write( restart_file )
             ! CONVERGENCE
             call cline_check3D_conv%set( 'oritab', trim(oritab) )
             call xcheck3D_conv%execute( cline_check3D_conv )
@@ -1125,13 +1128,10 @@ contains
             if( iter >= p_master%maxits ) exit
             ! ITERATION DEPENDENT UPDATES
             ! nothing so far
-            ! RESTART
-            restart_file = trim(RESTARTFBODY)//'_iter'//int2str_pad( iter, 3)//'.txt'
-            call cline%write( restart_file )
         end do
         call qsys_cleanup(p_master)
         ! report the last iteration on exit
-        call cline%delete( 'startit' )
+        call cline%delete('startit')
         call cline%set('endit', real(iter))
         ! end gracefully
         call simple_end('**** SIMPLE_DISTR_CONT3D NORMAL STOP ****')

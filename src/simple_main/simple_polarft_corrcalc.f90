@@ -369,11 +369,10 @@ contains
         class(polarft_corrcalc), intent(in) :: self
         real,                    intent(in) :: rot
         integer :: ind, irot, loc(1)
-        real    :: dists_sq(self%nrots)
-        do irot=1,self%nrots
-            dists_sq(irot) = (self%angtab(irot)-rot)**2.
-        end do
-        loc = minloc(dists_sq)
+        real    :: dists(self%nrots)
+        dists = abs(self%angtab-rot)
+        where(dists>180.)dists = 360.-dists
+        loc = minloc(dists)
         ind = loc(1)
     end function get_roind
 

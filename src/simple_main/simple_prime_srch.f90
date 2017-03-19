@@ -20,6 +20,8 @@ type prime_srch
     procedure :: roind
     procedure :: rot
     procedure :: corr
+    procedure :: get_nrots
+    procedure :: get_angtab
     ! procedure :: get_corrmat
     procedure :: inpl
     ! procedure :: get_inplmat
@@ -61,7 +63,7 @@ contains
         allocate(self%angtab(self%nrots), stat=alloc_stat)
         call alloc_err('In: new; simple_prime_srch', alloc_stat)
         dang = twopi/real(self%nrots)
-        forall( i=1:self%nrots ) self%angtab(i) = rad2deg( real(i-1)*dang )
+        forall( i=1:self%nrots ) self%angtab(i) = rad2deg(real(i-1)*dang)
         self%exists = .true.
     end subroutine new
     
@@ -69,8 +71,11 @@ contains
     function roind( self, rot ) result( ind )
         class(prime_srch), intent(in) :: self
         real,              intent(in) :: rot
+        real    :: dists(self%nrots)
         integer :: ind, loc(1)
-        loc = minloc((self%angtab-rot)**2 ) ! minimum of squared angular distances
+        dists = abs(self%angtab-rot)
+        where(dists>180.)dists = 360.-dists
+        loc = minloc(dists)
         ind = loc(1)
     end function roind
     
@@ -80,13 +85,28 @@ contains
         integer,           intent(in) :: ind
         real :: r
         if( ind < 1 .or. ind > self%nrots )then
-            write(*,*) 'rotational index is: ', ind, ' which is out of range; calc_rot; simple_prime3D_srch'
+            write(*,*) 'rotational index is: ', ind, ' which is out of range; calc_rot; simple_srch'
             stop
         endif
         r = self%angtab(ind)
         if( r == 360. ) r = 0.
     end function rot
-    
+
+    !>  \brief 
+    function get_nrots( self ) result( nrots )
+        class(prime_srch), intent(in) :: self
+        integer :: nrots
+        nrots = self%nrots
+    end function get_nrots
+
+    !>  \brief 
+    function get_angtab( self ) result( angtab )
+        class(prime_srch), intent(in) :: self
+        real, allocatable :: angtab(:)
+        allocate( angtab(self%nrots) )
+        angtab = self%angtab
+    end function get_angtab
+
     !>  \brief correlation getter
     real function corr( self, cnt_glob, iref )
         class(prime_srch), intent(in) :: self

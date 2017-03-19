@@ -496,7 +496,6 @@ contains
         integer       :: i, startit
         logical       :: converged=.false.
         p = params(cline) ! parameters generated
-        p%boxmatch = p%box   ! FOR NOW !!!!
         if( p%xfel .eq. 'yes' )then
             if( cline%defined('msk') .or. cline%defined('mw') .or.&
             cline%defined('nvox') .or. cline%defined('automsk') )then
@@ -510,7 +509,7 @@ contains
             call pcont3D_exec(b, p, cline, 0, converged) ! partition or not, depending on 'part'
         else
             startit = 1
-            if( cline%defined('startit') ) startit = p%startit
+            if( cline%defined('startit') )startit = p%startit
             do i=startit,p%maxits
                 call pcont3D_exec(b, p, cline, i, converged )
                 if(converged) exit

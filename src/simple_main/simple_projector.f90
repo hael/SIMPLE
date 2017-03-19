@@ -523,7 +523,6 @@ contains
         integer :: i, wlen, win(3,2)
         ! interpolation kernel window
         win = sqwin_3d(loc(1), loc(2), loc(3), self%harwin_exp)
-        ! 3D
         wlen = wdim**3
         ! interpolation kernel matrix
         w = 1.

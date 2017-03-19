@@ -491,13 +491,22 @@ contains
         if( p%norec .eq. 'yes' )then
             ! no reconstruction objects needed
         else
-            allocate( self%eorecvols(p%nstates), stat=alloc_stat )
-            call alloc_err('build_cont3D_tbox; simple_build, 1', alloc_stat)
-            do s=1,p%nstates
-                call self%eorecvols(s)%new(p)
-            end do
+            if( p%eo .eq. 'yes' )then
+                allocate( self%eorecvols(p%nstates), stat=alloc_stat )
+                call alloc_err('build_hadamard_prime3D_tbox; simple_build, 1', alloc_stat)
+                do s=1,p%nstates
+                    call self%eorecvols(s)%new(p)
+                end do
+            else
+                allocate( self%recvols(p%nstates), stat=alloc_stat )
+                call alloc_err('build_hadamard_prime3D_tbox; simple_build, 2', alloc_stat)
+                do s=1,p%nstates
+                    call self%recvols(s)%new([p%boxpd,p%boxpd,p%boxpd],p%smpd,p%imgkind)
+                    call self%recvols(s)%alloc_rho(p)
+                end do
+            endif
             allocate( self%refvols(p%nstates), stat=alloc_stat)
-            call alloc_err('build_cont3D_tbox; simple_build, 2', alloc_stat)
+            call alloc_err('build_cont3D_tbox; simple_build, 3', alloc_stat)
             do s=1,p%nstates 
                 call self%refvols(s)%new([p%boxmatch,p%boxmatch,p%boxmatch],p%smpd,p%imgkind)
             end do
@@ -517,11 +526,12 @@ contains
                 end do
                 deallocate(self%eorecvols)
             endif
-            if( allocated(self%refvols) )then
-                do i=1,size(self%refvols)
-                    call self%refvols(i)%kill
+            if( allocated(self%recvols) )then
+                do i=1,size(self%recvols)
+                    call self%recvols(i)%dealloc_rho
+                    call self%recvols(i)%kill
                 end do
-                deallocate(self%refvols)
+                deallocate(self%recvols)
             endif
             self%cont3D_tbox_exists = .false.
         endif
