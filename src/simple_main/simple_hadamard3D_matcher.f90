@@ -71,11 +71,10 @@ contains
         logical,        intent(inout) :: update_res, converged
         type(oris)                    :: prime3D_oris
         real, allocatable             :: wmat(:,:), wresamp(:), res(:), res_pad(:), corrs(:), corrs_incl(:)
-        integer, allocatable          :: inds(:), inds_incl(:)
         logical, allocatable          :: incl(:)
         real                          :: norm, het_corr_thresh
         integer                       :: iptcl, fnr, file_stat, s, inptcls, prev_state, istate
-        integer                       :: statecnt(p%nstates), ind, thresh_ind, n_samples
+        integer                       :: statecnt(p%nstates), ind, thresh_ind, n_samples, n_incl
         logical                       :: doshellweight, dohet
 
         inptcls = p%top - p%fromp + 1
@@ -129,15 +128,17 @@ contains
             if( frac_srch_space<0.98 .or. p%het_thresh>0.02 )then
                 dohet = .true.
                 write(*,'(A,F8.2)')'>>> STATE RANDOMIZATION %:', 100.*p%het_thresh
+                ! grab relevant correlations
                 corrs      = b%a%get_all('corr')
                 incl       = b%a%included()
-                inds       = b%a%order()
-                inds_incl  = pack(inds, mask=incl)
                 corrs_incl = pack(corrs, mask=incl)
-                thresh_ind = nint( size(inds_incl)*(1.-p%het_thresh) )
-                het_corr_thresh = corrs_incl( inds_incl(thresh_ind) )
+                ! sorts correlations & determine threshold
+                n_incl     = size(corrs_incl)
+                call hpsort(n_incl, corrs_incl)
+                thresh_ind = nint(real(n_incl) * p%het_thresh)
+                het_corr_thresh = corrs_incl(thresh_ind)
                 write(*,'(A,F8.2)')'>>> CORRELATION THRESHOLD:', het_corr_thresh
-                deallocate(corrs, inds, incl, inds_incl, corrs_incl)
+                deallocate(corrs, incl, corrs_incl)
             endif
             ! generate filename for memoization of particle pfts
             if( allocated(ppfts_fname) ) deallocate(ppfts_fname)
