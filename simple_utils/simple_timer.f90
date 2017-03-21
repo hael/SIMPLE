@@ -1,67 +1,164 @@
-!==Module simple_timer
+!= Module simple_timer
 !
-! simple_timer is a little module for calculating the relative and actual CPU-time.
-! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
-! Redistribution or modification is regulated by the GNU General Public License.
-! *Author:* Hans Elmlund, 2009-10-01.
-! 
-!==Changes are documented below
 !
-!* incorporated in the _SIMPLE_ library, HE 2009-10-01
-!
-module simple_timer
-use simple_jiffys ! singleton
-use simple_defs   ! singleton
-implicit none
+! Michael Eager 2017-03-15
 
-private :: raise_sys_error
+module simple_timer
+  use precision_m
+#ifdef _CUDA
+  use cudafor
+#endif
+  implicit none
+
+
+  public :: get_clock_rate,tic, toc, now, timer_setup, timer_kill
+  private
+  !type timer ! system or CUDA timer
+
+
+  ! contains
+  ! declare a static constructor        
+  ! initial  :: timer_setup  ! this will be evoked before any
+  ! calls to timer variables or
+  ! functions
+  !     final :: timer_destructor
+  ! methods
+  !    procedure :: kill
+  !    procedure :: tic
+  !    procedure :: toc
+  !   procedure :: now
+  !    procedure :: setup
+  !     procedure :: assign
+  !     procedure :: add
+  !     procedure :: sub
+  !    procedure :: writef
+  !     generic :: assignment(=) => assign
+  !     generic :: operator(+) => add
+  !     generic :: operator(-) => sub
+  !    generic :: write(formatted) => writef
+
+  !end type timer
+
+  ! interface timer
+  !       module procedure  constructor
+  !       procedure :: constructFromArray
+  !  end interface timer
+
+#ifdef CUDA
+  integer :: istat
+  type (cudaEvent) :: &
+#else
+       integer(fp_kind) :: &
+#endif
+       clock_start, clock_end, clock_rate
+  real(fp_kind) :: elapsed
 
 contains
 
-  double precision  :: start = 0
-  double precision  :: finish = 0
+  !  function constructor() result(self)
+  !    call setup
+  !  end function constructor
 
 
-  double precision function tic( time )
-    double precision                  :: time(2)
-    double precision,save :: last_time = 0
-    double precision      :: this_time
-        intrinsic SYSTEM_CLOCK_TIME
-        call SYSTEM_CLOCK_TIME(this_time)
-        time(1) = real(this_time-last_time)
-        time(2) = 0.
-        dtime = time(1)
-        last_time = this_time
+  !< Timer constructor
+  subroutine timer_setup()
+    call timer_kill
+#ifdef CUDA
+    integer :: nDevices
+    istat = cudaGetDeviceCount(nDevices)
+    write(*,"('Number of CUDA-capable devices: ', i0,/)") &
+         nDevices 
+    istat = cudaEventCreate(clock_start)
+    istat = cudaEventCreate(clock_end)
+    ! output device info and transfer size
+    !  istat = cudaGetDeviceProperties(prop, 0)
+
+#else
+    intrinsic system_clock
+#ifdef GF_CLOCK_MONOTONIC
+    ! 2010 fortran intrinsic module ISO FORTRAN ENV  
+    ! build with -lrt to ensure high precision clock is used
+    call system_clock_8(count, count_rate, count_max)
+#else
+    call system_clock(count_rate=clock_rate) ! Find the rate
+#endif
+
+#endif
+  end subroutine timer_setup
+
+  !< Get the clock_rate variable, make sure the timer is setup 
+  function get_clock_rate() result(rate)
+    real(fp_kind) :: rate
+    call timer_setup
+    rate = REAL(clock_rate,fp_kind)/1e9
+  end function get_clock_rate
+
+    function tic() result(itic)
+#ifdef CUDA
+      integer(fp_kind) :: itic
+      istat = cudaEventRecord(clock_start,0) ! start event 
+#else
+      integer(fp_kind) :: itic
+      intrinsic system_clock
+#ifdef GF_CLOCK_MONOTONIC
+      call system_clock_8(count=clock_start) ! Start timing
+#else
+      call system_clock(count=clock_start) ! Start timing
+#endif
+      itic=clock_start !REAL(clock_start,fp_kind)
+#endif
+
     end function tic
 
+    function toc (arg) result (elapsed_time)
+      real(fp_kind) :: elapsed_time
+#ifdef CUDA
+      type (cudaEvent), optional, intent(in) :: arg
+      if( present(arg)) then
+         clock_start = arg
+      end if
+      istat = cudaEventRecord(clock_end,0)
+      istat = cudaEventSynchronize(clock_end)
+      istat = cudaEventElapsedTime(elapsed, &
+           clock_start, clock_end)
+#else
+      real(fp_kind) :: itoc
+      integer(8), optional, intent(in) :: arg
+      intrinsic system_clock
+      if( present(arg)) then
+         clock_start = arg
+      end if
+#ifdef GF_CLOCK_MONOTONIC
+      call system_clock_8(count=clock_end) ! End timing
+#else
+      call system_clock(count=clock_end) ! End timing
+#endif
+      itoc = REAL(clock_end,fp_kind)
+      elapsed=REAL(clock_end-clock_start,fp_kind)/REAL(clock_rate,fp_kind)
+#endif
+      elapsed_time=elapsed
+    end function toc
 
-    !
-    real function toc( time )
-        real :: time(2)
-        call SYSTEM_CLOCK_TIME(etime)
-        time(1) = etime
-        time(2) = 0
-    end function etime
+    !< Timer destructor
+    subroutine timer_kill () !timer_destructor(this)
+#ifdef _CUDA
+      ! nothing to do here
+      istat = cudaEventDestroy(clock_start)
+      istat = cudaEventDestroy(clock_end)
+#else
+      ! nothing much to do here
 
-    !> is for getting the actual cputime
-    function getabscpu( lprint ) result( actual )
-        logical, intent(in) :: lprint
-        real                :: tarray(2)
-        real                :: actual
-        actual = etime( tarray )
-        if( lprint )then
-            write(*,'(A,2X,F9.2)') 'Actual cpu-time:', actual
-        endif
-    end function getabscpu
+      clock_end=0.
+      clock_start=0.
+#endif
+
+    end subroutine timer_kill !timer_destructor
+
+    subroutine now()
+
+    end subroutine now
+
+  end module simple_timer
 
 
-
-    PROGRAM simple_timer
-      INTEGER , INTENT(OUT):: count, count_rate, count_max
-      CALL SYSTEM_CLOCK(count, count_rate, count_max)
-      WRITE(*,*) count, count_rate, count_max
-    END PROGRAM
-
-    
-end module simple_timer
 

@@ -15,4 +15,5 @@ s_utes: simple_strings.o      \
         simple_ran_tabu.o     \
         simple_testfuns.o     ;
 
-s_utils: simple_syscalls.o  ;
+s_utils: simple_timer.o       \
+	simple_syscalls.o  ;
