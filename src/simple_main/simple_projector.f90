@@ -64,7 +64,7 @@ contains
         use simple_math, only: cyci_1d
         class(projector), intent(inout) :: self
         integer, allocatable :: cyck(:), cycm(:), cych(:)
-        integer :: h, k, m, alloc_stat, max_dim
+        integer :: h, k, m, alloc_stat
         integer :: lims(3,2), ldim(3)
         ldim = self%get_ldim()
         if( .not.self%is_ft() ) stop 'volume needs to be FTed before call; expand_cmat; simple_image'
@@ -73,10 +73,9 @@ contains
         self%harwin = real(ceiling(self%winsz))
         self%alpha  = get_kb_alpha()
         lims               = self%loop_lims(3)
-        max_dim            = maxval(abs(lims))
-        self%ldim_exp(:,2) = max_dim + ceiling(self%harwin_exp)
+        self%ldim_exp(:,2) = maxval(abs(lims))
         self%ldim_exp(:,1) = -self%ldim_exp(:,2)
-        if( allocated(self%cmat_exp) ) deallocate( self%cmat_exp )
+        if( allocated(self%cmat_exp) ) deallocate(self%cmat_exp)
         allocate( self%cmat_exp( self%ldim_exp(1,1):self%ldim_exp(1,2),&
                                 &self%ldim_exp(2,1):self%ldim_exp(2,2),&
                                 &self%ldim_exp(3,1):self%ldim_exp(3,2)),&
@@ -435,7 +434,7 @@ contains
         real    :: w(1:wdim,1:wdim,1:wdim)
         integer :: i, wlen, win(3,2)
         ! interpolation kernel window
-        win = sqwin_3d(loc(1), loc(2), loc(3), self%harwin_exp)
+        win  = sqwin_3d(loc(1), loc(2), loc(3), self%harwin_exp)
         wlen = wdim**3
         ! interpolation kernel matrix
         w = 1.

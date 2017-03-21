@@ -107,7 +107,6 @@ contains
             self%dfy_prev    = dfy
             self%angast_prev = angast
         endif
-
     end subroutine create_ctf_image
 
     !>  \brief  is for projecting a set
@@ -154,7 +153,7 @@ contains
         call self%refvols(s)%fproject_expanded(o, self%img_refs(iref), lp=self%pp%lp)
         if( self%pp%ctf .ne. 'no' )then
             call self%create_ctf_image(o)
-            call self%img_refs(iref)%mul( self%img_ctf )
+            call self%img_refs(iref)%mul(self%img_ctf)
         endif
     end subroutine project_2
 
@@ -239,6 +238,12 @@ contains
                 deallocate(self%img_refs)
             endif
             call self%img_ctf%kill
+            self%kv_prev     = 0.
+            self%cs_prev     = 0.
+            self%fraca_prev  = 0.
+            self%dfx_prev    = 0.
+            self%dfy_prev    = 0.
+            self%angast_prev = 0.
             self%existence = .false.
         endif
     end subroutine kill

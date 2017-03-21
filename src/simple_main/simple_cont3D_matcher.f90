@@ -227,12 +227,10 @@ contains
                     case('yes')
                         call cftcc_srch_set_state(state)
                         call cftcc_srch_minimize(orientation)
-                !print *,iptcl,'0'
                     case DEFAULT
                         stop 'Unkwnon refinement mode; simple_cont3D_matcher'
                 end select
                 call b%a%set_ori(iptcl,orientation)
-                !print *,iptcl,'0'
                 if( doshellweight )then
                     wresamp = resample_filter(wmat(iptcl,:), res, res_pad)
                     call grid_ptcl(b, p, iptcl, cnt_glob, orientation, shellweights=wresamp)
@@ -248,8 +246,7 @@ contains
         p%oritab = p%outfile
         
         ! cleanup
-        if( p%boxmatch < p%box )call b%img%new([p%box,p%box,1],p%smpd) ! for next iteration in local execution
-        if( p%boxmatch < p%box ) call b%vol%new([p%box,p%box,p%box], p%smpd) ! for next iteration in local execution
+        if( p%boxmatch < p%box )call b%img%new([p%boxmatch,p%boxmatch,1],p%smpd) ! for next iteration in local execution
         call b%refvols(1)%kill_expanded
 
         ! NORMALIZE STRUCTURE FACTORS

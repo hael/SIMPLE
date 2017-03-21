@@ -90,27 +90,23 @@ contains
         prev_shvec = o%get_shift()
         ! copy the input orientation
         o_glob = o
-        call o_glob%print
         ! initialise optimiser to current projdir & in-plane rotation
-        ospec%x = 0.
+        ospec%x      = 0.
         ospec%x(1:3) = o%get_euler()
         ! previous correlation
         call cftcc_ptr%project(o, 1)
-        !print *,'proj done'  
         prev_corr = cftcc_ptr%correlate(pimg, 1, [0.,0.,0.])
-        !print *,prev_corr
         ! search
         call nlopt%minimize(ospec, cost)
         corr = -cost
-        !print *,corr
         if(corr < prev_corr)then
-            ! no improvement
+            ! no improvment
             corr      = prev_corr
             dist      = 0.
             dist_inpl = 0.
             frac      = 100.
         else
-            ! improvement
+            ! improvment
             call o%set_euler(ospec%x(1:3))
             ! shifts must be obtained by vector addition
             ! the reference is rotated upon projection

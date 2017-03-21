@@ -152,7 +152,7 @@ contains
             endif
             call b%a%write(iptcl, p%outfile)
         enddo
-        ! cleanup
+        ! cleanup (mostly for debug purposes)
         call spiral%kill
         call pftcc%kill
         do state=1,p%nstates
@@ -161,7 +161,6 @@ contains
         !call b%img%kill_imgpolarizer is private a the moment
 
         ! orientations output
-        !call del_file(p%outfile)
         !call b%a%write(p%outfile, [p%fromp,p%top])
         p%oritab = p%outfile
 

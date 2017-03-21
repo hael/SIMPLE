@@ -35,7 +35,6 @@ real               :: angast_prev = 0.
 real               :: kV_prev     = 0.
 real               :: cs_prev     = 0.
 real               :: fraca_prev  = 0.
-integer            :: cnt = 0
     
 contains
     
@@ -45,7 +44,7 @@ contains
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         class(cmdline), intent(inout) :: cline
-        real, allocatable     :: resarr(:), tmparr(:)
+        real, allocatable     :: resarr(:)
         real                  :: fsc0143, fsc05, mapres(p%nstates)
         integer               :: s, loc(1)
         character(len=STDLEN) :: fsc_fname
@@ -358,9 +357,9 @@ contains
                 call b%img_pad%bwd_ft
                 call b%img_pad%clip(b%img_msk)
                 call b%img_msk%norm('sigm')
-                ! call b%img_msk%bin               ! under test
-                ! call b%img_msk%grow_bin          ! under test
-                ! call b%img_msk%cos_edge(30)      ! under test
+                !call b%img_msk%bin               ! under test
+                !call b%img_msk%grow_bin          ! under test
+                !call b%img_msk%cos_edge(50)      ! under test
             endif
             ! move to Fourier space
             call b%img%fwd_ft
@@ -466,7 +465,6 @@ contains
         class(cmdline),    intent(inout) :: cline
         integer,           intent(in)    :: s
         logical, optional, intent(in)    :: do_expand
-        real, allocatable :: filter(:)
         real    :: shvec(3)
         logical :: l_expand = .true.
         if(present(do_expand))l_expand = do_expand
@@ -476,20 +474,7 @@ contains
         if( p%l_xfel )then
             ! no centering
         else
-            if( p%doshift )then
-                ! centering only for asymmetric and circular symmetric cases
-                if( p%refine.ne.'het' )then
-                    if( p%pgrp(:1).eq.'c' )then
-                        shvec = b%vol%center(p%cenlp,'no',p%msk,doshift=.false.) ! find center of mass shift
-                        if( arg(shvec) > VOLSHTHRESH )then
-                            if( p%pgrp.ne.'c1' ) shvec(1:2) = 0.         ! shifts only along z-axis for C2 and above
-                            call b%vol%shift(shvec(1),shvec(2),shvec(3)) ! performs shift
-                            ! map back to particle oritentations
-                            if( cline%defined('oritab') ) call b%a%map3dshift22d(-shvec(:), state=s)
-                        endif
-                    endif
-                endif
-            endif
+            if(p%doshift)call centervol
         endif
         ! clip
         if( p%boxmatch < p%box )then
@@ -526,7 +511,25 @@ contains
         ! FT volume
         call b%vol%fwd_ft
         ! expand for fast interpolation
-        if(l_expand) call b%vol%expand_cmat
+        if(l_expand)call b%vol%expand_cmat
+
+        contains
+
+            subroutine centervol
+                ! centering only for asymmetric and circular symmetric cases
+                if( p%refine.ne.'het' )then
+                    if( p%pgrp(:1).eq.'c' )then
+                        shvec = b%vol%center(p%cenlp,'no',p%msk,doshift=.false.) ! find center of mass shift
+                        if( arg(shvec) > VOLSHTHRESH )then
+                            if( p%pgrp.ne.'c1' ) shvec(1:2) = 0.         ! shifts only along z-axis for C2 and above
+                            call b%vol%shift(shvec(1),shvec(2),shvec(3)) ! performs shift
+                            ! map back to particle oritentations
+                            if( cline%defined('oritab') ) call b%a%map3dshift22d(-shvec(:), state=s)
+                        endif
+                    endif
+                endif
+            end subroutine centervol
+
     end subroutine preprefvol
     
     subroutine eonorm_struct_facts( b, p, res, which_iter )
@@ -535,8 +538,7 @@ contains
         class(params),     intent(inout) :: p
         real,              intent(inout) :: res
         integer, optional, intent(in)    :: which_iter
-        type(image)           :: vol_tmp
-        integer               :: s, s_loc
+        integer               :: s
         real                  :: res05s(p%nstates), res0143s(p%nstates)
         character(len=STDLEN) :: pprocvol
         ! init
