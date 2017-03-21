@@ -35,6 +35,7 @@ real               :: angast_prev = 0.
 real               :: kV_prev     = 0.
 real               :: cs_prev     = 0.
 real               :: fraca_prev  = 0.
+integer            :: cnt = 0
     
 contains
     
@@ -357,6 +358,9 @@ contains
                 call b%img_pad%bwd_ft
                 call b%img_pad%clip(b%img_msk)
                 call b%img_msk%norm('sigm')
+                ! call b%img_msk%bin               ! under test
+                ! call b%img_msk%grow_bin          ! under test
+                ! call b%img_msk%cos_edge(30)      ! under test
             endif
             ! move to Fourier space
             call b%img%fwd_ft
@@ -456,14 +460,17 @@ contains
         call ref%fwd_ft
     end subroutine prep2Dref_2
 
-    subroutine preprefvol( b, p, cline, s )
-        class(build),   intent(inout) :: b
-        class(params),  intent(inout) :: p
-        class(cmdline), intent(inout) :: cline
-        integer,        intent(in)    :: s
+    subroutine preprefvol( b, p, cline, s, do_expand )
+        class(build),      intent(inout) :: b
+        class(params),     intent(inout) :: p
+        class(cmdline),    intent(inout) :: cline
+        integer,           intent(in)    :: s
+        logical, optional, intent(in)    :: do_expand
         real, allocatable :: filter(:)
-        real :: shvec(3)
-        if( p%boxmatch < p%box ) call b%vol%new([p%box,p%box,p%box],p%smpd) ! ensure correct dim
+        real    :: shvec(3)
+        logical :: l_expand = .true.
+        if(present(do_expand))l_expand = do_expand
+        if( p%boxmatch < p%box )call b%vol%new([p%box,p%box,p%box],p%smpd) ! ensure correct dim
         call b%vol%read(p%vols(s), isxfel=p%l_xfel)
         ! take care of centering
         if( p%l_xfel )then
@@ -519,7 +526,7 @@ contains
         ! FT volume
         call b%vol%fwd_ft
         ! expand for fast interpolation
-        call b%vol%expand_cmat
+        if(l_expand) call b%vol%expand_cmat
     end subroutine preprefvol
     
     subroutine eonorm_struct_facts( b, p, res, which_iter )

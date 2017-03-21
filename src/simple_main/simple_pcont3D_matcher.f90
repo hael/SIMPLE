@@ -114,9 +114,9 @@ contains
 
         ! INITIALIZE
         if( which_iter <= 0 )then
-            write(*,'(A)')'>>> CONTINUOUS 3D SEARCH'
+            write(*,'(A)')'>>> CONTINUOUS POLAR-FT ORIENTATION SEARCH'
         else
-            write(*,'(A,1X,I3)')'>>> CONTINUOUS 3D SEARCH, ITERATION:', which_iter
+            write(*,'(A,1X,I3)')'>>> CONTINUOUS POLAR-FT ORIENTATION SEARCH, ITERATION:', which_iter
             p%outfile = 'cont3Ddoc_'//int2str_pad(which_iter,3)//'.txt'
         endif
 
@@ -155,6 +155,10 @@ contains
         ! cleanup
         call spiral%kill
         call pftcc%kill
+        do state=1,p%nstates
+            if(state_exists(state))call b%refvols(state)%kill_expanded
+        enddo
+        !call b%img%kill_imgpolarizer is private a the moment
 
         ! orientations output
         !call del_file(p%outfile)
@@ -221,7 +225,6 @@ contains
         call ostoch%rnd_ori
         call ostoch%e3set(0.)
         call spiral%rot(ostoch)
-        ! get NREFS orientations within asymmetric unit
         half_nrefs = ceiling(real(NREFS) / 2.)
         call spiral%find_closest_projs(optcl, inds)
         call cone%new(NREFS)

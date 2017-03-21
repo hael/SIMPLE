@@ -82,84 +82,57 @@ contains
         cost = -cftcc_ptr%correlate(pimg, 1, shvec)
     end function cftcc_srch_cost
     
-    subroutine cftcc_srch_minimize( o, os )
+    subroutine cftcc_srch_minimize( o )
         use simple_math, only: rad2deg
         class(ori),  intent(inout) :: o
-        class(oris), intent(inout) :: os
-        real, allocatable :: vertices(:,:), costs(:)
-        type(ori) :: o_new
-        real      :: corr, cost, dist, prev_shvec(2), wcorr
-        integer   :: i
+        real      :: prev_shvec(2)
+        real      :: corr, cost, dist, dist_inpl, prev_corr, frac
         prev_shvec = o%get_shift()
         ! copy the input orientation
         o_glob = o
+        call o_glob%print
         ! initialise optimiser to current projdir & in-plane rotation
         ospec%x = 0.
         ospec%x(1:3) = o%get_euler()
+        ! previous correlation
+        call cftcc_ptr%project(o, 1)
+        !print *,'proj done'  
+        prev_corr = cftcc_ptr%correlate(pimg, 1, [0.,0.,0.])
+        !print *,prev_corr
         ! search
         call nlopt%minimize(ospec, cost)
-        if( ospec%str_opt.eq.'simplex')then
-            ! soft matching
-            o_new = o
-            call nlopt%get_vertices( ospec, vertices, costs )
-            call os%new(6)
-            do i = 1,6
-                o_new = o
-                call o_new%set('corr', -costs(i))
-                call o_new%set_euler(vertices(i,1:3))
-                call o_new%set_shift(prev_shvec-vertices(i,4:5))
-                call os%set_ori(i, o_new)
-            enddo
-            call prep_soft_oris( wcorr, os )
-            corr = wcorr
-            call o%set('ow', os%get(1,'ow'))
-            deallocate(vertices, costs)
+        corr = -cost
+        !print *,corr
+        if(corr < prev_corr)then
+            ! no improvement
+            corr      = prev_corr
+            dist      = 0.
+            dist_inpl = 0.
+            frac      = 100.
         else
-            ! hard matching
-            corr = -cost
-            call o%set('ow', 1.)
+            ! improvement
+            call o%set_euler(ospec%x(1:3))
+            ! shifts must be obtained by vector addition
+            ! the reference is rotated upon projection
+            ! the ptcl is shifted only: no need to rotate the shift
+            call o%set_shift(prev_shvec - ospec%x(4:5))
+            ! distance
+            dist_inpl = o_glob.inpldist.o
+            dist      = 0.5*rad2deg(o_glob.euldist.o)+0.5*dist_inpl
+            frac      = 100.*(180.-dist**2.)/180.
         endif
-        ! report
-        call o%set('corr', corr)
-        call o%set_euler(ospec%x(1:3))
-        ! shifts must be obtained by vector addition
-        ! the reference is rotated upon projection
-        ! the ptcl is shifted only: no need to rotate the shift
-        call o%set_shift( prev_shvec - ospec%x(4:5) )
-        ! distance
-        dist = 0.5*rad2deg(o_glob.euldist.o)+0.5*rad2deg(o_glob.inpldist.o)
-        call o%set('dist',dist)
+        call o%set('corr',      corr)
+        call o%set('ow',        1.)
+        call o%set('dist_inpl', dist_inpl)
+        call o%set('dist',      dist)
         ! set the overlaps
         call o%set('mi_class', 1.)
         call o%set('mi_inpl',  1.) ! todo
         call o%set('mi_state', 1.)
         call o%set('mi_joint', 1.)  !todo
-        call o%set('dist_inpl', 0.) ! todo
         ! all the other stuff
-        call o%set( 'frac',  100. ) ! todo
-        call o%set( 'sdev',  0. ) !todo
+        call o%set( 'frac',  frac) ! todo
+        call o%set( 'sdev',  0.)
     end subroutine cftcc_srch_minimize
-
-    subroutine prep_soft_oris( wcorr, os )
-        type(oris), intent(inout) :: os
-        real,       intent(out)   :: wcorr
-        real              :: ws(3)
-        real, allocatable :: corrs(:)
-        integer           :: i
-        if( os%get_noris() /= 6 )stop 'invalid number of orientations; simple_cftcc_srch::prep_soft_oris'
-        ws    = 0.
-        wcorr = 0.
-        ! get unnormalised correlations
-        corrs = os%get_all('corr')
-        ! calculate normalised weights and weighted corr
-        where( corrs > TINY ) ws = exp(corrs) ! ignore invalid corrs
-        ws    = ws/sum(ws)
-        wcorr = sum(ws*corrs) 
-        ! update npeaks individual weights
-        do i=1,6
-            call os%set(i,'ow',ws(i))
-        enddo
-        deallocate(corrs)
-    end subroutine prep_soft_oris
 
 end module simple_cftcc_srch

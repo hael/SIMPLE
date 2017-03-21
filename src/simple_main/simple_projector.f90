@@ -182,7 +182,7 @@ contains
         real,   optional, intent(inout) :: lp
         complex :: comp
         real    :: vec(3), loc(3)
-        integer :: h, k, sqarg, sqlp, wdim, halflim, lims(3,2)
+        integer :: h, k, sqarg, sqlp, wdim, lims(3,2)
         ! init
         lims = self%loop_lims(2) 
         if( present(lp) )then
@@ -220,7 +220,7 @@ contains
         class(image),     intent(inout) :: fplane
         real, optional,   intent(in)    :: lp
         complex :: comp
-        integer :: h, hh, k, kk, lims(3,2), sqarg, sqlp
+        integer :: h, k, lims(3,2), sqarg, sqlp
         real    :: vec(3), loc(3)
         fplane = cmplx(0.,0.)
         if( present(lp) )then
@@ -340,7 +340,7 @@ contains
         class(ori),        intent(inout) :: e       !< orientation
         class(polarft),    intent(inout) :: pimg    !< polar image
         logical, optional, intent(in)    :: memoize !< memoize or not
-        integer :: i, k, alloc_stat, wdim, ldim(3), pdims(3), ldim_polft(3)
+        integer :: i, k, wdim, ldim(3), pdims(3), ldim_polft(3)
         real    :: vec(3), loc(3)
         complex :: comp
         logical :: mmemoize

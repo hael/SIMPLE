@@ -3456,15 +3456,12 @@ contains
         else
             sqhp = 2 ! index 2 default high-pass limit
         endif
-        !$omp parallel do default(shared) private(h,hh,k,kk,l,ll,sqarg,phys,shcomp) &
+        !$omp parallel do collapse(3) default(shared) private(h,k,l,sqarg,phys,shcomp) &
         !$omp reduction(+:r,sumasq,sumbsq) schedule(auto)
         do h=lims(1,1),lims(1,2)
-            hh = h*h
             do k=lims(2,1),lims(2,2)
-                kk = k*k
                 do l=lims(3,1),lims(3,2)
-                    ll = l*l
-                    sqarg = hh+kk+ll
+                    sqarg = h*h + k*k + l*l
                     if( sqarg <= sqlp .and. sqarg >= sqhp  )then
                         phys = self_ref%fit%comp_addr_phys([h,k,l])
                         ! shift particle

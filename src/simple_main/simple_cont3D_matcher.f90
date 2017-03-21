@@ -154,7 +154,6 @@ contains
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: converged
-        type(oris)        :: soft_oris
         type(ori)         :: orientation
         real, allocatable :: wmat(:,:), wresamp(:), res(:), res_pad(:)
         real              :: frac_srch_space, reslim
@@ -188,16 +187,7 @@ contains
         call setup_shellweights(b, p, doshellweight, wmat, res, res_pad)
 
         ! INITIALIZE
-        select case( p%refine )
-            case('yes')
-                p%npeaks = 6
-                call cftcc_srch_init(cftcc, b%img, OPT_STR, p%optlims(:5,:), NRESTARTS)
-            case('shift')
-                p%npeaks = 3
-                call cftcc_shsrch_init(cftcc, b%img, OPT_STR, p%trs, NRESTARTS)
-            case DEFAULT
-                stop 'Unkwnon refinement mode; simple_cont3D_matcher'
-        end select
+        call cftcc_srch_init(cftcc, b%img, OPT_STR, p%optlims(:5,:), NRESTARTS)
 
         if( which_iter <= 0 )then
             write(*,'(A)') '>>> CONTINUOUS ORIENTATION SEARCH'
@@ -236,19 +226,18 @@ contains
                 select case( p%refine )
                     case('yes')
                         call cftcc_srch_set_state(state)
-                        call cftcc_srch_minimize(orientation, soft_oris)
-                    case('shift')
-                        call cftcc_shsrch_set_state(state)
-                        call cftcc_shsrch_minimize(orientation, soft_oris)
+                        call cftcc_srch_minimize(orientation)
+                !print *,iptcl,'0'
                     case DEFAULT
                         stop 'Unkwnon refinement mode; simple_cont3D_matcher'
                 end select
                 call b%a%set_ori(iptcl,orientation)
+                !print *,iptcl,'0'
                 if( doshellweight )then
                     wresamp = resample_filter(wmat(iptcl,:), res, res_pad)
                     call grid_ptcl(b, p, iptcl, cnt_glob, orientation, shellweights=wresamp)
                 else
-                    call grid_ptcl(b, p, iptcl, cnt_glob, orientation, soft_oris)
+                    call grid_ptcl(b, p, iptcl, cnt_glob, orientation)
                 endif
             else
                 call orientation%reject
@@ -258,6 +247,11 @@ contains
         end do
         p%oritab = p%outfile
         
+        ! cleanup
+        if( p%boxmatch < p%box )call b%img%new([p%box,p%box,1],p%smpd) ! for next iteration in local execution
+        if( p%boxmatch < p%box ) call b%vol%new([p%box,p%box,p%box], p%smpd) ! for next iteration in local execution
+        call b%refvols(1)%kill_expanded
+
         ! NORMALIZE STRUCTURE FACTORS
         if( p%eo .eq. 'yes' )then
             call eonorm_struct_facts(b, p, reslim, which_iter)
@@ -266,7 +260,7 @@ contains
         endif
 
         if( p%l_distr_exec )then
-            call qsys_job_finished( p, 'simple_hadamard3D_matcher.f90 :: prime3D_exec' )
+            call qsys_job_finished( p, 'simple_cont3D_matcher.f90 :: cont3D_exec' )
         else
             ! CONVERGENCE TEST
             converged = b%conv%check_conv3D()
