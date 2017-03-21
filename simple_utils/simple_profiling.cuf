@@ -1,0 +1,20 @@
+
+
+
+
+! C-bindings for CUDA profiling
+
+! Initialize the CUDA profiler.
+
+! __host__ ​cudaError_t cudaProfilerInitialize ( const char* configFile, const char* outputFile, cudaOutputMode_t outputMode )
+
+! __host__ ​cudaError_t cudaProfilerStart ( void )    !    Enable profiling.
+
+! __host__ ​cudaError_t cudaProfilerStop ( void )     !    Disable profiling.
+
+
+! Read more at: http://docs.nvidia.com/cuda/cuda-runtime-api/index.html#ixzz4bvOvoou1
+! Follow us: @GPUComputing on Twitter | NVIDIA on Facebook
+
+
+! NVVP  --> just use the NVIDIA visual profiler 
