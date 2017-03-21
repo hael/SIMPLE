@@ -24,7 +24,6 @@ use simple_reconstructor,    only: reconstructor
 use simple_eo_reconstructor, only: eo_reconstructor
 use simple_params,           only: params
 use simple_sym,              only: sym
-use simple_polarft,          only: polarft
 use simple_opt_spec,         only: opt_spec
 use simple_convergence,      only: convergence
 use simple_jiffys,           only: alloc_err
@@ -426,24 +425,20 @@ contains
         call self%kill_hadamard_prime3D_tbox
         call self%raise_hard_ctf_exception(p)
         ! reconstruction objects
-        if( p%norec .eq. 'yes' )then
-            ! no reconstruction objects needed
+        if( p%eo .eq. 'yes' )then
+            allocate( self%eorecvols(p%nstates), stat=alloc_stat )
+            call alloc_err('build_hadamard_prime3D_tbox; simple_build, 1', alloc_stat)
+            do s=1,p%nstates
+                call self%eorecvols(s)%new(p)
+            end do
         else
-            if( p%eo .eq. 'yes' )then
-                allocate( self%eorecvols(p%nstates), stat=alloc_stat )
-                call alloc_err('build_hadamard_prime3D_tbox; simple_build, 1', alloc_stat)
-                do s=1,p%nstates
-                    call self%eorecvols(s)%new(p)
-                end do
-            else
-                allocate( self%recvols(p%nstates), stat=alloc_stat )
-                call alloc_err('build_hadamard_prime3D_tbox; simple_build, 2', alloc_stat)
-                do s=1,p%nstates
-                    call self%recvols(s)%new([p%boxpd,p%boxpd,p%boxpd],p%smpd,p%imgkind)
-                    call self%recvols(s)%alloc_rho(p)
-                end do
-            endif
-        endif   
+            allocate( self%recvols(p%nstates), stat=alloc_stat )
+            call alloc_err('build_hadamard_prime3D_tbox; simple_build, 2', alloc_stat)
+            do s=1,p%nstates
+                call self%recvols(s)%new([p%boxpd,p%boxpd,p%boxpd],p%smpd,p%imgkind)
+                call self%recvols(s)%alloc_rho(p)
+            end do
+        endif
         if( str_has_substr(p%refine,'neigh') )then
             call self%e%nearest_neighbors( p%nnn, self%nnmat)
         endif

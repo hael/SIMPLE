@@ -3,7 +3,6 @@ use simple_image,     only: image
 use simple_oris,      only: oris
 use simple_params,    only: params
 use simple_gridding,  only: prep4cgrid
-use simple_polarft,   only: polarft
 use simple_ori,       only: ori
 use simple_math,      only: rotmat2d
 use simple_projector, only: projector
@@ -181,35 +180,5 @@ contains
         call roimg_pad%kill
         call img_copy%kill
     end subroutine rotimg
-
-    !>  \brief  generates an array of polar Fourier transforms of volume vol in orientations o
-    subroutine fprojvol_polar( vol, oset, p, pimgs, s )
-        class(image),     intent(inout) :: vol                       !< volume to project
-        class(oris),      intent(inout) :: oset                      !< orientations
-        class(params),    intent(in)    :: p                         !< parameters
-        class(polarft),   intent(inout) :: pimgs(p%nstates,p%nspace) !< resulting polar FTs
-        integer,          intent(in)    :: s                         !< state
-        character(len=:), allocatable :: imgk 
-        type(projector) :: vol4grid
-        type(ori)       :: o
-        integer         :: n, i, ldim(3)
-        imgk = vol%get_imgkind()
-        ldim = vol%get_ldim()
-        call vol4grid%new(ldim, p%smpd, imgk)
-        if( imgk .eq. 'xfel' )then
-            call vol%pad(vol4grid)
-        else
-            call prep4cgrid(vol, vol4grid, p%msk)
-        endif
-        n = oset%get_noris()
-        write(*,'(A)') '>>> GENERATES PROJECTIONS' 
-        do i=1,n
-            call progress(i, n)
-            call pimgs(s,i)%new([p%kfromto(1),p%kfromto(2)],p%ring2,ptcl=.false.)
-            o = oset%get_ori(i)
-            call vol4grid%fproject_polar(o, pimgs(s,i))
-        end do
-        call vol4grid%kill
-    end subroutine fprojvol_polar
 
 end module simple_projector_hlev

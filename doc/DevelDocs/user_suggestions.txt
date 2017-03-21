@@ -1,11 +1,5 @@
-workflow, if no oritab but 2D refs worflow is not taking the reference (ignores)
-
-traceback selection
-need output to enable this (to be able to trace from original micographs)
-state=1/0
-
-where did particles come from: index file for original
-
 It would be very helpful to have a sense of stage drift ....could unblur output an average value for shifts in x and y after processing an entire data set? Presumably ice movement should be somewhat random but what was left might be the stage?
 
 We need to introduce minp (minimum number of particles) and reject classes that fall below the threshold, mapping out these particle to the remaining ones, as they will anyway be zeroed out by the shell-weighting if they don't fit in. Likewise, we need to introduce maxp as a splitting threshold.
+
+Prime3D workflow in automatic update of resolution mode - says lpstop calculated as 8.9A, but keeps on updating low pass limit when FIND equates to resolution substantially below this (went to 5.16A)

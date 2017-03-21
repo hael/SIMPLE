@@ -604,11 +604,10 @@ select case(prg)
         keys_optional(3) = 'oritab'
         keys_optional(4) = 'filwidth'
         keys_optional(5) = 'mul'
-        keys_optional(6) = 'srch_inpl'
-        keys_optional(7) = 'tseries'
+        keys_optional(6) = 'tseries'
         ! parse command line
         if( describe ) call print_doc_prime2D_init
-        call cline%parse(keys_required(:4), keys_optional(:7))
+        call cline%parse(keys_required(:4), keys_optional(:6))
         ! set defaults
         if( .not. cline%defined('eo') ) call cline%set('eo', 'no')
         ! execute
@@ -640,10 +639,9 @@ select case(prg)
         keys_optional(11) = 'width'
         keys_optional(12) = 'startit'
         keys_optional(13) = 'maxits'
-        keys_optional(14) = 'srch_inpl'
         ! parse command line
         if( describe ) call print_doc_prime2D
-        call cline%parse(keys_required(:6), keys_optional(:14))
+        call cline%parse(keys_required(:6), keys_optional(:13))
         ! set defaults
         if( .not. cline%defined('lp')     ) call cline%set('lp',     20.)
         if( .not. cline%defined('amsklp') ) call cline%set('amsklp', 25.)
@@ -970,9 +968,10 @@ select case(prg)
         keys_optional(30) = 'nnn'
         keys_optional(31) = 'shellw'
         keys_optional(32) = 'rrate'
+        keys_optional(33) = 'norec'
         ! parse command line
         if( describe ) call print_doc_prime3D
-        call cline%parse(keys_required(:6), keys_optional(:32))
+        call cline%parse(keys_required(:6), keys_optional(:33))
         ! set defaults
         if( .not. cline%defined('nspace')                  ) call cline%set('nspace', 1000.)
         if( cline%defined('lp') .or. cline%defined('find') ) call cline%set('dynlp',   'no')
@@ -2005,21 +2004,22 @@ select case(prg)
         keys_optional(5)  = 'trs'
         keys_optional(6)  = 'nstates'
         keys_optional(7)  = 'pgrp'
-        keys_optional(8)  = 'defocus'
-        keys_optional(9)  = 'angerr'
-        keys_optional(10) = 'sherr'
-        keys_optional(11) = 'dferr'
-        keys_optional(12) = 'even'
-        keys_optional(13) = 'zero'
-        keys_optional(14) = 'discrete'
-        keys_optional(15) = 'ndiscrete'
-        keys_optional(16) = 'diverse'
-        keys_optional(17) = 'state'
-        keys_optional(18) = 'nspace'
-        keys_optional(19) = 'iares'
+        keys_optional(8)  = 'ctf'
+        keys_optional(9)  = 'defocus'
+        keys_optional(10) = 'angerr'
+        keys_optional(11) = 'sherr'
+        keys_optional(12) = 'dferr'
+        keys_optional(13) = 'even'
+        keys_optional(14) = 'zero'
+        keys_optional(15) = 'discrete'
+        keys_optional(16) = 'ndiscrete'
+        keys_optional(17) = 'diverse'
+        keys_optional(18) = 'state'
+        keys_optional(19) = 'nspace'
+        keys_optional(20) = 'iares'
         ! parse command line
         if( describe ) call print_doc_makeoris
-        call cline%parse(keys_required(:1),keys_optional(:19))
+        call cline%parse(keys_required(:1),keys_optional(:20))
         ! execute
         call xmakeoris%execute(cline)
     case( 'map2ptcls' )

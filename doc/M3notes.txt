@@ -1,0 +1,55 @@
+M3-PROJECT
+Our project ID and directories are ready to go.
+
+1. For data transfer, you may use the data transfer node:
+m3-dtn.massive.org.au
+using scp, rsync over ssh etc.
+
+2. Project folders, you will find two links to your project dirs under your home directory:
+el85
+el85_scratch
+
+Store primary data under el85 and reproducible data under el85_scratch.
+
+3. Job submission
+use #SBATCH --account= el85 in your job submission script.
+For more detailed information about M3, please visit http://docs.massive.org.au/M3/file-systems-on-M3.html
+
+PERFORMANCE ISSUES
+What we do know is that it has something to do with the TLB (translation look aside buffer). In particular the virtualisation process (qemu) was configured to use hugepages. Unfortunately while we anticipated that if simple used hugepages we could correct the performance issue, we don't fully understand why having qemu use hugepages should fix the performance issue.
+
+ M2 nodes have transparent huge pages enabled by default. M3 bare metal did not. After enabling THP on M3 BM it gives the same speeds as M2 nodes.
+
+STREAMING
+dir on M3
+
+/projects/hael_testing
+
+reservation: simple_realtime
+
+m3c
+
+5x24 (2 sockets and 12 cores)
+
+IP: 172.16.193.178
+
+samba
+
+uname: hael
+pwd  : cryoem
+
+12 s exp
+5 e/A/s
+
+nohup simple_distr_exec prg=preproc smpd=0.43 kv=300 cs=2.7 fraca=0.07 refs=pickrefs.mrc dir_movies=TatBC_MX dir_target=stream_output nthr=12 ncunits=10 fbody=tatbc_mx exp_time=12 dose_rate=5 scale=0.5 > PREPROC_STREAM &
+
+
+# FILE COPY
+robocopy /s /z /XO /XN /MOT:1 X:\Users\Susan M:\
+
+X is from M is to
+
+and that is with the M3 drive mapped as
+
+M:          --> \\172.16.193.178\cryoem
+hael / cryoem

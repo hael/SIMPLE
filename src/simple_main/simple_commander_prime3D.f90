@@ -215,7 +215,7 @@ contains
         call b%build_rec_tbox(p)
         if(.not.cline%defined('minp'))p%minp = nint( real(b%a%get_noris())/100. )
         call set_bp_range( b, p, cline )
-        srch_common = prime_srch(p, p%nspace, round2even(twopi*real(p%ring2)))
+        srch_common = prime_srch(p)
         ! initial states, volumes & correlations
         do i = 1,b%a%get_noris()
             if(nint(b%a%get(i,'state')).ne.p%state)call b%a%set(i,'state',0.)

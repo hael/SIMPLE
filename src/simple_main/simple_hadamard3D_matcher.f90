@@ -20,8 +20,7 @@ public :: preppftcc4align, prep_refs_pftcc4align
 private
 
 integer, parameter            :: MAXNPEAKS=10
-logical, parameter            :: debug=.false.
-
+logical, parameter            :: DEBUG=.false.
 type(polarft_corrcalc)        :: pftcc
 type(prime3D_srch)            :: primesrch3D
 real                          :: reslim
@@ -88,7 +87,7 @@ contains
         ! CALCULATE ANGULAR THRESHOLD (USED BY THE SPARSE WEIGHTING SCHEME)
         p%athres = rad2deg(atan(max(p%fny,p%lp)/(p%moldiam/2.)))
         reslim   = p%lp
-        if( debug ) write(*,*) '*** hadamard3D_matcher ***: calculated angular threshold (used by the sparse weighting scheme)'
+        if( DEBUG ) write(*,*) '*** hadamard3D_matcher ***: calculated angular threshold (used by the sparse weighting scheme)'
 
         ! DETERMINE THE NUMBER OF PEAKS
         if( .not. cline%defined('npeaks') )then
@@ -99,7 +98,7 @@ contains
                 case DEFAULT
                     p%npeaks = 1
             end select
-            if( debug ) write(*,*) '*** hadamard3D_matcher ***: determined the number of peaks'
+            if( DEBUG ) write(*,*) '*** hadamard3D_matcher ***: determined the number of peaks'
         endif
 
         ! RANDOM MODEL GENERATION
@@ -109,7 +108,7 @@ contains
             else
                 call gen_random_model(b, p)
             endif
-            if( debug ) write(*,*) '*** hadamard3D_matcher ***: generated random model'
+            if( DEBUG ) write(*,*) '*** hadamard3D_matcher ***: generated random model'
         endif
 
         ! SETUP WEIGHTS FOR THE 3D RECONSTRUCTION
@@ -162,15 +161,6 @@ contains
         endif
         if( which_iter > 0 ) p%outfile = 'prime3Ddoc_'//int2str_pad(which_iter,3)//'.txt'
 
-        ! FOR BENCHMARKING (GPU LOGICS ON CPU) OR USE OF GPU WE CALCULATE CORRS BEFORHAND
-        if( p%use_gpu .eq. 'yes' .or. p%bench_gpu .eq. 'yes' )then
-           if( p%bench_gpu .eq. 'yes' .and. p%use_gpu .eq. 'no' )then
-              call primesrch3D%calc_corrs(pftcc, mode='bench')
-           else
-              call primesrch3D%calc_corrs(pftcc)
-           endif
-        endif
-
         ! RESET RECVOLS
         do s=1,p%nstates
             if( p%eo .eq. 'yes' )then
@@ -179,13 +169,13 @@ contains
                 call b%recvols(s)%reset
             endif
         end do
-        if( debug ) write(*,*) '*** hadamard3D_matcher ***: did reset recvols'
+        if( DEBUG ) write(*,*) '*** hadamard3D_matcher ***: did reset recvols'
 
         ! ALIGN & GRID
         call del_file(p%outfile)
         cnt_glob = 0
         statecnt = 0
-        if( debug ) write(*,*) '*** hadamard3D_matcher ***: loop fromp/top:', p%fromp, p%top
+        if( DEBUG ) write(*,*) '*** hadamard3D_matcher ***: loop fromp/top:', p%fromp, p%top
         do iptcl=p%fromp,p%top
             cnt_glob = iptcl - p%fromp + 1
             call progress( cnt_glob, inptcls )
@@ -198,18 +188,18 @@ contains
                     select case(p%refine)
                         case('no')
                             if( p%oritab .eq. '' )then
-                                call primesrch3D%exec_prime3D_srch(pftcc, iptcl, p%lp, cnt_glob=cnt_glob)
+                                call primesrch3D%exec_prime3D_srch(pftcc, iptcl, p%lp)
                             else
-                                call primesrch3D%exec_prime3D_srch(pftcc, iptcl, p%lp, orientation, cnt_glob=cnt_glob)
+                                call primesrch3D%exec_prime3D_srch(pftcc, iptcl, p%lp, orientation)
                             endif
                         case('neigh')
                             stop 'refine=neigh mode not currently implemented on GPU'
                          case('shc')
                             stop 'refine=shc mode not currently implemented on GPU'
                             if( p%oritab .eq. '' )then
-                                call primesrch3D%exec_prime3D_shc_srch(pftcc, iptcl,  p%lp, cnt_glob=cnt_glob)
+                                call primesrch3D%exec_prime3D_shc_srch(pftcc, iptcl, p%lp)
                             else
-                                call primesrch3D%exec_prime3D_shc_srch(pftcc, iptcl,  p%lp, orientation, cnt_glob=cnt_glob)
+                                call primesrch3D%exec_prime3D_shc_srch(pftcc, iptcl, p%lp, orientation)
                             endif
                         case('shcneigh')
                             stop 'refine=shcneigh mode not currently implemented on GPU'
@@ -260,20 +250,22 @@ contains
                 endif
                 call primesrch3D%get_ori_best(orientation)
                 call b%a%set_ori(iptcl,orientation)
-                if( p%npeaks>1 )then
-                    call primesrch3D%get_oris(prime3D_oris, orientation)
-                    if( doshellweight )then
-                        wresamp = resample_filter(wmat(iptcl,:), res, res_pad)
-                        call grid_ptcl(b, p, iptcl, cnt_glob, orientation, prime3D_oris, shellweights=wresamp)
+                if( p%norec .eq. 'no' )then
+                    if( p%npeaks>1 )then
+                        call primesrch3D%get_oris(prime3D_oris, orientation)
+                        if( doshellweight )then
+                            wresamp = resample_filter(wmat(iptcl,:), res, res_pad)
+                            call grid_ptcl(b, p, iptcl, cnt_glob, orientation, prime3D_oris, shellweights=wresamp)
+                        else
+                            call grid_ptcl(b, p, iptcl, cnt_glob, orientation, prime3D_oris)
+                        endif
                     else
-                        call grid_ptcl(b, p, iptcl, cnt_glob, orientation, prime3D_oris)
-                    endif
-                else
-                    if( doshellweight )then
-                        wresamp = resample_filter(wmat(iptcl,:), res, res_pad)
-                        call grid_ptcl(b, p, iptcl, cnt_glob, orientation, shellweights=wresamp)
-                    else
-                        call grid_ptcl(b, p, iptcl, cnt_glob, orientation)
+                        if( doshellweight )then
+                            wresamp = resample_filter(wmat(iptcl,:), res, res_pad)
+                            call grid_ptcl(b, p, iptcl, cnt_glob, orientation, shellweights=wresamp)
+                        else
+                            call grid_ptcl(b, p, iptcl, cnt_glob, orientation)
+                        endif
                     endif
                 endif
             else
@@ -294,12 +286,19 @@ contains
         call b%a%write(p%outfile, [p%fromp,p%top])
         p%oritab = p%outfile
         call pftcc%kill
-        ! NORMALIZE STRUCTURE FACTORS
-        if( p%eo .eq. 'yes' )then
-            call eonorm_struct_facts(b, p, reslim, which_iter)
-        else
-            call norm_struct_facts(b, p, which_iter)
+        if( p%norec .eq. 'no' )then
+            ! NORMALIZE STRUCTURE FACTORS
+            if( p%eo .eq. 'yes' )then
+                call eonorm_struct_facts(b, p, reslim, which_iter)
+            else
+                call norm_struct_facts(b, p, which_iter)
+            endif
         endif
+        ! DEALLOCATE
+        if( allocated(wmat)    ) deallocate(wmat)
+        if( allocated(wresamp) ) deallocate(wresamp)
+        if( allocated(res)     ) deallocate(res)
+        if( allocated(res_pad) ) deallocate(res_pad)
         ! REPORT CONVERGENCE
         if( p%l_distr_exec )then
             call qsys_job_finished( p, 'simple_hadamard3D_matcher :: prime3D_exec')
@@ -311,11 +310,6 @@ contains
                 converged = b%conv%check_conv3D(update_res)
             endif
         endif
-        ! DEALLOCATE
-        if( allocated(wmat)    ) deallocate(wmat)
-        if( allocated(wresamp) ) deallocate(wresamp)
-        if( allocated(res)     ) deallocate(res)
-        if( allocated(res_pad) ) deallocate(res_pad)
     end subroutine prime3D_exec
 
     subroutine gen_random_model( b, p, nsamp_in )
@@ -406,7 +400,7 @@ contains
         call prep_ptcls_pftcc4align( b, p, cline, ppfts_fname )
         ! subtract the mean shell values for xfel correlations
         if( p%l_xfel ) call pftcc%xfel_subtract_shell_mean()
-        if( debug ) write(*,*) '*** hadamard3D_matcher ***: finished preppftcc4align'
+        if( DEBUG ) write(*,*) '*** hadamard3D_matcher ***: finished preppftcc4align'
     end subroutine preppftcc4align
 
     subroutine prep_refs_pftcc4align( b, p, cline )

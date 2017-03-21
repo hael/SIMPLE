@@ -61,7 +61,9 @@ production_code: ;
 utils_code: s_utes  \
             s_utils ;
 
-s_utes: simple_strings.o      \
+s_utes: simple_arr.o          \
+        simple_sll.o          \
+        simple_strings.o      \
         simple_imgheadrec.o   \
         simple_imghead.o      \
         simple_filehandling.o \
@@ -118,8 +120,6 @@ general: simple_hash.o            \
          simple_params.o          \
          simple_oris.o            \
          simple_ftiter.o          \
-         simple_arr.o             \
-         simple_sll.o             \
          simple_kbinterpol.o      \
          simple_winfuns.o         \
          simple_fsc_compare.o     \
@@ -131,14 +131,12 @@ simple: simple_image.o                  \
         simple_sym.o                    \
         simple_corrmat.o                \
         simple_gridding.o               \
-        simple_polarft.o                \
         simple_polarft_corrcalc.o       \
         simple_projector.o              \
         simple_projector_hlev.o         \
         simple_volpft_corrcalc.o        \
         simple_ft_shsrch.o              \
         simple_ftexp_shsrch.o           \
-        simple_polarft_shsrch.o         \
         simple_volpft_srch.o            \
         simple_pftcc_shsrch.o           \
         simple_pftcc_inplsrch.o         \

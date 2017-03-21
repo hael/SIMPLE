@@ -22,7 +22,7 @@ type sll_node
 ! contains the array _content_ and a pointer _next_ to the nextcoming node
     type(arr) :: content
     type(sll_node), pointer :: next=>null()
-end type
+end type sll_node
 
 type sll
 ! contains the list. In this implementation I have separated the head of the 
@@ -42,11 +42,11 @@ type sll
     procedure :: print
     procedure :: size
     procedure :: kill
-end type
+end type sll
 
 interface sll
     module procedure constructor
-end interface
+end interface sll
 
 contains
 
@@ -55,7 +55,7 @@ contains
     function constructor() result(self)
         type(sll) :: self
         call self%new
-    end function
+    end function constructor
 
     !>  \brief  is a constructor that allocates the head of the list 
     !! and nullifies its pointer to the nextcoming node
@@ -64,15 +64,15 @@ contains
         if( associated(self%head) ) call self%kill
         allocate(self%head)     ! allocate memory for the object
         nullify(self%head%next) ! start with an empty list
-    end subroutine
+    end subroutine new
     
     !>  \brief  does polymorphic addition of a node to the end of 
     !! the singly linked list and updates the list size
     subroutine add( self, iarr, rarr )
-        class(sll), intent(inout)     :: self
-        integer, intent(in), optional :: iarr(:)
-        real, intent(in), optional    :: rarr(:)
-        type(sll_node), pointer       :: prev, curr
+        class(sll),        intent(inout) :: self
+        integer, optional, intent(in)    :: iarr(:)
+        real, optional,    intent(in)    :: rarr(:)
+        type(sll_node), pointer          :: prev, curr
         ! initialization, begin at the 0:th position
         prev => self%head 
         curr => prev%next
@@ -86,16 +86,16 @@ contains
         self%list_size = self%list_size+1  
         ! Redirect the old last
         prev%next => curr
-    end subroutine
+    end subroutine add
     
     !>  \brief  is a polymorphic getter
     subroutine get( self, pos, iarr, rarr )
-        class(sll), intent(in)                      :: self
-        integer, intent(in)                         :: pos
-        integer, allocatable, intent(out), optional :: iarr(:)
-        real, allocatable, intent(out), optional    :: rarr(:)
-        type(sll_node), pointer                     :: curr
-        integer                                     :: counter
+        class(sll),                     intent(in)  :: self
+        integer,                        intent(in)  :: pos
+        integer, allocatable, optional, intent(out) :: iarr(:)
+        real,    allocatable, optional, intent(out) :: rarr(:)
+        type(sll_node), pointer :: curr
+        integer                 :: counter
         if ( pos < 1 .or. pos > self%list_size ) then
             write(*,*) 'Variable pos is out of range!'
             write(*,*) 'get; simple_sll'
@@ -116,14 +116,14 @@ contains
             if( allocated(rarr) ) deallocate(rarr)
             rarr = curr%content%rget()
         endif
-    end subroutine
+    end subroutine get
     
     !>  \brief  is a polymorphic setter
     subroutine set( self, pos, iarr, rarr )
-        class(sll), intent(in)        :: self
-        integer, intent(in)           :: pos
-        integer, intent(in), optional :: iarr(:)
-        real, intent(in), optional    :: rarr(:)
+        class(sll),        intent(in) :: self
+        integer,           intent(in) :: pos
+        integer, optional, intent(in) :: iarr(:)
+        real,    optional, intent(in) :: rarr(:)
         type(sll_node), pointer       :: curr
         integer                       :: counter
         if ( pos < 1 .or. pos > self%list_size ) then
@@ -140,12 +140,12 @@ contains
         end do
         if( present(iarr) ) curr%content = iarr
         if( present(rarr) ) curr%content = rarr
-    end subroutine
+    end subroutine set
     
     !>  \brief  deallocates a sll node and redirects the pointer to next node
     subroutine del( self, pos )
         class(sll), intent(inout) :: self
-        integer, intent(in)       :: pos
+        integer,    intent(in)    :: pos
         type(sll_node), pointer   :: prev, curr
         integer                   :: counter
         if ( pos < 1 .or. pos > self%list_size ) then
@@ -182,7 +182,7 @@ contains
           nullify( curr, prev%next )
         endif
         self%list_size = self%list_size-1 ! update the list size
-    end subroutine
+    end subroutine del
     
     !>  \brief  clones a sll
     subroutine assign( self, self_in )
@@ -193,7 +193,7 @@ contains
         self%list_size = self_in%list_size
         ! make resulting list a replica of self_in
         self%head%next => self_in%head%next
-    end subroutine
+    end subroutine assign
    
     !>  \brief is joining two singly linked lists together. The first node of 
     !! the second list (_self2_) is joined with the last node of the first list
@@ -224,7 +224,7 @@ contains
         deallocate( self2%head )
         nullify( self2%head )
         self2%list_size = 0
-    end function
+    end function append
   
     !>  \brief  is for printing
     subroutine print( self )
@@ -240,14 +240,14 @@ contains
           call curr%content%print
           curr => curr%next
         end do
-    end subroutine
+    end subroutine print
     
     !>  \brief  returns the size of the list
     pure function size( self ) result( list_size )
         class(sll), intent(in) :: self
         integer                :: list_size
         list_size = self%list_size   
-    end function
+    end function size
     
     !>  \brief  is a destructor
     subroutine kill( self )
@@ -262,6 +262,6 @@ contains
             deallocate(self%head)
             nullify(self%head)
         endif
-    end subroutine
+    end subroutine kill
 
 end module simple_sll

@@ -815,24 +815,35 @@ contains
             call cline_shellweight3D%set( 'oritab', trim(oritab) )
             call cline_merge_algndocs%set( 'outfile', trim(oritab) )
             call xmerge_algndocs%execute( cline_merge_algndocs )
-            ! ASSEMBLE VOLUMES
-            call cline_volassemble%set( 'oritab', trim(oritab) )
-            if( p_master%eo.eq.'yes' )then
+            if( p_master%norec .eq. 'yes' )then
+                ! RECONSTRUCT VOLUMES
+                call cline_recvol_distr%set( 'oritab', trim(oritab) )
                 do state = 1,p_master%nstates
-                    str_state = int2str_pad(state,2)
-                    call del_file('fsc_state'//trim(str_state)//'.bin')
-                enddo
-                call cline_volassemble%set( 'prg', 'eo_volassemble' )   ! required for cmdline exec
-                ! call xeo_volassemble%execute( cline_volassemble )
-                ! replaced the above with command line execution as giving the volassemble setup
-                ! its own process id seem to resolve the system instabilities on fast cpu systems
-                call exec_simple_prg(simple_exec_bin, cline_volassemble)
+                    call cline_recvol_distr%delete('state')
+                    call cline_recvol_distr%set('state', real(state))
+                    call xrecvol_distr%execute( cline_recvol_distr )
+                end do
+                call cline_recvol_distr%delete('state')
             else
-                call cline_volassemble%set( 'prg', 'volassemble' ) ! required for cmdline exec
-                ! call xvolassemble%execute( cline_volassemble )
-                ! replaced the above with command line execution as giving the volassemble setup
-                ! its own process id seem to resolve the system instabilities on fast cpu systems
-                call exec_simple_prg(simple_exec_bin, cline_volassemble)
+                ! ASSEMBLE VOLUMES
+                call cline_volassemble%set( 'oritab', trim(oritab) )
+                if( p_master%eo.eq.'yes' )then
+                    do state = 1,p_master%nstates
+                        str_state = int2str_pad(state,2)
+                        call del_file('fsc_state'//trim(str_state)//'.bin')
+                    enddo
+                    call cline_volassemble%set( 'prg', 'eo_volassemble' )   ! required for cmdline exec
+                    ! call xeo_volassemble%execute( cline_volassemble )
+                    ! replaced the above with command line execution as giving the volassemble setup
+                    ! its own process id seem to resolve the system instabilities on fast cpu systems
+                    call exec_simple_prg(simple_exec_bin, cline_volassemble)
+                else
+                    call cline_volassemble%set( 'prg', 'volassemble' ) ! required for cmdline exec
+                    ! call xvolassemble%execute( cline_volassemble )
+                    ! replaced the above with command line execution as giving the volassemble setup
+                    ! its own process id seem to resolve the system instabilities on fast cpu systems
+                    call exec_simple_prg(simple_exec_bin, cline_volassemble)
+                endif
             endif
             ! rename volumes, postprocess & update job_descr
             call os%read(trim(oritab))
@@ -1033,6 +1044,7 @@ contains
                 call rename( trim(vol), trim(str) )
                 vol = 'vol'//trim(int2str(state))
                 call cline%set( trim(vol), trim(str) )
+                call cline_shellweight3D%set( trim(vol), trim(str) )
             enddo
         else
             ! all good
@@ -1211,7 +1223,7 @@ contains
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! setup the environment for distributed execution
-        call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr)
+        call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr)        
         if( p_master%shellw .eq. 'yes' )then
             ! we need to set the prg flag for the command lines that control distributed workflows 
             cline_shellweight3D = cline
@@ -1235,6 +1247,8 @@ contains
         else
             call xsplit%execute( cline )
         endif
+        ! prepare scripts
+        call qsys_cleanup(p_master)
         call qscripts%generate_scripts(job_descr, p_master%ext, myq_descr)
         ! manage job scheduling
         call qscripts%schedule_jobs

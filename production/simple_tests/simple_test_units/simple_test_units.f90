@@ -18,7 +18,6 @@ use simple_args,             only: test_args
 use simple_online_var,       only: test_online_var
 use simple_hash,             only: test_hash
 use simple_imghead,          only: test_imghead
-use simple_polarft_corrcalc, only: test_polarft_corrcalc
 use simple_jiffys,           only: simple_end
 use simple_ft_shsrch,        only: test_ft_shsrch
 use simple_ftexp_shsrch,     only: test_ftexp_shsrch
@@ -34,7 +33,6 @@ call exec_cmdline( trim(command) )
 call chdir(folder)
 call test_cmd_dict           ! pass with PGI
 ! call test_build            ! NOT HAPPY: get_ldim in img class bails with PGI
-! call test_polarft_corrcalc ! set pft error
 call test_ftiter             ! pass with PGI
 call test_ori                ! pass with PGI
 call test_ori_dists          ! pass with PGI

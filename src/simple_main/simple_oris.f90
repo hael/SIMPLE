@@ -70,6 +70,7 @@ type :: oris
     procedure          :: get_nonzero_sum
     procedure          :: get_nonzero_avg
     procedure          :: get_ctfparams
+    procedure          :: get_defocus_groups
     procedure          :: included
     procedure          :: print
     procedure          :: print_mats
@@ -200,7 +201,6 @@ logical, allocatable :: class_part_of_set(:)
 real,    allocatable :: class_weights(:)
 type(ori)            :: o_glob
 real                 :: angthres = 0.
-
 
 contains
 
@@ -917,6 +917,90 @@ contains
         end do
     end function get_ctfparams
 
+    !>  \brief  is for finding the defocus groups and their corresponding CTF parameters
+    subroutine get_defocus_groups( self, fromto, defgroups, ctfparams )
+        use simple_sll,  only: sll
+        use simple_math, only: euclid
+        class(oris),          intent(inout) :: self
+        integer, optional,    intent(in)    :: fromto(2)
+        integer, allocatable, intent(out)   :: defgroups(:)
+        real,    allocatable, intent(out)   :: ctfparams(:,:)
+        real, allocatable :: ctfvec(:)
+        type(sll)         :: llist
+        integer           :: ffromto(2),nparams,i,cnt
+        real              :: kV,cs,fraca,dfx,dfy,angast,kV_prev,cs_prev
+        real              :: fraca_prev,dfx_prev,dfy_prev,angast_prev,dist
+        logical           :: astig=.false.
+        ! parse
+        if( .not. self%isthere('dfx') ) stop 'cannot get defocus groups if there is no CTF info; simple_oris :: get_defocus_groups'
+        ffromto(1) = 1
+        ffromto(2) = self%n
+        if( present(fromto) ) ffromto = fromto
+        ! build
+        llist = sll()
+        ! init
+        allocate(defgroups(ffromto(1):ffromto(2)))
+        defgroups  = 1
+        kV_prev    = self%get(ffromto(1), 'kv'   )
+        cs_prev    = self%get(ffromto(1), 'cs'   )
+        fraca_prev = self%get(ffromto(1), 'fraca')
+        dfx_prev   = self%get(ffromto(1), 'dfx'  )
+        if( self%isthere('dfy') )then
+            dfy_prev    = self%get(ffromto(1), 'dfy'   )
+            angast_prev = self%get(ffromto(1), 'angast')
+            astig       = .true.
+            nparams     = 6
+            call llist%add(rarr=[kV_prev,cs_prev,fraca_prev,dfx_prev,dfy_prev,angast_prev])
+        else
+            dfy_prev    = 0.
+            angast_prev = 0.
+            astig       = .false.
+            nparams     = 6
+            call llist%add(rarr=[kV_prev,cs_prev,fraca_prev,dfx_prev])
+        endif
+        cnt = 1
+        ! find groups
+        do i=ffromto(1) + 1,ffromto(2)
+            kV     = self%get(i, 'kv')
+            cs     = self%get(i, 'cs')
+            fraca  = self%get(i, 'fraca')
+            dfx    = self%get(i, 'dfx'   )
+            if( astig )then
+                dfy    = self%get(i, 'dfy'   )
+                angast = self%get(i, 'angast')
+                dist = euclid([kV,cs,fraca,dfx,dfy,angast],[kV_prev,cs_prev,fraca_prev,dfx_prev,dfy_prev,angast_prev])
+            else
+                dist = euclid([kV,cs,fraca,dfx],[kV_prev,cs_prev,fraca_prev,dfx_prev])
+            endif
+            if( dist < 0.001 )then
+                ! CTF parameters are the same as for the previous particle & no update is needed
+            else
+                ! update counter
+                cnt         = cnt + 1
+                ! update parameters
+                kV_prev     = kV
+                cs_prev     = cs
+                fraca_prev  = fraca
+                dfx_prev    = dfx
+                dfy_prev    = dfy
+                angast_prev = angast
+                ! update the linked list
+                if( astig )then
+                    call llist%add(rarr=[kV_prev,cs_prev,fraca_prev,dfx_prev,dfy_prev,angast_prev])
+                else
+                    call llist%add(rarr=[kV_prev,cs_prev,fraca_prev,dfx_prev])
+                endif
+            endif
+            defgroups(i) = cnt
+        end do
+        ! output params
+        allocate(ctfparams(cnt,nparams))
+        do i=1,cnt
+            call llist%get(i, rarr=ctfvec)
+            ctfparams(i,:) = ctfvec
+        end do
+    end subroutine get_defocus_groups
+
     !>  \brief  is for printing
     function included( self )result( incl )
         class(oris), intent(inout) :: self
@@ -1540,7 +1624,7 @@ contains
         open(unit=fnr, FILE=orifile, STATUS='OLD', action='READ', iostat=file_stat)
         if( file_stat .ne. 0 )then
             close(fnr)
-            write(*,'(a)') 'In: write_1, module: simple_oris.f90; Error when opening file for reading: '&
+            write(*,'(a)') 'In: read, module: simple_oris.f90; Error when opening file for reading: '&
             //trim(orifile)//' ; '//trim(io_message)
             stop 
         endif

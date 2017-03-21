@@ -26,7 +26,7 @@ interface setup_shellweights
     module procedure setup_shellweights_2
 end interface
 
-logical, parameter :: debug       = .false.
+logical, parameter :: DEBUG       = .false.
 real,    parameter :: SHTHRESH    = 0.0001
 real,    parameter :: VOLSHTHRESH = 0.01
 real               :: dfx_prev    = 0.
@@ -86,7 +86,7 @@ contains
                     if( p%kfromto(2) == 1 )then
                         stop 'simple_math::get_lplim gives nonsensical result (==1)'
                     endif
-                    if( debug ) write(*,*) '*** simple_hadamard_common ***: extracted FSC info'
+                    if( DEBUG ) write(*,*) '*** simple_hadamard_common ***: extracted FSC info'
                 else if( cline%defined('lp') )then
                     p%kfromto(2) = b%img%get_find(p%lp)
                 else if( cline%defined('find') )then
@@ -122,7 +122,7 @@ contains
             case DEFAULT
                 stop 'Unsupported eo flag; simple_hadamard_common'
         end select
-        if( debug ) write(*,*) '*** simple_hadamard_common ***: did set Fourier index range'
+        if( DEBUG ) write(*,*) '*** simple_hadamard_common ***: did set Fourier index range'
     end subroutine set_bp_range
 
     !>  \brief  constructs the shellweight matrix for 3D search
@@ -296,11 +296,11 @@ contains
             else
                 call prep4cgrid(b%img_copy, b%img_pad, p%msk)
             endif
-            if( debug ) write(*,*) '*** simple_hadamard_common ***: prepared image for gridding'
+            if( DEBUG ) write(*,*) '*** simple_hadamard_common ***: prepared image for gridding'
             ran = ran3()
             orisoft = orientation
             do jpeak=1,p%npeaks
-                if( debug ) write(*,*) '*** simple_hadamard_common ***: gridding, iteration:', jpeak
+                if( DEBUG ) write(*,*) '*** simple_hadamard_common ***: gridding, iteration:', jpeak
                 ! get ori info
                 if( softrec )then
                     orisoft =  os%get_ori(jpeak)
@@ -309,7 +309,7 @@ contains
                     w = 1.
                 endif
                 s = nint(orisoft%get('state'))
-                if( debug ) write(*,*) '*** simple_hadamard_common ***: got orientation'
+                if( DEBUG ) write(*,*) '*** simple_hadamard_common ***: got orientation'
                 if( p%frac < 0.99 ) w = w*pw
                 if( w > 0. )then
                     if( p%pgrp == 'c1' .or. str_has_substr(p%refine,'adasym') )then
@@ -329,7 +329,7 @@ contains
                         end do
                     endif
                 endif
-                if( debug ) write(*,*) '*** simple_hadamard_common ***: gridded ptcl'
+                if( DEBUG ) write(*,*) '*** simple_hadamard_common ***: gridded ptcl'
             end do
         endif
     end subroutine grid_ptcl
@@ -416,7 +416,7 @@ contains
             ! return in Fourier space
             call b%img%fwd_ft
         endif
-        if( debug ) write(*,*) '*** simple_hadamard_common ***: finished prepimg4align'
+        if( DEBUG ) write(*,*) '*** simple_hadamard_common ***: finished prepimg4align'
     end subroutine prepimg4align
 
     subroutine prep2Dref_1( p, ref )
@@ -637,7 +637,7 @@ contains
             endif
         end do
     end subroutine norm_struct_facts
-    
+
     subroutine preprefs4align( b, p, iptcl, pftcc, ref )
         use simple_math,             only: euclid
         use simple_polarft_corrcalc, only: polarft_corrcalc
@@ -668,7 +668,7 @@ contains
             kV    = b%a%get(iptcl,'kv')
             cs    = b%a%get(iptcl,'cs')
             fraca = b%a%get(iptcl,'fraca')
-            dist = euclid([kV,cs,fraca,dfx,dfy,angast],[kV_prev,cs_prev,fraca_prev,dfx_prev,dfy_prev,angast_prev])
+            dist  = euclid([kV,cs,fraca,dfx,dfy,angast],[kV_prev,cs_prev,fraca_prev,dfx_prev,dfy_prev,angast_prev])
             if( dist < 0.001 )then
                 ! CTF parameters are the same as for the previous particle & no update is needed
             else

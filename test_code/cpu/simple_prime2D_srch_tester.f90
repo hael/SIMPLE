@@ -38,7 +38,6 @@ contains
         call setup_testenv( cline, be_verbose )
         write(*,*) '****prime2D_srch_test, init'
         call test_calc_corrs2D
-        call test_prepcorrs4gpusrch
         !call test_greedy_srch
         call shutdown_testenv
         write(*,*) '****prime2D_srch_test, completed'
@@ -94,16 +93,15 @@ contains
     end subroutine setup_testenv
 
     subroutine test_calc_corrs2D
-        use simple_corrmat, only: project_corrmat3D_greedy
-        real    :: corrmat2d_ref(NPROJS,NPROJS)
-        real    :: corrmat2d_tst(NPROJS,NPROJS)
-        real    :: corrmat3d(NPROJS,NPROJS,pftcc%get_nrots())
-        integer :: inplmat_ref(NPROJS,NPROJS)
-        integer :: inplmat_tst(NPROJS,NPROJS)
-        integer :: iptcl, iref, loc(1)
-        real    :: corrs(pftcc%get_nrots())
+        real                 :: corrmat2d_ref(NPROJS,NPROJS)
+        real                 :: corrmat3d(NPROJS,NPROJS,pftcc%get_nrots())
+        integer              :: inplmat_ref(NPROJS,NPROJS)
+        integer              :: iptcl, iref, loc(1)
+        real                 :: corrs(pftcc%get_nrots())
+        real,    allocatable :: corrmat2d_tst(:,:)
+        integer, allocatable :: inplmat_tst(:,:)
 
-        ! generate the reference marices
+        ! generate the reference matrices
         do iptcl=1,NPROJS
             do iref=1,NPROJS
                 corrs = pftcc%gencorrs(iref, iptcl)
@@ -114,41 +112,8 @@ contains
         end do
 
         if( verbose ) write(*,*) 'testing polarft_corrcalc :: gencorrs_all_tester_1'
-        call pftcc%gencorrs_all_tester(corrmat2d_tst, inplmat_tst)
-        if( .not. test_passed() ) stop '****prime2D_srch_tester FAILURE polarft_corrcalc :: gencorrs_all_tester_1'
-
-        verbose = .true.
-        if( verbose ) write(*,*) 'testing polarft_corrcalc :: gencorrs_all_cpu'
-        call pftcc%expand_dim
-        call pftcc%gencorrs_all_cpu(corrmat3d)
-        call project_corrmat3D_greedy(NPROJS, pftcc%get_nrots(), corrmat3d, corrmat2d_tst, inplmat_tst)
+        call pftcc%gencorrs_all_cpu(corrmat2d_tst, inplmat_tst, shclogic=.false.)
         if( .not. test_passed() ) stop '****prime2D_srch_tester FAILURE polarft_corrcalc :: gencorrs_all_cpu'
-
-        if( verbose ) write(*,*) 'testing polarft_corrcalc :: gencorrs_all_cpu, 2nd round'
-        call pftcc%expand_dim
-        call pftcc%gencorrs_all_cpu(corrmat3d)
-        call project_corrmat3D_greedy(NPROJS, pftcc%get_nrots(), corrmat3d, corrmat2d_tst, inplmat_tst)
-        if( .not. test_passed() ) stop '****prime2D_srch_tester FAILURE polarft_corrcalc :: gencorrs_all_cpu routine, 2nd round'
-
-        if( verbose ) write(*,*) 'testing primesrch2D :: calc_corrs, mode=bench'
-        call primesrch2D%calc_corrs(pftcc, mode='bench')
-        do iptcl=1,NPROJS
-            do iref=1,NPROJS
-                corrmat2d_tst(iptcl,iref) = primesrch2D%get_corr(iptcl,iref)
-                inplmat_tst(iptcl,iref)   = primesrch2D%get_inpl(iptcl,iref)
-            end do
-        end do
-        if( .not. test_passed() ) stop '****prime2D_srch_tester FAILURE primesrch2D :: calc_corrs, mode=bench'
-
-        if( verbose ) write(*,*) 'testing primesrch2D :: calc_corrs, mode=cpu'
-        call primesrch2D%calc_corrs(pftcc, mode='cpu')
-        do iptcl=1,NPROJS
-            do iref=1,NPROJS
-                corrmat2d_tst(iptcl,iref) = primesrch2D%get_corr(iptcl,iref)
-                inplmat_tst(iptcl,iref)   = primesrch2D%get_inpl(iptcl,iref)
-            end do
-        end do
-        if( .not. test_passed() ) stop '****prime2D_srch_tester FAILURE primesrch2D :: calc_corrs, mode=cpu'
 
     contains
 
@@ -183,68 +148,26 @@ contains
 
     end subroutine test_calc_corrs2D
 
-    subroutine test_prepcorrs4gpusrch
-        real, allocatable :: prev_corrs(:)
-        integer :: icorr, icls
-        real    :: ref_corrs(NPROJS)
-        logical :: passed=.false.
-        if( verbose ) write(*,*) 'testing primesrch2D :: prepcorrs4gpusrc'
-        do icls=1,NPROJS
-            call o_ptcls%set(icls, 'class', real(icls))
-            ref_corrs(icls) = pftcc%corr(icls, icls, primesrch2D%get_roind(360.-o_ptcls%e3get(icls)))
-        end do
-        call primesrch2D%prepcorrs4gpusrch(pftcc, o_ptcls, [1,NPROJS])
-        prev_corrs = primesrch2D%get_prev_corrs()
-        if( .not. test_passed() ) stop '****prime2D_srch_tester TEST FAILURE primesrch2D :: test_prepcorrs4gpusrch'
-
-    contains
-
-         function test_passed() result( passed )
-            logical :: passed
-            real    :: ce(2)
-            passed = .false.
-            ce(1) = pearsn(ref_corrs,prev_corrs)
-            ce(2) = euclid(ref_corrs,prev_corrs)
-            if( verbose ) write(*,*) 'corr, corr/euclid: ', ce(1), ce(2)
-            if( ce(1) > 0.999999 .and. ce(2) < 0.000001 ) passed = .true.
-        end function test_passed
-
-    end subroutine test_prepcorrs4gpusrch
-
-    subroutine test_greedy_srch
-        use simple_ori, only: ori
-        integer    :: iptcl
-        type(ori)  :: one_ori
-        logical    :: assignments_correct(NPROJS)
-        if( verbose ) write(*,*) 'testing primesrch2D :: greedy_srch in CPU mode'
-        do iptcl=1,NPROJS
-            call primesrch2D%prep4srch(pftcc, iptcl, LPLIM)
-            call primesrch2D%greedy_srch(pftcc, iptcl)
-            call primesrch2D%get_cls(one_ori)
-            assignments_correct(iptcl) = nint(one_ori%get('class')) == iptcl
-            print *,iptcl, nint(one_ori%get('class')) 
-        end do
-        if( all(assignments_correct) )then
-            ! the test passed
-        else
-            print *, 'only ', count(assignments_correct), ' assignments correct'
-            stop '****prime2D_srch_tester TEST FAILURE primesrch2D :: test_greedy_srch, CPU mode'
-        endif
-        if( verbose ) write(*,*) 'testing primesrch2D :: greedy_srch in GPU mode'
-        call primesrch2D%set_use_cpu(.false.)
-        call primesrch2D%calc_corrs(pftcc, mode='cpu')
-        do iptcl=1,NPROJS
-            call primesrch2D%greedy_srch(pftcc, iptcl, iptcl)
-            call primesrch2D%get_cls(one_ori)
-            assignments_correct(iptcl) = nint(one_ori%get('class')) == iptcl
-        end do
-        call primesrch2D%set_use_cpu(.true.)
-        if( all(assignments_correct) )then
-            ! the test passed
-        else
-            stop '****prime2D_srch_tester TEST FAILURE primesrch2D :: test_greedy_srch, GPU mode'
-        endif
-    end subroutine test_greedy_srch
+    ! subroutine test_greedy_srch
+    !     use simple_ori, only: ori
+    !     integer    :: iptcl
+    !     type(ori)  :: one_ori
+    !     logical    :: assignments_correct(NPROJS)
+    !     if( verbose ) write(*,*) 'testing primesrch2D :: greedy_srch in CPU mode'
+    !     do iptcl=1,NPROJS
+    !         call primesrch2D%prep4srch(pftcc, iptcl)
+    !         call primesrch2D%greedy_srch_old(pftcc, iptcl)
+    !         call primesrch2D%get_cls(one_ori)
+    !         assignments_correct(iptcl) = nint(one_ori%get('class')) == iptcl
+    !         print *,iptcl, nint(one_ori%get('class')) 
+    !     end do
+    !     if( all(assignments_correct) )then
+    !         ! the test passed
+    !     else
+    !         print *, 'only ', count(assignments_correct), ' assignments correct'
+    !         stop '****prime2D_srch_tester TEST FAILURE primesrch2D :: test_greedy_srch, CPU mode'
+    !     endif
+    ! end subroutine test_greedy_srch
 
     subroutine shutdown_testenv
         integer :: iproj

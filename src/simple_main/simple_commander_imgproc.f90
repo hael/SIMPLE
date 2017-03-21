@@ -283,15 +283,12 @@ contains
                     else
                         call apply_ctf_imgfile(p%stk, p%outstk, b%a, p%smpd, 'flip')
                     endif
-                case( 'mul' )
+                case( 'yes' )
                     if( p%neg .eq. 'yes' )then
                         call apply_ctf_imgfile(p%stk, p%outstk, b%a, p%smpd, 'neg')
                     else
                         call apply_ctf_imgfile(p%stk, p%outstk, b%a, p%smpd, 'ctf')
-                    endif
-                case( 'abs' )
-                    call apply_ctf_imgfile(p%stk, p%outstk, b%a, p%smpd, 'abs')
-                
+                    endif                
                 case DEFAULT
                     stop 'Unknown ctf argument'
             end select

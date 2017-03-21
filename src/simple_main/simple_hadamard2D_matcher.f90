@@ -22,10 +22,12 @@ type(polarft_corrcalc) :: pftcc       ! need to be revealed to the outside world
 type(prime2D_srch)     :: primesrch2D ! need to be revealed to the outside world for testing purposes
 type(ori)              :: orientation
 integer                :: cnt_glob = 0
-real                   :: frac_srch_space
-real, allocatable      :: wmat(:,:)
-logical, parameter     :: debug=.false.
-real,    parameter     :: SHWLIM=50.
+real                   :: frac_srch_space = 0.
+integer, allocatable   :: defgroups(:)
+real,    allocatable   :: wmat(:,:)
+real,    allocatable   :: ctfparams(:,:)
+logical, parameter     :: DEBUG = .false.
+real,    parameter     :: SHWLIM = 50.
 
 contains
     
@@ -63,71 +65,34 @@ contains
             write(*,'(A,1X,I3)') '>>> PRIME2D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
         endif
         if( which_iter > 0 ) p%outfile = 'prime2Ddoc_'//int2str_pad(which_iter,3)//'.txt'
-        
-        ! IN GPU MODE WE CALCULATE ALL THE CORRELATIONS BEFORE THE SEARCH BEGINS
-        if( p%use_gpu .eq. 'yes' .or. p%bench_gpu .eq. 'yes' )then
-            if( p%bench_gpu .eq. 'yes' .and. p%use_gpu .eq. 'no')then
-                if( p%oritab .eq. '' )then
-                    call primesrch2D%calc_corrs(pftcc, mode='bench')
-                else
-                     call primesrch2D%calc_corrs(pftcc, b%a, [p%fromp,p%top], 'bench')
-                endif
-            else
-                if( p%oritab .eq. '' )then
-                    call primesrch2D%calc_corrs(pftcc, mode='cpu') ! 4 NOW
-                    ! call primesrch2D%calc_corrs(pftcc, mode='gpu')
-                else
-                    call primesrch2D%calc_corrs(pftcc, b%a, [p%fromp,p%top], 'cpu') ! 4 NOW
-                    ! call primesrch2D%calc_corrs(pftcc, b%a, [p%fromp,p%top], 'gpu')
-                endif
-            endif
-        endif
-        
+
         ! INITIALISE SUMS
         call prime2D_init_sums( b, p )
 
         ! ALIGN & GRID
         call del_file(p%outfile)
-        cnt_glob = 0
-        if( debug ) write(*,*) '*** hadamard2D_matcher ***: loop fromp/top:', p%fromp, p%top
-        do iptcl=p%fromp,p%top
-            cnt_glob = cnt_glob+1
-            call progress(cnt_glob, p%top-p%fromp+1)        
-            orientation = b%a%get_ori(iptcl)
-            if( nint(orientation%get('state')) > 0 )then
-                call preprefs4align(b, p, iptcl, pftcc)
-                ! execute the high-level routines in prime2D_srch
-                if(  p%use_gpu .eq. 'yes' .or. p%bench_gpu .eq. 'yes' )then
-                    if( str_has_substr(p%refine,'neigh') ) stop 'refine=neigh modes not currently implemented on GPU'
-                    if( p%oritab .eq. '' )then
-                        call primesrch2D%exec_prime2D_srch(pftcc, iptcl, p%lp, cnt_glob=cnt_glob)
-                    else
-                        call primesrch2D%exec_prime2D_srch(pftcc, iptcl, p%lp, orientation, cnt_glob=cnt_glob)
-                    endif
-                else             
-                    select case(p%refine)
-                        case('no')
-                            if( p%oritab .eq. '' )then
-                                call primesrch2D%exec_prime2D_srch(pftcc, iptcl, p%lp)
-                            else
-                                call primesrch2D%exec_prime2D_srch(pftcc, iptcl, p%lp, orientation)
-                            endif
-                        case('neigh')
-                            if( p%oritab .eq. '' )then
-                                call primesrch2D%exec_prime2D_srch(pftcc, iptcl, p%lp, nnmat=b%nnmat)
-                            else
-                                call primesrch2D%exec_prime2D_srch(pftcc, iptcl, p%lp, orientation, nnmat=b%nnmat)
-                            endif
-                        case DEFAULT
-                            write(*,*) 'The refinement mode: ', trim(p%refine), ' is unsupported on CPU'
-                            stop
-                    end select
+        if( p%ctf .ne. 'no' ) call pftcc%create_polar_ctfmats(p%smpd, b%a)
+        select case(p%refine)
+            case('no','greedy')
+                if( p%oritab .eq. '' )then
+                    call primesrch2D%exec_prime2D_srch(pftcc, b%a, [p%fromp,p%top], greedy=.true.)
+                else
+                    call primesrch2D%exec_prime2D_srch(pftcc, b%a, [p%fromp,p%top])
                 endif
-                call primesrch2D%get_cls(orientation)
-            else
-                call orientation%reject
-            endif
-            call b%a%set_ori(iptcl,orientation)
+            case('neigh')
+                if( p%oritab .eq. '' )then
+                    call primesrch2D%exec_prime2D_srch(pftcc, b%a, [p%fromp,p%top], greedy=.true., nnmat=b%nnmat)
+                else
+                    call primesrch2D%exec_prime2D_srch(pftcc, b%a, [p%fromp,p%top], nnmat=b%nnmat)
+                endif
+            case DEFAULT
+                write(*,*) 'The refinement mode: ', trim(p%refine), ' is unsupported'
+                stop
+        end select
+        cnt_glob = 0
+        do iptcl=p%fromp,p%top
+            cnt_glob = cnt_glob + 1
+            orientation = b%a%get_ori(iptcl)
             ! read back the image again 4 shift, rotation and cavg update
             if( p%l_distr_exec )then
                 call b%img%read(p%stk_part, cnt_glob)
@@ -151,6 +116,7 @@ contains
                 endif
             endif
         end do
+
         ! orientations output
         call b%a%write(p%outfile, [p%fromp,p%top])
         p%oritab = p%outfile
@@ -338,7 +304,7 @@ contains
         ! must be done here since constants in p are dynamically set
         call primesrch2D%new(p)
         call pftcc%new(p%ncls, [p%fromp,p%top], [p%box,p%box,1], p%kfromto, p%ring2, p%ctf)
-        ! prepare the polarizer
+        ! prepare the polarizers
         call b%img%init_imgpolarizer(pftcc, p%smpd)
         ! PREPARATION OF REFERENCES IN PFTCC
         ! read references and transform into polar coordinates
@@ -441,3 +407,56 @@ contains
     
 end module simple_hadamard2D_matcher
 
+! cnt_glob = 0
+! if( debug ) write(*,*) '*** hadamard2D_matcher ***: loop fromp/top:', p%fromp, p%top
+! do iptcl=p%fromp,p%top
+!     cnt_glob = cnt_glob + 1
+!     call progress(cnt_glob, p%top-p%fromp+1)        
+!     orientation = b%a%get_ori(iptcl)
+!     if( nint(orientation%get('state')) > 0 )then
+!         call preprefs4align(b, p, iptcl, pftcc)         
+!         select case(p%refine)
+!             case('no','greedy')
+!                 if( p%oritab .eq. '' )then
+!                     call primesrch2D%exec_prime2D_srch_old(pftcc, iptcl)
+!                 else
+!                     call primesrch2D%exec_prime2D_srch_old(pftcc, iptcl, orientation)
+!                 endif
+!             case('neigh')
+!                 if( p%oritab .eq. '' )then
+!                     call primesrch2D%exec_prime2D_srch_old(pftcc, iptcl, nnmat=b%nnmat)
+!                 else
+!                     call primesrch2D%exec_prime2D_srch_old(pftcc, iptcl, orientation, nnmat=b%nnmat)
+!                 endif
+!             case DEFAULT
+!                 write(*,*) 'The refinement mode: ', trim(p%refine), ' is unsupported'
+!                 stop
+!         end select
+!         call primesrch2D%get_cls(orientation)
+!     else
+!         call orientation%reject
+!     endif
+!     call b%a%set_ori(iptcl,orientation)
+!     ! read back the image again 4 shift, rotation and cavg update
+!     if( p%l_distr_exec )then
+!         call b%img%read(p%stk_part, cnt_glob)
+!     else
+!         call b%img%read(p%stk, iptcl)
+!     endif
+!     if( nint(orientation%get('state')) > 0 )then
+!         icls = nint(orientation%get('class'))
+!         if( allocated(wmat) )then
+!             ! the wiener_restore2D_online modifies b%img
+!             call wiener_restore2D_online(b%img, orientation,&
+!             p%tfplan, b%cavgs(icls), p%msk, wmat(iptcl,:))
+!             call assemble_ctfsqsum_online(b%img, orientation,&
+!             p%tfplan, b%ctfsqsums(icls), wmat(iptcl,:))
+!         else
+!             ! the wiener_restore2D_online modifies b%img
+!             call wiener_restore2D_online(b%img, orientation,&
+!             p%tfplan, b%cavgs(icls), p%msk)
+!             call assemble_ctfsqsum_online(b%img, orientation,&
+!             p%tfplan, b%ctfsqsums(icls))
+!         endif
+!     endif
+! end do
