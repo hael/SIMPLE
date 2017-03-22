@@ -75,8 +75,7 @@ select case(prg)
         keys_required(5)   = 'refs'
         keys_required(6)   = 'dir_movies'
         keys_required(7)   = 'dir_target'
-        keys_required(8)   = 'nthr'
-        keys_required(9)   = 'ncunits'
+        keys_required(8)   = 'ncunits'
         ! set optional keys
         keys_optional(1)   = 'nthr'
         keys_optional(2)   = 'fbody'
@@ -104,7 +103,7 @@ select case(prg)
         keys_optional(24)  = 'rm_outliers'
         ! parse command line
         if( describe ) call print_doc_preproc
-        call cline%parse(keys_required(:9), keys_optional(:24))
+        call cline%parse(keys_required(:8), keys_optional(:24))
         ! set defaults
         if( .not. cline%defined('trs')             ) call cline%set('trs',        5.)
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',   15.)
@@ -128,27 +127,27 @@ select case(prg)
         ! set required keys
         keys_required(1)  = 'filetab'
         keys_required(2)  = 'smpd'
-        keys_required(3)  = 'nthr'
-        keys_required(4)  = 'nparts'
+        keys_required(3)  = 'nparts'
         ! set optional keys
-        keys_optional(1)  = 'ncunits'
-        keys_optional(2)  = 'fbody'
-        keys_optional(3)  = 'lpstart'
-        keys_optional(4)  = 'lpstop'
-        keys_optional(5)  = 'trs'
-        keys_optional(6)  = 'exp_time'
-        keys_optional(7)  = 'dose_rate'
-        keys_optional(8)  = 'kv'
-        keys_optional(9)  = 'pspecsz'
-        keys_optional(10) = 'numlen'
-        keys_optional(11) = 'startit'
-        keys_optional(12) = 'scale'
-        keys_optional(13) = 'frameavg'
-        keys_optional(14) = 'fromf'
-        keys_optional(15) = 'tof'
+        keys_optional(1)  = 'nthr'
+        keys_optional(2)  = 'ncunits'
+        keys_optional(3)  = 'fbody'
+        keys_optional(4)  = 'lpstart'
+        keys_optional(5)  = 'lpstop'
+        keys_optional(6)  = 'trs'
+        keys_optional(7)  = 'exp_time'
+        keys_optional(8)  = 'dose_rate'
+        keys_optional(9)  = 'kv'
+        keys_optional(10) = 'pspecsz'
+        keys_optional(11) = 'numlen'
+        keys_optional(12) = 'startit'
+        keys_optional(13) = 'scale'
+        keys_optional(14) = 'frameavg'
+        keys_optional(15) = 'fromf'
+        keys_optional(16) = 'tof'
         ! parse command line
         if( describe ) call print_doc_unblur
-        call cline%parse(keys_required(:4), keys_optional(:15))
+        call cline%parse(keys_required(:3), keys_optional(:16))
         ! set defaults
         if( .not. cline%defined('trs')     ) call cline%set('trs',      5.)
         if( .not. cline%defined('lpstart') ) call cline%set('lpstart', 15.)
@@ -166,21 +165,21 @@ select case(prg)
         keys_required(1)  = 'tomoseries'
         keys_required(2)  = 'exp_doc'
         keys_required(3)  = 'smpd'
-        keys_required(4)  = 'nthr'
         ! set optional keys
-        keys_optional(1)  = 'ncunits'
-        keys_optional(2)  = 'lpstart'
-        keys_optional(3)  = 'lpstop'
-        keys_optional(4)  = 'trs'
-        keys_optional(5)  = 'kv'
-        keys_optional(6)  = 'pspecsz'
-        keys_optional(7)  = 'numlen'
-        keys_optional(8)  = 'startit'
-        keys_optional(9)  = 'scale'
-        keys_optional(10) = 'frameavg'
+        keys_optional(1)  = 'nthr'
+        keys_optional(2)  = 'ncunits'
+        keys_optional(3)  = 'lpstart'
+        keys_optional(4)  = 'lpstop'
+        keys_optional(5)  = 'trs'
+        keys_optional(6)  = 'kv'
+        keys_optional(7)  = 'pspecsz'
+        keys_optional(8)  = 'numlen'
+        keys_optional(9)  = 'startit'
+        keys_optional(10) = 'scale'
+        keys_optional(11) = 'frameavg'
         ! parse command line
         if( describe ) call print_doc_unblur_tomo
-        call cline%parse(keys_required(:4), keys_optional(:9))
+        call cline%parse(keys_required(:3), keys_optional(:11))
         ! set defaults
         if( .not. cline%defined('trs')     ) call cline%set('trs',      5.)
         if( .not. cline%defined('lpstart') ) call cline%set('lpstart', 15.)
@@ -215,7 +214,7 @@ select case(prg)
         keys_optional(9) = 'phaseplate'
         ! parse command line
         if( describe ) call print_doc_ctffind
-        call cline%parse(keys_required(:6), keys_optional(:8))
+        call cline%parse(keys_required(:6), keys_optional(:9))
         ! set defaults
         call cline%set('nthr', 1.0)
         if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz', 1024.)
@@ -235,15 +234,15 @@ select case(prg)
         keys_required(1) = 'filetab'
         keys_required(2) = 'refs'
         keys_required(3) = 'smpd'
-        keys_required(4) = 'nthr'
-        keys_required(5) = 'nparts'
+        keys_required(4) = 'nparts'
         ! set optional keys
-        keys_optional(1) = 'lp'
-        keys_optional(2) = 'thres'
-        keys_optional(3) = 'rm_outliers'
+        keys_optional(1) = 'nthr'
+        keys_optional(2) = 'lp'
+        keys_optional(3) = 'thres'
+        keys_optional(4) = 'rm_outliers'
         ! parse command line
         if( describe ) call print_doc_pick
-        call cline%parse(keys_required(:5), keys_optional(:3))
+        call cline%parse(keys_required(:4), keys_optional(:4))
         ! execute
         call xpick_distr%execute(cline)
 
@@ -262,17 +261,17 @@ select case(prg)
         keys_required(2) = 'smpd'
         keys_required(3) = 'ncls'
         keys_required(4) = 'ctf'
-        keys_required(5) = 'nthr'
-        keys_required(6) = 'nparts'
+        keys_required(5) = 'nparts'
         ! set optional keys
-        keys_optional(1) = 'ncunits'
-        keys_optional(2) = 'deftab'
-        keys_optional(3) = 'oritab'
-        keys_optional(4) = 'filwidth'
-        keys_optional(5) = 'mul'   
+        keys_optional(1) = 'nthr'
+        keys_optional(2) = 'ncunits'
+        keys_optional(3) = 'deftab'
+        keys_optional(4) = 'oritab'
+        keys_optional(5) = 'filwidth'
+        keys_optional(6) = 'mul'   
         ! parse command line
         if( describe ) call print_doc_prime2D_init
-        call cline%parse(keys_required(:6), keys_optional(:5))
+        call cline%parse(keys_required(:5), keys_optional(:6))
         ! execute
         call xprime2D_init_distr%execute(cline)
     case( 'prime2D' )
@@ -288,26 +287,27 @@ select case(prg)
         keys_required(4)  = 'ncls'
         keys_required(5)  = 'ctf'
         keys_required(6)  = 'nparts'
-        keys_required(7)  = 'nthr'
         ! set optional keys
-        keys_optional(1)  = 'ncunits'
-        keys_optional(2)  = 'deftab'
-        keys_optional(3)  = 'refine'
-        keys_optional(4)  = 'refs'
-        keys_optional(5)  = 'oritab'
-        keys_optional(6)  = 'hp'
-        keys_optional(7)  = 'lp'
-        keys_optional(8)  = 'cenlp'
-        keys_optional(9)  = 'trs'
-        keys_optional(10) = 'automsk'
-        keys_optional(11) = 'amsklp'
-        keys_optional(12) = 'inner'
-        keys_optional(13) = 'width'
-        keys_optional(14) = 'startit'
-        keys_optional(15) = 'maxits'
-        keys_optional(16) = 'filwidth'
-        keys_optional(17) = 'nnn'
-        keys_optional(18) = 'minp'        
+        keys_optional(1)  = 'nthr'
+        keys_optional(2)  = 'ncunits'
+        keys_optional(3)  = 'deftab'
+        keys_optional(4)  = 'refine'
+        keys_optional(5)  = 'refs'
+        keys_optional(6)  = 'oritab'
+        keys_optional(7)  = 'hp'
+        keys_optional(8)  = 'lp'
+        keys_optional(9)  = 'cenlp'
+        keys_optional(10)  = 'trs'
+        keys_optional(11) = 'automsk'
+        keys_optional(12) = 'amsklp'
+        keys_optional(13) = 'inner'
+        keys_optional(14) = 'width'
+        keys_optional(15) = 'startit'
+        keys_optional(16) = 'maxits'
+        keys_optional(17) = 'filwidth'
+        keys_optional(18) = 'nnn'
+        keys_optional(19) = 'minp'
+        keys_optional(20) = 'center'     
         ! documentation
         if( describe ) call print_doc_prime2D
         ! parse command line
@@ -317,13 +317,14 @@ select case(prg)
         ! else
         !     call cline%parse( keys_required(:7), keys_optional(:19) )
         ! endif
-        call cline%parse( keys_required(:7), keys_optional(:18) )
+        call cline%parse( keys_required(:6), keys_optional(:19) )
         ! set defaults
         if( .not. cline%defined('lp')     ) call cline%set('lp',     20.)
         if( .not. cline%defined('eo')     ) call cline%set('eo',    'no')
         if( .not. cline%defined('amsklp') ) call cline%set('amsklp', 25.)
         if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',  30.)
         if( .not. cline%defined('edge')   ) call cline%set('edge',   20.)
+        if( .not. cline%defined('center') ) call cline%set('center', 'yes')
         ! execute
         call xprime2D_distr%execute(cline)
     case( 'find_nnimgs' )
@@ -336,16 +337,16 @@ select case(prg)
         keys_required(1) = 'stk'
         keys_required(2) = 'smpd'
         keys_required(3) = 'msk'
-        keys_required(4) = 'nthr'
-        keys_required(5) = 'nparts'
+        keys_required(4) = 'nparts'
         ! set optional keys
-        keys_optional(1) = 'ncunits'
-        keys_optional(2) = 'nnn'
-        keys_optional(3) = 'lp'
-        keys_optional(4) = 'hp'
+        keys_optional(1) = 'nthr'
+        keys_optional(2) = 'ncunits'
+        keys_optional(3) = 'nnn'
+        keys_optional(4) = 'lp'
+        keys_optional(5) = 'hp'
         ! parse command line
         if( describe ) call print_doc_find_nnimgs
-        call cline%parse(keys_required(:5), keys_optional(:4))
+        call cline%parse(keys_required(:4), keys_optional(:5))
         ! execute
         call xfind_nnimgs_distr%execute(cline)
 
@@ -358,26 +359,26 @@ select case(prg)
         ! <prime3D_init/end> 
         !
         ! set required keys
-        keys_required(1) = 'stk'
-        keys_required(2) = 'smpd'
-        keys_required(3) = 'msk'
-        keys_required(4) = 'ctf'
-        keys_required(5) = 'pgrp'
-        keys_required(6) = 'nthr'
-        keys_required(7) = 'nparts'
+        keys_required(1)  = 'stk'
+        keys_required(2)  = 'smpd'
+        keys_required(3)  = 'msk'
+        keys_required(4)  = 'ctf'
+        keys_required(5)  = 'pgrp' 
+        keys_required(6)  = 'nparts'
         ! set optional keys
-        keys_optional(1) = 'ncunits'
-        keys_optional(2) = 'deftab'
-        keys_optional(3) = 'lp'
-        keys_optional(4) = 'inner'
-        keys_optional(5) = 'width'
-        keys_optional(6) = 'nspace'
-        keys_optional(7) = 'nran'
-        keys_optional(8) = 'npeaks'
-        keys_optional(9) = 'xfel'        
+        keys_optional(1)  = 'nthr'
+        keys_optional(2)  = 'ncunits'
+        keys_optional(3)  = 'deftab'
+        keys_optional(4)  = 'lp'
+        keys_optional(5)  = 'inner'
+        keys_optional(6)  = 'width'
+        keys_optional(7)  = 'nspace'
+        keys_optional(8)  = 'nran'
+        keys_optional(9)  = 'npeaks'
+        keys_optional(10) = 'xfel'        
         ! parse command line
         if( describe ) call print_doc_prime3D_init
-        call cline%parse(keys_required(:7), keys_optional(:9))
+        call cline%parse(keys_required(:6), keys_optional(:10))
         ! set defaults
         if( .not. cline%defined('nspace') ) call cline%set('nspace', 1000.)
         ! execute
@@ -407,50 +408,50 @@ select case(prg)
         keys_required(3)  = 'msk'
         keys_required(4)  = 'ctf'
         keys_required(5)  = 'pgrp'
-        keys_required(6)  = 'nthr'
-        keys_required(7)  = 'nparts'
+        keys_required(6)  = 'nparts'
         ! set optional keys
-        keys_optional(1)  = 'ncunits'
-        keys_optional(2)  = 'deftab'
-        keys_optional(3)  = 'vol1'
-        keys_optional(4)  = 'oritab'
-        keys_optional(5)  = 'trs'
-        keys_optional(6)  = 'hp'
-        keys_optional(7)  = 'lp'
-        keys_optional(8)  = 'cenlp'
-        keys_optional(9)  = 'dynlp'
-        keys_optional(10)  = 'lpstart'
-        keys_optional(11) = 'lpstop'
-        keys_optional(12) = 'eo'
-        keys_optional(13) = 'refine'
-        keys_optional(14) = 'frac'
-        keys_optional(15) = 'automsk'
-        keys_optional(16) = 'mw'
-        keys_optional(17) = 'amsklp'
-        keys_optional(18) = 'edge'
-        keys_optional(19) = 'binwidth'
-        keys_optional(20) = 'inner'
-        keys_optional(21) = 'width'
-        keys_optional(22) = 'nspace'
-        keys_optional(23) = 'nstates'
-        keys_optional(24) = 'npeaks'
-        keys_optional(25) = 'startit'
-        keys_optional(26) = 'maxits'
-        keys_optional(27) = 'shbarrier'
-        keys_optional(28) = 'noise'
-        keys_optional(29) = 'xfel'
-        keys_optional(30) = 'nnn'
-        keys_optional(31) = 'shellw'
-        keys_optional(32) = 'rrate'
-        keys_optional(33) = 'norec'
+        keys_optional(1)  = 'nthr'
+        keys_optional(2)  = 'ncunits'
+        keys_optional(3)  = 'deftab'
+        keys_optional(4)  = 'vol1'
+        keys_optional(5)  = 'oritab'
+        keys_optional(6)  = 'trs'
+        keys_optional(7)  = 'hp'
+        keys_optional(8)  = 'lp'
+        keys_optional(9)  = 'cenlp'
+        keys_optional(10) = 'dynlp'
+        keys_optional(11) = 'lpstart'
+        keys_optional(12) = 'lpstop'
+        keys_optional(13) = 'eo'
+        keys_optional(14) = 'refine'
+        keys_optional(15) = 'frac'
+        keys_optional(16) = 'automsk'
+        keys_optional(17) = 'mw'
+        keys_optional(18) = 'amsklp'
+        keys_optional(19) = 'edge'
+        keys_optional(20) = 'binwidth'
+        keys_optional(21) = 'inner'
+        keys_optional(22) = 'width'
+        keys_optional(23) = 'nspace'
+        keys_optional(24) = 'nstates'
+        keys_optional(25) = 'npeaks'
+        keys_optional(26) = 'startit'
+        keys_optional(27) = 'maxits'
+        keys_optional(28) = 'shbarrier'
+        keys_optional(29) = 'noise'
+        keys_optional(30) = 'xfel'
+        keys_optional(31) = 'nnn'
+        keys_optional(32) = 'shellw'
+        keys_optional(33) = 'rrate'
+        keys_optional(34) = 'norec'
         ! documentation
         if( describe ) call print_doc_prime3D
         ! parse command line
         call check_restart( entire_line, is_restart )
         if( is_restart )then
-            call parse_restart('prime3D', entire_line, cline, keys_required(:7), keys_optional(:33))
+            call parse_restart('prime3D', entire_line, cline, keys_required(:6), keys_optional(:34))
         else
-            call cline%parse( keys_required(:7), keys_optional(:32) )
+            call cline%parse( keys_required(:6), keys_optional(:34) )
         endif
         ! set defaults
         if( .not. cline%defined('nspace')                  ) call cline%set('nspace', 1000.)
@@ -477,33 +478,33 @@ select case(prg)
         keys_required(5)  = 'pgrp'
         keys_required(6)  = 'oritab'
         keys_required(7)  = 'trs'
-        keys_required(8)  = 'nthr'
-        keys_required(9)  = 'nparts'
+        keys_required(8)  = 'nparts'
         ! set optional keys
-        keys_optional(1)  = 'deftab'
-        keys_optional(2)  = 'vol1'
-        keys_optional(3)  = 'hp'
-        keys_optional(4)  = 'lpstart'
-        keys_optional(5)  = 'lpstop'
-        keys_optional(6)  = 'frac'
-        keys_optional(7)  = 'automsk'
-        keys_optional(8)  = 'mw'
-        keys_optional(9)  = 'amsklp'
-        keys_optional(10) = 'edge'
-        keys_optional(11) = 'inner'
-        keys_optional(12) = 'width'
-        keys_optional(13) = 'startit'
-        keys_optional(14) = 'maxits'
-        keys_optional(15) = 'xfel'
-        keys_optional(16) = 'shellw'
+        keys_optional(1)  = 'nthr'
+        keys_optional(2)  = 'deftab'
+        keys_optional(3)  = 'vol1'
+        keys_optional(4)  = 'hp'
+        keys_optional(5)  = 'lpstart'
+        keys_optional(6)  = 'lpstop'
+        keys_optional(7)  = 'frac'
+        keys_optional(8)  = 'automsk'
+        keys_optional(9)  = 'mw'
+        keys_optional(10) = 'amsklp'
+        keys_optional(11) = 'edge'
+        keys_optional(12) = 'inner'
+        keys_optional(13) = 'width'
+        keys_optional(14) = 'startit'
+        keys_optional(15) = 'maxits'
+        keys_optional(16) = 'xfel'
+        keys_optional(17) = 'shellw'
         ! documentation
         if( describe ) call print_doc_cont3D
         ! parse command line
         call check_restart( entire_line, is_restart )
         if( is_restart )then
-            call parse_restart('cont3D', entire_line, cline, keys_required(:9), keys_optional(:16))
+            call parse_restart('cont3D', entire_line, cline, keys_required(:8), keys_optional(:17))
         else
-            call cline%parse( keys_required(:9), keys_optional(:16) )
+            call cline%parse( keys_required(:8), keys_optional(:17) )
         endif
         ! set defaults
         if( .not. cline%defined('eo') )then
@@ -529,22 +530,22 @@ select case(prg)
         keys_required(4)  = 'msk' 
         keys_required(5)  = 'oritab'
         keys_required(6)  = 'ctf'
-        keys_required(7)  = 'nthr'
-        keys_required(8)  = 'nparts'
+        keys_required(7)  = 'nparts'
         ! set optional keys
-        keys_optional(1)  = 'ncunits'
-        keys_optional(2)  = 'deftab'
-        keys_optional(3)  = 'automsk'
-        keys_optional(4)  = 'mw'
-        keys_optional(5)  = 'amsklp'
-        keys_optional(6)  = 'edge'
-        keys_optional(7)  = 'binwidth'
-        keys_optional(8)  = 'inner'
-        keys_optional(9)  = 'width'
-        keys_optional(10) = 'refine'       
+        keys_optional(1)  = 'nthr'
+        keys_optional(2)  = 'ncunits'
+        keys_optional(3)  = 'deftab'
+        keys_optional(4)  = 'automsk'
+        keys_optional(5)  = 'mw'
+        keys_optional(6)  = 'amsklp'
+        keys_optional(7)  = 'edge'
+        keys_optional(8)  = 'binwidth'
+        keys_optional(9)  = 'inner'
+        keys_optional(10) = 'width'
+        keys_optional(11) = 'refine'       
         ! parse command line
         if( describe ) call print_doc_shellweight3D
-        call cline%parse(keys_required(:8), keys_optional(:10))
+        call cline%parse(keys_required(:7), keys_optional(:11))
         ! execute
         call xshellweight3D_distr%execute(cline)
         ! set defaults
@@ -572,22 +573,22 @@ select case(prg)
         keys_required(4)  = 'msk'
         keys_required(5)  = 'ctf'
         keys_required(6)  = 'pgrp'
-        keys_required(7)  = 'nthr'
-        keys_required(8)  = 'nparts'
+        keys_required(7)  = 'nparts'
         ! set optional keys
-        keys_optional(1)  = 'ncunits'
-        keys_optional(2)  = 'eo'
-        keys_optional(3)  = 'deftab'
-        keys_optional(4)  = 'frac'
-        keys_optional(5)  = 'mw'
-        keys_optional(6)  = 'mul'
-        keys_optional(7)  = 'state'
-        keys_optional(8)  = 'shellw'
-        keys_optional(9)  = 'vol1'
-        keys_optional(10) = 'npeaks'
+        keys_optional(1)  = 'nthr'
+        keys_optional(2)  = 'ncunits'
+        keys_optional(3)  = 'eo'
+        keys_optional(4)  = 'deftab'
+        keys_optional(5)  = 'frac'
+        keys_optional(6)  = 'mw'
+        keys_optional(7)  = 'mul'
+        keys_optional(8)  = 'state'
+        keys_optional(9)  = 'shellw'
+        keys_optional(10) = 'vol1'
+        keys_optional(11) = 'npeaks'
         ! parse command line
         if( describe ) call print_doc_recvol
-        call cline%parse(keys_required(:8), keys_optional(:10))
+        call cline%parse(keys_required(:7), keys_optional(:11))
         ! set defaults
         if( .not. cline%defined('trs') ) call cline%set('trs', 5.) ! to assure that shifts are being used
         if( .not. cline%defined('eo')  ) call cline%set('eo', 'no')
@@ -639,16 +640,16 @@ select case(prg)
         keys_required(7)  = 'nstates'
         keys_required(8)  = 'npeaks'
         keys_required(9)  = 'lp'
-        keys_required(10) = 'nthr'
-        keys_required(11) = 'nparts'
+        keys_required(10) = 'nparts'
         ! set optional keys
-        keys_optional(1)  = 'ncunits'
-        keys_optional(2)  = 'deftab'
-        keys_optional(3)  = 'frac'
-        keys_optional(4)  = 'maxits'
+        keys_optional(1)  = 'nthr'
+        keys_optional(2)  = 'ncunits'
+        keys_optional(3)  = 'deftab'
+        keys_optional(4)  = 'frac'
+        keys_optional(5)  = 'maxits'
         ! parse command line
         ! if( describe ) call print_doc_isw
-        call cline%parse(keys_required(:11), keys_optional(:4))
+        call cline%parse(keys_required(:10), keys_optional(:5))
         ! set defaults
         call cline%set('refine', 'isw')
         ! execute
@@ -664,26 +665,26 @@ select case(prg)
         keys_required(2)  = 'smpd'
         keys_required(3)  = 'msk'
         keys_required(4)  = 'pgrp'
-        keys_required(5)  = 'nthr'
-        keys_required(6)  = 'nparts'
+        keys_required(5)  = 'nparts'
         ! set optional keys
-        keys_optional(1)  = 'ncunits'
+        keys_optional(1)  = 'nthr'
         keys_optional(2)  = 'nthr_master'
-        keys_optional(3)  = 'hp'
-        keys_optional(4)  = 'lp'
-        keys_optional(5)  = 'frac'
-        keys_optional(6)  = 'automsk'
-        keys_optional(7)  = 'mw'
-        keys_optional(8)  = 'amsklp'
-        keys_optional(9)  = 'edge'
-        keys_optional(10) = 'binwidth'
-        keys_optional(11) = 'inner'
-        keys_optional(12) = 'width'
-        keys_optional(13) = 'nspace'
-        keys_optional(14) = 'shbarrier'
+        keys_optional(3)  = 'ncunits'
+        keys_optional(4)  = 'hp'
+        keys_optional(5)  = 'lp'
+        keys_optional(6)  = 'frac'
+        keys_optional(7)  = 'automsk'
+        keys_optional(8)  = 'mw'
+        keys_optional(9)  = 'amsklp'
+        keys_optional(10) = 'edge'
+        keys_optional(11) = 'binwidth'
+        keys_optional(12) = 'inner'
+        keys_optional(13) = 'width'
+        keys_optional(14) = 'nspace'
+        keys_optional(15) = 'shbarrier'
         ! parse command line
         if( describe ) call print_doc_ini3D_from_cavgs
-        call cline%parse(keys_required(:6), keys_optional(:14))
+        call cline%parse(keys_required(:5), keys_optional(:15))
         ! execute
         call xini3D_from_cavgs%execute( cline )
     case( 'het_ensemble' )
@@ -697,24 +698,25 @@ select case(prg)
         keys_required(3)  = 'oritab'
         keys_required(4)  = 'msk'
         keys_required(5)  = 'pgrp'
-        keys_required(6)  = 'nthr'
-        keys_required(7)  = 'nparts'
-        keys_required(8)  = 'ctf'
-        keys_required(9)  = 'nstates'
-        keys_required(10) = 'lp'
+        keys_required(6)  = 'ctf'
+        keys_required(7)  = 'nstates'
+        keys_required(8)  = 'lp'
+        keys_required(9)  = 'nparts'
         ! set optional keys
-        keys_optional(1)  = 'frac'
-        keys_optional(2)  = 'automsk'
-        keys_optional(3)  = 'mw'
-        keys_optional(4)  = 'amsklp'
-        keys_optional(5)  = 'edge'
-        keys_optional(6)  = 'binwidth'
-        keys_optional(7)  = 'inner'
-        keys_optional(8)  = 'width'
-        keys_optional(9)  = 'nspace'
+        keys_optional(1)  = 'nthr'
+        keys_optional(2)  = 'frac'
+        keys_optional(3)  = 'automsk'
+        keys_optional(4)  = 'mw'
+        keys_optional(5)  = 'amsklp'
+        keys_optional(6)  = 'edge'
+        keys_optional(7)  = 'binwidth'
+        keys_optional(8)  = 'inner'
+        keys_optional(9)  = 'width'
+        keys_optional(10) = 'nspace'
         ! parse command line
         ! if( describe ) call print_doc_het_ensemble
-        call cline%parse(keys_required(:10), keys_optional(:9))
+        call cline%parse(keys_required(:9), keys_optional(:10))
+        if( .not. cline%defined('shellw')  ) call cline%set('shellw', 'no')
         ! execute
         call xhet_ensemble%execute( cline )
     case DEFAULT

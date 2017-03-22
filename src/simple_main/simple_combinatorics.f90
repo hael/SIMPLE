@@ -13,7 +13,6 @@ contains
         real,    allocatable :: dists(:,:), rmat(:,:)
         type(ran_tabu)       :: rt
         integer :: isample, idiv, curr_pop, loc(2), nsamples, backcnt
-        write(*,'(a)') '>>> GENERATING DIVERSE LABELING'
         nsamples = 10*ndiverse*ndiverse
         allocate(configs_diverse(ndiverse,nptcls), configs_trial(nsamples,nptcls),&
         rmat(nsamples,nptcls), dists(nsamples,ndiverse), tmp(nptcls))
@@ -29,7 +28,7 @@ contains
         curr_pop = 1
         backcnt  = nsamples
         configs_diverse(curr_pop,:) = configs_trial(curr_pop,:)
-        do while(curr_pop < ndiverse)
+        do while(curr_pop <= ndiverse)
             ! calculate Hamming distances
             dists = 0.
             !$omp parallel do schedule(auto) default(shared) private(isample,idiv)
@@ -43,6 +42,7 @@ contains
             loc = maxloc(dists)
             curr_pop = curr_pop + 1
             configs_diverse(curr_pop,:) = configs_trial(loc(1),:)
+            print *, configs_diverse(curr_pop,:)
             ! swap with last in the trial set (using the backward counter)
             tmp = configs_trial(backcnt,:)
             configs_trial(backcnt,:) = configs_trial(loc(1),:)

@@ -105,12 +105,12 @@ contains
         use simple_commander_imgproc
         class(unblur_distr_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        ! commanders
-        type(stack_commander)              :: xstack
-        ! command lines
-        type(cmdline)                      :: cline_stack
         ! other vars
-        character(len=STDLEN), allocatable :: movienames(:)
+        character(len=STDLEN), allocatable :: names_intg(:)
+        character(len=STDLEN), allocatable :: names_forctf(:)
+        character(len=STDLEN), allocatable :: names_pspec(:)
+        character(len=STDLEN), allocatable :: names_thumb(:)
+        character(len=STDLEN)              :: str
         type(params)                       :: p_master
         type(qsys_ctrl)                    :: qscripts
         type(chash)                        :: myq_descr, job_descr
@@ -122,6 +122,7 @@ contains
         p_master = params(cline, checkdistr=.false.)
         p_master%nptcls = nlines(p_master%filetab)
         if( p_master%nparts > p_master%nptcls ) stop 'nr of partitions (nparts) mjust be < number of entries in filetable'
+        goto 999
         ! setup the environment for distributed execution
         call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr)
         ! prepare job description
@@ -132,25 +133,27 @@ contains
         ! manage job scheduling
         call qscripts%schedule_jobs
         call qsys_cleanup(p_master)
-        ! stack power spectra and thumbnails
-        if( cline%defined('numlen') )then
+        ! make unblur_files.txt file detaling all the files generated
+        999 if( cline%defined('numlen') )then
             numlen = p_master%numlen
         else
             numlen = len(int2str(p_master%nptcls))
         endif
         if( cline%defined('fbody') )then
-            call make_filetable('unblur_pspecs.txt', trim(adjustl(p_master%fbody))//'_pspec', p_master%nptcls, p_master%ext, numlen)
-            call make_filetable('unblur_thumbs.txt', trim(adjustl(p_master%fbody))//'_thumb', p_master%nptcls, p_master%ext, numlen)
+            str = trim(p_master%cwd)//'/'//trim(adjustl(p_master%fbody))
+            names_intg   = make_filenames(trim(str)//'_intg',   p_master%nptcls, p_master%ext, numlen)
+            names_forctf = make_filenames(trim(str)//'_forctf', p_master%nptcls, p_master%ext, numlen)
+            names_pspec  = make_filenames(trim(str)//'_pspec',  p_master%nptcls, p_master%ext, numlen)
+            names_thumb  = make_filenames(trim(str)//'_thumb',  p_master%nptcls, p_master%ext, numlen)
+            call make_multitab_filetable('unblur_files.txt', names_intg, names_forctf, names_pspec, names_thumb )
         else
-            call make_filetable('unblur_pspecs.txt', '', p_master%nptcls, p_master%ext, numlen, suffix='_pspec')
-            call make_filetable('unblur_thumbs.txt', '', p_master%nptcls, p_master%ext, numlen, suffix='_thumb')
+            str = trim(p_master%cwd)//'/'
+            names_intg   = make_filenames(trim(str), p_master%nptcls, p_master%ext, numlen, suffix='_intg')
+            names_forctf = make_filenames(trim(str), p_master%nptcls, p_master%ext, numlen, suffix='_forctf')
+            names_pspec  = make_filenames(trim(str), p_master%nptcls, p_master%ext, numlen, suffix='_pspec')
+            names_thumb  = make_filenames(trim(str), p_master%nptcls, p_master%ext, numlen, suffix='_thumb')
+            call make_multitab_filetable('unblur_files.txt', names_intg, names_forctf, names_pspec, names_thumb )
         endif
-        call cline_stack%set('filetab', 'unblur_pspecs.txt')
-        call cline_stack%set('outstk',  'unblur_pspecs'//p_master%ext)
-        call xstack%execute(cline_stack)
-        call cline_stack%set('filetab', 'unblur_thumbs.txt')
-        call cline_stack%set('outstk',  'unblur_thumbs'//p_master%ext)
-        call xstack%execute(cline_stack)
         call simple_end('**** SIMPLE_DISTR_UNBLUR NORMAL STOP ****')
     end subroutine exec_unblur_distr
 
@@ -728,6 +731,7 @@ contains
                 call rename( trim(vol), trim(str) )
                 vol = 'vol'//trim(int2str(state))
                 call cline%set( trim(vol), trim(str) )
+                call cline_shellweight3D%set( trim(vol), trim(str) )
             enddo
         else if( .not.cline%defined('oritab') .and. vol_defined )then
             ! projection matching
@@ -832,18 +836,16 @@ contains
                         str_state = int2str_pad(state,2)
                         call del_file('fsc_state'//trim(str_state)//'.bin')
                     enddo
-                    call cline_volassemble%set( 'prg', 'eo_volassemble' )   ! required for cmdline exec
-                    ! call xeo_volassemble%execute( cline_volassemble )
-                    ! replaced the above with command line execution as giving the volassemble setup
-                    ! its own process id seem to resolve the system instabilities on fast cpu systems
-                    call exec_simple_prg(simple_exec_bin, cline_volassemble)
+                    call cline_volassemble%set( 'prg', 'eo_volassemble' ) ! required for cmdline exec
                 else
-                    call cline_volassemble%set( 'prg', 'volassemble' ) ! required for cmdline exec
-                    ! call xvolassemble%execute( cline_volassemble )
-                    ! replaced the above with command line execution as giving the volassemble setup
-                    ! its own process id seem to resolve the system instabilities on fast cpu systems
-                    call exec_simple_prg(simple_exec_bin, cline_volassemble)
+                    call cline_volassemble%set( 'prg', 'volassemble' )    ! required for cmdline exec
                 endif
+                ! call xvolassemble%execute( cline_volassemble )
+                ! replaced the above with command line execution as giving the volassemble setup
+                ! its own process id seem to resolve the system instabilities on fast cpu systems
+                ! replaced the above with execution in the queue to reduce the stress on the login node
+                ! call exec_simple_prg(simple_exec_bin, cline_volassemble)
+                call exec_simple_prg_in_queue( qscripts, myq_descr, simple_exec_bin, cline_volassemble, 'VOLASSEMBLE_FINISHED')
             endif
             ! rename volumes, postprocess & update job_descr
             call os%read(trim(oritab))

@@ -428,7 +428,7 @@ contains
 
         ! GENERATE DIVERSE INITIAL LABELS
         write(*,'(A)') '>>>'
-        write(*,'(A)') '>>> GENERATE DIVERSE LABELING'
+        write(*,'(A)') '>>> GENERATING DIVERSE LABELING'
         write(*,'(A)') '>>>'
         call os%new(p_master%nptcls)
         call os%read(p_master%oritab)
@@ -441,7 +441,6 @@ contains
 
         ! GENERATE CANDIDATE SOLUTIONS
         do irepeat = 1,NREPEATS
-            write(*,'(A)') '>>>'
             write(*,'(A,I3)') '>>> PRIME3D REPEAT ', irepeat
             write(*,'(A)') '>>>'
             ! GENERATE ORIENTATIONS
@@ -471,7 +470,7 @@ contains
         ! GENERATE CONSENSUS DOCUMENT
         oritab = trim(REPEATFBODY)//'consensus.txt'
         write(*,'(A)') '>>>'
-        write(*,'(A,A)') '>>> GENERATE ENSEMBLE SOLUTION: ', trim(oritab)
+        write(*,'(A,A)') '>>> GENERATING ENSEMBLE SOLUTION: ', trim(oritab)
         write(*,'(A)') '>>>'
         allocate( labels_incl(NREPEATS,n_incl), consensus(n_incl) )
         do irepeat=1,NREPEATS

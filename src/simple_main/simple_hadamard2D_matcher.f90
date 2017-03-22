@@ -140,6 +140,7 @@ contains
             ! CONVERGENCE TEST
             converged = b%conv%check_conv2D()
         endif
+
     end subroutine prime2D_exec
     
     subroutine prime2D_read_sums( b, p )
@@ -294,7 +295,7 @@ contains
         integer   :: cnt, iptcl, icls, sz, pop, istate
         integer   :: filtsz, alloc_stat, filnum, io_stat
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PRIME2D SEARCH ENGINE'
-        if( frac_srch_space >= SHWLIM )then
+        if( frac_srch_space >= SHWLIM .and. p%oritab .ne. '' )then
             filtsz = b%img%get_filtsz()
             if( allocated(wmat) ) deallocate(wmat)
             allocate(wmat(p%top-p%fromp+1,filtsz), stat=alloc_stat)

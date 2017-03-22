@@ -368,7 +368,7 @@ contains
         class(params),     intent(inout) :: self
         class(cmdline),    intent(inout) :: cline
         logical, optional, intent(in)    :: checkdistr, allow_mix
-        integer                          :: i, s, ncls, ifoo, lfoo(3), cntfile=0
+        integer                          :: i, s, ncls, ifoo, lfoo(3), cntfile=0, nthr_local
         logical                          :: here, ccheckdistr, aamix
         character(len=STDLEN)            :: cwd_local, debug_local
         character(len=1)                 :: checkupfile(50)
@@ -773,7 +773,12 @@ contains
         call mkfnames
         ! check box
         if( self%box > 0 .and. self%box < 26 ) stop 'box size need to be larger than 26; simple_params'
-!$      call omp_set_num_threads(self%nthr)
+        if( cline%defined('nthr') )then
+!$          call omp_set_num_threads(self%nthr)       
+        else
+!$          self%nthr = omp_get_max_threads()
+!$          call omp_set_num_threads(self%nthr)   
+        endif
         nthr_glob = self%nthr
         if( .not. cline%defined('xdim') ) self%xdim = self%box/2
         self%xdimpd = round2even(self%alpha*real(self%box/2))

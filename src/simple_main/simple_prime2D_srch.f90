@@ -290,17 +290,19 @@ contains
         do iptcl=pfromto(1),pfromto(2)
             orientation = a%get_ori(iptcl)
             if( nint(orientation%get('state')) > 0 )then
-                self%prev_class = nint(orientation%get('class'))  
-                self%prev_rot   = self%srch_common%roind(360.-orientation%e3get())
-                self%prev_shvec = [orientation%get('x'),orientation%get('y')]
+                ! initialize
+                call self%prep4srch(pftcc, iptcl)
+                ! greedy selection
+                ! update the class
                 self%best_class = classes(iptcl)
-                self%best_rot   = self%inplmat(iptcl,classes(iptcl))
-                self%best_corr  = corrs(iptcl)
+                ! update the correlation
+                self%best_corr = self%corrmat2d(iptcl,self%best_class)
+                ! update the in-plane angle
+                self%best_rot = self%inplmat(iptcl,self%best_class)
                 ! search shifts
                 call self%shift_srch(iptcl)
                 ! we always evaluate all references using the greedy approach
                 self%nrefs_eval = self%nrefs
-                if( str_has_substr(self%refine,'neigh') ) self%nrefs_eval = self%nnn
                 ! output info
                 call self%get_cls(orientation)
                 call a%set_ori(iptcl,orientation)
@@ -382,7 +384,7 @@ contains
                 call orientation%reject
             endif
         end do
-        if( DEBUG ) write(*,'(A)') '>>> PRIME2D_SRCH::FINISHED GREEDY SEARCH'
+        if( DEBUG ) write(*,'(A)') '>>> PRIME2D_SRCH::FINISHED STOCHASTIC SEARCH'
     end subroutine stochastic_srch
 
     !>  \brief  executes the in-plane search over one reference

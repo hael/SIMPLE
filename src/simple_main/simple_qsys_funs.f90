@@ -287,11 +287,13 @@ contains
         integer, optional, intent(in) :: wtime
         integer :: wwtime
         integer, parameter :: SHORTTIME = 5
+        logical :: there
         wwtime = SHORTTIME
         if( present(wtime) ) wwtime = wtime
         do
-            if( file_exists(trim(fname)) ) exit
-            call sleep(wtime)
+            there = file_exists(trim(fname))
+            if( there ) exit
+            call simple_sleep(wwtime)
         end do
     end subroutine qsys_watcher_1
 
@@ -339,5 +341,28 @@ contains
         write(*,'(a)') trim(exec_str)
         call exec_cmdline(exec_str)
     end subroutine exec_simple_prg
+
+    subroutine exec_simple_prg_in_queue( qscripts, myq_descr, exec_bin, cline, finish_indicator )
+        use simple_qsys_ctrl, only: qsys_ctrl
+        use simple_chash,     only: chash
+        use simple_cmdline,   only: cmdline
+        class(qsys_ctrl), intent(inout)  :: qscripts         !< qsys controller
+        class(chash),     intent(in)     :: myq_descr        !< user-provided queue and job specifics from simple_distr_config.env
+        character(len=*), intent(in)     :: exec_bin         !< executable binary
+        class(cmdline),   intent(in)     :: cline            !< command line arguments
+        character(len=*), intent(in)     :: finish_indicator !< executable binary
+        character(len=STDLEN), parameter :: script_name = 'simple_script_single'
+        type(chash) :: job_descr
+        call del_file(finish_indicator)
+        ! prepare job description
+        call cline%gen_job_descr(job_descr)
+        ! generate the script
+        call qscripts%generate_script(job_descr, myq_descr, exec_bin, script_name)
+        ! submit it
+        call qscripts%submit_script(script_name)
+        ! watch for completion
+        call qsys_watcher_1(finish_indicator)
+        call del_file(finish_indicator)
+    end subroutine exec_simple_prg_in_queue
 
 end module simple_qsys_funs

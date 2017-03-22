@@ -639,15 +639,17 @@ select case(prg)
         keys_optional(11) = 'width'
         keys_optional(12) = 'startit'
         keys_optional(13) = 'maxits'
+        keys_optional(14) = 'center'
         ! parse command line
         if( describe ) call print_doc_prime2D
-        call cline%parse(keys_required(:6), keys_optional(:13))
+        call cline%parse(keys_required(:6), keys_optional(:14))
         ! set defaults
-        if( .not. cline%defined('lp')     ) call cline%set('lp',     20.)
-        if( .not. cline%defined('amsklp') ) call cline%set('amsklp', 25.)
-        if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',  30.)
-        if( .not. cline%defined('edge')   ) call cline%set('edge',   20.)
-        if( .not. cline%defined('eo')     ) call cline%set('eo',    'no')
+        if( .not. cline%defined('lp')     ) call cline%set('lp',      20.)
+        if( .not. cline%defined('amsklp') ) call cline%set('amsklp',  25.)
+        if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',   30.)
+        if( .not. cline%defined('edge')   ) call cline%set('edge',    20.)
+        if( .not. cline%defined('eo')     ) call cline%set('eo',     'no')
+        if( .not. cline%defined('center') ) call cline%set('center', 'yes')
         ! execute
         call xprime2D%execute(cline)
     case( 'cavgassemble' )
@@ -860,8 +862,9 @@ select case(prg)
         keys_required(2)  = 'smpd'
         keys_required(3)  = 'oritab'
         keys_required(4)  = 'ctf'
-        keys_required(5)  = 'nstates'
-        keys_required(6)  = 'msk'
+        keys_required(5)  = 'pgrp'
+        keys_required(6)  = 'nstates'
+        keys_required(7)  = 'msk'
         ! set optionnal keys
         keys_optional(1)  = 'nthr'
         keys_optional(2)  = 'deftab'
@@ -877,7 +880,7 @@ select case(prg)
         keys_optional(12) = 'tseries'
         ! parse command line
         if( describe ) call print_doc_multiptcl_init
-        call cline%parse(keys_required(:6), keys_optional(:12))
+        call cline%parse(keys_required(:7), keys_optional(:12))
         ! set defaults
         if( .not. cline%defined('trs') ) call cline%set('trs', 3.) ! to assure that shifts are being used
         !execute
@@ -980,6 +983,7 @@ select case(prg)
              call cline%set('refine',  'no')
         else
             if( cline%get_carg('refine').eq.'het' )then
+                if( .not. cline%defined('shellw')  ) call cline%set('shellw', 'no')
                 if( .not. cline%defined('nstates') ) stop 'refine=HET requires specification of NSTATES'
                 if( .not. cline%defined('oritab')  ) stop 'refine=HET requires ORITAB input'
             endif

@@ -126,10 +126,14 @@ contains
         character(len=*),   intent(in) :: which
         character(len=:), allocatable  :: moviename  
         select case( which )
-            case('forctf')
-                allocate(moviename, source=trim(self%moviename_forctf))
             case('intg')
                 allocate(moviename, source=trim(self%moviename_intg))
+            case('forctf')
+                allocate(moviename, source=trim(self%moviename_forctf))
+            case('pspec')
+                allocate(moviename, source=trim(self%moviename_pspec))
+            case('thumb')
+                allocate(moviename, source=trim(self%moviename_thumb))
             case DEFAULT
                 stop 'unsupported which flag; simple_unblur_iter :: get_moviename'
         end select

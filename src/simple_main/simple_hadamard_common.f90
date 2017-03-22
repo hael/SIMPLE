@@ -443,9 +443,11 @@ contains
         class(oris),    intent(inout) :: os
         integer,        intent(in)    :: icls
         real :: xyz(3)
-        ! center the reference and update the corresponding class parameters
-        xyz = ref%center(p%cenlp, 'no', p%msk)
-        call os%add_shift2class(icls, -xyz(1:2))
+        if( p%center .eq. 'yes' )then
+            ! center the reference and update the corresponding class parameters
+            xyz = ref%center(p%cenlp, 'no', p%msk)
+            call os%add_shift2class(icls, -xyz(1:2))
+        endif
         ! normalise
         call ref%norm
         ! apply mask

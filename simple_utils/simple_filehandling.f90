@@ -117,10 +117,10 @@ contains
     end subroutine del_files
 
     !> \brief  is for making a file-table (to be able to commander execute programs that depend on them)
-    subroutine make_filetable( tabname, body, n, ext, numlen, suffix )
+    subroutine make_filetable( tabname, n, body, ext, numlen, suffix )
         character(len=*),           intent(in) :: tabname
-        character(len=*),           intent(in) :: body
         integer,                    intent(in) :: n
+        character(len=*),           intent(in) :: body
         character(len=*),           intent(in) :: ext
         integer,          optional, intent(in) :: numlen
         character(len=*), optional, intent(in) :: suffix
@@ -134,8 +134,31 @@ contains
             write(fnr,'(a)') trim(names(ifile))
         end do 
         close(unit=fnr)
-        call flush(fnr)
     end subroutine make_filetable
+
+     !> \brief  is for making a file-table (to be able to commander execute programs that depend on them)
+    subroutine make_multitab_filetable( tabname, tab1, tab2, tab3, tab4 )
+         use simple_strings, only: int2str, int2str_pad
+        character(len=*),                intent(in) :: tabname
+        character(len=STDLEN),           intent(in) :: tab1(:), tab2(:)
+        character(len=STDLEN), optional, intent(in) :: tab3(:), tab4(:)
+        integer :: ntabs, n, fnr, ifile, file_stat
+        ntabs = 2
+        if( present(tab3) ) ntabs = 3
+        if( present(tab4) ) ntabs = 4
+        n = size(tab1)
+        fnr = get_fileunit()
+        open(unit=fnr, status='replace', action='write', file=tabname, iostat=file_stat)
+        call fopen_err('simple_filehandling :: make_filetable', file_stat)
+        do ifile=1,n
+            if( ntabs == 2 ) write(fnr,'(a)') trim(tab1(ifile))//' '//trim(tab2(ifile))
+            if( ntabs == 3 ) write(fnr,'(a)') trim(tab1(ifile))//' '//trim(tab2(ifile))&
+            &//' '//trim(tab3(ifile))
+            if( ntabs == 4 ) write(fnr,'(a)') trim(tab1(ifile))//' '//trim(tab2(ifile))&
+            &//' '//trim(tab3(ifile))//' '//trim(tab4(ifile))
+        end do 
+        close(unit=fnr)
+    end subroutine make_multitab_filetable
 
     !> \brief  is for getting a free fileunit
     function get_fileunit( ) result( iunit )

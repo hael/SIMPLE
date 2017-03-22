@@ -279,8 +279,8 @@ contains
         class(image),               intent(inout) :: self
         integer,                    intent(in)    :: ldim(3)
         real,                       intent(in)    :: smpd
-        real,             optional, intent(in)    :: backgr
         character(len=*), optional, intent(in)    :: imgkind
+        real,             optional, intent(in)    :: backgr
         integer(kind=c_int) :: rc
         integer :: i
         call self%kill
@@ -293,25 +293,7 @@ contains
         ! Work out dimensions of the complex array
         self%array_shape(1)   = fdim(self%ldim(1))
         self%array_shape(2:3) = self%ldim(2:3)
-        if( self%imgkind .eq. 'em' )then
-            self%nc = int(product(self%array_shape)) ! nr of components
-            ! Letting FFTW do the allocation in C ensures that we will be using aligned memory
-            self%p = fftwf_alloc_complex(int(product(self%array_shape),c_size_t))
-            ! Set up the complex array which will point at the allocated memory
-            call c_f_pointer(self%p,self%cmat,self%array_shape)
-            ! Work out the shape of the real array
-            self%array_shape(1) = 2*self%array_shape(1)
-            ! Set up the real array
-            call c_f_pointer(self%p,self%rmat,self%array_shape)
-            ! put back the shape of the complex array
-            self%array_shape(1) = fdim(self%ldim(1))
-            if( present(backgr) )then
-                self%rmat = backgr
-            else
-                self%rmat = 0.
-            endif
-            self%ft = .false.
-        else if( self%imgkind .eq. 'xfel' )then
+        if( self%imgkind .eq. 'xfel' )then
             if( self%even_dims() )then
                 self%lims(1,1) = -self%ldim(1)/2
                 self%lims(1,2) = self%ldim(1)/2-1
@@ -329,7 +311,23 @@ contains
             endif
             self%ft = .true.
         else
-            stop 'Unsupported image kind; smple_image::new'
+            self%nc = int(product(self%array_shape)) ! nr of components
+            ! Letting FFTW do the allocation in C ensures that we will be using aligned memory
+            self%p = fftwf_alloc_complex(int(product(self%array_shape),c_size_t))
+            ! Set up the complex array which will point at the allocated memory
+            call c_f_pointer(self%p,self%cmat,self%array_shape)
+            ! Work out the shape of the real array
+            self%array_shape(1) = 2*self%array_shape(1)
+            ! Set up the real array
+            call c_f_pointer(self%p,self%rmat,self%array_shape)
+            ! put back the shape of the complex array
+            self%array_shape(1) = fdim(self%ldim(1))
+            if( present(backgr) )then
+                self%rmat = backgr
+            else
+                self%rmat = 0.
+            endif
+            self%ft = .false.
         endif
         ! make fftw plans
         if( (any(ldim > 500) .or. ldim(3) > 200) .and. nthr_glob > 1 )then

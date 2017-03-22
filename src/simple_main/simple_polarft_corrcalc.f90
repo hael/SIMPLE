@@ -894,8 +894,6 @@ contains
 
     !>  \brief  is for generating rotational correlations
     function corrs( self, refvec, nrefs, iptcl, irot) result( cc )
-        !$ use omp_lib
-        !$ use omp_lib_kinds
         class(polarft_corrcalc), intent(inout) :: self               !< instance
         integer,                 intent(in)    :: refvec(nrefs)      !< ref & ptcl indices
         integer,                 intent(in)    :: irot, iptcl, nrefs !< ref & ptcl indices
@@ -908,7 +906,6 @@ contains
         end do
     end function corrs
 
-    !<<< THIS ROUTINE SHOULD BE PARALLELLIZED AS ABOVE >>>
     !>  \brief  is for generating resolution dependent correlations
     function genfrc( self, iref, iptcl, irot ) result( frc )
         !$ use omp_lib
@@ -971,39 +968,39 @@ contains
         if( allocated(self%ctfmats) )then
             !$omp parallel workshare 
             ! generate the argument matrix from memoized components in argtransf
-            argmat = self%argtransf(:self%refsz,:)*shvec(1)+self%argtransf(self%refsz+1:,:)*shvec(2)
+            argmat = self%argtransf(:self%refsz,:) * shvec(1) + self%argtransf(self%refsz+1:,:) * shvec(2)
             ! generate the complex shift transformation matrix
             shmat = cmplx(cos(argmat),sin(argmat))
             ! shift
             pft_ref_sh  = (self%pfts_refs(iref,:,:) * self%ctfmats(iptcl,:,:)) * shmat
             ! calculate correlation precursors
-            argmat = real(pft_ref_sh*conjg(self%pfts_ptcls(iptcl,irot:irot+self%refsz-1,:)))
+            argmat = real(pft_ref_sh * conjg(self%pfts_ptcls(iptcl,irot:irot+self%refsz-1,:)))
             !$omp end parallel workshare
             cc = sum(argmat)
             sqsum_ref_sh = sum(csq(pft_ref_sh))
         else if( allocated(self%pfts_refs_ctf) )then
             !$omp parallel workshare 
             ! generate the argument matrix from memoized components in argtransf
-            argmat = self%argtransf(:self%refsz,:)*shvec(1)+self%argtransf(self%refsz+1:,:)*shvec(2)
+            argmat = self%argtransf(:self%refsz,:) * shvec(1)+self%argtransf(self%refsz+1:,:) * shvec(2)
             ! generate the complex shift transformation matrix
             shmat = cmplx(cos(argmat),sin(argmat))
             ! shift
-            pft_ref_sh = self%pfts_refs_ctf(iref,:,:)*shmat
+            pft_ref_sh = self%pfts_refs_ctf(iref,:,:) * shmat
             ! calculate correlation precursors
-            argmat = real(pft_ref_sh*conjg(self%pfts_ptcls(iptcl,irot:irot+self%refsz-1,:)))
+            argmat = real(pft_ref_sh * conjg(self%pfts_ptcls(iptcl,irot:irot+self%refsz-1,:)))
             !$omp end parallel workshare
             cc = sum(argmat)
             sqsum_ref_sh = sum(csq(pft_ref_sh))
         else        
             !$omp parallel workshare
             ! generate the argument matrix from memoized components in argtransf
-            argmat = self%argtransf(:self%refsz,:)*shvec(1)+self%argtransf(self%refsz+1:,:)*shvec(2)
+            argmat = self%argtransf(:self%refsz,:) * shvec(1)+self%argtransf(self%refsz+1:,:) * shvec(2)
             ! generate the complex shift transformation matrix
             shmat = cmplx(cos(argmat),sin(argmat))
             ! shift
-            pft_ref_sh = self%pfts_refs(iref,:,:)*shmat
+            pft_ref_sh = self%pfts_refs(iref,:,:) * shmat
             ! calculate correlation precursors
-            argmat = real(pft_ref_sh*conjg(self%pfts_ptcls(iptcl,irot:irot+self%refsz-1,:)))
+            argmat = real(pft_ref_sh * conjg(self%pfts_ptcls(iptcl,irot:irot+self%refsz-1,:)))
             !$omp end parallel workshare
             cc = sum(argmat)
             sqsum_ref_sh = sum(csq(pft_ref_sh))

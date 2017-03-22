@@ -147,8 +147,9 @@ contains
         use simple_hadamard2D_matcher, only: prime2D_assemble_sums_from_parts, prime2D_write_sums
         class(cavgassemble_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        type(params)                                 :: p
-        type(build)                                  :: b
+        type(params) :: p
+        type(build)  :: b
+        integer      :: fnr, file_stat
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         call b%build_hadamard_prime2D_tbox(p)
@@ -160,6 +161,11 @@ contains
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_CAVGASSEMBLE NORMAL STOP ****', print_simple=.false.)
+        ! indicate completion (when run in a qsys env)
+        fnr = get_fileunit()
+        open(unit=fnr, FILE='CAVGASSEMBLE_FINISHED', STATUS='REPLACE', action='WRITE', iostat=file_stat)
+        call fopen_err('In: commander_rec :: eo_volassemble', file_stat )
+        close( unit=fnr )
     end subroutine exec_cavgassemble
     
     subroutine exec_check2D_conv( self, cline )
