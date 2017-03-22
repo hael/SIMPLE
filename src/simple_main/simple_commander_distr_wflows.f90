@@ -311,29 +311,31 @@ contains
         class(prime2D_init_distr_commander), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
         ! constants
-        logical, parameter           :: DEBUG=.false.
+        logical, parameter        :: DEBUG=.false.
         ! commanders
-        type(cavgassemble_commander) :: xcavgassemble
-        type(split_commander)        :: xsplit
+        type(split_commander)     :: xsplit
         ! command lines
-        type(cmdline)                :: cline_cavgassemble
+        type(cmdline)             :: cline_cavgassemble
         ! other variables
-        type(params)                 :: p_master
-        integer, allocatable         :: parts(:,:)
-        type(qsys_ctrl)              :: qscripts
-        type(chash)                  :: myq_descr, job_descr
-        type(qsys_factory)           :: qsys_fac
-        class(qsys_base), pointer    :: myqsys
+        character(len=STDLEN)     :: simple_exec_bin
+        type(params)              :: p_master
+        integer, allocatable      :: parts(:,:)
+        type(qsys_ctrl)           :: qscripts
+        type(chash)               :: myq_descr, job_descr
+        type(qsys_factory)        :: qsys_fac
+        class(qsys_base), pointer :: myqsys
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! setup the environment for distributed execution
         call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr)
+        simple_exec_bin = qscripts%get_exec_bin()
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! prepare command lines from prototype master
         cline_cavgassemble   = cline
         call cline_cavgassemble%set('nthr',1.)
         call cline_cavgassemble%set('oritab', 'prime2D_startdoc.txt')
+        call cline_cavgassemble%set('prg', 'cavgassemble')
         ! split stack
         if( stack_is_split(p_master%ext, p_master%nparts) )then
             ! check that the stack partitions are of correct sizes
@@ -347,7 +349,8 @@ contains
         ! manage job scheduling
         call qscripts%schedule_jobs
         ! assemble class averages
-        call xcavgassemble%execute(cline_cavgassemble)
+        call exec_simple_prg_in_queue( qscripts, myq_descr, simple_exec_bin,&
+        &cline_cavgassemble, 'CAVGASSEMBLE', 'CAVGASSEMBLE_FINISHED')
         call qsys_cleanup(p_master)
         call simple_end('**** SIMPLE_DISTR_PRIME2D_INIT NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_prime2D_init_distr
@@ -373,7 +376,6 @@ contains
         ! commanders
         type(prime2D_init_distr_commander) :: xprime2D_init_distr
         type(find_nnimgs_distr_commander)  :: xfind_nnimgs_distr
-        type(cavgassemble_commander)       :: xcavgassemble
         type(check2D_conv_commander)       :: xcheck2D_conv
         type(rank_cavgs_commander)         :: xrank_cavgs
         type(merge_algndocs_commander)     :: xmerge_algndocs
@@ -391,7 +393,7 @@ contains
         type(params)                       :: p_master
         integer, allocatable               :: parts(:,:)
         type(qsys_ctrl)                    :: qscripts
-        character(len=STDLEN)              :: refs, oritab, str, str_iter
+        character(len=STDLEN)              :: refs, oritab, str, str_iter, simple_exec_bin
         integer                            :: iter
         type(chash)                        :: myq_descr, job_descr
         type(qsys_factory)                 :: qsys_fac
@@ -400,6 +402,7 @@ contains
         p_master = params(cline, checkdistr=.false.)
         ! setup the environment for distributed execution
         call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr)
+        simple_exec_bin = qscripts%get_exec_bin()
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! initialise starting references, orientations
@@ -430,6 +433,7 @@ contains
         call cline_merge_algndocs%set('ndocs', real(p_master%nparts))
         call cline_check2D_conv%set('box', real(p_master%box))
         call cline_check2D_conv%set('nptcls', real(p_master%nptcls))
+        call cline_cavgassemble%set('prg', 'cavgassemble')
         if( .not. cline%defined('refs') .and. job_descr%isthere('automsk') ) call job_descr%delete('automsk')
         ! split stack
         if( stack_is_split(p_master%ext, p_master%nparts) )then
@@ -473,7 +477,8 @@ contains
             refs = trim(trim(CAVGS_ITERFBODY)// trim(str_iter) //p_master%ext)
             call cline_cavgassemble%set('oritab', trim(oritab))
             call cline_cavgassemble%set('which_iter', real(iter))
-            call xcavgassemble%execute(cline_cavgassemble)
+            call exec_simple_prg_in_queue( qscripts, myq_descr, simple_exec_bin,&
+            cline_cavgassemble, 'CAVGASSEMBLE', 'CAVGASSEMBLE_FINISHED')
             ! check convergence
             call cline_check2D_conv%set('oritab', trim(oritab))
             call cline_check2D_conv%set('lp',     real(p_master%lp)) ! may be subjected to iter-dependent update in future
@@ -548,31 +553,31 @@ contains
         class(prime3D_init_distr_commander), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
         ! constants
-        logical, parameter           :: debug=.false.
+        logical, parameter        :: debug=.false.
         ! commanders
-        type(volassemble_commander)  :: xvolassemble
-        type(split_commander)        :: xsplit
+        type(split_commander)     :: xsplit
         ! command lines
-        type(cmdline)                :: cline_volassemble
+        type(cmdline)             :: cline_volassemble
         ! other variables
-        type(params)                 :: p_master
-        integer, allocatable         :: parts(:,:)
-        type(qsys_ctrl)              :: qscripts
-        character(len=STDLEN)        :: vol
-        type(chash)                  :: myq_descr, job_descr
-         type(qsys_factory)          :: qsys_fac
-        class(qsys_base), pointer    :: myqsys
+        type(params)              :: p_master
+        integer, allocatable      :: parts(:,:)
+        type(qsys_ctrl)           :: qscripts
+        character(len=STDLEN)     :: vol, simple_exec_bin
+        type(chash)               :: myq_descr, job_descr
+        type(qsys_factory)        :: qsys_fac
+        class(qsys_base), pointer :: myqsys
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! setup the environment for distributed execution
         call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr)
+        simple_exec_bin = qscripts%get_exec_bin()
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! init
         if( cline%defined('vol1') )then
-           vol = trim(p_master%vols(1))
+            vol = trim(p_master%vols(1))
         else
-           vol = trim('startvol_state01'//p_master%ext)
+            vol = trim('startvol_state01'//p_master%ext)
         endif
         ! split stack
         if( stack_is_split(p_master%ext, p_master%nparts) )then
@@ -583,15 +588,17 @@ contains
         endif
         ! prepare command lines from prototype master
         cline_volassemble = cline
-        call cline_volassemble%set( 'outvol', vol )
-        call cline_volassemble%set( 'eo', 'no' )
+        call cline_volassemble%set( 'outvol', vol         )
+        call cline_volassemble%set( 'eo',    'no'         )
+        call cline_volassemble%set( 'prg',   'volassemble')
         ! prepare scripts
         call qsys_cleanup(p_master)
         call qscripts%generate_scripts(job_descr, p_master%ext, myq_descr)
         ! manage job scheduling
         call qscripts%schedule_jobs
         ! assemble volumes
-        call xvolassemble%execute( cline_volassemble )
+        call exec_simple_prg_in_queue( qscripts, myq_descr, simple_exec_bin,&
+        &cline_volassemble, 'VOLASSEMBLE', 'VOLASSEMBLE_FINISHED')
         ! termination
         call qsys_cleanup(p_master)
         call simple_end('**** SIMPLE_DISTR_PRIME3D_INIT NORMAL STOP ****', print_simple=.false.)
@@ -641,7 +648,7 @@ contains
         type(qsys_ctrl)                     :: qscripts
         type(oris)                          :: os
         character(len=STDLEN)               :: vol, vol_iter, oritab, str, str_iter
-        character(len=STDLEN)               :: str_state, fsc_file
+        character(len=STDLEN)               :: str_state, fsc_file, volassemble_output
         character(len=STDLEN)               :: simple_exec_bin, restart_file
         real                                :: frac_srch_space
         integer                             :: s, state, iter
@@ -717,6 +724,7 @@ contains
         enddo
         if( .not.cline%defined('oritab') .and. .not.vol_defined )then
             ! ab-initio
+            call cline_prime3D_init%set( 'oritab', oritab )
             call xprime3D_init_distr%execute( cline_prime3D_init )
             call cline%set( 'vol1', trim('startvol_state01'//p_master%ext) )
             call cline%set( 'oritab', oritab )
@@ -845,7 +853,13 @@ contains
                 ! its own process id seem to resolve the system instabilities on fast cpu systems
                 ! replaced the above with execution in the queue to reduce the stress on the login node
                 ! call exec_simple_prg(simple_exec_bin, cline_volassemble)
-                call exec_simple_prg_in_queue( qscripts, myq_descr, simple_exec_bin, cline_volassemble, 'VOLASSEMBLE_FINISHED')
+                if( p%eo .eq. 'yes' )then
+                    volassemble_output = 'RESOLUTION'//str_iter
+                else
+                    volassemble_output = 'VOLASSEMBLE'
+                endif
+                call exec_simple_prg_in_queue( qscripts, myq_descr, simple_exec_bin,&
+                &cline_volassemble, trim(volassemble_output), 'VOLASSEMBLE_FINISHED')
             endif
             ! rename volumes, postprocess & update job_descr
             call os%read(trim(oritab))
@@ -968,7 +982,7 @@ contains
         type(qsys_ctrl)                     :: qscripts
         type(oris)                          :: os
         character(len=STDLEN)               :: vol, vol_iter, oritab, str, str_iter
-        character(len=STDLEN)               :: str_state, fsc_file
+        character(len=STDLEN)               :: str_state, fsc_file, volassemble_output
         character(len=STDLEN)               :: simple_exec_bin, restart_file
         real                                :: frac_srch_space
         integer                             :: s, state, iter
@@ -1093,7 +1107,14 @@ contains
             ! call xeo_volassemble%execute( cline_volassemble )
             ! replaced the above with command line execution as giving the volassemble setup
             ! its own process id seem to resolve the system instabilities on fast cpu systems
-            call exec_simple_prg(simple_exec_bin, cline_volassemble)
+            ! call exec_simple_prg(simple_exec_bin, cline_volassemble)
+            if( p%eo .eq. 'yes' )then
+                volassemble_output = 'RESOLUTION'//str_iter
+            else
+                volassemble_output = 'VOLASSEMBLE'
+            endif
+            call exec_simple_prg_in_queue( qscripts, myq_descr, simple_exec_bin,&
+            &cline_volassemble, trim(volassemble_output), 'VOLASSEMBLE_FINISHED')
             ! rename volumes, postprocess & update job_descr
             call os%read(trim(oritab))
             do state = 1,p_master%nstates
@@ -1207,8 +1228,6 @@ contains
         ! constants
         logical, parameter                  :: debug=.false.
         ! commanders
-        type(volassemble_commander)         :: xvolassemble
-        type(eo_volassemble_commander)      :: xeo_volassemble
         type(split_commander)               :: xsplit
         type(shellweight3D_distr_commander) :: xshellweight3D_distr
         ! command lines
@@ -1217,7 +1236,7 @@ contains
         type(params)                        :: p_master
         integer, allocatable                :: parts(:,:)
         type(qsys_ctrl)                     :: qscripts
-        character(len=STDLEN)               :: vol
+        character(len=STDLEN)               :: vol, simple_exec_bin, volassemble_output
         type(chash)                         :: myq_descr, job_descr
         type(qsys_factory)                  :: qsys_fac
         class(qsys_base), pointer           :: myqsys
@@ -1225,7 +1244,8 @@ contains
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! setup the environment for distributed execution
-        call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr)        
+        call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr)   
+        simple_exec_bin = qscripts%get_exec_bin()     
         if( p_master%shellw .eq. 'yes' )then
             ! we need to set the prg flag for the command lines that control distributed workflows 
             cline_shellweight3D = cline
@@ -1255,11 +1275,15 @@ contains
         ! manage job scheduling
         call qscripts%schedule_jobs
         ! assemble volumes
-        if( p_master%eo.eq.'yes' )then
-            call xeo_volassemble%execute( cline )
+        if( p_master%eo .eq. 'yes' )then
+            call cline%set('prg', 'eo_volassemble')
+            volassemble_output = 'RESOLUTION'
         else
-            call xvolassemble%execute( cline )
+            call cline%set('prg', 'volassemble')
+            volassemble_output = 'VOLASSEMBLE'
         endif
+        call exec_simple_prg_in_queue( qscripts, myq_descr, simple_exec_bin,&
+        &cline, trim(volassemble_output), 'VOLASSEMBLE_FINISHED')
         ! termination
         call qsys_cleanup(p_master)
         call simple_end('**** SIMPLE_RECVOL NORMAL STOP ****', print_simple=.false.)

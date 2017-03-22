@@ -461,22 +461,18 @@ contains
         call ref%fwd_ft
     end subroutine prep2Dref_2
 
-    subroutine preprefvol( b, p, cline, s, do_expand )
+    subroutine preprefvol( b, p, cline, s )
         class(build),      intent(inout) :: b
         class(params),     intent(inout) :: p
         class(cmdline),    intent(inout) :: cline
         integer,           intent(in)    :: s
-        logical, optional, intent(in)    :: do_expand
         real    :: shvec(3)
-        logical :: l_expand = .true.
-        if(present(do_expand))l_expand = do_expand
         if( p%boxmatch < p%box )call b%vol%new([p%box,p%box,p%box],p%smpd) ! ensure correct dim
         call b%vol%read(p%vols(s), isxfel=p%l_xfel)
-        ! take care of centering
         if( p%l_xfel )then
             ! no centering
         else
-            if(p%doshift)call centervol
+            if( p%doshift ) call centervol
         endif
         ! clip
         if( p%boxmatch < p%box )then
@@ -513,7 +509,7 @@ contains
         ! FT volume
         call b%vol%fwd_ft
         ! expand for fast interpolation
-        if(l_expand)call b%vol%expand_cmat
+        call b%vol%expand_cmat
 
         contains
 

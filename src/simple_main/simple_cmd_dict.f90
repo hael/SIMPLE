@@ -224,7 +224,7 @@ contains
         call chdict%push('xcoord',        'x coordinate{0}')
         call chdict%push('ycoord',        'y coordinate{0}')
         call chdict%push('stepsz',        'size of step{0}')
-
+        call chdict%push('dopick',        'execute picking step (in preproc){yes}')
         initialised = .true.
     end subroutine init_cmd_dict
     

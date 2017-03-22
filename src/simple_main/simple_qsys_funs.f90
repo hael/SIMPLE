@@ -9,6 +9,8 @@ interface qsys_watcher
     module procedure qsys_watcher_2
 end interface
 
+integer, parameter :: SHORTTIME = 3
+
 contains
 
     subroutine qsys_cleanup( p )
@@ -286,7 +288,6 @@ contains
         character(len=*),  intent(in) :: fname
         integer, optional, intent(in) :: wtime
         integer :: wwtime
-        integer, parameter :: SHORTTIME = 5
         logical :: there
         wwtime = SHORTTIME
         if( present(wtime) ) wwtime = wtime
@@ -302,7 +303,7 @@ contains
         character(len=STDLEN), intent(in)    :: fnames(:)
         logical,               intent(inout) :: files_exist(:)
         integer, optional,     intent(in)    :: wtime
-        integer, parameter :: SHORTTIME = 5, MAXITS=1000
+        integer, parameter :: MAXITS=1000
         integer            :: wwtime, nfiles, ifile, nlogic, i
         logical            :: fexists, doreturn
         wwtime = SHORTTIME
@@ -342,15 +343,15 @@ contains
         call exec_cmdline(exec_str)
     end subroutine exec_simple_prg
 
-    subroutine exec_simple_prg_in_queue( qscripts, myq_descr, exec_bin, cline, finish_indicator )
+    subroutine exec_simple_prg_in_queue( qscripts, myq_descr, exec_bin, cline, outfile, finish_indicator )
         use simple_qsys_ctrl, only: qsys_ctrl
         use simple_chash,     only: chash
         use simple_cmdline,   only: cmdline
-        class(qsys_ctrl), intent(inout)  :: qscripts         !< qsys controller
-        class(chash),     intent(in)     :: myq_descr        !< user-provided queue and job specifics from simple_distr_config.env
-        character(len=*), intent(in)     :: exec_bin         !< executable binary
-        class(cmdline),   intent(in)     :: cline            !< command line arguments
-        character(len=*), intent(in)     :: finish_indicator !< executable binary
+        class(qsys_ctrl), intent(inout)  :: qscripts   !< qsys controller
+        class(chash),     intent(in)     :: myq_descr  !< user-provided queue and job specifics from simple_distr_config.env
+        character(len=*), intent(in)     :: exec_bin   !< executable binary
+        class(cmdline),   intent(in)     :: cline      !< command line arguments
+        character(len=*), intent(in)     :: outfile, finish_indicator
         character(len=STDLEN), parameter :: script_name = 'simple_script_single'
         type(chash) :: job_descr
         call del_file(finish_indicator)

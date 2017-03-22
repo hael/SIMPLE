@@ -47,6 +47,7 @@ type :: params
     character(len=3) :: diverse='no'
     character(len=3) :: doalign='yes'
     character(len=3) :: dopca='yes'
+    character(len=3) :: dopick='yes'
     character(len=3) :: doprint='no'
     character(len=3) :: dynlp='yes'
     character(len=3) :: eo='yes'
@@ -339,6 +340,7 @@ type :: params
     logical :: l_automsk     = .false.
     logical :: l_dose_weight = .false. 
     logical :: l_innermsk    = .false. 
+    logical :: l_pick        = .false. 
     logical :: l_shellw      = .false.
     logical :: l_xfel        = .false.
   contains
@@ -419,6 +421,7 @@ contains
         call check_carg('diverse',        self%diverse)
         call check_carg('doalign',        self%doalign)
         call check_carg('dopca',          self%dopca)
+        call check_carg('dopick',         self%dopick)
         call check_carg('doprint',        self%doprint)
         call check_carg('dynlp',          self%dynlp)
         call check_carg('endian',         self%endian)
@@ -1004,6 +1007,10 @@ contains
         if( cline%defined('shellw') )then
             if( self%shellw .eq. 'no' ) self%l_shellw = .false.
         endif
+        ! set logical pick flag
+        self%l_pick = .false.
+        if( self%dopick .eq. 'yes' ) self%l_pick = .true.
+
         write(*,'(A)') '>>> DONE PROCESSING PARAMETERS'
 
       contains

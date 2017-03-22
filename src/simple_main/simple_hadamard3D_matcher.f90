@@ -124,7 +124,7 @@ contains
         dohet = .false.
         if( p%refine.eq.'het' )then
             het_corr_thresh = -1.
-            if( frac_srch_space<0.98 .or. p%het_thresh>0.02 )then
+            if( frac_srch_space < 0.98 .or. p%het_thresh > 0.02 )then
                 dohet = .true.
                 write(*,'(A,F8.2)')'>>> STATE RANDOMIZATION %:', 100.*p%het_thresh
                 ! grab relevant correlations
@@ -184,70 +184,45 @@ contains
             if( prev_state > 0 )then
                 call preprefs4align(b, p, iptcl, pftcc)
                 ! execute the high-level routines in prime3D_srch
-                if( p%use_gpu .eq. 'yes' .or. p%bench_gpu .eq. 'yes' )then
-                    select case(p%refine)
-                        case('no')
-                            if( p%oritab .eq. '' )then
-                                call primesrch3D%exec_prime3D_srch(pftcc, iptcl, p%lp)
-                            else
-                                call primesrch3D%exec_prime3D_srch(pftcc, iptcl, p%lp, orientation)
-                            endif
-                        case('neigh')
-                            stop 'refine=neigh mode not currently implemented on GPU'
-                         case('shc')
-                            stop 'refine=shc mode not currently implemented on GPU'
-                            if( p%oritab .eq. '' )then
-                                call primesrch3D%exec_prime3D_shc_srch(pftcc, iptcl, p%lp)
-                            else
-                                call primesrch3D%exec_prime3D_shc_srch(pftcc, iptcl, p%lp, orientation)
-                            endif
-                        case('shcneigh')
-                            stop 'refine=shcneigh mode not currently implemented on GPU'
-                        case DEFAULT
-                            write(*,*) 'The refinement mode: ', trim(p%refine), ' is unsupported on GPU'
-                            stop 
-                    end select
-                else
-                   select case(p%refine)
-                        case('no')
-                            if( p%oritab .eq. '' )then
-                                call primesrch3D%exec_prime3D_srch(pftcc, iptcl, p%lp)
-                            else
-                                call primesrch3D%exec_prime3D_srch(pftcc, iptcl, p%lp, orientation)
-                            endif
-                        case('neigh')
-                            if( p%oritab .eq. '' ) stop 'cannot run the refine=neigh mode without input oridoc (oritab)'
-                            call primesrch3D%exec_prime3D_srch(pftcc, iptcl, p%lp, orientation, nnmat=b%nnmat)
-                        case('shc')
-                            if( p%oritab .eq. '' )then
-                                call primesrch3D%exec_prime3D_shc_srch(pftcc, iptcl, p%lp)
-                            else
-                                call primesrch3D%exec_prime3D_shc_srch(pftcc, iptcl, p%lp, orientation)
-                            endif
-                        case('shcneigh')
-                            if( p%oritab .eq. '' ) stop 'cannot run the refine=shcneigh mode without input oridoc (oritab)'
-                            call primesrch3D%exec_prime3D_shc_srch(pftcc, iptcl, p%lp, orientation, nnmat=b%nnmat)
-                        case('shift')
-                            if( p%oritab .eq. '' ) stop 'cannot run the refine=shift mode without input oridoc (oritab)'
-                            call primesrch3D%exec_prime3D_inpl_srch(pftcc, iptcl, p%lp, orientation, greedy=.false.)
-                        case('het')
-                            if( p%oritab .eq. '' ) stop 'cannot run the refine=het mode without input oridoc (oritab)'
-                            if(orientation%get('corr') < het_corr_thresh)then
-                                call primesrch3D%exec_prime3D_het_srch(pftcc, iptcl, orientation, statecnt, do_rnd=.true.)
-                            else
-                                call primesrch3D%exec_prime3D_het_srch(pftcc, iptcl, orientation, statecnt, do_rnd=.false.)
-                            endif
-                        case('adasym')
-                            if( p%oritab .eq. '' )then
-                                call primesrch3D%exec_prime3D_srch(pftcc, iptcl, p%lp)
-                            else
-                                call primesrch3D%exec_prime3D_srch(pftcc, iptcl, p%lp, orientation)
-                            endif
-                        case DEFAULT
-                            write(*,*) 'The refinement mode: ', trim(p%refine), ' is unsupported on CPU'
-                            stop 
-                    end select
-                endif
+                select case(p%refine)
+                    case('no')
+                        if( p%oritab .eq. '' )then
+                            call primesrch3D%exec_prime3D_srch(pftcc, iptcl, p%lp)
+                        else
+                            call primesrch3D%exec_prime3D_srch(pftcc, iptcl, p%lp, orientation)
+                        endif
+                    case('neigh')
+                        if( p%oritab .eq. '' ) stop 'cannot run the refine=neigh mode without input oridoc (oritab)'
+                        call primesrch3D%exec_prime3D_srch(pftcc, iptcl, p%lp, orientation, nnmat=b%nnmat)
+                    case('shc')
+                        if( p%oritab .eq. '' )then
+                            call primesrch3D%exec_prime3D_shc_srch(pftcc, iptcl, p%lp)
+                        else
+                            call primesrch3D%exec_prime3D_shc_srch(pftcc, iptcl, p%lp, orientation)
+                        endif
+                    case('shcneigh')
+                        if( p%oritab .eq. '' ) stop 'cannot run the refine=shcneigh mode without input oridoc (oritab)'
+                        call primesrch3D%exec_prime3D_shc_srch(pftcc, iptcl, p%lp, orientation, nnmat=b%nnmat)
+                    case('shift')
+                        if( p%oritab .eq. '' ) stop 'cannot run the refine=shift mode without input oridoc (oritab)'
+                        call primesrch3D%exec_prime3D_inpl_srch(pftcc, iptcl, p%lp, orientation, greedy=.false.)
+                    case('het')
+                        if( p%oritab .eq. '' ) stop 'cannot run the refine=het mode without input oridoc (oritab)'
+                        if(orientation%get('corr') < het_corr_thresh)then
+                            call primesrch3D%exec_prime3D_het_srch(pftcc, iptcl, orientation, statecnt, do_rnd=.true.)
+                        else
+                            call primesrch3D%exec_prime3D_het_srch(pftcc, iptcl, orientation, statecnt, do_rnd=.false.)
+                        endif
+                    case('adasym')
+                        if( p%oritab .eq. '' )then
+                            call primesrch3D%exec_prime3D_srch(pftcc, iptcl, p%lp)
+                        else
+                            call primesrch3D%exec_prime3D_srch(pftcc, iptcl, p%lp, orientation)
+                        endif
+                    case DEFAULT
+                        write(*,*) 'The refinement mode: ', trim(p%refine), ' is unsupported on CPU'
+                        stop 
+                end select
                 call primesrch3D%get_ori_best(orientation)
                 call b%a%set_ori(iptcl,orientation)
                 if( p%norec .eq. 'no' )then

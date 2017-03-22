@@ -252,7 +252,7 @@ contains
         fnr = get_fileunit()
         open(unit=fnr, FILE='VOLASSEMBLE_FINISHED', STATUS='REPLACE', action='WRITE', iostat=file_stat)
         call fopen_err('In: commander_rec :: eo_volassemble', file_stat )
-        close( unit=fnr )
+        close(fnr)
 
         contains
 

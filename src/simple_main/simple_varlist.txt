@@ -16,6 +16,7 @@ discrete
 diverse
 doalign
 dopca
+dopick
 doprint
 dynlp
 eo
@@ -296,6 +297,7 @@ doshift
 l_automsk
 l_dose_weight
 l_innermsk
+l_pick
 l_shellw
 l_xfel
 vol1

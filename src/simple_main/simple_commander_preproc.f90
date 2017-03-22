@@ -163,9 +163,11 @@ contains
             p%lp             = p%lp_ctffind 
             call cfiter%iterate(p, movie_ind, movie_counter, moviename_forctf,&
             &fname_ctffind_ctrl, fname_ctffind_output, os)
-            movie_counter = movie_counter - 1
-            p%lp      = p%lp_pick
-            call piter%iterate(cline, p, movie_counter, moviename_intg)
+            if( p%l_pick )then
+                movie_counter = movie_counter - 1
+                p%lp      = p%lp_pick
+                call piter%iterate(cline, p, movie_counter, moviename_intg)
+            endif
         end do
         ! write CTF parameters
         call os%write(fname_ctffind_output)

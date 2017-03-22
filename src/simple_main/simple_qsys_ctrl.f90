@@ -8,7 +8,7 @@ implicit none
 public :: qsys_ctrl
 private
 
-integer, parameter :: SHORTTIME = 5
+integer, parameter :: SHORTTIME = 3
 logical, parameter :: DEBUG     = .false.
 
 type qsys_ctrl
@@ -269,12 +269,12 @@ contains
     end subroutine generate_script_1
 
     !>  \brief  public script generator for single jobs
-    subroutine generate_script_2( self, job_descr, q_descr, exec_bin, script_name)
+    subroutine generate_script_2( self, job_descr, q_descr, exec_bin, script_name, outfile )
         use simple_filehandling, only: get_fileunit, file_exists
         class(qsys_ctrl), intent(inout) :: self
         class(chash),     intent(in)    :: job_descr
         class(chash),     intent(in)    :: q_descr
-        character(len=*), intent(in)    :: exec_bin, script_name
+        character(len=*), intent(in)    :: exec_bin, script_name, outfile
         character(len=512) :: io_msg
         integer :: ios, funit
         funit = get_fileunit()
@@ -298,7 +298,7 @@ contains
         ! compose the command line
         write(funit,'(a)',advance='no') trim(exec_bin)//' '//job_descr%chash2str() 
         ! direct output
-        write(funit,'(a)',advance='yes') ' > OUT_SINGLE'
+        write(funit,'(a)',advance='yes') ' > '//outfile
         ! exit shell when done
         write(funit,'(a)',advance='yes') ''
         write(funit,'(a)',advance='yes') 'exit'
