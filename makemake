@@ -181,7 +181,7 @@ vpath %.o   \$(OBJDIR)
 
 default:
 	@./makemake > /dev/null; \\
-	make --no-print-directory all
+	make --no-print-directory all \$(MFLAGS)
 
 all: makedir checkclean$all;
 $targets 
