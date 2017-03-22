@@ -49,7 +49,7 @@ vpath %.o   $(OBJDIR)
 
 default:
 	@./makemake > /dev/null; \
-	make --no-print-directory all
+	make --no-print-directory all $(MFLAGS)
 
 all: makedir checkclean defs_code production_code utils_code Simple_code src_code cpu_test_code test_code;
 
@@ -75,7 +75,8 @@ s_utes: simple_strings.o      \
         simple_ran_tabu.o     \
         simple_testfuns.o     ;
 
-s_utils: simple_syscalls.o  ;
+s_utils: simple_timer.o       \
+	simple_syscalls.o  ;
 
 Simple_code: opt            \
              general        \
