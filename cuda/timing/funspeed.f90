@@ -3,15 +3,16 @@ program speed
 !    the dot product of long vectors
       intrinsic system_clock
       integer nrep,i , iii
-      parameter (nrep=50000000)
+      parameter (nrep=5000000)
       real   b,c,cfac
       common b,c,cfac
-      real :: timings(8)
+      integer,parameter :: tmax=8
+      real, dimension(tmax) :: timings
       integer :: iti
 #ifdef DOUBLE_CLOCK
       integer(8) :: icount1,irate,icmax,icount2
 #endif
-
+      character(len=160) :: t_char
       interface saxpy
          function saxpy (a,x,y)
             real x,y,a,saxpy
@@ -44,7 +45,7 @@ program speed
       call system_clock(icount1,irate,icmax)
 
       !      print *, 'clock rate = ',irate, ' ticks per second'
-      timings(iti) = REAL(irate)/REAL(1.0E+03); iti=iti+1;
+      timings(iti) = REAL(irate)/REAL(1.0E+06); iti=iti+1;
       call system_clock(icount1,irate,icmax)
 
 !     The "1000" loop just makes sure that I do lots of work
@@ -130,8 +131,22 @@ program speed
       time = real(icount2-icount1)/real(irate)
       timings(iti) = time; iti=iti+1; !print *, 'Time for bare Loop = ', time, ' seconds'
 1999 continue
-      print *," ",timings(1)," ",timings(2)," ",timings(3) ," ",timings(4)," ",timings(5), &
-           " ",timings(6)," ",timings(7), " ",timings(8)
+
+      write(*,"(8A20)") "Ticks/s",  "Local fn (s)", "Standard fn (s)", &
+           "Subroutine (s)",  "Statement (s)", "Internal fn (s)", &
+           "COMMON (s)", "Empty Loop (s)"
+      
+
+      write(t_char,'(8es20.8)') timings
+      print '(a160)', adjustr(t_char)
+      !i=2
+      !write(*,"(g12.0)",advance="no") timings(1)
+      !write(*,"(6g10.10)",advance="no") (timings(i),i=2,7)
+!      timings(2), timings(3), timings(4), &
+!           timings(5), timings(6), timings(7)
+
+
+
       write(*,*)'-----------------------------------------------'
 
       !      print *, c,i
