@@ -385,7 +385,7 @@ contains
         class(cmdline),                intent(inout) :: cline
         ! constants
         logical,               parameter :: DEBUG=.false.
-        integer,               parameter :: MAXITS_INIT=50, NREPEATS=2
+        integer,               parameter :: MAXITS_INIT=50, NREPEATS=5
         character(len=32),     parameter :: HETFBODY    = 'hetrep_'
         character(len=32),     parameter :: REPEATFBODY = 'hetdoc_'
         character(len=32),     parameter :: VOLFBODY    = 'recvol_state'
@@ -419,8 +419,7 @@ contains
         cline_prime3D_master = cline
         call cline_prime3D_master%set('prg', 'prime3D')
         call cline_prime3D_master%set('startit', 1.)
-        !call cline_prime3D_master%set('maxits', real(MAXITS_INIT))
-        call cline_prime3D_master%set('maxits', 1.)
+        call cline_prime3D_master%set('maxits', real(MAXITS_INIT))
         call cline_prime3D_master%set('refine', 'het')
         call cline_prime3D_master%set('dynlp', 'no')
         call cline_prime3D_master%set('lp', p_master%lp) 

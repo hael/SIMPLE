@@ -73,7 +73,7 @@ contains
         self%harwin = real(ceiling(self%winsz))
         self%alpha  = get_kb_alpha()
         lims               = self%loop_lims(3)
-        self%ldim_exp(:,2) = maxval(abs(lims))
+        self%ldim_exp(:,2) = maxval(abs(lims))+ceiling(self%harwin_exp)
         self%ldim_exp(:,1) = -self%ldim_exp(:,2)
         if( allocated(self%cmat_exp) ) deallocate(self%cmat_exp)
         allocate( self%cmat_exp( self%ldim_exp(1,1):self%ldim_exp(1,2),&

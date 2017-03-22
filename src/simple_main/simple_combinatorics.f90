@@ -13,43 +13,51 @@ contains
         real,    allocatable :: dists(:,:), rmat(:,:)
         type(ran_tabu)       :: rt
         integer :: isample, idiv, curr_pop, loc(2), nsamples, backcnt
-        nsamples = 10*ndiverse*ndiverse
-        allocate(configs_diverse(ndiverse,nptcls), configs_trial(nsamples,nptcls),&
-        rmat(nsamples,nptcls), dists(nsamples,ndiverse), tmp(nptcls))
-        curr_pop = 1
+        ! nsamples = 10*ndiverse*ndiverse
+        ! allocate(configs_diverse(ndiverse,nptcls), configs_trial(nsamples,nptcls),&
+        ! rmat(nsamples,nptcls), dists(nsamples,ndiverse), tmp(nptcls))
+        ! curr_pop = 1
         ! generate random configurations
-        call random_number(rmat)
-        !$omp parallel workshare
-        configs_trial = ceiling(rmat*real(nlabels))
-        where(configs_trial < 1       ) configs_trial = 1
-        where(configs_trial > nlabels ) configs_trial = nlabels
-        !$omp end parallel workshare
+        allocate(configs_diverse(ndiverse,nptcls), tmp(nptcls))
+        rt = ran_tabu(nptcls)
+        do idiv=1,ndiverse
+            call rt%balanced(nlabels, tmp)
+            configs_diverse(idiv,:) = tmp
+        enddo
+        deallocate(tmp)
+        ! Failed attempt at generating diverse labels from maximising the hamming distance
+        ! Should calculate the minimum of the maximum distances of the partitions with swapped labels 
+        ! call random_number(rmat)
+        ! !$omp parallel workshare
+        ! configs_trial = ceiling(rmat*real(nlabels))
+        ! where(configs_trial < 1       ) configs_trial = 1
+        ! where(configs_trial > nlabels ) configs_trial = nlabels
+        ! !$omp end parallel workshare
         ! set the first solution
-        curr_pop = 1
-        backcnt  = nsamples
-        configs_diverse(curr_pop,:) = configs_trial(curr_pop,:)
-        do while(curr_pop <= ndiverse)
-            ! calculate Hamming distances
-            dists = 0.
-            !$omp parallel do schedule(auto) default(shared) private(isample,idiv)
-            do isample=1,10*ndiverse
-                do idiv=1,curr_pop
-                    dists(isample,idiv) = real(count(configs_diverse(idiv,:) /= configs_trial(isample,:)))
-                end do
-            end do
-            !$omp end parallel do
-            ! find the most diverse labeling solution
-            loc = maxloc(dists)
-            curr_pop = curr_pop + 1
-            configs_diverse(curr_pop,:) = configs_trial(loc(1),:)
-            print *, configs_diverse(curr_pop,:)
-            ! swap with last in the trial set (using the backward counter)
-            tmp = configs_trial(backcnt,:)
-            configs_trial(backcnt,:) = configs_trial(loc(1),:)
-            configs_trial(loc(1),:) = tmp
-            backcnt = backcnt - 1
-        end do
-        deallocate(configs_trial, rmat, dists, tmp)
+        ! curr_pop = 1
+        ! backcnt  = nsamples
+        ! configs_diverse(curr_pop,:) = configs_trial(curr_pop,:)
+        ! do while(curr_pop < ndiverse)
+        !     ! calculate Hamming distances
+        !     dists = 0.
+        !     !$omp parallel do schedule(auto) default(shared) private(isample,idiv)
+        !     do isample=1,nsamples-ndiverse
+        !         do idiv=1,curr_pop
+        !             dists(isample,idiv) = real(count(configs_diverse(idiv,:) /= configs_trial(isample,:)))
+        !         end do
+        !     end do
+        !     !$omp end parallel do
+        !     ! find the most diverse labeling solution
+        !     loc = maxloc(dists)
+        !     curr_pop = curr_pop + 1
+        !     configs_diverse(curr_pop,:) = configs_trial(loc(1),:)
+        !     ! swap with last in the trial set (using the backward counter)
+        !     tmp = configs_trial(backcnt,:)
+        !     configs_trial(backcnt,:) = configs_trial(loc(1),:)
+        !     configs_trial(loc(1),:) = tmp
+        !     backcnt = backcnt - 1
+        ! end do
+        ! deallocate(configs_trial, rmat, dists, tmp)
     end function diverse_labeling
 
     subroutine shc_aggregation( nrepeats, nptcls, labels, consensus )
