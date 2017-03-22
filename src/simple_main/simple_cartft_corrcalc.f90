@@ -60,7 +60,7 @@ contains
         call self%img_refs(1)%new([self%pp%boxmatch,self%pp%boxmatch,1],self%pp%smpd)
         write(*,'(A)') '>>> PREPARING 3D REFERENCES'
         do s=1,self%pp%nstates
-            call preprefvol( b, p, cline, s, do_expand=.false. )
+            call preprefvol( b, p, cline, s, doexpand=.false. )
             self%refvols(s) = b%vol
             call self%refvols(s)%expand_cmat
         end do

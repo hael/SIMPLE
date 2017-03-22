@@ -853,7 +853,7 @@ contains
                 ! its own process id seem to resolve the system instabilities on fast cpu systems
                 ! replaced the above with execution in the queue to reduce the stress on the login node
                 ! call exec_simple_prg(simple_exec_bin, cline_volassemble)
-                if( p%eo .eq. 'yes' )then
+                if( p_master%eo .eq. 'yes' )then
                     volassemble_output = 'RESOLUTION'//str_iter
                 else
                     volassemble_output = 'VOLASSEMBLE'
@@ -1108,7 +1108,7 @@ contains
             ! replaced the above with command line execution as giving the volassemble setup
             ! its own process id seem to resolve the system instabilities on fast cpu systems
             ! call exec_simple_prg(simple_exec_bin, cline_volassemble)
-            if( p%eo .eq. 'yes' )then
+            if( p_master%eo .eq. 'yes' )then
                 volassemble_output = 'RESOLUTION'//str_iter
             else
                 volassemble_output = 'VOLASSEMBLE'

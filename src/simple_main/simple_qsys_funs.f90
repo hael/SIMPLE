@@ -358,7 +358,7 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! generate the script
-        call qscripts%generate_script(job_descr, myq_descr, exec_bin, script_name)
+        call qscripts%generate_script(job_descr, myq_descr, exec_bin, script_name, outfile)
         ! submit it
         call qscripts%submit_script(script_name)
         ! watch for completion

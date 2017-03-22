@@ -461,12 +461,16 @@ contains
         call ref%fwd_ft
     end subroutine prep2Dref_2
 
-    subroutine preprefvol( b, p, cline, s )
+    subroutine preprefvol( b, p, cline, s, doexpand )
         class(build),      intent(inout) :: b
         class(params),     intent(inout) :: p
         class(cmdline),    intent(inout) :: cline
         integer,           intent(in)    :: s
+        logical, optional, intent(in)    :: doexpand
+        logical :: ddoexpand
         real    :: shvec(3)
+        ddoexpand = .true.
+        if( present(doexpand) ) ddoexpand = doexpand
         if( p%boxmatch < p%box )call b%vol%new([p%box,p%box,p%box],p%smpd) ! ensure correct dim
         call b%vol%read(p%vols(s), isxfel=p%l_xfel)
         if( p%l_xfel )then
@@ -509,7 +513,7 @@ contains
         ! FT volume
         call b%vol%fwd_ft
         ! expand for fast interpolation
-        call b%vol%expand_cmat
+        if( ddoexpand ) call b%vol%expand_cmat
 
         contains
 
