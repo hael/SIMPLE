@@ -390,7 +390,7 @@ contains
         class(prime3D_srch),        intent(inout) :: self
         class(ori),       optional, intent(inout) :: o_prev
         integer,          optional, intent(in)    :: nnmat(:,:)
-        if( str_has_substr(self%refine,'neigh') .and. .not. present(nnmat) )&
+        if(str_has_substr(self%refine,'neigh') .and. .not. present(nnmat) )&
         &stop 'need optional nnmat to be present for refine=neigh modes :: prep4srch (prime3D_srch)'
         if( (str_has_substr(self%refine,'neigh') .or. str_has_substr(self%refine,'shc')).and. .not. present(o_prev) )&
         &stop 'need optional o_prev to be present refine=shc modes :: prep4srch (prime3D_srch)'

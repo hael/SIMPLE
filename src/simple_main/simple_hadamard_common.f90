@@ -353,13 +353,12 @@ contains
                 ! make sure that img_msk is of the correct dimension
                 call b%img_msk%new([p%boxmatch,p%boxmatch,1],p%smpd)
                 ! create 2D envelope
-                call b%vol_pad%fproject(o, b%img_pad)
-                call b%img_pad%bwd_ft
-                call b%img_pad%clip(b%img_msk)
-                call b%img_msk%norm('sigm')
-                !call b%img_msk%bin               ! under test
-                !call b%img_msk%grow_bin          ! under test
-                !call b%img_msk%cos_edge(50)      ! under test
+                ! call b%vol_pad%fproject(o, b%img_pad)
+                ! call b%img_pad%bwd_ft
+                ! call b%img_pad%clip(b%img_msk)
+                ! call b%img_msk%norm('sigm')
+                call b%mskvol%env_rproject(o, b%img_msk, p%msk) ! test_cyril
+                call b%img_msk%cos_edge(20)
             endif
             ! move to Fourier space
             call b%img%fwd_ft

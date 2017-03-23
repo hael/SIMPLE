@@ -469,7 +469,7 @@ contains
                     if( p%doautomsk )then
                         ! read & pre-process mask volume
                         call b%mskvol%read(p%masks(s))
-                        call prep4cgrid(b%mskvol, b%vol_pad, p%msk)
+                        !call prep4cgrid(b%mskvol, b%vol_pad, p%msk)
                     endif
                     cnt = 0
                     do iptcl=p%fromp,p%top

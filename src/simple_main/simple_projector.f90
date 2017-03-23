@@ -51,6 +51,8 @@ type, extends(image) :: projector
     procedure          :: imgpolarizer
     procedure, private :: kill_imgpolarizer
     procedure          :: kill_expanded
+    ! REAL-SPACE PROJECTION
+    procedure          :: env_rproject
 end type projector
 
 contains
@@ -73,7 +75,7 @@ contains
         self%harwin = real(ceiling(self%winsz))
         self%alpha  = get_kb_alpha()
         lims               = self%loop_lims(3)
-        self%ldim_exp(:,2) = maxval(abs(lims))+ceiling(self%harwin_exp)
+        self%ldim_exp(:,2) = maxval(abs(lims)) + ceiling(self%harwin_exp)
         self%ldim_exp(:,1) = -self%ldim_exp(:,2)
         if( allocated(self%cmat_exp) ) deallocate(self%cmat_exp)
         allocate( self%cmat_exp( self%ldim_exp(1,1):self%ldim_exp(1,2),&
@@ -176,9 +178,8 @@ contains
         class(image),     intent(inout) :: fplane
         real, optional,   intent(in)    :: lp
         real    :: vec(3), loc(3)
-        integer :: h, k, sqarg, sqlp, wdim, lims(3,2)
+        integer :: h, k, sqarg, sqlp, lims(3,2)
         ! init
-        lims   = self%loop_lims(2)
         fplane = cmplx(0.,0.)
         if( present(lp) )then
             lims = self%loop_lims(1,lp)
@@ -212,18 +213,18 @@ contains
         class(ori),       intent(in)    :: e
         class(image),     intent(inout) :: fplane
         real, optional,   intent(in)    :: lp
-        complex :: comp
         real    :: vec(3), loc(3)
-        integer :: h, k, sqarg, sqlp, wdim, halflim, lims(3,2)
+        integer :: h, k, sqarg, sqlp, wdim, lims(3,2)
         ! init
         lims = self%loop_lims(2) 
         if( present(lp) )then
+            lims = self%loop_lims(1,lp)
             sqlp = fplane%get_find(lp)**2
         else
             sqlp = (maxval(lims(:,2)))**2
         endif
         fplane = cmplx(0.,0.)
-        wdim = 2*ceiling(self%harwin_exp) + 1   ! interpolation kernel window size
+        wdim   = 2*ceiling(self%harwin_exp) + 1   ! interpolation kernel window size
         !$omp parallel do collapse(2) schedule(auto) default(shared) private(h,k,sqarg,vec,loc)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
@@ -553,6 +554,72 @@ contains
         ! kill the remains
         deallocate(pft, comps)
     end subroutine imgpolarizer
+
+
+    ! REAL-SPACE PROJECTOR
+    
+    !>  \brief  Envelope projection: binarize and project a 3d MASKED volume onto a binarized 2d slice 
+    subroutine env_rproject(self, e, img, maxrad )
+        !$ use omp_lib
+        !$ use omp_lib_kinds
+        class(projector), intent(inout) :: self   !< projector instance
+        class(ori),       intent(in)    :: e      !< Euler angle
+        type(image),      intent(inout) :: img    !< resulting projection image
+        real,             intent(in)    :: maxrad !< project inside this radius
+        real, allocatable :: rmat(:,:,:)
+        real              :: out_coos(3), rad(3), rmat_max, mmaxrad, sqmaxrad
+        integer           :: closest(3), orig(3), ldim(3), i, j, k
+        ldim = self%get_ldim()
+        if( ldim(3) == 1 )          stop 'only for Volumes; env_rproject; simple_projector'
+        if( .not. self%even_dims() )stop 'even dimensions assumed; env_rproject; simple_projector'
+        if( self%is_ft() )          stop 'real space only; env_rproject; simple_projector'
+        call img%new([ldim(1),ldim(2),1],self%get_smpd())
+        ! init
+        orig     = ldim/2+1
+        out_coos = 0.
+        mmaxrad  = min(maxrad,real(ldim(1))/2-1)
+        sqmaxrad = mmaxrad**2
+        rad      = 0.
+        img      = 0.
+        ! binarize with threshold being the highest value, which should be one
+        rmat = self%get_rmat()
+        rmat_max = maxval(rmat) - TINY
+        where(rmat < rmat_max)
+            ! so any previous soft masking goes
+            ! but not the binary layers
+            rmat = 0.
+        else where
+            rmat = 1.
+        end where
+        if(count(rmat==0.)<1)stop 'not the right kind of volume'
+        !$omp parallel do default(shared) private(j,out_coos,rad,i,k)
+        do j=1,ldim(2)
+            out_coos(2) = real(j-orig(2))
+            rad(2) = out_coos(2)**2.
+            if( rad(2)>sqmaxrad )cycle
+            do i=1,ldim(1)
+                out_coos(1) = real(i-orig(1))
+                rad(1) = rad(2)+out_coos(1)**2
+                ! check whether we are within the radius
+                if( rad(1)>sqmaxrad )cycle
+                ! iterate over all the voxels in the ray which lands on the current pixel
+                do k=1,ldim(3)
+                    out_coos(3) = real(k-orig(3))
+                    rad(3) = rad(1)+out_coos(3)**2
+                    if(rad(3) > sqmaxrad)cycle
+                    ! if any of the 8 neighbors has a value of 1. then envelope value set to 1.
+                    closest = nint( matmul(out_coos,e%get_mat()) ) + orig
+                    if(any(rmat(closest(1):closest(1)+1, closest(2):closest(2)+1,&
+                        &closest(3):closest(3)+1) >= 1.))then
+                        call img%set([i,j,1], 1.)
+                        exit
+                    endif
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+        deallocate(rmat)            
+    end subroutine env_rproject
 
     ! DESTRUCTORS
 

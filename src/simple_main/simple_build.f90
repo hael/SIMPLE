@@ -50,7 +50,7 @@ type build
     type(image)                         :: img_copy           !< -"-
     type(projector)                     :: vol                !< -"-
     type(projector)                     :: vol_pad            !< -"-
-    type(image)                         :: mskvol             !< mask volume
+    type(projector)                     :: mskvol             !< mask volume
     ! CLUSTER TOOLBOX
     type(ppca)                          :: pca                !< 4 probabilistic pca
     type(centre_clust)                  :: cenclust           !< centre-based clustering object
