@@ -970,7 +970,7 @@ contains
                     call ctfsqs( i )%new([p%box,p%box,1],p%smpd)
                 enddo
                 ! prep images
-                call pftcc%new(proj_pop, [p%fromp,p%top], [p%box,p%box,1],p%kfromto, 1, p%ctf)
+                call pftcc%new(proj_pop, [p%fromp,p%top], [p%box,p%box,1], p%kfromto, 1, p%nthr, p%ctf)
                 do i = 1,proj_pop
                     iptcl = proj_inds( i )
                     o     = b%a%get_ori( iptcl )

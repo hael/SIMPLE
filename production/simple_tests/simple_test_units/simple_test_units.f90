@@ -32,15 +32,15 @@ command = 'mkdir '//folder
 call exec_cmdline( trim(command) )
 call chdir(folder)
 call test_cmd_dict           ! pass with PGI
-! call test_build            ! NOT HAPPY: get_ldim in img class bails with PGI
+call test_build              ! NOT HAPPY: get_ldim in img class bails with PGI
 call test_ftiter             ! pass with PGI
 call test_ori                ! pass with PGI
 call test_ori_dists          ! pass with PGI
 call test_oris(.false.)      ! pass with PGI
-! call test_imghead          ! NOT HAPPY: seems to believe it is an imgheadrec
-! call test_image(.false.)   ! NOT HAPPY   
-! call test_hac              ! NOT HAPPY
-! call test_kmeans           ! NOT HAPPY
+call test_imghead            ! NOT HAPPY: seems to believe it is an imgheadrec
+call test_image(.false.)     ! NOT HAPPY   
+call test_hac                ! NOT HAPPY
+call test_kmeans             ! NOT HAPPY
 call test_shc_cluster        ! pass with PGI
 call test_aff_prop           ! pass with PGI
 call test_args               ! pass with PGI
@@ -48,7 +48,7 @@ call test_online_var         ! pass with PGI
 call test_hash               ! pass with PGI
 call test_ft_shsrch          ! pass with PGI
 call test_ftexp_shsrch       ! pass with PGI
-! ! LOCAL TESTFUNCTIONS
+! LOCAL TESTFUNCTIONS
 call test_multinomal         ! pass with PGI
 call test_testfuns           ! pass with PGI
 call test_euler_shift        ! pass with PGI

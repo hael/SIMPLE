@@ -178,6 +178,7 @@ type :: params
     integer :: corner=0
     integer :: cube=0
     integer :: edge=14
+    integer :: filtsz_pad=0
     integer :: find=1
     integer :: frameavg=0
     integer :: fromf=1

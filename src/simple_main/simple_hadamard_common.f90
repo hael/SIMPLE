@@ -678,9 +678,11 @@ contains
                 ! CTF parameters have changed and ctf object and the reference central sections need to be updated
                 tfun = ctf(p%smpd, kV, cs, fraca)
                 if( present(ref) )then
-                    call pftcc%apply_ctf(tfun, dfx, dfy, angast, refvec=[ref,ref])
+                    ! call pftcc%apply_ctf(tfun, dfx, dfy, angast, refvec=[ref,ref])
+                    call pftcc%apply_ctf(iptcl, refvec=[ref,ref])
                 else
-                    call pftcc%apply_ctf(tfun, dfx, dfy, angast)
+                    ! call pftcc%apply_ctf(tfun, dfx, dfy, angast)
+                    call pftcc%apply_ctf(iptcl)
                 endif
             endif
             kV_prev     = kV

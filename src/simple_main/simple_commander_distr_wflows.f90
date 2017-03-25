@@ -806,7 +806,7 @@ contains
                 frac_srch_space = os%get_avg('frac')
                 call job_descr%set( 'oritab', trim(oritab) )
                 call cline_shellweight3D%set( 'oritab', trim(oritab) )
-                if( p_master%l_shellw .and. frac_srch_space >= 50.  )then
+                if( p_master%l_shellw .and. frac_srch_space >= SHW_FRAC_LIM  )then
                     call xshellweight3D_distr%execute(cline_shellweight3D)
                 endif
             endif
@@ -1083,7 +1083,7 @@ contains
             frac_srch_space = os%get_avg('frac')
             call job_descr%set( 'oritab', trim(oritab) )
             call cline_shellweight3D%set( 'oritab', trim(oritab) )
-            if( p_master%l_shellw .and. (frac_srch_space >= 50. .or. p_master%refine .eq. 'het') )then
+            if( p_master%l_shellw .and. frac_srch_space >= SHW_FRAC_LIM )then
                 call xshellweight3D_distr%execute(cline_shellweight3D)
             endif
             call job_descr%set( 'startit', trim(int2str(iter)) )

@@ -27,7 +27,6 @@ integer, allocatable   :: defgroups(:)
 real,    allocatable   :: wmat(:,:)
 real,    allocatable   :: ctfparams(:,:)
 logical, parameter     :: DEBUG = .false.
-real,    parameter     :: SHWLIM = 50.
 
 contains
     
@@ -40,6 +39,7 @@ contains
         class(cmdline), intent(inout) :: cline     
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: converged
+        real, allocatable :: res(:), res_pad(:), wresamp(:)
         integer :: iptcl, fnr, icls, file_stat
         logical :: doshellweight
         
@@ -47,7 +47,7 @@ contains
         frac_srch_space = b%a%get_avg('frac')
 
         ! SETUP SHELLWEIGHTS
-        if( p%l_distr_exec ) call setup_shellweights( b, p, doshellweight, wmat )
+        call setup_shellweights(b, p, doshellweight, wmat, res, res_pad)
         
         ! SET FOURIER INDEX RANGE
         call set_bp_range( b, p, cline )
@@ -75,15 +75,15 @@ contains
         select case(p%refine)
             case('no','greedy')
                 if( p%oritab .eq. '' )then
-                    call primesrch2D%exec_prime2D_srch(pftcc, b%a, [p%fromp,p%top], greedy=.true.)
+                    call primesrch2D%exec_prime2D_srch(pftcc, b%a, [p%fromp,p%top], frac_srch_space, greedy=.true.)
                 else
-                    call primesrch2D%exec_prime2D_srch(pftcc, b%a, [p%fromp,p%top])
+                    call primesrch2D%exec_prime2D_srch(pftcc, b%a, [p%fromp,p%top], frac_srch_space)
                 endif
             case('neigh')
                 if( p%oritab .eq. '' )then
-                    call primesrch2D%exec_prime2D_srch(pftcc, b%a, [p%fromp,p%top], greedy=.true., nnmat=b%nnmat)
+                    call primesrch2D%exec_prime2D_srch(pftcc, b%a, [p%fromp,p%top], frac_srch_space, greedy=.true., nnmat=b%nnmat)
                 else
-                    call primesrch2D%exec_prime2D_srch(pftcc, b%a, [p%fromp,p%top], nnmat=b%nnmat)
+                    call primesrch2D%exec_prime2D_srch(pftcc, b%a, [p%fromp,p%top], frac_srch_space, nnmat=b%nnmat)
                 endif
             case DEFAULT
                 write(*,*) 'The refinement mode: ', trim(p%refine), ' is unsupported'
@@ -91,7 +91,7 @@ contains
         end select
         cnt_glob = 0
         do iptcl=p%fromp,p%top
-            cnt_glob = cnt_glob + 1
+            cnt_glob    = cnt_glob + 1
             orientation = b%a%get_ori(iptcl)
             ! read back the image again 4 shift, rotation and cavg update
             if( p%l_distr_exec )then
@@ -102,17 +102,12 @@ contains
             if( nint(orientation%get('state')) > 0 )then
                 icls = nint(orientation%get('class'))
                 if( allocated(wmat) )then
-                    ! the wiener_restore2D_online modifies b%img
-                    call wiener_restore2D_online(b%img, orientation,&
-                    p%tfplan, b%cavgs(icls), p%msk, wmat(iptcl,:))
-                    call assemble_ctfsqsum_online(b%img, orientation,&
-                    p%tfplan, b%ctfsqsums(icls), wmat(iptcl,:))
+                    wresamp = resample_filter(wmat(iptcl,:), res, res_pad)
+                    call wiener_restore2D_online_fast(b%img, orientation, p%tfplan,&
+                    &b%cavgs(icls), b%ctfsqsums(icls), p%msk, wresamp)
                 else
-                    ! the wiener_restore2D_online modifies b%img
-                    call wiener_restore2D_online(b%img, orientation,&
-                    p%tfplan, b%cavgs(icls), p%msk)
-                    call assemble_ctfsqsum_online(b%img, orientation,&
-                    p%tfplan, b%ctfsqsums(icls))
+                    call wiener_restore2D_online_fast(b%img, orientation, p%tfplan,&
+                    &b%cavgs(icls), b%ctfsqsums(icls), p%msk)
                 endif
             endif
         end do
@@ -163,7 +158,7 @@ contains
         integer :: icls
         !$omp parallel do schedule(auto) default(shared) private(icls)
         do icls=1,p%ncls
-            b%cavgs(icls)     = 0.
+            b%cavgs(icls) = 0.
             b%ctfsqsums(icls) = cmplx(0.,0.)
         end do
         !$omp end parallel do 
@@ -196,10 +191,8 @@ contains
                 else
                     call b%img%read(p%stk, iptcl)
                 endif
-                call wiener_restore2D_online(b%img, orientation,&
-                p%tfplan, b%cavgs(icls), p%msk)
-                call assemble_ctfsqsum_online(b%img, orientation,&
-                p%tfplan, b%ctfsqsums(icls))             
+                call wiener_restore2D_online_fast(b%img, orientation, p%tfplan,&
+                &b%cavgs(icls), b%ctfsqsums(icls), p%msk)
             endif
         end do
         if( .not. p%l_distr_exec ) call prime2D_norm_sums( b, p )
@@ -295,7 +288,7 @@ contains
         integer   :: cnt, iptcl, icls, sz, pop, istate
         integer   :: filtsz, alloc_stat, filnum, io_stat
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PRIME2D SEARCH ENGINE'
-        if( frac_srch_space >= SHWLIM .and. p%oritab .ne. '' )then
+        if( frac_srch_space >= SHW_FRAC_LIM .and. p%oritab .ne. '' )then
             filtsz = b%img%get_filtsz()
             if( allocated(wmat) ) deallocate(wmat)
             allocate(wmat(p%top-p%fromp+1,filtsz), stat=alloc_stat)
@@ -304,7 +297,7 @@ contains
         endif
         ! must be done here since constants in p are dynamically set
         call primesrch2D%new(p)
-        call pftcc%new(p%ncls, [p%fromp,p%top], [p%box,p%box,1], p%kfromto, p%ring2, p%ctf)
+        call pftcc%new(p%ncls, [p%fromp,p%top], [p%box,p%box,1], p%kfromto, p%ring2, p%nthr, p%ctf)
         ! prepare the polarizers
         call b%img%init_imgpolarizer(pftcc, p%smpd)
         ! PREPARATION OF REFERENCES IN PFTCC
@@ -317,9 +310,9 @@ contains
             if( p%oritab /= '' ) pop = b%a%get_clspop(icls)
             if( pop > 1 )then
                 ! prepare the reference
-                b%refs(icls) = b%cavgs(icls)
-                b%img        = b%cavgs(icls)
+                b%img = b%cavgs(icls)
                 call prep2Dref(p, b%img, b%a, icls)
+                b%refs(icls) = b%img
                 ! transfer to polar coordinates
                 call b%img%imgpolarizer(pftcc, icls, isptcl=.false.)
             endif
@@ -346,22 +339,23 @@ contains
             call b%img%imgpolarizer(pftcc, iptcl)
         end do
         if( allocated(wmat) )then
-            if( p%l_distr_exec )then
-                filnum = get_fileunit()
+            filnum = get_fileunit()
+            if( p%l_distr_exec )then  
                 open(unit=filnum, status='REPLACE', action='WRITE',&
                 file='shellweights_part'//int2str_pad(p%part,p%numlen)//'.bin', access='STREAM')
-                write(unit=filnum,pos=1,iostat=io_stat) wmat
-                ! check if the write was successful
-                if( io_stat .ne. 0 )then
-                    write(*,'(a,i0,2a)') '**ERROR(preppftcc4align): I/O error ',&
-                    io_stat, ' when writing shellweights_partX.bin'
-                    stop 'I/O error; preppftcc4align; simple_hadamard2D_matcher'
-                endif
-                close(filnum)
-                deallocate(wmat)
             else
-                call normalise_shellweights( wmat )
+                open(unit=filnum, status='REPLACE', action='WRITE',&
+                file='shellweights.bin', access='STREAM')
             endif
+            write(unit=filnum,pos=1,iostat=io_stat) wmat
+            ! check if the write was successful
+            if( io_stat .ne. 0 )then
+                write(*,'(a,i0,2a)') '**ERROR(preppftcc4align): I/O error ',&
+                io_stat, ' when writing shellweights*.bin'
+                stop 'I/O error; preppftcc4align; simple_hadamard2D_matcher'
+            endif
+            close(filnum)
+            deallocate(wmat)
         endif
         if( debug ) write(*,*) '*** hadamard2D_matcher ***: finished preppftcc4align'
     end subroutine preppftcc4align
@@ -407,57 +401,3 @@ contains
     end subroutine calc_frc
     
 end module simple_hadamard2D_matcher
-
-! cnt_glob = 0
-! if( debug ) write(*,*) '*** hadamard2D_matcher ***: loop fromp/top:', p%fromp, p%top
-! do iptcl=p%fromp,p%top
-!     cnt_glob = cnt_glob + 1
-!     call progress(cnt_glob, p%top-p%fromp+1)        
-!     orientation = b%a%get_ori(iptcl)
-!     if( nint(orientation%get('state')) > 0 )then
-!         call preprefs4align(b, p, iptcl, pftcc)         
-!         select case(p%refine)
-!             case('no','greedy')
-!                 if( p%oritab .eq. '' )then
-!                     call primesrch2D%exec_prime2D_srch_old(pftcc, iptcl)
-!                 else
-!                     call primesrch2D%exec_prime2D_srch_old(pftcc, iptcl, orientation)
-!                 endif
-!             case('neigh')
-!                 if( p%oritab .eq. '' )then
-!                     call primesrch2D%exec_prime2D_srch_old(pftcc, iptcl, nnmat=b%nnmat)
-!                 else
-!                     call primesrch2D%exec_prime2D_srch_old(pftcc, iptcl, orientation, nnmat=b%nnmat)
-!                 endif
-!             case DEFAULT
-!                 write(*,*) 'The refinement mode: ', trim(p%refine), ' is unsupported'
-!                 stop
-!         end select
-!         call primesrch2D%get_cls(orientation)
-!     else
-!         call orientation%reject
-!     endif
-!     call b%a%set_ori(iptcl,orientation)
-!     ! read back the image again 4 shift, rotation and cavg update
-!     if( p%l_distr_exec )then
-!         call b%img%read(p%stk_part, cnt_glob)
-!     else
-!         call b%img%read(p%stk, iptcl)
-!     endif
-!     if( nint(orientation%get('state')) > 0 )then
-!         icls = nint(orientation%get('class'))
-!         if( allocated(wmat) )then
-!             ! the wiener_restore2D_online modifies b%img
-!             call wiener_restore2D_online(b%img, orientation,&
-!             p%tfplan, b%cavgs(icls), p%msk, wmat(iptcl,:))
-!             call assemble_ctfsqsum_online(b%img, orientation,&
-!             p%tfplan, b%ctfsqsums(icls), wmat(iptcl,:))
-!         else
-!             ! the wiener_restore2D_online modifies b%img
-!             call wiener_restore2D_online(b%img, orientation,&
-!             p%tfplan, b%cavgs(icls), p%msk)
-!             call assemble_ctfsqsum_online(b%img, orientation,&
-!             p%tfplan, b%ctfsqsums(icls))
-!         endif
-!     endif
-! end do

@@ -118,7 +118,7 @@ contains
         if( p%l_distr_exec )then
             ! nothing to do
         else
-            if( p%l_shellw .and. frac_srch_space >= 50. ) call cont3D_shellweight(b, p, cline)
+            if( p%l_shellw .and. frac_srch_space >= SHW_FRAC_LIM ) call cont3D_shellweight(b, p, cline)
         endif
         call setup_shellweights(b, p, doshellweight, wmat, res, res_pad)
 
@@ -384,10 +384,10 @@ contains
         nrefs = p%nspace*p%nstates
         if( p%l_xfel )then
             call pftcc%new(nrefs, [p%fromp,p%top], [p%boxmatch,p%boxmatch,1],&
-            p%kfromto, p%ring2, p%ctf, isxfel='yes')
+            p%kfromto, p%ring2, p%nthr, p%ctf, isxfel='yes')
         else
             call pftcc%new(nrefs, [p%fromp,p%top], [p%boxmatch,p%boxmatch,1],&
-            p%kfromto, p%ring2, p%ctf)
+            p%kfromto, p%ring2, p%nthr, p%ctf)
         endif
         ! PREPARATION OF REFERENCES IN PFTCC
         call prep_refs_pftcc4align( b, p, cline )

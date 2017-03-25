@@ -22,8 +22,11 @@ type :: polarft_corrcalc
     integer                  :: ring2      = 0         !< radius of molecule
     integer                  :: refsz      = 0         !< size of reference (nrots/2) (number of vectors used for matching)
     integer                  :: ptclsz     = 0         !< size of particle (2*nrots)
+    integer                  :: winsz      = 0         !< size of moving window in correlation cacluations
     integer                  :: ldim(3)    = 0         !< logical dimensions of original cartesian image
     integer                  :: kfromto(2) = 0         !< Fourier index range
+    integer                  :: chunksz    = 0         !< chunksz for parallel scheduling
+    integer                  :: nthr       = 0         !< nr of CPU threads
     real,        allocatable :: sqsums_refs(:)         !< memoized square sums for the correlation calculations
     real,        allocatable :: sqsums_ptcls(:)        !< memoized square sums for the correlation calculations
     real,        allocatable :: angtab(:)              !< table of in-plane angles (in degrees)
@@ -101,10 +104,10 @@ contains
     ! CONSTRUCTORS
     
     !>  \brief  is a constructor
-    subroutine new( self, nrefs, pfromto, ldim, kfromto, ring2, ctfflag, isxfel )
+    subroutine new( self, nrefs, pfromto, ldim, kfromto, ring2, nthr, ctfflag, isxfel )
         use simple_math, only: rad2deg, is_even, round2even
         class(polarft_corrcalc),    intent(inout) :: self
-        integer,                    intent(in)    :: nrefs, pfromto(2), ldim(3), kfromto(2), ring2
+        integer,                    intent(in)    :: nrefs, pfromto(2), ldim(3), kfromto(2), ring2, nthr
         character(len=*),           intent(in)    :: ctfflag
         character(len=*), optional, intent(in)    :: isxfel
         integer :: alloc_stat, irot, k, err
@@ -151,15 +154,18 @@ contains
             if( isxfel .eq. 'yes' ) self%xfel = .true.
         end if
         ! set constants
-        self%pfromto = pfromto                       !< from/to particle indices (in parallel execution)
-        self%nptcls  = pfromto(2) - pfromto(1) + 1   !< the total number of particles in partition (logically indexded [fromp,top])
-        self%nrefs   = nrefs                         !< the number of references (logically indexded [1,nrefs])
-        self%ring2   = ring2                         !< radius of molecule
-        self%nrots   = round2even(twopi*real(ring2)) !< number of in-plane rotations for one pft  (determined by radius of molecule)
-        self%refsz   = self%nrots/2                  !< size of reference (nrots/2) (number of vectors used for matching)
-        self%ptclsz  = self%nrots*2                  !< size of particle (2*nrots)
-        self%ldim    = ldim                          !< logical dimensions of original cartesian image
-        self%kfromto = kfromto                       !< Fourier index range
+        self%pfromto = pfromto                         !< from/to particle indices (in parallel execution)
+        self%nptcls  = pfromto(2) - pfromto(1) + 1     !< the total number of particles in partition (logically indexded [fromp,top])
+        self%nrefs   = nrefs                           !< the number of references (logically indexded [1,nrefs])
+        self%ring2   = ring2                           !< radius of molecule
+        self%nrots   = round2even(twopi * real(ring2)) !< number of in-plane rotations for one pft  (determined by radius of molecule)
+        self%refsz   = self%nrots / 2                  !< size of reference (nrots/2) (number of vectors used for matching)
+        self%winsz   = self%refsz - 1                  !< size of moving window in correlation cacluations
+        self%ptclsz  = self%nrots * 2                  !< size of particle (2*nrots)
+        self%ldim    = ldim                            !< logical dimensions of original cartesian image
+        self%kfromto = kfromto                         !< Fourier index range
+        self%nthr    = nthr                            !< number of CPU threads
+        self%chunksz = ceiling(real(self%nptcls)/real(nthr)) !< chunk size for the parallel exec
         ! generate polar coordinates
         allocate( self%polar(self%ptclsz,self%kfromto(1):self%kfromto(2)), self%angtab(self%nrots), stat=alloc_stat)
         call alloc_err('polar coordinate arrays; new; simple_polarft_corrcalc', alloc_stat)
@@ -399,7 +405,7 @@ contains
         complex, allocatable :: pft(:,:)
         integer :: alloc_stat
         allocate(pft(self%refsz,self%kfromto(1):self%kfromto(2)),&
-        source=self%pfts_ptcls(iptcl,irot:irot+self%refsz-1,:), stat=alloc_stat)
+        source=self%pfts_ptcls(iptcl,irot:irot+self%winsz,:), stat=alloc_stat)
         call alloc_err("In: get_ptcl_pft; simple_polarft_corrcalc", alloc_stat)
     end function get_ptcl_pft
     
@@ -477,7 +483,7 @@ contains
         integer,                 intent(in)    :: iref
         integer,       optional, intent(in)    :: irot
         if( present(irot) )then
-            self%sqsums_refs(iref) = sum(csq(self%pfts_refs_ctf(iref,irot:irot+self%refsz-1,:)))
+            self%sqsums_refs(iref) = sum(csq(self%pfts_refs_ctf(iref,irot:irot+self%winsz,:)))
         else
             self%sqsums_refs(iref) = sum(csq(self%pfts_refs_ctf(iref,:,:)))
         endif
@@ -530,7 +536,7 @@ contains
         endif
         close(funit)
         ! memoize sqsum_ptcls
-        !$omp parallel do schedule(auto) default(shared) private(iptcl)
+        !$omp parallel do schedule(static,self%chunksz) default(shared) private(iptcl)
         do iptcl=self%pfromto(1),self%pfromto(2)
             call self%memoize_sqsum_ptcl(iptcl)
         end do
@@ -589,25 +595,27 @@ contains
         integer,                 intent(in)    :: iptcl
         integer, optional,       intent(in)    :: refvec(2)
         integer :: iref, ref_start, ref_end
-        ! multiply the references with the CTF
-        if( present(refvec) )then
-            ! slice of references
-            if( any(refvec<1) .or. any(refvec>self%nrefs) .or. refvec(1)>refvec(2) )then
-                stop 'invalid reference indices; simple_polarft_corrcalc::apply_ctf:'
+        if( self%with_ctf )then
+            ! multiply the references with the CTF
+            if( present(refvec) )then
+                ! slice of references
+                if( any(refvec<1) .or. any(refvec>self%nrefs) .or. refvec(1)>refvec(2) )then
+                    stop 'invalid reference indices; simple_polarft_corrcalc::apply_ctf:'
+                endif
+                ref_start = refvec(1)
+                ref_end   = refvec(2)
+            else
+                ! all references
+                ref_start = 1
+                ref_end   = self%nrefs
             endif
-            ref_start = refvec(1)
-            ref_end   = refvec(2)
-        else
-            ! all references
-            ref_start = 1
-            ref_end   = self%nrefs
+            !$omp parallel do default(shared) schedule(auto) private(iref)
+            do iref=ref_start,ref_end
+                self%pfts_refs_ctf(iref,:,:) = self%pfts_refs(iref,:,:)*self%ctfmats(iptcl,:,:)
+                call self%memoize_sqsum_ref_ctf(iref)
+            end do
+            !$omp end parallel do
         endif
-        !$omp parallel do default(shared) schedule(auto) private(iref)
-        do iref=ref_start,ref_end
-            self%pfts_refs_ctf(iref,:,:) = self%pfts_refs(iref,:,:)*self%ctfmats(iptcl,:,:)
-            call self%memoize_sqsum_ref_ctf(iref)
-        end do
-        !$omp end parallel do
     end subroutine apply_ctf_2
 
     !>  \brief  is for preparing for XFEL pattern corr calc
@@ -636,7 +644,7 @@ contains
         ! calculate the mean of each particle at each k shell at each in plane rotation
         do iptcl=self%pfromto(1),self%pfromto(2)
             do k=self%kfromto(1),self%kfromto(2)
-                ptcls_mean_tmp(iptcl,1,k) = sum(self%pfts_ptcls(iptcl,1:self%refsz-1,k))/self%refsz
+                ptcls_mean_tmp(iptcl,1,k) = sum(self%pfts_ptcls(iptcl,1:self%winsz,k))/self%refsz
             end do
         end do
         ! subtract the mean of each particle at each k shell at each in plane rotation
@@ -720,27 +728,27 @@ contains
         use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: nrefs
-        real,                    intent(out)   :: corrmat3dout(self%pfromto(1):self%pfromto(2),nrefs,self%nrots) !< output correlation matrix
+        real,                    intent(out)   :: corrmat3dout(self%pfromto(1):self%pfromto(2),nrefs,self%nrots)
         integer :: iptcl, iref, irot
         real    :: norm
         complex :: ref(self%refsz,self%kfromto(1):self%kfromto(2))
         ! calculate correlations in parallel
         if( self%with_ctf )then
-            !$omp parallel do default(shared) private(iptcl,iref,ref,norm,irot)
+            !$omp parallel do schedule(static,self%chunksz) default(shared) private(iptcl,iref,ref,norm,irot)
             do iptcl=self%pfromto(1),self%pfromto(2)
                 do iref=1,self%nrefs
                     ref  = self%pfts_refs(iref,:,:) * self%ctfmats(iptcl,:,:)
                     norm = sqrt(sum(csq(ref)) * self%sqsums_ptcls(iptcl))
                     do irot=1,self%nrots
                         corrmat3dout(iptcl,iref,irot) = &
-                        sum(real(ref * conjg(self%pfts_ptcls(iptcl,irot:irot+self%refsz-1,:))))
+                        sum(real(ref * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:))))
                         corrmat3dout(iptcl,iref,irot) = corrmat3dout(iptcl,iref,irot)/norm
                     end do
                 end do
             end do
             !$omp end parallel do
         else
-            !$omp parallel do default(shared) private(iptcl,iref,irot)
+            !$omp parallel do schedule(static,self%chunksz) default(shared) private(iptcl,iref,irot)
             do iptcl=self%pfromto(1),self%pfromto(2)
                 do iref=1,self%nrefs
                     do irot=1,self%nrots
@@ -757,15 +765,15 @@ contains
         !$ use omp_lib
         !$ use omp_lib_kinds
         use simple_math, only: csq
-        class(polarft_corrcalc), intent(inout) :: self !< instance
+        class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: nrefs, nnmat(:,:), prevprojs(self%pfromto(1):self%pfromto(2))
-        real,                    intent(out)   :: corrmat3dout(self%pfromto(1):self%pfromto(2),nrefs,self%nrots) !< output correlation matrix
+        real,                    intent(out)   :: corrmat3dout(self%pfromto(1):self%pfromto(2),nrefs,self%nrots)
         integer :: i, iptcl, iref, iiref, irot
         real    :: norm
         complex :: ref(self%refsz,self%kfromto(1):self%kfromto(2))
         ! calculate correlations in parallel
         if( self%with_ctf )then
-            !$omp parallel do default(shared) private(iptcl,iref,ref,norm,irot)
+            !$omp parallel do schedule(static,self%chunksz) default(shared) private(iptcl,iiref,iref,ref,norm,irot)
             do iptcl=self%pfromto(1),self%pfromto(2)
                 do iiref=1,nrefs
                     iref = nnmat(prevprojs(iptcl),iref)
@@ -773,14 +781,14 @@ contains
                     norm = sqrt(sum(csq(ref)) * self%sqsums_ptcls(iptcl))
                     do irot=1,self%nrots
                         corrmat3dout(iptcl,iref,irot) = &
-                        sum(real(ref * conjg(self%pfts_ptcls(iptcl,irot:irot+self%refsz-1,:))))
+                        sum(real(ref * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:))))
                         corrmat3dout(iptcl,iref,irot) = corrmat3dout(iptcl,iref,irot)/norm
                     end do
                 end do
             end do
             !$omp end parallel do
         else
-            !$omp parallel do default(shared) private(iptcl,iref,irot)
+            !$omp parallel do schedule(static,self%chunksz) default(shared) private(iptcl,iref,irot)
             do iptcl=self%pfromto(1),self%pfromto(2)
                 do iref=1,nrefs
                     do irot=1,self%nrots
@@ -831,7 +839,7 @@ contains
             if( .not. present(previnds) ) stop 'need optional input previnds in&
             &conjunction shclogic=.true.; simple_polarft_corrcalc :: gencorrs_all_cpu'
             ! we are using SHC-logics for the in-plane search
-            !$omp parallel do default(shared) private(iptcl,iref)
+            !$omp parallel do schedule(static,self%chunksz) default(shared) private(iptcl,iref)
             do iptcl=self%pfromto(1),self%pfromto(2)
                 pprevcorrs(iptcl) = corrmat3d(iptcl,previnds(iptcl,1),previnds(iptcl,2))
                 do iref=1,nrefs
@@ -923,9 +931,9 @@ contains
         else
             refs => self%pfts_refs
         endif
-        !$omp parallel do default(shared) private(k,sumsqref,sumsqptcl)
+        !$omp parallel do default(shared) private(k,sumsqref,sumsqptcl) schedule(auto)
         do k=self%kfromto(1),self%kfromto(2)
-            frc(k)    = sum(refs(iref,:,k)*conjg(self%pfts_ptcls(iptcl,irot:irot+self%refsz-1,k)))
+            frc(k)    = sum(refs(iref,:,k)*conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,k)))
             sumsqref  = sum(csq(refs(iref,:,k)))
             sumsqptcl = sum(csq(self%pfts_ptcls(iptcl,:self%refsz,k)))
             frc(k)    = frc(k)/sqrt(sumsqref*sumsqptcl)
@@ -946,9 +954,9 @@ contains
             return
         endif
         if( self%with_ctf )then
-            cc = sum(real(self%pfts_refs_ctf(iref,:,:) * conjg(self%pfts_ptcls(iptcl,irot:irot+self%refsz-1,:))))
+            cc = sum(real(self%pfts_refs_ctf(iref,:,:) * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:))))
         else
-            cc = sum(real(self%pfts_refs(iref,:,:) * conjg(self%pfts_ptcls(iptcl,irot:irot+self%refsz-1,:))))
+            cc = sum(real(self%pfts_refs(iref,:,:) * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:))))
         endif
         cc = cc/sqrt(self%sqsums_refs(iref)*self%sqsums_ptcls(iptcl))
     end function corr_1
@@ -974,7 +982,7 @@ contains
             ! shift
             pft_ref_sh  = (self%pfts_refs(iref,:,:) * self%ctfmats(iptcl,:,:)) * shmat
             ! calculate correlation precursors
-            argmat = real(pft_ref_sh * conjg(self%pfts_ptcls(iptcl,irot:irot+self%refsz-1,:)))
+            argmat = real(pft_ref_sh * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:)))
             !$omp end parallel workshare
             cc = sum(argmat)
             sqsum_ref_sh = sum(csq(pft_ref_sh))
@@ -987,7 +995,7 @@ contains
             ! shift
             pft_ref_sh = self%pfts_refs_ctf(iref,:,:) * shmat
             ! calculate correlation precursors
-            argmat = real(pft_ref_sh * conjg(self%pfts_ptcls(iptcl,irot:irot+self%refsz-1,:)))
+            argmat = real(pft_ref_sh * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:)))
             !$omp end parallel workshare
             cc = sum(argmat)
             sqsum_ref_sh = sum(csq(pft_ref_sh))
@@ -1000,7 +1008,7 @@ contains
             ! shift
             pft_ref_sh = self%pfts_refs(iref,:,:) * shmat
             ! calculate correlation precursors
-            argmat = real(pft_ref_sh * conjg(self%pfts_ptcls(iptcl,irot:irot+self%refsz-1,:)))
+            argmat = real(pft_ref_sh * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:)))
             !$omp end parallel workshare
             cc = sum(argmat)
             sqsum_ref_sh = sum(csq(pft_ref_sh))

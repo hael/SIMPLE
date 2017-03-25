@@ -64,11 +64,11 @@ type build
     type(eo_reconstructor)              :: eorecvol           !< object for eo reconstruction
     type(reconstructor)                 :: recvol             !< object for reconstruction
     ! PRIME TOOLBOX
-    type(image), allocatable            :: cavgs(:)           !< class averages (Wiener normalised references)
-    type(projector), allocatable        :: refs(:)            !< referecnes
-    type(image), allocatable            :: ctfsqsums(:)       !< CTF**2 sums for Wiener normalisation
-    type(projector), allocatable        :: refvols(:)         !< reference volumes for quasi-continuous search
-    type(reconstructor), allocatable    :: recvols(:)         !< array of volumes for reconstruction
+    type(image),            allocatable :: cavgs(:)           !< class averages (Wiener normalised references)
+    type(projector),        allocatable :: refs(:)            !< referecnes
+    type(image),            allocatable :: ctfsqsums(:)       !< CTF**2 sums for Wiener normalisation
+    type(projector),        allocatable :: refvols(:)         !< reference volumes for quasi-continuous search
+    type(reconstructor),    allocatable :: recvols(:)         !< array of volumes for reconstruction
     type(eo_reconstructor), allocatable :: eorecvols(:)       !< array of volumes for eo-reconstruction
     real, allocatable                   :: ssnr(:,:)          !< spectral signal to noise rations
     real, allocatable                   :: fsc(:,:)           !< Fourier shell correlation
@@ -237,6 +237,7 @@ contains
             call self%img_msk%kill
             call self%img_filt%kill
             call self%img_pad%kill
+            call self%vol%kill_expanded
             call self%vol%kill
             call self%mskvol%kill
             call self%vol_pad%kill_expanded
@@ -467,6 +468,7 @@ contains
             endif
             if( allocated(self%refvols) )then
                 do i=1,size(self%refvols)
+                    call self%refvols(i)%kill_expanded
                     call self%refvols(i)%kill
                 end do
                 deallocate(self%refvols)
@@ -500,12 +502,12 @@ contains
                     call self%recvols(s)%alloc_rho(p)
                 end do
             endif
-            allocate( self%refvols(p%nstates), stat=alloc_stat)
-            call alloc_err('build_cont3D_tbox; simple_build, 3', alloc_stat)
-            do s=1,p%nstates 
-                call self%refvols(s)%new([p%boxmatch,p%boxmatch,p%boxmatch],p%smpd,p%imgkind)
-            end do
         endif
+        allocate( self%refvols(p%nstates), stat=alloc_stat)
+        call alloc_err('build_cont3D_tbox; simple_build, 3', alloc_stat)
+        do s=1,p%nstates 
+            call self%refvols(s)%new([p%boxmatch,p%boxmatch,p%boxmatch],p%smpd,p%imgkind)
+        end do
         write(*,'(A)') '>>> DONE BUILDING CONT3D TOOLBOX'
         self%cont3D_tbox_exists = .true.
     end subroutine build_cont3D_tbox
@@ -527,6 +529,13 @@ contains
                     call self%recvols(i)%kill
                 end do
                 deallocate(self%recvols)
+            endif
+            if( allocated(self%refvols) )then
+                do i=1,size(self%refvols)
+                    call self%refvols(i)%kill_expanded
+                    call self%refvols(i)%kill
+                end do
+                deallocate(self%refvols)
             endif
             self%cont3D_tbox_exists = .false.
         endif

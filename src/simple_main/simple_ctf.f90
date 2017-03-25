@@ -38,6 +38,7 @@ type ctf
     procedure          :: ctf2img
     procedure          :: ctf2spec
     procedure          :: apply
+    procedure          :: apply_and_shift
     ! CALCULATORS
     procedure          :: freqOfAZero
     procedure, private :: solve4PhSh
@@ -173,16 +174,14 @@ contains
         lims     = img%loop_lims(2)
         ldim     = img%get_ldim()
         inv_ldim = 1./real(ldim)
-        !$omp parallel do default(shared) private(h,hinv,hinvsq,k,kinv,kinvsq,spaFreqSq,ang,tval,phys) schedule(auto)
+        !$omp parallel do collapse(2) default(shared) private(h,hinv,k,kinv,spaFreqSq,ang,tval,phys) schedule(auto)
         do h=lims(1,1),lims(1,2)
-            hinv = real(h)*inv_ldim(1)
-            hinvsq = hinv*hinv
             do k=lims(2,1),lims(2,2)
-                kinv = real(k)*inv_ldim(2)
-                kinvsq = kinv*kinv
-                spaFreqSq = hinvsq+kinvsq
-                ang = atan2(real(k),real(h))
-                tval = self%eval(spaFreqSq, dfx, ddfy, aangast, ang)
+                hinv      = real(h) * inv_ldim(1)
+                kinv      = real(k) * inv_ldim(2)
+                spaFreqSq = hinv * hinv + kinv * kinv
+                ang       = atan2(real(k),real(h))
+                tval      = self%eval(spaFreqSq, dfx, ddfy, aangast, ang)
                 select case(mode)
                     case('abs')
                         tval = abs(tval)
@@ -201,7 +200,7 @@ contains
                         stop 'unsupported in ctf2img; simple_ctf'
                 end select
                 phys = img%comp_addr_phys([h,k,0])
-                call img%set_fcomp([h,k,0], cmplx(tval,0.), phys_in=phys)
+                call img%set_fcomp([h,k,0], phys, cmplx(tval,0.))
             end do
         end do
         !$omp end parallel do 
@@ -289,6 +288,78 @@ contains
         endif
         call ctfimg%kill
     end subroutine apply
+
+    !>  \brief  is for applying CTF to an image
+    subroutine apply_and_shift( self, img, imgctfsq, x, y, dfx, mode, dfy, angast )
+        !$ use omp_lib
+        !$ use omp_lib_kinds
+        use simple_image, only: image
+        class(ctf),                 intent(inout) :: self     !< instance
+        class(image),               intent(inout) :: img      !< modified image (output)
+        class(image),               intent(inout) :: imgctfsq !< CTF**2 image (output)
+        real,                       intent(in)    :: x, y     !< rotational origin shift
+        real,                       intent(in)    :: dfx      !< defocus x-axis
+        character(len=*),           intent(in)    :: mode     !< abs, ctf, flip, flipneg, neg, square
+        real,             optional, intent(in)    :: dfy      !< defocus y-axis
+        real,             optional, intent(in)    :: angast   !< angle of astigmatism
+        integer :: ldim(3),logi(3),imode,lims(3,2),h,k,phys(3)
+        real    :: ang,tval,ddfy,aangast,spaFreqSq,hinv,kinv,hinvsq,kinvsq,inv_ldim(3),tvalsq
+        complex :: comp
+        ldim = img%get_ldim()
+        ! check that image is 2D
+        if( img%is_3d() )then
+            print *, 'ldim: ', ldim
+            stop 'Only 4 2D images; apply; simple_ctf'
+        endif
+        ! check that image is FTed
+        if( .not. img%is_ft() )then
+            stop 'expecting FT input; simple_ctf :: apply_and_shift'
+        endif
+        ! set CTF params
+        ddfy = dfx
+        if( present(dfy) ) ddfy = dfy
+        aangast = 0.
+        if( present(angast) ) aangast = angast
+        select case(mode)
+            case('abs')
+                imode = 1
+            case('ctf')
+                imode = 2
+            case DEFAULT
+                imode = 3
+        end select
+        ! initialize
+        call self%init(dfx, ddfy, aangast)
+        lims     = img%loop_lims(2)
+        ldim     = img%get_ldim()
+        inv_ldim = 1./real(ldim)
+        !$omp parallel do collapse(2) default(shared) &
+        !$omp& private(h,hinv,k,kinv,spaFreqSq,ang,tval,tvalsq,logi,phys,comp) schedule(auto)
+        do h=lims(1,1),lims(1,2)
+            do k=lims(2,1),lims(2,2)
+                ! calculate CTF and CTF**2.0 values
+                hinv      = real(h) * inv_ldim(1)
+                kinv      = real(k) * inv_ldim(2)
+                spaFreqSq = hinv * hinv + kinv * kinv
+                ang       = atan2(real(k),real(h))
+                tval      = 1.0
+                if( imode <  3 ) tval = self%eval(spaFreqSq, dfx, ddfy, aangast, ang)
+                tvalsq = min(1.,max(tval**2.,0.001))
+                if( imode == 1 ) tval = abs(tval)
+                ! multiply image with CTF
+                logi = [h,k,0]
+                phys = img%comp_addr_phys(logi)
+                comp = img%get_fcomp(logi, phys)
+                comp = comp * tval
+                ! shift image
+                comp = comp * img%oshift(logi, [x,y,0.])
+                ! set outputs
+                call img%set_fcomp(logi, phys, comp)
+                call imgctfsq%set_fcomp(logi, phys, cmplx(tvalsq,0.))
+            end do
+        end do
+        !$omp end parallel do
+    end subroutine apply_and_shift
     
     ! CALCULATORS        
     

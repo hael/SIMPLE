@@ -113,7 +113,7 @@ contains
         class(params),    intent(in)    :: p    !< parameters
         type(projector) :: vol_pad
         type(image)     :: rovol_pad, rovol  
-        integer         :: h,k,l,lims(3,2)
+        integer         :: h,k,l,lims(3,2),logi(3),phys(3)
         real            :: loc(3)
         call vol_pad%new([p%boxpd,p%boxpd,p%boxpd], p%smpd)
         rovol_pad = vol_pad
@@ -122,12 +122,14 @@ contains
         call prep4cgrid(vol, vol_pad, p%msk)
         lims = vol_pad%loop_lims(2)
         write(*,'(A)') '>>> ROTATING VOLUME'
-        !$omp parallel do default(shared) private(h,k,l,loc) schedule(auto)
+        !$omp parallel do default(shared) private(h,k,l,loc,logi,phys) schedule(auto)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 do l=lims(3,1),lims(3,2)
-                    loc  = matmul(real([h,k,l]),o%get_mat())
-                    call rovol_pad%set_fcomp([h,k,l], vol_pad%extr_gridfcomp(loc))
+                    logi = [h,k,l]
+                    phys = rovol_pad%comp_addr_phys([h,k,l])
+                    loc  = matmul(real(logi),o%get_mat())
+                    call rovol_pad%set_fcomp(logi, phys, vol_pad%extr_gridfcomp(loc))
                 end do 
             end do
         end do
@@ -141,17 +143,21 @@ contains
     end function rotvol
 
     !>  \brief  rotates an image by angle ang using Fourier gridding
-    subroutine rotimg( img, ang, msk, roimg )
+    subroutine rotimg( img, ang, msk, roimg, shellw )
         !$ use omp_lib
         !$ use omp_lib_kinds
-        class(image),     intent(inout) :: img   !< image to rotate
-        real,             intent(in)    :: ang   !< angle of rotation
-        real,             intent(in)    :: msk   !< mask radius (in pixels)
-        class(image),     intent(out)   :: roimg !< rotated image
+        use simple_math, only: hyp
+        class(image),     intent(inout) :: img       !< image to rotate
+        real,             intent(in)    :: ang       !< angle of rotation
+        real,             intent(in)    :: msk       !< mask radius (in pixels)
+        class(image),     intent(out)   :: roimg     !< rotated image
+        real, optional,   intent(in)    :: shellw(:) !< shell-weights
         type(projector) :: img_pad 
         type(image)     :: roimg_pad, img_copy
-        integer         :: h,k,lims(3,2),ldim(3),ldim_pd(3) 
-        real            :: loc(3),mat(2,2),smpd
+        integer         :: h,k,lims(3,2),ldim(3),ldim_pd(3),logi(3),phys(3),sh,nyq
+        real            :: loc(3),mat(2,2),smpd,fwght,wzero
+        logical         :: doshellw
+        doshellw   = present(shellw)
         ldim       = img%get_ldim()
         ldim_pd    = 2*ldim
         ldim_pd(3) = 1
@@ -159,18 +165,34 @@ contains
         call roimg%new(ldim, smpd)
         call img_pad%new(ldim_pd, smpd)
         call roimg_pad%new(ldim_pd, smpd)
-        roimg_pad = cmplx(0.,0.)
-        img_copy  = img
+        nyq        = img_pad%get_nyq()
+        roimg_pad  = cmplx(0.,0.)
+        img_copy   = img
         call img_copy%mask(msk, 'soft')
         call prep4cgrid(img, img_pad, msk)
-        lims = img_pad%loop_lims(2)
-        mat = rotmat2d(ang)
-        !$omp parallel do collapse(2) default(shared) private(h,k,loc) schedule(auto)
+        lims       = img_pad%loop_lims(2)
+        mat        = rotmat2d(ang)
+        wzero      = 1.0
+        if( doshellw ) wzero = maxval(shellw)
+        !$omp parallel do collapse(2) default(shared) private(h,k,loc,logi,phys,fwght,sh) schedule(auto)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)                
                 loc(:2) = matmul(real([h,k]),mat)
                 loc(3)  = 0.
-                call roimg_pad%set_fcomp([h,k,0], img_pad%extr_gridfcomp(loc))
+                logi    = [h,k,0]
+                phys    = img_pad%comp_addr_phys(logi)
+                fwght   = 1.0
+                if( doshellw )then
+                    sh = nint(hyp(real(h),real(k)))
+                    if( sh > nyq )then
+                        fwght = 0.
+                    else if( sh == 0 )then
+                        fwght = wzero
+                    else
+                        fwght = shellw(sh)
+                    endif
+                endif
+                call roimg_pad%set_fcomp(logi, phys, fwght * img_pad%extr_gridfcomp(loc))
             end do
         end do
         !$omp end parallel do

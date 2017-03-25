@@ -396,10 +396,10 @@ contains
         real, optional,       intent(in)    :: pwght     !< external particle weight (affects both fplane and rho)
         real, optional,       intent(in)    :: mul
         real, optional,       intent(in)    :: shellweights(:)
-        integer                             :: h, k, lims(3,2), sh, lfny
-        complex                             :: oshift=cmplx(1.,0.)
-        real                                :: x=0., y=0., xtmp, ytmp, pw, shw
-        logical                             :: pwght_present
+        integer :: h, k, lims(3,2), sh, lfny, logi(3), phys(3)
+        complex :: oshift=cmplx(1.,0.)
+        real    :: x=0., y=0., xtmp, ytmp, pw, shw
+        logical :: pwght_present
         if( .not. fpl%is_ft() )       stop 'image need to be FTed; inout_fplane; simple_reconstructor'
         if( .not. (self.eqsmpd.fpl) ) stop 'scaling not yet implemented; inout_fplane; simple_reconstructor'
         pwght_present = present(pwght)
@@ -431,7 +431,7 @@ contains
         endif
         if( present(shellweights) )then
             lfny = size(shellweights)
-            !$omp parallel do default(shared) private(h,k,oshift,sh,pw) schedule(auto)
+            !$omp parallel do collapse(2) default(shared) private(h,k,oshift,sh,pw,logi,phys) schedule(auto)
             do h=lims(1,1),lims(1,2)
                 do k=lims(1,1),lims(1,2)
                     sh     = min(max(1,nint(hyp(real(h),real(k)))),lfny)
@@ -441,16 +441,20 @@ contains
                     else
                         pw = shellweights(sh)
                     endif
-                    call self%inout_fcomp(h,k,o,inoutmode,fpl%get_fcomp([h,k,0]),oshift,pw)
+                    logi = [h,k,0]
+                    phys = fpl%comp_addr_phys([h,k,0])
+                    call self%inout_fcomp(h,k,o,inoutmode,fpl%get_fcomp(logi,phys),oshift,pw)
                 end do
             end do
             !$omp end parallel do
         else
-            !$omp parallel do default(shared) private(h,k,oshift) schedule(auto)
+            !$omp parallel do collapse(2) default(shared) private(h,k,oshift,logi,phys) schedule(auto)
             do h=lims(1,1),lims(1,2)
                 do k=lims(1,1),lims(1,2)
                     oshift = fpl%oshift([h,k,0], [-xtmp,-ytmp,0.], ldim=2)
-                    call self%inout_fcomp(h,k,o,inoutmode,fpl%get_fcomp([h,k,0]),oshift,pwght)
+                    logi = [h,k,0]
+                    phys = fpl%comp_addr_phys([h,k,0])
+                    call self%inout_fcomp(h,k,o,inoutmode,fpl%get_fcomp(logi,phys),oshift,pwght)
                 end do
             end do
             !$omp end parallel do
@@ -461,7 +465,7 @@ contains
     subroutine sampl_dens_correct( self, self_out )
         class(reconstructor),   intent(inout) :: self
         class(image), optional, intent(inout) :: self_out
-        integer                               :: h, k, l, lims(3,2), phys(3)
+        integer :: h, k, l, lims(3,2), phys(3)
         ! set constants
         lims = self%loop_lims(2)
         if( present(self_out) ) self_out = self

@@ -59,7 +59,7 @@ contains
         class(image),       intent(inout) :: img
         real,               intent(in)    :: hp, lp
         integer :: alloc_stat,h,k,l,i,hcnt,kcnt,lcnt
-        integer :: lplim,hplim,hh,kk,ll,sqarg
+        integer :: lplim,hplim,hh,kk,ll,sqarg,phys(3)
         logical :: didft
         ! kill pre-existing object
         call self%kill
@@ -122,8 +122,9 @@ contains
                     lcnt = lcnt+1
                     sqarg = hh + kk + ll
                     if( sqarg <= lplim .and. sqarg >= hplim  )then
+                        phys = img%comp_addr_phys([h,k,l])
                         self%transfmat(hcnt,kcnt,lcnt,:) = real([h,k,l])*self%shconst
-                        self%cmat(hcnt,kcnt,lcnt)        = img%get_fcomp([h,k,l])
+                        self%cmat(hcnt,kcnt,lcnt) = img%get_fcomp([h,k,l],phys)
                      endif
                 end do
             end do
@@ -274,7 +275,7 @@ contains
                 if( self.eqdims.self_out )then
                     shvec_here = shvec
                     if( self%ldim(3) == 1 ) shvec_here(3) = 0.
-                    !$omp parallel do schedule(auto) default(shared) private(hind,kind,lind,arg)
+                    !$omp parallel do collapse(3) schedule(auto) default(shared) private(hind,kind,lind,arg)
                     do hind=self%flims(1,1),self%flims(1,2)
                         do kind=self%flims(2,1),self%flims(2,2)
                             do lind=self%flims(3,1),self%flims(3,2)
@@ -332,7 +333,7 @@ contains
             call alloc_err("In: corr_shifted; simple_ft_expanded", alloc_stat)
             shvec_here = shvec
             if( self1%ldim(3) == 1 ) shvec_here(3) = 0.
-            !$omp parallel do schedule(auto) default(shared) private(hind,kind,lind,arg)
+            !$omp parallel do collapse(3) schedule(auto) default(shared) private(hind,kind,lind,arg)
             do hind=self1%flims(1,1),self1%flims(1,2)
                 do kind=self1%flims(2,1),self1%flims(2,2)
                     do lind=self1%flims(3,1),self1%flims(3,2)

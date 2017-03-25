@@ -45,7 +45,7 @@ contains
         integer         :: iimg
         nimgs = size(imgs)
         nnn   = p%nnn
-        call pftcc%new(nimgs, [1,nimgs], [p%box,p%box,1], p%kfromto, p%ring2, 'no')
+        call pftcc%new(nimgs, [1,nimgs], [p%box,p%box,1], p%kfromto, p%ring2, p%nthr, 'no')
         ! set the "particles" first
         do iimg=1,nimgs
             ! move to Fourier space

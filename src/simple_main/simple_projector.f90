@@ -66,7 +66,7 @@ contains
         use simple_math, only: cyci_1d
         class(projector), intent(inout) :: self
         integer, allocatable :: cyck(:), cycm(:), cych(:)
-        integer :: h, k, m, alloc_stat
+        integer :: h, k, m, alloc_stat, phys(3), logi(3)
         integer :: lims(3,2), ldim(3)
         ldim = self%get_ldim()
         if( .not.self%is_ft() ) stop 'volume needs to be FTed before call; expand_cmat; simple_image'
@@ -100,11 +100,13 @@ contains
         enddo
         ! build expanded fourier components matrix
         self%cmat_exp = cmplx(0.,0.)
-        !$omp parallel do collapse(3) schedule(auto) default(shared) private(h,k,m)
+        !$omp parallel do collapse(3) schedule(auto) default(shared) private(h,k,m,logi,phys)
         do h = self%ldim_exp(1,1),self%ldim_exp(1,2)
             do k = self%ldim_exp(2,1),self%ldim_exp(2,2)
                 do m = self%ldim_exp(3,1),self%ldim_exp(3,2)
-                    self%cmat_exp(h,k,m) = self%get_fcomp( [cych(h),cyck(k),cycm(m)] )
+                    logi = [cych(h),cyck(k),cycm(m)]
+                    phys = self%comp_addr_phys(logi)
+                    self%cmat_exp(h,k,m) = self%get_fcomp(logi,phys)
                 enddo
             enddo
         enddo
@@ -116,18 +118,20 @@ contains
     !>  \brief converts the expanded matrix to standard imaginary representation
     subroutine compress_cmat( self )
         class(projector), intent(inout) :: self
-        integer :: h, k, m
+        integer :: h, k, m, logi(3), phys(3)
         integer :: lims(3,2)
         if( .not. self%expanded_exists )then
             stop 'expanded complex matrix does not exist; simple_projector :: compress_cmat'
         endif
         lims = self%loop_lims(2) ! excluding redundant Friedel mates
         self = cmplx(0.,0.)
-        !$omp parallel do collapse(3) schedule(auto) default(shared) private(h,k,m)
+        !$omp parallel do collapse(3) schedule(auto) default(shared) private(h,k,m,logi,phys)
         do h = lims(1,1),lims(1,2)
             do k = lims(2,1),lims(2,2)
                 do m = lims(3,1),lims(3,2)
-                    call self%set_fcomp([h,k,m],self%cmat_exp(h,k,m))
+                    logi = [h,k,m]
+                    phys = self%comp_addr_phys(logi)
+                    call self%set_fcomp(logi,phys,self%cmat_exp(h,k,m))
                 end do
             end do 
         end do
@@ -178,7 +182,7 @@ contains
         class(image),     intent(inout) :: fplane
         real, optional,   intent(in)    :: lp
         real    :: vec(3), loc(3)
-        integer :: h, k, sqarg, sqlp, lims(3,2)
+        integer :: h, k, sqarg, sqlp, lims(3,2), logi(3), phys(3)
         ! init
         fplane = cmplx(0.,0.)
         if( present(lp) )then
@@ -187,7 +191,7 @@ contains
             lims = self%loop_lims(2) ! Nyqvist default low-pass limit
         endif
         sqlp = (maxval(lims(:,2)))**2
-        !$omp parallel do collapse(2) schedule(auto) default(shared) private(h,k,sqarg,vec,loc)
+        !$omp parallel do collapse(2) schedule(auto) default(shared) private(h,k,sqarg,vec,loc,logi,phys)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 sqarg = h*h+k*k
@@ -198,7 +202,9 @@ contains
                     vec(3) = 0.
                     loc = matmul(vec,e%get_mat())
                     ! set fourier component
-                    call fplane%set_fcomp([h,k,0],self%extr_gridfcomp(loc))
+                    logi = [h,k,0]
+                    phys = self%comp_addr_phys(logi)
+                    call fplane%set_fcomp(logi,phys,self%extr_gridfcomp(loc))
                 endif
             end do
         end do
@@ -214,7 +220,7 @@ contains
         class(image),     intent(inout) :: fplane
         real, optional,   intent(in)    :: lp
         real    :: vec(3), loc(3)
-        integer :: h, k, sqarg, sqlp, wdim, lims(3,2)
+        integer :: h, k, sqarg, sqlp, wdim, lims(3,2), logi(3), phys(3)
         ! init
         lims = self%loop_lims(2) 
         if( present(lp) )then
@@ -224,8 +230,8 @@ contains
             sqlp = (maxval(lims(:,2)))**2
         endif
         fplane = cmplx(0.,0.)
-        wdim   = 2*ceiling(self%harwin_exp) + 1   ! interpolation kernel window size
-        !$omp parallel do collapse(2) schedule(auto) default(shared) private(h,k,sqarg,vec,loc)
+        wdim = 2*ceiling(self%harwin_exp) + 1 ! interpolation kernel window size
+        !$omp parallel do collapse(2) schedule(auto) default(shared) private(h,k,sqarg,vec,loc,logi,phys)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 sqarg = h*h+k*k
@@ -236,7 +242,9 @@ contains
                     vec(3) = 0.
                     loc    = matmul(vec,e%get_mat())
                     ! set fourier component
-                    call fplane%set_fcomp([h,k,0],self%interp_fcomp_expanded(wdim, loc))
+                    logi = [h,k,0]
+                    phys = self%comp_addr_phys(logi)
+                    call fplane%set_fcomp(logi,phys,self%interp_fcomp_expanded(wdim, loc))
                 endif
             end do
         end do
@@ -371,7 +379,7 @@ contains
         real,    allocatable :: w1(:), w2(:), w3(:)
         integer, allocatable :: cyc1(:), cyc2(:), cyc3(:)
         integer :: alloc_stat, i, j, m
-        integer :: lims(3,2), win(3,2)
+        integer :: lims(3,2), win(3,2), logi(3), phys(3)
         complex :: comp, comp_sum, zero
         real    :: harwin_here
         harwin_here = 2.
@@ -396,7 +404,9 @@ contains
                 if( w1(i) == 0. ) cycle
                 do j=win(2,1),win(2,2)
                     if( w2(j) == 0. ) cycle
-                    comp = self%get_fcomp( [cyc1(i),cyc2(j),0] )
+                    logi = [cyc1(i),cyc2(j),0]
+                    phys = self%comp_addr_phys(logi)
+                    comp = self%get_fcomp(logi,phys)
                     if( comp .eq. zero ) cycle
                     comp_sum = comp_sum+comp*w1(i)*w2(j)
                 end do
@@ -416,7 +426,9 @@ contains
                     if( w2(j) == 0. ) cycle
                     do m=win(3,1),win(3,2)
                         if( w3(m) == 0. ) cycle
-                        comp = self%get_fcomp( [cyc1(i),cyc2(j),cyc3(m)] )
+                        logi = [cyc1(i),cyc2(j),cyc3(m)]
+                        phys = self%comp_addr_phys(logi)
+                        comp = self%get_fcomp(logi,phys)
                         if( comp .eq. zero ) cycle
                         comp_sum = comp_sum+comp*w1(i)*w2(j)*w3(m)
                     end do
@@ -511,7 +523,7 @@ contains
         logical, optional,       intent(in)    :: isptcl
         complex, allocatable :: pft(:,:), comps(:,:)
         integer :: i, k, l, m, alloc_stat, windim, vecdim, addr_l
-        integer :: lims(3,2), ldim_img(3), ldim_pft(3), pdim(3)
+        integer :: lims(3,2), ldim_img(3), ldim_pft(3), pdim(3), logi(3), phys(3)
         logical :: iisptcl
         if( .not. allocated(self%polweights_mat) )&
         &stop 'the imgpolarizer has not been initialized!; simple_projector :: imgpolarizer'
@@ -533,13 +545,15 @@ contains
         allocate( pft(pdim(1),pdim(2):pdim(3)), comps(1:windim,1:windim), stat=alloc_stat )
         call alloc_err("In: imgpolarizer; simple_projector", alloc_stat)
         lims = self%loop_lims(3)
-        !$omp parallel do collapse(2) schedule(auto) default(shared) private(i,k,l,m,comps,addr_l)
+        !$omp parallel do collapse(2) schedule(auto) default(shared) private(i,k,l,m,logi,phys,comps,addr_l)
         do i=1,pdim(1)
             do k=pdim(2),pdim(3)
                 do l=1,windim
                     addr_l = self%polcyc1_mat(i,k,l)
                     do m=1,windim
-                        comps(l,m) = self%get_fcomp( [addr_l,self%polcyc2_mat(i,k,m),0] )
+                        logi = [addr_l,self%polcyc2_mat(i,k,m),0]
+                        phys = self%comp_addr_phys(logi)
+                        comps(l,m) = self%get_fcomp(logi,phys)
                     enddo
                 enddo
                 pft(i,k) = dot_product(self%polweights_mat(i,k,:), reshape(comps,(/vecdim/)))

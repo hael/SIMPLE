@@ -142,6 +142,7 @@ clip
 corner
 cube
 edge
+filtsz_pad
 find
 frameavg
 fromf

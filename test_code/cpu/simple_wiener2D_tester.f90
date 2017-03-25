@@ -27,6 +27,7 @@ type(image)              :: img_rec
 type(image), allocatable :: imgs(:), img_ref(:)
 type(simimgs_commander)  :: xsimimgs
 type(cmdline)            :: cline_here
+integer                  :: ldim(3)
 logical                  :: verbose=.false.
 
 contains
@@ -76,15 +77,15 @@ contains
         call b%build_general_tbox(p, cline_here) ! general objects built
         ! read back in images and orientations
         allocate(imgs(NPROJS))
+        ldim = [p%box,p%box,1]
         do iproj=1,NPROJS
-            call imgs(iproj)%new([p%box,p%box,1], p%smpd)
+            call imgs(iproj)%new(ldim, p%smpd)
             call imgs(iproj)%read(ptclsname, iproj)
         end do
         call oset%new(NPROJS)
         call oset%read(orisname)
         ! create reconstructed image
         call img_rec%new([p%box,p%box,1], p%smpd)
-        ! create reference
         ! create reference
         call o_single%new(1) 
         call o_single%set_euler(1, [0.,0.,0.])
@@ -99,12 +100,13 @@ contains
         if( verbose ) write(*,*) 'testing simple_filterer :: wiener_restore2D'
         tfplan%mode = 'astig'
         tfplan%flag = 'yes'
-        call wiener_restore2D(imgs, oset, tfplan, img_rec, p%msk)
+        call wiener_restore2D_fast(imgs, oset, tfplan, img_rec, p%msk)
         ! check if test passed
         call img_ref(1)%mask(p%msk, 'soft')
         call img_rec%mask(p%msk, 'soft')
+        call img_rec%vis
         corr = img_ref(1)%corr(img_rec, LP)
-        if( corr > 0.95 )then
+        if( corr > 0.945 )then
             ! the test passed
         else
             write(*,*) 'ref/rec corr: ', corr

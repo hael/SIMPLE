@@ -60,6 +60,10 @@ integer, parameter :: PICKER_OFFSET        = 3
 real, parameter :: KBWINSZ = 1.5
 real, parameter :: KBALPHA = 2.0
 
+! CONSTANTS THAT CONTROL SEARCH AND CONVERGENCE
+real, parameter :: FRAC_SH_LIM  = 90.0 ! at what frac to turn on the shift seacrh
+real, parameter :: SHW_FRAC_LIM = 50.  ! at what frac to turn on shell-weights
+
 ! constants for heterogeinity
 real, parameter :: HETINITTHRESH = 0.5
 
