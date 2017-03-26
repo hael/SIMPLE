@@ -28,7 +28,7 @@ our$SIMPLE_PATH="/Users/hael/src/fortran/simple3.0";
 # specifying the compiling directives
 # with OpenMP:  -fopenmp, CUDA: -DCUDA
 # Benchmarking: -DBENCH
-our$DOPENMP = ""; # -fopenmp
+our$DOPENMP = "-fopenmp";
 our$DCUDA = "";
 our$DBENCH = "";
 # getting the platform details

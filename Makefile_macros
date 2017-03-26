@@ -6,7 +6,7 @@ Simple_source=/Users/hael/src/fortran/simple3.0
 
 ####### The switches #####
 
-DOPENMP = 
+DOPENMP = -fopenmp
 DCUDA = 
 DBENCH = 
 
@@ -30,7 +30,7 @@ MODDIR=obj/SIMPLEOFILES
 ##############
 
 CC=$(CCCOMP)
-CFLAGS= -O3 -O -DMACOSX   
+CFLAGS= -O3 -O -DMACOSX -fopenmp  
 CCLIB=$(CC) -c $(CFLAGS) -I $(MODDIR)                                            \
                          -I /sw/include/
 
@@ -39,7 +39,7 @@ CCLIB=$(CC) -c $(CFLAGS) -I $(MODDIR)                                           
 ################
 
 CPP=$(GCC)
-CPPFLAGS=-DADD_ -O3 -DMACOSX   
+CPPFLAGS=-DADD_ -O3 -DMACOSX -fopenmp  
 CPPCLIB=$(CPP) -c $(CPPFLAGS) -I $(MODDIR)                                            \
                               -I $(Simple_source)/test_code                           \
                               -I /sw/include/
@@ -50,7 +50,7 @@ CPPCLIB=$(CPP) -c $(CPPFLAGS) -I $(MODDIR)                                      
 
 # $(DLIB)
 F90C=$(GFORTRAN)
-F90FLAGS=-fimplicit-none -fall-intrinsics -ffree-form -cpp -fpic -fno-second-underscore -O3 -DMACOSX   
+F90FLAGS=-fimplicit-none -fall-intrinsics -ffree-form -cpp -fpic -fno-second-underscore -O3 -DMACOSX -fopenmp  
 F90CLIB=$(F90C) -c $(F90FLAGS) -I $(MODDIR)                      \
                              -J $(MODDIR)                      \
 

@@ -70,8 +70,10 @@ type build
     type(projector),        allocatable :: refvols(:)         !< reference volumes for quasi-continuous search
     type(reconstructor),    allocatable :: recvols(:)         !< array of volumes for reconstruction
     type(eo_reconstructor), allocatable :: eorecvols(:)       !< array of volumes for eo-reconstruction
-    real, allocatable                   :: ssnr(:,:)          !< spectral signal to noise rations
-    real, allocatable                   :: fsc(:,:)           !< Fourier shell correlation
+    real,    allocatable                :: ssnr(:,:)          !< spectral signal to noise rations
+    real,    allocatable                :: fsc(:,:)           !< Fourier shell correlation
+    real,    allocatable                :: classprobs(:,:)    !< class probabilities
+    integer, allocatable                :: clscnt(:,:)        !< class counters 
     integer, allocatable                :: nnmat(:,:)         !< matrix with nearest neighbor indices
     ! PRIVATE EXISTENCE VARIABLES
     logical, private                    :: general_tbox_exists          = .false.
@@ -388,8 +390,11 @@ contains
         integer :: icls, alloc_stat, funit, io_stat
         call self%kill_hadamard_prime2D_tbox
         call self%raise_hard_ctf_exception(p)
-        allocate( self%cavgs(p%ncls), self%refs(p%ncls), self%ctfsqsums(p%ncls), stat=alloc_stat )
+        allocate( self%cavgs(p%ncls), self%refs(p%ncls), self%ctfsqsums(p%ncls),&
+        &self%clscnt(p%fromp:p%top,p%ncls), self%classprobs(p%fromp:p%top,p%ncls), stat=alloc_stat )
         call alloc_err('build_hadamard_prime2D_tbox; simple_build, 1', alloc_stat)
+        self%clscnt     = 0
+        self%classprobs = 1.0/real(p%ncls)
         do icls=1,p%ncls
             call self%cavgs(icls)%new([p%box,p%box,1],p%smpd,p%imgkind)
             call self%refs(icls)%new([p%box,p%box,1],p%smpd,p%imgkind)
@@ -412,7 +417,7 @@ contains
                 call self%refs(i)%kill
                 call self%ctfsqsums(i)%kill
             end do
-            deallocate(self%cavgs, self%refs, self%ctfsqsums)
+            deallocate(self%cavgs, self%refs, self%ctfsqsums, self%clscnt, self%classprobs)
             self%hadamard_prime2D_tbox_exists = .false.
         endif
     end subroutine kill_hadamard_prime2D_tbox

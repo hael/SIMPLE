@@ -198,7 +198,7 @@ contains
         integer,                 intent(in)    :: iptcl
         class(ori), optional,    intent(inout) :: o_prev
         real,       optional,    intent(in)    :: corr_prev
-        integer, optional,       intent(in)    :: nnmat(:,:)
+        integer,    optional,    intent(in)    :: nnmat(self%nrefs,self%nnn)
         type(ran_tabu) :: rt
         real           :: lims(2,2)
         if( str_has_substr(self%refine,'neigh') .and. .not.present(nnmat) )&
@@ -257,15 +257,15 @@ contains
     ! SEARCH ROUTINES
 
     !>  \brief a master prime search routine
-    subroutine exec_prime2D_srch( self, pftcc, a, pfromto, frac_srch_space, greedy, shclogic, nnmat )
+    subroutine exec_prime2D_srch( self, pftcc, a, pfromto, clscnt, greedy, shclogic, nnmat )
         use simple_oris, only: oris
         class(prime2D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
         class(oris),             intent(inout) :: a
         integer,                 intent(in)    :: pfromto(2)
-        real,                    intent(in)    :: frac_srch_space
+        integer,                 intent(inout) :: clscnt(pfromto(1):pfromto(2),self%nrefs)
         logical, optional,       intent(in)    :: greedy, shclogic
-        integer, optional,       intent(in)    :: nnmat(:,:)
+        integer, optional,       intent(in)    :: nnmat(self%nrefs,self%nnn)
         real    :: lims(2,2)
         logical :: ggreedy
         ggreedy = .false.
@@ -273,7 +273,7 @@ contains
         if( self%refine .eq. 'greedy' .or. ggreedy )then
             call self%greedy_srch(pftcc, a, pfromto)
         else
-            call self%stochastic_srch(pftcc, a, pfromto, frac_srch_space, shclogic=shclogic)
+            call self%stochastic_srch(pftcc, a, pfromto, clscnt, shclogic=shclogic)
         endif
         if( DEBUG ) write(*,'(A)') '>>> PRIME2D_SRCH::EXECUTED PRIME2D_SRCH'
     end subroutine exec_prime2D_srch
@@ -322,7 +322,7 @@ contains
     end subroutine greedy_srch
 
     !>  \brief  executes the greedy rotational search
-    subroutine stochastic_srch( self, pftcc, a, pfromto, frac_srch_space, shclogic, nnmat )
+    subroutine stochastic_srch( self, pftcc, a, pfromto, clscnt, shclogic, nnmat )
         !$ use omp_lib
         !$ use omp_lib_kinds
         use simple_oris, only: oris
@@ -333,9 +333,9 @@ contains
         class(polarft_corrcalc), intent(inout) :: pftcc
         class(oris),             intent(inout) :: a
         integer,                 intent(in)    :: pfromto(2)
-        real,                    intent(in)    :: frac_srch_space
+        integer,                 intent(inout) :: clscnt(pfromto(1):pfromto(2),self%nrefs)
         logical, optional,       intent(in)    :: shclogic
-        integer, optional,       intent(in)    :: nnmat(:,:)
+        integer, optional,       intent(in)    :: nnmat(self%nrefs,self%nnn)
         type(ori)       :: orientation
         integer         :: iptcl,iref,previnds(pfromto(1):pfromto(2),2),loc(1),i,endit
         integer         :: thr_ind,class_thr(self%nthr),rot_thr(self%nthr)
@@ -345,7 +345,7 @@ contains
         sshclogic = .true.
         if( present(shclogic) ) sshclogic = shclogic
         matrix_based_search = .false.
-        if( frac_srch_space > FRAC_SH_LIM )then
+        if( present(nnmat) )then
             ! set previous reference and in-plane angle indices
             do iptcl=pfromto(1),pfromto(2)
                 previnds(iptcl,1) = nint(a%get(iptcl, 'class'))                 ! reference index
@@ -353,7 +353,7 @@ contains
             end do
             ! generate the 2D search matrices
             call pftcc%gencorrs_all_cpu(self%corrmat2d, self%inplmat,&
-            shclogic=sshclogic, previnds=previnds, prevcorrs=prevcorrs)
+            shclogic=sshclogic, previnds=previnds, prevcorrs=prevcorrs, nnmat=nnmat)
             matrix_based_search = .true.
         endif
         ! search
@@ -380,6 +380,7 @@ contains
                         if( self%inplmat(iptcl,iref) > 0 )then
                             ! update the class
                             self%best_class = iref
+                            clscnt(iptcl,self%best_class) = clscnt(iptcl,self%best_class) + 1
                             ! update the correlation
                             self%best_corr = self%corrmat2d(iptcl,iref)
                             ! update the in-plane angle
@@ -404,6 +405,7 @@ contains
                         if( class_thr(thr_ind) > 0 )then
                             ! update the class
                             self%best_class = class_thr(thr_ind)
+                            clscnt(iptcl,self%best_class) = clscnt(iptcl,self%best_class) + 1
                             ! update the correlation
                             self%best_corr = corr_thr(thr_ind)
                             ! update the in-plane angle

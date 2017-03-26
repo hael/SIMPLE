@@ -27,6 +27,7 @@ integer, allocatable   :: defgroups(:)
 real,    allocatable   :: wmat(:,:)
 real,    allocatable   :: ctfparams(:,:)
 logical, parameter     :: DEBUG = .false.
+real,    parameter     :: prime2Deps = 0.3
 
 contains
     
@@ -34,13 +35,15 @@ contains
     subroutine prime2D_exec( b, p, cline, which_iter, converged )
         use simple_qsys_funs, only: qsys_job_finished
         use simple_strings,   only: str_has_substr
+        use simple_ran_tabu,  only: ran_tabu
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         class(cmdline), intent(inout) :: cline     
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: converged
+        type(ran_tabu)    :: rt
         real, allocatable :: res(:), res_pad(:), wresamp(:)
-        integer :: iptcl, fnr, icls, file_stat
+        integer :: iptcl, fnr, icls, file_stat, inorm, cands(3)
         logical :: doshellweight
         
         ! SET FRACTION OF SEARCH SPACE
@@ -75,20 +78,36 @@ contains
         select case(p%refine)
             case('no','greedy')
                 if( p%oritab .eq. '' )then
-                    call primesrch2D%exec_prime2D_srch(pftcc, b%a, [p%fromp,p%top], frac_srch_space, greedy=.true.)
+                    call primesrch2D%exec_prime2D_srch(pftcc, b%a,&
+                    &[p%fromp,p%top], clscnt=b%clscnt, greedy=.true.)
                 else
-                    call primesrch2D%exec_prime2D_srch(pftcc, b%a, [p%fromp,p%top], frac_srch_space)
+                    call primesrch2D%exec_prime2D_srch(pftcc, b%a,&
+                    &[p%fromp,p%top], clscnt=b%clscnt)
                 endif
             case('neigh')
                 if( p%oritab .eq. '' )then
-                    call primesrch2D%exec_prime2D_srch(pftcc, b%a, [p%fromp,p%top], frac_srch_space, greedy=.true., nnmat=b%nnmat)
+                    call primesrch2D%exec_prime2D_srch(pftcc, b%a,&
+                    &[p%fromp,p%top], clscnt=b%clscnt, greedy=.true., nnmat=b%nnmat)
                 else
-                    call primesrch2D%exec_prime2D_srch(pftcc, b%a, [p%fromp,p%top], frac_srch_space, nnmat=b%nnmat)
+                    call primesrch2D%exec_prime2D_srch(pftcc, b%a,&
+                    &[p%fromp,p%top], clscnt=b%clscnt, nnmat=b%nnmat)
                 endif
             case DEFAULT
                 write(*,*) 'The refinement mode: ', trim(p%refine), ' is unsupported'
                 stop
         end select
+
+        ! normalisation and learning of class probabilities
+        do iptcl=p%fromp,p%top
+            inorm = sum(b%clscnt(iptcl,:))
+            b%classprobs(iptcl,:) = (1.0 - prime2Deps) * b%classprobs(iptcl,:) +&
+            &prime2Deps * real(b%clscnt(iptcl,:))/real(inorm)
+        end do
+
+        rt = ran_tabu(p%ncls)
+        call rt%ne_mnomal_iarr(b%classprobs(1,:), cands)
+        call rt%kill
+
         cnt_glob = 0
         do iptcl=p%fromp,p%top
             cnt_glob    = cnt_glob + 1

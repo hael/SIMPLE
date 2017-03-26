@@ -524,63 +524,7 @@ contains
         deallocate(dat_sorted, mask)
     end subroutine sortmeans
     
-    !> \brief  generate mutually exclusive positions
-    function gen_ptcl_pos( npos, xdim, ydim, box ) result( pos )
-        use simple_jiffys, only: alloc_err
-        use simple_rnd,    only: irnd_uni
-        use simple_jiffys, only: progress
-        integer, intent(in)           :: npos, xdim, ydim
-        integer, intent(in), optional :: box
-        integer, allocatable          :: pos(:,:)
-        logical                       :: occupied(xdim,ydim)
-        integer                       :: alloc_stat, ix, iy, cnt
-        allocate( pos(npos,2), stat=alloc_stat )
-        call alloc_err("In: gen_ptcl_pos, simple_math", alloc_stat)
-        occupied = .false.
-        cnt = 0
-        do
-            ix = irnd_uni(xdim)
-            iy = irnd_uni(ydim)
-            if( present(box) )then
-                if( ix < box/2+1 .or. ix > xdim-box/2-1 ) cycle
-                if( iy < box/2+1 .or. iy > ydim-box/2-1 ) cycle
-                if(check_if_occupied()) cycle
-            else
-                if(occupied(ix,iy)) cycle
-            endif
-            if( present(box) )then
-                occupied(ix-box/2:ix+box/2-1,iy-box/2:iy+box/2-1) = .true.
-            else
-                occupied(ix,iy) = .true.
-            endif
-            cnt = cnt+1
-            call progress(cnt,npos)
-            pos(cnt,1) = ix
-            pos(cnt,2) = iy
-            if( cnt == 500*npos )then
-                write(*,'(a)') "WARNING! Exiting loop because maximum nr of iterations; gen_ptcl_pos; simple_math"
-                exit 
-            endif
-            if( cnt == npos ) exit
-        end do
-        
-        contains
-        
-            function check_if_occupied( )result( yes )
-                integer:: i, j
-                logical :: yes
-                yes = .false.
-                do i=ix-box/2,ix+box/2-1
-                    do j=iy-box/2,iy+box/2-1
-                        if( occupied(i,j) )then
-                            yes = .true.
-                            return
-                        endif
-                    end do
-                end do
-            end function
-            
-    end function
+    
     
     !> \brief  calculates the number of common integers in two arrays
     function common_ints( arr1, arr2 ) result( n )

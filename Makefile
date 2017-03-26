@@ -68,8 +68,8 @@ s_utes: simple_arr.o          \
         simple_imghead.o      \
         simple_filehandling.o \
         simple_jiffys.o       \
-        simple_rnd.o          \
         simple_math.o         \
+        simple_rnd.o          \
         gnufor2.o             \
         simple_imgfile.o      \
         simple_stat.o         \
