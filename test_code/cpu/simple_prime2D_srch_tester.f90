@@ -112,7 +112,7 @@ contains
         end do
 
         if( verbose ) write(*,*) 'testing polarft_corrcalc :: gencorrs_all_tester_1'
-        call pftcc%gencorrs_all_cpu(corrmat2d_tst, inplmat_tst, shclogic=.false.)
+        call pftcc%gencorrs_all_cpu(.false., corrmat2d_tst, inplmat_tst)
         if( .not. test_passed() ) stop '****prime2D_srch_tester FAILURE polarft_corrcalc :: gencorrs_all_cpu'
 
     contains

@@ -72,25 +72,23 @@ contains
         ! INITIALISE SUMS
         call prime2D_init_sums( b, p )
 
+
+        rt = ran_tabu(p%ncls)
+        b%nnmat = rt%stoch_nnmat([p%fromp,p%top], p%nnn, b%classprobs)
+        call rt%kill
+
+
         ! ALIGN & GRID
         call del_file(p%outfile)
         if( p%ctf .ne. 'no' ) call pftcc%create_polar_ctfmats(p%smpd, b%a)
         select case(p%refine)
             case('no','greedy')
                 if( p%oritab .eq. '' )then
-                    call primesrch2D%exec_prime2D_srch(pftcc, b%a,&
-                    &[p%fromp,p%top], clscnt=b%clscnt, greedy=.true.)
+                    call primesrch2D%exec_prime2D_srch(pftcc, b%a, [p%fromp,p%top],&
+                    &frac_srch_space, b%clscnt, b%nnmat, greedy=.true.)
                 else
-                    call primesrch2D%exec_prime2D_srch(pftcc, b%a,&
-                    &[p%fromp,p%top], clscnt=b%clscnt)
-                endif
-            case('neigh')
-                if( p%oritab .eq. '' )then
-                    call primesrch2D%exec_prime2D_srch(pftcc, b%a,&
-                    &[p%fromp,p%top], clscnt=b%clscnt, greedy=.true., nnmat=b%nnmat)
-                else
-                    call primesrch2D%exec_prime2D_srch(pftcc, b%a,&
-                    &[p%fromp,p%top], clscnt=b%clscnt, nnmat=b%nnmat)
+                    call primesrch2D%exec_prime2D_srch(pftcc, b%a, [p%fromp,p%top],&
+                    &frac_srch_space, b%clscnt, b%nnmat)
                 endif
             case DEFAULT
                 write(*,*) 'The refinement mode: ', trim(p%refine), ' is unsupported'
@@ -103,10 +101,6 @@ contains
             b%classprobs(iptcl,:) = (1.0 - prime2Deps) * b%classprobs(iptcl,:) +&
             &prime2Deps * real(b%clscnt(iptcl,:))/real(inorm)
         end do
-
-        rt = ran_tabu(p%ncls)
-        call rt%ne_mnomal_iarr(b%classprobs(1,:), cands)
-        call rt%kill
 
         cnt_glob = 0
         do iptcl=p%fromp,p%top

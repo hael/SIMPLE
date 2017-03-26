@@ -9,6 +9,7 @@
 !* OOD 2003, HE 2012-06-15
 !
 module simple_ran_tabu
+use simple_jiffys, only: alloc_err
 implicit none
 
 type :: ran_tabu
@@ -26,6 +27,7 @@ type :: ran_tabu
     procedure :: mnomal
     procedure :: ne_ran_iarr
     procedure :: ne_mnomal_iarr
+    procedure :: stoch_nnmat
     procedure :: shuffle
     procedure :: balanced
     procedure :: kill
@@ -39,7 +41,6 @@ contains
 
     !>  \brief  is a constructor
     function constructor( NP ) result( self )
-        use simple_jiffys, only: alloc_err
         integer, intent(in) :: NP
         type(ran_tabu)      :: self
         integer             :: alloc_stat
@@ -162,10 +163,12 @@ contains
             write( *,* ) 'In: ne_ran_iarr, module: simple_ran_tabu.f90'
             stop
         else
+            call self%reset
             do i=1,szrndiarr
                 rndiarr(i) = self%irnd()
                 call self%insert(rndiarr(i))  
             end do
+            call self%reset
         endif
     end subroutine ne_ran_iarr
 
@@ -181,6 +184,7 @@ contains
             write( *,* ) 'In: ne_mnomal_iarr, module: simple_ran_tabu.f90'
             stop
         else
+            call self%reset
             cnt = 0
             do i=1,self%NP
                 irnd = self%mnomal(pvec)
@@ -198,7 +202,22 @@ contains
                 end do
             endif
         endif
+        call self%reset
     end subroutine ne_mnomal_iarr
+
+    !>  \brief  stochastic nearest neighbor generation
+    function stoch_nnmat( self, pfromto, nnn, pmat ) result( nnmat )
+        class(ran_tabu), intent(inout) :: self
+        integer,         intent(in)    :: pfromto(2), nnn
+        real,            intent(in)    :: pmat(pfromto(1):pfromto(2),self%NP)
+        integer, allocatable :: nnmat(:,:)
+        integer :: iptcl, alloc_stat
+        allocate(nnmat(pfromto(1):pfromto(2),nnn), stat=alloc_stat)
+        call alloc_err('In: simple_ran_tabu; stoch_nnmat', alloc_stat)
+        do iptcl=pfromto(1),pfromto(2)
+            call self%ne_mnomal_iarr( pmat(iptcl,:), nnmat(iptcl,:))
+        end do
+    end function stoch_nnmat
     
     !>  \brief  shuffles an integer array
     subroutine shuffle( self, shuffled ) 
