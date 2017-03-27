@@ -284,9 +284,9 @@ contains
             call b%img%new([p%box,p%box,1],p%smpd)
         endif
         if( p%l_distr_exec )then
-            call b%img%read(p%stk_part, cnt_glob, p%l_xfel)
+            call b%img%read(p%stk_part, cnt_glob, isxfel=p%l_xfel)
         else
-            call b%img%read(p%stk, iptcl, p%l_xfel)
+            call b%img%read(p%stk, iptcl, isxfel=p%l_xfel)
         endif
         call prepimg4align(b, p, optcl)
         call b%img%imgpolarizer(pftcc, 1, isptcl=.true.)

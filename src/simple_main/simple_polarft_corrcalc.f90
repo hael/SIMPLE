@@ -1,6 +1,6 @@
 !>  \brief  SIMPLE polarft_corrcalc class
 module simple_polarft_corrcalc
-use simple_defs
+use simple_defs      ! use all in there
 use simple_params,   only: params
 use simple_ran_tabu, only: ran_tabu
 use simple_jiffys,   only: alloc_err
@@ -12,6 +12,10 @@ private
 ! CLASS PARAMETERS/VARIABLES
 complex, parameter :: zero=cmplx(0.,0.) !< just a complex zero
 logical, parameter :: DEBUG = .true.
+
+
+
+
 
 type :: polarft_corrcalc
     private
@@ -25,7 +29,6 @@ type :: polarft_corrcalc
     integer                  :: winsz      = 0         !< size of moving window in correlation cacluations
     integer                  :: ldim(3)    = 0         !< logical dimensions of original cartesian image
     integer                  :: kfromto(2) = 0         !< Fourier index range
-    integer                  :: chunksz    = 0         !< chunksz for parallel scheduling
     integer                  :: nthr       = 0         !< nr of CPU threads
     real,        allocatable :: sqsums_refs(:)         !< memoized square sums for the correlation calculations
     real,        allocatable :: sqsums_ptcls(:)        !< memoized square sums for the correlation calculations
@@ -82,6 +85,7 @@ type :: polarft_corrcalc
     procedure, private :: apply_ctf_1
     procedure, private :: apply_ctf_2
     generic            :: apply_ctf => apply_ctf_1, apply_ctf_2
+    procedure          :: apply_ctf_single
     procedure          :: xfel_subtract_shell_mean
     ! CALCULATORS
     procedure          :: create_polar_ctfmat
@@ -90,7 +94,8 @@ type :: polarft_corrcalc
     procedure, private :: gencorrs_all_cpu_2
     procedure, private :: gencorrs_all_cpu_3
     procedure, private :: gencorrs_all_cpu_4
-    generic            :: gencorrs_all_cpu => gencorrs_all_cpu_3, gencorrs_all_cpu_4
+    generic            :: gencorrs_all_cpu => gencorrs_all_cpu_1, gencorrs_all_cpu_2, gencorrs_all_cpu_3, gencorrs_all_cpu_4
+    procedure          :: gencorrs_serial
     procedure          :: gencorrs
     procedure          :: genfrc
     procedure          :: corrs
@@ -167,7 +172,6 @@ contains
         self%ldim    = ldim                            !< logical dimensions of original cartesian image
         self%kfromto = kfromto                         !< Fourier index range
         self%nthr    = nthr                            !< number of CPU threads
-        self%chunksz = ceiling(real(self%nptcls)/real(nthr)) !< chunk size for the parallel exec
         ! generate polar coordinates
         allocate( self%polar(self%ptclsz,self%kfromto(1):self%kfromto(2)), self%angtab(self%nrots), stat=alloc_stat)
         call alloc_err('polar coordinate arrays; new; simple_polarft_corrcalc', alloc_stat)
@@ -538,7 +542,7 @@ contains
         endif
         close(funit)
         ! memoize sqsum_ptcls
-        !$omp parallel do schedule(static,self%chunksz) default(shared) private(iptcl)
+        !$omp parallel do schedule(auto) default(shared) private(iptcl)
         do iptcl=self%pfromto(1),self%pfromto(2)
             call self%memoize_sqsum_ptcl(iptcl)
         end do
@@ -592,7 +596,6 @@ contains
     subroutine apply_ctf_2( self, iptcl, refvec )
         !$ use omp_lib
         !$ use omp_lib_kinds
-        use simple_ctf,   only: ctf
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iptcl
         integer, optional,       intent(in)    :: refvec(2)
@@ -619,6 +622,14 @@ contains
             !$omp end parallel do
         endif
     end subroutine apply_ctf_2
+
+    !>  \brief  is for applying CTF to references and updating the memoized ref sqsums
+    subroutine apply_ctf_single( self, iptcl, iref )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iptcl, iref
+        self%pfts_refs_ctf(iref,:,:) = self%pfts_refs(iref,:,:)*self%ctfmats(iptcl,:,:)
+        call self%memoize_sqsum_ref_ctf(iref)
+    end subroutine apply_ctf_single
 
     !>  \brief  is for preparing for XFEL pattern corr calc
     subroutine xfel_subtract_shell_mean( self )
@@ -690,7 +701,6 @@ contains
         !$omp end parallel do
     end function create_polar_ctfmat
 
-    ! THIS IS RIGOUROUSLY TESTED AND WORKS. THIS IS NOT THE CAUSE OF THE BUG
     !>  \brief  is for generating all matrices of CTF values
     subroutine create_polar_ctfmats( self, smpd, a )
         use simple_ctf,  only: ctf
@@ -727,37 +737,21 @@ contains
     subroutine gencorrs_all_cpu_1( self, corrmat3dout )
         !$ use omp_lib
         !$ use omp_lib_kinds
-        use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
         real,                    intent(out)   :: corrmat3dout(self%pfromto(1):self%pfromto(2),self%nrefs,self%nrots)
-        integer :: iptcl, iref, irot
-        real    :: norm
-        complex :: ref(self%refsz,self%kfromto(1):self%kfromto(2))
-        if( self%with_ctf )then
-            !$omp parallel do schedule(static,self%chunksz) default(shared) private(iptcl,iref,ref,norm,irot)
-            do iptcl=self%pfromto(1),self%pfromto(2)
-                do iref=1,self%nrefs
-                    ref  = self%pfts_refs(iref,:,:) * self%ctfmats(iptcl,:,:)
-                    norm = sqrt(sum(csq(ref)) * self%sqsums_ptcls(iptcl))
-                    do irot=1,self%nrots
-                        corrmat3dout(iptcl,iref,irot) = &
-                        sum(real(ref * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:))))
-                        corrmat3dout(iptcl,iref,irot) = corrmat3dout(iptcl,iref,irot)/norm
-                    end do
-                end do
+        integer :: iptcl, iref, nptcls
+        do iptcl=self%pfromto(1),self%pfromto(2)
+            ! tried to parallelize this one level up, which doesn't work because 
+            ! then we would need one CTF modulated reference array per thread
+            ! as we would otherwise get a race condition because diferent threads \
+            ! try to write to the same memory location
+            !$omp parallel do schedule(auto) default(shared) private(iref)
+            do iref=1,self%nrefs
+                if( self%with_ctf ) call self%apply_ctf_single(iptcl, iref)
+                corrmat3dout(iptcl,iref,:) = self%gencorrs_serial(iref,iptcl)
             end do
             !$omp end parallel do
-        else
-            !$omp parallel do schedule(static,self%chunksz) default(shared) private(iptcl,iref,irot)
-            do iptcl=self%pfromto(1),self%pfromto(2)
-                do iref=1,self%nrefs
-                    do irot=1,self%nrots
-                        corrmat3dout(iptcl,iref,irot) = self%corr_1(iref, iptcl, irot)
-                    end do
-                end do
-            end do
-            !$omp end parallel do
-        endif
+        end do
     end subroutine gencorrs_all_cpu_1
 
     !>  \brief  routine for generating all rotational correlations
@@ -768,37 +762,20 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: nnn, nnmat(self%pfromto(1):self%pfromto(2),nnn)
         real,                    intent(out)   :: corrmat3dout(self%pfromto(1):self%pfromto(2),nnn,self%nrots)
-        integer :: iptcl, iiref, iref, irot
-        real    :: norm
-        complex :: ref(self%refsz,self%kfromto(1):self%kfromto(2))
-        if( self%with_ctf )then
-            !$omp parallel do schedule(static,self%chunksz) default(shared) private(iptcl,iiref,iref,ref,norm,irot)
-            do iptcl=self%pfromto(1),self%pfromto(2)
-                do iiref=1,nnn
-                    iref = nnmat(iptcl,iiref)
-                    ref  = self%pfts_refs(iref,:,:) * self%ctfmats(iptcl,:,:)
-                    norm = sqrt(sum(csq(ref)) * self%sqsums_ptcls(iptcl))
-                    do irot=1,self%nrots
-                        corrmat3dout(iptcl,iiref,irot) = &
-                        sum(real(ref * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:))))
-                        corrmat3dout(iptcl,iiref,irot) = corrmat3dout(iptcl,iiref,irot)/norm
-                    end do
-
-                end do
+        integer :: iptcl, iiref, iref
+        do iptcl=self%pfromto(1),self%pfromto(2)
+            ! tried to parallelize this one level up, which doesn't work because 
+            ! then we would need one CTF modulated reference array per thread
+            ! as we would otherwise get a race condition because diferent threads \
+            ! try to write to the same memory location
+            !$omp parallel do schedule(auto) default(shared) private(iiref,iref)
+            do iiref=1,nnn
+                iref = nnmat(iptcl,iiref)
+                if( self%with_ctf ) call self%apply_ctf_single(iptcl, iref)
+                corrmat3dout(iptcl,iiref,:) = self%gencorrs_serial(iref,iptcl)
             end do
             !$omp end parallel do
-        else
-            !$omp parallel do schedule(static,self%chunksz) default(shared) private(iptcl,iiref,iref,irot)
-            do iptcl=self%pfromto(1),self%pfromto(2)
-                do iiref=1,nnn
-                    iref = nnmat(iptcl,iiref)
-                    do irot=1,self%nrots
-                        corrmat3dout(iptcl,iiref,irot) = self%corr_1(iref, iptcl, irot)
-                    end do
-                end do
-            end do
-            !$omp end parallel do
-        endif
+        end do
     end subroutine gencorrs_all_cpu_2
 
     !>  \brief  routine for generating all rotational correlations
@@ -826,7 +803,7 @@ contains
             if( .not. present(previnds) ) stop 'need optional input previnds in&
             &conjunction shclogic=.true.; simple_polarft_corrcalc :: gencorrs_all_cpu_3'
             ! we are using SHC-logics for the in-plane search
-            !$omp parallel do schedule(static,self%chunksz) default(shared) private(iptcl,iref)
+            !$omp parallel do schedule(auto) default(shared) private(iptcl,iref)
             do iptcl=self%pfromto(1),self%pfromto(2)
                 pprevcorrs(iptcl) = corrmat3d(iptcl,previnds(iptcl,1),previnds(iptcl,2))
                 do iref=1,self%nrefs
@@ -883,6 +860,19 @@ contains
     end subroutine gencorrs_all_cpu_4
 
     !>  \brief  is for generating rotational correlations
+    function gencorrs_serial( self, iref, iptcl, roind_vec ) result( cc )
+        class(polarft_corrcalc), intent(inout) :: self        !< instance
+        integer,                 intent(in)    :: iref, iptcl !< ref & ptcl indices
+        integer,       optional, intent(in)    :: roind_vec(:)
+        real      :: cc(self%nrots)
+        integer   :: irot, i, nrots
+        ! all correlations
+        do irot=1,self%nrots
+            cc(irot) = self%corr_1(iref, iptcl, irot)
+        end do
+    end function gencorrs_serial
+
+    !>  \brief  is for generating rotational correlations
     function gencorrs( self, iref, iptcl, roind_vec ) result( cc )
         !$ use omp_lib
         !$ use omp_lib_kinds
@@ -890,30 +880,27 @@ contains
         integer,                 intent(in)    :: iref, iptcl !< ref & ptcl indices
         integer,       optional, intent(in)    :: roind_vec(:)
         real      :: cc(self%nrots)
-        integer   :: irot, i, nrots, chunksz
+        integer   :: irot, i, nrots
         if( present(roind_vec) )then
             ! calculates only corrs for rotational indices provided in roind_vec
             ! see get_win_roind. returns -1.0 when not calculated
             if( any(roind_vec<=0) .or. any(roind_vec>self%nrots) )&
                 &stop'index out of range; simple_polarft_corrcalc::gencorrs'
-            cc      = -1.
-            nrots   = size(roind_vec)
-
-            chunksz = ceiling(real(self%nrots)/real(self%nthr))
-            !$omp parallel do schedule(static,self%chunksz) default(shared) private(i,irot)
+            cc    = -1.
+            nrots = size(roind_vec)
+            !$omp parallel do schedule(auto) default(shared) private(i,irot)
             do i=1,nrots
                 irot = roind_vec(i)
                 cc(irot) = self%corr_1(iref, iptcl, irot)
             end do
-            !$omp end parallel do
+            !$omp end parallel do 
         else
             ! all correlations
-            chunksz = ceiling(real(self%nrots)/real(self%nthr))
-            !$omp parallel do schedule(static,self%chunksz) default(shared) private(i,irot)
+            !$omp parallel do schedule(auto) default(shared) private(irot)
             do irot=1,self%nrots
                 cc(irot) = self%corr_1(iref, iptcl, irot)
             end do
-            !$omp end parallel do
+            !$omp end parallel do 
         endif
     end function gencorrs
 
@@ -958,14 +945,11 @@ contains
         !$omp end parallel do
     end function genfrc
 
-    !<<< THIS ROUTINE SHOULD BE SIMD INSTRUCTED >>>
     !>  \brief  for calculating the correlation between reference iref and particle iptcl in rotation irot
     function corr_1( self, iref, iptcl, irot ) result( cc )
-        use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self              !< instance
         integer,                 intent(in)    :: iref, iptcl, irot !< reference, particle, rotation
-        real    :: cc, ptcl_sqsum_tmp, ref_sqsum_tmp
-        integer :: kcount, k
+        real    :: cc
         if( self%sqsums_refs(iref) < TINY .or. self%sqsums_ptcls(iptcl) < TINY )then
             cc = 0.
             return
@@ -978,7 +962,6 @@ contains
         cc = cc/sqrt(self%sqsums_refs(iref)*self%sqsums_ptcls(iptcl))
     end function corr_1
 
-    !<<< THIS ROUTINE SHOULD BE SIMD INSTRUCTED >>>
     !>  \brief  for calculating the on-fly shifted correlation between reference iref and particle iptcl in rotation irot
     function corr_2( self, iref, iptcl, irot, shvec ) result( cc )
         !$ use omp_lib
@@ -991,7 +974,6 @@ contains
         complex :: shmat(self%refsz,self%kfromto(1):self%kfromto(2))
         complex :: pft_ref_sh(self%refsz,self%kfromto(1):self%kfromto(2))
         if( allocated(self%ctfmats) )then
-            !$omp parallel workshare 
             ! generate the argument matrix from memoized components in argtransf
             argmat = self%argtransf(:self%refsz,:) * shvec(1) + self%argtransf(self%refsz+1:,:) * shvec(2)
             ! generate the complex shift transformation matrix
@@ -1000,11 +982,9 @@ contains
             pft_ref_sh  = (self%pfts_refs(iref,:,:) * self%ctfmats(iptcl,:,:)) * shmat
             ! calculate correlation precursors
             argmat = real(pft_ref_sh * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:)))
-            !$omp end parallel workshare
             cc = sum(argmat)
             sqsum_ref_sh = sum(csq(pft_ref_sh))
         else if( allocated(self%pfts_refs_ctf) )then
-            !$omp parallel workshare 
             ! generate the argument matrix from memoized components in argtransf
             argmat = self%argtransf(:self%refsz,:) * shvec(1)+self%argtransf(self%refsz+1:,:) * shvec(2)
             ! generate the complex shift transformation matrix
@@ -1013,11 +993,9 @@ contains
             pft_ref_sh = self%pfts_refs_ctf(iref,:,:) * shmat
             ! calculate correlation precursors
             argmat = real(pft_ref_sh * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:)))
-            !$omp end parallel workshare
             cc = sum(argmat)
             sqsum_ref_sh = sum(csq(pft_ref_sh))
-        else        
-            !$omp parallel workshare
+        else
             ! generate the argument matrix from memoized components in argtransf
             argmat = self%argtransf(:self%refsz,:) * shvec(1)+self%argtransf(self%refsz+1:,:) * shvec(2)
             ! generate the complex shift transformation matrix
@@ -1026,7 +1004,6 @@ contains
             pft_ref_sh = self%pfts_refs(iref,:,:) * shmat
             ! calculate correlation precursors
             argmat = real(pft_ref_sh * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:)))
-            !$omp end parallel workshare
             cc = sum(argmat)
             sqsum_ref_sh = sum(csq(pft_ref_sh))
         endif

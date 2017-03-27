@@ -47,6 +47,7 @@ type :: image
     procedure          :: extr_pixels
     procedure          :: corner
     ! I/O
+    procedure          :: open
     procedure          :: read
     procedure          :: write
     procedure, private :: write_emkind
@@ -578,47 +579,22 @@ contains
     ! I/O
 
     !>  \brief  for reading 2D images from stack or volumes from volume files
-    subroutine read( self, fname, i, isxfel, formatchar, readhead, rwaction, read_failure )
-        use simple_imgfile,       only: imgfile
-        use simple_jiffys,        only: read_raw_image
-        use simple_filehandling,  only: fname2format, file_exists
+    subroutine open( self, fname, ioimg, formatchar, readhead, rwaction )
+        use simple_imgfile,      only: imgfile
+        use simple_jiffys,       only: read_raw_image
+        use simple_filehandling, only: fname2format, file_exists
         class(image),               intent(inout) :: self
         character(len=*),           intent(in)    :: fname
-        integer,          optional, intent(in)    :: i
-        logical,          optional, intent(in)    :: isxfel
+        class(imgfile),             intent(inout) :: ioimg
         character(len=1), optional, intent(in)    :: formatchar
         logical,          optional, intent(in)    :: readhead
         character(len=*), optional, intent(in)    :: rwaction
-        logical,          optional, intent(out)   :: read_failure
-        type(imgfile)         :: ioimg
-        character(len=1)      :: form
-        integer               :: ldim(3), iform, first_slice, mode
-        integer               :: last_slice, ii, alloc_stat
-        real                  :: smpd
-        logical               :: isvol, err, iisxfel, debug=.false.
-        real(dp), allocatable :: tmpmat1(:,:,:)
-        real(sp), allocatable :: tmpmat2(:,:,:)
+        character(len=1) :: form
+        integer          :: mode
+        logical          :: debug=.false.
         if( self%existence )then
             if( .not. file_exists(fname) )then
-                stop 'The file you are trying to read from does not exists; read; simple_image'
-            endif
-            ldim = self%ldim
-            smpd = self%smpd
-            iisxfel = .false.
-            if( present(isxfel) ) iisxfel = isxfel
-            if( iisxfel )then
-                ! always assume EM-kind images on disk
-                if( debug ) print *, 'ldim: ', ldim
-                if( debug ) print *, 'smpd: ', smpd
-                call self%new(ldim, smpd)
-            endif
-            isvol = .true. ! assume volume by default
-            ii    = 1      ! default location
-            if( present(i) )then
-                ! we are reading from a stack & in SIMPLE volumes are not allowed
-                ! to be stacked so the image object must be 2D
-                isvol = .false.
-                ii = i ! replace default location
+                stop 'The file you are trying to open does not exists; open; simple_image'
             endif
             if( present(formatchar) )then
                 form = formatchar
@@ -652,47 +628,66 @@ contains
                         write(*,*) '**** DEBUG **** file info right after opening the file'
                         call ioimg%print
                     endif
-                    iform = ioimg%getIform()
-                    ! iform file type specifier:
-                    !   1 = 2D image
-                    !   3 = 3D volume
-                    ! -11 = 2D Fourier odd
-                    ! -12 = 2D Fourier even
-                    ! -21 = 3D Fourier odd
-                    ! -22 = 3D Fourier even
-                    select case(iform)
-                        case(1,-11,-12)
-                            ! we are processing a stack of 2D images (single 2D images not allowed in SIMPLE)
-                            if( present(i) )then
-                                ! all good
-                            else
-                                stop 'ERROR, optional argument i required for reading from stack; read; simple_image'
-                            endif
-                            if( self%ldim(3) == 1 )then
-                                ! all good
-                            else if( self%ldim(3) > 1 )then
-                                stop 'ERROR, trying to read from a stack into a volume; read; simple_image'
-                            else
-                                stop 'ERROR, nonconforming logical dimension of image; read; simple_image'
-                            endif
-                            if( iform == -11 .or. iform == -12 ) self%ft = .true.
-                        case(3,-21,-22)
-                            ! we are processing a 3D image (stacks of 3D volumes not allowed in SIMPLE)
-                            if( present(i) )then
-                                stop 'ERROR, optional argument i should not be present when reading volumes; read; simple_image'
-                            endif
-                            if( self%ldim (3) > 1 )then
-                                ! all good
-                            else if( self%ldim(3) == 1)then
-                                stop 'ERROR, trying to read from a volume into a 2D image; read; simple_image'
-                            else
-                                stop 'ERROR, nonconforming logical dimension of image; read; simple_image'
-                            endif
-                            if( iform == -21 .or. iform == -22 ) self%ft = .true.
-                        case DEFAULT
-                            write(*,*) 'iform = ', iform
-                            stop 'Unsupported iform flag; simple_image :: read'
-                    end select
+            end select
+        else
+            stop 'ERROR, image need to be constructed before read/write; open; simple_image'
+        endif
+    end subroutine open
+
+    !>  \brief  for reading 2D images from stack or volumes from volume files
+    subroutine read( self, fname, i, ioimg, isxfel, formatchar, readhead, rwaction, read_failure )
+        use simple_imgfile,      only: imgfile
+        use simple_jiffys,       only: read_raw_image
+        use simple_filehandling, only: fname2format, file_exists
+        class(image),               intent(inout) :: self
+        character(len=*),           intent(in)    :: fname
+        integer,          optional, intent(in)    :: i
+        class(imgfile),   optional, intent(inout) :: ioimg 
+        logical,          optional, intent(in)    :: isxfel
+        character(len=1), optional, intent(in)    :: formatchar
+        logical,          optional, intent(in)    :: readhead
+        character(len=*), optional, intent(in)    :: rwaction
+        logical,          optional, intent(out)   :: read_failure
+        type(imgfile)         :: ioimg_local
+        character(len=1)      :: form
+        integer               :: ldim(3), iform, first_slice, mode
+        integer               :: last_slice, ii, alloc_stat
+        real                  :: smpd
+        logical               :: isvol, err, iisxfel, ioimg_present
+        logical, parameter    :: DEBUG=.false.
+        real(dp), allocatable :: tmpmat1(:,:,:)
+        real(sp), allocatable :: tmpmat2(:,:,:)
+        ldim          = self%ldim
+        smpd          = self%smpd
+        ioimg_present = present(ioimg)
+        iisxfel       = .false.
+        if( present(isxfel) ) iisxfel = isxfel
+        if( iisxfel )then
+            ! always assume EM-kind images on disk
+            if( debug ) print *, 'ldim: ', ldim
+            if( debug ) print *, 'smpd: ', smpd
+            call self%new(ldim, smpd)
+        endif
+        isvol = .true. ! assume volume by default
+        ii    = 1      ! default location
+        if( present(i) )then
+            ! we are reading from a stack & in SIMPLE volumes are not allowed
+            ! to be stacked so the image object must be 2D
+            isvol = .false.
+            ii = i ! replace default location
+        endif
+        if( present(formatchar) )then
+            form = formatchar
+        else
+            form = fname2format(fname)
+        endif
+        if( ioimg_present )then
+            call exception_handler(ioimg)
+            call read_local(ioimg)
+        else
+            select case(form)
+                case('M','F','S')
+                    call self%open(fname, ioimg_local, formatchar, readhead, rwaction)
                 case('D')
                     if( self%even_dims())then
                         allocate(tmpmat1(self%ldim(1),self%ldim(2),self%ldim(3)),&
@@ -712,40 +707,97 @@ contains
                     write(*,*) 'Trying to read from file: ', fname
                     stop 'ERROR, unsupported file format; read; simple_image'
             end select
-            if( form .ne. 'F' )then
-                ! make sure that the logical image dimensions of self are consistent with the overall header
-                ldim = ioimg%getDims()
-                if( .not. all(ldim(1:2) == self%ldim(1:2)) )then
-                    write(*,*) 'ldim of image object: ', self%ldim
-                    write(*,*) 'ldim in ioimg (fhandle) object: ', ldim
-                    stop 'ERROR, logical dimensions of overall header & image object do not match; read; simple_image'
+            call exception_handler(ioimg_local)
+            call read_local(ioimg_local)
+        endif
+
+        contains
+
+            subroutine read_local( ioimg )
+                class(imgfile) :: ioimg
+                ! work out the slice range
+                if( isvol )then
+                    if( ii .gt. 1 ) stop 'ERROR, stacks of volumes not supported; read; simple_image'
+                    first_slice = 1
+                    last_slice = ldim(3)
+                else
+                    first_slice = ii
+                    last_slice = ii
                 endif
-            endif
-            ! work out the slice range
-            if( isvol )then
-                if( ii .gt. 1 ) stop 'ERROR, stacks of volumes not supported; read; simple_image'
-                first_slice = 1
-                last_slice = ldim(3)
-            else
-                first_slice = ii
-                last_slice = ii
-            endif
-            call ioimg%rwSlices('r',first_slice,last_slice,self%rmat,&
-            &self%ldim,self%ft,self%smpd,read_failure=read_failure)
-            call ioimg%close
-        else
-            stop 'ERROR, image need to be constructed before read; read; simple_image'
-        endif
-        ! normalize if volume
-        if( self%is_3d() .and. .not. iisxfel )then
-            err = .false.
-            if( .not. self%ft ) call self%norm(err=err)
-            if( err )then
-                write(*,*) 'Normalization error, trying to read: ', fname
-                stop
-            endif
-        endif
-        if( iisxfel ) call self%em2xfel
+                call ioimg%rwSlices('r',first_slice,last_slice,self%rmat,&
+                &self%ldim,self%ft,self%smpd,read_failure=read_failure)
+                if( .not. ioimg_present ) call ioimg%close
+                ! normalize if volume
+                if( self%is_3d() .and. .not. iisxfel )then
+                    err = .false.
+                    if( .not. self%ft ) call self%norm(err=err)
+                    if( err )then
+                        write(*,*) 'Normalization error, trying to read: ', fname
+                        stop
+                    endif
+                endif
+                if( iisxfel ) call self%em2xfel
+            end subroutine read_local
+
+            subroutine exception_handler( ioimg )
+                class(imgfile) :: ioimg
+                if( form .eq. 'S' ) call spider_exception_handler(ioimg)
+                if( form .ne. 'F' )then
+                    ! make sure that the logical image dimensions of self are consistent with the overall header
+                    ldim = ioimg%getDims()
+                    if( .not. all(ldim(1:2) == self%ldim(1:2)) )then
+                        write(*,*) 'ldim of image object: ', self%ldim
+                        write(*,*) 'ldim in ioimg (fhandle) object: ', ldim
+                        stop 'ERROR, logical dimensions of overall header & image object do not match; read; simple_image'
+                    endif
+                endif
+            end subroutine exception_handler
+
+            subroutine spider_exception_handler(ioimg)
+                class(imgfile) :: ioimg
+                iform = ioimg%getIform()
+                ! iform file type specifier:
+                !   1 = 2D image
+                !   3 = 3D volume
+                ! -11 = 2D Fourier odd
+                ! -12 = 2D Fourier even
+                ! -21 = 3D Fourier odd
+                ! -22 = 3D Fourier even
+                select case(iform)
+                    case(1,-11,-12)
+                        ! we are processing a stack of 2D images (single 2D images not allowed in SIMPLE)
+                        if( present(i) )then
+                            ! all good
+                        else
+                            stop 'ERROR, optional argument i required for reading from stack; read; simple_image'
+                        endif
+                        if( self%ldim(3) == 1 )then
+                            ! all good
+                        else if( self%ldim(3) > 1 )then
+                            stop 'ERROR, trying to read from a stack into a volume; read; simple_image'
+                        else
+                            stop 'ERROR, nonconforming logical dimension of image; read; simple_image'
+                        endif
+                        if( iform == -11 .or. iform == -12 ) self%ft = .true.
+                    case(3,-21,-22)
+                        ! we are processing a 3D image (stacks of 3D volumes not allowed in SIMPLE)
+                        if( present(i) )then
+                            stop 'ERROR, optional argument i should not be present when reading volumes; read; simple_image'
+                        endif
+                        if( self%ldim (3) > 1 )then
+                            ! all good
+                        else if( self%ldim(3) == 1)then
+                            stop 'ERROR, trying to read from a volume into a 2D image; read; simple_image'
+                        else
+                            stop 'ERROR, nonconforming logical dimension of image; read; simple_image'
+                        endif
+                        if( iform == -21 .or. iform == -22 ) self%ft = .true.
+                    case DEFAULT
+                        write(*,*) 'iform = ', iform
+                        stop 'Unsupported iform flag; simple_image :: read'
+                end select
+            end subroutine spider_exception_handler
+
     end subroutine read
 
     !>  \brief  for writing any kind of images to stack or volumes to volume files

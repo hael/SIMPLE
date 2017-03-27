@@ -193,6 +193,7 @@ contains
 
         ! ALIGN & GRID
         call del_file(p%outfile)
+        if( p%ctf .ne. 'no' ) call pftcc%create_polar_ctfmats(p%smpd, b%a)
         cnt_glob = 0
         statecnt = 0
         if( DEBUG ) write(*,*) '*** hadamard3D_matcher ***: loop fromp/top:', p%fromp, p%top
@@ -349,7 +350,7 @@ contains
             do i=1,nsamp
                 call progress(i, nsamp)
                 orientation = b%a%get_ori(sample(i))
-                call b%img%read(p%stk, sample(i), p%l_xfel)
+                call b%img%read(p%stk, sample(i), isxfel=p%l_xfel)
                 if( p%l_xfel )then
                     call b%img%pad(b%img_pad)
                 else
@@ -485,9 +486,9 @@ contains
                             call b%img%new([p%box,p%box,1],p%smpd)
                         endif
                         if( p%l_distr_exec )then
-                            call b%img%read(p%stk_part, cnt, p%l_xfel)
+                            call b%img%read(p%stk_part, cnt, isxfel=p%l_xfel)
                         else
-                            call b%img%read(p%stk, iptcl, p%l_xfel)
+                            call b%img%read(p%stk, iptcl, isxfel=p%l_xfel)
                         endif
                         call prepimg4align(b, p, o)
                         call b%img%imgpolarizer(pftcc, iptcl)

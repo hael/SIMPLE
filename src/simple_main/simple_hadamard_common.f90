@@ -12,8 +12,8 @@ use simple_math          ! use all in there
 use simple_masker        ! use all in there
 implicit none
 
-public :: set_bp_range, setup_shellweights, grid_ptcl, prepimg4align, eonorm_struct_facts,&
-norm_struct_facts, preprefs4align, preprefvol, reset_prev_defparms, prep2Dref
+public :: read_imgs_from_stk, set_bp_range, setup_shellweights, grid_ptcl, prepimg4align,&
+eonorm_struct_facts, norm_struct_facts, preprefs4align, preprefvol, reset_prev_defparms, prep2Dref
 private
 
 interface prep2Dref
@@ -37,6 +37,29 @@ real               :: cs_prev     = 0.
 real               :: fraca_prev  = 0.
     
 contains
+
+    subroutine read_imgs_from_stk( b, p )
+        use simple_imgfile, only: imgfile
+        class(build),   intent(inout) :: b
+        class(params),  intent(inout) :: p
+        type(imgfile) :: ioimg
+        integer       :: cnt, iptcl
+        if( p%l_distr_exec )then
+            call b%imgs(p%fromp)%open(p%stk_part, ioimg)
+        else
+            call b%imgs(p%fromp)%open(p%stk, ioimg)
+        endif
+        cnt = 0
+        do iptcl=p%fromp,p%top
+            cnt = cnt + 1
+            if( p%l_distr_exec )then
+                call b%imgs(iptcl)%read(p%stk_part, cnt, ioimg=ioimg)
+            else
+                call b%imgs(iptcl)%read(p%stk, iptcl, ioimg=ioimg)
+            endif
+        end do
+        call ioimg%close
+    end subroutine read_imgs_from_stk
     
     subroutine set_bp_range( b, p, cline )
         use simple_estimate_ssnr, only: fsc2ssnr
@@ -284,9 +307,9 @@ contains
         pw = orientation%get('w')
         if( pw > 0. )then
             if( p%l_distr_exec )then
-                call b%img_copy%read(p%stk_part, cnt_glob, p%l_xfel)
+                call b%img_copy%read(p%stk_part, cnt_glob, isxfel=p%l_xfel)
             else
-                call b%img_copy%read(p%stk, iptcl, p%l_xfel)
+                call b%img_copy%read(p%stk, iptcl, isxfel=p%l_xfel)
             endif
             ! prepare image for gridding
             ! using the uncorrected/unmodified image as input
@@ -678,10 +701,8 @@ contains
                 ! CTF parameters have changed and ctf object and the reference central sections need to be updated
                 tfun = ctf(p%smpd, kV, cs, fraca)
                 if( present(ref) )then
-                    ! call pftcc%apply_ctf(tfun, dfx, dfy, angast, refvec=[ref,ref])
                     call pftcc%apply_ctf(iptcl, refvec=[ref,ref])
                 else
-                    ! call pftcc%apply_ctf(tfun, dfx, dfy, angast)
                     call pftcc%apply_ctf(iptcl)
                 endif
             endif

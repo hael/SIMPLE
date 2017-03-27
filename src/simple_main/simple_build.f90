@@ -120,7 +120,7 @@ contains
         class(cmdline),    intent(inout) :: cline
         logical, optional, intent(in)    :: do3d, nooritab, force_ctf
         type(ran_tabu) :: rt
-        integer        :: alloc_stat, lfny
+        integer        :: alloc_stat, lfny, iptcl
         real           :: slask(3)
         logical        :: err, ddo3d, fforce_ctf
         call self%kill_general_tbox
@@ -189,7 +189,11 @@ contains
             ! build image objects
             ! box-sized ones
             call self%img%new([p%box,p%box,1],p%smpd,p%imgkind)
-            call self%img_copy%new([p%box,p%box,1],p%smpd,p%imgkind) 
+            call self%img_copy%new([p%box,p%box,1],p%smpd,p%imgkind)
+            allocate(self%imgs(p%fromp:p%top))
+            do iptcl=p%fromp,p%top
+                call self%imgs(iptcl)%new([p%box,p%box,1],p%smpd,p%imgkind)
+            end do
             if( debug ) write(*,'(a)') 'did build box-sized image objects'
             ! boxmatch-sized ones
             call self%img_tmp%new([p%boxmatch,p%boxmatch,1],p%smpd,p%imgkind)
@@ -229,6 +233,7 @@ contains
     !> \brief  destructs the general toolbox
     subroutine kill_general_tbox( self )
         class(build), intent(inout)  :: self
+        integer :: i, istart, istop
         if( self%general_tbox_exists )then
             call self%se%kill
             call self%a%kill
@@ -244,6 +249,14 @@ contains
             call self%mskvol%kill
             call self%vol_pad%kill_expanded
             call self%vol_pad%kill
+            if( allocated(self%imgs) )then
+                istart = lbound(self%imgs, dim=1)
+                istop  = ubound(self%imgs, dim=1)
+                do i=istart,istop
+                    call self%imgs(i)%kill
+                end do
+                deallocate(self%imgs)
+            endif
             if( allocated(self%ssnr) )then
                 deallocate(self%ssnr, self%fsc)
             endif
@@ -386,7 +399,7 @@ contains
     subroutine build_hadamard_prime2D_tbox( self, p )
         use simple_strings, only: str_has_substr
         class(build),  intent(inout) :: self
-        class(params), intent(in)    :: p
+        class(params), intent(inout) :: p
         integer :: icls, alloc_stat, funit, io_stat
         call self%kill_hadamard_prime2D_tbox
         call self%raise_hard_ctf_exception(p)
@@ -403,6 +416,12 @@ contains
         if( str_has_substr(p%refine,'neigh') )then
             if( file_exists('nnmat.bin') )  call self%read_nnmat(p)
         endif
+        ! set number of nearest neighbours to 5 % of the total nr of classes 
+        ! and bound it [3,10]
+        p%nnn = max(3,min(10,nint(0.05 * real(p%ncls))))
+
+        print *, 'did set nnn: ', p%nnn
+
         write(*,'(A)') '>>> DONE BUILDING HADAMARD PRIME2D TOOLBOX'
         self%hadamard_prime2D_tbox_exists = .true.
     end subroutine build_hadamard_prime2D_tbox

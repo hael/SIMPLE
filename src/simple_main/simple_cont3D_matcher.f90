@@ -52,9 +52,9 @@ contains
             if( nint(orientation%get('state')) > 0 )then
                 if( p%boxmatch < p%box )call b%img%new([p%box,p%box,1],p%smpd) ! ensures correct dimensions
                 if( p%l_distr_exec )then
-                    call b%img%read(p%stk_part, cnt_glob, p%l_xfel)
+                    call b%img%read(p%stk_part, cnt_glob, isxfel=p%l_xfel)
                 else
-                    call b%img%read(p%stk, iptcl, p%l_xfel)
+                    call b%img%read(p%stk, iptcl, isxfel=p%l_xfel)
                 endif
                 call prepimg4align(b, p, orientation)
                 call cftcc%frc(orientation, 1, b%img, res, corrs)
@@ -109,9 +109,9 @@ contains
             orientation = b%a%get_ori(iptcl)
             if( p%boxmatch < p%box )call b%img%new([p%box,p%box,1],p%smpd) ! ensures correct dimensions
             if( p%l_distr_exec )then
-                call b%img%read(p%stk_part, cnt_glob, p%l_xfel)
+                call b%img%read(p%stk_part, cnt_glob, isxfel=p%l_xfel)
             else
-                call b%img%read(p%stk, iptcl, p%l_xfel)
+                call b%img%read(p%stk, iptcl, isxfel=p%l_xfel)
             endif
             call prepimg4align(b, p, orientation)
             if( nint(orientation%get('state')) > 0 )then
@@ -218,9 +218,9 @@ contains
             if( state > 0 )then
                 if( p%boxmatch < p%box )call b%img%new([p%box,p%box,1],p%smpd) ! ensures correct dimensions
                 if( p%l_distr_exec )then
-                    call b%img%read(p%stk_part, cnt_glob, p%l_xfel)
+                    call b%img%read(p%stk_part, cnt_glob, isxfel=p%l_xfel)
                 else
-                    call b%img%read(p%stk, iptcl, p%l_xfel)
+                    call b%img%read(p%stk, iptcl, isxfel=p%l_xfel)
                 endif
                 call prepimg4align(b, p, orientation)
                 select case( p%refine )

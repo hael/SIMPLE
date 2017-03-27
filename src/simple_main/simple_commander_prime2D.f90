@@ -51,7 +51,8 @@ contains
     subroutine exec_prime2D_init( self, cline )
         use simple_hadamard2D_matcher, only: prime2D_assemble_sums, prime2D_write_sums, &
         & prime2D_write_partial_sums
-        use simple_qsys_funs, only: qsys_job_finished
+        use simple_qsys_funs,          only: qsys_job_finished
+        use simple_hadamard_common,    only: read_imgs_from_stk 
         class(prime2D_init_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(params)  :: p
@@ -93,6 +94,7 @@ contains
             end do
             call prime2D_write_sums(b, p)
         else
+            call read_imgs_from_stk( b, p )
             call prime2D_assemble_sums(b, p)
             if( p%l_distr_exec)then
                 call prime2D_write_partial_sums( b, p )

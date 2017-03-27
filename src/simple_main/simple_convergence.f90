@@ -6,7 +6,7 @@ use simple_defs     ! all defs
 implicit none
 
 real, parameter :: MI_CLASS_LIM_3D = 0.80
-real, parameter :: MI_CLASS_LIM_2D = 0.98
+real, parameter :: MI_CLASS_LIM_2D = 0.99
 real, parameter :: MI_STATE_LIM    = 0.98
 real, parameter :: MI_INPL_LIM     = 0.98
 real, parameter :: FRAC_LIM        = 98.0
@@ -88,7 +88,7 @@ contains
         endif
         ! determine convergence
         if( nncls > 1 )then        
-            if( self%mi_class > MI_CLASS_LIM_2D .and. self%frac > FRAC_LIM )then
+            if( self%mi_class > MI_CLASS_LIM_2D .and. self%frac > FRAC_LIM .and. self%dist_inpl < 0.5 )then
                 write(*,'(A)') '>>> CONVERGED: .YES.'
                 converged = .true.
             else
@@ -235,7 +235,7 @@ contains
         endif
     end function check_conv3D
 
-   !>  \brief  checks convergence for the 3D case
+    !>  \brief  checks convergence for the 3D case
     function check_conv_het( self ) result( converged )
         use simple_math, only: rad2deg
         class(convergence), intent(inout) :: self
@@ -269,7 +269,6 @@ contains
         endif
         deallocate( statepops )
     end function check_conv_het
-
 
     !>  \brief  is a getter
     real function get( self, which )

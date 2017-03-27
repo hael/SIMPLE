@@ -1013,7 +1013,6 @@ contains
             if( istate > 0 ) incl(i) = .true.
         end do
     end function included
-
     
     !>  \brief  is for printing
     subroutine print( self, i )
