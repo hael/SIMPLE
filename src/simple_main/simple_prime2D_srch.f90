@@ -325,11 +325,11 @@ contains
         if( nnsrch )then
             allocate(corrmat3d(pfromto(1):pfromto(2),self%nnn,self%nrots))
             call pftcc%gencorrs_all_cpu(self%nnn, nnmat, corrmat3d)
-            usemat = .false.
+            usemat = .true.
         else
             allocate(corrmat3d(pfromto(1):pfromto(2),self%nrefs,self%nrots))
             call pftcc%gencorrs_all_cpu(corrmat3d)
-            usemat = .false.
+            usemat = .true.
         endif
         do iptcl=pfromto(1),pfromto(2)
             orientation = a%get_ori(iptcl)

@@ -469,7 +469,7 @@ contains
         ! set constants
         lims = self%loop_lims(2)
         if( present(self_out) ) self_out = self
-        !$omp parallel do default(shared) private(h,k,l,phys) schedule(auto)
+        !$omp parallel do collapse(3) default(shared) private(h,k,l,phys) schedule(auto)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 do l=lims(3,1),lims(3,2)
