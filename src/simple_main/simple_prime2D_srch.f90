@@ -204,7 +204,7 @@ contains
         lims(1,2) =  self%trs
         lims(2,1) = -self%trs
         lims(2,2) =  self%trs
-        call pftcc_shsrch_init(   pftcc, lims )
+        call pftcc_shsrch_init(pftcc, lims)
         if( present(o_prev) )then
             ! find previous discrete alignment parameters
             self%prev_class = nint(o_prev%get('class'))                    ! class index

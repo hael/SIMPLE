@@ -658,7 +658,7 @@ contains
         ! make oritab
         call os%new(p_master%nptcls)
         ! options check
-        if( p_master%automsk.eq.'yes' )stop 'Automasking not supported yet' ! automask deactivated for now
+        !if( p_master%automsk.eq.'yes' )stop 'Automasking not supported yet' ! automask deactivated for now
         if( p_master%nstates>1 .and. p_master%dynlp.eq.'yes' )&
             &stop 'Incompatible options: nstates>1 and dynlp=yes'
         if( p_master%automsk.eq.'yes' .and. p_master%dynlp.eq.'yes' )&

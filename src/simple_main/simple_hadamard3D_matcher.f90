@@ -8,7 +8,6 @@ use simple_params,           only: params
 use simple_cmdline,          only: cmdline
 use simple_gridding,         only: prep4cgrid
 use simple_masker,           only: automask
-use simple_rnd,              only: ran3
 use simple_strings,          only: str_has_substr
 use simple_cont3D_matcher    ! use all in there
 use simple_hadamard_common   ! use all in there
@@ -25,7 +24,7 @@ type(polarft_corrcalc)        :: pftcc
 type(prime3D_srch)            :: primesrch3D
 real                          :: reslim
 real                          :: frac_srch_space
-type(ori)                     :: orientation, o_sym, o_tmp
+type(ori)                     :: orientation, o_sym
 integer                       :: cnt_glob=0
 character(len=:), allocatable :: ppfts_fname
 
@@ -127,7 +126,7 @@ contains
         if( p%refine.eq.'het' )then
             allocate(state_corr_thresh(p%nstates))
             het_corr_thresh = -1.
-            if( frac_srch_space < 0.98 .or. p%het_thresh > 0.02 )then
+            if( frac_srch_space < 0.98 .or. p%het_thresh > 0.025 )then
                 dohet = .true.
                 write(*,'(A,F8.2)')'>>> STATE RANDOMIZATION %:', 100.*p%het_thresh
                 ! grab relevant correlations
@@ -426,7 +425,7 @@ contains
                 cnt = cnt+1
                 call progress(cnt, nrefs)
                 o = b%e%get_ori(iref)
-                call b%vol%fproject_polar(cnt, o, p, pftcc, expanded=.true.)
+                call b%vol%fproject_polar(cnt, o, pftcc, expanded=.true.)
             end do
             ! cleanup
             call b%vol%kill_expanded
@@ -459,7 +458,7 @@ contains
                 ! read particle images and create polar projections
                 if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PARTICLES'
                 ! initialize
-                call b%img%init_imgpolarizer(pftcc, p%smpd)
+                call b%img%init_imgpolarizer(pftcc)
                 progress_cnt = 0
                 ntot         = p%top-p%fromp+1
                 do s=1,p%nstates
@@ -470,7 +469,8 @@ contains
                     if( p%doautomsk )then
                         ! read & pre-process mask volume
                         call b%mskvol%read(p%masks(s))
-                        !call prep4cgrid(b%mskvol, b%vol_pad, p%msk)
+                        call b%mskvol%init_env_rproject
+                        !call prep4cgrid(b%mskvol, b%vol_pad, p%msk) ! for testing
                     endif
                     cnt = 0
                     do iptcl=p%fromp,p%top
@@ -494,6 +494,7 @@ contains
                         call b%img%imgpolarizer(pftcc, iptcl)
                     end do
                 end do
+                if( p%doautomsk )call b%mskvol%kill_env_rproject
                 ! restores b%img dimensions for clean exit
                 if( p%boxmatch < p%box )call b%img%new([p%box,p%box,1],p%smpd)
             end subroutine prep_pftcc_local

@@ -336,7 +336,7 @@ contains
         call primesrch2D%new(p)
         call pftcc%new(p%ncls, [p%fromp,p%top], [p%box,p%box,1], p%kfromto, p%ring2, p%nthr, p%ctf)
         ! prepare the polarizers
-        call b%img%init_imgpolarizer(pftcc, p%smpd)
+        call b%img%init_imgpolarizer(pftcc)
         ! PREPARATION OF REFERENCES IN PFTCC
         ! read references and transform into polar coordinates
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING REFERENCES'

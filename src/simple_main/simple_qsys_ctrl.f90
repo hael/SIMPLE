@@ -226,7 +226,7 @@ contains
         integer,          intent(in)    :: ipart
         class(chash),     intent(in)    :: q_descr
         character(len=512) :: io_msg
-        integer :: ios, funit
+        integer :: ios, funit, val
         funit = get_fileunit()
         if( self%stream )then
             if( file_exists(self%script_names(ipart)) ) return
@@ -255,8 +255,9 @@ contains
         ! exit shell when done
         write(funit,'(a)',advance='yes') ''
         write(funit,'(a)',advance='yes') 'exit'
-        close(funit)
         call flush(funit)
+        close(funit)
+        !call flush(funit)
         call chmod(trim(self%script_names(ipart)),'+x')
         if( ios .ne. 0 )then
             write(*,'(a)',advance='no') 'simple_qsys_scripts :: gen_qsys_script; Error'
@@ -276,7 +277,7 @@ contains
         class(chash),     intent(in)    :: q_descr
         character(len=*), intent(in)    :: exec_bin, script_name, outfile
         character(len=512) :: io_msg
-        integer :: ios, funit
+        integer :: ios, funit, val
         funit = get_fileunit()
         open(unit=funit, file=script_name, iostat=ios, STATUS='REPLACE', action='WRITE', iomsg=io_msg)
         if( ios .ne. 0 )then
@@ -302,8 +303,9 @@ contains
         ! exit shell when done
         write(funit,'(a)',advance='yes') ''
         write(funit,'(a)',advance='yes') 'exit'
+        call flush(funit)        
         close(funit)
-        call flush(funit)
+        !call flush(funit)
         call chmod(trim(script_name),'+x')
         if( ios .ne. 0 )then
             write(*,'(a)',advance='no') 'simple_qsys_ctrl :: generate_script_2; Error'
@@ -321,8 +323,8 @@ contains
         class(qsys_ctrl),  intent(inout) :: self
         class(qsys_base),      pointer   :: pmyqsys
         character(len=STDLEN), parameter :: master_submit_script = './qsys_submit_jobs'
-        integer :: ipart, fnr, file_stat, chmod_stat, ios
-        logical :: submit_or_not(self%fromto_part(1):self%fromto_part(2)), err
+        integer :: ipart, fnr, file_stat, chmod_stat, ios, val
+        logical :: submit_or_not(self%fromto_part(1):self%fromto_part(2)), err, opened, exists
         ! make a submission mask
         submit_or_not = .false.
         do ipart=self%fromto_part(1),self%fromto_part(2)
@@ -355,13 +357,19 @@ contains
             endif
         end do
         write(fnr,'(a)') 'exit'
+        call flush(fnr)
         close( unit=fnr )
+        !call flush(fnr)
         call chmod(master_submit_script,'+x')
         if( DEBUG )then
             call exec_cmdline('echo DISTRIBUTED MODE :: submitting scripts:')
             call exec_cmdline('ls -1 distr_simple_script_*')
         endif
         ! execute the master submission script
+        ! inquire(FILE=master_submit_script, OPENED=opened, EXIST=exists, IOSTAT=file_stat) 
+        ! print *, trim(master_submit_script), ' exists:', exists
+        ! print *, trim(master_submit_script), ' opened:', opened
+        ! print *, trim(master_submit_script), ' iostat:', file_stat
         call exec_cmdline(master_submit_script)
     end subroutine submit_scripts
 

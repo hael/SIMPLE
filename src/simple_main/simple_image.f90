@@ -5089,8 +5089,7 @@ contains
     !>  \brief  is for [0,1] interval normalization of an image
     subroutine norm_bin( self )
         class(image), intent(inout) :: self
-        integer                     :: i,j,k
-        real                        :: smin, smax, tijk, delta, const
+        real                        :: smin, smax
         logical                     :: didft
         if( self%imgkind .eq. 'xfel' ) stop 'not implemented for xfel-kind images; simple_image::norm_bin'
         didft = .false.
@@ -5099,27 +5098,11 @@ contains
             didft = .true.
         endif
         ! find minmax
-        smin=self%rmat(1,1,1)
-        smax=self%rmat(1,1,1)
-        do i=1,self%ldim(1)
-            do j=1,self%ldim(2)
-                do k=1,self%ldim(3)
-                    if( self%rmat(i,j,k) < smin ) smin = self%rmat(i,j,k)
-                    if( self%rmat(i,j,k) > smax ) smax = self%rmat(i,j,k)
-                end do
-            end do
-        end do
-        delta = smax-smin
-        const = exp(1.)-1.
+        smin  = minval(self%rmat)
+        smax  = maxval(self%rmat)
         ! create [0,1]-normalized image
-        do i=1,self%ldim(1)
-            do j=1,self%ldim(2)
-                do k=1,self%ldim(3)
-                    tijk = (self%rmat(i,j,k)-smin)/delta
-                    self%rmat(i,j,k) = (exp(tijk)-1.)/const
-                end do
-            end do
-        end do
+        self%rmat = (self%rmat - smin)  / (smax-smin)
+        self%rmat = (exp(self%rmat)-1.) / (exp(1.)-1.)
         if( didft ) call self%fwd_ft
     end subroutine norm_bin
 

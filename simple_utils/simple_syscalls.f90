@@ -99,7 +99,7 @@ contains
             err = .true.
         endif 
         if( cmdstat /= 0 )then
-            write(*,*)'cmdstat /= 0, command could not be executed: ', trim(adjustl(cmd))
+            write(*,*)'cmdstat = ',cmdstat,' command could not be executed: ', trim(adjustl(cmd))
             err = .true.
         endif
         if( err ) write(*,*) trim(cmdmsg)

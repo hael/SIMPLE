@@ -363,26 +363,14 @@ contains
         type(ori),      intent(inout) :: o
         type(ctf) :: tfun
         real      :: x, y, dfx, dfy, angast
-        integer   :: icls!, state
+        integer   :: i!, icls
         if( p%l_xfel )then
             ! nothing to do 4 now
             return
         else
             x     = o%get('x')
             y     = o%get('y')
-            !state = nint(o%get('state'))
-            icls  = nint(o%get('class'))
-            if( p%doautomsk )then
-                ! make sure that img_msk is of the correct dimension
-                call b%img_msk%new([p%boxmatch,p%boxmatch,1],p%smpd)
-                ! create 2D envelope
-                ! call b%vol_pad%fproject(o, b%img_pad)
-                ! call b%img_pad%bwd_ft
-                ! call b%img_pad%clip(b%img_msk)
-                ! call b%img_msk%norm('sigm')
-                call b%mskvol%env_rproject(o, b%img_msk, p%msk) ! test_cyril
-                call b%img_msk%cos_edge(20)
-            endif
+            !icls  = nint(o%get('class'))
             ! move to Fourier space
             call b%img%fwd_ft
             ! set CTF parameters
@@ -421,19 +409,30 @@ contains
             call b%img%bwd_ft
             ! clip image if needed
             if( p%boxmatch < p%box ) call b%img%clip_inplace([p%boxmatch,p%boxmatch,1]) ! SQUARE DIMS ASSUMED
-            ! apply a soft-edged mask
-            if( p%l_innermsk )then
-                call b%img%mask(p%msk, 'soft', inner=p%inner, width=p%width)
-            else 
-                call b%img%mask(p%msk, 'soft')
-            endif
+            ! MASKING
             if( p%doautomsk )then
+                ! make sure that img_msk is of the correct dimension
+                call b%img_msk%new([p%boxmatch,p%boxmatch,1],p%smpd)
+                ! create 2D envelope
+                call b%mskvol%env_rproject(o, b%img_msk, p%msk)
+                do i=1, p%binwidth
+                    call b%img_msk%grow_bin
+                enddo
+                call b%img_msk%cos_edge(20)
+                ! call b%img_msk%norm('sigm')
                 ! multiply with the projected envelope
                 call b%img%mul(b%img_msk)
             else if( p%automsk .eq. 'cavg' )then
                 ! ab initio mask
                 call automask2D(b%img, p)
-            endif  
+            else              
+                ! apply a soft-edged mask
+                if( p%l_innermsk )then
+                    call b%img%mask(p%msk, 'soft', inner=p%inner, width=p%width)
+                else
+                    call b%img%mask(p%msk, 'soft')
+                endif
+            endif
             ! return in Fourier space
             call b%img%fwd_ft
         endif
@@ -498,7 +497,7 @@ contains
         if( p%l_xfel )then
             ! no centering
         else
-            if( p%doshift ) call centervol
+            if(p%doshift) call centervol
         endif
         ! clip
         if( p%boxmatch < p%box )then

@@ -605,7 +605,7 @@ contains
             if( present(refvec) )then
                 ! slice of references
                 if( any(refvec<1) .or. any(refvec>self%nrefs) .or. refvec(1)>refvec(2) )then
-                    stop 'invalid reference indices; simple_polarft_corrcalc::apply_ctf:'
+                    stop 'invalid reference indices; simple_polarft_corrcalc::apply_ctf_2'
                 endif
                 ref_start = refvec(1)
                 ref_end   = refvec(2)
@@ -616,7 +616,9 @@ contains
             endif
             !$omp parallel do default(shared) schedule(auto) private(iref)
             do iref=ref_start,ref_end
-                self%pfts_refs_ctf(iref,:,:) = self%pfts_refs(iref,:,:)*self%ctfmats(iptcl,:,:)
+                self%pfts_refs_ctf(iref,:,:) = &
+                &self%pfts_refs(iref,:,:)*&
+                &self%ctfmats(iptcl,:,:)
                 call self%memoize_sqsum_ref_ctf(iref)
             end do
             !$omp end parallel do

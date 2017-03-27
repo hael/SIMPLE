@@ -110,7 +110,7 @@ contains
         else
             call pftcc%new(nrefs_per_ptcl, [1,1], [p%boxmatch,p%boxmatch,1],p%kfromto, p%ring2, p%nthr, p%ctf)
         endif
-        call b%img%init_imgpolarizer(pftcc, p%smpd)
+        call b%img%init_imgpolarizer(pftcc)
 
         ! INITIALIZE
         if( which_iter <= 0 )then
@@ -275,7 +275,7 @@ contains
         do iref=1,nrefs_per_ptcl
             oref  = orefs%get_ori(iref)
             state = nint(oref%get('state'))
-            call b%refvols(state)%fproject_polar(iref, oref, p, pftcc, expanded=.true.)
+            call b%refvols(state)%fproject_polar(iref, oref, pftcc, expanded=.true.)
         enddo
         ! PREP PARTICLE
         if( p%boxmatch < p%box )then
