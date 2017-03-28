@@ -88,7 +88,7 @@ contains
         endif
         ! determine convergence
         if( nncls > 1 )then        
-            if( self%mi_class > MI_CLASS_LIM_2D .and. self%frac > FRAC_LIM .and. self%dist_inpl < 0.5 )then
+            if( self%mi_class > MI_CLASS_LIM_2D .and. self%frac > FRAC_LIM )then
                 write(*,'(A)') '>>> CONVERGED: .YES.'
                 converged = .true.
             else

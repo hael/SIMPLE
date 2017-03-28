@@ -41,11 +41,9 @@ contains
         class(cmdline), intent(inout) :: cline     
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: converged
-        type(ran_tabu)    :: rt
         real, allocatable :: res(:), res_pad(:), wresamp(:)
         integer :: iptcl, fnr, icls, io_stat, inorm, cands(3)
         logical :: doshellweight
-        character(len=STDLEN) :: fname_cprobs
         
         ! SET FRACTION OF SEARCH SPACE
         frac_srch_space = b%a%get_avg('frac')
@@ -76,33 +74,6 @@ contains
         ! INITIALISE SUMS
         call prime2D_init_sums( b, p )
 
-        ! READ CLASS PROBABILITIES
-        if( p%l_distr_exec )then
-            fname_cprobs = 'cprobs_part'//int2str_pad(p%part,p%numlen)//'.bin'
-        else
-            fname_cprobs = 'cprobs.bin'
-        endif
-        if( which_iter > 1 )then
-            if( file_exists(fname_cprobs) )then
-                fnr = get_fileunit()
-                open(unit=fnr, status='OLD', action='READ', file=fname_cprobs, access='STREAM')
-                read(unit=fnr,pos=1,iostat=io_stat) b%classprobs
-                ! check if the write was successful
-                if( io_stat .ne. 0 )then
-                    write(*,'(a,i0,2a)') '**ERROR(prime2D_exec): I/O error ',&
-                    io_stat, ' when reading cprobs*.bin'
-                    stop 'I/O error; prime2D_exec; simple_hadamard2D_matcher'
-                endif
-                if( DEBUG ) print *, 'did read class probabilities'
-                close(fnr)
-            endif
-        endif
-
-        ! MULTIMODAL RANDOM SAMPLING TO CREATE STOCHASTIC NEIGHBORHOODS
-        rt = ran_tabu(p%ncls)
-        b%nnmat = rt%stoch_nnmat([p%fromp,p%top], p%nnn, b%classprobs)
-        call rt%kill
-
         ! ALIGN & GRID
         call del_file(p%outfile)
         if( p%ctf .ne. 'no' ) call pftcc%create_polar_ctfmats(p%smpd, b%a)
@@ -110,34 +81,20 @@ contains
             case('no','greedy')
                 if( p%oritab .eq. '' )then
                     call primesrch2D%exec_prime2D_srch(pftcc, b%a, [p%fromp,p%top],&
-                    &frac_srch_space, b%clscnt, b%nnmat, greedy=.true.)
+                    &frac_srch_space, greedy=.true.)
                 else
                     call primesrch2D%exec_prime2D_srch(pftcc, b%a, [p%fromp,p%top],&
-                    &frac_srch_space, b%clscnt, b%nnmat)
+                    &frac_srch_space)
                 endif
             case DEFAULT
                 write(*,*) 'The refinement mode: ', trim(p%refine), ' is unsupported'
                 stop
         end select
         
+        ! WIENER RESTORATION OF CLASS AVERAGES
         cnt_glob = 0
         do iptcl=p%fromp,p%top
-            ! NORMALISATION AND LEARNING OF CLASS PROBABILITIES
-            inorm = sum(b%clscnt(iptcl,:))
-            b%classprobs(iptcl,:) = (1.0 - prime2Deps) * b%classprobs(iptcl,:) +&
-            &prime2Deps * real(b%clscnt(iptcl,:))/real(inorm)
-            fnr = get_fileunit()
-            open(unit=fnr, status='REPLACE', action='WRITE', file=fname_cprobs, access='STREAM')
-            write(unit=fnr,pos=1,iostat=io_stat) b%classprobs
-            ! check if the write was successful
-            if( io_stat .ne. 0 )then
-                write(*,'(a,i0,2a)') '**ERROR(prime2D_exec): I/O error ',&
-                io_stat, ' when writing cprobs*.bin'
-                stop 'I/O error; prime2D_exec; simple_hadamard2D_matcher'
-            endif
-            close(fnr)
-            ! WIENER RESTORATION OF CLASS AVERAGES
-            cnt_glob    = cnt_glob + 1
+            cnt_glob = cnt_glob + 1
             orientation = b%a%get_ori(iptcl)            
             if( nint(orientation%get('state')) > 0 )then
                 b%img = b%imgs(iptcl) ! put the original image back

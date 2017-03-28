@@ -189,7 +189,7 @@ contains
     ! PREPARATION ROUTINES
 
     !>  \brief  prepares for the search
-    subroutine prep4srch( self, pftcc, iptcl, o_prev )
+    subroutine prep4srch( self, pftcc, iptcl, o_prev, corrmat )
         use simple_ori,      only: ori
         use simple_ran_tabu, only: ran_tabu
         use simple_rnd,      only: irnd_uni
@@ -197,6 +197,7 @@ contains
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: iptcl
         class(ori), optional,    intent(inout) :: o_prev
+        real,       optional,    intent(in)    :: corrmat(self%nrefs,self%nrots)
         type(ran_tabu) :: rt
         real           :: lims(2,2)
         ! initialize in-plane search classes
@@ -213,9 +214,14 @@ contains
             ! set best to previous best by default
             self%best_class = self%prev_class         
             self%best_rot   = self%prev_rot
-            ! calculate previous best corr (treshold for better)
-            self%prev_corr  = pftcc%corr(self%prev_class, iptcl, self%prev_rot)
-            self%best_corr  = self%prev_corr
+            if( present(corrmat) )then
+                self%prev_corr = corrmat(self%prev_class,self%prev_rot)
+                self%best_corr = corrmat(self%prev_class,self%prev_rot)
+            else
+                ! calculate previous best corr (treshold for better)
+                self%prev_corr  = pftcc%corr(self%prev_class, iptcl, self%prev_rot)
+                self%best_corr  = self%prev_corr
+            endif
         else
             self%prev_class = irnd_uni(self%nrefs)
             self%prev_rot   = 1
@@ -236,15 +242,13 @@ contains
     ! SEARCH ROUTINES
 
     !>  \brief a master prime search routine
-    subroutine exec_prime2D_srch( self, pftcc, a, pfromto, frac, clscnt, nnmat, greedy)
+    subroutine exec_prime2D_srch( self, pftcc, a, pfromto, frac, greedy)
         use simple_oris, only: oris
         class(prime2D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
         class(oris),             intent(inout) :: a
         integer,                 intent(in)    :: pfromto(2)
         real,                    intent(in)    :: frac
-        integer,                 intent(inout) :: clscnt(pfromto(1):pfromto(2),self%nrefs)
-        integer,                 intent(in)    :: nnmat(pfromto(1):pfromto(2),self%nnn)
         logical, optional,       intent(in)    :: greedy
         real    :: lims(2,2)
         logical :: ggreedy
@@ -253,7 +257,7 @@ contains
         if( self%refine .eq. 'greedy' .or. ggreedy )then
             call self%greedy_srch(pftcc, a, pfromto)
         else
-            call self%stochastic_srch(pftcc, a, pfromto, frac, clscnt, nnmat)
+            call self%stochastic_srch(pftcc, a, pfromto, frac)
         endif
         if( DEBUG ) write(*,'(A)') '>>> PRIME2D_SRCH::EXECUTED PRIME2D_SRCH'
     end subroutine exec_prime2D_srch
@@ -301,7 +305,7 @@ contains
     end subroutine greedy_srch
 
     !>  \brief  executes the greedy rotational search
-    subroutine stochastic_srch( self, pftcc, a, pfromto, frac, clscnt, nnmat )
+    subroutine stochastic_srch( self, pftcc, a, pfromto, frac )
         !$ use omp_lib
         !$ use omp_lib_kinds
         use simple_oris, only: oris
@@ -313,88 +317,48 @@ contains
         class(oris),             intent(inout) :: a
         integer,                 intent(in)    :: pfromto(2)
         real,                    intent(in)    :: frac
-        integer,                 intent(inout) :: clscnt(pfromto(1):pfromto(2),self%nrefs)
-        integer,                 intent(in)    :: nnmat(pfromto(1):pfromto(2),self%nnn)
-        type(ori)         :: orientation
-        integer           :: iptcl,iref,loc(1),i,inpl_ind
-        real              :: corrs(self%nrots),inpl_corr,corr
-        logical           :: found_better,nnsrch,usemat
-        real, allocatable :: corrmat3d(:,:,:)
-        nnsrch = .false.
-        if( frac >= FRAC_SH_LIM ) nnsrch = .true.
-        if( nnsrch )then
-            allocate(corrmat3d(pfromto(1):pfromto(2),self%nnn,self%nrots))
-            call pftcc%gencorrs_all_cpu(self%nnn, nnmat, corrmat3d)
-            usemat = .true.
-        else
-            allocate(corrmat3d(pfromto(1):pfromto(2),self%nrefs,self%nrots))
-            call pftcc%gencorrs_all_cpu(corrmat3d)
-            usemat = .true.
-        endif
+        type(ori)          :: orientation
+        integer            :: iptcl,iref,loc(1),i,inpl_ind
+        real               :: corrs(self%nrots),inpl_corr,corr
+        logical            :: found_better,nnsrch
+        real, allocatable  :: corrmat3d(:,:,:)
+        ! calculate all corrs
+        allocate(corrmat3d(pfromto(1):pfromto(2),self%nrefs,self%nrots))
+        call pftcc%gencorrs_all_cpu(corrmat3d)
+        ! execute search
         do iptcl=pfromto(1),pfromto(2)
             orientation = a%get_ori(iptcl)
             if( nint(orientation%get('state')) > 0 )then
                 ! initialize
-                call self%prep4srch(pftcc, iptcl, orientation)
-                if( usemat .and. .not. nnsrch )&
-                &self%prev_corr = corrmat3d(iptcl,self%prev_class,self%prev_rot)
-                if( .not. usemat )&
-                &call pftcc%apply_ctf(iptcl)
-                found_better    = .false.
+                call self%prep4srch(pftcc, iptcl, orientation, corrmat=corrmat3d(iptcl,:,:))
+                found_better = .false.
                 self%nrefs_eval = 0
-                ! search
-                if( nnsrch )then
-                    do i=1,self%nnn
-                        iref = nnmat(iptcl,i)
-                        if( usemat )then
-                            corrs = corrmat3d(iptcl,i,:)
-                        else
-                            corrs = pftcc%gencorrs_serial(iref, iptcl)
-                        endif
-                        inpl_ind  = shcloc(self%nrots, corrs, self%prev_corr)
-                        inpl_corr = 0.
-                        if( inpl_ind > 0 ) inpl_corr = corrs(inpl_ind)
-                        if( inpl_corr >= corr )then
-                            ! update the corr (4 srch)
-                            corr = inpl_corr
-                            ! update the class
-                            self%best_class = iref
-                            ! update the correlation
-                            self%best_corr = inpl_corr
-                            ! update the in-plane angle
-                            self%best_rot = inpl_ind
-                            ! indicate that we found a better solution
-                            found_better = .true.
-                        endif
-                    end do
+                do i=1,self%nrefs
+                    iref = self%srch_order(i)
                     ! keep track of how many references we are evaluating
-                    self%nrefs_eval = self%nrefs
-                else
-                    do i=1,self%nrefs
-                        iref = self%srch_order(i)
-                        ! keep track of how many references we are evaluating
-                        self%nrefs_eval = self%nrefs_eval + 1
-                        if( usemat )then
-                            corrs = corrmat3d(iptcl,iref,:)
-                        else
-                            corrs = pftcc%gencorrs_serial(iref, iptcl)
-                        endif
-                        inpl_ind  = shcloc(self%nrots, corrs, self%prev_corr)
+                    self%nrefs_eval = self%nrefs_eval + 1
+                    corrs = corrmat3d(iptcl,iref,:)
+                    if( frac >= FRAC_GREEDY_LIM )then
+                        loc = maxloc(corrs)
+                        inpl_ind = loc(1)
+                        inpl_corr = corrs(inpl_ind)
+                    else
+                        inpl_ind = shcloc(self%nrots, corrs, self%prev_corr)
                         inpl_corr = 0.
                         if( inpl_ind > 0 ) inpl_corr = corrs(inpl_ind)
-                        if( inpl_ind > 0 )then
-                            ! update the class
-                            self%best_class = iref
-                            ! update the correlation
-                            self%best_corr = inpl_corr
-                            ! update the in-plane angle
-                            self%best_rot = inpl_ind
-                            ! indicate that we found a better solution
-                            found_better = .true.
-                            exit ! first-improvement heuristic
-                        endif    
-                    end do
-                endif
+                    endif                    
+                    if( inpl_ind > 0 .and. inpl_corr >= self%prev_corr )then
+                        ! update the class
+                        self%best_class = iref
+                        ! update the correlation
+                        self%best_corr = inpl_corr
+                        ! update the in-plane angle
+                        self%best_rot = inpl_ind
+                        ! indicate that we found a better solution
+                        found_better = .true.
+                        exit ! first-improvement heuristic
+                    endif    
+                end do
                 if( found_better )then
                     ! best ref has already been updated
                 else
@@ -412,130 +376,9 @@ contains
                 call orientation%reject
             endif
         end do
+        if( allocated(corrmat3d) ) deallocate(corrmat3d)
         if( DEBUG ) write(*,'(A)') '>>> PRIME2D_SRCH::FINISHED STOCHASTIC SEARCH'
     end subroutine stochastic_srch
-
-    ! !>  \brief  executes the greedy rotational search
-    ! subroutine stochastic_srch( self, pftcc, a, pfromto, frac, clscnt, nnmat )
-    !     !$ use omp_lib
-    !     !$ use omp_lib_kinds
-    !     use simple_oris, only: oris
-    !     use simple_ori,  only: ori
-    !     use simple_rnd,  only: shcloc
-    !     use simple_syscalls
-    !     class(prime2D_srch),     intent(inout) :: self
-    !     class(polarft_corrcalc), intent(inout) :: pftcc
-    !     class(oris),             intent(inout) :: a
-    !     integer,                 intent(in)    :: pfromto(2)
-    !     real,                    intent(in)    :: frac
-    !     integer,                 intent(inout) :: clscnt(pfromto(1):pfromto(2),self%nrefs)
-    !     integer,                 intent(in)    :: nnmat(pfromto(1):pfromto(2),self%nnn)
-    !     type(ori) :: orientation
-    !     integer   :: iptcl,iref,previnds(pfromto(1):pfromto(2),2),loc(1),i,inpl_ind,prev_class
-    !     real      :: prevcorrs(pfromto(1):pfromto(2)), corrs(self%nrots), inpl_corr, corr
-    !     logical   :: found_better,nnsrch,usematrices
-    !     if( DEBUG ) print *, 'prime2D_srch :: stochastic_srch, pfromto: ', pfromto(1), pfromto(2)
-    !     usematrices = .true.
-    !     if( usematrices )then
-    !         do iptcl=pfromto(1),pfromto(2)
-    !             previnds(iptcl,1) = nint(a%get(iptcl, 'class'))                 ! reference index
-    !             previnds(iptcl,2) = self%srch_common%roind(360.-a%e3get(iptcl)) ! in-plane angle index
-    !         end do
-    !         call pftcc%gencorrs_all_cpu(.true., self%corrmat2d,&
-    !         &self%inplmat, previnds=previnds, prevcorrs=prevcorrs)
-    !         usematrices = .true.
-    !     endif
-    !     nnsrch = .false.
-    !     ! if( frac >= FRAC_SH_LIM )then
-    !     !     call pftcc%gencorrs_all_cpu(self%nnn, nnmat, self%corrmat2d, self%inplmat)
-    !     !     usematrices = .true.
-    !     !     nnsrch = .true.
-    !     ! endif
-    !     do iptcl=pfromto(1),pfromto(2)
-    !         orientation = a%get_ori(iptcl)
-    !         if( nint(orientation%get('state')) > 0 )then
-    !             ! initialize
-    !             call self%prep4srch(pftcc, iptcl, orientation)
-    !             if( .not. usematrices ) call pftcc%apply_ctf(iptcl)
-    !             found_better = .false.
-    !             self%nrefs_eval = 0
-    !             ! search
-    !             if( nnsrch )then
-    !                 corr = self%prev_corr
-    !                 do i=1,self%nnn
-    !                     iref = nnmat(iptcl,i)
-    !                     if( usematrices )then
-    !                         inpl_corr = self%corrmat2d(iptcl,i)
-    !                         inpl_ind  = self%inplmat(iptcl,i)
-    !                     else
-    !                         corrs = pftcc%gencorrs_serial(iref, iptcl)
-    !                         ! be greedy
-    !                         loc = maxloc(corrs)
-    !                         inpl_ind = loc(1)
-    !                         inpl_corr = corrs(inpl_ind)
-    !                     endif
-    !                     if( inpl_corr >= corr )then
-    !                         ! update the corr (4 srch)
-    !                         corr = inpl_corr
-    !                         ! update the class
-    !                         self%best_class = iref
-    !                         ! update the correlation
-    !                         self%best_corr = inpl_corr
-    !                         ! update the in-plane angle
-    !                         self%best_rot = inpl_ind
-    !                         ! indicate that we found a better solution
-    !                         found_better = .true.
-    !                     endif
-    !                 end do
-    !                 ! keep track of how many references we are evaluating
-    !                 self%nrefs_eval = self%nrefs
-    !             else
-    !                 if( usematrices ) self%prev_corr = prevcorrs(iptcl)
-    !                 do i=1,self%nrefs
-    !                     iref = self%srch_order(i)
-    !                     ! keep track of how many references we are evaluating
-    !                     self%nrefs_eval = self%nrefs_eval + 1
-    !                     if( usematrices )then
-    !                         inpl_corr = self%corrmat2d(iptcl,iref)
-    !                         inpl_ind  = self%inplmat(iptcl,iref)
-    !                     else
-    !                         corrs     = pftcc%gencorrs_serial(iref, iptcl)
-    !                         inpl_ind  = shcloc(self%nrots, corrs, self%prev_corr)
-    !                         inpl_corr = 0.
-    !                         if( inpl_ind > 0 ) inpl_corr = corrs(inpl_ind)
-    !                     endif
-    !                     if( inpl_ind > 0 )then
-    !                         ! update the class
-    !                         self%best_class = iref
-    !                         ! update the correlation
-    !                         self%best_corr = inpl_corr
-    !                         ! update the in-plane angle
-    !                         self%best_rot = inpl_ind
-    !                         ! indicate that we found a better solution
-    !                         found_better = .true.
-    !                         exit ! first-improvement heuristic
-    !                     endif    
-    !                 end do
-    !             endif
-    !             if( found_better )then
-    !                 ! best ref has already been updated
-    !             else
-    !                 ! keep the old parameters
-    !                 self%best_class = self%prev_class 
-    !                 self%best_corr  = self%prev_corr
-    !                 self%best_rot   = self%prev_rot
-    !             endif
-    !             ! search shifts
-    !             call self%shift_srch(iptcl)
-    !             ! output info
-    !             call self%get_cls(orientation)
-    !             call a%set_ori(iptcl,orientation)
-    !         else
-    !             call orientation%reject
-    !         endif
-    !     end do
-    !     if( DEBUG ) write(*,'(A)') '>>> PRIME2D_SRCH::FINISHED STOCHASTIC SEARCH'
-    ! end subroutine stochastic_srch
 
     !>  \brief  executes the in-plane search over one reference
     subroutine shift_srch( self, iptcl )

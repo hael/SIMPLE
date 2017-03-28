@@ -177,7 +177,8 @@ contains
         class(ran_tabu), intent(inout) :: self
         real,            intent(in)    :: pvec(self%NP)
         integer,         intent(out)   :: rndiarr(:)
-        integer :: i, szrndiarr, nsample, irnd, cnt
+        integer        :: i, szrndiarr, nsample, irnd, cnt
+        type(ran_tabu) :: rt4shuffle
         szrndiarr = size(rndiarr)
         if( szrndiarr + self%N_tabus > self%NP ) then
             write( *,* ) 'Random numbers must be generated from a larger set'
@@ -201,8 +202,12 @@ contains
                     call self%insert(rndiarr(i))
                 end do
             endif
+            call self%reset
         endif
-        call self%reset
+        ! make sure the order is shuffled
+        rt4shuffle = ran_tabu(szrndiarr)
+        call rt4shuffle%shuffle(rndiarr)
+        call rt4shuffle%kill
     end subroutine ne_mnomal_iarr
 
     !>  \brief  stochastic nearest neighbor generation
@@ -231,6 +236,7 @@ contains
             call self%insert(irnd)  
         end do
         shuffled = tmp
+        call self%reset
     end subroutine shuffle
     
     !>  \brief  creates a balanced randomised paritioning over nstates states

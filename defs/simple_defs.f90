@@ -61,8 +61,9 @@ real, parameter :: KBWINSZ = 1.5
 real, parameter :: KBALPHA = 2.0
 
 ! CONSTANTS THAT CONTROL SEARCH AND CONVERGENCE
-real, parameter :: FRAC_SH_LIM  = 90.0 ! at what frac to turn on the shift seacrh
-real, parameter :: SHW_FRAC_LIM = 50.  ! at what frac to turn on shell-weights
+real, parameter :: FRAC_SH_LIM     = 90.0 ! at what frac to turn on the shift search
+real, parameter :: FRAC_GREEDY_LIM = 95.0 ! at what frac to turn on the greeedy in-plane search
+real, parameter :: SHW_FRAC_LIM    = 50.  ! at what frac to turn on shell-weights
 
 ! constants for heterogeinity
 real, parameter :: HETINITTHRESH = 0.5

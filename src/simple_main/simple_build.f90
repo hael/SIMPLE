@@ -72,8 +72,6 @@ type build
     type(eo_reconstructor), allocatable :: eorecvols(:)       !< array of volumes for eo-reconstruction
     real,    allocatable                :: ssnr(:,:)          !< spectral signal to noise rations
     real,    allocatable                :: fsc(:,:)           !< Fourier shell correlation
-    real,    allocatable                :: classprobs(:,:)    !< class probabilities
-    integer, allocatable                :: clscnt(:,:)        !< class counters 
     integer, allocatable                :: nnmat(:,:)         !< matrix with nearest neighbor indices
     ! PRIVATE EXISTENCE VARIABLES
     logical, private                    :: general_tbox_exists          = .false.
@@ -190,10 +188,6 @@ contains
             ! box-sized ones
             call self%img%new([p%box,p%box,1],p%smpd,p%imgkind)
             call self%img_copy%new([p%box,p%box,1],p%smpd,p%imgkind)
-            allocate(self%imgs(p%fromp:p%top))
-            do iptcl=p%fromp,p%top
-                call self%imgs(iptcl)%new([p%box,p%box,1],p%smpd,p%imgkind)
-            end do
             if( debug ) write(*,'(a)') 'did build box-sized image objects'
             ! boxmatch-sized ones
             call self%img_tmp%new([p%boxmatch,p%boxmatch,1],p%smpd,p%imgkind)
@@ -249,14 +243,6 @@ contains
             call self%mskvol%kill
             call self%vol_pad%kill_expanded
             call self%vol_pad%kill
-            if( allocated(self%imgs) )then
-                istart = lbound(self%imgs, dim=1)
-                istop  = ubound(self%imgs, dim=1)
-                do i=istart,istop
-                    call self%imgs(i)%kill
-                end do
-                deallocate(self%imgs)
-            endif
             if( allocated(self%ssnr) )then
                 deallocate(self%ssnr, self%fsc)
             endif
@@ -403,11 +389,8 @@ contains
         integer :: icls, alloc_stat, funit, io_stat
         call self%kill_hadamard_prime2D_tbox
         call self%raise_hard_ctf_exception(p)
-        allocate( self%cavgs(p%ncls), self%refs(p%ncls), self%ctfsqsums(p%ncls),&
-        &self%clscnt(p%fromp:p%top,p%ncls), self%classprobs(p%fromp:p%top,p%ncls), stat=alloc_stat )
+        allocate( self%cavgs(p%ncls), self%refs(p%ncls), self%ctfsqsums(p%ncls), stat=alloc_stat )
         call alloc_err('build_hadamard_prime2D_tbox; simple_build, 1', alloc_stat)
-        self%clscnt     = 0
-        self%classprobs = 1.0/real(p%ncls)
         do icls=1,p%ncls
             call self%cavgs(icls)%new([p%box,p%box,1],p%smpd,p%imgkind)
             call self%refs(icls)%new([p%box,p%box,1],p%smpd,p%imgkind)
@@ -417,11 +400,8 @@ contains
             if( file_exists('nnmat.bin') )  call self%read_nnmat(p)
         endif
         ! set number of nearest neighbours to 5 % of the total nr of classes 
-        ! and bound it [3,10]
-        p%nnn = max(3,min(10,nint(0.05 * real(p%ncls))))
-
-        print *, 'did set nnn: ', p%nnn
-
+        ! and bound it [5,10]
+        p%nnn = max(5,min(20,nint(0.05 * real(p%ncls))))
         write(*,'(A)') '>>> DONE BUILDING HADAMARD PRIME2D TOOLBOX'
         self%hadamard_prime2D_tbox_exists = .true.
     end subroutine build_hadamard_prime2D_tbox
@@ -436,7 +416,7 @@ contains
                 call self%refs(i)%kill
                 call self%ctfsqsums(i)%kill
             end do
-            deallocate(self%cavgs, self%refs, self%ctfsqsums, self%clscnt, self%classprobs)
+            deallocate(self%cavgs, self%refs, self%ctfsqsums)
             self%hadamard_prime2D_tbox_exists = .false.
         endif
     end subroutine kill_hadamard_prime2D_tbox

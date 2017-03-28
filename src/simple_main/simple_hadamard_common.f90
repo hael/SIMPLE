@@ -43,7 +43,19 @@ contains
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         type(imgfile) :: ioimg
-        integer       :: cnt, iptcl
+        integer       :: cnt, iptcl, istart, istop, i
+        if( allocated(b%imgs) )then
+            istart = lbound(b%imgs, dim=1)
+            istop  = ubound(b%imgs, dim=1)
+            do i=istart,istop
+                call b%imgs(i)%kill
+            end do
+            deallocate(b%imgs)
+        endif
+        allocate(b%imgs(p%fromp:p%top))
+        do iptcl=p%fromp,p%top
+            call b%imgs(iptcl)%new([p%box,p%box,1],p%smpd,p%imgkind)
+        end do
         if( p%l_distr_exec )then
             call b%imgs(p%fromp)%open(p%stk_part, ioimg)
         else
