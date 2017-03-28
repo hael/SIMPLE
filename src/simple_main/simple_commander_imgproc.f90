@@ -948,7 +948,7 @@ contains
         ! Main Loop over projdirs
         do proj = 1,ncls
             call progress( proj, ncls )
-            proj_pop = b%a%get_clspop( proj )
+            proj_pop = b%a%get_cls_pop( proj )
             if( proj_pop == 0 )cycle
             proj_inds = b%a%get_cls_pinds( proj )
             if( proj_pop==1 )then

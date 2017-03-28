@@ -88,9 +88,7 @@ type :: polarft_corrcalc
     procedure          :: create_polar_ctfmats
     procedure, private :: gencorrs_all_cpu_1
     procedure, private :: gencorrs_all_cpu_2
-    procedure, private :: gencorrs_all_cpu_3
-    procedure, private :: gencorrs_all_cpu_4
-    generic            :: gencorrs_all_cpu => gencorrs_all_cpu_1, gencorrs_all_cpu_2, gencorrs_all_cpu_3, gencorrs_all_cpu_4
+    generic            :: gencorrs_all_cpu => gencorrs_all_cpu_1, gencorrs_all_cpu_2
     procedure          :: gencorrs_serial
     procedure          :: gencorrs
     procedure          :: genfrc
@@ -757,12 +755,13 @@ contains
     !>  \brief  routine for generating all rotational correlations
     !!          in a per-particle neighborhood structure
     !!          need to remeber to create this structure for 3D implementation
-    subroutine gencorrs_all_cpu_2( self, nnn, nnmat, corrmat3dout )
+    subroutine gencorrs_all_cpu_2( self, nspace, nnn, nnmat, prevprojs, corrmat3dout )
         !$ use omp_lib
         !$ use omp_lib_kinds
         use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: nnn, nnmat(self%pfromto(1):self%pfromto(2),nnn)
+        integer,                 intent(in)    :: nspace, nnn, nnmat(nspace,nnn)
+        integer,                 intent(in)    :: prevprojs(self%pfromto(1):self%pfromto(2))
         real,                    intent(out)   :: corrmat3dout(self%pfromto(1):self%pfromto(2),nnn,self%nrots)
         integer :: iptcl, iiref, iref
         !$omp parallel default(shared) private(iiref,iref)
@@ -773,7 +772,7 @@ contains
             ! try to write to the same memory location
             !$omp do schedule(auto)
             do iiref=1,nnn
-                iref = nnmat(iptcl,iiref)
+                iref = nnmat(prevprojs(iptcl),iiref)
                 if( self%with_ctf ) call self%apply_ctf_single(iptcl, iref)
                 corrmat3dout(iptcl,iiref,:) = self%gencorrs_serial(iref,iptcl)
             end do
@@ -781,87 +780,6 @@ contains
         end do
         !$omp end parallel
     end subroutine gencorrs_all_cpu_2
-
-    !>  \brief  routine for generating all rotational correlations
-    subroutine gencorrs_all_cpu_3( self, shclogic, corrmat2dout, inplmat2dout, previnds, prevcorrs )
-        !$ use omp_lib
-        !$ use omp_lib_kinds
-         use simple_rnd, only: shcloc
-        class(polarft_corrcalc), intent(inout) :: self              !< instance
-        logical,                 intent(in)    :: shclogic          !< use stochastic search logics or not
-        real,    allocatable,    intent(out)   :: corrmat2dout(:,:) !< output correlation matrix
-        integer, allocatable,    intent(out)   :: inplmat2dout(:,:) !< output inplane rot index matrix
-        integer, optional,       intent(in)    :: previnds(self%pfromto(1):self%pfromto(2),2)
-        real,    optional,       intent(out)   :: prevcorrs(self%pfromto(1):self%pfromto(2))
-        real, allocatable :: corrmat3d(:,:,:)
-        real              :: pprevcorrs(self%pfromto(1):self%pfromto(2))
-        integer           :: iptcl, iref, alloc_stat
-        if( allocated(corrmat2dout) ) deallocate(corrmat2dout)
-        if( allocated(inplmat2dout) ) deallocate(inplmat2dout)
-        allocate( corrmat3d(self%pfromto(1):self%pfromto(2),self%nrefs,self%nrots),&
-                  corrmat2dout(self%pfromto(1):self%pfromto(2),self%nrefs),&
-                  inplmat2dout(self%pfromto(1):self%pfromto(2),self%nrefs), stat=alloc_stat)
-        call alloc_err("In: simple_polarft_corrcalc :: gencorrs_all_cpu", alloc_stat)
-        call self%gencorrs_all_cpu_1(corrmat3d)
-        if( shclogic )then
-            if( .not. present(previnds) ) stop 'need optional input previnds in&
-            &conjunction shclogic=.true.; simple_polarft_corrcalc :: gencorrs_all_cpu_3'
-            ! we are using SHC-logics for the in-plane search
-            !$omp parallel do schedule(auto) default(shared) private(iptcl,iref)
-            do iptcl=self%pfromto(1),self%pfromto(2)
-                pprevcorrs(iptcl) = corrmat3d(iptcl,previnds(iptcl,1),previnds(iptcl,2))
-                do iref=1,self%nrefs
-                    inplmat2dout(iptcl,iref) = shcloc(self%nrots, corrmat3d(iptcl,iref,:), pprevcorrs(iptcl))
-                    if( inplmat2dout(iptcl,iref) > 1 )then
-                        corrmat2dout(iptcl,iref) = corrmat3d(iptcl,iref,inplmat2dout(iptcl,iref))
-                    else
-                        corrmat2dout(iptcl,iref) = 0.
-                    endif
-                end do
-            end do
-            !$omp end parallel do
-            if( present(prevcorrs) ) prevcorrs = pprevcorrs
-        else
-            if( present(prevcorrs) )then
-                if( present(previnds) )then
-                    do iptcl=self%pfromto(1),self%pfromto(2)
-                         prevcorrs(iptcl) = corrmat3d(iptcl,previnds(iptcl,1),previnds(iptcl,2))
-                    end do
-                else
-                    stop 'need optional input previnds in conjunction with prevcorrs;&
-                    &simple_polarft_corrcalc :: gencorrs_all_cpu_3'
-                endif
-            endif
-            ! we are being greedy in the in-plane search (refine=no and refine=neigh modes)
-            corrmat2dout = maxval(corrmat3d, dim=3)
-            inplmat2dout = maxloc(corrmat3d, dim=3)
-        endif
-        ! better be explicit about deallocating the big mama
-        deallocate(corrmat3d)
-    end subroutine gencorrs_all_cpu_3
-
-    !>  \brief  routine for generating all rotational correlations
-    subroutine gencorrs_all_cpu_4( self, nnn, nnmat, corrmat2dout, inplmat2dout )
-        !$ use omp_lib
-        !$ use omp_lib_kinds
-         use simple_rnd, only: shcloc
-        class(polarft_corrcalc), intent(inout) :: self              !< instance
-        integer,                 intent(in)    :: nnn, nnmat(self%pfromto(1):self%pfromto(2),nnn)
-        real,    allocatable,    intent(out)   :: corrmat2dout(:,:) !< output correlation matrix
-        integer, allocatable,    intent(out)   :: inplmat2dout(:,:) !< output inplane rot index matrix
-        real, allocatable :: corrmat3d(:,:,:)
-        integer           :: alloc_stat
-        if( allocated(corrmat2dout) ) deallocate(corrmat2dout)
-        if( allocated(inplmat2dout) ) deallocate(inplmat2dout)
-        allocate( corrmat3d(self%pfromto(1):self%pfromto(2),nnn,self%nrots),&
-                  corrmat2dout(self%pfromto(1):self%pfromto(2),nnn),&
-                  inplmat2dout(self%pfromto(1):self%pfromto(2),nnn), stat=alloc_stat)
-        call alloc_err("In: simple_polarft_corrcalc :: gencorrs_all_cpu_4", alloc_stat)
-        call self%gencorrs_all_cpu_2(nnn, nnmat, corrmat3d)
-        corrmat2dout = maxval(corrmat3d, dim=3)
-        inplmat2dout = maxloc(corrmat3d, dim=3)
-        deallocate(corrmat3d)
-    end subroutine gencorrs_all_cpu_4
 
     !>  \brief  is for generating rotational correlations
     function gencorrs_serial( self, iref, iptcl, roind_vec ) result( cc )

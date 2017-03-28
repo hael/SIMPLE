@@ -17,7 +17,6 @@ type prime2D_srch
     type(prime_srch)      :: srch_common          !< functionalities common to primesrch2D/3D
     integer               :: nrefs         = 0    !< number of references
     integer               :: nrots         = 0    !< number of in-plane rotations in polar representation
-    integer               :: nnn           = 0    !< number of nearest neighbours
     integer               :: nrefs_eval    = 0    !< nr of references evaluated
     integer               :: prev_class    = 0    !< previous class index
     integer               :: best_class    = 0    !< best class index found by search
@@ -79,7 +78,6 @@ contains
         endif
         self%nrots      = round2even(twopi*real(p%ring2))
         self%refine     = p%refine
-        self%nnn        = p%nnn
         self%nrefs_eval = 0
         self%trs        = p%trs
         self%doshift    = p%doshift
@@ -171,11 +169,7 @@ contains
         call o%set('mi_class',  mi_class)
         call o%set('mi_inpl',   mi_inpl)
         call o%set('mi_joint',  mi_joint)
-        if( str_has_substr(self%refine,'neigh') )then
-            call o%set('frac', 100.*(real(self%nrefs_eval)/real(self%nnn)))
-        else
-            call o%set('frac', 100.*(real(self%nrefs_eval)/real(self%nrefs)))
-        endif
+        call o%set('frac', 100.*(real(self%nrefs_eval)/real(self%nrefs)))
         if( DEBUG ) write(*,'(A)') '>>> PRIME2D_SRCH::GOT BEST ORI'
     end subroutine get_cls
 
@@ -242,13 +236,12 @@ contains
     ! SEARCH ROUTINES
 
     !>  \brief a master prime search routine
-    subroutine exec_prime2D_srch( self, pftcc, a, pfromto, frac, greedy)
+    subroutine exec_prime2D_srch( self, pftcc, a, pfromto, greedy)
         use simple_oris, only: oris
         class(prime2D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
         class(oris),             intent(inout) :: a
         integer,                 intent(in)    :: pfromto(2)
-        real,                    intent(in)    :: frac
         logical, optional,       intent(in)    :: greedy
         real    :: lims(2,2)
         logical :: ggreedy
@@ -257,7 +250,7 @@ contains
         if( self%refine .eq. 'greedy' .or. ggreedy )then
             call self%greedy_srch(pftcc, a, pfromto)
         else
-            call self%stochastic_srch(pftcc, a, pfromto, frac)
+            call self%stochastic_srch(pftcc, a, pfromto)
         endif
         if( DEBUG ) write(*,'(A)') '>>> PRIME2D_SRCH::EXECUTED PRIME2D_SRCH'
     end subroutine exec_prime2D_srch
@@ -270,26 +263,24 @@ contains
         class(polarft_corrcalc), intent(inout) :: pftcc
         class(oris),             intent(inout) :: a
         integer,                 intent(in)    :: pfromto(2)
-        type(ori) :: orientation
-        integer   :: classes(pfromto(1):pfromto(2)), iptcl
-        real      :: corrs(pfromto(1):pfromto(2))
-        ! calculate all correlations
-        call pftcc%gencorrs_all_cpu(.false., self%corrmat2d, self%inplmat)
-        ! greedy selection
-        corrs   = maxval(self%corrmat2d,dim=2)
-        classes = maxloc(self%corrmat2d,dim=2)
+        type(ori)         :: orientation
+        integer           :: iref, iptcl, loc(2)
+        real              :: corrs(self%nrots)
+        real, allocatable :: corrmat3d(:,:,:)
+        ! calculate all corrs
+        allocate(corrmat3d(pfromto(1):pfromto(2),self%nrefs,self%nrots))
+        call pftcc%gencorrs_all_cpu(corrmat3d)
         ! search in-plane
         do iptcl=pfromto(1),pfromto(2)
             orientation = a%get_ori(iptcl)
             if( nint(orientation%get('state')) > 0 )then
                 ! initialize
-                call self%prep4srch(pftcc, iptcl)
-                ! greedy selection, update the class
-                self%best_class = classes(iptcl)
-                ! update the correlation
-                self%best_corr = self%corrmat2d(iptcl,self%best_class)
-                ! update the in-plane angle
-                self%best_rot = self%inplmat(iptcl,self%best_class)
+                call self%prep4srch(pftcc, iptcl, orientation, corrmat=corrmat3d(iptcl,:,:))
+                ! greedy selection
+                loc = maxloc(corrmat3d(iptcl,:,:))
+                self%best_class = loc(1)
+                self%best_rot = loc(2)
+                self%best_corr = corrmat3d(iptcl,loc(1),loc(2))
                 ! search shifts
                 call self%shift_srch(iptcl)
                 ! we always evaluate all references using the greedy approach
@@ -301,11 +292,12 @@ contains
                 call orientation%reject
             endif
         end do
+        deallocate(corrmat3d)
         if( DEBUG ) write(*,'(A)') '>>> PRIME2D_SRCH::FINISHED GREEDY SEARCH'
     end subroutine greedy_srch
 
     !>  \brief  executes the greedy rotational search
-    subroutine stochastic_srch( self, pftcc, a, pfromto, frac )
+    subroutine stochastic_srch( self, pftcc, a, pfromto )
         !$ use omp_lib
         !$ use omp_lib_kinds
         use simple_oris, only: oris
@@ -316,7 +308,6 @@ contains
         class(polarft_corrcalc), intent(inout) :: pftcc
         class(oris),             intent(inout) :: a
         integer,                 intent(in)    :: pfromto(2)
-        real,                    intent(in)    :: frac
         type(ori)          :: orientation
         integer            :: iptcl,iref,loc(1),i,inpl_ind
         real               :: corrs(self%nrots),inpl_corr,corr
@@ -338,15 +329,9 @@ contains
                     ! keep track of how many references we are evaluating
                     self%nrefs_eval = self%nrefs_eval + 1
                     corrs = corrmat3d(iptcl,iref,:)
-                    if( frac >= FRAC_GREEDY_LIM )then
-                        loc = maxloc(corrs)
-                        inpl_ind = loc(1)
-                        inpl_corr = corrs(inpl_ind)
-                    else
-                        inpl_ind = shcloc(self%nrots, corrs, self%prev_corr)
-                        inpl_corr = 0.
-                        if( inpl_ind > 0 ) inpl_corr = corrs(inpl_ind)
-                    endif                    
+                    inpl_ind = shcloc(self%nrots, corrs, self%prev_corr)
+                    inpl_corr = 0.
+                    if( inpl_ind > 0 ) inpl_corr = corrs(inpl_ind)             
                     if( inpl_ind > 0 .and. inpl_corr >= self%prev_corr )then
                         ! update the class
                         self%best_class = iref
@@ -376,7 +361,7 @@ contains
                 call orientation%reject
             endif
         end do
-        if( allocated(corrmat3d) ) deallocate(corrmat3d)
+        deallocate(corrmat3d)
         if( DEBUG ) write(*,'(A)') '>>> PRIME2D_SRCH::FINISHED STOCHASTIC SEARCH'
     end subroutine stochastic_srch
 
@@ -384,14 +369,17 @@ contains
     subroutine shift_srch( self, iptcl )
         class(prime2D_srch), intent(inout) :: self
         integer,             intent(in)    :: iptcl
-        real :: cxy(3)
+        real :: cxy(3), corr_before, corr_after
+        self%best_shvec = [0.,0.]
         if( self%doshift )then
+            corr_before = self%best_corr
             call pftcc_shsrch_set_indices(self%best_class, iptcl, self%best_rot)
             cxy = pftcc_shsrch_minimize()
-            self%best_corr  = cxy(1)
-            self%best_shvec = cxy(2:3)
-        else
-            self%best_shvec = [0.,0.]
+            corr_after = cxy(1)
+            if( corr_after > corr_before )then
+                self%best_corr  = cxy(1)
+                self%best_shvec = cxy(2:3)
+            endif
         endif
         if( DEBUG ) write(*,'(A)') '>>> PRIME2D_SRCH::FINISHED SHIFT SEARCH'
     end subroutine shift_srch

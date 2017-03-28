@@ -379,7 +379,7 @@ contains
         ! erase deselected (by setting their state to zero)
         do icls=1,p%ncls
             if( selected(icls) ) cycle
-            if( b%a%get_clspop(icls) > 0 )then
+            if( b%a%get_cls_pop(icls) > 0 )then
                 rejected_particles = b%a%get_cls_pinds(icls)
                 do iptcl=1,size(rejected_particles)
                     call b%a%set(rejected_particles(iptcl), 'state', 0.)

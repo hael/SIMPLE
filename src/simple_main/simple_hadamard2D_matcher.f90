@@ -41,8 +41,10 @@ contains
         class(cmdline), intent(inout) :: cline     
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: converged
-        real, allocatable :: res(:), res_pad(:), wresamp(:)
-        integer :: iptcl, fnr, icls, io_stat, inorm, cands(3)
+        real,    allocatable :: res(:), res_pad(:), wresamp(:)
+        integer, allocatable :: classlabels(:) 
+        integer :: iptcl, fnr, icls, io_stat, inorm, cands(3), pop
+        real    :: shellscores(p%ncls)
         logical :: doshellweight
         
         ! SET FRACTION OF SEARCH SPACE
@@ -52,7 +54,31 @@ contains
         call read_imgs_from_stk( b, p )
 
         ! SETUP SHELLWEIGHTS
-        call setup_shellweights( b, p, doshellweight, wmat, res, res_pad )
+        if( p%l_shellw .and. frac_srch_space >= SHW_FRAC_LIM ) then
+            call setup_shellweights( b, p, doshellweight, wmat, res, res_pad )
+        endif
+        if( doshellweight )then
+            ! calculate per-class shell-scores
+            classlabels = b%a%get_all('class')
+            shellscores = 0.
+            do iptcl=1,p%nptcls ! needs to be over all ptcls
+                shellscores(classlabels(iptcl)) = shellscores(classlabels(iptcl)) + sum(wmat(iptcl,:))
+            end do
+            ! normalise shell scores based on class population
+            do icls=1,p%ncls
+                pop = b%a%get_cls_pop(icls)
+                if( pop > 0 )then
+                    shellscores(icls) = shellscores(icls)/real(pop)
+                else
+                    shellscores(icls) = 0.
+                endif
+            end do
+            ! set the scores in this partition
+            do iptcl=p%fromp,p%top
+                call b%a%set(iptcl, 'shellscore', shellscores(classlabels(iptcl)))
+            end do
+            deallocate(classlabels)
+        endif
         
         ! SET FOURIER INDEX RANGE
         call set_bp_range( b, p, cline )
@@ -74,17 +100,15 @@ contains
         ! INITIALISE SUMS
         call prime2D_init_sums( b, p )
 
-        ! ALIGN & GRID
+        ! ALIGN
         call del_file(p%outfile)
         if( p%ctf .ne. 'no' ) call pftcc%create_polar_ctfmats(p%smpd, b%a)
         select case(p%refine)
             case('no','greedy')
                 if( p%oritab .eq. '' )then
-                    call primesrch2D%exec_prime2D_srch(pftcc, b%a, [p%fromp,p%top],&
-                    &frac_srch_space, greedy=.true.)
+                    call primesrch2D%exec_prime2D_srch(pftcc, b%a, [p%fromp,p%top], greedy=.true.)
                 else
-                    call primesrch2D%exec_prime2D_srch(pftcc, b%a, [p%fromp,p%top],&
-                    &frac_srch_space)
+                    call primesrch2D%exec_prime2D_srch(pftcc, b%a, [p%fromp,p%top])
                 endif
             case DEFAULT
                 write(*,*) 'The refinement mode: ', trim(p%refine), ' is unsupported'
@@ -242,7 +266,7 @@ contains
         class(params), intent(inout) :: p
         integer :: icls, pop
         do icls=1,p%ncls
-            pop = b%a%get_clspop(icls)
+            pop = b%a%get_cls_pop(icls)
             if( pop > 1 )then
                 call b%cavgs(icls)%fwd_ft
                 call b%cavgs(icls)%ctf_dens_correct(b%ctfsqsums(icls))
@@ -255,7 +279,7 @@ contains
         class(build),      intent(inout) :: b
         class(params),     intent(inout) :: p
         integer, optional, intent(in)    :: which_iter
-        integer                          :: icls
+        integer :: icls
         if( present(which_iter) )then
             if( which_iter <= 0 )then
                 p%refs = 'cavgs'//p%ext
@@ -285,7 +309,7 @@ contains
         if( frac_srch_space >= SHW_FRAC_LIM .and. p%oritab .ne. '' )then
             filtsz = b%img%get_filtsz()
             if( allocated(wmat) ) deallocate(wmat)
-            allocate(wmat(p%top-p%fromp+1,filtsz), stat=alloc_stat)
+            allocate(wmat(p%fromp:p%top,filtsz), stat=alloc_stat)
             call alloc_err("In simple_hadamard2D_matcher :: preppftcc4align", alloc_stat)
             wmat = 1.0
         endif
@@ -301,7 +325,7 @@ contains
         do icls=1,p%ncls
             call progress(icls, p%ncls)
             pop = 2 
-            if( p%oritab /= '' ) pop = b%a%get_clspop(icls)
+            if( p%oritab /= '' ) pop = b%a%get_cls_pop(icls)
             if( pop > 1 )then
                 ! prepare the reference
                 b%img = b%cavgs(icls)
@@ -324,7 +348,7 @@ contains
             istate = nint(o%get('state'))
             if( istate == 0 ) icls = 0
             call prepimg4align(b, p, o)
-            if( allocated(wmat) ) call calc_frc( b, p, o, icls, cnt, wmat )
+            if( allocated(wmat) ) call calc_frc( b, p, o, icls, iptcl, filtsz, wmat )
             ! transfer to polar coordinates
             call b%img%imgpolarizer(pftcc, iptcl)
         end do
@@ -352,19 +376,19 @@ contains
 
     !>  \brief  calculates the FRC between the prepared reference
     !!          image and the prepared particle image
-    subroutine calc_frc( b, p, o, icls, cnt_glob, wmat )
+    subroutine calc_frc( b, p, o, icls, iptcl, filtsz, wmat )
         use simple_ctf, only: ctf
         class(build),  intent(inout) :: b
-        class(params), intent(in)    :: p 
-        integer,       intent(in)    :: icls, cnt_glob
+        class(params), intent(in)    :: p
         class(ori),    intent(inout) :: o
-        real,          intent(inout) :: wmat(:,:)
+        integer,       intent(in)    :: icls, iptcl, filtsz
+        real,          intent(inout) :: wmat(p%fromp:p%top,filtsz)
         real, allocatable :: res(:), corrs(:)
         type(image)       :: ref_local
         type(ctf)         :: tfun
         real              :: dfx, dfy, angast
         if( icls == 0 )then
-            wmat(cnt_glob,:) = -1.
+            wmat(iptcl,:) = -1.
             return
         endif
         ref_local = b%refs(icls)
@@ -385,7 +409,7 @@ contains
         endif
         ! calculate FRC    
         call ref_local%fsc(b%img, res, corrs)
-        wmat(cnt_glob,:) = corrs
+        wmat(iptcl,:) = corrs
         call ref_local%kill
         deallocate(res, corrs)
     end subroutine calc_frc

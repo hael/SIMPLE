@@ -50,7 +50,8 @@ type :: oris
     generic            :: isthere => isthere_1, isthere_2
     procedure          :: get_ncls
     procedure          :: get_pop
-    procedure          :: get_clspop
+    procedure          :: get_cls_pop
+    procedure          :: get_cls_shscore
     procedure          :: get_statepop
     procedure          :: get_ptcls_in_state
     procedure          :: get_nstates
@@ -197,6 +198,7 @@ end interface
 type(ori),  pointer  :: op(:)=>null()
 type(oris), pointer  :: ops  =>null()
 integer, allocatable :: classpops(:)
+real,    allocatable :: shellscores(:)
 logical, allocatable :: class_part_of_set(:)
 real,    allocatable :: class_weights(:)
 type(ori)            :: o_glob
@@ -402,7 +404,7 @@ contains
         if( present(minpop) )then
             ncls_here = 0
             do i=1,ncls
-                if( self%get_clspop(i) >= minpop ) ncls_here = ncls_here+1
+                if( self%get_cls_pop(i) >= minpop ) ncls_here = ncls_here+1
             end do
             ncls = ncls_here
         endif
@@ -427,7 +429,7 @@ contains
     end function get_pop
     
     !>  \brief  is for checking class population
-    function get_clspop( self, class ) result( pop )
+    function get_cls_pop( self, class ) result( pop )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: class
         integer :: mycls, pop, i, mystate
@@ -441,7 +443,23 @@ contains
                 endif
             endif
         end do
-    end function get_clspop
+    end function get_cls_pop
+
+    !>  \brief  is for getting the class score (stored per-particle)
+    function get_cls_shscore( self, class ) result( shscore )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: class
+        real    :: shscore
+        integer :: i, mycls
+        shscore = 0.
+        do i=1,self%n
+            mycls = nint(self%o(i)%get('class'))
+            if( mycls == class )then
+                shscore = self%o(i)%get('shellscore')
+                return
+            endif
+        end do
+    end function get_cls_shscore
     
     !>  \brief  is for checking state population
     function get_statepop( self, state ) result( pop )
@@ -568,7 +586,7 @@ contains
         allocate(pops(ncls_target))
         pops = 0
         do icls=1,ncls
-            pops(icls) = self%get_clspop(icls)
+            pops(icls) = self%get_cls_pop(icls)
         end do
         myncls = ncls
         do while( myncls < ncls_target )
@@ -578,8 +596,8 @@ contains
             ! update number of classes
             myncls = myncls+1
             ! update pops
-            pops(loc(1)) = self%get_clspop(loc(1))
-            pops(myncls) = self%get_clspop(myncls)
+            pops(loc(1)) = self%get_cls_pop(loc(1))
+            pops(myncls) = self%get_cls_pop(myncls)
         end do
     end subroutine expand_classes
     
@@ -591,7 +609,7 @@ contains
         ncls = self%get_ncls()
         allocate(clspops(ncls))
         do icls=1,ncls
-            clspops(icls) = self%get_clspop(icls)
+            clspops(icls) = self%get_cls_pop(icls)
         end do
         if( any(clspops == 0) )then
             clsind_remap = ncls
@@ -627,7 +645,7 @@ contains
         integer,     intent(in)    :: class
         integer, allocatable       :: clsarr(:)
         integer                    :: clsnr, i, pop, alloc_stat, cnt
-        pop = self%get_clspop( class )
+        pop = self%get_cls_pop( class )
         if( pop > 0 )then
             allocate( clsarr(pop), stat=alloc_stat )
             call alloc_err('get_cls; simple_oris', alloc_stat)
@@ -648,7 +666,7 @@ contains
         integer,     intent(in)    :: class
         type(oris)                 :: clsoris
         integer                    :: clsnr, i, pop, cnt
-        pop = self%get_clspop( class )
+        pop = self%get_cls_pop( class )
         if( pop > 0 )then
             call clsoris%new(pop)
             cnt = 0
@@ -694,7 +712,7 @@ contains
         integer :: pop, cnt, clsnr, i, alloc_stat, mystate
         real    :: val
         if( present(class) )then
-            pop = self%get_clspop(class)
+            pop = self%get_cls_pop(class)
         else if( present(state) )then
             pop = self%get_statepop(state)
         else
@@ -1700,7 +1718,7 @@ contains
         if( debug ) print *, '>>> PROCESSING CLASS: ', icls
         ! get pop 
         if( which .eq. 'class' )then
-            pop = self%get_clspop(icls)
+            pop = self%get_cls_pop(icls)
         else
             pop = self%get_statepop(icls)
         endif
@@ -1785,7 +1803,7 @@ contains
         coh = 0
         do k=1,ncls
             if( which .eq. 'class' )then
-                pop = self%get_clspop(k)
+                pop = self%get_cls_pop(k)
             else
                 pop = self%get_statepop(k)
             endif
@@ -1856,7 +1874,7 @@ contains
         sep = 0
         do iclass=1,ncls-1
             if( which .eq. 'class' )then
-                ipop = self%get_clspop(iclass)
+                ipop = self%get_cls_pop(iclass)
                 if( ipop > 0 ) iclsarr = self%get_cls_pinds(iclass)
             else
                 ipop = self%get_statepop(iclass)
@@ -1865,7 +1883,7 @@ contains
             if( ipop > 0 )then
                 do jclass=iclass+1,ncls
                     if( which .eq. 'class' )then
-                        jpop = self%get_clspop(jclass)
+                        jpop = self%get_cls_pop(jclass)
                         if( jpop > 0 ) jclsarr = self%get_cls_pinds(jclass)
                     else
                         jpop = self%get_statepop(jclass)
@@ -2019,7 +2037,7 @@ contains
         real :: med
         if( present(class) )then        
             med = 0.
-            pop = self%get_clspop(class)
+            pop = self%get_cls_pop(class)
             if( pop == 0 ) return
             vals = self%get_arr(which, class)
             if( pop == 1 )then
@@ -2186,21 +2204,39 @@ contains
     end function order
     
     !>  \brief  orders clusters according to population
+    ! function order_cls( self ) result( arr )
+    !     class(oris), intent(inout), target :: self
+    !     integer, allocatable :: arr(:)
+    !     integer :: i, alloc_stat, ncls
+    !     ops => self
+    !     ncls = self%get_ncls()
+    !     allocate(arr(ncls), classpops(ncls), stat=alloc_stat)
+    !     call alloc_err('order_cls; simple_oris', alloc_stat)
+    !     ! calculate class populations
+    !     do i=1,ncls
+    !         classpops(i)  = self%get_cls(i)
+    !     end do
+    !     arr = (/(i,i=1,ncls)/)
+    !     call hpsort( ncls, arr, class1_gt_class2 )
+    !     deallocate(classpops)
+    ! end function order_cls
+
+    !>  \brief  orders clusters according to population
     function order_cls( self ) result( arr )
         class(oris), intent(inout), target :: self
         integer, allocatable :: arr(:)
         integer :: i, alloc_stat, ncls
         ops => self
         ncls = self%get_ncls()
-        allocate(arr(ncls), classpops(ncls), stat=alloc_stat)
+        allocate(arr(ncls), shellscores(ncls), stat=alloc_stat)
         call alloc_err('order_cls; simple_oris', alloc_stat)
-        ! calculate class populations
+        ! calculate class scores
         do i=1,ncls
-            classpops(i)  = self%get_clspop(i)
+            shellscores(i) = self%get_cls_shscore(i)
         end do
         arr = (/(i,i=1,ncls)/)
-        call hpsort( ncls, arr, class1_gt_class2 )
-        deallocate(classpops)
+        call hpsort( ncls, arr, class1_gt_class2_shellscore )
+        deallocate(shellscores)
     end function order_cls
     
     !>  \brief  calculates hard weights based on ptcl ranking      
@@ -2666,6 +2702,20 @@ contains
             val = .false.
         endif
     end function class1_gt_class2
+
+    !>  \brief  class 1 greater than (better) than class 2 ?
+    function class1_gt_class2_shellscore( class1, class2 ) result( val )
+        integer, intent(in) :: class1, class2
+        logical             :: val
+        real                :: score1, score2
+        score1 = shellscores(class1)
+        score2 = shellscores(class2)
+        if( score1 > score2 )then
+            val = .true.
+        else
+            val = .false.
+        endif
+    end function class1_gt_class2_shellscore
     
     !>  \brief  class 1 less than (worse) than class 2 ?
     function class1_lt_class2( class1, class2 ) result( val )
@@ -3033,7 +3083,7 @@ contains
             if(key.eq.'state')then
                 pop_prev = self%get_statepop( i )
             else
-                pop_prev = self%get_clspop( i )
+                pop_prev = self%get_cls_pop( i )
             endif                
             if( (pop>0).and.(pop_prev>0) )then
                 ov       = real(pop)/real(pop_prev)

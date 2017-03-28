@@ -918,7 +918,7 @@ contains
         write(*,'(a)') '>>> MAKING CLASS AVERAGES'
         do i=1,ncls
             call progress(i,ncls)
-            pop = o%get_clspop(i)
+            pop = o%get_cls_pop(i)
             if( present(minp) )then
                 if( pop >= minp )then
                     if( present(list) ) call list%add(iarr=[i])
@@ -956,7 +956,7 @@ contains
         ssmpd = 1.
         if( present(smpd) ) ssmpd = smpd
         ncls = o%get_ncls()
-        pop = o%get_clspop(class) 
+        pop = o%get_cls_pop(class) 
         empty = .false.
         call avg%new(ldim, ssmpd)
         if( pop < 2 )then

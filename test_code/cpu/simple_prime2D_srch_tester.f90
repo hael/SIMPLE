@@ -37,7 +37,7 @@ contains
         logical, optional, intent(in)    :: be_verbose
         call setup_testenv( cline, be_verbose )
         write(*,*) '****prime2D_srch_test, init'
-        call test_calc_corrs2D
+        ! call test_calc_corrs2D
         !call test_greedy_srch
         call shutdown_testenv
         write(*,*) '****prime2D_srch_test, completed'
@@ -92,61 +92,61 @@ contains
         ! because of the use simple_hadamard2D_matcher statement in the top
     end subroutine setup_testenv
 
-    subroutine test_calc_corrs2D
-        real                 :: corrmat2d_ref(NPROJS,NPROJS)
-        real                 :: corrmat3d(NPROJS,NPROJS,pftcc%get_nrots())
-        integer              :: inplmat_ref(NPROJS,NPROJS)
-        integer              :: iptcl, iref, loc(1)
-        real                 :: corrs(pftcc%get_nrots())
-        real,    allocatable :: corrmat2d_tst(:,:)
-        integer, allocatable :: inplmat_tst(:,:)
+    ! subroutine test_calc_corrs2D
+    !     real                 :: corrmat2d_ref(NPROJS,NPROJS)
+    !     real                 :: corrmat3d(NPROJS,NPROJS,pftcc%get_nrots())
+    !     integer              :: inplmat_ref(NPROJS,NPROJS)
+    !     integer              :: iptcl, iref, loc(1)
+    !     real                 :: corrs(pftcc%get_nrots())
+    !     real,    allocatable :: corrmat2d_tst(:,:)
+    !     integer, allocatable :: inplmat_tst(:,:)
 
-        ! generate the reference matrices
-        do iptcl=1,NPROJS
-            do iref=1,NPROJS
-                corrs = pftcc%gencorrs(iref, iptcl)
-                loc   = maxloc(corrs)
-                corrmat2d_ref(iptcl,iref) = corrs(loc(1))
-                inplmat_ref(iptcl,iref)   = loc(1)
-            end do
-        end do
+    !     ! generate the reference matrices
+    !     do iptcl=1,NPROJS
+    !         do iref=1,NPROJS
+    !             corrs = pftcc%gencorrs(iref, iptcl)
+    !             loc   = maxloc(corrs)
+    !             corrmat2d_ref(iptcl,iref) = corrs(loc(1))
+    !             inplmat_ref(iptcl,iref)   = loc(1)
+    !         end do
+    !     end do
 
-        if( verbose ) write(*,*) 'testing polarft_corrcalc :: gencorrs_all_tester_1'
-        call pftcc%gencorrs_all_cpu(.false., corrmat2d_tst, inplmat_tst)
-        if( .not. test_passed() ) stop '****prime2D_srch_tester FAILURE polarft_corrcalc :: gencorrs_all_cpu'
+    !     if( verbose ) write(*,*) 'testing polarft_corrcalc :: gencorrs_all_tester_1'
+    !     call pftcc%gencorrs_all_cpu(.false., corrmat2d_tst, inplmat_tst)
+    !     if( .not. test_passed() ) stop '****prime2D_srch_tester FAILURE polarft_corrcalc :: gencorrs_all_cpu'
 
-    contains
+    ! contains
 
-        function test_passed() result( passed )
-            logical :: passed
-            real    :: ce_corr(2), ce_inpl(2)
-            passed = .false.
-            ce_corr = compare_corrmats(corrmat2d_ref, corrmat2d_tst)
-            ce_inpl = compare_inplmats(inplmat_ref, inplmat_tst)
-            !if( verbose ) write(*,*) 'corr, corr/euclid: ', ce_corr(1), ce_corr(2)
-            !if( verbose ) write(*,*) 'inpl, corr/euclid: ', ce_inpl(1), ce_inpl(2)
-            write(*,*) 'corr, corr/euclid: ', ce_corr(1), ce_corr(2)
-            write(*,*) 'inpl, corr/euclid: ', ce_inpl(1), ce_inpl(2)
-            if(       ce_corr(1) > 0.999999 .and. ce_corr(2) < 0.00001&
-                .and. ce_inpl(1) > 0.999999 .and. ce_inpl(2) < 0.00001 )&
-            passed = .true.
-        end function test_passed
+    !     function test_passed() result( passed )
+    !         logical :: passed
+    !         real    :: ce_corr(2), ce_inpl(2)
+    !         passed = .false.
+    !         ce_corr = compare_corrmats(corrmat2d_ref, corrmat2d_tst)
+    !         ce_inpl = compare_inplmats(inplmat_ref, inplmat_tst)
+    !         !if( verbose ) write(*,*) 'corr, corr/euclid: ', ce_corr(1), ce_corr(2)
+    !         !if( verbose ) write(*,*) 'inpl, corr/euclid: ', ce_inpl(1), ce_inpl(2)
+    !         write(*,*) 'corr, corr/euclid: ', ce_corr(1), ce_corr(2)
+    !         write(*,*) 'inpl, corr/euclid: ', ce_inpl(1), ce_inpl(2)
+    !         if(       ce_corr(1) > 0.999999 .and. ce_corr(2) < 0.00001&
+    !             .and. ce_inpl(1) > 0.999999 .and. ce_inpl(2) < 0.00001 )&
+    !         passed = .true.
+    !     end function test_passed
 
-        function compare_corrmats( cmat1, cmat2 ) result( ce )
-            real, intent(in) :: cmat1(NPROJS,NPROJS), cmat2(NPROJS,NPROJS)
-            real :: ce(2)
-            ce(1) = pearsn(reshape(cmat1,shape=[NPROJS**2]),reshape(cmat2,shape=[NPROJS**2]))
-            ce(2) = euclid(reshape(cmat1,shape=[NPROJS**2]),reshape(cmat2,shape=[NPROJS**2]))
-        end function compare_corrmats
+    !     function compare_corrmats( cmat1, cmat2 ) result( ce )
+    !         real, intent(in) :: cmat1(NPROJS,NPROJS), cmat2(NPROJS,NPROJS)
+    !         real :: ce(2)
+    !         ce(1) = pearsn(reshape(cmat1,shape=[NPROJS**2]),reshape(cmat2,shape=[NPROJS**2]))
+    !         ce(2) = euclid(reshape(cmat1,shape=[NPROJS**2]),reshape(cmat2,shape=[NPROJS**2]))
+    !     end function compare_corrmats
 
-        function compare_inplmats( inplmat1, inplmat2 ) result( ce )
-            integer, intent(in) :: inplmat1(NPROJS,NPROJS), inplmat2(NPROJS,NPROJS)
-            real :: ce(2)
-            ce(1) = pearsn(reshape(real(inplmat1),shape=[NPROJS**2]),reshape(real(inplmat2),shape=[NPROJS**2]))
-            ce(2) = euclid(reshape(real(inplmat1),shape=[NPROJS**2]),reshape(real(inplmat2),shape=[NPROJS**2]))
-        end function compare_inplmats
+    !     function compare_inplmats( inplmat1, inplmat2 ) result( ce )
+    !         integer, intent(in) :: inplmat1(NPROJS,NPROJS), inplmat2(NPROJS,NPROJS)
+    !         real :: ce(2)
+    !         ce(1) = pearsn(reshape(real(inplmat1),shape=[NPROJS**2]),reshape(real(inplmat2),shape=[NPROJS**2]))
+    !         ce(2) = euclid(reshape(real(inplmat1),shape=[NPROJS**2]),reshape(real(inplmat2),shape=[NPROJS**2]))
+    !     end function compare_inplmats
 
-    end subroutine test_calc_corrs2D
+    ! end subroutine test_calc_corrs2D
 
     ! subroutine test_greedy_srch
     !     use simple_ori, only: ori
