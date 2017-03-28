@@ -351,9 +351,9 @@ contains
                         else
                             corrs = pftcc%gencorrs_serial(iref, iptcl)
                         endif
-                        loc       = maxloc(corrs)
-                        inpl_ind  = loc(1)
-                        inpl_corr = corrs(inpl_ind)
+                        inpl_ind  = shcloc(self%nrots, corrs, self%prev_corr)
+                        inpl_corr = 0.
+                        if( inpl_ind > 0 ) inpl_corr = corrs(inpl_ind)
                         if( inpl_corr >= corr )then
                             ! update the corr (4 srch)
                             corr = inpl_corr
