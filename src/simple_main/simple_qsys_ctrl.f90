@@ -322,9 +322,11 @@ contains
         use simple_qsys_local,   only: qsys_local
         class(qsys_ctrl),  intent(inout) :: self
         class(qsys_base),      pointer   :: pmyqsys
-        character(len=STDLEN), parameter :: master_submit_script = './qsys_submit_jobs'
+        character(len=STDLEN)            :: master_submit_script
         integer :: ipart, fnr, file_stat, chmod_stat, ios, val
-        logical :: submit_or_not(self%fromto_part(1):self%fromto_part(2)), err, opened, exists
+        logical :: submit_or_not(self%fromto_part(1):self%fromto_part(2)), err
+        ! master command line
+        master_submit_script = trim(adjustl(self%pwd))//'/qsys_submit_jobs'
         ! make a submission mask
         submit_or_not = .false.
         do ipart=self%fromto_part(1),self%fromto_part(2)
@@ -357,19 +359,14 @@ contains
             endif
         end do
         write(fnr,'(a)') 'exit'
-        call flush(fnr)
         close( unit=fnr )
-        !call flush(fnr)
+        call flush(fnr)
         call chmod(master_submit_script,'+x')
         if( DEBUG )then
             call exec_cmdline('echo DISTRIBUTED MODE :: submitting scripts:')
             call exec_cmdline('ls -1 distr_simple_script_*')
         endif
         ! execute the master submission script
-        ! inquire(FILE=master_submit_script, OPENED=opened, EXIST=exists, IOSTAT=file_stat) 
-        ! print *, trim(master_submit_script), ' exists:', exists
-        ! print *, trim(master_submit_script), ' opened:', opened
-        ! print *, trim(master_submit_script), ' iostat:', file_stat
         call exec_cmdline(master_submit_script)
     end subroutine submit_scripts
 
@@ -379,12 +376,13 @@ contains
         class(qsys_ctrl), intent(inout) :: self
         character(len=*), intent(in)    :: script_name
         class(qsys_base),      pointer  :: pmyqsys
+        integer :: ios
         character(len=STDLEN) :: cmd
         select type( pmyqsys => self%myqsys )
             class is(qsys_local)
-                cmd = self%myqsys%submit_cmd()//' ./'//trim(adjustl(script_name))//' &'
+                cmd = self%myqsys%submit_cmd()//' '//trim(adjustl(self%pwd))//'/'//trim(adjustl(script_name))//' &'
             class DEFAULT
-                cmd = self%myqsys%submit_cmd()//' ./'//trim(adjustl(script_name))
+                cmd = self%myqsys%submit_cmd()//' '//trim(adjustl(self%pwd))//'/'//trim(adjustl(script_name))
         end select
         ! execute the command
         call exec_cmdline(cmd)

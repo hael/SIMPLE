@@ -1148,7 +1148,7 @@ contains
                     call rename( trim(vol), trim(vol_iter) )
                     ! post-process
                     vol = 'vol'//trim(int2str(state))
-                    call cline_postproc_vol%set( 'vol1' , trim(vol_iter))
+                    call cline_postproc_vol%set('vol1' , trim(vol_iter))
                     fsc_file = 'fsc_state'//trim(str_state)//'.bin'
                     call cline_postproc_vol%delete('lp')
                     call cline_postproc_vol%set('fsc', trim(fsc_file))
@@ -1163,11 +1163,11 @@ contains
             restart_file = trim(RESTARTFBODY)//'_iter'//int2str_pad( iter, 3)//'.txt'
             call cline%write( restart_file )
             ! CONVERGENCE
-            call cline_check3D_conv%set( 'oritab', trim(oritab) )
-            call xcheck3D_conv%execute( cline_check3D_conv )
+            call cline_check3D_conv%set('oritab', trim(oritab))
+            call xcheck3D_conv%execute(cline_check3D_conv )
             if( iter >= p_master%startit+2 )then
                 ! after a minimum of 2 iterations
-                if( cline_check3D_conv%get_carg('converged') .eq. 'yes' ) exit
+                if(cline_check3D_conv%get_carg('converged') .eq. 'yes') exit
             endif
             if( iter >= p_master%maxits ) exit
             ! ITERATION DEPENDENT UPDATES

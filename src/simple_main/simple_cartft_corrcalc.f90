@@ -44,7 +44,6 @@ contains
         use simple_jiffys,          only: alloc_err
         use simple_hadamard_common, only: preprefvol
         use simple_cmdline,         only: cmdline
-        use simple_strings,         only: int2str
         class(cartft_corrcalc), intent(inout) :: self
         class(build),  target,  intent(inout) :: b
         class(params), target,  intent(inout) :: p
@@ -58,7 +57,7 @@ contains
         allocate(self%refvols(self%pp%nstates), self%img_refs(1), stat=alloc_stat)
         call alloc_err("In: simple_cartft_corrcalc :: new", alloc_stat)
         call self%img_refs(1)%new([self%pp%boxmatch,self%pp%boxmatch,1],self%pp%smpd)
-        write(*,'(A)') '>>> PREPARING 3D REFERENCES'
+        write(*,'(A)') '>>> PREPARING VOLUMES'
         do s=1,self%pp%nstates
             call preprefvol( b, p, cline, s, doexpand=.false. )
             self%refvols(s) = b%vol
@@ -77,12 +76,11 @@ contains
         class(ori),             intent(inout) :: o
         type(ctf) :: tfun
         real      :: kV, cs, fraca, dfx, dfy, angast, dist
+        dfx    = o%get('dfx')
         if( self%pp%tfplan%mode .eq. 'astig' )then ! astigmatic CTF
-            dfx    = o%get('dfx')
             dfy    = o%get('dfy')
             angast = o%get('angast')
         else if( self%pp%tfplan%mode .eq. 'noastig' )then
-            dfx    = o%get('dfx')
             dfy    = dfx
             angast = 0.
         else
@@ -198,7 +196,6 @@ contains
         integer,                intent(in)    :: iref
         real,                   intent(in)    :: shvec(3)
         real :: cc
-        ! correlate
         cc = self%img_refs(iref)%corr_shifted(pimg, shvec, self%pp%lp, self%pp%hp)
     end function correlate_2
     
