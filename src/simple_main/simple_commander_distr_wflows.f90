@@ -598,9 +598,10 @@ contains
         endif
         ! prepare command lines from prototype master
         cline_volassemble = cline
-        call cline_volassemble%set( 'outvol', vol         )
-        call cline_volassemble%set( 'eo',    'no'         )
-        call cline_volassemble%set( 'prg',   'volassemble')
+        call cline_volassemble%set( 'outvol',  vol                  )
+        call cline_volassemble%set( 'eo',     'no'                  )
+        call cline_volassemble%set( 'prg',    'volassemble'         )
+        call cline_volassemble%set( 'oritab', 'prime3D_startdoc.txt')
         ! prepare scripts
         call qsys_cleanup(p_master)
         call qscripts%generate_scripts(job_descr, p_master%ext, myq_descr)
@@ -734,7 +735,7 @@ contains
         enddo
         if( .not.cline%defined('oritab') .and. .not.vol_defined )then
             ! ab-initio
-            call cline_prime3D_init%set( 'oritab', oritab )
+            ! call cline_prime3D_init%set( 'oritab', oritab )
             call xprime3D_init_distr%execute( cline_prime3D_init )
             call cline%set( 'vol1', trim('startvol_state01'//p_master%ext) )
             call cline%set( 'oritab', oritab )

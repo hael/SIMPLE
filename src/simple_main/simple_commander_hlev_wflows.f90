@@ -183,6 +183,10 @@ contains
                 srch4symaxis = .true.
             endif
         endif
+        ! set global 
+
+
+
         ! prepare command lines from prototype master
         cline_scale           = cline
         cline_prime3D_init    = cline
@@ -213,11 +217,13 @@ contains
         call cline_prime3D_init%set('ctf', 'no')
         call cline_prime3D_init%set('maxits', real(MAXITS_INIT))
         call cline_prime3D_init%set('dynlp', 'yes') ! better be explicit about the dynlp
+        call cline_prime3D_init%set('shellw', 'no')
         ! (3) PRIME3D REFINE STEP 1
         call cline_prime3D_refine1%set('prg', 'prime3D')
         call cline_prime3D_refine1%set('ctf', 'no')
         call cline_prime3D_refine1%set('maxits', real(MAXITS_REFINE))
         call cline_prime3D_refine1%set('dynlp', 'no') ! better be explicit about the dynlp
+        call cline_prime3D_refine1%set('shellw', 'no')
         call cline_prime3D_refine1%set('refine', 'shc')
         ! (4) SYMMETRY AXIS SEARCH
         if( srch4symaxis )then
@@ -258,6 +264,7 @@ contains
         call cline_prime3D_refine2%set('ctf', 'no')
         call cline_prime3D_refine2%set('maxits', real(MAXITS_REFINE))
         call cline_prime3D_refine2%set('dynlp', 'no') ! better be explicit about the dynlp
+        call cline_prime3D_refine2%set('shellw', 'no')
         call cline_prime3D_refine2%set('lp', LPLIMS(2))
         call cline_prime3D_refine2%set('refine', 'shc')
         ! (6) RE-PROJECT VOLUME
