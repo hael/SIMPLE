@@ -160,6 +160,7 @@ type :: oris
     procedure          :: nearest_neighbors
     procedure          :: find_angres
     procedure          :: find_angres_geod
+    procedure          :: extremal_bound
     procedure          :: find_npeaks
     procedure          :: class_calc_frac
     procedure          :: class_dist_stat
@@ -2204,39 +2205,21 @@ contains
     end function order
     
     !>  \brief  orders clusters according to population
-    ! function order_cls( self ) result( arr )
-    !     class(oris), intent(inout), target :: self
-    !     integer, allocatable :: arr(:)
-    !     integer :: i, alloc_stat, ncls
-    !     ops => self
-    !     ncls = self%get_ncls()
-    !     allocate(arr(ncls), classpops(ncls), stat=alloc_stat)
-    !     call alloc_err('order_cls; simple_oris', alloc_stat)
-    !     ! calculate class populations
-    !     do i=1,ncls
-    !         classpops(i)  = self%get_cls(i)
-    !     end do
-    !     arr = (/(i,i=1,ncls)/)
-    !     call hpsort( ncls, arr, class1_gt_class2 )
-    !     deallocate(classpops)
-    ! end function order_cls
-
-    !>  \brief  orders clusters according to population
     function order_cls( self ) result( arr )
         class(oris), intent(inout), target :: self
         integer, allocatable :: arr(:)
         integer :: i, alloc_stat, ncls
         ops => self
         ncls = self%get_ncls()
-        allocate(arr(ncls), shellscores(ncls), stat=alloc_stat)
+        allocate(arr(ncls), classpops(ncls), stat=alloc_stat)
         call alloc_err('order_cls; simple_oris', alloc_stat)
-        ! calculate class scores
+        ! calculate class populations
         do i=1,ncls
-            shellscores(i) = self%get_cls_shscore(i)
+            classpops(i) = self%get_cls_pop(i)
         end do
         arr = (/(i,i=1,ncls)/)
-        call hpsort( ncls, arr, class1_gt_class2_shellscore )
-        deallocate(shellscores)
+        call hpsort( ncls, arr, class1_gt_class2 )
+        deallocate(classpops)
     end function order_cls
     
     !>  \brief  calculates hard weights based on ptcl ranking      
@@ -2464,6 +2447,27 @@ contains
         end do
         res = rad2deg(res/real(self%n))  
     end function find_angres_geod
+
+    !>  \brief  to find the correlation bound in extremal search
+    function extremal_bound( self, thresh ) result( corr_bound )
+        use simple_math, only: hpsort
+        class(oris), intent(inout) :: self
+        real,        intent(in)    :: thresh
+        real,    allocatable       :: corrs(:), corrs_incl(:)
+        logical, allocatable       :: incl(:)
+        integer :: n_incl, thresh_ind
+        real    :: corr_bound
+        ! grab relevant correlations
+        corrs      = self%get_all('corr')
+        incl       = self%included()
+        corrs_incl = pack(corrs, mask=incl)
+        ! sort correlations & determine threshold
+        n_incl     = size(corrs_incl)
+        call hpsort(n_incl, corrs_incl)
+        thresh_ind = nint(real(n_incl) * thresh)
+        corr_bound = corrs_incl(thresh_ind)
+        deallocate(corrs, incl, corrs_incl)
+    end function extremal_bound
     
     !>  \brief  to find the neighborhood size for weighted orientation assignment
     function find_npeaks( self, res, moldiam ) result( npeaks )
@@ -2702,20 +2706,6 @@ contains
             val = .false.
         endif
     end function class1_gt_class2
-
-    !>  \brief  class 1 greater than (better) than class 2 ?
-    function class1_gt_class2_shellscore( class1, class2 ) result( val )
-        integer, intent(in) :: class1, class2
-        logical             :: val
-        real                :: score1, score2
-        score1 = shellscores(class1)
-        score2 = shellscores(class2)
-        if( score1 > score2 )then
-            val = .true.
-        else
-            val = .false.
-        endif
-    end function class1_gt_class2_shellscore
     
     !>  \brief  class 1 less than (worse) than class 2 ?
     function class1_lt_class2( class1, class2 ) result( val )

@@ -669,7 +669,7 @@ contains
     subroutine exec_stackops( self, cline )
         use simple_ran_tabu,    only: ran_tabu
         use simple_procimgfile, only: mirror_imgfile, neg_imgfile, acf_imgfile, frameavg_imgfile
-        use simple_procimgfile, only: add_noise_imgfile, copy_imgfile,  make_avg_imgfile
+        use simple_procimgfile  ! use all in there
         use simple_image,       only: image
         use simple_oris,        only: oris
         class(stackops_commander), intent(inout) :: self

@@ -128,7 +128,7 @@ contains
             het_corr_thresh = -1.
             if( frac_srch_space < 0.98 .or. p%het_thresh > 0.025 )then
                 dohet = .true.
-                write(*,'(A,F8.2)')'>>> STATE RANDOMIZATION %:', 100.*p%het_thresh
+                write(*,'(A,F8.2)') '>>> STATE RANDOMIZATION(%):', 100.*p%het_thresh
                 ! grab relevant correlations
                 corrs      = b%a%get_all('corr')
                 incl       = b%a%included()
@@ -138,7 +138,7 @@ contains
                 call hpsort(n_incl, corrs_incl)
                 thresh_ind = nint(real(n_incl) * p%het_thresh)
                 het_corr_thresh = corrs_incl(thresh_ind)
-                write(*,'(A,F8.2)')'>>> CORRELATION THRESHOLD:', het_corr_thresh
+                write(*,'(A,F8.2)') '>>> CORRELATION THRESHOLD:', het_corr_thresh
                 state_corr_thresh = het_corr_thresh
                 deallocate(corrs, incl, corrs_incl)
                 ! dev by state threshold

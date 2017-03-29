@@ -1786,10 +1786,11 @@ select case(prg)
         keys_optional(18) = 'nptcls'
         keys_optional(19) = 'append'
         keys_optional(20) = 'order'
-        keys_optional(21) = 'outfile'
+        keys_optional(21) = 'bfac'
+        keys_optional(22) = 'outfile'
         ! parse command line
         if( describe ) call print_doc_stackops
-        call cline%parse( keys_required(:1),keys_optional(:21) )
+        call cline%parse( keys_required(:1),keys_optional(:22) )
         ! execute
         call xstackops%execute(cline)
     case( 'fixmapheader' )

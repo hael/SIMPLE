@@ -32,7 +32,6 @@ type prime2D_srch
     integer, allocatable  :: parts(:,:)           !< balanced partitions over references
     integer, allocatable  :: inplmat(:,:)         !< in-plane indices in matrix formulated search
     real,    allocatable  :: corrmat2d(:,:)       !< correlations in matrix formulated search
-    character(len=STDLEN) :: refine               !< refinement flag
     logical               :: doshift = .true.     !< origin shift search indicator
     logical               :: exists  = .false.    !< 2 indicate existence
   contains
@@ -77,7 +76,6 @@ contains
             self%nrefs = p%ncls
         endif
         self%nrots      = round2even(twopi*real(p%ring2))
-        self%refine     = p%refine
         self%nrefs_eval = 0
         self%trs        = p%trs
         self%doshift    = p%doshift
@@ -236,21 +234,22 @@ contains
     ! SEARCH ROUTINES
 
     !>  \brief a master prime search routine
-    subroutine exec_prime2D_srch( self, pftcc, a, pfromto, greedy)
+    subroutine exec_prime2D_srch( self, pftcc, a, pfromto, greedy, extr_bound)
         use simple_oris, only: oris
         class(prime2D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
         class(oris),             intent(inout) :: a
         integer,                 intent(in)    :: pfromto(2)
         logical, optional,       intent(in)    :: greedy
+        real, optional,          intent(in)    :: extr_bound
         real    :: lims(2,2)
         logical :: ggreedy
         ggreedy = .false.
         if( present(greedy) ) ggreedy = greedy
-        if( self%refine .eq. 'greedy' .or. ggreedy )then
+        if( ggreedy )then
             call self%greedy_srch(pftcc, a, pfromto)
         else
-            call self%stochastic_srch(pftcc, a, pfromto)
+            call self%stochastic_srch(pftcc, a, pfromto, extr_bound)
         endif
         if( DEBUG ) write(*,'(A)') '>>> PRIME2D_SRCH::EXECUTED PRIME2D_SRCH'
     end subroutine exec_prime2D_srch
@@ -297,7 +296,7 @@ contains
     end subroutine greedy_srch
 
     !>  \brief  executes the greedy rotational search
-    subroutine stochastic_srch( self, pftcc, a, pfromto )
+    subroutine stochastic_srch( self, pftcc, a, pfromto, extr_bound )
         !$ use omp_lib
         !$ use omp_lib_kinds
         use simple_oris, only: oris
@@ -308,11 +307,15 @@ contains
         class(polarft_corrcalc), intent(inout) :: pftcc
         class(oris),             intent(inout) :: a
         integer,                 intent(in)    :: pfromto(2)
+        real, optional,          intent(in)    :: extr_bound
         type(ori)          :: orientation
         integer            :: iptcl,iref,loc(1),i,inpl_ind
         real               :: corrs(self%nrots),inpl_corr,corr
         logical            :: found_better,nnsrch
         real, allocatable  :: corrmat3d(:,:,:)
+        real               :: corr_bound
+        corr_bound = -1.0
+        if( present(extr_bound) ) corr_bound = extr_bound
         ! calculate all corrs
         allocate(corrmat3d(pfromto(1):pfromto(2),self%nrefs,self%nrots))
         call pftcc%gencorrs_all_cpu(corrmat3d)
@@ -322,28 +325,45 @@ contains
             if( nint(orientation%get('state')) > 0 )then
                 ! initialize
                 call self%prep4srch(pftcc, iptcl, orientation, corrmat=corrmat3d(iptcl,:,:))
-                found_better = .false.
-                self%nrefs_eval = 0
-                do i=1,self%nrefs
-                    iref = self%srch_order(i)
-                    ! keep track of how many references we are evaluating
-                    self%nrefs_eval = self%nrefs_eval + 1
+                if( self%prev_corr > corr_bound )then
+                    found_better = .false.
+                    self%nrefs_eval = 0
+                    do i=1,self%nrefs
+                        iref = self%srch_order(i)
+                        ! keep track of how many references we are evaluating
+                        self%nrefs_eval = self%nrefs_eval + 1
+                        corrs = corrmat3d(iptcl,iref,:)
+                        inpl_ind = shcloc(self%nrots, corrs, self%prev_corr)
+                        inpl_corr = 0.
+                        if( inpl_ind > 0 ) inpl_corr = corrs(inpl_ind)             
+                        if( inpl_ind > 0 .and. inpl_corr >= self%prev_corr )then
+                            ! update the class
+                            self%best_class = iref
+                            ! update the correlation
+                            self%best_corr = inpl_corr
+                            ! update the in-plane angle
+                            self%best_rot = inpl_ind
+                            ! indicate that we found a better solution
+                            found_better = .true.
+                            exit ! first-improvement heuristic
+                        endif    
+                    end do
+                else
+                    self%nrefs_eval = 1       ! evaluate one random ref
+                    iref = self%srch_order(1) ! random .ne. prev
                     corrs = corrmat3d(iptcl,iref,:)
-                    inpl_ind = shcloc(self%nrots, corrs, self%prev_corr)
-                    inpl_corr = 0.
-                    if( inpl_ind > 0 ) inpl_corr = corrs(inpl_ind)             
-                    if( inpl_ind > 0 .and. inpl_corr >= self%prev_corr )then
-                        ! update the class
-                        self%best_class = iref
-                        ! update the correlation
-                        self%best_corr = inpl_corr
-                        ! update the in-plane angle
-                        self%best_rot = inpl_ind
-                        ! indicate that we found a better solution
-                        found_better = .true.
-                        exit ! first-improvement heuristic
-                    endif    
-                end do
+                    loc = maxloc(corrs)
+                    inpl_ind = loc(1)
+                    inpl_corr = corrs(inpl_ind)
+                    ! update the class
+                    self%best_class = iref
+                    ! update the correlation
+                    self%best_corr = inpl_corr
+                    ! update the in-plane angle
+                    self%best_rot = inpl_ind
+                    ! indicate that we found a better solution
+                    found_better = .true.
+                endif
                 if( found_better )then
                     ! best ref has already been updated
                 else

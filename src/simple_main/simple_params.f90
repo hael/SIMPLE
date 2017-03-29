@@ -283,6 +283,7 @@ type :: params
     real    :: e2=0.
     real    :: e3=0.
     real    :: eps=0.003
+    real    :: extr_thresh=EXTRINITHRESH
     real    :: eullims(3,2)=0.
     real    :: expastig=0.1
     real    :: exp_time=2.0
@@ -617,6 +618,7 @@ contains
         call check_rarg('eps',            self%eps)
         call check_rarg('expastig',       self%expastig)
         call check_rarg('exp_time',       self%exp_time)
+        call check_rarg('extr_thresh',    self%extr_thresh)
         call check_rarg('filwidth',       self%filwidth)
         call check_rarg('frac',           self%frac)
         call check_rarg('fraca',          self%fraca)

@@ -447,6 +447,12 @@ contains
             call xprime2D_init_distr%execute(cline_prime2D_init)
             oritab='prime2D_startdoc.txt'
         endif
+        if( cline%defined('extr_thresh') )then
+            ! all is well
+        else
+            ! start from the top
+            p_master%extr_thresh = EXTRINITHRESH / p_master%rrate
+        endif
 
         ! main loop
         iter = p_master%startit-1
@@ -462,6 +468,10 @@ contains
                 call cline_find_nnimgs%set('stk', refs)
                 call xfind_nnimgs_distr%execute(cline_find_nnimgs)
             endif
+            ! exponential cooling of the randomization rate
+            p_master%extr_thresh = p_master%extr_thresh * p_master%rrate
+            call job_descr%set('extr_thresh', real2str(p_master%extr_thresh))
+            call cline%set('extr_thresh', p_master%extr_thresh)
             ! prepare scripts
             if( oritab .ne. '' ) call job_descr%set('oritab',  trim(oritab))
             call job_descr%set('refs',    trim(refs))
@@ -800,7 +810,6 @@ contains
             write(*,'(A,I6)')'>>> ITERATION ', iter
             write(*,'(A)')   '>>>'
             call qsys_cleanup(p_master)
-            ! PREPARE PRIME3D SCRIPTS
             if( cline%defined('oritab') )then
                 call os%read(trim(cline%get_carg('oritab')))
                 frac_srch_space = os%get_avg('frac')

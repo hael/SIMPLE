@@ -42,9 +42,8 @@ contains
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: converged
         real,    allocatable :: res(:), res_pad(:), wresamp(:)
-        integer, allocatable :: classlabels(:) 
         integer :: iptcl, fnr, icls, io_stat, inorm, cands(3), pop
-        real    :: shellscores(p%ncls)
+        real    :: corr_thresh
         logical :: doshellweight
         
         ! SET FRACTION OF SEARCH SPACE
@@ -57,27 +56,12 @@ contains
         if( p%l_shellw .and. frac_srch_space >= SHW_FRAC_LIM ) then
             call setup_shellweights( b, p, doshellweight, wmat, res, res_pad )
         endif
-        if( doshellweight )then
-            ! calculate per-class shell-scores
-            classlabels = b%a%get_all('class')
-            shellscores = 0.
-            do iptcl=1,p%nptcls ! needs to be over all ptcls
-                shellscores(classlabels(iptcl)) = shellscores(classlabels(iptcl)) + sum(wmat(iptcl,:))
-            end do
-            ! normalise shell scores based on class population
-            do icls=1,p%ncls
-                pop = b%a%get_cls_pop(icls)
-                if( pop > 0 )then
-                    shellscores(icls) = shellscores(icls)/real(pop)
-                else
-                    shellscores(icls) = 0.
-                endif
-            end do
-            ! set the scores in this partition
-            do iptcl=p%fromp,p%top
-                call b%a%set(iptcl, 'shellscore', shellscores(classlabels(iptcl)))
-            end do
-            deallocate(classlabels)
+
+        ! EXTREMAL LOGICS
+        if( frac_srch_space < 0.98 .or. p%extr_thresh > 0.025 )then
+            write(*,'(A,F8.1)') '>>> PARTICLE RANDOMIZATION(%):', 100.*p%extr_thresh
+            corr_thresh = b%a%extremal_bound(p%extr_thresh)
+            write(*,'(A,F8.2)') '>>> CORRELATION THRESHOLD:     ', corr_thresh
         endif
         
         ! SET FOURIER INDEX RANGE
@@ -103,17 +87,11 @@ contains
         ! ALIGN
         call del_file(p%outfile)
         if( p%ctf .ne. 'no' ) call pftcc%create_polar_ctfmats(p%smpd, b%a)
-        select case(p%refine)
-            case('no','greedy')
-                if( p%oritab .eq. '' )then
-                    call primesrch2D%exec_prime2D_srch(pftcc, b%a, [p%fromp,p%top], greedy=.true.)
-                else
-                    call primesrch2D%exec_prime2D_srch(pftcc, b%a, [p%fromp,p%top])
-                endif
-            case DEFAULT
-                write(*,*) 'The refinement mode: ', trim(p%refine), ' is unsupported'
-                stop
-        end select
+        if( p%oritab .eq. '' )then
+            call primesrch2D%exec_prime2D_srch(pftcc, b%a, [p%fromp,p%top], greedy=.true.)
+        else
+            call primesrch2D%exec_prime2D_srch(pftcc, b%a, [p%fromp,p%top], extr_bound=corr_thresh)
+        endif
         
         ! WIENER RESTORATION OF CLASS AVERAGES
         cnt_glob = 0

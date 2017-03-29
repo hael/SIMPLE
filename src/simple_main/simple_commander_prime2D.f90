@@ -134,9 +134,16 @@ contains
             if( .not. cline%defined('outfile') ) stop 'need unique output file for parallel jobs'
             call prime2D_exec(b, p, cline, 0, converged) ! partition or not, depending on 'part'       
         else
+            if( cline%defined('extr_thresh') )then
+                ! all is well
+            else
+                ! starts from the top
+                p%extr_thresh = EXTRINITHRESH/p%rrate
+            endif
             startit = 1
             if( cline%defined('startit') ) startit = p%startit
             do i=startit,p%maxits
+                p%extr_thresh = p%extr_thresh * p%rrate
                 call prime2D_exec(b, p, cline, i, converged)
                 if(converged) exit
             end do
@@ -210,8 +217,7 @@ contains
         call b%a%read(p%oritab)
         order = b%a%order_cls()
         do iclass=1,p%ncls
-            write(*,'(a,1x,i5,1x,a,i5,1x,a,f7.2)') 'CLASS:', order(iclass), 'POP:',& 
-            b%a%get_cls_pop(order(iclass)), 'SCORE:', b%a%get_cls_shscore(order(iclass))
+            write(*,'(a,1x,i5,1x,a,i5)') 'CLASS:', order(iclass), 'POP:', b%a%get_cls_pop(order(iclass))
             call b%img%read(p%stk, order(iclass))
             call b%img%write(p%outstk, iclass)
         end do

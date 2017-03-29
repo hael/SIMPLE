@@ -484,7 +484,7 @@ contains
         call img%kill
     end subroutine cure_imgfile
     
-     !>  \brief  is for calculating the acf of a stack
+    !>  \brief  is for calculating the acf of a stack
     subroutine acf_imgfile( fname2acf, fname )
         character(len=*), intent(in) :: fname2acf, fname
         type(image)   :: img
