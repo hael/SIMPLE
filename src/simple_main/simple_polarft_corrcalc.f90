@@ -610,9 +610,7 @@ contains
             endif
             !$omp parallel do default(shared) schedule(auto) private(iref)
             do iref=ref_start,ref_end
-                self%pfts_refs_ctf(iref,:,:) = &
-                &self%pfts_refs(iref,:,:)*&
-                &self%ctfmats(iptcl,:,:)
+                self%pfts_refs_ctf(iref,:,:) = self%pfts_refs(iref,:,:)*self%ctfmats(iptcl,:,:)
                 call self%memoize_sqsum_ref_ctf(iref)
             end do
             !$omp end parallel do
@@ -705,7 +703,7 @@ contains
         real,                    intent(in)    :: smpd
         class(oris),             intent(inout) :: a
         type(ctf)         :: tfun
-        real, allocatable :: ctfmats(:,:,:)
+        !real, allocatable :: ctfmats(:,:,:)
         integer           :: iptcl,alloc_stat 
         real              :: kv,cs,fraca,dfx,dfy,angast
         logical           :: astig
@@ -906,6 +904,7 @@ contains
             argmat = real(pft_ref_sh * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:)))
             cc = sum(argmat)
             sqsum_ref_sh = sum(csq(pft_ref_sh))
+            cc = cc/sqrt(sqsum_ref_sh*self%sqsums_ptcls(iptcl))
         else if( allocated(self%pfts_refs_ctf) )then
             ! generate the argument matrix from memoized components in argtransf
             argmat = self%argtransf(:self%refsz,:) * shvec(1)+self%argtransf(self%refsz+1:,:) * shvec(2)
@@ -917,6 +916,7 @@ contains
             argmat = real(pft_ref_sh * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:)))
             cc = sum(argmat)
             sqsum_ref_sh = sum(csq(pft_ref_sh))
+                cc = cc/sqrt(sqsum_ref_sh*self%sqsums_ptcls(iptcl))
         else
             ! generate the argument matrix from memoized components in argtransf
             argmat = self%argtransf(:self%refsz,:) * shvec(1)+self%argtransf(self%refsz+1:,:) * shvec(2)
@@ -928,8 +928,8 @@ contains
             argmat = real(pft_ref_sh * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:)))
             cc = sum(argmat)
             sqsum_ref_sh = sum(csq(pft_ref_sh))
+            cc = cc/sqrt(sqsum_ref_sh*self%sqsums_ptcls(iptcl))
         endif
-        cc = cc/sqrt(sqsum_ref_sh*self%sqsums_ptcls(iptcl))
     end function corr_2
     
     ! DESTRUCTOR

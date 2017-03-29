@@ -22,14 +22,17 @@ integer                         :: state=1           !< state to evaluate
 type(ori)                       :: o_glob            !< global orientation
 contains
 
-    subroutine cftcc_srch_init( cftcc, img, opt_str, lims, nrestarts, syme )
-        class(cartft_corrcalc), target, intent(in) :: cftcc
-        class(image),           target, intent(in) :: img
-        character(len=*),               intent(in) :: opt_str
-        real,                           intent(in) :: lims(5,2)
-        integer,                        intent(in) :: nrestarts
+    subroutine cftcc_srch_init(cftcc, img, opt_str, lims, nrestarts, syme)
+        class(cartft_corrcalc), target, intent(in)    :: cftcc
+        class(image),           target, intent(in)    :: img
+        character(len=*),               intent(in)    :: opt_str
+        real,                           intent(in)    :: lims(5,2)
+        integer,                        intent(in)    :: nrestarts
         class(sym),           optional, intent(inout) :: syme
         real :: lims_here(5,2)
+        ! set pointers
+        cftcc_ptr => cftcc
+        pimg      => img
         ! make optimizer spec
         if( present(syme) )then
             lims_here(1:3,:) = syme%srchrange()
@@ -42,9 +45,6 @@ contains
         call ospec%set_costfun(cftcc_srch_cost)
         ! generate optimizer object with the factory
         call ofac%new(ospec, nlopt)
-        ! set pointers
-        cftcc_ptr => cftcc
-        pimg      => img
     end subroutine cftcc_srch_init
     
     subroutine cftcc_srch_set_state( state_in )
@@ -77,7 +77,7 @@ contains
         call o%set_euler(vec(1:3))
         shvec(1:2) = vec(4:5)
         shvec(3)   = 0.0
-        call o%set('state', real(state))
+        !call o%set('state', real(state))
         call cftcc_ptr%project(o, 1)     
         cost = -cftcc_ptr%correlate(pimg, 1, shvec)
     end function cftcc_srch_cost
@@ -89,32 +89,35 @@ contains
         real      :: corr, cost, dist, dist_inpl, prev_corr, frac
         prev_shvec = o%get_shift()
         ! copy the input orientation
+        call o%set('state', real(state)) ! from cftcc_srch_set_state
         o_glob = o
-        ! initialise optimiser to current projdir & in-plane rotation
-        ospec%x      = 0.
-        ospec%x(1:3) = o%get_euler()
         ! previous correlation
         call cftcc_ptr%project(o, 1)
         prev_corr = cftcc_ptr%correlate(pimg, 1, [0.,0.,0.])
+        ! initialise optimiser to current projdir & in-plane rotation
+        ospec%x      = 0.
+        ospec%x(1:3) = o%get_euler()
         ! search
         call nlopt%minimize(ospec, cost)
         corr = -cost
+        ! report
         if(corr < prev_corr)then
-            ! no improvment
+            ! no improvement
             corr      = prev_corr
             dist      = 0.
             dist_inpl = 0.
             frac      = 100.
         else
-            ! improvment
+            ! improvement
             call o%set_euler(ospec%x(1:3))
             ! shifts must be obtained by vector addition
             ! the reference is rotated upon projection
             ! the ptcl is shifted only: no need to rotate the shift
             call o%set_shift(prev_shvec - ospec%x(4:5))
+            !call o%set_shift(prev_shvec + ospec%x(4:5))
             ! distance
             dist_inpl = o_glob.inpldist.o
-            dist      = 0.5*rad2deg(o_glob.euldist.o)+0.5*dist_inpl
+            dist      = 0.5*rad2deg(o_glob.euldist.o) + 0.5*dist_inpl
             frac      = 100.*(180.-dist**2.)/180.
         endif
         call o%set('corr',      corr)
@@ -123,12 +126,12 @@ contains
         call o%set('dist',      dist)
         ! set the overlaps
         call o%set('mi_class', 1.)
-        call o%set('mi_inpl',  1.) ! todo
+        call o%set('mi_inpl',  1.)
         call o%set('mi_state', 1.)
-        call o%set('mi_joint', 1.)  !todo
+        call o%set('mi_joint', 1.)
         ! all the other stuff
-        call o%set( 'frac',  frac) ! todo
-        call o%set( 'sdev',  0.)
+        call o%set('frac', frac)
+        call o%set('sdev', 0.)
     end subroutine cftcc_srch_minimize
 
 end module simple_cftcc_srch

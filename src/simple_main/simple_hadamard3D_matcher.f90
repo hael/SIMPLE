@@ -313,8 +313,8 @@ contains
         class(params),     intent(inout) :: p
         integer, optional, intent(in)    :: nsamp_in
         type(ran_tabu)       :: rt
-        integer              :: i, j, k, nsamp, alloc_stat
         integer, allocatable :: sample(:)
+        integer              :: i, j, k, nsamp, alloc_stat
         if( p%vols(1) == '' )then
             p%oritab = 'prime3D_startdoc.txt'
             if( p%refine .eq. 'no' .or. p%refine .eq. 'adasym' )then

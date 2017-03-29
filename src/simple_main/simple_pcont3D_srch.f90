@@ -103,9 +103,9 @@ contains
         use simple_ran_tabu
         class(pcont3D_srch), intent(inout) :: self
         integer, allocatable :: roind_vec(:)    ! slice of in-plane angles
-        type(ran_tabu) :: rt
-        real           :: corrs(self%nrots), e3, inpl_corr
-        integer        :: loc(1), i, iref, inpl_ind, srch_order(self%nrefs)
+        type(ran_tabu)       :: rt
+        real                 :: inpl_corr
+        integer              :: srch_order(self%nrefs), i, iref
         ! init
         self%nbetter = 0
         self%neval   = 0
@@ -117,30 +117,36 @@ contains
         do i = 1,self%nrefs
             iref = srch_order(i)
             if(iref == self%prev_ref)cycle
+            call local_inpl_srch(iref, inpl_corr)
             self%neval = self%neval+1
-            corrs      = self%ppftcc%gencorrs(iref, 1, roind_vec=roind_vec)
-            loc        = maxloc(corrs)     
-            inpl_ind   = loc(1)
-            inpl_corr  = corrs(inpl_ind)
-            e3         = 360. - self%ppftcc%get_rot(inpl_ind)
-            call self%reforis%set(iref, 'corr', inpl_corr)
-            call self%reforis%e3set(iref, e3)
             if(inpl_corr >= self%prev_corr)self%nbetter = self%nbetter+1
             if(self%nbetter >= self%npeaks)exit
         enddo
         if( self%nbetter<self%npeaks )then
-            ! add previous reference to the list
-            corrs     = self%ppftcc%gencorrs(self%prev_ref, 1, roind_vec=roind_vec)
-            loc       = maxloc(corrs)     
-            inpl_ind  = loc(1)
-            e3        = 360. - self%ppftcc%get_rot(inpl_ind)
-            call self%reforis%set(self%prev_ref, 'corr', corrs(inpl_ind))
-            call self%reforis%e3set(self%prev_ref, e3)
+            ! previous reference considered last
+            call local_inpl_srch(self%prev_ref, inpl_corr)
             self%nbetter = self%nbetter+1
             self%neval   = self%nrefs
         endif            
         deallocate( roind_vec )
+        call rt%kill
         if(debug)write(*,*)'simple_pcont3d_srch::do_refs_srch done'
+
+        contains
+
+            subroutine local_inpl_srch(iref_here, corr_here)
+                integer, intent(in)    :: iref_here
+                real,    intent(inout) :: corr_here
+                real    :: corrs(self%nrots), e3
+                integer :: loc(1), inpl_ind
+                corrs     = self%ppftcc%gencorrs(iref_here, 1, roind_vec=roind_vec)
+                loc       = maxloc(corrs)   
+                inpl_ind  = loc(1)
+                corr_here = corrs(inpl_ind)
+                e3        = 360. - self%ppftcc%get_rot(inpl_ind)
+                call self%reforis%set(iref, 'corr', corr_here)
+                call self%reforis%e3set(iref, e3)
+            end subroutine local_inpl_srch
     end subroutine do_refs_srch
 
     !>  \brief  performs the shift search

@@ -45,7 +45,7 @@ contains
         call parse( line, ' ', args, nargs )
         if( nargs /= 3 )stop 'Invalid command line for restart; simple_restart::parse_restart 1'
         call split( args(2), '=', arg )
-        if( trim(arg).ne.'prg' )stop 'Invalid command line for restart; simple_restart::parse_restart 3'
+        if( trim(arg).ne.'prg' )stop 'Invalid command line for restart; simple_restart::parse_restart 2'
         if( trim(args(2)).ne.trim(prg) )stop 'PRG key arguments are incompatible; simple_restart::parse_restart 3'
         call split( args(3), '=', arg )
         select case( trim(arg) )

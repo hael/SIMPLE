@@ -511,7 +511,7 @@ select case(prg)
             call cline%set('eo', 'no')
         endif
         call cline%set('dynlp', 'no')
-        if(.not.cline%defined('nspace'))call cline%set('nspace', 10000.)
+        if(.not.cline%defined('nspace'))call cline%set('nspace', 1000.)
         if(.not.cline%defined('shellw'))call cline%set('shellw', 'no')
         if(.not.cline%defined('refine'))call cline%set('refine', 'no')
         ! execute

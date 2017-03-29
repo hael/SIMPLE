@@ -423,17 +423,18 @@ contains
             if( p%boxmatch < p%box ) call b%img%clip_inplace([p%boxmatch,p%boxmatch,1]) ! SQUARE DIMS ASSUMED
             ! MASKING
             if( p%doautomsk )then
-                ! make sure that img_msk is of the correct dimension
-                call b%img_msk%new([p%boxmatch,p%boxmatch,1],p%smpd)
-                ! create 2D envelope
-                call b%mskvol%env_rproject(o, b%img_msk, p%msk)
-                do i=1, p%binwidth
-                    call b%img_msk%grow_bin
-                enddo
-                call b%img_msk%cos_edge(20)
-                ! call b%img_msk%norm('sigm')
-                ! multiply with the projected envelope
-                call b%img%mul(b%img_msk)
+                ! PARTICLE ENVELOPPE MASKING TURNED OFF FOR NOW
+                ! ! make sure that img_msk is of the correct dimension
+                ! call b%img_msk%new([p%boxmatch,p%boxmatch,1],p%smpd)
+                ! ! create 2D envelope
+                ! call b%mskvol%env_rproject(o, b%img_msk, p%msk)
+                ! do i=1, p%binwidth
+                !     call b%img_msk%grow_bin
+                ! enddo
+                ! call b%img_msk%cos_edge(20)
+                ! ! call b%img_msk%norm('sigm')
+                ! ! multiply with the projected envelope
+                ! call b%img%mul(b%img_msk)
             else if( p%automsk .eq. 'cavg' )then
                 ! ab initio mask
                 call automask2D(b%img, p)

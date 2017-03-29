@@ -1035,7 +1035,7 @@ select case(prg)
         else
             call cline%set('eo','no')
         endif
-        if( .not.cline%defined('nspace') )call cline%set('nspace',10000.)
+        if( .not.cline%defined('nspace') )call cline%set('nspace',1000.)
         if( .not.cline%defined('shellw') )call cline%set('shellw','no')
         ! execute
         call xcont3D%execute(cline)        
