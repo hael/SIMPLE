@@ -2605,8 +2605,7 @@ contains
                             dist_sq = dij_sq + (kk-k0)**2
                             if( dist_sq<=falloff_sq )then
                                 if( rmat(ii,jj,kk)<1. )then
-                                    !rmat(ii,jj,kk) = max( cosedge( sqrt(real(dist_sq) ), rfalloff),rmat(ii,jj,kk) )
-                                    rmat(ii,jj,kk) = max( cos((sqrt(real(dist_sq))/rfalloff )*PI/2.)   ,rmat(ii,jj,kk) )
+                                    rmat(ii,jj,kk) = max( cosedge( sqrt(real(dist_sq) ), rfalloff),rmat(ii,jj,kk) )
                                 endif
                             endif
                         enddo
