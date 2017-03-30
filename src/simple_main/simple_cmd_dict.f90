@@ -33,7 +33,6 @@ contains
         call chdict%push('chunksz',       'number of images/orientations in chunk')
         call chdict%push('class',         'cluster identity')
         call chdict%push('clip',          'clipped image box size(in pixels)')
-        call chdict%push('clip2',         'clipped image box size 2nd(in pixels)')
         call chdict%push('clustvalid',    'validate clustering(yes|homo|no){no}')
         call chdict%push('comlindoc',     'shc_clustering_nclsX.txt')
         call chdict%push('compare',       'do comparison(yes|no){no}')

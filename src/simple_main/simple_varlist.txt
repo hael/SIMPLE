@@ -140,7 +140,6 @@ boxpd
 chunksz
 class
 clip
-clip2
 corner
 cube
 edge

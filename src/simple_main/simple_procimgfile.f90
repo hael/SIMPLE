@@ -184,13 +184,14 @@ contains
     end subroutine pad_imgfile
     
     !>  \brief  is for resizing
-    subroutine resize_imgfile( fname2resize, fname, smpd, ldim_new, fromptop )
-        character(len=*),  intent(in) :: fname2resize, fname !< filenames
-        real,              intent(in) :: smpd                !< original sampling distance
-        integer,           intent(in) :: ldim_new(3)         !< desired dimensions
-        integer, optional, intent(in) :: fromptop(2)         !< particle range
-        type(image)                   :: img, img_resized
-        integer                       :: n, i, ldim(3), prange(2), cnt, sz
+    subroutine resize_imgfile( fname2resize, fname, smpd, ldim_new, smpd_new, fromptop )
+        character(len=*),  intent(in)  :: fname2resize, fname !< filenames
+        real,              intent(in)  :: smpd        !< original sampling distance
+        integer,           intent(in)  :: ldim_new(3) !< desired dimensions
+        real,              intent(out) :: smpd_new    !< new sampling distance
+        integer, optional, intent(in)  :: fromptop(2) !< particle range
+        type(image) :: img, img_resized
+        integer     :: n, i, ldim(3), prange(2), cnt, sz
         call find_ldim_nptcls(fname2resize, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'resize_imgfile' )
@@ -220,6 +221,7 @@ contains
             call img_resized%bwd_ft
             call img_resized%write(fname, cnt)
         end do
+        smpd_new = img_resized%get_smpd()
         call img%kill
         call img_resized%kill
     end subroutine resize_imgfile
@@ -227,7 +229,7 @@ contains
     !>  \brief  is for clipping
     subroutine clip_imgfile( fname2clip, fname, ldim_clip )
         character(len=*), intent(in) :: fname2clip, fname !< filenames
-        integer, intent(in)          :: ldim_clip(3)      !< desired dimensions
+        integer,          intent(in) :: ldim_clip(3)      !< desired dimensions
         type(image)                  :: img, img_clip
         integer                      :: n, i, ldim(3)
         call find_ldim_nptcls(fname2clip, ldim, n)
@@ -251,14 +253,15 @@ contains
     end subroutine clip_imgfile
     
     !>  \brief  is for resizing and clipping
-    subroutine resize_and_clip_imgfile( fname2resize, fname, smpd, ldim_new, ldim_clip, fromptop )
-        character(len=*),  intent(in) :: fname2resize, fname !< filenames
-        real,              intent(in) :: smpd                !< original sampling distance
-        integer,           intent(in) :: ldim_new(3)         !< scaled dimensions
-        integer,           intent(in) :: ldim_clip(3)        !< clipped (final) dimensions
-        integer, optional, intent(in) :: fromptop(2)         !< particle range
-        type(image)                   :: img, img_resized, img_clip
-        integer                       :: n, i, ldim(3), prange(2), cnt, sz
+    subroutine resize_and_clip_imgfile( fname2resize, fname, smpd, ldim_new, ldim_clip, smpd_new, fromptop )
+        character(len=*),  intent(in)  :: fname2resize, fname !< filenames
+        real,              intent(in)  :: smpd         !< original sampling distance
+        integer,           intent(in)  :: ldim_new(3)  !< scaled dimensions
+        integer,           intent(in)  :: ldim_clip(3) !< clipped (final) dimensions
+        real,              intent(out) :: smpd_new     !< new sampling distance
+        integer, optional, intent(in)  :: fromptop(2)  !< particle range
+        type(image) :: img, img_resized, img_clip
+        integer     :: n, i, ldim(3), prange(2), cnt, sz
         call find_ldim_nptcls(fname2resize, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'resize_imgfile' )
@@ -290,20 +293,20 @@ contains
             endif
             call img_clip%write(fname, cnt)
         end do
+        smpd_new = img_resized%get_smpd()
         call img%kill
         call img_resized%kill
         call img_clip%kill
     end subroutine resize_and_clip_imgfile
 
     !>  \brief  is for resizing and clipping
-    subroutine resize_and_clip_imgfile_double( fname2resize, fname1, fname2,&
-        smpd, ldims_new, ldims_clip, fromptop )
-        character(len=*),  intent(in) :: fname2resize, fname1, fname2 !< filenames
-        real,              intent(in) :: smpd             !< original sampling distance
-        integer,           intent(in) :: ldims_new(2,3)   !< scaled dimensions
-        integer,           intent(in) :: ldims_clip(2,3)  !< clipped (final) dimensions
-        integer, optional, intent(in) :: fromptop(2)      !< particle range
-        type(image) :: img, img_resized1, img_resized2, img_clip1, img_clip2
+    subroutine resize_imgfile_double( fname2resize, fname1, fname2, smpd, ldims_new, smpds_new, fromptop )
+        character(len=*),  intent(in)  :: fname2resize, fname1, fname2 !< filenames
+        real,              intent(in)  :: smpd           !< original sampling distance
+        integer,           intent(in)  :: ldims_new(2,3) !< scaled dimensions
+        real,              intent(out) :: smpds_new(2)   !< new sampling distances
+        integer, optional, intent(in)  :: fromptop(2)    !< particle range
+        type(image) :: img, img_resized1, img_resized2
         integer     :: n, i, ldim(3), prange(2), cnt, sz
         call find_ldim_nptcls(fname2resize, ldim, n)
         ldim(3) = 1
@@ -330,29 +333,15 @@ contains
             call img%clip(img_resized2)
             call img_resized1%bwd_ft
             call img_resized2%bwd_ft
-            call img_clip1%new(ldims_clip(1,:),img_resized1%get_smpd())
-            call img_clip2%new(ldims_clip(2,:),img_resized2%get_smpd())
-            if( ldims_clip(1,1) <= ldims_new(1,1) .and. ldims_clip(1,2) <= ldims_new(1,2)&
-            .and. ldims_clip(1,3) <= ldims_new(1,3) )then
-                call img_resized1%clip(img_clip1)
-            else
-                call img_resized1%pad(img_clip1)
-            endif
-            if( ldims_clip(2,1) <= ldims_new(2,1) .and. ldims_clip(2,2) <= ldims_new(2,2)&
-            .and. ldims_clip(2,3) <= ldims_new(2,3) )then
-                call img_resized2%clip(img_clip2)
-            else
-                call img_resized2%pad(img_clip2)
-            endif
-            call img_clip1%write(fname1, cnt)
-            call img_clip2%write(fname2, cnt)
+            call img_resized1%write(fname1, cnt)
+            call img_resized2%write(fname2, cnt)
         end do
+        smpds_new(1) = img_resized1%get_smpd()
+        smpds_new(2) = img_resized2%get_smpd()
         call img%kill
         call img_resized1%kill
         call img_resized2%kill
-        call img_clip1%kill
-        call img_clip2%kill
-    end subroutine resize_and_clip_imgfile_double
+    end subroutine resize_imgfile_double
     
     !>  \brief  is for normalization
     subroutine norm_imgfile( fname2norm, fname, hfun )

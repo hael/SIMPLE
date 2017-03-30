@@ -16,6 +16,7 @@ use simple_cmdline,     only: cmdline
 use simple_strings      ! use all in there
 use simple_filehandling ! use all in there
 use simple_jiffys,      only: find_ldim_nptcls
+use simple_magic_boxes, only: find_magic_box
 implicit none
 
 public :: params
@@ -176,7 +177,6 @@ type :: params
     integer :: chunksz=0
     integer :: class=1
     integer :: clip=0
-    integer :: clip2=0
     integer :: corner=0
     integer :: cube=0
     integer :: edge=14
@@ -529,7 +529,6 @@ contains
         call check_iarg('boxconvsz',      self%boxconvsz)
         call check_iarg('chunksz',        self%chunksz)
         call check_iarg('clip',           self%clip)
-        call check_iarg('clip2',          self%clip2)
         call check_iarg('corner',         self%corner)
         call check_iarg('cube',           self%cube)
         call check_iarg('edge',           self%edge)
@@ -827,8 +826,6 @@ contains
             else
                 self%msk = self%box/2
             endif
-        ! else
-        !     if( self%box /= 0 ) self%msk = min(real(self%box/2),self%msk)
         endif
         ! set mode of masking
         if( cline%defined('inner') )then
@@ -844,7 +841,8 @@ contains
             self%boxmatch = self%box
             self%l_xfel    = .true.
         else if( self%box > 2*(self%msk+10) )then
-            self%boxmatch = 2*(nint(self%msk)+10)
+            self%boxmatch = find_magic_box(2*(nint(self%msk)+10))
+            if( self%boxmatch > self%box ) self%boxmatch = self%box
         else
             self%boxmatch = self%box
         endif
@@ -858,16 +856,16 @@ contains
         if( .not.cline%defined('mw') .and. self%automsk.eq.'yes') &
             write(*,*) 'WARNING! MW argument not provided in conjunction with AUTOMSK'
         if( self%doautomsk )then
-            if( self%edge <= 0 )   stop 'Invalid value for edge' 
-            if( self%binwidth < 0 )stop 'Invalid value for binwidth'
+            if( self%edge <= 0    ) stop 'Invalid value for edge' 
+            if( self%binwidth < 0 ) stop 'Invalid value for binwidth'
         endif
         ! set newbox if scale is defined
         if( cline%defined('scale') )then
-            self%newbox = round2even(self%scale*real(self%box))
+            self%newbox = find_magic_box(nint(self%scale*real(self%box)))
         endif
          ! set newbox if scale is defined
         if( cline%defined('scale2') )then
-            self%newbox2 = round2even(self%scale2*real(self%box))
+            self%newbox2 = find_magic_box(nint(self%scale2*real(self%box)))
         endif
         self%kfromto(1) = max(2,int(self%dstep/self%hp)) ! high-pass Fourier index set according to hp
         self%kfromto(2) = int(self%dstep/self%lp)        ! low-pass Fourier index set according to lp
@@ -890,9 +888,6 @@ contains
         ! define clipped box if not given
         if( .not. cline%defined('clip') )then
             self%clip = self%box
-        endif
-        if( .not. cline%defined('clip2') )then
-            self%clip2 = self%box
         endif
         ! error check ncls
         if( file_exists(self%refs) )then

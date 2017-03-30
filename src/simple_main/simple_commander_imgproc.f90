@@ -464,7 +464,7 @@ contains
         type(params) :: p
         type(build)  :: b
         type(image)  :: vol2, img, img2
-        real         :: ave, sdev, var, med
+        real         :: ave, sdev, var, med, smpd_new, smpds_new(2)
         integer      :: ldim(3), ldim_scaled(3), nfiles, nframes, iframe, ifile
         integer      :: ldims_scaled(2,3), ldims_clip(2,3)
         character(len=:), allocatable      :: fname
@@ -479,39 +479,41 @@ contains
             ! 2D
             if( cline%defined('scale2') )then
                 ! Rescaling, double
-                if( .not. cline%defined('clip')  ) stop 'need clip to be part of command line as well'
-                if( .not. cline%defined('clip2') ) stop 'need clip2 to be part of command line as well'
-                if( .not. cline%defined('scale') ) stop 'need scale to be part of command line as well'
+                if( cline%defined('clip')  ) stop 'clip is not allowed in double scaling'
+                if( .not. cline%defined('scale') ) stop 'need scale to be part of command line as well 4 double scaling'
                 ldims_scaled(1,:) = [p%newbox,p%newbox,1]   ! dimension of scaled
                 ldims_scaled(2,:) = [p%newbox2,p%newbox2,1] ! dimension of scaled
-                ldims_clip(1,:)   = [p%clip,p%clip,1]
-                ldims_clip(2,:)   = [p%clip2,p%clip2,1]
                 if( cline%defined('part') )then
                     p%outstk  = 'outstk_part'//int2str_pad(p%part, p%numlen)//p%ext
                     p%outstk2 = 'outstk2_part'//int2str_pad(p%part, p%numlen)//p%ext
-                    call resize_and_clip_imgfile_double(p%stk, p%outstk, p%outstk2,&
-                    p%smpd, ldims_scaled, ldims_clip, [p%fromp,p%top])
+                    call resize_imgfile_double(p%stk, p%outstk, p%outstk2,&
+                    p%smpd, ldims_scaled, smpds_new, [p%fromp,p%top])
                 else
-                    call resize_and_clip_imgfile_double(p%stk, p%outstk, p%outstk2,&
-                    p%smpd, ldims_scaled, ldims_clip)
+                    call resize_imgfile_double(p%stk, p%outstk, p%outstk2,&
+                    p%smpd, ldims_scaled, smpds_new)
                 endif
+                write(*,'(a,1x,f9.4)') 'SAMPLING DISTANCE AFTER SCALING (OUTSTK): ', smpds_new(1)
+                write(*,'(a,1x,f9.4)') 'SAMPLING DISTANCE AFTER SCALING (OUTSTK2):', smpds_new(2)
             else if( cline%defined('scale') )then
                 ! Rescaling
                 ldim_scaled = [p%newbox,p%newbox,1] ! dimension of scaled
                 if( cline%defined('clip') )then
                     if( cline%defined('part') )then
                         p%outstk = 'outstk_part'//int2str_pad(p%part, p%numlen)//p%ext
-                        call resize_and_clip_imgfile(p%stk,p%outstk,p%smpd,ldim_scaled,[p%clip,p%clip,1],[p%fromp,p%top])
+                        call resize_and_clip_imgfile(p%stk,p%outstk,p%smpd,ldim_scaled,&
+                        &[p%clip,p%clip,1],smpd_new,[p%fromp,p%top])
                     else
-                        call resize_and_clip_imgfile(p%stk,p%outstk,p%smpd,ldim_scaled,[p%clip,p%clip,1])
+                        call resize_and_clip_imgfile(p%stk,p%outstk,p%smpd,ldim_scaled,&
+                        [p%clip,p%clip,1],smpd_new)
                     endif
                 else
                     if( cline%defined('part') )then
                         p%outstk = 'outstk_part'//int2str_pad(p%part, p%numlen)//p%ext
-                        call resize_imgfile(p%stk,p%outstk,p%smpd,ldim_scaled,[p%fromp,p%top])
+                        call resize_imgfile(p%stk,p%outstk,p%smpd,ldim_scaled,smpd_new,[p%fromp,p%top])
                     else
-                        call resize_imgfile(p%stk,p%outstk,p%smpd,ldim_scaled)
+                        call resize_imgfile(p%stk,p%outstk,p%smpd,ldim_scaled,smpd_new)
                     endif
+                    write(*,'(a,1x,f9.4)') 'SAMPLING DISTANCE AFTER SCALING:', smpd_new
                 endif
             else if( cline%defined('clip') )then
                 ! Clipping
