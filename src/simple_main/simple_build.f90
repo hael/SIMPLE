@@ -73,6 +73,7 @@ type build
     real,    allocatable                :: ssnr(:,:)          !< spectral signal to noise rations
     real,    allocatable                :: fsc(:,:)           !< Fourier shell correlation
     integer, allocatable                :: nnmat(:,:)         !< matrix with nearest neighbor indices
+    integer, allocatable                :: pbatch(:)          !< particle index batch
     ! PRIVATE EXISTENCE VARIABLES
     logical, private                    :: general_tbox_exists          = .false.
     logical, private                    :: cluster_tbox_exists          = .false.
@@ -118,7 +119,7 @@ contains
         class(cmdline),    intent(inout) :: cline
         logical, optional, intent(in)    :: do3d, nooritab, force_ctf
         type(ran_tabu) :: rt
-        integer        :: alloc_stat, lfny, iptcl
+        integer        :: alloc_stat, lfny, iptcl, partsz
         real           :: slask(3)
         logical        :: err, ddo3d, fforce_ctf
         call self%kill_general_tbox
@@ -220,6 +221,20 @@ contains
         call init_kbiterpol(KBWINSZ, KBALPHA)
         ! build convergence checker
         self%conv = convergence(self%a, p, cline)
+        ! generate random particle batch
+        if( cline%defined('batchfrac') )then
+            ! allocate index array
+            partsz    = p%top - p%fromp + 1
+            p%batchsz = nint(real(partsz) * p%batchfrac)
+            allocate(self%pbatch(p%batchsz), stat=alloc_stat)
+            call alloc_err("In: build_general_tbox; simple_build, 2", alloc_stat)
+            ! select random indices
+            rt = ran_tabu(partsz)
+            call rt%ne_ran_iarr(self%pbatch)
+            ! shift the indicies
+            self%pbatch = self%pbatch + p%fromp - 1
+            call rt%kill
+        endif
         write(*,'(A)') '>>> DONE BUILDING GENERAL TOOLBOX'
         self%general_tbox_exists = .true.
     end subroutine build_general_tbox

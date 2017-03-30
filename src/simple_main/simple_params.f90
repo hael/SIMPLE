@@ -75,7 +75,6 @@ type :: params
     character(len=3) :: phrand='no'
     character(len=3) :: plot='no'
     character(len=3) :: readwrite='no'
-    character(len=3) :: remap='no'
     character(len=3) :: restart='no'
     character(len=3) :: rnd='no'
     character(len=3) :: rm_outliers='yes'
@@ -169,6 +168,7 @@ type :: params
     ! integer variables in ascending alphabetical order
     integer :: astep=1
     integer :: avgsz=0
+    integer :: batchsz=0
     integer :: binwidth=1
     integer :: box=0
     integer :: boxconvsz=256
@@ -266,6 +266,7 @@ type :: params
     real    :: astigerr=0.
     real    :: astigstep=0.05
     real    :: athres=0.
+    real    :: batchfrac=1.0
     real    :: bfac=200
     real    :: bfacerr=50.
     real    :: cenlp=50.
@@ -468,7 +469,6 @@ contains
         call check_carg('readwrite',      self%readwrite)
         call check_carg('refine',         self%refine)
         call check_carg('refs',           self%refs)
-        call check_carg('remap',          self%remap)
         call check_carg('restart',        self%restart)
         call check_carg('rm_outliers',    self%rm_outliers)
         call check_carg('rnd',            self%rnd)
@@ -553,6 +553,7 @@ contains
         call check_iarg('ncunits',        self%ncunits)
         call check_iarg('ndiscrete',      self%ndiscrete)
         call check_iarg('ndocs',          self%ndocs)
+        call check_iarg('newbox',         self%newbox)
         call check_iarg('nframes',        self%nframes)
         call check_iarg('nmembers',       self%nmembers)
         call check_iarg('nnn',            self%nnn)
@@ -602,6 +603,7 @@ contains
         call check_rarg('astigerr',       self%astigerr)
         call check_rarg('astigstep',      self%astigstep)
         call check_rarg('athres',         self%athres)
+        call check_rarg('batchfrac',      self%batchfrac)
         call check_rarg('bfac',           self%bfac)
         call check_rarg('bfacerr',        self%bfacerr)
         call check_rarg('cenlp',          self%cenlp)
@@ -859,11 +861,13 @@ contains
             if( self%edge <= 0    ) stop 'Invalid value for edge' 
             if( self%binwidth < 0 ) stop 'Invalid value for binwidth'
         endif
-        ! set newbox if scale is defined
-        if( cline%defined('scale') )then
-            self%newbox = find_magic_box(nint(self%scale*real(self%box)))
+        if( .not. cline%defined('newbox') )then
+            ! set newbox if scale is defined
+            if( cline%defined('scale') )then
+                self%newbox = find_magic_box(nint(self%scale*real(self%box)))
+            endif
         endif
-         ! set newbox if scale is defined
+        ! set newbox if scale is defined
         if( cline%defined('scale2') )then
             self%newbox2 = find_magic_box(nint(self%scale2*real(self%box)))
         endif

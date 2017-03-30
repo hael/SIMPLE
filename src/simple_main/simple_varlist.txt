@@ -43,7 +43,6 @@ phaseplate
 phrand
 plot
 readwrite
-remap
 restart
 rnd
 rm_outliers
@@ -132,6 +131,7 @@ voltab2
 wfun
 astep
 avgsz
+batchsz
 binwidth
 box
 boxconvsz
@@ -226,6 +226,7 @@ ares
 astigerr
 astigstep
 athres
+batchfrac
 bfac
 bfacerr
 cenlp

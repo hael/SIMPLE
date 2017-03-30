@@ -464,7 +464,7 @@ contains
         type(params) :: p
         type(build)  :: b
         type(image)  :: vol2, img, img2
-        real         :: ave, sdev, var, med, smpd_new, smpds_new(2)
+        real         :: ave, sdev, var, med, smpd_new, smpds_new(2), scale
         integer      :: ldim(3), ldim_scaled(3), nfiles, nframes, iframe, ifile
         integer      :: ldims_scaled(2,3), ldims_clip(2,3)
         character(len=:), allocatable      :: fname
@@ -492,9 +492,11 @@ contains
                     call resize_imgfile_double(p%stk, p%outstk, p%outstk2,&
                     p%smpd, ldims_scaled, smpds_new)
                 endif
-                write(*,'(a,1x,f9.4)') 'SAMPLING DISTANCE AFTER SCALING (OUTSTK): ', smpds_new(1)
+                write(*,'(a,1x,f9.4)') 'SAMPLING DISTANCE AFTER SCALING (OUTSTK) :', smpds_new(1)
                 write(*,'(a,1x,f9.4)') 'SAMPLING DISTANCE AFTER SCALING (OUTSTK2):', smpds_new(2)
-            else if( cline%defined('scale') )then
+                write(*,'(a,1x,i5)')   'BOX SIZE AFTER SCALING (OUTSTK) :', ldims_scaled(1,1)
+                write(*,'(a,1x,i5)')   'BOX SIZE AFTER SCALING (OUTSTK2):', ldims_scaled(2,1)
+            else if( cline%defined('scale') .or. cline%defined('newbox') )then
                 ! Rescaling
                 ldim_scaled = [p%newbox,p%newbox,1] ! dimension of scaled
                 if( cline%defined('clip') )then
@@ -513,8 +515,9 @@ contains
                     else
                         call resize_imgfile(p%stk,p%outstk,p%smpd,ldim_scaled,smpd_new)
                     endif
-                    write(*,'(a,1x,f9.4)') 'SAMPLING DISTANCE AFTER SCALING:', smpd_new
+                    write(*,'(a,1x,i5)') 'BOX SIZE AFTER SCALING:', ldim_scaled(1)
                 endif
+                write(*,'(a,1x,f9.4)') 'SAMPLING DISTANCE AFTER SCALING:', smpd_new
             else if( cline%defined('clip') )then
                 ! Clipping
                 call clip_imgfile(p%stk,p%outstk,[p%clip,p%clip,1])
@@ -523,7 +526,7 @@ contains
             ! 3D
             if( .not.file_exists(p%vols(1)) ) stop 'Cannot find input volume'
             call b%vol%read(p%vols(1))
-            if( cline%defined('scale') )then
+            if( cline%defined('scale') .or. cline%defined('newbox') )then
                 ! Rescaling
                 call vol2%new([p%newbox,p%newbox,p%newbox],p%smpd)
                 call b%vol%fwd_ft
@@ -538,6 +541,9 @@ contains
                 b%vol = vol2
                 call b%vol%bwd_ft
                 p%box = p%newbox
+                scale = real(p%newbox)/real(p%box)
+                smpd_new = p%smpd/scale
+                write(*,'(a,1x,f9.4)') 'SAMPLING DISTANCE AFTER SCALING:', smpd_new
             endif
             if( cline%defined('clip') )then
                 ! Clipping
@@ -553,6 +559,8 @@ contains
                     call b%vol%pad(vol2, backgr=med)
                 endif
                 b%vol = vol2
+            else
+                 write(*,'(a,1x,i5)') 'BOX SIZE AFTER SCALING:', p%newbox
             endif
             if( p%outvol .ne. '' )call b%vol%write(p%outvol, del_if_exists=.true.)
         else if( cline%defined('filetab') )then

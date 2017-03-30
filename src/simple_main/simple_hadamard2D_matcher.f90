@@ -101,7 +101,7 @@ contains
             if( nint(orientation%get('state')) > 0 )then
                 b%img = b%imgs(iptcl) ! put the original image back
                 icls = nint(orientation%get('class'))
-                if( allocated(wmat) )then
+                if( p%l_shellw .and. allocated(wmat) )then
                     wresamp = resample_filter(wmat(iptcl,:), res, res_pad)
                     call wiener_restore2D_online_fast(b%img, orientation, p%tfplan,&
                     &b%cavgs(icls), b%ctfsqsums(icls), p%msk, wresamp)
@@ -284,7 +284,7 @@ contains
         integer   :: cnt, iptcl, icls, sz, pop, istate
         integer   :: filtsz, alloc_stat, filnum, io_stat
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PRIME2D SEARCH ENGINE'
-        if( frac_srch_space >= SHW_FRAC_LIM .and. p%oritab .ne. '' )then
+        if( p%l_shellw .and. frac_srch_space >= SHW_FRAC_LIM .and. p%oritab .ne. '' )then
             filtsz = b%img%get_filtsz()
             if( allocated(wmat) ) deallocate(wmat)
             allocate(wmat(p%fromp:p%top,filtsz), stat=alloc_stat)

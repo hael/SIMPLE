@@ -1717,10 +1717,10 @@ select case(prg)
         keys_optional(4)  = 'msk'
         keys_optional(5)  = 'scale'
         keys_optional(6)  = 'scale2'
-        keys_optional(7)  = 'clip'
-        keys_optional(8)  = 'clip2'
+        keys_optional(7)  = 'newbox'
+        keys_optional(8)  = 'clip'
         keys_optional(9)  = 'outvol'
-        keys_optional(10) = 'outstk'
+        keys_optional(10)  = 'outstk'
         keys_optional(11) = 'outstk2'
         ! parse command line
         if( describe ) call print_doc_scale

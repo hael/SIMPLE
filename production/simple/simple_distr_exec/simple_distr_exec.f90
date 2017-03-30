@@ -297,7 +297,7 @@ select case(prg)
         keys_optional(7)  = 'hp'
         keys_optional(8)  = 'lp'
         keys_optional(9)  = 'cenlp'
-        keys_optional(10)  = 'trs'
+        keys_optional(10) = 'trs'
         keys_optional(11) = 'automsk'
         keys_optional(12) = 'amsklp'
         keys_optional(13) = 'inner'
@@ -317,7 +317,7 @@ select case(prg)
         ! else
         !     call cline%parse( keys_required(:7), keys_optional(:19) )
         ! endif
-        call cline%parse( keys_required(:6), keys_optional(:19) )
+        call cline%parse( keys_required(:6), keys_optional(:20) )
         ! set defaults
         if( .not. cline%defined('lp')     ) call cline%set('lp',     20.)
         if( .not. cline%defined('eo')     ) call cline%set('eo',    'no')

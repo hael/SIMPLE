@@ -361,31 +361,6 @@ contains
         p1 = 0.
         p2 = 359.9999/real(csym)
     end subroutine
-
-    !> \brief  automatic scaling to smpd=3.3
-    subroutine autoscale( box_in, msk_in, smpd_in, box_new, msk_new, smpd_new, scale )
-        integer, intent(in)  :: box_in
-        real,    intent(in)  :: msk_in, smpd_in
-        integer, intent(out) :: box_new
-        real,    intent(out) :: msk_new, smpd_new, scale
-        real,    parameter   :: SMPD_TARGET = 3.7
-        integer, parameter   :: EDGE = 5
-        integer :: box_cut
-        if( smpd_in < SMPD_TARGET )then
-            ! ok
-        else
-            scale    = 1.0
-            msk_new  = msk_in
-            box_new  = box_in
-            smpd_new = smpd_in
-            write(*,*) 'Inputted smpd < SMPD_TARGET, no scaling done; simple_math :: autoscale'
-            return
-        endif
-        scale    = smpd_in/SMPD_TARGET
-        msk_new  = scale*real(msk_in)
-        box_new  = round2even(real(2*msk_new+EDGE))
-        smpd_new = SMPD_TARGET
-    end subroutine autoscale
     
     !> \brief  to put the which element (if it exists) last in the array, 
     !!         swapping it with its present position

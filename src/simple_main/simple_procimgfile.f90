@@ -266,7 +266,7 @@ contains
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'resize_imgfile' )
         ! do the work
-        call img%new(ldim,1.)
+        call img%new(ldim,smpd)
         call img_resized%new(ldim_new,smpd) ! this sampling distance will be overwritten
         write(*,'(a)') '>>> RESIZING IMAGES'
         if( present(fromptop) )then
@@ -312,7 +312,7 @@ contains
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'resize_imgfile' )
         ! do the work
-        call img%new(ldim,1.)
+        call img%new(ldim,smpd)
         call img_resized1%new(ldims_new(1,:),smpd) ! this sampling distance will be overwritten
         call img_resized2%new(ldims_new(2,:),smpd) ! this sampling distance will be overwritten
         write(*,'(a)') '>>> RESIZING IMAGES'

@@ -131,7 +131,7 @@ contains
         use simple_commander_volops,  only: projvol_commander
         use simple_commander_rec,     only: recvol_commander
         use simple_strings,           only: int2str_pad, str2int
-        use simple_math,              only: autoscale
+        use simple_magic_boxes,       only: autoscale
         use simple_oris,              only: oris
         class(ini3D_from_cavgs_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
@@ -194,9 +194,8 @@ contains
         ! initialise command line parameters
         if( DOSCALE )then
             ! (1) SCALING
-            call autoscale( p_master%box, p_master%msk, p_master%smpd, box_sc, msk_sc, smpd_sc, scale )
-            call cline_scale%set('scale',  scale)
-            call cline_scale%set('clip',   real(box_sc))
+            call autoscale( p_master%box, p_master%msk, p_master%smpd, box_sc, msk_sc, smpd_sc )
+            call cline_scale%set('newbox', real(box_sc))
             call cline_scale%set('outstk', trim(STKSCALEDBODY)//p_master%ext)
             call cline_prime3D_init%set('stk',  trim(STKSCALEDBODY)//p_master%ext)
             call cline_prime3D_init%set('smpd', smpd_sc)

@@ -702,11 +702,10 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         real,                    intent(in)    :: smpd
         class(oris),             intent(inout) :: a
-        type(ctf)         :: tfun
-        !real, allocatable :: ctfmats(:,:,:)
-        integer           :: iptcl,alloc_stat 
-        real              :: kv,cs,fraca,dfx,dfy,angast
-        logical           :: astig
+        type(ctf) :: tfun
+        integer   :: iptcl,alloc_stat 
+        real      :: kv,cs,fraca,dfx,dfy,angast
+        logical   :: astig
         astig = a%isthere('dfy')
         if( allocated(self%ctfmats) ) deallocate(self%ctfmats)
         allocate(self%ctfmats(self%pfromto(1):self%pfromto(2),self%refsz,self%kfromto(1):self%kfromto(2)), stat=alloc_stat)
