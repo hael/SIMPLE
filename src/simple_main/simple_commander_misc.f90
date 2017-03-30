@@ -25,6 +25,7 @@ public :: masscen_commander
 public :: print_cmd_dict_commander
 public :: print_dose_weights_commander
 public :: print_fsc_commander
+public :: print_magic_boxes_commander
 public :: res_commander
 public :: shift_commander
 private
@@ -53,6 +54,10 @@ type, extends(commander_base) :: print_fsc_commander
   contains
     procedure :: execute       => exec_print_fsc
 end type print_fsc_commander
+type, extends(commander_base) :: print_magic_boxes_commander
+  contains
+    procedure :: execute       => exec_print_magic_boxes
+end type print_magic_boxes_commander
 type, extends(commander_base) :: res_commander
   contains
     procedure :: execute       => exec_res
@@ -287,6 +292,17 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_PRINT_FSC NORMAL STOP ****')
     end subroutine exec_print_fsc
+
+    subroutine exec_print_magic_boxes( self, cline )
+        use simple_magic_boxes, only: print_magic_box_range
+        class(print_magic_boxes_commander), intent(inout) :: self
+        class(cmdline),                     intent(inout) :: cline
+        type(params) :: p
+        p = params(cline) ! parameters generated
+        call print_magic_box_range(p%smpd, p%moldiam )
+        ! end gracefully
+        call simple_end('**** SIMPLE_PRINT_MAGIC_BOXES NORMAL STOP ****')
+    end subroutine exec_print_magic_boxes
     
     subroutine exec_res( self, cline )
         class(res_commander), intent(inout) :: self

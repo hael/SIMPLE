@@ -366,7 +366,7 @@ contains
         class(prime2D_distr_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         ! constants
-        logical, parameter                 :: DEBUG=.true.
+        logical, parameter                 :: DEBUG           = .true.
         character(len=32), parameter       :: ALGNFBODY       = 'algndoc_'
         character(len=32), parameter       :: ITERFBODY       = 'prime2Ddoc_'
         character(len=32), parameter       :: CAVGS_ITERFBODY = 'cavgs_iter'
@@ -375,7 +375,6 @@ contains
         real,              parameter       :: MAXSHIFT        = 6.0
         ! commanders
         type(prime2D_init_distr_commander) :: xprime2D_init_distr
-        type(find_nnimgs_distr_commander)  :: xfind_nnimgs_distr
         type(check2D_conv_commander)       :: xcheck2D_conv
         type(rank_cavgs_commander)         :: xrank_cavgs
         type(merge_algndocs_commander)     :: xmerge_algndocs
@@ -388,13 +387,12 @@ contains
         type(cmdline)                      :: cline_merge_algndocs
         type(cmdline)                      :: cline_automask2D
         type(cmdline)                      :: cline_prime2D_init
-        type(cmdline)                      :: cline_find_nnimgs
         ! other variables
         type(params)                       :: p_master
         integer, allocatable               :: parts(:,:)
         type(qsys_ctrl)                    :: qscripts
         character(len=STDLEN)              :: refs, oritab, str, str_iter, simple_exec_bin
-        integer                            :: iter
+        integer                            :: iter, i
         type(chash)                        :: myq_descr, job_descr
         type(qsys_factory)                 :: qsys_fac
         class(qsys_base), pointer          :: myqsys
@@ -423,10 +421,8 @@ contains
         cline_merge_algndocs = cline
         cline_automask2D     = cline
         cline_prime2D_init   = cline
-        cline_find_nnimgs    = cline
         ! we need to set the prg flag for the command lines that control distributed workflows 
         call cline_prime2D_init%set('prg', 'prime2D_init')
-        call cline_find_nnimgs%set('prg', 'find_nnimgs' )
         ! initialise static command line parameters and static job description parameters
         call cline_merge_algndocs%set('fbody',  ALGNFBODY)
         call cline_merge_algndocs%set('nptcls', real(p_master%nptcls))
@@ -450,12 +446,18 @@ contains
         if( cline%defined('extr_thresh') )then
             ! all is well
         else
-            ! start from the top
+            ! starts from the top
             p_master%extr_thresh = EXTRINITHRESH / p_master%rrate
+            if( p_master%startit > 1 )then
+                ! need to update the randomization rate
+                do i=1,p_master%startit-1
+                     p_master%extr_thresh = p_master%extr_thresh * p_master%rrate
+                end do
+            endif
         endif
 
         ! main loop
-        iter = p_master%startit-1
+        iter = p_master%startit - 1
         do
             iter = iter+1
             str_iter = int2str_pad(iter,3)
@@ -463,11 +465,6 @@ contains
             write(*,'(A,I6)')'>>> ITERATION ', iter
             write(*,'(A)')   '>>>'
             call qsys_cleanup(p_master)
-            ! identify nearest neighbors in parallel, if needed
-            if( str_has_substr(p_master%refine,'neigh') )then
-                call cline_find_nnimgs%set('stk', refs)
-                call xfind_nnimgs_distr%execute(cline_find_nnimgs)
-            endif
             ! exponential cooling of the randomization rate
             p_master%extr_thresh = p_master%extr_thresh * p_master%rrate
             call job_descr%set('extr_thresh', real2str(p_master%extr_thresh))
@@ -493,7 +490,7 @@ contains
             call cline_check2D_conv%set('oritab', trim(oritab))
             call cline_check2D_conv%set('lp',     real(p_master%lp)) ! may be subjected to iter-dependent update in future
             call xcheck2D_conv%execute(cline_check2D_conv)
-            ! this activates shifting & automasking if frac >= 90
+            ! this activates shifting & automasking if frac >= 80
             if( cline_check2D_conv%defined('trs') .and. .not.job_descr%isthere('trs') )then
                 ! activates shift search
                 str = real2str(cline_check2D_conv%get_rarg('trs'))
@@ -506,12 +503,6 @@ contains
             if( cline_check2D_conv%get_carg('converged').eq.'yes' .or. iter==p_master%maxits ) exit
         end do
         call qsys_cleanup(p_master)
-        ! performs masking
-        if( cline_automask2D%get_carg('automsk').eq.'cavg' )then
-            call cline_automask2D%set('stk', trim(refs))
-            call xautomask2D%execute(cline_automask2D)
-            refs = trim('cavgs_iter'//int2str_pad(iter,3)//'msk'//p_master%ext)
-        endif
         ! ranking
         call cline_rank_cavgs%set('oritab', trim(oritab))
         call cline_rank_cavgs%set('stk',    trim(refs))
@@ -735,7 +726,6 @@ contains
         enddo
         if( .not.cline%defined('oritab') .and. .not.vol_defined )then
             ! ab-initio
-            ! call cline_prime3D_init%set( 'oritab', oritab )
             call xprime3D_init_distr%execute( cline_prime3D_init )
             call cline%set( 'vol1', trim('startvol_state01'//p_master%ext) )
             call cline%set( 'oritab', oritab )

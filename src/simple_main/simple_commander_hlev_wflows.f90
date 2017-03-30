@@ -183,10 +183,6 @@ contains
                 srch4symaxis = .true.
             endif
         endif
-        ! set global 
-
-
-
         ! prepare command lines from prototype master
         cline_scale           = cline
         cline_prime3D_init    = cline

@@ -294,6 +294,65 @@ contains
         call img_resized%kill
         call img_clip%kill
     end subroutine resize_and_clip_imgfile
+
+    !>  \brief  is for resizing and clipping
+    subroutine resize_and_clip_imgfile_double( fname2resize, fname1, fname2,&
+        smpd, ldims_new, ldims_clip, fromptop )
+        character(len=*),  intent(in) :: fname2resize, fname1, fname2 !< filenames
+        real,              intent(in) :: smpd             !< original sampling distance
+        integer,           intent(in) :: ldims_new(2,3)   !< scaled dimensions
+        integer,           intent(in) :: ldims_clip(2,3)  !< clipped (final) dimensions
+        integer, optional, intent(in) :: fromptop(2)      !< particle range
+        type(image) :: img, img_resized1, img_resized2, img_clip1, img_clip2
+        integer     :: n, i, ldim(3), prange(2), cnt, sz
+        call find_ldim_nptcls(fname2resize, ldim, n)
+        ldim(3) = 1
+        call raise_exception_imgfile( n, ldim, 'resize_imgfile' )
+        ! do the work
+        call img%new(ldim,1.)
+        call img_resized1%new(ldims_new(1,:),smpd) ! this sampling distance will be overwritten
+        call img_resized2%new(ldims_new(2,:),smpd) ! this sampling distance will be overwritten
+        write(*,'(a)') '>>> RESIZING IMAGES'
+        if( present(fromptop) )then
+            prange = fromptop
+        else
+            prange(1) = 1
+            prange(2) = n
+        endif
+        sz  = prange(2)-prange(1)+1
+        cnt = 0
+        do i=prange(1),prange(2)
+            cnt = cnt+1
+            call progress(cnt,sz)
+            call img%read(fname2resize, i)
+            call img%fwd_ft
+            call img%clip(img_resized1)
+            call img%clip(img_resized2)
+            call img_resized1%bwd_ft
+            call img_resized2%bwd_ft
+            call img_clip1%new(ldims_clip(1,:),img_resized1%get_smpd())
+            call img_clip2%new(ldims_clip(2,:),img_resized2%get_smpd())
+            if( ldims_clip(1,1) <= ldims_new(1,1) .and. ldims_clip(1,2) <= ldims_new(1,2)&
+            .and. ldims_clip(1,3) <= ldims_new(1,3) )then
+                call img_resized1%clip(img_clip1)
+            else
+                call img_resized1%pad(img_clip1)
+            endif
+            if( ldims_clip(2,1) <= ldims_new(2,1) .and. ldims_clip(2,2) <= ldims_new(2,2)&
+            .and. ldims_clip(2,3) <= ldims_new(2,3) )then
+                call img_resized2%clip(img_clip2)
+            else
+                call img_resized2%pad(img_clip2)
+            endif
+            call img_clip1%write(fname1, cnt)
+            call img_clip2%write(fname2, cnt)
+        end do
+        call img%kill
+        call img_resized1%kill
+        call img_resized2%kill
+        call img_clip1%kill
+        call img_clip2%kill
+    end subroutine resize_and_clip_imgfile_double
     
     !>  \brief  is for normalization
     subroutine norm_imgfile( fname2norm, fname, hfun )

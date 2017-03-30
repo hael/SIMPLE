@@ -14,6 +14,7 @@ use simple_defs
 use simple_ori,         only: ori
 use simple_math,        only: hpsort, is_a_number
 use simple_jiffys,      only: alloc_err
+use simple_stat,        only: moment
 use simple_filehandling ! use all in there
 implicit none
 
@@ -51,7 +52,7 @@ type :: oris
     procedure          :: get_ncls
     procedure          :: get_pop
     procedure          :: get_cls_pop
-    procedure          :: get_cls_shscore
+    procedure          :: get_cls_corr
     procedure          :: get_statepop
     procedure          :: get_ptcls_in_state
     procedure          :: get_nstates
@@ -117,7 +118,7 @@ type :: oris
     procedure          :: merge_classes
     procedure          :: symmetrize
     procedure          :: merge
-    procedure          :: merge_files
+    ! procedure          :: merge_files
     ! I/O
     procedure          :: read
     procedure, private :: write_1
@@ -199,11 +200,12 @@ end interface
 type(ori),  pointer  :: op(:)=>null()
 type(oris), pointer  :: ops  =>null()
 integer, allocatable :: classpops(:)
+real,    allocatable :: classcorrs(:)
 real,    allocatable :: shellscores(:)
 logical, allocatable :: class_part_of_set(:)
 real,    allocatable :: class_weights(:)
 type(ori)            :: o_glob
-real                 :: angthres = 0.
+real                 :: angthres = 0., cccavg = 0., cccsdev = 0.
 
 contains
 
@@ -447,20 +449,18 @@ contains
     end function get_cls_pop
 
     !>  \brief  is for getting the class score (stored per-particle)
-    function get_cls_shscore( self, class ) result( shscore )
+    function get_cls_corr( self, class ) result( corr )
+        use simple_math, only: median_nocopy
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: class
-        real    :: shscore
-        integer :: i, mycls
-        shscore = 0.
-        do i=1,self%n
-            mycls = nint(self%o(i)%get('class'))
-            if( mycls == class )then
-                shscore = self%o(i)%get('shellscore')
-                return
-            endif
-        end do
-    end function get_cls_shscore
+        real, allocatable :: corrs(:)
+        real :: corr
+        corrs = self%get_arr('corr', class=class)
+        corr  = 0.
+        if( allocated(corrs) )then
+            corr  = median_nocopy(corrs)
+        endif
+    end function get_cls_corr
     
     !>  \brief  is for checking state population
     function get_statepop( self, state ) result( pop )
@@ -1601,34 +1601,6 @@ contains
         call self2add%kill    
     end subroutine merge
     
-    !>  \brief  for merging two oris files into one object
-    subroutine merge_files( self, fname1, fname2 )
-        class(oris),      intent(inout) :: self
-        character(len=*), intent(in)    :: fname1, fname2
-        integer    :: nl1, nl2
-        type(oris) :: o2
-        logical    :: here1, here2
-        call self%kill
-        here1 = file_exists(fname1)
-        here2 = file_exists(fname2)
-        nl1   = 0
-        nl2   = 0
-        if(here1) nl1 = nlines(fname1)
-        if(here2) nl2 = nlines(fname2)        
-        if( here1 )then
-            call self%new(nl1)
-            call self%read(fname1)
-            if( .not. here2 ) return
-        else
-            call self%new(nl2)
-            call self%read(fname2)
-            return
-        endif
-        call o2%new(nl2)
-        call o2%read(fname2)
-        call self%merge(o2)
-    end subroutine merge_files
-    
     ! I/O
     
     !>  \brief  reads orientation info from file
@@ -1648,7 +1620,7 @@ contains
         endif
         if( present(nst) ) nst = 0
         do i=1,self%n
-             call self%o(i)%read(fnr)
+            call self%o(i)%read(fnr)
             if( present(nst) )then
                 state = int(self%o(i)%get('state'))
                 nst = max(1,max(state,nst))
@@ -2064,7 +2036,6 @@ contains
     
     !>  \brief  is for calculating variable statistics
     subroutine stats( self, which, ave, sdev, var, err )
-        use simple_stat, only: moment
         class(oris),      intent(inout) :: self
         character(len=*), intent(in)    :: which
         real,             intent(out)   :: ave, sdev, var
@@ -2090,7 +2061,6 @@ contains
     
     !>  \brief  is for calculating the minimum/maximum values of a variable
     subroutine minmax( self, which, minv, maxv )
-        use simple_stat, only: moment
         class(oris),      intent(inout) :: self
         character(len=*), intent(in)    :: which
         real,             intent(out)   :: minv, maxv
@@ -2519,7 +2489,6 @@ contains
     ! this routine could also be used to reduce bias in refinement (enforce class variance reduction for new orientations)
     ! could also be used to measure convergence (while reducing class variance, continue, else stop)
         use simple_math, only: rad2deg
-        use simple_stat, only: moment
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: class
         real,        intent(out)   :: distavg, distsdev 
@@ -2706,7 +2675,7 @@ contains
             val = .false.
         endif
     end function class1_gt_class2
-    
+
     !>  \brief  class 1 less than (worse) than class 2 ?
     function class1_lt_class2( class1, class2 ) result( val )
         integer, intent(in) :: class1, class2
@@ -2925,7 +2894,6 @@ contains
     
     !>  \brief  for calculating statistics of distances within a single distribution
     subroutine diststat_1( self, sumd, avgd, sdevd, mind, maxd )
-        use simple_stat, only: moment
         class(oris), intent(in)  :: self
         real,        intent(out) :: mind, maxd, avgd, sdevd, sumd
         integer :: i, j
@@ -2947,7 +2915,6 @@ contains
 
     !>  \brief  for calculating statistics of distances between two equally sized distributions
     subroutine diststat_2( self1, self2, sumd, avgd, sdevd, mind, maxd )
-        use simple_stat, only: moment
         class(oris), intent(in)  :: self1, self2
         real,        intent(out) :: mind, maxd, avgd, sdevd, sumd
         integer :: i
@@ -2970,7 +2937,6 @@ contains
 
     !>  \brief  for calculating statistics of geodesic distances within clusters of orientations
     subroutine cluster_diststat( self, avgd, sdevd, maxd, mind )
-        use simple_stat, only: moment
         class(oris), intent(inout) :: self
         real,        intent(out)   :: avgd, sdevd, maxd, mind
         integer, allocatable       :: clsarr(:)
@@ -3144,11 +3110,11 @@ contains
             do i=1,100
                 call os2%print(i)
             end do
-            call os%merge(os2)
-            write(*,*) '********'
-            do i=1,200
-                call os%print(i)
-            end do
+            ! call os%merge(os2)
+            ! write(*,*) '********'
+            ! do i=1,200
+            !     call os%print(i)
+            ! end do
         endif
         write(*,'(a)') '**info(simple_oris_unit_test, part2): testing assignment'
         os = oris(2)

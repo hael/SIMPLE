@@ -456,7 +456,7 @@ contains
     end subroutine exec_norm
     
     subroutine exec_scale( self, cline )
-        use simple_procimgfile, only: resize_and_clip_imgfile, resize_imgfile, clip_imgfile
+        use simple_procimgfile  ! use all in there
         use simple_image,       only: image
         use simple_math,        only: round2even
         class(scale_commander), intent(inout) :: self
@@ -466,6 +466,7 @@ contains
         type(image)  :: vol2, img, img2
         real         :: ave, sdev, var, med
         integer      :: ldim(3), ldim_scaled(3), nfiles, nframes, iframe, ifile
+        integer      :: ldims_scaled(2,3), ldims_clip(2,3)
         character(len=:), allocatable      :: fname
         character(len=STDLEN), allocatable :: filenames(:)
         p = params(cline)                               ! parameters generated
@@ -476,7 +477,25 @@ contains
         if( cline%defined('stk') .and. cline%defined('vol1') )stop 'Cannot operate on images AND volume at once'
         if( cline%defined('stk') )then
             ! 2D
-            if( cline%defined('newbox') .or. cline%defined('scale') )then
+            if( cline%defined('scale2') )then
+                ! Rescaling, double
+                if( .not. cline%defined('clip')  ) stop 'need clip to be part of command line as well'
+                if( .not. cline%defined('clip2') ) stop 'need clip2 to be part of command line as well'
+                if( .not. cline%defined('scale') ) stop 'need scale to be part of command line as well'
+                ldims_scaled(1,:) = [p%newbox,p%newbox,1]   ! dimension of scaled
+                ldims_scaled(2,:) = [p%newbox2,p%newbox2,1] ! dimension of scaled
+                ldims_clip(1,:)   = [p%clip,p%clip,1]
+                ldims_clip(2,:)   = [p%clip2,p%clip2,1]
+                if( cline%defined('part') )then
+                    p%outstk  = 'outstk_part'//int2str_pad(p%part, p%numlen)//p%ext
+                    p%outstk2 = 'outstk2_part'//int2str_pad(p%part, p%numlen)//p%ext
+                    call resize_and_clip_imgfile_double(p%stk, p%outstk, p%outstk2,&
+                    p%smpd, ldims_scaled, ldims_clip, [p%fromp,p%top])
+                else
+                    call resize_and_clip_imgfile_double(p%stk, p%outstk, p%outstk2,&
+                    p%smpd, ldims_scaled, ldims_clip)
+                endif
+            else if( cline%defined('scale') )then
                 ! Rescaling
                 ldim_scaled = [p%newbox,p%newbox,1] ! dimension of scaled
                 if( cline%defined('clip') )then
@@ -502,7 +521,7 @@ contains
             ! 3D
             if( .not.file_exists(p%vols(1)) ) stop 'Cannot find input volume'
             call b%vol%read(p%vols(1))
-            if( cline%defined('newbox') .or. cline%defined('scale') )then
+            if( cline%defined('scale') )then
                 ! Rescaling
                 call vol2%new([p%newbox,p%newbox,p%newbox],p%smpd)
                 call b%vol%fwd_ft

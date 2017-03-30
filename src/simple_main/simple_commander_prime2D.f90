@@ -134,14 +134,20 @@ contains
             if( .not. cline%defined('outfile') ) stop 'need unique output file for parallel jobs'
             call prime2D_exec(b, p, cline, 0, converged) ! partition or not, depending on 'part'       
         else
+            startit = 1
+            if( cline%defined('startit') ) startit = p%startit
             if( cline%defined('extr_thresh') )then
                 ! all is well
             else
                 ! starts from the top
                 p%extr_thresh = EXTRINITHRESH/p%rrate
+                if( startit > 1 )then
+                    ! need to update the randomization rate
+                    do i=1,startit-1
+                         p%extr_thresh = p%extr_thresh * p%rrate
+                    end do
+                endif
             endif
-            startit = 1
-            if( cline%defined('startit') ) startit = p%startit
             do i=startit,p%maxits
                 p%extr_thresh = p%extr_thresh * p%rrate
                 call prime2D_exec(b, p, cline, i, converged)

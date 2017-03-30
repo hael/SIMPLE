@@ -107,6 +107,7 @@ oritab
 oritab2
 outfile
 outstk
+outstk2
 outvol
 ctffind_doc
 pcastk
@@ -139,6 +140,7 @@ boxpd
 chunksz
 class
 clip
+clip2
 corner
 cube
 edge
@@ -168,6 +170,7 @@ ncomps
 ndiscrete
 ndocs
 newbox
+newbox2
 nframes
 nmembers
 nnn
@@ -280,6 +283,7 @@ phranlp
 power
 rrate
 scale
+scale2
 sherr
 smpd
 snr

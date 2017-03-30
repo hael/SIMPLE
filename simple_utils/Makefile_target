@@ -9,6 +9,7 @@ s_utes: simple_arr.o          \
         simple_filehandling.o \
         simple_jiffys.o       \
         simple_math.o         \
+        simple_magic_boxes.o  \
         simple_rnd.o          \
         gnufor2.o             \
         simple_imgfile.o      \

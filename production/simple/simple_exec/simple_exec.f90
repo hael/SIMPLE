@@ -118,6 +118,7 @@ type(masscen_commander)            :: xmasscen
 type(print_cmd_dict_commander)     :: xprint_cmd_dict
 type(print_dose_weights_commander) :: xprint_dose_weights
 type(print_fsc_commander)          :: xprint_fsc
+type(print_magic_boxes_commander)  :: xprint_magic_boxes
 type(res_commander)                :: xres
 type(shift_commander)              :: xshift
 
@@ -1708,22 +1709,22 @@ select case(prg)
         ! <scale/begin>is a program that provides re-scaling and clipping routines for MRC or SPIDER stacks
         ! and volumes<scale/end> 
         !
-        keys_required(1) = 'smpd'
+        keys_required(1)  = 'smpd'
         ! set optional keys
-        keys_optional(1) = 'stk'
-        keys_optional(2) = 'vol1'
-        keys_optional(3) = 'filetab'
-        keys_optional(4) = 'msk'
-        keys_optional(5) = 'newbox'
-        keys_optional(6) = 'scale'
-        keys_optional(7) = 'clip'
-        keys_optional(8) = 'outvol'
-        keys_optional(9) = 'outstk'
+        keys_optional(1)  = 'stk'
+        keys_optional(2)  = 'vol1'
+        keys_optional(3)  = 'filetab'
+        keys_optional(4)  = 'msk'
+        keys_optional(5)  = 'scale'
+        keys_optional(6)  = 'scale2'
+        keys_optional(7)  = 'clip'
+        keys_optional(8)  = 'clip2'
+        keys_optional(9)  = 'outvol'
+        keys_optional(10) = 'outstk'
+        keys_optional(11) = 'outstk2'
         ! parse command line
         if( describe ) call print_doc_scale
-        call cline%parse(keys_required(:1),keys_optional(:9))
-        ! set defaults
-        if( .not. cline%defined('scale') ) call cline%set('scale', 1.)
+        call cline%parse(keys_required(:1),keys_optional(:11))
         ! execute
         call xscale%execute(cline)
     case( 'stack' )
@@ -1911,6 +1912,19 @@ select case(prg)
         call cline%parse(keys_required(:3))
         ! execute
         call xprint_fsc%execute(cline)
+    case( 'print_magic_boxes' )
+        !==Program print_magic_boxes
+        !
+        ! <print_magic_boxes/begin>is a program for printing magic box sizes (fast FFT)<print_magic_boxes/end>
+        !
+        ! set required keys
+        keys_required(1)  = 'smpd'
+        keys_required(2)  = 'moldiam'
+        ! parse command line
+        ! if( describe ) call print_doc_print_magig_boxes
+        call cline%parse(keys_required(:2))
+        ! execute
+        call xprint_magic_boxes%execute(cline)
     case( 'res' )
         !==Program res
         !

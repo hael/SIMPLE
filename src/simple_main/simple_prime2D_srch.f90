@@ -80,7 +80,6 @@ contains
         self%trs        = p%trs
         self%doshift    = p%doshift
         self%nthr       = p%nthr
-        if( self%nrefs < self%nthr ) stop 'ncls < nthr not allowed; simple_prime2D_srch :: new'
         ! construct composites
         self%srch_common = prime_srch(p)
         ! find number of threads & create the same number of balanced partitions

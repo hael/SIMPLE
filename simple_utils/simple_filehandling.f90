@@ -21,9 +21,9 @@ contains
     !> \brief  is for counting the number of lines in a textfile
     function nlines( fname ) result( n )
         character(len=*), intent(in) :: fname
-        integer                      :: n, funit, ios
-        logical                      :: here
-        character(len=1)             :: junk
+        integer          :: n, funit, ios
+        logical          :: here
+        character(len=1) :: junk
         inquire(FILE=fname, EXIST=here)
         if( here )then
             funit = get_fileunit( )
@@ -34,7 +34,7 @@ contains
                  if(ios /= 0)then
                      exit
                  else
-                     n = n+1
+                     n = n + 1
                  endif
             end do
             close( unit=funit )

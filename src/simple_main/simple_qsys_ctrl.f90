@@ -16,6 +16,7 @@ type qsys_ctrl
     character(len=STDLEN)          :: exec_binary      = ''      !< binary to execute in parallel
                                                                  !< trim(simplepath)//'/bin/simple_exec'
     character(len=32), allocatable :: script_names(:)            !< file names of generated scripts
+    character(len=32), allocatable :: jobs_done_fnames(:)        !< touch files indicating completion
     character(len=STDLEN)          :: pwd              = ''      !< working directory
     class(qsys_base), pointer      :: myqsys           => null() !< pointer to polymorphic qsys object
     integer, pointer               :: parts(:,:)       => null() !< defines the fromp/top ranges for all partitions
@@ -103,13 +104,18 @@ contains
         ! allocate
         allocate(   self%jobs_done(fromto_part(1):fromto_part(2)),&
                     self%jobs_submitted(fromto_part(1):fromto_part(2)),&
-                    self%script_names(fromto_part(1):fromto_part(2)), stat=alloc_stat)
+                    self%script_names(fromto_part(1):fromto_part(2)),&
+                    self%jobs_done_fnames(fromto_part(1):fromto_part(2)), stat=alloc_stat)
         call alloc_err("In: simple_qsys_ctrl :: new", alloc_stat)
         self%jobs_done      = .false.
         self%jobs_submitted = .false.
         ! create script names
         do ipart=fromto_part(1),fromto_part(2)
             self%script_names(ipart) = 'distr_simple_script_'//int2str_pad(ipart,self%numlen)
+        end do
+        ! create jobs done flags
+        do ipart=self%fromto_part(1),self%fromto_part(2)
+            self%jobs_done_fnames(ipart) = 'JOB_FINISHED_'//int2str_pad(ipart,self%numlen)
         end do
         ! get pwd
         call get_environment_variable('PWD', self%pwd)
@@ -393,14 +399,13 @@ contains
     subroutine update_queue( self )
         use simple_filehandling, only: file_exists
         class(qsys_ctrl),  intent(inout) :: self
-        character(len=:), allocatable    :: job_done_fname
         integer :: ipart, njobs_in_queue
         do ipart=self%fromto_part(1),self%fromto_part(2)
-            allocate(job_done_fname, source='JOB_FINISHED_'//int2str_pad(ipart,self%numlen))
-            self%jobs_done(ipart) = file_exists(job_done_fname)
+            if( .not. self%jobs_done(ipart) )then
+                self%jobs_done(ipart) = file_exists(self%jobs_done_fnames(ipart))
+            endif
             ! this one is for streaming
             if( self%jobs_done(ipart) ) self%jobs_submitted(ipart) = .true.
-            deallocate(job_done_fname)
         end do
         njobs_in_queue = count(self%jobs_submitted .eqv. (.not. self%jobs_done))
         self%ncomputing_units_avail = self%ncomputing_units-njobs_in_queue
@@ -433,7 +438,7 @@ contains
             self%ncomputing_units       =  0
             self%ncomputing_units_avail =  0
             self%numlen                 =  0
-            deallocate(self%script_names, self%jobs_done, self%jobs_submitted)
+            deallocate(self%script_names, self%jobs_done, self%jobs_done_fnames, self%jobs_submitted)
             self%existence = .false.
         endif
     end subroutine kill

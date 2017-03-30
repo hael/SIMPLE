@@ -140,6 +140,7 @@ type :: params
     character(len=STDLEN) :: oritab2=''
     character(len=STDLEN) :: outfile='outfile.txt'
     character(len=STDLEN) :: outstk=''
+    character(len=STDLEN) :: outstk2=''
     character(len=STDLEN) :: outvol=''
     character(len=STDLEN) :: ctffind_doc=''
     character(len=STDLEN) :: pcastk='pcavecinstk.bin'
@@ -175,6 +176,7 @@ type :: params
     integer :: chunksz=0
     integer :: class=1
     integer :: clip=0
+    integer :: clip2=0
     integer :: corner=0
     integer :: cube=0
     integer :: edge=14
@@ -206,6 +208,7 @@ type :: params
     integer :: ndiscrete=0
     integer :: ndocs=0
     integer :: newbox=0
+    integer :: newbox2=0
     integer :: nframes=0
     integer :: nmembers=0
     integer :: nnn=500
@@ -321,6 +324,7 @@ type :: params
     real    :: power=2.
     real    :: rrate=0.8
     real    :: scale=1.
+    real    :: scale2=1.
     real    :: sherr=0.
     real    :: smpd=2.
     real    :: snr
@@ -509,6 +513,7 @@ contains
         call check_file('oritab',         self%oritab, 'T')
         call check_file('oritab2',        self%oritab2,'T')
         call check_file('outstk',         self%outstk,   notAllowed='T')
+        call check_file('outstk2',        self%outstk2,  notAllowed='T')
         call check_file('outvol',         self%outvol,   notAllowed='T')
         call check_file('plaintexttab',   self%plaintexttab,'T')
         call check_file('stk',            self%stk,  notAllowed='T')
@@ -524,6 +529,7 @@ contains
         call check_iarg('boxconvsz',      self%boxconvsz)
         call check_iarg('chunksz',        self%chunksz)
         call check_iarg('clip',           self%clip)
+        call check_iarg('clip2',          self%clip2)
         call check_iarg('corner',         self%corner)
         call check_iarg('cube',           self%cube)
         call check_iarg('edge',           self%edge)
@@ -548,7 +554,6 @@ contains
         call check_iarg('ncunits',        self%ncunits)
         call check_iarg('ndiscrete',      self%ndiscrete)
         call check_iarg('ndocs',          self%ndocs)
-        call check_iarg('newbox',         self%newbox)
         call check_iarg('nframes',        self%nframes)
         call check_iarg('nmembers',       self%nmembers)
         call check_iarg('nnn',            self%nnn)
@@ -648,6 +653,7 @@ contains
         call check_rarg('power',          self%power)
         call check_rarg('rrate',          self%rrate)
         call check_rarg('scale',          self%scale)
+        call check_rarg('scale2',         self%scale2)
         call check_rarg('sherr',          self%sherr)
         call check_rarg('smpd',           self%smpd)
         call check_rarg('snr',            self%snr)
@@ -856,10 +862,12 @@ contains
             if( self%binwidth < 0 )stop 'Invalid value for binwidth'
         endif
         ! set newbox if scale is defined
-        if( .not. cline%defined('newbox') )then
-            if( cline%defined('scale') )then
-                self%newbox = round2even(self%scale*real(self%box))
-            endif
+        if( cline%defined('scale') )then
+            self%newbox = round2even(self%scale*real(self%box))
+        endif
+         ! set newbox if scale is defined
+        if( cline%defined('scale2') )then
+            self%newbox2 = round2even(self%scale2*real(self%box))
         endif
         self%kfromto(1) = max(2,int(self%dstep/self%hp)) ! high-pass Fourier index set according to hp
         self%kfromto(2) = int(self%dstep/self%lp)        ! low-pass Fourier index set according to lp
@@ -882,6 +890,9 @@ contains
         ! define clipped box if not given
         if( .not. cline%defined('clip') )then
             self%clip = self%box
+        endif
+        if( .not. cline%defined('clip2') )then
+            self%clip2 = self%box
         endif
         ! error check ncls
         if( file_exists(self%refs) )then
@@ -1173,8 +1184,9 @@ contains
                   self%vols_msk(i) = add2fbody(self%vols(i), self%ext, 'msk')
                   self%masks(i)    = 'automask_state'//int2str_pad(i,2)//self%ext
               end do
-              if( .not. cline%defined('outstk') ) self%outstk = 'outstk'//self%ext
-              if( .not. cline%defined('outvol') ) self%outvol = 'outvol'//self%ext
+              if( .not. cline%defined('outstk')  ) self%outstk  = 'outstk'//self%ext
+              if( .not. cline%defined('outstk2') ) self%outstk2 = 'outstk2'//self%ext
+              if( .not. cline%defined('outvol')  ) self%outvol  = 'outvol'//self%ext
           end subroutine mkfnames
 
           subroutine check_carg( carg, var )
