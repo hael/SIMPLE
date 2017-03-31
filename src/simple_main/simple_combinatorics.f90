@@ -25,6 +25,7 @@ contains
             configs_diverse(idiv,:) = tmp
         enddo
         deallocate(tmp)
+        call rt%kill
         ! Failed attempt at generating diverse labels from maximising the hamming distance
         ! Should calculate the minimum of the maximum distances of the partitions with swapped labels 
         ! call random_number(rmat)

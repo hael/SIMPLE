@@ -903,6 +903,7 @@ contains
             enddo
             ! CONVERGENCE
             call cline_check3D_conv%set( 'oritab', trim(oritab) )
+            if(p_master%refine.eq.'het')call cline_check3D_conv%delete('update_res')
             call xcheck3D_conv%execute( cline_check3D_conv )
             if( iter >= p_master%startit+2 )then
                 ! after a minimum of 2 iterations

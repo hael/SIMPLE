@@ -69,8 +69,6 @@ contains
         logical,        intent(inout) :: update_res, converged
         type(oris)                    :: prime3D_oris
         real, allocatable             :: wmat(:,:), wresamp(:), res(:), res_pad(:), corrs(:), corrs_incl(:)
-        real, allocatable             :: state_corr_thresh(:)
-        !integer, allocatable          :: states(:)
         logical, allocatable          :: incl(:)
         real                          :: norm, het_corr_thresh
         integer                       :: iptcl, fnr, file_stat, s, inptcls, prev_state, istate
@@ -124,9 +122,8 @@ contains
         ! HETEROGEINITY
         dohet = .false.
         if( p%refine.eq.'het' )then
-            allocate(state_corr_thresh(p%nstates))
             het_corr_thresh = -1.
-            if( frac_srch_space < 0.98 .or. p%het_thresh > 0.025 )then
+            if(frac_srch_space < 0.98 .or. p%het_thresh > 0.025)then
                 dohet = .true.
                 write(*,'(A,F8.2)') '>>> STATE RANDOMIZATION(%):', 100.*p%het_thresh
                 ! grab relevant correlations
@@ -139,24 +136,7 @@ contains
                 thresh_ind = nint(real(n_incl) * p%het_thresh)
                 het_corr_thresh = corrs_incl(thresh_ind)
                 write(*,'(A,F8.2)') '>>> CORRELATION THRESHOLD:', het_corr_thresh
-                state_corr_thresh = het_corr_thresh
                 deallocate(corrs, incl, corrs_incl)
-                ! dev by state threshold
-                ! corrs  = b%a%get_all('corr')
-                ! states = nint(b%a%get_all('state'))
-                ! allocate(incl(b%a%get_noris()))
-                ! do s = 1,p%nstates
-                !     if(count(states==s)==0)cycle
-                !     corrs_incl = pack(corrs, mask=(states==s))
-                !     n_incl     = size(corrs_incl)
-                !     call hpsort(n_incl, corrs_incl)
-                !     thresh_ind = nint(real(n_incl) * p%het_thresh)
-                !     state_corr_thresh(s) = corrs_incl(thresh_ind)
-                !     write(*,'(A,I2,A,F6.2)')'>>> STATE ',s,' CORRELATION THRESHOLD:', state_corr_thresh(s)
-                !     deallocate(corrs_incl)
-                ! enddo
-                ! deallocate(corrs, states)
-                ! end dev
             endif
             ! generate filename for memoization of particle pfts
             if( allocated(ppfts_fname) ) deallocate(ppfts_fname)
@@ -273,7 +253,7 @@ contains
             norm = real(sum(statecnt))
             do istate=1,p%nstates
                print *, '% state ', istate, ' is ', 100.*(real(statecnt(istate))/norm)
-               print *, 'rand nptcls for state ', istate, ' is ', statecnt(istate)
+               print *, 'randomized ptcls for state ', istate, ' is ', statecnt(istate)
             end do
         endif
         ! END DEV
