@@ -559,7 +559,7 @@ contains
         !
         integer :: nnn, inpl_ind
         real    :: wprev_corr, sumw, angthresh, e3
-        real    :: corrs(self%nrots), ws(self%nrots), inpl_dist
+        real    :: corrs(self%nrots), ws(self%nrots)
         !
         calc_corr = .true.
         if( present(corr_t) ) calc_corr = .false.

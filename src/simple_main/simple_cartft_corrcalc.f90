@@ -148,7 +148,8 @@ contains
         integer,                intent(in)    :: iref
         integer   :: s
         s = nint(o%get('state'))
-        call self%refvols(s)%fproject_expanded(o, self%img_refs(iref), lp=self%pp%lp)
+        !call self%refvols(s)%fproject_expanded(o, self%img_refs(iref), lp=self%pp%lp)
+        call self%refvols(s)%fproject_expanded(o, self%img_refs(iref))
         if( self%pp%ctf .ne. 'no' )then
             call self%create_ctf_image(o)
             call self%img_refs(iref)%mul(self%img_ctf)
@@ -188,7 +189,7 @@ contains
         end do
     end function correlate_1
 
-    !>  \brief  for calculating the shifted orrelation for one reference (iref)
+    !>  \brief  for calculating the shifted correlation for one reference (iref)
     !!          parameterised over one rotational orientation + state + shift
     function correlate_2( self, pimg, iref, shvec ) result( cc )
         class(cartft_corrcalc), intent(inout) :: self

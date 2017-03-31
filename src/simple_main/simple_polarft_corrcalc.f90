@@ -903,7 +903,6 @@ contains
             argmat = real(pft_ref_sh * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:)))
             cc = sum(argmat)
             sqsum_ref_sh = sum(csq(pft_ref_sh))
-            cc = cc/sqrt(sqsum_ref_sh*self%sqsums_ptcls(iptcl))
         else if( allocated(self%pfts_refs_ctf) )then
             ! generate the argument matrix from memoized components in argtransf
             argmat = self%argtransf(:self%refsz,:) * shvec(1)+self%argtransf(self%refsz+1:,:) * shvec(2)
@@ -915,7 +914,6 @@ contains
             argmat = real(pft_ref_sh * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:)))
             cc = sum(argmat)
             sqsum_ref_sh = sum(csq(pft_ref_sh))
-                cc = cc/sqrt(sqsum_ref_sh*self%sqsums_ptcls(iptcl))
         else
             ! generate the argument matrix from memoized components in argtransf
             argmat = self%argtransf(:self%refsz,:) * shvec(1)+self%argtransf(self%refsz+1:,:) * shvec(2)
@@ -927,8 +925,8 @@ contains
             argmat = real(pft_ref_sh * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:)))
             cc = sum(argmat)
             sqsum_ref_sh = sum(csq(pft_ref_sh))
-            cc = cc/sqrt(sqsum_ref_sh*self%sqsums_ptcls(iptcl))
         endif
+        cc = cc/sqrt(sqsum_ref_sh*self%sqsums_ptcls(iptcl))
     end function corr_2
     
     ! DESTRUCTOR

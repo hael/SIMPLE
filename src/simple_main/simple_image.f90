@@ -160,6 +160,7 @@ type :: image
     procedure          :: bin_inv
     procedure          :: grow_bin
     procedure          :: cos_edge
+    procedure          :: cos_edge2
     procedure          :: increment
     ! FILTERS
     procedure          :: acf
@@ -316,7 +317,7 @@ contains
             ! Set up the complex array which will point at the allocated memory
             call c_f_pointer(self%p,self%cmat,self%array_shape)
             ! Work out the shape of the real array
-            self%array_shape(1) = 2*self%array_shape(1)
+            self%array_shape(1) = 2*(self%array_shape(1))
             ! Set up the real array
             call c_f_pointer(self%p,self%rmat,self%array_shape)
             ! put back the shape of the complex array
@@ -2614,6 +2615,104 @@ contains
             end subroutine update_mask_3d
 
     end subroutine cos_edge
+
+    !>  \brief  applies cosine edge to a binary image
+    ! TOO SLOW
+    subroutine cos_edge2( self, falloff )
+        use simple_math, only: cosedge
+        class(image), intent(inout) :: self
+        integer,      intent(in)    :: falloff
+        integer, allocatable        :: imat(:,:,:), dmat(:,:,:), lmat(:,:,:)
+        real                        :: rfalloff
+        integer                     :: dims(3,2), i, j, k, dist_sq, ihuge, length
+        if(self%imgkind .eq. 'xfel' ) stop 'xfel-kind images cannot be low-pass filtered in real space; simple_image::cos_edge'
+        if(falloff <= 0) stop 'stictly positive values for edge fall-off allowed; simple_image::cos_edge'
+        if(self%ft)    stop 'not intended for FTs; simple_image :: cos_edge'
+        ihuge     = huge(ihuge)
+        length    = 2*falloff+1
+        self%rmat = self%rmat/maxval(self%rmat)
+        rfalloff  = real(falloff)
+        dims(:,1) = 1 - falloff
+        dims(:,2) = self%ldim + falloff
+        ! main loop
+        if(self%ldim(3) > 1)then
+            ! 3D
+            ! zero-padded matrix of integer values
+            allocate(imat(dims(1,1):dims(1,2), dims(2,1):dims(2,2), dims(3,1):dims(3,2)))
+            imat = 0
+            imat(1:self%ldim(1), 1:self%ldim(2), 1:self%ldim(3)) = nint(self%rmat(1:self%ldim(1),:,:))
+            ! private matrix
+            allocate(lmat(length, length, length))
+            ! pre-computed squared distance matrix
+            allocate(dmat(length, length, length))
+            dmat = 0
+            do i=1,length
+                dist_sq     = (i-falloff-1)**2
+                dmat(i,:,:) = dmat(i,:,:) + dist_sq
+                dmat(:,i,:) = dmat(:,i,:) + dist_sq
+                dmat(:,:,i) = dmat(:,:,i) + dist_sq
+            enddo
+            ! main loop
+            do i=1,self%ldim(1)
+                if(.not. any(imat(i-falloff:i+falloff,:,:) == 1))cycle
+                do j=1,self%ldim(2)
+                    if(.not. any(imat(i-falloff:i+falloff,j-falloff:j+falloff,:) == 1))cycle
+                    do k=1,self%ldim(3)
+                        if(imat(i,j,k) == 1)cycle
+                        ! not in mask
+                        lmat = imat(i-falloff:i+falloff,j-falloff:j+falloff,k-falloff:k+falloff)
+                        if(any(lmat == 1))then
+                            ! one neighbour is masked
+                            where(lmat == 1)
+                                ! square distance * mask
+                                lmat  = lmat*dmat
+                            else where
+                                lmat  = ihuge
+                            end where
+                            dist_sq = minval(lmat)
+                            self%rmat(i,j,k) = cosedge(sqrt(real(dist_sq)), rfalloff)
+                        endif
+                    enddo
+                enddo
+            enddo
+        else
+            ! 2D
+            ! zero-padded matrix of integer values
+            allocate(imat(dims(1,1):dims(1,2), dims(2,1):dims(2,2), 1))
+            imat = 0
+            imat(1:self%ldim(1), 1:self%ldim(2), 1:1) = nint(self%rmat)
+            ! private matrix
+            allocate(lmat(length, length, 1))
+            ! pre-computed squared distance matrix
+            allocate(dmat(length, length, 1))
+            dmat = 0
+            do i=1,length
+                dist_sq   = (i-falloff-1)**2
+                dmat(i,:,1) = dmat(i,:,1) + dist_sq
+                dmat(:,i,1) = dmat(:,i,1) + dist_sq
+            enddo
+            ! main loop
+            do i=1,self%ldim(1)
+                do j=1,self%ldim(2)
+                    if(imat(i,j,1) == 1)cycle
+                    ! not in mask
+                    lmat(:,:,1) = imat(i-falloff:i+falloff,j-falloff:j+falloff,1)
+                    if( any(lmat == 1) )then
+                        ! one neighbour is masked
+                        where(lmat == 1)
+                            ! square distance * mask
+                            lmat  = lmat*dmat
+                        else where
+                            lmat  = ihuge
+                        end where
+                        dist_sq = minval(lmat)
+                        self%rmat(i,j,1) = cosedge(sqrt(real(dist_sq)), rfalloff)
+                    endif
+                enddo
+            enddo
+        endif
+        deallocate(imat, dmat, lmat)
+    end subroutine cos_edge2
 
     !>  \brief  increments the logi pixel value with incr
     subroutine increment( self, logi, incr )

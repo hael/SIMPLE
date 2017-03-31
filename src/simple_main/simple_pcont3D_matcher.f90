@@ -19,7 +19,6 @@ private
 
 type(polarft_corrcalc) :: pftcc
 type(oris)             :: orefs                   !< per particle projection direction search space
-!type(oris)             :: spiral                  !< projection direction search space - FOR SAFEKEEPING
 logical, allocatable   :: state_exists(:)
 integer                :: nptcls          = 0
 integer                :: nrefs_per_ptcl  = 0
@@ -98,10 +97,6 @@ contains
         end do
         if(debug)write(*,*)'*** pcont3D_matcher ***: did reset recvols'
 
-        ! SEARCH SPACE PREP
-        !call spiral%new(p%nspace * b%se%get_nsym())
-        !call spiral%spiral
-
         ! INIT PFTCC & IMGPOLARIZER
         if( p%l_xfel )then
             call pftcc%new(nrefs_per_ptcl, [1,1], [p%boxmatch,p%boxmatch,1],p%kfromto, p%ring2, p%nthr, p%ctf, isxfel='yes')
@@ -147,15 +142,22 @@ contains
             ! grid
             if( doshellweight )then
                 wresamp = resample_filter(wmat(iptcl,:), res, res_pad)
-                call grid_ptcl(b, p, iptcl, cnt_glob, orientation, softoris, shellweights=wresamp)
+                if(p%npeaks == 1)then
+                    call grid_ptcl(b, p, iptcl, cnt_glob, orientation, shellweights=wresamp)
+                else
+                    call grid_ptcl(b, p, iptcl, cnt_glob, orientation, os=softoris, shellweights=wresamp)
+                endif
             else
-                call grid_ptcl(b, p, iptcl, cnt_glob, orientation, softoris )
+                if(p%npeaks == 1)then
+                    call grid_ptcl(b, p, iptcl, cnt_glob, orientation)
+                else
+                    call grid_ptcl(b, p, iptcl, cnt_glob, orientation, os=softoris)
+                endif
             endif
             ! output orientation
             call b%a%write(iptcl, p%outfile)
         enddo
         ! cleanup (mostly for debug purposes)
-        !call spiral%kill
         call pftcc%kill
         do state=1,p%nstates
             if(state_exists(state))call b%refvols(state)%kill_expanded
@@ -180,10 +182,10 @@ contains
             converged = b%conv%check_conv3D(update_res)
         endif
         ! DEALLOCATE
-        if( allocated(wmat)    ) deallocate(wmat)
-        if( allocated(wresamp) ) deallocate(wresamp)
-        if( allocated(res)     ) deallocate(res)
-        if( allocated(res_pad) ) deallocate(res_pad)
+        if(allocated(wmat)   ) deallocate(wmat)
+        if(allocated(wresamp)) deallocate(wresamp)
+        if(allocated(res)    ) deallocate(res)
+        if(allocated(res_pad)) deallocate(res_pad)
     end subroutine pcont3D_exec
 
     subroutine prep_vols( b, p, cline )
@@ -211,10 +213,9 @@ contains
         integer,                 intent(in)    :: iptcl
         integer,                 intent(in)    :: cnt_glob
         type(oris) :: cone
-        type(ori)  :: optcl, oref!, ostoch
-        real :: eullims(3,2)
-        !integer    :: inds(p%nspace*b%se%get_nsym())
-        integer    :: state, iref, cnt!, iref_start, half_nrefs
+        type(ori)  :: optcl, oref
+        real       :: eullims(3,2)
+        integer    :: state, iref, cnt
         optcl = b%a%get_ori(iptcl)
         ! RE-INIT PFTCC
         if( p%l_xfel )then
@@ -225,47 +226,14 @@ contains
         ! SEARCH SPACE PREP
         eullims = b%se%srchrange()
         call cone%rnd_proj_space(NREFS, optcl, p%athres, eullims)
+        call cone%set_ori(1, optcl)    ! previous best is the first
+        call cone%set(1, 'corr', -1.)  ! !!!
         do iref = 1, NREFS
             call cone%e3set(iref, 0.)
         enddo
-        ! SPIRAL-LIKE SEARCH SPACE - FOR SAFEKEEPING
-        ! ! random rotation of spiral
-        ! call ostoch%rnd_ori
-        ! call ostoch%e3set(0.)
-        ! call spiral%rot(ostoch)
-        ! half_nrefs = ceiling(real(NREFS) / 2.)
-        ! call spiral%find_closest_projs(optcl, inds)
-        ! call cone%new(NREFS)
-        ! ! previous orientation goes first
-        ! call oref%new
-        ! call oref%set_euler(optcl%get_euler())
-        ! call oref%e3set(0.)
-        ! call cone%set_ori(1, oref)
-        ! ! fine grained first-half
-        ! cnt = 1
-        ! do iref = 1,p%nspace*b%se%get_nsym()
-        !     oref = spiral%get_ori(inds(iref))
-        !     if( b%se%within_asymunit(oref) )then
-        !         cnt = cnt + 1
-        !         if(cnt > half_nrefs)exit
-        !         call oref%e3set(0.)
-        !         call cone%set_ori(cnt, oref)
-        !     endif
-        ! enddo
-        ! ! coarse grained second-half
-        ! iref_start = iref
-        ! do iref = iref_start,p%nspace*b%se%get_nsym()
-        !     oref = spiral%get_ori(inds(iref))
-        !     if( b%se%within_asymunit(oref) )then
-        !         if(ran3() >= 0.5)cycle ! skips every second on average
-        !         cnt = cnt + 1
-        !         if(cnt > NREFS)exit
-        !         call oref%e3set(0.)
-        !         call cone%set_ori(cnt, oref)
-        !     endif
-        ! enddo
         ! replicates to states
         if( p%nstates==1 )then
+            call cone%set_all2single('state', 1.)
             orefs = cone
         else
             call orefs%new(NREFS*neff_states)

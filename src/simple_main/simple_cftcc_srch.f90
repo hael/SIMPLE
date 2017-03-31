@@ -77,7 +77,6 @@ contains
         call o%set_euler(vec(1:3))
         shvec(1:2) = vec(4:5)
         shvec(3)   = 0.0
-        !call o%set('state', real(state))
         call cftcc_ptr%project(o, 1)     
         cost = -cftcc_ptr%correlate(pimg, 1, shvec)
     end function cftcc_srch_cost
@@ -114,24 +113,24 @@ contains
             ! the reference is rotated upon projection
             ! the ptcl is shifted only: no need to rotate the shift
             call o%set_shift(prev_shvec - ospec%x(4:5))
-            !call o%set_shift(prev_shvec + ospec%x(4:5))
             ! distance
-            dist_inpl = o_glob.inpldist.o
-            dist      = 0.5*rad2deg(o_glob.euldist.o) + 0.5*dist_inpl
-            frac      = 100.*(180.-dist**2.)/180.
+            dist_inpl = rad2deg(o_glob.inpldist.o)
+            dist      = rad2deg(o_glob.euldist.o)
+            frac      = 100.*(180.-(.5*dist+.5*dist_inpl)**2.)/180.
         endif
+        ! set new values
         call o%set('corr',      corr)
         call o%set('ow',        1.)
         call o%set('dist_inpl', dist_inpl)
         call o%set('dist',      dist)
-        ! set the overlaps
-        call o%set('mi_class', 1.)
-        call o%set('mi_inpl',  1.)
-        call o%set('mi_state', 1.)
-        call o%set('mi_joint', 1.)
-        ! all the other stuff
-        call o%set('frac', frac)
-        call o%set('sdev', 0.)
+        call o%set('mi_class',  1.)
+        call o%set('mi_inpl',   1.)
+        call o%set('mi_state',  1.)
+        call o%set('mi_joint',  1.)
+        call o%set('frac',      frac)
+        call o%set('sdev',      0.)
+        ! clean exit
+        state = 1
     end subroutine cftcc_srch_minimize
 
 end module simple_cftcc_srch

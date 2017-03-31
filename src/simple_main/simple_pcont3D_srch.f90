@@ -2,9 +2,9 @@ module simple_pcont3D_srch
 use simple_defs
 use simple_params,           only: params
 use simple_polarft_corrcalc, only: polarft_corrcalc
-use simple_pftcc_shsrch      ! use all in there
 use simple_oris,             only: oris
 use simple_ori,              only: ori
+use simple_pftcc_shsrch      ! use all in there
 use simple_math              ! use all in there
 implicit none
 
@@ -16,17 +16,17 @@ logical, parameter :: debug = .false.
 
 type pcont3D_srch
     private
-    class(polarft_corrcalc), pointer :: ppftcc => null()    !< polar fourier correlation calculator
+    class(polarft_corrcalc), pointer :: ppftcc => null()  !< polar fourier correlation calculator
     type(oris) :: reforis             !< per ptcl search space and result of euler angles search
-    type(oris) :: softoris            !< reference returned
-    type(oris) :: shiftedoris         !< reference whise shifts are searched
+    type(oris) :: softoris            !< references returned
+    type(oris) :: shiftedoris         !< references whose shifts are searched
     type(ori)  :: orientation_in      !< input orientation
     type(ori)  :: orientation_out     !< best orientation found
     real       :: lims(2,2)  = 0.     !< shift search limits
     real       :: prev_corr  = -1.    !< previous correlation
     integer    :: prev_ref   = 0      !< previous reference
     integer    :: prev_roind = 0      !< previous in-plane rotational index
-    integer    :: nstates    = 0      !< number states
+    integer    :: nstates    = 0      !< number of states
     integer    :: nbetter    = 0      !< number of improving references found
     integer    :: neval      = 0      !< number of references evaluated
     integer    :: npeaks     = 0      !< number of references returned
@@ -58,7 +58,6 @@ contains
         class(ori),                      intent(in)    :: o_in  !< 
         class(oris),                     intent(in)    :: e     !< 
         class(polarft_corrcalc), target, intent(in)    :: pftcc
-        ! destroy possibly pre-existing instance
         call self%kill
         ! set constants
         self%ppftcc    => pftcc
@@ -69,7 +68,7 @@ contains
         self%nstates   = p%nstates
         self%nrefs     = self%ppftcc%get_nrefs()
         self%nrots     = self%ppftcc%get_nrots()
-        if( self%reforis%get_noris().ne.self%nrefs )&
+        if(self%reforis%get_noris().ne.self%nrefs)&
             &stop 'Inconsistent number of references & orientations'
         ! orientations
         self%orientation_in  = o_in
@@ -100,53 +99,69 @@ contains
 
     !>  \brief  performs euler angles search
     subroutine do_refs_srch( self )
-        use simple_ran_tabu
         class(pcont3D_srch), intent(inout) :: self
         integer, allocatable :: roind_vec(:)    ! slice of in-plane angles
-        type(ran_tabu)       :: rt
         real                 :: inpl_corr
-        integer              :: srch_order(self%nrefs), i, iref
+        integer              :: iref
         ! init
         self%nbetter = 0
         self%neval   = 0
-        srch_order   = (/ (i,i=1,self%nrefs) /)
-        rt = ran_tabu(self%nrefs)
-        call rt%shuffle( srch_order )
         roind_vec = self%ppftcc%get_win_roind(360.-self%orientation_in%e3get(), E3HALFWINSZ)
         ! search
-        do i = 1,self%nrefs
-            iref = srch_order(i)
+        ! the input search space in stochastic, so no need for a randomized search order
+        do iref = 1,self%nrefs
             if(iref == self%prev_ref)cycle
-            call local_inpl_srch(iref, inpl_corr)
+            if(self%npeaks == 1)then
+                call shc_inpl_srch(iref, inpl_corr)
+            else
+                call greedy_inpl_srch(iref, inpl_corr)
+            endif
             self%neval = self%neval+1
             if(inpl_corr >= self%prev_corr)self%nbetter = self%nbetter+1
             if(self%nbetter >= self%npeaks)exit
         enddo
         if( self%nbetter<self%npeaks )then
             ! previous reference considered last
-            call local_inpl_srch(self%prev_ref, inpl_corr)
-            self%nbetter = self%nbetter+1
+            call greedy_inpl_srch(self%prev_ref, inpl_corr)
+            self%nbetter = self%nbetter + 1
             self%neval   = self%nrefs
         endif            
-        deallocate( roind_vec )
-        call rt%kill
+        deallocate(roind_vec)
         if(debug)write(*,*)'simple_pcont3d_srch::do_refs_srch done'
 
         contains
 
-            subroutine local_inpl_srch(iref_here, corr_here)
+            subroutine shc_inpl_srch(iref_here, corr_here)
+                use simple_rnd, only: shcloc
+                integer, intent(in)    :: iref_here
+                real,    intent(inout) :: corr_here
+                real    :: corrs(self%nrots), e3
+                integer :: inpl_ind
+                corrs    = self%ppftcc%gencorrs(iref_here, 1, roind_vec=roind_vec)
+                inpl_ind = shcloc(self%nrots, corrs, self%prev_corr)
+                if(inpl_ind > 0)then
+                    corr_here = corrs(inpl_ind)
+                    e3 = 360. - self%ppftcc%get_rot(inpl_ind)
+                    call self%reforis%e3set(iref_here, e3)
+                else
+                    corr_here = 0.
+                endif
+                call self%reforis%set(iref_here, 'corr', corr_here)
+            end subroutine shc_inpl_srch
+
+            subroutine greedy_inpl_srch(iref_here, corr_here)
                 integer, intent(in)    :: iref_here
                 real,    intent(inout) :: corr_here
                 real    :: corrs(self%nrots), e3
                 integer :: loc(1), inpl_ind
                 corrs     = self%ppftcc%gencorrs(iref_here, 1, roind_vec=roind_vec)
-                loc       = maxloc(corrs)   
+                loc       = maxloc(corrs)
                 inpl_ind  = loc(1)
                 corr_here = corrs(inpl_ind)
-                e3        = 360. - self%ppftcc%get_rot(inpl_ind)
-                call self%reforis%set(iref, 'corr', corr_here)
-                call self%reforis%e3set(iref, e3)
-            end subroutine local_inpl_srch
+                e3 = 360. - self%ppftcc%get_rot(inpl_ind)
+                call self%reforis%e3set(iref_here, e3)
+                call self%reforis%set(iref_here, 'corr', corr_here)
+            end subroutine greedy_inpl_srch
     end subroutine do_refs_srch
 
     !>  \brief  performs the shift search
@@ -158,7 +173,7 @@ contains
         real              :: cxy(3), prev_shift_vec(2), corr
         integer           :: ref_inds(self%nrefs), i, iref, inpl_ind, cnt
         ! SORT ORIENTATIONS
-        ref_inds = (/ (i,i=1,self%nrefs) /)
+        ref_inds = (/ (i, i=1, self%nrefs) /)
         corrs = self%reforis%get_all('corr')
         call hpsort(self%nrefs, corrs, ref_inds)
         ! SHIFT SEARCH
@@ -231,7 +246,7 @@ contains
         if(o%isthere('kv'))    call self%softoris%set_all2single('kv',o%get('kv'))
         if(o%isthere('fraca')) call self%softoris%set_all2single('fraca',o%get('fraca'))
         if(o%isthere('lp'))    call self%softoris%set_all2single('lp',o%get('lp'))
-        call self%softoris%set_all2single('w',o%get('w'))
+        call self%softoris%set_all2single('w', o%get('w'))
         call o%kill
         ! best orientation
         self%orientation_out = self%softoris%get_ori(self%npeaks) ! best ori
@@ -262,7 +277,6 @@ contains
         else
             mi_joint = mi_joint/2.
         endif
-        ! overlaps
         call self%orientation_out%set('mi_class', mi_class)
         call self%orientation_out%set('mi_inpl',  mi_inpl)
         call self%orientation_out%set('mi_state', mi_state)

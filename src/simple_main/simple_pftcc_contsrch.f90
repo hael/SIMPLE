@@ -7,7 +7,6 @@ use simple_opt_spec,         only: opt_spec
 use simple_optimizer,        only: optimizer
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_projector,        only: projector
-use simple_ctf,              only: ctf
 use simple_ori,              only: ori
 use simple_defs
 implicit none
@@ -21,10 +20,8 @@ class(params),           pointer :: p_ptr =>null()  !< pointer to params
 class(optimizer),        pointer :: nlopt =>null()  !< pointer to nonlinear optimizer
 class(projector),        pointer :: pimg  =>null()  !< pointer to projector
 type(polarft_corrcalc),  pointer :: ppftcc=>null()  !< polar FT calculator
-type(ctf)                        :: tfun            !< transfer function
 type(ori)                        :: o_glob          !< global orientation
 type(projector),     allocatable :: refvols(:)      !< reference volumes
-real                             :: dfx=0., dfy=0., angast=0. !< particle CTF parameters
 integer                          :: state = 1       !< state to evaluate
 logical,               parameter :: debug = .false.
 
@@ -100,7 +97,7 @@ contains
         o = o_glob
         call o%set_euler(vec(1:3))
         call refvols(state)%fproject_polar(1, o, ppftcc, expanded=.true.)
-        if(p_ptr%ctf .ne. 'no')call ppftcc%apply_ctf(tfun, dfx, dfy=dfy, angast=angast)
+        if(p_ptr%ctf .ne. 'no')call ppftcc%apply_ctf_single(1, 1)
         cost = -ppftcc%corr(1, 1, 1, vec(4:5))
     end function pftcc_contsrch_cost
     
@@ -110,7 +107,7 @@ contains
         class(ori), intent(inout) :: o
         type(oris) :: a
         real :: corr, cost, dist, dist_inpl, prev_corr, frac
-        real      :: prev_shvec(2)
+        real :: prev_shvec(2), dfx, dfy, angast
         ! extract pft from ptcl
         call pimg%img2polarft(1, ppftcc, isptcl=.true.)
         ! init CTF
@@ -138,7 +135,7 @@ contains
         o_glob = o
         ! previous correlation
         call refvols(state)%fproject_polar(1, o, ppftcc, expanded=.true.)
-        if(p_ptr%ctf .ne. 'no')call ppftcc%apply_ctf(tfun, dfx, dfy=dfy, angast=angast)
+        if(p_ptr%ctf .ne. 'no')call ppftcc%apply_ctf_single(1, 1)
         prev_corr = ppftcc%corr(1, 1, 1, [0.,0.])
         ! initialise optimiser
         ospec%x      = 0.
@@ -156,31 +153,25 @@ contains
         else
             ! improvement
             call o%set_euler(ospec%x(1:3))
-            ! shifts must be obtained by vector addition after rotation
+            ! shifts must be obtained by vector addition
             call o%set_shift(prev_shvec + ospec%x(4:5))
             ! distance
-            dist_inpl = o_glob.inpldist.o
-            dist      = 0.5*rad2deg(o_glob.euldist.o) + 0.5*dist_inpl
-            frac      = 100.*(180.-dist**2.)/180.
+            dist_inpl = rad2deg(o_glob.inpldist.o)
+            dist      = rad2deg(o_glob.euldist.o)
+            frac      = 100.*(180.-(.5*dist+.5*dist_inpl)**2.)/180.
         endif
+        ! sets new values
         call o%set('corr',      corr)
         call o%set('ow',        1.)
         call o%set('dist_inpl', dist_inpl)
         call o%set('dist',      dist)
-        ! set the overlaps
-        call o%set('mi_class', 1.)
-        call o%set('mi_inpl',  1.)
-        call o%set('mi_state', 1.)
-        call o%set('mi_joint', 1.)
-        ! all the other stuff
-        call o%set('frac', frac)
-        call o%set('sdev', 0.)
+        call o%set('mi_class',  1.)
+        call o%set('mi_inpl',   1.)
+        call o%set('mi_state',  1.)
+        call o%set('mi_joint',  1.)
+        call o%set('frac',      frac)
+        call o%set('sdev',      0.)
         ! clean exit
-        if(p_ptr%ctf .ne. 'no')then
-            dfx      = 0.
-            dfy      = 0.
-            angast   = 0.
-        endif
         state = 1
     end subroutine pftcc_contsrch_minimize
 
