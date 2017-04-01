@@ -208,10 +208,10 @@ contains
       contains
 
         subroutine wmat_from_single_file
-            if( file_exists('shellweights.bin') )then    
+            if( file_exists(p%shellwfile) )then    
                 allocate( wmat(p%nptcls,filtsz), stat=alloc_stat)
                 filnum = get_fileunit()
-                open(unit=filnum, status='OLD', action='READ', file='shellweights.bin', access='STREAM')
+                open(unit=filnum, status='OLD', action='READ', file=p%shellwfile, access='STREAM')
                 read(unit=filnum,pos=1,iostat=io_stat) wmat
                 ! check if the read was successful
                 if( io_stat .ne. 0 )then
@@ -276,15 +276,15 @@ contains
       contains
 
         subroutine wmat_from_single_file
-            if( file_exists('shellweights.bin') )then    
+            if( file_exists(p%shellwfile) )then    
                 allocate( wmat(p%nstates,p%nptcls,filtsz), stat=alloc_stat)
                 filnum = get_fileunit()
-                open(unit=filnum, status='OLD', action='READ', file='shellweights.bin', access='STREAM')
+                open(unit=filnum, status='OLD', action='READ', file=p%shellwfile, access='STREAM')
                 read(unit=filnum,pos=1,iostat=io_stat) wmat
                 ! check if the read was successful
                 if( io_stat .ne. 0 )then
                     write(*,'(a,i0,2a)') '**ERROR(setup_shellweights_2): I/O error ',&
-                    io_stat, ' when reading shellweights.bin'
+                    io_stat, ' when reading'//trim(p%shellwfile)
                     stop 'I/O error; setup_shellweights_2; simple_hadamard_common'
                 endif
                 close(filnum)

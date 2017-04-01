@@ -25,7 +25,6 @@ type :: polarft_corrcalc
     integer                  :: winsz      = 0         !< size of moving window in correlation cacluations
     integer                  :: ldim(3)    = 0         !< logical dimensions of original cartesian image
     integer                  :: kfromto(2) = 0         !< Fourier index range
-    integer                  :: nthr       = 0         !< nr of CPU threads
     real,        allocatable :: sqsums_refs(:)         !< memoized square sums for the correlation calculations
     real,        allocatable :: sqsums_ptcls(:)        !< memoized square sums for the correlation calculations
     real,        allocatable :: angtab(:)              !< table of in-plane angles (in degrees)
@@ -48,6 +47,8 @@ type :: polarft_corrcalc
     procedure          :: set_ref_fcomp
     procedure          :: set_ptcl_fcomp
     procedure          :: cp_ptcls2refs
+    procedure          :: cp_ptcl2ref
+    procedure          :: zero_ref
     ! GETTERS
     procedure          :: get_pfromto
     procedure          :: get_nptcls
@@ -105,10 +106,10 @@ contains
     ! CONSTRUCTORS
     
     !>  \brief  is a constructor
-    subroutine new( self, nrefs, pfromto, ldim, kfromto, ring2, nthr, ctfflag, isxfel )
+    subroutine new( self, nrefs, pfromto, ldim, kfromto, ring2, ctfflag, isxfel )
         use simple_math, only: rad2deg, is_even, round2even
         class(polarft_corrcalc),    intent(inout) :: self
-        integer,                    intent(in)    :: nrefs, pfromto(2), ldim(3), kfromto(2), ring2, nthr
+        integer,                    intent(in)    :: nrefs, pfromto(2), ldim(3), kfromto(2), ring2
         character(len=*),           intent(in)    :: ctfflag
         character(len=*), optional, intent(in)    :: isxfel
         integer :: alloc_stat, irot, k, err
@@ -165,7 +166,6 @@ contains
         self%ptclsz  = self%nrots * 2                  !< size of particle (2*nrots)
         self%ldim    = ldim                            !< logical dimensions of original cartesian image
         self%kfromto = kfromto                         !< Fourier index range
-        self%nthr    = nthr                            !< number of CPU threads
         ! generate polar coordinates
         allocate( self%polar(self%ptclsz,self%kfromto(1):self%kfromto(2)), self%angtab(self%nrots), stat=alloc_stat)
         call alloc_err('polar coordinate arrays; new; simple_polarft_corrcalc', alloc_stat)
@@ -256,6 +256,28 @@ contains
             stop 'pfts_refs and pfts_ptcls not congruent (nrefs .ne. nptcls)'
         endif
     end subroutine cp_ptcls2refs
+
+    !>  \brief  copies the particles to the references
+    subroutine cp_ptcl2ref( self, iptcl, iref, irot )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iptcl, iref
+        integer, optional,       intent(in)    :: irot
+        if( present(irot) )then
+            self%pfts_refs(iref,:,:) = self%pfts_ptcls(iptcl,irot:irot+self%winsz,:)
+            self%sqsums_refs(iref)   = self%sqsums_ptcls(iptcl)
+        else
+            self%pfts_refs(iref,:,:) = self%pfts_ptcls(iptcl,:self%refsz,:)
+            self%sqsums_refs(iref)   = self%sqsums_ptcls(iptcl)
+        endif
+    end subroutine cp_ptcl2ref
+
+    !>  \brief  zeroes the iref reference
+    subroutine zero_ref( self, iref )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref
+        self%pfts_refs(iref,:,:) = cmplx(0.,0.)
+        self%sqsums_refs(iref)   = 1.0
+    end subroutine zero_ref
     
     ! GETTERS
     
@@ -779,10 +801,9 @@ contains
     end subroutine gencorrs_all_cpu_2
 
     !>  \brief  is for generating rotational correlations
-    function gencorrs_serial( self, iref, iptcl, roind_vec ) result( cc )
+    function gencorrs_serial( self, iref, iptcl ) result( cc )
         class(polarft_corrcalc), intent(inout) :: self        !< instance
         integer,                 intent(in)    :: iref, iptcl !< ref & ptcl indices
-        integer,       optional, intent(in)    :: roind_vec(:)
         real      :: cc(self%nrots)
         integer   :: irot, i, nrots
         ! all correlations

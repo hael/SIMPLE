@@ -33,7 +33,7 @@ public :: pick_distr_commander
 public :: prime2D_init_distr_commander
 public :: cont3D_distr_commander
 public :: prime2D_distr_commander
-public :: find_nnimgs_distr_commander
+public :: prime2D_chunk_distr_commander
 public :: prime3D_init_distr_commander
 public :: prime3D_distr_commander
 public :: shellweight3D_distr_commander
@@ -65,10 +65,10 @@ type, extends(commander_base) :: prime2D_distr_commander
   contains
     procedure :: execute      => exec_prime2D_distr
 end type prime2D_distr_commander
-type, extends(commander_base) :: find_nnimgs_distr_commander
+type, extends(commander_base) :: prime2D_chunk_distr_commander
   contains
-    procedure :: execute      => exec_find_nnimgs_distr
-end type find_nnimgs_distr_commander
+    procedure :: execute      => exec_prime2D_chunk_distr
+end type prime2D_chunk_distr_commander
 type, extends(commander_base) :: prime3D_init_distr_commander
   contains
     procedure :: execute      => exec_prime3D_init_distr
@@ -165,16 +165,16 @@ contains
         class(unblur_tomo_movies_distr_commander), intent(inout) :: self
         class(cmdline),                            intent(inout) :: cline
         character(len=STDLEN), allocatable :: tomonames(:), tiltnames(:)
-        type(oris)                         :: exp_doc
-        integer                            :: nseries, ipart, numlen
-        type(params)                       :: p_master
-        integer, allocatable               :: parts(:,:)
-        type(qsys_ctrl)                    :: qscripts
-        character(len=KEYLEN)              :: str
-        type(chash)                        :: myq_descr, job_descr
-        type(chash), allocatable           :: part_params(:)
-        type(qsys_factory)                 :: qsys_fac
-        class(qsys_base), pointer          :: myqsys
+        type(oris)                :: exp_doc
+        integer                   :: nseries, ipart, numlen
+        type(params)              :: p_master
+        integer, allocatable      :: parts(:,:)
+        type(qsys_ctrl)           :: qscripts
+        character(len=KEYLEN)     :: str
+        type(chash)               :: myq_descr, job_descr
+        type(chash), allocatable  :: part_params(:)
+        type(qsys_factory)        :: qsys_fac
+        class(qsys_base), pointer :: myqsys
         ! make master parameters
         call cline%set('prg', 'unblur')
         p_master = params(cline, checkdistr=.false.)
@@ -511,40 +511,58 @@ contains
         call simple_end('**** SIMPLE_DISTR_PRIME2D NORMAL STOP ****')
     end subroutine exec_prime2D_distr
 
-    ! FIND_NNIMGS (to find nearest neighbors in 2D)
-
-    subroutine exec_find_nnimgs_distr( self, cline )
-        use simple_commander_misc,  only: find_nnimgs_commander
-        use simple_commander_distr, only: merge_nnmat_commander
-        class(find_nnimgs_distr_commander), intent(inout) :: self
-        class(cmdline),                     intent(inout) :: cline
-        ! constants
-        logical, parameter          :: DEBUG=.false.
-        ! commanders
-        type(find_nnimgs_commander) :: xfind_nnimgs
-        type(merge_nnmat_commander) :: xmerge_nnmat
-        ! other variables
-        type(params)                :: p_master
-        integer, allocatable        :: parts(:,:)
-        type(qsys_ctrl)             :: qscripts
-        type(chash)                 :: myq_descr, job_descr
-        type(qsys_factory)          :: qsys_fac
-        class(qsys_base), pointer   :: myqsys
+    subroutine exec_prime2D_chunk_distr( self, cline )
+        use simple_commander_prime2D ! use all in there
+        use simple_commander_distr   ! use all in there
+        use simple_commander_mask    ! use all in there
+        use simple_oris,    only: oris
+        use simple_strings, only: str_has_substr
+        class(prime2D_chunk_distr_commander), intent(inout) :: self
+        class(cmdline),                       intent(inout) :: cline
+        type(params)              :: p_master
+        integer, allocatable      :: parts(:,:)
+        type(qsys_ctrl)           :: qscripts
+        character(len=STDLEN)     :: refs, oritab, str, str_iter, simple_exec_bin
+        type(split_commander)     :: xsplit
+        type(chash), allocatable  :: part_params(:)
+        type(chash)               :: myq_descr, job_descr
+        type(qsys_factory)        :: qsys_fac
+        class(qsys_base), pointer :: myqsys
+        integer :: ipart, numlen
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
+        ! determine the number of partitions
+        p_master%nparts = nint(real(p_master%nptcls)/real(p_master%chunksz))
+        call cline%set('nparts', real(p_master%nparts))
+        numlen = len(int2str(p_master%nparts))
+        if( .not. cline%defined('ncunits') ) p_master%ncunits = p_master%nparts 
         ! setup the environment for distributed execution
         call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
-        ! main functionality
+        ! prepare part-dependent parameters
+        allocate(part_params(p_master%nparts))
+        do ipart=1,p_master%nparts
+            call part_params(ipart)%new(2)
+            call part_params(ipart)%set('chunktag',   'chunk'//int2str_pad(ipart,numlen))
+            call part_params(ipart)%set('shellwfile', 'chunk'//int2str_pad(ipart,numlen)//'shellweights.bin')
+        end do
+        ! split stack
+        if( stack_is_split(p_master%ext, p_master%nparts) )then
+            ! check that the stack partitions are of correct sizes
+            call stack_parts_of_correct_sizes(p_master%ext, parts, p_master%box)
+        else
+            call xsplit%execute(cline)
+        endif
+        ! prepare scripts
         call qsys_cleanup(p_master)
-        call qscripts%generate_scripts(job_descr, p_master%ext, myq_descr)
+        call qscripts%generate_scripts(job_descr, p_master%ext,&
+        &myq_descr, part_params=part_params, chunkdistr=.true.)
+        ! manage job scheduling
         call qscripts%schedule_jobs
-        call xmerge_nnmat%execute(cline)
         call qsys_cleanup(p_master)
-        call del_files('nnmat_part', p_master%nparts, ext='.bin')
-        call simple_end('**** SIMPLE_DISTR_FIND_NNIMGS NORMAL STOP ****', print_simple=.false.)
-    end subroutine exec_find_nnimgs_distr
+        call simple_end('**** SIMPLE_DISTR_PRIME2D_CHUNK NORMAL STOP ****')
+    end subroutine exec_prime2D_chunk_distr
 
     ! PRIME3D_INIT
 

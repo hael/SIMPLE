@@ -28,7 +28,7 @@ type(pick_distr_commander)                :: xpick_distr
 ! PRIME2D
 type(prime2D_init_distr_commander)        :: xprime2D_init_distr
 type(prime2D_distr_commander)             :: xprime2D_distr
-type(find_nnimgs_distr_commander)         :: xfind_nnimgs_distr
+type(prime2D_chunk_distr_commander)       :: xprime2D_chunk_distr
 ! PRIME3D
 type(prime3D_init_distr_commander)        :: xprime3D_init_distr
 type(prime3D_distr_commander)             :: xprime3D_distr
@@ -286,28 +286,29 @@ select case(prg)
         keys_required(3)  = 'msk'
         keys_required(4)  = 'ncls'
         keys_required(5)  = 'ctf'
-        keys_required(6)  = 'nparts'
         ! set optional keys
-        keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'ncunits'
-        keys_optional(3)  = 'deftab'
-        keys_optional(4)  = 'refine'
-        keys_optional(5)  = 'refs'
-        keys_optional(6)  = 'oritab'
-        keys_optional(7)  = 'hp'
-        keys_optional(8)  = 'lp'
-        keys_optional(9)  = 'cenlp'
-        keys_optional(10) = 'trs'
-        keys_optional(11) = 'automsk'
-        keys_optional(12) = 'amsklp'
-        keys_optional(13) = 'inner'
-        keys_optional(14) = 'width'
-        keys_optional(15) = 'startit'
-        keys_optional(16) = 'maxits'
-        keys_optional(17) = 'filwidth'
-        keys_optional(18) = 'nnn'
-        keys_optional(19) = 'minp'
-        keys_optional(20) = 'center'     
+        keys_optional(1)  = 'nparts'
+        keys_optional(2)  = 'chunksz'
+        keys_optional(3)  = 'nthr'
+        keys_optional(4)  = 'ncunits'
+        keys_optional(5)  = 'deftab'
+        keys_optional(6)  = 'refine'
+        keys_optional(7)  = 'refs'
+        keys_optional(8)  = 'oritab'
+        keys_optional(9)  = 'hp'
+        keys_optional(10)  = 'lp'
+        keys_optional(11) = 'cenlp'
+        keys_optional(12) = 'trs'
+        keys_optional(13) = 'automsk'
+        keys_optional(14) = 'amsklp'
+        keys_optional(15) = 'inner'
+        keys_optional(16) = 'width'
+        keys_optional(17) = 'startit'
+        keys_optional(18) = 'maxits'
+        keys_optional(19) = 'filwidth'
+        keys_optional(20) = 'nnn'
+        keys_optional(21) = 'minp'
+        keys_optional(22) = 'center'     
         ! documentation
         if( describe ) call print_doc_prime2D
         ! parse command line
@@ -317,7 +318,7 @@ select case(prg)
         ! else
         !     call cline%parse( keys_required(:7), keys_optional(:19) )
         ! endif
-        call cline%parse( keys_required(:6), keys_optional(:20) )
+        call cline%parse( keys_required(:5), keys_optional(:21) )
         ! set defaults
         if( .not. cline%defined('lp')     ) call cline%set('lp',     20.)
         if( .not. cline%defined('eo')     ) call cline%set('eo',    'no')
@@ -325,30 +326,15 @@ select case(prg)
         if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',  30.)
         if( .not. cline%defined('edge')   ) call cline%set('edge',   20.)
         if( .not. cline%defined('center') ) call cline%set('center', 'yes')
-        ! execute
-        call xprime2D_distr%execute(cline)
-    case( 'find_nnimgs' )
-        !==Program find_nnimgs
-        !
-        ! <find_nnimgs/begin>is a program for cidentifying the nnn nearest neighbor
-        ! images for each image in the inputted stack<find_nnimgs/end>
-        !
-        ! set required keys
-        keys_required(1) = 'stk'
-        keys_required(2) = 'smpd'
-        keys_required(3) = 'msk'
-        keys_required(4) = 'nparts'
-        ! set optional keys
-        keys_optional(1) = 'nthr'
-        keys_optional(2) = 'ncunits'
-        keys_optional(3) = 'nnn'
-        keys_optional(4) = 'lp'
-        keys_optional(5) = 'hp'
-        ! parse command line
-        if( describe ) call print_doc_find_nnimgs
-        call cline%parse(keys_required(:4), keys_optional(:5))
-        ! execute
-        call xfind_nnimgs_distr%execute(cline)
+        if( cline%defined('nparts') .and. cline%defined('chunksz') )then
+            stop 'nparts and chunksz cannot simultaneously be part of command line'
+        else if(cline%defined('nparts') )then
+            call xprime2D_distr%execute(cline)
+        else if( cline%defined('chunksz') )then
+            call xprime2D_chunk_distr%execute(cline)
+        else
+            stop 'eiter nparts or chunksz need to be part of command line'
+        endif
 
     ! PRIME3D
 

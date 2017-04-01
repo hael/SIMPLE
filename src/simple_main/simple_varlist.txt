@@ -72,6 +72,7 @@ angastunit
 boxfile
 boxtab
 boxtype
+chunktag
 clsdoc
 comlindoc
 ctf
@@ -117,6 +118,7 @@ prg
 refine
 refs_msk
 refs
+shellwfile
 speckind
 split_mode
 stk_part

@@ -113,7 +113,7 @@ type(fixmapheader_commander)       :: xfixmapheader
     
 ! MISCELLANOUS PROGRAMS
 type(cluster_smat_commander)       :: xcluster_smat
-type(find_nnimgs_commander)        :: xfind_nnimgs
+! type(find_nnimgs_commander)        :: xfind_nnimgs
 type(masscen_commander)            :: xmasscen
 type(print_cmd_dict_commander)     :: xprint_cmd_dict
 type(print_dose_weights_commander) :: xprint_dose_weights
@@ -521,12 +521,12 @@ select case(prg)
         !
         ! set required keys
         keys_required(1) = 'pgrp'
+        keys_required(2) = 'smpd'
         ! set optional keys
         keys_optional(1) = 'nthr'
         keys_optional(2) = 'vol1'
         keys_optional(3) = 'stk'
-        keys_optional(4) = 'smpd'
-        keys_optional(5) = 'neg'
+        keys_optional(4) = 'neg'
         ! parse command line
         ! if( describe ) call print_doc_makepickrefs
         call cline%parse(keys_required(:1), keys_optional(:4))
@@ -624,26 +624,26 @@ select case(prg)
         keys_required(2)  = 'smpd'
         keys_required(3)  = 'msk'
         keys_required(4)  = 'ncls'
-        keys_required(5)  = 'refs'
-        keys_required(6)  = 'ctf'
+        keys_required(5)  = 'ctf'
         ! set optional keys
         keys_optional(1)  = 'nthr'
         keys_optional(2)  = 'deftab'
         keys_optional(3)  = 'oritab'
-        keys_optional(4)  = 'hp'
-        keys_optional(5)  = 'lp'
-        keys_optional(6)  = 'cenlp'
-        keys_optional(7)  = 'trs'
-        keys_optional(8)  = 'automsk'
-        keys_optional(9)  = 'amsklp'
-        keys_optional(10) = 'inner'
-        keys_optional(11) = 'width'
-        keys_optional(12) = 'startit'
-        keys_optional(13) = 'maxits'
-        keys_optional(14) = 'center'
+        keys_optional(4)  = 'refs'
+        keys_optional(5)  = 'hp'
+        keys_optional(6)  = 'lp'
+        keys_optional(7)  = 'cenlp'
+        keys_optional(8)  = 'trs'
+        keys_optional(9)  = 'automsk'
+        keys_optional(10)  = 'amsklp'
+        keys_optional(11) = 'inner'
+        keys_optional(12) = 'width'
+        keys_optional(13) = 'startit'
+        keys_optional(14) = 'maxits'
+        keys_optional(15) = 'center'
         ! parse command line
         if( describe ) call print_doc_prime2D
-        call cline%parse(keys_required(:6), keys_optional(:14))
+        call cline%parse(keys_required(:5), keys_optional(:15))
         ! set defaults
         if( .not. cline%defined('lp')     ) call cline%set('lp',      20.)
         if( .not. cline%defined('amsklp') ) call cline%set('amsklp',  25.)
@@ -720,7 +720,7 @@ select case(prg)
         call cline%parse(keys_required(:2), keys_optional(:1))
         ! execute
         call xrank_cavgs%execute(cline)
-        
+
     ! PRIME3D PROGRAMS
     
     case( 'resrange' )
@@ -1167,6 +1167,7 @@ select case(prg)
        !
        ! set required keys
        keys_required(1)  = 'msk'
+       keys_required(2)  = 'smpd'
        ! set optional keys
        keys_optional(1)  = 'stk'
        keys_optional(2)  = 'vol1'
@@ -1183,7 +1184,7 @@ select case(prg)
        keys_optional(13) = 'smpd'
        ! parse command line
        if( describe ) call print_doc_mask
-       call cline%parse( keys_required(:1), keys_optional(:13))
+       call cline%parse( keys_required(:2), keys_optional(:13))
        ! execute
        call xmask%execute(cline)
     case( 'automask2D' )
@@ -1669,17 +1670,19 @@ select case(prg)
         ! images or volume (vol1) with respect to their power spectrum set shell_norm=yes
         ! <norm/end> 
         !
+        ! set required keys
+        keys_required(1) = 'smpd'
         ! set optional keys
-        keys_optional(1)  = 'stk'
-        keys_optional(2)  = 'msk'
-        keys_optional(3)  = 'norm'
-        keys_optional(4)  = 'noise_norm'
-        keys_optional(5)  = 'shell_norm'
-        keys_optional(6)  = 'hfun'
-        keys_optional(7)  = 'nthr'
+        keys_optional(1) = 'stk'
+        keys_optional(2) = 'msk'
+        keys_optional(3) = 'norm'
+        keys_optional(4) = 'noise_norm'
+        keys_optional(5) = 'shell_norm'
+        keys_optional(6) = 'hfun'
+        keys_optional(7) = 'nthr'
         ! parse command line
         if( describe ) call print_doc_norm
-        call cline%parse(keys_optional=keys_optional(:7))
+        call cline%parse(keys_required(:1), keys_optional(:7))
         ! execute
         call xnorm%execute(cline)
     case( 'respimg' )
@@ -1766,32 +1769,32 @@ select case(prg)
         !
         ! Required keys
         keys_required(1) = 'stk'
+        keys_required(2)  = 'smpd'
         ! set optional keys
-        keys_optional(1)  = 'smpd'
-        keys_optional(2)  = 'oritab'
-        keys_optional(3)  = 'outstk'
-        keys_optional(4)  = 'mirr'
-        keys_optional(5)  = 'nran'
-        keys_optional(6)  = 'frac'
-        keys_optional(7)  = 'state'
-        keys_optional(8)  = 'class'
-        keys_optional(9)  = 'neg'
-        keys_optional(10) = 'acf'
-        keys_optional(11) = 'avg'
-        keys_optional(12) = 'frameavg'
-        keys_optional(13) = 'vis'
-        keys_optional(14) = 'snr'
-        keys_optional(15) = 'fromp'
-        keys_optional(16) = 'top'
-        keys_optional(17) = 'stk2'
-        keys_optional(18) = 'nptcls'
-        keys_optional(19) = 'append'
-        keys_optional(20) = 'order'
-        keys_optional(21) = 'bfac'
-        keys_optional(22) = 'outfile'
+        keys_optional(1)  = 'oritab'
+        keys_optional(2)  = 'outstk'
+        keys_optional(3)  = 'mirr'
+        keys_optional(4)  = 'nran'
+        keys_optional(5)  = 'frac'
+        keys_optional(6)  = 'state'
+        keys_optional(7)  = 'class'
+        keys_optional(8)  = 'neg'
+        keys_optional(9)  = 'acf'
+        keys_optional(10) = 'avg'
+        keys_optional(11) = 'frameavg'
+        keys_optional(12) = 'vis'
+        keys_optional(13) = 'snr'
+        keys_optional(14) = 'fromp'
+        keys_optional(15) = 'top'
+        keys_optional(16) = 'stk2'
+        keys_optional(17) = 'nptcls'
+        keys_optional(18) = 'append'
+        keys_optional(19) = 'order'
+        keys_optional(20) = 'bfac'
+        keys_optional(21) = 'outfile'
         ! parse command line
         if( describe ) call print_doc_stackops
-        call cline%parse( keys_required(:1),keys_optional(:22) )
+        call cline%parse( keys_required(:2),keys_optional(:21) )
         ! execute
         call xstackops%execute(cline)
     case( 'fixmapheader' )
@@ -1829,25 +1832,25 @@ select case(prg)
         call cline%parse(keys_required(:4), keys_optional(:1))
         ! execute
         call xcluster_smat%execute(cline)
-    case( 'find_nnimgs' )
-        !==Program find_nnimgs
-        !
-        ! <find_nnimgs/begin>is a program for cidentifying the nnn nearest neighbor
-        ! images for each image in the inputted stack<find_nnimgs/end>
-        !
-        ! set required keys
-        keys_required(1) = 'stk'
-        keys_required(2) = 'smpd'
-        keys_required(3) = 'msk'
-        keys_required(4) = 'nnn'
-        ! set optional keys
-        keys_optional(1) = 'lp'
-        keys_optional(2) = 'hp'
-        ! parse command line
-        if( describe ) call print_doc_find_nnimgs
-        call cline%parse(keys_required(:4), keys_optional(:2))
-        ! execute
-        call xfind_nnimgs%execute(cline)
+    ! case( 'find_nnimgs' )
+    !     !==Program find_nnimgs
+    !     !
+    !     ! <find_nnimgs/begin>is a program for cidentifying the nnn nearest neighbor
+    !     ! images for each image in the inputted stack<find_nnimgs/end>
+    !     !
+    !     ! set required keys
+    !     keys_required(1) = 'stk'
+    !     keys_required(2) = 'smpd'
+    !     keys_required(3) = 'msk'
+    !     keys_required(4) = 'nnn'
+    !     ! set optional keys
+    !     keys_optional(1) = 'lp'
+    !     keys_optional(2) = 'hp'
+    !     ! parse command line
+    !     if( describe ) call print_doc_find_nnimgs
+    !     call cline%parse(keys_required(:4), keys_optional(:2))
+    !     ! execute
+    !     call xfind_nnimgs%execute(cline)
     case( 'masscen' )
         !==Program masscen
         !

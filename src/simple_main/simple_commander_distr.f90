@@ -201,19 +201,19 @@ contains
             wmat_states = merge_rmat_from_parts(p%nstates, p%nptcls, p%nparts, filtsz, 'shellweights_part')
             call normalise_shellweights(wmat_states, p%npeaks)
             filnum = get_fileunit()
-            open(unit=filnum, status='REPLACE', action='WRITE', file='shellweights.bin', access='STREAM')
+            open(unit=filnum, status='REPLACE', action='WRITE', file=p%shellwfile, access='STREAM')
             write(unit=filnum,pos=1,iostat=io_stat) wmat_states
             deallocate(wmat_states)
         else
             wmat = merge_rmat_from_parts(p%nptcls, p%nparts, filtsz, 'shellweights_part')
             call normalise_shellweights(wmat)
             filnum = get_fileunit()
-            open(unit=filnum, status='REPLACE', action='WRITE', file='shellweights.bin', access='STREAM')
+            open(unit=filnum, status='REPLACE', action='WRITE', file=p%shellwfile, access='STREAM')
             write(unit=filnum,pos=1,iostat=io_stat) wmat
             deallocate(wmat)
         endif
         if( io_stat .ne. 0 )then
-            write(*,'(a,i0,a)') 'I/O error ', io_stat, ' when writing to shellweights.bin'
+            write(*,'(a,i0,a)') 'I/O error ', io_stat, ' when writing to '//trim(p%shellwfile)
             stop 'I/O error; merge_shellweights'
         endif
         close(filnum)

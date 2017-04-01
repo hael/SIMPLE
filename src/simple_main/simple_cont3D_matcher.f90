@@ -66,7 +66,7 @@ contains
         if( p%l_distr_exec )then
             allocate(fname, source='shellweights_part'//int2str_pad(p%part,p%numlen)//'.bin')
         else
-            allocate(fname, source='shellweights.bin')
+            allocate(fname, source=p%shellwfile)
         endif
         open(unit=filnum, status='REPLACE', action='WRITE', file=fname, access='STREAM')
         write(unit=filnum,pos=1,iostat=io_stat) wmat
@@ -126,7 +126,7 @@ contains
         if( p%l_distr_exec )then
             allocate(fname, source='shellweights_part'//int2str_pad(p%part,p%numlen)//'.bin')
         else
-            allocate(fname, source='shellweights.bin')
+            allocate(fname, source=p%shellwfile)
         endif
         open(unit=filnum, status='REPLACE', action='WRITE', file=fname, access='STREAM')
         write(unit=filnum,pos=1,iostat=io_stat) wmat
@@ -171,9 +171,9 @@ contains
                 if(p%boxmatch < p%box)call b%vol%new([p%box,p%box,p%box],p%smpd)
             case('polar')
                 if( p%l_xfel )then
-                    call pftcc%new(1, [1,1], [p%boxmatch,p%boxmatch,1], p%kfromto, p%ring2, p%nthr, p%ctf, isxfel='yes')
+                    call pftcc%new(1, [1,1], [p%boxmatch,p%boxmatch,1], p%kfromto, p%ring2, p%ctf, isxfel='yes')
                 else
-                    call pftcc%new(1, [1,1], [p%boxmatch,p%boxmatch,1], p%kfromto, p%ring2, p%nthr, p%ctf)
+                    call pftcc%new(1, [1,1], [p%boxmatch,p%boxmatch,1], p%kfromto, p%ring2, p%ctf)
                 endif
             case DEFAULT
                 stop 'Unknown refinment mode; simple_cont3D_matcher%cont3D_exec'

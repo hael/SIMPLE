@@ -226,9 +226,12 @@ contains
     function int2str_pad(intg, numlen) result(string)
         integer, intent(in)           :: intg, numlen
         character(len=:), allocatable :: string, str_tmp, str_tmp2
-        integer :: str_tmp_len
+        integer :: str_tmp_len, slen
         str_tmp = int2str(intg)
-        if( len(str_tmp) > numlen )then
+        slen    = len(str_tmp)
+        if( slen > numlen )then
+            print *, 'len(int2str(intg)): ', slen
+            print *, 'numlen            : ', numlen
             stop 'length of number > than desired length; simple_strings :: in2str_pad'
         else if( len(str_tmp) == numlen )then
             allocate(string, source=str_tmp)

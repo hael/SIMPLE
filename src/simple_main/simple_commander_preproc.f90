@@ -717,7 +717,7 @@ contains
                     call cline%set('stk', 'rotated_from_makepickrefs'//p%ext)
                 endif
                 if( p%neg .eq. 'yes' )then
-                    call neg_imgfile('rotated_from_makepickrefs'//p%ext, 'pickrefs'//p%ext)
+                    call neg_imgfile('rotated_from_makepickrefs'//p%ext, 'pickrefs'//p%ext, p%smpd)
                 else
                      call rename('rotated_from_makepickrefs'//p%ext, 'pickrefs'//p%ext)
                 endif

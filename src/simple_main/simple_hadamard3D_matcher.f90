@@ -364,10 +364,10 @@ contains
         nrefs = p%nspace*p%nstates
         if( p%l_xfel )then
             call pftcc%new(nrefs, [p%fromp,p%top], [p%boxmatch,p%boxmatch,1],&
-            p%kfromto, p%ring2, p%nthr, p%ctf, isxfel='yes')
+            p%kfromto, p%ring2, p%ctf, isxfel='yes')
         else
             call pftcc%new(nrefs, [p%fromp,p%top], [p%boxmatch,p%boxmatch,1],&
-            p%kfromto, p%ring2, p%nthr, p%ctf)
+            p%kfromto, p%ring2, p%ctf)
         endif
         ! PREPARATION OF REFERENCES IN PFTCC
         call prep_refs_pftcc4align( b, p, cline )

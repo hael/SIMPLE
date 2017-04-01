@@ -4947,7 +4947,7 @@ contains
                     !$omp end parallel do
                     deallocate(antialw)
                     ratio = real(self_in%ldim(1))/real(self_out%ldim(1))
-                    self_out%smpd = self_in%smpd/ratio ! padding Fourier transform, so sampling is finer
+                    self_out%smpd = self_in%smpd*ratio ! padding Fourier transform, so sampling is finer
                     self_out%ft = .true.
                 endif
             else

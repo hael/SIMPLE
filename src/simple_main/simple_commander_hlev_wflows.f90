@@ -82,10 +82,10 @@ contains
         call seed_rnd
         call random_number(wmat1)
         call random_number(wmat2)
-        if( .not. file_exists('shellweights.bin') )then
+        if( .not. file_exists(p_master%shellwfile) )then
             ! write wmat2 to file
             filnum = get_fileunit()
-            open(unit=filnum, status='REPLACE', action='WRITE', file='shellweights.bin', access='STREAM')
+            open(unit=filnum, status='REPLACE', action='WRITE', file=p_master%shellwfile, access='STREAM')
             write(unit=filnum,pos=1,iostat=io_stat) wmat2
             close(filnum)
         endif
@@ -111,7 +111,7 @@ contains
             ! stash the previous matrix
             wmat1 = wmat2
             ! read in the new shell-weights
-            open(unit=filnum, status='OLD', action='READ', file='shellweights.bin', access='STREAM')
+            open(unit=filnum, status='OLD', action='READ', file=p_master%shellwfile, access='STREAM')
             read(unit=filnum,pos=1,iostat=io_stat) wmat2
             close(filnum)
 

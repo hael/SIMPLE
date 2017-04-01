@@ -400,7 +400,7 @@ contains
     subroutine exec_norm( self, cline )
         use simple_procimgfile,   only: norm_imgfile, noise_norm_imgfile, shellnorm_imgfile
         class(norm_commander), intent(inout) :: self
-        class(cmdline),                intent(inout) :: cline
+        class(cmdline),        intent(inout) :: cline
         type(build)       :: b
         type(params)      :: p
         real, allocatable :: spec(:)
@@ -417,21 +417,21 @@ contains
             if( p%norm.eq.'yes' )then
                 ! Normalization
                 if( cline%defined('hfun') )then
-                    call norm_imgfile(p%stk, p%outstk, hfun=p%hfun)
+                    call norm_imgfile(p%stk, p%outstk, p%smpd, hfun=p%hfun)
                 else
-                    call norm_imgfile(p%stk, p%outstk)
+                    call norm_imgfile(p%stk, p%outstk, p%smpd)
                 endif
             else if( p%noise_norm.eq.'yes' )then
                 ! Noise normalization
                 if( cline%defined('msk') )then
-                    call noise_norm_imgfile(p%stk, p%msk, p%outstk)
+                    call noise_norm_imgfile(p%stk, p%msk, p%outstk, p%smpd)
                 else
                     stop 'need msk parameter for noise normalization'
                 endif
             else if( p%shellnorm.eq.'yes' )then
                 ! shell normalization
                 print *,'in'
-                call shellnorm_imgfile( p%stk, p%outstk )
+                call shellnorm_imgfile( p%stk, p%outstk, p%smpd)
             endif
         else if( cline%defined('vol1') )then
             ! 3D
@@ -520,7 +520,7 @@ contains
                 write(*,'(a,1x,f9.4)') 'SAMPLING DISTANCE AFTER SCALING:', smpd_new
             else if( cline%defined('clip') )then
                 ! Clipping
-                call clip_imgfile(p%stk,p%outstk,[p%clip,p%clip,1])
+                call clip_imgfile(p%stk,p%outstk,[p%clip,p%clip,1],p%smpd)
             endif
         else if( cline%defined('vol1') )then
             ! 3D
@@ -540,8 +540,8 @@ contains
                 endif
                 b%vol = vol2
                 call b%vol%bwd_ft
-                p%box = p%newbox
                 scale = real(p%newbox)/real(p%box)
+                p%box = p%newbox
                 smpd_new = p%smpd/scale
                 write(*,'(a,1x,f9.4)') 'SAMPLING DISTANCE AFTER SCALING:', smpd_new
             endif
@@ -697,7 +697,7 @@ contains
 
     subroutine exec_stackops( self, cline )
         use simple_ran_tabu,    only: ran_tabu
-        use simple_procimgfile, only: mirror_imgfile, neg_imgfile, acf_imgfile, frameavg_imgfile
+        use simple_procimgfile, only: neg_imgfile, acf_imgfile, frameavg_imgfile
         use simple_procimgfile  ! use all in there
         use simple_image,       only: image
         use simple_oris,        only: oris
@@ -714,11 +714,6 @@ contains
         p = params(cline)                               ! parameters generated
         call b%build_general_tbox(p, cline)             ! general objects built
         call img%new([p%box,p%box,1],p%smpd,p%imgkind)  ! image created
-        ! mirroring
-        if( cline%defined('mirr') )then
-          call mirror_imgfile( p%stk, p%outstk, p%mirr )
-          goto 999
-        endif
         ! random selection
         if( cline%defined('nran') )then
             write(*,'(a)') '>>> RANDOMLY SELECTING IMAGES'
@@ -881,7 +876,7 @@ contains
         endif
         ! invert contrast
         if( p%neg .eq. 'yes' )then
-            call neg_imgfile(p%stk, p%outstk)
+            call neg_imgfile(p%stk, p%outstk, p%smpd)
             goto 999
         endif
         ! auto correlation function
@@ -891,7 +886,7 @@ contains
         endif
         ! create frame averages
         if( p%frameavg > 0 )then
-            call frameavg_imgfile(p%stk,p%outstk,p%frameavg)
+            call frameavg_imgfile(p%stk, p%outstk, p%frameavg, p%smpd)
             goto 999
         endif
         ! visualize
@@ -904,12 +899,12 @@ contains
         endif
         ! average
         if( p%avg .eq. 'yes' )then
-            call make_avg_imgfile(p%stk, p%outstk)
+            call make_avg_imgfile(p%stk, p%outstk, p%smpd)
             goto 999
         endif
         ! add noise
         if( cline%defined('snr') )then
-            call add_noise_imgfile(p%stk, p%outstk, p%snr)
+            call add_noise_imgfile(p%stk, p%outstk, p%snr, p%smpd)
             goto 999
         endif
         ! APPEND STK2 TO STK WHILE PRESERVING THE NAME OF STK
@@ -933,7 +928,7 @@ contains
         endif
         ! copy
         if( cline%defined('top') .and. .not. cline%defined('part') )then
-            call copy_imgfile(p%stk, p%outstk, fromto=[p%fromp,p%top], smpd_in=p%smpd)
+            call copy_imgfile(p%stk, p%outstk, p%smpd, fromto=[p%fromp,p%top])
             goto 999
         endif
         ! default
@@ -999,7 +994,7 @@ contains
                     call ctfsqs( i )%new([p%box,p%box,1],p%smpd)
                 enddo
                 ! prep images
-                call pftcc%new(proj_pop, [p%fromp,p%top], [p%box,p%box,1], p%kfromto, 1, p%nthr, p%ctf)
+                call pftcc%new(proj_pop, [p%fromp,p%top], [p%box,p%box,1], p%kfromto, 1, p%ctf)
                 do i = 1,proj_pop
                     iptcl = proj_inds( i )
                     o     = b%a%get_ori( iptcl )

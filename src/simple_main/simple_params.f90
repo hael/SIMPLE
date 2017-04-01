@@ -105,6 +105,7 @@ type :: params
     character(len=STDLEN) :: boxfile=''
     character(len=STDLEN) :: boxtab=''
     character(len=STDLEN) :: boxtype='eman'
+    character(len=STDLEN) :: chunktag=''
     character(len=STDLEN) :: clsdoc=''
     character(len=STDLEN) :: comlindoc=''
     character(len=STDLEN) :: ctf='no'
@@ -151,6 +152,7 @@ type :: params
     character(len=STDLEN) :: refine='no'
     character(len=STDLEN) :: refs_msk=''
     character(len=STDLEN) :: refs=''
+    character(len=STDLEN) :: shellwfile='shellweights.bin'
     character(len=STDLEN) :: speckind='sqrt'
     character(len=STDLEN) :: split_mode='even'
     character(len=STDLEN) :: stk_part=''
@@ -407,6 +409,7 @@ contains
         call check_carg('bench_gpu',      self%bench_gpu)
         call check_carg('bin',            self%bin)
         call check_carg('boxtype',        self%boxtype)
+        call check_carg('chunktag',       self%chunktag)
         call check_carg('center',         self%center)
         call check_carg('clustvalid',     self%clustvalid)
         call check_carg('compare',        self%compare)
@@ -478,6 +481,7 @@ contains
         call check_carg('shbarrier',      self%shbarrier)
         call check_carg('shellnorm',      self%shellnorm)
         call check_carg('shellw',         self%shellw)
+        call check_carg('shellwfile',     self%shellwfile)
         call check_carg('single',         self%single)
         call check_carg('soften',         self%soften)
         call check_carg('speckind',       self%speckind)

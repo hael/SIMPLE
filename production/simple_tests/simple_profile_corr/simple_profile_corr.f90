@@ -24,7 +24,7 @@ do i=1,NPTCLS
     call a%set(i, 'angast', 0.)
     call a%set(i, 'kv',   300.)
 end do 
-call pftcc%new(NREFS, [1,NPTCLS], [BOX,BOX,1], [2,NK], RING2, NTHR, 'yes')
+call pftcc%new(NREFS, [1,NPTCLS], [BOX,BOX,1], [2,NK], RING2, 'yes')
 call pftcc%create_polar_ctfmats(SMPD, a)
 nrots = pftcc%get_nrots()
 allocate(corrmat3d(NPTCLS,NREFS,nrots))

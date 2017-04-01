@@ -99,9 +99,9 @@ contains
 
         ! INIT PFTCC & IMGPOLARIZER
         if( p%l_xfel )then
-            call pftcc%new(nrefs_per_ptcl, [1,1], [p%boxmatch,p%boxmatch,1],p%kfromto, p%ring2, p%nthr, p%ctf, isxfel='yes')
+            call pftcc%new(nrefs_per_ptcl, [1,1], [p%boxmatch,p%boxmatch,1],p%kfromto, p%ring2, p%ctf, isxfel='yes')
         else
-            call pftcc%new(nrefs_per_ptcl, [1,1], [p%boxmatch,p%boxmatch,1],p%kfromto, p%ring2, p%nthr, p%ctf)
+            call pftcc%new(nrefs_per_ptcl, [1,1], [p%boxmatch,p%boxmatch,1],p%kfromto, p%ring2, p%ctf)
         endif
         ! the pftcc is only intitalized here so the img polarizer can be
         call b%img%init_imgpolarizer(pftcc)
@@ -219,9 +219,9 @@ contains
         optcl = b%a%get_ori(iptcl)
         ! RE-INIT PFTCC
         if( p%l_xfel )then
-            call pftcc%new(nrefs_per_ptcl, [1,1], [p%boxmatch,p%boxmatch,1],p%kfromto, p%ring2, p%nthr, p%ctf, isxfel='yes')
+            call pftcc%new(nrefs_per_ptcl, [1,1], [p%boxmatch,p%boxmatch,1],p%kfromto, p%ring2, p%ctf, isxfel='yes')
         else
-            call pftcc%new(nrefs_per_ptcl, [1,1], [p%boxmatch,p%boxmatch,1],p%kfromto, p%ring2, p%nthr, p%ctf)
+            call pftcc%new(nrefs_per_ptcl, [1,1], [p%boxmatch,p%boxmatch,1],p%kfromto, p%ring2, p%ctf)
         endif
         ! SEARCH SPACE PREP
         eullims = b%se%srchrange()

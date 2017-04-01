@@ -42,8 +42,8 @@ type, extends(commander_base) :: check2D_conv_commander
     procedure :: execute      => exec_check2D_conv
 end type check2D_conv_commander
 type, extends(commander_base) :: rank_cavgs_commander
- contains
-   procedure :: execute      => exec_rank_cavgs
+  contains
+    procedure :: execute      => exec_rank_cavgs
 end type rank_cavgs_commander
 
 contains
@@ -58,9 +58,9 @@ contains
         type(params)  :: p
         type(build)   :: b
         integer       :: ncls_in_oritab, icls, fnr, file_stat
-        p = params(cline)                     ! parameters generated
-        p%boxmatch = p%box                    !!!!!!!!!!!!!!!!!! 4 NOW
-        call b%build_general_tbox(p, cline)   ! general objects built
+        p = params(cline)  ! parameters generated
+        p%boxmatch = p%box !!!!!!!!!!!!!!!!!! 4 NOW
+        call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         call b%build_hadamard_prime2D_tbox(p) ! 2D Hadamard matcher built
         write(*,'(a)') '>>> GENERATING INITIAL CLUSTER CENTERS'
         if( cline%defined('oritab') )then
@@ -115,9 +115,9 @@ contains
         type(build)  :: b
         integer      :: i, startit, ncls_from_refs, lfoo(3)
         logical      :: converged=.false.
-        p = params(cline)                     ! parameters generated
-        p%boxmatch = p%box                    !!!!!!!!!!!!!!!!!! 4 NOW
-        call b%build_general_tbox(p, cline)   ! general objects built
+        p = params(cline)  ! parameters generated
+        p%boxmatch = p%box !!!!!!!!!!!!!!!!!! 4 NOW
+        call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         call b%build_hadamard_prime2D_tbox(p) ! 2D Hadamard matcher built
         if( p%srch_inpl .eq. 'no' )then
             if( .not. cline%defined('oritab') )then
@@ -165,8 +165,8 @@ contains
         type(params) :: p
         type(build)  :: b
         integer      :: fnr, file_stat
-        p = params(cline)                   ! parameters generated
-        call b%build_general_tbox(p, cline) ! general objects built
+        p = params(cline) ! parameters generated
+        call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         call b%build_hadamard_prime2D_tbox(p)
         call prime2D_assemble_sums_from_parts(b, p)
         if( cline%defined('which_iter') )then
@@ -189,8 +189,8 @@ contains
         type(params) :: p
         type(build)  :: b
         logical      :: converged
-        p = params(cline)                   ! parameters generated
-        call b%build_general_tbox(p, cline) ! general objects built
+        p = params(cline) ! parameters generated
+        call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         p%ncls    = b%a%get_ncls()
         converged = b%conv%check_conv2D()   ! convergence check
         call cline%set('frac', b%conv%get('frac'))
@@ -215,8 +215,8 @@ contains
         type(build)          :: b
         integer              :: iclass
         integer, allocatable :: order(:)
-        p = params(cline)                   ! parameters generated
-        call b%build_general_tbox(p, cline) ! general objects built
+        p = params(cline) ! parameters generated
+        call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         p%ncls   = p%nptcls
         p%nptcls = nlines(p%oritab) 
         call b%a%new(p%nptcls)

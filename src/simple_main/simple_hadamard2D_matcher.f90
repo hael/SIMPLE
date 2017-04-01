@@ -23,9 +23,7 @@ type(prime2D_srch)     :: primesrch2D ! need to be revealed to the outside world
 type(ori)              :: orientation
 integer                :: cnt_glob = 0
 real                   :: frac_srch_space = 0.
-integer, allocatable   :: defgroups(:)
 real,    allocatable   :: wmat(:,:)
-real,    allocatable   :: ctfparams(:,:)
 logical, parameter     :: DEBUG = .false.
 real,    parameter     :: prime2Deps = 0.3
 
@@ -33,9 +31,9 @@ contains
     
     !>  \brief  is the prime2D algorithm
     subroutine prime2D_exec( b, p, cline, which_iter, converged )
-        use simple_qsys_funs, only: qsys_job_finished
-        use simple_strings,   only: str_has_substr
-        use simple_ran_tabu,  only: ran_tabu
+        use simple_qsys_funs,   only: qsys_job_finished
+        use simple_strings,     only: str_has_substr
+        use simple_procimgfile, only: random_selection_from_imgfile
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         class(cmdline), intent(inout) :: cline     
@@ -51,6 +49,15 @@ contains
 
         ! READ IMAGES
         call read_imgs_from_stk( b, p )
+
+        ! PREP REFERENCES
+        if( which_iter == 1 .and. .not. file_exists(p%refs) )then
+            p%refs = 'start2Drefs'//p%ext
+            if( p%chunktag .ne. '' ) p%refs = trim(p%chunktag)//trim(p%refs)
+            call random_selection_from_imgfile(p%stk, p%refs, p%ncls, p%smpd)
+        else
+            if( .not. file_exists(p%refs) ) stop 'inputted reference file (refs) does not exist in cwd'
+        endif
 
         ! SETUP SHELLWEIGHTS
         if( p%l_shellw .and. frac_srch_space >= SHW_FRAC_LIM ) then
@@ -75,13 +82,14 @@ contains
 
         ! INITIALIZE
         if( which_iter <= 0 )then
-            write(*,'(A)') '>>> PRIME2D DISCRETE STOCHASTIC SEARCH'
+            write(*,'(A)')       '>>> PRIME2D DISCRETE STOCHASTIC SEARCH'
         else
             write(*,'(A,1X,I3)') '>>> PRIME2D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
         endif
-        if( which_iter > 0 ) p%outfile = 'prime2Ddoc_'//int2str_pad(which_iter,3)//'.txt'
-
-        ! INITIALISE SUMS
+        if( which_iter > 0 )then
+            p%outfile = 'prime2Ddoc_'//int2str_pad(which_iter,3)//'.txt'
+            if( p%chunktag .ne. '' ) p%outfile= trim(p%chunktag)//trim(p%outfile)
+        endif
         call prime2D_init_sums( b, p )
 
         ! ALIGN
@@ -267,6 +275,7 @@ contains
         else
             p%refs = 'startcavgs'//p%ext
         endif
+        if( p%chunktag .ne. '' ) p%refs = trim(p%chunktag)//trim(p%refs)
         ! write to disk
         do icls=1,p%ncls
             call b%cavgs(icls)%write(p%refs, icls)
@@ -293,7 +302,7 @@ contains
         endif
         ! must be done here since constants in p are dynamically set
         call primesrch2D%new(p)
-        call pftcc%new(p%ncls, [p%fromp,p%top], [p%box,p%box,1], p%kfromto, p%ring2, p%nthr, p%ctf)
+        call pftcc%new(p%ncls, [p%fromp,p%top], [p%box,p%box,1], p%kfromto, p%ring2, p%ctf)
         ! prepare the polarizers
         call b%img%init_imgpolarizer(pftcc)
         ! PREPARATION OF REFERENCES IN PFTCC
@@ -336,8 +345,7 @@ contains
                 open(unit=filnum, status='REPLACE', action='WRITE',&
                 file='shellweights_part'//int2str_pad(p%part,p%numlen)//'.bin', access='STREAM')
             else
-                open(unit=filnum, status='REPLACE', action='WRITE',&
-                file='shellweights.bin', access='STREAM')
+                open(unit=filnum, status='REPLACE', action='WRITE', file=p%shellwfile, access='STREAM')
             endif
             write(unit=filnum,pos=1,iostat=io_stat) wmat
             ! check if the write was successful

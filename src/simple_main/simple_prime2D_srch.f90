@@ -277,8 +277,8 @@ contains
                 ! greedy selection
                 loc = maxloc(corrmat3d(iptcl,:,:))
                 self%best_class = loc(1)
-                self%best_rot = loc(2)
-                self%best_corr = corrmat3d(iptcl,loc(1),loc(2))
+                self%best_rot   = loc(2)
+                self%best_corr  = corrmat3d(iptcl,loc(1),loc(2))
                 ! search shifts
                 call self%shift_srch(iptcl)
                 ! we always evaluate all references using the greedy approach
