@@ -678,7 +678,7 @@ contains
                 call find_ldim_nptcls(filenames(ifile),lfoo,nimgs)
                 do iimg=1,nimgs
                     cnt = cnt+1
-                    call b%img%read(filenames(ifile), iimg, readhead=.false.)
+                    call b%img%read(filenames(ifile), iimg, readhead=.false., rwaction='READ')
                     if( cline%defined('clip') )then
                         call b%img%clip(tmp)  
                         mm = tmp%minmax()

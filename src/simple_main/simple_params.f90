@@ -11,7 +11,6 @@
 module simple_params
 use simple_defs
 use simple_ori,         only: ori
-use simple_AVratios,    only: AVratios
 use simple_cmdline,     only: cmdline
 use simple_strings      ! use all in there
 use simple_filehandling ! use all in there
@@ -27,7 +26,6 @@ logical, parameter :: debug=.false.
 type :: params
     ! global objects
     type(ori)        :: ori_glob
-    type(AVratios)   :: avr
     type(ctfplan)    :: tfplan
     ! yes/no decision variables in ascending alphabetical order
     character(len=3) :: acf='no'
@@ -673,6 +671,8 @@ contains
         call check_rarg('xsh',            self%xsh)
         call check_rarg('ysh',            self%ysh)
         call check_rarg('zsh',            self%zsh)
+
+!>>> START, SANITY CHECKING AND PARAMETER EXTRACTION FROM ORITAB(S)/VOL(S)/STACK(S)
         ! put ctffind_doc (if defined) as oritab
         if( cline%defined('ctffind_doc') )then
             if( .not. cline%defined('oritab') )then
@@ -680,7 +680,7 @@ contains
                 self%oritab = self%ctffind_doc
             endif
         endif
-        ! make all programs have the simple_ prefix
+        ! make all programs have the simple_prefix
         if( cline%defined('prg') )then
             if( .not. str_has_substr(self%prg, 'simple_') ) self%prg = 'simple_'//trim(self%prg)
         endif
@@ -756,8 +756,35 @@ contains
                 stop
             endif
         endif
+        ! check file formats
+        call check_file_formats(aamix)
+        call double_check_file_formats
+        ! make file names
+        call mkfnames
+        ! check box
+        if( self%box > 0 .and. self%box < 26 ) stop 'box size need to be larger than 26; simple_params'
+        ! set endconv in simple_defs
+        if( allocated(endconv) ) deallocate(endconv)
+        if( cline%defined('endian') )then
+            select case(self%endian)
+                case('big')
+                    allocate(endconv, source='BIG_ENDIAN')
+                case('little')
+                    allocate(endconv, source='LITTLE_ENDIAN')
+                case('native')
+                    allocate(endconv, source='NATIVE')
+                case DEFAULT
+                    stop 'unsupported endianness flag; simple_params :: constructor'
+            end select
+        else if( allocated(conv) )then
+            allocate(endconv, source=conv)
+        else
+            allocate(endconv, source='NATIVE')
+        endif
+        if( allocated(conv) ) deallocate(conv)
+!<<< END, SANITY CHECKING AND PARAMETER EXTRACTION FROM VOL(S)/STACK(S)
 
-        ! PARALLELISATION-RELATED
+!>>> START, PARALLELISATION-RELATED
         ! set split mode (even)
         self%split_mode = 'even'
         nparts_set      = .false.
@@ -779,6 +806,16 @@ contains
         else
             self%stk_part = 'stack_part'//int2str(self%part)//self%ext
         endif
+        ! Check for the existance of this file if part is defined on the command line
+        if( cline%defined('part') )then
+            if( ccheckdistr )then
+                if( .not. file_exists(self%stk_part) )then
+                    write(*,*) 'Need partial stacks to be generated for parallel execution'
+                    write(*,*) 'Use simple_exec prg=split'
+                    stop
+                endif
+            endif
+        endif
         ! if we are doing chunk-based parallelisation...
         self%l_chunk_distr = .false.
         if( cline%defined('chunksz') )then
@@ -797,14 +834,9 @@ contains
 !$          call omp_set_num_threads(self%nthr)   
         endif
         nthr_glob = self%nthr
+!<<< END, PARALLELISATION-RELATED
 
-        ! check file formats
-        call check_file_formats(aamix)
-        call double_check_file_formats
-        ! make file names
-        call mkfnames
-        ! check box
-        if( self%box > 0 .and. self%box < 26 ) stop 'box size need to be larger than 26; simple_params'
+!>>> START, IMAGE-PROCESSING-RELATED
         if( .not. cline%defined('xdim') ) self%xdim = self%box/2
         self%xdimpd = round2even(self%alpha*real(self%box/2))
         self%boxpd  = 2*self%xdimpd
@@ -817,12 +849,7 @@ contains
             self%lpstop = self%fny                                ! deafult lpstop
         endif
         if( self%fny > 0. ) self%tofny = int(self%dstep/self%fny) ! Nyqvist Fourier index
-        if( cline%defined('lp') )then                             ! override dynlp=yes and lpstop
-            self%dynlp = 'no'
-            ! TAKEN OUT BECAUSE THE PREPROC IS UNHAPPY
-            ! if( self%lp < self%lpstop )  self%lpstop  = self%lp
-            ! if( self%lpstart > self%lp ) self%lpstart = self%lp
-        endif
+        if( cline%defined('lp') ) self%dynlp = 'no'               ! override dynlp=yes and lpstop
         ! set default ring2 value
         if( .not. cline%defined('ring2') )then
             if( cline%defined('msk') )then
@@ -917,25 +944,6 @@ contains
                 self%ncls = ncls
             endif
         endif
-        ! set endconv it simple_defs
-        if( allocated(endconv) ) deallocate(endconv)
-        if( cline%defined('endian') )then
-            select case(self%endian)
-                case('big')
-                    allocate(endconv, source='BIG_ENDIAN')
-                case('little')
-                    allocate(endconv, source='LITTLE_ENDIAN')
-                case('native')
-                    allocate(endconv, source='NATIVE')
-                case DEFAULT
-                    stop 'unsupported endianness flag; simple_params :: constructor'
-            end select
-        else if( allocated(conv) )then
-            allocate(endconv, source=conv)
-        else
-            allocate(endconv, source='NATIVE')
-        endif
-        if( allocated(conv) ) deallocate(conv)        
         ! set to particle index if not defined in cmdlin
         if( .not. cline%defined('top') ) self%top = self%nptcls
         ! set the number of input orientations
@@ -968,17 +976,6 @@ contains
         if( .not. cline%defined('moldiam') )then
             self%moldiam = 0.7*real(self%box)*self%smpd
         endif
-        
-        ! Check for the existance of this file if part is defined on the command line
-        if( cline%defined('part') )then
-            if( ccheckdistr )then
-                if( .not. file_exists(self%stk_part) )then
-                    write(*,*) 'Need partial stacks to be generated for parallel execution'
-                    write(*,*) 'Use simple_exec prg=split'
-                    stop
-                endif
-            endif
-        endif
         ! set imgkind and check so that ctf and xfel parameters are congruent
         self%imgkind = 'em'
         if( self%xfel .eq. 'yes' ) then
@@ -989,14 +986,6 @@ contains
                 stop 'when xfel .eq. yes, ctf .ne. no is not allowed; simple_params'
             endif
         endif
-        ! create are/volume ratios object for SSNR re-weighting
-        if( cline%defined('mw') )then
-            self%avr = AVratios([self%box,self%box,self%box], [self%box,self%box,1], self%msk, self%smpd, self%mw)
-        else
-            self%avr = AVratios([self%box,self%box,self%box], [self%box,self%box,1], self%msk, self%smpd)
-        endif
-        ! take care of nspace value for refine .eq. 'qcontneigh' mode
-        if( self%refine .eq. 'qcontneigh' ) self%nspace = self%nnn
         ! check if we are dose-weighting or not
         self%l_dose_weight = .false.
         if( cline%defined('exp_time') .or. cline%defined('dose_rate') )then
@@ -1018,6 +1007,7 @@ contains
         ! set logical pick flag
         self%l_pick = .false.
         if( self%dopick .eq. 'yes' ) self%l_pick = .true.
+!>>> END, IMAGE-PROCESSING-RELATED
 
         write(*,'(A)') '>>> DONE PROCESSING PARAMETERS'
 

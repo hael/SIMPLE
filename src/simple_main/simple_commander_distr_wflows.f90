@@ -360,8 +360,9 @@ contains
         use simple_commander_prime2D ! use all in there
         use simple_commander_distr   ! use all in there
         use simple_commander_mask    ! use all in there
-        use simple_oris,    only: oris
-        use simple_strings, only: str_has_substr
+        use simple_procimgfile, only: random_selection_from_imgfile
+        use simple_oris,        only: oris
+        use simple_strings,     only: str_has_substr
         class(prime2D_distr_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         ! constants
@@ -373,7 +374,6 @@ contains
         real,              parameter       :: MINSHIFT        = 2.0
         real,              parameter       :: MAXSHIFT        = 6.0
         ! commanders
-        type(prime2D_init_distr_commander) :: xprime2D_init_distr
         type(check2D_conv_commander)       :: xcheck2D_conv
         type(rank_cavgs_commander)         :: xrank_cavgs
         type(merge_algndocs_commander)     :: xmerge_algndocs
@@ -385,7 +385,6 @@ contains
         type(cmdline)                      :: cline_rank_cavgs
         type(cmdline)                      :: cline_merge_algndocs
         type(cmdline)                      :: cline_automask2D
-        type(cmdline)                      :: cline_prime2D_init
         ! other variables
         type(params)                       :: p_master
         integer, allocatable               :: parts(:,:)
@@ -419,9 +418,6 @@ contains
         cline_rank_cavgs     = cline
         cline_merge_algndocs = cline
         cline_automask2D     = cline
-        cline_prime2D_init   = cline
-        ! we need to set the prg flag for the command lines that control distributed workflows 
-        call cline_prime2D_init%set('prg', 'prime2D_init')
         ! initialise static command line parameters and static job description parameters
         call cline_merge_algndocs%set('fbody',  ALGNFBODY)
         call cline_merge_algndocs%set('nptcls', real(p_master%nptcls))
@@ -439,8 +435,8 @@ contains
         endif
         ! execute initialiser
         if( .not. cline%defined('refs') )then
-            call xprime2D_init_distr%execute(cline_prime2D_init)
-            oritab='prime2D_startdoc.txt'
+            p_master%refs = 'start2Drefs'//p_master%ext
+            call random_selection_from_imgfile(p_master%stk, p_master%refs, p_master%ncls, p_master%smpd)
         endif
         if( cline%defined('extr_thresh') )then
             ! all is well
@@ -542,7 +538,7 @@ contains
         p_master = params(cline, checkdistr=.false.)
         ! determine the number of partitions
         nparts = nint(real(p_master%nptcls)/real(p_master%chunksz))
-        numlen = len(int2str(p_master%nparts))
+        numlen = len(int2str(nparts))
         call cline%set('nparts', real(nparts))
         call cline%set('numlen', real(numlen))
         ! re-make the master parameters to accomodate nparts/numlen
