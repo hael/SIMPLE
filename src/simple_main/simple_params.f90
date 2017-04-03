@@ -320,6 +320,7 @@ type :: params
     real    :: mul=1.
     real    :: mw=0.
     real    :: neigh=0.2
+    real    :: nsig=2.5
     real    :: optlims(7,2)=0.
     real    :: outer=0.
     real    :: phranlp=35.
@@ -653,6 +654,7 @@ contains
         call check_rarg('mul',            self%mul)
         call check_rarg('mw',             self%mw)
         call check_rarg('neigh',          self%neigh)
+        call check_rarg('nsig',           self%nsig)
         call check_rarg('outer',          self%outer)
         call check_rarg('phranlp',        self%phranlp)
         call check_rarg('power',          self%power)

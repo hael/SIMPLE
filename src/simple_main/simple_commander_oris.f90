@@ -559,8 +559,8 @@ contains
         type(build)       :: b
         type(ori)         :: orientation
         type(params)      :: p
-        real              :: normal(3), thresh, corr
-        integer           :: s, i, nincl, ind
+        real              :: normal(3), thresh, corr, percen
+        integer           :: s, i, nincl, ind, icls, ncls
         real, allocatable :: corrs(:)
         p = params(cline)
         call b%build_general_tbox(p, cline)
@@ -625,6 +625,17 @@ contains
                     write(*,*) 'particle: ', i, 'included: ', 0
                 endif
             end do
+        endif
+        if( cline%defined('nsig') )then
+            ncls = b%a%get_ncls()
+            percen = 0.
+            write(*,'(a)') '>>> SIGMA THRESHOLDING CLUSTERING SOLUTION'
+            do icls=1,ncls
+                call progress(icls, ncls)
+                percen = percen + b%a%cls_corr_sigthresh(icls, p%nsig)
+            end do
+            percen = percen/real(ncls)
+            write(*,*) percen, ' % of the particles included at sigma ', p%nsig 
         endif
         call b%a%write(p%outfile)
         call simple_end('**** SIMPLE_ORISOPS NORMAL STOP ****')

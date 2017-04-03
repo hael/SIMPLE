@@ -512,6 +512,7 @@ contains
         use simple_commander_mask    ! use all in there
         use simple_commander_imgproc, only: stack_commander
         use simple_oris,              only: oris
+        use simple_ori,               only: ori
         use simple_strings,           only: str_has_substr
         class(prime2D_chunk_distr_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
@@ -533,7 +534,7 @@ contains
         type(qsys_factory)        :: qsys_fac
         class(qsys_base), pointer :: myqsys
         type(oris)                :: os
-        integer :: ipart, numlen, nl, ishift, nparts
+        integer :: ipart, numlen, nl, ishift, nparts, npart_params
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! determine the number of partitions
@@ -547,14 +548,28 @@ contains
         call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
-        ! prepare part-dependent parameters
+        ! prepare part-dependent parameters and docs
+        npart_params = 3
+        if( cline%defined('deftab') .and. cline%defined('oritab') )then
+            stop 'ERROR, deftab or oritab can be part of of command line, not both; exec_prime2D_chunk_distr'
+        else if( cline%defined('deftab') .or. cline%defined('oritab') )then
+            npart_params = npart_params + 1
+        endif
         allocate(part_params(p_master%nparts))
         do ipart=1,p_master%nparts
-            call part_params(ipart)%new(3)
+            call part_params(ipart)%new(npart_params)
             chunktag = 'chunk'//int2str_pad(ipart,numlen)
             call part_params(ipart)%set('chunk',    int2str(ipart))
             call part_params(ipart)%set('chunktag', chunktag)
             call part_params(ipart)%set('stk', 'stack_part'//int2str_pad(ipart,numlen)//p_master%ext)
+            if( cline%defined('deftab') )then
+                call read_part_and_write(parts(ipart,:), p_master%deftab, trim(chunktag)//'deftab.txt')
+                call part_params(ipart)%set('deftab', trim(chunktag)//'deftab.txt')
+            endif
+            if( cline%defined('oritab') )then
+                call read_part_and_write(parts(ipart,:), p_master%deftab, trim(chunktag)//'oritab.txt')
+                call part_params(ipart)%set('oritab', trim(chunktag)//'oritab.txt')
+            endif
         end do
         ! split stack
         if( stack_is_split(p_master%ext, p_master%nparts) )then
@@ -596,6 +611,28 @@ contains
         call cline_stack%set('outstk', 'prime2Dcavgs_final'//p_master%ext)
         call xstack%execute(cline_stack)
         call simple_end('**** SIMPLE_DISTR_PRIME2D_CHUNK NORMAL STOP ****')
+
+        contains
+
+            subroutine read_part_and_write( pfromto, file_in, file_out )
+                integer,          intent(in) :: pfromto(2)
+                character(len=*), intent(in) :: file_in, file_out
+                integer    :: nl, cnt, i
+                type(oris) :: os_in, os_out
+                type(ori)  :: o
+                nl = nlines(file_in)
+                call os_in%new(nl)
+                call os_in%read(file_in)
+                call os_out%new(pfromto(2) - pfromto(1) + 1)
+                cnt = 0
+                do i=pfromto(1),pfromto(2)
+                    cnt = cnt + 1
+                    o   = os_in%get_ori(i)
+                    call os_out%set_ori(cnt, o)
+                end do
+                call os_out%write(file_out)
+            end subroutine read_part_and_write
+
     end subroutine exec_prime2D_chunk_distr
 
     ! PRIME3D_INIT

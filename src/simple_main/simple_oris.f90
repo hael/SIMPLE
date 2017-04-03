@@ -53,6 +53,7 @@ type :: oris
     procedure          :: get_pop
     procedure          :: get_cls_pop
     procedure          :: get_cls_corr
+    procedure          :: cls_corr_sigthresh
     procedure          :: get_statepop
     procedure          :: get_ptcls_in_state
     procedure          :: get_nstates
@@ -119,7 +120,6 @@ type :: oris
     procedure          :: merge_classes
     procedure          :: symmetrize
     procedure          :: merge
-    ! procedure          :: merge_files
     ! I/O
     procedure          :: read
     procedure, private :: write_1
@@ -460,6 +460,29 @@ contains
             corr  = median_nocopy(corrs)
         endif
     end function get_cls_corr
+
+    !>  \brief  is for counting the number of inclusions given nsigma thresh
+    function cls_corr_sigthresh( self, class, nsig ) result( percen )
+        use simple_stat, only: moment
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: class
+        real,        intent(in)    :: nsig
+        real, allocatable :: corrs(:)
+        real    :: corr, ccav, ccsd, ccvar, thresh, percen
+        logical :: err
+        corrs = self%get_arr('corr', class=class)
+        if( allocated(corrs) )then
+            if( size(corrs) > 1 )then
+                call moment(corrs, ccav, ccsd, ccvar, err)
+                thresh = ccav-nsig*ccsd
+                percen = 100.*real(count(corrs >= thresh)/real(size(corrs)))
+            else
+                percen = 0.
+            endif
+        else
+            percen = 0.
+        endif
+    end function cls_corr_sigthresh
     
     !>  \brief  is for checking state population
     function get_statepop( self, state ) result( pop )

@@ -281,6 +281,7 @@ msk
 mul
 mw
 neigh
+nsig
 outer
 phranlp
 power
