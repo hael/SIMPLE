@@ -414,9 +414,6 @@ contains
         if( str_has_substr(p%refine,'neigh') )then
             if( file_exists('nnmat.bin') )  call self%read_nnmat(p)
         endif
-        ! set number of nearest neighbours to 5 % of the total nr of classes 
-        ! and bound it [5,10]
-        p%nnn = max(5,min(20,nint(0.05 * real(p%ncls))))
         write(*,'(A)') '>>> DONE BUILDING HADAMARD PRIME2D TOOLBOX'
         self%hadamard_prime2D_tbox_exists = .true.
     end subroutine build_hadamard_prime2D_tbox
@@ -460,7 +457,7 @@ contains
             end do
         endif
         if( str_has_substr(p%refine,'neigh') )then
-            call self%e%nearest_neighbors( p%nnn, self%nnmat)
+            call self%e%nearest_neighbors(p%nnn, self%nnmat)
         endif
         write(*,'(A)') '>>> DONE BUILDING HADAMARD PRIME3D TOOLBOX'
         call flush(6)

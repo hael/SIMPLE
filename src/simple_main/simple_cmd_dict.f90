@@ -189,7 +189,6 @@ contains
         call chdict%push('shell_norm',    'normalise based on power spectrum (yes|no){no}')
         call chdict%push('ctffind_doc',   'per-micrograph CTF parameters to transfer')
         call chdict%push('outer',         'outer mask radius(in pixels)')
-        call chdict%push('split_mode',    'mode of splitting for distributed execution(even|chunk){even}')
         call chdict%push('ncunits',       'number of computing units, can be < nparts {nparts}')
         call chdict%push('diverse',       'diverse or not flag (yes|no){no}')
         call chdict%push('iares',         'integer angular resolution{10}')

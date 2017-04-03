@@ -61,6 +61,7 @@ type :: oris
     procedure          :: split_class
     procedure          :: expand_classes
     procedure          :: remap_classes
+    procedure          :: shift_classes
     procedure          :: get_cls_pinds
     procedure          :: get_cls_oris
     procedure          :: get_state
@@ -200,12 +201,10 @@ end interface
 type(ori),  pointer  :: op(:)=>null()
 type(oris), pointer  :: ops  =>null()
 integer, allocatable :: classpops(:)
-real,    allocatable :: classcorrs(:)
-real,    allocatable :: shellscores(:)
 logical, allocatable :: class_part_of_set(:)
 real,    allocatable :: class_weights(:)
 type(ori)            :: o_glob
-real                 :: angthres = 0., cccavg = 0., cccsdev = 0.
+real                 :: angthres = 0.
 
 contains
 
@@ -639,6 +638,21 @@ contains
         endif
         deallocate(clspops)
     end subroutine remap_classes
+
+    !>  \brief  for shifting class indices after chunk-based prime2D exec
+    !!             1 .. 10 
+    !!    + 10 => 11 .. 20
+    !!    + 10 => 21 .. 31 etc.
+    subroutine shift_classes( self, ishift )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: ishift
+        integer :: iptcl, new_cls, old_cls
+        do iptcl=1,self%n
+            old_cls = nint(self%o(iptcl)%get('class'))
+            new_cls = old_cls + ishift
+            call self%o(iptcl)%set('class', real(new_cls))
+        end do
+    end subroutine shift_classes
     
     !>  \brief  is for getting an allocatable array with ptcl indices of the class 'class'
     function get_cls_pinds( self, class ) result( clsarr )
@@ -2349,8 +2363,8 @@ contains
 
     !>  \brief  to identify the indices of the k nearest neighbors (inclusive)
     subroutine nearest_neighbors( self, k, nnmat ) 
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: k
+        class(oris),          intent(inout) :: self
+        integer,              intent(in)    :: k
         integer, allocatable, intent(inout) :: nnmat(:,:)
         real      :: dists(self%n)
         integer   :: inds(self%n), i, j, alloc_stat

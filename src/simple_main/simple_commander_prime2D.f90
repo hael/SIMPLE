@@ -109,12 +109,13 @@ contains
     
     subroutine exec_prime2D( self, cline )
         use simple_hadamard2D_matcher, only: prime2D_exec
+        use simple_qsys_funs,          only: qsys_job_finished
         class(prime2D_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(params) :: p
         type(build)  :: b
         integer      :: i, startit, ncls_from_refs, lfoo(3)
-        logical      :: converged=.false.
+        logical      :: converged=.false., l_distr_exec=.false.
         p = params(cline)  ! parameters generated
         p%boxmatch = p%box !!!!!!!!!!!!!!!!!! 4 NOW
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
@@ -156,6 +157,8 @@ contains
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_PRIME2D NORMAL STOP ****')
+        ! this is needed for chunk-based prime2D parallellisation
+        call qsys_job_finished(p, 'simple_commander_prime2D :: exec_prime2D')
     end subroutine exec_prime2D
     
     subroutine exec_cavgassemble( self, cline )

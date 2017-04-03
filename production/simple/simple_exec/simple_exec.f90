@@ -647,7 +647,7 @@ select case(prg)
         ! set defaults
         if( .not. cline%defined('lp')     ) call cline%set('lp',      20.)
         if( .not. cline%defined('amsklp') ) call cline%set('amsklp',  25.)
-        if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',   30.)
+        if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',   25.)
         if( .not. cline%defined('edge')   ) call cline%set('edge',    20.)
         if( .not. cline%defined('eo')     ) call cline%set('eo',     'no')
         if( .not. cline%defined('center') ) call cline%set('center', 'yes')
@@ -979,7 +979,7 @@ select case(prg)
         ! set defaults
         if( .not. cline%defined('nspace')                  ) call cline%set('nspace', 1000.)
         if( cline%defined('lp') .or. cline%defined('find') ) call cline%set('dynlp',   'no')
-        if( .not. cline%defined('cenlp')  )                  call cline%set('cenlp',    30.)
+        if( .not. cline%defined('cenlp')  )                  call cline%set('cenlp',    25.)
         if( .not. cline%defined('refine') )then
              call cline%set('refine',  'no')
         else

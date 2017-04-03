@@ -176,6 +176,7 @@ type :: params
     integer :: boxconvsz=256
     integer :: boxmatch=0
     integer :: boxpd=0
+    integer :: chunk=0
     integer :: chunksz=0
     integer :: class=1
     integer :: clip=0
@@ -344,6 +345,7 @@ type :: params
     ! logical variables in ascending alphabetical order
     logical :: cyclic(7)     = .false.
     logical :: l_distr_exec  = .false.
+    logical :: l_chunk_distr = .false.
     logical :: doautomsk     = .false.
     logical :: doshift       = .false.
     logical :: l_automsk     = .false.
@@ -409,8 +411,8 @@ contains
         call check_carg('bench_gpu',      self%bench_gpu)
         call check_carg('bin',            self%bin)
         call check_carg('boxtype',        self%boxtype)
-        call check_carg('chunktag',       self%chunktag)
         call check_carg('center',         self%center)
+        call check_carg('chunktag',       self%chunktag)
         call check_carg('clustvalid',     self%clustvalid)
         call check_carg('compare',        self%compare)
         call check_carg('countvox',       self%countvox)
@@ -485,7 +487,6 @@ contains
         call check_carg('single',         self%single)
         call check_carg('soften',         self%soften)
         call check_carg('speckind',       self%speckind)
-        call check_carg('split_mode',     self%split_mode)
         call check_carg('srch_inpl',      self%srch_inpl)
         call check_carg('stats',          self%stats)
         call check_carg('stream',         self%stream)
@@ -531,6 +532,7 @@ contains
         call check_iarg('binwidth',       self%binwidth)
         call check_iarg('box',            self%box)
         call check_iarg('boxconvsz',      self%boxconvsz)
+        call check_iarg('chunk',          self%chunk)
         call check_iarg('chunksz',        self%chunksz)
         call check_iarg('clip',           self%clip)
         call check_iarg('corner',         self%corner)
@@ -754,42 +756,40 @@ contains
                 stop
             endif
         endif
-        ! check parallelisation mode (even/chunk)
-        nparts_set = .false.
-        if( self%split_mode .eq. 'chunk' )then
-            if( cline%defined('ncls') .and. cline%defined('nspace') )then
-                write(*,*) 'ncls (nr of classes) and nspace (nr of references) cannot'&
-                &' simlutaneously be part of the command line!'
-                stop 'simple_params :: new'
-            else if( cline%defined('ncls') )then
-                self%chunksz = self%ncls
-            else if( cline%defined('nspace') )then
-                self%chunksz = self%nspace
-            else 
-                write(*,*) 'either ncls (nr of classes) and nspace (nr of references) need'&
-                &' to be part of the command line for this mode of job distribution'
-                stop 'simple_params :: new'
-            endif
-            parts       = split_nobjs_in_chunks(self%nptcls, self%chunksz)
-            self%nparts = size(parts,1)
-            nparts_set  = .true.
-            deallocate(parts)
+
+        ! PARALLELISATION-RELATED
+        ! set split mode (even)
+        self%split_mode = 'even'
+        nparts_set      = .false.
+        if( cline%defined('nparts') ) nparts_set  = .true.
+        ! set execution mode (shmem or distr)
+        if( cline%defined('part') )then
+            self%l_distr_exec = .true.
         else
-            self%split_mode = 'even'
-            nparts_set      = .false.
-            if( cline%defined('nparts') ) nparts_set  = .true.
+            self%l_distr_exec = .false.
+        endif
+        l_distr_exec_glob = self%l_distr_exec
+        ! set lenght of number string for zero padding
+        if( .not. cline%defined('numlen') )then
+            if( nparts_set ) self%numlen = len(int2str(self%nparts))
+        endif
+        ! set name of partial stack in parallel execution
+        if( self%numlen > 0 )then
+            self%stk_part = 'stack_part'//int2str_pad(self%part,self%numlen)//self%ext
+        else
+            self%stk_part = 'stack_part'//int2str(self%part)//self%ext
+        endif
+        ! if we are doing chunk-based parallelisation...
+        self%l_chunk_distr = .false.
+        if( cline%defined('chunksz') )then
+            self%l_chunk_distr = .true.
+            self%shellwfile    = trim(self%chunktag)//trim(self%shellwfile)
         endif
         if( .not. cline%defined('ncunits') )then
             ! we assume that the number of computing units is equal to the number of partitions
             self%ncunits = self%nparts
         endif
-        ! check file formats
-        call check_file_formats(aamix)
-        call double_check_file_formats
-        ! make file names
-        call mkfnames
-        ! check box
-        if( self%box > 0 .and. self%box < 26 ) stop 'box size need to be larger than 26; simple_params'
+        ! OpenMP threads
         if( cline%defined('nthr') )then
 !$          call omp_set_num_threads(self%nthr)       
         else
@@ -797,6 +797,14 @@ contains
 !$          call omp_set_num_threads(self%nthr)   
         endif
         nthr_glob = self%nthr
+
+        ! check file formats
+        call check_file_formats(aamix)
+        call double_check_file_formats
+        ! make file names
+        call mkfnames
+        ! check box
+        if( self%box > 0 .and. self%box < 26 ) stop 'box size need to be larger than 26; simple_params'
         if( .not. cline%defined('xdim') ) self%xdim = self%box/2
         self%xdimpd = round2even(self%alpha*real(self%box/2))
         self%boxpd  = 2*self%xdimpd
@@ -960,24 +968,7 @@ contains
         if( .not. cline%defined('moldiam') )then
             self%moldiam = 0.7*real(self%box)*self%smpd
         endif
-        ! set execution mode (shmem or distr)
-        if( cline%defined('part') )then
-            self%l_distr_exec = .true.
-        else
-            self%l_distr_exec = .false.
-        endif
-        ! set global distributed execution flag
-        l_distr_exec_glob = self%l_distr_exec
-        ! set lenght of number string for zero padding
-        if( .not. cline%defined('numlen') )then
-            if( nparts_set ) self%numlen = len(int2str(self%nparts))
-        endif
-        ! set name of partial stack in parallel execution
-        if( self%numlen > 0 )then
-            self%stk_part = 'stack_part'//int2str_pad(self%part,self%numlen)//self%ext
-        else
-            self%stk_part = 'stack_part'//int2str(self%part)//self%ext
-        endif
+        
         ! Check for the existance of this file if part is defined on the command line
         if( cline%defined('part') )then
             if( ccheckdistr )then

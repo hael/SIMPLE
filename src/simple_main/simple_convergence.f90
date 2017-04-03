@@ -27,6 +27,7 @@ type convergence
     real :: frac      = 0.                      !< average fraction of search space scanned
     real :: mi_joint  = 0.                      !< joint parameter distribution overlap
     real :: mi_class  = 0.                      !< class parameter distribution overlap
+    real :: mi_proj   = 0.                      !< projection parameter distribution overlap
     real :: mi_inpl   = 0.                      !< in-plane parameter distribution overlap 
     real :: mi_state  = 0.                      !< state parameter distribution overlap
     real :: sdev      = 0.                      !< angular standard deviation of model
@@ -43,7 +44,6 @@ end interface convergence
 
 contains
 
-    !>  \brief  is a constructor
     function constructor( ba, p, cline ) result( self )
         class(oris),    target, intent(in) :: ba    !< alignment oris object (a) part of build (b)
         class(params),  target, intent(in) :: p     !< parameters object
@@ -54,7 +54,6 @@ contains
         self%pcline => cline 
     end function constructor
     
-    !>  \brief  checks convergence for the 2D case
     function check_conv2D( self, ncls ) result( converged )
         class(convergence), intent(inout) :: self
         integer, optional,  intent(in)    :: ncls
@@ -108,7 +107,6 @@ contains
         endif
     end function check_conv2D
     
-    !>  \brief  checks convergence for the 3D case
     function check_conv3D( self, update_res ) result( converged )
         use simple_math, only: rad2deg
         class(convergence), intent(inout) :: self
@@ -122,7 +120,7 @@ contains
         self%dist_inpl = self%bap%get_avg('dist_inpl')
         self%frac      = self%bap%get_avg('frac')
         self%mi_joint  = self%bap%get_avg('mi_joint')
-        self%mi_class  = self%bap%get_avg('mi_class')
+        self%mi_proj   = self%bap%get_avg('mi_proj')
         self%mi_inpl   = self%bap%get_avg('mi_inpl')
         self%mi_state  = self%bap%get_avg('mi_state')
         self%sdev      = self%bap%get_avg('sdev')
@@ -132,7 +130,7 @@ contains
         endif
         write(*,'(A,1X,F7.1)') '>>> ANGLE OF FEASIBLE REGION:          ', self%pp%athres
         write(*,'(A,1X,F7.4)') '>>> JOINT    DISTRIBUTION OVERLAP:     ', self%mi_joint
-        write(*,'(A,1X,F7.4)') '>>> CLASS    DISTRIBUTION OVERLAP:     ', self%mi_class
+        write(*,'(A,1X,F7.4)') '>>> PROJ     DISTRIBUTION OVERLAP:     ', self%mi_proj
         write(*,'(A,1X,F7.4)') '>>> IN-PLANE DISTRIBUTION OVERLAP:     ', self%mi_inpl
         if( self%pp%nstates > 1 )&
         write(*,'(A,1X,F7.4)') '>>> STATE DISTRIBUTION OVERLAP:        ', self%mi_state
@@ -182,7 +180,7 @@ contains
         if( self%pp%nstates == 1 )then
             if( self%dist < self%pp%athres/5. .and.&
                 self%frac > FRAC_LIM          .and.&
-                self%mi_class > MI_CLASS_LIM_3D )then
+                self%mi_proj > MI_CLASS_LIM_3D )then
                 write(*,'(A)') '>>> CONVERGED: .YES.'
                 converged = .true.
             else
@@ -200,7 +198,7 @@ contains
                 if( istate==0 )cycle
                 ! it doesn't make sense to include the state overlap here
                 ! as the overall state overlap is already provided above
-                state_mi_joint(istate) = state_mi_joint(istate) + self%bap%get(iptcl,'mi_class')
+                state_mi_joint(istate) = state_mi_joint(istate) + self%bap%get(iptcl,'mi_proj')
                 state_mi_joint(istate) = state_mi_joint(istate) + self%bap%get(iptcl,'mi_inpl')
                 ! 2.0 because we include two mi-values
                 statepops(istate)      = statepops(istate) + 2.0
@@ -237,7 +235,6 @@ contains
         endif
     end function check_conv3D
 
-    !>  \brief  checks convergence for the 3D case
     function check_conv_het( self ) result( converged )
         use simple_math, only: rad2deg
         class(convergence), intent(inout) :: self
@@ -289,6 +286,8 @@ contains
                 get = self%mi_joint
             case('mi_class')
                 get = self%mi_class
+            case('mi_proj')
+                get = self%mi_proj
             case('mi_inpl')
                 get = self%mi_inpl
             case('mi_state')

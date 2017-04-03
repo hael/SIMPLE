@@ -122,7 +122,6 @@ contains
         p_master = params(cline, checkdistr=.false.)
         p_master%nptcls = nlines(p_master%filetab)
         if( p_master%nparts > p_master%nptcls ) stop 'nr of partitions (nparts) mjust be < number of entries in filetable'
-        goto 999
         ! setup the environment for distributed execution
         call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr)
         ! prepare job description
@@ -134,7 +133,7 @@ contains
         call qscripts%schedule_jobs
         call qsys_cleanup(p_master)
         ! make unblur_files.txt file detaling all the files generated
-        999 if( cline%defined('numlen') )then
+        if( cline%defined('numlen') )then
             numlen = p_master%numlen
         else
             numlen = len(int2str(p_master%nptcls))
@@ -515,27 +514,39 @@ contains
         use simple_commander_prime2D ! use all in there
         use simple_commander_distr   ! use all in there
         use simple_commander_mask    ! use all in there
-        use simple_oris,    only: oris
-        use simple_strings, only: str_has_substr
+        use simple_commander_imgproc, only: stack_commander
+        use simple_oris,              only: oris
+        use simple_strings,           only: str_has_substr
         class(prime2D_chunk_distr_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
+        ! strings
+        character(len=STDLEN), parameter   :: CAVGNAMES = 'prime2Dcavgs_final.txt'
+        character(len=STDLEN), allocatable :: final_docs(:), final_cavgs(:)
+        character(len=STDLEN)     :: chunktag
+        ! stacking 
+        type(stack_commander)     :: xstack
+        type(cmdline)             :: cline_stack
+        ! splitting
+        type(split_commander)     :: xsplit
+        ! other
         type(params)              :: p_master
         integer, allocatable      :: parts(:,:)
         type(qsys_ctrl)           :: qscripts
-        character(len=STDLEN)     :: refs, oritab, str, str_iter, simple_exec_bin
-        type(split_commander)     :: xsplit
         type(chash), allocatable  :: part_params(:)
         type(chash)               :: myq_descr, job_descr
         type(qsys_factory)        :: qsys_fac
         class(qsys_base), pointer :: myqsys
-        integer :: ipart, numlen
+        type(oris)                :: os
+        integer :: ipart, numlen, nl, ishift, nparts
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! determine the number of partitions
-        p_master%nparts = nint(real(p_master%nptcls)/real(p_master%chunksz))
-        call cline%set('nparts', real(p_master%nparts))
+        nparts = nint(real(p_master%nptcls)/real(p_master%chunksz))
         numlen = len(int2str(p_master%nparts))
-        if( .not. cline%defined('ncunits') ) p_master%ncunits = p_master%nparts 
+        call cline%set('nparts', real(nparts))
+        call cline%set('numlen', real(numlen))
+        ! re-make the master parameters to accomodate nparts/numlen
+        p_master = params(cline, checkdistr=.false.)
         ! setup the environment for distributed execution
         call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr)
         ! prepare job description
@@ -543,9 +554,11 @@ contains
         ! prepare part-dependent parameters
         allocate(part_params(p_master%nparts))
         do ipart=1,p_master%nparts
-            call part_params(ipart)%new(2)
-            call part_params(ipart)%set('chunktag',   'chunk'//int2str_pad(ipart,numlen))
-            call part_params(ipart)%set('shellwfile', 'chunk'//int2str_pad(ipart,numlen)//'shellweights.bin')
+            call part_params(ipart)%new(3)
+            chunktag = 'chunk'//int2str_pad(ipart,numlen)
+            call part_params(ipart)%set('chunk',    int2str(ipart))
+            call part_params(ipart)%set('chunktag', chunktag)
+            call part_params(ipart)%set('stk', 'stack_part'//int2str_pad(ipart,numlen)//p_master%ext)
         end do
         ! split stack
         if( stack_is_split(p_master%ext, p_master%nparts) )then
@@ -561,6 +574,31 @@ contains
         ! manage job scheduling
         call qscripts%schedule_jobs
         call qsys_cleanup(p_master)
+        ! merge final stacks of cavgs and orientation documents
+        allocate(final_docs(p_master%nparts), final_cavgs(p_master%nparts))
+        ishift = 0
+        do ipart=1,p_master%nparts
+            chunktag = 'chunk'//int2str_pad(ipart,numlen)
+            final_cavgs(ipart) = sys_get_last_fname(trim(chunktag)//'cavgs_iter', p_master%ext)
+            final_docs(ipart)  = sys_get_last_fname(trim(chunktag)//'prime2Ddoc_', 'txt')
+            if( ipart > 1 )then
+                ! the class indices need to be shifted by p%ncls
+                ishift = ishift + p_master%ncls
+                ! modify the doc accordingly
+                nl = nlines(final_docs(ipart))
+                call os%new(nl)
+                call os%read(final_docs(ipart))
+                call os%shift_classes(ishift)
+                call os%write(final_docs(ipart))
+            endif
+        end do
+        ! merge docs
+        call sys_merge_docs(final_docs, 'prime2Ddoc_merged.txt')
+        ! merge class averages
+        call write_filetable(CAVGNAMES, final_cavgs)
+        call cline_stack%set('filetab', CAVGNAMES)
+        call cline_stack%set('outstk', 'prime2Dcavgs_final'//p_master%ext)
+        call xstack%execute(cline_stack)
         call simple_end('**** SIMPLE_DISTR_PRIME2D_CHUNK NORMAL STOP ****')
     end subroutine exec_prime2D_chunk_distr
 

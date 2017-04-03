@@ -139,6 +139,7 @@ box
 boxconvsz
 boxmatch
 boxpd
+chunk
 chunksz
 class
 clip
@@ -300,6 +301,7 @@ xsh
 ysh
 zsh
 l_distr_exec
+l_chunk_distr
 doautomsk
 doshift
 l_automsk

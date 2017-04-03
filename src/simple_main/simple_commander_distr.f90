@@ -66,15 +66,7 @@ contains
         integer, allocatable  :: parts(:,:)
         character(len=1024)   :: line
         p = params(cline) ! parameters generated
-        select case(p%split_mode)
-            case('chunk')
-                parts = split_nobjs_in_chunks(p%nptcls, p%chunksz)
-            case('even')
-                parts = split_nobjs_even(p%nptcls, p%ndocs)
-            case DEFAULT
-                write(*,*) 'split mode: ', trim(p%split_mode)
-                stop 'unsupported split_mode; simple_commander_distr :: exec_merge_algndocs'
-        end select
+        parts = split_nobjs_even(p%nptcls, p%ndocs)
         funit_merge = get_fileunit()
         open(unit=funit_merge, file=p%outfile, iostat=ios, status='replace',&
         &action='write', position='append', access='sequential')
@@ -109,60 +101,6 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_MERGE_ALGNDOCS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_merge_algndocs
-    
-    ! subroutine exec_merge_algndocs( self, cline )
-    !     use simple_oris, only: oris
-    !     use simple_map_reduce ! use all in there
-    !     class(merge_algndocs_commander), intent(inout) :: self
-    !     class(cmdline),                  intent(inout) :: cline
-    !     type(params)          :: p
-    !     type(oris)            :: o, o_read
-    !     integer               :: i, j, nentries, cnt, nentries_all, numlen
-    !     integer, allocatable  :: parts(:,:)
-    !     character(len=STDLEN) :: fname
-    !     logical               :: here
-    !     logical, parameter    :: print_part_info = .false.
-    !     p = params(cline) ! parameters generated
-    !     select case(p%split_mode)
-    !         case('chunk')
-    !             parts = split_nobjs_in_chunks(p%nptcls, p%chunksz)
-    !         case('even')
-    !             parts = split_nobjs_even(p%nptcls, p%ndocs)
-    !         case DEFAULT
-    !             write(*,*) 'split mode: ', trim(p%split_mode)
-    !             stop 'unsupported split_mode; simple_commander_distr :: exec_merge_algndocs'
-    !     end select
-    !     numlen = len(int2str(p%ndocs))
-    !     do i=1,p%ndocs
-    !         fname = trim(adjustl(p%fbody))//int2str_pad(i,numlen)//'.txt'
-    !         ! calculate the number of all entries
-    !         nentries_all = parts(i,2)-parts(i,1)+1 
-    !         ! calculate the actual number of entries
-    !         inquire(FILE=fname, EXIST=here)
-    !         if( here )then
-    !             nentries = nlines(fname)
-    !         else
-    !             nentries = 0
-    !         endif
-    !         ! check if oritab is there to fill-in blanks
-    !         if( nentries < nentries_all )then
-    !             write(*,*) 'nentries: ',     nentries
-    !             write(*,*) 'nentries_all: ', nentries_all
-    !             write(*,*) 'number of entries in the doc to be merged not equal to the expected number'
-    !             stop 'simple_commander_distr :: exec_merge_algndocs'
-    !         endif
-    !         if( print_part_info )then
-    !             write(*,'(a,1x,i3,1x,a,1x,i6,1x,i6)') 'partition:', i, 'from/to:', parts(i,1), parts(i,2)
-    !         endif
-    !         o_read = oris(nentries)
-    !         call o_read%read(fname)
-    !         call o%merge(o_read)
-    !     end do
-    !     call o%write(p%outfile)
-    !     deallocate(parts)
-    !     ! end gracefully
-    !     call simple_end('**** SIMPLE_MERGE_ALGNDOCS NORMAL STOP ****', print_simple=.false.)
-    ! end subroutine exec_merge_algndocs
 
     subroutine exec_merge_nnmat( self, cline )
         use simple_map_reduce, only: merge_nnmat_from_parts
@@ -268,15 +206,7 @@ contains
         call find_ldim_nptcls(p%stk, ldim, nimgs)
         ldim(3) = 1
         call img%new(ldim,1.)
-        select case(p%split_mode)
-            case('chunk')
-                parts = split_nobjs_in_chunks(nimgs, p%chunksz)
-            case('even')
-                parts = split_nobjs_even(nimgs, p%nparts)
-            case DEFAULT
-                write(*,*) 'split mode: ', trim(p%split_mode)
-                stop 'unsupported split_mode; simple_commander_distr :: exec_split'
-        end select
+        parts = split_nobjs_even(nimgs, p%nparts)
         if( size(parts,1) /= p%nparts ) stop 'ERROR! generated number of parts not same as inputted nparts'
         do ipart=1,p%nparts
             call progress(ipart,p%nparts)

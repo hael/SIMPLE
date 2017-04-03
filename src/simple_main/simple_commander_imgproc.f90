@@ -626,7 +626,7 @@ contains
             ldim = [p%xdim,p%ydim,1]
         else
             call find_ldim_nptcls(filenames(1),ldim,ifoo)
-            ldim(3) = 1 ! to correct for the stupide 3:d dim of mrc stacks
+            ldim(3) = 1 ! to correct for the stupid 3:d dim of mrc stacks
         endif
         if( debug ) write(*,*) 'logical dimension: ', ldim
         if( cline%defined('nframes') )then
