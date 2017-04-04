@@ -137,6 +137,7 @@ type :: params
     character(len=STDLEN) :: opt='simplex'
     character(len=STDLEN) :: oritab=''
     character(len=STDLEN) :: oritab2=''
+    character(len=STDLEN) :: oritab3D=''
     character(len=STDLEN) :: outfile='outfile.txt'
     character(len=STDLEN) :: outstk=''
     character(len=STDLEN) :: outstk2=''
@@ -516,6 +517,7 @@ contains
         call check_file('mskfile',        self%mskfile,  notAllowed='T')
         call check_file('oritab',         self%oritab, 'T')
         call check_file('oritab2',        self%oritab2,'T')
+        call check_file('oritab3D',       self%oritab3D,'T')
         call check_file('outstk',         self%outstk,   notAllowed='T')
         call check_file('outstk2',        self%outstk2,  notAllowed='T')
         call check_file('outvol',         self%outvol,   notAllowed='T')

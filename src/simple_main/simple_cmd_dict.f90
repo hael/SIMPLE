@@ -123,6 +123,7 @@ contains
         call chdict%push('odd',           'calculate odd eo-pair(yes|no){no}')
         call chdict%push('oritab',        'table (text file) of orientations(*.asc/*.txt)')
         call chdict%push('oritab2',       '2nd table (text file) of orientations(*.asc/*.txt)')
+        call chdict%push('oritab3D',      'table (text file) of 3D orientations(*.asc/*.txt)')
         call chdict%push('outfile',       'output document')
         call chdict%push('outside',       'extract boxes outside the micrograph boundaries(yes|no){no}')
         call chdict%push('outstk',        'output image stack')

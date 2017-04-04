@@ -29,9 +29,6 @@ type prime2D_srch
     real                  :: prev_corr     = -1.  !< previous best correlation
     real                  :: best_corr     = -1.  !< best corr found by search
     integer, allocatable  :: srch_order(:)        !< stochastic search order
-    integer, allocatable  :: parts(:,:)           !< balanced partitions over references
-    integer, allocatable  :: inplmat(:,:)         !< in-plane indices in matrix formulated search
-    real,    allocatable  :: corrmat2d(:,:)       !< correlations in matrix formulated search
     logical               :: doshift = .true.     !< origin shift search indicator
     logical               :: exists  = .false.    !< 2 indicate existence
   contains
@@ -39,8 +36,6 @@ type prime2D_srch
     procedure :: new
     ! GETTERS
     procedure :: get_nrots
-    procedure :: get_corr
-    procedure :: get_inpl
     procedure :: get_cls
     procedure :: get_roind
     ! PREPARATION ROUTINE
@@ -82,11 +77,9 @@ contains
         self%nthr       = p%nthr
         ! construct composites
         self%srch_common = prime_srch(p)
-        ! find number of threads & create the same number of balanced partitions
-        self%parts = split_nobjs_even(self%nrefs,self%nthr)
         ! the instance now exists
         self%exists = .true.
-        if( DEBUG ) write(*,'(A)') '>>> PRIME2D_SRCH::CONSTRUCTED NEW SIMPLE_prime2D_srch OBJECT'
+        if( DEBUG ) write(*,'(A)') '>>> PRIME2D_SRCH::CONSTRUCTED NEW SIMPLE_PRIME2D_SRCH OBJECT'
     end subroutine new
 
     ! GETTERS
@@ -96,20 +89,6 @@ contains
         class(prime2D_srch), intent(in) :: self
         get_nrots = self%nrots
     end function get_nrots
-
-    !>  \brief correlation getter
-    real function get_corr( self, iptcl, iref )
-        class(prime2D_srch), intent(in) :: self
-        integer,             intent(in) :: iptcl, iref
-        get_corr = self%corrmat2d(iptcl, iref)
-    end function get_corr
-    
-    !>  \brief in-plane index getter
-    integer function get_inpl( self, iptcl, iref )
-        class(prime2D_srch), intent(in) :: self
-        integer,             intent(in) :: iptcl, iref
-        get_inpl = self%inplmat(iptcl, iref)
-    end function get_inpl
     
     !>  \brief  to get the class
     subroutine get_cls( self, o )
@@ -199,9 +178,9 @@ contains
         call pftcc_shsrch_init(pftcc, lims)
         if( present(o_prev) )then
             ! find previous discrete alignment parameters
-            self%prev_class = nint(o_prev%get('class'))                    ! class index
-            self%prev_rot   = self%srch_common%roind(360.-o_prev%e3get())  ! in-plane angle index
-            self%prev_shvec = [o_prev%get('x'),o_prev%get('y')]            ! shift vector
+            self%prev_class = nint(o_prev%get('class'))                   ! class index
+            self%prev_rot   = self%srch_common%roind(360.-o_prev%e3get()) ! in-plane angle index
+            self%prev_shvec = [o_prev%get('x'),o_prev%get('y')]           ! shift vector
             ! set best to previous best by default
             self%best_class = self%prev_class         
             self%best_rot   = self%prev_rot
@@ -227,7 +206,7 @@ contains
         ! put prev_best last to avoid cycling
         call put_last(self%prev_class, self%srch_order)
         if( any(self%srch_order == 0) ) stop 'Invalid index in srch_order; simple_prime2D_srch :: prep4srch'
-        if( DEBUG ) write(*,'(A)') '>>> PRIME2D_SRCH::PREPARED FOR SIMPLE_prime2D_srch'
+        if( DEBUG ) write(*,'(A)') '>>> PRIME2D_SRCH::PREPARED FOR SIMPLE_PRIME2D_SRCH'
     end subroutine prep4srch
 
     ! SEARCH ROUTINES
@@ -409,10 +388,10 @@ contains
     subroutine kill( self )
         class(prime2D_srch), intent(inout) :: self !< instance
         if( self%exists )then
-            if( allocated(self%corrmat2d)  ) deallocate(self%corrmat2d)
-            if( allocated(self%inplmat)    ) deallocate(self%inplmat)
+            ! if( allocated(self%corrmat2d)  ) deallocate(self%corrmat2d)
+            ! if( allocated(self%inplmat)    ) deallocate(self%inplmat)
             if( allocated(self%srch_order) ) deallocate(self%srch_order)
-            if( allocated(self%parts)      ) deallocate(self%parts)
+            ! if( allocated(self%parts)      ) deallocate(self%parts)
             call self%srch_common%kill
             self%exists = .false.
         endif

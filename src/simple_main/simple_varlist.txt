@@ -105,6 +105,7 @@ msktype
 opt
 oritab
 oritab2
+oritab3D
 outfile
 outstk
 outstk2

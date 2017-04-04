@@ -2057,7 +2057,7 @@ select case(prg)
        keys_required(4)  = 'oritab'
        ! set optional keys
        keys_optional(1)  = 'nthr'
-       keys_optional(2)  = 'oritab2'
+       keys_optional(2)  = 'oritab3D'
        keys_optional(3)  = 'comlindoc'
        keys_optional(4)  = 'doclist'
        keys_optional(5)  = 'deftab'

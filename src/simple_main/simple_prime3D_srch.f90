@@ -55,7 +55,7 @@ type prime3D_srch
     logical, allocatable   :: state_exists(:)         !< indicates whether each state is populated
     character(len=STDLEN)  :: refine        = ''      !< refinement flag
     character(len=STDLEN)  :: ctf           = ''      !< ctf flag
-    character(len=STDLEN)  :: shbarr        = 'yes'   !< shift barrier flag
+    character(len=STDLEN)  :: shbarr        = ''      !< shift barrier flag
     logical                :: doshift       = .true.  !< origin shift search indicator
     logical                :: greedy_inpl   = .true.  !< indicator for whether in-plane search is greedy or not
     logical                :: exists        = .false. !< 2 indicate existence
@@ -86,7 +86,7 @@ type prime3D_srch
     procedure, private :: stochastic_srch_inpl
     procedure, private :: stochastic_srch_het
     procedure, private :: stochastic_adasym_srch
-    procedure, private :: gen_symneigh
+    procedure, private :: gen_symnnmat
     procedure          :: inpl_srch
     procedure, private :: greedy_srch
     procedure          :: stochastic_weights
@@ -120,7 +120,7 @@ contains
         class(params), target, intent(in)    :: p         !< parameters
         class(oris),   target, intent(in)    :: e         !< reference oris
         class(oris),           intent(inout) :: a         !< ptcls oris
-        real,        optional, intent(inout) :: threshold !< general purpose threshold
+        real,    optional,     intent(inout) :: threshold !< general purpose threshold
         real,    allocatable :: corrs(:)
         integer, allocatable :: inds(:)
         integer  :: alloc_stat, s, ind, thresh_ind
@@ -170,7 +170,7 @@ contains
         call self%se%new( self%pp%pgrp )
         self%nsym    = self%se%get_nsym()
         self%eullims = self%se%srchrange()
-        if( str_has_substr(self%refine,'adasym') ) call self%gen_symneigh
+        if( str_has_substr(self%refine,'adasym') ) call self%gen_symnnmat
         ! Updates option to search shift
         self%doshift = self%pp%doshift
         if( self%doshift )then
@@ -546,56 +546,38 @@ contains
     end subroutine prep_reforis
 
     !>  \brief  prepares correlation target (previous best) for the search
-    subroutine prep_corr4srch( self, pftcc, iptcl, lp, o_prev, corr_t, prev_corrs )
-        class(prime3D_srch),        intent(inout) :: self
-        class(polarft_corrcalc),    intent(inout) :: pftcc
-        integer,                    intent(in)    :: iptcl
-        real,                       intent(in)    :: lp
-        class(ori),       optional, intent(inout) :: o_prev
-        real,             optional, intent(in)    :: corr_t
-        real,             optional, intent(out)   :: prev_corrs(:)
+    subroutine prep_corr4srch( self, pftcc, iptcl, lp, o_prev )
+        class(prime3D_srch),     intent(inout) :: self
+        class(polarft_corrcalc), intent(inout) :: pftcc
+        integer,                 intent(in)    :: iptcl
+        real,                    intent(in)    :: lp
+        class(ori), optional,    intent(inout) :: o_prev
         real      :: cc_t, cc_t_min_1, corr
-        logical   :: calc_corr, did_set_prev_corr
         !
-        integer :: nnn, inpl_ind
-        real    :: wprev_corr, sumw, angthresh, e3
-        real    :: corrs(self%nrots), ws(self%nrots)
+        ! integer :: nnn, inpl_ind
+        ! real    :: wprev_corr, sumw, angthresh, e3
+        ! real    :: corrs(self%nrots), ws(self%nrots)
         !
-        calc_corr = .true.
-        if( present(corr_t) ) calc_corr = .false.
         corr = 1.
         if( present(o_prev) )then
-            ! CALCULATE PREVIOUS BEST CORRELATION (treshold for better)
-            did_set_prev_corr = .false.
-            if( calc_corr )then
-                cc_t = max( 0., pftcc%corr(self%prev_ref, iptcl, self%prev_roind) ) ! correlation with prev best ori
-            else
-                cc_t = corr_t
-            endif
-            if( cc_t > 1. .or. cc_t < -1. .or. .not. is_a_number(cc_t) )then
+            corr = max( 0., pftcc%corr(self%prev_ref, iptcl, self%prev_roind) )
+            if( corr > 1. .or. .not. is_a_number(cc_t) )then
                 stop 'Invalid correlation value in simple_prime3d_srch::prep_corr4srch'
             endif
-            corr = cc_t                                            ! default
-            if( (self%refine.eq.'no' .or. self%refine.eq.'adasym') .and. self%nstates==1 )then ! the ctf=no condition has been removed
+            if( (self%refine.eq.'no' .or. self%refine.eq.'adasym') .and. self%nstates==1 )then
                 ! moving average for single state only
                 cc_t_min_1 = -1.
                 if( o_prev%isthere('corr') ) cc_t_min_1 = o_prev%get('corr')
                 if( o_prev%isthere('lp') )then
-                    if( abs(o_prev%get('lp') - lp) < 0.5 )then    ! previous and present correlations comparable
+                    if( abs(o_prev%get('lp') - lp) < 0.5 )then   ! previous and present correlations comparable
                         if( cc_t_min_1 > 0. )then
-                            corr = 0.5 * cc_t + 0.5 * cc_t_min_1  ! diversifying limit
-                            did_set_prev_corr = .true.
+                            corr = 0.5 * corr + 0.5 * cc_t_min_1 ! diversifying limit
                         endif
                     endif
                 endif
-                if( .not. did_set_prev_corr ) corr = cc_t         ! greedy limit
             endif
         endif
-        if( present(prev_corrs) )then
-            prev_corrs(iptcl) = corr
-        else
-            self%prev_corr = corr
-        endif
+        self%prev_corr = corr
         if( DEBUG ) write(*,'(A)') '>>> PRIME3D_SRCH::PREPARED CORRELATION FOR SIMPLE_PRIME3D_SRCH'
     end subroutine prep_corr4srch
 
@@ -1141,7 +1123,7 @@ contains
         if( DEBUG ) write(*,'(A)') '>>> PRIME3D_SRCH::FINISHED INPL SEARCH'
     end subroutine inpl_srch
 
-    subroutine gen_symneigh( self )
+    subroutine gen_symnnmat( self )
         class(prime3D_srch), intent(inout) :: self
         type(ori) :: oref,osym
         integer :: i, isym,iref
@@ -1154,7 +1136,7 @@ contains
                 self%nnmat_sym(iref,isym-1) = self%pe%find_closest_proj( osym )
             enddo
         enddo
-    end subroutine gen_symneigh
+    end subroutine gen_symnnmat
 
     subroutine stochastic_weights( self, wcorr, os )
         class(prime3D_srch), intent(inout) :: self
