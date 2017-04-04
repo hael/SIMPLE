@@ -35,6 +35,7 @@ real                            :: smpd_scaled    = 0.        !< sampling distan
 real                            :: corr_saved     = 0.        !< opt corr for local opt saved
 real                            :: kV             = 300.      !< acceleration voltage
 real                            :: dose_rate      = 0.        !< dose rate
+real                            :: nsig_here      = 6.0       !< nr of sigmas (for outlier removal)
 logical                         :: do_dose_weight = .false.   !< dose weight or not
 logical                         :: doscale        = .false.   !< scale or not
 logical                         :: doprint        = .true.    !< print out correlations
@@ -47,7 +48,7 @@ real,    parameter :: SMALLSHIFT = 2. !< small initial shift to blur out fixed p
 
 contains
     
-    subroutine unblur_movie( movie_stack_fname, p, corr )
+    subroutine unblur_movie( movie_stack_fname, p, corr, nsig )
         use simple_oris,        only: oris
         use simple_strings,     only: int2str
         use simple_rnd,         only: ran3
@@ -56,11 +57,14 @@ contains
         character(len=*), intent(in)    :: movie_stack_fname
         class(params),    intent(inout) :: p
         real,             intent(out)   :: corr
+        real, optional,   intent(in)    :: nsig
         real    :: ave, sdev, var, minw, maxw
         real    :: cxy(3), lims(2,2), corr_prev, frac_improved, corrfrac
         integer :: iframe, iter, nimproved, ires, updateres, i
         logical :: didsave, didupdateres, err
         ! initialise
+        nsig_here = 6.0
+        if( present(nsig) ) nsig_here = nsig
         call unblur_init(movie_stack_fname, p)
         ! make search object ready
         lims(:,1) = -maxshift
@@ -219,12 +223,16 @@ contains
      
     subroutine unblur_init( movie_stack_fname, p )
         use simple_jiffys, only: find_ldim_nptcls, alloc_err, progress
-        use simple_math,   only: round2even
+        use simple_math,   only: round2even, median
         character(len=*), intent(in)    :: movie_stack_fname
         class(params),    intent(inout) :: p
-        real        :: moldiam, dimo4
-        integer     :: alloc_stat, iframe
-        real        :: time_per_frame, current_time
+        type(image)          :: tmpmovsum
+        real                 :: moldiam, dimo4
+        integer              :: alloc_stat, iframe, ncured, wisz, deadhot(2), i, j, winsz
+        real                 :: time_per_frame, current_time
+        integer, parameter   :: HWINSZ = 6
+        real,    allocatable :: rmat(:,:,:), rmat_pad(:,:), win(:,:)
+        logical, allocatable :: outliers(:,:)
         call unblur_kill  
         ! GET NUMBER OF FRAMES & DIM FROM STACK
         call find_ldim_nptcls(movie_stack_fname, ldim, nframes, endconv=endconv)
@@ -262,18 +270,55 @@ contains
         call alloc_err('unblur_init; simple_unblur', alloc_stat)
         corrmat = 0.
         corrs   = 0.
-        ! read and FT frames
-        if( doprint ) write(*,'(a)') '>>> READING AND FOURIER TRANSFORMING FRAMES'
+        call frame_tmp%new(ldim, smpd)
+        ! allocate padded matrix
+        winsz   = 2*HWINSZ+1
+        allocate(rmat_pad(1-hwinsz:ldim(1)+hwinsz, 1-hwinsz:ldim(2)+hwinsz), win(winsz,winsz))
+        ! calculate image sum and identify outliers
+        if( doprint ) write(*,'(a)') '>>> READING & REMOVING DEAD/HOT PIXELS & FOURIER TRANSFORMING FRAMES'
+        call tmpmovsum%new(ldim, smpd)
         do iframe=1,nframes
-            call progress(iframe, nframes)
-            call frame_tmp%new(ldim, smpd)
-            call movie_frames_scaled(iframe)%new(ldim_scaled, smpd_scaled)
             call frame_tmp%read(movie_stack_fname, iframe, rwaction='READ')
-            call frame_tmp%fwd_ft
-            call frame_tmp%clip(movie_frames_scaled(iframe))
-            call movie_frames_ftexp(iframe)%new(movie_frames_scaled(iframe), hp, lp) 
-            call movie_frames_ftexp_sh(iframe)%new(movie_frames_ftexp(iframe))
+            call tmpmovsum%add(frame_tmp)
         end do
+        call tmpmovsum%cure_outliers(ncured, nsig_here, deadhot, outliers)
+        write(*,'(a,1x,i7)') '>>> # DEAD PIXELS:', deadhot(1)
+        write(*,'(a,1x,i7)') '>>> # HOT  PIXELS:', deadhot(2)
+        if( any(outliers) )then ! remove the outliers & do the rest
+            do iframe=1,nframes
+                call progress(iframe, nframes)
+                call frame_tmp%read(movie_stack_fname, iframe, rwaction='READ')
+                rmat = frame_tmp%get_rmat()
+                rmat_pad = median( reshape(rmat(:,:,1),(/(ldim(1)*ldim(2))/)) )
+                rmat_pad(1:ldim(1),1:ldim(2)) = rmat(1:ldim(1),1:ldim(2),1)
+                !$omp parallel do collapse(2) schedule(auto) default(shared) private(i,j,win)
+                do i=1,ldim(1)
+                    do j=1,ldim(2)
+                        if( outliers(i,j) )then
+                            win = rmat_pad( i-hwinsz:i+hwinsz, j-hwinsz:j+hwinsz )
+                            rmat(i,j,1) = median( reshape(win,(/winsz**2/)) )
+                        endif
+                    enddo
+                enddo
+                !$omp end parallel do
+                call frame_tmp%set_rmat(rmat)
+                call movie_frames_scaled(iframe)%new(ldim_scaled, smpd_scaled)
+                call frame_tmp%fwd_ft
+                call frame_tmp%clip(movie_frames_scaled(iframe))
+                call movie_frames_ftexp(iframe)%new(movie_frames_scaled(iframe), hp, lp) 
+                call movie_frames_ftexp_sh(iframe)%new(movie_frames_ftexp(iframe))
+            enddo
+        else
+            do iframe=1,nframes
+                call progress(iframe, nframes)
+                call movie_frames_scaled(iframe)%new(ldim_scaled, smpd_scaled)
+                call frame_tmp%read(movie_stack_fname, iframe, rwaction='READ')
+                call frame_tmp%fwd_ft
+                call frame_tmp%clip(movie_frames_scaled(iframe))
+                call movie_frames_ftexp(iframe)%new(movie_frames_scaled(iframe), hp, lp) 
+                call movie_frames_ftexp_sh(iframe)%new(movie_frames_ftexp(iframe))
+            end do
+        endif
         call frame_tmp%kill
         ! check if we are doing dose weighting
         if( p%l_dose_weight )then

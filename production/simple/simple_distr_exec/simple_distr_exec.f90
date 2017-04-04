@@ -101,9 +101,10 @@ select case(prg)
         keys_optional(22)  = 'phaseplate'
         keys_optional(23)  = 'thres'
         keys_optional(24)  = 'rm_outliers'
+        keys_optional(25)  = 'nsig'
         ! parse command line
         if( describe ) call print_doc_preproc
-        call cline%parse(keys_required(:8), keys_optional(:24))
+        call cline%parse(keys_required(:8), keys_optional(:25))
         ! set defaults
         if( .not. cline%defined('trs')             ) call cline%set('trs',        5.)
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',   15.)
@@ -145,9 +146,10 @@ select case(prg)
         keys_optional(14) = 'frameavg'
         keys_optional(15) = 'fromf'
         keys_optional(16) = 'tof'
+        keys_optional(17) = 'nsig'
         ! parse command line
         if( describe ) call print_doc_unblur
-        call cline%parse(keys_required(:3), keys_optional(:16))
+        call cline%parse(keys_required(:3), keys_optional(:17))
         ! set defaults
         if( .not. cline%defined('trs')     ) call cline%set('trs',      5.)
         if( .not. cline%defined('lpstart') ) call cline%set('lpstart', 15.)
@@ -177,6 +179,7 @@ select case(prg)
         keys_optional(9)  = 'startit'
         keys_optional(10) = 'scale'
         keys_optional(11) = 'frameavg'
+        keys_optional(12) = 'nsig'
         ! parse command line
         if( describe ) call print_doc_unblur_tomo
         call cline%parse(keys_required(:3), keys_optional(:11))

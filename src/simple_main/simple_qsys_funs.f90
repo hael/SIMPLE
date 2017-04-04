@@ -274,17 +274,20 @@ contains
         class(params),    intent(in) :: p
         character(len=*), intent(in) :: source 
         integer :: fnr, file_stat
-        fnr = get_fileunit()
         if( p%l_chunk_distr )then
+            fnr = get_fileunit()
             open(unit=fnr, FILE='JOB_FINISHED_'//int2str_pad(p%chunk,p%numlen),&
             &STATUS='REPLACE', action='WRITE', iostat=file_stat)
+            call fopen_err( source, file_stat )
+            close( unit=fnr )
         endif
         if( p%l_distr_exec )then
+            fnr = get_fileunit()
             open(unit=fnr, FILE='JOB_FINISHED_'//int2str_pad(p%part,p%numlen),&
             &STATUS='REPLACE', action='WRITE', iostat=file_stat)
+            call fopen_err( source, file_stat )
+            close( unit=fnr )
         endif
-        call fopen_err( source, file_stat )
-        close( unit=fnr )
     end subroutine qsys_job_finished
 
     !>  returns when the inputted file exists in cwd
