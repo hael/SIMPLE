@@ -378,7 +378,7 @@ contains
     ! ENSEMBLE HETEROGEINITY ANALYSIS
 
     subroutine exec_het_ensemble( self, cline )
-        !use simple_commander_rec,     only: recvol_commander
+        use simple_commander_rec,     only: recvol_commander
         use simple_strings,           only: int2str_pad
         use simple_oris,              only: oris
         use simple_combinatorics,     only: diverse_labeling, shc_aggregation
@@ -393,12 +393,13 @@ contains
         character(len=32),     parameter :: VOLFBODY    = 'recvol_state'
         ! distributed commanders
         type(prime3D_distr_commander) :: xprime3D_distr
+        type(recvol_distr_commander)  :: xrecvol_distr        
         ! shared-mem commanders
-        ! type(recvol_commander)        :: xrecvol
+        !
         ! command lines
         type(cmdline)                 :: cline_prime3D_master
         type(cmdline)                 :: cline_prime3D
-        !type(cmdline)                 :: cline_recvol
+        type(cmdline)                 :: cline_recvol_distr
         ! other variables
         type(params)                  :: p_master
         type(oris)                    :: os, rep_os
@@ -418,6 +419,10 @@ contains
         call del_files('ppfts_memoized_part', p_master%nparts, ext='.bin')
 
         ! prepare command lines from prototype master
+        cline_recvol_distr = cline
+        call cline_recvol_distr%set('prg', 'recvol')
+        call cline_recvol_distr%set('eo', 'yes')
+        call cline_recvol_distr%delete('lp')
         cline_prime3D_master = cline
         call cline_prime3D_master%set('prg', 'prime3D')
         call cline_prime3D_master%set('startit', 1.)
@@ -425,7 +430,6 @@ contains
         call cline_prime3D_master%set('refine', 'het')
         call cline_prime3D_master%set('dynlp', 'no')
         call cline_prime3D_master%set('lp', p_master%lp) 
-        !cline_recvol         = cline
 
         ! GENERATE DIVERSE INITIAL LABELS
         write(*,'(A)') '>>>'
@@ -481,8 +485,14 @@ contains
         call shc_aggregation( NREPEATS, n_incl, labels_incl, consensus )
         call os%set_all('state', real(unpack(consensus, included, labels(1,:))) )
         call os%write(trim(oritab))
-        ! should reconstruct here?
+        call os%kill
 
+        ! FINAL RECONSTRUCTION
+        call cline_recvol_distr%set('oritab', trim(oritab))
+        call xrecvol_distr%execute(cline_recvol_distr)
+
+        ! end gracefully
+        call simple_end('**** SIMPLE_HET_ENSEMBLE NORMAL STOP ****')        
         contains
 
             subroutine prime3d_cleanup

@@ -148,7 +148,6 @@ contains
         integer,                intent(in)    :: iref
         integer   :: s
         s = nint(o%get('state'))
-        !call self%refvols(s)%fproject_expanded(o, self%img_refs(iref), lp=self%pp%lp)
         call self%refvols(s)%fproject_expanded(o, self%img_refs(iref))
         if( self%pp%ctf .ne. 'no' )then
             call self%create_ctf_image(o)

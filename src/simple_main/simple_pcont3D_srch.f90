@@ -111,11 +111,7 @@ contains
         ! the input search space in stochastic, so no need for a randomized search order
         do iref = 1,self%nrefs
             if(iref == self%prev_ref)cycle
-            if(self%npeaks == 1)then
-                call shc_inpl_srch(iref, inpl_corr)
-            else
-                call greedy_inpl_srch(iref, inpl_corr)
-            endif
+            call greedy_inpl_srch(iref, inpl_corr)
             self%neval = self%neval+1
             if(inpl_corr >= self%prev_corr)self%nbetter = self%nbetter+1
             if(self%nbetter >= self%npeaks)exit
@@ -131,6 +127,7 @@ contains
 
         contains
 
+            ! Unused at the moment, for testing purpose
             subroutine shc_inpl_srch(iref_here, corr_here)
                 use simple_rnd, only: shcloc
                 integer, intent(in)    :: iref_here

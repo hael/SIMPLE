@@ -870,11 +870,17 @@ contains
 
         ! HETEROGEINITY SPECIFICS
         if( p_master%refine.eq.'het' )then
-            if( cline%defined('het_thresh') )then
+            if( cline%defined('extr_thresh') )then
                 ! all is well
             else
-                ! start from the top
-                p_master%het_thresh = HETINITTHRESH / p_master%rrate
+                ! starts from the top
+                p_master%extr_thresh = EXTRINITHRESH / p_master%rrate
+                if( p_master%startit > 1 )then
+                    ! need to update the randomization rate
+                    do iter=1,p_master%startit-1
+                         p_master%extr_thresh = p_master%extr_thresh * p_master%rrate
+                    end do
+                endif
             endif
         endif
 

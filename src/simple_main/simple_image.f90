@@ -560,7 +560,8 @@ contains
         if( self%is_ft() ) stop 'only 4 real images; extr_pixels; simple_image'
         if( self.eqdims.mskimg )then
             ! pixels = self%packer(mskimg) ! Intel hickup
-            pixels = pack( self%rmat, mskimg%rmat>0.5 )
+            pixels = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
+                &mskimg%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))>0.5 )
         else
             stop 'mask and image of different dims; extr_pixels; simple_image'
         endif
@@ -2344,7 +2345,7 @@ contains
         cen1 = sum(forsort(1:npix/2))/real(npix/2)
         cen2 = sum(forsort(npix/2+1:npix))/real(npix-npix/2)
         ! do 100 iterations of k-means to identify background/forground distributions
-        sum_rmat = sum(self%rmat)
+        sum_rmat = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
         do l=1,100
             sum1 = 0.
             cnt1 = 0
@@ -2401,27 +2402,24 @@ contains
         if( self%imgkind .eq. 'xfel' ) stop 'masscen not implemented for xfel patterns; masscen; simple_image'
         if( self%ft )                  stop 'masscen not implemented for FTs; masscen; simple_image'
         spix = 0.
-        xyz = 0.
-        ci = -real(self%ldim(1))/2.
+        xyz  = 0.
+        ci   = -real(self%ldim(1)-1)/2.
         do i=1,self%ldim(1)
-            cj = -real(self%ldim(2))/2.
+            cj = -real(self%ldim(2)-1)/2.
             do j=1,self%ldim(2)
-                ck = -real(self%ldim(3))/2.
+                ck = -real(self%ldim(3)-1)/2.
                 do k=1,self%ldim(3)
-                    pix = self%get([i,j,k])
-                    xyz(1) = xyz(1)+pix*ci
-                    xyz(2) = xyz(2)+pix*cj
-                    xyz(3) = xyz(3)+pix*ck
+                    pix  = self%get([i,j,k])
+                    xyz  = xyz + pix * [ci, cj, ck]
                     spix = spix+pix
-                    ck = ck+1.
+                    ck   = ck+1.
                 end do
                 cj = cj+1.
             end do
             ci = ci+1.
         end do
-        xyz(1) = xyz(1)/spix
-        xyz(2) = xyz(2)/spix
-        xyz(3) = xyz(3)/spix
+        xyz = xyz / spix
+        if(self%is_2d()) xyz(3) = 0.
     end function masscen
 
     !>  \brief  is for centering an image based on center of mass
@@ -2445,9 +2443,9 @@ contains
         else
             rmsk = real( dims(1) )/2. - 5. ! 5 pixels outer width
         endif
-        if( neg .eq. 'yes' ) call tmp%neg
-        call tmp%bp(0.,lp)
-        call tmp%mask( rmsk, 'soft' )
+        if(neg .eq. 'yes') call tmp%neg
+        call tmp%bp(0., lp)
+        call tmp%mask(rmsk, 'soft')
         if( present(thres) )then
             call tmp%norm_bin
             call tmp%bin(thres)
@@ -2527,13 +2525,13 @@ contains
         class(image), intent(inout) :: self
         integer, intent(in)         :: falloff
         real                        :: rfalloff
-        real, allocatable :: rmat(:,:,:)
+        real, allocatable           :: rmat(:,:,:)
         integer                     :: i, j, k, is, js, ks, ie, je, ke
         integer                     :: il, ir, jl, jr, kl, kr, falloff_sq
         if( self%imgkind .eq. 'xfel' ) stop 'xfel-kind images cannot be low-pass filtered in real space; simple_image::cos_edge'
         if( falloff<=0 ) stop 'stictly positive values for edge fall-off allowed; simple_image::cos_edge'
         if( self%ft )    stop 'not intended for FTs; simple_image :: cos_edge'
-        self%rmat   = self%rmat/maxval(self%rmat)
+        self%rmat   = self%rmat/maxval(self%rmat(1:self%ldim(1),:,:))
         rfalloff    = real( falloff )
         falloff_sq  = falloff**2
         allocate( rmat(self%ldim(1),self%ldim(2),self%ldim(3)) )
@@ -2630,7 +2628,7 @@ contains
         if(self%ft)    stop 'not intended for FTs; simple_image :: cos_edge'
         ihuge     = huge(ihuge)
         length    = 2*falloff+1
-        self%rmat = self%rmat/maxval(self%rmat)
+        self%rmat = self%rmat/maxval(self%rmat(1:self%ldim(1),:,:))
         rfalloff  = real(falloff)
         dims(:,1) = 1 - falloff
         dims(:,2) = self%ldim + falloff
@@ -2640,7 +2638,7 @@ contains
             ! zero-padded matrix of integer values
             allocate(imat(dims(1,1):dims(1,2), dims(2,1):dims(2,2), dims(3,1):dims(3,2)))
             imat = 0
-            imat(1:self%ldim(1), 1:self%ldim(2), 1:self%ldim(3)) = nint(self%rmat(1:self%ldim(1),:,:))
+            imat(1:self%ldim(1), 1:self%ldim(2), 1:self%ldim(3)) = nint(self%rmat(:self%ldim(1),:,:))
             ! private matrix
             allocate(lmat(length, length, length))
             ! pre-computed squared distance matrix
@@ -3172,7 +3170,7 @@ contains
         if( self%ft )then
             stop 'maxloc not implemented 4 FTs! simple_image'
         else
-             loc = maxloc(self%rmat)
+             loc = maxloc(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
         endif
     end function maxcoord
 
@@ -3503,8 +3501,8 @@ contains
             write(*,*) 'found NaNs in simple_image; cure:', n_nans
         endif
         ave = ave/real(npix)
-        maxv = maxval( self%rmat )
-        minv = minval( self%rmat )        
+        maxv = maxval( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) )
+        minv = minval( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) )        
         self%rmat = self%rmat - ave
         ! calc sum of devs and sum of devs squared
         ep = 0.
@@ -5125,7 +5123,8 @@ contains
         call maskimg%disc(self%ldim, self%smpd, msk, npix)
         npix_tot = product(self%ldim)
         nbackgr = npix_tot-npix
-        pixels = pack( self%rmat, maskimg%rmat<0.5 )
+        pixels = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
+            &maskimg%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) < 0.5 )
         med = median_nocopy(pixels)
         call moment(pixels, ave, sdev, var, err)
         deallocate(pixels)
@@ -5197,8 +5196,8 @@ contains
             didft = .true.
         endif
         ! find minmax
-        smin  = minval(self%rmat)
-        smax  = maxval(self%rmat)
+        smin  = minval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
+        smax  = maxval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
         ! create [0,1]-normalized image
         self%rmat = (self%rmat - smin)  / (smax-smin)
         self%rmat = (exp(self%rmat)-1.) / (exp(1.)-1.)
@@ -5340,7 +5339,7 @@ contains
         ncured   = 0
         hwinsz   = 6
         was_fted = self%is_ft()
-        call moment( self%rmat, ave, sdev, var, err )
+        call moment( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), ave, sdev, var, err )
         if( sdev<TINY )return
         lthresh = ave - sigma_here * sdev
         uthresh = ave + sigma_here * sdev

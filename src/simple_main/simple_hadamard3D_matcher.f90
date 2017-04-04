@@ -126,17 +126,8 @@ contains
             if(frac_srch_space < 0.98 .or. p%het_thresh > 0.025)then
                 dohet = .true.
                 write(*,'(A,F8.2)') '>>> STATE RANDOMIZATION(%):', 100.*p%het_thresh
-                ! grab relevant correlations
-                corrs      = b%a%get_all('corr')
-                incl       = b%a%included()
-                corrs_incl = pack(corrs, mask=incl)
-                ! sorts correlations & determine threshold
-                n_incl     = size(corrs_incl)
-                call hpsort(n_incl, corrs_incl)
-                thresh_ind = nint(real(n_incl) * p%het_thresh)
-                het_corr_thresh = corrs_incl(thresh_ind)
+                het_corr_thresh = b%a%extremal_bound(p%het_thresh)
                 write(*,'(A,F8.2)') '>>> CORRELATION THRESHOLD:', het_corr_thresh
-                deallocate(corrs, incl, corrs_incl)
             endif
             ! generate filename for memoization of particle pfts
             if( allocated(ppfts_fname) ) deallocate(ppfts_fname)
@@ -151,7 +142,7 @@ contains
             ! generate projections (polar FTs)
             call preppftcc4align( b, p, cline )
         endif
-
+        
         ! INITIALIZE
         if( which_iter <= 0 )then
             write(*,'(A)') '>>> PRIME3D DISCRETE STOCHASTIC SEARCH'

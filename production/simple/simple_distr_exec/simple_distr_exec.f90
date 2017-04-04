@@ -296,7 +296,7 @@ select case(prg)
         keys_optional(7)  = 'refs'
         keys_optional(8)  = 'oritab'
         keys_optional(9)  = 'hp'
-        keys_optional(10)  = 'lp'
+        keys_optional(10) = 'lp'
         keys_optional(11) = 'cenlp'
         keys_optional(12) = 'trs'
         keys_optional(13) = 'automsk'
@@ -323,7 +323,7 @@ select case(prg)
         if( .not. cline%defined('lp')     ) call cline%set('lp',     20.)
         if( .not. cline%defined('eo')     ) call cline%set('eo',    'no')
         if( .not. cline%defined('amsklp') ) call cline%set('amsklp', 25.)
-        if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',  25.)
+        if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',  30.)
         if( .not. cline%defined('edge')   ) call cline%set('edge',   20.)
         if( .not. cline%defined('center') ) call cline%set('center', 'yes')
         if( cline%defined('nparts') .and. cline%defined('chunksz') )then
@@ -442,7 +442,7 @@ select case(prg)
         ! set defaults
         if( .not. cline%defined('nspace')                  ) call cline%set('nspace', 1000.)
         if( cline%defined('lp') .or. cline%defined('find') ) call cline%set('dynlp',   'no')
-        if( .not. cline%defined('cenlp')                   ) call cline%set('cenlp',    25.)
+        if( .not. cline%defined('cenlp')                   ) call cline%set('cenlp',    30.)
         if( .not. cline%defined('refine')                  ) call cline%set('refine',  'no')
         if( .not. cline%defined('eo') )then
             call cline%set('eo', 'no')

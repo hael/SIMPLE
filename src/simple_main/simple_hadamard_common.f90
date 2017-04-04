@@ -26,15 +26,16 @@ interface setup_shellweights
     module procedure setup_shellweights_2
 end interface
 
-logical, parameter :: DEBUG       = .false.
-real,    parameter :: SHTHRESH    = 0.0001
-real,    parameter :: VOLSHTHRESH = 0.01
-real               :: dfx_prev    = 0.
-real               :: dfy_prev    = 0.
-real               :: angast_prev = 0.
-real               :: kV_prev     = 0.
-real               :: cs_prev     = 0.
-real               :: fraca_prev  = 0.
+logical, parameter :: DEBUG        = .false.
+real,    parameter :: SHTHRESH     = 0.0001
+real,    parameter :: CENTHRESH    = 0.01   ! threshold for performing volume/cavg centering in pixels
+real,    parameter :: MAXCENTHRESH = 0.025  ! max centering shift applied: 2.5% of box size
+real               :: dfx_prev     = 0.
+real               :: dfy_prev     = 0.
+real               :: angast_prev  = 0.
+real               :: kV_prev      = 0.
+real               :: cs_prev      = 0.
+real               :: fraca_prev   = 0.
     
 contains
 
@@ -476,11 +477,17 @@ contains
         class(image),   intent(inout) :: ref
         class(oris),    intent(inout) :: os
         integer,        intent(in)    :: icls
-        real :: xyz(3)
-        if( p%center .eq. 'yes' .and. p%doshift )then
-            ! center the reference and update the corresponding class parameters
-            xyz = ref%center(p%cenlp, 'no', p%msk)
-            call os%add_shift2class(icls, -xyz(1:2))
+        real :: xyz(3), sharg
+        if(p%center.eq.'yes' .or. p%doshift)then
+            ! center the reference
+            xyz   = ref%center(p%cenlp, 'no', p%msk, doshift=.false.)
+            sharg = arg(xyz)
+            if(sharg > CENTHRESH)then
+                ! apply shift  and update the corresponding class parameters
+                if(sharg > real(p%box)*MAXCENTHRESH) xyz = xyz / sharg
+                call ref%shift(-xyz(1), -xyz(2))
+                call os%add_shift2class(icls, xyz(1:2))
+            endif
         endif
         ! normalise
         call ref%norm
@@ -556,7 +563,7 @@ contains
                 if( p%refine.ne.'het' )then
                     if( p%pgrp(:1).eq.'c' )then
                         shvec = b%vol%center(p%cenlp,'no',p%msk,doshift=.false.) ! find center of mass shift
-                        if( arg(shvec) > VOLSHTHRESH )then
+                        if( arg(shvec) > CENTHRESH )then
                             if( p%pgrp.ne.'c1' ) shvec(1:2) = 0.         ! shifts only along z-axis for C2 and above
                             call b%vol%shift(shvec(1),shvec(2),shvec(3)) ! performs shift
                             ! map back to particle oritentations
