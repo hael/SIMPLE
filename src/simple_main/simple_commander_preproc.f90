@@ -22,7 +22,7 @@ implicit none
 public :: preproc_commander
 public :: select_frames_commander
 public :: boxconvs_commander
-public :: integrate_movies_commander
+public :: replace_deadpix_commander
 public :: powerspecs_commander
 public :: unblur_commander
 public :: ctffind_commander
@@ -44,10 +44,10 @@ type, extends(commander_base) :: boxconvs_commander
   contains
     procedure :: execute      => exec_boxconvs
 end type boxconvs_commander
-type, extends(commander_base) :: integrate_movies_commander
+type, extends(commander_base) :: replace_deadpix_commander
   contains
-    procedure :: execute      => exec_integrate_movies
-end type integrate_movies_commander
+    procedure :: execute      => exec_replace_deadpix
+end type replace_deadpix_commander
 type, extends(commander_base) :: powerspecs_commander
  contains
    procedure :: execute       => exec_powerspecs
@@ -306,21 +306,28 @@ contains
         call simple_end('**** SIMPLE_BOXCONVS NORMAL STOP ****')
     end subroutine exec_boxconvs
     
-    subroutine exec_integrate_movies(self,cline)
+    subroutine exec_replace_deadpix(self,cline)
+        !$ use omp_lib
+        !$ use omp_lib_kinds
         use simple_imgfile, only: imgfile
         use simple_image,   only: image
-        class(integrate_movies_commander), intent(inout) :: self
-        class(cmdline),                    intent(inout) :: cline
+        use simple_stat,    only: moment
+        use simple_math,    only: median
+        class(replace_deadpix_commander), intent(inout) :: self
+        class(cmdline),                   intent(inout) :: cline
         type(params)                       :: p
         type(build)                        :: b
-        integer                            :: nmovies, nframes, frame, alloc_stat, lfoo(3)
-        integer                            :: numlen, ldim(3), fromto(2), movie, ifoo, ldim_scaled(3)
-        integer                            :: movie_counter, ntot
+        integer                            :: nmovies, nframes, frame, alloc_stat
+        integer                            :: numlen, ldim(3), fromto(2), movie
+        integer                            :: movie_counter, ntot, i, j, ncured, ifoo
+        integer                            :: hwinsz, winsz
         character(len=STDLEN), allocatable :: movienames(:)
-        character(len=:), allocatable      :: cpcmd
-        real                               :: x, y, smpd, smpd_scaled
-        type(image), allocatable           :: img_frames(:)
-        type(image)                        :: img_sum, pspec, frame_tmp
+        character(len=:),      allocatable :: cpcmd
+        real,                  allocatable :: rmat(:,:,:), rmat_pad(:,:), win (:,:)
+        logical,               allocatable :: outliers(:,:)
+        type(image),           allocatable :: img_frames(:)
+        real                               :: x, y, smpd, nsigma
+        type(image)                        :: img_sum, pspec
         logical, parameter                 :: debug = .false.
         p = params(cline,checkdistr=.false.) ! constants & derived constants produced
         call b%build_general_tbox(p,cline,do3d=.false.)
@@ -331,17 +338,11 @@ contains
         call find_ldim_nptcls(movienames(1), ldim, ifoo)
         if( debug ) write(*,*) 'logical dimension: ', ldim
         ldim(3) = 1 ! to correct for the stupid 3:d dim of mrc stacks
-        if( p%scale < 0.99 )then
-            ldim_scaled(1) = nint(real(ldim(1))*p%scale)
-            ldim_scaled(2) = nint(real(ldim(2))*p%scale)
-            ldim_scaled(3) = 1
-        else
-            ldim_scaled = ldim
-        endif
         ! SET SAMPLING DISTANCE
-        smpd        = p%smpd 
-        smpd_scaled = p%smpd/p%scale
-        numlen  = len(int2str(nmovies))
+        smpd   = p%smpd 
+        numlen = len(int2str(nmovies))
+        nsigma  = 6.
+        if( cline%defined('nsig') ) nsigma = p%nsig
         if( debug ) write(*,*) 'length of number string: ', numlen
         ! determine loop range
         if( cline%defined('part') )then
@@ -358,7 +359,11 @@ contains
         ntot = fromto(2) - fromto(1) + 1
         if( debug ) write(*,*) 'fromto: ', fromto(1), fromto(2)
         ! create sum
-        call img_sum%new([ldim_scaled(1),ldim_scaled(2),1], p%smpd)
+        call img_sum%new([ldim(1),ldim(2),1], p%smpd)
+        ! allocate padded matrix
+        hwinsz = 6
+        winsz  = 2*hwinsz+1
+        allocate(rmat_pad(1-hwinsz:ldim(1)+hwinsz, 1-hwinsz:ldim(2)+hwinsz), win(winsz,winsz))
         ! loop over exposures (movies)
         movie_counter = 0
         do movie=fromto(1),fromto(2)
@@ -367,32 +372,47 @@ contains
             if( .not. file_exists(movienames(movie)) )&
             & write(*,*) 'inputted movie stack does not exist: ', trim(adjustl(movienames(movie)))
             ! get number of frames from stack
-            call find_ldim_nptcls(movienames(movie), lfoo, nframes)
+            call find_ldim_nptcls(movienames(movie), ldim, nframes)
             if( debug ) write(*,*) 'number of frames: ', nframes
             ! create frames & read
-            allocate(img_frames(nframes), stat=alloc_stat)
-            call alloc_err('In: simple_integrate_movies', alloc_stat)
+            allocate(img_frames(nframes))
             img_sum = 0.
             do frame=1,nframes
-                call frame_tmp%new(ldim, smpd)
-                call frame_tmp%read(movienames(movie),frame, rwaction='READ')
-                call img_frames(frame)%new([ldim_scaled(1),ldim_scaled(2),1], smpd_scaled)
-                call frame_tmp%clip(img_frames(frame))
+                call img_frames(frame)%new([ldim(1),ldim(2),1], smpd)
+                call img_frames(frame)%read(movienames(movie),frame, rwaction='READ')
                 call img_sum%add(img_frames(frame))
             end do
-            ! write output
-            call img_sum%write(trim(adjustl(p%fbody))//'_intg'//int2str_pad(movie, numlen)//p%ext)
-            pspec = img_sum%mic2spec(p%pspecsz, trim(adjustl(p%speckind)))
-            call pspec%write(trim(adjustl(p%fbody))//'_pspec'//int2str_pad(movie, numlen)//p%ext)
+            call img_sum%cure_outliers(ncured, nsigma, outliers)
+            if( any(outliers) )then
+                !$omp parallel do schedule(static,1) default(shared) private(frame,rmat,rmat_pad,i,j,win)
+                do frame=1,nframes
+                    rmat = img_frames(frame)%get_rmat()
+                    rmat_pad = median( reshape(rmat(:,:,1),(/(ldim(1)*ldim(2))/)) )
+                    rmat_pad(1:ldim(1),1:ldim(2)) = rmat(1:ldim(1),1:ldim(2),1)
+                    do i=1,ldim(1)
+                        do j=1,ldim(2)
+                            if( outliers(i,j))then
+                                win = rmat_pad( i-hwinsz:i+hwinsz, j-hwinsz:j+hwinsz )
+                                rmat(i,j,1) = median( reshape(win,(/winsz**2/)) )
+                            endif
+                        enddo
+                    enddo
+                    call img_frames(frame)%set_rmat(rmat)  
+                enddo
+                !$omp end parallel do
+            endif
+            do frame=1,nframes
+                 call img_frames(frame)%write(trim(adjustl(p%fbody))//'_cure'//int2str_pad(movie, numlen)//p%ext, frame)
+            enddo
             ! destroy objects and deallocate
             do frame=1,nframes
                 call img_frames(frame)%kill
             end do
-            deallocate(img_frames)
+            deallocate(img_frames,rmat_pad)
         end do
         ! end gracefully
-        call simple_end('**** SIMPLE_INTEGRATE_MOVIES NORMAL STOP ****')
-    end subroutine exec_integrate_movies
+        call simple_end('**** SIMPLE_REPLACE_DEADPIX NORMAL STOP ****')
+    end subroutine exec_replace_deadpix
 
     subroutine exec_powerspecs( self, cline )
         use simple_imgfile, only: imgfile

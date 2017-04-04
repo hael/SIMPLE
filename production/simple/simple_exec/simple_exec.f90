@@ -42,7 +42,7 @@ type(simsubtomo_commander)         :: xsimsubtomo
 type(preproc_commander)            :: xpreproc
 type(select_frames_commander)      :: xselect_frames
 type(boxconvs_commander)           :: xboxconvs
-type(integrate_movies_commander)   :: xintegrate_movies
+type(replace_deadpix_commander)    :: xreplace_deadpix
 type(powerspecs_commander)         :: xpowerspecs
 type(unblur_commander)             :: xunblur
 type(ctffind_commander)            :: xctffind
@@ -383,23 +383,23 @@ select case(prg)
         if( .not. cline%defined('boxconvsz') ) call cline%set('boxconvsz', 512.)
         ! execute
         call xboxconvs%execute(cline)
-    case( 'integrate_movies' )
-        !==Program integrate_movies
+    case( 'replace_deadpix' )
+        !==Program replace_deadpix
         !
-        ! <integrate_movies/begin>is a program for integrating DDD movies<integrate_movies/end>
+        ! <replace_deadpix/begin>is a program for replacing dead/hot pixels indentified in the sum 
+        ! in the individual frames. This is done as a pre-processing step for unblur<replace_deadpix/end>
         !
         ! set required keys
         keys_required(1)  = 'filetab'
         keys_required(2)  = 'fbody'
         keys_required(3)  = 'smpd'
         ! set optional keys
-        keys_optional(1)  = 'pspecsz'
-        keys_optional(2)  = 'scale'
+        keys_optional(1)  = 'nsig'
         ! parse command line
-        if( describe ) call print_doc_integrate_movies
-        call cline%parse(keys_required(:3), keys_optional(:2))
+        !if( describe ) call print_doc_replace_deadpix
+        call cline%parse(keys_required(:3), keys_optional(:1))
         ! execute
-        call xintegrate_movies%execute(cline)
+        call xreplace_deadpix%execute(cline)
     case( 'powerspecs' )
         !==Program powerspecs
         !

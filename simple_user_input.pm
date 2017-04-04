@@ -24,7 +24,7 @@ use Config;
 #####################################################################
 
 # enter the SIMPLE root path
-our$SIMPLE_PATH="/Users/hael/src/fortran/simple3.0";
+our$SIMPLE_PATH="/Users/susan/src/simple_git";
 # specifying the compiling directives
 # with OpenMP:  -fopenmp, CUDA: -DCUDA
 # Benchmarking: -DBENCH

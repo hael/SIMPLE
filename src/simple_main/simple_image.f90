@@ -5318,34 +5318,40 @@ contains
 
     !>  \brief  for replacing extreme outliers with median of a 13x13 neighbourhood window
     !!          only done on negative values, assuming white ptcls on black bkgr
-    subroutine cure_outliers( self, ncured, sigma )
+    subroutine cure_outliers( self, ncured, nsigma, outliers )
         !$ use omp_lib
         !$ use omp_lib_kinds
-        use simple_stat,           only: moment
-        class(image),   intent(inout) :: self
-        integer,        intent(inout) :: ncured
-        real, optional, intent(in)    :: sigma
+        use simple_stat, only: moment
+        class(image),      intent(inout) :: self
+        integer,           intent(inout) :: ncured
+        real,    optional, intent(in)    :: nsigma
+        logical, optional, allocatable   :: outliers(:,:) 
         real, allocatable :: win(:,:), rmat_pad(:,:)
-        real    :: ave, sdev, var, sigma_here, lthresh, uthresh
-        integer :: i, j, alloc_stat, hwinsz, winsz
-        logical :: was_fted, err
+        real    :: ave, sdev, var, nsigma_here, lthresh, uthresh
+        integer :: i, j, alloc_stat, hwinsz, winsz, dead_pix, hot_pix
+        logical :: was_fted, err, present_outliers
         if( self%ldim(3)>1 )stop 'for images only; simple_image::cure_outliers'
         if( was_fted )stop 'for real space images only'
-        sigma_here = 6.
-        if( present(sigma) )then
-            if(sigma<=TINY)stop 'invalid sigma value; simple_image::cure_outliers'
-            sigma_here = sigma
+        present_outliers = present(outliers)
+        nsigma_here = 6.
+        if( present(nsigma) )then
+            if(nsigma<=TINY)stop 'invalid sigma value; simple_image::cure_outliers'
+            nsigma_here = nsigma
         endif
         ncured   = 0
         hwinsz   = 6
-        was_fted = self%is_ft()
-        call moment( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), ave, sdev, var, err )
+        was_fted = self%is_ft()        
+        if( allocated(outliers) ) deallocate(outliers)
+        allocate( outliers(self%ldim(1),self%ldim(2)) )
+        outliers = .false.
+        call moment( self%rmat, ave, sdev, var, err )
         if( sdev<TINY )return
-        lthresh = ave - sigma_here * sdev
-        uthresh = ave + sigma_here * sdev
-        !if( any(self%rmat<=lthresh) .or. any(self%rmat>=uthresh) )then
-        if( any(self%rmat<=lthresh) )then
+        lthresh = ave - nsigma_here * sdev
+        uthresh = ave + nsigma_here * sdev
+        if( any(self%rmat<=lthresh) .or. any(self%rmat>=uthresh) )then
             winsz = 2*hwinsz+1
+            dead_pix=0
+            hot_pix=0
             allocate(rmat_pad(1-hwinsz:self%ldim(1)+hwinsz,1-hwinsz:self%ldim(2)+hwinsz),&
                 &win(winsz,winsz), stat=alloc_stat)
             call alloc_err('In: cure_outliers; simple_image 1', alloc_stat)
@@ -5356,15 +5362,22 @@ contains
             !$omp reduction(+:ncured)
             do i=1,self%ldim(1)
                 do j=1,self%ldim(2)
-                    !if( self%rmat(i,j,1)<lthresh .or. self%rmat(i,j,1)>uthresh )then
-                    if( self%rmat(i,j,1)<lthresh )then
-                        win = rmat_pad( i-hwinsz:i+hwinsz, j-hwinsz:j+hwinsz )
-                        self%rmat(i,j,1) = median( reshape(win,(/winsz**2/)) )
-                        ncured = ncured+1
+                    if( self%rmat(i,j,1)<lthresh .or. self%rmat(i,j,1)>uthresh )then
+                        if( present_outliers )then
+                            outliers(i,j)=.true.
+                            if (self%rmat(i,j,1)<lthresh) dead_pix=dead_pix + 1
+                            if (self%rmat(i,j,1)>uthresh) hot_pix=hot_pix + 1
+                        else
+                            win = rmat_pad( i-hwinsz:i+hwinsz, j-hwinsz:j+hwinsz )
+                            self%rmat(i,j,1) = median( reshape(win,(/winsz**2/)) )
+                            ncured = ncured + 1
+                        endif
                     endif
                 enddo
             enddo
             !$omp end parallel do
+            write(*,'(a,1x,i7)') '# dead pixels : ', dead_pix
+            write(*,'(a,1x,i7)') '# hot pixels  : ', hot_pix
             deallocate( win, rmat_pad )
         endif
     end subroutine cure_outliers
