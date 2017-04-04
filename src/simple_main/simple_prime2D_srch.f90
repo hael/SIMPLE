@@ -275,8 +275,6 @@ contains
 
     !>  \brief  executes the greedy rotational search
     subroutine stochastic_srch( self, pftcc, a, pfromto, extr_bound )
-        !$ use omp_lib
-        !$ use omp_lib_kinds
         use simple_oris, only: oris
         use simple_ori,  only: ori
         use simple_rnd,  only: shcloc
@@ -303,7 +301,7 @@ contains
             if( nint(orientation%get('state')) > 0 )then
                 ! initialize
                 call self%prep4srch(pftcc, iptcl, orientation, corrmat=corrmat3d(iptcl,:,:))
-                if( self%prev_corr > corr_bound )then
+                if( corr_bound < 0. .or. self%prev_corr > corr_bound )then
                     found_better = .false.
                     self%nrefs_eval = 0
                     do i=1,self%nrefs
@@ -357,6 +355,7 @@ contains
                 call a%set_ori(iptcl,orientation)
             else
                 call orientation%reject
+                call a%set_ori(iptcl,orientation)
             endif
         end do
         deallocate(corrmat3d)
@@ -388,111 +387,10 @@ contains
     subroutine kill( self )
         class(prime2D_srch), intent(inout) :: self !< instance
         if( self%exists )then
-            ! if( allocated(self%corrmat2d)  ) deallocate(self%corrmat2d)
-            ! if( allocated(self%inplmat)    ) deallocate(self%inplmat)
             if( allocated(self%srch_order) ) deallocate(self%srch_order)
-            ! if( allocated(self%parts)      ) deallocate(self%parts)
             call self%srch_common%kill
             self%exists = .false.
         endif
     end subroutine kill
-
-    !>  \brief a master prime search routine
-    ! subroutine exec_prime2D_srch_old( self, pftcc, iptcl, o, nnmat )
-    !     use simple_ori, only: ori
-    !     class(prime2D_srch),     intent(inout) :: self
-    !     class(polarft_corrcalc), intent(inout) :: pftcc
-    !     integer,                 intent(in)    :: iptcl
-    !     class(ori), optional,    intent(inout) :: o
-    !     integer,    optional,    intent(in)    :: nnmat(:,:)
-    !     call self%prep4srch(pftcc, iptcl, o, nnmat=nnmat)
-    !     if( .not.present(o) .or. self%refine.eq.'greedy' )then
-    !         call self%greedy_srch_old(pftcc, iptcl)
-    !     else
-    !         call self%stochastic_srch_shc_old(pftcc, iptcl)
-    !     endif
-    !     if( DEBUG ) write(*,'(A)') '>>> PRIME2D_SRCH::EXECUTED PRIME2D_SRCH'
-    ! end subroutine exec_prime2D_srch_old
-
-    !>  \brief  executes the greedy rotational search
-    ! subroutine greedy_srch_old( self, pftcc, iptcl )
-    !     class(prime2D_srch),     intent(inout) :: self
-    !     class(polarft_corrcalc), intent(inout) :: pftcc
-    !     integer,                 intent(in)    :: iptcl
-    !     integer :: ref, loc(1), inpl_ind, i, endit
-    !     real    :: cxy(3), corrs(self%nrots), inpl_corr
-    !     self%prev_corr = -1.
-    !     endit = self%nrefs
-    !     if( str_has_substr(self%refine,'neigh') ) endit = self%nnn
-    !     do i=1,endit
-    !         ref       = self%srch_order(i)
-    !         corrs     = pftcc%gencorrs(ref, iptcl)
-    !         loc       = maxloc(corrs)
-    !         inpl_ind  = loc(1)
-    !         inpl_corr = corrs(inpl_ind)
-    !         if( inpl_corr >= self%prev_corr )then
-    !             ! update the class
-    !             self%best_class = ref
-    !             ! update the correlations
-    !             self%best_corr = inpl_corr
-    !             self%prev_corr = self%best_corr
-    !             ! update the in-plane angle
-    !             self%best_rot = inpl_ind
-    !         endif
-    !     end do
-    !     ! we always evaluate all references using the greedy approach
-    !     self%nrefs_eval = self%nrefs
-    !     if( str_has_substr(self%refine,'neigh') ) self%nrefs_eval = self%nnn
-    !     ! search in-plane
-    !     call self%shift_srch(iptcl)
-    !     if( DEBUG ) write(*,'(A)') '>>> PRIME2D_SRCH::FINISHED GREEDY SEARCH'
-    ! end subroutine greedy_srch_old
-
-    !>  \brief  executes the stochastic rotational search
-    ! subroutine stochastic_srch_shc_old( self, pftcc, iptcl )
-    !     use simple_rnd, only: shcloc
-    !     class(prime2D_srch),     intent(inout) :: self
-    !     class(polarft_corrcalc), intent(inout) :: pftcc
-    !     integer,                 intent(in)    :: iptcl
-    !     integer :: i, iref, inpl_ind, loc(1), endit
-    !     real    :: corr_new, cxy(3), corrs(self%nrots), inpl_corr
-    !     logical :: found_better
-    !     ! initialize
-    !     found_better    = .false.
-    !     self%nrefs_eval = 0
-    !     endit           = self%nrefs
-    !     if( str_has_substr(self%refine,'neigh') ) endit = self%nnn
-    !     ! search
-    !     do i=1,endit
-    !         iref = self%srch_order(i)
-    !         ! keep track of how many references we are evaluating
-    !         self%nrefs_eval = self%nrefs_eval + 1
-    !         corrs           = pftcc%gencorrs(iref, iptcl)
-    !         inpl_ind        = shcloc(self%nrots, corrs, self%prev_corr)
-    !         inpl_corr       = 0.
-    !         if( inpl_ind > 0 ) inpl_corr = corrs(inpl_ind)
-    !         if( inpl_ind > 0 )then
-    !             ! update the class
-    !             self%best_class = iref
-    !             ! update the correlation
-    !             self%best_corr  = inpl_corr
-    !             ! update the in-plane angle
-    !             self%best_rot   = inpl_ind
-    !             ! indicate that we found a better solution
-    !             found_better    = .true.
-    !             exit ! first-improvement heuristic
-    !         endif    
-    !     end do
-    !     if( found_better )then
-    !         ! best ref has already been updated
-    !     else
-    !         ! keep the old parameters
-    !         self%best_class = self%prev_class 
-    !         self%best_corr  = self%prev_corr
-    !         self%best_rot   = self%prev_rot
-    !     endif
-    !     call self%shift_srch(iptcl)
-    !     if( DEBUG ) write(*,'(A)') '>>> PRIME2D_SRCH::FINISHED STOCHASTIC SEARCH'
-    ! end subroutine stochastic_srch_shc_old
 
 end module simple_prime2D_srch

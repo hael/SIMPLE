@@ -4,7 +4,6 @@ use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_prime_srch,       only: prime_srch
 use simple_oris,             only: oris
 use simple_ori,              only: ori
-use simple_params,           only: params
 use simple_strings,          only: str_has_substr
 use simple_sym,              only: sym
 use simple_pftcc_shsrch      ! use all in there
@@ -19,7 +18,6 @@ logical, parameter :: DEBUG = .false.
 
 type prime3D_srch
     private
-    class(params), pointer :: pp => null()            !< pointer to parameters
     class(oris),   pointer :: pe => null()            !< pointer to orientations of references in proj_space
     type(prime_srch)       :: srch_common             !< functionalities common to primesrch2D/3D
     type(oris)             :: o_refs                  !< projection directions search space
@@ -83,7 +81,7 @@ type prime3D_srch
     procedure          :: exec_prime3D_inpl_srch
     procedure          :: exec_prime3D_het_srch
     procedure, private :: stochastic_srch
-    procedure, private :: stochastic_srch_new
+    ! procedure, private :: stochastic_srch_new
     procedure, private :: stochastic_srch_shc
     procedure, private :: stochastic_srch_inpl
     procedure, private :: stochastic_srch_het
@@ -117,19 +115,18 @@ end type prime3D_srch
 contains
 
     !>  \brief  is a constructor
-    subroutine new( self, a, e, p, threshold)
-        class(prime3D_srch),   intent(inout) :: self      !< instance
-        class(params), target, intent(in)    :: p         !< parameters
-        class(oris),   target, intent(in)    :: e         !< reference oris
-        class(oris),           intent(inout) :: a         !< ptcls oris
-        real,    optional,     intent(inout) :: threshold !< general purpose threshold
+    subroutine new( self, a, e, p )
+        use simple_params, only: params
+        class(prime3D_srch),   intent(inout) :: self !< instance
+        class(oris),           intent(inout) :: a    !< ptcls oris
+        class(oris),   target, intent(in)    :: e    !< reference oris
+        class(params),         intent(in)    :: p    !< parameters
         real,    allocatable :: corrs(:)
         integer, allocatable :: inds(:)
         integer  :: alloc_stat, s, ind, thresh_ind
         ! destroy possibly pre-existing instance
         call self%kill
         ! set constants
-        self%pp          => p 
         self%pe          => e
         self%nstates     =  p%nstates
         self%nprojs      =  p%nspace
@@ -171,15 +168,15 @@ contains
         ! generate oris oject in which the best npeaks refs will be stored
         call self%o_npeaks%new(self%npeaks)
         ! symmetry-related variables
-        call self%se%new( self%pp%pgrp )
+        call self%se%new( p%pgrp )
         self%nsym    = self%se%get_nsym()
         self%eullims = self%se%srchrange()
         if( str_has_substr(self%refine,'adasym') ) call self%gen_symnnmat
         ! updates option to search shift
-        self%doshift = self%pp%doshift
+        self%doshift = p%doshift
         if( self%doshift )then
-            self%lims(:,1) = -self%pp%trs
-            self%lims(:,2) =  self%pp%trs
+            self%lims(:,1) = -p%trs
+            self%lims(:,2) =  p%trs
         endif
         self%exists = .true.
         if( DEBUG ) write(*,'(A)') '>>> PRIME3D_SRCH::CONSTRUCTED NEW SIMPLE_PRIME3D_SRCH OBJECT'
@@ -590,7 +587,7 @@ contains
     end subroutine prep_corr4srch
 
     !>  \brief  initialises pftcc in-plane search
-    subroutine prep_inpl_srch( self, pftcc)
+    subroutine prep_inpl_srch( self, pftcc )
         class(prime3D_srch),        intent(inout) :: self
         class(polarft_corrcalc),    intent(inout) :: pftcc
         ! Init shift search
@@ -684,7 +681,7 @@ contains
         call self%prep4srch( o, nnmat )
         call self%prep_corr4srch( pftcc, iptcl, lp, o )
         call self%prep_inpl_srch( pftcc )
-        if( str_has_substr(self%pp%refine,'adasym') )then
+        if( str_has_substr(self%refine,'adasym') )then
             call self%stochastic_adasym_srch( pftcc, iptcl )
         else
             call self%stochastic_srch( pftcc, iptcl )
@@ -705,15 +702,12 @@ contains
         real,                    intent(in)    :: lp
         integer,    optional,    intent(in)    :: nnmat(self%nprojs,self%nnn)
         real :: wcorr
-        if( str_has_substr(self%pp%refine,'adasym') )then
+        if( str_has_substr(self%refine,'adasym') )then
             ! call self%stochastic_adasym_srch_new( pftcc, a, pfromto, lp, nnmat )
         else
-            call self%stochastic_srch_new( pftcc, a, pfromto, lp, nnmat )
+            ! call self%stochastic_srch_new( pftcc, a, pfromto, lp, extr_bound, nnmat )
         endif
-        call self%prep_npeaks_oris
-        call self%stochastic_weights( wcorr, self%o_npeaks )
-        ! if( present(o)   ) call o%set('corr', wcorr)
-        ! if( self%doshift ) call self%sort_shifted_npeaks( self%o_npeaks )
+        
         if( DEBUG ) write(*,'(A)') '>>> PRIME3D_SRCH::EXECUTED PRIME3D_SRCH'
     end subroutine exec_prime3D_srch_new
 
@@ -838,71 +832,114 @@ contains
 
     end subroutine stochastic_srch
 
-    !>  \brief  executes the stochastic soft orientation search on CPU
-    subroutine stochastic_srch_new( self, pftcc, a, pfromto, lp, nnmat )
-        class(prime3D_srch),     intent(inout) :: self
-        class(polarft_corrcalc), intent(inout) :: pftcc
-        class(oris),             intent(inout) :: a
-        integer,                 intent(in)    :: pfromto(2)
-        real,                    intent(in)    :: lp
-        integer,    optional,    intent(in)    :: nnmat(self%nprojs,self%nnn)
-        real    :: projspace_corrs( self%nrefs )
-        integer :: ref, isample, nrefs
-        real, allocatable :: corrmat3d(:,:,:)
+    !>  \brief  executes the stochastic soft orientation search
+    ! subroutine stochastic_srch_new( self, pftcc, a, pfromto, lp, extr_bound, nnmat )
+    !     use simple_params, only: params
+    !     use simple_build,  only: build
+    !     class(prime3D_srch),     intent(inout) :: self
+    !     class(polarft_corrcalc), intent(inout) :: pftcc
+    !     class(oris),             intent(inout) :: a
+    !     integer,                 intent(in)    :: pfromto(2)
+    !     real,                    intent(in)    :: lp
+    !     real,    optional,       intent(in)    :: extr_bound
+    !     integer, optional,       intent(in)    :: nnmat(self%nprojs,self%nnn)
+    !     real, allocatable :: corrmat3d(:,:,:)
+    !     type(ori)         :: orientation
+    !     type(oris)        :: os
+    !     real              :: projspace_corrs(self%nrefs),corr_bound,wcorr
+    !     integer           :: iref,isample,nrefs,iptcl
+    !     if( present(nnmat) )then
+    !         stop 'neigh modes not yet implemented with matrix logic; prime3D_srch :: stochastic_srch_new'
+    !     endif
+    !     corr_bound = -1.0
+    !     if( present(extr_bound) ) corr_bound = extr_bound
+    !     ! calculate all corrs
+    !     allocate(corrmat3d(pfromto(1):pfromto(2),self%nrefs,self%nrots))
+    !     call pftcc%gencorrs_all_cpu(corrmat3d)
+    !     ! execute search
+    !     do iptcl=pfromto(1),pfromto(2)
+    !         orientation = a%get_ori(iptcl)
+    !         if( nint(orientation%get('state')) > 0 )then
+    !             ! initialize
+    !             call self%prep4srch(orientation, nnmat)
+    !             call self%prep_corr4srch(pftcc, iptcl, lp, orientation, corrmat=corrmat3d(iptcl,:,:))
+    !             call self%prep_inpl_srch(pftcc)
+    !             if( self%prev_corr > corr_bound )then
+    !                 self%nbetter         = 0
+    !                 self%nrefs_eval      = 0
+    !                 self%proj_space_inds = 0
+    !                 projspace_corrs      = -1.
+    !                 ! search
+    !                 nrefs = self%nrefs
+    !                 if( self%refine.eq.'neigh' ) nrefs = self%nnnrefs
+    !                 do isample=1,nrefs
+    !                     iref = self%srch_order(isample)                            ! set the stochastic reference index
+    !                     if( iref == self%prev_ref ) cycle                          ! previous best considered last
+    !                     call per_ref_srch(iref,.false.)                            ! actual search
+    !                     if( self%nbetter >= self%npeaks ) exit                     ! exit condition
+    !                 end do
+    !                 if( self%nbetter < self%npeaks )then
+    !                     call per_ref_srch(self%prev_ref,.false.)                   ! evaluate previous best ref last
+    !                 endif
+    !                 call hpsort(self%nrefs, projspace_corrs, self%proj_space_inds) ! sort in correlation projection direction space
+    !                 call self%inpl_srch(iptcl)                                     ! search shifts
+    !             else
+    !                 ! randomize
+    !                 do isample=1,self%npeaks ! evaluate npeaks and accept them all
+    !                     iref = self%srch_order(isample)
+    !                     call per_ref_srch(iref,.true.)
+    !                     if( self%nbetter >= self%npeaks ) exit
+    !                 end do
+    !             endif
+    !             ! prepare weights and orientations
+    !             call self%prep_npeaks_oris
+    !             call self%stochastic_weights(wcorr, self%o_npeaks)
+    !             call b%set('corr', iptcl, wcorr)
+    !             if( self%doshift ) call self%sort_shifted_npeaks(self%o_npeaks)
+    !             call self%get_ori_best(orientation)
+    !             call a%set_ori(iptcl,orientation)
+                
+    !         else
+    !             call orientation%reject
+    !             call a%set_ori(iptcl,orientation)
+    !         endif
+    !     end do
+    !     deallocate(corrmat3d)
+    !     if( DEBUG ) write(*,'(A)') '>>> PRIME3D_SRCH::FINISHED STOCHASTIC SEARCH'
 
-        ! calculate all corrs
-        allocate(corrmat3d(pfromto(1):pfromto(2),self%nrefs,self%nrots))
-        call pftcc%gencorrs_all_cpu(corrmat3d)
+    !     contains
 
+    !         subroutine per_ref_srch( iref, randomize )
+    !             integer, intent(in) :: iref
+    !             logical, intent(in) :: randomize
+    !             real    :: corrs(self%nrots), inpl_corr
+    !             integer :: loc(1), inpl_ind, state
+    !             state = 1
+    !             if( self%nstates > 1 ) state = nint( self%o_refs%get(iref, 'state') )
+    !             if( self%state_exists(state) )then
+    !                 corrs     = corrmat3d(iptcl,iref,:) ! In-plane correlations
+    !                 loc       = maxloc(corrs)           ! greedy in-plane
+    !                 inpl_ind  = loc(1)                  ! in-plane angle index
+    !                 inpl_corr = corrs(inpl_ind)         ! max in plane correlation
+    !                 call self%store_solution( iref, iref, inpl_ind, inpl_corr )
+    !                 projspace_corrs( iref ) = inpl_corr ! stash in-plane correlation for sorting
+    !                 if( randomize )then
+    !                     ! we accept every choice
+    !                     self%nbetter = self%nbetter + 1
+    !                 else
+    !                     ! update nbetter to keep track of how many improving solutions we have identified
+    !                     if( self%npeaks == 1 )then
+    !                         if( inpl_corr > self%prev_corr ) self%nbetter = self%nbetter + 1
+    !                     else
+    !                         if( inpl_corr >= self%prev_corr ) self%nbetter = self%nbetter + 1
+    !                     endif
+    !                 endif
+    !                 ! keep track of how many references we are evaluating
+    !                 self%nrefs_eval = self%nrefs_eval + 1
+    !             endif
+    !         end subroutine per_ref_srch
 
-
-        ! initialize
-        ! self%nbetter         = 0
-        ! self%nrefs_eval      = 0
-        ! self%proj_space_inds = 0
-        ! projspace_corrs      = -1.
-        ! ! search
-        ! nrefs = self%nrefs
-        ! if( self%refine.eq.'neigh' )nrefs=self%nnnrefs
-        ! do isample=1,nrefs
-        !     ref = self%srch_order( isample )                             ! set the stochastic reference index
-        !     if( ref==self%prev_ref )cycle                                ! previous best considered last
-        !     if( ref < 1 .or. ref > self%nrefs ) stop 'ref index out of bound; simple_prime3D_srch::stochastic_srch'
-        !     call per_ref_srch( ref )                                     ! actual search
-        !     if( self%nbetter >= self%npeaks ) exit                       ! exit condition
-        ! end do
-        ! if( self%nbetter<self%npeaks )call per_ref_srch( self%prev_ref ) ! evaluate previous best ref last
-        ! call hpsort(self%nrefs, projspace_corrs, self%proj_space_inds)   ! sort in correlation projection direction space
-        ! call self%inpl_srch( iptcl )                                     ! search shifts
-        ! if( DEBUG ) write(*,'(A)') '>>> PRIME3D_SRCH::FINISHED STOCHASTIC SEARCH'
-
-        contains
-
-            ! subroutine per_ref_srch( iref )
-            !     integer, intent(in) :: iref
-            !     real                :: corrs(self%nrots), inpl_corr
-            !     integer             :: loc(1), inpl_ind, state
-            !     state = 1
-            !     if( self%nstates>1 )state = nint( self%o_refs%get(iref, 'state') )
-            !     if( self%state_exists( state ) )then
-            !         corrs     = pftcc%gencorrs(iref, iptcl) ! In-plane correlations
-            !         loc       = maxloc(corrs)               ! greedy in-plane
-            !         inpl_ind  = loc(1)                      ! in-plane angle index
-            !         inpl_corr = corrs(inpl_ind)             ! max in plane correlation
-            !         call self%store_solution( iref, iref, inpl_ind, inpl_corr )
-            !         projspace_corrs( iref ) = inpl_corr     ! stash in-plane correlation for sorting
-            !         ! update nbetter to keep track of how many improving solutions we have identified
-            !         if( self%npeaks == 1 )then
-            !             if( inpl_corr > self%prev_corr ) self%nbetter = self%nbetter+1
-            !         else
-            !             if( inpl_corr >= self%prev_corr ) self%nbetter = self%nbetter+1
-            !         endif
-            !         ! keep track of how many references we are evaluating
-            !         self%nrefs_eval = self%nrefs_eval+1
-            !     endif
-            ! end subroutine per_ref_srch
-
-    end subroutine stochastic_srch_new
+    ! end subroutine stochastic_srch_new
     
     !>  \brief  executes the stochastic hard orientation search using pure stochastic hill climbing
     !!          (no probabilistic weighting + stochastic search of in-plane angles) on CPU
@@ -1401,7 +1438,6 @@ contains
         class(prime3D_srch), intent(inout) :: self !< instance
         if( self%exists )then
             self%pe => null()
-            self%pp => null()
             if( allocated( self%proj_space_inds) ) deallocate( self%proj_space_inds )
             if( allocated( self%srch_order )     ) deallocate( self%srch_order)
             if( allocated( self%state_exists )   ) deallocate(self%state_exists)

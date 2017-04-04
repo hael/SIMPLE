@@ -478,16 +478,23 @@ contains
         class(oris),    intent(inout) :: os
         integer,        intent(in)    :: icls
         real :: xyz(3), sharg
-        if(p%center.eq.'yes' .or. p%doshift)then
-            ! center the reference
-            xyz   = ref%center(p%cenlp, 'no', p%msk, doshift=.false.)
-            sharg = arg(xyz)
-            if(sharg > CENTHRESH)then
-                ! apply shift  and update the corresponding class parameters
-                if(sharg > real(p%box)*MAXCENTHRESH) xyz = xyz / sharg
-                call ref%shift(-xyz(1), -xyz(2))
-                call os%add_shift2class(icls, xyz(1:2))
-            endif
+        if( p%center.eq.'yes' .or. p%doshift )then
+
+            ! TOOK OUT: PARTICLES JUMPING ALL OVER THE SHOP
+            ! ! center the reference
+            ! xyz   = ref%center(p%cenlp, 'no', p%msk, doshift=.false.)
+            ! sharg = arg(xyz)
+            ! if(sharg > CENTHRESH)then
+            !     ! apply shift  and update the corresponding class parameters
+            !     if(sharg > real(p%box)*MAXCENTHRESH) xyz = xyz / sharg
+            !     call ref%shift(-xyz(1), -xyz(2))
+            !     call os%add_shift2class(icls, xyz(1:2))
+            ! endif
+
+            ! center the reference and update the corresponding class parameters
+            xyz = ref%center(p%cenlp, 'no', p%msk)
+            call os%add_shift2class(icls, -xyz(1:2))
+            
         endif
         ! normalise
         call ref%norm

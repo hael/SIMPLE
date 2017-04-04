@@ -771,9 +771,7 @@ contains
         !$omp end parallel
     end subroutine gencorrs_all_cpu_1
 
-    !>  \brief  routine for generating all rotational correlations
-    !!          in a per-particle neighborhood structure
-    !!          need to remeber to create this structure for 3D implementation
+    !>  \brief  routine for generating all rotational correlations in a neighborhood
     subroutine gencorrs_all_cpu_2( self, nspace, nnn, nnmat, prevprojs, corrmat3dout )
         !$ use omp_lib
         !$ use omp_lib_kinds
