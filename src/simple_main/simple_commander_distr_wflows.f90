@@ -556,6 +556,7 @@ contains
             npart_params = npart_params + 1
         endif
         allocate(part_params(p_master%nparts))
+        ishift = 0
         do ipart=1,p_master%nparts
             call part_params(ipart)%new(npart_params)
             chunktag = 'chunk'//int2str_pad(ipart,numlen)
@@ -567,8 +568,9 @@ contains
                 call part_params(ipart)%set('deftab', trim(chunktag)//'deftab.txt')
             endif
             if( cline%defined('oritab') )then
-                call read_part_and_write(parts(ipart,:), p_master%oritab, trim(chunktag)//'oritab.txt')
+                call read_part_and_write(parts(ipart,:), p_master%oritab, trim(chunktag)//'oritab.txt', ishift)
                 call part_params(ipart)%set('oritab', trim(chunktag)//'oritab.txt')
+                ishift = ishift - p_master%ncls
             endif
         end do
         ! split stack
@@ -614,9 +616,10 @@ contains
 
         contains
 
-            subroutine read_part_and_write( pfromto, file_in, file_out )
-                integer,          intent(in) :: pfromto(2)
-                character(len=*), intent(in) :: file_in, file_out
+            subroutine read_part_and_write( pfromto, file_in, file_out, ishift )
+                integer,           intent(in) :: pfromto(2)
+                character(len=*),  intent(in) :: file_in, file_out
+                integer, optional, intent(in) :: ishift
                 integer    :: nl, cnt, i
                 type(oris) :: os_in, os_out
                 type(ori)  :: o
@@ -630,6 +633,7 @@ contains
                     o   = os_in%get_ori(i)
                     call os_out%set_ori(cnt, o)
                 end do
+                if( present(ishift) ) call os%shift_classes(ishift)
                 call os_out%write(file_out)
             end subroutine read_part_and_write
 
