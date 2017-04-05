@@ -311,7 +311,8 @@ select case(prg)
         keys_optional(19) = 'filwidth'
         keys_optional(20) = 'nnn'
         keys_optional(21) = 'minp'
-        keys_optional(22) = 'center'     
+        keys_optional(22) = 'center'
+        keys_optional(23) = 'mul'
         ! documentation
         if( describe ) call print_doc_prime2D
         ! parse command line
@@ -321,7 +322,7 @@ select case(prg)
         ! else
         !     call cline%parse( keys_required(:7), keys_optional(:19) )
         ! endif
-        call cline%parse( keys_required(:5), keys_optional(:21) )
+        call cline%parse( keys_required(:5), keys_optional(:23) )
         ! set defaults
         if( .not. cline%defined('lp')     ) call cline%set('lp',     20.)
         if( .not. cline%defined('eo')     ) call cline%set('eo',    'no')

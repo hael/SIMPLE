@@ -55,6 +55,9 @@ contains
             p%refs = 'start2Drefs'//p%ext
             if( p%chunktag .ne. '' ) p%refs = trim(p%chunktag)//trim(p%refs)
             call random_selection_from_imgfile(p%stk, p%refs, p%ncls, p%smpd)
+        else if( which_iter == 1 )then
+            if( p%mul > 1. ) call b%a%mul_shifts(p%mul)
+            call prime2D_assemble_sums(b, p)
         else
             if( .not. file_exists(p%refs) ) stop 'inputted reference file (refs) does not exist in cwd'
         endif

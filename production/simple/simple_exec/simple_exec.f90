@@ -619,15 +619,16 @@ select case(prg)
         keys_optional(7)  = 'cenlp'
         keys_optional(8)  = 'trs'
         keys_optional(9)  = 'automsk'
-        keys_optional(10)  = 'amsklp'
+        keys_optional(10) = 'amsklp'
         keys_optional(11) = 'inner'
         keys_optional(12) = 'width'
         keys_optional(13) = 'startit'
         keys_optional(14) = 'maxits'
         keys_optional(15) = 'center'
+        keys_optional(16) = 'mul'
         ! parse command line
         if( describe ) call print_doc_prime2D
-        call cline%parse(keys_required(:5), keys_optional(:15))
+        call cline%parse(keys_required(:5), keys_optional(:16))
         ! set defaults
         if( .not. cline%defined('lp')     ) call cline%set('lp',      20.)
         if( .not. cline%defined('amsklp') ) call cline%set('amsklp',  25.)

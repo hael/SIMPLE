@@ -410,7 +410,7 @@ contains
         if( cline%defined('refs') )then
             refs = trim(p_master%refs)
         else
-            refs = trim('startcavgs' // p_master%ext)
+            refs = trim('start2Drefs' // p_master%ext)
         endif
         ! prepare command lines from prototype master
         cline_check2D_conv   = cline
