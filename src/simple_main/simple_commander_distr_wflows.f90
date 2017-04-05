@@ -567,7 +567,7 @@ contains
                 call part_params(ipart)%set('deftab', trim(chunktag)//'deftab.txt')
             endif
             if( cline%defined('oritab') )then
-                call read_part_and_write(parts(ipart,:), p_master%deftab, trim(chunktag)//'oritab.txt')
+                call read_part_and_write(parts(ipart,:), p_master%oritab, trim(chunktag)//'oritab.txt')
                 call part_params(ipart)%set('oritab', trim(chunktag)//'oritab.txt')
             endif
         end do
