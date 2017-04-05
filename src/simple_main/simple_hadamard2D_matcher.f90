@@ -51,15 +51,33 @@ contains
         call read_imgs_from_stk( b, p )
 
         ! PREP REFERENCES
-        if( which_iter == 1 .and. .not. file_exists(p%refs) )then
-            p%refs = 'start2Drefs'//p%ext
-            if( p%chunktag .ne. '' ) p%refs = trim(p%chunktag)//trim(p%refs)
-            call random_selection_from_imgfile(p%stk, p%refs, p%ncls, p%smpd)
-        else if( which_iter == 1 )then
-            if( p%mul > 1. ) call b%a%mul_shifts(p%mul)
-            call prime2D_assemble_sums(b, p)
+        if( p%l_distr_exec )then
+            if( .not. cline%defined('refs') )then
+                stop 'need refs to be part of command line for distributed prime2D execution'
+            else if( cline%defined('refs') )then
+                if( .not. file_exists(p%refs) ) stop 'input references (refs) does not exist in cwd'
+            endif
+            call prime2D_read_sums( b, p )
         else
-            if( .not. file_exists(p%refs) ) stop 'inputted reference file (refs) does not exist in cwd'
+            ! for shared-memory or chunk-based parallellisation we need initial references for iter=1 only
+            if( which_iter == 1 )then
+                if( cline%defined('refs') )then
+                    if( .not. file_exists(p%refs) ) stop 'input references (refs) does not exist in cwd'
+                    call prime2D_read_sums( b, p )
+                else
+                    ! we need to make references
+                    if( cline%defined('oritab') )then
+                        ! we make class averages
+                        if( p%mul > 1. ) call b%a%mul_shifts(p%mul)
+                        call prime2D_assemble_sums(b, p)
+                    else
+                        ! we randomly select particle images as initial references
+                        p%refs = 'start2Drefs'//p%ext
+                        if( p%chunktag .ne. '' ) p%refs = trim(p%chunktag)//trim(p%refs)
+                        call random_selection_from_imgfile(p%stk, p%refs, p%ncls, p%smpd)
+                    endif
+                endif
+            endif 
         endif
 
         ! SETUP SHELLWEIGHTS
@@ -76,9 +94,6 @@ contains
         
         ! SET FOURIER INDEX RANGE
         call set_bp_range( b, p, cline )
-         
-        ! READ REFERENCES
-        call prime2D_read_sums( b, p )
         
         ! GENERATE REFERENCE & PARTICLE POLAR FTs
         call preppftcc4align( b, p )
