@@ -633,7 +633,7 @@ contains
                     o   = os_in%get_ori(i)
                     call os_out%set_ori(cnt, o)
                 end do
-                if( present(ishift) ) call os%shift_classes(ishift)
+                if( present(ishift) ) call os_out%shift_classes(ishift)
                 call os_out%write(file_out)
             end subroutine read_part_and_write
 
