@@ -35,7 +35,7 @@ contains
         integer                       :: iptcl, filtsz, alloc_stat
         integer                       :: io_stat, filnum
         filtsz = b%img%get_filtsz()
-        allocate( wmat(p%top-p%fromp+1,filtsz), corrs(filtsz), stat=alloc_stat)
+        allocate(wmat(p%top-p%fromp+1,filtsz), corrs(filtsz), stat=alloc_stat)
         call alloc_err('In: simple_cont3D_matcher :: cont3D_shellweight', alloc_stat)
         wmat  = 0.
         corrs = 0.
@@ -241,7 +241,7 @@ contains
                     call b%img%read(p%stk, iptcl, isxfel=p%l_xfel)
                 endif
                 call prepimg4align(b, p, orientation)
-                select case( p%refine )
+                select case(p%refine)
                     case('cart')
                         call cftcc_srch_set_state(state)
                         call cftcc_srch_minimize(orientation)

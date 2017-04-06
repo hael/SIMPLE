@@ -84,8 +84,9 @@ contains
     subroutine cftcc_srch_minimize( o )
         use simple_math, only: rad2deg
         class(ori),  intent(inout) :: o
+        type(ori) :: o1, o2
         real      :: prev_shvec(2)
-        real      :: corr, cost, dist, dist_inpl, prev_corr, frac
+        real      :: corr, cost, dist, dist_inpl, prev_corr, frac, maxdist
         prev_shvec = o%get_shift()
         ! copy the input orientation
         call o%set('state', real(state)) ! from cftcc_srch_set_state
@@ -116,7 +117,15 @@ contains
             ! distance
             dist_inpl = rad2deg(o_glob.inpldist.o)
             dist      = rad2deg(o_glob.euldist.o)
-            frac      = 100.*(180.-(.5*dist+.5*dist_inpl)**2.)/180.
+            ! frac
+            call o1%new
+            call o2%new
+            call o1%set_euler([ospec%limits(1,1),ospec%limits(2,1),0.])
+            call o2%set_euler([ospec%limits(1,2),ospec%limits(2,2),0.])
+            ! max distance within asymetric unit
+            maxdist = 0.5*rad2deg(o1.inpldist.o2) + 0.5*rad2deg(o1.euldist.o2)
+            ! proportion of ...
+            frac = 100.*(maxdist-(.5*dist+.5*dist_inpl)) / maxdist
         endif
         ! set new values
         call o%set('corr',      corr)

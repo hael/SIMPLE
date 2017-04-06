@@ -836,10 +836,10 @@ contains
     end subroutine mask_imgfile
     
     !>  \brief  is for binarizing all images in the stack
-    subroutine bin_imgfile( fname2process, fname, smpd, tres )
+    subroutine bin_imgfile( fname2process, fname, smpd, thres )
         character(len=*), intent(in) :: fname2process, fname
         real,             intent(in) :: smpd
-        real, optional,   intent(in) :: tres
+        real, optional,   intent(in) :: thres
         type(image) :: img
         integer     :: n, i, ldim(3)
         logical     :: didft
@@ -857,10 +857,10 @@ contains
                 call img%bwd_ft
                 didft = .true.
             endif
-            if( present(tres) )then
-                call img%bin(tres)
+            if( present(thres) )then
+                call img%bin(thres)
             else
-                call img%bin
+                call img%bin('nomsk')
             endif
             if( didft ) call img%fwd_ft
             call img%write(fname, i)

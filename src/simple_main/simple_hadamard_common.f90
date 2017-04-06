@@ -29,7 +29,6 @@ end interface
 logical, parameter :: DEBUG        = .false.
 real,    parameter :: SHTHRESH     = 0.0001
 real,    parameter :: CENTHRESH    = 0.01   ! threshold for performing volume/cavg centering in pixels
-real,    parameter :: MAXCENTHRESH = 0.025  ! max centering shift applied: 2.5% of box size
 real               :: dfx_prev     = 0.
 real               :: dfy_prev     = 0.
 real               :: angast_prev  = 0.
@@ -479,22 +478,14 @@ contains
         integer,        intent(in)    :: icls
         real :: xyz(3), sharg
         if( p%center.eq.'yes' .or. p%doshift )then
-
-            ! TOOK OUT: PARTICLES JUMPING ALL OVER THE SHOP
-            ! ! center the reference
-            ! xyz   = ref%center(p%cenlp, 'no', p%msk, doshift=.false.)
-            ! sharg = arg(xyz)
-            ! if(sharg > CENTHRESH)then
-            !     ! apply shift  and update the corresponding class parameters
-            !     if(sharg > real(p%box)*MAXCENTHRESH) xyz = xyz / sharg
-            !     call ref%shift(-xyz(1), -xyz(2))
-            !     call os%add_shift2class(icls, xyz(1:2))
-            ! endif
-
-            ! center the reference and update the corresponding class parameters
-            xyz = ref%center(p%cenlp, 'no', p%msk)
-            call os%add_shift2class(icls, -xyz(1:2))
-            
+            ! center the reference
+            xyz   = ref%center(p%cenlp, 'no', p%msk, doshift=.false.)
+            sharg = arg(xyz)
+            if(sharg > CENTHRESH)then
+                ! apply shift and update the corresponding class parameters
+                call ref%shift(xyz(1), xyz(2))
+                call os%add_shift2class(icls, -xyz(1:2))
+            endif
         endif
         ! normalise
         call ref%norm
@@ -574,7 +565,7 @@ contains
                             if( p%pgrp.ne.'c1' ) shvec(1:2) = 0.         ! shifts only along z-axis for C2 and above
                             call b%vol%shift(shvec(1),shvec(2),shvec(3)) ! performs shift
                             ! map back to particle oritentations
-                            if( cline%defined('oritab') ) call b%a%map3dshift22d(-shvec(:), state=s)
+                            if( cline%defined('oritab') )call b%a%map3dshift22d(-shvec(:), state=s)
                         endif
                     endif
                 endif

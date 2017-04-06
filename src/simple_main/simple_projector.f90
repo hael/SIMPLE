@@ -580,7 +580,8 @@ contains
         !$ use omp_lib_kinds
         class(projector), intent(inout) :: self   !< projector instance
         real, allocatable :: rmat(:,:,:)
-        integer           ::  ldim(3),i, ii, jj, j, k, orig(3)
+        real              :: thresh
+        integer           :: ldim(3),i, ii, jj, j, k, orig(3)
         call self%kill_env_rproject
         ldim = self%get_ldim()
         if( ldim(3) == 1 )          stop 'only for Volumes; env_rproject; simple_projector'
@@ -588,9 +589,10 @@ contains
         if( self%is_ft() )          stop 'real space only; env_rproject; simple_projector'
         ! init
         call self%norm_bin
-        rmat = self%get_rmat()
-        if( maxval(rmat)>1.+TINY )stop 'input volume should be a mask volume in [0;1]'      
-        if( minval(rmat)<0.-TINY )stop 'input volume should be a mask volume in [0;1]'
+        rmat   = self%get_rmat()
+        thresh = 0.9999
+        if(maxval(rmat) >  1.0001)stop 'input volume should be a mask volume in [0;1]'      
+        if(minval(rmat) < -0.0001)stop 'input volume should be a mask volume in [0;1]'
         orig = ldim/2+1
         allocate( self%is_in_mask(1-orig(1):ldim(1)-orig(1),&
                                  &1-orig(2):ldim(2)-orig(2),&
@@ -602,8 +604,8 @@ contains
             do j=1,ldim(2)-1
                 jj = j-orig(2)
                 do k=1,ldim(3)
-                    ! if any of the 4 neighbors has a value >0.5 then envelope value is set to 1.
-                    self%is_in_mask(ii, jj, k-orig(3)) = any(rmat(i:i+1, j:j+1, k) >= 0.5)
+                    ! if any of the 4 neighbors is in hard mask value is set to true
+                    self%is_in_mask(ii, jj, k-orig(3)) = any(rmat(i:i+1, j:j+1, k) >= thresh)
                 enddo
             enddo
         enddo
@@ -633,10 +635,10 @@ contains
         sqmaxrad = nint(mmaxrad**2)
         lims(1)  = orig(1) - ceiling(mmaxrad)
         lims(2)  = orig(2) + ceiling(mmaxrad)
-        incr_i   = matmul( [1., 0., 0.], e%get_mat())
-        incr_j   = matmul( [0., 1., 0.], e%get_mat())
-        incr_k   = matmul( [0., 0., 1.], e%get_mat())
-        corner   = matmul( -real([mmaxrad+1,mmaxrad+1,mmaxrad+1]), e%get_mat())
+        incr_i   = matmul([1., 0., 0.], e%get_mat())
+        incr_j   = matmul([0., 1., 0.], e%get_mat())
+        incr_k   = matmul([0., 0., 1.], e%get_mat())
+        corner   = matmul(-real([mmaxrad+1,mmaxrad+1,mmaxrad+1]), e%get_mat())
         !$omp parallel do collapse(2) default(shared) private(j,i,k,ray_k,inds)
         do i=lims(1),lims(2) 
             do j=lims(1),lims(2)
