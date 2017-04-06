@@ -75,6 +75,7 @@ contains
                         p%refs = 'start2Drefs'//p%ext
                         if( p%chunktag .ne. '' ) p%refs = trim(p%chunktag)//trim(p%refs)
                         call random_selection_from_imgfile(p%stk, p%refs, p%ncls, p%smpd)
+                        call prime2D_read_sums( b, p )
                     endif
                 endif
             endif 
