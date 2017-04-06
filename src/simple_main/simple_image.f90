@@ -150,9 +150,9 @@ type :: image
     ! BINARY IMAGE METHODS
     procedure          :: nforeground
     procedure          :: nbackground
-    procedure          :: bin_1
-    procedure          :: bin_2
-    procedure          :: bin_3
+    procedure, private :: bin_1
+    procedure, private :: bin_2
+    procedure, private :: bin_3
     generic            :: bin => bin_1, bin_2, bin_3
     procedure          :: bin_filament
     procedure          :: masscen
@@ -2303,7 +2303,7 @@ contains
     !!          binary normalization (norm_bin) assumed
     subroutine bin_1( self, thres )
         class(image), intent(inout) :: self
-        real,         intent(in)     :: thres
+        real,         intent(in)    :: thres
         if( self%ft ) stop 'only for real images; bin_1; simple image'
         where( self%rmat >= thres )
             self%rmat = 1.
@@ -2330,35 +2330,51 @@ contains
     end subroutine bin_2
 
     !>  \brief  is for binarizing an image using k-means to identify the background/
-    !!          foreground distributions
-    subroutine bin_3( self )
-        class(image), intent(inout) :: self
-        real, allocatable           :: forsort(:)
-        real                        :: cen1, cen2, sum1, sum2, val1, val2, sum_rmat
-        integer                     :: cnt1, cnt2, i, l,npix
-        if( self%ft ) stop 'only for real images; bin_2; simple image'
+    !!          foreground distributions for the image or within a spherical mask
+    subroutine bin_3( self, which, mskrad )
+        class(image),     intent(inout) :: self
+        character(len=*), intent(in)    :: which
+        real, optional,   intent(in)    :: mskrad
+        real, allocatable :: forsort(:)
+        type(image)       :: maskimg
+        real              :: cen1, cen2, sum1, sum2, val1, val2, sumvals
+        integer           :: cnt1, cnt2, i, l, npix, halfnpix
+        if( self%ft ) stop 'only for real images; bin_3; simple image'
         ! sort the pixels to initialize k-means
-        npix = product(self%ldim)
-        ! forsort = self%packer() ! Intel hickup
-        forsort = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), .true.)
+        select case(which)
+            case('msk')
+                if(.not.present(mskrad))stop 'missing radius; bin_3; simple image'
+                call maskimg%new(self%ldim, self%smpd)
+                maskimg%rmat = 1.
+                call maskimg%mask(mskrad, 'hard')
+                forsort = pack(self%rmat(:self%ldim(1), :self%ldim(2), :self%ldim(3)),&
+                    &maskimg%rmat(:self%ldim(1), :self%ldim(2), :self%ldim(3)) > 0.5 )
+            case('full', 'nomsk')
+                forsort = pack(self%rmat(:self%ldim(1), :self%ldim(2), :self%ldim(3)), .true.)
+                ! forsort = self%packer() ! Intel hickup
+            case DEFAULT
+                stop 'Unknown argument which ; bin_3; simple image'
+        end select
+        npix = size(forsort)
         call hpsort(npix, forsort)
-        cen1 = sum(forsort(1:npix/2))/real(npix/2)
-        cen2 = sum(forsort(npix/2+1:npix))/real(npix-npix/2)
+        halfnpix = nint(real(npix)/2.)
+        cen1     = sum(forsort(1:halfnpix)) / real(halfnpix)
+        cen2     = sum(forsort(halfnpix+1:npix)) / real(npix-halfnpix)
+        sumvals  = sum(forsort)
         ! do 100 iterations of k-means to identify background/forground distributions
-        sum_rmat = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
         do l=1,100
             sum1 = 0.
             cnt1 = 0
             do i=1,npix
                 if( (cen1-forsort(i))**2. < (cen2-forsort(i))**2. )then
-                    cnt1 = cnt1+1
-                    sum1 = sum1+forsort(i)
+                    cnt1 = cnt1 + 1
+                    sum1 = sum1 + forsort(i)
                 endif
             end do
             cnt2 = npix - cnt1
-            sum2 = sum_rmat - sum1
-            cen1 = sum1/real(cnt1)
-            cen2 = sum2/real(cnt2)
+            sum2 = sumvals - sum1
+            cen1 = sum1 / real(cnt1)
+            cen2 = sum2 / real(cnt2)
         end do
         ! assign values to the centers
         if( cen1 > cen2 )then
@@ -2374,9 +2390,11 @@ contains
         elsewhere
             self%rmat = val2
         end where
-        deallocate( forsort )
+        if(which .eq. 'msk')call self%mul(maskimg)
+        deallocate(forsort)
+        call maskimg%kill
     end subroutine bin_3
-    
+
     !>  \brief  is for creating a binary filament
     subroutine bin_filament( self, width_A )
         class(image), intent(inout) :: self
@@ -2414,9 +2432,9 @@ contains
                     spix = spix+pix
                     ck   = ck+1.
                 end do
-                cj = cj+1.
+                cj = cj + 1.
             end do
-            ci = ci+1.
+            ci = ci + 1.
         end do
         xyz = xyz / spix
         if(self%is_2d()) xyz(3) = 0.
@@ -2445,12 +2463,14 @@ contains
         endif
         if(neg .eq. 'yes') call tmp%neg
         call tmp%bp(0., lp)
-        call tmp%mask(rmsk, 'soft')
         if( present(thres) )then
+            call tmp%mask(rmsk, 'soft')
             call tmp%norm_bin
             call tmp%bin(thres)
         else
-            call tmp%bin
+            !call tmp%mask(rmsk, 'soft')    ! the old fashioned way
+            !call tmp%bin('nomsk')          ! the old fashioned way
+            call tmp%bin('msk', rmsk)
         endif
         xyz = tmp%masscen()
         if( l_doshift )then
@@ -2535,7 +2555,7 @@ contains
         rfalloff    = real( falloff )
         falloff_sq  = falloff**2
         allocate( rmat(self%ldim(1),self%ldim(2),self%ldim(3)) )
-        rmat = self%rmat
+        rmat = self%rmat(1:self%ldim(1),:,:)
         do i=1,self%ldim(1)
             is = max(1,i-1)                  ! left neighbour
             ie = min(i+1,self%ldim(1))       ! right neighbour
@@ -2615,101 +2635,123 @@ contains
     end subroutine cos_edge
 
     !>  \brief  applies cosine edge to a binary image
-    ! TOO SLOW
+    ! IN DEV, 2x serial speed-up so far
     subroutine cos_edge2( self, falloff )
+        !$ use omp_lib
+        !$ use omp_lib_kinds
         use simple_math, only: cosedge
         class(image), intent(inout) :: self
         integer,      intent(in)    :: falloff
-        integer, allocatable        :: imat(:,:,:), dmat(:,:,:), lmat(:,:,:)
-        real                        :: rfalloff
-        integer                     :: dims(3,2), i, j, k, dist_sq, ihuge, length
-        if(self%imgkind .eq. 'xfel' ) stop 'xfel-kind images cannot be low-pass filtered in real space; simple_image::cos_edge'
-        if(falloff <= 0) stop 'stictly positive values for edge fall-off allowed; simple_image::cos_edge'
-        if(self%ft)    stop 'not intended for FTs; simple_image :: cos_edge'
-        ihuge     = huge(ihuge)
-        length    = 2*falloff+1
-        self%rmat = self%rmat/maxval(self%rmat(1:self%ldim(1),:,:))
-        rfalloff  = real(falloff)
-        dims(:,1) = 1 - falloff
-        dims(:,2) = self%ldim + falloff
-        ! main loop
-        if(self%ldim(3) > 1)then
-            ! 3D
-            ! zero-padded matrix of integer values
-            allocate(imat(dims(1,1):dims(1,2), dims(2,1):dims(2,2), dims(3,1):dims(3,2)))
-            imat = 0
-            imat(1:self%ldim(1), 1:self%ldim(2), 1:self%ldim(3)) = nint(self%rmat(:self%ldim(1),:,:))
-            ! private matrix
-            allocate(lmat(length, length, length))
-            ! pre-computed squared distance matrix
-            allocate(dmat(length, length, length))
-            dmat = 0
-            do i=1,length
-                dist_sq     = (i-falloff-1)**2
-                dmat(i,:,:) = dmat(i,:,:) + dist_sq
-                dmat(:,i,:) = dmat(:,i,:) + dist_sq
-                dmat(:,:,i) = dmat(:,:,i) + dist_sq
-            enddo
-            ! main loop
-            do i=1,self%ldim(1)
-                if(.not. any(imat(i-falloff:i+falloff,:,:) == 1))cycle
-                do j=1,self%ldim(2)
-                    if(.not. any(imat(i-falloff:i+falloff,j-falloff:j+falloff,:) == 1))cycle
+        integer, allocatable :: imat(:,:,:)
+        real                 :: rfalloff, rfalloff_sq
+        integer              :: vec(3), i, j, k, is, js, ks, ie, je, ke
+        integer              :: il, ir, jl, jr, kl, kr, falloff_sq
+        if( self%imgkind .eq. 'xfel' ) stop 'xfel-kind images cannot be low-pass filtered in real space; simple_image::cos_edge'
+        if( falloff<=0 ) stop 'stictly positive values for edge fall-off allowed; simple_image::cos_edge'
+        if( self%ft )    stop 'not intended for FTs; simple_image :: cos_edge'
+        self%rmat   = self%rmat/maxval(self%rmat)
+        rfalloff    = real( falloff )
+        falloff_sq  = falloff**2
+        rfalloff_sq = real(falloff_sq)
+        ! padded temporary matrix
+        allocate( imat(1-falloff:self%ldim(1)+falloff, 1-falloff:self%ldim(2)+falloff,&
+            &1-falloff:self%ldim(3)+falloff))
+        imat = 1
+        imat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = 1 - nint(self%rmat(1:self%ldim(1),:,:))
+        imat = imat * falloff_sq
+        ! gets minimum distances from mask
+        !!$omp parallel do default(shared) private(i,j,k,is,ie,il,ir,js,je,jl,jr,kl,kr)&
+        !!$omp reduction(min:imat) schedule(auto)
+        do i=1,self%ldim(1)
+            if(.not. any(imat(i,:,:) == 0))cycle
+            is = i-1            ! left neighbour
+            ie = i+1            ! right neighbour
+            il = i-falloff      ! left bounding box limit
+            ir = i+falloff      ! right bounding box limit
+            do j=1,self%ldim(2)
+                js = j-1
+                je = j+1
+                jl = j-falloff
+                jr = j+falloff
+                if( self%ldim(3)==1 )then
+                    ! 2D
+                    if(imat(i,j,1) == 0)then
+                        ! within mask region
+                        ! update if has a masked neighbour 
+                        if(any(imat(is:ie,js:je,1) > 0))call update_mask_2d
+                    endif
+                else
+                    ! 3D
+                    if( .not. any(imat(i,j,:) == 0))cycle
                     do k=1,self%ldim(3)
-                        if(imat(i,j,k) == 1)cycle
-                        ! not in mask
-                        lmat = imat(i-falloff:i+falloff,j-falloff:j+falloff,k-falloff:k+falloff)
-                        if(any(lmat == 1))then
-                            ! one neighbour is masked
-                            where(lmat == 1)
-                                ! square distance * mask
-                                lmat  = lmat*dmat
-                            else where
-                                lmat  = ihuge
-                            end where
-                            dist_sq = minval(lmat)
-                            self%rmat(i,j,k) = cosedge(sqrt(real(dist_sq)), rfalloff)
+                        if(imat(i,j,k) == 0)then
+                            ! within mask region
+                            ! update if has a masked neighbour 
+                            if(any(imat(is:ie,js:je,k-1:k+1) > 0))then
+                                kl = k-falloff
+                                kr = k+falloff
+                                call update_mask_3d
+                            endif
                         endif
-                    enddo
-                enddo
-            enddo
-        else
-            ! 2D
-            ! zero-padded matrix of integer values
-            allocate(imat(dims(1,1):dims(1,2), dims(2,1):dims(2,2), 1))
-            imat = 0
-            imat(1:self%ldim(1), 1:self%ldim(2), 1:1) = nint(self%rmat)
-            ! private matrix
-            allocate(lmat(length, length, 1))
-            ! pre-computed squared distance matrix
-            allocate(dmat(length, length, 1))
-            dmat = 0
-            do i=1,length
-                dist_sq   = (i-falloff-1)**2
-                dmat(i,:,1) = dmat(i,:,1) + dist_sq
-                dmat(:,i,1) = dmat(:,i,1) + dist_sq
-            enddo
-            ! main loop
-            do i=1,self%ldim(1)
-                do j=1,self%ldim(2)
-                    if(imat(i,j,1) == 1)cycle
-                    ! not in mask
-                    lmat(:,:,1) = imat(i-falloff:i+falloff,j-falloff:j+falloff,1)
-                    if( any(lmat == 1) )then
-                        ! one neighbour is masked
-                        where(lmat == 1)
-                            ! square distance * mask
-                            lmat  = lmat*dmat
-                        else where
-                            lmat  = ihuge
-                        end where
-                        dist_sq = minval(lmat)
-                        self%rmat(i,j,1) = cosedge(sqrt(real(dist_sq)), rfalloff)
+                    end do
+                endif
+            end do
+        end do
+        !!$omp end parallel do
+        ! apply cosine, could be threaded...
+        do i=1,self%ldim(1)
+            do j=1,self%ldim(2)
+                do k=1,self%ldim(3)
+                    if(imat(i,j,k)>0 .and. imat(i,j,k)<falloff_sq)then
+                        self%rmat(i,j,k) = cosedge(sqrt(real(imat(i,j,k))), rfalloff)
                     endif
                 enddo
             enddo
-        endif
-        deallocate(imat, dmat, lmat)
+        enddo
+        ! ...or matrix formulation see cos_edge
+        ! where(rmat>0 .and. rmat<falloff_sq)
+        !     self%rmat = XXXX( sqrt(real(imat) falloff )
+        ! end where
+        deallocate(imat)
+        contains
+
+            ! updates neighbours 
+            subroutine update_mask_2d
+                integer :: ii,jj,dist_sq
+                real    :: w
+                do ii=il,ir
+                    vec(1) = ii - i
+                    do jj=jl,jr
+                        vec(2) = jj - j                      
+                        dist_sq = dot_product(vec(1:2) ,vec(1:2))
+                        if(dist_sq <= falloff_sq)then
+                            if(imat(ii,jj,1) > 0)then
+                                imat(ii,jj,1) = min(dist_sq, imat(ii,jj,1))
+                            endif
+                        endif
+                    enddo
+                enddo
+            end subroutine update_mask_2d
+
+            ! updates neighbours 
+            subroutine update_mask_3d
+                integer :: ii,jj,kk,dist_sq
+                do ii=il,ir
+                    vec(1) = ii - i
+                    do jj=jl,jr
+                        vec(2) = jj - j
+                        do kk=kl,kr
+                            vec(3) = kk - k
+                            dist_sq = dot_product(vec ,vec )
+                            if(dist_sq <= falloff_sq)then
+                                if(imat(ii,jj,kk) > 0)then
+                                    imat(ii,jj,kk) = min(dist_sq, imat(ii,jj,kk))
+                                endif
+                            endif
+                        enddo
+                    enddo
+                enddo
+            end subroutine update_mask_3d
     end subroutine cos_edge2
 
     !>  \brief  increments the logi pixel value with incr
@@ -3170,7 +3212,7 @@ contains
         if( self%ft )then
             stop 'maxloc not implemented 4 FTs! simple_image'
         else
-             loc = maxloc(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
+            loc = maxloc(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
         endif
     end function maxcoord
 
@@ -4613,15 +4655,15 @@ contains
 
     !>  \brief  is for spherical masking
     subroutine mask( self, mskrad, which, inner, width, msksum )
-        class(image), intent(inout) :: self
-        real, intent(in)            :: mskrad
-        character(len=*)            :: which
-        real, intent(in), optional  :: inner, width
-        real, intent(out), optional :: msksum
+        class(image),     intent(inout) :: self
+        real,             intent(in)    :: mskrad
+        character(len=*), intent(in)    :: which
+        real, optional,   intent(in)    :: inner, width
+        real, optional,   intent(out)   :: msksum
         real    :: ci, cj, ck, e, wwidth
         real    :: cis(self%ldim(1)), cjs(self%ldim(2)), cks(self%ldim(3))
         integer :: i, j, k, minlen, ir, jr, kr
-        logical :: didft, doinner, soft, domsksum, is_3d
+        logical :: didft, doinner, soft, domsksum
         if( self%imgkind .eq. 'xfel' ) stop 'masking of xfel-kind images not allowed; simple_image::mask'
         ! width
         wwidth = 10.
@@ -4649,24 +4691,22 @@ contains
             call self%bwd_ft
             didft = .true.
         endif
-        ! 2D/3D
-        is_3d = .false.
-        if( self%ldim(3) > 1 )is_3d = .true.
         ! minlen
-        if( is_3d )then
+        if( self%is_3d() )then
             minlen = minval(self%ldim)
         else
             minlen = minval(self%ldim(1:2))
         endif
         ! init center as origin
-        cis = (/ (-real(self%ldim(1))/2.+real(i), i=0,self%ldim(1)-1) /)
-        cjs = (/ (-real(self%ldim(2))/2.+real(i), i=0,self%ldim(2)-1) /)
-        if( is_3d )cks = (/ (-real(self%ldim(3))/2.+real(i), i=0,self%ldim(3)-1) /)
+        forall(i=1:self%ldim(1)) cis(i) = -real(self%ldim(1)-1)/2. + real(i-1)
+        forall(i=1:self%ldim(2)) cjs(i) = -real(self%ldim(2)-1)/2. + real(i-1)
+        if(self%is_3d())forall(i=1:self%ldim(3)) cks(i) = -real(self%ldim(3)-1)/2. + real(i-1)
+        ! Main loops
         if( .not.domsksum )then
             ! MASKING
             if( soft )then
                 ! Soft masking
-                if( is_3d )then
+                if( self%is_3d() )then
                     ! 3d
                     do i=1,self%ldim(1)/2
                         ir = self%ldim(1)+1-i
@@ -4704,7 +4744,7 @@ contains
                 endif
             else
                 ! Hard masking
-                if( is_3d )then
+                if( self%is_3d() )then
                     ! 3d
                     do i=1,self%ldim(1)/2
                         ir = self%ldim(1)+1-i
@@ -4747,7 +4787,7 @@ contains
                 ci = cis(i)
                 do j=1,self%ldim(2)
                     cj = cjs(j)
-                    if( is_3d )then
+                    if( self%is_3d() )then
                         ! 3D
                         do k=1,self%ldim(3)
                             ck = cks(k)

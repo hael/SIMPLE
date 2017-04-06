@@ -152,6 +152,7 @@ contains
         class(cmdline),           intent(inout) :: cline
         type(params) :: p
         p = params(cline) ! parameters generated
+        p%cenlp = p%lp
         ! center of mass centering
         if( cline%defined('thres') )then
             call masscen_imgfile(p%stk, p%outstk, p%smpd, p%lp, p%neg, p%msk, p%thres)

@@ -302,7 +302,6 @@ contains
 
     !>  \brief  prepares the polarft corrcalc object for search
     subroutine preppftcc4align( b, p )
-        use simple_image,        only: image
         use simple_masker,       only: automask2D
         use simple_jiffys,       only: alloc_err
         class(build),  intent(inout) :: b
