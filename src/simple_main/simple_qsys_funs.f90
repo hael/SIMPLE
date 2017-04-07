@@ -136,9 +136,9 @@ contains
         if( .not. env%isthere('qsys_name') ) &
             & stop 'The type of the queuing system is required in simple_distr_config.env: qsys_name=<local|slurm|pbs>'
         qsys_name = env%get('qsys_name')
-        if( qsys_name.ne.'local' .and. qsys_name.ne.'pbs' .and. qsys_name.ne.'slurm' ) &
+        if( qsys_name.ne.'local' .and. qsys_name.ne.'pbs' .and. qsys_name.ne.'slurm' .and. qsys_name.ne.'sge' ) &
             & stop 'Invalid qsys_name in simple_distr_config.env'
-        if( qsys_name.ne.'local' )then
+        if( qsys_name.eq.'slurm' )then
             if( .not. env%isthere('qsys_partition') )stop 'qsys_partition field is required in simple_distr_config.env'        
         endif
         ! Job keys

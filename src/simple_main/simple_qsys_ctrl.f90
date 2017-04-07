@@ -272,7 +272,6 @@ contains
         write(funit,'(a)',advance='yes') 'exit'
         call flush(funit)
         close(funit)
-        !call flush(funit)
         call chmod(trim(self%script_names(ipart)),'+x')
         if( ios .ne. 0 )then
             write(*,'(a)',advance='no') 'simple_qsys_scripts :: gen_qsys_script; Error'
