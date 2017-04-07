@@ -49,7 +49,7 @@ contains
         class(qsys_sge), intent(in) :: self
         class(chash),      intent(in) :: job_descr
         integer, optional, intent(in) :: fhandle
-        character(len=:), allocatable :: key, qsub_cmd, qsub_val
+        character(len=:), allocatable :: key, qsub_cmd, qsub_val, bind2socket
         integer :: i, which
         logical :: write2file
         write2file = .false.
@@ -65,6 +65,10 @@ contains
                 else
                     write(*,'(a)') qsub_cmd//' '//qsub_val
                 endif
+                if(key .eq. 'job_cpus_per_task')then
+                    if( allocated(bind2socket) ) deallocate(bind2socket)
+                    allocate(bind2socket, source='#$ -binding linear:'//trim(qsub_val))
+                endif
                 deallocate(qsub_cmd,qsub_val)
             endif
             deallocate(key)
@@ -75,11 +79,17 @@ contains
             write(fhandle,'(a)') '#$ -S /bin/bash'
             write(fhandle,'(a)') '#$ -cwd'
             write(fhandle,'(a)') '#$ -o outfile -j y'
+            if( allocated(bind2socket) )then
+                 write(fhandle,'(a)') bind2socket
+            endif
         else
             write(*,'(a)') '#$ -V'
             write(*,'(a)') '#$ -S /bin/bash'
             write(*,'(a)') '#$ -cwd'
             write(*,'(a)') '#$ -o outfile -j y'
+             if( allocated(bind2socket) )then
+                 write(*,'(a)') bind2socket
+            endif
         endif
     end subroutine write_sge_header
     
