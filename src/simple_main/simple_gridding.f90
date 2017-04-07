@@ -11,9 +11,12 @@ contains
         real,         intent(in)     :: msk
         real                         :: ave, sdev, var, med
         logical                      :: err
-        call img%bwd_ft                                           ! make sure not FTed
-        call img%stats('background', ave, sdev, var, msk, med=med, errout=err) ! get background statistics
-        call img%pad(img4grid, backgr=med)                        ! padding in real space                     
+        call img%bwd_ft      
+
+        !! DEBUG
+                                     ! make sure not FTed
+!        call img%stats('background', ave, sdev, var, msk, med=med, errout=err) ! get background statistics
+        call img%pad(img4grid)                        ! padding in real space                     
         call divide_w_instr(img4grid)                             ! division w instr in real space
         call img4grid%fwd_ft                                      ! return the Fourier transform
     end subroutine prep4cgrid

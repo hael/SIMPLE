@@ -29,12 +29,12 @@ contains
         ! ### USER PARAMETERS
         call self%env%push('user_account',           '#$ -A')
         call self%env%push('user_email',             '#$ -M')
+        call self%env%push('user_project',           '#$ -P')
         ! ### QSYS PARAMETERS
         call self%env%push('qsys_queue',             '#$ -q')
         call self%env%push('qsys_submit_cmd',         'qsub')
         ! ### JOB PARAMETERS
         call self%env%push('job_name',               '#$ -N')
-        call self%env%push('job_cpus_per_task', '#$ -pe smp') ! overridden by p%nthr
     end subroutine new_sge_env
 
     !> \brief  is a getter
@@ -79,6 +79,7 @@ contains
             write(fhandle,'(a)') '#$ -S /bin/bash'
             write(fhandle,'(a)') '#$ -cwd'
             write(fhandle,'(a)') '#$ -o outfile -j y'
+            write(fhandle,'(a)') '#$ -pe mpi 1'
             if( allocated(bind2socket) )then
                  write(fhandle,'(a)') bind2socket
             endif
@@ -87,7 +88,8 @@ contains
             write(*,'(a)') '#$ -S /bin/bash'
             write(*,'(a)') '#$ -cwd'
             write(*,'(a)') '#$ -o outfile -j y'
-             if( allocated(bind2socket) )then
+            write(*,'(a)') '#$ -pe mpi 1'
+            if( allocated(bind2socket) )then
                  write(*,'(a)') bind2socket
             endif
         endif

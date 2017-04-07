@@ -119,12 +119,13 @@ contains
         else
             call primesrch2D%exec_prime2D_srch(pftcc, b%a, [p%fromp,p%top], extr_bound=corr_thresh)
         endif
+        if( DEBUG ) print *, 'DEBUG, hadamard2D_matcher; completed alignment'
         
         ! WIENER RESTORATION OF CLASS AVERAGES
         cnt_glob = 0
         do iptcl=p%fromp,p%top
             cnt_glob = cnt_glob + 1
-            orientation = b%a%get_ori(iptcl)            
+            orientation = b%a%get_ori(iptcl)
             if( nint(orientation%get('state')) > 0 )then
                 b%img = b%imgs(iptcl) ! put the original image back
                 icls = nint(orientation%get('class'))
@@ -138,6 +139,7 @@ contains
                 endif
             endif
         end do
+        if( DEBUG ) print *, 'DEBUG, hadamard2D_matcher; generated class averages'
 
         ! orientations output
         call b%a%write(p%outfile, [p%fromp,p%top])

@@ -24,7 +24,7 @@ use Config;
 #####################################################################
 
 # enter the SIMPLE root path
-our$SIMPLE_PATH="/Users/hael/src/fortran/simple_git";
+our$SIMPLE_PATH="/users/strubi/juha/apps/simple_beta";
 # specifying the compiling directives
 # with OpenMP:  -fopenmp, CUDA: -DCUDA
 # Benchmarking: -DBENCH
@@ -48,9 +48,9 @@ our$FCOMPILER = "gfortran";
 our$CUDADIR="";
 # enter the fftw lib default: /usr/lib/x86_64-linux-gnu for [linux]
 #                             /usr/local/lib for [MacOSX]
-our$FFTW_LIB="/sw/lib";
+our$FFTW_LIB="/apps/well/fftw/3.3.4-gcc5.4.0/lib/";
 # on clusters we need extra path after module load fftw/3.3.4-gcc to identify the FFTW header
-our$FFTW_INC="/sw/include/";
+our$FFTW_INC="/apps/well/fftw/3.3.4-gcc5.4.0/include/";
 # Modules and objects directories. default: obj/SIMPLEOFILES
 our$OBJDIR="obj/SIMPLEOFILES";
 our$MODDIR="obj/SIMPLEOFILES";
