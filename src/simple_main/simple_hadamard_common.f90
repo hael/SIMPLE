@@ -375,14 +375,13 @@ contains
         type(ori),      intent(inout) :: o
         type(ctf) :: tfun
         real      :: x, y, dfx, dfy, angast
-        integer   :: i!, icls
+        integer   :: i
         if( p%l_xfel )then
             ! nothing to do 4 now
             return
         else
             x     = o%get('x')
             y     = o%get('y')
-            !icls  = nint(o%get('class'))
             ! move to Fourier space
             call b%img%fwd_ft
             ! set CTF parameters
@@ -423,18 +422,14 @@ contains
             if( p%boxmatch < p%box ) call b%img%clip_inplace([p%boxmatch,p%boxmatch,1]) ! SQUARE DIMS ASSUMED
             ! MASKING
             if( p%doautomsk )then
-                ! PARTICLE ENVELOPPE MASKING TURNED OFF FOR NOW
-                ! ! make sure that img_msk is of the correct dimension
-                ! call b%img_msk%new([p%boxmatch,p%boxmatch,1],p%smpd)
-                ! ! create 2D envelope
-                ! call b%mskvol%env_rproject(o, b%img_msk, p%msk)
-                ! do i=1, p%binwidth
-                !     call b%img_msk%grow_bin
-                ! enddo
-                ! call b%img_msk%cos_edge(20)
-                ! ! call b%img_msk%norm('sigm')
-                ! ! multiply with the projected envelope
-                ! call b%img%mul(b%img_msk)
+                ! PARTICLE ENVELOPPE MASKING
+                call b%img_msk%new([p%boxmatch,p%boxmatch,1], p%smpd) ! ensures the correct dimension
+                call b%mskvol%env_rproject(o, b%img_msk, p%msk)       ! create 2D envelope
+                do i=1, p%binwidth                                    ! binary layers
+                    call b%img_msk%grow_bin
+                enddo
+                call b%img_msk%cos_edge(p%edge)                       ! soft edge
+                call b%img%mul(b%img_msk)                             ! multiply by projected envelope
             else if( p%automsk .eq. 'cavg' )then
                 ! ab initio mask
                 call automask2D(b%img, p)
@@ -547,6 +542,8 @@ contains
                     ! automask & write files
                     call automask(b, p, cline, b%vol, b%mskvol, p%vols_msk(s), p%masks(s))
                 endif
+                ! stash for enveloppe particle projection
+                b%mskvols(s) = b%mskvol
             endif
         endif
         ! FT volume
@@ -559,10 +556,10 @@ contains
             subroutine centervol
                 ! centering only for asymmetric and circular symmetric cases
                 if( p%refine.ne.'het' )then
-                    if( p%pgrp(:1).eq.'c' )then
+                    if(p%pgrp(:1) .eq. 'c')then
                         shvec = b%vol%center(p%cenlp,'no',p%msk,doshift=.false.) ! find center of mass shift
                         if( arg(shvec) > CENTHRESH )then
-                            if( p%pgrp.ne.'c1' ) shvec(1:2) = 0.         ! shifts only along z-axis for C2 and above
+                            if(p%pgrp .ne. 'c1') shvec(1:2) = 0.         ! shifts only along z-axis for C2 and above
                             call b%vol%shift(shvec(1),shvec(2),shvec(3)) ! performs shift
                             ! map back to particle oritentations
                             if( cline%defined('oritab') )call b%a%map3dshift22d(-shvec(:), state=s)
@@ -570,7 +567,6 @@ contains
                     endif
                 endif
             end subroutine centervol
-
     end subroutine preprefvol
     
     subroutine eonorm_struct_facts( b, p, res, which_iter )

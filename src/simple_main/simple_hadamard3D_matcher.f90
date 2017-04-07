@@ -439,9 +439,9 @@ contains
                     endif
                     if( p%doautomsk )then
                         ! read & pre-process mask volume
-                        call b%mskvol%read(p%masks(s))
+                        !call b%mskvol%read(p%masks(s))
+                        b%mskvol = b%mskvols(s)
                         call b%mskvol%init_env_rproject
-                        !call prep4cgrid(b%mskvol, b%vol_pad, p%msk) ! for testing
                     endif
                     cnt = 0
                     do iptcl=p%fromp,p%top

@@ -65,9 +65,10 @@ type build
     type(reconstructor)                 :: recvol             !< object for reconstruction
     ! PRIME TOOLBOX
     type(image),            allocatable :: cavgs(:)           !< class averages (Wiener normalised references)
-    type(projector),        allocatable :: refs(:)            !< referecnes
+    type(projector),        allocatable :: refs(:)            !< references
     type(image),            allocatable :: ctfsqsums(:)       !< CTF**2 sums for Wiener normalisation
     type(projector),        allocatable :: refvols(:)         !< reference volumes for quasi-continuous search
+    type(projector),        allocatable :: mskvols(:)         !< volumes masks for particle masking
     type(reconstructor),    allocatable :: recvols(:)         !< array of volumes for reconstruction
     type(eo_reconstructor), allocatable :: eorecvols(:)       !< array of volumes for eo-reconstruction
     real,    allocatable                :: ssnr(:,:)          !< spectral signal to noise rations
@@ -459,6 +460,13 @@ contains
         if( str_has_substr(p%refine,'neigh') )then
             call self%e%nearest_neighbors(p%nnn, self%nnmat)
         endif
+        if( p%doautomsk )then
+            allocate( self%mskvols(p%nstates), stat=alloc_stat )
+            call alloc_err('build_hadamard_prime3D_tbox; simple_build, 2', alloc_stat)
+            do s=1,p%nstates
+                call self%mskvols(s)%new([p%boxmatch,p%boxmatch,p%boxmatch],p%smpd,p%imgkind)
+            end do
+        endif
         write(*,'(A)') '>>> DONE BUILDING HADAMARD PRIME3D TOOLBOX'
         call flush(6)
         self%hadamard_prime3D_tbox_exists = .true.
@@ -488,6 +496,13 @@ contains
                     call self%refvols(i)%kill
                 end do
                 deallocate(self%refvols)
+            endif
+            if( allocated(self%mskvols) )then
+                do i=1,size(self%mskvols)
+                    call self%mskvols(i)%kill_env_rproject
+                    call self%mskvols(i)%kill
+                end do
+                deallocate(self%mskvols)
             endif
             if( allocated(self%nnmat) ) deallocate(self%nnmat)
             self%hadamard_prime3D_tbox_exists = .false.

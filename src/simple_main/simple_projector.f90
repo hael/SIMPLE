@@ -588,11 +588,9 @@ contains
         if( .not. self%even_dims() )stop 'even dimensions assumed; env_rproject; simple_projector'
         if( self%is_ft() )          stop 'real space only; env_rproject; simple_projector'
         ! init
-        call self%norm_bin
+        call self%norm_bin          ! ensures [0;1] range
         rmat   = self%get_rmat()
-        thresh = 0.9999
-        if(maxval(rmat) >  1.0001)stop 'input volume should be a mask volume in [0;1]'      
-        if(minval(rmat) < -0.0001)stop 'input volume should be a mask volume in [0;1]'
+        thresh = 0.9999             ! prior soft masking is discarded
         orig = ldim/2+1
         allocate( self%is_in_mask(1-orig(1):ldim(1)-orig(1),&
                                  &1-orig(2):ldim(2)-orig(2),&
@@ -603,9 +601,9 @@ contains
             ii = i-orig(1)
             do j=1,ldim(2)-1
                 jj = j-orig(2)
-                do k=1,ldim(3)
-                    ! if any of the 4 neighbors is in hard mask value is set to true
-                    self%is_in_mask(ii, jj, k-orig(3)) = any(rmat(i:i+1, j:j+1, k) >= thresh)
+                do k=1,ldim(3)-1
+                    ! if any of the 8 neighbors is in hard mask, value is set to true
+                    self%is_in_mask(ii, jj, k-orig(3)) = any(rmat(i:i+1, j:j+1, k:k+1) >= thresh)
                 enddo
             enddo
         enddo

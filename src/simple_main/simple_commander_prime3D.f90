@@ -430,6 +430,14 @@ contains
                 stop 'need oritab input for execution of prime3D with refine mode'
             endif
         endif
+        if( p%doautomsk )then
+            ! automasking specifics
+            if(p%oritab .eq. '')stop 'need oritab input for automasking'
+            if(.not. cline%defined('binwidth'))p%binwidth = min(10, ceiling(0.025*real(p%box)))
+            if(.not. cline%defined('edge'))p%edge = min(12, max(12, ceiling(0.025*real(p%box))))
+            write(*,'(A,I3)')'>>> AUTOMASKING BINARY LAYERS:', p%binwidth
+            write(*,'(A,I3)')'>>> AUTOMASKING SOFT LAYERS:  ', p%edge
+        endif
         call b%build_general_tbox(p, cline)   ! general objects built
         if( .not. cline%defined('eo') ) p%eo = 'no' ! default
         if( p%eo .eq. 'yes' ) p%dynlp = 'no'    
