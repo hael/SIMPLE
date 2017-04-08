@@ -187,6 +187,7 @@ type :: image
     procedure          :: est_noise_pow
     procedure          :: est_noise_pow_norm
     procedure          :: mean
+    procedure          :: median_pixel
     procedure          :: contains_nans
     procedure          :: checkimg4nans
     procedure, private :: cure_1
@@ -3441,6 +3442,16 @@ contains
         avg = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))/real(product(self%ldim))
         if( didft ) call self%bwd_ft
     end function mean
+
+    !>  \brief  is for calculating the median of an image
+    function median_pixel( self ) result( med )
+        class(image), intent(inout) :: self
+        real, allocatable           :: pixels(:)
+        real :: med
+        if( self%ft ) stop 'not for FTs; simple_image::median'
+        pixels = pack(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=.true.)
+        med = median_nocopy(pixels)
+    end function median_pixel
 
     !>  \brief  is for checking the numerical soundness of an image
     logical function contains_nans( self )

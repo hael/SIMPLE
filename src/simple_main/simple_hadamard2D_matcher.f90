@@ -82,7 +82,7 @@ contains
         endif
 
         ! SETUP SHELLWEIGHTS
-        if( p%l_shellw .and. frac_srch_space >= SHW_FRAC_LIM ) then
+        if( p%l_shellw .and. frac_srch_space >= SHW_FRAC_LIM .and. which_iter > 1 ) then
             call setup_shellweights( b, p, doshellweight, wmat, res, res_pad )
         endif
 

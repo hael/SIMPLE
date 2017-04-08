@@ -2,7 +2,7 @@
 
 ####### The project path #####
 
-Simple_source=/users/strubi/juha/apps/simple_beta
+Simple_source=/Users/hael/src/fortran/simple_git
 
 ####### The switches #####
 
@@ -30,19 +30,19 @@ MODDIR=obj/SIMPLEOFILES
 ##############
 
 CC=$(CCCOMP)
-CFLAGS= -O3 -O -DLINUX -fopenmp  
+CFLAGS= -O3 -O -DMACOSX -fopenmp  
 CCLIB=$(CC) -c $(CFLAGS) -I $(MODDIR)                                            \
-                         -I /apps/well/fftw/3.3.4-gcc5.4.0/include/
+                         -I /sw/include/
 
 ################
 # C++ compiler.#
 ################
 
 CPP=$(GCC)
-CPPFLAGS=-DADD_ -O3 -DLINUX -fopenmp  
+CPPFLAGS=-DADD_ -O3 -DMACOSX -fopenmp  
 CPPCLIB=$(CPP) -c $(CPPFLAGS) -I $(MODDIR)                                            \
                               -I $(Simple_source)/test_code                           \
-                              -I /apps/well/fftw/3.3.4-gcc5.4.0/include/
+                              -I /sw/include/
 
 #######################
 # Fortran 90 compiler.#
@@ -50,7 +50,7 @@ CPPCLIB=$(CPP) -c $(CPPFLAGS) -I $(MODDIR)                                      
 
 # $(DLIB)
 F90C=$(GFORTRAN)
-F90FLAGS=-ffree-form -cpp -fPIC -fno-second-underscore -O3 -DLINUX -fopenmp  
+F90FLAGS=-fimplicit-none -fall-intrinsics -ffree-form -cpp -fpic -fno-second-underscore -O3 -DMACOSX -fopenmp  
 F90CLIB=$(F90C) -c $(F90FLAGS) -I $(MODDIR)                      \
                              -J $(MODDIR)                      \
 
