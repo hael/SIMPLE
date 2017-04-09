@@ -13,12 +13,12 @@
 !
 
 module precision_m
-  integer, parameter :: singlePrecision = kind(0.0)
-  integer, parameter :: doublePrecision = kind(0.0d0)
+  integer, parameter :: sp = kind(0.0)
+  integer, parameter :: dp = kind(0.0d0)
   
 #ifdef DOUBLE
-  integer, parameter :: fp_kind = doublePrecision
+  integer, parameter :: fp_kind = dp
 #else
-  integer, parameter :: fp_kind = singlePrecision
+  integer, parameter :: fp_kind = sp
 #endif
 end module precision_m
