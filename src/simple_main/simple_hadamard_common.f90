@@ -380,8 +380,8 @@ contains
             ! nothing to do 4 now
             return
         else
-            x     = o%get('x')
-            y     = o%get('y')
+            x = o%get('x')
+            y = o%get('y')
             ! move to Fourier space
             call b%img%fwd_ft
             ! set CTF parameters
@@ -425,11 +425,11 @@ contains
                 ! PARTICLE ENVELOPPE MASKING
                 call b%img_msk%new([p%boxmatch,p%boxmatch,1], p%smpd) ! ensures the correct dimension
                 call b%mskvol%env_rproject(o, b%img_msk, p%msk)       ! create 2D envelope
-                do i=1, p%binwidth                                    ! binary layers
-                    call b%img_msk%grow_bin
+                do i=1, p%binwidth
+                    call b%img_msk%grow_bin             ! binary layers
                 enddo
-                call b%img_msk%cos_edge(p%edge)                       ! soft edge
-                call b%img%mul(b%img_msk)                             ! multiply by projected envelope
+                call b%img_msk%cos_edge(p%edge)         ! soft edge
+                call b%img%mul(b%img_msk)               ! multiply by projected envelope
             else if( p%automsk .eq. 'cavg' )then
                 ! ab initio mask
                 call automask2D(b%img, p)

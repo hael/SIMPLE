@@ -196,6 +196,7 @@ cluster_cavg: simple_matchpursuit.o       \
 qsys: simple_qsys_base.o                  \
       simple_qsys_slurm.o                 \
       simple_qsys_sge.o                   \
+      simple_qsys_pbs.o                   \
       simple_qsys_local.o                 \
       simple_qsys_factory.o               \
       simple_qsys_ctrl.o                  \

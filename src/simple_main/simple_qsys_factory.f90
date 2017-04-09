@@ -3,6 +3,7 @@ use simple_qsys_base,  only: qsys_base
 use simple_qsys_local, only: qsys_local
 use simple_qsys_slurm, only: qsys_slurm
 use simple_qsys_sge,   only: qsys_sge
+use simple_qsys_pbs,   only: qsys_pbs
 implicit none
 
 public :: qsys_factory
@@ -32,6 +33,8 @@ contains
                 allocate(qsys_slurm :: self%qsys_base_type)
             case('sge')
                 allocate(qsys_sge   :: self%qsys_base_type)
+            case('pbs')
+                allocate(qsys_pbs   :: self%qsys_base_type)
             case DEFAULT
                 write(*,*) 'class:', which
                 stop 'unsupported in qsys_factory constructor'

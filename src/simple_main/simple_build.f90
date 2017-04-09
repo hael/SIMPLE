@@ -462,7 +462,7 @@ contains
         endif
         if( p%doautomsk )then
             allocate( self%mskvols(p%nstates), stat=alloc_stat )
-            call alloc_err('build_hadamard_prime3D_tbox; simple_build, 2', alloc_stat)
+            call alloc_err('build_hadamard_prime3D_tbox; simple_build, 3', alloc_stat)
             do s=1,p%nstates
                 call self%mskvols(s)%new([p%boxmatch,p%boxmatch,p%boxmatch],p%smpd,p%imgkind)
             end do

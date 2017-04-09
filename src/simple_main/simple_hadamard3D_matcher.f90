@@ -434,7 +434,7 @@ contains
                 progress_cnt = 0
                 ntot         = p%top-p%fromp+1
                 do s=1,p%nstates
-                    if( b%a%get_statepop(s) ==0 )then
+                    if( b%a%get_statepop(s) == 0 )then
                         ! empty state
                         cycle
                     endif
