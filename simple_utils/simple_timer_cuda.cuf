@@ -1,75 +1,86 @@
-!= Module simple_timer
+!= Module simple_timer_cuda
 !
 !
 ! Michael Eager 2017-03-15
 
-module simple_timer
+module simple_timer_cuda
   use precision_m
-
   use cudafor
-
   implicit none
 
-
-  public :: tic, toc, now, timer_setup, timer_kill
   private
-
-
-  integer :: istat
-  type (cudaEvent) :: &
-       clock_start, clock_end, clock_rate
-  real(fp_kind) :: elapsed
+  type (cudaDeviceProp) :: prop
+  integer,save :: istat
+  type (cudaEvent),save :: start_point, end_point
+  public :: ticU, tocU, now, CUtimer_setup, CUtimer_kill
 
 contains
 
   !  function constructor() result(self)
-  !    call setup
+  !    call timer_setup
   !  end function constructor
 
   subroutine timer_setup()
-    call timer_kill
-
     integer :: nDevices
+    call timer_kill
+#ifdef DEBUG
     istat = cudaGetDeviceCount(nDevices)
-    write(*,"('Number of CUDA-capable devices: ', i0,/)") &
-         nDevices 
-    istat = cudaEventCreate(clock_start)
-    istat = cudaEventCreate(clock_end)
+    write(*,"('Number of CUDA-capable devices: ', i0,/)") nDevices
     ! output device info and transfer size
-    !  istat = cudaGetDeviceProperties(prop, 0)
+    istat = cudaGetDeviceProperties(prop, 0)
+    ilen = verify(prop%name, ' ', .true.)
+    write (*,900) prop%name(1:ilen), &
+         real(prop%clockRate)/1000.0, &
+         real(prop%totalGlobalMem)/1024.0/1024.0
+
+#endif
+    istat = cudaEventCreate(start_point)
+    istat = cudaEventCreate(end_point)
+    clock_rate=1.0
   end subroutine timer_setup
 
-  function tic() result(itic)
-    integer(fp_kind) :: itic
-    istat = cudaEventRecord(clock_start,0)     
-    itic = floor(clock_start)
+  type(cudaEvent) function ticU()
+    type(cudaEvent) :: itic
+    istat = cudaEventRecord(start_point,0)
+    ticU = start_point
   end function tic
 
-  function toc (arg) result (elapsed_time)
-    real(fp_kind) :: elapsed_time
-
-    type (cudaEvent), optional, intent(in) :: arg
-    if( present(arg)) then
-       clock_start = arg
-    end if
-    istat = cudaEventRecord(clock_end,0)
-    istat = cudaEventSynchronize(clock_end)
-    istat = cudaEventElapsedTime(elapsed, clock_start, clock_end)
-    elapsed_time=elapsed
+  real(dp) function tocU(start_optional)
+    type(cudaEvent), intent(in), optional ::  start_optional
+    if (present(start_optional)) start_point = start_optional
+    real(fp_kind) :: elapsed
+    istat = cudaEventRecord(end_point,0)
+    istat = cudaEventSynchronize(end_point)
+    istat = cudaEventElapsedTime(elapsed, start_point, end_point)
+    tocU=elapsed
   end function toc
 
-  subroutine timer_kill () !timer_destructor(this)
-
-    istat = cudaEventDestroy(clock_start)
-    istat = cudaEventDestroy(clock_end)
-
+  !> timer_destructor(this)
+  subroutine timer_kill() 
+    istat = cudaEventDestroy(start_point)
+    istat = cudaEventDestroy(end_point)
   end subroutine timer_kill !timer_destructor
 
+  !< Print Info and clock time
   subroutine now()
+    !integer :: ilen
+    type(cudaDeviceProp) :: prop
+     istat = cudaGetDeviceProperties(prop,0)
+     ilen = verify(prop%name, ' ', .true.)
+     write (*,900) prop%name(1:ilen), &
+                real(prop%clockRate)/1000.0, &
+                real(prop%totalGlobalMem)/1024.0/1024.0
+     character(len=8)  :: date
+     character(len=10) :: time
+     character(len=33) :: f_result
+     !***********************************************************************************
+     call date_and_time(date,time)
+     write (*,'(A,A,A,A,A,A,A)') 'Date: ',date(7:8),'-',date(5:6),'-',date(1:4),'\n'
+     write (*,'(A,A,A,A,A,A,A)') 'Time: ',time(1:2),':',time(3:4),':',time(5:10),'\n'
 
   end subroutine now
 
-end module simple_timer
+end module simple_timer_cuda
 
 
 
