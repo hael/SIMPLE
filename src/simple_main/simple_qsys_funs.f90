@@ -134,7 +134,7 @@ contains
         if( .not. env%isthere('simple_path') )stop 'Path to SIMPLE directory is required in simple_distr_config.env (simple_path)'        
         ! Queue keys
         if( .not. env%isthere('qsys_name') ) &
-            & stop 'The type of the queuing system is required in simple_distr_config.env: qsys_name=<local|slurm|pbs>'
+            & stop 'The type of the queuing system is required in simple_distr_config.env: qsys_name=<local|slurm|pbs|sge>'
         qsys_name = env%get('qsys_name')
         if( qsys_name.ne.'local' .and. qsys_name.ne.'pbs' .and. qsys_name.ne.'slurm' .and. qsys_name.ne.'sge' ) &
             & stop 'Invalid qsys_name in simple_distr_config.env'

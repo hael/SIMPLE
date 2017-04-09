@@ -35,6 +35,7 @@ contains
         call self%env%push('qsys_submit_cmd',         'qsub')
         ! ### JOB PARAMETERS
         call self%env%push('job_name',               '#$ -N')
+        call self%env%push('job_addon_line',         '')
     end subroutine new_sge_env
 
     !> \brief  is a getter
@@ -46,9 +47,10 @@ contains
 
     !> \brief  writes the header instructions
     subroutine write_sge_header( self, job_descr, fhandle )
-        class(qsys_sge), intent(in) :: self
+        class(qsys_sge), intent(in)   :: self
         class(chash),      intent(in) :: job_descr
         integer, optional, intent(in) :: fhandle
+        character(len=:), allocatable :: addon_line
         character(len=:), allocatable :: key, qsub_cmd, qsub_val, bind2socket
         integer :: i, which
         logical :: write2file
@@ -56,14 +58,26 @@ contains
         if( present(fhandle) ) write2file = .true.
         do i=1,job_descr%size_of_chash()
             key   = job_descr%get_key(i)
+
+            print *, 'key from sge: ', key
+
             which = self%env%lookup(key)
             if( which > 0 )then
                 qsub_cmd = self%env%get(which)
                 qsub_val = job_descr%get(i)
-                if( write2file )then
-                    write(fhandle,'(a)') qsub_cmd//' '//qsub_val
+                if( key .eq. 'job_addon_line' )then
+                    if( allocated(addon_line) ) deallocate(addon_line)
+
+                    print *, 'qsub val for key(job_addon_line): ', qsub_val
+ 
+                    allocate( addon_line, source=qsub_val )
+                    cycle
                 else
-                    write(*,'(a)') qsub_cmd//' '//qsub_val
+                    if( write2file )then
+                        write(fhandle,'(a)') qsub_cmd//' '//qsub_val
+                    else
+                        write(*,'(a)') qsub_cmd//' '//qsub_val
+                    endif
                 endif
                 if(key .eq. 'job_cpus_per_task')then
                     if( allocated(bind2socket) ) deallocate(bind2socket)
@@ -79,18 +93,24 @@ contains
             write(fhandle,'(a)') '#$ -S /bin/bash'
             write(fhandle,'(a)') '#$ -cwd'
             write(fhandle,'(a)') '#$ -o outfile -j y'
-            write(fhandle,'(a)') '#$ -pe mpi 1'
+!            write(fhandle,'(a)') '#$ -pe mpi 1'
             if( allocated(bind2socket) )then
                  write(fhandle,'(a)') bind2socket
+            endif
+            if( allocated(addon_line) )then
+                 write(fhandle, '(a)') addon_line
             endif
         else
             write(*,'(a)') '#$ -V'
             write(*,'(a)') '#$ -S /bin/bash'
             write(*,'(a)') '#$ -cwd'
             write(*,'(a)') '#$ -o outfile -j y'
-            write(*,'(a)') '#$ -pe mpi 1'
+ !           write(*,'(a)') '#$ -pe mpi 1'
             if( allocated(bind2socket) )then
                  write(*,'(a)') bind2socket
+            endif
+            if( allocated(addon_line) )then
+                 write(*,'(a)') addon_line
             endif
         endif
     end subroutine write_sge_header
