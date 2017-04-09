@@ -2,7 +2,7 @@
 
 ####### The project path #####
 
-Simple_source=/Users/creboul/Simple3
+Simple_source=/Users/hael/src/fortran/simple_git
 
 ####### The switches #####
 
@@ -32,7 +32,7 @@ MODDIR=obj/SIMPLEOFILES
 CC=$(CCCOMP)
 CFLAGS= -O3 -O -DMACOSX -fopenmp  
 CCLIB=$(CC) -c $(CFLAGS) -I $(MODDIR)                                            \
-                         -I /opt/local/include/
+                         -I /sw/include/
 
 ################
 # C++ compiler.#
@@ -42,7 +42,7 @@ CPP=$(GCC)
 CPPFLAGS=-DADD_ -O3 -DMACOSX -fopenmp  
 CPPCLIB=$(CPP) -c $(CPPFLAGS) -I $(MODDIR)                                            \
                               -I $(Simple_source)/test_code                           \
-                              -I /opt/local/include/
+                              -I /sw/include/
 
 #######################
 # Fortran 90 compiler.#
