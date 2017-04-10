@@ -78,9 +78,9 @@ contains
         if( p%l_distr_exec )then
             ! nothing to do
         else
-            if( p%l_shellw .and. frac_srch_space>=50. )call cont3D_shellweight(b, p, cline)
+            if( p%l_shellw )call cont3D_shellweight(b, p, cline)
         endif
-        call setup_shellweights(b, p, doshellweight, wmat, res, res_pad)
+        call setup_shellweights(b, p, doshellweight, wmat, res=res, res_pad=res_pad)
 
         ! PREPARE REFVOLS
         call prep_vols(b, p, cline)
@@ -103,7 +103,7 @@ contains
         else
             call pftcc%new(nrefs_per_ptcl, [1,1], [p%boxmatch,p%boxmatch,1],p%kfromto, p%ring2, p%ctf)
         endif
-        ! the pftcc is only intitalized here so the img polarizer can be
+        ! the pftcc is only initialized here so the img polarizer can be
         call b%img%init_imgpolarizer(pftcc)
 
         ! INITIALIZE
@@ -138,31 +138,26 @@ contains
             call pcont3Dsrch%do_srch
             orientation = pcont3Dsrch%get_best_ori()
             call b%a%set_ori(iptcl, orientation)
-            softoris = pcont3Dsrch%get_softoris()
             ! grid
             if( doshellweight )then
                 wresamp = resample_filter(wmat(iptcl,:), res, res_pad)
                 if(p%npeaks == 1)then
                     call grid_ptcl(b, p, iptcl, cnt_glob, orientation, shellweights=wresamp)
                 else
+                    softoris = pcont3Dsrch%get_softoris()
                     call grid_ptcl(b, p, iptcl, cnt_glob, orientation, os=softoris, shellweights=wresamp)
                 endif
             else
                 if(p%npeaks == 1)then
                     call grid_ptcl(b, p, iptcl, cnt_glob, orientation)
                 else
+                    softoris = pcont3Dsrch%get_softoris()
                     call grid_ptcl(b, p, iptcl, cnt_glob, orientation, os=softoris)
                 endif
             endif
             ! output orientation
             call b%a%write(iptcl, p%outfile)
         enddo
-        ! cleanup (mostly for debug purposes)
-        call pftcc%kill
-        do state=1,p%nstates
-            if(state_exists(state))call b%refvols(state)%kill_expanded
-        enddo
-        !call b%img%kill_imgpolarizer is private a the moment
 
         ! orientations output
         !call b%a%write(p%outfile, [p%fromp,p%top])
@@ -182,6 +177,11 @@ contains
             converged = b%conv%check_conv3D(update_res)
         endif
         ! DEALLOCATE
+        call pftcc%kill
+        do state=1,p%nstates
+            if(state_exists(state))call b%refvols(state)%kill_expanded
+        enddo
+        !call b%img%kill_imgpolarizer is private a the moment
         if(allocated(wmat)   ) deallocate(wmat)
         if(allocated(wresamp)) deallocate(wresamp)
         if(allocated(res)    ) deallocate(res)
@@ -196,14 +196,14 @@ contains
         ! PREPARATION OF VOLUMES FOR PROJECTION
         do state=1,p%nstates
             if( state_exists(state) )then
-                call preprefvol( b, p, cline, state )
+                call preprefvol( b, p, cline, state, doexpand=.false. )
                 b%refvols(state) = b%vol
                 call b%refvols(state)%expand_cmat
             endif
         enddo
         if( debug )write(*,*)'prep volumes done'
         ! bring back the original b%vol size
-        if( p%boxmatch < p%box ) call b%vol%new([p%box,p%box,p%box], p%smpd) ! to double check
+        if( p%boxmatch < p%box )call b%vol%new([p%box,p%box,p%box], p%smpd) ! to double check
     end subroutine prep_vols
 
     subroutine prep_pftcc(b, p, iptcl, cnt_glob)
@@ -226,8 +226,7 @@ contains
         ! SEARCH SPACE PREP
         eullims = b%se%srchrange()
         call cone%rnd_proj_space(NREFS, optcl, p%athres, eullims)
-        call cone%set_ori(1, optcl)    ! previous best is the first
-        call cone%set(1, 'corr', -1.)  ! !!!
+        call cone%set_euler(1, optcl%get_euler()) ! previous best is the first
         do iref = 1, NREFS
             call cone%e3set(iref, 0.)
         enddo

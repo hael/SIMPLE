@@ -63,7 +63,6 @@ type(npeaks_commander)             :: xnpeaks
 type(nspace_commander)             :: xnspace
 type(shellweight3D_commander)      :: xshellweight3D
 type(prime3D_init_commander)       :: xprime3D_init
-type(het_init_commander)           :: xhet_init
 type(multiptcl_init_commander)     :: xmultiptcl_init
 type(prime3D_commander)            :: xprime3D
 type(cont3D_commander)             :: xcont3D
@@ -871,33 +870,6 @@ select case(prg)
         if( .not. cline%defined('trs') ) call cline%set('trs', 3.) ! to assure that shifts are being used
         !execute
         call xmultiptcl_init%execute(cline)     
-    case( 'het_init' )
-        !==Program het_init
-        !
-        ! <het_init/begin> <het_init/end> 
-        !
-        ! set required keys
-        keys_required(1) = 'stk'
-        keys_required(2) = 'smpd'
-        keys_required(3) = 'oritab'
-        keys_required(4) = 'nstates'
-        keys_required(5) = 'ctf'
-        keys_required(6) = 'trs'
-        ! set optionnal keys
-        keys_optional(1) = 'nthr'
-        keys_optional(2) = 'deftab'
-        keys_optional(3) = 'msk'
-        keys_optional(4) = 'inner'
-        keys_optional(5) = 'width'
-        keys_optional(6) = 'lp'
-        keys_optional(7) = 'eo'
-        keys_optional(8) = 'frac'        
-        ! parse command line
-        call cline%parse(keys_required(:6), keys_optional(:8))
-        ! set defaults
-        if( .not. cline%defined('eo') ) call cline%set('eo', 'no')
-        !execute
-        call xhet_init%execute(cline)    
     case( 'prime3D' )
         !==Program prime3D
         !

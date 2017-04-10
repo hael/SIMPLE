@@ -953,7 +953,7 @@ contains
                 ! replaced the above with execution in the queue to reduce the stress on the login node
                 ! call exec_simple_prg(simple_exec_bin, cline_volassemble)
                 if( p_master%eo .eq. 'yes' )then
-                    volassemble_output = 'RESOLUTION'//str_iter
+                    volassemble_output = 'RESOLUTION'//trim(str_iter)
                 else
                     volassemble_output = 'VOLASSEMBLE'
                 endif
@@ -1097,15 +1097,13 @@ contains
             &stop 'Incompatible options: nstates>1 and dynlp=yes'
         if( p_master%automsk.eq.'yes' .and. p_master%dynlp.eq.'yes' )&
             &stop 'Incompatible options: automsk=yes and dynlp=yes'
-        !if( p_master%eo.eq.'yes' .and. p_master%dynlp.eq.'yes' )&
-        !    &stop 'Incompatible options: eo=yes and dynlp=yes'
         ! setup the environment for distributed execution
         call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr)
         simple_exec_bin = qscripts%get_exec_bin()
 
         ! initialise
-        if( .not. cline%defined('nspace') ) call cline%set('nspace', 100.)
-        call cline%set( 'box', real(p_master%box) )
+        if( .not. cline%defined('nspace') ) call cline%set('nspace', 1000.)
+        call cline%set('box', real(p_master%box))
         ! prepare command lines from prototype master
         cline_recvol_distr   = cline
         cline_check3D_conv   = cline
@@ -1194,9 +1192,9 @@ contains
             ! ASSEMBLE ALIGNMENT DOCS
             oritab = trim(ITERFBODY)//trim(str_iter)//'.txt'    
             call cline%set( 'oritab', oritab )
-            call cline_shellweight3D%set( 'oritab', trim(oritab) )
-            call cline_merge_algndocs%set( 'outfile', trim(oritab) )
-            call xmerge_algndocs%execute( cline_merge_algndocs )
+            call cline_shellweight3D%set('oritab', trim(oritab))
+            call cline_merge_algndocs%set('outfile', trim(oritab))
+            call xmerge_algndocs%execute(cline_merge_algndocs)
             ! ASSEMBLE VOLUMES
             call cline_volassemble%set( 'oritab', trim(oritab) )
             do state = 1,p_master%nstates
@@ -1209,7 +1207,7 @@ contains
             ! its own process id seem to resolve the system instabilities on fast cpu systems
             ! call exec_simple_prg(simple_exec_bin, cline_volassemble)
             if( p_master%eo .eq. 'yes' )then
-                volassemble_output = 'RESOLUTION'//str_iter
+                volassemble_output = 'RESOLUTION'//trim(str_iter)
             else
                 volassemble_output = 'VOLASSEMBLE'
             endif
@@ -1340,7 +1338,6 @@ contains
         type(chash)                         :: myq_descr, job_descr
         type(qsys_factory)                  :: qsys_fac
         class(qsys_base), pointer           :: myqsys
-        integer                             :: istate
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! setup the environment for distributed execution

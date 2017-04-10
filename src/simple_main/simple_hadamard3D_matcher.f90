@@ -68,11 +68,10 @@ contains
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: update_res, converged
         type(oris)                    :: prime3D_oris
-        real, allocatable             :: wmat(:,:), wresamp(:), res(:), res_pad(:), corrs(:), corrs_incl(:)
-        logical, allocatable          :: incl(:)
+        real, allocatable             :: wmat(:,:), wresamp(:), res(:), res_pad(:)
         real                          :: norm, het_corr_thresh
-        integer                       :: iptcl, fnr, file_stat, s, inptcls, prev_state, istate
-        integer                       :: statecnt(p%nstates), ind, thresh_ind, n_samples, n_incl
+        integer                       :: iptcl, s, inptcls, prev_state, istate
+        integer                       :: statecnt(p%nstates)
         logical                       :: doshellweight, dohet
 
         inptcls = p%top - p%fromp + 1
@@ -118,7 +117,7 @@ contains
             if( p%l_shellw .and. frac_srch_space >= SHW_FRAC_LIM .and. which_iter > 1 )&
             &call cont3D_shellweight(b, p, cline)
         endif
-        call setup_shellweights(b, p, doshellweight, wmat, res, res_pad)
+        call setup_shellweights(b, p, doshellweight, wmat, res=res, res_pad=res_pad)
 
         ! HETEROGEINITY
         dohet = .false.
@@ -286,7 +285,7 @@ contains
         integer, optional, intent(in)    :: nsamp_in
         type(ran_tabu)       :: rt
         integer, allocatable :: sample(:)
-        integer              :: i, j, k, nsamp, alloc_stat
+        integer              :: i, k, nsamp, alloc_stat
         if( p%vols(1) == '' )then
             p%oritab = 'prime3D_startdoc.txt'
             if( p%refine .eq. 'no' .or. p%refine .eq. 'adasym' )then
@@ -364,7 +363,7 @@ contains
         ! PREPARATION OF REFERENCES IN PFTCC
         call prep_refs_pftcc4align( b, p, cline )
         ! PREPARATION OF PARTICLES IN PFTCC
-        call prep_ptcls_pftcc4align( b, p, cline, ppfts_fname )
+        call prep_ptcls_pftcc4align( b, p, ppfts_fname )
         ! subtract the mean shell values for xfel correlations
         if( p%l_xfel ) call pftcc%xfel_subtract_shell_mean()
         if( DEBUG ) write(*,*) '*** hadamard3D_matcher ***: finished preppftcc4align'
@@ -406,10 +405,9 @@ contains
         if( p%boxmatch < p%box ) call b%vol%new([p%box,p%box,p%box], p%smpd)
     end subroutine prep_refs_pftcc4align
 
-    subroutine prep_ptcls_pftcc4align( b, p, cline, ppfts_fname )
+    subroutine prep_ptcls_pftcc4align( b, p, ppfts_fname )
         class(build),               intent(inout) :: b
         class(params),              intent(inout) :: p
-        class(cmdline),             intent(inout) :: cline
         character(len=*), optional, intent(in)    :: ppfts_fname
         type(ori) :: o
         integer   :: cnt, s, iptcl, istate, ntot, progress_cnt

@@ -501,10 +501,10 @@ contains
         class(cmdline),    intent(inout) :: cline
         integer,           intent(in)    :: s
         logical, optional, intent(in)    :: doexpand
-        logical :: ddoexpand
+        logical :: l_doexpand
         real    :: shvec(3)
-        ddoexpand = .true.
-        if( present(doexpand) ) ddoexpand = doexpand
+        l_doexpand = .true.
+        if( present(doexpand) )l_doexpand = doexpand
         if( p%boxmatch < p%box )call b%vol%new([p%box,p%box,p%box],p%smpd) ! ensure correct dim
         call b%vol%read(p%vols(s), isxfel=p%l_xfel)
         if( p%l_xfel )then
@@ -549,7 +549,7 @@ contains
         ! FT volume
         call b%vol%fwd_ft
         ! expand for fast interpolation
-        if( ddoexpand ) call b%vol%expand_cmat
+        if( l_doexpand )call b%vol%expand_cmat
 
         contains
 

@@ -63,7 +63,6 @@ contains
             self%refvols(s) = b%vol
             call self%refvols(s)%expand_cmat
         end do
-        call b%vol%kill_expanded
         self%existence = .true.
     end subroutine new
 
@@ -219,7 +218,7 @@ contains
     !>  \brief  is a destructor
     subroutine kill( self )
         class(cartft_corrcalc), intent(inout) :: self
-        integer :: s, nrefs, iref
+        integer :: s, iref
         if( self%existence )then
             self%pp => null()
             do s=1,self%nstates
@@ -228,8 +227,7 @@ contains
             end do
             deallocate(self%refvols)
             if( allocated(self%img_refs) )then
-                nrefs = size(self%img_refs)
-                do iref=1,nrefs
+                do iref=1,size(self%img_refs)
                     call self%img_refs(iref)%kill
                 end do
                 deallocate(self%img_refs)

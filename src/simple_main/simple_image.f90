@@ -159,6 +159,7 @@ type :: image
     procedure          :: center
     procedure          :: bin_inv
     procedure          :: grow_bin
+    procedure          :: grow_bin2
     procedure          :: cos_edge
     procedure          :: cos_edge2
     procedure          :: increment
@@ -2537,8 +2538,37 @@ contains
             forall( i=1:self%ldim(1), j=1:self%ldim(2), k=1:self%ldim(3), add_pixels(i,j,k) ) &
                 & self%rmat(i,j,k) = 1.
         endif
+        where(add_pixels) self%rmat = 1.
         deallocate( add_pixels )
     end subroutine grow_bin
+
+    !>  \brief  adds one layer of pixels bordering the background in a binary image
+    subroutine grow_bin2( self )
+        class(image), intent(inout) :: self
+        integer                     :: alloc_stat, x, y, z
+        logical, allocatable        :: lmat(:,:,:), imat(:,:,:)
+        if( self%ft ) stop 'only for real images; grow_bin; simple image'
+        x = self%ldim(1)
+        y = self%ldim(2)
+        z = self%ldim(3)
+        allocate(imat(x, y, z), stat=alloc_stat)
+        call alloc_err('grow_bin; simple_image', alloc_stat)
+        lmat = (self%rmat(:x, :y, :z) > 0.5)
+        imat = lmat
+
+        imat( :x-1, :y,   :z) = imat( :x-1, :y,   :z) .or. lmat(2:x,   :y,   :z)
+        imat(2:x,   :y,   :z) = imat(2:x,   :y,   :z) .or. lmat( :x-1, :y,   :z)
+        imat( :x,   :y-1, :z) = imat( :,    :y-1, :z) .or. lmat( :x,  2:y,   :z)
+        imat( :x,  2:y,   :z) = imat( :,   2:y,   :z) .or. lmat( :x,   :y-1, :z)
+        ! ...
+
+
+        if( self%is_3d() )then
+
+        endif
+        where(imat) self%rmat = 1.
+        deallocate(imat,lmat)
+    end subroutine grow_bin2
 
     !>  \brief  applies cosine edge to a binary image
     subroutine cos_edge( self, falloff )
@@ -2590,8 +2620,8 @@ contains
                 endif
             end do
         end do
-        self%rmat = rmat
-        deallocate( rmat )
+        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = rmat
+        deallocate(rmat)
 
         contains
 
@@ -2632,7 +2662,6 @@ contains
                     enddo
                 enddo
             end subroutine update_mask_3d
-
     end subroutine cos_edge
 
     !>  \brief  applies cosine edge to a binary image
@@ -2661,7 +2690,7 @@ contains
         imat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = 1 - nint(self%rmat(1:self%ldim(1),:,:))
         imat = imat * falloff_sq
         ! gets minimum distances from mask
-        !!$omp parallel do default(shared) private(i,j,k,is,ie,il,ir,js,je,jl,jr,kl,kr)&
+        !!$omp parallel do default(shared) private(i,j,k,is,ie,il,ir,js,je,jl,jr,kl,kr,vec)&
         !!$omp reduction(min:imat) schedule(auto)
         do i=1,self%ldim(1)
             if(.not. any(imat(i,:,:) == 0))cycle
@@ -2719,7 +2748,6 @@ contains
             ! updates neighbours 
             subroutine update_mask_2d
                 integer :: ii,jj,dist_sq
-                real    :: w
                 do ii=il,ir
                     vec(1) = ii - i
                     do jj=jl,jr

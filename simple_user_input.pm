@@ -24,7 +24,7 @@ use Config;
 #####################################################################
 
 # enter the SIMPLE root path
-our$SIMPLE_PATH="/home/cxc21780/apps/simple_beta/";
+our$SIMPLE_PATH="/Users/creboul/Simple3";
 # specifying the compiling directives
 # with OpenMP:  -fopenmp, CUDA: -DCUDA
 # Benchmarking: -DBENCH
@@ -37,7 +37,7 @@ getPlatform();
 # would you like to compile the library from scracth?
 # make cleanall before make and link: 0   make only and generate scripts : 2
 # make clean before make and link   : 1   link, compile production only  : 3 
-our$ICOMPILE = 2;
+our$ICOMPILE = 1;
 # the name compiler default(linux): cc, gcc, gfortran
 # the name compiler default(MacOSX): /usr/local/bin/gcc, /usr/local/bin/gcc,
 #                                    /usr/local/bin/gfortran
@@ -48,9 +48,9 @@ our$FCOMPILER = "gfortran";
 our$CUDADIR="";
 # enter the fftw lib default: /usr/lib/x86_64-linux-gnu for [linux]
 #                             /usr/local/lib for [MacOSX]
-our$FFTW_LIB="/dls_sw/apps/fftw/3.3.3/64/5/lib";
+our$FFTW_LIB="/opt/local/lib/";
 # on clusters we need extra path after module load fftw/3.3.4-gcc to identify the FFTW header
-our$FFTW_INC="/dls_sw/apps/fftw/3.3.3/64/5/include";
+our$FFTW_INC="/opt/local/include/";
 # Modules and objects directories. default: obj/SIMPLEOFILES
 our$OBJDIR="obj/SIMPLEOFILES";
 our$MODDIR="obj/SIMPLEOFILES";

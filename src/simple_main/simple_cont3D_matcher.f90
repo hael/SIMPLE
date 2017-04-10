@@ -260,7 +260,7 @@ contains
             else
                 call orientation%reject
             endif
-            call b%a%set_ori(iptcl,orientation)
+            call b%a%set_ori(iptcl, orientation)
             call b%a%write(iptcl, p%outfile)
         end do
         p%oritab = p%outfile
