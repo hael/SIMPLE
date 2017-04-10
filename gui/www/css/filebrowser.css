@@ -1,0 +1,24 @@
+#filebrowserlisttable tr:nth-child(even) {
+	background: #CCC;
+}
+
+#filebrowserlisttable tr:nth-child(odd) {
+	background: #FFF;
+}
+
+.filebrowserpopup {
+	position: absolute;
+	height: 400px;
+	width: 600px;
+	top: calc(50% - 200px);
+	left: calc(50% - 200px);
+	background-color: white;
+	border-radius: 5px;
+	display: none;
+}
+
+#filebrowserlisttable{
+	overflow: auto;
+	height: 300px;
+	display: block;
+}
