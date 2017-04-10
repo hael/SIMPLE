@@ -50,9 +50,6 @@ my $opti;      # compiler optimisation variable
 my $dbg_lvl_f; # debugging directives
 # test if all required simple directories exist
 check_lib_paths();
-
-compile_gui();
-
 # make sure that the object folder is created
 make_path("$SIMPLE_PATH/obj/SIMPLEOFILES/");
 if( $FCOMPILER =~ /pgfortran/ ){
@@ -308,6 +305,7 @@ sub compile_gui{
     print "*********************************************************\n";
 	print "Installing websocketd ... ";
 	print color('bold green');
+    make_path($guidir.'/bin');
 	if($PLATFORM == 0){
 		copy($guidir . "/src/ext/websocketd-mac", $guidir . "/bin/websocketd") or die "Failed: $!";
 	}elsif($PLATFORM == 1){
