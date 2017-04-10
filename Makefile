@@ -61,13 +61,16 @@ production_code: ;
 utils_code: s_utes  \
             s_utils ;
 
-s_utes: simple_strings.o      \
+s_utes: simple_arr.o          \
+        simple_sll.o          \
+        simple_strings.o      \
         simple_imgheadrec.o   \
         simple_imghead.o      \
         simple_filehandling.o \
         simple_jiffys.o       \
-        simple_rnd.o          \
         simple_math.o         \
+        simple_magic_boxes.o  \
+        simple_rnd.o          \
         gnufor2.o             \
         simple_imgfile.o      \
         simple_stat.o         \
@@ -119,8 +122,6 @@ general: simple_hash.o            \
          simple_params.o          \
          simple_oris.o            \
          simple_ftiter.o          \
-         simple_arr.o             \
-         simple_sll.o             \
          simple_kbinterpol.o      \
          simple_winfuns.o         \
          simple_fsc_compare.o     \
@@ -132,18 +133,15 @@ simple: simple_image.o                  \
         simple_sym.o                    \
         simple_corrmat.o                \
         simple_gridding.o               \
-        simple_polarft.o                \
         simple_polarft_corrcalc.o       \
         simple_projector.o              \
         simple_projector_hlev.o         \
         simple_volpft_corrcalc.o        \
         simple_ft_shsrch.o              \
         simple_ftexp_shsrch.o           \
-        simple_polarft_shsrch.o         \
         simple_volpft_srch.o            \
         simple_pftcc_shsrch.o           \
         simple_pftcc_inplsrch.o         \
-        simple_nnimgs.o                 \
         simple_filterer.o               \
         simple_unblur.o                 \
         simple_convergence.o            \
@@ -182,6 +180,7 @@ matcher: simple_picker.o                  \
          simple_scatter_orisrch.o         \
          simple_cftcc_srch.o              \
          simple_cftcc_shsrch.o            \
+         simple_pftcc_contsrch.o          \
          simple_cont3D_matcher.o          \
          simple_pcont3D_matcher.o         \
          simple_hadamard2D_matcher.o      \
@@ -197,6 +196,8 @@ cluster_cavg: simple_matchpursuit.o       \
 
 qsys: simple_qsys_base.o                  \
       simple_qsys_slurm.o                 \
+      simple_qsys_sge.o                   \
+      simple_qsys_pbs.o                   \
       simple_qsys_local.o                 \
       simple_qsys_factory.o               \
       simple_qsys_ctrl.o                  \

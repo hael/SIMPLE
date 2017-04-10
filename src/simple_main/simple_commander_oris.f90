@@ -283,7 +283,7 @@ contains
             call o%write('aggregate_oris.txt')
             return
         else
-            call b%a%rnd_oris(p%trs) 
+            call b%a%rnd_oris(p%trs)
         endif
         if( p%nstates > 1 ) call b%a%rnd_states(p%nstates)
         if( cline%defined('astigerr') )then
@@ -312,14 +312,14 @@ contains
         end type state_organiser
         type(params)                       :: p
         type(build)                        :: b
-        type(state_organiser), allocatable :: labeler(:)
-        type(image), allocatable           :: imgs_sel(:), imgs_cls(:)
-        type(oris)                         :: o_comlindoc, o_state, a_copy, o_oritab2
+        type(oris)                         :: o_comlindoc, o_state, a_copy, o_oritab3D
         type(ori)                          :: ori2d, ori_comp
-        real, allocatable                  :: correlations(:,:)
-        integer, allocatable               :: statepops(:), state_particles(:), rejected_particles(:)
+        type(state_organiser), allocatable :: labeler(:)
+        type(image),           allocatable :: imgs_sel(:), imgs_cls(:)
+        real,                  allocatable :: correlations(:,:)
+        integer,               allocatable :: statepops(:), state_particles(:), rejected_particles(:)  
         integer                            :: isel, nsel, loc(1), iptcl, pind, icls
-        integer                            :: nlines_oritab, nlines_oritab2, nlines_comlindoc, nlines_deftab
+        integer                            :: nlines_oritab, nlines_oritab3D, nlines_comlindoc, nlines_deftab
         integer                            :: cnt, istate, funit, iline, nls, lfoo(3)
         logical, allocatable               :: statedoc_exists(:), selected(:)
         character(len=STDLEN)              :: statedoc
@@ -347,8 +347,10 @@ contains
                 if( nlines(p%doclist) /= 1 ) stop 'need a comlindoc together with statelist'        
             endif
         endif
-        if( cline%defined('comlindoc') .and. cline%defined('oritab2') ) stop 'either comlindoc or oritab2 can be inputted, not both'
-        if( cline%defined('doclist')   .and. cline%defined('oritab2') ) stop 'either doclist or oritab2 can be inputted, not both'
+        if( cline%defined('comlindoc') .and. cline%defined('oritab3D') )&
+        &stop 'either comlindoc or oritab3D can be inputted, not both'
+        if( cline%defined('doclist')   .and. cline%defined('oritab3D') )&
+        &stop 'either doclist or oritab3D can be inputted, not both'
         allocate(imgs_sel(nsel), imgs_cls(p%ncls))
         ! read images
         do isel=1,nsel
@@ -379,7 +381,7 @@ contains
         ! erase deselected (by setting their state to zero)
         do icls=1,p%ncls
             if( selected(icls) ) cycle
-            if( b%a%get_clspop(icls) > 0 )then
+            if( b%a%get_cls_pop(icls) > 0 )then
                 rejected_particles = b%a%get_cls_pinds(icls)
                 do iptcl=1,size(rejected_particles)
                     call b%a%set(rejected_particles(iptcl), 'state', 0.)
@@ -417,16 +419,16 @@ contains
             statepops(1)      = nsel
             labeler(:)%istate = 1
         endif
-        if( cline%defined('oritab2') )then
-            if( .not. file_exists(p%oritab2) ) stop 'Inputted oritab2 does not exist in the cwd'
-            nlines_oritab2 = nlines(p%oritab2)
-            if( nlines_oritab2 /= nsel ) stop 'Nr lines in oritab2 /= nr of selected cavgs'
-            o_oritab2 = oris(nsel)
-            call o_oritab2%read(p%oritab2)
+        if( cline%defined('oritab3D') )then
+            if( .not. file_exists(p%oritab3D) ) stop 'Inputted oritab3D does not exist in the cwd'
+            nlines_oritab3D = nlines(p%oritab3D)
+            if( nlines_oritab3D /= nsel ) stop 'Nr lines in oritab3D /= nr of selected cavgs'
+            o_oritab3D = oris(nsel)
+            call o_oritab3D%read(p%oritab3D)
             ! compose orientations and set states
             do isel=1,nsel
                 ! get 3d ori
-                labeler(isel)%ori3d  = o_oritab2%get_ori(isel)
+                labeler(isel)%ori3d  = o_oritab3D%get_ori(isel)
                 labeler(isel)%istate = nint(labeler(isel)%ori3d%get('state'))
                 corr                 = labeler(isel)%ori3d%get('corr')
                 do iptcl=1,size(labeler(isel)%particles)
@@ -559,8 +561,8 @@ contains
         type(build)       :: b
         type(ori)         :: orientation
         type(params)      :: p
-        real              :: normal(3), thresh, corr
-        integer           :: s, i, nincl, ind
+        real              :: normal(3), thresh, corr, percen
+        integer           :: s, i, nincl, ind, icls, ncls
         real, allocatable :: corrs(:)
         p = params(cline)
         call b%build_general_tbox(p, cline)
@@ -625,6 +627,17 @@ contains
                     write(*,*) 'particle: ', i, 'included: ', 0
                 endif
             end do
+        endif
+        if( cline%defined('nsig') )then
+            ncls = b%a%get_ncls()
+            percen = 0.
+            write(*,'(a)') '>>> SIGMA THRESHOLDING CLUSTERING SOLUTION'
+            do icls=1,ncls
+                call progress(icls, ncls)
+                percen = percen + b%a%cls_corr_sigthresh(icls, p%nsig)
+            end do
+            percen = percen/real(ncls)
+            write(*,*) percen, ' % of the particles included at sigma ', p%nsig 
         endif
         call b%a%write(p%outfile)
         call simple_end('**** SIMPLE_ORISOPS NORMAL STOP ****')

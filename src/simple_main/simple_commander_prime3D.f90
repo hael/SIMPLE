@@ -215,7 +215,7 @@ contains
         call b%build_rec_tbox(p)
         if(.not.cline%defined('minp'))p%minp = nint( real(b%a%get_noris())/100. )
         call set_bp_range( b, p, cline )
-        srch_common = prime_srch(p, p%nspace, round2even(twopi*real(p%ring2)))
+        srch_common = prime_srch(p)
         ! initial states, volumes & correlations
         do i = 1,b%a%get_noris()
             if(nint(b%a%get(i,'state')).ne.p%state)call b%a%set(i,'state',0.)
@@ -430,6 +430,14 @@ contains
                 stop 'need oritab input for execution of prime3D with refine mode'
             endif
         endif
+        if( p%doautomsk )then
+            ! automasking specifics
+            if(p%oritab .eq. '')stop 'need oritab input for automasking'
+            if(.not. cline%defined('binwidth'))p%binwidth = min(10, ceiling(0.025*real(p%box)))
+            if(.not. cline%defined('edge'))p%edge = min(12, max(12, ceiling(0.025*real(p%box))))
+            write(*,'(A,I3)')'>>> AUTOMASKING BINARY LAYERS:', p%binwidth
+            write(*,'(A,I3)')'>>> AUTOMASKING SOFT LAYERS:  ', p%edge
+        endif
         call b%build_general_tbox(p, cline)   ! general objects built
         if( .not. cline%defined('eo') ) p%eo = 'no' ! default
         if( p%eo .eq. 'yes' ) p%dynlp = 'no'    
@@ -493,8 +501,8 @@ contains
         class(cmdline),          intent(inout) :: cline
         type(params) :: p
         type(build)  :: b
-        integer       :: i, startit
-        logical       :: converged=.false.
+        integer      :: i, startit
+        logical      :: converged=.false.
         p = params(cline) ! parameters generated
         if( p%xfel .eq. 'yes' )then
             if( cline%defined('msk') .or. cline%defined('mw') .or.&
@@ -506,20 +514,26 @@ contains
         call b%build_cont3D_tbox(p)
         if( cline%defined('part') )then
             if( .not. cline%defined('outfile') ) stop 'need unique output file for parallel jobs'
-                if(p%refine.eq.'polar')then
-                    call pcont3D_exec(b, p, cline, 0, converged) ! partition or not, depending on 'part'
-                else
-                    call cont3D_exec(b, p, cline, 0, converged )                    
-                endif
+                select case(p%refine)
+                    case('yes')
+                        call pcont3D_exec(b, p, cline, 0, converged)
+                    case('cart','polar')
+                        call cont3D_exec(b, p, cline, 0, converged)   
+                    case DEFAULT
+                        stop 'unknown refinement mode; simple_commander_prime3D%exec_cont3D'                 
+                end select
         else
             startit = 1
             if( cline%defined('startit') )startit = p%startit
             do i=startit,p%maxits
-                if(p%refine.eq.'polar')then
-                    call pcont3D_exec(b, p, cline, i, converged )
-                else
-                    call cont3D_exec(b, p, cline, i, converged )                    
-                endif
+                select case(p%refine)
+                    case('yes')
+                        call pcont3D_exec(b, p, cline, i, converged)
+                    case('cart','polar')
+                        call cont3D_exec(b, p, cline, i, converged)   
+                    case DEFAULT
+                        stop 'unknown refinement mode; simple_commander_prime3D%exec_cont3D'                 
+                end select
                 if(converged) exit
             end do
         endif

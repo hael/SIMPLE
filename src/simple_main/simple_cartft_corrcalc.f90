@@ -44,7 +44,6 @@ contains
         use simple_jiffys,          only: alloc_err
         use simple_hadamard_common, only: preprefvol
         use simple_cmdline,         only: cmdline
-        use simple_strings,         only: int2str
         class(cartft_corrcalc), intent(inout) :: self
         class(build),  target,  intent(inout) :: b
         class(params), target,  intent(inout) :: p
@@ -58,9 +57,9 @@ contains
         allocate(self%refvols(self%pp%nstates), self%img_refs(1), stat=alloc_stat)
         call alloc_err("In: simple_cartft_corrcalc :: new", alloc_stat)
         call self%img_refs(1)%new([self%pp%boxmatch,self%pp%boxmatch,1],self%pp%smpd)
-        write(*,'(A)') '>>> PREPARING 3D REFERENCES'
+        write(*,'(A)') '>>> PREPARING VOLUMES'
         do s=1,self%pp%nstates
-            call preprefvol( b, p, cline, s, do_expand=.false. )
+            call preprefvol( b, p, cline, s, doexpand=.false. )
             self%refvols(s) = b%vol
             call self%refvols(s)%expand_cmat
         end do
@@ -77,12 +76,11 @@ contains
         class(ori),             intent(inout) :: o
         type(ctf) :: tfun
         real      :: kV, cs, fraca, dfx, dfy, angast, dist
+        dfx    = o%get('dfx')
         if( self%pp%tfplan%mode .eq. 'astig' )then ! astigmatic CTF
-            dfx    = o%get('dfx')
             dfy    = o%get('dfy')
             angast = o%get('angast')
         else if( self%pp%tfplan%mode .eq. 'noastig' )then
-            dfx    = o%get('dfx')
             dfy    = dfx
             angast = 0.
         else
@@ -107,7 +105,6 @@ contains
             self%dfy_prev    = dfy
             self%angast_prev = angast
         endif
-
     end subroutine create_ctf_image
 
     !>  \brief  is for projecting a set
@@ -151,10 +148,10 @@ contains
         integer,                intent(in)    :: iref
         integer   :: s
         s = nint(o%get('state'))
-        call self%refvols(s)%fproject_expanded(o, self%img_refs(iref), lp=self%pp%lp)
+        call self%refvols(s)%fproject_expanded(o, self%img_refs(iref))
         if( self%pp%ctf .ne. 'no' )then
             call self%create_ctf_image(o)
-            call self%img_refs(iref)%mul( self%img_ctf )
+            call self%img_refs(iref)%mul(self%img_ctf)
         endif
     end subroutine project_2
 
@@ -191,7 +188,7 @@ contains
         end do
     end function correlate_1
 
-    !>  \brief  for calculating the shifted orrelation for one reference (iref)
+    !>  \brief  for calculating the shifted correlation for one reference (iref)
     !!          parameterised over one rotational orientation + state + shift
     function correlate_2( self, pimg, iref, shvec ) result( cc )
         class(cartft_corrcalc), intent(inout) :: self
@@ -199,7 +196,6 @@ contains
         integer,                intent(in)    :: iref
         real,                   intent(in)    :: shvec(3)
         real :: cc
-        ! correlate
         cc = self%img_refs(iref)%corr_shifted(pimg, shvec, self%pp%lp, self%pp%hp)
     end function correlate_2
     
@@ -239,6 +235,12 @@ contains
                 deallocate(self%img_refs)
             endif
             call self%img_ctf%kill
+            self%kv_prev     = 0.
+            self%cs_prev     = 0.
+            self%fraca_prev  = 0.
+            self%dfx_prev    = 0.
+            self%dfy_prev    = 0.
+            self%angast_prev = 0.
             self%existence = .false.
         endif
     end subroutine kill

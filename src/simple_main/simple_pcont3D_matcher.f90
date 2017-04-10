@@ -19,14 +19,13 @@ private
 
 type(polarft_corrcalc) :: pftcc
 type(oris)             :: orefs                   !< per particle projection direction search space
-type(oris)             :: spiral                  !< projection direction search space
 logical, allocatable   :: state_exists(:)
 integer                :: nptcls          = 0
 integer                :: nrefs_per_ptcl  = 0
 integer                :: neff_states     = 0
 
 integer, parameter     :: MAXNPEAKS = 10
-integer, parameter     :: NREFS     = 200
+integer, parameter     :: NREFS     = 100
 logical, parameter     :: debug = .false.
 
 contains
@@ -53,12 +52,11 @@ contains
         nptcls = p%top - p%fromp + 1                ! number of particles processed
         ! state existence
         allocate(state_exists(p%nstates), stat=alloc_stat)
-        state_exists = .true.
         do state = 1, p%nstates
             state_exists(state) = (b%a%get_statepop(state) > 0)
         enddo
-        neff_states = count(state_exists)           ! number of non-empty states
-        nrefs_per_ptcl = NREFS*neff_states          ! number of references per particle
+        neff_states     = count(state_exists)       ! number of non-empty states
+        nrefs_per_ptcl  = NREFS*neff_states         ! number of references per particle
         frac_srch_space = b%a%get_avg('frac')       ! Fraction of the search space
 
         ! SET BAND-PASS LIMIT RANGE
@@ -66,13 +64,12 @@ contains
         reslim = p%lp
 
         ! CALCULATE ANGULAR THRESHOLD (USED BY THE SPARSE WEIGHTING SCHEME)
-        ! Unused for now
-        ! p%athres = rad2deg(atan(max(p%fny,p%lp)/(p%moldiam/2.)))
-        ! write(*,'(A,F8.2)')'>>> ANGULAR THRESHOLD:', p%athres
+        p%athres = rad2deg(atan(max(p%fny,p%lp)/(p%moldiam/2.)))
+        write(*,'(A,F8.2)')'>>> ANGULAR THRESHOLD:', p%athres
 
         ! DETERMINE THE NUMBER OF PEAKS
         if( .not. cline%defined('npeaks') )then
-            p%npeaks = min(MAXNPEAKS,b%e%find_npeaks(p%lp, p%moldiam)) ! to update dependence on b%e?
+            p%npeaks = min(MAXNPEAKS,b%e%find_npeaks(p%lp, p%moldiam))
         endif
         write(*,'(A,I3)')'>>> NPEAKS:', p%npeaks
 
@@ -100,17 +97,14 @@ contains
         end do
         if(debug)write(*,*)'*** pcont3D_matcher ***: did reset recvols'
 
-        ! SEARCH SPACE PREP
-        call spiral%new(p%nspace * b%se%get_nsym())
-        call spiral%spiral
-
         ! INIT PFTCC & IMGPOLARIZER
         if( p%l_xfel )then
             call pftcc%new(nrefs_per_ptcl, [1,1], [p%boxmatch,p%boxmatch,1],p%kfromto, p%ring2, p%ctf, isxfel='yes')
         else
             call pftcc%new(nrefs_per_ptcl, [1,1], [p%boxmatch,p%boxmatch,1],p%kfromto, p%ring2, p%ctf)
         endif
-        call b%img%init_imgpolarizer(pftcc, p%smpd)
+        ! the pftcc is only intitalized here so the img polarizer can be
+        call b%img%init_imgpolarizer(pftcc)
 
         ! INITIALIZE
         if( which_iter <= 0 )then
@@ -126,11 +120,13 @@ contains
         do iptcl=p%fromp,p%top
             cnt_glob = cnt_glob + 1
             call progress(cnt_glob, nptcls)
+            ! orientation to align
             orientation = b%a%get_ori(iptcl)
             state = nint(orientation%get('state'))
-            if(state==0) then
+            if(state == 0) then
                 call orientation%reject
                 call b%a%set_ori(iptcl,orientation)
+                call b%a%write(iptcl, p%outfile)
                 cycle
             endif
             ! re-fills pftcc
@@ -146,14 +142,22 @@ contains
             ! grid
             if( doshellweight )then
                 wresamp = resample_filter(wmat(iptcl,:), res, res_pad)
-                call grid_ptcl(b, p, iptcl, cnt_glob, orientation, softoris, shellweights=wresamp)
+                if(p%npeaks == 1)then
+                    call grid_ptcl(b, p, iptcl, cnt_glob, orientation, shellweights=wresamp)
+                else
+                    call grid_ptcl(b, p, iptcl, cnt_glob, orientation, os=softoris, shellweights=wresamp)
+                endif
             else
-                call grid_ptcl(b, p, iptcl, cnt_glob, orientation, softoris )
+                if(p%npeaks == 1)then
+                    call grid_ptcl(b, p, iptcl, cnt_glob, orientation)
+                else
+                    call grid_ptcl(b, p, iptcl, cnt_glob, orientation, os=softoris)
+                endif
             endif
+            ! output orientation
             call b%a%write(iptcl, p%outfile)
         enddo
-        ! cleanup
-        call spiral%kill
+        ! cleanup (mostly for debug purposes)
         call pftcc%kill
         do state=1,p%nstates
             if(state_exists(state))call b%refvols(state)%kill_expanded
@@ -161,7 +165,6 @@ contains
         !call b%img%kill_imgpolarizer is private a the moment
 
         ! orientations output
-        !call del_file(p%outfile)
         !call b%a%write(p%outfile, [p%fromp,p%top])
         p%oritab = p%outfile
 
@@ -179,10 +182,10 @@ contains
             converged = b%conv%check_conv3D(update_res)
         endif
         ! DEALLOCATE
-        if( allocated(wmat)    ) deallocate(wmat)
-        if( allocated(wresamp) ) deallocate(wresamp)
-        if( allocated(res)     ) deallocate(res)
-        if( allocated(res_pad) ) deallocate(res_pad)
+        if(allocated(wmat)   ) deallocate(wmat)
+        if(allocated(wresamp)) deallocate(wresamp)
+        if(allocated(res)    ) deallocate(res)
+        if(allocated(res_pad)) deallocate(res_pad)
     end subroutine pcont3D_exec
 
     subroutine prep_vols( b, p, cline )
@@ -210,9 +213,9 @@ contains
         integer,                 intent(in)    :: iptcl
         integer,                 intent(in)    :: cnt_glob
         type(oris) :: cone
-        type(ori)  :: optcl, oref, ostoch
-        integer    :: inds(p%nspace*b%se%get_nsym())
-        integer    :: state, iref, cnt, iref_start, half_nrefs
+        type(ori)  :: optcl, oref
+        real       :: eullims(3,2)
+        integer    :: state, iref, cnt
         optcl = b%a%get_ori(iptcl)
         ! RE-INIT PFTCC
         if( p%l_xfel )then
@@ -221,43 +224,16 @@ contains
             call pftcc%new(nrefs_per_ptcl, [1,1], [p%boxmatch,p%boxmatch,1],p%kfromto, p%ring2, p%ctf)
         endif
         ! SEARCH SPACE PREP
-        ! random rotation of spiral
-        call ostoch%rnd_ori
-        call ostoch%e3set(0.)
-        call spiral%rot(ostoch)
-        half_nrefs = ceiling(real(NREFS) / 2.)
-        call spiral%find_closest_projs(optcl, inds)
-        call cone%new(NREFS)
-        ! previous orientation goes first
-        call oref%new
-        call oref%set_euler(optcl%get_euler())
-        call oref%e3set(0.)
-        call cone%set_ori(1, oref)
-        ! fine grained first-half
-        cnt = 1
-        do iref = 1,p%nspace*b%se%get_nsym()
-            oref = spiral%get_ori(inds(iref))
-            if( b%se%within_asymunit(oref) )then
-                cnt = cnt + 1
-                if(cnt > half_nrefs)exit
-                call oref%e3set(0.)
-                call cone%set_ori(cnt, oref)
-            endif
-        enddo
-        ! coarse grained second-half
-        iref_start = iref
-        do iref = iref_start,p%nspace*b%se%get_nsym()
-            oref = spiral%get_ori(inds(iref))
-            if( b%se%within_asymunit(oref) )then
-                if(ran3() >= 0.5)cycle ! skips every second on average
-                cnt = cnt + 1
-                if(cnt > NREFS)exit
-                call oref%e3set(0.)
-                call cone%set_ori(cnt, oref)
-            endif
+        eullims = b%se%srchrange()
+        call cone%rnd_proj_space(NREFS, optcl, p%athres, eullims)
+        call cone%set_ori(1, optcl)    ! previous best is the first
+        call cone%set(1, 'corr', -1.)  ! !!!
+        do iref = 1, NREFS
+            call cone%e3set(iref, 0.)
         enddo
         ! replicates to states
         if( p%nstates==1 )then
+            call cone%set_all2single('state', 1.)
             orefs = cone
         else
             call orefs%new(NREFS*neff_states)
@@ -276,18 +252,13 @@ contains
         do iref=1,nrefs_per_ptcl
             oref  = orefs%get_ori(iref)
             state = nint(oref%get('state'))
-            call b%refvols(state)%fproject_polar(iref, oref, p, pftcc, expanded=.true.)
+            call b%refvols(state)%fproject_polar(iref, oref, pftcc, expanded=.true.)
         enddo
         ! PREP PARTICLE
-        if( p%boxmatch < p%box )then
-            ! back to the original size as b%img has been
-            ! and will be clipped/padded in prepimg4align
-            call b%img%new([p%box,p%box,1],p%smpd)
-        endif
         if( p%l_distr_exec )then
-            call b%img%read(p%stk_part, cnt_glob, p%l_xfel)
+            call b%img%read(p%stk_part, cnt_glob, isxfel=p%l_xfel)
         else
-            call b%img%read(p%stk, iptcl, p%l_xfel)
+            call b%img%read(p%stk, iptcl, isxfel=p%l_xfel)
         endif
         call prepimg4align(b, p, optcl)
         call b%img%imgpolarizer(pftcc, 1, isptcl=.true.)
@@ -303,7 +274,7 @@ contains
         type(ctf) :: tfun
         real      :: kV, cs, fraca, dfx, dfy, angast
         if( p%ctf .ne. 'no' )then
-            ! grabf CTF parameters
+            ! grab CTF parameters
             dfx = o%get('dfx')
             if( p%tfplan%mode .eq. 'astig' )then ! astigmatic CTF
                 dfy    = o%get('dfy')

@@ -112,14 +112,14 @@ contains
         if( .not. maskvol%exists() ) stop 'maskvol not allocated; automask_3; simple_masker'
         if( cline%defined('nvox') )then
             call automask_1(recvol, p, maskvol, p%nvox)
-            call maskvol%mask(p%msk,'soft')
+            !call maskvol%mask(p%msk,'soft') ! for now
             call recvol%mul(maskvol)         
         else if( cline%defined('mw') )then
             call automask_1(recvol, p, maskvol)
-            call maskvol%mask(p%msk,'soft')
+            !call maskvol%mask(p%msk,'soft') ! for now
             call recvol%mul(maskvol)
         else if( cline%defined('mskfile') )then
-            call maskvol%mask(p%msk,'soft')
+            !call maskvol%mask(p%msk,'soft') ! for now
             call recvol%mul(maskvol) 
         endif
     end subroutine automask_4
@@ -148,7 +148,8 @@ contains
         call img_pad%fwd_ft
         call img_pad%bp(0., p%amsklp)
         call img_pad%bwd_ft
-        call img_pad%bin
+        call img_pad%bin('nomsk')
+        !call img_pad%bin('msk', p%msk)     ! for now
         call img_pad%grow_bin
         call img_pad%cos_edge(p%edge)
         call img_pad%clip(img_msk)

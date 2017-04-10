@@ -20,11 +20,11 @@ use simple_jiffys          ! use all in there
 implicit none
 
 public :: cluster_smat_commander
-public :: find_nnimgs_commander
 public :: masscen_commander
 public :: print_cmd_dict_commander
 public :: print_dose_weights_commander
 public :: print_fsc_commander
+public :: print_magic_boxes_commander
 public :: res_commander
 public :: shift_commander
 private
@@ -33,10 +33,6 @@ type, extends(commander_base) :: cluster_smat_commander
   contains
     procedure :: execute      => exec_cluster_smat
 end type cluster_smat_commander
-type, extends(commander_base) :: find_nnimgs_commander
-  contains
-    procedure :: execute      => exec_find_nnimgs
-end type find_nnimgs_commander
 type, extends(commander_base) :: masscen_commander
   contains
     procedure :: execute      => exec_masscen
@@ -53,6 +49,10 @@ type, extends(commander_base) :: print_fsc_commander
   contains
     procedure :: execute       => exec_print_fsc
 end type print_fsc_commander
+type, extends(commander_base) :: print_magic_boxes_commander
+  contains
+    procedure :: execute       => exec_print_magic_boxes
+end type print_magic_boxes_commander
 type, extends(commander_base) :: res_commander
   contains
     procedure :: execute       => exec_res
@@ -146,77 +146,13 @@ contains
         call simple_end('**** SIMPLE_CLUSTER_SMAT NORMAL STOP ****')
     end subroutine exec_cluster_smat
 
-    subroutine exec_find_nnimgs( self, cline )
-        use simple_nnimgs      ! use all in there
-        use simple_image,      only: image
-        use simple_projector,  only: projector
-        use simple_qsys_funs,  only: qsys_job_finished
-        class(find_nnimgs_commander), intent(inout) :: self
-        class(cmdline),               intent(inout) :: cline
-        type(params)                  :: p
-        integer,          allocatable :: nnmat(:,:), nnmat_part(:,:)
-        type(projector),  allocatable :: imgs(:)
-        character(len=:), allocatable :: fname
-        integer :: iptcl, ineigh, alloc_stat, funit, io_stat, fnr
-        p = params(cline, checkdistr=.false.) ! parameters generated, we don't split stack
-        allocate( imgs(p%nptcls) )
-        ! read, normalise & mask images
-        do iptcl=1,p%nptcls
-            call imgs(iptcl)%new([p%box,p%box,1],p%smpd)
-            call imgs(iptcl)%read(p%stk, iptcl)
-            call imgs(iptcl)%norm
-            call imgs(iptcl)%mask(p%msk, 'soft')
-        end do
-        ! set Fourier index range
-        p%kfromto(1) = max(2,imgs(1)%get_find(p%hp))
-        p%kfromto(2) = imgs(1)%get_find(p%lp)
-        call init_nn_srch( p, imgs )
-        if( cline%defined('part') )then
-            ! generate the partial nearest neighbor matrix
-            allocate(nnmat_part(p%fromp:p%top,p%nnn), stat=alloc_stat)
-            call alloc_err('In: simple_commander_misc :: exec_find_nnimgs, 1', alloc_stat)
-            ! calculate the nearest neighbors
-            call conduct_nn_srch([p%fromp,p%top], nnmat_part)
-            ! write the nearest neighbors
-            funit = get_fileunit()
-            allocate(fname, source='nnmat_part'//int2str_pad(p%part,p%numlen)//'.bin')
-            open(unit=funit, status='REPLACE', action='WRITE', file=fname, access='STREAM')
-            write(unit=funit,pos=1,iostat=io_stat) nnmat_part(:,:)
-            ! check if the write was successful
-            if( io_stat .ne. 0 )then
-                write(*,'(a,i0,2a)') '**ERROR(commander_misc :: exec_find_nnimgs): I/O error ',&
-                io_stat, ' when writing to: ', fname
-                stop
-            endif
-            close(funit)
-            deallocate(fname, nnmat_part)
-            call qsys_job_finished( p, 'commander_misc :: exec_find_nnimg' )
-        else
-            nnmat = img_nearest_neighbors( p, imgs )
-            do iptcl=1,p%nptcls
-                allocate(fname, source='nnimgs'//int2str(iptcl)//p%ext)
-                do ineigh=1,p%nnn
-                    call imgs(nnmat(iptcl,ineigh))%bwd_ft
-                    call imgs(nnmat(iptcl,ineigh))%write(fname,ineigh)
-                end do
-                deallocate(fname)
-            end do
-            do iptcl=1,p%nptcls
-                call imgs(iptcl)%kill
-            end do
-            deallocate(nnmat)
-        endif
-        deallocate(imgs)
-        ! end gracefully
-        call simple_end('**** SIMPLE_FIND_NNIMGS NORMAL STOP ****')
-    end subroutine exec_find_nnimgs
-
     subroutine exec_masscen( self, cline )
         use simple_procimgfile, only: masscen_imgfile
         class(masscen_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(params) :: p
         p = params(cline) ! parameters generated
+        p%cenlp = p%lp
         ! center of mass centering
         if( cline%defined('thres') )then
             call masscen_imgfile(p%stk, p%outstk, p%smpd, p%lp, p%neg, p%msk, p%thres)
@@ -287,6 +223,17 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_PRINT_FSC NORMAL STOP ****')
     end subroutine exec_print_fsc
+
+    subroutine exec_print_magic_boxes( self, cline )
+        use simple_magic_boxes, only: print_magic_box_range
+        class(print_magic_boxes_commander), intent(inout) :: self
+        class(cmdline),                     intent(inout) :: cline
+        type(params) :: p
+        p = params(cline) ! parameters generated
+        call print_magic_box_range(p%smpd, p%moldiam )
+        ! end gracefully
+        call simple_end('**** SIMPLE_PRINT_MAGIC_BOXES NORMAL STOP ****')
+    end subroutine exec_print_magic_boxes
     
     subroutine exec_res( self, cline )
         class(res_commander), intent(inout) :: self

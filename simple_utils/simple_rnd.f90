@@ -156,22 +156,26 @@ contains
     !>  \brief  generates a multinomal 1-of-K random number according to the
     !!          distribution in pvec
     function multinomal( pvec ) result( which )
-        real, intent(in)     :: pvec(:) !< probabilities
-        integer              :: n, which, irnd
-        real                 :: rnd, bound
-        ! It is assumed that sum(pvec) <= 1.
+        use simple_math, only: hpsort
+        real,     intent(in) :: pvec(:) !< probabilities
+        real,    allocatable :: pvec_sorted(:)
+        integer, allocatable :: inds(:)
+        integer :: n, which, irnd, i
+        real    :: rnd, bound
         n = size(pvec)
-        if( sum(pvec) >= 1.001 )then
-           print *,'sum(',pvec,')=',sum(pvec)
-           stop 'probability distribution does not sum up to 1.;multinomal; simple_rnd;'
+        allocate(pvec_sorted(n), source=pvec)
+        inds = (/(i,i=1,n)/)
+        call hpsort(n, pvec_sorted, inds)
+        if( sum(pvec_sorted) >= 1.001 )then
+            stop 'probability distribution does not sum up to 1.; multinomal; simple_rnd;'
         endif
         rnd = ran3()
         do which=1,n
-            bound = sum(pvec(1:which))
-            if( rnd<=bound )exit
+            bound = sum(pvec_sorted(1:which))
+            if( rnd <= bound )exit
         enddo
-        if( which>n )which=n ! to deal with numerical instability
-        !if( which>n )stop 'Error in multinomal; simple_rnd;'
+        if( which > n ) which = n ! to deal with numerical instability
+        which = inds(which)
     end function multinomal
     
     !>  \brief  random number generator yielding normal distribution 

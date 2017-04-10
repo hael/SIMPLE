@@ -8,7 +8,7 @@ implicit none
 public :: qsys_ctrl
 private
 
-integer, parameter :: SHORTTIME = 5
+integer, parameter :: SHORTTIME = 3
 logical, parameter :: DEBUG     = .false.
 
 type qsys_ctrl
@@ -16,6 +16,7 @@ type qsys_ctrl
     character(len=STDLEN)          :: exec_binary      = ''      !< binary to execute in parallel
                                                                  !< trim(simplepath)//'/bin/simple_exec'
     character(len=32), allocatable :: script_names(:)            !< file names of generated scripts
+    character(len=32), allocatable :: jobs_done_fnames(:)        !< touch files indicating completion
     character(len=STDLEN)          :: pwd              = ''      !< working directory
     class(qsys_base), pointer      :: myqsys           => null() !< pointer to polymorphic qsys object
     integer, pointer               :: parts(:,:)       => null() !< defines the fromp/top ranges for all partitions
@@ -41,9 +42,12 @@ type qsys_ctrl
     procedure          :: set_jobs_status
     ! SCRIPT GENERATORS
     procedure          :: generate_scripts
-    procedure, private :: generate_script
+    procedure, private :: generate_script_1
+    procedure, private :: generate_script_2
+    generic            :: generate_script => generate_script_2
     ! SUBMISSION TO QSYS
     procedure          :: submit_scripts
+    procedure          :: submit_script
     ! QUERIES
     procedure          :: update_queue
     ! THE MASTER SCHEDULER
@@ -100,13 +104,18 @@ contains
         ! allocate
         allocate(   self%jobs_done(fromto_part(1):fromto_part(2)),&
                     self%jobs_submitted(fromto_part(1):fromto_part(2)),&
-                    self%script_names(fromto_part(1):fromto_part(2)), stat=alloc_stat)
+                    self%script_names(fromto_part(1):fromto_part(2)),&
+                    self%jobs_done_fnames(fromto_part(1):fromto_part(2)), stat=alloc_stat)
         call alloc_err("In: simple_qsys_ctrl :: new", alloc_stat)
         self%jobs_done      = .false.
         self%jobs_submitted = .false.
         ! create script names
         do ipart=fromto_part(1),fromto_part(2)
             self%script_names(ipart) = 'distr_simple_script_'//int2str_pad(ipart,self%numlen)
+        end do
+        ! create jobs done flags
+        do ipart=self%fromto_part(1),self%fromto_part(2)
+            self%jobs_done_fnames(ipart) = 'JOB_FINISHED_'//int2str_pad(ipart,self%numlen)
         end do
         ! get pwd
         call get_environment_variable('PWD', self%pwd)
@@ -166,27 +175,34 @@ contains
     ! SCRIPT GENERATORS
     
     !>  \brief  public script generator
-    subroutine generate_scripts( self, job_descr, ext, q_descr, outfile_body, part_params )
+    subroutine generate_scripts( self, job_descr, ext, q_descr, outfile_body, part_params, chunkdistr )
         class(qsys_ctrl),           intent(inout) :: self
         class(chash),               intent(inout) :: job_descr
         character(len=4),           intent(in)    :: ext
         class(chash),               intent(in)    :: q_descr
         character(len=*), optional, intent(in)    :: outfile_body
         class(chash),     optional, intent(in)    :: part_params(:)
+        logical,          optional, intent(in)    :: chunkdistr
         character(len=:), allocatable :: outfile_body_local, key, val
         integer :: ipart, iadd
-        logical :: part_params_present
+        logical :: part_params_present, cchunkdistr
+        cchunkdistr = .false.
+        if( present(chunkdistr) ) cchunkdistr = .true.
         if( present(outfile_body) )then
             allocate(outfile_body_local, source=trim(outfile_body))
         endif
-        part_params_present  = present(part_params)
+        part_params_present = present(part_params)
         do ipart=self%fromto_part(1),self%fromto_part(2)
-            call job_descr%set('fromp',   int2str(self%parts(ipart,1)))
-            call job_descr%set('top',     int2str(self%parts(ipart,2)))
-            call job_descr%set('part',    int2str(ipart))
-            call job_descr%set('nparts',  int2str(self%nparts_tot))
-            if( allocated(outfile_body_local) )then
-                call job_descr%set('outfile', trim(trim(outfile_body_local)//int2str_pad(ipart,self%numlen)//'.txt'))
+            if( cchunkdistr )then
+                ! don't input part-dependent parameters
+            else
+                call job_descr%set('fromp',   int2str(self%parts(ipart,1)))
+                call job_descr%set('top',     int2str(self%parts(ipart,2)))
+                call job_descr%set('part',    int2str(ipart))
+                call job_descr%set('nparts',  int2str(self%nparts_tot))
+                if( allocated(outfile_body_local) )then
+                    call job_descr%set('outfile', trim(trim(outfile_body_local)//int2str_pad(ipart,self%numlen)//'.txt'))
+                endif
             endif
             if( part_params_present  )then
                 do iadd=1,part_params(ipart)%size_of_chash()
@@ -195,15 +211,17 @@ contains
                     call job_descr%set(key, val)
                 end do
             endif
-            call self%generate_script(job_descr, ipart, q_descr)
+            call self%generate_script_1(job_descr, ipart, q_descr)
         end do
-        call job_descr%delete('fromp')
-        call job_descr%delete('top')
-        call job_descr%delete('part')
-        call job_descr%delete('nparts')
-        if( allocated(outfile_body_local) )then
-            call job_descr%delete('outfile')
-            deallocate(outfile_body_local)
+        if( .not. cchunkdistr )then
+            call job_descr%delete('fromp')
+            call job_descr%delete('top')
+            call job_descr%delete('part')
+            call job_descr%delete('nparts')
+            if( allocated(outfile_body_local) )then
+                call job_descr%delete('outfile')
+                deallocate(outfile_body_local)
+            endif
         endif
         if( part_params_present  )then
             do iadd=1,part_params(1)%size_of_chash()
@@ -216,14 +234,14 @@ contains
     end subroutine generate_scripts
 
     !>  \brief  private part script generator
-    subroutine generate_script( self, job_descr, ipart, q_descr )
+    subroutine generate_script_1( self, job_descr, ipart, q_descr )
         use simple_filehandling, only: get_fileunit, file_exists
         class(qsys_ctrl), intent(inout) :: self
         class(chash),     intent(in)    :: job_descr
         integer,          intent(in)    :: ipart
         class(chash),     intent(in)    :: q_descr
         character(len=512) :: io_msg
-        integer :: ios, funit
+        integer :: ios, funit, val
         funit = get_fileunit()
         if( self%stream )then
             if( file_exists(self%script_names(ipart)) ) return
@@ -252,8 +270,8 @@ contains
         ! exit shell when done
         write(funit,'(a)',advance='yes') ''
         write(funit,'(a)',advance='yes') 'exit'
-        close(funit)
         call flush(funit)
+        close(funit)
         call chmod(trim(self%script_names(ipart)),'+x')
         if( ios .ne. 0 )then
             write(*,'(a)',advance='no') 'simple_qsys_scripts :: gen_qsys_script; Error'
@@ -263,7 +281,52 @@ contains
         ! when we generate the script we also unflag jobs_submitted and jobs_done
         self%jobs_done(ipart)      = .false.
         self%jobs_submitted(ipart) = .false.
-    end subroutine generate_script
+    end subroutine generate_script_1
+
+    !>  \brief  public script generator for single jobs
+    subroutine generate_script_2( self, job_descr, q_descr, exec_bin, script_name, outfile )
+        use simple_filehandling, only: get_fileunit, file_exists
+        class(qsys_ctrl), intent(inout) :: self
+        class(chash),     intent(in)    :: job_descr
+        class(chash),     intent(in)    :: q_descr
+        character(len=*), intent(in)    :: exec_bin, script_name, outfile
+        character(len=512) :: io_msg
+        integer :: ios, funit, val
+        funit = get_fileunit()
+        open(unit=funit, file=script_name, iostat=ios, STATUS='REPLACE', action='WRITE', iomsg=io_msg)
+        if( ios .ne. 0 )then
+            close(funit)
+            write(*,'(a)') 'simple_qsys_ctrl :: gen_qsys_script; Error when opening file for writing: '&
+            //trim(script_name)//' ; '//trim(io_msg)
+            stop
+        endif
+        ! need to specify shell
+        write(funit,'(a)') '#!/bin/bash'
+        ! write (run-time polymorphic) instructions to the qsys
+        if( q_descr%get('qsys_name').ne.'local' )then
+            call self%myqsys%write_instr(q_descr, fhandle=funit)
+        else
+            call self%myqsys%write_instr(job_descr, fhandle=funit)
+        endif
+        write(funit,'(a)',advance='yes') 'cd '//trim(self%pwd)
+        write(funit,'(a)',advance='yes') ''
+        ! compose the command line
+        write(funit,'(a)',advance='no') trim(exec_bin)//' '//job_descr%chash2str() 
+        ! direct output
+        write(funit,'(a)',advance='yes') ' > '//outfile
+        ! exit shell when done
+        write(funit,'(a)',advance='yes') ''
+        write(funit,'(a)',advance='yes') 'exit'
+        call flush(funit)        
+        close(funit)
+        !call flush(funit)
+        call chmod(trim(script_name),'+x')
+        if( ios .ne. 0 )then
+            write(*,'(a)',advance='no') 'simple_qsys_ctrl :: generate_script_2; Error'
+            write(*,'(a)') 'chmoding submit script'//trim(script_name)
+            stop
+        endif
+    end subroutine generate_script_2
 
     ! SUBMISSION TO QSYS
 
@@ -273,9 +336,11 @@ contains
         use simple_qsys_local,   only: qsys_local
         class(qsys_ctrl),  intent(inout) :: self
         class(qsys_base),      pointer   :: pmyqsys
-        character(len=STDLEN), parameter :: master_submit_script = './qsys_submit_jobs'
-        integer :: ipart, fnr, file_stat, chmod_stat, ios
+        character(len=STDLEN)            :: master_submit_script
+        integer :: ipart, fnr, file_stat, chmod_stat, ios, val
         logical :: submit_or_not(self%fromto_part(1):self%fromto_part(2)), err
+        ! master command line
+        master_submit_script = trim(adjustl(self%pwd))//'/qsys_submit_jobs'
         ! make a submission mask
         submit_or_not = .false.
         do ipart=self%fromto_part(1),self%fromto_part(2)
@@ -309,6 +374,7 @@ contains
         end do
         write(fnr,'(a)') 'exit'
         close( unit=fnr )
+        call flush(fnr)
         call chmod(master_submit_script,'+x')
         if( DEBUG )then
             call exec_cmdline('echo DISTRIBUTED MODE :: submitting scripts:')
@@ -317,20 +383,37 @@ contains
         ! execute the master submission script
         call exec_cmdline(master_submit_script)
     end subroutine submit_scripts
+
+    subroutine submit_script( self, script_name )
+        use simple_syscalls,     only: exec_cmdline
+        use simple_qsys_local,   only: qsys_local
+        class(qsys_ctrl), intent(inout) :: self
+        character(len=*), intent(in)    :: script_name
+        class(qsys_base),      pointer  :: pmyqsys
+        integer :: ios
+        character(len=STDLEN) :: cmd
+        select type( pmyqsys => self%myqsys )
+            class is(qsys_local)
+                cmd = self%myqsys%submit_cmd()//' '//trim(adjustl(self%pwd))//'/'//trim(adjustl(script_name))//' &'
+            class DEFAULT
+                cmd = self%myqsys%submit_cmd()//' '//trim(adjustl(self%pwd))//'/'//trim(adjustl(script_name))
+        end select
+        ! execute the command
+        call exec_cmdline(cmd)
+    end subroutine submit_script
     
     ! QUERIES
 
     subroutine update_queue( self )
         use simple_filehandling, only: file_exists
         class(qsys_ctrl),  intent(inout) :: self
-        character(len=:), allocatable    :: job_done_fname
         integer :: ipart, njobs_in_queue
         do ipart=self%fromto_part(1),self%fromto_part(2)
-            allocate(job_done_fname, source='JOB_FINISHED_'//int2str_pad(ipart,self%numlen))
-            self%jobs_done(ipart) = file_exists(job_done_fname)
+            if( .not. self%jobs_done(ipart) )then
+                self%jobs_done(ipart) = file_exists(self%jobs_done_fnames(ipart))
+            endif
             ! this one is for streaming
             if( self%jobs_done(ipart) ) self%jobs_submitted(ipart) = .true.
-            deallocate(job_done_fname)
         end do
         njobs_in_queue = count(self%jobs_submitted .eqv. (.not. self%jobs_done))
         self%ncomputing_units_avail = self%ncomputing_units-njobs_in_queue
@@ -363,7 +446,7 @@ contains
             self%ncomputing_units       =  0
             self%ncomputing_units_avail =  0
             self%numlen                 =  0
-            deallocate(self%script_names, self%jobs_done, self%jobs_submitted)
+            deallocate(self%script_names, self%jobs_done, self%jobs_done_fnames, self%jobs_submitted)
             self%existence = .false.
         endif
     end subroutine kill

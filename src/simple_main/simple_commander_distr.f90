@@ -54,57 +54,50 @@ type, extends(commander_base) :: split_commander
 end type split_commander
 
 contains
-    
+
     subroutine exec_merge_algndocs( self, cline )
         use simple_oris, only: oris
         use simple_map_reduce ! use all in there
         class(merge_algndocs_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(params)          :: p
-        type(oris)            :: o, o_read
-        integer               :: i, j, nentries, cnt, nentries_all, numlen
-        integer, allocatable  :: parts(:,:)
+        integer               :: i, j, nj, numlen, funit, funit_merge, ios, nentries_all
         character(len=STDLEN) :: fname
-        logical               :: here
-        logical, parameter    :: print_part_info = .false.
+        integer, allocatable  :: parts(:,:)
+        character(len=1024)   :: line
         p = params(cline) ! parameters generated
-        select case(p%split_mode)
-            case('chunk')
-                parts = split_nobjs_in_chunks(p%nptcls, p%chunksz)
-            case('even')
-                parts = split_nobjs_even(p%nptcls, p%ndocs)
-            case DEFAULT
-                write(*,*) 'split mode: ', trim(p%split_mode)
-                stop 'unsupported split_mode; simple_commander_distr :: exec_merge_algndocs'
-        end select
+        parts = split_nobjs_even(p%nptcls, p%ndocs)
+        funit_merge = get_fileunit()
+        open(unit=funit_merge, file=p%outfile, iostat=ios, status='replace',&
+        &action='write', position='append', access='sequential')
+        if( ios /= 0 )then
+            write(*,*) "Error opening file", trim(adjustl(p%outfile))
+            stop
+        endif
         numlen = len(int2str(p%ndocs))
+        funit  = get_fileunit()
         do i=1,p%ndocs
             fname = trim(adjustl(p%fbody))//int2str_pad(i,numlen)//'.txt'
-            ! calculate the number of all entries
-            nentries_all = parts(i,2)-parts(i,1)+1 
-            ! calculate the actual number of entries
-            inquire(FILE=fname, EXIST=here)
-            if( here )then
-                nentries = nlines(fname)
-            else
-                nentries = 0
+            nj = nlines(fname)
+            nentries_all = parts(i,2) - parts(i,1) + 1
+            if( nentries_all /= nj ) then
+                write(*,*) 'nr of entries in partition: ', nentries_all
+                write(*,*) 'nr of lines in file: ', nj
+                write(*,*) 'filename: ', trim(fname)
+                stop 'number of lines in file not consistent with the size of the partition'
             endif
-            ! check if oritab is there to fill-in blanks
-            if( nentries < nentries_all )then
-                write(*,*) 'nentries: ',     nentries
-                write(*,*) 'nentries_all: ', nentries_all
-                write(*,*) 'number of entries in the doc to be merged not equal to the expected number'
-                stop 'simple_commander_distr :: exec_merge_algndocs'
+            open(unit=funit, file=fname, iostat=ios, status='old', action='read', access='sequential')
+            if( ios /= 0 )then
+                write(*,*) "Error opening file", trim(adjustl(fname))
+                stop
             endif
-            if( print_part_info )then
-                write(*,'(a,1x,i3,1x,a,1x,i6,1x,i6)') 'partition:', i, 'from/to:', parts(i,1), parts(i,2)
-            endif
-            o_read = oris(nentries)
-            call o_read%read(fname)
-            call o%merge(o_read)
+            do j=1,nj
+                read(funit,fmt='(A)') line
+                write(funit_merge,fmt='(A)') trim(line)
+            end do 
+            close(funit)
         end do
-        call o%write(p%outfile)
-        deallocate(parts)
+        close(funit_merge)
         ! end gracefully
         call simple_end('**** SIMPLE_MERGE_ALGNDOCS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_merge_algndocs
@@ -146,19 +139,19 @@ contains
             wmat_states = merge_rmat_from_parts(p%nstates, p%nptcls, p%nparts, filtsz, 'shellweights_part')
             call normalise_shellweights(wmat_states, p%npeaks)
             filnum = get_fileunit()
-            open(unit=filnum, status='REPLACE', action='WRITE', file='shellweights.bin', access='STREAM')
+            open(unit=filnum, status='REPLACE', action='WRITE', file=p%shellwfile, access='STREAM')
             write(unit=filnum,pos=1,iostat=io_stat) wmat_states
             deallocate(wmat_states)
         else
             wmat = merge_rmat_from_parts(p%nptcls, p%nparts, filtsz, 'shellweights_part')
             call normalise_shellweights(wmat)
             filnum = get_fileunit()
-            open(unit=filnum, status='REPLACE', action='WRITE', file='shellweights.bin', access='STREAM')
+            open(unit=filnum, status='REPLACE', action='WRITE', file=p%shellwfile, access='STREAM')
             write(unit=filnum,pos=1,iostat=io_stat) wmat
             deallocate(wmat)
         endif
         if( io_stat .ne. 0 )then
-            write(*,'(a,i0,a)') 'I/O error ', io_stat, ' when writing to shellweights.bin'
+            write(*,'(a,i0,a)') 'I/O error ', io_stat, ' when writing to '//trim(p%shellwfile)
             stop 'I/O error; merge_shellweights'
         endif
         close(filnum)
@@ -213,15 +206,7 @@ contains
         call find_ldim_nptcls(p%stk, ldim, nimgs)
         ldim(3) = 1
         call img%new(ldim,1.)
-        select case(p%split_mode)
-            case('chunk')
-                parts = split_nobjs_in_chunks(nimgs, p%chunksz)
-            case('even')
-                parts = split_nobjs_even(nimgs, p%nparts)
-            case DEFAULT
-                write(*,*) 'split mode: ', trim(p%split_mode)
-                stop 'unsupported split_mode; simple_commander_distr :: exec_split'
-        end select
+        parts = split_nobjs_even(nimgs, p%nparts)
         if( size(parts,1) /= p%nparts ) stop 'ERROR! generated number of parts not same as inputted nparts'
         do ipart=1,p%nparts
             call progress(ipart,p%nparts)

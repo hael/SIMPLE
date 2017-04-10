@@ -126,7 +126,7 @@ contains
                 else if( cline%defined('npix') )then
                     call img_or_vol%bin(p%npix)
                 else
-                    call img_or_vol%bin
+                    call img_or_vol%bin('nomsk')
                 endif
                 write(*,'(a,1x,i9)') 'NO FOREGROUND PIXELS:', img_or_vol%nforeground()
                 write(*,'(a,1x,i9)') 'NO BACKGROUND PIXELS:', img_or_vol%nbackground()
@@ -283,15 +283,12 @@ contains
                     else
                         call apply_ctf_imgfile(p%stk, p%outstk, b%a, p%smpd, 'flip')
                     endif
-                case( 'mul' )
+                case( 'yes' )
                     if( p%neg .eq. 'yes' )then
                         call apply_ctf_imgfile(p%stk, p%outstk, b%a, p%smpd, 'neg')
                     else
                         call apply_ctf_imgfile(p%stk, p%outstk, b%a, p%smpd, 'ctf')
-                    endif
-                case( 'abs' )
-                    call apply_ctf_imgfile(p%stk, p%outstk, b%a, p%smpd, 'abs')
-                
+                    endif                
                 case DEFAULT
                     stop 'Unknown ctf argument'
             end select
@@ -403,7 +400,7 @@ contains
     subroutine exec_norm( self, cline )
         use simple_procimgfile,   only: norm_imgfile, noise_norm_imgfile, shellnorm_imgfile
         class(norm_commander), intent(inout) :: self
-        class(cmdline),                intent(inout) :: cline
+        class(cmdline),        intent(inout) :: cline
         type(build)       :: b
         type(params)      :: p
         real, allocatable :: spec(:)
@@ -420,21 +417,21 @@ contains
             if( p%norm.eq.'yes' )then
                 ! Normalization
                 if( cline%defined('hfun') )then
-                    call norm_imgfile(p%stk, p%outstk, hfun=p%hfun)
+                    call norm_imgfile(p%stk, p%outstk, p%smpd, hfun=p%hfun)
                 else
-                    call norm_imgfile(p%stk, p%outstk)
+                    call norm_imgfile(p%stk, p%outstk, p%smpd)
                 endif
             else if( p%noise_norm.eq.'yes' )then
                 ! Noise normalization
                 if( cline%defined('msk') )then
-                    call noise_norm_imgfile(p%stk, p%msk, p%outstk)
+                    call noise_norm_imgfile(p%stk, p%msk, p%outstk, p%smpd)
                 else
                     stop 'need msk parameter for noise normalization'
                 endif
             else if( p%shellnorm.eq.'yes' )then
                 ! shell normalization
                 print *,'in'
-                call shellnorm_imgfile( p%stk, p%outstk )
+                call shellnorm_imgfile( p%stk, p%outstk, p%smpd)
             endif
         else if( cline%defined('vol1') )then
             ! 3D
@@ -459,7 +456,7 @@ contains
     end subroutine exec_norm
     
     subroutine exec_scale( self, cline )
-        use simple_procimgfile, only: resize_and_clip_imgfile, resize_imgfile, clip_imgfile
+        use simple_procimgfile  ! use all in there
         use simple_image,       only: image
         use simple_math,        only: round2even
         class(scale_commander), intent(inout) :: self
@@ -467,8 +464,9 @@ contains
         type(params) :: p
         type(build)  :: b
         type(image)  :: vol2, img, img2
-        real         :: ave, sdev, var, med
+        real         :: ave, sdev, var, med, smpd_new, smpds_new(2), scale
         integer      :: ldim(3), ldim_scaled(3), nfiles, nframes, iframe, ifile
+        integer      :: ldims_scaled(2,3), ldims_clip(2,3)
         character(len=:), allocatable      :: fname
         character(len=STDLEN), allocatable :: filenames(:)
         p = params(cline)                               ! parameters generated
@@ -479,33 +477,56 @@ contains
         if( cline%defined('stk') .and. cline%defined('vol1') )stop 'Cannot operate on images AND volume at once'
         if( cline%defined('stk') )then
             ! 2D
-            if( cline%defined('newbox') .or. cline%defined('scale') )then
+            if( cline%defined('scale2') )then
+                ! Rescaling, double
+                if( cline%defined('clip')  ) stop 'clip is not allowed in double scaling'
+                if( .not. cline%defined('scale') ) stop 'need scale to be part of command line as well 4 double scaling'
+                ldims_scaled(1,:) = [p%newbox,p%newbox,1]   ! dimension of scaled
+                ldims_scaled(2,:) = [p%newbox2,p%newbox2,1] ! dimension of scaled
+                if( cline%defined('part') )then
+                    p%outstk  = 'outstk_part'//int2str_pad(p%part, p%numlen)//p%ext
+                    p%outstk2 = 'outstk2_part'//int2str_pad(p%part, p%numlen)//p%ext
+                    call resize_imgfile_double(p%stk, p%outstk, p%outstk2,&
+                    p%smpd, ldims_scaled, smpds_new, [p%fromp,p%top])
+                else
+                    call resize_imgfile_double(p%stk, p%outstk, p%outstk2,&
+                    p%smpd, ldims_scaled, smpds_new)
+                endif
+                write(*,'(a,1x,f9.4)') 'SAMPLING DISTANCE AFTER SCALING (OUTSTK) :', smpds_new(1)
+                write(*,'(a,1x,f9.4)') 'SAMPLING DISTANCE AFTER SCALING (OUTSTK2):', smpds_new(2)
+                write(*,'(a,1x,i5)')   'BOX SIZE AFTER SCALING (OUTSTK) :', ldims_scaled(1,1)
+                write(*,'(a,1x,i5)')   'BOX SIZE AFTER SCALING (OUTSTK2):', ldims_scaled(2,1)
+            else if( cline%defined('scale') .or. cline%defined('newbox') )then
                 ! Rescaling
                 ldim_scaled = [p%newbox,p%newbox,1] ! dimension of scaled
                 if( cline%defined('clip') )then
                     if( cline%defined('part') )then
                         p%outstk = 'outstk_part'//int2str_pad(p%part, p%numlen)//p%ext
-                        call resize_and_clip_imgfile(p%stk,p%outstk,p%smpd,ldim_scaled,[p%clip,p%clip,1],[p%fromp,p%top])
+                        call resize_and_clip_imgfile(p%stk,p%outstk,p%smpd,ldim_scaled,&
+                        &[p%clip,p%clip,1],smpd_new,[p%fromp,p%top])
                     else
-                        call resize_and_clip_imgfile(p%stk,p%outstk,p%smpd,ldim_scaled,[p%clip,p%clip,1])
+                        call resize_and_clip_imgfile(p%stk,p%outstk,p%smpd,ldim_scaled,&
+                        [p%clip,p%clip,1],smpd_new)
                     endif
                 else
                     if( cline%defined('part') )then
                         p%outstk = 'outstk_part'//int2str_pad(p%part, p%numlen)//p%ext
-                        call resize_imgfile(p%stk,p%outstk,p%smpd,ldim_scaled,[p%fromp,p%top])
+                        call resize_imgfile(p%stk,p%outstk,p%smpd,ldim_scaled,smpd_new,[p%fromp,p%top])
                     else
-                        call resize_imgfile(p%stk,p%outstk,p%smpd,ldim_scaled)
+                        call resize_imgfile(p%stk,p%outstk,p%smpd,ldim_scaled,smpd_new)
                     endif
+                    write(*,'(a,1x,i5)') 'BOX SIZE AFTER SCALING:', ldim_scaled(1)
                 endif
+                write(*,'(a,1x,f9.4)') 'SAMPLING DISTANCE AFTER SCALING:', smpd_new
             else if( cline%defined('clip') )then
                 ! Clipping
-                call clip_imgfile(p%stk,p%outstk,[p%clip,p%clip,1])
+                call clip_imgfile(p%stk,p%outstk,[p%clip,p%clip,1],p%smpd)
             endif
         else if( cline%defined('vol1') )then
             ! 3D
             if( .not.file_exists(p%vols(1)) ) stop 'Cannot find input volume'
             call b%vol%read(p%vols(1))
-            if( cline%defined('newbox') .or. cline%defined('scale') )then
+            if( cline%defined('scale') .or. cline%defined('newbox') )then
                 ! Rescaling
                 call vol2%new([p%newbox,p%newbox,p%newbox],p%smpd)
                 call b%vol%fwd_ft
@@ -519,7 +540,10 @@ contains
                 endif
                 b%vol = vol2
                 call b%vol%bwd_ft
+                scale = real(p%newbox)/real(p%box)
                 p%box = p%newbox
+                smpd_new = p%smpd/scale
+                write(*,'(a,1x,f9.4)') 'SAMPLING DISTANCE AFTER SCALING:', smpd_new
             endif
             if( cline%defined('clip') )then
                 ! Clipping
@@ -535,6 +559,8 @@ contains
                     call b%vol%pad(vol2, backgr=med)
                 endif
                 b%vol = vol2
+            else
+                 write(*,'(a,1x,i5)') 'BOX SIZE AFTER SCALING:', p%newbox
             endif
             if( p%outvol .ne. '' )call b%vol%write(p%outvol, del_if_exists=.true.)
         else if( cline%defined('filetab') )then
@@ -600,7 +626,7 @@ contains
             ldim = [p%xdim,p%ydim,1]
         else
             call find_ldim_nptcls(filenames(1),ldim,ifoo)
-            ldim(3) = 1 ! to correct for the stupide 3:d dim of mrc stacks
+            ldim(3) = 1 ! to correct for the stupid 3:d dim of mrc stacks
         endif
         if( debug ) write(*,*) 'logical dimension: ', ldim
         if( cline%defined('nframes') )then
@@ -652,7 +678,7 @@ contains
                 call find_ldim_nptcls(filenames(ifile),lfoo,nimgs)
                 do iimg=1,nimgs
                     cnt = cnt+1
-                    call b%img%read(filenames(ifile), iimg, readhead=.false.)
+                    call b%img%read(filenames(ifile), iimg, readhead=.false., rwaction='READ')
                     if( cline%defined('clip') )then
                         call b%img%clip(tmp)  
                         mm = tmp%minmax()
@@ -671,8 +697,8 @@ contains
 
     subroutine exec_stackops( self, cline )
         use simple_ran_tabu,    only: ran_tabu
-        use simple_procimgfile, only: mirror_imgfile, neg_imgfile, acf_imgfile, frameavg_imgfile
-        use simple_procimgfile, only: add_noise_imgfile, copy_imgfile,  make_avg_imgfile
+        use simple_procimgfile, only: neg_imgfile, acf_imgfile, frameavg_imgfile
+        use simple_procimgfile  ! use all in there
         use simple_image,       only: image
         use simple_oris,        only: oris
         class(stackops_commander), intent(inout) :: self
@@ -688,11 +714,6 @@ contains
         p = params(cline)                               ! parameters generated
         call b%build_general_tbox(p, cline)             ! general objects built
         call img%new([p%box,p%box,1],p%smpd,p%imgkind)  ! image created
-        ! mirroring
-        if( cline%defined('mirr') )then
-          call mirror_imgfile( p%stk, p%outstk, p%mirr )
-          goto 999
-        endif
         ! random selection
         if( cline%defined('nran') )then
             write(*,'(a)') '>>> RANDOMLY SELECTING IMAGES'
@@ -855,7 +876,7 @@ contains
         endif
         ! invert contrast
         if( p%neg .eq. 'yes' )then
-            call neg_imgfile(p%stk, p%outstk)
+            call neg_imgfile(p%stk, p%outstk, p%smpd)
             goto 999
         endif
         ! auto correlation function
@@ -865,7 +886,7 @@ contains
         endif
         ! create frame averages
         if( p%frameavg > 0 )then
-            call frameavg_imgfile(p%stk,p%outstk,p%frameavg)
+            call frameavg_imgfile(p%stk, p%outstk, p%frameavg, p%smpd)
             goto 999
         endif
         ! visualize
@@ -878,12 +899,12 @@ contains
         endif
         ! average
         if( p%avg .eq. 'yes' )then
-            call make_avg_imgfile(p%stk, p%outstk)
+            call make_avg_imgfile(p%stk, p%outstk, p%smpd)
             goto 999
         endif
         ! add noise
         if( cline%defined('snr') )then
-            call add_noise_imgfile(p%stk, p%outstk, p%snr)
+            call add_noise_imgfile(p%stk, p%outstk, p%snr, p%smpd)
             goto 999
         endif
         ! APPEND STK2 TO STK WHILE PRESERVING THE NAME OF STK
@@ -907,7 +928,7 @@ contains
         endif
         ! copy
         if( cline%defined('top') .and. .not. cline%defined('part') )then
-            call copy_imgfile(p%stk, p%outstk, fromto=[p%fromp,p%top], smpd_in=p%smpd)
+            call copy_imgfile(p%stk, p%outstk, p%smpd, fromto=[p%fromp,p%top])
             goto 999
         endif
         ! default
@@ -951,7 +972,7 @@ contains
         ! Main Loop over projdirs
         do proj = 1,ncls
             call progress( proj, ncls )
-            proj_pop = b%a%get_clspop( proj )
+            proj_pop = b%a%get_cls_pop( proj )
             if( proj_pop == 0 )cycle
             proj_inds = b%a%get_cls_pinds( proj )
             if( proj_pop==1 )then
@@ -973,7 +994,7 @@ contains
                     call ctfsqs( i )%new([p%box,p%box,1],p%smpd)
                 enddo
                 ! prep images
-                call pftcc%new(proj_pop, [p%fromp,p%top], [p%box,p%box,1],p%kfromto, 1, p%ctf)
+                call pftcc%new(proj_pop, [p%fromp,p%top], [p%box,p%box,1], p%kfromto, 1, p%ctf)
                 do i = 1,proj_pop
                     iptcl = proj_inds( i )
                     o     = b%a%get_ori( iptcl )

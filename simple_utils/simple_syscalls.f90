@@ -10,8 +10,9 @@
 !* incorporated in the _SIMPLE_ library, HE 2009-10-01
 !
 module simple_syscalls
-use simple_jiffys ! singleton
-use simple_defs   ! singleton
+use simple_jiffys       ! use all in there
+use simple_defs         ! use all in there
+use simple_filehandling ! use all in there
 implicit none
 
 private :: raise_sys_error
@@ -99,7 +100,7 @@ contains
             err = .true.
         endif 
         if( cmdstat /= 0 )then
-            write(*,*)'cmdstat /= 0, command could not be executed: ', trim(adjustl(cmd))
+            write(*,*)'cmdstat = ',cmdstat,' command could not be executed: ', trim(adjustl(cmd))
             err = .true.
         endif
         if( err ) write(*,*) trim(cmdmsg)
@@ -119,11 +120,44 @@ contains
     end function sys_get_env_var
 
     subroutine sys_gen_mrcfiletab( dir, filetabname )
-        character(len=*),      intent(in)  :: dir, filetabname
-        character(len=STDLEN), allocatable :: cmd
+        character(len=*),intent(in)  :: dir, filetabname
+        character(len=STDLEN) :: cmd
         cmd = 'ls -tr '//trim(dir)//'/*.mrc*'//' > '//trim(filetabname)
         call exec_cmdline(cmd)
     end subroutine sys_gen_mrcfiletab
+
+    subroutine sys_gen_filetab( fbody, ext, filetabname )
+        character(len=*), intent(in)  :: fbody, ext, filetabname
+        character(len=STDLEN) :: cmd
+        cmd = 'ls -tr '//trim(fbody)//'*'//trim(ext)//' > '//trim(filetabname)
+        call exec_cmdline(cmd)
+    end subroutine sys_gen_filetab
+
+    function sys_get_last_fname( fbody, ext ) result( fname )
+        character(len=*),      intent(in)  :: fbody, ext
+        character(len=STDLEN), allocatable :: fnames(:)
+        character(len=STDLEN), parameter   :: ftab = 'ftab_from_sys_find_last_fname.txt'
+        character(len=STDLEN) :: fname
+        integer :: last
+        call sys_gen_filetab(fbody, ext, ftab) ! filetable written to disc
+        call read_filetable(ftab, fnames)      ! filetable read back in
+        last = size(fnames)                    
+        fname = fnames(last)
+        deallocate(fnames)
+    end function sys_get_last_fname
+
+    subroutine sys_merge_docs( docnames, fname_merged )
+        character(len=STDLEN), intent(in) :: docnames(:)
+        character(len=*),      intent(in) :: fname_merged
+        character(len=STDLEN) :: cmd
+        integer :: ndocs, idoc
+        call del_file(fname_merged)
+        ndocs = size(docnames)
+        do idoc=1,ndocs
+            cmd = 'cat '//trim(docnames(idoc))//' >> '//trim(fname_merged)
+            call exec_cmdline(cmd)
+        end do
+    end subroutine sys_merge_docs
 
     subroutine simple_sleep( secs )
 #if defined(INTEL)

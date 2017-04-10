@@ -12,8 +12,8 @@ use simple_math          ! use all in there
 use simple_masker        ! use all in there
 implicit none
 
-public :: set_bp_range, setup_shellweights, grid_ptcl, prepimg4align, eonorm_struct_facts,&
-norm_struct_facts, preprefs4align, preprefvol, reset_prev_defparms, prep2Dref
+public :: read_imgs_from_stk, set_bp_range, setup_shellweights, grid_ptcl, prepimg4align,&
+eonorm_struct_facts, norm_struct_facts, preprefs4align, preprefvol, reset_prev_defparms, prep2Dref
 private
 
 interface prep2Dref
@@ -26,18 +26,52 @@ interface setup_shellweights
     module procedure setup_shellweights_2
 end interface
 
-logical, parameter :: debug       = .false.
-real,    parameter :: SHTHRESH    = 0.0001
-real,    parameter :: VOLSHTHRESH = 0.01
-real               :: dfx_prev    = 0.
-real               :: dfy_prev    = 0.
-real               :: angast_prev = 0.
-real               :: kV_prev     = 0.
-real               :: cs_prev     = 0.
-real               :: fraca_prev  = 0.
-integer            :: cnt = 0
+logical, parameter :: DEBUG        = .false.
+real,    parameter :: SHTHRESH     = 0.0001
+real,    parameter :: CENTHRESH    = 0.01   ! threshold for performing volume/cavg centering in pixels
+real               :: dfx_prev     = 0.
+real               :: dfy_prev     = 0.
+real               :: angast_prev  = 0.
+real               :: kV_prev      = 0.
+real               :: cs_prev      = 0.
+real               :: fraca_prev   = 0.
     
 contains
+
+    subroutine read_imgs_from_stk( b, p )
+        use simple_imgfile, only: imgfile
+        class(build),   intent(inout) :: b
+        class(params),  intent(inout) :: p
+        type(imgfile) :: ioimg
+        integer       :: cnt, iptcl, istart, istop, i
+        if( allocated(b%imgs) )then
+            istart = lbound(b%imgs, dim=1)
+            istop  = ubound(b%imgs, dim=1)
+            do i=istart,istop
+                call b%imgs(i)%kill
+            end do
+            deallocate(b%imgs)
+        endif
+        allocate(b%imgs(p%fromp:p%top))
+        do iptcl=p%fromp,p%top
+            call b%imgs(iptcl)%new([p%box,p%box,1],p%smpd,p%imgkind)
+        end do
+        if( p%l_distr_exec )then
+            call b%imgs(p%fromp)%open(p%stk_part, ioimg)
+        else
+            call b%imgs(p%fromp)%open(p%stk, ioimg)
+        endif
+        cnt = 0
+        do iptcl=p%fromp,p%top
+            cnt = cnt + 1
+            if( p%l_distr_exec )then
+                call b%imgs(iptcl)%read(p%stk_part, cnt, ioimg=ioimg)
+            else
+                call b%imgs(iptcl)%read(p%stk, iptcl, ioimg=ioimg)
+            endif
+        end do
+        call ioimg%close
+    end subroutine read_imgs_from_stk
     
     subroutine set_bp_range( b, p, cline )
         use simple_estimate_ssnr, only: fsc2ssnr
@@ -45,7 +79,7 @@ contains
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         class(cmdline), intent(inout) :: cline
-        real, allocatable     :: resarr(:), tmparr(:)
+        real, allocatable     :: resarr(:)
         real                  :: fsc0143, fsc05, mapres(p%nstates)
         integer               :: s, loc(1)
         character(len=STDLEN) :: fsc_fname
@@ -86,7 +120,7 @@ contains
                     if( p%kfromto(2) == 1 )then
                         stop 'simple_math::get_lplim gives nonsensical result (==1)'
                     endif
-                    if( debug ) write(*,*) '*** simple_hadamard_common ***: extracted FSC info'
+                    if( DEBUG ) write(*,*) '*** simple_hadamard_common ***: extracted FSC info'
                 else if( cline%defined('lp') )then
                     p%kfromto(2) = b%img%get_find(p%lp)
                 else if( cline%defined('find') )then
@@ -122,7 +156,7 @@ contains
             case DEFAULT
                 stop 'Unsupported eo flag; simple_hadamard_common'
         end select
-        if( debug ) write(*,*) '*** simple_hadamard_common ***: did set Fourier index range'
+        if( DEBUG ) write(*,*) '*** simple_hadamard_common ***: did set Fourier index range'
     end subroutine set_bp_range
 
     !>  \brief  constructs the shellweight matrix for 3D search
@@ -174,10 +208,10 @@ contains
       contains
 
         subroutine wmat_from_single_file
-            if( file_exists('shellweights.bin') )then    
+            if( file_exists(p%shellwfile) )then    
                 allocate( wmat(p%nptcls,filtsz), stat=alloc_stat)
                 filnum = get_fileunit()
-                open(unit=filnum, status='OLD', action='READ', file='shellweights.bin', access='STREAM')
+                open(unit=filnum, status='OLD', action='READ', file=p%shellwfile, access='STREAM')
                 read(unit=filnum,pos=1,iostat=io_stat) wmat
                 ! check if the read was successful
                 if( io_stat .ne. 0 )then
@@ -242,15 +276,15 @@ contains
       contains
 
         subroutine wmat_from_single_file
-            if( file_exists('shellweights.bin') )then    
+            if( file_exists(p%shellwfile) )then    
                 allocate( wmat(p%nstates,p%nptcls,filtsz), stat=alloc_stat)
                 filnum = get_fileunit()
-                open(unit=filnum, status='OLD', action='READ', file='shellweights.bin', access='STREAM')
+                open(unit=filnum, status='OLD', action='READ', file=p%shellwfile, access='STREAM')
                 read(unit=filnum,pos=1,iostat=io_stat) wmat
                 ! check if the read was successful
                 if( io_stat .ne. 0 )then
                     write(*,'(a,i0,2a)') '**ERROR(setup_shellweights_2): I/O error ',&
-                    io_stat, ' when reading shellweights.bin'
+                    io_stat, ' when reading'//trim(p%shellwfile)
                     stop 'I/O error; setup_shellweights_2; simple_hadamard_common'
                 endif
                 close(filnum)
@@ -285,9 +319,9 @@ contains
         pw = orientation%get('w')
         if( pw > 0. )then
             if( p%l_distr_exec )then
-                call b%img_copy%read(p%stk_part, cnt_glob, p%l_xfel)
+                call b%img_copy%read(p%stk_part, cnt_glob, isxfel=p%l_xfel)
             else
-                call b%img_copy%read(p%stk, iptcl, p%l_xfel)
+                call b%img_copy%read(p%stk, iptcl, isxfel=p%l_xfel)
             endif
             ! prepare image for gridding
             ! using the uncorrected/unmodified image as input
@@ -296,11 +330,11 @@ contains
             else
                 call prep4cgrid(b%img_copy, b%img_pad, p%msk)
             endif
-            if( debug ) write(*,*) '*** simple_hadamard_common ***: prepared image for gridding'
+            if( DEBUG ) write(*,*) '*** simple_hadamard_common ***: prepared image for gridding'
             ran = ran3()
             orisoft = orientation
             do jpeak=1,p%npeaks
-                if( debug ) write(*,*) '*** simple_hadamard_common ***: gridding, iteration:', jpeak
+                if( DEBUG ) write(*,*) '*** simple_hadamard_common ***: gridding, iteration:', jpeak
                 ! get ori info
                 if( softrec )then
                     orisoft =  os%get_ori(jpeak)
@@ -309,7 +343,7 @@ contains
                     w = 1.
                 endif
                 s = nint(orisoft%get('state'))
-                if( debug ) write(*,*) '*** simple_hadamard_common ***: got orientation'
+                if( DEBUG ) write(*,*) '*** simple_hadamard_common ***: got orientation'
                 if( p%frac < 0.99 ) w = w*pw
                 if( w > 0. )then
                     if( p%pgrp == 'c1' .or. str_has_substr(p%refine,'adasym') )then
@@ -329,7 +363,7 @@ contains
                         end do
                     endif
                 endif
-                if( debug ) write(*,*) '*** simple_hadamard_common ***: gridded ptcl'
+                if( DEBUG ) write(*,*) '*** simple_hadamard_common ***: gridded ptcl'
             end do
         endif
     end subroutine grid_ptcl
@@ -341,27 +375,13 @@ contains
         type(ori),      intent(inout) :: o
         type(ctf) :: tfun
         real      :: x, y, dfx, dfy, angast
-        integer   :: icls!, state
+        integer   :: i
         if( p%l_xfel )then
             ! nothing to do 4 now
             return
         else
-            x     = o%get('x')
-            y     = o%get('y')
-            !state = nint(o%get('state'))
-            icls  = nint(o%get('class'))
-            if( p%doautomsk )then
-                ! make sure that img_msk is of the correct dimension
-                call b%img_msk%new([p%boxmatch,p%boxmatch,1],p%smpd)
-                ! create 2D envelope
-                call b%vol_pad%fproject(o, b%img_pad)
-                call b%img_pad%bwd_ft
-                call b%img_pad%clip(b%img_msk)
-                call b%img_msk%norm('sigm')
-                ! call b%img_msk%bin               ! under test
-                ! call b%img_msk%grow_bin          ! under test
-                ! call b%img_msk%cos_edge(30)      ! under test
-            endif
+            x = o%get('x')
+            y = o%get('y')
             ! move to Fourier space
             call b%img%fwd_ft
             ! set CTF parameters
@@ -400,23 +420,31 @@ contains
             call b%img%bwd_ft
             ! clip image if needed
             if( p%boxmatch < p%box ) call b%img%clip_inplace([p%boxmatch,p%boxmatch,1]) ! SQUARE DIMS ASSUMED
-            ! apply a soft-edged mask
-            if( p%l_innermsk )then
-                call b%img%mask(p%msk, 'soft', inner=p%inner, width=p%width)
-            else 
-                call b%img%mask(p%msk, 'soft')
-            endif
+            ! MASKING
             if( p%doautomsk )then
-                ! multiply with the projected envelope
-                call b%img%mul(b%img_msk)
+                ! PARTICLE ENVELOPPE MASKING
+                call b%img_msk%new([p%boxmatch,p%boxmatch,1], p%smpd) ! ensures the correct dimension
+                call b%mskvol%env_rproject(o, b%img_msk, p%msk)       ! create 2D envelope
+                do i=1, p%binwidth
+                    call b%img_msk%grow_bin             ! binary layers
+                enddo
+                call b%img_msk%cos_edge(p%edge)         ! soft edge
+                call b%img%mul(b%img_msk)               ! multiply by projected envelope
             else if( p%automsk .eq. 'cavg' )then
                 ! ab initio mask
                 call automask2D(b%img, p)
-            endif  
+            else              
+                ! apply a soft-edged mask
+                if( p%l_innermsk )then
+                    call b%img%mask(p%msk, 'soft', inner=p%inner, width=p%width)
+                else
+                    call b%img%mask(p%msk, 'soft')
+                endif
+            endif
             ! return in Fourier space
             call b%img%fwd_ft
         endif
-        if( debug ) write(*,*) '*** simple_hadamard_common ***: finished prepimg4align'
+        if( DEBUG ) write(*,*) '*** simple_hadamard_common ***: finished prepimg4align'
     end subroutine prepimg4align
 
     subroutine prep2Dref_1( p, ref )
@@ -443,10 +471,17 @@ contains
         class(image),   intent(inout) :: ref
         class(oris),    intent(inout) :: os
         integer,        intent(in)    :: icls
-        real :: xyz(3)
-        ! center the reference and update the corresponding class parameters
-        xyz = ref%center(p%cenlp, 'no', p%msk)
-        call os%add_shift2class(icls, -xyz(1:2))
+        real :: xyz(3), sharg
+        if( p%center.eq.'yes' .or. p%doshift )then
+            ! center the reference
+            xyz   = ref%center(p%cenlp, 'no', p%msk, doshift=.false.)
+            sharg = arg(xyz)
+            if(sharg > CENTHRESH)then
+                ! apply shift and update the corresponding class parameters
+                call ref%shift(xyz(1), xyz(2))
+                call os%add_shift2class(icls, -xyz(1:2))
+            endif
+        endif
         ! normalise
         call ref%norm
         ! apply mask
@@ -460,36 +495,22 @@ contains
         call ref%fwd_ft
     end subroutine prep2Dref_2
 
-    subroutine preprefvol( b, p, cline, s, do_expand )
+    subroutine preprefvol( b, p, cline, s, doexpand )
         class(build),      intent(inout) :: b
         class(params),     intent(inout) :: p
         class(cmdline),    intent(inout) :: cline
         integer,           intent(in)    :: s
-        logical, optional, intent(in)    :: do_expand
-        real, allocatable :: filter(:)
+        logical, optional, intent(in)    :: doexpand
+        logical :: ddoexpand
         real    :: shvec(3)
-        logical :: l_expand = .true.
-        if(present(do_expand))l_expand = do_expand
+        ddoexpand = .true.
+        if( present(doexpand) ) ddoexpand = doexpand
         if( p%boxmatch < p%box )call b%vol%new([p%box,p%box,p%box],p%smpd) ! ensure correct dim
         call b%vol%read(p%vols(s), isxfel=p%l_xfel)
-        ! take care of centering
         if( p%l_xfel )then
             ! no centering
         else
-            if( p%doshift )then
-                ! centering only for asymmetric and circular symmetric cases
-                if( p%refine.ne.'het' )then
-                    if( p%pgrp(:1).eq.'c' )then
-                        shvec = b%vol%center(p%cenlp,'no',p%msk,doshift=.false.) ! find center of mass shift
-                        if( arg(shvec) > VOLSHTHRESH )then
-                            if( p%pgrp.ne.'c1' ) shvec(1:2) = 0.         ! shifts only along z-axis for C2 and above
-                            call b%vol%shift(shvec(1),shvec(2),shvec(3)) ! performs shift
-                            ! map back to particle oritentations
-                            if( cline%defined('oritab') ) call b%a%map3dshift22d(-shvec(:), state=s)
-                        endif
-                    endif
-                endif
-            endif
+            if(p%doshift) call centervol
         endif
         ! clip
         if( p%boxmatch < p%box )then
@@ -521,12 +542,31 @@ contains
                     ! automask & write files
                     call automask(b, p, cline, b%vol, b%mskvol, p%vols_msk(s), p%masks(s))
                 endif
+                ! stash for enveloppe particle projection
+                b%mskvols(s) = b%mskvol
             endif
         endif
         ! FT volume
         call b%vol%fwd_ft
         ! expand for fast interpolation
-        if(l_expand) call b%vol%expand_cmat
+        if( ddoexpand ) call b%vol%expand_cmat
+
+        contains
+
+            subroutine centervol
+                ! centering only for asymmetric and circular symmetric cases
+                if( p%refine.ne.'het' )then
+                    if(p%pgrp(:1) .eq. 'c')then
+                        shvec = b%vol%center(p%cenlp,'no',p%msk,doshift=.false.) ! find center of mass shift
+                        if( arg(shvec) > CENTHRESH )then
+                            if(p%pgrp .ne. 'c1') shvec(1:2) = 0.         ! shifts only along z-axis for C2 and above
+                            call b%vol%shift(shvec(1),shvec(2),shvec(3)) ! performs shift
+                            ! map back to particle oritentations
+                            if( cline%defined('oritab') )call b%a%map3dshift22d(-shvec(:), state=s)
+                        endif
+                    endif
+                endif
+            end subroutine centervol
     end subroutine preprefvol
     
     subroutine eonorm_struct_facts( b, p, res, which_iter )
@@ -535,8 +575,7 @@ contains
         class(params),     intent(inout) :: p
         real,              intent(inout) :: res
         integer, optional, intent(in)    :: which_iter
-        type(image)           :: vol_tmp
-        integer               :: s, s_loc
+        integer               :: s
         real                  :: res05s(p%nstates), res0143s(p%nstates)
         character(len=STDLEN) :: pprocvol
         ! init
@@ -637,7 +676,7 @@ contains
             endif
         end do
     end subroutine norm_struct_facts
-    
+
     subroutine preprefs4align( b, p, iptcl, pftcc, ref )
         use simple_math,             only: euclid
         use simple_polarft_corrcalc, only: polarft_corrcalc
@@ -668,16 +707,16 @@ contains
             kV    = b%a%get(iptcl,'kv')
             cs    = b%a%get(iptcl,'cs')
             fraca = b%a%get(iptcl,'fraca')
-            dist = euclid([kV,cs,fraca,dfx,dfy,angast],[kV_prev,cs_prev,fraca_prev,dfx_prev,dfy_prev,angast_prev])
+            dist  = euclid([kV,cs,fraca,dfx,dfy,angast],[kV_prev,cs_prev,fraca_prev,dfx_prev,dfy_prev,angast_prev])
             if( dist < 0.001 )then
                 ! CTF parameters are the same as for the previous particle & no update is needed
             else
                 ! CTF parameters have changed and ctf object and the reference central sections need to be updated
                 tfun = ctf(p%smpd, kV, cs, fraca)
                 if( present(ref) )then
-                    call pftcc%apply_ctf(tfun, dfx, dfy, angast, refvec=[ref,ref])
+                    call pftcc%apply_ctf(iptcl, refvec=[ref,ref])
                 else
-                    call pftcc%apply_ctf(tfun, dfx, dfy, angast)
+                    call pftcc%apply_ctf(iptcl)
                 endif
             endif
             kV_prev     = kV

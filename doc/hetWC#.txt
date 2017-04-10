@@ -1,3 +1,0 @@
-we need a restart procedure and implement it (Monday)
-swap the corr with frc-based metric and see if it makes a difference (Hans implements O/W)
-test with shell-weights

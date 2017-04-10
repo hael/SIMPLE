@@ -191,7 +191,7 @@ contains
         nrefs = primesrch3D%get_ntotrefs()
         nrots = primesrch3D%get_nrots()
         ! refine=no,shc; states=1
-        srch_common = prime_srch( p, nrefs, nrots)
+        srch_common = prime_srch( p )
         do i=1,NPROJS
             o = b%a%get_ori(i)
             call o%rnd_inpl( p%trs )
@@ -224,7 +224,7 @@ contains
         integer   :: nrefs, nrots, ind,i, state, proj, j
         nrefs = primesrch3D%get_ntotrefs()
         nrots = primesrch3D%get_nrots()
-        srch_common = prime_srch( p, nrefs, nrots)
+        srch_common = prime_srch( p )
         if( p%refine.eq.'no' .and. p%ctf.eq.'no' )then
             ! refine=no; states=1
             do j=1,10

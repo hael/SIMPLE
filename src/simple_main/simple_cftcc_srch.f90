@@ -22,14 +22,17 @@ integer                         :: state=1           !< state to evaluate
 type(ori)                       :: o_glob            !< global orientation
 contains
 
-    subroutine cftcc_srch_init( cftcc, img, opt_str, lims, nrestarts, syme )
-        class(cartft_corrcalc), target, intent(in) :: cftcc
-        class(image),           target, intent(in) :: img
-        character(len=*),               intent(in) :: opt_str
-        real,                           intent(in) :: lims(5,2)
-        integer,                        intent(in) :: nrestarts
+    subroutine cftcc_srch_init(cftcc, img, opt_str, lims, nrestarts, syme)
+        class(cartft_corrcalc), target, intent(in)    :: cftcc
+        class(image),           target, intent(in)    :: img
+        character(len=*),               intent(in)    :: opt_str
+        real,                           intent(in)    :: lims(5,2)
+        integer,                        intent(in)    :: nrestarts
         class(sym),           optional, intent(inout) :: syme
         real :: lims_here(5,2)
+        ! set pointers
+        cftcc_ptr => cftcc
+        pimg      => img
         ! make optimizer spec
         if( present(syme) )then
             lims_here(1:3,:) = syme%srchrange()
@@ -42,9 +45,6 @@ contains
         call ospec%set_costfun(cftcc_srch_cost)
         ! generate optimizer object with the factory
         call ofac%new(ospec, nlopt)
-        ! set pointers
-        cftcc_ptr => cftcc
-        pimg      => img
     end subroutine cftcc_srch_init
     
     subroutine cftcc_srch_set_state( state_in )
@@ -77,7 +77,6 @@ contains
         call o%set_euler(vec(1:3))
         shvec(1:2) = vec(4:5)
         shvec(3)   = 0.0
-        call o%set('state', real(state))
         call cftcc_ptr%project(o, 1)     
         cost = -cftcc_ptr%correlate(pimg, 1, shvec)
     end function cftcc_srch_cost
@@ -85,24 +84,23 @@ contains
     subroutine cftcc_srch_minimize( o )
         use simple_math, only: rad2deg
         class(ori),  intent(inout) :: o
+        type(ori) :: o1, o2
         real      :: prev_shvec(2)
-        real      :: corr, cost, dist, dist_inpl, prev_corr, frac
+        real      :: corr, cost, dist, dist_inpl, prev_corr, frac, maxdist
         prev_shvec = o%get_shift()
         ! copy the input orientation
+        call o%set('state', real(state)) ! from cftcc_srch_set_state
         o_glob = o
-        call o_glob%print
-        ! initialise optimiser to current projdir & in-plane rotation
-        ospec%x = 0.
-        ospec%x(1:3) = o%get_euler()
         ! previous correlation
         call cftcc_ptr%project(o, 1)
-        !print *,'proj done'  
         prev_corr = cftcc_ptr%correlate(pimg, 1, [0.,0.,0.])
-        !print *,prev_corr
+        ! initialise optimiser to current projdir & in-plane rotation
+        ospec%x      = 0.
+        ospec%x(1:3) = o%get_euler()
         ! search
         call nlopt%minimize(ospec, cost)
         corr = -cost
-        !print *,corr
+        ! report
         if(corr < prev_corr)then
             ! no improvement
             corr      = prev_corr
@@ -117,22 +115,31 @@ contains
             ! the ptcl is shifted only: no need to rotate the shift
             call o%set_shift(prev_shvec - ospec%x(4:5))
             ! distance
-            dist_inpl = o_glob.inpldist.o
-            dist      = 0.5*rad2deg(o_glob.euldist.o)+0.5*dist_inpl
-            frac      = 100.*(180.-dist**2.)/180.
+            dist_inpl = rad2deg(o_glob.inpldist.o)
+            dist      = rad2deg(o_glob.euldist.o)
+            ! frac
+            call o1%new
+            call o2%new
+            call o1%set_euler([ospec%limits(1,1),ospec%limits(2,1),0.])
+            call o2%set_euler([ospec%limits(1,2),ospec%limits(2,2),0.])
+            ! max distance within asymetric unit
+            maxdist = 0.5*rad2deg(o1.inpldist.o2) + 0.5*rad2deg(o1.euldist.o2)
+            ! proportion of ...
+            frac = 100.*(maxdist-(.5*dist+.5*dist_inpl)) / maxdist
         endif
+        ! set new values
         call o%set('corr',      corr)
         call o%set('ow',        1.)
         call o%set('dist_inpl', dist_inpl)
         call o%set('dist',      dist)
-        ! set the overlaps
-        call o%set('mi_class', 1.)
-        call o%set('mi_inpl',  1.) ! todo
-        call o%set('mi_state', 1.)
-        call o%set('mi_joint', 1.)  !todo
-        ! all the other stuff
-        call o%set( 'frac',  frac) ! todo
-        call o%set( 'sdev',  0.)
+        call o%set('mi_class',  1.)
+        call o%set('mi_inpl',   1.)
+        call o%set('mi_state',  1.)
+        call o%set('mi_joint',  1.)
+        call o%set('frac',      frac)
+        call o%set('sdev',      0.)
+        ! clean exit
+        state = 1
     end subroutine cftcc_srch_minimize
 
 end module simple_cftcc_srch

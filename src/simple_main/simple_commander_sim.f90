@@ -167,7 +167,7 @@ contains
 
     subroutine exec_simmovie( self, cline )
         use simple_ori,         only: ori
-        use simple_math,        only: deg2rad, gen_ptcl_pos
+        use simple_math,        only: deg2rad
         use simple_image,       only: image
         use simple_rnd,         only: ran3
         use simple_procimgfile, only: stats_imgfile
@@ -324,6 +324,54 @@ contains
         call b%a%write('simmovie_params.txt')
         ! end gracefully
         call simple_end('**** SIMPLE_SIMMOVIE NORMAL STOP ****')
+
+        contains
+
+            !> \brief  generate mutually exclusive positions
+            function gen_ptcl_pos( npos, xdim, ydim, box ) result( pos )
+                use simple_jiffys, only: alloc_err
+                use simple_rnd,    only: irnd_uni
+                use simple_jiffys, only: progress
+                integer, intent(in)           :: npos, xdim, ydim
+                integer, intent(in), optional :: box
+                integer, allocatable          :: pos(:,:)
+                logical                       :: occupied(xdim,ydim)
+                integer                       :: alloc_stat, ix, iy, cnt, i, j
+                allocate( pos(npos,2), stat=alloc_stat )
+                call alloc_err("In: gen_ptcl_pos, simple_math", alloc_stat)
+                occupied = .false.
+                cnt = 0
+                do
+                    ix = irnd_uni(xdim)
+                    iy = irnd_uni(ydim)
+                    if( present(box) )then
+                        if( ix < box/2+1 .or. ix > xdim-box/2-1 ) cycle
+                        if( iy < box/2+1 .or. iy > ydim-box/2-1 ) cycle
+                        do i=ix-box/2,ix+box/2-1
+                            do j=iy-box/2,iy+box/2-1
+                                if( occupied(i,j) ) cycle
+                            end do
+                        end do
+                    else
+                        if(occupied(ix,iy)) cycle
+                    endif
+                    if( present(box) )then
+                        occupied(ix-box/2:ix+box/2-1,iy-box/2:iy+box/2-1) = .true.
+                    else
+                        occupied(ix,iy) = .true.
+                    endif
+                    cnt = cnt+1
+                    call progress(cnt,npos)
+                    pos(cnt,1) = ix
+                    pos(cnt,2) = iy
+                    if( cnt == 500*npos )then
+                        write(*,'(a)') "WARNING! Exiting loop because maximum nr of iterations; gen_ptcl_pos; simple_math"
+                        exit 
+                    endif
+                    if( cnt == npos ) exit
+                end do
+            end function gen_ptcl_pos
+
     end subroutine exec_simmovie
     
     subroutine exec_simsubtomo( self, cline )

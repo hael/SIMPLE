@@ -17,24 +17,23 @@ private
 logical, parameter :: shift_to_phase_origin=.true.
 logical, parameter :: debug=.false.
 
-
 type :: image
     private
-    logical                                :: ft=.false.              !< FTed or not
-    integer                                :: ldim(3)=[1,1,1]         !< logical image dimensions
-    integer                                :: nc                      !< number of F-comps
-    real                                   :: smpd                    !< sampling distance
-    type(ftiter)                           :: fit                     !< Fourier iterator object
-    type(c_ptr)                            :: p                       !< c pointer for fftw allocation
-    real(kind=c_float), pointer            :: rmat(:,:,:)=>null()     !< image pixels/voxels (in data)
-    complex(kind=c_float_complex), pointer :: cmat(:,:,:)=>null()     !< Fourier components
-    real                                   :: shconst(3)              !< shift constant
-    type(c_ptr)                            :: plan_fwd                !< fftw plan for the image (fwd)
-    type(c_ptr)                            :: plan_bwd                !< fftw plan for the image (bwd)
-    integer                                :: array_shape(3)          !< shape of complex array
-    integer                                :: lims(3,2)               !< physical limits for the XFEL patterns
-    character(len=STDLEN)                  :: imgkind='em'            !< indicates image kind (different representation 4 EM/XFEL)
-    logical                                :: existence=.false.       !< indicates existence
+    logical                                :: ft=.false.           !< FTed or not
+    integer                                :: ldim(3)=[1,1,1]      !< logical image dimensions
+    integer                                :: nc                   !< number of F-comps
+    real                                   :: smpd                 !< sampling distance
+    type(ftiter)                           :: fit                  !< Fourier iterator object
+    type(c_ptr)                            :: p                    !< c pointer for fftw allocation
+    real(kind=c_float), pointer            :: rmat(:,:,:)=>null()  !< image pixels/voxels (in data)
+    complex(kind=c_float_complex), pointer :: cmat(:,:,:)=>null()  !< Fourier components
+    real                                   :: shconst(3)           !< shift constant
+    type(c_ptr)                            :: plan_fwd             !< fftw plan for the image (fwd)
+    type(c_ptr)                            :: plan_bwd             !< fftw plan for the image (bwd)
+    integer                                :: array_shape(3)       !< shape of complex array
+    integer                                :: lims(3,2)            !< physical limits for the XFEL patterns
+    character(len=STDLEN)                  :: imgkind='em'         !< indicates image kind (different representation 4 EM/XFEL)
+    logical                                :: existence=.false.    !< indicates existence
   contains
     ! CONSTRUCTORS
     procedure          :: new
@@ -48,6 +47,7 @@ type :: image
     procedure          :: extr_pixels
     procedure          :: corner
     ! I/O
+    procedure          :: open
     procedure          :: read
     procedure          :: write
     procedure, private :: write_emkind
@@ -63,6 +63,7 @@ type :: image
     procedure          :: get
     procedure          :: get_rmat
     procedure          :: get_cmat
+    procedure          :: expand_ft
     procedure          :: set
     procedure          :: set_rmat
     procedure          :: set_ldim
@@ -82,6 +83,8 @@ type :: image
     procedure          :: zero2one
     procedure          :: get_fcomp
     procedure          :: set_fcomp
+    procedure          :: add_fcomp
+    procedure          :: subtr_fcomp
     procedure          :: vis
     procedure          :: set_ft
     procedure          :: extr_fcomp
@@ -147,9 +150,9 @@ type :: image
     ! BINARY IMAGE METHODS
     procedure          :: nforeground
     procedure          :: nbackground
-    procedure          :: bin_1
-    procedure          :: bin_2
-    procedure          :: bin_3
+    procedure, private :: bin_1
+    procedure, private :: bin_2
+    procedure, private :: bin_3
     generic            :: bin => bin_1, bin_2, bin_3
     procedure          :: bin_filament
     procedure          :: masscen
@@ -157,6 +160,7 @@ type :: image
     procedure          :: bin_inv
     procedure          :: grow_bin
     procedure          :: cos_edge
+    procedure          :: cos_edge2
     procedure          :: increment
     ! FILTERS
     procedure          :: acf
@@ -183,6 +187,7 @@ type :: image
     procedure          :: est_noise_pow
     procedure          :: est_noise_pow_norm
     procedure          :: mean
+    procedure          :: median_pixel
     procedure          :: contains_nans
     procedure          :: checkimg4nans
     procedure, private :: cure_1
@@ -244,11 +249,7 @@ type :: image
     procedure          :: bwd_ft
     procedure          :: bwd_logft
     procedure          :: shift
-    procedure          :: rankify
     procedure          :: cure_outliers
-    ! TESTS
-    procedure, private :: get_fplane_simple
-    procedure, private :: get_fplane_frealix
     ! DESTRUCTOR
     procedure :: kill
 end type
@@ -279,8 +280,8 @@ contains
         class(image),               intent(inout) :: self
         integer,                    intent(in)    :: ldim(3)
         real,                       intent(in)    :: smpd
-        real,             optional, intent(in)    :: backgr
         character(len=*), optional, intent(in)    :: imgkind
+        real,             optional, intent(in)    :: backgr
         integer(kind=c_int) :: rc
         integer :: i
         call self%kill
@@ -293,25 +294,7 @@ contains
         ! Work out dimensions of the complex array
         self%array_shape(1)   = fdim(self%ldim(1))
         self%array_shape(2:3) = self%ldim(2:3)
-        if( self%imgkind .eq. 'em' )then
-            self%nc = int(product(self%array_shape)) ! nr of components
-            ! Letting FFTW do the allocation in C ensures that we will be using aligned memory
-            self%p = fftwf_alloc_complex(int(product(self%array_shape),c_size_t))
-            ! Set up the complex array which will point at the allocated memory
-            call c_f_pointer(self%p,self%cmat,self%array_shape)
-            ! Work out the shape of the real array
-            self%array_shape(1) = 2*self%array_shape(1)
-            ! Set up the real array
-            call c_f_pointer(self%p,self%rmat,self%array_shape)
-            ! put back the shape of the complex array
-            self%array_shape(1) = fdim(self%ldim(1))
-            if( present(backgr) )then
-                self%rmat = backgr
-            else
-                self%rmat = 0.
-            endif
-            self%ft = .false.
-        else if( self%imgkind .eq. 'xfel' )then
+        if( self%imgkind .eq. 'xfel' )then
             if( self%even_dims() )then
                 self%lims(1,1) = -self%ldim(1)/2
                 self%lims(1,2) = self%ldim(1)/2-1
@@ -329,7 +312,23 @@ contains
             endif
             self%ft = .true.
         else
-            stop 'Unsupported image kind; smple_image::new'
+            self%nc = int(product(self%array_shape)) ! nr of components
+            ! Letting FFTW do the allocation in C ensures that we will be using aligned memory
+            self%p = fftwf_alloc_complex(int(product(self%array_shape),c_size_t))
+            ! Set up the complex array which will point at the allocated memory
+            call c_f_pointer(self%p,self%cmat,self%array_shape)
+            ! Work out the shape of the real array
+            self%array_shape(1) = 2*(self%array_shape(1))
+            ! Set up the real array
+            call c_f_pointer(self%p,self%rmat,self%array_shape)
+            ! put back the shape of the complex array
+            self%array_shape(1) = fdim(self%ldim(1))
+            if( present(backgr) )then
+                self%rmat = backgr
+            else
+                self%rmat = 0.
+            endif
+            self%ft = .false.
         endif
         ! make fftw plans
         if( (any(ldim > 500) .or. ldim(3) > 200) .and. nthr_glob > 1 )then
@@ -562,7 +561,8 @@ contains
         if( self%is_ft() ) stop 'only 4 real images; extr_pixels; simple_image'
         if( self.eqdims.mskimg )then
             ! pixels = self%packer(mskimg) ! Intel hickup
-            pixels = pack( self%rmat, mskimg%rmat>0.5 )
+            pixels = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
+                &mskimg%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))>0.5 )
         else
             stop 'mask and image of different dims; extr_pixels; simple_image'
         endif
@@ -582,47 +582,22 @@ contains
     ! I/O
 
     !>  \brief  for reading 2D images from stack or volumes from volume files
-    subroutine read( self, fname, i, isxfel, formatchar, readhead, rwaction, read_failure )
-        use simple_imgfile,       only: imgfile
-        use simple_jiffys,        only: read_raw_image
-        use simple_filehandling,  only: fname2format, file_exists
+    subroutine open( self, fname, ioimg, formatchar, readhead, rwaction )
+        use simple_imgfile,      only: imgfile
+        use simple_jiffys,       only: read_raw_image
+        use simple_filehandling, only: fname2format, file_exists
         class(image),               intent(inout) :: self
         character(len=*),           intent(in)    :: fname
-        integer,          optional, intent(in)    :: i
-        logical,          optional, intent(in)    :: isxfel
+        class(imgfile),             intent(inout) :: ioimg
         character(len=1), optional, intent(in)    :: formatchar
         logical,          optional, intent(in)    :: readhead
         character(len=*), optional, intent(in)    :: rwaction
-        logical,          optional, intent(out)   :: read_failure
-        type(imgfile)         :: ioimg
-        character(len=1)      :: form
-        integer               :: ldim(3), iform, first_slice, mode
-        integer               :: last_slice, ii, alloc_stat
-        real                  :: smpd
-        logical               :: isvol, err, iisxfel, debug=.false.
-        real(dp), allocatable :: tmpmat1(:,:,:)
-        real(sp), allocatable :: tmpmat2(:,:,:)
+        character(len=1) :: form
+        integer          :: mode
+        logical          :: debug=.false.
         if( self%existence )then
             if( .not. file_exists(fname) )then
-                stop 'The file you are trying to read from does not exists; read; simple_image'
-            endif
-            ldim = self%ldim
-            smpd = self%smpd
-            iisxfel = .false.
-            if( present(isxfel) ) iisxfel = isxfel
-            if( iisxfel )then
-                ! always assume EM-kind images on disk
-                if( debug ) print *, 'ldim: ', ldim
-                if( debug ) print *, 'smpd: ', smpd
-                call self%new(ldim, smpd)
-            endif
-            isvol = .true. ! assume volume by default
-            ii    = 1      ! default location
-            if( present(i) )then
-                ! we are reading from a stack & in SIMPLE volumes are not allowed
-                ! to be stacked so the image object must be 2D
-                isvol = .false.
-                ii = i ! replace default location
+                stop 'The file you are trying to open does not exists; open; simple_image'
             endif
             if( present(formatchar) )then
                 form = formatchar
@@ -656,47 +631,66 @@ contains
                         write(*,*) '**** DEBUG **** file info right after opening the file'
                         call ioimg%print
                     endif
-                    iform = ioimg%getIform()
-                    ! iform file type specifier:
-                    !   1 = 2D image
-                    !   3 = 3D volume
-                    ! -11 = 2D Fourier odd
-                    ! -12 = 2D Fourier even
-                    ! -21 = 3D Fourier odd
-                    ! -22 = 3D Fourier even
-                    select case(iform)
-                        case(1,-11,-12)
-                            ! we are processing a stack of 2D images (single 2D images not allowed in SIMPLE)
-                            if( present(i) )then
-                                ! all good
-                            else
-                                stop 'ERROR, optional argument i required for reading from stack; read; simple_image'
-                            endif
-                            if( self%ldim(3) == 1 )then
-                                ! all good
-                            else if( self%ldim(3) > 1 )then
-                                stop 'ERROR, trying to read from a stack into a volume; read; simple_image'
-                            else
-                                stop 'ERROR, nonconforming logical dimension of image; read; simple_image'
-                            endif
-                            if( iform == -11 .or. iform == -12 ) self%ft = .true.
-                        case(3,-21,-22)
-                            ! we are processing a 3D image (stacks of 3D volumes not allowed in SIMPLE)
-                            if( present(i) )then
-                                stop 'ERROR, optional argument i should not be present when reading volumes; read; simple_image'
-                            endif
-                            if( self%ldim (3) > 1 )then
-                                ! all good
-                            else if( self%ldim(3) == 1)then
-                                stop 'ERROR, trying to read from a volume into a 2D image; read; simple_image'
-                            else
-                                stop 'ERROR, nonconforming logical dimension of image; read; simple_image'
-                            endif
-                            if( iform == -21 .or. iform == -22 ) self%ft = .true.
-                        case DEFAULT
-                            write(*,*) 'iform = ', iform
-                            stop 'Unsupported iform flag; simple_image :: read'
-                    end select
+            end select
+        else
+            stop 'ERROR, image need to be constructed before read/write; open; simple_image'
+        endif
+    end subroutine open
+
+    !>  \brief  for reading 2D images from stack or volumes from volume files
+    subroutine read( self, fname, i, ioimg, isxfel, formatchar, readhead, rwaction, read_failure )
+        use simple_imgfile,      only: imgfile
+        use simple_jiffys,       only: read_raw_image
+        use simple_filehandling, only: fname2format, file_exists
+        class(image),               intent(inout) :: self
+        character(len=*),           intent(in)    :: fname
+        integer,          optional, intent(in)    :: i
+        class(imgfile),   optional, intent(inout) :: ioimg 
+        logical,          optional, intent(in)    :: isxfel
+        character(len=1), optional, intent(in)    :: formatchar
+        logical,          optional, intent(in)    :: readhead
+        character(len=*), optional, intent(in)    :: rwaction
+        logical,          optional, intent(out)   :: read_failure
+        type(imgfile)         :: ioimg_local
+        character(len=1)      :: form
+        integer               :: ldim(3), iform, first_slice, mode
+        integer               :: last_slice, ii, alloc_stat
+        real                  :: smpd
+        logical               :: isvol, err, iisxfel, ioimg_present
+        logical, parameter    :: DEBUG=.false.
+        real(dp), allocatable :: tmpmat1(:,:,:)
+        real(sp), allocatable :: tmpmat2(:,:,:)
+        ldim          = self%ldim
+        smpd          = self%smpd
+        ioimg_present = present(ioimg)
+        iisxfel       = .false.
+        if( present(isxfel) ) iisxfel = isxfel
+        if( iisxfel )then
+            ! always assume EM-kind images on disk
+            if( debug ) print *, 'ldim: ', ldim
+            if( debug ) print *, 'smpd: ', smpd
+            call self%new(ldim, smpd)
+        endif
+        isvol = .true. ! assume volume by default
+        ii    = 1      ! default location
+        if( present(i) )then
+            ! we are reading from a stack & in SIMPLE volumes are not allowed
+            ! to be stacked so the image object must be 2D
+            isvol = .false.
+            ii = i ! replace default location
+        endif
+        if( present(formatchar) )then
+            form = formatchar
+        else
+            form = fname2format(fname)
+        endif
+        if( ioimg_present )then
+            call exception_handler(ioimg)
+            call read_local(ioimg)
+        else
+            select case(form)
+                case('M','F','S')
+                    call self%open(fname, ioimg_local, formatchar, readhead, rwaction)
                 case('D')
                     if( self%even_dims())then
                         allocate(tmpmat1(self%ldim(1),self%ldim(2),self%ldim(3)),&
@@ -716,40 +710,97 @@ contains
                     write(*,*) 'Trying to read from file: ', fname
                     stop 'ERROR, unsupported file format; read; simple_image'
             end select
-            if( form .ne. 'F' )then
-                ! make sure that the logical image dimensions of self are consistent with the overall header
-                ldim = ioimg%getDims()
-                if( .not. all(ldim(1:2) == self%ldim(1:2)) )then
-                    write(*,*) 'ldim of image object: ', self%ldim
-                    write(*,*) 'ldim in ioimg (fhandle) object: ', ldim
-                    stop 'ERROR, logical dimensions of overall header & image object do not match; read; simple_image'
+            call exception_handler(ioimg_local)
+            call read_local(ioimg_local)
+        endif
+
+        contains
+
+            subroutine read_local( ioimg )
+                class(imgfile) :: ioimg
+                ! work out the slice range
+                if( isvol )then
+                    if( ii .gt. 1 ) stop 'ERROR, stacks of volumes not supported; read; simple_image'
+                    first_slice = 1
+                    last_slice = ldim(3)
+                else
+                    first_slice = ii
+                    last_slice = ii
                 endif
-            endif
-            ! work out the slice range
-            if( isvol )then
-                if( ii .gt. 1 ) stop 'ERROR, stacks of volumes not supported; read; simple_image'
-                first_slice = 1
-                last_slice = ldim(3)
-            else
-                first_slice = ii
-                last_slice = ii
-            endif
-            call ioimg%rwSlices('r',first_slice,last_slice,self%rmat,&
-            &self%ldim,self%ft,self%smpd,read_failure=read_failure)
-            call ioimg%close
-        else
-            stop 'ERROR, image need to be constructed before read; read; simple_image'
-        endif
-        ! normalize if volume
-        if( self%is_3d() .and. .not. iisxfel )then
-            err = .false.
-            if( .not. self%ft ) call self%norm(err=err)
-            if( err )then
-                write(*,*) 'Normalization error, trying to read: ', fname
-                stop
-            endif
-        endif
-        if( iisxfel ) call self%em2xfel
+                call ioimg%rwSlices('r',first_slice,last_slice,self%rmat,&
+                &self%ldim,self%ft,self%smpd,read_failure=read_failure)
+                if( .not. ioimg_present ) call ioimg%close
+                ! normalize if volume
+                if( self%is_3d() .and. .not. iisxfel )then
+                    err = .false.
+                    if( .not. self%ft ) call self%norm(err=err)
+                    if( err )then
+                        write(*,*) 'Normalization error, trying to read: ', fname
+                        stop
+                    endif
+                endif
+                if( iisxfel ) call self%em2xfel
+            end subroutine read_local
+
+            subroutine exception_handler( ioimg )
+                class(imgfile) :: ioimg
+                if( form .eq. 'S' ) call spider_exception_handler(ioimg)
+                if( form .ne. 'F' )then
+                    ! make sure that the logical image dimensions of self are consistent with the overall header
+                    ldim = ioimg%getDims()
+                    if( .not. all(ldim(1:2) == self%ldim(1:2)) )then
+                        write(*,*) 'ldim of image object: ', self%ldim
+                        write(*,*) 'ldim in ioimg (fhandle) object: ', ldim
+                        stop 'ERROR, logical dimensions of overall header & image object do not match; read; simple_image'
+                    endif
+                endif
+            end subroutine exception_handler
+
+            subroutine spider_exception_handler(ioimg)
+                class(imgfile) :: ioimg
+                iform = ioimg%getIform()
+                ! iform file type specifier:
+                !   1 = 2D image
+                !   3 = 3D volume
+                ! -11 = 2D Fourier odd
+                ! -12 = 2D Fourier even
+                ! -21 = 3D Fourier odd
+                ! -22 = 3D Fourier even
+                select case(iform)
+                    case(1,-11,-12)
+                        ! we are processing a stack of 2D images (single 2D images not allowed in SIMPLE)
+                        if( present(i) )then
+                            ! all good
+                        else
+                            stop 'ERROR, optional argument i required for reading from stack; read; simple_image'
+                        endif
+                        if( self%ldim(3) == 1 )then
+                            ! all good
+                        else if( self%ldim(3) > 1 )then
+                            stop 'ERROR, trying to read from a stack into a volume; read; simple_image'
+                        else
+                            stop 'ERROR, nonconforming logical dimension of image; read; simple_image'
+                        endif
+                        if( iform == -11 .or. iform == -12 ) self%ft = .true.
+                    case(3,-21,-22)
+                        ! we are processing a 3D image (stacks of 3D volumes not allowed in SIMPLE)
+                        if( present(i) )then
+                            stop 'ERROR, optional argument i should not be present when reading volumes; read; simple_image'
+                        endif
+                        if( self%ldim (3) > 1 )then
+                            ! all good
+                        else if( self%ldim(3) == 1)then
+                            stop 'ERROR, trying to read from a volume into a 2D image; read; simple_image'
+                        else
+                            stop 'ERROR, nonconforming logical dimension of image; read; simple_image'
+                        endif
+                        if( iform == -21 .or. iform == -22 ) self%ft = .true.
+                    case DEFAULT
+                        write(*,*) 'iform = ', iform
+                        stop 'Unsupported iform flag; simple_image :: read'
+                end select
+            end subroutine spider_exception_handler
+
     end subroutine read
 
     !>  \brief  for writing any kind of images to stack or volumes to volume files
@@ -989,6 +1040,29 @@ contains
         array_shape(2:3) = self%ldim(2:3)
         allocate(cmat(array_shape(1),array_shape(2),array_shape(3)), source=self%cmat)
     end function get_cmat
+
+    !>  \brief  is for getting a Fourier plane using the old SIMPLE logics
+    function expand_ft( self ) result( fplane )
+         class(image), intent(in) :: self
+         complex, allocatable :: fplane(:,:)
+         integer :: xdim, ydim, h, k, phys(3)
+         if( self%imgkind .eq. 'xfel' ) stop 'not implemented for xfel-kind images; simple_image :: expand_ft'
+         if(is_even(self%ldim(1)))then
+             xdim = self%ldim(1)/2
+             ydim = self%ldim(2)/2
+         else
+             xdim = (self%ldim(1)-1)/2
+             ydim = (self%ldim(2)-1)/2
+         endif
+         allocate(fplane(-xdim:xdim,-ydim:ydim))
+         fplane = cmplx(0.,0.)
+         do h=-xdim,xdim
+             do k=-ydim,ydim
+                phys = self%comp_addr_phys([h,k,0])
+                fplane(h,k) = self%get_fcomp([h,k,0],phys)
+            end do
+        end do
+    end function expand_ft
 
     !>  \brief  is a setter
     subroutine set( self, logi, val )
@@ -1280,40 +1354,22 @@ contains
     end subroutine zero2one
 
     !>  \brief  for getting a Fourier component from the compact representation
-    function get_fcomp( self, logi, phys_in, phys_out ) result( comp )
-        class(image),      intent(in)  :: self
-        integer,           intent(in)  :: logi(3)
-        integer, optional, intent(in)  :: phys_in(3)
-        integer, optional, intent(out) :: phys_out(3)
-        integer                        :: phys(3)
-        complex                        :: comp
-        if( .not. self%ft ) stop 'cannot get Fourier component from real image! get_fcomp; simple_image'
-        if( present(phys_in) )then
-            phys = phys_in
-        else
-            phys = self%fit%comp_addr_phys(logi)
-        endif
+    function get_fcomp( self, logi, phys ) result( comp )
+        class(image), intent(in)  :: self
+        integer,      intent(in)  :: logi(3), phys(3)
+        complex :: comp
         comp = self%cmat(phys(1),phys(2),phys(3))
         if( self%imgkind .ne. 'xfel' )then
             if( logi(1) < 0 ) comp = conjg(comp)
         endif
-        if( present(phys_out) ) phys_out = phys
     end function get_fcomp
 
     !>  \brief  for setting a Fourier component in the compact representation
-    subroutine set_fcomp( self, logi, comp, phys_in )
-        class(image),      intent(inout) :: self
-        integer,           intent(in)    :: logi(3)
-        complex,           intent(in)    :: comp
-        integer, optional, intent(in)    :: phys_in(3)
-        integer :: phys(3)
+    subroutine set_fcomp( self, logi, phys, comp )
+        class(image), intent(inout) :: self
+        integer,      intent(in)    :: logi(3), phys(3)
+        complex,      intent(in)    :: comp
         complex :: comp_here
-        if( .not. self%ft ) stop 'cannot set Fourier component in real image! set_fcomp; simple_image'
-        if( present(phys_in) )then
-            phys = phys_in
-        else
-            phys = self%fit%comp_addr_phys(logi)
-        endif
         if( logi(1) < 0 .and. self%imgkind .ne. 'xfel' )then
             comp_here = conjg(comp)
         else
@@ -1321,6 +1377,34 @@ contains
         endif
         self%cmat(phys(1),phys(2),phys(3)) = comp_here
     end subroutine set_fcomp
+
+    !>  \brief  is for componentwise summation
+    subroutine add_fcomp( self, logi, phys, comp)
+        class(image), intent(inout) :: self
+        integer,      intent(in)    :: logi(3), phys(3)
+        complex,      intent(in)    :: comp
+        complex :: comp_here
+        if( logi(1) < 0 .and. self%imgkind .ne. 'xfel' )then
+            comp_here = conjg(comp)
+        else
+            comp_here = comp
+        endif
+        self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) + comp_here
+    end subroutine add_fcomp
+
+    !>  \brief  is for componentwise summation
+    subroutine subtr_fcomp( self, logi, phys, comp )
+        class(image), intent(inout) :: self
+        integer,      intent(in)    :: logi(3), phys(3)
+        complex,      intent(in)    :: comp
+        complex :: comp_here
+        if( logi(1) < 0 .and. self%imgkind .ne. 'xfel' )then
+            comp_here = conjg(comp)
+        else
+            comp_here = comp
+        endif
+        self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) - comp_here
+    end subroutine subtr_fcomp
 
     !>  \brief  is for plotting an image
     subroutine vis( self, sect )
@@ -1337,7 +1421,7 @@ contains
             if( present(sect) ) sect_here = sect
             if( self%ft )then
                 if( self%ldim(3) == 1 ) sect_here = 0
-                fplane = self%get_fplane_frealix()
+                fplane = self%expand_ft()
                 call gnufor_image(real(fplane), palette='gray')
                 call gnufor_image(aimag(fplane), palette='gray')
                 deallocate(fplane)
@@ -1361,7 +1445,7 @@ contains
         class(image), intent(inout) :: self
         real,         intent(in)    :: h, k, x, y
         complex :: comp
-        integer :: win(2,2), i, j
+        integer :: win(2,2), i, j, phys(3)
         if( self%ldim(3) > 1 )         stop 'only 4 2D images; extr_fcomp; simple_image'
         if( .not. self%ft )            stop 'image need to be FTed; extr_fcomp; simple_image'
         if( self%imgkind .eq. 'xfel' ) stop 'this method not intended for xfel-kind images; simple_image::extr_fcomp'
@@ -1370,7 +1454,8 @@ contains
         comp = cmplx(0.,0.)
         do i=win(1,1),win(1,2)
             do j=win(2,1),win(2,2)
-                comp = comp+sinc(h-real(i))*sinc(k-real(j))*self%get_fcomp([i,j,0])
+                phys = self%comp_addr_phys([i,j,0])
+                comp = comp+sinc(h-real(i))*sinc(k-real(j))*self%get_fcomp([i,j,0],phys)
             end do
         end do
         ! origin shift
@@ -1659,7 +1744,7 @@ contains
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: logi(3)
         complex,           intent(in)    :: comp
-        integer, optional, intent(out)   :: phys_in(3)
+        integer, optional, intent(in)   :: phys_in(3)
         integer, optional, intent(out)   :: phys_out(3)
         integer :: phys(3)
         complex :: comp_here
@@ -1927,20 +2012,17 @@ contains
         class(image), intent(inout) :: self
         class(image), intent(in)    :: self2mul
         real,         intent(in)    :: lp
-        integer                     :: lims(3,2),sqlim,h,hh,k,kk,l,ll,phys(3)
+        integer                     :: lims(3,2),sqlim,h,k,l,phys(3)
         if( .not. self%is_ft() )     stop 'low-pass limited multiplication requires self to be FT'
         if( .not. self2mul%is_ft() ) stop 'low-pass limited multiplication requires self2mul to be FT'
         if( self.eqdims.self2mul )then
             lims = self%fit%loop_lims(1,lp)
             sqlim = (maxval(lims(:,2)))**2
-            !$omp parallel do default(shared) private(h,hh,k,kk,l,ll,phys) schedule(auto)
+            !$omp parallel do collapse(3) default(shared) private(h,k,l,phys) schedule(auto)
             do h=lims(1,1),lims(1,2)
-                hh = h*h
                 do k=lims(2,1),lims(2,2)
-                    kk = k*k
                     do l=lims(3,1),lims(3,2)
-                        ll = l*l
-                        if( hh+kk+ll <= sqlim )then
+                        if( h * h + k * k + l * l <= sqlim )then
                             phys = self%fit%comp_addr_phys([h,k,l])
                             self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3))*&
                             self2mul%cmat(phys(1),phys(2),phys(3))
@@ -1965,7 +2047,7 @@ contains
                 if( self1%ft .and. self2%ft )then
                     lims = self1%loop_lims(2)
                     !$omp parallel default(shared) private(h,k,l,phys)                    
-                    !$omp do schedule(auto)
+                    !$omp do collapse(3) schedule(auto)
                     do h=lims(1,1),lims(1,2)
                         do k=lims(2,1),lims(2,2)
                             do l=lims(3,1),lims(3,2)
@@ -2114,7 +2196,7 @@ contains
         ! set constants
         lims = self_sum%loop_lims(2)
         if( present(self_out) ) self_out = self_sum
-        !$omp parallel do default(shared) private(h,k,l,phys) schedule(auto)
+        !$omp parallel do collapse(3) default(shared) private(h,k,l,phys) schedule(auto)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 do l=lims(3,1),lims(3,2)
@@ -2222,7 +2304,7 @@ contains
     !!          binary normalization (norm_bin) assumed
     subroutine bin_1( self, thres )
         class(image), intent(inout) :: self
-        real,         intent(in)     :: thres
+        real,         intent(in)    :: thres
         if( self%ft ) stop 'only for real images; bin_1; simple image'
         where( self%rmat >= thres )
             self%rmat = 1.
@@ -2249,35 +2331,51 @@ contains
     end subroutine bin_2
 
     !>  \brief  is for binarizing an image using k-means to identify the background/
-    !!          foreground distributions
-    subroutine bin_3( self )
-        class(image), intent(inout) :: self
-        real, allocatable           :: forsort(:)
-        real                        :: cen1, cen2, sum1, sum2, val1, val2, sum_rmat
-        integer                     :: cnt1, cnt2, i, l,npix
-        if( self%ft ) stop 'only for real images; bin_2; simple image'
+    !!          foreground distributions for the image or within a spherical mask
+    subroutine bin_3( self, which, mskrad )
+        class(image),     intent(inout) :: self
+        character(len=*), intent(in)    :: which
+        real, optional,   intent(in)    :: mskrad
+        real, allocatable :: forsort(:)
+        type(image)       :: maskimg
+        real              :: cen1, cen2, sum1, sum2, val1, val2, sumvals
+        integer           :: cnt1, cnt2, i, l, npix, halfnpix
+        if( self%ft ) stop 'only for real images; bin_3; simple image'
         ! sort the pixels to initialize k-means
-        npix = product(self%ldim)
-        ! forsort = self%packer() ! Intel hickup
-        forsort = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), .true.)
+        select case(which)
+            case('msk')
+                if(.not.present(mskrad))stop 'missing radius; bin_3; simple image'
+                call maskimg%new(self%ldim, self%smpd)
+                maskimg%rmat = 1.
+                call maskimg%mask(mskrad, 'hard')
+                forsort = pack(self%rmat(:self%ldim(1), :self%ldim(2), :self%ldim(3)),&
+                    &maskimg%rmat(:self%ldim(1), :self%ldim(2), :self%ldim(3)) > 0.5 )
+            case('full', 'nomsk')
+                forsort = pack(self%rmat(:self%ldim(1), :self%ldim(2), :self%ldim(3)), .true.)
+                ! forsort = self%packer() ! Intel hickup
+            case DEFAULT
+                stop 'Unknown argument which ; bin_3; simple image'
+        end select
+        npix = size(forsort)
         call hpsort(npix, forsort)
-        cen1 = sum(forsort(1:npix/2))/real(npix/2)
-        cen2 = sum(forsort(npix/2+1:npix))/real(npix-npix/2)
+        halfnpix = nint(real(npix)/2.)
+        cen1     = sum(forsort(1:halfnpix)) / real(halfnpix)
+        cen2     = sum(forsort(halfnpix+1:npix)) / real(npix-halfnpix)
+        sumvals  = sum(forsort)
         ! do 100 iterations of k-means to identify background/forground distributions
-        sum_rmat = sum(self%rmat)
         do l=1,100
             sum1 = 0.
             cnt1 = 0
             do i=1,npix
                 if( (cen1-forsort(i))**2. < (cen2-forsort(i))**2. )then
-                    cnt1 = cnt1+1
-                    sum1 = sum1+forsort(i)
+                    cnt1 = cnt1 + 1
+                    sum1 = sum1 + forsort(i)
                 endif
             end do
             cnt2 = npix - cnt1
-            sum2 = sum_rmat - sum1
-            cen1 = sum1/real(cnt1)
-            cen2 = sum2/real(cnt2)
+            sum2 = sumvals - sum1
+            cen1 = sum1 / real(cnt1)
+            cen2 = sum2 / real(cnt2)
         end do
         ! assign values to the centers
         if( cen1 > cen2 )then
@@ -2293,9 +2391,11 @@ contains
         elsewhere
             self%rmat = val2
         end where
-        deallocate( forsort )
+        if(which .eq. 'msk')call self%mul(maskimg)
+        deallocate(forsort)
+        call maskimg%kill
     end subroutine bin_3
-    
+
     !>  \brief  is for creating a binary filament
     subroutine bin_filament( self, width_A )
         class(image), intent(inout) :: self
@@ -2321,27 +2421,24 @@ contains
         if( self%imgkind .eq. 'xfel' ) stop 'masscen not implemented for xfel patterns; masscen; simple_image'
         if( self%ft )                  stop 'masscen not implemented for FTs; masscen; simple_image'
         spix = 0.
-        xyz = 0.
-        ci = -real(self%ldim(1))/2.
+        xyz  = 0.
+        ci   = -real(self%ldim(1)-1)/2.
         do i=1,self%ldim(1)
-            cj = -real(self%ldim(2))/2.
+            cj = -real(self%ldim(2)-1)/2.
             do j=1,self%ldim(2)
-                ck = -real(self%ldim(3))/2.
+                ck = -real(self%ldim(3)-1)/2.
                 do k=1,self%ldim(3)
-                    pix = self%get([i,j,k])
-                    xyz(1) = xyz(1)+pix*ci
-                    xyz(2) = xyz(2)+pix*cj
-                    xyz(3) = xyz(3)+pix*ck
+                    pix  = self%get([i,j,k])
+                    xyz  = xyz + pix * [ci, cj, ck]
                     spix = spix+pix
-                    ck = ck+1.
+                    ck   = ck+1.
                 end do
-                cj = cj+1.
+                cj = cj + 1.
             end do
-            ci = ci+1.
+            ci = ci + 1.
         end do
-        xyz(1) = xyz(1)/spix
-        xyz(2) = xyz(2)/spix
-        xyz(3) = xyz(3)/spix
+        xyz = xyz / spix
+        if(self%is_2d()) xyz(3) = 0.
     end function masscen
 
     !>  \brief  is for centering an image based on center of mass
@@ -2365,14 +2462,16 @@ contains
         else
             rmsk = real( dims(1) )/2. - 5. ! 5 pixels outer width
         endif
-        if( neg .eq. 'yes' ) call tmp%neg
-        call tmp%bp(0.,lp)
-        call tmp%mask( rmsk, 'soft' )
+        if(neg .eq. 'yes') call tmp%neg
+        call tmp%bp(0., lp)
         if( present(thres) )then
+            call tmp%mask(rmsk, 'soft')
             call tmp%norm_bin
             call tmp%bin(thres)
         else
-            call tmp%bin
+            !call tmp%mask(rmsk, 'soft')    ! the old fashioned way
+            !call tmp%bin('nomsk')          ! the old fashioned way
+            call tmp%bin('msk', rmsk)
         endif
         xyz = tmp%masscen()
         if( l_doshift )then
@@ -2447,17 +2546,17 @@ contains
         class(image), intent(inout) :: self
         integer, intent(in)         :: falloff
         real                        :: rfalloff
-        real, allocatable :: rmat(:,:,:)
+        real, allocatable           :: rmat(:,:,:)
         integer                     :: i, j, k, is, js, ks, ie, je, ke
         integer                     :: il, ir, jl, jr, kl, kr, falloff_sq
         if( self%imgkind .eq. 'xfel' ) stop 'xfel-kind images cannot be low-pass filtered in real space; simple_image::cos_edge'
         if( falloff<=0 ) stop 'stictly positive values for edge fall-off allowed; simple_image::cos_edge'
         if( self%ft )    stop 'not intended for FTs; simple_image :: cos_edge'
-        self%rmat   = self%rmat/maxval(self%rmat)
+        self%rmat   = self%rmat/maxval(self%rmat(1:self%ldim(1),:,:))
         rfalloff    = real( falloff )
         falloff_sq  = falloff**2
         allocate( rmat(self%ldim(1),self%ldim(2),self%ldim(3)) )
-        rmat = self%rmat
+        rmat = self%rmat(1:self%ldim(1),:,:)
         do i=1,self%ldim(1)
             is = max(1,i-1)                  ! left neighbour
             ie = min(i+1,self%ldim(1))       ! right neighbour
@@ -2535,6 +2634,126 @@ contains
             end subroutine update_mask_3d
 
     end subroutine cos_edge
+
+    !>  \brief  applies cosine edge to a binary image
+    ! IN DEV, 2x serial speed-up so far
+    subroutine cos_edge2( self, falloff )
+        !$ use omp_lib
+        !$ use omp_lib_kinds
+        use simple_math, only: cosedge
+        class(image), intent(inout) :: self
+        integer,      intent(in)    :: falloff
+        integer, allocatable :: imat(:,:,:)
+        real                 :: rfalloff, rfalloff_sq
+        integer              :: vec(3), i, j, k, is, js, ks, ie, je, ke
+        integer              :: il, ir, jl, jr, kl, kr, falloff_sq
+        if( self%imgkind .eq. 'xfel' ) stop 'xfel-kind images cannot be low-pass filtered in real space; simple_image::cos_edge'
+        if( falloff<=0 ) stop 'stictly positive values for edge fall-off allowed; simple_image::cos_edge'
+        if( self%ft )    stop 'not intended for FTs; simple_image :: cos_edge'
+        self%rmat   = self%rmat/maxval(self%rmat)
+        rfalloff    = real( falloff )
+        falloff_sq  = falloff**2
+        rfalloff_sq = real(falloff_sq)
+        ! padded temporary matrix
+        allocate( imat(1-falloff:self%ldim(1)+falloff, 1-falloff:self%ldim(2)+falloff,&
+            &1-falloff:self%ldim(3)+falloff))
+        imat = 1
+        imat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = 1 - nint(self%rmat(1:self%ldim(1),:,:))
+        imat = imat * falloff_sq
+        ! gets minimum distances from mask
+        !!$omp parallel do default(shared) private(i,j,k,is,ie,il,ir,js,je,jl,jr,kl,kr)&
+        !!$omp reduction(min:imat) schedule(auto)
+        do i=1,self%ldim(1)
+            if(.not. any(imat(i,:,:) == 0))cycle
+            is = i-1            ! left neighbour
+            ie = i+1            ! right neighbour
+            il = i-falloff      ! left bounding box limit
+            ir = i+falloff      ! right bounding box limit
+            do j=1,self%ldim(2)
+                js = j-1
+                je = j+1
+                jl = j-falloff
+                jr = j+falloff
+                if( self%ldim(3)==1 )then
+                    ! 2D
+                    if(imat(i,j,1) == 0)then
+                        ! within mask region
+                        ! update if has a masked neighbour 
+                        if(any(imat(is:ie,js:je,1) > 0))call update_mask_2d
+                    endif
+                else
+                    ! 3D
+                    if( .not. any(imat(i,j,:) == 0))cycle
+                    do k=1,self%ldim(3)
+                        if(imat(i,j,k) == 0)then
+                            ! within mask region
+                            ! update if has a masked neighbour 
+                            if(any(imat(is:ie,js:je,k-1:k+1) > 0))then
+                                kl = k-falloff
+                                kr = k+falloff
+                                call update_mask_3d
+                            endif
+                        endif
+                    end do
+                endif
+            end do
+        end do
+        !!$omp end parallel do
+        ! apply cosine, could be threaded...
+        do i=1,self%ldim(1)
+            do j=1,self%ldim(2)
+                do k=1,self%ldim(3)
+                    if(imat(i,j,k)>0 .and. imat(i,j,k)<falloff_sq)then
+                        self%rmat(i,j,k) = cosedge(sqrt(real(imat(i,j,k))), rfalloff)
+                    endif
+                enddo
+            enddo
+        enddo
+        ! ...or matrix formulation see cos_edge
+        ! where(rmat>0 .and. rmat<falloff_sq)
+        !     self%rmat = XXXX( sqrt(real(imat) falloff )
+        ! end where
+        deallocate(imat)
+        contains
+
+            ! updates neighbours 
+            subroutine update_mask_2d
+                integer :: ii,jj,dist_sq
+                real    :: w
+                do ii=il,ir
+                    vec(1) = ii - i
+                    do jj=jl,jr
+                        vec(2) = jj - j                      
+                        dist_sq = dot_product(vec(1:2) ,vec(1:2))
+                        if(dist_sq <= falloff_sq)then
+                            if(imat(ii,jj,1) > 0)then
+                                imat(ii,jj,1) = min(dist_sq, imat(ii,jj,1))
+                            endif
+                        endif
+                    enddo
+                enddo
+            end subroutine update_mask_2d
+
+            ! updates neighbours 
+            subroutine update_mask_3d
+                integer :: ii,jj,kk,dist_sq
+                do ii=il,ir
+                    vec(1) = ii - i
+                    do jj=jl,jr
+                        vec(2) = jj - j
+                        do kk=kl,kr
+                            vec(3) = kk - k
+                            dist_sq = dot_product(vec ,vec )
+                            if(dist_sq <= falloff_sq)then
+                                if(imat(ii,jj,kk) > 0)then
+                                    imat(ii,jj,kk) = min(dist_sq, imat(ii,jj,kk))
+                                endif
+                            endif
+                        enddo
+                    enddo
+                enddo
+            end subroutine update_mask_3d
+    end subroutine cos_edge2
 
     !>  \brief  increments the logi pixel value with incr
     subroutine increment( self, logi, incr )
@@ -2702,7 +2921,7 @@ contains
         ! calculate the expectation value of the signal power in each shell
         expec_pow = self%spectrum('power')
         ! normalise
-        !$omp parallel do default(shared) private(h,k,l,sh,phys) schedule(auto)
+        !$omp parallel do collapse(3) default(shared) private(h,k,l,sh,phys) schedule(auto)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 do l=lims(3,1),lims(3,2)
@@ -2738,7 +2957,7 @@ contains
         !$ use omp_lib_kinds
         class(image), intent(inout) :: self
         real, intent(in)            :: b
-        integer                     :: i,ii,j,jj,k,kk,phys(3),lims(3,2)
+        integer                     :: i,j,k,phys(3),lims(3,2)
         real                        :: wght, res
         logical                     :: didft
         didft = .false.
@@ -2747,14 +2966,11 @@ contains
             didft = .true.
         endif
         lims = self%fit%loop_lims(2)
-        !$omp parallel do default(shared) private(k,kk,j,jj,i,ii,res,phys,wght) schedule(auto)
+        !$omp parallel do collapse(3) default(shared) private(k,j,i,res,phys,wght) schedule(auto)
         do k=lims(3,1),lims(3,2)
-            kk = k*k
             do j=lims(2,1),lims(2,2)
-                jj = j*j
                 do i=lims(1,1),lims(1,2)
-                    ii = i*i
-                    res = sqrt(real(kk+jj+ii))/(self%ldim(1)*self%smpd) ! assuming square dimensions
+                    res = sqrt(real(k*k+j*j+i*i))/(self%ldim(1)*self%smpd) ! assuming square dimensions
                     phys = self%fit%comp_addr_phys([i,j,k])
                     wght = max(0.,exp(-(b/4.)*res*res))
                     self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3))*wght
@@ -2849,7 +3065,7 @@ contains
         endif
         wzero = maxval(filter)
         lims = self%fit%loop_lims(2)
-        !$omp parallel do default(shared) private(h,k,l,sh,fwght) schedule(auto)
+        !$omp parallel do collapse(3) default(shared) private(h,k,l,sh,fwght) schedule(auto)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 do l=lims(3,1),lims(3,2)
@@ -2884,11 +3100,12 @@ contains
                     stop 'assumed that image 2 be filtered is in the Fourier domain; apply_filter_2; simple_image'
                 endif
                 lims = self%fit%loop_lims(2)
-                !$omp parallel do default(shared) private(h,k,l,comp,fwght,phys) schedule(auto)
+                !$omp parallel do collapse(3) default(shared) private(h,k,l,comp,fwght,phys) schedule(auto)
                 do h=lims(1,1),lims(1,2)
                     do k=lims(2,1),lims(2,2)
                         do l=lims(3,1),lims(3,2)
-                            comp  = filter%get_fcomp([h,k,l],phys_out=phys)
+                            phys  = self%comp_addr_phys([h,k,l])
+                            comp  = filter%get_fcomp([h,k,l],phys)
                             fwght = real(comp)
                             call self%mul([h,k,l],fwght,phys_in=phys)
                         end do
@@ -2996,7 +3213,7 @@ contains
         if( self%ft )then
             stop 'maxloc not implemented 4 FTs! simple_image'
         else
-             loc = maxloc(self%rmat)
+            loc = maxloc(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
         endif
     end function maxcoord
 
@@ -3226,6 +3443,16 @@ contains
         if( didft ) call self%bwd_ft
     end function mean
 
+    !>  \brief  is for calculating the median of an image
+    function median_pixel( self ) result( med )
+        class(image), intent(inout) :: self
+        real, allocatable           :: pixels(:)
+        real :: med
+        if( self%ft ) stop 'not for FTs; simple_image::median'
+        pixels = pack(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=.true.)
+        med = median_nocopy(pixels)
+    end function median_pixel
+
     !>  \brief  is for checking the numerical soundness of an image
     logical function contains_nans( self )
         class(image), intent(in) :: self
@@ -3327,8 +3554,8 @@ contains
             write(*,*) 'found NaNs in simple_image; cure:', n_nans
         endif
         ave = ave/real(npix)
-        maxv = maxval( self%rmat )
-        minv = minval( self%rmat )        
+        maxv = maxval( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) )
+        minv = minval( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) )        
         self%rmat = self%rmat - ave
         ! calc sum of devs and sum of devs squared
         ep = 0.
@@ -3616,7 +3843,7 @@ contains
         sumasq = 0.
         sumbsq = 0.
         lims   = self1%fit%loop_lims(2)
-        !$omp parallel do default(shared) private(h,k,l,phys,sh) schedule(auto)
+        !$omp parallel do collapse(3) default(shared) private(h,k,l,phys,sh) schedule(auto)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 do l=lims(3,1),lims(3,2)
@@ -3662,7 +3889,7 @@ contains
         call alloc_err('In: get_nvoxshell, module: simple_image', alloc_stat)
         voxs = 0.
         lims = self%fit%loop_lims(2)
-        !$omp parallel do default(shared) private(h,k,l,sh) schedule(auto)
+        !$omp parallel do collapse(3) default(shared) private(h,k,l,sh) schedule(auto)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 do l=lims(3,1),lims(3,2)
@@ -3753,7 +3980,7 @@ contains
         call transfmats(2)%new(self%ldim,self%smpd)
         call transfmats(3)%new(self%ldim,self%smpd)
         lims = self%fit%loop_lims(2)
-        !$omp parallel do default(shared) private(arg,phys,h,k,l) schedule(auto)
+        !$omp parallel do collapse(3) default(shared) private(arg,phys,h,k,l) schedule(auto)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 do l=lims(3,1),lims(3,2)
@@ -4216,7 +4443,7 @@ contains
         class(image),     intent(inout) :: self
         character(len=*), intent(in)    :: which
         class(image),     intent(out)   :: img
-        integer :: h,mh,k,mk,l,ml,lims(3,2),inds(3)
+        integer :: h,mh,k,mk,l,ml,lims(3,2),inds(3),phys(3)
         logical :: didft
         complex :: comp
         if( self%imgkind .eq. 'xfel' )then
@@ -4248,7 +4475,8 @@ contains
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 do l=lims(3,1),lims(3,2)
-                    comp = self%get_fcomp([h,k,l])
+                    phys = self%comp_addr_phys([h,k,l])
+                    comp = self%get_fcomp([h,k,l],phys)
                     inds(1) = min(max(1,h+mh+1),self%ldim(1))
                     inds(2) = min(max(1,k+mk+1),self%ldim(2))
                     inds(3) = min(max(1,l+ml+1),self%ldim(3))
@@ -4406,7 +4634,7 @@ contains
         endif
         if( present(imgout) )then
             imgout%ft = .true.
-            !$omp parallel do default(shared) private(phys,h,k,l) schedule(auto)
+            !$omp parallel do collapse(3) default(shared) private(phys,h,k,l) schedule(auto)
             do h=lims(1,1),lims(1,2)
                 do k=lims(2,1),lims(2,2)
                     do l=lims(3,1),lims(3,2)
@@ -4418,7 +4646,7 @@ contains
             end do
             !$omp end parallel do
         else
-            !$omp parallel do default(shared) private(phys,h,k,l) schedule(auto)
+            !$omp parallel do collapse(3) default(shared) private(phys,h,k,l) schedule(auto)
             do h=lims(1,1),lims(1,2)
                 do k=lims(2,1),lims(2,2)
                     do l=lims(3,1),lims(3,2)
@@ -4436,84 +4664,17 @@ contains
         endif
     end subroutine shift
 
-    !>  \brief  is for rank transformation of an image
-    subroutine rankify( self )
-        class(image), intent(inout) :: self
-        integer, allocatable        :: rorder(:), corder(:), indices(:,:)
-        real, allocatable           :: rvals(:), cvals(:)
-        integer                     :: n, alloc_stat, i, j, k, cnt, lims(3,2), phys(3)
-        complex                     :: comp
-        if( self%ft )then
-            if( self%imgkind .eq. 'xfel' ) stop 'rankify not implemented for xfel patterns; simple_image::rankify'
-            ! extract the info needed
-            lims = self%loop_lims(2)
-            n = (lims(1,2)-lims(1,1)+1)*(lims(2,2)-lims(2,1)+1)*(lims(3,2)-lims(3,1)+1)
-            allocate( rvals(n), rorder(n), cvals(n), corder(n), indices(n,3), stat=alloc_stat )
-            call alloc_err("In: rankify; simple_image", alloc_stat )
-            cnt = 0
-            do i=lims(1,1),lims(1,2)
-                do j=lims(2,1),lims(2,2)
-                    do k=lims(3,1),lims(3,2)
-                        cnt            = cnt+1
-                        corder(cnt)    = cnt
-                        rorder(cnt)    = cnt
-                        comp = self%get_fcomp([i,j,k],phys_out=phys)
-                        indices(cnt,:) = phys
-                        rvals(cnt)     = real(comp)
-                        cvals(cnt)     = aimag(comp)
-                    end do
-                end do
-            end do
-            ! sort
-            call hpsort(n, rvals, rorder)
-            call hpsort(n, cvals, corder)
-            ! convert to rank
-            do j=1,n
-                comp = self%cmat(indices(rorder(j),1),indices(rorder(j),2),indices(rorder(j),3))
-                comp = cmplx(real(j),aimag(comp))
-                self%cmat(indices(rorder(j),1),indices(rorder(j),2),indices(rorder(j),3)) = comp
-                comp = self%cmat(indices(corder(j),1),indices(corder(j),2),indices(corder(j),3))
-                comp = cmplx(real(comp),real(j))
-                self%cmat(indices(corder(j),1),indices(corder(j),2),indices(corder(j),3)) = comp
-            end do
-            deallocate(rvals, cvals, rorder, corder, indices)
-        else
-            ! extract the infor needed
-            n = product(self%ldim)
-            allocate( rvals(n), rorder(n), indices(n,3), stat=alloc_stat )
-            call alloc_err("In: rankify; simple_image", alloc_stat )
-            cnt = 0
-            do i=1,self%ldim(1)
-                do j=1,self%ldim(2)
-                    do k=1,self%ldim(3)
-                        cnt            = cnt+1
-                        indices(cnt,:) = [i,j,k]
-                        rorder(cnt)     = cnt
-                        rvals(cnt)      = self%rmat(i,j,k)
-                    end do
-                end do
-            end do
-            ! sort
-            call hpsort(n, rvals, rorder)
-            ! convert to rank
-            do j=1,n
-                self%rmat(indices(rorder(j),1),indices(rorder(j),2),indices(rorder(j),3)) = real(j)
-            end do
-            deallocate(rvals, rorder, indices)
-        endif
-    end subroutine rankify
-
     !>  \brief  is for spherical masking
     subroutine mask( self, mskrad, which, inner, width, msksum )
-        class(image), intent(inout) :: self
-        real, intent(in)            :: mskrad
-        character(len=*)            :: which
-        real, intent(in), optional  :: inner, width
-        real, intent(out), optional :: msksum
+        class(image),     intent(inout) :: self
+        real,             intent(in)    :: mskrad
+        character(len=*), intent(in)    :: which
+        real, optional,   intent(in)    :: inner, width
+        real, optional,   intent(out)   :: msksum
         real    :: ci, cj, ck, e, wwidth
         real    :: cis(self%ldim(1)), cjs(self%ldim(2)), cks(self%ldim(3))
         integer :: i, j, k, minlen, ir, jr, kr
-        logical :: didft, doinner, soft, domsksum, is_3d
+        logical :: didft, doinner, soft, domsksum
         if( self%imgkind .eq. 'xfel' ) stop 'masking of xfel-kind images not allowed; simple_image::mask'
         ! width
         wwidth = 10.
@@ -4541,24 +4702,22 @@ contains
             call self%bwd_ft
             didft = .true.
         endif
-        ! 2D/3D
-        is_3d = .false.
-        if( self%ldim(3) > 1 )is_3d = .true.
         ! minlen
-        if( is_3d )then
+        if( self%is_3d() )then
             minlen = minval(self%ldim)
         else
             minlen = minval(self%ldim(1:2))
         endif
         ! init center as origin
-        cis = (/ (-real(self%ldim(1))/2.+real(i), i=0,self%ldim(1)-1) /)
-        cjs = (/ (-real(self%ldim(2))/2.+real(i), i=0,self%ldim(2)-1) /)
-        if( is_3d )cks = (/ (-real(self%ldim(3))/2.+real(i), i=0,self%ldim(3)-1) /)
+        forall(i=1:self%ldim(1)) cis(i) = -real(self%ldim(1)-1)/2. + real(i-1)
+        forall(i=1:self%ldim(2)) cjs(i) = -real(self%ldim(2)-1)/2. + real(i-1)
+        if(self%is_3d())forall(i=1:self%ldim(3)) cks(i) = -real(self%ldim(3)-1)/2. + real(i-1)
+        ! Main loops
         if( .not.domsksum )then
             ! MASKING
             if( soft )then
                 ! Soft masking
-                if( is_3d )then
+                if( self%is_3d() )then
                     ! 3d
                     do i=1,self%ldim(1)/2
                         ir = self%ldim(1)+1-i
@@ -4596,7 +4755,7 @@ contains
                 endif
             else
                 ! Hard masking
-                if( is_3d )then
+                if( self%is_3d() )then
                     ! 3d
                     do i=1,self%ldim(1)/2
                         ir = self%ldim(1)+1-i
@@ -4639,7 +4798,7 @@ contains
                 ci = cis(i)
                 do j=1,self%ldim(2)
                     cj = cjs(j)
-                    if( is_3d )then
+                    if( self%is_3d() )then
                         ! 3D
                         do k=1,self%ldim(3)
                             ck = cks(k)
@@ -4809,7 +4968,7 @@ contains
                 self_out = cmplx(0.,0.)
                 if( self_in%imgkind .eq. 'xfel' )then
                     lims = self_in%fit%loop_lims(2)
-                    !$omp parallel do schedule(auto) default(shared) private(h,k,l,w,phys_out,phys_in)
+                    !$omp parallel do collapse(3) schedule(auto) default(shared) private(h,k,l,w,phys_out,phys_in)
                     do h=lims(1,1),lims(1,2)
                         do k=lims(2,1),lims(2,2)
                             do l=lims(3,1),lims(3,2)
@@ -4822,7 +4981,7 @@ contains
                 else
                     antialw = self_in%hannw()
                     lims = self_in%fit%loop_lims(2)
-                    !$omp parallel do schedule(auto) default(shared) private(h,k,l,w,phys_out,phys_in)
+                    !$omp parallel do collapse(3) schedule(auto) default(shared) private(h,k,l,w,phys_out,phys_in)
                     do h=lims(1,1),lims(1,2)
                         do k=lims(2,1),lims(2,2)
                             do l=lims(3,1),lims(3,2)
@@ -4837,7 +4996,7 @@ contains
                     !$omp end parallel do
                     deallocate(antialw)
                     ratio = real(self_in%ldim(1))/real(self_out%ldim(1))
-                    self_out%smpd = self_in%smpd/ratio ! padding Fourier transform, so sampling is finer
+                    self_out%smpd = self_in%smpd*ratio ! padding Fourier transform, so sampling is finer
                     self_out%ft = .true.
                 endif
             else
@@ -4879,7 +5038,7 @@ contains
         .and. self_out%ldim(3) <= self_in%ldim(3) )then
             if( self_in%ft )then
                 lims = self_out%fit%loop_lims(2)
-                !$omp parallel do schedule(auto) default(shared) private(h,k,l,phys_out,phys_in)
+                !$omp parallel do collapse(3) schedule(auto) default(shared) private(h,k,l,phys_out,phys_in)
                 do h=lims(1,1),lims(1,2)
                     do k=lims(2,1),lims(2,2)
                         do l=lims(3,1),lims(3,2)
@@ -5015,8 +5174,8 @@ contains
         call maskimg%disc(self%ldim, self%smpd, msk, npix)
         npix_tot = product(self%ldim)
         nbackgr = npix_tot-npix
-        ! pixels = self%packer(maskimg) ! Intel hickup
-        pixels = pack( self%rmat, maskimg%rmat<0.5 )
+        pixels = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
+            &maskimg%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) < 0.5 )
         med = median_nocopy(pixels)
         call moment(pixels, ave, sdev, var, err)
         deallocate(pixels)
@@ -5079,8 +5238,7 @@ contains
     !>  \brief  is for [0,1] interval normalization of an image
     subroutine norm_bin( self )
         class(image), intent(inout) :: self
-        integer                     :: i,j,k
-        real                        :: smin, smax, tijk, delta, const
+        real                        :: smin, smax
         logical                     :: didft
         if( self%imgkind .eq. 'xfel' ) stop 'not implemented for xfel-kind images; simple_image::norm_bin'
         didft = .false.
@@ -5089,27 +5247,11 @@ contains
             didft = .true.
         endif
         ! find minmax
-        smin=self%rmat(1,1,1)
-        smax=self%rmat(1,1,1)
-        do i=1,self%ldim(1)
-            do j=1,self%ldim(2)
-                do k=1,self%ldim(3)
-                    if( self%rmat(i,j,k) < smin ) smin = self%rmat(i,j,k)
-                    if( self%rmat(i,j,k) > smax ) smax = self%rmat(i,j,k)
-                end do
-            end do
-        end do
-        delta = smax-smin
-        const = exp(1.)-1.
+        smin  = minval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
+        smax  = maxval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
         ! create [0,1]-normalized image
-        do i=1,self%ldim(1)
-            do j=1,self%ldim(2)
-                do k=1,self%ldim(3)
-                    tijk = (self%rmat(i,j,k)-smin)/delta
-                    self%rmat(i,j,k) = (exp(tijk)-1.)/const
-                end do
-            end do
-        end do
+        self%rmat = (self%rmat - smin)  / (smax-smin)
+        self%rmat = (exp(self%rmat)-1.) / (exp(1.)-1.)
         if( didft ) call self%fwd_ft
     end subroutine norm_bin
 
@@ -5227,34 +5369,35 @@ contains
 
     !>  \brief  for replacing extreme outliers with median of a 13x13 neighbourhood window
     !!          only done on negative values, assuming white ptcls on black bkgr
-    subroutine cure_outliers( self, ncured, sigma )
+    subroutine cure_outliers( self, ncured, nsigma, deadhot, outliers )
         !$ use omp_lib
         !$ use omp_lib_kinds
-        use simple_stat,           only: moment
-        class(image),   intent(inout) :: self
-        integer,        intent(inout) :: ncured
-        real, optional, intent(in)    :: sigma
+        use simple_stat, only: moment
+        class(image),      intent(inout) :: self
+        integer,           intent(inout) :: ncured
+        real,              intent(in)    :: nsigma
+        integer,           intent(out)   :: deadhot(2)
+        logical, optional, allocatable   :: outliers(:,:) 
         real, allocatable :: win(:,:), rmat_pad(:,:)
-        real    :: ave, sdev, var, sigma_here, lthresh, uthresh
+        real    :: ave, sdev, var, lthresh, uthresh
         integer :: i, j, alloc_stat, hwinsz, winsz
-        logical :: was_fted, err
+        logical :: was_fted, err, present_outliers
         if( self%ldim(3)>1 )stop 'for images only; simple_image::cure_outliers'
-        if( was_fted )stop 'for real space images only'
-        sigma_here = 6.
-        if( present(sigma) )then
-            if(sigma<=TINY)stop 'invalid sigma value; simple_image::cure_outliers'
-            sigma_here = sigma
-        endif
+        if( was_fted )stop 'for real space images only; simple_image::cure_outliers'
+        present_outliers = present(outliers)
         ncured   = 0
         hwinsz   = 6
-        was_fted = self%is_ft()
+        was_fted = self%is_ft()        
+        if( allocated(outliers) ) deallocate(outliers)
+        allocate( outliers(self%ldim(1),self%ldim(2)) )
+        outliers = .false.
         call moment( self%rmat, ave, sdev, var, err )
         if( sdev<TINY )return
-        lthresh = ave - sigma_here * sdev
-        uthresh = ave + sigma_here * sdev
-        !if( any(self%rmat<=lthresh) .or. any(self%rmat>=uthresh) )then
-        if( any(self%rmat<=lthresh) )then
+        lthresh = ave - nsigma * sdev
+        uthresh = ave + nsigma * sdev
+        if( any(self%rmat<=lthresh) .or. any(self%rmat>=uthresh) )then
             winsz = 2*hwinsz+1
+            deadhot = 0
             allocate(rmat_pad(1-hwinsz:self%ldim(1)+hwinsz,1-hwinsz:self%ldim(2)+hwinsz),&
                 &win(winsz,winsz), stat=alloc_stat)
             call alloc_err('In: cure_outliers; simple_image 1', alloc_stat)
@@ -5265,11 +5408,16 @@ contains
             !$omp reduction(+:ncured)
             do i=1,self%ldim(1)
                 do j=1,self%ldim(2)
-                    !if( self%rmat(i,j,1)<lthresh .or. self%rmat(i,j,1)>uthresh )then
-                    if( self%rmat(i,j,1)<lthresh )then
-                        win = rmat_pad( i-hwinsz:i+hwinsz, j-hwinsz:j+hwinsz )
-                        self%rmat(i,j,1) = median( reshape(win,(/winsz**2/)) )
-                        ncured = ncured+1
+                    if( self%rmat(i,j,1)<lthresh .or. self%rmat(i,j,1)>uthresh )then
+                        if( present_outliers )then
+                            outliers(i,j)=.true.
+                            if (self%rmat(i,j,1)<lthresh) deadhot(1) = deadhot(1) + 1
+                            if (self%rmat(i,j,1)>uthresh) deadhot(2) = deadhot(2) + 1
+                        else
+                            win = rmat_pad( i-hwinsz:i+hwinsz, j-hwinsz:j+hwinsz )
+                            self%rmat(i,j,1) = median( reshape(win,(/winsz**2/)) )
+                            ncured = ncured + 1
+                        endif
                     endif
                 enddo
             enddo
@@ -5277,56 +5425,6 @@ contains
             deallocate( win, rmat_pad )
         endif
     end subroutine cure_outliers
-
-    ! TESTS
-
-    !>  \brief  is for getting a Fourier plane using the old SIMPLE logics
-    function get_fplane_simple( self ) result( fplane )
-         class(image), intent(in) :: self
-         complex, allocatable :: fplane(:,:)
-         integer :: xdim, ydim, h, k, kt
-         if( self%imgkind .eq. 'xfel' ) stop 'not implemented for xfel-kind images; simple_image::get_fplane_simple'
-         if(is_even(self%ldim(1)))then
-             xdim = self%ldim(1)/2
-             ydim = self%ldim(2)/2
-         else
-             xdim = (self%ldim(1)-1)/2
-             ydim = (self%ldim(2)-1)/2
-         endif
-         allocate(fplane(-xdim:xdim,-ydim:ydim))
-         fplane = cmplx(0.,0.)
-         do h=0,xdim
-             kt = ydim+1
-             do k=-ydim,ydim
-                 fplane(h,k) = self%cmat(h+1,kt,1)
-                 fplane(-h,-k) = conjg(self%cmat(h+1,kt,1))
-                 kt = kt+1
-                 if( kt > 2*ydim ) kt = 1
-            end do
-        end do
-    end function get_fplane_simple
-
-    !>  \brief  is for getting a Fourier plane using the old SIMPLE logics
-    function get_fplane_frealix( self ) result( fplane )
-         class(image), intent(in) :: self
-         complex, allocatable :: fplane(:,:)
-         integer :: xdim, ydim, h, k
-         if( self%imgkind .eq. 'xfel' ) stop 'not implemented for xfel-kind images; simple_image::get_fplane_frealix'
-         if(is_even(self%ldim(1)))then
-             xdim = self%ldim(1)/2
-             ydim = self%ldim(2)/2
-         else
-             xdim = (self%ldim(1)-1)/2
-             ydim = (self%ldim(2)-1)/2
-         endif
-         allocate(fplane(-xdim:xdim,-ydim:ydim))
-         fplane = cmplx(0.,0.)
-         do h=-xdim,xdim
-             do k=-ydim,ydim
-                 fplane(h,k) = self%get_fcomp([h,k,0])
-            end do
-        end do
-    end function get_fplane_frealix
 
     !>  \brief  is the image class unit test
     subroutine test_image( doplot )
@@ -5600,21 +5698,6 @@ contains
                 call img_2%clip(img)
                 call img%bwd_ft
                 if( doplot ) call img%vis
-
-                write(*,'(a)') '**info(simple_image_unit_test, part 12): testing Frealix vs SIMPLE Fourier plane'
-                passed = .false.
-                call img%square(10)
-                call img%fwd_ft
-                fplane_simple = img%get_fplane_simple()
-                fplane_frealix = img%get_fplane_frealix()
-                if( doplot ) call gnufor_image(real(fplane_simple), palette='gray')
-                if( doplot ) call gnufor_image(aimag(fplane_simple), palette='gray')
-                if( doplot ) call gnufor_image(real(fplane_frealix), palette='gray')
-                if( doplot ) call gnufor_image(aimag(fplane_frealix), palette='gray')
-                imcorr = pearsn(reshape(aimag(fplane_simple), [101*101]), reshape(aimag(fplane_frealix), [101*101]))
-                recorr = pearsn(reshape(real(fplane_simple), [101*101]), reshape(real(fplane_frealix), [101*101]))
-                if( imcorr > 0.99 .and. recorr > 0.99 ) passed = .true.
-                if( .not. passed )  stop 'Fourier plane conformance test failed'
 
                 write(*,'(a)') '**info(simple_image_unit_test, part 13): testing bicubic rots'
                 cnt = 0

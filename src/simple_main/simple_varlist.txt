@@ -16,6 +16,7 @@ discrete
 diverse
 doalign
 dopca
+dopick
 doprint
 dynlp
 eo
@@ -42,7 +43,6 @@ phaseplate
 phrand
 plot
 readwrite
-remap
 restart
 rnd
 rm_outliers
@@ -72,6 +72,7 @@ angastunit
 boxfile
 boxtab
 boxtype
+chunktag
 clsdoc
 comlindoc
 ctf
@@ -104,8 +105,10 @@ msktype
 opt
 oritab
 oritab2
+oritab3D
 outfile
 outstk
+outstk2
 outvol
 ctffind_doc
 pcastk
@@ -116,6 +119,7 @@ prg
 refine
 refs_msk
 refs
+shellwfile
 speckind
 split_mode
 stk_part
@@ -130,17 +134,20 @@ voltab2
 wfun
 astep
 avgsz
+batchsz
 binwidth
 box
 boxconvsz
 boxmatch
 boxpd
+chunk
 chunksz
 class
 clip
 corner
 cube
 edge
+filtsz_pad
 find
 frameavg
 fromf
@@ -166,6 +173,7 @@ ncomps
 ndiscrete
 ndocs
 newbox
+newbox2
 nframes
 nmembers
 nnn
@@ -222,6 +230,7 @@ ares
 astigerr
 astigstep
 athres
+batchfrac
 bfac
 bfacerr
 cenlp
@@ -242,6 +251,7 @@ e1
 e2
 e3
 eps
+extr_thresh
 expastig
 exp_time
 filwidth
@@ -272,11 +282,13 @@ msk
 mul
 mw
 neigh
+nsig
 outer
 phranlp
 power
 rrate
 scale
+scale2
 sherr
 smpd
 snr
@@ -291,11 +303,13 @@ xsh
 ysh
 zsh
 l_distr_exec
+l_chunk_distr
 doautomsk
 doshift
 l_automsk
 l_dose_weight
 l_innermsk
+l_pick
 l_shellw
 l_xfel
 vol1

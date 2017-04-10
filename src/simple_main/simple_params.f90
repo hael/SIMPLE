@@ -11,11 +11,11 @@
 module simple_params
 use simple_defs
 use simple_ori,         only: ori
-use simple_AVratios,    only: AVratios
 use simple_cmdline,     only: cmdline
 use simple_strings      ! use all in there
 use simple_filehandling ! use all in there
 use simple_jiffys,      only: find_ldim_nptcls
+use simple_magic_boxes, only: find_magic_box
 implicit none
 
 public :: params
@@ -26,7 +26,6 @@ logical, parameter :: debug=.false.
 type :: params
     ! global objects
     type(ori)        :: ori_glob
-    type(AVratios)   :: avr
     type(ctfplan)    :: tfplan
     ! yes/no decision variables in ascending alphabetical order
     character(len=3) :: acf='no'
@@ -47,6 +46,7 @@ type :: params
     character(len=3) :: diverse='no'
     character(len=3) :: doalign='yes'
     character(len=3) :: dopca='yes'
+    character(len=3) :: dopick='yes'
     character(len=3) :: doprint='no'
     character(len=3) :: dynlp='yes'
     character(len=3) :: eo='yes'
@@ -73,7 +73,6 @@ type :: params
     character(len=3) :: phrand='no'
     character(len=3) :: plot='no'
     character(len=3) :: readwrite='no'
-    character(len=3) :: remap='no'
     character(len=3) :: restart='no'
     character(len=3) :: rnd='no'
     character(len=3) :: rm_outliers='yes'
@@ -104,6 +103,7 @@ type :: params
     character(len=STDLEN) :: boxfile=''
     character(len=STDLEN) :: boxtab=''
     character(len=STDLEN) :: boxtype='eman'
+    character(len=STDLEN) :: chunktag=''
     character(len=STDLEN) :: clsdoc=''
     character(len=STDLEN) :: comlindoc=''
     character(len=STDLEN) :: ctf='no'
@@ -137,8 +137,10 @@ type :: params
     character(len=STDLEN) :: opt='simplex'
     character(len=STDLEN) :: oritab=''
     character(len=STDLEN) :: oritab2=''
+    character(len=STDLEN) :: oritab3D=''
     character(len=STDLEN) :: outfile='outfile.txt'
     character(len=STDLEN) :: outstk=''
+    character(len=STDLEN) :: outstk2=''
     character(len=STDLEN) :: outvol=''
     character(len=STDLEN) :: ctffind_doc=''
     character(len=STDLEN) :: pcastk='pcavecinstk.bin'
@@ -149,6 +151,7 @@ type :: params
     character(len=STDLEN) :: refine='no'
     character(len=STDLEN) :: refs_msk=''
     character(len=STDLEN) :: refs=''
+    character(len=STDLEN) :: shellwfile='shellweights.bin'
     character(len=STDLEN) :: speckind='sqrt'
     character(len=STDLEN) :: split_mode='even'
     character(len=STDLEN) :: stk_part=''
@@ -166,17 +169,20 @@ type :: params
     ! integer variables in ascending alphabetical order
     integer :: astep=1
     integer :: avgsz=0
+    integer :: batchsz=0
     integer :: binwidth=1
     integer :: box=0
     integer :: boxconvsz=256
     integer :: boxmatch=0
     integer :: boxpd=0
+    integer :: chunk=0
     integer :: chunksz=0
     integer :: class=1
     integer :: clip=0
     integer :: corner=0
     integer :: cube=0
     integer :: edge=14
+    integer :: filtsz_pad=0
     integer :: find=1
     integer :: frameavg=0
     integer :: fromf=1
@@ -204,6 +210,7 @@ type :: params
     integer :: ndiscrete=0
     integer :: ndocs=0
     integer :: newbox=0
+    integer :: newbox2=0
     integer :: nframes=0
     integer :: nmembers=0
     integer :: nnn=500
@@ -261,6 +268,7 @@ type :: params
     real    :: astigerr=0.
     real    :: astigstep=0.05
     real    :: athres=0.
+    real    :: batchfrac=1.0
     real    :: bfac=200
     real    :: bfacerr=50.
     real    :: cenlp=50.
@@ -281,6 +289,7 @@ type :: params
     real    :: e2=0.
     real    :: e3=0.
     real    :: eps=0.003
+    real    :: extr_thresh=EXTRINITHRESH
     real    :: eullims(3,2)=0.
     real    :: expastig=0.1
     real    :: exp_time=2.0
@@ -312,12 +321,14 @@ type :: params
     real    :: mul=1.
     real    :: mw=0.
     real    :: neigh=0.2
+    real    :: nsig=2.5
     real    :: optlims(7,2)=0.
     real    :: outer=0.
     real    :: phranlp=35.
     real    :: power=2.
     real    :: rrate=0.8
     real    :: scale=1.
+    real    :: scale2=1.
     real    :: sherr=0.
     real    :: smpd=2.
     real    :: snr
@@ -334,11 +345,13 @@ type :: params
     ! logical variables in ascending alphabetical order
     logical :: cyclic(7)     = .false.
     logical :: l_distr_exec  = .false.
+    logical :: l_chunk_distr = .false.
     logical :: doautomsk     = .false.
     logical :: doshift       = .false.
     logical :: l_automsk     = .false.
     logical :: l_dose_weight = .false. 
     logical :: l_innermsk    = .false. 
+    logical :: l_pick        = .false. 
     logical :: l_shellw      = .false.
     logical :: l_xfel        = .false.
   contains
@@ -368,7 +381,7 @@ contains
         class(params),     intent(inout) :: self
         class(cmdline),    intent(inout) :: cline
         logical, optional, intent(in)    :: checkdistr, allow_mix
-        integer                          :: i, s, ncls, ifoo, lfoo(3), cntfile=0
+        integer                          :: i, s, ncls, ifoo, lfoo(3), cntfile=0, nthr_local
         logical                          :: here, ccheckdistr, aamix
         character(len=STDLEN)            :: cwd_local, debug_local
         character(len=1)                 :: checkupfile(50)
@@ -399,6 +412,7 @@ contains
         call check_carg('bin',            self%bin)
         call check_carg('boxtype',        self%boxtype)
         call check_carg('center',         self%center)
+        call check_carg('chunktag',       self%chunktag)
         call check_carg('clustvalid',     self%clustvalid)
         call check_carg('compare',        self%compare)
         call check_carg('countvox',       self%countvox)
@@ -419,6 +433,7 @@ contains
         call check_carg('diverse',        self%diverse)
         call check_carg('doalign',        self%doalign)
         call check_carg('dopca',          self%dopca)
+        call check_carg('dopick',         self%dopick)
         call check_carg('doprint',        self%doprint)
         call check_carg('dynlp',          self%dynlp)
         call check_carg('endian',         self%endian)
@@ -459,7 +474,6 @@ contains
         call check_carg('readwrite',      self%readwrite)
         call check_carg('refine',         self%refine)
         call check_carg('refs',           self%refs)
-        call check_carg('remap',          self%remap)
         call check_carg('restart',        self%restart)
         call check_carg('rm_outliers',    self%rm_outliers)
         call check_carg('rnd',            self%rnd)
@@ -469,10 +483,10 @@ contains
         call check_carg('shbarrier',      self%shbarrier)
         call check_carg('shellnorm',      self%shellnorm)
         call check_carg('shellw',         self%shellw)
+        call check_carg('shellwfile',     self%shellwfile)
         call check_carg('single',         self%single)
         call check_carg('soften',         self%soften)
         call check_carg('speckind',       self%speckind)
-        call check_carg('split_mode',     self%split_mode)
         call check_carg('srch_inpl',      self%srch_inpl)
         call check_carg('stats',          self%stats)
         call check_carg('stream',         self%stream)
@@ -503,7 +517,9 @@ contains
         call check_file('mskfile',        self%mskfile,  notAllowed='T')
         call check_file('oritab',         self%oritab, 'T')
         call check_file('oritab2',        self%oritab2,'T')
+        call check_file('oritab3D',       self%oritab3D,'T')
         call check_file('outstk',         self%outstk,   notAllowed='T')
+        call check_file('outstk2',        self%outstk2,  notAllowed='T')
         call check_file('outvol',         self%outvol,   notAllowed='T')
         call check_file('plaintexttab',   self%plaintexttab,'T')
         call check_file('stk',            self%stk,  notAllowed='T')
@@ -517,6 +533,7 @@ contains
         call check_iarg('binwidth',       self%binwidth)
         call check_iarg('box',            self%box)
         call check_iarg('boxconvsz',      self%boxconvsz)
+        call check_iarg('chunk',          self%chunk)
         call check_iarg('chunksz',        self%chunksz)
         call check_iarg('clip',           self%clip)
         call check_iarg('corner',         self%corner)
@@ -593,6 +610,7 @@ contains
         call check_rarg('astigerr',       self%astigerr)
         call check_rarg('astigstep',      self%astigstep)
         call check_rarg('athres',         self%athres)
+        call check_rarg('batchfrac',      self%batchfrac)
         call check_rarg('bfac',           self%bfac)
         call check_rarg('bfacerr',        self%bfacerr)
         call check_rarg('cenlp',          self%cenlp)
@@ -613,6 +631,7 @@ contains
         call check_rarg('eps',            self%eps)
         call check_rarg('expastig',       self%expastig)
         call check_rarg('exp_time',       self%exp_time)
+        call check_rarg('extr_thresh',    self%extr_thresh)
         call check_rarg('filwidth',       self%filwidth)
         call check_rarg('frac',           self%frac)
         call check_rarg('fraca',          self%fraca)
@@ -637,11 +656,13 @@ contains
         call check_rarg('mul',            self%mul)
         call check_rarg('mw',             self%mw)
         call check_rarg('neigh',          self%neigh)
+        call check_rarg('nsig',           self%nsig)
         call check_rarg('outer',          self%outer)
         call check_rarg('phranlp',        self%phranlp)
         call check_rarg('power',          self%power)
         call check_rarg('rrate',          self%rrate)
         call check_rarg('scale',          self%scale)
+        call check_rarg('scale2',         self%scale2)
         call check_rarg('sherr',          self%sherr)
         call check_rarg('smpd',           self%smpd)
         call check_rarg('snr',            self%snr)
@@ -654,6 +675,8 @@ contains
         call check_rarg('xsh',            self%xsh)
         call check_rarg('ysh',            self%ysh)
         call check_rarg('zsh',            self%zsh)
+
+!>>> START, SANITY CHECKING AND PARAMETER EXTRACTION FROM ORITAB(S)/VOL(S)/STACK(S)
         ! put ctffind_doc (if defined) as oritab
         if( cline%defined('ctffind_doc') )then
             if( .not. cline%defined('oritab') )then
@@ -661,7 +684,7 @@ contains
                 self%oritab = self%ctffind_doc
             endif
         endif
-        ! make all programs have the simple_ prefix
+        ! make all programs have the simple_prefix
         if( cline%defined('prg') )then
             if( .not. str_has_substr(self%prg, 'simple_') ) self%prg = 'simple_'//trim(self%prg)
         endif
@@ -737,35 +760,6 @@ contains
                 stop
             endif
         endif
-        ! check parallelisation mode (even/chunk)
-        nparts_set = .false.
-        if( self%split_mode .eq. 'chunk' )then
-            if( cline%defined('ncls') .and. cline%defined('nspace') )then
-                write(*,*) 'ncls (nr of classes) and nspace (nr of references) cannot'&
-                &' simlutaneously be part of the command line!'
-                stop 'simple_params :: new'
-            else if( cline%defined('ncls') )then
-                self%chunksz = self%ncls
-            else if( cline%defined('nspace') )then
-                self%chunksz = self%nspace
-            else 
-                write(*,*) 'either ncls (nr of classes) and nspace (nr of references) need'&
-                &' to be part of the command line for this mode of job distribution'
-                stop 'simple_params :: new'
-            endif
-            parts       = split_nobjs_in_chunks(self%nptcls, self%chunksz)
-            self%nparts = size(parts,1)
-            nparts_set  = .true.
-            deallocate(parts)
-        else
-            self%split_mode = 'even'
-            nparts_set      = .false.
-            if( cline%defined('nparts') ) nparts_set  = .true.
-        endif
-        if( .not. cline%defined('ncunits') )then
-            ! we assume that the number of computing units is equal to the number of partitions
-            self%ncunits = self%nparts
-        endif
         ! check file formats
         call check_file_formats(aamix)
         call double_check_file_formats
@@ -773,8 +767,80 @@ contains
         call mkfnames
         ! check box
         if( self%box > 0 .and. self%box < 26 ) stop 'box size need to be larger than 26; simple_params'
-!$      call omp_set_num_threads(self%nthr)
+        ! set endconv in simple_defs
+        if( allocated(endconv) ) deallocate(endconv)
+        if( cline%defined('endian') )then
+            select case(self%endian)
+                case('big')
+                    allocate(endconv, source='BIG_ENDIAN')
+                case('little')
+                    allocate(endconv, source='LITTLE_ENDIAN')
+                case('native')
+                    allocate(endconv, source='NATIVE')
+                case DEFAULT
+                    stop 'unsupported endianness flag; simple_params :: constructor'
+            end select
+        else if( allocated(conv) )then
+            allocate(endconv, source=conv)
+        else
+            allocate(endconv, source='NATIVE')
+        endif
+        if( allocated(conv) ) deallocate(conv)
+!<<< END, SANITY CHECKING AND PARAMETER EXTRACTION FROM VOL(S)/STACK(S)
+
+!>>> START, PARALLELISATION-RELATED
+        ! set split mode (even)
+        self%split_mode = 'even'
+        nparts_set      = .false.
+        if( cline%defined('nparts') ) nparts_set  = .true.
+        ! set execution mode (shmem or distr)
+        if( cline%defined('part') )then
+            self%l_distr_exec = .true.
+        else
+            self%l_distr_exec = .false.
+        endif
+        l_distr_exec_glob = self%l_distr_exec
+        ! set lenght of number string for zero padding
+        if( .not. cline%defined('numlen') )then
+            if( nparts_set ) self%numlen = len(int2str(self%nparts))
+        endif
+        ! set name of partial stack in parallel execution
+        if( self%numlen > 0 )then
+            self%stk_part = 'stack_part'//int2str_pad(self%part,self%numlen)//self%ext
+        else
+            self%stk_part = 'stack_part'//int2str(self%part)//self%ext
+        endif
+        ! Check for the existance of this file if part is defined on the command line
+        if( cline%defined('part') )then
+            if( ccheckdistr )then
+                if( .not. file_exists(self%stk_part) )then
+                    write(*,*) 'Need partial stacks to be generated for parallel execution'
+                    write(*,*) 'Use simple_exec prg=split'
+                    stop
+                endif
+            endif
+        endif
+        ! if we are doing chunk-based parallelisation...
+        self%l_chunk_distr = .false.
+        if( cline%defined('chunksz') )then
+            self%l_chunk_distr = .true.
+            self%shellwfile    = trim(self%chunktag)//trim(self%shellwfile)
+        endif
+        if( .not. cline%defined('ncunits') )then
+            ! we assume that the number of computing units is equal to the number of partitions
+            self%ncunits = self%nparts
+        endif
+        ! OpenMP threads
+        if( cline%defined('nthr') )then
+!$          call omp_set_num_threads(self%nthr)       
+        else
+!$          self%nthr = omp_get_max_threads()
+!$          call omp_set_num_threads(self%nthr)   
+        endif
         nthr_glob = self%nthr
+!<<< END, PARALLELISATION-RELATED
+
+!>>> START, IMAGE-PROCESSING-RELATED
         if( .not. cline%defined('xdim') ) self%xdim = self%box/2
         self%xdimpd = round2even(self%alpha*real(self%box/2))
         self%boxpd  = 2*self%xdimpd
@@ -787,12 +853,7 @@ contains
             self%lpstop = self%fny                                ! deafult lpstop
         endif
         if( self%fny > 0. ) self%tofny = int(self%dstep/self%fny) ! Nyqvist Fourier index
-        if( cline%defined('lp') )then                             ! override dynlp=yes and lpstop
-            self%dynlp = 'no'
-            ! TAKEN OUT BECAUSE THE PREPROC IS UNHAPPY
-            ! if( self%lp < self%lpstop )  self%lpstop  = self%lp
-            ! if( self%lpstart > self%lp ) self%lpstart = self%lp
-        endif
+        if( cline%defined('lp') ) self%dynlp = 'no'               ! override dynlp=yes and lpstop
         ! set default ring2 value
         if( .not. cline%defined('ring2') )then
             if( cline%defined('msk') )then
@@ -810,8 +871,6 @@ contains
             else
                 self%msk = self%box/2
             endif
-        ! else
-        !     if( self%box /= 0 ) self%msk = min(real(self%box/2),self%msk)
         endif
         ! set mode of masking
         if( cline%defined('inner') )then
@@ -827,7 +886,8 @@ contains
             self%boxmatch = self%box
             self%l_xfel    = .true.
         else if( self%box > 2*(self%msk+10) )then
-            self%boxmatch = 2*(nint(self%msk)+10)
+            self%boxmatch = find_magic_box(2*(nint(self%msk)+10))
+            if( self%boxmatch > self%box ) self%boxmatch = self%box
         else
             self%boxmatch = self%box
         endif
@@ -841,14 +901,18 @@ contains
         if( .not.cline%defined('mw') .and. self%automsk.eq.'yes') &
             write(*,*) 'WARNING! MW argument not provided in conjunction with AUTOMSK'
         if( self%doautomsk )then
-            if( self%edge <= 0 )   stop 'Invalid value for edge' 
-            if( self%binwidth < 0 )stop 'Invalid value for binwidth'
+            if( self%edge <= 0    ) stop 'Invalid value for edge' 
+            if( self%binwidth < 0 ) stop 'Invalid value for binwidth'
+        endif
+        if( .not. cline%defined('newbox') )then
+            ! set newbox if scale is defined
+            if( cline%defined('scale') )then
+                self%newbox = find_magic_box(nint(self%scale*real(self%box)))
+            endif
         endif
         ! set newbox if scale is defined
-        if( .not. cline%defined('newbox') )then
-            if( cline%defined('scale') )then
-                self%newbox = round2even(self%scale*real(self%box))
-            endif
+        if( cline%defined('scale2') )then
+            self%newbox2 = find_magic_box(nint(self%scale2*real(self%box)))
         endif
         self%kfromto(1) = max(2,int(self%dstep/self%hp)) ! high-pass Fourier index set according to hp
         self%kfromto(2) = int(self%dstep/self%lp)        ! low-pass Fourier index set according to lp
@@ -884,25 +948,6 @@ contains
                 self%ncls = ncls
             endif
         endif
-        ! set endconv it simple_defs
-        if( allocated(endconv) ) deallocate(endconv)
-        if( cline%defined('endian') )then
-            select case(self%endian)
-                case('big')
-                    allocate(endconv, source='BIG_ENDIAN')
-                case('little')
-                    allocate(endconv, source='LITTLE_ENDIAN')
-                case('native')
-                    allocate(endconv, source='NATIVE')
-                case DEFAULT
-                    stop 'unsupported endianness flag; simple_params :: constructor'
-            end select
-        else if( allocated(conv) )then
-            allocate(endconv, source=conv)
-        else
-            allocate(endconv, source='NATIVE')
-        endif
-        if( allocated(conv) ) deallocate(conv)        
         ! set to particle index if not defined in cmdlin
         if( .not. cline%defined('top') ) self%top = self%nptcls
         ! set the number of input orientations
@@ -935,34 +980,6 @@ contains
         if( .not. cline%defined('moldiam') )then
             self%moldiam = 0.7*real(self%box)*self%smpd
         endif
-        ! set execution mode (shmem or distr)
-        if( cline%defined('part') )then
-            self%l_distr_exec = .true.
-        else
-            self%l_distr_exec = .false.
-        endif
-        ! set global distributed execution flag
-        l_distr_exec_glob = self%l_distr_exec
-        ! set lenght of number string for zero padding
-        if( .not. cline%defined('numlen') )then
-            if( nparts_set ) self%numlen = len(int2str(self%nparts))
-        endif
-        ! set name of partial stack in parallel execution
-        if( self%numlen > 0 )then
-            self%stk_part = 'stack_part'//int2str_pad(self%part,self%numlen)//self%ext
-        else
-            self%stk_part = 'stack_part'//int2str(self%part)//self%ext
-        endif
-        ! Check for the existance of this file if part is defined on the command line
-        if( cline%defined('part') )then
-            if( ccheckdistr )then
-                if( .not. file_exists(self%stk_part) )then
-                    write(*,*) 'Need partial stacks to be generated for parallel execution'
-                    write(*,*) 'Use simple_exec prg=split'
-                    stop
-                endif
-            endif
-        endif
         ! set imgkind and check so that ctf and xfel parameters are congruent
         self%imgkind = 'em'
         if( self%xfel .eq. 'yes' ) then
@@ -973,14 +990,6 @@ contains
                 stop 'when xfel .eq. yes, ctf .ne. no is not allowed; simple_params'
             endif
         endif
-        ! create are/volume ratios object for SSNR re-weighting
-        if( cline%defined('mw') )then
-            self%avr = AVratios([self%box,self%box,self%box], [self%box,self%box,1], self%msk, self%smpd, self%mw)
-        else
-            self%avr = AVratios([self%box,self%box,self%box], [self%box,self%box,1], self%msk, self%smpd)
-        endif
-        ! take care of nspace value for refine .eq. 'qcontneigh' mode
-        if( self%refine .eq. 'qcontneigh' ) self%nspace = self%nnn
         ! check if we are dose-weighting or not
         self%l_dose_weight = .false.
         if( cline%defined('exp_time') .or. cline%defined('dose_rate') )then
@@ -999,6 +1008,11 @@ contains
         if( cline%defined('shellw') )then
             if( self%shellw .eq. 'no' ) self%l_shellw = .false.
         endif
+        ! set logical pick flag
+        self%l_pick = .false.
+        if( self%dopick .eq. 'yes' ) self%l_pick = .true.
+!>>> END, IMAGE-PROCESSING-RELATED
+
         write(*,'(A)') '>>> DONE PROCESSING PARAMETERS'
 
       contains
@@ -1158,8 +1172,9 @@ contains
                   self%vols_msk(i) = add2fbody(self%vols(i), self%ext, 'msk')
                   self%masks(i)    = 'automask_state'//int2str_pad(i,2)//self%ext
               end do
-              if( .not. cline%defined('outstk') ) self%outstk = 'outstk'//self%ext
-              if( .not. cline%defined('outvol') ) self%outvol = 'outvol'//self%ext
+              if( .not. cline%defined('outstk')  ) self%outstk  = 'outstk'//self%ext
+              if( .not. cline%defined('outstk2') ) self%outstk2 = 'outstk2'//self%ext
+              if( .not. cline%defined('outvol')  ) self%outvol  = 'outvol'//self%ext
           end subroutine mkfnames
 
           subroutine check_carg( carg, var )

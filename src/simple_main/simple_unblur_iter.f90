@@ -66,7 +66,7 @@ contains
         ! averages frames as a pre-processing step (Falcon 3 with long exposures)
         if( p%frameavg > 0 )then
             self%moviename = 'tmpframeavgmovie'//p%ext
-            call frameavg_imgfile(trim(moviename), trim(self%moviename), p%frameavg)
+            call frameavg_imgfile(trim(moviename), trim(self%moviename), p%frameavg, p%smpd)
         else
             self%moviename = trim(moviename)
         endif
@@ -126,10 +126,14 @@ contains
         character(len=*),   intent(in) :: which
         character(len=:), allocatable  :: moviename  
         select case( which )
-            case('forctf')
-                allocate(moviename, source=trim(self%moviename_forctf))
             case('intg')
                 allocate(moviename, source=trim(self%moviename_intg))
+            case('forctf')
+                allocate(moviename, source=trim(self%moviename_forctf))
+            case('pspec')
+                allocate(moviename, source=trim(self%moviename_pspec))
+            case('thumb')
+                allocate(moviename, source=trim(self%moviename_thumb))
             case DEFAULT
                 stop 'unsupported which flag; simple_unblur_iter :: get_moviename'
         end select

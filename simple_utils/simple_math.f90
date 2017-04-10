@@ -361,31 +361,6 @@ contains
         p1 = 0.
         p2 = 359.9999/real(csym)
     end subroutine
-
-    !> \brief  automatic scaling to smpd=3.3
-    subroutine autoscale( box_in, msk_in, smpd_in, box_new, msk_new, smpd_new, scale )
-        integer, intent(in)  :: box_in
-        real,    intent(in)  :: msk_in, smpd_in
-        integer, intent(out) :: box_new
-        real,    intent(out) :: msk_new, smpd_new, scale
-        real,    parameter   :: SMPD_TARGET = 3.7
-        integer, parameter   :: EDGE = 5
-        integer :: box_cut
-        if( smpd_in < SMPD_TARGET )then
-            ! ok
-        else
-            scale    = 1.0
-            msk_new  = msk_in
-            box_new  = box_in
-            smpd_new = smpd_in
-            write(*,*) 'Inputted smpd < SMPD_TARGET, no scaling done; simple_math :: autoscale'
-            return
-        endif
-        scale    = smpd_in/SMPD_TARGET
-        msk_new  = scale*real(msk_in)
-        box_new  = round2even(real(2*msk_new+EDGE))
-        smpd_new = SMPD_TARGET
-    end subroutine autoscale
     
     !> \brief  to put the which element (if it exists) last in the array, 
     !!         swapping it with its present position
@@ -524,63 +499,7 @@ contains
         deallocate(dat_sorted, mask)
     end subroutine sortmeans
     
-    !> \brief  generate mutually exclusive positions
-    function gen_ptcl_pos( npos, xdim, ydim, box ) result( pos )
-        use simple_jiffys, only: alloc_err
-        use simple_rnd,    only: irnd_uni
-        use simple_jiffys, only: progress
-        integer, intent(in)           :: npos, xdim, ydim
-        integer, intent(in), optional :: box
-        integer, allocatable          :: pos(:,:)
-        logical                       :: occupied(xdim,ydim)
-        integer                       :: alloc_stat, ix, iy, cnt
-        allocate( pos(npos,2), stat=alloc_stat )
-        call alloc_err("In: gen_ptcl_pos, simple_math", alloc_stat)
-        occupied = .false.
-        cnt = 0
-        do
-            ix = irnd_uni(xdim)
-            iy = irnd_uni(ydim)
-            if( present(box) )then
-                if( ix < box/2+1 .or. ix > xdim-box/2-1 ) cycle
-                if( iy < box/2+1 .or. iy > ydim-box/2-1 ) cycle
-                if(check_if_occupied()) cycle
-            else
-                if(occupied(ix,iy)) cycle
-            endif
-            if( present(box) )then
-                occupied(ix-box/2:ix+box/2-1,iy-box/2:iy+box/2-1) = .true.
-            else
-                occupied(ix,iy) = .true.
-            endif
-            cnt = cnt+1
-            call progress(cnt,npos)
-            pos(cnt,1) = ix
-            pos(cnt,2) = iy
-            if( cnt == 500*npos )then
-                write(*,'(a)') "WARNING! Exiting loop because maximum nr of iterations; gen_ptcl_pos; simple_math"
-                exit 
-            endif
-            if( cnt == npos ) exit
-        end do
-        
-        contains
-        
-            function check_if_occupied( )result( yes )
-                integer:: i, j
-                logical :: yes
-                yes = .false.
-                do i=ix-box/2,ix+box/2-1
-                    do j=iy-box/2,iy+box/2-1
-                        if( occupied(i,j) )then
-                            yes = .true.
-                            return
-                        endif
-                    end do
-                end do
-            end function
-            
-    end function
+    
     
     !> \brief  calculates the number of common integers in two arrays
     function common_ints( arr1, arr2 ) result( n )
@@ -898,31 +817,31 @@ contains
         integer, intent(in) :: box
         real, intent(in)    :: mskrad
         real                :: w, rad, width, maxrad
-        maxrad = real(box/2)
+        maxrad = real(box)/2.
         rad    = sqrt(x**2.+y**2.)
-        width  = 2.*(maxrad-mskrad)
+        width  = maxrad-mskrad
         w      = 1.
         if( rad .ge. maxrad )then
             w = 0.
         else if( rad .ge. maxrad-width )then
-            w = (cos(((rad-(maxrad-width))/width)*pi)+1.)/2.
+            w = (cos(((rad-mskrad)/width)*pi)+1.)/2.
         endif
     end function cosedge_2
 
     !> \brief  three-dimensional gaussian edge
-    pure function cosedge_3( x, y, z, box, mskrad ) result( w )
-        real, intent(in)    :: x, y, z
+    function cosedge_3( x, y, z, box, mskrad ) result( w )
+        real,    intent(in) :: x, y, z
         integer, intent(in) :: box
-        real, intent(in)    :: mskrad
+        real,    intent(in) :: mskrad
         real                :: w, rad, maxrad, width
-        maxrad = real(box/2)
+        maxrad = real(box)/2.
         rad    = sqrt(x**2.+y**2.+z**2.)
-        width  = 2.*(maxrad-mskrad)
+        width  = maxrad-mskrad
         w      = 1.
         if( rad .ge. maxrad )then
             w = 0.
         else if( rad .ge. maxrad-width )then
-            w = (cos(((rad-(maxrad-width))/width)*pi)+1.)/2.
+            w = (cos(((rad-mskrad)/width)*pi)+1.)/2.
         endif
     end function cosedge_3
     

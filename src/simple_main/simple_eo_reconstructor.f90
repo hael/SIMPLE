@@ -437,9 +437,9 @@ contains
                 if( pw > 0. )then
                     orientation = o%get_ori(i)
                     if( p%l_distr_exec )then
-                        call img%read(p%stk_part, cnt, p%l_xfel)
+                        call img%read(p%stk_part, cnt, isxfel=p%l_xfel)
                     else
-                        call img%read(fname, i, p%l_xfel)
+                        call img%read(fname, i, isxfel=p%l_xfel)
                     endif
                     if( p%l_xfel )then
                         call img%pad(img_pad)

@@ -82,10 +82,10 @@ contains
         call seed_rnd
         call random_number(wmat1)
         call random_number(wmat2)
-        if( .not. file_exists('shellweights.bin') )then
+        if( .not. file_exists(p_master%shellwfile) )then
             ! write wmat2 to file
             filnum = get_fileunit()
-            open(unit=filnum, status='REPLACE', action='WRITE', file='shellweights.bin', access='STREAM')
+            open(unit=filnum, status='REPLACE', action='WRITE', file=p_master%shellwfile, access='STREAM')
             write(unit=filnum,pos=1,iostat=io_stat) wmat2
             close(filnum)
         endif
@@ -111,7 +111,7 @@ contains
             ! stash the previous matrix
             wmat1 = wmat2
             ! read in the new shell-weights
-            open(unit=filnum, status='OLD', action='READ', file='shellweights.bin', access='STREAM')
+            open(unit=filnum, status='OLD', action='READ', file=p_master%shellwfile, access='STREAM')
             read(unit=filnum,pos=1,iostat=io_stat) wmat2
             close(filnum)
 
@@ -131,7 +131,7 @@ contains
         use simple_commander_volops,  only: projvol_commander
         use simple_commander_rec,     only: recvol_commander
         use simple_strings,           only: int2str_pad, str2int
-        use simple_math,              only: autoscale
+        use simple_magic_boxes,       only: autoscale
         use simple_oris,              only: oris
         class(ini3D_from_cavgs_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
@@ -194,9 +194,8 @@ contains
         ! initialise command line parameters
         if( DOSCALE )then
             ! (1) SCALING
-            call autoscale( p_master%box, p_master%msk, p_master%smpd, box_sc, msk_sc, smpd_sc, scale )
-            call cline_scale%set('scale',  scale)
-            call cline_scale%set('clip',   real(box_sc))
+            call autoscale( p_master%box, p_master%msk, p_master%smpd, box_sc, msk_sc, smpd_sc )
+            call cline_scale%set('newbox', real(box_sc))
             call cline_scale%set('outstk', trim(STKSCALEDBODY)//p_master%ext)
             call cline_prime3D_init%set('stk',  trim(STKSCALEDBODY)//p_master%ext)
             call cline_prime3D_init%set('smpd', smpd_sc)
@@ -213,11 +212,13 @@ contains
         call cline_prime3D_init%set('ctf', 'no')
         call cline_prime3D_init%set('maxits', real(MAXITS_INIT))
         call cline_prime3D_init%set('dynlp', 'yes') ! better be explicit about the dynlp
+        call cline_prime3D_init%set('shellw', 'no')
         ! (3) PRIME3D REFINE STEP 1
         call cline_prime3D_refine1%set('prg', 'prime3D')
         call cline_prime3D_refine1%set('ctf', 'no')
         call cline_prime3D_refine1%set('maxits', real(MAXITS_REFINE))
         call cline_prime3D_refine1%set('dynlp', 'no') ! better be explicit about the dynlp
+        call cline_prime3D_refine1%set('shellw', 'no')
         call cline_prime3D_refine1%set('refine', 'shc')
         ! (4) SYMMETRY AXIS SEARCH
         if( srch4symaxis )then
@@ -258,6 +259,7 @@ contains
         call cline_prime3D_refine2%set('ctf', 'no')
         call cline_prime3D_refine2%set('maxits', real(MAXITS_REFINE))
         call cline_prime3D_refine2%set('dynlp', 'no') ! better be explicit about the dynlp
+        call cline_prime3D_refine2%set('shellw', 'no')
         call cline_prime3D_refine2%set('lp', LPLIMS(2))
         call cline_prime3D_refine2%set('refine', 'shc')
         ! (6) RE-PROJECT VOLUME
@@ -376,7 +378,7 @@ contains
     ! ENSEMBLE HETEROGEINITY ANALYSIS
 
     subroutine exec_het_ensemble( self, cline )
-        !use simple_commander_rec,     only: recvol_commander
+        use simple_commander_rec,     only: recvol_commander
         use simple_strings,           only: int2str_pad
         use simple_oris,              only: oris
         use simple_combinatorics,     only: diverse_labeling, shc_aggregation
@@ -385,18 +387,19 @@ contains
         class(cmdline),                intent(inout) :: cline
         ! constants
         logical,               parameter :: DEBUG=.false.
-        integer,               parameter :: MAXITS_INIT=50, NREPEATS=2
+        integer,               parameter :: MAXITS_INIT=50, NREPEATS=5
         character(len=32),     parameter :: HETFBODY    = 'hetrep_'
         character(len=32),     parameter :: REPEATFBODY = 'hetdoc_'
         character(len=32),     parameter :: VOLFBODY    = 'recvol_state'
         ! distributed commanders
         type(prime3D_distr_commander) :: xprime3D_distr
+        type(recvol_distr_commander)  :: xrecvol_distr        
         ! shared-mem commanders
-        ! type(recvol_commander)        :: xrecvol
+        !
         ! command lines
         type(cmdline)                 :: cline_prime3D_master
         type(cmdline)                 :: cline_prime3D
-        !type(cmdline)                 :: cline_recvol
+        type(cmdline)                 :: cline_recvol_distr
         ! other variables
         type(params)                  :: p_master
         type(oris)                    :: os, rep_os
@@ -416,19 +419,21 @@ contains
         call del_files('ppfts_memoized_part', p_master%nparts, ext='.bin')
 
         ! prepare command lines from prototype master
+        cline_recvol_distr = cline
+        call cline_recvol_distr%set('prg', 'recvol')
+        call cline_recvol_distr%set('eo', 'yes')
+        call cline_recvol_distr%delete('lp')
         cline_prime3D_master = cline
         call cline_prime3D_master%set('prg', 'prime3D')
         call cline_prime3D_master%set('startit', 1.)
-        !call cline_prime3D_master%set('maxits', real(MAXITS_INIT))
-        call cline_prime3D_master%set('maxits', 1.)
+        call cline_prime3D_master%set('maxits', real(MAXITS_INIT))
         call cline_prime3D_master%set('refine', 'het')
         call cline_prime3D_master%set('dynlp', 'no')
         call cline_prime3D_master%set('lp', p_master%lp) 
-        !cline_recvol         = cline
 
         ! GENERATE DIVERSE INITIAL LABELS
         write(*,'(A)') '>>>'
-        write(*,'(A)') '>>> GENERATE DIVERSE LABELING'
+        write(*,'(A)') '>>> GENERATING DIVERSE LABELING'
         write(*,'(A)') '>>>'
         call os%new(p_master%nptcls)
         call os%read(p_master%oritab)
@@ -441,7 +446,6 @@ contains
 
         ! GENERATE CANDIDATE SOLUTIONS
         do irepeat = 1,NREPEATS
-            write(*,'(A)') '>>>'
             write(*,'(A,I3)') '>>> PRIME3D REPEAT ', irepeat
             write(*,'(A)') '>>>'
             ! GENERATE ORIENTATIONS
@@ -471,7 +475,7 @@ contains
         ! GENERATE CONSENSUS DOCUMENT
         oritab = trim(REPEATFBODY)//'consensus.txt'
         write(*,'(A)') '>>>'
-        write(*,'(A,A)') '>>> GENERATE ENSEMBLE SOLUTION: ', trim(oritab)
+        write(*,'(A,A)') '>>> GENERATING ENSEMBLE SOLUTION: ', trim(oritab)
         write(*,'(A)') '>>>'
         allocate( labels_incl(NREPEATS,n_incl), consensus(n_incl) )
         do irepeat=1,NREPEATS
@@ -481,8 +485,14 @@ contains
         call shc_aggregation( NREPEATS, n_incl, labels_incl, consensus )
         call os%set_all('state', real(unpack(consensus, included, labels(1,:))) )
         call os%write(trim(oritab))
-        ! should reconstruct here?
+        call os%kill
 
+        ! FINAL RECONSTRUCTION
+        call cline_recvol_distr%set('oritab', trim(oritab))
+        call xrecvol_distr%execute(cline_recvol_distr)
+
+        ! end gracefully
+        call simple_end('**** SIMPLE_HET_ENSEMBLE NORMAL STOP ****')        
         contains
 
             subroutine prime3d_cleanup

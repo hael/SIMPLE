@@ -65,12 +65,12 @@ contains
                 ! spherical
                 if( cline%defined('inner') )then
                     if( cline%defined('width') )then
-                        call mask_imgfile(p%stk, p%outstk, p%msk, inner=p%inner, width=p%width, which=p%msktype)
+                        call mask_imgfile(p%stk, p%outstk, p%msk, p%smpd, inner=p%inner, width=p%width, which=p%msktype)
                     else
-                        call mask_imgfile(p%stk, p%outstk, p%msk, inner=p%inner, which=p%msktype)
+                        call mask_imgfile(p%stk, p%outstk, p%msk, p%smpd, inner=p%inner, which=p%msktype)
                     endif
                 else
-                    call mask_imgfile(p%stk, p%outstk, p%msk, which=p%msktype)
+                    call mask_imgfile(p%stk, p%outstk, p%msk, p%smpd, which=p%msktype)
                 endif
             else
                 stop 'Nothing to do!'

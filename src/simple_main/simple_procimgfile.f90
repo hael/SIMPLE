@@ -24,23 +24,15 @@ contains
     end subroutine raise_exception_imgfile
 
     !>  \brief  is for copying
-    subroutine copy_imgfile( fname2copy, fname, fromto , smpd_in)
-        character(len=*), intent(in)  :: fname2copy, fname !< filenames
-        integer, intent(in), optional :: fromto(2)         !< range
-        real, intent(in), optional    :: smpd_in
-        type(image)                   :: img
-        integer                       :: n, i, cnt, ldim(3)
-        !local variable
-        real :: smpd
+    subroutine copy_imgfile( fname2copy, fname, smpd, fromto )
+        character(len=*),  intent(in) :: fname2copy, fname
+        real,              intent(in) :: smpd
+        integer, optional, intent(in) :: fromto(2)
+        type(image) :: img
+        integer     :: n, i, cnt, ldim(3)
         call find_ldim_nptcls(fname2copy, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile(n, ldim, 'copy_imgfile')
-        if ( .not. present(smpd_in) ) then
-           smpd = 1.0 
-        else
-           smpd = smpd_in
-        end if
-        ! do the work
         call img%new(ldim,smpd)
         if( n >= 1 )then
             write(*,'(a)') '>>> COPYING IMAGES'
@@ -70,12 +62,12 @@ contains
         use simple_oris,         only: oris
         use simple_math,         only: check4nans
         use simple_jiffys,       only: alloc_err
-        character(len=*),            intent(in)    :: fnameStack, fnamePatterns !< filenames
-        real,                        intent(in)    :: mskrad                    !< mask radius
-        integer,                     intent(out)   :: D, recsz                  !< D=number of pixels and recsz=record size 
-        real, allocatable, optional, intent(out)   :: avg(:)                    !< average
-        class(oris),       optional, intent(inout) :: otab                      !< orientation table
-        character(len=*),  optional, intent(in)    :: hfun                      !< hidden unit function descriptor
+        character(len=*),            intent(in)    :: fnameStack, fnamePatterns
+        real,                        intent(in)    :: mskrad
+        integer,                     intent(out)   :: D, recsz
+        real, allocatable, optional, intent(out)   :: avg(:)
+        class(oris),       optional, intent(inout) :: otab
+        character(len=*),  optional, intent(in)    :: hfun
         type(image)        :: img
         real, allocatable  :: pcavec(:)
         real               :: x, y
@@ -152,20 +144,20 @@ contains
     end subroutine make_pattern_stack
     
     !>  \brief  is for padding
-    subroutine pad_imgfile( fname2pad, fname, ldim_pad )
-        character(len=*), intent(in) :: fname2pad, fname !< filenames
-        integer, intent(in)          :: ldim_pad(3)      !< desired dimensions
+    subroutine pad_imgfile( fname2pad, fname, ldim_pad, smpd )
+        character(len=*), intent(in) :: fname2pad, fname
+        integer,          intent(in) :: ldim_pad(3)
+        real,             intent(in) :: smpd
         type(image)                  :: img, img_pad
         integer                      :: n, i, ldim(3)
         real                         :: ave, sdev, var, med
         call find_ldim_nptcls(fname2pad, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'pad_imgfile' )
-        ! do the work
         if( ldim_pad(1) >= ldim(1) .and. ldim(2) >= ldim(2)&
         .and. ldim(3) >= ldim(3) )then
-            call img%new(ldim,1.)
-            call img_pad%new(ldim_pad,1.)
+            call img%new(ldim,smpd)
+            call img_pad%new(ldim_pad,smpd)
             write(*,'(a)') '>>> PADDING IMAGES'
             do i=1,n
                 call progress(i,n)
@@ -173,7 +165,8 @@ contains
                 if( img%is_ft() )then
                     call img%pad(img_pad) ! FT state preserved
                 else
-                    call img%stats('background', ave, sdev, var, med=med) ! get background statistics
+                    ! get background statistics
+                    call img%stats('background', ave, sdev, var, med=med) 
                     call img%pad(img_pad, backgr=med) ! FT state preserved
                 endif
                 call img_pad%write(fname, i)
@@ -184,17 +177,17 @@ contains
     end subroutine pad_imgfile
     
     !>  \brief  is for resizing
-    subroutine resize_imgfile( fname2resize, fname, smpd, ldim_new, fromptop )
-        character(len=*),  intent(in) :: fname2resize, fname !< filenames
-        real,              intent(in) :: smpd                !< original sampling distance
-        integer,           intent(in) :: ldim_new(3)         !< desired dimensions
-        integer, optional, intent(in) :: fromptop(2)         !< particle range
-        type(image)                   :: img, img_resized
-        integer                       :: n, i, ldim(3), prange(2), cnt, sz
+    subroutine resize_imgfile( fname2resize, fname, smpd, ldim_new, smpd_new, fromptop )
+        character(len=*),  intent(in)  :: fname2resize, fname
+        real,              intent(in)  :: smpd
+        integer,           intent(in)  :: ldim_new(3)
+        real,              intent(out) :: smpd_new
+        integer, optional, intent(in)  :: fromptop(2)
+        type(image) :: img, img_resized
+        integer     :: n, i, ldim(3), prange(2), cnt, sz
         call find_ldim_nptcls(fname2resize, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'resize_imgfile' )
-        ! do the work
         call img%new(ldim,smpd)
         call img_resized%new(ldim_new,smpd) ! this sampling distance will be overwritten
         write(*,'(a)') '>>> RESIZING IMAGES'
@@ -220,24 +213,26 @@ contains
             call img_resized%bwd_ft
             call img_resized%write(fname, cnt)
         end do
+        smpd_new = img_resized%get_smpd()
         call img%kill
         call img_resized%kill
     end subroutine resize_imgfile
     
     !>  \brief  is for clipping
-    subroutine clip_imgfile( fname2clip, fname, ldim_clip )
-        character(len=*), intent(in) :: fname2clip, fname !< filenames
-        integer, intent(in)          :: ldim_clip(3)      !< desired dimensions
-        type(image)                  :: img, img_clip
-        integer                      :: n, i, ldim(3)
+    subroutine clip_imgfile( fname2clip, fname, ldim_clip, smpd )
+        character(len=*), intent(in) :: fname2clip, fname
+        integer,          intent(in) :: ldim_clip(3)
+        real,             intent(in) :: smpd
+        type(image) :: img, img_clip
+        integer     :: n, i, ldim(3)
         call find_ldim_nptcls(fname2clip, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'clip_imgfile' )
         ! do the work
         if( ldim_clip(1) <= ldim(1) .and. ldim_clip(2) <= ldim(2)&
         .and. ldim_clip(3) <= ldim(3) )then
-            call img%new(ldim,1.)
-            call img_clip%new(ldim_clip,1.)
+            call img%new(ldim,smpd)
+            call img_clip%new(ldim_clip,smpd)
             write(*,'(a)') '>>> CLIPPING IMAGES'
             do i=1,n
                 call progress(i,n)
@@ -251,19 +246,19 @@ contains
     end subroutine clip_imgfile
     
     !>  \brief  is for resizing and clipping
-    subroutine resize_and_clip_imgfile( fname2resize, fname, smpd, ldim_new, ldim_clip, fromptop )
-        character(len=*),  intent(in) :: fname2resize, fname !< filenames
-        real,              intent(in) :: smpd                !< original sampling distance
-        integer,           intent(in) :: ldim_new(3)         !< scaled dimensions
-        integer,           intent(in) :: ldim_clip(3)        !< clipped (final) dimensions
-        integer, optional, intent(in) :: fromptop(2)         !< particle range
-        type(image)                   :: img, img_resized, img_clip
-        integer                       :: n, i, ldim(3), prange(2), cnt, sz
+    subroutine resize_and_clip_imgfile( fname2resize, fname, smpd, ldim_new, ldim_clip, smpd_new, fromptop )
+        character(len=*),  intent(in)  :: fname2resize, fname
+        real,              intent(in)  :: smpd
+        integer,           intent(in)  :: ldim_new(3)
+        integer,           intent(in)  :: ldim_clip(3)
+        real,              intent(out) :: smpd_new
+        integer, optional, intent(in)  :: fromptop(2)
+        type(image) :: img, img_resized, img_clip
+        integer     :: n, i, ldim(3), prange(2), cnt, sz
         call find_ldim_nptcls(fname2resize, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'resize_imgfile' )
-        ! do the work
-        call img%new(ldim,1.)
+        call img%new(ldim,smpd)
         call img_resized%new(ldim_new,smpd) ! this sampling distance will be overwritten
         write(*,'(a)') '>>> RESIZING IMAGES'
         if( present(fromptop) )then
@@ -290,22 +285,66 @@ contains
             endif
             call img_clip%write(fname, cnt)
         end do
+        smpd_new = img_resized%get_smpd()
         call img%kill
         call img_resized%kill
         call img_clip%kill
     end subroutine resize_and_clip_imgfile
+
+    !>  \brief  is for resizing and clipping
+    subroutine resize_imgfile_double( fname2resize, fname1, fname2, smpd, ldims_new, smpds_new, fromptop )
+        character(len=*),  intent(in)  :: fname2resize, fname1, fname2
+        real,              intent(in)  :: smpd
+        integer,           intent(in)  :: ldims_new(2,3)
+        real,              intent(out) :: smpds_new(2)
+        integer, optional, intent(in)  :: fromptop(2)
+        type(image) :: img, img_resized1, img_resized2
+        integer     :: n, i, ldim(3), prange(2), cnt, sz
+        call find_ldim_nptcls(fname2resize, ldim, n)
+        ldim(3) = 1
+        call raise_exception_imgfile( n, ldim, 'resize_imgfile' )
+        call img%new(ldim,smpd)
+        call img_resized1%new(ldims_new(1,:),smpd) ! this sampling distance will be overwritten
+        call img_resized2%new(ldims_new(2,:),smpd) ! this sampling distance will be overwritten
+        write(*,'(a)') '>>> RESIZING IMAGES'
+        if( present(fromptop) )then
+            prange = fromptop
+        else
+            prange(1) = 1
+            prange(2) = n
+        endif
+        sz  = prange(2)-prange(1)+1
+        cnt = 0
+        do i=prange(1),prange(2)
+            cnt = cnt+1
+            call progress(cnt,sz)
+            call img%read(fname2resize, i)
+            call img%fwd_ft
+            call img%clip(img_resized1)
+            call img%clip(img_resized2)
+            call img_resized1%bwd_ft
+            call img_resized2%bwd_ft
+            call img_resized1%write(fname1, cnt)
+            call img_resized2%write(fname2, cnt)
+        end do
+        smpds_new(1) = img_resized1%get_smpd()
+        smpds_new(2) = img_resized2%get_smpd()
+        call img%kill
+        call img_resized1%kill
+        call img_resized2%kill
+    end subroutine resize_imgfile_double
     
     !>  \brief  is for normalization
-    subroutine norm_imgfile( fname2norm, fname, hfun )
-        character(len=*), intent(in) :: fname2norm, fname !< filenames
-        character(len=*), intent(in), optional :: hfun    !< hidden unit function for initialization
+    subroutine norm_imgfile( fname2norm, fname, smpd, hfun )
+        character(len=*),           intent(in) :: fname2norm, fname
+        real,                       intent(in) :: smpd
+        character(len=*), optional, intent(in) :: hfun
         type(image) :: img
         integer     :: i, n, ldim(3)
         call find_ldim_nptcls(fname2norm, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'norm_imgfile' )
-        ! do the work
-        call img%new(ldim,1.)
+        call img%new(ldim,smpd)
         write(*,'(a)') '>>> NORMALIZING IMAGES'
         do i=1,n
             call progress(i,n)
@@ -317,16 +356,15 @@ contains
     end subroutine norm_imgfile
     
     !>  \brief  is for normalization
-    subroutine norm_ext_imgfile( fname2norm, avg, sdev, fname )
-        character(len=*), intent(in) :: fname2norm, fname !< filenames
-        real, intent(in)             :: avg, sdev         !< average, standard deviation
+    subroutine norm_ext_imgfile( fname2norm, avg, sdev, fname, smpd )
+        character(len=*), intent(in) :: fname2norm, fname
+        real,             intent(in)  :: avg, sdev, smpd
         type(image)   :: img
         integer       :: i, n, ldim(3)
         call find_ldim_nptcls(fname2norm, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'norm_imgfile' )
-        ! do the work
-        call img%new(ldim,1.)
+        call img%new(ldim,smpd)
         write(*,'(a)') '>>> NORMALIZING IMAGES'
         do i=1,n
             call progress(i,n)
@@ -338,16 +376,15 @@ contains
     end subroutine norm_ext_imgfile
     
     !>  \brief  is for noise normalization
-    subroutine noise_norm_imgfile( fname2norm, msk, fname )
-        character(len=*), intent(in) :: fname2norm, fname !< filenames
-        real, intent(in) :: msk
+    subroutine noise_norm_imgfile( fname2norm, msk, fname, smpd )
+        character(len=*), intent(in) :: fname2norm, fname
+        real,             intent(in) :: msk, smpd             
         type(image)      :: img
         integer          :: i, n, ldim(3)
         call find_ldim_nptcls(fname2norm, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'noise_norm_imgfile' )
-        ! do the work
-        call img%new(ldim,1.)
+        call img%new(ldim,smpd)
         write(*,'(a)') '>>> NOISE NORMALIZING IMAGES'
         do i=1,n
             call progress(i,n)
@@ -359,15 +396,15 @@ contains
     end subroutine noise_norm_imgfile
 
     !>  \brief  is for noise normalization
-    subroutine shellnorm_imgfile( fname2norm, fname )
-        character(len=*), intent(in) :: fname2norm, fname !< filenames
-        type(image)      :: img
-        integer          :: i, n, ldim(3)
+    subroutine shellnorm_imgfile( fname2norm, fname, smpd )
+        character(len=*), intent(in) :: fname2norm, fname
+        real,             intent(in) :: smpd
+        type(image) :: img
+        integer     :: i, n, ldim(3)
         call find_ldim_nptcls(fname2norm, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'noise_norm_imgfile' )
-        ! do the work
-        call img%new(ldim,1.)
+        call img%new(ldim,smpd)
         write(*,'(a)') '>>> SHELL NORMALIZING IMAGES'
         do i=1,n
             call progress(i,n)
@@ -380,16 +417,15 @@ contains
 
     !>  \brief  is for calculating statistics
     subroutine stats_imgfile( fname, which, ave, sdev, var, med, msk )
-        character(len=*), intent(in) :: fname, which        !< filename, selector
-        real, intent(out)            :: ave, sdev, var, med !< ouputs
-        real, intent(in), optional   :: msk                 !< optional mask parameter
+        character(len=*), intent(in)  :: fname, which
+        real,             intent(out) :: ave, sdev, var, med
+        real, optional,   intent(in)  :: msk
         real        :: ave_loc, sdev_loc, var_loc, med_loc
         type(image) :: img
         integer     :: i, n, ldim(3)
         call find_ldim_nptcls(fname, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'stats_imgfile' )
-        ! do the work
         call img%new(ldim,1.)
         write(*,'(a)') '>>> CALCULATING STACK STATISTICS'
         ave  = 0.
@@ -413,15 +449,15 @@ contains
     end subroutine stats_imgfile
     
     !>  \brief  is for contrast inversion
-    subroutine neg_imgfile( fname2neg, fname )
-        character(len=*), intent(in) :: fname2neg, fname !< filenames
-        type(image)   :: img
-        integer       :: i, n, ldim(3)
+    subroutine neg_imgfile( fname2neg, fname, smpd )
+        character(len=*), intent(in) :: fname2neg, fname
+        real,             intent(in) :: smpd
+        type(image) :: img
+        integer     :: i, n, ldim(3)
         call find_ldim_nptcls(fname2neg, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'neg_imgfile' )
-        ! do the work
-        call img%new(ldim,1.)
+        call img%new(ldim,smpd)
         write(*,'(a)') '>>> INVERTING IMAGE CONTRAST'
         do i=1,n
             call progress(i,n)
@@ -444,7 +480,6 @@ contains
         call find_ldim_nptcls(fname2masscen, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'masscen_imgfile' )
-        ! do the work
         call img%new(ldim,smpd)
         write(*,'(a)') '>>> CENTERING IMAGES'
         do i=1,n
@@ -457,20 +492,20 @@ contains
     end subroutine masscen_imgfile
     
     !>  \brief  is for curing
-    subroutine cure_imgfile( fname2cure, fname )
+    subroutine cure_imgfile( fname2cure, fname, smpd )
         use simple_image,        only: image
         use simple_filehandling, only: get_fileunit
         character(len=*), intent(in) :: fname2cure, fname
+        real,             intent(in) :: smpd
         type(image) :: img
         integer     :: i, n, n_nans, filnum, ldim(3)
         real        :: maxv, minv, ave, sdev
         call find_ldim_nptcls(fname2cure, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'cure_imgfile' )
-        ! do the work
         filnum = get_fileunit()
         open(unit=filnum, status='replace', file='cure_stats.txt')
-        call img%new(ldim,1.)
+        call img%new(ldim,smpd)
         write(*,'(a)') '>>> CURING IMAGES'
         do i=1,n
             call progress(i,n)
@@ -484,7 +519,7 @@ contains
         call img%kill
     end subroutine cure_imgfile
     
-     !>  \brief  is for calculating the acf of a stack
+    !>  \brief  is for calculating the acf of a stack
     subroutine acf_imgfile( fname2acf, fname )
         character(len=*), intent(in) :: fname2acf, fname
         type(image)   :: img
@@ -492,7 +527,6 @@ contains
         call find_ldim_nptcls(fname2acf, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'acf_imgfile' )
-        ! do the work
         call img%new(ldim,1.)
         write(*,'(a)') '>>> CALCULATING ACF:S OF THE IMAGES'
         do i=1,n
@@ -505,16 +539,15 @@ contains
     end subroutine acf_imgfile
     
     !>  \brief  is for adding noise
-    subroutine add_noise_imgfile( fname2process, fname, snr )
+    subroutine add_noise_imgfile( fname2process, fname, snr, smpd )
         character(len=*), intent(in) :: fname2process, fname
-        real, intent(in) :: snr
-        type(image)      :: img
-        integer          :: i, n, ldim(3)
+        real,             intent(in) :: snr, smpd
+        type(image) :: img
+        integer     :: i, n, ldim(3)
         call find_ldim_nptcls(fname2process, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'add_noise_imgfile' )
-        ! do the work
-        call img%new(ldim,1.)
+        call img%new(ldim,smpd)
         write(*,'(a)') '>>> ADDING NOISE TO THE IMAGES'
         do i=1,n
             call progress(i,n)
@@ -526,17 +559,17 @@ contains
     end subroutine add_noise_imgfile
     
     !>  \brief  is for making frame averages of dose-fractionated image series
-    subroutine frameavg_imgfile( fname2process, fname, navg )
+    subroutine frameavg_imgfile( fname2process, fname, navg, smpd )
         character(len=*), intent(in) :: fname2process, fname
-        integer, intent(in) :: navg
-        type(image)         :: img, avg
-        integer :: i, n, cnt, cnt2, ldim(3)
+        integer,          intent(in) :: navg
+        real,             intent(in) :: smpd
+        type(image) :: img, avg
+        integer     :: i, n, cnt, cnt2, ldim(3)
         call find_ldim_nptcls(fname2process, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'frameavg_imgfile' )
-        ! do the work
-        call img%new(ldim,1.)
-        call avg%new(ldim,1.)
+        call img%new(ldim,smpd)
+        call avg%new(ldim,smpd)
         cnt = 0
         cnt2 = 0
         write(*,'(a)') '>>> AVERAGING FRAMES'
@@ -558,42 +591,6 @@ contains
         call avg%kill
     end subroutine frameavg_imgfile
     
-    !>  \brief  is for swapping the sign of the imaginary part of the FT
-    subroutine signswap_aimag_imgfile( fname2process, fname )
-        character(len=*), intent(in) :: fname2process, fname
-        type(image)   :: img
-        integer       :: n, i, ldim(3)
-        call find_ldim_nptcls(fname2process, ldim, n)
-        ldim(3) = 1
-        call raise_exception_imgfile( n, ldim, 'signswap_aimag_imgfile' )
-        ! do the work
-        call img%new(ldim,1.)
-        do i=1,n
-            call img%read(fname2process, i)
-            call img%signswap_aimag
-            call img%write(fname, i)
-        end do
-        call img%kill
-    end subroutine signswap_aimag_imgfile
-    
-    !>  \brief  is for swapping the sign of the real part of the FT
-    subroutine signswap_real_imgfile( fname2process, fname )
-        character(len=*), intent(in) :: fname2process, fname
-        type(image)   :: img
-        integer       :: n, i, ldim(3)
-        call find_ldim_nptcls(fname2process, ldim, n)
-        ldim(3) = 1
-        call raise_exception_imgfile( n, ldim, 'signswap_real_imgfile' )
-        ! do the work
-        call img%new(ldim,1.)
-        do i=1,n
-            call img%read(fname2process, i)
-            call img%signswap_real
-            call img%write(fname, i)
-        end do
-        call img%kill
-    end subroutine signswap_real_imgfile
-    
     !>  \brief  is for Fourier transformation visualization
     subroutine ft2img_imgfile( fname2process, fname, which )
         character(len=*), intent(in) :: fname2process, fname
@@ -603,7 +600,6 @@ contains
         call find_ldim_nptcls(fname2process, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'ft2img_imgfile' )
-        ! do the work
         call img%new(ldim,1.)
         if( ldim(3) == 1 )then
             do i=1,n
@@ -622,12 +618,12 @@ contains
     
     !>  \brief  is for origin shifting a stack according to info in o
     subroutine shift_imgfile( fname2shift, fname, o, smpd, mul, round )
-        use simple_oris,  only: oris
-        character(len=*), intent(in)  :: fname2shift, fname
-        class(oris), intent(inout)    :: o
-        real, intent(in)              :: smpd
-        real, intent(in), optional    :: mul
-        logical, intent(in), optional :: round
+        use simple_oris, only: oris
+        character(len=*),  intent(in)    :: fname2shift, fname
+        class(oris),       intent(inout) :: o
+        real,              intent(in)    :: smpd
+        real,    optional, intent(in)    :: mul
+        logical, optional, intent(in)    :: round
         type(image)   :: img
         integer       :: n, i, ldim(3)
         real          :: x, y, xhere, yhere
@@ -635,7 +631,6 @@ contains
         call find_ldim_nptcls(fname2shift, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'shift_imgfile' )
-        ! do the work
         rround = .false.
         if( present(round) ) rround = round
         if( n /= o%get_noris() ) stop 'inconsistent nr entries; shift; simple_procimgfile'
@@ -673,7 +668,6 @@ contains
         call find_ldim_nptcls(fname2filter, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'bp_imgfile' )
-        ! do the work
         call img%new(ldim,smpd)
         write(*,'(a)') '>>> BAND-PASS FILTERING IMAGES'   
         do i=1,n
@@ -688,13 +682,12 @@ contains
     !>  \brief  is for phase randomization
     subroutine phase_rand_imgfile( fname2process, fname, smpd, lp )
         character(len=*), intent(in) :: fname2process, fname
-        real, intent(in) :: smpd, lp
-        type(image)      :: img
+        real,             intent(in) :: smpd, lp
+        type(image) :: img
         integer :: n, i, ldim(3)
         call find_ldim_nptcls(fname2process, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'phase_rand_imgfile' )
-        ! do the work
         call img%new(ldim,smpd)
         write(*,'(a)') '>>> PHASE RANDOMIZING IMAGES'     
         do i=1,n
@@ -711,11 +704,11 @@ contains
         use simple_math,  only: deg2rad
         use simple_oris,  only: oris
         use simple_ctf,   only: ctf
-        character(len=*), intent(in)    :: fname2process, fname !< filenames
-        class(oris),      intent(inout) :: o                    !< orientations object
-        real,             intent(in)    :: smpd                 !< sampling distance, a/pix
-        character(len=*), intent(in)    :: mode                 !< abs, ctf, flip, flipneg, neg, square
-        real, optional,   intent(in)    :: bfac                 !< bfactor
+        character(len=*), intent(in)    :: fname2process, fname
+        class(oris),      intent(inout) :: o
+        real,             intent(in)    :: smpd
+        character(len=*), intent(in)    :: mode
+        real, optional,   intent(in)    :: bfac
         type(image)   :: img
         integer       :: i, n, ldim(3)
         type(ctf)     :: tfun
@@ -745,13 +738,13 @@ contains
         use simple_math,  only: deg2rad
         use simple_oris,  only: oris
         use simple_ctf,   only: ctf
-        character(len=*), intent(in) :: fname2process, fname !< filenames
-        class(oris), intent(inout)   :: o                    !< orientations object
-        real, intent(in)             :: smpd                 !< sampling distance, a/pix
-        class(ctf), intent(inout)    :: tfun                 !< transfer function 
-        real, intent(in), optional   :: bfac                 !< bfactor
-        type(image)   :: img, img2
-        integer       :: i, n, ldim(3)
+        character(len=*), intent(in)    :: fname2process, fname
+        class(oris),      intent(inout) :: o
+        real,             intent(in)    :: smpd
+        class(ctf),       intent(inout) :: tfun
+        real, optional,   intent(in)    :: bfac
+        type(image) :: img, img2
+        integer     :: i, n, ldim(3)
         call find_ldim_nptcls(fname2process, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'ctf2imgfile' )
@@ -777,10 +770,10 @@ contains
     !!          according to info in o 
     subroutine shrot_imgfile( fname2process, fname, o, smpd, mul )
         use simple_oris,  only: oris
-        character(len=*), intent(in) :: fname2process, fname !< filenames
-        class(oris), intent(inout)   :: o                    !< orientations
-        real, intent(in)             :: smpd                 !< sampling distance
-        real, intent(in), optional   :: mul                  !< optional multiplicaton factor
+        character(len=*), intent(in)    :: fname2process, fname
+        class(oris),      intent(inout) :: o
+        real,             intent(in)    :: smpd
+        real, optional,   intent(in)    :: mul
         type(image)   :: img, img_rot
         integer       :: n, i, ldim(3)
         real          :: x, y
@@ -816,11 +809,12 @@ contains
     end subroutine shrot_imgfile
     
     !>  \brief  is for applying a soft circular mask to all images in stack
-    subroutine mask_imgfile( fname2mask, fname, mskrad, inner, width, which )
-        character(len=*), intent(in)           :: fname2mask, fname !< filenames
-        real,             intent(in)           :: mskrad            !< mask radius
-        real,             intent(in), optional :: inner, width      !< inner & outer mask radii (optional)
-        character(len=*), intent(in), optional :: which
+    subroutine mask_imgfile( fname2mask, fname, mskrad, smpd, inner, width, which )
+        character(len=*),           intent(in) :: fname2mask, fname
+        real,                       intent(in) :: mskrad
+        real,                       intent(in) :: smpd
+        real,             optional, intent(in) :: inner, width
+        character(len=*), optional, intent(in) :: which
         type(image)           :: img
         integer               :: n, i, ldim(3)
         character(len=STDLEN) :: msktype
@@ -830,7 +824,7 @@ contains
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'mask_imgfile' )
         ! do the work
-        call img%new(ldim,1.)
+        call img%new(ldim,smpd)
         write(*,'(a)') '>>> MASKING IMAGES' 
         do i=1,n
             call progress(i,n)
@@ -842,9 +836,10 @@ contains
     end subroutine mask_imgfile
     
     !>  \brief  is for binarizing all images in the stack
-    subroutine bin_imgfile( fname2process, fname, tres )
-        character(len=*), intent(in) :: fname2process, fname !< filenames
-        real, intent(in), optional   :: tres                 !< optional treshold
+    subroutine bin_imgfile( fname2process, fname, smpd, thres )
+        character(len=*), intent(in) :: fname2process, fname
+        real,             intent(in) :: smpd
+        real, optional,   intent(in) :: thres
         type(image) :: img
         integer     :: n, i, ldim(3)
         logical     :: didft
@@ -852,7 +847,7 @@ contains
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'bin_imgfile' )
         ! do the work
-        call img%new(ldim,1.)
+        call img%new(ldim,smpd)
         write(*,'(a)') '>>> BINARIZING IMAGES'
         do i=1,n
             call progress(i,n)
@@ -862,10 +857,10 @@ contains
                 call img%bwd_ft
                 didft = .true.
             endif
-            if( present(tres) )then
-                call img%bin(tres)
+            if( present(thres) )then
+                call img%bin(thres)
             else
-                call img%bin
+                call img%bin('nomsk')
             endif
             if( didft ) call img%fwd_ft
             call img%write(fname, i)
@@ -874,16 +869,16 @@ contains
     end subroutine bin_imgfile
     
     !>  \brief  is for making an average of the entire stack
-    subroutine make_avg_imgfile( fname, avgname )
-        character(len=*), intent(in) :: fname, avgname !< filenames
+    subroutine make_avg_imgfile( fname, avgname, smpd )
+        character(len=*), intent(in) :: fname, avgname
+        real,             intent(in) :: smpd
         type(image)                  :: avg, img
         integer                      :: i, n, ldim(3)
         call find_ldim_nptcls(fname, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'make_avg_imgfile' )
-        ! do the work
-        call avg%new(ldim, 1.)
-        call img%new(ldim, 1.)
+        call avg%new(ldim, smpd)
+        call img%new(ldim, smpd)
         avg = 0.
         write(*,'(a)') '>>> MAKING GLOBAL STACK AVERAGE'
         do i=1,n
@@ -894,105 +889,29 @@ contains
         call avg%div(real(n))
         call avg%write(avgname,1)
     end subroutine make_avg_imgfile
-    
-    !>  \brief  is for making class averages according to the 
-    !!          classification info in o
-    subroutine make_cavgs_imgfile( fname2process, fname, o, minp, list )
-        use simple_oris,  only: oris
-        use simple_sll,   only: sll
-        character(len=*), intent(in)     :: fname2process, fname !< filenames
-        class(oris), intent(inout)       :: o                    !< orientations
-        integer, intent(in), optional    :: minp                 !< minimum number of particles          
-        type(sll), intent(out), optional :: list                 !< optional singly linked list
-        type(image)                      :: avg
-        logical                          :: empty
-        integer :: i, ncls, ncls_here, pop, ldim(3), n
-        call find_ldim_nptcls(fname2process, ldim, n)
-        ldim(3) = 1
-        call raise_exception_imgfile(ncls, ldim, 'make_cavgs_imgfile' )
-        ! extract the number of classes from the oris structure
-        ncls = o%get_ncls()
-        ! build
-        if( present(list) ) call list%new
-        ncls_here = 0
-        write(*,'(a)') '>>> MAKING CLASS AVERAGES'
-        do i=1,ncls
-            call progress(i,ncls)
-            pop = o%get_clspop(i)
-            if( present(minp) )then
-                if( pop >= minp )then
-                    if( present(list) ) call list%add(iarr=[i])
-                    ncls_here = ncls_here+1
-                    call make_cavg_imgfile(fname2process, fname, o, i, avg, empty)
-                    call avg%write(fname, ncls_here)
-                endif   
-            else
-                if( pop > 0 )then
-                    if( present(list) ) call list%add(iarr=[i])
-                endif
-                call make_cavg_imgfile(fname2process, fname, o, i, avg, empty)
-                call avg%write(fname, i)
-            endif     
-        end do
-    end subroutine make_cavgs_imgfile
-    
-    !>  \brief  is for making one class average according to the 
-    !!          classification info in o and the inputted class
-    subroutine make_cavg_imgfile( fname2process, fname, o, class, avg, empty, smpd )  
-        use simple_oris,  only: oris
-        character(len=*), intent(in) :: fname2process, fname !< filenames
-        class(oris), intent(inout)   :: o                    !< orientations
-        integer, intent(in)          :: class                !< class index
-        type(image), intent(inout)   :: avg                  !< output average
-        logical, intent(out)         :: empty                !< empty indicator
-        real, intent(in), optional   :: smpd                 !< optional sampling distance
-        type(image)                  :: img
-        real                         :: ssmpd
-        integer :: j, ncls, pop, n, mycls, ldim(3)
-        call find_ldim_nptcls(fname2process, ldim, n)
-        ldim(3) = 1
-        call raise_exception_imgfile( n, ldim, 'make_cavg_imgfile' )
-        ! do the work
-        ssmpd = 1.
-        if( present(smpd) ) ssmpd = smpd
-        ncls = o%get_ncls()
-        pop = o%get_clspop(class) 
-        empty = .false.
-        call avg%new(ldim, ssmpd)
-        if( pop < 2 )then
-            empty = .true.
-        else
-            call img%new(ldim, ssmpd)
-            avg = 0.         
-            do j=1,n
-                mycls = nint(o%get(j, 'class'))
-                if( mycls == class )then
-                    call img%read(fname2process, j)
-                    call avg%add(img)
-                endif
-            end do
-            call avg%div(real(pop))
-            call img%kill
-        endif
-    end subroutine make_cavg_imgfile
 
-    subroutine mirror_imgfile( fname2mirr, fname, mirr )
-        character(len=*), intent(in) :: fname, fname2mirr, mirr
-        type(image) :: img
-        integer     :: i, n, ldim(3)
-        call find_ldim_nptcls(fname2mirr, ldim, n)
+    subroutine random_selection_from_imgfile( fname2selfrom, fname, nran, smpd )
+        use simple_ran_tabu, only: ran_tabu
+        character(len=*), intent(in) :: fname2selfrom, fname
+        integer,          intent(in) :: nran
+        real,             intent(in) :: smpd
+        integer, allocatable :: pinds(:)
+        integer              :: alloc_stat, n, ldim(3), i
+        type(ran_tabu)       :: rt
+        type(image)          :: img
+        call find_ldim_nptcls(fname2selfrom, ldim, n)
         ldim(3) = 1
-        call raise_exception_imgfile( n, ldim, 'mirror_imgfile' )
-        ! do the work
-        call img%new(ldim,1.)
-        write(*,'(a)') '>>> MIRRORING IMAGES'
-        do i=1,n
-            call progress(i,n)
-            call img%read(fname2mirr, i)
-            call img%mirror(mirr)
+        call raise_exception_imgfile( n, ldim, 'random_selection_from_imgfile' )
+        call img%new(ldim,smpd)
+        write(*,'(a)') '>>> RANDOMLY SELECTING IMAGES'
+        allocate( pinds(nran) )
+        rt = ran_tabu(n)
+        call rt%ne_ran_iarr(pinds)
+        do i=1,nran
+            call progress(i, nran)
+            call img%read(fname2selfrom, pinds(i))
             call img%write(fname, i)
         end do
-        call img%kill
-    end subroutine mirror_imgfile
+    end subroutine random_selection_from_imgfile
 
 end module simple_procimgfile

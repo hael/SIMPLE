@@ -27,21 +27,21 @@ type :: ftiter
     real    :: smpd=0.                      !< sampling distance (Angstroms per pixel)
   contains
     ! CONSTRUCTOR
-    procedure          :: new
+    procedure :: new
     ! SETTER
-    procedure          :: set_hp
-    procedure          :: get_lhp
-    procedure          :: get_llp
-    procedure          :: get_find
-    procedure          :: get_lfny
-    procedure          :: get_lp
-    procedure          :: get_spat_freq
-    procedure          :: get_clin_lims
+    procedure :: set_hp
+    procedure :: get_lhp
+    procedure :: get_llp
+    procedure :: get_find
+    procedure :: get_lfny
+    procedure :: get_lp
+    procedure :: get_spat_freq
+    procedure :: get_clin_lims
     ! LOOPING LIMITS
-    procedure          :: loop_lims
+    procedure :: loop_lims
     ! LOGICAL<->PHYSICAL ADDRESS CONVERTERS
-    procedure          :: comp_addr_phys
-    procedure          :: comp_addr_logi
+    procedure :: comp_addr_phys
+    procedure :: comp_addr_logi
     ! TESTS
     procedure, private :: test_addr
 end type
@@ -69,11 +69,7 @@ contains
         integer, intent(in)          :: ldim(:)
         character(len=*), intent(in) :: imgkind
         integer                      :: d
-        if( imgkind .eq. 'xfel' .or. imgkind .eq. 'em')then
-            self%imgkind = imgkind
-        else
-            stop 'Unsupported image kind; simple_ftiter::new'
-        endif
+        self%imgkind = imgkind
         if( size(ldim) == 2 )then
             self%ldim(1:2) = ldim
             self%ldim(3) = 1
@@ -239,7 +235,7 @@ contains
                         lims(2,2) = self%clogi_ubounds_all(2)
                         lims(3,1) = self%clogi_lbounds_all(3)
                         lims(3,2) = self%clogi_ubounds_all(3)
-                    else if( self%imgkind .eq. 'em' )then
+                    else
                         lims(1,1) = self%clogi_lbounds(1)
                         lims(1,2) = self%clogi_ubounds(1)
                         lims(2,1) = self%clogi_lbounds(2)

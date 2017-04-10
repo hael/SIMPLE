@@ -108,7 +108,7 @@ contains
         call o%set('corr', corr)
         ! shifts must be obtained by vector addition
         ! the reference is rotated upon projection: no need to rotate the shift
-        call o%set_shift( prev_shvec - ospec%x )
+        call o%set_shift(prev_shvec - ospec%x)
         ! distance
         dist = arg( ospec%x )
         call o%set('dist',dist)
@@ -119,9 +119,9 @@ contains
         call o%set('mi_joint', 1.)
         call o%set('dist_inpl', 0.)
         ! all the other stuff
-        call o%set( 'frac',  100. )
-        call o%set( 'mirr',  0. )
-        call o%set( 'sdev',  0. )
+        call o%set('frac', 100.)
+        call o%set('mirr', 0.)
+        call o%set('sdev', 0.)
     end subroutine cftcc_shsrch_minimize
 
     subroutine prep_soft_oris( wcorr, os )

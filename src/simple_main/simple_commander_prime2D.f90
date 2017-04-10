@@ -42,8 +42,8 @@ type, extends(commander_base) :: check2D_conv_commander
     procedure :: execute      => exec_check2D_conv
 end type check2D_conv_commander
 type, extends(commander_base) :: rank_cavgs_commander
- contains
-   procedure :: execute      => exec_rank_cavgs
+  contains
+    procedure :: execute      => exec_rank_cavgs
 end type rank_cavgs_commander
 
 contains
@@ -51,15 +51,16 @@ contains
     subroutine exec_prime2D_init( self, cline )
         use simple_hadamard2D_matcher, only: prime2D_assemble_sums, prime2D_write_sums, &
         & prime2D_write_partial_sums
-        use simple_qsys_funs, only: qsys_job_finished
+        use simple_qsys_funs,          only: qsys_job_finished
+        use simple_hadamard_common,    only: read_imgs_from_stk 
         class(prime2D_init_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(params)  :: p
         type(build)   :: b
         integer       :: ncls_in_oritab, icls, fnr, file_stat
-        p = params(cline)                     ! parameters generated
-        p%boxmatch = p%box                    !!!!!!!!!!!!!!!!!! 4 NOW
-        call b%build_general_tbox(p, cline)   ! general objects built
+        p = params(cline)  ! parameters generated
+        p%boxmatch = p%box !!!!!!!!!!!!!!!!!! 4 NOW
+        call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         call b%build_hadamard_prime2D_tbox(p) ! 2D Hadamard matcher built
         write(*,'(a)') '>>> GENERATING INITIAL CLUSTER CENTERS'
         if( cline%defined('oritab') )then
@@ -93,6 +94,7 @@ contains
             end do
             call prime2D_write_sums(b, p)
         else
+            call read_imgs_from_stk( b, p )
             call prime2D_assemble_sums(b, p)
             if( p%l_distr_exec)then
                 call prime2D_write_partial_sums( b, p )
@@ -107,15 +109,16 @@ contains
     
     subroutine exec_prime2D( self, cline )
         use simple_hadamard2D_matcher, only: prime2D_exec
+        use simple_qsys_funs,          only: qsys_job_finished
         class(prime2D_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(params) :: p
         type(build)  :: b
         integer      :: i, startit, ncls_from_refs, lfoo(3)
-        logical      :: converged=.false.
-        p = params(cline)                     ! parameters generated
-        p%boxmatch = p%box                    !!!!!!!!!!!!!!!!!! 4 NOW
-        call b%build_general_tbox(p, cline)   ! general objects built
+        logical      :: converged=.false., l_distr_exec=.false.
+        p = params(cline)  ! parameters generated
+        p%boxmatch = p%box !!!!!!!!!!!!!!!!!! 4 NOW
+        call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         call b%build_hadamard_prime2D_tbox(p) ! 2D Hadamard matcher built
         if( p%srch_inpl .eq. 'no' )then
             if( .not. cline%defined('oritab') )then
@@ -134,23 +137,39 @@ contains
         else
             startit = 1
             if( cline%defined('startit') ) startit = p%startit
+            if( cline%defined('extr_thresh') )then
+                ! all is well
+            else
+                ! starts from the top
+                p%extr_thresh = EXTRINITHRESH/p%rrate
+                if( startit > 1 )then
+                    ! need to update the randomization rate
+                    do i=1,startit-1
+                         p%extr_thresh = p%extr_thresh * p%rrate
+                    end do
+                endif
+            endif
             do i=startit,p%maxits
+                p%extr_thresh = p%extr_thresh * p%rrate
                 call prime2D_exec(b, p, cline, i, converged)
                 if(converged) exit
             end do
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_PRIME2D NORMAL STOP ****')
+        ! this is needed for chunk-based prime2D parallellisation
+        call qsys_job_finished(p, 'simple_commander_prime2D :: exec_prime2D')
     end subroutine exec_prime2D
     
     subroutine exec_cavgassemble( self, cline )
         use simple_hadamard2D_matcher, only: prime2D_assemble_sums_from_parts, prime2D_write_sums
         class(cavgassemble_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        type(params)                                 :: p
-        type(build)                                  :: b
-        p = params(cline)                   ! parameters generated
-        call b%build_general_tbox(p, cline) ! general objects built
+        type(params) :: p
+        type(build)  :: b
+        integer      :: fnr, file_stat
+        p = params(cline) ! parameters generated
+        call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         call b%build_hadamard_prime2D_tbox(p)
         call prime2D_assemble_sums_from_parts(b, p)
         if( cline%defined('which_iter') )then
@@ -160,6 +179,11 @@ contains
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_CAVGASSEMBLE NORMAL STOP ****', print_simple=.false.)
+        ! indicate completion (when run in a qsys env)
+        fnr = get_fileunit()
+        open(unit=fnr, FILE='CAVGASSEMBLE_FINISHED', STATUS='REPLACE', action='WRITE', iostat=file_stat)
+        call fopen_err('In: commander_rec :: eo_volassemble', file_stat )
+        close( unit=fnr )
     end subroutine exec_cavgassemble
     
     subroutine exec_check2D_conv( self, cline )
@@ -168,8 +192,8 @@ contains
         type(params) :: p
         type(build)  :: b
         logical      :: converged
-        p = params(cline)                   ! parameters generated
-        call b%build_general_tbox(p, cline) ! general objects built
+        p = params(cline) ! parameters generated
+        call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         p%ncls    = b%a%get_ncls()
         converged = b%conv%check_conv2D()   ! convergence check
         call cline%set('frac', b%conv%get('frac'))
@@ -194,15 +218,15 @@ contains
         type(build)          :: b
         integer              :: iclass
         integer, allocatable :: order(:)
-        p = params(cline)                   ! parameters generated
-        call b%build_general_tbox(p, cline) ! general objects built
+        p = params(cline) ! parameters generated
+        call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         p%ncls   = p%nptcls
         p%nptcls = nlines(p%oritab) 
         call b%a%new(p%nptcls)
         call b%a%read(p%oritab)
         order = b%a%order_cls()
         do iclass=1,p%ncls
-            write(*,'(a,1x,i5,1x,a,i5)') 'CLASS:', order(iclass), 'POP:', b%a%get_clspop(order(iclass)) 
+            write(*,'(a,1x,i5,1x,a,i5)') 'CLASS:', order(iclass), 'POP:', b%a%get_cls_pop(order(iclass))
             call b%img%read(p%stk, order(iclass))
             call b%img%write(p%outstk, iclass)
         end do

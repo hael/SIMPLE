@@ -145,6 +145,119 @@ contains
     end function resample_filter
     
     ! WIENER RESTORATION ROUTINES
+
+    !>  \brief does the Wiener restoration of aligned images in 2D 
+    subroutine wiener_restore2D_fast( img_set, o_set, tfplan, img_rec, msk, shellw )
+        use simple_oris,  only: oris
+        use simple_ori,   only: ori
+        class(image),     intent(inout) :: img_set(:)
+        class(oris),      intent(inout) :: o_set
+        type(ctfplan),    intent(in)    :: tfplan
+        class(image),     intent(inout) :: img_rec
+        real,             intent(in)    :: msk
+        real, optional,   intent(in)    :: shellw(:,:)
+        integer           :: ldim(3), ldim_pad(3), nimgs, iptcl
+        type(ori)         :: o
+        type(image)       :: ctfsqsum
+        real              :: smpd
+        logical           :: doshellw
+        if( o_set%get_noris() /= size(img_set) )&
+        stop 'nr of imgs and oris not consistent; simple_filterer :: wiener_restore2D_1'
+        doshellw = present(shellw)
+        ! set constants
+        ldim     = img_set(1)%get_ldim()
+        smpd     = img_set(1)%get_smpd()
+        ldim_pad = img_rec%get_ldim()
+        nimgs    = size(img_set)
+        ! create & init objs
+        call img_rec%new(ldim_pad, smpd)
+        call ctfsqsum%new(ldim_pad, smpd)
+        ctfsqsum = cmplx(0.,0.)
+        ! average in the assumption of infinite signal
+        do iptcl=1,nimgs
+            o = o_set%get_ori(iptcl)
+            if( doshellw )then
+                call wiener_restore2D_online_fast(img_set(iptcl), o,&
+                &tfplan, img_rec, ctfsqsum, msk, shellw(iptcl,:))
+            else
+                call wiener_restore2D_online_fast(img_set(iptcl), o,&
+                &tfplan, img_rec, ctfsqsum, msk)
+            endif
+        end do
+        ! do the density correction
+        call img_rec%fwd_ft
+        call img_rec%ctf_dens_correct(ctfsqsum)
+        call img_rec%bwd_ft
+        ! destroy objects
+        call ctfsqsum%kill
+    end subroutine wiener_restore2D_fast
+
+    !>  \brief does the online Wiener restoration of 2D images, including shift+rotations
+    !!         the image is left shifted and Fourier transformed on output
+    subroutine wiener_restore2D_online_fast( img, o, tfplan, img_rec, ctfsqsum, msk, shellw, add )
+        use simple_ori,            only: ori
+        use simple_ctf,            only: ctf
+        use simple_projector_hlev, only: rotimg
+        class(image),      intent(inout) :: img
+        class(ori),        intent(inout) :: o
+        type(ctfplan),     intent(in)    :: tfplan
+        class(image),      intent(inout) :: img_rec
+        class(image),      intent(inout) :: ctfsqsum
+        real,              intent(in)    :: msk
+        real,    optional, intent(in)    :: shellw(:)
+        logical, optional, intent(in)    :: add
+        type(image) :: roimg, ctfsq
+        type(ctf)   :: tfun
+        integer     :: ldim(3)
+        real        :: angast,dfx,dfy,x,y,smpd
+        logical     :: aadd
+        aadd = .true.
+        if( present(add) ) aadd = add
+        ! set constants
+        ldim = img%get_ldim()
+        smpd = img%get_smpd()
+        ! create & init objs 
+        call ctfsq%new(ldim, smpd)
+        call ctfsq%set_ft(.true.)
+        if( tfplan%flag .ne. 'no' )&
+        tfun = ctf(img%get_smpd(), o%get('kv'), o%get('cs'), o%get('fraca'))
+        ! set CTF and shift parameters
+        select case(tfplan%mode)
+            case('astig') ! astigmatic CTF
+                dfx    = o%get('dfx')
+                dfy    = o%get('dfy')
+                angast = o%get('angast')
+            case('noastig') ! non-astigmatic CTF
+                dfx    = o%get('dfx')
+                dfy    = dfx
+                angast = 0.
+        end select
+        x = -o%get('x')
+        y = -o%get('y')
+        ! apply
+        call img%fwd_ft
+        ! take care of the nominator
+        select case(tfplan%flag)
+            case('yes')  ! multiply with CTF
+                call tfun%apply_and_shift(img, ctfsq, x, y, dfx, 'ctf', dfy, angast)
+            case('flip') ! multiply with abs(CTF)
+                call tfun%apply_and_shift(img, ctfsq, x, y, dfx, 'abs', dfy, angast)
+            case('mul','no')
+                call tfun%apply_and_shift(img, ctfsq, x, y, dfx, '', dfy, angast)
+        end select
+        ! griding-based image rotation and filtering
+        call rotimg(img, -o%e3get(), msk, roimg, shellw)
+        ! assemble img_rec sum
+        if( aadd )then
+            call img_rec%add(roimg)
+            call ctfsqsum%add(ctfsq)
+        else
+            call img_rec%subtr(roimg)
+            call ctfsqsum%subtr(ctfsq)
+        endif
+        call roimg%kill
+        call ctfsq%kill
+    end subroutine wiener_restore2D_online_fast
     
     !>  \brief does the Wiener restoration of aligned images in 2D 
     subroutine wiener_restore2D( img_set, o_set, tfplan, img_rec, msk, shellw )
@@ -204,7 +317,6 @@ contains
         real,              intent(in)    :: msk
         real,    optional, intent(in)    :: shellw(:)
         logical, optional, intent(in)    :: add
-        type(projector) :: proj
         type(image)     :: roimg
         type(ctf)       :: tfun
         real            :: angast, dfx, dfy, x, y

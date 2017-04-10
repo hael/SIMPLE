@@ -14,6 +14,7 @@ use simple_defs
 use simple_ori,         only: ori
 use simple_math,        only: hpsort, is_a_number
 use simple_jiffys,      only: alloc_err
+use simple_stat,        only: moment
 use simple_filehandling ! use all in there
 implicit none
 
@@ -50,7 +51,9 @@ type :: oris
     generic            :: isthere => isthere_1, isthere_2
     procedure          :: get_ncls
     procedure          :: get_pop
-    procedure          :: get_clspop
+    procedure          :: get_cls_pop
+    procedure          :: get_cls_corr
+    procedure          :: cls_corr_sigthresh
     procedure          :: get_statepop
     procedure          :: get_ptcls_in_state
     procedure          :: get_nstates
@@ -59,6 +62,7 @@ type :: oris
     procedure          :: split_class
     procedure          :: expand_classes
     procedure          :: remap_classes
+    procedure          :: shift_classes
     procedure          :: get_cls_pinds
     procedure          :: get_cls_oris
     procedure          :: get_state
@@ -70,6 +74,7 @@ type :: oris
     procedure          :: get_nonzero_sum
     procedure          :: get_nonzero_avg
     procedure          :: get_ctfparams
+    procedure          :: get_defocus_groups
     procedure          :: included
     procedure          :: print
     procedure          :: print_mats
@@ -115,7 +120,6 @@ type :: oris
     procedure          :: merge_classes
     procedure          :: symmetrize
     procedure          :: merge
-    procedure          :: merge_files
     ! I/O
     procedure          :: read
     procedure, private :: write_1
@@ -158,6 +162,7 @@ type :: oris
     procedure          :: nearest_neighbors
     procedure          :: find_angres
     procedure          :: find_angres_geod
+    procedure          :: extremal_bound
     procedure          :: find_npeaks
     procedure          :: class_calc_frac
     procedure          :: class_dist_stat
@@ -200,7 +205,6 @@ logical, allocatable :: class_part_of_set(:)
 real,    allocatable :: class_weights(:)
 type(ori)            :: o_glob
 real                 :: angthres = 0.
-
 
 contains
 
@@ -402,7 +406,7 @@ contains
         if( present(minpop) )then
             ncls_here = 0
             do i=1,ncls
-                if( self%get_clspop(i) >= minpop ) ncls_here = ncls_here+1
+                if( self%get_cls_pop(i) >= minpop ) ncls_here = ncls_here+1
             end do
             ncls = ncls_here
         endif
@@ -427,7 +431,7 @@ contains
     end function get_pop
     
     !>  \brief  is for checking class population
-    function get_clspop( self, class ) result( pop )
+    function get_cls_pop( self, class ) result( pop )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: class
         integer :: mycls, pop, i, mystate
@@ -441,7 +445,44 @@ contains
                 endif
             endif
         end do
-    end function get_clspop
+    end function get_cls_pop
+
+    !>  \brief  is for getting the class score (stored per-particle)
+    function get_cls_corr( self, class ) result( corr )
+        use simple_math, only: median_nocopy
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: class
+        real, allocatable :: corrs(:)
+        real :: corr
+        corrs = self%get_arr('corr', class=class)
+        corr  = 0.
+        if( allocated(corrs) )then
+            corr  = median_nocopy(corrs)
+        endif
+    end function get_cls_corr
+
+    !>  \brief  is for counting the number of inclusions given nsigma thresh
+    function cls_corr_sigthresh( self, class, nsig ) result( percen )
+        use simple_stat, only: moment
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: class
+        real,        intent(in)    :: nsig
+        real, allocatable :: corrs(:)
+        real    :: corr, ccav, ccsd, ccvar, thresh, percen
+        logical :: err
+        corrs = self%get_arr('corr', class=class)
+        if( allocated(corrs) )then
+            if( size(corrs) > 1 )then
+                call moment(corrs, ccav, ccsd, ccvar, err)
+                thresh = ccav-nsig*ccsd
+                percen = 100.*real(count(corrs >= thresh)/real(size(corrs)))
+            else
+                percen = 0.
+            endif
+        else
+            percen = 0.
+        endif
+    end function cls_corr_sigthresh
     
     !>  \brief  is for checking state population
     function get_statepop( self, state ) result( pop )
@@ -568,7 +609,7 @@ contains
         allocate(pops(ncls_target))
         pops = 0
         do icls=1,ncls
-            pops(icls) = self%get_clspop(icls)
+            pops(icls) = self%get_cls_pop(icls)
         end do
         myncls = ncls
         do while( myncls < ncls_target )
@@ -578,8 +619,8 @@ contains
             ! update number of classes
             myncls = myncls+1
             ! update pops
-            pops(loc(1)) = self%get_clspop(loc(1))
-            pops(myncls) = self%get_clspop(myncls)
+            pops(loc(1)) = self%get_cls_pop(loc(1))
+            pops(myncls) = self%get_cls_pop(myncls)
         end do
     end subroutine expand_classes
     
@@ -591,7 +632,7 @@ contains
         ncls = self%get_ncls()
         allocate(clspops(ncls))
         do icls=1,ncls
-            clspops(icls) = self%get_clspop(icls)
+            clspops(icls) = self%get_cls_pop(icls)
         end do
         if( any(clspops == 0) )then
             clsind_remap = ncls
@@ -620,6 +661,21 @@ contains
         endif
         deallocate(clspops)
     end subroutine remap_classes
+
+    !>  \brief  for shifting class indices after chunk-based prime2D exec
+    !!             1 .. 10 
+    !!    + 10 => 11 .. 20
+    !!    + 10 => 21 .. 31 etc.
+    subroutine shift_classes( self, ishift )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: ishift
+        integer :: iptcl, new_cls, old_cls
+        do iptcl=1,self%n
+            old_cls = nint(self%o(iptcl)%get('class'))
+            new_cls = old_cls + ishift
+            call self%o(iptcl)%set('class', real(new_cls))
+        end do
+    end subroutine shift_classes
     
     !>  \brief  is for getting an allocatable array with ptcl indices of the class 'class'
     function get_cls_pinds( self, class ) result( clsarr )
@@ -627,7 +683,7 @@ contains
         integer,     intent(in)    :: class
         integer, allocatable       :: clsarr(:)
         integer                    :: clsnr, i, pop, alloc_stat, cnt
-        pop = self%get_clspop( class )
+        pop = self%get_cls_pop( class )
         if( pop > 0 )then
             allocate( clsarr(pop), stat=alloc_stat )
             call alloc_err('get_cls; simple_oris', alloc_stat)
@@ -648,7 +704,7 @@ contains
         integer,     intent(in)    :: class
         type(oris)                 :: clsoris
         integer                    :: clsnr, i, pop, cnt
-        pop = self%get_clspop( class )
+        pop = self%get_cls_pop( class )
         if( pop > 0 )then
             call clsoris%new(pop)
             cnt = 0
@@ -694,7 +750,7 @@ contains
         integer :: pop, cnt, clsnr, i, alloc_stat, mystate
         real    :: val
         if( present(class) )then
-            pop = self%get_clspop(class)
+            pop = self%get_cls_pop(class)
         else if( present(state) )then
             pop = self%get_statepop(state)
         else
@@ -917,6 +973,90 @@ contains
         end do
     end function get_ctfparams
 
+    !>  \brief  is for finding the defocus groups and their corresponding CTF parameters
+    subroutine get_defocus_groups( self, fromto, defgroups, ctfparams )
+        use simple_sll,  only: sll
+        use simple_math, only: euclid
+        class(oris),          intent(inout) :: self
+        integer, optional,    intent(in)    :: fromto(2)
+        integer, allocatable, intent(out)   :: defgroups(:)
+        real,    allocatable, intent(out)   :: ctfparams(:,:)
+        real, allocatable :: ctfvec(:)
+        type(sll)         :: llist
+        integer           :: ffromto(2),nparams,i,cnt
+        real              :: kV,cs,fraca,dfx,dfy,angast,kV_prev,cs_prev
+        real              :: fraca_prev,dfx_prev,dfy_prev,angast_prev,dist
+        logical           :: astig=.false.
+        ! parse
+        if( .not. self%isthere('dfx') ) stop 'cannot get defocus groups if there is no CTF info; simple_oris :: get_defocus_groups'
+        ffromto(1) = 1
+        ffromto(2) = self%n
+        if( present(fromto) ) ffromto = fromto
+        ! build
+        llist = sll()
+        ! init
+        allocate(defgroups(ffromto(1):ffromto(2)))
+        defgroups  = 1
+        kV_prev    = self%get(ffromto(1), 'kv'   )
+        cs_prev    = self%get(ffromto(1), 'cs'   )
+        fraca_prev = self%get(ffromto(1), 'fraca')
+        dfx_prev   = self%get(ffromto(1), 'dfx'  )
+        if( self%isthere('dfy') )then
+            dfy_prev    = self%get(ffromto(1), 'dfy'   )
+            angast_prev = self%get(ffromto(1), 'angast')
+            astig       = .true.
+            nparams     = 6
+            call llist%add(rarr=[kV_prev,cs_prev,fraca_prev,dfx_prev,dfy_prev,angast_prev])
+        else
+            dfy_prev    = 0.
+            angast_prev = 0.
+            astig       = .false.
+            nparams     = 6
+            call llist%add(rarr=[kV_prev,cs_prev,fraca_prev,dfx_prev])
+        endif
+        cnt = 1
+        ! find groups
+        do i=ffromto(1) + 1,ffromto(2)
+            kV     = self%get(i, 'kv')
+            cs     = self%get(i, 'cs')
+            fraca  = self%get(i, 'fraca')
+            dfx    = self%get(i, 'dfx'   )
+            if( astig )then
+                dfy    = self%get(i, 'dfy'   )
+                angast = self%get(i, 'angast')
+                dist = euclid([kV,cs,fraca,dfx,dfy,angast],[kV_prev,cs_prev,fraca_prev,dfx_prev,dfy_prev,angast_prev])
+            else
+                dist = euclid([kV,cs,fraca,dfx],[kV_prev,cs_prev,fraca_prev,dfx_prev])
+            endif
+            if( dist < 0.001 )then
+                ! CTF parameters are the same as for the previous particle & no update is needed
+            else
+                ! update counter
+                cnt         = cnt + 1
+                ! update parameters
+                kV_prev     = kV
+                cs_prev     = cs
+                fraca_prev  = fraca
+                dfx_prev    = dfx
+                dfy_prev    = dfy
+                angast_prev = angast
+                ! update the linked list
+                if( astig )then
+                    call llist%add(rarr=[kV_prev,cs_prev,fraca_prev,dfx_prev,dfy_prev,angast_prev])
+                else
+                    call llist%add(rarr=[kV_prev,cs_prev,fraca_prev,dfx_prev])
+                endif
+            endif
+            defgroups(i) = cnt
+        end do
+        ! output params
+        allocate(ctfparams(cnt,nparams))
+        do i=1,cnt
+            call llist%get(i, rarr=ctfvec)
+            ctfparams(i,:) = ctfvec
+        end do
+    end subroutine get_defocus_groups
+
     !>  \brief  is for printing
     function included( self )result( incl )
         class(oris), intent(inout) :: self
@@ -929,7 +1069,6 @@ contains
             if( istate > 0 ) incl(i) = .true.
         end do
     end function included
-
     
     !>  \brief  is for printing
     subroutine print( self, i )
@@ -1499,34 +1638,6 @@ contains
         call self2add%kill    
     end subroutine merge
     
-    !>  \brief  for merging two oris files into one object
-    subroutine merge_files( self, fname1, fname2 )
-        class(oris),      intent(inout) :: self
-        character(len=*), intent(in)    :: fname1, fname2
-        integer    :: nl1, nl2
-        type(oris) :: o2
-        logical    :: here1, here2
-        call self%kill
-        here1 = file_exists(fname1)
-        here2 = file_exists(fname2)
-        nl1   = 0
-        nl2   = 0
-        if(here1) nl1 = nlines(fname1)
-        if(here2) nl2 = nlines(fname2)        
-        if( here1 )then
-            call self%new(nl1)
-            call self%read(fname1)
-            if( .not. here2 ) return
-        else
-            call self%new(nl2)
-            call self%read(fname2)
-            return
-        endif
-        call o2%new(nl2)
-        call o2%read(fname2)
-        call self%merge(o2)
-    end subroutine merge_files
-    
     ! I/O
     
     !>  \brief  reads orientation info from file
@@ -1540,13 +1651,13 @@ contains
         open(unit=fnr, FILE=orifile, STATUS='OLD', action='READ', iostat=file_stat)
         if( file_stat .ne. 0 )then
             close(fnr)
-            write(*,'(a)') 'In: write_1, module: simple_oris.f90; Error when opening file for reading: '&
+            write(*,'(a)') 'In: read, module: simple_oris.f90; Error when opening file for reading: '&
             //trim(orifile)//' ; '//trim(io_message)
             stop 
         endif
         if( present(nst) ) nst = 0
         do i=1,self%n
-             call self%o(i)%read(fnr)
+            call self%o(i)%read(fnr)
             if( present(nst) )then
                 state = int(self%o(i)%get('state'))
                 nst = max(1,max(state,nst))
@@ -1617,7 +1728,7 @@ contains
         if( debug ) print *, '>>> PROCESSING CLASS: ', icls
         ! get pop 
         if( which .eq. 'class' )then
-            pop = self%get_clspop(icls)
+            pop = self%get_cls_pop(icls)
         else
             pop = self%get_statepop(icls)
         endif
@@ -1702,7 +1813,7 @@ contains
         coh = 0
         do k=1,ncls
             if( which .eq. 'class' )then
-                pop = self%get_clspop(k)
+                pop = self%get_cls_pop(k)
             else
                 pop = self%get_statepop(k)
             endif
@@ -1773,7 +1884,7 @@ contains
         sep = 0
         do iclass=1,ncls-1
             if( which .eq. 'class' )then
-                ipop = self%get_clspop(iclass)
+                ipop = self%get_cls_pop(iclass)
                 if( ipop > 0 ) iclsarr = self%get_cls_pinds(iclass)
             else
                 ipop = self%get_statepop(iclass)
@@ -1782,7 +1893,7 @@ contains
             if( ipop > 0 )then
                 do jclass=iclass+1,ncls
                     if( which .eq. 'class' )then
-                        jpop = self%get_clspop(jclass)
+                        jpop = self%get_cls_pop(jclass)
                         if( jpop > 0 ) jclsarr = self%get_cls_pinds(jclass)
                     else
                         jpop = self%get_statepop(jclass)
@@ -1936,7 +2047,7 @@ contains
         real :: med
         if( present(class) )then        
             med = 0.
-            pop = self%get_clspop(class)
+            pop = self%get_cls_pop(class)
             if( pop == 0 ) return
             vals = self%get_arr(which, class)
             if( pop == 1 )then
@@ -1962,7 +2073,6 @@ contains
     
     !>  \brief  is for calculating variable statistics
     subroutine stats( self, which, ave, sdev, var, err )
-        use simple_stat, only: moment
         class(oris),      intent(inout) :: self
         character(len=*), intent(in)    :: which
         real,             intent(out)   :: ave, sdev, var
@@ -1988,7 +2098,6 @@ contains
     
     !>  \brief  is for calculating the minimum/maximum values of a variable
     subroutine minmax( self, which, minv, maxv )
-        use simple_stat, only: moment
         class(oris),      intent(inout) :: self
         character(len=*), intent(in)    :: which
         real,             intent(out)   :: minv, maxv
@@ -2113,7 +2222,7 @@ contains
         call alloc_err('order_cls; simple_oris', alloc_stat)
         ! calculate class populations
         do i=1,ncls
-            classpops(i)  = self%get_clspop(i)
+            classpops(i) = self%get_cls_pop(i)
         end do
         arr = (/(i,i=1,ncls)/)
         call hpsort( ncls, arr, class1_gt_class2 )
@@ -2277,8 +2386,8 @@ contains
 
     !>  \brief  to identify the indices of the k nearest neighbors (inclusive)
     subroutine nearest_neighbors( self, k, nnmat ) 
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: k
+        class(oris),          intent(inout) :: self
+        integer,              intent(in)    :: k
         integer, allocatable, intent(inout) :: nnmat(:,:)
         real      :: dists(self%n)
         integer   :: inds(self%n), i, j, alloc_stat
@@ -2345,6 +2454,27 @@ contains
         end do
         res = rad2deg(res/real(self%n))  
     end function find_angres_geod
+
+    !>  \brief  to find the correlation bound in extremal search
+    function extremal_bound( self, thresh ) result( corr_bound )
+        use simple_math, only: hpsort
+        class(oris), intent(inout) :: self
+        real,        intent(in)    :: thresh
+        real,    allocatable       :: corrs(:), corrs_incl(:)
+        logical, allocatable       :: incl(:)
+        integer :: n_incl, thresh_ind
+        real    :: corr_bound
+        ! grab relevant correlations
+        corrs      = self%get_all('corr')
+        incl       = self%included()
+        corrs_incl = pack(corrs, mask=incl)
+        ! sort correlations & determine threshold
+        n_incl     = size(corrs_incl)
+        call hpsort(n_incl, corrs_incl)
+        thresh_ind = nint(real(n_incl) * thresh)
+        corr_bound = corrs_incl(thresh_ind)
+        deallocate(corrs, incl, corrs_incl)
+    end function extremal_bound
     
     !>  \brief  to find the neighborhood size for weighted orientation assignment
     function find_npeaks( self, res, moldiam ) result( npeaks )
@@ -2396,7 +2526,6 @@ contains
     ! this routine could also be used to reduce bias in refinement (enforce class variance reduction for new orientations)
     ! could also be used to measure convergence (while reducing class variance, continue, else stop)
         use simple_math, only: rad2deg
-        use simple_stat, only: moment
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: class
         real,        intent(out)   :: distavg, distsdev 
@@ -2583,7 +2712,7 @@ contains
             val = .false.
         endif
     end function class1_gt_class2
-    
+
     !>  \brief  class 1 less than (worse) than class 2 ?
     function class1_lt_class2( class1, class2 ) result( val )
         integer, intent(in) :: class1, class2
@@ -2802,7 +2931,6 @@ contains
     
     !>  \brief  for calculating statistics of distances within a single distribution
     subroutine diststat_1( self, sumd, avgd, sdevd, mind, maxd )
-        use simple_stat, only: moment
         class(oris), intent(in)  :: self
         real,        intent(out) :: mind, maxd, avgd, sdevd, sumd
         integer :: i, j
@@ -2824,7 +2952,6 @@ contains
 
     !>  \brief  for calculating statistics of distances between two equally sized distributions
     subroutine diststat_2( self1, self2, sumd, avgd, sdevd, mind, maxd )
-        use simple_stat, only: moment
         class(oris), intent(in)  :: self1, self2
         real,        intent(out) :: mind, maxd, avgd, sdevd, sumd
         integer :: i
@@ -2847,7 +2974,6 @@ contains
 
     !>  \brief  for calculating statistics of geodesic distances within clusters of orientations
     subroutine cluster_diststat( self, avgd, sdevd, maxd, mind )
-        use simple_stat, only: moment
         class(oris), intent(inout) :: self
         real,        intent(out)   :: avgd, sdevd, maxd, mind
         integer, allocatable       :: clsarr(:)
@@ -2950,7 +3076,7 @@ contains
             if(key.eq.'state')then
                 pop_prev = self%get_statepop( i )
             else
-                pop_prev = self%get_clspop( i )
+                pop_prev = self%get_cls_pop( i )
             endif                
             if( (pop>0).and.(pop_prev>0) )then
                 ov       = real(pop)/real(pop_prev)
@@ -3021,11 +3147,11 @@ contains
             do i=1,100
                 call os2%print(i)
             end do
-            call os%merge(os2)
-            write(*,*) '********'
-            do i=1,200
-                call os%print(i)
-            end do
+            ! call os%merge(os2)
+            ! write(*,*) '********'
+            ! do i=1,200
+            !     call os%print(i)
+            ! end do
         endif
         write(*,'(a)') '**info(simple_oris_unit_test, part2): testing assignment'
         os = oris(2)

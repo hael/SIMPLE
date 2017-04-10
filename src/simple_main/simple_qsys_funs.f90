@@ -9,6 +9,8 @@ interface qsys_watcher
     module procedure qsys_watcher_2
 end interface
 
+integer, parameter :: SHORTTIME = 3
+
 contains
 
     subroutine qsys_cleanup( p )
@@ -22,6 +24,7 @@ contains
         call del_file('FOO')
         call del_file('fort.0')
         call del_file('qsys_submit_jobs')
+        call del_file('simple_script_single')
         ! part numbered files
         call del_files('OUT',                    p%nparts)
         call del_files('algndoc_',               p%nparts, ext='.txt')
@@ -131,11 +134,11 @@ contains
         if( .not. env%isthere('simple_path') )stop 'Path to SIMPLE directory is required in simple_distr_config.env (simple_path)'        
         ! Queue keys
         if( .not. env%isthere('qsys_name') ) &
-            & stop 'The type of the queuing system is required in simple_distr_config.env: qsys_name=<local|slurm|pbs>'
+            & stop 'The type of the queuing system is required in simple_distr_config.env: qsys_name=<local|slurm|pbs|sge>'
         qsys_name = env%get('qsys_name')
-        if( qsys_name.ne.'local' .and. qsys_name.ne.'pbs' .and. qsys_name.ne.'slurm' ) &
+        if( qsys_name.ne.'local' .and. qsys_name.ne.'pbs' .and. qsys_name.ne.'slurm' .and. qsys_name.ne.'sge' ) &
             & stop 'Invalid qsys_name in simple_distr_config.env'
-        if( qsys_name.ne.'local' )then
+        if( qsys_name.eq.'slurm' )then
             if( .not. env%isthere('qsys_partition') )stop 'qsys_partition field is required in simple_distr_config.env'        
         endif
         ! Job keys
@@ -272,6 +275,13 @@ contains
         class(params),    intent(in) :: p
         character(len=*), intent(in) :: source 
         integer :: fnr, file_stat
+        if( p%l_chunk_distr )then
+            fnr = get_fileunit()
+            open(unit=fnr, FILE='JOB_FINISHED_'//int2str_pad(p%chunk,p%numlen),&
+            &STATUS='REPLACE', action='WRITE', iostat=file_stat)
+            call fopen_err( source, file_stat )
+            close( unit=fnr )
+        endif
         if( p%l_distr_exec )then
             fnr = get_fileunit()
             open(unit=fnr, FILE='JOB_FINISHED_'//int2str_pad(p%part,p%numlen),&
@@ -286,12 +296,13 @@ contains
         character(len=*),  intent(in) :: fname
         integer, optional, intent(in) :: wtime
         integer :: wwtime
-        integer, parameter :: SHORTTIME = 5
+        logical :: there
         wwtime = SHORTTIME
         if( present(wtime) ) wwtime = wtime
         do
-            if( file_exists(trim(fname)) ) exit
-            call sleep(wtime)
+            there = file_exists(trim(fname))
+            if( there ) exit
+            call simple_sleep(wwtime)
         end do
     end subroutine qsys_watcher_1
 
@@ -300,7 +311,7 @@ contains
         character(len=STDLEN), intent(in)    :: fnames(:)
         logical,               intent(inout) :: files_exist(:)
         integer, optional,     intent(in)    :: wtime
-        integer, parameter :: SHORTTIME = 5, MAXITS=1000
+        integer, parameter :: MAXITS=1000
         integer            :: wwtime, nfiles, ifile, nlogic, i
         logical            :: fexists, doreturn
         wwtime = SHORTTIME
@@ -339,5 +350,28 @@ contains
         write(*,'(a)') trim(exec_str)
         call exec_cmdline(exec_str)
     end subroutine exec_simple_prg
+
+    subroutine exec_simple_prg_in_queue( qscripts, myq_descr, exec_bin, cline, outfile, finish_indicator )
+        use simple_qsys_ctrl, only: qsys_ctrl
+        use simple_chash,     only: chash
+        use simple_cmdline,   only: cmdline
+        class(qsys_ctrl), intent(inout)  :: qscripts   !< qsys controller
+        class(chash),     intent(in)     :: myq_descr  !< user-provided queue and job specifics from simple_distr_config.env
+        character(len=*), intent(in)     :: exec_bin   !< executable binary
+        class(cmdline),   intent(in)     :: cline      !< command line arguments
+        character(len=*), intent(in)     :: outfile, finish_indicator
+        character(len=STDLEN), parameter :: script_name = 'simple_script_single'
+        type(chash) :: job_descr
+        call del_file(finish_indicator)
+        ! prepare job description
+        call cline%gen_job_descr(job_descr)
+        ! generate the script
+        call qscripts%generate_script(job_descr, myq_descr, exec_bin, script_name, outfile)
+        ! submit it
+        call qscripts%submit_script(script_name)
+        ! watch for completion
+        call qsys_watcher_1(finish_indicator)
+        call del_file(finish_indicator)
+    end subroutine exec_simple_prg_in_queue
 
 end module simple_qsys_funs

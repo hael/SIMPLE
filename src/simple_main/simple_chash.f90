@@ -476,13 +476,14 @@ contains
     
     !>  \brief  is a destructor
     subroutine kill( self )
-         class(chash), intent(inout) :: self !< instance
-         if( self%exists )then
-             deallocate(self%keys, self%values)
-             self%nmax        = 0
-             self%chash_index = 0
-             self%exists      = .false.
-         endif
+        class(chash), intent(inout) :: self !< instance
+        if( self%exists )then
+            if(allocated(self%keys))deallocate(self%keys)
+            if(allocated(self%values))deallocate(self%values)
+            self%nmax        = 0
+            self%chash_index = 0
+            self%exists      = .false.
+        endif
     end subroutine kill
 
 end module simple_chash
