@@ -885,7 +885,7 @@ contains
         if( self%xfel .eq. 'yes')then
             self%boxmatch = self%box
             self%l_xfel    = .true.
-        else if( self%box > 2*(self%msk+10) )then
+        else if( self%box > 2*(nint(self%msk)+10) )then
             self%boxmatch = find_magic_box(2*(nint(self%msk)+10))
             if( self%boxmatch > self%box ) self%boxmatch = self%box
         else

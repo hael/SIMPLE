@@ -423,7 +423,7 @@ contains
             ! MASKING
             if( p%doautomsk )then
                 ! PARTICLE ENVELOPPE MASKING
-                call b%img_msk%new([p%boxmatch,p%boxmatch,1], p%smpd) ! ensures the correct dimension
+                if( p%boxmatch < p%box )call b%img_msk%new([p%boxmatch,p%boxmatch,1], p%smpd)
                 call b%mskvol%env_rproject(o, b%img_msk, p%msk)       ! create 2D envelope
                 do i=1, p%binwidth
                     call b%img_msk%grow_bin             ! binary layers
