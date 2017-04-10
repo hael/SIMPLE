@@ -3,7 +3,7 @@ program speed
 !    the dot product of long vectors
       intrinsic system_clock
       integer nrep,i , iii
-      parameter (nrep=5000000)
+      parameter (nrep=50000000)
       real   b,c,cfac
       common b,c,cfac
       integer,parameter :: tmax=8
@@ -19,7 +19,7 @@ program speed
 !    Declare x,y,a as input only to saxpy
             intent (in) x,y,a
          end function saxpy
-      end interface
+      end interface saxpy
 !    The following is a Statement function
       slaxpy(x,y,z)= x*y+z
       iti=8
@@ -152,13 +152,14 @@ program speed
       !      print *, c,i
 
       stop
-      contains
-         function siaxpy(a1,x1,y1)
+
+    contains
+      function siaxpy(a1,x1,y1)
          real a1,x1,y1,siaxpy
          siaxpy =  a1*x1 + y1
          return
          end function
-      end
+      end 
 
       function saxpy(a,x,y)
 
@@ -184,7 +185,7 @@ program speed
       real a,x,y,z
       z     =  a*x + y
       return
-      end
+    end 
       subroutine scsaxpy
 
 !   Multply all contents of  "c" by the scalar "cfac"
@@ -197,6 +198,6 @@ program speed
       common b,c,cfac
       c     =  cfac*c + b
       return
-      end
+    end 
 
       
