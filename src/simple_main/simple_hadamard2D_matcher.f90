@@ -50,7 +50,7 @@ contains
         ! READ IMAGES
         call read_imgs_from_stk( b, p )
 
-        ! PREP REFERENCES
+          ! PREP REFERENCES
         if( p%l_distr_exec )then
             if( .not. cline%defined('refs') )then
                 stop 'need refs to be part of command line for distributed prime2D execution'
@@ -60,7 +60,7 @@ contains
             call prime2D_read_sums( b, p )
         else
             ! for shared-memory or chunk-based parallellisation we need initial references for iter=1 only
-            if( which_iter == 1 )then
+            if( which_iter == p%startit )then
                 if( cline%defined('refs') )then
                     if( .not. file_exists(p%refs) ) stop 'input references (refs) does not exist in cwd'
                     call prime2D_read_sums( b, p )
