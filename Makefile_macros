@@ -30,7 +30,7 @@ MODDIR=obj/SIMPLEOFILES
 ##############
 
 CC=$(CCCOMP)
-CFLAGS= -O3 -O -DLINUX -fopenmp  
+CFLAGS= -g -DLINUX -fopenmp  
 CCLIB=$(CC) -c $(CFLAGS) -I $(MODDIR)                                            \
                          -I /usr/local/fftw/3.3.4-gcc/include/
 
@@ -39,7 +39,7 @@ CCLIB=$(CC) -c $(CFLAGS) -I $(MODDIR)                                           
 ################
 
 CPP=$(GCC)
-CPPFLAGS=-DADD_ -O3 -DLINUX -fopenmp  
+CPPFLAGS=-DADD_ -g -DLINUX -fopenmp  
 CPPCLIB=$(CPP) -c $(CPPFLAGS) -I $(MODDIR)                                            \
                               -I $(Simple_source)/test_code                           \
                               -I /usr/local/fftw/3.3.4-gcc/include/
@@ -50,7 +50,7 @@ CPPCLIB=$(CPP) -c $(CPPFLAGS) -I $(MODDIR)                                      
 
 # $(DLIB)
 F90C=$(GFORTRAN)
-F90FLAGS=-ffree-form -cpp -fPIC -fno-second-underscore -O3 -DLINUX -fopenmp  
+F90FLAGS=-ffree-form -cpp -fPIC -fno-second-underscore -g -Og -Wall -fbounds-check -DLINUX -fopenmp  
 F90CLIB=$(F90C) -c $(F90FLAGS) -I $(MODDIR)                      \
                              -J $(MODDIR)                      \
 

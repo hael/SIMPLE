@@ -2538,11 +2538,11 @@ contains
             forall( i=1:self%ldim(1), j=1:self%ldim(2), k=1:self%ldim(3), add_pixels(i,j,k) ) &
                 & self%rmat(i,j,k) = 1.
         endif
-        where(add_pixels) self%rmat = 1.
         deallocate( add_pixels )
     end subroutine grow_bin
 
     !>  \brief  adds one layer of pixels bordering the background in a binary image
+    ! DEV ONLY
     subroutine grow_bin2( self )
         class(image), intent(inout) :: self
         integer                     :: alloc_stat, x, y, z
@@ -2555,15 +2555,14 @@ contains
         call alloc_err('grow_bin; simple_image', alloc_stat)
         lmat = (self%rmat(:x, :y, :z) > 0.5)
         imat = lmat
+        if(self%is_2d())then
+            imat( :x-1, :y,   :z) = imat( :x-1, :y,   :z) .or. lmat(2:x,   :y,   :z)
+            imat(2:x,   :y,   :z) = imat(2:x,   :y,   :z) .or. lmat( :x-1, :y,   :z)
+            imat( :x,   :y-1, :z) = imat( :,    :y-1, :z) .or. lmat( :x,  2:y,   :z)
+            imat( :x,  2:y,   :z) = imat( :,   2:y,   :z) .or. lmat( :x,   :y-1, :z)
+            ! ...
+        else
 
-        imat( :x-1, :y,   :z) = imat( :x-1, :y,   :z) .or. lmat(2:x,   :y,   :z)
-        imat(2:x,   :y,   :z) = imat(2:x,   :y,   :z) .or. lmat( :x-1, :y,   :z)
-        imat( :x,   :y-1, :z) = imat( :,    :y-1, :z) .or. lmat( :x,  2:y,   :z)
-        imat( :x,  2:y,   :z) = imat( :,   2:y,   :z) .or. lmat( :x,   :y-1, :z)
-        ! ...
-
-
-        if( self%is_3d() )then
 
         endif
         where(imat) self%rmat = 1.

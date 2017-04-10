@@ -817,31 +817,31 @@ contains
         integer, intent(in) :: box
         real, intent(in)    :: mskrad
         real                :: w, rad, width, maxrad
-        maxrad = real(box)/2.
+        maxrad = real(box/2)
         rad    = sqrt(x**2.+y**2.)
-        width  = maxrad-mskrad
+        width  = 2.*(maxrad-mskrad)
         w      = 1.
         if( rad .ge. maxrad )then
             w = 0.
         else if( rad .ge. maxrad-width )then
-            w = (cos(((rad-mskrad)/width)*pi)+1.)/2.
+            w = (cos(((rad-(maxrad-width))/width)*pi)+1.)/2.
         endif
     end function cosedge_2
 
     !> \brief  three-dimensional gaussian edge
-    function cosedge_3( x, y, z, box, mskrad ) result( w )
-        real,    intent(in) :: x, y, z
+    pure function cosedge_3( x, y, z, box, mskrad ) result( w )
+        real, intent(in)    :: x, y, z
         integer, intent(in) :: box
-        real,    intent(in) :: mskrad
+        real, intent(in)    :: mskrad
         real                :: w, rad, maxrad, width
-        maxrad = real(box)/2.
+        maxrad = real(box/2)
         rad    = sqrt(x**2.+y**2.+z**2.)
-        width  = maxrad-mskrad
+        width  = 2.*(maxrad-mskrad)
         w      = 1.
         if( rad .ge. maxrad )then
             w = 0.
         else if( rad .ge. maxrad-width )then
-            w = (cos(((rad-mskrad)/width)*pi)+1.)/2.
+            w = (cos(((rad-(maxrad-width))/width)*pi)+1.)/2.
         endif
     end function cosedge_3
     
