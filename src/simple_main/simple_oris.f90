@@ -77,11 +77,14 @@ type :: oris
     procedure          :: get_defocus_groups
     procedure          :: included
     procedure          :: print
+    procedure          :: print_chash_sizes
     procedure          :: print_mats
     ! SETTERS
     procedure, private :: assign
     generic            :: assignment(=) => assign
+    procedure          :: reject
     procedure          :: set_euler
+    procedure          :: set_shift
     procedure          :: e1set
     procedure          :: e2set
     procedure          :: e3set
@@ -1076,6 +1079,15 @@ contains
         integer,     intent(in)    :: i
         call self%o(i)%print
     end subroutine print
+
+    !>  \brief  is for printing
+    subroutine print_chash_sizes( self )
+        class(oris), intent(inout) :: self
+        integer :: nmax, i
+        do i=1,self%n
+            nmax = self%o(i)%chash_nmax()
+        end do
+    end subroutine print_chash_sizes
     
     !>  \brief  is for printing
     subroutine print_mats( self )
@@ -1101,12 +1113,27 @@ contains
     end subroutine assign
     
     !>  \brief  is a setter
+    subroutine reject( self, i )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: i
+        call self%o(i)%reject
+    end subroutine reject
+
+    !>  \brief  is a setter
     subroutine set_euler( self, i, euls )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: i
         real,        intent(in)    :: euls(3)
         call self%o(i)%set_euler(euls)
     end subroutine set_euler
+
+    !>  \brief  is a setter
+    subroutine set_shift( self, i, vec )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: i
+        real,        intent(in)    :: vec(2)
+        call self%o(i)%set_shift(vec)
+    end subroutine set_shift
     
     !>  \brief  is a setter
     subroutine e1set( self, i, e1 )

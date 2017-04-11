@@ -47,9 +47,6 @@ contains
         integer                       :: iptcl, state, alloc_stat, cnt_glob
         logical                       :: doshellweight, update_res
 
-        ! READ IMAGES
-        call read_imgs_from_stk( b, p )
-
         ! AUTOMASKING DEACTIVATED FOR NOW
         ! INIT
         nptcls = p%top - p%fromp + 1                ! number of particles processed
@@ -256,7 +253,7 @@ contains
             call b%refvols(state)%fproject_polar(iref, oref, pftcc, expanded=.true.)
         enddo
         ! PREP PARTICLE
-        b%img = b%imgs(iptcl) ! put the original image back
+        call read_img_from_stk(b, p, iptcl)
         call prepimg4align(b, p, optcl)
         call b%img%imgpolarizer(pftcc, 1, isptcl=.true.)
         ! restores b%img dimensions for clean exit

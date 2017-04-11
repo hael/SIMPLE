@@ -30,6 +30,7 @@ type :: chash
     procedure, private :: get_1
     procedure, private :: get_2
     generic            :: get => get_1, get_2
+    procedure          :: get_nmax
     procedure          :: get_key
     procedure          :: chash2str
     procedure          :: size_of_chash
@@ -135,7 +136,7 @@ contains
         class(chash),     intent(inout) :: self
         character(len=*), intent(in)    :: key
         character(len=*), intent(in)    :: val
-        self%chash_index = self%chash_index+1
+        self%chash_index = self%chash_index + 1
         if( self%chash_index > self%nmax )then
             write(*,*) 'nmax: ', self%nmax
             write(*,*) 'chash_index: ', self%chash_index
@@ -235,6 +236,13 @@ contains
         character(len=:), allocatable :: val
         allocate(val, source=trim(self%values(ival)))
     end function get_2
+
+    !>  \brief  gets the size of the hash
+    function get_nmax( self ) result( nmax )
+        class(chash), intent(in) :: self
+        integer :: nmax
+        nmax = self%nmax
+    end function get_nmax
     
     !>  \brief  gets a key in the chash
     function get_key( self, ikey ) result( val ) 

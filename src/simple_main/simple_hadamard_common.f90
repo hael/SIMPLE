@@ -12,7 +12,7 @@ use simple_math          ! use all in there
 use simple_masker        ! use all in there
 implicit none
 
-public :: read_imgs_from_stk, set_bp_range, setup_shellweights, grid_ptcl, prepimg4align,&
+public :: read_img_from_stk, set_bp_range, setup_shellweights, grid_ptcl, prepimg4align,&
 eonorm_struct_facts, norm_struct_facts, preprefs4align, preprefvol, reset_prev_defparms, prep2Dref
 private
 
@@ -38,40 +38,19 @@ real               :: fraca_prev   = 0.
     
 contains
 
-    subroutine read_imgs_from_stk( b, p )
-        use simple_imgfile, only: imgfile
+    subroutine read_img_from_stk( b, p, iptcl )
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
-        type(imgfile) :: ioimg
-        integer       :: cnt, iptcl, istart, istop, i
-        if( allocated(b%imgs) )then
-            istart = lbound(b%imgs, dim=1)
-            istop  = ubound(b%imgs, dim=1)
-            do i=istart,istop
-                call b%imgs(i)%kill
-            end do
-            deallocate(b%imgs)
-        endif
-        allocate(b%imgs(p%fromp:p%top))
-        do iptcl=p%fromp,p%top
-            call b%imgs(iptcl)%new([p%box,p%box,1],p%smpd,p%imgkind)
-        end do
+        integer,        intent(in)    :: iptcl
+        integer :: stack_index
+        if( p%boxmatch < p%box ) call b%img%new([p%box,p%box,1], p%smpd)
         if( p%l_distr_exec )then
-            call b%imgs(p%fromp)%open(p%stk_part, ioimg)
+            stack_index = iptcl - p%fromp + 1
+            call b%img%read(p%stk_part, stack_index)
         else
-            call b%imgs(p%fromp)%open(p%stk, ioimg)
+            call b%img%read(p%stk, iptcl)
         endif
-        cnt = 0
-        do iptcl=p%fromp,p%top
-            cnt = cnt + 1
-            if( p%l_distr_exec )then
-                call b%imgs(iptcl)%read(p%stk_part, cnt, ioimg=ioimg)
-            else
-                call b%imgs(iptcl)%read(p%stk, iptcl, ioimg=ioimg)
-            endif
-        end do
-        call ioimg%close
-    end subroutine read_imgs_from_stk
+    end subroutine read_img_from_stk
     
     subroutine set_bp_range( b, p, cline )
         use simple_estimate_ssnr, only: fsc2ssnr
@@ -318,13 +297,12 @@ contains
             stop 'need optional primesrch3D input when npeaks > 1; simple_hadamard_common :: grid_ptcl'
         pw = orientation%get('w')
         if( pw > 0. )then
-            b%img_copy = b%imgs(iptcl) ! put the original image back
             ! prepare image for gridding
             ! using the uncorrected/unmodified image as input
             if( p%l_xfel )then
-                call b%img_copy%pad(b%img_pad)
+                call b%img%pad(b%img_pad)
             else
-                call prep4cgrid(b%img_copy, b%img_pad, p%msk)
+                call prep4cgrid(b%img, b%img_pad, p%msk)
             endif
             if( DEBUG ) write(*,*) '*** simple_hadamard_common ***: prepared image for gridding'
             ran = ran3()
