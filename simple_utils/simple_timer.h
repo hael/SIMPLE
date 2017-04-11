@@ -12,16 +12,56 @@
 #if !defined(SIMPLE_TIMER_H)
 #define SIMPLE_TIMER_H
 
-
-#define TBLOCK(XX)                              \
-  XX = tic();
-!  write(*,'(A)') "Begin TBLOCK"
-
-#define TSTOP(XX)                                                       \
-  write(*,'(A,A,1i4,A,1d20.10)') __FILE__,":",__LINE__,":Elapsed time (s) ", toc()
+#  getting into ## preprocessor magic
+#define CAT(prefix, suffix)            prefix ## suffix
+#define _UNIQUE_LABEL(prefix, suffix)  CAT(prefix, suffix)
+#define UNIQUE_LABEL(prefix)           _UNIQUE_LABEL(prefix, __LINE__)
 
 
-/*write(*,'(A,1d20.10)') "__PRETTY_FUNCTION__:__FILE__:__LINE__: Elapsed time (sec): "  REAL(etime,dp)*/
+#define TBLOCK()                                \
+  t1 = tic();
+
+#define TSTOP()                                                         \
+  write(*,'(A,A,1i4,A,1d20.10)') __FILE__,":",__LINE__,":Elapsed time (s) ", toc(); 
+
+#define TIMER_LOOP_START()                      \
+  integer(dp) :: timestamp;                     \
+              real, dimension(3):: elapsed;     \
+              integer :: ii                     \
+              do ii=1,3                         \
+                   timestamp = tic();
+
+
+#define TIMER_LOOP_END()                                                \
+  elapsed(ii) = toc(timestamp);                                         \
+  end do;                                                               \
+  write(*,'(A,A,1i4,A)') __FILE__,":",__LINE__, ' *** Timed loop *** '; \
+  write(*,'(A,1d20.10)') "  Average over 3 (sec):",  SUM(elapsed,DIM=1) / REAL(3.,dp); \
+  write(*,'(A,1d20.10)') "  Min time (sec) ", MINVAL(elapsed);
+
+
+
+
+/* write(*,'(A,1d20.10)') "__PRETTY_FUNCTION__:__FILE__:__LINE__: Elapsed time (sec): "  REAL(etime,dp) */
+
+/* #define TIME_LOOP(...) TIMER_LOOP_START(integer(dp)) (__VA_ARGS__) */
+
+/* #define TIMED_LOOP(XX) TIMER_LOOP_START(integer(dp)) \ */
+/*   { XX } \ */
+/*   TIMER_LOOP_END() */
+
+/* #define TIMER_LOOP_START(typ)                                    \ */
+/*   typ :: UNIQUE_LABEL(timestamp);UNIQUE_LABEL(timestamp) = tic(); \ */
+/*   real(dp),dimension(3)::UNIQUE_LABEL(elapsed); \ */
+/*           integer::loopindex=1; do loopindex=1,3 */
+
+
+/* #define TIMER_LOOP_END()                                           \ */
+/*   UNIQUE_LABEL(elapsed)(loopindex) = toc(UNIQUE_LABEL(timestamp)); \ */
+/*   end do;\ */
+/* write(*,'(A,A,1i4,A,1d20.10,A,1d20.10,A)') __FILE__,":",__LINE__,":Elapsed time(s): average ",  SUM(UNIQUE_LABEL(elapsed))/REAL(3.,dp) , " (sec)   Min ", MINVAL(UNIQUE_LABEL(elapsed)), " (sec)" */
+
+
 
 
 
