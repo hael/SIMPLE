@@ -12,9 +12,7 @@ module simple_commander_distr_wflows
 use simple_defs
 use simple_cmdline,        only: cmdline
 use simple_chash,          only: chash
-use simple_qsys_base,      only: qsys_base
-use simple_qsys_factory,   only: qsys_factory
-use simple_qsys_ctrl,      only: qsys_ctrl
+use simple_qsys_env,       only: qsys_env
 use simple_params,         only: params
 use simple_commander_base, only: commander_base
 use simple_strings,        only: real2str
@@ -105,32 +103,25 @@ contains
         use simple_commander_imgproc
         class(unblur_distr_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        ! other vars
         character(len=STDLEN), allocatable :: names_intg(:)
         character(len=STDLEN), allocatable :: names_forctf(:)
         character(len=STDLEN), allocatable :: names_pspec(:)
         character(len=STDLEN), allocatable :: names_thumb(:)
         character(len=STDLEN)              :: str
-        type(params)                       :: p_master
-        type(qsys_ctrl)                    :: qscripts
-        type(chash)                        :: myq_descr, job_descr
-        integer, allocatable               :: parts(:,:)
-        type(qsys_factory)                 :: qsys_fac
-        class(qsys_base), pointer          :: myqsys
-        integer                            :: numlen
+        type(qsys_env) :: qenv
+        type(params)   :: p_master
+        type(chash)    :: job_descr
+        integer        :: numlen
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         p_master%nptcls = nlines(p_master%filetab)
         if( p_master%nparts > p_master%nptcls ) stop 'nr of partitions (nparts) mjust be < number of entries in filetable'
         ! setup the environment for distributed execution
-        call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr)
+        call qenv%new(p_master)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
-        ! prepare scripts
-        call qsys_cleanup(p_master)
-        call qscripts%generate_scripts(job_descr, p_master%ext, myq_descr)
-        ! manage job scheduling
-        call qscripts%schedule_jobs
+        ! schedule & clean
+        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)
         call qsys_cleanup(p_master)
         ! make unblur_files.txt file detaling all the files generated
         if( cline%defined('numlen') )then
@@ -164,16 +155,13 @@ contains
         class(unblur_tomo_movies_distr_commander), intent(inout) :: self
         class(cmdline),                            intent(inout) :: cline
         character(len=STDLEN), allocatable :: tomonames(:), tiltnames(:)
-        type(oris)                :: exp_doc
-        integer                   :: nseries, ipart, numlen
-        type(params)              :: p_master
-        integer, allocatable      :: parts(:,:)
-        type(qsys_ctrl)           :: qscripts
-        character(len=KEYLEN)     :: str
-        type(chash)               :: myq_descr, job_descr
-        type(chash), allocatable  :: part_params(:)
-        type(qsys_factory)        :: qsys_fac
-        class(qsys_base), pointer :: myqsys
+        type(oris)               :: exp_doc
+        integer                  :: nseries, ipart, numlen
+        type(qsys_env)           :: qenv
+        type(params)             :: p_master
+        character(len=KEYLEN)    :: str
+        type(chash)              :: job_descr
+        type(chash), allocatable :: part_params(:)
         ! make master parameters
         call cline%set('prg', 'unblur')
         p_master = params(cline, checkdistr=.false.)
@@ -209,14 +197,11 @@ contains
             call part_params(ipart)%set('dose_rate', trim(str))
         end do
         ! setup the environment for distributed execution
-        call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr)
+        call qenv%new(p_master)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
-        ! prepare scripts
-        call qsys_cleanup(p_master)
-        call qscripts%generate_scripts(job_descr, p_master%ext, myq_descr, part_params=part_params)
-        ! manage job scheduling
-        call qscripts%schedule_jobs
+        ! schedule & clean
+        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, part_params=part_params)
         call qsys_cleanup(p_master)
         call simple_end('**** SIMPLE_DISTR_UNBLUR_TOMO_MOVIES NORMAL STOP ****')
     end subroutine exec_unblur_tomo_movies_distr
@@ -232,20 +217,13 @@ contains
         type(cmdline)                  :: cline_merge_algndocs
         ! other variables
         type(params)                   :: p_master
-        type(qsys_ctrl)                :: qscripts
         character(len=KEYLEN)          :: str
-        type(chash)                    :: myq_descr, job_descr
-        integer, allocatable           :: parts(:,:)
-        type(qsys_factory)             :: qsys_fac
-        class(qsys_base), pointer      :: myqsys
+        type(chash)                    :: job_descr
+        type(qsys_env)                 :: qenv
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         p_master%nptcls = nlines(p_master%filetab)
         if( p_master%nparts > p_master%nptcls ) stop 'nr of partitions (nparts) mjust be < number of entries in filetable'
-        ! setup the environment for distributed execution
-        call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr)
-        ! prepare job description
-        call cline%gen_job_descr(job_descr)
         ! prepare command lines from prototype master
         cline_merge_algndocs = cline
         cline_merge_algndocs = cline
@@ -255,14 +233,11 @@ contains
         call cline_merge_algndocs%set( 'ndocs',  real(p_master%nparts) )
         call cline_merge_algndocs%set( 'outfile', 'ctffind_output_merged.txt' )
         ! setup the environment for distributed execution
-        call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr)
+        call qenv%new(p_master)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
-        ! prepare scripts
-        call qsys_cleanup(p_master)
-        call qscripts%generate_scripts(job_descr, p_master%ext, myq_descr)
-        ! manage job scheduling
-        call qscripts%schedule_jobs
+        ! schedule
+        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)
         ! merge docs
         call xmerge_algndocs%execute( cline_merge_algndocs )
         ! clean
@@ -276,28 +251,21 @@ contains
         use simple_commander_preproc
         class(pick_distr_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
-        ! other vars
-        type(params)              :: p_master
-        type(qsys_ctrl)           :: qscripts
-        type(chash)               :: myq_descr, job_descr
-        integer, allocatable      :: parts(:,:)
-        type(qsys_factory)        :: qsys_fac
-        class(qsys_base), pointer :: myqsys
-        integer                   :: numlen
+        type(qsys_env) :: qenv
+        type(params)   :: p_master
+        type(chash)    :: job_descr
+        integer        :: numlen
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         p_master%nptcls = nlines(p_master%filetab)
         if( p_master%nparts > p_master%nptcls ) stop 'nr of partitions (nparts) mjust be < number of entries in filetable'
         ! setup the environment for distributed execution
-        call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr)
+        call qenv%new(p_master)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
-        ! prepare scripts
-        call qsys_cleanup(p_master)
-        call qscripts%generate_scripts(job_descr, p_master%ext, myq_descr)
-        ! manage job scheduling
-        call qscripts%schedule_jobs
-        call qsys_cleanup(p_master)
+        ! schedule & clean
+        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)
+        call qsys_cleanup(p_master)        
         call simple_end('**** SIMPLE_DISTR_PICK NORMAL STOP ****')
     end subroutine exec_pick_distr
 
@@ -309,25 +277,16 @@ contains
         use simple_commander_mask
         class(prime2D_init_distr_commander), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
-        ! constants
-        logical, parameter        :: DEBUG=.false.
-        ! commanders
-        type(split_commander)     :: xsplit
-        ! command lines
-        type(cmdline)             :: cline_cavgassemble
-        ! other variables
-        character(len=STDLEN)     :: simple_exec_bin
-        type(params)              :: p_master
-        integer, allocatable      :: parts(:,:)
-        type(qsys_ctrl)           :: qscripts
-        type(chash)               :: myq_descr, job_descr
-        type(qsys_factory)        :: qsys_fac
-        class(qsys_base), pointer :: myqsys
+        logical, parameter    :: DEBUG=.false.
+        type(split_commander) :: xsplit
+        type(cmdline)         :: cline_cavgassemble
+        type(qsys_env)        :: qenv
+        type(params)          :: p_master
+        type(chash)           :: job_descr
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! setup the environment for distributed execution
-        call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr)
-        simple_exec_bin = qscripts%get_exec_bin()
+        call qenv%new(p_master)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! prepare command lines from prototype master
@@ -338,18 +297,14 @@ contains
         ! split stack
         if( stack_is_split(p_master%ext, p_master%nparts) )then
             ! check that the stack partitions are of correct sizes
-            call stack_parts_of_correct_sizes(p_master%ext, parts, p_master%box)
+            call stack_parts_of_correct_sizes(p_master%ext, qenv%parts, p_master%box)
         else
             call xsplit%execute(cline)
         endif
-        ! prepare scripts
-        call qsys_cleanup(p_master)
-        call qscripts%generate_scripts(job_descr, p_master%ext, myq_descr)
-        ! manage job scheduling
-        call qscripts%schedule_jobs
+        ! schedule
+        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)
         ! assemble class averages
-        call exec_simple_prg_in_queue( qscripts, myq_descr, simple_exec_bin,&
-        &cline_cavgassemble, 'CAVGASSEMBLE', 'CAVGASSEMBLE_FINISHED')
+        call qenv%exec_simple_prg_in_queue(cline_cavgassemble, 'CAVGASSEMBLE', 'CAVGASSEMBLE_FINISHED')
         call qsys_cleanup(p_master)
         call simple_end('**** SIMPLE_DISTR_PRIME2D_INIT NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_prime2D_init_distr
@@ -366,39 +321,35 @@ contains
         class(prime2D_distr_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         ! constants
-        logical, parameter                 :: DEBUG           = .true.
-        character(len=32), parameter       :: ALGNFBODY       = 'algndoc_'
-        character(len=32), parameter       :: ITERFBODY       = 'prime2Ddoc_'
-        character(len=32), parameter       :: CAVGS_ITERFBODY = 'cavgs_iter'
-        real,              parameter       :: MSK_FRAC        = 0.06
-        real,              parameter       :: MINSHIFT        = 2.0
-        real,              parameter       :: MAXSHIFT        = 6.0
+        logical, parameter           :: DEBUG           = .true.
+        character(len=32), parameter :: ALGNFBODY       = 'algndoc_'
+        character(len=32), parameter :: ITERFBODY       = 'prime2Ddoc_'
+        character(len=32), parameter :: CAVGS_ITERFBODY = 'cavgs_iter'
+        real,              parameter :: MSK_FRAC        = 0.06
+        real,              parameter :: MINSHIFT        = 2.0
+        real,              parameter :: MAXSHIFT        = 6.0
         ! commanders
-        type(check2D_conv_commander)       :: xcheck2D_conv
-        type(rank_cavgs_commander)         :: xrank_cavgs
-        type(merge_algndocs_commander)     :: xmerge_algndocs
-        type(split_commander)              :: xsplit
-        type(automask2D_commander)         :: xautomask2D
+        type(check2D_conv_commander)   :: xcheck2D_conv
+        type(rank_cavgs_commander)     :: xrank_cavgs
+        type(merge_algndocs_commander) :: xmerge_algndocs
+        type(split_commander)          :: xsplit
+        type(automask2D_commander)     :: xautomask2D
         ! command lines
-        type(cmdline)                      :: cline_check2D_conv
-        type(cmdline)                      :: cline_cavgassemble
-        type(cmdline)                      :: cline_rank_cavgs
-        type(cmdline)                      :: cline_merge_algndocs
-        type(cmdline)                      :: cline_automask2D
+        type(cmdline)         :: cline_check2D_conv
+        type(cmdline)         :: cline_cavgassemble
+        type(cmdline)         :: cline_rank_cavgs
+        type(cmdline)         :: cline_merge_algndocs
+        type(cmdline)         :: cline_automask2D
         ! other variables
-        type(params)                       :: p_master
-        integer, allocatable               :: parts(:,:)
-        type(qsys_ctrl)                    :: qscripts
-        character(len=STDLEN)              :: refs, oritab, str, str_iter, simple_exec_bin
-        integer                            :: iter, i
-        type(chash)                        :: myq_descr, job_descr
-        type(qsys_factory)                 :: qsys_fac
-        class(qsys_base), pointer          :: myqsys
+        type(qsys_env)        :: qenv
+        type(params)          :: p_master
+        character(len=STDLEN) :: refs, oritab, str, str_iter
+        integer               :: iter, i
+        type(chash)           :: job_descr
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! setup the environment for distributed execution
-        call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr)
-        simple_exec_bin = qscripts%get_exec_bin()
+        call qenv%new(p_master)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! initialise starting references, orientations
@@ -429,7 +380,7 @@ contains
         ! split stack
         if( stack_is_split(p_master%ext, p_master%nparts) )then
             ! check that the stack partitions are of correct sizes
-            call stack_parts_of_correct_sizes(p_master%ext, parts, p_master%box)
+            call stack_parts_of_correct_sizes(p_master%ext, qenv%parts, p_master%box)
         else
             call xsplit%execute(cline)
         endif
@@ -450,7 +401,6 @@ contains
                 end do
             endif
         endif
-
         ! main loop
         iter = p_master%startit - 1
         do
@@ -458,19 +408,16 @@ contains
             str_iter = int2str_pad(iter,3)
             write(*,'(A)')   '>>>'
             write(*,'(A,I6)')'>>> ITERATION ', iter
-            write(*,'(A)')   '>>>'
-            call qsys_cleanup(p_master)
+            write(*,'(A)')   '>>>'   
             ! exponential cooling of the randomization rate
             p_master%extr_thresh = p_master%extr_thresh * p_master%rrate
             call job_descr%set('extr_thresh', real2str(p_master%extr_thresh))
             call cline%set('extr_thresh', p_master%extr_thresh)
-            ! prepare scripts
             if( oritab .ne. '' ) call job_descr%set('oritab',  trim(oritab))
             call job_descr%set('refs',    trim(refs))
             call job_descr%set('startit', int2str(iter))
-            call qscripts%generate_scripts(job_descr, p_master%ext, myq_descr, ALGNFBODY)
-            ! manage job scheduling
-            call qscripts%schedule_jobs
+            ! schedule
+            call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=ALGNFBODY)
             ! merge orientation documents
             oritab=trim(ITERFBODY)// trim(str_iter) //'.txt'
             call cline_merge_algndocs%set('outfile', trim(oritab))
@@ -479,8 +426,7 @@ contains
             refs = trim(trim(CAVGS_ITERFBODY)// trim(str_iter) //p_master%ext)
             call cline_cavgassemble%set('oritab', trim(oritab))
             call cline_cavgassemble%set('which_iter', real(iter))
-            call exec_simple_prg_in_queue( qscripts, myq_descr, simple_exec_bin,&
-            cline_cavgassemble, 'CAVGASSEMBLE', 'CAVGASSEMBLE_FINISHED')
+            call qenv%exec_simple_prg_in_queue(cline_cavgassemble, 'CAVGASSEMBLE', 'CAVGASSEMBLE_FINISHED')
             ! check convergence
             call cline_check2D_conv%set('oritab', trim(oritab))
             call cline_check2D_conv%set('lp',     real(p_master%lp)) ! may be subjected to iter-dependent update in future
@@ -516,24 +462,17 @@ contains
         use simple_strings,           only: str_has_substr
         class(prime2D_chunk_distr_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
-        ! strings
         character(len=STDLEN), parameter   :: CAVGNAMES = 'prime2Dcavgs_final.txt'
         character(len=STDLEN), allocatable :: final_docs(:), final_cavgs(:)
-        character(len=STDLEN)     :: chunktag
-        ! stacking 
-        type(stack_commander)     :: xstack
-        type(cmdline)             :: cline_stack
-        ! splitting
-        type(split_commander)     :: xsplit
-        ! other
-        type(params)              :: p_master
-        integer, allocatable      :: parts(:,:)
-        type(qsys_ctrl)           :: qscripts
-        type(chash), allocatable  :: part_params(:)
-        type(chash)               :: myq_descr, job_descr
-        type(qsys_factory)        :: qsys_fac
-        class(qsys_base), pointer :: myqsys
-        type(oris)                :: os
+        character(len=STDLEN)    :: chunktag
+        type(stack_commander)    :: xstack
+        type(cmdline)            :: cline_stack
+        type(split_commander)    :: xsplit
+        type(qsys_env)           :: qenv
+        type(params)             :: p_master
+        type(chash), allocatable :: part_params(:)
+        type(chash)              :: job_descr
+        type(oris)               :: os
         integer :: ipart, numlen, nl, ishift, nparts, npart_params
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
@@ -545,7 +484,7 @@ contains
         ! re-make the master parameters to accomodate nparts/numlen
         p_master = params(cline, checkdistr=.false.)
         ! setup the environment for distributed execution
-        call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr)
+        call qenv%new(p_master)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! prepare part-dependent parameters and docs
@@ -564,11 +503,11 @@ contains
             call part_params(ipart)%set('chunktag', chunktag)
             call part_params(ipart)%set('stk', 'stack_part'//int2str_pad(ipart,numlen)//p_master%ext)
             if( cline%defined('deftab') )then
-                call read_part_and_write(parts(ipart,:), p_master%deftab, trim(chunktag)//'deftab.txt')
+                call read_part_and_write(qenv%parts(ipart,:), p_master%deftab, trim(chunktag)//'deftab.txt')
                 call part_params(ipart)%set('deftab', trim(chunktag)//'deftab.txt')
             endif
             if( cline%defined('oritab') )then
-                call read_part_and_write(parts(ipart,:), p_master%oritab, trim(chunktag)//'oritab.txt', ishift)
+                call read_part_and_write(qenv%parts(ipart,:), p_master%oritab, trim(chunktag)//'oritab.txt', ishift)
                 call part_params(ipart)%set('oritab', trim(chunktag)//'oritab.txt')
                 ishift = ishift - p_master%ncls
             endif
@@ -576,16 +515,12 @@ contains
         ! split stack
         if( stack_is_split(p_master%ext, p_master%nparts) )then
             ! check that the stack partitions are of correct sizes
-            call stack_parts_of_correct_sizes(p_master%ext, parts, p_master%box)
+            call stack_parts_of_correct_sizes(p_master%ext, qenv%parts, p_master%box)
         else
             call xsplit%execute(cline)
         endif
-        ! prepare scripts
-        call qsys_cleanup(p_master)
-        call qscripts%generate_scripts(job_descr, p_master%ext,&
-        &myq_descr, part_params=part_params, chunkdistr=.true.)
-        ! manage job scheduling
-        call qscripts%schedule_jobs
+        ! schedule & clean
+        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, part_params=part_params, chunkdistr=.true.)
         call qsys_cleanup(p_master)
         ! merge final stacks of cavgs and orientation documents
         allocate(final_docs(p_master%nparts), final_cavgs(p_master%nparts))
@@ -646,25 +581,17 @@ contains
         use simple_commander_rec
         class(prime3D_init_distr_commander), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
-        ! constants
-        logical, parameter        :: debug=.false.
-        ! commanders
-        type(split_commander)     :: xsplit
-        ! command lines
-        type(cmdline)             :: cline_volassemble
-        ! other variables
-        type(params)              :: p_master
-        integer, allocatable      :: parts(:,:)
-        type(qsys_ctrl)           :: qscripts
-        character(len=STDLEN)     :: vol, simple_exec_bin
-        type(chash)               :: myq_descr, job_descr
-        type(qsys_factory)        :: qsys_fac
-        class(qsys_base), pointer :: myqsys
+        logical, parameter    :: debug=.false.
+        type(split_commander) :: xsplit
+        type(cmdline)         :: cline_volassemble
+        type(qsys_env)        :: qenv
+        type(params)          :: p_master
+        character(len=STDLEN) :: vol
+        type(chash)           :: job_descr
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! setup the environment for distributed execution
-        call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr)
-        simple_exec_bin = qscripts%get_exec_bin()
+        call qenv%new(p_master)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! init
@@ -676,7 +603,7 @@ contains
         ! split stack
         if( stack_is_split(p_master%ext, p_master%nparts) )then
             ! check that the stack partitions are of correct sizes
-            call stack_parts_of_correct_sizes(p_master%ext, parts, p_master%box)
+            call stack_parts_of_correct_sizes(p_master%ext, qenv%parts, p_master%box)
         else
             call xsplit%execute( cline )
         endif
@@ -686,15 +613,8 @@ contains
         call cline_volassemble%set( 'eo',     'no'                  )
         call cline_volassemble%set( 'prg',    'volassemble'         )
         call cline_volassemble%set( 'oritab', 'prime3D_startdoc.txt')
-        ! prepare scripts
-        call qsys_cleanup(p_master)
-        call qscripts%generate_scripts(job_descr, p_master%ext, myq_descr)
-        ! manage job scheduling
-        call qscripts%schedule_jobs
-        ! assemble volumes
-        call exec_simple_prg_in_queue( qscripts, myq_descr, simple_exec_bin,&
-        &cline_volassemble, 'VOLASSEMBLE', 'VOLASSEMBLE_FINISHED')
-        ! termination
+        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)
+        call qenv%exec_simple_prg_in_queue(cline_volassemble, 'VOLASSEMBLE', 'VOLASSEMBLE_FINISHED')
         call qsys_cleanup(p_master)
         call simple_end('**** SIMPLE_DISTR_PRIME3D_INIT NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_prime3D_init_distr
@@ -726,28 +646,25 @@ contains
         type(split_commander)               :: xsplit
         type(postproc_vol_commander)        :: xpostproc_vol
         ! command lines
-        type(cmdline)                       :: cline_recvol_distr
-        type(cmdline)                       :: cline_prime3D_init
-        type(cmdline)                       :: cline_resrange
-        type(cmdline)                       :: cline_check3D_conv
-        type(cmdline)                       :: cline_merge_algndocs
-        type(cmdline)                       :: cline_volassemble
-        type(cmdline)                       :: cline_shellweight3D
-        type(cmdline)                       :: cline_postproc_vol
+        type(cmdline)         :: cline_recvol_distr
+        type(cmdline)         :: cline_prime3D_init
+        type(cmdline)         :: cline_resrange
+        type(cmdline)         :: cline_check3D_conv
+        type(cmdline)         :: cline_merge_algndocs
+        type(cmdline)         :: cline_volassemble
+        type(cmdline)         :: cline_shellweight3D
+        type(cmdline)         :: cline_postproc_vol
         ! other variables
-        type(params)                        :: p_master
-        type(chash)                         :: myq_descr, job_descr
-        type(qsys_factory)                  :: qsys_fac
-        class(qsys_base), pointer           :: myqsys
-        integer, allocatable                :: parts(:,:)
-        type(qsys_ctrl)                     :: qscripts
-        type(oris)                          :: os
-        character(len=STDLEN)               :: vol, vol_iter, oritab, str, str_iter
-        character(len=STDLEN)               :: str_state, fsc_file, volassemble_output
-        character(len=STDLEN)               :: simple_exec_bin, restart_file
-        real                                :: frac_srch_space
-        integer                             :: s, state, iter
-        logical                             :: vol_defined
+        type(qsys_env)        :: qenv
+        type(params)          :: p_master
+        type(chash)           :: job_descr
+        type(oris)            :: os
+        character(len=STDLEN) :: vol, vol_iter, oritab, str, str_iter
+        character(len=STDLEN) :: str_state, fsc_file, volassemble_output
+        character(len=STDLEN) :: restart_file
+        real                  :: frac_srch_space
+        integer               :: s, state, iter, i
+        logical               :: vol_defined
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! make oritab
@@ -761,9 +678,7 @@ contains
         if( p_master%eo.eq.'yes' .and. p_master%dynlp.eq.'yes' )&
             &stop 'Incompatible options: eo=yes and dynlp=yes'
         ! setup the environment for distributed execution
-        call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr)
-        simple_exec_bin = qscripts%get_exec_bin()
-
+        call qenv%new(p_master)
         ! initialise
         if( .not. cline%defined('nspace') ) call cline%set('nspace', 1000.)
         call cline%set( 'box', real(p_master%box) )
@@ -795,15 +710,13 @@ contains
             call cline_merge_algndocs%delete( trim(vol) )
             call cline_volassemble%delete( trim(vol) )
         enddo
-
         ! SPLIT STACK
         if( stack_is_split(p_master%ext, p_master%nparts) )then
             ! check that the stack partitions are of correct sizes
-            call stack_parts_of_correct_sizes(p_master%ext, parts, p_master%box)
+            call stack_parts_of_correct_sizes(p_master%ext, qenv%parts, p_master%box)
         else
             call xsplit%execute( cline )
         endif
-
         ! GENERATE STARTING MODELS & ORIENTATIONS
         ! Orientations
         if( cline%defined('oritab') )then
@@ -846,7 +759,6 @@ contains
         else
             ! all good
         endif
-
         ! DYNAMIC LOW-PASS
         if( p_master%dynlp.eq.'yes' )then
             if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
@@ -871,26 +783,21 @@ contains
             call cline_check3D_conv%set( 'find', real(p_master%find) )
             call cline%set( 'find', real(p_master%find) )
         endif
-
-        ! HETEROGEINITY SPECIFICS
-        if( p_master%refine.eq.'het' )then
-            if( cline%defined('extr_thresh') )then
-                ! all is well
-            else
-                ! starts from the top
-                p_master%extr_thresh = EXTRINITHRESH / p_master%rrate
-                if( p_master%startit > 1 )then
-                    ! need to update the randomization rate
-                    do iter=1,p_master%startit-1
-                         p_master%extr_thresh = p_master%extr_thresh * p_master%rrate
-                    end do
-                endif
+        ! EXTREMAL DYNAMICS
+        if( cline%defined('extr_thresh') )then
+            ! all is well
+        else
+            ! starts from the top
+            p_master%extr_thresh = EXTRINITHRESH / p_master%rrate
+            if( p_master%startit > 1 )then
+                ! need to update the randomization rate
+                do i=1,p_master%startit-1
+                     p_master%extr_thresh = p_master%extr_thresh * p_master%rrate
+                end do
             endif
         endif
-
         ! prepare Prime3D job description
         call cline%gen_job_descr(job_descr)
-
         ! MAIN LOOP
         iter = p_master%startit-1
         do
@@ -899,7 +806,6 @@ contains
             write(*,'(A)')   '>>>'
             write(*,'(A,I6)')'>>> ITERATION ', iter
             write(*,'(A)')   '>>>'
-            call qsys_cleanup(p_master)
             if( cline%defined('oritab') )then
                 call os%read(trim(cline%get_carg('oritab')))
                 frac_srch_space = os%get_avg('frac')
@@ -909,17 +815,14 @@ contains
                     call xshellweight3D_distr%execute(cline_shellweight3D)
                 endif
             endif
-            if( p_master%refine.eq.'het' )then
-                ! exponential cooling of the randomization rate
-                p_master%het_thresh = p_master%het_thresh * p_master%rrate
-                call job_descr%set('het_thresh', real2str(p_master%het_thresh))
-                call cline%set('het_thresh', p_master%het_thresh)
-            endif
+            ! exponential cooling of the randomization rate
+            p_master%extr_thresh = p_master%extr_thresh * p_master%rrate
+            call job_descr%set('extr_thresh', real2str(p_master%extr_thresh))
+            call cline%set('extr_thresh', p_master%extr_thresh)
             call job_descr%set( 'startit', trim(int2str(iter)) )
             call cline%set( 'startit', real(iter) )
-            call qscripts%generate_scripts(job_descr, p_master%ext, myq_descr, ALGNFBODY)
-            ! PRIMED3D JOB SCHEDULING
-            call qscripts%schedule_jobs
+            ! schedule
+            call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=ALGNFBODY)
             ! ASSEMBLE ALIGNMENT DOCS
             oritab = trim(ITERFBODY)//trim(str_iter)//'.txt'    
             call cline%set( 'oritab', oritab )
@@ -947,18 +850,13 @@ contains
                 else
                     call cline_volassemble%set( 'prg', 'volassemble' )    ! required for cmdline exec
                 endif
-                ! call xvolassemble%execute( cline_volassemble )
-                ! replaced the above with command line execution as giving the volassemble setup
-                ! its own process id seem to resolve the system instabilities on fast cpu systems
-                ! replaced the above with execution in the queue to reduce the stress on the login node
-                ! call exec_simple_prg(simple_exec_bin, cline_volassemble)
                 if( p_master%eo .eq. 'yes' )then
-                    volassemble_output = 'RESOLUTION'//str_iter
+                    volassemble_output = 'RESOLUTION'//trim(str_iter)
                 else
                     volassemble_output = 'VOLASSEMBLE'
                 endif
-                call exec_simple_prg_in_queue( qscripts, myq_descr, simple_exec_bin,&
-                &cline_volassemble, trim(volassemble_output), 'VOLASSEMBLE_FINISHED')
+                call qenv%exec_simple_prg_in_queue(cline_volassemble,&
+                &trim(volassemble_output), 'VOLASSEMBLE_FINISHED')
             endif
             ! rename volumes, postprocess & update job_descr
             call os%read(trim(oritab))
@@ -986,7 +884,7 @@ contains
                     vol = 'vol'//trim(int2str(state))
                     call cline_postproc_vol%set( 'vol1' , trim(vol_iter))
                     fsc_file = 'fsc_state'//trim(str_state)//'.bin'
-                    if( file_exists(fsc_file) )then
+                    if( file_exists(fsc_file) .and. p_master%eo .eq. 'yes' )then
                         call cline_postproc_vol%delete('lp')
                         call cline_postproc_vol%set('fsc', trim(fsc_file))
                     else
@@ -1067,26 +965,23 @@ contains
         type(split_commander)               :: xsplit
         type(postproc_vol_commander)        :: xpostproc_vol
         ! command lines
-        type(cmdline)                       :: cline_recvol_distr
-        type(cmdline)                       :: cline_check3D_conv
-        type(cmdline)                       :: cline_merge_algndocs
-        type(cmdline)                       :: cline_volassemble
-        type(cmdline)                       :: cline_shellweight3D
-        type(cmdline)                       :: cline_postproc_vol
+        type(cmdline)         :: cline_recvol_distr
+        type(cmdline)         :: cline_check3D_conv
+        type(cmdline)         :: cline_merge_algndocs
+        type(cmdline)         :: cline_volassemble
+        type(cmdline)         :: cline_shellweight3D
+        type(cmdline)         :: cline_postproc_vol
         ! other variables
-        type(params)                        :: p_master
-        type(chash)                         :: myq_descr, job_descr
-        type(qsys_factory)                  :: qsys_fac
-        class(qsys_base), pointer           :: myqsys
-        integer, allocatable                :: parts(:,:)
-        type(qsys_ctrl)                     :: qscripts
-        type(oris)                          :: os
-        character(len=STDLEN)               :: vol, vol_iter, oritab, str, str_iter
-        character(len=STDLEN)               :: str_state, fsc_file, volassemble_output
-        character(len=STDLEN)               :: simple_exec_bin, restart_file
-        real                                :: frac_srch_space
-        integer                             :: s, state, iter
-        logical                             :: vol_defined
+        type(qsys_env)        :: qenv
+        type(params)          :: p_master
+        type(chash)           :: job_descr
+        type(oris)            :: os
+        character(len=STDLEN) :: vol, vol_iter, oritab, str, str_iter
+        character(len=STDLEN) :: str_state, fsc_file, volassemble_output
+        character(len=STDLEN) :: restart_file
+        real                  :: frac_srch_space
+        integer               :: s, state, iter
+        logical               :: vol_defined
         ! ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! make oritab
@@ -1097,15 +992,12 @@ contains
             &stop 'Incompatible options: nstates>1 and dynlp=yes'
         if( p_master%automsk.eq.'yes' .and. p_master%dynlp.eq.'yes' )&
             &stop 'Incompatible options: automsk=yes and dynlp=yes'
-        !if( p_master%eo.eq.'yes' .and. p_master%dynlp.eq.'yes' )&
-        !    &stop 'Incompatible options: eo=yes and dynlp=yes'
         ! setup the environment for distributed execution
-        call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr)
-        simple_exec_bin = qscripts%get_exec_bin()
+        call qenv%new(p_master)
 
         ! initialise
-        if( .not. cline%defined('nspace') ) call cline%set('nspace', 100.)
-        call cline%set( 'box', real(p_master%box) )
+        if( .not. cline%defined('nspace') ) call cline%set('nspace', 1000.)
+        call cline%set('box', real(p_master%box))
         ! prepare command lines from prototype master
         cline_recvol_distr   = cline
         cline_check3D_conv   = cline
@@ -1131,15 +1023,13 @@ contains
             call cline_merge_algndocs%delete( trim(vol) )
             call cline_volassemble%delete( trim(vol) )
         enddo
-
         ! SPLIT STACK
         if( stack_is_split(p_master%ext, p_master%nparts) )then
             ! check that the stack partitions are of correct sizes
-            call stack_parts_of_correct_sizes(p_master%ext, parts, p_master%box)
+            call stack_parts_of_correct_sizes(p_master%ext, qenv%parts, p_master%box)
         else
             call xsplit%execute( cline )
         endif
-
         ! GENERATE STARTING MODELS & ORIENTATIONS
         ! Orientations
         oritab=trim(p_master%oritab)
@@ -1165,10 +1055,8 @@ contains
         else
             ! all good
         endif
-
         ! prepare Cont3D job description
         call cline%gen_job_descr(job_descr)
-
         ! MAIN LOOP
         iter = p_master%startit-1
         do
@@ -1176,9 +1064,7 @@ contains
             str_iter = int2str_pad(iter,3)
             write(*,'(A)')   '>>>'
             write(*,'(A,I6)')'>>> ITERATION ', iter
-            write(*,'(A)')   '>>>'
-            call qsys_cleanup(p_master)
-            ! PREPARE CONT3D SCRIPTS
+            write(*,'(A)')   '>>>' 
             call os%read(trim(cline%get_carg('oritab')))
             frac_srch_space = os%get_avg('frac')
             call job_descr%set( 'oritab', trim(oritab) )
@@ -1188,33 +1074,28 @@ contains
             endif
             call job_descr%set( 'startit', trim(int2str(iter)) )
             call cline%set( 'startit', real(iter) )
-            call qscripts%generate_scripts(job_descr, p_master%ext, myq_descr, ALGNFBODY)
-            ! CONT3D JOB SCHEDULING
-            call qscripts%schedule_jobs
+            ! schedule
+            call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=ALGNFBODY)
             ! ASSEMBLE ALIGNMENT DOCS
             oritab = trim(ITERFBODY)//trim(str_iter)//'.txt'    
             call cline%set( 'oritab', oritab )
-            call cline_shellweight3D%set( 'oritab', trim(oritab) )
-            call cline_merge_algndocs%set( 'outfile', trim(oritab) )
-            call xmerge_algndocs%execute( cline_merge_algndocs )
+            call cline_shellweight3D%set('oritab', trim(oritab))
+            call cline_merge_algndocs%set('outfile', trim(oritab))
+            call xmerge_algndocs%execute(cline_merge_algndocs)
             ! ASSEMBLE VOLUMES
             call cline_volassemble%set( 'oritab', trim(oritab) )
             do state = 1,p_master%nstates
                 str_state = int2str_pad(state,2)
                 call del_file('fsc_state'//trim(str_state)//'.bin')
             enddo
-            call cline_volassemble%set( 'prg', 'eo_volassemble' )   ! required for cmdline exec
-            ! call xeo_volassemble%execute( cline_volassemble )
-            ! replaced the above with command line execution as giving the volassemble setup
-            ! its own process id seem to resolve the system instabilities on fast cpu systems
-            ! call exec_simple_prg(simple_exec_bin, cline_volassemble)
+            call cline_volassemble%set( 'prg', 'eo_volassemble' )
             if( p_master%eo .eq. 'yes' )then
-                volassemble_output = 'RESOLUTION'//str_iter
+                volassemble_output = 'RESOLUTION'//trim(str_iter)
             else
                 volassemble_output = 'VOLASSEMBLE'
             endif
-            call exec_simple_prg_in_queue( qscripts, myq_descr, simple_exec_bin,&
-            &cline_volassemble, trim(volassemble_output), 'VOLASSEMBLE_FINISHED')
+            call qenv%exec_simple_prg_in_queue(cline_volassemble,&
+            &trim(volassemble_output), 'VOLASSEMBLE_FINISHED')
             ! rename volumes, postprocess & update job_descr
             call os%read(trim(oritab))
             do state = 1,p_master%nstates
@@ -1280,7 +1161,7 @@ contains
         class(shellweight3D_distr_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         ! constants
-        logical, parameter                 :: DEBUG=.false.
+        logical,           parameter       :: DEBUG=.false.
         character(len=32), parameter       :: ALGNFBODY = 'algndoc_'
         ! commanders
         type(split_commander)              :: xsplit
@@ -1288,30 +1169,24 @@ contains
         type(merge_algndocs_commander)     :: xmerge_algndocs
         type(merge_shellweights_commander) :: xmerge_shellweights
         ! other variables
-        type(params)                       :: p_master
-        integer, allocatable               :: parts(:,:)
-        type(qsys_ctrl)                    :: qscripts
-        type(chash)                        :: myq_descr, job_descr
-        type(qsys_factory)                 :: qsys_fac
-        class(qsys_base), pointer          :: myqsys
+        type(qsys_env) :: qenv
+        type(params)   :: p_master
+        type(chash)    :: job_descr
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! setup the environment for distributed execution
-        call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr)
+        call qenv%new(p_master)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! split stack
         if( stack_is_split(p_master%ext, p_master%nparts) )then
             ! check that the stack partitions are of correct sizes
-            call stack_parts_of_correct_sizes(p_master%ext, parts, p_master%box)
+            call stack_parts_of_correct_sizes(p_master%ext, qenv%parts, p_master%box)
         else
             call xsplit%execute( cline )
         endif
-        ! prepare scripts
-        call qsys_cleanup(p_master)
-        call qscripts%generate_scripts(job_descr, p_master%ext, myq_descr, ALGNFBODY)
-        ! manage job scheduling
-        call qscripts%schedule_jobs
+        ! schedule
+        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=ALGNFBODY)
         ! merge matrices
         call xmerge_shellweights%execute(cline)
         call qsys_cleanup(p_master)
@@ -1325,55 +1200,35 @@ contains
         use simple_commander_rec
         class(recvol_distr_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        ! constants
         logical, parameter                  :: debug=.false.
-        ! commanders
         type(split_commander)               :: xsplit
         type(shellweight3D_distr_commander) :: xshellweight3D_distr
-        ! command lines
         type(cmdline)                       :: cline_shellweight3D
-        ! other variables
+        type(qsys_env)                      :: qenv
         type(params)                        :: p_master
-        integer, allocatable                :: parts(:,:)
-        type(qsys_ctrl)                     :: qscripts
-        character(len=STDLEN)               :: vol, simple_exec_bin, volassemble_output
-        type(chash)                         :: myq_descr, job_descr
-        type(qsys_factory)                  :: qsys_fac
-        class(qsys_base), pointer           :: myqsys
+        character(len=STDLEN)               :: vol, volassemble_output
+        type(chash)                         :: job_descr
         integer                             :: istate
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! setup the environment for distributed execution
-        call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr)   
-        simple_exec_bin = qscripts%get_exec_bin()     
+        call qenv%new(p_master)
         if( p_master%shellw .eq. 'yes' )then
             ! we need to set the prg flag for the command lines that control distributed workflows 
             cline_shellweight3D = cline
             call cline_shellweight3D%set('prg', 'shellweight3D')
-            ! NEEDED TO REMOVE THIS FOR ISW
-            ! do istate = 1,p_master%nstates
-            !     vol = 'vol'//trim(int2str(istate))
-            !     if( .not. cline%defined(vol) )then
-            !         write(*,*) 'simple_commander_distr_wflows :: exec_recvol_distr'
-            !         stop 'need input volume(s) for shell-weighted 3D reconstruction'
-            !     endif
-            ! end do
-            ! execute
             call xshellweight3D_distr%execute(cline_shellweight3D)
         endif
         call cline%gen_job_descr(job_descr)
         ! split stack
         if( stack_is_split(p_master%ext, p_master%nparts) )then
             ! check that the stack partitions are of correct sizes
-            call stack_parts_of_correct_sizes(p_master%ext, parts, p_master%box)
+            call stack_parts_of_correct_sizes(p_master%ext, qenv%parts, p_master%box)
         else
             call xsplit%execute( cline )
         endif
-        ! prepare scripts
-        call qsys_cleanup(p_master)
-        call qscripts%generate_scripts(job_descr, p_master%ext, myq_descr)
-        ! manage job scheduling
-        call qscripts%schedule_jobs
+        ! schedule
+        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)
         ! assemble volumes
         if( p_master%eo .eq. 'yes' )then
             call cline%set('prg', 'eo_volassemble')
@@ -1382,8 +1237,8 @@ contains
             call cline%set('prg', 'volassemble')
             volassemble_output = 'VOLASSEMBLE'
         endif
-        call exec_simple_prg_in_queue( qscripts, myq_descr, simple_exec_bin,&
-        &cline, trim(volassemble_output), 'VOLASSEMBLE_FINISHED')
+        call qenv%exec_simple_prg_in_queue(cline,&
+        &trim(volassemble_output), 'VOLASSEMBLE_FINISHED')
         ! termination
         call qsys_cleanup(p_master)
         call simple_end('**** SIMPLE_RECVOL NORMAL STOP ****', print_simple=.false.)
@@ -1396,17 +1251,11 @@ contains
         use simple_nrtxtfile,         only: nrtxtfile 
         class(tseries_track_distr_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
-        ! constants
         logical, parameter            :: debug=.false.
-        ! commanders
         type(tseries_track_commander) :: xtseries_track
-        ! other stuff
+        type(qsys_env)                :: qenv
         type(params)                  :: p_master
-        type(qsys_ctrl)               :: qscripts
-        type(chash)                   :: myq_descr, job_descr
-        integer, allocatable          :: parts(:,:)
-        type(qsys_factory)            :: qsys_fac
-        class(qsys_base), pointer     :: myqsys
+        type(chash)                   :: job_descr
         type(nrtxtfile)               :: boxfile
         real,        allocatable      :: boxdata(:,:)
         type(chash), allocatable      :: part_params(:)
@@ -1448,16 +1297,11 @@ contains
             call part_params(ipart)%set('ind',    int2str(ipart))
         end do
         ! setup the environment for distributed execution
-        call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr)
-        ! prepare job description
-        call cline%gen_job_descr(job_descr)
-        ! prepare scripts
+        call qenv%new(p_master)
+        ! schedule & clean
+        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, part_params=part_params)
         call qsys_cleanup(p_master)
-        call qscripts%generate_scripts(job_descr, p_master%ext, myq_descr, part_params=part_params)
-        ! manage job scheduling
-        call qscripts%schedule_jobs
-        ! termination
-        call qsys_cleanup(p_master)
+        ! end gracefully
         call simple_end('**** SIMPLE_TSERIES_TRACK NORMAL STOP ****')
     end subroutine exec_tseries_track_distr
 

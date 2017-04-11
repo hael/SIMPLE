@@ -6,40 +6,40 @@ public :: opt_spec
 private
 
 type :: opt_spec
-    procedure(costfun),  pointer, nopass :: costfun =>null() !< defines cost function
-    procedure(gcostfun), pointer, nopass :: gcostfun=>null() !< defines the gradient of the cost function
-    character(len=STDLEN) :: str_opt=''                      !< string descriptor (of optimization routine to be used)
-    character(len=STDLEN) :: str_mode=''                     !< mode string descriptor
-    integer               :: ndim=0, ldim=0                  !< dimension parameters
-    real                  :: ftol=1e-5, gtol=1e-5            !< fractional convergence tolerance to be achieved in costfun/gradient
-    real                  :: eps=0.5                         !< learning rate
-    real                  :: cfac=0.1                        !< convergence factor bfgs
-    real                  :: yb                              !< best cost obtained so far
-    integer               :: maxits=100                      !< maximum number of iterations
-    integer               :: nbest=0                         !< number of best solutions used to re-estimate the model in CE
-    integer               :: niter=0                         !< actual number of iterations
-    integer               :: nrestarts=1                     !< number of restarts
-    integer               :: nsample=0                       !< number of samples per OASIS iteration
-    integer               :: nevals=0                        !< total number of cost function evaluations
-    integer               :: nstates=1                       !< number of states
-    integer               :: npeaks=0                        !< number of peaks (local optima to identify)
-    integer               :: npop=0                          !< population size (4 evolutionary optimizers)
-    integer               :: nnn=0                           !< number of nearest neighbors
-    integer               :: peakcnt=0                       !< peak counter
-    logical, allocatable  :: cyclic(:)                       !< to indicate which variables are cyclic (Euler angles)
-    real, allocatable     :: limits(:,:)                     !< variable bounds
-    real, allocatable     :: stepsz(:)                       !< step sizes for brute force search
-    real, allocatable     :: x(:)                            !< best/final solution
-    real, allocatable     :: xi(:)                           !< search direction used in linmin
-    real, allocatable     :: xt(:)                           !< test point, used in linmin
-    real, allocatable     :: sdevs(:)                        !< standard deviations of the variables, used in oasis
-    real, allocatable     :: population(:,:)                 !< output solution population from the evolutionary approaches
-    real, allocatable     :: peaks(:,:)                      !< output peaks (local optimal solutions)
-    logical               :: verbose=.false.                 !< verbose output of optimizer on/off
-    logical               :: debug=.false.                   !< debugging mode on/off
-    logical               :: warn=.false.                    !< warning mode on/off
-    logical               :: converged=.false.               !< converged status
-    logical               :: exists=.false.                  !< to indicate existence
+    procedure(costfun),  pointer, nopass :: costfun  =>null() !< defines cost function
+    procedure(gcostfun), pointer, nopass :: gcostfun =>null() !< defines the gradient of the cost function
+    character(len=STDLEN) :: str_opt=''                       !< string descriptor (of optimization routine to be used)
+    character(len=STDLEN) :: str_mode=''                      !< mode string descriptor
+    integer               :: ndim=0, ldim=0                   !< dimension parameters
+    real                  :: ftol=1e-5, gtol=1e-5             !< fractional convergence tolerance to be achieved in costfun/gradient
+    real                  :: eps=0.5                          !< learning rate
+    real                  :: cfac=0.1                         !< convergence factor bfgs
+    real                  :: yb                               !< best cost obtained so far
+    integer               :: maxits=100                       !< maximum number of iterations
+    integer               :: nbest=0                          !< number of best solutions used to re-estimate the model in CE
+    integer               :: niter=0                          !< actual number of iterations
+    integer               :: nrestarts=1                      !< number of restarts
+    integer               :: nsample=0                        !< number of samples per OASIS iteration
+    integer               :: nevals=0                         !< total number of cost function evaluations
+    integer               :: nstates=1                        !< number of states
+    integer               :: npeaks=0                         !< number of peaks (local optima to identify)
+    integer               :: npop=0                           !< population size (4 evolutionary optimizers)
+    integer               :: nnn=0                            !< number of nearest neighbors
+    integer               :: peakcnt=0                        !< peak counter
+    logical, allocatable  :: cyclic(:)                        !< to indicate which variables are cyclic (Euler angles)
+    real, allocatable     :: limits(:,:)                      !< variable bounds
+    real, allocatable     :: stepsz(:)                        !< step sizes for brute force search
+    real, allocatable     :: x(:)                             !< best/final solution
+    real, allocatable     :: xi(:)                            !< search direction used in linmin
+    real, allocatable     :: xt(:)                            !< test point, used in linmin
+    real, allocatable     :: sdevs(:)                         !< standard deviations of the variables, used in oasis
+    real, allocatable     :: population(:,:)                  !< output solution population from the evolutionary approaches
+    real, allocatable     :: peaks(:,:)                       !< output peaks (local optimal solutions)
+    logical               :: verbose   = .false.              !< verbose output of optimizer on/off
+    logical               :: debug     = .false.              !< debugging mode on/off
+    logical               :: warn      = .false.              !< warning mode on/off
+    logical               :: converged = .false.              !< converged status
+    logical               :: exists    = .false.              !< to indicate existence
   contains
     procedure :: specify
     procedure :: change_opt
@@ -53,7 +53,7 @@ end type
 abstract interface
     function costfun( vec, D ) result( cost )
         integer, intent(in) :: D
-        real, intent(in)    :: vec(D)
+        real,    intent(in) :: vec(D)
         real                :: cost
     end function 
 end interface
@@ -61,9 +61,9 @@ end interface
 !>  \brief  defines the cost function gradient interface
 abstract interface
     function gcostfun( vec, D ) result( grad )
-        integer, intent(in) :: D
-        real, intent(inout) :: vec(D)
-        real                :: grad(D)
+        integer, intent(in)    :: D
+        real,    intent(inout) :: vec(D)
+        real                   :: grad(D)
     end function 
 end interface
 
@@ -74,28 +74,28 @@ contains
     nrestarts, nsample, limits, cyclic, verbose, debug, npop,&
     eps, cfac, warn, nbest, nstates, stepsz, npeaks, nnn )
         use simple_jiffys, only: alloc_err
-        class(opt_spec), intent(inout)         :: self           !< instance
-        character(len=*), intent(in)           :: str_opt        !< string descriptor (of optimization routine to be used)
-        integer, intent(in)                    :: ndim           !< problem dimensionality
-        character(len=*), intent(in), optional :: mode           !< mode string descriptor
-        integer, intent(in), optional          :: ldim           !< second problem dimensionality 
-        real, intent(in), optional             :: ftol,gtol      !< fractional convergence tolerance to be achieved in costfun/gradient
-        integer, intent(in), optional          :: maxits         !< maximum number of iterations
-        integer, intent(in), optional          :: nbest          !< nr of best solutions used to update the CE model
-        integer, intent(in), optional          :: nrestarts      !< number of restarts
-        integer, intent(in), optional          :: nsample        !< number of samples per OASIS iteration
-        integer, intent(in), optional          :: nstates        !< nr of states
-        real, intent(in), optional             :: limits(ndim,2) !< variable bounds
-        logical, intent(in), optional          :: cyclic(ndim)   !< to indicate which variables are cyclic (Euler angles)
-        logical, intent(in), optional          :: verbose        !< verbose output of optimizer
-        logical, intent(in), optional          :: debug          !< debugging mode
-        logical, intent(in), optional          :: warn           !< warning mode
-        integer, intent(in), optional          :: npop           !< population size (4 evolutionary optimizers)
-        integer, intent(in), optional          :: npeaks         !< number of peaks (local optima to identify)
-        integer, intent(in), optional          :: nnn            !< number of nearest neighbors
-        real, intent(in), optional             :: cfac           !< convergence factor (bfgs)
-        real, intent(in), optional             :: eps            !< learning rate (OASIS)
-        real, intent(in), optional             :: stepsz(ndim)   !< step sizes for brute force search
+        class(opt_spec),            intent(inout) :: self           !< instance
+        character(len=*),           intent(in)    :: str_opt        !< string descriptor (of optimization routine to be used)
+        integer,                    intent(in)    :: ndim           !< problem dimensionality
+        character(len=*), optional, intent(in)    :: mode           !< mode string descriptor
+        integer,          optional, intent(in)    :: ldim           !< second problem dimensionality 
+        real,             optional, intent(in)    :: ftol,gtol      !< fractional convergence tolerance to be achieved in costfun/gradient
+        integer,          optional, intent(in)    :: maxits         !< maximum number of iterations
+        integer,          optional, intent(in)    :: nbest          !< nr of best solutions used to update the CE model
+        integer,          optional, intent(in)    :: nrestarts      !< number of restarts
+        integer,          optional, intent(in)    :: nsample        !< number of samples per OASIS iteration
+        integer,          optional, intent(in)    :: nstates        !< nr of states
+        real,             optional, intent(in)    :: limits(ndim,2) !< variable bounds
+        logical,          optional, intent(in)    :: cyclic(ndim)   !< to indicate which variables are cyclic (Euler angles)
+        logical,          optional, intent(in)    :: verbose        !< verbose output of optimizer
+        logical,          optional, intent(in)    :: debug          !< debugging mode
+        logical,          optional, intent(in)    :: warn           !< warning mode
+        integer,          optional, intent(in)    :: npop           !< population size (4 evolutionary optimizers)
+        integer,          optional, intent(in)    :: npeaks         !< number of peaks (local optima to identify)
+        integer,          optional, intent(in)    :: nnn            !< number of nearest neighbors
+        real,             optional, intent(in)    :: cfac           !< convergence factor (bfgs)
+        real,             optional, intent(in)    :: eps            !< learning rate (OASIS)
+        real,             optional, intent(in)    :: stepsz(ndim)   !< step sizes for brute force search
         integer :: alloc_stat, i
         call self%kill
         ! take care of optimizer specifics

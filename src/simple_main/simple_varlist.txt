@@ -262,7 +262,6 @@ fracdeadhot
 fraczero
 ftol
 gw
-het_thresh
 hp
 hp_ctffind
 inner

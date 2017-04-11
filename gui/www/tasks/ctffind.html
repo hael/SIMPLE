@@ -1,0 +1,123 @@
+<div class=tasktitle>
+	CTF Estimation
+	<div class=taskhovertext>Calculate CTF Parameters</div>
+</div>	
+<table class=taskattributestable>
+	<input class=jobarg type=hidden id=cmd value=simple_distr_exec>
+	<input class=jobarg type=hidden id=prg value=ctffind>
+	<input class=jobarg type=hidden id=jobtype value=ctffind>
+	<tr>
+		<td>Job Name</td>
+		<td><input class=jobarg type=text id=jobname></td>
+	</tr>
+	<tr>
+		<td>Job Description</td>
+		<td><input class=jobarg type=text id=jobdescription></td>
+	</tr>
+		<tr>
+			<td>Required Arguments</td>
+		</tr>
+
+		<tr>
+			<td>Sampling Distance</td>
+			<td><input class=jobarg type=text id=smpd></td>
+			<td class=taskhelp>
+				<img class=taskhelpimage src=img/info.png>
+				<div class=taskhelptext>Sampling distance of the microscope in A/pixel</div>
+			</td>
+		</tr>
+		<tr>
+			<td>Micrograph List File</td>
+			<td><input class=jobarg type=text id=filetab></td>
+			<td class=taskhelp>
+				<img class=taskhelpimage src=img/info.png>
+				<div class=taskhelptext>Text file containing a list of micrographs</div>
+			</td>
+		</tr>	
+		<tr>
+			<td>Acceleration Voltage</td>
+			<td><input class=jobarg type=text id=kv></td>
+			<td class=taskhelp>
+				<img class=taskhelpimage src=img/info.png>
+				<div class=taskhelptext>Text file containing a list of micrographs</div>
+			</td>
+		</tr>	
+		<tr>
+			<td>Spherical Abberation</td>
+			<td><input class=jobarg type=text id=cs></td>
+			<td class=taskhelp>
+				<img class=taskhelpimage src=img/info.png>
+				<div class=taskhelptext>Text file containing a list of micrographs</div>
+			</td>
+		</tr>
+		<tr>
+			<td>Amplitude Contrast</td>
+			<td><input class=jobarg type=text id=fraca></td>
+			<td class=taskhelp>
+				<img class=taskhelpimage src=img/info.png>
+				<div class=taskhelptext>Text file containing a list of micrographs</div>
+			</td>
+		</tr>
+		<tr>	
+			<td>Optional Arguments</td>
+		</tr>
+		<tr>
+			<td>Power Spectrum Size</td>
+			<td><input class=jobarg type=text id=pspecsz></td>
+			<td class=taskhelp>
+				<img class=taskhelpimage src=img/info.png>
+				<div class=taskhelptext>File body prepended to each output file</div>
+			</td>
+		</tr>
+		<tr>
+			<td>High Pass Limit</td>
+			<td><input class=jobarg type=text id=hp></td>
+			<td class=taskhelp>
+				<img class=taskhelpimage src=img/info.png>
+				<div class=taskhelptext>Start low-pass limit (A)</div>
+			</td>
+		</tr>
+		<tr>
+			<td>Low Pass Limit</td>
+			<td><input class=jobarg type=text id=lp></td>
+			<td class=taskhelp>
+				<img class=taskhelpimage src=img/info.png>
+				<div class=taskhelptext>Stop low-pass limit (A)</div>
+			</td>
+		</tr>
+		<tr>
+			<td>Minimum Expected Defocus</td>
+			<td><input class=jobarg type=text id=dfmin></td>
+			<td class=taskhelp>
+				<img class=taskhelpimage src=img/info.png>
+				<div class=taskhelptext>Maximimum halfwidth shift (pixels)</div>
+			</td>
+		</tr>
+		<tr>
+			<td>Maximum Expected Defocus</td>
+			<td><input class=jobarg type=text id=dfmax></td>
+			<td class=taskhelp>
+				<img class=taskhelpimage src=img/info.png>
+				<div class=taskhelptext>Total exposure time (seconds)</div>
+			</td>
+		</tr>
+		<tr>
+			<td>Astigmatism Search Step</td>
+			<td><input class=jobarg type=text id=astigstep></td>
+			<td class=taskhelp>
+				<img class=taskhelpimage src=img/info.png>
+				<div class=taskhelptext>Total exposure time (seconds)</div>
+			</td>
+		</tr>
+		<tr>
+			<td>Expected Astigmatism</td>
+			<td><input class=jobarg type=text id=expastig></td>
+			<td class=taskhelp>
+				<img class=taskhelpimage src=img/info.png>
+				<div class=taskhelptext>Acceleration voltage (kV)</div>
+			</td>
+		</tr>
+	</table>
+	<div class=clickbutton onclick=hideTasks()>Cancel</div>
+	<div class=clickbutton onclick=showRunParameters('ctffindtask')>Run</div>
+</div>

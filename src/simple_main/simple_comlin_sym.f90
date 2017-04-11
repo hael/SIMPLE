@@ -48,7 +48,7 @@ contains
         lp = p%lp
         bp => b
         pp => p
-    end subroutine
+    end subroutine comlin_sym_init
 
     !>  \brief  is for finding the symmetry axis given an aligned set of images
     subroutine comlin_sym_axis( orientation_best, mode, doprint )
@@ -103,7 +103,7 @@ contains
            call orientation_best%print
         endif
         deallocate(corrs, corrs_inds)
-   end subroutine
+   end subroutine comlin_sym_axis
 
    !< Update limits when visiting new vertex
    subroutine update_lims( o, lims)
@@ -115,6 +115,6 @@ contains
         optlims(1:3,2) = euls+lims
         optlims(4:5,1) = -pp%trs
         optlims(4:5,2) = pp%trs
-   end subroutine
+   end subroutine update_lims
     
 end module simple_comlin_sym

@@ -34,6 +34,10 @@ contains
         type(ori)                     :: orientation
         integer                       :: iptcl, filtsz, alloc_stat
         integer                       :: io_stat, filnum
+
+        ! READ IMAGES
+        call read_imgs_from_stk( b, p )
+        
         filtsz = b%img%get_filtsz()
         allocate(wmat(p%top-p%fromp+1,filtsz), corrs(filtsz), stat=alloc_stat)
         call alloc_err('In: simple_cont3D_matcher :: cont3D_shellweight', alloc_stat)
@@ -47,12 +51,7 @@ contains
             call progress(cnt_glob, p%top-p%fromp+1)
             orientation = b%a%get_ori(iptcl)
             if( nint(orientation%get('state')) > 0 )then
-                if( p%boxmatch < p%box )call b%img%new([p%box,p%box,1],p%smpd) ! ensures correct dimensions
-                if( p%l_distr_exec )then
-                    call b%img%read(p%stk_part, cnt_glob, isxfel=p%l_xfel)
-                else
-                    call b%img%read(p%stk, iptcl, isxfel=p%l_xfel)
-                endif
+                b%img = b%imgs(iptcl) ! put the original image back
                 call prepimg4align(b, p, orientation)
                 call cftcc%frc(orientation, 1, b%img, res, corrs)
                 wmat(cnt_glob,:) = corrs(:)
@@ -91,6 +90,10 @@ contains
         type(ori)                     :: orientation
         integer                       :: iptcl, filtsz, alloc_stat
         integer                       :: io_stat, filnum, istate
+
+        ! READ IMAGES
+        call read_imgs_from_stk( b, p )
+
         filtsz = b%img%get_filtsz()
         allocate( wmat(p%nstates,p%top-p%fromp+1,filtsz), corrs(filtsz), stat=alloc_stat)
         call alloc_err('In: simple_cont3D_matcher :: cont3D_shellweight_states', alloc_stat)
@@ -103,12 +106,7 @@ contains
             cnt_glob = cnt_glob + 1
             call progress(cnt_glob, p%top-p%fromp+1)
             orientation = b%a%get_ori(iptcl)
-            if( p%boxmatch < p%box )call b%img%new([p%box,p%box,1],p%smpd) ! ensures correct dimensions
-            if( p%l_distr_exec )then
-                call b%img%read(p%stk_part, cnt_glob, isxfel=p%l_xfel)
-            else
-                call b%img%read(p%stk, iptcl, isxfel=p%l_xfel)
-            endif
+            b%img = b%imgs(iptcl) ! put the original image back
             call prepimg4align(b, p, orientation)
             if( nint(orientation%get('state')) > 0 )then
                 do istate=1,p%nstates
@@ -158,6 +156,9 @@ contains
         real                   :: frac_srch_space, reslim
         integer                :: state, iptcl
         logical                :: doshellweight
+
+        ! READ IMAGES
+        call read_imgs_from_stk( b, p )
 
         ! SET BAND-PASS LIMIT RANGE 
         call set_bp_range( b, p, cline )
@@ -234,12 +235,7 @@ contains
             orientation = b%a%get_ori(iptcl)
             state = nint(orientation%get('state'))
             if( state > 0 )then
-                if( p%boxmatch < p%box )call b%img%new([p%box,p%box,1],p%smpd) ! ensures correct dimensions
-                if( p%l_distr_exec )then
-                    call b%img%read(p%stk_part, cnt_glob, isxfel=p%l_xfel)
-                else
-                    call b%img%read(p%stk, iptcl, isxfel=p%l_xfel)
-                endif
+                b%img = b%imgs(iptcl) ! put the original image back
                 call prepimg4align(b, p, orientation)
                 select case(p%refine)
                     case('cart')
@@ -253,14 +249,14 @@ contains
                 end select
                 if( doshellweight )then
                     wresamp = resample_filter(wmat(iptcl,:), res, res_pad)
-                    call grid_ptcl(b, p, iptcl, cnt_glob, orientation, shellweights=wresamp)
+                    call grid_ptcl(b, p, iptcl, orientation, shellweights=wresamp)
                 else
-                    call grid_ptcl(b, p, iptcl, cnt_glob, orientation)
+                    call grid_ptcl(b, p, iptcl, orientation)
                 endif
             else
                 call orientation%reject
             endif
-            call b%a%set_ori(iptcl,orientation)
+            call b%a%set_ori(iptcl, orientation)
             call b%a%write(iptcl, p%outfile)
         end do
         p%oritab = p%outfile

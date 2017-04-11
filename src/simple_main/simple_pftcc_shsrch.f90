@@ -1,107 +1,123 @@
 module simple_pftcc_shsrch
-use simple_opt_factory,      only: opt_factory
-use simple_opt_spec,         only: opt_spec
-use simple_optimizer,        only: optimizer
-use simple_polarft_corrcalc, only: polarft_corrcalc
-use simple_defs
+use simple_opt_spec,          only: opt_spec
+use simple_pftcc_opt,         only: pftcc_opt
+use simple_polarft_corrcalc,  only: polarft_corrcalc
+use simple_simplex_pftcc_opt, only: simplex_pftcc_opt
+use simple_defs               ! use all in there
 implicit none
 
-public :: pftcc_shsrch_init, pftcc_shsrch_set_indices, pftcc_shsrch_minimize, pftcc_shsrch_get_nevals,&
-pftcc_shsrch_cost
+public :: pftcc_shsrch
 private
 
-type(opt_factory)                :: ofac                 !< optimizer factory
-type(opt_spec)                   :: ospec                !< optimizer specification object
-class(optimizer), pointer        :: nlopt      =>null()  !< pointer to nonlinear optimizer
-class(polarft_corrcalc), pointer :: pftcc_ptr  =>null()  !< pointer to pftcc object
-integer                          :: reference  = 0       !< reference pft
-integer                          :: particle   = 0       !< particle pft
-integer                          :: rot        = 1       !< in-plane rotation
-integer                          :: ldim(3)    = [0,0,0] !< logical dimension of Cartesian image
-real                             :: rotmat(2,2)= 0.      !< rotation matrix for checking limits
-real                             :: maxshift   = 0.      !< maximal shift
-logical                          :: shbarr     = .true.  !< shift barrier constraint or not
-integer, parameter               :: NRESTARTS  =  5      !< simplex restarts (randomized bounds)
-
+type, extends(pftcc_opt) :: pftcc_shsrch
+    private
+    type(opt_spec)                   :: ospec                 !< optimizer specification object
+    type(simplex_pftcc_opt)          :: nlopt                 !< optimizer object
+    class(polarft_corrcalc), pointer :: pftcc_ptr   =>null()  !< pointer to pftcc object
+    integer                          :: reference   = 0       !< reference pft
+    integer                          :: particle    = 0       !< particle pft
+    integer                          :: rot         = 1       !< in-plane rotation
+    integer                          :: ldim(3)     = [0,0,0] !< logical dimension of Cartesian image
+    real                             :: rotmat(2,2) = 0.      !< rotation matrix for checking limits
+    real                             :: maxshift    = 0.      !< maximal shift
+    logical                          :: shbarr      = .true.  !< shift barrier constraint or not
+    integer                          :: nrestarts   =  5      !< simplex restarts (randomized bounds)
+  contains
+    procedure :: new         => shsrch_new
+    procedure :: set_indices => shsrch_set_indices
+    procedure :: costfun     => shsrch_costfun
+    procedure :: minimize    => shsrch_minimize
+    procedure :: get_nevals  => shsrch_get_nevals
+end type pftcc_shsrch
 
 contains
 
-    subroutine pftcc_shsrch_init( pftcc, lims, shbarrier )
-        class(polarft_corrcalc), intent(in), target :: pftcc
-        real,             intent(in)                :: lims(2,2)
-        character(len=*), intent(in), optional      :: shbarrier
-        integer :: nnrestarts
+    subroutine shsrch_new( self, pftcc, lims, shbarrier, nrestarts )
+        class(pftcc_shsrch),             intent(inout) :: self
+        class(polarft_corrcalc), target, intent(in)    :: pftcc
+        real,                            intent(in)    :: lims(:,:)
+        character(len=*), optional,      intent(in)    :: shbarrier
+        integer,          optional,      intent(in)    :: nrestarts
         ! flag the barrier constraint
-        shbarr = .true.
+        self%shbarr = .true.
         if( present(shbarrier) )then
-            if( shbarrier .eq. 'no' ) shbarr = .false.
+            if( shbarrier .eq. 'no' ) self%shbarr = .false.
         endif
+        self%nrestarts = 5
+        if( present(nrestarts) ) self%nrestarts = nrestarts
         ! make optimizer spec
-        call ospec%specify('simplex', 2, ftol=1e-4, gtol=1e-4, limits=lims, nrestarts=NRESTARTS)
-        ! set optimizer cost function
-        call ospec%set_costfun(pftcc_shsrch_cost)
-        ! generate optimizer object with the factory
-        call ofac%new(ospec, nlopt)
+        call self%ospec%specify('simplex', 2, ftol=1e-4,&
+        &gtol=1e-4, limits=lims, nrestarts=self%nrestarts)
+        ! generate the simplex optimizer object 
+        call self%nlopt%new(self%ospec)
         ! set pointer to corrcalc object
-        pftcc_ptr => pftcc
+        self%pftcc_ptr => pftcc
         ! get logical dimension
-        ldim = pftcc_ptr%get_ldim()
+        self%ldim = self%pftcc_ptr%get_ldim()
         ! set maxshift
-        maxshift = real(maxval(ldim))/2.
+        self%maxshift = real(maxval(self%ldim))/2.
         ! rotmat init
-        call init_rotmat
-    end subroutine pftcc_shsrch_init
+        self%rotmat      = 0.
+        self%rotmat(1,1) = 1.
+        self%rotmat(2,2) = 1.
+    end subroutine shsrch_new
     
-    subroutine pftcc_shsrch_set_indices( ref, ptcl, r )
-        integer, intent(in) :: ref, ptcl, r
-        reference = ref 
-        particle  = ptcl
-        rot       = r
-    end subroutine pftcc_shsrch_set_indices
+    subroutine shsrch_set_indices( self, ref, ptcl, rot )
+        class(pftcc_shsrch), intent(inout) :: self
+        integer,             intent(in)    :: ref, ptcl
+        integer, optional,   intent(in)    :: rot
+        self%reference = ref 
+        self%particle  = ptcl
+        if( present(rot) ) self%rot = rot
+    end subroutine shsrch_set_indices
 
-    function pftcc_shsrch_cost( vec, D ) result( cost )
-        integer, intent(in) :: D
-        real,    intent(in) :: vec(D)
+    function shsrch_costfun( self, vec, D ) result( cost )
+        class(pftcc_shsrch), intent(inout) :: self
+        integer,             intent(in)    :: D
+        real,                intent(in)    :: vec(D)
         real    :: vec_here(2)    ! current set of values
         real    :: rotvec_here(2) ! current set of values rotated to frame of reference
         real    :: cost
         vec_here = vec
         if( abs(vec(1)) < 1e-6 ) vec_here(1) = 0.
         if( abs(vec(2)) < 1e-6 ) vec_here(2) = 0.
-        rotvec_here = matmul(vec_here,rotmat)
-        if( shbarr )then
-            if( rotvec_here(1) < ospec%limits(1,1) .or. rotvec_here(1) > ospec%limits(1,2) )then
+        rotvec_here = matmul(vec_here,self%rotmat)
+        if( self%shbarr )then
+            if( rotvec_here(1) < self%ospec%limits(1,1) .or.&
+               &rotvec_here(1) > self%ospec%limits(1,2) )then
                 cost = 1.
                 return
-            else if( rotvec_here(2) < ospec%limits(2,1) .or. rotvec_here(2) > ospec%limits(2,2) )then
+            else if( rotvec_here(2) < self%ospec%limits(2,1) .or.&
+                    &rotvec_here(2) > self%ospec%limits(2,2) )then
                 cost = 1.
                 return
             endif
         endif
-        cost = -pftcc_ptr%corr(reference, particle, rot, vec_here)
-    end function pftcc_shsrch_cost
-    
-    function pftcc_shsrch_get_nevals() result( nevals )
-        integer :: nevals
-        nevals = ospec%nevals
-    end function pftcc_shsrch_get_nevals
-    
-    function pftcc_shsrch_minimize( ) result( cxy )
+        cost = -self%pftcc_ptr%corr(self%reference, self%particle, self%rot, vec_here)
+    end function shsrch_costfun
+
+    function shsrch_minimize( self, irot, shvec, rxy ) result( cxy )
         use simple_math, only: rotmat2d
-        real :: cxy(3), cost, cost_init
+        class(pftcc_shsrch), intent(inout) :: self
+        integer, optional,   intent(in)    :: irot
+        real,    optional,   intent(in)    :: shvec(:)
+        real,    optional,   intent(in)    :: rxy(:)
+        real              :: cost, cost_init
+        real, allocatable :: cxy(:)
+        allocate(cxy(3))
         ! set rotmat for boudary checking and final rotation
-        rotmat = rotmat2d( pftcc_ptr%get_rot(rot) )
+        self%rotmat = rotmat2d( self%pftcc_ptr%get_rot(self%rot) )
         ! minimisation
-        ospec%x = 0.
-        ospec%nevals = 0
-        cost_init = pftcc_shsrch_cost( ospec%x, ospec%ndim )
-        call nlopt%minimize(ospec, cost)
+        self%ospec%x = 0.
+        self%ospec%nevals = 0
+        cost_init = self%costfun(self%ospec%x, self%ospec%ndim)
+        call self%nlopt%minimize(self%ospec, self, cost)
         if( cost < cost_init )then
             cxy(1)  = -cost ! correlation
             ! rotate the shift vector to the frame of reference
-            cxy(2:) = ospec%x ! shift
-            cxy(2:) = matmul(cxy(2:),rotmat)
-            if( any(cxy(2:) > maxshift) .or. any(cxy(2:) < -maxshift) )then
+            cxy(2:) = self%ospec%x ! shift
+            cxy(2:) = matmul(cxy(2:),self%rotmat)
+            if( any(cxy(2:) > self%maxshift) .or. any(cxy(2:) < -self%maxshift) )then
                 cxy(1)  = -1.
                 cxy(2:) = 0.
             endif
@@ -109,14 +125,16 @@ contains
              cxy(1)  = -cost_init ! correlation
              cxy(2:) = 0.
         endif
-        call init_rotmat ! clean exit
-    end function pftcc_shsrch_minimize
-
-    subroutine init_rotmat()
-        ! identity matrix
-        rotmat      = 0.
-        rotmat(1,1) = 1.
-        rotmat(2,2) = 1.
-    end subroutine init_rotmat
+        ! clean exit
+        self%rotmat      = 0.
+        self%rotmat(1,1) = 1.
+        self%rotmat(2,2) = 1.
+    end function shsrch_minimize
+    
+    function shsrch_get_nevals( self ) result( nevals )
+        class(pftcc_shsrch), intent(inout) :: self
+        integer :: nevals
+        nevals = self%ospec%nevals
+    end function shsrch_get_nevals
     
 end module simple_pftcc_shsrch

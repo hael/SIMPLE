@@ -2,13 +2,11 @@ module simple_commander_stream_wflows
 use simple_defs
 use simple_cmdline,           only: cmdline
 use simple_chash,             only: chash
-use simple_qsys_base,         only: qsys_base
-use simple_qsys_factory,      only: qsys_factory
-use simple_qsys_ctrl,         only: qsys_ctrl
 use simple_params,            only: params
 use simple_commander_base,    only: commander_base
 use simple_strings,           only: real2str
 use simple_commander_preproc, only: preproc_commander
+use simple_qsys_env,          only: qsys_env
 use simple_filehandling       ! use all in there
 use simple_qsys_funs          ! use all in there
 use simple_syscalls           ! use all in there
@@ -30,23 +28,17 @@ contains
         use simple_commander_preproc, only: preproc_commander
         class(preproc_stream_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
-        ! constants
         logical,               parameter   :: DEBUG = .true.
         character(len=STDLEN), parameter   :: FILETABNAME='movieftab_preproc_stream.txt'
         integer,               parameter   :: SHORTTIME = 15
-        ! other vars
         character(len=STDLEN), allocatable :: movienames(:)
-        type(params)                       :: p_master
-        type(qsys_ctrl)                    :: qscripts
-        type(chash)                        :: myq_descr, job_descr
-        type(chash), allocatable           :: part_params(:)
-        integer, allocatable               :: parts(:,:)
-        logical, allocatable               :: jobs_done(:), jobs_submitted(:)
-        type(qsys_factory)                 :: qsys_fac
-        class(qsys_base), pointer          :: myqsys
-        integer                            :: nmovies, nmovies_prev, imovie
-        integer, parameter                 :: TRAILING=5
-
+        type(qsys_env)           :: qenv
+        type(params)             :: p_master
+        type(chash)              :: job_descr
+        type(chash), allocatable :: part_params(:)
+        logical,     allocatable :: jobs_done(:), jobs_submitted(:)
+        integer                  :: nmovies, nmovies_prev, imovie
+        integer, parameter       :: TRAILING=5
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! set defaults
@@ -69,17 +61,15 @@ contains
             call read_filetable(FILETABNAME, movienames)
             nmovies_prev = nmovies
             nmovies      = size(movienames)
-            print *, 'sz of 1:    ', file_size(movienames(1))
-            print *, 'sz of last: ', file_size(movienames(nmovies))
             call cline%set('nparts', real(nmovies)) ! need dyn update of nparts 4 stream
             p_master%nparts = nmovies               ! need dyn update of nparts 4 stream
             p_master%nptcls = nmovies               ! need dyn update of nparts 4 stream
             call create_individual_filetables       ! 1-of-1 ftab but index comes from part
             call setup_distr_env                    ! just to reduce complexity
             ! manage job scheduling
-            if( qscripts%exists() )then
-                call qscripts%update_queue
-                call qscripts%submit_scripts
+            if( qenv%exists() )then
+                call qenv%qscripts%update_queue
+                call qenv%qscripts%submit_scripts
             endif
             call simple_sleep(SHORTTIME)
         end do
@@ -105,16 +95,16 @@ contains
 
             subroutine setup_distr_env
                 ! get the old jobs status
-                if( qscripts%exists() ) call qscripts%get_jobs_status( jobs_done, jobs_submitted )
+                if( qenv%exists() ) call qenv%qscripts%get_jobs_status( jobs_done, jobs_submitted )
                 ! setup the environment for distributed execution
-                call setup_qsys_env(p_master, qsys_fac, myqsys, parts, qscripts, myq_descr, stream=.true.)
+                call qenv%new(p_master, stream=.true.)
                 ! put back the old jobs status
-                if( allocated(jobs_done) ) call qscripts%set_jobs_status( jobs_done, jobs_submitted )
+                if( allocated(jobs_done) ) call qenv%qscripts%set_jobs_status( jobs_done, jobs_submitted )
                 ! prepare job description
                 call cline%gen_job_descr(job_descr)
                 ! prepare scripts
                 if( nmovies > nmovies_prev )then
-                    call qscripts%generate_scripts(job_descr, p_master%ext, myq_descr, part_params=part_params)
+                    call qenv%qscripts%generate_scripts(job_descr, p_master%ext, qenv%qdescr, part_params=part_params)
                 endif
             end subroutine setup_distr_env
 

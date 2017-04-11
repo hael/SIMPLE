@@ -9,8 +9,7 @@ use simple_cmdline,          only: cmdline
 !use simple_masker,           only: automask
 use simple_cont3D_matcher,   only: cont3D_shellweight
 use simple_pcont3D_srch,     only: pcont3D_srch
-use simple_hadamard_common,  only: set_bp_range, norm_struct_facts, eonorm_struct_facts,&
-                                &prepimg4align, preprefvol, setup_shellweights, grid_ptcl
+use simple_hadamard_common,  ! use all in there
 use simple_math              ! use all in there
 implicit none
 
@@ -47,6 +46,10 @@ contains
         real                          :: reslim, frac_srch_space
         integer                       :: iptcl, state, alloc_stat, cnt_glob
         logical                       :: doshellweight, update_res
+
+        ! READ IMAGES
+        call read_imgs_from_stk( b, p )
+
         ! AUTOMASKING DEACTIVATED FOR NOW
         ! INIT
         nptcls = p%top - p%fromp + 1                ! number of particles processed
@@ -78,9 +81,9 @@ contains
         if( p%l_distr_exec )then
             ! nothing to do
         else
-            if( p%l_shellw .and. frac_srch_space>=50. )call cont3D_shellweight(b, p, cline)
+            if( p%l_shellw )call cont3D_shellweight(b, p, cline)
         endif
-        call setup_shellweights(b, p, doshellweight, wmat, res, res_pad)
+        call setup_shellweights(b, p, doshellweight, wmat, res=res, res_pad=res_pad)
 
         ! PREPARE REFVOLS
         call prep_vols(b, p, cline)
@@ -103,7 +106,7 @@ contains
         else
             call pftcc%new(nrefs_per_ptcl, [1,1], [p%boxmatch,p%boxmatch,1],p%kfromto, p%ring2, p%ctf)
         endif
-        ! the pftcc is only intitalized here so the img polarizer can be
+        ! the pftcc is only initialized here so the img polarizer can be
         call b%img%init_imgpolarizer(pftcc)
 
         ! INITIALIZE
@@ -130,7 +133,7 @@ contains
                 cycle
             endif
             ! re-fills pftcc
-            call prep_pftcc(b, p, iptcl, cnt_glob )
+            call prep_pftcc(b, p, iptcl)
             ! multiply refs with CTF
             call apply_ctf(p, orientation, pftcc)
             ! align
@@ -138,31 +141,26 @@ contains
             call pcont3Dsrch%do_srch
             orientation = pcont3Dsrch%get_best_ori()
             call b%a%set_ori(iptcl, orientation)
-            softoris = pcont3Dsrch%get_softoris()
             ! grid
             if( doshellweight )then
                 wresamp = resample_filter(wmat(iptcl,:), res, res_pad)
                 if(p%npeaks == 1)then
-                    call grid_ptcl(b, p, iptcl, cnt_glob, orientation, shellweights=wresamp)
+                    call grid_ptcl(b, p, iptcl, orientation, shellweights=wresamp)
                 else
-                    call grid_ptcl(b, p, iptcl, cnt_glob, orientation, os=softoris, shellweights=wresamp)
+                    softoris = pcont3Dsrch%get_softoris()
+                    call grid_ptcl(b, p, iptcl, orientation, os=softoris, shellweights=wresamp)
                 endif
             else
                 if(p%npeaks == 1)then
-                    call grid_ptcl(b, p, iptcl, cnt_glob, orientation)
+                    call grid_ptcl(b, p, iptcl, orientation)
                 else
-                    call grid_ptcl(b, p, iptcl, cnt_glob, orientation, os=softoris)
+                    softoris = pcont3Dsrch%get_softoris()
+                    call grid_ptcl(b, p, iptcl, orientation, os=softoris)
                 endif
             endif
             ! output orientation
             call b%a%write(iptcl, p%outfile)
         enddo
-        ! cleanup (mostly for debug purposes)
-        call pftcc%kill
-        do state=1,p%nstates
-            if(state_exists(state))call b%refvols(state)%kill_expanded
-        enddo
-        !call b%img%kill_imgpolarizer is private a the moment
 
         ! orientations output
         !call b%a%write(p%outfile, [p%fromp,p%top])
@@ -182,6 +180,11 @@ contains
             converged = b%conv%check_conv3D(update_res)
         endif
         ! DEALLOCATE
+        call pftcc%kill
+        do state=1,p%nstates
+            if(state_exists(state))call b%refvols(state)%kill_expanded
+        enddo
+        !call b%img%kill_imgpolarizer is private a the moment
         if(allocated(wmat)   ) deallocate(wmat)
         if(allocated(wresamp)) deallocate(wresamp)
         if(allocated(res)    ) deallocate(res)
@@ -196,22 +199,21 @@ contains
         ! PREPARATION OF VOLUMES FOR PROJECTION
         do state=1,p%nstates
             if( state_exists(state) )then
-                call preprefvol( b, p, cline, state )
+                call preprefvol( b, p, cline, state, doexpand=.false. )
                 b%refvols(state) = b%vol
                 call b%refvols(state)%expand_cmat
             endif
         enddo
         if( debug )write(*,*)'prep volumes done'
         ! bring back the original b%vol size
-        if( p%boxmatch < p%box ) call b%vol%new([p%box,p%box,p%box], p%smpd) ! to double check
+        if( p%boxmatch < p%box )call b%vol%new([p%box,p%box,p%box], p%smpd) ! to double check
     end subroutine prep_vols
 
-    subroutine prep_pftcc(b, p, iptcl, cnt_glob)
+    subroutine prep_pftcc(b, p, iptcl)
         use simple_rnd, only: ran3
-        class(build),            intent(inout) :: b
-        class(params),           intent(inout) :: p
-        integer,                 intent(in)    :: iptcl
-        integer,                 intent(in)    :: cnt_glob
+        class(build),  intent(inout) :: b
+        class(params), intent(inout) :: p
+        integer,       intent(in)    :: iptcl
         type(oris) :: cone
         type(ori)  :: optcl, oref
         real       :: eullims(3,2)
@@ -226,8 +228,7 @@ contains
         ! SEARCH SPACE PREP
         eullims = b%se%srchrange()
         call cone%rnd_proj_space(NREFS, optcl, p%athres, eullims)
-        call cone%set_ori(1, optcl)    ! previous best is the first
-        call cone%set(1, 'corr', -1.)  ! !!!
+        call cone%set_euler(1, optcl%get_euler()) ! previous best is the first
         do iref = 1, NREFS
             call cone%e3set(iref, 0.)
         enddo
@@ -255,11 +256,7 @@ contains
             call b%refvols(state)%fproject_polar(iref, oref, pftcc, expanded=.true.)
         enddo
         ! PREP PARTICLE
-        if( p%l_distr_exec )then
-            call b%img%read(p%stk_part, cnt_glob, isxfel=p%l_xfel)
-        else
-            call b%img%read(p%stk, iptcl, isxfel=p%l_xfel)
-        endif
+        b%img = b%imgs(iptcl) ! put the original image back
         call prepimg4align(b, p, optcl)
         call b%img%imgpolarizer(pftcc, 1, isptcl=.true.)
         ! restores b%img dimensions for clean exit

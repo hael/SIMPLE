@@ -14,6 +14,7 @@ use Cwd qw(getcwd);
 use File::Path qw(make_path);
 use Tie::File;
 use simple_user_input;
+use File::Copy;
 
 ################################################################################
 # Declare variables                                                            #
@@ -285,12 +286,46 @@ print TCSH "setenv SIMPLE_QSYS=\"local\"\n";
 print TCSH "setenv SIMPLE_PATH $SIMPLE_PATH\n";
 print TCSH 'set path=(${SIMPLE_PATH}/scripts ${SIMPLE_PATH}/bin $path)', "\n";
 close(TCSH);
+
+# Compile and install gui
+compile_gui();
+
 my $finishdir = getcwd();
 finish_message($finishdir);
 
 ################################################################################
 # Subroutines                                                                  #
 ################################################################################
+
+sub compile_gui{
+	my $guidir = $SIMPLE_PATH . "/gui";
+	print color('bold blue');
+	print "*********************************************************\n";
+    print "* Compiling the SIMPLE GUI...                           *\n";
+    print "*********************************************************\n";
+	print color('bold green');
+    make_path($guidir.'/bin');
+	if($PLATFORM == 0){
+		copy($guidir . "/src/ext/websocketd-mac", $guidir . "/bin/websocketd") or die "Failed: $!";
+	}elsif($PLATFORM == 1){
+		copy($guidir . "/src/ext/websocketd-linux", $guidir . "/bin/websocketd") or die "Failed: $!";
+	}
+	print color('bold blue');
+	print color('reset');
+	system("g++ -DSIMPLE_DIR=" . $SIMPLE_PATH . " " . 
+				$guidir . "/src/lodepng.cpp " . 
+				$guidir . "/src/base64.cpp " . 
+				$guidir . "/src/simple_ws.cpp " . 
+				"-ansi -pedantic -Wall -Wextra -O3 -pthread " . 
+				"-o " . $guidir . "/bin/simple_ws");	
+	system("g++ -DSIMPLE_DIR=" . $SIMPLE_PATH . " " . 
+				$guidir . "/src/simple.cpp " . 
+				"-ansi -pedantic -Wall -Wextra -O3 -pthread " . 
+				"-o " . $SIMPLE_PATH . "/bin/simple");
+	print color('bold green');			
+	print color('reset');
+}
+
 sub finish_message{
     my $finishdir_in = shift;
     print color('bold blue');

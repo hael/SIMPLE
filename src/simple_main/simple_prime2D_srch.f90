@@ -1,7 +1,7 @@
 module simple_prime2D_srch
 use simple_defs              ! use all in there
 use simple_math              ! use all in there
-use simple_pftcc_shsrch      ! use all in there
+use simple_pftcc_shsrch,     only: pftcc_shsrch
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_prime_srch,       only: prime_srch
 use simple_strings,          only: str_has_substr
@@ -15,6 +15,7 @@ logical, parameter :: DEBUG=.false.
 type prime2D_srch
     private
     type(prime_srch)      :: srch_common          !< functionalities common to primesrch2D/3D
+    type(pftcc_shsrch )   :: shsrch_obj           !< shift search object
     integer               :: nrefs         = 0    !< number of references
     integer               :: nrots         = 0    !< number of in-plane rotations in polar representation
     integer               :: nrefs_eval    = 0    !< nr of references evaluated
@@ -54,22 +55,18 @@ contains
     ! CONSTRUCTOR
     
     !>  \brief  is a constructor
-    subroutine new( self, p, ncls )
+    subroutine new( self, p, pftcc )
         use simple_params,     only: params
         use simple_map_reduce, only: split_nobjs_even
-        class(prime2D_srch), intent(inout) :: self !< instance
-        class(params),       intent(in)    :: p    !< parameters
-        integer, optional,   intent(in)    :: ncls !< overriding dummy (ncls)
+        class(prime2D_srch),     intent(inout) :: self
+        class(params),           intent(in)    :: p
+        class(polarft_corrcalc), intent(inout) :: pftcc
         integer :: alloc_stat, i
-        real    :: dang
+        real    :: dang, lims(2,2)
         ! destroy possibly pre-existing instance
         call self%kill
         ! set constants
-        if( present(ncls) )then
-            self%nrefs = ncls
-        else
-            self%nrefs = p%ncls
-        endif
+        self%nrefs      = p%ncls
         self%nrots      = round2even(twopi*real(p%ring2))
         self%nrefs_eval = 0
         self%trs        = p%trs
@@ -77,6 +74,11 @@ contains
         self%nthr       = p%nthr
         ! construct composites
         self%srch_common = prime_srch(p)
+        lims(1,1) = -self%trs
+        lims(1,2) =  self%trs
+        lims(2,1) = -self%trs
+        lims(2,2) =  self%trs
+        call self%shsrch_obj%new(pftcc, lims)
         ! the instance now exists
         self%exists = .true.
         if( DEBUG ) write(*,'(A)') '>>> PRIME2D_SRCH::CONSTRUCTED NEW SIMPLE_PRIME2D_SRCH OBJECT'
@@ -169,13 +171,6 @@ contains
         class(ori), optional,    intent(inout) :: o_prev
         real,       optional,    intent(in)    :: corrmat(self%nrefs,self%nrots)
         type(ran_tabu) :: rt
-        real           :: lims(2,2)
-        ! initialize in-plane search classes
-        lims(1,1) = -self%trs
-        lims(1,2) =  self%trs
-        lims(2,1) = -self%trs
-        lims(2,2) =  self%trs
-        call pftcc_shsrch_init(pftcc, lims)
         if( present(o_prev) )then
             ! find previous discrete alignment parameters
             self%prev_class = nint(o_prev%get('class'))                   ! class index
@@ -370,8 +365,8 @@ contains
         self%best_shvec = [0.,0.]
         if( self%doshift )then
             corr_before = self%best_corr
-            call pftcc_shsrch_set_indices(self%best_class, iptcl, self%best_rot)
-            cxy = pftcc_shsrch_minimize()
+            call self%shsrch_obj%set_indices(self%best_class, iptcl, self%best_rot)
+            cxy = self%shsrch_obj%minimize()
             corr_after = cxy(1)
             if( corr_after > corr_before )then
                 self%best_corr  = cxy(1)
@@ -394,3 +389,4 @@ contains
     end subroutine kill
 
 end module simple_prime2D_srch
+

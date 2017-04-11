@@ -19,9 +19,9 @@ type, extends(optimizer) :: simplex_opt
     real              :: yb=0.          !< best cost function value
     logical           :: exists=.false. !< to indicate existence
   contains
-    procedure :: new      => new_simplex_opt
-    procedure :: minimize => simplex_minimize
-    procedure :: kill     => kill_simplex_opt
+    procedure :: new          => new_simplex_opt
+    procedure :: minimize     => simplex_minimize
+    procedure :: kill         => kill_simplex_opt
     ! GETTERS
     procedure :: get_vertices => get_simplex_vertices
 end type simplex_opt
@@ -33,7 +33,7 @@ contains
         use simple_opt_spec, only: opt_spec
         use simple_jiffys,   only: alloc_err
         class(simplex_opt), intent(inout) :: self !< instance
-        class(opt_spec), intent(inout)    :: spec !< specification
+        class(opt_spec),    intent(inout) :: spec !< specification
         integer                           :: alloc_stat
         real                              :: x
         call self%kill

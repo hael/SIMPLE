@@ -31,13 +31,13 @@ contains
         call self%env%push('user_email',            '#PBS -M')
         ! ### QSYS PARAMETERS
         call self%env%push('qsys_partition',        '#PBS -q')
-        !call self%env%push('qsys_qos',              '#PBS -q') ??
+        call self%env%push('qsys_qos',              '#PBS -l qos')
         !call self%env%push('qsys_reservation',      '#PBS --reservation') ??
         call self%env%push('qsys_submit_cmd',       'qsub')
         ! ### JOB PARAMETERS
         call self%env%push('job_name',              '#PBS -N')
-        !call self%env%push('job_ntasks',            '')     ??
-        !call self%env%push('job_ntasks_per_socket', '') ??
+        !call self%env%push('job_ntasks',            '')                   ! unnecessary
+        !call self%env%push('job_ntasks_per_socket', '')                   ! unnecessary
         call self%env%push('job_cpus_per_task',     '#PBS -l nodes=1:ppn') ! overridden by p%nthr
         call self%env%push('job_memory_per_task',   '#PBS -l mem')
         call self%env%push('job_time',              '#PBS -l walltime')
@@ -70,15 +70,14 @@ contains
             pbs_cmd = self%env%get(which)
             pbs_val = job_descr%get(i)
             select case(key)
-                case('job_time','job_cpus_per_task')
+                case('job_time', 'job_cpus_per_task', 'qsys_qos')
                     call write_formatted(pbs_cmd, pbs_val, '=')
                 case('job_memory_per_task')
-                    ! memory
+                    ! memory in kilobytes
                     rval    = str2real(pbs_val) / 1024.
                     pbs_val = trim(int2str(ceiling(rval)))//'kb'
                     call write_formatted(pbs_cmd, pbs_val, '=')
                 case DEFAULT
-                    ! regular formatting
                     call write_formatted(pbs_cmd, pbs_val)
             end select
             if(allocated(pbs_cmd))deallocate(pbs_cmd)
@@ -87,10 +86,12 @@ contains
         if(allocated(key))deallocate(key)
         ! write default instructions
         if( write2file )then
+            write(fhandle,'(a)') '#PBS -V'  ! environment copy
             write(fhandle,'(a)') '#PBS -o outfile.%j'
             write(fhandle,'(a)') '#PBS -e errfile.%j'
             write(fhandle,'(a)') '#PBS -m a'
         else
+            write(*,'(a)') '#PBS -V'  ! environment copy
             write(*,'(a)') '#PBS -o outfile.%j'
             write(*,'(a)') '#PBS -e errfile.%j'
             write(*,'(a)') '#PBS -m a'

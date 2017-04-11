@@ -11,11 +11,11 @@ contains
     !!          direction spec%xi from spec%x, and replaces spec%xi by the actual vector 
     !!          displacement that spec%x was moved. Returns as lowest_cost the value of 
     !!          spec%cosfun at the returned location spec%x. All accomplished by calling the 
-    !!          routines mnbrak and brent. No derivatives needed!
+    !!          routines mnbrak and brent. No derivatives needed
     subroutine linmin(spec,lowest_cost)
         use simple_opt_spec, only: opt_spec
         class(opt_spec), intent(inout) :: spec
-        real, intent(out)              :: lowest_cost
+        real,            intent(out)   :: lowest_cost
         integer :: j
         real    :: ax,bx,fa,fb,fx,xmin,xx
         if( spec%str_opt .ne. 'linmin' )then
@@ -46,7 +46,7 @@ contains
                 end do
                 r = spec%costfun(spec%xt,spec%ndim)
                 spec%nevals = spec%nevals+1
-            end function
+            end function eval_move
             
             !>  \brief  routine for initially bracketing a minimum
             !!          given the function eval_move(x), and given distinct initial points ax and
@@ -58,9 +58,9 @@ contains
             !!          are magnified; GLIMIT is the maximum magnification allowed for
             !!          parabolic-fit step
             subroutine mnbrak(ax,bx,cx,fa,fb,fc)
-                real, intent(inout)         :: ax,bx,cx
-                real, intent(out)           :: fa,fb,fc
-                real, parameter             :: GOLD=1.618034, GLIMIT=100., TINY=1.e-10
+                real, intent(inout) :: ax,bx,cx
+                real, intent(out)   :: fa,fb,fc
+                real, parameter     :: GOLD=1.618034, GLIMIT=100., TINY=1.e-10
                 real :: dum,fu,q,r,u,ulim
                 fa=eval_move(ax)
                 fb=eval_move(bx)
@@ -118,7 +118,7 @@ contains
                     fb=fc
                     fc=fu
                 end do
-            end subroutine
+            end subroutine mnbrak
             
             !>  \brief  Brent's method in one dimension
             !!          Given the eval_move function, and a bracketing triplet of abscissas
@@ -207,9 +207,9 @@ contains
                         endif
                     endif
                 end do
-            end function
+            end function brent
 
-    end subroutine
+    end subroutine linmin
     
     !>  \brief  line search routine (relying on gradient evals, used in BFGS)
     subroutine lnsrch(n,xold,fold,g,p,x,f,stpmax,check,func,nevals)
@@ -221,7 +221,7 @@ contains
         interface
             function func( vec, D ) result(cost)
                 integer, intent(in) :: D
-                real, intent(in)    :: vec(D)
+                real,    intent(in) :: vec(D)
                 real                :: cost
             end function 
         end interface
@@ -287,7 +287,7 @@ contains
             fold2=fold
             alam=max(tmplam,.1*alam)
         end do
-    end subroutine
+    end subroutine lnsrch
 
     !>  \brief  multidimensional minimization of the function func(x) (x(1:ndim) is a vector in ndim dimensions)
     !!          by the downhill simplex method of Nelder and Mead. The matrix p(1:ndim+1,1:ndim) is input/output. 
@@ -297,12 +297,12 @@ contains
     !!          value. On output, p and y will have been reset to ndim+1 new points all within ftol of a minimum
     !!          function value, and iter gives the number of function evaluations taken.
     subroutine amoeba(p,y,pb,yb,ftol,func,iter,itmax,nevals)
-        real, intent(inout)  :: p(:,:) !< the ndim+1 rows of p are ndim vec:s which are the vertices of the starting simplex
-                                       !! the best point is put in slot 1 upon convergence
-        real, intent(inout)    :: y(:)   !< must be pre-initialized to the values of func evaluated at the ndim+1 vertices (rows) of p
-        real, intent(inout)    :: pb(:)  !< for updating the best point
-        real, intent(inout)    :: yb     !< for updating the cost of best point
-        real, intent(in)       :: ftol   !< fractional convergence tolerance to be achieved in the function value (0.0005)
+        real,    intent(inout) :: p(:,:) !< the ndim+1 rows of p are ndim vec:s which are the vertices of the starting simplex
+                                         !! the best point is put in slot 1 upon convergence
+        real,    intent(inout) :: y(:)   !< must be pre-initialized to the values of func evaluated at the ndim+1 vertices (rows) of p
+        real,    intent(inout) :: pb(:)  !< for updating the best point
+        real,    intent(inout) :: yb     !< for updating the cost of best point
+        real,    intent(in)    :: ftol   !< fractional convergence tolerance to be achieved in the function value (0.0005)
         integer, intent(out)   :: iter   !< number of exectuted iterations
         integer, intent(in)    :: itmax  !< maximum number of iterations
         integer, intent(inout) :: nevals !< number of costfun evals counter
@@ -380,7 +380,7 @@ contains
                     pb(:) = p(1,:)
                     yb    = y(1)
                 endif
-            end subroutine
+            end subroutine amoeba_private
             
             !>  \brief  extrapolates by a factor fac through the face of the simplex across from the
             !!          high point, tries it, and replaces the high point if the new point is better
@@ -400,7 +400,7 @@ contains
                     p(ihi,:)=ptry(:)
                 end if
                 amotry=ytry
-            end function
+            end function amotry
 
     end subroutine amoeba
 
@@ -488,7 +488,7 @@ contains
                     end if
                 end if
             end do
-        end subroutine
+        end subroutine amebsa_private
         
         !>  \brief  extrapolates by a factor fac through the face of the contsa across from the
         !!          high point, tries it, and replaces the high point if the new point is better
@@ -514,7 +514,7 @@ contains
                 p(ihi,:)=ptry(:)
             end if
             amotsa=yflu
-        end function
+        end function amotsa
         
     end subroutine amebsa
     
@@ -543,7 +543,7 @@ contains
             new_ind = rt%irnd()
         endif
         call rt%kill
-    end function
+    end function shc_selector
     
     !> \brief  check the vector with respect to the limits
     subroutine check_and_correct_vec( spec, vec, corrected )
@@ -568,6 +568,6 @@ contains
             endif
         end do
         if( present(corrected) ) corrected = ccorrected
-    end subroutine
+    end subroutine check_and_correct_vec
 
-end module
+end module simple_opt_subs

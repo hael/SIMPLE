@@ -38,9 +38,9 @@ real                  :: olims(6,2)=0.   !< optimization limits
 real                  :: hp=0.           !< fixed high-pass limit
 real                  :: lp=0.           !< fixed low-pass limit
 
-real, parameter    :: cost_err = 0.0001, T_initial = 1000000., T_update = 0.9, T_lowlim = 0.5
-real, parameter    :: trs_lrate = 0.05, eul_lrate = 0.1
-real, parameter    :: lrates(5) = [eul_lrate,eul_lrate,eul_lrate,trs_lrate,trs_lrate]
+real,    parameter :: cost_err = 0.0001, T_initial = 1000000., T_update = 0.9, T_lowlim = 0.5
+real,    parameter :: trs_lrate = 0.05, eul_lrate = 0.1
+real,    parameter :: lrates(5) = [eul_lrate,eul_lrate,eul_lrate,trs_lrate,trs_lrate]
 integer, parameter :: T_level_max_rearr = 500
 logical, parameter :: limvars(5) = [.false.,.false.,.false.,.true.,.true.]
 
@@ -75,8 +75,8 @@ contains
         ! make random number functionality
         rt = ran_tabu( p%nptcls )
         ! make annealing object
-        call metro%new([nspace], [.true.], nptcls, 1, pcost_comlin_sa, update)
-        call metro%set_statefun(statefun)
+        ! call metro%new([nspace], [.true.], nptcls, 1, pcost_comlin_sa, update)
+        ! call metro%set_statefun(statefun)
         ! make constants for differential evolution:
         cyhere     = .false.
         eullims    = p%eullims
@@ -97,7 +97,7 @@ contains
             olims(6,1) = 1.
             olims(6,2) = 1.9999
         endif
-    end subroutine
+    end subroutine comlin_srch_init
     
     ! GETTER/SETTERS
     
@@ -122,7 +122,7 @@ contains
             corr = corr+pcorr_comlin()
         end do
         corr = corr/real(nptcls)
-    end function
+    end function comlin_srch_corr
 
     !>  \brief  is for calculating all individual common line correlations
     !!           (for statistical analysis of the distribution)
@@ -139,7 +139,7 @@ contains
             ptcl = i
             corrs(i) = pcorr_comlin()
         end do
-    end function
+    end function comlin_srch_corr_distr
     
     !>  \brief  is for setting the state array
     subroutine comlin_srch_set_states
@@ -147,7 +147,7 @@ contains
         do i=1,nptcls
             statearr(i) = nint(bp%a%get(i, 'state'))
         end do
-    end subroutine
+    end subroutine comlin_srch_set_states
     
     ! OPTIMIZERS
     
@@ -233,7 +233,7 @@ contains
         endif
         bp%a = a_copy
         call a_copy%kill
-    end subroutine
+    end subroutine comlin_srch_symaxis
     
     !>  \brief  is the simulated annealing based algorithm "Reference-free 3D Alignment in a Discrete angular space"
     !!          Elmlund H. et al. "A new cryo-EM single-particle _ab_ _initio_ reconstruction method visualizes 
@@ -251,7 +251,7 @@ contains
             call bp%a%set(i, 'corr', -cost)
             call bp%a%set(i, 'state',   1.)
         end do          
-    end subroutine
+    end subroutine comlin_srch_anneal
     
     !>  \brief  is for assinging conformational states to aligned ptcls by GRASP
     subroutine comlin_srch_state( slim )
@@ -308,7 +308,7 @@ contains
                 statearr(i) = statearr_best(i)
             end do
          endif
-    end subroutine
+    end subroutine comlin_srch_state
     
     ! PRIVATE STUFF
 
@@ -316,7 +316,7 @@ contains
     subroutine update( vec, i, L ) 
         integer, intent(in) :: i, L, vec(L)
         call bp%a%set_ori(i, bp%e%get_ori(vec(1)))
-    end subroutine
+    end subroutine update
     
     !>  \brief  is for updating bp%a when a configuration is accepted in the stochastic gradient descent
     subroutine update2( vec, i, D )
@@ -325,7 +325,7 @@ contains
         call bp%a%set_euler(i, vec(:3))
         call bp%a%set(i, 'x', vec(4))
         call bp%a%set(i, 'y', vec(5))
-    end subroutine
+    end subroutine update2
     
     !>  \brief  is for temperature dependent update of the lowpass limit used for calculating the common line
     !!          correlation. Also updates the bootstrap sample during annealing. The strategy is to have a small 
@@ -356,6 +356,6 @@ contains
         call rt%ne_ran_iarr(bootarr) ! bootstrap sample update
         ! decorate bootstrap estimation functionality to the comlin_corr object:
         call comlin_corr_decor( bootarr_in=bootarr )
-    end subroutine
+    end subroutine statefun
 
 end module simple_comlin_srch

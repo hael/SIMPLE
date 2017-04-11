@@ -4,7 +4,7 @@ use simple_params,           only: params
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_oris,             only: oris
 use simple_ori,              only: ori
-use simple_pftcc_shsrch      ! use all in there
+use simple_pftcc_shsrch,     only: pftcc_shsrch
 use simple_math              ! use all in there
 implicit none
 
@@ -17,11 +17,13 @@ logical, parameter :: debug = .false.
 type pcont3D_srch
     private
     class(polarft_corrcalc), pointer :: ppftcc => null()  !< polar fourier correlation calculator
+    type(pftcc_shsrch)               :: shsrch_obj        !< shift search object
     type(oris) :: reforis             !< per ptcl search space and result of euler angles search
     type(oris) :: softoris            !< references returned
     type(oris) :: shiftedoris         !< references whose shifts are searched
     type(ori)  :: orientation_in      !< input orientation
     type(ori)  :: orientation_out     !< best orientation found
+
     real       :: lims(2,2)  = 0.     !< shift search limits
     real       :: prev_corr  = -1.    !< previous correlation
     integer    :: prev_ref   = 0      !< previous reference
@@ -75,6 +77,7 @@ contains
         call self%shiftedoris%new(self%npeaks)
         call self%softoris%new(self%npeaks)
         ! other stuff
+        call self%shsrch_obj%new(self%ppftcc, self%lims)
         self%prev_roind = self%ppftcc%get_roind(360.-o_in%e3get())
         self%prev_ref   = self%reforis%find_closest_proj(self%orientation_in) ! state not taken into account
         self%prev_corr  = self%ppftcc%corr(self%prev_ref, 1, self%prev_roind) ! state not taken into account
@@ -167,14 +170,14 @@ contains
         class(pcont3D_srch), intent(inout) :: self
         real, allocatable :: corrs(:)
         type(ori)         :: o
-        real              :: cxy(3), prev_shift_vec(2), corr
+        real, allocatable :: cxy(:)
+        real              :: prev_shift_vec(2), corr
         integer           :: ref_inds(self%nrefs), i, iref, inpl_ind, cnt
         ! SORT ORIENTATIONS
         ref_inds = (/ (i, i=1, self%nrefs) /)
         corrs = self%reforis%get_all('corr')
         call hpsort(self%nrefs, corrs, ref_inds)
-        ! SHIFT SEARCH
-        call pftcc_shsrch_init(self%ppftcc, self%lims)
+        ! SHIFT SEARC
         prev_shift_vec = self%orientation_in%get_shift()
         cnt = 0
         do i = self%nrefs-self%npeaks+1,self%nrefs
@@ -183,8 +186,8 @@ contains
             o        = self%reforis%get_ori(iref)
             corr     = o%get('corr')
             inpl_ind = self%ppftcc%get_roind(360.-o%e3get())
-            call pftcc_shsrch_set_indices(iref, 1, inpl_ind)
-            cxy = pftcc_shsrch_minimize()
+            call self%shsrch_obj%set_indices(iref, 1, inpl_ind)
+            cxy = self%shsrch_obj%minimize()
             if(cxy(1) >= corr)then
                 call o%set('corr', cxy(1))
                 call o%set_shift(cxy(2:) + prev_shift_vec)

@@ -296,11 +296,11 @@ contains
     end subroutine setup_shellweights_2
 
     !>  \brief  grids one particle image to the volume
-    subroutine grid_ptcl( b, p, iptcl, cnt_glob, orientation, os, shellweights )
+    subroutine grid_ptcl( b, p, iptcl, orientation, os, shellweights )
         use simple_oris, only: oris
         class(build),              intent(inout) :: b
         class(params),             intent(inout) :: p
-        integer,                   intent(in)    :: iptcl, cnt_glob
+        integer,                   intent(in)    :: iptcl
         class(ori),                intent(inout) :: orientation
         class(oris),     optional, intent(inout) :: os
         real,            optional, intent(in)    :: shellweights(:)
@@ -318,11 +318,7 @@ contains
             stop 'need optional primesrch3D input when npeaks > 1; simple_hadamard_common :: grid_ptcl'
         pw = orientation%get('w')
         if( pw > 0. )then
-            if( p%l_distr_exec )then
-                call b%img_copy%read(p%stk_part, cnt_glob, isxfel=p%l_xfel)
-            else
-                call b%img_copy%read(p%stk, iptcl, isxfel=p%l_xfel)
-            endif
+            b%img_copy = b%imgs(iptcl) ! put the original image back
             ! prepare image for gridding
             ! using the uncorrected/unmodified image as input
             if( p%l_xfel )then
@@ -423,8 +419,8 @@ contains
             ! MASKING
             if( p%doautomsk )then
                 ! PARTICLE ENVELOPPE MASKING
-                call b%img_msk%new([p%boxmatch,p%boxmatch,1], p%smpd) ! ensures the correct dimension
-                call b%mskvol%env_rproject(o, b%img_msk, p%msk)       ! create 2D envelope
+                if( p%boxmatch < p%box )call b%img_msk%new([p%boxmatch,p%boxmatch,1], p%smpd)
+                call b%mskvol%env_rproject(o, b%img_msk, p%msk) ! create 2D envelope
                 do i=1, p%binwidth
                     call b%img_msk%grow_bin             ! binary layers
                 enddo
@@ -501,10 +497,10 @@ contains
         class(cmdline),    intent(inout) :: cline
         integer,           intent(in)    :: s
         logical, optional, intent(in)    :: doexpand
-        logical :: ddoexpand
+        logical :: l_doexpand
         real    :: shvec(3)
-        ddoexpand = .true.
-        if( present(doexpand) ) ddoexpand = doexpand
+        l_doexpand = .true.
+        if( present(doexpand) )l_doexpand = doexpand
         if( p%boxmatch < p%box )call b%vol%new([p%box,p%box,p%box],p%smpd) ! ensure correct dim
         call b%vol%read(p%vols(s), isxfel=p%l_xfel)
         if( p%l_xfel )then
@@ -549,7 +545,7 @@ contains
         ! FT volume
         call b%vol%fwd_ft
         ! expand for fast interpolation
-        if( ddoexpand ) call b%vol%expand_cmat
+        if( l_doexpand )call b%vol%expand_cmat
 
         contains
 

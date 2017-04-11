@@ -324,12 +324,13 @@ select case(prg)
         ! endif
         call cline%parse( keys_required(:5), keys_optional(:23) )
         ! set defaults
-        if( .not. cline%defined('lp')     ) call cline%set('lp',     20.)
-        if( .not. cline%defined('eo')     ) call cline%set('eo',    'no')
-        if( .not. cline%defined('amsklp') ) call cline%set('amsklp', 25.)
-        if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',  30.)
-        if( .not. cline%defined('edge')   ) call cline%set('edge',   20.)
+        if( .not. cline%defined('lp')     ) call cline%set('lp',       10.)
+        if( .not. cline%defined('eo')     ) call cline%set('eo',      'no')
+        if( .not. cline%defined('amsklp') ) call cline%set('amsklp',   25.)
+        if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',    30.)
+        if( .not. cline%defined('edge')   ) call cline%set('edge',     20.)
         if( .not. cline%defined('center') ) call cline%set('center', 'yes')
+        if( .not. cline%defined('maxits') ) call cline%set('maxits',  30. )
         if( cline%defined('nparts') .and. cline%defined('chunksz') )then
             stop 'nparts and chunksz cannot simultaneously be part of command line'
         else if(cline%defined('nparts') )then
