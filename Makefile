@@ -58,27 +58,27 @@ defs_code: simple_defs.o   \
 
 production_code: ;
 
-utils_code: s_utes  \
-            s_utils ;
+utils_code: s_utes                \
+            s_utils               ;
 
-s_utes: simple_arr.o          \
-        simple_sll.o          \
-        simple_strings.o      \
-        simple_imgheadrec.o   \
-        simple_imghead.o      \
-        simple_filehandling.o \
-        simple_jiffys.o       \
-        simple_math.o         \
-        simple_magic_boxes.o  \
-        simple_rnd.o          \
-        gnufor2.o             \
-        simple_imgfile.o      \
-        simple_stat.o         \
-        simple_online_var.o   \
-        simple_ran_tabu.o     \
-        simple_testfuns.o     ;
+s_utes: simple_arr.o              \
+        simple_sll.o              \
+        simple_strings.o          \
+        simple_imgheadrec.o       \
+        simple_imghead.o          \
+        simple_filehandling.o     \
+        simple_jiffys.o           \
+        simple_math.o             \
+        simple_magic_boxes.o      \
+        simple_rnd.o              \
+        gnufor2.o                 \
+        simple_imgfile.o          \
+        simple_stat.o             \
+        simple_online_var.o       \
+        simple_ran_tabu.o         \
+        simple_testfuns.o         ;
 
-s_utils: simple_syscalls.o  ;
+s_utils: simple_syscalls.o        ;
 
 Simple_code: opt            \
              general        \
@@ -133,6 +133,8 @@ simple: simple_image.o                  \
         simple_corrmat.o                \
         simple_gridding.o               \
         simple_polarft_corrcalc.o       \
+        simple_pftcc_opt.o              \
+        simple_simplex_pftcc_opt.o      \
         simple_projector.o              \
         simple_projector_hlev.o         \
         simple_volpft_corrcalc.o        \
@@ -200,7 +202,8 @@ qsys: simple_qsys_base.o                  \
       simple_qsys_local.o                 \
       simple_qsys_factory.o               \
       simple_qsys_ctrl.o                  \
-      simple_qsys_funs.o                  ;
+      simple_qsys_funs.o                  \
+      simple_qsys_env.o                   ;
 
 masters: simple_rec_master.o              \
          simple_symsrcher.o               \
@@ -230,12 +233,10 @@ src_code: ;
 
 cpu_test_code: simple_optimiser_tester.o       \
                simple_scatter_orisrch_tester.o \
-               simple_prime2D_srch_tester.o    \
                simple_wiener2D_tester.o        \
                simple_ft_expanded_tester.o     \
                simple_speedtester.o            \
-               simple_volpft_srch_tester.o     \
-               simple_prime3D_srch_tester.o    ;
+               simple_volpft_srch_tester.o     ;
 
 test_code: ;
  

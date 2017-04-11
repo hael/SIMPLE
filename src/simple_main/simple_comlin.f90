@@ -46,11 +46,11 @@ type comlin
     procedure, private :: extr_comlin
     ! DESTRUCTOR
     procedure :: kill
-end type
+end type comlin
 
 interface comlin
     module procedure constructor
-end interface
+end interface comlin
 
 contains
 
@@ -64,7 +64,7 @@ contains
         class(image), intent(in), target :: fpls(:) !< Fourier planes
         type(comlin)                     :: self    !< object
         call self%new( a, fpls ) 
-    end function
+    end function constructor
 
     !>  \brief  is a constructor
     subroutine new( self, a, fpls )
@@ -94,7 +94,7 @@ contains
         self%foundline = .false.
         self%lines     = 0.
         self%existence = .true.
-    end subroutine
+    end subroutine new
     
     !>  \brief  is for extracting common lines (for debugging purposes)
     subroutine extr_lines( self, pind, lp_dyn )
@@ -114,7 +114,7 @@ contains
             write(unit=filnum,rec=j) self%clines(j,:,2)
         end do
         close(unit=filnum)
-    end subroutine
+    end subroutine extr_lines
 
     !>  \brief  is for interpolating the common lines associated with one particle image 
     !!          and calculating the per-particle common line correlation 
@@ -142,7 +142,7 @@ contains
         else
             corr = -1.
         endif
-    end function
+    end function pcorr_1
     
     !>  \brief  is for interpolating the common lines associated with one particle image 
     !!          and calculating the per-particle common line correlation, with random 
@@ -172,7 +172,7 @@ contains
         else
             corr = -1.
         endif
-    end function
+    end function pcorr_2
     
     !>  \brief  is for interpolating the common lines associated with one particle image 
     !!          and calculating the per-particle common line correlation, with state
@@ -204,7 +204,7 @@ contains
         else
             corr = -1.
         endif
-    end function
+    end function pcorr_3
     
     !>  \brief  is for interpolating the common lines associated with one particle image 
     !!          and calculating the per-particle common line correlation, with random
@@ -237,7 +237,7 @@ contains
         else
             corr = -1.
         endif
-    end function
+    end function pcorr_4
     
     !>  \brief  is for interpolating the common line between a pair of images
     !!          and calculating the common line correlation 
@@ -260,7 +260,7 @@ contains
         else
             corr = -1.
         endif
-    end function
+    end function pcorr_5
     
     ! PRIVATE STUFF
     
@@ -311,7 +311,7 @@ contains
         tmpb1 = matmul( self%a%get_mat(j), comlin )
         call projz( tmpb1, self%lines(j,:,2) )
         self%foundline(j) = .true.
-    end subroutine
+    end subroutine calc_comlin
     
     !>  \brief  calculates common line algebra, interpolates the
     !!          complex vectors, and calculates corr precursors
@@ -343,7 +343,7 @@ contains
                 sumbsq = sumbsq+csq(self%clines(j,k,2))
             end do
         endif
-    end subroutine
+    end subroutine extr_comlin
     
     ! DESTRUCTOR
     
@@ -355,6 +355,6 @@ contains
             self%a    => null()
             self%fpls => null()
         endif
-    end subroutine
+    end subroutine kill
     
 end module simple_comlin

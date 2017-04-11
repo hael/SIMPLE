@@ -155,6 +155,7 @@ contains
         type(params) :: p
         type(build)  :: b
         type(oris)   :: o
+        integer      :: fnr, file_stat
         p = params(cline) ! parameters generated
         if( cline%defined('stk') )then
             p%nptcls = 1
@@ -166,6 +167,11 @@ contains
         call o%write(p%outfile)
         ! end gracefully
         call simple_end('**** SIMPLE_SYMSRCH NORMAL STOP ****')
+         ! indicate completion (when run in a qsys env)
+        fnr = get_fileunit()
+        open(unit=fnr, FILE='SYMSRCH_FINISHED', STATUS='REPLACE', action='WRITE', iostat=file_stat)
+        call fopen_err('In: commander_comlin :: symsrch', file_stat )
+        close( unit=fnr )
     end subroutine exec_symsrch
 
 end module simple_commander_comlin

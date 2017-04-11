@@ -301,9 +301,8 @@ sub compile_gui{
 	my $guidir = $SIMPLE_PATH . "/gui";
 	print color('bold blue');
 	print "*********************************************************\n";
-    print "* Installing the gui...        *\n";
+    print "* Compiling the SIMPLE GUI...                           *\n";
     print "*********************************************************\n";
-	print "Installing websocketd ... ";
 	print color('bold green');
     make_path($guidir.'/bin');
 	if($PLATFORM == 0){
@@ -311,9 +310,7 @@ sub compile_gui{
 	}elsif($PLATFORM == 1){
 		copy($guidir . "/src/ext/websocketd-linux", $guidir . "/bin/websocketd") or die "Failed: $!";
 	}
-	print "Done\n";
 	print color('bold blue');
-	print "Installing simple gui ... ";
 	print color('reset');
 	system("g++ -DSIMPLE_DIR=" . $SIMPLE_PATH . " " . 
 				$guidir . "/src/lodepng.cpp " . 
@@ -325,8 +322,7 @@ sub compile_gui{
 				$guidir . "/src/simple.cpp " . 
 				"-ansi -pedantic -Wall -Wextra -O3 -pthread " . 
 				"-o " . $SIMPLE_PATH . "/bin/simple");
-	print color('bold green');		
-	print "Done\n";		
+	print color('bold green');			
 	print color('reset');
 }
 

@@ -213,7 +213,7 @@ type :: params
     integer :: newbox2=0
     integer :: nframes=0
     integer :: nmembers=0
-    integer :: nnn=500
+    integer :: nnn=50
     integer :: noris=0
     integer :: nparts=1
     integer :: npeaks=1
@@ -301,7 +301,6 @@ type :: params
     real    :: fraczero=0.
     real    :: ftol=1e-6
     real    :: gw=0.5
-    real    :: het_thresh=HETINITTHRESH
     real    :: hp=100.
     real    :: hp_ctffind=30.
     real    :: inner=0.
@@ -639,7 +638,6 @@ contains
         call check_rarg('fraczero',       self%fraczero)
         call check_rarg('ftol',           self%ftol)
         call check_rarg('gw',             self%gw)
-        call check_rarg('het_thresh',     self%het_thresh)
         call check_rarg('hp',             self%hp)
         call check_rarg('hp_ctffind',     self%hp_ctffind)
         call check_rarg('inner',          self%inner)
@@ -838,6 +836,10 @@ contains
 !$          call omp_set_num_threads(self%nthr)   
         endif
         nthr_glob = self%nthr
+        if( .not. cline%defined('nthr_master') )then
+            self%nthr_master = nthr_glob
+        endif
+
 !<<< END, PARALLELISATION-RELATED
 
 !>>> START, IMAGE-PROCESSING-RELATED

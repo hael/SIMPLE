@@ -65,9 +65,6 @@ real, parameter :: FRAC_SH_LIM   = 80.0 ! at what frac to turn on the shift sear
 real, parameter :: SHW_FRAC_LIM  = 50.  ! at what frac to turn on shell-weights
 real, parameter :: EXTRINITHRESH = 0.5
 
-! constants for heterogeinity
-real, parameter :: HETINITTHRESH = 0.5
-
 ! endianness conversion
 character(len=:), allocatable :: endconv
 

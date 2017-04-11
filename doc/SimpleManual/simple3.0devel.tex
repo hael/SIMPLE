@@ -1075,28 +1075,6 @@ our$DEBUG_LEVEL = "low";
 \end{verbatim}
 This catches most common errors, such as out of bounds array indices etc. If you have hairy floating-point exceptions haunting you it may pay off to increase the debug level to \texttt{high}. However, beware that this mode will take ages to compile and execute. Often, simply printing and backtracking works as well. I have yet to find a good symbolic debugger for Fortran. If you find one, please let me know.
 
-\subsection{Unresolved Bugs}
-On certain systems the file-system and/or the master node becomes overloaded by the volassemble step when executing \prgname{prime3D} and gives odd errors. For example, it fails to open the submit script files for writing and then goes on trying to submit non-existing scripts. We have tried to add a linux \texttt{sync} command in the \texttt{qsys\_cleanup} subroutine and we are flushing all the file-handles every iteration, but the error nevertheless occurs. The problem has been nailed down to a being volassemble-related, as if the volassemble step is taken out and the current map is simply copied to the \texttt{vol\_iter} name, the problem never occurs. The error looks as follows
-\begin{verbatim}
- System error        4096  for command: echo DISTRIBUTED MODE :: submitting scripts:ls -1  
- distr_simple_script_*REPLACEWRITEsimple_qsys_ctrl :: submit_scripts#!/bin/bashdistr_
- simple_script_simple_qsys_ctrl :: gen_qsys_script; Error when opening file for writing:  ;  
- qsys_namelocalyescd cmdstat /= 0, command could not be executed: echo DISTRIBUTED  
- MODE :: submitting scripts:ls -1 distr_simple_script_*REPLACEWRITEsimple_qsys_ctrl :: 
- submit_scripts#!/bin/bashdistr_simple_script_simple_qsys_ctrl :: gen_qsys_script; Error 
- when opening file for writing:  ; qsys_namelocalyescd
- Termination status of the command-language interpreter cannot be obtained
- System error        4096  for command: ls -1 distr_simple_script_*REPLACEWRITE
- simple_qsys_ctrl :: submit_scripts#!/bin/bashdistr_simple_script_simple_qsys_ctrl :: 
- gen_qsys_script; Error when opening file for writing:  ; qsys_namelocalyescd   > OUT
- simple_qsys_scripts :: gen_qsys_scri cmdstat /= 0, command could not be executed: 
- ls -1 distr_simple_script_*REPLACEWRITEsimple_qsys_ctrl :: submit_scripts
- #!/bin/bashdistr_simple_script_simple_qsys_ctrl :: gen_qsys_script; Error when opening 
- file for writing:  ; qsys_namelocalyescd   > OUTsimple_qsys_scripts :: gen_qsys_scri
- Termination status of the command-language interpreter cannot be obtained
-\end{verbatim}
-and when it occurs, you need to restart \prgname{prime3D} from the last completed iteration.
-
 \section{The SIMPLE Git Repository}
 We mostly try to keep the distributed version control system out of our way. All SIMPLE developers code in the same branch (the master branch). I prefer regular communication and regular push/pulls over fancy source code control procedures. Commit messages are of course important but I don't feel I need to read a novel for every commit (the repo will anyway tell me what has changed). We use a remote private repository (https://github.com/hael/SIMPLE3.0.git) and the recommended push/pull procedure is as follows:
 \begin{enumerate}

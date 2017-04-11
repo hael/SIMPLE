@@ -1,0 +1,10 @@
+(1) ctffind output needs to have *intg.mrc file (go with whatever is given in terms of abspath)
+(2) pick: replace input with output from ctffind but support filetable (unitab)
+(3) extract, replace filtab with unitab as input
+
+smpd needs to be part of ctffind output and never given again
+keep possibility for uout of box exec
+
+
+
+simple_unified_doc.txt

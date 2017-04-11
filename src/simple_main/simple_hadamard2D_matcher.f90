@@ -321,8 +321,8 @@ contains
             wmat = 1.0
         endif
         ! must be done here since constants in p are dynamically set
-        call primesrch2D%new(p)
         call pftcc%new(p%ncls, [p%fromp,p%top], [p%box,p%box,1], p%kfromto, p%ring2, p%ctf)
+        call primesrch2D%new(p, pftcc)
         ! prepare the polarizers
         call b%img%init_imgpolarizer(pftcc)
         ! PREPARATION OF REFERENCES IN PFTCC
@@ -421,3 +421,4 @@ contains
     end subroutine calc_frc
     
 end module simple_hadamard2D_matcher
+

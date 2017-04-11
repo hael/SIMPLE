@@ -13,6 +13,7 @@ use simple_defs
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_commander_base, only: commander_base
+use simple_qsys_env,       only: qsys_env
 use simple_commander_distr_wflows ! use all in there
 use simple_filehandling           ! use all in there
 use simple_jiffys                 ! use all in there
@@ -137,9 +138,9 @@ contains
         class(cmdline),                    intent(inout) :: cline
         ! constants
         logical,               parameter :: DEBUG=.false.
-        real,                  parameter :: LPLIMS(2) = [20.,10.], CENLP=50.
-        integer,               parameter :: MAXITS_INIT=50, MAXITS_REFINE=100
-        integer,               parameter :: STATE=1, NPROJS_SYMSRCH=150
+        real,                  parameter :: LPLIMS(2) = [20.,10.], CENLP=50., NNN=50.
+        integer,               parameter :: MAXITS_INIT=30, MAXITS_REFINE=80
+        integer,               parameter :: STATE=1, NPROJS_SYMSRCH=75
         character(len=32),     parameter :: ITERFBODY     = 'prime3Ddoc_'
         character(len=32),     parameter :: VOLFBODY      = 'recvol_state'
         character(len=STDLEN), parameter :: STKSCALEDBODY = 'stk_sc_ini3D_from_cavgs'
@@ -160,6 +161,7 @@ contains
         type(cmdline)                 :: cline_recvol
         type(cmdline)                 :: cline_projvol
         ! other variables
+        type(qsys_env)                :: qenv
         type(params)                  :: p_master
         type(oris)                    :: os
         real                          :: iter, scale, smpd_sc, msk_sc
@@ -171,6 +173,8 @@ contains
         call cline%set('eo', 'no')
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
+        ! setup the environment for distributed execution
+        call qenv%new(p_master)
         ! set global state string
         str_state = int2str_pad(STATE,2)
         ! delete possibly pre-existing stack_parts
@@ -194,7 +198,8 @@ contains
         ! initialise command line parameters
         if( DOSCALE )then
             ! (1) SCALING
-            call autoscale( p_master%box, p_master%msk, p_master%smpd, box_sc, msk_sc, smpd_sc )
+            call autoscale(p_master%box, p_master%smpd, box_sc, smpd_sc, scale)
+            msk_sc = scale * p_master%msk
             call cline_scale%set('newbox', real(box_sc))
             call cline_scale%set('outstk', trim(STKSCALEDBODY)//p_master%ext)
             call cline_prime3D_init%set('stk',  trim(STKSCALEDBODY)//p_master%ext)
@@ -208,10 +213,10 @@ contains
             call cline_prime3D_refine2%set('msk',  real(msk_sc))
         endif
         ! (2) PRIME3D_INIT
-        call cline_prime3D_init%set('prg', 'prime3D')
-        call cline_prime3D_init%set('ctf', 'no')
+        call cline_prime3D_init%set('prg',    'prime3D')
+        call cline_prime3D_init%set('ctf',    'no')
         call cline_prime3D_init%set('maxits', real(MAXITS_INIT))
-        call cline_prime3D_init%set('dynlp', 'yes') ! better be explicit about the dynlp
+        call cline_prime3D_init%set('dynlp',  'yes') ! better be explicit about the dynlp
         call cline_prime3D_init%set('shellw', 'no')
         ! (3) PRIME3D REFINE STEP 1
         call cline_prime3D_refine1%set('prg', 'prime3D')
@@ -259,9 +264,10 @@ contains
         call cline_prime3D_refine2%set('ctf', 'no')
         call cline_prime3D_refine2%set('maxits', real(MAXITS_REFINE))
         call cline_prime3D_refine2%set('dynlp', 'no') ! better be explicit about the dynlp
+        call cline_prime3D_refine2%set('nnn', NNN)    ! better be explicit about the number of nearest neighs
         call cline_prime3D_refine2%set('shellw', 'no')
         call cline_prime3D_refine2%set('lp', LPLIMS(2))
-        call cline_prime3D_refine2%set('refine', 'shc')
+        call cline_prime3D_refine2%set('refine', 'shcneigh')
         ! (6) RE-PROJECT VOLUME
         call cline_projvol%set('prg', 'projvol')
         call cline_projvol%set('outstk', 'reprojs'//p_master%ext)
@@ -295,7 +301,7 @@ contains
             call cline_symsrch%set('oritab', trim(oritab))
             call cline_symsrch%set('vol1', trim(vol_iter))
             call update_lp(cline_symsrch, 1)
-            call xsymsrch%execute(cline_symsrch)
+            call qenv%exec_simple_prg_in_queue(cline_symsrch, 'SYMSRCH', 'SYMSRCH_FINISHED')
             write(*,'(A)') '>>>'
             write(*,'(A)') '>>> 3D RECONSTRUCTION OF SYMMETRISED VOLUME'
             write(*,'(A)') '>>>'
@@ -373,7 +379,6 @@ contains
             end subroutine update_lp
 
     end subroutine exec_ini3D_from_cavgs
-
 
     ! ENSEMBLE HETEROGEINITY ANALYSIS
 

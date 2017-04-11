@@ -25,6 +25,10 @@ contains
         call del_file('fort.0')
         call del_file('qsys_submit_jobs')
         call del_file('simple_script_single')
+        call del_file('ftab_from_sys_find_last_fname.txt')
+        call del_file('VOLASSEMBLE')
+        call del_file('CAVGASSEMBLE')
+        call del_file('SYMSRCH')
         ! part numbered files
         call del_files('OUT',                    p%nparts)
         call del_files('algndoc_',               p%nparts, ext='.txt')
@@ -194,79 +198,6 @@ contains
         close(funit)
     end subroutine autogen_env_file
 
-    subroutine setup_qsys_env( p, qsys_fac, myqsys, parts, qscripts, myq_descr, stream )
-        use simple_params,       only: params
-        use simple_qsys_factory, only: qsys_factory
-        use simple_qsys_base,    only: qsys_base
-        use simple_qsys_ctrl,    only: qsys_ctrl
-        use simple_chash,        only: chash
-        use simple_map_reduce   ! use all in there
-        class(params),             intent(in)    :: p            !< parameters
-        class(qsys_factory),       intent(out)   :: qsys_fac     !< qsystem factory instance
-        class(qsys_base), pointer, intent(out)   :: myqsys       !< pointer to constructed object
-        integer, allocatable,      intent(out)   :: parts(:,:)   !< indices of partitions
-        class(qsys_ctrl),          intent(out)   :: qscripts     !< qsys controller
-        class(chash),              intent(out)   :: myq_descr    !< user-provided queue and job specifics from simple_distr_config.env
-        logical,         optional, intent(in)    :: stream       !< stream mode or not
-        character(len=STDLEN)         :: simplepath_exec
-        character(len=:), allocatable :: qsnam, tpi, hrs_str, mins_str, secs_str
-        integer                       :: io_stat, partsz, hrs, mins, secs, ipart
-        real                          :: rtpi, tot_time_sec
-        logical                       :: sstream
-        integer, parameter            :: MAXNKEYS = 30
-        logical, parameter            :: DEBUG = .true.
-        sstream = .false.
-        if( present(stream) ) sstream = stream
-        if( .not. allocated(parts) )then
-            ! generate partitions
-            if( allocated(parts) ) deallocate(parts)
-            select case(p%split_mode)
-                case('even')
-                    parts      = split_nobjs_even(p%nptcls, p%nparts)
-                    partsz     = parts(1,2) - parts(1,1) + 1
-                case('chunk')
-                    parts      = split_nobjs_in_chunks(p%nptcls, p%chunksz)
-                    partsz     = p%chunksz
-                case('singles')
-                    allocate(parts(p%nptcls,2))
-                    parts(:,:) = 1
-                    partsz     = 1
-                case DEFAULT
-                    write(*,*) 'split_mode: ', trim(p%split_mode)
-                    stop 'Unsupported split_mode'
-            end select
-        endif
-        ! PREPARE QUEUE DEPENDENT VARIABLES
-        ! retrieve environment variables from file
-        call myq_descr%new(MAXNKEYS)
-        call parse_env_file(myq_descr) ! parse .env file
-        ! deal with time
-        if( myq_descr%isthere('time_per_image') )then
-            tpi          = myq_descr%get('time_per_image')
-            rtpi         = str2real(tpi)
-            tot_time_sec = rtpi*real(partsz)
-            hrs          = int(tot_time_sec/3600.)
-            hrs_str      = int2str(hrs)
-            mins         = int((tot_time_sec - 3600.*real(hrs))/60.)
-            mins_str     = int2str(mins)
-            secs         = int(tot_time_sec - 3600.*real(hrs) - 60.*real(mins))
-            secs_str     = int2str(secs)
-            if( hrs > 23 )then
-                call myq_descr%set('job_time', '1-23:59:0')
-            else
-                call myq_descr%set('job_time','0-'//hrs_str//':'//mins_str//':'//secs_str)
-            endif
-        endif
-        qsnam = myq_descr%get('qsys_name')
-        call qsys_fac%new(qsnam, myqsys)
-        ! create the user specific qsys and qsys controller (script generator)
-        simplepath_exec = trim(myq_descr%get('simple_path'))//'/bin/simple_exec'
-        call qscripts%new(simplepath_exec, myqsys, parts, [1,p%nparts], p%ncunits, sstream )
-        call myq_descr%set('job_cpus_per_task', int2str(p%nthr))   ! overrides env file
-        call myq_descr%set('job_nparts',        int2str(p%nparts)) ! overrides env file
-        deallocate(qsnam)
-    end subroutine setup_qsys_env
-
     !>  Writes the JOB_FINISHED_* file to mark end of computing unit job 
     subroutine qsys_job_finished( p, source )
         ! generation of this file marks completion of the partition
@@ -350,28 +281,5 @@ contains
         write(*,'(a)') trim(exec_str)
         call exec_cmdline(exec_str)
     end subroutine exec_simple_prg
-
-    subroutine exec_simple_prg_in_queue( qscripts, myq_descr, exec_bin, cline, outfile, finish_indicator )
-        use simple_qsys_ctrl, only: qsys_ctrl
-        use simple_chash,     only: chash
-        use simple_cmdline,   only: cmdline
-        class(qsys_ctrl), intent(inout)  :: qscripts   !< qsys controller
-        class(chash),     intent(in)     :: myq_descr  !< user-provided queue and job specifics from simple_distr_config.env
-        character(len=*), intent(in)     :: exec_bin   !< executable binary
-        class(cmdline),   intent(in)     :: cline      !< command line arguments
-        character(len=*), intent(in)     :: outfile, finish_indicator
-        character(len=STDLEN), parameter :: script_name = 'simple_script_single'
-        type(chash) :: job_descr
-        call del_file(finish_indicator)
-        ! prepare job description
-        call cline%gen_job_descr(job_descr)
-        ! generate the script
-        call qscripts%generate_script(job_descr, myq_descr, exec_bin, script_name, outfile)
-        ! submit it
-        call qscripts%submit_script(script_name)
-        ! watch for completion
-        call qsys_watcher_1(finish_indicator)
-        call del_file(finish_indicator)
-    end subroutine exec_simple_prg_in_queue
 
 end module simple_qsys_funs

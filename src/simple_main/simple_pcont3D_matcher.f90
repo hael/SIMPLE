@@ -9,8 +9,7 @@ use simple_cmdline,          only: cmdline
 !use simple_masker,           only: automask
 use simple_cont3D_matcher,   only: cont3D_shellweight
 use simple_pcont3D_srch,     only: pcont3D_srch
-use simple_hadamard_common,  only: set_bp_range, norm_struct_facts, eonorm_struct_facts,&
-                                &prepimg4align, preprefvol, setup_shellweights, grid_ptcl
+use simple_hadamard_common,  ! use all in there
 use simple_math              ! use all in there
 implicit none
 
@@ -47,6 +46,10 @@ contains
         real                          :: reslim, frac_srch_space
         integer                       :: iptcl, state, alloc_stat, cnt_glob
         logical                       :: doshellweight, update_res
+
+        ! READ IMAGES
+        call read_imgs_from_stk( b, p )
+
         ! AUTOMASKING DEACTIVATED FOR NOW
         ! INIT
         nptcls = p%top - p%fromp + 1                ! number of particles processed
@@ -130,7 +133,7 @@ contains
                 cycle
             endif
             ! re-fills pftcc
-            call prep_pftcc(b, p, iptcl, cnt_glob )
+            call prep_pftcc(b, p, iptcl)
             ! multiply refs with CTF
             call apply_ctf(p, orientation, pftcc)
             ! align
@@ -142,17 +145,17 @@ contains
             if( doshellweight )then
                 wresamp = resample_filter(wmat(iptcl,:), res, res_pad)
                 if(p%npeaks == 1)then
-                    call grid_ptcl(b, p, iptcl, cnt_glob, orientation, shellweights=wresamp)
+                    call grid_ptcl(b, p, iptcl, orientation, shellweights=wresamp)
                 else
                     softoris = pcont3Dsrch%get_softoris()
-                    call grid_ptcl(b, p, iptcl, cnt_glob, orientation, os=softoris, shellweights=wresamp)
+                    call grid_ptcl(b, p, iptcl, orientation, os=softoris, shellweights=wresamp)
                 endif
             else
                 if(p%npeaks == 1)then
-                    call grid_ptcl(b, p, iptcl, cnt_glob, orientation)
+                    call grid_ptcl(b, p, iptcl, orientation)
                 else
                     softoris = pcont3Dsrch%get_softoris()
-                    call grid_ptcl(b, p, iptcl, cnt_glob, orientation, os=softoris)
+                    call grid_ptcl(b, p, iptcl, orientation, os=softoris)
                 endif
             endif
             ! output orientation
@@ -206,12 +209,11 @@ contains
         if( p%boxmatch < p%box )call b%vol%new([p%box,p%box,p%box], p%smpd) ! to double check
     end subroutine prep_vols
 
-    subroutine prep_pftcc(b, p, iptcl, cnt_glob)
+    subroutine prep_pftcc(b, p, iptcl)
         use simple_rnd, only: ran3
-        class(build),            intent(inout) :: b
-        class(params),           intent(inout) :: p
-        integer,                 intent(in)    :: iptcl
-        integer,                 intent(in)    :: cnt_glob
+        class(build),  intent(inout) :: b
+        class(params), intent(inout) :: p
+        integer,       intent(in)    :: iptcl
         type(oris) :: cone
         type(ori)  :: optcl, oref
         real       :: eullims(3,2)
@@ -254,11 +256,7 @@ contains
             call b%refvols(state)%fproject_polar(iref, oref, pftcc, expanded=.true.)
         enddo
         ! PREP PARTICLE
-        if( p%l_distr_exec )then
-            call b%img%read(p%stk_part, cnt_glob, isxfel=p%l_xfel)
-        else
-            call b%img%read(p%stk, iptcl, isxfel=p%l_xfel)
-        endif
+        b%img = b%imgs(iptcl) ! put the original image back
         call prepimg4align(b, p, optcl)
         call b%img%imgpolarizer(pftcc, 1, isptcl=.true.)
         ! restores b%img dimensions for clean exit

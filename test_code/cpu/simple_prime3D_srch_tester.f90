@@ -45,7 +45,7 @@ contains
         call cline_local%set('nstates',1.)
         call setup_testenv( cline_local, be_verbose )
         call test_stochastic_weights
-        call test_sort_shifted_npeaks
+        call test_sort_shifted_peaks
         call test_prep4srch
         call test_prepcorr4srch
         call test_prep_reforis
@@ -67,7 +67,7 @@ contains
         call cline_local%set('nstates',real(NSTATES))
         call setup_testenv( cline_local, be_verbose )
         call test_stochastic_weights
-        call test_sort_shifted_npeaks
+        call test_sort_shifted_peaks
         call test_prep4srch
         call test_prepcorr4srch
         call test_prep_reforis
@@ -275,7 +275,7 @@ contains
         call test_os%kill
     end subroutine test_stochastic_weights
 
-    subroutine test_sort_shifted_npeaks
+    subroutine test_sort_shifted_peaks
         type(oris) :: test_os
         type(ori)  :: o
         integer :: i,j,IND
@@ -289,11 +289,11 @@ contains
                 call test_os%set_ori(i,o)
             enddo
             call test_os%set(IND,'corr',.5+real(j)/10.)
-            call primesrch3D%sort_shifted_npeaks( test_os )
+            call primesrch3D%sort_shifted_peaks( test_os )
             if( nint(test_os%get(p%npeaks,'class')).ne.IND)print *,'Failed in simple_prime3D_srch_tester::test_sort_shifted_npeaks'
             call test_os%kill
         enddo
-    end subroutine test_sort_shifted_npeaks
+    end subroutine test_sort_shifted_peaks
 
     subroutine test_prep_reforis
         type(oris) :: test_os

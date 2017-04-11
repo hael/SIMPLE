@@ -53,7 +53,6 @@ abstract interface
         class(optimizer), intent(inout) :: self
     end subroutine generic_kill
 
- 
 end interface
 
 end module simple_optimizer

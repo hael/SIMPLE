@@ -53,3 +53,21 @@ and that is with the M3 drive mapped as
 
 M:          --> \\172.16.193.178\cryoem
 hael / cryoem
+
+Hi Cyril,
+
+    You have a guarantee resources of 120 using ReservationName=simple.
+
+    Can you please add
+
+    #SBATCH ReservationName=simple
+
+    into your script.
+
+    You can still run your jobs without the reservation but the resources can't
+    be guaranteed.
+
+    Thanks.
+
+    Regards,
+    Gin

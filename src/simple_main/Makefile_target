@@ -51,6 +51,8 @@ simple: simple_image.o                  \
         simple_corrmat.o                \
         simple_gridding.o               \
         simple_polarft_corrcalc.o       \
+        simple_pftcc_opt.o              \
+        simple_simplex_pftcc_opt.o      \
         simple_projector.o              \
         simple_projector_hlev.o         \
         simple_volpft_corrcalc.o        \
@@ -118,7 +120,8 @@ qsys: simple_qsys_base.o                  \
       simple_qsys_local.o                 \
       simple_qsys_factory.o               \
       simple_qsys_ctrl.o                  \
-      simple_qsys_funs.o                  ;
+      simple_qsys_funs.o                  \
+      simple_qsys_env.o                   ;
 
 masters: simple_rec_master.o              \
          simple_symsrcher.o               \

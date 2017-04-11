@@ -1,0 +1,15 @@
+(1) I need to modify the nearest neighbour matrix such that it has the set of neighbours repeated for every state, i.e. if the neighbours in single-state mode is 1,2,3 and I have three states it needs to be 1,2,3,1,2,3,1,2,3
+ 
+Yes
+ 
+(2) I need to allocate corrmat3d(fromp:top,nnrefs,nrots)
+ 
+Yes. Ideally you would also want nnnrefs = nnn * neff_states, where neff_states id the number of existing, non-empty, states.
+This does not exist in prime3d_srch now as there is no possible limiting memory requirement, the search space is built as usual, the correlation calculations are skipped on the fly.
+ 
+(3) I need to call gencorrs_all_cpu_2( self, nspace, nnn, nnmat, prevprojs, corrmat3dout )
+    with nnn=nnrefs
+ 
+Yes
+ 
+(4) I execute the search as before but fetching the correlations from the matrix instead of calling gencorrs
