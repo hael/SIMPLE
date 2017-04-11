@@ -10,10 +10,10 @@ module simple_timer_cuda
 #endif
   implicit none
 
-  type timer_cuda_type
+  type timer_cuda
 #ifdef PGI
-     type(cudaEvent) :: start_point
-     type(cudaEvent) :: end_point
+     type(cudaEvent) :: start_point => null()
+     type(cudaEvent) :: end_point => null()
 #else
      real(dp)  :: start_point = REAL(0.,dp)
      real(dp)  :: end_point   = REAL(0.,dp)
@@ -25,21 +25,21 @@ module simple_timer_cuda
      procedure :: tocU
      procedure :: nowCU
      procedure :: CUtimer_setup
-  end type timer_cuda_type
+  end type timer_cuda
 
-  interface timer_cuda_type
+  interface timer_cuda
      module procedure constructor
-  end interface timer_cuda_type
+  end interface timer_cuda
 
 contains
   function constructor() result(this)
-    class(timer_cuda_type),pointer :: this
+    class(timer_cuda),pointer :: this
       call this%CUtimer_setup()
     end function constructor
 
     subroutine CUtimer_setup(this)
 #ifdef PGI
-      class(timer_cuda_type) :: this
+      class(timer_cuda) :: this
       
 #ifdef DEBUG
     integer :: nDevices
@@ -71,7 +71,7 @@ contains
 #endif
        function ticU(this)
 #ifdef PGI
-  class(timer_cuda_type) :: this
+  class(timer_cuda) :: this
   this%istat = cudaEventRecord(this%start_point,0)
 #else
   call cpu_time(this%start_point)
@@ -81,7 +81,7 @@ contains
 
   real(dp) function tocU(this, start_optional)
 #ifdef PGI
-    class(timer_cuda_type) :: this
+    class(timer_cuda) :: this
     type(cudaEvent), intent(in), optional ::  start_optional
 #else
     real(dp),intent(in),optional :: start_optional
@@ -108,7 +108,7 @@ contains
     character(len=33) :: f_result
     !***********************************************************************************
 #ifdef PGI
-    class(timer_cuda_type) :: this
+    class(timer_cuda) :: this
      type(cudaDeviceProp) :: prop
      this%istat = cudaGetDeviceProperties(prop,0)
      ilen = verify(prop%name, ' ', .true.)
@@ -124,7 +124,7 @@ contains
   !> \brief timer destructor
   subroutine CUtimer_kill(this) 
 #ifdef PGI
-    type(timer_cuda_type) :: this
+    type(timer_cuda) :: this
     this5istat = cudaEventDestroy(this%start_point)
     this%istat = cudaEventDestroy(this%end_point)
 #endif
