@@ -20,7 +20,9 @@ implicit none
 
 ! DISTRIBUTED COMMANDERS
 ! pre-processing
+
 type(preproc_stream_commander)            :: xpreproc_stream
+type(unblur_ctffind_distr_commander)      :: xunblur_ctffind_distr
 type(unblur_distr_commander)              :: xunblur_distr
 type(unblur_tomo_movies_distr_commander)  :: xunblur_tomo_distr
 type(ctffind_distr_commander)             :: xctffind_distr
@@ -72,39 +74,40 @@ select case(prg)
         keys_required(2)   = 'kv'
         keys_required(3)   = 'cs'
         keys_required(4)   = 'fraca'
-        keys_required(5)   = 'refs'
-        keys_required(6)   = 'dir_movies'
-        keys_required(7)   = 'dir_target'
-        keys_required(8)   = 'ncunits'
+        keys_required(5)   = 'dir_movies'
+        keys_required(6)   = 'dir_target'
+        keys_required(7)   = 'ncunits'
         ! set optional keys
         keys_optional(1)   = 'nthr'
-        keys_optional(2)   = 'fbody'
-        keys_optional(3)   = 'lpstart'
-        keys_optional(4)   = 'lpstop'
-        keys_optional(5)   = 'trs'
-        keys_optional(6)   = 'exp_time'
-        keys_optional(7)   = 'dose_rate'
-        keys_optional(8)   = 'pspecsz_unblur'
-        keys_optional(9)   = 'pspecsz_ctffind'
-        keys_optional(10)  = 'numlen'
-        keys_optional(11)  = 'startit'
-        keys_optional(12)  = 'scale'
-        keys_optional(13)  = 'frameavg'
-        keys_optional(14)  = 'tomo'
-        keys_optional(15)  = 'hp_ctffind'
-        keys_optional(16)  = 'lp_ctffind'
-        keys_optional(17)  = 'lp_pick'
-        keys_optional(18)  = 'dfmin'
-        keys_optional(19)  = 'dfmax'
-        keys_optional(20)  = 'astigstep'
-        keys_optional(21)  = 'expastig'
-        keys_optional(22)  = 'phaseplate'
-        keys_optional(23)  = 'thres'
-        keys_optional(24)  = 'rm_outliers'
-        keys_optional(25)  = 'nsig'
+        keys_optional(2)   = 'refs'
+        keys_optional(3)   = 'fbody'
+        keys_optional(4)   = 'lpstart'
+        keys_optional(5)   = 'lpstop'
+        keys_optional(6)   = 'trs'
+        keys_optional(7)   = 'exp_time'
+        keys_optional(8)   = 'dose_rate'
+        keys_optional(9)   = 'pspecsz_unblur'
+        keys_optional(10)  = 'pspecsz_ctffind'
+        keys_optional(11)  = 'numlen'
+        keys_optional(12)  = 'startit'
+        keys_optional(13)  = 'scale'
+        keys_optional(14)  = 'frameavg'
+        keys_optional(15)  = 'tomo'
+        keys_optional(16)  = 'hp_ctffind'
+        keys_optional(17)  = 'lp_ctffind'
+        keys_optional(18)  = 'lp_pick'
+        keys_optional(19)  = 'dfmin'
+        keys_optional(20)  = 'dfmax'
+        keys_optional(21)  = 'astigstep'
+        keys_optional(22)  = 'expastig'
+        keys_optional(23)  = 'phaseplate'
+        keys_optional(24)  = 'thres'
+        keys_optional(25)  = 'rm_outliers'
+        keys_optional(26)  = 'nsig'
+        keys_optional(27)  = 'dopick'
         ! parse command line
         if( describe ) call print_doc_preproc
-        call cline%parse(keys_required(:8), keys_optional(:25))
+        call cline%parse(keys_required(:7), keys_optional(:27))
         ! set defaults
         if( .not. cline%defined('trs')             ) call cline%set('trs',        5.)
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',   15.)
@@ -115,6 +118,60 @@ select case(prg)
         if( .not. cline%defined('lp_ctffind')      ) call cline%set('lp',         5.)
         if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',   20.)
         call xpreproc_stream%execute(cline)
+
+    ! PIPELINED UNBLUR + CTFFIND
+
+    case( 'unblur_ctffind' )
+        !==Program unblur_ctffind
+        !
+        ! <ctffind/begin>is a pipelined unblur + ctffind program<ctffind/end> 
+        !
+        ! set required keys
+        keys_required(1)  = 'filetab'
+        keys_required(2)  = 'smpd'
+        keys_required(3)  = 'kv'
+        keys_required(4)  = 'cs'
+        keys_required(5)  = 'fraca'
+        keys_required(6)  = 'nparts'
+        ! set optional keys
+        keys_optional(1)  = 'nthr'
+        keys_optional(2)  = 'ncunits'
+        keys_optional(3)  = 'fbody'
+        keys_optional(4)  = 'lpstart'
+        keys_optional(5)  = 'lpstop'
+        keys_optional(6)  = 'trs'
+        keys_optional(7)  = 'pspecsz'
+        keys_optional(8)  = 'numlen'
+        keys_optional(9)  = 'startit'
+        keys_optional(10)  = 'scale'
+        keys_optional(11) = 'frameavg'
+        keys_optional(12) = 'tomo'
+        keys_optional(13) = 'fromf'
+        keys_optional(14) = 'tof'
+        keys_optional(15) = 'nsig'
+        keys_optional(16) = 'outfile'
+        keys_optional(17) = 'hp'
+        keys_optional(18) = 'lp'
+        keys_optional(19) = 'dfmin'
+        keys_optional(20) = 'dfmax'
+        keys_optional(21) = 'astigstep'
+        keys_optional(22) = 'expastig'
+        keys_optional(23) = 'phaseplate'
+        ! parse command line
+        ! if( describe ) call print_doc_unblur_ctffind
+        call cline%parse(keys_required(:6), keys_optional(:23))
+        ! set defaults
+        call cline%set('dopick', 'no'     )
+        call cline%set('prg',    'preproc')
+        if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz',               1024.)
+        if( .not. cline%defined('hp')      ) call cline%set('hp',                      30.)
+        if( .not. cline%defined('lp')      ) call cline%set('lp',                       5.)
+        if( .not. cline%defined('trs')     ) call cline%set('trs',                      5.)
+        if( .not. cline%defined('lpstart') ) call cline%set('lpstart',                 15.)
+        if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',                   8.)
+        if( .not. cline%defined('outfile') ) call cline%set('outfile', 'simple_unidoc.txt')
+        ! execute
+        call xunblur_ctffind_distr%execute(cline)
 
     ! UNBLUR_MOVIES
 

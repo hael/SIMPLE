@@ -44,6 +44,7 @@ contains
         real    :: corr, scale
         ! make names
         if( cline%defined('fbody') )then
+            call orientation%set('movie', trim(moviename))
             self%moviename_intg   = trim(adjustl(p%fbody))//'_intg'//int2str_pad(imovie,p%numlen)//p%ext
             call orientation%set('intg', trim(self%moviename_intg))
             self%moviename_forctf = trim(adjustl(p%fbody))//'_forctf'//int2str_pad(imovie,p%numlen)//p%ext
@@ -58,6 +59,7 @@ contains
                 call orientation%set('intg_frames', trim(self%moviename_intg_frames))
             endif
         else
+            call orientation%set('movie', trim(moviename))
             self%moviename_intg   = int2str_pad(imovie,p%numlen)//'_intg'//p%ext
             call orientation%set('intg', trim(self%moviename_intg))
             self%moviename_forctf = int2str_pad(imovie,p%numlen)//'_forctf'//p%ext
@@ -87,6 +89,7 @@ contains
         endif
         ! execute the unblurring
         call unblur_movie(self%moviename, p, corr, smpd_out)
+        call orientation%set('smpd', smpd_out)
         if( p%tomo .eq. 'yes' )then
             call unblur_calc_sums_tomo(frame_counter, p%time_per_frame,&
             &self%moviesum, self%moviesum_corrected, self%moviesum_ctf)

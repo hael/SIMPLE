@@ -24,6 +24,7 @@ use simple_filehandling    ! use all in there
 use simple_jiffys          ! use all in there
 implicit none
 
+public :: unblur_ctffind_distr_commander
 public :: unblur_distr_commander
 public :: unblur_tomo_movies_distr_commander
 public :: ctffind_distr_commander
@@ -39,6 +40,10 @@ public :: recvol_distr_commander
 public :: tseries_track_distr_commander
 private
 
+type, extends(commander_base) :: unblur_ctffind_distr_commander
+  contains
+    procedure :: execute      => exec_unblur_ctffind_distr
+end type unblur_ctffind_distr_commander
 type, extends(commander_base) :: unblur_distr_commander
   contains
     procedure :: execute      => exec_unblur_distr
@@ -96,54 +101,77 @@ integer, parameter :: KEYLEN=32
 
 contains
 
-    ! UNBLUR SINGLE-PARTICLE DDDs
+    ! PIPELINED UNBLUR + CTFFIND
 
-    subroutine exec_unblur_distr( self, cline )
+    subroutine exec_unblur_ctffind_distr( self, cline )
         use simple_commander_preproc
-        use simple_commander_imgproc
-        class(unblur_distr_commander), intent(inout) :: self
-        class(cmdline),                intent(inout) :: cline
-        character(len=STDLEN), allocatable :: names_intg(:)
-        character(len=STDLEN), allocatable :: names_forctf(:)
-        character(len=STDLEN), allocatable :: names_pspec(:)
-        character(len=STDLEN), allocatable :: names_thumb(:)
-        character(len=STDLEN)              :: str
+        class(unblur_ctffind_distr_commander), intent(inout) :: self
+        class(cmdline),                        intent(inout) :: cline
+        character(len=32), parameter   :: UNIDOCFBODY = 'unindoc_'
+        type(merge_algndocs_commander) :: xmerge_algndocs
+        type(cmdline)  :: cline_merge_algndocs
         type(qsys_env) :: qenv
         type(params)   :: p_master
         type(chash)    :: job_descr
-        integer        :: numlen
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         p_master%nptcls = nlines(p_master%filetab)
         if( p_master%nparts > p_master%nptcls ) stop 'nr of partitions (nparts) mjust be < number of entries in filetable'
+        ! prepare merge_algndocs command line
+        cline_merge_algndocs = cline
+        call cline_merge_algndocs%set( 'nthr',    1.                         )
+        call cline_merge_algndocs%set( 'fbody',   'unindoc_'                 )
+        call cline_merge_algndocs%set( 'nptcls',  real(p_master%nptcls)      )
+        call cline_merge_algndocs%set( 'ndocs',   real(p_master%nparts)      )
+        call cline_merge_algndocs%set( 'outfile', 'simple_unidoc_merged.txt' )
         ! setup the environment for distributed execution
         call qenv%new(p_master)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)
+        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=UNIDOCFBODY)
+        ! merge docs
+        call xmerge_algndocs%execute( cline_merge_algndocs )
+        ! clean
         call qsys_cleanup(p_master)
-        ! make unblur_files.txt file detaling all the files generated
-        if( cline%defined('numlen') )then
-            numlen = p_master%numlen
-        else
-            numlen = len(int2str(p_master%nptcls))
-        endif
-        if( cline%defined('fbody') )then
-            str = trim(p_master%cwd)//'/'//trim(adjustl(p_master%fbody))
-            names_intg   = make_filenames(trim(str)//'_intg',   p_master%nptcls, p_master%ext, numlen)
-            names_forctf = make_filenames(trim(str)//'_forctf', p_master%nptcls, p_master%ext, numlen)
-            names_pspec  = make_filenames(trim(str)//'_pspec',  p_master%nptcls, p_master%ext, numlen)
-            names_thumb  = make_filenames(trim(str)//'_thumb',  p_master%nptcls, p_master%ext, numlen)
-            call make_multitab_filetable('unblur_files.txt', names_intg, names_forctf, names_pspec, names_thumb )
-        else
-            str = trim(p_master%cwd)//'/'
-            names_intg   = make_filenames(trim(str), p_master%nptcls, p_master%ext, numlen, suffix='_intg')
-            names_forctf = make_filenames(trim(str), p_master%nptcls, p_master%ext, numlen, suffix='_forctf')
-            names_pspec  = make_filenames(trim(str), p_master%nptcls, p_master%ext, numlen, suffix='_pspec')
-            names_thumb  = make_filenames(trim(str), p_master%nptcls, p_master%ext, numlen, suffix='_thumb')
-            call make_multitab_filetable('unblur_files.txt', names_intg, names_forctf, names_pspec, names_thumb )
-        endif
+        ! end gracefully
+        call simple_end('**** SIMPLE_DISTR_UNBLUR_CTFFIND NORMAL STOP ****')
+    end subroutine exec_unblur_ctffind_distr
+
+    ! UNBLUR SP DDDs
+
+    subroutine exec_unblur_distr( self, cline )
+        use simple_commander_preproc
+        class(unblur_distr_commander), intent(inout) :: self
+        class(cmdline),                intent(inout) :: cline
+        character(len=32), parameter   :: UNIDOCFBODY = 'unindoc_'
+        type(merge_algndocs_commander) :: xmerge_algndocs
+        type(cmdline)  :: cline_merge_algndocs
+        type(qsys_env) :: qenv
+        type(params)   :: p_master
+        type(chash)    :: job_descr
+        ! make master parameters
+        p_master = params(cline, checkdistr=.false.)
+        p_master%nptcls = nlines(p_master%filetab)
+        if( p_master%nparts > p_master%nptcls ) stop 'nr of partitions (nparts) mjust be < number of entries in filetable'
+        ! prepare merge_algndocs command line
+        cline_merge_algndocs = cline
+        call cline_merge_algndocs%set( 'nthr',    1.                         )
+        call cline_merge_algndocs%set( 'fbody',   'unindoc_'                 )
+        call cline_merge_algndocs%set( 'nptcls',  real(p_master%nptcls)      )
+        call cline_merge_algndocs%set( 'ndocs',   real(p_master%nparts)      )
+        call cline_merge_algndocs%set( 'outfile', 'simple_unidoc_merged.txt' )
+        ! setup the environment for distributed execution
+        call qenv%new(p_master)
+        ! prepare job description
+        call cline%gen_job_descr(job_descr)
+        ! schedule & clean
+        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=UNIDOCFBODY)
+        ! merge docs
+        call xmerge_algndocs%execute( cline_merge_algndocs )
+        ! clean
+        call qsys_cleanup(p_master)
+        ! end gracefully
         call simple_end('**** SIMPLE_DISTR_UNBLUR NORMAL STOP ****')
     end subroutine exec_unblur_distr
 
@@ -211,11 +239,8 @@ contains
     subroutine exec_ctffind_distr( self, cline )
         class(ctffind_distr_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        ! commanders
         type(merge_algndocs_commander) :: xmerge_algndocs
-        ! command lines
         type(cmdline)                  :: cline_merge_algndocs
-        ! other variables
         type(params)                   :: p_master
         character(len=KEYLEN)          :: str
         type(chash)                    :: job_descr
@@ -224,8 +249,7 @@ contains
         p_master = params(cline, checkdistr=.false.)
         p_master%nptcls = nlines(p_master%filetab)
         if( p_master%nparts > p_master%nptcls ) stop 'nr of partitions (nparts) mjust be < number of entries in filetable'
-        ! prepare command lines from prototype master
-        cline_merge_algndocs = cline
+        ! prepare merge_algndocs command line
         cline_merge_algndocs = cline
         call cline_merge_algndocs%set( 'nthr', 1. )
         call cline_merge_algndocs%set( 'fbody',  'ctffind_output_part')
@@ -451,6 +475,8 @@ contains
         call xrank_cavgs%execute( cline_rank_cavgs )
         call simple_end('**** SIMPLE_DISTR_PRIME2D NORMAL STOP ****')
     end subroutine exec_prime2D_distr
+
+    ! PRIME2D CHUNK-BASED DISTRIBUTION 
 
     subroutine exec_prime2D_chunk_distr( self, cline )
         use simple_commander_prime2D ! use all in there

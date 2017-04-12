@@ -92,7 +92,8 @@ contains
         character(len=STDLEN), allocatable :: movienames(:)
         character(len=:),      allocatable :: fname_ctffind_ctrl, fname_ctffind_output
         character(len=:),      allocatable :: moviename_forctf, moviename_intg
-        logical, parameter :: DEBUG = .true.
+        logical, parameter    :: DEBUG = .true.
+        character(len=STDLEN) :: boxfile
         type(params) :: p
         type(oris)   :: os_uni
         type(ori)    :: orientation
@@ -105,6 +106,11 @@ contains
         endif
         if( p%tomo .eq. 'yes' )then
             stop 'tomography mode (tomo=yes) not yet supported!'
+        endif
+        if( p%l_pick )then
+            if( .not. cline%defined('refs') )then
+                stop 'need references for picker or turn off picking with dopick=no'
+            endif
         endif
         call read_filetable(p%filetab, movienames)
         nmovies = size(movienames)
@@ -141,7 +147,6 @@ contains
             fromto(2) = nmovies
         endif
         ntot = fromto(2) - fromto(1) + 1
-        
         frame_counter = 0
         movie_counter = 0
         call orientation%new
@@ -158,8 +163,8 @@ contains
             endif 
             call ubiter%iterate(cline, p, orientation, movie_ind, movie_counter,&
             &frame_counter, movienames(imovie), smpd_scaled)
-            p%smpd           = smpd_scaled
             call os_uni%set_ori(movie_counter, orientation)
+            p%smpd           = smpd_scaled     
             movie_counter    = movie_counter - 1
             moviename_forctf = ubiter%get_moviename('forctf')
             moviename_intg   = ubiter%get_moviename('intg')
@@ -171,7 +176,8 @@ contains
             if( p%l_pick )then
                 movie_counter = movie_counter - 1
                 p%lp      = p%lp_pick
-                call piter%iterate(cline, p, movie_counter, moviename_intg)
+                call piter%iterate(cline, p, movie_counter, moviename_intg, boxfile)
+                call os_uni%set(movie_counter, 'boxfile', trim(boxfile))
             endif
         end do
         ! write CTF parameters
@@ -441,7 +447,7 @@ contains
         frame_counter = 0
         movie_counter = 0
         call orientation%new
-        call os_uni%new(nmovies)
+        call os_uni%new(ntot)
         do imovie=fromto(1),fromto(2)
             call ubiter%iterate(cline, p, orientation, imovie, movie_counter,&
             &frame_counter, movienames(imovie), smpd_scaled)
@@ -512,14 +518,14 @@ contains
         class(cmdline),          intent(inout) :: cline
         type(params)                       :: p
         type(build)                        :: b
-        type(image), allocatable           :: imgs_sel(:), imgs_all(:)
         type(image)                        :: stk3_img
+        type(image),           allocatable :: imgs_sel(:), imgs_all(:)
         character(len=STDLEN), allocatable :: imgnames(:)
+        integer,               allocatable :: selected(:)
+        real,                  allocatable :: correlations(:,:)
+        logical,               allocatable :: lselected(:)
         character(len=STDLEN)              :: cmd_str
         integer                            :: iimg, isel, nall, nsel, loc(1), ios, funit, ldim(3), ifoo, lfoo(3)
-        integer, allocatable               :: selected(:)
-        real,    allocatable               :: correlations(:,:)
-        logical, allocatable               :: lselected(:)
         logical, parameter                 :: debug=.false.
         ! error check
         if( cline%defined('stk3') .or. cline%defined('filetab') )then
@@ -663,6 +669,7 @@ contains
         type(params)    :: p
         type(pick_iter) :: piter
         character(len=STDLEN), allocatable :: movienames_intg(:)
+        character(len=STDLEN) :: boxfile
         integer :: nmovies, fromto(2), imovie, ntot, movie_counter
         p = params(cline, checkdistr=.false.) ! constants & derived constants produced
         ! check filetab existence
@@ -684,7 +691,7 @@ contains
         ntot          = fromto(2) - fromto(1) + 1
         movie_counter = 0
         do imovie=fromto(1),fromto(2)
-            call piter%iterate(cline, p, movie_counter, movienames_intg(imovie))
+            call piter%iterate(cline, p, movie_counter, movienames_intg(imovie), boxfile)
             write(*,'(f4.0,1x,a)') 100.*(real(movie_counter)/real(ntot)), 'percent of the micrographs processed'
         end do
     end subroutine exec_pick

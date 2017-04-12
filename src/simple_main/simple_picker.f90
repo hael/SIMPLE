@@ -111,7 +111,8 @@ contains
         if( DEBUG ) call mic_shrunken%write('shrunken.mrc')
     end subroutine init_picker
 
-    subroutine exec_picker
+    subroutine exec_picker( boxname_out )
+        character(len=STDLEN), intent(out) :: boxname_out
         call extract_peaks_and_background
         call distance_filter
         call refine_positions
@@ -120,6 +121,7 @@ contains
         peak_positions_refined = nint(PICKER_SHRINK_REFINE)*peak_positions_refined
         backgr_positions       = nint(PICKER_SHRINK_REFINE)*backgr_positions
         call write_boxfile
+        boxname_out = boxname
     end subroutine exec_picker
 
     subroutine extract_peaks_and_background

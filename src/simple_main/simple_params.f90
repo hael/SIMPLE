@@ -25,79 +25,76 @@ logical, parameter :: debug=.false.
 
 type :: params
     ! global objects
-    type(ori)        :: ori_glob
-    type(ctfplan)    :: tfplan
+    type(ori)             :: ori_glob
+    type(ctfplan)         :: tfplan
     ! yes/no decision variables in ascending alphabetical order
-    character(len=3) :: acf='no'
-    character(len=3) :: append='no'
-    character(len=3) :: async='no'
-    character(len=3) :: automsk='no'   
-    character(len=3) :: avg='no'
-    character(len=3) :: bench_gpu='no'
-    character(len=3) :: bin='no'
-    character(len=3) :: center='no'
-    character(len=3) :: clustvalid='no'
-    character(len=3) :: compare='no'
-    character(len=3) :: countvox='no'
-    character(len=3) :: ctfstats='no'
-    character(len=3) :: cure='no'
-    character(len=3) :: debug='no'
-    character(len=3) :: discrete='no'
-    character(len=3) :: diverse='no'
-    character(len=3) :: doalign='yes'
-    character(len=3) :: dopca='yes'
-    character(len=3) :: dopick='yes'
-    character(len=3) :: doprint='no'
-    character(len=3) :: dynlp='yes'
-    character(len=3) :: eo='yes'
-    character(len=3) :: errify='no'
-    character(len=3) :: even='no'
-    character(len=3) :: fix_gpu='no'
-    character(len=3) :: ft2img='no'
-    character(len=3) :: guinier='no'
-    character(len=3) :: kmeans='yes'
-    character(len=3) :: local='no'
-    character(len=3) :: masscen='no'
-    character(len=3) :: merge='no'
-    character(len=3) :: mirr='no'
-    character(len=3) :: neg='no'
-    character(len=3) :: noise_norm ='no'
-    character(len=3) :: noise='no'
-    character(len=3) :: norec='no'
-    character(len=3) :: norm='no'
-    character(len=3) :: odd='no'
-    character(len=3) :: order='no'
-    character(len=3) :: outside='no'
-    character(len=3) :: pad='no'
-    character(len=3) :: phaseplate='no'
-    character(len=3) :: phrand='no'
-    character(len=3) :: plot='no'
-    character(len=3) :: readwrite='no'
-    character(len=3) :: restart='no'
-    character(len=3) :: rnd='no'
-    character(len=3) :: rm_outliers='yes'
-    character(len=3) :: roalgn='no'
-    character(len=3) :: round='no'
-    character(len=3) :: shalgn='no'
-    character(len=3) :: shellnorm='no'
-    character(len=3) :: shellw='no'
-    character(len=3) :: shbarrier='yes'
-    character(len=3) :: single='no'
-    character(len=3) :: soften='no'
-    character(len=3) :: srch_inpl='yes'
-    character(len=3) :: stats='no'
-    character(len=3) :: stream='no'
-    character(len=3) :: swap='no'
-    character(len=3) :: test='no'
-    character(len=3) :: tomo='no'
-    character(len=3) :: time='no'
-    character(len=3) :: trsstats='no'
-    character(len=3) :: tseries='no'
-    character(len=3) :: use_gpu='no'
-    character(len=3) :: verbose='no'
-    character(len=3) :: vis='no'
-    character(len=3) :: xfel='no'
-    character(len=3) :: zero='no'
+    character(len=3)      :: acf='no'
+    character(len=3)      :: append='no'
+    character(len=3)      :: async='no'
+    character(len=3)      :: automsk='no'   
+    character(len=3)      :: avg='no'
+    character(len=3)      :: bin='no'
+    character(len=3)      :: center='no'
+    character(len=3)      :: clustvalid='no'
+    character(len=3)      :: compare='no'
+    character(len=3)      :: countvox='no'
+    character(len=3)      :: ctfstats='no'
+    character(len=3)      :: cure='no'
+    character(len=3)      :: debug='no'
+    character(len=3)      :: discrete='no'
+    character(len=3)      :: diverse='no'
+    character(len=3)      :: doalign='yes'
+    character(len=3)      :: dopca='yes'
+    character(len=3)      :: dopick='yes'
+    character(len=3)      :: doprint='no'
+    character(len=3)      :: dynlp='yes'
+    character(len=3)      :: eo='yes'
+    character(len=3)      :: errify='no'
+    character(len=3)      :: even='no'
+    character(len=3)      :: ft2img='no'
+    character(len=3)      :: guinier='no'
+    character(len=3)      :: kmeans='yes'
+    character(len=3)      :: local='no'
+    character(len=3)      :: masscen='no'
+    character(len=3)      :: merge='no'
+    character(len=3)      :: mirr='no'
+    character(len=3)      :: neg='no'
+    character(len=3)      :: noise_norm ='no'
+    character(len=3)      :: noise='no'
+    character(len=3)      :: norec='no'
+    character(len=3)      :: norm='no'
+    character(len=3)      :: odd='no'
+    character(len=3)      :: order='no'
+    character(len=3)      :: outside='no'
+    character(len=3)      :: pad='no'
+    character(len=3)      :: phaseplate='no'
+    character(len=3)      :: phrand='no'
+    character(len=3)      :: plot='no'
+    character(len=3)      :: readwrite='no'
+    character(len=3)      :: restart='no'
+    character(len=3)      :: rnd='no'
+    character(len=3)      :: rm_outliers='yes'
+    character(len=3)      :: roalgn='no'
+    character(len=3)      :: round='no'
+    character(len=3)      :: shalgn='no'
+    character(len=3)      :: shellnorm='no'
+    character(len=3)      :: shellw='no'
+    character(len=3)      :: shbarrier='yes'
+    character(len=3)      :: single='no'
+    character(len=3)      :: soften='no'
+    character(len=3)      :: srch_inpl='yes'
+    character(len=3)      :: stats='no'
+    character(len=3)      :: stream='no'
+    character(len=3)      :: swap='no'
+    character(len=3)      :: test='no'
+    character(len=3)      :: tomo='no'
+    character(len=3)      :: time='no'
+    character(len=3)      :: trsstats='no'
+    character(len=3)      :: tseries='no'
+    character(len=3)      :: verbose='no'
+    character(len=3)      :: vis='no'
+    character(len=3)      :: xfel='no'
+    character(len=3)      :: zero='no'
     ! other fixed length character variables in ascending alphabetical order
     character(len=STDLEN) :: angastunit='degrees'
     character(len=STDLEN) :: boxfile=''
@@ -159,6 +156,7 @@ type :: params
     character(len=STDLEN) :: stk2=''
     character(len=STDLEN) :: stk3=''
     character(len=STDLEN) :: tomoseries=''
+    character(len=STDLEN) :: unidoc=''
     character(len=STDLEN) :: vol=''
     character(len=STDLEN) :: vollist=''
     character(len=STDLEN) :: vols_msk(MAXS)=''
@@ -242,7 +240,6 @@ type :: params
     integer :: ptcl=1
     integer :: ring1=2
     integer :: ring2=0
-    integer :: set_gpu=0
     integer :: spec=0
     integer :: startit=1
     integer :: state=1
@@ -385,7 +382,7 @@ contains
         character(len=STDLEN)            :: cwd_local, debug_local
         character(len=1)                 :: checkupfile(50)
         character(len=:), allocatable    :: conv
-        integer, allocatable             :: parts(:,:)
+        integer,          allocatable    :: parts(:,:)
         logical                          :: nparts_set=.false.
         logical                          :: vol_defined(MAXS)=.false.
         ! take care of optionals
@@ -407,7 +404,6 @@ contains
         call check_carg('async',          self%async)
         call check_carg('automsk',        self%automsk)
         call check_carg('avg',            self%avg)
-        call check_carg('bench_gpu',      self%bench_gpu)
         call check_carg('bin',            self%bin)
         call check_carg('boxtype',        self%boxtype)
         call check_carg('center',         self%center)
@@ -442,7 +438,6 @@ contains
         call check_carg('exp_doc',        self%exp_doc)
         call check_carg('extrmode',       self%extrmode)
         call check_carg('fbody',          self%fbody)
-        call check_carg('fix_gpu',        self%fix_gpu)
         call check_carg('ft2img',         self%ft2img)
         call check_carg('guinier',        self%guinier)
         call check_carg('hfun',           self%hfun)
@@ -496,7 +491,6 @@ contains
         call check_carg('tomoseries',     self%tomoseries)
         call check_carg('trsstats',       self%trsstats)
         call check_carg('tseries',        self%tseries)
-        call check_carg('use_gpu',        self%use_gpu)
         call check_carg('verbose',        self%verbose)
         call check_carg('vis',            self%vis)
         call check_carg('vol',            self%vol)
@@ -524,9 +518,10 @@ contains
         call check_file('stk',            self%stk,  notAllowed='T')
         call check_file('stk2',           self%stk2, notAllowed='T')
         call check_file('stk3',           self%stk3, notAllowed='T')
+        call check_file('unidoc',         self%unidoc,  'T')
         call check_file('vollist',        self%vollist, 'T')
-        call check_file('voltab',         self%voltab, 'T')
-        call check_file('voltab2',        self%voltab2,'T')
+        call check_file('voltab',         self%voltab,  'T')
+        call check_file('voltab2',        self%voltab2, 'T')
         call check_iarg('astep',          self%astep)
         call check_iarg('avgsz',          self%avgsz)
         call check_iarg('binwidth',       self%binwidth)
@@ -569,7 +564,6 @@ contains
         call check_iarg('nrestarts',      self%nrestarts)
         call check_iarg('nspace',         self%nspace)
         call check_iarg('nstates',        self%nstates)
-        call check_iarg('set_gpu',        self%set_gpu)
         call check_iarg('class',          self%class)
         call check_iarg('nparts',         self%nparts)
         call check_iarg('npeaks',         self%npeaks)
