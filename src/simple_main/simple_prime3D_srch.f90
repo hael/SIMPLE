@@ -474,7 +474,7 @@ contains
         type(ori) :: o_prev
         real      :: cc_t_min_1, corr
         o_prev = a%get_ori(iptcl)
-        corr   = max( 0., pftcc%corr(self%prev_ref, iptcl, self%prev_roind) )
+        corr   = max( 0., pftcc%corr_single(self%prev_ref, iptcl, self%prev_roind) )
         if( corr > 1. .or. .not. is_a_number(corr) )then
             stop 'Invalid correlation value in simple_prime3d_srch::prep_corr4srch'
         endif
@@ -906,14 +906,14 @@ contains
                     state = irnd_uni(self%nstates)
                 enddo
                 iref = (state - 1) * self%nprojs + self%prev_proj
-                corr = pftcc%corr(iref, iptcl, self%prev_roind)
+                corr = pftcc%corr_single(iref, iptcl, self%prev_roind)
             else
                 ! SHC
                 corrs = -1.
                 do istate=1,self%nstates
                     if( .not. self%state_exists(istate) )cycle
                     iref          = (istate-1)*self%nprojs + self%prev_proj 
-                    corrs(istate) = pftcc%corr(iref, iptcl, self%prev_roind)
+                    corrs(istate) = pftcc%corr_single(iref, iptcl, self%prev_roind)
                 enddo
                 self%prev_corr  = corrs(self%prev_state)
                 loc             = shcloc(self%nstates, corrs, self%prev_corr)
@@ -926,7 +926,7 @@ contains
             call a%set(iptcl, 'state', real(state))
             call a%set(iptcl, 'corr', corr)
             call a%set(iptcl, 'mi_proj', 1.)
-            call a%set(iptcl, 'mi_inpl',  1.)
+            call a%set(iptcl, 'mi_inpl', 1.)
             if( self%prev_state .ne. state )then
                 mi_state = 0.
             else

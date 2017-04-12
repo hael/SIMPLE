@@ -94,6 +94,7 @@ type :: polarft_corrcalc
     procedure          :: gencorrs
     procedure          :: genfrc
     procedure          :: corrs
+    procedure          :: corr_single
     procedure, private :: corr_1
     procedure, private :: corr_2
     generic            :: corr => corr_1, corr_2
@@ -890,6 +891,16 @@ contains
     end function genfrc
 
     !>  \brief  for calculating the correlation between reference iref and particle iptcl in rotation irot
+    !    for a single 
+    function corr_single( self, iref, iptcl, irot ) result( cc )
+        class(polarft_corrcalc), intent(inout) :: self              !< instance
+        integer,                 intent(in)    :: iref, iptcl, irot !< reference, particle, rotation
+        real    :: cc
+        if( self%with_ctf )call self%apply_ctf_single(iptcl, iref)
+        cc = self%corr_1(iref, iptcl, irot)
+    end function corr_single
+
+    !>  \brief  for calculating the correlation between reference iref and particle iptcl in rotation irot
     function corr_1( self, iref, iptcl, irot ) result( cc )
         class(polarft_corrcalc), intent(inout) :: self              !< instance
         integer,                 intent(in)    :: iref, iptcl, irot !< reference, particle, rotation
@@ -899,7 +910,6 @@ contains
             return
         endif
         if( self%with_ctf )then
-            call self%apply_ctf_single(iptcl, iref)
             cc = sum(real(self%pfts_refs_ctf(iref,:,:) * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:))))
         else
             cc = sum(real(self%pfts_refs(iref,:,:) * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:))))
