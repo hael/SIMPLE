@@ -47,10 +47,7 @@ contains
         ! SET FRACTION OF SEARCH SPACE
         frac_srch_space = b%a%get_avg('frac')
 
-        ! READ IMAGES
-        call read_imgs_from_stk( b, p )
-
-          ! PREP REFERENCES
+        ! PREP REFERENCES
         if( p%l_distr_exec )then
             if( .not. cline%defined('refs') )then
                 stop 'need refs to be part of command line for distributed prime2D execution'
@@ -127,7 +124,7 @@ contains
             cnt_glob = cnt_glob + 1
             orientation = b%a%get_ori(iptcl)
             if( nint(orientation%get('state')) > 0 )then
-                b%img = b%imgs(iptcl) ! put the original image back
+                call read_img_from_stk( b, p, iptcl )
                 icls = nint(orientation%get('class'))
                 if( p%l_shellw .and. allocated(wmat) )then
                     wresamp = resample_filter(wmat(iptcl,:), res, res_pad)
@@ -214,7 +211,7 @@ contains
             call progress( cnt, iend-istart+1 )
             orientation = b%a%get_ori(iptcl)
             if( nint(orientation%get('state')) > 0 )then
-                b%img = b%imgs(iptcl) ! put the original image back
+                call read_img_from_stk( b, p, iptcl )
                 icls = nint(orientation%get('class'))
                 call wiener_restore2D_online_fast(b%img, orientation, p%tfplan,&
                 &b%cavgs(icls), b%ctfsqsums(icls), p%msk)
@@ -349,7 +346,7 @@ contains
         do iptcl=p%fromp,p%top
             cnt = cnt+1
             call progress(cnt, p%top-p%fromp+1)
-            b%img  = b%imgs(iptcl) ! put the original image back
+            call read_img_from_stk( b, p, iptcl )
             o      = b%a%get_ori(iptcl)
             icls   = nint(o%get('class'))
             istate = nint(o%get('state'))

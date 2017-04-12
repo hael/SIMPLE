@@ -81,6 +81,7 @@ contains
         use simple_ctffind_iter, only: ctffind_iter
         use simple_pick_iter,    only: pick_iter
         use simple_oris,         only: oris
+        use simple_ori,          only: ori
         use simple_math,         only: round2even
         use simple_qsys_funs,    only: qsys_job_finished
         class(preproc_commander), intent(inout) :: self
@@ -93,7 +94,9 @@ contains
         character(len=:),      allocatable :: moviename_forctf, moviename_intg
         logical, parameter :: DEBUG = .true.
         type(params) :: p
-        type(oris)   :: os
+        type(oris)   :: os_uni
+        type(ori)    :: orientation
+        real         :: smpd_native, smpd_scaled
         integer      :: nmovies, fromto(2), imovie, ntot, movie_counter
         integer      :: frame_counter, lfoo(3), nframes, i, movie_ind
         p = params(cline, checkdistr=.false.) ! constants & derived constants produced
@@ -138,26 +141,33 @@ contains
             fromto(2) = nmovies
         endif
         ntot = fromto(2) - fromto(1) + 1
-        call os%new(ntot)
-        ! loop over exposures (movies)
+        
         frame_counter = 0
         movie_counter = 0
+        call orientation%new
+        call os_uni%new(ntot)
+        smpd_native = p%smpd
+        ! loop over exposures (movies)
         do imovie=fromto(1),fromto(2)
+            p%smpd    = smpd_native
             p%pspecsz = p%pspecsz_unblur
             if( ntot == 1 )then
                 movie_ind = p%part ! streaming mode
             else
                 movie_ind = imovie ! standard mode
             endif 
-            call ubiter%iterate(cline, p, movie_ind, movie_counter, frame_counter, movienames(imovie))
-            movie_counter = movie_counter - 1
+            call ubiter%iterate(cline, p, orientation, movie_ind, movie_counter,&
+            &frame_counter, movienames(imovie), smpd_scaled)
+            p%smpd           = smpd_scaled
+            call os_uni%set_ori(movie_counter, orientation)
+            movie_counter    = movie_counter - 1
             moviename_forctf = ubiter%get_moviename('forctf')
             moviename_intg   = ubiter%get_moviename('intg')
             p%pspecsz        = p%pspecsz_ctffind
             p%hp             = p%hp_ctffind
             p%lp             = p%lp_ctffind 
             call cfiter%iterate(p, movie_ind, movie_counter, moviename_forctf,&
-            &fname_ctffind_ctrl, fname_ctffind_output, os)
+            &fname_ctffind_ctrl, fname_ctffind_output, os_uni)
             if( p%l_pick )then
                 movie_counter = movie_counter - 1
                 p%lp      = p%lp_pick
@@ -165,9 +175,9 @@ contains
             endif
         end do
         ! write CTF parameters
-        call os%write(fname_ctffind_output)
+        call os_uni%write(fname_ctffind_output)
         ! destruct
-        call os%kill
+        call os_uni%kill
         deallocate(fname_ctffind_ctrl,fname_ctffind_output)
         call qsys_job_finished( p, 'simple_commander_preproc :: exec_preproc' )
         ! end gracefully
@@ -371,13 +381,17 @@ contains
     subroutine exec_unblur( self, cline )
         use simple_unblur_iter, only: unblur_iter
         use simple_oris,        only: oris
+        use simple_ori,         only: ori
         use simple_math,        only: round2even
         use simple_qsys_funs,   only: qsys_job_finished
         class(unblur_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
-        type(params)                       :: p
-        type(unblur_iter)                  :: ubiter
+        type(params)      :: p
+        type(unblur_iter) :: ubiter
+        type(oris)        :: os_uni
+        type(ori)         :: orientation
         character(len=STDLEN), allocatable :: movienames(:)
+        real    :: smpd_scaled
         integer :: nmovies, fromto(2), imovie, ntot, movie_counter
         integer :: frame_counter, lfoo(3), nframes
         p = params(cline, checkdistr=.false.) ! constants & derived constants produced
@@ -426,10 +440,15 @@ contains
         ! align
         frame_counter = 0
         movie_counter = 0
+        call orientation%new
+        call os_uni%new(nmovies)
         do imovie=fromto(1),fromto(2)
-            call ubiter%iterate(cline, p, imovie, movie_counter, frame_counter, movienames(imovie))
+            call ubiter%iterate(cline, p, orientation, imovie, movie_counter,&
+            &frame_counter, movienames(imovie), smpd_scaled)
+            call os_uni%set_ori(movie_counter, orientation)
             write(*,'(f4.0,1x,a)') 100.*(real(movie_counter)/real(ntot)), 'percent of the movies processed'
         end do
+        call os_uni%write(p%outfile)
         call qsys_job_finished( p, 'simple_commander_preproc :: exec_unblur' )
         ! end gracefully
         call simple_end('**** SIMPLE_UNBLUR NORMAL STOP ****')

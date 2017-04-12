@@ -16,6 +16,7 @@ type, extends(image) :: reconstructor
     type(ctf)                   :: tfun                  !< CTF object
     real(kind=c_float), pointer :: rho(:,:,:)=>null()    !< sampling+CTF**2 density
     real, allocatable           :: rho_exp(:,:,:)        !< sampling+CTF**2 density of expanded reconstructor
+    real, allocatable           :: cmat_exp(:,:,:)       !< Fourier components of expanded reconstructor
     integer                     :: rhosz                 !< size of the sampling density matrix
     character(len=STDLEN)       :: wfun_str='kb'         !< window function, string descriptor
     real                        :: winsz=1.              !< window half-width
@@ -105,48 +106,48 @@ contains
         call self%reset
     end subroutine alloc_rho
 
-    !>  \brief  allocates the sampling density matrix
-    subroutine alloc_rho_exp( self, p )
-        use simple_params, only: params
-        use simple_math,   only: fdim
-        class(reconstructor),         intent(inout) :: self  !< instance
-        class(params),                intent(in)    :: p     !< parameters
-        integer                       :: ld_here(3)          !< logical dimension here
-        integer                       :: rho_shape(3)        !< shape of the rho matrix
-        integer                       :: rho_lims(3,2)       !< bounds of the rho matrix (xfel-kind images)
-        character(len=:), allocatable :: ikind_tmp
-        if( .not. self%exists() ) stop 'construct image before allocating rho; alloc_rho; simple_reconstructor'
-        ld_here = self%get_ldim()
-        if( ld_here(3) < 2 ) stop 'reconstructor need to be 3D 4 now; alloc_rho; simple_reconstructor'
-        self%dens_const = 1./real(p%nptcls)
-        self%wfun_str   = p%wfun
-        self%winsz      = p%winsz
-        self%alpha      = p%alpha
-        self%ctfflag    = p%ctf
-        self%tfneg = .false.
-        if( p%neg .eq. 'yes' ) self%tfneg = .true.
-        self%tfastig = .false.
-        if( p%tfplan%mode .eq. 'astig' ) self%tfastig = .true.
-        self%wfuns = winfuns(self%wfun_str,self%winsz,self%alpha)
-        ikind_tmp  = self%get_imgkind()
-        self%ikind = ikind_tmp
-        if( trim(self%ikind) .eq. 'xfel' )then
-            rho_lims = self%get_cmat_lims()
-            allocate(self%rho(rho_lims(1,1):rho_lims(1,2),rho_lims(2,1):rho_lims(2,2),rho_lims(3,1):rho_lims(3,2)))
-        else
-            ! Work out dimensions of the rho array
-            rho_shape(1)   = fdim(ld_here(1))
-            rho_shape(2:3) = ld_here(2:3)
-            ! Letting FFTW do the allocation in C ensures that we will be using aligned memory
-            self%kp = fftwf_alloc_real(int(product(rho_shape),c_size_t))
-            ! Set up the rho array which will point at the allocated memory
-            call c_f_pointer(self%kp,self%rho,rho_shape)
-        endif
-        ! Set the record size of stack entry
-        inquire(iolength=self%rhosz) self%rho
-        self%rho_allocated = .true.
-        call self%reset
-    end subroutine alloc_rho_exp
+    ! !>  \brief  allocates the sampling density matrix
+    ! subroutine alloc_rho_exp( self, p )
+    !     use simple_params, only: params
+    !     use simple_math,   only: fdim
+    !     class(reconstructor),         intent(inout) :: self  !< instance
+    !     class(params),                intent(in)    :: p     !< parameters
+    !     integer                       :: ld_here(3)          !< logical dimension here
+    !     integer                       :: rho_shape(3)        !< shape of the rho matrix
+    !     integer                       :: rho_lims(3,2)       !< bounds of the rho matrix (xfel-kind images)
+    !     character(len=:), allocatable :: ikind_tmp
+    !     if( .not. self%exists() ) stop 'construct image before allocating rho; alloc_rho; simple_reconstructor'
+    !     ld_here = self%get_ldim()
+    !     if( ld_here(3) < 2 ) stop 'reconstructor need to be 3D 4 now; alloc_rho; simple_reconstructor'
+    !     self%dens_const = 1./real(p%nptcls)
+    !     self%wfun_str   = p%wfun
+    !     self%winsz      = p%winsz
+    !     self%alpha      = p%alpha
+    !     self%ctfflag    = p%ctf
+    !     self%tfneg = .false.
+    !     if( p%neg .eq. 'yes' ) self%tfneg = .true.
+    !     self%tfastig = .false.
+    !     if( p%tfplan%mode .eq. 'astig' ) self%tfastig = .true.
+    !     self%wfuns = winfuns(self%wfun_str,self%winsz,self%alpha)
+    !     ikind_tmp  = self%get_imgkind()
+    !     self%ikind = ikind_tmp
+    !     if( trim(self%ikind) .eq. 'xfel' )then
+    !         rho_lims = self%get_cmat_lims()
+    !         allocate(self%rho(rho_lims(1,1):rho_lims(1,2),rho_lims(2,1):rho_lims(2,2),rho_lims(3,1):rho_lims(3,2)))
+    !     else
+    !         ! Work out dimensions of the rho array
+    !         rho_shape(1)   = fdim(ld_here(1))
+    !         rho_shape(2:3) = ld_here(2:3)
+    !         ! Letting FFTW do the allocation in C ensures that we will be using aligned memory
+    !         self%kp = fftwf_alloc_real(int(product(rho_shape),c_size_t))
+    !         ! Set up the rho array which will point at the allocated memory
+    !         call c_f_pointer(self%kp,self%rho,rho_shape)
+    !     endif
+    !     ! Set the record size of stack entry
+    !     inquire(iolength=self%rhosz) self%rho
+    !     self%rho_allocated = .true.
+    !     call self%reset
+    ! end subroutine alloc_rho_exp
 
     ! SETTERS
     
@@ -505,7 +506,6 @@ contains
         use simple_oris,     only: oris
         use simple_sym,      only: sym
         use simple_params,   only: params
-        use simple_ran_tabu, only: ran_tabu
         use simple_filterer, only: resample_filter
         use simple_jiffys,   only: find_ldim_nptcls, progress
         use simple_gridding  ! use all in there
@@ -521,7 +521,6 @@ contains
         real,    optional,    intent(in)    :: wmat(:,:)          !< shellweights
         real,    optional,    intent(in)    :: wmat_states(:,:,:) !< shellweights for multi-particle analysis
         type(image)       :: img, img_pd
-        type(ran_tabu)    :: rt
         integer           :: statecnt(p%nstates), i, cnt, n, ldim(3), filtsz
         integer           :: filtsz_pad, state_here, state_glob
         real, allocatable :: res(:), res_pad(:), wresamp(:)
@@ -535,7 +534,6 @@ contains
         ! stash global state index
         state_glob = state 
         ! make random number generator
-        rt = ran_tabu(n)
         ! make the images
         call img_pd%new([p%boxpd,p%boxpd,1],self%get_smpd(),p%imgkind)
         call img%new([p%box,p%box,1],self%get_smpd(),p%imgkind)
@@ -584,7 +582,6 @@ contains
         endif
         call img%kill
         call img_pd%kill
-        call rt%kill
         ! report how many particles were used to reconstruct each state
         if( p%nstates > 1 )then
             write(*,'(a,1x,i3,1x,a,1x,i6)') '>>> NR OF PARTICLES INCLUDED IN STATE:', state, 'WAS:', statecnt(state)

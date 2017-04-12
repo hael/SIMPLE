@@ -69,6 +69,7 @@ type :: ori
     procedure          :: get_shift
     procedure          :: hash_size
     procedure          :: chash_size
+    procedure          :: chash_nmax
     procedure          :: isthere
     procedure          :: key_is_real
     procedure          :: ori2str
@@ -512,6 +513,13 @@ contains
         integer :: sz 
         sz = self%chtab%size_of_chash()
     end function chash_size
+
+    !>  \brief  returns size of chash
+    function chash_nmax( self ) result( nmax )
+        class(ori), intent(in) :: self
+        integer :: nmax
+        nmax = self%chtab%get_nmax()
+    end function chash_nmax
 
     !>  \brief  check for presence of key in the ori hash
     function isthere( self, key ) result( found )

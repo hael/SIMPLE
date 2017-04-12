@@ -8,7 +8,7 @@ use simple_params,           only: params
 use simple_cmdline,          only: cmdline
 use simple_gridding,         only: prep4cgrid
 use simple_masker,           only: automask
-use simple_strings,          only: str_has_substr, int2str
+use simple_strings,          only: str_has_substr
 use simple_cont3D_matcher    ! use all in there
 use simple_hadamard_common   ! use all in there
 use simple_math              ! use all in there
@@ -61,6 +61,8 @@ contains
         use simple_qsys_funs, only: qsys_job_finished
         use simple_oris,      only: oris
         use simple_strings,   only: int2str_pad
+        !$ use omp_lib
+        !$ use omp_lib_kinds
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         class(cmdline), intent(inout) :: cline
@@ -76,9 +78,6 @@ contains
 
         ! SET FRACTION OF SEARCH SPACE
         frac_srch_space = b%a%get_avg('frac')
-
-        ! READ IMAGES
-        call read_imgs_from_stk( b, p )
 
         ! SET BAND-PASS LIMIT RANGE
         call set_bp_range( b, p, cline )
@@ -127,6 +126,7 @@ contains
 
         ! PREPARE THE POLARFT_CORRCALC DATA STRUCTURE
         if( p%refine.eq.'het' )then
+            statecnt(:) = 0
             ! generate filename for memoization of particle pfts
             if( allocated(ppfts_fname) ) deallocate(ppfts_fname)
             if( p%l_distr_exec )then
@@ -158,9 +158,8 @@ contains
         if( DEBUG ) write(*,*) '*** hadamard3D_matcher ***: did reset recvols'
 
         ! STOCHASTIC IMAGE ALIGNMENT
-        ! create the search objects
-        if( .not. allocated(primesrch3D) ) allocate( primesrch3D(p%fromp:p%top) )
-        ! need to re-create every round because parameters are changing
+        ! create the search objects, need to re-create every round because parameters are changing
+        allocate( primesrch3D(p%fromp:p%top) )
         do iptcl=p%fromp,p%top
             call primesrch3D(iptcl)%new(b%a, b%e, p, pftcc) 
         end do
@@ -170,67 +169,54 @@ contains
         select case(p%refine)
             case( 'no', 'adasym' )
                 if( p%oritab .eq. '' )then
-                    !$omp parallel do default(shared) schedule(auto) private(iptcl,orientation)
+                    !$omp parallel do default(shared) schedule(auto) private(iptcl)
                     do iptcl=p%fromp,p%top
-                        orientation = b%a%get_ori(iptcl)
-                        call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, orientation, p%lp, greedy=.true.)
-                        call b%a%set_ori(iptcl, orientation)
+                        call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp, greedy=.true.)
                     end do
                     !$omp end parallel do
                 else
-                    !$omp parallel do default(shared) schedule(auto) private(iptcl,orientation)
+                    !$omp parallel do default(shared) schedule(auto) private(iptcl)
                     do iptcl=p%fromp,p%top
-                        orientation = b%a%get_ori(iptcl)
-                        call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, orientation, p%lp)
-                        call b%a%set_ori(iptcl, orientation)
+                        call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp)
                     end do
                     !$omp end parallel do
                 endif
             case('neigh')
                 if( p%oritab .eq. '' ) stop 'cannot run the refine=neigh mode without input oridoc (oritab)'
-                !$omp parallel do default(shared) schedule(auto) private(iptcl,orientation)
+                !$omp parallel do default(shared) schedule(auto) private(iptcl)
                 do iptcl=p%fromp,p%top
-                    orientation = b%a%get_ori(iptcl)
-                    call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, orientation, p%lp, nnmat=b%nnmat)
-                    call b%a%set_ori(iptcl, orientation)
+                    call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp, nnmat=b%nnmat)
                 end do
                 !$omp end parallel do
             case('shc')
                 if( p%oritab .eq. '' )then
-                    !$omp parallel do default(shared) schedule(auto) private(iptcl,orientation)
+                    !$omp parallel do default(shared) schedule(auto) private(iptcl)
                     do iptcl=p%fromp,p%top
-                        orientation = b%a%get_ori(iptcl)
-                        call primesrch3D(iptcl)%exec_prime3D_srch_shc(pftcc, iptcl, orientation, p%lp, greedy=.true.)
-                        call b%a%set_ori(iptcl, orientation)
+                        call primesrch3D(iptcl)%exec_prime3D_srch_shc(pftcc, iptcl, b%a, b%e, p%lp, greedy=.true.)
                     end do
                     !$omp end parallel do
                 else
-                    !$omp parallel do default(shared) schedule(auto) private(iptcl,orientation)
+                    !$omp parallel do default(shared) schedule(auto) private(iptcl)
                     do iptcl=p%fromp,p%top
-                        orientation = b%a%get_ori(iptcl)
-                        call primesrch3D(iptcl)%exec_prime3D_srch_shc(pftcc, iptcl, orientation, p%lp)
-                        call b%a%set_ori(iptcl, orientation)
+                        call primesrch3D(iptcl)%exec_prime3D_srch_shc(pftcc, iptcl, b%a, b%e, p%lp)
                     end do
                     !$omp end parallel do
                 endif
             case('shcneigh')
                 if( p%oritab .eq. '' ) stop 'cannot run the refine=shcneigh mode without input oridoc (oritab)'
-                !$omp parallel do default(shared) schedule(auto) private(iptcl,orientation)
+                !$omp parallel do default(shared) schedule(auto) private(iptcl)
                 do iptcl=p%fromp,p%top
-                    orientation = b%a%get_ori(iptcl)
-                    call primesrch3D(iptcl)%exec_prime3D_srch_shc(pftcc, iptcl, orientation, p%lp, nnmat=b%nnmat)
-                    call b%a%set_ori(iptcl, orientation)
+                    call primesrch3D(iptcl)%exec_prime3D_srch_shc(pftcc, iptcl, b%a, b%e, p%lp, nnmat=b%nnmat)
                 end do
                 !$omp end parallel do
             case('het')
                 if( p%oritab .eq. '' ) stop 'cannot run the refine=het mode without input oridoc (oritab)'
                 write(*,'(A,F8.2)') '>>> PARTICLE RANDOMIZATION(%):', 100.*p%extr_thresh
                 write(*,'(A,F8.2)') '>>> CORRELATION THRESHOLD:    ', corr_thresh
-                !$omp parallel do default(shared) schedule(auto) private(iptcl,orientation)
+                !$omp parallel do default(shared) schedule(auto) private(iptcl)&
+                !$omp reduction(+:statecnt)
                 do iptcl=p%fromp,p%top
-                    orientation = b%a%get_ori(iptcl)
-                    call primesrch3D(iptcl)%exec_prime3D_srch_het(pftcc, iptcl, orientation, corr_thresh, statecnt)
-                    call b%a%set_ori(iptcl, orientation)
+                    call primesrch3D(iptcl)%exec_prime3D_srch_het(pftcc, iptcl, b%a, b%e, corr_thresh, statecnt)
                 end do
                 !$omp end parallel do
                 norm = real(sum(statecnt))
@@ -252,6 +238,7 @@ contains
                 orientation = b%a%get_ori(iptcl)
                 prev_state  = nint( orientation%get('state') )
                 if( prev_state > 0 )then
+                    call read_img_from_stk( b, p, iptcl )
                     if( p%npeaks > 1 )then
                         call primesrch3D(iptcl)%get_oris(prime3D_oris, orientation)
                         if( doshellweight )then
@@ -279,6 +266,10 @@ contains
         endif
 
         ! DESTRUCT
+        do iptcl=p%fromp,p%top
+            call primesrch3D(iptcl)%kill
+        end do
+        deallocate( primesrch3D )
         if( allocated(wmat)    ) deallocate(wmat)
         if( allocated(wresamp) ) deallocate(wresamp)
         if( allocated(res)     ) deallocate(res)
@@ -355,7 +346,6 @@ contains
                 endif
             end do
             deallocate(sample)
-            ! NORMALIZE STRUCTURE FACTORS
             call norm_struct_facts(b, p)
         endif
     end subroutine gen_random_model
@@ -453,7 +443,6 @@ contains
                     endif
                     if( p%doautomsk )then
                         ! read & pre-process mask volume
-                        !call b%mskvol%read(p%masks(s))
                         b%mskvol = b%mskvols(s)
                         call b%mskvol%init_env_rproject
                     endif
@@ -470,7 +459,7 @@ contains
                             ! and will be clipped/padded in prepimg4align
                             call b%img%new([p%box,p%box,1],p%smpd)
                         endif
-                        b%img  = b%imgs(iptcl) ! put the original image back
+                        call read_img_from_stk( b, p, iptcl )
                         call prepimg4align(b, p, o)
                         call b%img%imgpolarizer(pftcc, iptcl)
                     end do

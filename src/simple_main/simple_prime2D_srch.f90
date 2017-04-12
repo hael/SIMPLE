@@ -389,4 +389,3 @@ contains
     end subroutine kill
 
 end module simple_prime2D_srch
-

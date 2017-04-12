@@ -138,9 +138,9 @@ contains
         class(cmdline),                    intent(inout) :: cline
         ! constants
         logical,               parameter :: DEBUG=.false.
-        real,                  parameter :: LPLIMS(2) = [20.,10.], CENLP=50., NNN=50.
+        real,                  parameter :: LPLIMS(2) = [20.,10.], CENLP=50.
         integer,               parameter :: MAXITS_INIT=30, MAXITS_REFINE=80
-        integer,               parameter :: STATE=1, NPROJS_SYMSRCH=75
+        integer,               parameter :: STATE=1, NPROJS_SYMSRCH=100
         character(len=32),     parameter :: ITERFBODY     = 'prime3Ddoc_'
         character(len=32),     parameter :: VOLFBODY      = 'recvol_state'
         character(len=STDLEN), parameter :: STKSCALEDBODY = 'stk_sc_ini3D_from_cavgs'
@@ -264,10 +264,9 @@ contains
         call cline_prime3D_refine2%set('ctf', 'no')
         call cline_prime3D_refine2%set('maxits', real(MAXITS_REFINE))
         call cline_prime3D_refine2%set('dynlp', 'no') ! better be explicit about the dynlp
-        call cline_prime3D_refine2%set('nnn', NNN)    ! better be explicit about the number of nearest neighs
         call cline_prime3D_refine2%set('shellw', 'no')
         call cline_prime3D_refine2%set('lp', LPLIMS(2))
-        call cline_prime3D_refine2%set('refine', 'shcneigh')
+        call cline_prime3D_refine2%set('refine', 'shc')
         ! (6) RE-PROJECT VOLUME
         call cline_projvol%set('prg', 'projvol')
         call cline_projvol%set('outstk', 'reprojs'//p_master%ext)

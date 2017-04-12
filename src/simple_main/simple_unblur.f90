@@ -9,6 +9,11 @@ implicit none
 public :: unblur_movie, unblur_calc_sums, unblur_calc_sums_tomo
 private
 
+interface unblur_calc_sums
+    module procedure unblur_calc_sums_1
+    module procedure unblur_calc_sums_2
+end interface
+
 type(ft_expanded), allocatable  :: movie_frames_ftexp(:)      !< movie frames
 type(ft_expanded), allocatable  :: movie_frames_ftexp_sh(:)   !< shifted movie frames
 type(ft_expanded)               :: movie_sum_global_ftexp     !< global movie sum for refinement
@@ -48,7 +53,7 @@ real,    parameter :: SMALLSHIFT = 2. !< small initial shift to blur out fixed p
 
 contains
     
-    subroutine unblur_movie( movie_stack_fname, p, corr, nsig )
+    subroutine unblur_movie( movie_stack_fname, p, corr, smpd_out, nsig )
         use simple_oris,        only: oris
         use simple_strings,     only: int2str
         use simple_rnd,         only: ran3
@@ -57,6 +62,7 @@ contains
         character(len=*), intent(in)    :: movie_stack_fname
         class(params),    intent(inout) :: p
         real,             intent(out)   :: corr
+        real,             intent(out)   :: smpd_out
         real, optional,   intent(in)    :: nsig
         real    :: ave, sdev, var, minw, maxw
         real    :: cxy(3), lims(2,2), corr_prev, frac_improved, corrfrac
@@ -150,6 +156,8 @@ contains
         if( doprint ) write(*,'(a,7x,f7.4)') '>>> SDEV OF WEIGHTS    :', sdev
         if( doprint ) write(*,'(a,7x,f7.4)') '>>> MIN WEIGHT         :', minw
         if( doprint ) write(*,'(a,7x,f7.4)') '>>> MAX WEIGHT         :', maxw
+        ! report the sampling distance of the possibly scaled movies
+        smpd_out = smpd_scaled
         
         contains
             
@@ -184,23 +192,32 @@ contains
                     
     end subroutine unblur_movie
 
-    subroutine unblur_calc_sums( movie_sum, movie_sum_corrected, movie_sum_ctf, fromto )
-        type(image),       intent(out) :: movie_sum, movie_sum_corrected, movie_sum_ctf
-        integer, optional, intent(in)  :: fromto(2)
+    subroutine unblur_calc_sums_1( movie_sum, movie_sum_corrected, movie_sum_ctf )
+        type(image), intent(out) :: movie_sum, movie_sum_corrected, movie_sum_ctf
         integer :: iframe
         ! calculate the sum for CTF estimation
         call sum_movie_frames(opt_shifts)
         movie_sum_ctf = movie_sum_global
         call movie_sum_ctf%bwd_ft
         ! re-calculate the weighted sum
-        call wsum_movie_frames(opt_shifts, fromto)
+        call wsum_movie_frames(opt_shifts)
         movie_sum_corrected = movie_sum_global
         call movie_sum_corrected%bwd_ft
         ! generate straight integrated movie frame for comparison
         call sum_movie_frames
         movie_sum = movie_sum_global
         call movie_sum%bwd_ft
-    end subroutine unblur_calc_sums
+    end subroutine unblur_calc_sums_1
+
+    subroutine unblur_calc_sums_2( movie_sum_corrected, fromto )
+        type(image), intent(out) :: movie_sum_corrected
+        integer,     intent(in)  :: fromto(2)
+        integer :: iframe
+        ! re-calculate the weighted sum
+        call wsum_movie_frames(opt_shifts, fromto)
+        movie_sum_corrected = movie_sum_global
+        call movie_sum_corrected%bwd_ft
+    end subroutine unblur_calc_sums_2
 
     subroutine unblur_calc_sums_tomo( frame_counter, time_per_frame, movie_sum, movie_sum_corrected, movie_sum_ctf )
         integer,     intent(inout) :: frame_counter

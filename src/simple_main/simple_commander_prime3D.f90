@@ -153,7 +153,6 @@ contains
     
     subroutine exec_prime3D_init( self, cline )
         use simple_hadamard3D_matcher, only: gen_random_model, prime3D_find_resrange
-        use simple_hadamard_common,    only: read_imgs_from_stk
         class(prime3D_init_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(params)       :: p
@@ -172,7 +171,6 @@ contains
         endif
         call b%build_general_tbox(p, cline)   ! general objects built
         call b%build_hadamard_prime3D_tbox(p) ! prime3D objects built
-        call read_imgs_from_stk(b, p)
         ! determine resolution range
         if( cline%defined('lp') ) call prime3D_find_resrange( b, p, p%lp, p%lpstop )
         ! determine the number of peaks
@@ -182,7 +180,7 @@ contains
             call gen_random_model( b, p, p%nran )
         else
             if( p%nptcls > MAXIMGS )then
-                 call gen_random_model( b, p, MAXIMGS )
+                call gen_random_model( b, p, MAXIMGS )
             else
                 call gen_random_model( b, p )
             endif
@@ -439,6 +437,7 @@ contains
             if(.not. cline%defined('edge'))    p%edge     = max(15, ceiling(0.05*real(p%box)))
             write(*,'(A,I3)')'>>> AUTOMASKING BINARY LAYERS:', p%binwidth
             write(*,'(A,I3)')'>>> AUTOMASKING SOFT LAYERS:  ', p%edge
+            write(*,'(A,F6.1)')'>>> AUTOMASKING LOW-PASS:   ', p%amsklp
         endif
         call b%build_general_tbox(p, cline)   ! general objects built
         if( .not. cline%defined('eo') ) p%eo = 'no' ! default

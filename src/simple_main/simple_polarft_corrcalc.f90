@@ -486,7 +486,7 @@ contains
    
     ! MEMOIZERS
 
-    !>  \brief  is for memoization of the complex square sums reqired for correlation calculation
+    !>  \brief  is for memoization of the complex square sums required for correlation calculation
     subroutine memoize_sqsum_ref( self, iref )
         use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
@@ -498,7 +498,7 @@ contains
         endif
     end subroutine memoize_sqsum_ref
     
-    !>  \brief  is for memoization of the complex square sums reqired for correlation calculation
+    !>  \brief  is for memoization of the complex square sums required for correlation calculation
     subroutine memoize_sqsum_ref_ctf( self, iref, irot )
         use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
@@ -511,7 +511,7 @@ contains
         endif
     end subroutine memoize_sqsum_ref_ctf
 
-    !>  \brief  is for memoization of the complex square sums reqired for correlation calculation
+    !>  \brief  is for memoization of the complex square sums required for correlation calculation
     subroutine memoize_sqsum_ptcl( self, iptcl )
         use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
@@ -899,6 +899,7 @@ contains
             return
         endif
         if( self%with_ctf )then
+            call self%apply_ctf_single(iptcl, iref)
             cc = sum(real(self%pfts_refs_ctf(iref,:,:) * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:))))
         else
             cc = sum(real(self%pfts_refs(iref,:,:) * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:))))

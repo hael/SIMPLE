@@ -437,13 +437,15 @@ select case(prg)
         keys_optional(15) = 'fromf'
         keys_optional(16) = 'tof'
         keys_optional(17) = 'nsig'
+        keys_optional(18) = 'outfile'
         ! parse command line
         if( describe ) call print_doc_unblur
         call cline%parse(keys_required(:2), keys_optional(:17))
         ! set defaults
-        if( .not. cline%defined('trs')     ) call cline%set('trs',      5.)
-        if( .not. cline%defined('lpstart') ) call cline%set('lpstart', 15.)
-        if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',   8.)
+        if( .not. cline%defined('trs')     ) call cline%set('trs',                      5.)
+        if( .not. cline%defined('lpstart') ) call cline%set('lpstart',                 15.)
+        if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',                   8.)
+        if( .not. cline%defined('outfile') ) call cline%set('outfile', 'simple_unidoc.txt')
         ! execute
         call xunblur%execute(cline)
     case( 'ctffind' )
@@ -965,7 +967,8 @@ select case(prg)
         ! set defaults
         if( .not. cline%defined('nspace')                  ) call cline%set('nspace', 1000.)
         if( cline%defined('lp') .or. cline%defined('find') ) call cline%set('dynlp',   'no')
-        if( .not. cline%defined('cenlp')  )                  call cline%set('cenlp',    30.)
+        if( .not. cline%defined('cenlp')                   ) call cline%set('cenlp',    30.)
+        if( .not. cline%defined('amsklp')                  ) call cline%set('amsklp',   25.)
         if( .not. cline%defined('refine') )then
              call cline%set('refine',  'no')
         else
