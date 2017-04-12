@@ -1,0 +1,335 @@
+body {
+	font-family: Impact, Charcoal, sans-serif;
+	background-color: rgb(34, 152, 202);
+	margin: 0px;
+	overflow: hidden;
+}
+
+.header {
+	width: 100%;
+	text-align: center;
+	background-color: rgb(252, 252, 252);
+	padding-top: 5px;
+	padding-bottom: 5px;
+	height: 80px;
+}
+
+.headerimage {
+	width: 350px;
+}
+	
+.body {
+	width: 100%;
+	height: calc(100vh - 170px);
+	overflow: hidden;
+}
+		
+.footer {
+	width: 100%;
+	background-color: rgb(252, 252, 252);
+	position: absolute;
+	bottom: 0px;
+	padding-top: 5px;
+	height: 30px;
+}
+		
+.footerbutton {
+	display: inline-block;
+	padding-left: 20px;
+}
+
+.footerbutton:hover {
+	background-color: rgb(218, 132, 40);
+}
+		
+.bodydiv {
+	background-color: rgb(252, 252, 252);
+	margin: 20px;
+}
+		
+.historytable {
+	width: 100%;
+	display: block;
+	overflow-y: scroll;
+	height: calc(100vh - 220px);
+}
+
+.historytable tr:nth-child(odd) {
+	background-color: rgb(236, 236, 236);
+}
+		
+.projectselector {
+	display: inline-block;
+	float: right;
+	margin-right: 5px;
+}
+		
+.projectselector select{
+	vertical-align: bottom;
+}
+
+.bodyheader {
+	font-size: 20px;
+}
+
+.bodyheader:hover {
+	background-color: rgb(218, 132, 40);
+}
+
+.bodyheader:hover .hoverdiv {
+	display: block;
+}
+
+.bodybutton {
+	display: inline-block;
+}
+
+.bodybutton:hover {
+	background-color: rgb(218, 132, 40);
+}
+
+.bodybutton:hover .hoverdiv {
+	display: block;
+}
+
+.hoverdiv {
+	display: none;
+	width: 350px;
+	position: absolute;
+	border-style: solid;
+	padding: 5px;
+	background-color: white;
+	z-index: 100;
+}
+
+.hoverdiv div:hover {
+	background-color: rgb(218, 132, 40);
+}
+
+.hoverdiv input {
+	width: 150px;
+}
+
+.hoverdiv label {
+	width: 150px;
+}
+
+.taskbutton {
+	width: 400px;
+	height: 20px;
+	margin-left: auto;
+	margin-right: auto;
+	margin-bottom: 10px;
+	margin-top: 10px;
+	padding: 5px;
+	color: white;
+	background-color: #2298ca;
+	text-align: center;
+	
+}
+
+.taskbutton:hover{
+	background-color: rgb(218, 132, 40);
+}
+
+.taskbutton:hover .hoverdiv {
+	display: block;
+}
+
+.taskwindow {
+	text-align: center;
+	height: 100%;
+}
+
+.tasktable {
+	overflow-y: scroll;
+	display: block;
+	height: calc(100vh - 370px);
+}
+
+.micrographimgdeselected {
+	border-style: solid;
+	border-color: black;
+	border-width: 5px;
+	margin: 2px;
+
+	background-repeat: no-repeat;
+	background-size: contain;
+	display: inline-block;
+}
+
+.micrographimgselected {
+	border-style: solid;
+	border-color: #da8428;;
+	border-width: 5px;
+	margin: 2px;
+
+	background-repeat: no-repeat;
+	background-size: contain;
+	display: inline-block;
+}
+
+.popupheader {
+	font-size: 20px;
+	background-color: rgb(34, 152, 202);
+}
+
+.popuptable {
+	width: 100%;
+	display: block;
+	overflow: auto;
+}
+
+.popuptable tr:nth-child(odd) {
+	background-color: rgb(236, 236, 236);
+}
+
+.pipelineviewboxselect{
+	position: absolute;
+	width: 800px;
+	height: 800px;
+	top: calc(50% - 400px);
+	left: calc(50% - 400px);
+	background-color: white;
+	display: none;
+}
+
+.pipelineviewsave{
+	position: absolute;
+	height: 400px;
+	width: 400px;
+	top: calc(50% - 200px);
+	left: calc(50% - 200px);
+	background-color: white;
+	display: none;
+}
+
+.pspecdiv,.thumbdiv,.paramsdiv{
+	float: left;
+	display:flex;
+	overflow: hidden;
+	height: 250px;
+	width: 250px;
+	justify-content: center;
+	align-items: center;
+}
+
+.pipelineimg img{
+	flex: none;
+}
+
+.pipelineview table{
+	margin: auto;
+}
+
+.pipelineviewmicrograph {
+	width: 750px;
+	display: inline-block;
+	margin-left: 5px;
+	padding: 10px;
+}
+
+#gauze {
+	position: absolute;
+	height: 100%;
+	width: 100%;
+	background-color: grey;
+	opacity: 0.5;
+	top: 0px;
+	left: 0px;
+	display: none;
+}
+
+#filebrowserpopup {
+	position: absolute;
+	height: 400px;
+	width: 600px;
+	top: calc(50% - 200px);
+	left: calc(50% - 200px);
+	background-color: white;
+	display: none;
+	z-index: 200;
+}
+
+#taskdiv{
+	display: none;
+	height: calc(100vh - 230px);
+}
+
+#filebrowserlisttable{
+	overflow: auto;
+	height: 300px;
+	display: block;
+}
+
+#filesviewsave {
+	position: absolute;
+	height: 400px;
+	width: 600px;
+	top: calc(50% - 200px);
+	left: calc(50% - 200px);
+	background-color: white;
+	display: none;
+	z-index: 100;
+}
+
+#folderselectorpopup {
+	position: absolute;
+	height: 400px;
+	width: 400px;
+	top: calc(50% - 200px);
+	left: calc(50% - 200px);
+	background-color: white;
+	display: none;
+	z-index: 200;
+}
+
+#folderlisttable{
+	overflow: auto;
+	height: 300px;
+	display: block;
+}
+
+#filesviewdiv {
+	overflow-y: scroll;
+	height: calc(100% - 50px);
+}
+
+#pipelineviewdiv {
+	overflow-y: scroll;
+	height: calc(100% - 75px);
+}
+
+#pipelinepage {
+	display: inline-flex;
+}
+
+#pipelinepage input{
+	width: 40px;
+}
+
+#newprojectpopup {
+	position: absolute;
+	height: 200px;
+	width: 400px;
+	top: calc(50% - 100px);
+	left: calc(50% - 200px);
+	background-color: white;
+	display: none;
+}
+
+#jobrunparameterspopup {
+	position: absolute;
+	height: 400px;
+	width: 600px;
+	top: calc(50% - 200px);
+	left: calc(50% - 200px);
+	background-color: white;
+	display: none;
+}
+
+div[name=pipelineviewselected] {    
+	background-color: #acbcab;
+} 
+
+

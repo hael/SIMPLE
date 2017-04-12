@@ -1,0 +1,109 @@
+<div class=bodyheader>
+	<b>New Job</b>
+</div>
+
+<div class=modeselector>
+	Mode
+	<select id=modeselector name=mode onchange=selectMode()>
+		<option value=standardtasklist selected>Standard</option>
+		<option value=pipelinetasklist>Pipeline</option>
+		<option value=pipeline2dtasklist>Pipeline 2D</option>
+		<option value=advancedtasklist>Advanced</option>
+	</select>
+</div>
+
+<div id=standardtasklist class=tasklist>
+	<div class=taskbutton onclick=showTask('importtask')>
+		Import
+		<div class=hoverdiv>
+			Import movies
+		</div>
+	</div>
+	<img src=img/down-arrow.png>
+	<div class=taskbutton onclick=showTask('unblurtask')>
+		Motion Correction & CTF Estimation
+		<div class=hoverdiv>
+			Perform alignment of movie frames to correct for movement and estimate CTF parameters for each resulting micrograph
+		</div>
+	</div>
+	<img src=img/down-arrow.png>
+	<div class=taskbutton onclick=showTask('picktask')>
+		Manual Picking
+	</div>
+	<img src=img/down-arrow.png>
+	<div class=taskbutton onclick=showTask('extracttask')>
+		Extract Particles
+	</div>
+	<img src=img/down-arrow.png>
+	<div class=taskbutton onclick=showTask('prime2dtask')>
+		2D Clustering
+	</div>
+	<img src=img/down-arrow.png>
+	<div class=taskbutton onclick=showTask('picktask')>
+		Reference Based Picking
+	</div>
+	<img src=img/down-arrow.png>
+	<div class=taskbutton onclick=showTask('extracttask')>
+		Extract Particles
+	</div>
+	<img src=img/down-arrow.png>
+	<div class=taskbutton onclick=showTask('prime2dtask')>
+		2D Clustering
+	</div>
+	<img src=img/down-arrow.png>
+	<div class=taskbutton onclick=showTask('ini3dtask')>
+		Initial Model Generation
+	</div>
+	<img src=img/down-arrow.png>
+	<div class=taskbutton onclick=showTask('prime2dtask')>
+		3D Refinement
+	</div>
+</div>
+
+<div id=pipelinetasklist class=tasklist>
+	<div class=taskbutton onclick=showTask('unblurtask')>
+		Pipeline
+		<div class=hoverdiv>
+			Performs alignment of movie frames to correct for movement, estimation of CTF parameters for each resulting micrograph and automated, reference based picking.
+		</div>
+	</div>
+	<img src=img/down-arrow.png>
+	<div class=taskbutton onclick=showTask('extracttask')>
+		Extract Particles
+	</div>
+	<img src=img/down-arrow.png>
+	<div class=taskbutton onclick=showTask('prime2dtask')>
+		2D Clustering
+	</div>
+	<img src=img/down-arrow.png>
+	<div class=taskbutton onclick=showTask('ini3dtask')>
+		Initial Model Generation
+	</div>
+	<img src=img/down-arrow.png>
+	<div class=taskbutton onclick=showTask('prime2dtask')>
+		3D Refinement
+	</div>
+</div>
+
+<div id=pipeline2dtasklist class=tasklist>
+	<div class=taskbutton onclick=showTask('unblurtask')>
+		Pipeline 2D
+		<div class=hoverdiv>
+			Performs alignment of movie frames to correct for movement, estimation of CTF parameters for each resulting micrograph, automated, reference based picking and 2D clustering
+		</div>
+	</div>
+	<img src=img/down-arrow.png>
+	<div class=taskbutton onclick=showTask('ini3dtask')>
+		Initial Model Generation
+	</div>
+	<img src=img/down-arrow.png>
+	<div class=taskbutton onclick=showTask('prime2dtask')>
+		3D Refinement
+	</div>
+</div>
+
+<div id=advancedtasklist class=tasklist>
+
+</div>
+
+
