@@ -92,22 +92,23 @@ select case(prg)
         keys_optional(12)  = 'startit'
         keys_optional(13)  = 'scale'
         keys_optional(14)  = 'frameavg'
-        keys_optional(15)  = 'tomo'
-        keys_optional(16)  = 'hp_ctffind'
-        keys_optional(17)  = 'lp_ctffind'
-        keys_optional(18)  = 'lp_pick'
-        keys_optional(19)  = 'dfmin'
-        keys_optional(20)  = 'dfmax'
-        keys_optional(21)  = 'astigstep'
-        keys_optional(22)  = 'expastig'
-        keys_optional(23)  = 'phaseplate'
-        keys_optional(24)  = 'thres'
-        keys_optional(25)  = 'rm_outliers'
-        keys_optional(26)  = 'nsig'
-        keys_optional(27)  = 'dopick'
+        keys_optional(15)  = 'fromf'
+        keys_optional(16)  = 'tof'
+        keys_optional(17)  = 'hp_ctffind'
+        keys_optional(18)  = 'lp_ctffind'
+        keys_optional(19)  = 'lp_pick'
+        keys_optional(20)  = 'dfmin'
+        keys_optional(21)  = 'dfmax'
+        keys_optional(22)  = 'astigstep'
+        keys_optional(23)  = 'expastig'
+        keys_optional(24)  = 'phaseplate'
+        keys_optional(25)  = 'thres'
+        keys_optional(26)  = 'rm_outliers'
+        keys_optional(27)  = 'nsig'
+        keys_optional(28)  = 'dopick'
         ! parse command line
         if( describe ) call print_doc_preproc
-        call cline%parse(keys_required(:7), keys_optional(:27))
+        call cline%parse(keys_required(:7), keys_optional(:28))
         ! set defaults
         if( .not. cline%defined('trs')             ) call cline%set('trs',        5.)
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',   15.)
@@ -143,23 +144,22 @@ select case(prg)
         keys_optional(7)  = 'pspecsz'
         keys_optional(8)  = 'numlen'
         keys_optional(9)  = 'startit'
-        keys_optional(10)  = 'scale'
+        keys_optional(10) = 'scale'
         keys_optional(11) = 'frameavg'
-        keys_optional(12) = 'tomo'
-        keys_optional(13) = 'fromf'
-        keys_optional(14) = 'tof'
-        keys_optional(15) = 'nsig'
-        keys_optional(16) = 'outfile'
-        keys_optional(17) = 'hp'
-        keys_optional(18) = 'lp'
-        keys_optional(19) = 'dfmin'
-        keys_optional(20) = 'dfmax'
-        keys_optional(21) = 'astigstep'
-        keys_optional(22) = 'expastig'
-        keys_optional(23) = 'phaseplate'
+        keys_optional(12) = 'fromf'
+        keys_optional(13) = 'tof'
+        keys_optional(14) = 'nsig'
+        keys_optional(15) = 'outfile'
+        keys_optional(16) = 'hp'
+        keys_optional(17) = 'lp'
+        keys_optional(18) = 'dfmin'
+        keys_optional(19) = 'dfmax'
+        keys_optional(20) = 'astigstep'
+        keys_optional(21) = 'expastig'
+        keys_optional(22) = 'phaseplate'
         ! parse command line
         ! if( describe ) call print_doc_unblur_ctffind
-        call cline%parse(keys_required(:6), keys_optional(:23))
+        call cline%parse(keys_required(:6), keys_optional(:22))
         ! set defaults
         call cline%set('dopick', 'no'     )
         call cline%set('prg',    'preproc')

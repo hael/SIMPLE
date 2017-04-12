@@ -72,7 +72,7 @@ contains
         call chdict%push('frac',          'fraction of ptcls(0-1){1}')
         call chdict%push('fraca',         'fraction of amplitude contrast used for fitting CTF{0.07}')
         call chdict%push('fracdeadhot',   'fraction of dead or hot pixels{0.01}')
-        call chdict%push('frameavg',      'nr of frames to average{0}')
+        call chdict%push('frameavg',      '# frames to average{0}')
         call chdict%push('fromp',         'start ptcl index')
         call chdict%push('fsc',           'binary file with FSC info{fsc_state01.bin}')
         call chdict%push('ft2img',        'convert Fourier transform to real image of power(yes|no){no}')
@@ -101,23 +101,23 @@ contains
         call chdict%push('msktype',       'type of mask(hard|soft){soft}')
         call chdict%push('mul',           'origin shift multiplication factor{1}')
         call chdict%push('mw',            'molecular weight(in kD)')
-        call chdict%push('ncls',          'nr of clusters')
-        call chdict%push('ndiscrete',     'nr of discrete orientations')
-        call chdict%push('ndocs',         'nr of documents')
+        call chdict%push('ncls',          '# clusters')
+        call chdict%push('ndiscrete',     '# discrete orientations')
+        call chdict%push('ndocs',         '# documents')
         call chdict%push('neg',           'invert contrast of images(yes|no)')
         call chdict%push('nframes',       'number of frames{30}')
         call chdict%push('noise',         'noise initialisation(yes|no){no}')
         call chdict%push('noise_norm',    'normalise based on sdev of background(yes|no){no}')
         call chdict%push('norec',         'do not reconstruct volume(s)(yes|no){no}')
         call chdict%push('norm',          'do statistical normalisation avg')
-        call chdict%push('nparts',        'nr of partitions in distributed exection')
-        call chdict%push('npeaks',        'nr of nonzero orientation weights{1}')
-        call chdict%push('nptcls',        'nr of images in stk/nr of orientations in oritab')
+        call chdict%push('nparts',        '# partitions in distributed exection')
+        call chdict%push('npeaks',        '# nonzero orientation weights{1}')
+        call chdict%push('nptcls',        '# images in stk/# orientations in oritab')
         call chdict%push('nran',          'number of random images to select')
-        call chdict%push('nspace',        'nr of projection directions')
-        call chdict%push('nstates',       'nr of states to reconstruct')
-        call chdict%push('nthr',          'nr of OpenMP threads{1}')
-        call chdict%push('nthr_master',   'nr of OpenMP threads on master node{1}')
+        call chdict%push('nspace',        '# projection directions')
+        call chdict%push('nstates',       '# states to reconstruct')
+        call chdict%push('nthr',          '# OpenMP threads{1}')
+        call chdict%push('nthr_master',   '# OpenMP threads on master node{1}')
         call chdict%push('numlen',        'length of number string')
         call chdict%push('nvox',          'number of voxels{0}')
         call chdict%push('odd',           'calculate odd eo-pair(yes|no){no}')
@@ -215,7 +215,7 @@ contains
         call chdict%push('dfunit',        'defocus unit (A|microns){microns}')
         call chdict%push('angastunit',    'angle of astigmatism unit (radians|degrees){degrees}')
         call chdict%push('plaintexttab',  'plain text file of input parameters')
-        call chdict%push('nrepeats',      'nr of times to restart workflow{1}')
+        call chdict%push('nrepeats',      '# times to restart workflow{1}')
         call chdict%push('async',         'asynchronous mode of operation(yes|no){no}')
         call chdict%push('nrefs',         'number of references used for picking{100}')
         call chdict%push('ext',           'file extension{.mrc}')
@@ -253,7 +253,7 @@ contains
         ! print required
         if( present(keys_required) )then
             nreq =  size(keys_required)
-            if( debug ) print *, 'nr of required keys provided: ', nreq
+            if( debug ) print *, '# required keys provided: ', nreq
             if( nreq > 0 )then
                 write(*,'(a)') ''
                 write(*,'(a)') 'REQUIRED'
@@ -263,7 +263,7 @@ contains
         ! print optionals
         if( present(keys_optional) )then
             nopt = size(keys_optional)
-            if( debug ) print *, 'nr of optional keys provided: ', nopt
+            if( debug ) print *, '# optional keys provided: ', nopt
             if( nopt > 0 )then
                 write(*,'(a)') ''
                 write(*,'(a)') 'OPTIONAL'
