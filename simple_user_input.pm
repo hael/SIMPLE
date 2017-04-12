@@ -59,7 +59,7 @@ our$SET_OPTIMIZATION = 3;
 # debug mode
 # no debug mode: no, dubug mode: yes default: no
 # if debug = yes the opmization level = null
-our$DEBUG = "yes";
+our$DEBUG = "no";
 # debugging level "low" or "high"
 our$DEBUG_LEVEL = "low";
 
