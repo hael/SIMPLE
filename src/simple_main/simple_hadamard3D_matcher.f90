@@ -126,6 +126,7 @@ contains
 
         ! PREPARE THE POLARFT_CORRCALC DATA STRUCTURE
         if( p%refine.eq.'het' )then
+            statecnt(:) = 0
             ! generate filename for memoization of particle pfts
             if( allocated(ppfts_fname) ) deallocate(ppfts_fname)
             if( p%l_distr_exec )then
@@ -212,7 +213,8 @@ contains
                 if( p%oritab .eq. '' ) stop 'cannot run the refine=het mode without input oridoc (oritab)'
                 write(*,'(A,F8.2)') '>>> PARTICLE RANDOMIZATION(%):', 100.*p%extr_thresh
                 write(*,'(A,F8.2)') '>>> CORRELATION THRESHOLD:    ', corr_thresh
-                !$omp parallel do default(shared) schedule(auto) private(iptcl)
+                !$omp parallel do default(shared) schedule(auto) private(iptcl)&
+                !$omp reduction(+:statecnt)
                 do iptcl=p%fromp,p%top
                     call primesrch3D(iptcl)%exec_prime3D_srch_het(pftcc, iptcl, b%a, b%e, corr_thresh, statecnt)
                 end do

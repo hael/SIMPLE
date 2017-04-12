@@ -892,8 +892,8 @@ contains
         real,                    intent(in)    :: extr_bound
         integer,                 intent(inout) :: statecnt(self%nstates)
         type(ori) :: o
-        integer   :: istate,iref,state,refs(self%nstates),loc(1)
-        real      :: corr,mi_state,frac,corrs(self%nstates)
+        integer   :: istate, iref, state, loc(1)
+        real      :: corr,mi_state, frac, corrs(self%nstates)
         if( nint(a%get(iptcl, 'state')) > 0 )then
             ! initialize
             call self%prep4srch(iptcl, a, e)
@@ -909,12 +909,12 @@ contains
                 corr = pftcc%corr(iref, iptcl, self%prev_roind)
             else
                 ! SHC
-                refs = 0
+                corrs = -1.
                 do istate=1,self%nstates
-                    refs(istate) =  (istate-1)*self%nprojs + self%prev_proj 
-                    if( .not. self%state_exists(istate) ) refs(istate) = 0
+                    if( .not. self%state_exists(istate) )cycle
+                    iref          = (istate-1)*self%nprojs + self%prev_proj 
+                    corrs(istate) = pftcc%corr(iref, iptcl, self%prev_roind)
                 enddo
-                corrs           = pftcc%corrs(refs, self%nstates, iptcl, self%prev_roind)
                 self%prev_corr  = corrs(self%prev_state)
                 loc             = shcloc(self%nstates, corrs, self%prev_corr)
                 state           = loc(1)
@@ -937,7 +937,7 @@ contains
             call a%set(iptcl, 'w', 1.)
             o = a%get_ori(iptcl)
             call self%o_peaks%set_ori(1,o)
-            call self%prep_npeaks_oris
+            !call self%prep_npeaks_oris
             call self%update_best(iptcl, a)
         else
             call a%reject(iptcl)
