@@ -810,7 +810,7 @@ contains
             w = 0.
         endif
     end function cosedge_1
-    
+
     !> \brief  two-dimensional gaussian edge
     pure function cosedge_2( x, y, box, mskrad ) result( w )
         real, intent(in)    :: x, y
@@ -823,7 +823,7 @@ contains
         w      = 1.
         if( rad .ge. maxrad )then
             w = 0.
-        else if( rad .ge. maxrad-width )then
+        else if( rad .ge. (maxrad-width) )then
             w = (cos(((rad-(maxrad-width))/width)*pi)+1.)/2.
         endif
     end function cosedge_2
@@ -840,7 +840,7 @@ contains
         w      = 1.
         if( rad .ge. maxrad )then
             w = 0.
-        else if( rad .ge. maxrad-width )then
+        else if( rad .ge. (maxrad-width) )then
             w = (cos(((rad-(maxrad-width))/width)*pi)+1.)/2.
         endif
     end function cosedge_3

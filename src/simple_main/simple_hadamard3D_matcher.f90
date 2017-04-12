@@ -8,7 +8,7 @@ use simple_params,           only: params
 use simple_cmdline,          only: cmdline
 use simple_gridding,         only: prep4cgrid
 use simple_masker,           only: automask
-use simple_strings,          only: str_has_substr, int2str
+use simple_strings,          only: str_has_substr
 use simple_cont3D_matcher    ! use all in there
 use simple_hadamard_common   ! use all in there
 use simple_math              ! use all in there
@@ -441,7 +441,6 @@ contains
                     endif
                     if( p%doautomsk )then
                         ! read & pre-process mask volume
-                        !call b%mskvol%read(p%masks(s))
                         b%mskvol = b%mskvols(s)
                         call b%mskvol%init_env_rproject
                     endif

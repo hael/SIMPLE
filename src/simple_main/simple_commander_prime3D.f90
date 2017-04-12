@@ -437,6 +437,7 @@ contains
             if(.not. cline%defined('edge'))    p%edge     = max(15, ceiling(0.05*real(p%box)))
             write(*,'(A,I3)')'>>> AUTOMASKING BINARY LAYERS:', p%binwidth
             write(*,'(A,I3)')'>>> AUTOMASKING SOFT LAYERS:  ', p%edge
+            write(*,'(A,F6.1)')'>>> AUTOMASKING LOW-PASS:   ', p%amsklp
         endif
         call b%build_general_tbox(p, cline)   ! general objects built
         if( .not. cline%defined('eo') ) p%eo = 'no' ! default

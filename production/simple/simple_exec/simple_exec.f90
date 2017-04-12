@@ -967,7 +967,8 @@ select case(prg)
         ! set defaults
         if( .not. cline%defined('nspace')                  ) call cline%set('nspace', 1000.)
         if( cline%defined('lp') .or. cline%defined('find') ) call cline%set('dynlp',   'no')
-        if( .not. cline%defined('cenlp')  )                  call cline%set('cenlp',    30.)
+        if( .not. cline%defined('cenlp')                   ) call cline%set('cenlp',    30.)
+        if( .not. cline%defined('amsklp')                  ) call cline%set('amsklp',   25.)
         if( .not. cline%defined('refine') )then
              call cline%set('refine',  'no')
         else

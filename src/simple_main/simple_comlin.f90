@@ -293,9 +293,7 @@ contains
         abscom = sqrt(comlin(1)**2+comlin(2)**2+comlin(3)**2)
         if( abscom >= 0.0001 ) then
             ! normalize
-            comlin(1) = comlin(1)/abscom
-            comlin(2) = comlin(2)/abscom
-            comlin(3) = comlin(3)/abscom
+            comlin(:) = comlin(:)/abscom
         else
             ! identical planes have no common line
             ! this should never happen
@@ -326,19 +324,19 @@ contains
         sumasq = 0.
         sumbsq = 0.
         if( self%foundline(j) )then
+            px = self%a%get(pind, 'x')
+            py = self%a%get(pind, 'y')
+            jx = self%a%get(j, 'x')
+            jy = self%a%get(j, 'y')
             do k=lims(1),lims(2)
                 h1 = real(k)*self%lines(j,1,1)
                 k1 = real(k)*self%lines(j,2,1)
                 h2 = real(k)*self%lines(j,1,2)
                 k2 = real(k)*self%lines(j,2,2)
-                px = self%a%get(pind, 'x')
-                py = self%a%get(pind, 'y')
-                jx = self%a%get(j, 'x')
-                jy = self%a%get(j, 'y')
                 self%clines(j,k,1) = self%fpls(pind)%extr_fcomp(h1,k1,px,py)
                 self%clines(j,k,2) = self%fpls(j   )%extr_fcomp(h2,k2,jx,jy)
                 corr = corr+real(self%clines(j,k,1))*real(self%clines(j,k,2))+&
-                aimag(self%clines(j,k,1))*aimag(self%clines(j,k,2))
+                &aimag(self%clines(j,k,1))*aimag(self%clines(j,k,2))
                 sumasq = sumasq+csq(self%clines(j,k,1)) 
                 sumbsq = sumbsq+csq(self%clines(j,k,2))
             end do
