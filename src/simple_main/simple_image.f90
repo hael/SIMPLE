@@ -4631,6 +4631,7 @@ contains
                                 kr = self%ldim(3)+1-k
                                 e = cosedge(cis(i),cjs(j),cks(k),minlen,mskrad)
                                 if( doinner )e = e * cosedge_inner(cis(i),cjs(j),cks(k),wwidth,inner)
+                                if(e > 0.9999)cycle
                                 self%rmat(i,j,k)    = e * self%rmat(i,j,k)
                                 self%rmat(i,j,kr)   = e * self%rmat(i,j,kr)
                                 self%rmat(i,jr,k)   = e * self%rmat(i,jr,k)
@@ -4650,6 +4651,7 @@ contains
                             jr = self%ldim(2)+1-j
                             e = cosedge(cis(i),cjs(j),minlen,mskrad)
                             if( doinner )e = e * cosedge_inner(cis(i),cjs(j),wwidth,inner)
+                            if(e > 0.9999)cycle
                             self%rmat(i,j,1)   = e * self%rmat(i,j,1)
                             self%rmat(i,jr,1)  = e * self%rmat(i,jr,1)
                             self%rmat(ir,j,1)  = e * self%rmat(ir,j,1)
