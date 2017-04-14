@@ -598,20 +598,18 @@ select case(prg)
         ! that can be used in conjunction with other SIMPLE programs. We obtain CTF parameters 
         ! with CTFFIND4<extract/end> 
         !
-        ! set required keys
-        keys_required(1) = 'filetab'
-        keys_required(2) = 'boxtab'
-        keys_required(3) = 'smpd'
         ! set optional keys
-        keys_optional(1) = 'msk'
-        keys_optional(2) = 'ctffind_doc'
-        keys_optional(3) = 'neg'
-        keys_optional(4) = 'box'
-        keys_optional(5) = 'noise_norm'
-        keys_optional(6) = 'outside'
+        keys_optional(1) = 'unidoc'
+        keys_optional(2) = 'filetab'
+        keys_optional(3) = 'boxtab'
+        keys_optional(4) = 'ctffind_doc'
+        keys_optional(5) = 'smpd'
+        keys_optional(6) = 'neg'
+        keys_optional(7) = 'box'
+        keys_optional(8) = 'outside'
         ! parse command line
         if( describe ) call print_doc_extract
-        call cline%parse( keys_required(:3), keys_optional(:6))
+        call cline%parse(keys_optional=keys_optional(:8))
         ! parse command line
         if( .not. cline%defined('neg') )call cline%set('neg', 'yes')
         ! execute
@@ -2023,10 +2021,11 @@ select case(prg)
         ! with using optional variables. The units refer to the units in the inputted document<makedeftab/end>
         !
         ! Required keys
-        keys_required(1) = 'kv'
-        keys_required(2) = 'cs'
-        keys_required(3) = 'fraca'
-        keys_required(4) = 'outfile'
+        keys_required(1) = 'smpd'
+        keys_required(2) = 'kv'
+        keys_required(3) = 'cs'
+        keys_required(4) = 'fraca'
+        keys_required(5) = 'outfile'
         ! set optional keys
         keys_optional(1) = 'plaintexttab'
         keys_optional(2) = 'oritab'
@@ -2035,7 +2034,7 @@ select case(prg)
         keys_optional(5) = 'angastunit'
         ! parse command line
         if( describe ) call print_doc_makedeftab
-        call cline%parse(keys_required(:4),keys_optional(:5))
+        call cline%parse(keys_required(:5),keys_optional(:5))
         ! execute
         call xmakedeftab%execute(cline)
     case( 'makeoris' )

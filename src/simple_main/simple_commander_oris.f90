@@ -126,6 +126,7 @@ contains
                 stop 'simple_commander_oris :: exec_makedeftab'
             endif
             do iptcl=1,nptcls
+                call b%a%set(iptcl, 'smpd',  p%smpd )
                 call b%a%set(iptcl, 'kv',    p%kv   )
                 call b%a%set(iptcl, 'cs',    p%cs   )
                 call b%a%set(iptcl, 'fraca', p%fraca)
@@ -159,6 +160,7 @@ contains
                     case DEFAULT 
                         stop 'unsupported angastunit; simple_commander_oris :: exec_makedeftab'
                 end select
+                call b%a%set(iptcl, 'smpd',  p%smpd )
                 call b%a%set(iptcl, 'kv',    p%kv   )
                 call b%a%set(iptcl, 'cs',    p%cs   )
                 call b%a%set(iptcl, 'fraca', p%fraca)

@@ -669,11 +669,22 @@ contains
         call check_rarg('zsh',            self%zsh)
 
 !>>> START, SANITY CHECKING AND PARAMETER EXTRACTION FROM ORITAB(S)/VOL(S)/STACK(S)
+        ! put unidoc (if defined as oritab)
+        if( cline%defined('unidoc') )then
+            if( .not. cline%defined('oritab') )then
+                call cline%set('oritab', self%unidoc)
+                self%oritab = self%unidoc
+            else
+                write(*,*) 'WARNING! Could not set unidoc to oritab because oritab is defined'
+            endif
+        endif
         ! put ctffind_doc (if defined) as oritab
         if( cline%defined('ctffind_doc') )then
             if( .not. cline%defined('oritab') )then
                 call cline%set('oritab', self%ctffind_doc)
                 self%oritab = self%ctffind_doc
+            else
+                write(*,*) 'WARNING! Could not set ctffind_doc to oritab because oritab is defined'
             endif
         endif
         ! make all programs have the simple_prefix

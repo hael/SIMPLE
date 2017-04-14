@@ -389,10 +389,10 @@ contains
         if( self%prev_state > self%nstates ) stop 'previous best state outside boundary; prep4srch; simple_prime3D_srch'
         if( .not. self%state_exists(self%prev_state) ) stop 'empty previous state; prep4srch; simple_prime3D_srch'
         select case( self%refine )
-            case( 'no', 'shc','adasym')                                                ! DISCRETE CASE
+            case( 'no','shc','adasym' )                                                ! DISCRETE CASE
                 call self%prep_reforis(e)                                              ! search space & order prep
                 self%prev_ref = self%o_refs%find_closest_proj(o_prev, self%prev_state) ! find closest ori with same state
-            case( 'neigh', 'shcneigh' )                                                ! DISCRETE CASE WITH NEIGHBOURHOOD
+            case( 'neigh','shcneigh' )                                                 ! DISCRETE CASE WITH NEIGHBOURHOOD
                 call self%prep_reforis(e, nnvec=nnmat(self%prev_proj,:) )              ! search space & order prep
                 self%prev_ref = self%o_refs%find_closest_proj(o_prev, self%prev_state) ! find closest ori with same state
             case( 'het' )
@@ -416,7 +416,7 @@ contains
         ! on exit all the oris are clean and only the out-of-planes, 
         ! state & proj fields are present
         select case( self%refine )
-            case( 'no', 'shc', 'neigh', 'shcneigh', 'adasym' )
+            case( 'no','shc','neigh','shcneigh','adasym' )
                 if( allocated(self%srch_order) ) deallocate(self%srch_order)
                 if( str_has_substr(self%refine, 'neigh') )then ! local refinement
                     allocate(self%srch_order(self%nnnrefs))
@@ -1042,7 +1042,7 @@ contains
 
     ! GETTERS FOR TESTING
 
-    !>  \brief  is for getting the search order
+    !>  \brief  is for creating the search order
     function get_srch_order( self )result( inds )
         class(prime3D_srch), intent(inout) :: self
         integer,allocatable :: inds(:)

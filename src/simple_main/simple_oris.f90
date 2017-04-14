@@ -75,6 +75,7 @@ type :: oris
     procedure          :: get_nonzero_avg
     procedure          :: get_ctfparams
     procedure          :: get_defocus_groups
+    procedure          :: extract_table
     procedure          :: included
     procedure          :: print
     procedure          :: print_chash_sizes
@@ -1059,6 +1060,20 @@ contains
             ctfparams(i,:) = ctfvec
         end do
     end subroutine get_defocus_groups
+
+    !>  \brief  is for extracting a table from the character hash
+    function extract_table( self, which ) result( table )
+        class(oris),      intent(inout) :: self
+        character(len=*), intent(in)    :: which
+        character(len=STDLEN), allocatable :: table(:)
+        character(len=:),      allocatable :: str
+        integer :: i
+        allocate(table(self%n))
+        do i=1,self%n
+            call self%getter(i, which, str)
+            table(i) = str
+        end do
+    end function extract_table
 
     !>  \brief  is for printing
     function included( self )result( incl )
