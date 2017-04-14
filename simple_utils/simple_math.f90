@@ -812,7 +812,7 @@ contains
     end function cosedge_1
 
     !> \brief  two-dimensional gaussian edge
-    pure function cosedge_2( x, y, box, mskrad ) result( w )
+   pure function cosedge_2( x, y, box, mskrad ) result( w )
         real, intent(in)    :: x, y
         integer, intent(in) :: box
         real, intent(in)    :: mskrad

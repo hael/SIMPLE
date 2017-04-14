@@ -1009,6 +1009,7 @@ contains
         integer          :: i
         if( self%npeaks == 1 )then
             call self%o_peaks%set(1,'ow',1.0)
+            wcorr = self%o_peaks%get(1,'corr')
             return
         endif
         if( self%o_peaks%get_noris() /= self%npeaks ) stop 'invalid number of references in simple_prime3D_srch::stochastic_weights'

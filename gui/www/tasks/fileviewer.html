@@ -1,4 +1,55 @@
-<div class=tasktitle>
-	View File
-	<div class=taskhovertext>Description goes here</div>
+<div class=bodyheader>
+	<b>View Files</b>
+	<div class=hoverdiv>Description goes here</div>
+</div>
+
+<div id=filesviewactionstoolbar class=bodybutton>
+	Actions
+	<div class=hoverdiv>
+		<div onclick=selectAll('filesviewdiv')>Select All</div>
+		<div onclick=deselectAll('filesviewdiv')>Deselect All</div>
+		<div onclick=filesViewSave()>Save Selection</div>
+	</div>
+</div>
+
+<div id=filesviewimagetoolbar class=bodybutton>
+	View
+	<div class=hoverdiv>
+		<div>
+			<label for=filesviewcontrast>Contrast</label>
+			<input type=range id=filesviewcontrast value=2 max=10 min=0 onchange='filesViewFetch()'>
+		</div>
+		<div>		
+		<label for=filesviewbrightness>Brightness</label>
+		<input type=range id=filesviewbrightness value=128 max=255 min=0 onchange='filesViewFetch()'>
+		</div>
+		<div>
+		<label for=filesviewscale>Scale</label>
+		<input type=hidden id=filesvieworiginalheight>
+		<input type=hidden id=filesvieworiginalwidth>
+		<input type=range id=filesviewscale value=5 max=10 min=1 step=0.5 onchange='filesViewZoom()'>
+		</div>
+	</div>	
+</div>
+
+<div id=filesviewdiv></div>
+
+<div id=filesviewsave>
+	<div class=popupheader>
+		Save Selection
+	</div>
+	<input type=hidden id=filesviewfolder>
+	<table class=popuptable>
+		<tr>
+			<td>Filename</td>
+			<td><input id=filesviewsavefilename type=text></td>
+		</tr>
+		<tr>
+			<td>Folder</td>
+			<td><input id=filesviewsavefolder type=text></td>
+			<td><img src=img/folder.png onclick=selectFolder('filesviewsavefolder')></img></td>
+		</tr>
+	</table>
+	<div class=clickbutton onclick=cancelFilesViewSave()>Cancel</div>
+	<div class=clickbutton onclick=confirmFilesViewSave()>Save</div>
 </div>
