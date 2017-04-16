@@ -3813,7 +3813,7 @@ contains
         class(image), intent(in) :: self
         real, allocatable        :: res(:)
         integer                  :: n, k, alloc_stat
-        n = fdim(self%ldim(1))
+        n = fdim(self%ldim(1)) - 1 ! exclude zero frequency
         allocate( res(n), stat=alloc_stat )
         call alloc_err('In: get_res, module: simple_image', alloc_stat)
         do k=1,n

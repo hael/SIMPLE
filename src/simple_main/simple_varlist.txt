@@ -2,6 +2,7 @@ acf
 append
 async
 automsk
+autoscale
 avg
 bin
 center
@@ -145,7 +146,6 @@ clip
 corner
 cube
 edge
-filtsz_pad
 find
 frameavg
 fromf
@@ -303,6 +303,7 @@ l_chunk_distr
 doautomsk
 doshift
 l_automsk
+l_autoscale
 l_dose_weight
 l_innermsk
 l_pick

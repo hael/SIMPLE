@@ -31,7 +31,8 @@ type :: params
     character(len=3)      :: acf='no'
     character(len=3)      :: append='no'
     character(len=3)      :: async='no'
-    character(len=3)      :: automsk='no'   
+    character(len=3)      :: automsk='no'
+    character(len=3)      :: autoscale='yes'
     character(len=3)      :: avg='no'
     character(len=3)      :: bin='no'
     character(len=3)      :: center='no'
@@ -180,7 +181,6 @@ type :: params
     integer :: corner=0
     integer :: cube=0
     integer :: edge=14
-    integer :: filtsz_pad=0
     integer :: find=1
     integer :: frameavg=0
     integer :: fromf=1
@@ -345,6 +345,7 @@ type :: params
     logical :: doautomsk     = .false.
     logical :: doshift       = .false.
     logical :: l_automsk     = .false.
+    logical :: l_autoscale   = .false.
     logical :: l_dose_weight = .false. 
     logical :: l_innermsk    = .false. 
     logical :: l_pick        = .false. 
@@ -403,6 +404,7 @@ contains
         call check_carg('append',         self%append)
         call check_carg('async',          self%async)
         call check_carg('automsk',        self%automsk)
+        call check_carg('autoscale',      self%autoscale)
         call check_carg('avg',            self%avg)
         call check_carg('bin',            self%bin)
         call check_carg('boxtype',        self%boxtype)
@@ -903,14 +905,17 @@ contains
         ! checks automask related values
         self%l_automsk = .false.
         self%doautomsk = .false.
-        if( self%automsk.eq.'yes' )                          self%l_automsk = .true.
-        if( cline%defined('mw') .and. self%automsk.ne.'no' ) self%doautomsk = .true.
+        if( self%automsk .eq. 'yes' )                          self%l_automsk = .true.
+        if( cline%defined('mw') .and. self%automsk .ne. 'no' ) self%doautomsk = .true.
         if( .not.cline%defined('mw') .and. self%automsk.eq.'yes') &
             write(*,*) 'WARNING! MW argument not provided in conjunction with AUTOMSK'
         if( self%doautomsk )then
             if( self%edge <= 0    ) stop 'Invalid value for edge' 
             if( self%binwidth < 0 ) stop 'Invalid value for binwidth'
         endif
+        ! scaling stuff
+        self%l_autoscale = .false.
+        if( self%autoscale .eq. 'yes' ) self%l_autoscale = .true.
         if( .not. cline%defined('newbox') )then
             ! set newbox if scale is defined
             if( cline%defined('scale') )then

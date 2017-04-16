@@ -1,0 +1,5 @@
+need to break out if simple_distr_exec not points to same location as simple_exec
+need to parallelise the volassemble of the different states for het_ensemble
+need to test unidoc strategy
+need to put ctf flag in unidoc
+parallelise shellw generation on the particle level

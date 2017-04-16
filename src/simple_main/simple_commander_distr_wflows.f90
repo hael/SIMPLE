@@ -29,7 +29,7 @@ public :: unblur_distr_commander
 public :: unblur_tomo_movies_distr_commander
 public :: ctffind_distr_commander
 public :: pick_distr_commander
-public :: prime2D_init_distr_commander
+public :: makecavgs_distr_commander
 public :: cont3D_distr_commander
 public :: prime2D_distr_commander
 public :: prime2D_chunk_distr_commander
@@ -60,10 +60,10 @@ type, extends(commander_base) :: pick_distr_commander
   contains
     procedure :: execute      => exec_pick_distr
 end type pick_distr_commander
-type, extends(commander_base) :: prime2D_init_distr_commander
+type, extends(commander_base) :: makecavgs_distr_commander
   contains
-    procedure :: execute      => exec_prime2D_init_distr
-end type prime2D_init_distr_commander
+    procedure :: execute      => exec_makecavgs_distr
+end type makecavgs_distr_commander
 type, extends(commander_base) :: prime2D_distr_commander
   contains
     procedure :: execute      => exec_prime2D_distr
@@ -293,14 +293,14 @@ contains
         call simple_end('**** SIMPLE_DISTR_PICK NORMAL STOP ****')
     end subroutine exec_pick_distr
 
-    ! PRIME2D_INIT
+    ! PARALLEL CLASS AVERAGE GENERATION
 
-    subroutine exec_prime2D_init_distr( self, cline )
+    subroutine exec_makecavgs_distr( self, cline )
         use simple_commander_prime2D
         use simple_commander_distr
         use simple_commander_mask
-        class(prime2D_init_distr_commander), intent(inout) :: self
-        class(cmdline),                      intent(inout) :: cline
+        class(makecavgs_distr_commander), intent(inout) :: self
+        class(cmdline),                   intent(inout) :: cline
         logical, parameter    :: DEBUG=.false.
         type(split_commander) :: xsplit
         type(cmdline)         :: cline_cavgassemble
@@ -316,8 +316,10 @@ contains
         ! prepare command lines from prototype master
         cline_cavgassemble   = cline
         call cline_cavgassemble%set('nthr',1.)
-        call cline_cavgassemble%set('oritab', 'prime2D_startdoc.txt')
         call cline_cavgassemble%set('prg', 'cavgassemble')
+        if( .not. cline%defined('oritab') )then
+            call cline_cavgassemble%set('oritab', 'prime2D_startdoc.txt')
+        endif
         ! split stack
         if( stack_is_split(p_master%ext, p_master%nparts) )then
             ! check that the stack partitions are of correct sizes
@@ -330,8 +332,8 @@ contains
         ! assemble class averages
         call qenv%exec_simple_prg_in_queue(cline_cavgassemble, 'CAVGASSEMBLE', 'CAVGASSEMBLE_FINISHED')
         call qsys_cleanup(p_master)
-        call simple_end('**** SIMPLE_DISTR_PRIME2D_INIT NORMAL STOP ****', print_simple=.false.)
-    end subroutine exec_prime2D_init_distr
+        call simple_end('**** SIMPLE_DISTR_MAKECAVGS NORMAL STOP ****', print_simple=.false.)
+    end subroutine exec_makecavgs_distr
 
     ! PRIME2D
 
@@ -339,41 +341,80 @@ contains
         use simple_commander_prime2D ! use all in there
         use simple_commander_distr   ! use all in there
         use simple_commander_mask    ! use all in there
-        use simple_procimgfile, only: random_selection_from_imgfile
-        use simple_oris,        only: oris
-        use simple_strings,     only: str_has_substr
+        use simple_commander_imgproc, only: scale_commander
+        use simple_magic_boxes,       only: autoscale
+        use simple_procimgfile,       only: random_selection_from_imgfile
+        use simple_oris,              only: oris
+        use simple_strings,           only: str_has_substr
+        use simple_image,             only: image
         class(prime2D_distr_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         ! constants
-        logical, parameter           :: DEBUG           = .true.
-        character(len=32), parameter :: ALGNFBODY       = 'algndoc_'
-        character(len=32), parameter :: ITERFBODY       = 'prime2Ddoc_'
-        character(len=32), parameter :: CAVGS_ITERFBODY = 'cavgs_iter'
-        real,              parameter :: MSK_FRAC        = 0.06
-        real,              parameter :: MINSHIFT        = 2.0
-        real,              parameter :: MAXSHIFT        = 6.0
+        logical,               parameter :: DEBUG           = .true.
+        character(len=32),     parameter :: ALGNFBODY       = 'algndoc_'
+        character(len=32),     parameter :: ITERFBODY       = 'prime2Ddoc_'
+        character(len=32),     parameter :: CAVGS_ITERFBODY = 'cavgs_iter'
+        real,                  parameter :: MSK_FRAC        = 0.06
+        real,                  parameter :: MINSHIFT        = 2.0
+        real,                  parameter :: MAXSHIFT        = 6.0
+        character(len=STDLEN), parameter :: STKSCALEDBODY   = 'stk_sc_prime2D'
         ! commanders
-        type(check2D_conv_commander)   :: xcheck2D_conv
-        type(rank_cavgs_commander)     :: xrank_cavgs
-        type(merge_algndocs_commander) :: xmerge_algndocs
-        type(split_commander)          :: xsplit
-        type(automask2D_commander)     :: xautomask2D
+        type(scale_commander)           :: xscale
+        type(check2D_conv_commander)    :: xcheck2D_conv
+        type(rank_cavgs_commander)      :: xrank_cavgs
+        type(merge_algndocs_commander)  :: xmerge_algndocs
+        type(split_commander)           :: xsplit
+        type(automask2D_commander)      :: xautomask2D
+        type(makecavgs_distr_commander) :: xmakecavgs
         ! command lines
+        type(cmdline)         :: cline_scale
         type(cmdline)         :: cline_check2D_conv
         type(cmdline)         :: cline_cavgassemble
         type(cmdline)         :: cline_rank_cavgs
         type(cmdline)         :: cline_merge_algndocs
         type(cmdline)         :: cline_automask2D
+        type(cmdline)         :: cline_makecavgs
         ! other variables
         type(qsys_env)        :: qenv
         type(params)          :: p_master
-        character(len=STDLEN) :: refs, oritab, str, str_iter
-        integer               :: iter, i
+        character(len=STDLEN) :: refs, oritab, str, str_iter, native_stk
+        real                  :: smpd_sc, msk_sc, scale, native_smpd, native_msk
+        real, allocatable     :: res_native(:), res_scaled(:)
+        integer               :: iter, i, box_sc, native_box
         type(chash)           :: job_descr
+        type(image)           :: img_native, img_scaled
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! setup the environment for distributed execution
         call qenv%new(p_master)
+        
+        if( p_master%l_autoscale )then
+            ! prepare for down-scaling
+            native_stk  = p_master%stk
+            native_smpd = p_master%smpd
+            native_msk  = p_master%msk
+            native_box  = p_master%box
+            cline_scale = cline
+            call autoscale(p_master%box, p_master%smpd, box_sc, smpd_sc, scale)
+            msk_sc = scale * p_master%msk
+            call cline_scale%set('newbox', real(box_sc))
+            call cline_scale%set('outstk', trim(STKSCALEDBODY)//p_master%ext)
+            p_master%stk  = trim(STKSCALEDBODY)//p_master%ext
+            p_master%smpd = smpd_sc
+            p_master%msk  = msk_sc
+            p_master%box  = box_sc
+            call cline%set('stk',  trim(p_master%stk))
+            call cline%set('smpd', p_master%smpd)
+            call cline%set('msk',  p_master%msk)
+            ! needed for mapping the shell-weights to the native sampling
+            call img_native%new([native_box,native_box,1], native_smpd)
+            call img_scaled%new([box_sc,box_sc,1], smpd_sc)
+            res_native = img_native%get_res()
+            res_scaled = img_scaled%get_res()
+            call img_native%kill
+            call img_scaled%kill
+        endif
+
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! initialise starting references, orientations
@@ -387,12 +428,15 @@ contains
         else
             refs = trim('start2Drefs' // p_master%ext)
         endif
+
         ! prepare command lines from prototype master
         cline_check2D_conv   = cline
         cline_cavgassemble   = cline
         cline_rank_cavgs     = cline
         cline_merge_algndocs = cline
         cline_automask2D     = cline
+        cline_makecavgs      = cline
+
         ! initialise static command line parameters and static job description parameters
         call cline_merge_algndocs%set('fbody',  ALGNFBODY)
         call cline_merge_algndocs%set('nptcls', real(p_master%nptcls))
@@ -401,6 +445,15 @@ contains
         call cline_check2D_conv%set('nptcls', real(p_master%nptcls))
         call cline_cavgassemble%set('prg', 'cavgassemble')
         if( .not. cline%defined('refs') .and. job_descr%isthere('automsk') ) call job_descr%delete('automsk')
+
+        if( p_master%l_autoscale )then
+            if( .not. file_exists(trim(STKSCALEDBODY)//p_master%ext) )then
+                write(*,'(A)') '>>>'
+                write(*,'(A)') '>>> AUTO-SCALING IMAGES'
+                write(*,'(A)') '>>>'
+                call xscale%execute(cline_scale)
+            endif
+        endif
         ! split stack
         if( stack_is_split(p_master%ext, p_master%nparts) )then
             ! check that the stack partitions are of correct sizes
@@ -425,6 +478,7 @@ contains
                 end do
             endif
         endif
+
         ! main loop
         iter = p_master%startit - 1
         do
@@ -432,7 +486,7 @@ contains
             str_iter = int2str_pad(iter,3)
             write(*,'(A)')   '>>>'
             write(*,'(A,I6)')'>>> ITERATION ', iter
-            write(*,'(A)')   '>>>'   
+            write(*,'(A)')   '>>>'
             ! exponential cooling of the randomization rate
             p_master%extr_thresh = p_master%extr_thresh * p_master%rrate
             call job_descr%set('extr_thresh', real2str(p_master%extr_thresh))
@@ -462,17 +516,52 @@ contains
                 call job_descr%set('trs', trim(str) )
                 if( cline%defined('automsk') )then
                     ! activates masking
-                    if( cline%get_carg('automsk').ne.'no' )call job_descr%set('automsk','yes')
+                    if( cline%get_carg('automsk') .ne. 'no' ) call job_descr%set('automsk','yes')
                 endif
             endif
             if( cline_check2D_conv%get_carg('converged').eq.'yes' .or. iter==p_master%maxits ) exit
         end do
         call qsys_cleanup(p_master)
+
+        if( p_master%l_autoscale )then
+            write(*,'(A)') '>>>'
+            write(*,'(A)') '>>> GENERATING CLASS AVERAGES AT NATIVE SAMPLING'
+            write(*,'(A)') '>>>'
+            ! re-split stack
+            call del_files('stack_part', p_master%nparts, ext=p_master%ext)
+            call cline%set('stk',        native_stk)
+            call cline%set('smpd',       native_smpd)
+            call xsplit%execute(cline)
+
+            ! setup and re-sample shellweights
+            ! call setup_shellweights_from_parts( p, doshellweight, wmat, res_calc, res_target )
+
+            
+            
+            ! pepare makecavgs command line
+            cline_makecavgs = cline
+            call cline_makecavgs%set('prg',     'makecavgs')
+            call cline_makecavgs%set('stk',     native_stk)
+            call cline_makecavgs%set('smpd',    native_smpd)
+            call cline_makecavgs%set('msk',     native_msk)
+            call cline_makecavgs%set('oritab',  trim(oritab))
+            call cline_makecavgs%set('mul',     1./scale)
+            call cline_makecavgs%set('refs',    'prime2Dcavgs_final'//p_master%ext)
+            call cline_makecavgs%set('outfile', 'prime2Ddoc_final.txt')
+            ! execute
+            call xmakecavgs%execute(cline_makecavgs)
+            ! cleanup
+            call del_files('stack_part', p_master%nparts, ext=p_master%ext)
+        else
+            call rename(trim(oritab), 'prime2Dcavgs_final'//p_master%ext)
+            call rename(trim(refs),   'prime2Ddoc_final.txt')
+        endif
         ! ranking
-        call cline_rank_cavgs%set('oritab', trim(oritab))
-        call cline_rank_cavgs%set('stk',    trim(refs))
-        call cline_rank_cavgs%set('outstk', trim('cavgs_final_ranked'//p_master%ext))
+        call cline_rank_cavgs%set('oritab', 'prime2Ddoc_final.txt')
+        call cline_rank_cavgs%set('stk',    'prime2Dcavgs_final'//p_master%ext)
+        call cline_rank_cavgs%set('outstk', trim('prime2Dcavgs_final_ranked'//p_master%ext))
         call xrank_cavgs%execute( cline_rank_cavgs )
+        ! end gracefully
         call simple_end('**** SIMPLE_DISTR_PRIME2D NORMAL STOP ****')
     end subroutine exec_prime2D_distr
 
@@ -482,24 +571,33 @@ contains
         use simple_commander_prime2D ! use all in there
         use simple_commander_distr   ! use all in there
         use simple_commander_mask    ! use all in there
-        use simple_commander_imgproc, only: stack_commander
+        use simple_commander_imgproc, only: stack_commander, scale_commander
+        use simple_magic_boxes,       only: autoscale
         use simple_oris,              only: oris
         use simple_ori,               only: ori
         use simple_strings,           only: str_has_substr
         class(prime2D_chunk_distr_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
-        character(len=STDLEN), parameter   :: CAVGNAMES = 'prime2Dcavgs_final.txt'
+        character(len=STDLEN), parameter   :: CAVGNAMES     = 'prime2Dcavgs_final.txt'
+        character(len=STDLEN), parameter   :: STKSCALEDBODY = 'stk_sc_prime2D'
         character(len=STDLEN), allocatable :: final_docs(:), final_cavgs(:)
-        character(len=STDLEN)    :: chunktag
-        type(stack_commander)    :: xstack
-        type(cmdline)            :: cline_stack
-        type(split_commander)    :: xsplit
-        type(qsys_env)           :: qenv
-        type(params)             :: p_master
-        type(chash), allocatable :: part_params(:)
-        type(chash)              :: job_descr
-        type(oris)               :: os
-        integer :: ipart, numlen, nl, ishift, nparts, npart_params
+        character(len=STDLEN)              :: chunktag, native_stk
+        type(scale_commander)              :: xscale
+        type(split_commander)              :: xsplit
+        type(makecavgs_distr_commander)    :: xmakecavgs
+        type(stack_commander)              :: xstack
+        type(rank_cavgs_commander)         :: xrank_cavgs
+        type(cmdline)                      :: cline_scale
+        type(cmdline)                      :: cline_stack
+        type(cmdline)                      :: cline_makecavgs
+        type(cmdline)                      :: cline_rank_cavgs
+        type(qsys_env)                     :: qenv
+        type(params)                       :: p_master
+        type(chash), allocatable           :: part_params(:)
+        type(chash)                        :: job_descr
+        type(oris)                         :: os
+        real    :: smpd_sc, msk_sc, scale, native_smpd, native_msk
+        integer :: ipart, numlen, nl, ishift, nparts, npart_params, native_box, box_sc
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! determine the number of partitions
@@ -511,6 +609,27 @@ contains
         p_master = params(cline, checkdistr=.false.)
         ! setup the environment for distributed execution
         call qenv%new(p_master)
+
+        if( p_master%l_autoscale )then
+            ! prepare for down-scaling
+            native_stk  = p_master%stk
+            native_smpd = p_master%smpd
+            native_msk  = p_master%msk
+            native_box  = p_master%box
+            cline_scale = cline
+            call autoscale(p_master%box, p_master%smpd, box_sc, smpd_sc, scale)
+            msk_sc = scale * p_master%msk
+            call cline_scale%set('newbox', real(box_sc))
+            call cline_scale%set('outstk', trim(STKSCALEDBODY)//p_master%ext)
+            p_master%stk  = trim(STKSCALEDBODY)//p_master%ext
+            p_master%smpd = smpd_sc
+            p_master%msk  = msk_sc
+            p_master%box  = box_sc
+            call cline%set('stk',  trim(p_master%stk))
+            call cline%set('smpd', p_master%smpd)
+            call cline%set('msk',  p_master%msk)
+        endif
+
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! prepare part-dependent parameters and docs
@@ -538,6 +657,15 @@ contains
                 ishift = ishift - p_master%ncls
             endif
         end do
+
+        if( p_master%l_autoscale )then
+            if( .not. file_exists(trim(STKSCALEDBODY)//p_master%ext) )then
+                write(*,'(A)') '>>>'
+                write(*,'(A)') '>>> AUTO-SCALING IMAGES'
+                write(*,'(A)') '>>>'
+                call xscale%execute(cline_scale)
+            endif
+        endif
         ! split stack
         if( stack_is_split(p_master%ext, p_master%nparts) )then
             ! check that the stack partitions are of correct sizes
@@ -567,12 +695,46 @@ contains
             endif
         end do
         ! merge docs
-        call sys_merge_docs(final_docs, 'prime2Ddoc_merged.txt')
-        ! merge class averages
-        call write_filetable(CAVGNAMES, final_cavgs)
-        call cline_stack%set('filetab', CAVGNAMES)
-        call cline_stack%set('outstk', 'prime2Dcavgs_final'//p_master%ext)
-        call xstack%execute(cline_stack)
+        call sys_merge_docs(final_docs, 'temp_prime2Ddoc_merged.txt')
+        
+        if( p_master%l_autoscale )then
+            write(*,'(A)') '>>>'
+            write(*,'(A)') '>>> GENERATING CLASS AVERAGES AT NATIVE SAMPLING'
+            write(*,'(A)') '>>>'
+            ! re-split stack
+            call del_files('stack_part', p_master%nparts, ext=p_master%ext)
+            call cline%set('stk',        native_stk)
+            call cline%set('smpd',       native_smpd)
+            call xsplit%execute(cline)
+            ! pepare makecavgs command line
+            call cline_makecavgs%set('prg',     'makecavgs')
+            call cline_makecavgs%set('stk',     native_stk)
+            call cline_makecavgs%set('smpd',    native_smpd)
+            call cline_makecavgs%set('msk',     native_msk)
+            call cline_makecavgs%set('oritab',  'temp_prime2Ddoc_merged.txt')
+            call cline_makecavgs%set('mul',     1./scale)
+            call cline_makecavgs%set('refs',    'prime2Dcavgs_final'//p_master%ext)
+            call cline_makecavgs%set('outfile', 'prime2Ddoc_final.txt')
+            ! execute
+            call xmakecavgs%execute(cline_makecavgs)
+            ! cleanup
+            call del_files('stack_part', p_master%nparts, ext=p_master%ext)
+            call del_file('temp_prime2Ddoc_merged.txt')
+        else
+            ! merge class averages
+            call write_filetable(CAVGNAMES, final_cavgs)
+            call cline_stack%set('filetab', CAVGNAMES)
+            call cline_stack%set('outstk', 'prime2Dcavgs_final'//p_master%ext)
+            call xstack%execute(cline_stack)
+            ! cleanup
+            call rename('temp_prime2Ddoc_merged.txt', 'prime2Ddoc_final.txt')
+            call del_file(CAVGNAMES)
+        endif
+        ! ranking
+        call cline_rank_cavgs%set('oritab', 'prime2Ddoc_final.txt')
+        call cline_rank_cavgs%set('stk',    'prime2Dcavgs_final'//p_master%ext)
+        call cline_rank_cavgs%set('outstk', trim('prime2Dcavgs_final_ranked'//p_master%ext))
+        ! end gracefully
         call simple_end('**** SIMPLE_DISTR_PRIME2D_CHUNK NORMAL STOP ****')
 
         contains

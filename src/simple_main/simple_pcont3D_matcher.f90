@@ -31,7 +31,6 @@ contains
 
     !>  \brief  is the prime3D algorithm
     subroutine pcont3D_exec( b, p, cline, which_iter, converged )
-        use simple_filterer,  only: resample_filter
         use simple_qsys_funs, only: qsys_job_finished
         use simple_strings,   only: int2str_pad
         class(build),   intent(inout) :: b
@@ -42,7 +41,7 @@ contains
         type(pcont3D_srch)            :: pcont3Dsrch
         type(oris)                    :: softoris
         type(ori)                     :: orientation
-        real, allocatable             :: wmat(:,:), wresamp(:), res(:), res_pad(:)
+        real, allocatable             :: wmat(:,:), res(:), res_pad(:)
         real                          :: reslim, frac_srch_space
         integer                       :: iptcl, state, alloc_stat, cnt_glob
         logical                       :: doshellweight, update_res
@@ -80,7 +79,9 @@ contains
         else
             if( p%l_shellw )call cont3D_shellweight(b, p, cline)
         endif
-        call setup_shellweights(b, p, doshellweight, wmat, res=res, res_pad=res_pad)
+        res     = b%img%get_res()
+        res_pad = b%img_pad%get_res()
+        ! call setup_shellweights(p, doshellweight, wmat, res, res_pad)
 
         ! PREPARE REFVOLS
         call prep_vols(b, p, cline)
@@ -140,12 +141,11 @@ contains
             call b%a%set_ori(iptcl, orientation)
             ! grid
             if( doshellweight )then
-                wresamp = resample_filter(wmat(iptcl,:), res, res_pad)
                 if(p%npeaks == 1)then
-                    call grid_ptcl(b, p, iptcl, orientation, shellweights=wresamp)
+                    call grid_ptcl(b, p, iptcl, orientation, shellweights=wmat(iptcl,:))
                 else
                     softoris = pcont3Dsrch%get_softoris()
-                    call grid_ptcl(b, p, iptcl, orientation, os=softoris, shellweights=wresamp)
+                    call grid_ptcl(b, p, iptcl, orientation, os=softoris, shellweights=wmat(iptcl,:))
                 endif
             else
                 if(p%npeaks == 1)then
@@ -183,7 +183,6 @@ contains
         enddo
         !call b%img%kill_imgpolarizer is private a the moment
         if(allocated(wmat)   ) deallocate(wmat)
-        if(allocated(wresamp)) deallocate(wresamp)
         if(allocated(res)    ) deallocate(res)
         if(allocated(res_pad)) deallocate(res_pad)
     end subroutine pcont3D_exec

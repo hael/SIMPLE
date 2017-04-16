@@ -39,10 +39,10 @@ contains
         class(cmdline), intent(inout) :: cline     
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: converged
-        real,    allocatable :: res(:), res_pad(:), wresamp(:)
-        integer :: iptcl, fnr, icls, io_stat, inorm, cands(3), pop
-        real    :: corr_thresh
-        logical :: doshellweight
+        real, allocatable :: res(:)
+        integer           :: iptcl, fnr, icls, io_stat, inorm, cands(3), pop
+        real              :: corr_thresh
+        logical           :: doshellweight
         
         ! SET FRACTION OF SEARCH SPACE
         frac_srch_space = b%a%get_avg('frac')
@@ -80,7 +80,12 @@ contains
 
         ! SETUP SHELLWEIGHTS
         if( p%l_shellw .and. frac_srch_space >= SHW_FRAC_LIM .and. which_iter > 1 ) then
-            call setup_shellweights( b, p, doshellweight, wmat, res, res_pad )
+            res = b%img%get_res()
+            if( p%l_distr_exec )then
+                call setup_shellweights_from_parts( p, doshellweight, wmat, res )
+            else
+                call setup_shellweights_from_single( p, doshellweight, wmat, res )
+            endif
         endif
 
         ! EXTREMAL LOGICS
@@ -91,7 +96,7 @@ contains
         endif
         
         ! SET FOURIER INDEX RANGE
-        call set_bp_range( b, p, cline )
+        call set_bp_range2D( b, p, cline, which_iter, frac_srch_space )
         
         ! GENERATE REFERENCE & PARTICLE POLAR FTs
         call preppftcc4align( b, p )
@@ -102,7 +107,7 @@ contains
         else
             write(*,'(A,1X,I3)') '>>> PRIME2D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
         endif
-        if( which_iter > 0 )then
+        if( .not. p%l_distr_exec .and. which_iter > 0 )then
             p%outfile = 'prime2Ddoc_'//int2str_pad(which_iter,3)//'.txt'
             if( p%chunktag .ne. '' ) p%outfile= trim(p%chunktag)//trim(p%outfile)
         endif
@@ -127,9 +132,8 @@ contains
                 call read_img_from_stk( b, p, iptcl )
                 icls = nint(orientation%get('class'))
                 if( p%l_shellw .and. allocated(wmat) )then
-                    wresamp = resample_filter(wmat(iptcl,:), res, res_pad)
                     call wiener_restore2D_online_fast(b%img, orientation, p%tfplan,&
-                    &b%cavgs(icls), b%ctfsqsums(icls), p%msk, wresamp)
+                    &b%cavgs(icls), b%ctfsqsums(icls), p%msk, wmat(iptcl,:))
                 else
                     call wiener_restore2D_online_fast(b%img, orientation, p%tfplan,&
                     &b%cavgs(icls), b%ctfsqsums(icls), p%msk)
@@ -279,19 +283,26 @@ contains
         end do
     end subroutine prime2D_norm_sums
     
-    subroutine prime2D_write_sums( b, p, which_iter )
-        class(build),      intent(inout) :: b
-        class(params),     intent(inout) :: p
-        integer, optional, intent(in)    :: which_iter
+    subroutine prime2D_write_sums( b, p, which_iter, fname )
+        class(build),               intent(inout) :: b
+        class(params),              intent(inout) :: p
+        integer,          optional, intent(in)    :: which_iter
+        character(len=*), optional, intent(in)    :: fname
         integer :: icls
         if( present(which_iter) )then
+            if( present(fname) ) stop&
+            &'fname cannot be present together with which_iter; simple_hadamard2D_matcher :: prime2D_write_sums'
             if( which_iter <= 0 )then
                 p%refs = 'cavgs'//p%ext
             else
                 p%refs = 'cavgs_iter'//int2str_pad(which_iter,3)//p%ext
             endif
         else
-            p%refs = 'startcavgs'//p%ext
+            if( present(fname) )then
+                p%refs = fname
+            else
+                p%refs = 'startcavgs'//p%ext
+            endif
         endif
         if( p%chunktag .ne. '' ) p%refs = trim(p%chunktag)//trim(p%refs)
         ! write to disk
@@ -418,4 +429,3 @@ contains
     end subroutine calc_frc
     
 end module simple_hadamard2D_matcher
-

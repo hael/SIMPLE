@@ -46,8 +46,8 @@ contains
         class(cmdline),          intent(inout) :: cline
         type(params)      :: p
         type(build)       :: b
-        logical           :: doshellweight, doshellweight_states
-        real, allocatable :: wmat(:,:), wmat_states(:,:,:)
+        logical           :: doshellweight
+        real, allocatable :: wmat(:,:), res(:), res_pad(:)
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         select case(p%eo)
@@ -58,18 +58,11 @@ contains
             case DEFAULT
                 stop 'unknonw eo flag; simple_commander_rec :: exec_recvol'
         end select
-        doshellweight        = .false.
-        doshellweight_states = .false.
-        if( p%refine .eq. 'isw' )then
-            ! shell-weights for multi-particle setup
-            call setup_shellweights(b, p, doshellweight_states, wmat_states, p%npeaks)
-        else
-            ! shell-weights setup
-            call setup_shellweights(b, p, doshellweight, wmat)               
-        endif
-        if( doshellweight_states )then
-            call exec_rec_master(b, p, cline, wmat_states=wmat_states)
-        else if( doshellweight )then
+        doshellweight = .false.
+        res     = b%img%get_res()
+        res_pad = b%img_pad%get_res()
+        call setup_shellweights_from_single(p, doshellweight, wmat, res, res_pad)
+        if( doshellweight )then
             call exec_rec_master(b, p, cline, wmat=wmat)
         else
             call exec_rec_master(b, p, cline)

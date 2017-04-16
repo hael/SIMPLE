@@ -19,15 +19,10 @@ use simple_filehandling           ! use all in there
 use simple_jiffys                 ! use all in there
 implicit none
 
-public :: iterated_spectral_weights_commander
 public :: ini3D_from_cavgs_commander
 public :: het_ensemble_commander
 private
 
-type, extends(commander_base) :: iterated_spectral_weights_commander
-  contains
-    procedure :: execute      => exec_ISW
-end type iterated_spectral_weights_commander
 type, extends(commander_base) :: ini3D_from_cavgs_commander
   contains
     procedure :: execute      => exec_ini3D_from_cavgs
@@ -38,91 +33,6 @@ type, extends(commander_base) :: het_ensemble_commander
 end type het_ensemble_commander
 
 contains
-
-    subroutine exec_ISW( self, cline )
-        use simple_rnd,     only: seed_rnd
-        use simple_math,    only: fdim
-        use simple_strings, only: int2str, int2str_pad
-        use simple_image,   only: image
-        class(iterated_spectral_weights_commander), intent(inout) :: self
-        class(cmdline),                             intent(inout) :: cline
-        ! constants
-        logical,           parameter        :: DEBUG        = .false.
-        character(len=32), parameter        :: VOLFBODY     = 'recvol_state'
-        integer,           parameter        :: NUMLEN_STATE = 2
-        ! commanders
-        type(shellweight3D_distr_commander) :: xshellweight3D_distr
-        type(recvol_distr_commander)        :: xrecvol_distr
-        ! command lines
-        type(cmdline)                       :: cline_recvol_distr
-        type(cmdline)                       :: cline_shellweight3D_distr
-        ! other variables
-        type(params)                        :: p_master
-        type(image)                         :: imgvol
-        real,                  allocatable  :: wmat1(:,:,:), wmat2(:,:,:)
-        character(len=STDLEN)               :: vol, vol_state
-        integer :: filtsz, alloc_stat, istate, filnum, iter, io_stat
-        ! make master parameters
-        p_master = params(cline, checkdistr=.false.)
-        ! set constants
-        call find_ldim_nptcls(p_master%stk, p_master%ldim, p_master%nptcls)
-        p_master%ldim(3) = 1
-        filtsz = fdim(p_master%ldim(1)) - 1
-        ! build
-        call imgvol%new([p_master%box,p_master%box,p_master%box], p_master%smpd)
-        allocate( wmat1(p_master%nstates,p_master%nptcls,filtsz),&
-        wmat2(p_master%nstates,p_master%nptcls,filtsz), stat=alloc_stat)
-        call alloc_err("In: simple_commander_hlev_wflows :: exec_ISW", alloc_stat)
-        ! make command lines from prototype
-        cline_recvol_distr        = cline
-        cline_shellweight3D_distr = cline
-        call cline_recvol_distr%set('prg', 'recvol')
-        call cline_recvol_distr%set('eo',  'no'    )
-        call cline_shellweight3D_distr%set('prg', 'shellweight3D')
-        ! generate random initial weights
-        call seed_rnd
-        call random_number(wmat1)
-        call random_number(wmat2)
-        if( .not. file_exists(p_master%shellwfile) )then
-            ! write wmat2 to file
-            filnum = get_fileunit()
-            open(unit=filnum, status='REPLACE', action='WRITE', file=p_master%shellwfile, access='STREAM')
-            write(unit=filnum,pos=1,iostat=io_stat) wmat2
-            close(filnum)
-        endif
-        do iter=1,p_master%maxits
-            write(*,'(a,1x,i3)') '>>> ISW ITERATION', iter
-            ! reconstruct and rename weighted volumes
-            do istate = 1,p_master%nstates
-                call cline_recvol_distr%set('state', real(istate))
-                vol_state = 'recvol_isw_state'//int2str_pad(istate,NUMLEN_STATE)//p_master%ext
-                vol       = 'vol'//trim(int2str(istate))
-                call cline_shellweight3D_distr%set(trim(vol), trim(vol_state))
-                call xrecvol_distr%execute( cline_recvol_distr )
-                vol = trim( VOLFBODY )//int2str_pad(istate,NUMLEN_STATE)//p_master%ext
-                if( iter == 1 )then
-                    call imgvol%read(trim(vol))
-                    call imgvol%phase_rand(p_master%lp)
-                    call imgvol%write(trim(vol))
-                endif
-                call rename( trim(vol), trim(vol_state) )
-            enddo
-            ! calculate state-dependent shell-weights
-            call xshellweight3D_distr%execute(cline_shellweight3D_distr)
-            ! stash the previous matrix
-            wmat1 = wmat2
-            ! read in the new shell-weights
-            open(unit=filnum, status='OLD', action='READ', file=p_master%shellwfile, access='STREAM')
-            read(unit=filnum,pos=1,iostat=io_stat) wmat2
-            close(filnum)
-
-            print *, sum((wmat1-wmat2)**2.0)/real(p_master%nstates*p_master%nptcls)
-
-        end do
-        call imgvol%kill
-        ! end gracefully
-        call simple_end('**** SIMPLE_ITERATED_SPECTRAL_WEIGHTS NORMAL STOP ****')
-    end subroutine exec_ISW
 
     ! GENERATE INITIAL 3D MODEL FROM CLASS AVERAGES
 
@@ -187,6 +97,16 @@ contains
                 srch4symaxis = .true.
             endif
         endif
+        if( DOSCALE )then
+            ! (1) SCALING - preparation
+            call autoscale(p_master%box, p_master%smpd, box_sc, smpd_sc, scale)
+            msk_sc = scale * p_master%msk
+            call cline_scale%set('newbox', real(box_sc))
+            call cline_scale%set('outstk', trim(STKSCALEDBODY)//p_master%ext)
+            call cline%set('stk',  trim(STKSCALEDBODY)//p_master%ext)
+            call cline%set('smpd', smpd_sc)
+            call cline%set('msk',  real(msk_sc))
+        endif
         ! prepare command lines from prototype master
         cline_scale           = cline
         cline_prime3D_init    = cline
@@ -196,22 +116,6 @@ contains
         cline_recvol          = cline
         cline_projvol         = cline
         ! initialise command line parameters
-        if( DOSCALE )then
-            ! (1) SCALING
-            call autoscale(p_master%box, p_master%smpd, box_sc, smpd_sc, scale)
-            msk_sc = scale * p_master%msk
-            call cline_scale%set('newbox', real(box_sc))
-            call cline_scale%set('outstk', trim(STKSCALEDBODY)//p_master%ext)
-            call cline_prime3D_init%set('stk',  trim(STKSCALEDBODY)//p_master%ext)
-            call cline_prime3D_init%set('smpd', smpd_sc)
-            call cline_prime3D_init%set('msk',  real(msk_sc))
-            call cline_prime3D_refine1%set('stk',  trim(STKSCALEDBODY)//p_master%ext)
-            call cline_prime3D_refine1%set('smpd', smpd_sc)
-            call cline_prime3D_refine1%set('msk',  real(msk_sc))
-            call cline_prime3D_refine2%set('stk',  trim(STKSCALEDBODY)//p_master%ext)
-            call cline_prime3D_refine2%set('smpd', smpd_sc)
-            call cline_prime3D_refine2%set('msk',  real(msk_sc))
-        endif
         ! (2) PRIME3D_INIT
         call cline_prime3D_init%set('prg',    'prime3D')
         call cline_prime3D_init%set('ctf',    'no')
@@ -275,8 +179,8 @@ contains
             write(*,'(A)') '>>>'
             write(*,'(A)') '>>> AUTO-SCALING CLASS AVERAGES'
             write(*,'(A)') '>>>'
+            call xscale%execute(cline_scale)
         endif
-        call xscale%execute(cline_scale)
         write(*,'(A)') '>>>'
         write(*,'(A)') '>>> INITIAL 3D MODEL GENERATION WITH PRIME3D'
         write(*,'(A)') '>>>'

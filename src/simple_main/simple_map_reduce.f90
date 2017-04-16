@@ -5,11 +5,6 @@ use simple_filehandling, only: get_fileunit
 use simple_jiffys,       only: alloc_err
 implicit none
 
-interface merge_rmat_from_parts
-    module procedure merge_rmat_from_parts_1
-    module procedure merge_rmat_from_parts_2
-end interface
-
 logical, private :: debug = .false.
 
 contains
@@ -235,7 +230,7 @@ contains
     end function merge_nnmat_from_parts
 
     !>  \brief  for merging partial calculations of the nearest neighbour matrix
-    function merge_rmat_from_parts_1( nobjs, nparts, ydim, fbody ) result( mat_merged )
+    function merge_rmat_from_parts( nobjs, nparts, ydim, fbody ) result( mat_merged )
         integer,          intent(in)  :: nobjs  !< number of objects (images)
         integer,          intent(in)  :: nparts !< number of partitions, assuming even split (CPU exec)
         integer,          intent(in)  :: ydim   !< y dimension
@@ -246,7 +241,7 @@ contains
         integer :: alloc_stat, numlen, ipart, funit, io_stat
         ! allocate merged matrix
         allocate(mat_merged(nobjs,ydim), stat=alloc_stat)
-        call alloc_err("In: simple_map_reduce :: merge_mat_from_parts_1", alloc_stat)
+        call alloc_err("In: simple_map_reduce :: merge_mat_from_parts", alloc_stat)
         ! repeat the generation of balanced partitions
         parts  = split_nobjs_even(nobjs, nparts)
         numlen = len(int2str(nparts))
@@ -266,41 +261,6 @@ contains
             deallocate(fname)
         end do
         deallocate(parts)
-    end function merge_rmat_from_parts_1
-
-    !>  \brief  for merging partial calculations of the nearest neighbour matrix
-    function merge_rmat_from_parts_2( nstates, nobjs, nparts, ydim, fbody ) result( mat_merged )
-        integer,          intent(in)  :: nstates !< number of states
-        integer,          intent(in)  :: nobjs   !< number of objects (images)
-        integer,          intent(in)  :: nparts  !< number of partitions, assuming even split (CPU exec)
-        integer,          intent(in)  :: ydim    !< y dimension
-        character(len=*), intent(in)  :: fbody   !< file body of partial files
-        integer,          allocatable :: parts(:,:)
-        real,             allocatable :: mat_merged(:,:,:)
-        character(len=:), allocatable :: fname
-        integer :: alloc_stat, numlen, ipart, funit, io_stat
-        ! allocate merged matrix
-        allocate(mat_merged(nstates,nobjs,ydim), stat=alloc_stat)
-        call alloc_err("In: simple_map_reduce :: merge_mat_from_parts_2", alloc_stat)
-        ! repeat the generation of balanced partitions
-        parts  = split_nobjs_even(nobjs, nparts)
-        numlen = len(int2str(nparts))
-        ! compress the partial matrices into a single matrix
-        funit = get_fileunit()
-        do ipart=1,nparts
-            allocate(fname, source=trim(fbody)//int2str_pad(ipart,numlen)//'.bin')
-            open(unit=funit, status='OLD', action='READ', file=fname, access='STREAM')
-            read(unit=funit,pos=1,iostat=io_stat) mat_merged(:,parts(ipart,1):parts(ipart,2),:)
-            ! check if the read was successful
-            if( io_stat .ne. 0 )then
-                write(*,'(a,i0,2a)') '**ERROR(merge_rmat_from_parts_2): I/O error ',&
-                io_stat, ' when reading: ', fname
-                stop 'I/O error; merge_rmat_from_parts_2; simple_map_reduce'
-            endif
-            close(funit)
-            deallocate(fname)
-        end do
-        deallocate(parts)
-    end function merge_rmat_from_parts_2
+    end function merge_rmat_from_parts
     
 end module simple_map_reduce

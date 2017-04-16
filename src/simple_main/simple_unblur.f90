@@ -146,7 +146,7 @@ contains
         call shift_frames(opt_shifts)
         ! print
         if( corr < 0. )then 
-            if( doprint ) write(*,'(a)') '>>> WARNING! OPTIMAL CORREALTION < 0.0'
+            if( doprint ) write(*,'(a)') '>>> WARNING! OPTIMAL CORRELATION < 0.0'
             if( doprint ) write(*,'(a,7x,f7.4)') '>>> OPTIMAL CORRELATION:', corr
         endif
         call moment(frameweights, ave, sdev, var, err)

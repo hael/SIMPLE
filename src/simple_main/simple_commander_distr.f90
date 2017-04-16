@@ -130,26 +130,17 @@ contains
         class(cmdline),                      intent(inout) :: cline
         type(params)      :: p
         type(build)       :: b
-        real, allocatable :: wmat(:,:), wmat_states(:,:,:)
+        real, allocatable :: wmat(:,:)
         integer :: filnum, io_stat, filtsz
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built (assumes stk input)
         filtsz = b%img%get_filtsz()         ! nr of resolution elements
-        if( p%refine .eq. 'isw' )then
-            wmat_states = merge_rmat_from_parts(p%nstates, p%nptcls, p%nparts, filtsz, 'shellweights_part')
-            call normalise_shellweights(wmat_states, p%npeaks)
-            filnum = get_fileunit()
-            open(unit=filnum, status='REPLACE', action='WRITE', file=p%shellwfile, access='STREAM')
-            write(unit=filnum,pos=1,iostat=io_stat) wmat_states
-            deallocate(wmat_states)
-        else
-            wmat = merge_rmat_from_parts(p%nptcls, p%nparts, filtsz, 'shellweights_part')
-            call normalise_shellweights(wmat)
-            filnum = get_fileunit()
-            open(unit=filnum, status='REPLACE', action='WRITE', file=p%shellwfile, access='STREAM')
-            write(unit=filnum,pos=1,iostat=io_stat) wmat
-            deallocate(wmat)
-        endif
+        wmat = merge_rmat_from_parts(p%nptcls, p%nparts, filtsz, 'shellweights_part')
+        call normalise_shellweights(wmat)
+        filnum = get_fileunit()
+        open(unit=filnum, status='REPLACE', action='WRITE', file=p%shellwfile, access='STREAM')
+        write(unit=filnum,pos=1,iostat=io_stat) wmat
+        deallocate(wmat)
         if( io_stat .ne. 0 )then
             write(*,'(a,i0,a)') 'I/O error ', io_stat, ' when writing to '//trim(p%shellwfile)
             stop 'I/O error; merge_shellweights'

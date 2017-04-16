@@ -12,18 +12,14 @@ use simple_math          ! use all in there
 use simple_masker        ! use all in there
 implicit none
 
-public :: read_img_from_stk, set_bp_range, setup_shellweights, grid_ptcl, prepimg4align,&
-eonorm_struct_facts, norm_struct_facts, preprefs4align, preprefvol, reset_prev_defparms, prep2Dref
+public :: read_img_from_stk, set_bp_range, set_bp_range2D, setup_shellweights_from_single,&
+&setup_shellweights_from_parts, grid_ptcl, prepimg4align, eonorm_struct_facts, norm_struct_facts,&
+&preprefs4align, preprefvol, reset_prev_defparms, prep2Dref
 private
 
 interface prep2Dref
     module procedure prep2Dref_1
     module procedure prep2Dref_2
-end interface
-
-interface setup_shellweights
-    module procedure setup_shellweights_1
-    module procedure setup_shellweights_2
 end interface
 
 logical, parameter :: DEBUG        = .false.
@@ -138,141 +134,229 @@ contains
         if( DEBUG ) write(*,*) '*** simple_hadamard_common ***: did set Fourier index range'
     end subroutine set_bp_range
 
-    !>  \brief  constructs the shellweight matrix for 3D search
-    subroutine setup_shellweights_1( b, p, doshellweight, wmat, res, res_pad )
+    subroutine set_bp_range2D( b, p, cline, which_iter, frac_srch_space )
+        use simple_estimate_ssnr, only: fsc2ssnr
+        use simple_cmdline,       only: cmdline
+        class(build),   intent(inout) :: b
+        class(params),  intent(inout) :: p
+        class(cmdline), intent(inout) :: cline
+        integer,        intent(in)    :: which_iter
+        real,           intent(in)    :: frac_srch_space
+        real :: lplims(3), lplim
+        if( cline%defined('lp') )then        
+            ! set Fourier index range
+            p%kfromto(1) = max(2,b%img%get_find(p%hp))
+            p%kfromto(2) = b%img%get_find(p%lp)
+            p%lp_dyn     = p%lp
+            call b%a%set_all2single('lp',p%lp)
+        else
+            lplims(1) = p%lpstart
+            lplims(2) = lplims(1) - (p%lpstart - p%lpstop)/2.
+            lplims(3) = p%lpstop
+            ! set Fourier index range
+            p%kfromto(1) = max(2,b%img%get_find(p%hp))
+            if( which_iter <= LPLIM1ITERBOUND )then
+                lplim = lplims(1)
+            else if( frac_srch_space >= FRAC_SH_LIM .and. which_iter > LPLIM3ITERBOUND )then
+                lplim = lplims(3)
+            else
+                lplim = lplims(2)
+            endif
+            p%kfromto(2) = b%img%get_find(lplim)
+            p%lp_dyn = lplim
+            call b%a%set_all2single('lp',lplim)
+        endif
+        if( DEBUG ) write(*,*) '*** simple_hadamard_common ***: did set Fourier index range'
+    end subroutine set_bp_range2D
+
+    !>  \brief  constructs the shellweight matrix
+    subroutine setup_shellweights_from_single( p, doshellweight, wmat, res_calc, res_target )
         use simple_map_reduce, only: merge_rmat_from_parts
-        use simple_filterer,   only: normalise_shellweights
-        class(build),                intent(inout) :: b
-        class(params),               intent(inout) :: p
-        logical,                     intent(out)   :: doshellweight
-        real,           allocatable, intent(out)   :: wmat(:,:)
-        real, optional, allocatable, intent(out)   :: res(:), res_pad(:)
+        use simple_filterer,   only: normalise_shellweights, resample_filter
+        class(params),     intent(inout) :: p
+        logical,           intent(out)   :: doshellweight
+        real, allocatable, intent(out)   :: wmat(:,:)
+        real,              intent(in)    :: res_calc(:)
+        real, optional,    intent(in)    :: res_target(:)
         logical, allocatable :: files_exist(:)
-        integer :: filtsz, filtsz_pad, alloc_stat, filnum, io_stat, ipart
+        real,    allocatable :: wmat_calc(:,:), wresamp(:)
+        integer :: filtsz_calc, filtsz_target, alloc_stat, filnum, io_stat, ipart, iptcl
+        logical :: doresample
         doshellweight = .false.
         if( .not. p%l_shellw ) return
-        filtsz     = b%img%get_filtsz() ! nr of resolution elements
-        filtsz_pad = b%img_pad%get_filtsz()
-        if( allocated(wmat) ) deallocate(wmat)
-        if( present(res) )then
-            if( allocated(res) ) deallocate(res)
-            res = b%img%get_res()
-        endif
-        if( present(res_pad) )then
-            if( allocated(res_pad) ) deallocate(res_pad)
-            res_pad = b%img_pad%get_res()
-        endif
-        if( p%l_distr_exec )then
-            call wmat_from_single_file
-            if( doshellweight )then
-                ! we are done
-                return
-            else
-                ! we may need to merge partial shellweight files
-                allocate( files_exist(p%nparts) )
-                do ipart=1,p%nparts
-                    files_exist(ipart) = file_exists('shellweights_part'//int2str_pad(ipart,p%numlen)//'.bin')
-                end do
-                if( all(files_exist) )then
-                    wmat = merge_rmat_from_parts(p%nptcls, p%nparts, filtsz, 'shellweights_part')
-                    call normalise_shellweights(wmat)
-                    doshellweight = .true.
-                endif
-                deallocate(files_exist)
-            endif
+        filtsz_calc = size(res_calc) ! nr of resolution elements used when calculating shell-weights
+        doresample  = .false.
+        if( present(res_target) )then
+            filtsz_target = size(res_target)
+            if( filtsz_calc /= filtsz_target ) doresample = .true.
         else
-            call wmat_from_single_file
+            filtsz_target = filtsz_calc
         endif
-
-      contains
-
-        subroutine wmat_from_single_file
-            if( file_exists(p%shellwfile) )then    
-                allocate( wmat(p%nptcls,filtsz), stat=alloc_stat)
-                filnum = get_fileunit()
-                open(unit=filnum, status='OLD', action='READ', file=p%shellwfile, access='STREAM')
-                read(unit=filnum,pos=1,iostat=io_stat) wmat
-                ! check if the read was successful
-                if( io_stat .ne. 0 )then
-                    doshellweight = .false.
-                    return  
-                endif
-                close(filnum)
-                call normalise_shellweights(wmat)
-                doshellweight = .true.
+        if( allocated(wmat) ) deallocate(wmat)
+        if( file_exists(p%shellwfile) )then    
+            allocate(wmat_calc(p%nptcls,filtsz_calc))
+            filnum = get_fileunit()
+            open(unit=filnum, status='OLD', action='READ', file=p%shellwfile, access='STREAM')
+            read(unit=filnum,pos=1,iostat=io_stat) wmat_calc
+            ! check if the read was successful
+            if( io_stat .ne. 0 )then
+                write(*,'(a,i0,2a)') '**ERROR(setup_shellweights_from_single): I/O error ',&
+                io_stat, ' when reading: ', p%shellwfile
+                stop 'I/O error;setup_shellweights_from_single; simple_hadamard_common '
             endif
-        end subroutine wmat_from_single_file
+            close(filnum)
+            call normalise_shellweights(wmat_calc)
+            doshellweight = .true.
+        endif
+        if( doshellweight )then
+            if( doresample )then
+                allocate( wmat(p%nptcls,filtsz_target) )
+                do iptcl=1,p%nptcls
+                    wresamp       = resample_filter(wmat_calc(iptcl,:), res_calc, res_target)
+                    wmat(iptcl,:) = wresamp
+                    deallocate(wresamp)
+                end do
+            else
+                allocate(wmat(p%nptcls,filtsz_target), source=wmat_calc)
+            endif
+            deallocate(wmat_calc)
+        endif
+    end subroutine setup_shellweights_from_single
 
-    end subroutine setup_shellweights_1
-
-    !>  \brief  constructs the shellweight matrix for 3D search
-    subroutine setup_shellweights_2( b, p, doshellweight, wmat, npeaks, res, res_pad )
+    !>  \brief  constructs the shellweight matrix
+    subroutine setup_shellweights_from_parts( p, doshellweight, wmat, res_calc, res_target )
         use simple_map_reduce, only: merge_rmat_from_parts
-        use simple_filterer,   only: normalise_shellweights
-        class(build),                intent(inout) :: b
-        class(params),               intent(inout) :: p
-        logical,                     intent(out)   :: doshellweight
-        real,           allocatable, intent(out)   :: wmat(:,:,:)
-        integer,                     intent(in)    :: npeaks
-        real, optional, allocatable, intent(out)   :: res(:), res_pad(:)
+        use simple_filterer,   only: normalise_shellweights, resample_filter
+        class(params),     intent(inout) :: p
+        logical,           intent(out)   :: doshellweight
+        real, allocatable, intent(out)   :: wmat(:,:)
+        real,              intent(in)    :: res_calc(:)
+        real, optional,    intent(in)    :: res_target(:)
         logical, allocatable :: files_exist(:)
-        integer :: filtsz, filtsz_pad, alloc_stat, filnum, io_stat, ipart
+        real,    allocatable :: wmat_calc(:,:), wresamp(:)
+        integer :: filtsz_calc, filtsz_target, alloc_stat, filnum, io_stat, ipart, iptcl
+        logical :: doresample
         doshellweight = .false.
         if( .not. p%l_shellw ) return
-        filtsz     = b%img%get_filtsz() ! nr of resolution elements
-        filtsz_pad = b%img_pad%get_filtsz()
-        if( allocated(wmat) ) deallocate(wmat)
-        if( present(res) )then
-            if( allocated(res) ) deallocate(res)
-            res = b%img%get_res()
-        endif
-        if( present(res_pad) )then
-            if( allocated(res_pad) ) deallocate(res_pad)
-            res_pad = b%img_pad%get_res()
-        endif
-        if( p%l_distr_exec )then
-            call wmat_from_single_file
-            if( doshellweight )then
-                ! we are done
-                return
-            else
-                ! we may need to merge partial shellweight files
-                allocate( files_exist(p%nparts) )
-                do ipart=1,p%nparts
-                    files_exist(ipart) = file_exists('shellweights_part'//int2str_pad(ipart,p%numlen)//'.bin')
-                end do
-                if( all(files_exist) )then
-                    wmat = merge_rmat_from_parts(p%nstates, p%nptcls, p%nparts, filtsz, 'shellweights_part')
-                    call normalise_shellweights(wmat, npeaks)
-                    doshellweight = .true.
-                endif
-                deallocate(files_exist)
-            endif
+        filtsz_calc = size(res_calc) ! nr of resolution elements used when calculating shell-weights
+        doresample  = .false.
+        if( present(res_target) )then
+            filtsz_target = size(res_target)
+            if( filtsz_calc /= filtsz_target ) doresample = .true.
         else
-            call wmat_from_single_file
+            filtsz_target = filtsz_calc
         endif
-
-      contains
-
-        subroutine wmat_from_single_file
-            if( file_exists(p%shellwfile) )then    
-                allocate( wmat(p%nstates,p%nptcls,filtsz), stat=alloc_stat)
-                filnum = get_fileunit()
-                open(unit=filnum, status='OLD', action='READ', file=p%shellwfile, access='STREAM')
-                read(unit=filnum,pos=1,iostat=io_stat) wmat
-                ! check if the read was successful
-                if( io_stat .ne. 0 )then
-                    write(*,'(a,i0,2a)') '**ERROR(setup_shellweights_2): I/O error ',&
-                    io_stat, ' when reading'//trim(p%shellwfile)
-                    stop 'I/O error; setup_shellweights_2; simple_hadamard_common'
-                endif
-                close(filnum)
-                call normalise_shellweights(wmat, npeaks)
-                doshellweight = .true.
+        if( allocated(wmat) ) deallocate(wmat)
+        ! we need to merge partial shellweight files
+        allocate( files_exist(p%nparts) )
+        do ipart=1,p%nparts
+            files_exist(ipart) = file_exists('shellweights_part'//int2str_pad(ipart,p%numlen)//'.bin')
+        end do
+        if( all(files_exist) )then
+            wmat_calc = merge_rmat_from_parts(p%nptcls, p%nparts, filtsz_calc, 'shellweights_part')
+            call normalise_shellweights(wmat_calc)
+            doshellweight = .true.
+        endif
+        deallocate(files_exist)
+        if( doshellweight )then
+            if( doresample )then
+                allocate( wmat(p%nptcls,filtsz_target) )
+                do iptcl=1,p%nptcls
+                    wresamp       = resample_filter(wmat_calc(iptcl,:), res_calc, res_target)
+                    wmat(iptcl,:) = wresamp
+                    deallocate(wresamp)
+                end do
+            else
+                allocate(wmat(p%nptcls,filtsz_target), source=wmat_calc)
             endif
-        end subroutine wmat_from_single_file
+            deallocate(wmat_calc)
+        endif
+    end subroutine setup_shellweights_from_parts
 
-    end subroutine setup_shellweights_2
+    !>  \brief  constructs the shellweight matrix for 3D search
+    ! subroutine setup_shellweights( p, doshellweight, wmat, res_calc, res_target )
+    !     use simple_map_reduce, only: merge_rmat_from_parts
+    !     use simple_filterer,   only: normalise_shellweights, resample_filter
+    !     class(params),     intent(inout) :: p
+    !     logical,           intent(out)   :: doshellweight
+    !     real, allocatable, intent(out)   :: wmat(:,:)
+    !     real,              intent(in)    :: res_calc(:)
+    !     real, optional,    intent(in)    :: res_target(:)
+    !     logical, allocatable :: files_exist(:)
+    !     real,    allocatable :: wmat_calc(:,:), wresamp(:)
+    !     integer :: filtsz_calc, filtsz_target, alloc_stat, filnum, io_stat, ipart, iptcl
+    !     logical :: doresample
+    !     doshellweight = .false.
+    !     if( .not. p%l_shellw ) return
+    !     filtsz_calc = size(res_calc) ! nr of resolution elements used when calculating shell-weights
+    !     doresample  = .false.
+    !     if( present(res_target) )then
+    !         filtsz_target = size(res_target)
+    !         if( filtsz_calc /= filtsz_target ) doresample = .true.
+    !     else
+    !         filtsz_target = filtsz_calc
+    !     endif
+    !     if( allocated(wmat) ) deallocate(wmat)
+    !     if( p%l_distr_exec )then
+    !         call wmat_from_single_file
+    !         if( doshellweight )then
+    !             call resample_shellweights
+    !             return ! since we are done
+    !         else
+    !             ! we need to merge partial shellweight files
+    !             allocate( files_exist(p%nparts) )
+    !             do ipart=1,p%nparts
+    !                 files_exist(ipart) = file_exists('shellweights_part'//int2str_pad(ipart,p%numlen)//'.bin')
+    !             end do
+    !             if( all(files_exist) )then
+    !                 wmat_calc = merge_rmat_from_parts(p%nptcls, p%nparts, filtsz_calc, 'shellweights_part')
+    !                 call normalise_shellweights(wmat_calc)
+    !                 doshellweight = .true.
+    !             endif
+    !             deallocate(files_exist)
+    !         endif
+    !     else
+    !         call wmat_from_single_file
+    !     endif
+    !     call resample_shellweights
+        
+
+    !   contains
+
+    !     subroutine wmat_from_single_file
+    !         if( file_exists(p%shellwfile) )then    
+    !             allocate(wmat_calc(p%nptcls,filtsz_calc))
+    !             filnum = get_fileunit()
+    !             open(unit=filnum, status='OLD', action='READ', file=p%shellwfile, access='STREAM')
+    !             read(unit=filnum,pos=1,iostat=io_stat) wmat_calc
+    !             ! check if the read was successful
+    !             if( io_stat .ne. 0 )then
+    !                 doshellweight = .false.
+    !                 return  
+    !             endif
+    !             close(filnum)
+    !             call normalise_shellweights(wmat_calc)
+    !             doshellweight = .true.
+    !         endif
+    !     end subroutine wmat_from_single_file
+
+    !     subroutine resample_shellweights
+    !         if( doshellweight )then
+    !             if( doresample )then
+    !                 allocate( wmat(p%nptcls,filtsz_target) )
+    !                 do iptcl=1,p%nptcls
+    !                     wresamp       = resample_filter(wmat_calc(iptcl,:), res_calc, res_target)
+    !                     wmat(iptcl,:) = wresamp
+    !                     deallocate(wresamp)
+    !                 end do
+    !             else
+    !                 allocate(wmat(p%nptcls,filtsz_target), source=wmat_calc)
+    !             endif
+    !             deallocate(wmat_calc)
+    !         endif
+    !     end subroutine resample_shellweights
+
+    ! end subroutine setup_shellweights
 
     !>  \brief  grids one particle image to the volume
     subroutine grid_ptcl( b, p, iptcl, orientation, os, shellweights )

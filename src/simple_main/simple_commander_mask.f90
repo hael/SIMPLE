@@ -48,7 +48,7 @@ contains
         type(automask3D_commander) :: automask3D
         logical                    :: here
         p = params(cline)                   ! parameters generated
-        p%boxmatch = p%box                  !!!!!!!!!!!!!!!!!! 4 NOW
+        p%boxmatch = p%box                  ! turns off boxmatch logics
         call b%build_general_tbox(p, cline) ! general objects built
         if( cline%defined('stk') .and. cline%defined('vol1') )stop 'Cannot operate on images AND volume at once'
         if( p%automsk.eq.'yes' .and..not.cline%defined('mw')  )stop 'Missing mw argument for automasking'
@@ -114,7 +114,7 @@ contains
         type(build)  :: b
         integer      :: iptcl
         p = params(cline)                   ! parameters generated
-        p%boxmatch = p%box                   !!!!!!!!!!!!!!!!!! 4 NOW
+        p%boxmatch = p%box                  ! turns off boxmatch logics
         call b%build_general_tbox(p, cline) ! general objects built
         write(*,'(A,F8.2,A)') '>>> AUTOMASK LOW-PASS:',        p%amsklp, ' ANGSTROMS'
         write(*,'(A,I3,A)')   '>>> AUTOMASK SOFT EDGE WIDTH:', p%edge,   ' PIXELS'
@@ -138,7 +138,7 @@ contains
         type(build)  :: b
         integer      :: istate
         p = params(cline)                   ! parameters generated
-        p%boxmatch = p%box                  !!!!!!!!!!!!!!!!!! 4 NOW
+        p%boxmatch = p%box                  ! turns off boxmatch logics
         call b%build_general_tbox(p, cline) ! general objects built
         write(*,'(A,F14.1,A)') '>>> AUTOMASK LOW-PASS:',            p%amsklp,  ' ANGSTROMS'
         write(*,'(A,I7,A)')    '>>> AUTOMASK SOFT EDGE WIDTH:',     p%edge,    ' PIXEL(S)'

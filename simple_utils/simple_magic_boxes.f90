@@ -47,7 +47,7 @@ contains
         real,    intent(in)  :: smpd_in
         integer, intent(out) :: box_new
         real,    intent(out) :: smpd_new, scale
-        real,    parameter   :: SMPD_TARGET = 3.7
+        real,    parameter   :: SMPD_TARGET = 3.3
         if( smpd_in < SMPD_TARGET )then
             ! ok
         else

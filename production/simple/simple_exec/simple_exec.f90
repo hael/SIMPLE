@@ -51,7 +51,7 @@ type(pick_commander)               :: xpick
 type(extract_commander)            :: xextract
 
 ! PRIME2D PROGRAMS
-type(prime2D_init_commander)       :: xprime2D_init
+type(makecavgs_commander)          :: xmakecavgs
 type(prime2D_commander)            :: xprime2D
 type(cavgassemble_commander)       :: xcavgassemble
 type(check2D_conv_commander)       :: xcheck2D_conv
@@ -617,33 +617,33 @@ select case(prg)
         
     ! PRIME2D PROGRAMS
 
-    case( 'prime2D_init' )
-        !==Program prime2D_init
+    case( 'makecavgs' )
+        !==Program makecavgs
         !
-        ! <prime2D_init/begin>is used  to produce the initial random references for prime2D execution.
-        ! The random clustering and in-plane alignment is printed in the file prime2D_startdoc.txt 
-        ! produced by the program. This file is used together with the initial references
-        ! (startcavgs.ext) to execute prime2D<prime2D_init/end> 
+        ! <makecavgs/begin>is used  to produce class averages or initial random references
+        ! for prime2D execution. <makecavgs/end> 
         !
         ! set required keys
         keys_required(1) = 'stk'
         keys_required(2) = 'smpd'
-        keys_required(3) = 'ncls'
-        keys_required(4) = 'ctf'
+        keys_required(3) = 'ctf'
         ! set optional keys
         keys_optional(1) = 'nthr'
-        keys_optional(2) = 'deftab'
-        keys_optional(3) = 'oritab'
-        keys_optional(4) = 'filwidth'
-        keys_optional(5) = 'mul'
-        keys_optional(6) = 'tseries'
+        keys_optional(2) = 'ncls'
+        keys_optional(3) = 'deftab'
+        keys_optional(4) = 'oritab'
+        keys_optional(5) = 'filwidth'
+        keys_optional(6) = 'mul'
+        keys_optional(7) = 'tseries'
+        keys_optional(8) = 'outfile'
+        keys_optional(9) = 'refs'
         ! parse command line
-        if( describe ) call print_doc_prime2D_init
-        call cline%parse(keys_required(:4), keys_optional(:6))
+        ! if( describe ) call print_doc_makecavgs
+        call cline%parse(keys_required(:3), keys_optional(:9))
         ! set defaults
         if( .not. cline%defined('eo') ) call cline%set('eo', 'no')
         ! execute
-        call xprime2D_init%execute(cline)
+        call xmakecavgs%execute(cline)
     case( 'prime2D' )
         !==Program prime2D
         !
@@ -663,27 +663,30 @@ select case(prg)
         keys_optional(4)  = 'refs'
         keys_optional(5)  = 'hp'
         keys_optional(6)  = 'lp'
-        keys_optional(7)  = 'cenlp'
-        keys_optional(8)  = 'trs'
-        keys_optional(9)  = 'automsk'
-        keys_optional(10) = 'amsklp'
-        keys_optional(11) = 'inner'
-        keys_optional(12) = 'width'
-        keys_optional(13) = 'startit'
-        keys_optional(14) = 'maxits'
-        keys_optional(15) = 'center'
-        keys_optional(16) = 'mul'
+        keys_optional(7)  = 'lpstart'
+        keys_optional(8)  = 'lpstop'
+        keys_optional(9)  = 'cenlp'
+        keys_optional(10) = 'trs'
+        keys_optional(11) = 'automsk'
+        keys_optional(12) = 'amsklp'
+        keys_optional(13) = 'inner'
+        keys_optional(14) = 'width'
+        keys_optional(15) = 'startit'
+        keys_optional(16) = 'maxits'
+        keys_optional(17) = 'center'
+        keys_optional(18) = 'mul'
         ! parse command line
         if( describe ) call print_doc_prime2D
-        call cline%parse(keys_required(:5), keys_optional(:16))
+        call cline%parse(keys_required(:5), keys_optional(:18))
         ! set defaults
-        if( .not. cline%defined('lp')     ) call cline%set('lp',       10.)
-        if( .not. cline%defined('amsklp') ) call cline%set('amsklp',   25.)
-        if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',    30.)
-        if( .not. cline%defined('edge')   ) call cline%set('edge',     20.)
-        if( .not. cline%defined('eo')     ) call cline%set('eo',      'no')
-        if( .not. cline%defined('center') ) call cline%set('center', 'yes')
-        if( .not. cline%defined('maxits') ) call cline%set('maxits',  30. )
+        if( .not. cline%defined('lpstart') ) call cline%set('lpstart',  15.)
+        if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',    8.)
+        if( .not. cline%defined('amsklp')  ) call cline%set('amsklp',   25.)
+        if( .not. cline%defined('cenlp')   ) call cline%set('cenlp',    30.)
+        if( .not. cline%defined('edge')    ) call cline%set('edge',     20.)
+        if( .not. cline%defined('eo')      ) call cline%set('eo',      'no')
+        if( .not. cline%defined('center')  ) call cline%set('center', 'yes')
+        if( .not. cline%defined('maxits')  ) call cline%set('maxits',  30. )
         ! execute
         call xprime2D%execute(cline)
     case( 'cavgassemble' )
@@ -704,10 +707,11 @@ select case(prg)
         keys_optional(2) = 'deftab'
         keys_optional(3) = 'inner'
         keys_optional(4) = 'width'
-        keys_optional(5) = 'which_iter'        
+        keys_optional(5) = 'which_iter'
+        keys_optional(6) = 'refs'        
         ! parse command line
         if( describe ) call print_doc_cavgassemble
-        call cline%parse(keys_required(:6), keys_optional(:5))
+        call cline%parse(keys_required(:6), keys_optional(:6))
         ! execute
         call xcavgassemble%execute(cline)
     case( 'check2D_conv' )

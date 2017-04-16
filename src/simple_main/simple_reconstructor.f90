@@ -502,11 +502,10 @@ contains
     
     !> \brief  for reconstructing Fourier volumes according to the orientations 
     !!         and states in o, assumes that stack is open   
-    subroutine rec( self, fname, p, o, se, state, mul, eo, part, wmat, wmat_states )
+    subroutine rec( self, fname, p, o, se, state, mul, eo, part, wmat )
         use simple_oris,     only: oris
         use simple_sym,      only: sym
         use simple_params,   only: params
-        use simple_filterer, only: resample_filter
         use simple_jiffys,   only: find_ldim_nptcls, progress
         use simple_gridding  ! use all in there
         class(reconstructor), intent(inout) :: self               !< object
@@ -519,28 +518,19 @@ contains
         integer, optional,    intent(in)    :: eo                 !< even(2) or odd(1)
         integer, optional,    intent(in)    :: part               !< partition (4 parallel rec)
         real,    optional,    intent(in)    :: wmat(:,:)          !< shellweights
-        real,    optional,    intent(in)    :: wmat_states(:,:,:) !< shellweights for multi-particle analysis
         type(image)       :: img, img_pd
-        integer           :: statecnt(p%nstates), i, cnt, n, ldim(3), filtsz
-        integer           :: filtsz_pad, state_here, state_glob
-        real, allocatable :: res(:), res_pad(:), wresamp(:)
-        logical           :: doshellweight, doshellweight_states
+        integer           :: statecnt(p%nstates), i, cnt, n, ldim(3)
+        integer           :: state_here, state_glob
+        logical           :: doshellweight
         call find_ldim_nptcls(fname, ldim, n)
         if( n /= o%get_noris() ) stop 'inconsistent nr entries; rec; simple_reconstructor'
-        doshellweight        = present(wmat)
-        doshellweight_states = present(wmat_states)
-        if( doshellweight .and. doshellweight_states ) stop 'only one mode of shellweighting allowed&
-        &(wmat or wmat_states); rec; simple_reconstructor'
+        doshellweight = present(wmat)
         ! stash global state index
         state_glob = state 
         ! make random number generator
         ! make the images
         call img_pd%new([p%boxpd,p%boxpd,1],self%get_smpd(),p%imgkind)
         call img%new([p%box,p%box,1],self%get_smpd(),p%imgkind)
-        ! make the stuff needed for shellweighting
-        res        = img%get_res()
-        res_pad    = img_pd%get_res()
-        filtsz_pad = img_pd%get_filtsz()
         ! calculate particle weights
         if( p%frac < 0.99 ) call o%calc_hard_ptcl_weights(p%frac, bystate=.true.)
         ! zero the Fourier volume and rho
@@ -553,7 +543,7 @@ contains
             if( i <= p%top .and. i >= p%fromp )then
                 cnt = cnt+1
                 state_here = nint(o%get(i,'state')) 
-                if( state_here > 0 .and. (state_here == state .or. doshellweight_states) )then
+                if( state_here > 0 .and. (state_here == state) )then
                     statecnt(state) = statecnt(state)+1
                     if( present(eo) )then
                         if( mod(cnt,2) == 0 .and. eo == 2 )then
@@ -611,23 +601,22 @@ contains
                     else
                         call prep4cgrid(img, img_pd, p%msk)
                     endif
-                    if( doshellweight_states )then
-                        wresamp = resample_filter(wmat_states(state_glob,i,:), res, res_pad)
-                    else if( doshellweight )then
-                        wresamp = resample_filter(wmat(i,:), res, res_pad)
-                    else
-                        allocate(wresamp(filtsz_pad))
-                        wresamp = 1.0
-                    endif
                     if( p%pgrp == 'c1' )then
-                        call self%inout_fplane(orientation, .true., img_pd, pwght=pw, mul=mul, shellweights=wresamp)
+                        if( doshellweight )then
+                            call self%inout_fplane(orientation, .true., img_pd, pwght=pw, mul=mul, shellweights=wmat(i,:))
+                        else
+                            call self%inout_fplane(orientation, .true., img_pd, pwght=pw, mul=mul)
+                        endif
                     else
                         do j=1,se%get_nsym()
                             o_sym = se%apply(orientation, j)
-                            call self%inout_fplane(o_sym, .true., img_pd, pwght=pw, mul=mul, shellweights=wresamp)
+                            if( doshellweight )then
+                                call self%inout_fplane(o_sym, .true., img_pd, pwght=pw, mul=mul, shellweights=wmat(i,:))
+                            else
+                                call self%inout_fplane(o_sym, .true., img_pd, pwght=pw, mul=mul)
+                            endif
                         end do
                     endif
-                    deallocate(wresamp)
                 endif
             end subroutine rec_dens
             

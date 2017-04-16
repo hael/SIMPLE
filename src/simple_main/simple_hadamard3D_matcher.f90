@@ -57,7 +57,6 @@ contains
 
     !>  \brief  is the prime3D algorithm
     subroutine prime3D_exec( b, p, cline, which_iter, update_res, converged )
-        use simple_filterer,  only: resample_filter
         use simple_qsys_funs, only: qsys_job_finished
         use simple_oris,      only: oris
         use simple_strings,   only: int2str_pad
@@ -69,7 +68,7 @@ contains
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: update_res, converged
         type(oris)                    :: prime3D_oris
-        real, allocatable             :: wmat(:,:), wresamp(:), res(:), res_pad(:)
+        real, allocatable             :: wmat(:,:), res(:), res_pad(:)
         real                          :: norm, corr_thresh
         integer                       :: iptcl, s, inptcls, prev_state, istate, statecnt(p%nstates)
         logical                       :: doshellweight
@@ -117,7 +116,9 @@ contains
             if( p%l_shellw .and. frac_srch_space >= SHW_FRAC_LIM .and. which_iter > 1 )&
             &call cont3D_shellweight(b, p, cline)
         endif
-        call setup_shellweights(b, p, doshellweight, wmat, res=res, res_pad=res_pad)
+        res     = b%img%get_res()
+        res_pad = b%img_pad%get_res()
+        call setup_shellweights_from_single(p, doshellweight, wmat, res, res_pad)
 
         ! EXTREMAL LOGICS
         if( frac_srch_space < 0.98 .or. p%extr_thresh > 0.025 )then
@@ -243,15 +244,13 @@ contains
                     if( p%npeaks > 1 )then
                         call primesrch3D(iptcl)%get_oris(prime3D_oris, orientation)
                         if( doshellweight )then
-                            wresamp = resample_filter(wmat(iptcl,:), res, res_pad)
-                            call grid_ptcl(b, p, iptcl, orientation, prime3D_oris, shellweights=wresamp)
+                            call grid_ptcl(b, p, iptcl, orientation, prime3D_oris, shellweights=wmat(iptcl,:))
                         else
                             call grid_ptcl(b, p, iptcl, orientation, prime3D_oris)
                         endif
                     else
                         if( doshellweight )then
-                            wresamp = resample_filter(wmat(iptcl,:), res, res_pad)
-                            call grid_ptcl(b, p, iptcl, orientation, shellweights=wresamp)
+                            call grid_ptcl(b, p, iptcl, orientation, shellweights=wmat(iptcl,:))
                         else
                             call grid_ptcl(b, p, iptcl, orientation)
                         endif
@@ -272,7 +271,6 @@ contains
         end do
         deallocate( primesrch3D )
         if( allocated(wmat)    ) deallocate(wmat)
-        if( allocated(wresamp) ) deallocate(wresamp)
         if( allocated(res)     ) deallocate(res)
         if( allocated(res_pad) ) deallocate(res_pad)
         call pftcc%kill
@@ -407,7 +405,7 @@ contains
             ! cleanup
             call b%vol%kill_expanded
         end do
-        ! bring back the original b%vol size
+        ! bring back the original b%vol size for clean exit
         if( p%boxmatch < p%box ) call b%vol%new([p%box,p%box,p%box], p%smpd)
     end subroutine prep_refs_pftcc4align
 
@@ -455,11 +453,6 @@ contains
                         if( istate /= s ) cycle
                         progress_cnt = progress_cnt + 1
                         call progress( progress_cnt, ntot )
-                        if( p%boxmatch < p%box )then
-                            ! back to the original size as b%img has been
-                            ! and will be clipped/padded in prepimg4align
-                            call b%img%new([p%box,p%box,1],p%smpd)
-                        endif
                         call read_img_from_stk( b, p, iptcl )
                         call prepimg4align(b, p, o)
                         call b%img%imgpolarizer(pftcc, iptcl)

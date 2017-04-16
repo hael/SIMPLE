@@ -28,19 +28,18 @@ type(unblur_tomo_movies_distr_commander)  :: xunblur_tomo_distr
 type(ctffind_distr_commander)             :: xctffind_distr
 type(pick_distr_commander)                :: xpick_distr
 ! PRIME2D
-type(prime2D_init_distr_commander)        :: xprime2D_init_distr
+type(makecavgs_distr_commander)           :: xmakecavgs_distr
 type(prime2D_distr_commander)             :: xprime2D_distr
 type(prime2D_chunk_distr_commander)       :: xprime2D_chunk_distr
 ! PRIME3D
 type(prime3D_init_distr_commander)        :: xprime3D_init_distr
 type(prime3D_distr_commander)             :: xprime3D_distr
-type(cont3D_distr_commander)             ::  xcont3D_distr
+type(cont3D_distr_commander)              :: xcont3D_distr
 type(shellweight3D_distr_commander)       :: xshellweight3D_distr
 type(recvol_distr_commander)              :: xrecvol_distr
 ! time-series workflows
 type(tseries_track_distr_commander)       :: xtseries_track_distr
 ! high-level workflows
-type(iterated_spectral_weights_commander) :: xisw_distr
 type(ini3D_from_cavgs_commander)          :: xini3D_from_cavgs
 type(het_ensemble_commander)              :: xhet_ensemble
 
@@ -308,32 +307,32 @@ select case(prg)
 
     ! PRIME2D
 
-    case( 'prime2D_init' )
-        !==Program prime2D_init
+    case( 'makecavgs' )
+        !==Program makecavgs
         !
-        ! <prime2D_init/begin>is used to produce the initial random references for prime2D execution.
-        ! The random clustering and in-plane alignment is printed in the file
-        ! prime2D_startdoc.txt produced by the program. This file is used together with the initial references
-        ! (startcavgs.ext) to execute prime2D<prime2D_init/end> 
+        ! <makecavgs/begin>is used  to produce class averages or initial random references
+        ! for prime2D execution. <makecavgs/end> 
         !
         ! set required keys
         keys_required(1) = 'stk'
         keys_required(2) = 'smpd'
-        keys_required(3) = 'ncls'
-        keys_required(4) = 'ctf'
-        keys_required(5) = 'nparts'
+        keys_required(3) = 'ctf'
+        keys_required(4) = 'nparts'
         ! set optional keys
         keys_optional(1) = 'nthr'
         keys_optional(2) = 'ncunits'
-        keys_optional(3) = 'deftab'
-        keys_optional(4) = 'oritab'
-        keys_optional(5) = 'filwidth'
-        keys_optional(6) = 'mul'   
+        keys_optional(3) = 'ncls'
+        keys_optional(4) = 'deftab'
+        keys_optional(5) = 'oritab'
+        keys_optional(6) = 'filwidth'
+        keys_optional(7) = 'mul'
+        keys_optional(8) = 'outfile'
+        keys_optional(9) = 'refs'  
         ! parse command line
-        if( describe ) call print_doc_prime2D_init
-        call cline%parse(keys_required(:5), keys_optional(:6))
+        ! if( describe ) call print_doc_makecavgs
+        call cline%parse(keys_required(:4), keys_optional(:9))
         ! execute
-        call xprime2D_init_distr%execute(cline)
+        call xmakecavgs_distr%execute(cline)
     case( 'prime2D' )
         !==Program prime2D
         !
@@ -357,19 +356,22 @@ select case(prg)
         keys_optional(8)  = 'oritab'
         keys_optional(9)  = 'hp'
         keys_optional(10) = 'lp'
-        keys_optional(11) = 'cenlp'
-        keys_optional(12) = 'trs'
-        keys_optional(13) = 'automsk'
-        keys_optional(14) = 'amsklp'
-        keys_optional(15) = 'inner'
-        keys_optional(16) = 'width'
-        keys_optional(17) = 'startit'
-        keys_optional(18) = 'maxits'
-        keys_optional(19) = 'filwidth'
-        keys_optional(20) = 'nnn'
-        keys_optional(21) = 'minp'
-        keys_optional(22) = 'center'
-        keys_optional(23) = 'mul'
+        keys_optional(11) = 'lpstart'
+        keys_optional(12) = 'lpstop'
+        keys_optional(13) = 'cenlp'
+        keys_optional(14) = 'trs'
+        keys_optional(15) = 'automsk'
+        keys_optional(16) = 'amsklp'
+        keys_optional(17) = 'inner'
+        keys_optional(18) = 'width'
+        keys_optional(19) = 'startit'
+        keys_optional(20) = 'maxits'
+        keys_optional(21) = 'filwidth'
+        keys_optional(22) = 'nnn'
+        keys_optional(23) = 'minp'
+        keys_optional(24) = 'center'
+        keys_optional(25) = 'mul'
+        keys_optional(26) = 'autoscale'
         ! documentation
         if( describe ) call print_doc_prime2D
         ! parse command line
@@ -379,15 +381,16 @@ select case(prg)
         ! else
         !     call cline%parse( keys_required(:7), keys_optional(:19) )
         ! endif
-        call cline%parse( keys_required(:5), keys_optional(:23) )
+        call cline%parse( keys_required(:5), keys_optional(:26) )
         ! set defaults
-        if( .not. cline%defined('lp')     ) call cline%set('lp',       10.)
-        if( .not. cline%defined('eo')     ) call cline%set('eo',      'no')
-        if( .not. cline%defined('amsklp') ) call cline%set('amsklp',   25.)
-        if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',    30.)
-        if( .not. cline%defined('edge')   ) call cline%set('edge',     20.)
-        if( .not. cline%defined('center') ) call cline%set('center', 'yes')
-        if( .not. cline%defined('maxits') ) call cline%set('maxits',  30. )
+        if( .not. cline%defined('lpstart') ) call cline%set('lpstart',  15.)
+        if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',    8.)
+        if( .not. cline%defined('eo')      ) call cline%set('eo',      'no')
+        if( .not. cline%defined('amsklp')  ) call cline%set('amsklp',   25.)
+        if( .not. cline%defined('cenlp')   ) call cline%set('cenlp',    30.)
+        if( .not. cline%defined('edge')    ) call cline%set('edge',     20.)
+        if( .not. cline%defined('center')  ) call cline%set('center', 'yes')
+        if( .not. cline%defined('maxits')  ) call cline%set('maxits',  30. )
         if( cline%defined('nparts') .and. cline%defined('chunksz') )then
             stop 'nparts and chunksz cannot simultaneously be part of command line'
         else if(cline%defined('nparts') )then
@@ -673,36 +676,6 @@ select case(prg)
 
     ! HIGH-LEVEL DISTRIBUTED WORKFLOWS
 
-    case( 'isw' )
-        !==Program isw
-        !
-        ! <isw/begin>is a program for multi-particle 3D reconstruction by iterated spectral weights,
-        ! a blind deconvolution approach for weighted state sorting<isw/end> 
-        !
-        ! set required keys
-        keys_required(1)  = 'stk'
-        keys_required(2)  = 'smpd'
-        keys_required(3)  = 'oritab'
-        keys_required(4)  = 'msk'
-        keys_required(5)  = 'ctf'
-        keys_required(6)  = 'pgrp'
-        keys_required(7)  = 'nstates'
-        keys_required(8)  = 'npeaks'
-        keys_required(9)  = 'lp'
-        keys_required(10) = 'nparts'
-        ! set optional keys
-        keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'ncunits'
-        keys_optional(3)  = 'deftab'
-        keys_optional(4)  = 'frac'
-        keys_optional(5)  = 'maxits'
-        ! parse command line
-        ! if( describe ) call print_doc_isw
-        call cline%parse(keys_required(:10), keys_optional(:5))
-        ! set defaults
-        call cline%set('refine', 'isw')
-        ! execute
-        call xisw_distr%execute( cline )
     case( 'ini3D_from_cavgs' )
         !==Program ini3D_from_cavgs
         !

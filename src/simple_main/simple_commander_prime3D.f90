@@ -139,15 +139,11 @@ contains
         type(params)          :: p
         type(build)           :: b
         type(cartft_corrcalc) :: cftcc
-        p = params(cline)                    ! constants & derived constants produced
+        p = params(cline)                   ! constants & derived constants produced
         ! make sure boxmatch .eq. box
         p%boxmatch = p%box
-        call b%build_general_tbox(p, cline)  ! general objects built
-        if( p%refine .eq. 'isw' )then
-            call cont3D_shellweight_states( b, p, cline )
-        else
-            call cont3D_shellweight(b, p, cline)
-        endif
+        call b%build_general_tbox(p, cline) ! general objects built
+        call cont3D_shellweight(b, p, cline)
         call simple_end('**** SIMPLE_SHELLWEIGHT3D NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_shellweight3D
     
