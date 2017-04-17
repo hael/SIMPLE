@@ -1,3 +1,5 @@
 need to parallelise the volassemble of the different states for het_ensemble
 need to test unidoc strategy
 need to put ctf flag in unidoc
+
+frameavg -> nframesgroup

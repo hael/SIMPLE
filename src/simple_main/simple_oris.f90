@@ -2353,8 +2353,8 @@ contains
     subroutine calc_hard_ptcl_weights_single( self, frac )
         class(oris),       intent(inout) :: self
         real,              intent(in)    :: frac
-        integer, allocatable :: order(:), inds(:)
-        integer    :: i, lim, n
+        integer, allocatable :: order(:)
+        integer :: i, lim, n
         order = self%order()
         n = 0
         do i=1,self%n
@@ -2373,7 +2373,7 @@ contains
 
     !>  \brief  calculates hard weights based on ptcl ranking      
     subroutine calc_spectral_weights_single( self, frac )
-        use simple_stat, only: corrs2weights
+        use simple_stat, only: normalize_sigm
         class(oris), intent(inout) :: self
         real,        intent(in)    :: frac
         real,    allocatable :: specscores(:), weights(:)
@@ -2382,7 +2382,8 @@ contains
         integer :: i, lim, n
         if( self%isthere('specscore') )then
             specscores = self%get_all('specscore')
-            weights    = corrs2weights(specscores)
+            allocate(weights(self%n), source=specscores)
+            call normalize_sigm(weights)
             do i=1,self%n
                 call self%o(i)%set('w', weights(i))
             end do

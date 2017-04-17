@@ -132,7 +132,6 @@ contains
         character(len=STDLEN)         :: env_file, qsys_name
         character(len=:), allocatable :: simple_path, simple_path_env
         integer :: i,funit, nl, file_stat
-        
         env_file = './simple_distr_config.env'
         if( .not. file_exists(trim(env_file)) ) call autogen_env_file(env_file)
         call env%read( trim(env_file) )
