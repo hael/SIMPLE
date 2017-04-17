@@ -79,7 +79,6 @@ type :: params
     character(len=3)      :: round='no'
     character(len=3)      :: shalgn='no'
     character(len=3)      :: shellnorm='no'
-    character(len=3)      :: shellw='no'
     character(len=3)      :: shbarrier='yes'
     character(len=3)      :: single='no'
     character(len=3)      :: soften='no'
@@ -116,6 +115,7 @@ type :: params
     character(len=STDLEN) :: dir_ptcls=''
     character(len=STDLEN) :: doclist=''
     character(len=STDLEN) :: endian='native'
+    character(len=STDLEN) :: exec_abspath=''
     character(len=STDLEN) :: exp_doc=''
     character(len=4)      :: ext='.mrc'
     character(len=STDLEN) :: extrmode='all'
@@ -149,7 +149,6 @@ type :: params
     character(len=STDLEN) :: refine='no'
     character(len=STDLEN) :: refs_msk=''
     character(len=STDLEN) :: refs=''
-    character(len=STDLEN) :: shellwfile='shellweights.bin'
     character(len=STDLEN) :: speckind='sqrt'
     character(len=STDLEN) :: split_mode='even'
     character(len=STDLEN) :: stk_part=''
@@ -348,8 +347,7 @@ type :: params
     logical :: l_autoscale   = .false.
     logical :: l_dose_weight = .false. 
     logical :: l_innermsk    = .false. 
-    logical :: l_pick        = .false. 
-    logical :: l_shellw      = .false.
+    logical :: l_pick        = .false.
     logical :: l_xfel        = .false.
   contains
     procedure :: new
@@ -398,6 +396,8 @@ contains
         ! get cwd
         call getcwd(self%cwd)
         cwd_local = self%cwd
+        ! get absolute path of executable
+        call getarg(0,self%exec_abspath)
         ! checkers in ascending alphabetical order
         call check_carg('acf',            self%acf)
         call check_carg('angastunit',     self%angastunit)
@@ -478,8 +478,6 @@ contains
         call check_carg('shalgn',         self%shalgn)
         call check_carg('shbarrier',      self%shbarrier)
         call check_carg('shellnorm',      self%shellnorm)
-        call check_carg('shellw',         self%shellw)
-        call check_carg('shellwfile',     self%shellwfile)
         call check_carg('single',         self%single)
         call check_carg('soften',         self%soften)
         call check_carg('speckind',       self%speckind)
@@ -829,7 +827,6 @@ contains
         self%l_chunk_distr = .false.
         if( cline%defined('chunksz') )then
             self%l_chunk_distr = .true.
-            self%shellwfile    = trim(self%chunktag)//trim(self%shellwfile)
         endif
         if( .not. cline%defined('ncunits') )then
             ! we assume that the number of computing units is equal to the number of partitions
@@ -1015,11 +1012,6 @@ contains
         endif
         ! prepare CTF plan
         self%tfplan%flag = self%ctf
-        ! set logical shellw flag
-        self%l_shellw = .true.
-        if( cline%defined('shellw') )then
-            if( self%shellw .eq. 'no' ) self%l_shellw = .false.
-        endif
         ! set logical pick flag
         self%l_pick = .false.
         if( self%dopick .eq. 'yes' ) self%l_pick = .true.

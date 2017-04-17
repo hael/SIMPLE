@@ -157,7 +157,9 @@ type :: oris
     procedure          :: order
     procedure          :: order_cls
     procedure          :: calc_hard_ptcl_weights
+    procedure          :: calc_spectral_weights
     procedure, private :: calc_hard_ptcl_weights_single
+    procedure, private :: calc_spectral_weights_single
     procedure          :: find_closest_proj
     procedure          :: find_closest_projs
     procedure          :: find_closest_ori
@@ -2310,16 +2312,53 @@ contains
     end subroutine calc_hard_ptcl_weights
 
     !>  \brief  calculates hard weights based on ptcl ranking      
+    subroutine calc_spectral_weights( self, frac, bystate )
+        class(oris),       intent(inout) :: self
+        real,              intent(in)    :: frac
+        logical, optional, intent(in)    :: bystate
+        integer, allocatable :: inds(:)
+        type(oris) :: os
+        integer    :: i, lim, n, nstates, s, pop
+        logical    :: ibystate
+        ibystate = .false.
+        if( present(bystate) )ibystate = bystate
+        if( .not.ibystate )then
+            ! treated as single state
+            call self%calc_spectral_weights_single( frac )
+        else
+            ! per state frac
+            nstates = self%get_nstates()
+            if( nstates==1 )then
+                call self%calc_spectral_weights_single( frac )
+            else
+                do s=1,nstates
+                    pop = self%get_statepop( s )
+                    if( pop==0 )cycle
+                    inds = self%get_state( s )
+                    os = oris( pop )
+                    do i=1,pop
+                        call os%set_ori( i, self%get_ori( inds(i) ))
+                    enddo
+                    call os%calc_spectral_weights_single( frac )
+                    do i=1,pop
+                        call self%set_ori( inds(i), os%get_ori( i ))
+                    enddo
+                    deallocate(inds)
+                enddo
+            endif
+        endif
+    end subroutine calc_spectral_weights
+
+    !>  \brief  calculates hard weights based on ptcl ranking      
     subroutine calc_hard_ptcl_weights_single( self, frac )
         class(oris),       intent(inout) :: self
         real,              intent(in)    :: frac
         integer, allocatable :: order(:), inds(:)
         integer    :: i, lim, n
-        ! treated as single state
         order = self%order()
         n = 0
         do i=1,self%n
-            if( self%o(i)%get('state') > 0 )n = n+1
+            if( self%o(i)%get('state') > 0 ) n = n+1
         end do        
         lim = nint(frac*real(n))
         do i=1,self%n
@@ -2331,6 +2370,43 @@ contains
         end do
         deallocate(order)
     end subroutine calc_hard_ptcl_weights_single
+
+    !>  \brief  calculates hard weights based on ptcl ranking      
+    subroutine calc_spectral_weights_single( self, frac )
+        use simple_stat, only: corrs2weights
+        class(oris), intent(inout) :: self
+        real,        intent(in)    :: frac
+        real,    allocatable :: specscores(:), weights(:)
+        integer, allocatable :: order(:), inds(:)
+        real    :: w
+        integer :: i, lim, n
+        if( self%isthere('specscore') )then
+            specscores = self%get_all('specscore')
+            weights    = corrs2weights(specscores)
+            do i=1,self%n
+                call self%o(i)%set('w', weights(i))
+            end do
+        else
+            call self%set_all2single('w', 1.)
+        endif
+        if( frac < 0.99 )then
+            order = self%order()
+            n = 0
+            do i=1,self%n
+                if( self%o(i)%get('state') > 0 ) n = n + 1
+            end do        
+            lim = nint(frac*real(n))
+            do i=1,self%n
+                w = self%o(order(i))%get('w')
+                if( i <= lim )then
+                    call self%o(order(i))%set('w', w)
+                else
+                    call self%o(order(i))%set('w', 0.)
+                endif           
+            end do
+            deallocate(order)
+        endif
+    end subroutine calc_spectral_weights_single
 
     !>  \brief  to find the closest matching projection direction
     function find_closest_proj( self, o_in, state ) result( closest )
@@ -2724,13 +2800,23 @@ contains
     function o1_gt_o2( o1, o2 ) result( val )
         integer, intent(in) :: o1, o2
         logical             :: val
-        real                :: corr1, corr2
-        corr1 = op(o1)%get('corr')
-        corr2 = op(o2)%get('corr')
-        if( corr1 > corr2 )then
-            val = .true.
+        real                :: corr1, corr2, spec1, spec2
+        if( op(o1)%isthere('specscore') )then
+            spec1 = op(o1)%get('specscore')
+            spec2 = op(o2)%get('specscore')
+            if( spec1 > spec2 )then
+                val = .true.
+            else
+                val = .false.
+            endif
         else
-            val = .false.
+            corr1 = op(o1)%get('corr')
+            corr2 = op(o2)%get('corr')
+            if( corr1 > corr2 )then
+                val = .true.
+            else
+                val = .false.
+            endif
         endif
     end function o1_gt_o2
     

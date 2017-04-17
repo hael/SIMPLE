@@ -61,7 +61,6 @@ type(rank_cavgs_commander)         :: xrank_cavgs
 type(resrange_commander)           :: xresrange
 type(npeaks_commander)             :: xnpeaks
 type(nspace_commander)             :: xnspace
-type(shellweight3D_commander)      :: xshellweight3D
 type(prime3D_init_commander)       :: xprime3D_init
 ! type(het_init_commander)           :: xhet_init
 type(multiptcl_init_commander)     :: xmultiptcl_init
@@ -138,7 +137,6 @@ type(tseries_split_commander)      :: xtseries_split
 ! PARALLEL PROCESSING PROGRAMS
 type(merge_algndocs_commander)     :: xmerge_algndocs
 type(merge_nnmat_commander)        :: xmerge_nnmat
-type(merge_shellweights_commander) :: xmerge_shellweights
 type(merge_similarities_commander) :: xmerge_similarities  
 type(split_pairs_commander)        :: xsplit_pairs
 type(split_commander)              :: xsplit
@@ -698,20 +696,16 @@ select case(prg)
         ! set required keys
         keys_required(1) = 'stk'
         keys_required(2) = 'smpd'
-        keys_required(3) = 'ncls'
-        keys_required(4) = 'oritab'
-        keys_required(5) = 'nparts'
-        keys_required(6) = 'ctf'
+        keys_required(3) = 'oritab'
+        keys_required(4) = 'nparts'
+        keys_required(5) = 'ctf'
         ! set optional keys
         keys_optional(1) = 'nthr'
-        keys_optional(2) = 'deftab'
-        keys_optional(3) = 'inner'
-        keys_optional(4) = 'width'
-        keys_optional(5) = 'which_iter'
-        keys_optional(6) = 'refs'        
+        keys_optional(2) = 'which_iter'
+        keys_optional(3) = 'refs'        
         ! parse command line
         if( describe ) call print_doc_cavgassemble
-        call cline%parse(keys_required(:6), keys_optional(:6))
+        call cline%parse(keys_required(:5), keys_optional(:3))
         ! execute
         call xcavgassemble%execute(cline)
     case( 'check2D_conv' )
@@ -828,35 +822,6 @@ select case(prg)
         call cline%parse(keys_required=keys_required(:1))
         ! execute
         call xnspace%execute(cline)
-    case( 'shellweight3D' )
-        !==Program shellweight3D
-        !
-        ! <shellweight3D/begin>is a program for calculating the shell-by-shell resolution weights in a global sense, so that 
-        ! particles that do contribute with higher resolution information (as measured by the FRC) are given the appropriate 
-        ! weight<shellweight3D/end>
-        !
-        ! set required keys
-        keys_required(1) = 'stk'
-        keys_required(2) = 'vol1'
-        keys_required(3) = 'smpd'
-        keys_required(4) = 'msk' 
-        keys_required(5) = 'oritab'
-        keys_required(6) = 'ctf'
-        ! set optional CTF-related keys
-        keys_optional(1) = 'deftab'
-        keys_optional(2) = 'automsk'
-        keys_optional(3) = 'mw'
-        keys_optional(4) = 'amsklp'
-        keys_optional(5) = 'edge'
-        keys_optional(6) = 'binwidth'
-        keys_optional(7) = 'inner'
-        keys_optional(8) = 'width'
-        keys_optional(9) = 'refine'       
-        ! parse command line
-        if( describe ) call print_doc_shellweight3D
-        call cline%parse(keys_required(:6), keys_optional(:9))
-        ! execute
-        call xshellweight3D%execute(cline)
     case( 'prime3D_init' )
         !==Program prime3D_init
         !
@@ -1007,12 +972,11 @@ select case(prg)
         keys_optional(28) = 'noise'
         keys_optional(29) = 'xfel'
         keys_optional(30) = 'nnn'
-        keys_optional(31) = 'shellw'
-        keys_optional(32) = 'rrate'
-        keys_optional(33) = 'norec'
+        keys_optional(31) = 'rrate'
+        keys_optional(32) = 'norec'
         ! parse command line
         if( describe ) call print_doc_prime3D
-        call cline%parse(keys_required(:6), keys_optional(:33))
+        call cline%parse(keys_required(:6), keys_optional(:32))
         ! set defaults
         if( .not. cline%defined('nspace')                  ) call cline%set('nspace', 1000.)
         if( cline%defined('lp') .or. cline%defined('find') ) call cline%set('dynlp',   'no')
@@ -1022,7 +986,6 @@ select case(prg)
              call cline%set('refine',  'no')
         else
             if( cline%get_carg('refine').eq.'het' )then
-                if( .not. cline%defined('shellw')  ) call cline%set('shellw', 'no')
                 if( .not. cline%defined('nstates') ) stop 'refine=HET requires specification of NSTATES'
                 if( .not. cline%defined('oritab')  ) stop 'refine=HET requires ORITAB input'
             endif
@@ -1059,10 +1022,9 @@ select case(prg)
         keys_optional(13) = 'startit'
         keys_optional(14) = 'maxits'
         keys_optional(15) = 'xfel'
-        keys_optional(16) = 'shellw'
         ! parse command line
         if( describe ) call print_doc_cont3D
-        call cline%parse(keys_required(:8), keys_optional(:16))
+        call cline%parse(keys_required(:8), keys_optional(:15))
         ! set defaults
         call cline%set('dynlp', 'no')
         if( cline%defined('eo') )then
@@ -1075,7 +1037,6 @@ select case(prg)
             call cline%set('eo','no')
         endif
         if( .not.cline%defined('nspace') )call cline%set('nspace',1000.)
-        if( .not.cline%defined('shellw') )call cline%set('shellw','no')
         ! execute
         call xcont3D%execute(cline)        
     case( 'check3D_conv' )
@@ -2300,23 +2261,6 @@ select case(prg)
         call cline%parse( keys_required(:3) )
         ! execute
         call xmerge_nnmat%execute(cline)
-    case( 'merge_shellweights' )
-        !==Program merge_shellweights
-        !
-        ! <merge_shellweights/begin>is a program for merging partial shellweight matrices calculated 
-        ! in distributed mode<merge_shellweights/end>
-        !
-        ! set required keys
-        keys_required(1) = 'stk'
-        keys_required(2) = 'nparts'
-        ! parse command line
-        keys_optional(1) = 'refine'
-        if( describe ) call print_doc_merge_shellweights
-        call cline%parse(keys_required(:2), keys_optional(:1))
-        ! set defaults
-        call cline%set('outfile', 'shellweight3D_doc.txt')
-        ! execute
-        call xmerge_shellweights%execute(cline)
     case( 'merge_similarities' )
         !==Program merge_similarities
         !
@@ -2355,14 +2299,13 @@ select case(prg)
         ! set required keys
         keys_required(1) = 'stk'
         ! set optional keys
-        keys_optional(1) = 'split_mode'
-        keys_optional(2) = 'nparts'
-        keys_optional(3) = 'neg'
-        keys_optional(4) = 'ncls'
-        keys_optional(5) = 'nspace'
+        keys_optional(1) = 'nparts'
+        keys_optional(2) = 'neg'
+        keys_optional(3) = 'ncls'
+        keys_optional(4) = 'nspace'
         ! parse command line
         if( describe ) call print_doc_split
-        call cline%parse(keys_required(:1), keys_optional(:5))
+        call cline%parse(keys_required(:1), keys_optional(:4))
         ! execute
         call xsplit%execute(cline)
     case DEFAULT

@@ -23,7 +23,6 @@ type(prime2D_srch)     :: primesrch2D ! need to be revealed to the outside world
 type(ori)              :: orientation
 integer                :: cnt_glob = 0
 real                   :: frac_srch_space = 0.
-real,    allocatable   :: wmat(:,:)
 logical, parameter     :: DEBUG = .false.
 real,    parameter     :: prime2Deps = 0.3
 
@@ -39,10 +38,9 @@ contains
         class(cmdline), intent(inout) :: cline     
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: converged
-        real, allocatable :: res(:)
-        integer           :: iptcl, fnr, icls, io_stat, inorm, cands(3), pop
-        real              :: corr_thresh
-        logical           :: doshellweight
+        real, allocatable :: res(:), res_pad(:)
+        integer :: iptcl, fnr, icls, io_stat, inorm, cands(3), pop
+        real    :: corr_thresh
         
         ! SET FRACTION OF SEARCH SPACE
         frac_srch_space = b%a%get_avg('frac')
@@ -78,15 +76,8 @@ contains
             endif 
         endif
 
-        ! SETUP SHELLWEIGHTS
-        if( p%l_shellw .and. frac_srch_space >= SHW_FRAC_LIM .and. which_iter > 1 ) then
-            res = b%img%get_res()
-            if( p%l_distr_exec )then
-                call setup_shellweights_from_parts( p, doshellweight, wmat, res )
-            else
-                call setup_shellweights_from_single( p, doshellweight, wmat, res )
-            endif
-        endif
+        ! SETUP WEIGHTS
+        call b%a%calc_spectral_weights(p%frac)
 
         ! EXTREMAL LOGICS
         if( frac_srch_space < 0.98 .or. p%extr_thresh > 0.025 )then
@@ -131,13 +122,8 @@ contains
             if( nint(orientation%get('state')) > 0 )then
                 call read_img_from_stk( b, p, iptcl )
                 icls = nint(orientation%get('class'))
-                if( p%l_shellw .and. allocated(wmat) )then
-                    call wiener_restore2D_online_fast(b%img, orientation, p%tfplan,&
-                    &b%cavgs(icls), b%ctfsqsums(icls), p%msk, wmat(iptcl,:))
-                else
-                    call wiener_restore2D_online_fast(b%img, orientation, p%tfplan,&
-                    &b%cavgs(icls), b%ctfsqsums(icls), p%msk)
-                endif
+                call wiener_restore2D_online(b%img, orientation, p%tfplan,&
+                &b%cavgs(icls), b%ctfsqsums(icls), p%msk)
             endif
         end do
         if( DEBUG ) print *, 'DEBUG, hadamard2D_matcher; generated class averages'
@@ -198,9 +184,12 @@ contains
         use simple_ctf, only: ctf
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
-        type(ori) :: orientation
-        integer   :: icls, iptcl, cnt, istart, iend
+        real, allocatable :: res(:)
+        real, allocatable :: res_pad(:)
+        type(ori)         :: orientation
+        integer           :: icls, iptcl, cnt, istart, iend, filtsz
         if( .not. p%l_distr_exec ) write(*,'(a)') '>>> ASSEMBLING CLASS SUMS'
+        filtsz = b%img_pad%get_filtsz()
         call prime2D_init_sums( b, p )
         if( p%l_distr_exec )then
             istart  = p%fromp
@@ -217,7 +206,7 @@ contains
             if( nint(orientation%get('state')) > 0 )then
                 call read_img_from_stk( b, p, iptcl )
                 icls = nint(orientation%get('class'))
-                call wiener_restore2D_online_fast(b%img, orientation, p%tfplan,&
+                call wiener_restore2D_online(b%img, orientation, p%tfplan,&
                 &b%cavgs(icls), b%ctfsqsums(icls), p%msk)
             endif
         end do
@@ -321,13 +310,6 @@ contains
         integer   :: cnt, iptcl, icls, sz, pop, istate
         integer   :: filtsz, alloc_stat, filnum, io_stat
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PRIME2D SEARCH ENGINE'
-        if( p%l_shellw .and. frac_srch_space >= SHW_FRAC_LIM .and. p%oritab .ne. '' )then
-            filtsz = b%img%get_filtsz()
-            if( allocated(wmat) ) deallocate(wmat)
-            allocate(wmat(p%fromp:p%top,filtsz), stat=alloc_stat)
-            call alloc_err("In simple_hadamard2D_matcher :: preppftcc4align", alloc_stat)
-            wmat = 1.0
-        endif
         ! must be done here since constants in p are dynamically set
         call pftcc%new(p%ncls, [p%fromp,p%top], [p%box,p%box,1], p%kfromto, p%ring2, p%ctf)
         call primesrch2D%new(p, pftcc)
@@ -363,69 +345,10 @@ contains
             istate = nint(o%get('state'))
             if( istate == 0 ) icls = 0
             call prepimg4align(b, p, o)
-            if( allocated(wmat) ) call calc_frc( b, p, o, icls, iptcl, filtsz, wmat )
             ! transfer to polar coordinates
             call b%img%imgpolarizer(pftcc, iptcl)
         end do
-        if( allocated(wmat) )then
-            filnum = get_fileunit()
-            if( p%l_distr_exec )then  
-                open(unit=filnum, status='REPLACE', action='WRITE',&
-                file='shellweights_part'//int2str_pad(p%part,p%numlen)//'.bin', access='STREAM')
-            else
-                open(unit=filnum, status='REPLACE', action='WRITE', file=p%shellwfile, access='STREAM')
-            endif
-            write(unit=filnum,pos=1,iostat=io_stat) wmat
-            ! check if the write was successful
-            if( io_stat .ne. 0 )then
-                write(*,'(a,i0,2a)') '**ERROR(preppftcc4align): I/O error ',&
-                io_stat, ' when writing shellweights*.bin'
-                stop 'I/O error; preppftcc4align; simple_hadamard2D_matcher'
-            endif
-            close(filnum)
-            deallocate(wmat)
-        endif
         if( debug ) write(*,*) '*** hadamard2D_matcher ***: finished preppftcc4align'
     end subroutine preppftcc4align
-
-    !>  \brief  calculates the FRC between the prepared reference
-    !!          image and the prepared particle image
-    subroutine calc_frc( b, p, o, icls, iptcl, filtsz, wmat )
-        use simple_ctf, only: ctf
-        class(build),  intent(inout) :: b
-        class(params), intent(in)    :: p
-        class(ori),    intent(inout) :: o
-        integer,       intent(in)    :: icls, iptcl, filtsz
-        real,          intent(inout) :: wmat(p%fromp:p%top,filtsz)
-        real, allocatable :: res(:), corrs(:)
-        type(image)       :: ref_local
-        type(ctf)         :: tfun
-        real              :: dfx, dfy, angast
-        if( icls == 0 )then
-            wmat(iptcl,:) = -1.
-            return
-        endif
-        ref_local = b%refs(icls)
-        if( p%tfplan%flag .ne. 'no' )then
-            if( p%tfplan%mode .eq. 'astig' )then ! astigmatic CTF
-                dfx    = o%get('dfx')
-                dfy    = o%get('dfy')
-                angast = o%get('angast')
-            else if( p%tfplan%mode .eq. 'noastig' )then
-                dfx    = o%get('dfx')
-                dfy    = dfx
-                angast = 0.
-            else
-                stop 'Unsupported ctf mode; simple_hadamard2D_matcher :: calc_frc'
-            endif
-            tfun = ctf(p%smpd, o%get('kv'), o%get('cs'), o%get('fraca'))
-            call tfun%apply(ref_local, dfx, 'ctf', dfy, angast)
-        endif
-        ! calculate FRC    
-        call ref_local%fsc(b%img, res, corrs)
-        wmat(iptcl,:) = corrs
-        call ref_local%kill
-        deallocate(res, corrs)
-    end subroutine calc_frc
     
 end module simple_hadamard2D_matcher

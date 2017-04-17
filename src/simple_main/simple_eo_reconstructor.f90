@@ -375,7 +375,7 @@ contains
         call img%new([p%box,p%box,1],p%smpd,p%imgkind)
         call img_pad%new([p%boxpd,p%boxpd,1],p%smpd,p%imgkind)
         ! calculate weights
-        if( p%frac < 0.99 ) call o%calc_hard_ptcl_weights(p%frac)
+        call o%calc_spectral_weights(p%frac)
         ! zero the Fourier volumes and rhos
         call self%reset_all
         ! dig holds the state digit

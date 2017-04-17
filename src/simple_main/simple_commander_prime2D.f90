@@ -187,6 +187,7 @@ contains
         integer      :: fnr, file_stat
         p = params(cline) ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
+        p%ncls = b%a%get_ncls()
         call b%build_hadamard_prime2D_tbox(p)
         call prime2D_assemble_sums_from_parts(b, p)
         if( cline%defined('which_iter') )then

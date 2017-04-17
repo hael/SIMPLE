@@ -68,10 +68,8 @@ contains
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: update_res, converged
         type(oris)                    :: prime3D_oris
-        real, allocatable             :: wmat(:,:), res(:), res_pad(:)
         real                          :: norm, corr_thresh
         integer                       :: iptcl, s, inptcls, prev_state, istate, statecnt(p%nstates)
-        logical                       :: doshellweight
 
         inptcls = p%top - p%fromp + 1
 
@@ -109,16 +107,7 @@ contains
         endif
 
         ! SETUP WEIGHTS FOR THE 3D RECONSTRUCTION
-        if( p%oritab .ne. '' .and. p%frac < 0.99 ) call b%a%calc_hard_ptcl_weights(p%frac)
-        if( p%l_distr_exec )then
-            ! nothing to do
-        else
-            if( p%l_shellw .and. frac_srch_space >= SHW_FRAC_LIM .and. which_iter > 1 )&
-            &call cont3D_shellweight(b, p, cline)
-        endif
-        res     = b%img%get_res()
-        res_pad = b%img_pad%get_res()
-        call setup_shellweights_from_single(p, doshellweight, wmat, res, res_pad)
+        call b%a%calc_spectral_weights(p%frac)
 
         ! EXTREMAL LOGICS
         if( frac_srch_space < 0.98 .or. p%extr_thresh > 0.025 )then
@@ -243,17 +232,9 @@ contains
                     call read_img_from_stk( b, p, iptcl )
                     if( p%npeaks > 1 )then
                         call primesrch3D(iptcl)%get_oris(prime3D_oris, orientation)
-                        if( doshellweight )then
-                            call grid_ptcl(b, p, iptcl, orientation, prime3D_oris, shellweights=wmat(iptcl,:))
-                        else
-                            call grid_ptcl(b, p, iptcl, orientation, prime3D_oris)
-                        endif
+                        call grid_ptcl(b, p, iptcl, orientation, prime3D_oris)
                     else
-                        if( doshellweight )then
-                            call grid_ptcl(b, p, iptcl, orientation, shellweights=wmat(iptcl,:))
-                        else
-                            call grid_ptcl(b, p, iptcl, orientation)
-                        endif
+                        call grid_ptcl(b, p, iptcl, orientation)
                     endif
                 endif
             end do
@@ -270,9 +251,6 @@ contains
             call primesrch3D(iptcl)%kill
         end do
         deallocate( primesrch3D )
-        if( allocated(wmat)    ) deallocate(wmat)
-        if( allocated(res)     ) deallocate(res)
-        if( allocated(res_pad) ) deallocate(res_pad)
         call pftcc%kill
 
         ! REPORT CONVERGENCE

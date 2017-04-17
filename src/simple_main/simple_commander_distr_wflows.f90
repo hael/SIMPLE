@@ -35,7 +35,6 @@ public :: prime2D_distr_commander
 public :: prime2D_chunk_distr_commander
 public :: prime3D_init_distr_commander
 public :: prime3D_distr_commander
-public :: shellweight3D_distr_commander
 public :: recvol_distr_commander
 public :: tseries_track_distr_commander
 private
@@ -84,10 +83,6 @@ type, extends(commander_base) :: prime3D_distr_commander
   contains
     procedure :: execute      => exec_prime3D_distr
 end type prime3D_distr_commander
-type, extends(commander_base) :: shellweight3D_distr_commander
-  contains
-    procedure :: execute      => exec_shellweight3D_distr
-end type shellweight3D_distr_commander
 type, extends(commander_base) :: recvol_distr_commander
   contains
     procedure :: execute      => exec_recvol_distr
@@ -346,7 +341,6 @@ contains
         use simple_procimgfile,       only: random_selection_from_imgfile
         use simple_oris,              only: oris
         use simple_strings,           only: str_has_substr
-        use simple_image,             only: image
         class(prime2D_distr_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         ! constants
@@ -379,10 +373,9 @@ contains
         type(params)          :: p_master
         character(len=STDLEN) :: refs, oritab, str, str_iter, native_stk
         real                  :: smpd_sc, msk_sc, scale, native_smpd, native_msk
-        real, allocatable     :: res_native(:), res_scaled(:)
-        integer               :: iter, i, box_sc, native_box
+        real, allocatable     :: res_native(:), res_scaled(:), wmat(:,:)
+        integer               :: iter, i, box_sc, native_box, filnum, io_stat
         type(chash)           :: job_descr
-        type(image)           :: img_native, img_scaled
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! setup the environment for distributed execution
@@ -406,13 +399,6 @@ contains
             call cline%set('stk',  trim(p_master%stk))
             call cline%set('smpd', p_master%smpd)
             call cline%set('msk',  p_master%msk)
-            ! needed for mapping the shell-weights to the native sampling
-            call img_native%new([native_box,native_box,1], native_smpd)
-            call img_scaled%new([box_sc,box_sc,1], smpd_sc)
-            res_native = img_native%get_res()
-            res_scaled = img_scaled%get_res()
-            call img_native%kill
-            call img_scaled%kill
         endif
 
         ! prepare job description
@@ -532,16 +518,10 @@ contains
             call cline%set('stk',        native_stk)
             call cline%set('smpd',       native_smpd)
             call xsplit%execute(cline)
-
-            ! setup and re-sample shellweights
-            ! call setup_shellweights_from_parts( p, doshellweight, wmat, res_calc, res_target )
-
-            
-            
             ! pepare makecavgs command line
             cline_makecavgs = cline
             call cline_makecavgs%set('prg',     'makecavgs')
-            call cline_makecavgs%set('stk',     native_stk)
+            call cline_makecavgs%set('stk',     trim(native_stk))
             call cline_makecavgs%set('smpd',    native_smpd)
             call cline_makecavgs%set('msk',     native_msk)
             call cline_makecavgs%set('oritab',  trim(oritab))
@@ -674,8 +654,12 @@ contains
             call xsplit%execute(cline)
         endif
         ! schedule & clean
+        write(*,'(A)') '>>>'
+        write(*,'(A)') '>>> EXECUTING PRIME2D IN CHUNK-BASED DISTRIBUTION MODE'
+        write(*,'(A)') '>>>'
         call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, part_params=part_params, chunkdistr=.true.)
         call qsys_cleanup(p_master)
+
         ! merge final stacks of cavgs and orientation documents
         allocate(final_docs(p_master%nparts), final_cavgs(p_master%nparts))
         ishift = 0
@@ -696,7 +680,7 @@ contains
         end do
         ! merge docs
         call sys_merge_docs(final_docs, 'temp_prime2Ddoc_merged.txt')
-        
+
         if( p_master%l_autoscale )then
             write(*,'(A)') '>>>'
             write(*,'(A)') '>>> GENERATING CLASS AVERAGES AT NATIVE SAMPLING'
@@ -705,12 +689,17 @@ contains
             call del_files('stack_part', p_master%nparts, ext=p_master%ext)
             call cline%set('stk',        native_stk)
             call cline%set('smpd',       native_smpd)
+            call cline%set('nparts',     real(nparts))
             call xsplit%execute(cline)
             ! pepare makecavgs command line
+            cline_makecavgs = cline
+            call cline_makecavgs%delete('ncls')
+            call cline_makecavgs%delete('chunksz')
             call cline_makecavgs%set('prg',     'makecavgs')
             call cline_makecavgs%set('stk',     native_stk)
             call cline_makecavgs%set('smpd',    native_smpd)
             call cline_makecavgs%set('msk',     native_msk)
+            call cline_makecavgs%set('nparts',  real(nparts))
             call cline_makecavgs%set('oritab',  'temp_prime2Ddoc_merged.txt')
             call cline_makecavgs%set('mul',     1./scale)
             call cline_makecavgs%set('refs',    'prime2Dcavgs_final'//p_master%ext)
@@ -720,6 +709,8 @@ contains
             ! cleanup
             call del_files('stack_part', p_master%nparts, ext=p_master%ext)
             call del_file('temp_prime2Ddoc_merged.txt')
+            call sys_del_files('chunk', '.txt')
+            call sys_del_files('chunk', p_master%ext)
         else
             ! merge class averages
             call write_filetable(CAVGNAMES, final_cavgs)
@@ -729,6 +720,8 @@ contains
             ! cleanup
             call rename('temp_prime2Ddoc_merged.txt', 'prime2Ddoc_final.txt')
             call del_file(CAVGNAMES)
+            call sys_del_files('chunk', '.txt')
+            call sys_del_files('chunk', p_master%ext)
         endif
         ! ranking
         call cline_rank_cavgs%set('oritab', 'prime2Ddoc_final.txt')
@@ -826,7 +819,6 @@ contains
         character(len=32), parameter :: RESTARTFBODY = 'prime3D_restart'
         ! commanders
         type(prime3D_init_distr_commander)  :: xprime3D_init_distr
-        type(shellweight3D_distr_commander) :: xshellweight3D_distr
         type(recvol_distr_commander)        :: xrecvol_distr
         type(resrange_commander)            :: xresrange
         type(merge_algndocs_commander)      :: xmerge_algndocs
@@ -840,7 +832,6 @@ contains
         type(cmdline)         :: cline_check3D_conv
         type(cmdline)         :: cline_merge_algndocs
         type(cmdline)         :: cline_volassemble
-        type(cmdline)         :: cline_shellweight3D
         type(cmdline)         :: cline_postproc_vol
         ! other variables
         type(qsys_env)        :: qenv
@@ -877,12 +868,10 @@ contains
         cline_check3D_conv   = cline
         cline_merge_algndocs = cline
         cline_volassemble    = cline
-        cline_shellweight3D  = cline
         cline_postproc_vol   = cline
         ! initialise static command line parameters and static job description parameter
         call cline_recvol_distr%set( 'prg', 'recvol' )       ! required for distributed call
         call cline_prime3D_init%set( 'prg', 'prime3D_init' ) ! required for distributed call
-        call cline_shellweight3D%set('prg', 'shellweight3D') ! required for distributed call
         call cline_merge_algndocs%set( 'nthr', 1. )
         call cline_merge_algndocs%set( 'fbody',  ALGNFBODY)
         call cline_merge_algndocs%set( 'nptcls', real(p_master%nptcls) )
@@ -934,7 +923,6 @@ contains
                 call rename( trim(vol), trim(str) )
                 vol = 'vol'//trim(int2str(state))
                 call cline%set( trim(vol), trim(str) )
-                call cline_shellweight3D%set( trim(vol), trim(str) )
             enddo
         else if( .not.cline%defined('oritab') .and. vol_defined )then
             ! projection matching
@@ -998,10 +986,6 @@ contains
                 call os%read(trim(cline%get_carg('oritab')))
                 frac_srch_space = os%get_avg('frac')
                 call job_descr%set( 'oritab', trim(oritab) )
-                call cline_shellweight3D%set( 'oritab', trim(oritab) )
-                if( p_master%l_shellw .and. frac_srch_space >= SHW_FRAC_LIM  )then
-                    call xshellweight3D_distr%execute(cline_shellweight3D)
-                endif
             endif
             ! exponential cooling of the randomization rate
             p_master%extr_thresh = p_master%extr_thresh * p_master%rrate
@@ -1014,7 +998,6 @@ contains
             ! ASSEMBLE ALIGNMENT DOCS
             oritab = trim(ITERFBODY)//trim(str_iter)//'.txt'    
             call cline%set( 'oritab', oritab )
-            call cline_shellweight3D%set( 'oritab', trim(oritab) )
             call cline_merge_algndocs%set( 'outfile', trim(oritab) )
             call xmerge_algndocs%execute( cline_merge_algndocs )
             if( p_master%norec .eq. 'yes' )then
@@ -1055,7 +1038,6 @@ contains
                     vol = 'vol'//trim(int2str(state))
                     call cline%delete( vol )
                     call job_descr%delete( trim(vol) )
-                    call cline_shellweight3D%delete( trim(vol) )
                 else
                     if( p_master%nstates>1 )then
                         ! cleanup postprocessing cmdline as it only takes one volume at a time
@@ -1083,7 +1065,6 @@ contains
                     ! updates cmdlines & job description
                     call job_descr%set( trim(vol), trim(vol_iter) )
                     call cline%set( trim(vol), trim(vol_iter) )
-                    call cline_shellweight3D%set( trim(vol), trim(vol_iter) )
                 endif
             enddo
             ! CONVERGENCE
@@ -1146,7 +1127,6 @@ contains
         character(len=32), parameter :: VOLFBODY     = 'recvol_state'
         character(len=32), parameter :: RESTARTFBODY = 'cont3D_restart'
         ! ! commanders
-        type(shellweight3D_distr_commander) :: xshellweight3D_distr
         type(recvol_distr_commander)        :: xrecvol_distr
         type(merge_algndocs_commander)      :: xmerge_algndocs
         type(check3D_conv_commander)        :: xcheck3D_conv
@@ -1157,7 +1137,6 @@ contains
         type(cmdline)         :: cline_check3D_conv
         type(cmdline)         :: cline_merge_algndocs
         type(cmdline)         :: cline_volassemble
-        type(cmdline)         :: cline_shellweight3D
         type(cmdline)         :: cline_postproc_vol
         ! other variables
         type(qsys_env)        :: qenv
@@ -1191,11 +1170,9 @@ contains
         cline_check3D_conv   = cline
         cline_merge_algndocs = cline
         cline_volassemble    = cline
-        cline_shellweight3D  = cline
         cline_postproc_vol   = cline
         ! initialise static command line parameters and static job description parameter
         call cline_recvol_distr%set( 'prg', 'recvol' )       ! required for distributed call
-        call cline_shellweight3D%set('prg', 'shellweight3D') ! required for distributed call
         call cline_merge_algndocs%set( 'nthr', 1. )
         call cline_merge_algndocs%set( 'fbody',  ALGNFBODY)
         call cline_merge_algndocs%set( 'nptcls', real(p_master%nptcls) )
@@ -1238,7 +1215,6 @@ contains
                 call rename( trim(vol), trim(str) )
                 vol = 'vol'//trim(int2str(state))
                 call cline%set( trim(vol), trim(str) )
-                call cline_shellweight3D%set( trim(vol), trim(str) )
             enddo
         else
             ! all good
@@ -1256,10 +1232,6 @@ contains
             call os%read(trim(cline%get_carg('oritab')))
             frac_srch_space = os%get_avg('frac')
             call job_descr%set( 'oritab', trim(oritab) )
-            call cline_shellweight3D%set( 'oritab', trim(oritab) )
-            if( p_master%l_shellw .and. frac_srch_space >= SHW_FRAC_LIM )then
-                call xshellweight3D_distr%execute(cline_shellweight3D)
-            endif
             call job_descr%set( 'startit', trim(int2str(iter)) )
             call cline%set( 'startit', real(iter) )
             ! schedule
@@ -1267,7 +1239,6 @@ contains
             ! ASSEMBLE ALIGNMENT DOCS
             oritab = trim(ITERFBODY)//trim(str_iter)//'.txt'    
             call cline%set( 'oritab', oritab )
-            call cline_shellweight3D%set('oritab', trim(oritab))
             call cline_merge_algndocs%set('outfile', trim(oritab))
             call xmerge_algndocs%execute(cline_merge_algndocs)
             ! ASSEMBLE VOLUMES
@@ -1293,7 +1264,6 @@ contains
                     vol = 'vol'//trim(int2str(state))
                     call cline%delete( vol )
                     call job_descr%delete( trim(vol) )
-                    call cline_shellweight3D%delete( trim(vol) )
                 else
                     if( p_master%nstates>1 )then
                         ! cleanup postprocessing cmdline as it only takes one volume at a time
@@ -1316,7 +1286,6 @@ contains
                     ! updates cmdlines & job description
                     call job_descr%set(trim(vol), trim(vol_iter))
                     call cline%set(trim(vol), trim(vol_iter))
-                    call cline_shellweight3D%set( trim(vol), trim(vol_iter) )
                 endif
             enddo
             ! RESTART
@@ -1341,47 +1310,6 @@ contains
         call simple_end('**** SIMPLE_DISTR_CONT3D NORMAL STOP ****')
     end subroutine exec_cont3D_distr
 
-    ! SHELLWEIGHT3D
-
-    subroutine exec_shellweight3D_distr( self, cline )
-        use simple_commander_prime3D
-        use simple_commander_distr
-        class(shellweight3D_distr_commander), intent(inout) :: self
-        class(cmdline),                       intent(inout) :: cline
-        ! constants
-        logical,           parameter       :: DEBUG=.false.
-        character(len=32), parameter       :: ALGNFBODY = 'algndoc_'
-        ! commanders
-        type(split_commander)              :: xsplit
-        type(shellweight3D_commander)      :: xshellweight3D
-        type(merge_algndocs_commander)     :: xmerge_algndocs
-        type(merge_shellweights_commander) :: xmerge_shellweights
-        ! other variables
-        type(qsys_env) :: qenv
-        type(params)   :: p_master
-        type(chash)    :: job_descr
-        ! make master parameters
-        p_master = params(cline, checkdistr=.false.)
-        ! setup the environment for distributed execution
-        call qenv%new(p_master)
-        ! prepare job description
-        call cline%gen_job_descr(job_descr)
-        ! split stack
-        if( stack_is_split(p_master%ext, p_master%nparts) )then
-            ! check that the stack partitions are of correct sizes
-            call stack_parts_of_correct_sizes(p_master%ext, qenv%parts, p_master%box)
-        else
-            call xsplit%execute( cline )
-        endif
-        ! schedule
-        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=ALGNFBODY)
-        ! merge matrices
-        call xmerge_shellweights%execute(cline)
-        call qsys_cleanup(p_master)
-        call del_files('shellweights_part', p_master%nparts, ext='.bin')
-        call simple_end('**** SIMPLE_DISTR_SHELLWEIGHT3D NORMAL STOP ****', print_simple=.false.)
-    end subroutine exec_shellweight3D_distr
-
     ! RECVOL
 
     subroutine exec_recvol_distr( self, cline )
@@ -1390,8 +1318,6 @@ contains
         class(cmdline),                intent(inout) :: cline
         logical, parameter                  :: debug=.false.
         type(split_commander)               :: xsplit
-        type(shellweight3D_distr_commander) :: xshellweight3D_distr
-        type(cmdline)                       :: cline_shellweight3D
         type(qsys_env)                      :: qenv
         type(params)                        :: p_master
         character(len=STDLEN)               :: vol, volassemble_output
@@ -1401,12 +1327,6 @@ contains
         p_master = params(cline, checkdistr=.false.)
         ! setup the environment for distributed execution
         call qenv%new(p_master)
-        if( p_master%shellw .eq. 'yes' )then
-            ! we need to set the prg flag for the command lines that control distributed workflows 
-            cline_shellweight3D = cline
-            call cline_shellweight3D%set('prg', 'shellweight3D')
-            call xshellweight3D_distr%execute(cline_shellweight3D)
-        endif
         call cline%gen_job_descr(job_descr)
         ! split stack
         if( stack_is_split(p_master%ext, p_master%nparts) )then

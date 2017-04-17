@@ -49,7 +49,6 @@ roalgn
 round
 shalgn
 shellnorm
-shellw
 shbarrier
 single
 soften
@@ -85,6 +84,7 @@ dir_target
 dir_ptcls
 doclist
 endian
+exec_abspath
 exp_doc
 ext
 extrmode
@@ -117,7 +117,6 @@ prg
 refine
 refs_msk
 refs
-shellwfile
 speckind
 split_mode
 stk_part
@@ -307,7 +306,6 @@ l_autoscale
 l_dose_weight
 l_innermsk
 l_pick
-l_shellw
 l_xfel
 vol1
 vol2

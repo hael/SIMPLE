@@ -37,6 +37,7 @@ type prime3D_srch
     integer                 :: prev_ref       = 0      !< previous reference index
     integer                 :: prev_proj      = 0      !< previous projection index
     real                    :: prev_corr      = 1.     !< previous best correlation
+    real                    :: specscore      = 0.     !< spectral score
     real                    :: prev_shvec(2)  = 0.     !< previous origin shift vector
     real                    :: lims(2,2)      = 0.     !< shift search range limit
     real                    :: athres         = 0.     !< angular threshold
@@ -256,6 +257,7 @@ contains
         call a%set(iptcl, 'state', real(state)       )
         call a%set(iptcl, 'frac',  o_new%get('frac') )
         call a%set(iptcl, 'corr',  o_new%get('corr') )
+        call a%set(iptcl, 'specscore', self%specscore)
         call a%set(iptcl, 'ow',    o_new%get('ow')   )
         call a%set(iptcl, 'mirr',  0.                )
         call a%set(iptcl, 'proj',  o_new%get('proj') )
@@ -471,10 +473,13 @@ contains
         integer,                 intent(in)    :: iptcl
         class(oris),             intent(inout) :: a
         real,                    intent(in)    :: lp
-        type(ori) :: o_prev
-        real      :: cc_t_min_1, corr
+        type(ori)         :: o_prev
+        real              :: cc_t_min_1, corr
+        real, allocatable :: frc(:)
         o_prev = a%get_ori(iptcl)
         corr   = max( 0., pftcc%corr_single(self%prev_ref, iptcl, self%prev_roind) )
+        frc    = pftcc%genfrc(self%prev_ref, iptcl, self%prev_roind)
+        self%specscore = median_nocopy(frc)
         if( corr > 1. .or. .not. is_a_number(corr) )then
             stop 'Invalid correlation value in simple_prime3d_srch::prep_corr4srch'
         endif

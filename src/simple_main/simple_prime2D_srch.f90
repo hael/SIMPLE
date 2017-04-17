@@ -29,6 +29,7 @@ type prime2D_srch
     real                  :: best_shvec(2) = 0.   !< best ishift vector found by search
     real                  :: prev_corr     = -1.  !< previous best correlation
     real                  :: best_corr     = -1.  !< best corr found by search
+    real                  :: specscore     = 0.   !< spectral score
     integer, allocatable  :: srch_order(:)        !< stochastic search order
     logical               :: doshift = .true.     !< origin shift search indicator
     logical               :: exists  = .false.    !< 2 indicate existence
@@ -143,6 +144,7 @@ contains
         call o%set('y',         y)
         call o%set('class',     real(class))
         call o%set('corr',      self%best_corr)
+        call o%set('specscore', self%specscore)
         call o%set('dist_inpl', rad2deg(myacos(dot_product(x1,x2))))
         call o%set('mi_class',  mi_class)
         call o%set('mi_inpl',   mi_inpl)
@@ -168,31 +170,27 @@ contains
         class(prime2D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: iptcl
-        class(ori), optional,    intent(inout) :: o_prev
+        class(ori),              intent(inout) :: o_prev
         real,       optional,    intent(in)    :: corrmat(self%nrefs,self%nrots)
-        type(ran_tabu) :: rt
-        if( present(o_prev) )then
-            ! find previous discrete alignment parameters
-            self%prev_class = nint(o_prev%get('class'))                   ! class index
-            self%prev_rot   = self%srch_common%roind(360.-o_prev%e3get()) ! in-plane angle index
-            self%prev_shvec = [o_prev%get('x'),o_prev%get('y')]           ! shift vector
-            ! set best to previous best by default
-            self%best_class = self%prev_class         
-            self%best_rot   = self%prev_rot
-            if( present(corrmat) )then
-                self%prev_corr = corrmat(self%prev_class,self%prev_rot)
-                self%best_corr = corrmat(self%prev_class,self%prev_rot)
-            else
-                ! calculate previous best corr (treshold for better)
-                self%prev_corr  = pftcc%corr(self%prev_class, iptcl, self%prev_rot)
-                self%best_corr  = self%prev_corr
-            endif
+        real, allocatable :: frc(:)
+        type(ran_tabu)    :: rt
+        ! find previous discrete alignment parameters
+        self%prev_class = nint(o_prev%get('class'))                   ! class index
+        self%prev_rot   = self%srch_common%roind(360.-o_prev%e3get()) ! in-plane angle index
+        self%prev_shvec = [o_prev%get('x'),o_prev%get('y')]           ! shift vector
+        ! set best to previous best by default
+        self%best_class = self%prev_class         
+        self%best_rot   = self%prev_rot
+        if( present(corrmat) )then
+            self%prev_corr = corrmat(self%prev_class,self%prev_rot)
+            self%best_corr = corrmat(self%prev_class,self%prev_rot)
         else
-            self%prev_class = irnd_uni(self%nrefs)
-            self%prev_rot   = 1
-            self%prev_shvec = 0.
-            self%prev_corr  = 1.
+            ! calculate previous best corr (treshold for better)
+            self%prev_corr  = pftcc%corr(self%prev_class, iptcl, self%prev_rot)
+            self%best_corr  = self%prev_corr
         endif
+        frc = pftcc%genfrc(self%prev_class, iptcl, self%prev_rot)
+        self%specscore = median_nocopy(frc)
         rt = ran_tabu(self%nrefs)
         if( allocated(self%srch_order) ) deallocate(self%srch_order)
         allocate(self%srch_order(self%nrefs))

@@ -532,7 +532,7 @@ contains
         call img_pd%new([p%boxpd,p%boxpd,1],self%get_smpd(),p%imgkind)
         call img%new([p%box,p%box,1],self%get_smpd(),p%imgkind)
         ! calculate particle weights
-        if( p%frac < 0.99 ) call o%calc_hard_ptcl_weights(p%frac, bystate=.true.)
+        call o%calc_spectral_weights(p%frac, bystate=.true.)
         ! zero the Fourier volume and rho
         call self%reset
         write(*,'(A)') '>>> KAISER-BESSEL INTERPOLATION'

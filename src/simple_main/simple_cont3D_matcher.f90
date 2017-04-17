@@ -13,7 +13,7 @@ use simple_hadamard_common  ! use all in there
 use simple_math             ! use all in there
 implicit none
 
-public :: cont3D_exec, cont3D_shellweight
+public :: cont3D_exec
 private
 
 type(cartft_corrcalc)   :: cftcc
@@ -23,55 +23,6 @@ logical, parameter      :: debug=.false.
 character(len=STDLEN)   :: OPT_STR='simplex'
 
 contains
-
-    subroutine cont3D_shellweight( b, p, cline )
-        use simple_stat, only: corrs2weights, normalize_sigm
-        class(build),   intent(inout) :: b
-        class(params),  intent(inout) :: p
-        class(cmdline), intent(inout) :: cline
-        real, allocatable             :: res(:), corrs(:), wmat(:,:)
-        character(len=:), allocatable :: fname
-        type(ori)                     :: orientation
-        integer                       :: iptcl, filtsz, alloc_stat
-        integer                       :: io_stat, filnum
-        filtsz = b%img%get_filtsz()
-        allocate(wmat(p%fromp:p%top,filtsz), corrs(filtsz), stat=alloc_stat)
-        call alloc_err('In: simple_cont3D_matcher :: cont3D_shellweight', alloc_stat)
-        wmat  = 0.
-        corrs = 0.
-        call cftcc%new( b, p, cline )
-        write(*,'(A)') '>>> CALCULATING FOURIER RING CORRELATIONS'
-        do iptcl=p%fromp,p%top
-            orientation = b%a%get_ori(iptcl)
-            if( nint(orientation%get('state')) > 0 )then
-                call read_img_from_stk( b, p, iptcl )
-                call prepimg4align(b, p, orientation)
-                call cftcc%frc(orientation, 1, b%img, res, corrs)
-                wmat(iptcl,:) = corrs(:)
-            else
-                ! weights should be zero
-                wmat(iptcl,:) = 0.
-            endif
-        end do
-        ! write the weight matrix
-        filnum = get_fileunit()
-        if( p%l_distr_exec )then
-            allocate(fname, source='shellweights_part'//int2str_pad(p%part,p%numlen)//'.bin')
-        else
-            allocate(fname, source=p%shellwfile)
-        endif
-        open(unit=filnum, status='REPLACE', action='WRITE', file=fname, access='STREAM')
-        write(unit=filnum,pos=1,iostat=io_stat) wmat
-        ! check if the write was successful
-        if( io_stat .ne. 0 )then
-            write(*,'(a,i0,2a)') '**ERROR(cont3D_shellweight): I/O error ',&
-            io_stat, ' when writing to cont3D_shellweights_partX.bin'
-            stop 'I/O error; cont3D_shellweight_part*; simple_cont3D_matcher'
-        endif
-        close(filnum)
-        deallocate(wmat, fname)
-        call qsys_job_finished( p, 'simple_cont3D_matcher :: cont3D_shellweight' )
-    end subroutine cont3D_shellweight
     
     !>  \brief  is the continuous refinement algorithm
     subroutine cont3D_exec( b, p, cline, which_iter, converged )
@@ -88,7 +39,6 @@ contains
         real, allocatable      :: wmat(:,:), res(:), res_pad(:)
         real                   :: frac_srch_space, reslim
         integer                :: state, iptcl
-        logical                :: doshellweight
 
         ! SET BAND-PASS LIMIT RANGE 
         call set_bp_range( b, p, cline )
@@ -115,17 +65,6 @@ contains
         
         ! GENERATE PARTICLE WEIGHTS
         if( p%oritab .ne. '' .and. p%frac < 0.99 )call b%a%calc_hard_ptcl_weights(p%frac)
-        if( p%l_distr_exec )then
-            ! nothing to do
-        else
-            if( p%l_shellw )then
-                call cont3D_shellweight(b, p, cline)
-                if( p%boxmatch < p%box )call b%vol%new([p%box,p%box,p%box],p%smpd) ! ensures correct dimensions
-            endif
-        endif
-        res     = b%img%get_res()
-        res_pad = b%img_pad%get_res()
-        call setup_shellweights_from_single(p, doshellweight, wmat, res, res_pad)
 
         ! INITIALIZE
         select case(p%refine)
@@ -179,11 +118,7 @@ contains
                     case DEFAULT
                         stop 'Unkwnon refinement mode; simple_cont3D_matcher'
                 end select
-                if( doshellweight )then
-                    call grid_ptcl(b, p, iptcl, orientation, shellweights=wmat(iptcl,:))
-                else
-                    call grid_ptcl(b, p, iptcl, orientation)
-                endif
+                call grid_ptcl(b, p, iptcl, orientation)
             else
                 call orientation%reject
             endif

@@ -8,9 +8,10 @@
 !
 program simple_distr_exec
 use simple_defs  
-use simple_cmdline, only: cmdline
-use simple_strings, only: str_has_substr
-use simple_jiffys,  only: cmdline_err
+use simple_cmdline,      only: cmdline
+use simple_strings,      only: str_has_substr
+use simple_jiffys,       only: cmdline_err
+use simple_filehandling, only: extract_abspath
 use simple_gen_doc
 use simple_restart
 use simple_commander_stream_wflows
@@ -35,7 +36,6 @@ type(prime2D_chunk_distr_commander)       :: xprime2D_chunk_distr
 type(prime3D_init_distr_commander)        :: xprime3D_init_distr
 type(prime3D_distr_commander)             :: xprime3D_distr
 type(cont3D_distr_commander)              :: xcont3D_distr
-type(shellweight3D_distr_commander)       :: xshellweight3D_distr
 type(recvol_distr_commander)              :: xrecvol_distr
 ! time-series workflows
 type(tseries_track_distr_commander)       :: xtseries_track_distr
@@ -58,6 +58,7 @@ pos = index(arg, '=') ! position of '='
 call cmdline_err( cmdstat, cmdlen, arg, pos )
 prg = arg(pos+1:) ! this is the program name
 if( str_has_substr(prg, 'simple_') ) stop 'giving program names with simple_* prefix is depreciated'
+
 select case(prg)
 
     ! PRE-PROCESSING STREAM, LINKING UNBLUR + CTFFIND + PICK
@@ -492,9 +493,8 @@ select case(prg)
         keys_optional(29) = 'noise'
         keys_optional(30) = 'xfel'
         keys_optional(31) = 'nnn'
-        keys_optional(32) = 'shellw'
-        keys_optional(33) = 'rrate'
-        keys_optional(34) = 'norec'
+        keys_optional(32) = 'rrate'
+        keys_optional(33) = 'norec'
         ! documentation
         if( describe ) call print_doc_prime3D
         ! parse command line
@@ -502,7 +502,7 @@ select case(prg)
         if( is_restart )then
             call parse_restart('prime3D', entire_line, cline, keys_required(:6), keys_optional(:34))
         else
-            call cline%parse( keys_required(:6), keys_optional(:34) )
+            call cline%parse( keys_required(:6), keys_optional(:33) )
         endif
         ! set defaults
         if( .not. cline%defined('nspace')                  ) call cline%set('nspace', 1000.)
@@ -548,7 +548,6 @@ select case(prg)
         keys_optional(14) = 'startit'
         keys_optional(15) = 'maxits'
         keys_optional(16) = 'xfel'
-        keys_optional(17) = 'shellw'
         ! documentation
         if( describe ) call print_doc_cont3D
         ! parse command line
@@ -556,7 +555,7 @@ select case(prg)
         if( is_restart )then
             call parse_restart('cont3D', entire_line, cline, keys_required(:8), keys_optional(:17))
         else
-            call cline%parse( keys_required(:8), keys_optional(:17) )
+            call cline%parse( keys_required(:8), keys_optional(:16) )
         endif
         ! set defaults
         if( .not. cline%defined('eo') )then
@@ -564,44 +563,9 @@ select case(prg)
         endif
         call cline%set('dynlp', 'no')
         if(.not.cline%defined('nspace'))call cline%set('nspace', 1000.)
-        if(.not.cline%defined('shellw'))call cline%set('shellw', 'no')
         if(.not.cline%defined('refine'))call cline%set('refine', 'no')
         ! execute
         call xcont3D_distr%execute(cline)
-    case('shellweight3D')
-        !==Program shellweight3D
-        !
-        ! <shellweight3D/begin>is a program for calculating the shell-by-shell resolution weights in a global sense, so that 
-        ! particles that do contribute with higher resolution information (as measure by the FRC) are given the appropriate 
-        ! weight<shellweight3D/end>
-        !
-        ! set required keys     
-        keys_required(1)  = 'stk'
-        keys_required(2)  = 'vol1'
-        keys_required(3)  = 'smpd'
-        keys_required(4)  = 'msk' 
-        keys_required(5)  = 'oritab'
-        keys_required(6)  = 'ctf'
-        keys_required(7)  = 'nparts'
-        ! set optional keys
-        keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'ncunits'
-        keys_optional(3)  = 'deftab'
-        keys_optional(4)  = 'automsk'
-        keys_optional(5)  = 'mw'
-        keys_optional(6)  = 'amsklp'
-        keys_optional(7)  = 'edge'
-        keys_optional(8)  = 'binwidth'
-        keys_optional(9)  = 'inner'
-        keys_optional(10) = 'width'
-        keys_optional(11) = 'refine'       
-        ! parse command line
-        if( describe ) call print_doc_shellweight3D
-        call cline%parse(keys_required(:7), keys_optional(:11))
-        ! execute
-        call xshellweight3D_distr%execute(cline)
-        ! set defaults
-        call cline%set('outfile', 'shellweight3D_doc.txt')
     case( 'recvol' )
         !==Program recvol
         !
@@ -635,12 +599,11 @@ select case(prg)
         keys_optional(6)  = 'mw'
         keys_optional(7)  = 'mul'
         keys_optional(8)  = 'state'
-        keys_optional(9)  = 'shellw'
-        keys_optional(10) = 'vol1'
-        keys_optional(11) = 'npeaks'
+        keys_optional(9)  = 'vol1'
+        keys_optional(10) = 'npeaks'
         ! parse command line
         if( describe ) call print_doc_recvol
-        call cline%parse(keys_required(:7), keys_optional(:11))
+        call cline%parse(keys_required(:7), keys_optional(:10))
         ! set defaults
         if( .not. cline%defined('trs') ) call cline%set('trs', 5.) ! to assure that shifts are being used
         if( .not. cline%defined('eo')  ) call cline%set('eo', 'no')
@@ -738,7 +701,6 @@ select case(prg)
         ! parse command line
         ! if( describe ) call print_doc_het_ensemble
         call cline%parse(keys_required(:9), keys_optional(:10))
-        if( .not. cline%defined('shellw')  ) call cline%set('shellw', 'no')
         ! execute
         call xhet_ensemble%execute( cline )
     case DEFAULT

@@ -962,7 +962,7 @@ contains
     pure function get_filtsz( self ) result( n )
         class(image), intent(in) :: self
         integer :: n
-        n = fdim(self%ldim(1)) - 1 ! exclude zero frequency
+        n = fdim(self%ldim(1))
     end function get_filtsz
 
     !>  \brief  to get the image kind (em/xfel)
@@ -3737,7 +3737,7 @@ contains
             call self2%fwd_ft
             didft2 = .true.
         endif
-        n = fdim(self1%ldim(1)) - 1 ! exclude zero frequency from FSC calculation
+        n = fdim(self1%ldim(1))
         if( allocated(corrs) ) deallocate(corrs)
         if( allocated(res) )   deallocate(res)
         allocate( corrs(n), res(n), sumasq(n), sumbsq(n), stat=alloc_stat )
@@ -3787,7 +3787,7 @@ contains
             call self%fwd_ft
             didft = .true.
         endif
-        n = fdim(self%ldim(1)) - 1 ! exclude zero frequency
+        n = fdim(self%ldim(1))
         if( allocated(voxs) )deallocate(voxs)
         allocate( voxs(n), stat=alloc_stat )
         call alloc_err('In: get_nvoxshell, module: simple_image', alloc_stat)
@@ -3813,7 +3813,7 @@ contains
         class(image), intent(in) :: self
         real, allocatable        :: res(:)
         integer                  :: n, k, alloc_stat
-        n = fdim(self%ldim(1)) - 1 ! exclude zero frequency
+        n = fdim(self%ldim(1))
         allocate( res(n), stat=alloc_stat )
         call alloc_err('In: get_res, module: simple_image', alloc_stat)
         do k=1,n

@@ -76,4 +76,7 @@ integer(kind=c_int):: nthr_glob
 ! global distributed execution flag
 logical :: l_distr_exec_glob
 
+! global executable absolute path
+character(len=STDLEN) :: exec_abspath_glob
+
 end module simple_defs

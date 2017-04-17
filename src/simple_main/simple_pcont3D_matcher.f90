@@ -7,7 +7,6 @@ use simple_oris,             only: oris
 use simple_ori,              only: ori
 use simple_cmdline,          only: cmdline
 !use simple_masker,           only: automask
-use simple_cont3D_matcher,   only: cont3D_shellweight
 use simple_pcont3D_srch,     only: pcont3D_srch
 use simple_hadamard_common,  ! use all in there
 use simple_math              ! use all in there
@@ -44,7 +43,7 @@ contains
         real, allocatable             :: wmat(:,:), res(:), res_pad(:)
         real                          :: reslim, frac_srch_space
         integer                       :: iptcl, state, alloc_stat, cnt_glob
-        logical                       :: doshellweight, update_res
+        logical                       :: update_res
 
         ! AUTOMASKING DEACTIVATED FOR NOW
         ! INIT
@@ -74,14 +73,6 @@ contains
 
         ! SETUP WEIGHTS FOR THE 3D RECONSTRUCTION
         if( p%frac < 0.99 ) call b%a%calc_hard_ptcl_weights(p%frac)
-        if( p%l_distr_exec )then
-            ! nothing to do
-        else
-            if( p%l_shellw )call cont3D_shellweight(b, p, cline)
-        endif
-        res     = b%img%get_res()
-        res_pad = b%img_pad%get_res()
-        ! call setup_shellweights(p, doshellweight, wmat, res, res_pad)
 
         ! PREPARE REFVOLS
         call prep_vols(b, p, cline)
@@ -140,20 +131,11 @@ contains
             orientation = pcont3Dsrch%get_best_ori()
             call b%a%set_ori(iptcl, orientation)
             ! grid
-            if( doshellweight )then
-                if(p%npeaks == 1)then
-                    call grid_ptcl(b, p, iptcl, orientation, shellweights=wmat(iptcl,:))
-                else
-                    softoris = pcont3Dsrch%get_softoris()
-                    call grid_ptcl(b, p, iptcl, orientation, os=softoris, shellweights=wmat(iptcl,:))
-                endif
+            if(p%npeaks == 1)then
+                call grid_ptcl(b, p, iptcl, orientation)
             else
-                if(p%npeaks == 1)then
-                    call grid_ptcl(b, p, iptcl, orientation)
-                else
-                    softoris = pcont3Dsrch%get_softoris()
-                    call grid_ptcl(b, p, iptcl, orientation, os=softoris)
-                endif
+                softoris = pcont3Dsrch%get_softoris()
+                call grid_ptcl(b, p, iptcl, orientation, os=softoris)
             endif
             ! output orientation
             call b%a%write(iptcl, p%outfile)

@@ -22,7 +22,6 @@ implicit none
 public :: resrange_commander
 public :: npeaks_commander
 public :: nspace_commander
-public :: shellweight3D_commander
 public :: prime3D_init_commander
 public :: multiptcl_init_commander
 ! public :: het_init_commander
@@ -43,10 +42,6 @@ type, extends(commander_base) :: nspace_commander
  contains
    procedure :: execute      => exec_nspace
 end type nspace_commander
-type, extends(commander_base) :: shellweight3D_commander
- contains
-   procedure :: execute      => exec_shellweight3D
-end type shellweight3D_commander
 type, extends(commander_base) :: prime3D_init_commander 
   contains
     procedure :: execute      => exec_prime3D_init
@@ -130,22 +125,6 @@ contains
         end do
         call simple_end('**** SIMPLE_NSPACE NORMAL STOP ****')
     end subroutine exec_nspace
-
-    subroutine exec_shellweight3D(self,cline)
-        use simple_cartft_corrcalc, only: cartft_corrcalc
-        use simple_cont3D_matcher   ! use all in there
-        class(shellweight3D_commander), intent(inout) :: self
-        class(cmdline),                 intent(inout) :: cline
-        type(params)          :: p
-        type(build)           :: b
-        type(cartft_corrcalc) :: cftcc
-        p = params(cline)                   ! constants & derived constants produced
-        ! make sure boxmatch .eq. box
-        p%boxmatch = p%box
-        call b%build_general_tbox(p, cline) ! general objects built
-        call cont3D_shellweight(b, p, cline)
-        call simple_end('**** SIMPLE_SHELLWEIGHT3D NORMAL STOP ****', print_simple=.false.)
-    end subroutine exec_shellweight3D
     
     subroutine exec_prime3D_init( self, cline )
         use simple_hadamard3D_matcher, only: gen_random_model, prime3D_find_resrange
