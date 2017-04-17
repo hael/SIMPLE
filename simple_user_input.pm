@@ -17,14 +17,12 @@ use Exporter;
 @ISA = ("Exporter");
 use Config;
 @ISA = ('Exporter');
-@EXPORT = qw($ICOMPILE $SIMPLE_PATH $FCOMPILER $PLATFORM $CUDADIR $FFTW_LIB $FFTW_INC $OBJDIR $MODDIR $DEBUG $DEBUG_LEVEL $CC_COMPILER $GCC_COMPILER $DOPENMP $DCUDA $DBENCH $SET_OPTIMIZATION $op_sys $architecture getPlatform );
+@EXPORT = qw($ICOMPILE $FCOMPILER $PLATFORM $CUDADIR $FFTW_LIB $FFTW_INC $OBJDIR $MODDIR $DEBUG $DEBUG_LEVEL $CC_COMPILER $GCC_COMPILER $DOPENMP $DCUDA $DBENCH $SET_OPTIMIZATION $op_sys $architecture getPlatform );
 
 #####################################################################
 # User-defined variables controlling compilation                    #
 #####################################################################
 
-# enter the SIMPLE root path
-our$SIMPLE_PATH="/Users/hael/src/fortran/simple3.0";
 # specifying the compiling directives
 # with OpenMP:  -fopenmp, CUDA: -DCUDA
 # Benchmarking: -DBENCH

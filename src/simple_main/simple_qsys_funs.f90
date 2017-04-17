@@ -1,7 +1,7 @@
 module simple_qsys_funs
 use simple_defs     
 use simple_syscalls ! use all in there
-use simple_strings, only: int2str, int2str_pad, str2real
+use simple_strings  ! use all in there
 implicit none
 
 interface qsys_watcher
@@ -128,14 +128,25 @@ contains
 
     subroutine parse_env_file( env )
         use simple_chash, only: chash
-        type(chash), intent(inout)  :: env
-        character(len=STDLEN) :: env_file, qsys_name
-        integer               :: i,funit, nl, file_stat
+        type(chash), intent(inout)    :: env
+        character(len=STDLEN)         :: env_file, qsys_name
+        character(len=:), allocatable :: simple_path, simple_path_env
+        integer :: i,funit, nl, file_stat
+        
         env_file = './simple_distr_config.env'
         if( .not. file_exists(trim(env_file)) ) call autogen_env_file(env_file)
         call env%read( trim(env_file) )
         ! User keys
-        if( .not. env%isthere('simple_path') )stop 'Path to SIMPLE directory is required in simple_distr_config.env (simple_path)'        
+        if( .not. env%isthere('simple_path') )stop 'Path to SIMPLE directory is required in simple_distr_config.env (simple_path)'
+        simple_path = sys_get_env_var('SIMPLE_PATH')
+        if( allocated(simple_path) )then
+            simple_path_env = env%get('simple_path')
+            if( str_has_substr(simple_path, simple_path_env) .or. str_has_substr(simple_path_env, simple_path) )then
+                ! all ok
+            else
+                write(*,*) 'WARNING! simple absolute paths in shell and simple_distr_config.env do not agree'
+            endif
+        endif
         ! Queue keys
         if( .not. env%isthere('qsys_name') ) &
             & stop 'The type of the queuing system is required in simple_distr_config.env: qsys_name=<local|slurm|pbs|sge>'
