@@ -251,7 +251,6 @@ contains
         write(*,'(A)') '>>>'
         call cline_projvol%set('vol1', 'rec_final'//p_master%ext)
         call cline_projvol%set('oritab', trim(oritab))
-        call cline_projvol%print
         call xprojvol%execute(cline_projvol)
         ! end gracefully
         call del_file(trim(STKSCALEDBODY)//p_master%ext)

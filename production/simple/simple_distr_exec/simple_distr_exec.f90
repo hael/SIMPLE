@@ -81,11 +81,11 @@ select case(prg)
         keys_optional(1)   = 'nthr'
         keys_optional(2)   = 'refs'
         keys_optional(3)   = 'fbody'
-        keys_optional(4)   = 'lpstart'
-        keys_optional(5)   = 'lpstop'
-        keys_optional(6)   = 'trs'
-        keys_optional(7)   = 'exp_time'
-        keys_optional(8)   = 'dose_rate'
+        keys_optional(4)   = 'dose_rate'
+        keys_optional(5)   = 'exp_time'
+        keys_optional(6)   = 'lpstart'
+        keys_optional(7)   = 'lpstop'
+        keys_optional(8)   = 'trs'
         keys_optional(9)   = 'pspecsz_unblur'
         keys_optional(10)  = 'pspecsz_ctffind'
         keys_optional(11)  = 'numlen'
@@ -138,28 +138,30 @@ select case(prg)
         keys_optional(1)  = 'nthr'
         keys_optional(2)  = 'ncunits'
         keys_optional(3)  = 'fbody'
-        keys_optional(4)  = 'lpstart'
-        keys_optional(5)  = 'lpstop'
-        keys_optional(6)  = 'trs'
-        keys_optional(7)  = 'pspecsz'
-        keys_optional(8)  = 'numlen'
-        keys_optional(9)  = 'startit'
-        keys_optional(10) = 'scale'
-        keys_optional(11) = 'nframesgrp'
-        keys_optional(12) = 'fromf'
-        keys_optional(13) = 'tof'
-        keys_optional(14) = 'nsig'
-        keys_optional(15) = 'outfile'
-        keys_optional(16) = 'hp'
-        keys_optional(17) = 'lp'
-        keys_optional(18) = 'dfmin'
-        keys_optional(19) = 'dfmax'
-        keys_optional(20) = 'astigstep'
-        keys_optional(21) = 'expastig'
-        keys_optional(22) = 'phaseplate'
+        keys_optional(4)  = 'dose_rate'
+        keys_optional(5)  = 'exp_time'
+        keys_optional(6)  = 'lpstart'
+        keys_optional(7)  = 'lpstop'
+        keys_optional(8)  = 'trs'
+        keys_optional(9)  = 'pspecsz'
+        keys_optional(10) = 'numlen'
+        keys_optional(11) = 'startit'
+        keys_optional(12) = 'scale'
+        keys_optional(13) = 'nframesgrp'
+        keys_optional(14) = 'fromf'
+        keys_optional(15) = 'tof'
+        keys_optional(16) = 'nsig'
+        keys_optional(17) = 'outfile'
+        keys_optional(18) = 'hp'
+        keys_optional(19) = 'lp'
+        keys_optional(20) = 'dfmin'
+        keys_optional(21) = 'dfmax'
+        keys_optional(22) = 'astigstep'
+        keys_optional(23) = 'expastig'
+        keys_optional(24) = 'phaseplate'
         ! parse command line
         ! if( describe ) call print_doc_unblur_ctffind
-        call cline%parse(keys_required(:6), keys_optional(:22))
+        call cline%parse(keys_required(:6), keys_optional(:24))
         ! set defaults
         call cline%set('dopick', 'no'     )
         call cline%set('prg',    'preproc')
@@ -190,11 +192,11 @@ select case(prg)
         keys_optional(1)  = 'nthr'
         keys_optional(2)  = 'ncunits'
         keys_optional(3)  = 'fbody'
-        keys_optional(4)  = 'lpstart'
-        keys_optional(5)  = 'lpstop'
-        keys_optional(6)  = 'trs'
-        keys_optional(7)  = 'exp_time'
-        keys_optional(8)  = 'dose_rate'
+        keys_optional(4)  = 'dose_rate'
+        keys_optional(5)  = 'exp_time'
+        keys_optional(6)  = 'lpstart'
+        keys_optional(7)  = 'lpstop'
+        keys_optional(8)  = 'trs'
         keys_optional(9)  = 'kv'
         keys_optional(10) = 'pspecsz'
         keys_optional(11) = 'numlen'
@@ -239,7 +241,7 @@ select case(prg)
         keys_optional(12) = 'nsig'
         ! parse command line
         if( describe ) call print_doc_unblur_tomo
-        call cline%parse(keys_required(:3), keys_optional(:11))
+        call cline%parse(keys_required(:3), keys_optional(:12))
         ! set defaults
         if( .not. cline%defined('trs')     ) call cline%set('trs',      5.)
         if( .not. cline%defined('lpstart') ) call cline%set('lpstart', 15.)

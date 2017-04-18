@@ -286,29 +286,16 @@ contains
         ldim_polft(3)   = 1
         pdim   = pftcc%get_pdim(.false.)
         wdim   = 2*ceiling(self%harwin_exp) + 1 ! interpolation kernel window size
-        
-        !$omp parallel do collapse(2) schedule(auto) default(shared) private(irot,k,vec,loc)
+        vec(3) = 0.
+        !$omp parallel do collapse(1) schedule(auto) default(shared) private(irot,k,vec,loc)
         do irot=1,pdim(1)
             do k=pdim(2),pdim(3)
                 vec(:2) = pftcc%get_coord(irot,k)
-                vec(3)  = 0.
                 loc     = matmul(vec,e%get_mat())
-                call pftcc%set_ref_fcomp(iref, irot, k, self%interp_fcomp_expanded( wdim, loc ))
+                call pftcc%set_ref_fcomp(iref, irot, k, self%interp_fcomp_expanded(wdim, loc))
             end do
         end do
         !$omp end parallel do
-
-        ! THIS GIVES RIS TO A BUG
-        ! vec(3) = 0.
-        ! !$omp parallel do collapse(1) schedule(auto) default(shared) private(irot,k,vec,loc)
-        ! do irot=1,pdim(1)
-        !     do k=pdim(2),pdim(3)
-        !         vec(:2) = pftcc%get_coord(irot,k)
-        !         loc     = matmul(vec,e%get_mat())
-        !         call pftcc%set_ref_fcomp(iref, irot, k, self%interp_fcomp_expanded(wdim, loc))
-        !     end do
-        ! end do
-        ! !$omp end parallel do
     end subroutine fproject_polar_expanded
     
     !> \brief  transfers a 2D Cartesian image (self) to polar Fourier

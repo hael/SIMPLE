@@ -106,7 +106,6 @@ contains
             if( DEBUG ) write(*,*) '*** hadamard3D_matcher ***: generated random model'
         endif
 
-        ! SETUP WEIGHTS FOR THE 3D RECONSTRUCTION
         ! SETUP WEIGHTS
         if( p%nptcls <= SPECWMINPOP )then
             call b%a%calc_hard_ptcl_weights(p%frac)
