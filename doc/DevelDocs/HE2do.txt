@@ -1,9 +1,7 @@
 need to parallelise the volassemble of the different states for het_ensemble
 need to test unidoc strategy
 need to put ctf flag in unidoc
-
-frameavg -> nframesgroup
-
-nested correlation function in replacement of the shell-weights?
-   >> calculate corr, stepping one res elem at the time
 weighted multi-resolution state sorting by fitting B-factors?
+
+need to print what is missing in the command line
+need to give an error message when not key=value syntax 

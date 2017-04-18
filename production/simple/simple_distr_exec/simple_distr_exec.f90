@@ -352,27 +352,24 @@ select case(prg)
         keys_optional(3)  = 'nthr'
         keys_optional(4)  = 'ncunits'
         keys_optional(5)  = 'deftab'
-        keys_optional(6)  = 'refine'
-        keys_optional(7)  = 'refs'
-        keys_optional(8)  = 'oritab'
-        keys_optional(9)  = 'hp'
-        keys_optional(10) = 'lp'
-        keys_optional(11) = 'lpstart'
-        keys_optional(12) = 'lpstop'
-        keys_optional(13) = 'cenlp'
-        keys_optional(14) = 'trs'
-        keys_optional(15) = 'automsk'
-        keys_optional(16) = 'amsklp'
-        keys_optional(17) = 'inner'
-        keys_optional(18) = 'width'
-        keys_optional(19) = 'startit'
-        keys_optional(20) = 'maxits'
-        keys_optional(21) = 'filwidth'
-        keys_optional(22) = 'nnn'
-        keys_optional(23) = 'minp'
-        keys_optional(24) = 'center'
-        keys_optional(25) = 'mul'
-        keys_optional(26) = 'autoscale'
+        keys_optional(6)  = 'refs'
+        keys_optional(7)  = 'oritab'
+        keys_optional(8)  = 'hp'
+        keys_optional(9) = 'lp'
+        keys_optional(10) = 'lpstart'
+        keys_optional(11) = 'lpstop'
+        keys_optional(12) = 'cenlp'
+        keys_optional(13) = 'trs'
+        keys_optional(14) = 'automsk'
+        keys_optional(15) = 'amsklp'
+        keys_optional(16) = 'inner'
+        keys_optional(17) = 'width'
+        keys_optional(18) = 'startit'
+        keys_optional(19) = 'maxits'
+        keys_optional(20) = 'filwidth'
+        keys_optional(21) = 'center'
+        keys_optional(22) = 'mul'
+        keys_optional(23) = 'autoscale'
         ! documentation
         if( describe ) call print_doc_prime2D
         ! parse command line
@@ -382,7 +379,7 @@ select case(prg)
         ! else
         !     call cline%parse( keys_required(:7), keys_optional(:19) )
         ! endif
-        call cline%parse( keys_required(:5), keys_optional(:26) )
+        call cline%parse( keys_required(:5), keys_optional(:23) )
         ! set defaults
         if( .not. cline%defined('lpstart') ) call cline%set('lpstart',  15.)
         if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',    8.)
@@ -391,7 +388,7 @@ select case(prg)
         if( .not. cline%defined('cenlp')   ) call cline%set('cenlp',    30.)
         if( .not. cline%defined('edge')    ) call cline%set('edge',     20.)
         if( .not. cline%defined('center')  ) call cline%set('center', 'yes')
-        if( .not. cline%defined('maxits')  ) call cline%set('maxits',   50.)
+        if( .not. cline%defined('maxits')  ) call cline%set('maxits',   30.)
         if( cline%defined('nparts') .and. cline%defined('chunksz') )then
             stop 'nparts and chunksz cannot simultaneously be part of command line'
         else if(cline%defined('nparts') )then

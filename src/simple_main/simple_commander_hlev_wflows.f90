@@ -74,7 +74,7 @@ contains
         type(qsys_env)                :: qenv
         type(params)                  :: p_master
         type(oris)                    :: os
-        real                          :: iter, scale, smpd_sc, msk_sc
+        real                          :: iter, scale, smpd_sc, msk_sc, native_msk, native_smpd
         character(len=2)              :: str_state
         character(len=STDLEN)         :: oritab, vol_iter
         logical                       :: srch4symaxis
@@ -99,6 +99,8 @@ contains
         endif
         if( DOSCALE )then
             ! (1) SCALING - preparation
+            native_msk  = p_master%msk
+            native_smpd = p_master%smpd
             cline_scale = cline
             call autoscale(p_master%box, p_master%smpd, box_sc, smpd_sc, scale)
             msk_sc = scale * p_master%msk
@@ -171,6 +173,10 @@ contains
         ! (6) RE-PROJECT VOLUME
         call cline_projvol%set('prg', 'projvol')
         call cline_projvol%set('outstk', 'reprojs'//p_master%ext)
+        call cline_projvol%delete('stk')
+        call cline_projvol%set('msk',  native_msk)
+        call cline_projvol%set('smpd', native_smpd)
+        call cline_projvol%set('oritab', 'prime3Ddoc_022.txt')
         ! execute commanders
         if( DOSCALE )then
             write(*,'(A)') '>>>'
@@ -245,6 +251,7 @@ contains
         write(*,'(A)') '>>>'
         call cline_projvol%set('vol1', 'rec_final'//p_master%ext)
         call cline_projvol%set('oritab', trim(oritab))
+        call cline_projvol%print
         call xprojvol%execute(cline_projvol)
         ! end gracefully
         call del_file(trim(STKSCALEDBODY)//p_master%ext)
