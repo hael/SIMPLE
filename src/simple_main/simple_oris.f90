@@ -2355,20 +2355,24 @@ contains
         real,              intent(in)    :: frac
         integer, allocatable :: order(:)
         integer :: i, lim, n
-        order = self%order()
-        n = 0
-        do i=1,self%n
-            if( self%o(i)%get('state') > 0 ) n = n+1
-        end do        
-        lim = nint(frac*real(n))
-        do i=1,self%n
-            if( i <= lim )then
-                call self%o(order(i))%set('w', 1.)
-            else
-                call self%o(order(i))%set('w', 0.)
-            endif           
-        end do
-        deallocate(order)
+        if( frac < 0.99 )then
+            order = self%order()
+            n = 0
+            do i=1,self%n
+                if( self%o(i)%get('state') > 0 ) n = n+1
+            end do        
+            lim = nint(frac*real(n))
+            do i=1,self%n
+                if( i <= lim )then
+                    call self%o(order(i))%set('w', 1.)
+                else
+                    call self%o(order(i))%set('w', 0.)
+                endif           
+            end do
+            deallocate(order)
+        else
+            call self%set_all2single('w', 1.)
+        endif
     end subroutine calc_hard_ptcl_weights_single
 
     !>  \brief  calculates hard weights based on ptcl ranking      

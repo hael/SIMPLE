@@ -60,7 +60,10 @@ integer, parameter :: PICKER_OFFSET        = 3
 real, parameter :: KBWINSZ = 1.5
 real, parameter :: KBALPHA = 2.0
 
-! CONSTANTS THAT CONTROL SEARCH AND CONVERGENCE
+! minimum population for spectral weighting
+integer, parameter :: SPECWMINPOP=2000
+
+! constants that control search and convergence
 real,    parameter :: FRAC_SH_LIM     = 80.0 ! at what frac to turn on the shift search
 real,    parameter :: SHW_FRAC_LIM    = 50.  ! at what frac to turn on shell-weights
 real,    parameter :: EXTRINITHRESH   = 0.5
