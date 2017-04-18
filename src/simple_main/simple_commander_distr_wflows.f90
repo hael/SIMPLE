@@ -373,7 +373,6 @@ contains
         type(params)          :: p_master
         character(len=STDLEN) :: refs, oritab, str, str_iter, native_stk
         real                  :: smpd_sc, msk_sc, scale, native_smpd, native_msk
-        real, allocatable     :: res_native(:), res_scaled(:), wmat(:,:)
         integer               :: iter, i, box_sc, native_box, filnum, io_stat
         type(chash)           :: job_descr
         ! make master parameters

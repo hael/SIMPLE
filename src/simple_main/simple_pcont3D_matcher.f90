@@ -40,7 +40,6 @@ contains
         type(pcont3D_srch)            :: pcont3Dsrch
         type(oris)                    :: softoris
         type(ori)                     :: orientation
-        real, allocatable             :: wmat(:,:), res(:), res_pad(:)
         real                          :: reslim, frac_srch_space
         integer                       :: iptcl, state, alloc_stat, cnt_glob
         logical                       :: update_res
@@ -164,9 +163,6 @@ contains
             if(state_exists(state))call b%refvols(state)%kill_expanded
         enddo
         !call b%img%kill_imgpolarizer is private a the moment
-        if(allocated(wmat)   ) deallocate(wmat)
-        if(allocated(res)    ) deallocate(res)
-        if(allocated(res_pad)) deallocate(res_pad)
     end subroutine pcont3D_exec
 
     subroutine prep_vols( b, p, cline )

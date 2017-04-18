@@ -67,23 +67,23 @@ contains
             write(*,*) 'nframes: ', nframes
             stop 'simple_commander_imgproc :: exec_tseries_extract assumes one frame per file' 
         endif
-        if( cline%defined('frameavg') )then
-            if( p%frameavg < 3 )then
-                stop 'frameavg integer (nr of frames to average) needs to be >= 3; &
+        if( cline%defined('nframesgrp') )then
+            if( p%nframesgrp < 3 )then
+                stop 'nframesgrp integer (nr of frames to average) needs to be >= 3; &
                 &simple_commander_imgproc :: exec_tseries_extract'
             endif
         else
-            stop 'need frameavg integer input = nr of frames to average; &
+            stop 'need nframesgrp integer input = nr of frames to average; &
             &simple_commander_imgproc :: exec_tseries_extract'
         endif
-        do iframe=1,nfiles - p%frameavg + 1
+        do iframe=1,nfiles - p%nframesgrp + 1
             if( cline%defined('fbody') )then
                 outfname = 'tseries_frames'//int2str_pad(iframe,numlen)//p%ext
             else
                 outfname = trim(p%fbody)//'tseries_frames'//int2str_pad(iframe,numlen)//p%ext
             endif
             frame_from = iframe
-            frame_to   = iframe + p%frameavg - 1
+            frame_to   = iframe + p%nframesgrp - 1
             cnt = 0
             do jframe=frame_from,frame_to
                 cnt = cnt + 1

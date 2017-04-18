@@ -81,9 +81,9 @@ contains
         movie_counter = movie_counter + 1
         write(*,'(a,1x,i5)') '>>> PROCESSING MOVIE:', imovie
         ! averages frames as a pre-processing step (Falcon 3 with long exposures)
-        if( p%frameavg > 0 )then
-            self%moviename = 'tmpframeavgmovie'//p%ext
-            call frameavg_imgfile(trim(moviename), trim(self%moviename), p%frameavg, p%smpd)
+        if( p%nframesgrp > 0 )then
+            self%moviename = 'tmpnframesgrpmovie'//p%ext
+            call frameavg_imgfile(trim(moviename), trim(self%moviename), p%nframesgrp, p%smpd)
         else
             self%moviename = trim(moviename)
         endif

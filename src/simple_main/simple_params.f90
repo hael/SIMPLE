@@ -181,7 +181,7 @@ type :: params
     integer :: cube=0
     integer :: edge=14
     integer :: find=1
-    integer :: frameavg=0
+    integer :: nframesgrp=0
     integer :: fromf=1
     integer :: fromp=1
     integer :: froms=1
@@ -534,7 +534,7 @@ contains
         call check_iarg('cube',           self%cube)
         call check_iarg('edge',           self%edge)
         call check_iarg('find',           self%find)
-        call check_iarg('frameavg',       self%frameavg)
+        call check_iarg('nframesgrp',     self%nframesgrp)
         call check_iarg('fromf',          self%fromf)
         call check_iarg('fromp',          self%fromp)
         call check_iarg('froms',          self%froms)

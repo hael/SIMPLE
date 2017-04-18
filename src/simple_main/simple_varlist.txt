@@ -146,7 +146,7 @@ corner
 cube
 edge
 find
-frameavg
+nframesgrp
 fromf
 fromp
 froms

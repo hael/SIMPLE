@@ -836,29 +836,32 @@ contains
 
     !>  \brief  is for generating resolution dependent correlations
     function genfrc( self, iref, iptcl, irot ) result( frc )
-        !$ use omp_lib
-        !$ use omp_lib_kinds
         use simple_math, only: csq
         class(polarft_corrcalc), target, intent(inout) :: self              !< instance
         integer,                         intent(in)    :: iref, iptcl, irot !< reference, particle, rotation
         real, allocatable :: frc(:)
-        complex, pointer  :: refs(:,:,:) => null()
         real    :: sumsqref, sumsqptcl
         integer :: k
         allocate( frc(self%kfromto(1):self%kfromto(2)) )
-        if( allocated(self%pfts_refs_ctf) )then
-            refs => self%pfts_refs_ctf
+        if( self%with_ctf )then
+            ! multiply reference with CTF
+            self%pfts_refs_ctf(iref,:,:) = self%pfts_refs(iref,:,:)*self%ctfmats(iptcl,:,:)
+            ! calc FRC
+            do k=self%kfromto(1),self%kfromto(2)
+                frc(k)    = sum(self%pfts_refs_ctf(iref,:,k)*conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,k)))
+                sumsqref  = sum(csq(self%pfts_refs_ctf(iref,:,k)))
+                sumsqptcl = sum(csq(self%pfts_ptcls(iptcl,:self%refsz,k)))
+                frc(k)    = frc(k)/sqrt(sumsqref*sumsqptcl)
+            end do
         else
-            refs => self%pfts_refs
+            ! calc FRC
+            do k=self%kfromto(1),self%kfromto(2)
+                frc(k)    = sum(self%pfts_refs(iref,:,k)*conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,k)))
+                sumsqref  = sum(csq(self%pfts_refs(iref,:,k)))
+                sumsqptcl = sum(csq(self%pfts_ptcls(iptcl,:self%refsz,k)))
+                frc(k)    = frc(k)/sqrt(sumsqref*sumsqptcl)
+            end do
         endif
-        !$omp parallel do default(shared) private(k,sumsqref,sumsqptcl) schedule(auto)
-        do k=self%kfromto(1),self%kfromto(2)
-            frc(k)    = sum(refs(iref,:,k)*conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,k)))
-            sumsqref  = sum(csq(refs(iref,:,k)))
-            sumsqptcl = sum(csq(self%pfts_ptcls(iptcl,:self%refsz,k)))
-            frc(k)    = frc(k)/sqrt(sumsqref*sumsqptcl)
-        end do
-        !$omp end parallel do
     end function genfrc
 
     !>  \brief  for calculating the correlation between reference iref and particle iptcl in rotation irot

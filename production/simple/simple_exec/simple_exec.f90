@@ -316,7 +316,7 @@ select case(prg)
         keys_optional(11)  = 'numlen'
         keys_optional(12)  = 'startit'
         keys_optional(13)  = 'scale'
-        keys_optional(14)  = 'frameavg'
+        keys_optional(14)  = 'nframesgrp'
         keys_optional(15)  = 'fromf'
         keys_optional(16)  = 'tof'
         keys_optional(17)  = 'hp_ctffind'
@@ -429,7 +429,7 @@ select case(prg)
         keys_optional(7)  = 'numlen'
         keys_optional(8)  = 'startit'
         keys_optional(9)  = 'scale'
-        keys_optional(10) = 'frameavg'
+        keys_optional(10) = 'nframesgrp'
         keys_optional(11) = 'tomo'
         keys_optional(12) = 'fromf'
         keys_optional(13) = 'tof'
@@ -495,7 +495,7 @@ select case(prg)
         keys_optional(7)  = 'numlen'
         keys_optional(8)  = 'startit'
         keys_optional(9)  = 'scale'
-        keys_optional(10) = 'frameavg'
+        keys_optional(10) = 'nframesgrp'
         keys_optional(11) = 'fromf'
         keys_optional(12) = 'tof'
         keys_optional(13) = 'nsig'
@@ -1763,7 +1763,7 @@ select case(prg)
         ! function of your images set acf=yes. If you want to extract a contiguous subset of particle images from the stack, set 
         ! fromp and top. If you want to fish out a number of particle images from your stack at random, set nran to
         ! some nonzero integer number less than nptcls. With avg=yes the global average of the inputted stack is calculated.
-        ! If you define frameavg to some integer number larger than one averages with chunk sizes of frameavg are produced,
+        ! If you define nframesgrp to some integer number larger than one averages with chunk sizes of nframesgrp are produced,
         ! which may be useful for analysis of dose-fractionated image series. neg inverts the contrast of the images<stackops/end>
         !
         ! Required keys
@@ -1780,7 +1780,7 @@ select case(prg)
         keys_optional(8)  = 'neg'
         keys_optional(9)  = 'acf'
         keys_optional(10) = 'avg'
-        keys_optional(11) = 'frameavg'
+        keys_optional(11) = 'nframesgrp'
         keys_optional(12) = 'vis'
         keys_optional(13) = 'snr'
         keys_optional(14) = 'fromp'
@@ -2170,13 +2170,13 @@ select case(prg)
      case( 'tseries_extract' )
         !==Program tseries_extract
         !
-        ! <tseries_extract/begin>is a program for creating overlapping chunks of frameavg frames from time-series data
+        ! <tseries_extract/begin>is a program for creating overlapping chunks of nframesgrp frames from time-series data
         ! <tseries_extract/end> 
         !
         ! set required keys
         keys_required(1) = 'filetab'
         keys_required(2) = 'smpd'
-        keys_required(3) = 'frameavg'
+        keys_required(3) = 'nframesgrp'
         ! set optional keys
         keys_optional(1)  = 'fbody'
         ! parse command line

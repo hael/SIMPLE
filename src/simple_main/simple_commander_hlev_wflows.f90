@@ -99,6 +99,7 @@ contains
         endif
         if( DOSCALE )then
             ! (1) SCALING - preparation
+            cline_scale = cline
             call autoscale(p_master%box, p_master%smpd, box_sc, smpd_sc, scale)
             msk_sc = scale * p_master%msk
             call cline_scale%set('newbox', real(box_sc))
@@ -108,7 +109,6 @@ contains
             call cline%set('msk',  real(msk_sc))
         endif
         ! prepare command lines from prototype master
-        cline_scale           = cline
         cline_prime3D_init    = cline
         cline_prime3D_refine1 = cline
         cline_prime3D_refine2 = cline

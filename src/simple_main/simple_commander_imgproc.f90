@@ -885,8 +885,8 @@ contains
             goto 999
         endif
         ! create frame averages
-        if( p%frameavg > 0 )then
-            call frameavg_imgfile(p%stk, p%outstk, p%frameavg, p%smpd)
+        if( p%nframesgrp > 0 )then
+            call frameavg_imgfile(p%stk, p%outstk, p%nframesgrp, p%smpd)
             goto 999
         endif
         ! visualize

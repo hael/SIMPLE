@@ -178,7 +178,7 @@ contains
         self%args(146) = 'cube'
         self%args(147) = 'edge'
         self%args(148) = 'find'
-        self%args(149) = 'frameavg'
+        self%args(149) = 'nframesgrp'
         self%args(150) = 'fromf'
         self%args(151) = 'fromp'
         self%args(152) = 'froms'

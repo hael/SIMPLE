@@ -36,7 +36,6 @@ contains
         logical,        intent(inout) :: converged
         type(polarft_corrcalc) :: pftcc
         type(ori)              :: orientation
-        real, allocatable      :: wmat(:,:), res(:), res_pad(:)
         real                   :: frac_srch_space, reslim
         integer                :: state, iptcl
 
@@ -146,11 +145,6 @@ contains
             ! CONVERGENCE TEST
             converged = b%conv%check_conv3D()
         endif
-
-        ! DEALLOCATE
-        if(allocated(wmat)   )deallocate(wmat)
-        if(allocated(res)    )deallocate(res)
-        if(allocated(res_pad))deallocate(res_pad)
     end subroutine cont3D_exec
 
 end module simple_cont3D_matcher
