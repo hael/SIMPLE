@@ -32,7 +32,6 @@ type, extends(image) :: projector
   contains
     ! CONSTRUCTORS
     procedure          :: expand_cmat
-    procedure          :: compress_cmat
     ! GETTERS
     procedure          :: get_harwin
     procedure          :: get_harwin_exp
@@ -75,9 +74,9 @@ contains
         ldim = self%get_ldim()
         if( .not.self%is_ft() ) stop 'volume needs to be FTed before call; expand_cmat; simple_image'
         if( ldim(3) == 1      ) stop 'only for volumes; expand_cmat; simple_image'
-        self%winsz  = get_kb_winsz()
-        self%harwin = real(ceiling(self%winsz))
-        self%alpha  = get_kb_alpha()
+        self%winsz         = get_kb_winsz()
+        self%harwin        = real(ceiling(self%winsz))
+        self%alpha         = get_kb_alpha()
         lims               = self%loop_lims(3)
         self%ldim_exp(:,2) = maxval(abs(lims)) + ceiling(self%harwin_exp)
         self%ldim_exp(:,1) = -self%ldim_exp(:,2)
@@ -110,7 +109,7 @@ contains
                 do m = self%ldim_exp(3,1),self%ldim_exp(3,2)
                     logi = [cych(h),cyck(k),cycm(m)]
                     phys = self%comp_addr_phys(logi)
-                    self%cmat_exp(h,k,m) = self%get_fcomp(logi,phys)
+                    self%cmat_exp(h,k,m) = self%get_fcomp(logi, phys)
                 enddo
             enddo
         enddo
@@ -118,29 +117,6 @@ contains
         deallocate( cych,cyck,cycm )
         self%expanded_exists = .true.
     end subroutine expand_cmat
-
-    !>  \brief converts the expanded matrix to standard imaginary representation
-    subroutine compress_cmat( self )
-        class(projector), intent(inout) :: self
-        integer :: h, k, m, logi(3), phys(3)
-        integer :: lims(3,2)
-        if( .not. self%expanded_exists )then
-            stop 'expanded complex matrix does not exist; simple_projector :: compress_cmat'
-        endif
-        lims = self%loop_lims(2) ! excluding redundant Friedel mates
-        self = cmplx(0.,0.)
-        !$omp parallel do collapse(3) schedule(auto) default(shared) private(h,k,m,logi,phys)
-        do h = lims(1,1),lims(1,2)
-            do k = lims(2,1),lims(2,2)
-                do m = lims(3,1),lims(3,2)
-                    logi = [h,k,m]
-                    phys = self%comp_addr_phys(logi)
-                    call self%set_fcomp(logi,phys,self%cmat_exp(h,k,m))
-                end do
-            end do 
-        end do
-        !$omp end parallel do     
-    end subroutine compress_cmat
 
     ! GETTERS
 
@@ -223,33 +199,30 @@ contains
         class(ori),       intent(in)    :: e
         class(image),     intent(inout) :: fplane
         real, optional,   intent(in)    :: lp
-        real    :: vec(3), loc(3)
+        real    :: loc(3)
         integer :: h, k, sqarg, sqlp, wdim, lims(3,2), logi(3), phys(3)
         ! init
-        lims = self%loop_lims(2) 
         if( present(lp) )then
             lims = self%loop_lims(1,lp)
             sqlp = fplane%get_find(lp)**2
         else
+            lims = self%loop_lims(2) 
             sqlp = (maxval(lims(:,2)))**2
         endif
         fplane = cmplx(0.,0.)
-        wdim = 2*ceiling(self%harwin_exp) + 1 ! interpolation kernel window size
-        !$omp parallel do collapse(2) schedule(auto) default(shared) private(h,k,sqarg,vec,loc,logi,phys)
+        wdim   = 2*ceiling(self%harwin_exp) + 1 ! interpolation kernel window size
+        !$omp parallel do collapse(2) schedule(auto) default(shared)&
+        !$omp private(h,k,sqarg,loc,logi,phys)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 sqarg = h*h+k*k
-                if( sqarg <= sqlp )then
-                    ! address
-                    vec(1) = real(h)
-                    vec(2) = real(k)
-                    vec(3) = 0.
-                    loc    = matmul(vec,e%get_mat())
-                    ! set fourier component
-                    logi = [h,k,0]
-                    phys = self%comp_addr_phys(logi)
-                    call fplane%set_fcomp(logi,phys,self%interp_fcomp_expanded(wdim, loc))
-                endif
+                if(sqarg > sqlp)cycle
+                ! address
+                logi = [h, k, 0]
+                loc  = matmul(real(logi), e%get_mat())
+                ! set fourier component
+                phys = self%comp_addr_phys(logi)
+                call fplane%set_fcomp(logi,phys,self%interp_fcomp_expanded(wdim, loc))
             end do
         end do
         !$omp end parallel do
@@ -307,19 +280,19 @@ contains
         integer :: irot, k, wdim, ldim(3), pdim(3), ldim_polft(3)
         real    :: vec(3), loc(3)
         ldim = self%get_ldim()
-        if( ldim(3) == 1 )        stop 'only for interpolation from 3D images; fproject_polar_1; simple_projector'
-        if( .not. self%is_ft() )  stop 'volume needs to be FTed before call; fproject_polar_1; simple_projector'
+        if(ldim(3) == 1)stop 'only for interpolation from 3D images; fproject_polar_1; simple_projector'
+        if(.not. self%is_ft())stop 'volume needs to be FTed before call; fproject_polar_1; simple_projector'
         ldim_polft(1:2) = ldim(1:2)
         ldim_polft(3)   = 1
-        pdim = pftcc%get_pdim(.false.)
-        wdim = 2*ceiling(self%harwin_exp) + 1 ! interpolation kernel window size
-        !$omp parallel do collapse(2) schedule(auto) default(shared) private(irot,k,vec,loc)
+        pdim   = pftcc%get_pdim(.false.)
+        wdim   = 2*ceiling(self%harwin_exp) + 1 ! interpolation kernel window size
+        vec(3) = 0.
+        !$omp parallel do collapse(1) schedule(auto) default(shared) private(irot,k,vec,loc)
         do irot=1,pdim(1)
             do k=pdim(2),pdim(3)
                 vec(:2) = pftcc%get_coord(irot,k)
-                vec(3)  = 0.
                 loc     = matmul(vec,e%get_mat())
-                call pftcc%set_ref_fcomp(iref, irot, k, self%interp_fcomp_expanded( wdim, loc ))
+                call pftcc%set_ref_fcomp(iref, irot, k, self%interp_fcomp_expanded(wdim, loc))
             end do
         end do
         !$omp end parallel do
@@ -460,7 +433,7 @@ contains
             w(:,:,i) = w(:,:,i) * kb_apod( real(win(3,1)+i-1)-loc(3) )
         end do
         ! SUM( kernel x components )
-        comp = dot_product( reshape(w,(/wlen/)), reshape(self%cmat_exp( win(1,1):win(1,2),&
+        comp = dot_product( reshape(w,(/wlen/)), reshape(self%cmat_exp(win(1,1):win(1,2),&
             &win(2,1):win(2,2),win(3,1):win(3,2)), (/wlen/)) )
     end function interp_fcomp_expanded
     
@@ -570,7 +543,6 @@ contains
         ! kill the remains
         deallocate(pft, comps)
     end subroutine imgpolarizer
-
 
     ! REAL-SPACE PROJECTOR
 

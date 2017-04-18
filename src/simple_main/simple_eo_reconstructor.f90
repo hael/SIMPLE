@@ -221,7 +221,7 @@ contains
     ! INTERPOLATION
     
     !> \brief  for gridding a Fourier plane
-    subroutine grid_fplane( self, o, fpl, pwght, mul, ran, shellweights )
+    subroutine grid_fplane(self, o, fpl, pwght, mul, ran, shellweights, expanded)
         use simple_ori, only: ori
         use simple_rnd, only: ran3
         class(eo_reconstructor), intent(inout) :: self            !< instance
@@ -231,16 +231,21 @@ contains
         real, optional,          intent(in)    :: mul             !< shift multiplication factor
         real, optional,          intent(in)    :: ran             !< external random number
         real, optional,          intent(in)    :: shellweights(:) !< resolution weights
-        real                                   :: rran
+        logical, optional,       intent(in)    :: expanded        !< whether to use expanded routines
+        real    :: rran
+        logical :: l_exp = .false.
+        if(present(expanded))l_exp = expanded
         if( present(ran) )then
             rran = ran
         else
             rran = ran3()
         endif
         if( rran > 0.5 )then
-            call self%even%inout_fplane(o, .true., fpl, pwght=pwght, mul=mul, shellweights=shellweights)
+            call self%even%inout_fplane(o, .true., fpl,&
+            &pwght=pwght, mul=mul, shellweights=shellweights, expanded=l_exp)
         else
-            call self%odd%inout_fplane(o, .true., fpl, pwght=pwght, mul=mul, shellweights=shellweights)
+            call self%odd%inout_fplane(o, .true., fpl,&
+            &pwght=pwght, mul=mul, shellweights=shellweights, expanded=l_exp)
         endif
     end subroutine grid_fplane
     
@@ -327,7 +332,6 @@ contains
     subroutine sampl_dens_correct_sum( self, reference )
         class(eo_reconstructor), intent(inout) :: self      !< instance
         class(image),            intent(inout) :: reference !< reference volume
-        integer :: filtsz
         write(*,'(A)') '>>> SAMPLING DENSITY (RHO) CORRECTION & WIENER NORMALIZATION'
         call self%eosum%sampl_dens_correct
         if( self%xfel )then
@@ -378,6 +382,9 @@ contains
         call o%calc_spectral_weights(p%frac)
         ! zero the Fourier volumes and rhos
         call self%reset_all
+        ! init expansion
+        call self%even%init_exp
+        call self%odd%init_exp
         ! dig holds the state digit
         write(*,'(A)') '>>> KAISER-BESSEL INTERPOLATION'
         statecnt = 0
@@ -393,6 +400,12 @@ contains
                 endif
             endif
         end do
+        ! unddo expansion
+        call self%even%compress_exp
+        call self%even%dealloc_exp
+        call self%odd%compress_exp
+        call self%odd%dealloc_exp
+        ! proceeds with density correction & output
         if( present(part) )then
             if( present(fbody) )then
                 call self%write_eos(fbody//int2str_pad(state,2)//'_part'//int2str_pad(part,self%numlen))
@@ -438,24 +451,27 @@ contains
                     endif
                     if( p%pgrp == 'c1' )then
                         if( doshellweight )then
-                            call self%grid_fplane(orientation, img_pad, pwght=pw, mul=mul, shellweights=wmat(i,:))
+                            call self%grid_fplane(orientation, img_pad, pwght=pw, mul=mul,&
+                                &shellweights=wmat(i,:), expanded=.true.)
                         else
-                            call self%grid_fplane(orientation, img_pad, pwght=pw, mul=mul)
+                            call self%grid_fplane(orientation, img_pad, pwght=pw, mul=mul,&
+                                &expanded=.true.)
                         endif
                     else
                         ran = ran3()
                         do j=1,se%get_nsym()
                             o_sym = se%apply(orientation, j)
                             if( doshellweight )then
-                                call self%grid_fplane(o_sym, img_pad, pwght=pw, mul=mul, ran=ran, shellweights=wmat(i,:))
+                                call self%grid_fplane(o_sym, img_pad, pwght=pw, mul=mul, ran=ran,&
+                                    &shellweights=wmat(i,:), expanded=.true.)
                             else
-                                call self%grid_fplane(o_sym, img_pad, pwght=pw, mul=mul, ran=ran)
+                                call self%grid_fplane(o_sym, img_pad, pwght=pw, mul=mul, ran=ran,&
+                                    &expanded=.true.)
                             endif
                         end do
                     endif
                  endif
             end subroutine rec_dens
-        
     end subroutine eorec
     
     ! DESTRUCTOR
@@ -466,10 +482,13 @@ contains
         if( self%exists )then
             ! kill composites
             call self%even%dealloc_rho
+            call self%even%dealloc_exp
             call self%even%kill
             call self%odd%dealloc_rho
+            call self%odd%dealloc_exp
             call self%odd%kill
             call self%eosum%dealloc_rho
+            call self%eosum%dealloc_exp
             call self%eosum%kill
             ! set existence
             self%exists = .false.
