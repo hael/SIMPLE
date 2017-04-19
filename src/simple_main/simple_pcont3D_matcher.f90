@@ -23,7 +23,7 @@ integer                :: nrefs_per_ptcl  = 0
 integer                :: neff_states     = 0
 
 integer, parameter     :: MAXNPEAKS = 10
-integer, parameter     :: NREFS     = 100
+integer, parameter     :: NREFS     = 50
 logical, parameter     :: debug = .false.
 
 contains
@@ -43,7 +43,6 @@ contains
         real                          :: reslim, frac_srch_space
         integer                       :: iptcl, state, alloc_stat, cnt_glob
         logical                       :: update_res
-
         ! AUTOMASKING DEACTIVATED FOR NOW
         ! INIT
         nptcls = p%top - p%fromp + 1                ! number of particles processed
@@ -97,6 +96,7 @@ contains
         ! the pftcc is only initialized here so the img polarizer can be
         call b%img%init_imgpolarizer(pftcc)
 
+
         ! INITIALIZE
         if( which_iter <= 0 )then
             write(*,'(A)')'>>> CONTINUOUS POLAR-FT ORIENTATION SEARCH'
@@ -117,24 +117,23 @@ contains
             if(state == 0) then
                 call orientation%reject
                 call b%a%set_ori(iptcl,orientation)
-                call b%a%write(iptcl, p%outfile)
-                cycle
-            endif
-            ! re-fills pftcc
-            call prep_pftcc(b, p, iptcl)
-            ! multiply refs with CTF
-            call apply_ctf(p, orientation, pftcc)
-            ! align
-            call pcont3Dsrch%new(p, orientation, orefs, pftcc)
-            call pcont3Dsrch%do_srch
-            orientation = pcont3Dsrch%get_best_ori()
-            call b%a%set_ori(iptcl, orientation)
-            ! grid
-            if(p%npeaks == 1)then
-                call grid_ptcl(b, p, iptcl, orientation)
             else
-                softoris = pcont3Dsrch%get_softoris()
-                call grid_ptcl(b, p, iptcl, orientation, os=softoris)
+                ! re-fills pftcc
+                call prep_pftcc(b, p, iptcl)
+                ! CTF matrices
+                call apply_ctf(p, orientation, pftcc)
+                ! align
+                call pcont3Dsrch%new(p, orientation, orefs, pftcc)
+                call pcont3Dsrch%do_srch
+                orientation = pcont3Dsrch%get_best_ori()
+                call b%a%set_ori(iptcl, orientation)
+                ! grid
+                if(p%npeaks == 1)then
+                    call grid_ptcl(b, p, iptcl, orientation)
+                else
+                    softoris = pcont3Dsrch%get_softoris()
+                    call grid_ptcl(b, p, iptcl, orientation, os=softoris)
+                endif
             endif
             ! output orientation
             call b%a%write(iptcl, p%outfile)
@@ -234,7 +233,7 @@ contains
         call prepimg4align(b, p, optcl)
         call b%img%imgpolarizer(pftcc, 1, isptcl=.true.)
         ! restores b%img dimensions for clean exit
-        if( p%boxmatch < p%box )call b%img%new([p%box,p%box,1],p%smpd)
+        if(p%boxmatch < p%box)call b%img%new([p%box,p%box,1],p%smpd)
     end subroutine prep_pftcc
 
     subroutine apply_ctf(p, o, pftcc)
@@ -242,8 +241,9 @@ contains
         class(params),           intent(inout) :: p
         class(ori),              intent(inout) :: o
         class(polarft_corrcalc), intent(inout) :: pftcc
-        type(ctf) :: tfun
-        real      :: kV, cs, fraca, dfx, dfy, angast
+        type(oris) :: weirdos
+        type(ctf)  :: tfun
+        real       :: kV, cs, fraca, dfx, dfy, angast
         if( p%ctf .ne. 'no' )then
             ! grab CTF parameters
             dfx = o%get('dfx')
@@ -261,8 +261,11 @@ contains
             fraca = o%get('fraca')
             ! transfer function
             tfun = ctf(p%smpd, kV, cs, fraca)
-            ! CTF multiplication of references
-            call pftcc%apply_ctf(tfun, dfx, dfy=dfy, angast=angast)
+            ! create CTF polar matrices for online application
+            call weirdos%new(1)
+            call weirdos%set_ori(1, o)
+            call pftcc%create_polar_ctfmats(p%smpd, weirdos)
+            call weirdos%kill
         endif
     end subroutine apply_ctf
 

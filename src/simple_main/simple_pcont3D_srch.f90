@@ -80,7 +80,7 @@ contains
         call self%shsrch_obj%new(self%ppftcc, self%lims)
         self%prev_roind = self%ppftcc%get_roind(360.-o_in%e3get())
         self%prev_ref   = self%reforis%find_closest_proj(self%orientation_in) ! state not taken into account
-        self%prev_corr  = self%ppftcc%corr(self%prev_ref, 1, self%prev_roind) ! state not taken into account
+        self%prev_corr  = self%ppftcc%corr_single(self%prev_ref, 1, self%prev_roind) ! state not taken into account
         ! done
         self%exists = .true.
         if( debug ) write(*,'(A)') '>>> PCONT3D_SRCH::CONSTRUCTED NEW SIMPLE_PCONT3D_SRCH OBJECT'
@@ -208,7 +208,7 @@ contains
         integer, allocatable :: inds(:)
         type(ori) :: o
         real      :: ws(self%npeaks), u(2), mat(2,2), x1(2), x2(2)
-        real      :: frac, wcorr, euldist, mi_class, mi_inpl, mi_state, mi_joint
+        real      :: frac, wcorr, euldist, mi_proj, mi_inpl, mi_state, mi_joint
         integer   :: i, state, roind, prev_state
         ! sort oris
         if(self%npeaks > 1)then
@@ -258,10 +258,14 @@ contains
         call self%orientation_out%set('dist',euldist)
         ! overlap between distributions
         roind    = self%ppftcc%get_roind(360.-self%orientation_out%e3get())
-        mi_class = 1.
+        mi_proj  = 1.
         mi_inpl  = 0.
         mi_state = 0.
         mi_joint = 1.
+        if( euldist < 0.1 )then
+            mi_proj  = mi_proj + 1.
+            mi_joint = mi_joint + 1.
+        endif
         if(self%prev_roind == roind)then
             mi_inpl  = mi_inpl  + 1.
             mi_joint = mi_joint + 1.
@@ -277,7 +281,7 @@ contains
         else
             mi_joint = mi_joint/2.
         endif
-        call self%orientation_out%set('mi_class', mi_class)
+        call self%orientation_out%set('mi_proj',  mi_proj)
         call self%orientation_out%set('mi_inpl',  mi_inpl)
         call self%orientation_out%set('mi_state', mi_state)
         call self%orientation_out%set('mi_joint', mi_joint)

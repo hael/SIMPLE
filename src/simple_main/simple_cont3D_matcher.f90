@@ -105,7 +105,7 @@ contains
             orientation = b%a%get_ori(iptcl)
             state = nint(orientation%get('state'))
             if( state > 0 )then
-                call read_img_from_stk( b, p, iptcl )
+                call read_img_from_stk(b, p, iptcl)
                 call prepimg4align(b, p, orientation)
                 select case(p%refine)
                     case('cart')
