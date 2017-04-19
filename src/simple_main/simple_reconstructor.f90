@@ -328,12 +328,7 @@ contains
                         pw = shellweights(sh)
                     endif
                     phys = fpl%comp_addr_phys(logi)
-                    ! if(l_exp)then
-                    !     call self%inout_fcomp_exp(h, k, o, inoutmode, fpl%get_fcomp(logi,phys),&
-                    !     &oshift, pwght=pw)
-                    ! else
-                        call self%inout_fcomp(h,k,o,inoutmode,fpl%get_fcomp(logi,phys),oshift,pw)
-                    ! endif
+                    call self%inout_fcomp(h,k,o,inoutmode,fpl%get_fcomp(logi,phys),oshift,pw)
                 end do
             end do
             !$omp end parallel do
@@ -344,11 +339,7 @@ contains
                     logi   = [h,k,0]
                     oshift = fpl%oshift(logi, [-xtmp,-ytmp,0.], ldim=2)
                     phys   = fpl%comp_addr_phys(logi)
-                    ! if(l_exp)then
-                    !     call self%inout_fcomp_exp(h,k,o,inoutmode,fpl%get_fcomp(logi,phys),oshift,pwght)
-                    ! else
-                        call self%inout_fcomp(h,k,o,inoutmode,fpl%get_fcomp(logi,phys),oshift,pwght)
-                    ! endif
+                    call self%inout_fcomp(h,k,o,inoutmode,fpl%get_fcomp(logi,phys),oshift,pwght)
                 end do
             end do
             !$omp end parallel do
@@ -432,20 +423,20 @@ contains
         use simple_params,   only: params
         use simple_jiffys,   only: find_ldim_nptcls, progress
         use simple_gridding  ! use all in there
-        class(reconstructor), intent(inout) :: self               !< object
-        character(len=*),     intent(inout) :: fname              !< spider/MRC stack filename
-        class(params),        intent(in)    :: p                  !< parameters
-        class(oris),          intent(inout) :: o                  !< orientations
-        class(sym),           intent(inout) :: se                 !< symmetry element
-        integer,              intent(in)    :: state              !< state to reconstruct
-        real,    optional,    intent(in)    :: mul                !< shift multiplication factor
-        integer, optional,    intent(in)    :: eo                 !< even(2) or odd(1)
-        integer, optional,    intent(in)    :: part               !< partition (4 parallel rec)
-        real,    optional,    intent(in)    :: wmat(:,:)          !< shellweights
-        type(image)       :: img, img_pd
-        integer           :: statecnt(p%nstates), i, cnt, n, ldim(3)
-        integer           :: state_here, state_glob
-        logical           :: doshellweight
+        class(reconstructor), intent(inout) :: self      !< object
+        character(len=*),     intent(inout) :: fname     !< spider/MRC stack filename
+        class(params),        intent(in)    :: p         !< parameters
+        class(oris),          intent(inout) :: o         !< orientations
+        class(sym),           intent(inout) :: se        !< symmetry element
+        integer,              intent(in)    :: state     !< state to reconstruct
+        real,    optional,    intent(in)    :: mul       !< shift multiplication factor
+        integer, optional,    intent(in)    :: eo        !< even(2) or odd(1)
+        integer, optional,    intent(in)    :: part      !< partition (4 parallel rec)
+        real,    optional,    intent(in)    :: wmat(:,:) !< shellweights
+        type(image) :: img, img_pd
+        integer     :: statecnt(p%nstates), i, cnt, n, ldim(3)
+        integer     :: state_here, state_glob
+        logical     :: doshellweight
         call find_ldim_nptcls(fname, ldim, n)
         if( n /= o%get_noris() ) stop 'inconsistent nr entries; rec; simple_reconstructor'
         doshellweight = present(wmat)

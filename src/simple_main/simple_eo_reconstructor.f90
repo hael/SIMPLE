@@ -244,10 +244,10 @@ contains
         endif
         if( rran > 0.5 )then
             call self%even%inout_fplane(o, .true., fpl,&
-            &pwght=pwght, mul=mul, shellweights=shellweights, expanded=l_exp)
+            &pwght=pwght, mul=mul, shellweights=shellweights)
         else
             call self%odd%inout_fplane(o, .true., fpl,&
-            &pwght=pwght, mul=mul, shellweights=shellweights, expanded=l_exp)
+            &pwght=pwght, mul=mul, shellweights=shellweights)
         endif
     end subroutine grid_fplane
     
