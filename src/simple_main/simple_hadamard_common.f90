@@ -509,6 +509,7 @@ contains
                 allocate(fbody, source='recvol_state'//int2str_pad(s,2)//'_part'//int2str_pad(p%part,p%numlen))
                 p%vols(s)  = trim(adjustl(fbody))//p%ext
                 p%masks(s) = 'rho_'//trim(adjustl(fbody))//p%ext
+                call b%recvols(s)%compress_exp
                 call b%recvols(s)%write(p%vols(s), del_if_exists=.true.)
                 call b%recvols(s)%write_rho(p%masks(s))
                 deallocate(fbody)

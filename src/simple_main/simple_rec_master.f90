@@ -77,6 +77,7 @@ contains
                     call b%recvol%rec(p%stk, p, b%a, b%se, s, mul=p%mul,&
                     part=p%part, wmat=wmat)
                 endif
+                call b%recvol%compress_exp
                 call b%recvol%write(p%vols(s), del_if_exists=.true.)
                 call b%recvol%write_rho(p%masks(s))
             else ! shared-mem parallel rec

@@ -162,6 +162,7 @@ contains
     subroutine write_even( self, fbody )
         class(eo_reconstructor), intent(inout) :: self
         character(len=*),        intent(in)    :: fbody
+        call self%even%compress_exp
         call self%even%write(trim(adjustl(fbody))//'_even'//self%ext, del_if_exists=.true.)
         call self%even%write_rho('rho_'//trim(adjustl(fbody))//'_even'//self%ext)
     end subroutine write_even
@@ -170,6 +171,7 @@ contains
     subroutine write_odd( self, fbody )
         class(eo_reconstructor), intent(inout) :: self
         character(len=*),        intent(in)    :: fbody
+        call self%odd%compress_exp
         call self%odd%write(trim(adjustl(fbody))//'_odd'//self%ext, del_if_exists=.true.)
         call self%odd%write_rho('rho_'//trim(adjustl(fbody))//'_odd'//self%ext)
     end subroutine write_odd
@@ -382,9 +384,6 @@ contains
         call o%calc_spectral_weights(p%frac)
         ! zero the Fourier volumes and rhos
         call self%reset_all
-        ! init expansion
-        call self%even%init_exp
-        call self%odd%init_exp
         ! dig holds the state digit
         write(*,'(A)') '>>> KAISER-BESSEL INTERPOLATION'
         statecnt = 0
@@ -402,9 +401,7 @@ contains
         end do
         ! unddo expansion
         call self%even%compress_exp
-        call self%even%dealloc_exp
         call self%odd%compress_exp
-        call self%odd%dealloc_exp
         ! proceeds with density correction & output
         if( present(part) )then
             if( present(fbody) )then
@@ -482,13 +479,10 @@ contains
         if( self%exists )then
             ! kill composites
             call self%even%dealloc_rho
-            call self%even%dealloc_exp
             call self%even%kill
             call self%odd%dealloc_rho
-            call self%odd%dealloc_exp
             call self%odd%kill
             call self%eosum%dealloc_rho
-            call self%eosum%dealloc_exp
             call self%eosum%kill
             ! set existence
             self%exists = .false.
