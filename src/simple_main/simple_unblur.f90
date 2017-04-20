@@ -213,10 +213,14 @@ contains
         type(image), intent(out) :: movie_sum_corrected
         integer,     intent(in)  :: fromto(2)
         integer :: iframe
-        ! re-calculate the weighted sum
+        logical :: l_tmp
+        ! re-calculate the weighted sum with dose_weighting turned off
+        l_tmp = do_dose_weight
+        do_dose_weight = .false.
         call wsum_movie_frames(opt_shifts, fromto)
         movie_sum_corrected = movie_sum_global
         call movie_sum_corrected%bwd_ft
+        do_dose_weight = l_tmp
     end subroutine unblur_calc_sums_2
 
     subroutine unblur_calc_sums_tomo( frame_counter, time_per_frame, movie_sum, movie_sum_corrected, movie_sum_ctf )

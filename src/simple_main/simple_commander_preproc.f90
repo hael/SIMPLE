@@ -782,7 +782,14 @@ contains
             call os_uni%new(nmovies)
             call os_uni%read(p%unidoc)
             movienames   = os_uni%extract_table('intg')
-            boxfilenames = os_uni%extract_table('boxfile')
+            if( os_uni%isthere('boxfile') )then
+                boxfilenames = os_uni%extract_table('boxfile')
+            else
+                if( .not. cline%defined('boxtab')  ) stop 'need boxtab input to extract'
+                nboxfiles = nlines(p%boxtab)
+                if( nmovies /= nboxfiles ) stop 'number of entries in inputted files do not match!'
+                call read_filetable(p%boxtab,  boxfilenames)
+            endif
             if( os_uni%isthere('intg_frames') )then
                 movienames_frames = os_uni%extract_table('intg_frames')
             endif

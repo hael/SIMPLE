@@ -32,6 +32,7 @@ contains
         ! part numbered files
         call del_files('OUT',                    p%nparts)
         call del_files('algndoc_',               p%nparts, ext='.txt')
+        call del_files('unidoc_',                p%nparts, ext='.txt')
         call del_files('cavgs_part',             p%nparts, ext=p%ext )
         call del_files('JOB_FINISHED_',          p%nparts)
         call del_files('ctfsqsums_part',         p%nparts, ext=p%ext )

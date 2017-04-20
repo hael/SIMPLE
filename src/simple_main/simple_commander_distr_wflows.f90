@@ -119,11 +119,11 @@ contains
         if( p_master%nparts > p_master%nptcls ) stop 'nr of partitions (nparts) mjust be < number of entries in filetable'
         ! prepare merge_algndocs command line
         cline_merge_algndocs = cline
-        call cline_merge_algndocs%set( 'nthr',    1.                         )
-        call cline_merge_algndocs%set( 'fbody',   'unindoc_'                 )
-        call cline_merge_algndocs%set( 'nptcls',  real(p_master%nptcls)      )
-        call cline_merge_algndocs%set( 'ndocs',   real(p_master%nparts)      )
-        call cline_merge_algndocs%set( 'outfile', 'simple_unidoc_merged.txt' )
+        call cline_merge_algndocs%set( 'nthr',    1.                    )
+        call cline_merge_algndocs%set( 'fbody',   'unindoc_'            )
+        call cline_merge_algndocs%set( 'nptcls',  real(p_master%nptcls) )
+        call cline_merge_algndocs%set( 'ndocs',   real(p_master%nparts) )
+        call cline_merge_algndocs%set( 'outfile', 'simple_unidoc.txt'   )
         ! setup the environment for distributed execution
         call qenv%new(p_master)
         ! prepare job description
@@ -156,11 +156,11 @@ contains
         if( p_master%nparts > p_master%nptcls ) stop 'nr of partitions (nparts) mjust be < number of entries in filetable'
         ! prepare merge_algndocs command line
         cline_merge_algndocs = cline
-        call cline_merge_algndocs%set( 'nthr',    1.                         )
-        call cline_merge_algndocs%set( 'fbody',   'unindoc_'                 )
-        call cline_merge_algndocs%set( 'nptcls',  real(p_master%nptcls)      )
-        call cline_merge_algndocs%set( 'ndocs',   real(p_master%nparts)      )
-        call cline_merge_algndocs%set( 'outfile', 'simple_unidoc_merged.txt' )
+        call cline_merge_algndocs%set( 'nthr',    1.                    )
+        call cline_merge_algndocs%set( 'fbody',   'unindoc_'            )
+        call cline_merge_algndocs%set( 'nptcls',  real(p_master%nptcls) )
+        call cline_merge_algndocs%set( 'ndocs',   real(p_master%nparts) )
+        call cline_merge_algndocs%set( 'outfile', 'simple_unidoc.txt'   )
         ! setup the environment for distributed execution
         call qenv%new(p_master)
         ! prepare job description
