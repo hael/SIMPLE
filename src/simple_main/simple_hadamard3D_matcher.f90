@@ -116,6 +116,8 @@ contains
         ! EXTREMAL LOGICS
         if( frac_srch_space < 0.98 .or. p%extr_thresh > 0.025 )then
             corr_thresh = b%a%extremal_bound(p%extr_thresh)
+        else
+            corr_thresh = -huge(corr_thresh)
         endif
 
         ! PREPARE THE POLARFT_CORRCALC DATA STRUCTURE
@@ -205,7 +207,6 @@ contains
                 !$omp end parallel do
             case('het')
                 if(p%oritab .eq. '') stop 'cannot run the refine=het mode without input oridoc (oritab)'
-                corr_thresh = -huge(corr_thresh)
                 write(*,'(A,F8.2)') '>>> PARTICLE RANDOMIZATION(%):', 100.*p%extr_thresh
                 write(*,'(A,F8.2)') '>>> CORRELATION THRESHOLD:    ', corr_thresh
                 !$omp parallel do default(shared) schedule(auto) private(iptcl)&
