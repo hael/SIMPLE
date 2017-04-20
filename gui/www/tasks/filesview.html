@@ -1,48 +1,7 @@
-<div class=tasktitle>
-	View Files From Task
-	<div class=taskhovertext>Description goes here</div>
-	<img src=img/close.png onclick=hideTasks()>
+<div class=bodyheader>
+	<img src=img/right_chevron.png>
+	<b>View Files From Job</b>
+	<div class=hoverdiv></div>
 </div>
-<input type=hidden id=filesviewdirectory>
-<input type=hidden id=filesviewfilename>
-<div class=toolbar>
-	<button onclick='filesViewBack()'>Back</button>
-	<div class=filesviewimagetoolbar>
-		<label for=filesviewcontrast>Contrast</label>
-		<input type=range id=filesviewcontrast value=2 max=10 min=0 onchange='filesViewFetch()'>
-		<label for=filesviewbrightness>Brightness</label>
-		<input type=range id=filesviewbrightness value=128 max=255 min=0 onchange='filesViewFetch()'>
-		<label for=filesviewscale>Scale</label>
-		<input type=range id=filesviewscale value=5 max=10 min=1 step=0.5 onchange='filesViewUpdateZoom()'>
-	</div>
-</div>
-<table class=filesviewtable id=filesviewtable></table>
-<div class=filesviewdiv id=filesviewdiv></div>
-
-<div class=filesviewsave id=filesviewsave>
-	<div class=popupheader>
-		Save Selection
-	</div>
-	<input type=hidden id=filesviewfolder>
-	<table class=popuptable>
-		<tr>
-			<td>Filename</td>
-			<td><input id=filesviewsavefilename type=text></td>
-		</tr>
-		<tr>
-			<td>Folder</td>
-			<td><input id=filesviewsavefolder type=text></td>
-			<td><img src=img/folder.png onclick=selectFolder('filesviewsavefolder')></img></td>
-		</tr>
-	</table>
-	<div class=clickbutton onclick=cancelFilesViewSave()>Cancel</div>
-	<div class=clickbutton onclick=confirmFilesViewSave()>Save</div>
-</div>
-
-<applet
-	width="640" height="480" name="av"
-	code="MoleculeViewerApplet"
-	codebase=""
-	archive="OpenAstexViewer.jar">
-      <param name="scriptFile" value="test.script">
-</applet>
+<table class=tasktable id=viewjobfilestable></table>
+	

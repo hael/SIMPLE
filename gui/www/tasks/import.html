@@ -1,33 +1,57 @@
-<div class=tasktitle>
+<div class=bodyheader>
+	<img src=img/right_chevron.png>
 	<b>Import</b>
-	<div class=taskhovertext>Unblur your movies</div>
+	<div class=hoverdiv>Import movies, micrographs or boxfiles</div>
 </div>	
-<table class=taskattributestable>
+<table class=tasktable>
 	<input class=jobarg type=hidden id=cmd value=import>
 	<input class=jobarg type=hidden id=jobtype value=import>
 	<input class=jobarg type=hidden id=taskname value=importtask>
-	
-	<tr>
+	<tr class=taskheader onclick=taskHeaderShowHide(this)>
+		<td>
+			<img src=img/right_chevron.png>
+			Job Parameters
+		</td>
+		<td></td>
+		<td></td>
+		<td></td>
+	</tr>
+	<tr class=taskheaderline>
 		<td>Job Name</td>
 		<td><input class=jobarg type=text id=jobname></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>An identifier for the job. This will appear in the name of the folder containing the output from the job. E.G First_100</div>
+		</td>
 	</tr>
-	<tr>
+	<tr class=taskheaderline>
 		<td>Job Description</td>
 		<td><input class=jobarg type=text id=jobdescription></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>A description of the job</div>
+		</td>
 	</tr>
-	<tr>
-		<td>Required Arguments</td>
+	<tr class=taskrequired onclick=taskRequiredShowHide(this)>
+		<td>
+			<img src=img/right_chevron.png>
+			Required Arguments</td>
+		<td></td>
+		<td></td>
+		<td></td>
 	</tr>
-	<tr>
+	<tr class=taskrequiredline>
 		<td>Directory</td>
 		<td><input class=jobarg type=text id=dir></td>
 		<td><img src=img/folder.png onclick=selectFolder('dir')></img></td>
 		<td class=taskhelp>
-			<img class=taskhelpimage src=img/info.png>
-			<div class=taskhelptext></div>
+			<img src=img/info.png>
+			<div class=hoverdiv></div>
 		</td>
 	</tr>
-	<tr>
+	<tr class=taskrequiredline>
 		<td>File Suffix</td>
 		<td>
 			<select class=jobarg type=select id=suffix>
@@ -37,23 +61,31 @@
 				<option value=mrcs>mrcs</option>
 			</select>
 		</td>
+		<td></td>
 		<td class=taskhelp>
 			<img class=taskhelpimage src=img/info.png>
 			<div class=taskhelptext></div>
 		</td>
 	</tr>
-	<tr>
-		<td>Optional Arguments</td>
+	<tr class=taskoptional onclick=taskOptionalShowHide(this)>
+		<td>
+			<img src=img/right_chevron.png>
+			Optional Arguments
+		</td>
+		<td></td>
+		<td></td>
+		<td></td>
 	</tr>
-	<tr>
+	<tr class=taskoptionalline>
 		<td>Output Filename</td>
 		<td><input class=jobarg type=text id=outfile></td>
+		<td></td>
 		<td class=taskhelp>
 			<img class=taskhelpimage src=img/info.png>
 			<div class=taskhelptext></div>
 		</td>
 	</tr>
 </table>
-<div class=clickbutton onclick=hideTasks()>Cancel</div>
+<div class=clickbutton onclick="hideTasks(); projectHistoryFull()">Cancel</div>
 <div class=clickbutton onclick=runTask('importtask')>Run</div>
-</div>
+

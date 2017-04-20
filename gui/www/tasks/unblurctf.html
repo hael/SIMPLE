@@ -1,156 +1,310 @@
 <div class=bodyheader>
+	<img src=img/right_chevron.png>
 	<b>Motion Correction and CTF Estimation</b>
 	<div class=hoverdiv>Perform alignment of movie frames to correct for movement and estimate CTF parameters for each resulting micrograph</div>
 </div>
-<table class=taskattributestable>
+<table class=tasktable>
 	<input class=jobarg type=hidden id=cmd value=simple_distr_exec>
-	<input class=jobarg type=hidden id=prg value=unblur>
-	<input class=jobarg type=hidden id=jobtype value=unblur>
-	<tr>
+	<input class=jobarg type=hidden id=prg value=unblur_ctffind>
+	<input class=jobarg type=hidden id=jobtype value=unblur_ctffind>
+	<input class=jobarg type=hidden id=taskname value=unblurctftask>
+	<tr class=taskheader onclick=taskHeaderShowHide(this)>
+		<td>
+			<img src=img/right_chevron.png>
+			Job Parameters</td>
+		<td></td>
+		<td></td>
+		<td></td>
+	</tr>
+	<tr class=taskheaderline>
 		<td>Job Name</td>
 		<td><input class=jobarg type=text id=jobname></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>An identifier for the job. This will appear in the name of the folder containing the output from the job. E.G First_100</div>
+		</td>
 	</tr>
-	<tr>
+	<tr class=taskheaderline>
 		<td>Job Description</td>
 		<td><input class=jobarg type=text id=jobdescription></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>A description of the job</div>
+		</td>
+	</tr>	
+	<tr class=taskrequired onclick=taskRequiredShowHide(this)>
+		<td>
+			<img src=img/right_chevron.png>
+			Required Arguments</td>
+		<td></td>
+		<td></td>
+		<td></td>
 	</tr>
-		<tr>
-			<td>Required Arguments</td>
-		</tr>
+	<tr class=taskrequiredline>
+		<td>Movie List</td>
+		<td>
+			<input class=jobarg type=text id=filetab>
+		</td>
+		<td>
+			<img src=img/folder.png onclick=fileBrowser('filetab')>
+		</td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Text file containing a list of movies. Usually this is the produced during an import job</div>
+		</td>
+	</tr>
+	<tr class=taskrequiredline>
+		<td>Sampling Distance</td>
+		<td>
+			<input class=jobarg type=text id=smpd>
+		</td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Sampling distance of the microscope in A/pixel</div>
+		</td>
+	</tr>
+	<tr class=taskrequiredline>
+		<td>Acceleration Voltage</td>
+		<td>
+			<input class=jobarg type=text id=kv>
+		</td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Acceleration voltage of the microscope (kV)</div>
+		</td>
+	</tr>
+	<tr class=taskrequiredline>
+		<td>Spherical Abberation</td>
+		<td>
+			<input class=jobarg type=text id=cs>
+		</td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Spherical abberation of the microscope (mm)</div>
+		</td>
+	</tr>
+		<tr class=taskrequiredline>
+		<td>Amplitude Contrast</td>
+		<td>
+			<input class=jobarg type=text id=fraca>
+		</td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Fraction of the the amplidtude contrast used for fitting CTF</div>
+		</td>
+	</tr>
+	<tr class=taskoptional onclick=taskOptionalShowHide(this)>
+		<td>
+			<img src=img/right_chevron.png>
+			Optional Arguments
+		</td>
+		<td></td>
+		<td></td>
+		<td></td>
+	</tr>
+	<tr class=taskoptionalline>
+		<td>File Body</td>
+		<td><input class=jobarg type=text id=fbody></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>File body prepended to each output file</div>
+		</td>
+	</tr>
+	<tr class=taskoptionalline>
+		<td>Start Low Pass Limit</td>
+		<td><input class=jobarg type=text id=lpstart></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Start low-pass limit (A). Default: 15A </div>
+		</td>
+	</tr>
+	<tr class=taskoptionalline>
+		<td>Stop Low Pass Limit</td>
+		<td><input class=jobarg type=text id=lpstop></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Stop low-pass limit (A). Default: 8A</div>
+		</td>
+	</tr>
+	<tr class=taskoptionalline>
+		<td>Maximum Halfwidth Shift</td>
+		<td><input class=jobarg type=text id=trs></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Maximimum halfwidth shift (pixels)</div>
+		</td>
+	</tr>
+	<tr class=taskoptionalline>
+		<td>Exposure Time</td>
+		<td><input class=jobarg type=text id=exp_time></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Total exposure time (seconds)</div>
+		</td>
+	</tr>
+	<tr class=taskoptionalline>
+		<td>Power Spectrum Dimensions</td>
+		<td><input class=jobarg type=text id=pspecsz></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Power spectrum dimensions (pixels)</div>
+		</td>
+	</tr>
+	<tr class=taskoptionalline>
+		<td>Number String Length</td>
+		<td><input class=jobarg type=text id=numlen></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Length of number string (characters)</div>
+		</td>
+	</tr>
+	<tr class=taskoptionalline>
+		<td>First Iteration</td>
+		<td><input class=jobarg type=text id=startit></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Start iterating from here</div>
+		</td>
+	</tr>
+	<tr class=taskoptionalline>
+		<td>Scale Image</td>
+		<td><input class=jobarg type=text id=scale></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Image scale factor</div>
+		</td>
+	</tr>
+	<tr class=taskoptionalline>
+		<td>Number Frames To Group</td>
+		<td><input class=jobarg type=text id=nframesgrp></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Number of frames to average</div>
+		</td>
+	</tr>
+	<tr class=taskoptionalline>
+		<td>First Frame</td>
+		<td><input class=jobarg type=text id=fromf></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Start frame index</div>
+		</td>
+	</tr>
+	<tr class=taskoptionalline>
+		<td>Final Frame</td>
+		<td><input class=jobarg type=text id=tof></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Final frame index</div>
+		</td>
+	</tr>
+	<tr class=taskoptionalline>
+		<td>Sigma Cutoff</td>
+		<td><input class=jobarg type=text id=nsig></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Sigma cutoff for outlier rejection</div>
+		</td>
+	</tr>	
+	<tr class=taskoptionalline>
+		<td>Output Filename</td>
+		<td><input class=jobarg type=text id=outfile></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv></div>
+		</td>
+	</tr>	
+		<tr class=taskoptionalline>
+		<td>High Pass Limit</td>
+		<td><input class=jobarg type=text id=hp></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>High pass limit(A)</div>
+		</td>
+	</tr>
+		<tr class=taskoptionalline>
+		<td>Low Pass Limit</td>
+		<td><input class=jobarg type=text id=lp></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Low pass limit (A)</div>
+		</td>
+	</tr>
+		<tr class=taskoptionalline>
+		<td>Minimum Defocus</td>
+		<td><input class=jobarg type=text id=dfmin></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Minimum expected defocus (microns)</div>
+		</td>
+	</tr>
+	<tr class=taskoptionalline>
+		<td>Maximim Defocus</td>
+		<td><input class=jobarg type=text id=dfmax></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Maximum expected defocus (microns)</div>
+		</td>
+	</tr>
+		<tr class=taskoptionalline>
+		<td>Expected Astigmatism</td>
+		<td><input class=jobarg type=text id=expastig></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Expected astigmatism (microns)</div>
+		</td>
+	</tr>
+		<tr class=taskoptionalline>
+		<td>Astigmatism Step</td>
+		<td><input class=jobarg type=text id=astigstep></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Step size for astigamtism search (microns)</div>
+		</td>
+	</tr>
+	<tr class=taskoptionalline>
+		<td>Phaseplate</td>
+		<td>
+			<select class=jobarg type=select id=phaseplate>
+				<option selected></option>
+				<option value=yes>yes</option>
+				<option value=no>no</option>
+			</select>
+		</td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Images obtained with phaseplate. Default: no</div>
+		</td>
+	</tr>	
+</table>
+<div class=clickbutton onclick="hideTasks(); projectHistoryFull()">Cancel</div>
+<div class=clickbutton onclick=showRunParameters('unblurctftask')>Run</div>
 
-		<tr>
-			<td>Sampling Distance</td>
-			<td><input class=jobarg type=text id=smpd></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Sampling distance of the microscope in A/pixel</div>
-			</td>
-		</tr>
-		<tr>
-			<td>Movie List</td>
-			<td><input class=jobarg type=text id=filetab></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Text file containing a list of movies</div>
-			</td>
-		</tr>	
-		<tr>
-			<td>Optional Arguments</td>
-		</tr>
-		<tr>
-			<td>File Body</td>
-			<td><input class=jobarg type=text id=fbody></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>File body prepended to each output file</div>
-			</td>
-		</tr>
-		<tr>
-			<td>Start Low Pass Limit</td>
-			<td><input class=jobarg type=text id=lpstart></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Start low-pass limit (A)</div>
-			</td>
-		</tr>
-		<tr>
-			<td>Stop Low Pass Limit</td>
-			<td><input class=jobarg type=text id=lpstop></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Stop low-pass limit (A)</div>
-			</td>
-		</tr>
-		<tr>
-			<td>Maximum Halfwidth Shift</td>
-			<td><input class=jobarg type=text id=trs></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Maximimum halfwidth shift (pixels)</div>
-			</td>
-		</tr>
-		<tr>
-			<td>Exposure Time</td>
-			<td><input class=jobarg type=text id=exp_time></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Total exposure time (seconds)</div>
-			</td>
-		</tr>
-		<tr>
-			<td>Dose Rate</td>
-			<td><input class=jobarg type=text id=dose_rate></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Total exposure time (seconds)</div>
-			</td>
-		</tr>
-		<tr>
-			<td>Acceleration Voltage</td>
-			<td><input class=jobarg type=text id=kv></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Acceleration voltage (kV)</div>
-			</td>
-		</tr>
-		<tr>
-			<td>Power Spectrum Dimensions</td>
-			<td><input class=jobarg type=text id=pspecsz></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Power spectrum dimensions (pixels)</div>
-			</td>
-		</tr>
-		<tr>
-			<td>Number String Length</td>
-			<td><input class=jobarg type=text id=numlen></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>length of number string (characters)</div>
-			</td>
-		</tr>
-		<tr>
-			<td>First Iteration</td>
-			<td><input class=jobarg type=text id=startit></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Start iterating from here</div>
-			</td>
-		</tr>
-		<tr>
-			<td>Scale Image</td>
-			<td><input class=jobarg type=text id=scale></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Image scale factor</div>
-			</td>
-		</tr>
-		<tr>
-			<td>Number Frames</td>
-			<td><input class=jobarg type=text id=frameavg></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Number of frames to average</div>
-			</td>
-		</tr>
-		<tr>
-			<td>First Frame</td>
-			<td><input class=jobarg type=text id=fromf></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Start frame index</div>
-			</td>
-		</tr>
-		<tr>
-			<td>Final Frame</td>
-			<td><input class=jobarg type=text id=tof></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Final frame index</div>
-			</td>
-		</tr>
-	</table>
-	<div class=clickbutton onclick=hideTasks()>Cancel</div>
-	<div class=clickbutton onclick=showRunParameters('unblurtask')>Run</div>
-</div>
 

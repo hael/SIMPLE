@@ -1,63 +1,108 @@
 <div class=bodyheader>
-	<b>Pipeline View</b>
-	<div class=hoverdiv>Description goes here</div>
+	<img src=img/right_chevron.png>
+	<b>Selection View</b>
+	<div class=hoverdiv>Select micrographs based on their thumbnails, CTF parameters and power spectra</div>
 </div>
 
 <input type=hidden id=pipelineviewdirectory>
 
-<div class=bodybutton>
-	<b>Actions</b>
-	<div class=hoverdiv>
-		<div onclick=selectAll('filesviewdiv')>Select All</div>
-		<div onclick=deselectAll('filesviewdiv')>Deselect All</div>
-		<div onclick=pipelineViewSave()>Save Selection</div>
+<div class=bodytoolbar>
+	<div class=bodybutton id=pipelineactionsbutton>
+		<b>Actions</b>
+		<div class=hoverdiv>
+			<div onclick=pipelineViewSelectAll()>Select All</div>
+			<div onclick=pipelineViewClearAll()>Deselect All</div>
+			<div onclick=pipelineViewSave()>Save Selection</div>
+		</div>
 	</div>
-</div>
 
-<div class=bodybutton>
-	<b>View</b>
-	<div class=hoverdiv>
-		<label for=pipelinepspeccontrast>Pspec Contrast</label>
-		<input type=range id=pipelinepspeccontrast value=4 max=10 min=0 onchange=pipelineViewShowPage()>
-		<label for=pipelinepspecbrightness>Pspec Brightness</label>
-		<input type=range id=pipelinepspecbrightness value=64 max=255 min=0 onchange=pipelineViewShowPage()>
-		<label for=pipelinepspeczoom>Pspec Zoom</label>
-		<input type=range id=pipelinepspeczoom value=1 max=4 min=0.5 step=0.1 onchange=pipelineViewUpdateZoom()>
-		<label for=pipelinethumbcontrast>Thumb Contrast</label>
-		<input type=range id=pipelinethumbcontrast value=2 max=10 min=0 onchange=pipelineViewShowPage()>
-		<label for=pipelinethumbbrightness>Thumb Brightness</label>
-		<input type=range id=pipelinethumbbrightness value=128 max=255 min=0 onchange=pipelineViewShowPage()>
-		<label for=pipelinethumbzoom>Thumb Zoom</label>
-		<input type=range id=pipelinethumbzoom value=1 max=4 min=0.5 step=0.1 onchange=pipelineViewUpdateZoom()>
+	<div class=bodybutton id=pipelineviewbutton>
+		<b>View</b>
+		<div class=hoverdiv>
+			<table>
+				<tr>
+					<td>
+						<label for=pipelinepspeccontrast>Pspec Contrast</label>
+					</td>
+					<td>
+						<input type=range id=pipelinepspeccontrast value=4 max=10 min=0 onchange=pipelineViewShowPage()>
+					</td>
+				</tr>
+				<tr>
+					<td>
+						<label for=pipelinepspecbrightness>Pspec Brightness</label>
+					</td>
+					<td>
+						<input type=range id=pipelinepspecbrightness value=64 max=255 min=0 onchange=pipelineViewShowPage()>
+					</td>
+				</tr>
+				<tr>
+					<td>
+						<label for=pipelinepspeczoom>Pspec Zoom</label>
+					</td>
+					<td>
+						<input type=range id=pipelinepspeczoom value=1 max=4 min=0.5 step=0.1 onchange=pipelineViewUpdateZoom()>
+					</td>
+				</tr>
+				<tr>
+					<td>
+						<label for=pipelinethumbcontrast>Thumb Contrast</label>
+					</td>
+					<td>
+						<input type=range id=pipelinethumbcontrast value=2 max=10 min=0 onchange=pipelineViewShowPage()>
+					</td>
+				</tr>
+					<tr>
+					<td>
+						<label for=pipelinethumbbrightness>Thumb Brightness</label>
+					</td>
+					<td>
+						<input type=range id=pipelinethumbbrightness value=128 max=255 min=0 onchange=pipelineViewShowPage()>
+					</td>
+				</tr>
+				<tr>
+					<td>
+						<label for=pipelinethumbzoom>Thumb Zoom</label>
+					</td>
+					<td>
+						<input type=range id=pipelinethumbzoom value=1 max=4 min=0.5 step=0.1 onchange=pipelineViewUpdateZoom()>	
+					</td>
+				</tr>
+				<tr>
+					<td>
+						<label for=pipelinepagecount>Lines Per Page</label>
+					</td>
+					<td>
+						<select name=pipelinepagecount id=pipelinepagecount>
+							<option value=10>10</option>
+							<option value=25 selected>25</option>
+							<option value=50>50</option>
+							<option value=100>100</option>
+							<option value=200>200</option>
+						</select>
+					</td>
+				</tr>
+			</table>	
+		</div>
 	</div>
-</div>
 
-<div class=bodybutton>
-	<label for=pipelinesort>Sort By</label>
-	<select name=pipelinesort id=pipelinesort onchange=pipelineViewSort()>
-		<option value=name selected>Name</option>
-		<option value=dfx>DFX</option>
-		<option value=dfy>DFY</option>
-		<option value=angast>Angast</option>
-	</select>
-</div>
+	<div class=bodybutton id=pipelinesortbutton>
+		<b>Sort</b>
+		<div class=hoverdiv>
+			<div onclick=pipelineViewSort('name')>Name</div>
+			<div onclick=pipelineViewSort('dfx')>DFX</div>
+			<div onclick=pipelineViewSort('dfy')>DFY</div>
+			<div onclick=pipelineViewSort('angast')>Angast</div>
+		</div>
+	</div>
 
-<div class=bodybutton>
-	<label for=pipelinepagecount>Lines Per Page</label>
-	<select name=pipelinepagecount id=pipelinepagecount>
-		<option value=10>10</option>
-		<option value=25 selected>25</option>
-		<option value=50>50</option>
-		<option value=100>100</option>
-		<option value=200>200</option>
-	</select>
-</div>
-
-<div class=bodybutton id=pipelinepage>
-	<img src=img/left-arrow.png onclick=pipelineViewPageDown()>
-	<input type=text id=pipelinepagenumber onchange=pipelineViewPage()>/
-	<div id=pipelinepagemax ></div>
-	<img src=img/right-arrow.png onclick=pipelineViewPageUp()>
+	<div class=bodybutton id=pipelinepage>
+		<b>Page</b>
+		<img src=img/left-arrow.png onclick=pipelineViewPageDown()>
+		<input type=text id=pipelinepagenumber onchange=pipelineViewShowPage()>/
+		<div id=pipelinepagemax></div>
+		<img src=img/right-arrow.png onclick=pipelineViewPageUp()>
+	</div>
 </div>
 
 <div id=pipelineviewdiv></div>

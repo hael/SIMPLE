@@ -847,6 +847,57 @@ void pipelineSaveSelectionHistory(std::string argstring){
 }
 
 void pipelineViewMaster(std::string argstring){
+	std::string unidoc, returnstring, line, select;
+	struct stat buffer;
+	std::ifstream selectionfile, unidocstream;
+	
+	unidoc = getKeyValFromString(argstring, "dir");
+
+	if(unidoc == ""){
+		missingArgumentError("dir");
+	}
+	
+	unidoc.append("/simple_unidoc_merged.txt");
+	
+	returnstring = "micrographs=";
+	
+	if(stat(unidoc.c_str(), &buffer) == 0){
+		unidocstream.open(unidoc.c_str());
+		while(getline(unidocstream, line)){
+			returnstring.append(getKeyValFromString(line, "intg"));
+			returnstring.append(",");
+			returnstring.append(getKeyValFromString(line, "pspec"));
+			returnstring.append(",");
+			returnstring.append(getKeyValFromString(line, "thumb"));
+			returnstring.append(",");
+			returnstring.append(getKeyValFromString(line, "dfx"));
+			returnstring.append(",");
+			returnstring.append(getKeyValFromString(line, "dfy"));
+			returnstring.append(",");
+			returnstring.append(getKeyValFromString(line, "angast"));
+			returnstring.append(";");	
+		}
+		unidocstream.close();
+		
+		select = getKeyValFromString(argstring, "dir");
+		select.append("/.selection");
+	
+		if(stat(select.c_str(), &buffer) == 0){
+			selectionfile.open(select.c_str());
+			if (selectionfile.is_open()){
+				returnstring.append(" selected=");
+				while(getline(selectionfile,line)){
+					returnstring.append(line);
+					returnstring.append(";");
+				}
+				selectionfile.close();
+			}
+		}
+		std::cout << returnstring << std::endl;
+	}
+}
+
+void pipelineViewMasterOLD(std::string argstring){
 	std::string dir, returnstring, line, select, ctf, ctfparams;
 	DIR *directory;
 	struct dirent *entry;
@@ -1122,9 +1173,10 @@ void import(std::string argstring){
 }
 
 void showFile(std::string argstring){
-	std::string file, contrast, brightness, returnstring;
+	std::string file, contrast, brightness, returnstring, line;
 	struct stat buffer;
 	int nx, ny, nz, mode;
+	std::ifstream logfile, txtfile;
 	
 	file = getKeyValFromString(argstring, "file");
 	contrast = getKeyValFromString(argstring, "contrast");
@@ -1137,11 +1189,30 @@ void showFile(std::string argstring){
 				returnstring = "";
 				returnstring.append("image=");
 				returnstring.append(pngFromMRC(file, std::strtof(brightness.c_str(), NULL), std::strtof(contrast.c_str(), NULL)));
-				std::cout << returnstring << std::endl;
+				std::cout << returnstring << " nz=" << nz  << " nx=" << nx << " ny=" << ny << std::endl;
 			}else if(nz > 1 && mode == 2){
 				returnstring = "";
 				pngsFromMRCStack(file, std::strtof(brightness.c_str(), NULL), std::strtof(contrast.c_str(), NULL));
 			}
+		}else if(std::strstr(file.c_str(), ".log")){
+			logfile.open(file.c_str());
+			returnstring.append("log=");
+			while(getline(logfile, line)){
+				std::replace(line.begin(), line.end(), ' ', '^');
+				returnstring.append(line);
+			}
+			logfile.close();
+			std::cout << returnstring << std::endl;
+		}else if(std::strstr(file.c_str(), ".txt")){
+			txtfile.open(file.c_str());
+			returnstring.append("txt=");
+			while(getline(txtfile, line)){
+				std::replace(line.begin(), line.end(), ' ', '^');
+				std::replace(line.begin(), line.end(), '=', '¬');
+				returnstring.append(line);
+			}
+			txtfile.close();
+			std::cout << returnstring << std::endl;
 		}
 	}
 }

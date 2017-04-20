@@ -15,11 +15,13 @@
 			<div include-html=tasks/tasklist.html class=taskwindow id=tasklist></div>
 			<div include-html=tasks/import.html class=taskwindow id=importtask></div>
 			<div include-html=tasks/unblurctf.html class=taskwindow id=unblurctftask></div>
-			<div include-html=tasks/fileviewer.html class=taskwindow id=fileviewer></div>
+			<div include-html=tasks/filesview.html class=taskwindow id=filesviewtask></div>
 			<div include-html=tasks/pipelineview.html class=taskwindow id=pipelineview></div>
+			<div include-html=tasks/fileviewer.html class=taskwindow id=fileviewer></div>
 		</div>
 		<div id=historydiv class=bodydiv>
 			<div class=bodyheader onclick=projectHistoryFull()>
+				<img id=historyicon src=img/right_chevron.png>
 				<b>Project History</b>
 			</div>
 			<table class=historytable>
@@ -71,7 +73,9 @@
 	<div id=folderselectorpopup>
 		<input type=hidden id=folderselectorfolder>
 		<input type=hidden id=folderselectorcaller>
-		<div class=popupheader>Select Folder</div>
+		<div class=popupheader>
+			<b>Select Folder</b>
+		</div>
 		<table class=popuptable id=folderdirectorytable></table>
 		<table class=popuptable id=folderlisttable></table>
 		<div class=clickbutton onclick=cancelFolderSelection()>Cancel</div>
@@ -79,7 +83,9 @@
 	</div>
 	
 	<div id=newprojectpopup>
-		<div class=popupheader>Create New Project</div>
+		<div class=popupheader>
+			<b>Create New Project</b>
+		</div>
 		<table class=popuptable>
 			<tr>
 				<td>Project Name</td>

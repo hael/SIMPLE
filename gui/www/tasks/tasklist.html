@@ -3,7 +3,7 @@
 </div>
 
 <div class=modeselector>
-	Mode
+	Workflow
 	<select id=modeselector name=mode onchange=selectMode()>
 		<option value=standardtasklist selected>Standard</option>
 		<option value=pipelinetasklist>Pipeline</option>
@@ -15,20 +15,23 @@
 <div id=standardtasklist class=tasklist>
 	<div class=taskbutton onclick=showTask('importtask')>
 		Import
-		<div class=hoverdiv>
+		<div class=taskdescription>
 			Import movies
 		</div>
 	</div>
 	<img src=img/down-arrow.png>
-	<div class=taskbutton onclick=showTask('unblurtask')>
+	<div class=taskbutton onclick=showTask('unblurctftask')>
 		Motion Correction & CTF Estimation
-		<div class=hoverdiv>
+		<div class=taskdescription>
 			Perform alignment of movie frames to correct for movement and estimate CTF parameters for each resulting micrograph
 		</div>
 	</div>
 	<img src=img/down-arrow.png>
 	<div class=taskbutton onclick=showTask('picktask')>
 		Manual Picking
+		<div class=taskdescription>
+			We haven't implemented this just yet
+		</div>
 	</div>
 	<img src=img/down-arrow.png>
 	<div class=taskbutton onclick=showTask('extracttask')>
@@ -103,7 +106,12 @@
 </div>
 
 <div id=advancedtasklist class=tasklist>
-
+	<div class=taskbutton onclick=showTask('externaltask')>
+		External Job
+		<div class=hoverdiv>
+			Add a job executed externally to the gui to the project history
+		</div>
+	</div>
 </div>
 
 

@@ -69,7 +69,10 @@ body {
 }
 
 .bodyheader {
-	font-size: 20px;
+	background-color: #e4e4e4;
+	font-size: 18px;
+	padding: 10px;
+	text-align: left;
 }
 
 .bodyheader:hover {
@@ -90,6 +93,22 @@ body {
 
 .bodybutton:hover .hoverdiv {
 	display: block;
+}
+
+.clickbutton {
+	display: inline-block;
+	width: 170px;
+	height: 20px;
+	#margin-left: 60px;
+	margin-top: 5px;
+	padding: 5px;
+	color: white;
+	background-color: #2298ca;
+	text-align: center;
+}
+
+.clickbutton:hover {
+	background-color: rgb(218, 132, 40);
 }
 
 .hoverdiv {
@@ -125,15 +144,25 @@ body {
 	color: white;
 	background-color: #2298ca;
 	text-align: center;
-	
 }
 
 .taskbutton:hover{
 	background-color: rgb(218, 132, 40);
 }
 
-.taskbutton:hover .hoverdiv {
+.taskbutton:hover .taskdescription {
 	display: block;
+}
+
+.taskdescription {
+	display: none;
+	width: 350px;
+	position: absolute;
+	border-style: solid;
+	padding: 5px;
+	color: black;
+	z-index: 100;
+	background-color: white;
 }
 
 .taskwindow {
@@ -141,10 +170,51 @@ body {
 	height: 100%;
 }
 
+.taskhelp:hover .hoverdiv{
+	display: block;
+}
+
 .tasktable {
 	overflow-y: scroll;
-	display: block;
-	height: calc(100vh - 370px);
+	max-height: calc(100vh - 370px);
+	margin: auto;
+	padding: 10px;
+	text-align: left;
+	border-collapse: collapse;
+	margin-top: 20px;
+}
+
+.taskheader {
+	background-color: #2298ca;
+	color: white;
+}
+
+.taskrequired {
+	background-color: #2298ca;
+	color: white;
+}
+
+.taskoptional {
+	background-color: #2298ca;
+	color: white;
+}
+
+.tasktable tr:nth-child(odd) {
+	background-color: rgb(236, 236, 236);
+}
+
+.taskrequired td{
+	padding: 5px;
+}
+
+.taskheader td{
+	background-color: #2298ca;
+	padding: 5px;
+}
+
+.taskoptional td{
+	background-color: #2298ca;
+	padding: 5px;
 }
 
 .micrographimgdeselected {
@@ -172,6 +242,8 @@ body {
 .popupheader {
 	font-size: 20px;
 	background-color: rgb(34, 152, 202);
+	padding: 5px;
+	color:white;
 }
 
 .popuptable {
@@ -202,6 +274,7 @@ body {
 	left: calc(50% - 200px);
 	background-color: white;
 	display: none;
+	z-index: 100;
 }
 
 .pspecdiv,.thumbdiv,.paramsdiv{
@@ -229,6 +302,7 @@ body {
 	padding: 10px;
 }
 
+
 #gauze {
 	position: absolute;
 	height: 100%;
@@ -242,7 +316,7 @@ body {
 
 #filebrowserpopup {
 	position: absolute;
-	height: 400px;
+	height: 412px;
 	width: 600px;
 	top: calc(50% - 200px);
 	left: calc(50% - 200px);
@@ -253,7 +327,7 @@ body {
 
 #taskdiv{
 	display: none;
-	height: calc(100vh - 230px);
+	height: calc(100vh - 250px);
 }
 
 #filebrowserlisttable{
@@ -286,7 +360,7 @@ body {
 
 #folderlisttable{
 	overflow: auto;
-	height: 300px;
+	height: 290px;
 	display: block;
 }
 
@@ -326,6 +400,41 @@ body {
 	left: calc(50% - 200px);
 	background-color: white;
 	display: none;
+}
+
+#pipelineactionsbutton {
+	float: left;
+	margin-left: 10px;
+	margin-top: 5px;
+}
+
+#pipelineviewbutton {
+	float: left;
+	margin-top: 5px;
+	margin-left: 10px;
+}
+
+#pipelinesortbutton {
+	float: left;
+	margin-top: 5px;
+	margin-left: 10px;
+}
+
+#pipelinepage {
+	margin-top: 5px;
+	margin-left: 10px;
+}
+
+#filesviewactionsbutton {
+	float: left;
+	margin-left: 10px;
+	margin-right: 10px;
+	margin-top: 5px;
+}
+
+#filesviewviewbutton {
+	float: left;
+	margin-top: 5px;
 }
 
 div[name=pipelineviewselected] {    
