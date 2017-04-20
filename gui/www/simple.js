@@ -41,7 +41,7 @@ function getArgument(argumentstring, argumentname){
 	for (var i = 0; i < argumentarray.length; i++) {
 		var keyvalue = argumentarray[i].split('=');
 		if (keyvalue[0] == argumentname){
-			returnvalue = keyvalue[1].replace(/\^/g, " ").replace(/\¬/g, "=");
+			returnvalue = keyvalue[1].replace(/\^/g, " ").replace(/\|/g, "=");
 		}
 	}
 	return returnvalue;
