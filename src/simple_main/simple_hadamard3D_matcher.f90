@@ -116,13 +116,13 @@ contains
         ! EXTREMAL LOGICS
         if( frac_srch_space < 0.98 .or. p%extr_thresh > 0.025 )then
             corr_thresh = b%a%extremal_bound(p%extr_thresh)
+            statecnt(:) = 0
         else
             corr_thresh = -huge(corr_thresh)
         endif
 
         ! PREPARE THE POLARFT_CORRCALC DATA STRUCTURE
         if( p%refine.eq.'het' )then
-            statecnt(:) = 0
             ! generate filename for memoization of particle pfts
             if( allocated(ppfts_fname) ) deallocate(ppfts_fname)
             if( p%l_distr_exec )then
@@ -207,19 +207,23 @@ contains
                 !$omp end parallel do
             case('het')
                 if(p%oritab .eq. '') stop 'cannot run the refine=het mode without input oridoc (oritab)'
-                write(*,'(A,F8.2)') '>>> PARTICLE RANDOMIZATION(%):', 100.*p%extr_thresh
-                write(*,'(A,F8.2)') '>>> CORRELATION THRESHOLD:    ', corr_thresh
+                if(corr_thresh > 0.)then
+                    write(*,'(A,F8.2)') '>>> PARTICLE RANDOMIZATION(%):', 100.*p%extr_thresh
+                    write(*,'(A,F8.2)') '>>> CORRELATION THRESHOLD:    ', corr_thresh
+                endif
                 !$omp parallel do default(shared) schedule(auto) private(iptcl)&
                 !$omp reduction(+:statecnt)
                 do iptcl=p%fromp,p%top
                     call primesrch3D(iptcl)%exec_prime3D_srch_het(pftcc, iptcl, b%a, b%e, corr_thresh, statecnt)
                 end do
                 !$omp end parallel do
-                norm = real(sum(statecnt))
-                do istate=1,p%nstates
-                    print *, '% state ', istate, ' is ', 100.*(real(statecnt(istate))/norm)
-                    print *, 'randomized ptcls for state ', istate, ' is ', statecnt(istate)
-                end do
+                if(corr_thresh > 0.)then
+                    norm = real(sum(statecnt))
+                    do istate=1,p%nstates
+                        print *, '% state ', istate, ' is ', 100.*(real(statecnt(istate))/norm)
+                        print *, 'randomized ptcls for state ', istate, ' is ', statecnt(istate)
+                    end do
+                endif
             case DEFAULT
                 write(*,*) 'The refinement mode: ', trim(p%refine), ' is unsupported'
                 stop
