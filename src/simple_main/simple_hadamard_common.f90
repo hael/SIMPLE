@@ -297,6 +297,7 @@ contains
                     call b%img_msk%grow_bin             ! binary layers
                 enddo
                 call b%img_msk%cos_edge(p%edge)         ! soft edge
+                call b%img%mask(p%msk, 'soft')          ! testing
                 call b%img%mul(b%img_msk)               ! multiply by projected envelope
             else if( p%automsk .eq. 'cavg' )then
                 ! ab initio mask

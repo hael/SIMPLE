@@ -97,7 +97,7 @@ contains
                 call progress(cnt, npairs)
                 p%iptcl = pairs(ipair,1)
                 p%jptcl = pairs(ipair,2)
-                call comlin_sym_axis(orientation_best, 'pair', .false.)
+                call comlin_sym_axis(p, orientation_best, 'pair', .false.)
                 corrs(ipair) = orientation_best%get('corr')
             end do
             if( debug ) print *, 'did set this number of similarities: ', cnt
@@ -127,7 +127,7 @@ contains
                     call progress(cnt, ntot)
                     p%iptcl = iptcl
                     p%jptcl = jptcl
-                    call comlin_sym_axis(orientation_best, 'pair', .false.)
+                    call comlin_sym_axis(p, orientation_best, 'pair', .false.)
                     corrmat(iptcl,jptcl) = orientation_best%get('corr')
                     corrmat(jptcl,iptcl) = corrmat(iptcl,jptcl)
                 end do
@@ -148,14 +148,16 @@ contains
     end subroutine exec_comlin_smat
     
     subroutine exec_symsrch( self, cline )
+        use simple_strings,   only: int2str_pad
         use simple_oris,      only: oris
         use simple_symsrcher, only: symsrch_master
         class(symsrch_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
-        type(params) :: p
-        type(build)  :: b
-        type(oris)   :: o
-        integer      :: fnr, file_stat
+        type(params)          :: p
+        type(build)           :: b
+        type(oris)            :: os
+        integer               :: fnr, file_stat
+        character(len=STDLEN) :: fname_finished
         p = params(cline) ! parameters generated
         if( cline%defined('stk') )then
             p%nptcls = 1
@@ -163,13 +165,22 @@ contains
         endif
         call b%build_general_tbox(p, cline, .true., .true.) ! general objects built (no oritab reading)
         call b%build_comlin_tbox(p)                         ! objects for common lines based alignment built
-        call symsrch_master( cline, p, b, o )
-        call o%write(p%outfile)
+        call symsrch_master( cline, p, b, os )
+        if(p%l_distr_exec)then
+            ! alles klar
+        else
+            call os%write(p%outfile)
+        endif
         ! end gracefully
         call simple_end('**** SIMPLE_SYMSRCH NORMAL STOP ****')
-         ! indicate completion (when run in a qsys env)
+        ! indicate completion (when run in a qsys env)
+        if(p%l_distr_exec)then
+            fname_finished = 'JOB_FINISHED_'//int2str_pad(p%part,p%numlen)
+        else
+            fname_finished = 'SYMSRCH_FINISHED'
+        endif
         fnr = get_fileunit()
-        open(unit=fnr, FILE='SYMSRCH_FINISHED', STATUS='REPLACE', action='WRITE', iostat=file_stat)
+        open(unit=fnr, FILE=trim(fname_finished), STATUS='REPLACE', action='WRITE', iostat=file_stat)
         call fopen_err('In: commander_comlin :: symsrch', file_stat )
         close( unit=fnr )
     end subroutine exec_symsrch

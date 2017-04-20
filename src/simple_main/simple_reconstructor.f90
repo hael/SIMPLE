@@ -283,7 +283,7 @@ contains
         integer :: h, k, lims(3,2), sh, lfny, logi(3), phys(3)
         complex :: oshift=cmplx(1.,0.)
         real    :: x=0., y=0., xtmp, ytmp, pw
-        logical :: pwght_present, l_exp=.false.
+        logical :: pwght_present
         if( .not. fpl%is_ft() )       stop 'image need to be FTed; inout_fplane; simple_reconstructor'
         if( .not. (self.eqsmpd.fpl) ) stop 'scaling not yet implemented; inout_fplane; simple_reconstructor'
         pwght_present = present(pwght)
@@ -385,18 +385,19 @@ contains
         ! Can't be threaded because of add_fcomp
         do h = lims(1,1),lims(1,2)
             do k = lims(2,1),lims(2,2)
-                if(.not.any(self%cmat_exp(h,k,:).eq.zero))cycle
-                do m = lims(3,1),lims(3,2)
-                    comp = self%cmat_exp(h,k,m)
-                    if(comp .eq. zero)cycle
-                    logi = [h, k, m]
-                    phys = self%comp_addr_phys(logi)
-                    ! addition because FC and its Friedel mate must be summed
-                    ! as the expansion updates one or the other
-                    call self%add_fcomp(logi, phys, comp)
-                    self%rho(phys(1),phys(2),phys(3)) = &
-                        &self%rho(phys(1),phys(2),phys(3)) + self%rho_exp(h,k,m)
-                end do
+                if(any(self%cmat_exp(h,k,:).ne.zero))then
+                    do m = lims(3,1),lims(3,2)
+                        comp = self%cmat_exp(h,k,m)
+                        if(comp .eq. zero)cycle
+                        logi = [h, k, m]
+                        phys = self%comp_addr_phys(logi)
+                        ! addition because FC and its Friedel mate must be summed
+                        ! as the expansion updates one or the other
+                        call self%add_fcomp(logi, phys, comp)
+                        self%rho(phys(1),phys(2),phys(3)) = &
+                            &self%rho(phys(1),phys(2),phys(3)) + self%rho_exp(h,k,m)
+                    end do
+                endif
             end do 
         end do
     end subroutine compress_exp

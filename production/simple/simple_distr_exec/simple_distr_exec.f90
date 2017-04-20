@@ -37,6 +37,7 @@ type(prime3D_init_distr_commander)        :: xprime3D_init_distr
 type(prime3D_distr_commander)             :: xprime3D_distr
 type(cont3D_distr_commander)              :: xcont3D_distr
 type(recvol_distr_commander)              :: xrecvol_distr
+type(symsrch_distr_commander)             :: xsymsrch_distr
 ! time-series workflows
 type(tseries_track_distr_commander)       :: xtseries_track_distr
 ! high-level workflows
@@ -608,7 +609,35 @@ select case(prg)
         if( .not. cline%defined('eo')  ) call cline%set('eo', 'no')
         ! execute
         call xrecvol_distr%execute( cline )
-
+    case( 'symsrch' )
+        !==Program recvol
+        !
+        ! <recvol/begin>volum-based symmetry serach only<recvol/end>
+        !
+        ! set required keys
+        keys_required(1)  = 'smpd'
+        keys_required(2)  = 'msk'
+        keys_required(3)  = 'vol1'
+        keys_required(4)  = 'pgrp'
+        keys_required(5)  = 'lp'
+        keys_required(6)  = 'nparts'
+        ! set optional keys
+        keys_optional(1)  = 'nthr'
+        keys_optional(2)  = 'oritab'
+        keys_optional(3)  = 'cenlp'
+        keys_optional(4)  = 'hp'
+        keys_optional(5)  = 'nspace'
+        ! parse command line
+        if( describe ) call print_doc_symsrch
+        call cline%parse(keys_required(:6), keys_optional(:5))
+        ! set defaults
+        if(cline%defined('stk'))stop 'Distributed execution of SYMSRCH does not support the STK argument'
+        if(cline%defined('compare'))stop 'Distributed execution of SYMSRCH does not support the COMPARE argument'
+        call cline%set('nptcls', 150.)                                 ! 50 projections 4 symsrch
+        if(.not.cline%defined('nspace'))call cline%set('nspace', 150.) ! 50 projections 4 symsrch
+        if(.not.cline%defined('cenlp')) call cline%set('cenlp',   50.)
+        ! execute
+        call xsymsrch_distr%execute( cline )
     ! TIME-SERIES DISTRIBUTED WORKFLOWS
 
     case( 'tseries_track' )

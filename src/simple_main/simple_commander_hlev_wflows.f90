@@ -131,6 +131,9 @@ contains
         call cline_prime3D_refine1%set('refine', 'shc')
         ! (4) SYMMETRY AXIS SEARCH
         if( srch4symaxis )then
+            ! FOR NOW PRIOR TO USING DISTRIBUTED WORKFLOW
+            call cline_symsrch%delete('nparts')
+            ! END FOR NOW
             if( DOSCALE )then
                 call cline_symsrch%set('smpd',    smpd_sc)
                 call cline_symsrch%set('msk',     real(msk_sc))

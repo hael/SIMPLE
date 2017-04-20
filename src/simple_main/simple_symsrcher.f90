@@ -18,6 +18,8 @@ integer                       :: i, s, n_subgrps, bestind, iptcl, nptcls, lfoo(3
 character(len=3), allocatable :: subgrps(:)
 real                          :: shvec(3)
 
+character(len=32), parameter :: SYMSHTAB = 'sym_3dshift.txt'
+
 contains
 
     subroutine symsrch_master( cline, p, b, o )
@@ -27,10 +29,20 @@ contains
         class(params),  intent(inout) :: p
         class(build),   intent(inout) :: b
         class(oris),    intent(out)   :: o
+        type(oris)                    :: oshift
         if( cline%defined('vol1') )then              
             ! center volume
             call b%vol%read(p%vols(1))
             shvec = b%vol%center(p%cenlp,'no',p%msk)
+            if(p%l_distr_exec .and. p%part.eq.1)then
+                ! writes shifts for distributed execution
+                call oshift%new(1)
+                call oshift%set(1,'x',shvec(1))
+                call oshift%set(1,'y',shvec(2))
+                call oshift%set(1,'z',shvec(3))
+                call oshift%write(trim(SYMSHTAB))
+                call oshift%kill
+            endif
         endif
         ! main fork
         if( p%compare .eq. 'no' )then
@@ -83,7 +95,9 @@ contains
             call sym_probs( bestind )
             orientation = subgrps_oris%get_ori(bestind)
         endif
-        if( cline%defined('vol1') )then ! we have 3D shifts to deal with
+        if(p%l_distr_exec)then
+            ! alles klar
+        elseif( cline%defined('vol1') )then ! we have 3D shifts to deal with
             ! rotate the orientations & transfer the 3d shifts to 2d
             shvec = -1.*shvec
             o     = oris(nlines(p%oritab))
@@ -157,8 +171,8 @@ contains
             end do
         end do
         ! search for the axis
-        call comlin_sym_init( b, p )
-        call comlin_sym_axis( best_o, 'sym', .true.)
+        call comlin_sym_init(b, p)
+        call comlin_sym_axis(p, best_o, 'sym', doprint=.true.)
     end subroutine single_symsrch
     
     !>  \brief  calculates probabilities and returns best axis index

@@ -37,6 +37,7 @@ public :: prime3D_init_distr_commander
 public :: prime3D_distr_commander
 public :: recvol_distr_commander
 public :: tseries_track_distr_commander
+public :: symsrch_distr_commander
 private
 
 type, extends(commander_base) :: unblur_ctffind_distr_commander
@@ -91,6 +92,10 @@ type, extends(commander_base) :: tseries_track_distr_commander
   contains
     procedure :: execute      => exec_tseries_track_distr
 end type tseries_track_distr_commander
+type, extends(commander_base) :: symsrch_distr_commander
+  contains
+    procedure :: execute      => exec_symsrch_distr
+end type symsrch_distr_commander
 
 integer, parameter :: KEYLEN=32
 
@@ -177,7 +182,7 @@ contains
         use simple_oris, only: oris
         class(unblur_tomo_movies_distr_commander), intent(inout) :: self
         class(cmdline),                            intent(inout) :: cline
-        character(len=STDLEN), allocatable :: tomonames(:), tiltnames(:)
+        character(len=STDLEN), allocatable :: tomonames(:)
         type(oris)               :: exp_doc
         integer                  :: nseries, ipart, numlen
         type(qsys_env)           :: qenv
@@ -237,7 +242,6 @@ contains
         type(merge_algndocs_commander) :: xmerge_algndocs
         type(cmdline)                  :: cline_merge_algndocs
         type(params)                   :: p_master
-        character(len=KEYLEN)          :: str
         type(chash)                    :: job_descr
         type(qsys_env)                 :: qenv
         ! make master parameters
@@ -273,7 +277,6 @@ contains
         type(qsys_env) :: qenv
         type(params)   :: p_master
         type(chash)    :: job_descr
-        integer        :: numlen
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         p_master%nptcls = nlines(p_master%filetab)
@@ -358,7 +361,7 @@ contains
         type(rank_cavgs_commander)      :: xrank_cavgs
         type(merge_algndocs_commander)  :: xmerge_algndocs
         type(split_commander)           :: xsplit
-        type(automask2D_commander)      :: xautomask2D
+        !type(automask2D_commander)      :: xautomask2D
         type(makecavgs_distr_commander) :: xmakecavgs
         ! command lines
         type(cmdline)         :: cline_scale
@@ -373,7 +376,7 @@ contains
         type(params)          :: p_master
         character(len=STDLEN) :: refs, oritab, str, str_iter, native_stk
         real                  :: smpd_sc, msk_sc, scale, native_smpd, native_msk
-        integer               :: iter, i, box_sc, native_box, filnum, io_stat
+        integer               :: iter, i, box_sc, native_box
         type(chash)           :: job_descr
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
@@ -565,7 +568,7 @@ contains
         type(split_commander)              :: xsplit
         type(makecavgs_distr_commander)    :: xmakecavgs
         type(stack_commander)              :: xstack
-        type(rank_cavgs_commander)         :: xrank_cavgs
+        !type(rank_cavgs_commander)         :: xrank_cavgs
         type(cmdline)                      :: cline_scale
         type(cmdline)                      :: cline_stack
         type(cmdline)                      :: cline_makecavgs
@@ -1148,7 +1151,7 @@ contains
         real                  :: frac_srch_space
         integer               :: s, state, iter
         logical               :: vol_defined
-        ! ! make master parameters
+        ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! make oritab
         call os%new(p_master%nptcls)
@@ -1319,9 +1322,8 @@ contains
         type(split_commander)               :: xsplit
         type(qsys_env)                      :: qenv
         type(params)                        :: p_master
-        character(len=STDLEN)               :: vol, volassemble_output
+        character(len=STDLEN)               :: volassemble_output
         type(chash)                         :: job_descr
-        integer                             :: istate
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! setup the environment for distributed execution
@@ -1354,12 +1356,10 @@ contains
     ! TIME-SERIES ROUTINES
 
     subroutine exec_tseries_track_distr( self, cline )
-        use simple_commander_tseries, only: tseries_track_commander
         use simple_nrtxtfile,         only: nrtxtfile 
         class(tseries_track_distr_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         logical, parameter            :: debug=.false.
-        type(tseries_track_commander) :: xtseries_track
         type(qsys_env)                :: qenv
         type(params)                  :: p_master
         type(chash)                   :: job_descr
@@ -1411,5 +1411,107 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_TSERIES_TRACK NORMAL STOP ****')
     end subroutine exec_tseries_track_distr
+
+    ! SYMMETRY SEARCH
+
+    subroutine exec_symsrch_distr( self, cline )
+        use simple_math,    only: hpsort
+        use simple_ori,     only: ori
+        use simple_oris,    only: oris
+        use simple_strings, only: int2str_pad, int2str
+        class(symsrch_distr_commander), intent(inout) :: self
+        class(cmdline),                 intent(inout) :: cline
+        type(qsys_env)          :: qenv
+        type(params)            :: p_master
+        type(chash)             :: job_descr
+        type(oris)              :: os, sym_os, o_shift
+        type(ori)               :: o_best
+        real,       allocatable :: corrs(:)
+        integer,    allocatable :: corr_inds(:)
+        real                    :: shvec(3)
+        integer                 :: i, j, s, cnt
+        character(len=STDLEN)   :: part_tab
+        integer,           parameter :: NSYMORIS = 60
+        character(len=32), parameter :: SYMFBODY = 'symoris_'
+        character(len=32), parameter :: SYMTAB   = 'symaxes.txt'
+        character(len=32), parameter :: SYMSHTAB = 'sym_3dshift.txt' ! cf simple_symsrcher
+        logical,           parameter :: debug    = .false.
+        ! vol1 need be default
+        ! make master parameters
+        p_master = params(cline, checkdistr=.false.)
+        call cline%set('prg', 'symsrch')
+        call cline%delete('part')
+        call cline%delete('stk')
+        ! because symsrch uses 60 starting points
+        p_master%nparts = min(NSYMORIS, p_master%nparts)
+        p_master%numlen = len(trim(int2str(p_master%nparts)))
+        ! setup the environment for distributed execution
+        call qenv%new(p_master)
+        call cline%gen_job_descr(job_descr)
+        ! schedule
+        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=trim(SYMFBODY))        
+        ! assemble symmetry axes
+        call sym_os%new(NSYMORIS)
+        cnt = 0
+        do i=1,p_master%nparts
+            part_tab = trim(SYMFBODY)//int2str_pad(i, p_master%numlen)//'.txt'
+            os = oris(nlines(trim(part_tab)))
+            call os%read(trim(part_tab))
+            do j = 1,os%get_noris()
+                cnt = cnt + 1
+                if(cnt > NSYMORIS)then
+                    stop 'Inconsistent number of orientations in symmetry documents'
+                endif
+                call sym_os%set_ori(cnt, os%get_ori(j))
+            enddo
+            call os%kill
+        enddo
+        call sym_os%write(trim(SYMTAB))
+        ! Sorting, picks best
+        corrs = sym_os%get_all('corr')
+        allocate(corr_inds(NSYMORIS))
+        corr_inds = (/ (i,i=1,NSYMORIS) /)
+        call hpsort(NSYMORIS, corrs, corr_inds)
+        o_best = sym_os%get_ori(corr_inds(NSYMORIS))
+        write(*,'(A)') '>>> FOUND SYMMETRY AXIS ORIENTATION:'
+        call o_best%print
+        deallocate(corrs, corr_inds)
+        if( cline%defined('oritab') )then
+            ! retrieve shift
+            call o_shift%new(1)
+            call o_shift%read(trim(SYMSHTAB))
+            shvec(1) = o_shift%get(1,'x')
+            shvec(2) = o_shift%get(1,'y')
+            shvec(3) = o_shift%get(1,'z')
+            call o_shift%kill
+            shvec = -1. * shvec ! the sign is right
+            ! rotate the orientations & transfer the 3d shifts to 2d
+            os = oris(nlines(p_master%oritab))
+            call os%read(p_master%oritab)
+            if(cline%defined('state'))then
+                do i = 1, os%get_noris()
+                    s = nint(os%get(i, 'state'))
+                    if(s == p_master%state)then
+                        call os%map3dshift22d(i, shvec)
+                        call os%rot(i, o_best)
+                    endif
+                end do
+            else
+                call os%map3dshift22d(shvec) 
+                call os%rot(o_best)
+            endif
+            ! Output
+            call os%write(p_master%outfile)
+            ! cleanup
+            call del_file(trim(SYMSHTAB))
+            do i = 1, p_master%nparts
+                part_tab = trim(SYMFBODY)//int2str_pad(i, p_master%numlen)//'.txt'
+                call del_file(trim(part_tab))
+            enddo
+        endif
+        ! end gracefully
+        call qsys_cleanup(p_master)
+        call simple_end('**** SIMPLE_SYMSRCH NORMAL STOP ****')
+    end subroutine exec_symsrch_distr
 
 end module simple_commander_distr_wflows

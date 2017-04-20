@@ -688,8 +688,8 @@ contains
             endif
         endif
         ! make all programs have the simple_prefix
-        if( cline%defined('prg') )then
-            if( .not. str_has_substr(self%prg, 'simple_') ) self%prg = 'simple_'//trim(self%prg)
+        if(cline%defined('prg'))then
+            if(.not. str_has_substr(self%prg, 'simple_')) self%prg = 'simple_'//trim(self%prg)
         endif
         ! check nr of states
         if( cline%defined('nstates') )then
@@ -816,7 +816,9 @@ contains
         ! Check for the existance of this file if part is defined on the command line
         if( cline%defined('part') )then
             if( ccheckdistr )then
-                if( .not. file_exists(self%stk_part) )then
+                if(trim(self%prg).eq.'simple_symsrch')then
+                    ! no need for split stack with prg=symsrch
+                elseif( .not. file_exists(self%stk_part) )then
                     write(*,*) 'Need partial stacks to be generated for parallel execution'
                     write(*,*) 'Use simple_exec prg=split'
                     stop
