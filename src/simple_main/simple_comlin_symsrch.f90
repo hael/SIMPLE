@@ -6,7 +6,6 @@
 ! is regulated by the GNU General Public License. *Author:* Hans Elmlund, 2009-06-11.
 module simple_comlin_symsrch
 use simple_defs
-use simple_comlin_corr  ! use all in there
 use simple_build,       only: build
 use simple_opt_factory, only: opt_factory
 use simple_opt_spec,    only: opt_spec
@@ -25,7 +24,6 @@ class(optimizer), pointer :: nlopt=>null()   !< pointer to nonlinear optimizer
 type(oris)                :: a_copy          !< safe keeping for cost function
 type(ori)                 :: optori          !< axis ori being optimised
 type(ori)                 :: vertex          !< current vertex (initial position)
-integer, pointer          :: ptcl=>null()    !< ptcl index
 integer, pointer          :: iptcl=>null()   !< ptcl index
 integer, pointer          :: jptcl=>null()   !< ptcl index
 real, pointer             :: dynlim=>null()  !< dynamic lowpass limit
@@ -56,14 +54,11 @@ contains
         lp         = p%lp
         euldistmax = dmax
         bp         => b
-        ptcl       => p%ptcl
         iptcl      => p%iptcl
         jptcl      => p%jptcl
         dynlim     => p%lp_dyn
         trs        = p%trs
         eullims    = lims(:3,:2)
-        ! make comlin_corr functionality:
-        call comlin_corr_init( bp , ptcl, dynlim )
         ! OPTIMISER INIT
         a_copy = bp%a
         vertex = o_vertex
@@ -115,18 +110,16 @@ contains
         integer :: i
         cost = 0.
         call optori%set_euler(vec)
-        if( (vec(3)<eullims(3,1)) .or. (vec(3)>eullims(3,2)) )then
+        if(any(vec(1:3)-eullims(:,1) < 0.))then     ! lower limts
             cost = 1.
-        elseif( (optori.euldist.vertex)>euldistmax )then
+        elseif(any(vec(1:3)-eullims(:,2) > 0.))then ! upper limits
+            cost = 1.
+        elseif((optori.euldist.vertex)>euldistmax)then
             cost = 1.
         else
             call bp%a%rot(optori)
             call bp%se%apply2all(bp%a)
-            do i=1,nptcls
-                ptcl = i
-                cost = cost+pcorr_comlin()
-            end do
-            cost = -cost/real(nptcls)
+            cost = -bp%clins%corr(dynlim)
             bp%a = a_copy
         endif
     end function comlin_symsrch_cost
@@ -137,22 +130,20 @@ contains
         real :: cost
         cost = 0.
         call optori%set_euler(vec(1:3))
-        if( (vec(3)<eullims(3,1)) .or. (vec(3)>eullims(3,2)) )then
+        if(any(vec(1:3)-eullims(:,1) < 0.))then     ! lower limts
             cost = 1.
-        elseif( (optori.euldist.vertex)>euldistmax )then
+        elseif(any(vec(1:3)-eullims(:,2) > 0.))then ! upper limits
+            cost = 1.
+        elseif((optori.euldist.vertex) > euldistmax)then
             cost = 1.
         elseif( vec(4) < -trs .or. vec(4) > trs )then 
             cost = 1.
         elseif( vec(5) < -trs .or. vec(5) > trs )then 
             cost = 1.
         else
-            call bp%a%set_euler( iptcl,             [0.,0.,0.])
-            call bp%a%set(iptcl, 'x',                       0.)
-            call bp%a%set(iptcl, 'y',                       0.)
-            call bp%a%set_euler( jptcl, [vec(1),vec(2),vec(3)])
-            call bp%a%set(jptcl, 'x',                   vec(4))
-            call bp%a%set(jptcl, 'y',                   vec(5))
-            cost = -pcorr_comlin(iptcl, jptcl) 
+            call bp%a%set_euler(jptcl, vec(1:3))
+            call bp%a%set_shift(jptcl, vec(4:5))
+            cost = -bp%clins%pcorr(iptcl, jptcl, dynlim) 
         endif
     end function comlin_pairsrch_cost
 
@@ -160,5 +151,91 @@ contains
         integer :: nevals
         nevals = ospec%nevals
     end function comlin_symsrch_get_nevals
+
+    ! OLD SYMMETRY SRCH ROUTINE
+
+    !>  \brief  is for finding the symmetry axis give an aligned set of images
+    subroutine comlin_srch_symaxis( orientation_best, doprint )
+        use simple_ori,  only: ori
+        use simple_oris, only: oris
+        class(ori), intent(inout) :: orientation_best
+        logical,    intent(in)    :: doprint
+        integer    :: i, j, k
+        type(ori)  :: orientation
+        type(oris) :: a_copy
+        real       :: corr, corr_best
+        integer    :: ntot, cnt, lims(3,2)
+        if( doprint ) write(*,'(A)') '>>> GLOBAL SYMMETRY AXIS SEARCH'
+        a_copy    = bp%a
+        corr_best = -1.
+        ntot      = 24624
+        cnt       = 0
+        lims(1,1) = 0
+        lims(1,2) = 359
+        lims(2,1) = 0
+        lims(2,2) = 180
+        lims(3,1) = 0
+        lims(3,2) = 359
+        call orientation%new
+        do i=lims(1,1),lims(1,2),10
+            call orientation%e1set(real(i))
+            do j=lims(2,1),lims(2,2),10
+                call orientation%e2set(real(j))
+                do k=lims(3,1),lims(3,2),10
+                    cnt = cnt+1
+                    if( doprint ) call progress(cnt, ntot)
+                    call orientation%e3set(real(k))
+                    bp%a = a_copy
+                    call bp%a%rot(orientation)
+                    call bp%se%apply2all(bp%a)
+                    corr = bp%clins%corr(dynlim)
+                    call orientation%set('corr',corr)
+                    if( corr > corr_best )then
+                        corr_best = corr
+                        orientation_best = orientation
+                    endif
+                end do
+            end do
+        end do
+        if( doprint )then
+            write(*,'(A)') '>>> FOUND FIRST SYMMETRY AXIS ORIENTATION'
+            call orientation_best%print
+            write(*,'(A)') '>>> REFINED SYMMETRY AXIS SEARCH'
+        endif
+        lims(1,1) = max(nint(orientation_best%e1get()-10.),lims(1,1))
+        lims(1,2) = min(nint(orientation_best%e1get()+10.),lims(1,2))
+        lims(2,1) = max(nint(orientation_best%e2get()-10.),lims(2,1))
+        lims(2,2) = min(nint(orientation_best%e2get()+10.),lims(2,2))
+        lims(3,1) = max(nint(orientation_best%e3get()-10.),lims(3,1))
+        lims(3,2) = min(nint(orientation_best%e3get()+10.),lims(3,2))
+        ntot      = (lims(1,2)-lims(1,1)+1)*(lims(2,2)-lims(2,1)+1)*(lims(3,2)-lims(3,1)+1)
+        cnt       = 0 
+        do i=lims(1,1),lims(1,2)
+            call orientation%e1set(real(i))
+            do j=lims(2,1),lims(2,2)
+                call orientation%e2set(real(j))
+                do k=lims(3,1),lims(3,2)
+                    cnt = cnt+1
+                    if( doprint ) call progress(cnt, ntot)
+                    call orientation%e3set(real(k))
+                    bp%a = a_copy
+                    call bp%a%rot(orientation)
+                    call bp%se%apply2all(bp%a)
+                    corr = bp%clins%corr(dynlim)
+                    call orientation%set('corr',corr)
+                    if( corr > corr_best )then
+                        corr_best = corr
+                        orientation_best = orientation
+                    endif
+                end do
+            end do
+        end do
+        if( doprint )then
+            write(*,'(A)') '>>> FOUND REFINED SYMMETRY AXIS ORIENTATION'
+            call orientation_best%print
+        endif
+        bp%a = a_copy
+        call a_copy%kill
+    end subroutine comlin_srch_symaxis
     
 end module simple_comlin_symsrch

@@ -1,14 +1,12 @@
 module simple_comlin_srch
-use simple_comlin_corr ! use all in there
-use simple_build,      only: build
-use simple_jiffys,     only: progress
+use simple_build,  only: build
+use simple_jiffys, only: progress
 implicit none
 
 public :: comlin_srch_init, comlin_srch_symaxis
 private
 
 class(build), pointer :: bp=>null()      !< pointer to builder
-integer,      pointer :: ptcl=>null()    !< ptcl index
 real,         pointer :: dynlim=>null()  !< dynamic lowpass limit
 integer               :: nptcls=0        !< nr of particles
 
@@ -22,10 +20,7 @@ contains
         class(params), target, intent(in) :: p
         nptcls = p%nptcls
         bp     => b
-        ptcl   => p%ptcl
         dynlim => p%lp_dyn
-        ! make comlin_corr functionality:
-        call comlin_corr_init( b, ptcl, dynlim )
     end subroutine comlin_srch_init
     
     !>  \brief  is for calculating the joint common line correlation
@@ -34,8 +29,7 @@ contains
         integer :: i
         corr = 0.
         do i=1,nptcls
-            ptcl = i
-            corr = corr+pcorr_comlin()
+            corr = corr+bp%clins%pcorr(i,dynlim)
         end do
         corr = corr/real(nptcls)
     end function comlin_srch_corr
@@ -74,7 +68,7 @@ contains
                     bp%a = a_copy
                     call bp%a%rot(orientation)
                     call bp%se%apply2all(bp%a)
-                    corr = comlin_srch_corr()
+                    corr = bp%clins%corr(dynlim)
                     call orientation%set('corr',corr)
                     if( corr > corr_best )then
                         corr_best = corr

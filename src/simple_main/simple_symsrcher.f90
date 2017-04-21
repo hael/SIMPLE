@@ -12,7 +12,7 @@ public :: symsrch_master
 private
 
 type(ori)                     :: orientation
-type(oris)                    :: o, subgrps_oris
+type(oris)                    :: subgrps_oris
 type(sym)                     :: symobj
 integer                       :: i, s, n_subgrps, bestind, iptcl, nptcls, lfoo(3)
 character(len=3), allocatable :: subgrps(:)
@@ -22,14 +22,15 @@ character(len=32), parameter :: SYMSHTAB = 'sym_3dshift.txt'
 
 contains
 
-    subroutine symsrch_master( cline, p, b, o )
+    subroutine symsrch_master( cline, p, b, os )
         use simple_filehandling,   only: nlines
         use simple_projector_hlev, only: projvol
         class(cmdline), intent(inout) :: cline
         class(params),  intent(inout) :: p
         class(build),   intent(inout) :: b
-        class(oris),    intent(out)   :: o
-        type(oris)                    :: oshift
+        class(oris),    intent(out)   :: os
+        type(oris) :: oshift
+        type(ori)  :: o
         if( cline%defined('vol1') )then              
             ! center volume
             call b%vol%read(p%vols(1))
@@ -58,13 +59,13 @@ contains
             else if( cline%defined('stk') )then
                 ! get number of particles from stack
                 call find_ldim_nptcls(p%stk, lfoo, nptcls)
-                o = oris(nptcls)
+                os = oris(nptcls)
                 do iptcl=1,nptcls
                     call b%ref_imgs(1,1)%new([p%box,p%box,1], p%smpd)
                     call b%ref_imgs(1,1)%read(p%stk,iptcl)
                     call b%ref_imgs(1,1)%mask(p%msk, 'soft')
                     call single_symsrch(b,p,orientation)
-                    call o%set_ori(iptcl,orientation)
+                    call os%set_ori(iptcl,orientation)
                 end do
             else
                 stop 'not enough input to run simple_symsrch; either vol1 or stk is needed!'
@@ -100,23 +101,26 @@ contains
         elseif( cline%defined('vol1') )then ! we have 3D shifts to deal with
             ! rotate the orientations & transfer the 3d shifts to 2d
             shvec = -1.*shvec
-            o     = oris(nlines(p%oritab))
-            call o%read(p%oritab)
+            os    = oris(nlines(p%oritab))
+            call os%read(p%oritab)
             if( cline%defined('state') )then
-                do i=1,o%get_noris()
-                    s = nint(o%get(i, 'state'))
-                    if( s == p%state )then
-                        call o%map3dshift22d(i, shvec)
-                        call o%rot(i,orientation)
-                    endif
+                do i=1,os%get_noris()
+                    s = nint(os%get(i, 'state'))
+                    if(s .ne. p%state)cycle
+                    call os%map3dshift22d(i, shvec)
+                    call os%rot(i,orientation)
+                    o = os%get_ori(i)
+                    call b%se%rot_to_asym(o)
+                    call os%set_ori(i, o) 
                 end do
             else
-                call o%map3dshift22d( shvec ) 
-                call o%rot(orientation)
+                call os%map3dshift22d( shvec ) 
+                call os%rot(orientation)
+                call b%se%rotall_to_asym(os)
             endif
         endif
     end subroutine symsrch_master
-    
+
     !>  \brief  Updates general and common lines toolboxes with current symmetry
     subroutine updates_tboxs( b, p, so )
         use simple_comlin, only: comlin

@@ -10,27 +10,23 @@ private
 
 type comlin
     private
-    integer                 :: nptcls=0          !< nr of ptcls
-    integer                 :: xdim=0            !< Fourier dim
-    complex, allocatable    :: clines(:,:,:)     !< the interpolated common lines
-    real, allocatable       :: lines(:,:,:)      !< the algebraic common lines
-    logical, allocatable    :: foundline(:)      !< to indicate found line or not
-    class(oris), pointer    :: a=>null()         !< orientations pointer
-    class(image), pointer   :: fpls(:)=>null()   !< Fourier planes pointer
-    logical                 :: existence=.false. !< to indicate object existence
+    integer               :: nptcls=0          !< nr of ptcls
+    integer               :: xdim=0            !< Fourier dim
+    complex, allocatable  :: clines(:,:,:)     !< the interpolated common lines
+    real,    allocatable  :: lines(:,:,:)      !< the algebraic common lines
+    logical, allocatable  :: foundline(:)      !< to indicate found line or not
+    class(oris),  pointer :: a=>null()         !< orientations pointer
+    class(image), pointer :: fpls(:)=>null()   !< Fourier planes pointer
+    logical               :: existence=.false. !< to indicate object existence
   contains
-    ! CONSTRUCTOR
-    procedure :: new
-    ! PARTICLE COMMON LINE CORRELATORS
+    procedure          :: new
+    procedure          :: corr
+    generic            :: pcorr => pcorr_1, pcorr_2
     procedure, private :: pcorr_1
     procedure, private :: pcorr_2
-    procedure          :: extr_lines
-    generic :: pcorr => pcorr_1, pcorr_2
-    ! PRIVATE STUFF
-    procedure, private :: calc_comlin
     procedure, private :: extr_comlin
-    ! DESTRUCTOR
-    procedure :: kill
+    procedure, private :: calc_comlin
+    procedure          :: kill
 end type comlin
 
 interface comlin
@@ -38,8 +34,6 @@ interface comlin
 end interface comlin
 
 contains
-
-    ! CONSTRUCTORS
     
     !>  \brief  is a constructor
     function constructor( a, fpls ) result( self )
@@ -81,25 +75,22 @@ contains
         self%existence = .true.
     end subroutine new
     
-    !>  \brief  is for extracting common lines (for debugging purposes)
-    subroutine extr_lines( self, pind, lp_dyn )
-        use simple_filehandling, only: get_fileunit
+    !>  \brief  is for calculating the joint common line correlation
+    function corr( self, lp_dyn ) result( cc )
         class(comlin), intent(inout) :: self
-        integer, intent(in)          :: pind 
-        real, intent(in)             :: lp_dyn
-        real                         :: corrs(self%nptcls), sums1(self%nptcls)
-        real                         :: sums2(self%nptcls)
-        integer                      :: j, lims(2), filnum, recsz
-        lims = self%fpls(pind)%get_clin_lims(lp_dyn)
-        filnum = get_fileunit()
-        inquire( iolength=recsz ) self%clines(1,:,1)
-        open(unit=filnum, status='replace', file='comlins_new.bin', access='direct', form='unformatted', recl=recsz )
-        do j=1,self%nptcls
-            call self%extr_comlin( pind, j, lims, corrs(j), sums1(j), sums2(j) )
-            write(unit=filnum,rec=j) self%clines(j,:,2)
+        real,          intent(in)    :: lp_dyn
+        real    :: cc
+        integer :: i
+        cc = 0.
+        !$omp parallel do default(shared) private(i) schedule(auto) reduction(+:cc)
+        do i=1,self%nptcls
+            cc = cc + self%pcorr_1(i,lp_dyn)
         end do
-        close(unit=filnum)
-    end subroutine extr_lines
+        !$omp end parallel do 
+        cc = cc/real(self%nptcls)
+    end function corr
+    
+    ! PRIVATE STUFF
 
     !>  \brief  is for interpolating the common lines associated with one particle image 
     !!          and calculating the per-particle common line correlation 
@@ -116,12 +107,10 @@ contains
         self%foundline = .false.
         corrs = 0.
         sums1 = 0.
-        sums2 = 0.       
-        !$omp parallel do default(shared) private(j) schedule(auto)
+        sums2 = 0.
         do j=1,self%nptcls
-            call self%extr_comlin( pind, j, lims, corrs(j), sums1(j), sums2(j) )
+            call self%extr_comlin(pind, j, lims, corrs(j), sums1(j), sums2(j))
         end do
-        !$omp end parallel do
         if( count(self%foundline) > 0 ) then
             corr = calc_corr(sum(corrs),sum(sums1)*sum(sums2))
         else
@@ -152,8 +141,38 @@ contains
         endif
     end function pcorr_2
     
-    ! PRIVATE STUFF
-    
+    !>  \brief  calculates common line algebra, interpolates the
+    !!          complex vectors, and calculates corr precursors
+    subroutine extr_comlin( self, pind, j, lims, corr, sumasq, sumbsq )
+        class(comlin), intent(inout) :: self
+        integer,intent(in)           :: pind,j,lims(2)
+        real, intent(out)            :: corr,sumasq,sumbsq
+        integer                      :: k
+        real                         :: h1,k1,h2,k2,px,py,jx,jy
+        call self%calc_comlin(pind, j)
+        corr   = 0.
+        sumasq = 0.
+        sumbsq = 0.
+        if( self%foundline(j) )then
+            px = self%a%get(pind, 'x')
+            py = self%a%get(pind, 'y')
+            jx = self%a%get(j, 'x')
+            jy = self%a%get(j, 'y')
+            do k=lims(1),lims(2)
+                h1 = real(k)*self%lines(j,1,1)
+                k1 = real(k)*self%lines(j,2,1)
+                h2 = real(k)*self%lines(j,1,2)
+                k2 = real(k)*self%lines(j,2,2)
+                self%clines(j,k,1) = self%fpls(pind)%extr_fcomp(h1,k1,px,py)
+                self%clines(j,k,2) = self%fpls(j   )%extr_fcomp(h2,k2,jx,jy)
+                corr = corr+real(self%clines(j,k,1))*real(self%clines(j,k,2))+&
+                &aimag(self%clines(j,k,1))*aimag(self%clines(j,k,2))
+                sumasq = sumasq+csq(self%clines(j,k,1)) 
+                sumbsq = sumbsq+csq(self%clines(j,k,2))
+            end do
+        endif
+    end subroutine extr_comlin
+
     !>  \brief  calculates the 3D intersection between two planes 
     !!          defined by their normals and maps the 3D intersection 
     !!          to the coordinate systems of the respective planes
@@ -200,38 +219,6 @@ contains
         call projz( tmpb1, self%lines(j,:,2) )
         self%foundline(j) = .true.
     end subroutine calc_comlin
-    
-    !>  \brief  calculates common line algebra, interpolates the
-    !!          complex vectors, and calculates corr precursors
-    subroutine extr_comlin( self, pind, j, lims, corr, sumasq, sumbsq )
-        class(comlin), intent(inout) :: self
-        integer,intent(in)           :: pind,j,lims(2)
-        real, intent(out)            :: corr,sumasq,sumbsq
-        integer                      :: k
-        real                         :: h1,k1,h2,k2,px,py,jx,jy
-        call self%calc_comlin(pind, j)
-        corr   = 0.
-        sumasq = 0.
-        sumbsq = 0.
-        if( self%foundline(j) )then
-            px = self%a%get(pind, 'x')
-            py = self%a%get(pind, 'y')
-            jx = self%a%get(j, 'x')
-            jy = self%a%get(j, 'y')
-            do k=lims(1),lims(2)
-                h1 = real(k)*self%lines(j,1,1)
-                k1 = real(k)*self%lines(j,2,1)
-                h2 = real(k)*self%lines(j,1,2)
-                k2 = real(k)*self%lines(j,2,2)
-                self%clines(j,k,1) = self%fpls(pind)%extr_fcomp(h1,k1,px,py)
-                self%clines(j,k,2) = self%fpls(j   )%extr_fcomp(h2,k2,jx,jy)
-                corr = corr+real(self%clines(j,k,1))*real(self%clines(j,k,2))+&
-                &aimag(self%clines(j,k,1))*aimag(self%clines(j,k,2))
-                sumasq = sumasq+csq(self%clines(j,k,1)) 
-                sumbsq = sumbsq+csq(self%clines(j,k,2))
-            end do
-        endif
-    end subroutine extr_comlin
     
     ! DESTRUCTOR
     

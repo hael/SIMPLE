@@ -60,7 +60,6 @@ contains
                 fromv = parts(p%part,1)
                 tov   = parts(p%part,2)
                 deallocate(parts)
-                print *,fromv, tov
             endif
         else
             fromv = 1

@@ -84,8 +84,6 @@ Simple_code: opt            \
              general        \
              simple         \
              build          \
-             comlin_corr    \
-             comlin_srch    \
              s_other        \
              qsys           \
              matcher        \

@@ -35,7 +35,6 @@ contains
     
     subroutine exec_comlin_smat( self, cline )
         use simple_comlin_sym    ! use all in there
-        use simple_comlin_corr   ! use all in there
         use simple_ori,          only: ori
         use simple_imgfile,      only: imgfile
         use simple_comlin,       only: comlin
