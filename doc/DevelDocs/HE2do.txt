@@ -1,7 +1,4 @@
 need to parallelise the volassemble of the different states for het_ensemble
-need to test unidoc strategy
-need to put ctf flag in unidoc
+need to have another go at the picker
 weighted multi-resolution state sorting by fitting B-factors?
 
-need to print what is missing in the command line
-need to give an error message when not key=value syntax 

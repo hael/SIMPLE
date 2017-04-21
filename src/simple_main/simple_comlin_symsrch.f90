@@ -42,13 +42,14 @@ contains
     subroutine comlin_symsrch_init( b, p, opt_str, lims, o_vertex, dmax, mode )
         use simple_build,        only: build
         use simple_params,       only: params
-        class(build), intent(in), target  :: b
-        class(params), intent(in), target :: p
-        type(ori)                         :: o_vertex    ! inital position (is an ico vertex)
-        real, intent(in)                  :: lims(5,2)
-        real, intent(in)                  :: dmax        ! Max angular distance from inital position
-        character(len=*), intent(in)      :: opt_str, mode
-        character(len=8)                  :: str_opt= 'simplex'
+        class(build), target,  intent(in)    :: b
+        class(params), target, intent(in)    :: p
+        character(len=*),      intent(in)    :: opt_str
+        real,                  intent(in)    :: lims(5,2)
+        type(ori),             intent(inout) :: o_vertex    ! inital position (is an ico vertex)
+        real,                  intent(in)    :: dmax        ! Max angular distance from inital position
+        character(len=*),      intent(in)    :: mode
+        character(len=8) :: str_opt= 'simplex'
         ! set constants & pointers:
         nptcls     = p%nptcls
         hp         = p%hp
@@ -85,7 +86,7 @@ contains
             stop 'Unsupported mode; simple_comlin_symsrch::comlin_symsrch_init'
         endif
         call ofac%new(ospec, nlopt)
-    end subroutine
+    end subroutine comlin_symsrch_init
 
     function comlin_symsrch_minimize() result( cxy )
         real :: cxy(4)
@@ -94,7 +95,7 @@ contains
         call nlopt%minimize(ospec, cxy(1))
         cxy(1)  = -cxy(1) ! correlation 
         cxy(2:) = ospec%x ! euler set
-    end function
+    end function comlin_symsrch_minimize
     
     function comlin_pairsrch_minimize() result( cxy )
         real :: cxy(6)
@@ -105,13 +106,13 @@ contains
         call nlopt%minimize(ospec, cxy(1))
         cxy(1)  = -cxy(1) ! correlation 
         cxy(2:) = ospec%x ! ori set
-    end function
+    end function comlin_pairsrch_minimize
     
     function comlin_symsrch_cost( vec, D) result( cost )
         integer, intent(in)  :: D
-        real, intent(in)     :: vec(D)
-        real                 :: cost
-        integer              :: i
+        real,    intent(in)  :: vec(D)
+        real    :: cost
+        integer :: i
         cost = 0.
         call optori%set_euler(vec)
         if( (vec(3)<eullims(3,1)) .or. (vec(3)>eullims(3,2)) )then
@@ -128,12 +129,12 @@ contains
             cost = -cost/real(nptcls)
             bp%a = a_copy
         endif
-    end function
+    end function comlin_symsrch_cost
     
     function comlin_pairsrch_cost( vec, D) result( cost )
         integer, intent(in)  :: D
-        real, intent(in)     :: vec(D)
-        real                 :: cost
+        real,    intent(in)  :: vec(D)
+        real :: cost
         cost = 0.
         call optori%set_euler(vec(1:3))
         if( (vec(3)<eullims(3,1)) .or. (vec(3)>eullims(3,2)) )then
@@ -145,19 +146,19 @@ contains
         elseif( vec(5) < -trs .or. vec(5) > trs )then 
             cost = 1.
         else
-            call bp%a%set_euler(iptcl, [0.,0.,0.])
-            call bp%a%set(iptcl, 'x', 0.)
-            call bp%a%set(iptcl, 'y', 0.)
-            call bp%a%set_euler(jptcl, [vec(1),vec(2),vec(3)])
-            call bp%a%set(jptcl, 'x', vec(4))
-            call bp%a%set(jptcl, 'y', vec(5))
+            call bp%a%set_euler( iptcl,             [0.,0.,0.])
+            call bp%a%set(iptcl, 'x',                       0.)
+            call bp%a%set(iptcl, 'y',                       0.)
+            call bp%a%set_euler( jptcl, [vec(1),vec(2),vec(3)])
+            call bp%a%set(jptcl, 'x',                   vec(4))
+            call bp%a%set(jptcl, 'y',                   vec(5))
             cost = -pcorr_comlin(iptcl, jptcl) 
         endif
-    end function
+    end function comlin_pairsrch_cost
 
     function comlin_symsrch_get_nevals() result( nevals )
         integer :: nevals
         nevals = ospec%nevals
-    end function
+    end function comlin_symsrch_get_nevals
     
 end module simple_comlin_symsrch

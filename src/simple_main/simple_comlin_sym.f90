@@ -38,9 +38,9 @@ contains
     !>  \brief  is a constructor
     subroutine comlin_sym_init( b, p )
         use simple_map_reduce, only: split_nobjs_even
-        use simple_build,    only: build
-        class(build),  intent(in), target :: b
-        class(params), intent(in), target :: p
+        use simple_build,      only: build
+        class(build),  target, intent(in) :: b
+        class(params), target, intent(in) :: p
         integer, allocatable :: parts(:,:)
         integer              :: i, n
         call ico%new('ico')
@@ -51,8 +51,8 @@ contains
         bp => b
         pp => p
         ! automated partioning
-        if(p%l_distr_exec .and. p%nparts > 1)then
-            if(p%nparts > n)then
+        if( p%l_distr_exec .and. p%nparts > 1 )then
+            if( p%nparts > n )then
                 fromv = 0
                 tov   = 0
             else
@@ -69,7 +69,7 @@ contains
     end subroutine comlin_sym_init
 
     !>  \brief  is for finding the symmetry axis given an aligned set of images
-    subroutine comlin_sym_axis(p, orientation_best, mode, doprint )
+    subroutine comlin_sym_axis( p, orientation_best, mode, doprint )
         use simple_math,    only: hpsort
         use simple_strings, only: int2str_pad
         class(params),    intent(in)    :: p
@@ -92,7 +92,7 @@ contains
         do i = fromv, tov   ! vertices range from partitioning
             ! init with vertex
             o = ico%apply(o_zero, i)
-            if(doprint)call progress(i, ncorr)
+            if( doprint ) call progress(i, ncorr)
             call update_lims(o, [delta1, delta2, delta3])
             ! calculate
             if( mode .eq. 'sym' )then

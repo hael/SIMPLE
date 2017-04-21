@@ -1,15 +1,3 @@
-!==Class simple_comlin
-!
-! simple_comlin is the central class for all common lines based alignment methods in _SIMPLE_.
-! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
-! Redistribution or modification is regulated by the GNU General Public License.
-! *Author:* Hans Elmlund, 2009-06-11.
-! 
-!==Changes are documented below
-!
-!* deugged and incorporated in the _SIMPLE_ library, HE 2009-06-25
-!* re-implemented with new comlin data struct and truly OOD, HE June 14 2012
-!
 module simple_comlin
 use simple_defs
 use simple_image,  only: image 
@@ -36,11 +24,8 @@ type comlin
     ! PARTICLE COMMON LINE CORRELATORS
     procedure, private :: pcorr_1
     procedure, private :: pcorr_2
-    procedure, private :: pcorr_3
-    procedure, private :: pcorr_4
-    procedure, private :: pcorr_5
     procedure          :: extr_lines
-    generic :: pcorr => pcorr_1, pcorr_2, pcorr_3, pcorr_4, pcorr_5
+    generic :: pcorr => pcorr_1, pcorr_2
     ! PRIVATE STUFF
     procedure, private :: calc_comlin
     procedure, private :: extr_comlin
@@ -60,9 +45,9 @@ contains
     function constructor( a, fpls ) result( self )
         use simple_oris,  only: oris
         use simple_image, only: image
-        class(oris), intent(in), target  :: a       !< orientations
-        class(image), intent(in), target :: fpls(:) !< Fourier planes
-        type(comlin)                     :: self    !< object
+        class(oris),  target, intent(in) :: a       !< orientations
+        class(image), target, intent(in) :: fpls(:) !< Fourier planes
+        type(comlin) :: self                        !< object
         call self%new( a, fpls ) 
     end function constructor
 
@@ -144,104 +129,9 @@ contains
         endif
     end function pcorr_1
     
-    !>  \brief  is for interpolating the common lines associated with one particle image 
-    !!          and calculating the per-particle common line correlation, with random 
-    !!          sampling
-    function pcorr_2( self, pind, lp_dyn, bootarr ) result( corr )
-        class(comlin), intent(inout) :: self
-        integer, intent(in)          :: pind 
-        real, intent(in)             :: lp_dyn
-        integer, intent(in)          :: bootarr(:)
-        real                         :: corrs(self%nptcls), sums1(self%nptcls)
-        real                         :: sums2(self%nptcls), corr
-        integer                      :: j, lims(2)
-        ! determine the dynamic resolution range
-        lims = self%fpls(pind)%get_clin_lims(lp_dyn)
-        ! init
-        self%foundline = .false.
-        corrs = 0.
-        sums1 = 0.
-        sums2 = 0.     
-        !$omp parallel do default(shared) private(j) schedule(auto)
-        do j=1,size(bootarr)
-            call self%extr_comlin( pind, bootarr(j), lims, corrs(j), sums1(j), sums2(j) )
-        end do
-        !$omp end parallel do
-        if( count(self%foundline) > 0 ) then
-            corr = calc_corr(sum(corrs),sum(sums1)*sum(sums2))
-        else
-            corr = -1.
-        endif
-    end function pcorr_2
-    
-    !>  \brief  is for interpolating the common lines associated with one particle image 
-    !!          and calculating the per-particle common line correlation, with state
-    !!          formalism
-    function pcorr_3( self, pind, lp_dyn, statearr, state ) result( corr )
-        class(comlin), intent(inout) :: self
-        integer, intent(in)          :: pind 
-        real, intent(in)             :: lp_dyn
-        integer, intent(in)          :: statearr(self%nptcls), state
-        real                         :: corrs(self%nptcls), sums1(self%nptcls)
-        real                         :: sums2(self%nptcls), corr
-        integer                      :: j, lims(2)
-        ! determine the dynamic resolution range
-        lims = self%fpls(pind)%get_clin_lims(lp_dyn)
-        ! init
-        self%foundline = .false.
-        corrs = 0.
-        sums1 = 0.
-        sums2 = 0.        
-        !$omp parallel do default(shared) private(j) schedule(auto)
-        do j=1,self%nptcls
-            if( statearr(j) == state ) then
-                call self%extr_comlin( pind, j, lims, corrs(j), sums1(j), sums2(j) )
-            endif
-        end do
-        !$omp end parallel do
-        if( count(self%foundline) > 0 ) then
-            corr = calc_corr(sum(corrs),sum(sums1)*sum(sums2))
-        else
-            corr = -1.
-        endif
-    end function pcorr_3
-    
-    !>  \brief  is for interpolating the common lines associated with one particle image 
-    !!          and calculating the per-particle common line correlation, with random
-    !!          sampling and state formalism
-    function pcorr_4( self, pind, lp_dyn, bootarr, statearr, state ) result( corr )
-        class(comlin), intent(inout) :: self
-        integer, intent(in)          :: pind 
-        real, intent(in)             :: lp_dyn
-        integer, intent(in)          :: bootarr(:)
-        integer, intent(in)          :: statearr(self%nptcls), state
-        real                         :: corrs(self%nptcls), sums1(self%nptcls)
-        real                         :: sums2(self%nptcls), corr
-        integer                      :: j, lims(2)
-        ! determine the dynamic resolution range
-        lims = self%fpls(pind)%get_clin_lims(lp_dyn)
-        ! init
-        self%foundline = .false.
-        corrs = 0.
-        sums1 = 0.
-        sums2 = 0.
-        !$omp parallel do default(shared) private(j) schedule(auto)       
-        do j=1,size(bootarr)
-            if( statearr(bootarr(j)) == state ) then
-                call self%extr_comlin( pind, bootarr(j), lims, corrs(j), sums1(j), sums2(j) )
-            endif
-        end do
-        !$omp end parallel do
-        if( count(self%foundline) > 0 ) then
-            corr = calc_corr(sum(corrs),sum(sums1)*sum(sums2))
-        else
-            corr = -1.
-        endif
-    end function pcorr_4
-    
     !>  \brief  is for interpolating the common line between a pair of images
     !!          and calculating the common line correlation 
-    function pcorr_5( self, iptcl, jptcl, lp_dyn ) result( corr )
+    function pcorr_2( self, iptcl, jptcl, lp_dyn ) result( corr )
         class(comlin), intent(inout) :: self
         integer, intent(in)          :: iptcl, jptcl
         real, intent(in)             :: lp_dyn
@@ -260,7 +150,7 @@ contains
         else
             corr = -1.
         endif
-    end function pcorr_5
+    end function pcorr_2
     
     ! PRIVATE STUFF
     
