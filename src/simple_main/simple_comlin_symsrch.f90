@@ -114,9 +114,11 @@ contains
         integer              :: i
         cost = 0.
         call optori%set_euler(vec)
-        if( (vec(3)<eullims(3,1)) .or. (vec(3)>eullims(3,2)) )then
+        if(any(vec(1:3)-eullims(:,1) < 0.))then     ! lower limts
             cost = 1.
-        elseif( (optori.euldist.vertex)>euldistmax )then
+        elseif(any(vec(1:3)-eullims(:,2) > 0.))then ! upper limits
+            cost = 1.
+        elseif((optori.euldist.vertex)>euldistmax)then
             cost = 1.
         else
             call bp%a%rot(optori)
@@ -136,9 +138,11 @@ contains
         real                 :: cost
         cost = 0.
         call optori%set_euler(vec(1:3))
-        if( (vec(3)<eullims(3,1)) .or. (vec(3)>eullims(3,2)) )then
+        if(any(vec(1:3)-eullims(:,1) < 0.))then     ! lower limts
             cost = 1.
-        elseif( (optori.euldist.vertex)>euldistmax )then
+        elseif(any(vec(1:3)-eullims(:,2) > 0.))then ! upper limits
+            cost = 1.
+        elseif((optori.euldist.vertex) > euldistmax)then
             cost = 1.
         elseif( vec(4) < -trs .or. vec(4) > trs )then 
             cost = 1.
@@ -146,11 +150,9 @@ contains
             cost = 1.
         else
             call bp%a%set_euler(iptcl, [0.,0.,0.])
-            call bp%a%set(iptcl, 'x', 0.)
-            call bp%a%set(iptcl, 'y', 0.)
-            call bp%a%set_euler(jptcl, [vec(1),vec(2),vec(3)])
-            call bp%a%set(jptcl, 'x', vec(4))
-            call bp%a%set(jptcl, 'y', vec(5))
+            call bp%a%set_shift(iptcl, [0.,0.])
+            call bp%a%set_euler(jptcl, vec(1:3))
+            call bp%a%set_shift(jptcl, vec(4:5))
             cost = -pcorr_comlin(iptcl, jptcl) 
         endif
     end function

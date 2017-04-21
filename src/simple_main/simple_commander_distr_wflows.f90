@@ -1416,6 +1416,7 @@ contains
 
     subroutine exec_symsrch_distr( self, cline )
         use simple_math,    only: hpsort
+        use simple_sym,     only: sym
         use simple_ori,     only: ori
         use simple_oris,    only: oris
         use simple_strings, only: int2str_pad, int2str
@@ -1425,7 +1426,8 @@ contains
         type(params)            :: p_master
         type(chash)             :: job_descr
         type(oris)              :: os, sym_os, o_shift
-        type(ori)               :: o_best
+        type(ori)               :: o, o_best
+        type(sym)               :: syme
         real,       allocatable :: corrs(:)
         integer,    allocatable :: corr_inds(:)
         real                    :: shvec(3)
@@ -1486,6 +1488,7 @@ contains
             call o_shift%kill
             shvec = -1. * shvec ! the sign is right
             ! rotate the orientations & transfer the 3d shifts to 2d
+            call syme%new(p_master%pgrp)
             os = oris(nlines(p_master%oritab))
             call os%read(p_master%oritab)
             if(cline%defined('state'))then
@@ -1494,12 +1497,17 @@ contains
                     if(s == p_master%state)then
                         call os%map3dshift22d(i, shvec)
                         call os%rot(i, o_best)
+                        o = os%get_ori(i)
+                        call syme%rot_to_asym(o)
+                        call os%set_ori(i, o)
                     endif
                 end do
             else
                 call os%map3dshift22d(shvec) 
                 call os%rot(o_best)
+                call syme%rotall_to_asym(os)
             endif
+            call syme%kill
             ! Output
             call os%write(p_master%outfile)
             ! cleanup
