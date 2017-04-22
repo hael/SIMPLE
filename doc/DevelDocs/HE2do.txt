@@ -2,3 +2,10 @@ need to parallelise the volassemble of the different states for het_ensemble
 need to have another go at the picker
 weighted multi-resolution state sorting by fitting B-factors?
 
+# unidoc points
+everything written to cwd
+same naming convention for picker as for others
+consider auto in name for autoboxes
+put in absolute paths whenever files are written out
+ctfres put back in
+nptcls_per_movie in unidoc

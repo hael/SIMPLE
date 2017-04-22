@@ -88,7 +88,7 @@ contains
         call o%new
         call o_zero%new
         ! Simplex search
-        do i = fromv, tov   ! vertices range from partitioning
+        do i =fromv,tov   ! vertices range from partitioning
             ! init with vertex
             o = ico%apply(o_zero, i)
             if( doprint ) call progress(i, ncorr)
@@ -112,7 +112,7 @@ contains
             call resoris%set_ori(i, o)
         end do
         ! output & sorting
-        if(p%l_distr_exec .and. mode.eq.'sym')then
+        if( p%l_distr_exec .and. mode.eq.'sym' )then
             call resoris%write(p%outfile, [fromv,tov])
         else
             corr_inds = (/ (i,i=1,ncorr) /)

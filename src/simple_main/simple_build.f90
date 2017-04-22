@@ -311,14 +311,14 @@ contains
             do i=1,p%nptcls*p%nsym
                 call self%imgs_sym(i)%new([p%box,p%box,1],p%smpd,p%imgkind)
             end do
-            self%clins = comlin(self%a, self%imgs_sym)
+            self%clins = comlin(self%a, self%imgs_sym, p%lp)
         else ! set up assymetrical common lines-based alignment functionality
             allocate( self%imgs(1:p%nptcls), stat=alloc_stat )
             call alloc_err( 'build_comlin_tbox; simple_build, 2', alloc_stat )
             do i=1,p%nptcls
                 call self%imgs(i)%new([p%box,p%box,1],p%smpd,p%imgkind)
             end do  
-            self%clins = comlin( self%a, self%imgs )
+            self%clins = comlin( self%a, self%imgs, p%lp )
         endif
         write(*,'(A)') '>>> DONE BUILDING COMLIN TOOLBOX'
         self%comlin_tbox_exists = .true.

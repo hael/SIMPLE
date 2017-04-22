@@ -1108,49 +1108,38 @@ select case(prg)
         !==Program symsrch
         !
         ! <symsrch/begin>is a program for searching for the principal symmetry axis of a volume 
-        ! reconstructed without assuming any point-group symmetry or assessing the degree of symmetry
-        ! of class averages or individual particles of higher pointgroups (dn,t,o,i). The program takes 
-        ! as input an asymmetrical reconstruction or stack of class averages/individual particles.
-        ! For volumes, the alignment document for all the particle images that have gone into the 3D 
-        ! reconstruction and the desired point-group symmetry needs to be inputted. The 3D reconstruction 
-        ! is then projected in 150 (default option) even directions, common lines-based optimisation is 
-        ! used to identify the principal symmetry axis, the rotational transformation is applied to the 
-        ! inputted orientations, and a new alignment document is produced. Input this document to 
-        ! recvol together with the images and the point-group symmetry to generate a symmetrised map. 
-        ! If you are unsure about the point-group, you should use the compare=yes mode and input the highest 
-        ! conceviable point-group. The program then calculates probabilities for all lower groups inclusive.
-        ! The class average/particle option operates in an equivalent fashion but with individual images. 
-        ! The output is then a per-image correlation value that informs about how well the image conforms 
-        ! to to inputted point-group. The state parameter allows you to apply symmetry for the given state.
-        ! <symsrch/end>
+        ! reconstructed without assuming any point-group symmetry. The program takes as input an 
+        ! asymmetrical 3D reconstruction. The alignment document for all the particle images 
+        ! that have gone into the 3D reconstruction and the desired point-group symmetry needs to 
+        ! be inputted. The 3D reconstruction is then projected in 150 (default option) even directions, 
+        ! common lines-based optimisation is used to identify the principal symmetry axis, the rotational 
+        ! transformation is applied to the inputted orientations, and a new alignment document is produced. 
+        ! Input this document to recvol together with the images and the point-group symmetry to generate a 
+        ! symmetrised map. If you are unsure about the point-group, you should use the compare=yes mode and 
+        ! input the highest conceviable point-group. The program then calculates probabilities for all lower 
+        ! groups inclusive.<symsrch/end>
         !        
         ! set required keys
-        keys_required(1) = 'smpd'
-        keys_required(2) = 'msk'
-        keys_required(3) = 'pgrp'
-        keys_required(4) = 'outfile'
-        keys_required(5) = 'lp'
+        keys_required(1) = 'vol1'
+        keys_required(2) = 'smpd'
+        keys_required(3) = 'msk'
+        keys_required(4) = 'pgrp'
+        keys_required(5) = 'oritab'
+        keys_required(6) = 'outfile'
+        keys_required(7) = 'lp'
         ! set optional keys
-        keys_optional(1) = 'nthr'
-        keys_optional(2) = 'vol1'
-        keys_optional(3) = 'stk'
-        keys_optional(4) = 'oritab'
-        keys_optional(5) = 'cenlp'
-        keys_optional(6) = 'hp'
-        keys_optional(7) = 'nspace'
-        keys_optional(8) = 'compare'
+        keys_optional(1) = 'nthr'        
+        keys_optional(2) = 'cenlp'
+        keys_optional(3) = 'hp'
+        keys_optional(4) = 'nspace'
+        keys_optional(5) = 'compare'
         ! parse command line
         if( describe ) call print_doc_symsrch
         call cline%parse(keys_required(:5), keys_optional(:8))
         ! set defaults
         if( .not. cline%defined('nspace') )then
-            if( cline%defined('vol1') )then
-                call cline%set('nptcls', 150.) ! 50 projections 4 symsrch
-                call cline%set('nspace', 150.) ! 50 projections 4 symsrch
-            else
-                call cline%set('nptcls', 1.) ! single-particle search
-                call cline%set('nspace', 1.) ! single-particle search
-            endif
+            call cline%set('nptcls', 150.) ! 50 projections 4 symsrch
+            call cline%set('nspace', 150.) ! 50 projections 4 symsrch
         else
             call cline%set('nptcls', cline%get_rarg('nspace'))
         endif

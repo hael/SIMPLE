@@ -30,50 +30,29 @@ contains
         class(build),   intent(inout) :: b
         class(oris),    intent(out)   :: os
         type(oris) :: oshift
-        type(ori)  :: o
-        if( cline%defined('vol1') )then              
-            ! center volume
-            call b%vol%read(p%vols(1))
-            shvec = b%vol%center(p%cenlp,'no',p%msk)
-            if(p%l_distr_exec .and. p%part.eq.1)then
-                ! writes shifts for distributed execution
-                call oshift%new(1)
-                call oshift%set(1,'x',shvec(1))
-                call oshift%set(1,'y',shvec(2))
-                call oshift%set(1,'z',shvec(3))
-                call oshift%write(trim(SYMSHTAB))
-                call oshift%kill
-            endif
+        type(ori)  :: o         
+        ! center volume
+        call b%vol%read(p%vols(1))
+        shvec = b%vol%center(p%cenlp,'no',p%msk)
+        if(p%l_distr_exec .and. p%part.eq.1)then
+            ! writes shifts for distributed execution
+            call oshift%new(1)
+            call oshift%set(1,'x',shvec(1))
+            call oshift%set(1,'y',shvec(2))
+            call oshift%set(1,'z',shvec(3))
+            call oshift%write(trim(SYMSHTAB))
+            call oshift%kill
         endif
         ! main fork
         if( p%compare .eq. 'no' )then
-            if( cline%defined('vol1') )then
-                if( .not. cline%defined('oritab') )&
-                & stop 'need oritab of for particles that went into the volume as input; simple_symsrcher :: symsrch_master'
-                ! single symmetry search
-                ! generate projections
-                call b%vol%mask(p%msk, 'soft')
-                b%ref_imgs(1,:) = projvol(b%vol, b%e, p)
-                ! do the symmetry search
-                call single_symsrch( b, p, orientation )
-            else if( cline%defined('stk') )then
-                ! get number of particles from stack
-                call find_ldim_nptcls(p%stk, lfoo, nptcls)
-                os = oris(nptcls)
-                do iptcl=1,nptcls
-                    call b%ref_imgs(1,1)%new([p%box,p%box,1], p%smpd)
-                    call b%ref_imgs(1,1)%read(p%stk,iptcl)
-                    call b%ref_imgs(1,1)%mask(p%msk, 'soft')
-                    call single_symsrch(b,p,orientation)
-                    call os%set_ori(iptcl,orientation)
-                end do
-            else
-                stop 'not enough input to run simple_symsrch; either vol1 or stk is needed!'
-            endif
+            ! single symmetry search
+            ! generate projections
+            call b%vol%mask(p%msk, 'soft')
+            b%ref_imgs(1,:) = projvol(b%vol, b%e, p)
+            ! do the symmetry search
+            ! call single_symsrch( b, p, orientation )
+            call single_symsrch_oldschool( b, p, orientation )
         else
-            if( .not. cline%defined('vol1') )&
-            & stop 'the compare=yes mode is only intended for volumes, please give vol1; simple_symsrcher :: symsrch_master'
-            ! projection generation does not have to be inside the loop over subgroups
             ! generate projections
             call b%vol%mask(p%msk, 'soft')
             b%ref_imgs(1,:) = projvol(b%vol, b%e, p)
@@ -96,9 +75,9 @@ contains
             call sym_probs( bestind )
             orientation = subgrps_oris%get_ori(bestind)
         endif
-        if(p%l_distr_exec)then
+        if( p%l_distr_exec )then
             ! alles klar
-        elseif( cline%defined('vol1') )then ! we have 3D shifts to deal with
+        else ! we have 3D shifts to deal with
             ! rotate the orientations & transfer the 3d shifts to 2d
             shvec = -1.*shvec
             os    = oris(nlines(p%oritab))
@@ -127,7 +106,7 @@ contains
         type(build)  :: b
         type(params) :: p
         type(sym)    :: so
-        integer      :: i,k, alloc_stat
+        integer      :: i, k, alloc_stat
         ! Update general toolbox sym functionality
         p%pgrp    = so%get_pgrp()
         call b%se%new(p%pgrp)
@@ -154,17 +133,17 @@ contains
             do i=1,p%nptcls*p%nsym
                 call b%imgs_sym(i)%new([p%box,p%box,1], p%smpd)
             end do 
-            b%clins = comlin(b%a, b%imgs_sym)
+            b%clins = comlin(b%a, b%imgs_sym, p%lp)
         endif
     end subroutine updates_tboxs
     
     !>  \brief does common lines symmetry search over one symmetry pointgroup
     subroutine single_symsrch( b, p, best_o)
         use simple_comlin_sym  ! use all in there
-        type(build)              :: b
-        type(params)             :: p
-        type(ori), intent(inout) :: best_o
-        integer :: i, j, cnt
+        type(build)  :: b
+        type(params) :: p
+        type(ori)    :: best_o
+        integer      :: i, j, cnt
         ! expand over symmetry group
         cnt = 0
         do i=1,p%nptcls
@@ -178,15 +157,35 @@ contains
         call comlin_sym_init(b, p)
         call comlin_sym_axis(p, best_o, 'sym', doprint=.true.)
     end subroutine single_symsrch
+
+    !>  \brief does common lines symmetry search over one symmetry pointgroup
+    subroutine single_symsrch_oldschool( b, p, best_o )
+        use simple_comlin_symsrch, only: comlin_srch_symaxis ! use all in there
+        type(build)  :: b
+        type(params) :: p
+        type(ori)    :: best_o
+        integer      :: i, j, cnt
+        ! expand over symmetry group
+        cnt = 0
+        do i=1,p%nptcls
+            do j=1,p%nsym
+                cnt = cnt+1
+                b%imgs_sym(cnt) = b%ref_imgs(1,i)
+                call b%imgs_sym(cnt)%fwd_ft
+            end do
+        end do
+        ! search for the axis
+        call comlin_srch_symaxis(b, best_o, .true.)
+    end subroutine single_symsrch_oldschool
     
     !>  \brief  calculates probabilities and returns best axis index
     subroutine sym_probs( bestind )
-        integer, intent(inout) :: bestind
-        type(sym)              :: se, subse
-        real, allocatable      :: probs(:)
-        character(len=3)       :: pgrp
-        real                   :: bestp
-        integer                :: i,j,k, alloc_stat
+        integer           :: bestind
+        type(sym)         :: se, subse
+        real, allocatable :: probs(:)
+        character(len=3)  :: pgrp
+        real              :: bestp
+        integer           :: i, j, k, alloc_stat
         allocate( probs(n_subgrps), stat=alloc_stat)
         call alloc_err( 'sym_probs; simple_sym', alloc_stat )            
         probs = 0.

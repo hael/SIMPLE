@@ -64,7 +64,7 @@ contains
             ! Fourier transform
             call b%imgs_sym(iptcl)%fwd_ft
         end do
-        b%clins = comlin(b%a, b%imgs_sym)
+        b%clins = comlin(b%a, b%imgs_sym, p%lp)
         if( cline%defined('part') )then
             npairs = p%top-p%fromp+1
             if( debug ) print *, 'allocating this number of similarities: ', npairs

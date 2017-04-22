@@ -14,7 +14,8 @@ use simple_oris,        only: oris
 use simple_optimizer,   only: optimizer
 implicit none
 
-public :: comlin_symsrch_init, comlin_symsrch_minimize, comlin_symsrch_get_nevals, comlin_pairsrch_minimize
+public :: comlin_symsrch_init, comlin_symsrch_minimize, comlin_symsrch_get_nevals, comlin_pairsrch_minimize,&
+&comlin_srch_symaxis
 private
 
 type(opt_factory)         :: ofac            !< optimizer factory
@@ -26,7 +27,6 @@ type(ori)                 :: optori          !< axis ori being optimised
 type(ori)                 :: vertex          !< current vertex (initial position)
 integer, pointer          :: iptcl=>null()   !< ptcl index
 integer, pointer          :: jptcl=>null()   !< ptcl index
-real, pointer             :: dynlim=>null()  !< dynamic lowpass limit
 integer                   :: nptcls=0        !< nr of particles
 real                      :: eullims(3,2)=0. !< Euler limits; only used to setup optimizer
 real                      :: hp=0.           !< fixed high-pass limit
@@ -40,7 +40,7 @@ contains
     subroutine comlin_symsrch_init( b, p, opt_str, lims, o_vertex, dmax, mode )
         use simple_build,        only: build
         use simple_params,       only: params
-        class(build), target,  intent(in)    :: b
+        class(build),  target, intent(in)    :: b
         class(params), target, intent(in)    :: p
         character(len=*),      intent(in)    :: opt_str
         real,                  intent(in)    :: lims(5,2)
@@ -48,17 +48,15 @@ contains
         real,                  intent(in)    :: dmax        ! Max angular distance from inital position
         character(len=*),      intent(in)    :: mode
         character(len=8) :: str_opt= 'simplex'
-        ! set constants & pointers:
-        nptcls     = p%nptcls
-        hp         = p%hp
-        lp         = p%lp
-        euldistmax = dmax
+        nptcls     =  p%nptcls
+        hp         =  p%hp
+        lp         =  p%lp
+        euldistmax =  dmax
         bp         => b
         iptcl      => p%iptcl
         jptcl      => p%jptcl
-        dynlim     => p%lp_dyn
-        trs        = p%trs
-        eullims    = lims(:3,:2)
+        trs        =  p%trs
+        eullims    =  lims(:3,:2)
         ! OPTIMISER INIT
         a_copy = bp%a
         vertex = o_vertex
@@ -74,7 +72,7 @@ contains
         if( mode .eq. 'sym' )then
             call ospec%specify(str_opt, 3, ftol=1e-4, gtol=1e-4, limits=lims(:3,:), nrestarts=3)
             call ospec%set_costfun(comlin_symsrch_cost)
-        elseif( mode .eq. 'pair')then
+        elseif( mode .eq. 'pair' )then
             call ospec%specify(str_opt, 5, ftol=1e-4, gtol=1e-4, limits=lims, nrestarts=1, maxits=30)
             call ospec%set_costfun(comlin_pairsrch_cost)
         else
@@ -119,7 +117,7 @@ contains
         else
             call bp%a%rot(optori)
             call bp%se%apply2all(bp%a)
-            cost = -bp%clins%corr(dynlim)
+            cost = -bp%clins%corr()
             bp%a = a_copy
         endif
     end function comlin_symsrch_cost
@@ -143,7 +141,7 @@ contains
         else
             call bp%a%set_euler(jptcl, vec(1:3))
             call bp%a%set_shift(jptcl, vec(4:5))
-            cost = -bp%clins%pcorr(iptcl, jptcl, dynlim) 
+            cost = -bp%clins%pcorr(iptcl, jptcl) 
         endif
     end function comlin_pairsrch_cost
 
@@ -155,18 +153,20 @@ contains
     ! OLD SYMMETRY SRCH ROUTINE
 
     !>  \brief  is for finding the symmetry axis give an aligned set of images
-    subroutine comlin_srch_symaxis( orientation_best, doprint )
-        use simple_ori,  only: ori
-        use simple_oris, only: oris
-        class(ori), intent(inout) :: orientation_best
-        logical,    intent(in)    :: doprint
+    subroutine comlin_srch_symaxis( b, orientation_best, doprint )
+        use simple_ori,    only: ori
+        use simple_oris,   only: oris
+        use simple_jiffys, only: progress
+        class(build), intent(inout) :: b
+        class(ori),   intent(inout) :: orientation_best
+        logical,      intent(in)    :: doprint
         integer    :: i, j, k
         type(ori)  :: orientation
         type(oris) :: a_copy
         real       :: corr, corr_best
         integer    :: ntot, cnt, lims(3,2)
         if( doprint ) write(*,'(A)') '>>> GLOBAL SYMMETRY AXIS SEARCH'
-        a_copy    = bp%a
+        a_copy    = b%a
         corr_best = -1.
         ntot      = 24624
         cnt       = 0
@@ -185,10 +185,10 @@ contains
                     cnt = cnt+1
                     if( doprint ) call progress(cnt, ntot)
                     call orientation%e3set(real(k))
-                    bp%a = a_copy
-                    call bp%a%rot(orientation)
-                    call bp%se%apply2all(bp%a)
-                    corr = bp%clins%corr(dynlim)
+                    b%a = a_copy
+                    call b%a%rot(orientation)
+                    call b%se%apply2all(b%a)
+                    corr = b%clins%corr()
                     call orientation%set('corr',corr)
                     if( corr > corr_best )then
                         corr_best = corr
@@ -218,10 +218,10 @@ contains
                     cnt = cnt+1
                     if( doprint ) call progress(cnt, ntot)
                     call orientation%e3set(real(k))
-                    bp%a = a_copy
-                    call bp%a%rot(orientation)
-                    call bp%se%apply2all(bp%a)
-                    corr = bp%clins%corr(dynlim)
+                    b%a = a_copy
+                    call b%a%rot(orientation)
+                    call b%se%apply2all(b%a)
+                    corr = b%clins%corr()
                     call orientation%set('corr',corr)
                     if( corr > corr_best )then
                         corr_best = corr
@@ -234,7 +234,7 @@ contains
             write(*,'(A)') '>>> FOUND REFINED SYMMETRY AXIS ORIENTATION'
             call orientation_best%print
         endif
-        bp%a = a_copy
+        b%a = a_copy
         call a_copy%kill
     end subroutine comlin_srch_symaxis
     
