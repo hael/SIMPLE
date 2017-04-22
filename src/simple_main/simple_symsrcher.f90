@@ -17,8 +17,7 @@ type(sym)                     :: symobj
 integer                       :: i, s, n_subgrps, bestind, iptcl, nptcls, lfoo(3)
 character(len=3), allocatable :: subgrps(:)
 real                          :: shvec(3)
-
-character(len=32), parameter :: SYMSHTAB = 'sym_3dshift.txt'
+character(len=32), parameter  :: SYMSHTAB = 'sym_3dshift.txt'
 
 contains
 
@@ -50,8 +49,7 @@ contains
             call b%vol%mask(p%msk, 'soft')
             b%ref_imgs(1,:) = projvol(b%vol, b%e, p)
             ! do the symmetry search
-            ! call single_symsrch( b, p, orientation )
-            call single_symsrch_oldschool( b, p, orientation )
+            call single_symsrch( b, p, orientation )
         else
             ! generate projections
             call b%vol%mask(p%msk, 'soft')

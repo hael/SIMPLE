@@ -96,13 +96,12 @@ contains
         class(comlin), intent(inout) :: self
         integer,       intent(in)    :: iptcl, jptcl
         real    :: corr, sums1, sums2
-        logical :: foundlines(self%nptcls)
-        foundlines = .false.
+        logical :: foundline
         corr  = 0.
         sums1 = 0.
         sums2 = 0.
-        call self%extr_comlin( iptcl, jptcl, corr, sums1, sums2, foundlines(jptcl) )
-        if( foundlines(jptcl) )then
+        call self%extr_comlin( iptcl, jptcl, corr, sums1, sums2, foundline )
+        if( foundline )then
             corr = calc_corr(corr,sums1*sums2)
         else
             corr = -1.
