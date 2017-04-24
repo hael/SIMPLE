@@ -259,6 +259,7 @@ contains
             call self%mskvol%kill
             call self%vol_pad%kill_expanded
             call self%vol_pad%kill
+            call self%conv%kill
             if( allocated(self%ssnr) )then
                 deallocate(self%ssnr, self%fsc)
             endif

@@ -70,7 +70,8 @@ contains
         integer :: i,j
         logical :: foundlines(self%nptcls)
         cc = 0.
-        !$omp parallel do default(shared) private(i,j,corrs,sums1,sums2,foundlines) schedule(auto) reduction(+:cc)
+        !$omp parallel do default(shared) private(i,j,cciter,corrs,sums1,sums2,foundlines)&
+        !$omp schedule(auto) reduction(+:cc)
         do i=1,self%nptcls
             corrs      = 0.
             sums1      = 0.
@@ -79,7 +80,7 @@ contains
             do j=1,self%nptcls
                 call self%extr_comlin(i, j, corrs(j), sums1(j), sums2(j), foundlines(j))
             end do
-            if( count(foundlines) > 0 ) then
+            if(any(foundlines)) then
                 cciter = calc_corr(sum(corrs),sum(sums1)*sum(sums2))
             else
                 cciter = -1.
@@ -139,7 +140,7 @@ contains
         comlin(1) = norm1(2)*norm2(3)-norm1(3)*norm2(2)
         comlin(2) = norm1(3)*norm2(1)-norm1(1)*norm2(3)
         comlin(3) = norm1(1)*norm2(2)-norm1(2)*norm2(1)
-        abscom = sqrt(comlin(1)**2+comlin(2)**2+comlin(3)**2)
+        abscom = sqrt(dot_product(comlin, comlin))
         if( abscom >= 0.0001 ) then
             ! normalize
             comlin(:) = comlin(:)/abscom
@@ -172,8 +173,8 @@ contains
                 k2 = real(k)*line(2,2)
                 cline(k,1) = self%fpls(pind)%extr_fcomp(h1,k1,px,py)
                 cline(k,2) = self%fpls(j   )%extr_fcomp(h2,k2,jx,jy)
-                corr = corr + real(cline(k,1)) * real(cline(k,2))+&
-                &aimag(cline(k,1)) * aimag(cline(k,2))
+                corr = corr + dot_product([real(cline(k,1)), aimag(cline(k,1))],&
+                    &[real(cline(k,2)), aimag(cline(k,2))])
                 sumasq = sumasq+csq(cline(k,1)) 
                 sumbsq = sumbsq+csq(cline(k,2))
             end do

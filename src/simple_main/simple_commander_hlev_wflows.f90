@@ -38,7 +38,6 @@ contains
 
     subroutine exec_ini3D_from_cavgs( self, cline )
         use simple_commander_imgproc, only: scale_commander
-        use simple_commander_comlin,  only: symsrch_commander
         use simple_commander_volops,  only: projvol_commander
         use simple_commander_rec,     only: recvol_commander
         use simple_strings,           only: int2str_pad, str2int
@@ -48,7 +47,8 @@ contains
         class(cmdline),                    intent(inout) :: cline
         ! constants
         logical,               parameter :: DEBUG=.false.
-        real,                  parameter :: LPLIMS(2) = [20.,10.], CENLP=50.
+        real,                  parameter :: LPLIMS(2) = [20.,10.]
+        real,                  parameter :: CENLP=30.   ! consistency with prime3D 
         integer,               parameter :: MAXITS_INIT=30, MAXITS_REFINE=80
         integer,               parameter :: STATE=1, NPROJS_SYMSRCH=100
         character(len=32),     parameter :: ITERFBODY     = 'prime3Ddoc_'
@@ -57,9 +57,9 @@ contains
         logical,               parameter :: DOSCALE=.true.
         ! distributed commanders
         type(prime3D_distr_commander) :: xprime3D_distr
+        type(symsrch_distr_commander) :: xsymsrch_distr
         ! shared-mem commanders
         type(scale_commander)         :: xscale
-        type(symsrch_commander)       :: xsymsrch
         type(recvol_commander)        :: xrecvol
         type(projvol_commander)       :: xprojvol
         ! command lines
@@ -131,9 +131,6 @@ contains
         call cline_prime3D_refine1%set('refine', 'shc')
         ! (4) SYMMETRY AXIS SEARCH
         if( srch4symaxis )then
-            ! FOR NOW PRIOR TO USING DISTRIBUTED WORKFLOW
-            call cline_symsrch%delete('nparts')
-            ! END FOR NOW
             if( DOSCALE )then
                 call cline_symsrch%set('smpd',    smpd_sc)
                 call cline_symsrch%set('msk',     real(msk_sc))
@@ -151,9 +148,6 @@ contains
             call cline_symsrch%set('nspace',  real(NPROJS_SYMSRCH))
             call cline_symsrch%set('cenlp',   CENLP)
             call cline_symsrch%set('outfile', 'symdoc.txt')
-            if( cline%defined('nthr_master') )then
-                call cline_symsrch%set('nthr', real(p_master%nthr_master))
-            endif
             ! (4.5) RECONSTRUCT SYMMETRISED VOLUME
             call cline_recvol%set('prg', 'recvol')
             call cline_recvol%set('trs',  5.) ! to assure that shifts are being used
@@ -207,10 +201,11 @@ contains
             write(*,'(A)') '>>>'
             write(*,'(A)') '>>> SYMMETRY AXIS SEARCH'
             write(*,'(A)') '>>>'
+            ! cenetring deactivated as prime3D already does it?
             call cline_symsrch%set('oritab', trim(oritab))
             call cline_symsrch%set('vol1', trim(vol_iter))
             call update_lp(cline_symsrch, 1)
-            call qenv%exec_simple_prg_in_queue(cline_symsrch, 'SYMSRCH', 'SYMSRCH_FINISHED')
+            call xsymsrch_distr%execute(cline_symsrch)
             write(*,'(A)') '>>>'
             write(*,'(A)') '>>> 3D RECONSTRUCTION OF SYMMETRISED VOLUME'
             write(*,'(A)') '>>>'
@@ -391,12 +386,12 @@ contains
         write(*,'(A)') '>>>'
         write(*,'(A,A)') '>>> GENERATING ENSEMBLE SOLUTION: ', trim(oritab)
         write(*,'(A)') '>>>'
-        allocate( labels_incl(NREPEATS,n_incl), consensus(n_incl) )
+        allocate(labels_incl(NREPEATS,n_incl), consensus(n_incl))
         do irepeat=1,NREPEATS
             labels_incl(irepeat,:) = pack(labels(irepeat,:), mask=included)
         enddo
         labels(1,:) = 0
-        call shc_aggregation( NREPEATS, n_incl, labels_incl, consensus )
+        call shc_aggregation(NREPEATS, n_incl, labels_incl, consensus)
         call os%set_all('state', real(unpack(consensus, included, labels(1,:))) )
         call os%write(trim(oritab))
         call os%kill

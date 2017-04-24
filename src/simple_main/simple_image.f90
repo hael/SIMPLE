@@ -1444,20 +1444,27 @@ contains
     function extr_fcomp( self, h, k, x, y ) result( comp )
         class(image), intent(inout) :: self
         real,         intent(in)    :: h, k, x, y
+        complex, allocatable :: comps(:,:)
         complex :: comp
         integer :: win(2,2), i, j, phys(3)
         if( self%ldim(3) > 1 )         stop 'only 4 2D images; extr_fcomp; simple_image'
         if( .not. self%ft )            stop 'image need to be FTed; extr_fcomp; simple_image'
         if( self%imgkind .eq. 'xfel' ) stop 'this method not intended for xfel-kind images; simple_image::extr_fcomp'
         ! evenness and squareness are checked in the comlin class
-        win = recwin_2d(h,k,1.)
-        comp = cmplx(0.,0.)
+        win  = recwin_2d(h, k, 1.)
+        allocate( comps(win(1,1):win(1,2),win(2,1):win(2,2)) )
         do i=win(1,1),win(1,2)
             do j=win(2,1),win(2,2)
-                phys = self%comp_addr_phys([i,j,0])
-                comp = comp+sinc(h-real(i))*sinc(k-real(j))*self%get_fcomp([i,j,0],phys)
+                phys       = self%comp_addr_phys([i,j,0])
+                comps(i,j) = self%get_fcomp([i,j,0], phys)
             end do
+            comps(i,:) = comps(i,:) * sinc(h-real(i))
         end do
+        do i = win(2,1), win(2,2)
+            comps(:,i) = comps(:,i) * sinc(k-real(i))
+        enddo
+        comp = sum(comps)
+        deallocate(comps)
         ! origin shift
         if( x == 0. .and. y == 0. )then
         else
@@ -1471,7 +1478,8 @@ contains
                 real, intent(in)     :: x, y, dx, dy
                 complex              :: comp
                 real                 :: arg
-                arg = (pi/real(xdim))*(dx*x+dy*y)
+                !arg = (pi/real(xdim))*(dx*x+dy*y)
+                arg = (pi/real(xdim)) * dot_product([x,y], [dx,dy])
                 comp = cmplx(cos(arg),sin(arg))
             end function oshift_here
 
@@ -2462,7 +2470,7 @@ contains
             call tmp%norm_bin
             call tmp%bin(thres)
         else
-            !call tmp%mask(rmsk, 'soft')    ! the old fashioned way
+            call tmp%mask(rmsk, 'soft')
             !call tmp%bin('nomsk')          ! the old fashioned way
             call tmp%bin('msk', rmsk)
         endif

@@ -36,6 +36,7 @@ type convergence
     procedure :: check_conv3D
     procedure :: check_conv_het
     procedure :: get
+    procedure :: kill
 end type convergence
 
 interface convergence
@@ -297,6 +298,13 @@ contains
             case DEFAULT
         end select
     end function get
+
+    subroutine kill( self )
+        class(convergence), intent(inout) :: self
+        self%bap    => null()
+        self%pp     => null()
+        self%pcline => null() 
+    end subroutine kill
 
 end module simple_convergence
 

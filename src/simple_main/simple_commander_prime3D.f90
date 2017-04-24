@@ -49,10 +49,6 @@ type, extends(commander_base) :: multiptcl_init_commander
   contains
     procedure :: execute      => exec_multiptcl_init
 end type multiptcl_init_commander
-! type, extends(commander_base) :: het_init_commander
-!   contains
-!     procedure :: execute      => exec_het_init
-! end type het_init_commander
 type, extends(commander_base) :: prime3D_commander
   contains
     procedure :: execute      => exec_prime3D
@@ -423,6 +419,7 @@ contains
         endif
         call cline%set('frac', b%conv%get('frac'))
         ! end gracefully
+        call b%kill_general_tbox
         call simple_end('**** SIMPLE_CHECK3D_CONV NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_check3D_conv
 

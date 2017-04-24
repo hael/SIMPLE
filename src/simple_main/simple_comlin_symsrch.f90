@@ -105,10 +105,9 @@ contains
         integer, intent(in)  :: D
         real,    intent(in)  :: vec(D)
         real    :: cost
-        integer :: i
         cost = 0.
         call optori%set_euler(vec)
-        if(any(vec(1:3)-eullims(:,1) < 0.))then     ! lower limts
+        if(any(vec(1:3)-eullims(:,1) < 0.))then     ! lower limits
             cost = 1.
         elseif(any(vec(1:3)-eullims(:,2) > 0.))then ! upper limits
             cost = 1.
@@ -128,7 +127,7 @@ contains
         real :: cost
         cost = 0.
         call optori%set_euler(vec(1:3))
-        if(any(vec(1:3)-eullims(:,1) < 0.))then     ! lower limts
+        if(any(vec(1:3)-eullims(:,1) < 0.))then     ! lower limits
             cost = 1.
         elseif(any(vec(1:3)-eullims(:,2) > 0.))then ! upper limits
             cost = 1.

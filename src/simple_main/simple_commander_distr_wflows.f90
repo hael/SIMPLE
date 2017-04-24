@@ -1511,7 +1511,7 @@ contains
             ! Output
             call os%write(p_master%outfile)
             ! cleanup
-            call del_file(trim(SYMSHTAB))
+            !call del_file(trim(SYMSHTAB)) ! FOR NOW
             do i = 1, p_master%nparts
                 part_tab = trim(SYMFBODY)//int2str_pad(i, p_master%numlen)//'.txt'
                 call del_file(trim(part_tab))
