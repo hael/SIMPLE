@@ -7,47 +7,18 @@
 	<body>
 		
 	<div class=header>
-		<img class=headerimage src=img/simple_logo.png>
-	</div>
-	
-	<div class=body>
-		<div id=taskdiv class=bodydiv>
-			<div include-html=tasks/tasklist.html class=taskwindow id=tasklist></div>
-			<div include-html=tasks/import.html class=taskwindow id=importtask></div>
-			<div include-html=tasks/unblurctf.html class=taskwindow id=unblurctftask></div>
-			<div include-html=tasks/extract.html class=taskwindow id=extracttask></div>
-			<div include-html=tasks/filesview.html class=taskwindow id=filesviewtask></div>
-			<div include-html=tasks/pipelineview.html class=taskwindow id=pipelineview></div>
-			<div include-html=tasks/fileviewer.html class=taskwindow id=fileviewer></div>
-		</div>
-		<div id=historydiv class=bodydiv>
-			<div class=bodyheader onclick=projectHistoryFull()>
-				<img id=historyicon src=img/right_chevron.png>
-				<b>Project History</b>
+		<div class=headermenu>
+			<img src=img/headermenu.png>
+			<div class=hoverdiv>
+				<div onclick='selectMode();showTask("tasklist")'>
+					<b>New Job</b>
+				</div>
+				<div onclick=fileBrowser("fileviewer")>
+					<b>View Files</b>
+				</div>
 			</div>
-			<table class=historytable>
-				<thead>
-					<tr>
-						<td><b>ID</b></td>
-						<td><b>Status</b></td>
-						<td><b>Type</b></td>
-						<td><b>Job Name</b></td>
-						<td><b>Job Description</b></td>
-						<td><b>Actions</b></td>
-					</tr>
-				</thead>
-				<tbody id=historytable></tbody>
-			</table>
 		</div>
-	</div>
-	
-	<div class=footer>
-		<div class=footerbutton onclick='selectMode();showTask("tasklist")'>
-			<b>New Job</b>
-		</div>
-		<div class=footerbutton onclick=fileBrowser("fileviewer")>
-			<b>View Files</b>
-		</div>
+		<img class=headerimage src=img/simple_logo.png>
 		<div class=projectselector>
 			<b>Project</b>
 			<select id=projectselector name=mode onchange=selectProject()>
@@ -57,28 +28,67 @@
 		</div>
 	</div>
 	
+	<div class=body>
+		
+		<div id=historydiv class=bodydiv>
+			<div class=bodyheader onclick=projectHistoryFull()>
+				<img id=historyicon src=img/right_chevron.png>
+				<b>Project History</b>
+			</div>
+			<table class=historytable>
+				<thead>
+					<tr id=historytableheader>
+						<td><b>ID</b></td>
+						<td><b>Status</b></td>
+						<td><b>Type</b></td>
+						<td><b>Job Name</b></td>
+						<td><b>Job Description</b></td>
+						<td style="width: 100%;"><b>Actions</b></td>
+					</tr>
+				</thead>
+				<tbody id=historytable></tbody>
+			</table>
+		</div>
+		
+		<div id=taskdiv class=bodydiv>
+			<div include-html=tasks/tasklist.html class=taskwindow id=tasklist></div>
+			<div include-html=tasks/import.html class=taskwindow id=importtask></div>
+			<div include-html=tasks/unblurctf.html class=taskwindow id=unblurctftask></div>
+			<div include-html=tasks/extract.html class=taskwindow id=extracttask></div>
+			<div include-html=tasks/prime2d.html class=taskwindow id=prime2dtask></div>
+			<div include-html=tasks/pick.html class=taskwindow id=picktask></div>
+			<div include-html=tasks/ini3d.html class=taskwindow id=ini3dtask></div>
+			<div include-html=tasks/filesview.html class=taskwindow id=filesviewtask></div>
+			<div include-html=tasks/pipelineview.html class=taskwindow id=pipelineview></div>
+			<div include-html=tasks/fileviewer.html class=taskwindow id=fileviewer></div>
+		</div>
+		
+	</div>
+	
 	<div id=gauze></div>
 	
 	<div id=filebrowserpopup>
 		<input type=hidden id=filesviewfilename>
 		<input type=hidden id=filesviewcaller>
-		<div class=popupheader>
+		<div class=bodyheader>
 			<b>File Browser</b>
 		</div>
 		<table class=popuptable id=filebrowserdirectorytable></table>
-		<table class=popuptable id=filebrowserlisttable></table>
-		<div class=clickbutton onclick=cancelFileBrowser()>Cancel</div>
-		<div class=clickbutton onclick=confirmFileBrowser()>Open</div>
+		<table class=popupfiletable id=filebrowserlisttable></table>
+		<div class=clickbuttoncontainer>
+			<div class=clickbutton onclick=cancelFileBrowser()>Cancel</div>
+			<div class=clickbutton onclick=confirmFileBrowser()>Open</div>
+		</div>
 	</div>
 	
 	<div id=folderselectorpopup>
 		<input type=hidden id=folderselectorfolder>
 		<input type=hidden id=folderselectorcaller>
-		<div class=popupheader>
+		<div class=bodyheader>
 			<b>Select Folder</b>
 		</div>
 		<table class=popuptable id=folderdirectorytable></table>
-		<table class=popuptable id=folderlisttable></table>
+		<table class=popupfiletable id=folderlisttable></table>
 		<div class=clickbutton onclick=cancelFolderSelection()>Cancel</div>
 		<div class=clickbutton onclick=confirmFolderSelection()>Select</div>
 	</div>
@@ -150,8 +160,10 @@
 				<td><input type=number id=time_per_image class=jobarg></td>
 			</tr>
 		</table>
-		<div class=clickbutton onclick=hideRunParameters()>Cancel</div>
-		<div class=clickbutton id=jobrunparametersrunbutton>Run</div>
+		<div class=clickbuttoncontainer>
+			<div class=clickbutton onclick=hideRunParameters()>Cancel</div>
+			<div class=clickbutton id=jobrunparametersrunbutton>Run</div>
+		</div>
 	</div>
 	<script src=simple.js></script>
 	</body>

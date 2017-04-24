@@ -143,25 +143,26 @@ function addJob(data){
 		actionmenudiv.appendChild(hoverdiv);
 		cell6.appendChild(actionmenudiv);
 	}
+	projectHistoryFull();
 }
 
 function projectHistoryFull(){
 	hideTasks();
 	var taskdiv = document.getElementById('taskdiv');
-	taskdiv.style.display = "none";
+	taskdiv.style.height = "0px";
 	var historytable = document.getElementsByClassName('historytable')[0]; 
-	historytable.style.display = "block";
+	historytable.style.height = "calc(100vh - 205px)";
 	var historyicon = document.getElementById('historyicon');
-	historyicon.setAttribute("src","img/right_chevron.png");
+	historyicon.setAttribute("src","img/up_chevron.png");
 }
 
 function projectHistorySmall(){
 	var historytable = document.getElementsByClassName('historytable')[0]; 
-	historytable.style.display = "none";
+	historytable.style.height = "0px";
 	var taskdiv = document.getElementById('taskdiv');
-	taskdiv.style.display = "block";
+	taskdiv.style.height = "calc(100vh - 210px)";
 	var historyicon = document.getElementById('historyicon');
-	historyicon.setAttribute("src","img/up_chevron.png");
+	historyicon.setAttribute("src","img/right_chevron.png");
 }
 
 function showTask(taskname){
@@ -172,17 +173,17 @@ function showTask(taskname){
 	
 	var lines = taskpane.getElementsByClassName('taskheaderline');
 	for (var i = 0; i < lines.length; i++) { 
-		lines[i].style.visibility = 'unset';
+		lines[i].style.display = 'table-row';
 	}
 	
 	var lines = taskpane.getElementsByClassName('taskrequiredline');
 	for (var i = 0; i < lines.length; i++) { 
-		lines[i].style.visibility = 'unset';
+		lines[i].style.display = 'table-row';
 	}
 	
 	var lines = taskpane.getElementsByClassName('taskoptionalline');
 	for (var i = 0; i < lines.length; i++) { 
-		lines[i].style.visibility = 'collapse';
+		lines[i].style.display = 'none';
 	}
 }
 
@@ -260,14 +261,15 @@ function addFileBrowserFileLine(filename){
 	var filearray = filename.split('/');
 	cell1.innerHTML = "<img src=img/file.png></img>";
 	cell2.innerHTML = filearray[filearray.length - 1];
+	cell2.style = "width:100%";
 	row.onclick = function(){
 		var rows = this.parentElement.childNodes;
 		for (var i = 0; i <  rows.length; i++){
-			if(rows[i].style.backgroundColor == "orange"){
+			if(rows[i].style.backgroundColor == "rgb(106, 133, 168)"){
 				rows[i].removeAttribute("style");
 			}
 		}
-		this.style.backgroundColor = "orange";
+		this.style.backgroundColor = "rgb(106, 133, 168)";
 		document.getElementById('filesviewfilename').value = filename;
 		document.getElementById('filebrowsercurrentfolder').value = filename;
 	}
@@ -469,6 +471,7 @@ function addFolderLine(foldername){
 	var folderarray = foldername.split('/');
 	cell1.innerHTML = "<img src=img/folder.png></img>";
 	cell2.innerHTML = folderarray[folderarray.length - 1];
+	cell2.style = "width:100%";
 	cell1.onclick = function(){
 		clearFolderLines();
 		selectFolderWS.execute('cmd=dirlist dir='+foldername, "addFolderViewData"); //ADD USER SELECTION
@@ -476,11 +479,11 @@ function addFolderLine(foldername){
 	cell2.onclick = function(){
 		var rows = this.parentElement.parentElement.childNodes;
 		for (var i = 0; i <  rows.length; i++){
-			if(rows[i].style.backgroundColor == "orange"){
+			if(rows[i].style.backgroundColor == "rgb(106, 133, 168)"){
 				rows[i].removeAttribute("style");
 			}
 		}
-		this.parentElement.style.backgroundColor = "orange";
+		this.parentElement.style.backgroundColor = "rgb(106, 133, 168)";
 		var currentfolder = document.getElementById('currentfolder');
 		currentfolder.value = foldername;
 		var folderselectorfolder = document.getElementById('folderselectorfolder');
@@ -1012,10 +1015,10 @@ function taskHeaderShowHide(element){
 	var parent = element.parentElement;
 	var lines = parent.getElementsByClassName('taskheaderline');
 	for (var i = 0; i < lines.length; i++) { 
-		if(lines[i].style.visibility == 'unset'){
-			lines[i].style.visibility = 'collapse';
+		if(lines[i].style.display == 'table-row'){
+			lines[i].style.display = 'none';
 		}else{
-			lines[i].style.visibility = 'unset';
+			lines[i].style.display = 'table-row';
 		}
 	}
 }
@@ -1024,10 +1027,10 @@ function taskRequiredShowHide(element){
 	var parent = element.parentElement;
 	var lines = parent.getElementsByClassName('taskrequiredline');
 	for (var i = 0; i < lines.length; i++) { 
-		if(lines[i].style.visibility == 'unset'){
-			lines[i].style.visibility = 'collapse';
+		if(lines[i].style.display == 'table-row'){
+			lines[i].style.display = 'none';
 		}else{
-			lines[i].style.visibility = 'unset';
+			lines[i].style.display = 'table-row';
 		}
 	}
 }
@@ -1036,10 +1039,10 @@ function taskOptionalShowHide(element){
 	var parent = element.parentElement;
 	var lines = parent.getElementsByClassName('taskoptionalline');
 	for (var i = 0; i < lines.length; i++) { 
-		if(lines[i].style.visibility == 'unset'){
-			lines[i].style.visibility = 'collapse';
+		if(lines[i].style.display == 'table-row'){
+			lines[i].style.display = 'none';
 		}else{
-			lines[i].style.visibility = 'unset';
+			lines[i].style.display = 'table-row';
 		}
 	}
 }

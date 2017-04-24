@@ -311,6 +311,7 @@ sub compile_gui{
 	}elsif($PLATFORM == 1){
 		copy($guidir . "/src/ext/websocketd-linux", $guidir . "/bin/websocketd") or die "Failed: $!";
 	}
+	chmod 0755, $guidir . "/bin/websocketd";
 	print color('bold blue');
 	print color('reset');
 	system("g++ -DSIMPLE_DIR=" . $SIMPLE_PATH . " " . 

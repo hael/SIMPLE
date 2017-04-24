@@ -1,67 +1,76 @@
 body {
 	font-family: Arial, Helvetica, sans-serif;
-	background-color: rgb(34, 152, 202);
 	margin: 0px;
 	overflow: hidden;
+	background-image: linear-gradient(#FFFFFF, #59779E);
 }
 
 .header {
 	width: 100%;
 	text-align: center;
-	background-color: rgb(252, 252, 252);
-	padding-top: 5px;
-	padding-bottom: 5px;
-	height: 80px;
+	padding-top: 20px;
+	height: 90px;
 }
 
 .headerimage {
 	width: 350px;
 }
-	
-.body {
-	width: 100%;
-	height: calc(100vh - 170px);
-	overflow: hidden;
-}
-		
-.footer {
-	width: 100%;
-	background-color: rgb(252, 252, 252);
+
+.headermenu {
+	float: left;
 	position: absolute;
-	bottom: 0px;
-	padding-top: 5px;
-	height: 30px;
-}
-		
-.footerbutton {
-	display: inline-block;
-	padding-left: 20px;
+	left: 50px;
+	top: 40px;
 }
 
-.footerbutton:hover {
-	background-color: rgb(218, 132, 40);
+.headermenu .hoverdiv {
+	width: 150px;
+	text-align: left;
+	padding-left: 5px;
 }
-		
+
+.headermenu:hover .hoverdiv {
+	display: block;
+}	
+
+.body {
+	height: calc(100vh);
+	overflow: hidden;
+	padding-left: 50px;
+	padding-right: 50px;
+}
+
 .bodydiv {
-	background-color: rgb(252, 252, 252);
-	margin: 20px;
+	background-color: rgb(255, 255, 255);
 }
-		
+
+.bodytoolbar {
+	height: 30px;
+	margin-bottom: 20px;
+}
+	
 .historytable {
 	width: 100%;
 	display: block;
 	overflow-y: scroll;
-	height: calc(100vh - 220px);
+	height: 0px;
+	transition: height 0.2s;
+	white-space: nowrap;
+}
+	
+.historytable tr:nth-child(odd) {
+	background-color: rgb(201, 218, 240);
 }
 
-.historytable tr:nth-child(odd) {
-	background-color: rgb(236, 236, 236);
-}
-		
+.historytable td {
+	padding-left: 10px;
+	padding-right: 10px;
+}	
+
 .projectselector {
-	display: inline-block;
-	float: right;
-	margin-right: 5px;
+	position: absolute;
+	right: 50px;
+	top: 20px;
 }
 		
 .projectselector select{
@@ -69,14 +78,16 @@ body {
 }
 
 .bodyheader {
-	background-color: #e4e4e4;
+	background-color: #cfcfcf;
 	font-size: 18px;
 	padding: 10px;
 	text-align: left;
+	height: 30px;
+	padding-bottom: 5px;
 }
 
 .bodyheader:hover {
-	background-color: rgb(218, 132, 40);
+	background-color: #959595;
 }
 
 .bodyheader:hover .hoverdiv {
@@ -87,8 +98,12 @@ body {
 	display: inline-block;
 }
 
+.bodybutton .hoverdiv {
+	   text-align: left;
+}
+
 .bodybutton:hover {
-	background-color: rgb(218, 132, 40);
+	background-color: #6a85a8;
 }
 
 .bodybutton:hover .hoverdiv {
@@ -99,16 +114,21 @@ body {
 	display: inline-block;
 	width: 170px;
 	height: 20px;
-	#margin-left: 60px;
 	margin-top: 5px;
 	padding: 5px;
-	color: white;
-	background-color: #2298ca;
+	text-align: center;
+	border-style: solid;
+	border-color: rgb(154, 172, 196);
+	border-width: 5px;
+	margin-left: 5px;
+}
+
+.clickbuttoncontainer {
 	text-align: center;
 }
 
 .clickbutton:hover {
-	background-color: rgb(218, 132, 40);
+	background-color: #959595;
 }
 
 .hoverdiv {
@@ -122,7 +142,7 @@ body {
 }
 
 .hoverdiv div:hover {
-	background-color: rgb(218, 132, 40);
+	background-color: #6a85a8;
 }
 
 .hoverdiv input {
@@ -134,40 +154,42 @@ body {
 }
 
 .taskbutton {
-	width: 400px;
-	height: 20px;
-	margin-left: auto;
-	margin-right: auto;
-	margin-bottom: 10px;
-	margin-top: 10px;
-	padding: 5px;
-	color: white;
-	background-color: #2298ca;
+	width: 200px;
+	height: 40px;
 	text-align: center;
+	border-style: solid;
+	border-color: rgb(154, 172, 196);
+	border-width: 5px;
 }
 
 .taskbutton:hover{
-	background-color: rgb(218, 132, 40);
+	background-color: #cfcfcf;
 }
 
 .taskbutton:hover .taskdescription {
 	display: block;
 }
 
-.taskdescription {
-	display: none;
-	width: 350px;
-	position: absolute;
-	border-style: solid;
-	padding: 5px;
-	color: black;
-	z-index: 100;
-	background-color: white;
+.taskdescription{
+	visibility: hidden;
+	max-width: 600px;
 }
 
 .taskwindow {
 	text-align: center;
 	height: 100%;
+}
+
+.taskrow:hover .taskdescription{
+	visibility: unset;
+}
+
+.tasklisttable {
+	overflow-y: scroll;
+	max-height: calc(100vh - 370px);
+	margin: auto;
+	text-align: left;
+	margin-top: 20px;
 }
 
 .taskhelp:hover .hoverdiv{
@@ -176,45 +198,36 @@ body {
 
 .tasktable {
 	overflow-y: scroll;
-	max-height: calc(100vh - 370px);
+	max-height: calc(100vh - 330px);
 	margin: auto;
-	padding: 10px;
+	padding-left: 20px;
 	text-align: left;
 	border-collapse: collapse;
 	margin-top: 20px;
+	display: block;
 }
 
 .taskheader {
-	background-color: #2298ca;
-	color: white;
-}
-
-.taskrequired {
-	background-color: #2298ca;
-	color: white;
-}
-
-.taskoptional {
-	background-color: #2298ca;
-	color: white;
-}
-
-.tasktable tr:nth-child(odd) {
-	background-color: rgb(236, 236, 236);
-}
-
-.taskrequired td{
-	padding: 5px;
+	border-style: solid;
+	border-color: rgb(154, 172, 196);
+	border-width: 5px;
+	white-space: nowrap;
 }
 
 .taskheader td{
-	background-color: #2298ca;
 	padding: 5px;
 }
 
-.taskoptional td{
-	background-color: #2298ca;
-	padding: 5px;
+.taskheaderline {
+	display: table-row;
+}
+
+.taskrequiredline {
+	display: table-row;
+}
+
+.taskoptionalline {
+	display: none;
 }
 
 .micrographimgdeselected {
@@ -241,9 +254,7 @@ body {
 
 .popupheader {
 	font-size: 20px;
-	background-color: rgb(34, 152, 202);
-	padding: 5px;
-	color:white;
+	padding: 5px;	
 }
 
 .popuptable {
@@ -252,7 +263,13 @@ body {
 	overflow: auto;
 }
 
-.popuptable tr:nth-child(odd) {
+.popupfiletable {
+	width: 100%;
+	display: block;
+	overflow: auto;
+}
+
+.popupfiletable tr:nth-child(odd) {
 	background-color: rgb(236, 236, 236);
 }
 
@@ -302,12 +319,16 @@ body {
 	padding: 10px;
 }
 
+.tasklist {
+	height: calc(100% - 75px);
+	overflow-y: auto;
+}
 
 #gauze {
 	position: absolute;
 	height: 100%;
 	width: 100%;
-	background-color: grey;
+	background-color: whitesmoke;
 	opacity: 0.5;
 	top: 0px;
 	left: 0px;
@@ -316,18 +337,23 @@ body {
 
 #filebrowserpopup {
 	position: absolute;
-	height: 412px;
+	height: 428px;
 	width: 600px;
 	top: calc(50% - 200px);
-	left: calc(50% - 200px);
+	left: calc(50% - 300px);
 	background-color: white;
 	display: none;
 	z-index: 200;
+	border-style: solid;
+	border-color: rgb(154, 172, 196);
+	border-width: 5px;
 }
 
 #taskdiv{
-	display: none;
-	height: calc(100vh - 250px);
+	height: 0px;
+	margin-top: 10px;
+	transition: height 0.2s;
+	overflow: hidden;
 }
 
 #filebrowserlisttable{
@@ -349,24 +375,27 @@ body {
 
 #folderselectorpopup {
 	position: absolute;
-	height: 400px;
+	height: 408px;
 	width: 400px;
 	top: calc(50% - 200px);
 	left: calc(50% - 200px);
 	background-color: white;
 	display: none;
 	z-index: 200;
+	border-style: solid;
+	border-color: rgb(154, 172, 196);
+	border-width: 5px
 }
 
 #folderlisttable{
 	overflow: auto;
-	height: 290px;
+	height: 280px;
 	display: block;
 }
 
 #filesviewdiv {
 	overflow-y: scroll;
-	height: calc(100% - 50px);
+	height: calc(100% - 75px);
 }
 
 #pipelineviewdiv {
@@ -384,7 +413,7 @@ body {
 
 #newprojectpopup {
 	position: absolute;
-	height: 200px;
+	height: 154px;
 	width: 400px;
 	top: calc(50% - 100px);
 	left: calc(50% - 200px);
@@ -437,8 +466,14 @@ body {
 	margin-top: 5px;
 }
 
+#historytableheader {
+	background-color: #6a85a8;;
+	color: white;
+}
+
+
 div[name=pipelineviewselected] {    
-	background-color: #acbcab;
+	background-color: #6a85a8;;
 } 
 
 

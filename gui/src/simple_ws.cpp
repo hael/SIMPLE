@@ -957,7 +957,7 @@ void pipelineViewMaster(std::string argstring){
 		missingArgumentError("dir");
 	}
 	
-	unidoc.append("/simple_unidoc_merged.txt");
+	unidoc.append("/simple_unidoc.txt");
 	
 	returnstring = "micrographs=";
 	

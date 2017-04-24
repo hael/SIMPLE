@@ -12,11 +12,11 @@
 	<tr class=taskheader onclick=taskHeaderShowHide(this)>
 		<td>
 			<img src=img/right_chevron.png>
-			Job Parameters
+			<b>Job Parameters</b>
 		</td>
 		<td></td>
 		<td></td>
-		<td></td>
+		<td style="width: 100%;"></td>
 	</tr>
 	<tr class=taskheaderline>
 		<td>Job Name</td>
@@ -36,10 +36,10 @@
 			<div class=hoverdiv>A description of the job</div>
 		</td>
 	</tr>	
-	<tr class=taskrequired onclick=taskRequiredShowHide(this)>
+	<tr class=taskheader onclick=taskRequiredShowHide(this)>
 		<td>
 			<img src=img/right_chevron.png>
-			Required Arguments
+			<b>Required Arguments</b>
 		</td>
 		<td></td>
 		<td></td>
@@ -58,7 +58,17 @@
 			<div class=hoverdiv>Text file containing a list of micrographs and associated CTF parameters. Usually this is output from an unblur, unblur_ctf or pipeline job</div>
 		</td>
 	</tr>
-	<tr class=taskrequiredline>
+	
+	<tr class=taskheader onclick=taskOptionalShowHide(this)>
+		<td>
+			<img src=img/right_chevron.png>
+			<b>Optional Arguments</b>
+		</td>
+		<td></td>
+		<td></td>
+		<td></td>
+	</tr>
+	<tr class=taskoptionalline>
 		<td>Boxfiles Directory</td>
 		<td>
 			<input class=jobarg type=text id=boxdir>
@@ -70,15 +80,6 @@
 			<img src=img/info.png>
 			<div class=hoverdiv>Directory containing box files. These files must have the same name as the micrograph with a .box suffix</div>
 		</td>
-	</tr>
-	<tr class=taskoptional onclick=taskOptionalShowHide(this)>
-		<td>
-			<img src=img/right_chevron.png>
-			Optional Arguments
-		</td>
-		<td></td>
-		<td></td>
-		<td></td>
 	</tr>
 	<tr class=taskoptionalline>
 		<td>Boxsize</td>

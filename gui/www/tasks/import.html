@@ -10,11 +10,11 @@
 	<tr class=taskheader onclick=taskHeaderShowHide(this)>
 		<td>
 			<img src=img/right_chevron.png>
-			Job Parameters
+			<b>Job Parameters</b>
 		</td>
 		<td></td>
 		<td></td>
-		<td></td>
+		<td style="width: 100%;"></td>
 	</tr>
 	<tr class=taskheaderline>
 		<td>Job Name</td>
@@ -34,10 +34,11 @@
 			<div class=hoverdiv>A description of the job</div>
 		</td>
 	</tr>
-	<tr class=taskrequired onclick=taskRequiredShowHide(this)>
+	<tr class=taskheader onclick=taskRequiredShowHide(this)>
 		<td>
 			<img src=img/right_chevron.png>
-			Required Arguments</td>
+			<b>Required Arguments</b>
+		</td>
 		<td></td>
 		<td></td>
 		<td></td>
@@ -67,10 +68,10 @@
 			<div class=taskhelptext></div>
 		</td>
 	</tr>
-	<tr class=taskoptional onclick=taskOptionalShowHide(this)>
+	<tr class=taskheader onclick=taskOptionalShowHide(this)>
 		<td>
 			<img src=img/right_chevron.png>
-			Optional Arguments
+			<b>Optional Arguments</b>
 		</td>
 		<td></td>
 		<td></td>
@@ -86,6 +87,7 @@
 		</td>
 	</tr>
 </table>
-<div class=clickbutton onclick="hideTasks(); projectHistoryFull()">Cancel</div>
-<div class=clickbutton onclick=runTask('importtask')>Run</div>
-
+<div class=clickbuttoncontainer>
+	<div class=clickbutton onclick='selectMode();showTask("tasklist")'>Cancel</div>
+	<div class=clickbutton onclick=runTask('importtask')>Run</div>
+</div>
