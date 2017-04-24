@@ -23,7 +23,7 @@ logical, parameter              :: DEBUG=.false.
 type(polarft_corrcalc)          :: pftcc
 type(prime3D_srch), allocatable :: primesrch3D(:)
 real                            :: reslim
-real                            :: frac_srch_space
+real                            :: frac_srch_space = 0.
 type(ori)                       :: orientation, o_sym
 character(len=:), allocatable   :: ppfts_fname
 
@@ -207,7 +207,7 @@ contains
                 !$omp end parallel do
             case('het')
                 if(p%oritab .eq. '') stop 'cannot run the refine=het mode without input oridoc (oritab)'
-                if(corr_thresh > 0.)then
+                if( corr_thresh > 0. )then
                     write(*,'(A,F8.2)') '>>> PARTICLE RANDOMIZATION(%):', 100.*p%extr_thresh
                     write(*,'(A,F8.2)') '>>> CORRELATION THRESHOLD:    ', corr_thresh
                 endif

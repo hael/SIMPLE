@@ -823,9 +823,9 @@ contains
         class(oris),             intent(inout) :: a, e
         real,                    intent(in)    :: lp
         integer, optional,       intent(in)    :: nnmat(self%nprojs,self%nnn)
-        real      :: inpl_corr,corrs(self%nrots)
-        integer   :: iref,isample,nrefs,inpl_ind,loc(1)
-        logical   :: found_better
+        real    :: inpl_corr,corrs(self%nrots)
+        integer :: iref,isample,nrefs,inpl_ind,loc(1)
+        logical :: found_better
         if( nint(a%get(iptcl,'state')) > 0 )then
             ! initialize
             call self%prep4srch(iptcl, a, e, nnmat)

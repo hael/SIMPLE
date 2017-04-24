@@ -103,7 +103,7 @@ type build
     procedure                           :: build_cont3D_tbox
     procedure                           :: kill_cont3D_tbox
     procedure                           :: read_features
-    procedure                           :: read_nnmat
+    ! procedure                           :: read_nnmat
     procedure                           :: raise_hard_ctf_exception
 end type build
 
@@ -403,7 +403,8 @@ contains
         use simple_strings, only: str_has_substr
         class(build),  intent(inout) :: self
         class(params), intent(inout) :: p
-        integer :: icls, alloc_stat, funit, io_stat
+        type(oris) :: os
+        integer    :: icls, alloc_stat, funit, io_stat
         call self%kill_hadamard_prime2D_tbox
         call self%raise_hard_ctf_exception(p)
         allocate( self%cavgs(p%ncls), self%refs(p%ncls), self%ctfsqsums(p%ncls), stat=alloc_stat )
@@ -414,7 +415,14 @@ contains
             call self%ctfsqsums(icls)%new([p%box,p%box,1],p%smpd,p%imgkind)
         end do
         if( str_has_substr(p%refine,'neigh') )then
-            if( file_exists('nnmat.bin') )  call self%read_nnmat(p)
+            if( file_exists(p%oritab3D) )then
+                call os%new(p%ncls)
+                call os%read(p%oritab3D)
+                call os%nearest_neighbors(p%nnn, self%nnmat)
+                call os%kill
+            else
+                stop 'need oritab3D input for prime2D refine=neigh mode; simple_build :: build_hadamard_prime2D_tbox'
+            endif
         endif
         write(*,'(A)') '>>> DONE BUILDING HADAMARD PRIME2D TOOLBOX'
         self%hadamard_prime2D_tbox_exists = .true.
@@ -591,24 +599,24 @@ contains
     end subroutine read_features
 
     !>  \brief  for reading nearest neighbour matrix from disk
-    subroutine read_nnmat( self, p )
-        class(build),  intent(inout) :: self
-        class(params), intent(in)    :: p
-        integer :: alloc_stat, funit, io_stat
-        if( allocated(self%nnmat) ) deallocate(self%nnmat)
-        allocate( self%nnmat(p%ncls,p%nnn), stat=alloc_stat )
-        call alloc_err('build_hadamard_prime2D_tbox; simple_build, 2', alloc_stat)
-        funit = get_fileunit()
-        open(unit=funit, status='OLD', action='READ', file='nnmat.bin', access='STREAM')
-        read(unit=funit,pos=1,iostat=io_stat) self%nnmat
-        ! check if the read was successful
-        if( io_stat .ne. 0 )then
-            write(*,'(a,i0,2a)') '**ERROR(read_nnmat): I/O error ',&
-            io_stat, ' when reading nnmat.bin'
-            stop 'I/O error; simple_build; read_nnmat'
-        endif
-        close(funit)
-    end subroutine read_nnmat
+    ! subroutine read_nnmat( self, p )
+    !     class(build),  intent(inout) :: self
+    !     class(params), intent(in)    :: p
+    !     integer :: alloc_stat, funit, io_stat
+    !     if( allocated(self%nnmat) ) deallocate(self%nnmat)
+    !     allocate( self%nnmat(p%ncls,p%nnn), stat=alloc_stat )
+    !     call alloc_err('build_hadamard_prime2D_tbox; simple_build, 2', alloc_stat)
+    !     funit = get_fileunit()
+    !     open(unit=funit, status='OLD', action='READ', file='nnmat.bin', access='STREAM')
+    !     read(unit=funit,pos=1,iostat=io_stat) self%nnmat
+    !     ! check if the read was successful
+    !     if( io_stat .ne. 0 )then
+    !         write(*,'(a,i0,2a)') '**ERROR(read_nnmat): I/O error ',&
+    !         io_stat, ' when reading nnmat.bin'
+    !         stop 'I/O error; simple_build; read_nnmat'
+    !     endif
+    !     close(funit)
+    ! end subroutine read_nnmat
     
     !> \brief  fall-over if CTF params are missing
     subroutine raise_hard_ctf_exception( self, p )

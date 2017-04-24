@@ -358,7 +358,7 @@ select case(prg)
         keys_optional(6)  = 'refs'
         keys_optional(7)  = 'oritab'
         keys_optional(8)  = 'hp'
-        keys_optional(9) = 'lp'
+        keys_optional(9)  = 'lp'
         keys_optional(10) = 'lpstart'
         keys_optional(11) = 'lpstop'
         keys_optional(12) = 'cenlp'
@@ -373,6 +373,7 @@ select case(prg)
         keys_optional(21) = 'center'
         keys_optional(22) = 'mul'
         keys_optional(23) = 'autoscale'
+        keys_optional(24) = 'oritab3D'
         ! documentation
         if( describe ) call print_doc_prime2D
         ! parse command line
@@ -382,7 +383,7 @@ select case(prg)
         ! else
         !     call cline%parse( keys_required(:7), keys_optional(:19) )
         ! endif
-        call cline%parse( keys_required(:5), keys_optional(:23) )
+        call cline%parse( keys_required(:5), keys_optional(:24) )
         ! set defaults
         if( .not. cline%defined('lpstart') ) call cline%set('lpstart',  15.)
         if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',    8.)

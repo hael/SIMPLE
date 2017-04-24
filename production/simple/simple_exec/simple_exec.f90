@@ -111,7 +111,6 @@ type(fixmapheader_commander)       :: xfixmapheader
     
 ! MISCELLANOUS PROGRAMS
 type(cluster_smat_commander)       :: xcluster_smat
-! type(find_nnimgs_commander)        :: xfind_nnimgs
 type(masscen_commander)            :: xmasscen
 type(print_cmd_dict_commander)     :: xprint_cmd_dict
 type(print_dose_weights_commander) :: xprint_dose_weights
@@ -677,9 +676,10 @@ select case(prg)
         keys_optional(16) = 'maxits'
         keys_optional(17) = 'center'
         keys_optional(18) = 'mul'
+        keys_optional(19) = 'oritab3D'
         ! parse command line
         if( describe ) call print_doc_prime2D
-        call cline%parse(keys_required(:5), keys_optional(:18))
+        call cline%parse(keys_required(:5), keys_optional(:19))
         ! set defaults
         if( .not. cline%defined('lpstart') ) call cline%set('lpstart',  15.)
         if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',    8.)
@@ -1824,25 +1824,6 @@ select case(prg)
         call cline%parse(keys_required(:4), keys_optional(:1))
         ! execute
         call xcluster_smat%execute(cline)
-    ! case( 'find_nnimgs' )
-    !     !==Program find_nnimgs
-    !     !
-    !     ! <find_nnimgs/begin>is a program for cidentifying the nnn nearest neighbor
-    !     ! images for each image in the inputted stack<find_nnimgs/end>
-    !     !
-    !     ! set required keys
-    !     keys_required(1) = 'stk'
-    !     keys_required(2) = 'smpd'
-    !     keys_required(3) = 'msk'
-    !     keys_required(4) = 'nnn'
-    !     ! set optional keys
-    !     keys_optional(1) = 'lp'
-    !     keys_optional(2) = 'hp'
-    !     ! parse command line
-    !     if( describe ) call print_doc_find_nnimgs
-    !     call cline%parse(keys_required(:4), keys_optional(:2))
-    !     ! execute
-    !     call xfind_nnimgs%execute(cline)
     case( 'masscen' )
         !==Program masscen
         !

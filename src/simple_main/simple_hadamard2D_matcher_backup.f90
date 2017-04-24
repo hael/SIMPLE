@@ -18,12 +18,13 @@ public :: prime2D_exec, prime2D_assemble_sums, prime2D_norm_sums, prime2D_assemb
 prime2D_write_sums, preppftcc4align, pftcc, primesrch2D, prime2D_read_sums, prime2D_write_partial_sums
 private
 
-logical, parameter              :: DEBUG = .false.
-type(polarft_corrcalc)          :: pftcc
-type(prime2D_srch), allocatable :: primesrch2D(:)
-real,               allocatable :: corrmat3d(:,:,:)
-real                            :: frac_srch_space = 0.
-type(ori)                       :: orientation
+type(polarft_corrcalc) :: pftcc       ! need to be revealed to the outside world for testing purposes
+type(prime2D_srch)     :: primesrch2D ! need to be revealed to the outside world for testing purposes
+type(ori)              :: orientation
+integer                :: cnt_glob = 0
+real                   :: frac_srch_space = 0.
+logical, parameter     :: DEBUG = .false.
+real,    parameter     :: prime2Deps = 0.3
 
 contains
     
@@ -84,9 +85,9 @@ contains
 
         ! EXTREMAL LOGICS
         if( frac_srch_space < 0.98 .or. p%extr_thresh > 0.025 )then
+            write(*,'(A,F8.1)') '>>> PARTICLE RANDOMIZATION(%):', 100.*p%extr_thresh
             corr_thresh = b%a%extremal_bound(p%extr_thresh)
-        else
-            corr_thresh = -huge(corr_thresh)
+            write(*,'(A,F8.2)') '>>> CORRELATION THRESHOLD:     ', corr_thresh
         endif
         
         ! SET FOURIER INDEX RANGE
@@ -107,46 +108,20 @@ contains
         endif
         call prime2D_init_sums( b, p )
 
-        ! STOCHASTIC IMAGE ALIGNMENT
-        allocate( primesrch2D(p%fromp:p%top) )
-        do iptcl=p%fromp,p%top
-            call primesrch2D(iptcl)%new(p, pftcc) 
-        end do
-        ! calculate CTF matrices
-        if( p%ctf .ne. 'no' ) call pftcc%create_polar_ctfmats(p%smpd, b%a)
-        ! calculate all correlations
-        ! this has proven to be more efficient to do for the 2D case 
-        ! becase the number of references (ncls) is typically smaller than in prime3D
-        ! and data locality is increased by pre-calculating all corrs even though it
-        ! is more computations involved
-        allocate(corrmat3d(p%fromp:p%top,p%ncls,pftcc%get_nrots()))
-        call pftcc%gencorrs_all_cpu(corrmat3d)
-        ! execute the search
+        ! ALIGN
         call del_file(p%outfile)
+        if( p%ctf .ne. 'no' ) call pftcc%create_polar_ctfmats(p%smpd, b%a)
         if( p%oritab .eq. '' )then
-            !$omp parallel do default(shared) schedule(auto) private(iptcl)
-            do iptcl=p%fromp,p%top
-                call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, corrmat3d, greedy=.true.)
-            end do
-            !$omp end parallel do
+            call primesrch2D%exec_prime2D_srch(pftcc, b%a, [p%fromp,p%top], greedy=.true.)
         else
-            if(corr_thresh > 0.)then
-                write(*,'(A,F8.2)') '>>> PARTICLE RANDOMIZATION(%):', 100.*p%extr_thresh
-                write(*,'(A,F8.2)') '>>> CORRELATION THRESHOLD:    ', corr_thresh
-            endif
-            !$omp parallel do default(shared) schedule(auto) private(iptcl)
-            do iptcl=p%fromp,p%top
-                call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, corrmat3d, extr_bound=corr_thresh)
-            end do
-            !$omp end parallel do
+            call primesrch2D%exec_prime2D_srch(pftcc, b%a, [p%fromp,p%top], extr_bound=corr_thresh)
         endif
         if( DEBUG ) print *, 'DEBUG, hadamard2D_matcher; completed alignment'
-        ! output orientations
-        call b%a%write(p%outfile, [p%fromp,p%top])
-        p%oritab = p%outfile
         
         ! WIENER RESTORATION OF CLASS AVERAGES
+        cnt_glob = 0
         do iptcl=p%fromp,p%top
+            cnt_glob = cnt_glob + 1
             orientation = b%a%get_ori(iptcl)
             if( nint(orientation%get('state')) > 0 )then
                 call read_img_from_stk( b, p, iptcl )
@@ -156,6 +131,11 @@ contains
             endif
         end do
         if( DEBUG ) print *, 'DEBUG, hadamard2D_matcher; generated class averages'
+
+        ! orientations output
+        call b%a%write(p%outfile, [p%fromp,p%top])
+        p%oritab = p%outfile
+        call pftcc%kill
         
         ! status here: sums have been assembled but not normalised
         ! in parallel setting: write partial files and move on
@@ -169,20 +149,13 @@ contains
             call prime2D_write_sums( b, p, which_iter )
         endif
 
-        ! DESTRUCT
-        do iptcl=p%fromp,p%top
-            call primesrch2D(iptcl)%kill
-        end do
-        deallocate( primesrch2D, corrmat3d )
-        call pftcc%kill
-
-        ! REPORT CONVERGENCE
         if( p%l_distr_exec )then
             call qsys_job_finished(p, 'simple_hadamard2D_matcher :: prime2D_exec')
         else
             ! CONVERGENCE TEST
             converged = b%conv%check_conv2D()
         endif
+
     end subroutine prime2D_exec
     
     subroutine prime2D_read_sums( b, p )
@@ -343,6 +316,7 @@ contains
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PRIME2D SEARCH ENGINE'
         ! must be done here since constants in p are dynamically set
         call pftcc%new(p%ncls, [p%fromp,p%top], [p%box,p%box,1], p%kfromto, p%ring2, p%ctf)
+        call primesrch2D%new(p, pftcc)
         ! prepare the polarizers
         call b%img%init_imgpolarizer(pftcc)
         ! PREPARATION OF REFERENCES IN PFTCC
