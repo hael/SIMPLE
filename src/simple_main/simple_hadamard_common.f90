@@ -524,6 +524,7 @@ contains
                 else
                      p%vols(s) = 'startvol_state'//int2str_pad(s,2)//p%ext
                 endif
+                call b%recvols(s)%compress_exp
                 call b%recvols(s)%sampl_dens_correct(self_out=b%vol_pad) ! this preserves the recvol for online update
                 if( p%l_xfel )then
                     ! no back transformation of the volume

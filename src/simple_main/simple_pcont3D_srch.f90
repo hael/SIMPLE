@@ -137,7 +137,7 @@ contains
                 real,    intent(inout) :: corr_here
                 real    :: corrs(self%nrots), e3
                 integer :: inpl_ind
-                corrs    = self%ppftcc%gencorrs(iref_here, 1, roind_vec=roind_vec)
+                corrs    = self%ppftcc%gencorrs_serial(iref_here, 1, roind_vec=roind_vec)
                 inpl_ind = shcloc(self%nrots, corrs, self%prev_corr)
                 if(inpl_ind > 0)then
                     corr_here = corrs(inpl_ind)
@@ -154,7 +154,7 @@ contains
                 real,    intent(inout) :: corr_here
                 real    :: corrs(self%nrots), e3
                 integer :: loc(1), inpl_ind
-                corrs     = self%ppftcc%gencorrs(iref_here, 1, roind_vec=roind_vec)
+                corrs     = self%ppftcc%gencorrs_serial(iref_here, 1, roind_vec=roind_vec)
                 loc       = maxloc(corrs)
                 inpl_ind  = loc(1)
                 corr_here = corrs(inpl_ind)

@@ -55,6 +55,7 @@ type :: oris
     procedure          :: get_cls_corr
     procedure          :: cls_corr_sigthresh
     procedure          :: get_statepop
+    procedure          :: get_state_exist
     procedure          :: get_ptcls_in_state
     procedure          :: get_nstates
     procedure          :: get_nlabels
@@ -501,6 +502,18 @@ contains
             if( mystate == state ) pop = pop+1
         end do
     end function get_statepop
+
+    !>  \brief  returns a logical array of state existence
+    function get_state_exist(self, nstates) result(exists)
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: nstates
+        integer :: i
+        logical :: exists(nstates)
+        do i=1,nstates
+            exists(i) = (self%get_statepop(i) > 0)
+        end do
+    end function get_state_exist
+
     
     !>  \brief  4 getting the particle indices corresponding to state
     function get_ptcls_in_state( self, state ) result( ptcls )

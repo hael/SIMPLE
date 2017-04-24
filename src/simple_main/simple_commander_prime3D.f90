@@ -223,7 +223,7 @@ contains
         if( p%doautomsk )then
             ! automasking specifics
             if(p%oritab .eq. '')stop 'need oritab input for automasking'
-            if(.not. cline%defined('binwidth'))p%binwidth = min(10, ceiling(0.025*real(p%box)))
+            if(.not. cline%defined('binwidth'))p%binwidth = min(8, ceiling(0.025*real(p%box)))
             if(.not. cline%defined('edge'))    p%edge     = max(15, ceiling(0.05*real(p%box)))
             write(*,'(A,I3)')'>>> AUTOMASKING BINARY LAYERS:', p%binwidth
             write(*,'(A,I3)')'>>> AUTOMASKING SOFT LAYERS:  ', p%edge
@@ -285,7 +285,7 @@ contains
     end subroutine exec_prime3D
 
     subroutine exec_cont3D( self, cline )
-        use simple_pcont3D_matcher, only: pcont3D_exec
+        use simple_pcont3D_matcher, only: pcont3D_exec, pcont3D_exec_single
         use simple_cont3D_matcher,  only: cont3D_exec
         class(cont3D_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
@@ -306,7 +306,7 @@ contains
             if( .not. cline%defined('outfile') ) stop 'need unique output file for parallel jobs'
                 select case(p%refine)
                     case('yes')
-                        call pcont3D_exec(b, p, cline, 0, converged)
+                        call pcont3D_exec_single(b, p, cline, 0, converged)
                     case('cart','polar')
                         call cont3D_exec(b, p, cline, 0, converged)   
                     case DEFAULT
@@ -318,7 +318,7 @@ contains
             do i=startit,p%maxits
                 select case(p%refine)
                     case('yes')
-                        call pcont3D_exec(b, p, cline, i, converged)
+                        call pcont3D_exec_single(b, p, cline, i, converged)
                     case('cart','polar')
                         call cont3D_exec(b, p, cline, i, converged)   
                     case DEFAULT

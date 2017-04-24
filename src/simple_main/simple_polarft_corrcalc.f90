@@ -771,16 +771,30 @@ contains
     end subroutine gencorrs_all_cpu
 
     !>  \brief  is for generating rotational correlations
-    function gencorrs_serial( self, iref, iptcl ) result( cc )
+    function gencorrs_serial( self, iref, iptcl, roind_vec ) result( cc )
         class(polarft_corrcalc), intent(inout) :: self        !< instance
         integer,                 intent(in)    :: iref, iptcl !< ref & ptcl indices
+        integer,       optional, intent(in)    :: roind_vec(:)
         real      :: cc(self%nrots)
         integer   :: irot, i, nrots
-        ! all correlations
         if( self%with_ctf ) call self%apply_ctf_single(iptcl, iref)
-        do irot=1,self%nrots
-            cc(irot) = self%corr_1(iref, iptcl, irot)
-        end do
+        if( present(roind_vec) )then
+            ! calculates only corrs for rotational indices provided in roind_vec
+            ! see get_win_roind. returns -1.0 when not calculated
+            if( any(roind_vec<=0) .or. any(roind_vec>self%nrots) )&
+                &stop'index out of range; simple_polarft_corrcalc::gencorrs_serial'
+            cc    = -1.
+            nrots = size(roind_vec)
+            do i=1,nrots
+                irot = roind_vec(i)
+                cc(irot) = self%corr_1(iref, iptcl, irot)
+            end do
+        else
+            ! all correlations
+            do irot=1,self%nrots
+                cc(irot) = self%corr_1(iref, iptcl, irot)
+            end do
+        endif
     end function gencorrs_serial
 
     !>  \brief  is for generating rotational correlations
