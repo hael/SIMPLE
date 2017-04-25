@@ -320,14 +320,18 @@ contains
     end subroutine getter_2
 
     !>  \brief  is for getting an array of 'key' values
-    function get_all( self, key ) result( arr ) 
+    function get_all( self, key, fromto ) result( arr ) 
         class(oris),      intent(inout) :: self
         character(len=*), intent(in)    :: key
+        integer, optional, intent(in)   :: fromto(2)
         real, allocatable :: arr(:)
-        integer :: i, alloc_stat
-        allocate( arr(self%n), stat=alloc_stat)
+        integer :: i, alloc_stat, ffromto(2)
+        ffromto(1) = 1
+        ffromto(2) = self%n
+        if( present(fromto) ) ffromto = fromto
+        allocate( arr(ffromto(1):ffromto(2)), stat=alloc_stat)
         call alloc_err('get_all; simple_oris', alloc_stat)
-        do i=1,self%n
+        do i=ffromto(1),ffromto(2)
             arr(i) = self%o(i)%get(key)
         enddo
     end function get_all

@@ -22,6 +22,7 @@ logical, parameter              :: DEBUG = .false.
 type(polarft_corrcalc)          :: pftcc
 type(prime2D_srch), allocatable :: primesrch2D(:)
 real,               allocatable :: corrmat3d(:,:,:)
+integer,            allocatable :: prev_classes(:)
 real                            :: frac_srch_space = 0.
 type(ori)                       :: orientation
 
@@ -118,9 +119,15 @@ contains
         ! this has proven to be more efficient to do for the 2D case 
         ! becase the number of references (ncls) is typically smaller than in prime3D
         ! and data locality is increased by pre-calculating all corrs even though it
-        ! is more computations involved
-        allocate(corrmat3d(p%fromp:p%top,p%ncls,pftcc%get_nrots()))
-        call pftcc%gencorrs_all_cpu(corrmat3d)
+        ! is more computations
+        if( p%refine .eq. 'neigh' )then
+            prev_classes = b%a%get_all('class', fromto=[p%fromp,p%top]) 
+            allocate(corrmat3d(p%fromp:p%top,p%nnn,pftcc%get_nrots()))
+            call pftcc%gencorrs_all_cpu(prev_classes, p%nnn, b%nnmat, corrmat3d)
+        else
+            allocate(corrmat3d(p%fromp:p%top,p%ncls,pftcc%get_nrots()))
+            call pftcc%gencorrs_all_cpu(corrmat3d)
+        endif
         ! execute the search
         call del_file(p%outfile)
         if( p%oritab .eq. '' )then
@@ -174,6 +181,7 @@ contains
             call primesrch2D(iptcl)%kill
         end do
         deallocate( primesrch2D, corrmat3d )
+        if( allocated(prev_classes) ) deallocate(prev_classes)
         call pftcc%kill
 
         ! REPORT CONVERGENCE

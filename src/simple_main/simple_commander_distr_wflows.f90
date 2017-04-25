@@ -528,20 +528,20 @@ contains
             call cline_makecavgs%set('msk',     native_msk)
             call cline_makecavgs%set('oritab',  trim(oritab))
             call cline_makecavgs%set('mul',     1./scale)
-            call cline_makecavgs%set('refs',    'prime2Dcavgs_final'//p_master%ext)
+            call cline_makecavgs%set('refs',    'cavgs_final'//p_master%ext)
             call cline_makecavgs%set('outfile', 'prime2Ddoc_final.txt')
             ! execute
             call xmakecavgs%execute(cline_makecavgs)
             ! cleanup
             call del_files('stack_part', p_master%nparts, ext=p_master%ext)
         else
-            call rename(trim(oritab), 'prime2Dcavgs_final'//p_master%ext)
-            call rename(trim(refs),   'prime2Ddoc_final.txt')
+            call rename(trim(oritab), 'prime2Ddoc_final.txt' )
+            call rename(trim(refs),   'cavgs_final'//p_master%ext)
         endif
         ! ranking
         call cline_rank_cavgs%set('oritab', 'prime2Ddoc_final.txt')
-        call cline_rank_cavgs%set('stk',    'prime2Dcavgs_final'//p_master%ext)
-        call cline_rank_cavgs%set('outstk', trim('prime2Dcavgs_final_ranked'//p_master%ext))
+        call cline_rank_cavgs%set('stk',    'cavgs_final'//p_master%ext)
+        call cline_rank_cavgs%set('outstk', trim('cavgs_final_ranked'//p_master%ext))
         call xrank_cavgs%execute( cline_rank_cavgs )
         ! end gracefully
         call simple_end('**** SIMPLE_DISTR_PRIME2D NORMAL STOP ****')
@@ -560,7 +560,7 @@ contains
         use simple_strings,           only: str_has_substr
         class(prime2D_chunk_distr_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
-        character(len=STDLEN), parameter   :: CAVGNAMES     = 'prime2Dcavgs_final.txt'
+        character(len=STDLEN), parameter   :: CAVGNAMES     = 'cavgs_final.txt'
         character(len=STDLEN), parameter   :: STKSCALEDBODY = 'stk_sc_prime2D'
         character(len=STDLEN), allocatable :: final_docs(:), final_cavgs(:)
         character(len=STDLEN)              :: chunktag, native_stk
@@ -704,7 +704,7 @@ contains
             call cline_makecavgs%set('nparts',  real(nparts))
             call cline_makecavgs%set('oritab',  'temp_prime2Ddoc_merged.txt')
             call cline_makecavgs%set('mul',     1./scale)
-            call cline_makecavgs%set('refs',    'prime2Dcavgs_final'//p_master%ext)
+            call cline_makecavgs%set('refs',    'cavgs_final'//p_master%ext)
             call cline_makecavgs%set('outfile', 'prime2Ddoc_final.txt')
             ! execute
             call xmakecavgs%execute(cline_makecavgs)
@@ -717,7 +717,7 @@ contains
             ! merge class averages
             call write_filetable(CAVGNAMES, final_cavgs)
             call cline_stack%set('filetab', CAVGNAMES)
-            call cline_stack%set('outstk', 'prime2Dcavgs_final'//p_master%ext)
+            call cline_stack%set('outstk', 'cavgs_final'//p_master%ext)
             call xstack%execute(cline_stack)
             ! cleanup
             call rename('temp_prime2Ddoc_merged.txt', 'prime2Ddoc_final.txt')
@@ -727,8 +727,8 @@ contains
         endif
         ! ranking
         call cline_rank_cavgs%set('oritab', 'prime2Ddoc_final.txt')
-        call cline_rank_cavgs%set('stk',    'prime2Dcavgs_final'//p_master%ext)
-        call cline_rank_cavgs%set('outstk', trim('prime2Dcavgs_final_ranked'//p_master%ext))
+        call cline_rank_cavgs%set('stk',    'cavgs_final'//p_master%ext)
+        call cline_rank_cavgs%set('outstk', trim('cavgs_final_ranked'//p_master%ext))
         ! end gracefully
         call simple_end('**** SIMPLE_DISTR_PRIME2D_CHUNK NORMAL STOP ****')
 

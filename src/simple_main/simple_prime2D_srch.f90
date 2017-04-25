@@ -26,6 +26,7 @@ type prime2D_srch
     integer               :: nthr          = 0    !< number of threads
     integer               :: fromp         = 1    !< from particle index
     integer               :: top           = 1    !< to particle index
+    integer               :: nnn           = 0    !< # nearest neighbors
     real                  :: trs           = 0.   !< shift range parameter [-trs,trs]
     real                  :: prev_shvec(2) = 0.   !< previous origin shift vector
     real                  :: best_shvec(2) = 0.   !< best ishift vector found by search
@@ -48,6 +49,7 @@ type prime2D_srch
     procedure :: exec_prime2D_srch
     procedure :: greedy_srch
     procedure :: stochastic_srch
+    procedure :: nn_srch
     procedure :: shift_srch
     ! DESTRUCTOR
     procedure :: kill
@@ -76,6 +78,7 @@ contains
         self%nthr       = p%nthr
         self%fromp      = p%fromp
         self%top        = p%top
+        self%nnn        = p%nnn
         ! construct composites
         self%srch_common = prime_srch(p)
         lims(1,1) = -self%trs
@@ -235,7 +238,7 @@ contains
         if( nint(a%get(iptcl,'state')) > 0 )then
             call self%prep4srch( pftcc, iptcl, a, corrmat3d(iptcl,:,:) )
             ! greedy selection
-            loc = maxloc(corrmat3d(iptcl,:,:))
+            loc             = maxloc(corrmat3d(iptcl,:,:))
             self%best_class = loc(1)
             self%best_rot   = loc(2)
             self%best_corr  = corrmat3d(iptcl,loc(1),loc(2))
@@ -324,6 +327,45 @@ contains
         endif
         if( DEBUG ) write(*,'(A)') '>>> PRIME2D_SRCH::FINISHED STOCHASTIC SEARCH'
     end subroutine stochastic_srch
+
+    !>  \brief  executes nearest-neighbor rotational search
+    subroutine nn_srch( self, pftcc, iptcl, a, corrmat3d, nnmat )
+        use simple_rnd,  only: shcloc
+        class(prime2D_srch),     intent(inout) :: self
+        class(polarft_corrcalc), intent(inout) :: pftcc
+        integer,                 intent(in)    :: iptcl
+        class(oris),             intent(inout) :: a
+        real,                    intent(in)    :: corrmat3d(self%fromp:self%top,self%nnn,self%nrots)
+        integer,                 intent(in)    :: nnmat(self%nrefs,self%nnn)
+        integer           :: loc(2)
+        real, allocatable :: frc(:)
+        if( nint(a%get(iptcl,'state')) > 0 )then
+            ! find previous discrete alignment parameters
+            self%prev_class = nint(a%get(iptcl,'class'))                  ! class index
+            self%prev_rot   = self%srch_common%roind(360.-a%e3get(iptcl)) ! in-plane angle index
+            self%prev_shvec = [a%get(iptcl,'x'),a%get(iptcl,'y')]         ! shift vector
+            ! set best to previous best by default
+            self%best_class = self%prev_class         
+            self%best_rot   = self%prev_rot
+            ! calculate spectral score
+            frc = pftcc%genfrc(self%prev_class, iptcl, self%prev_rot)
+            self%specscore  = median_nocopy(frc)
+            ! greedy selection
+            loc             = maxloc(corrmat3d(iptcl,:,:))
+            self%best_class = nnmat(self%prev_class,loc(1))
+            self%best_rot   = loc(2)
+            self%best_corr  = corrmat3d(iptcl,self%best_class,self%best_rot)
+            ! we always evaluate all references using the greedy approach
+            self%nrefs_eval = self%nrefs
+            ! search shifts
+            call self%shift_srch(iptcl)
+            ! output info
+            call self%update_best(iptcl, a)
+        else
+            call a%reject(iptcl)
+        endif
+        if( DEBUG ) write(*,'(A)') '>>> PRIME2D_SRCH::FINISHED NEAREST-NEIGHBOR SEARCH'
+    end subroutine nn_srch
 
     !>  \brief  executes the in-plane search over one reference
     subroutine shift_srch( self, iptcl )

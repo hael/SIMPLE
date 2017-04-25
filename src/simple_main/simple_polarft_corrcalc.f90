@@ -87,7 +87,9 @@ type :: polarft_corrcalc
     ! CALCULATORS
     procedure          :: create_polar_ctfmat
     procedure          :: create_polar_ctfmats
-    procedure          :: gencorrs_all_cpu
+    procedure, private :: gencorrs_all_cpu_1
+    procedure, private :: gencorrs_all_cpu_2
+    generic            :: gencorrs_all_cpu => gencorrs_all_cpu_1, gencorrs_all_cpu_2
     procedure          :: gencorrs_serial
     procedure          :: gencorrs
     procedure          :: genfrc
@@ -748,7 +750,7 @@ contains
     end subroutine create_polar_ctfmats
 
     !>  \brief  routine for generating all rotational correlations
-    subroutine gencorrs_all_cpu( self, corrmat3dout )
+    subroutine gencorrs_all_cpu_1( self, corrmat3dout )
         !$ use omp_lib
         !$ use omp_lib_kinds
         class(polarft_corrcalc), intent(inout) :: self
@@ -768,32 +770,32 @@ contains
             !$omp end do
         end do
         !$omp end parallel
-    end subroutine gencorrs_all_cpu
+    end subroutine gencorrs_all_cpu_1
 
     !>  \brief  routine for generating all rotational correlations
-    ! subroutine gencorrs_all_cpu_2( self, prev_refs, nnn, nnmat, corrmat3dout )
-    !     !$ use omp_lib
-    !     !$ use omp_lib_kinds
-    !     class(polarft_corrcalc), intent(inout) :: self
-    !     integer,                 intent(in)    :: prev_refs(self%pfromto(1):self%pfromto(2)),nnn,nnmat(self%nrefs,nnn)
-    !     real,                    intent(out)   :: corrmat3dout(self%pfromto(1):self%pfromto(2),nnn,self%nrots)
-    !     integer :: iptcl, iref, nptcls, inn
-    !     !$omp parallel default(shared) private(inn,iref)
-    !     do iptcl=self%pfromto(1),self%pfromto(2)
-    !         ! tried to parallelize this one level up, which doesn't work because 
-    !         ! then we would need one CTF modulated reference array per thread
-    !         ! as we would otherwise get a race condition because different threads
-    !         ! try to write to the same memory location
-    !         !$omp do schedule(auto)
-    !         do inn=1,nnn
-    !             iref = nnmat(prev_refs(iptcl),inn)
-    !             if( self%with_ctf ) call self%apply_ctf_single(iptcl, iref)
-    !             corrmat3dout(iptcl,inn,:) = self%gencorrs_serial(iref,iptcl)
-    !         end do
-    !         !$omp end do
-    !     end do
-    !     !$omp end parallel
-    ! end subroutine gencorrs_all_cpu_2
+    subroutine gencorrs_all_cpu_2( self, prev_refs, nnn, nnmat, corrmat3dout )
+        !$ use omp_lib
+        !$ use omp_lib_kinds
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: prev_refs(self%pfromto(1):self%pfromto(2)),nnn,nnmat(self%nrefs,nnn)
+        real,                    intent(out)   :: corrmat3dout(self%pfromto(1):self%pfromto(2),nnn,self%nrots)
+        integer :: iptcl, iref, nptcls, inn
+        !$omp parallel default(shared) private(inn,iref)
+        do iptcl=self%pfromto(1),self%pfromto(2)
+            ! tried to parallelize this one level up, which doesn't work because 
+            ! then we would need one CTF modulated reference array per thread
+            ! as we would otherwise get a race condition because different threads
+            ! try to write to the same memory location
+            !$omp do schedule(auto)
+            do inn=1,nnn
+                iref = nnmat(prev_refs(iptcl),inn)
+                if( self%with_ctf ) call self%apply_ctf_single(iptcl, iref)
+                corrmat3dout(iptcl,inn,:) = self%gencorrs_serial(iref,iptcl)
+            end do
+            !$omp end do
+        end do
+        !$omp end parallel
+    end subroutine gencorrs_all_cpu_2
 
     !>  \brief  is for generating rotational correlations
     function gencorrs_serial( self, iref, iptcl, roind_vec ) result( cc )
