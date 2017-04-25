@@ -124,28 +124,35 @@ contains
             prev_classes = b%a%get_all('class', fromto=[p%fromp,p%top]) 
             allocate(corrmat3d(p%fromp:p%top,p%nnn,pftcc%get_nrots()))
             call pftcc%gencorrs_all_cpu(prev_classes, p%nnn, b%nnmat, corrmat3d)
+            ! execute the search
+            call del_file(p%outfile)
+            !$omp parallel do default(shared) schedule(auto) private(iptcl)
+            do iptcl=p%fromp,p%top
+                call primesrch2D(iptcl)%nn_srch(pftcc, iptcl, b%a, corrmat3d, b%nnmat)
+            end do
+            !$omp end parallel do
         else
             allocate(corrmat3d(p%fromp:p%top,p%ncls,pftcc%get_nrots()))
             call pftcc%gencorrs_all_cpu(corrmat3d)
-        endif
-        ! execute the search
-        call del_file(p%outfile)
-        if( p%oritab .eq. '' )then
-            !$omp parallel do default(shared) schedule(auto) private(iptcl)
-            do iptcl=p%fromp,p%top
-                call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, corrmat3d, greedy=.true.)
-            end do
-            !$omp end parallel do
-        else
-            if(corr_thresh > 0.)then
-                write(*,'(A,F8.2)') '>>> PARTICLE RANDOMIZATION(%):', 100.*p%extr_thresh
-                write(*,'(A,F8.2)') '>>> CORRELATION THRESHOLD:    ', corr_thresh
+            ! execute the search
+            call del_file(p%outfile)
+            if( p%oritab .eq. '' )then
+                !$omp parallel do default(shared) schedule(auto) private(iptcl)
+                do iptcl=p%fromp,p%top
+                    call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, corrmat3d, greedy=.true.)
+                end do
+                !$omp end parallel do
+            else
+                if(corr_thresh > 0.)then
+                    write(*,'(A,F8.2)') '>>> PARTICLE RANDOMIZATION(%):', 100.*p%extr_thresh
+                    write(*,'(A,F8.2)') '>>> CORRELATION THRESHOLD:    ', corr_thresh
+                endif
+                !$omp parallel do default(shared) schedule(auto) private(iptcl)
+                do iptcl=p%fromp,p%top
+                    call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, corrmat3d, extr_bound=corr_thresh)
+                end do
+                !$omp end parallel do
             endif
-            !$omp parallel do default(shared) schedule(auto) private(iptcl)
-            do iptcl=p%fromp,p%top
-                call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, corrmat3d, extr_bound=corr_thresh)
-            end do
-            !$omp end parallel do
         endif
         if( DEBUG ) print *, 'DEBUG, hadamard2D_matcher; completed alignment'
         ! output orientations
