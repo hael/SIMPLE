@@ -48,7 +48,6 @@ contains
         logical,               parameter :: DEBUG=.false.
         real,                  parameter :: LPLIMS(2)=[20.,10.] ! default low-pass limits
         real,                  parameter :: CENLP=30.           ! consistency with prime3D
-        real,                  parameter :: SMPD_TARGET=3.3     ! 4 auto-scaling
         integer,               parameter :: MAXITS_INIT=30, MAXITS_REFINE=80
         integer,               parameter :: STATE=1, NPROJS_SYMSRCH=100
         character(len=32),     parameter :: ITERFBODY     = 'prime3Ddoc_'
@@ -72,7 +71,8 @@ contains
         type(qsys_env)                :: qenv
         type(params)                  :: p_master
         type(oris)                    :: os
-        real                          :: iter, scale, smpd_sc, msk_sc, native_msk, native_smpd
+        real                          :: iter, scale, smpd_sc, msk_sc, native_msk
+        real                          :: native_smpd, lpstop, smpd_target
         character(len=2)              :: str_state
         character(len=STDLEN)         :: oritab, vol_iter
         logical                       :: srch4symaxis
@@ -96,6 +96,13 @@ contains
             endif
         endif
         ! auto-scaling prep
+        if( cline%defined('lp') )then
+            smpd_target = p_master%lp*LP2SMPDFAC
+        else if( cline%defined('lpstop') )then
+            smpd_target = min(LPLIMS(2),p_master%lpstop)*LP2SMPDFAC
+        else
+            smpd_target = LPLIMS(2)*LP2SMPDFAC
+        endif
         call scobj%init(p_master, cline, SMPD_TARGET, STKSCALEDBODY)
         ! prepare command lines from prototype master
         cline_prime3D_init    = cline

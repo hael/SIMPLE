@@ -685,19 +685,20 @@ select case(prg)
         keys_optional(2)  = 'ncunits'
         keys_optional(3)  = 'hp'
         keys_optional(4)  = 'lp'
-        keys_optional(5)  = 'frac'
-        keys_optional(6)  = 'automsk'
-        keys_optional(7)  = 'mw'
-        keys_optional(8)  = 'amsklp'
-        keys_optional(9)  = 'edge'
-        keys_optional(10) = 'binwidth'
-        keys_optional(11) = 'inner'
-        keys_optional(12) = 'width'
-        keys_optional(13) = 'nspace'
-        keys_optional(14) = 'shbarrier'
+        keys_optional(5)  = 'lpstop' 
+        keys_optional(6)  = 'frac'
+        keys_optional(7)  = 'automsk'
+        keys_optional(8)  = 'mw'
+        keys_optional(9)  = 'amsklp'
+        keys_optional(10) = 'edge'
+        keys_optional(11) = 'binwidth'
+        keys_optional(12) = 'inner'
+        keys_optional(13) = 'width'
+        keys_optional(14) = 'nspace'
+        keys_optional(15) = 'shbarrier'
         ! parse command line
         if( describe ) call print_doc_ini3D_from_cavgs
-        call cline%parse(keys_required(:5), keys_optional(:14))
+        call cline%parse(keys_required(:5), keys_optional(:15))
         ! execute
         call xini3D_from_cavgs%execute( cline )
     case( 'het_ensemble' )
