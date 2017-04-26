@@ -472,10 +472,10 @@ contains
         type(ori)         :: o_prev
         real              :: cc_t_min_1, corr
         real, allocatable :: frc(:)
-        o_prev = a%get_ori(iptcl)
-        corr   = max( 0., pftcc%corr_single(self%prev_ref, iptcl, self%prev_roind) )
-        frc    = pftcc%genfrc(self%prev_ref, iptcl, self%prev_roind)
-        self%specscore = median_nocopy(frc)
+        o_prev         = a%get_ori(iptcl)
+        corr           = max( 0., pftcc%corr_single(self%prev_ref, iptcl, self%prev_roind) )
+        frc            = pftcc%genfrc(self%prev_ref, iptcl, self%prev_roind)
+        self%specscore = max(0.,median_nocopy(frc))
         if( corr > 1. .or. .not. is_a_number(corr) )then
             stop 'Invalid correlation value in simple_prime3d_srch::prep_corr4srch'
         endif

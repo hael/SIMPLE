@@ -37,33 +37,30 @@ contains
     ! GENERATE INITIAL 3D MODEL FROM CLASS AVERAGES
 
     subroutine exec_ini3D_from_cavgs( self, cline )
-        use simple_commander_imgproc, only: scale_commander
         use simple_commander_volops,  only: projvol_commander
         use simple_commander_rec,     only: recvol_commander
         use simple_strings,           only: int2str_pad, str2int
-        use simple_magic_boxes,       only: autoscale
+        use simple_scaler,            only: scaler
         use simple_oris,              only: oris
         class(ini3D_from_cavgs_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         ! constants
         logical,               parameter :: DEBUG=.false.
-        real,                  parameter :: LPLIMS(2) = [20.,10.]
-        real,                  parameter :: CENLP=30.   ! consistency with prime3D 
+        real,                  parameter :: LPLIMS(2)=[20.,10.] ! default low-pass limits
+        real,                  parameter :: CENLP=30.           ! consistency with prime3D
+        real,                  parameter :: SMPD_TARGET=3.3     ! 4 auto-scaling
         integer,               parameter :: MAXITS_INIT=30, MAXITS_REFINE=80
         integer,               parameter :: STATE=1, NPROJS_SYMSRCH=100
         character(len=32),     parameter :: ITERFBODY     = 'prime3Ddoc_'
         character(len=32),     parameter :: VOLFBODY      = 'recvol_state'
         character(len=STDLEN), parameter :: STKSCALEDBODY = 'stk_sc_ini3D_from_cavgs'
-        logical,               parameter :: DOSCALE=.true.
         ! distributed commanders
         type(prime3D_distr_commander) :: xprime3D_distr
         type(symsrch_distr_commander) :: xsymsrch_distr
         ! shared-mem commanders
-        type(scale_commander)         :: xscale
         type(recvol_commander)        :: xrecvol
         type(projvol_commander)       :: xprojvol
         ! command lines
-        type(cmdline)                 :: cline_scale
         type(cmdline)                 :: cline_prime3D_init
         type(cmdline)                 :: cline_prime3D_refine1
         type(cmdline)                 :: cline_prime3D_refine2
@@ -71,6 +68,7 @@ contains
         type(cmdline)                 :: cline_recvol
         type(cmdline)                 :: cline_projvol
         ! other variables
+        type(scaler)                  :: scobj
         type(qsys_env)                :: qenv
         type(params)                  :: p_master
         type(oris)                    :: os
@@ -97,19 +95,8 @@ contains
                 srch4symaxis = .true.
             endif
         endif
-        if( DOSCALE )then
-            ! (1) SCALING - preparation
-            native_msk  = p_master%msk
-            native_smpd = p_master%smpd
-            cline_scale = cline
-            call autoscale(p_master%box, p_master%smpd, box_sc, smpd_sc, scale)
-            msk_sc = scale * p_master%msk
-            call cline_scale%set('newbox', real(box_sc))
-            call cline_scale%set('outstk', trim(STKSCALEDBODY)//p_master%ext)
-            call cline%set('stk',  trim(STKSCALEDBODY)//p_master%ext)
-            call cline%set('smpd', smpd_sc)
-            call cline%set('msk',  real(msk_sc))
-        endif
+        ! auto-scaling prep
+        call scobj%init(p_master, cline, SMPD_TARGET, STKSCALEDBODY)
         ! prepare command lines from prototype master
         cline_prime3D_init    = cline
         cline_prime3D_refine1 = cline
@@ -124,20 +111,15 @@ contains
         call cline_prime3D_init%set('maxits', real(MAXITS_INIT))
         call cline_prime3D_init%set('dynlp',  'yes') ! better be explicit about the dynlp
         ! (3) PRIME3D REFINE STEP 1
-        call cline_prime3D_refine1%set('prg', 'prime3D')
-        call cline_prime3D_refine1%set('ctf', 'no')
+        call cline_prime3D_refine1%set('prg',    'prime3D')
+        call cline_prime3D_refine1%set('ctf',    'no')
         call cline_prime3D_refine1%set('maxits', real(MAXITS_REFINE))
-        call cline_prime3D_refine1%set('dynlp', 'no') ! better be explicit about the dynlp
+        call cline_prime3D_refine1%set('dynlp',  'no') ! better be explicit about the dynlp
         call cline_prime3D_refine1%set('refine', 'shc')
         ! (4) SYMMETRY AXIS SEARCH
         if( srch4symaxis )then
-            if( DOSCALE )then
-                call cline_symsrch%set('smpd',    smpd_sc)
-                call cline_symsrch%set('msk',     real(msk_sc))
-                call cline_recvol%set('stk',  trim(STKSCALEDBODY)//p_master%ext)
-                call cline_recvol%set('smpd', smpd_sc)
-                call cline_recvol%set('msk',  real(msk_sc))
-            endif
+            call scobj%update_smpd_msk(cline_symsrch, 'scaled')
+            call scobj%update_stk_smpd_msk(cline_recvol, 'scaled')
             ! need to replace original point-group flag with c1
             call cline_prime3D_init%set('pgrp', 'c1') 
             call cline_prime3D_refine1%set('pgrp', 'c1')
@@ -153,9 +135,6 @@ contains
             call cline_recvol%set('trs',  5.) ! to assure that shifts are being used
             call cline_recvol%set('ctf',  'no')
             call cline_recvol%set('oritab', 'symdoc.txt')
-            if( cline%defined('nthr_master') )then
-                call cline_recvol%set('nthr', real(p_master%nthr_master))
-            endif
             ! 2nd refinement step now uses the symmetrised vol and doc
             call cline_prime3D_refine2%set('oritab', 'symdoc.txt')
             call cline_prime3D_refine2%set('vol1', 'rec_sym'//p_master%ext)
@@ -171,16 +150,10 @@ contains
         call cline_projvol%set('prg', 'projvol')
         call cline_projvol%set('outstk', 'reprojs'//p_master%ext)
         call cline_projvol%delete('stk')
-        call cline_projvol%set('msk',  native_msk)
-        call cline_projvol%set('smpd', native_smpd)
-        call cline_projvol%set('oritab', 'prime3Ddoc_022.txt')
+        call scobj%update_smpd_msk(cline_projvol, 'native')
+        ! scale class averages
+        call scobj%scale_exec()
         ! execute commanders
-        if( DOSCALE )then
-            write(*,'(A)') '>>>'
-            write(*,'(A)') '>>> AUTO-SCALING CLASS AVERAGES'
-            write(*,'(A)') '>>>'
-            call xscale%execute(cline_scale)
-        endif
         write(*,'(A)') '>>>'
         write(*,'(A)') '>>> INITIAL 3D MODEL GENERATION WITH PRIME3D'
         write(*,'(A)') '>>>'
@@ -201,7 +174,6 @@ contains
             write(*,'(A)') '>>>'
             write(*,'(A)') '>>> SYMMETRY AXIS SEARCH'
             write(*,'(A)') '>>>'
-            ! cenetring deactivated as prime3D already does it?
             call cline_symsrch%set('oritab', trim(oritab))
             call cline_symsrch%set('vol1', trim(vol_iter))
             call update_lp(cline_symsrch, 1)
@@ -224,26 +196,20 @@ contains
         call xprime3D_distr%execute(cline_prime3D_refine2)
         iter = cline_prime3D_refine2%get_rarg('endit')
         call set_iter_dependencies
-        if( DOSCALE )then
-            write(*,'(A)') '>>>'
-            write(*,'(A)') '>>> 3D RECONSTRUCTION AT NATIVE SAMPLING'
-            write(*,'(A)') '>>>'
-            ! modulate shifts
-            call os%new(p_master%nptcls)
-            call os%read(oritab)
-            call os%mul_shifts(1./scale)
-            call os%write(oritab)
-            ! prepare recvol command line
-            call cline_recvol%set('stk',    p_master%stk)
-            call cline_recvol%set('smpd',   p_master%smpd)
-            call cline_recvol%set('msk',    p_master%msk)
-            call cline_recvol%set('oritab', trim(oritab))
-            ! re-reconstruct volume
-            call xrecvol%execute(cline_recvol)
-            call rename(trim(volfbody)//trim(str_state)//p_master%ext, 'rec_final'//p_master%ext)
-        else
-            call rename(vol_iter, 'rec_final'//p_master%ext)
-        endif
+        write(*,'(A)') '>>>'
+        write(*,'(A)') '>>> 3D RECONSTRUCTION AT NATIVE SAMPLING'
+        write(*,'(A)') '>>>'
+        ! modulate shifts
+        call os%new(p_master%nptcls)
+        call os%read(oritab)
+        call os%mul_shifts(1./scobj%get_scaled_var('scale'))
+        call os%write(oritab)
+        ! prepare recvol command line
+        call scobj%update_stk_smpd_msk(cline_recvol, 'native')
+        call cline_recvol%set('oritab', trim(oritab))
+        ! re-reconstruct volume
+        call xrecvol%execute(cline_recvol)
+        call rename(trim(volfbody)//trim(str_state)//p_master%ext, 'rec_final'//p_master%ext)
         write(*,'(A)') '>>>'
         write(*,'(A)') '>>> RE-PROJECTION OF THE FINAL VOLUME'
         write(*,'(A)') '>>>'

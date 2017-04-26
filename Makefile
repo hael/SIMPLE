@@ -211,6 +211,7 @@ masters: simple_rec_master.o              \
          simple_commander_comlin.o        \
          simple_commander_distr.o         \
          simple_commander_imgproc.o       \
+         simple_scaler.o                  \
          simple_commander_mask.o          \
          simple_commander_misc.o          \
          simple_commander_oris.o          \
@@ -226,6 +227,7 @@ masters: simple_rec_master.o              \
          simple_commander_stream_wflows.o \
          simple_commander_distr_wflows.o  \
          simple_commander_hlev_wflows.o   ;
+         
 
 src_code: ;
 

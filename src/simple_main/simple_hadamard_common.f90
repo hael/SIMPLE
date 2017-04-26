@@ -141,7 +141,7 @@ contains
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
         real,           intent(in)    :: frac_srch_space
-        real :: lplims(3), lplim
+        real :: lplim
         if( cline%defined('lp') )then        
             ! set Fourier index range
             p%kfromto(1) = max(2,b%img%get_find(p%hp))
@@ -149,17 +149,14 @@ contains
             p%lp_dyn     = p%lp
             call b%a%set_all2single('lp',p%lp)
         else
-            lplims(1) = p%lpstart
-            lplims(2) = lplims(1) - (p%lpstart - p%lpstop)/2.
-            lplims(3) = p%lpstop
             ! set Fourier index range
             p%kfromto(1) = max(2,b%img%get_find(p%hp))
             if( which_iter <= LPLIM1ITERBOUND )then
-                lplim = lplims(1)
+                lplim = p%lplims2D(1)
             else if( frac_srch_space >= FRAC_SH_LIM .and. which_iter > LPLIM3ITERBOUND )then
-                lplim = lplims(3)
+                lplim = p%lplims2D(3)
             else
-                lplim = lplims(2)
+                lplim = p%lplims2D(2)
             endif
             p%kfromto(2) = b%img%get_find(lplim)
             p%lp_dyn = lplim

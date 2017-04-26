@@ -518,7 +518,6 @@ contains
         end do
     end function get_state_exist
 
-    
     !>  \brief  4 getting the particle indices corresponding to state
     function get_ptcls_in_state( self, state ) result( ptcls )
         class(oris), intent(inout) :: self
@@ -662,7 +661,7 @@ contains
             do icls=1,ncls
                 pop = clspops(icls)
                 if( pop > 1 )then
-                    clsind_remap = clsind_remap+1
+                    clsind_remap = clsind_remap + 1
                     do iptcl=1,self%n
                         old_cls = nint(self%o(iptcl)%get('class'))
                         if( old_cls == icls ) call self%o(iptcl)%set('class', real(clsind_remap))
@@ -2404,6 +2403,7 @@ contains
         if( self%isthere('specscore') )then
             specscores = self%get_all('specscore')
             allocate(weights(self%n), source=specscores)
+            where( specscores < TINY ) weights = 0.
             call normalize_sigm(weights)
             do i=1,self%n
                 call self%o(i)%set('w', weights(i))

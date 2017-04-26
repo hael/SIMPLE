@@ -69,23 +69,22 @@ contains
     end subroutine find_ldim_nptcls
 
     !>  \brief  is for checking logical dimension and number of particles in stack
-    subroutine check_ldim_nptcls( fname, ldim, nptcls )
+    logical function has_ldim_nptcls( fname, ldim, nptcls )
         character(len=*), intent(in) :: fname   !< filename
         integer,          intent(in) :: ldim(3) !< expected logical dimension
         integer,          intent(in) :: nptcls  !< number of expected particles
         integer :: ldim_found(3), nptcls_found
         call find_ldim_nptcls( fname, ldim_found, nptcls_found )
         if( ldim_found(1) /= ldim(1) .or. ldim_found(2) /= ldim(2) )then
-            write(*,*) 'Expected logical dimension:        ', ldim(1:2)
-            write(*,*) 'Logical dimension of stack header: ', ldim_found(1:2)
-            stop 'ERROR! logical dimension; simple_jiffys :: check_ldim_nptcls'
+            has_ldim_nptcls = .false.
+            return
         endif
         if( nptcls_found /= nptcls )then
-            write(*,*) 'Expected # particles:                  ', nptcls
-            write(*,*) '# particles according to stack header: ', nptcls_found
-            stop 'ERROR! # particles; simple_jiffys :: check_ldim_nptcls'
+            has_ldim_nptcls = .false.
+            return
         endif
-    end subroutine check_ldim_nptcls
+        has_ldim_nptcls = .true.
+    end function has_ldim_nptcls
     
     !>  \brief is for gettign a part of the info in a MRC image header
     subroutine get_mrcfile_info( fname, ldim, form, smpd, doprint )

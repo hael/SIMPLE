@@ -21,8 +21,6 @@ private
 logical, parameter              :: DEBUG = .false.
 type(polarft_corrcalc)          :: pftcc
 type(prime2D_srch), allocatable :: primesrch2D(:)
-real,               allocatable :: corrmat3d(:,:,:)
-integer,            allocatable :: prev_classes(:)
 real                            :: frac_srch_space = 0.
 type(ori)                       :: orientation
 
@@ -115,31 +113,21 @@ contains
         end do
         ! calculate CTF matrices
         if( p%ctf .ne. 'no' ) call pftcc%create_polar_ctfmats(p%smpd, b%a)
-        ! calculate all correlations
-        ! this has proven to be more efficient to do for the 2D case 
-        ! becase the number of references (ncls) is typically smaller than in prime3D
-        ! and data locality is increased by pre-calculating all corrs even though it
-        ! is more computations
+        ! execute the search
         if( p%refine .eq. 'neigh' )then
-            prev_classes = b%a%get_all('class', fromto=[p%fromp,p%top]) 
-            allocate(corrmat3d(p%fromp:p%top,p%nnn,pftcc%get_nrots()))
-            call pftcc%gencorrs_all_cpu(prev_classes, p%nnn, b%nnmat, corrmat3d)
-            ! execute the search
             call del_file(p%outfile)
             !$omp parallel do default(shared) schedule(auto) private(iptcl)
             do iptcl=p%fromp,p%top
-                call primesrch2D(iptcl)%nn_srch(pftcc, iptcl, b%a, corrmat3d, b%nnmat)
+                call primesrch2D(iptcl)%nn_srch(pftcc, iptcl, b%a, b%nnmat)
             end do
             !$omp end parallel do
         else
-            allocate(corrmat3d(p%fromp:p%top,p%ncls,pftcc%get_nrots()))
-            call pftcc%gencorrs_all_cpu(corrmat3d)
             ! execute the search
             call del_file(p%outfile)
             if( p%oritab .eq. '' )then
                 !$omp parallel do default(shared) schedule(auto) private(iptcl)
                 do iptcl=p%fromp,p%top
-                    call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, corrmat3d, greedy=.true.)
+                    call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, greedy=.true.)
                 end do
                 !$omp end parallel do
             else
@@ -149,7 +137,7 @@ contains
                 endif
                 !$omp parallel do default(shared) schedule(auto) private(iptcl)
                 do iptcl=p%fromp,p%top
-                    call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, corrmat3d, extr_bound=corr_thresh)
+                    call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, extr_bound=corr_thresh)
                 end do
                 !$omp end parallel do
             endif
@@ -171,10 +159,6 @@ contains
         end do
         if( DEBUG ) print *, 'DEBUG, hadamard2D_matcher; generated class averages'
         
-        ! status here: sums have been assembled but not normalised
-        ! in parallel setting: write partial files and move on
-        ! in serial setting: normalise sums and write to disk
-        
         ! WRITE CLASS AVERAGES
         if( p%l_distr_exec )then
             call prime2D_write_partial_sums( b, p )
@@ -187,8 +171,7 @@ contains
         do iptcl=p%fromp,p%top
             call primesrch2D(iptcl)%kill
         end do
-        deallocate( primesrch2D, corrmat3d )
-        if( allocated(prev_classes) ) deallocate(prev_classes)
+        deallocate( primesrch2D )
         call pftcc%kill
 
         ! REPORT CONVERGENCE

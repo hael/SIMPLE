@@ -706,7 +706,7 @@ select case(prg)
         ! set optional keys
         keys_optional(1) = 'nthr'
         keys_optional(2) = 'which_iter'
-        keys_optional(3) = 'refs'        
+        keys_optional(3) = 'refs'
         ! parse command line
         if( describe ) call print_doc_cavgassemble
         call cline%parse(keys_required(:5), keys_optional(:3))

@@ -12,10 +12,10 @@ module simple_params
 use simple_defs
 use simple_ori,         only: ori
 use simple_cmdline,     only: cmdline
-use simple_strings      ! use all in there
-use simple_filehandling ! use all in there
 use simple_jiffys,      only: find_ldim_nptcls
 use simple_magic_boxes, only: find_magic_box
+use simple_strings      ! use all in there
+use simple_filehandling ! use all in there
 implicit none
 
 public :: params
@@ -306,6 +306,7 @@ type :: params
     real    :: lp=20.
     real    :: lp_ctffind=5.0
     real    :: lp_pick=20.
+    real    :: lplims2D(3)
     real    :: lpmed=20.
     real    :: lpstart=0.
     real    :: lpstop=7.0
@@ -326,6 +327,7 @@ type :: params
     real    :: scale2=1.
     real    :: sherr=0.
     real    :: smpd=2.
+    real    :: smpd_targets2D(2)
     real    :: snr
     real    :: thres=0.
     real    :: time_per_image=200.
@@ -361,8 +363,8 @@ contains
     
     !> \brief  is a constructor
     function constructor( cline, checkdistr, allow_mix ) result( self )
-        class(cmdline), intent(inout) :: cline
-        logical, intent(in), optional :: checkdistr, allow_mix
+        class(cmdline),    intent(inout) :: cline
+        logical, optional, intent(in)    :: checkdistr, allow_mix
         type(params) :: self
         call self%new( cline, checkdistr, allow_mix )    
     end function constructor
@@ -845,7 +847,6 @@ contains
         if( .not. cline%defined('nthr_master') )then
             self%nthr_master = nthr_glob
         endif
-
 !<<< END, PARALLELISATION-RELATED
 
 !>>> START, IMAGE-PROCESSING-RELATED
@@ -862,6 +863,12 @@ contains
         endif
         if( self%fny > 0. ) self%tofny = int(self%dstep/self%fny) ! Nyqvist Fourier index
         if( cline%defined('lp') ) self%dynlp = 'no'               ! override dynlp=yes and lpstop
+        ! set 2D low-pass limits and smpd_targets 4 scaling
+        self%lplims2D(1)       = self%lpstart
+        self%lplims2D(2)       = self%lplims2D(1) - (self%lpstart - self%lpstop)/2.
+        self%lplims2D(3)       = self%lpstop
+        self%smpd_targets2D(1) = self%lplims2D(2)*LP2SMPDFAC
+        self%smpd_targets2D(2) = self%lplims2D(3)*LP2SMPDFAC
         ! set default ring2 value
         if( .not. cline%defined('ring2') )then
             if( cline%defined('msk') )then

@@ -62,11 +62,6 @@ contains
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         call b%build_hadamard_prime2D_tbox(p) ! 2D Hadamard matcher built
         write(*,'(a)') '>>> GENERATING CLUSTER CENTERS'
-        if( .not. cline%defined('oritab') )then
-            if( .not. cline%defined('ncls') )then
-                stop 'If no oritab is provided ncls (# class averages) need to be part of command line'
-            endif
-        endif
         if( cline%defined('oritab') )then
             call b%a%remap_classes
             ncls_in_oritab = b%a%get_ncls()
@@ -75,10 +70,18 @@ contains
                 if( p%ncls > ncls_in_oritab )then
                     call b%a%expand_classes(p%ncls)
                 endif
+            else
+                p%ncls = ncls_in_oritab
             endif
         else if( p%tseries .eq. 'yes' )then
+            if( .not. cline%defined('ncls') )then
+                stop '# class averages (ncls) need to be part of command line when tseries=yes'
+            endif
             call b%a%ini_tseries(p%ncls, 'class')
         else
+            if( .not. cline%defined('ncls') )then
+                stop 'If no oritab is provided ncls (# class averages) need to be part of command line'
+            endif
             if( p%srch_inpl .eq. 'yes' )then
                 call b%a%rnd_cls(p%ncls)
             else
@@ -91,8 +94,7 @@ contains
             p%oritab = 'prime2D_startdoc.txt'
         endif
         if( p%mul > 1. ) call b%a%mul_shifts(p%mul)
-        if( p%l_distr_exec .and. nint(cline%get_rarg('part')) .ne. 1 )then
-        else
+        if( p%l_distr_exec .and. nint(cline%get_rarg('part')) .eq. 1 )then
             call b%a%write(p%oritab)
         endif
         if( cline%defined('filwidth') )then
@@ -194,6 +196,8 @@ contains
             call prime2D_write_sums(b, p, p%which_iter)
         else if( cline%defined('refs') )then
             call prime2D_write_sums(b, p, fname=p%refs)
+        else
+            call prime2D_write_sums(b, p, fname='startcavgs'//p%ext)
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_CAVGASSEMBLE NORMAL STOP ****', print_simple=.false.)
@@ -213,7 +217,7 @@ contains
         p = params(cline) ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         p%ncls    = b%a%get_ncls()
-        converged = b%conv%check_conv2D()   ! convergence check
+        converged = b%conv%check_conv2D() ! convergence check
         call cline%set('frac', b%conv%get('frac'))
         if( p%doshift )then
             ! activates shift serach

@@ -315,13 +315,15 @@ contains
         cline_cavgassemble   = cline
         call cline_cavgassemble%set('nthr',1.)
         call cline_cavgassemble%set('prg', 'cavgassemble')
-        if( .not. cline%defined('oritab') )then
+        if( cline%defined('outfile') )then
+            ! because outfile is output from distributed exec of makecavsg
+            call cline_cavgassemble%set('oritab', p_master%outfile)
+        else
+            ! because prime2D_startdoc.txt is default output in the absence of outfile
             call cline_cavgassemble%set('oritab', 'prime2D_startdoc.txt')
         endif
         ! split stack
-        if( stack_is_split(p_master%ext, p_master%nparts) )then
-            ! check that the stack partitions are of correct sizes
-            call stack_parts_of_correct_sizes(p_master%ext, qenv%parts, p_master%box)
+        if( stack_is_split(p_master%ext, qenv%parts, p_master%box) )then
         else
             call xsplit%execute(cline)
         endif
@@ -339,11 +341,9 @@ contains
         use simple_commander_prime2D ! use all in there
         use simple_commander_distr   ! use all in there
         use simple_commander_mask    ! use all in there
-        use simple_commander_imgproc, only: scale_commander
-        use simple_magic_boxes,       only: autoscale
-        use simple_procimgfile,       only: random_selection_from_imgfile
-        use simple_oris,              only: oris
-        use simple_strings,           only: str_has_substr
+        use simple_procimgfile, only: random_selection_from_imgfile
+        use simple_oris,        only: oris
+        use simple_strings,     only: str_has_substr
         class(prime2D_distr_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         ! constants
@@ -351,58 +351,29 @@ contains
         character(len=32),     parameter :: ALGNFBODY       = 'algndoc_'
         character(len=32),     parameter :: ITERFBODY       = 'prime2Ddoc_'
         character(len=32),     parameter :: CAVGS_ITERFBODY = 'cavgs_iter'
-        real,                  parameter :: MSK_FRAC        = 0.06
-        real,                  parameter :: MINSHIFT        = 2.0
-        real,                  parameter :: MAXSHIFT        = 6.0
-        character(len=STDLEN), parameter :: STKSCALEDBODY   = 'stk_sc_prime2D'
         ! commanders
-        type(scale_commander)           :: xscale
         type(check2D_conv_commander)    :: xcheck2D_conv
         type(rank_cavgs_commander)      :: xrank_cavgs
         type(merge_algndocs_commander)  :: xmerge_algndocs
         type(split_commander)           :: xsplit
-        !type(automask2D_commander)      :: xautomask2D
         type(makecavgs_distr_commander) :: xmakecavgs
         ! command lines
-        type(cmdline)         :: cline_scale
         type(cmdline)         :: cline_check2D_conv
         type(cmdline)         :: cline_cavgassemble
         type(cmdline)         :: cline_rank_cavgs
         type(cmdline)         :: cline_merge_algndocs
-        type(cmdline)         :: cline_automask2D
         type(cmdline)         :: cline_makecavgs
         ! other variables
         type(qsys_env)        :: qenv
         type(params)          :: p_master
-        character(len=STDLEN) :: refs, oritab, str, str_iter, native_stk
-        real                  :: smpd_sc, msk_sc, scale, native_smpd, native_msk
-        integer               :: iter, i, box_sc, native_box
+        character(len=STDLEN) :: refs, oritab, str, str_iter
+        integer               :: iter, i
         type(chash)           :: job_descr
+        real                  :: frac_srch_space
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! setup the environment for distributed execution
         call qenv%new(p_master)
-        
-        if( p_master%l_autoscale )then
-            ! prepare for down-scaling
-            native_stk  = p_master%stk
-            native_smpd = p_master%smpd
-            native_msk  = p_master%msk
-            native_box  = p_master%box
-            cline_scale = cline
-            call autoscale(p_master%box, p_master%smpd, box_sc, smpd_sc, scale)
-            msk_sc = scale * p_master%msk
-            call cline_scale%set('newbox', real(box_sc))
-            call cline_scale%set('outstk', trim(STKSCALEDBODY)//p_master%ext)
-            p_master%stk  = trim(STKSCALEDBODY)//p_master%ext
-            p_master%smpd = smpd_sc
-            p_master%msk  = msk_sc
-            p_master%box  = box_sc
-            call cline%set('stk',  trim(p_master%stk))
-            call cline%set('smpd', p_master%smpd)
-            call cline%set('msk',  p_master%msk)
-        endif
-
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! initialise starting references, orientations
@@ -422,7 +393,6 @@ contains
         cline_cavgassemble   = cline
         cline_rank_cavgs     = cline
         cline_merge_algndocs = cline
-        cline_automask2D     = cline
         cline_makecavgs      = cline
 
         ! initialise static command line parameters and static job description parameters
@@ -434,18 +404,8 @@ contains
         call cline_cavgassemble%set('prg', 'cavgassemble')
         if( .not. cline%defined('refs') .and. job_descr%isthere('automsk') ) call job_descr%delete('automsk')
 
-        if( p_master%l_autoscale )then
-            if( .not. file_exists(trim(STKSCALEDBODY)//p_master%ext) )then
-                write(*,'(A)') '>>>'
-                write(*,'(A)') '>>> AUTO-SCALING IMAGES'
-                write(*,'(A)') '>>>'
-                call xscale%execute(cline_scale)
-            endif
-        endif
         ! split stack
-        if( stack_is_split(p_master%ext, p_master%nparts) )then
-            ! check that the stack partitions are of correct sizes
-            call stack_parts_of_correct_sizes(p_master%ext, qenv%parts, p_master%box)
+        if( stack_is_split(p_master%ext, qenv%parts, p_master%box) )then
         else
             call xsplit%execute(cline)
         endif
@@ -470,7 +430,7 @@ contains
         ! main loop
         iter = p_master%startit - 1
         do
-            iter = iter+1
+            iter = iter + 1
             str_iter = int2str_pad(iter,3)
             write(*,'(A)')   '>>>'
             write(*,'(A,I6)')'>>> ITERATION ', iter
@@ -495,13 +455,15 @@ contains
             call qenv%exec_simple_prg_in_queue(cline_cavgassemble, 'CAVGASSEMBLE', 'CAVGASSEMBLE_FINISHED')
             ! check convergence
             call cline_check2D_conv%set('oritab', trim(oritab))
-            call cline_check2D_conv%set('lp',     real(p_master%lp)) ! may be subjected to iter-dependent update in future
             call xcheck2D_conv%execute(cline_check2D_conv)
-            ! this activates shifting & automasking if frac >= 80
-            if( cline_check2D_conv%defined('trs') .and. .not.job_descr%isthere('trs') )then
-                ! activates shift search
-                str = real2str(cline_check2D_conv%get_rarg('trs'))
-                call job_descr%set('trs', trim(str) )
+            ! the below activates shifting & automasking
+            frac_srch_space = cline_check2D_conv%get_rarg('frac')
+            if( frac_srch_space >= FRAC_SH_LIM .or. cline_check2D_conv%defined('trs') )then
+                if( .not.job_descr%isthere('trs') )then
+                    ! activates shift search
+                    str = real2str(cline_check2D_conv%get_rarg('trs'))
+                    call job_descr%set('trs', trim(str) )
+                endif
                 if( cline%defined('automsk') )then
                     ! activates masking
                     if( cline%get_carg('automsk') .ne. 'no' ) call job_descr%set('automsk','yes')
@@ -510,34 +472,8 @@ contains
             if( cline_check2D_conv%get_carg('converged').eq.'yes' .or. iter==p_master%maxits ) exit
         end do
         call qsys_cleanup(p_master)
-
-        if( p_master%l_autoscale )then
-            write(*,'(A)') '>>>'
-            write(*,'(A)') '>>> GENERATING CLASS AVERAGES AT NATIVE SAMPLING'
-            write(*,'(A)') '>>>'
-            ! re-split stack
-            call del_files('stack_part', p_master%nparts, ext=p_master%ext)
-            call cline%set('stk',        native_stk)
-            call cline%set('smpd',       native_smpd)
-            call xsplit%execute(cline)
-            ! pepare makecavgs command line
-            cline_makecavgs = cline
-            call cline_makecavgs%set('prg',     'makecavgs')
-            call cline_makecavgs%set('stk',     trim(native_stk))
-            call cline_makecavgs%set('smpd',    native_smpd)
-            call cline_makecavgs%set('msk',     native_msk)
-            call cline_makecavgs%set('oritab',  trim(oritab))
-            call cline_makecavgs%set('mul',     1./scale)
-            call cline_makecavgs%set('refs',    'cavgs_final'//p_master%ext)
-            call cline_makecavgs%set('outfile', 'prime2Ddoc_final.txt')
-            ! execute
-            call xmakecavgs%execute(cline_makecavgs)
-            ! cleanup
-            call del_files('stack_part', p_master%nparts, ext=p_master%ext)
-        else
-            call rename(trim(oritab), 'prime2Ddoc_final.txt' )
-            call rename(trim(refs),   'cavgs_final'//p_master%ext)
-        endif
+        call rename(trim(oritab), 'prime2Ddoc_final.txt' )
+        call rename(trim(refs),   'cavgs_final'//p_master%ext)
         ! ranking
         call cline_rank_cavgs%set('oritab', 'prime2Ddoc_final.txt')
         call cline_rank_cavgs%set('stk',    'cavgs_final'//p_master%ext)
@@ -553,23 +489,19 @@ contains
         use simple_commander_prime2D ! use all in there
         use simple_commander_distr   ! use all in there
         use simple_commander_mask    ! use all in there
-        use simple_commander_imgproc, only: stack_commander, scale_commander
-        use simple_magic_boxes,       only: autoscale
+        use simple_commander_imgproc, only: stack_commander
         use simple_oris,              only: oris
         use simple_ori,               only: ori
         use simple_strings,           only: str_has_substr
         class(prime2D_chunk_distr_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         character(len=STDLEN), parameter   :: CAVGNAMES     = 'cavgs_final.txt'
-        character(len=STDLEN), parameter   :: STKSCALEDBODY = 'stk_sc_prime2D'
         character(len=STDLEN), allocatable :: final_docs(:), final_cavgs(:)
-        character(len=STDLEN)              :: chunktag, native_stk
-        type(scale_commander)              :: xscale
+        character(len=STDLEN)              :: chunktag
         type(split_commander)              :: xsplit
         type(makecavgs_distr_commander)    :: xmakecavgs
         type(stack_commander)              :: xstack
-        !type(rank_cavgs_commander)         :: xrank_cavgs
-        type(cmdline)                      :: cline_scale
+        type(rank_cavgs_commander)         :: xrank_cavgs
         type(cmdline)                      :: cline_stack
         type(cmdline)                      :: cline_makecavgs
         type(cmdline)                      :: cline_rank_cavgs
@@ -578,8 +510,7 @@ contains
         type(chash), allocatable           :: part_params(:)
         type(chash)                        :: job_descr
         type(oris)                         :: os
-        real    :: smpd_sc, msk_sc, scale, native_smpd, native_msk
-        integer :: ipart, numlen, nl, ishift, nparts, npart_params, native_box, box_sc
+        integer :: ipart, numlen, nl, ishift, nparts, npart_params
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! determine the number of partitions
@@ -591,27 +522,6 @@ contains
         p_master = params(cline, checkdistr=.false.)
         ! setup the environment for distributed execution
         call qenv%new(p_master)
-
-        if( p_master%l_autoscale )then
-            ! prepare for down-scaling
-            native_stk  = p_master%stk
-            native_smpd = p_master%smpd
-            native_msk  = p_master%msk
-            native_box  = p_master%box
-            cline_scale = cline
-            call autoscale(p_master%box, p_master%smpd, box_sc, smpd_sc, scale)
-            msk_sc = scale * p_master%msk
-            call cline_scale%set('newbox', real(box_sc))
-            call cline_scale%set('outstk', trim(STKSCALEDBODY)//p_master%ext)
-            p_master%stk  = trim(STKSCALEDBODY)//p_master%ext
-            p_master%smpd = smpd_sc
-            p_master%msk  = msk_sc
-            p_master%box  = box_sc
-            call cline%set('stk',  trim(p_master%stk))
-            call cline%set('smpd', p_master%smpd)
-            call cline%set('msk',  p_master%msk)
-        endif
-
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! prepare part-dependent parameters and docs
@@ -639,19 +549,8 @@ contains
                 ishift = ishift - p_master%ncls
             endif
         end do
-
-        if( p_master%l_autoscale )then
-            if( .not. file_exists(trim(STKSCALEDBODY)//p_master%ext) )then
-                write(*,'(A)') '>>>'
-                write(*,'(A)') '>>> AUTO-SCALING IMAGES'
-                write(*,'(A)') '>>>'
-                call xscale%execute(cline_scale)
-            endif
-        endif
         ! split stack
-        if( stack_is_split(p_master%ext, p_master%nparts) )then
-            ! check that the stack partitions are of correct sizes
-            call stack_parts_of_correct_sizes(p_master%ext, qenv%parts, p_master%box)
+        if( stack_is_split(p_master%ext, qenv%parts, p_master%box) )then
         else
             call xsplit%execute(cline)
         endif
@@ -661,7 +560,6 @@ contains
         write(*,'(A)') '>>>'
         call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, part_params=part_params, chunkdistr=.true.)
         call qsys_cleanup(p_master)
-
         ! merge final stacks of cavgs and orientation documents
         allocate(final_docs(p_master%nparts), final_cavgs(p_master%nparts))
         ishift = 0
@@ -681,54 +579,21 @@ contains
             endif
         end do
         ! merge docs
-        call sys_merge_docs(final_docs, 'temp_prime2Ddoc_merged.txt')
-
-        if( p_master%l_autoscale )then
-            write(*,'(A)') '>>>'
-            write(*,'(A)') '>>> GENERATING CLASS AVERAGES AT NATIVE SAMPLING'
-            write(*,'(A)') '>>>'
-            ! re-split stack
-            call del_files('stack_part', p_master%nparts, ext=p_master%ext)
-            call cline%set('stk',        native_stk)
-            call cline%set('smpd',       native_smpd)
-            call cline%set('nparts',     real(nparts))
-            call xsplit%execute(cline)
-            ! pepare makecavgs command line
-            cline_makecavgs = cline
-            call cline_makecavgs%delete('ncls')
-            call cline_makecavgs%delete('chunksz')
-            call cline_makecavgs%set('prg',     'makecavgs')
-            call cline_makecavgs%set('stk',     native_stk)
-            call cline_makecavgs%set('smpd',    native_smpd)
-            call cline_makecavgs%set('msk',     native_msk)
-            call cline_makecavgs%set('nparts',  real(nparts))
-            call cline_makecavgs%set('oritab',  'temp_prime2Ddoc_merged.txt')
-            call cline_makecavgs%set('mul',     1./scale)
-            call cline_makecavgs%set('refs',    'cavgs_final'//p_master%ext)
-            call cline_makecavgs%set('outfile', 'prime2Ddoc_final.txt')
-            ! execute
-            call xmakecavgs%execute(cline_makecavgs)
-            ! cleanup
-            call del_files('stack_part', p_master%nparts, ext=p_master%ext)
-            call del_file('temp_prime2Ddoc_merged.txt')
-            call sys_del_files('chunk', '.txt')
-            call sys_del_files('chunk', p_master%ext)
-        else
-            ! merge class averages
-            call write_filetable(CAVGNAMES, final_cavgs)
-            call cline_stack%set('filetab', CAVGNAMES)
-            call cline_stack%set('outstk', 'cavgs_final'//p_master%ext)
-            call xstack%execute(cline_stack)
-            ! cleanup
-            call rename('temp_prime2Ddoc_merged.txt', 'prime2Ddoc_final.txt')
-            call del_file(CAVGNAMES)
-            call sys_del_files('chunk', '.txt')
-            call sys_del_files('chunk', p_master%ext)
-        endif
+        call sys_merge_docs(final_docs, 'prime2Ddoc_final.txt')
+        ! merge class averages
+        call write_filetable(CAVGNAMES, final_cavgs)
+        call cline_stack%set('filetab', CAVGNAMES)
+        call cline_stack%set('outstk', 'cavgs_final'//p_master%ext)
+        call xstack%execute(cline_stack)
+        ! cleanup
+        call del_file(CAVGNAMES)
+        call sys_del_files('chunk', '.txt')
+        call sys_del_files('chunk', p_master%ext)
         ! ranking
         call cline_rank_cavgs%set('oritab', 'prime2Ddoc_final.txt')
         call cline_rank_cavgs%set('stk',    'cavgs_final'//p_master%ext)
         call cline_rank_cavgs%set('outstk', trim('cavgs_final_ranked'//p_master%ext))
+        call xrank_cavgs%execute( cline_rank_cavgs )
         ! end gracefully
         call simple_end('**** SIMPLE_DISTR_PRIME2D_CHUNK NORMAL STOP ****')
 
@@ -784,11 +649,9 @@ contains
             vol = trim('startvol_state01'//p_master%ext)
         endif
         ! split stack
-        if( stack_is_split(p_master%ext, p_master%nparts) )then
-            ! check that the stack partitions are of correct sizes
-            call stack_parts_of_correct_sizes(p_master%ext, qenv%parts, p_master%box)
+        if( stack_is_split(p_master%ext, qenv%parts, p_master%box) )then
         else
-            call xsplit%execute( cline )
+            call xsplit%execute(cline)
         endif
         ! prepare command lines from prototype master
         cline_volassemble = cline
@@ -890,11 +753,9 @@ contains
             call cline_volassemble%delete( trim(vol) )
         enddo
         ! SPLIT STACK
-        if( stack_is_split(p_master%ext, p_master%nparts) )then
-            ! check that the stack partitions are of correct sizes
-            call stack_parts_of_correct_sizes(p_master%ext, qenv%parts, p_master%box)
+        if( stack_is_split(p_master%ext, qenv%parts, p_master%box) )then
         else
-            call xsplit%execute( cline )
+            call xsplit%execute(cline)
         endif
         ! GENERATE STARTING MODELS & ORIENTATIONS
         ! Orientations
@@ -1191,11 +1052,9 @@ contains
             call cline_volassemble%delete( trim(vol) )
         enddo
         ! SPLIT STACK
-        if( stack_is_split(p_master%ext, p_master%nparts) )then
-            ! check that the stack partitions are of correct sizes
-            call stack_parts_of_correct_sizes(p_master%ext, qenv%parts, p_master%box)
+        if( stack_is_split(p_master%ext, qenv%parts, p_master%box) )then
         else
-            call xsplit%execute( cline )
+            call xsplit%execute(cline)
         endif
         ! GENERATE STARTING MODELS & ORIENTATIONS
         ! Orientations
@@ -1330,11 +1189,9 @@ contains
         call qenv%new(p_master)
         call cline%gen_job_descr(job_descr)
         ! split stack
-        if( stack_is_split(p_master%ext, p_master%nparts) )then
-            ! check that the stack partitions are of correct sizes
-            call stack_parts_of_correct_sizes(p_master%ext, qenv%parts, p_master%box)
+        if( stack_is_split(p_master%ext, qenv%parts, p_master%box) )then
         else
-            call xsplit%execute( cline )
+            call xsplit%execute(cline)
         endif
         ! schedule
         call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)
