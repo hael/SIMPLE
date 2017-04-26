@@ -69,7 +69,8 @@ contains
         logical,        intent(inout) :: update_res, converged
         type(oris)                    :: prime3D_oris
         real                          :: norm, corr_thresh
-        integer                       :: iptcl, s, inptcls, prev_state, istate, statecnt(p%nstates)
+        integer                       :: iptcl, s, inptcls, prev_state, istate
+        integer                       :: statecnt(p%nstates)
 
         inptcls = p%top - p%fromp + 1
 
@@ -115,8 +116,8 @@ contains
 
         ! EXTREMAL LOGICS
         if( frac_srch_space < 0.98 .or. p%extr_thresh > 0.025 )then
-            corr_thresh = b%a%extremal_bound(p%extr_thresh)
-            statecnt(:) = 0
+            corr_thresh  = b%a%extremal_bound(p%extr_thresh, convex=.false.)
+            statecnt(:)  = 0
         else
             corr_thresh = -huge(corr_thresh)
         endif
@@ -157,7 +158,7 @@ contains
         ! create the search objects, need to re-create every round because parameters are changing
         allocate( primesrch3D(p%fromp:p%top) )
         do iptcl=p%fromp,p%top
-            call primesrch3D(iptcl)%new(b%a, b%e, p, pftcc) 
+            call primesrch3D(iptcl)%new(b%a, p, pftcc) 
         end do
         ! execute the search
         call del_file(p%outfile)
@@ -211,8 +212,7 @@ contains
                     write(*,'(A,F8.2)') '>>> PARTICLE RANDOMIZATION(%):', 100.*p%extr_thresh
                     write(*,'(A,F8.2)') '>>> CORRELATION THRESHOLD:    ', corr_thresh
                 endif
-                !$omp parallel do default(shared) schedule(auto) private(iptcl)&
-                !$omp reduction(+:statecnt)
+                !$omp parallel do default(shared) schedule(auto) private(iptcl) reduction(+:statecnt)
                 do iptcl=p%fromp,p%top
                     call primesrch3D(iptcl)%exec_prime3D_srch_het(pftcc, iptcl, b%a, b%e, corr_thresh, statecnt)
                 end do
@@ -220,8 +220,8 @@ contains
                 if(corr_thresh > 0.)then
                     norm = real(sum(statecnt))
                     do istate=1,p%nstates
-                        print *, '% state ', istate, ' is ', 100.*(real(statecnt(istate))/norm)
-                        print *, 'randomized ptcls for state ', istate, ' is ', statecnt(istate)
+                        print *,'% randomized ptcls for state ',istate,' is ',100.*(real(statecnt(istate))/norm),&
+                            &'; pop=',statecnt(istate)
                     end do
                 endif
             case DEFAULT

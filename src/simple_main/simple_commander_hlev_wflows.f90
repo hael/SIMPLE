@@ -78,7 +78,7 @@ contains
         character(len=2)              :: str_state
         character(len=STDLEN)         :: oritab, vol_iter
         logical                       :: srch4symaxis
-        integer                       :: io_stat, pgrp_nr, box_sc
+        integer                       :: box_sc
         ! set cline defaults
         call cline%set('eo', 'no')
         ! make master parameters
@@ -315,7 +315,7 @@ contains
         integer, allocatable          :: labels(:,:), labels_incl(:,:), consensus(:)
         logical, allocatable          :: included(:)
         character(len=STDLEN)         :: oritab, vol1, vol2, fname
-        integer                       :: irepeat, state, iter, n_incl, cnt, iptcl, it
+        integer                       :: irepeat, state, iter, n_incl, it
         ! set cline defaults
         call cline%set('eo', 'no')
         if(nint(cline%get_rarg('nstates')) <= 1)stop 'Non-sensical NSTATES argument for heterogeinity analysis!'
@@ -355,8 +355,9 @@ contains
 
         ! GENERATE CANDIDATE SOLUTIONS
         do irepeat = 1,NREPEATS
+            write(*,'(A)')    '>>>'
             write(*,'(A,I3)') '>>> PRIME3D REPEAT ', irepeat
-            write(*,'(A)') '>>>'
+            write(*,'(A)')    '>>>'
             ! GENERATE ORIENTATIONS
             rep_os = os
             call rep_os%set_all('state', real(labels(irepeat,:)))
@@ -383,9 +384,9 @@ contains
 
         ! GENERATE CONSENSUS DOCUMENT
         oritab = trim(REPEATFBODY)//'consensus.txt'
-        write(*,'(A)') '>>>'
+        write(*,'(A)')   '>>>'
         write(*,'(A,A)') '>>> GENERATING ENSEMBLE SOLUTION: ', trim(oritab)
-        write(*,'(A)') '>>>'
+        write(*,'(A)')   '>>>'
         allocate(labels_incl(NREPEATS,n_incl), consensus(n_incl))
         do irepeat=1,NREPEATS
             labels_incl(irepeat,:) = pack(labels(irepeat,:), mask=included)

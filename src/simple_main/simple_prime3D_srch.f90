@@ -109,15 +109,13 @@ end type prime3D_srch
 contains
 
     !>  \brief  is a constructor
-    subroutine new( self, a, e, p, pftcc )
+    subroutine new( self, a, p, pftcc )
         use simple_params, only: params
         class(prime3D_srch),             intent(inout) :: self  !< instance
-        class(oris),                     intent(inout) :: a, e  !< ptcls oris, reference oris
+        class(oris),                     intent(inout) :: a     !< ptcls oris
         class(params),                   intent(in)    :: p     !< parameters
         class(polarft_corrcalc), target, intent(inout) :: pftcc !< correlator
-        real,    allocatable :: corrs(:)
-        integer, allocatable :: inds(:)
-        integer  :: alloc_stat, s, ind, thresh_ind
+        integer  :: alloc_stat, s
         ! destroy possibly pre-existing instance
         call self%kill
         ! set constants
@@ -288,7 +286,6 @@ contains
         class(prime3D_srch), intent(inout) :: self
         integer,             intent(in)    :: ipeak
         class(ori),          intent(inout) :: o2update
-        type(ori) :: o
         real      :: euls(3), x, y, rstate, ow
         integer   :: ind
         if( str_has_substr(self%refine,'shc') .and. ipeak /= 1 ) stop 'get_ori not for shc-modes; simple_prime3D_srch'
@@ -412,9 +409,8 @@ contains
         class(prime3D_srch),  intent(inout) :: self
         class(oris),          intent(inout) :: e
         integer,    optional, intent(in)    :: nnvec(self%nnn)
-        type(ran_tabu)       :: irt, rt
-        integer, allocatable :: isrch_order(:)
-        integer              :: i, istate, n, istart, iend, start, end, nprojs
+        type(ran_tabu)       :: rt
+        integer              :: i, istate, end
         ! on exit all the oris are clean and only the out-of-planes, 
         ! state & proj fields are present
         select case( self%refine )
@@ -623,7 +619,7 @@ contains
         real,                    intent(in)    :: extr_bound
         integer,                 intent(inout) :: statecnt(self%nstates)
         call self%online_allocate
-        call self%stochastic_srch_het( pftcc, iptcl, a, e, extr_bound, statecnt )
+        call self%stochastic_srch_het(pftcc, iptcl, a, e, extr_bound, statecnt)
         call self%online_destruct
         if( DEBUG ) write(*,'(A)') '>>> PRIME3D_SRCH::EXECUTED PRIME3D_HET_SRCH'
     end subroutine exec_prime3D_srch_het
@@ -888,7 +884,7 @@ contains
 
     end subroutine stochastic_srch_shc
     
-    subroutine stochastic_srch_het( self, pftcc, iptcl, a, e, extr_bound, statecnt )
+    subroutine stochastic_srch_het( self, pftcc, iptcl, a, e, extr_bound, statecnt)
         use simple_rnd, only: shcloc, irnd_uni
         class(prime3D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
@@ -897,17 +893,17 @@ contains
         real,                    intent(in)    :: extr_bound
         integer,                 intent(inout) :: statecnt(self%nstates)
         type(ori) :: o
-        integer   :: istate, iref, state, loc(1)
-        real      :: corr,mi_state, frac, corrs(self%nstates)
+        integer   :: iref, state, loc(1)
+        real      :: corr, mi_state, frac, corrs(self%nstates)
         if( nint(a%get(iptcl, 'state')) > 0 )then
             ! initialize
             call self%prep4srch(iptcl, a, e)
-            if( a%get(iptcl,'corr') < extr_bound )then
+            if(a%get(iptcl,'corr') < extr_bound)then
                 ! state randomization
                 statecnt(self%prev_state) = statecnt(self%prev_state) + 1
                 self%nrefs_eval = 1
                 state = irnd_uni(self%nstates)
-                do while( state == self%prev_state )
+                do while(state == self%prev_state .or. .not.self%state_exists(state))
                     state = irnd_uni(self%nstates)
                 enddo
                 iref = (state - 1) * self%nprojs + self%prev_proj
@@ -915,10 +911,10 @@ contains
             else
                 ! SHC
                 corrs = -1.
-                do istate=1,self%nstates
-                    if( .not. self%state_exists(istate) )cycle
-                    iref          = (istate-1)*self%nprojs + self%prev_proj 
-                    corrs(istate) = pftcc%corr_single(iref, iptcl, self%prev_roind)
+                do state=1,self%nstates
+                    if( .not.self%state_exists(state) )cycle
+                    iref = (state-1) * self%nprojs + self%prev_proj 
+                    corrs(state) = pftcc%corr_single(iref, iptcl, self%prev_roind)
                 enddo
                 self%prev_corr  = corrs(self%prev_state)
                 loc             = shcloc(self%nstates, corrs, self%prev_corr)
@@ -942,7 +938,6 @@ contains
             call a%set(iptcl, 'w', 1.)
             o = a%get_ori(iptcl)
             call self%o_peaks%set_ori(1,o)
-            !call self%prep_npeaks_oris
             call self%update_best(iptcl, a)
         else
             call a%reject(iptcl)
@@ -991,8 +986,8 @@ contains
          use simple_sym, only: sym
         class(prime3D_srch), intent(inout) :: self
         class(oris),         intent(inout) :: e
-        type(ori) :: oref,osym
-        integer :: i, isym,iref
+        type(ori) :: oref, osym
+        integer   :: isym, iref
         type(sym) :: se
         call se%new( self%pgrp )
         self%nsym = se%get_nsym()
@@ -1059,9 +1054,8 @@ contains
     end function get_srch_order
 
     !>  \brief  is for getting o_peaks
-    function get_o_peaks( self, iptcl )result( out_os )
+    function get_o_peaks( self )result( out_os )
         class(prime3D_srch), intent(inout) :: self
-        integer,             intent(in)    :: iptcl
         type(oris) :: out_os
         out_os = self%o_peaks
     end function get_o_peaks
@@ -1195,7 +1189,6 @@ contains
     !>  \brief  is a destructor
     subroutine kill( self )
         class(prime3D_srch), intent(inout) :: self !< instance
-        integer :: i, istart, istop
         if( self%exists )then
             call self%srch_common%kill
             call self%o_peaks%kill

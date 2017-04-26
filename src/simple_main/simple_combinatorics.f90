@@ -1,4 +1,5 @@
 module simple_combinatorics
+use simple_rnd
 use simple_ran_tabu, only: ran_tabu
 use simple_jiffys,   only: progress
 implicit none
@@ -13,6 +14,7 @@ contains
         real,    allocatable :: dists(:,:), rmat(:,:)
         type(ran_tabu)       :: rt
         integer :: isample, idiv, curr_pop, loc(2), nsamples, backcnt
+        call seed_rnd
         ! nsamples = 10*ndiverse*ndiverse
         ! allocate(configs_diverse(ndiverse,nptcls), configs_trial(nsamples,nptcls),&
         ! rmat(nsamples,nptcls), dists(nsamples,ndiverse), tmp(nptcls))
@@ -62,7 +64,6 @@ contains
     end function diverse_labeling
 
     subroutine shc_aggregation( nrepeats, nptcls, labels, consensus )
-        use simple_rnd,  only: irnd_uni, irnd_uni_pair
         use simple_math, only: hpsort
         integer, intent(in)    :: nrepeats, nptcls
         integer, intent(inout) :: labels(nrepeats,nptcls), consensus(nptcls)
@@ -74,6 +75,7 @@ contains
         integer :: irep, ilab, iptcl, irestart, restart_winner
         real    :: scores(nrepeats), s, naccepted, norm, score_best
         real    :: score_curr, dists(nrepeats)
+        call seed_rnd
         nlabels    = maxval(labels)
         norm       = real((nrepeats-1)*nptcls)
         score_best = 0.0

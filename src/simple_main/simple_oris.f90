@@ -2596,14 +2596,17 @@ contains
     end function find_angres_geod
 
     !>  \brief  to find the correlation bound in extremal search
-    function extremal_bound( self, thresh ) result( corr_bound )
+    function extremal_bound( self, thresh, convex ) result( corr_bound )
         use simple_math, only: hpsort
-        class(oris), intent(inout) :: self
-        real,        intent(in)    :: thresh
+        class(oris),       intent(inout) :: self
+        real,              intent(inout) :: thresh
+        logical, optional, intent(in)    :: convex
         real,    allocatable       :: corrs(:), corrs_incl(:)
         logical, allocatable       :: incl(:)
         integer :: n_incl, thresh_ind
         real    :: corr_bound
+        logical :: l_convex = .true.
+        if(present(convex))l_convex = convex
         ! grab relevant correlations
         corrs      = self%get_all('corr')
         incl       = self%included()
@@ -2611,6 +2614,12 @@ contains
         ! sort correlations & determine threshold
         n_incl     = size(corrs_incl)
         call hpsort(n_incl, corrs_incl)
+        if( .not.l_convex )then
+            ! concave down
+            thresh = EXTRINITHRESH - thresh
+            thresh = EXTRINITHRESH - 180.*thresh**8.
+            thresh = max(0., thresh)
+        endif
         thresh_ind = nint(real(n_incl) * thresh)
         corr_bound = corrs_incl(thresh_ind)
         deallocate(corrs, incl, corrs_incl)
