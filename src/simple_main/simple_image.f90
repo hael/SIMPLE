@@ -233,6 +233,7 @@ type :: image
     generic            :: fmaskv => fmaskv_1, fmaskv_2
     procedure          :: neg
     procedure          :: pad
+    procedure          :: pad_mirr
     procedure          :: resize_nn
     procedure          :: resize_bilin
     procedure          :: clip
@@ -4924,6 +4925,62 @@ contains
             endif
         endif
     end subroutine pad
+
+    !>  \brief is a constructor that pads the input image to input ldim in real space using mirroring
+    subroutine pad_mirr( self_in, self_out )
+        use simple_winfuns, only: winfuns
+        class(image),   intent(inout) :: self_in, self_out
+        integer :: starts(3), stops(3), lims(3,2)
+        integer :: i,j, i_in, j_in
+        if( .not. self_in%same_kind(self_out) )then
+            stop 'images not of same kind (xfel/em); simple_image::pad_mirr'
+        endif
+        if( self_in.eqdims.self_out )then
+            self_out = self_in
+            return
+        endif
+        if(self_in%is_3d())stop '2D images only; simple_image::pad_mirr'
+        if(self_in%ft)stop 'real space 2D images only; simple_image::pad_mirr'
+        if( self_out%ldim(1) >= self_in%ldim(1) .and. self_out%ldim(2) >= self_in%ldim(2))then
+            self_out%rmat = 0.
+            starts  = (self_out%ldim-self_in%ldim)/2+1
+            stops   = self_out%ldim-starts+1
+            ! actual image
+            self_out%rmat(starts(1):stops(1),starts(2):stops(2),1) =&
+                &self_in%rmat(:self_in%ldim(1),:self_in%ldim(2),1)
+            ! left border
+            i_in = 0
+            do i = starts(1)-1,1,-1
+                i_in = i_in + 1
+                if(i_in > self_in%ldim(1))exit
+                self_out%rmat(i,starts(2):stops(2),1) = self_in%rmat(i_in,:self_in%ldim(2),1)
+            enddo
+            ! right border
+            i_in = self_in%ldim(1)+1
+            do i=stops(1)+1,self_out%ldim(1)
+                i_in = i_in - 1
+                if(i_in < 1)exit
+                self_out%rmat(i,starts(2):stops(2),1) = self_in%rmat(i_in,:self_in%ldim(2),1)
+            enddo
+            ! upper border & corners
+            j_in = starts(2)
+            do j = starts(2)-1,1,-1
+                j_in = j_in + 1
+                if(i_in > self_in%ldim(1))exit
+                self_out%rmat(:self_out%ldim(1),j,1) = self_out%rmat(:self_out%ldim(1),j_in,1)
+            enddo
+            ! lower border & corners
+            j_in = stops(2)+1
+            do j = stops(2)+1, self_out%ldim(2)
+                j_in = j_in - 1
+                if(j_in < 1)exit
+                self_out%rmat(:self_out%ldim(1),j,1) = self_out%rmat(:self_out%ldim(1),j_in,1)
+            enddo
+            self_out%ft = .false.
+        else
+            stop 'Inconsistent dimensions; simple_image::pad_mirr'
+        endif
+    end subroutine pad_mirr
 
     !>  \brief is a constructor that clips the input image to input ldim
     subroutine clip( self_in, self_out )

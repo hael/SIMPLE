@@ -157,7 +157,7 @@ contains
         real,             optional, intent(in)    :: bfac        !< bfactor
         integer :: lims(3,2),h,k,phys(3),hh,kk,ldim(3)
         real    :: ang,tval,ddfy,aangast,spaFreqSq,hinv
-        real    :: kinv,hinvsq,kinvsq,inv_ldim(3)
+        real    :: kinv, inv_ldim(3)
         if( img%is_3d() )then
             print *, 'ldim: ', img%get_ldim()
             stop 'Only 4 2D images; ctf2img; simple_ctf'
@@ -277,14 +277,22 @@ contains
             print *, 'ldim: ', ldim
             stop 'Only 4 2D images; apply; simple_ctf'
         endif
-        call ctfimg%new(ldim, self%smpd)
-        call self%ctf2img(ctfimg, dfx, mode, dfy, angast, bfac)
         if( img%is_ft() )then
+            call ctfimg%new(ldim, self%smpd)
+            call self%ctf2img(ctfimg, dfx, mode, dfy, angast, bfac)
             call img%mul(ctfimg)
         else
-            call img%fwd_ft
-            call img%mul(ctfimg)
-            call img%bwd_ft
+            ldim_pd(1:2) = 2*ldim(1:2)
+            ldim_pd(3)   = 1
+            call ctfimg%new(ldim_pd, self%smpd)
+            call img_pd%new(ldim_pd, self%smpd)
+            call self%ctf2img(ctfimg, dfx, mode, dfy, angast, bfac)
+            call img%pad_mirr(img_pd)
+            call img_pd%fwd_ft
+            call img_pd%mul(ctfimg)
+            call img_pd%bwd_ft
+            call img_pd%clip(img)
+            call img_pd%kill
         endif
         call ctfimg%kill
     end subroutine apply

@@ -367,8 +367,8 @@ contains
         call del_file(p%outfile)      
         do batch = 1, nbatches
             ! BATCH INDICES
-            fromp = p%fromp -1 + batches(batch,1)
-            top   = p%fromp -1 + batches(batch,2)
+            fromp = p%fromp-1 + batches(batch,1)
+            top   = p%fromp-1 + batches(batch,2)
             ! PREP BATCH
             allocate(pftccs(fromp:top), pcont3Dsrchs(fromp:top),&
                 &batch_imgs(fromp:top), stat=alloc_stat)
