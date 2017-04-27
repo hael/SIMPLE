@@ -154,36 +154,4 @@ contains
         end select
     end function get_native_var
 
-    ! subroutine prep4makecavgs_at_native_smpd( self, p_master, nparts, oritab, refs, outfile, cline, cline_makecavgs )
-    !     use simple_commander_distr, only: split_commander
-    !     use simple_filehandling,    only: del_files
-    !     class(scaler)         :: self
-    !     class(params)         :: p_master
-    !     integer               :: nparts
-    !     character(len=*)      :: oritab, refs, outfile
-    !     class(cmdline)        :: cline, cline_makecavgs
-    !     type(split_commander) :: xsplit
-    !     write(*,'(A)') '>>>'
-    !     write(*,'(A)') '>>> GENERATING CLASS AVERAGES AT NATIVE SAMPLING'
-    !     write(*,'(A)') '>>>'
-    !     ! re-split stack
-    !     call del_files('stack_part', p_master%nparts, ext=p_master%ext)
-    !     call cline%set('stk',        trim(self%native_stk))
-    !     call cline%set('smpd',       self%native_smpd)
-    !     call cline%set('nparts',     real(nparts))
-    !     call xsplit%execute(cline)
-    !     ! pepare makecavgs command line
-    !     cline_makecavgs = cline
-    !     call cline_makecavgs%delete('ncls')
-    !     call cline_makecavgs%delete('chunksz')
-    !     call cline_makecavgs%set('prg',     'makecavgs')
-    !     call cline_makecavgs%set('stk',     trim(self%native_stk))
-    !     call cline_makecavgs%set('smpd',    self%native_smpd)
-    !     call cline_makecavgs%set('msk',     self%native_msk)
-    !     call cline_makecavgs%set('oritab',  trim(oritab))
-    !     call cline_makecavgs%set('mul',     1./self%scale)
-    !     call cline_makecavgs%set('refs',    trim(refs))
-    !     call cline_makecavgs%set('outfile', trim(outfile))
-    ! end subroutine prep4makecavgs_at_native_smpd
-
 end module simple_scaler

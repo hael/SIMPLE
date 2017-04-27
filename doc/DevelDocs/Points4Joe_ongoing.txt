@@ -1,0 +1,41 @@
+The gray bar color must be replaced
+The project history tab unfolds but doesn't fold back if I click a second time (shoudl fold/unfold, right?)
+
+Standard workflow
+Extract Particles description: coordinates misspelled
+
+New Job Tab
+The Workflow selector needs a margin on top
+
+Import
+Does the Directory, File Suffix & Output Filename fields really need info buttons, consider removing
+The right margin is not correctly displayed, there is a line that shouldn't be there
+Why is there an Optional Argument -> Output Filename ?
+
+Motion Correction and CTF Estimation
+Same margin issue on the right-hadn side
+Movie List Info button should read: Text file containing a list of movies. Usually produced on import
+Sampling Distance info button, should read: Sampling distance of images in A/pixel
+Amplitude Contrast info button, shoudl read: Fraction of the amplitude contrast used for fitting CTF
+Should probably have a default value for the amplitude contrast as 0.1 so that folks don't give percent
+
+
+Info button behavior
+The info string should be displayed in the vicinity of the input field. The position seems arbitrary and sometimes goes outside the field of view
+
+Extract Particles
+With the new structure there should be no need to give any info att all. Just hit the botton and then display something like X partciles extracted to file Y.
+When I cancel here I get back to Project History, not to the workflow
+
+Particle Stack File
+Info tag should be: Stack file containing extracted particles. Usually produced with extract
+
+Apply CTF Correction
+Info tag should be: Indicates CTF status of input images and mode of correction, yes=images have CTF & do Wiener restoration, no=turn off CTF correction, flip=images have been phase-flipped & do Wiener restoration
+
+Create New Project
+Expand the Project Name and Project Folder boxes so that they fill out the box
+
+
+
+

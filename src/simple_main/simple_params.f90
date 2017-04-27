@@ -267,7 +267,7 @@ type :: params
     real    :: batchfrac=1.0
     real    :: bfac=200
     real    :: bfacerr=50.
-    real    :: cenlp=50.
+    real    :: cenlp=30.
     real    :: cs=2.7
     real    :: ctfreslim=8.
     real    :: dcrit_rel=0.5

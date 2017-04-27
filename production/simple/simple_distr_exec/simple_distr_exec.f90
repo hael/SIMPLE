@@ -30,8 +30,7 @@ type(ctffind_distr_commander)             :: xctffind_distr
 type(pick_distr_commander)                :: xpick_distr
 ! PRIME2D
 type(makecavgs_distr_commander)           :: xmakecavgs_distr
-type(prime2D_distr_commander)             :: xprime2D_distr
-type(prime2D_chunk_distr_commander)       :: xprime2D_chunk_distr
+type(prime2D_autoscale_commander)         :: xprime2D_distr
 ! PRIME3D
 type(prime3D_init_distr_commander)        :: xprime3D_init_distr
 type(prime3D_distr_commander)             :: xprime3D_distr
@@ -371,9 +370,8 @@ select case(prg)
         keys_optional(19) = 'maxits'
         keys_optional(20) = 'filwidth'
         keys_optional(21) = 'center'
-        keys_optional(22) = 'mul'
-        keys_optional(23) = 'autoscale'
-        keys_optional(24) = 'oritab3D'
+        keys_optional(22) = 'autoscale'
+        keys_optional(23) = 'oritab3D'
         ! documentation
         if( describe ) call print_doc_prime2D
         ! parse command line
@@ -383,7 +381,7 @@ select case(prg)
         ! else
         !     call cline%parse( keys_required(:7), keys_optional(:19) )
         ! endif
-        call cline%parse( keys_required(:5), keys_optional(:24) )
+        call cline%parse( keys_required(:5), keys_optional(:23) )
         ! set defaults
         if( .not. cline%defined('lpstart') ) call cline%set('lpstart',  15.)
         if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',    8.)
@@ -396,13 +394,14 @@ select case(prg)
         if( cline%defined('nparts') .and. cline%defined('chunksz') )then
             stop 'nparts and chunksz cannot simultaneously be part of command line'
         else if(cline%defined('nparts') )then
-            call xprime2D_distr%execute(cline)
+            ! ok
         else if( cline%defined('chunksz') )then
-            call xprime2D_chunk_distr%execute(cline)
+            ! ok
         else
             stop 'eiter nparts or chunksz need to be part of command line'
         endif
-
+        call xprime2D_distr%execute(cline)
+        
     ! PRIME3D
 
     case('prime3D_init')
@@ -636,7 +635,7 @@ select case(prg)
         if(cline%defined('compare'))stop 'Distributed execution of SYMSRCH does not support the COMPARE argument'
         call cline%set('nptcls', 150.)                                 ! 50 projections 4 symsrch
         if(.not.cline%defined('nspace'))call cline%set('nspace', 150.) ! 50 projections 4 symsrch
-        if(.not.cline%defined('cenlp')) call cline%set('cenlp',   50.)
+        if(.not.cline%defined('cenlp')) call cline%set('cenlp',   30.)
         ! execute
         call xsymsrch_distr%execute( cline )
     ! TIME-SERIES DISTRIBUTED WORKFLOWS

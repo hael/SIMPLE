@@ -353,14 +353,12 @@ contains
         character(len=32),     parameter :: CAVGS_ITERFBODY = 'cavgs_iter'
         ! commanders
         type(check2D_conv_commander)    :: xcheck2D_conv
-        type(rank_cavgs_commander)      :: xrank_cavgs
         type(merge_algndocs_commander)  :: xmerge_algndocs
         type(split_commander)           :: xsplit
         type(makecavgs_distr_commander) :: xmakecavgs
         ! command lines
         type(cmdline)         :: cline_check2D_conv
         type(cmdline)         :: cline_cavgassemble
-        type(cmdline)         :: cline_rank_cavgs
         type(cmdline)         :: cline_merge_algndocs
         type(cmdline)         :: cline_makecavgs
         ! other variables
@@ -391,7 +389,6 @@ contains
         ! prepare command lines from prototype master
         cline_check2D_conv   = cline
         cline_cavgassemble   = cline
-        cline_rank_cavgs     = cline
         cline_merge_algndocs = cline
         cline_makecavgs      = cline
 
@@ -402,6 +399,9 @@ contains
         call cline_check2D_conv%set('box', real(p_master%box))
         call cline_check2D_conv%set('nptcls', real(p_master%nptcls))
         call cline_cavgassemble%set('prg', 'cavgassemble')
+        call cline_makecavgs%set('prg',   'makecavgs')
+            
+
         if( .not. cline%defined('refs') .and. job_descr%isthere('automsk') ) call job_descr%delete('automsk')
 
         ! split stack
@@ -412,7 +412,12 @@ contains
         ! execute initialiser
         if( .not. cline%defined('refs') )then
             p_master%refs = 'start2Drefs'//p_master%ext
-            call random_selection_from_imgfile(p_master%stk, p_master%refs, p_master%ncls, p_master%smpd)
+            if( cline%defined('oritab') )then
+                call cline_makecavgs%set('refs', p_master%refs)
+                call xmakecavgs%execute(cline_makecavgs)
+            else
+                call random_selection_from_imgfile(p_master%stk, p_master%refs, p_master%ncls, p_master%smpd)
+            endif
         endif
         if( cline%defined('extr_thresh') )then
             ! all is well
@@ -445,7 +450,7 @@ contains
             ! schedule
             call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=ALGNFBODY)
             ! merge orientation documents
-            oritab=trim(ITERFBODY)// trim(str_iter) //'.txt'
+            oritab = trim(ITERFBODY) // trim(str_iter) //'.txt'
             call cline_merge_algndocs%set('outfile', trim(oritab))
             call xmerge_algndocs%execute(cline_merge_algndocs)
             ! assemble class averages
@@ -474,11 +479,6 @@ contains
         call qsys_cleanup(p_master)
         call rename(trim(oritab), 'prime2Ddoc_final.txt' )
         call rename(trim(refs),   'cavgs_final'//p_master%ext)
-        ! ranking
-        call cline_rank_cavgs%set('oritab', 'prime2Ddoc_final.txt')
-        call cline_rank_cavgs%set('stk',    'cavgs_final'//p_master%ext)
-        call cline_rank_cavgs%set('outstk', trim('cavgs_final_ranked'//p_master%ext))
-        call xrank_cavgs%execute( cline_rank_cavgs )
         ! end gracefully
         call simple_end('**** SIMPLE_DISTR_PRIME2D NORMAL STOP ****')
     end subroutine exec_prime2D_distr
@@ -495,16 +495,14 @@ contains
         use simple_strings,           only: str_has_substr
         class(prime2D_chunk_distr_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
-        character(len=STDLEN), parameter   :: CAVGNAMES     = 'cavgs_final.txt'
+        character(len=STDLEN), parameter   :: CAVGNAMES       = 'cavgs_final.txt'
+        character(len=32),     parameter   :: ITERFBODY       = 'prime2Ddoc_'
+        character(len=32),     parameter   :: CAVGS_ITERFBODY = 'cavgs_iter'
         character(len=STDLEN), allocatable :: final_docs(:), final_cavgs(:)
         character(len=STDLEN)              :: chunktag
         type(split_commander)              :: xsplit
-        type(makecavgs_distr_commander)    :: xmakecavgs
         type(stack_commander)              :: xstack
-        type(rank_cavgs_commander)         :: xrank_cavgs
         type(cmdline)                      :: cline_stack
-        type(cmdline)                      :: cline_makecavgs
-        type(cmdline)                      :: cline_rank_cavgs
         type(qsys_env)                     :: qenv
         type(params)                       :: p_master
         type(chash), allocatable           :: part_params(:)
@@ -565,8 +563,8 @@ contains
         ishift = 0
         do ipart=1,p_master%nparts
             chunktag = 'chunk'//int2str_pad(ipart,numlen)
-            final_cavgs(ipart) = sys_get_last_fname(trim(chunktag)//'cavgs_iter', p_master%ext)
-            final_docs(ipart)  = sys_get_last_fname(trim(chunktag)//'prime2Ddoc_', 'txt')
+            final_cavgs(ipart) = sys_get_last_fname(trim(chunktag)//CAVGS_ITERFBODY, p_master%ext)
+            final_docs(ipart)  = sys_get_last_fname(trim(chunktag)//ITERFBODY, 'txt')
             if( ipart > 1 )then
                 ! the class indices need to be shifted by p%ncls
                 ishift = ishift + p_master%ncls
@@ -589,11 +587,6 @@ contains
         call del_file(CAVGNAMES)
         call sys_del_files('chunk', '.txt')
         call sys_del_files('chunk', p_master%ext)
-        ! ranking
-        call cline_rank_cavgs%set('oritab', 'prime2Ddoc_final.txt')
-        call cline_rank_cavgs%set('stk',    'cavgs_final'//p_master%ext)
-        call cline_rank_cavgs%set('outstk', trim('cavgs_final_ranked'//p_master%ext))
-        call xrank_cavgs%execute( cline_rank_cavgs )
         ! end gracefully
         call simple_end('**** SIMPLE_DISTR_PRIME2D_CHUNK NORMAL STOP ****')
 

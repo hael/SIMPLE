@@ -675,11 +675,10 @@ select case(prg)
         keys_optional(15) = 'startit'
         keys_optional(16) = 'maxits'
         keys_optional(17) = 'center'
-        keys_optional(18) = 'mul'
-        keys_optional(19) = 'oritab3D'
+        keys_optional(18) = 'oritab3D'
         ! parse command line
         if( describe ) call print_doc_prime2D
-        call cline%parse(keys_required(:5), keys_optional(:19))
+        call cline%parse(keys_required(:5), keys_optional(:18))
         ! set defaults
         if( .not. cline%defined('lpstart') ) call cline%set('lpstart',  15.)
         if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',    8.)
@@ -1143,7 +1142,7 @@ select case(prg)
         else
             call cline%set('nptcls', cline%get_rarg('nspace'))
         endif
-        if( .not. cline%defined('cenlp')   ) call cline%set('cenlp',    50.)
+        if( .not. cline%defined('cenlp')   ) call cline%set('cenlp',    30.)
         if( .not. cline%defined('compare') ) call cline%set('compare', 'no')
         ! execute
         call xsymsrch%execute(cline)

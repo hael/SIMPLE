@@ -19,10 +19,15 @@ use simple_filehandling           ! use all in there
 use simple_jiffys                 ! use all in there
 implicit none
 
+public :: prime2D_autoscale_commander
 public :: ini3D_from_cavgs_commander
 public :: het_ensemble_commander
 private
 
+type, extends(commander_base) :: prime2D_autoscale_commander
+  contains
+    procedure :: execute      => exec_prime2D_autoscale
+end type prime2D_autoscale_commander
 type, extends(commander_base) :: ini3D_from_cavgs_commander
   contains
     procedure :: execute      => exec_ini3D_from_cavgs
@@ -33,6 +38,103 @@ type, extends(commander_base) :: het_ensemble_commander
 end type het_ensemble_commander
 
 contains
+
+    ! PRIME2D WITH TWO-STAGE AUTO-SCALING
+
+    subroutine exec_prime2D_autoscale( self, cline )
+        use simple_scaler,            only: scaler
+        use simple_oris,              only: oris
+        use simple_commander_prime2D, only: rank_cavgs_commander
+        class(prime2D_autoscale_commander), intent(inout) :: self
+        class(cmdline),                     intent(inout) :: cline
+        ! constants
+        logical,           parameter :: DEBUG           = .false.
+        integer,           parameter :: MAXITS_STAGE1   = 10
+        character(len=32), parameter :: CAVGS_ITERFBODY = 'cavgs_iter'
+        character(len=32), parameter :: STKSCALEDBODY   = 'stk_sc_prime2D'
+        character(len=32), parameter :: FINALDOC        = 'prime2Ddoc_final.txt'
+        ! commanders
+        type(makecavgs_distr_commander)              :: xmakecavgs
+        type(prime2D_distr_commander),       target  :: xprime2D_distr
+        type(prime2D_chunk_distr_commander), target  :: xprime2D_chunk_distr
+        class(commander_base),               pointer :: xprime2D => null() 
+        type(rank_cavgs_commander)                   :: xrank_cavgs
+        ! command lines
+        type(cmdline) :: cline_prime2D_stage1
+        type(cmdline) :: cline_prime2D_stage2
+        type(cmdline) :: cline_makecavgs
+        type(cmdline) :: cline_rank_cavgs
+        ! other variables
+        type(oris)            :: os
+        type(scaler)          :: scobj
+        type(params)          :: p_master
+        character(len=STDLEN) :: refs
+        real                  :: scale_stage1, scale_stage2
+        integer               :: nparts
+        ! make master parameters
+        p_master = params(cline, checkdistr=.false.)
+        ! set pointer to the right commander
+        if( cline%defined('chunksz') )then
+            nparts = nint(real(p_master%nptcls)/real(p_master%chunksz))
+            xprime2D => xprime2D_chunk_distr
+        else
+            nparts = p_master%nparts
+            xprime2D => xprime2D_distr
+        endif
+        if( p_master%l_autoscale )then
+            ! auto-scaling prep (cline is modified by scobj%init)
+            call scobj%init(p_master, cline, p_master%smpd_targets2D(1), STKSCALEDBODY)
+            scale_stage1 = scobj%get_scaled_var('scale')
+            ! scale images
+            call scobj%scale_exec
+            ! execute stage 1
+            cline_prime2D_stage1 = cline
+            call cline_prime2D_stage1%set('maxits', real(MAXITS_STAGE1))
+            call xprime2D%execute(cline_prime2D_stage1)
+            ! prepare stage 2 input -- re-scale 
+            call scobj%uninit(cline) ! puts back the old command line
+            call scobj%init(p_master, cline, p_master%smpd_targets2D(2), STKSCALEDBODY)
+            scale_stage2 = scobj%get_scaled_var('scale')
+            call scobj%scale_exec
+            ! prepare stage 2 input -- shift modulation
+            call os%new(p_master%nptcls)
+            call os%read(FINALDOC)
+            call os%mul_shifts(scale_stage2/scale_stage1)
+            call os%write(FINALDOC)
+            ! prepare stage 2 input -- command line
+            cline_prime2D_stage2 = cline
+            call cline_prime2D_stage2%delete('deftab')
+            call cline_prime2D_stage2%set('oritab',  trim(FINALDOC))
+            call cline_prime2D_stage2%set('startit', real(MAXITS_STAGE1 + 1))
+            call xprime2D%execute(cline_prime2D_stage2)
+            ! re-generate class averages at native sampling
+            call scobj%uninit(cline) ! puts back the old command line
+            call os%read(FINALDOC)
+            call os%mul_shifts(1./scale_stage2)
+            call os%write(FINALDOC)
+            cline_makecavgs = cline
+            call cline_makecavgs%delete('ncls')
+            call cline_makecavgs%delete('chunksz')
+            call cline_makecavgs%set('prg',   'makecavgs')
+            call cline_makecavgs%set('oritab', FINALDOC)
+            call cline_makecavgs%set('nparts', real(nparts))
+            call cline_makecavgs%set('refs',   'cavgs_final'//p_master%ext)
+            call xmakecavgs%execute(cline_makecavgs)
+            call del_file(trim(STKSCALEDBODY)//p_master%ext)
+        else
+            call xprime2D%execute(cline)
+        endif
+        ! ranking
+        call cline_rank_cavgs%set('oritab', FINALDOC)
+        call cline_rank_cavgs%set('stk',    'cavgs_final'//p_master%ext)
+        call cline_rank_cavgs%set('outstk', 'cavgs_final_ranked'//p_master%ext)
+        call xrank_cavgs%execute( cline_rank_cavgs )
+        ! cleanup
+        call del_file('prime2D_startdoc.txt')
+        call del_file('start2Drefs'//p_master%ext)
+        ! end gracefully
+        call simple_end('**** SIMPLE_PRIME2D NORMAL STOP ****')
+    end subroutine exec_prime2D_autoscale
 
     ! GENERATE INITIAL 3D MODEL FROM CLASS AVERAGES
 
@@ -68,21 +170,16 @@ contains
         type(cmdline)                 :: cline_projvol
         ! other variables
         type(scaler)                  :: scobj
-        type(qsys_env)                :: qenv
         type(params)                  :: p_master
         type(oris)                    :: os
-        real                          :: iter, scale, smpd_sc, msk_sc, native_msk
-        real                          :: native_smpd, lpstop, smpd_target
+        real                          :: iter, lpstop, smpd_target
         character(len=2)              :: str_state
-        character(len=STDLEN)         :: oritab, vol_iter
+        character(len=STDLEN)         :: vol_iter, oritab
         logical                       :: srch4symaxis
-        integer                       :: box_sc
         ! set cline defaults
         call cline%set('eo', 'no')
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
-        ! setup the environment for distributed execution
-        call qenv%new(p_master)
         ! set global state string
         str_state = int2str_pad(STATE,2)
         ! delete possibly pre-existing stack_parts
@@ -159,7 +256,7 @@ contains
         call cline_projvol%delete('stk')
         call scobj%update_smpd_msk(cline_projvol, 'native')
         ! scale class averages
-        call scobj%scale_exec()
+        call scobj%scale_exec
         ! execute commanders
         write(*,'(A)') '>>>'
         write(*,'(A)') '>>> INITIAL 3D MODEL GENERATION WITH PRIME3D'

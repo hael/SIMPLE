@@ -692,7 +692,7 @@ contains
             end do
         endif
         ! end gracefully
-        call simple_end('**** SIMPLE_STACK NORMAL STOP ****')
+        call simple_end('**** SIMPLE_STACK NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_stack
 
     subroutine exec_stackops( self, cline )

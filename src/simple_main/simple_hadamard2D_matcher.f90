@@ -61,7 +61,6 @@ contains
                     ! we need to make references
                     if( cline%defined('oritab') )then
                         ! we make class averages
-                        if( p%mul > 1. ) call b%a%mul_shifts(p%mul)
                         call prime2D_assemble_sums(b, p)
                     else
                         ! we randomly select particle images as initial references
