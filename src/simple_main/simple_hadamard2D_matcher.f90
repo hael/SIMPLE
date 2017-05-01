@@ -34,11 +34,11 @@ contains
         class(cmdline), intent(inout) :: cline     
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: converged
-        type(ori)            :: orientation
-        logical, allocatable :: srch_shifts(:)   ! per-particle shift flags
         integer, allocatable :: ptcls2process(:) ! ptcl inds 2 process
-        integer :: iptcl, fnr, icls, io_stat, inorm, cands(3), pop, iproc, nproc
-        real    :: corr_thresh, frac_srch_space
+        logical   :: srch_shifts(p%fromp:p%top)  ! per-particle shift flags
+        integer   :: iptcl, fnr, icls, io_stat, inorm, cands(3), pop, iproc, nproc
+        real      :: corr_thresh, frac_srch_space
+        type(ori) :: orientation
         
         ! SET FRACTION OF SEARCH SPACE
         frac_srch_space = b%a%get_avg('frac')
@@ -49,9 +49,9 @@ contains
         else
             call b%ppconv%zero_joint_distr_olap
         endif
-        srch_shifts   = b%ppconv%gen_shift_larr()
+        call b%ppconv%set_shift_larr(srch_shifts)
         ptcls2process = b%ppconv%identify_ptcls2process()
-        nproc         = size(ptcls2process)
+        nproc = size(ptcls2process)
         write(*,'(A,F8.2)') '>>> NON-CONVERGED PARTICLES(%):', 100.*(real(nproc) / real(p%top - p%fromp + 1))
 
         ! PREP REFERENCES

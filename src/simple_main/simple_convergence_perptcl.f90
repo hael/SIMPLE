@@ -21,15 +21,14 @@ type convergence_perptcl
     real, allocatable       :: mi_joint(:)      !< joint distribution overlaps
   contains
     ! updater (learning rate above)
-    procedure          :: update_joint_distr_olap
-    procedure          :: zero_joint_distr_olap
+    procedure :: update_joint_distr_olap
+    procedure :: zero_joint_distr_olap
     ! generators
-    procedure          :: gen_shift_larr
-    procedure, private :: gen_larr
-    procedure          :: identify_ptcls2process
+    procedure :: set_shift_larr
+    procedure :: identify_ptcls2process
     ! I/O
-    procedure          :: write
-    procedure          :: read
+    procedure :: write
+    procedure :: read
 end type convergence_perptcl
 
 interface convergence_perptcl
@@ -66,35 +65,36 @@ contains
         self%mi_joint = 0.
     end subroutine zero_joint_distr_olap
 
-    function gen_shift_larr( self ) result( larr )
-        class(convergence_perptcl), intent(in) :: self
-        logical, allocatable :: larr(:)
-        larr = self%gen_larr(FRAC_SH_LIM_PPTCL)
-    end function gen_shift_larr
-
-    function gen_larr( self, lim ) result( larr )
-        class(convergence_perptcl), intent(in) :: self
-        real,                       intent(in) :: lim
-        logical, allocatable :: larr(:)
-        integer :: alloc_stat
-        allocate(larr(self%fromto(1):self%fromto(2)), stat=alloc_stat)
-        call alloc_err("In: comple_convergence_perptcl :: gen_larr", alloc_stat)
-        where( self%mi_joint >= lim )
-            larr = .true.
-        else where
-            larr = .false.
-        end where
-    end function gen_larr
+    subroutine set_shift_larr( self, shift_larr )
+        class(convergence_perptcl), intent(in)  :: self
+        logical,                    intent(out) :: shift_larr(self%fromto(1):self%fromto(2))
+        integer :: iptcl
+        do iptcl=self%fromto(1),self%fromto(2)
+            if( self%mi_joint(iptcl) >= FRAC_SH_LIM_PPTCL )then
+                shift_larr(iptcl) = .true.
+            else
+                shift_larr(iptcl) = .false.
+            endif
+        end do
+    end subroutine set_shift_larr
 
     function identify_ptcls2process( self ) result( inds )
         class(convergence_perptcl), intent(in) :: self
         logical, allocatable :: larr(:)
         integer, allocatable :: inds(:)
         integer :: ninds, iptcl, cnt, alloc_stat
-        larr = self%gen_larr(MI_JOINT_LIM_2D)
+        allocate(larr(self%fromto(1):self%fromto(2)), stat=alloc_stat)
+        call alloc_err("In: comple_convergence_perptcl :: identify_ptcls2process, 1", alloc_stat)
+        do iptcl=self%fromto(1),self%fromto(2)
+            if( self%mi_joint(iptcl) >= MI_JOINT_LIM_2D )then
+                larr(iptcl) = .true.
+            else
+                larr(iptcl) = .false.
+            endif
+        end do
         ninds = count(.not. larr)
         allocate( inds(ninds), stat=alloc_stat )
-        call alloc_err("In: comple_convergence_perptcl :: identify_ptcls2process", alloc_stat)
+        call alloc_err("In: comple_convergence_perptcl :: identify_ptcls2process, 2", alloc_stat)
         cnt = 0
         do iptcl=self%fromto(1),self%fromto(2)
             if( .not. larr(iptcl) )then
