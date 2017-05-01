@@ -1,20 +1,13 @@
 module simple_convergence
-use simple_oris,    only: oris
-use simple_params,  only: params
-use simple_cmdline, only: cmdline
-use simple_defs     ! all defs
+use simple_oris,     only: oris
+use simple_params,   only: params
+use simple_cmdline,  only: cmdline
+use simple_defs      ! use all in there
+use simple_defs_conv ! use all in there
 implicit none
 
-real, parameter :: MI_CLASS_LIM_3D  = 0.80
-real, parameter :: MI_CLASS_LIM_2D  = 0.98
-real, parameter :: MI_STATE_LIM     = 0.98
-real, parameter :: MI_INPL_LIM      = 0.98
-real, parameter :: FRAC_LIM         = 98.0
-real, parameter :: MSK_FRAC         = 0.06
-real, parameter :: MINSHIFT         = 2.0
-real, parameter :: MAXSHIFT         = 6.0
-real, parameter :: HET_MI_STATE_LIM = 0.99
-real, parameter :: HET_FRAC_LIM     = 99.0
+public :: convergence
+private
 
 type convergence
     private

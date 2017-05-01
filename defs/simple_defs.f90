@@ -1,14 +1,3 @@
-!*******************************************************************************
-!                                                                              !
-! Name:                                                                        !
-! simple_defs - basic definitions used in all modules.                         !
-!                                                                              !
-! Description:                                                                 !
-! simple_defs provides basic definitions for the types and declarations        !
-! and all the modules used through out the code. It is based on numerical      !
-! nrtypes.f90 module.                                                          !
-!*******************************************************************************
-!
 module simple_defs
 use, intrinsic :: iso_c_binding
 implicit none
@@ -65,7 +54,6 @@ integer, parameter :: SPECWMINPOP=2000
 
 ! constants that control search and convergence
 real,    parameter :: FRAC_SH_LIM     = 80.0 ! at what frac to turn on the shift search
-real,    parameter :: SHW_FRAC_LIM    = 50.  ! at what frac to turn on shell-weights
 real,    parameter :: EXTRINITHRESH   = 0.5
 real,    parameter :: LP2SMPDFAC      = 0.4125
 integer, parameter :: LPLIM1ITERBOUND = 5

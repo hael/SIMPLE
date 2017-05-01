@@ -1,6 +1,7 @@
 need to parallelise the volassemble of the different states for het_ensemble
 need to have another go at the picker
 weighted multi-resolution state sorting by fitting B-factors?
+per-particle convergence for accelerated analysis?
 
 # unidoc points
 everything written to cwd

@@ -34,7 +34,7 @@ type prime2D_srch
     real                 :: best_corr     = -1.  !< best corr found by search
     real                 :: specscore     = 0.   !< spectral score
     integer, allocatable :: srch_order(:)        !< stochastic search order
-    logical              :: doshift = .true.     !< origin shift search indicator
+    ! logical              :: doshift = .true.     !< origin shift search indicator
     logical              :: exists  = .false.    !< 2 indicate existence
   contains
     ! CONSTRUCTOR
@@ -74,7 +74,7 @@ contains
         self%nrots       =  round2even(twopi*real(p%ring2))
         self%nrefs_eval  =  0
         self%trs         =  p%trs
-        self%doshift     =  p%doshift
+        ! self%doshift     =  p%doshift
         self%nthr        =  p%nthr
         self%fromp       =  p%fromp
         self%top         =  p%top
@@ -141,11 +141,9 @@ contains
         ! set parameters
         x = self%prev_shvec(1)
         y = self%prev_shvec(2)
-        if( self%doshift )then
-            ! shifts must be obtained by vector addition
-            x = x + self%best_shvec(1)
-            y = y + self%best_shvec(2)
-        endif
+        ! shifts must be obtained by vector addition
+        x = x + self%best_shvec(1)
+        y = y + self%best_shvec(2)
         call a%set(iptcl, 'x',         x)
         call a%set(iptcl, 'y',         y)
         call a%set(iptcl, 'class',     real(class))
@@ -205,11 +203,12 @@ contains
     ! SEARCH ROUTINES
 
     !>  \brief a master prime search routine
-    subroutine exec_prime2D_srch( self, pftcc, iptcl, a, greedy, extr_bound )
+    subroutine exec_prime2D_srch( self, pftcc, iptcl, a, doshift, greedy, extr_bound )
         class(prime2D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: iptcl
         class(oris),             intent(inout) :: a
+        logical,                 intent(in)    :: doshift
         logical, optional,       intent(in)    :: greedy
         real,    optional,       intent(in)    :: extr_bound
         real    :: lims(2,2)
@@ -217,21 +216,22 @@ contains
         ggreedy = .false.
         if( present(greedy) ) ggreedy = greedy
         if( ggreedy )then
-            call self%greedy_srch(pftcc, iptcl, a)
+            call self%greedy_srch(pftcc, iptcl, a, doshift)
         else
-            call self%stochastic_srch(pftcc, iptcl, a, extr_bound)
+            call self%stochastic_srch(pftcc, iptcl, a, doshift, extr_bound)
         endif
         ! memory management (important for ompenMP distr over arrays of prime2D_srch objects)
-        deallocate(self%srch_order)
+        if( allocated(self%srch_order) ) deallocate(self%srch_order)
         if( DEBUG ) write(*,'(A)') '>>> PRIME2D_SRCH::EXECUTED PRIME2D_SRCH'
     end subroutine exec_prime2D_srch
 
     !>  \brief  executes stochastic rotational search
-    subroutine greedy_srch( self, pftcc, iptcl, a )
+    subroutine greedy_srch( self, pftcc, iptcl, a, doshift )
         class(prime2D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: iptcl
         class(oris),             intent(inout) :: a
+        logical,                 intent(in)    :: doshift
         integer :: iref,loc(1),inpl_ind
         real    :: corrs(self%nrots),inpl_corr,corr
         if( nint(a%get(iptcl,'state')) > 0 )then
@@ -250,7 +250,7 @@ contains
                 endif    
             end do
             self%nrefs_eval = self%nrefs
-            call self%shift_srch(iptcl)
+            call self%shift_srch(iptcl, doshift)
             call self%update_best(iptcl, a)
         else
             call a%reject(iptcl)
@@ -259,12 +259,13 @@ contains
     end subroutine greedy_srch
 
     !>  \brief  executes stochastic rotational search
-    subroutine stochastic_srch( self, pftcc, iptcl, a, extr_bound )
+    subroutine stochastic_srch( self, pftcc, iptcl, a, doshift, extr_bound )
         use simple_rnd,  only: shcloc
         class(prime2D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: iptcl
         class(oris),             intent(inout) :: a
+        logical,                 intent(in)    :: doshift
         real, optional,          intent(in)    :: extr_bound
         integer :: iref,loc(1),isample,inpl_ind
         real    :: corrs(self%nrots),inpl_corr,corr
@@ -314,7 +315,7 @@ contains
                 self%best_corr  = self%prev_corr
                 self%best_rot   = self%prev_rot
             endif
-            call self%shift_srch(iptcl)
+            call self%shift_srch(iptcl, doshift)
             call self%update_best(iptcl, a)
         else
             call a%reject(iptcl)
@@ -323,13 +324,14 @@ contains
     end subroutine stochastic_srch
 
     !>  \brief  executes nearest-neighbor rotational search
-    subroutine nn_srch( self, pftcc, iptcl, a, nnmat )
+    subroutine nn_srch( self, pftcc, iptcl, a, nnmat, doshift )
         use simple_rnd,  only: shcloc
         class(prime2D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: iptcl
         class(oris),             intent(inout) :: a
         integer,                 intent(in)    :: nnmat(self%nrefs,self%nnn)
+        logical,                 intent(in)    :: doshift
         real, allocatable :: frc(:)
         integer           :: iref,loc(1),inpl_ind,inn
         real              :: corrs(self%nrots),inpl_corr,corr
@@ -360,7 +362,7 @@ contains
                 endif    
             end do
             self%nrefs_eval = self%nrefs
-            call self%shift_srch(iptcl)
+            call self%shift_srch(iptcl, doshift)
             call self%update_best(iptcl, a)
         else
             call a%reject(iptcl)
@@ -369,12 +371,13 @@ contains
     end subroutine nn_srch
 
     !>  \brief  executes the in-plane search over one reference
-    subroutine shift_srch( self, iptcl )
+    subroutine shift_srch( self, iptcl, doshift )
         class(prime2D_srch), intent(inout) :: self
         integer,             intent(in)    :: iptcl
+        logical,             intent(in)    :: doshift
         real :: cxy(3), corr_before, corr_after
         self%best_shvec = [0.,0.]
-        if( self%doshift )then
+        if( doshift )then
             corr_before = self%best_corr
             call self%shsrch_obj%set_indices(self%best_class, iptcl, self%best_rot)
             cxy = self%shsrch_obj%minimize()

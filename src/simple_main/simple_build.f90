@@ -13,23 +13,24 @@
 !
 module simple_build
 use simple_defs
-use simple_cmdline,          only: cmdline
-use simple_comlin,           only: comlin
-use simple_image,            only: image
-use simple_centre_clust,     only: centre_clust
-use simple_oris,             only: oris
-use simple_pair_dtab,        only: pair_dtab
-use simple_ppca,             only: ppca
-use simple_reconstructor,    only: reconstructor
-use simple_eo_reconstructor, only: eo_reconstructor
-use simple_params,           only: params
-use simple_sym,              only: sym
-use simple_opt_spec,         only: opt_spec
-use simple_convergence,      only: convergence
-use simple_jiffys,           only: alloc_err
-use simple_projector,        only: projector
-use simple_filehandling      ! use all in there
-use simple_kbinterpol        ! use all in there
+use simple_cmdline,             only: cmdline
+use simple_comlin,              only: comlin
+use simple_image,               only: image
+use simple_centre_clust,        only: centre_clust
+use simple_oris,                only: oris
+use simple_pair_dtab,           only: pair_dtab
+use simple_ppca,                only: ppca
+use simple_reconstructor,       only: reconstructor
+use simple_eo_reconstructor,    only: eo_reconstructor
+use simple_params,              only: params
+use simple_sym,                 only: sym
+use simple_opt_spec,            only: opt_spec
+use simple_convergence,         only: convergence
+use simple_convergence_perptcl, only: convergence_perptcl
+use simple_jiffys,              only: alloc_err
+use simple_projector,           only: projector
+use simple_filehandling         ! use all in there
+use simple_kbinterpol           ! use all in there
 implicit none
 
 public :: build, test_build
@@ -42,6 +43,7 @@ type build
     type(oris)                          :: a, e               !< aligndata, discrete space
     type(sym)                           :: se                 !< symmetry elements object
     type(convergence)                   :: conv               !< object for convergence checking of the PRIME2D/3D approaches
+    type(convergence_perptcl)           :: ppconv             !< per-particle convergence checking object
     type(projector)                     :: img                !< individual image objects
     type(image)                         :: img_pad            !< -"-
     type(image)                         :: img_tmp            !< -"-
@@ -103,7 +105,6 @@ type build
     procedure                           :: build_cont3D_tbox
     procedure                           :: kill_cont3D_tbox
     procedure                           :: read_features
-    ! procedure                           :: read_nnmat
     procedure                           :: raise_hard_ctf_exception
 end type build
 
@@ -220,8 +221,9 @@ contains
         endif
         ! initialize Kaiser-Bessel kernel
         call init_kbiterpol(KBWINSZ, KBALPHA)
-        ! build convergence checker
-        self%conv = convergence(self%a, p, cline)
+        ! build convergence checkers
+        self%conv   = convergence(self%a, p, cline)
+        self%ppconv = convergence_perptcl(self%a, p, cline)
         ! generate random particle batch
         if( cline%defined('batchfrac') )then
             ! allocate index array
@@ -597,26 +599,6 @@ contains
         end do
         close(unit=funit)
     end subroutine read_features
-
-    !>  \brief  for reading nearest neighbour matrix from disk
-    ! subroutine read_nnmat( self, p )
-    !     class(build),  intent(inout) :: self
-    !     class(params), intent(in)    :: p
-    !     integer :: alloc_stat, funit, io_stat
-    !     if( allocated(self%nnmat) ) deallocate(self%nnmat)
-    !     allocate( self%nnmat(p%ncls,p%nnn), stat=alloc_stat )
-    !     call alloc_err('build_hadamard_prime2D_tbox; simple_build, 2', alloc_stat)
-    !     funit = get_fileunit()
-    !     open(unit=funit, status='OLD', action='READ', file='nnmat.bin', access='STREAM')
-    !     read(unit=funit,pos=1,iostat=io_stat) self%nnmat
-    !     ! check if the read was successful
-    !     if( io_stat .ne. 0 )then
-    !         write(*,'(a,i0,2a)') '**ERROR(read_nnmat): I/O error ',&
-    !         io_stat, ' when reading nnmat.bin'
-    !         stop 'I/O error; simple_build; read_nnmat'
-    !     endif
-    !     close(funit)
-    ! end subroutine read_nnmat
     
     !> \brief  fall-over if CTF params are missing
     subroutine raise_hard_ctf_exception( self, p )

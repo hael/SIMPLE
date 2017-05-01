@@ -145,6 +145,7 @@ type :: params
     character(len=STDLEN) :: pdfile='pdfile.bin'
     character(len=STDLEN) :: pgrp='c1'
     character(len=STDLEN) :: plaintexttab=''
+    character(len=STDLEN) :: ppconvfile=''
     character(len=STDLEN) :: prg=''
     character(len=STDLEN) :: refine='no'
     character(len=STDLEN) :: refs_msk=''
@@ -809,11 +810,13 @@ contains
         if( .not. cline%defined('numlen') )then
             if( nparts_set ) self%numlen = len(int2str(self%nparts))
         endif
-        ! set name of partial stack in parallel execution
+        ! set name of partial files in parallel execution
         if( self%numlen > 0 )then
-            self%stk_part = 'stack_part'//int2str_pad(self%part,self%numlen)//self%ext
+            self%stk_part   = 'stack_part'//int2str_pad(self%part,self%numlen)//self%ext
+            self%ppconvfile = 'ppconv_part'//int2str_pad(self%part,self%numlen)//'.bin'
         else
-            self%stk_part = 'stack_part'//int2str(self%part)//self%ext
+            self%stk_part   = 'stack_part'//int2str(self%part)//self%ext
+            self%ppconvfile = 'ppconv_part'//int2str(self%part)//'.bin'
         endif
         ! Check for the existance of this file if part is defined on the command line
         if( cline%defined('part') )then
@@ -826,6 +829,12 @@ contains
                     stop
                 endif
             endif
+        else
+            if( cline%defined('chunktag') )then
+                self%ppconvfile = trim(self%chunktag)//'ppconv.bin'
+            else
+                self%ppconvfile = 'ppconv.bin'
+            endif   
         endif
         ! if we are doing chunk-based parallelisation...
         self%l_chunk_distr = .false.

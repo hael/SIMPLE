@@ -62,6 +62,7 @@ simple: simple_image.o                  \
         simple_filterer.o               \
         simple_unblur.o                 \
         simple_convergence.o            \
+        simple_convergence_perptcl.o    \
         simple_prime_srch.o             \
         simple_prime2D_srch.o           \
         simple_prime3D_srch.o           \

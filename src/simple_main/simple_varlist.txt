@@ -113,6 +113,7 @@ pcastk
 pdfile
 pgrp
 plaintexttab
+ppconvfile
 prg
 refine
 refs_msk

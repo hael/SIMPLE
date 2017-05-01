@@ -312,7 +312,7 @@ contains
 
     !>  \brief  is a getter   
     subroutine getter_2( self, i, key, val )
-        class(oris),       intent(inout) :: self
+        class(oris),      intent(inout) :: self
         integer,          intent(in)    :: i
         character(len=*), intent(in)    :: key
         real,             intent(inout) :: val
@@ -321,9 +321,9 @@ contains
 
     !>  \brief  is for getting an array of 'key' values
     function get_all( self, key, fromto ) result( arr ) 
-        class(oris),      intent(inout) :: self
-        character(len=*), intent(in)    :: key
-        integer, optional, intent(in)   :: fromto(2)
+        class(oris),       intent(inout) :: self
+        character(len=*),  intent(in)    :: key
+        integer, optional, intent(in)    :: fromto(2)
         real, allocatable :: arr(:)
         integer :: i, alloc_stat, ffromto(2)
         ffromto(1) = 1

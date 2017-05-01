@@ -21,8 +21,6 @@ private
 logical, parameter              :: DEBUG = .false.
 type(polarft_corrcalc)          :: pftcc
 type(prime2D_srch), allocatable :: primesrch2D(:)
-real                            :: frac_srch_space = 0.
-type(ori)                       :: orientation
 
 contains
     
@@ -36,12 +34,25 @@ contains
         class(cmdline), intent(inout) :: cline     
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: converged
-        real, allocatable :: res(:), res_pad(:)
-        integer :: iptcl, fnr, icls, io_stat, inorm, cands(3), pop
-        real    :: corr_thresh
+        type(ori)            :: orientation
+        logical, allocatable :: srch_shifts(:)   ! per-particle shift flags
+        integer, allocatable :: ptcls2process(:) ! ptcl inds 2 process
+        integer :: iptcl, fnr, icls, io_stat, inorm, cands(3), pop, iproc, nproc
+        real    :: corr_thresh, frac_srch_space
         
         ! SET FRACTION OF SEARCH SPACE
         frac_srch_space = b%a%get_avg('frac')
+
+        ! PER-PARTICLE CONVERGENCE
+        if( file_exists(p%ppconvfile) )then
+            call b%ppconv%read(p%ppconvfile)
+        else
+            call b%ppconv%zero_joint_distr_olap
+        endif
+        srch_shifts   = b%ppconv%gen_shift_larr()
+        ptcls2process = b%ppconv%identify_ptcls2process()
+        nproc         = size(ptcls2process)
+        write(*,'(A,F8.2)') '>>> NON-CONVERGED PARTICLES(%):', 100.*(real(nproc) / real(p%top - p%fromp + 1))
 
         ! PREP REFERENCES
         if( p%l_distr_exec )then
@@ -106,27 +117,29 @@ contains
         call prime2D_init_sums( b, p )
 
         ! STOCHASTIC IMAGE ALIGNMENT
-        allocate( primesrch2D(p%fromp:p%top) )
-        do iptcl=p%fromp,p%top
-            call primesrch2D(iptcl)%new(p, pftcc) 
+        allocate( primesrch2D(nproc) )
+        do iproc=1,nproc
+            call primesrch2D(iproc)%new(p, pftcc) 
         end do
         ! calculate CTF matrices
         if( p%ctf .ne. 'no' ) call pftcc%create_polar_ctfmats(p%smpd, b%a)
         ! execute the search
         if( p%refine .eq. 'neigh' )then
             call del_file(p%outfile)
-            !$omp parallel do default(shared) schedule(auto) private(iptcl)
-            do iptcl=p%fromp,p%top
-                call primesrch2D(iptcl)%nn_srch(pftcc, iptcl, b%a, b%nnmat)
+            !$omp parallel do default(shared) schedule(auto) private(iproc,iptcl)
+            do iproc=1,nproc
+                iptcl = ptcls2process(iproc)
+                call primesrch2D(iproc)%nn_srch(pftcc, iptcl, b%a, b%nnmat, srch_shifts(iptcl))
             end do
             !$omp end parallel do
         else
             ! execute the search
             call del_file(p%outfile)
             if( p%oritab .eq. '' )then
-                !$omp parallel do default(shared) schedule(auto) private(iptcl)
-                do iptcl=p%fromp,p%top
-                    call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, greedy=.true.)
+                !$omp parallel do default(shared) schedule(auto) private(iproc,iptcl)
+                do iproc=1,nproc
+                    iptcl = ptcls2process(iproc)
+                    call primesrch2D(iproc)%exec_prime2D_srch(pftcc, iptcl, b%a, srch_shifts(iptcl), greedy=.true.)
                 end do
                 !$omp end parallel do
             else
@@ -134,9 +147,10 @@ contains
                     write(*,'(A,F8.2)') '>>> PARTICLE RANDOMIZATION(%):', 100.*p%extr_thresh
                     write(*,'(A,F8.2)') '>>> CORRELATION THRESHOLD:    ', corr_thresh
                 endif
-                !$omp parallel do default(shared) schedule(auto) private(iptcl)
-                do iptcl=p%fromp,p%top
-                    call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, extr_bound=corr_thresh)
+                !$omp parallel do default(shared) schedule(auto) private(iproc,iptcl)
+                do iproc=1,nproc
+                    iptcl = ptcls2process(iproc)
+                    call primesrch2D(iproc)%exec_prime2D_srch(pftcc, iptcl, b%a, srch_shifts(iptcl), extr_bound=corr_thresh)
                 end do
                 !$omp end parallel do
             endif
@@ -167,13 +181,15 @@ contains
         endif
 
         ! DESTRUCT
-        do iptcl=p%fromp,p%top
-            call primesrch2D(iptcl)%kill
+        do iproc=1,nproc
+            call primesrch2D(iproc)%kill
         end do
         deallocate( primesrch2D )
         call pftcc%kill
 
         ! REPORT CONVERGENCE
+        call b%ppconv%update_joint_distr_olap
+        call b%ppconv%write(p%ppconvfile)
         if( p%l_distr_exec )then
             call qsys_job_finished(p, 'simple_hadamard2D_matcher :: prime2D_exec')
         else
@@ -212,10 +228,8 @@ contains
         use simple_ctf, only: ctf
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
-        real, allocatable :: res(:)
-        real, allocatable :: res_pad(:)
-        type(ori)         :: orientation
-        integer           :: icls, iptcl, cnt, istart, iend, filtsz
+        type(ori) :: orientation
+        integer   :: icls, iptcl, cnt, istart, iend, filtsz
         if( .not. p%l_distr_exec ) write(*,'(a)') '>>> ASSEMBLING CLASS SUMS'
         filtsz = b%img_pad%get_filtsz()
         call prime2D_init_sums( b, p )
