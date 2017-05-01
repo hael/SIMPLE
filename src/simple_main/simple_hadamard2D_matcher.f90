@@ -31,12 +31,11 @@ contains
         use simple_procimgfile, only: random_selection_from_imgfile
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
-        class(cmdline), intent(inout) :: cline     
+        class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: converged
-        integer, allocatable :: ptcls2process(:) ! ptcl inds 2 process
-        logical   :: srch_shifts(p%fromp:p%top)  ! per-particle shift flags
-        integer   :: iptcl, fnr, icls, io_stat, inorm, cands(3), pop, iproc, nproc
+        logical   :: conv_larr(p%fromp:p%top) ! per-particle convergence flags
+        integer   :: iptcl, icls
         real      :: corr_thresh, frac_srch_space
         type(ori) :: orientation
         
@@ -49,10 +48,8 @@ contains
         else
             call b%ppconv%zero_joint_distr_olap
         endif
-        call b%ppconv%set_shift_larr(srch_shifts)
-        ptcls2process = b%ppconv%identify_ptcls2process()
-        nproc = size(ptcls2process)
-        write(*,'(A,F8.2)') '>>> NON-CONVERGED PARTICLES(%):', 100.*(real(nproc) / real(p%top - p%fromp + 1))
+        call b%ppconv%set_conv_larr(conv_larr)
+        write(*,'(A,F8.2)') '>>> NON-CONVERGED PARTICLES(%):', 100.*(real(count(conv_larr)) / real(p%top - p%fromp + 1))
 
         ! PREP REFERENCES
         if( p%l_distr_exec )then
@@ -117,29 +114,27 @@ contains
         call prime2D_init_sums( b, p )
 
         ! STOCHASTIC IMAGE ALIGNMENT
-        allocate( primesrch2D(nproc) )
-        do iproc=1,nproc
-            call primesrch2D(iproc)%new(p, pftcc) 
+        allocate( primesrch2D(p%fromp:p%top) )
+        do iptcl=p%fromp,p%top
+            call primesrch2D(iptcl)%new(p, pftcc) 
         end do
         ! calculate CTF matrices
         if( p%ctf .ne. 'no' ) call pftcc%create_polar_ctfmats(p%smpd, b%a)
         ! execute the search
         if( p%refine .eq. 'neigh' )then
             call del_file(p%outfile)
-            !$omp parallel do default(shared) schedule(auto) private(iproc,iptcl)
-            do iproc=1,nproc
-                iptcl = ptcls2process(iproc)
-                call primesrch2D(iproc)%nn_srch(pftcc, iptcl, b%a, b%nnmat, srch_shifts(iptcl))
+            !$omp parallel do default(shared) schedule(auto) private(iptcl)
+            do iptcl=p%fromp,p%top
+                call primesrch2D(iptcl)%nn_srch(pftcc, iptcl, b%a, b%nnmat)
             end do
             !$omp end parallel do
         else
             ! execute the search
             call del_file(p%outfile)
             if( p%oritab .eq. '' )then
-                !$omp parallel do default(shared) schedule(auto) private(iproc,iptcl)
-                do iproc=1,nproc
-                    iptcl = ptcls2process(iproc)
-                    call primesrch2D(iproc)%exec_prime2D_srch(pftcc, iptcl, b%a, srch_shifts(iptcl), greedy=.true.)
+                !$omp parallel do default(shared) schedule(auto) private(iptcl)
+                do iptcl=p%fromp,p%top
+                    call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, conv_larr(iptcl), greedy=.true.)
                 end do
                 !$omp end parallel do
             else
@@ -147,10 +142,9 @@ contains
                     write(*,'(A,F8.2)') '>>> PARTICLE RANDOMIZATION(%):', 100.*p%extr_thresh
                     write(*,'(A,F8.2)') '>>> CORRELATION THRESHOLD:    ', corr_thresh
                 endif
-                !$omp parallel do default(shared) schedule(auto) private(iproc,iptcl)
-                do iproc=1,nproc
-                    iptcl = ptcls2process(iproc)
-                    call primesrch2D(iproc)%exec_prime2D_srch(pftcc, iptcl, b%a, srch_shifts(iptcl), extr_bound=corr_thresh)
+                !$omp parallel do default(shared) schedule(auto) private(iptcl)
+                do iptcl=p%fromp,p%top
+                    call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, conv_larr(iptcl), extr_bound=corr_thresh)
                 end do
                 !$omp end parallel do
             endif
@@ -181,8 +175,8 @@ contains
         endif
 
         ! DESTRUCT
-        do iproc=1,nproc
-            call primesrch2D(iproc)%kill
+        do iptcl=p%fromp,p%top
+            call primesrch2D(iptcl)%kill
         end do
         deallocate( primesrch2D )
         call pftcc%kill

@@ -1,7 +1,7 @@
 module simple_defs_conv
 real, parameter :: MI_CLASS_LIM_3D   = 0.80
 real, parameter :: MI_CLASS_LIM_2D   = 0.98
-real, parameter :: MI_JOINT_LIM_2D   = 0.95
+real, parameter :: MI_JOINT_LIM_2D   = 0.98
 real, parameter :: MI_STATE_LIM      = 0.98
 real, parameter :: MI_INPL_LIM       = 0.98
 real, parameter :: FRAC_LIM          = 98.0

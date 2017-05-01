@@ -24,8 +24,7 @@ type convergence_perptcl
     procedure :: update_joint_distr_olap
     procedure :: zero_joint_distr_olap
     ! generators
-    procedure :: set_shift_larr
-    procedure :: identify_ptcls2process
+    procedure :: set_conv_larr
     ! I/O
     procedure :: write
     procedure :: read
@@ -65,44 +64,18 @@ contains
         self%mi_joint = 0.
     end subroutine zero_joint_distr_olap
 
-    subroutine set_shift_larr( self, shift_larr )
+    subroutine set_conv_larr( self, conv_larr )
         class(convergence_perptcl), intent(in)  :: self
-        logical,                    intent(out) :: shift_larr(self%fromto(1):self%fromto(2))
+        logical,                    intent(out) :: conv_larr(self%fromto(1):self%fromto(2))
         integer :: iptcl
         do iptcl=self%fromto(1),self%fromto(2)
-            if( self%mi_joint(iptcl) >= FRAC_SH_LIM_PPTCL )then
-                shift_larr(iptcl) = .true.
-            else
-                shift_larr(iptcl) = .false.
-            endif
-        end do
-    end subroutine set_shift_larr
-
-    function identify_ptcls2process( self ) result( inds )
-        class(convergence_perptcl), intent(in) :: self
-        logical, allocatable :: larr(:)
-        integer, allocatable :: inds(:)
-        integer :: ninds, iptcl, cnt, alloc_stat
-        allocate(larr(self%fromto(1):self%fromto(2)), stat=alloc_stat)
-        call alloc_err("In: comple_convergence_perptcl :: identify_ptcls2process, 1", alloc_stat)
-        do iptcl=self%fromto(1),self%fromto(2)
             if( self%mi_joint(iptcl) >= MI_JOINT_LIM_2D )then
-                larr(iptcl) = .true.
+                conv_larr(iptcl) = .true.
             else
-                larr(iptcl) = .false.
+                conv_larr(iptcl) = .false.
             endif
         end do
-        ninds = count(.not. larr)
-        allocate( inds(ninds), stat=alloc_stat )
-        call alloc_err("In: comple_convergence_perptcl :: identify_ptcls2process, 2", alloc_stat)
-        cnt = 0
-        do iptcl=self%fromto(1),self%fromto(2)
-            if( .not. larr(iptcl) )then
-                cnt       = cnt + 1
-                inds(cnt) = iptcl
-            endif
-        end do
-    end function identify_ptcls2process
+    end subroutine set_conv_larr
 
     subroutine write( self, fname )
         use simple_filehandling, only: get_fileunit
