@@ -123,7 +123,7 @@ contains
         ! execute the search
         if( p%refine .eq. 'neigh' )then
             call del_file(p%outfile)
-            !$omp parallel do default(shared) schedule(auto) private(iptcl)
+            !$omp parallel do default(shared) schedule(dynamic) private(iptcl)
             do iptcl=p%fromp,p%top
                 call primesrch2D(iptcl)%nn_srch(pftcc, iptcl, b%a, b%nnmat)
             end do
@@ -132,7 +132,7 @@ contains
             ! execute the search
             call del_file(p%outfile)
             if( p%oritab .eq. '' )then
-                !$omp parallel do default(shared) schedule(auto) private(iptcl)
+                !$omp parallel do default(shared) schedule(dynamic) private(iptcl)
                 do iptcl=p%fromp,p%top
                     call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, conv_larr(iptcl), greedy=.true.)
                 end do
@@ -142,7 +142,7 @@ contains
                     write(*,'(A,F8.2)') '>>> PARTICLE RANDOMIZATION(%):', 100.*p%extr_thresh
                     write(*,'(A,F8.2)') '>>> CORRELATION THRESHOLD:    ', corr_thresh
                 endif
-                !$omp parallel do default(shared) schedule(auto) private(iptcl)
+                !$omp parallel do default(shared) schedule(dynamic) private(iptcl)
                 do iptcl=p%fromp,p%top
                     call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, conv_larr(iptcl), extr_bound=corr_thresh)
                 end do
@@ -210,7 +210,7 @@ contains
         class(build),  intent(inout) :: b
         class(params), intent(inout) :: p
         integer :: icls
-        !$omp parallel do schedule(auto) default(shared) private(icls)
+        !$omp parallel do schedule(static) default(shared) private(icls)
         do icls=1,p%ncls
             b%cavgs(icls) = 0.
             b%ctfsqsums(icls) = cmplx(0.,0.)
