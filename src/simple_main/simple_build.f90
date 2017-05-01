@@ -247,9 +247,11 @@ contains
         class(build), intent(inout)  :: self
         integer :: i, istart, istop
         if( self%general_tbox_exists )then
+            call self%conv%kill
             call self%se%kill
             call self%a%kill
             call self%e%kill
+            call self%img%kill_expanded
             call self%img%kill
             call self%img_copy%kill
             call self%img_tmp%kill
@@ -261,7 +263,6 @@ contains
             call self%mskvol%kill
             call self%vol_pad%kill_expanded
             call self%vol_pad%kill
-            call self%conv%kill
             if( allocated(self%ssnr) )then
                 deallocate(self%ssnr, self%fsc)
             endif

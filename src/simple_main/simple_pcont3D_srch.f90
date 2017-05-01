@@ -28,6 +28,7 @@ type pcont3D_srch
     real       :: prev_corr  = -1.    !< previous correlation
     integer    :: prev_ref   = 0      !< previous reference
     integer    :: prev_roind = 0      !< previous in-plane rotational index
+    integer    :: prev_state = 0      !< previous state
     integer    :: nstates    = 0      !< number of states
     integer    :: nbetter    = 0      !< number of improving references found
     integer    :: neval      = 0      !< number of references evaluated
@@ -47,6 +48,7 @@ type pcont3D_srch
     ! GETTERS
     procedure          :: get_best_ori
     procedure          :: get_softoris
+    procedure          :: does_exist
     ! DESTRUCTOR
     procedure          :: kill
 end type pcont3D_srch
@@ -57,10 +59,12 @@ contains
     subroutine new( self, p, o_in, e, pftcc )
         class(pcont3D_srch),             intent(inout) :: self  !< instance
         class(params),                   intent(in)    :: p     !< parameters
-        class(ori),                      intent(in)    :: o_in  !< 
+        class(ori),                      intent(inout) :: o_in  !< 
         class(oris),                     intent(in)    :: e     !< 
         class(polarft_corrcalc), target, intent(in)    :: pftcc
         call self%kill
+        self%prev_state = nint(o_in%get('state'))
+        if(self%prev_state < 1)return
         ! set constants
         self%ppftcc    => pftcc
         self%reforis   = e
@@ -91,6 +95,7 @@ contains
     !>  \brief  is the master search routine
     subroutine do_srch( self )
         class(pcont3D_srch), intent(inout) :: self
+        if(.not.self%exists)return
         ! EULER ANGLES SEARCH
         call self%do_refs_srch
         ! SHIFT SEARCH
@@ -258,10 +263,10 @@ contains
         call self%orientation_out%set('dist',euldist)
         ! overlap between distributions
         roind    = self%ppftcc%get_roind(360.-self%orientation_out%e3get())
-        mi_proj  = 1.
+        mi_proj  = 0.
         mi_inpl  = 0.
         mi_state = 0.
-        mi_joint = 1.
+        mi_joint = 0.
         if( euldist < 0.1 )then
             mi_proj  = mi_proj + 1.
             mi_joint = mi_joint + 1.
@@ -370,6 +375,7 @@ contains
     function get_softoris( self )result( os )
         class(pcont3D_srch), intent(inout) :: self
         type(oris) :: os
+        if(.not.self%exists)stop 'search has not been performed; pcont3d_srch::get_softoris'
         os = self%softoris
     end function get_softoris
 
@@ -377,14 +383,23 @@ contains
     function get_best_ori( self )result( o )
         class(pcont3D_srch), intent(inout) :: self
         type(ori) :: o
+        if(.not.self%exists)stop 'search has not been performed; pcont3d_srch::get_softoris'
         o = self%orientation_out
     end function get_best_ori
+
+    !>  \brief  whether object has been initialized
+    function does_exist( self )result( l )
+        class(pcont3D_srch), intent(inout) :: self
+        logical :: l
+        l = self%exists
+    end function does_exist
 
     ! DESTRUCTOR
 
     !>  \brief  is the destructor
     subroutine kill( self )
         class(pcont3D_srch), intent(inout) :: self
+        call self%shsrch_obj%kill
         self%ppftcc => null()
         call self%shiftedoris%kill
         call self%softoris%kill

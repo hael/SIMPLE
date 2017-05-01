@@ -275,7 +275,7 @@ contains
                 if( update_res )then
                     ! dynamic low-pass
                     p%find = p%find+p%fstep
-                    p%lp = max(p%lpstop,b%img%get_lp(p%find))
+                    p%lp   = max(p%lpstop,b%img%get_lp(p%find))
                 endif
                 if( converged )exit
             end do

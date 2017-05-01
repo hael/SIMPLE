@@ -73,16 +73,18 @@ contains
         call prep_vols(b, p, cline)
 
         ! RESET RECVOLS
-        do state=1,p%nstates
-            if( state_exists(state) )then
-                if( p%eo .eq. 'yes' )then
-                    call b%eorecvols(state)%reset_all
-                else
-                    call b%recvols(state)%reset
+        if(p%norec .eq. 'no')then
+            do state=1,p%nstates
+                if( state_exists(state) )then
+                    if( p%eo .eq. 'yes' )then
+                        call b%eorecvols(state)%reset_all
+                    else
+                        call b%recvols(state)%reset
+                    endif
                 endif
-            endif
-        end do
-        if(debug)write(*,*)'*** pcont3D_matcher ***: did reset recvols'
+            end do
+            if(debug)write(*,*)'*** pcont3D_matcher ***: did reset recvols'
+        endif
 
         ! INIT PFTCC & IMGPOLARIZER
         if( p%l_xfel )then
@@ -126,10 +128,10 @@ contains
                 ! grid
                 call read_img_from_stk( b, p, iptcl )
                 if(p%npeaks == 1)then
-                    call grid_ptcl(b, p, iptcl, orientation)
+                    call grid_ptcl(b, p, orientation)
                 else
                     softoris = pcont3Dsrch%get_softoris()
-                    call grid_ptcl(b, p, iptcl, orientation, os=softoris)
+                    call grid_ptcl(b, p, orientation, os=softoris)
                 endif
             endif
             ! output orientation
@@ -334,16 +336,18 @@ contains
         call prep_vols(b, p, cline)
 
         ! RESET RECVOLS
-        do state=1,p%nstates
-            if( state_exists(state) )then
-                if( p%eo .eq. 'yes' )then
-                    call b%eorecvols(state)%reset_all
-                else
-                    call b%recvols(state)%reset
+        if(p%norec .eq. 'no')then
+            do state=1,p%nstates
+                if( state_exists(state) )then
+                    if( p%eo .eq. 'yes' )then
+                        call b%eorecvols(state)%reset_all
+                    else
+                        call b%recvols(state)%reset
+                    endif
                 endif
-            endif
-        end do
-        if(debug)write(*,*)'*** pcont3D_matcher ***: did reset recvols'
+            end do
+            if(debug)write(*,*)'*** pcont3D_matcher ***: did reset recvols'
+        endif
 
         ! INIT IMGPOLARIZER
         ! dummy pftcc is only init here so the img polarizer can be initialized
@@ -403,10 +407,10 @@ contains
                     if(p%norec .eq. 'no')then
                         b%img = batch_imgs(iptcl)
                         if(p%npeaks == 1)then
-                            call grid_ptcl(b, p, iptcl, orientation)
+                            call grid_ptcl(b, p, orientation)
                         else
                             softoris = pcont3Dsrchs(iptcl)%get_softoris()
-                            call grid_ptcl(b, p, iptcl, orientation, os=softoris)
+                            call grid_ptcl(b, p, orientation, os=softoris)
                         endif
                     endif
                 endif

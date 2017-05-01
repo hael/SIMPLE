@@ -117,7 +117,7 @@ contains
                     case DEFAULT
                         stop 'Unkwnon refinement mode; simple_cont3D_matcher'
                 end select
-                call grid_ptcl(b, p, iptcl, orientation)
+                call grid_ptcl(b, p, orientation)
             else
                 call orientation%reject
             endif

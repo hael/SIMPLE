@@ -956,7 +956,7 @@ contains
     pure function get_nyq( self ) result( nyq )
         class(image), intent(in) :: self
         integer :: nyq
-        nyq = fdim(self%ldim(1))
+        nyq = fdim(self%ldim(1)) - 1
     end function get_nyq
     
     !>  \brief  to get the size of the filters
@@ -1037,7 +1037,7 @@ contains
         class(image), intent(in) :: self
         integer :: array_shape(3)
         complex, allocatable :: cmat(:,:,:)
-        array_shape(1)   = fdim(self%ldim(1))
+        array_shape(1)   = self%get_filtsz()
         array_shape(2:3) = self%ldim(2:3)
         allocate(cmat(array_shape(1),array_shape(2),array_shape(3)), source=self%cmat)
     end function get_cmat
