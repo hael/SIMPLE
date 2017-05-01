@@ -14,7 +14,6 @@ type :: eo_reconstructor
     type(reconstructor)    :: even
     type(reconstructor)    :: odd
     type(reconstructor)    :: eosum
-    class(params), pointer :: pp=>null()
     character(len=4)       :: ext
     real                   :: fsc05, fsc0143, smpd, msk, fny, inner=0., width=10.
     integer                :: box=0, nstates=1, numlen=2, lfny=0
@@ -44,6 +43,7 @@ type :: eo_reconstructor
     procedure, private :: read_odd
     ! INTERPOLATION
     procedure          :: grid_fplane
+    procedure          :: compress_exp
     procedure          :: sum_eos ! for merging even and odd into sum
     procedure          :: sum     ! for summing eo_recs obtained by parallell exec
     procedure          :: sampl_dens_correct_eos
@@ -68,7 +68,6 @@ contains
         ! set constants
         neg = .false.
         if( p%neg .eq. 'yes' ) neg = .true.
-        self%pp      => p
         self%box     =  p%box
         self%smpd    =  p%smpd
         self%nstates =  p%nstates
@@ -162,7 +161,6 @@ contains
     subroutine write_even( self, fbody )
         class(eo_reconstructor), intent(inout) :: self
         character(len=*),        intent(in)    :: fbody
-        call self%even%compress_exp
         call self%even%write(trim(adjustl(fbody))//'_even'//self%ext, del_if_exists=.true.)
         call self%even%write_rho('rho_'//trim(adjustl(fbody))//'_even'//self%ext)
     end subroutine write_even
@@ -171,7 +169,6 @@ contains
     subroutine write_odd( self, fbody )
         class(eo_reconstructor), intent(inout) :: self
         character(len=*),        intent(in)    :: fbody
-        call self%odd%compress_exp
         call self%odd%write(trim(adjustl(fbody))//'_odd'//self%ext, del_if_exists=.true.)
         call self%odd%write_rho('rho_'//trim(adjustl(fbody))//'_odd'//self%ext)
     end subroutine write_odd
@@ -266,6 +263,13 @@ contains
          call self%even%sum(self_in%even)
          call self%odd%sum(self_in%odd)
     end subroutine sum
+
+    !>  \brief compress e/o
+    subroutine compress_exp( self )
+        class(eo_reconstructor), intent(inout) :: self
+        call self%even%compress_exp
+        call self%odd%compress_exp
+    end subroutine compress_exp
     
     !> \brief  for sampling density correction of the eo pairs
     subroutine sampl_dens_correct_eos( self, state )
@@ -400,8 +404,7 @@ contains
             endif
         end do
         ! unddo expansion
-        call self%even%compress_exp
-        call self%odd%compress_exp
+        call self%compress_exp
         ! proceeds with density correction & output
         if( present(part) )then
             if( present(fbody) )then

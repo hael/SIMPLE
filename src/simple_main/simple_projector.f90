@@ -55,7 +55,7 @@ type, extends(image) :: projector
     procedure          :: init_env_rproject
     procedure          :: env_rproject
     procedure          :: kill_env_rproject
-
+    procedure          :: destructor
 end type projector
 
 contains
@@ -71,6 +71,7 @@ contains
         integer, allocatable :: cyck(:), cycm(:), cych(:)
         integer :: h, k, m, alloc_stat, phys(3), logi(3)
         integer :: lims(3,2), ldim(3)
+        call self%kill_expanded
         ldim = self%get_ldim()
         if( .not.self%is_ft() ) stop 'volume needs to be FTed before call; expand_cmat; simple_image'
         if( ldim(3) == 1      ) stop 'only for volumes; expand_cmat; simple_image'
@@ -80,7 +81,6 @@ contains
         lims               = self%loop_lims(3)
         self%ldim_exp(:,2) = maxval(abs(lims)) + ceiling(self%harwin_exp)
         self%ldim_exp(:,1) = -self%ldim_exp(:,2)
-        if( allocated(self%cmat_exp) ) deallocate(self%cmat_exp)
         allocate( self%cmat_exp( self%ldim_exp(1,1):self%ldim_exp(1,2),&
                                 &self%ldim_exp(2,1):self%ldim_exp(2,2),&
                                 &self%ldim_exp(3,1):self%ldim_exp(3,2)),&
@@ -253,7 +253,7 @@ contains
         if( l_exp )then
             call self%fproject_polar_expanded(iref, e, pftcc)
         else
-            !$omp parallel do collapse(2) schedule(auto) default(shared) private(irot,k)
+            !$omp parallel do collapse(2) schedule(auto) default(shared) private(loc,vec,irot,k)
             do irot=1,pdim(1)
                 do k=pdim(2),pdim(3)
                     vec(:2) = pftcc%get_coord(irot,k) 
@@ -630,7 +630,7 @@ contains
 
     ! DESTRUCTORS
 
-    !>  \brief  is a detructor 
+    !>  \brief  is a destructor of impolarizer 
     subroutine kill_imgpolarizer( self )
         class(projector), intent(inout) :: self !< projector instance
         if( allocated(self%polweights_mat) ) deallocate(self%polweights_mat)
@@ -638,7 +638,7 @@ contains
         if( allocated(self%polcyc2_mat)    ) deallocate(self%polcyc2_mat)
     end subroutine kill_imgpolarizer
 
-    !>  \brief  is a detructor 
+    !>  \brief  is a destructor of expanded matrices (imgpolarizer AND expanded projection of)
     subroutine kill_expanded( self )
         class(projector), intent(inout) :: self !< projector instance
         call self%kill_imgpolarizer
@@ -647,10 +647,17 @@ contains
         self%expanded_exists = .false.
     end subroutine kill_expanded
 
-    !>  \brief  
+    !>  \brief  is the enveloppe projector killer
     subroutine kill_env_rproject( self )
         class(projector), intent(inout) :: self !< projector instance
         if( allocated(self%is_in_mask) )deallocate(self%is_in_mask)          
     end subroutine kill_env_rproject
+
+    !>  \brief  is a destructor for projector, not parent image 
+    subroutine destructor( self )
+        class(projector), intent(inout) :: self !< projector instance
+        call self%kill_env_rproject
+        call self%kill_expanded
+    end subroutine destructor
 
 end module simple_projector

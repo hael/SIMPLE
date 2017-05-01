@@ -4,16 +4,17 @@ use simple_cmdline,      only: cmdline
 use simple_build,        only: build
 use simple_params,       only: params
 use simple_ori,          only: ori
+use simple_oris,         only: oris
 use simple_rnd,          only: ran3
 use simple_prime3D_srch, only: prime3D_srch
 use simple_gridding,     only: prep4cgrid
-use simple_strings,      ! use all in there
+use simple_strings       ! use all in there
 use simple_math          ! use all in there
 use simple_masker        ! use all in there
 implicit none
 
 public :: read_img_from_stk, set_bp_range, set_bp_range2D,grid_ptcl, prepimg4align, eonorm_struct_facts,&
-&norm_struct_facts, preprefs4align, preprefvol, reset_prev_defparms, prep2Dref
+&norm_struct_facts, preprefs4align, preprefvol, prep2Dref, reset_prev_defparms
 private
 
 interface prep2Dref
@@ -49,11 +50,10 @@ contains
     
     subroutine set_bp_range( b, p, cline )
         use simple_estimate_ssnr, only: fsc2ssnr
-        use simple_cmdline,       only: cmdline
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         class(cmdline), intent(inout) :: cline
-        real, allocatable     :: resarr(:)
+        real, allocatable     :: resarr(:), tmp_arr(:)
         real                  :: fsc0143, fsc05, mapres(p%nstates)
         integer               :: s, loc(1)
         character(len=STDLEN) :: fsc_fname
@@ -69,7 +69,7 @@ contains
                     if( b%a%get_statepop( s )>0 .and. .not.fsc_bin_exists(s))&
                         & all_fsc_bin_exist = .false.
                 enddo
-                if( p%oritab.eq.'')all_fsc_bin_exist = ( count(fsc_bin_exists)==p%nstates )
+                if( p%oritab.eq.'')all_fsc_bin_exist = (count(fsc_bin_exists)==p%nstates)
                 ! set low-pass Fourier index limit
                 if( all_fsc_bin_exist )then
                     ! we need the worst resolved fsc
@@ -78,7 +78,18 @@ contains
                         if( fsc_bin_exists(s) )then
                             ! these are the 'classical' resolution measures
                             fsc_fname   = adjustl('fsc_state'//int2str_pad(s,2)//'.bin')
-                            b%fsc(s,:)  = file2rarr( trim(fsc_fname) )
+                            tmp_arr     = file2rarr(trim(fsc_fname))
+                            if(size(tmp_arr) > size(b%fsc(s,:)))then
+                                ! TO REMOVE
+                                ! ugly patch for backward compatibility
+                                b%fsc(s,:)  = tmp_arr(1:size(b%fsc(s,:)))
+                                deallocate(tmp_arr)
+                            else
+                                ! must become default
+                                b%fsc(s,:)  = tmp_arr(:)
+                                deallocate(tmp_arr)
+                                !b%fsc(s,:)  = file2rarr(trim(fsc_fname))                             
+                            endif
                             b%ssnr(s,:) = fsc2ssnr(b%fsc(s,:))
                             call get_resolution(b%fsc(s,:), resarr, fsc05, fsc0143)
                             mapres(s)   = fsc0143
@@ -135,7 +146,6 @@ contains
 
     subroutine set_bp_range2D( b, p, cline, which_iter, frac_srch_space )
         use simple_estimate_ssnr, only: fsc2ssnr
-        use simple_cmdline,       only: cmdline
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         class(cmdline), intent(inout) :: cline
@@ -166,11 +176,9 @@ contains
     end subroutine set_bp_range2D
 
     !>  \brief  grids one particle image to the volume
-    subroutine grid_ptcl( b, p, iptcl, orientation, os, shellweights )
-        use simple_oris, only: oris
+    subroutine grid_ptcl( b, p, orientation, os, shellweights )
         class(build),              intent(inout) :: b
         class(params),             intent(inout) :: p
-        integer,                   intent(in)    :: iptcl
         class(ori),                intent(inout) :: orientation
         class(oris),     optional, intent(inout) :: os
         real,            optional, intent(in)    :: shellweights(:)
@@ -332,7 +340,6 @@ contains
 
     subroutine prep2Dref_2( p, ref, os, icls )
         use simple_image, only: image
-        use simple_oris,  only: oris
         class(params),  intent(in)    :: p
         class(image),   intent(inout) :: ref
         class(oris),    intent(inout) :: os
@@ -367,9 +374,7 @@ contains
         class(cmdline),    intent(inout) :: cline
         integer,           intent(in)    :: s
         logical, optional, intent(in)    :: doexpand
-        logical :: l_doexpand
-        real    :: shvec(3)
-        l_doexpand = .true.
+        logical :: l_doexpand = .true.
         if( present(doexpand) )l_doexpand = doexpand
         if( p%boxmatch < p%box )call b%vol%new([p%box,p%box,p%box],p%smpd) ! ensure correct dim
         call b%vol%read(p%vols(s), isxfel=p%l_xfel)
@@ -420,8 +425,9 @@ contains
         contains
 
             subroutine centervol
+                real :: shvec(3)
                 ! centering only for asymmetric and circular symmetric cases
-                if( p%refine.ne.'het' )then
+                if( p%refine.ne.'het' .and. p%nstates==1)then
                     if(p%pgrp(:1) .eq. 'c')then
                         shvec = b%vol%center(p%cenlp,'no',p%msk,doshift=.false.) ! find center of mass shift
                         if( arg(shvec) > CENTHRESH )then
@@ -454,6 +460,7 @@ contains
                 if( present(which_iter) )b%fsc(s,:) = 0.
                 cycle
             endif
+            call b%eorecvols(s)%compress_exp
             if( p%l_distr_exec )then
                 call b%eorecvols(s)%write_eos('recvol_state'//int2str_pad(s,2)//'_part'//int2str_pad(p%part,p%numlen))
             else

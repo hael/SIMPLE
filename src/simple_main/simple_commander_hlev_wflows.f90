@@ -438,6 +438,7 @@ contains
             rep_os = os
             call rep_os%set_all('state', real(labels(irepeat,:)))
             oritab = trim(REPEATFBODY)//'init_rep'//int2str_pad(irepeat,2)//'.txt'
+            call del_file(oritab)
             call rep_os%write(trim(oritab))
             ! RUN PRIME3D
             cline_prime3D = cline_prime3D_master
@@ -460,6 +461,7 @@ contains
 
         ! GENERATE CONSENSUS DOCUMENT
         oritab = trim(REPEATFBODY)//'consensus.txt'
+        call del_file(oritab)
         write(*,'(A)')   '>>>'
         write(*,'(A,A)') '>>> GENERATING ENSEMBLE SOLUTION: ', trim(oritab)
         write(*,'(A)')   '>>>'

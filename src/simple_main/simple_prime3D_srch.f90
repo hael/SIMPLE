@@ -115,7 +115,7 @@ contains
         class(oris),                     intent(inout) :: a     !< ptcls oris
         class(params),                   intent(in)    :: p     !< parameters
         class(polarft_corrcalc), target, intent(inout) :: pftcc !< correlator
-        integer  :: alloc_stat, s
+        integer  :: alloc_stat
         ! destroy possibly pre-existing instance
         call self%kill
         ! set constants
@@ -141,14 +141,11 @@ contains
             self%greedy_inpl = .false.
         endif
         ! construct composites
-        allocate(self%state_exists(self%nstates), stat=alloc_stat)   
-        call alloc_err('In: new; simple_prime3D_srch, 1', alloc_stat)
         if( p%oritab.ne.'' )then
-            self%state_exists = .false.
-            do s=1,self%nstates
-                if( a%get_statepop(s) > 0 ) self%state_exists(s) = .true.
-            enddo
+            self%state_exists = a%get_state_exist(self%nstates)
         else
+            allocate(self%state_exists(self%nstates), stat=alloc_stat)   
+            call alloc_err('In: new; simple_prime3D_srch, 1', alloc_stat)
             self%state_exists = .true.
         endif
         ! generate oris oject in which the best npeaks refs will be stored

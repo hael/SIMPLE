@@ -28,6 +28,7 @@ type, extends(pftcc_opt) :: pftcc_shsrch
     procedure :: costfun     => shsrch_costfun
     procedure :: minimize    => shsrch_minimize
     procedure :: get_nevals  => shsrch_get_nevals
+    procedure :: kill
 end type pftcc_shsrch
 
 contains
@@ -136,5 +137,10 @@ contains
         integer :: nevals
         nevals = self%ospec%nevals
     end function shsrch_get_nevals
+
+    subroutine kill( self )
+        class(pftcc_shsrch), intent(inout) :: self
+        self%pftcc_ptr => null()
+    end subroutine kill
     
 end module simple_pftcc_shsrch
