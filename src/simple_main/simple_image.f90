@@ -3251,14 +3251,17 @@ contains
     function rmsd( self ) result( dev )
         class(image), intent(inout) :: self
         real :: devmat(self%ldim(1),self%ldim(2),self%ldim(3)), dev, avg
-        if( self%ft ) stop 'rmsd not intended for Fourier transforms; simple_image :: rmsd'
-        avg    = self%mean()
-        devmat = self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - avg
-        dev    = sum(devmat**2.0)/real(product(self%ldim))
-        if( dev > 0. )then
-            dev = sqrt(dev)
-        else
+        if( self%ft )then
             dev = 0.
+        else
+            avg    = self%mean()
+            devmat = self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - avg
+            dev    = sum(devmat**2.0)/real(product(self%ldim))
+            if( dev > 0. )then
+                dev = sqrt(dev)
+            else
+                dev = 0.
+            endif
         endif
     end function rmsd
 

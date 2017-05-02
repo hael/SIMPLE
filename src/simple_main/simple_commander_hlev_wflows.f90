@@ -456,11 +456,10 @@ contains
             ! HARVEST OUTCOME
             iter   = nint(cline_prime3D%get_rarg('endit'))
             oritab = 'prime3Ddoc_'//int2str_pad(iter,3)//'.txt'
-            call os%read(oritab)
+            call rename(trim(oritab), trim(final_docs(irepeat)))
+            call os%read(trim(final_docs(irepeat)))
             ! updates labels & stash
             labels(irepeat,:) = nint(os%get_all('state'))
-            ! stash candidate solution
-            call rename(trim(oritab), trim(final_docs(irepeat)))
             ! STASH FINAL VOLUMES
             call stash_volumes
             ! CLEANUP
@@ -470,6 +469,7 @@ contains
         ! GENERATE CONSENSUS DOCUMENT
         oritab = trim(REPEATFBODY)//'consensus.txt'
         call del_file(oritab)
+        call os%read(p_master%oritab)
         write(*,'(A)')   '>>>'
         write(*,'(A,A)') '>>> GENERATING ENSEMBLE SOLUTION: ', trim(oritab)
         write(*,'(A)')   '>>>'
@@ -479,10 +479,11 @@ contains
         enddo
         labels(1,:) = 0
         call shc_aggregation(NREPEATS, n_incl, labels_incl, consensus)
-        call os%read(oritab)
         call os%set_all('state', real(unpack(consensus, included, labels(1,:))) )
         call os%write(trim(oritab))
+        ! cleanup
         call os%kill
+        deallocate(init_docs, final_docs, labels_incl, consensus, labels, included)
 
         ! FINAL RECONSTRUCTION
         call cline_recvol_distr%set('oritab', trim(oritab))
