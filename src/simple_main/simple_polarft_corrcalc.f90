@@ -831,24 +831,30 @@ contains
     function corr_1( self, iref, iptcl, irot ) result( cc )
         class(polarft_corrcalc), intent(inout) :: self              !< instance
         integer,                 intent(in)    :: iref, iptcl, irot !< reference, particle, rotation
-        real    :: cc
-        if( self%sqsums_refs(iref) < TINY .or. self%sqsums_ptcls(iptcl) < TINY )then
-            cc = 0.
-            return
-        endif
+        real :: cc
         if( self%with_ctf )then
             call self%apply_ctf_single(iptcl, iref)
+            call floating_point_checker
             cc = sum(real(self%pfts_refs_ctf(iref,:,:) * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:))))
         else
+            call floating_point_checker
             cc = sum(real(self%pfts_refs(iref,:,:) * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:))))
         endif
         cc = cc/sqrt(self%sqsums_refs(iref)*self%sqsums_ptcls(iptcl))
+
+        contains
+
+            subroutine floating_point_checker
+                if( self%sqsums_refs(iref) < TINY .or. self%sqsums_ptcls(iptcl) < TINY )then
+                    cc = 0.
+                    return
+                endif
+            end subroutine floating_point_checker
+
     end function corr_1
 
     !>  \brief  for calculating the on-fly shifted correlation between reference iref and particle iptcl in rotation irot
     function corr_2( self, iref, iptcl, irot, shvec ) result( cc )
-        !$ use omp_lib
-        !$ use omp_lib_kinds
         use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self              !< instance
         integer,                 intent(in)    :: iref, iptcl, irot !< reference, particle, rotation
