@@ -576,7 +576,7 @@ sub make_Makefile_macros {
     print $mkma qq[\n];
     print $mkma qq[CC=\$(CCCOMP)\n];
     print $mkma qq[CFLAGS=$mkma_gcc_flags\n];
-    print $mkma qq[CCLIB=\$(CC) -c \$(CFLAGS) -I \$(MODDIR)                                            \\\n];
+    print $mkma qq[CCLIB=\$(CC) -c \$(CFLAGS) -I \$(MODDIR)  -I\$(Simple_source)/simple_utils        \\\n];
     if( $DCUDA =~ /DCUDA/ ) {
     print $mkma qq[                         -I \$(CUDADIR)/include/                                  \\\n];
     print $mkma qq[                         -I \$(CUDADIR)/src                                       \\\n];
@@ -589,7 +589,7 @@ sub make_Makefile_macros {
     print $mkma qq[\n];
     print $mkma qq[CPP=\$(GCC)\n];
     print $mkma qq[CPPFLAGS=$mkma_gpp_flags\n];
-    print $mkma qq[CPPCLIB=\$(CPP) -c \$(CPPFLAGS) -I \$(MODDIR)                                            \\\n];
+    print $mkma qq[CPPCLIB=\$(CPP) -c \$(CPPFLAGS) -I \$(MODDIR)  -I\$(Simple_source)/simple_utils        \\\n];
     if( $DCUDA =~ /DCUDA/ ) {
     print $mkma qq[                              -I \$(CUDADIR)/include/                                  \\\n];
     print $mkma qq[                              -I \$(CUDADIR)/src                                       \\\n];
@@ -617,7 +617,7 @@ sub make_Makefile_macros {
         print $mkma qq[NVCCFLAGS= --ptxas-options=-v \$(PUSHMEM_GPU) -O3 -DADD_ $DBENCH $DCUDA\n];
         print $mkma qq[NVCCFLAGS += -D_FORCE_INLINES -ccbin=\$(CXX) -Xcompiler -fPIC \$(COMMON_FLAGS)\n];
     }
-    print $mkma qq[NVCCCLIB=\$(NVCC) -c \$(NVCCFLAGS) -I \$(MODDIR)                                \\\n];
+    print $mkma qq[NVCCCLIB=\$(NVCC) -c \$(NVCCFLAGS) -I \$(MODDIR)    -I\$(Simple_source)/simple_utils  \\\n];
     print $mkma qq[                                 -I \$(CUDADIR)/include                       \\\n];
     print $mkma qq[                                 -I \$(Simple_source)/src/simple_gpu/cuda/cub \\\n];
     print $mkma qq[\n];
@@ -630,13 +630,13 @@ sub make_Makefile_macros {
     print $mkma qq[# \$(DLIB)\n];
     print $mkma qq[F90C=\$(GFORTRAN)\n];
     print $mkma qq[F90FLAGS=$mkma_f90_flags\n];
-    print $mkma qq[F90CLIB=\$(F90C) -c \$(F90FLAGS) -I \$(MODDIR)                      \\\n];
+    print $mkma qq[F90CLIB=\$(F90C) -c \$(F90FLAGS) -I \$(MODDIR)  -I\$(Simple_source)/simple_utils  \\\n];
     if( $FCOMPILER !~ /pgfortran/ and $FCOMPILER !~ /ifort/ ){
     print $mkma qq[                             -J \$(MODDIR)                      \\\n];
     }
     print $mkma qq[\n];
     print $mkma qq[\n];
-    print $mkma qq[F90CLIB77=\$(F90C) -c \$(F90FLAGS77) -I .                                \\\n];
+    print $mkma qq[F90CLIB77=\$(F90C) -c \$(F90FLAGS77) -I .   -I\$(Simple_source)/simple_utils  \\\n];
     print $mkma qq[                                   -I \$(MODDIR)                        \\\n];
     if( $FCOMPILER !~ /pgfortran/ and $FCOMPILER !~ /ifort/ ){
     print $mkma qq[                                   -J \$(MODDIR)                        \\\n];
