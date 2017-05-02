@@ -333,7 +333,8 @@ contains
             end do
             !$omp end parallel do
         else
-            !$omp parallel do collapse(2) default(shared) private(h,k,oshift,logi,phys) schedule(auto)
+            !$omp parallel do collapse(2) default(shared) private(h,k,oshift,logi,phys)&
+            !$omp schedule(auto)
             do h=lims(1,1),lims(1,2)
                 do k=lims(1,1),lims(1,2)
                     logi   = [h,k,0]

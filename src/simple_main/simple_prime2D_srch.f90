@@ -184,7 +184,7 @@ contains
         self%best_class = self%prev_class         
         self%best_rot   = self%prev_rot
         ! calculate previous best corr (treshold for better)
-        self%prev_corr  = max( 0., pftcc%corr_single(self%prev_class, iptcl, self%prev_rot) )
+        self%prev_corr  = max( 0., pftcc%corr(self%prev_class, iptcl, self%prev_rot) )
         self%best_corr  = self%prev_corr
         ! calculate spectral score
         frc = pftcc%genfrc(self%prev_class, iptcl, self%prev_rot)
@@ -242,7 +242,7 @@ contains
             call self%prep4srch( pftcc, iptcl, a )
             corr = self%prev_corr
             do iref=1,self%nrefs
-                corrs     = pftcc%gencorrs_serial(iref, iptcl) 
+                corrs     = pftcc%gencorrs(iref, iptcl) 
                 loc       = maxloc(corrs)
                 inpl_ind  = loc(1)
                 inpl_corr = corrs(inpl_ind)         
@@ -286,7 +286,7 @@ contains
                     ! keep track of how many references we are evaluating
                     self%nrefs_eval = self%nrefs_eval + 1
                     ! shc update
-                    corrs     = pftcc%gencorrs_serial(iref, iptcl) 
+                    corrs     = pftcc%gencorrs(iref, iptcl) 
                     inpl_ind  = shcloc(self%nrots, corrs, self%prev_corr)
                     inpl_corr = 0.
                     if( inpl_ind > 0 ) inpl_corr = corrs(inpl_ind)             
@@ -301,7 +301,7 @@ contains
             else
                 self%nrefs_eval = 1 ! evaluate one random ref
                 iref            = self%srch_order(1) ! random .ne. prev
-                corrs           = pftcc%gencorrs_serial(iref, iptcl) 
+                corrs           = pftcc%gencorrs(iref, iptcl) 
                 loc             = maxloc(corrs)
                 inpl_ind        = loc(1)
                 inpl_corr       = corrs(inpl_ind)
@@ -352,7 +352,7 @@ contains
             ! evaluate neighbors (greedy selection)
             do inn=1,self%nnn
                 iref      = nnmat(self%prev_class,inn)
-                corrs     = pftcc%gencorrs_serial(iref, iptcl) 
+                corrs     = pftcc%gencorrs(iref, iptcl) 
                 loc       = maxloc(corrs)
                 inpl_ind  = loc(1)
                 inpl_corr = corrs(inpl_ind)         

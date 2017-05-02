@@ -26,11 +26,10 @@ public :: ctfops_commander
 public :: filter_commander
 public :: image_smat_commander
 public :: norm_commander
-public :: respimg_commander
 public :: scale_commander
 public :: stack_commander
 public :: stackops_commander
-public :: fixmapheader_commander
+! public :: fixmapheader_commander
 private
 
 type, extends(commander_base) :: binarise_commander
@@ -73,14 +72,10 @@ type, extends(commander_base) :: stackops_commander
   contains
     procedure :: execute      => exec_stackops
 end type stackops_commander
-type, extends(commander_base) :: respimg_commander
-  contains
-    procedure :: execute      => exec_respimg
-end type respimg_commander
-type, extends(commander_base) :: fixmapheader_commander
-  contains
-    procedure :: execute      => exec_fixmapheader
-end type fixmapheader_commander
+! type, extends(commander_base) :: fixmapheader_commander
+!   contains
+!     procedure :: execute      => exec_fixmapheader
+! end type fixmapheader_commander
 
 contains
     
@@ -937,324 +932,24 @@ contains
     999 call simple_end('**** SIMPLE_STACKOPS NORMAL STOP ****')
     end subroutine exec_stackops
 
-    subroutine exec_respimg( self, cline )
-        use simple_stat,             only: pearsn, normalize_sigm, corrs2weights
-        use simple_aff_prop,         only: aff_prop
-        use simple_ori,              only: ori
-        use simple_image,            only: image
-        use simple_polarft_corrcalc, only: polarft_corrcalc
-        use simple_hadamard_common,  only: preprefs4align, reset_prev_defparms
-        use simple_ctf,              only: ctf
-        use simple_projector_hlev,   only: rotimg
-        class(respimg_commander), intent(inout) :: self
-        class(cmdline),           intent(inout) :: cline
-        type(params)                  :: p
-        type(build)                   :: b
-        type(ori)                     :: o
-        type(image), allocatable      :: imgs(:), ctfsqs(:)
-        type(image)                   :: ctfsqsum, new_img, last
-        type(aff_prop)                :: affprop
-        type(polarft_corrcalc)        :: pftcc
-        real,    allocatable          :: simmat(:,:), resp(:,:), weights(:)
-        integer, allocatable          :: proj_inds(:), centers(:), labels(:)
-        real                          :: x, y, simm, w
-        integer                       :: iptcl, i,j, proj, proj_pop, ncls, fnr
-        real,               parameter :: SHTHRESH=0.0001
-        p = params(cline)                   ! parameters generated
-        call b%build_general_tbox(p, cline) ! general objects built
-        ! Init
-        call b%img%new([p%box,p%box,1],p%smpd)
-        call new_img%new([p%box,p%box,1],p%smpd)
-        call last%new([p%box,p%box,1],p%smpd)
-        call ctfsqsum%new([p%box,p%box,1],p%smpd)
-        ncls = maxval( nint(b%a%get_all('class')) )
-        write(*,'(A,I6)') '>>> NUMBER OF PROJECTIONS DIRECTIONS', ncls
-        ! Main Loop over projdirs
-        do proj = 1,ncls
-            call progress( proj, ncls )
-            proj_pop = b%a%get_cls_pop( proj )
-            if( proj_pop == 0 )cycle
-            proj_inds = b%a%get_cls_pinds( proj )
-            if( proj_pop==1 )then
-                ! no weighing
-                iptcl = proj_inds( 1 )
-                o = b%a%get_ori( iptcl )
-                call b%img%read( p%stk, iptcl )
-                call prep4rec( b%img, o )
-                call b%img%write( p%outstk, iptcl )
-                deallocate( proj_inds )
-            else if( proj_pop>1 )then
-                ! Affinity propagation weighing
-                ! init 
-                allocate( simmat( proj_pop, proj_pop ), weights( proj_pop ) )
-                allocate( imgs(proj_pop), ctfsqs( proj_pop ) )
-                simmat = 1.
-                do i=1,proj_pop
-                    call imgs( i )%new([p%box,p%box,1],p%smpd)
-                    call ctfsqs( i )%new([p%box,p%box,1],p%smpd)
-                enddo
-                ! prep images
-                call pftcc%new(proj_pop, [p%fromp,p%top], [p%box,p%box,1], p%kfromto, 1, p%ctf)
-                do i = 1,proj_pop
-                    iptcl = proj_inds( i )
-                    o     = b%a%get_ori( iptcl )
-                    call b%img%read( p%stk, iptcl )
-                    imgs(i) = b%img
-                    ! prep for correlation
-                    call prep_img4align( b%img, o )
-                    call b%img%img2polarft(i, pftcc, isptcl=.true. )
-                    call b%img%img2polarft(i, pftcc, isptcl=.false. )
-                enddo
-                ! build similarity matrix
-                do i=1,proj_pop-1
-                    call reset_prev_defparms
-                    call preprefs4align(b, p, i, pftcc )
-                    do j=i+1,proj_pop
-                        simm = pftcc%corr(i,j,1)
-                        simmat( i,j ) = simm
-                        simmat( j,i ) = simm
-                    enddo
-                enddo
-                ! simmat = -(1.-simmat)**2.
-                ! if( proj_pop>2 )then
-                !     ! exec affinity propagation
-                !     call affprop%new( proj_pop, simmat, lam=0.6 )
-                !     call affprop%propagate( centers, labels, simm )
-                !     resp = affprop%get_resp()
-                !     call affprop%kill
-                !     !deallocate( centers, labels)
-                ! else
-                !     allocate( resp(2,2) )
-                !     resp = simmat
-                ! endif
-                ! prep image & ctfsq
-                do i=1,proj_pop
-                    o = b%a%get_ori( proj_inds(i) )
-                    call prep4rec( imgs(i), o )
-                    call prep_ctfsq( ctfsqs(i), o )
-                enddo
-                ! ! exponential weighing
-                ! resp = exp(resp)
-                ! ! linear weighing
-                ! !forall( i=1:proj_pop )resp(i,:) = resp(i,:)+abs(minval(resp(i,:)))
-                ! ! forall( i=1:proj_pop )resp(i,:) = (1.+resp(i,:)) / (1.+maxval(resp(i,:)))
-                ! forall( i=1:proj_pop )resp(i,:) = resp(i,:) / sum( resp(i,:) )
-                ! generate substitute particles
-                do i=1,proj_pop
-                    iptcl = proj_inds( i )
-                    new_img  = 0.
-                    ctfsqsum = cmplx(0.,0.)
-                    !call normalize_sigm(resp(i,:))
-                    !resp(i,:) = exp(resp(i,:))
-                    !resp(i,:) = resp(i,:)/sum(resp(i,:))
-                    !weights = corrs2weights( simmat( i,:) )
-                    weights = simmat(i,:)**12.
-                    print *,proj,i,simmat(i,:)
-                    print *,proj,i,weights
-                    !print *,proj,i,simmat(i,:)**2.
-                    do j=1,proj_pop
-                        ! if( proj_pop>2 )then
-                        !     if( labels(j).ne.labels(i) )cycle
-                        ! endif
-                        ! w = resp(i,j)
-                        w = weights( j )
-                        if( w<= 0. )cycle
-                        ! accumulates imgs
-                        b%img = imgs(j)
-                        call b%img%mul( w )
-                        call new_img%add( b%img )
-                        ! accumulates CTFsq
-                        b%img = ctfsqs(j)
-                        call b%img%mul( w )
-                        call ctfsqsum%add( b%img )
-                    enddo
-                    ! CTFsq sum division
-                    call new_img%fwd_ft
-                    call new_img%ctf_dens_correct( ctfsqsum )
-                    call new_img%bwd_ft
-                    call new_img%norm
-                    if( iptcl.eq.p%nptcls )then
-                        last = new_img
-                    else
-                        call new_img%write( p%outstk, iptcl )
-                    endif
-                enddo
-                ! generate cavg
-                ! new_img  = 0.
-                ! ctfsqsum = cmplx(0.,0.)
-                ! do i=1,proj_pop
-                !     call new_img%add( imgs(i) )
-                !     !call ctfsqsum%add( ctfsqs(i) )
-                ! enddo
-                ! ! call new_img%fwd_ft
-                ! ! call new_img%ctf_dens_correct( ctfsqsum )
-                ! ! call new_img%bwd_ft
-                ! call new_img%div( real(proj_pop) )
-                ! !call new_img%norm
-                ! call new_img%write( 'cavgs.mrc', proj )
-                ! deallocation
-                if( allocated(weights) )deallocate(weights)
-                if( allocated(simmat) )deallocate(simmat)
-                if( allocated(centers) )deallocate(centers)
-                if( allocated(labels) )deallocate(labels)
-                do i=1,proj_pop
-                    call imgs(i)%kill
-                    call ctfsqs(i)%kill
-                enddo
-                if( allocated(resp) )deallocate( resp )
-                deallocate( proj_inds, imgs, ctfsqs )
-            endif
-        enddo
-        call last%write( p%outstk, p%nptcls )
-        ! orientations output
-        do i=1,b%a%get_noris()
-            o = b%a%get_ori( i )
-            call o%set('x',0.)
-            call o%set('y',0.)
-            call o%e3set( 0. )
-            call o%set('dfx',0.)
-            call o%set('dfy',0.)
-            call o%set('angast',0.)
-            call b%a%set_ori( i, o )
-        enddo
-        call b%a%write( p%outfile )
-        call simple_end('**** SIMPLE_RESPIMG NORMAL STOP ****')
-
-        contains
-
-        subroutine prep_img4align( img, o )
-            class(image), intent(inout) :: img
-            type(ori),    intent(inout) :: o
-            type(image) :: img_rot
-            type(ctf)   :: tfun
-            real        :: x, y, dfx, dfy, angast
-            if( p%ctf .ne. 'no' )then
-                ! create ctf object
-                tfun = ctf(img%get_smpd(),o%get('kv'),o%get('cs'),o%get('fraca'))
-                select case(p%tfplan%mode)
-                    case('astig') ! astigmatic CTF
-                        dfx    = o%get('dfx')
-                        dfy    = o%get('dfy')
-                        angast = o%get('angast')
-                    case('noastig') ! non-astigmatic CTF
-                        dfx    = o%get('dfx')
-                        dfy    = dfx
-                        angast = 0.
-                    case DEFAULT
-                        write(*,*) 'Unsupported p%tfplan%mode: ', trim(p%tfplan%mode)
-                        stop 'simple_hadamard_common :: prepimg4align'
-                end select
-            endif
-            call img%fwd_ft
-            select case(p%ctf)
-                case('mul')  ! images have been multiplied with the CTF, no CTF-dependent weighting of the correlations
-                    stop 'ctf=mul is not supported; simple_hadamard_common :: prepimg4align' 
-                case('no')   ! do nothing
-                case('yes')  ! do nothing
-                case('flip') ! flip back
-                    call tfun%apply( img, dfx, 'flip', dfy, angast )
-                case DEFAULT
-                    stop 'Unsupported ctf mode; simple_hadamard_common :: prepimg4align'
-            end select
-            ! shift image to rotational origin
-            x = o%get('x')
-            y = o%get('y')
-            if( abs(x) > SHTHRESH .or. abs(y) > SHTHRESH ) call img%shift(-x, -y)
-            ! rotation
-            call rotimg( img, -o%e3get(), p%msk, img_rot )
-            img = img_rot
-            call img_rot%kill
-            call img%bwd_ft
-            call img%mask(p%msk, 'soft')
-            call img%fwd_ft
-        end subroutine
-
-        subroutine prep4rec( img, o )
-            class(image), intent(inout) :: img
-            type(ori),   intent(inout) :: o
-            type(image) :: img_rot
-            type(ctf)   :: tfun
-            real :: x, y, dfx, dfy, angast
-            call img_rot%new( img%get_ldim(), img%get_smpd() )
-            if( p%ctf .ne. 'no' )then
-                ! create ctf object
-                tfun = ctf(img%get_smpd(),o%get('kv'),o%get('cs'),o%get('fraca'))
-                select case(p%tfplan%mode)
-                    case('astig') ! astigmatic CTF
-                        dfx    = o%get('dfx')
-                        dfy    = o%get('dfy')
-                        angast = o%get('angast')
-                    case('noastig') ! non-astigmatic CTF
-                        dfx    = o%get('dfx')
-                        dfy    = dfx
-                        angast = 0.
-                end select
-            endif
-            call img%fwd_ft
-            select case(p%tfplan%flag)
-                case('yes')  ! multiply with CTF
-                    call tfun%apply(img, dfx, 'ctf', dfy, angast)
-                case('flip') ! multiply with abs(CTF)
-                    call tfun%apply(img, dfx, 'abs', dfy, angast)
-                case('mul','no')  ! do nothing
-                    ! doing nothing
-                case DEFAULT
-                    write(*,*) 'Unsupported ctfflag: ', p%tfplan%flag
-                    stop 'simple_filterer :: wiener_restore2D_online'
-            end select
-            ! shift image to rotational origin
-            x = o%get('x')
-            y = o%get('y')
-            if( abs(x) > SHTHRESH .or. abs(y) > SHTHRESH ) call img%shift(-x, -y)
-            ! rotation
-            call rotimg(img, -o%e3get(), p%msk, img_rot )
-            img = img_rot
-            !call img%bwd_ft
-            call img_rot%kill
-        end subroutine prep4rec
-
-        subroutine prep_ctfsq( img, o )
-            type(image), intent(inout) :: img
-            type(ori),   intent(inout) :: o
-            type(ctf) :: tfun
-            real      :: dfx, dfy, angast
-            if( p%tfplan%flag .ne. 'no' )then
-                ! create ctf object
-                tfun = ctf(img%get_smpd(),o%get('kv'),o%get('cs'),o%get('fraca'))
-                select case(p%tfplan%mode)
-                    case('astig') ! astigmatic CTF
-                        dfx    = o%get('dfx')
-                        dfy    = o%get('dfy')
-                        angast = o%get('angast')
-                    case('noastig') ! non-astigmatic CTF
-                        dfx    = o%get('dfx')
-                        dfy    = dfx
-                        angast = 0.
-                end select
-                call tfun%ctf2img( img, dfx, 'square', dfy, angast)
-            endif
-        end subroutine prep_ctfsq
-
-    end subroutine exec_respimg
-
-    subroutine exec_fixmapheader( self, cline )
-        use simple_image,   only: image
-        use simple_imgfile, only: imgfile
-        class(fixmapheader_commander), intent(inout) :: self
-        class(cmdline),                intent(inout) :: cline
-        type(params) :: p
-        type(image)  :: img 
-        real         :: dev
-        integer      :: ldim(3), maxim
-        p = params(cline) ! parameters generated
-        ! read vol
-        call find_ldim_nptcls(p%vols(1), ldim, maxim)
-        call img%new(ldim, p%smpd)
-        call img%read(p%vols(1))
-        ! set RMSD
-        dev = img%rmsd()
-        ! header will be sorted on write
-        call img%write(p%outvol, rmsd=dev)
-    end subroutine exec_fixmapheader
+    ! subroutine exec_fixmapheader( self, cline )
+    !     use simple_image,   only: image
+    !     use simple_imgfile, only: imgfile
+    !     class(fixmapheader_commander), intent(inout) :: self
+    !     class(cmdline),                intent(inout) :: cline
+    !     type(params) :: p
+    !     type(image)  :: img 
+    !     real         :: dev
+    !     integer      :: ldim(3), maxim
+    !     p = params(cline) ! parameters generated
+    !     ! read vol
+    !     call find_ldim_nptcls(p%vols(1), ldim, maxim)
+    !     call img%new(ldim, p%smpd)
+    !     call img%read(p%vols(1))
+    !     ! set RMSD
+    !     dev = img%rmsd()
+    !     ! header will be sorted on write
+    !     call img%write(p%outvol, rmsd=dev)
+    ! end subroutine exec_fixmapheader
 
 end module simple_commander_imgproc

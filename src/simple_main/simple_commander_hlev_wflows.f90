@@ -386,12 +386,24 @@ contains
         type(cmdline)                 :: cline_prime3D
         type(cmdline)                 :: cline_recvol_distr
         ! other variables
+        integer,               allocatable :: labels(:,:), labels_incl(:,:), consensus(:)
+        character(len=STDLEN), allocatable :: init_docs(:), final_docs(:)
+        logical,               allocatable :: included(:)
         type(params)                  :: p_master
-        type(oris)                    :: os, rep_os
-        integer, allocatable          :: labels(:,:), labels_incl(:,:), consensus(:)
-        logical, allocatable          :: included(:)
+        type(oris)                    :: os
         character(len=STDLEN)         :: oritab, vol1, vol2, fname
         integer                       :: irepeat, state, iter, n_incl, it
+        ! some init
+        allocate(init_docs(NREPEATS), final_docs(NREPEATS))
+        do irepeat=1,NREPEATS
+            oritab              = trim(REPEATFBODY)//'init_rep'//int2str_pad(irepeat,2)//'.txt'
+            init_docs(irepeat)  = trim(oritab)
+            oritab              = trim(REPEATFBODY)//'rep'//int2str_pad(irepeat,2)//'.txt'
+            final_docs(irepeat) = trim(oritab)
+            call del_file(init_docs(irepeat))
+            call del_file(final_docs(irepeat))
+        enddo
+
         ! set cline defaults
         call cline%set('eo', 'no')
         if(nint(cline%get_rarg('nstates')) <= 1)stop 'Non-sensical NSTATES argument for heterogeinity analysis!'
@@ -422,11 +434,14 @@ contains
         write(*,'(A)') '>>>'
         call os%new(p_master%nptcls)
         call os%read(p_master%oritab)
-        labels   = diverse_labeling( p_master%nptcls, p_master%nstates, NREPEATS)
+        labels   = diverse_labeling(p_master%nptcls, p_master%nstates, NREPEATS)
         included = os%included()
         n_incl   = count(included)
+        ! GENERATE ORIENTATIONS
         do irepeat=1,NREPEATS
             where( .not.included )labels(irepeat,:) = 0
+            call os%set_all('state', real(labels(irepeat,:)))
+            call os%write( trim(init_docs(irepeat)) )
         enddo
 
         ! GENERATE CANDIDATE SOLUTIONS
@@ -434,25 +449,18 @@ contains
             write(*,'(A)')    '>>>'
             write(*,'(A,I3)') '>>> PRIME3D REPEAT ', irepeat
             write(*,'(A)')    '>>>'
-            ! GENERATE ORIENTATIONS
-            rep_os = os
-            call rep_os%set_all('state', real(labels(irepeat,:)))
-            oritab = trim(REPEATFBODY)//'init_rep'//int2str_pad(irepeat,2)//'.txt'
-            call del_file(oritab)
-            call rep_os%write(trim(oritab))
             ! RUN PRIME3D
             cline_prime3D = cline_prime3D_master
-            call cline_prime3D%set('oritab',oritab)
+            call cline_prime3D%set('oritab', init_docs(irepeat))
             call xprime3D_distr%execute(cline_prime3D)
             ! HARVEST OUTCOME
             iter   = nint(cline_prime3D%get_rarg('endit'))
             oritab = 'prime3Ddoc_'//int2str_pad(iter,3)//'.txt'
-            call rep_os%read(trim(oritab))
-            ! updates labels
-            labels(irepeat,:) = nint(rep_os%get_all('state'))
+            call os%read(oritab)
+            ! updates labels & stash
+            labels(irepeat,:) = nint(os%get_all('state'))
             ! stash candidate solution
-            fname = trim(REPEATFBODY)//'rep'//int2str_pad(irepeat,2)//'.txt'
-            call rename(trim(oritab), trim(fname))
+            call rename(trim(oritab), trim(final_docs(irepeat)))
             ! STASH FINAL VOLUMES
             call stash_volumes
             ! CLEANUP
@@ -471,6 +479,7 @@ contains
         enddo
         labels(1,:) = 0
         call shc_aggregation(NREPEATS, n_incl, labels_incl, consensus)
+        call os%read(oritab)
         call os%set_all('state', real(unpack(consensus, included, labels(1,:))) )
         call os%write(trim(oritab))
         call os%kill
@@ -510,11 +519,13 @@ contains
             subroutine stash_volumes
                 ! renames final volumes of each repeat for all states
                 do state=1,p_master%nstates
-                    vol1 = trim(VOLFBODY)//int2str_pad(state,2)//'_iter'//int2str_pad(iter,3)//p_master%ext
                     vol2 = trim(HETFBODY)//int2str_pad(irepeat,2)//'_'//trim(VOLFBODY)//int2str_pad(state,2)//p_master%ext
+                    call del_file(trim(vol2))
+                    vol1 = trim(VOLFBODY)//int2str_pad(state,2)//'_iter'//int2str_pad(iter,3)//p_master%ext
                     call rename(trim(vol1), trim(vol2))
-                    vol1 = trim(VOLFBODY)//int2str_pad(state,2)//'_iter'//int2str_pad(iter,3)//'pproc'//p_master%ext
                     vol2 = trim(HETFBODY)//int2str_pad(irepeat,2)//'_'//trim(VOLFBODY)//int2str_pad(state,2)//'pproc'//p_master%ext
+                    call del_file(trim(vol2))
+                    vol1 = trim(VOLFBODY)//int2str_pad(state,2)//'_iter'//int2str_pad(iter,3)//'pproc'//p_master%ext
                     call rename(trim(vol1), trim(vol2))
                 enddo
             end subroutine stash_volumes

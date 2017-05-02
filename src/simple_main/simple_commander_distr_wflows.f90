@@ -736,7 +736,7 @@ contains
         call cline_merge_algndocs%set( 'ndocs',  real(p_master%nparts) )
         call cline_check3D_conv%set( 'box',    real(p_master%box))
         call cline_check3D_conv%set( 'nptcls', real(p_master%nptcls))
-        call cline_volassemble%set( 'nthr', 1. )
+        !call cline_volassemble%set( 'nthr', 1. )
         call cline_postproc_vol%set( 'nstates', 1. )
         ! removes unnecessary volume keys
         do state = 1,p_master%nstates

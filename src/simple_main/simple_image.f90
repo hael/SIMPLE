@@ -805,20 +805,22 @@ contains
     end subroutine read
 
     !>  \brief  for writing any kind of images to stack or volumes to volume files
-    subroutine write( self, fname, i, del_if_exists, formatchar, rmsd )
+    subroutine write( self, fname, i, del_if_exists, formatchar )
         class(image),               intent(inout) :: self
         character(len=*),           intent(in)    :: fname
         integer,          optional, intent(in)    :: i
         logical,          optional, intent(in)    :: del_if_exists
         character(len=1), optional, intent(in)    :: formatchar
-        real,             optional, intent(in)    :: rmsd
         type(image) :: tmpimg
+        real        :: dev
         if( self%imgkind .eq. 'xfel' )then
              call self%ft2img('real', tmpimg)
-             call tmpimg%write_emkind(fname, i, del_if_exists, formatchar=formatchar, rmsd=rmsd)
+             call tmpimg%write_emkind(fname, i, del_if_exists, formatchar=formatchar)
              call tmpimg%kill
         else
-            call self%write_emkind(fname, i, del_if_exists, formatchar=formatchar, rmsd=rmsd)
+            ! to prepare the header for coot
+            dev = self%rmsd()
+            call self%write_emkind(fname, i, del_if_exists, formatchar=formatchar, rmsd=dev)
         endif
     end subroutine write
 

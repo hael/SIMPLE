@@ -290,7 +290,6 @@ contains
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: converged
-
         type(projector),        allocatable :: batch_imgs(:)
         type(polarft_corrcalc), allocatable :: pftccs(:)
         type(pcont3D_srch),     allocatable :: pcont3Dsrchs(:)
@@ -303,6 +302,7 @@ contains
         ! AUTOMASKING DEACTIVATED FOR NOW
         ! INIT
         nptcls          = p%top - p%fromp + 1       ! number of particles processed
+        allocate(state_exists(p%nstates))
         state_exists    = b%a%get_state_exist(p%nstates)    ! state existence
         neff_states     = count(state_exists)       ! number of non-empty states
         nrefs_per_ptcl  = NREFS*neff_states         ! number of references per particle
@@ -390,7 +390,7 @@ contains
                 call pcont3Dsrchs(iptcl)%new(p, orientation, orefs, pftccs(iptcl))
             enddo
             ! SEARCH
-            !$omp parallel do default(shared) schedule(auto) private(iptcl)
+            !$omp parallel do default(shared) schedule(dynamic,2) private(iptcl)
             do iptcl = fromp, top
                 call pcont3Dsrchs(iptcl)%do_srch
                 call pftccs(iptcl)%kill ! cleanup
@@ -450,7 +450,8 @@ contains
         do state=1,p%nstates
             if(state_exists(state))call b%refvols(state)%kill_expanded
         enddo
-        !call b%img%kill_imgpolarizer is private a the moment
+        deallocate(state_exists)
+        call b%img%kill_expanded
     end subroutine pcont3D_exec_single
 
 end module simple_pcont3D_matcher

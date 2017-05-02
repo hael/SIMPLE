@@ -87,14 +87,9 @@ type :: polarft_corrcalc
     ! CALCULATORS
     procedure          :: create_polar_ctfmat
     procedure          :: create_polar_ctfmats
-    ! procedure, private :: gencorrs_all_cpu_1
-    ! procedure, private :: gencorrs_all_cpu_2
-    ! generic            :: gencorrs_all_cpu => gencorrs_all_cpu_1, gencorrs_all_cpu_2
-    procedure          :: gencorrs_serial
-    ! procedure          :: gencorrs
+    procedure          :: gencorrs
     procedure          :: genfrc
     procedure          :: corrs
-    procedure          :: corr_single
     procedure, private :: corr_1
     procedure, private :: corr_2
     generic            :: corr => corr_1, corr_2
@@ -749,56 +744,8 @@ contains
         end do
     end subroutine create_polar_ctfmats
 
-    !>  \brief  routine for generating all rotational correlations
-    ! subroutine gencorrs_all_cpu_1( self, corrmat3dout )
-    !     !$ use omp_lib
-    !     !$ use omp_lib_kinds
-    !     class(polarft_corrcalc), intent(inout) :: self
-    !     real,                    intent(out)   :: corrmat3dout(self%pfromto(1):self%pfromto(2),self%nrefs,self%nrots)
-    !     integer :: iptcl, iref, nptcls
-    !     !$omp parallel default(shared) private(iref)
-    !     do iptcl=self%pfromto(1),self%pfromto(2)
-    !         ! tried to parallelize this one level up, which doesn't work because 
-    !         ! then we would need one CTF modulated reference array per thread
-    !         ! as we would otherwise get a race condition because different threads
-    !         ! try to write to the same memory location
-    !         !$omp do schedule(auto)
-    !         do iref=1,self%nrefs
-    !             if( self%with_ctf ) call self%apply_ctf_single(iptcl, iref)
-    !             corrmat3dout(iptcl,iref,:) = self%gencorrs_serial(iref,iptcl)
-    !         end do
-    !         !$omp end do
-    !     end do
-    !     !$omp end parallel
-    ! end subroutine gencorrs_all_cpu_1
-
-    !>  \brief  routine for generating all rotational correlations
-    ! subroutine gencorrs_all_cpu_2( self, prev_refs, nnn, nnmat, corrmat3dout )
-    !     !$ use omp_lib
-    !     !$ use omp_lib_kinds
-    !     class(polarft_corrcalc), intent(inout) :: self
-    !     integer,                 intent(in)    :: prev_refs(self%pfromto(1):self%pfromto(2)),nnn,nnmat(self%nrefs,nnn)
-    !     real,                    intent(out)   :: corrmat3dout(self%pfromto(1):self%pfromto(2),nnn,self%nrots)
-    !     integer :: iptcl, iref, nptcls, inn
-    !     !$omp parallel default(shared) private(inn,iref)
-    !     do iptcl=self%pfromto(1),self%pfromto(2)
-    !         ! tried to parallelize this one level up, which doesn't work because 
-    !         ! then we would need one CTF modulated reference array per thread
-    !         ! as we would otherwise get a race condition because different threads
-    !         ! try to write to the same memory location
-    !         !$omp do schedule(auto)
-    !         do inn=1,nnn
-    !             iref = nnmat(prev_refs(iptcl),inn)
-    !             if( self%with_ctf ) call self%apply_ctf_single(iptcl, iref)
-    !             corrmat3dout(iptcl,inn,:) = self%gencorrs_serial(iref,iptcl)
-    !         end do
-    !         !$omp end do
-    !     end do
-    !     !$omp end parallel
-    ! end subroutine gencorrs_all_cpu_2
-
     !>  \brief  is for generating rotational correlations
-    function gencorrs_serial( self, iref, iptcl, roind_vec ) result( cc )
+    function gencorrs( self, iref, iptcl, roind_vec ) result( cc )
         class(polarft_corrcalc), intent(inout) :: self        !< instance
         integer,                 intent(in)    :: iref, iptcl !< ref & ptcl indices
         integer,       optional, intent(in)    :: roind_vec(:)
@@ -809,7 +756,7 @@ contains
             ! calculates only corrs for rotational indices provided in roind_vec
             ! see get_win_roind. returns -1.0 when not calculated
             if( any(roind_vec<=0) .or. any(roind_vec>self%nrots) )&
-                &stop'index out of range; simple_polarft_corrcalc::gencorrs_serial'
+                &stop'index out of range; simple_polarft_corrcalc::gencorrs'
             cc    = -1.
             nrots = size(roind_vec)
             do i=1,nrots
@@ -822,40 +769,7 @@ contains
                 cc(irot) = self%corr_1(iref, iptcl, irot)
             end do
         endif
-    end function gencorrs_serial
-
-    !>  \brief  is for generating rotational correlations
-    ! function gencorrs( self, iref, iptcl, roind_vec ) result( cc )
-    !     !$ use omp_lib
-    !     !$ use omp_lib_kinds
-    !     class(polarft_corrcalc), intent(inout) :: self        !< instance
-    !     integer,                 intent(in)    :: iref, iptcl !< ref & ptcl indices
-    !     integer,       optional, intent(in)    :: roind_vec(:)
-    !     real      :: cc(self%nrots)
-    !     integer   :: irot, i, nrots
-    !     if( self%with_ctf ) call self%apply_ctf_single(iptcl, iref)
-    !     if( present(roind_vec) )then
-    !         ! calculates only corrs for rotational indices provided in roind_vec
-    !         ! see get_win_roind. returns -1.0 when not calculated
-    !         if( any(roind_vec<=0) .or. any(roind_vec>self%nrots) )&
-    !             &stop'index out of range; simple_polarft_corrcalc::gencorrs'
-    !         cc    = -1.
-    !         nrots = size(roind_vec)
-    !         !$omp parallel do schedule(auto) default(shared) private(i,irot)
-    !         do i=1,nrots
-    !             irot = roind_vec(i)
-    !             cc(irot) = self%corr_1(iref, iptcl, irot)
-    !         end do
-    !         !$omp end parallel do 
-    !     else
-    !         ! all correlations
-    !         !$omp parallel do schedule(auto) default(shared) private(irot)
-    !         do irot=1,self%nrots
-    !             cc(irot) = self%corr_1(iref, iptcl, irot)
-    !         end do
-    !         !$omp end parallel do 
-    !     endif
-    ! end function gencorrs
+    end function gencorrs
 
     !>  \brief  is for generating rotational correlations
     function corrs( self, refvec, nrefs_in, iptcl, irot) result( cc )
@@ -914,16 +828,6 @@ contains
     end function genfrc
 
     !>  \brief  for calculating the correlation between reference iref and particle iptcl in rotation irot
-    !    for a single 
-    function corr_single( self, iref, iptcl, irot ) result( cc )
-        class(polarft_corrcalc), intent(inout) :: self              !< instance
-        integer,                 intent(in)    :: iref, iptcl, irot !< reference, particle, rotation
-        real    :: cc
-        if( self%with_ctf )call self%apply_ctf_single(iptcl, iref)
-        cc = self%corr_1(iref, iptcl, irot)
-    end function corr_single
-
-    !>  \brief  for calculating the correlation between reference iref and particle iptcl in rotation irot
     function corr_1( self, iref, iptcl, irot ) result( cc )
         class(polarft_corrcalc), intent(inout) :: self              !< instance
         integer,                 intent(in)    :: iref, iptcl, irot !< reference, particle, rotation
@@ -933,6 +837,7 @@ contains
             return
         endif
         if( self%with_ctf )then
+            call self%apply_ctf_single(iptcl, iref)
             cc = sum(real(self%pfts_refs_ctf(iref,:,:) * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:))))
         else
             cc = sum(real(self%pfts_refs(iref,:,:) * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:))))

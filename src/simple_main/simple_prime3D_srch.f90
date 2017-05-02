@@ -70,6 +70,7 @@ type prime3D_srch
     procedure          :: prep4srch
     procedure          :: prep_corr4srch
     procedure          :: prep_reforis
+    procedure, private :: prep_specscore
     ! SEARCH ROUTINES
     procedure          :: exec_prime3D_srch
     procedure          :: exec_prime3D_srch_shc
@@ -468,11 +469,8 @@ contains
         real,                    intent(in)    :: lp
         type(ori)         :: o_prev
         real              :: cc_t_min_1, corr
-        real, allocatable :: frc(:)
-        o_prev         = a%get_ori(iptcl)
-        corr           = max( 0., pftcc%corr_single(self%prev_ref, iptcl, self%prev_roind) )
-        frc            = pftcc%genfrc(self%prev_ref, iptcl, self%prev_roind)
-        self%specscore = max(0.,median_nocopy(frc))
+        o_prev = a%get_ori(iptcl)
+        corr   = max( 0., pftcc%corr(self%prev_ref, iptcl, self%prev_roind) )
         if( corr > 1. .or. .not. is_a_number(corr) )then
             stop 'Invalid correlation value in simple_prime3d_srch::prep_corr4srch'
         endif
@@ -489,8 +487,20 @@ contains
             endif
         endif
         self%prev_corr = corr
+        call self%prep_specscore(pftcc, iptcl)
         if( DEBUG ) write(*,'(A)') '>>> PRIME3D_SRCH::PREPARED CORRELATION FOR SIMPLE_PRIME3D_SRCH'
     end subroutine prep_corr4srch
+
+    !>  \brief calculates and store spectral score
+    subroutine prep_specscore( self, pftcc, iptcl )
+        class(prime3D_srch),     intent(inout) :: self
+        class(polarft_corrcalc), intent(inout) :: pftcc
+        integer,                 intent(in)    :: iptcl
+        real, allocatable :: frc(:)
+        frc = pftcc%genfrc(self%prev_ref, iptcl, self%prev_roind)
+        self%specscore = max(0., median_nocopy(frc))
+        deallocate(frc)
+    end subroutine prep_specscore
 
     !>  \brief retrieves and preps npeaks orientations for reconstruction
     subroutine prep_npeaks_oris( self )
@@ -615,7 +625,6 @@ contains
         class(oris),             intent(inout) :: a, e
         real,                    intent(in)    :: extr_bound
         integer,                 intent(inout) :: statecnt(self%nstates)
-        call self%online_allocate
         call self%stochastic_srch_het(pftcc, iptcl, a, e, extr_bound, statecnt)
         call self%online_destruct
         if( DEBUG ) write(*,'(A)') '>>> PRIME3D_SRCH::EXECUTED PRIME3D_HET_SRCH'
@@ -671,7 +680,7 @@ contains
                 state = 1
                 if( self%nstates > 1 ) state = nint( self%o_refs%get(iref, 'state') )
                 if( self%state_exists(state) )then
-                    corrs     = pftcc%gencorrs_serial(iref, iptcl) ! In-plane correlations
+                    corrs     = pftcc%gencorrs(iref, iptcl) ! In-plane correlations
                     loc       = maxloc(corrs)                      ! greedy in-plane
                     inpl_ind  = loc(1)                             ! in-plane angle index
                     inpl_corr = corrs(inpl_ind)                    ! max in plane correlation
@@ -751,7 +760,7 @@ contains
                 state = 1
                 if( self%nstates > 1 ) state = nint( self%o_refs%get(iref, 'state') )
                 if( self%state_exists(state) )then
-                    corrs     = pftcc%gencorrs_serial(iref, iptcl) ! In-plane correlations
+                    corrs     = pftcc%gencorrs(iref, iptcl) ! In-plane correlations
                     loc       = maxloc(corrs)                      ! greedy in-plane
                     inpl_ind  = loc(1)                             ! in-plane angle index
                     inpl_corr = corrs(inpl_ind)                    ! max in plane correlation
@@ -775,7 +784,7 @@ contains
                 state = 1
                 if( self%nstates>1 ) state = nint( self%o_refs%get(iref, 'state') )
                 if( self%state_exists( state ) )then
-                    corrs     = pftcc%gencorrs_serial(iref, iptcl) ! In-plane correlations
+                    corrs     = pftcc%gencorrs(iref, iptcl) ! In-plane correlations
                     loc       = maxloc(corrs)                      ! greedy in-plane
                     inpl_ind  = loc(1)                             ! in-plane angle index
                     inpl_corr = corrs(loc(1))                      ! max in plane correlation
@@ -794,7 +803,7 @@ contains
                         do isym=1,self%nsym - 1
                             iref_sym = self%nnmat_sym(iref,isym)
                             if( self%proj_space_inds(iref_sym) /= 0 ) cycle
-                            corrs     = pftcc%gencorrs_serial(iref_sym, iptcl) ! In-plane correlations
+                            corrs     = pftcc%gencorrs(iref_sym, iptcl) ! In-plane correlations
                             loc       = maxloc(corrs)                          ! greedy in-plane
                             inpl_ind  = loc(1)                                 ! in-plane angle index
                             inpl_corr = corrs(loc(1))                          ! max in plane correlation
@@ -872,7 +881,7 @@ contains
                 state     = 1
                 if( self%nstates > 1 ) state = nint( self%o_refs%get(iref, 'state') )
                 if( self%state_exists( state ) )then
-                    corrs    = pftcc%gencorrs_serial( iref, iptcl )      ! in-plane correlations 
+                    corrs    = pftcc%gencorrs( iref, iptcl )      ! in-plane correlations 
                     inpl_ind = shcloc(self%nrots, corrs, self%prev_corr) ! first improving in-plane index
                     if( inpl_ind > 0 ) inpl_corr = corrs( inpl_ind )     ! improving correlation found
                     self%nrefs_eval = self%nrefs_eval + 1                ! updates fractional search space
@@ -895,6 +904,7 @@ contains
         if( nint(a%get(iptcl, 'state')) > 0 )then
             ! initialize
             call self%prep4srch(iptcl, a, e)
+            call self%prep_specscore(pftcc, iptcl)
             if(a%get(iptcl,'corr') < extr_bound)then
                 ! state randomization
                 statecnt(self%prev_state) = statecnt(self%prev_state) + 1
@@ -904,18 +914,18 @@ contains
                     state = irnd_uni(self%nstates)
                 enddo
                 iref = (state - 1) * self%nprojs + self%prev_proj
-                corr = pftcc%corr_single(iref, iptcl, self%prev_roind)
+                corr = pftcc%corr(iref, iptcl, self%prev_roind)
             else
                 ! SHC
                 corrs = -1.
                 do state=1,self%nstates
                     if( .not.self%state_exists(state) )cycle
                     iref = (state-1) * self%nprojs + self%prev_proj 
-                    corrs(state) = pftcc%corr_single(iref, iptcl, self%prev_roind)
+                    corrs(state) = pftcc%corr(iref, iptcl, self%prev_roind)
                 enddo
                 self%prev_corr  = corrs(self%prev_state)
-                loc             = shcloc(self%nstates, corrs, self%prev_corr)
-                state           = loc(1)
+                state           = shcloc(self%nstates, corrs, self%prev_corr)
+                if(state == 0)state = self%prev_state ! numerical stability
                 corr            = corrs(state)
                 self%nrefs_eval = count(corrs <= self%prev_corr)
             endif
@@ -923,6 +933,7 @@ contains
             call a%set(iptcl, 'frac', frac)
             call a%set(iptcl, 'state', real(state))
             call a%set(iptcl, 'corr', corr)
+            call a%set(iptcl, 'specscore', self%specscore)
             call a%set(iptcl, 'mi_proj', 1.)
             call a%set(iptcl, 'mi_inpl', 1.)
             if( self%prev_state .ne. state )then
