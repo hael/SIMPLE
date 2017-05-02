@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<DOCTYPE html>
 <html>
 	<head>
 		<title>Simple</title>
@@ -34,6 +34,7 @@
 			<div class=bodyheader onclick=projectHistoryFull()>
 				<img id=historyicon src=img/right_chevron.png>
 				<b>Project History</b>
+				<img id=historyrefreshicon src=img/refresh.png onclick="refreshProject();">
 			</div>
 			<table class=historytable>
 				<thead>
@@ -94,7 +95,7 @@
 	</div>
 	
 	<div id=newprojectpopup>
-		<div class=popupheader>
+		<div class=bodyheader>
 			<b>Create New Project</b>
 		</div>
 		<table class=popuptable>
@@ -113,8 +114,8 @@
 	</div>
 	
 	<div id=jobrunparameterspopup>
-		<div class=popupheader>
-			Job Parameters
+		<div class=bodyheader>
+			<b>Job Parameters</b>
 		</div>
 		<table class=popuptable id=jobrunparameterstable>
 			<tr>

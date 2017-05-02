@@ -381,7 +381,7 @@ body {
 	left: calc(50% - 200px);
 	background-color: white;
 	display: none;
-	z-index: 200;
+	z-index: 300;
 	border-style: solid;
 	border-color: rgb(154, 172, 196);
 	border-width: 5px
@@ -413,22 +413,30 @@ body {
 
 #newprojectpopup {
 	position: absolute;
-	height: 154px;
+	height: 162px;
 	width: 400px;
 	top: calc(50% - 100px);
 	left: calc(50% - 200px);
 	background-color: white;
 	display: none;
+	z-index: 200;
+	border-style: solid;
+	border-color: rgb(154, 172, 196);
+	border-width: 5px
 }
 
 #jobrunparameterspopup {
 	position: absolute;
-	height: 400px;
+	height: 380px;
 	width: 600px;
 	top: calc(50% - 200px);
 	left: calc(50% - 200px);
 	background-color: white;
 	display: none;
+	z-index: 200;
+	border-style: solid;
+	border-color: rgb(154, 172, 196);
+	border-width: 5px
 }
 
 #pipelineactionsbutton {
@@ -467,10 +475,23 @@ body {
 }
 
 #historytableheader {
-	background-color: #6a85a8;;
+	background-color: #6a85a8;
 	color: white;
 }
 
+#historyrefreshicon {
+	float: right;
+	margin-top: 4px;
+}
+
+#viewjobfilestable tr:nth-child(odd) {
+	background-color: rgb(201, 218, 240);
+}
+
+#fileviewerback {
+	float: right;
+	margin-top: 4px;
+}
 
 div[name=pipelineviewselected] {    
 	background-color: #6a85a8;;

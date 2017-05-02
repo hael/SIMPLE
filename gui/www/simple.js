@@ -83,7 +83,17 @@ function selectProject(){
 	} else {
 		document.getElementById('historytable').innerHTML = "";
 		projectHistoryWS.execute("cmd=jobslist projectname="+project, "addJob");
+		projectHistoryFull();
 	}
+}
+
+function refreshProject(){
+	var projectselector = document.getElementById('projectselector');
+	var project = projectselector.options[projectselector.selectedIndex].value;
+	if (project != 'createnew' && project != ''){
+		document.getElementById('historytable').innerHTML = "";
+		projectHistoryWS.execute("cmd=jobslist projectname="+project, "addJob");
+	}	
 }
 
 function addProject(data){
@@ -128,13 +138,15 @@ function addJob(data){
 		var hoverdiv = document.createElement('div');
 		hoverdiv.className = "hoverdiv";
 		
-		if(getArgument(data, 'jobtype') == "pipeline"){
+		if(getArgument(data, 'jobtype') == "pipeline" && getArgument(data, 'jobstatus') == "Complete"){
 			hoverdiv.innerHTML += "<div onclick=pipelineView('"+getArgument(data, 'jobdir')+"')>View Output From Job</div>";
-		} else if (getArgument(data, 'jobtype') == "unblur_ctffind"){
+		} else if (getArgument(data, 'jobtype') == "unblur_ctffind" && getArgument(data, 'jobstatus') == "Complete"){
 			hoverdiv.innerHTML += "<div onclick=pipelineView('"+getArgument(data, 'jobdir')+"')>View Output From Job</div>";
+		}else if (getArgument(data, 'jobtype') == "prime2d" && getArgument(data, 'jobstatus') == "Complete"){
+			hoverdiv.innerHTML += "<div onclick=viewFile('"+getArgument(data, 'jobdir')+"/prime2Dcavgs_final_ranked.mrc','" + getArgument(data, 'jobid') + "_" + getArgument(data, 'jobtype') + "')>View Output From Job</div>";
 		}
-		hoverdiv.innerHTML += "<div onclick=logfileView('"+getArgument(data, 'jobdir')+"/job.log')>View Log File</div>";
-		hoverdiv.innerHTML += "<div onclick=filesView('"+getArgument(data, 'jobdir')+"')>View Files From Job</div>";
+		hoverdiv.innerHTML += "<div onclick=logfileView('"+getArgument(data, 'jobdir')+"/job.log'," + "'" + getArgument(data, 'jobid') + "_" + getArgument(data, 'jobtype') +"')>View Log File</div>";
+		hoverdiv.innerHTML += "<div onclick=filesView('"+getArgument(data, 'jobdir')+"'," + "'" + getArgument(data, 'jobid') + "_" + getArgument(data, 'jobtype') +"')>View Files From Job</div>";
 		if(getArgument(data, 'taskname') != ""){
 			hoverdiv.innerHTML += "<div onclick=rerunJob('"+getArgument(data, 'jobid')+"')>Rerun Job</div>";
 		}
@@ -143,7 +155,6 @@ function addJob(data){
 		actionmenudiv.appendChild(hoverdiv);
 		cell6.appendChild(actionmenudiv);
 	}
-	projectHistoryFull();
 }
 
 function projectHistoryFull(){
@@ -922,10 +933,14 @@ function clearNewProjectPopupLines(){
 function confirmNewProjectPopup(){
 	var newprojectname = document.getElementById('newprojectname').value;
 	var newprojectfolder = document.getElementById('newprojectfolder').value;
-	newProjectWS.execute('cmd=addproject projectname=' + newprojectname + ' projectdir=' + newprojectfolder, "statusPopup");
+	newProjectWS.execute('cmd=addproject projectname=' + newprojectname + ' projectdir=' + newprojectfolder, "pageReload");
 	hideGauze();
 	hideNewProjectPopup();
 	projectSelector();
+}
+
+function pageReload(){
+	location.reload(); 
 }
 
 function cancelNewProjectPopup(){
@@ -1063,11 +1078,13 @@ function hideRunParameters(){
 	hideGauze();
 }
 
-function filesView(directory){
+function filesView(){
 	showTask('filesviewtask');
 	var filesviewtable = document.getElementById('viewjobfilestable');
 	filesviewtable.innerHTML = "";
-	filesViewWS.execute("cmd=dirlist dir=" + directory, "filesViewAddData");
+	var filesviewdescription = document.getElementById('filesviewdescription');
+	filesviewdescription.innerHTML = "View Files From Job: " + arguments[1];
+	filesViewWS.execute("cmd=dirlist dir=" + arguments[0], "filesViewAddData");
 }
 
 function filesViewAddData(data){
@@ -1101,19 +1118,32 @@ function filesViewAddFileLine(filename){
 	cell1.innerHTML = "<img src=img/file.png></img>";
 	cell2.innerHTML = filearray[filearray.length - 1];
 	cell2.onclick = function(){
-		var filesviewfilename = document.getElementById('filesviewfilename');
-		filesviewfilename.value = filename;
-		showTask('fileviewer');
-		filesViewFetch();
+		viewFile(filename, filename);
+		//var filesviewfilename = document.getElementById('filesviewfilename');
+		//filesviewfilename.value = filename;
+		//showTask('fileviewer');
+		//filesViewFetch();
 	}
 }
 
-function logfileView(logfile){
+function logfileView(){
 	var filesviewfilename = document.getElementById('filesviewfilename');
-	filesviewfilename.value = logfile;
+	filesviewfilename.value = arguments[0];
+	var fileviewerdescription = document.getElementById('fileviewerdescription');
+	fileviewerdescription.innerHTML = "<b>View Log File: " + arguments[1] + "</b>";
+	showTask('fileviewer');
+	filesViewFetch();
+}
+
+function viewFile(){
+	var filesviewfilename = document.getElementById('filesviewfilename');fileviewerdescription
+	filesviewfilename.value = arguments[0];
+	var fileviewerdescription = document.getElementById('fileviewerdescription');
+	fileviewerdescription.innerHTML = "<b>View Files From Job: " + arguments[1] + "</b>";
 	showTask('fileviewer');
 	filesViewFetch();
 }
 
 includeHTML();
 projectSelector();
+setInterval(function(){refreshProject()}, 30000);

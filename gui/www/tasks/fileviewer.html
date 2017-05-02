@@ -1,12 +1,12 @@
-<div class=bodyheader>
-	<img src=img/right_chevron.png>
-	<b>View Files</b>
-	<div class=hoverdiv>Description goes here</div>
+<div class=bodyheader id=fileviewerheader>
+	<img src=img/up_chevron.png>
+	<b id=fileviewerdescription>View Files</b>
+	<img id=fileviewerback src=img/back.png onclick="showTask('filesviewtask');">
 </div>
 
 <div class=bodytoolbar>
 	<div id=filesviewactionsbutton class=bodybutton>
-		<b> Actions</b>
+		<b>Actions</b>
 		<div class=hoverdiv>
 			<div onclick=selectAll('filesviewdiv')>Select All</div>
 			<div onclick=deselectAll('filesviewdiv')>Deselect All</div>
@@ -52,8 +52,8 @@
 <div id=filesviewdiv></div>
 
 <div id=filesviewsave>
-	<div class=popupheader>
-		Save Selection
+	<div class=bodyheader>
+		<b>Save Selection</b>
 	</div>
 	<input type=hidden id=filesviewfolder>
 	<table class=popuptable>

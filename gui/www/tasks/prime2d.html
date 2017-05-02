@@ -1,11 +1,11 @@
 <div class=bodyheader>
-	<img src=img/right_chevron.png>
+	<img src=img/up_chevron.png>
 	<b>2D Clustering</b>
 	<div class=hoverdiv>Sort particles into clusters based on their similarity in 2D</div>
 </div>
 <table class=tasktable>
 	<input class=jobarg type=hidden id=cmd value=simple_distr_exec>
-	<input class=jobarg type=hidden id=prg value=prime2d>
+	<input class=jobarg type=hidden id=prg value=prime2D>
 	<input class=jobarg type=hidden id=jobtype value=prime2d>
 	<input class=jobarg type=hidden id=taskname value=prime2dtask>
 	<tr class=taskheader onclick=taskHeaderShowHide(this)>
@@ -117,7 +117,9 @@
 	<tr class=taskoptionalline>
 		<td>CTF Parameters File</td>
 		<td><input class=jobarg type=text id=deftab></td>
-		<td></td>
+		<td>
+			<img src=img/folder.png onclick=fileBrowser('deftab')>
+		</td>
 		<td class=taskhelp>
 			<img src=img/info.png>
 			<div class=hoverdiv>File containing CTF parameters</div>
@@ -126,7 +128,9 @@
 	<tr class=taskoptionalline>
 		<td>Initial References</td>
 		<td><input class=jobarg type=text id=refs></td>
-		<td></td>
+		<td>
+			<img src=img/folder.png onclick=fileBrowser('refs')>
+		</td>
 		<td class=taskhelp>
 			<img src=img/info.png>
 			<div class=hoverdiv>Initial references to start the clustering</div>
@@ -135,7 +139,9 @@
 	<tr class=taskoptionalline>
 		<td>Orientation Table File</td>
 		<td><input class=jobarg type=text id=oritab></td>
-		<td></td>
+		<td>
+			<img src=img/folder.png onclick=fileBrowser('oritab')>
+		</td>
 		<td class=taskhelp>
 			<img src=img/info.png>
 			<div class=hoverdiv>File containing previously determined orientations for each particle</div>
