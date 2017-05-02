@@ -534,7 +534,8 @@ contains
         real,                  allocatable :: correlations(:,:)
         logical,               allocatable :: lselected(:)
         character(len=STDLEN)              :: cmd_str
-        integer                            :: iimg, isel, nall, nsel, loc(1), ios, funit, ldim(3), ifoo, lfoo(3)
+        integer                            :: iimg, isel, nall, nsel, loc(1), ios, alloc_stat
+        integer                            :: funit, ldim(3), ifoo, lfoo(3), io_stat
         logical, parameter                 :: debug=.false.
         ! error check
         if( cline%defined('stk3') .or. cline%defined('filetab') )then
@@ -558,8 +559,35 @@ contains
             call imgs_all(iimg)%new([p%box,p%box,1], p%smpd)
             call imgs_all(iimg)%read(p%stk, iimg)
         end do
-        write(*,'(a)') '>>> CALCULATING CORRELATIONS'
-        call calc_cartesian_corrmat(imgs_sel, imgs_all, correlations)
+        if( file_exists('corrmat_select.bin') )then
+            allocate(correlations(nsel,nall), stat=alloc_stat)
+            call alloc_err('In: exec_select; simple_commander_preproc', alloc_stat)
+            ! read matrix
+            funit = get_fileunit()
+            open(unit=funit, status='OLD', action='READ', file='corrmat_select.bin', access='STREAM')
+            read(unit=funit,pos=1,iostat=io_stat) correlations
+            ! Check if the read was successful
+            if( io_stat .ne. 0 )then
+                write(*,'(a,i0,2a)') '**ERROR(exec_select): I/O error ',&
+                io_stat, ' when reading corrmat_select.bin. Remove the file to override the memoization.'
+                stop 'I/O error; exec_select; simple_commander_preproc'
+            endif
+            close(funit)
+        else
+            write(*,'(a)') '>>> CALCULATING CORRELATIONS'
+            call calc_cartesian_corrmat(imgs_sel, imgs_all, correlations)
+            ! write matrix
+            funit = get_fileunit()
+            open(unit=funit, status='REPLACE', action='WRITE', file='corrmat_select.bin', access='STREAM')
+            write(unit=funit,pos=1,iostat=io_stat) correlations
+            ! Check if the write was successful
+            if( io_stat .ne. 0 )then
+                write(*,'(a,i0,2a)') '**ERROR(exec_select): I/O error ',&
+                io_stat, ' when writing to corrmat_select.bin'
+                stop 'I/O error; exec_select; simple_commander_preproc'
+            endif
+            close(funit)
+        endif
         ! find selected
         ! in addition to the index array, also make a logical array encoding the selection (to be able to reject)
         allocate(selected(nsel), lselected(nall))
