@@ -456,10 +456,10 @@ sub setCompiling_options {
     }
     if( $FCOMPILER =~ /gfortran/ || $FCOMPILER =~ /ifort/ || $FCOMPILER =~ /pgfortran/ ) {
     	if( $DEBUG eq 'yes' ) {
-    	    $option            = $option_in." $dbg_lvl_f $DPLAT $DOPENMP $DBENCH $DCUDA";
+    	    $option            = $option_in." -D_DEBUG $dbg_lvl_f $DPLAT $DOPENMP $DBENCH $DCUDA";
     	    $mkma_gcc_flags    = $option_mkma_gcc_flags." -g $DPLAT $DOPENMP $DBENCH $DCUDA";
     	    $mkma_gpp_flags    = $option_mkma_gpp_flags." -g $DPLAT $DOPENMP $DBENCH $DCUDA";
-    	    $mkma_f90_flags    = $option_mkma_f90_flags." $dbg_lvl_f $DPLAT $DOPENMP $DBENCH $DCUDA";
+    	    $mkma_f90_flags    = $option_mkma_f90_flags." -D_DEBUG $dbg_lvl_f $DPLAT $DOPENMP $DBENCH $DCUDA";
     	} else {
     	    $option            = $option_in." $opti $DPLAT $DOPENMP $DBENCH $DCUDA";
     	    $mkma_gcc_flags    = $option_mkma_gcc_flags." $opti -O $DPLAT $DOPENMP $DBENCH $DCUDA";
