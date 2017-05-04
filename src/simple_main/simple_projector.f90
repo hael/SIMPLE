@@ -215,7 +215,7 @@ contains
         !$omp private(h,k,sqarg,loc,logi,phys)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
-                sqarg = h*h+k*k
+                sqarg = dot_product([h,k],[h,k])
                 if(sqarg > sqlp)cycle
                 ! address
                 logi = [h, k, 0]
@@ -229,18 +229,20 @@ contains
     end subroutine fproject_expanded
 
     !> \brief  extracts a polar FT from a volume (self)
-    subroutine fproject_polar( self, iref, e, pftcc, expanded )
+    subroutine fproject_polar( self, iref, e, pftcc, expanded, serial )
         use simple_polarft_corrcalc, only: polarft_corrcalc
         use simple_params, only: params
         class(projector),        intent(inout) :: self  !< projector instance
         integer,                 intent(in)    :: iref  !< logical reference index [1,nrefs]
         class(ori),              intent(inout) :: e     !< orientation
         class(polarft_corrcalc), intent(inout) :: pftcc !< polarft_corrcalc object to be filled
-        logical,optional,        intent(in)    :: expanded
+        logical,       optional, intent(in)    :: expanded
+        logical,       optional, intent(inout) :: serial
         integer :: irot, k, ldim_fvol(3), ldim_pft(3), pdim(3)
         real    :: vec(3), loc(3)
-        logical :: l_exp
-        l_exp = .false.
+        logical :: l_exp = .false., l_serial = .false.
+        if(.not. self%is_ft())stop 'volume needs to be FTed before call; fproject_polar_1; simple_projector'
+        if( present(serial) )l_serial = serial
         if( present(expanded) )then
             l_exp = expanded
             if( l_exp .and. .not. self%exp_exists() )&
@@ -251,51 +253,81 @@ contains
         if( .not. all(ldim_fvol(1:2) == ldim_pft(1:2)) ) stop 'nonconforming logical dimensions; fproject_polar_2; simple_projector'
         pdim = pftcc%get_pdim(.false.)
         if( l_exp )then
-            call self%fproject_polar_expanded(iref, e, pftcc)
+            ! use of expanded routine
+            call self%fproject_polar_expanded(iref, e, pftcc, serial=serial)
         else
-            !$omp parallel do collapse(2) schedule(auto) default(shared) private(loc,vec,irot,k)
-            do irot=1,pdim(1)
-                do k=pdim(2),pdim(3)
-                    vec(:2) = pftcc%get_coord(irot,k) 
-                    vec(3)  = 0.
-                    loc     = matmul(vec,e%get_mat())
-                    call pftcc%set_ref_fcomp(iref, irot, k, self%extr_gridfcomp(loc))
+            if( l_serial )then
+                ! this is the serial version of the threaded version just below
+                do irot=1,pdim(1)
+                    do k=pdim(2),pdim(3)
+                        vec(:2) = pftcc%get_coord(irot,k) 
+                        vec(3)  = 0.
+                        loc     = matmul(vec,e%get_mat())
+                        call pftcc%set_ref_fcomp(iref, irot, k, self%extr_gridfcomp(loc))
+                    end do
                 end do
-            end do
-            !$omp end parallel do
+            else
+                ! threaded version
+                !$omp parallel do collapse(2) schedule(auto) default(shared) private(loc,vec,irot,k)
+                do irot=1,pdim(1)
+                    do k=pdim(2),pdim(3)
+                        vec(:2) = pftcc%get_coord(irot,k) 
+                        vec(3)  = 0.
+                        loc     = matmul(vec,e%get_mat())
+                        call pftcc%set_ref_fcomp(iref, irot, k, self%extr_gridfcomp(loc))
+                    end do
+                end do
+                !$omp end parallel do
+            endif
         endif
+        ! memoize
         call pftcc%memoize_sqsum_ref(iref)
     end subroutine fproject_polar
 
     !> \brief  extracts a polar FT from a volume's expanded FT (self)
-    subroutine fproject_polar_expanded( self, iref, e, pftcc )
+    subroutine fproject_polar_expanded( self, iref, e, pftcc, serial )
         use simple_polarft_corrcalc, only: polarft_corrcalc
         use simple_math,             only: deg2rad
         !$ use omp_lib
         !$ use omp_lib_kinds
-        class(projector),        intent(inout) :: self  !< projector object
-        integer,                 intent(in)    :: iref  !< which reference
-        class(ori),              intent(inout) :: e     !< orientation
-        class(polarft_corrcalc), intent(inout) :: pftcc !< object that holds the polar image
+        class(projector),        intent(inout) :: self   !< projector object
+        integer,                 intent(in)    :: iref   !< which reference
+        class(ori),              intent(inout) :: e      !< orientation
+        class(polarft_corrcalc), intent(inout) :: pftcc  !< object that holds the polar image
+        logical, optional,       intent(in)    :: serial !< thread or serial
         integer :: irot, k, wdim, ldim(3), pdim(3), ldim_polft(3)
         real    :: vec(3), loc(3)
+        logical :: l_serial = .false.
+        if( present(serial) )l_serial = serial
         ldim = self%get_ldim()
         if(ldim(3) == 1)stop 'only for interpolation from 3D images; fproject_polar_1; simple_projector'
-        if(.not. self%is_ft())stop 'volume needs to be FTed before call; fproject_polar_1; simple_projector'
         ldim_polft(1:2) = ldim(1:2)
         ldim_polft(3)   = 1
         pdim   = pftcc%get_pdim(.false.)
         wdim   = 2*ceiling(self%harwin_exp) + 1 ! interpolation kernel window size
-        !$omp parallel do collapse(2) schedule(auto) default(shared) private(irot,k,vec,loc)
-        do irot=1,pdim(1)
-            do k=pdim(2),pdim(3)
-                vec(:2) = pftcc%get_coord(irot,k)
-                vec(3)  = 0.
-                loc     = matmul(vec,e%get_mat())
-                call pftcc%set_ref_fcomp(iref, irot, k, self%interp_fcomp_expanded( wdim, loc ))
+        if( l_serial )then
+            ! this is the serial version of the threaded version just below
+            do irot=1,pdim(1)
+                do k=pdim(2),pdim(3)
+                    vec(:2) = pftcc%get_coord(irot,k)
+                    vec(3)  = 0.
+                    loc     = matmul(vec,e%get_mat())
+                    call pftcc%set_ref_fcomp(iref, irot, k, self%interp_fcomp_expanded( wdim, loc ))
+                end do
             end do
-        end do
-        !$omp end parallel do
+        else
+            ! threaded version
+            !$omp parallel do collapse(2) schedule(auto) default(shared) private(irot,k,vec,loc)
+            do irot=1,pdim(1)
+                do k=pdim(2),pdim(3)
+                    vec(:2) = pftcc%get_coord(irot,k)
+                    vec(3)  = 0.
+                    loc     = matmul(vec,e%get_mat())
+                    call pftcc%set_ref_fcomp(iref, irot, k, self%interp_fcomp_expanded( wdim, loc ))
+                end do
+            end do
+            !$omp end parallel do
+        endif
     end subroutine fproject_polar_expanded
     
     !> \brief  transfers a 2D Cartesian image (self) to polar Fourier
@@ -592,7 +624,7 @@ contains
         type(image),      intent(inout) :: img    !< resulting projection image
         real,             intent(in)    :: maxrad !< project inside this radius
         real              :: incr_i(3), incr_j(3), incr_k(3), ray_k(3), corner(3), mmaxrad
-        integer           :: orig(3), ldim(3),  lims(2), inds(3), i, j, k, sqmaxrad
+        integer           :: orig(3), ldim(3),  lims(2), inds(3), i, j, k, sqmaxrad, vec(2)
         if( .not.allocated(self%is_in_mask) )stop 'the envelope projector has not been initialized'
         ldim = self%get_ldim()
         if( ldim(3) == 1 )          stop 'only for Volumes; env_rproject; simple_projector'
@@ -609,10 +641,11 @@ contains
         incr_j   = matmul([0., 1., 0.], e%get_mat())
         incr_k   = matmul([0., 0., 1.], e%get_mat())
         corner   = matmul(-real([mmaxrad+1,mmaxrad+1,mmaxrad+1]), e%get_mat())
-        !$omp parallel do collapse(2) default(shared) private(j,i,k,ray_k,inds)
+        !$omp parallel do collapse(2) default(shared) private(j,i,k,ray_k,inds,vec)
         do i=lims(1),lims(2) 
             do j=lims(1),lims(2)
-                if( (i-orig(1))**2+(j-orig(2))**2 > sqmaxrad )cycle
+                vec = [i, j] - orig(1:2)
+                if(dot_product(vec, vec) > sqmaxrad)cycle
                 ray_k = corner + real(i-lims(1)+1)*incr_i + real(j-lims(1)+1)*incr_j
                 do k = lims(1),lims(2)
                     ray_k = ray_k + incr_k

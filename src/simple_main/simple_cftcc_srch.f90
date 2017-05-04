@@ -10,7 +10,7 @@ use simple_sym,             only: sym
 use simple_defs
 implicit none
 
-public :: cftcc_srch_init, cftcc_srch_set_state, cftcc_srch_minimize
+public :: cftcc_srch_init, cftcc_srch_set_state, cftcc_srch_minimize, cftcc_srch_reset
 private
 
 type(opt_factory)               :: ofac              !< optimizer factory
@@ -46,6 +46,15 @@ contains
         ! generate optimizer object with the factory
         call ofac%new(ospec, nlopt)
     end subroutine cftcc_srch_init
+
+    subroutine cftcc_srch_reset
+        call ospec%kill
+        nlopt     => null()
+        cftcc_ptr => null()
+        pimg      => null()
+        call o_glob%kill()
+        state = 1
+    end subroutine cftcc_srch_reset
     
     subroutine cftcc_srch_set_state( state_in )
         integer, intent(in) :: state_in
@@ -82,11 +91,13 @@ contains
     end function cftcc_srch_cost
     
     subroutine cftcc_srch_minimize( o )
-        use simple_math, only: rad2deg
+        use simple_math, only: rad2deg, median_nocopy
         class(ori),  intent(inout) :: o
+        real, allocatable :: res(:), corrs(:)
         type(ori) :: o1, o2
-        real      :: prev_shvec(2)
-        real      :: corr, cost, dist, dist_inpl, prev_corr, frac, maxdist
+        integer   :: hp_ind(1), lp_ind(1)
+        real      :: prev_shvec(2), specscore, maxdist
+        real      :: corr, cost, dist, dist_inpl, prev_corr, frac
         prev_shvec = o%get_shift()
         ! copy the input orientation
         call o%set('state', real(state)) ! from cftcc_srch_set_state
@@ -94,6 +105,12 @@ contains
         ! previous correlation
         call cftcc_ptr%project(o, 1)
         prev_corr = cftcc_ptr%correlate(pimg, 1, [0.,0.,0.])
+        ! spectral score
+        call cftcc_ptr%frc(o, 1, pimg, res, corrs)
+        hp_ind = minloc((res-cftcc_ptr%get_hp())**2.)
+        lp_ind = minloc((res-cftcc_ptr%get_lp())**2.)
+        specscore = max(0., median_nocopy(corrs(hp_ind(1):lp_ind(1))))
+        deallocate(res, corrs)
         ! initialise optimiser to current projdir & in-plane rotation
         ospec%x      = 0.
         ospec%x(1:3) = o%get_euler()
@@ -111,8 +128,6 @@ contains
             ! improvement
             call o%set_euler(ospec%x(1:3))
             ! shifts must be obtained by vector addition
-            ! the reference is rotated upon projection
-            ! the ptcl is shifted only: no need to rotate the shift
             call o%set_shift(prev_shvec - ospec%x(4:5))
             ! distance
             dist_inpl = rad2deg(o_glob.inpldist.o)
@@ -120,19 +135,22 @@ contains
             ! frac
             call o1%new
             call o2%new
-            call o1%set_euler([ospec%limits(1,1),ospec%limits(2,1),0.])
-            call o2%set_euler([ospec%limits(1,2),ospec%limits(2,2),0.])
+            call o1%set_euler([ospec%limits(1,1), ospec%limits(2,1), ospec%limits(3,1)])
+            call o2%set_euler([ospec%limits(1,2), ospec%limits(2,2), ospec%limits(3,2)])
             ! max distance within asymetric unit
             maxdist = 0.5*rad2deg(o1.inpldist.o2) + 0.5*rad2deg(o1.euldist.o2)
-            ! proportion of ...
-            frac = 100.*(maxdist-(.5*dist+.5*dist_inpl)) / maxdist
+            frac = max(0., 100.*(maxdist-(.5*dist+.5*dist_inpl)) / maxdist)
+            call o1%kill
+            call o2%kill
         endif
         ! set new values
         call o%set('corr',      corr)
+        call o%set('specscore', specscore)
         call o%set('ow',        1.)
         call o%set('dist_inpl', dist_inpl)
         call o%set('dist',      dist)
-        call o%set('mi_class',  1.)
+        call o%set('proj',      1.)
+        call o%set('mi_proj',   1.)
         call o%set('mi_inpl',   1.)
         call o%set('mi_state',  1.)
         call o%set('mi_joint',  1.)

@@ -862,29 +862,32 @@ contains
         real    :: argmat(self%refsz,self%kfromto(1):self%kfromto(2)), sqsum_ref_sh, cc
         complex :: shmat(self%refsz,self%kfromto(1):self%kfromto(2))
         complex :: pft_ref_sh(self%refsz,self%kfromto(1):self%kfromto(2))
-        if( allocated(self%ctfmats) )then
-            ! generate the argument matrix from memoized components in argtransf
-            argmat = self%argtransf(:self%refsz,:) * shvec(1) + self%argtransf(self%refsz+1:,:) * shvec(2)
-            ! generate the complex shift transformation matrix
-            shmat = cmplx(cos(argmat),sin(argmat))
-            ! shift
-            pft_ref_sh  = (self%pfts_refs(iref,:,:) * self%ctfmats(iptcl,:,:)) * shmat
-            ! calculate correlation precursors
-            argmat = real(pft_ref_sh * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:)))
-            cc = sum(argmat)
-            sqsum_ref_sh = sum(csq(pft_ref_sh))
-        else if( allocated(self%pfts_refs_ctf) )then
-            ! generate the argument matrix from memoized components in argtransf
-            argmat = self%argtransf(:self%refsz,:) * shvec(1)+self%argtransf(self%refsz+1:,:) * shvec(2)
-            ! generate the complex shift transformation matrix
-            shmat = cmplx(cos(argmat),sin(argmat))
-            ! shift
-            pft_ref_sh = self%pfts_refs_ctf(iref,:,:) * shmat
-            ! calculate correlation precursors
-            argmat = real(pft_ref_sh * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:)))
-            cc = sum(argmat)
-            sqsum_ref_sh = sum(csq(pft_ref_sh))
+        if( self%with_ctf)then
+            if( allocated(self%ctfmats) )then
+                ! generate the argument matrix from memoized components in argtransf
+                argmat = self%argtransf(:self%refsz,:) * shvec(1) + self%argtransf(self%refsz+1:,:) * shvec(2)
+                ! generate the complex shift transformation matrix
+                shmat = cmplx(cos(argmat),sin(argmat))
+                ! shift
+                pft_ref_sh  = (self%pfts_refs(iref,:,:) * self%ctfmats(iptcl,:,:)) * shmat
+                ! calculate correlation precursors
+                argmat = real(pft_ref_sh * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:)))
+                cc = sum(argmat)
+                sqsum_ref_sh = sum(csq(pft_ref_sh))
+            else
+                ! generate the argument matrix from memoized components in argtransf
+                argmat = self%argtransf(:self%refsz,:) * shvec(1)+self%argtransf(self%refsz+1:,:) * shvec(2)
+                ! generate the complex shift transformation matrix
+                shmat = cmplx(cos(argmat),sin(argmat))
+                ! shift
+                pft_ref_sh = self%pfts_refs_ctf(iref,:,:) * shmat
+                ! calculate correlation precursors
+                argmat = real(pft_ref_sh * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:)))
+                cc = sum(argmat)
+                sqsum_ref_sh = sum(csq(pft_ref_sh))
+            endif
         else
+            ! NO CTF MULTIPLICATION
             ! generate the argument matrix from memoized components in argtransf
             argmat = self%argtransf(:self%refsz,:) * shvec(1)+self%argtransf(self%refsz+1:,:) * shvec(2)
             ! generate the complex shift transformation matrix

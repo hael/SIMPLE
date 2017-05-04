@@ -145,13 +145,14 @@ contains
 
     !>  \brief  is for writing the sampling density (rho)
     subroutine write_rho( self, kernam )
-        use simple_filehandling, only: get_fileunit, fopen_err
+        use simple_filehandling, only: get_fileunit, fopen_err, del_file
         class(reconstructor), intent(in) :: self
         character(len=*),     intent(in) :: kernam
         character(len=100) :: io_message
         integer :: filnum, ier, io_stat
+        call del_file(trim(kernam))
         filnum = get_fileunit( )
-        open(unit=filnum, status='REPLACE', action='WRITE', file=kernam, access='STREAM', iostat=ier)
+        open(unit=filnum, status='NEW', action='WRITE', file=trim(kernam), access='STREAM', iostat=ier)
         call fopen_err('write_rho; simple_reconstructor', ier)
         write(filnum, pos=1, iostat=io_stat, iomsg=io_message) self%rho    
         if( io_stat .ne. 0 )then

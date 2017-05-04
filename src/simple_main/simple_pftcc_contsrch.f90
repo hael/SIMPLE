@@ -11,7 +11,7 @@ use simple_ori,              only: ori
 use simple_defs
 implicit none
 
-public :: pftcc_contsrch_init, pftcc_contsrch_set_state, pftcc_contsrch_minimize
+public :: pftcc_contsrch_init, pftcc_contsrch_set_state, pftcc_contsrch_minimize, pftcc_contsrch_reset
 private
 
 type(opt_factory)                :: ofac            !< optimizer factory
@@ -67,7 +67,25 @@ contains
         call b%vol%kill_expanded
         if(debug)write(*,*)'pftcc_contsrch_init done'
     end subroutine pftcc_contsrch_init
-    
+
+    subroutine pftcc_contsrch_reset
+        integer :: s
+        call ospec%kill
+        p_ptr  => null()
+        nlopt  => null()
+        pimg   => null()
+        ppftcc => null()
+        if(allocated(refvols))then
+            do s = 1,size(refvols)
+                call refvols(s)%kill_expanded
+                call refvols(s)%kill
+            enddo
+            deallocate(refvols)
+        endif
+        call o_glob%kill
+        state = 1
+    end subroutine pftcc_contsrch_reset
+
     subroutine pftcc_contsrch_set_state( state_in )
         integer, intent(in) :: state_in
         state = state_in
@@ -102,12 +120,14 @@ contains
     end function pftcc_contsrch_cost
     
     subroutine pftcc_contsrch_minimize( o )
-        use simple_math, only: rad2deg
+        use simple_math, only: rad2deg, median_nocopy
         use simple_oris, only: oris
         class(ori), intent(inout) :: o
+        real, allocatable :: frc(:)
         type(oris) :: a
-        real :: corr, cost, dist, dist_inpl, prev_corr, frac
-        real :: prev_shvec(2), dfx, dfy, angast
+        type(ori)  :: o1, o2
+        real       :: corr, cost, dist, dist_inpl, prev_corr, frac, specscore
+        real       :: prev_shvec(2), dfx, dfy, angast, maxdist
         ! extract pft from ptcl
         call pimg%img2polarft(1, ppftcc, isptcl=.true.)
         ! init CTF
@@ -131,12 +151,15 @@ contains
         ! initial shift vector
         prev_shvec = o%get_shift()
         ! copy the input orientation
-        call o%set('state', real(state)) ! from pftcc_srch_set_state
+        call o%set('state', real(state)) ! as set by pftcc_srch_set_state
         o_glob = o
         ! previous correlation
         call refvols(state)%fproject_polar(1, o, ppftcc, expanded=.true.)
-        if(p_ptr%ctf .ne. 'no')call ppftcc%apply_ctf_single(1, 1)
         prev_corr = ppftcc%corr(1, 1, 1, [0.,0.])
+        ! spectral score
+        frc       = ppftcc%genfrc(1, 1, 1)
+        specscore = max(0., median_nocopy(frc))
+        deallocate(frc)
         ! initialise optimiser
         ospec%x      = 0.
         ospec%x(1:3) = o%get_euler()
@@ -158,14 +181,25 @@ contains
             ! distance
             dist_inpl = rad2deg(o_glob.inpldist.o)
             dist      = rad2deg(o_glob.euldist.o)
-            frac      = 100.*(180.-(.5*dist+.5*dist_inpl)**2.)/180.
+            ! frac
+            call o1%new
+            call o2%new
+            call o1%set_euler([ospec%limits(1,1), ospec%limits(2,1), ospec%limits(3,1)])
+            call o2%set_euler([ospec%limits(1,2), ospec%limits(2,2), ospec%limits(3,2)])
+            ! max distance within asymetric unit
+            maxdist = 0.5*rad2deg(o1.inpldist.o2) + 0.5*rad2deg(o1.euldist.o2)
+            frac = max(0., 100.*(maxdist-(.5*dist+.5*dist_inpl)) / maxdist)
+            call o1%kill
+            call o2%kill
         endif
         ! sets new values
         call o%set('corr',      corr)
+        call o%set('specscore', specscore)
         call o%set('ow',        1.)
         call o%set('dist_inpl', dist_inpl)
         call o%set('dist',      dist)
-        call o%set('mi_class',  1.)
+        call o%set('proj',      1.)
+        call o%set('mi_proj',   1.)
         call o%set('mi_inpl',   1.)
         call o%set('mi_state',  1.)
         call o%set('mi_joint',  1.)

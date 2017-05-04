@@ -420,12 +420,11 @@ contains
 
             subroutine prep_pftcc_local
                 type(ori) :: o
-                integer   :: cnt, s, iptcl, istate, ntot, progress_cnt
+                integer   :: cnt, s, iptcl, istate, ntot
                 if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PARTICLES'
                 ! initialize
                 call b%img%init_imgpolarizer(pftcc)
-                progress_cnt = 0
-                ntot         = p%top-p%fromp+1
+                ntot = p%top-p%fromp+1
                 do s=1,p%nstates
                     if( b%a%get_statepop(s) == 0 )then
                         ! empty state
@@ -438,12 +437,11 @@ contains
                     endif
                     cnt = 0
                     do iptcl=p%fromp,p%top
-                        cnt      = cnt + 1
-                        o        = b%a%get_ori(iptcl)
-                        istate   = nint(o%get('state'))
+                        o      = b%a%get_ori(iptcl)
+                        istate = nint(o%get('state'))
                         if( istate /= s ) cycle
-                        progress_cnt = progress_cnt + 1
-                        call progress( progress_cnt, ntot )
+                        cnt = cnt + 1
+                        call progress( cnt, ntot )
                         call read_img_from_stk( b, p, iptcl )
                         call prepimg4align(b, p, o)
                         call b%img%imgpolarizer(pftcc, iptcl)

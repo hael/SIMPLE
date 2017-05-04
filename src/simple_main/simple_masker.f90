@@ -148,7 +148,6 @@ contains
         call img_pad%fwd_ft
         call img_pad%bp(0., p%amsklp)
         call img_pad%bwd_ft
-        !call img_pad%bin('nomsk')
         call img_pad%bin('msk', p%msk)
         call img_pad%grow_bin
         call img_pad%cos_edge(p%edge)

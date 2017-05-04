@@ -124,7 +124,7 @@ contains
 
             subroutine assemble( fbody )
                 character(len=*), intent(in) :: fbody
-                call eorecvol_read%read_eos(fbody)
+                call eorecvol_read%read_eos(trim(fbody))
                 ! sum the Fourier coefficients
                 call b%eorecvol%sum(eorecvol_read)
             end subroutine assemble

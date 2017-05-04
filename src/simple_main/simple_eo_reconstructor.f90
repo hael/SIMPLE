@@ -161,8 +161,8 @@ contains
     subroutine write_even( self, fbody )
         class(eo_reconstructor), intent(inout) :: self
         character(len=*),        intent(in)    :: fbody
-        call self%even%write(trim(adjustl(fbody))//'_even'//self%ext, del_if_exists=.true.)
-        call self%even%write_rho('rho_'//trim(adjustl(fbody))//'_even'//self%ext)
+        call self%even%write(trim(trim(adjustl(fbody))//'_even'//self%ext), del_if_exists=.true.)
+        call self%even%write_rho(trim('rho_'//trim(adjustl(fbody))//'_even'//self%ext))
     end subroutine write_even
     
     !>  \brief  write the odd reconstruction

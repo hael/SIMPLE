@@ -12,10 +12,12 @@ type :: cartft_corrcalc
     type(projector), allocatable :: refvols(:)
     type(image),     allocatable :: img_refs(:)
     type(image)                  :: img_ctf
-    real    :: kv_prev=0., cs_prev=0., fraca_prev=0.
-    real    :: dfx_prev=0., dfy_prev=0., angast_prev=0.
-    integer :: nstates   = 0
-    logical :: existence = .false.
+    real             :: lp = 0., hp = 0.
+    real             :: kv_prev =0., cs_prev =0., fraca_prev =0.
+    real             :: dfx_prev=0., dfy_prev=0., angast_prev=0.
+    integer          :: nstates   = 0
+    character(len=4) :: ctf = 'no'
+    logical          :: existence = .false.
   contains
     ! CONSTRUCTOR
     procedure          :: new
@@ -31,6 +33,8 @@ type :: cartft_corrcalc
     procedure, private :: correlate_2
     generic            :: correlate => correlate_1, correlate_2
     ! GETTERS
+    procedure          :: get_hp
+    procedure          :: get_lp
     procedure          :: get_ref
     procedure          :: get_ctf_img
     ! DESTRUCTOR
@@ -51,14 +55,17 @@ contains
         integer :: s, alloc_stat
         call self%kill
         ! set constants
-        self%nstates =  p%nstates
+        self%nstates = p%nstates
+        self%ctf     = p%ctf
+        self%lp      = p%lp
+        self%hp      = p%hp
         self%pp      => p
         ! allocate reference volumes & one reference image
-        allocate(self%refvols(self%pp%nstates), self%img_refs(1), stat=alloc_stat)
+        allocate(self%refvols(self%nstates), self%img_refs(1), stat=alloc_stat)
         call alloc_err("In: simple_cartft_corrcalc :: new", alloc_stat)
         call self%img_refs(1)%new([self%pp%boxmatch,self%pp%boxmatch,1],self%pp%smpd)
         write(*,'(A)') '>>> PREPARING VOLUMES'
-        do s=1,self%pp%nstates
+        do s=1,self%nstates
             call preprefvol( b, p, cline, s, doexpand=.false. )
             self%refvols(s) = b%vol
             call self%refvols(s)%expand_cmat
@@ -75,7 +82,7 @@ contains
         class(ori),             intent(inout) :: o
         type(ctf) :: tfun
         real      :: kV, cs, fraca, dfx, dfy, angast, dist
-        dfx    = o%get('dfx')
+        dfx = o%get('dfx')
         if( self%pp%tfplan%mode .eq. 'astig' )then ! astigmatic CTF
             dfy    = o%get('dfy')
             angast = o%get('angast')
@@ -114,9 +121,7 @@ contains
         class(oris),            intent(inout) :: os
         type(ori) :: o
         integer   :: noris, nrefs, iref
-        logical   :: alloc_new
         ! make the container
-        alloc_new = .false.
         noris = os%get_noris()
         nrefs = size(self%img_refs)
         if( noris == nrefs )then
@@ -148,7 +153,7 @@ contains
         integer   :: s
         s = nint(o%get('state'))
         call self%refvols(s)%fproject_expanded(o, self%img_refs(iref))
-        if( self%pp%ctf .ne. 'no' )then
+        if( self%ctf .ne. 'no' )then
             call self%create_ctf_image(o)
             call self%img_refs(iref)%mul(self%img_ctf)
         endif
@@ -165,8 +170,8 @@ contains
         real, allocatable,      intent(out)   :: res(:), corrs(:)
         integer :: s
         s = nint(o%get('state'))
-        call self%refvols(s)%fproject(o, self%img_refs(iref))
-        if( self%pp%ctf .ne. 'no' )then
+        call self%refvols(s)%fproject_expanded(o, self%img_refs(iref))
+        if( self%ctf .ne. 'no' )then
             call self%create_ctf_image(o)
             call self%img_refs(iref)%mul(self%img_ctf)
         endif
@@ -183,7 +188,7 @@ contains
         nrefs = size(self%img_refs)
         allocate(cc(nrefs))
         do iref=1,nrefs
-            cc(iref) = self%img_refs(iref)%corr(pimg, self%pp%lp, self%pp%hp)
+            cc(iref) = self%img_refs(iref)%corr(pimg, self%lp, self%hp)
         end do
     end function correlate_1
 
@@ -195,7 +200,7 @@ contains
         integer,                intent(in)    :: iref
         real,                   intent(in)    :: shvec(3)
         real :: cc
-        cc = self%img_refs(iref)%corr_shifted(pimg, shvec, self%pp%lp, self%pp%hp)
+        cc = self%img_refs(iref)%corr_shifted(pimg, shvec, self%lp, self%hp)
     end function correlate_2
     
     !>  \brief for getting the current fwd ft CTF img
@@ -214,6 +219,18 @@ contains
             & stop 'Index out of bounds in simple_cartft_corrcalc%get_ref'
         img = self%img_refs( ind )
     end function get_ref
+
+    function get_lp( self )result( lp )
+        class(cartft_corrcalc), intent(inout) :: self
+        real :: lp
+        lp = self%lp
+    end function get_lp
+
+    function get_hp( self )result( hp )
+        class(cartft_corrcalc), intent(inout) :: self
+        real :: hp
+        hp = self%hp
+    end function get_hp
 
     !>  \brief  is a destructor
     subroutine kill( self )
@@ -239,6 +256,8 @@ contains
             self%dfx_prev    = 0.
             self%dfy_prev    = 0.
             self%angast_prev = 0.
+            self%lp = 0.
+            self%hp = 0.
             self%existence = .false.
         endif
     end subroutine kill

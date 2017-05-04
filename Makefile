@@ -2,7 +2,7 @@ include Makefile_macros
 
 # Source directories.
 
-SRCDIRS = defs production simple_utils src/simple_main src test_code/cpu test_code
+SRCDIRS = defs production simple_utils/cuda simple_utils src/simple_main src test_code/cpu test_code
 
 # Search directories.
 
@@ -45,19 +45,21 @@ vpath %.o   $(OBJDIR)
 
 # Targets.
 
-.PHONY: defs_code production_code utils_code Simple_code src_code cpu_test_code test_code default all makedir checkclean clean cleanall wc;
+.PHONY: defs_code production_code cuda_mods utils_code Simple_code src_code cpu_test_code test_code default all makedir checkclean clean cleanall wc;
 
 default:
 	@./makemake > /dev/null; \
 	make --no-print-directory all $(MFLAGS)
 
-all: makedir checkclean defs_code production_code utils_code Simple_code src_code cpu_test_code test_code;
+all: makedir checkclean defs_code production_code cuda_mods utils_code Simple_code src_code cpu_test_code test_code;
 
 defs_code: simple_defs.o      \
            simple_defs_conv.o \
            simple_fftw3.o     ;
 
 production_code: ;
+
+cuda_mods: precision_m.o;
 
 utils_code: s_utes                \
             s_utils               ;
@@ -79,8 +81,9 @@ s_utes: simple_arr.o              \
         simple_ran_tabu.o         \
         simple_testfuns.o         ;
 
-s_utils: simple_timer.o       \
-	simple_syscalls.o  ;
+s_utils: simple_timer_omp.o    \
+         simple_timer.o       \
+	       simple_syscalls.o  ;
 
 Simple_code: opt            \
              general        \
@@ -239,7 +242,9 @@ cpu_test_code: simple_optimiser_tester.o       \
                simple_wiener2D_tester.o        \
                simple_ft_expanded_tester.o     \
                simple_speedtester.o            \
-               simple_volpft_srch_tester.o     ;
+               simple_volpft_srch_tester.o     \
+               simple_timer_basic_test.o;
+omp_test_code: simple_timer_omp_test.o;
 
 test_code: ;
  

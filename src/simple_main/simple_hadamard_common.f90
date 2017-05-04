@@ -298,9 +298,9 @@ contains
                 ! PARTICLE ENVELOPPE MASKING
                 if( p%boxmatch < p%box )call b%img_msk%new([p%boxmatch,p%boxmatch,1], p%smpd)
                 call b%mskvol%env_rproject(o, b%img_msk, p%msk) ! create 2D envelope
-                do i=1, p%binwidth
-                    call b%img_msk%grow_bin             ! binary layers
-                enddo
+                !do i=1, p%binwidth
+                !    call b%img_msk%grow_bin             ! binary layers
+                !enddo
                 call b%img_msk%cos_edge(p%edge)         ! soft edge
                 call b%img%mask(p%msk, 'soft')          ! testing
                 call b%img%mul(b%img_msk)               ! multiply by projected envelope

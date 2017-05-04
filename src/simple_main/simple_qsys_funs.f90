@@ -1,5 +1,6 @@
 module simple_qsys_funs
 use simple_defs     
+use simple_filehandling, only: del_file, del_files
 use simple_syscalls ! use all in there
 use simple_strings  ! use all in there
 implicit none
@@ -15,7 +16,6 @@ contains
 
     subroutine qsys_cleanup( p )
         use simple_params,       only: params
-        use simple_filehandling, only: del_file, del_files
         class(params),     intent(in) :: p
         character(len=:), allocatable :: rec_base_str, rho_base_str
         integer, parameter :: NUMLEN_STATE = 2, NUMLEN_ITER = 3

@@ -272,7 +272,7 @@ contains
         write(funit,'(a)',advance='yes') 'exit'
         call flush(funit)
         close(funit)
-        call chmod(trim(self%script_names(ipart)),'+x')
+        if( q_descr%get('qsys_name').eq.'local' )call chmod(trim(self%script_names(ipart)),'+x')
         if( ios .ne. 0 )then
             write(*,'(a)',advance='no') 'simple_qsys_scripts :: gen_qsys_script; Error'
             write(*,'(a)') 'chmoding submit script'//trim(self%script_names(ipart))
@@ -320,7 +320,7 @@ contains
         call flush(funit)        
         close(funit)
         !call flush(funit)
-        call chmod(trim(script_name),'+x')
+        if( q_descr%get('qsys_name').eq.'local' )call chmod(trim(script_name),'+x')
         if( ios .ne. 0 )then
             write(*,'(a)',advance='no') 'simple_qsys_ctrl :: generate_script_2; Error'
             write(*,'(a)') 'chmoding submit script'//trim(script_name)
@@ -331,7 +331,7 @@ contains
     ! SUBMISSION TO QSYS
 
     subroutine submit_scripts( self )
-        use simple_filehandling, only: get_fileunit, fopen_err
+        use simple_filehandling, only: get_fileunit, fopen_err, del_file
         use simple_syscalls,     only: exec_cmdline
         use simple_qsys_local,   only: qsys_local
         class(qsys_ctrl),  intent(inout) :: self
@@ -341,6 +341,7 @@ contains
         logical :: submit_or_not(self%fromto_part(1):self%fromto_part(2)), err
         ! master command line
         master_submit_script = trim(adjustl(self%pwd))//'/qsys_submit_jobs'
+        call del_file(trim(master_submit_script))
         ! make a submission mask
         submit_or_not = .false.
         do ipart=self%fromto_part(1),self%fromto_part(2)
@@ -359,7 +360,7 @@ contains
         if( .not. any(submit_or_not) ) return
         ! make the master submission script
         fnr = get_fileunit()
-        open(unit=fnr, FILE=master_submit_script, STATUS='REPLACE', action='WRITE', iostat=file_stat)
+        open(unit=fnr, FILE=master_submit_script, STATUS='NEW', action='WRITE', iostat=file_stat)
         call fopen_err('simple_qsys_ctrl :: submit_scripts', file_stat )
         write(fnr,'(a)') '#!/bin/bash'
         do ipart=self%fromto_part(1),self%fromto_part(2)

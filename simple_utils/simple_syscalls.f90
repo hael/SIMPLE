@@ -189,4 +189,29 @@ contains
 #endif        
     end subroutine simple_sleep
 
+    function waitforfileclose( funit )result( all_good )
+        integer, intent(inout) :: funit
+        integer :: rec_prev, rec, iostat, waits, maxwaits = 60
+        logical :: all_good, opened
+        all_good = .false.
+        waits    = 0
+        inquire(unit=funit, opened=opened, recl=rec_prev)
+        do while(.not.all_good)
+            call simple_sleep(1)
+            inquire(unit=funit, opened=opened, recl=rec, iostat=iostat)
+            all_good = .not.opened
+            all_good = all_good .and. (rec == rec_prev)
+            all_good = all_good .and. (iostat == 0)
+            rec_prev = rec
+            waits    = waits + 1
+            if(waits > 10)then
+                write(*,'(A,I3)')'This is taking a long time for file unit:', funit
+                if(waits > maxwaits)then
+                    write(*,'(A,I3)')'This is taking too long a time for file unit:', funit
+                    stop
+                endif
+            endif
+        enddo
+    end function waitforfileclose
+
 end module simple_syscalls

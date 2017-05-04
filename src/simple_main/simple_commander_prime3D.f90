@@ -285,13 +285,13 @@ contains
     end subroutine exec_prime3D
 
     subroutine exec_cont3D( self, cline )
-        use simple_pcont3D_matcher, only: pcont3D_exec, pcont3D_exec_single
+        use simple_pcont3D_matcher, only: pcont3D_exec
         use simple_cont3D_matcher,  only: cont3D_exec
         class(cont3D_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(params) :: p
         type(build)  :: b
-        integer      :: i, startit
+        integer      :: i, startit, iter = 0
         logical      :: converged=.false.
         p = params(cline) ! parameters generated
         if( p%xfel .eq. 'yes' )then
@@ -304,21 +304,21 @@ contains
         call b%build_cont3D_tbox(p)
         if( cline%defined('part') )then
             if( .not. cline%defined('outfile') ) stop 'need unique output file for parallel jobs'
-                select case(p%refine)
-                    case('yes')
-                        call pcont3D_exec_single(b, p, cline, 0, converged)
-                    case('cart','polar')
-                        call cont3D_exec(b, p, cline, 0, converged)   
-                    case DEFAULT
-                        stop 'unknown refinement mode; simple_commander_prime3D%exec_cont3D'                 
-                end select
+            select case(p%refine)
+                case('yes')
+                    call pcont3D_exec(b, p, cline, iter, converged)
+                case('cart','polar')
+                    call cont3D_exec(b, p, cline, iter, converged)   
+                case DEFAULT
+                    stop 'unknown refinement mode; simple_commander_prime3D%exec_cont3D'                 
+            end select
         else
             startit = 1
             if( cline%defined('startit') )startit = p%startit
             do i=startit,p%maxits
                 select case(p%refine)
                     case('yes')
-                        call pcont3D_exec_single(b, p, cline, i, converged)
+                        call pcont3D_exec(b, p, cline, i, converged)
                     case('cart','polar')
                         call cont3D_exec(b, p, cline, i, converged)   
                     case DEFAULT
