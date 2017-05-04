@@ -401,7 +401,7 @@ contains
                     enddo
                 endif      
             case DEFAULT
-                stop'not implemented yet'
+                stop 'not implemented yet'
         end select
         if( verbose )print *,'end prep_reforis'
     end subroutine test_prep_reforis

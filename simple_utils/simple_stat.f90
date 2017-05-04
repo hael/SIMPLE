@@ -58,7 +58,7 @@ contains
         write(*,*) "Variance = ", var
         h = 0
         binwidth = (maxv-minv)/real(bins)
-        do i=1,n 
+        do i=1,n
             bin = nint((arr(i)-minv)/binwidth)  ! int(1.+(arr(i)-minv)/binwidth)
             if( bin < 1 )    bin = 1            ! check for underflows
             if( bin > bins ) bin = bins         ! check for overflows
@@ -94,7 +94,7 @@ contains
         ! calc average
         ave = sum(data)/nr
         ! calc sum of devs and sum of devs squared
-        ep = 0.        
+        ep = 0.
         var = 0.
         !$omp parallel do default(shared) private(i,dev) schedule(auto) reduction(+:ep,var)
         do i=1,n
@@ -111,9 +111,9 @@ contains
             ave  = 0.
             sdev = 0.
             var  = 0.
-        endif   
+        endif
     end subroutine moment_1
-    
+
     !>  \brief  given a 2D real array of data, this routine returns its mean: _ave_,
     !!          standard deviation: _sdev_, and variance: _var_
     subroutine moment_2( data, ave, sdev, var, err )
@@ -137,7 +137,7 @@ contains
         ! calc average
         ave = sum(data)/nr
         ! calc sum of devs and sum of devs squared
-        ep = 0.        
+        ep = 0.
         var = 0.
         !$omp parallel do default(shared) private(i,j,dev) schedule(auto) reduction(+:ep,var)
         do i=1,nx
@@ -158,7 +158,7 @@ contains
             var  = 0.
         endif
     end subroutine moment_2
-    
+
     !>  \brief  given a 3D real array of data, this routine returns its mean: _ave_,
     !!          standard deviation: _sdev_, and variance: _var_
     subroutine moment_3( data, ave, sdev, var, err )
@@ -182,7 +182,7 @@ contains
         endif
         ave = sum(data)/nr
         ! calc sum of devs and sum of devs squared
-        ep = 0.        
+        ep = 0.
         var = 0.
         !$omp parallel do default(shared) private(i,j,k,dev) schedule(auto) reduction(+:ep,var)
         do i=1,nx
@@ -197,7 +197,7 @@ contains
         !$omp end parallel do
         var = (var-ep**2./nr)/(nr-1.) ! corrected two-pass formula
         sdev = 0.
-        if( var > 0. ) sdev = sqrt(var)  
+        if( var > 0. ) sdev = sqrt(var)
         if( abs(var) < TINY )then
             err  = .true.
             ave  = 0.
@@ -205,7 +205,7 @@ contains
             var  = 0.
         endif
     end subroutine moment_3
-    
+
     !>  \brief  is for statistical normalization of an array
     subroutine normalize_1( arr, err )
         real, intent(inout)  :: arr(:)
@@ -213,9 +213,9 @@ contains
         logical, intent(out) :: err
         call moment_1( arr, ave, sdev, var, err )
         if( err ) return
-        arr = (arr-ave)/sdev ! array op    
+        arr = (arr-ave)/sdev ! array op
     end subroutine normalize_1
-    
+
     !>  \brief  is for statistical normalization of a 2D matrix
     subroutine normalize_2( arr, err )
         real, intent(inout)  :: arr(:,:)
@@ -223,9 +223,9 @@ contains
         logical, intent(out) :: err
         call moment_2( arr, ave, sdev, var, err )
         if( err ) return
-        arr = (arr-ave)/sdev ! array op    
+        arr = (arr-ave)/sdev ! array op
     end subroutine normalize_2
-    
+
     !>  \brief  is for statistical normalization of a 3D matrix
     subroutine normalize_3( arr, err )
         real, intent(inout)  :: arr(:,:,:)
@@ -233,11 +233,11 @@ contains
         logical, intent(out) :: err
         call moment_3( arr, ave, sdev, var, err )
         if( err ) return
-        arr = (arr-ave)/sdev ! array op    
+        arr = (arr-ave)/sdev ! array op
     end subroutine normalize_3
-    
+
     !>  \brief  is for sigmoid normalisation [0,1]
-    subroutine normalize_sigm_1( arr ) 
+    subroutine normalize_sigm_1( arr )
         real, intent(inout) :: arr(:)
         real                :: smin, smax, delta
         real, parameter     :: nnet_const = exp(1.)-1.
@@ -250,9 +250,9 @@ contains
         arr = (exp((arr-smin)/delta)-1.)/nnet_const
         !$omp end parallel workshare
     end subroutine normalize_sigm_1
-    
+
     !>  \brief  is for sigmoid normalisation [0,1]
-    subroutine normalize_sigm_2( arr ) 
+    subroutine normalize_sigm_2( arr )
         real, intent(inout) :: arr(:,:)
         real                :: smin, smax, delta
         real, parameter     :: nnet_const = exp(1.)-1.
@@ -265,9 +265,9 @@ contains
         arr = (exp((arr-smin)/delta)-1.)/nnet_const
         !$omp end parallel workshare
     end subroutine normalize_sigm_2
-    
+
     !>  \brief  is for sigmoid normalisation [0,1]
-    subroutine normalize_sigm_3( arr ) 
+    subroutine normalize_sigm_3( arr )
         real, intent(inout) :: arr(:,:,:)
         real                :: smin, smax, delta
         real, parameter     :: nnet_const = exp(1.)-1.
@@ -280,7 +280,7 @@ contains
         arr = (exp((arr-smin)/delta)-1.)/nnet_const
         !$omp end parallel workshare
     end subroutine normalize_sigm_3
-    
+
     !>  \brief  calculates the devation around point
     subroutine deviation( data, point, sdev, var, err )
         !$ use omp_lib
@@ -294,7 +294,7 @@ contains
         n   = size(data,1)
         nr  = n
         ! calc sum of devs and sum of devs squared
-        ep = 0.        
+        ep = 0.
         var = 0.
         !$omp parallel do default(shared) private(i,dev) schedule(auto) reduction(+:ep,var)
         do i=1,n
@@ -302,14 +302,14 @@ contains
             ep = ep+dev
             var = var+dev*dev
         end do
-        !$omp end parallel do 
+        !$omp end parallel do
         var = (var-ep**2./nr)/(nr-1.) ! corrected two-pass formula
         sdev = sqrt(var)
         if( abs(var) < TINY ) err = .true.
     end subroutine deviation
-    
+
     ! CORRELATION
-    
+
     !>  \brief  calculates Pearson's correlation coefficient
     function pearsn_1( x, y ) result( r )
         real, intent(in) :: x(:),y(:)
@@ -323,7 +323,7 @@ contains
         syy = 0.
         sxy = 0.
         !$omp parallel do default(shared) private(j,xt,yt) &
-        !$omp reduction(+:sxx,syy,sxy) schedule(auto) 
+        !$omp reduction(+:sxx,syy,sxy) schedule(auto)
         do j=1,n
             xt  = x(j)-ax
             yt  = y(j)-ay
@@ -334,7 +334,7 @@ contains
         !$omp end parallel do
         r = max(-1.,min(1.,sxy/sqrt(sxx*syy)))
     end function pearsn_1
-    
+
     !>  \brief  calculates Pearson's correlation coefficient
     function pearsn_2( x, y ) result( r )
         real, intent(in) :: x(:,:),y(:,:)
@@ -362,7 +362,7 @@ contains
         !$omp end parallel do
         r = max(-1.,min(1.,sxy/sqrt(sxx*syy)))
     end function pearsn_2
-    
+
     !>  \brief  calculates Pearson's correlation coefficient
     function pearsn_3( x, y ) result( r )
         real, intent(in) :: x(:,:,:),y(:,:,:)
@@ -394,7 +394,7 @@ contains
         !$omp end parallel do
         r = max(-1.,min(1.,sxy/sqrt(sxx*syy)))
     end function pearsn_3
-   
+
     !>  \brief  calculates the Pearson correlation for pre-normalized data
     function pearsn_prenorm( x, y ) result( r )
         real    :: x(:),y(:),r,sxx,syy,sxy,den
@@ -405,7 +405,7 @@ contains
         syy = 0.
         sxy = 0.
         !$omp parallel do default(shared) private(j) &
-        !$omp reduction(+:sxx,syy,sxy) schedule(auto) 
+        !$omp reduction(+:sxx,syy,sxy) schedule(auto)
         do j=1,n
             sxx = sxx+x(j)**2
             syy = syy+y(j)**2
@@ -428,11 +428,11 @@ contains
         integer :: icorr, ncorrs
         ncorrs = size(corrs)
         allocate(weights(ncorrs), corrs_copy(ncorrs), expnegdists(ncorrs))
-        weights     = 0. 
+        weights     = 0.
         corrs_copy  = corrs
-        expnegdists = 0. 
+        expnegdists = 0.
         corrmax     = maxval(corrs_copy)
-        if( corrmax < 0. )then 
+        if( corrmax < 0. )then
             ! weighting does not make sense, put them all to 1/ncorrs
             weights = 1./real(ncorrs)
             return
@@ -468,7 +468,7 @@ contains
     end function corrs2weights
 
     ! INTEGER STUFF
-    
+
     !>  \brief  is for rank transformation of an array
     subroutine rank_transform_1( arr )
         use simple_jiffys, only: alloc_err
@@ -482,14 +482,14 @@ contains
         do j=1,n
             order(j) = j
             vals(j)  = arr(j)
-        end do  
+        end do
         call hpsort(n, vals, order)
         do j=1,n
             arr(order(j)) = real(j)
         end do
         deallocate(vals, order)
     end subroutine rank_transform_1
-    
+
     !>  \brief  is for rank transformation of a 2D matrix
     subroutine rank_transform_2( mat )
         use simple_jiffys, only: alloc_err
@@ -518,7 +518,7 @@ contains
         end do
         deallocate(vals, order, indices)
     end subroutine rank_transform_2
-    
+
     !>  \brief  Spearman rank correlation
     function spear( n, pi1, pi2 ) result( corr )
         integer, intent(in) :: n
@@ -526,7 +526,7 @@ contains
         real                :: corr, sqsum, rn
         integer             :: k
         rn = real(n)
-        sqsum = 0. 
+        sqsum = 0.
         do k=1,n
             sqsum = sqsum+(pi1(k)-pi2(k))**2.
         end do
@@ -557,18 +557,18 @@ contains
             d2 = data2(j2)
             if(d1.le.d2)then
                 fn1 = j1/en1
-                j1  = j1+1 
+                j1  = j1+1
             endif
             if(d2.le.d1)then
                 fn2 = j2/en2
                 j2  = j2+1
             endif
             dt = abs(fn2-fn1)
-            if(dt.gt.d) d = dt 
+            if(dt.gt.d) d = dt
         end do
         en = sqrt(en1*en2/(en1+en2))
         prob = probks((en+0.12+0.11/en)*d) ! significance
-        
+
         contains
 
             function probks( alam ) result( p )
@@ -578,7 +578,7 @@ contains
                 integer :: j
                 a2  = -2.*alam**2
                 fac = 2.
-                p = 0.    
+                p = 0.
                 termbf = 0. ! prev term in sum
                 do j=1,100
                     term = fac*exp(a2*j**2)
@@ -591,7 +591,7 @@ contains
             end function probks
 
     end subroutine kstwo
-    
+
     !>  \brief  4 statistical analysis of similarity matrix
     subroutine analyze_smat( s, symmetrize, smin, smax )
         real, intent(inout) :: s(:,:)
@@ -653,7 +653,7 @@ contains
         binwidth = ( maxv - minv ) / real( nbins )
         allocate( h(nbins) )
         h = 0
-        do i=1,n 
+        do i=1,n
             bin = nint((arr(i)-minv)/binwidth)   ! int(1.+(arr(i)-minv)/binwidth)
             if( bin < 1 )     bin = 1            ! check for underflows
             if( bin > nbins ) bin = nbins        ! check for overflows
@@ -682,8 +682,8 @@ contains
         allocate( h(nbins,nbins) )
         h = 0
         do i=1,n
-            bin1 = bin( arr1(i), minv1, binwidth1 ) 
-            bin2 = bin( arr2(i), minv2, binwidth2 ) 
+            bin1 = bin( arr1(i), minv1, binwidth1 )
+            bin2 = bin( arr2(i), minv2, binwidth2 )
             h( bin1, bin2 ) = h( bin1, bin2 ) + 1
         end do
 
