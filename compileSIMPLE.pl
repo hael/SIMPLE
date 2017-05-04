@@ -28,10 +28,11 @@ my $ending = "f90";
 my $execdir = getcwd();
 my $mainprog;
 my @prod_dirs;
-my $SIMPLE_SCRIPTS_PATH   = $SIMPLE_PATH.'/scripts';
-my $SIMPLE_SRC_PATH       = $SIMPLE_PATH.'/src/simple_main';
-my $SIMPLE_PROD_PATH      = $SIMPLE_PATH."/production";
-my $SIMPLE_TEST_PROD_PATH = $SIMPLE_PATH."/production/simple_tests";
+my $SIMPLE_PATH           = $execdir;
+my $SIMPLE_SCRIPTS_PATH   = $execdir.'/scripts';
+my $SIMPLE_SRC_PATH       = $execdir.'/src/simple_main';
+my $SIMPLE_PROD_PATH      = $execdir."/production";
+my $SIMPLE_TEST_PROD_PATH = $execdir."/production/simple_tests";
 my $option;
 my $mkma_gcc_flags;
 my $mkma_gpp_flags;
@@ -310,6 +311,7 @@ sub compile_gui{
 	}elsif($PLATFORM == 1){
 		copy($guidir . "/src/ext/websocketd-linux", $guidir . "/bin/websocketd") or die "Failed: $!";
 	}
+	chmod 0755, $guidir . "/bin/websocketd";
 	print color('bold blue');
 	print color('reset');
 	system("g++ -DSIMPLE_DIR=" . $SIMPLE_PATH . " " . 

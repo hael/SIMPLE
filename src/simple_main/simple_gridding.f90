@@ -32,12 +32,8 @@ contains
         if( img%is_ft() )then
             lims = img%loop_lims(2)
         else
-            lims(1,1) = 1
-            lims(1,2) = ldim(1)
-            lims(2,1) = 1
-            lims(2,2) = ldim(2)
-            lims(3,1) = 1
-            lims(3,2) = ldim(3)
+            lims(:,1) = 1
+            lims(:,2) = ldim
         endif
         ! make the window
         allocate( w1(lims(1,1):lims(1,2)), w2(lims(2,1):lims(2,2)),&

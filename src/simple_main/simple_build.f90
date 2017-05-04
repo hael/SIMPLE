@@ -13,23 +13,24 @@
 !
 module simple_build
 use simple_defs
-use simple_cmdline,          only: cmdline
-use simple_comlin,           only: comlin
-use simple_image,            only: image
-use simple_centre_clust,     only: centre_clust
-use simple_oris,             only: oris
-use simple_pair_dtab,        only: pair_dtab
-use simple_ppca,             only: ppca
-use simple_reconstructor,    only: reconstructor
-use simple_eo_reconstructor, only: eo_reconstructor
-use simple_params,           only: params
-use simple_sym,              only: sym
-use simple_opt_spec,         only: opt_spec
-use simple_convergence,      only: convergence
-use simple_jiffys,           only: alloc_err
-use simple_projector,        only: projector
-use simple_filehandling      ! use all in there
-use simple_kbinterpol        ! use all in there
+use simple_cmdline,             only: cmdline
+use simple_comlin,              only: comlin
+use simple_image,               only: image
+use simple_centre_clust,        only: centre_clust
+use simple_oris,                only: oris
+use simple_pair_dtab,           only: pair_dtab
+use simple_ppca,                only: ppca
+use simple_reconstructor,       only: reconstructor
+use simple_eo_reconstructor,    only: eo_reconstructor
+use simple_params,              only: params
+use simple_sym,                 only: sym
+use simple_opt_spec,            only: opt_spec
+use simple_convergence,         only: convergence
+use simple_convergence_perptcl, only: convergence_perptcl
+use simple_jiffys,              only: alloc_err
+use simple_projector,           only: projector
+use simple_filehandling         ! use all in there
+use simple_kbinterpol           ! use all in there
 implicit none
 
 public :: build, test_build
@@ -42,6 +43,7 @@ type build
     type(oris)                          :: a, e               !< aligndata, discrete space
     type(sym)                           :: se                 !< symmetry elements object
     type(convergence)                   :: conv               !< object for convergence checking of the PRIME2D/3D approaches
+    type(convergence_perptcl)           :: ppconv             !< per-particle convergence checking object
     type(projector)                     :: img                !< individual image objects
     type(image)                         :: img_pad            !< -"-
     type(image)                         :: img_tmp            !< -"-
@@ -103,7 +105,6 @@ type build
     procedure                           :: build_cont3D_tbox
     procedure                           :: kill_cont3D_tbox
     procedure                           :: read_features
-    procedure                           :: read_nnmat
     procedure                           :: raise_hard_ctf_exception
 end type build
 
@@ -220,8 +221,9 @@ contains
         endif
         ! initialize Kaiser-Bessel kernel
         call init_kbiterpol(KBWINSZ, KBALPHA)
-        ! build convergence checker
-        self%conv = convergence(self%a, p, cline)
+        ! build convergence checkers
+        self%conv   = convergence(self%a, p, cline)
+        self%ppconv = convergence_perptcl(self%a, p, cline)
         ! generate random particle batch
         if( cline%defined('batchfrac') )then
             ! allocate index array
@@ -245,9 +247,11 @@ contains
         class(build), intent(inout)  :: self
         integer :: i, istart, istop
         if( self%general_tbox_exists )then
+            call self%conv%kill
             call self%se%kill
             call self%a%kill
             call self%e%kill
+            call self%img%kill_expanded
             call self%img%kill
             call self%img_copy%kill
             call self%img_tmp%kill
@@ -311,14 +315,14 @@ contains
             do i=1,p%nptcls*p%nsym
                 call self%imgs_sym(i)%new([p%box,p%box,1],p%smpd,p%imgkind)
             end do
-            self%clins = comlin(self%a, self%imgs_sym)
+            self%clins = comlin(self%a, self%imgs_sym, p%lp)
         else ! set up assymetrical common lines-based alignment functionality
             allocate( self%imgs(1:p%nptcls), stat=alloc_stat )
             call alloc_err( 'build_comlin_tbox; simple_build, 2', alloc_stat )
             do i=1,p%nptcls
                 call self%imgs(i)%new([p%box,p%box,1],p%smpd,p%imgkind)
             end do  
-            self%clins = comlin( self%a, self%imgs )
+            self%clins = comlin( self%a, self%imgs, p%lp )
         endif
         write(*,'(A)') '>>> DONE BUILDING COMLIN TOOLBOX'
         self%comlin_tbox_exists = .true.
@@ -402,7 +406,8 @@ contains
         use simple_strings, only: str_has_substr
         class(build),  intent(inout) :: self
         class(params), intent(inout) :: p
-        integer :: icls, alloc_stat, funit, io_stat
+        type(oris) :: os
+        integer    :: icls, alloc_stat, funit, io_stat
         call self%kill_hadamard_prime2D_tbox
         call self%raise_hard_ctf_exception(p)
         allocate( self%cavgs(p%ncls), self%refs(p%ncls), self%ctfsqsums(p%ncls), stat=alloc_stat )
@@ -413,7 +418,14 @@ contains
             call self%ctfsqsums(icls)%new([p%box,p%box,1],p%smpd,p%imgkind)
         end do
         if( str_has_substr(p%refine,'neigh') )then
-            if( file_exists('nnmat.bin') )  call self%read_nnmat(p)
+            if( file_exists(p%oritab3D) )then
+                call os%new(p%ncls)
+                call os%read(p%oritab3D)
+                call os%nearest_neighbors(p%nnn, self%nnmat)
+                call os%kill
+            else
+                stop 'need oritab3D input for prime2D refine=neigh mode; simple_build :: build_hadamard_prime2D_tbox'
+            endif
         endif
         write(*,'(A)') '>>> DONE BUILDING HADAMARD PRIME2D TOOLBOX'
         self%hadamard_prime2D_tbox_exists = .true.
@@ -588,26 +600,6 @@ contains
         end do
         close(unit=funit)
     end subroutine read_features
-
-    !>  \brief  for reading nearest neighbour matrix from disk
-    subroutine read_nnmat( self, p )
-        class(build),  intent(inout) :: self
-        class(params), intent(in)    :: p
-        integer :: alloc_stat, funit, io_stat
-        if( allocated(self%nnmat) ) deallocate(self%nnmat)
-        allocate( self%nnmat(p%ncls,p%nnn), stat=alloc_stat )
-        call alloc_err('build_hadamard_prime2D_tbox; simple_build, 2', alloc_stat)
-        funit = get_fileunit()
-        open(unit=funit, status='OLD', action='READ', file='nnmat.bin', access='STREAM')
-        read(unit=funit,pos=1,iostat=io_stat) self%nnmat
-        ! check if the read was successful
-        if( io_stat .ne. 0 )then
-            write(*,'(a,i0,2a)') '**ERROR(read_nnmat): I/O error ',&
-            io_stat, ' when reading nnmat.bin'
-            stop 'I/O error; simple_build; read_nnmat'
-        endif
-        close(funit)
-    end subroutine read_nnmat
     
     !> \brief  fall-over if CTF params are missing
     subroutine raise_hard_ctf_exception( self, p )

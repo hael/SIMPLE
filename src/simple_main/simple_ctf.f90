@@ -157,7 +157,7 @@ contains
         real,             optional, intent(in)    :: bfac        !< bfactor
         integer :: lims(3,2),h,k,phys(3),hh,kk,ldim(3)
         real    :: ang,tval,ddfy,aangast,spaFreqSq,hinv
-        real    :: kinv,hinvsq,kinvsq,inv_ldim(3)
+        real    :: kinv, inv_ldim(3)
         if( img%is_3d() )then
             print *, 'ldim: ', img%get_ldim()
             stop 'Only 4 2D images; ctf2img; simple_ctf'
@@ -174,7 +174,7 @@ contains
         lims     = img%loop_lims(2)
         ldim     = img%get_ldim()
         inv_ldim = 1./real(ldim)
-        !$omp parallel do collapse(2) default(shared) private(h,hinv,k,kinv,spaFreqSq,ang,tval,phys) schedule(auto)
+        !$omp parallel do collapse(2) default(shared) private(h,hinv,k,kinv,spaFreqSq,ang,tval,phys) schedule(static)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 hinv      = real(h) * inv_ldim(1)
@@ -277,14 +277,22 @@ contains
             print *, 'ldim: ', ldim
             stop 'Only 4 2D images; apply; simple_ctf'
         endif
-        call ctfimg%new(ldim, self%smpd)
-        call self%ctf2img(ctfimg, dfx, mode, dfy, angast, bfac)
         if( img%is_ft() )then
+            call ctfimg%new(ldim, self%smpd)
+            call self%ctf2img(ctfimg, dfx, mode, dfy, angast, bfac)
             call img%mul(ctfimg)
         else
-            call img%fwd_ft
-            call img%mul(ctfimg)
-            call img%bwd_ft
+            ldim_pd(1:2) = 2*ldim(1:2)
+            ldim_pd(3)   = 1
+            call ctfimg%new(ldim_pd, self%smpd)
+            call img_pd%new(ldim_pd, self%smpd)
+            call self%ctf2img(ctfimg, dfx, mode, dfy, angast, bfac)
+            call img%pad_mirr(img_pd)
+            call img_pd%fwd_ft
+            call img_pd%mul(ctfimg)
+            call img_pd%bwd_ft
+            call img_pd%clip(img)
+            call img_pd%kill
         endif
         call ctfimg%kill
     end subroutine apply
@@ -334,7 +342,7 @@ contains
         ldim     = img%get_ldim()
         inv_ldim = 1./real(ldim)
         !$omp parallel do collapse(2) default(shared) &
-        !$omp& private(h,hinv,k,kinv,spaFreqSq,ang,tval,tvalsq,logi,phys,comp) schedule(auto)
+        !$omp& private(h,hinv,k,kinv,spaFreqSq,ang,tval,tvalsq,logi,phys,comp) schedule(static)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 ! calculate CTF and CTF**2.0 values

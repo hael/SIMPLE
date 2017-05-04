@@ -37,6 +37,7 @@ type prime3D_srch
     integer                 :: prev_ref       = 0      !< previous reference index
     integer                 :: prev_proj      = 0      !< previous projection index
     real                    :: prev_corr      = 1.     !< previous best correlation
+    real                    :: specscore      = 0.     !< spectral score
     real                    :: prev_shvec(2)  = 0.     !< previous origin shift vector
     real                    :: lims(2,2)      = 0.     !< shift search range limit
     real                    :: athres         = 0.     !< angular threshold
@@ -69,6 +70,7 @@ type prime3D_srch
     procedure          :: prep4srch
     procedure          :: prep_corr4srch
     procedure          :: prep_reforis
+    procedure, private :: prep_specscore
     ! SEARCH ROUTINES
     procedure          :: exec_prime3D_srch
     procedure          :: exec_prime3D_srch_shc
@@ -108,15 +110,13 @@ end type prime3D_srch
 contains
 
     !>  \brief  is a constructor
-    subroutine new( self, a, e, p, pftcc )
+    subroutine new( self, a, p, pftcc )
         use simple_params, only: params
         class(prime3D_srch),             intent(inout) :: self  !< instance
-        class(oris),                     intent(inout) :: a, e  !< ptcls oris, reference oris
+        class(oris),                     intent(inout) :: a     !< ptcls oris
         class(params),                   intent(in)    :: p     !< parameters
         class(polarft_corrcalc), target, intent(inout) :: pftcc !< correlator
-        real,    allocatable :: corrs(:)
-        integer, allocatable :: inds(:)
-        integer  :: alloc_stat, s, ind, thresh_ind
+        integer  :: alloc_stat
         ! destroy possibly pre-existing instance
         call self%kill
         ! set constants
@@ -142,14 +142,11 @@ contains
             self%greedy_inpl = .false.
         endif
         ! construct composites
-        allocate(self%state_exists(self%nstates), stat=alloc_stat)   
-        call alloc_err('In: new; simple_prime3D_srch, 1', alloc_stat)
         if( p%oritab.ne.'' )then
-            self%state_exists = .false.
-            do s=1,self%nstates
-                if( a%get_statepop(s) > 0 ) self%state_exists(s) = .true.
-            enddo
+            self%state_exists = a%get_state_exist(self%nstates)
         else
+            allocate(self%state_exists(self%nstates), stat=alloc_stat)   
+            call alloc_err('In: new; simple_prime3D_srch, 1', alloc_stat)
             self%state_exists = .true.
         endif
         ! generate oris oject in which the best npeaks refs will be stored
@@ -256,6 +253,7 @@ contains
         call a%set(iptcl, 'state', real(state)       )
         call a%set(iptcl, 'frac',  o_new%get('frac') )
         call a%set(iptcl, 'corr',  o_new%get('corr') )
+        call a%set(iptcl, 'specscore', self%specscore)
         call a%set(iptcl, 'ow',    o_new%get('ow')   )
         call a%set(iptcl, 'mirr',  0.                )
         call a%set(iptcl, 'proj',  o_new%get('proj') )
@@ -286,7 +284,6 @@ contains
         class(prime3D_srch), intent(inout) :: self
         integer,             intent(in)    :: ipeak
         class(ori),          intent(inout) :: o2update
-        type(ori) :: o
         real      :: euls(3), x, y, rstate, ow
         integer   :: ind
         if( str_has_substr(self%refine,'shc') .and. ipeak /= 1 ) stop 'get_ori not for shc-modes; simple_prime3D_srch'
@@ -389,10 +386,10 @@ contains
         if( self%prev_state > self%nstates ) stop 'previous best state outside boundary; prep4srch; simple_prime3D_srch'
         if( .not. self%state_exists(self%prev_state) ) stop 'empty previous state; prep4srch; simple_prime3D_srch'
         select case( self%refine )
-            case( 'no', 'shc','adasym')                                                ! DISCRETE CASE
+            case( 'no','shc','adasym' )                                                ! DISCRETE CASE
                 call self%prep_reforis(e)                                              ! search space & order prep
                 self%prev_ref = self%o_refs%find_closest_proj(o_prev, self%prev_state) ! find closest ori with same state
-            case( 'neigh', 'shcneigh' )                                                ! DISCRETE CASE WITH NEIGHBOURHOOD
+            case( 'neigh','shcneigh' )                                                 ! DISCRETE CASE WITH NEIGHBOURHOOD
                 call self%prep_reforis(e, nnvec=nnmat(self%prev_proj,:) )              ! search space & order prep
                 self%prev_ref = self%o_refs%find_closest_proj(o_prev, self%prev_state) ! find closest ori with same state
             case( 'het' )
@@ -410,13 +407,12 @@ contains
         class(prime3D_srch),  intent(inout) :: self
         class(oris),          intent(inout) :: e
         integer,    optional, intent(in)    :: nnvec(self%nnn)
-        type(ran_tabu)       :: irt, rt
-        integer, allocatable :: isrch_order(:)
-        integer              :: i, istate, n, istart, iend, start, end, nprojs
+        type(ran_tabu)       :: rt
+        integer              :: i, istate, end
         ! on exit all the oris are clean and only the out-of-planes, 
         ! state & proj fields are present
         select case( self%refine )
-            case( 'no', 'shc', 'neigh', 'shcneigh', 'adasym' )
+            case( 'no','shc','neigh','shcneigh','adasym' )
                 if( allocated(self%srch_order) ) deallocate(self%srch_order)
                 if( str_has_substr(self%refine, 'neigh') )then ! local refinement
                     allocate(self%srch_order(self%nnnrefs))
@@ -471,10 +467,10 @@ contains
         integer,                 intent(in)    :: iptcl
         class(oris),             intent(inout) :: a
         real,                    intent(in)    :: lp
-        type(ori) :: o_prev
-        real      :: cc_t_min_1, corr
+        type(ori)         :: o_prev
+        real              :: cc_t_min_1, corr
         o_prev = a%get_ori(iptcl)
-        corr   = max( 0., pftcc%corr_single(self%prev_ref, iptcl, self%prev_roind) )
+        corr   = max( 0., pftcc%corr(self%prev_ref, iptcl, self%prev_roind) )
         if( corr > 1. .or. .not. is_a_number(corr) )then
             stop 'Invalid correlation value in simple_prime3d_srch::prep_corr4srch'
         endif
@@ -491,8 +487,20 @@ contains
             endif
         endif
         self%prev_corr = corr
+        call self%prep_specscore(pftcc, iptcl)
         if( DEBUG ) write(*,'(A)') '>>> PRIME3D_SRCH::PREPARED CORRELATION FOR SIMPLE_PRIME3D_SRCH'
     end subroutine prep_corr4srch
+
+    !>  \brief calculates and store spectral score
+    subroutine prep_specscore( self, pftcc, iptcl )
+        class(prime3D_srch),     intent(inout) :: self
+        class(polarft_corrcalc), intent(inout) :: pftcc
+        integer,                 intent(in)    :: iptcl
+        real, allocatable :: frc(:)
+        frc = pftcc%genfrc(self%prev_ref, iptcl, self%prev_roind)
+        self%specscore = max(0., median_nocopy(frc))
+        deallocate(frc)
+    end subroutine prep_specscore
 
     !>  \brief retrieves and preps npeaks orientations for reconstruction
     subroutine prep_npeaks_oris( self )
@@ -617,8 +625,7 @@ contains
         class(oris),             intent(inout) :: a, e
         real,                    intent(in)    :: extr_bound
         integer,                 intent(inout) :: statecnt(self%nstates)
-        call self%online_allocate
-        call self%stochastic_srch_het( pftcc, iptcl, a, e, extr_bound, statecnt )
+        call self%stochastic_srch_het(pftcc, iptcl, a, e, extr_bound, statecnt)
         call self%online_destruct
         if( DEBUG ) write(*,'(A)') '>>> PRIME3D_SRCH::EXECUTED PRIME3D_HET_SRCH'
     end subroutine exec_prime3D_srch_het
@@ -673,7 +680,7 @@ contains
                 state = 1
                 if( self%nstates > 1 ) state = nint( self%o_refs%get(iref, 'state') )
                 if( self%state_exists(state) )then
-                    corrs     = pftcc%gencorrs_serial(iref, iptcl) ! In-plane correlations
+                    corrs     = pftcc%gencorrs(iref, iptcl) ! In-plane correlations
                     loc       = maxloc(corrs)                      ! greedy in-plane
                     inpl_ind  = loc(1)                             ! in-plane angle index
                     inpl_corr = corrs(inpl_ind)                    ! max in plane correlation
@@ -753,7 +760,7 @@ contains
                 state = 1
                 if( self%nstates > 1 ) state = nint( self%o_refs%get(iref, 'state') )
                 if( self%state_exists(state) )then
-                    corrs     = pftcc%gencorrs_serial(iref, iptcl) ! In-plane correlations
+                    corrs     = pftcc%gencorrs(iref, iptcl) ! In-plane correlations
                     loc       = maxloc(corrs)                      ! greedy in-plane
                     inpl_ind  = loc(1)                             ! in-plane angle index
                     inpl_corr = corrs(inpl_ind)                    ! max in plane correlation
@@ -777,7 +784,7 @@ contains
                 state = 1
                 if( self%nstates>1 ) state = nint( self%o_refs%get(iref, 'state') )
                 if( self%state_exists( state ) )then
-                    corrs     = pftcc%gencorrs_serial(iref, iptcl) ! In-plane correlations
+                    corrs     = pftcc%gencorrs(iref, iptcl) ! In-plane correlations
                     loc       = maxloc(corrs)                      ! greedy in-plane
                     inpl_ind  = loc(1)                             ! in-plane angle index
                     inpl_corr = corrs(loc(1))                      ! max in plane correlation
@@ -796,7 +803,7 @@ contains
                         do isym=1,self%nsym - 1
                             iref_sym = self%nnmat_sym(iref,isym)
                             if( self%proj_space_inds(iref_sym) /= 0 ) cycle
-                            corrs     = pftcc%gencorrs_serial(iref_sym, iptcl) ! In-plane correlations
+                            corrs     = pftcc%gencorrs(iref_sym, iptcl) ! In-plane correlations
                             loc       = maxloc(corrs)                          ! greedy in-plane
                             inpl_ind  = loc(1)                                 ! in-plane angle index
                             inpl_corr = corrs(loc(1))                          ! max in plane correlation
@@ -818,9 +825,9 @@ contains
         class(oris),             intent(inout) :: a, e
         real,                    intent(in)    :: lp
         integer, optional,       intent(in)    :: nnmat(self%nprojs,self%nnn)
-        real      :: inpl_corr,corrs(self%nrots)
-        integer   :: iref,isample,nrefs,inpl_ind,loc(1)
-        logical   :: found_better
+        real    :: inpl_corr,corrs(self%nrots)
+        integer :: iref,isample,nrefs,inpl_ind,loc(1)
+        logical :: found_better
         if( nint(a%get(iptcl,'state')) > 0 )then
             ! initialize
             call self%prep4srch(iptcl, a, e, nnmat)
@@ -874,7 +881,7 @@ contains
                 state     = 1
                 if( self%nstates > 1 ) state = nint( self%o_refs%get(iref, 'state') )
                 if( self%state_exists( state ) )then
-                    corrs    = pftcc%gencorrs_serial( iref, iptcl )      ! in-plane correlations 
+                    corrs    = pftcc%gencorrs( iref, iptcl )      ! in-plane correlations 
                     inpl_ind = shcloc(self%nrots, corrs, self%prev_corr) ! first improving in-plane index
                     if( inpl_ind > 0 ) inpl_corr = corrs( inpl_ind )     ! improving correlation found
                     self%nrefs_eval = self%nrefs_eval + 1                ! updates fractional search space
@@ -883,7 +890,7 @@ contains
 
     end subroutine stochastic_srch_shc
     
-    subroutine stochastic_srch_het( self, pftcc, iptcl, a, e, extr_bound, statecnt )
+    subroutine stochastic_srch_het( self, pftcc, iptcl, a, e, extr_bound, statecnt)
         use simple_rnd, only: shcloc, irnd_uni
         class(prime3D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
@@ -892,32 +899,33 @@ contains
         real,                    intent(in)    :: extr_bound
         integer,                 intent(inout) :: statecnt(self%nstates)
         type(ori) :: o
-        integer   :: istate, iref, state, loc(1)
-        real      :: corr,mi_state, frac, corrs(self%nstates)
+        integer   :: iref, state, loc(1)
+        real      :: corr, mi_state, frac, corrs(self%nstates)
         if( nint(a%get(iptcl, 'state')) > 0 )then
             ! initialize
             call self%prep4srch(iptcl, a, e)
-            if( a%get(iptcl,'corr') < extr_bound )then
+            call self%prep_specscore(pftcc, iptcl)
+            if(a%get(iptcl,'corr') < extr_bound)then
                 ! state randomization
                 statecnt(self%prev_state) = statecnt(self%prev_state) + 1
                 self%nrefs_eval = 1
                 state = irnd_uni(self%nstates)
-                do while( state == self%prev_state )
+                do while(state == self%prev_state .or. .not.self%state_exists(state))
                     state = irnd_uni(self%nstates)
                 enddo
                 iref = (state - 1) * self%nprojs + self%prev_proj
-                corr = pftcc%corr_single(iref, iptcl, self%prev_roind)
+                corr = pftcc%corr(iref, iptcl, self%prev_roind)
             else
                 ! SHC
                 corrs = -1.
-                do istate=1,self%nstates
-                    if( .not. self%state_exists(istate) )cycle
-                    iref          = (istate-1)*self%nprojs + self%prev_proj 
-                    corrs(istate) = pftcc%corr_single(iref, iptcl, self%prev_roind)
+                do state=1,self%nstates
+                    if( .not.self%state_exists(state) )cycle
+                    iref = (state-1) * self%nprojs + self%prev_proj 
+                    corrs(state) = pftcc%corr(iref, iptcl, self%prev_roind)
                 enddo
                 self%prev_corr  = corrs(self%prev_state)
-                loc             = shcloc(self%nstates, corrs, self%prev_corr)
-                state           = loc(1)
+                state           = shcloc(self%nstates, corrs, self%prev_corr)
+                if(state == 0)state = self%prev_state ! numerical stability
                 corr            = corrs(state)
                 self%nrefs_eval = count(corrs <= self%prev_corr)
             endif
@@ -925,6 +933,7 @@ contains
             call a%set(iptcl, 'frac', frac)
             call a%set(iptcl, 'state', real(state))
             call a%set(iptcl, 'corr', corr)
+            call a%set(iptcl, 'specscore', self%specscore)
             call a%set(iptcl, 'mi_proj', 1.)
             call a%set(iptcl, 'mi_inpl', 1.)
             if( self%prev_state .ne. state )then
@@ -937,7 +946,6 @@ contains
             call a%set(iptcl, 'w', 1.)
             o = a%get_ori(iptcl)
             call self%o_peaks%set_ori(1,o)
-            !call self%prep_npeaks_oris
             call self%update_best(iptcl, a)
         else
             call a%reject(iptcl)
@@ -986,8 +994,8 @@ contains
          use simple_sym, only: sym
         class(prime3D_srch), intent(inout) :: self
         class(oris),         intent(inout) :: e
-        type(ori) :: oref,osym
-        integer :: i, isym,iref
+        type(ori) :: oref, osym
+        integer   :: isym, iref
         type(sym) :: se
         call se%new( self%pgrp )
         self%nsym = se%get_nsym()
@@ -1009,6 +1017,7 @@ contains
         integer          :: i
         if( self%npeaks == 1 )then
             call self%o_peaks%set(1,'ow',1.0)
+            wcorr = self%o_peaks%get(1,'corr')
             return
         endif
         if( self%o_peaks%get_noris() /= self%npeaks ) stop 'invalid number of references in simple_prime3D_srch::stochastic_weights'
@@ -1042,7 +1051,7 @@ contains
 
     ! GETTERS FOR TESTING
 
-    !>  \brief  is for getting the search order
+    !>  \brief  is for creating the search order
     function get_srch_order( self )result( inds )
         class(prime3D_srch), intent(inout) :: self
         integer,allocatable :: inds(:)
@@ -1053,9 +1062,8 @@ contains
     end function get_srch_order
 
     !>  \brief  is for getting o_peaks
-    function get_o_peaks( self, iptcl )result( out_os )
+    function get_o_peaks( self )result( out_os )
         class(prime3D_srch), intent(inout) :: self
-        integer,             intent(in)    :: iptcl
         type(oris) :: out_os
         out_os = self%o_peaks
     end function get_o_peaks
@@ -1189,7 +1197,6 @@ contains
     !>  \brief  is a destructor
     subroutine kill( self )
         class(prime3D_srch), intent(inout) :: self !< instance
-        integer :: i, istart, istop
         if( self%exists )then
             call self%srch_common%kill
             call self%o_peaks%kill

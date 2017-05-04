@@ -1,156 +1,229 @@
-<div class=tasktitle>
-	3D From Averages
-	<div class=taskhovertext>Calculate CTF Parameters</div>
-</div>	
-<table class=taskattributestable>
+<div class=bodyheader>
+	<img src=img/up_chevron.png>
+	<b>Initial Model Generation</b></b>
+	<div class=hoverdiv>Generate an initial 3D model from 2D cluster averages</div>
+</div>
+<table class=tasktable>
 	<input class=jobarg type=hidden id=cmd value=simple_distr_exec>
 	<input class=jobarg type=hidden id=prg value=ini3D_from_cavgs>
-	<input class=jobarg type=hidden id=jobtype value=ini3d>
-	<tr>
+	<input class=jobarg type=hidden id=jobtype value=ini3D>
+	<input class=jobarg type=hidden id=taskname value=ini3dtask>
+	<tr class=taskheader onclick=taskHeaderShowHide(this)>
+		<td>
+			<img src=img/right_chevron.png>
+			<b>Job Parameters</b>
+		</td>
+		<td></td>
+		<td></td>
+		<td style="width: 100%;"></td>
+	</tr>
+	<tr class=taskheaderline>
 		<td>Job Name</td>
 		<td><input class=jobarg type=text id=jobname></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>An identifier for the job. This will appear in the name of the folder containing the output from the job. E.G First_100</div>
+		</td>
 	</tr>
-	<tr>
+	<tr class=taskheaderline>
 		<td>Job Description</td>
 		<td><input class=jobarg type=text id=jobdescription></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>A description of the job</div>
+		</td>
+	</tr>	
+	<tr class=taskheader onclick=taskRequiredShowHide(this)>
+		<td>
+			<img src=img/right_chevron.png>
+			<b>Required Arguments</b>
+		</td>
+		<td></td>
+		<td></td>
+		<td></td>
 	</tr>
-		<tr>
-			<td>Required Arguments</td>
-		</tr>
-		<tr>
-			<td>Particle Stack</td>
-			<td><input class=jobarg type=text id=stk></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Sampling distance of the microscope in A/pixel</div>
-			</td>
-		</tr>
-		<tr>
-			<td>Sampling Distance</td>
-			<td><input class=jobarg type=text id=smpd></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Sampling distance of the microscope in A/pixel</div>
-			</td>
-		</tr>
-		<tr>
-			<td>Mask Radius</td>
-			<td><input class=jobarg type=text id=msk></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Text file containing a list of micrographs</div>
-			</td>
-		</tr>	
-		<tr>
-			<td>Point Group</td>
-			<td><input class=jobarg type=text id=pgrp value=c1></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Text file containing a list of micrographs</div>
-			</td>
-		</tr>	
-		<tr>	
-			<td>Optional Arguments</td>
-		</tr>
-		<tr>
-			<td>High Pass Limit</td>
-			<td><input class=jobarg type=text id=hp></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Maximimum halfwidth shift (pixels)</div>
-			</td>
-		</tr>
-		<tr>
-			<td>Low Pass Limit</td>
-			<td><input class=jobarg type=text id=lp></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Total exposure time (seconds)</div>
-			</td>
-		</tr>
-		<tr>
-			<td>Fraction Of Averages In Volume</td>
-			<td><input class=jobarg type=text id=frac></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>File body prepended to each output file</div>
-			</td>
-		</tr>
-		<tr>
-			<td>Automatic Masking</td>
+	<tr class=taskrequiredline>
+		<td>Particle Stack File</td>
+		<td>
+			<input class=jobarg type=text id=stk>
+		</td>
+		<td>
+			<img src=img/folder.png onclick=fileBrowser('stk')>
+		</td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Stack file containing extracted particles. Usually this is the produced during an extract job</div>
+		</td>
+	</tr>
+	<tr class=taskrequiredline>
+		<td>Sampling Distance</td>
+		<td>
+			<input class=jobarg type=text id=smpd>
+		</td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Sampling distance of the microscope in A/pixel</div>
+		</td>
+	</tr>
+	<tr class=taskrequiredline>
+		<td>Mask Radius</td>
+		<td>
+			<input class=jobarg type=text id=msk>
+		</td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Mask radius (pixels)</div>
+		</td>
+	</tr>
+	<tr class=taskrequiredline>
+		<td>Point Group Symmetry</td>
+		<td>
+			<input class=jobarg type=text id=pgrp>
+		</td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Point group symmetry (cn|dn|t|o|i)</div>
+		</td>
+	</tr>
+	<tr class=taskheader onclick=taskOptionalShowHide(this)>
+		<td>
+			<img src=img/right_chevron.png>
+			<b>Optional Arguments</b>
+		</td>
+		<td></td>
+		<td></td>
+		<td></td>
+	</tr>	
+	<tr class=taskoptionalline>
+		<td>High Pass Limit</td>
+		<td><input class=jobarg type=text id=hp></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>High pass limit(A)</div>
+		</td>
+	</tr>
+		<tr class=taskoptionalline>
+		<td>Low Pass Limit</td>
+		<td><input class=jobarg type=text id=lp></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Low pass limit (A)</div>
+		</td>
+	</tr>
+	<tr class=taskoptionalline>
+		<td>Fraction Of Clusters</td>
+		<td><input class=jobarg type=text id=frac></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Fraction of clusters to include in model. Default: 1</div>
+		</td>
+	</tr>
+	<tr class=taskoptionalline>
+		<td>Envelope Masking</td>
 			<td>
-				<select class=jobarg id=automsk>
-					<option value=no>no</option>
+				<select class=jobarg type=select id=automsk>
+					<option selected></option>
 					<option value=yes>yes</option>
+					<option value=no>no</option>
 					<option value=cavg>cavg</option>
 				</select>
 			</td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Text file containing a list of micrographs</div>
-			</td>
-		<tr>
-			<td>Automask Low Pass Limit</td>
-			<td><input class=jobarg type=text id=amsklp></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Acceleration voltage (kV)</div>
-			</td>
-		</tr>
-		<tr>
-			<td>Edge Size</td>
-			<td><input class=jobarg type=text id=edge></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Start low-pass limit (A)</div>
-			</td>
-		</tr>
-		<tr>
-			<td>Binary Layer Width</td>
-			<td><input class=jobarg type=text id=binwidth></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Stop low-pass limit (A)</div>
-			</td>
-		</tr>
-		<tr>
-			<td>Inner Mask Radius</td>
-			<td><input class=jobarg type=text id=inner></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Acceleration voltage (kV)</div>
-			</td>
-		</tr>
-		<tr>
-			<td>Inner Mask Falloff</td>
-			<td><input class=jobarg type=text id=width></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Acceleration voltage (kV)</div>
-			</td>
-		</tr>
-		<tr>
-			<td>Number Projection Directions</td>
-			<td><input class=jobarg type=text id=nspace></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Total exposure time (seconds)</div>
-			</td>
-		</tr>
-		<tr>
-			<td>Use Shift Search Barrier</td>
-			<td>
-				<select class=jobarg id=shbarrier>
-					<option value=yes>yes</option>
-					<option value=no>no</option>
-				</select>
-			</td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Acceleration voltage (kV)</div>
-			</td>
-		</tr>
-	</table>
-	<div class=clickbutton onclick=hideTasks()>Cancel</div>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Enable envelope masking. Default: no</div>
+		</td>
+	</tr>
+
+	<tr class=taskoptionalline>
+		<td>Low Pass Limit For Envelope Masking</td>
+		<td><input class=jobarg type=text id=amsklp></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Low pass limit for envelope mask generation (A)</div>
+		</td>
+	</tr>
+	<tr class=taskoptionalline>
+		<td>Inner Mask Radius</td>
+		<td><input class=jobarg type=text id=inner></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Inner mask radius (pixels)</div>
+		</td>
+	</tr>
+	<tr class=taskoptionalline>
+		<td>Inner Mask Falloff</td>
+		<td><input class=jobarg type=text id=width></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Falloff of inner mask (pixels). Default: 10 pixels</div>
+		</td>
+	</tr>
+	<tr class=taskoptionalline>
+		<td>Edge Size</td>
+		<td><input class=jobarg type=text id=edge></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Edge size for softening envelope (pixels)</div>
+		</td>
+	</tr>
+	<tr class=taskoptionalline>
+		<td>Molecular Weight</td>
+		<td><input class=jobarg type=text id=mw></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Molecular weight (kD)</div>
+		</td>
+	</tr>
+	<tr class=taskoptionalline>
+		<td>Binary Layers Grown For Envelope</td>
+		<td><input class=jobarg type=text id=binwidth></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Binary layers grown for molecular envelope(pixels))</div>
+		</td>
+	</tr>
+	<tr class=taskoptionalline>
+		<td>Number Of Projection Directions</td>
+		<td><input class=jobarg type=text id=nspace></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Number of projection directions</div>
+		</td>
+	</tr>
+	<tr class=taskoptionalline>
+		<td>Use Shift Barrier Constraint</td>
+		<td>
+			<select class=jobarg type=select id=shbarrier>
+				<option selected></option>
+				<option value=yes>yes</option>
+				<option value=no>no</option>
+			</select>
+		</td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Use shift barrier constraint. Default: yes</div>
+		</td>
+	</tr>	
+</table>
+<div class=clickbuttoncontainer>
+	<div class=clickbutton onclick='selectMode();showTask("tasklist")'>Cancel</div>
 	<div class=clickbutton onclick=showRunParameters('ini3dtask')>Run</div>
 </div>
+

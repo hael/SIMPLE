@@ -708,7 +708,7 @@ void simpleDistrExec(std::string argstring){
 	if(stat(jobdir.c_str(), &dirbuffer) != 0){
 		mkdir(jobdir.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 	}
-	
+
 	pid = fork();
 	
 	if(pid == 0){
@@ -767,6 +767,106 @@ void simpleDistrExec(std::string argstring){
 }
 
 void simpleExec(std::string argstring){
+	FILE* pipe;
+	int pid, jobid, returnstatus;
+	char buffer[512];
+	std::stringstream ss, sspid;
+	std::string argscommand, line, command, arg, jobdir, path, simplecommand, boxtabloc, intg;
+	std::vector<std::string> commandargs;
+	struct stat dirbuffer, filebuffer;
+	std::ifstream unidoc;
+	std::ofstream boxtab;
+	
+	jobid = addJob(argstring);
+	jobdir = getJobFolder(argstring, jobid);
+	
+	if(stat(jobdir.c_str(), &dirbuffer) != 0){
+		mkdir(jobdir.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+	}
+	
+	if(getKeyValFromString(argstring, "prg") == "extract"){
+		if(getKeyValFromString(argstring, "boxdir") == ""){
+			missingArgumentError("boxdir");
+		}
+		if(stat(getKeyValFromString(argstring, "unidoc").c_str(), &filebuffer) != 0){
+			fatalError("Unidoc file specified does not exist");
+		}
+		
+		boxtabloc = jobdir;
+		boxtabloc.append("/boxtab.txt");
+		
+		unidoc.open(getKeyValFromString(argstring, "unidoc").c_str());
+		boxtab.open(boxtabloc.c_str());
+		
+		while(getline(unidoc,line)){
+			intg = getKeyValFromString(line, "intg").c_str();
+			intg.replace(intg.find(".mrc"), 4, ".box");
+			boxtab << getKeyValFromString(argstring, "boxdir") << "/" << intg << "\n";
+		}
+		
+		boxtab.close();
+		unidoc.close();
+		
+		argstring.append(" boxtab=");
+		argstring.append(boxtabloc);
+	}
+
+	pid = fork();
+	
+	if(pid == 0){
+		path = std::getenv("PATH");
+		path.append(":");
+		path.append(SIMPLE_DIR_VALUE);
+		path.append("/bin");
+		setenv("PATH", path.c_str(), 1); 
+		
+		argscommand = "simple_exec prg=";
+		argscommand.append(getKeyValFromString(argstring, "prg"));
+	
+		pipe = popen(argscommand.c_str(), "r");
+		while (!feof(pipe)) {
+			if (fgets(buffer, sizeof(buffer), pipe) != NULL){
+				ss << buffer;
+			}
+		}
+	
+		pclose(pipe);
+	
+		while(std::getline(ss,line,'\n')){
+			commandargs.push_back(getElementFromString(line, 0));
+		}
+	
+		simplecommand = "simple_exec prg=";
+		simplecommand.append(getKeyValFromString(argstring, "prg"));
+	
+		for (std::vector<std::string>::iterator it=commandargs.begin(); it!=commandargs.end(); ++it){
+			arg = getKeyValFromString(argstring, *it);
+			if(arg != "" && *it != ""){
+				simplecommand.append(" ");
+				simplecommand.append(*it);
+				simplecommand.append("=");
+				simplecommand.append(arg);
+			}
+		}
+		
+		simplecommand.append(" 2>&1 > job.log");
+		
+		chdir(jobdir.c_str());
+		pipe = popen(simplecommand.c_str(), "r");
+		returnstatus = pclose(pipe);
+		if(WEXITSTATUS(returnstatus) == 0){
+			editJob(argstring, jobid, "jobstatus", "Complete");
+		}else{
+			editJob(argstring, jobid, "jobstatus", "Failed");
+		}
+		
+	}else if(pid > 0){
+		sspid << pid;
+		editJob(argstring, jobid, "jobpid", sspid.str());
+	}
+}
+
+void simpleExecOLD(std::string argstring){
 	FILE* pipe;
 	int pid;
 	char buffer[128];
@@ -847,6 +947,57 @@ void pipelineSaveSelectionHistory(std::string argstring){
 }
 
 void pipelineViewMaster(std::string argstring){
+	std::string unidoc, returnstring, line, select;
+	struct stat buffer;
+	std::ifstream selectionfile, unidocstream;
+	
+	unidoc = getKeyValFromString(argstring, "dir");
+
+	if(unidoc == ""){
+		missingArgumentError("dir");
+	}
+	
+	unidoc.append("/simple_unidoc.txt");
+	
+	returnstring = "micrographs=";
+	
+	if(stat(unidoc.c_str(), &buffer) == 0){
+		unidocstream.open(unidoc.c_str());
+		while(getline(unidocstream, line)){
+			returnstring.append(getKeyValFromString(line, "intg"));
+			returnstring.append(",");
+			returnstring.append(getKeyValFromString(line, "pspec"));
+			returnstring.append(",");
+			returnstring.append(getKeyValFromString(line, "thumb"));
+			returnstring.append(",");
+			returnstring.append(getKeyValFromString(line, "dfx"));
+			returnstring.append(",");
+			returnstring.append(getKeyValFromString(line, "dfy"));
+			returnstring.append(",");
+			returnstring.append(getKeyValFromString(line, "angast"));
+			returnstring.append(";");	
+		}
+		unidocstream.close();
+		
+		select = getKeyValFromString(argstring, "dir");
+		select.append("/.selection");
+	
+		if(stat(select.c_str(), &buffer) == 0){
+			selectionfile.open(select.c_str());
+			if (selectionfile.is_open()){
+				returnstring.append(" selected=");
+				while(getline(selectionfile,line)){
+					returnstring.append(line);
+					returnstring.append(";");
+				}
+				selectionfile.close();
+			}
+		}
+		std::cout << returnstring << std::endl;
+	}
+}
+
+void pipelineViewMasterOLD(std::string argstring){
 	std::string dir, returnstring, line, select, ctf, ctfparams;
 	DIR *directory;
 	struct dirent *entry;
@@ -1122,9 +1273,10 @@ void import(std::string argstring){
 }
 
 void showFile(std::string argstring){
-	std::string file, contrast, brightness, returnstring;
+	std::string file, contrast, brightness, returnstring, line;
 	struct stat buffer;
 	int nx, ny, nz, mode;
+	std::ifstream logfile, txtfile;
 	
 	file = getKeyValFromString(argstring, "file");
 	contrast = getKeyValFromString(argstring, "contrast");
@@ -1137,11 +1289,30 @@ void showFile(std::string argstring){
 				returnstring = "";
 				returnstring.append("image=");
 				returnstring.append(pngFromMRC(file, std::strtof(brightness.c_str(), NULL), std::strtof(contrast.c_str(), NULL)));
-				std::cout << returnstring << std::endl;
+				std::cout << returnstring << " nz=" << nz  << " nx=" << nx << " ny=" << ny << std::endl;
 			}else if(nz > 1 && mode == 2){
 				returnstring = "";
 				pngsFromMRCStack(file, std::strtof(brightness.c_str(), NULL), std::strtof(contrast.c_str(), NULL));
 			}
+		}else if(std::strstr(file.c_str(), ".log")){
+			logfile.open(file.c_str());
+			returnstring.append("log=");
+			while(getline(logfile, line)){
+				std::replace(line.begin(), line.end(), ' ', '^');
+				returnstring.append(line);
+			}
+			logfile.close();
+			std::cout << returnstring << std::endl;
+		}else if(std::strstr(file.c_str(), ".txt")){
+			txtfile.open(file.c_str());
+			returnstring.append("txt=");
+			while(getline(txtfile, line)){
+				std::replace(line.begin(), line.end(), ' ', '^');
+				std::replace(line.begin(), line.end(), ' ', '|');
+				returnstring.append(line);
+			}
+			txtfile.close();
+			std::cout << returnstring << std::endl;
 		}
 	}
 }

@@ -1,7 +1,7 @@
 module simple_qsys_funs
 use simple_defs     
 use simple_syscalls ! use all in there
-use simple_strings, only: int2str, int2str_pad, str2real
+use simple_strings  ! use all in there
 implicit none
 
 interface qsys_watcher
@@ -32,6 +32,7 @@ contains
         ! part numbered files
         call del_files('OUT',                    p%nparts)
         call del_files('algndoc_',               p%nparts, ext='.txt')
+        call del_files('unidoc_',                p%nparts, ext='.txt')
         call del_files('cavgs_part',             p%nparts, ext=p%ext )
         call del_files('JOB_FINISHED_',          p%nparts)
         call del_files('ctfsqsums_part',         p%nparts, ext=p%ext )
@@ -52,48 +53,45 @@ contains
         end do
     end subroutine qsys_cleanup
 
-    function stack_is_split( stkext, npart ) result( is_split )
-        character(len=4),  intent(in) :: stkext
-        integer,           intent(in) :: npart  
+    function stack_is_split( stkext, parts, box ) result( is_split_correctly )
+        character(len=4), intent(in)  :: stkext
+        integer,          intent(in)  :: parts(:,:)
+        integer,          intent(in)  :: box 
         character(len=:), allocatable :: stack_part_fname
         logical, allocatable          :: stack_parts_exist(:) 
-        integer :: ipart, numlen
-        logical :: is_split
-        allocate( stack_parts_exist(npart) )
-        numlen = len(int2str(npart))
-        do ipart=1,npart
+        integer :: ipart, numlen, nparts, sz, sz_correct, ldim(3)
+        logical :: is_split, is_correct, is_split_correctly
+        nparts = size(parts,1)
+        allocate( stack_parts_exist(nparts) )
+        numlen = len(int2str(nparts))
+        do ipart=1,nparts
             allocate(stack_part_fname, source='stack_part'//int2str_pad(ipart,numlen)//stkext)
             stack_parts_exist(ipart) = file_exists(stack_part_fname)
             deallocate(stack_part_fname)
         end do
-        is_split = all(stack_parts_exist)
+        is_split   = all(stack_parts_exist)
+        is_correct = .true.
+        if( is_split )then
+            do ipart=1,nparts
+                sz_correct = parts(ipart,2)-parts(ipart,1)+1
+                allocate(stack_part_fname, source='stack_part'//int2str_pad(ipart,numlen)//stkext)
+                call find_ldim_nptcls(stack_part_fname, ldim, sz)
+                if( sz /= sz_correct )then
+                    is_correct = .false.
+                    exit
+                endif
+                if( ldim(1) == box .and. ldim(2) == box )then
+                    ! dimension ok
+                else
+                    is_correct = .false.
+                    exit
+                endif
+                deallocate(stack_part_fname)
+            end do
+        endif
+        is_split_correctly = is_split .and. is_correct
+        if( .not. is_split_correctly ) call del_files('stack_part', nparts, ext=stkext)
     end function stack_is_split
-
-    subroutine stack_parts_of_correct_sizes( stkext, parts, box )
-        character(len=4),  intent(in) :: stkext
-        integer,           intent(in) :: parts(:,:)
-        integer,           intent(in) :: box
-        character(len=:), allocatable :: stack_part_fname
-        integer :: ipart, numlen, sz_correct, sz, ldim(3), npart
-        npart  = size(parts,1)
-        numlen = len(int2str(npart))
-        do ipart=1,npart
-            sz_correct = parts(ipart,2)-parts(ipart,1)+1
-            allocate(stack_part_fname, source='stack_part'//int2str_pad(ipart,numlen)//stkext)
-            call find_ldim_nptcls(stack_part_fname, ldim, sz)
-            if( sz /= sz_correct )then
-                write(*,*) 'size of ', stack_part_fname, ' is ', sz, ' not ', sz_correct, 'as expected'
-                stop 'simple_qsys_funs :: stack_parts_of_correct_sizes'
-            endif
-            if( ldim(1) == box .and. ldim(2) == box )then
-                ! dimension ok
-            else
-                write(*,*) 'ldim of ', stack_part_fname, ' is ', [ldim(1),ldim(2),1], ' not ', [box,box,1], 'as expected'
-                stop 'simple_qsys_funs :: stack_parts_of_correct_sizes'
-            endif
-            deallocate(stack_part_fname)
-        end do
-    end subroutine stack_parts_of_correct_sizes
 
     subroutine terminate_if_prg_in_cwd( prg )
         character(len=*), intent(in) :: prg
@@ -128,14 +126,24 @@ contains
 
     subroutine parse_env_file( env )
         use simple_chash, only: chash
-        type(chash), intent(inout)  :: env
-        character(len=STDLEN) :: env_file, qsys_name
-        integer               :: i,funit, nl, file_stat
+        type(chash), intent(inout)    :: env
+        character(len=STDLEN)         :: env_file, qsys_name
+        character(len=:), allocatable :: simple_path, simple_path_env
+        integer :: i,funit, nl, file_stat
         env_file = './simple_distr_config.env'
         if( .not. file_exists(trim(env_file)) ) call autogen_env_file(env_file)
         call env%read( trim(env_file) )
         ! User keys
-        if( .not. env%isthere('simple_path') )stop 'Path to SIMPLE directory is required in simple_distr_config.env (simple_path)'        
+        if( .not. env%isthere('simple_path') )stop 'Path to SIMPLE directory is required in simple_distr_config.env (simple_path)'
+        simple_path = sys_get_env_var('SIMPLE_PATH')
+        if( allocated(simple_path) )then
+            simple_path_env = env%get('simple_path')
+            if( str_has_substr(simple_path, simple_path_env) .or. str_has_substr(simple_path_env, simple_path) )then
+                ! all ok
+            else
+                write(*,*) 'WARNING! simple absolute paths in shell and simple_distr_config.env do not agree'
+            endif
+        endif
         ! Queue keys
         if( .not. env%isthere('qsys_name') ) &
             & stop 'The type of the queuing system is required in simple_distr_config.env: qsys_name=<local|slurm|pbs|sge>'

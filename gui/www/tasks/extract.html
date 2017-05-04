@@ -1,108 +1,127 @@
-<div class=tasktitle>
-	Extract Particles
-	<div class=taskhovertext>Calculate CTF Parameters</div>
-</div>	
-<table class=taskattributestable>
+<div class=bodyheader>
+	<img src=img/up_chevron.png>
+	<b>Extract Particles</b>
+	<div class=hoverdiv>Extract particles from micrographs</div>
+</div>
+
+<table class=tasktable>
 	<input class=jobarg type=hidden id=cmd value=simple_exec>
 	<input class=jobarg type=hidden id=prg value=extract>
 	<input class=jobarg type=hidden id=jobtype value=extract>
-	<tr>
+	<input class=jobarg type=hidden id=taskname value=extracttask>
+	<tr class=taskheader onclick=taskHeaderShowHide(this)>
+		<td>
+			<img src=img/right_chevron.png>
+			<b>Job Parameters</b>
+		</td>
+		<td></td>
+		<td></td>
+		<td style="width: 100%;"></td>
+	</tr>
+	<tr class=taskheaderline>
 		<td>Job Name</td>
 		<td><input class=jobarg type=text id=jobname></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>An identifier for the job. This will appear in the name of the folder containing the output from the job. E.G First_100</div>
+		</td>
 	</tr>
-	<tr>
+	<tr class=taskheaderline>
 		<td>Job Description</td>
 		<td><input class=jobarg type=text id=jobdescription></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>A description of the job</div>
+		</td>
+	</tr>	
+	<tr class=taskheader onclick=taskRequiredShowHide(this)>
+		<td>
+			<img src=img/right_chevron.png>
+			<b>Required Arguments</b>
+		</td>
+		<td></td>
+		<td></td>
+		<td></td>
 	</tr>
-		<tr>
-			<td>Required Arguments</td>
-		</tr>
-		<tr>
-			<td>Micrograph List File</td>
-			<td><input class=jobarg type=text id=filetab></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Sampling distance of the microscope in A/pixel</div>
-			</td>
-		</tr>
-		<tr>
-			<td>Boxfiles List File</td>
-			<td><input class=jobarg type=text id=boxtab></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Sampling distance of the microscope in A/pixel</div>
-			</td>
-		</tr>
-		<tr>
-			<td>Sampling Distance</td>
-			<td><input class=jobarg type=text id=smpd></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Text file containing a list of micrographs</div>
-			</td>
-		</tr>	
-		<tr>
-			<td>Optional Arguments</td>
-		</tr>
-		<tr>
-			<td>Mask Radius</td>
-			<td><input class=jobarg type=text id=msk></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>File body prepended to each output file</div>
-			</td>
-		</tr>
-		<tr>
-			<td>CTF Parameters</td>
-			<td><input class=jobarg type=text id=ctffind_doc></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Start low-pass limit (A)</div>
-			</td>
-		</tr>
-		<tr>
-			<td>Invert Contrast</td>
-			<td><input class=jobarg type=text id=rm_outliers></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Stop low-pass limit (A)</div>
-			</td>
-		</tr>
-		<tr>
-			<td>Box Size</td>
-			<td><input class=jobarg type=text id=box></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Stop low-pass limit (A)</div>
-			</td>
-		</tr>
-		<tr>
-			<td>Normalise</td>
-			<td>
-				<select class=jobarg id=noise_norm>
-					<option value=no>no</option>
-					<option value=yes>yes</option>
-				</select>
-			</td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Stop low-pass limit (A)</div>
-			</td>
-		</tr>
-		<tr>
-			<td>Extract Outside Boundaries</td>
-			<td>
-				<select class=jobarg id=outside>
-					<option value=no>no</option>
-					<option value=yes>yes</option>
-				</select>
-			</td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Stop low-pass limit (A)</div>
-			</td>
-		</tr>
-	</table>
-	<div class=clickbutton onclick=hideTasks()>Cancel</div>
-	<div class=clickbutton onclick=showRunParameters('extracttask')>Run</div>
-</div>
+	<tr class=taskrequiredline>
+		<td>Micrograph Parameters File</td>
+		<td>
+			<input class=jobarg type=text id=unidoc>
+		</td>
+		<td>
+			<img src=img/folder.png onclick=fileBrowser('unidoc')>
+		</td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Text file containing a list of micrographs and associated CTF parameters. Usually this is output from an unblur, unblur_ctf or pipeline job</div>
+		</td>
+	</tr>
+	
+	<tr class=taskheader onclick=taskOptionalShowHide(this)>
+		<td>
+			<img src=img/right_chevron.png>
+			<b>Optional Arguments</b>
+		</td>
+		<td></td>
+		<td></td>
+		<td></td>
+	</tr>
+	<tr class=taskoptionalline>
+		<td>Boxfiles Directory</td>
+		<td>
+			<input class=jobarg type=text id=boxdir>
+		</td>
+		<td>
+			<img src=img/folder.png onclick=selectFolder('boxdir')>
+		</td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Directory containing box files. These files must have the same name as the micrograph with a .box suffix</div>
+		</td>
+	</tr>
+	<tr class=taskoptionalline>
+		<td>Boxsize</td>
+		<td><input class=jobarg type=text id=box></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Box size in pixels if different from that defined in the box files</div>
+		</td>
+	</tr>
+	<tr class=taskoptionalline>
+		<td>Invert Contrast</td>
+		<td>
+			<select class=jobarg type=select id=neg>
+				<option selected></option>
+				<option value=yes>yes</option>
+				<option value=no>no</option>
+			</select>
+		</td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Invert the contrast of extract particles. Default: yes</div>
+		</td>
+	</tr>	
+	<tr class=taskoptionalline>
+		<td>Extract Outside</td>
+		<td>
+			<select class=jobarg type=select id=outside>
+				<option selected></option>
+				<option value=yes>yes</option>
+				<option value=no>no</option>
+			</select>
+		</td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Extract boxes extending outdside the micrograph boundaries. Default: no</div>
+		</td>
+	</tr>
+</table>
+
+<div class=clickbutton onclick="hideTasks(); projectHistoryFull()">Cancel</div>
+<div class=clickbutton onclick=showRunParameters('extracttask')>Run</div>
+

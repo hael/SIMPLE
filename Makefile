@@ -53,8 +53,9 @@ default:
 
 all: makedir checkclean defs_code production_code utils_code Simple_code src_code cpu_test_code test_code;
 
-defs_code: simple_defs.o   \
-           simple_fftw3.o  ;
+defs_code: simple_defs.o      \
+           simple_defs_conv.o \
+           simple_fftw3.o     ;
 
 production_code: ;
 
@@ -85,8 +86,6 @@ Simple_code: opt            \
              general        \
              simple         \
              build          \
-             comlin_corr    \
-             comlin_srch    \
              s_other        \
              qsys           \
              matcher        \
@@ -147,6 +146,7 @@ simple: simple_image.o                  \
         simple_filterer.o               \
         simple_unblur.o                 \
         simple_convergence.o            \
+        simple_convergence_perptcl.o    \
         simple_prime_srch.o             \
         simple_prime2D_srch.o           \
         simple_prime3D_srch.o           \
@@ -214,6 +214,7 @@ masters: simple_rec_master.o              \
          simple_commander_comlin.o        \
          simple_commander_distr.o         \
          simple_commander_imgproc.o       \
+         simple_scaler.o                  \
          simple_commander_mask.o          \
          simple_commander_misc.o          \
          simple_commander_oris.o          \
@@ -229,6 +230,7 @@ masters: simple_rec_master.o              \
          simple_commander_stream_wflows.o \
          simple_commander_distr_wflows.o  \
          simple_commander_hlev_wflows.o   ;
+         
 
 src_code: ;
 

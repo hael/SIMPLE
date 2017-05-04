@@ -44,10 +44,8 @@ contains
         use simple_rec_master, only: exec_rec_master
         class(recvol_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
-        type(params)      :: p
-        type(build)       :: b
-        logical           :: doshellweight, doshellweight_states
-        real, allocatable :: wmat(:,:), wmat_states(:,:,:)
+        type(params) :: p
+        type(build)  :: b
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         select case(p%eo)
@@ -58,22 +56,7 @@ contains
             case DEFAULT
                 stop 'unknonw eo flag; simple_commander_rec :: exec_recvol'
         end select
-        doshellweight        = .false.
-        doshellweight_states = .false.
-        if( p%refine .eq. 'isw' )then
-            ! shell-weights for multi-particle setup
-            call setup_shellweights(b, p, doshellweight_states, wmat_states, p%npeaks)
-        else
-            ! shell-weights setup
-            call setup_shellweights(b, p, doshellweight, wmat)               
-        endif
-        if( doshellweight_states )then
-            call exec_rec_master(b, p, cline, wmat_states=wmat_states)
-        else if( doshellweight )then
-            call exec_rec_master(b, p, cline, wmat=wmat)
-        else
-            call exec_rec_master(b, p, cline)
-        endif
+        call exec_rec_master(b, p, cline)
         ! end gracefully
         call simple_end('**** SIMPLE_RECVOL NORMAL STOP ****', print_simple=.false.)    
     end subroutine exec_recvol

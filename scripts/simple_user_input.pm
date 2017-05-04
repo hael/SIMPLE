@@ -43,7 +43,7 @@ our$ICOMPILE = 2;
 #                                    /usr/local/bin/gfortran
 our$CC_COMPILER = "";
 our$GCC_COMPILER = "";
-our$FCOMPILER = "/sw/bin/gfortran";
+our$FCOMPILER = "gfortran";
 # enter the CUDA libary path default: /usr/local/cuda
 our$CUDADIR="";
 # enter the fftw lib default: /usr/lib/x86_64-linux-gnu for [linux]

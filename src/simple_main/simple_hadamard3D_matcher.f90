@@ -23,7 +23,7 @@ logical, parameter              :: DEBUG=.false.
 type(polarft_corrcalc)          :: pftcc
 type(prime3D_srch), allocatable :: primesrch3D(:)
 real                            :: reslim
-real                            :: frac_srch_space
+real                            :: frac_srch_space = 0.
 type(ori)                       :: orientation, o_sym
 character(len=:), allocatable   :: ppfts_fname
 
@@ -57,7 +57,6 @@ contains
 
     !>  \brief  is the prime3D algorithm
     subroutine prime3D_exec( b, p, cline, which_iter, update_res, converged )
-        use simple_filterer,  only: resample_filter
         use simple_qsys_funs, only: qsys_job_finished
         use simple_oris,      only: oris
         use simple_strings,   only: int2str_pad
@@ -69,10 +68,9 @@ contains
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: update_res, converged
         type(oris)                    :: prime3D_oris
-        real, allocatable             :: wmat(:,:), wresamp(:), res(:), res_pad(:)
         real                          :: norm, corr_thresh
-        integer                       :: iptcl, s, inptcls, prev_state, istate, statecnt(p%nstates)
-        logical                       :: doshellweight, dohet
+        integer                       :: iptcl, s, inptcls, prev_state, istate
+        integer                       :: statecnt(p%nstates)
 
         inptcls = p%top - p%fromp + 1
 
@@ -109,26 +107,25 @@ contains
             if( DEBUG ) write(*,*) '*** hadamard3D_matcher ***: generated random model'
         endif
 
-        ! SETUP WEIGHTS FOR THE 3D RECONSTRUCTION
-        if( p%oritab .ne. '' .and. p%frac < 0.99 ) call b%a%calc_hard_ptcl_weights(p%frac)
-        if( p%l_distr_exec )then
-            ! nothing to do
+        ! SETUP WEIGHTS
+        if( p%nptcls <= SPECWMINPOP )then
+            call b%a%calc_hard_ptcl_weights(p%frac)
         else
-            if( p%l_shellw .and. frac_srch_space >= SHW_FRAC_LIM .and. which_iter > 1 )&
-            &call cont3D_shellweight(b, p, cline)
+            call b%a%calc_spectral_weights(p%frac)
         endif
-        call setup_shellweights(b, p, doshellweight, wmat, res=res, res_pad=res_pad)
 
         ! EXTREMAL LOGICS
-        dohet = .false.
-        if( frac_srch_space < 0.98 .or. p%extr_thresh > 0.025 )then
-            corr_thresh = b%a%extremal_bound(p%extr_thresh)
-            dohet       = .true.
+        if( p%refine.eq.'het' )then
+            if( frac_srch_space < 0.98 .or. p%extr_thresh > 0.025 )then
+                corr_thresh  = b%a%extremal_bound(p%extr_thresh, convex=.false.)
+                statecnt(:)  = 0
+            else
+                corr_thresh = -huge(corr_thresh)
+            endif
         endif
 
         ! PREPARE THE POLARFT_CORRCALC DATA STRUCTURE
         if( p%refine.eq.'het' )then
-            statecnt(:) = 0
             ! generate filename for memoization of particle pfts
             if( allocated(ppfts_fname) ) deallocate(ppfts_fname)
             if( p%l_distr_exec )then
@@ -150,24 +147,26 @@ contains
             write(*,'(A,1X,I3)') '>>> PRIME3D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
         endif
         if( which_iter > 0 ) p%outfile = 'prime3Ddoc_'//int2str_pad(which_iter,3)//'.txt'
-        do s=1,p%nstates
-            if( p%eo .eq. 'yes' )then
-                call b%eorecvols(s)%reset_all
-            else
-                call b%recvols(s)%reset
-            endif
-        end do
-        if( DEBUG ) write(*,*) '*** hadamard3D_matcher ***: did reset recvols'
+        if(p%norec .eq. 'no')then
+            do s=1,p%nstates
+                if( p%eo .eq. 'yes' )then
+                    call b%eorecvols(s)%reset_all
+                else
+                    call b%recvols(s)%reset
+                endif
+            end do
+            if( DEBUG ) write(*,*) '*** hadamard3D_matcher ***: did reset recvols'
+        endif
 
         ! STOCHASTIC IMAGE ALIGNMENT
         ! create the search objects, need to re-create every round because parameters are changing
         allocate( primesrch3D(p%fromp:p%top) )
         do iptcl=p%fromp,p%top
-            call primesrch3D(iptcl)%new(b%a, b%e, p, pftcc) 
+            call primesrch3D(iptcl)%new(b%a, p, pftcc)
         end do
         ! execute the search
         call del_file(p%outfile)
-        if( p%ctf .ne. 'no' ) call pftcc%create_polar_ctfmats(p%smpd, b%a)
+        if(p%ctf .ne. 'no') call pftcc%create_polar_ctfmats(p%smpd, b%a)
         select case(p%refine)
             case( 'no', 'adasym' )
                 if( p%oritab .eq. '' )then
@@ -213,22 +212,20 @@ contains
                 !$omp end parallel do
             case('het')
                 if(p%oritab .eq. '') stop 'cannot run the refine=het mode without input oridoc (oritab)'
-                corr_thresh = -huge(corr_thresh)
-                if( dohet )then
+                if( corr_thresh > 0. )then
                     write(*,'(A,F8.2)') '>>> PARTICLE RANDOMIZATION(%):', 100.*p%extr_thresh
                     write(*,'(A,F8.2)') '>>> CORRELATION THRESHOLD:    ', corr_thresh
                 endif
-                !$omp parallel do default(shared) schedule(auto) private(iptcl)&
-                !$omp reduction(+:statecnt)
+                !$omp parallel do default(shared) schedule(auto) private(iptcl) reduction(+:statecnt)
                 do iptcl=p%fromp,p%top
                     call primesrch3D(iptcl)%exec_prime3D_srch_het(pftcc, iptcl, b%a, b%e, corr_thresh, statecnt)
                 end do
                 !$omp end parallel do
-                if( dohet )then
+                if(corr_thresh > 0.)then
                     norm = real(sum(statecnt))
                     do istate=1,p%nstates
-                        print *, '% state ', istate, ' is ', 100.*(real(statecnt(istate))/norm)
-                        print *, 'randomized ptcls for state ', istate, ' is ', statecnt(istate)
+                        print *,'% randomized ptcls for state ',istate,' is ',100.*(real(statecnt(istate))/norm),&
+                            &'; pop=',statecnt(istate)
                     end do
                 endif
             case DEFAULT
@@ -248,19 +245,9 @@ contains
                     call read_img_from_stk( b, p, iptcl )
                     if( p%npeaks > 1 )then
                         call primesrch3D(iptcl)%get_oris(prime3D_oris, orientation)
-                        if( doshellweight )then
-                            wresamp = resample_filter(wmat(iptcl,:), res, res_pad)
-                            call grid_ptcl(b, p, iptcl, orientation, prime3D_oris, shellweights=wresamp)
-                        else
-                            call grid_ptcl(b, p, iptcl, orientation, prime3D_oris)
-                        endif
+                        call grid_ptcl(b, p, orientation, prime3D_oris)
                     else
-                        if( doshellweight )then
-                            wresamp = resample_filter(wmat(iptcl,:), res, res_pad)
-                            call grid_ptcl(b, p, iptcl, orientation, shellweights=wresamp)
-                        else
-                            call grid_ptcl(b, p, iptcl, orientation)
-                        endif
+                        call grid_ptcl(b, p, orientation)
                     endif
                 endif
             end do
@@ -277,10 +264,6 @@ contains
             call primesrch3D(iptcl)%kill
         end do
         deallocate( primesrch3D )
-        if( allocated(wmat)    ) deallocate(wmat)
-        if( allocated(wresamp) ) deallocate(wresamp)
-        if( allocated(res)     ) deallocate(res)
-        if( allocated(res_pad) ) deallocate(res_pad)
         call pftcc%kill
 
         ! REPORT CONVERGENCE
@@ -410,19 +393,18 @@ contains
                 o = b%e%get_ori(iref)
                 call b%vol%fproject_polar(cnt, o, pftcc, expanded=.true.)
             end do
-            ! cleanup
-            call b%vol%kill_expanded
         end do
-        ! bring back the original b%vol size
-        if( p%boxmatch < p%box ) call b%vol%new([p%box,p%box,p%box], p%smpd)
+        ! cleanup
+        call b%vol%kill_expanded
+        ! bring back the original b%vol size for clean exit
+        if( p%boxmatch < p%box )call b%vol%new([p%box,p%box,p%box], p%smpd)
     end subroutine prep_refs_pftcc4align
 
     subroutine prep_ptcls_pftcc4align( b, p, ppfts_fname )
         class(build),               intent(inout) :: b
         class(params),              intent(inout) :: p
         character(len=*), optional, intent(in)    :: ppfts_fname
-        type(ori) :: o
-        integer   :: cnt, s, iptcl, istate, ntot, progress_cnt
+        ! read particle images and create polar projections
         if( present(ppfts_fname) )then
             if( file_exists(ppfts_fname) )then
                 call pftcc%read_pfts_ptcls(ppfts_fname)
@@ -437,7 +419,8 @@ contains
         contains
 
             subroutine prep_pftcc_local
-                ! read particle images and create polar projections
+                type(ori) :: o
+                integer   :: cnt, s, iptcl, istate, ntot, progress_cnt
                 if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PARTICLES'
                 ! initialize
                 call b%img%init_imgpolarizer(pftcc)
@@ -461,11 +444,6 @@ contains
                         if( istate /= s ) cycle
                         progress_cnt = progress_cnt + 1
                         call progress( progress_cnt, ntot )
-                        if( p%boxmatch < p%box )then
-                            ! back to the original size as b%img has been
-                            ! and will be clipped/padded in prepimg4align
-                            call b%img%new([p%box,p%box,1],p%smpd)
-                        endif
                         call read_img_from_stk( b, p, iptcl )
                         call prepimg4align(b, p, o)
                         call b%img%imgpolarizer(pftcc, iptcl)

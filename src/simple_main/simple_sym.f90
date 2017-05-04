@@ -33,6 +33,7 @@ type sym
     procedure          :: apply
     procedure          :: apply2all
     procedure          :: rot_to_asym
+    procedure          :: rotall_to_asym
     procedure          :: get_symori
     procedure          :: get_nsubgrp
     procedure          :: get_subgrp
@@ -304,6 +305,20 @@ contains
             osym = oasym
         endif
     end subroutine rot_to_asym
+
+    !>  \brief  rotates orientations to the asymmetric unit
+    subroutine rotall_to_asym( self, osyms )
+        use simple_ori, only: ori
+        class(sym),  intent(inout) :: self
+        class(oris), intent(inout) :: osyms
+        type(ori) :: o
+        integer   :: i
+        do i = 1, osyms%get_noris()
+            o = osyms%get_ori(i)
+            call self%rot_to_asym(o)
+            call osyms%set_ori(i, o)
+        enddo
+    end subroutine rotall_to_asym
 
     !>  \brief  is a getter 
     function get_symori( self, symop ) result( e_sym )

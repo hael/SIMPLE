@@ -1,224 +1,318 @@
-<div class=tasktitle>
-	Prime 2D
-	<div class=taskhovertext>Calculate CTF Parameters</div>
-</div>	
-<table class=taskattributestable>
+<div class=bodyheader>
+	<img src=img/up_chevron.png>
+	<b>2D Clustering</b>
+	<div class=hoverdiv>Sort particles into clusters based on their similarity in 2D</div>
+</div>
+<table class=tasktable>
 	<input class=jobarg type=hidden id=cmd value=simple_distr_exec>
 	<input class=jobarg type=hidden id=prg value=prime2D>
-	<input class=jobarg type=hidden id=jobtype value=prime2D>
+	<input class=jobarg type=hidden id=jobtype value=prime2d>
 	<input class=jobarg type=hidden id=taskname value=prime2dtask>
-	<tr>
+	<tr class=taskheader onclick=taskHeaderShowHide(this)>
+		<td>
+			<img src=img/right_chevron.png>
+			<b>Job Parameters</b>
+		</td>
+		<td></td>
+		<td></td>
+		<td style="width: 100%;"></td>
+	</tr>
+	<tr class=taskheaderline>
 		<td>Job Name</td>
 		<td><input class=jobarg type=text id=jobname></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>An identifier for the job. This will appear in the name of the folder containing the output from the job. E.G First_100</div>
+		</td>
 	</tr>
-	<tr>
+	<tr class=taskheaderline>
 		<td>Job Description</td>
 		<td><input class=jobarg type=text id=jobdescription></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>A description of the job</div>
+		</td>
+	</tr>	
+	<tr class=taskheader onclick=taskRequiredShowHide(this)>
+		<td>
+			<img src=img/right_chevron.png>
+			<b>Required Arguments</b>
+		</td>
+		<td></td>
+		<td></td>
+		<td></td>
 	</tr>
-		<tr>
-			<td>Required Arguments</td>
-		</tr>
-		<tr>
-			<td>Particle Stack</td>
-			<td><input class=jobarg type=text id=stk></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Sampling distance of the microscope in A/pixel</div>
-			</td>
-		</tr>
-		<tr>
-			<td>Sampling Distance</td>
-			<td><input class=jobarg type=text id=smpd></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Sampling distance of the microscope in A/pixel</div>
-			</td>
-		</tr>
-		<tr>
-			<td>Mask Radius</td>
-			<td><input class=jobarg type=text id=msk></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Text file containing a list of micrographs</div>
-			</td>
+	<tr class=taskrequiredline>
+		<td>Particle Stack File</td>
+		<td>
+			<input class=jobarg type=text id=stk>
+		</td>
+		<td>
+			<img src=img/folder.png onclick=fileBrowser('stk')>
+		</td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Stack file containing extracted particles. Usually this is the produced during an extract job</div>
+		</td>
+	</tr>
+	<tr class=taskrequiredline>
+		<td>Sampling Distance</td>
+		<td>
+			<input class=jobarg type=text id=smpd>
+		</td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Sampling distance of the microscope in A/pixel</div>
+		</td>
+	</tr>
+	<tr class=taskrequiredline>
+		<td>Mask Radius</td>
+		<td>
+			<input class=jobarg type=text id=msk>
+		</td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Mask radius (pixels)</div>
+		</td>
+	</tr>
+	<tr class=taskrequiredline>
+		<td>Number Of Clusters</td>
+		<td>
+			<input class=jobarg type=text id=ncls>
+		</td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Number of clusters to sort the particles into</div>
+		</td>
+	</tr>
+		<tr class=taskrequiredline>
+		<td>Apply CTF Correction</td>
+		<td>
+			<select class=jobarg type=select id=ctf>
+				<option value=yes selected>yes</option>
+				<option value=no>no</option>
+				<option value=flip>flip</option>
+			</select>
+		</td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Choose to apply full CTF correction, perform phase flipping only or none</div>
+		</td>
+	</tr>
+	<tr class=taskheader onclick=taskOptionalShowHide(this)>
+		<td>
+			<img src=img/right_chevron.png>
+			<b>Optional Arguments</b>
+		</td>
+		<td></td>
+		<td></td>
+		<td></td>
+	</tr>
+	<tr class=taskoptionalline>
+		<td>CTF Parameters File</td>
+		<td><input class=jobarg type=text id=deftab></td>
+		<td>
+			<img src=img/folder.png onclick=fileBrowser('deftab')>
+		</td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>File containing CTF parameters</div>
+		</td>
+	</tr>
+	<tr class=taskoptionalline>
+		<td>Initial References</td>
+		<td><input class=jobarg type=text id=refs></td>
+		<td>
+			<img src=img/folder.png onclick=fileBrowser('refs')>
+		</td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Initial references to start the clustering</div>
+		</td>
+	</tr>
+	<tr class=taskoptionalline>
+		<td>Orientation Table File</td>
+		<td><input class=jobarg type=text id=oritab></td>
+		<td>
+			<img src=img/folder.png onclick=fileBrowser('oritab')>
+		</td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>File containing previously determined orientations for each particle</div>
+		</td>
+	</tr>
+	</tr>	
+		<tr class=taskoptionalline>
+		<td>High Pass Limit</td>
+		<td><input class=jobarg type=text id=hp></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>High pass limit(A)</div>
+		</td>
+	</tr>
+		<tr class=taskoptionalline>
+		<td>Low Pass Limit</td>
+		<td><input class=jobarg type=text id=lp></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Low pass limit (A)</div>
+		</td>
+	</tr>
 		</tr>	
-		<tr>
-			<td>Number Of Clusters</td>
-			<td><input class=jobarg type=text id=ncls></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Text file containing a list of micrographs</div>
-			</td>
-		</tr>	
-		<tr>
-			<td>CTF Correction</td>
+		<tr class=taskoptionalline>
+		<td>Starting Low Pass Limit</td>
+		<td><input class=jobarg type=text id=lpstart></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Starting low pass limit (A). Default: 15A</div>
+		</td>
+	</tr>
+		<tr class=taskoptionalline>
+		<td>Stopping Low Pass Limit</td>
+		<td><input class=jobarg type=text id=lpstop></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Starting low pass limit (A). Default: 8A</div>
+		</td>
+	</tr>
+	<tr class=taskoptionalline>
+		<td>Low Pass Limit For Centering Binarisation</td>
+		<td><input class=jobarg type=text id=cenlp></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Low pass limit for binarisation in centering (A)</div>
+		</td>
+	</tr>
+	<tr class=taskoptionalline>
+		<td>Maximum Halfwidth Shift</td>
+		<td><input class=jobarg type=text id=trs></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Maximum halfwidth shift in translational search (pixels)</div>
+		</td>
+	</tr>
+	<tr class=taskoptionalline>
+		<td>Envelope Masking</td>
 			<td>
-				<select class=jobarg id=ctf>
+				<select class=jobarg type=select id=automsk>
+					<option selected></option>
 					<option value=yes>yes</option>
 					<option value=no>no</option>
-					<option value=flip>flip</option>
-				</select>
-			</td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Text file containing a list of micrographs</div>
-			</td>
-		</tr>
-		<tr>	
-			<td>Optional Arguments</td>
-		</tr>
-		<tr>
-			<td>CTF Parameters Table</td>
-			<td><input class=jobarg type=text id=deftab></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>File body prepended to each output file</div>
-			</td>
-		</tr>
-		<tr>
-			<td>Refinement Mode</td>
-			<td>
-				<select class=jobarg id=refine>
-					<option value=no>no</option>
-					<option value=shc>shc</option>
-					<option value=neigh>neigh</option>
-					<option value=shcneigh>shcneigh</option>
-					<option value=adasym>adasym</option>
-					<option value=isw>isw</option>
-					<option value=shift>shift</option>
-				</select>
-			</td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Text file containing a list of micrographs</div>
-			</td>
-		</tr>
-		<tr>
-			<td>Initial References</td>
-			<td><input class=jobarg type=text id=refs></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Start low-pass limit (A)</div>
-			</td>
-		</tr>
-		<tr>
-			<td>Orientation Table</td>
-			<td><input class=jobarg type=text id=oritab></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Stop low-pass limit (A)</div>
-			</td>
-		</tr>
-		<tr>
-			<td>High Pass Limit</td>
-			<td><input class=jobarg type=text id=hp></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Maximimum halfwidth shift (pixels)</div>
-			</td>
-		</tr>
-		<tr>
-			<td>Low Pass Limit</td>
-			<td><input class=jobarg type=text id=lp></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Total exposure time (seconds)</div>
-			</td>
-		</tr>
-		<tr>
-			<td>Centering Low Pass Limit</td>
-			<td><input class=jobarg type=text id=cenlp></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Total exposure time (seconds)</div>
-			</td>
-		</tr>
-		<tr>
-			<td>Maximum Transalational Halfwidth Shift</td>
-			<td><input class=jobarg type=text id=trs></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Acceleration voltage (kV)</div>
-			</td>
-		</tr>
-		<tr>
-			<td>Automatic Masking</td>
-			<td>
-				<select class=jobarg id=automsk>
-					<option value=no>no</option>
-					<option value=yes>yes</option>
 					<option value=cavg>cavg</option>
 				</select>
 			</td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Text file containing a list of micrographs</div>
-			</td>
-		<tr>
-			<td>Automask Low Pass Limit</td>
-			<td><input class=jobarg type=text id=amsklp></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Acceleration voltage (kV)</div>
-			</td>
-		</tr>
-		<tr>
-			<td>Inner Mask Radius</td>
-			<td><input class=jobarg type=text id=inner></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Acceleration voltage (kV)</div>
-			</td>
-		</tr>
-		<tr>
-			<td>Inner Mask Falloff</td>
-			<td><input class=jobarg type=text id=width></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Acceleration voltage (kV)</div>
-			</td>
-		</tr>
-		<tr>
-			<td>Starting Iteration</td>
-			<td><input class=jobarg type=text id=startit></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Acceleration voltage (kV)</div>
-			</td>
-		</tr>
-		<tr>
-			<td>Maximum Number Iterations</td>
-			<td><input class=jobarg type=text id=maxits></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Acceleration voltage (kV)</div>
-			</td>
-		</tr>
-		<tr>
-			<td>Filament Width</td>
-			<td><input class=jobarg type=text id=filwidth></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Acceleration voltage (kV)</div>
-			</td>
-		</tr>
-		<tr>
-			<td>Number Nearest Neighbours</td>
-			<td><input class=jobarg type=text id=nnn></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Acceleration voltage (kV)</div>
-			</td>
-		</tr>
-		<tr>
-			<td>Minimum Cluster Population</td>
-			<td><input class=jobarg type=text id=minp></td>
-			<td class=taskhelp>
-				<img class=taskhelpimage src=img/info.png>
-				<div class=taskhelptext>Acceleration voltage (kV)</div>
-			</td>
-		</tr>
-	</table>
-	<div class=clickbutton onclick=hideTasks()>Cancel</div>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Enable envelope masking. Default: no</div>
+		</td>
+	</tr>
+	<tr class=taskoptionalline>
+		<td>Low Pass Limit For Envelope Masking</td>
+		<td><input class=jobarg type=text id=amsklp></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Low pass limit for envelope mask generation (A)</div>
+		</td>
+	</tr>
+	<tr class=taskoptionalline>
+		<td>Inner Mask Radius</td>
+		<td><input class=jobarg type=text id=inner></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Inner mask radius (pixels)</div>
+		</td>
+	</tr>
+	<tr class=taskoptionalline>
+		<td>Inner Mask Falloff</td>
+		<td><input class=jobarg type=text id=width></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Falloff of inner mask (pixels). Default: 10 pixels</div>
+		</td>
+	</tr>
+	<tr class=taskoptionalline>
+		<td>First Iteration</td>
+		<td><input class=jobarg type=text id=startit></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Start iterating from here</div>
+		</td>
+	</tr>
+	<tr class=taskoptionalline>
+		<td>Maximum Number Of Iterations</td>
+		<td><input class=jobarg type=text id=maxits></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Maximum number of iterations. Default: 500</div>
+		</td>
+	</tr>
+	<tr class=taskoptionalline>
+		<td>Filament Width</td>
+		<td><input class=jobarg type=text id=filwidth></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Filament width (A)</div>
+		</td>
+	</tr>
+	<tr class=taskoptionalline>
+		<td>Center Images</td>
+		<td>
+			<select class=jobarg type=select id=center>
+				<option selected></option>
+				<option value=yes>yes</option>
+				<option value=no>no</option>
+			</select>
+		</td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Center images. Default: no</div>
+		</td>
+	</tr>	
+	<tr class=taskoptionalline>
+		<td>Origin Shift Multiplication Factor</td>
+		<td><input class=jobarg type=text id=mul></td>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Origin shift multiplication factor. Default: 1</div>
+		</td>
+
+		<tr class=taskoptionalline>
+		<td>Autoscale</td>
+		<td>
+			<select class=jobarg type=select id=autoscale>
+				<option selected></option>
+				<option value=yes>yes</option>
+				<option value=no>no</option>
+			</select>
+		<td></td>
+		<td class=taskhelp>
+			<img src=img/info.png>
+			<div class=hoverdiv>Automatic down-scaling. Default: yes</div>
+		</td>
+	</tr>
+</table>
+<div class=clickbuttoncontainer>
+	<div class=clickbutton onclick='selectMode();showTask("tasklist")'>Cancel</div>
 	<div class=clickbutton onclick=showRunParameters('prime2dtask')>Run</div>
 </div>

@@ -233,6 +233,7 @@ type :: image
     generic            :: fmaskv => fmaskv_1, fmaskv_2
     procedure          :: neg
     procedure          :: pad
+    procedure          :: pad_mirr
     procedure          :: resize_nn
     procedure          :: resize_bilin
     procedure          :: clip
@@ -804,20 +805,22 @@ contains
     end subroutine read
 
     !>  \brief  for writing any kind of images to stack or volumes to volume files
-    subroutine write( self, fname, i, del_if_exists, formatchar, rmsd )
+    subroutine write( self, fname, i, del_if_exists, formatchar )
         class(image),               intent(inout) :: self
         character(len=*),           intent(in)    :: fname
         integer,          optional, intent(in)    :: i
         logical,          optional, intent(in)    :: del_if_exists
         character(len=1), optional, intent(in)    :: formatchar
-        real,             optional, intent(in)    :: rmsd
         type(image) :: tmpimg
+        real        :: dev
         if( self%imgkind .eq. 'xfel' )then
              call self%ft2img('real', tmpimg)
-             call tmpimg%write_emkind(fname, i, del_if_exists, formatchar=formatchar, rmsd=rmsd)
+             call tmpimg%write_emkind(fname, i, del_if_exists, formatchar=formatchar)
              call tmpimg%kill
         else
-            call self%write_emkind(fname, i, del_if_exists, formatchar=formatchar, rmsd=rmsd)
+            ! to prepare the header for coot
+            dev = self%rmsd()
+            call self%write_emkind(fname, i, del_if_exists, formatchar=formatchar, rmsd=dev)
         endif
     end subroutine write
 
@@ -955,14 +958,14 @@ contains
     pure function get_nyq( self ) result( nyq )
         class(image), intent(in) :: self
         integer :: nyq
-        nyq = fdim(self%ldim(1))
+        nyq = fdim(self%ldim(1)) - 1
     end function get_nyq
     
     !>  \brief  to get the size of the filters
     pure function get_filtsz( self ) result( n )
         class(image), intent(in) :: self
         integer :: n
-        n = fdim(self%ldim(1)) - 1 ! exclude zero frequency
+        n = fdim(self%ldim(1)) - 1
     end function get_filtsz
 
     !>  \brief  to get the image kind (em/xfel)
@@ -1036,7 +1039,7 @@ contains
         class(image), intent(in) :: self
         integer :: array_shape(3)
         complex, allocatable :: cmat(:,:,:)
-        array_shape(1)   = fdim(self%ldim(1))
+        array_shape(1)   = self%get_filtsz()
         array_shape(2:3) = self%ldim(2:3)
         allocate(cmat(array_shape(1),array_shape(2),array_shape(3)), source=self%cmat)
     end function get_cmat
@@ -1444,20 +1447,27 @@ contains
     function extr_fcomp( self, h, k, x, y ) result( comp )
         class(image), intent(inout) :: self
         real,         intent(in)    :: h, k, x, y
+        complex, allocatable :: comps(:,:)
         complex :: comp
         integer :: win(2,2), i, j, phys(3)
         if( self%ldim(3) > 1 )         stop 'only 4 2D images; extr_fcomp; simple_image'
         if( .not. self%ft )            stop 'image need to be FTed; extr_fcomp; simple_image'
         if( self%imgkind .eq. 'xfel' ) stop 'this method not intended for xfel-kind images; simple_image::extr_fcomp'
         ! evenness and squareness are checked in the comlin class
-        win = recwin_2d(h,k,1.)
-        comp = cmplx(0.,0.)
+        win  = recwin_2d(h, k, 1.)
+        allocate( comps(win(1,1):win(1,2),win(2,1):win(2,2)) )
         do i=win(1,1),win(1,2)
             do j=win(2,1),win(2,2)
-                phys = self%comp_addr_phys([i,j,0])
-                comp = comp+sinc(h-real(i))*sinc(k-real(j))*self%get_fcomp([i,j,0],phys)
+                phys       = self%comp_addr_phys([i,j,0])
+                comps(i,j) = self%get_fcomp([i,j,0], phys)
             end do
+            comps(i,:) = comps(i,:) * sinc(h-real(i))
         end do
+        do i = win(2,1), win(2,2)
+            comps(:,i) = comps(:,i) * sinc(k-real(i))
+        enddo
+        comp = sum(comps)
+        deallocate(comps)
         ! origin shift
         if( x == 0. .and. y == 0. )then
         else
@@ -1471,7 +1481,8 @@ contains
                 real, intent(in)     :: x, y, dx, dy
                 complex              :: comp
                 real                 :: arg
-                arg = (pi/real(xdim))*(dx*x+dy*y)
+                !arg = (pi/real(xdim))*(dx*x+dy*y)
+                arg = (pi/real(xdim)) * dot_product([x,y], [dx,dy])
                 comp = cmplx(cos(arg),sin(arg))
             end function oshift_here
 
@@ -2462,7 +2473,7 @@ contains
             call tmp%norm_bin
             call tmp%bin(thres)
         else
-            !call tmp%mask(rmsk, 'soft')    ! the old fashioned way
+            call tmp%mask(rmsk, 'soft')
             !call tmp%bin('nomsk')          ! the old fashioned way
             call tmp%bin('msk', rmsk)
         endif
@@ -3240,14 +3251,17 @@ contains
     function rmsd( self ) result( dev )
         class(image), intent(inout) :: self
         real :: devmat(self%ldim(1),self%ldim(2),self%ldim(3)), dev, avg
-        if( self%ft ) stop 'rmsd not intended for Fourier transforms; simple_image :: rmsd'
-        avg    = self%mean()
-        devmat = self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - avg
-        dev    = sum(devmat**2.0)/real(product(self%ldim))
-        if( dev > 0. )then
-            dev = sqrt(dev)
-        else
+        if( self%ft )then
             dev = 0.
+        else
+            avg    = self%mean()
+            devmat = self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - avg
+            dev    = sum(devmat**2.0)/real(product(self%ldim))
+            if( dev > 0. )then
+                dev = sqrt(dev)
+            else
+                dev = 0.
+            endif
         endif
     end function rmsd
 
@@ -3737,7 +3751,7 @@ contains
             call self2%fwd_ft
             didft2 = .true.
         endif
-        n = fdim(self1%ldim(1)) - 1 ! exclude zero frequency from FSC calculation
+        n = self1%get_filtsz()
         if( allocated(corrs) ) deallocate(corrs)
         if( allocated(res) )   deallocate(res)
         allocate( corrs(n), res(n), sumasq(n), sumbsq(n), stat=alloc_stat )
@@ -3787,7 +3801,7 @@ contains
             call self%fwd_ft
             didft = .true.
         endif
-        n = fdim(self%ldim(1)) - 1 ! exclude zero frequency
+        n = self%get_filtsz()
         if( allocated(voxs) )deallocate(voxs)
         allocate( voxs(n), stat=alloc_stat )
         call alloc_err('In: get_nvoxshell, module: simple_image', alloc_stat)
@@ -3813,7 +3827,7 @@ contains
         class(image), intent(in) :: self
         real, allocatable        :: res(:)
         integer                  :: n, k, alloc_stat
-        n = fdim(self%ldim(1))
+        n = self%get_filtsz()
         allocate( res(n), stat=alloc_stat )
         call alloc_err('In: get_res, module: simple_image', alloc_stat)
         do k=1,n
@@ -4631,6 +4645,7 @@ contains
                                 kr = self%ldim(3)+1-k
                                 e = cosedge(cis(i),cjs(j),cks(k),minlen,mskrad)
                                 if( doinner )e = e * cosedge_inner(cis(i),cjs(j),cks(k),wwidth,inner)
+                                if(e > 0.9999)cycle
                                 self%rmat(i,j,k)    = e * self%rmat(i,j,k)
                                 self%rmat(i,j,kr)   = e * self%rmat(i,j,kr)
                                 self%rmat(i,jr,k)   = e * self%rmat(i,jr,k)
@@ -4650,6 +4665,7 @@ contains
                             jr = self%ldim(2)+1-j
                             e = cosedge(cis(i),cjs(j),minlen,mskrad)
                             if( doinner )e = e * cosedge_inner(cis(i),cjs(j),wwidth,inner)
+                            if(e > 0.9999)cycle
                             self%rmat(i,j,1)   = e * self%rmat(i,j,1)
                             self%rmat(i,jr,1)  = e * self%rmat(i,jr,1)
                             self%rmat(ir,j,1)  = e * self%rmat(ir,j,1)
@@ -4914,6 +4930,62 @@ contains
             endif
         endif
     end subroutine pad
+
+    !>  \brief is a constructor that pads the input image to input ldim in real space using mirroring
+    subroutine pad_mirr( self_in, self_out )
+        use simple_winfuns, only: winfuns
+        class(image),   intent(inout) :: self_in, self_out
+        integer :: starts(3), stops(3), lims(3,2)
+        integer :: i,j, i_in, j_in
+        if( .not. self_in%same_kind(self_out) )then
+            stop 'images not of same kind (xfel/em); simple_image::pad_mirr'
+        endif
+        if( self_in.eqdims.self_out )then
+            self_out = self_in
+            return
+        endif
+        if(self_in%is_3d())stop '2D images only; simple_image::pad_mirr'
+        if(self_in%ft)stop 'real space 2D images only; simple_image::pad_mirr'
+        if( self_out%ldim(1) >= self_in%ldim(1) .and. self_out%ldim(2) >= self_in%ldim(2))then
+            self_out%rmat = 0.
+            starts  = (self_out%ldim-self_in%ldim)/2+1
+            stops   = self_out%ldim-starts+1
+            ! actual image
+            self_out%rmat(starts(1):stops(1),starts(2):stops(2),1) =&
+                &self_in%rmat(:self_in%ldim(1),:self_in%ldim(2),1)
+            ! left border
+            i_in = 0
+            do i = starts(1)-1,1,-1
+                i_in = i_in + 1
+                if(i_in > self_in%ldim(1))exit
+                self_out%rmat(i,starts(2):stops(2),1) = self_in%rmat(i_in,:self_in%ldim(2),1)
+            enddo
+            ! right border
+            i_in = self_in%ldim(1)+1
+            do i=stops(1)+1,self_out%ldim(1)
+                i_in = i_in - 1
+                if(i_in < 1)exit
+                self_out%rmat(i,starts(2):stops(2),1) = self_in%rmat(i_in,:self_in%ldim(2),1)
+            enddo
+            ! upper border & corners
+            j_in = starts(2)
+            do j = starts(2)-1,1,-1
+                j_in = j_in + 1
+                if(i_in > self_in%ldim(1))exit
+                self_out%rmat(:self_out%ldim(1),j,1) = self_out%rmat(:self_out%ldim(1),j_in,1)
+            enddo
+            ! lower border & corners
+            j_in = stops(2)+1
+            do j = stops(2)+1, self_out%ldim(2)
+                j_in = j_in - 1
+                if(j_in < 1)exit
+                self_out%rmat(:self_out%ldim(1),j,1) = self_out%rmat(:self_out%ldim(1),j_in,1)
+            enddo
+            self_out%ft = .false.
+        else
+            stop 'Inconsistent dimensions; simple_image::pad_mirr'
+        endif
+    end subroutine pad_mirr
 
     !>  \brief is a constructor that clips the input image to input ldim
     subroutine clip( self_in, self_out )
@@ -5534,13 +5606,13 @@ contains
                 call img%square( 10 )
                 if( doplot ) call img%vis
                 call img%serialize(pcavec1, msk)
-                call img%shift( 10., 10. )
+                call img%shift( 10., 5. )
                 if( doplot ) call img%vis
                 xyz = img%masscen()
                 call img%shift(real(int(xyz(1))),real(int(xyz(2))))
                 if( doplot ) call img%vis
                 call img%serialize(pcavec2, msk)
-                if( pearsn(pcavec1, pcavec2) > 0.99 ) passed = .true.
+                if( pearsn(pcavec1, pcavec2) > 0.9 ) passed = .true.
                 if( .not. passed ) stop 'masscen test failed'
 
                 write(*,'(a)') '**info(simple_image_unit_test, part 9): testing lowpass filter'

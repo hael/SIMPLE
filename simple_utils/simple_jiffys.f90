@@ -24,14 +24,14 @@ contains
 
     ! FILE-HANDLING JIFFYS
 
-    !>  \brief  is for finding logical dimension and numbe rof particles in stack
+    !>  \brief  is for finding logical dimension and number of particles in stack
     subroutine find_ldim_nptcls( fname, ldim, nptcls, doprint, formatchar, endconv )
-        character(len=*), intent(in)                         :: fname      !< filename
-        integer, intent(out)                                 :: ldim(3)    !< logical dimension
-        integer, intent(out)                                 :: nptcls     !< number of particles
-        logical, intent(in), optional                        :: doprint    !< do print or not
-        character(len=1), intent(in), optional               :: formatchar !< input format
-        character(len=:), intent(out), allocatable, optional :: endconv    !< endian conversion
+        character(len=*),                        intent(in)  :: fname      !< filename
+        integer,                                 intent(out) :: ldim(3)    !< logical dimension
+        integer,                                 intent(out) :: nptcls     !< number of particles
+        logical,                       optional, intent(in)  :: doprint    !< do print or not
+        character(len=1),              optional, intent(in)  :: formatchar !< input format
+        character(len=:), allocatable, optional, intent(out) :: endconv    !< endian conversion
         integer                       :: mode, iform, maxim
         real                          :: smpd
         character(len=:), allocatable :: conv
@@ -67,6 +67,24 @@ contains
             end select
         endif
     end subroutine find_ldim_nptcls
+
+    !>  \brief  is for checking logical dimension and number of particles in stack
+    logical function has_ldim_nptcls( fname, ldim, nptcls )
+        character(len=*), intent(in) :: fname   !< filename
+        integer,          intent(in) :: ldim(3) !< expected logical dimension
+        integer,          intent(in) :: nptcls  !< number of expected particles
+        integer :: ldim_found(3), nptcls_found
+        call find_ldim_nptcls( fname, ldim_found, nptcls_found )
+        if( ldim_found(1) /= ldim(1) .or. ldim_found(2) /= ldim(2) )then
+            has_ldim_nptcls = .false.
+            return
+        endif
+        if( nptcls_found /= nptcls )then
+            has_ldim_nptcls = .false.
+            return
+        endif
+        has_ldim_nptcls = .true.
+    end function has_ldim_nptcls
     
     !>  \brief is for gettign a part of the info in a MRC image header
     subroutine get_mrcfile_info( fname, ldim, form, smpd, doprint )

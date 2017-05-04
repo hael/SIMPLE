@@ -22,7 +22,6 @@ implicit none
 
 public :: merge_algndocs_commander
 public :: merge_nnmat_commander
-public :: merge_shellweights_commander
 public :: merge_similarities_commander
 public :: split_pairs_commander
 public :: split_commander
@@ -36,10 +35,6 @@ type, extends(commander_base) :: merge_nnmat_commander
   contains
     procedure :: execute      => exec_merge_nnmat
 end type merge_nnmat_commander
-type, extends(commander_base) :: merge_shellweights_commander
-  contains
-    procedure :: execute      => exec_merge_shellweights
-end type merge_shellweights_commander
 type, extends(commander_base) :: merge_similarities_commander
   contains
     procedure :: execute      => exec_merge_similarities
@@ -122,42 +117,6 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_MERGE_NNMAT NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_merge_nnmat
-
-    subroutine exec_merge_shellweights( self, cline )
-        use simple_map_reduce, only: merge_rmat_from_parts
-        use simple_filterer,   only: normalise_shellweights
-        class(merge_shellweights_commander), intent(inout) :: self
-        class(cmdline),                      intent(inout) :: cline
-        type(params)      :: p
-        type(build)       :: b
-        real, allocatable :: wmat(:,:), wmat_states(:,:,:)
-        integer :: filnum, io_stat, filtsz
-        p = params(cline)                   ! parameters generated
-        call b%build_general_tbox(p, cline) ! general objects built (assumes stk input)
-        filtsz = b%img%get_filtsz()         ! nr of resolution elements
-        if( p%refine .eq. 'isw' )then
-            wmat_states = merge_rmat_from_parts(p%nstates, p%nptcls, p%nparts, filtsz, 'shellweights_part')
-            call normalise_shellweights(wmat_states, p%npeaks)
-            filnum = get_fileunit()
-            open(unit=filnum, status='REPLACE', action='WRITE', file=p%shellwfile, access='STREAM')
-            write(unit=filnum,pos=1,iostat=io_stat) wmat_states
-            deallocate(wmat_states)
-        else
-            wmat = merge_rmat_from_parts(p%nptcls, p%nparts, filtsz, 'shellweights_part')
-            call normalise_shellweights(wmat)
-            filnum = get_fileunit()
-            open(unit=filnum, status='REPLACE', action='WRITE', file=p%shellwfile, access='STREAM')
-            write(unit=filnum,pos=1,iostat=io_stat) wmat
-            deallocate(wmat)
-        endif
-        if( io_stat .ne. 0 )then
-            write(*,'(a,i0,a)') 'I/O error ', io_stat, ' when writing to '//trim(p%shellwfile)
-            stop 'I/O error; merge_shellweights'
-        endif
-        close(filnum)
-        ! end gracefully
-        call simple_end('**** SIMPLE_MERGE_SHELLWEIGHTS NORMAL STOP ****', print_simple=.false.)
-    end subroutine exec_merge_shellweights
     
     subroutine exec_merge_similarities( self, cline )
         use simple_map_reduce, only: merge_similarities_from_parts

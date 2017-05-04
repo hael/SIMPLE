@@ -90,9 +90,10 @@ contains
         type(unblur_iter)  :: ubiter
         type(pick_iter)    :: piter
         character(len=STDLEN), allocatable :: movienames(:)
-        character(len=:),      allocatable :: fname_ctffind_ctrl, fname_ctffind_output
-        character(len=:),      allocatable :: moviename_forctf, moviename_intg
-        logical, parameter :: DEBUG = .true.
+        character(len=:),      allocatable :: fname_ctffind_ctrl, fname_unidoc_output
+        character(len=:),      allocatable :: moviename_forctf, moviename_intg, outfile
+        logical, parameter    :: DEBUG = .true.
+        character(len=STDLEN) :: boxfile
         type(params) :: p
         type(oris)   :: os_uni
         type(ori)    :: orientation
@@ -106,6 +107,11 @@ contains
         if( p%tomo .eq. 'yes' )then
             stop 'tomography mode (tomo=yes) not yet supported!'
         endif
+        if( p%l_pick )then
+            if( .not. cline%defined('refs') )then
+                stop 'need references for picker or turn off picking with dopick=no'
+            endif
+        endif
         call read_filetable(p%filetab, movienames)
         nmovies = size(movienames)
         if( cline%defined('numlen') )then
@@ -117,13 +123,22 @@ contains
             if( cline%defined('dir_target') )then
                 allocate(fname_ctffind_ctrl,  source=trim(p%dir_target)//'/'//&
                 &'ctffind_ctrl_file_part'//int2str_pad(p%part,p%numlen)//'.txt')
-                allocate(fname_ctffind_output, source=trim(p%dir_target)//'/'//&
-                &'ctffind_output_part'//int2str_pad(p%part,p%numlen)//'.txt')
+                if( cline%defined('outfile') )then
+                    allocate(fname_unidoc_output, source=trim(p%dir_target)//'/'//&
+                    &trim(p%outfile))
+                else
+                    allocate(fname_unidoc_output, source=trim(p%dir_target)//'/'//&
+                    &'unidoc_output_part'//int2str_pad(p%part,p%numlen)//'.txt')
+                endif
             else
                 allocate(fname_ctffind_ctrl,  source='ctffind_ctrl_file_part'//&
                 &int2str_pad(p%part,p%numlen)//'.txt')
-                allocate(fname_ctffind_output, source='ctffind_output_part'//&
-                &int2str_pad(p%part,p%numlen)//'.txt')
+                if( cline%defined('outfile') )then
+                    allocate(fname_unidoc_output, source=trim(p%outfile))
+                else
+                    allocate(fname_unidoc_output, source='unidoc_output_part'//&
+                    &int2str_pad(p%part,p%numlen)//'.txt')
+                endif
             endif
             ! determine loop range
             if( cline%defined('fromp') .and. cline%defined('top') )then
@@ -133,15 +148,14 @@ contains
                 stop 'fromp & top args need to be defined in parallel execution; exec_preproc'
             endif
         else
-            allocate(fname_ctffind_ctrl,   source='ctffind_ctrl_file.txt')
-            allocate(fname_ctffind_output, source='ctffind_output.txt')
+            allocate(fname_ctffind_ctrl,  source='ctffind_ctrl_file.txt')
+            allocate(fname_unidoc_output, source='unidoc_output.txt')
             ! determine loop range
             fromto(1) = 1
             if( cline%defined('startit') ) fromto(1) = p%startit
             fromto(2) = nmovies
         endif
         ntot = fromto(2) - fromto(1) + 1
-        
         frame_counter = 0
         movie_counter = 0
         call orientation%new
@@ -158,8 +172,8 @@ contains
             endif 
             call ubiter%iterate(cline, p, orientation, movie_ind, movie_counter,&
             &frame_counter, movienames(imovie), smpd_scaled)
-            p%smpd           = smpd_scaled
             call os_uni%set_ori(movie_counter, orientation)
+            p%smpd           = smpd_scaled     
             movie_counter    = movie_counter - 1
             moviename_forctf = ubiter%get_moviename('forctf')
             moviename_intg   = ubiter%get_moviename('intg')
@@ -167,18 +181,19 @@ contains
             p%hp             = p%hp_ctffind
             p%lp             = p%lp_ctffind 
             call cfiter%iterate(p, movie_ind, movie_counter, moviename_forctf,&
-            &fname_ctffind_ctrl, fname_ctffind_output, os_uni)
+            &fname_ctffind_ctrl, fname_unidoc_output, os_uni)
             if( p%l_pick )then
                 movie_counter = movie_counter - 1
-                p%lp      = p%lp_pick
-                call piter%iterate(cline, p, movie_counter, moviename_intg)
+                p%lp          = p%lp_pick
+                call piter%iterate(cline, p, movie_counter, moviename_intg, boxfile)
+                call os_uni%set(movie_counter, 'boxfile', trim(boxfile))
             endif
         end do
-        ! write CTF parameters
-        call os_uni%write(fname_ctffind_output)
+        ! write unidoc
+        call os_uni%write(fname_unidoc_output)
         ! destruct
         call os_uni%kill
-        deallocate(fname_ctffind_ctrl,fname_ctffind_output)
+        deallocate(fname_ctffind_ctrl,fname_unidoc_output)
         call qsys_job_finished( p, 'simple_commander_preproc :: exec_preproc' )
         ! end gracefully
         call simple_end('**** SIMPLE_PREPROC NORMAL STOP ****')
@@ -441,7 +456,7 @@ contains
         frame_counter = 0
         movie_counter = 0
         call orientation%new
-        call os_uni%new(nmovies)
+        call os_uni%new(ntot)
         do imovie=fromto(1),fromto(2)
             call ubiter%iterate(cline, p, orientation, imovie, movie_counter,&
             &frame_counter, movienames(imovie), smpd_scaled)
@@ -512,14 +527,15 @@ contains
         class(cmdline),          intent(inout) :: cline
         type(params)                       :: p
         type(build)                        :: b
-        type(image), allocatable           :: imgs_sel(:), imgs_all(:)
         type(image)                        :: stk3_img
+        type(image),           allocatable :: imgs_sel(:), imgs_all(:)
         character(len=STDLEN), allocatable :: imgnames(:)
+        integer,               allocatable :: selected(:)
+        real,                  allocatable :: correlations(:,:)
+        logical,               allocatable :: lselected(:)
         character(len=STDLEN)              :: cmd_str
-        integer                            :: iimg, isel, nall, nsel, loc(1), ios, funit, ldim(3), ifoo, lfoo(3)
-        integer, allocatable               :: selected(:)
-        real,    allocatable               :: correlations(:,:)
-        logical, allocatable               :: lselected(:)
+        integer                            :: iimg, isel, nall, nsel, loc(1), ios, alloc_stat
+        integer                            :: funit, ldim(3), ifoo, lfoo(3), io_stat
         logical, parameter                 :: debug=.false.
         ! error check
         if( cline%defined('stk3') .or. cline%defined('filetab') )then
@@ -543,8 +559,35 @@ contains
             call imgs_all(iimg)%new([p%box,p%box,1], p%smpd)
             call imgs_all(iimg)%read(p%stk, iimg)
         end do
-        write(*,'(a)') '>>> CALCULATING CORRELATIONS'
-        call calc_cartesian_corrmat(imgs_sel, imgs_all, correlations)
+        if( file_exists('corrmat_select.bin') )then
+            allocate(correlations(nsel,nall), stat=alloc_stat)
+            call alloc_err('In: exec_select; simple_commander_preproc', alloc_stat)
+            ! read matrix
+            funit = get_fileunit()
+            open(unit=funit, status='OLD', action='READ', file='corrmat_select.bin', access='STREAM')
+            read(unit=funit,pos=1,iostat=io_stat) correlations
+            ! Check if the read was successful
+            if( io_stat .ne. 0 )then
+                write(*,'(a,i0,2a)') '**ERROR(exec_select): I/O error ',&
+                io_stat, ' when reading corrmat_select.bin. Remove the file to override the memoization.'
+                stop 'I/O error; exec_select; simple_commander_preproc'
+            endif
+            close(funit)
+        else
+            write(*,'(a)') '>>> CALCULATING CORRELATIONS'
+            call calc_cartesian_corrmat(imgs_sel, imgs_all, correlations)
+            ! write matrix
+            funit = get_fileunit()
+            open(unit=funit, status='REPLACE', action='WRITE', file='corrmat_select.bin', access='STREAM')
+            write(unit=funit,pos=1,iostat=io_stat) correlations
+            ! Check if the write was successful
+            if( io_stat .ne. 0 )then
+                write(*,'(a,i0,2a)') '**ERROR(exec_select): I/O error ',&
+                io_stat, ' when writing to corrmat_select.bin'
+                stop 'I/O error; exec_select; simple_commander_preproc'
+            endif
+            close(funit)
+        endif
         ! find selected
         ! in addition to the index array, also make a logical array encoding the selection (to be able to reject)
         allocate(selected(nsel), lselected(nall))
@@ -663,6 +706,7 @@ contains
         type(params)    :: p
         type(pick_iter) :: piter
         character(len=STDLEN), allocatable :: movienames_intg(:)
+        character(len=STDLEN) :: boxfile
         integer :: nmovies, fromto(2), imovie, ntot, movie_counter
         p = params(cline, checkdistr=.false.) ! constants & derived constants produced
         ! check filetab existence
@@ -679,12 +723,12 @@ contains
         else
             fromto(1) = 1
             if( cline%defined('startit') ) fromto(1) = p%startit
-            fromto(2)  = nmovies
+            fromto(2) = nmovies
         endif
         ntot          = fromto(2) - fromto(1) + 1
         movie_counter = 0
         do imovie=fromto(1),fromto(2)
-            call piter%iterate(cline, p, movie_counter, movienames_intg(imovie))
+            call piter%iterate(cline, p, movie_counter, movienames_intg(imovie), boxfile)
             write(*,'(f4.0,1x,a)') 100.*(real(movie_counter)/real(ntot)), 'percent of the micrographs processed'
         end do
     end subroutine exec_pick
@@ -705,22 +749,18 @@ contains
         integer                            :: cnt, niter, fromto(2), orig_box
         integer                            :: movie_ind, ntot, lfoo(3), ifoo, noutside=0
         type(nrtxtfile)                    :: boxfile
-        character(len=STDLEN)              :: mode, sumstack, outfile
-        character(len=STDLEN), allocatable :: movienames(:), boxfilenames(:)
+        character(len=STDLEN)              :: mode, sumstack, outfile, sumstack_frames
+        character(len=STDLEN), allocatable :: movienames(:), boxfilenames(:), movienames_frames(:)
         real, allocatable                  :: boxdata(:,:)
         integer, allocatable               :: pinds(:)
         real                               :: x, y, kv, cs, fraca, dfx, dfy, angast, ctfres
-        real                               :: med, ave, sdev, var, particle_position(2)
+        real                               :: med, ave, sdev, var, particle_position(2), smpd
         type(image)                        :: micrograph
-        type(oris)                         :: outoris
-        logical                            :: err, params_present(3)
+        type(oris)                         :: outoris, os_uni
+        logical                            :: err, params_present(4)
         logical, parameter                 :: debug = .false.
         p = params(cline, checkdistr=.false.) ! constants & derived constants produced
 
-        ! sanity checks
-        if( p%noise_norm .eq. 'yes' )then
-            if( .not. cline%defined('msk') ) stop 'need rough mask radius as input (msk) for noise normalisation'
-        endif
         if( p%stream .eq. 'yes' )then
             if( cline%defined('outstk') )then
                 ! all ok
@@ -748,6 +788,7 @@ contains
                 sumstack = 'sumstack'//p%ext
             endif
         endif
+        sumstack_frames = add2fbody(sumstack, p%ext, '_frames_subset')
         if( cline%defined('outfile') )then
             if( cline%defined('dir_ptcls') )then
                 outfile = trim(p%dir_ptcls)//trim(p%outfile)
@@ -763,15 +804,36 @@ contains
         endif
 
         ! check file inout existence and read filetables
-        if( .not. file_exists(p%filetab) ) stop 'inputted filetab does not exist in cwd'
-        if( .not. file_exists(p%boxtab)  ) stop 'inputted boxtab does not exist in cwd'
-        nmovies = nlines(p%filetab)
+        if( cline%defined('unidoc') )then
+            if( .not. file_exists(p%unidoc)  ) stop 'inputted unidoc does not exist in cwd'
+            nmovies = nlines(p%unidoc)
+            call os_uni%new(nmovies)
+            call os_uni%read(p%unidoc)
+            movienames   = os_uni%extract_table('intg')
+            if( os_uni%isthere('boxfile') )then
+                boxfilenames = os_uni%extract_table('boxfile')
+            else
+                if( .not. cline%defined('boxtab')  ) stop 'need boxtab input to extract'
+                nboxfiles = nlines(p%boxtab)
+                if( nmovies /= nboxfiles ) stop 'number of entries in inputted files do not match!'
+                call read_filetable(p%boxtab,  boxfilenames)
+            endif
+            if( os_uni%isthere('intg_frames') )then
+                movienames_frames = os_uni%extract_table('intg_frames')
+            endif
+        else
+            if( .not. cline%defined('filetab') ) stop 'need filetab input to extract'
+            if( .not. cline%defined('boxtab')  ) stop 'need boxtab input to extract'
+            if( .not. file_exists(p%filetab)   ) stop 'inputted filetab does not exist in cwd'
+            if( .not. file_exists(p%boxtab)    ) stop 'inputted boxtab does not exist in cwd'
+            nmovies = nlines(p%filetab)
+            nboxfiles = nlines(p%boxtab)
+            if( debug ) write(*,*) 'nboxfiles: ', nboxfiles
+            if( nmovies /= nboxfiles ) stop 'number of entries in inputted files do not match!'
+            call read_filetable(p%filetab, movienames)
+            call read_filetable(p%boxtab,  boxfilenames)
+        endif
         if( debug ) write(*,*) 'nmovies: ', nmovies
-        nboxfiles = nlines(p%boxtab)
-        if( debug ) write(*,*) 'nboxfiles: ', nboxfiles
-        if( nmovies /= nboxfiles ) stop 'number of entries in inputted files do not match!'
-        call read_filetable(p%filetab, movienames)
-        call read_filetable(p%boxtab,  boxfilenames)
 
         ! remove possibly pre-existing output file
         call del_file(outfile)
@@ -788,7 +850,7 @@ contains
                 if( nlines(boxfilenames(movie)) > 0 )then
                     call boxfile%new(boxfilenames(movie), 1)
                     ndatlines = boxfile%get_ndatalines()
-                    nptcls = nptcls+ndatlines
+                    nptcls    = nptcls + ndatlines
                     call boxfile%kill
                 endif
             else
@@ -823,7 +885,7 @@ contains
             if( ndatlines == 0 ) cycle
     
             ! update iteration counter (has to be after the cycle statements or suffer bug!!!)
-            niter = niter+1
+            niter = niter + 1
 
             ! show progress
             if( niter > 1 ) call progress(niter,ntot)
@@ -845,7 +907,7 @@ contains
             ! create particle index list and set movie index
             do j=1,ndatlines
                 if( box_inside(ldim, nint(boxdata(j,1:2)), p%box) )then
-                    pind     = pind+1
+                    pind     = pind + 1
                     pinds(j) = pind
                     call outoris%set(pinds(j), 'movie', real(movie_ind))
                 else
@@ -883,17 +945,20 @@ contains
                 params_present(1) = b%a%isthere('kv')
                 params_present(2) = b%a%isthere('cs')
                 params_present(3) = b%a%isthere('fraca')
+                params_present(4) = b%a%isthere('smpd')
                 if( all(params_present) )then
                     ! alles ok
                 else
                     if( .not. params_present(1) ) write(*,*) 'ERROR! input doc lacks kv'
                     if( .not. params_present(2) ) write(*,*) 'ERROR! input doc lacks cs'
                     if( .not. params_present(3) ) write(*,*) 'ERROR! input doc lacks fraca'
+                    if( .not. params_present(4) ) write(*,*) 'ERROR! input doc lacks smpd'
                     stop
                 endif                
                 kv     = b%a%get(movie,'kv')
                 cs     = b%a%get(movie,'cs')
                 fraca  = b%a%get(movie,'fraca')
+                smpd   = b%a%get(movie,'smpd')
                 dfx    = b%a%get(movie,'dfx')
                 ctfres = b%a%get(movie,'ctfres')
                 angast = 0.
@@ -908,6 +973,7 @@ contains
                         call outoris%set(pinds(i), 'kv',         kv)
                         call outoris%set(pinds(i), 'cs',         cs)
                         call outoris%set(pinds(i), 'fraca',   fraca)
+                        call outoris%set(pinds(i), 'smpd',     smpd)
                         call outoris%set(pinds(i), 'dfx',       dfx)
                         call outoris%set(pinds(i), 'ctfres', ctfres)
                         if( b%a%isthere('dfy') )then
@@ -920,7 +986,7 @@ contains
             endif
     
             ! extract windows
-            ! read integrated movie
+            ! integrated movie
             call micrograph%read(movienames(movie),1,rwaction='READ')
             cnt = 0
             do j=1,ndatlines ! loop over boxes
@@ -929,15 +995,26 @@ contains
                     particle_position = boxdata(j,1:2)
                     call micrograph%window(nint(particle_position), p%box, b%img, noutside)
                     if( p%neg .eq. 'yes' ) call b%img%neg
-                    if( p%noise_norm .eq. 'yes' )then
-                        call b%img%noise_norm(p%msk)
-                    else
-                        call b%img%norm
-                    endif
+                    call b%img%norm
                     call b%img%write(trim(adjustl(sumstack)), pinds(j))
                 endif
             end do
-    
+            ! integrated movie (subset of frames)
+            if( allocated(movienames_frames) )then
+                call micrograph%read(movienames_frames(movie),1,rwaction='READ')
+                cnt = 0
+                do j=1,ndatlines ! loop over boxes
+                    if( pinds(j) > 0 )then
+                        ! extract the window
+                        particle_position = boxdata(j,1:2)
+                        call micrograph%window(nint(particle_position), p%box, b%img)
+                        if( p%neg .eq. 'yes' ) call b%img%neg
+                        call b%img%norm
+                        call b%img%write(trim(adjustl(sumstack_frames)), pinds(j))
+                    endif
+                end do
+            endif
+            
             ! write output
             do j=1,ndatlines ! loop over boxes
                 if( pinds(j) > 0 )then

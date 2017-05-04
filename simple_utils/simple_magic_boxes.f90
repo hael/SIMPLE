@@ -42,22 +42,21 @@ contains
         boxes(2) = boxsizes(ind2)
     end function find_magic_boxes4scale
 
-    subroutine autoscale( box_in, smpd_in, box_new, smpd_new, scale )
+    subroutine autoscale( box_in, smpd_in, smpd_target, box_new, smpd_new, scale )
         integer, intent(in)  :: box_in
-        real,    intent(in)  :: smpd_in
+        real,    intent(in)  :: smpd_in, smpd_target
         integer, intent(out) :: box_new
         real,    intent(out) :: smpd_new, scale
-        real,    parameter   :: SMPD_TARGET = 3.7
-        if( smpd_in < SMPD_TARGET )then
+        if( smpd_in < smpd_target )then
             ! ok
         else
             scale    = 1.0
             box_new  = box_in
             smpd_new = smpd_in
-            write(*,*) 'Inputted smpd < SMPD_TARGET, no scaling done; simple_magic_boxes :: autoscale'
+            write(*,*) 'Inputted smpd < smpd_target, no scaling done; simple_magic_boxes :: autoscale'
             return
         endif
-        scale    = smpd_in/SMPD_TARGET
+        scale    = smpd_in/smpd_target
         box_new  = find_magic_box(nint(scale*real(box_in)))
         scale    = real(box_new)/real(box_in)
         smpd_new = smpd_in/scale

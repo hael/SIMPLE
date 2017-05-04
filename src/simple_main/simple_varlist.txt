@@ -2,8 +2,8 @@ acf
 append
 async
 automsk
+autoscale
 avg
-bench_gpu
 bin
 center
 clustvalid
@@ -22,7 +22,6 @@ dynlp
 eo
 errify
 even
-fix_gpu
 ft2img
 guinier
 kmeans
@@ -50,7 +49,6 @@ roalgn
 round
 shalgn
 shellnorm
-shellw
 shbarrier
 single
 soften
@@ -63,7 +61,6 @@ tomo
 time
 trsstats
 tseries
-use_gpu
 verbose
 vis
 xfel
@@ -87,6 +84,7 @@ dir_target
 dir_ptcls
 doclist
 endian
+exec_abspath
 exp_doc
 ext
 extrmode
@@ -115,11 +113,11 @@ pcastk
 pdfile
 pgrp
 plaintexttab
+ppconvfile
 prg
 refine
 refs_msk
 refs
-shellwfile
 speckind
 split_mode
 stk_part
@@ -127,6 +125,7 @@ stk
 stk2
 stk3
 tomoseries
+unidoc
 vol
 vollist
 voltab
@@ -147,9 +146,8 @@ clip
 corner
 cube
 edge
-filtsz_pad
 find
-frameavg
+nframesgrp
 fromf
 fromp
 froms
@@ -205,7 +203,6 @@ pspecsz_ctffind
 ptcl
 ring1
 ring2
-set_gpu
 spec
 startit
 state
@@ -306,10 +303,10 @@ l_chunk_distr
 doautomsk
 doshift
 l_automsk
+l_autoscale
 l_dose_weight
 l_innermsk
 l_pick
-l_shellw
 l_xfel
 vol1
 vol2

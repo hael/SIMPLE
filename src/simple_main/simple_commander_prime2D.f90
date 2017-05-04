@@ -18,17 +18,17 @@ use simple_filehandling    ! use all in there
 use simple_jiffys          ! use all in there
 implicit none
 
-public :: prime2D_init_commander
+public :: makecavgs_commander
 public :: prime2D_commander
 public :: cavgassemble_commander
 public :: check2D_conv_commander
 public :: rank_cavgs_commander
 private
 
-type, extends(commander_base) :: prime2D_init_commander 
+type, extends(commander_base) :: makecavgs_commander 
   contains
-    procedure :: execute      => exec_prime2D_init
-end type prime2D_init_commander 
+    procedure :: execute      => exec_makecavgs
+end type makecavgs_commander 
 type, extends(commander_base) :: prime2D_commander 
   contains
     procedure :: execute      => exec_prime2D
@@ -48,62 +48,83 @@ end type rank_cavgs_commander
 
 contains
 
-    subroutine exec_prime2D_init( self, cline )
+    subroutine exec_makecavgs( self, cline )
         use simple_hadamard2D_matcher, only: prime2D_assemble_sums, prime2D_write_sums, &
         & prime2D_write_partial_sums
-        use simple_qsys_funs,          only: qsys_job_finished
-        class(prime2D_init_commander), intent(inout) :: self
-        class(cmdline),                intent(inout) :: cline
+        use simple_qsys_funs, only: qsys_job_finished
+        class(makecavgs_commander), intent(inout) :: self
+        class(cmdline),             intent(inout) :: cline
         type(params)  :: p
         type(build)   :: b
         integer       :: ncls_in_oritab, icls, fnr, file_stat
         p = params(cline)  ! parameters generated
-        p%boxmatch = p%box !!!!!!!!!!!!!!!!!! 4 NOW
+        p%boxmatch = p%box ! turns off boxmatch logics for 2D
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         call b%build_hadamard_prime2D_tbox(p) ! 2D Hadamard matcher built
-        write(*,'(a)') '>>> GENERATING INITIAL CLUSTER CENTERS'
+        write(*,'(a)') '>>> GENERATING CLUSTER CENTERS'
         if( cline%defined('oritab') )then
             call b%a%remap_classes
             ncls_in_oritab = b%a%get_ncls()
-            if( p%ncls < ncls_in_oritab ) stop 'Inputted ncls < ncls_in_oritab; not allowed!'
-            if( p%ncls > ncls_in_oritab )then
-                call b%a%expand_classes(p%ncls)
+            if( cline%defined('ncls') )then
+                if( p%ncls < ncls_in_oritab ) stop 'ERROR, inputted ncls < ncls_in_oritab; not allowed!'
+                if( p%ncls > ncls_in_oritab )then
+                    call b%a%expand_classes(p%ncls)
+                endif
+            else
+                p%ncls = ncls_in_oritab
             endif
         else if( p%tseries .eq. 'yes' )then
+            if( .not. cline%defined('ncls') )then
+                stop '# class averages (ncls) need to be part of command line when tseries=yes'
+            endif
             call b%a%ini_tseries(p%ncls, 'class')
         else
+            if( .not. cline%defined('ncls') )then
+                stop 'If no oritab is provided ncls (# class averages) need to be part of command line'
+            endif
             if( p%srch_inpl .eq. 'yes' )then
                 call b%a%rnd_cls(p%ncls)
             else
                 call b%a%rnd_cls(p%ncls, srch_inpl=.false.)
             endif
         endif
-        p%oritab = 'prime2D_startdoc.txt'
-        if( p%mul > 1. ) call b%a%mul_shifts(p%mul)
-        if( p%l_distr_exec .and. nint(cline%get_rarg('part')).ne.1 )then
+        if( cline%defined('outfile') )then
+            p%oritab = p%outfile
         else
+            p%oritab = 'prime2D_startdoc.txt'
+        endif
+        if( p%mul > 1. ) call b%a%mul_shifts(p%mul)
+        if( p%l_distr_exec .and. nint(cline%get_rarg('part')) .eq. 1 )then
             call b%a%write(p%oritab)
         endif
         if( cline%defined('filwidth') )then
             if( p%l_distr_exec)then
-                stop 'filwidth mode not implemented for distributed mode; simple_commander_prime2D.f90; exec_prime2D_init'
+                stop 'filwidth mode not implemented for distributed mode; simple_commander_prime2D.f90; exec_makecavgs'
             endif
             do icls=1,p%ncls
                 call b%cavgs(icls)%bin_filament(p%filwidth)
             end do
-            call prime2D_write_sums(b, p)
+            if( cline%defined('refs') )then
+                call prime2D_write_sums(b, p, fname=p%refs)
+            else
+                call prime2D_write_sums(b, p)
+            endif           
         else
             call prime2D_assemble_sums(b, p)
             if( p%l_distr_exec)then
                 call prime2D_write_partial_sums( b, p )
-                call qsys_job_finished( p, 'simple_commander_prime2D :: exec_prime2D_init' )
+                call qsys_job_finished( p, 'simple_commander_prime2D :: exec_makecavgs' )
             else
-                call prime2D_write_sums(b, p)
+                if( cline%defined('refs') )then
+                    call prime2D_write_sums(b, p, fname=p%refs)
+                else
+                    call prime2D_write_sums(b, p)
+                endif
             endif
         endif
         ! end gracefully
-        call simple_end('**** SIMPLE_PRIME2D_INIT NORMAL STOP ****', print_simple=.false.)
-    end subroutine exec_prime2D_init
+        call simple_end('**** SIMPLE_MAKECAVGS NORMAL STOP ****', print_simple=.false.)
+    end subroutine exec_makecavgs
     
     subroutine exec_prime2D( self, cline )
         use simple_hadamard2D_matcher, only: prime2D_exec
@@ -115,7 +136,7 @@ contains
         integer      :: i, startit, ncls_from_refs, lfoo(3)
         logical      :: converged=.false., l_distr_exec=.false.
         p = params(cline)  ! parameters generated
-        p%boxmatch = p%box !!!!!!!!!!!!!!!!!! 4 NOW
+        p%boxmatch = p%box ! turns off boxmatch logics for 2D
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         call b%build_hadamard_prime2D_tbox(p) ! 2D Hadamard matcher built
         if( p%srch_inpl .eq. 'no' )then
@@ -131,7 +152,7 @@ contains
         ! execute
         if( cline%defined('part') )then
             if( .not. cline%defined('outfile') ) stop 'need unique output file for parallel jobs'
-            call prime2D_exec(b, p, cline, 0, converged) ! partition or not, depending on 'part'       
+            call prime2D_exec(b, p, cline, p%startit, converged) ! partition or not, depending on 'part'       
         else
             startit = 1
             if( cline%defined('startit') ) startit = p%startit
@@ -168,12 +189,15 @@ contains
         integer      :: fnr, file_stat
         p = params(cline) ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
+        p%ncls = b%a%get_ncls()
         call b%build_hadamard_prime2D_tbox(p)
         call prime2D_assemble_sums_from_parts(b, p)
         if( cline%defined('which_iter') )then
-            call prime2D_write_sums( b, p, p%which_iter)
+            call prime2D_write_sums(b, p, p%which_iter)
+        else if( cline%defined('refs') )then
+            call prime2D_write_sums(b, p, fname=p%refs)
         else
-            call prime2D_write_sums( b, p )
+            call prime2D_write_sums(b, p, fname='startcavgs'//p%ext)
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_CAVGASSEMBLE NORMAL STOP ****', print_simple=.false.)
@@ -193,7 +217,7 @@ contains
         p = params(cline) ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         p%ncls    = b%a%get_ncls()
-        converged = b%conv%check_conv2D()   ! convergence check
+        converged = b%conv%check_conv2D() ! convergence check
         call cline%set('frac', b%conv%get('frac'))
         if( p%doshift )then
             ! activates shift serach

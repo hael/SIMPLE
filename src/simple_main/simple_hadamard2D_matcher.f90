@@ -18,14 +18,9 @@ public :: prime2D_exec, prime2D_assemble_sums, prime2D_norm_sums, prime2D_assemb
 prime2D_write_sums, preppftcc4align, pftcc, primesrch2D, prime2D_read_sums, prime2D_write_partial_sums
 private
 
-type(polarft_corrcalc) :: pftcc       ! need to be revealed to the outside world for testing purposes
-type(prime2D_srch)     :: primesrch2D ! need to be revealed to the outside world for testing purposes
-type(ori)              :: orientation
-integer                :: cnt_glob = 0
-real                   :: frac_srch_space = 0.
-real,    allocatable   :: wmat(:,:)
-logical, parameter     :: DEBUG = .false.
-real,    parameter     :: prime2Deps = 0.3
+logical, parameter              :: DEBUG = .false.
+type(polarft_corrcalc)          :: pftcc
+type(prime2D_srch), allocatable :: primesrch2D(:)
 
 contains
     
@@ -36,16 +31,25 @@ contains
         use simple_procimgfile, only: random_selection_from_imgfile
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
-        class(cmdline), intent(inout) :: cline     
+        class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: converged
-        real,    allocatable :: res(:), res_pad(:), wresamp(:)
-        integer :: iptcl, fnr, icls, io_stat, inorm, cands(3), pop
-        real    :: corr_thresh
-        logical :: doshellweight
+        logical   :: conv_larr(p%fromp:p%top) ! per-particle convergence flags
+        integer   :: iptcl, icls
+        real      :: corr_thresh, frac_srch_space
+        type(ori) :: orientation
         
         ! SET FRACTION OF SEARCH SPACE
         frac_srch_space = b%a%get_avg('frac')
+
+        ! PER-PARTICLE CONVERGENCE
+        if( file_exists(p%ppconvfile) )then
+            call b%ppconv%read(p%ppconvfile)
+        else
+            call b%ppconv%zero_joint_distr_olap
+        endif
+        call b%ppconv%set_conv_larr(conv_larr)
+        write(*,'(A,F8.2)') '>>> NON-CONVERGED PARTICLES(%):', 100.*(real(count(conv_larr)) / real(p%top - p%fromp + 1))
 
         ! PREP REFERENCES
         if( p%l_distr_exec )then
@@ -65,7 +69,6 @@ contains
                     ! we need to make references
                     if( cline%defined('oritab') )then
                         ! we make class averages
-                        if( p%mul > 1. ) call b%a%mul_shifts(p%mul)
                         call prime2D_assemble_sums(b, p)
                     else
                         ! we randomly select particle images as initial references
@@ -78,20 +81,22 @@ contains
             endif 
         endif
 
-        ! SETUP SHELLWEIGHTS
-        if( p%l_shellw .and. frac_srch_space >= SHW_FRAC_LIM .and. which_iter > 1 ) then
-            call setup_shellweights( b, p, doshellweight, wmat, res, res_pad )
+        ! SETUP WEIGHTS
+        if( p%nptcls <= SPECWMINPOP )then
+            call b%a%calc_hard_ptcl_weights(p%frac)
+        else
+            call b%a%calc_spectral_weights(p%frac)
         endif
 
         ! EXTREMAL LOGICS
         if( frac_srch_space < 0.98 .or. p%extr_thresh > 0.025 )then
-            write(*,'(A,F8.1)') '>>> PARTICLE RANDOMIZATION(%):', 100.*p%extr_thresh
             corr_thresh = b%a%extremal_bound(p%extr_thresh)
-            write(*,'(A,F8.2)') '>>> CORRELATION THRESHOLD:     ', corr_thresh
+        else
+            corr_thresh = -huge(corr_thresh)
         endif
         
         ! SET FOURIER INDEX RANGE
-        call set_bp_range( b, p, cline )
+        call set_bp_range2D( b, p, cline, which_iter, frac_srch_space )
         
         ! GENERATE REFERENCE & PARTICLE POLAR FTs
         call preppftcc4align( b, p )
@@ -102,50 +107,64 @@ contains
         else
             write(*,'(A,1X,I3)') '>>> PRIME2D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
         endif
-        if( which_iter > 0 )then
+        if( .not. p%l_distr_exec .and. which_iter > 0 )then
             p%outfile = 'prime2Ddoc_'//int2str_pad(which_iter,3)//'.txt'
             if( p%chunktag .ne. '' ) p%outfile= trim(p%chunktag)//trim(p%outfile)
         endif
         call prime2D_init_sums( b, p )
 
-        ! ALIGN
-        call del_file(p%outfile)
+        ! STOCHASTIC IMAGE ALIGNMENT
+        allocate( primesrch2D(p%fromp:p%top) )
+        do iptcl=p%fromp,p%top
+            call primesrch2D(iptcl)%new(p, pftcc) 
+        end do
+        ! calculate CTF matrices
         if( p%ctf .ne. 'no' ) call pftcc%create_polar_ctfmats(p%smpd, b%a)
-        if( p%oritab .eq. '' )then
-            call primesrch2D%exec_prime2D_srch(pftcc, b%a, [p%fromp,p%top], greedy=.true.)
+        ! execute the search
+        if( p%refine .eq. 'neigh' )then
+            call del_file(p%outfile)
+            !$omp parallel do default(shared) schedule(dynamic) private(iptcl)
+            do iptcl=p%fromp,p%top
+                call primesrch2D(iptcl)%nn_srch(pftcc, iptcl, b%a, b%nnmat)
+            end do
+            !$omp end parallel do
         else
-            call primesrch2D%exec_prime2D_srch(pftcc, b%a, [p%fromp,p%top], extr_bound=corr_thresh)
+            ! execute the search
+            call del_file(p%outfile)
+            if( p%oritab .eq. '' )then
+                !$omp parallel do default(shared) schedule(dynamic) private(iptcl)
+                do iptcl=p%fromp,p%top
+                    call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, conv_larr(iptcl), greedy=.true.)
+                end do
+                !$omp end parallel do
+            else
+                if(corr_thresh > 0.)then
+                    write(*,'(A,F8.2)') '>>> PARTICLE RANDOMIZATION(%):', 100.*p%extr_thresh
+                    write(*,'(A,F8.2)') '>>> CORRELATION THRESHOLD:    ', corr_thresh
+                endif
+                !$omp parallel do default(shared) schedule(dynamic) private(iptcl)
+                do iptcl=p%fromp,p%top
+                    call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, conv_larr(iptcl), extr_bound=corr_thresh)
+                end do
+                !$omp end parallel do
+            endif
         endif
         if( DEBUG ) print *, 'DEBUG, hadamard2D_matcher; completed alignment'
+        ! output orientations
+        call b%a%write(p%outfile, [p%fromp,p%top])
+        p%oritab = p%outfile
         
         ! WIENER RESTORATION OF CLASS AVERAGES
-        cnt_glob = 0
         do iptcl=p%fromp,p%top
-            cnt_glob = cnt_glob + 1
             orientation = b%a%get_ori(iptcl)
             if( nint(orientation%get('state')) > 0 )then
                 call read_img_from_stk( b, p, iptcl )
                 icls = nint(orientation%get('class'))
-                if( p%l_shellw .and. allocated(wmat) )then
-                    wresamp = resample_filter(wmat(iptcl,:), res, res_pad)
-                    call wiener_restore2D_online_fast(b%img, orientation, p%tfplan,&
-                    &b%cavgs(icls), b%ctfsqsums(icls), p%msk, wresamp)
-                else
-                    call wiener_restore2D_online_fast(b%img, orientation, p%tfplan,&
-                    &b%cavgs(icls), b%ctfsqsums(icls), p%msk)
-                endif
+                call wiener_restore2D_online(b%img, orientation, p%tfplan,&
+                &b%cavgs(icls), b%ctfsqsums(icls), p%msk)
             endif
         end do
         if( DEBUG ) print *, 'DEBUG, hadamard2D_matcher; generated class averages'
-
-        ! orientations output
-        call b%a%write(p%outfile, [p%fromp,p%top])
-        p%oritab = p%outfile
-        call pftcc%kill
-        
-        ! status here: sums have been assembled but not normalised
-        ! in parallel setting: write partial files and move on
-        ! in serial setting: normalise sums and write to disk
         
         ! WRITE CLASS AVERAGES
         if( p%l_distr_exec )then
@@ -155,13 +174,22 @@ contains
             call prime2D_write_sums( b, p, which_iter )
         endif
 
+        ! DESTRUCT
+        do iptcl=p%fromp,p%top
+            call primesrch2D(iptcl)%kill
+        end do
+        deallocate( primesrch2D )
+        call pftcc%kill
+
+        ! REPORT CONVERGENCE
+        call b%ppconv%update_joint_distr_olap
+        call b%ppconv%write(p%ppconvfile)
         if( p%l_distr_exec )then
             call qsys_job_finished(p, 'simple_hadamard2D_matcher :: prime2D_exec')
         else
             ! CONVERGENCE TEST
             converged = b%conv%check_conv2D()
         endif
-
     end subroutine prime2D_exec
     
     subroutine prime2D_read_sums( b, p )
@@ -182,7 +210,7 @@ contains
         class(build),  intent(inout) :: b
         class(params), intent(inout) :: p
         integer :: icls
-        !$omp parallel do schedule(auto) default(shared) private(icls)
+        !$omp parallel do schedule(static) default(shared) private(icls)
         do icls=1,p%ncls
             b%cavgs(icls) = 0.
             b%ctfsqsums(icls) = cmplx(0.,0.)
@@ -195,8 +223,9 @@ contains
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         type(ori) :: orientation
-        integer   :: icls, iptcl, cnt, istart, iend
+        integer   :: icls, iptcl, cnt, istart, iend, filtsz
         if( .not. p%l_distr_exec ) write(*,'(a)') '>>> ASSEMBLING CLASS SUMS'
+        filtsz = b%img_pad%get_filtsz()
         call prime2D_init_sums( b, p )
         if( p%l_distr_exec )then
             istart  = p%fromp
@@ -213,7 +242,7 @@ contains
             if( nint(orientation%get('state')) > 0 )then
                 call read_img_from_stk( b, p, iptcl )
                 icls = nint(orientation%get('class'))
-                call wiener_restore2D_online_fast(b%img, orientation, p%tfplan,&
+                call wiener_restore2D_online(b%img, orientation, p%tfplan,&
                 &b%cavgs(icls), b%ctfsqsums(icls), p%msk)
             endif
         end do
@@ -279,19 +308,26 @@ contains
         end do
     end subroutine prime2D_norm_sums
     
-    subroutine prime2D_write_sums( b, p, which_iter )
-        class(build),      intent(inout) :: b
-        class(params),     intent(inout) :: p
-        integer, optional, intent(in)    :: which_iter
+    subroutine prime2D_write_sums( b, p, which_iter, fname )
+        class(build),               intent(inout) :: b
+        class(params),              intent(inout) :: p
+        integer,          optional, intent(in)    :: which_iter
+        character(len=*), optional, intent(in)    :: fname
         integer :: icls
         if( present(which_iter) )then
+            if( present(fname) ) stop&
+            &'fname cannot be present together with which_iter; simple_hadamard2D_matcher :: prime2D_write_sums'
             if( which_iter <= 0 )then
                 p%refs = 'cavgs'//p%ext
             else
                 p%refs = 'cavgs_iter'//int2str_pad(which_iter,3)//p%ext
             endif
         else
-            p%refs = 'startcavgs'//p%ext
+            if( present(fname) )then
+                p%refs = fname
+            else
+                p%refs = 'startcavgs'//p%ext
+            endif
         endif
         if( p%chunktag .ne. '' ) p%refs = trim(p%chunktag)//trim(p%refs)
         ! write to disk
@@ -310,16 +346,8 @@ contains
         integer   :: cnt, iptcl, icls, sz, pop, istate
         integer   :: filtsz, alloc_stat, filnum, io_stat
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PRIME2D SEARCH ENGINE'
-        if( p%l_shellw .and. frac_srch_space >= SHW_FRAC_LIM .and. p%oritab .ne. '' )then
-            filtsz = b%img%get_filtsz()
-            if( allocated(wmat) ) deallocate(wmat)
-            allocate(wmat(p%fromp:p%top,filtsz), stat=alloc_stat)
-            call alloc_err("In simple_hadamard2D_matcher :: preppftcc4align", alloc_stat)
-            wmat = 1.0
-        endif
         ! must be done here since constants in p are dynamically set
         call pftcc%new(p%ncls, [p%fromp,p%top], [p%box,p%box,1], p%kfromto, p%ring2, p%ctf)
-        call primesrch2D%new(p, pftcc)
         ! prepare the polarizers
         call b%img%init_imgpolarizer(pftcc)
         ! PREPARATION OF REFERENCES IN PFTCC
@@ -352,70 +380,10 @@ contains
             istate = nint(o%get('state'))
             if( istate == 0 ) icls = 0
             call prepimg4align(b, p, o)
-            if( allocated(wmat) ) call calc_frc( b, p, o, icls, iptcl, filtsz, wmat )
             ! transfer to polar coordinates
             call b%img%imgpolarizer(pftcc, iptcl)
         end do
-        if( allocated(wmat) )then
-            filnum = get_fileunit()
-            if( p%l_distr_exec )then  
-                open(unit=filnum, status='REPLACE', action='WRITE',&
-                file='shellweights_part'//int2str_pad(p%part,p%numlen)//'.bin', access='STREAM')
-            else
-                open(unit=filnum, status='REPLACE', action='WRITE', file=p%shellwfile, access='STREAM')
-            endif
-            write(unit=filnum,pos=1,iostat=io_stat) wmat
-            ! check if the write was successful
-            if( io_stat .ne. 0 )then
-                write(*,'(a,i0,2a)') '**ERROR(preppftcc4align): I/O error ',&
-                io_stat, ' when writing shellweights*.bin'
-                stop 'I/O error; preppftcc4align; simple_hadamard2D_matcher'
-            endif
-            close(filnum)
-            deallocate(wmat)
-        endif
         if( debug ) write(*,*) '*** hadamard2D_matcher ***: finished preppftcc4align'
     end subroutine preppftcc4align
-
-    !>  \brief  calculates the FRC between the prepared reference
-    !!          image and the prepared particle image
-    subroutine calc_frc( b, p, o, icls, iptcl, filtsz, wmat )
-        use simple_ctf, only: ctf
-        class(build),  intent(inout) :: b
-        class(params), intent(in)    :: p
-        class(ori),    intent(inout) :: o
-        integer,       intent(in)    :: icls, iptcl, filtsz
-        real,          intent(inout) :: wmat(p%fromp:p%top,filtsz)
-        real, allocatable :: res(:), corrs(:)
-        type(image)       :: ref_local
-        type(ctf)         :: tfun
-        real              :: dfx, dfy, angast
-        if( icls == 0 )then
-            wmat(iptcl,:) = -1.
-            return
-        endif
-        ref_local = b%refs(icls)
-        if( p%tfplan%flag .ne. 'no' )then
-            if( p%tfplan%mode .eq. 'astig' )then ! astigmatic CTF
-                dfx    = o%get('dfx')
-                dfy    = o%get('dfy')
-                angast = o%get('angast')
-            else if( p%tfplan%mode .eq. 'noastig' )then
-                dfx    = o%get('dfx')
-                dfy    = dfx
-                angast = 0.
-            else
-                stop 'Unsupported ctf mode; simple_hadamard2D_matcher :: calc_frc'
-            endif
-            tfun = ctf(p%smpd, o%get('kv'), o%get('cs'), o%get('fraca'))
-            call tfun%apply(ref_local, dfx, 'ctf', dfy, angast)
-        endif
-        ! calculate FRC    
-        call ref_local%fsc(b%img, res, corrs)
-        wmat(iptcl,:) = corrs
-        call ref_local%kill
-        deallocate(res, corrs)
-    end subroutine calc_frc
     
 end module simple_hadamard2D_matcher
-

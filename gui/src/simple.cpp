@@ -22,18 +22,26 @@
 #include <signal.h>
 
 std::string getKeyValFromString(std::string argstring, std::string key){ 				// Return string containing value from space separated keyval pairs in input string
-	std::size_t location;
+	std::size_t location, hashlocation;
 	char character;
 	std::string returnstring;
 	
 	returnstring = "";
 	key.append("=");
 	location = argstring.find(key) + key.length();
+	hashlocation = argstring.find("#");
+	
+	if(hashlocation != std::string::npos && location >= hashlocation){
+		return returnstring;
+	}
+	
 	if(location != key.length() - 1){
 		while ( location < argstring.length() ){
 			character = argstring.c_str()[location];
 			if ( character != ' '){
 				returnstring.push_back(character);
+			} else if ( character == '#'){
+				break;
 			} else {
 				break;
 			}
@@ -197,9 +205,6 @@ int main(int argc, char* argv[]){ 														// Main
 		checkNotRunning(port);
 		openBrowser(port);
 	}
-	
-	
-	
-	
+
 	return 0;
 }

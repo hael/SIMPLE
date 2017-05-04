@@ -26,8 +26,10 @@ type pcont3D_srch
 
     real       :: lims(2,2)  = 0.     !< shift search limits
     real       :: prev_corr  = -1.    !< previous correlation
+    real       :: specscore  = 0.     !< previous spectral score
     integer    :: prev_ref   = 0      !< previous reference
     integer    :: prev_roind = 0      !< previous in-plane rotational index
+    integer    :: prev_state = 0      !< previous state
     integer    :: nstates    = 0      !< number of states
     integer    :: nbetter    = 0      !< number of improving references found
     integer    :: neval      = 0      !< number of references evaluated
@@ -38,15 +40,18 @@ type pcont3D_srch
   contains
     ! CONSTRUCTOR
     procedure          :: new
+    ! PREP ROUTINES
+    procedure, private :: prep_srch
+    procedure, private :: prep_softoris
     ! SEARCH ROUTINES
     procedure          :: do_srch
     procedure, private :: do_refs_srch
     procedure, private :: do_shift_srch
-    procedure, private :: prep_softoris
     procedure, private :: ang_sdev
     ! GETTERS
     procedure          :: get_best_ori
     procedure          :: get_softoris
+    procedure          :: does_exist
     ! DESTRUCTOR
     procedure          :: kill
 end type pcont3D_srch
@@ -57,10 +62,12 @@ contains
     subroutine new( self, p, o_in, e, pftcc )
         class(pcont3D_srch),             intent(inout) :: self  !< instance
         class(params),                   intent(in)    :: p     !< parameters
-        class(ori),                      intent(in)    :: o_in  !< 
+        class(ori),                      intent(inout) :: o_in  !< 
         class(oris),                     intent(in)    :: e     !< 
         class(polarft_corrcalc), target, intent(in)    :: pftcc
         call self%kill
+        self%prev_state = nint(o_in%get('state'))
+        if(self%prev_state < 1)return
         ! set constants
         self%ppftcc    => pftcc
         self%reforis   = e
@@ -73,24 +80,38 @@ contains
         if(self%reforis%get_noris().ne.self%nrefs)&
             &stop 'Inconsistent number of references & orientations'
         ! orientations
-        self%orientation_in  = o_in
-        call self%shiftedoris%new(self%npeaks)
-        call self%softoris%new(self%npeaks)
-        ! other stuff
-        call self%shsrch_obj%new(self%ppftcc, self%lims)
-        self%prev_roind = self%ppftcc%get_roind(360.-o_in%e3get())
-        self%prev_ref   = self%reforis%find_closest_proj(self%orientation_in) ! state not taken into account
-        self%prev_corr  = self%ppftcc%corr(self%prev_ref, 1, self%prev_roind) ! state not taken into account
+        self%orientation_in = o_in
         ! done
         self%exists = .true.
         if( debug ) write(*,'(A)') '>>> PCONT3D_SRCH::CONSTRUCTED NEW SIMPLE_PCONT3D_SRCH OBJECT'
     end subroutine new
+
+    ! PREP ROUTINES
+
+    !>  \brief  is the master search routine
+    subroutine prep_srch( self )
+        class(pcont3D_srch), intent(inout) :: self
+        real, allocatable :: frc(:)
+        if(.not.self%exists)return
+        ! INIT
+        call self%shsrch_obj%new(self%ppftcc, self%lims)
+        self%prev_roind = self%ppftcc%get_roind(360.-self%orientation_in%e3get())
+        self%prev_ref   = self%reforis%find_closest_proj(self%orientation_in) ! state not taken into account
+        self%prev_corr  = self%ppftcc%corr(self%prev_ref, 1, self%prev_roind)
+        frc             = self%ppftcc%genfrc(self%prev_ref, 1, self%prev_roind)
+        self%specscore  = max(0., median_nocopy(frc))
+        deallocate(frc)
+        if( debug ) write(*,'(A)') '>>> PCONT3D_SRCH::END OF PREP_SRCH'
+    end subroutine prep_srch
 
     ! SEARCH ROUTINES
 
     !>  \brief  is the master search routine
     subroutine do_srch( self )
         class(pcont3D_srch), intent(inout) :: self
+        if(.not.self%exists)return
+        ! INIT
+        call self%prep_srch
         ! EULER ANGLES SEARCH
         call self%do_refs_srch
         ! SHIFT SEARCH
@@ -173,11 +194,12 @@ contains
         real, allocatable :: cxy(:)
         real              :: prev_shift_vec(2), corr
         integer           :: ref_inds(self%nrefs), i, iref, inpl_ind, cnt
+        call self%shiftedoris%new(self%npeaks)
         ! SORT ORIENTATIONS
         ref_inds = (/ (i, i=1, self%nrefs) /)
-        corrs = self%reforis%get_all('corr')
+        corrs    = self%reforis%get_all('corr')
         call hpsort(self%nrefs, corrs, ref_inds)
-        ! SHIFT SEARC
+        ! SHIFT SEARCH
         prev_shift_vec = self%orientation_in%get_shift()
         cnt = 0
         do i = self%nrefs-self%npeaks+1,self%nrefs
@@ -208,8 +230,9 @@ contains
         integer, allocatable :: inds(:)
         type(ori) :: o
         real      :: ws(self%npeaks), u(2), mat(2,2), x1(2), x2(2)
-        real      :: frac, wcorr, euldist, mi_class, mi_inpl, mi_state, mi_joint
+        real      :: frac, wcorr, euldist, mi_proj, mi_inpl, mi_state, mi_joint
         integer   :: i, state, roind, prev_state
+        call self%softoris%new(self%npeaks)
         ! sort oris
         if(self%npeaks > 1)then
             allocate(inds(self%npeaks))
@@ -247,6 +270,7 @@ contains
         if(o%isthere('fraca')) call self%softoris%set_all2single('fraca',o%get('fraca'))
         if(o%isthere('lp'))    call self%softoris%set_all2single('lp',o%get('lp'))
         call self%softoris%set_all2single('w', o%get('w'))
+        call self%softoris%set_all2single('specscore', self%specscore)
         call o%kill
         ! best orientation
         self%orientation_out = self%softoris%get_ori(self%npeaks) ! best ori
@@ -258,10 +282,14 @@ contains
         call self%orientation_out%set('dist',euldist)
         ! overlap between distributions
         roind    = self%ppftcc%get_roind(360.-self%orientation_out%e3get())
-        mi_class = 1.
+        mi_proj  = 0.
         mi_inpl  = 0.
         mi_state = 0.
-        mi_joint = 1.
+        mi_joint = 0.
+        if( euldist < 0.1 )then
+            mi_proj  = mi_proj + 1.
+            mi_joint = mi_joint + 1.
+        endif
         if(self%prev_roind == roind)then
             mi_inpl  = mi_inpl  + 1.
             mi_joint = mi_joint + 1.
@@ -277,7 +305,7 @@ contains
         else
             mi_joint = mi_joint/2.
         endif
-        call self%orientation_out%set('mi_class', mi_class)
+        call self%orientation_out%set('mi_proj',  mi_proj)
         call self%orientation_out%set('mi_inpl',  mi_inpl)
         call self%orientation_out%set('mi_state', mi_state)
         call self%orientation_out%set('mi_joint', mi_joint)
@@ -366,6 +394,7 @@ contains
     function get_softoris( self )result( os )
         class(pcont3D_srch), intent(inout) :: self
         type(oris) :: os
+        if(.not.self%exists)stop 'search has not been performed; pcont3d_srch::get_softoris'
         os = self%softoris
     end function get_softoris
 
@@ -373,14 +402,23 @@ contains
     function get_best_ori( self )result( o )
         class(pcont3D_srch), intent(inout) :: self
         type(ori) :: o
+        if(.not.self%exists)stop 'search has not been performed; pcont3d_srch::get_softoris'
         o = self%orientation_out
     end function get_best_ori
+
+    !>  \brief  whether object has been initialized
+    function does_exist( self )result( l )
+        class(pcont3D_srch), intent(inout) :: self
+        logical :: l
+        l = self%exists
+    end function does_exist
 
     ! DESTRUCTOR
 
     !>  \brief  is the destructor
     subroutine kill( self )
         class(pcont3D_srch), intent(inout) :: self
+        call self%shsrch_obj%kill
         self%ppftcc => null()
         call self%shiftedoris%kill
         call self%softoris%kill

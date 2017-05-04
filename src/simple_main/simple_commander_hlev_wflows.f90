@@ -19,15 +19,15 @@ use simple_filehandling           ! use all in there
 use simple_jiffys                 ! use all in there
 implicit none
 
-public :: iterated_spectral_weights_commander
+public :: prime2D_autoscale_commander
 public :: ini3D_from_cavgs_commander
 public :: het_ensemble_commander
 private
 
-type, extends(commander_base) :: iterated_spectral_weights_commander
+type, extends(commander_base) :: prime2D_autoscale_commander
   contains
-    procedure :: execute      => exec_ISW
-end type iterated_spectral_weights_commander
+    procedure :: execute      => exec_prime2D_autoscale
+end type prime2D_autoscale_commander
 type, extends(commander_base) :: ini3D_from_cavgs_commander
   contains
     procedure :: execute      => exec_ini3D_from_cavgs
@@ -39,121 +39,135 @@ end type het_ensemble_commander
 
 contains
 
-    subroutine exec_ISW( self, cline )
-        use simple_rnd,     only: seed_rnd
-        use simple_math,    only: fdim
-        use simple_strings, only: int2str, int2str_pad
-        use simple_image,   only: image
-        class(iterated_spectral_weights_commander), intent(inout) :: self
-        class(cmdline),                             intent(inout) :: cline
+    ! PRIME2D WITH TWO-STAGE AUTO-SCALING
+
+    subroutine exec_prime2D_autoscale( self, cline )
+        use simple_scaler,            only: scaler
+        use simple_oris,              only: oris
+        use simple_commander_prime2D, only: rank_cavgs_commander
+        use simple_syscalls,          only: sys_del_files
+        class(prime2D_autoscale_commander), intent(inout) :: self
+        class(cmdline),                     intent(inout) :: cline
         ! constants
-        logical,           parameter        :: DEBUG        = .false.
-        character(len=32), parameter        :: VOLFBODY     = 'recvol_state'
-        integer,           parameter        :: NUMLEN_STATE = 2
+        logical,           parameter :: DEBUG           = .false.
+        integer,           parameter :: MAXITS_STAGE1   = 10
+        character(len=32), parameter :: CAVGS_ITERFBODY = 'cavgs_iter'
+        character(len=32), parameter :: STKSCALEDBODY   = 'stk_sc_prime2D'
+        character(len=32), parameter :: FINALDOC        = 'prime2Ddoc_final.txt'
         ! commanders
-        type(shellweight3D_distr_commander) :: xshellweight3D_distr
-        type(recvol_distr_commander)        :: xrecvol_distr
+        type(makecavgs_distr_commander)              :: xmakecavgs
+        type(prime2D_distr_commander),       target  :: xprime2D_distr
+        type(prime2D_chunk_distr_commander), target  :: xprime2D_chunk_distr
+        class(commander_base),               pointer :: xprime2D => null() 
+        type(rank_cavgs_commander)                   :: xrank_cavgs
         ! command lines
-        type(cmdline)                       :: cline_recvol_distr
-        type(cmdline)                       :: cline_shellweight3D_distr
+        type(cmdline) :: cline_prime2D_stage1
+        type(cmdline) :: cline_prime2D_stage2
+        type(cmdline) :: cline_makecavgs
+        type(cmdline) :: cline_rank_cavgs
         ! other variables
-        type(params)                        :: p_master
-        type(image)                         :: imgvol
-        real,                  allocatable  :: wmat1(:,:,:), wmat2(:,:,:)
-        character(len=STDLEN)               :: vol, vol_state
-        integer :: filtsz, alloc_stat, istate, filnum, iter, io_stat
+        type(oris)            :: os
+        type(scaler)          :: scobj
+        type(params)          :: p_master
+        character(len=STDLEN) :: refs
+        real                  :: scale_stage1, scale_stage2
+        integer               :: nparts
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
-        ! set constants
-        call find_ldim_nptcls(p_master%stk, p_master%ldim, p_master%nptcls)
-        p_master%ldim(3) = 1
-        filtsz = fdim(p_master%ldim(1)) - 1
-        ! build
-        call imgvol%new([p_master%box,p_master%box,p_master%box], p_master%smpd)
-        allocate( wmat1(p_master%nstates,p_master%nptcls,filtsz),&
-        wmat2(p_master%nstates,p_master%nptcls,filtsz), stat=alloc_stat)
-        call alloc_err("In: simple_commander_hlev_wflows :: exec_ISW", alloc_stat)
-        ! make command lines from prototype
-        cline_recvol_distr        = cline
-        cline_shellweight3D_distr = cline
-        call cline_recvol_distr%set('prg', 'recvol')
-        call cline_recvol_distr%set('eo',  'no'    )
-        call cline_shellweight3D_distr%set('prg', 'shellweight3D')
-        ! generate random initial weights
-        call seed_rnd
-        call random_number(wmat1)
-        call random_number(wmat2)
-        if( .not. file_exists(p_master%shellwfile) )then
-            ! write wmat2 to file
-            filnum = get_fileunit()
-            open(unit=filnum, status='REPLACE', action='WRITE', file=p_master%shellwfile, access='STREAM')
-            write(unit=filnum,pos=1,iostat=io_stat) wmat2
-            close(filnum)
+        ! set pointer to the right commander
+        if( cline%defined('chunksz') )then
+            nparts = nint(real(p_master%nptcls)/real(p_master%chunksz))
+            xprime2D => xprime2D_chunk_distr
+        else
+            nparts = p_master%nparts
+            xprime2D => xprime2D_distr
         endif
-        do iter=1,p_master%maxits
-            write(*,'(a,1x,i3)') '>>> ISW ITERATION', iter
-            ! reconstruct and rename weighted volumes
-            do istate = 1,p_master%nstates
-                call cline_recvol_distr%set('state', real(istate))
-                vol_state = 'recvol_isw_state'//int2str_pad(istate,NUMLEN_STATE)//p_master%ext
-                vol       = 'vol'//trim(int2str(istate))
-                call cline_shellweight3D_distr%set(trim(vol), trim(vol_state))
-                call xrecvol_distr%execute( cline_recvol_distr )
-                vol = trim( VOLFBODY )//int2str_pad(istate,NUMLEN_STATE)//p_master%ext
-                if( iter == 1 )then
-                    call imgvol%read(trim(vol))
-                    call imgvol%phase_rand(p_master%lp)
-                    call imgvol%write(trim(vol))
-                endif
-                call rename( trim(vol), trim(vol_state) )
-            enddo
-            ! calculate state-dependent shell-weights
-            call xshellweight3D_distr%execute(cline_shellweight3D_distr)
-            ! stash the previous matrix
-            wmat1 = wmat2
-            ! read in the new shell-weights
-            open(unit=filnum, status='OLD', action='READ', file=p_master%shellwfile, access='STREAM')
-            read(unit=filnum,pos=1,iostat=io_stat) wmat2
-            close(filnum)
-
-            print *, sum((wmat1-wmat2)**2.0)/real(p_master%nstates*p_master%nptcls)
-
-        end do
-        call imgvol%kill
+        if( p_master%l_autoscale )then
+            ! auto-scaling prep (cline is modified by scobj%init)
+            call scobj%init(p_master, cline, p_master%smpd_targets2D(1), STKSCALEDBODY)
+            scale_stage1 = scobj%get_scaled_var('scale')
+            ! scale images
+            call scobj%scale_exec
+            ! execute stage 1
+            cline_prime2D_stage1 = cline
+            call cline_prime2D_stage1%set('maxits', real(MAXITS_STAGE1))
+            call xprime2D%execute(cline_prime2D_stage1)
+            ! prepare stage 2 input -- re-scale 
+            call scobj%uninit(cline) ! puts back the old command line
+            call scobj%init(p_master, cline, p_master%smpd_targets2D(2), STKSCALEDBODY)
+            scale_stage2 = scobj%get_scaled_var('scale')
+            call scobj%scale_exec
+            ! prepare stage 2 input -- shift modulation
+            call os%new(p_master%nptcls)
+            call os%read(FINALDOC)
+            call os%mul_shifts(scale_stage2/scale_stage1)
+            call os%write(FINALDOC)
+            ! prepare stage 2 input -- command line
+            cline_prime2D_stage2 = cline
+            call cline_prime2D_stage2%delete('deftab')
+            call cline_prime2D_stage2%set('oritab',  trim(FINALDOC))
+            call cline_prime2D_stage2%set('startit', real(MAXITS_STAGE1 + 1))
+            call xprime2D%execute(cline_prime2D_stage2)
+            ! re-generate class averages at native sampling
+            call scobj%uninit(cline) ! puts back the old command line
+            call os%read(FINALDOC)
+            call os%mul_shifts(1./scale_stage2)
+            call os%write(FINALDOC)
+            cline_makecavgs = cline
+            call cline_makecavgs%delete('ncls')
+            call cline_makecavgs%delete('chunksz')
+            call cline_makecavgs%set('prg',   'makecavgs')
+            call cline_makecavgs%set('oritab', FINALDOC)
+            call cline_makecavgs%set('nparts', real(nparts))
+            call cline_makecavgs%set('refs',   'cavgs_final'//p_master%ext)
+            call xmakecavgs%execute(cline_makecavgs)
+            call del_file(trim(STKSCALEDBODY)//p_master%ext)
+        else
+            call xprime2D%execute(cline)
+        endif
+        ! ranking
+        call cline_rank_cavgs%set('oritab', FINALDOC)
+        call cline_rank_cavgs%set('stk',    'cavgs_final'//p_master%ext)
+        call cline_rank_cavgs%set('outstk', 'cavgs_final_ranked'//p_master%ext)
+        call xrank_cavgs%execute( cline_rank_cavgs )
+        ! cleanup
+        if( cline%defined('chunksz') )then
+            call sys_del_files('chunk', '.bin')
+        else
+            call del_files('ppconv_part', p_master%nparts, ext='.bin')
+        endif
+        call del_file('prime2D_startdoc.txt')
+        call del_file('start2Drefs'//p_master%ext)
         ! end gracefully
-        call simple_end('**** SIMPLE_ITERATED_SPECTRAL_WEIGHTS NORMAL STOP ****')
-    end subroutine exec_ISW
+        call simple_end('**** SIMPLE_PRIME2D NORMAL STOP ****')
+    end subroutine exec_prime2D_autoscale
 
     ! GENERATE INITIAL 3D MODEL FROM CLASS AVERAGES
 
     subroutine exec_ini3D_from_cavgs( self, cline )
-        use simple_commander_imgproc, only: scale_commander
-        use simple_commander_comlin,  only: symsrch_commander
         use simple_commander_volops,  only: projvol_commander
         use simple_commander_rec,     only: recvol_commander
         use simple_strings,           only: int2str_pad, str2int
-        use simple_magic_boxes,       only: autoscale
+        use simple_scaler,            only: scaler
         use simple_oris,              only: oris
         class(ini3D_from_cavgs_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         ! constants
         logical,               parameter :: DEBUG=.false.
-        real,                  parameter :: LPLIMS(2) = [20.,10.], CENLP=50.
+        real,                  parameter :: LPLIMS(2)=[20.,10.] ! default low-pass limits
+        real,                  parameter :: CENLP=30.           ! consistency with prime3D
         integer,               parameter :: MAXITS_INIT=30, MAXITS_REFINE=80
         integer,               parameter :: STATE=1, NPROJS_SYMSRCH=100
         character(len=32),     parameter :: ITERFBODY     = 'prime3Ddoc_'
         character(len=32),     parameter :: VOLFBODY      = 'recvol_state'
         character(len=STDLEN), parameter :: STKSCALEDBODY = 'stk_sc_ini3D_from_cavgs'
-        logical,               parameter :: DOSCALE=.true.
         ! distributed commanders
         type(prime3D_distr_commander) :: xprime3D_distr
+        type(symsrch_distr_commander) :: xsymsrch_distr
         ! shared-mem commanders
-        type(scale_commander)         :: xscale
-        type(symsrch_commander)       :: xsymsrch
         type(recvol_commander)        :: xrecvol
         type(projvol_commander)       :: xprojvol
         ! command lines
-        type(cmdline)                 :: cline_scale
         type(cmdline)                 :: cline_prime3D_init
         type(cmdline)                 :: cline_prime3D_refine1
         type(cmdline)                 :: cline_prime3D_refine2
@@ -161,20 +175,17 @@ contains
         type(cmdline)                 :: cline_recvol
         type(cmdline)                 :: cline_projvol
         ! other variables
-        type(qsys_env)                :: qenv
+        type(scaler)                  :: scobj
         type(params)                  :: p_master
         type(oris)                    :: os
-        real                          :: iter, scale, smpd_sc, msk_sc
+        real                          :: iter, lpstop, smpd_target
         character(len=2)              :: str_state
-        character(len=STDLEN)         :: oritab, vol_iter
+        character(len=STDLEN)         :: vol_iter, oritab
         logical                       :: srch4symaxis
-        integer                       :: io_stat, pgrp_nr, box_sc
         ! set cline defaults
         call cline%set('eo', 'no')
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
-        ! setup the environment for distributed execution
-        call qenv%new(p_master)
         ! set global state string
         str_state = int2str_pad(STATE,2)
         ! delete possibly pre-existing stack_parts
@@ -187,8 +198,16 @@ contains
                 srch4symaxis = .true.
             endif
         endif
+        ! auto-scaling prep
+        if( cline%defined('lp') )then
+            smpd_target = p_master%lp*LP2SMPDFAC
+        else if( cline%defined('lpstop') )then
+            smpd_target = min(LPLIMS(2),p_master%lpstop)*LP2SMPDFAC
+        else
+            smpd_target = LPLIMS(2)*LP2SMPDFAC
+        endif
+        call scobj%init(p_master, cline, SMPD_TARGET, STKSCALEDBODY)
         ! prepare command lines from prototype master
-        cline_scale           = cline
         cline_prime3D_init    = cline
         cline_prime3D_refine1 = cline
         cline_prime3D_refine2 = cline
@@ -196,44 +215,21 @@ contains
         cline_recvol          = cline
         cline_projvol         = cline
         ! initialise command line parameters
-        if( DOSCALE )then
-            ! (1) SCALING
-            call autoscale(p_master%box, p_master%smpd, box_sc, smpd_sc, scale)
-            msk_sc = scale * p_master%msk
-            call cline_scale%set('newbox', real(box_sc))
-            call cline_scale%set('outstk', trim(STKSCALEDBODY)//p_master%ext)
-            call cline_prime3D_init%set('stk',  trim(STKSCALEDBODY)//p_master%ext)
-            call cline_prime3D_init%set('smpd', smpd_sc)
-            call cline_prime3D_init%set('msk',  real(msk_sc))
-            call cline_prime3D_refine1%set('stk',  trim(STKSCALEDBODY)//p_master%ext)
-            call cline_prime3D_refine1%set('smpd', smpd_sc)
-            call cline_prime3D_refine1%set('msk',  real(msk_sc))
-            call cline_prime3D_refine2%set('stk',  trim(STKSCALEDBODY)//p_master%ext)
-            call cline_prime3D_refine2%set('smpd', smpd_sc)
-            call cline_prime3D_refine2%set('msk',  real(msk_sc))
-        endif
         ! (2) PRIME3D_INIT
         call cline_prime3D_init%set('prg',    'prime3D')
         call cline_prime3D_init%set('ctf',    'no')
         call cline_prime3D_init%set('maxits', real(MAXITS_INIT))
         call cline_prime3D_init%set('dynlp',  'yes') ! better be explicit about the dynlp
-        call cline_prime3D_init%set('shellw', 'no')
         ! (3) PRIME3D REFINE STEP 1
-        call cline_prime3D_refine1%set('prg', 'prime3D')
-        call cline_prime3D_refine1%set('ctf', 'no')
+        call cline_prime3D_refine1%set('prg',    'prime3D')
+        call cline_prime3D_refine1%set('ctf',    'no')
         call cline_prime3D_refine1%set('maxits', real(MAXITS_REFINE))
-        call cline_prime3D_refine1%set('dynlp', 'no') ! better be explicit about the dynlp
-        call cline_prime3D_refine1%set('shellw', 'no')
+        call cline_prime3D_refine1%set('dynlp',  'no') ! better be explicit about the dynlp
         call cline_prime3D_refine1%set('refine', 'shc')
         ! (4) SYMMETRY AXIS SEARCH
         if( srch4symaxis )then
-            if( DOSCALE )then
-                call cline_symsrch%set('smpd',    smpd_sc)
-                call cline_symsrch%set('msk',     real(msk_sc))
-                call cline_recvol%set('stk',  trim(STKSCALEDBODY)//p_master%ext)
-                call cline_recvol%set('smpd', smpd_sc)
-                call cline_recvol%set('msk',  real(msk_sc))
-            endif
+            call scobj%update_smpd_msk(cline_symsrch, 'scaled')
+            call scobj%update_stk_smpd_msk(cline_recvol, 'scaled')
             ! need to replace original point-group flag with c1
             call cline_prime3D_init%set('pgrp', 'c1') 
             call cline_prime3D_refine1%set('pgrp', 'c1')
@@ -244,17 +240,11 @@ contains
             call cline_symsrch%set('nspace',  real(NPROJS_SYMSRCH))
             call cline_symsrch%set('cenlp',   CENLP)
             call cline_symsrch%set('outfile', 'symdoc.txt')
-            if( cline%defined('nthr_master') )then
-                call cline_symsrch%set('nthr', real(p_master%nthr_master))
-            endif
             ! (4.5) RECONSTRUCT SYMMETRISED VOLUME
             call cline_recvol%set('prg', 'recvol')
             call cline_recvol%set('trs',  5.) ! to assure that shifts are being used
             call cline_recvol%set('ctf',  'no')
             call cline_recvol%set('oritab', 'symdoc.txt')
-            if( cline%defined('nthr_master') )then
-                call cline_recvol%set('nthr', real(p_master%nthr_master))
-            endif
             ! 2nd refinement step now uses the symmetrised vol and doc
             call cline_prime3D_refine2%set('oritab', 'symdoc.txt')
             call cline_prime3D_refine2%set('vol1', 'rec_sym'//p_master%ext)
@@ -264,19 +254,16 @@ contains
         call cline_prime3D_refine2%set('ctf', 'no')
         call cline_prime3D_refine2%set('maxits', real(MAXITS_REFINE))
         call cline_prime3D_refine2%set('dynlp', 'no') ! better be explicit about the dynlp
-        call cline_prime3D_refine2%set('shellw', 'no')
         call cline_prime3D_refine2%set('lp', LPLIMS(2))
         call cline_prime3D_refine2%set('refine', 'shc')
         ! (6) RE-PROJECT VOLUME
         call cline_projvol%set('prg', 'projvol')
         call cline_projvol%set('outstk', 'reprojs'//p_master%ext)
+        call cline_projvol%delete('stk')
+        call scobj%update_smpd_msk(cline_projvol, 'native')
+        ! scale class averages
+        call scobj%scale_exec
         ! execute commanders
-        if( DOSCALE )then
-            write(*,'(A)') '>>>'
-            write(*,'(A)') '>>> AUTO-SCALING CLASS AVERAGES'
-            write(*,'(A)') '>>>'
-        endif
-        call xscale%execute(cline_scale)
         write(*,'(A)') '>>>'
         write(*,'(A)') '>>> INITIAL 3D MODEL GENERATION WITH PRIME3D'
         write(*,'(A)') '>>>'
@@ -300,7 +287,7 @@ contains
             call cline_symsrch%set('oritab', trim(oritab))
             call cline_symsrch%set('vol1', trim(vol_iter))
             call update_lp(cline_symsrch, 1)
-            call qenv%exec_simple_prg_in_queue(cline_symsrch, 'SYMSRCH', 'SYMSRCH_FINISHED')
+            call xsymsrch_distr%execute(cline_symsrch)
             write(*,'(A)') '>>>'
             write(*,'(A)') '>>> 3D RECONSTRUCTION OF SYMMETRISED VOLUME'
             write(*,'(A)') '>>>'
@@ -319,26 +306,20 @@ contains
         call xprime3D_distr%execute(cline_prime3D_refine2)
         iter = cline_prime3D_refine2%get_rarg('endit')
         call set_iter_dependencies
-        if( DOSCALE )then
-            write(*,'(A)') '>>>'
-            write(*,'(A)') '>>> 3D RECONSTRUCTION AT NATIVE SAMPLING'
-            write(*,'(A)') '>>>'
-            ! modulate shifts
-            call os%new(p_master%nptcls)
-            call os%read(oritab)
-            call os%mul_shifts(1./scale)
-            call os%write(oritab)
-            ! prepare recvol command line
-            call cline_recvol%set('stk',    p_master%stk)
-            call cline_recvol%set('smpd',   p_master%smpd)
-            call cline_recvol%set('msk',    p_master%msk)
-            call cline_recvol%set('oritab', trim(oritab))
-            ! re-reconstruct volume
-            call xrecvol%execute(cline_recvol)
-            call rename(trim(volfbody)//trim(str_state)//p_master%ext, 'rec_final'//p_master%ext)
-        else
-            call rename(vol_iter, 'rec_final'//p_master%ext)
-        endif
+        write(*,'(A)') '>>>'
+        write(*,'(A)') '>>> 3D RECONSTRUCTION AT NATIVE SAMPLING'
+        write(*,'(A)') '>>>'
+        ! modulate shifts
+        call os%new(p_master%nptcls)
+        call os%read(oritab)
+        call os%mul_shifts(1./scobj%get_scaled_var('scale'))
+        call os%write(oritab)
+        ! prepare recvol command line
+        call scobj%update_stk_smpd_msk(cline_recvol, 'native')
+        call cline_recvol%set('oritab', trim(oritab))
+        ! re-reconstruct volume
+        call xrecvol%execute(cline_recvol)
+        call rename(trim(volfbody)//trim(str_state)//p_master%ext, 'rec_final'//p_master%ext)
         write(*,'(A)') '>>>'
         write(*,'(A)') '>>> RE-PROJECTION OF THE FINAL VOLUME'
         write(*,'(A)') '>>>'
@@ -405,12 +386,24 @@ contains
         type(cmdline)                 :: cline_prime3D
         type(cmdline)                 :: cline_recvol_distr
         ! other variables
+        integer,               allocatable :: labels(:,:), labels_incl(:,:), consensus(:)
+        character(len=STDLEN), allocatable :: init_docs(:), final_docs(:)
+        logical,               allocatable :: included(:)
         type(params)                  :: p_master
-        type(oris)                    :: os, rep_os
-        integer, allocatable          :: labels(:,:), labels_incl(:,:), consensus(:)
-        logical, allocatable          :: included(:)
+        type(oris)                    :: os
         character(len=STDLEN)         :: oritab, vol1, vol2, fname
-        integer                       :: irepeat, state, iter, n_incl, cnt, iptcl, it
+        integer                       :: irepeat, state, iter, n_incl, it
+        ! some init
+        allocate(init_docs(NREPEATS), final_docs(NREPEATS))
+        do irepeat=1,NREPEATS
+            oritab              = trim(REPEATFBODY)//'init_rep'//int2str_pad(irepeat,2)//'.txt'
+            init_docs(irepeat)  = trim(oritab)
+            oritab              = trim(REPEATFBODY)//'rep'//int2str_pad(irepeat,2)//'.txt'
+            final_docs(irepeat) = trim(oritab)
+            call del_file(init_docs(irepeat))
+            call del_file(final_docs(irepeat))
+        enddo
+
         ! set cline defaults
         call cline%set('eo', 'no')
         if(nint(cline%get_rarg('nstates')) <= 1)stop 'Non-sensical NSTATES argument for heterogeinity analysis!'
@@ -441,35 +434,32 @@ contains
         write(*,'(A)') '>>>'
         call os%new(p_master%nptcls)
         call os%read(p_master%oritab)
-        labels   = diverse_labeling( p_master%nptcls, p_master%nstates, NREPEATS)
+        labels   = diverse_labeling(p_master%nptcls, p_master%nstates, NREPEATS)
         included = os%included()
         n_incl   = count(included)
+        ! GENERATE ORIENTATIONS
         do irepeat=1,NREPEATS
             where( .not.included )labels(irepeat,:) = 0
+            call os%set_all('state', real(labels(irepeat,:)))
+            call os%write( trim(init_docs(irepeat)) )
         enddo
 
         ! GENERATE CANDIDATE SOLUTIONS
         do irepeat = 1,NREPEATS
+            write(*,'(A)')    '>>>'
             write(*,'(A,I3)') '>>> PRIME3D REPEAT ', irepeat
-            write(*,'(A)') '>>>'
-            ! GENERATE ORIENTATIONS
-            rep_os = os
-            call rep_os%set_all('state', real(labels(irepeat,:)))
-            oritab = trim(REPEATFBODY)//'init_rep'//int2str_pad(irepeat,2)//'.txt'
-            call rep_os%write(trim(oritab))
+            write(*,'(A)')    '>>>'
             ! RUN PRIME3D
             cline_prime3D = cline_prime3D_master
-            call cline_prime3D%set('oritab',oritab)
+            call cline_prime3D%set('oritab', init_docs(irepeat))
             call xprime3D_distr%execute(cline_prime3D)
             ! HARVEST OUTCOME
             iter   = nint(cline_prime3D%get_rarg('endit'))
             oritab = 'prime3Ddoc_'//int2str_pad(iter,3)//'.txt'
-            call rep_os%read(trim(oritab))
-            ! updates labels
-            labels(irepeat,:) = nint(rep_os%get_all('state'))
-            ! stash candidate solution
-            fname = trim(REPEATFBODY)//'rep'//int2str_pad(irepeat,2)//'.txt'
-            call rename(trim(oritab), trim(fname))
+            call rename(trim(oritab), trim(final_docs(irepeat)))
+            call os%read(trim(final_docs(irepeat)))
+            ! updates labels & stash
+            labels(irepeat,:) = nint(os%get_all('state'))
             ! STASH FINAL VOLUMES
             call stash_volumes
             ! CLEANUP
@@ -478,18 +468,22 @@ contains
 
         ! GENERATE CONSENSUS DOCUMENT
         oritab = trim(REPEATFBODY)//'consensus.txt'
-        write(*,'(A)') '>>>'
+        call del_file(oritab)
+        call os%read(p_master%oritab)
+        write(*,'(A)')   '>>>'
         write(*,'(A,A)') '>>> GENERATING ENSEMBLE SOLUTION: ', trim(oritab)
-        write(*,'(A)') '>>>'
-        allocate( labels_incl(NREPEATS,n_incl), consensus(n_incl) )
+        write(*,'(A)')   '>>>'
+        allocate(labels_incl(NREPEATS,n_incl), consensus(n_incl))
         do irepeat=1,NREPEATS
             labels_incl(irepeat,:) = pack(labels(irepeat,:), mask=included)
         enddo
         labels(1,:) = 0
-        call shc_aggregation( NREPEATS, n_incl, labels_incl, consensus )
+        call shc_aggregation(NREPEATS, n_incl, labels_incl, consensus)
         call os%set_all('state', real(unpack(consensus, included, labels(1,:))) )
         call os%write(trim(oritab))
+        ! cleanup
         call os%kill
+        deallocate(init_docs, final_docs, labels_incl, consensus, labels, included)
 
         ! FINAL RECONSTRUCTION
         call cline_recvol_distr%set('oritab', trim(oritab))
@@ -526,11 +520,13 @@ contains
             subroutine stash_volumes
                 ! renames final volumes of each repeat for all states
                 do state=1,p_master%nstates
-                    vol1 = trim(VOLFBODY)//int2str_pad(state,2)//'_iter'//int2str_pad(iter,3)//p_master%ext
                     vol2 = trim(HETFBODY)//int2str_pad(irepeat,2)//'_'//trim(VOLFBODY)//int2str_pad(state,2)//p_master%ext
+                    call del_file(trim(vol2))
+                    vol1 = trim(VOLFBODY)//int2str_pad(state,2)//'_iter'//int2str_pad(iter,3)//p_master%ext
                     call rename(trim(vol1), trim(vol2))
-                    vol1 = trim(VOLFBODY)//int2str_pad(state,2)//'_iter'//int2str_pad(iter,3)//'pproc'//p_master%ext
                     vol2 = trim(HETFBODY)//int2str_pad(irepeat,2)//'_'//trim(VOLFBODY)//int2str_pad(state,2)//'pproc'//p_master%ext
+                    call del_file(trim(vol2))
+                    vol1 = trim(VOLFBODY)//int2str_pad(state,2)//'_iter'//int2str_pad(iter,3)//'pproc'//p_master%ext
                     call rename(trim(vol1), trim(vol2))
                 enddo
             end subroutine stash_volumes

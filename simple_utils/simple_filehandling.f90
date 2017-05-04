@@ -276,6 +276,15 @@ contains
         endif
     end function remove_abspath
 
+    pure function extract_abspath( fname ) result( abspath )
+        character(len=*), intent(in)  :: fname
+        character(len=:), allocatable :: abspath
+        integer :: length, pos
+        length = len_trim(fname)
+        pos = scan(fname(1:length),'/',back=.true.)
+        allocate(abspath, source=trim(fname(1:pos)))
+    end function extract_abspath
+
     !>  \brief  returns the integer number identifier of a filename
     subroutine fname2ind( str, ivar )
         use simple_strings, only: map_str_nrs, str2int

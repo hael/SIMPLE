@@ -143,7 +143,7 @@ contains
         if(present(nstates))   self%nstates   = nstates
         if(present(nnn))       self%nnn       = nnn
         if(present(limits))    call self%set_limits( limits )
-        allocate( self%cyclic(ndim), stat=alloc_stat )
+        allocate( self%cyclic(self%ndim), stat=alloc_stat )
         call alloc_err('In: specify; simple_opt_spec, cyclic', alloc_stat)
         self%cyclic = .false.
         if( present(cyclic) )then

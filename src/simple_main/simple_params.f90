@@ -12,10 +12,10 @@ module simple_params
 use simple_defs
 use simple_ori,         only: ori
 use simple_cmdline,     only: cmdline
-use simple_strings      ! use all in there
-use simple_filehandling ! use all in there
 use simple_jiffys,      only: find_ldim_nptcls
 use simple_magic_boxes, only: find_magic_box
+use simple_strings      ! use all in there
+use simple_filehandling ! use all in there
 implicit none
 
 public :: params
@@ -25,79 +25,76 @@ logical, parameter :: debug=.false.
 
 type :: params
     ! global objects
-    type(ori)        :: ori_glob
-    type(ctfplan)    :: tfplan
+    type(ori)             :: ori_glob
+    type(ctfplan)         :: tfplan
     ! yes/no decision variables in ascending alphabetical order
-    character(len=3) :: acf='no'
-    character(len=3) :: append='no'
-    character(len=3) :: async='no'
-    character(len=3) :: automsk='no'   
-    character(len=3) :: avg='no'
-    character(len=3) :: bench_gpu='no'
-    character(len=3) :: bin='no'
-    character(len=3) :: center='no'
-    character(len=3) :: clustvalid='no'
-    character(len=3) :: compare='no'
-    character(len=3) :: countvox='no'
-    character(len=3) :: ctfstats='no'
-    character(len=3) :: cure='no'
-    character(len=3) :: debug='no'
-    character(len=3) :: discrete='no'
-    character(len=3) :: diverse='no'
-    character(len=3) :: doalign='yes'
-    character(len=3) :: dopca='yes'
-    character(len=3) :: dopick='yes'
-    character(len=3) :: doprint='no'
-    character(len=3) :: dynlp='yes'
-    character(len=3) :: eo='yes'
-    character(len=3) :: errify='no'
-    character(len=3) :: even='no'
-    character(len=3) :: fix_gpu='no'
-    character(len=3) :: ft2img='no'
-    character(len=3) :: guinier='no'
-    character(len=3) :: kmeans='yes'
-    character(len=3) :: local='no'
-    character(len=3) :: masscen='no'
-    character(len=3) :: merge='no'
-    character(len=3) :: mirr='no'
-    character(len=3) :: neg='no'
-    character(len=3) :: noise_norm ='no'
-    character(len=3) :: noise='no'
-    character(len=3) :: norec='no'
-    character(len=3) :: norm='no'
-    character(len=3) :: odd='no'
-    character(len=3) :: order='no'
-    character(len=3) :: outside='no'
-    character(len=3) :: pad='no'
-    character(len=3) :: phaseplate='no'
-    character(len=3) :: phrand='no'
-    character(len=3) :: plot='no'
-    character(len=3) :: readwrite='no'
-    character(len=3) :: restart='no'
-    character(len=3) :: rnd='no'
-    character(len=3) :: rm_outliers='yes'
-    character(len=3) :: roalgn='no'
-    character(len=3) :: round='no'
-    character(len=3) :: shalgn='no'
-    character(len=3) :: shellnorm='no'
-    character(len=3) :: shellw='no'
-    character(len=3) :: shbarrier='yes'
-    character(len=3) :: single='no'
-    character(len=3) :: soften='no'
-    character(len=3) :: srch_inpl='yes'
-    character(len=3) :: stats='no'
-    character(len=3) :: stream='no'
-    character(len=3) :: swap='no'
-    character(len=3) :: test='no'
-    character(len=3) :: tomo='no'
-    character(len=3) :: time='no'
-    character(len=3) :: trsstats='no'
-    character(len=3) :: tseries='no'
-    character(len=3) :: use_gpu='no'
-    character(len=3) :: verbose='no'
-    character(len=3) :: vis='no'
-    character(len=3) :: xfel='no'
-    character(len=3) :: zero='no'
+    character(len=3)      :: acf='no'
+    character(len=3)      :: append='no'
+    character(len=3)      :: async='no'
+    character(len=3)      :: automsk='no'
+    character(len=3)      :: autoscale='yes'
+    character(len=3)      :: avg='no'
+    character(len=3)      :: bin='no'
+    character(len=3)      :: center='no'
+    character(len=3)      :: clustvalid='no'
+    character(len=3)      :: compare='no'
+    character(len=3)      :: countvox='no'
+    character(len=3)      :: ctfstats='no'
+    character(len=3)      :: cure='no'
+    character(len=3)      :: debug='no'
+    character(len=3)      :: discrete='no'
+    character(len=3)      :: diverse='no'
+    character(len=3)      :: doalign='yes'
+    character(len=3)      :: dopca='yes'
+    character(len=3)      :: dopick='yes'
+    character(len=3)      :: doprint='no'
+    character(len=3)      :: dynlp='yes'
+    character(len=3)      :: eo='yes'
+    character(len=3)      :: errify='no'
+    character(len=3)      :: even='no'
+    character(len=3)      :: ft2img='no'
+    character(len=3)      :: guinier='no'
+    character(len=3)      :: kmeans='yes'
+    character(len=3)      :: local='no'
+    character(len=3)      :: masscen='no'
+    character(len=3)      :: merge='no'
+    character(len=3)      :: mirr='no'
+    character(len=3)      :: neg='no'
+    character(len=3)      :: noise_norm ='no'
+    character(len=3)      :: noise='no'
+    character(len=3)      :: norec='no'
+    character(len=3)      :: norm='no'
+    character(len=3)      :: odd='no'
+    character(len=3)      :: order='no'
+    character(len=3)      :: outside='no'
+    character(len=3)      :: pad='no'
+    character(len=3)      :: phaseplate='no'
+    character(len=3)      :: phrand='no'
+    character(len=3)      :: plot='no'
+    character(len=3)      :: readwrite='no'
+    character(len=3)      :: restart='no'
+    character(len=3)      :: rnd='no'
+    character(len=3)      :: rm_outliers='yes'
+    character(len=3)      :: roalgn='no'
+    character(len=3)      :: round='no'
+    character(len=3)      :: shalgn='no'
+    character(len=3)      :: shellnorm='no'
+    character(len=3)      :: shbarrier='yes'
+    character(len=3)      :: single='no'
+    character(len=3)      :: soften='no'
+    character(len=3)      :: srch_inpl='yes'
+    character(len=3)      :: stats='no'
+    character(len=3)      :: stream='no'
+    character(len=3)      :: swap='no'
+    character(len=3)      :: test='no'
+    character(len=3)      :: tomo='no'
+    character(len=3)      :: time='no'
+    character(len=3)      :: trsstats='no'
+    character(len=3)      :: tseries='no'
+    character(len=3)      :: verbose='no'
+    character(len=3)      :: vis='no'
+    character(len=3)      :: xfel='no'
+    character(len=3)      :: zero='no'
     ! other fixed length character variables in ascending alphabetical order
     character(len=STDLEN) :: angastunit='degrees'
     character(len=STDLEN) :: boxfile=''
@@ -118,6 +115,7 @@ type :: params
     character(len=STDLEN) :: dir_ptcls=''
     character(len=STDLEN) :: doclist=''
     character(len=STDLEN) :: endian='native'
+    character(len=STDLEN) :: exec_abspath=''
     character(len=STDLEN) :: exp_doc=''
     character(len=4)      :: ext='.mrc'
     character(len=STDLEN) :: extrmode='all'
@@ -147,11 +145,11 @@ type :: params
     character(len=STDLEN) :: pdfile='pdfile.bin'
     character(len=STDLEN) :: pgrp='c1'
     character(len=STDLEN) :: plaintexttab=''
+    character(len=STDLEN) :: ppconvfile=''
     character(len=STDLEN) :: prg=''
     character(len=STDLEN) :: refine='no'
     character(len=STDLEN) :: refs_msk=''
     character(len=STDLEN) :: refs=''
-    character(len=STDLEN) :: shellwfile='shellweights.bin'
     character(len=STDLEN) :: speckind='sqrt'
     character(len=STDLEN) :: split_mode='even'
     character(len=STDLEN) :: stk_part=''
@@ -159,6 +157,7 @@ type :: params
     character(len=STDLEN) :: stk2=''
     character(len=STDLEN) :: stk3=''
     character(len=STDLEN) :: tomoseries=''
+    character(len=STDLEN) :: unidoc=''
     character(len=STDLEN) :: vol=''
     character(len=STDLEN) :: vollist=''
     character(len=STDLEN) :: vols_msk(MAXS)=''
@@ -182,9 +181,8 @@ type :: params
     integer :: corner=0
     integer :: cube=0
     integer :: edge=14
-    integer :: filtsz_pad=0
     integer :: find=1
-    integer :: frameavg=0
+    integer :: nframesgrp=0
     integer :: fromf=1
     integer :: fromp=1
     integer :: froms=1
@@ -242,7 +240,6 @@ type :: params
     integer :: ptcl=1
     integer :: ring1=2
     integer :: ring2=0
-    integer :: set_gpu=0
     integer :: spec=0
     integer :: startit=1
     integer :: state=1
@@ -271,7 +268,7 @@ type :: params
     real    :: batchfrac=1.0
     real    :: bfac=200
     real    :: bfacerr=50.
-    real    :: cenlp=50.
+    real    :: cenlp=30.
     real    :: cs=2.7
     real    :: ctfreslim=8.
     real    :: dcrit_rel=0.5
@@ -310,6 +307,7 @@ type :: params
     real    :: lp=20.
     real    :: lp_ctffind=5.0
     real    :: lp_pick=20.
+    real    :: lplims2D(3)
     real    :: lpmed=20.
     real    :: lpstart=0.
     real    :: lpstop=7.0
@@ -330,6 +328,7 @@ type :: params
     real    :: scale2=1.
     real    :: sherr=0.
     real    :: smpd=2.
+    real    :: smpd_targets2D(2)
     real    :: snr
     real    :: thres=0.
     real    :: time_per_image=200.
@@ -348,10 +347,10 @@ type :: params
     logical :: doautomsk     = .false.
     logical :: doshift       = .false.
     logical :: l_automsk     = .false.
+    logical :: l_autoscale   = .false.
     logical :: l_dose_weight = .false. 
     logical :: l_innermsk    = .false. 
-    logical :: l_pick        = .false. 
-    logical :: l_shellw      = .false.
+    logical :: l_pick        = .false.
     logical :: l_xfel        = .false.
   contains
     procedure :: new
@@ -365,8 +364,8 @@ contains
     
     !> \brief  is a constructor
     function constructor( cline, checkdistr, allow_mix ) result( self )
-        class(cmdline), intent(inout) :: cline
-        logical, intent(in), optional :: checkdistr, allow_mix
+        class(cmdline),    intent(inout) :: cline
+        logical, optional, intent(in)    :: checkdistr, allow_mix
         type(params) :: self
         call self%new( cline, checkdistr, allow_mix )    
     end function constructor
@@ -385,7 +384,7 @@ contains
         character(len=STDLEN)            :: cwd_local, debug_local
         character(len=1)                 :: checkupfile(50)
         character(len=:), allocatable    :: conv
-        integer, allocatable             :: parts(:,:)
+        integer,          allocatable    :: parts(:,:)
         logical                          :: nparts_set=.false.
         logical                          :: vol_defined(MAXS)=.false.
         ! take care of optionals
@@ -400,14 +399,16 @@ contains
         ! get cwd
         call getcwd(self%cwd)
         cwd_local = self%cwd
+        ! get absolute path of executable
+        call getarg(0,self%exec_abspath)
         ! checkers in ascending alphabetical order
         call check_carg('acf',            self%acf)
         call check_carg('angastunit',     self%angastunit)
         call check_carg('append',         self%append)
         call check_carg('async',          self%async)
         call check_carg('automsk',        self%automsk)
+        call check_carg('autoscale',      self%autoscale)
         call check_carg('avg',            self%avg)
-        call check_carg('bench_gpu',      self%bench_gpu)
         call check_carg('bin',            self%bin)
         call check_carg('boxtype',        self%boxtype)
         call check_carg('center',         self%center)
@@ -442,7 +443,6 @@ contains
         call check_carg('exp_doc',        self%exp_doc)
         call check_carg('extrmode',       self%extrmode)
         call check_carg('fbody',          self%fbody)
-        call check_carg('fix_gpu',        self%fix_gpu)
         call check_carg('ft2img',         self%ft2img)
         call check_carg('guinier',        self%guinier)
         call check_carg('hfun',           self%hfun)
@@ -481,8 +481,6 @@ contains
         call check_carg('shalgn',         self%shalgn)
         call check_carg('shbarrier',      self%shbarrier)
         call check_carg('shellnorm',      self%shellnorm)
-        call check_carg('shellw',         self%shellw)
-        call check_carg('shellwfile',     self%shellwfile)
         call check_carg('single',         self%single)
         call check_carg('soften',         self%soften)
         call check_carg('speckind',       self%speckind)
@@ -496,7 +494,6 @@ contains
         call check_carg('tomoseries',     self%tomoseries)
         call check_carg('trsstats',       self%trsstats)
         call check_carg('tseries',        self%tseries)
-        call check_carg('use_gpu',        self%use_gpu)
         call check_carg('verbose',        self%verbose)
         call check_carg('vis',            self%vis)
         call check_carg('vol',            self%vol)
@@ -524,9 +521,10 @@ contains
         call check_file('stk',            self%stk,  notAllowed='T')
         call check_file('stk2',           self%stk2, notAllowed='T')
         call check_file('stk3',           self%stk3, notAllowed='T')
+        call check_file('unidoc',         self%unidoc,  'T')
         call check_file('vollist',        self%vollist, 'T')
-        call check_file('voltab',         self%voltab, 'T')
-        call check_file('voltab2',        self%voltab2,'T')
+        call check_file('voltab',         self%voltab,  'T')
+        call check_file('voltab2',        self%voltab2, 'T')
         call check_iarg('astep',          self%astep)
         call check_iarg('avgsz',          self%avgsz)
         call check_iarg('binwidth',       self%binwidth)
@@ -539,7 +537,7 @@ contains
         call check_iarg('cube',           self%cube)
         call check_iarg('edge',           self%edge)
         call check_iarg('find',           self%find)
-        call check_iarg('frameavg',       self%frameavg)
+        call check_iarg('nframesgrp',     self%nframesgrp)
         call check_iarg('fromf',          self%fromf)
         call check_iarg('fromp',          self%fromp)
         call check_iarg('froms',          self%froms)
@@ -569,7 +567,6 @@ contains
         call check_iarg('nrestarts',      self%nrestarts)
         call check_iarg('nspace',         self%nspace)
         call check_iarg('nstates',        self%nstates)
-        call check_iarg('set_gpu',        self%set_gpu)
         call check_iarg('class',          self%class)
         call check_iarg('nparts',         self%nparts)
         call check_iarg('npeaks',         self%npeaks)
@@ -675,16 +672,27 @@ contains
         call check_rarg('zsh',            self%zsh)
 
 !>>> START, SANITY CHECKING AND PARAMETER EXTRACTION FROM ORITAB(S)/VOL(S)/STACK(S)
+        ! put unidoc (if defined as oritab)
+        if( cline%defined('unidoc') )then
+            if( .not. cline%defined('oritab') )then
+                call cline%set('oritab', self%unidoc)
+                self%oritab = self%unidoc
+            else
+                write(*,*) 'WARNING! Could not set unidoc to oritab because oritab is defined'
+            endif
+        endif
         ! put ctffind_doc (if defined) as oritab
         if( cline%defined('ctffind_doc') )then
             if( .not. cline%defined('oritab') )then
                 call cline%set('oritab', self%ctffind_doc)
                 self%oritab = self%ctffind_doc
+            else
+                write(*,*) 'WARNING! Could not set ctffind_doc to oritab because oritab is defined'
             endif
         endif
         ! make all programs have the simple_prefix
-        if( cline%defined('prg') )then
-            if( .not. str_has_substr(self%prg, 'simple_') ) self%prg = 'simple_'//trim(self%prg)
+        if(cline%defined('prg'))then
+            if(.not. str_has_substr(self%prg, 'simple_')) self%prg = 'simple_'//trim(self%prg)
         endif
         ! check nr of states
         if( cline%defined('nstates') )then
@@ -802,27 +810,36 @@ contains
         if( .not. cline%defined('numlen') )then
             if( nparts_set ) self%numlen = len(int2str(self%nparts))
         endif
-        ! set name of partial stack in parallel execution
+        ! set name of partial files in parallel execution
         if( self%numlen > 0 )then
-            self%stk_part = 'stack_part'//int2str_pad(self%part,self%numlen)//self%ext
+            self%stk_part   = 'stack_part'//int2str_pad(self%part,self%numlen)//self%ext
+            self%ppconvfile = 'ppconv_part'//int2str_pad(self%part,self%numlen)//'.bin'
         else
-            self%stk_part = 'stack_part'//int2str(self%part)//self%ext
+            self%stk_part   = 'stack_part'//int2str(self%part)//self%ext
+            self%ppconvfile = 'ppconv_part'//int2str(self%part)//'.bin'
         endif
         ! Check for the existance of this file if part is defined on the command line
         if( cline%defined('part') )then
             if( ccheckdistr )then
-                if( .not. file_exists(self%stk_part) )then
+                if(trim(self%prg).eq.'simple_symsrch')then
+                    ! no need for split stack with prg=symsrch
+                elseif( .not. file_exists(self%stk_part) )then
                     write(*,*) 'Need partial stacks to be generated for parallel execution'
                     write(*,*) 'Use simple_exec prg=split'
                     stop
                 endif
             endif
+        else
+            if( cline%defined('chunktag') )then
+                self%ppconvfile = trim(self%chunktag)//'ppconv.bin'
+            else
+                self%ppconvfile = 'ppconv.bin'
+            endif   
         endif
         ! if we are doing chunk-based parallelisation...
         self%l_chunk_distr = .false.
         if( cline%defined('chunksz') )then
             self%l_chunk_distr = .true.
-            self%shellwfile    = trim(self%chunktag)//trim(self%shellwfile)
         endif
         if( .not. cline%defined('ncunits') )then
             ! we assume that the number of computing units is equal to the number of partitions
@@ -839,7 +856,6 @@ contains
         if( .not. cline%defined('nthr_master') )then
             self%nthr_master = nthr_glob
         endif
-
 !<<< END, PARALLELISATION-RELATED
 
 !>>> START, IMAGE-PROCESSING-RELATED
@@ -856,6 +872,12 @@ contains
         endif
         if( self%fny > 0. ) self%tofny = int(self%dstep/self%fny) ! Nyqvist Fourier index
         if( cline%defined('lp') ) self%dynlp = 'no'               ! override dynlp=yes and lpstop
+        ! set 2D low-pass limits and smpd_targets 4 scaling
+        self%lplims2D(1)       = self%lpstart
+        self%lplims2D(2)       = self%lplims2D(1) - (self%lpstart - self%lpstop)/2.
+        self%lplims2D(3)       = self%lpstop
+        self%smpd_targets2D(1) = self%lplims2D(2)*LP2SMPDFAC
+        self%smpd_targets2D(2) = self%lplims2D(3)*LP2SMPDFAC
         ! set default ring2 value
         if( .not. cline%defined('ring2') )then
             if( cline%defined('msk') )then
@@ -898,14 +920,17 @@ contains
         ! checks automask related values
         self%l_automsk = .false.
         self%doautomsk = .false.
-        if( self%automsk.eq.'yes' )                          self%l_automsk = .true.
-        if( cline%defined('mw') .and. self%automsk.ne.'no' ) self%doautomsk = .true.
+        if( self%automsk .eq. 'yes' )                          self%l_automsk = .true.
+        if( cline%defined('mw') .and. self%automsk .ne. 'no' ) self%doautomsk = .true.
         if( .not.cline%defined('mw') .and. self%automsk.eq.'yes') &
             write(*,*) 'WARNING! MW argument not provided in conjunction with AUTOMSK'
         if( self%doautomsk )then
             if( self%edge <= 0    ) stop 'Invalid value for edge' 
             if( self%binwidth < 0 ) stop 'Invalid value for binwidth'
         endif
+        ! scaling stuff
+        self%l_autoscale = .false.
+        if( self%autoscale .eq. 'yes' ) self%l_autoscale = .true.
         if( .not. cline%defined('newbox') )then
             ! set newbox if scale is defined
             if( cline%defined('scale') )then
@@ -1005,11 +1030,6 @@ contains
         endif
         ! prepare CTF plan
         self%tfplan%flag = self%ctf
-        ! set logical shellw flag
-        self%l_shellw = .true.
-        if( cline%defined('shellw') )then
-            if( self%shellw .eq. 'no' ) self%l_shellw = .false.
-        endif
         ! set logical pick flag
         self%l_pick = .false.
         if( self%dopick .eq. 'yes' ) self%l_pick = .true.

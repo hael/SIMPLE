@@ -1,0 +1,29 @@
+need to parallelise the volassemble of the different states for het_ensemble
+need to have another go at the picker
+weighted multi-resolution state sorting by fitting B-factors?
+per-particle convergence for accelerated analysis?
+
+# unidoc points
+everything written to cwd
+same naming convention for picker as for others
+consider auto in name for autoboxes
+put in absolute paths whenever files are written out
+ctfres put back in
+nptcls_per_movie in unidoc
+
+I've pushed the latest version of the gui for you to critique the theme. I think I've incorporated all of the things we discussed. There are a few things still to add such as:
+    history auto update
+    file identifier on files view page
+    3D refinement task
+    advanced tasks
+
+You can run up to extract but here I keep getting an error:
+
+>>> DONE PROCESSING PARAMETERS
+At line 303 of file simple_utils/simple_filehandling.f90
+Fortran runtime error: Index '0' of dimension 1 of array 'pos' below lower bound of 1
+
+I get this whether I give a unitab, unitab + boxtab, filetab + boxtab. 
+I will also need to make a few changes to utilize the full path names.
+
+stack check scaling

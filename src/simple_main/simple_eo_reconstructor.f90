@@ -14,7 +14,6 @@ type :: eo_reconstructor
     type(reconstructor)    :: even
     type(reconstructor)    :: odd
     type(reconstructor)    :: eosum
-    class(params), pointer :: pp=>null()
     character(len=4)       :: ext
     real                   :: fsc05, fsc0143, smpd, msk, fny, inner=0., width=10.
     integer                :: box=0, nstates=1, numlen=2, lfny=0
@@ -44,6 +43,7 @@ type :: eo_reconstructor
     procedure, private :: read_odd
     ! INTERPOLATION
     procedure          :: grid_fplane
+    procedure          :: compress_exp
     procedure          :: sum_eos ! for merging even and odd into sum
     procedure          :: sum     ! for summing eo_recs obtained by parallell exec
     procedure          :: sampl_dens_correct_eos
@@ -68,7 +68,6 @@ contains
         ! set constants
         neg = .false.
         if( p%neg .eq. 'yes' ) neg = .true.
-        self%pp      => p
         self%box     =  p%box
         self%smpd    =  p%smpd
         self%nstates =  p%nstates
@@ -221,7 +220,7 @@ contains
     ! INTERPOLATION
     
     !> \brief  for gridding a Fourier plane
-    subroutine grid_fplane( self, o, fpl, pwght, mul, ran, shellweights )
+    subroutine grid_fplane(self, o, fpl, pwght, mul, ran, shellweights, expanded)
         use simple_ori, only: ori
         use simple_rnd, only: ran3
         class(eo_reconstructor), intent(inout) :: self            !< instance
@@ -231,16 +230,21 @@ contains
         real, optional,          intent(in)    :: mul             !< shift multiplication factor
         real, optional,          intent(in)    :: ran             !< external random number
         real, optional,          intent(in)    :: shellweights(:) !< resolution weights
-        real                                   :: rran
+        logical, optional,       intent(in)    :: expanded        !< whether to use expanded routines
+        real    :: rran
+        logical :: l_exp = .false.
+        if(present(expanded))l_exp = expanded
         if( present(ran) )then
             rran = ran
         else
             rran = ran3()
         endif
         if( rran > 0.5 )then
-            call self%even%inout_fplane(o, .true., fpl, pwght=pwght, mul=mul, shellweights=shellweights)
+            call self%even%inout_fplane(o, .true., fpl,&
+            &pwght=pwght, mul=mul, shellweights=shellweights)
         else
-            call self%odd%inout_fplane(o, .true., fpl, pwght=pwght, mul=mul, shellweights=shellweights)
+            call self%odd%inout_fplane(o, .true., fpl,&
+            &pwght=pwght, mul=mul, shellweights=shellweights)
         endif
     end subroutine grid_fplane
     
@@ -259,6 +263,13 @@ contains
          call self%even%sum(self_in%even)
          call self%odd%sum(self_in%odd)
     end subroutine sum
+
+    !>  \brief compress e/o
+    subroutine compress_exp( self )
+        class(eo_reconstructor), intent(inout) :: self
+        call self%even%compress_exp
+        call self%odd%compress_exp
+    end subroutine compress_exp
     
     !> \brief  for sampling density correction of the eo pairs
     subroutine sampl_dens_correct_eos( self, state )
@@ -327,7 +338,6 @@ contains
     subroutine sampl_dens_correct_sum( self, reference )
         class(eo_reconstructor), intent(inout) :: self      !< instance
         class(image),            intent(inout) :: reference !< reference volume
-        integer :: filtsz
         write(*,'(A)') '>>> SAMPLING DENSITY (RHO) CORRECTION & WIENER NORMALIZATION'
         call self%eosum%sampl_dens_correct
         if( self%xfel )then
@@ -343,49 +353,39 @@ contains
     
     !> \brief  for reconstructing Fourier volumes according to the orientations 
     !!         and states in o, assumes that stack is open   
-    subroutine eorec( self, fname, p, o, se, state, vol, mul, part, fbody, wmat, wmat_states )
+    subroutine eorec( self, fname, p, o, se, state, vol, mul, part, fbody, wmat )
         use simple_oris,     only: oris
         use simple_sym,      only: sym
         use simple_params,   only: params
         use simple_gridding, only: prep4cgrid
         use simple_imgfile,  only: imgfile
-        use simple_filterer, only: resample_filter
         use simple_strings,  only: int2str_pad
         use simple_jiffys,   only: find_ldim_nptcls, progress
-        class(eo_reconstructor),    intent(inout) :: self               !< object
-        character(len=*),           intent(in)    :: fname              !< spider/MRC stack filename
-        class(params),              intent(in)    :: p                  !< parameters
-        class(oris),                intent(inout) :: o                  !< orientations
-        class(sym),                 intent(inout) :: se                 !< symmetry element
-        integer,                    intent(in)    :: state              !< state to reconstruct
-        class(image),               intent(inout) :: vol                !< reconstructed volume
-        real,             optional, intent(in)    :: mul                !< shift multiplication factor
-        integer,          optional, intent(in)    :: part               !< partition (4 parallel rec)
-        character(len=*), optional, intent(in)    :: fbody              !< body of output file
-        real,             optional, intent(in)    :: wmat(:,:)          !< shellweights
-        real,             optional, intent(in)    :: wmat_states(:,:,:) !< shellweights for multi-particle analysis
-        type(image)       :: img, img_pad
-        integer           :: i, cnt, n, ldim(3), filtsz, io_stat, filnum, state_glob
-        integer           :: filtsz_pad, statecnt(p%nstates), alloc_stat, state_here
-        real, allocatable :: res(:), res_pad(:), wresamp(:)
-        logical           :: doshellweight, doshellweight_states
+        class(eo_reconstructor),    intent(inout) :: self      !< object
+        character(len=*),           intent(in)    :: fname     !< spider/MRC stack filename
+        class(params),              intent(in)    :: p         !< parameters
+        class(oris),                intent(inout) :: o         !< orientations
+        class(sym),                 intent(inout) :: se        !< symmetry element
+        integer,                    intent(in)    :: state     !< state to reconstruct
+        class(image),               intent(inout) :: vol       !< reconstructed volume
+        real,             optional, intent(in)    :: mul       !< shift multiplication factor
+        integer,          optional, intent(in)    :: part      !< partition (4 parallel rec)
+        character(len=*), optional, intent(in)    :: fbody     !< body of output file
+        real,             optional, intent(in)    :: wmat(:,:) !< shellweights
+        type(image) :: img, img_pad
+        integer     :: i, cnt, n, ldim(3), io_stat, filnum, state_glob
+        integer     :: statecnt(p%nstates), alloc_stat, state_here
+        logical     :: doshellweight
         call find_ldim_nptcls(fname, ldim, n)
         if( n /= o%get_noris() ) stop 'inconsistent nr entries; eorec; simple_eo_reconstructor'
-        doshellweight        = present(wmat)
-        doshellweight_states = present(wmat_states)
-        if( doshellweight .and. doshellweight_states ) stop 'only one mode of shellweighting allowed&
-        &(wmat or wmat_states); eorec; simple_eo_reconstructor'
+        doshellweight = present(wmat)
         ! stash global state index
         state_glob = state 
         ! make the images
         call img%new([p%box,p%box,1],p%smpd,p%imgkind)
         call img_pad%new([p%boxpd,p%boxpd,1],p%smpd,p%imgkind)
-        ! make the stuff needed for shellweighting
-        res        = img%get_res()
-        res_pad    = img_pad%get_res()
-        filtsz_pad = img_pad%get_filtsz()
         ! calculate weights
-        if( p%frac < 0.99 ) call o%calc_hard_ptcl_weights(p%frac)
+        call o%calc_spectral_weights(p%frac)
         ! zero the Fourier volumes and rhos
         call self%reset_all
         ! dig holds the state digit
@@ -397,12 +397,15 @@ contains
             if( i <= p%top .and. i >= p%fromp )then
                 cnt = cnt+1
                 state_here = nint(o%get(i,'state')) 
-                if( state_here > 0 .and. (state_here == state .or. doshellweight_states) )then
+                if( state_here > 0 .and. (state_here == state ) )then
                     statecnt(state) = statecnt(state)+1
                     call rec_dens
                 endif
             endif
         end do
+        ! unddo expansion
+        call self%compress_exp
+        ! proceeds with density correction & output
         if( present(part) )then
             if( present(fbody) )then
                 call self%write_eos(fbody//int2str_pad(state,2)//'_part'//int2str_pad(part,self%numlen))
@@ -446,27 +449,29 @@ contains
                     else
                         call prep4cgrid(img, img_pad, p%msk)
                     endif
-                    if( doshellweight_states )then
-                        wresamp = resample_filter(wmat_states(state_glob,i,:), res, res_pad)
-                    else if( doshellweight )then
-                        wresamp = resample_filter(wmat(i,:), res, res_pad)
-                    else
-                        allocate(wresamp(filtsz_pad))
-                        wresamp = 1.0
-                    endif
                     if( p%pgrp == 'c1' )then
-                        call self%grid_fplane(orientation, img_pad, pwght=pw, mul=mul, shellweights=wresamp)
+                        if( doshellweight )then
+                            call self%grid_fplane(orientation, img_pad, pwght=pw, mul=mul,&
+                                &shellweights=wmat(i,:), expanded=.true.)
+                        else
+                            call self%grid_fplane(orientation, img_pad, pwght=pw, mul=mul,&
+                                &expanded=.true.)
+                        endif
                     else
                         ran = ran3()
                         do j=1,se%get_nsym()
                             o_sym = se%apply(orientation, j)
-                            call self%grid_fplane(o_sym, img_pad, pwght=pw, mul=mul, ran=ran, shellweights=wresamp)
+                            if( doshellweight )then
+                                call self%grid_fplane(o_sym, img_pad, pwght=pw, mul=mul, ran=ran,&
+                                    &shellweights=wmat(i,:), expanded=.true.)
+                            else
+                                call self%grid_fplane(o_sym, img_pad, pwght=pw, mul=mul, ran=ran,&
+                                    &expanded=.true.)
+                            endif
                         end do
                     endif
-                    deallocate(wresamp)
                  endif
             end subroutine rec_dens
-        
     end subroutine eorec
     
     ! DESTRUCTOR

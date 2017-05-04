@@ -178,6 +178,7 @@ contains
         call self%htab%set('class',0.)
         call self%htab%set('mirr',0.)
         call self%htab%set('frac',0.)
+        call self%htab%set('specscore',0.)
     end subroutine reject
     
     !>  \brief  is a polymorphic assigner

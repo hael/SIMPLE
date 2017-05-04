@@ -4,26 +4,22 @@ use simple_cmdline,      only: cmdline
 use simple_build,        only: build
 use simple_params,       only: params
 use simple_ori,          only: ori
+use simple_oris,         only: oris
 use simple_rnd,          only: ran3
 use simple_prime3D_srch, only: prime3D_srch
 use simple_gridding,     only: prep4cgrid
-use simple_strings,      ! use all in there
+use simple_strings       ! use all in there
 use simple_math          ! use all in there
 use simple_masker        ! use all in there
 implicit none
 
-public :: read_img_from_stk, set_bp_range, setup_shellweights, grid_ptcl, prepimg4align,&
-eonorm_struct_facts, norm_struct_facts, preprefs4align, preprefvol, reset_prev_defparms, prep2Dref
+public :: read_img_from_stk, set_bp_range, set_bp_range2D,grid_ptcl, prepimg4align, eonorm_struct_facts,&
+&norm_struct_facts, preprefs4align, preprefvol, prep2Dref, reset_prev_defparms
 private
 
 interface prep2Dref
     module procedure prep2Dref_1
     module procedure prep2Dref_2
-end interface
-
-interface setup_shellweights
-    module procedure setup_shellweights_1
-    module procedure setup_shellweights_2
 end interface
 
 logical, parameter :: DEBUG        = .false.
@@ -54,11 +50,10 @@ contains
     
     subroutine set_bp_range( b, p, cline )
         use simple_estimate_ssnr, only: fsc2ssnr
-        use simple_cmdline,       only: cmdline
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         class(cmdline), intent(inout) :: cline
-        real, allocatable     :: resarr(:)
+        real, allocatable     :: resarr(:), tmp_arr(:)
         real                  :: fsc0143, fsc05, mapres(p%nstates)
         integer               :: s, loc(1)
         character(len=STDLEN) :: fsc_fname
@@ -74,7 +69,7 @@ contains
                     if( b%a%get_statepop( s )>0 .and. .not.fsc_bin_exists(s))&
                         & all_fsc_bin_exist = .false.
                 enddo
-                if( p%oritab.eq.'')all_fsc_bin_exist = ( count(fsc_bin_exists)==p%nstates )
+                if( p%oritab.eq.'')all_fsc_bin_exist = (count(fsc_bin_exists)==p%nstates)
                 ! set low-pass Fourier index limit
                 if( all_fsc_bin_exist )then
                     ! we need the worst resolved fsc
@@ -83,7 +78,18 @@ contains
                         if( fsc_bin_exists(s) )then
                             ! these are the 'classical' resolution measures
                             fsc_fname   = adjustl('fsc_state'//int2str_pad(s,2)//'.bin')
-                            b%fsc(s,:)  = file2rarr( trim(fsc_fname) )
+                            tmp_arr     = file2rarr(trim(fsc_fname))
+                            if(size(tmp_arr) > size(b%fsc(s,:)))then
+                                ! TO REMOVE
+                                ! ugly patch for backward compatibility
+                                b%fsc(s,:)  = tmp_arr(1:size(b%fsc(s,:)))
+                                deallocate(tmp_arr)
+                            else
+                                ! must become default
+                                b%fsc(s,:)  = tmp_arr(:)
+                                deallocate(tmp_arr)
+                                !b%fsc(s,:)  = file2rarr(trim(fsc_fname))                             
+                            endif
                             b%ssnr(s,:) = fsc2ssnr(b%fsc(s,:))
                             call get_resolution(b%fsc(s,:), resarr, fsc05, fsc0143)
                             mapres(s)   = fsc0143
@@ -138,148 +144,41 @@ contains
         if( DEBUG ) write(*,*) '*** simple_hadamard_common ***: did set Fourier index range'
     end subroutine set_bp_range
 
-    !>  \brief  constructs the shellweight matrix for 3D search
-    subroutine setup_shellweights_1( b, p, doshellweight, wmat, res, res_pad )
-        use simple_map_reduce, only: merge_rmat_from_parts
-        use simple_filterer,   only: normalise_shellweights
-        class(build),                intent(inout) :: b
-        class(params),               intent(inout) :: p
-        logical,                     intent(out)   :: doshellweight
-        real,           allocatable, intent(out)   :: wmat(:,:)
-        real, optional, allocatable, intent(out)   :: res(:), res_pad(:)
-        logical, allocatable :: files_exist(:)
-        integer :: filtsz, filtsz_pad, alloc_stat, filnum, io_stat, ipart
-        doshellweight = .false.
-        if( .not. p%l_shellw ) return
-        filtsz     = b%img%get_filtsz() ! nr of resolution elements
-        filtsz_pad = b%img_pad%get_filtsz()
-        if( allocated(wmat) ) deallocate(wmat)
-        if( present(res) )then
-            if( allocated(res) ) deallocate(res)
-            res = b%img%get_res()
-        endif
-        if( present(res_pad) )then
-            if( allocated(res_pad) ) deallocate(res_pad)
-            res_pad = b%img_pad%get_res()
-        endif
-        if( p%l_distr_exec )then
-            call wmat_from_single_file
-            if( doshellweight )then
-                ! we are done
-                return
-            else
-                ! we may need to merge partial shellweight files
-                allocate( files_exist(p%nparts) )
-                do ipart=1,p%nparts
-                    files_exist(ipart) = file_exists('shellweights_part'//int2str_pad(ipart,p%numlen)//'.bin')
-                end do
-                if( all(files_exist) )then
-                    wmat = merge_rmat_from_parts(p%nptcls, p%nparts, filtsz, 'shellweights_part')
-                    call normalise_shellweights(wmat)
-                    doshellweight = .true.
-                endif
-                deallocate(files_exist)
-            endif
+    subroutine set_bp_range2D( b, p, cline, which_iter, frac_srch_space )
+        use simple_estimate_ssnr, only: fsc2ssnr
+        class(build),   intent(inout) :: b
+        class(params),  intent(inout) :: p
+        class(cmdline), intent(inout) :: cline
+        integer,        intent(in)    :: which_iter
+        real,           intent(in)    :: frac_srch_space
+        real :: lplim
+        if( cline%defined('lp') )then        
+            ! set Fourier index range
+            p%kfromto(1) = max(2,b%img%get_find(p%hp))
+            p%kfromto(2) = b%img%get_find(p%lp)
+            p%lp_dyn     = p%lp
+            call b%a%set_all2single('lp',p%lp)
         else
-            call wmat_from_single_file
-        endif
-
-      contains
-
-        subroutine wmat_from_single_file
-            if( file_exists(p%shellwfile) )then    
-                allocate( wmat(p%nptcls,filtsz), stat=alloc_stat)
-                filnum = get_fileunit()
-                open(unit=filnum, status='OLD', action='READ', file=p%shellwfile, access='STREAM')
-                read(unit=filnum,pos=1,iostat=io_stat) wmat
-                ! check if the read was successful
-                if( io_stat .ne. 0 )then
-                    doshellweight = .false.
-                    return  
-                endif
-                close(filnum)
-                call normalise_shellweights(wmat)
-                doshellweight = .true.
-            endif
-        end subroutine wmat_from_single_file
-
-    end subroutine setup_shellweights_1
-
-    !>  \brief  constructs the shellweight matrix for 3D search
-    subroutine setup_shellweights_2( b, p, doshellweight, wmat, npeaks, res, res_pad )
-        use simple_map_reduce, only: merge_rmat_from_parts
-        use simple_filterer,   only: normalise_shellweights
-        class(build),                intent(inout) :: b
-        class(params),               intent(inout) :: p
-        logical,                     intent(out)   :: doshellweight
-        real,           allocatable, intent(out)   :: wmat(:,:,:)
-        integer,                     intent(in)    :: npeaks
-        real, optional, allocatable, intent(out)   :: res(:), res_pad(:)
-        logical, allocatable :: files_exist(:)
-        integer :: filtsz, filtsz_pad, alloc_stat, filnum, io_stat, ipart
-        doshellweight = .false.
-        if( .not. p%l_shellw ) return
-        filtsz     = b%img%get_filtsz() ! nr of resolution elements
-        filtsz_pad = b%img_pad%get_filtsz()
-        if( allocated(wmat) ) deallocate(wmat)
-        if( present(res) )then
-            if( allocated(res) ) deallocate(res)
-            res = b%img%get_res()
-        endif
-        if( present(res_pad) )then
-            if( allocated(res_pad) ) deallocate(res_pad)
-            res_pad = b%img_pad%get_res()
-        endif
-        if( p%l_distr_exec )then
-            call wmat_from_single_file
-            if( doshellweight )then
-                ! we are done
-                return
+            ! set Fourier index range
+            p%kfromto(1) = max(2,b%img%get_find(p%hp))
+            if( which_iter <= LPLIM1ITERBOUND )then
+                lplim = p%lplims2D(1)
+            else if( frac_srch_space >= FRAC_SH_LIM .and. which_iter > LPLIM3ITERBOUND )then
+                lplim = p%lplims2D(3)
             else
-                ! we may need to merge partial shellweight files
-                allocate( files_exist(p%nparts) )
-                do ipart=1,p%nparts
-                    files_exist(ipart) = file_exists('shellweights_part'//int2str_pad(ipart,p%numlen)//'.bin')
-                end do
-                if( all(files_exist) )then
-                    wmat = merge_rmat_from_parts(p%nstates, p%nptcls, p%nparts, filtsz, 'shellweights_part')
-                    call normalise_shellweights(wmat, npeaks)
-                    doshellweight = .true.
-                endif
-                deallocate(files_exist)
+                lplim = p%lplims2D(2)
             endif
-        else
-            call wmat_from_single_file
+            p%kfromto(2) = b%img%get_find(lplim)
+            p%lp_dyn = lplim
+            call b%a%set_all2single('lp',lplim)
         endif
-
-      contains
-
-        subroutine wmat_from_single_file
-            if( file_exists(p%shellwfile) )then    
-                allocate( wmat(p%nstates,p%nptcls,filtsz), stat=alloc_stat)
-                filnum = get_fileunit()
-                open(unit=filnum, status='OLD', action='READ', file=p%shellwfile, access='STREAM')
-                read(unit=filnum,pos=1,iostat=io_stat) wmat
-                ! check if the read was successful
-                if( io_stat .ne. 0 )then
-                    write(*,'(a,i0,2a)') '**ERROR(setup_shellweights_2): I/O error ',&
-                    io_stat, ' when reading'//trim(p%shellwfile)
-                    stop 'I/O error; setup_shellweights_2; simple_hadamard_common'
-                endif
-                close(filnum)
-                call normalise_shellweights(wmat, npeaks)
-                doshellweight = .true.
-            endif
-        end subroutine wmat_from_single_file
-
-    end subroutine setup_shellweights_2
+        if( DEBUG ) write(*,*) '*** simple_hadamard_common ***: did set Fourier index range'
+    end subroutine set_bp_range2D
 
     !>  \brief  grids one particle image to the volume
-    subroutine grid_ptcl( b, p, iptcl, orientation, os, shellweights )
-        use simple_oris, only: oris
+    subroutine grid_ptcl( b, p, orientation, os, shellweights )
         class(build),              intent(inout) :: b
         class(params),             intent(inout) :: p
-        integer,                   intent(in)    :: iptcl
         class(ori),                intent(inout) :: orientation
         class(oris),     optional, intent(inout) :: os
         real,            optional, intent(in)    :: shellweights(:)
@@ -403,6 +302,7 @@ contains
                     call b%img_msk%grow_bin             ! binary layers
                 enddo
                 call b%img_msk%cos_edge(p%edge)         ! soft edge
+                call b%img%mask(p%msk, 'soft')          ! testing
                 call b%img%mul(b%img_msk)               ! multiply by projected envelope
             else if( p%automsk .eq. 'cavg' )then
                 ! ab initio mask
@@ -440,7 +340,6 @@ contains
 
     subroutine prep2Dref_2( p, ref, os, icls )
         use simple_image, only: image
-        use simple_oris,  only: oris
         class(params),  intent(in)    :: p
         class(image),   intent(inout) :: ref
         class(oris),    intent(inout) :: os
@@ -475,9 +374,7 @@ contains
         class(cmdline),    intent(inout) :: cline
         integer,           intent(in)    :: s
         logical, optional, intent(in)    :: doexpand
-        logical :: l_doexpand
-        real    :: shvec(3)
-        l_doexpand = .true.
+        logical :: l_doexpand = .true.
         if( present(doexpand) )l_doexpand = doexpand
         if( p%boxmatch < p%box )call b%vol%new([p%box,p%box,p%box],p%smpd) ! ensure correct dim
         call b%vol%read(p%vols(s), isxfel=p%l_xfel)
@@ -528,8 +425,9 @@ contains
         contains
 
             subroutine centervol
+                real :: shvec(3)
                 ! centering only for asymmetric and circular symmetric cases
-                if( p%refine.ne.'het' )then
+                if( p%refine.ne.'het' .and. p%nstates==1)then
                     if(p%pgrp(:1) .eq. 'c')then
                         shvec = b%vol%center(p%cenlp,'no',p%msk,doshift=.false.) ! find center of mass shift
                         if( arg(shvec) > CENTHRESH )then
@@ -562,6 +460,7 @@ contains
                 if( present(which_iter) )b%fsc(s,:) = 0.
                 cycle
             endif
+            call b%eorecvols(s)%compress_exp
             if( p%l_distr_exec )then
                 call b%eorecvols(s)%write_eos('recvol_state'//int2str_pad(s,2)//'_part'//int2str_pad(p%part,p%numlen))
             else
@@ -615,6 +514,7 @@ contains
                 allocate(fbody, source='recvol_state'//int2str_pad(s,2)//'_part'//int2str_pad(p%part,p%numlen))
                 p%vols(s)  = trim(adjustl(fbody))//p%ext
                 p%masks(s) = 'rho_'//trim(adjustl(fbody))//p%ext
+                call b%recvols(s)%compress_exp
                 call b%recvols(s)%write(p%vols(s), del_if_exists=.true.)
                 call b%recvols(s)%write_rho(p%masks(s))
                 deallocate(fbody)
@@ -628,6 +528,7 @@ contains
                 else
                      p%vols(s) = 'startvol_state'//int2str_pad(s,2)//p%ext
                 endif
+                call b%recvols(s)%compress_exp
                 call b%recvols(s)%sampl_dens_correct(self_out=b%vol_pad) ! this preserves the recvol for online update
                 if( p%l_xfel )then
                     ! no back transformation of the volume
