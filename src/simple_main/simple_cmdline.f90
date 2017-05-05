@@ -263,6 +263,7 @@ contains
         cmderr = .false.
         do i=1,self%ncheck
             cmderr(i) = .not. self%defined(self%checker(i))
+            if( cmderr(i) ) write(*,'(a,a)') 'Missing key on command line: ', trim(self%checker(i))
         end do
         ! to care of the case where the first state has vanished (eg vol1 key absent)
         if( self%defined('nstates') )then

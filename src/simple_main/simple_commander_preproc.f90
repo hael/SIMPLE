@@ -754,10 +754,10 @@ contains
         real, allocatable                  :: boxdata(:,:)
         integer, allocatable               :: pinds(:)
         real                               :: x, y, kv, cs, fraca, dfx, dfy, angast, ctfres
-        real                               :: med, ave, sdev, var, particle_position(2), smpd
+        real                               :: med, ave, sdev, var, particle_position(2)
         type(image)                        :: micrograph
         type(oris)                         :: outoris, os_uni
-        logical                            :: err, params_present(4)
+        logical                            :: err, params_present(3)
         logical, parameter                 :: debug = .false.
         p = params(cline, checkdistr=.false.) ! constants & derived constants produced
 
@@ -945,20 +945,17 @@ contains
                 params_present(1) = b%a%isthere('kv')
                 params_present(2) = b%a%isthere('cs')
                 params_present(3) = b%a%isthere('fraca')
-                params_present(4) = b%a%isthere('smpd')
                 if( all(params_present) )then
                     ! alles ok
                 else
                     if( .not. params_present(1) ) write(*,*) 'ERROR! input doc lacks kv'
                     if( .not. params_present(2) ) write(*,*) 'ERROR! input doc lacks cs'
                     if( .not. params_present(3) ) write(*,*) 'ERROR! input doc lacks fraca'
-                    if( .not. params_present(4) ) write(*,*) 'ERROR! input doc lacks smpd'
                     stop
                 endif                
                 kv     = b%a%get(movie,'kv')
                 cs     = b%a%get(movie,'cs')
                 fraca  = b%a%get(movie,'fraca')
-                smpd   = b%a%get(movie,'smpd')
                 dfx    = b%a%get(movie,'dfx')
                 ctfres = b%a%get(movie,'ctfres')
                 angast = 0.
@@ -973,7 +970,7 @@ contains
                         call outoris%set(pinds(i), 'kv',         kv)
                         call outoris%set(pinds(i), 'cs',         cs)
                         call outoris%set(pinds(i), 'fraca',   fraca)
-                        call outoris%set(pinds(i), 'smpd',     smpd)
+                        call outoris%set(pinds(i), 'smpd',   p%smpd)
                         call outoris%set(pinds(i), 'dfx',       dfx)
                         call outoris%set(pinds(i), 'ctfres', ctfres)
                         if( b%a%isthere('dfy') )then

@@ -598,18 +598,19 @@ select case(prg)
         ! that can be used in conjunction with other SIMPLE programs. We obtain CTF parameters 
         ! with CTFFIND4<extract/end> 
         !
+        ! set required keys
+        keys_required(1) = 'smpd'
         ! set optional keys
         keys_optional(1) = 'unidoc'
         keys_optional(2) = 'filetab'
         keys_optional(3) = 'boxtab'
         keys_optional(4) = 'ctffind_doc'
-        keys_optional(5) = 'smpd'
-        keys_optional(6) = 'neg'
-        keys_optional(7) = 'box'
-        keys_optional(8) = 'outside'
+        keys_optional(5) = 'neg'
+        keys_optional(6) = 'box'
+        keys_optional(7) = 'outside'
         ! parse command line
         if( describe ) call print_doc_extract
-        call cline%parse(keys_optional=keys_optional(:8))
+        call cline%parse(keys_required(:1),keys_optional(:7))
         ! parse command line
         if( .not. cline%defined('neg') )call cline%set('neg', 'yes')
         ! execute
