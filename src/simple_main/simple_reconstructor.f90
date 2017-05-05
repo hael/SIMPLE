@@ -65,15 +65,18 @@ contains
     ! CONSTRUCTOR
 
     !>  \brief  allocates the sampling density matrix
-    subroutine alloc_rho( self, p )
+    subroutine alloc_rho( self, p, expand )
         use simple_params, only: params
         use simple_math,   only: fdim
         class(reconstructor),         intent(inout) :: self  !< instance
         class(params),                intent(in)    :: p     !< parameters
+        logical,            optional, intent(in)    :: expand
         integer :: ld_here(3), rho_shape(3), rho_lims(3,2), lims(3,2), alloc_stat, dim
         character(len=:), allocatable :: ikind_tmp
-        if( .not. self%exists() ) stop 'construct image before allocating rho; alloc_rho; simple_reconstructor'
-        if(       self%is_2d()   )stop 'only for volumes; alloc_rho; simple_reconstructor'
+        logical :: l_expand = .true.
+        if(.not. self%exists() ) stop 'construct image before allocating rho; alloc_rho; simple_reconstructor'
+        if(      self%is_2d()  )stop 'only for volumes; alloc_rho; simple_reconstructor'
+        if( present(expand) )l_expand = expand
         ld_here = self%get_ldim()
         if( ld_here(3) < 2 ) stop 'reconstructor need to be 3D 4 now; alloc_rho; simple_reconstructor'
         call self%dealloc_rho
@@ -102,24 +105,26 @@ contains
             call c_f_pointer(self%kp,self%rho,rho_shape)
         endif
         self%rho_allocated = .true.
-        ! setup expanded matrices
-        lims = self%loop_lims(2)
-        dim  = ceiling(sqrt(2.)*maxval(abs(lims))) + ceiling(self%winsz)
-        self%ldim_exp(1,:) = [-dim, dim]
-        self%ldim_exp(2,:) = [-dim, dim]
-        self%ldim_exp(3,:) = [-dim, dim]
-        allocate(self%cmat_exp( self%ldim_exp(1,1):self%ldim_exp(1,2),&
-                                &self%ldim_exp(2,1):self%ldim_exp(2,2),&
-                                &self%ldim_exp(3,1):self%ldim_exp(3,2)), stat=alloc_stat)
-        call alloc_err("In: alloc_rho; simple_reconstructor 1", alloc_stat)
-        allocate(self%rho_exp( self%ldim_exp(1,1):self%ldim_exp(1,2),&
-                                &self%ldim_exp(2,1):self%ldim_exp(2,2),&
-                                &self%ldim_exp(3,1):self%ldim_exp(3,2)), stat=alloc_stat)
-        call alloc_err("In: alloc_rho; simple_reconstructor 2", alloc_stat)
-        self%cmat_exp           = cmplx(0.,0.)
-        self%rho_exp            = 0.
-        self%cmat_exp_allocated = .true.
-        self%rho_exp_allocated  = .true.
+        if( l_expand )then
+            ! setup expanded matrices
+            lims = self%loop_lims(2)
+            dim  = ceiling(sqrt(2.)*maxval(abs(lims))) + ceiling(self%winsz)
+            self%ldim_exp(1,:) = [-dim, dim]
+            self%ldim_exp(2,:) = [-dim, dim]
+            self%ldim_exp(3,:) = [-dim, dim]
+            allocate(self%cmat_exp( self%ldim_exp(1,1):self%ldim_exp(1,2),&
+                                    &self%ldim_exp(2,1):self%ldim_exp(2,2),&
+                                    &self%ldim_exp(3,1):self%ldim_exp(3,2)), stat=alloc_stat)
+            call alloc_err("In: alloc_rho; simple_reconstructor 1", alloc_stat)
+            allocate(self%rho_exp( self%ldim_exp(1,1):self%ldim_exp(1,2),&
+                                    &self%ldim_exp(2,1):self%ldim_exp(2,2),&
+                                    &self%ldim_exp(3,1):self%ldim_exp(3,2)), stat=alloc_stat)
+            call alloc_err("In: alloc_rho; simple_reconstructor 2", alloc_stat)
+            self%cmat_exp           = cmplx(0.,0.)
+            self%rho_exp            = 0.
+            self%cmat_exp_allocated = .true.
+            self%rho_exp_allocated  = .true.
+        endif
         call self%reset
     end subroutine alloc_rho
 

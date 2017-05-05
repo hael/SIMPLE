@@ -237,7 +237,7 @@ contains
         class(ori),              intent(inout) :: e     !< orientation
         class(polarft_corrcalc), intent(inout) :: pftcc !< polarft_corrcalc object to be filled
         logical,       optional, intent(in)    :: expanded
-        logical,       optional, intent(inout) :: serial
+        logical,       optional, intent(in)    :: serial
         integer :: irot, k, ldim_fvol(3), ldim_pft(3), pdim(3)
         real    :: vec(3), loc(3)
         logical :: l_exp = .false., l_serial = .false.
@@ -254,7 +254,7 @@ contains
         pdim = pftcc%get_pdim(.false.)
         if( l_exp )then
             ! use of expanded routine
-            call self%fproject_polar_expanded(iref, e, pftcc, serial=serial)
+            call self%fproject_polar_expanded(iref, e, pftcc, serial=l_serial)
         else
             if( l_serial )then
                 ! this is the serial version of the threaded version just below

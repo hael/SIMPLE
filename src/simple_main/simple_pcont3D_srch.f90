@@ -63,17 +63,17 @@ contains
     subroutine new( self, p, a, e, pftcc, iptcl )
         class(pcont3D_srch),             intent(inout) :: self  !< instance
         class(params),                   intent(in)    :: p     !< parameters
-        class(oris),                     intent(inout) :: a  !< 
-        class(oris),                     intent(in)    :: e     !< 
+        class(oris),                     intent(inout) :: a     !< ptcls orientations 
+        class(oris),                     intent(in)    :: e     !< references
         class(polarft_corrcalc), target, intent(in)    :: pftcc
-        integer,                         intent(in)    :: iptcl
+        integer,                         intent(in)    :: iptcl !< general particle index
         call self%kill
         ! particle index
         self%iptcl = iptcl
         ! input orientation
         self%orientation_in = a%get_ori(self%iptcl)
         self%prev_state     = nint(self%orientation_in%get('state'))
-        if(self%prev_state < 1)return
+        if(self%prev_state == 0)return
         ! set constants
         self%ppftcc    => pftcc
         self%reforis   = e

@@ -86,7 +86,7 @@ contains
         call self%odd%alloc_rho(p)
         call self%odd%set_ft(.true.)
         call self%eosum%new([p%boxpd,p%boxpd,p%boxpd], p%smpd, p%imgkind)
-        call self%eosum%alloc_rho(p)
+        call self%eosum%alloc_rho(p, expand=.false.)
         ! set lfny
         call imgtmp%new([self%box,self%box,self%box], self%smpd)
         self%lfny = imgtmp%get_lfny(1)

@@ -137,18 +137,18 @@ contains
                 ! prep pftccs & ctf
                 call prep_pftcc(b, p, iptcl, pftccs(iptcl))
                 if( p%ctf.ne.'no' )call pftccs(iptcl)%create_polar_ctfmats(p%smpd, b%a)
+                call pcont3Dsrchs(iptcl)%new(p, b%a, orefs, pftccs(iptcl), iptcl)
             enddo
             ! SERIAL SEARCHES
             !$omp parallel do default(shared) schedule(guided) private(iptcl)
             do iptcl = fromp, top
-                call pcont3Dsrchs(iptcl)%new(p, b%a, orefs, pftccs(iptcl), iptcl)
                 call pcont3Dsrchs(iptcl)%do_srch(b%a)
             enddo
             !$omp end parallel do
             ! GRID & 3D REC
             if(p%norec .eq. 'no')then
                 do iptcl = fromp, top
-                    orientation = b%a%get_ori(iptcl)              
+                    orientation = b%a%get_ori(iptcl)
                     state       = nint(orientation%get('state'))
                     if(state == 0)cycle
                     b%img = batch_imgs(iptcl)

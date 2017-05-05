@@ -68,7 +68,6 @@ contains
     
     function cftcc_srch_cost( vec, D ) result( cost )
         use simple_ori, only: ori
-        use simple_math, only: rad2deg
         integer, intent(in) :: D
         real,    intent(in) :: vec(D)
         type(ori) :: o

@@ -31,12 +31,14 @@ end type pftcc_inplsrch
 
 contains
 
-    subroutine inplsrch_new( self, pftcc, lims, shbarrier, nrestarts )
-        class(pftcc_inplsrch),           intent(inout) :: self
-        class(polarft_corrcalc), target, intent(in)    :: pftcc
-        real,                            intent(in)    :: lims(:,:)
-        character(len=*), optional,      intent(in)    :: shbarrier
-        integer,          optional,      intent(in)    :: nrestarts
+    subroutine inplsrch_new( self, pftcc, lims, shbarrier, nrestarts, vols )
+        use simple_projector, only: projector
+        class(pftcc_inplsrch),              intent(inout) :: self
+        class(polarft_corrcalc),    target, intent(in)    :: pftcc
+        real,                               intent(in)    :: lims(:,:)
+        character(len=*), optional,         intent(in)    :: shbarrier
+        integer,          optional,         intent(in)    :: nrestarts
+        class(projector), optional, target, intent(in)    :: vols(:)
         real :: inpllims(3,2)
         ! flag the barrier constraint
         self%shbarr = .true.
@@ -65,10 +67,10 @@ contains
         self%rotmat(2,2) = 1.
     end subroutine inplsrch_new
     
-    subroutine inplsrch_set_indices( self, ref, ptcl, rot )
+    subroutine inplsrch_set_indices( self, ref, ptcl, rot, state )
         class(pftcc_inplsrch), intent(inout) :: self
         integer,               intent(in)    :: ref, ptcl
-        integer, optional,     intent(in)    :: rot
+        integer, optional,     intent(in)    :: rot, state
         self%reference = ref 
         self%particle  = ptcl
     end subroutine inplsrch_set_indices

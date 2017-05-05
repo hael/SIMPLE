@@ -136,9 +136,9 @@ simple: simple_image.o                  \
         simple_corrmat.o                \
         simple_gridding.o               \
         simple_polarft_corrcalc.o       \
+        simple_projector.o              \
         simple_pftcc_opt.o              \
         simple_simplex_pftcc_opt.o      \
-        simple_projector.o              \
         simple_projector_hlev.o         \
         simple_volpft_corrcalc.o        \
         simple_ft_shsrch.o              \
@@ -146,6 +146,7 @@ simple: simple_image.o                  \
         simple_volpft_srch.o            \
         simple_pftcc_shsrch.o           \
         simple_pftcc_inplsrch.o         \
+        simple_pftcc_srch.o             \
         simple_filterer.o               \
         simple_unblur.o                 \
         simple_convergence.o            \

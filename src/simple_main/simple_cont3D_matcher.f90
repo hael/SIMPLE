@@ -59,9 +59,7 @@ contains
 
         ! POLAR/CARTESIAN FORK
         select case(p%refine)
-            case('cart')
-                call cont3D_cart_exec(b, p, cline, which_iter, converged)
-            case('polar')
+            case('greedy')
                 call cont3D_polar_exec(b, p, cline, which_iter, converged)
             case DEFAULT
                 stop 'Unknown refinment mode; simple_cont3D_matcher%cont3D_exec'
