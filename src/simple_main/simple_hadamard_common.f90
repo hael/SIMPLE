@@ -302,7 +302,7 @@ contains
                 !    call b%img_msk%grow_bin             ! binary layers
                 !enddo
                 call b%img_msk%cos_edge(p%edge)         ! soft edge
-                call b%img%mask(p%msk, 'soft')          ! testing
+                !call b%img%mask(p%msk, 'soft')          ! testing
                 call b%img%mul(b%img_msk)               ! multiply by projected envelope
             else if( p%automsk .eq. 'cavg' )then
                 ! ab initio mask
@@ -426,8 +426,8 @@ contains
 
             subroutine centervol
                 real :: shvec(3)
-                ! centering only for asymmetric and circular symmetric cases
-                if( p%refine.ne.'het' .and. p%nstates==1)then
+                ! centering only for single state, asymmetric and circular symmetric cases 
+                if( p%nstates==1 )then
                     if(p%pgrp(:1) .eq. 'c')then
                         shvec = b%vol%center(p%cenlp,'no',p%msk,doshift=.false.) ! find center of mass shift
                         if( arg(shvec) > CENTHRESH )then
