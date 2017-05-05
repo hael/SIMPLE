@@ -117,7 +117,7 @@ contains
             call cline_makecavgs%delete('ncls')
             call cline_makecavgs%delete('chunksz')
             call cline_makecavgs%set('prg',   'makecavgs')
-            call cline_makecavgs%set('oritab', FINALDOC)
+            call cline_makecavgs%set('oritab', trim(FINALDOC))
             call cline_makecavgs%set('nparts', real(nparts))
             call cline_makecavgs%set('refs',   'cavgs_final'//p_master%ext)
             call xmakecavgs%execute(cline_makecavgs)
@@ -125,8 +125,9 @@ contains
         else
             call xprime2D%execute(cline)
         endif
+        call cline_rank_cavgs%print
         ! ranking
-        call cline_rank_cavgs%set('oritab', FINALDOC)
+        call cline_rank_cavgs%set('oritab', trim(FINALDOC))
         call cline_rank_cavgs%set('stk',    'cavgs_final'//p_master%ext)
         call cline_rank_cavgs%set('outstk', 'cavgs_final_ranked'//p_master%ext)
         call xrank_cavgs%execute( cline_rank_cavgs )
