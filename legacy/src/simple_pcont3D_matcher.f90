@@ -1,4 +1,4 @@
-module simple_pcont3D_matcher
+module simple_cont3D_matcher
 use simple_defs
 use simple_build,            only: build
 use simple_params,           only: params
@@ -7,17 +7,19 @@ use simple_oris,             only: oris
 use simple_ori,              only: ori
 use simple_cmdline,          only: cmdline
 !use simple_masker,           only: automask
+use simple_cont3D_srch,     only: cont3D_srch
 use simple_pcont3D_srch,     only: pcont3D_srch
 use simple_hadamard_common,  ! use all in there
 use simple_math              ! use all in there
 implicit none
 
-public :: pcont3D_exec
+public :: cont3D_exec
 private
 
 type(polarft_corrcalc) :: pftcc
 type(oris)             :: orefs                   !< per particle projection direction search space
 logical, allocatable   :: state_exists(:)
+real                   :: reslim          = 0.
 integer                :: nptcls          = 0
 integer                :: nrefs_per_ptcl  = 0
 integer                :: neff_states     = 0
@@ -30,7 +32,7 @@ logical, parameter     :: debug = .false.
 contains
 
     !>  \brief  is the prime3D algorithm
-    subroutine pcont3D_exec( b, p, cline, which_iter, converged )
+    subroutine cont3D_exec( b, p, cline, which_iter, converged )
         use simple_map_reduce, only: split_nobjs_even
         use simple_qsys_funs,  only: qsys_job_finished
         use simple_strings,    only: int2str_pad
@@ -46,11 +48,12 @@ contains
         type(projector),        allocatable :: batch_imgs(:)
         type(polarft_corrcalc), allocatable :: pftccs(:)
         type(pcont3D_srch),     allocatable :: pcont3Dsrchs(:)
+        type(cont3D_srch),     allocatable  :: cont3Dsrchs(:)
         integer,                allocatable :: batches(:,:)
         ! other variables
         type(oris) :: softoris
         type(ori)  :: orientation
-        real       :: reslim, frac_srch_space
+        real       :: frac_srch_space
         integer    :: nbatches, batch, fromp, top, iptcl, state, alloc_stat
         logical    :: update_res
         ! AUTOMASKING DEACTIVATED FOR NOW
@@ -74,10 +77,15 @@ contains
         write(*,'(A,F6.2)')'>>> ANGULAR THRESHOLD: ', p%athres
 
         ! DETERMINE THE NUMBER OF PEAKS
-        if( .not. cline%defined('npeaks') )then
-            p%npeaks = min(MAXNPEAKS,b%e%find_npeaks(p%lp, p%moldiam))
-        endif
-        write(*,'(A,I2)')'>>> NPEAKS: ', p%npeaks
+        select case(p%refine)
+            case('yes')
+                if( .not. cline%defined('npeaks') )then
+                    p%npeaks = min(MAXNPEAKS,b%e%find_npeaks(p%lp, p%moldiam))
+                endif
+                write(*,'(A,I2)')'>>> NPEAKS: ', p%npeaks
+            case DEFAULT
+                p%npeaks = 1
+        end select
 
         ! SETUP WEIGHTS FOR THE 3D RECONSTRUCTION
         if( p%nptcls <= SPECWMINPOP )then
@@ -125,7 +133,7 @@ contains
             fromp = p%fromp-1 + batches(batch,1)
             top   = p%fromp-1 + batches(batch,2)
             ! PREP BATCH
-            allocate(pftccs(fromp:top), pcont3Dsrchs(fromp:top),&
+            allocate(pftccs(fromp:top), cont3Dsrchs(fromp:top), pcont3Dsrchs(fromp:top),&
                 &batch_imgs(fromp:top), stat=alloc_stat)
             call alloc_err('In pcont3D_matcher::pcont3D_exec_single',alloc_stat)
             do iptcl = fromp, top
@@ -135,14 +143,27 @@ contains
                 call read_img_from_stk(b, p, iptcl)
                 batch_imgs(iptcl) = b%img
                 ! prep pftccs & ctf
-                call prep_pftcc(b, p, iptcl, pftccs(iptcl))
+                select case(p%refine)
+                    case('yes')
+                        call prep_pftcc(b, p, iptcl, pftccs(iptcl))
+                        call pcont3Dsrchs(iptcl)%new(p, orefs, pftccs(iptcl))
+                    case('greedy')
+                        call init_pftcc(p, iptcl, pftccs(iptcl), 1)
+                        call cont3Dsrchs(iptcl)%new(p, pftccs(iptcl), b%refvols)
+                    case DEFAULT
+                        stop 'Uknown refinement mode; pcont3D_matcher::cont3D_exec'
+                end select
                 if( p%ctf.ne.'no' )call pftccs(iptcl)%create_polar_ctfmats(p%smpd, b%a)
-                call pcont3Dsrchs(iptcl)%new(p, b%a, orefs, pftccs(iptcl), iptcl)
             enddo
             ! SERIAL SEARCHES
             !$omp parallel do default(shared) schedule(guided) private(iptcl)
             do iptcl = fromp, top
-                call pcont3Dsrchs(iptcl)%do_srch(b%a)
+                select case(p%refine)
+                    case('yes')
+                        call pcont3Dsrchs(iptcl)%exec_srch(b%a, iptcl)
+                    case('greedy')
+                        call cont3Dsrchs(iptcl)%exec_srch(b%a, iptcl, 1, 1)
+                end select
             enddo
             !$omp end parallel do
             ! GRID & 3D REC
@@ -167,10 +188,11 @@ contains
             ! CLEANUP BATCH
             do iptcl = fromp, top
                 call pcont3Dsrchs(iptcl)%kill
+                call cont3Dsrchs(iptcl)%kill
                 call pftccs(iptcl)%kill
                 call batch_imgs(iptcl)%kill
             enddo
-            deallocate(pftccs, pcont3Dsrchs, batch_imgs)
+            deallocate(pftccs, cont3Dsrchs, pcont3Dsrchs, batch_imgs)
         enddo
         ! orientations output
         !call b%a%write(p%outfile, [p%fromp,p%top])
@@ -189,7 +211,6 @@ contains
         if( p%l_distr_exec )then
             call qsys_job_finished( p, 'simple_pcont3D_matcher :: cont3D_exec')
         else
-            ! CONVERGENCE TEST
             converged = b%conv%check_conv3D(update_res)
         endif
         
@@ -203,7 +224,7 @@ contains
         enddo
         deallocate(state_exists)
         call b%img%kill_expanded
-    end subroutine pcont3D_exec
+    end subroutine cont3D_exec
 
     subroutine prep_vols( b, p, cline )
         class(build),   intent(inout) :: b
@@ -223,10 +244,23 @@ contains
         if( p%boxmatch < p%box )call b%vol%new([p%box,p%box,p%box], p%smpd) ! to double check
     end subroutine prep_vols
 
+    subroutine init_pftcc(p, iptcl, pftcc, nrefs)
+        class(params),              intent(inout) :: p
+        integer,                    intent(in)    :: iptcl
+        class(polarft_corrcalc),    intent(inout) :: pftcc
+        integer,                    intent(in)    :: nrefs
+        ! RE-INIT PFTCC
+        if( p%l_xfel )then
+            call pftcc%new(nrefs, [iptcl,iptcl], [p%boxmatch,p%boxmatch,1],p%kfromto, p%ring2, p%ctf, isxfel='yes')
+        else
+            call pftcc%new(nrefs, [iptcl,iptcl], [p%boxmatch,p%boxmatch,1],p%kfromto, p%ring2, p%ctf)
+        endif
+    end subroutine init_pftcc
+
     subroutine prep_pftcc(b, p, iptcl, pftcc)
         class(build),               intent(inout) :: b
         class(params),              intent(inout) :: p
-        integer,                    intent(in)    :: iptcl
+        integer,                    intent(inout) :: iptcl
         class(polarft_corrcalc),    intent(inout) :: pftcc
         type(oris) :: cone
         type(ori)  :: optcl, oref
@@ -234,11 +268,7 @@ contains
         integer    :: state, iref, cnt
         optcl = b%a%get_ori(iptcl)
         ! RE-INIT PFTCC
-        if( p%l_xfel )then
-            call pftcc%new(nrefs_per_ptcl, [iptcl,iptcl], [p%boxmatch,p%boxmatch,1],p%kfromto, p%ring2, p%ctf, isxfel='yes')
-        else
-            call pftcc%new(nrefs_per_ptcl, [iptcl,iptcl], [p%boxmatch,p%boxmatch,1],p%kfromto, p%ring2, p%ctf)
-        endif
+        call init_pftcc(p, iptcl, pftcc, nrefs_per_ptcl)
         ! SEARCH SPACE PREP
         eullims = b%se%srchrange()
         call cone%rnd_proj_space(NREFS, optcl, p%athres, eullims)
@@ -270,12 +300,11 @@ contains
             call b%refvols(state)%fproject_polar(iref, oref, pftcc, expanded=.true.)
         enddo
         ! PREP PARTICLE
-        call read_img_from_stk(b, p, iptcl)
         call prepimg4align(b, p, optcl)
         call b%img%imgpolarizer(pftcc, iptcl, isptcl=.true.)
         ! restores b%img dimensions for clean exit
         if(p%boxmatch < p%box)call b%img%new([p%box,p%box,1],p%smpd)
     end subroutine prep_pftcc
 
-end module simple_pcont3D_matcher
+end module simple_cont3D_matcher
 

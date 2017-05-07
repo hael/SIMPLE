@@ -154,7 +154,8 @@ simple: simple_image.o                  \
         simple_prime_srch.o             \
         simple_prime2D_srch.o           \
         simple_prime3D_srch.o           \
-        simple_pcont3D_srch.o           \
+        simple_cont3D_srch.o            \
+        simple_cont3D_greedysrch.o      \
         simple_procimgfile.o            ;
 
 build: simple_pair_dtab.o               \
@@ -187,7 +188,6 @@ matcher: simple_picker.o                  \
          simple_cftcc_shsrch.o            \
          simple_pftcc_contsrch.o          \
          simple_cont3D_matcher.o          \
-         simple_pcont3D_matcher.o         \
          simple_hadamard2D_matcher.o      \
          simple_hadamard3D_matcher.o      ;
 

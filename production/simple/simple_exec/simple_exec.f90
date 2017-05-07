@@ -1025,9 +1025,10 @@ select case(prg)
         keys_optional(13) = 'startit'
         keys_optional(14) = 'maxits'
         keys_optional(15) = 'xfel'
+        keys_optional(16) = 'refine'
         ! parse command line
         if( describe ) call print_doc_cont3D
-        call cline%parse(keys_required(:8), keys_optional(:15))
+        call cline%parse(keys_required(:8), keys_optional(:16))
         ! set defaults
         call cline%set('dynlp', 'no')
         if( cline%defined('eo') )then
@@ -1039,6 +1040,7 @@ select case(prg)
         else
             call cline%set('eo','no')
         endif
+        if( .not.cline%defined('refine') )call cline%set('refine','yes')
         if( .not.cline%defined('nspace') )call cline%set('nspace',1000.)
         ! execute
         call xcont3D%execute(cline)        

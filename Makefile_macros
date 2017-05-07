@@ -2,7 +2,7 @@
 
 ####### The project path #####
 
-Simple_source=/home/cyril/Simple3
+Simple_source=/Users/creboul/Simple3
 
 ####### The switches #####
 
@@ -30,19 +30,19 @@ MODDIR=obj/SIMPLEOFILES
 ##############
 
 CC=$(CCCOMP)
-CFLAGS= -O3 -O -DLINUX -fopenmp  
+CFLAGS= -g -DMACOSX -fopenmp  
 CCLIB=$(CC) -c $(CFLAGS) -I $(MODDIR)  -I$(Simple_source)/simple_utils        \
-                         -I /usr/local/fftw/3.3.4-gcc/include/
+                         -I /opt/local/include/
 
 ################
 # C++ compiler.#
 ################
 
 CPP=$(GCC)
-CPPFLAGS=-DADD_ -O3 -DLINUX -fopenmp  
+CPPFLAGS=-DADD_ -g -DMACOSX -fopenmp  
 CPPCLIB=$(CPP) -c $(CPPFLAGS) -I $(MODDIR)  -I$(Simple_source)/simple_utils        \
                               -I $(Simple_source)/test_code                           \
-                              -I /usr/local/fftw/3.3.4-gcc/include/
+                              -I /opt/local/include/
 
 #######################
 # Fortran 90 compiler.#
@@ -50,7 +50,7 @@ CPPCLIB=$(CPP) -c $(CPPFLAGS) -I $(MODDIR)  -I$(Simple_source)/simple_utils     
 
 # $(DLIB)
 F90C=$(GFORTRAN)
-F90FLAGS=-ffree-form -cpp -fPIC -fno-second-underscore -O3 -DLINUX -fopenmp  
+F90FLAGS=-fimplicit-none -fall-intrinsics -ffree-form -cpp -fpic -fno-second-underscore -D_DEBUG -g -Og -Wall -fbounds-check -fbacktrace -DMACOSX -fopenmp  
 F90CLIB=$(F90C) -c $(F90FLAGS) -I $(MODDIR)  -I$(Simple_source)/simple_utils  \
                              -J $(MODDIR)                      \
 

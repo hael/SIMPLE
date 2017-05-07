@@ -548,6 +548,7 @@ select case(prg)
         keys_optional(14) = 'startit'
         keys_optional(15) = 'maxits'
         keys_optional(16) = 'xfel'
+        keys_optional(17) = 'refine'
         ! documentation
         if( describe ) call print_doc_cont3D
         ! parse command line
@@ -555,7 +556,7 @@ select case(prg)
         if( is_restart )then
             call parse_restart('cont3D', entire_line, cline, keys_required(:8), keys_optional(:17))
         else
-            call cline%parse( keys_required(:8), keys_optional(:16) )
+            call cline%parse( keys_required(:8), keys_optional(:17) )
         endif
         ! set defaults
         if( .not. cline%defined('eo') )then
@@ -563,7 +564,7 @@ select case(prg)
         endif
         call cline%set('dynlp', 'no')
         if(.not.cline%defined('nspace'))call cline%set('nspace', 1000.)
-        if(.not.cline%defined('refine'))call cline%set('refine', 'no')
+        if(.not.cline%defined('refine'))call cline%set('refine', 'yes')
         ! execute
         call xcont3D_distr%execute(cline)
     case( 'recvol' )

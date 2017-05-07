@@ -31,6 +31,7 @@ real               :: angast_prev  = 0.
 real               :: kV_prev      = 0.
 real               :: cs_prev      = 0.
 real               :: fraca_prev   = 0.
+integer :: glob_cnt = 0 ! dev purpose only
     
 contains
 

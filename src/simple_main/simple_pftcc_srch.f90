@@ -29,6 +29,7 @@ type, extends(pftcc_opt) :: pftcc_srch
     procedure :: costfun     => srch_costfun
     procedure :: minimize    => srch_minimize
     procedure :: get_nevals  => srch_get_nevals
+    procedure :: kill
 end type pftcc_srch
 
 contains
@@ -50,7 +51,7 @@ contains
         if( present(nrestarts) ) self%nrestarts = nrestarts 
         ! make optimizer spec
         srchlims = lims
-        call self%ospec%specify('simplex', 3, ftol=1e-4,&
+        call self%ospec%specify('simplex', 5, ftol=1e-4,&
         &gtol=1e-4, limits=srchlims, nrestarts=self%nrestarts)
         ! generate the simplex optimizer object 
         call self%nlopt%new(self%ospec)
@@ -93,7 +94,7 @@ contains
         if( abs(vec(5)) < 1e-6 ) vec_here(5) = 0.
         ! check shift boundaries
         if( self%shbarr )then
-            if(vec_here(4) < self%ospec%limits(4,1) .or. vec_here(1) > self%ospec%limits(4,2))then
+            if(vec_here(4) < self%ospec%limits(4,1) .or. vec_here(4) > self%ospec%limits(4,2))then
                 cost = 1.
                 return
             else if(vec_here(5) < self%ospec%limits(5,1) .or. vec_here(5) > self%ospec%limits(5,2))then
@@ -154,7 +155,7 @@ contains
             ! no improvement
             crxy(1)   = -cost_init  ! previous correlation
             crxy(2:4) = rxy         ! previous euler
-            crxy(5:6) = 0.          ! previous shift
+            crxy(5:)  = 0.          ! previous shift
         endif
     end function srch_minimize
 
@@ -163,5 +164,11 @@ contains
         integer :: nevals
         nevals = self%ospec%nevals
     end function  srch_get_nevals
-    
+
+    subroutine kill( self )
+        class(pftcc_srch), intent(inout) :: self
+        self%pftcc_ptr => null()
+        self%vols_ptr  => null()         
+    end subroutine kill
+
 end module simple_pftcc_srch
