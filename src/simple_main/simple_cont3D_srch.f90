@@ -102,8 +102,10 @@ contains
         self%prev_roind = self%pftcc_ptr%get_roind(360.-self%o_in%e3get())
         self%prev_ref   = self%reforis%find_closest_proj(self%o_in) ! state not taken into account
         self%prev_corr  = self%pftcc_ptr%corr(self%prev_ref, self%iptcl, self%prev_roind)
+        ! specscore
         frc = self%pftcc_ptr%genfrc(self%prev_ref, self%iptcl, self%prev_roind)
         self%specscore  = max(0., median_nocopy(frc))
+        ! shift search object
         call self%shsrch_obj%new(self%pftcc_ptr, self%lims)
         deallocate(frc)
         if( debug ) write(*,'(A)') '>>> cont3D_srch::END OF PREP_SRCH'

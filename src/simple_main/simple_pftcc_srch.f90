@@ -4,11 +4,13 @@ use simple_pftcc_opt,         only: pftcc_opt
 use simple_polarft_corrcalc,  only: polarft_corrcalc
 use simple_projector,         only: projector
 use simple_simplex_pftcc_opt, only: simplex_pftcc_opt
+        use simple_ori,  only: ori
 use simple_defs               ! use all in there
 implicit none
 
 public :: pftcc_srch
 private
+
 
 type, extends(pftcc_opt) :: pftcc_srch
     private
@@ -83,7 +85,6 @@ contains
         type(ori) :: o
         real      :: vec_here(5)    ! current set of values
         real      :: cost
-        integer   :: rot
         vec_here = vec
         ! check so that the in-plane rotation is within the limit
         call enforce_cyclic_limit(vec_here(1), 360.)
@@ -107,13 +108,11 @@ contains
         call o%set_euler(vec_here(1:3))
         call self%vols_ptr(self%state)%fproject_polar(self%reference, o, self%pftcc_ptr,&
         &expanded=.true., serial=.true.)
-        ! correlation. CTF matrix MUST be created prior to using the minimizer
         cost = -self%pftcc_ptr%corr(self%reference, self%particle, 1, vec_here(4:5))
     end function srch_costfun
     
     function srch_minimize( self, irot, shvec, rxy ) result( crxy )
-        use simple_math, only: rotmat2d, enforce_cyclic_limit
-        use simple_rnd,  only: ran3
+        use simple_math, only: enforce_cyclic_limit
         class(pftcc_srch),     intent(inout) :: self
         integer, optional,     intent(in)    :: irot
         real,    optional,     intent(in)    :: shvec(:)
@@ -139,7 +138,7 @@ contains
         call self%nlopt%minimize(self%ospec, self, cost)
         if(cost < cost_init)then
             ! correlation improvement
-            crxy(1) = -cost               ! correlation
+            crxy(1)   = -cost             ! correlation
             crxy(2:4) = self%ospec%x(1:3) ! euler angles
             ! check so that all rotations are within the limit
             call enforce_cyclic_limit(crxy(2), 360.)
@@ -168,7 +167,7 @@ contains
     subroutine kill( self )
         class(pftcc_srch), intent(inout) :: self
         self%pftcc_ptr => null()
-        self%vols_ptr  => null()         
+        self%vols_ptr  => null()
     end subroutine kill
 
 end module simple_pftcc_srch

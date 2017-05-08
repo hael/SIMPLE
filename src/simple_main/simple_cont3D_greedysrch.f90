@@ -33,7 +33,7 @@ type cont3D_greedysrch
     integer                          :: state         = 0      !< previous state
     integer                          :: prev_state    = 0      !< previous state
     integer                          :: nstates       = 0      !< number of states
-    character(len=STDLEN)            :: shbarr        = ''      !< shift barrier flag
+    character(len=STDLEN)            :: shbarr        = 'yes'  !< shift barrier flag
     logical                          :: exists = .false.
 
   contains
@@ -86,8 +86,8 @@ contains
         real :: lims(5,2)
         self%iptcl = iptcl
         self%ref   = iref
+        self%state = istate
         self%o_in  = a%get_ori(self%iptcl)
-        self%o_out = self%o_in
         self%prev_shift = self%o_in%get_shift()
         ! state
         allocate(self%state_exists(self%nstates))
@@ -136,7 +136,7 @@ contains
         real :: euls(3)
         euls = self%o_in%get_euler()
         call self%srch_obj%set_indices(self%ref, self%iptcl, state=self%state)
-        solution   = self%srch_obj%minimize(rxy=euls)
+        solution = self%srch_obj%minimize(rxy=euls)
         ! updates correlation, euler angles and shift
         self%o_out = self%o_in
         if(solution(1) >= self%prev_corr)then
@@ -164,7 +164,7 @@ contains
         euldist = rad2deg(self%o_in.euldist.self%o_out)
         call self%o_out%set('dist', euldist)
         ! overlap between distributions
-        euldist_thresh = max(0.1, self%angthresh/10.)
+        euldist_thresh = max(0.1, self%angthresh/2.)
         roind      = self%pftcc_ptr%get_roind(360.-self%o_out%e3get())
         prev_roind = self%pftcc_ptr%get_roind(360.-self%o_in%e3get())
         mi_proj  = 0.

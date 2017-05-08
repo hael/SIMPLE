@@ -6,7 +6,6 @@ use simple_params,       only: params
 use simple_ori,          only: ori
 use simple_oris,         only: oris
 use simple_rnd,          only: ran3
-use simple_prime3D_srch, only: prime3D_srch
 use simple_gridding,     only: prep4cgrid
 use simple_strings       ! use all in there
 use simple_math          ! use all in there
@@ -249,7 +248,6 @@ contains
         type(ori),      intent(inout) :: o
         type(ctf) :: tfun
         real      :: x, y, dfx, dfy, angast
-        integer   :: i
         if( p%l_xfel )then
             ! nothing to do 4 now
             return

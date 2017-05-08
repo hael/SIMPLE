@@ -465,8 +465,7 @@ contains
             w(:,:,i) = w(:,:,i) * kb_apod( real(win(3,1)+i-1)-loc(3) )
         end do
         ! SUM( kernel x components )
-        comp = dot_product( reshape(w,(/wlen/)), reshape(self%cmat_exp(win(1,1):win(1,2),&
-            &win(2,1):win(2,2),win(3,1):win(3,2)), (/wlen/)) )
+        comp = sum( w * self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2),win(3,1):win(3,2)) )
     end function interp_fcomp_expanded
     
     ! IMAGE TO POLAR FT TRANSFORMER

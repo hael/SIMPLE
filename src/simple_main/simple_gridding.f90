@@ -11,8 +11,7 @@ contains
     subroutine prep4cgrid( img, img4grid, msk )
         class(image), intent(inout)  :: img, img4grid
         real,         intent(in)     :: msk
-        real                         :: ave, sdev, var, med
-        logical                      :: err
+        real                         :: med
         call img%bwd_ft                                           ! make sure not FTed
         med = img%median_pixel()
         call img%pad(img4grid, backgr=med)                        ! padding in real space                     
@@ -26,7 +25,7 @@ contains
         class(image), intent(inout) :: img
         real, allocatable :: w1(:), w2(:), w3(:)
         integer :: ldim(3), i, j, k, alloc_stat, lims(3,2)
-        real    :: ci, cj, ck, arg
+        real    :: arg
         ! get the limits
         ldim = img%get_ldim()      
         if( img%is_ft() )then
@@ -40,56 +39,46 @@ contains
         w3(lims(3,1):lims(3,2)), stat=alloc_stat )
         call alloc_err("In: divide_w_instr; simple_gridding", alloc_stat)
         ! calculate the values
-        ci = -real(ldim(1))/2.
-        do i=lims(1,1),lims(1,2)
-            if( img%is_ft() )then
-                arg = real(i)/real(ldim(1))
-            else
-                arg = ci/real(ldim(1))
-            endif
-            w1(i) = kb_instr(arg)
-            ci = ci+1.
-        end do
+        call calc_w(lims(1,:), ldim(1), w1)
         if( img%square_dims() )then
             w2 = w1
-            if( img%is_3d() ) w3 = w1
+            if(img%is_3d()) w3 = w1
         else
-            cj = -real(ldim(2))/2.
-            do j=lims(2,1),lims(2,2)
-                if( img%is_ft() )then
-                    arg = real(j)/real(ldim(2))
-                else
-                    arg = cj/real(ldim(2))
-                endif
-                w2(j) = kb_instr(arg)
-                cj = cj+1.
-            end do
-            ck = -real(ldim(3))/2.
-            do k=lims(3,1),lims(3,2)
-                if( img%is_ft() )then
-                    arg = real(k)/real(ldim(3))
-                else
-                    arg = ck/real(ldim(3))
-                endif
-                w3(k) = kb_instr(arg)
-                ck = ck+1.
-            end do
+            call calc_w(lims(2,:), ldim(2), w2)
+            call calc_w(lims(3,:), ldim(3), w3)
         endif
         if( img%is_2d() ) w3 = 1.
         ! divide the image
-        !$omp parallel do schedule(auto) default(shared) private(i,j,k)
+        !$omp parallel do collapse(3) schedule(auto) default(shared) private(i,j,k)
         do i=lims(1,1),lims(1,2)
-            if( w1(i) == 0. ) cycle
             do j=lims(2,1),lims(2,2)
-                if( w2(j) == 0. ) cycle
                 do k=lims(3,1),lims(3,2)
-                    if( w3(k) == 0. ) cycle
                     call img%div([i,j,k], w1(i)*w2(j)*w3(k))
                 end do
             end do
         end do
         !$omp end parallel do
         deallocate(w1,w2,w3)
+
+        contains
+
+            subroutine calc_w( lims_here, ldim_here, w )
+                integer, intent(in)    :: lims_here(2), ldim_here
+                real,    intent(inout) :: w(lims_here(1):lims_here(2))
+                real    :: ci
+                integer :: i
+                ci = -real(ldim_here-1)/2.
+                do i=lims_here(1),lims_here(2)
+                    if( img%is_ft() )then
+                        arg = real(i)/real(ldim_here)
+                    else
+                        arg = ci/real(ldim_here)
+                    endif
+                    w(i) = kb_instr(arg)
+                    ci = ci+1.
+                end do
+            end subroutine calc_w
+            
     end subroutine divide_w_instr
     
 end module simple_gridding
