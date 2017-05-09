@@ -140,7 +140,7 @@ chdir($SIMPLE_SRC_PATH);
 print color('bold blue');
 print"Executing simple_args_generator.pl in dir: ";print color('bold green');
 print"$SIMPLE_SRC_PATH\n"; print color('reset');
-system("$SIMPLE_SCRIPTS_PATH/simple_args_generator.pl")==0 or die 'simple args generator failed';
+system("$SIMPLE_SCRIPTS_PATH/simple_args_generator.pl");
 # tie to the simple_args.f90 file
 my @simple_args;
 tie @simple_args, 'Tie::File', 'simple_args.f90' or die "Could not open file simple_args.f90 $!";
@@ -173,13 +173,13 @@ close $mkma;
 # Compile the library codes using the Makefile_macros script                   #
 ################################################################################
 if( $ICOMPILE == 0 ){
-    system("make cleanall") ==0 or die ' make cleanall failed' ;
-    system("make") ==0 or die ' make  failed';
+    system("make cleanall") ;
+    system("make") ;
 } elsif ( $ICOMPILE == 1 ) {
-    system("make clean") ==0 or die ' make clean failed';
-    system("make")==0 or die ' make  failed';
+    system("make clean");
+    system("make");
 } elsif ( $ICOMPILE == 2 ) {
-    system("make")==0 or die ' make failed';
+    system("make");
 } elsif ( $ICOMPILE == 3 ) {
     # just continue.
 }
