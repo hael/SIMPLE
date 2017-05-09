@@ -1,9 +1,9 @@
 program simple_test_srch
-use simple_prime2D_srch_tester
-use simple_wiener2D_tester
-use simple_optimiser_tester
-use simple_prime3D_srch_tester
-use simple_volpft_srch_tester
+!use simple_prime2D_srch_tester
+!use simple_wiener2D_tester
+! use simple_optimiser_tester
+! use simple_prime3D_srch_tester
+! use simple_volpft_srch_tester
 use simple_cmdline, only: cmdline
 implicit none
 type(cmdline) :: cline
@@ -24,7 +24,7 @@ if( cline%defined('verbose') )then
         be_verbose = .true.
     endif
 endif
-call exec_prime2D_srch_test( cline, be_verbose )
+!call exec_prime2D_srch_test( cline, be_verbose )
 ! call exec_prime3D_srch_test( cline, be_verbose )
 ! call exec_wiener2D_test    ( cline, be_verbose )
 ! call exec_optimiser_test   (        be_verbose )
