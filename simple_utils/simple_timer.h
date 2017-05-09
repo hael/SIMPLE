@@ -71,15 +71,15 @@
   write(*,'(A,A,1i4,A,A,F20.10)') __FILE__,":",__LINE__,TSTRING," time (sec)" toc()
 
 
-#define TPROFILE5(NLOOP,TOK1,TOK2,TOK3,TOK4,TOK5) \
+#define TPROFILE5(NUMLOOPS,TOK1,TOK2,TOK3,TOK4,TOK5) \
   call timer_profile_setup(NUMLOOPS,TOK1,TOK2,TOK3,TOK4,TOK5)
-#define TPROFILE4(NLOOP,TOK1,TOK2,TOK3,TOK4)      \
+#define TPROFILE4(NUMLOOPS,TOK1,TOK2,TOK3,TOK4)      \
   call timer_profile_setup(NUMLOOPS,TOK1,TOK2,TOK3,TOK4)
-#define TPROFILE3(NLOOP,TOK1,TOK2,TOK3)           \
+#define TPROFILE3(NUMLOOPS,TOK1,TOK2,TOK3)           \
   call timer_profile_setup(NUMLOOPS,TOK1,TOK2,TOK3)
-#define TPROFILE2(NLOOP,TOK1,TOK2)                \
+#define TPROFILE2(NUMLOOPS,TOK1,TOK2)                \
   call timer_profile_setup(NUMLOOPS,TOK1,TOK2)
-#define TPROFILE1(NLOOP,TOK1)                     \
+#define TPROFILE1(NUMLOOPS,TOK1)                     \
   call timer_profile_setup(NUMLOOPS,TOK1)
 
 /*#define TPROFILE(NUMLOOPS, ...)  TPROFILE_AUX##VA_NUM_ARGS(__VA_ARGS__)(NUMLOOPS,__VA_ARGS__)
