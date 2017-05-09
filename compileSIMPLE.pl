@@ -140,7 +140,7 @@ chdir($SIMPLE_SRC_PATH);
 print color('bold blue');
 print"Executing simple_args_generator.pl in dir: ";print color('bold green');
 print"$SIMPLE_SRC_PATH\n"; print color('reset');
-system("$SIMPLE_SCRIPTS_PATH/simple_args_generator.pl");
+system("$SIMPLE_SCRIPTS_PATH/simple_args_generator.pl")==0 or die 'simple args generator failed';
 # tie to the simple_args.f90 file
 my @simple_args;
 tie @simple_args, 'Tie::File', 'simple_args.f90' or die "Could not open file simple_args.f90 $!";
@@ -173,13 +173,13 @@ close $mkma;
 # Compile the library codes using the Makefile_macros script                   #
 ################################################################################
 if( $ICOMPILE == 0 ){
-    system("make cleanall");
-    system("make");
+    system("make cleanall") ==0 or die ' make cleanall failed' ;
+    system("make") ==0 or die ' make  failed';
 } elsif ( $ICOMPILE == 1 ) {
-    system("make clean");
-    system("make");
+    system("make clean") ==0 or die ' make clean failed';
+    system("make")==0 or die ' make  failed';
 } elsif ( $ICOMPILE == 2 ) {
-    system("make");
+    system("make")==0 or die ' make failed';
 } elsif ( $ICOMPILE == 3 ) {
     # just continue.
 }
@@ -269,9 +269,9 @@ foreach my $j(0 .. $#prod_dirs){
     $basename =~ s/\.f90//;
     gen_compile_and_link($basename, $bindir);
 	close $fh;
-	system("chmod a+x $filename");
+	system("chmod a+x $filename")==0 or die 'You do not have premision to change attributes.  Make sure you have read/write access to the build directory';
 	print ">>> COMPILING & LINKING: $prgnames_all_short[$j]\n";
-	system("$filename");
+	system("$filename") == 0 or die $filename.' returned an error';
 }
 # produce addonfiles for the bash (.bashrc) and tcsh (.tcshrc) shells
 chdir($SIMPLE_PATH);
