@@ -433,6 +433,7 @@ sub process_fsource{
 }
 
 sub setCompiling_options {
+
     if ($SET_OPTIMIZATION == 0 ) {
 	    $opti = "-O0";
     } elsif ($SET_OPTIMIZATION == 1) {
@@ -456,6 +457,7 @@ sub setCompiling_options {
     } elsif ( $PLATFORM == 1 ) {
 	    $DPLAT = "-DLINUX";
     }
+    if ($DOPENMP ne "" && !($DOPENMP =~ /DOPENMP/) ) {$DOPENMP .= " -DOPENMP ";}
     if( $FCOMPILER =~ /gfortran/ || $FCOMPILER =~ /ifort/ || $FCOMPILER =~ /pgfortran/ ) {
     	if( $DEBUG eq 'yes' ) {
     	    $option            = $option_in." -D_DEBUG $dbg_lvl_f $DPLAT $DOPENMP $DBENCH $DCUDA";

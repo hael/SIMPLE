@@ -1,4 +1,4 @@
-\
+
 /*
   C/FORTRAN  preprocessor macros for timing module blocks
   Note: __PRETTY_FUNCTION__ is GNU specific and not standard
@@ -102,7 +102,8 @@
 
 
 
-#if defined(OPENMP)
+#ifdef OPENMP
+
 #define TBLOCKOMP()                             \
   print *,"Start timer: ", ticOMP()
 
