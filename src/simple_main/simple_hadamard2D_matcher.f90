@@ -315,7 +315,7 @@ contains
         character(len=*), optional, intent(in)    :: fname
         integer :: icls
         if( present(which_iter) )then
-            if( present(fname) ) stop&
+            if( present(fname) ) stop &
             &'fname cannot be present together with which_iter; simple_hadamard2D_matcher :: prime2D_write_sums'
             if( which_iter <= 0 )then
                 p%refs = 'cavgs'//p%ext

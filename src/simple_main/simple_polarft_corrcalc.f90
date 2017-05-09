@@ -756,7 +756,7 @@ contains
             ! calculates only corrs for rotational indices provided in roind_vec
             ! see get_win_roind. returns -1.0 when not calculated
             if( any(roind_vec<=0) .or. any(roind_vec>self%nrots) )&
-                &stop'index out of range; simple_polarft_corrcalc::gencorrs'
+                &stop 'index out of range; simple_polarft_corrcalc::gencorrs'
             cc    = -1.
             nrots = size(roind_vec)
             do i=1,nrots

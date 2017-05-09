@@ -16,7 +16,7 @@ type :: arr
     procedure :: rget
     procedure :: print
     procedure :: kill
-end type
+end type arr
 
 contains
 
