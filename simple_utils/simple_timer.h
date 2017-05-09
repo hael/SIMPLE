@@ -1,4 +1,4 @@
-
+\
 /*
   C/FORTRAN  preprocessor macros for timing module blocks
   Note: __PRETTY_FUNCTION__ is GNU specific and not standard
@@ -16,13 +16,26 @@
 #define CAT(prefix, suffix)            prefix ## suffix
 #define _UNIQUE_LABEL(prefix, suffix)  CAT(prefix, suffix)
 #define UNIQUE_LABEL(prefix)           _UNIQUE_LABEL(prefix, __LINE__)
+/* calculate the number of arguments in macro - max 5 */
+#define VA_ARGS_NUM_PRIV(P1, P2, P3, P4, P5, P6, Pn, ...) Pn
+#define VA_ARGS_NUM(...) VA_ARGS_NUM_PRIV(-1, ##__VA_ARGS__, 5, 4, 3, 2, 1, 0)
 
 
 #define TBLOCK()                                \
   print *,"TBLOCK:  Start timer: ", tic()
 
+
 #define TSTOP()                                                         \
-  write(*,'(A,A,1i4,A,1d20.10)') __FILE__,":",__LINE__,":Elapsed time (s) ", toc()
+  write(*,'(A,A,1i4,A,F20.10)') __FILE__,":",__LINE__,":Elapsed time (sec) ", toc()
+
+#define TBREAK(TSTRING)                         \
+  write(*,'(A,A,1i4,A,A,F20.10)') __FILE__,":",__LINE__,TSTRING," time (sec)" toc()
+
+
+#define TPROFILE(NUMLOOPS, ... )  call timer_profile_setup(NUMLOOPS, VA_ARGS_NUM(__VA_ARGS__), __VA_ARGS__)
+#define TBEG(LABEL) call timer_profile_start(LABEL)
+#define TEND(LABEL) call timer_profile_break(LABEL)
+#define TREPORT(COMMENT) call timer_profile_report(COMMENT)
 
 
 #define START_TIMER_LOOP(N)                     \
