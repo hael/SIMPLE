@@ -471,7 +471,11 @@ contains
         o_prev = a%get_ori(iptcl)
         corr   = max( 0., pftcc%corr(self%prev_ref, iptcl, self%prev_roind) )
         if( corr > 1. .or. .not. is_a_number(corr) )then
-            stop 'Invalid correlation value in simple_prime3d_srch::prep_corr4srch'
+            print *, 'FLOATING POINT EXCEPTION ALARM; simple_prime3D_srch :: prep_corr4srch'
+            print *, 'corr > 1. or isNaN'
+            print *, 'corr = ', corr
+            if( corr > 1. )               corr = 1.
+            if( .not. is_a_number(corr) ) corr = 0.
         endif
         if( (self%refine.eq.'no' .or. self%refine.eq.'adasym') .and. self%nstates==1 )then
             ! moving average for single state only
