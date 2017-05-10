@@ -137,6 +137,7 @@ simple: simple_image.o                  \
         simple_gridding.o               \
         simple_polarft_corrcalc.o       \
         simple_projector.o              \
+        simple_mask_projector.o         \
         simple_pftcc_opt.o              \
         simple_simplex_pftcc_opt.o      \
         simple_projector_hlev.o         \
@@ -243,8 +244,8 @@ cpu_test_code: simple_optimiser_tester.o       \
                simple_ft_expanded_tester.o     \
                simple_speedtester.o            \
                simple_volpft_srch_tester.o     \
-               simple_timer_basic_test.o;
-omp_test_code: simple_timer_omp_test.o;
+               simple_timer_basic_test.o       \
+               simple_timer_omp_test.o         ;
 
 test_code: ;
  

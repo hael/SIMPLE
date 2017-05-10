@@ -42,7 +42,7 @@ type prime2D_srch
     ! GETTERS
     procedure          :: get_nrots
     procedure          :: update_best
-    procedure          :: get_roind
+    !procedure          :: get_roind
     ! PREPARATION ROUTINE
     procedure          :: prep4srch
     ! SEARCH ROUTINES
@@ -67,7 +67,7 @@ contains
         class(params),           intent(in)    :: p
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer :: alloc_stat, i
-        real    :: dang, lims(2,2)
+        real    :: lims(2,2)
         ! destroy possibly pre-existing instance
         call self%kill
         ! set constants
@@ -101,11 +101,12 @@ contains
     end function get_nrots
     
     !>  \brief  to get the class
-    subroutine update_best( self, iptcl, a )
+    subroutine update_best( self, pftcc, iptcl, a )
         use simple_math, only: myacos, rotmat2d, rad2deg
-        class(prime2D_srch), intent(in)    :: self
-        integer,             intent(in)    :: iptcl
-        class(oris),         intent(inout) :: a
+        class(prime2D_srch),     intent(in)    :: self
+        class(polarft_corrcalc), intent(inout) :: pftcc
+        integer,                 intent(in)    :: iptcl
+        class(oris),             intent(inout) :: a
         real    :: euls(3), mi_class, mi_inpl, mi_joint
         integer :: class, rot
         real    :: x, y, mat(2,2), u(2), x1(2), x2(2)
@@ -120,7 +121,7 @@ contains
         rot      = self%best_rot
         ! get in-plane angle
         euls     = 0.
-        euls(3)  = 360.-self%srch_common%rot(rot) ! change sgn to fit convention
+        euls(3)  = 360.-pftcc%get_rot(rot) ! change sgn to fit convention
         if( euls(3) == 360. ) euls(3) = 0.
         call a%set_euler(iptcl, euls)
         ! calculate new vec & distance (in degrees)
@@ -159,11 +160,11 @@ contains
     end subroutine update_best
 
     !>  \brief returns the in-plane rotational index for the rot in-plane angle
-    integer function get_roind( self, rot )
-        class(prime2D_srch), intent(in) :: self
-        real,                intent(in) :: rot
-        get_roind = self%srch_common%roind(rot)
-    end function get_roind
+    ! integer function get_roind( self, rot )
+    !     class(prime2D_srch), intent(in) :: self
+    !     real,                intent(in) :: rot
+    !     get_roind = self%srch_common%roind(rot)
+    ! end function get_roind
 
     ! PREPARATION ROUTINES
 
@@ -178,7 +179,7 @@ contains
         type(ran_tabu)    :: rt
         ! find previous discrete alignment parameters
         self%prev_class = nint(a%get(iptcl,'class'))                  ! class index
-        self%prev_rot   = self%srch_common%roind(360.-a%e3get(iptcl)) ! in-plane angle index
+        self%prev_rot   = pftcc%get_roind(360.-a%e3get(iptcl)) ! in-plane angle index
         self%prev_shvec = [a%get(iptcl,'x'),a%get(iptcl,'y')]         ! shift vector
         ! set best to previous best by default
         self%best_class = self%prev_class         
@@ -212,7 +213,6 @@ contains
         logical,                 intent(in)    :: lconv
         logical, optional,       intent(in)    :: greedy
         real,    optional,       intent(in)    :: extr_bound
-        real    :: lims(2,2)
         logical :: ggreedy
         ggreedy = .false.
         if( present(greedy) ) ggreedy = greedy
@@ -255,7 +255,7 @@ contains
             end do
             self%nrefs_eval = self%nrefs
             call self%shift_srch_local(iptcl)
-            call self%update_best(iptcl, a)
+            call self%update_best(pftcc, iptcl, a)
         else
             call a%reject(iptcl)
         endif
@@ -271,7 +271,7 @@ contains
         class(oris),             intent(inout) :: a
         real, optional,          intent(in)    :: extr_bound
         integer :: iref,loc(1),isample,inpl_ind
-        real    :: corrs(self%nrots),inpl_corr,corr
+        real    :: corrs(self%nrots), inpl_corr
         logical :: found_better
         real    :: corr_bound
         if( nint(a%get(iptcl,'state')) > 0 )then
@@ -319,7 +319,7 @@ contains
                 self%best_rot   = self%prev_rot
             endif
             call self%shift_srch_local(iptcl)
-            call self%update_best(iptcl, a)
+            call self%update_best(pftcc, iptcl, a)
         else
             call a%reject(iptcl)
         endif
@@ -340,7 +340,7 @@ contains
         if( nint(a%get(iptcl,'state')) > 0 )then
             ! find previous discrete alignment parameters
             self%prev_class = nint(a%get(iptcl,'class'))                  ! class index
-            self%prev_rot   = self%srch_common%roind(360.-a%e3get(iptcl)) ! in-plane angle index
+            self%prev_rot   = pftcc%get_roind(360.-a%e3get(iptcl)) ! in-plane angle index
             self%prev_shvec = [a%get(iptcl,'x'),a%get(iptcl,'y')]         ! shift vector
             ! set best to previous best by default
             self%best_class = self%prev_class         
@@ -365,7 +365,7 @@ contains
             end do
             self%nrefs_eval = self%nrefs
             call self%shift_srch_local(iptcl)
-            call self%update_best(iptcl, a)
+            call self%update_best(pftcc, iptcl, a)
         else
             call a%reject(iptcl)
         endif
@@ -382,7 +382,7 @@ contains
             call self%prep4srch( pftcc, iptcl, a )
             self%nrefs_eval = self%nrefs
             call self%shift_srch_local(iptcl)
-            call self%update_best(iptcl, a)
+            call self%update_best(pftcc, iptcl, a)
         else
             call a%reject(iptcl)
         endif

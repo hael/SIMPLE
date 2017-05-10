@@ -28,6 +28,7 @@ use simple_opt_spec,            only: opt_spec
 use simple_convergence,         only: convergence
 use simple_convergence_perptcl, only: convergence_perptcl
 use simple_jiffys,              only: alloc_err
+use simple_mask_projector,      only: mask_projector
 use simple_projector,           only: projector
 use simple_filehandling         ! use all in there
 use simple_kbinterpol           ! use all in there
@@ -52,7 +53,7 @@ type build
     type(image)                         :: img_copy           !< -"-
     type(projector)                     :: vol                !< -"-
     type(projector)                     :: vol_pad            !< -"-
-    type(projector)                     :: mskvol             !< mask volume
+    type(mask_projector)                :: mskvol             !< mask volume
     ! CLUSTER TOOLBOX
     type(ppca)                          :: pca                !< 4 probabilistic pca
     type(centre_clust)                  :: cenclust           !< centre-based clustering object
@@ -70,7 +71,7 @@ type build
     type(projector),        allocatable :: refs(:)            !< references
     type(image),            allocatable :: ctfsqsums(:)       !< CTF**2 sums for Wiener normalisation
     type(projector),        allocatable :: refvols(:)         !< reference volumes for quasi-continuous search
-    type(projector),        allocatable :: mskvols(:)         !< volumes masks for particle masking
+    type(mask_projector),   allocatable :: mskvols(:)         !< volumes masks for particle masking
     type(reconstructor),    allocatable :: recvols(:)         !< array of volumes for reconstruction
     type(eo_reconstructor), allocatable :: eorecvols(:)       !< array of volumes for eo-reconstruction
     real,    allocatable                :: ssnr(:,:)          !< spectral signal to noise rations
@@ -260,6 +261,7 @@ contains
             call self%img_pad%kill
             call self%vol%kill_expanded
             call self%vol%kill
+            call self%mskvol%kill_mskproj
             call self%mskvol%kill
             call self%vol_pad%kill_expanded
             call self%vol_pad%kill
@@ -511,7 +513,7 @@ contains
             endif
             if( allocated(self%mskvols) )then
                 do i=1,size(self%mskvols)
-                    call self%mskvols(i)%kill_env_rproject
+                    call self%mskvols(i)%kill_mskproj
                     call self%mskvols(i)%kill
                 end do
                 deallocate(self%mskvols)

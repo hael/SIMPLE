@@ -425,6 +425,7 @@ contains
                 ! initialize
                 call b%img%init_imgpolarizer(pftcc)
                 ntot = p%top-p%fromp+1
+                cnt  = 0
                 do s=1,p%nstates
                     if( b%a%get_statepop(s) == 0 )then
                         ! empty state
@@ -433,21 +434,21 @@ contains
                     if( p%doautomsk )then
                         ! read & pre-process mask volume
                         b%mskvol = b%mskvols(s)
-                        call b%mskvol%init_env_rproject
+                        call b%mskvol%init_mskproj(p)
                     endif
-                    cnt = 0
                     do iptcl=p%fromp,p%top
                         o      = b%a%get_ori(iptcl)
                         istate = nint(o%get('state'))
                         if( istate /= s ) cycle
                         cnt = cnt + 1
-                        call progress( cnt, ntot )
+                        call progress(cnt, ntot)
                         call read_img_from_stk( b, p, iptcl )
                         call prepimg4align(b, p, o)
                         call b%img%imgpolarizer(pftcc, iptcl)
                     end do
                 end do
-                if( p%doautomsk )call b%mskvol%kill_env_rproject
+                call progress(ntot, ntot)
+                if( p%doautomsk )call b%mskvol%kill_mskproj
                 ! restores b%img dimensions for clean exit
                 if( p%boxmatch < p%box )call b%img%new([p%box,p%box,1],p%smpd)
             end subroutine prep_pftcc_local

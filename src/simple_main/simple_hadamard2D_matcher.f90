@@ -1,7 +1,6 @@
 module simple_hadamard2D_matcher
 use simple_defs
 use simple_polarft_corrcalc, only: polarft_corrcalc
-use simple_prime_srch,       only: prime_srch
 use simple_prime2D_srch,     only: prime2D_srch
 use simple_ori,              only: ori
 use simple_build,            only: build

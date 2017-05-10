@@ -287,22 +287,15 @@ contains
                     stop 'Unsupported ctf mode; simple_hadamard_common :: prepimg4align'
             end select
             ! shift image to rotational origin
-            if( abs(x) > SHTHRESH .or. abs(y) > SHTHRESH ) call b%img%shift(-x, -y)
+            if(abs(x) > SHTHRESH .or. abs(y) > SHTHRESH) call b%img%shift(-x, -y)
             ! back to real-space
             call b%img%bwd_ft
             ! clip image if needed
             if( p%boxmatch < p%box ) call b%img%clip_inplace([p%boxmatch,p%boxmatch,1]) ! SQUARE DIMS ASSUMED
             ! MASKING
             if( p%doautomsk )then
-                ! PARTICLE ENVELOPPE MASKING
-                if( p%boxmatch < p%box )call b%img_msk%new([p%boxmatch,p%boxmatch,1], p%smpd)
-                call b%mskvol%env_rproject(o, b%img_msk, p%msk) ! create 2D envelope
-                !do i=1, p%binwidth
-                !    call b%img_msk%grow_bin             ! binary layers
-                !enddo
-                call b%img_msk%cos_edge(p%edge)         ! soft edge
-                !call b%img%mask(p%msk, 'soft')          ! testing
-                call b%img%mul(b%img_msk)               ! multiply by projected envelope
+                ! particle masking
+                call b%mskvol%apply_mask(b%img, o)
             else if( p%automsk .eq. 'cavg' )then
                 ! ab initio mask
                 call automask2D(b%img, p)

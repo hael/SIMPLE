@@ -51,11 +51,6 @@ type, extends(image) :: projector
     procedure          :: imgpolarizer
     procedure, private :: kill_imgpolarizer
     procedure          :: kill_expanded
-    ! MASK REAL-SPACE PROJECTION
-    procedure          :: init_env_rproject
-    procedure          :: env_rproject
-    procedure          :: kill_env_rproject
-    procedure          :: destructor
 end type projector
 
 contains
@@ -575,91 +570,6 @@ contains
         deallocate(pft, comps)
     end subroutine imgpolarizer
 
-    ! REAL-SPACE PROJECTOR
-
-    !>  \brief  
-    subroutine init_env_rproject( self )
-        !$ use omp_lib
-        !$ use omp_lib_kinds
-        class(projector), intent(inout) :: self   !< projector instance
-        real, allocatable :: rmat(:,:,:)
-        real              :: thresh
-        integer           :: ldim(3),i, ii, jj, j, k, orig(3)
-        call self%kill_env_rproject
-        ldim = self%get_ldim()
-        if( ldim(3) == 1 )          stop 'only for Volumes; env_rproject; simple_projector'
-        if( .not. self%even_dims() )stop 'even dimensions assumed; env_rproject; simple_projector'
-        if( self%is_ft() )          stop 'real space only; env_rproject; simple_projector'
-        ! init
-        call self%norm_bin          ! ensures [0;1] range
-        rmat   = self%get_rmat()
-        thresh = 0.9999             ! prior soft masking is discarded
-        orig = ldim/2+1
-        allocate( self%is_in_mask(1-orig(1):ldim(1)-orig(1),&
-                                 &1-orig(2):ldim(2)-orig(2),&
-                                 &1-orig(3):ldim(3)-orig(3)) )
-        self%is_in_mask = .false.
-        !$omp parallel do default(shared) private(i,ii,jj,j,k)
-        do i=1,ldim(1)-1
-            ii = i-orig(1)
-            do j=1,ldim(2)-1
-                jj = j-orig(2)
-                do k=1,ldim(3)-1
-                    ! if any of the 8 neighbors is in hard mask, value is set to true
-                    self%is_in_mask(ii, jj, k-orig(3)) = any(rmat(i:i+1, j:j+1, k:k+1) >= thresh)
-                enddo
-            enddo
-        enddo
-        !$omp end parallel do
-        deallocate(rmat)            
-    end subroutine init_env_rproject
-
-    !>  \brief  Envelope projection effector
-    subroutine env_rproject(self, e, img, maxrad)
-        !$ use omp_lib
-        !$ use omp_lib_kinds
-        class(projector), intent(inout) :: self   !< projector instance
-        class(ori),       intent(inout)    :: e      !< Euler angle
-        type(image),      intent(inout) :: img    !< resulting projection image
-        real,             intent(in)    :: maxrad !< project inside this radius
-        real              :: incr_i(3), incr_j(3), incr_k(3), ray_k(3), corner(3), mmaxrad
-        integer           :: orig(3), ldim(3),  lims(2), inds(3), i, j, k, sqmaxrad, vec(2)
-        if( .not.allocated(self%is_in_mask) )stop 'the envelope projector has not been initialized'
-        ldim = self%get_ldim()
-        if( ldim(3) == 1 )          stop 'only for Volumes; env_rproject; simple_projector'
-        if( .not. self%even_dims() )stop 'even dimensions assumed; env_rproject; simple_projector'
-        if( self%is_ft() )          stop 'real space only; env_rproject; simple_projector'
-        ! init
-        img      = 0.
-        orig     = ldim/2+1
-        mmaxrad  = min(maxrad,real(ldim(1))/2.-1.)
-        sqmaxrad = nint(mmaxrad**2)
-        lims(1)  = orig(1) - ceiling(mmaxrad)
-        lims(2)  = orig(2) + ceiling(mmaxrad)
-        incr_i   = matmul([1., 0., 0.], e%get_mat())
-        incr_j   = matmul([0., 1., 0.], e%get_mat())
-        incr_k   = matmul([0., 0., 1.], e%get_mat())
-        corner   = matmul(-real([mmaxrad+1,mmaxrad+1,mmaxrad+1]), e%get_mat())
-        !$omp parallel do collapse(2) default(shared) private(j,i,k,ray_k,inds,vec)
-        do i=lims(1),lims(2) 
-            do j=lims(1),lims(2)
-                vec = [i, j] - orig(1:2)
-                if(dot_product(vec, vec) > sqmaxrad)cycle
-                ray_k = corner + real(i-lims(1)+1)*incr_i + real(j-lims(1)+1)*incr_j
-                do k = lims(1),lims(2)
-                    ray_k = ray_k + incr_k
-                    inds  = floor(ray_k)
-                    if(dot_product(inds,inds) > sqmaxrad) cycle
-                    if( self%is_in_mask(inds(1), inds(2), inds(3)) )then
-                        call img%set([i,j,1], 1.)
-                        exit
-                    endif                    
-                enddo
-            enddo
-        enddo
-        !$omp end parallel do
-    end subroutine env_rproject
-
     ! DESTRUCTORS
 
     !>  \brief  is a destructor of impolarizer 
@@ -678,18 +588,5 @@ contains
         self%ldim_exp        = 0
         self%expanded_exists = .false.
     end subroutine kill_expanded
-
-    !>  \brief  is the enveloppe projector killer
-    subroutine kill_env_rproject( self )
-        class(projector), intent(inout) :: self !< projector instance
-        if( allocated(self%is_in_mask) )deallocate(self%is_in_mask)          
-    end subroutine kill_env_rproject
-
-    !>  \brief  is a destructor for projector, not parent image 
-    subroutine destructor( self )
-        class(projector), intent(inout) :: self !< projector instance
-        call self%kill_env_rproject
-        call self%kill_expanded
-    end subroutine destructor
 
 end module simple_projector
