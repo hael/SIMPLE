@@ -11,7 +11,7 @@ type, abstract :: pftcc_opt
     procedure(generic_costfun),      deferred :: costfun
     procedure(generic_minimize),     deferred :: minimize
     procedure(generic_get_nevals),   deferred :: get_nevals
-end type
+end type  pftcc_opt
 
 abstract interface
 

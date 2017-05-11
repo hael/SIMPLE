@@ -43,11 +43,11 @@ contains
         class(comlin_smat_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(params), target          :: p
-        type(build), target           :: b
+        type(build),  target          :: b
         type(ori)                     :: orientation_best
         integer                       :: iptcl, jptcl, alloc_stat, funit, io_stat
         integer                       :: cnt, ntot, npairs, ipair, fnr
-        real, allocatable             :: corrmat(:,:), corrs(:)
+        real,    allocatable          :: corrmat(:,:), corrs(:)
         integer, allocatable          :: pairs(:,:)
         logical                       :: debug=.false.
         character(len=:), allocatable :: fname
@@ -66,7 +66,7 @@ contains
         end do
         b%clins = comlin(b%a, b%imgs_sym, p%lp)
         if( cline%defined('part') )then
-            npairs = p%top-p%fromp+1
+            npairs = p%top - p%fromp + 1
             if( debug ) print *, 'allocating this number of similarities: ', npairs
             allocate(corrs(p%fromp:p%top), pairs(p%fromp:p%top,2), stat=alloc_stat)
             call alloc_err('In: simple_comlin_smat, 1', alloc_stat)

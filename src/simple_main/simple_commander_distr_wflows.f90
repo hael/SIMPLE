@@ -30,6 +30,7 @@ public :: unblur_tomo_movies_distr_commander
 public :: ctffind_distr_commander
 public :: pick_distr_commander
 public :: makecavgs_distr_commander
+public :: comlin_smat_distr_commander
 public :: cont3D_distr_commander
 public :: prime2D_distr_commander
 public :: prime2D_chunk_distr_commander
@@ -64,6 +65,10 @@ type, extends(commander_base) :: makecavgs_distr_commander
   contains
     procedure :: execute      => exec_makecavgs_distr
 end type makecavgs_distr_commander
+type, extends(commander_base) :: comlin_smat_distr_commander
+  contains
+    procedure :: execute      => exec_comlin_smat_distr
+end type comlin_smat_distr_commander
 type, extends(commander_base) :: prime2D_distr_commander
   contains
     procedure :: execute      => exec_prime2D_distr
@@ -400,8 +405,6 @@ contains
         call cline_check2D_conv%set('nptcls', real(p_master%nptcls))
         call cline_cavgassemble%set('prg', 'cavgassemble')
         call cline_makecavgs%set('prg',   'makecavgs')
-            
-
         if( .not. cline%defined('refs') .and. job_descr%isthere('automsk') ) call job_descr%delete('automsk')
 
         ! split stack
@@ -615,6 +618,39 @@ contains
 
     end subroutine exec_prime2D_chunk_distr
 
+    ! 3D SIMILARITY MATRIX GENERATION WITH COMMON LINES
+
+    subroutine exec_comlin_smat_distr( self, cline )
+        use simple_commander_comlin, only: comlin_smat_commander
+        use simple_commander_distr,  only: merge_similarities_commander
+        class(comlin_smat_distr_commander), intent(inout) :: self
+        class(cmdline),                     intent(inout) :: cline
+        type(merge_similarities_commander) :: xmergesims
+        type(cmdline)  :: cline_mergesims
+        type(qsys_env) :: qenv
+        type(params)   :: p_master
+        type(chash)    :: job_descr
+        integer        :: nptcls
+        ! make master parameters
+        p_master        = params(cline, checkdistr=.false.)
+        nptcls          = p_master%nptcls
+        p_master%nptcls = (p_master%nptcls*(p_master%nptcls - 1))/2
+        ! setup the environment for distributed execution
+        call qenv%new(p_master)
+        ! prepare job description
+        call cline%gen_job_descr(job_descr)
+        ! schedule & clean
+        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)
+        ! merge similarities
+        call cline_mergesims%set('nptcls', real(nptcls))
+        call cline_mergesims%set('nparts', real(p_master%nparts))
+        call xmergesims%execute( cline_mergesims )
+        ! clean
+        call qsys_cleanup(p_master)
+        ! end gracefully
+        call simple_end('**** SIMPLE_DISTR_COMLIN_SMAT NORMAL STOP ****')
+    end subroutine exec_comlin_smat_distr
+
     ! PRIME3D_INIT
 
     subroutine exec_prime3D_init_distr( self, cline )
@@ -706,6 +742,7 @@ contains
         p_master = params(cline, checkdistr=.false.)
         ! make oritab
         call os%new(p_master%nptcls)
+
         ! options check
         !if( p_master%automsk.eq.'yes' )stop 'Automasking not supported yet' ! automask deactivated for now
         if( p_master%nstates>1 .and. p_master%dynlp.eq.'yes' )&
@@ -714,8 +751,10 @@ contains
             &stop 'Incompatible options: automsk=yes and dynlp=yes'
         if( p_master%eo.eq.'yes' .and. p_master%dynlp.eq.'yes' )&
             &stop 'Incompatible options: eo=yes and dynlp=yes'
+
         ! setup the environment for distributed execution
         call qenv%new(p_master)
+
         ! initialise
         if( .not. cline%defined('nspace') ) call cline%set('nspace', 1000.)
         call cline%set( 'box', real(p_master%box) )
@@ -727,6 +766,7 @@ contains
         cline_merge_algndocs = cline
         cline_volassemble    = cline
         cline_postproc_vol   = cline
+
         ! initialise static command line parameters and static job description parameter
         call cline_recvol_distr%set( 'prg', 'recvol' )       ! required for distributed call
         call cline_prime3D_init%set( 'prg', 'prime3D_init' ) ! required for distributed call

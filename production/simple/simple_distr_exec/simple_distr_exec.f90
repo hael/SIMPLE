@@ -21,7 +21,6 @@ implicit none
 
 ! DISTRIBUTED COMMANDERS
 ! pre-processing
-
 type(preproc_stream_commander)            :: xpreproc_stream
 type(unblur_ctffind_distr_commander)      :: xunblur_ctffind_distr
 type(unblur_distr_commander)              :: xunblur_distr
@@ -435,7 +434,7 @@ select case(prg)
         if( .not. cline%defined('nspace') ) call cline%set('nspace', 1000.)
         ! execute
         call xprime3D_init_distr%execute( cline )
-    case('prime3D')
+    case( 'prime3D' )
         !==Program prime3D
         !
         ! <prime3D/begin>is an ab inito reconstruction/refinement program based on probabilistic
@@ -517,7 +516,7 @@ select case(prg)
         endif
         ! execute
         call xprime3D_distr%execute(cline)
-    case('cont3D')
+    case( 'cont3D' )
         !==Program prime3D
         !
         ! <cont3D/begin><cont3D/end>
@@ -611,34 +610,44 @@ select case(prg)
         ! execute
         call xrecvol_distr%execute( cline )
     case( 'symsrch' )
-        !==Program recvol
+        !==Program symsrch
         !
-        ! <recvol/begin>volum-based symmetry serach only<recvol/end>
-        !
+        ! <symsrch/begin>is a program for searching for the principal symmetry axis of a volume 
+        ! reconstructed without assuming any point-group symmetry. The program takes as input an 
+        ! asymmetrical 3D reconstruction. The alignment document for all the particle images 
+        ! that have gone into the 3D reconstruction and the desired point-group symmetry needs to 
+        ! be inputted. The 3D reconstruction is then projected in 150 (default option) even directions, 
+        ! common lines-based optimisation is used to identify the principal symmetry axis, the rotational 
+        ! transformation is applied to the inputted orientations, and a new alignment document is produced. 
+        ! Input this document to recvol together with the images and the point-group symmetry to generate a 
+        ! symmetrised map. If you are unsure about the point-group, you should use the compare=yes mode and 
+        ! input the highest conceviable point-group. The program then calculates probabilities for all lower 
+        ! groups inclusive.<symsrch/end>
+        !        
         ! set required keys
-        keys_required(1)  = 'smpd'
-        keys_required(2)  = 'msk'
-        keys_required(3)  = 'vol1'
+        keys_required(1)  = 'vol1'
+        keys_required(2)  = 'smpd'
+        keys_required(3)  = 'msk'
         keys_required(4)  = 'pgrp'
-        keys_required(5)  = 'lp'
-        keys_required(6)  = 'nparts'
+        keys_optional(5)  = 'oritab'
+        keys_required(6)  = 'lp'
+        keys_required(7)  = 'nparts'
         ! set optional keys
         keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'oritab'
-        keys_optional(3)  = 'cenlp'
-        keys_optional(4)  = 'hp'
-        keys_optional(5)  = 'nspace'
+        keys_optional(2)  = 'cenlp'
+        keys_optional(3)  = 'hp'
+        keys_optional(4)  = 'nspace'
         ! parse command line
         if( describe ) call print_doc_symsrch
-        call cline%parse(keys_required(:6), keys_optional(:5))
+        call cline%parse(keys_required(:7), keys_optional(:4))
         ! set defaults
-        if(cline%defined('stk'))stop 'Distributed execution of SYMSRCH does not support the STK argument'
         if(cline%defined('compare'))stop 'Distributed execution of SYMSRCH does not support the COMPARE argument'
         call cline%set('nptcls', 150.)                                 ! 50 projections 4 symsrch
         if(.not.cline%defined('nspace'))call cline%set('nspace', 150.) ! 50 projections 4 symsrch
         if(.not.cline%defined('cenlp')) call cline%set('cenlp',   30.)
         ! execute
         call xsymsrch_distr%execute( cline )
+
     ! TIME-SERIES DISTRIBUTED WORKFLOWS
 
     case( 'tseries_track' )
