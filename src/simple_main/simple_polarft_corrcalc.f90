@@ -69,6 +69,7 @@ type :: polarft_corrcalc
     procedure          :: exists
     ! PRINTERS/VISUALISERS
     procedure          :: print
+    procedure          :: check
     procedure          :: vis_ptcl
     procedure          :: vis_ref    
     ! MEMOIZERS
@@ -93,6 +94,7 @@ type :: polarft_corrcalc
     procedure, private :: corr_1
     procedure, private :: corr_2
     generic            :: corr => corr_1, corr_2
+    procedure          :: corr_single
     ! DESTRUCTOR
     procedure          :: kill
 end type polarft_corrcalc
@@ -833,7 +835,6 @@ contains
         integer,                 intent(in)    :: iref, iptcl, irot !< reference, particle, rotation
         real :: cc
         if( self%with_ctf )then
-            call self%apply_ctf_single(iptcl, iref)
             call floating_point_checker
             cc = sum(real(self%pfts_refs_ctf(iref,:,:) * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:))))
         else
@@ -852,6 +853,69 @@ contains
             end subroutine floating_point_checker
 
     end function corr_1
+
+    !>  \brief  for calculating the correlation between reference iref and particle iptcl in rotation irot
+    !>          Only intended when the CTF has NOT been applied to the reference!
+    function corr_single( self, iref, iptcl, irot ) result( cc )
+        class(polarft_corrcalc), intent(inout) :: self              !< instance
+        integer,                 intent(in)    :: iref, iptcl, irot !< reference, particle, rotation
+        real :: cc
+        call floating_point_checker
+        if( self%with_ctf )then
+            call self%apply_ctf_single(iptcl, iref)
+            cc = sum(real(self%pfts_refs_ctf(iref,:,:) * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:))))
+        else
+            cc = sum(real(self%pfts_refs(iref,:,:) * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:))))
+        endif
+        cc = cc/sqrt(self%sqsums_refs(iref)*self%sqsums_ptcls(iptcl))
+
+        contains
+
+            subroutine floating_point_checker
+                if( self%sqsums_refs(iref) < TINY .or. self%sqsums_ptcls(iptcl) < TINY )then
+                    cc = 0.
+                    return
+                endif
+            end subroutine floating_point_checker
+
+    end function corr_single
+
+    subroutine check( self, iref, iptcl, irot )
+        class(polarft_corrcalc), intent(inout) :: self              !< instance
+        integer,                 intent(in)    :: iref, iptcl, irot !< reference, particle, rotation
+        real :: cc
+        print *,'in pffcc%check'
+        print *,'iref',iref
+        print *,'irot',irot
+        print *,'iptcl',iptcl
+        if( self%with_ctf )then
+            call floating_point_checker
+            print *,sum(real(self%pfts_refs_ctf(iref,:,:)))
+            print *,conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:))
+            cc = sum(real(self%pfts_refs_ctf(iref,:,:) * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:))))
+        else
+            call floating_point_checker
+            print *,sum(real(self%pfts_refs(iref,:,:)))
+            print *,conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:))
+            cc = sum(real(self%pfts_refs(iref,:,:) * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:))))
+        endif
+        print *,'cc',cc
+        print *,'sqsums_refs(iref)',self%sqsums_refs(iref)
+        print *,'sqsums_ptclss(iptcl)',self%sqsums_ptcls(iptcl)
+        print *,sqrt(self%sqsums_refs(iref)*self%sqsums_ptcls(iptcl))
+        cc = cc/sqrt(self%sqsums_refs(iref)*self%sqsums_ptcls(iptcl))
+        print *,'cc',cc
+
+        contains
+
+            subroutine floating_point_checker
+                if( self%sqsums_refs(iref) < TINY .or. self%sqsums_ptcls(iptcl) < TINY )then
+                    cc = 0.
+                    return
+                endif
+            end subroutine floating_point_checker
+
+    end subroutine check
 
     !>  \brief  for calculating the on-fly shifted correlation between reference iref and particle iptcl in rotation irot
     function corr_2( self, iref, iptcl, irot, shvec ) result( cc )

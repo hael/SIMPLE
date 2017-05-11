@@ -350,12 +350,17 @@ contains
         ! normalise
         call ref%norm
         ! apply mask
-        if( p%l_innermsk )then
-            call ref%mask(p%msk, 'soft', inner=p%inner, width=p%width)
-        else 
-            call ref%mask(p%msk, 'soft')
+        if( p%l_automsk )then
+            ! automasking
+            call automask2D(ref, p)
+        else
+            ! soft masking
+            if( p%l_innermsk )then
+                call ref%mask(p%msk, 'soft', inner=p%inner, width=p%width)
+            else 
+                call ref%mask(p%msk, 'soft')
+            endif
         endif
-        if( p%l_automsk ) call automask2D(ref, p)
         ! move to Fourier space
         call ref%fwd_ft
     end subroutine prep2Dref_2

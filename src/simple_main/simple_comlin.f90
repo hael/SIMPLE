@@ -81,7 +81,7 @@ contains
                 call self%extr_comlin(i, j, corrs(j), sums1(j), sums2(j), foundlines(j))
             end do
             if(any(foundlines)) then
-                cciter = calc_corr(sum(corrs),sum(sums1)*sum(sums2))
+                cciter = calc_corr(sum(corrs,mask=foundlines),sum(sums1,mask=foundlines)*sum(sums2,mask=foundlines))
             else
                 cciter = -1.
             endif

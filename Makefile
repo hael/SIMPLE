@@ -187,7 +187,6 @@ matcher: simple_picker.o                  \
          simple_cartft_corrcalc.o         \
          simple_scatter_orisrch.o         \
          simple_cftcc_shsrch.o            \
-         simple_pftcc_contsrch.o          \
          simple_cont3D_matcher.o          \
          simple_hadamard2D_matcher.o      \
          simple_hadamard3D_matcher.o      ;

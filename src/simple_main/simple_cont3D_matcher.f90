@@ -223,7 +223,7 @@ contains
         if( p%l_distr_exec )then
             call qsys_job_finished( p, 'simple_pcont3D_matcher :: cont3D_exec')
         else
-            converged = b%conv%check_conv3D(update_res)
+            converged = b%conv%check_conv_cont3D()
         endif
         
         ! DEALLOCATE

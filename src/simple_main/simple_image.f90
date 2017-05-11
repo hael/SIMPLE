@@ -159,7 +159,7 @@ type :: image
     procedure          :: center
     procedure          :: bin_inv
     procedure          :: grow_bin
-    procedure          :: grow_bin2
+    procedure          :: grow_bins
     procedure          :: cos_edge
     procedure          :: increment
     ! FILTERS
@@ -1481,7 +1481,6 @@ contains
                 real, intent(in)     :: x, y, dx, dy
                 complex              :: comp
                 real                 :: arg
-                !arg = (pi/real(xdim))*(dx*x+dy*y)
                 arg = (pi/real(xdim)) * dot_product([x,y], [dx,dy])
                 comp = cmplx(cos(arg),sin(arg))
             end function oshift_here
@@ -2545,32 +2544,76 @@ contains
     end subroutine grow_bin
 
     !>  \brief  adds one layer of pixels bordering the background in a binary image
-    ! DEV ONLY
-    subroutine grow_bin2( self )
+    subroutine grow_bins( self, nlayers )
         class(image), intent(inout) :: self
-        integer                     :: alloc_stat, x, y, z
-        logical, allocatable        :: lmat(:,:,:), imat(:,:,:)
+        integer,      intent(in)    :: nlayers
+        integer                     :: i,j,k,alloc_stat, tsz(3,2), win(3,2), pdsz(3,2)
+        logical, allocatable        :: add_pixels(:,:,:), template(:,:,:)
         if( self%ft ) stop 'only for real images; grow_bin; simple image'
-        x = self%ldim(1)
-        y = self%ldim(2)
-        z = self%ldim(3)
-        allocate(imat(x, y, z), stat=alloc_stat)
-        call alloc_err('grow_bin; simple_image', alloc_stat)
-        lmat = (self%rmat(:x, :y, :z) > 0.5)
-        imat = lmat
-        if(self%is_2d())then
-            imat( :x-1, :y,   :z) = imat( :x-1, :y,   :z) .or. lmat(2:x,   :y,   :z)
-            imat(2:x,   :y,   :z) = imat(2:x,   :y,   :z) .or. lmat( :x-1, :y,   :z)
-            imat( :x,   :y-1, :z) = imat( :,    :y-1, :z) .or. lmat( :x,  2:y,   :z)
-            imat( :x,  2:y,   :z) = imat( :,   2:y,   :z) .or. lmat( :x,   :y-1, :z)
-            ! ...TBC
+        tsz(:,1) = -nlayers
+        tsz(:,2) = nlayers
+        if(self%is_2d())tsz(3,:) = 1
+        allocate( template(tsz(1,1):tsz(1,2), tsz(2,1):tsz(2,2), tsz(3,1):tsz(3,2)), stat=alloc_stat )
+        call alloc_err('grow_bins; simple_image 2', alloc_stat)
+        pdsz(:,1) = 1 - nlayers
+        pdsz(:,2) = self%ldim + nlayers
+        if(self%is_2d())pdsz(3,:) = 1
+        allocate( add_pixels(pdsz(1,1):pdsz(1,2), pdsz(2,1):pdsz(2,2),&
+        &pdsz(3,1):pdsz(3,2)), stat=alloc_stat )
+        call alloc_err('grow_bins; simple_image 1', alloc_stat)
+        ! template matrix
+        template = .true.
+        do i = tsz(1,1), tsz(1,2)
+            do j = tsz(2,1), tsz(2,2)
+                if(self%is_2d())then
+                    if(dot_product([i,j], [i,j]) > nlayers**2) template(i,j,1) = .false.
+                else
+                    do k = tsz(3,1), tsz(3,2)
+                        if(dot_product([i,j,k],[i,j,k]) > nlayers**2) template(i,j,k) = .false.
+                    enddo
+                endif
+            enddo
+        enddo
+        ! init paddedd logical array
+        add_pixels = .false.
+        forall( i=1:self%ldim(1), j=1:self%ldim(2), k=1:self%ldim(3), self%rmat(i,j,k)==1. )&
+            & add_pixels(i,j,k) = .true.
+        ! cycle
+        if( self%is_3d() )then
+            do i = 1, self%ldim(1)
+                if( .not.any(self%rmat(i,:,:) > 0.5) )cycle
+                do j = 1, self%ldim(2)
+                    if( .not.any(self%rmat(i,j,:) > 0.5) )cycle
+                    win(1:2,1) = [i, j] - nlayers
+                    win(1:2,2) = [i, j] + nlayers
+                    do k = 1, self%ldim(3)
+                        if (self%rmat(i,j,k) <= 0.5)cycle
+                        win(3,1) = k - nlayers
+                        win(3,2) = k + nlayers
+                        add_pixels(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
+                        &add_pixels(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2))&
+                        &.or.template
+                    enddo
+                enddo
+            enddo
         else
-
-
+            do i=1,self%ldim(1)
+                if( .not.any(self%rmat(i,:,1) > 0.5) )cycle
+                do j=1,self%ldim(2)
+                    win(1:2,1) = [i, j] - nlayers
+                    win(1:2,2) = [i, j] + nlayers
+                    if (self%rmat(i,j,1) <= 0.5)cycle
+                    add_pixels(win(1,1):win(1,2), win(2,1):win(2,2), 1) =&
+                    &add_pixels(win(1,1):win(1,2), win(2,1):win(2,2), 1).or.template(:,:,1)
+                enddo
+            enddo
         endif
-        where(imat) self%rmat = 1.
-        deallocate(imat,lmat)
-    end subroutine grow_bin2
+        ! finalize
+        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = 0.
+        forall( i=1:self%ldim(1), j=1:self%ldim(2), k=1:self%ldim(3), add_pixels(i,j,k) ) &
+            & self%rmat(i,j,k) = 1.
+        deallocate( template, add_pixels )
+    end subroutine grow_bins
 
     !>  \brief  applies cosine edge to a binary image
     subroutine cos_edge( self, falloff )
@@ -2587,7 +2630,7 @@ contains
         self%rmat   = self%rmat/maxval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
         rfalloff    = real( falloff )
         falloff_sq  = falloff**2
-        scalefactor = PI / (2.*rfalloff)
+        scalefactor = PI / rfalloff
         allocate( rmat(self%ldim(1),self%ldim(2),self%ldim(3)) )
         rmat = self%rmat(1:self%ldim(1),:,:)
         do i=1,self%ldim(1)
@@ -2665,7 +2708,7 @@ contains
             ! this is not a replacement of math%cosedge, which is not applicable here
             elemental real function local_versine( r_sq )result( c )
                 real, intent(in) :: r_sq
-                c = 1. - cos(scalefactor * (sqrt(r_sq)-rfalloff))
+                c = 0.5 * (1. - cos(scalefactor*(sqrt(r_sq)-rfalloff)) )
             end function local_versine
 
     end subroutine cos_edge

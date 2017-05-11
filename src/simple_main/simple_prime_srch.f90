@@ -14,8 +14,7 @@ type prime_srch
     ! CONSTRUCTOR 
     procedure :: new
     ! GETTERS
-    procedure :: roind
-    procedure :: rot
+
     ! DESTRUCTOR
     procedure :: kill
 end type prime_srch
@@ -50,27 +49,6 @@ contains
         forall( i=1:self%nrots ) self%angtab(i) = rad2deg(real(i-1)*dang)
         self%exists = .true.
     end subroutine new
-    
-    !>  \brief calculates the in-plane rotational index for the rot in-plane angle
-    function roind( self, rot ) result( ind )
-        class(prime_srch), intent(in) :: self
-        real,              intent(in) :: rot
-        real    :: dists(self%nrots)
-        integer :: ind, loc(1)
-        dists = abs(self%angtab-rot)
-        where(dists>180.)dists = 360.-dists
-        loc = minloc(dists)
-        ind = loc(1)
-    end function roind
-    
-    !>  \brief calculates the in-plane angle of in-plane rotational index rot
-    function rot( self, ind ) result( r )
-        class(prime_srch), intent(in) :: self
-        integer,           intent(in) :: ind
-        real :: r
-        r = self%angtab(ind)
-        if( r == 360. ) r = 0.
-    end function rot
     
     !>  \brief  is a destructor
     subroutine kill( self )

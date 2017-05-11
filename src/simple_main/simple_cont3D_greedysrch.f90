@@ -152,8 +152,8 @@ contains
     !>  \brief  updates solutions orientations
     subroutine prep_ori( self )
         class(cont3D_greedysrch), intent(inout) :: self
-        real      :: u(2), mat(2,2), x1(2), x2(2), euldist_thresh
-        real      :: frac, euldist, mi_proj, mi_inpl, mi_state, mi_joint
+        real      :: u(2), mat(2,2), x1(2), x2(2)
+        real      :: frac, euldist, mi_inpl, mi_proj, mi_state, mi_joint
         integer   :: roind, prev_roind
         call self%o_out%set('ow', 1.)
         call self%o_out%set('specscore', self%specscore)
@@ -164,35 +164,30 @@ contains
         euldist = rad2deg(self%o_in.euldist.self%o_out)
         call self%o_out%set('dist', euldist)
         ! overlap between distributions
-        euldist_thresh = max(0.1, self%angthresh/2.)
         roind      = self%pftcc_ptr%get_roind(360.-self%o_out%e3get())
         prev_roind = self%pftcc_ptr%get_roind(360.-self%o_in%e3get())
-        mi_proj  = 0.
         mi_inpl  = 0.
         mi_state = 0.
         mi_joint = 0.
-        if(euldist < euldist_thresh)then
-            mi_proj  = mi_proj  + 1.
-            mi_joint = mi_joint + 1.
-        endif
+        mi_proj  = 0.
         if(prev_roind == roind)then
             mi_inpl  = mi_inpl  + 1.
             mi_joint = mi_joint + 1.
         endif
-        if(self%nstates > 1)then
-            if(self%prev_state == self%state)then
-                mi_state = mi_state + 1.
-                mi_joint = mi_joint + 1.
-            endif
-            mi_joint = mi_joint/3.
-        else
-            mi_state = 1.
-            mi_joint = mi_joint/2.
-        endif
+        ! if(self%nstates > 1)then
+        !     if(self%prev_state == self%state)then
+        !         mi_state = mi_state + 1.
+        !         mi_joint = mi_joint + 1.
+        !     endif
+        !     mi_joint = mi_joint/3.
+        ! else
+        !     mi_state = 1.
+        !     mi_joint = mi_joint/2.
+        ! endif
         call self%o_out%set('mi_proj',  mi_proj)
         call self%o_out%set('mi_inpl',  mi_inpl)
-        call self%o_out%set('mi_state', mi_state)
-        call self%o_out%set('mi_joint', mi_joint)
+        call self%o_out%set('mi_state', 1.) ! ignored for now
+        call self%o_out%set('mi_joint', 1.) ! ignored for now
         ! in-plane distance
         ! make in-plane unit vector
         u = [0., 1.]
@@ -204,8 +199,9 @@ contains
         x2  = matmul(u, mat)
         call self%o_out%set('dist_inpl', rad2deg(myacos(dot_product(x1,x2))))
         ! frac
-        frac = 100.*(1.-min(euldist/euldist_thresh, 1.))
-        call self%o_out%set('frac', frac)
+        call self%o_out%set('frac', 0.)        
+        !frac = 100.*(1.-min(euldist/euldist_thresh, 1.))
+        !call self%o_out%set('frac', frac)
         ! done
         if(debug)write(*,*)'simple_cont3D_greedysrch::prep_ori done'
     end subroutine prep_ori

@@ -185,7 +185,7 @@ contains
         self%best_class = self%prev_class         
         self%best_rot   = self%prev_rot
         ! calculate previous best corr (treshold for better)
-        self%prev_corr  = max( 0., pftcc%corr(self%prev_class, iptcl, self%prev_rot) )
+        self%prev_corr  = max( 0., pftcc%corr_single(self%prev_class, iptcl, self%prev_rot) )
         self%best_corr  = self%prev_corr
         ! calculate spectral score
         frc = pftcc%genfrc(self%prev_class, iptcl, self%prev_rot)

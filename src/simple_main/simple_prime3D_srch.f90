@@ -302,68 +302,6 @@ contains
         call o2update%set( 'state', rstate )
         call o2update%set( 'ow',    ow     )
     end subroutine get_ori
-
-    ! !>  \brief  standard deviation
-    ! function ang_sdev( self ) result( sdev )
-    !     class(prime3D_srch), intent(inout) :: self
-    !     real    :: sdev
-    !     integer :: nstates, state, pop
-    !     sdev = 0.
-    !     if( self%npeaks < 3 .or. self%refine.eq.'shc' .or. self%refine.eq.'shcneigh' ) return
-    !     nstates = 0
-    !     do state=1,self%nstates
-    !         pop = self%o_peaks%get_statepop( state )
-    !         if( pop > 0 )then
-    !             sdev = sdev + ang_sdev_state( state )
-    !             nstates = nstates + 1
-    !         endif
-    !     enddo
-    !     sdev = sdev / real( nstates )
-    !     if( DEBUG ) write(*,'(A)') '>>> PRIME3D_SRCH::CALCULATED ANG_SDEV'
-    
-    !     contains
-            
-    !         function ang_sdev_state( istate )result( isdev )
-    !             use simple_stat, only: moment
-    !             integer, intent(in)  :: istate
-    !             type(ori)            :: o_best, o
-    !             type(oris)           :: os
-    !             real, allocatable    :: dists(:), ws(:)
-    !             integer, allocatable :: inds(:)
-    !             real                 :: ave, isdev, var
-    !             integer              :: loc(1), alloc_stat, i, ind, n, cnt
-    !             logical              :: err
-    !             isdev = 0.
-    !             inds = self%o_peaks%get_state( istate )
-    !             n = size(inds)
-    !             if( n < 3 )return ! because one is excluded in the next step & moment needs at least 2 objs
-    !             call os%new( n )
-    !             allocate( ws(n), dists(n-1), stat=alloc_stat )
-    !             call alloc_err( 'ang_sdev_state; simple_prime3D_srch', alloc_stat )
-    !             ws    = 0.
-    !             dists = 0.
-    !             ! get best ori
-    !             do i=1,n
-    !                 ind = inds(i)
-    !                 ws(i) = self%o_peaks%get(ind,'ow')
-    !                 call os%set_ori( i, self%o_peaks%get_ori(ind) )
-    !             enddo
-    !             loc    = maxloc( ws )
-    !             o_best = os%get_ori( loc(1) )
-    !             ! build distance vector
-    !             cnt = 0
-    !             do i=1,n
-    !                 if( i==loc(1) )cycle
-    !                 cnt = cnt+1
-    !                 o = os%get_ori( i )
-    !                 dists( cnt ) = rad2deg( o.euldist.o_best )
-    !             enddo
-    !             call moment(dists, ave, isdev, var, err)
-    !             deallocate( ws, dists, inds )
-    !             call os%kill
-    !         end function ang_sdev_state
-
-    ! end function ang_sdev
     
     ! PREPARATION ROUTINES
 
@@ -469,13 +407,16 @@ contains
         type(ori)         :: o_prev
         real              :: cc_t_min_1, corr
         o_prev = a%get_ori(iptcl)
-        corr   = max( 0., pftcc%corr(self%prev_ref, iptcl, self%prev_roind) )
+        corr   = max( 0., pftcc%corr_single(self%prev_ref, iptcl, self%prev_roind) )
         if( corr > 1. .or. .not. is_a_number(corr) )then
             print *, 'FLOATING POINT EXCEPTION ALARM; simple_prime3D_srch :: prep_corr4srch'
             print *, 'corr > 1. or isNaN'
             print *, 'corr = ', corr
             if( corr > 1. )               corr = 1.
             if( .not. is_a_number(corr) ) corr = 0.
+            call o_prev%print
+            call pftcc%check(self%prev_ref, iptcl, self%prev_roind)
+            ! stop 'Invalid correlation value in simple_prime3d_srch::prep_corr4srch'
         endif
         if( (self%refine.eq.'no' .or. self%refine.eq.'adasym') .and. self%nstates==1 )then
             ! moving average for single state only
@@ -918,14 +859,14 @@ contains
                     state = irnd_uni(self%nstates)
                 enddo
                 iref = (state - 1) * self%nprojs + self%prev_proj
-                corr = pftcc%corr(iref, iptcl, self%prev_roind)
+                corr = pftcc%corr_single(iref, iptcl, self%prev_roind)
             else
                 ! SHC
                 corrs = -1.
                 do state=1,self%nstates
                     if( .not.self%state_exists(state) )cycle
                     iref = (state-1) * self%nprojs + self%prev_proj 
-                    corrs(state) = pftcc%corr(iref, iptcl, self%prev_roind)
+                    corrs(state) = pftcc%corr_single(iref, iptcl, self%prev_roind)
                 enddo
                 self%prev_corr  = corrs(self%prev_state)
                 state           = shcloc(self%nstates, corrs, self%prev_corr)
@@ -1013,34 +954,6 @@ contains
             enddo
         enddo
     end subroutine gen_symnnmat
-
-    ! subroutine stochastic_weights( self, wcorr )
-    !     class(prime3D_srch), intent(inout) :: self
-    !     real,                intent(out)   :: wcorr
-    !     real             :: ws(self%npeaks)
-    !     real,allocatable :: corrs(:)
-    !     integer          :: i
-    !     if( self%npeaks == 1 )then
-    !         call self%o_peaks%set(1,'ow',1.0)
-    !         wcorr = self%o_peaks%get(1,'corr')
-    !         return
-    !     endif
-    !     if( self%o_peaks%get_noris() /= self%npeaks ) stop 'invalid number of references in simple_prime3D_srch::stochastic_weights'
-    !     ws    = 0.
-    !     wcorr = 0.
-    !     ! get unnormalised correlations
-    !     corrs = self%o_peaks%get_all('corr')
-    !     ! calculate normalised weights and weighted corr
-    !     where( corrs > TINY ) ws = exp(corrs) ! ignore invalid corrs
-    !     ws    = ws/sum(ws)
-    !     wcorr = sum(ws*corrs) 
-    !     ! update npeaks individual weights
-    !     do i=1,self%npeaks
-    !         call self%o_peaks%set(i,'ow',ws(i))
-    !     enddo
-    !     deallocate(corrs)
-    !     if( DEBUG ) write(*,'(A)') '>>> PRIME3D_SRCH :: CALCULATED STOCHASTIC WEIGHTS PRIME3D_SRCH'        
-    ! end subroutine stochastic_weights
 
     subroutine store_solution( self, pftcc, ind, ref, inpl_ind, corr )
         class(prime3D_srch),     intent(inout) :: self

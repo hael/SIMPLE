@@ -44,10 +44,7 @@ contains
         if( present(nvox) )then
             ! todo
         else
-            ! binary layer growth
-            do i=1,p%binwidth
-                call img_msk%grow_bin
-            end do
+            call img_msk%grow_bins(p%binwidth)
         endif
         call img_msk%cos_edge(p%edge) ! real-space filter based softening of the edge
     end subroutine automask_1
@@ -118,6 +115,7 @@ contains
             call automask_1(recvol, p, maskvol)
             !call maskvol%mask(p%msk,'soft') ! for now
             call recvol%mul(maskvol)
+            !call recvol%mask(p%msk,'soft')
         else if( cline%defined('mskfile') )then
             !call maskvol%mask(p%msk,'soft') ! for now
             call recvol%mul(maskvol) 
