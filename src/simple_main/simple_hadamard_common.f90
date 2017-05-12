@@ -248,12 +248,14 @@ contains
         type(ori),      intent(inout) :: o
         type(ctf) :: tfun
         real      :: x, y, dfx, dfy, angast
+        integer   :: state
         if( p%l_xfel )then
             ! nothing to do 4 now
             return
         else
             x = o%get('x')
             y = o%get('y')
+            state = nint(o%get('state'))
             ! move to Fourier space
             call b%img%fwd_ft
             ! set CTF parameters
@@ -294,8 +296,8 @@ contains
             if( p%boxmatch < p%box ) call b%img%clip_inplace([p%boxmatch,p%boxmatch,1]) ! SQUARE DIMS ASSUMED
             ! MASKING
             if( p%doautomsk )then
-                ! particle masking
-                call b%mskvol%apply_mask(b%img, o)
+                ! from volume
+                call b%mskvols(state)%apply_mask(b%img, o)
             else if( p%automsk .eq. 'cavg' )then
                 ! ab initio mask
                 call automask2D(b%img, p)
@@ -378,7 +380,7 @@ contains
         if( p%l_xfel )then
             ! no centering
         else
-            if(p%doshift) call centervol
+            if( p%doshift )call centervol
         endif
         ! clip
         if( p%boxmatch < p%box )then
@@ -397,21 +399,19 @@ contains
             endif
             ! mask using a molecular envelope
             if( p%doautomsk )then
-                p%masks(s) = 'automask_state'//int2str_pad(s,2)//p%ext
+                p%masks(s)   = 'automask_state'//int2str_pad(s,2)//p%ext
+                call b%mskvols(s)%init_mskproj( p, b%vol )
                 if( p%l_distr_exec )then
                     if( p%part == 1 )then
-                        ! automask & write files
-                        call automask(b, p, cline, b%vol, b%mskvol, p%vols_msk(s), p%masks(s))
-                    else
-                        ! automask & DO NOT write files
-                        call automask(b, p, cline, b%vol, b%mskvol)
+                        ! write files
+                        call b%vol%write( p%vols_msk(s) )
+                        call b%mskvols(s)%write( p%masks(s) )
                     endif
                 else
-                    ! automask & write files
-                    call automask(b, p, cline, b%vol, b%mskvol, p%vols_msk(s), p%masks(s))
+                    ! write files
+                    call b%vol%write( p%vols_msk(s) )
+                    call b%mskvols(s)%write( p%masks(s) )
                 endif
-                ! stash for enveloppe particle projection
-                b%mskvols(s) = b%mskvol
             endif
         endif
         ! FT volume

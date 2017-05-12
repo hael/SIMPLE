@@ -71,7 +71,7 @@ type build
     type(projector),        allocatable :: refs(:)            !< references
     type(image),            allocatable :: ctfsqsums(:)       !< CTF**2 sums for Wiener normalisation
     type(projector),        allocatable :: refvols(:)         !< reference volumes for quasi-continuous search
-    type(image),            allocatable :: mskvols(:)         !< volumes masks for particle masking
+    type(mask_projector),   allocatable :: mskvols(:)         !< volumes masks for particle masking
     type(reconstructor),    allocatable :: recvols(:)         !< array of volumes for reconstruction
     type(eo_reconstructor), allocatable :: eorecvols(:)       !< array of volumes for eo-reconstruction
     real,    allocatable                :: ssnr(:,:)          !< spectral signal to noise rations
@@ -513,6 +513,7 @@ contains
             endif
             if( allocated(self%mskvols) )then
                 do i=1,size(self%mskvols)
+                    call self%mskvols(i)%kill_mskproj
                     call self%mskvols(i)%kill
                 end do
                 deallocate(self%mskvols)
