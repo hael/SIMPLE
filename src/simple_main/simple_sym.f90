@@ -40,6 +40,7 @@ type sym
     procedure          :: get_all_subgrps
     procedure          :: within_asymunit
     procedure          :: write
+    procedure          :: apply_sym_with_shift
     procedure, private :: build_srchrange
     procedure, private :: make_c_and_d
     procedure, private :: make_t
@@ -369,6 +370,32 @@ contains
         character(len=*), intent(in) :: orifile
         call self%e_sym%write(orifile)
     end subroutine write
+
+    subroutine apply_sym_with_shift( self, os, symaxis_ori, shvec, state )
+        use simple_ori, only: ori
+        class(sym),        intent(inout) :: self
+        class(oris),       intent(inout) :: os
+        class(ori),        intent(in)    :: symaxis_ori
+        real,              intent(in)    :: shvec(3)
+        integer, optional, intent(in)    :: state
+        type(ori) :: o
+        integer   :: i, s
+        if( present(state) )then
+            do i=1,os%get_noris()
+                s = nint(os%get(i, 'state'))
+                if(s .ne. state) cycle
+                call os%map3dshift22d(i, shvec)
+                call os%rot(i,symaxis_ori)
+                o = os%get_ori(i)
+                call self%rot_to_asym(o)
+                call os%set_ori(i, o) 
+            end do
+        else
+            call os%map3dshift22d( shvec ) 
+            call os%rot(symaxis_ori)
+            call self%rotall_to_asym(os)
+        endif
+    end subroutine apply_sym_with_shift
     
     !>  \brief  SPIDER code for making c and d symmetries
     subroutine make_c_and_d( self )

@@ -34,7 +34,7 @@ end type symsrch_commander
 contains
     
     subroutine exec_comlin_smat( self, cline )
-        use simple_comlin_sym    ! use all in there
+        use simple_comlin_srch   ! use all in there
         use simple_ori,          only: ori
         use simple_imgfile,      only: imgfile
         use simple_comlin,       only: comlin
@@ -46,7 +46,7 @@ contains
         type(build),  target          :: b
         type(ori)                     :: orientation_best
         integer                       :: iptcl, jptcl, alloc_stat, funit, io_stat
-        integer                       :: cnt, ntot, npairs, ipair, fnr
+        integer                       :: ntot, npairs, ipair, fnr
         real,    allocatable          :: corrmat(:,:), corrs(:)
         integer, allocatable          :: pairs(:,:)
         logical                       :: debug=.false.
@@ -89,17 +89,12 @@ contains
             close(funit)
             deallocate(fname)
             ! calculate the similarities
-            call comlin_sym_init(b, p)
-            cnt = 0
+            call comlin_srch_init( b, p, 'simplex', 'pair' )
             do ipair=p%fromp,p%top
-                cnt = cnt+1
-                call progress(cnt, npairs)
                 p%iptcl = pairs(ipair,1)
                 p%jptcl = pairs(ipair,2)
-                call comlin_sym_axis(p, orientation_best, 'pair', .false.)
-                corrs(ipair) = orientation_best%get('corr')
+                corrs(ipair) = comlin_srch_pair()
             end do
-            if( debug ) print *, 'did set this number of similarities: ', cnt
             ! write the similarities
             funit = get_fileunit()
             allocate(fname, source='similarities_part'//int2str_pad(p%part,p%numlen)//'.bin')
@@ -118,16 +113,13 @@ contains
             call alloc_err('In: simple_comlin_smat, 3', alloc_stat)
             corrmat = 1.
             ntot = (p%nptcls*(p%nptcls-1))/2
-            call comlin_sym_init(b, p)
-            cnt = 0
+            ! calculate the similarities
+            call comlin_srch_init( b, p, 'simplex', 'pair' )
             do iptcl=1,p%nptcls-1
                 do jptcl=iptcl+1,p%nptcls
-                    cnt = cnt+1
-                    call progress(cnt, ntot)
                     p%iptcl = iptcl
                     p%jptcl = jptcl
-                    call comlin_sym_axis(p, orientation_best, 'pair', .false.)
-                    corrmat(iptcl,jptcl) = orientation_best%get('corr')
+                    corrmat(iptcl,jptcl) = comlin_srch_pair()
                     corrmat(jptcl,iptcl) = corrmat(iptcl,jptcl)
                 end do
             end do
@@ -147,28 +139,69 @@ contains
     end subroutine exec_comlin_smat
     
     subroutine exec_symsrch( self, cline )
-        use simple_strings,   only: int2str_pad
-        use simple_oris,      only: oris
-        use simple_symsrcher, only: symsrch_master
+        use simple_strings,        only: int2str_pad
+        use simple_oris,           only: oris
+        use simple_ori,            only: ori
+        use simple_projector_hlev, only: projvol
+        use simple_comlin_srch     ! use all in there
         class(symsrch_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
-        type(params)          :: p
-        type(build)           :: b
-        type(oris)            :: os
-        integer               :: fnr, file_stat
-        character(len=STDLEN) :: fname_finished
-        p = params(cline) ! parameters generated
-        if( cline%defined('stk') )then
-            p%nptcls = 1
-            p%nspace = 1
-        endif
+        type(params)                  :: p
+        type(build)                   :: b
+        type(ori)                     :: symaxis_ori
+        type(oris)                    :: os, oshift
+        integer                       :: fnr, file_stat, comlin_srch_nbest, cnt, i, j
+        real                          :: shvec(3)
+        character(len=STDLEN)         :: fname_finished
+        character(len=32), parameter  :: SYMSHTAB = 'sym_3dshift.txt'
+        p = params(cline)                                   ! parameters generated
         call b%build_general_tbox(p, cline, .true., .true.) ! general objects built (no oritab reading)
         call b%build_comlin_tbox(p)                         ! objects for common lines based alignment built
-        call symsrch_master( cline, p, b, os )
-        if(p%l_distr_exec)then
-            ! alles klar
+        ! center volume
+        call b%vol%read(p%vols(1))
+        shvec = b%vol%center(p%cenlp,'no',p%msk)
+        if( p%l_distr_exec .and. p%part.eq.1 )then
+            ! writes shifts for distributed execution
+            call oshift%new(1)
+            call oshift%set(1,'x',shvec(1))
+            call oshift%set(1,'y',shvec(2))
+            call oshift%set(1,'z',shvec(3))
+            call oshift%write(trim(SYMSHTAB))
+            call oshift%kill
+        endif
+        ! generate projections
+        call b%vol%mask(p%msk, 'soft')
+        b%ref_imgs(1,:) = projvol(b%vol, b%e, p)
+        ! expand over symmetry group
+        cnt = 0
+        do i=1,p%nptcls
+            do j=1,p%nsym
+                cnt = cnt+1
+                b%imgs_sym(cnt) = b%ref_imgs(1,i)
+                call b%imgs_sym(cnt)%fwd_ft
+            end do
+        end do
+        ! search for the axes
+        call comlin_srch_init( b, p, 'simplex', 'sym')
+        if(  p%l_distr_exec )then
+            call comlin_srch_symaxis( symaxis_ori, [p%fromp,p%top])
+            call comlin_srch_write_resoris('symaxes_part'//int2str_pad(p%part,p%numlen)//'.txt', [p%fromp,p%top])
         else
-            call os%write(p%outfile)
+            comlin_srch_nbest = comlin_srch_get_nbest()
+            call comlin_srch_symaxis( symaxis_ori )
+            call comlin_srch_write_resoris('symaxes.txt', [1,comlin_srch_nbest])
+            if( cline%defined('oritab') )then
+                ! rotate the orientations & transfer the 3d shifts to 2d
+                shvec = -1.*shvec
+                os    = oris(nlines(p%oritab))
+                call os%read(p%oritab)
+                if( cline%defined('state') )then
+                    call b%se%apply_sym_with_shift(os, symaxis_ori, shvec, p%state )
+                else
+                    call b%se%apply_sym_with_shift(os, symaxis_ori, shvec )
+                endif
+                call os%write(p%outfile)
+            endif
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_SYMSRCH NORMAL STOP ****')

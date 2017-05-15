@@ -92,7 +92,7 @@ Simple_code: opt            \
              s_other        \
              qsys           \
              matcher        \
-             comlin_sym     \
+             comlin_srch    \
              cluster_cavg   \
              masters        ;
 
@@ -177,8 +177,6 @@ build: simple_pair_dtab.o               \
        simple_eo_reconstructor.o        \
        simple_build.o                   ;
 
-comlin_corr: simple_comlin_corr.o       ;
-
 comlin_srch: simple_comlin_srch.o       ;
 
 matcher: simple_picker.o                  \
@@ -192,9 +190,6 @@ matcher: simple_picker.o                  \
          simple_hadamard3D_matcher.o      ;
 
 s_other: simple_masker.o                  ;
-         
-comlin_sym: simple_comlin_symsrch.o       \
-            simple_comlin_sym.o           ;
 
 cluster_cavg: simple_matchpursuit.o       \
               simple_cavgppca.o           ;

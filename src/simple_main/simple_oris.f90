@@ -158,6 +158,7 @@ type :: oris
     generic            :: spiral => spiral_1, spiral_2
     procedure          :: qspiral
     procedure          :: order
+    procedure          :: order_corr
     procedure          :: order_cls
     procedure          :: calc_hard_ptcl_weights
     procedure          :: calc_spectral_weights
@@ -2347,7 +2348,7 @@ contains
         enddo
     end subroutine qspiral
 
-    !>  \brief  orders oris according to quality
+    !>  \brief  orders oris according to specscore
     function order( self ) result( arr )
         class(oris), intent(in), target :: self
         integer, allocatable :: arr(:)
@@ -2358,6 +2359,18 @@ contains
         arr = (/(i,i=1,self%n)/)
         call hpsort( self%n, arr, o1_gt_o2 )
     end function order
+
+    !>  \brief  orders oris according to corr
+    function order_corr( self ) result( arr )
+        class(oris), intent(in), target :: self
+        integer, allocatable :: arr(:)
+        integer :: i, alloc_stat
+        op => self%o
+        allocate( arr(self%n), stat=alloc_stat )
+        call alloc_err('order; simple_oris', alloc_stat)
+        arr = (/(i,i=1,self%n)/)
+        call hpsort( self%n, arr, o1_gt_o2_corr )
+    end function order_corr
     
     !>  \brief  orders clusters according to population
     function order_cls( self ) result( arr )
@@ -2921,24 +2934,28 @@ contains
         integer, intent(in) :: o1, o2
         logical             :: val
         real                :: corr1, corr2, spec1, spec2
-        if( op(o1)%isthere('specscore') )then
-            spec1 = op(o1)%get('specscore')
-            spec2 = op(o2)%get('specscore')
-            if( spec1 > spec2 )then
-                val = .true.
-            else
-                val = .false.
-            endif
+        spec1 = op(o1)%get('specscore')
+        spec2 = op(o2)%get('specscore')
+        if( spec1 > spec2 )then
+            val = .true.
         else
-            corr1 = op(o1)%get('corr')
-            corr2 = op(o2)%get('corr')
-            if( corr1 > corr2 )then
-                val = .true.
-            else
-                val = .false.
-            endif
+            val = .false.
         endif
     end function o1_gt_o2
+
+    !>  \brief  orientation 1 greater than (better) than orientation 2 ?
+    function o1_gt_o2_corr( o1, o2 ) result( val )
+        integer, intent(in) :: o1, o2
+        logical             :: val
+        real                :: corr1, corr2, spec1, spec2
+        corr1 = op(o1)%get('corr')
+        corr2 = op(o2)%get('corr')
+        if( corr1 > corr2 )then
+            val = .true.
+        else
+            val = .false.
+        endif
+    end function o1_gt_o2_corr
     
     !>  \brief  orientation 1 less than (worse) than orientation 2 ?
     function o1_lt_o2( o1, o2 ) result( val )

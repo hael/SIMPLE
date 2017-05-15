@@ -33,7 +33,7 @@ contains
         ! center volume
         call b%vol%read(p%vols(1))
         shvec = b%vol%center(p%cenlp,'no',p%msk)
-        if(p%l_distr_exec .and. p%part.eq.1)then
+        if( p%l_distr_exec .and. p%part.eq.1 )then
             ! writes shifts for distributed execution
             call oshift%new(1)
             call oshift%set(1,'x',shvec(1))
@@ -136,12 +136,13 @@ contains
     end subroutine updates_tboxs
     
     !>  \brief does common lines symmetry search over one symmetry pointgroup
-    subroutine single_symsrch( b, p, best_o)
-        use simple_comlin_sym  ! use all in there
-        type(build)  :: b
-        type(params) :: p
-        type(ori)    :: best_o
-        integer      :: i, j, cnt
+    subroutine single_symsrch( b, p, best_o, fromto )
+        use simple_comlin_srch ! use all in there
+        type(build)       :: b
+        type(params)      :: p
+        type(ori)         :: best_o
+        integer, optional :: fromto(2)
+        integer           :: i, j, cnt
         ! expand over symmetry group
         cnt = 0
         do i=1,p%nptcls
@@ -152,29 +153,9 @@ contains
             end do
         end do
         ! search for the axis
-        call comlin_sym_init(b, p)
-        call comlin_sym_axis(p, best_o, 'sym', doprint=.true.)
+        call comlin_srch_init( b, p, 'simplex', 'sym')
+        call comlin_srch_symaxis( best_o, fromto )
     end subroutine single_symsrch
-
-    !>  \brief does common lines symmetry search over one symmetry pointgroup
-    subroutine single_symsrch_oldschool( b, p, best_o )
-        use simple_comlin_symsrch, only: comlin_srch_symaxis ! use all in there
-        type(build)  :: b
-        type(params) :: p
-        type(ori)    :: best_o
-        integer      :: i, j, cnt
-        ! expand over symmetry group
-        cnt = 0
-        do i=1,p%nptcls
-            do j=1,p%nsym
-                cnt = cnt+1
-                b%imgs_sym(cnt) = b%ref_imgs(1,i)
-                call b%imgs_sym(cnt)%fwd_ft
-            end do
-        end do
-        ! search for the axis
-        call comlin_srch_symaxis(b, best_o, .true.)
-    end subroutine single_symsrch_oldschool
     
     !>  \brief  calculates probabilities and returns best axis index
     subroutine sym_probs( bestind )
@@ -189,12 +170,12 @@ contains
         probs = 0.
         do i=1,n_subgrps
             pgrp = subgrps(i)
-            se = sym(pgrp)
+            se   = sym(pgrp)
             do j=1,se%get_nsubgrp()
                 subse = se%get_subgrp(j)
                 do k=1,n_subgrps
                     if( subse%get_pgrp().eq.subgrps(k) )then
-                        probs(i) = probs(i)+subgrps_oris%get(k,'corr') 
+                        probs(i) = probs(i) + subgrps_oris%get(k,'corr') 
                     endif
                 enddo
             enddo
@@ -204,8 +185,7 @@ contains
         bestp   = -1.
         bestind = 0
         do i=1,n_subgrps
-            write(*,'(A,A3,A,F4.2)')'>>> PROBABILITY FOR POINT-GROUP ',&
-            subgrps(i),': ',probs(i)
+            write(*,'(A,A3,A,F4.2)')'>>> PROBABILITY FOR POINT-GROUP ', subgrps(i),' : ',probs(i)
             if( probs(i).gt.bestp )then
                 bestp   = probs(i)
                 bestind = i

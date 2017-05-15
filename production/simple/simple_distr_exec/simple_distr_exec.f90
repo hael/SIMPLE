@@ -616,7 +616,7 @@ select case(prg)
         ! reconstructed without assuming any point-group symmetry. The program takes as input an 
         ! asymmetrical 3D reconstruction. The alignment document for all the particle images 
         ! that have gone into the 3D reconstruction and the desired point-group symmetry needs to 
-        ! be inputted. The 3D reconstruction is then projected in 150 (default option) even directions, 
+        ! be inputted. The 3D reconstruction is then projected in 50 (default option) even directions, 
         ! common lines-based optimisation is used to identify the principal symmetry axis, the rotational 
         ! transformation is applied to the inputted orientations, and a new alignment document is produced. 
         ! Input this document to recvol together with the images and the point-group symmetry to generate a 
@@ -629,7 +629,7 @@ select case(prg)
         keys_required(2)  = 'smpd'
         keys_required(3)  = 'msk'
         keys_required(4)  = 'pgrp'
-        keys_optional(5)  = 'oritab'
+        keys_required(5)  = 'oritab'
         keys_required(6)  = 'lp'
         keys_required(7)  = 'nparts'
         ! set optional keys
@@ -642,8 +642,13 @@ select case(prg)
         call cline%parse(keys_required(:7), keys_optional(:4))
         ! set defaults
         if(cline%defined('compare'))stop 'Distributed execution of SYMSRCH does not support the COMPARE argument'
-        call cline%set('nptcls', 150.)                                 ! 50 projections 4 symsrch
-        if(.not.cline%defined('nspace'))call cline%set('nspace', 150.) ! 50 projections 4 symsrch
+        ! set defaults
+        if( .not. cline%defined('nspace') )then
+            call cline%set('nptcls', 50.) ! 50 projections 4 symsrch
+            call cline%set('nspace', 50.) ! 50 projections 4 symsrch
+        else
+            call cline%set('nptcls', cline%get_rarg('nspace'))
+        endif
         if(.not.cline%defined('cenlp')) call cline%set('cenlp',   30.)
         ! execute
         call xsymsrch_distr%execute( cline )
