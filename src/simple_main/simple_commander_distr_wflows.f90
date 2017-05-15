@@ -1372,7 +1372,7 @@ contains
             call syme%new(p_master%pgrp)
             call o_shift%new(1)
             ! retrieve shift
-            call o_shift%read(trim(SYMSHTAB))ls
+            call o_shift%read(trim(SYMSHTAB))
             shvec(1) = o_shift%get(1,'x')
             shvec(2) = o_shift%get(1,'y')
             shvec(3) = o_shift%get(1,'z')
