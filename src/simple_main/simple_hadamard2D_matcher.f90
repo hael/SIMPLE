@@ -49,7 +49,7 @@ contains
             call b%ppconv%zero_joint_distr_olap
         endif
         call b%ppconv%set_conv_larr(conv_larr)
-        write(*,'(A,F8.2)') '>>> NON-CONVERGED PARTICLES(%):', 100.*(real(count(conv_larr)) / real(p%top - p%fromp + 1))
+        write(*,'(A,F8.2)') '>>> CONVERGED PARTICLES(%):', 100.*(real(count(conv_larr)) / real(p%top - p%fromp + 1))
 
         ! PREP REFERENCES
         if( p%l_distr_exec )then

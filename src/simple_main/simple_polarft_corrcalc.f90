@@ -28,15 +28,14 @@ type :: polarft_corrcalc
     real(dp),    allocatable :: sqsums_refs(:)         !< memoized square sums for the correlation calculations
     real(dp),    allocatable :: sqsums_ptcls(:)        !< memoized square sums for the correlation calculations
     real(sp),    allocatable :: angtab(:)              !< table of in-plane angles (in degrees)
-    real(sp),    allocatable :: argtransf(:,:)         !< argument transfer constants for shifting the references
+    real(dp),    allocatable :: argtransf(:,:)         !< argument transfer constants for shifting the references
     real(sp),    allocatable :: polar(:,:)             !< table of polar coordinates (in Cartesian coordinates)
-    real(sp),    allocatable :: ctfmats(:,:,:)         !< expandd set of CTF matrices (for efficient parallel exec)
+    real(dp),    allocatable :: ctfmats(:,:,:)         !< expandd set of CTF matrices (for efficient parallel exec)
     complex(dp), allocatable :: pfts_refs(:,:,:)       !< 3D complex matrix of polar reference sections (nrefs,refsz,nk)
     complex(dp), allocatable :: pfts_refs_ctf(:,:,:)   !< 3D complex matrix of polar reference sections with CTF applied
     complex(dp), allocatable :: pfts_ptcls(:,:,:)      !< 3D complex matrix of particle sections
     logical                  :: with_ctf     = .false. !< CTF flag
     logical                  :: xfel         = .false. !< to indicate whether we process xfel patterns or not
-    logical                  :: dim_expanded = .false. !< to indicate whether dim has been expanded or not
     logical                  :: existence    = .false. !< to indicate existence
   contains
     ! CONSTRUCTOR
@@ -86,7 +85,7 @@ type :: polarft_corrcalc
     procedure          :: apply_ctf_single
     procedure          :: xfel_subtract_shell_mean
     ! CALCULATORS
-    procedure          :: create_polar_ctfmat
+    procedure, private :: create_polar_ctfmat
     procedure          :: create_polar_ctfmats
     procedure          :: gencorrs
     procedure          :: genfrc
@@ -180,10 +179,10 @@ contains
         call alloc_err('shift argument transfer array; new; simple_polarft_corrcalc', alloc_stat)
         self%argtransf(:self%refsz,:)   = &
             self%polar(:self%refsz,:)   * &
-            (PI/real(self%ldim(1)/2))    ! x-part
+            (DPI/dble(self%ldim(1)/2))    ! x-part
         self%argtransf(self%refsz+1:,:) = &
             self%polar(self%nrots+1:self%nrots+self%refsz,:) * &
-            (PI/real(self%ldim(2)/2))    ! y-part
+            (DPI/dble(self%ldim(2)/2))    ! y-part
         ! allocate polarfts and sqsums
         allocate(   self%pfts_refs(self%nrefs,self%refsz,self%kfromto(1):self%kfromto(2)),&
                     self%pfts_ptcls(self%pfromto(1):self%pfromto(2),self%ptclsz,self%kfromto(1):self%kfromto(2)),&
@@ -196,11 +195,9 @@ contains
         self%sqsums_refs   = 0.d0
         self%sqsums_ptcls  = 0.d0
         self%pfts_refs_ctf = zero
-        ! pfts_refs_ctf if needed
         self%with_ctf = .false.
         if( ctfflag .ne. 'no' ) self%with_ctf = .true.
-        self%dim_expanded = .false.
-        self%existence    = .true.
+        self%existence     = .true.
     end subroutine new
 
     ! SETTERS
@@ -565,7 +562,7 @@ contains
     ! MODIFIERS
 
     !>  \brief  is for applying CTF to references and updating the memoized ref sqsums
-    subroutine apply_ctf_1( self, tfun, dfx, dfy, angast, refvec, ctfmat )
+    subroutine apply_ctf_1( self, tfun, dfx, dfy, angast, refvec )
         !$ use omp_lib
         !$ use omp_lib_kinds
         use simple_ctf,   only: ctf
@@ -574,15 +571,10 @@ contains
         real(sp),                intent(in)    :: dfx
         real(sp), optional,      intent(in)    :: dfy, angast
         integer,  optional,      intent(in)    :: refvec(2)
-        real(sp), optional,      intent(in)    :: ctfmat(:,:)
-        real(sp), allocatable :: ctfmat_here(:,:)
+        real(dp), allocatable :: ctfmat(:,:)
         integer :: iref, ref_start, ref_end
-        if( present(ctfmat) )then
-            ctfmat_here = ctfmat
-        else
-            ! create the congruent polar matrix of real CTF values
-            ctfmat_here = self%create_polar_ctfmat(tfun, dfx, dfy, angast, self%refsz)
-        endif
+        ! create the congruent polar matrix of real CTF values
+        ctfmat = self%create_polar_ctfmat(tfun, dfx, dfy, angast, self%refsz)
         ! multiply the references with the CTF
         if( present(refvec) )then
             ! slice of references
@@ -598,11 +590,11 @@ contains
         endif
         !$omp parallel do default(shared) schedule(auto) private(iref)
         do iref=ref_start,ref_end
-            self%pfts_refs_ctf(iref,:,:) = self%pfts_refs(iref,:,:)*dble(ctfmat_here)
+            self%pfts_refs_ctf(iref,:,:) = self%pfts_refs(iref,:,:) * ctfmat
             call self%memoize_sqsum_ref_ctf(iref)
         end do
         !$omp end parallel do
-        if( allocated(ctfmat_here) )deallocate(ctfmat_here)
+        deallocate(ctfmat)
     end subroutine apply_ctf_1
 
     !>  \brief  is for applying CTF to references and updating the memoized ref sqsums
@@ -629,7 +621,7 @@ contains
             endif
             !$omp parallel do default(shared) schedule(auto) private(iref)
             do iref=ref_start,ref_end
-                self%pfts_refs_ctf(iref,:,:) = self%pfts_refs(iref,:,:)*dble(self%ctfmats(iptcl,:,:))
+                self%pfts_refs_ctf(iref,:,:) = self%pfts_refs(iref,:,:) * self%ctfmats(iptcl,:,:)
                 call self%memoize_sqsum_ref_ctf(iref)
             end do
             !$omp end parallel do
@@ -640,7 +632,7 @@ contains
     subroutine apply_ctf_single( self, iptcl, iref )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iptcl, iref
-        self%pfts_refs_ctf(iref,:,:) = self%pfts_refs(iref,:,:)*dble(self%ctfmats(iptcl,:,:))
+        self%pfts_refs_ctf(iref,:,:) = self%pfts_refs(iref,:,:) * self%ctfmats(iptcl,:,:)
         call self%memoize_sqsum_ref_ctf(iref)
     end subroutine apply_ctf_single
 
@@ -696,7 +688,7 @@ contains
         class(ctf),              intent(inout) :: tfun
         real(sp),                intent(in)    :: dfx, dfy, angast
         integer,                 intent(in)    :: endrot
-        real(sp), allocatable :: ctfmat(:,:)
+        real(dp), allocatable :: ctfmat(:,:)
         real(sp)              :: inv_ldim(3),hinv,kinv,spaFreqSq,ang
         integer               :: irot,k
         allocate( ctfmat(endrot,self%kfromto(1):self%kfromto(2)) )
@@ -708,7 +700,7 @@ contains
                 kinv           = self%polar(irot+self%nrots,k)*inv_ldim(2)
                 spaFreqSq      = hinv*hinv+kinv*kinv
                 ang            = atan2(self%polar(irot+self%nrots,k),self%polar(irot,k))
-                ctfmat(irot,k) = tfun%eval(spaFreqSq,dfx,dfy,angast,ang)
+                ctfmat(irot,k) = dble(tfun%eval(spaFreqSq,dfx,dfy,angast,ang))
             end do
         end do
         !$omp end parallel do
@@ -784,7 +776,7 @@ contains
         allocate( dfrc(self%kfromto(1):self%kfromto(2)) )
         if( self%with_ctf )then
             ! multiply reference with CTF
-            self%pfts_refs_ctf(iref,:,:) = self%pfts_refs(iref,:,:)*dble(self%ctfmats(iptcl,:,:))
+            self%pfts_refs_ctf(iref,:,:) = self%pfts_refs(iref,:,:)*self%ctfmats(iptcl,:,:)
             ! calc FRC
             do k=self%kfromto(1),self%kfromto(2)
                 dfrc(k)   = sum(dble(self%pfts_refs_ctf(iref,:,k)*conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,k))))
@@ -911,47 +903,31 @@ contains
         class(polarft_corrcalc), intent(inout) :: self              !< instance
         integer,                 intent(in)    :: iref, iptcl, irot !< reference, particle, rotation
         real(sp),                intent(in)    :: shvec(2)          !< origin shift vector
-        real(dp)    :: sqsum_ref_sh
+        real(dp)    :: sqsum_ref_sh, dshvec(2)
         real(sp)    :: cc
         real(dp)    :: argmat(self%refsz,self%kfromto(1):self%kfromto(2)), dcc
-        complex(dp) :: pft_ref_sh(self%refsz,self%kfromto(1):self%kfromto(2)), shmat(self%refsz,self%kfromto(1):self%kfromto(2))
+        complex(dp) :: pft_ref_sh(self%refsz,self%kfromto(1):self%kfromto(2))
+        complex(dp) :: shmat(self%refsz,self%kfromto(1):self%kfromto(2))
+        dshvec = dble(shvec)
+        ! generate the argument matrix from memoized components in argtransf
+        argmat = self%argtransf(:self%refsz,:) * dshvec(1) + self%argtransf(self%refsz+1:,:) * dshvec(2)
+        ! generate the complex shift transformation matrix
+        shmat = cmplx(dcos(argmat),dsin(argmat),kind=dp)
+        ! shift
         if( self%with_ctf)then
             if( allocated(self%ctfmats) )then
-                ! generate the argument matrix from memoized components in argtransf
-                argmat = dble(self%argtransf(:self%refsz,:) * shvec(1) + self%argtransf(self%refsz+1:,:) * shvec(2))
-                ! generate the complex shift transformation matrix
-                shmat = cmplx(dcos(argmat),dsin(argmat),kind=dp)
-                ! shift
-                pft_ref_sh = (self%pfts_refs(iref,:,:) * dble(self%ctfmats(iptcl,:,:))) * shmat
-                ! calculate correlation precursors
-                argmat = dble(pft_ref_sh * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:)))
-                dcc    = sum(argmat)
-                sqsum_ref_sh = sum(csq(pft_ref_sh))
+                pft_ref_sh = (self%pfts_refs(iref,:,:) * self%ctfmats(iptcl,:,:)) * shmat
             else
-                ! generate the argument matrix from memoized components in argtransf
-                argmat = dble(self%argtransf(:self%refsz,:) * shvec(1)+self%argtransf(self%refsz+1:,:) * shvec(2))
-                ! generate the complex shift transformation matrix
-                shmat = cmplx(dcos(argmat),dsin(argmat),kind=dp)
-                ! shift
                 pft_ref_sh = self%pfts_refs_ctf(iref,:,:) * shmat
-                ! calculate correlation precursors
-                argmat = dble(pft_ref_sh * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:)))
-                dcc = sum(argmat)
-                sqsum_ref_sh = sum(csq(pft_ref_sh))
             endif
         else
-            ! NO CTF MULTIPLICATION
-            ! generate the argument matrix from memoized components in argtransf
-            argmat = dble(self%argtransf(:self%refsz,:) * shvec(1)+self%argtransf(self%refsz+1:,:) * shvec(2))
-            ! generate the complex shift transformation matrix
-            shmat = cmplx(dcos(argmat),dsin(argmat),kind=dp)
-            ! shift
-            pft_ref_sh = self%pfts_refs(iref,:,:) * shmat
-            ! calculate correlation precursors
-            argmat = dble(pft_ref_sh * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:)))
-            dcc = sum(argmat)
-            sqsum_ref_sh = sum(csq(pft_ref_sh))
+            pft_ref_sh = self%pfts_refs(iref,:,:) * shmat ! no ctf multiplication
         endif
+        ! calculate correlation precursors
+        argmat       = dble(pft_ref_sh * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:)))
+        dcc          = sum(argmat)
+        sqsum_ref_sh = sum(csq(pft_ref_sh))
+        ! finalize cross-correlation
         cc = real(dcc/dsqrt(sqsum_ref_sh*self%sqsums_ptcls(iptcl)))
     end function corr_2
     
