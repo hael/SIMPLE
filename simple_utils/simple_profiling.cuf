@@ -1,5 +1,4 @@
 
-
 ! C-bindings for CUDA profiling
 !
 ! Initialize the CUDA profiler.
@@ -16,46 +15,44 @@
 ! NVVP  --> just use the NVIDIA visual profiler
 
 module simple_CUDA_profiler
-  use cudafor
-  implicit none
-  private
-  public :: StartCUDAprofiler, StopCUDAprofiler
-  type CUDAprof
+   use cudafor
+   implicit none
+   private
+   public :: StartCUDAprofiler, StopCUDAprofiler
+   type CUDAprof
    contains
-     final    ::  killCUDAprofiler
-     procedure ::  StartCUDAprofiler
-     procedure ::  StopCUDAprofiler
-  end type CUDAprof
-  interface CUDAprof
-     module procedure constructor
-  end interface CUDAprof
+      final    ::  killCUDAprofiler
+      procedure ::  StartCUDAprofiler
+      procedure ::  StopCUDAprofiler
+   end type CUDAprof
+   interface CUDAprof
+      module procedure constructor
+   end interface CUDAprof
 contains
 
-  function constructor()
-    type(CUDAprof), pointer :: this
-    integer  :: istat
-    use iso_c_bindings
-    istat = cudaProfilerInitialize('profiler.log','profiler.txt',CUDAOVERWRITE)
-  end function constructor
+   function constructor()
+      type(CUDAprof), pointer :: this
+      integer  :: istat
+      use iso_c_bindings
+      istat = cudaProfilerInitialize('profiler.log', 'profiler.txt', CUDAOVERWRITE)
+   end function constructor
 
-  subroutine StartCUDAprofiler(this)
-    type(CUDAprof) :: this
-    integer  :: istat
-    istat = cudaProfilerStart()
-  end subroutine StartCUDAprofiler
+   subroutine StartCUDAprofiler(this)
+      type(CUDAprof) :: this
+      integer  :: istat
+      istat = cudaProfilerStart()
+   end subroutine StartCUDAprofiler
 
+   subroutine StopCUDAprofiler(this)
+      type(CUDAprof) :: this
+      integer  :: istat
+      istat = cudaProfilerStop()
+   end subroutine StopCUDAprofiler
 
-  subroutine StopCUDAprofiler(this)
-    type(CUDAprof) :: this
-    integer  :: istat
-    istat = cudaProfilerStop()
-  end subroutine StopCUDAprofiler
-
-
-  subroutine killCUDAprofiler(this)
-    type(CUDAprof) :: this
-    integer  :: istat
-    !
-    !
-  end subroutine killCUDAprofiler
+   subroutine killCUDAprofiler(this)
+      type(CUDAprof) :: this
+      integer  :: istat
+      !
+      !
+   end subroutine killCUDAprofiler
 end module simple_CUDA_profiler
