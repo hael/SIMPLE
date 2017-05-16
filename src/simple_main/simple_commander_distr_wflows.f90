@@ -635,6 +635,7 @@ contains
         p_master        = params(cline, checkdistr=.false.)
         nptcls          = p_master%nptcls
         p_master%nptcls = (p_master%nptcls*(p_master%nptcls - 1))/2
+        call split_pairs_in_parts(p_master%nptcls, p_master%nparts)
         ! setup the environment for distributed execution
         call qenv%new(p_master)
         ! prepare job description
@@ -646,6 +647,7 @@ contains
         call cline_mergesims%set('nparts', real(p_master%nparts))
         call xmergesims%execute( cline_mergesims )
         ! clean
+        call del_files('pairs_part', p_master%nparts, ext='.bin')
         call qsys_cleanup(p_master)
         ! end gracefully
         call simple_end('**** SIMPLE_DISTR_COMLIN_SMAT NORMAL STOP ****')

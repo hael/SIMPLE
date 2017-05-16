@@ -42,6 +42,7 @@ contains
         frac_srch_space = b%a%get_avg('frac')
 
         ! PER-PARTICLE CONVERGENCE
+        if( which_iter == 1 ) call del_file(p%ppconvfile)
         if( file_exists(p%ppconvfile) )then
             call b%ppconv%read(p%ppconvfile)
         else

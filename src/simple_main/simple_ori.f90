@@ -102,7 +102,6 @@ type :: ori
     generic            :: operator(.inplrotdist.) => inplrotdist
     ! DESTRUCTOR
     procedure          :: kill
-    final              :: destructor
 end type
 
 interface ori
@@ -940,12 +939,6 @@ contains
         class(ori), intent(inout) :: self
         call self%chtab%kill
     end subroutine kill
-
-    !>  \brief  is a destructor
-    subroutine destructor( self )
-        type(ori), intent(inout) :: self
-        call self%kill
-    end subroutine destructor
   
     ! PRIVATE STUFF
     

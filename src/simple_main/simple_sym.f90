@@ -64,7 +64,6 @@ double precision, parameter :: delta5 = 72.d0
 double precision, parameter :: alpha = 58.282524d0
 double precision, parameter :: beta  = 20.905157d0
 double precision, parameter :: gamma = 54.735611d0
-double precision, parameter :: dpi = 3.14159265358979323846264d0
 
 contains
 
