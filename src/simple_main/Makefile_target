@@ -118,7 +118,6 @@ qsys: simple_qsys_base.o                  \
       simple_qsys_env.o                   ;
 
 masters: simple_rec_master.o              \
-         simple_symsrcher.o               \
          simple_commander_base.o          \
          simple_commander_volops.o        \
          simple_commander_checks.o        \

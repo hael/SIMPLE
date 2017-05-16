@@ -1103,6 +1103,8 @@ select case(prg)
         ! parse command line
         if( describe ) call print_doc_comlin_smat
         call cline%parse(keys_required(:4), keys_optional(:2))
+        ! set defaults
+        if( .not. cline%defined('trs') ) call cline%set('trs', 3.0)
         ! execute
         call xcomlin_smat%execute(cline)
     case( 'symsrch' )

@@ -19,8 +19,7 @@ use simple_commander_distr_wflows
 use simple_commander_hlev_wflows
 implicit none
 
-! DISTRIBUTED COMMANDERS
-! pre-processing
+! PRE-PROCESSING
 type(preproc_stream_commander)            :: xpreproc_stream
 type(unblur_ctffind_distr_commander)      :: xunblur_ctffind_distr
 type(unblur_distr_commander)              :: xunblur_distr
@@ -30,15 +29,17 @@ type(pick_distr_commander)                :: xpick_distr
 ! PRIME2D
 type(makecavgs_distr_commander)           :: xmakecavgs_distr
 type(prime2D_autoscale_commander)         :: xprime2D_distr
+! 3D SIMILARITY MATRIX GENERATION WITH COMMON LINES
+type(comlin_smat_distr_commander)         :: xcomlin_smat_distr
 ! PRIME3D
 type(prime3D_init_distr_commander)        :: xprime3D_init_distr
 type(prime3D_distr_commander)             :: xprime3D_distr
 type(cont3D_distr_commander)              :: xcont3D_distr
 type(recvol_distr_commander)              :: xrecvol_distr
 type(symsrch_distr_commander)             :: xsymsrch_distr
-! time-series workflows
+! TIME-SERIES WORKFLOWS
 type(tseries_track_distr_commander)       :: xtseries_track_distr
-! high-level workflows
+! HIGH-LEVEL WORKFLOWS
 type(ini3D_from_cavgs_commander)          :: xini3D_from_cavgs
 type(het_ensemble_commander)              :: xhet_ensemble
 
@@ -400,6 +401,34 @@ select case(prg)
             stop 'eiter nparts or chunksz need to be part of command line'
         endif
         call xprime2D_distr%execute(cline)
+
+    ! 3D SIMILARITY MATRIX GENERATION WITH COMMON LINES
+
+    case( 'comlin_smat' )
+        !==Program comlin_smat
+        !
+        ! <comlin_smat/begin>is a program for creating a similarity matrix based on common
+        ! line correlation. The idea being that it should be possible to cluster images based
+        ! on their 3D similarity witout having a 3D model by only operating on class averages
+        ! and find averages that fit well together in 3D<comlin_smat/end>
+        !
+        ! set required keys
+        keys_required(1) = 'stk'
+        keys_required(2) = 'smpd'
+        keys_required(3) = 'lp'
+        keys_required(4) = 'msk'
+        keys_required(5) = 'nparts'
+        ! set optional keys
+        keys_optional(1) = 'hp'
+        keys_optional(2) = 'trs'
+        ! parse command line
+        if( describe ) call print_doc_comlin_smat
+        call cline%parse(keys_required(:5), keys_optional(:2))
+        ! set defaults
+        call cline%set('nthr', 1.0)
+        if( .not. cline%defined('trs') ) call cline%set('trs', 3.0)
+        ! execute
+        call xcomlin_smat_distr%execute(cline) 
         
     ! PRIME3D
 
