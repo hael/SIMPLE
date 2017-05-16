@@ -4,7 +4,6 @@ use simple_pftcc_opt,         only: pftcc_opt
 use simple_polarft_corrcalc,  only: polarft_corrcalc
 use simple_projector,         only: projector
 use simple_simplex_pftcc_opt, only: simplex_pftcc_opt
-        use simple_ori,  only: ori
 use simple_defs               ! use all in there
 implicit none
 
@@ -49,11 +48,11 @@ contains
         if( present(shbarrier) )then
             if( shbarrier .eq. 'no' ) self%shbarr = .false.
         endif
-        self%nrestarts = 5
+        self%nrestarts = 3
         if( present(nrestarts) ) self%nrestarts = nrestarts 
         ! make optimizer spec
         srchlims = lims
-        call self%ospec%specify('simplex', 5, ftol=1e-4,&
+        call self%ospec%specify('de', 5, ftol=1e-4,&
         &gtol=1e-4, limits=srchlims, nrestarts=self%nrestarts)
         ! generate the simplex optimizer object 
         call self%nlopt%new(self%ospec)
@@ -69,8 +68,8 @@ contains
     
     subroutine srch_set_indices( self, ref, ptcl, rot, state )
         class(pftcc_srch), intent(inout) :: self
-        integer,               intent(in)    :: ref, ptcl
-        integer, optional,     intent(in)    :: rot, state
+        integer,           intent(in)    :: ref, ptcl
+        integer, optional, intent(in)    :: rot, state
         self%reference = ref 
         self%particle  = ptcl
         self%state     = state
@@ -83,31 +82,37 @@ contains
         integer,           intent(in)    :: D
         real,              intent(in)    :: vec(D)
         type(ori) :: o
-        real      :: vec_here(5)    ! current set of values
-        real      :: cost
+        real      :: vec_here(5), cost
+        integer   :: i
         vec_here = vec
-        ! check so that the in-plane rotation is within the limit
-        call enforce_cyclic_limit(vec_here(1), 360.)
-        call enforce_cyclic_limit(vec_here(2), 360.)
-        call enforce_cyclic_limit(vec_here(3), 360.)
-        ! zero small shifts
-        if( abs(vec(4)) < 1e-6 ) vec_here(4) = 0.
-        if( abs(vec(5)) < 1e-6 ) vec_here(5) = 0.
-        ! check shift boundaries
-        if( self%shbarr )then
-            if(vec_here(4) < self%ospec%limits(4,1) .or. vec_here(4) > self%ospec%limits(4,2))then
-                cost = 1.
-                return
-            else if(vec_here(5) < self%ospec%limits(5,1) .or. vec_here(5) > self%ospec%limits(5,2))then
+        ! euler angles range and boundaries
+        do i = 1,3
+            call enforce_cyclic_limit(vec_here(i), 360.)
+            if(vec_here(i) < self%ospec%limits(i,1) .or.&
+              &vec_here(i) > self%ospec%limits(i,2))then
                 cost = 1.
                 return
             endif
+        enddo
+        ! shift boundaries
+        if( self%shbarr )then
+            do i = 4,5
+                if(vec_here(i) < self%ospec%limits(i,1) .or.&
+                  &vec_here(i) > self%ospec%limits(i,2))then
+                    cost = 1.
+                    return
+                endif
+            enddo
         endif
+        ! zero small shifts
+        if( abs(vec(4)) < 1e-6 ) vec_here(4) = 0.
+        if( abs(vec(5)) < 1e-6 ) vec_here(5) = 0.
         ! projection
         call o%new
         call o%set_euler(vec_here(1:3))
         call self%vols_ptr(self%state)%fproject_polar(self%reference, o, self%pftcc_ptr,&
         &expanded=.true., serial=.true.)
+        ! correlation
         cost = -self%pftcc_ptr%corr(self%reference, self%particle, 1, vec_here(4:5))
     end function srch_costfun
     
@@ -136,16 +141,18 @@ contains
         cost_init = self%costfun(self%ospec%x, self%ospec%ndim)
         ! minimisation
         call self%nlopt%minimize(self%ospec, self, cost)
+        crxy(1) = -cost    ! correlation
         if(cost < cost_init)then
-            ! correlation improvement
-            crxy(1)   = -cost             ! correlation
+            ! improvement
             crxy(2:4) = self%ospec%x(1:3) ! euler angles
-            ! check so that all rotations are within the limit
+            crxy(5:6) = self%ospec%x(4:5) ! shifts
+            ! enforce all ddf range
             call enforce_cyclic_limit(crxy(2), 360.)
             call enforce_cyclic_limit(crxy(3), 360.)
             call enforce_cyclic_limit(crxy(4), 360.)
+            if( abs(crxy(5)) < 1e-6 ) crxy(5) = 0.
+            if( abs(crxy(6)) < 1e-6 ) crxy(6) = 0.
             ! shifts by vector addition must be done in the driver
-            crxy(5:) = self%ospec%x(4:)
             if( any(crxy(5:) > self%maxshift) .or. any(crxy(5:) < -self%maxshift) )then
                 crxy(1)  = -1.
                 crxy(5:) = 0.

@@ -224,8 +224,8 @@ contains
         real,    allocatable :: corrs(:)
         integer, allocatable :: inds(:)
         type(ori) :: o
-        real      :: ws(self%npeaks), u(2), mat(2,2), x1(2), x2(2), euldist_thresh
-        real      :: frac, wcorr, euldist, mi_proj, mi_inpl, mi_state, mi_joint, ang_sdev
+        real      :: ws(self%npeaks), euldist_thresh, ang_sdev, dist_inpl
+        real      :: frac, wcorr, euldist, mi_proj, mi_inpl, mi_state, mi_joint
         integer   :: i, state, roind, prev_state
         call self%softoris%new(self%npeaks)
         ! sort oris
@@ -244,38 +244,31 @@ contains
         endif
         ! stochastic weights and weighted correlation
         if(self%npeaks > 1)then
-            ws    = 0.
-            corrs = self%softoris%get_all('corr')
-            where(corrs > TINY)ws = exp(corrs)
-            ws    = ws/sum(ws)
-            wcorr = sum(ws*corrs) 
-            call self%softoris%set_all('ow', ws)
-            deallocate( corrs )
+            call self%softoris%stochastic_weights( wcorr )
         else
             call self%softoris%set(1, 'ow', 1.)
             wcorr = self%softoris%get(1, 'corr')
         endif
         ! variables inherited from input ori: CTF, w, lp
-        o = self%o_in
-        if(o%isthere('dfx'))   call self%softoris%set_all2single('dfx',o%get('dfx'))
-        if(o%isthere('dfy'))   call self%softoris%set_all2single('dfy',o%get('dfy'))
-        if(o%isthere('angast'))call self%softoris%set_all2single('angast',o%get('angast'))
-        if(o%isthere('cs'))    call self%softoris%set_all2single('cs',o%get('cs'))
-        if(o%isthere('kv'))    call self%softoris%set_all2single('kv',o%get('kv'))
-        if(o%isthere('fraca')) call self%softoris%set_all2single('fraca',o%get('fraca'))
-        if(o%isthere('lp'))    call self%softoris%set_all2single('lp',o%get('lp'))
+        if(self%o_in%isthere('dfx'))   call self%softoris%set_all2single('dfx',self%o_in%get('dfx'))
+        if(self%o_in%isthere('dfy'))   call self%softoris%set_all2single('dfy',self%o_in%get('dfy'))
+        if(self%o_in%isthere('angast'))call self%softoris%set_all2single('angast',self%o_in%get('angast'))
+        if(self%o_in%isthere('cs'))    call self%softoris%set_all2single('cs',self%o_in%get('cs'))
+        if(self%o_in%isthere('kv'))    call self%softoris%set_all2single('kv',self%o_in%get('kv'))
+        if(self%o_in%isthere('fraca')) call self%softoris%set_all2single('fraca',self%o_in%get('fraca'))
+        if(self%o_in%isthere('lp'))    call self%softoris%set_all2single('lp',self%o_in%get('lp'))
         call self%softoris%set_all2single('w', o%get('w'))
         call self%softoris%set_all2single('specscore', self%specscore)
-        call o%kill
         ! best orientation
-        self%o_out = self%softoris%get_ori(self%npeaks) ! best ori
+        self%o_out = self%softoris%get_ori(self%npeaks)
         call self%o_out%set('corr', wcorr)  
-        ! angular standard deviation
-        ang_sdev = self%softoris%ang_sdev(self%refine, self%nstates, self%npeaks)
+        ! angular distances & deviation
+        euldist   = rad2deg( self%o_in.euldist.self%o_out )
+        dist_inpl = rad2deg( self%o_in.inplrotdist.self%o_out )
+        ang_sdev  = self%softoris%ang_sdev(self%refine, self%nstates, self%npeaks)
+        call self%o_out%set('dist', euldist)
+        call self%o_out%set('dist_inpl', dist_inpl)
         call self%o_out%set('sdev', ang_sdev)
-        ! dist
-        euldist = rad2deg(self%o_in.euldist.self%o_out)
-        call self%o_out%set('dist',euldist)
         ! overlap between distributions
         euldist_thresh = max(0.1, self%angthresh/10.)
         roind    = self%pftcc_ptr%get_roind(360.-self%o_out%e3get())
@@ -306,18 +299,7 @@ contains
         call self%o_out%set('mi_proj',  mi_proj)
         call self%o_out%set('mi_inpl',  mi_inpl)
         call self%o_out%set('mi_state', mi_state)
-        call self%o_out%set('mi_joint', mi_joint)
-        ! in-plane distance
-        ! make in-plane unit vector
-        u(1) = 0.
-        u(2) = 1.
-        ! calculate previous vec
-        mat  = rotmat2d(self%o_in%e3get())
-        x1   = matmul(u,mat)
-        ! calculate new vec
-        mat     = rotmat2d(self%o_out%e3get())
-        x2      = matmul(u,mat)
-        call self%o_out%set('dist_inpl', rad2deg(myacos(dot_product(x1,x2))))
+        call self%o_out%set('mi_joint', mi_joint)       
         ! frac
         frac = 100. * (real(self%neval)/real(self%nrefs))
         call self%o_out%set('frac', frac)

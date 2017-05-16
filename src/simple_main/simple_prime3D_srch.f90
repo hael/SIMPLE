@@ -193,21 +193,13 @@ contains
         integer,                 intent(in)    :: iptcl
         class(oris),             intent(inout) :: a
         type(ori) :: o_new, o_old
-        real      :: euldist, mi_joint, mi_proj, mi_inpl, mi_state
-        real      :: mat(2,2), u(2), x1(2), x2(2)
+        real      :: euldist, mi_joint, mi_proj, mi_inpl, mi_state, dist_inpl
         integer   :: roind,state
         o_old   = a%get_ori(iptcl)
         o_new   = self%o_peaks%get_ori(self%npeaks)
-        u(1)    = 0.
-        u(2)    = 1.
-        ! old vec
-        mat     = rotmat2d(o_old%e3get())
-        x1      = matmul(u,mat)
-        ! new vec
-        mat     = rotmat2d(o_new%e3get())
-        x2      = matmul(u,mat)
-        ! dist
-        euldist = rad2deg(o_old.euldist.o_new)
+        ! angular distances
+        dist_inpl = rad2deg( o_new.inplrotdist.o_old )
+        euldist   = rad2deg( o_old.euldist.o_new )
         ! new params
         roind   = pftcc%get_roind( 360.-o_new%e3get() )
         state   = nint( o_new%get('state') )
@@ -244,7 +236,7 @@ contains
         call a%set(iptcl, 'mi_joint', mi_joint)
         ! set the distances before we update the orientation
         call a%set(iptcl, 'dist', 0.5*euldist + 0.5*o_old%get('dist'))
-        call a%set(iptcl, 'dist_inpl', rad2deg(myacos(dot_product(x1,x2))))
+        call a%set(iptcl, 'dist_inpl', dist_inpl)
         ! all the other stuff
         call a%set_euler(iptcl, o_new%get_euler()    )
         call a%set_shift(iptcl, o_new%get_shift()    )
@@ -937,7 +929,7 @@ contains
     end subroutine inpl_srch
 
     subroutine gen_symnnmat( self, e )
-         use simple_sym, only: sym
+        use simple_sym, only: sym
         class(prime3D_srch), intent(inout) :: self
         class(oris),         intent(inout) :: e
         type(ori) :: oref, osym

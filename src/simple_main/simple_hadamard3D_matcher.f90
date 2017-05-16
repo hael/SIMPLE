@@ -117,7 +117,7 @@ contains
         ! EXTREMAL LOGICS
         if( p%refine.eq.'het' )then
             if( frac_srch_space < 0.98 .or. p%extr_thresh > 0.025 )then
-                corr_thresh  = b%a%extremal_bound(p%extr_thresh, convex=.false.)
+                corr_thresh  = b%a%extremal_bound(p%extr_thresh, convex=.true.)
                 statecnt(:)  = 0
             else
                 corr_thresh = -huge(corr_thresh)
