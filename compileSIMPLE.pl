@@ -24,7 +24,7 @@ my @prgnames_all;
 my @prgnames_all_short;
 my @modfiles_glob;
 my %ffiles;
-my $ending = "f90";
+my $ending = "(f90|f95|f03|f08)";
 my $execdir = getcwd();
 my $mainprog;
 my @prod_dirs;
@@ -81,11 +81,11 @@ if( $FCOMPILER =~ /pgfortran/ ){
             $dbg_lvl_f = "";
         }
     	# for [MacOSX]
-    	$option_in = '-fimplicit-none -fall-intrinsics -ffree-form -cpp -fpic -fno-second-underscore';
+    	$option_in = '-fimplicit-none -fall-intrinsics -ffree-form -cpp -fpic -fno-second-underscore -ffree-line-length-none';
     	# compiling options for the Makefile_macros
     	$option_mkma_gcc_flags = '';
     	$option_mkma_gpp_flags = '-DADD_';
-    	$option_mkma_f90_flags = '-fimplicit-none -fall-intrinsics -ffree-form -cpp -fpic -fno-second-underscore';
+    	$option_mkma_f90_flags = '-fimplicit-none -fall-intrinsics -ffree-form -cpp -fpic -fno-second-underscore -ffree-line-length-none';
     } elsif ( $PLATFORM == 1 ){
     	# debugging options
     	if( $DEBUG eq 'yes' ) {
@@ -97,11 +97,11 @@ if( $FCOMPILER =~ /pgfortran/ ){
             $dbg_lvl_f = "";
         }
         #for [Linux]
-        $option_in = '-ffree-form -cpp -fPIC -fno-second-underscore';
+      $option_in = '-ffree-form -cpp -fPIC -fno-second-underscore -ffree-line-length-none';
     	#compiling options for the Makefile_macros
     	$option_mkma_gcc_flags = '';
     	$option_mkma_gpp_flags = '-DADD_';
-    	$option_mkma_f90_flags = '-ffree-form -cpp -fPIC -fno-second-underscore';
+    	$option_mkma_f90_flags = '-ffree-form -cpp -fPIC -fno-second-underscore -ffree-line-length-none';
     }
 } elsif( $FCOMPILER =~ /ifort/ ) {
     if( $PLATFORM == 0 ){
@@ -266,7 +266,7 @@ foreach my $j(0 .. $#prod_dirs){
 	$filename = './compile_and_link_local.csh';
 	open($fh, '>', $filename) or die "Could not open file '$filename' $!";
     my $basename = $toBcompiled;
-    $basename =~ s/\.f90//;
+    $basename =~ s/\.f[09][038]//;
     gen_compile_and_link($basename, $bindir);
 	close $fh;
 	system("chmod a+x $filename")==0 or die 'You do not have premision to change attributes.  Make sure you have read/write access to the build directory';
@@ -497,10 +497,10 @@ sub dir_walk{
 
 sub ffiles2hash{
     chomp $_[0];
-    if( $_[0] =~ /\.f90$/ ){
+    if( $_[0] =~ /\.$ending$/ ){
         my @arr = split('/', $_[0]);
         chomp(@arr);
-        $arr[-1] =~ s/\.f90//;
+        $arr[-1] =~ s/\.$ending//;
         $ffiles{$arr[-1]} = $_[0]; 
     }
     return;
@@ -587,6 +587,18 @@ sub make_Makefile_macros {
     }
     print $mkma qq[                         -I $FFTW_INC\n];
     print $mkma qq[\n];
+    print $mkma qq[##############\n];
+    print $mkma qq[# Preprocessor .#\n];
+    print $mkma qq[##############\n];
+    print $mkma qq[\n];
+    print $mkma qq[FPP=cpp \n];
+    print $mkma qq[FPPFLAGS= -P \$(DOPENMP) -J \$(MODDIR) -I \$(OBJDIR) -I \$(MODDIR) -I\$(Simple_source)/simple_utils  \\\n];
+    if( $DCUDA =~ /DCUDA/ ) {
+        print $mkma qq[     \$(DCUDA)           -I \$(CUDADIR)/include/                                  \\\n];
+        print $mkma qq[                         -I \$(CUDADIR)/src                                       \\\n];
+    }
+    print $mkma qq[                         -I $FFTW_INC\n];
+    print $mkma qq[\n];
     print $mkma qq[################\n];
     print $mkma qq[# C++ compiler.#\n];
     print $mkma qq[################\n];
@@ -633,7 +645,7 @@ sub make_Makefile_macros {
     print $mkma qq[\n];
     print $mkma qq[# \$(DLIB)\n];
     print $mkma qq[F90C=\$(GFORTRAN)\n];
-    print $mkma qq[F90FLAGS=$mkma_f90_flags\n];
+    print $mkma qq[F90FLAGS=$mkma_f90_flags \$(FFLAGS)\n];
     print $mkma qq[F90CLIB=\$(F90C) -c \$(F90FLAGS) -I \$(MODDIR)  -I\$(Simple_source)/simple_utils  \\\n];
     if( $FCOMPILER !~ /pgfortran/ and $FCOMPILER !~ /ifort/ ){
     print $mkma qq[                             -J \$(MODDIR)                      \\\n];
