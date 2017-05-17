@@ -46,7 +46,7 @@ contains
          TBEG('bar')
          c = cfac*c + b
          TEND('bar')
-         if (mod(nrep, 1000) .eq. 0) print *, 'Repetition ', i
+         if (mod(nrep, nrep/1000) .eq. 1) print *, 'Repetition ', i
 
       end do
       TREPORT(' Testing profiler using macros done')

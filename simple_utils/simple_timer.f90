@@ -272,13 +272,13 @@ contains
       if (ival .gt. num_profile_vars) then
          write (*, '(A,A,A,1i10)') "Error Timer_Profile_start:", &
             trim(adjustl(LABEL)), " label index outside range ", ival
-#ifdef _DEBUG      
+#ifdef _DEBUG
 #if _DEBUG > 1
-     else
+      else
          print *, "Label: ", profile_labels(ival), " time stamp "
 #endif
 #endif
-     end if
+      end if
    end subroutine timer_profile_start
 
 !< Within profile loop - get elapsed time for token 'LABEL' and reset
@@ -310,13 +310,14 @@ contains
          end if
       end do
       if (tmp_tstamp .eq. 0) then
-       write (*, '(A,2i8,A)') "Error Timer_Profile_break: No time stamp created. loop,val,label:", iloop, ival, trim(adjustl(LABEL))
+         write (*, '(A,2i8,A)') "Error profile: No time stamp created. loop,val,label:", &
+            iloop, ival, trim(adjustl(LABEL))
       end if
       if (ival .gt. num_profile_vars + 1) then
-         write (*, '(A,1i8)') "Error Timer_Profile_break: label index outside range ", ival
+         write (*, '(A,1i8)') "Error profile: label index outside range ", ival
       end if
       if (iloop .gt. num_profile_loops + 1) then
-         write (*, '(A,1i8)') "Error Timer_Profile_break: loop index outside range ", iloop
+         write (*, '(A,1i8)') "Error profile: loop index outside range ", iloop
       end if
 #ifdef _DEBUG
 #if _DEBUG > 1
@@ -333,29 +334,42 @@ contains
    subroutine timer_profile_report(COMMENT, totaltime)
       character(len=*), intent(in) :: COMMENT
       real(dp), intent(in):: totaltime
+      real(dp)            :: total_avg
+      real(dp), allocatable:: avgtime_token(:)
       integer :: ival, iloop
 !    if (.not.present(COMMENT)) COMMENT="PROFILE"
-      write (*, '(A,A,A)') "** PROFILE REPORT : ", trim(adjustl(COMMENT))
-      write (*, '(A,A,A,1i4)') '** FILE:LINE: ', __FILE__, ":", __LINE__
-      write (*, '(A,1i8,A)') '** Iterations: ', num_profile_loops, ' timed loops'
 
-      do ival = 1, num_profile_vars
-         write (*, '(A,A)') '**** Label name: ', trim(profile_labels(ival))
-         write (*, '(A,1d20.10)') "**** Average (sec):", &
-            SUM(profile_matrix(:, ival), MASK=(profile_matrix(:, ival) /= 0.), DIM=1)/REAL(num_profile_loops, dp)
-         write (*, '(A,1d20.10,A,1i3)') "**** Longest run(sec) ", &
-            MAXVAL(profile_matrix(:, ival), MASK=(profile_matrix(:, ival) /= 0.), DIM=1), &
-            '    at ', MAXLOC(profile_matrix(:, ival), MASK=(profile_matrix(:, ival) /= 0.), DIM=1)
-         write (*, '(A,1d20.10,A,1i3)') "**** Shortest run(sec) ", &
-            MINVAL(profile_matrix(:, ival), MASK=(profile_matrix(:, ival) /= 0.), DIM=1), &
-            '   at ', MINLOC(profile_matrix(:, ival), MASK=(profile_matrix(:, ival) /= 0.), DIM=1)
-      end do
-      write (*, '(A,1d20.10)') "** Total time (sec):", totaltime
-      write (*, '(A,1d20.10)') "** Average iteration (sec):", totaltime/REAL(num_profile_loops, dp)
+      if (allocated(profile_matrix)) then
+         total_avg = totaltime/REAL(num_profile_loops, dp)
+         allocate (avgtime_token(num_profile_vars))
+         do ival = 1, num_profile_vars
+            avgtime_token(ival) = SUM(profile_matrix(:, ival), &
+                                      MASK=(profile_matrix(:, ival) /= 0.), DIM=1)/REAL(num_profile_loops, dp)
+         end do
 
-      write (*, '(A,A,A)') "******* END ", trim(COMMENT), " REPORT **************"
-      deallocate (profile_matrix)
+         write (*, '(A,A,A)') "** PROFILE REPORT : ", trim(adjustl(COMMENT))
+         write (*, '(A,A,A,1i4)') '** FILE:LINE: ', __FILE__, ":", __LINE__
+         write (*, '(A,1i8,A)') '** Iterations: ', num_profile_loops, ' timed loops'
 
+         do ival = 1, num_profile_vars
+            write (*, '(A,A)') '**** Label name: ', trim(profile_labels(ival))
+            write (*, '(A,1ES20.10,2x,1ES20.10,A)') "**** Average (sec):", &
+               avgtime_token(ival), avgtime_token(ival)/total_avg, '%'
+            if (num_profile_loops .gt. 1) then
+               write (*, '(A,1ES20.10,A,1i10)') "**** Longest run(sec) ", &
+                  MAXVAL(profile_matrix(:, ival), MASK=(profile_matrix(:, ival) /= 0.), DIM=1), &
+                  '    at ', MAXLOC(profile_matrix(:, ival), MASK=(profile_matrix(:, ival) /= 0.), DIM=1)
+               write (*, '(A,1ES20.10,A,1i10)') "**** Shortest run(sec) ", &
+                  MINVAL(profile_matrix(:, ival), MASK=(profile_matrix(:, ival) /= 0.), DIM=1), &
+                  '   at ', MINLOC(profile_matrix(:, ival), MASK=(profile_matrix(:, ival) /= 0.), DIM=1)
+            end if
+         end do
+         write (*, '(A,1d20.10)') "** Total time (sec):", totaltime
+         write (*, '(A,1d20.10)') "** Average iteration (sec):", total_avg
+
+         write (*, '(A,A,A)') "******* END ", trim(COMMENT), " REPORT **************"
+         deallocate (profile_matrix,avgtime_token)
+      end if
 ! unset labels
       profile_labels = ""
       profile_last_timerstamp = INT(0, dp)
