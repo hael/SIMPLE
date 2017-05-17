@@ -128,7 +128,10 @@ contains
     call reset_timer()
     if (be_verbose) write (*,"(A)") ' '
     if (be_verbose) write (*,'(A)') '10.  Testing timed block macro '
-    TIMER_BLOCK(c=.1; c=saxy(c), ' my block comment ')
+    TIMER_BLOCK(
+    c=.1;
+    c=saxy(c)
+    , ' my block comment ')
 
     end subroutine exec_timertest
 

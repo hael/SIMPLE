@@ -3,7 +3,7 @@
  
 program simple_test_timer
 use simple_defs
-!use simple_timer_basic_test
+use simple_timer_basic_test
 use simple_timer_profile_test
 use simple_cmdline, only: cmdline
 use simple_strings, only: str2real
@@ -28,11 +28,13 @@ be_verbose = .true.
 !        be_verbose = .true.
 !    endif
 !endif
-!call exec_timertest(be_verbose)
+write(*,'(a)') '------------- Basic timer test ----------------- '
+call exec_timertest(be_verbose)
 call date_and_time(TIME=time)
 stoptime = str2real(time)
 write(*,'(a,1x,f9.2)') 'simple_test_timer_basic total runtime (s): ', stoptime - starttime
 starttime=stoptime
+write(*,'(a)') '------------- Profiling timer test ----------------- '
 call exec_profiletest(be_verbose)
 call date_and_time(TIME=time)
 stoptime = str2real(time)

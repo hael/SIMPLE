@@ -55,7 +55,7 @@ contains
       if (be_verbose) write (*, "(A)") ' '
       if (be_verbose) write (*, '(A)') '2.  Testing profiler using macros and seperate loops'
       c = .1
-      TPROFILER(1, i, 'standard  ', 'subroutine', 'common    ', 'empty     ')
+      TPROFILER(1, i, 'standard', 'subroutine', 'common', 'empty')
       TBEG('standard')
       do i = 1, nrep
          c = cfac*c + b

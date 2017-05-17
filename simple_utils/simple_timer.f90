@@ -21,12 +21,12 @@ module simple_timer
    integer, public       :: num_profile_loops, num_profile_vars
    logical, public       :: inloop = .false.
    integer, public       :: profile_counter
-   integer, parameter, public :: ic_profile = 5 ! number of entries in language dictionary
-   integer, parameter, public :: lc_profile = 30 ! max length of tokens
+   integer, parameter, public :: max_tokens = 10 ! number of entries in token dictionary
+   integer, parameter, public :: max_token_csize = 30 ! max char length of tokens
    real(dp), allocatable, public :: elapsed_times(:)
    real(dp), allocatable, public :: profile_matrix(:, :)
-   integer(dp), dimension(ic_profile), public :: profile_last_timerstamp
-   character(len=lc_profile), dimension(ic_profile), public :: profile_labels = ""
+   integer(dp), dimension(max_tokens), public :: profile_last_timerstamp
+   character(len=max_token_csize), dimension(max_tokens), public :: profile_labels = ""
 
    public :: tic, tickrate
    public :: toc, tdiff, tocprint
@@ -97,11 +97,11 @@ contains
       if (present(tstart)) last_time_point = tstart
       call system_clock(count=end_point)
 #ifdef _DEBUG
-      write (*, '(A,1d20.10)') " TOC Time stamp ", REAL(end_point, dp)
+      write (*, '(A,1ES20.10)') " TOC Time stamp ", REAL(end_point, dp)
 #endif
       elapsed = tdiff(end_point, last_time_point)
       last_time_point = end_point
-      write (*, '(A,A,1F20.10)') trim(comment), " Elapsed time ", elapsed
+      write (*, '(A,A,1ES20.10)') trim(comment), " Elapsed time ", elapsed
    end subroutine tocprint
 
 !> print current time and date
@@ -166,12 +166,12 @@ contains
          write (*, '(A,1i8)') '*** Iterations:  ', num_elapsed
          if (idx_elapsed .eq. num_elapsed) then
             elapsed_times(idx_elapsed) = toc()
-            write (*, '(A,1d20.10)') "*** Average (sec):", &
+            write (*, '(A,1ES20.10)') "*** Average (sec):", &
                SUM(elapsed_times, DIM=1)/REAL(num_elapsed, dp)
-            write (*, '(A,1d20.10,A,1i3)') "*** Longest run(sec) ", &
+            write (*, '(A,1ES20.10,A,1i3)') "*** Longest run(sec) ", &
                MAXVAL(elapsed_times, DIM=1), &
                '    at ', MAXLOC(elapsed_times, DIM=1)
-            write (*, '(A,1d20.10,A,1i3)') "*** Shortest run(sec) ", &
+            write (*, '(A,1ES20.10,A,1i3)') "*** Shortest run(sec) ", &
                MINVAL(elapsed_times, DIM=1), &
                '   at ', MINLOC(elapsed_times, DIM=1)
          else
@@ -185,7 +185,7 @@ contains
       end if
    end subroutine timer_loop_end
 !< Setup profiling
-   subroutine timer_profile_setup(nLoops, nVars, v) !1,v2,v3,v4,v5)
+   subroutine timer_profile_setup(nLoops, nVars, v)
       integer(dp), intent(in) :: nLoops
       integer, intent(in) :: nVars
       character(len=*), intent(in) :: v(:)
@@ -194,13 +194,12 @@ contains
          return
       end if
 !      nVars = size(v)
-      if (nVars .gt. 5 .or. nVars .le. 0) then
-         stop "timer_profile_setup error -- maximum 5 labels, minimum 1"
+      if (nVars .gt. max_tokens .or. nVars .le. 0) then
+         stop "timer_profile_setup error -- maximum exceeded"
       else
-         !      allocate (character(len=lc_profile) :: profile_labels(5))
          ! profile_labels are a fixed size
          if (nVars .ge. 1 .and. v(1) .ne. "") then
-            if (len_trim(v(1)) .le. lc_profile) then
+            if (len_trim(v(1)) .le. max_token_csize) then
                profile_labels(1) = trim(adjustl(v(1)))
                num_profile_vars = 1
             else
@@ -208,7 +207,7 @@ contains
             end if
          end if
          if (nVars .ge. 2 .and. v(2) .ne. "") then
-            if (len_trim(v(2)) .le. lc_profile) then
+            if (len_trim(v(2)) .le. max_token_csize) then
                profile_labels(2) = trim(adjustl(v(2)))
                num_profile_vars = 2
             else
@@ -216,7 +215,7 @@ contains
             end if
          end if
          if (nVars .ge. 3 .and. v(3) .ne. "") then
-            if (len_trim(v(3)) .le. lc_profile) then
+            if (len_trim(v(3)) .le. max_token_csize) then
                profile_labels(3) = trim(adjustl(v(3)))
                num_profile_vars = 3
             else
@@ -224,7 +223,7 @@ contains
             end if
          end if
          if (nVars .ge. 4 .and. v(4) .ne. "") then
-            if (len_trim(v(4)) .le. lc_profile) then
+            if (len_trim(v(4)) .le. max_token_csize) then
                profile_labels(4) = trim(adjustl(v(4)))
                num_profile_vars = 4
             else
@@ -232,11 +231,51 @@ contains
             end if
          end if
          if (nVars .ge. 5 .and. v(5) .ne. "") then
-            if (len_trim(v(5)) .le. lc_profile) then
+            if (len_trim(v(5)) .le. max_token_csize) then
                profile_labels(5) = trim(adjustl(v(5)))
                num_profile_vars = 5
             else
                stop 'Error: Timer profile token 5 too long'
+            end if
+        end if
+        if (nVars .ge. 6 .and. v(6) .ne. "") then
+            if (len_trim(v(6)) .le. max_token_csize) then
+               profile_labels(6) = trim(adjustl(v(6)))
+               num_profile_vars = 6
+            else
+               stop 'Error: Timer profile token 6 too long'
+            end if
+         end if
+         if (nVars .ge. 7 .and. v(7) .ne. "") then
+            if (len_trim(v(7)) .le. max_token_csize) then
+               profile_labels(7) = trim(adjustl(v(7)))
+               num_profile_vars = 7
+            else
+               stop 'Error: Timer profile token 7 too long'
+            end if
+         end if
+         if (nVars .ge. 8 .and. v(8) .ne. "") then
+            if (len_trim(v(8)) .le. max_token_csize) then
+               profile_labels(8) = trim(adjustl(v(8)))
+               num_profile_vars = 8
+            else
+               stop 'Error: Timer profile token 8 too long'
+            end if
+         end if
+         if (nVars .ge. 9 .and. v(9) .ne. "") then
+            if (len_trim(v(9)) .le. max_token_csize) then
+               profile_labels(9) = trim(adjustl(v(9)))
+               num_profile_vars = 9
+            else
+               stop 'Error: Timer profile token 9 too long'
+            end if
+         end if
+         if (nVars .ge. 10 .and. v(10) .ne. "") then
+            if (len_trim(v(10)) .le. max_token_csize) then
+               profile_labels(10) = trim(adjustl(v(10)))
+               num_profile_vars = 10
+            else
+               stop 'Error: Timer profile token 10 too long'
             end if
          end if
       end if
@@ -353,19 +392,19 @@ contains
 
          do ival = 1, num_profile_vars
             write (*, '(A,A)') '**** Label name: ', trim(profile_labels(ival))
-            write (*, '(A,1ES20.10,2x,1ES20.10,A)') "**** Average (sec):", &
+            write (*, '(A,1ES20.6,2x,1ES20.5,A)') "**** Average (sec):", &
                avgtime_token(ival), avgtime_token(ival)/total_avg, '%'
             if (num_profile_loops .gt. 1) then
-               write (*, '(A,1ES20.10,A,1i10)') "**** Longest run(sec) ", &
+               write (*, '(A,1ES20.6,A,1i10)') "**** Longest run(sec) ", &
                   MAXVAL(profile_matrix(:, ival), MASK=(profile_matrix(:, ival) /= 0.), DIM=1), &
                   '    at ', MAXLOC(profile_matrix(:, ival), MASK=(profile_matrix(:, ival) /= 0.), DIM=1)
-               write (*, '(A,1ES20.10,A,1i10)') "**** Shortest run(sec) ", &
+               write (*, '(A,1ES20.6,A,1i10)') "**** Shortest run(sec) ", &
                   MINVAL(profile_matrix(:, ival), MASK=(profile_matrix(:, ival) /= 0.), DIM=1), &
                   '   at ', MINLOC(profile_matrix(:, ival), MASK=(profile_matrix(:, ival) /= 0.), DIM=1)
             end if
          end do
-         write (*, '(A,1d20.10)') "** Total time (sec):", totaltime
-         write (*, '(A,1d20.10)') "** Average iteration (sec):", total_avg
+         write (*, '(A,1d20.6)') "** Total time (sec):", totaltime
+         write (*, '(A,1d20.6)') "** Average iteration (sec):", total_avg
 
          write (*, '(A,A,A)') "******* END ", trim(COMMENT), " REPORT **************"
          deallocate (profile_matrix,avgtime_token)
