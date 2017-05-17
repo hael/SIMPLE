@@ -19,9 +19,7 @@ use simple_commander_distr_wflows
 use simple_commander_hlev_wflows
 implicit none
 
-! DISTRIBUTED COMMANDERS
-! pre-processing
-
+! PRE-PROCESSING
 type(preproc_stream_commander)            :: xpreproc_stream
 type(unblur_ctffind_distr_commander)      :: xunblur_ctffind_distr
 type(unblur_distr_commander)              :: xunblur_distr
@@ -31,15 +29,17 @@ type(pick_distr_commander)                :: xpick_distr
 ! PRIME2D
 type(makecavgs_distr_commander)           :: xmakecavgs_distr
 type(prime2D_autoscale_commander)         :: xprime2D_distr
+! 3D SIMILARITY MATRIX GENERATION WITH COMMON LINES
+type(comlin_smat_distr_commander)         :: xcomlin_smat_distr
 ! PRIME3D
 type(prime3D_init_distr_commander)        :: xprime3D_init_distr
 type(prime3D_distr_commander)             :: xprime3D_distr
 type(cont3D_distr_commander)              :: xcont3D_distr
 type(recvol_distr_commander)              :: xrecvol_distr
 type(symsrch_distr_commander)             :: xsymsrch_distr
-! time-series workflows
+! TIME-SERIES WORKFLOWS
 type(tseries_track_distr_commander)       :: xtseries_track_distr
-! high-level workflows
+! HIGH-LEVEL WORKFLOWS
 type(ini3D_from_cavgs_commander)          :: xini3D_from_cavgs
 type(het_ensemble_commander)              :: xhet_ensemble
 
@@ -401,6 +401,34 @@ select case(prg)
             stop 'eiter nparts or chunksz need to be part of command line'
         endif
         call xprime2D_distr%execute(cline)
+
+    ! 3D SIMILARITY MATRIX GENERATION WITH COMMON LINES
+
+    case( 'comlin_smat' )
+        !==Program comlin_smat
+        !
+        ! <comlin_smat/begin>is a program for creating a similarity matrix based on common
+        ! line correlation. The idea being that it should be possible to cluster images based
+        ! on their 3D similarity witout having a 3D model by only operating on class averages
+        ! and find averages that fit well together in 3D<comlin_smat/end>
+        !
+        ! set required keys
+        keys_required(1) = 'stk'
+        keys_required(2) = 'smpd'
+        keys_required(3) = 'lp'
+        keys_required(4) = 'msk'
+        keys_required(5) = 'nparts'
+        ! set optional keys
+        keys_optional(1) = 'hp'
+        keys_optional(2) = 'trs'
+        ! parse command line
+        if( describe ) call print_doc_comlin_smat
+        call cline%parse(keys_required(:5), keys_optional(:2))
+        ! set defaults
+        call cline%set('nthr', 1.0)
+        if( .not. cline%defined('trs') ) call cline%set('trs', 3.0)
+        ! execute
+        call xcomlin_smat_distr%execute(cline) 
         
     ! PRIME3D
 
@@ -435,7 +463,7 @@ select case(prg)
         if( .not. cline%defined('nspace') ) call cline%set('nspace', 1000.)
         ! execute
         call xprime3D_init_distr%execute( cline )
-    case('prime3D')
+    case( 'prime3D' )
         !==Program prime3D
         !
         ! <prime3D/begin>is an ab inito reconstruction/refinement program based on probabilistic
@@ -517,7 +545,7 @@ select case(prg)
         endif
         ! execute
         call xprime3D_distr%execute(cline)
-    case('cont3D')
+    case( 'cont3D' )
         !==Program prime3D
         !
         ! <cont3D/begin><cont3D/end>
@@ -611,34 +639,49 @@ select case(prg)
         ! execute
         call xrecvol_distr%execute( cline )
     case( 'symsrch' )
-        !==Program recvol
+        !==Program symsrch
         !
-        ! <recvol/begin>volum-based symmetry serach only<recvol/end>
-        !
+        ! <symsrch/begin>is a program for searching for the principal symmetry axis of a volume 
+        ! reconstructed without assuming any point-group symmetry. The program takes as input an 
+        ! asymmetrical 3D reconstruction. The alignment document for all the particle images 
+        ! that have gone into the 3D reconstruction and the desired point-group symmetry needs to 
+        ! be inputted. The 3D reconstruction is then projected in 50 (default option) even directions, 
+        ! common lines-based optimisation is used to identify the principal symmetry axis, the rotational 
+        ! transformation is applied to the inputted orientations, and a new alignment document is produced. 
+        ! Input this document to recvol together with the images and the point-group symmetry to generate a 
+        ! symmetrised map. If you are unsure about the point-group, you should use the compare=yes mode and 
+        ! input the highest conceviable point-group. The program then calculates probabilities for all lower 
+        ! groups inclusive.<symsrch/end>
+        !        
         ! set required keys
-        keys_required(1)  = 'smpd'
-        keys_required(2)  = 'msk'
-        keys_required(3)  = 'vol1'
+        keys_required(1)  = 'vol1'
+        keys_required(2)  = 'smpd'
+        keys_required(3)  = 'msk'
         keys_required(4)  = 'pgrp'
-        keys_required(5)  = 'lp'
-        keys_required(6)  = 'nparts'
+        keys_required(5)  = 'oritab'
+        keys_required(6)  = 'lp'
+        keys_required(7)  = 'nparts'
         ! set optional keys
         keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'oritab'
-        keys_optional(3)  = 'cenlp'
-        keys_optional(4)  = 'hp'
-        keys_optional(5)  = 'nspace'
+        keys_optional(2)  = 'cenlp'
+        keys_optional(3)  = 'hp'
+        keys_optional(4)  = 'nspace'
         ! parse command line
         if( describe ) call print_doc_symsrch
-        call cline%parse(keys_required(:6), keys_optional(:5))
+        call cline%parse(keys_required(:7), keys_optional(:4))
         ! set defaults
-        if(cline%defined('stk'))stop 'Distributed execution of SYMSRCH does not support the STK argument'
         if(cline%defined('compare'))stop 'Distributed execution of SYMSRCH does not support the COMPARE argument'
-        call cline%set('nptcls', 150.)                                 ! 50 projections 4 symsrch
-        if(.not.cline%defined('nspace'))call cline%set('nspace', 150.) ! 50 projections 4 symsrch
+        ! set defaults
+        if( .not. cline%defined('nspace') )then
+            call cline%set('nptcls', 50.) ! 50 projections 4 symsrch
+            call cline%set('nspace', 50.) ! 50 projections 4 symsrch
+        else
+            call cline%set('nptcls', cline%get_rarg('nspace'))
+        endif
         if(.not.cline%defined('cenlp')) call cline%set('cenlp',   30.)
         ! execute
         call xsymsrch_distr%execute( cline )
+
     ! TIME-SERIES DISTRIBUTED WORKFLOWS
 
     case( 'tseries_track' )

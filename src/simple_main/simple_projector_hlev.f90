@@ -153,7 +153,7 @@ contains
         class(image),     intent(out)   :: roimg     !< rotated image
         real, optional,   intent(in)    :: shellw(:) !< shell-weights
         type(projector) :: img_pad 
-        type(image)     :: roimg_pad, img_copy
+        type(image)     :: roimg_pad
         integer         :: h,k,lims(3,2),ldim(3),ldim_pd(3),logi(3),phys(3),sh,nyq
         real            :: loc(3),mat(2,2),smpd,fwght,wzero
         logical         :: doshellw
@@ -167,8 +167,6 @@ contains
         call roimg_pad%new(ldim_pd, smpd)
         nyq        = img_pad%get_nyq()
         roimg_pad  = cmplx(0.,0.)
-        img_copy   = img
-        call img_copy%mask(msk, 'soft')
         call prep4cgrid(img, img_pad, msk)
         lims       = img_pad%loop_lims(2)
         mat        = rotmat2d(ang)
@@ -200,7 +198,6 @@ contains
         call roimg_pad%clip(roimg)
         call img_pad%kill
         call roimg_pad%kill
-        call img_copy%kill
     end subroutine rotimg
 
 end module simple_projector_hlev

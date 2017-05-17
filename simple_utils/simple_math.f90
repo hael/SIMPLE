@@ -114,6 +114,17 @@ interface zeros
     module procedure zeros_2
 end interface
 
+interface rad2deg
+    module procedure rad2deg_1
+    module procedure rad2deg_2
+end interface
+
+interface csq
+    module procedure csq_1
+    module procedure csq_2
+end interface
+
+
 contains
 
     ! JIFFYS
@@ -150,10 +161,17 @@ contains
     end function
     
     !> \brief  converts from radians to degrees
-    pure function rad2deg( rad ) result( deg )
-        real, intent(in) :: rad
-        real             :: deg
-        deg = (rad/pi)*180.
+    pure function rad2deg_1( rad ) result( deg )
+        real(sp), intent(in) :: rad
+        real(sp)             :: deg
+        deg = (rad/PI)*180.
+    end function
+
+    !> \brief  converts from radians to degrees
+    pure function rad2deg_2( rad ) result( deg )
+        real(dp), intent(in) :: rad
+        real(dp)             :: deg
+        deg = (rad/DPI)*180.d0
     end function
     
     !>  \brief  Convert acceleration voltage in kV into electron wavelength in Angstroms
@@ -698,9 +716,9 @@ contains
     end function
     
     !> \brief  is for complex squaring
-    elemental pure function csq( a ) result( sq )
-        complex, intent(in) :: a
-        real :: sq, x, y, frac
+    elemental pure function csq_1( a ) result( sq )
+        complex(sp), intent(in) :: a
+        real(sp) :: sq, x, y, frac
         x = abs(real(a))
         y = abs(aimag(a))
         if( x == 0.) then
@@ -714,10 +732,10 @@ contains
             frac = x/y
             sq = y*y*(1.+frac*frac)
         endif
-    end function csq
+    end function csq_1
 
     !> \brief is for double complex squaring
-    elemental pure function csq_dble( a ) result( sq )
+    elemental pure function csq_2( a ) result( sq )
         complex(dp), intent(in) :: a
         real(dp) :: sq, x, y, frac
         x = abs(real(a))
@@ -733,7 +751,7 @@ contains
             frac = x/y
             sq = y*y*(1.+frac*frac)
         endif
-    end function
+    end function csq_2
     
     !> \brief  is for calculating complex arg/abs/modulus, from numerical recepies
     elemental pure function mycabs( a ) result( myabs )

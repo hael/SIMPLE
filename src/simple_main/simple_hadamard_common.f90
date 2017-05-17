@@ -248,12 +248,14 @@ contains
         type(ori),      intent(inout) :: o
         type(ctf) :: tfun
         real      :: x, y, dfx, dfy, angast
+        integer   :: state
         if( p%l_xfel )then
             ! nothing to do 4 now
             return
         else
             x = o%get('x')
             y = o%get('y')
+            state = nint(o%get('state'))
             ! move to Fourier space
             call b%img%fwd_ft
             ! set CTF parameters
@@ -287,22 +289,15 @@ contains
                     stop 'Unsupported ctf mode; simple_hadamard_common :: prepimg4align'
             end select
             ! shift image to rotational origin
-            if( abs(x) > SHTHRESH .or. abs(y) > SHTHRESH ) call b%img%shift(-x, -y)
+            if(abs(x) > SHTHRESH .or. abs(y) > SHTHRESH) call b%img%shift(-x, -y)
             ! back to real-space
             call b%img%bwd_ft
             ! clip image if needed
             if( p%boxmatch < p%box ) call b%img%clip_inplace([p%boxmatch,p%boxmatch,1]) ! SQUARE DIMS ASSUMED
             ! MASKING
             if( p%doautomsk )then
-                ! PARTICLE ENVELOPPE MASKING
-                if( p%boxmatch < p%box )call b%img_msk%new([p%boxmatch,p%boxmatch,1], p%smpd)
-                call b%mskvol%env_rproject(o, b%img_msk, p%msk) ! create 2D envelope
-                !do i=1, p%binwidth
-                !    call b%img_msk%grow_bin             ! binary layers
-                !enddo
-                call b%img_msk%cos_edge(p%edge)         ! soft edge
-                !call b%img%mask(p%msk, 'soft')          ! testing
-                call b%img%mul(b%img_msk)               ! multiply by projected envelope
+                ! from volume
+                call b%mskvols(state)%apply_mask(b%img, o)
             else if( p%automsk .eq. 'cavg' )then
                 ! ab initio mask
                 call automask2D(b%img, p)
@@ -357,12 +352,17 @@ contains
         ! normalise
         call ref%norm
         ! apply mask
-        if( p%l_innermsk )then
-            call ref%mask(p%msk, 'soft', inner=p%inner, width=p%width)
-        else 
-            call ref%mask(p%msk, 'soft')
+        if( p%l_automsk )then
+            ! automasking
+            call automask2D(ref, p)
+        else
+            ! soft masking
+            if( p%l_innermsk )then
+                call ref%mask(p%msk, 'soft', inner=p%inner, width=p%width)
+            else 
+                call ref%mask(p%msk, 'soft')
+            endif
         endif
-        if( p%l_automsk ) call automask2D(ref, p)
         ! move to Fourier space
         call ref%fwd_ft
     end subroutine prep2Dref_2
@@ -380,7 +380,7 @@ contains
         if( p%l_xfel )then
             ! no centering
         else
-            if(p%doshift) call centervol
+            if( p%doshift )call centervol
         endif
         ! clip
         if( p%boxmatch < p%box )then
@@ -399,21 +399,19 @@ contains
             endif
             ! mask using a molecular envelope
             if( p%doautomsk )then
-                p%masks(s) = 'automask_state'//int2str_pad(s,2)//p%ext
+                p%masks(s)   = 'automask_state'//int2str_pad(s,2)//p%ext
+                call b%mskvols(s)%init_mskproj( p, b%vol )
                 if( p%l_distr_exec )then
                     if( p%part == 1 )then
-                        ! automask & write files
-                        call automask(b, p, cline, b%vol, b%mskvol, p%vols_msk(s), p%masks(s))
-                    else
-                        ! automask & DO NOT write files
-                        call automask(b, p, cline, b%vol, b%mskvol)
+                        ! write files
+                        call b%vol%write( p%vols_msk(s) )
+                        call b%mskvols(s)%write( p%masks(s) )
                     endif
                 else
-                    ! automask & write files
-                    call automask(b, p, cline, b%vol, b%mskvol, p%vols_msk(s), p%masks(s))
+                    ! write files
+                    call b%vol%write( p%vols_msk(s) )
+                    call b%mskvols(s)%write( p%masks(s) )
                 endif
-                ! stash for enveloppe particle projection
-                b%mskvols(s) = b%mskvol
             endif
         endif
         ! FT volume

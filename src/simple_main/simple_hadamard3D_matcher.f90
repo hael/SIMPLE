@@ -117,7 +117,7 @@ contains
         ! EXTREMAL LOGICS
         if( p%refine.eq.'het' )then
             if( frac_srch_space < 0.98 .or. p%extr_thresh > 0.025 )then
-                corr_thresh  = b%a%extremal_bound(p%extr_thresh, convex=.false.)
+                corr_thresh  = b%a%extremal_bound(p%extr_thresh, convex=.true.)
                 statecnt(:)  = 0
             else
                 corr_thresh = -huge(corr_thresh)
@@ -425,29 +425,30 @@ contains
                 ! initialize
                 call b%img%init_imgpolarizer(pftcc)
                 ntot = p%top-p%fromp+1
+                cnt  = 0
                 do s=1,p%nstates
                     if( b%a%get_statepop(s) == 0 )then
                         ! empty state
                         cycle
                     endif
-                    if( p%doautomsk )then
-                        ! read & pre-process mask volume
-                        b%mskvol = b%mskvols(s)
-                        call b%mskvol%init_env_rproject
-                    endif
-                    cnt = 0
+                    ! if( p%doautomsk )then
+                    !     ! read & pre-process mask volume
+                    !     b%mskvol = b%mskvols(s)
+                    !     call b%mskvol%init_mskproj(p)
+                    ! endif
                     do iptcl=p%fromp,p%top
                         o      = b%a%get_ori(iptcl)
                         istate = nint(o%get('state'))
                         if( istate /= s ) cycle
                         cnt = cnt + 1
-                        call progress( cnt, ntot )
+                        call progress(cnt, ntot)
                         call read_img_from_stk( b, p, iptcl )
                         call prepimg4align(b, p, o)
                         call b%img%imgpolarizer(pftcc, iptcl)
                     end do
+                    if( p%doautomsk )call b%mskvols(s)%kill_mskproj
                 end do
-                if( p%doautomsk )call b%mskvol%kill_env_rproject
+                call progress(ntot, ntot)
                 ! restores b%img dimensions for clean exit
                 if( p%boxmatch < p%box )call b%img%new([p%box,p%box,1],p%smpd)
             end subroutine prep_pftcc_local

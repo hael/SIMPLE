@@ -1,7 +1,6 @@
 module simple_hadamard2D_matcher
 use simple_defs
 use simple_polarft_corrcalc, only: polarft_corrcalc
-use simple_prime_srch,       only: prime_srch
 use simple_prime2D_srch,     only: prime2D_srch
 use simple_ori,              only: ori
 use simple_build,            only: build
@@ -43,13 +42,14 @@ contains
         frac_srch_space = b%a%get_avg('frac')
 
         ! PER-PARTICLE CONVERGENCE
+        if( which_iter == 1 ) call del_file(p%ppconvfile)
         if( file_exists(p%ppconvfile) )then
             call b%ppconv%read(p%ppconvfile)
         else
             call b%ppconv%zero_joint_distr_olap
         endif
         call b%ppconv%set_conv_larr(conv_larr)
-        write(*,'(A,F8.2)') '>>> NON-CONVERGED PARTICLES(%):', 100.*(real(count(conv_larr)) / real(p%top - p%fromp + 1))
+        write(*,'(A,F8.2)') '>>> CONVERGED PARTICLES(%):', 100.*(real(count(conv_larr)) / real(p%top - p%fromp + 1))
 
         ! PREP REFERENCES
         if( p%l_distr_exec )then
@@ -123,7 +123,7 @@ contains
         ! execute the search
         if( p%refine .eq. 'neigh' )then
             call del_file(p%outfile)
-            !$omp parallel do default(shared) schedule(dynamic) private(iptcl)
+            !$omp parallel do default(shared) schedule(guided) private(iptcl)
             do iptcl=p%fromp,p%top
                 call primesrch2D(iptcl)%nn_srch(pftcc, iptcl, b%a, b%nnmat)
             end do
@@ -132,7 +132,7 @@ contains
             ! execute the search
             call del_file(p%outfile)
             if( p%oritab .eq. '' )then
-                !$omp parallel do default(shared) schedule(dynamic) private(iptcl)
+                !$omp parallel do default(shared) schedule(guided) private(iptcl)
                 do iptcl=p%fromp,p%top
                     call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, conv_larr(iptcl), greedy=.true.)
                 end do
@@ -142,7 +142,7 @@ contains
                     write(*,'(A,F8.2)') '>>> PARTICLE RANDOMIZATION(%):', 100.*p%extr_thresh
                     write(*,'(A,F8.2)') '>>> CORRELATION THRESHOLD:    ', corr_thresh
                 endif
-                !$omp parallel do default(shared) schedule(dynamic) private(iptcl)
+                !$omp parallel do default(shared) schedule(guided) private(iptcl)
                 do iptcl=p%fromp,p%top
                     call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, conv_larr(iptcl), extr_bound=corr_thresh)
                 end do

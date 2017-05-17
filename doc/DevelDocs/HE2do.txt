@@ -1,4 +1,6 @@
-need to parallelise the volassemble of the different states for het_ensemble
+
+random selection of images for prime2D init need to take state=0 into account
+
 need to have another go at the picker
 weighted multi-resolution state sorting by fitting B-factors?
 per-particle convergence for accelerated analysis?

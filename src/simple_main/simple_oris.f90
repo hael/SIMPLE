@@ -77,6 +77,8 @@ type :: oris
     procedure          :: get_ctfparams
     procedure          :: get_defocus_groups
     procedure          :: extract_table
+    procedure          :: ang_sdev
+    procedure          :: stochastic_weights
     procedure          :: included
     procedure          :: print
     procedure          :: print_chash_sizes
@@ -156,6 +158,7 @@ type :: oris
     generic            :: spiral => spiral_1, spiral_2
     procedure          :: qspiral
     procedure          :: order
+    procedure          :: order_corr
     procedure          :: order_cls
     procedure          :: calc_hard_ptcl_weights
     procedure          :: calc_spectral_weights
@@ -1092,6 +1095,92 @@ contains
             table(i) = str
         end do
     end function extract_table
+
+    !>  \brief  angular standard deviation
+    real function ang_sdev( self, refine, nstates, npeaks )
+        class(oris),           intent(inout) :: self
+        character(len=STDLEN), intent(in)    :: refine
+        integer,               intent(in)    :: nstates, npeaks
+        integer :: instates, state, pop
+        ang_sdev = 0.
+        if(npeaks < 3 .or. trim(refine).eq.'shc' .or. trim(refine).eq.'shcneigh')return
+        instates = 0
+        do state=1,nstates
+            pop = self%get_statepop( state )
+            if( pop > 0 )then
+                ang_sdev = ang_sdev + ang_sdev_state( state )
+                instates = instates + 1
+            endif
+        enddo
+        ang_sdev = ang_sdev / real(instates)
+    
+        contains
+            
+            function ang_sdev_state( istate )result( isdev )
+                use simple_math, only: rad2deg
+                use simple_stat, only: moment
+                integer, intent(in)  :: istate
+                type(ori)            :: o_best, o
+                type(oris)           :: os
+                real,    allocatable :: dists(:), ws(:)
+                integer, allocatable :: inds(:)
+                real                 :: ave, isdev, var
+                integer              :: loc(1), alloc_stat, i, ind, n, cnt
+                logical              :: err
+                isdev = 0.
+                inds = self%get_state( istate )
+                n = size(inds)
+                if( n < 3 )return ! because one is excluded in the next step & moment needs at least 2 objs
+                call os%new( n )
+                allocate( ws(n), dists(n-1), stat=alloc_stat )
+                call alloc_err( 'ang_sdev_state; simple_oris', alloc_stat )
+                ws    = 0.
+                dists = 0.
+                ! get best ori
+                do i=1,n
+                    ind   = inds(i)
+                    ws(i) = self%get(ind,'ow')
+                    call os%set_ori( i, self%o(ind) )
+                enddo
+                loc    = maxloc( ws )
+                o_best = os%get_ori( loc(1) )
+                ! build distance vector
+                cnt = 0
+                do i=1,n
+                    if( i==loc(1) )cycle
+                    cnt = cnt+1
+                    o = os%get_ori( i )
+                    dists( cnt ) = rad2deg( o.euldist.o_best )
+                enddo
+                call moment(dists, ave, isdev, var, err)
+                deallocate( ws, dists, inds )
+                call os%kill
+            end function ang_sdev_state
+    end function ang_sdev
+
+    !>  \brief  determines and updates stochastic weights
+    subroutine stochastic_weights( self, wcorr )
+        class(oris), intent(inout) :: self
+        real,        intent(out)   :: wcorr
+        real             :: ws(self%n)
+        real,allocatable :: corrs(:)
+        if(self%n == 1)then
+            call self%set(1,'ow',1.0)
+            wcorr = self%get(1,'corr')
+            return
+        endif
+        ws    = 0.
+        wcorr = 0.
+        ! get unnormalised correlations
+        corrs = self%get_all('corr')
+        ! calculate normalised weights and weighted corr
+        where(corrs > TINY) ws = exp(corrs) ! ignore invalid corrs
+        ws    = ws/sum(ws)
+        wcorr = sum(ws*corrs) 
+        ! update npeaks individual weights
+        call self%set_all('ow', ws)
+        deallocate(corrs)
+    end subroutine stochastic_weights
 
     !>  \brief  is for printing
     function included( self )result( incl )
@@ -2259,7 +2348,7 @@ contains
         enddo
     end subroutine qspiral
 
-    !>  \brief  orders oris according to quality
+    !>  \brief  orders oris according to specscore
     function order( self ) result( arr )
         class(oris), intent(in), target :: self
         integer, allocatable :: arr(:)
@@ -2270,6 +2359,18 @@ contains
         arr = (/(i,i=1,self%n)/)
         call hpsort( self%n, arr, o1_gt_o2 )
     end function order
+
+    !>  \brief  orders oris according to corr
+    function order_corr( self ) result( arr )
+        class(oris), intent(in), target :: self
+        integer, allocatable :: arr(:)
+        integer :: i, alloc_stat
+        op => self%o
+        allocate( arr(self%n), stat=alloc_stat )
+        call alloc_err('order; simple_oris', alloc_stat)
+        arr = (/(i,i=1,self%n)/)
+        call hpsort( self%n, arr, o1_gt_o2_corr )
+    end function order_corr
     
     !>  \brief  orders clusters according to population
     function order_cls( self ) result( arr )
@@ -2296,7 +2397,7 @@ contains
         logical, optional, intent(in)    :: bystate
         integer, allocatable :: inds(:)
         type(oris) :: os
-        integer    :: i, lim, n, nstates, s, pop
+        integer    :: i, nstates, s, pop
         logical    :: ibystate
         ibystate = .false.
         if( present(bystate) )ibystate = bystate
@@ -2334,7 +2435,7 @@ contains
         logical, optional, intent(in)    :: bystate
         integer, allocatable :: inds(:)
         type(oris) :: os
-        integer    :: i, lim, n, nstates, s, pop
+        integer    :: i, nstates, s, pop
         logical    :: ibystate
         ibystate = .false.
         if( present(bystate) )ibystate = bystate
@@ -2397,7 +2498,7 @@ contains
         class(oris), intent(inout) :: self
         real,        intent(in)    :: frac
         real,    allocatable :: specscores(:), weights(:)
-        integer, allocatable :: order(:), inds(:)
+        integer, allocatable :: order(:)
         real    :: w
         integer :: i, lim, n
         if( self%isthere('specscore') )then
@@ -2408,6 +2509,7 @@ contains
             do i=1,self%n
                 call self%o(i)%set('w', weights(i))
             end do
+            deallocate(specscores, weights)
         else
             call self%set_all2single('w', 1.)
         endif
@@ -2832,24 +2934,28 @@ contains
         integer, intent(in) :: o1, o2
         logical             :: val
         real                :: corr1, corr2, spec1, spec2
-        if( op(o1)%isthere('specscore') )then
-            spec1 = op(o1)%get('specscore')
-            spec2 = op(o2)%get('specscore')
-            if( spec1 > spec2 )then
-                val = .true.
-            else
-                val = .false.
-            endif
+        spec1 = op(o1)%get('specscore')
+        spec2 = op(o2)%get('specscore')
+        if( spec1 > spec2 )then
+            val = .true.
         else
-            corr1 = op(o1)%get('corr')
-            corr2 = op(o2)%get('corr')
-            if( corr1 > corr2 )then
-                val = .true.
-            else
-                val = .false.
-            endif
+            val = .false.
         endif
     end function o1_gt_o2
+
+    !>  \brief  orientation 1 greater than (better) than orientation 2 ?
+    function o1_gt_o2_corr( o1, o2 ) result( val )
+        integer, intent(in) :: o1, o2
+        logical             :: val
+        real                :: corr1, corr2, spec1, spec2
+        corr1 = op(o1)%get('corr')
+        corr2 = op(o2)%get('corr')
+        if( corr1 > corr2 )then
+            val = .true.
+        else
+            val = .false.
+        endif
+    end function o1_gt_o2_corr
     
     !>  \brief  orientation 1 less than (worse) than orientation 2 ?
     function o1_lt_o2( o1, o2 ) result( val )
@@ -2932,7 +3038,7 @@ contains
         class(ori),  intent(in) :: o
         real    :: diversity_score
         real    :: dist, dist_min
-        integer :: i, j
+        integer :: i
         dist_min = 2.0*sqrt(2.0)
         do i=1,self%n
             dist = self%o(i).geod.o

@@ -5,7 +5,7 @@ use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_projector,        only: projector
 use simple_oris,             only: oris
 use simple_ori,              only: ori
-use simple_pftcc_srch,      only: pftcc_srch
+use simple_pftcc_srch,       only: pftcc_srch
 use simple_math              ! use all in there
 implicit none
 
@@ -16,13 +16,13 @@ logical, parameter :: debug = .false.
 
 type cont3D_greedysrch
     private
-    class(polarft_corrcalc), pointer :: pftcc_ptr   => null()   !< polar fourier correlation calculator
-    class(projector),        pointer :: vols_ptr(:) => null()   !< volumes for projection
-    type(pftcc_srch)                 :: srch_obj                !< shift search object
-    type(ori)                        :: o_in                    !< input orientation
-    type(ori)                        :: o_out                   !< best orientation found
-    logical,             allocatable :: state_exists(:)         !< indicates whether each state is populated
-    real                             :: lims(2,2)     = 0.     !< shift search limits
+    class(polarft_corrcalc), pointer :: pftcc_ptr   => null()  !< polar fourier correlation calculator
+    class(projector),        pointer :: vols_ptr(:) => null()  !< volumes for projection
+    type(pftcc_srch)                 :: srch_obj               !< shift search object
+    type(ori)                        :: o_in                   !< input orientation
+    type(ori)                        :: o_out                  !< best orientation found
+    logical,             allocatable :: state_exists(:)        !< indicates whether each state is populated
+    real                             :: lims(5,2)     = 0.     !< shift search limits
     real                             :: prev_corr     = -1.    !< previous correlation
     real                             :: prev_shift(2) = 0.     !< previous correlation
     real                             :: angthresh     = 0.     !< angular threshold
@@ -62,14 +62,15 @@ contains
         class(projector),        target, intent(in)    :: vols(:)    !< references
         call self%kill
         ! set constants
-        self%pftcc_ptr => pftcc
-        self%vols_ptr  => vols
-        self%lims(:,1) = -p%trs
-        self%lims(:,2) = p%trs
-        self%nstates   = p%nstates
+        self%pftcc_ptr  => pftcc
+        self%vols_ptr   => vols
+        self%lims(:3,:) = p%eullims
+        self%lims(4,:)  = [-p%trs, p%trs]
+        self%lims(5,:)  = [-p%trs, p%trs]
+        self%nstates    = p%nstates
         if( size(vols).ne.self%nstates )stop 'Inconsistent number of volumes; cont3D_greedysrch::new'
-        self%angthresh = p%athres
-        self%shbarr    = p%shbarrier
+        self%angthresh  = p%athres
+        self%shbarr     = p%shbarrier
         ! done
         self%exists = .true.
         if( debug ) write(*,'(A)') '>>> cont3D_greedysrch::CONSTRUCTED NEW SIMPLE_cont3D_greedysrch OBJECT'
@@ -83,16 +84,15 @@ contains
         class(oris),        intent(inout) :: a
         integer,            intent(in)    :: iptcl, iref, istate
         real, allocatable :: frc(:)
-        real :: lims(5,2)
-        self%iptcl = iptcl
-        self%ref   = iref
-        self%state = istate
-        self%o_in  = a%get_ori(self%iptcl)
+        self%iptcl      = iptcl
+        self%ref        = iref
+        self%state      = istate
+        self%o_in       = a%get_ori(self%iptcl)
         self%prev_shift = self%o_in%get_shift()
         ! state
         allocate(self%state_exists(self%nstates))
         self%state_exists = a%get_state_exist(self%nstates)
-        self%state = istate
+        self%state        = istate
         if( .not.self%state_exists(self%state) )stop 'state is empty; cont3D_greedysrch::prep_srch'
         ! correlation
         call self%vols_ptr(self%state)%fproject_polar(self%ref, self%o_in,&
@@ -102,11 +102,9 @@ contains
         frc = self%pftcc_ptr%genfrc(self%ref, self%iptcl, 1)
         self%specscore = max(0., median_nocopy(frc))
         ! search object
-        lims(:3,1) = 0.
-        lims(:3,2) = 360.
-        lims(4:,:) = self%lims
-        call self%srch_obj%new(self%pftcc_ptr, lims, shbarrier=self%shbarr,&
+        call self%srch_obj%new(self%pftcc_ptr, self%lims, shbarrier=self%shbarr,&
         &vols=self%vols_ptr)
+        ! cleanup
         deallocate(frc)
         if( debug ) write(*,'(A)') '>>> cont3D_greedysrch::END OF PREP_SRCH'
     end subroutine prep_srch
@@ -152,60 +150,45 @@ contains
     !>  \brief  updates solutions orientations
     subroutine prep_ori( self )
         class(cont3D_greedysrch), intent(inout) :: self
-        real      :: u(2), mat(2,2), x1(2), x2(2), euldist_thresh
-        real      :: frac, euldist, mi_proj, mi_inpl, mi_state, mi_joint
+        real      :: frac, euldist, mi_inpl, mi_proj, mi_state, mi_joint, dist_inpl
         integer   :: roind, prev_roind
         call self%o_out%set('ow', 1.)
         call self%o_out%set('specscore', self%specscore)
         call self%o_out%set('sdev', 0.)
         call self%o_out%set('proj', 0.)
         call self%o_out%set('state', real(self%state))
-        ! dist
-        euldist = rad2deg(self%o_in.euldist.self%o_out)
+        ! angular distances
+        euldist   = rad2deg( self%o_in.euldist.self%o_out )
+        dist_inpl = rad2deg( self%o_in.inplrotdist.self%o_out )
         call self%o_out%set('dist', euldist)
+        call self%o_out%set('dist_inpl', dist_inpl)
         ! overlap between distributions
-        euldist_thresh = max(0.1, self%angthresh/2.)
         roind      = self%pftcc_ptr%get_roind(360.-self%o_out%e3get())
         prev_roind = self%pftcc_ptr%get_roind(360.-self%o_in%e3get())
-        mi_proj  = 0.
         mi_inpl  = 0.
         mi_state = 0.
         mi_joint = 0.
-        if(euldist < euldist_thresh)then
-            mi_proj  = mi_proj  + 1.
-            mi_joint = mi_joint + 1.
-        endif
+        mi_proj  = 0.
         if(prev_roind == roind)then
             mi_inpl  = mi_inpl  + 1.
             mi_joint = mi_joint + 1.
         endif
-        if(self%nstates > 1)then
-            if(self%prev_state == self%state)then
-                mi_state = mi_state + 1.
-                mi_joint = mi_joint + 1.
-            endif
-            mi_joint = mi_joint/3.
-        else
-            mi_state = 1.
-            mi_joint = mi_joint/2.
-        endif
+        ! if(self%nstates > 1)then
+        !     if(self%prev_state == self%state)then
+        !         mi_state = mi_state + 1.
+        !         mi_joint = mi_joint + 1.
+        !     endif
+        !     mi_joint = mi_joint/3.
+        ! else
+        !     mi_state = 1.
+        !     mi_joint = mi_joint/2.
+        ! endif
         call self%o_out%set('mi_proj',  mi_proj)
         call self%o_out%set('mi_inpl',  mi_inpl)
-        call self%o_out%set('mi_state', mi_state)
-        call self%o_out%set('mi_joint', mi_joint)
-        ! in-plane distance
-        ! make in-plane unit vector
-        u = [0., 1.]
-        ! calculate previous vec
-        mat = rotmat2d(self%o_in%e3get())
-        x1  = matmul(u,mat)
-        ! calculate new vec
-        mat = rotmat2d(self%o_out%e3get())
-        x2  = matmul(u, mat)
-        call self%o_out%set('dist_inpl', rad2deg(myacos(dot_product(x1,x2))))
+        call self%o_out%set('mi_state', 1.) ! ignored for now
+        call self%o_out%set('mi_joint', 1.) ! ignored for now
         ! frac
-        frac = 100.*(1.-min(euldist/euldist_thresh, 1.))
-        call self%o_out%set('frac', frac)
+        call self%o_out%set('frac', 100.)
         ! done
         if(debug)write(*,*)'simple_cont3D_greedysrch::prep_ori done'
     end subroutine prep_ori

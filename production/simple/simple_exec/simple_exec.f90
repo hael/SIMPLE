@@ -1103,6 +1103,8 @@ select case(prg)
         ! parse command line
         if( describe ) call print_doc_comlin_smat
         call cline%parse(keys_required(:4), keys_optional(:2))
+        ! set defaults
+        if( .not. cline%defined('trs') ) call cline%set('trs', 3.0)
         ! execute
         call xcomlin_smat%execute(cline)
     case( 'symsrch' )
@@ -1112,13 +1114,11 @@ select case(prg)
         ! reconstructed without assuming any point-group symmetry. The program takes as input an 
         ! asymmetrical 3D reconstruction. The alignment document for all the particle images 
         ! that have gone into the 3D reconstruction and the desired point-group symmetry needs to 
-        ! be inputted. The 3D reconstruction is then projected in 150 (default option) even directions, 
+        ! be inputted. The 3D reconstruction is then projected in 50 (default option) even directions, 
         ! common lines-based optimisation is used to identify the principal symmetry axis, the rotational 
         ! transformation is applied to the inputted orientations, and a new alignment document is produced. 
         ! Input this document to recvol together with the images and the point-group symmetry to generate a 
-        ! symmetrised map. If you are unsure about the point-group, you should use the compare=yes mode and 
-        ! input the highest conceviable point-group. The program then calculates probabilities for all lower 
-        ! groups inclusive.<symsrch/end>
+        ! symmetrised map.<symsrch/end>
         !        
         ! set required keys
         keys_required(1) = 'vol1'
@@ -1133,19 +1133,18 @@ select case(prg)
         keys_optional(2) = 'cenlp'
         keys_optional(3) = 'hp'
         keys_optional(4) = 'nspace'
-        keys_optional(5) = 'compare'
         ! parse command line
         if( describe ) call print_doc_symsrch
-        call cline%parse(keys_required(:5), keys_optional(:8))
+        call cline%parse(keys_required(:7), keys_optional(:4))
         ! set defaults
         if( .not. cline%defined('nspace') )then
-            call cline%set('nptcls', 150.) ! 50 projections 4 symsrch
-            call cline%set('nspace', 150.) ! 50 projections 4 symsrch
+            call cline%set('nptcls', 50.) ! 50 projections 4 symsrch
+            call cline%set('nspace', 50.) ! 50 projections 4 symsrch
         else
             call cline%set('nptcls', cline%get_rarg('nspace'))
         endif
-        if( .not. cline%defined('cenlp')   ) call cline%set('cenlp',    30.)
-        if( .not. cline%defined('compare') ) call cline%set('compare', 'no')
+        if( .not. cline%defined('cenlp') ) call cline%set('cenlp', 30.)
+        call cline%set('compare', 'no')
         ! execute
         call xsymsrch%execute(cline)
         

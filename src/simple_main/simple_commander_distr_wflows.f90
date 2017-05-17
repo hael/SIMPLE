@@ -30,6 +30,7 @@ public :: unblur_tomo_movies_distr_commander
 public :: ctffind_distr_commander
 public :: pick_distr_commander
 public :: makecavgs_distr_commander
+public :: comlin_smat_distr_commander
 public :: cont3D_distr_commander
 public :: prime2D_distr_commander
 public :: prime2D_chunk_distr_commander
@@ -64,6 +65,10 @@ type, extends(commander_base) :: makecavgs_distr_commander
   contains
     procedure :: execute      => exec_makecavgs_distr
 end type makecavgs_distr_commander
+type, extends(commander_base) :: comlin_smat_distr_commander
+  contains
+    procedure :: execute      => exec_comlin_smat_distr
+end type comlin_smat_distr_commander
 type, extends(commander_base) :: prime2D_distr_commander
   contains
     procedure :: execute      => exec_prime2D_distr
@@ -400,8 +405,6 @@ contains
         call cline_check2D_conv%set('nptcls', real(p_master%nptcls))
         call cline_cavgassemble%set('prg', 'cavgassemble')
         call cline_makecavgs%set('prg',   'makecavgs')
-            
-
         if( .not. cline%defined('refs') .and. job_descr%isthere('automsk') ) call job_descr%delete('automsk')
 
         ! split stack
@@ -615,6 +618,41 @@ contains
 
     end subroutine exec_prime2D_chunk_distr
 
+    ! 3D SIMILARITY MATRIX GENERATION WITH COMMON LINES
+
+    subroutine exec_comlin_smat_distr( self, cline )
+        use simple_commander_comlin, only: comlin_smat_commander
+        use simple_commander_distr,  only: merge_similarities_commander
+        class(comlin_smat_distr_commander), intent(inout) :: self
+        class(cmdline),                     intent(inout) :: cline
+        type(merge_similarities_commander) :: xmergesims
+        type(cmdline)  :: cline_mergesims
+        type(qsys_env) :: qenv
+        type(params)   :: p_master
+        type(chash)    :: job_descr
+        integer        :: nptcls
+        ! make master parameters
+        p_master        = params(cline, checkdistr=.false.)
+        nptcls          = p_master%nptcls
+        p_master%nptcls = (p_master%nptcls*(p_master%nptcls - 1))/2
+        call split_pairs_in_parts(p_master%nptcls, p_master%nparts)
+        ! setup the environment for distributed execution
+        call qenv%new(p_master)
+        ! prepare job description
+        call cline%gen_job_descr(job_descr)
+        ! schedule & clean
+        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)
+        ! merge similarities
+        call cline_mergesims%set('nptcls', real(nptcls))
+        call cline_mergesims%set('nparts', real(p_master%nparts))
+        call xmergesims%execute( cline_mergesims )
+        ! clean
+        call del_files('pairs_part', p_master%nparts, ext='.bin')
+        call qsys_cleanup(p_master)
+        ! end gracefully
+        call simple_end('**** SIMPLE_DISTR_COMLIN_SMAT NORMAL STOP ****')
+    end subroutine exec_comlin_smat_distr
+
     ! PRIME3D_INIT
 
     subroutine exec_prime3D_init_distr( self, cline )
@@ -706,6 +744,7 @@ contains
         p_master = params(cline, checkdistr=.false.)
         ! make oritab
         call os%new(p_master%nptcls)
+
         ! options check
         !if( p_master%automsk.eq.'yes' )stop 'Automasking not supported yet' ! automask deactivated for now
         if( p_master%nstates>1 .and. p_master%dynlp.eq.'yes' )&
@@ -714,8 +753,10 @@ contains
             &stop 'Incompatible options: automsk=yes and dynlp=yes'
         if( p_master%eo.eq.'yes' .and. p_master%dynlp.eq.'yes' )&
             &stop 'Incompatible options: eo=yes and dynlp=yes'
+
         ! setup the environment for distributed execution
         call qenv%new(p_master)
+
         ! initialise
         if( .not. cline%defined('nspace') ) call cline%set('nspace', 1000.)
         call cline%set( 'box', real(p_master%box) )
@@ -727,6 +768,7 @@ contains
         cline_merge_algndocs = cline
         cline_volassemble    = cline
         cline_postproc_vol   = cline
+
         ! initialise static command line parameters and static job description parameter
         call cline_recvol_distr%set( 'prg', 'recvol' )       ! required for distributed call
         call cline_prime3D_init%set( 'prg', 'prime3D_init' ) ! required for distributed call
@@ -1265,6 +1307,7 @@ contains
     ! SYMMETRY SEARCH
 
     subroutine exec_symsrch_distr( self, cline )
+        use simple_comlin_srch, only: comlin_srch_get_nproj
         use simple_math,    only: hpsort
         use simple_sym,     only: sym
         use simple_ori,     only: ori
@@ -1272,101 +1315,89 @@ contains
         use simple_strings, only: int2str_pad, int2str
         class(symsrch_distr_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
+        type(merge_algndocs_commander) :: xmerge_algndocs
+        type(cmdline)                  :: cline_merge_algndocs
         type(qsys_env)          :: qenv
         type(params)            :: p_master
         type(chash)             :: job_descr
-        type(oris)              :: os, sym_os, o_shift
-        type(ori)               :: o, o_best
+        type(oris)              :: os, sym_os, o_shift, sym_os_ordered
+        type(ori)               :: o, symaxis_ori
         type(sym)               :: syme
-        real,       allocatable :: corrs(:)
-        integer,    allocatable :: corr_inds(:)
+        integer,    allocatable :: order_inds(:)
         real                    :: shvec(3)
-        integer                 :: i, j, s, cnt
+        integer                 :: i, comlin_srch_nproj
         character(len=STDLEN)   :: part_tab
-        integer,           parameter :: NSYMORIS = 60
-        character(len=32), parameter :: SYMFBODY = 'symoris_'
+        character(len=32), parameter :: SYMFBODY = 'symaxes_part'
         character(len=32), parameter :: SYMTAB   = 'symaxes.txt'
-        character(len=32), parameter :: SYMSHTAB = 'sym_3dshift.txt' ! cf simple_symsrcher
+        character(len=32), parameter :: SYMSHTAB = 'sym_3dshift.txt'
         logical,           parameter :: debug    = .false.
+        call cline%set('prg', 'symsrch')
         ! vol1 need be default
         ! make master parameters
-        p_master = params(cline, checkdistr=.false.)
-        call cline%set('prg', 'symsrch')
-        call cline%delete('part')
-        call cline%delete('stk')
-        ! because symsrch uses 60 starting points
-        p_master%nparts = min(NSYMORIS, p_master%nparts)
-        p_master%numlen = len(trim(int2str(p_master%nparts)))
+        p_master          = params(cline, checkdistr=.false.)
+        comlin_srch_nproj = comlin_srch_get_nproj()
+        p_master%nptcls   = comlin_srch_nproj
+        if( p_master%nparts > p_master%nptcls )then
+            stop 'number of partitions (npart) > nr of jobs, adjust!'
+        endif
         ! setup the environment for distributed execution
         call qenv%new(p_master)
         call cline%gen_job_descr(job_descr)
         ! schedule
-        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=trim(SYMFBODY))        
-        ! assemble symmetry axes
-        call sym_os%new(NSYMORIS)
-        cnt = 0
-        do i=1,p_master%nparts
-            part_tab = trim(SYMFBODY)//int2str_pad(i, p_master%numlen)//'.txt'
-            os = oris(nlines(trim(part_tab)))
-            call os%read(trim(part_tab))
-            do j = 1,os%get_noris()
-                cnt = cnt + 1
-                if(cnt > NSYMORIS)then
-                    stop 'Inconsistent number of orientations in symmetry documents'
-                endif
-                call sym_os%set_ori(cnt, os%get_ori(j))
-            enddo
-            call os%kill
-        enddo
-        call sym_os%write(trim(SYMTAB))
-        ! Sorting, picks best
-        corrs = sym_os%get_all('corr')
-        allocate(corr_inds(NSYMORIS))
-        corr_inds = (/ (i,i=1,NSYMORIS) /)
-        call hpsort(NSYMORIS, corrs, corr_inds)
-        o_best = sym_os%get_ori(corr_inds(NSYMORIS))
+        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)
+        ! prepare merge_algndocs command line
+        cline_merge_algndocs = cline
+        call cline_merge_algndocs%set( 'nthr',    1.                      )
+        call cline_merge_algndocs%set( 'fbody',   trim(SYMFBODY)          )
+        call cline_merge_algndocs%set( 'nptcls',  real(comlin_srch_nproj) )
+        call cline_merge_algndocs%set( 'ndocs',   real(p_master%nparts)   )
+        call cline_merge_algndocs%set( 'outfile', trim(SYMTAB)            )
+        ! merge docs
+        call xmerge_algndocs%execute( cline_merge_algndocs )
+        ! read symmetry axes, sort & pick best
+        call sym_os%new(comlin_srch_nproj)
+        call sym_os%read(trim(SYMTAB))
+        order_inds  = sym_os%order_corr()
+        symaxis_ori = sym_os%get_ori(order_inds(1))
         write(*,'(A)') '>>> FOUND SYMMETRY AXIS ORIENTATION:'
-        call o_best%print
-        deallocate(corrs, corr_inds)
+        call symaxis_ori%print
+        ! sort the output
+        call sym_os_ordered%new(comlin_srch_nproj)
+        do i=1,comlin_srch_nproj
+            o = sym_os%get_ori(order_inds(i))
+            call sym_os_ordered%set_ori(i,o)
+        enddo
+        call del_file(SYMTAB)
+        call sym_os_ordered%write(SYMTAB)
         if( cline%defined('oritab') )then
-            ! retrieve shift
+            ! transfer shift and symmetry to input orientations
+            call syme%new(p_master%pgrp)
             call o_shift%new(1)
+            ! retrieve shift
             call o_shift%read(trim(SYMSHTAB))
             shvec(1) = o_shift%get(1,'x')
             shvec(2) = o_shift%get(1,'y')
             shvec(3) = o_shift%get(1,'z')
-            call o_shift%kill
-            shvec = -1. * shvec ! the sign is right
+            shvec    = -1. * shvec ! the sign is right
             ! rotate the orientations & transfer the 3d shifts to 2d
-            call syme%new(p_master%pgrp)
             os = oris(nlines(p_master%oritab))
             call os%read(p_master%oritab)
-            if(cline%defined('state'))then
-                do i = 1, os%get_noris()
-                    s = nint(os%get(i, 'state'))
-                    if(s == p_master%state)then
-                        call os%map3dshift22d(i, shvec)
-                        call os%rot(i, o_best)
-                        o = os%get_ori(i)
-                        call syme%rot_to_asym(o)
-                        call os%set_ori(i, o)
-                    endif
-                end do
+            if( cline%defined('state') )then
+                call syme%apply_sym_with_shift(os, symaxis_ori, shvec, p_master%state )
             else
-                call os%map3dshift22d(shvec) 
-                call os%rot(o_best)
-                call syme%rotall_to_asym(os)
+                call syme%apply_sym_with_shift(os, symaxis_ori, shvec )
             endif
-            call syme%kill
-            ! Output
             call os%write(p_master%outfile)
-            ! cleanup
-            !call del_file(trim(SYMSHTAB)) ! FOR NOW
-            do i = 1, p_master%nparts
-                part_tab = trim(SYMFBODY)//int2str_pad(i, p_master%numlen)//'.txt'
-                call del_file(trim(part_tab))
-            enddo
         endif
+        ! cleanup
+        call syme%kill
+        call o_shift%kill
+        deallocate(order_inds)
+        call del_file(trim(SYMSHTAB)) ! FOR NOW
+        do i = 1, p_master%nparts
+            part_tab = trim(SYMFBODY)//int2str_pad(i, p_master%numlen)//'.txt'
+            call del_file(trim(part_tab))
+        enddo
         ! end gracefully
         call qsys_cleanup(p_master)
         call simple_end('**** SIMPLE_SYMSRCH NORMAL STOP ****')

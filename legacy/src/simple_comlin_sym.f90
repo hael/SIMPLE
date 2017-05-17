@@ -88,7 +88,7 @@ contains
         call o%new
         call o_zero%new
         ! Simplex search
-        do i =fromv,tov   ! vertices range from partitioning
+        do i=fromv,tov ! vertices range from partitioning
             ! init with vertex
             o = ico%apply(o_zero, i)
             if( doprint ) call progress(i, ncorr)

@@ -920,7 +920,7 @@ contains
         ! checks automask related values
         self%l_automsk = .false.
         self%doautomsk = .false.
-        if( self%automsk .eq. 'yes' )                          self%l_automsk = .true.
+        if( self%automsk .eq. 'yes' ) self%l_automsk = .true.
         if( cline%defined('mw') .and. self%automsk .ne. 'no' ) self%doautomsk = .true.
         if( .not.cline%defined('mw') .and. self%automsk.eq.'yes') &
             write(*,*) 'WARNING! MW argument not provided in conjunction with AUTOMSK'

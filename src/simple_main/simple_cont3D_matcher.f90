@@ -26,7 +26,7 @@ type(cont3D_srch),       allocatable :: cont3Dsrch(:)
 type(cont3D_greedysrch), allocatable :: cont3Dgreedysrch(:)
 logical, allocatable                 :: state_exists(:)
 real                                 :: reslim          = 0.
-real                                 :: frac_srch_space = 0.
+!real                                 :: frac_srch_space = 0.   ! so far unused
 integer                              :: nptcls          = 0
 integer                              :: nrefs_per_ptcl  = 0
 integer                              :: neff_states     = 0
@@ -54,7 +54,6 @@ contains
         type(oris) :: softoris
         type(ori)  :: orientation
         integer    :: nbatches, batch, fromp, top, iptcl, state, alloc_stat
-        logical    :: update_res
         ! AUTOMASKING DEACTIVATED FOR NOW
         ! MULTIPLE STATES DEACTIVATED FOR NOW
         if(p%nstates>1)stop 'MULTIPLE STATES DEACTIVATED FOR NOW; cont3D_matcher::cont3Dexec'
@@ -74,7 +73,7 @@ contains
                 stop 'Uknown refinement mode; pcont3D_matcher::cont3D_exec'
         end select
         ! Fraction of the search space
-        frac_srch_space = b%a%get_avg('frac')      ! unused
+        ! frac_srch_space = b%a%get_avg('frac')      ! unused
         ! batches
         nbatches = ceiling(real(nptcls)/real(p%nthr*BATCHSZ_MUL))
         batches  = split_nobjs_even(nptcls, nbatches)
@@ -223,7 +222,7 @@ contains
         if( p%l_distr_exec )then
             call qsys_job_finished( p, 'simple_pcont3D_matcher :: cont3D_exec')
         else
-            converged = b%conv%check_conv3D(update_res)
+            converged = b%conv%check_conv_cont3D()
         endif
         
         ! DEALLOCATE

@@ -158,7 +158,7 @@ contains
         real,                  parameter :: LPLIMS(2)=[20.,10.] ! default low-pass limits
         real,                  parameter :: CENLP=30.           ! consistency with prime3D
         integer,               parameter :: MAXITS_INIT=30, MAXITS_REFINE=80
-        integer,               parameter :: STATE=1, NPROJS_SYMSRCH=100
+        integer,               parameter :: STATE=1, NPROJS_SYMSRCH=50
         character(len=32),     parameter :: ITERFBODY     = 'prime3Ddoc_'
         character(len=32),     parameter :: VOLFBODY      = 'recvol_state'
         character(len=STDLEN), parameter :: STKSCALEDBODY = 'stk_sc_ini3D_from_cavgs'

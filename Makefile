@@ -92,7 +92,7 @@ Simple_code: opt            \
              s_other        \
              qsys           \
              matcher        \
-             comlin_sym     \
+             comlin_srch    \
              cluster_cavg   \
              masters        ;
 
@@ -137,6 +137,7 @@ simple: simple_image.o                  \
         simple_gridding.o               \
         simple_polarft_corrcalc.o       \
         simple_projector.o              \
+        simple_mask_projector.o         \
         simple_pftcc_opt.o              \
         simple_simplex_pftcc_opt.o      \
         simple_projector_hlev.o         \
@@ -176,8 +177,6 @@ build: simple_pair_dtab.o               \
        simple_eo_reconstructor.o        \
        simple_build.o                   ;
 
-comlin_corr: simple_comlin_corr.o       ;
-
 comlin_srch: simple_comlin_srch.o       ;
 
 matcher: simple_picker.o                  \
@@ -186,15 +185,11 @@ matcher: simple_picker.o                  \
          simple_cartft_corrcalc.o         \
          simple_scatter_orisrch.o         \
          simple_cftcc_shsrch.o            \
-         simple_pftcc_contsrch.o          \
          simple_cont3D_matcher.o          \
          simple_hadamard2D_matcher.o      \
          simple_hadamard3D_matcher.o      ;
 
 s_other: simple_masker.o                  ;
-         
-comlin_sym: simple_comlin_symsrch.o       \
-            simple_comlin_sym.o           ;
 
 cluster_cavg: simple_matchpursuit.o       \
               simple_cavgppca.o           ;
@@ -210,7 +205,6 @@ qsys: simple_qsys_base.o                  \
       simple_qsys_env.o                   ;
 
 masters: simple_rec_master.o              \
-         simple_symsrcher.o               \
          simple_commander_base.o          \
          simple_commander_volops.o        \
          simple_commander_checks.o        \
@@ -243,8 +237,8 @@ cpu_test_code: simple_optimiser_tester.o       \
                simple_ft_expanded_tester.o     \
                simple_speedtester.o            \
                simple_volpft_srch_tester.o     \
-               simple_timer_basic_test.o;
-omp_test_code: simple_timer_omp_test.o;
+               simple_timer_basic_test.o       \
+               simple_timer_omp_test.o         ;
 
 test_code: ;
  
