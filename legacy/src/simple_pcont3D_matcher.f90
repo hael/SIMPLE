@@ -112,8 +112,6 @@ contains
         endif
 
         ! INIT IMGPOLARIZER
-        ! dummy pftcc is only init here so the img polarizer can be initialized
-        ! todo: write init_imgpolarizer constructor that does not require pftcc
         call pftcc%new(nrefs_per_ptcl, [1,1], [p%boxmatch,p%boxmatch,1],p%kfromto, p%ring2, p%ctf)
         call b%img%init_imgpolarizer(pftcc)
         call pftcc%kill
@@ -154,6 +152,7 @@ contains
                         stop 'Uknown refinement mode; pcont3D_matcher::cont3D_exec'
                 end select
                 if( p%ctf.ne.'no' )call pftccs(iptcl)%create_polar_ctfmats(p%smpd, b%a)
+                call pcont3Dsrchs(iptcl)%new(p, b%a, orefs, pftccs(iptcl), iptcl)
             enddo
             ! SERIAL SEARCHES
             !$omp parallel do default(shared) schedule(guided) private(iptcl)

@@ -11,10 +11,12 @@ vpath %.cpp $(SRCDIRS)
 vpath %.cu  $(SRCDIRS)
 vpath %.f   $(SRCDIRS)
 vpath %.for $(SRCDIRS)
+vpath %.f08 $(SRCDIRS)
 vpath %.t90 $(SRCDIRS)
 vpath %.mpi.f90 $(SRCDIRS)
 vpath %.f90 $(SRCDIRS)
 vpath %.o   $(OBJDIR)
+vpath %.i   $(OBJDIR)
 
 # Implicit rules.
 
@@ -32,6 +34,10 @@ vpath %.o   $(OBJDIR)
 
 %.o:%.for
 	$(F90CLIB77) -o $(OBJDIR)/$@ $<; $(F90POST)
+
+%.o:%.f08
+	$(FPP) $(FPPFLAGS)  -o $(OBJDIR)/$(basename $@).f08 $<
+	$(F90CLIB) -o $(OBJDIR)/$@ $(OBJDIR)/$(basename $@).f08
 
 %.o:%.t90
 	./template $<
@@ -238,7 +244,12 @@ cpu_test_code: simple_optimiser_tester.o       \
                simple_speedtester.o            \
                simple_volpft_srch_tester.o     \
                simple_timer_basic_test.o       \
+               simple_timer_profile_test.o     \
                simple_timer_omp_test.o         ;
+
+#Variadic macros cannot be done with gfortran alone,
+# cpp produces the *.i, gfortran can compile the rest
+# simple_timer_profile_test.o: simple_timer_profile_test.f08
 
 test_code: ;
  
