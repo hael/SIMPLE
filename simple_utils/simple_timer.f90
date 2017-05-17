@@ -268,14 +268,17 @@ contains
             exit
          end if
       end do
-#ifdef _DEBUG
+
       if (ival .gt. num_profile_vars) then
          write (*, '(A,A,A,1i10)') "Error Timer_Profile_start:", &
             trim(adjustl(LABEL)), " label index outside range ", ival
-      else
+#ifdef _DEBUG      
+#if _DEBUG > 1
+     else
          print *, "Label: ", profile_labels(ival), " time stamp "
-      end if
 #endif
+#endif
+     end if
    end subroutine timer_profile_start
 
 !< Within profile loop - get elapsed time for token 'LABEL' and reset
