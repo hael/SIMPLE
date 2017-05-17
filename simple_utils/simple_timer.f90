@@ -204,7 +204,7 @@ contains
                profile_labels(1) = trim(adjustl(v(1)))
                num_profile_vars = 1
             else
-               stop'Error: Timer profile token 1 too long'
+               stop 'Error: Timer profile token 1 too long'
             end if
          end if
          if (nVars .ge. 2 .and. v(2) .ne. "") then
@@ -212,7 +212,7 @@ contains
                profile_labels(2) = trim(adjustl(v(2)))
                num_profile_vars = 2
             else
-               stop'Error: Timer profile token 2 too long'
+               stop 'Error: Timer profile token 2 too long'
             end if
          end if
          if (nVars .ge. 3 .and. v(3) .ne. "") then
@@ -220,7 +220,7 @@ contains
                profile_labels(3) = trim(adjustl(v(3)))
                num_profile_vars = 3
             else
-               stop'Error: Timer profile token 3 too long'
+               stop 'Error: Timer profile token 3 too long'
             end if
          end if
          if (nVars .ge. 4 .and. v(4) .ne. "") then
@@ -228,7 +228,7 @@ contains
                profile_labels(4) = trim(adjustl(v(4)))
                num_profile_vars = 4
             else
-               stop'Error: Timer profile token 4 too long'
+               stop 'Error: Timer profile token 4 too long'
             end if
          end if
          if (nVars .ge. 5 .and. v(5) .ne. "") then
@@ -236,12 +236,12 @@ contains
                profile_labels(5) = trim(adjustl(v(5)))
                num_profile_vars = 5
             else
-               stop'Error: Timer profile token 5 too long'
+               stop 'Error: Timer profile token 5 too long'
             end if
          end if
       end if
       if (nVars .ne. num_profile_vars) then
-         stop'timer profile setup error: vars input > internal num_profile_vars'
+         stop 'timer profile setup error: vars input > internal num_profile_vars'
       end if
       num_profile_loops = nLoops
       if (allocated(profile_matrix)) deallocate (profile_matrix)
