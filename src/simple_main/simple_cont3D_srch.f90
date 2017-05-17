@@ -101,7 +101,7 @@ contains
         if( .not.self%state_exists(self%prev_state) )stop 'state is empty; cont3D_srch::prep_srch'
         self%prev_roind = self%pftcc_ptr%get_roind(360.-self%o_in%e3get())
         self%prev_ref   = self%reforis%find_closest_proj(self%o_in) ! state not taken into account
-        self%prev_corr  = self%pftcc_ptr%corr_single(self%prev_ref, self%iptcl, self%prev_roind)
+        self%prev_corr  = self%pftcc_ptr%corr(self%prev_ref, self%iptcl, self%prev_roind)
         ! specscore
         frc = self%pftcc_ptr%genfrc(self%prev_ref, self%iptcl, self%prev_roind)
         self%specscore  = max(0., median_nocopy(frc))

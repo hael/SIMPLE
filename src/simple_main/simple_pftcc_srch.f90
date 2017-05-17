@@ -10,7 +10,6 @@ implicit none
 public :: pftcc_srch
 private
 
-
 type, extends(pftcc_opt) :: pftcc_srch
     private
     type(opt_spec)                   :: ospec                  !< optimizer specification object
@@ -48,11 +47,11 @@ contains
         if( present(shbarrier) )then
             if( shbarrier .eq. 'no' ) self%shbarr = .false.
         endif
-        self%nrestarts = 3
+        self%nrestarts = 5
         if( present(nrestarts) ) self%nrestarts = nrestarts 
         ! make optimizer spec
         srchlims = lims
-        call self%ospec%specify('de', 5, ftol=1e-4,&
+        call self%ospec%specify('simplex', 5, ftol=1e-4,&
         &gtol=1e-4, limits=srchlims, nrestarts=self%nrestarts)
         ! generate the simplex optimizer object 
         call self%nlopt%new(self%ospec)
@@ -85,25 +84,16 @@ contains
         real      :: vec_here(5), cost
         integer   :: i
         vec_here = vec
-        ! euler angles range and boundaries
-        do i = 1,3
-            call enforce_cyclic_limit(vec_here(i), 360.)
+        do i = 1,5
+            ! euler angles range
+            if(i<=3)call enforce_cyclic_limit(vec_here(i), 360.)
+            ! euler angles & shift boundaries
             if(vec_here(i) < self%ospec%limits(i,1) .or.&
               &vec_here(i) > self%ospec%limits(i,2))then
                 cost = 1.
                 return
             endif
         enddo
-        ! shift boundaries
-        if( self%shbarr )then
-            do i = 4,5
-                if(vec_here(i) < self%ospec%limits(i,1) .or.&
-                  &vec_here(i) > self%ospec%limits(i,2))then
-                    cost = 1.
-                    return
-                endif
-            enddo
-        endif
         ! zero small shifts
         if( abs(vec(4)) < 1e-6 ) vec_here(4) = 0.
         if( abs(vec(5)) < 1e-6 ) vec_here(5) = 0.

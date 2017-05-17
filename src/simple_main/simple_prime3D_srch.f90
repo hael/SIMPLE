@@ -399,7 +399,7 @@ contains
         type(ori)         :: o_prev
         real              :: cc_t_min_1, corr
         o_prev = a%get_ori(iptcl)
-        corr   = max( 0., pftcc%corr_single(self%prev_ref, iptcl, self%prev_roind) )
+        corr   = max( 0., pftcc%corr(self%prev_ref, iptcl, self%prev_roind) )
         if( corr > 1. .or. .not. is_a_number(corr) )then
             print *, 'FLOATING POINT EXCEPTION ALARM; simple_prime3D_srch :: prep_corr4srch'
             print *, 'corr > 1. or isNaN'
@@ -407,8 +407,6 @@ contains
             if( corr > 1. )               corr = 1.
             if( .not. is_a_number(corr) ) corr = 0.
             call o_prev%print
-            call pftcc%check(self%prev_ref, iptcl, self%prev_roind)
-            ! stop 'Invalid correlation value in simple_prime3d_srch::prep_corr4srch'
         endif
         if( (self%refine.eq.'no' .or. self%refine.eq.'adasym') .and. self%nstates==1 )then
             ! moving average for single state only
@@ -851,14 +849,14 @@ contains
                     state = irnd_uni(self%nstates)
                 enddo
                 iref = (state - 1) * self%nprojs + self%prev_proj
-                corr = pftcc%corr_single(iref, iptcl, self%prev_roind)
+                corr = pftcc%corr(iref, iptcl, self%prev_roind)
             else
                 ! SHC
                 corrs = -1.
                 do state=1,self%nstates
                     if( .not.self%state_exists(state) )cycle
                     iref = (state-1) * self%nprojs + self%prev_proj 
-                    corrs(state) = pftcc%corr_single(iref, iptcl, self%prev_roind)
+                    corrs(state) = pftcc%corr(iref, iptcl, self%prev_roind)
                 enddo
                 self%prev_corr  = corrs(self%prev_state)
                 state           = shcloc(self%nstates, corrs, self%prev_corr)

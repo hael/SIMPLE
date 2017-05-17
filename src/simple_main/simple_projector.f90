@@ -275,8 +275,6 @@ contains
                 !$omp end parallel do
             endif
         endif
-        ! memoize
-        call pftcc%memoize_sqsum_ref(iref)
     end subroutine fproject_polar
 
     !> \brief  extracts a polar FT from a volume's expanded FT (self)

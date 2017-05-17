@@ -13,7 +13,7 @@ use simple_masker        ! use all in there
 implicit none
 
 public :: read_img_from_stk, set_bp_range, set_bp_range2D,grid_ptcl, prepimg4align, eonorm_struct_facts,&
-&norm_struct_facts, preprefs4align, preprefvol, prep2Dref, reset_prev_defparms
+&norm_struct_facts, preprefvol, prep2Dref
 private
 
 interface prep2Dref
@@ -21,16 +21,10 @@ interface prep2Dref
     module procedure prep2Dref_2
 end interface
 
-logical, parameter :: DEBUG        = .false.
-real,    parameter :: SHTHRESH     = 0.0001
-real,    parameter :: CENTHRESH    = 0.01   ! threshold for performing volume/cavg centering in pixels
-real               :: dfx_prev     = 0.
-real               :: dfy_prev     = 0.
-real               :: angast_prev  = 0.
-real               :: kV_prev      = 0.
-real               :: cs_prev      = 0.
-real               :: fraca_prev   = 0.
-integer :: glob_cnt = 0 ! dev purpose only
+logical, parameter :: DEBUG     = .false.
+real,    parameter :: SHTHRESH  = 0.0001
+real,    parameter :: CENTHRESH = 0.01   ! threshold for performing volume/cavg centering in pixels
+integer            :: glob_cnt  = 0      ! dev purpose only
     
 contains
 
@@ -548,65 +542,5 @@ contains
             endif
         end do
     end subroutine norm_struct_facts
-
-    subroutine preprefs4align( b, p, iptcl, pftcc, ref )
-        use simple_math,             only: euclid
-        use simple_polarft_corrcalc, only: polarft_corrcalc
-        use simple_ctf,              only: ctf
-        class(build),            intent(inout) :: b
-        class(params),           intent(inout) :: p
-        integer,                 intent(in)    :: iptcl
-        class(polarft_corrcalc), intent(inout) :: pftcc
-        integer, optional,       intent(inout) :: ref
-        type(ctf) :: tfun
-        real      :: kV, cs, fraca, dfx, dfy, angast, dist
-        if( p%ctf .ne. 'no' )then
-            if( present(ref) )then
-                if( ref<1 .or. ref>pftcc%get_nrefs() )&
-                    &stop 'reference index out of bounds; simple_hadamard_common%preprefs4align'
-            endif
-            if( p%tfplan%mode .eq. 'astig' )then ! astigmatic CTF
-                dfx = b%a%get(iptcl,'dfx')
-                dfy = b%a%get(iptcl,'dfy')
-                angast = b%a%get(iptcl,'angast')
-            else if( p%tfplan%mode .eq. 'noastig' )then
-                dfx = b%a%get(iptcl,'dfx')
-                dfy = dfx
-                angast = 0.
-            else
-                stop 'Unsupported ctf mode; preprefs4align; simple_hadamard_common'
-            endif
-            kV    = b%a%get(iptcl,'kv')
-            cs    = b%a%get(iptcl,'cs')
-            fraca = b%a%get(iptcl,'fraca')
-            dist  = euclid([kV,cs,fraca,dfx,dfy,angast],[kV_prev,cs_prev,fraca_prev,dfx_prev,dfy_prev,angast_prev])
-            if( dist < 0.001 )then
-                ! CTF parameters are the same as for the previous particle & no update is needed
-            else
-                ! CTF parameters have changed and ctf object and the reference central sections need to be updated
-                tfun = ctf(p%smpd, kV, cs, fraca)
-                if( present(ref) )then
-                    call pftcc%apply_ctf(iptcl, refvec=[ref,ref])
-                else
-                    call pftcc%apply_ctf(iptcl)
-                endif
-            endif
-            kV_prev     = kV
-            cs_prev     = cs
-            fraca_prev  = fraca
-            dfx_prev    = dfx
-            dfy_prev    = dfy
-            angast_prev = angast
-        endif
-    end subroutine preprefs4align
-
-    subroutine reset_prev_defparms
-        kV_prev     = 0.
-        cs_prev     = 0.
-        fraca_prev  = 0.
-        dfx_prev    = 0.
-        dfy_prev    = 0.
-        angast_prev = 0.
-    end subroutine reset_prev_defparms
 
 end module simple_hadamard_common

@@ -10,7 +10,7 @@ public :: polarft_corrcalc
 private
 
 ! CLASS PARAMETERS/VARIABLES
-complex(dp), parameter :: zero=cmplx(0.d0,0.d0,kind=dp) !< just a complex zero
+complex(sp), parameter :: zero=cmplx(0.,0.) !< just a complex zero
 logical,     parameter :: DEBUG = .true.
 
 type :: polarft_corrcalc
@@ -25,15 +25,13 @@ type :: polarft_corrcalc
     integer                  :: winsz      = 0         !< size of moving window in correlation cacluations
     integer                  :: ldim(3)    = 0         !< logical dimensions of original cartesian image
     integer                  :: kfromto(2) = 0         !< Fourier index range
-    real(dp),    allocatable :: sqsums_refs(:)         !< memoized square sums for the correlation calculations
-    real(dp),    allocatable :: sqsums_ptcls(:)        !< memoized square sums for the correlation calculations
+    real(sp),    allocatable :: sqsums_ptcls(:)        !< memoized square sums for the correlation calculations
     real(sp),    allocatable :: angtab(:)              !< table of in-plane angles (in degrees)
-    real(dp),    allocatable :: argtransf(:,:)         !< argument transfer constants for shifting the references
+    real(sp),    allocatable :: argtransf(:,:)         !< argument transfer constants for shifting the references
     real(sp),    allocatable :: polar(:,:)             !< table of polar coordinates (in Cartesian coordinates)
-    real(dp),    allocatable :: ctfmats(:,:,:)         !< expandd set of CTF matrices (for efficient parallel exec)
-    complex(dp), allocatable :: pfts_refs(:,:,:)       !< 3D complex matrix of polar reference sections (nrefs,refsz,nk)
-    complex(dp), allocatable :: pfts_refs_ctf(:,:,:)   !< 3D complex matrix of polar reference sections with CTF applied
-    complex(dp), allocatable :: pfts_ptcls(:,:,:)      !< 3D complex matrix of particle sections
+    real(sp),    allocatable :: ctfmats(:,:,:)         !< expandd set of CTF matrices (for efficient parallel exec)
+    complex(sp), allocatable :: pfts_refs(:,:,:)       !< 3D complex matrix of polar reference sections (nrefs,refsz,nk)
+    complex(sp), allocatable :: pfts_ptcls(:,:,:)      !< 3D complex matrix of particle sections
     logical                  :: with_ctf     = .false. !< CTF flag
     logical                  :: xfel         = .false. !< to indicate whether we process xfel patterns or not
     logical                  :: existence    = .false. !< to indicate existence
@@ -68,21 +66,15 @@ type :: polarft_corrcalc
     procedure          :: exists
     ! PRINTERS/VISUALISERS
     procedure          :: print
-    procedure          :: check
     procedure          :: vis_ptcl
     procedure          :: vis_ref    
-    ! MEMOIZERS
-    procedure          :: memoize_sqsum_ref
-    procedure          :: memoize_sqsum_ref_ctf
+    ! MEMOIZER
     procedure, private :: memoize_sqsum_ptcl
     ! I/O
     procedure          :: write_pfts_ptcls
     procedure          :: read_pfts_ptcls
     ! MODIFIERS
-    procedure, private :: apply_ctf_1
-    procedure, private :: apply_ctf_2
-    generic            :: apply_ctf => apply_ctf_1, apply_ctf_2
-    procedure          :: apply_ctf_single
+    procedure, private :: prep_ref4corr
     procedure          :: xfel_subtract_shell_mean
     ! CALCULATORS
     procedure, private :: create_polar_ctfmat
@@ -92,7 +84,6 @@ type :: polarft_corrcalc
     procedure, private :: corr_1
     procedure, private :: corr_2
     generic            :: corr => corr_1, corr_2
-    procedure          :: corr_single
     ! DESTRUCTOR
     procedure          :: kill
 end type polarft_corrcalc
@@ -179,22 +170,18 @@ contains
         call alloc_err('shift argument transfer array; new; simple_polarft_corrcalc', alloc_stat)
         self%argtransf(:self%refsz,:)   = &
             self%polar(:self%refsz,:)   * &
-            (DPI/dble(self%ldim(1)/2))    ! x-part
+            (PI/real(self%ldim(1)/2))    ! x-part
         self%argtransf(self%refsz+1:,:) = &
             self%polar(self%nrots+1:self%nrots+self%refsz,:) * &
-            (DPI/dble(self%ldim(2)/2))    ! y-part
+            (PI/real(self%ldim(2)/2))    ! y-part
         ! allocate polarfts and sqsums
         allocate(   self%pfts_refs(self%nrefs,self%refsz,self%kfromto(1):self%kfromto(2)),&
                     self%pfts_ptcls(self%pfromto(1):self%pfromto(2),self%ptclsz,self%kfromto(1):self%kfromto(2)),&
-                    self%sqsums_refs(self%nrefs),&
-                    self%sqsums_ptcls(self%pfromto(1):self%pfromto(2)),&
-                    self%pfts_refs_ctf(self%nrefs,self%refsz,self%kfromto(1):self%kfromto(2)), stat=alloc_stat)
+                    self%sqsums_ptcls(self%pfromto(1):self%pfromto(2)), stat=alloc_stat)
         call alloc_err('polarfts and sqsums; new; simple_polarft_corrcalc', alloc_stat)
         self%pfts_refs     = zero
         self%pfts_ptcls    = zero
-        self%sqsums_refs   = 0.d0
-        self%sqsums_ptcls  = 0.d0
-        self%pfts_refs_ctf = zero
+        self%sqsums_ptcls  = 0.
         self%with_ctf = .false.
         if( ctfflag .ne. 'no' ) self%with_ctf = .true.
         self%existence     = .true.
@@ -207,9 +194,7 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref
         complex(sp),             intent(in)    :: pft(:,:)
-        self%pfts_refs(iref,:,:) = cmplx(pft(:self%refsz,:),kind=dp)
-        ! calculate the square sum required for correlation calculation
-        call self%memoize_sqsum_ref(iref)
+        self%pfts_refs(iref,:,:) = pft(:self%refsz,:)
     end subroutine set_ref_pft
 
     !>  \brief  sets particle pft iptcl
@@ -217,8 +202,8 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iptcl
         complex(sp),             intent(in)    :: pft(:,:)
-        self%pfts_ptcls(iptcl,:self%nrots,:)   = cmplx(pft,kind=dp)
-        self%pfts_ptcls(iptcl,self%nrots+1:,:) = cmplx(pft,kind=dp) ! because rot dim is expanded
+        self%pfts_ptcls(iptcl,:self%nrots,:)   = pft
+        self%pfts_ptcls(iptcl,self%nrots+1:,:) = pft ! because rot dim is expanded
         ! calculate the square sum required for correlation calculation
         call self%memoize_sqsum_ptcl(iptcl)
     end subroutine set_ptcl_pft
@@ -228,7 +213,7 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, irot, k
         complex(sp),             intent(in)    :: comp
-        self%pfts_refs(iref,irot,k) = cmplx(comp,kind=dp)
+        self%pfts_refs(iref,irot,k) = comp
     end subroutine set_ref_fcomp
     
     !>  \brief  sets a particle Fourier component
@@ -236,16 +221,15 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iptcl, irot, k
         complex(sp),             intent(in)    :: comp
-        self%pfts_ptcls(iptcl,irot,k) = cmplx(comp,kind=dp)
-        self%pfts_ptcls(iptcl,irot+self%nrots,k) = cmplx(comp,kind=dp) ! because rot dim is expanded
+        self%pfts_ptcls(iptcl,irot,k) = comp
+        self%pfts_ptcls(iptcl,irot+self%nrots,k) = comp ! because rot dim is expanded
     end subroutine set_ptcl_fcomp
 
     !>  \brief  copies the particles to the references
     subroutine cp_ptcls2refs( self )
         class(polarft_corrcalc), intent(inout) :: self
         if( self%nrefs .eq. self%nptcls )then
-            self%pfts_refs(:,:,:) = self%pfts_ptcls(:,:self%refsz,:)
-            self%sqsums_refs = self%sqsums_ptcls           
+            self%pfts_refs(:,:,:) = self%pfts_ptcls(:,:self%refsz,:)         
         else
             stop 'pfts_refs and pfts_ptcls not congruent (nrefs .ne. nptcls)'
         endif
@@ -258,10 +242,8 @@ contains
         integer, optional,       intent(in)    :: irot
         if( present(irot) )then
             self%pfts_refs(iref,:,:) = self%pfts_ptcls(iptcl,irot:irot+self%winsz,:)
-            self%sqsums_refs(iref)   = self%sqsums_ptcls(iptcl)
         else
             self%pfts_refs(iref,:,:) = self%pfts_ptcls(iptcl,:self%refsz,:)
-            self%sqsums_refs(iref)   = self%sqsums_ptcls(iptcl)
         endif
     end subroutine cp_ptcl2ref
 
@@ -270,7 +252,6 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref
         self%pfts_refs(iref,:,:) = zero
-        self%sqsums_refs(iref)   = 1.d0
     end subroutine zero_ref
     
     ! GETTERS
@@ -421,7 +402,7 @@ contains
         complex(sp), allocatable :: pft(:,:)
         integer :: alloc_stat
         allocate(pft(self%refsz,self%kfromto(1):self%kfromto(2)),&
-        source=cmplx(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:),kind=sp), stat=alloc_stat)
+        source=self%pfts_ptcls(iptcl,irot:irot+self%winsz,:), stat=alloc_stat)
         call alloc_err("In: get_ptcl_pft; simple_polarft_corrcalc", alloc_stat)
     end function get_ptcl_pft
     
@@ -432,7 +413,7 @@ contains
         complex(sp), allocatable :: pft(:,:)
         integer :: alloc_stat
         allocate(pft(self%refsz,self%kfromto(1):self%kfromto(2)),&
-        source=cmplx(self%pfts_refs(iref,:,:),kind=sp), stat=alloc_stat)
+        source=self%pfts_refs(iref,:,:), stat=alloc_stat)
         call alloc_err("In: get_ref_pft; simple_polarft_corrcalc", alloc_stat)
     end function get_ref_pft
 
@@ -450,8 +431,8 @@ contains
         use gnufor2
         class(polarft_corrcalc), intent(in) :: self
         integer,                 intent(in) :: iptcl
-        call gnufor_image(real(cmplx(self%pfts_ptcls(iptcl,:self%refsz,:),kind=sp)),  palette='gray')
-        call gnufor_image(aimag(cmplx(self%pfts_ptcls(iptcl,:self%refsz,:),kind=sp)), palette='gray')
+        call gnufor_image(real(self%pfts_ptcls(iptcl,:self%refsz,:)),  palette='gray')
+        call gnufor_image(aimag(self%pfts_ptcls(iptcl,:self%refsz,:)), palette='gray')
     end subroutine vis_ptcl
     
     !>  \brief  is for plotting a particle polar FT
@@ -459,8 +440,8 @@ contains
         use gnufor2
         class(polarft_corrcalc), intent(in) :: self
         integer,                 intent(in) :: iref
-        call gnufor_image(real(cmplx(self%pfts_refs(iref,:,:),kind=sp)),  palette='gray')
-        call gnufor_image(aimag(cmplx(self%pfts_refs(iref,:,:),kind=sp)), palette='gray')
+        call gnufor_image(real(self%pfts_refs(iref,:,:)),  palette='gray')
+        call gnufor_image(aimag(self%pfts_refs(iref,:,:)), palette='gray')
     end subroutine vis_ref
       
     !>  \brief  for printing info about the object
@@ -481,37 +462,12 @@ contains
     ! MEMOIZERS
 
     !>  \brief  is for memoization of the complex square sums required for correlation calculation
-    subroutine memoize_sqsum_ref( self, iref )
-        use simple_math, only: csq
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: iref
-        if( self%xfel )then
-            self%sqsums_refs(iref) = sum(dble(self%pfts_refs(iref,:,:))**2.d0)
-        else
-            self%sqsums_refs(iref) = sum(csq(self%pfts_refs(iref,:,:)))
-        endif
-    end subroutine memoize_sqsum_ref
-    
-    !>  \brief  is for memoization of the complex square sums required for correlation calculation
-    subroutine memoize_sqsum_ref_ctf( self, iref, irot )
-        use simple_math, only: csq
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: iref
-        integer,       optional, intent(in)    :: irot
-        if( present(irot) )then
-            self%sqsums_refs(iref) = sum(csq(self%pfts_refs_ctf(iref,irot:irot+self%winsz,:)))
-        else
-            self%sqsums_refs(iref) = sum(csq(self%pfts_refs_ctf(iref,:,:)))
-        endif
-    end subroutine memoize_sqsum_ref_ctf
-
-    !>  \brief  is for memoization of the complex square sums required for correlation calculation
     subroutine memoize_sqsum_ptcl( self, iptcl )
         use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iptcl
         if( self%xfel )then
-            self%sqsums_ptcls(iptcl) = sum(dble(self%pfts_ptcls(iptcl,:self%refsz,:))**2.d0)
+            self%sqsums_ptcls(iptcl) = sum(real(self%pfts_ptcls(iptcl,:self%refsz,:))**2.)
         else
             self%sqsums_ptcls(iptcl) = sum(csq(self%pfts_ptcls(iptcl,:self%refsz,:)))
         endif
@@ -561,93 +517,32 @@ contains
     
     ! MODIFIERS
 
-    !>  \brief  is for applying CTF to references and updating the memoized ref sqsums
-    subroutine apply_ctf_1( self, tfun, dfx, dfy, angast, refvec )
-        !$ use omp_lib
-        !$ use omp_lib_kinds
-        use simple_ctf,   only: ctf
-        class(polarft_corrcalc), intent(inout) :: self
-        class(ctf),              intent(inout) :: tfun
-        real(sp),                intent(in)    :: dfx
-        real(sp), optional,      intent(in)    :: dfy, angast
-        integer,  optional,      intent(in)    :: refvec(2)
-        real(dp), allocatable :: ctfmat(:,:)
-        integer :: iref, ref_start, ref_end
-        ! create the congruent polar matrix of real CTF values
-        ctfmat = self%create_polar_ctfmat(tfun, dfx, dfy, angast, self%refsz)
-        ! multiply the references with the CTF
-        if( present(refvec) )then
-            ! slice of references
-            if( any(refvec<1) .or. any(refvec>self%nrefs) .or. refvec(1)>refvec(2) )then
-                stop 'invalid reference indices; simple_polarft_corrcalc::apply_ctf:'
-            endif
-            ref_start = refvec(1)
-            ref_end   = refvec(2)
-        else
-            ! all references
-            ref_start = 1
-            ref_end   = self%nrefs
-        endif
-        !$omp parallel do default(shared) schedule(auto) private(iref)
-        do iref=ref_start,ref_end
-            self%pfts_refs_ctf(iref,:,:) = self%pfts_refs(iref,:,:) * ctfmat
-            call self%memoize_sqsum_ref_ctf(iref)
-        end do
-        !$omp end parallel do
-        deallocate(ctfmat)
-    end subroutine apply_ctf_1
-
-    !>  \brief  is for applying CTF to references and updating the memoized ref sqsums
-    subroutine apply_ctf_2( self, iptcl, refvec )
-        !$ use omp_lib
-        !$ use omp_lib_kinds
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: iptcl
-        integer, optional,       intent(in)    :: refvec(2)
-        integer :: iref, ref_start, ref_end
-        if( self%with_ctf )then
-            ! multiply the references with the CTF
-            if( present(refvec) )then
-                ! slice of references
-                if( any(refvec<1) .or. any(refvec>self%nrefs) .or. refvec(1)>refvec(2) )then
-                    stop 'invalid reference indices; simple_polarft_corrcalc::apply_ctf_2'
-                endif
-                ref_start = refvec(1)
-                ref_end   = refvec(2)
-            else
-                ! all references
-                ref_start = 1
-                ref_end   = self%nrefs
-            endif
-            !$omp parallel do default(shared) schedule(auto) private(iref)
-            do iref=ref_start,ref_end
-                self%pfts_refs_ctf(iref,:,:) = self%pfts_refs(iref,:,:) * self%ctfmats(iptcl,:,:)
-                call self%memoize_sqsum_ref_ctf(iref)
-            end do
-            !$omp end parallel do
-        endif
-    end subroutine apply_ctf_2
-
-    !>  \brief  is for applying CTF to references and updating the memoized ref sqsums
-    subroutine apply_ctf_single( self, iptcl, iref )
+    subroutine prep_ref4corr( self, iptcl, iref, pft_ref, sqsum_ref )
+        use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iptcl, iref
-        self%pfts_refs_ctf(iref,:,:) = self%pfts_refs(iref,:,:) * self%ctfmats(iptcl,:,:)
-        call self%memoize_sqsum_ref_ctf(iref)
-    end subroutine apply_ctf_single
+        complex(sp),             intent(out)   :: pft_ref(self%refsz,self%kfromto(1):self%kfromto(2))
+        real(sp),                intent(out)   :: sqsum_ref
+        if( self%with_ctf )then
+            pft_ref = self%pfts_refs(iref,:,:) * self%ctfmats(iptcl,:,:)
+        else
+            pft_ref = self%pfts_refs(iref,:,:)
+        endif
+        sqsum_ref = sum(csq(pft_ref))
+    end subroutine prep_ref4corr
 
     !>  \brief  is for preparing for XFEL pattern corr calc
     subroutine xfel_subtract_shell_mean( self )
         class(polarft_corrcalc), intent(inout) :: self
-        real(dp), allocatable :: ptcls_mean_tmp(:,:,:)
-        real(dp), allocatable :: refs_mean_tmp(:,:)
+        real(sp), allocatable :: ptcls_mean_tmp(:,:,:)
+        real(sp), allocatable :: refs_mean_tmp(:,:)
         integer :: iptcl, iref, irot, k
         allocate( ptcls_mean_tmp(2*self%nptcls,self%ptclsz,self%kfromto(1):self%kfromto(2)),&
         refs_mean_tmp(self%nrefs,self%kfromto(1):self%kfromto(2)))
         ! calculate the mean of each reference at each k shell
         do iref=1,self%nrefs
             do k=self%kfromto(1),self%kfromto(2)
-                refs_mean_tmp(iref,k) = sum(dble(self%pfts_refs(iref,:,k)))/dble(self%refsz)
+                refs_mean_tmp(iref,k) = sum(real(self%pfts_refs(iref,:,k)))/real(self%refsz)
             end do
         end do
         ! calculate the mean of each reference at each k shell
@@ -662,7 +557,7 @@ contains
         ! calculate the mean of each particle at each k shell at each in plane rotation
         do iptcl=self%pfromto(1),self%pfromto(2)
             do k=self%kfromto(1),self%kfromto(2)
-                ptcls_mean_tmp(iptcl,1,k) = sum(dble(self%pfts_ptcls(iptcl,1:self%winsz,k)))/dble(self%refsz)
+                ptcls_mean_tmp(iptcl,1,k) = sum(real(self%pfts_ptcls(iptcl,1:self%winsz,k)))/real(self%refsz)
             end do
         end do
         ! subtract the mean of each particle at each k shell at each in plane rotation
@@ -688,7 +583,7 @@ contains
         class(ctf),              intent(inout) :: tfun
         real(sp),                intent(in)    :: dfx, dfy, angast
         integer,                 intent(in)    :: endrot
-        real(dp), allocatable :: ctfmat(:,:)
+        real(sp), allocatable :: ctfmat(:,:)
         real(sp)              :: inv_ldim(3),hinv,kinv,spaFreqSq,ang
         integer               :: irot,k
         allocate( ctfmat(endrot,self%kfromto(1):self%kfromto(2)) )
@@ -739,28 +634,33 @@ contains
 
     !>  \brief  is for generating rotational correlations
     function gencorrs( self, iref, iptcl, roind_vec ) result( cc )
+        use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self        !< instance
         integer,                 intent(in)    :: iref, iptcl !< ref & ptcl indices
         integer,       optional, intent(in)    :: roind_vec(:)
-        real(sp) :: cc(self%nrots)
-        integer  :: irot, i, nrots
-        if( self%with_ctf ) call self%apply_ctf_single(iptcl, iref)
+        complex(sp) :: pft_ref(self%refsz,self%kfromto(1):self%kfromto(2))
+        real(sp)    :: cc(self%nrots), sqsum_ref
+        integer     :: irot, i
+        call self%prep_ref4corr(iptcl, iref, pft_ref, sqsum_ref)
         if( present(roind_vec) )then
             ! calculates only corrs for rotational indices provided in roind_vec
-            ! see get_win_roind. returns -1.0 when not calculated
+            ! see get_win_roind. returns -1. when not calculated
             if( any(roind_vec<=0) .or. any(roind_vec>self%nrots) )&
                 &stop 'index out of range; simple_polarft_corrcalc::gencorrs'
-            cc    = -1.
-            nrots = size(roind_vec)
-            do i=1,nrots
+            cc = -1.
+            do i = 1, size(roind_vec)
                 irot = roind_vec(i)
-                cc(irot) = self%corr_1(iref, iptcl, irot)
+                cc(irot) = sum(real( pft_ref * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:)) ))
+                cc(irot) = cc(irot) / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
             end do
         else
-            ! all correlations
-            do irot=1,self%nrots
-                cc(irot) = self%corr_1(iref, iptcl, irot)
+            ! all rotations
+            ! numerator
+            do irot = 1, self%nrots
+                cc(irot) = sum(real( pft_ref * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:)) ))
             end do
+            ! denominator
+            cc = cc / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
         endif
     end function gencorrs
 
@@ -770,132 +670,58 @@ contains
         class(polarft_corrcalc), target, intent(inout) :: self              !< instance
         integer,                         intent(in)    :: iref, iptcl, irot !< reference, particle, rotation
         real(sp), allocatable :: frc(:)
-        real(dp), allocatable :: dfrc(:)
-        real(dp) :: sumsqref, sumsqptcl
-        integer  :: k
-        allocate( dfrc(self%kfromto(1):self%kfromto(2)) )
+        complex(sp) :: pft_ref_ctf(self%refsz,self%kfromto(1):self%kfromto(2))        
+        real(sp)    :: sumsqref, sumsqptcl
+        integer     :: k
+        allocate( frc(self%kfromto(1):self%kfromto(2)) )
         if( self%with_ctf )then
             ! multiply reference with CTF
-            self%pfts_refs_ctf(iref,:,:) = self%pfts_refs(iref,:,:)*self%ctfmats(iptcl,:,:)
+            pft_ref_ctf = self%pfts_refs(iref,:,:) * self%ctfmats(iptcl,:,:)
             ! calc FRC
             do k=self%kfromto(1),self%kfromto(2)
-                dfrc(k)   = sum(dble(self%pfts_refs_ctf(iref,:,k)*conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,k))))
-                sumsqref  = sum(csq(self%pfts_refs_ctf(iref,:,k)))
+                frc(k)    = sum(real(pft_ref_ctf(:,k)*conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,k))))
+                sumsqref  = sum(csq(pft_ref_ctf(:,k)))
                 sumsqptcl = sum(csq(self%pfts_ptcls(iptcl,:self%refsz,k)))
-                if( sumsqref < DTINY .or. sumsqptcl < DTINY )then
-                    dfrc(k) = 0.d0
+                if( sumsqref < TINY .or. sumsqptcl < TINY )then
+                    frc(k) = 0.
                 else
-                    dfrc(k) = dfrc(k)/dsqrt(sumsqref*sumsqptcl)
+                    frc(k) = frc(k)/sqrt(sumsqref*sumsqptcl)
                 endif
             end do
         else
             ! calc FRC
             do k=self%kfromto(1),self%kfromto(2)
-                dfrc(k)   = sum(dble(self%pfts_refs(iref,:,k)*conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,k))))
+                frc(k)    = sum(real(self%pfts_refs(iref,:,k)*conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,k))))
                 sumsqref  = sum(csq(self%pfts_refs(iref,:,k)))
                 sumsqptcl = sum(csq(self%pfts_ptcls(iptcl,:self%refsz,k)))
-                if( sumsqref < DTINY .or. sumsqptcl < DTINY )then
-                    dfrc(k) = 0.d0
+                if( sumsqref < TINY .or. sumsqptcl < TINY )then
+                    frc(k) = 0.
                 else
-                    dfrc(k) = dfrc(k)/dsqrt(sumsqref*sumsqptcl)
+                    frc(k) = frc(k)/sqrt(sumsqref*sumsqptcl)
                 endif
             end do
         endif
-        allocate( frc(self%kfromto(1):self%kfromto(2)), source=real(dfrc) )
-        deallocate(dfrc)
     end function genfrc
 
     !>  \brief  for calculating the correlation between reference iref and particle iptcl in rotation irot
     function corr_1( self, iref, iptcl, irot ) result( cc )
         class(polarft_corrcalc), intent(inout) :: self              !< instance
         integer,                 intent(in)    :: iref, iptcl, irot !< reference, particle, rotation
-        real(sp) :: cc
-        real(dp) :: dcc
-        if( self%with_ctf )then
-            call floating_point_checker
-            dcc = sum(dble(self%pfts_refs_ctf(iref,:,:) * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:))))
-        else
-            call floating_point_checker
-            dcc = sum(dble(self%pfts_refs(iref,:,:) * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:))))
-        endif
-        dcc = dcc/dsqrt(self%sqsums_refs(iref)*self%sqsums_ptcls(iptcl))
-        cc  = real(dcc)
-
-        contains
-
-            subroutine floating_point_checker
-                if( self%sqsums_refs(iref) < DTINY .or. self%sqsums_ptcls(iptcl) < DTINY )then
-                    cc = 0.
-                    return
-                endif
-            end subroutine floating_point_checker
-
+        real(sp)    :: cc, sqsum_ref
+        complex(sp) :: pft_ref(self%refsz,self%kfromto(1):self%kfromto(2))
+        cc = 0.
+        ! floating point check
+        if( self%sqsums_ptcls(iptcl) < TINY ) return
+        call self%prep_ref4corr(iptcl, iref, pft_ref, sqsum_ref)
+        ! floating point check
+        if( sqsum_ref < TINY ) return
+        ! numerator
+        cc = sum(real( pft_ref * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:)) ))
+        ! denominator
+        cc = cc / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
+        ! check
+        if( cc >= 1. ) print *,'cc out of range', iref, iptcl, cc
     end function corr_1
-
-    !>  \brief  for calculating the correlation between reference iref and particle iptcl in rotation irot
-    !>          Only intended when the CTF has NOT been applied to the reference!
-    function corr_single( self, iref, iptcl, irot ) result( cc )
-        class(polarft_corrcalc), intent(inout) :: self              !< instance
-        integer,                 intent(in)    :: iref, iptcl, irot !< reference, particle, rotation
-        real(sp) :: cc
-        real(dp) :: dcc
-        call floating_point_checker
-        if( self%with_ctf )then
-            call self%apply_ctf_single(iptcl, iref)
-            dcc = sum(dble(self%pfts_refs_ctf(iref,:,:) * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:))))
-        else
-            dcc = sum(dble(self%pfts_refs(iref,:,:) * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:))))
-        endif
-        dcc = dcc/dsqrt(self%sqsums_refs(iref)*self%sqsums_ptcls(iptcl))
-        cc  = real(dcc)
-
-        contains
-
-            subroutine floating_point_checker
-                if( self%sqsums_refs(iref) < DTINY .or. self%sqsums_ptcls(iptcl) < DTINY )then
-                    cc = 0.
-                    return
-                endif
-            end subroutine floating_point_checker
-
-    end function corr_single
-
-    subroutine check( self, iref, iptcl, irot )
-        class(polarft_corrcalc), intent(inout) :: self              !< instance
-        integer,                 intent(in)    :: iref, iptcl, irot !< reference, particle, rotation
-        real(dp) :: cc
-        print *,'in pffcc%check'
-        print *,'iref',iref
-        print *,'irot',irot
-        print *,'iptcl',iptcl
-        if( self%with_ctf )then
-            call floating_point_checker
-            print *,sum(self%pfts_refs_ctf(iref,:,:))
-            print *,conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:))
-            cc = sum(dble(self%pfts_refs_ctf(iref,:,:) * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:))))
-        else
-            call floating_point_checker
-            print *,sum(self%pfts_refs(iref,:,:))
-            print *,conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:))
-            cc = sum(dble(self%pfts_refs(iref,:,:) * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:))))
-        endif
-        print *,'cc',cc
-        print *,'sqsums_refs(iref)',self%sqsums_refs(iref)
-        print *,'sqsums_ptclss(iptcl)',self%sqsums_ptcls(iptcl)
-        print *,dsqrt(self%sqsums_refs(iref)*self%sqsums_ptcls(iptcl))
-        cc = cc/dsqrt(self%sqsums_refs(iref)*self%sqsums_ptcls(iptcl))
-        print *,'cc',cc
-
-        contains
-
-            subroutine floating_point_checker
-                if( self%sqsums_refs(iref) < DTINY .or. self%sqsums_ptcls(iptcl) < DTINY )then
-                    cc = 0.
-                    return
-                endif
-            end subroutine floating_point_checker
-
-    end subroutine check
 
     !>  \brief  for calculating the on-fly shifted correlation between reference iref and particle iptcl in rotation irot
     function corr_2( self, iref, iptcl, irot, shvec ) result( cc )
@@ -903,32 +729,31 @@ contains
         class(polarft_corrcalc), intent(inout) :: self              !< instance
         integer,                 intent(in)    :: iref, iptcl, irot !< reference, particle, rotation
         real(sp),                intent(in)    :: shvec(2)          !< origin shift vector
-        real(dp)    :: sqsum_ref_sh, dshvec(2)
-        real(sp)    :: cc
-        real(dp)    :: argmat(self%refsz,self%kfromto(1):self%kfromto(2)), dcc
-        complex(dp) :: pft_ref_sh(self%refsz,self%kfromto(1):self%kfromto(2))
-        complex(dp) :: shmat(self%refsz,self%kfromto(1):self%kfromto(2))
-        dshvec = dble(shvec)
+        real(sp)    :: sqsum_ref_sh, cc
+        real(sp)    :: argmat(self%refsz,self%kfromto(1):self%kfromto(2))
+        complex(sp) :: pft_ref_sh(self%refsz,self%kfromto(1):self%kfromto(2))
+        complex(sp) :: shmat(self%refsz,self%kfromto(1):self%kfromto(2))
+        cc = 0.
+        ! floating point check
+        if( self%sqsums_ptcls(iptcl) < TINY ) return
         ! generate the argument matrix from memoized components in argtransf
-        argmat = self%argtransf(:self%refsz,:) * dshvec(1) + self%argtransf(self%refsz+1:,:) * dshvec(2)
+        argmat = self%argtransf(:self%refsz,:) * shvec(1) + self%argtransf(self%refsz+1:,:) * shvec(2)
         ! generate the complex shift transformation matrix
-        shmat = cmplx(dcos(argmat),dsin(argmat),kind=dp)
+        shmat = cmplx(cos(argmat),sin(argmat))
         ! shift
         if( self%with_ctf)then
-            if( allocated(self%ctfmats) )then
-                pft_ref_sh = (self%pfts_refs(iref,:,:) * self%ctfmats(iptcl,:,:)) * shmat
-            else
-                pft_ref_sh = self%pfts_refs_ctf(iref,:,:) * shmat
-            endif
+            pft_ref_sh = (self%pfts_refs(iref,:,:) * self%ctfmats(iptcl,:,:)) * shmat
         else
-            pft_ref_sh = self%pfts_refs(iref,:,:) * shmat ! no ctf multiplication
+            pft_ref_sh = self%pfts_refs(iref,:,:) * shmat
         endif
         ! calculate correlation precursors
-        argmat       = dble(pft_ref_sh * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:)))
-        dcc          = sum(argmat)
         sqsum_ref_sh = sum(csq(pft_ref_sh))
+        ! floating point check
+        if( sqsum_ref_sh < TINY  ) return
+        argmat = real(pft_ref_sh * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:)))
+        cc     = sum(argmat)
         ! finalize cross-correlation
-        cc = real(dcc/dsqrt(sqsum_ref_sh*self%sqsums_ptcls(iptcl)))
+        cc = cc/sqrt(sqsum_ref_sh*self%sqsums_ptcls(iptcl))
     end function corr_2
     
     ! DESTRUCTOR
@@ -937,14 +762,12 @@ contains
     subroutine kill( self )
         class(polarft_corrcalc), intent(inout) :: self
         if( self%existence )then
-            deallocate( self%sqsums_refs,  &
-                        self%sqsums_ptcls, &
+            deallocate( self%sqsums_ptcls, &
                         self%angtab,       &
                         self%argtransf,    &
                         self%polar,        &
                         self%pfts_refs,    &
                         self%pfts_ptcls    )
-            if( allocated(self%pfts_refs_ctf)  ) deallocate(self%pfts_refs_ctf)
             self%existence = .false.
         endif
     end subroutine kill
