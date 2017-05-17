@@ -173,7 +173,7 @@ close $mkma;
 # Compile the library codes using the Makefile_macros script                   #
 ################################################################################
 if( $ICOMPILE == 0 ){
-    system("make cleanall") ;
+    system("make -i cleanall") ;
     system("make") ;
 } elsif ( $ICOMPILE == 1 ) {
     system("make clean");
