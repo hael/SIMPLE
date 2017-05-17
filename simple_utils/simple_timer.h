@@ -59,8 +59,8 @@ t1=tic();srcline=__LINE__; \
 cblock=trim(COMMENT); \
 srcname=trim(__FILE__); \
 YBLOCK; \
- write(*,'(TIMER_BLOCK:,A,:,1i4,: ,A)') trim(srcname),srcline,trim(cblock); \
- write(*,'(Elapsed time (sec): ,1F20.10)') 'Elapsed time (sec): ', toc(t1); \
+ write(*,'(A,A,A,1i4,A ,A)') "TIMER_BLOCK:",trim(srcname),":",srcline,":",trim(cblock); \
+ write(*,'(A,1F20.10)') 'Elapsed time (sec): ', toc(t1); \
 end block
 
 
