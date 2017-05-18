@@ -32,6 +32,13 @@
 \usepackage{verbatim}
 \usepackage{wrapfig}
 \usepackage{xcolor}
+\usepackage{listings}
+\lstset{
+  basicstyle=\small\ttfamily,
+  columns=flexible,
+%  numbers=left,
+  breaklines=true
+  }
 % Declarations
 \DeclarePairedDelimiter\floor{\lfloor}{\rfloor}
 \DeclareSymbolFont{cyrletters}{OT2}{wncyr}{m}{n}
@@ -1074,6 +1081,212 @@ our$DEBUG = "no";
 our$DEBUG_LEVEL = "low";
 \end{verbatim}
 This catches most common errors, such as out of bounds array indices etc. If you have hairy floating-point exceptions haunting you it may pay off to increase the debug level to \texttt{high}. However, beware that this mode will take ages to compile and execute. Often, simply printing and backtracking works as well. I have yet to find a good symbolic debugger for Fortran. If you find one, please let me know.
+
+
+\subsection{Timing class}
+\label{sec:org636d6da}
+
+Fortran \texttt{system\_clock} traditionally used a clock rate of 1000 ticks per
+second. Since 2003, the standard allows for one billion ticks per second
+if a 64-bit integer is used. This gives nano-second timing support to the
+simple\(_{\text{timer}}\) module. The \texttt{simple\_timer} module can be used as a typical
+clock or as a profiling tool.
+
+The simple timer basic functions include \textbf{tic}, \textbf{toc}, \textbf{reset\texttt{\_}timer},
+\textbf{tdiff}. Other functions enable loop blocks and labelled profile blocks.
+
+Preprocessor defined macros in \texttt{simple\_timer.h} make debugging all the more SIMPLEr.
+The macros include:
+\begin{itemize}
+\item \textbf{TBLOCK}  -- start the timer
+\item \textbf{TSTOP}   -- get elapsed time
+\item \textbf{TBREAK} (str)  -- get elapsed time and add string comment
+\item \textbf{TIMER\_BLOCK} (code,str) -- time the code using block construct
+\item \textbf{START\_TIMER\_LOOP} (n) -- setup loop with n iterations
+\item \textbf{STOP\_TIMER\_LOOP} (str)  -- end loop with comment
+\item \textbf{TPROFILER} (n,i,<'str1','str2'>) -- setup profile routine with n iterations
+\item \textbf{TBEG} (str)  -- start timer for token 'str'
+\item \textbf{TEND} (str)  -- add new elapsed time for token 'str' and reset
+\item \textbf{TREPORT} (comment) -- print profiler results
+\end{itemize}
+
+Due to the preprocessor inability to insert newlines into macros, the resulting
+output will exceed the default 132 characters in a line in standard fortran.
+Line length compiler arguments need to be employed; for gfortran this is
+-ffree-line-length-none.
+
+\subsubsection{Running the simple\(_{\text{timer}}\) module}
+\label{sec:orgc628b09}
+Demonstration of timing  in \texttt{simple\_timer\_basic\_test}:
+ In-code assignment of time-stamps
+ calculation of time difference \texttt{tdiff(t1,t2)}
+\begin{lstlisting}
+  use precision_m
+  use simple_timer
+..
+     integer(dp) :: t1,t2
+     real        :: etime
+..
+     t1 = tic()
+     do i = 1, nrep
+        c = cfac*c + b
+     end do
+     t2 = tic()
+     etime = tdiff(t2, t1)
+     write (*, '(A,1d20.10)') 'Time for simple evaluation (s) = ', etime
+\end{lstlisting}
+
+Calculating elapsed time without the additional step of tic and tdiff is
+   done using \texttt{toc(t1)}. If \textbf{toc} is called without an argument, the last
+   timestamp is used.
+\begin{lstlisting}
+t1 = tic()
+c=.1
+do i = 1, nrep
+   c = cfac*c + b
+end do
+write (*, '(A,1d20.10)') "4.  toc in write ", toc(t1)
+\end{lstlisting}
+
+\subsection{Preprocessor defined macros in \texttt{simple\_timer.h}}
+\label{sec:orgf0c7a15}
+
+Instead of declaring new variables t1,t2 and elapsed times, preprocessor
+macros are a quick way to debug without too much hassle. 
+
+\begin{lstlisting}
+\#include "simple_timer.h"
+   use precision_m
+   use simple_timer
+..
+     TBLOCK()
+     c=.1
+     do i = 1, nrep
+        c = cfac*c + b
+     end do
+     TSTOP()
+\end{lstlisting}
+After preprocessing, the source code in the example looks like:
+\begin{lstlisting}
+print *,"TBLOCK:  Start timer: ", tic()
+c=.1
+do i=1,nrep
+  c=cfac*c+b
+end do
+write(*,'(A,A,1i4,A,F20.10)') __FILE__,":",__LINE__,": Elapsed time (sec) ", toc()
+\end{lstlisting}
+
+The above code prints out the following:
+\begin{lstlisting}
+TBLOCK:  Start timer:      1745765323619840
+test_code/cpu/simple_timer_basic_test.f08: 112: Elapsed time (sec)    0.0348173400
+\end{lstlisting}
+
+
+The \texttt{TIMER\_BLOCK} macro encapsulates code in a block construct. A simple
+example can be done over multiple lines (with conditions) or in one line.
+The TIMER\_BLOCK} requires that there are no commas in the encapsulated
+code and that all lines except the last require a semi-colon.
+
+The example below is in the basic timer testing file:
+\begin{lstlisting}
+    TIMER_BLOCK(
+    c=.1;
+    c=saxy(c)
+, ' my block comment ')
+\end{lstlisting}
+This generates the following code on one line. 
+\begin{lstlisting}
+block; character(len=80) :: cblock,srcname; integer(dp) :: t1,srcline; t1=tic();srcline=131; cblock=trim(' my block comment '); srcname=trim("test_code/cpu/simple_timer_basic_test.f08"); c=.1; c=saxy(c); write(*,'(A,A,A,1i4,A ,A)') "TIMER_BLOCK:",trim(srcname),":",srcline,":",trim(cblock); write(*,'(A,1F20.10)') 'Elapsed time (sec): ', toc(t1); end block
+\end{lstlisting}
+and outputs:
+\begin{lstlisting}
+TIMER_BLOCK:test_code/cpu/simple_timer_basic_test.f08: 134: my block comment
+Elapsed time (sec):         0.0000219840
+\end{lstlisting}
+
+
+\subsection{Timing loop blocks}
+\label{sec:org50e06d0}
+
+Most times, the timing routine is very short. To get a better estimate of
+the efficiency of the code block is to run through several times.
+ 
+\begin{lstlisting}
+START_TIMER_LOOP(10)
+ c=.1
+ c=saxy(c)
+STOP_TIMER_LOOP_( 'my test loop comment')
+\end{lstlisting}
+
+Here, the simple dot product subroutine was run 10 times, with the longest runtime occuring in one of the first iterations.
+\begin{lstlisting}
+ Size of elapsed array           10
+******* TIMER LOOP my test loop comment
+*** Iterations:        10
+*** Average (sec):    0.2766440670D-01
+*** Longest run(sec)     0.2840547900D-01    at   2
+*** Shortest run(sec)     0.2703258200D-01   at   9
+******* TIMER LOOP **************
+\end{lstlisting}
+
+\subsection{Profiling}
+\label{sec:orgce5802e}
+
+Profiling tools such as \texttt{gprof} and \texttt{gcov} are good fun when you know how
+to use them. We have included some simple macros to do some profiling in
+small sections.  
+
+The setup routine \texttt{timer\_profile\_setup} requires number of repetitions,
+number of tokens, and a list of tokens (separated by commas). A block
+construct is used to declare variables and simplify the profiling
+process. The module \texttt{simple\_timer} is declared within the block so there
+is no need to include a use statement in the main body -- only 
+the \texttt{\#include "simple\_timer.h"} statement is necessary.
+
+Profiling example: 
+\begin{lstlisting}
+TPROFILER(nrep, i, foo, bar)
+do i = 1, nrep
+   TBEG(foo)
+   c = cfac*c + b
+   TEND(foo)
+   TBEG(bar)
+   c = cfac*c + b
+   TEND(bar)
+   if (mod(nrep, nrep/1000) .eq. 1) print *, 'Repetition ', i
+end do
+TREPORT(Testing profiler using macros)
+\end{lstlisting}
+
+for the first line \texttt{TPROFILER} declares a time-stamp
+for the whole block, and temporary strings to handle preprocessor macro strings:
+\begin{lstlisting}
+block; use simple_timer; character(len=20)::p_tmp; character(len=255)::p_comment; integer(dp) :: np,tn; integer,parameter :: nv=2; character(255)::p_tokens= "foo, bar" ; print*,p_tokens; tn=tic();np=nrep; call timer_profile_setup(np,nv,p_tokens);
+\end{lstlisting}
+
+Producing the following output:
+
+\begin{lstlisting}
+** PROFILE REPORT : Testing profiler using macros
+** FILE:LINE: simple_utils/simple_timer.f90: 428
+** Iterations:   100000 timed loops
+**** Label name: foo
+**** Average (sec):        3.775303E-05           4.94281E-01%
+**** Longest run(sec)         2.340480E-04    at      80200
+**** Shortest run(sec)         1.730000E-07   at         11
+**** Label name: bar
+**** Average (sec):        3.806979E-05           4.98428E-01%
+**** Longest run(sec)         2.331470E-04    at      95050
+**** Shortest run(sec)         2.560000E-07   at          4
+** Total time (sec):        0.763797D+01
+** Average iteration (sec):        0.763797D-04
+******* END Testing profiler using macros REPORT **************
+\end{lstlisting}
+
+
+
+
 
 \section{The SIMPLE Git Repository}
 We mostly try to keep the distributed version control system out of our way. All SIMPLE developers code in the same branch (the master branch). I prefer regular communication and regular push/pulls over fancy source code control procedures. Commit messages are of course important but I don't feel I need to read a novel for every commit (the repo will anyway tell me what has changed). We use a remote private repository (https://github.com/hael/SIMPLE3.0.git) and the recommended push/pull procedure is as follows:
