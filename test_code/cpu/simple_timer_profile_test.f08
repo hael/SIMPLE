@@ -7,7 +7,7 @@
 
 #define NREP_MAX INT(10000000,8)
 
-#define PROFILER 1
+
 #include "simple_timer.h"
 
 module simple_timer_profile_test
@@ -38,50 +38,50 @@ contains
       if (be_verbose) write (*, "(A)") ' '
       if (be_verbose) write (*, '(A)') '1.  Testing profiler using macros inside loop'
       c = .1
-      TPROFILER(nrep, i, 'foo', 'bar')
+      TPROFILER(nrep, i, foo, bar)
       do i = 1, nrep
-         TBEG('foo')
+         TBEG(foo)
          c = cfac*c + b
-         TEND('foo')
-         TBEG('bar')
+         TEND(foo)
+         TBEG(bar)
          c = cfac*c + b
-         TEND('bar')
+         TEND(bar)
          if (mod(nrep, nrep/1000) .eq. 1) print *, 'Repetition ', i
 
       end do
-      TREPORT(' Testing profiler using macros done')
+      TREPORT( Testing profiler using macros )
 
       call reset_timer()
       if (be_verbose) write (*, "(A)") ' '
       if (be_verbose) write (*, '(A)') '2.  Testing profiler using macros and seperate loops'
       c = .1
-      TPROFILER(1, i, 'standard', 'subroutine', 'common', 'empty')
-      TBEG('standard')
+      TPROFILER(1, i, standard, subrout, common, empty)
+      TBEG(standard)
       do i = 1, nrep
          c = cfac*c + b
       end do
-      TEND('standard')
-      TBEG('subroutine')
+      TEND(standard)
+      TBEG(subrout)
       c = .1
       c = saxy(c)
-      TEND('subroutine')
-      ! TBEG('statement')
+      TEND(subrout)
+      ! TBEG(statement)
       ! do i=1,nrep
       !     c = slaxpy(cfac,c,b)
       ! end do
-      ! TEND('statement')
-      TBEG('common')
+      ! TEND(statement)
+      TBEG(common)
       do i = 1, nrep
          call scsaxpy
       end do
-      TEND('common')
-      TBEG('empty')
+      TEND(common)
+      TBEG(empty)
       do i = 1, nrep
 
       end do
-      TEND('empty')
+      TEND(empty)
 
-      TREPORT(' Testing different loop unrolling methods')
+      TREPORT( Testing different loop unrolling methods)
 
    end subroutine exec_profiletest
 

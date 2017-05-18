@@ -54,21 +54,28 @@
 #define TPROFILER(NLOOPS,IDX,...)  block;\
   use simple_timer; \
   character(len=20)::p_tmp;        \
-  character(len=80)::p_comment;    \
-  integer(dp) :: IDX,tn;        \
+  character(len=255)::p_comment;    \
+  integer(dp) :: np,tn;                             \
   integer,parameter :: nv=c99_count (__VA_ARGS__);  \
-  character(len=20),dimension(nv)::p_tokens=(/ __VA_ARGS__ /);  \
+  character(255)::p_tokens= #__VA_ARGS__ ; print*,p_tokens; \
+  tn=tic();np=NLOOPS;                                       \
+  call timer_profile_setup(np,nv,p_tokens);
+
+/*
+character(7):: formatstr='(A20)'; print*,formatstr; \
+    allocate(character(20) :: p_tokens(nv));\
+    write(p_tokens,formatstr)  __VA_ARGS__ ; print*,p_tokens;  \
   tn=tic();\
-  call timer_profile_setup(NLOOPS,nv,p_tokens);
+  call timer_profile_setup(NLOOPS,nv,p_tokens);call abort()
+*/
 
-
-#define TBEG(TOKEN) p_tmp = TOKEN; \
+#define TBEG(TOKEN) p_tmp = #TOKEN; \
  call timer_profile_start(trim(p_tmp))
 
-#define TEND(TOKEN) p_tmp = TOKEN; \
+#define TEND(TOKEN) p_tmp = #TOKEN; \
  call timer_profile_break(trim(p_tmp))
 
-#define TREPORT(COMMENT) p_comment = COMMENT;         \
+#define TREPORT(COMMENT) p_comment = #COMMENT;         \
   call timer_profile_report(trim(adjustl(p_comment)),toc(tn));  \
  end block
 

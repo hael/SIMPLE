@@ -184,19 +184,57 @@ contains
          end if
       end if
    end subroutine timer_loop_end
-!< Setup profiling
-   subroutine timer_profile_setup(nLoops, nVars, v)
+
+   !< Setup profiling
+   subroutine timer_profile_setup(nLoops, nVars, vin)
+   use simple_strings
       integer(dp), intent(in) :: nLoops
       integer, intent(in) :: nVars
-      character(len=*), intent(in) :: v(:)
+      character(len=*), intent(inout) :: vin
+      character(:),allocatable,dimension(:):: v
+      integer :: nargs_parse
+#ifdef _DEBUG
+#if _DEBUG > 1
+      print *, " timer_profile_setup ", char(nLoops), "  ", char(nVars)
+      print *, vin
+#endif
+#endif
       if (nLoops .lt. 1) then
          print *, "timer_profile_setup error -- must have more than 1 loop"
-         return
-      end if
-!      nVars = size(v)
-      if (nVars .gt. max_tokens .or. nVars .le. 0) then
-         stop "timer_profile_setup error -- maximum exceeded"
+         stop
+      elseif (nVars .gt. max_tokens .or. nVars .le. 0) then
+          print*, "timer_profile_setup arg nVars error -- outside range"
+          stop
+      elseif (len_trim(vin)==0 )then
+          print *, "timer_profile_setup error -- token string is empty"
+          stop
       else
+          call removepunct(vin)
+#ifdef _DEBUG
+#if _DEBUG > 1
+          print *, " timer_profile_setup remove punct"
+          print *, vin
+#endif
+#endif
+          allocate(character(20):: v(nVars))
+          call parse(vin,',',v,nargs_parse)
+#ifdef _DEBUG
+#if _DEBUG > 1
+          print *, " timer_profile_setup parsed tokens"
+          print *, v
+#endif
+#endif
+          if (nargs_parse .ne. nVars .or. size(v,1) .ne. nVars) then
+              print *, "timer_profile_setup error -- parsing token string error ", nargs_parse, size(v,1)
+              stop
+          end if
+#ifdef _DEBUG
+#if _DEBUG > 1
+          print *, " timer_profile_setup parsed tokens OK"
+          print *, v
+#endif
+#endif
+
          ! profile_labels are a fixed size
          if (nVars .ge. 1 .and. v(1) .ne. "") then
             if (len_trim(v(1)) .le. max_token_csize) then

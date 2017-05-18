@@ -161,6 +161,76 @@ contains
         return
     end subroutine split
     
+    !> \brief  replace any tokens in string (str) with char rch
+    subroutine replace(str, tokens, rch)
+    character(len=*), intent(inout) :: str
+    character(len=*), intent(inout) :: tokens     ! array of searchable chars
+    character(len=1), intent(in) :: rch     ! replace any element in tokens with char
+    character(len=1):: ch,tok
+    character(len=len_trim(str))::outstr
+    integer :: lenstr,lensstr, k, i,j, ich, itoken
+    str=adjustl(str) 
+    tokens=adjustl(tokens)
+    lensstr=len_trim(tokens)
+    outstr=adjustl(str) ! initialise outstr
+    do j=1,lensstr
+        str=adjustl(outstr)  ! update str for each element in sstr in case rch == ''
+        lenstr=len_trim(str) ! re-adjust length
+        outstr=''            ! reset outstr
+        k=0
+        tok=tokens(j:j)
+        itoken=iachar(tok)
+        do i=1,lenstr
+            ch=str(i:i)
+            ich=iachar(ch)
+            if(ich == itoken) then  ! character in schs
+                if ( len_trim(rch) == 0 ) then
+                    cycle
+                else
+                    k=k+1
+                    outstr(k:k)=rch
+                end if
+            else
+                k=k+1
+                outstr(k:k)=ch
+            end if
+        end do
+    end do
+    str=adjustl(outstr)
+    end subroutine replace
+    
+    !> \brief  removes punctuation (except comma) characters in string str
+    subroutine removepunct(str)
+    character(len=*), intent(inout) :: str
+    character(len=1):: ch
+    character(len=len_trim(str))::outstr
+    integer :: lenstr, k, i, ich
+    str=adjustl(str)
+    lenstr=len_trim(str)
+    outstr=''
+    k=0
+    do i=1,lenstr
+        ch=str(i:i)
+        ich=iachar(ch)
+        select case(ich)
+        case(32:43)  ! ! " # $ % & ' ( ) * +  characters
+            cycle
+        case(45:47)  ! . - / characters
+            cycle
+        case(58:64)  ! : ; < = > ? @ characters
+            cycle
+        case(91:94)  !  _ ^ [ ] characters
+            cycle
+        case(123:126) ! { | }
+            cycle
+        case default
+            k=k+1
+            outstr(k:k)=ch
+        end select
+    end do
+    str=adjustl(outstr)
+    end subroutine removepunct
+
     !> \brief  removes spaces, tabs, and control characters in string str
     subroutine removesp(str)
         character(len=*), intent(inout) :: str
