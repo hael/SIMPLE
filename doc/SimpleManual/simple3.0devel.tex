@@ -1301,4 +1301,104 @@ We mostly try to keep the distributed version control system out of our way. All
 \item commit your changes via \texttt{git commit -a} (make sensible comments, no epopeia)
 \item push your changes to the remote repository via \texttt{git push}
 \end{enumerate}
+
+
+
+\subsection{Feature development}
+\label{sec:org5fb5e43}
+
+When developing more advanced features of SIMPLE without disrupting the
+master branch, it is recommended to use the Fork/Branch to
+Merge/Pull-Request method (see a full rundown at
+\url{https://gist.github.com/Chaser324/ce0505fbed06b947d962}).
+
+To setup a feature branch:
+
+\begin{enumerate}
+\item Go to github.com/hael/SIMPLE3.0 and click on \texttt{Fork}, save to your personal repositories
+
+\item Clone your forked repo to your machine (this remote URL is called 'origin' by git)
+\end{enumerate}
+\begin{verbatim}
+git clone git@github.com:USERNAME/SIMPLE3.0.git MYSIMPLE
+\end{verbatim}
+
+\begin{enumerate}
+\item Add 'upstream' repo to list of remotes
+\end{enumerate}
+\begin{verbatim}
+cd MYSIMPLE; git remote add upstream https://github.com/hael/SIMPLE3.0.git
+\end{verbatim}
+
+\begin{enumerate}
+\item Create a new branch, checkout the master branch first - you want your new branch to come from master
+\end{enumerate}
+\begin{verbatim}
+git checkout master
+git branch newfeature
+git checkout newfeature
+\end{verbatim}
+
+Assuming there is only one branch on the upstream repo, there are now two branches on the local machine.
+List all the branches on the local machine and on the remote upstream repos with the follow:
+\begin{verbatim}
+git branch -va
+\end{verbatim}
+
+Once you have done some work and want to push back into the master branch you must do the following:
+
+\begin{enumerate}
+\item Fetch any changes from the upstream repo:
+\end{enumerate}
+\begin{verbatim}
+git fetch upstream
+\end{verbatim}
+\begin{enumerate}
+\item Merge with your new branch
+\end{enumerate}
+\begin{verbatim}
+git checkout newfeature
+git merge upstream/master
+\end{verbatim}
+
+\begin{enumerate}
+\item Make any changes that ensures the SIMPLE master builds correctly. Merge errors can be fixed with \texttt{git mergetool}
+
+\item Commit changes and push to your forked repository (do not push to upstream master)
+\end{enumerate}
+\begin{verbatim}
+git commit -m" Merging newfeature to main branch"
+git push origin master
+\end{verbatim}
+
+\begin{enumerate}
+\item Go to your fork on Github (\url{https://github.com:USERNAME/SIMPLE3.0.git}), open your branch and create pull request
+\end{enumerate}
+
+
+For the more daring (i.e. quick fixes in master branch):
+\begin{enumerate}
+\item Fetch any changes from the upstream repo:
+\end{enumerate}
+\begin{verbatim}
+git fetch upstream
+\end{verbatim}
+\begin{enumerate}
+\item Merge with your master branch (origin/master)
+\end{enumerate}
+\begin{verbatim}
+git merge upstream/master
+\end{verbatim}
+\begin{enumerate}
+\item Commit changes
+\end{enumerate}
+\begin{verbatim}
+git commit -a -m" My witty commits to main branch"
+\end{verbatim}
+\begin{enumerate}
+\item Push to upstream master
+\end{enumerate}
+\begin{verbatim}
+git push upstream master
+\end{verbatim}
 \end{document}
