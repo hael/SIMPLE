@@ -368,7 +368,7 @@ contains
         integer,           intent(in)    :: s
         logical, optional, intent(in)    :: doexpand
         logical :: l_doexpand = .true.
-        if( present(doexpand) )l_doexpand = doexpand
+        if( present(doexpand) ) l_doexpand = doexpand
         if( p%boxmatch < p%box )call b%vol%new([p%box,p%box,p%box],p%smpd) ! ensure correct dim
         call b%vol%read(p%vols(s), isxfel=p%l_xfel)
         if( p%l_xfel )then
@@ -430,6 +430,7 @@ contains
                     endif
                 endif
             end subroutine centervol
+            
     end subroutine preprefvol
     
     subroutine eonorm_struct_facts( b, p, res, which_iter )

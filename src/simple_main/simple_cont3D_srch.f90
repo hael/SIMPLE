@@ -178,6 +178,7 @@ contains
                 call self%reforis%e3set(iref_here, e3)
                 call self%reforis%set(iref_here, 'corr', corr_here)
             end subroutine greedy_inpl_srch
+            
     end subroutine do_euler_srch
 
     !>  \brief  performs the shift search

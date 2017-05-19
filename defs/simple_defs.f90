@@ -55,11 +55,12 @@ real, parameter :: KBALPHA = 2.0
 integer, parameter :: SPECWMINPOP=2000
 
 ! constants that control search and convergence
-real,    parameter :: FRAC_SH_LIM     = 80.0 ! at what frac to turn on the shift search
-real,    parameter :: EXTRINITHRESH   = 0.5
-real,    parameter :: LP2SMPDFAC      = 0.4125
-integer, parameter :: LPLIM1ITERBOUND = 5
-integer, parameter :: LPLIM3ITERBOUND = 7
+real,    parameter :: FRAC_SH_LIM      = 80.0 ! at what frac to turn on the shift search
+real,    parameter :: EXTRINITHRESH    = 0.5
+real,    parameter :: EXTRTHRESH_CONST = 0.2
+real,    parameter :: LP2SMPDFAC       = 0.4125
+integer, parameter :: LPLIM1ITERBOUND  = 5
+integer, parameter :: LPLIM3ITERBOUND  = 7
 
 ! endianness conversion
 character(len=:), allocatable :: endconv

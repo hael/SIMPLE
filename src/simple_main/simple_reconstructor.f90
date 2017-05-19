@@ -17,13 +17,14 @@ type, extends(image) :: reconstructor
     type(c_ptr)                 :: kp                           !< c pointer for fftw allocation
     type(ctf)                   :: tfun                         !< CTF object
     real(kind=c_float), pointer :: rho(:,:,:)=>null()           !< sampling+CTF**2 density
-    complex,        allocatable :: cmat_exp(:,:,:)              !< Fourier components of expanded reconstructor
-    real,           allocatable :: rho_exp(:,:,:)               !< sampling+CTF**2 density of expanded reconstructor
+    complex, allocatable        :: cmat_exp(:,:,:)              !< Fourier components of expanded reconstructor
+    real,    allocatable        :: rho_exp(:,:,:)               !< sampling+CTF**2 density of expanded reconstructor
     character(len=STDLEN)       :: wfun_str      = 'kb'         !< window function, string descriptor
     real                        :: winsz         = 1.           !< window half-width
     real                        :: alpha         = 2.           !< oversampling ratio
     real                        :: dens_const    = 1.           !< density estimation constant, old val: 1/nptcls
     integer                     :: lfny          = 0            !< Nyqvist Fourier index
+    integer                     :: ldim_img(3)   = 0            !< logical dimension of the original image
     integer                     :: ldim_exp(3,2) = 0            !< dimensions of the Fourier components expanded matrix
     character(len=STDLEN)       :: ctfflag       = ''           !< ctf flag <yes|no|mul|flip>
     character(len=STDLEN)       :: ikind                        !< image kind (em/xfel)
@@ -65,28 +66,27 @@ contains
 
     ! CONSTRUCTOR
 
-    !>  \brief  allocates the sampling density matrix
     subroutine alloc_rho( self, p, expand )
         use simple_params, only: params
         use simple_math,   only: fdim
-        class(reconstructor),         intent(inout) :: self  !< instance
-        class(params),                intent(in)    :: p     !< parameters
-        logical,            optional, intent(in)    :: expand
-        integer :: ld_here(3), rho_shape(3), rho_lims(3,2), lims(3,2), alloc_stat, dim
+        class(reconstructor), intent(inout) :: self  !< instance
+        class(params),        intent(in)    :: p     !< parameters
+        logical, optional,    intent(in)    :: expand
+        integer :: rho_shape(3), rho_lims(3,2), lims(3,2), alloc_stat, dim
         character(len=:), allocatable :: ikind_tmp
         logical :: l_expand = .true.
         if(.not. self%exists() ) stop 'construct image before allocating rho; alloc_rho; simple_reconstructor'
-        if(      self%is_2d()  )stop 'only for volumes; alloc_rho; simple_reconstructor'
+        if(      self%is_2d()  ) stop 'only for volumes; alloc_rho; simple_reconstructor'
         if( present(expand) )l_expand = expand
-        ld_here = self%get_ldim()
-        if( ld_here(3) < 2 ) stop 'reconstructor need to be 3D 4 now; alloc_rho; simple_reconstructor'
+        self%ldim_img = self%get_ldim()
+        if( self%ldim_img(3) < 2 ) stop 'reconstructor need to be 3D 4 now; alloc_rho; simple_reconstructor'
         call self%dealloc_rho
         self%dens_const = 1./real(p%nptcls)
         self%wfun_str   = p%wfun
         self%winsz      = p%winsz
         self%alpha      = p%alpha
         self%ctfflag    = p%ctf
-        self%tfneg = .false.
+        self%tfneg      = .false.
         if( p%neg .eq. 'yes' ) self%tfneg = .true.
         self%tfastig = .false.
         if( p%tfplan%mode .eq. 'astig' ) self%tfastig = .true.
@@ -98,8 +98,8 @@ contains
             allocate(self%rho(rho_lims(1,1):rho_lims(1,2),rho_lims(2,1):rho_lims(2,2),rho_lims(3,1):rho_lims(3,2)))
         else
             ! Work out dimensions of the rho array
-            rho_shape(1)   = fdim(ld_here(1))
-            rho_shape(2:3) = ld_here(2:3)
+            rho_shape(1)   = fdim(self%ldim_img(1))
+            rho_shape(2:3) = self%ldim_img(2:3)
             ! Letting FFTW do the allocation in C ensures that we will be using aligned memory
             self%kp = fftwf_alloc_real(int(product(rho_shape),c_size_t))
             ! Set up the rho array which will point at the allocated memory
@@ -131,7 +131,7 @@ contains
 
     ! SETTERS
     
-    !>  \brief  resets the reconstructor object before reconstruction
+    ! resets the reconstructor object before reconstruction
     subroutine reset( self )
         class(reconstructor), intent(inout) :: self
         self     = cmplx(0.,0.)
@@ -140,7 +140,6 @@ contains
     
     ! GETTERS
     
-    !>  \brief  return the window functions used by reconstructor
     function get_wfuns( self ) result( wfs )
         class(reconstructor), intent(inout) :: self
         type(winfuns) :: wfs
@@ -149,7 +148,6 @@ contains
     
     ! I/O
 
-    !>  \brief  is for writing the sampling density (rho)
     subroutine write_rho( self, kernam )
         use simple_filehandling, only: get_fileunit, fopen_err, del_file
         class(reconstructor), intent(in) :: self
@@ -169,7 +167,6 @@ contains
         close(unit=filnum)
     end subroutine write_rho
     
-    !>  \brief  is for reading the sampling density (rho)
     subroutine read_rho( self, kernam )
         use simple_filehandling, only: get_fileunit, fopen_err
         class(reconstructor), intent(inout) :: self
@@ -190,7 +187,6 @@ contains
     
     ! INTERPOLATION
 
-    !> \brief  inserts or uninserts a Fourier plane component to the expanded Fourier matrix
     subroutine inout_fcomp( self, h, k, e, inoutmode, comp, oshift, pwght)
         use simple_ori,    only: ori
         use simple_math,   only: sqwin_3d, euclid, hyp, cyci_1d
@@ -245,7 +241,6 @@ contains
         deallocate(w)
     end subroutine inout_fcomp
    
-    !> \brief  for evaluating the transfer function
     subroutine calc_tfun_vals( self, vec, tval, tvalsq )
         use simple_math, only: hyp
         use simple_ctf,  only: ctf
@@ -274,7 +269,6 @@ contains
         endif
     end subroutine calc_tfun_vals
     
-    !> \brief  for gridding or ungridding a Fourier plane
     subroutine inout_fplane( self, o, inoutmode, fpl, pwght, mul, shellweights )
         !$ use omp_lib
         !$ use omp_lib_kinds
@@ -354,20 +348,21 @@ contains
         endif
     end subroutine inout_fplane
     
-    !> \brief  for sampling density compensation & Wiener normalization
     subroutine sampl_dens_correct( self, self_out )
         class(reconstructor),   intent(inout) :: self
         class(image), optional, intent(inout) :: self_out
         integer :: h, k, l, lims(3,2), phys(3)
+        logical :: self_out_present
+        self_out_present = present(self_out)
         ! set constants
         lims = self%loop_lims(2)
-        if( present(self_out) ) self_out = self
+        if( self_out_present ) self_out = self
         !$omp parallel do collapse(3) default(shared) private(h,k,l,phys) schedule(auto)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 do l=lims(3,1),lims(3,2)
                     phys = self%comp_addr_phys([h,k,l])
-                    if( present(self_out) )then
+                    if( self_out_present )then
                         call self_out%div([h,k,l],self%rho(phys(1),phys(2),phys(3)),phys_in=phys)
                     else
                         call self%div([h,k,l],self%rho(phys(1),phys(2),phys(3)),phys_in=phys) 
@@ -378,7 +373,6 @@ contains
         !$omp end parallel do
     end subroutine sampl_dens_correct
 
-    !>  \brief converts the expanded matrix to standard imaginary representation
     subroutine compress_exp( self )
         class(reconstructor), intent(inout) :: self
         complex :: comp, zero
@@ -412,7 +406,7 @@ contains
     
     ! SUMMATION
     
-    !> \brief  for summing reconstructors generated by parallel execution
+    ! for summing reconstructors generated by parallel execution
     subroutine sum( self, self_in )
          class(reconstructor), intent(inout) :: self
          class(reconstructor), intent(in)    :: self_in
@@ -424,8 +418,6 @@ contains
     
     ! RECONSTRUCTION
     
-    !> \brief  for reconstructing Fourier volumes according to the orientations 
-    !!         and states in o, assumes that stack is open   
     subroutine rec( self, fname, p, o, se, state, mul, eo, part, wmat )
         use simple_oris,     only: oris
         use simple_sym,      only: sym
@@ -546,9 +538,11 @@ contains
                     endif
                 endif
             end subroutine rec_dens
+            
     end subroutine rec
 
     ! DESTRUCTORS
+
 
     !>  \brief  is the expanded destructor
     subroutine dealloc_exp( self )

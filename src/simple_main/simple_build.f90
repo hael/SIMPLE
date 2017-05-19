@@ -87,6 +87,7 @@ type build
     logical, private                    :: hadamard_prime3D_tbox_exists = .false.
     logical, private                    :: hadamard_prime2D_tbox_exists = .false.
     logical, private                    :: cont3D_tbox_exists           = .false.
+    logical, private                    :: extremal3D_tbox_exists       = .false.
     logical, private                    :: read_features_exists         = .false.
   contains
     procedure                           :: build_general_tbox
@@ -105,6 +106,8 @@ type build
     procedure                           :: kill_hadamard_prime2D_tbox
     procedure                           :: build_cont3D_tbox
     procedure                           :: kill_cont3D_tbox
+    procedure                           :: build_extremal3D_tbox
+    procedure                           :: kill_extremal3D_tbox
     procedure                           :: read_features
     procedure                           :: raise_hard_ctf_exception
 end type build
@@ -482,7 +485,6 @@ contains
             end do
         endif
         write(*,'(A)') '>>> DONE BUILDING HADAMARD PRIME3D TOOLBOX'
-        call flush(6)
         self%hadamard_prime3D_tbox_exists = .true.
     end subroutine build_hadamard_prime3D_tbox
     
@@ -523,7 +525,7 @@ contains
         endif
     end subroutine kill_hadamard_prime3D_tbox
     
-    !> \brief  constructs the toolbox for continuous Cartesian sampling refinement
+    !> \brief  constructs the toolbox for continuous refinement
     subroutine build_cont3D_tbox( self, p )
         class(build),  intent(inout) :: self
         class(params), intent(in)    :: p
@@ -557,7 +559,7 @@ contains
         self%cont3D_tbox_exists = .true.
     end subroutine build_cont3D_tbox
     
-    !> \brief  destructs the toolbox for continuous Cartesian sampling refinement
+    !> \brief  destructs the toolbox for continuous refinement
     subroutine kill_cont3D_tbox( self )
         class(build), intent(inout) :: self
         integer :: i
@@ -585,6 +587,32 @@ contains
             self%cont3D_tbox_exists = .false.
         endif
     end subroutine kill_cont3D_tbox
+
+    !> \brief  constructs the extremal3D toolbox
+    subroutine build_extremal3D_tbox( self, p )
+        class(build),  intent(inout) :: self
+        class(params), intent(in)    :: p
+        integer :: s, alloc_stat, i
+        call self%kill_extremal3D_tbox
+        call self%raise_hard_ctf_exception(p)
+        allocate( self%recvols(1), stat=alloc_stat )
+        call alloc_err('build_hadamard_prime3D_tbox; simple_build, 2', alloc_stat)
+        call self%recvols(1)%new([p%boxpd,p%boxpd,p%boxpd],p%smpd,p%imgkind)
+        call self%recvols(1)%alloc_rho(p)
+        write(*,'(A)') '>>> DONE BUILDING EXTREMAL3D TOOLBOX'
+        self%extremal3D_tbox_exists = .true.
+    end subroutine build_extremal3D_tbox
+
+    !> \brief  destructs the toolbox for continuous refinement
+    subroutine kill_extremal3D_tbox( self )
+        class(build), intent(inout) :: self
+        if( self%extremal3D_tbox_exists )then
+            call self%recvols(1)%dealloc_rho
+            call self%recvols(1)%kill
+            deallocate(self%recvols)
+            self%extremal3D_tbox_exists = .false.
+        endif
+    end subroutine kill_extremal3D_tbox
     
     !>  \brief  for reading feature vectors from disk
     subroutine read_features( self, p )
@@ -787,6 +815,10 @@ contains
               call myb%build_cont3D_tbox(myp)
               call myb%kill_cont3D_tbox
               write(*,'(a)') 'build_cont3D_tbox passed'
+              call myb%build_extremal3D_tbox(myp)
+              call myb%build_extremal3D_tbox(myp)
+              call myb%kill_extremal3D_tbox
+              write(*,'(a)') 'build_extremal3D_tbox passed'
           end subroutine tester
         
     end subroutine test_build

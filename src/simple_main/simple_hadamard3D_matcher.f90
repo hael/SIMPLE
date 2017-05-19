@@ -14,8 +14,8 @@ use simple_hadamard_common   ! use all in there
 use simple_math              ! use all in there
 implicit none
 
-public :: prime3D_exec, gen_random_model, prime3D_find_resrange, pftcc, primesrch3D
-public :: preppftcc4align, prep_refs_pftcc4align
+public :: prime3D_find_resrange, prime3D_exec, gen_random_model
+public :: preppftcc4align, prep_refs_pftcc4align, pftcc, primesrch3D
 private
 
 integer, parameter              :: MAXNPEAKS=10
@@ -29,7 +29,6 @@ character(len=:), allocatable   :: ppfts_fname
 
 contains
 
-    !>  \brief  to find the resolution range for initial prime3D alignment
     subroutine prime3D_find_resrange( b, p, lp_start, lp_finish )
         use simple_oris, only: oris
         class(build),  intent(inout) :: b
@@ -55,7 +54,6 @@ contains
         call o%kill
     end subroutine prime3D_find_resrange
 
-    !>  \brief  is the prime3D algorithm
     subroutine prime3D_exec( b, p, cline, which_iter, update_res, converged )
         use simple_qsys_funs, only: qsys_job_finished
         use simple_oris,      only: oris
@@ -67,10 +65,12 @@ contains
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: update_res, converged
-        type(oris)                    :: prime3D_oris
-        real                          :: norm, corr_thresh
-        integer                       :: iptcl, s, inptcls, prev_state, istate
-        integer                       :: statecnt(p%nstates)
+        logical, allocatable :: l_extremal_targets(:)
+        real,    allocatable :: corrs(:)
+        type(oris)           :: prime3D_oris
+        real                 :: norm, corr_thresh
+        integer              :: iptcl, s, inptcls, prev_state, istate
+        integer              :: statecnt(p%nstates)
 
         inptcls = p%top - p%fromp + 1
 
@@ -122,7 +122,7 @@ contains
             else
                 corr_thresh = -huge(corr_thresh)
             endif
-        endif
+        endif       
 
         ! PREPARE THE POLARFT_CORRCALC DATA STRUCTURE
         if( p%refine.eq.'het' )then
@@ -164,50 +164,42 @@ contains
         do iptcl=p%fromp,p%top
             call primesrch3D(iptcl)%new(b%a, p, pftcc)
         end do
+        if( p%refine.eq.'extremal' )then
+            ! update corrs
+            !$omp parallel do default(shared) schedule(static) private(iptcl)
+            do iptcl=1,p%nptcls
+                call primesrch3D(iptcl)%update_corr(pftcc, iptcl, b%a, b%e, p%lp)
+            end do
+            !$omp end parallel do
+            ! identify extremal targets
+            allocate( l_extremal_targets(p%nptcls) )
+            corr_thresh        = b%a%extremal_bound(EXTRTHRESH_CONST, convex=.true.)
+            corrs              = b%a%get_all('corr')
+            l_extremal_targets = corrs < corr_thresh
+        endif
         ! execute the search
         call del_file(p%outfile)
         if(p%ctf .ne. 'no') call pftcc%create_polar_ctfmats(p%smpd, b%a)
         select case(p%refine)
-            case( 'no', 'adasym' )
+            case( 'extremal','no','adasym','shc' )
                 if( p%oritab .eq. '' )then
-                    !$omp parallel do default(shared) schedule(auto) private(iptcl)
+                    !$omp parallel do default(shared) schedule(guided) private(iptcl)
                     do iptcl=p%fromp,p%top
                         call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp, greedy=.true.)
                     end do
                     !$omp end parallel do
                 else
-                    !$omp parallel do default(shared) schedule(auto) private(iptcl)
+                    !$omp parallel do default(shared) schedule(guided) private(iptcl)
                     do iptcl=p%fromp,p%top
                         call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp)
                     end do
                     !$omp end parallel do
                 endif
-            case('neigh')
+            case('neigh','shcneigh')
                 if( p%oritab .eq. '' ) stop 'cannot run the refine=neigh mode without input oridoc (oritab)'
-                !$omp parallel do default(shared) schedule(auto) private(iptcl)
+                !$omp parallel do default(shared) schedule(guided) private(iptcl)
                 do iptcl=p%fromp,p%top
                     call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp, nnmat=b%nnmat)
-                end do
-                !$omp end parallel do
-            case('shc')
-                if( p%oritab .eq. '' )then
-                    !$omp parallel do default(shared) schedule(auto) private(iptcl)
-                    do iptcl=p%fromp,p%top
-                        call primesrch3D(iptcl)%exec_prime3D_srch_shc(pftcc, iptcl, b%a, b%e, p%lp, greedy=.true.)
-                    end do
-                    !$omp end parallel do
-                else
-                    !$omp parallel do default(shared) schedule(auto) private(iptcl)
-                    do iptcl=p%fromp,p%top
-                        call primesrch3D(iptcl)%exec_prime3D_srch_shc(pftcc, iptcl, b%a, b%e, p%lp)
-                    end do
-                    !$omp end parallel do
-                endif
-            case('shcneigh')
-                if( p%oritab .eq. '' ) stop 'cannot run the refine=shcneigh mode without input oridoc (oritab)'
-                !$omp parallel do default(shared) schedule(auto) private(iptcl)
-                do iptcl=p%fromp,p%top
-                    call primesrch3D(iptcl)%exec_prime3D_srch_shc(pftcc, iptcl, b%a, b%e, p%lp, nnmat=b%nnmat)
                 end do
                 !$omp end parallel do
             case('het')
@@ -216,7 +208,7 @@ contains
                     write(*,'(A,F8.2)') '>>> PARTICLE RANDOMIZATION(%):', 100.*p%extr_thresh
                     write(*,'(A,F8.2)') '>>> CORRELATION THRESHOLD:    ', corr_thresh
                 endif
-                !$omp parallel do default(shared) schedule(auto) private(iptcl) reduction(+:statecnt)
+                !$omp parallel do default(shared) schedule(guided) private(iptcl) reduction(+:statecnt)
                 do iptcl=p%fromp,p%top
                     call primesrch3D(iptcl)%exec_prime3D_srch_het(pftcc, iptcl, b%a, b%e, corr_thresh, statecnt)
                 end do
@@ -236,7 +228,7 @@ contains
         call b%a%write(p%outfile, [p%fromp,p%top])
         p%oritab = p%outfile
 
-        ! VOLUMETRIC 3D RECONSTRUCTION
+        ! volumetric 3d reconstruction
         if( p%norec .eq. 'no' )then
             do iptcl=p%fromp,p%top
                 orientation = b%a%get_ori(iptcl)
@@ -259,14 +251,14 @@ contains
             endif
         endif
 
-        ! DESTRUCT
+        ! destruct
         do iptcl=p%fromp,p%top
             call primesrch3D(iptcl)%kill
         end do
         deallocate( primesrch3D )
         call pftcc%kill
 
-        ! REPORT CONVERGENCE
+        ! report convergence
         if( p%l_distr_exec )then
             call qsys_job_finished( p, 'simple_hadamard3D_matcher :: prime3D_exec')
         else

@@ -2701,12 +2701,12 @@ contains
     function extremal_bound( self, thresh, convex ) result( corr_bound )
         use simple_math, only: hpsort
         class(oris),       intent(inout) :: self
-        real,              intent(inout) :: thresh
+        real,              intent(in)    :: thresh
         logical, optional, intent(in)    :: convex
         real,    allocatable       :: corrs(:), corrs_incl(:)
         logical, allocatable       :: incl(:)
         integer :: n_incl, thresh_ind
-        real    :: corr_bound
+        real    :: corr_bound, thresh_here
         logical :: l_convex = .true.
         if(present(convex))l_convex = convex
         ! grab relevant correlations
@@ -2718,11 +2718,13 @@ contains
         call hpsort(n_incl, corrs_incl)
         if( .not.l_convex )then
             ! concave down
-            thresh = EXTRINITHRESH - thresh
-            thresh = EXTRINITHRESH - 180.*thresh**8.
-            thresh = max(0., thresh)
+            thresh_here = EXTRINITHRESH - thresh
+            thresh_here = EXTRINITHRESH - 180.*thresh**8.
+            thresh_here = max(0., thresh)
+        else
+            thresh_here = thresh
         endif
-        thresh_ind = nint(real(n_incl) * thresh)
+        thresh_ind = nint(real(n_incl) * thresh_here)
         corr_bound = corrs_incl(thresh_ind)
         deallocate(corrs, incl, corrs_incl)
     end function extremal_bound
