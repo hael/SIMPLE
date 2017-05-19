@@ -193,12 +193,11 @@ contains
         integer,                 intent(in)    :: iptcl
         class(oris),             intent(inout) :: a
         type(ori) :: o_new, o_old
-        real      :: euldist, mi_joint, mi_proj, mi_inpl, mi_state, dist_inpl
+        real      :: euldist, mi_joint, mi_proj, mi_inpl, mi_state
         integer   :: roind,state
         o_old   = a%get_ori(iptcl)
         o_new   = self%o_peaks%get_ori(self%npeaks)
-        ! angular distances
-        dist_inpl = rad2deg( o_new.inplrotdist.o_old )
+        ! angular distance
         euldist   = rad2deg( o_old.euldist.o_new )
         ! new params
         roind   = pftcc%get_roind( 360.-o_new%e3get() )
@@ -236,7 +235,7 @@ contains
         call a%set(iptcl, 'mi_joint', mi_joint)
         ! set the distances before we update the orientation
         call a%set(iptcl, 'dist', 0.5*euldist + 0.5*o_old%get('dist'))
-        call a%set(iptcl, 'dist_inpl', dist_inpl)
+        call a%set(iptcl, 'dist_inpl', rad2deg( o_new.inplrotdist.o_old ))
         ! all the other stuff
         call a%set_euler(iptcl, o_new%get_euler()    )
         call a%set_shift(iptcl, o_new%get_shift()    )

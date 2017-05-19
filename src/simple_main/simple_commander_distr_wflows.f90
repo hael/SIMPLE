@@ -778,7 +778,6 @@ contains
         call cline_merge_algndocs%set( 'ndocs',  real(p_master%nparts) )
         call cline_check3D_conv%set( 'box',    real(p_master%box))
         call cline_check3D_conv%set( 'nptcls', real(p_master%nptcls))
-        !call cline_volassemble%set( 'nthr', 1. )
         call cline_postproc_vol%set( 'nstates', 1. )
         ! removes unnecessary volume keys
         do state = 1,p_master%nstates
@@ -1077,7 +1076,6 @@ contains
         call cline_merge_algndocs%set( 'ndocs',  real(p_master%nparts) )
         call cline_check3D_conv%set( 'box',    real(p_master%box))
         call cline_check3D_conv%set( 'nptcls', real(p_master%nptcls))
-        call cline_volassemble%set( 'nthr', 1. )
         call cline_postproc_vol%set( 'nstates', 1. )
         ! removes unnecessary volume keys
         do state = 1,p_master%nstates
@@ -1143,10 +1141,11 @@ contains
                 str_state = int2str_pad(state,2)
                 call del_file('fsc_state'//trim(str_state)//'.bin')
             enddo
-            call cline_volassemble%set( 'prg', 'eo_volassemble' )
             if( p_master%eo .eq. 'yes' )then
+                call cline_volassemble%set( 'prg', 'eo_volassemble' )
                 volassemble_output = 'RESOLUTION'//trim(str_iter)
             else
+                call cline_volassemble%set( 'prg', 'volassemble' )
                 volassemble_output = 'VOLASSEMBLE'
             endif
             call qenv%exec_simple_prg_in_queue(cline_volassemble,&

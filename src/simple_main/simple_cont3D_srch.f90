@@ -257,7 +257,7 @@ contains
         if(self%o_in%isthere('kv'))    call self%softoris%set_all2single('kv',self%o_in%get('kv'))
         if(self%o_in%isthere('fraca')) call self%softoris%set_all2single('fraca',self%o_in%get('fraca'))
         if(self%o_in%isthere('lp'))    call self%softoris%set_all2single('lp',self%o_in%get('lp'))
-        call self%softoris%set_all2single('w', o%get('w'))
+        call self%softoris%set_all2single('w', self%o_in%get('w'))
         call self%softoris%set_all2single('specscore', self%specscore)
         ! best orientation
         self%o_out = self%softoris%get_ori(self%npeaks)

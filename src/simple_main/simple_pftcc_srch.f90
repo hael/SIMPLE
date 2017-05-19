@@ -47,11 +47,11 @@ contains
         if( present(shbarrier) )then
             if( shbarrier .eq. 'no' ) self%shbarr = .false.
         endif
-        self%nrestarts = 5
+        self%nrestarts = 2
         if( present(nrestarts) ) self%nrestarts = nrestarts 
         ! make optimizer spec
         srchlims = lims
-        call self%ospec%specify('simplex', 5, ftol=1e-4,&
+        call self%ospec%specify('de', 5, ftol=1e-4,&
         &gtol=1e-4, limits=srchlims, nrestarts=self%nrestarts)
         ! generate the simplex optimizer object 
         call self%nlopt%new(self%ospec)

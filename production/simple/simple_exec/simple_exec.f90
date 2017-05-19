@@ -1020,15 +1020,16 @@ select case(prg)
         keys_optional(8)  = 'inner'
         keys_optional(9)  = 'width'
         keys_optional(10) = 'hp'
-        keys_optional(11) = 'lpstart'
+        keys_optional(11) = 'lp'
         keys_optional(12) = 'lpstop'
         keys_optional(13) = 'startit'
         keys_optional(14) = 'maxits'
         keys_optional(15) = 'xfel'
         keys_optional(16) = 'refine'
+        keys_optional(17) = 'eo'
         ! parse command line
         if( describe ) call print_doc_cont3D
-        call cline%parse(keys_required(:8), keys_optional(:16))
+        call cline%parse(keys_required(:8), keys_optional(:17))
         ! set defaults
         call cline%set('dynlp', 'no')
         if( cline%defined('eo') )then

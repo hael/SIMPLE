@@ -75,7 +75,8 @@ contains
         logical                       :: debug=.false.
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
-        call b%build_eo_rec_tbox(p)   ! reconstruction toolbox built
+        call b%build_eo_rec_tbox(p)         ! reconstruction toolbox built
+        call b%eorecvol%kill_exp            ! reduced meory usage
         allocate(res05s(p%nstates), res0143s(p%nstates), stat=alloc_stat)
         res0143s = 0.
         res05s   = 0.
@@ -83,6 +84,7 @@ contains
         ! rebuild b%vol according to box size (beacuse it is otherwise boxmatch)
         call b%vol%new([p%box,p%box,p%box], p%smpd, p%imgkind)
         call eorecvol_read%new(p)
+        call eorecvol_read%kill_exp        ! reduced meory usage
         n = p%nstates*p%nparts
         do ss=1,p%nstates
             if( cline%defined('state') )then

@@ -50,6 +50,7 @@ type :: eo_reconstructor
     procedure          :: sampl_dens_correct_sum
     procedure          :: eorec
     ! DESTRUCTOR
+    procedure          :: kill_exp
     procedure          :: kill
 end type eo_reconstructor
 
@@ -475,6 +476,16 @@ contains
     end subroutine eorec
     
     ! DESTRUCTOR
+
+    !>  \brief  is the expanded destructor
+    subroutine kill_exp( self )
+        class(eo_reconstructor), intent(inout)   :: self !< instance
+        if( self%exists )then
+            call self%even%dealloc_exp
+            call self%odd%dealloc_exp
+            call self%eosum%dealloc_exp
+        endif
+    end subroutine kill_exp
     
     !>  \brief  is a destructor
     subroutine kill( self )

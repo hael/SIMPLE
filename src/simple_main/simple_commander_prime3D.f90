@@ -293,12 +293,12 @@ contains
         integer      :: i, startit, iter = 0
         logical      :: converged=.false.
         p = params(cline) ! parameters generated
-            select case(p%refine)
-                case('yes','greedy')
-                    ! alles klar  
-                case DEFAULT
-                    stop 'unknown refinement mode; simple_commander_prime3D%exec_cont3D'                 
-            end select
+        select case(p%refine)
+            case('yes','greedy')
+                ! alles klar  
+            case DEFAULT
+                stop 'unknown refinement mode; simple_commander_prime3D%exec_cont3D'                 
+        end select
         if( p%xfel .eq. 'yes' )then
             if( cline%defined('msk') .or. cline%defined('mw') .or.&
             cline%defined('nvox') .or. cline%defined('automsk') )then

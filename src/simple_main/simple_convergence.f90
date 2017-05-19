@@ -245,7 +245,6 @@ contains
             case('yes')
                 ! PRIME3D-LIKE CONVERGENCE
                 converged = self%check_conv3D( update_res )
-                return
             case('greedy')
                 self%corr      = self%bap%get_avg('corr')
                 self%dist      = self%bap%get_avg('dist')

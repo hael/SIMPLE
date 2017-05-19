@@ -192,7 +192,7 @@ contains
                     endif
                 enddo
             endif
-            ! ORIENTATIONS OUPTUT: only here for now
+            ! ORIENTATIONS OUTPUT: only here for now
             do iptcl = fromp, top
                 call b%a%write(iptcl, p%outfile)
             enddo
@@ -205,7 +205,14 @@ contains
             enddo
             deallocate(pftccs, cont3Dsrch, cont3Dgreedysrch, batch_imgs)
         enddo
-        ! orientations output
+        ! CLEANUP SEARCH
+        call b%img%kill_expanded
+        do state=1,p%nstates
+            call b%refvols(state)%kill_expanded
+            call b%refvols(state)%kill
+        enddo
+
+        ! ORIENTATIONS OUTPUT
         !call b%a%write(p%outfile, [p%fromp,p%top])
         p%oritab = p%outfile
 
@@ -227,14 +234,7 @@ contains
         
         ! DEALLOCATE
         deallocate(batches)
-        do state=1,p%nstates
-            if(state_exists(state))then
-                call b%refvols(state)%kill_expanded
-                call b%refvols(state)%kill
-            endif
-        enddo
         deallocate(state_exists)
-        call b%img%kill_expanded
     end subroutine cont3D_exec
 
     !>  \brief  preps volumes for projection
@@ -269,14 +269,18 @@ contains
 
     !>  \brief  preps search space and performs reference projection 
     subroutine prep_pftcc_refs(b, p, iptcl, pftcc)
+        use simple_image, only: image
+        use simple_ctf,   only: ctf
         class(build),               intent(inout) :: b
         class(params),              intent(inout) :: p
         integer,                    intent(inout) :: iptcl
         class(polarft_corrcalc),    intent(inout) :: pftcc
-        type(oris) :: cone
-        type(ori)  :: optcl, oref
-        real       :: eullims(3,2)
-        integer    :: state, iref, cnt
+        type(ctf)   :: tfun
+        type(image) :: ref_img, ctf_img
+        type(oris)  :: cone
+        type(ori)   :: optcl, oref
+        real        :: eullims(3,2),  dfx, dfy, angast
+        integer     :: state, iref, cnt
         optcl = b%a%get_ori(iptcl)
         ! SEARCH SPACE PREP
         eullims = b%se%srchrange()
@@ -307,7 +311,48 @@ contains
             oref  = orefs%get_ori(iref)
             state = nint(oref%get('state'))
             call b%refvols(state)%fproject_polar(iref, oref, pftcc, expanded=.true.)
-        enddo
+        enddo          
+        ! select case(p%refine)
+        !     case('yes')
+        !         if( p%ctf.eq.'yes' )then
+        !             tfun = ctf(p%smpd, optcl%get('kv'),  optcl%get('cs'),  optcl%get('fraca'))
+        !             select case(p%tfplan%mode)
+        !                 case('astig') ! astigmatic CTF
+        !                     dfx    = optcl%get('dfx')
+        !                     dfy    = optcl%get('dfy')
+        !                     angast = optcl%get('angast')
+        !                 case('noastig') ! non-astigmatic CTF
+        !                     dfx    = optcl%get('dfx')
+        !                     dfy    = dfx
+        !                     angast = 0.
+        !                 case DEFAULT
+        !                     stop 'Unsupported p%tfplan%mode: simple_cont3Dmatcher::prep_pftcc_refs'
+        !             end select
+        !             call ctf_img%new([p%boxmatch, p%boxmatch, 1], p%smpd)
+        !             call b%img%new([p%boxmatch, p%boxmatch, 1], p%smpd)
+        !             call tfun%ctf2img(ctf_img, dfx, 'ctf', dfy, angast)
+        !             do iref=1,nrefs_per_ptcl
+        !                 oref    = orefs%get_ori(iref)
+        !                 state   = nint(oref%get('state'))
+        !                 call b%refvols(state)%fproject_expanded( oref, b%img )
+        !                 call b%img%mul( ctf_img )
+        !                 call b%img%imgpolarizer(pftcc, iref, isptcl=.false.)
+        !             enddo
+        !             if(p%boxmatch < p%box)call b%img%new([p%box,p%box,1],p%smpd)
+        !         else
+        !             do iref=1,nrefs_per_ptcl
+        !                 oref  = orefs%get_ori(iref)
+        !                 state = nint(oref%get('state'))
+        !                 call b%refvols(state)%fproject_polar(iref, oref, pftcc, expanded=.true.)
+        !             enddo 
+        !         endif
+        !     case('greedy')
+        !         do iref=1,nrefs_per_ptcl
+        !             oref  = orefs%get_ori(iref)
+        !             state = nint(oref%get('state'))
+        !             call b%refvols(state)%fproject_polar(iref, oref, pftcc, expanded=.true.)
+        !         enddo            
+        ! end select
     end subroutine prep_pftcc_refs
 
     !>  \brief  particle projection into pftcc 

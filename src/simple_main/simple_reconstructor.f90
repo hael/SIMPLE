@@ -53,6 +53,7 @@ type, extends(image) :: reconstructor
     ! RECONSTRUCTION
     procedure          :: rec
     ! DESTRUCTORS
+    procedure          :: dealloc_exp
     procedure          :: dealloc_rho
 end type reconstructor
 
@@ -549,13 +550,19 @@ contains
 
     ! DESTRUCTORS
 
-    !>  \brief  is a destructor
-    subroutine dealloc_rho( self )
+    !>  \brief  is the expanded destructor
+    subroutine dealloc_exp( self )
         class(reconstructor), intent(inout) :: self
         if(allocated(self%rho_exp)) deallocate(self%rho_exp)
         if(allocated(self%cmat_exp))deallocate(self%cmat_exp)
         self%rho_exp_allocated  = .false.
         self%cmat_exp_allocated = .false.
+    end subroutine dealloc_exp
+
+    !>  \brief  is a destructor
+    subroutine dealloc_rho( self )
+        class(reconstructor), intent(inout) :: self
+        call self%dealloc_exp
         if( self%rho_allocated )then
             call fftwf_free(self%kp)
             self%rho => null()

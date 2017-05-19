@@ -103,68 +103,51 @@ contains
     !>  \brief  to get the class
     subroutine update_best( self, pftcc, iptcl, a )
         use simple_math, only: myacos, rotmat2d, rad2deg
+        use simple_ori,  only: ori
         class(prime2D_srch),     intent(in)    :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: iptcl
         class(oris),             intent(inout) :: a
-        real    :: euls(3), mi_class, mi_inpl, mi_joint
-        integer :: class, rot
-        real    :: x, y, mat(2,2), u(2), x1(2), x2(2)
-        ! make unit vector
-        u(1)     = 0.
-        u(2)     = 1.
-        ! calculate previous vec
-        mat      = rotmat2d(a%e3get(iptcl))
-        x1       = matmul(u,mat)
-        ! get new indices
-        class    = self%best_class
-        rot      = self%best_rot
+        type(ori) :: o_new, o_old
+        real      :: euls(3), mi_class, mi_inpl, mi_joint
+        ! get previous oruentation
+        o_old = a%get_ori(iptcl)
+        o_new = o_old
         ! get in-plane angle
         euls     = 0.
-        euls(3)  = 360.-pftcc%get_rot(rot) ! change sgn to fit convention
+        euls(3)  = 360.-pftcc%get_rot(self%best_rot) ! change sgn to fit convention
         if( euls(3) == 360. ) euls(3) = 0.
-        call a%set_euler(iptcl, euls)
-        ! calculate new vec & distance (in degrees)
-        mat      = rotmat2d(a%e3get(iptcl))
-        x2       = matmul(u,mat)
+        call o_new%set_euler(euls)
         ! calculate overlap between distributions
         mi_class = 0.
         mi_inpl  = 0.
         mi_joint = 0.
-        if( self%prev_class == class )then
+        if( self%prev_class == self%best_class )then
             mi_class = mi_class + 1.
             mi_joint = mi_joint + 1.
         endif
-        if( self%prev_rot == rot )then
+        if( self%prev_rot ==  self%best_rot )then
             mi_inpl  = mi_inpl  + 1.
             mi_joint = mi_joint + 1.
         endif 
         mi_joint = mi_joint / 2.
-        ! set parameters
-        x = self%prev_shvec(1)
-        y = self%prev_shvec(2)
-        ! shifts must be obtained by vector addition
-        x = x + self%best_shvec(1)
-        y = y + self%best_shvec(2)
-        call a%set(iptcl, 'x',         x)
-        call a%set(iptcl, 'y',         y)
-        call a%set(iptcl, 'class',     real(class))
-        call a%set(iptcl, 'corr',      self%best_corr)
-        call a%set(iptcl, 'specscore', self%specscore)
-        call a%set(iptcl, 'dist_inpl', rad2deg(myacos(dot_product(x1,x2))))
-        call a%set(iptcl, 'mi_class',  mi_class)
-        call a%set(iptcl, 'mi_inpl',   mi_inpl)
-        call a%set(iptcl, 'mi_joint',  mi_joint)
-        call a%set(iptcl, 'frac', 100.*(real(self%nrefs_eval)/real(self%nrefs)))
+        ! updates parameters
+        call o_new%set_shift(self%prev_shvec + self%best_shvec) ! shifts must be obtained by vector addition
+        call o_new%set('class',     real(self%best_class))
+        call o_new%set('corr',      self%best_corr)
+        call o_new%set('specscore', self%specscore)
+        call o_new%set('dist_inpl', rad2deg( o_old.inplrotdist.o_new ))
+        call o_new%set('mi_class',  mi_class)
+        call o_new%set('mi_inpl',   mi_inpl)
+        call o_new%set('mi_joint',  mi_joint)
+        call o_new%set('frac',      100.*(real(self%nrefs_eval)/real(self%nrefs)))
+        ! updates orientation
+        call a%set_ori(iptcl, o_new)
+        ! cleanup
+        call o_old%kill
+        call o_new%kill
         if( DEBUG ) write(*,'(A)') '>>> PRIME2D_SRCH::GOT BEST ORI'
     end subroutine update_best
-
-    !>  \brief returns the in-plane rotational index for the rot in-plane angle
-    ! integer function get_roind( self, rot )
-    !     class(prime2D_srch), intent(in) :: self
-    !     real,                intent(in) :: rot
-    !     get_roind = self%srch_common%roind(rot)
-    ! end function get_roind
 
     ! PREPARATION ROUTINES
 

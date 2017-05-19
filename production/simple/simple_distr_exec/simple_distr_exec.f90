@@ -564,7 +564,7 @@ select case(prg)
         keys_optional(2)  = 'deftab'
         keys_optional(3)  = 'vol1'
         keys_optional(4)  = 'hp'
-        keys_optional(5)  = 'lpstart'
+        keys_optional(5)  = 'lp'
         keys_optional(6)  = 'lpstop'
         keys_optional(7)  = 'frac'
         keys_optional(8)  = 'automsk'
@@ -577,18 +577,25 @@ select case(prg)
         keys_optional(15) = 'maxits'
         keys_optional(16) = 'xfel'
         keys_optional(17) = 'refine'
+        keys_optional(18) = 'eo'
         ! documentation
         if( describe ) call print_doc_cont3D
         ! parse command line
         call check_restart( entire_line, is_restart )
         if( is_restart )then
-            call parse_restart('cont3D', entire_line, cline, keys_required(:8), keys_optional(:17))
+            call parse_restart('cont3D', entire_line, cline, keys_required(:8), keys_optional(:18))
         else
-            call cline%parse( keys_required(:8), keys_optional(:17) )
+            call cline%parse( keys_required(:8), keys_optional(:18) )
         endif
         ! set defaults
-        if( .not. cline%defined('eo') )then
-            call cline%set('eo', 'no')
+        if( cline%defined('eo') )then
+            if( cline%get_carg('eo').eq.'yes')then
+                if( cline%defined('lp') )stop 'Low-pass cannot be set with EO=YES'
+            else
+                if( .not.cline%defined('lp'))stop 'Low-pass must be defined with EO=NO'
+            endif
+        else
+            call cline%set('eo','no')
         endif
         call cline%set('dynlp', 'no')
         if(.not.cline%defined('nspace'))call cline%set('nspace', 1000.)
