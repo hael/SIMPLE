@@ -646,7 +646,8 @@ contains
         call cline_mergesims%set('nparts', real(p_master%nparts))
         call xmergesims%execute( cline_mergesims )
         ! clean
-        call del_files('pairs_part', p_master%nparts, ext='.bin')
+        call del_files('pairs_part',        p_master%nparts, ext='.bin')
+        call del_files('similarities_part', p_master%nparts, ext='.bin')
         call qsys_cleanup(p_master)
         ! end gracefully
         call simple_end('**** SIMPLE_DISTR_COMLIN_SMAT NORMAL STOP ****')
@@ -732,20 +733,17 @@ contains
         type(qsys_env)        :: qenv
         type(params)          :: p_master
         type(chash)           :: job_descr
-        type(oris)            :: os, os2, os_tmp
+        type(oris)            :: os
         character(len=STDLEN) :: vol, vol_iter, oritab, str, str_iter
         character(len=STDLEN) :: str_state, fsc_file, volassemble_output
         character(len=STDLEN) :: restart_file
-        real, allocatable     :: corrs(:)
-        real                  :: frac_srch_space, corr, corr_prev
+        real                  :: frac_srch_space
         integer               :: s, state, iter, i
         logical               :: vol_defined
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
-        ! make oritabs
+        ! make oritab
         call os%new(p_master%nptcls)
-        call os2%new(p_master%nptcls)
-        call os_tmp%new(p_master%nptcls)
 
         ! options check
         !if( p_master%automsk.eq.'yes' )stop 'Automasking not supported yet' ! automask deactivated for now
@@ -903,7 +901,6 @@ contains
             call cline%set( 'oritab', oritab )
             call cline_merge_algndocs%set( 'outfile', trim(oritab) )
             call xmerge_algndocs%execute( cline_merge_algndocs )
-            call os2%read(trim(oritab))
             if( p_master%norec .eq. 'yes' )then
                 ! RECONSTRUCT VOLUMES
                 call cline_recvol_distr%set( 'oritab', trim(oritab) )

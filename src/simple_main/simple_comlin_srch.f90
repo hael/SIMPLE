@@ -15,10 +15,11 @@ public :: comlin_srch_init, comlin_srch_get_nproj, comlin_srch_get_nbest, comlin
 comlin_srch_symaxis, comlin_srch_pair
 private
 
-logical, parameter :: DEBUG  = .false.
-integer, parameter :: NPROJ  = 200
-integer, parameter :: NBEST  = 20
-integer, parameter :: ANGRES = 10
+logical, parameter :: DEBUG      = .false.
+integer, parameter :: NPROJ      = 200
+integer, parameter :: NBEST      = 20
+integer, parameter :: NBEST_PAIR = 10
+integer, parameter :: ANGRES     = 10
 
 class(build),     pointer :: bp=>null()       !< pointer to builder
 class(params),    pointer :: pp=>null()       !< pointer to params
@@ -164,7 +165,7 @@ contains
             ! refine the NBEST local optima
             ! order the local optima according to correlation
             order = resoris%order_corr()
-            ! refine the nbest solutions
+            ! refine the NBEST solutions
             do iloc=1,NBEST
                 orientation = resoris%get_ori(order(iloc))
                 cxy = comlin_srch_minimize(orientation)
@@ -181,13 +182,14 @@ contains
     end subroutine comlin_srch_symaxis
 
     function comlin_srch_pair() result( similarity )
+        integer, allocatable :: order(:)
         type(ori) :: orientation, orientation_best
         real      :: corr, corr_best, similarity, cxy(6)
-        integer   :: iproj, inpl
+        integer   :: iproj, inpl, iloc
         ! grid search using the spiral geometry & ANGRES degree in-plane resolution
-        corr_best = -1.
         do iproj=1,NPROJ
             orientation = espace%get_ori(iproj)
+            corr_best   = -1.
             do inpl=0,359,ANGRES
                 call orientation%e3set(real(inpl))
                 call bp%a%set_ori(jptcl, orientation)
@@ -198,11 +200,23 @@ contains
                     orientation_best = orientation
                 endif
             end do
+            ! set local in-plane optimum for iproj
+            call resoris%set_ori(iproj,orientation_best)
         end do
+        ! refine the NBEST_PAIR local optima
         ! continuous refinement with rotational origin optimization
-        cxy = comlin_pairsrch_minimize(orientation_best)
-        ! we are only interested in a similarity value
-        similarity = cxy(1)
+        ! first, order the local optima according to correlation
+        order = resoris%order_corr()
+        ! refine the NBEST_PAIR solutions
+        do iloc=1,NBEST_PAIR
+            orientation = resoris%get_ori(order(iloc))
+            cxy = comlin_pairsrch_minimize(orientation)
+            call resoris%set(order(iloc), 'corr', cxy(1))
+        end do
+        ! re-order
+        order = resoris%order_corr()
+        ! we are only interested in a similarity value, return best
+        similarity = resoris%get(order(1), 'corr')
     end function comlin_srch_pair
 
     function comlin_srch_minimize( otarget ) result( cxy )
