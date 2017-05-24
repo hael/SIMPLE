@@ -634,7 +634,7 @@ contains
         p_master        = params(cline, checkdistr=.false.)
         nptcls          = p_master%nptcls
         p_master%nptcls = (p_master%nptcls*(p_master%nptcls - 1))/2
-        call split_pairs_in_parts(p_master%nptcls, p_master%nparts)
+        call split_pairs_in_parts(nptcls, p_master%nparts)
         ! setup the environment for distributed execution
         call qenv%new(p_master)
         ! prepare job description

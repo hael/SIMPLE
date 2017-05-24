@@ -94,15 +94,17 @@ contains
     !>  \brief  for generating balanced partitions for pairwise calculations on nobjs ojects
     subroutine split_pairs_in_parts( nobjs, nparts )
         use simple_jiffys, only: progress
-        integer, intent(in) :: nobjs !< number objects to analyse in pairs
-        integer, intent(in) :: nparts !< number of partitions (nodes) for parallel execution
-        integer :: npairs, alloc_stat, cnt, funit, i, j
-        integer :: ipart, io_stat, numlen
+        integer, intent(in)  :: nobjs  !< number objects to analyse in pairs
+        integer, intent(in)  :: nparts !< number of partitions (nodes) for parallel execution
+        integer              :: npairs, alloc_stat, cnt, funit, i, j
+        integer              :: ipart, io_stat, numlen
         integer, allocatable :: pairs(:,:), parts(:,:)
         character(len=:), allocatable :: fname
+        logical, parameter :: DEBUG = .false.
         ! generate all pairs
+        if( DEBUG ) print *, 'DEBUG(split_pairs_in_parts), nobjs: ', nobjs
         npairs = (nobjs*(nobjs-1))/2
-        if( debug ) print *, 'npairs: ', npairs
+        if( DEBUG ) print *, 'DEBUG(split_pairs_in_parts), npairs: ', npairs
         allocate( pairs(npairs,2), stat=alloc_stat )
         cnt = 0
         do i=1,nobjs-1
@@ -121,7 +123,7 @@ contains
             funit = get_fileunit()
             allocate(fname, source='pairs_part'//int2str_pad(ipart,numlen)//'.bin')
             open(unit=funit, status='REPLACE', action='WRITE', file=fname, access='STREAM')
-            if( debug ) print *, 'writing pairs in range: ', parts(ipart,1), parts(ipart,2)
+            if( DEBUG ) print *, 'writing pairs in range: ', parts(ipart,1), parts(ipart,2)
             write(unit=funit,pos=1,iostat=io_stat) pairs(parts(ipart,1):parts(ipart,2),:)
             ! Check if the write was successful
             if( io_stat .ne. 0 )then
