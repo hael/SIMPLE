@@ -129,10 +129,8 @@ contains
         call pftcc%kill
 
         ! INITIALIZE
-        if( which_iter <= 0 )then
-            write(*,'(A)')'>>> CONTINUOUS POLAR-FT ORIENTATION SEARCH'
-        else
-            write(*,'(A,1X,I3)')'>>> CONTINUOUS POLAR-FT ORIENTATION SEARCH, ITERATION:', which_iter
+        write(*,'(A,1X,I3)')'>>> CONTINUOUS POLAR-FT ORIENTATION SEARCH, ITERATION:', which_iter
+        if( .not. p%l_distr_exec )then
             p%outfile = 'cont3Ddoc_'//int2str_pad(which_iter,3)//'.txt'
         endif
 

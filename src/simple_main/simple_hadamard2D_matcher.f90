@@ -102,12 +102,8 @@ contains
         call preppftcc4align( b, p )
 
         ! INITIALIZE
-        if( which_iter <= 0 )then
-            write(*,'(A)')       '>>> PRIME2D DISCRETE STOCHASTIC SEARCH'
-        else
-            write(*,'(A,1X,I3)') '>>> PRIME2D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
-        endif
-        if( .not. p%l_distr_exec .and. which_iter > 0 )then
+        write(*,'(A,1X,I3)') '>>> PRIME2D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
+        if( .not. p%l_distr_exec )then
             p%outfile = 'prime2Ddoc_'//int2str_pad(which_iter,3)//'.txt'
             if( p%chunktag .ne. '' ) p%outfile= trim(p%chunktag)//trim(p%outfile)
         endif
@@ -317,11 +313,7 @@ contains
         if( present(which_iter) )then
             if( present(fname) ) stop &
             &'fname cannot be present together with which_iter; simple_hadamard2D_matcher :: prime2D_write_sums'
-            if( which_iter <= 0 )then
-                p%refs = 'cavgs'//p%ext
-            else
-                p%refs = 'cavgs_iter'//int2str_pad(which_iter,3)//p%ext
-            endif
+            p%refs = 'cavgs_iter'//int2str_pad(which_iter,3)//p%ext
         else
             if( present(fname) )then
                 p%refs = fname

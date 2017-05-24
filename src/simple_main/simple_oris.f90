@@ -1796,6 +1796,10 @@ contains
         integer, optional, intent(out)   :: nst
         character(len=100) :: io_message
         integer :: file_stat, i, fnr, state, recsz
+        if( .not. file_exists(orifile) )then
+            write(*,*) 'The file you are trying to read: ', trim(orifile), ' does not exist in cwd'
+            stop 'simple_oris :: read' 
+        endif
         fnr = get_fileunit( )
         open(unit=fnr, FILE=orifile, STATUS='OLD', action='READ', iostat=file_stat)
         if( file_stat .ne. 0 )then

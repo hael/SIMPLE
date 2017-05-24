@@ -65,12 +65,10 @@ contains
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: update_res, converged
-        logical, allocatable :: l_extremal_targets(:)
-        real,    allocatable :: corrs(:)
-        type(oris)           :: prime3D_oris
-        real                 :: norm, corr_thresh
-        integer              :: iptcl, s, inptcls, prev_state, istate
-        integer              :: statecnt(p%nstates)
+        type(oris)        :: prime3D_oris
+        real              :: norm, corr_thresh, corr_prev, corr
+        integer           :: iptcl, s, inptcls, prev_state, istate
+        integer           :: statecnt(p%nstates)
 
         inptcls = p%top - p%fromp + 1
 
@@ -141,12 +139,14 @@ contains
         endif
         
         ! INITIALIZE
-        if( which_iter <= 0 )then
-            write(*,'(A)') '>>> PRIME3D DISCRETE STOCHASTIC SEARCH'
-        else
-            write(*,'(A,1X,I3)') '>>> PRIME3D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
+        write(*,'(A,1X,I3)') '>>> PRIME3D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
+        if( .not. p%l_distr_exec )then
+            if( p%refine .eq. 'snhc')then
+                p%outfile = SNHCDOC
+            else
+                p%outfile = 'prime3Ddoc_'//int2str_pad(which_iter,3)//'.txt'
+            endif
         endif
-        if( which_iter > 0 ) p%outfile = 'prime3Ddoc_'//int2str_pad(which_iter,3)//'.txt'
         if(p%norec .eq. 'no')then
             do s=1,p%nstates
                 if( p%eo .eq. 'yes' )then
@@ -164,24 +164,11 @@ contains
         do iptcl=p%fromp,p%top
             call primesrch3D(iptcl)%new(b%a, p, pftcc)
         end do
-        if( p%refine.eq.'extremal' )then
-            ! update corrs
-            !$omp parallel do default(shared) schedule(static) private(iptcl)
-            do iptcl=1,p%nptcls
-                call primesrch3D(iptcl)%update_corr(pftcc, iptcl, b%a, b%e, p%lp)
-            end do
-            !$omp end parallel do
-            ! identify extremal targets
-            allocate( l_extremal_targets(p%nptcls) )
-            corr_thresh        = b%a%extremal_bound(EXTRTHRESH_CONST, convex=.true.)
-            corrs              = b%a%get_all('corr')
-            l_extremal_targets = corrs < corr_thresh
-        endif
         ! execute the search
         call del_file(p%outfile)
         if(p%ctf .ne. 'no') call pftcc%create_polar_ctfmats(p%smpd, b%a)
         select case(p%refine)
-            case( 'extremal','no','adasym','shc' )
+            case( 'no','adasym','shc','snhc' )
                 if( p%oritab .eq. '' )then
                     !$omp parallel do default(shared) schedule(guided) private(iptcl)
                     do iptcl=p%fromp,p%top
@@ -257,6 +244,7 @@ contains
         end do
         deallocate( primesrch3D )
         call pftcc%kill
+        call prime3D_oris%kill
 
         ! report convergence
         if( p%l_distr_exec )then
@@ -280,16 +268,12 @@ contains
         integer              :: i, k, nsamp, alloc_stat
         if( p%vols(1) == '' )then
             p%oritab = 'prime3D_startdoc.txt'
-            if( p%refine .eq. 'no' .or. p%refine .eq. 'adasym' )then
-                call b%a%rnd_oris
-                call b%a%zero_shifts
-                if( p%l_distr_exec .and. p%part.ne.1 )then
-                    ! so random oris only written once in distributed mode
-                else
-                    call b%a%write( p%oritab )
-                endif
+            call b%a%rnd_oris
+            call b%a%zero_shifts
+            if( p%l_distr_exec .and. p%part.ne.1 )then
+                ! so random oris only written once in distributed mode
             else
-                stop 'Unsupported refine option; simple_hadamard3D_matcher::gen_random_model'
+                call b%a%write( p%oritab )
             endif
             p%vols(1) = 'startvol'//p%ext
             if( p%noise .eq. 'yes' )then

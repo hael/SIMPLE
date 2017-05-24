@@ -746,9 +746,10 @@ select case(prg)
         keys_optional(13) = 'width'
         keys_optional(14) = 'nspace'
         keys_optional(15) = 'shbarrier'
+        keys_optional(16) = 'autoscale'
         ! parse command line
         if( describe ) call print_doc_ini3D_from_cavgs
-        call cline%parse(keys_required(:5), keys_optional(:15))
+        call cline%parse(keys_required(:5), keys_optional(:16))
         ! execute
         call xini3D_from_cavgs%execute( cline )
     case( 'het_ensemble' )

@@ -157,7 +157,7 @@ contains
         logical,               parameter :: DEBUG=.false.
         real,                  parameter :: LPLIMS(2)=[20.,10.] ! default low-pass limits
         real,                  parameter :: CENLP=30.           ! consistency with prime3D
-        integer,               parameter :: MAXITS_INIT=30, MAXITS_REFINE=80
+        integer,               parameter :: MAXITS_SNHC=30, MAXITS_INIT=10, MAXITS_REFINE=40
         integer,               parameter :: STATE=1, NPROJS_SYMSRCH=50
         character(len=32),     parameter :: ITERFBODY     = 'prime3Ddoc_'
         character(len=32),     parameter :: VOLFBODY      = 'recvol_state'
@@ -169,20 +169,22 @@ contains
         type(recvol_commander)        :: xrecvol
         type(projvol_commander)       :: xprojvol
         ! command lines
-        type(cmdline)                 :: cline_prime3D_init
-        type(cmdline)                 :: cline_prime3D_refine1
-        type(cmdline)                 :: cline_prime3D_refine2
-        type(cmdline)                 :: cline_symsrch
-        type(cmdline)                 :: cline_recvol
-        type(cmdline)                 :: cline_projvol
+        type(cmdline)         :: cline_prime3D_snhc
+        type(cmdline)         :: cline_prime3D_init
+        ! type(cmdline)         :: cline_prime3D_refine1
+        type(cmdline)         :: cline_prime3D_refine2
+        type(cmdline)         :: cline_symsrch
+        type(cmdline)         :: cline_recvol
+        type(cmdline)         :: cline_projvol
         ! other variables
-        type(scaler)                  :: scobj
-        type(params)                  :: p_master
-        type(oris)                    :: os
-        real                          :: iter, lpstop, smpd_target
-        character(len=2)              :: str_state
-        character(len=STDLEN)         :: vol_iter, oritab
-        logical                       :: srch4symaxis
+        type(scaler)          :: scobj
+        type(params)          :: p_master
+        type(oris)            :: os
+        real                  :: iter, lpstop, smpd_target, smpd
+        character(len=2)      :: str_state
+        character(len=STDLEN) :: vol_iter, oritab
+        character(len=3)      :: autoscale_flag
+        logical               :: srch4symaxis, doautoscale
         ! set cline defaults
         call cline%set('eo', 'no')
         ! make master parameters
@@ -200,40 +202,59 @@ contains
             endif
         endif
         ! auto-scaling prep
-        if( cline%defined('lp') )then
-            smpd_target = p_master%lp*LP2SMPDFAC
-        else if( cline%defined('lpstop') )then
-            smpd_target = min(LPLIMS(2),p_master%lpstop)*LP2SMPDFAC
+        autoscale_flag = cline%get_carg('autoscale')
+        doautoscale = .false.
+        if( autoscale_flag .eq. 'yes' ) doautoscale = .true.
+        smpd = cline%get_rarg('smpd')
+        if( doautoscale )then
+            if( cline%defined('lp') )then
+                smpd_target = p_master%lp*LP2SMPDFAC
+            else if( cline%defined('lpstop') )then
+                smpd_target = min(LPLIMS(2),p_master%lpstop)*LP2SMPDFAC
+            else
+                smpd_target = LPLIMS(2)*LP2SMPDFAC
+            endif
+            call scobj%init(p_master, cline, SMPD_TARGET, STKSCALEDBODY)
         else
-            smpd_target = LPLIMS(2)*LP2SMPDFAC
+            smpd_target = smpd
         endif
-        call scobj%init(p_master, cline, SMPD_TARGET, STKSCALEDBODY)
         ! prepare command lines from prototype master
+        cline_prime3D_snhc    = cline
         cline_prime3D_init    = cline
-        cline_prime3D_refine1 = cline
+        ! cline_prime3D_refine1 = cline
         cline_prime3D_refine2 = cline
         cline_symsrch         = cline
         cline_recvol          = cline
         cline_projvol         = cline
         ! initialise command line parameters
+        ! (1) INITIALIZATION BY STOCHASTIC NEIGHBORHOOD HILL-CLIMBING
+        call cline_prime3D_snhc%set('prg',    'prime3D')
+        call cline_prime3D_snhc%set('ctf',    'no')
+        call cline_prime3D_snhc%set('maxits', real(MAXITS_SNHC))
+        call cline_prime3D_snhc%set('dynlp',  'yes') ! better be explicit about the dynlp
+        call cline_prime3D_snhc%set('refine', 'snhc')
         ! (2) PRIME3D_INIT
         call cline_prime3D_init%set('prg',    'prime3D')
         call cline_prime3D_init%set('ctf',    'no')
         call cline_prime3D_init%set('maxits', real(MAXITS_INIT))
-        call cline_prime3D_init%set('dynlp',  'yes') ! better be explicit about the dynlp
+        call cline_prime3D_init%set('dynlp',  'no') ! better be explicit about the dynlp
+        call cline_prime3D_init%set('vol1',   trim(SNHCVOL)//trim(str_state)//p_master%ext)
+        call cline_prime3D_init%set('oritab', SNHCDOC)
         ! (3) PRIME3D REFINE STEP 1
-        call cline_prime3D_refine1%set('prg',    'prime3D')
-        call cline_prime3D_refine1%set('ctf',    'no')
-        call cline_prime3D_refine1%set('maxits', real(MAXITS_REFINE))
-        call cline_prime3D_refine1%set('dynlp',  'no') ! better be explicit about the dynlp
-        call cline_prime3D_refine1%set('refine', 'shc')
+        ! call cline_prime3D_refine1%set('prg',    'prime3D')
+        ! call cline_prime3D_refine1%set('ctf',    'no')
+        ! call cline_prime3D_refine1%set('maxits', real(MAXITS_REFINE))
+        ! call cline_prime3D_refine1%set('dynlp',  'no') ! better be explicit about the dynlp
+        ! call cline_prime3D_refine1%set('refine', 'shc')
         ! (4) SYMMETRY AXIS SEARCH
         if( srch4symaxis )then
-            call scobj%update_smpd_msk(cline_symsrch, 'scaled')
-            call scobj%update_stk_smpd_msk(cline_recvol, 'scaled')
+            if( doautoscale )then
+                call scobj%update_smpd_msk(cline_symsrch, 'scaled')
+                call scobj%update_stk_smpd_msk(cline_recvol, 'scaled')
+            endif
             ! need to replace original point-group flag with c1
             call cline_prime3D_init%set('pgrp', 'c1') 
-            call cline_prime3D_refine1%set('pgrp', 'c1')
+            ! call cline_prime3D_refine1%set('pgrp', 'c1')
             ! symsrch
             call cline_symsrch%set('prg', 'symsrch')
             call cline_symsrch%delete('stk')  ! volumetric symsrch
@@ -261,26 +282,33 @@ contains
         call cline_projvol%set('prg', 'projvol')
         call cline_projvol%set('outstk', 'reprojs'//p_master%ext)
         call cline_projvol%delete('stk')
-        call scobj%update_smpd_msk(cline_projvol, 'native')
-        ! scale class averages
-        call scobj%scale_exec
+        if( doautoscale )then
+            call scobj%update_smpd_msk(cline_projvol, 'native')
+            ! scale class averages
+            call scobj%scale_exec
+        endif
         ! execute commanders
+        write(*,'(A)') '>>>'
+        write(*,'(A)') '>>> INITIALIZATION WITH STOCHASTIC NEIGHBORHOOD HILL-CLIMBING'
+        write(*,'(A)') '>>>'
+        call xprime3D_distr%execute(cline_prime3D_snhc)
         write(*,'(A)') '>>>'
         write(*,'(A)') '>>> INITIAL 3D MODEL GENERATION WITH PRIME3D'
         write(*,'(A)') '>>>'
+        call update_lp(cline_prime3D_init, 1)
         call xprime3D_distr%execute(cline_prime3D_init)
         iter = cline_prime3D_init%get_rarg('endit')
         call set_iter_dependencies
-        write(*,'(A)') '>>>'
-        write(*,'(A)') '>>> FIRST PRIME3D REFINEMENT STEP, REFINE=SHC'
-        write(*,'(A)') '>>>'
-        call cline_prime3D_refine1%set('startit', iter + 1.0)
-        call cline_prime3D_refine1%set('oritab', trim(oritab))
-        call cline_prime3D_refine1%set('vol1', trim(vol_iter))
-        call update_lp(cline_prime3D_refine1, 1)
-        call xprime3D_distr%execute(cline_prime3D_refine1)
-        iter = cline_prime3D_refine1%get_rarg('endit')
-        call set_iter_dependencies
+        ! write(*,'(A)') '>>>'
+        ! write(*,'(A)') '>>> FIRST PRIME3D REFINEMENT STEP, REFINE=SHC'
+        ! write(*,'(A)') '>>>'
+        ! call cline_prime3D_refine1%set('startit', iter + 1.0)
+        ! call cline_prime3D_refine1%set('oritab', trim(oritab))
+        ! call cline_prime3D_refine1%set('vol1', trim(vol_iter))
+        ! call update_lp(cline_prime3D_refine1, 1)
+        ! call xprime3D_distr%execute(cline_prime3D_refine1)
+        ! iter = cline_prime3D_refine1%get_rarg('endit')
+        ! call set_iter_dependencies
         if( srch4symaxis )then
             write(*,'(A)') '>>>'
             write(*,'(A)') '>>> SYMMETRY AXIS SEARCH'
@@ -307,20 +335,24 @@ contains
         call xprime3D_distr%execute(cline_prime3D_refine2)
         iter = cline_prime3D_refine2%get_rarg('endit')
         call set_iter_dependencies
-        write(*,'(A)') '>>>'
-        write(*,'(A)') '>>> 3D RECONSTRUCTION AT NATIVE SAMPLING'
-        write(*,'(A)') '>>>'
-        ! modulate shifts
-        call os%new(p_master%nptcls)
-        call os%read(oritab)
-        call os%mul_shifts(1./scobj%get_scaled_var('scale'))
-        call os%write(oritab)
-        ! prepare recvol command line
-        call scobj%update_stk_smpd_msk(cline_recvol, 'native')
-        call cline_recvol%set('oritab', trim(oritab))
-        ! re-reconstruct volume
-        call xrecvol%execute(cline_recvol)
-        call rename(trim(volfbody)//trim(str_state)//p_master%ext, 'rec_final'//p_master%ext)
+        if( doautoscale )then
+            write(*,'(A)') '>>>'
+            write(*,'(A)') '>>> 3D RECONSTRUCTION AT NATIVE SAMPLING'
+            write(*,'(A)') '>>>'
+            ! modulate shifts
+            call os%new(p_master%nptcls)
+            call os%read(oritab)
+            call os%mul_shifts(1./scobj%get_scaled_var('scale'))
+            call os%write(oritab)
+            ! prepare recvol command line
+            call scobj%update_stk_smpd_msk(cline_recvol, 'native')
+            call cline_recvol%set('oritab', trim(oritab))
+            ! re-reconstruct volume
+            call xrecvol%execute(cline_recvol)
+            call rename(trim(volfbody)//trim(str_state)//p_master%ext, 'rec_final'//p_master%ext)
+        else
+            call rename(trim(vol_iter), 'rec_final'//p_master%ext)
+        endif
         write(*,'(A)') '>>>'
         write(*,'(A)') '>>> RE-PROJECTION OF THE FINAL VOLUME'
         write(*,'(A)') '>>>'

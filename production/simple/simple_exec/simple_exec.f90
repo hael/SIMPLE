@@ -865,27 +865,27 @@ select case(prg)
         ! set required keys
         keys_required(1)  = 'stk'
         keys_required(2)  = 'smpd'
-        keys_required(3)  = 'oritab'
-        keys_required(4)  = 'ctf'
-        keys_required(5)  = 'pgrp'
-        keys_required(6)  = 'nstates'
-        keys_required(7)  = 'msk'
+        keys_required(3)  = 'ctf'
+        keys_required(4)  = 'pgrp'
+        keys_required(5)  = 'nstates'
+        keys_required(6)  = 'msk'
         ! set optionnal keys
         keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'deftab'
-        keys_optional(3)  = 'inner'
-        keys_optional(4)  = 'width'
-        keys_optional(5)  = 'lp'
-        keys_optional(6)  = 'eo'
-        keys_optional(7)  = 'frac'
-        keys_optional(8)  = 'state2split'
-        keys_optional(9)  = 'norec'
-        keys_optional(10) = 'mul'
-        keys_optional(11) = 'zero'
-        keys_optional(12) = 'tseries'
+        keys_optional(2)  = 'oritab'
+        keys_optional(3)  = 'deftab'
+        keys_optional(4)  = 'inner'
+        keys_optional(5)  = 'width'
+        keys_optional(6)  = 'lp'
+        keys_optional(7)  = 'eo'
+        keys_optional(8)  = 'frac'
+        keys_optional(9)  = 'state2split'
+        keys_optional(10) = 'norec'
+        keys_optional(11) = 'mul'
+        keys_optional(12) = 'zero'
+        keys_optional(13) = 'tseries'
         ! parse command line
         if( describe ) call print_doc_multiptcl_init
-        call cline%parse(keys_required(:7), keys_optional(:12))
+        call cline%parse(keys_required(:6), keys_optional(:13))
         ! set defaults
         if( .not. cline%defined('trs') ) call cline%set('trs', 3.) ! to assure that shifts are being used
         !execute

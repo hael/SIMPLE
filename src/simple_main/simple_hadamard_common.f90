@@ -457,11 +457,7 @@ contains
                 call b%eorecvols(s)%write_eos('recvol_state'//int2str_pad(s,2)//'_part'//int2str_pad(p%part,p%numlen))
             else
                 if( present(which_iter) )then
-                    if( which_iter <= 0 )then
-                        p%vols(s) = 'recvol_state'//int2str_pad(s,2)//p%ext
-                    else
-                        p%vols(s) = 'recvol_state'//int2str_pad(s,2)//'_iter'//int2str_pad(which_iter,3)//p%ext
-                    endif
+                    p%vols(s) = 'recvol_state'//int2str_pad(s,2)//'_iter'//int2str_pad(which_iter,3)//p%ext
                 else
                      p%vols(s) = 'startvol_state'//int2str_pad(s,2)//p%ext
                 endif
@@ -511,14 +507,14 @@ contains
                 call b%recvols(s)%write_rho(p%masks(s))
                 deallocate(fbody)
             else
-                if( present(which_iter) )then
-                    if( which_iter <= 0 )then
-                        p%vols(s) = 'recvol_state'//int2str_pad(s,2)//p%ext
-                    else
-                        p%vols(s) = 'recvol_state'//int2str_pad(s,2)//'_iter'//int2str_pad(which_iter,3)//p%ext
-                    endif
+                if( p%refine .eq. 'snhc' )then
+                     p%vols(s) = trim(SNHCVOL)//int2str_pad(s,2)//p%ext
                 else
-                     p%vols(s) = 'startvol_state'//int2str_pad(s,2)//p%ext
+                    if( present(which_iter) )then
+                        p%vols(s) = 'recvol_state'//int2str_pad(s,2)//'_iter'//int2str_pad(which_iter,3)//p%ext
+                    else
+                        p%vols(s) = 'startvol_state'//int2str_pad(s,2)//p%ext
+                    endif
                 endif
                 call b%recvols(s)%compress_exp
                 call b%recvols(s)%sampl_dens_correct(self_out=b%vol_pad) ! this preserves the recvol for online update

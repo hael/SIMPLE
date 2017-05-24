@@ -347,7 +347,6 @@ contains
         use simple_commander_distr   ! use all in there
         use simple_commander_mask    ! use all in there
         use simple_procimgfile, only: random_selection_from_imgfile
-        use simple_oris,        only: oris
         use simple_strings,     only: str_has_substr
         class(prime2D_distr_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
@@ -710,8 +709,8 @@ contains
         ! constants
         logical,           parameter :: DEBUG=.false.
         character(len=32), parameter :: ALGNFBODY    = 'algndoc_'
-        character(len=32), parameter :: ITERFBODY    = 'prime3Ddoc_'
         character(len=32), parameter :: VOLFBODY     = 'recvol_state'
+        character(len=32), parameter :: ITERFBODY    = 'prime3Ddoc_'
         character(len=32), parameter :: RESTARTFBODY = 'prime3D_restart'
         ! commanders
         type(prime3D_init_distr_commander)  :: xprime3D_init_distr
@@ -733,17 +732,20 @@ contains
         type(qsys_env)        :: qenv
         type(params)          :: p_master
         type(chash)           :: job_descr
-        type(oris)            :: os
+        type(oris)            :: os, os2, os_tmp
         character(len=STDLEN) :: vol, vol_iter, oritab, str, str_iter
         character(len=STDLEN) :: str_state, fsc_file, volassemble_output
         character(len=STDLEN) :: restart_file
-        real                  :: frac_srch_space
+        real, allocatable     :: corrs(:)
+        real                  :: frac_srch_space, corr, corr_prev
         integer               :: s, state, iter, i
         logical               :: vol_defined
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
-        ! make oritab
+        ! make oritabs
         call os%new(p_master%nptcls)
+        call os2%new(p_master%nptcls)
+        call os_tmp%new(p_master%nptcls)
 
         ! options check
         !if( p_master%automsk.eq.'yes' )stop 'Automasking not supported yet' ! automask deactivated for now
@@ -815,7 +817,7 @@ contains
             do state = 1,p_master%nstates
                 ! rename volumes and updates cline
                 str_state = int2str_pad(state,2)
-                vol = trim( VOLFBODY )//trim(str_state)//p_master%ext
+                vol = trim(VOLFBODY)//trim(str_state)//p_master%ext
                 str = 'startvol_state'//trim(str_state)//p_master%ext
                 call rename( trim(vol), trim(str) )
                 vol = 'vol'//trim(int2str(state))
@@ -893,10 +895,15 @@ contains
             ! schedule
             call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=ALGNFBODY)
             ! ASSEMBLE ALIGNMENT DOCS
-            oritab = trim(ITERFBODY)//trim(str_iter)//'.txt'    
+            if( p_master%refine .eq. 'snhc' )then
+                oritab = trim(SNHCDOC)
+            else
+                oritab = trim(ITERFBODY)//trim(str_iter)//'.txt'
+            endif
             call cline%set( 'oritab', oritab )
             call cline_merge_algndocs%set( 'outfile', trim(oritab) )
             call xmerge_algndocs%execute( cline_merge_algndocs )
+            call os2%read(trim(oritab))
             if( p_master%norec .eq. 'yes' )then
                 ! RECONSTRUCT VOLUMES
                 call cline_recvol_distr%set( 'oritab', trim(oritab) )
@@ -944,8 +951,12 @@ contains
                         enddo
                     endif
                     ! rename state volume
-                    vol       = trim(VOLFBODY)//trim(str_state)//p_master%ext
-                    vol_iter  = trim(VOLFBODY)//trim(str_state)//'_iter'//trim(str_iter)//p_master%ext
+                    vol = trim(VOLFBODY)//trim(str_state)//p_master%ext
+                    if( p_master%refine .eq. 'snhc' )then
+                        vol_iter  = trim(SNHCVOL)//trim(str_state)//p_master%ext
+                    else
+                        vol_iter  = trim(VOLFBODY)//trim(str_state)//'_iter'//trim(str_iter)//p_master%ext
+                    endif
                     call rename( trim(vol), trim(vol_iter) )
                     ! post-process
                     vol = 'vol'//trim(int2str(state))
@@ -966,7 +977,7 @@ contains
             enddo
             ! CONVERGENCE
             call cline_check3D_conv%set( 'oritab', trim(oritab) )
-            if(p_master%refine.eq.'het')call cline_check3D_conv%delete('update_res')
+            if(p_master%refine.eq.'het') call cline_check3D_conv%delete('update_res')
             call xcheck3D_conv%execute( cline_check3D_conv )
             if( iter >= p_master%startit+2 )then
                 ! after a minimum of 2 iterations
@@ -991,9 +1002,11 @@ contains
                     call cline_check3D_conv%set( 'find', real(p_master%find) )
                endif
             endif
-            ! RESTART
-            restart_file = trim(RESTARTFBODY)//'_iter'//int2str_pad( iter, 3)//'.txt'
-            call cline%write( restart_file )
+            if( p_master%refine .ne. 'snhc' )then
+                ! RESTART
+                restart_file = trim(RESTARTFBODY)//'_iter'//int2str_pad( iter, 3)//'.txt'
+                call cline%write( restart_file )
+            endif
         end do
         call qsys_cleanup(p_master)
         ! RESTART
@@ -1024,11 +1037,11 @@ contains
         character(len=32), parameter :: VOLFBODY     = 'recvol_state'
         character(len=32), parameter :: RESTARTFBODY = 'cont3D_restart'
         ! ! commanders
-        type(recvol_distr_commander)        :: xrecvol_distr
-        type(merge_algndocs_commander)      :: xmerge_algndocs
-        type(check3D_conv_commander)        :: xcheck3D_conv
-        type(split_commander)               :: xsplit
-        type(postproc_vol_commander)        :: xpostproc_vol
+        type(recvol_distr_commander)   :: xrecvol_distr
+        type(merge_algndocs_commander) :: xmerge_algndocs
+        type(check3D_conv_commander)   :: xcheck3D_conv
+        type(split_commander)          :: xsplit
+        type(postproc_vol_commander)   :: xpostproc_vol
         ! command lines
         type(cmdline)         :: cline_recvol_distr
         type(cmdline)         :: cline_check3D_conv

@@ -66,14 +66,13 @@ type prime3D_srch
     procedure          :: prep_corr4srch
     procedure          :: prep_reforis
     procedure, private :: prep_specscore
-    procedure          :: update_corr
     ! SEARCH ROUTINES
     procedure          :: exec_prime3D_srch
     procedure          :: exec_prime3D_srch_het
     procedure, private :: greedy_srch
-    procedure, private :: extremal_srch
     procedure, private :: stochastic_srch
     procedure, private :: stochastic_srch_shc
+    procedure, private :: stochastic_srch_snhc
     procedure, private :: stochastic_srch_het
     procedure, private :: gen_symnnmat
     procedure          :: inpl_srch
@@ -316,7 +315,7 @@ contains
         if( self%prev_state > self%nstates ) stop 'previous best state outside boundary; prep4srch; simple_prime3D_srch'
         if( .not. self%state_exists(self%prev_state) ) stop 'empty previous state; prep4srch; simple_prime3D_srch'
         select case( self%refine )
-            case( 'extremal','no','shc','adasym' )                                                ! DISCRETE CASE
+            case( 'no','shc','adasym','snhc' )                                         ! DISCRETE CASE
                 call self%prep_reforis(e)                                              ! search space & order prep
                 self%prev_ref = self%o_refs%find_closest_proj(o_prev, self%prev_state) ! find closest ori with same state
             case( 'neigh','shcneigh' )                                                 ! DISCRETE CASE WITH NEIGHBOURHOOD
@@ -502,22 +501,6 @@ contains
         if( DEBUG ) write(*,'(A)') '>>> PRIME3D_SRCH::EXECUTED PREP_NPEAKS_ORIS'
     end subroutine prep_npeaks_oris
 
-    !>  \brief updates the correlation values in a
-    subroutine update_corr( self, pftcc, iptcl, a, e, lp )
-        class(prime3D_srch),     intent(inout) :: self
-        class(polarft_corrcalc), intent(inout) :: pftcc
-        integer,                 intent(in)    :: iptcl
-        class(oris),             intent(inout) :: a, e
-        real,                    intent(in)    :: lp
-        if( nint(a%get(iptcl,'state')) > 0 )then
-            call self%prep4srch(pftcc, iptcl, a, e)
-            call self%prep_corr4srch(pftcc, iptcl, a, lp)
-            call a%set(iptcl, 'corr', self%prev_corr)
-        else
-            call a%reject(iptcl)
-        endif
-    end subroutine update_corr
-
     ! SEARCH ROUTINES
     
     !>  \brief a master prime search routine
@@ -535,8 +518,8 @@ contains
         call self%online_allocate
         if( ggreedy )then
             call self%greedy_srch( pftcc,  iptcl, a, e, lp, nnmat )
-        else if( str_has_substr(self%refine,'extremal') )then
-            call self%extremal_srch( pftcc, iptcl, a, e, lp )
+        else if( self%refine.eq.'snhc' )then
+            call self%stochastic_srch_snhc( pftcc, iptcl, a, e, lp )
         else if( str_has_substr(self%refine,'shc') )then
             call self%stochastic_srch_shc( pftcc, iptcl, a, e, lp, nnmat )
         else
@@ -558,57 +541,6 @@ contains
         call self%online_destruct
         if( DEBUG ) write(*,'(A)') '>>> PRIME3D_SRCH::EXECUTED PRIME3D_HET_SRCH'
     end subroutine exec_prime3D_srch_het
-
-
-    !>  \brief  extremal optimisation (experimental)
-    subroutine extremal_srch( self, pftcc, iptcl, a, e, lp )
-        class(prime3D_srch),     intent(inout) :: self
-        class(polarft_corrcalc), intent(inout) :: pftcc
-        integer,                 intent(in)    :: iptcl
-        class(oris),             intent(inout) :: a, e
-        real,                    intent(in)    :: lp
-        real    :: projspace_corrs(self%nrefs)
-        integer :: iref, isample
-        integer, parameter :: NREFS=5
-        if( nint(a%get(iptcl,'state')) > 0 )then
-            ! initialize
-            call self%prep4srch(pftcc, iptcl, a, e)
-            call self%prep_corr4srch(pftcc, iptcl, a, lp)
-            self%nbetter         = 0
-            self%nrefs_eval      = 0
-            self%proj_space_inds = 0
-            projspace_corrs      = -1.
-            ! search
-            do isample=1,NREFS
-                iref = self%srch_order(isample) ! set the stochastic reference index
-                call per_ref_srch(iref)         ! actual search
-            end do
-            self%nrefs_eval = NREFS
-            ! sort in correlation projection direction space
-            call hpsort(self%nrefs, projspace_corrs, self%proj_space_inds) 
-            ! output
-            call self%prep_npeaks_oris
-            call self%update_best(pftcc, iptcl, a)
-        else
-            call a%reject(iptcl)
-        endif
-        if( DEBUG ) write(*,'(A)') '>>> PRIME3D_SRCH::FINISHED EXTREMAL SEARCH'
-
-        contains
-
-            subroutine per_ref_srch( iref )
-                integer, intent(in) :: iref
-                real    :: corrs(self%nrots), inpl_corr
-                integer :: loc(1), inpl_ind                
-                corrs     = pftcc%gencorrs(iref, iptcl) ! In-plane correlations
-                loc       = maxloc(corrs)               ! greedy in-plane
-                inpl_ind  = loc(1)                      ! in-plane angle index
-                inpl_corr = corrs(inpl_ind)             ! max in plane correlation
-                call self%store_solution(pftcc, iref, iref, inpl_ind, inpl_corr)
-                projspace_corrs( iref ) = inpl_corr     ! stash in-plane correlation for sorting
-            end subroutine per_ref_srch
-
-    end subroutine extremal_srch
 
     !>  \brief  greedy hill-climbing (4 initialisation)
     subroutine greedy_srch( self, pftcc, iptcl, a, e, lp, nnmat )
@@ -869,6 +801,60 @@ contains
             end subroutine per_ref_srch
 
     end subroutine stochastic_srch_shc
+
+    !>  \brief  stochastic neighborhood hill-climbing
+    subroutine stochastic_srch_snhc( self, pftcc, iptcl, a, e, lp )
+        class(prime3D_srch),     intent(inout) :: self
+        class(polarft_corrcalc), intent(inout) :: pftcc
+        integer,                 intent(in)    :: iptcl
+        class(oris),             intent(inout) :: a, e
+        real,                    intent(in)    :: lp
+        real    :: projspace_corrs(self%nrefs)
+        integer :: iref, isample
+        integer, parameter :: NREFS=5
+        if( nint(a%get(iptcl,'state')) > 0 )then
+            ! initialize
+            call self%prep4srch(pftcc, iptcl, a, e)
+            call self%prep_corr4srch(pftcc, iptcl, a, lp)
+            self%nbetter         = 0
+            self%nrefs_eval      = 0
+            self%proj_space_inds = 0
+            projspace_corrs      = -1.
+            ! search
+            do isample=1,NREFS
+                iref = self%srch_order(isample) ! set the stochastic reference index
+                call per_ref_srch(iref)         ! actual search
+            end do
+            self%nrefs_eval = NREFS
+            ! sort in correlation projection direction space
+            call hpsort(self%nrefs, projspace_corrs, self%proj_space_inds) 
+            ! output
+            call self%prep_npeaks_oris
+            call self%update_best(pftcc, iptcl, a)
+        else
+            call a%reject(iptcl)
+        endif
+        if( DEBUG ) write(*,'(A)') '>>> PRIME3D_SRCH::FINISHED EXTREMAL SEARCH'
+
+        contains
+
+            subroutine per_ref_srch( iref )
+                integer, intent(in) :: iref
+                real    :: corrs(self%nrots), inpl_corr
+                integer :: loc(1), inpl_ind, state
+                state = 1
+                if( self%nstates > 1 ) state = nint( self%o_refs%get(iref, 'state') )
+                if( self%state_exists(state) )then       
+                    corrs     = pftcc%gencorrs(iref, iptcl) ! In-plane correlations
+                    loc       = maxloc(corrs)               ! greedy in-plane
+                    inpl_ind  = loc(1)                      ! in-plane angle index
+                    inpl_corr = corrs(inpl_ind)             ! max in plane correlation
+                    call self%store_solution(pftcc, iref, iref, inpl_ind, inpl_corr)
+                    projspace_corrs( iref ) = inpl_corr     ! stash in-plane correlation for sorting
+                endif
+            end subroutine per_ref_srch
+
+    end subroutine stochastic_srch_snhc
     
     subroutine stochastic_srch_het( self, pftcc, iptcl, a, e, extr_bound, statecnt)
         use simple_rnd, only: shcloc, irnd_uni

@@ -168,6 +168,10 @@ contains
         type(build)  :: b
         p = params(cline) ! constants & derived constants produced
         call b%build_general_tbox(p, cline)
+        if( .not. cline%defined('oritab') )then
+            call b%a%rnd_oris
+            call b%a%zero_shifts
+        endif
         if( cline%defined('state2split') )then
             if( cline%defined('oritab') )then
                 p%nstates = b%a%get_nstates()
@@ -225,9 +229,9 @@ contains
             if(p%oritab .eq. '')stop 'need oritab input for automasking'
             if(.not. cline%defined('binwidth'))p%binwidth = min( 8, ceiling(0.04*real(p%box)))
             if(.not. cline%defined('edge'))    p%edge     = max(12, ceiling(0.05*real(p%box)))
-            write(*,'(A,I3)')'>>> AUTOMASKING BINARY LAYERS:', p%binwidth
-            write(*,'(A,I3)')'>>> AUTOMASKING SOFT LAYERS:  ', p%edge
-            write(*,'(A,F6.1)')'>>> AUTOMASKING LOW-PASS:   ', p%amsklp
+            write(*,'(A,I3)') '>>> AUTOMASKING BINARY LAYERS:', p%binwidth
+            write(*,'(A,I3)') '>>> AUTOMASKING SOFT LAYERS:  ', p%edge
+            write(*,'(A,F6.1)') '>>> AUTOMASKING LOW-PASS:   ', p%amsklp
         endif
         call b%build_general_tbox(p, cline)   ! general objects built
         if( .not. cline%defined('eo') ) p%eo = 'no' ! default
@@ -260,15 +264,21 @@ contains
                 endif
             endif
             p%find = int((real(p%box-1)*p%smpd)/p%lp)
+            startit = 1
+            if( cline%defined('startit') ) startit = p%startit
             ! extremal dynamics
-            if( cline%defined('extr_thresh'))then
+            if( cline%defined('extr_thresh') )then
                 ! all is well
             else
                 ! starts from the top
-                p%extr_thresh = EXTRINITHRESH / p%rrate
-            endif        
-            startit = 1
-            if( cline%defined('startit') ) startit = p%startit
+                p%extr_thresh = EXTRINITHRESH/p%rrate
+                if( startit > 1 )then
+                    ! need to update the randomization rate
+                    do i=1,startit-1
+                         p%extr_thresh = p%extr_thresh * p%rrate
+                    end do
+                endif
+            endif
             do i=startit,p%maxits
                 p%extr_thresh = p%extr_thresh * p%rrate
                 call prime3D_exec(b, p, cline, i, update_res, converged)
