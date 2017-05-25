@@ -118,7 +118,15 @@ contains
         call b%build_general_tbox(p, cline) ! general objects built
         write(*,'(A,F8.2,A)') '>>> AUTOMASK LOW-PASS:',        p%amsklp, ' ANGSTROMS'
         write(*,'(A,I3,A)')   '>>> AUTOMASK SOFT EDGE WIDTH:', p%edge,   ' PIXELS'
-        p%outstk = add2fbody(p%stk, p%ext, 'msk') 
+        p%outstk = add2fbody(p%stk, p%ext, 'msk')
+        !call b%mskimg%init2D(p, p%nptcls, mode='cavg')
+        ! do iptcl=1,p%nptcls
+        !     call b%img%read(p%stk, iptcl)
+        !     call b%mskimg%update_cls(b%img, iptcl)
+        !     b%img_msk = b%mskimg%get_imgmsk(iptcl)
+        !     call b%img_msk%write('automasks2D'//p%ext, iptcl)
+        !     call b%img%write(p%outstk, iptcl)
+        ! end do
         do iptcl=1,p%nptcls
             call b%img%read(p%stk, iptcl)
             call automask2D(b%img, p, b%img_msk)

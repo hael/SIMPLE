@@ -53,6 +53,7 @@ type build
     type(image)                         :: img_copy           !< -"-
     type(projector)                     :: vol                !< -"-
     type(projector)                     :: vol_pad            !< -"-
+    type(mask_projector)                :: mskimg             !< mask image
     type(mask_projector)                :: mskvol             !< mask volume
     ! CLUSTER TOOLBOX
     type(ppca)                          :: pca                !< 4 probabilistic pca
@@ -199,6 +200,7 @@ contains
             ! boxmatch-sized ones
             call self%img_tmp%new([p%boxmatch,p%boxmatch,1],p%smpd,p%imgkind)
             call self%img_msk%new([p%boxmatch,p%boxmatch,1],p%smpd,p%imgkind)
+            call self%mskimg%new([p%boxmatch, p%boxmatch, 1],p%smpd,p%imgkind)
             call self%img_filt%new([p%box,p%box,1],p%smpd,p%imgkind)
             if( debug ) write(*,'(a)') 'did build boxmatch-sized image objects'
             ! boxpd-sized ones
@@ -266,6 +268,8 @@ contains
             call self%vol%kill
             call self%mskvol%kill_mskproj
             call self%mskvol%kill
+            call self%mskimg%kill_mskproj
+            call self%mskimg%kill
             call self%vol_pad%kill_expanded
             call self%vol_pad%kill
             if( allocated(self%ssnr) )then

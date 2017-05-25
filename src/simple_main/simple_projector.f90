@@ -393,7 +393,7 @@ contains
         if( self%is_2d() )then
             ! 2D
             ! init
-            allocate( cyc1(1:wdim), cyc2(1:wdim), w(1:wdim, 1:wdim, 1), comps(1:wdim, 1:wdim, 1))
+            allocate( cyc1(wdim), cyc2(wdim), w(wdim, wdim, 1), comps(wdim, wdim, 1))
             comps = cmplx(0.,0.)
             w     = 1.
             do i=1,wdim
@@ -415,13 +415,12 @@ contains
                 end do
             end do
             ! SUM( kernel x components )
-            comp_sum = sum(w(:,:,1) * comps(:,:,1))
+            comp_sum = sum(w * comps)
             deallocate( w,comps,cyc1,cyc2 )
         else
             ! 3D
             ! init
-            allocate( cyc1(1:wdim), cyc2(1:wdim), cyc3(1:wdim), w(1:wdim, 1:wdim, 1),&
-            &comps(1:wdim, 1:wdim, 1:wdim))
+            allocate( cyc1(wdim), cyc2(wdim), cyc3(wdim), w(wdim, wdim, wdim),comps(wdim, wdim, wdim))
             comps = cmplx(0.,0.)
             w     = 1.
             do i=1, wdim
@@ -448,7 +447,7 @@ contains
                 end do
             end do
             ! SUM( kernel x components )
-            comp_sum = sum(w(:,:,1) * comps(:,:,1))
+            comp_sum = sum(w * comps)
             deallocate( w,comps,cyc1,cyc2,cyc3 )
         endif
     end function extr_gridfcomp

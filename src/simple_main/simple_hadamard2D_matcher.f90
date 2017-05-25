@@ -428,6 +428,8 @@ contains
         call pftcc%new(p%ncls, [p%fromp,p%top], [p%box,p%box,1], p%kfromto, p%ring2, p%ctf)
         ! prepare the polarizers
         call b%img%init_imgpolarizer(pftcc)
+        ! prepare the automasker
+        if( p%l_automsk )call b%mskimg%init2D( p, p%ncls )
         ! PREPARATION OF REFERENCES IN PFTCC
         ! read references and transform into polar coordinates
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING REFERENCES'
@@ -439,7 +441,7 @@ contains
             if( pop > 1 )then
                 ! prepare the reference
                 b%img = b%cavgs(icls)
-                call prep2Dref(p, b%img, b%a, icls)
+                call prep2Dref(b, p, b%img, icls)
                 b%refs(icls) = b%img
                 ! transfer to polar coordinates
                 call b%img%imgpolarizer(pftcc, icls, isptcl=.false.)

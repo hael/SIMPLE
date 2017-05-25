@@ -296,7 +296,8 @@ contains
                 call b%mskvols(state)%apply_mask(b%img, o)
             else if( p%automsk .eq. 'cavg' )then
                 ! ab initio mask
-                call automask2D(b%img, p)
+                call b%mskimg%apply_mask(b%img, nint(o%get('cls')))
+                !call automask2D(b%img, p)
             else              
                 ! apply a soft-edged mask
                 if( p%l_innermsk )then
@@ -328,11 +329,11 @@ contains
         call ref%fwd_ft
     end subroutine prep2Dref_1
 
-    subroutine prep2Dref_2( p, ref, os, icls )
+    subroutine prep2Dref_2( b, p, ref, icls )
         use simple_image, only: image
+        class(build),   intent(inout) :: b
         class(params),  intent(in)    :: p
         class(image),   intent(inout) :: ref
-        class(oris),    intent(inout) :: os
         integer,        intent(in)    :: icls
         real :: xyz(3), sharg
         if( p%center.eq.'yes' .or. p%doshift )then
@@ -342,7 +343,7 @@ contains
             if(sharg > CENTHRESH)then
                 ! apply shift and update the corresponding class parameters
                 call ref%shift(xyz(1), xyz(2))
-                call os%add_shift2class(icls, -xyz(1:2))
+                call b%a%add_shift2class(icls, -xyz(1:2))
             endif
         endif
         ! normalise
@@ -350,7 +351,8 @@ contains
         ! apply mask
         if( p%l_automsk )then
             ! automasking
-            call automask2D(ref, p)
+            call b%mskimg%update_cls(ref, icls)
+            ! call automask2D(ref, p)
         else
             ! soft masking
             if( p%l_innermsk )then
@@ -396,7 +398,7 @@ contains
             ! mask using a molecular envelope
             if( p%doautomsk )then
                 p%masks(s)   = 'automask_state'//int2str_pad(s,2)//p%ext
-                call b%mskvols(s)%init_mskproj( p, b%vol )
+                call b%mskvols(s)%init3D( p, b%vol )
                 if( p%l_distr_exec )then
                     if( p%part == 1 )then
                         ! write files
