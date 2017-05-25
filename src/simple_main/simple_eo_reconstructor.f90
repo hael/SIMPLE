@@ -147,7 +147,7 @@ contains
         fsc0143 = self%fsc0143
         fsc05   = self%fsc05
     end subroutine get_res
-     
+
     ! I/O
     
     !>  \brief  write the even and odd reconstructions
@@ -389,7 +389,6 @@ contains
         call o%calc_spectral_weights(p%frac)
         ! zero the Fourier volumes and rhos
         call self%reset_all
-        ! dig holds the state digit
         write(*,'(A)') '>>> KAISER-BESSEL INTERPOLATION'
         statecnt = 0
         cnt      = 0
@@ -404,7 +403,7 @@ contains
                 endif
             endif
         end do
-        ! unddo expansion
+        ! undo fourier components expansion
         call self%compress_exp
         ! proceeds with density correction & output
         if( present(part) )then

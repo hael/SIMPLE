@@ -39,6 +39,7 @@ contains
         use simple_qsys_funs,  only: qsys_job_finished
         use simple_strings,    only: int2str_pad
         use simple_projector,  only: projector
+        use simple_ran_tabu,   only: ran_tabu
         !$ use omp_lib
         !$ use omp_lib_kinds
         class(build),   intent(inout) :: b
@@ -51,9 +52,11 @@ contains
         type(polarft_corrcalc),  allocatable :: pftccs(:)
         integer,                 allocatable :: batches(:,:)
         ! other variables
-        type(oris) :: softoris
-        type(ori)  :: orientation
-        integer    :: nbatches, batch, fromp, top, iptcl, state, alloc_stat
+        integer, allocatable :: eo_part(:)
+        type(oris)           :: softoris
+        type(ori)            :: orientation
+        type(ran_tabu)       :: rt
+        integer              :: nbatches, batch, fromp, top, iptcl, state, alloc_stat, ind
         ! AUTOMASKING DEACTIVATED FOR NOW
         ! MULTIPLE STATES DEACTIVATED FOR NOW
         if(p%nstates>1)stop 'MULTIPLE STATES DEACTIVATED FOR NOW; cont3D_matcher::cont3Dexec'
@@ -177,18 +180,34 @@ contains
             !$omp end parallel do
             ! GRID & 3D REC
             if(p%norec .eq. 'no')then
+                if( p%eo.eq.'yes' )then
+                    rt = ran_tabu(top-fromp+1)
+                    call rt%balanced(2, eo_part)
+                    eo_part = eo_part - 1
+                    call rt%kill
+                endif
                 do iptcl = fromp, top
                     orientation = b%a%get_ori(iptcl)
                     state       = nint(orientation%get('state'))
                     if(state == 0)cycle
+                    ind   = iptcl-fromp+1
                     b%img = batch_imgs(iptcl)
                     if(p%npeaks == 1)then
-                        call grid_ptcl(b, p, orientation)
+                        if( p%eo.eq.'yes' )then
+                            call grid_ptcl(b, p, orientation, ran_eo=real(eo_part(ind)))
+                        else
+                            call grid_ptcl(b, p, orientation)
+                        endif
                     else
                         softoris = cont3Dsrch(iptcl)%get_softoris()
-                        call grid_ptcl(b, p, orientation, os=softoris)
+                        if( p%eo.eq.'yes' )then
+                            call grid_ptcl(b, p, orientation, os=softoris, ran_eo=real(eo_part(ind)))
+                        else
+                            call grid_ptcl(b, p, orientation, os=softoris)
+                        endif
                     endif
                 enddo
+                if( p%eo.eq.'yes' )deallocate(eo_part)
             endif
             ! ORIENTATIONS OUTPUT: only here for now
             do iptcl = fromp, top

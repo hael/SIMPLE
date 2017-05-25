@@ -170,12 +170,13 @@ contains
     end subroutine set_bp_range2D
 
     !>  \brief  grids one particle image to the volume
-    subroutine grid_ptcl( b, p, orientation, os, shellweights )
+    subroutine grid_ptcl( b, p, orientation, os, shellweights, ran_eo )
         class(build),              intent(inout) :: b
         class(params),             intent(inout) :: p
         class(ori),                intent(inout) :: orientation
         class(oris),     optional, intent(inout) :: os
         real,            optional, intent(in)    :: shellweights(:)
+        real,            optional, intent(in)    :: ran_eo
         real      :: pw, ran, w
         integer   :: jpeak, s, k
         type(ori) :: orisoft, o_sym
@@ -199,6 +200,7 @@ contains
             endif
             if( DEBUG ) write(*,*) '*** simple_hadamard_common ***: prepared image for gridding'
             ran = ran3()
+            if( present(ran_eo) )ran = ran_eo 
             orisoft = orientation
             do jpeak=1,p%npeaks
                 if( DEBUG ) write(*,*) '*** simple_hadamard_common ***: gridding, iteration:', jpeak

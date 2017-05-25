@@ -25,7 +25,6 @@ type, extends(image) :: reconstructor
     real                        :: dens_const    = 1.           !< density estimation constant, old val: 1/nptcls
     integer                     :: lfny          = 0            !< Nyqvist Fourier index
     integer                     :: ldim_img(3)   = 0            !< logical dimension of the original image
-    integer                     :: ldim_exp(3,2) = 0            !< dimensions of the Fourier components expanded matrix
     character(len=STDLEN)       :: ctfflag       = ''           !< ctf flag <yes|no|mul|flip>
     character(len=STDLEN)       :: ikind                        !< image kind (em/xfel)
     logical                     :: tfneg              = .false. !< invert contrast or not
@@ -72,8 +71,9 @@ contains
         class(reconstructor), intent(inout) :: self  !< instance
         class(params),        intent(in)    :: p     !< parameters
         logical, optional,    intent(in)    :: expand
-        integer :: rho_shape(3), rho_lims(3,2), lims(3,2), alloc_stat, dim
         character(len=:), allocatable :: ikind_tmp
+        integer :: rho_shape(3), rho_lims(3,2), lims(3,2), rho_exp_lims(3,2), ldim_exp(3,2)
+        integer :: alloc_stat, dim, maxlims
         logical :: l_expand
         l_expand = .true.
         if(.not. self%exists() ) stop 'construct image before allocating rho; alloc_rho; simple_reconstructor'
@@ -109,18 +109,20 @@ contains
         self%rho_allocated = .true.
         if( l_expand )then
             ! setup expanded matrices
-            lims = self%loop_lims(2)
-            dim  = ceiling(sqrt(2.)*maxval(abs(lims))) + ceiling(self%winsz)
-            self%ldim_exp(1,:) = [-dim, dim]
-            self%ldim_exp(2,:) = [-dim, dim]
-            self%ldim_exp(3,:) = [-dim, dim]
-            allocate(self%cmat_exp( self%ldim_exp(1,1):self%ldim_exp(1,2),&
-                                    &self%ldim_exp(2,1):self%ldim_exp(2,2),&
-                                    &self%ldim_exp(3,1):self%ldim_exp(3,2)), stat=alloc_stat)
+            lims    = self%loop_lims(2)
+            maxlims = maxval(abs(lims))
+            dim     = ceiling(sqrt(2.)*maxlims + self%winsz)
+            ldim_exp(1,:) = [-dim, dim]
+            ldim_exp(2,:) = [-dim, dim]
+            ldim_exp(3,:) = [-dim, dim]
+            rho_exp_lims  = ldim_exp
+            allocate(self%cmat_exp( ldim_exp(1,1):ldim_exp(1,2),&
+                                    &ldim_exp(2,1):ldim_exp(2,2),&
+                                    &ldim_exp(3,1):ldim_exp(3,2)), stat=alloc_stat)
             call alloc_err("In: alloc_rho; simple_reconstructor 1", alloc_stat)
-            allocate(self%rho_exp( self%ldim_exp(1,1):self%ldim_exp(1,2),&
-                                    &self%ldim_exp(2,1):self%ldim_exp(2,2),&
-                                    &self%ldim_exp(3,1):self%ldim_exp(3,2)), stat=alloc_stat)
+            allocate(self%rho_exp( rho_exp_lims(1,1):rho_exp_lims(1,2),&
+                                    &rho_exp_lims(2,1):rho_exp_lims(2,2),&
+                                    &rho_exp_lims(3,1):rho_exp_lims(3,2)), stat=alloc_stat)
             call alloc_err("In: alloc_rho; simple_reconstructor 2", alloc_stat)
             self%cmat_exp           = cmplx(0.,0.)
             self%rho_exp            = 0.
@@ -397,7 +399,7 @@ contains
                         phys = self%comp_addr_phys(logi)
                         ! addition because FC and its Friedel mate must be summed
                         ! as the expansion updates one or the other
-                        call self%add_fcomp(logi, phys, comp)
+                        call self%add_fcomp(logi, phys, comp) 
                         self%rho(phys(1),phys(2),phys(3)) = &
                             &self%rho(phys(1),phys(2),phys(3)) + self%rho_exp(h,k,m)
                     end do

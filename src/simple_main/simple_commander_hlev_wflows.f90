@@ -183,7 +183,6 @@ contains
         real                  :: iter, lpstop, smpd_target, smpd
         character(len=2)      :: str_state
         character(len=STDLEN) :: vol_iter, oritab
-        character(len=3)      :: autoscale_flag
         logical               :: srch4symaxis, doautoscale
         ! set cline defaults
         call cline%set('eo', 'no')
@@ -202,9 +201,7 @@ contains
             endif
         endif
         ! auto-scaling prep
-        autoscale_flag = cline%get_carg('autoscale')
-        doautoscale = .false.
-        if( autoscale_flag .eq. 'yes' ) doautoscale = .true.
+        doautoscale = (p_master%autoscale.eq.'yes')
         smpd = cline%get_rarg('smpd')
         if( doautoscale )then
             if( cline%defined('lp') )then
@@ -253,6 +250,7 @@ contains
                 call scobj%update_stk_smpd_msk(cline_recvol, 'scaled')
             endif
             ! need to replace original point-group flag with c1
+            call cline_prime3D_snhc%set('pgrp', 'c1')
             call cline_prime3D_init%set('pgrp', 'c1') 
             ! call cline_prime3D_refine1%set('pgrp', 'c1')
             ! symsrch
