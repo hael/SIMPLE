@@ -235,7 +235,9 @@ contains
         logical,       optional, intent(in)    :: serial
         integer :: irot, k, ldim_fvol(3), ldim_pft(3), pdim(3)
         real    :: vec(3), loc(3)
-        logical :: l_exp = .false., l_serial = .false.
+        logical :: l_exp, l_serial
+        l_exp    = .false.
+        l_serial = .false.
         if(.not. self%is_ft())stop 'volume needs to be FTed before call; fproject_polar_1; simple_projector'
         if( present(serial) )l_serial = serial
         if( present(expanded) )then
@@ -377,65 +379,77 @@ contains
         use simple_math, only: cyci_1d
         class(projector), intent(inout) :: self
         real,             intent(in)    :: loc(3)
-        real,    allocatable :: w1(:), w2(:), w3(:)
+        complex, allocatable :: comps(:,:,:)
+        real,    allocatable :: w(:,:,:)
         integer, allocatable :: cyc1(:), cyc2(:), cyc3(:)
-        integer :: alloc_stat, i, j, m
-        integer :: lims(3,2), win(3,2), logi(3), phys(3)
-        complex :: comp, comp_sum, zero
-        real    :: harwin_here
-        harwin_here = 2.
-        zero        = cmplx(0.,0.)
-        comp_sum    = zero
-        win         = recwin_3d(loc(1),loc(2),loc(3),harwin_here)
-        lims        = self%loop_lims(3)
-        allocate( w1(win(1,1):win(1,2)), w2(win(2,1):win(2,2)), &
-            & cyc1(win(1,1):win(1,2)), cyc2(win(2,1):win(2,2)), stat=alloc_stat)
-        call alloc_err("In: extr_gridfcomp; simple_projector, 1", alloc_stat)
-        do i=win(1,1),win(1,2)
-            w1(i)   = kb_apod(real(i)-loc(1))
-            cyc1(i) = cyci_1d( lims(1,:),i )
-        end do
-        do j=win(2,1),win(2,2)
-            w2(j)   = kb_apod(real(j)-loc(2))
-            cyc2(j) = cyci_1d( lims(2,:),j )
-        end do
+        complex  :: comp_sum
+        integer  :: i, j, m, wdim, incr, lims(3,2), win(3,2), logi(3), phys(3)
+        real     :: harwin_here
+        !harwin_here = 2.
+        harwin_here = self%harwin_exp
+        win  = sqwin_3d(loc(1),loc(2),loc(3), harwin_here)
+        wdim = win(1,2) - win(1,1) + 1
+        lims = self%loop_lims(3)
         if( self%is_2d() )then
             ! 2D
-            do i=win(1,1),win(1,2)
-                if( w1(i) == 0. ) cycle
-                do j=win(2,1),win(2,2)
-                    if( w2(j) == 0. ) cycle
-                    logi = [cyc1(i),cyc2(j),0]
+            ! init
+            allocate( cyc1(1:wdim), cyc2(1:wdim), w(1:wdim, 1:wdim, 1), comps(1:wdim, 1:wdim, 1))
+            comps = cmplx(0.,0.)
+            w     = 1.
+            do i=1,wdim
+                incr = i-1
+                ! circular addresses
+                cyc1(i)  = cyci_1d(lims(1,:), win(1,1)+incr)
+                cyc2(i)  = cyci_1d(lims(2,:), win(2,1)+incr)
+                ! interpolation kernel matrix
+                w(i,:,1) = w(i,:,1) * kb_apod( real(win(1,1)+incr)-loc(1) )
+                w(:,i,1) = w(:,i,1) * kb_apod( real(win(2,1)+incr)-loc(2) )
+            enddo
+            ! fetch fourier components
+            do i=1, wdim
+                do j=1, wdim
+                    if(w(i,j,1) == 0.)cycle
+                    logi = [cyc1(i), cyc2(j), 0]
                     phys = self%comp_addr_phys(logi)
-                    comp = self%get_fcomp(logi,phys)
-                    if( comp .eq. zero ) cycle
-                    comp_sum = comp_sum+comp*w1(i)*w2(j)
+                    comps(i,j,1) = self%get_fcomp(logi, phys)
                 end do
             end do
-            deallocate( w1,w2,cyc1,cyc2 )
+            ! SUM( kernel x components )
+            comp_sum = sum(w(:,:,1) * comps(:,:,1))
+            deallocate( w,comps,cyc1,cyc2 )
         else
             ! 3D
-            allocate( w3(win(3,1):win(3,2)), cyc3(win(3,1):win(3,2)), stat=alloc_stat)
-            call alloc_err("In: extr_gridfcomp; simple_projector, 2", alloc_stat)
-            do m=win(3,1),win(3,2)
-                w3(m)   = kb_apod(real(m)-loc(3))
-                cyc3(m) = cyci_1d( lims(3,:),m )
-            end do
-            do i=win(1,1),win(1,2)
-                if( w1(i) == 0. ) cycle
-                do j=win(2,1),win(2,2)
-                    if( w2(j) == 0. ) cycle
-                    do m=win(3,1),win(3,2)
-                        if( w3(m) == 0. ) cycle
-                        logi = [cyc1(i),cyc2(j),cyc3(m)]
+            ! init
+            allocate( cyc1(1:wdim), cyc2(1:wdim), cyc3(1:wdim), w(1:wdim, 1:wdim, 1),&
+            &comps(1:wdim, 1:wdim, 1:wdim))
+            comps = cmplx(0.,0.)
+            w     = 1.
+            do i=1, wdim
+                incr = i-1
+                ! circular addresses
+                cyc1(i)  = cyci_1d(lims(1,:), win(1,1)+incr)
+                cyc2(i)  = cyci_1d(lims(2,:), win(2,1)+incr)
+                cyc3(i)  = cyci_1d(lims(3,:), win(3,1)+incr)
+                ! interpolation kernel matrix
+                w(i,:,:) = w(i,:,:) * kb_apod( real(win(1,1)+incr)-loc(1) )
+                w(:,i,:) = w(:,i,:) * kb_apod( real(win(2,1)+incr)-loc(2) )
+                w(:,:,i) = w(:,:,i) * kb_apod( real(win(3,1)+incr)-loc(3) )
+            enddo
+            ! fetch fourier components
+            do i=1, wdim
+                do j=1, wdim
+                    if(all(w(i,j,:) == 0.))cycle
+                    do m=1, wdim
+                        if(w(i,j,m) == 0.)cycle
+                        logi = [cyc1(i), cyc2(j), cyc3(m)]
                         phys = self%comp_addr_phys(logi)
-                        comp = self%get_fcomp(logi,phys)
-                        if( comp .eq. zero ) cycle
-                        comp_sum = comp_sum+comp*w1(i)*w2(j)*w3(m)
-                    end do
+                        comps(i,j,m) = self%get_fcomp(logi, phys)
+                    enddo
                 end do
             end do
-            deallocate(w1,w2,w3,cyc1,cyc2,cyc3)
+            ! SUM( kernel x components )
+            comp_sum = sum(w(:,:,1) * comps(:,:,1))
+            deallocate( w,comps,cyc1,cyc2,cyc3 )
         endif
     end function extr_gridfcomp
 
@@ -446,10 +460,9 @@ contains
         real,             intent(in)    :: loc(3)
         complex :: comp
         real    :: w(1:wdim,1:wdim,1:wdim)
-        integer :: i, wlen, win(3,2)
+        integer :: i, win(3,2)
         ! interpolation kernel window
         win  = sqwin_3d(loc(1), loc(2), loc(3), self%harwin_exp)
-        wlen = wdim**3
         ! interpolation kernel matrix
         w = 1.
         do i=1,wdim

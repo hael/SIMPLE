@@ -225,7 +225,8 @@ contains
         class(ft_expanded), intent(inout) :: self
         class(ft_expanded), intent(in)    :: self2add
         real, optional,     intent(in)    :: w
-        real :: ww=1.0
+        real :: ww
+        ww =1.0
         if( present(w) ) ww = w
         if( self%existence )then
             if( self.eqdims.self2add )then
@@ -246,7 +247,8 @@ contains
         class(ft_expanded), intent(inout) :: self
         class(ft_expanded), intent(in)    :: self2subtr
         real, optional,     intent(in)    :: w
-        real :: ww=1.0
+        real :: ww
+        ww = 1.0
         if( present(w) ) ww = w
         if( self%existence )then
             if( self.eqdims.self2subtr )then

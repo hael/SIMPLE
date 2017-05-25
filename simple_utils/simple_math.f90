@@ -517,8 +517,6 @@ contains
         deallocate(dat_sorted, mask)
     end subroutine sortmeans
     
-    
-    
     !> \brief  calculates the number of common integers in two arrays
     function common_ints( arr1, arr2 ) result( n )
         integer, intent(in) :: arr1(:), arr2(:)
@@ -532,7 +530,7 @@ contains
     end function
 
     !> \brief  to enforce cyclic limit
-    subroutine enforce_cyclic_limit( x, lim )
+    pure subroutine enforce_cyclic_limit( x, lim )
         real, intent(inout) :: x
         real, intent(in)    :: lim
         do while( x > lim )
@@ -544,7 +542,7 @@ contains
     end subroutine enforce_cyclic_limit
     
     !> \brief  one-dimensional cyclic index generation
-    function cyci_1d( lims, i ) result( ind )
+    pure function cyci_1d( lims, i ) result( ind )
         integer, intent(in) :: lims(2), i
         integer :: ind, del
         ind = i

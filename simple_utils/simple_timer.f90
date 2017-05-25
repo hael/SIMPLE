@@ -188,10 +188,10 @@ contains
    !< Setup profiling
    subroutine timer_profile_setup(nLoops, nVars, vin)
    use simple_strings
-      integer(dp), intent(in) :: nLoops
-      integer, intent(in) :: nVars
+      integer(dp),      intent(in)    :: nLoops
+      integer,          intent(in)    :: nVars
       character(len=*), intent(inout) :: vin
-      character(:),allocatable,dimension(:):: v
+      character(len=20), allocatable  :: v(:)
       integer :: nargs_parse
 #ifdef _DEBUG
 #if _DEBUG > 1
@@ -216,7 +216,7 @@ contains
           print *, vin
 #endif
 #endif
-          allocate(character(20):: v(nVars))
+          allocate(v(nVars))
           call parse(vin,',',v,nargs_parse)
 #ifdef _DEBUG
 #if _DEBUG > 1
@@ -234,7 +234,6 @@ contains
           print *, v
 #endif
 #endif
-
          ! profile_labels are a fixed size
          if (nVars .ge. 1 .and. v(1) .ne. "") then
             if (len_trim(v(1)) .le. max_token_csize) then

@@ -595,7 +595,7 @@ contains
                 kinv           = self%polar(irot+self%nrots,k)*inv_ldim(2)
                 spaFreqSq      = hinv*hinv+kinv*kinv
                 ang            = atan2(self%polar(irot+self%nrots,k),self%polar(irot,k))
-                ctfmat(irot,k) = dble(tfun%eval(spaFreqSq,dfx,dfy,angast,ang))
+                ctfmat(irot,k) = tfun%eval(spaFreqSq,dfx,dfy,angast,ang)
             end do
         end do
         !$omp end parallel do

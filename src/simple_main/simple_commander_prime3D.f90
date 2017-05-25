@@ -210,8 +210,10 @@ contains
         type(params)      :: p
         type(build)       :: b
         integer           :: i, startit, s, n_states, cnt
-        logical           :: update_res=.false., converged=.false.
+        logical           :: update_res, converged
         real              :: lpstart, lpstop
+        update_res = .false.
+        converged  = .false.
         p = params(cline) ! parameters generated
         if( p%l_xfel )then
             if( cline%defined('msk') .or. cline%defined('mw') .or.&
@@ -300,8 +302,10 @@ contains
         class(cmdline),          intent(inout) :: cline
         type(params) :: p
         type(build)  :: b
-        integer      :: i, startit, iter = 0
-        logical      :: converged=.false.
+        integer      :: i, startit, iter
+        logical      :: converged
+        iter      = 0
+        converged = .false.
         p = params(cline) ! parameters generated
         select case(p%refine)
             case('yes','greedy')

@@ -747,7 +747,7 @@ contains
         integer                            :: nmovies, nboxfiles, nframes, pind
         integer                            :: i, j, k, alloc_stat, ldim(3), box_current, movie, ndatlines, nptcls
         integer                            :: cnt, niter, fromto(2), orig_box
-        integer                            :: movie_ind, ntot, lfoo(3), ifoo, noutside=0
+        integer                            :: movie_ind, ntot, lfoo(3), ifoo, noutside
         type(nrtxtfile)                    :: boxfile
         character(len=STDLEN)              :: mode, sumstack, outfile, sumstack_frames
         character(len=STDLEN), allocatable :: movienames(:), boxfilenames(:), movienames_frames(:)
@@ -759,8 +759,8 @@ contains
         type(oris)                         :: outoris, os_uni
         logical                            :: err, params_present(3)
         logical, parameter                 :: debug = .false.
+        noutside = 0
         p = params(cline, checkdistr=.false.) ! constants & derived constants produced
-
         if( p%stream .eq. 'yes' )then
             if( cline%defined('outstk') )then
                 ! all ok

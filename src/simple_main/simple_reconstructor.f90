@@ -74,7 +74,8 @@ contains
         logical, optional,    intent(in)    :: expand
         integer :: rho_shape(3), rho_lims(3,2), lims(3,2), alloc_stat, dim
         character(len=:), allocatable :: ikind_tmp
-        logical :: l_expand = .true.
+        logical :: l_expand
+        l_expand = .true.
         if(.not. self%exists() ) stop 'construct image before allocating rho; alloc_rho; simple_reconstructor'
         if(      self%is_2d()  ) stop 'only for volumes; alloc_rho; simple_reconstructor'
         if( present(expand) )l_expand = expand
@@ -282,8 +283,8 @@ contains
         real,    optional,    intent(in)    :: mul
         real,    optional,    intent(in)    :: shellweights(:)
         integer :: h, k, lims(3,2), sh, lfny, logi(3), phys(3)
-        complex :: oshift=cmplx(1.,0.)
-        real    :: x=0., y=0., xtmp, ytmp, pw
+        complex :: oshift
+        real    :: x, y, xtmp, ytmp, pw
         logical :: pwght_present
         if( .not. fpl%is_ft() )       stop 'image need to be FTed; inout_fplane; simple_reconstructor'
         if( .not. (self.eqsmpd.fpl) ) stop 'scaling not yet implemented; inout_fplane; simple_reconstructor'
@@ -299,11 +300,12 @@ contains
                 angast = 0.
             endif
         endif
-        lims = self%loop_lims(2)
-        x    = o%get('x')
-        y    = o%get('y')
-        xtmp = 0.
-        ytmp = 0.
+        oshift = cmplx(1.,0.)
+        lims   = self%loop_lims(2)
+        x      = o%get('x')
+        y      = o%get('y')
+        xtmp   = 0.
+        ytmp   = 0.
         if( abs(x) > SHTHRESH .or. abs(y) > SHTHRESH )then ! shift the image prior to insertion
             if( present(mul) )then
                 x = x*mul

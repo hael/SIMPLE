@@ -90,7 +90,8 @@ contains
         type(params)      :: p
         type(build)       :: b
         real, allocatable :: fsc(:), optlp(:)
-        integer           :: k, state=1
+        integer           :: k, state
+        state = 1
         ! pre-proc
         p = params(cline, checkdistr=.false.) ! constants & derived constants produced, mode=2
         call b%build_general_tbox(p, cline)   ! general objects built

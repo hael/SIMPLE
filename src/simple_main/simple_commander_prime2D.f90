@@ -134,7 +134,9 @@ contains
         type(params) :: p
         type(build)  :: b
         integer      :: i, startit, ncls_from_refs, lfoo(3)
-        logical      :: converged=.false., l_distr_exec=.false.
+        logical      :: converged, l_distr_exec
+        converged    = .false.
+        l_distr_exec = .false.
         p = params(cline)  ! parameters generated
         p%boxmatch = p%box ! turns off boxmatch logics for 2D
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built

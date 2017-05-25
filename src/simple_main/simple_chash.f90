@@ -384,8 +384,12 @@ contains
         character(len=*), optional, intent(in) :: keys2print(:)
         integer,          optional, intent(in) :: fhandle
         logical,          optional, intent(in) :: oneline
-        logical :: ooneline=.false.
-        integer :: maxlen=0, ikey=0, sz=0, keylen=0
+        logical :: ooneline
+        integer :: maxlen, ikey, sz, keylen
+        maxlen  = 0
+        ikey    = 0
+        sz      = 0
+        keylen  = 0
         ooneline = .false.
         if( present(oneline) ) ooneline = oneline
         if( present(keys2print) )then

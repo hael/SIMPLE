@@ -1724,7 +1724,8 @@ contains
         class(image),   intent(inout) :: self
         class(image),   intent(in)    :: self_to_add
         real, optional, intent(in)    :: w
-        real :: ww=1.0
+        real :: ww
+        ww = 1.
         if( present(w) ) ww = w
         if( self%exists() )then
             if( self.eqdims.self_to_add )then

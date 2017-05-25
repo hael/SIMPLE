@@ -36,7 +36,6 @@ contains
         logical   :: conv_larr(p%fromp:p%top) ! per-particle convergence flags
         integer   :: iptcl, icls
         real      :: corr_thresh, frac_srch_space
-        type(ori) :: orientation
         
         ! SET FRACTION OF SEARCH SPACE
         frac_srch_space = b%a%get_avg('frac')
@@ -94,7 +93,7 @@ contains
         else
             corr_thresh = -huge(corr_thresh)
         endif
-        
+
         ! SET FOURIER INDEX RANGE
         call set_bp_range2D( b, p, cline, which_iter, frac_srch_space )
         
@@ -151,22 +150,14 @@ contains
         p%oritab = p%outfile
         
         ! WIENER RESTORATION OF CLASS AVERAGES
-        do iptcl=p%fromp,p%top
-            orientation = b%a%get_ori(iptcl)
-            if( nint(orientation%get('state')) > 0 )then
-                call read_img_from_stk( b, p, iptcl )
-                icls = nint(orientation%get('class'))
-                call wiener_restore2D_online(b%img, orientation, p%tfplan,&
-                &b%cavgs(icls), b%ctfsqsums(icls), p%msk)
-            endif
-        end do
+        call prime2D_assemble_sums(b, p)     
         if( DEBUG ) print *, 'DEBUG, hadamard2D_matcher; generated class averages'
         
         ! WRITE CLASS AVERAGES
         if( p%l_distr_exec )then
             call prime2D_write_partial_sums( b, p )
         else
-            call prime2D_norm_sums( b, p )
+            !call prime2D_norm_sums( b, p )
             call prime2D_write_sums( b, p, which_iter )
         endif
 
@@ -215,34 +206,129 @@ contains
     end subroutine prime2D_init_sums
     
     subroutine prime2D_assemble_sums( b, p )
-        use simple_ctf, only: ctf
+        use simple_projector_hlev, only: rot_imgbatch
+        use simple_map_reduce,     only: split_nobjs_even
+        use simple_oris,           only: oris
+        use simple_ctf,            only: ctf
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
-        type(ori) :: orientation
-        integer   :: icls, iptcl, cnt, istart, iend, filtsz
-        if( .not. p%l_distr_exec ) write(*,'(a)') '>>> ASSEMBLING CLASS SUMS'
-        filtsz = b%img_pad%get_filtsz()
-        call prime2D_init_sums( b, p )
+        type(oris)  :: a_here, batch_oris
+        type(ori)   :: orientation
+        type(image) :: batch_imgsum, cls_imgsum
+        type(image), allocatable :: batch_imgs(:) 
+        integer,     allocatable :: ptcls_inds(:), batches(:,:)
+        integer   :: icls, iptcl, istart, iend, inptcls, icls_pop
+        integer   :: i, nbatches, batch, batchsz, cnt
+        integer, parameter :: BATCHTHRSZ = 20
+        if( .not. p%l_distr_exec )then
+            write(*,'(a)') '>>> ASSEMBLING CLASS SUMS'
+            call prime2D_init_sums( b, p )
+        endif
+        ! init
         if( p%l_distr_exec )then
             istart  = p%fromp
             iend    = p%top
+            inptcls = iend - istart +1 
+            call a_here%new(inptcls)
+            cnt = 0
+            do iptcl = istart, iend
+                cnt = cnt + 1
+                call a_here%set_ori(cnt, b%a%get_ori(iptcl))
+            enddo
         else
             istart  = 1
             iend    = p%nptcls
+            inptcls = p%nptcls
+            a_here  = b%a
         endif
-        cnt = 0
-        do iptcl=istart,iend
-            cnt = cnt+1
-            call progress( cnt, iend-istart+1 )
-            orientation = b%a%get_ori(iptcl)
-            if( nint(orientation%get('state')) > 0 )then
-                call read_img_from_stk( b, p, iptcl )
-                icls = nint(orientation%get('class'))
-                call wiener_restore2D_online(b%img, orientation, p%tfplan,&
-                &b%cavgs(icls), b%ctfsqsums(icls), p%msk)
-            endif
-        end do
-        if( .not. p%l_distr_exec ) call prime2D_norm_sums( b, p )
+        ! cluster loop
+        do icls = 1, p%ncls
+            call progress(icls,p%ncls)
+            icls_pop = a_here%get_cls_pop( icls )
+            if(icls_pop == 0)cycle
+            call cls_imgsum%new([p%box, p%box, 1], p%smpd)
+            ptcls_inds = a_here%get_cls_pinds( icls )
+            ! batch planning
+            nbatches = ceiling(real(icls_pop)/real(p%nthr*BATCHTHRSZ))
+            batches  = split_nobjs_even(icls_pop, nbatches)
+            ! batch loop
+            do batch = 1, nbatches
+                ! prep batch
+                batchsz = batches(batch,2) - batches(batch,1) + 1
+                allocate(batch_imgs(batchsz))
+                call batch_oris%new(batchsz)
+                ! batch particles loop
+                do i = 1,batchsz
+                    iptcl       = istart - 1 + ptcls_inds(batches(batch,1)+i-1)
+                    orientation = b%a%get_ori(iptcl)
+                    call batch_oris%set_ori(i, orientation)
+                    if( nint(orientation%get('state')) == 0 )cycle
+                    ! stash images
+                    call read_img_from_stk( b, p, iptcl )
+                    batch_imgs(i) = b%img
+                    ! CTF square sum & shift
+                    if( orientation%get('w') == 0. )cycle
+                    call apply_ctf_and_shift(batch_imgs(i), orientation)
+                enddo
+                ! rotate batch
+                call rot_imgbatch(batch_imgs, batch_oris, batch_imgsum, p%msk)
+                ! batch summation
+                call cls_imgsum%add( batch_imgsum )
+                ! batch cleanup
+                do i = 1, batchsz
+                    call batch_imgs(i)%kill
+                enddo
+                deallocate(batch_imgs)
+            enddo
+            ! set class
+            b%cavgs(icls) = cls_imgsum
+            ! class cleanup
+            deallocate(ptcls_inds)
+        enddo
+        if( .not.p%l_distr_exec )call prime2D_norm_sums( b, p )
+
+        contains
+
+            ! image is shifted and Fted on exit and the class CTF square sum updated
+            subroutine apply_ctf_and_shift( img, o )
+                class(image), intent(inout) :: img
+                class(ori),   intent(inout) :: o
+                type(image) :: ctfsq
+                type(ctf)   :: tfun
+                real        :: dfx, dfy, angast, w, x, y
+                call ctfsq%new(img%get_ldim(), p%smpd)
+                call ctfsq%set_ft(.true.)
+                if( p%tfplan%flag .ne. 'no' )&
+                tfun = ctf(img%get_smpd(), o%get('kv'), o%get('cs'), o%get('fraca'))
+                ! set CTF and shift parameters
+                select case(p%tfplan%mode)
+                    case('astig') ! astigmatic CTF
+                        dfx    = o%get('dfx')
+                        dfy    = o%get('dfy')
+                        angast = o%get('angast')
+                    case('noastig') ! non-astigmatic CTF
+                        dfx    = o%get('dfx')
+                        dfy    = dfx
+                        angast = 0.
+                end select
+                x = -o%get('x')
+                y = -o%get('y')
+                w =  o%get('w')
+                ! apply
+                call img%fwd_ft
+                ! take care of the nominator
+                select case(p%tfplan%flag)
+                    case('yes')  ! multiply with CTF
+                        call tfun%apply_and_shift(img, ctfsq, x, y, dfx, 'ctf', dfy, angast)
+                    case('flip') ! multiply with abs(CTF)
+                        call tfun%apply_and_shift(img, ctfsq, x, y, dfx, 'abs', dfy, angast)
+                    case('mul','no')
+                        call tfun%apply_and_shift(img, ctfsq, x, y, dfx, '', dfy, angast)
+                end select
+                ! add to sum
+                call  b%ctfsqsums(icls)%add(ctfsq, w)
+            end subroutine apply_ctf_and_shift
+
     end subroutine prime2D_assemble_sums
     
     subroutine prime2D_assemble_sums_from_parts( b, p )
@@ -377,5 +463,37 @@ contains
         end do
         if( debug ) write(*,*) '*** hadamard2D_matcher ***: finished preppftcc4align'
     end subroutine preppftcc4align
-    
+
+    ! FOR SAFEKEEPING 24/05/17
+    ! subroutine prime2D_assemble_sums( b, p )
+    !     use simple_ctf, only: ctf
+    !     class(build),   intent(inout) :: b
+    !     class(params),  intent(inout) :: p
+    !     type(ori) :: orientation
+    !     integer   :: icls, iptcl, cnt, istart, iend, filtsz
+    !     if( .not. p%l_distr_exec ) write(*,'(a)') '>>> ASSEMBLING CLASS SUMS'
+    !     filtsz = b%img_pad%get_filtsz()
+    !     call prime2D_init_sums( b, p )
+    !     if( p%l_distr_exec )then
+    !         istart  = p%fromp
+    !         iend    = p%top
+    !     else
+    !         istart  = 1
+    !         iend    = p%nptcls
+    !     endif
+    !     cnt = 0
+    !     do iptcl=istart,iend
+    !         cnt = cnt+1
+    !         call progress( cnt, iend-istart+1 )
+    !         orientation = b%a%get_ori(iptcl)
+    !         if( nint(orientation%get('state')) > 0 )then
+    !             call read_img_from_stk( b, p, iptcl )
+    !             icls = nint(orientation%get('class'))
+    !             call wiener_restore2D_online(b%img, orientation, p%tfplan,&
+    !             &b%cavgs(icls), b%ctfsqsums(icls), p%msk)
+    !         endif
+    !     end do
+    !     if( .not. p%l_distr_exec ) call prime2D_norm_sums( b, p )
+    ! end subroutine prime2D_assemble_sums
+
 end module simple_hadamard2D_matcher
