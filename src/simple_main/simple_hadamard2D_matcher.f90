@@ -14,7 +14,8 @@ use simple_filterer          ! use all in there
 implicit none
 
 public :: prime2D_exec, prime2D_assemble_sums, prime2D_norm_sums, prime2D_assemble_sums_from_parts,&
-prime2D_write_sums, preppftcc4align, pftcc, prime2D_read_sums, prime2D_write_partial_sums
+prime2D_write_sums, preppftcc4align, pftcc, prime2D_read_sums, prime2D_write_partial_sums,&
+prime2D_init_sums
 private
 
 logical, parameter              :: DEBUG = .false.
@@ -222,7 +223,6 @@ contains
         integer, parameter :: BATCHTHRSZ = 20
         if( .not. p%l_distr_exec )then
             write(*,'(a)') '>>> ASSEMBLING CLASS SUMS'
-            call prime2D_init_sums( b, p )
         endif
         ! init
         if( p%l_distr_exec )then
