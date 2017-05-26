@@ -203,6 +203,7 @@ contains
     end subroutine exec_multiptcl_init
     
     subroutine exec_prime3D( self, cline )
+        use simple_math, only: calc_lowpass_lim, calc_fourier_index
         use simple_hadamard3D_matcher, only: prime3D_exec, prime3D_find_resrange
         use simple_strings,            only: str_has_substr
         class(prime3D_commander), intent(inout) :: self
@@ -248,7 +249,7 @@ contains
         if( cline%defined('part') )then
             if( .not. cline%defined('outfile') ) stop 'need unique output file for parallel jobs'
             if( cline%defined('find') )then
-                p%lp = b%img%get_lp(p%find)
+                p%lp = calc_lowpass_lim( p%find, p%boxmatch, p%smpd )
             endif
             call prime3D_exec(b, p, cline, 0, update_res, converged) ! partition or not, depending on 'part'
         else
@@ -265,7 +266,7 @@ contains
                     p%lpstop = lpstop
                 endif
             endif
-            p%find = int((real(p%box-1)*p%smpd)/p%lp)
+            p%find = calc_fourier_index( p%lp, p%boxmatch, p%smpd )
             startit = 1
             if( cline%defined('startit') ) startit = p%startit
             ! extremal dynamics
@@ -287,7 +288,7 @@ contains
                 if( update_res )then
                     ! dynamic low-pass
                     p%find = p%find+p%fstep
-                    p%lp   = max(p%lpstop,b%img%get_lp(p%find))
+                    p%lp   = max(p%lpstop, calc_lowpass_lim( p%find, p%boxmatch, p%smpd ))
                 endif
                 if( converged )exit
             end do

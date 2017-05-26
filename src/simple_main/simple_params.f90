@@ -872,7 +872,7 @@ contains
         if( .not. cline%defined('lpstop') )then                   ! default highest resolution lp
             self%lpstop = self%fny                                ! deafult lpstop
         endif
-        if( self%fny > 0. ) self%tofny = int(self%dstep/self%fny) ! Nyqvist Fourier index
+        if( self%fny > 0. ) self%tofny = nint(self%dstep/self%fny) ! Nyqvist Fourier index
         if( cline%defined('lp') ) self%dynlp = 'no'               ! override dynlp=yes and lpstop
         ! set 2D low-pass limits and smpd_targets 4 scaling
         self%lplims2D(1)       = self%lpstart

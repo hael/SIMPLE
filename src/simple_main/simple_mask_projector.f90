@@ -125,9 +125,9 @@ contains
         integer              :: i, alloc_stat
         if( .not.self%is_2d() )stop 'this routine is intended for 2D images only, simple_mask_projector::mskref'
         call self%kill_mskproj
-        call self%init(p)
         self%idim = [p%boxmatch, p%boxmatch, 1]
         self%n    = ncls
+        call self%init(p)
         if(present(mode))then
             if(trim(mode).ne.'circ' .and. trim(mode).ne.'cavg')&
             &stop 'Unknown 2D masking mode; simple_mask_projector::init'
@@ -184,9 +184,6 @@ contains
         minmax  = tmp_img%minmax()
         new_msk = real(ceiling(sqrt(minmax(2))+self%mskwidth))
         new_msk = min(new_msk, self%msk)
-        ! call cleanup
-        call img_dsq%kill
-        call tmp_img%kill
     end function calc_adamsk
 
     ! 2D CALCULATORS
@@ -214,8 +211,6 @@ contains
             self%img_msks(cls) = img
         endif
         call ref%mul(img)
-        ! cleanup
-        call img%kill
     end subroutine update_cls
 
     !>  \brief  is for binarizing the 2D image
@@ -354,7 +349,6 @@ contains
 
     !>  \brief  produces an image with square distance from the centre of the image
     subroutine distsq_img( self, img )
-        ! TO GO IN IMAGE CLASS
         class(mask_projector), intent(inout) :: self
         class(image),          intent(inout) :: img
         real, allocatable :: rmat(:,:,:)

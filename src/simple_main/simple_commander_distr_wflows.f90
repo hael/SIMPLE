@@ -850,7 +850,7 @@ contains
                 endif
             endif
             ! initial fourier index
-            p_master%find = calc_fourier_index(p_master%lpstart, p_master%box, p_master%smpd)
+            p_master%find = calc_fourier_index(p_master%lpstart, p_master%boxmatch, p_master%smpd)
             p_master%lp   = p_master%lpstart
             call cline_check3D_conv%set( 'update_res', 'no' )
             call cline_check3D_conv%set( 'find', real(p_master%find) )

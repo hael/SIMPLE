@@ -43,13 +43,14 @@ contains
     end subroutine read_img_from_stk
     
     subroutine set_bp_range( b, p, cline )
+        use simple_math,          only: calc_fourier_index
         use simple_estimate_ssnr, only: fsc2ssnr
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         class(cmdline), intent(inout) :: cline
         real, allocatable     :: resarr(:), tmp_arr(:)
         real                  :: fsc0143, fsc05, mapres(p%nstates)
-        integer               :: s, loc(1)
+        integer               :: s, loc(1), lp_ind
         character(len=STDLEN) :: fsc_fname
         logical               :: fsc_bin_exists(p%nstates), all_fsc_bin_exist
         select case(p%eo)
@@ -94,14 +95,15 @@ contains
                             b%ssnr(s,:) = 0.
                         endif
                     end do
-                    loc = maxloc(mapres)
-                    p%kfromto(2) = get_lplim(b%fsc(loc(1),:))
+                    loc   = maxloc(mapres)
+                    lp_ind = get_lplim(b%fsc(loc(1),:))
+                    p%kfromto(2) = calc_fourier_index( resarr(lp_ind), p%boxmatch, p%smpd )
                     if( p%kfromto(2) == 1 )then
                         stop 'simple_math::get_lplim gives nonsensical result (==1)'
                     endif
                     if( DEBUG ) write(*,*) '*** simple_hadamard_common ***: extracted FSC info'
                 else if( cline%defined('lp') )then
-                    p%kfromto(2) = b%img%get_find(p%lp)
+                    p%kfromto(2) = calc_fourier_index( p%lp, p%boxmatch, p%smpd )
                 else if( cline%defined('find') )then
                     p%kfromto(2) = p%find
                 else
@@ -114,21 +116,22 @@ contains
                 endif
                 ! lpstop overrides any other method for setting the low-pass limit
                 if( cline%defined('lpstop') )then
-                    p%kfromto(2) = min(p%kfromto(2),b%img%get_find(p%lpstop))
+                    p%kfromto(2) = min(p%kfromto(2), calc_fourier_index( p%lpstop, p%boxmatch, p%smpd ))
                 endif
                 ! set high-pass Fourier index limit
-                p%kfromto(1) = max(2,b%img%get_find(p%hp))
+                p%kfromto(1) = max(2,calc_fourier_index( p%hp, p%boxmatch, p%smpd ))
                 ! re-set the low-pass limit
-                p%lp = b%img%get_lp(p%kfromto(2))
+                p%lp = calc_lowpass_lim( p%kfromto(2), p%boxmatch, p%smpd )
                 p%lp_dyn = p%lp
                 call b%a%set_all2single('lp',p%lp)
             case('no')
                 ! set Fourier index range
-                p%kfromto(1) = max(2,b%img%get_find(p%hp))
+                p%kfromto(1) = max(2, calc_fourier_index( p%hp, p%boxmatch, p%smpd ))
                 if( cline%defined('lpstop') )then
-                    p%kfromto(2) = min(b%img%get_find(p%lp),b%img%get_find(p%lpstop))
+                    p%kfromto(2) = min(calc_fourier_index(p%lp, p%boxmatch, p%smpd),&
+                    &calc_fourier_index(p%lpstop, p%boxmatch, p%smpd))
                 else
-                    p%kfromto(2) = b%img%get_find(p%lp)
+                    p%kfromto(2) = calc_fourier_index(p%lp, p%boxmatch, p%smpd)
                 endif
                 p%lp_dyn = p%lp
                 call b%a%set_all2single('lp',p%lp)
@@ -146,15 +149,14 @@ contains
         integer,        intent(in)    :: which_iter
         real,           intent(in)    :: frac_srch_space
         real :: lplim
+        p%kfromto(1) = max(2, calc_fourier_index(p%hp, p%boxmatch, p%smpd))
         if( cline%defined('lp') )then        
             ! set Fourier index range
-            p%kfromto(1) = max(2,b%img%get_find(p%hp))
-            p%kfromto(2) = b%img%get_find(p%lp)
+            p%kfromto(2) = calc_fourier_index(p%lp, p%boxmatch, p%smpd)
             p%lp_dyn     = p%lp
             call b%a%set_all2single('lp',p%lp)
         else
             ! set Fourier index range
-            p%kfromto(1) = max(2,b%img%get_find(p%hp))
             if( which_iter <= LPLIM1ITERBOUND )then
                 lplim = p%lplims2D(1)
             else if( frac_srch_space >= FRAC_SH_LIM .and. which_iter > LPLIM3ITERBOUND )then
@@ -162,7 +164,7 @@ contains
             else
                 lplim = p%lplims2D(2)
             endif
-            p%kfromto(2) = b%img%get_find(lplim)
+            p%kfromto(2) = calc_fourier_index(lplim, p%boxmatch, p%smpd)
             p%lp_dyn = lplim
             call b%a%set_all2single('lp',lplim)
         endif

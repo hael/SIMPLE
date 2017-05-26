@@ -18,7 +18,7 @@ logical, parameter :: DEBUG = .true.
 
 type, extends(image) :: projector
     private
-    integer               :: ldim_exp(3,2)=0         !< expanded FT matrix limits
+    integer               :: ldim_exp(3,2) = 0       !< expanded FT matrix limits
     complex, allocatable  :: cmat_exp(:,:,:)         !< expanded FT matrix
     real,    allocatable  :: polweights_mat(:,:,:)   !< polar weights matrix for the image to polar transformer
     integer, allocatable  :: polcyc1_mat(:,:,:)      !< image cyclic adresses for the image to polar transformer
