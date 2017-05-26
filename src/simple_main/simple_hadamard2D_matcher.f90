@@ -14,7 +14,7 @@ use simple_filterer          ! use all in there
 implicit none
 
 public :: prime2D_exec, prime2D_assemble_sums, prime2D_norm_sums, prime2D_assemble_sums_from_parts,&
-prime2D_write_sums, preppftcc4align, pftcc, primesrch2D, prime2D_read_sums, prime2D_write_partial_sums
+prime2D_write_sums, preppftcc4align, pftcc, prime2D_read_sums, prime2D_write_partial_sums
 private
 
 logical, parameter              :: DEBUG = .false.
@@ -421,19 +421,18 @@ contains
         class(build),  intent(inout) :: b
         class(params), intent(inout) :: p
         type(ori) :: o
-        integer   :: cnt, iptcl, icls, sz, pop, istate
+        integer   :: cnt, iptcl, icls, pop, istate
         integer   :: filtsz, alloc_stat, filnum, io_stat
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PRIME2D SEARCH ENGINE'
         ! must be done here since constants in p are dynamically set
-        call pftcc%new(p%ncls, [p%fromp,p%top], [p%box,p%box,1], p%kfromto, p%ring2, p%ctf)
+        call pftcc%new(p%ncls, [p%fromp,p%top], [p%boxmatch,p%boxmatch,1], p%kfromto, p%ring2, p%ctf)
         ! prepare the polarizers
-        call b%img%init_imgpolarizer(pftcc)
+        call b%img_match%init_imgpolarizer(pftcc)
         ! prepare the automasker
         if( p%l_automsk )call b%mskimg%init2D( p, p%ncls )
         ! PREPARATION OF REFERENCES IN PFTCC
         ! read references and transform into polar coordinates
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING REFERENCES'
-        sz = b%img%get_lfny(1)
         do icls=1,p%ncls
             call progress(icls, p%ncls)
             pop = 2 
@@ -441,10 +440,9 @@ contains
             if( pop > 1 )then
                 ! prepare the reference
                 b%img = b%cavgs(icls)
-                call prep2Dref(b, p, b%img, icls)
-                b%refs(icls) = b%img
+                call prep2Dref(b, p, icls)
                 ! transfer to polar coordinates
-                call b%img%imgpolarizer(pftcc, icls, isptcl=.false.)
+                call b%img_match%imgpolarizer(pftcc, icls, isptcl=.false.)
             endif
         end do
         ! PREPARATION OF PARTICLES IN PFTCC
@@ -461,7 +459,7 @@ contains
             if( istate == 0 ) icls = 0
             call prepimg4align(b, p, o)
             ! transfer to polar coordinates
-            call b%img%imgpolarizer(pftcc, iptcl)
+            call b%img_match%imgpolarizer(pftcc, iptcl)
         end do
         if( debug ) write(*,*) '*** hadamard2D_matcher ***: finished preppftcc4align'
     end subroutine preppftcc4align

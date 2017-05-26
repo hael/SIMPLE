@@ -2,8 +2,9 @@ module simple_prime2D_srch_tester
 use simple_hadamard2D_matcher ! singleton
 use simple_defs               ! singleton
 use simple_jiffys             ! singleton
+use simple_prime2D_srch,      only: prime2D_srch
 use simple_stat,              only: pearsn
-use simple_math,              only: euclid
+use simple_math,              only: euclid, calc_fourier_index
 use simple_cmdline,           only: cmdline
 use simple_params,            only: params
 use simple_build,             only: build
@@ -37,8 +38,7 @@ contains
         logical, optional, intent(in)    :: be_verbose
         call setup_testenv( cline, be_verbose )
         write(*,*) '****prime2D_srch_test, init'
-        ! call test_calc_corrs2D
-        !call test_greedy_srch
+        call test_greedy_srch
         call shutdown_testenv
         write(*,*) '****prime2D_srch_test, completed'
     end subroutine exec_prime2D_srch_test
@@ -65,11 +65,10 @@ contains
         call o_ptcls%rnd_inpls
         ! create parameters and build
         p = params(cline_here)                   ! parameters generated
-        p%boxmatch = p%box                       !!!!!!!!!!!!!!!!!! 4 NOW
         call b%build_general_tbox(p, cline_here) ! general objects built
         ! set resolution range
         p%kfromto(1) = 2
-        p%kfromto(2) = b%img%get_find(p%lp)
+        p%kfromto(2) = calc_fourier_index(p%lp, p%boxmatch, p%smpd)
         ! generate images
         call b%vol%read(p%vols(1))
         imgs_refs  = projvol(b%vol, o_refs,  p)
@@ -82,7 +81,6 @@ contains
         call cline_here%set('refs', refsname)
         ! re-create parameters and build
         p = params(cline_here)                   ! parameters generated
-        p%boxmatch = p%box                       !!!!!!!!!!!!!!!!!! 4 NOW
         call b%build_general_tbox(p, cline_here) ! general objects built
         call b%build_hadamard_prime2D_tbox(p)    ! 2D Hadamard matcher built
         ! prepare pftcc object
@@ -92,89 +90,32 @@ contains
         ! because of the use simple_hadamard2D_matcher statement in the top
     end subroutine setup_testenv
 
-    ! subroutine test_calc_corrs2D
-    !     real                 :: corrmat2d_ref(NPROJS,NPROJS)
-    !     real                 :: corrmat3d(NPROJS,NPROJS,pftcc%get_nrots())
-    !     integer              :: inplmat_ref(NPROJS,NPROJS)
-    !     integer              :: iptcl, iref, loc(1)
-    !     real                 :: corrs(pftcc%get_nrots())
-    !     real,    allocatable :: corrmat2d_tst(:,:)
-    !     integer, allocatable :: inplmat_tst(:,:)
-
-    !     ! generate the reference matrices
-    !     do iptcl=1,NPROJS
-    !         do iref=1,NPROJS
-    !             corrs = pftcc%gencorrs(iref, iptcl)
-    !             loc   = maxloc(corrs)
-    !             corrmat2d_ref(iptcl,iref) = corrs(loc(1))
-    !             inplmat_ref(iptcl,iref)   = loc(1)
-    !         end do
-    !     end do
-
-    !     if( verbose ) write(*,*) 'testing polarft_corrcalc :: gencorrs_all_tester_1'
-    !     call pftcc%gencorrs_all_cpu(.false., corrmat2d_tst, inplmat_tst)
-    !     if( .not. test_passed() ) stop '****prime2D_srch_tester FAILURE polarft_corrcalc :: gencorrs_all_cpu'
-
-    ! contains
-
-    !     function test_passed() result( passed )
-    !         logical :: passed
-    !         real    :: ce_corr(2), ce_inpl(2)
-    !         passed = .false.
-    !         ce_corr = compare_corrmats(corrmat2d_ref, corrmat2d_tst)
-    !         ce_inpl = compare_inplmats(inplmat_ref, inplmat_tst)
-    !         !if( verbose ) write(*,*) 'corr, corr/euclid: ', ce_corr(1), ce_corr(2)
-    !         !if( verbose ) write(*,*) 'inpl, corr/euclid: ', ce_inpl(1), ce_inpl(2)
-    !         write(*,*) 'corr, corr/euclid: ', ce_corr(1), ce_corr(2)
-    !         write(*,*) 'inpl, corr/euclid: ', ce_inpl(1), ce_inpl(2)
-    !         if(       ce_corr(1) > 0.999999 .and. ce_corr(2) < 0.00001&
-    !             .and. ce_inpl(1) > 0.999999 .and. ce_inpl(2) < 0.00001 )&
-    !         passed = .true.
-    !     end function test_passed
-
-    !     function compare_corrmats( cmat1, cmat2 ) result( ce )
-    !         real, intent(in) :: cmat1(NPROJS,NPROJS), cmat2(NPROJS,NPROJS)
-    !         real :: ce(2)
-    !         ce(1) = pearsn(reshape(cmat1,shape=[NPROJS**2]),reshape(cmat2,shape=[NPROJS**2]))
-    !         ce(2) = euclid(reshape(cmat1,shape=[NPROJS**2]),reshape(cmat2,shape=[NPROJS**2]))
-    !     end function compare_corrmats
-
-    !     function compare_inplmats( inplmat1, inplmat2 ) result( ce )
-    !         integer, intent(in) :: inplmat1(NPROJS,NPROJS), inplmat2(NPROJS,NPROJS)
-    !         real :: ce(2)
-    !         ce(1) = pearsn(reshape(real(inplmat1),shape=[NPROJS**2]),reshape(real(inplmat2),shape=[NPROJS**2]))
-    !         ce(2) = euclid(reshape(real(inplmat1),shape=[NPROJS**2]),reshape(real(inplmat2),shape=[NPROJS**2]))
-    !     end function compare_inplmats
-
-    ! end subroutine test_calc_corrs2D
-
-    ! subroutine test_greedy_srch
-    !     use simple_ori, only: ori
-    !     integer    :: iptcl
-    !     type(ori)  :: one_ori
-    !     logical    :: assignments_correct(NPROJS)
-    !     if( verbose ) write(*,*) 'testing primesrch2D :: greedy_srch in CPU mode'
-    !     do iptcl=1,NPROJS
-    !         call primesrch2D%prep4srch(pftcc, iptcl)
-    !         call primesrch2D%greedy_srch_old(pftcc, iptcl)
-    !         call primesrch2D%get_cls(one_ori)
-    !         assignments_correct(iptcl) = nint(one_ori%get('class')) == iptcl
-    !         print *,iptcl, nint(one_ori%get('class')) 
-    !     end do
-    !     if( all(assignments_correct) )then
-    !         ! the test passed
-    !     else
-    !         print *, 'only ', count(assignments_correct), ' assignments correct'
-    !         stop '****prime2D_srch_tester TEST FAILURE primesrch2D :: test_greedy_srch, CPU mode'
-    !     endif
-    ! end subroutine test_greedy_srch
+    subroutine test_greedy_srch
+        use simple_ori, only: ori
+        integer            :: iptcl
+        logical            :: assignments_correct(NPROJS)
+        type(prime2D_srch) :: primesrch2D
+        call primesrch2D%new(p, pftcc)
+        if( verbose ) write(*,*) 'testing primesrch2D :: greedy_srch in CPU mode'
+        do iptcl=1,NPROJS
+            call primesrch2D%prep4srch(pftcc, iptcl, b%a)
+            call primesrch2D%greedy_srch(pftcc, iptcl, b%a)
+            assignments_correct(iptcl) = nint(b%a%get(iptcl,'class')) == iptcl
+        end do
+        if( all(assignments_correct) )then
+            ! the test passed
+        else
+            print *, 'only ', count(assignments_correct), ' assignments correct'
+            stop '****prime2D_srch_tester TEST FAILURE primesrch2D :: test_greedy_srch, CPU mode'
+        endif
+        call primesrch2D%kill
+    end subroutine test_greedy_srch
 
     subroutine shutdown_testenv
         integer :: iproj
         call b%kill_general_tbox
         call b%kill_hadamard_prime2D_tbox
         call pftcc%kill
-        call primesrch2D%kill
         do iproj=1,NPROJS
             call imgs_refs(iproj)%kill
             call imgs_ptcls(iproj)%kill

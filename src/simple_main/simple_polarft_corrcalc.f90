@@ -720,7 +720,7 @@ contains
         ! denominator
         cc = cc / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
         ! check
-        if( cc >= 1. ) print *,'cc out of range', iref, iptcl, cc
+        ! if( cc >= 1. ) print *,'cc out of range', iref, iptcl, cc
     end function corr_1
 
     !>  \brief  for calculating the on-fly shifted correlation between reference iref and particle iptcl in rotation irot

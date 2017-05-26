@@ -128,7 +128,7 @@ contains
         ! dummy pftcc is only init here so the img polarizer can be initialized
         ! todo: write init_imgpolarizer constructor that does not require pftcc
         call pftcc%new(nrefs_per_ptcl, [1,1], [p%boxmatch,p%boxmatch,1],p%kfromto, p%ring2, p%ctf)
-        call b%img%init_imgpolarizer(pftcc)
+        call b%img_match%init_imgpolarizer(pftcc)
         call pftcc%kill
 
         ! INITIALIZE
@@ -223,7 +223,7 @@ contains
             deallocate(pftccs, cont3Dsrch, cont3Dgreedysrch, batch_imgs)
         enddo
         ! CLEANUP SEARCH
-        call b%img%kill_expanded
+        call b%img_match%kill_expanded
         do state=1,p%nstates
             call b%refvols(state)%kill_expanded
             call b%refvols(state)%kill
@@ -329,47 +329,6 @@ contains
             state = nint(oref%get('state'))
             call b%refvols(state)%fproject_polar(iref, oref, pftcc, expanded=.true.)
         enddo          
-        ! select case(p%refine)
-        !     case('yes')
-        !         if( p%ctf.eq.'yes' )then
-        !             tfun = ctf(p%smpd, optcl%get('kv'),  optcl%get('cs'),  optcl%get('fraca'))
-        !             select case(p%tfplan%mode)
-        !                 case('astig') ! astigmatic CTF
-        !                     dfx    = optcl%get('dfx')
-        !                     dfy    = optcl%get('dfy')
-        !                     angast = optcl%get('angast')
-        !                 case('noastig') ! non-astigmatic CTF
-        !                     dfx    = optcl%get('dfx')
-        !                     dfy    = dfx
-        !                     angast = 0.
-        !                 case DEFAULT
-        !                     stop 'Unsupported p%tfplan%mode: simple_cont3Dmatcher::prep_pftcc_refs'
-        !             end select
-        !             call ctf_img%new([p%boxmatch, p%boxmatch, 1], p%smpd)
-        !             call b%img%new([p%boxmatch, p%boxmatch, 1], p%smpd)
-        !             call tfun%ctf2img(ctf_img, dfx, 'ctf', dfy, angast)
-        !             do iref=1,nrefs_per_ptcl
-        !                 oref    = orefs%get_ori(iref)
-        !                 state   = nint(oref%get('state'))
-        !                 call b%refvols(state)%fproject_expanded( oref, b%img )
-        !                 call b%img%mul( ctf_img )
-        !                 call b%img%imgpolarizer(pftcc, iref, isptcl=.false.)
-        !             enddo
-        !             if(p%boxmatch < p%box)call b%img%new([p%box,p%box,1],p%smpd)
-        !         else
-        !             do iref=1,nrefs_per_ptcl
-        !                 oref  = orefs%get_ori(iref)
-        !                 state = nint(oref%get('state'))
-        !                 call b%refvols(state)%fproject_polar(iref, oref, pftcc, expanded=.true.)
-        !             enddo 
-        !         endif
-        !     case('greedy')
-        !         do iref=1,nrefs_per_ptcl
-        !             oref  = orefs%get_ori(iref)
-        !             state = nint(oref%get('state'))
-        !             call b%refvols(state)%fproject_polar(iref, oref, pftcc, expanded=.true.)
-        !         enddo            
-        ! end select
     end subroutine prep_pftcc_refs
 
     !>  \brief  particle projection into pftcc 
@@ -381,9 +340,7 @@ contains
         type(ori)  :: optcl
         optcl = b%a%get_ori(iptcl)
         call prepimg4align(b, p, optcl)
-        call b%img%imgpolarizer(pftcc, iptcl, isptcl=.true.)
-        ! restores b%img dimensions for clean exit
-        if(p%boxmatch < p%box)call b%img%new([p%box,p%box,1],p%smpd)
+        call b%img_match%imgpolarizer(pftcc, iptcl, isptcl=.true.)
     end subroutine prep_pftcc_ptcl
 
 end module simple_cont3D_matcher

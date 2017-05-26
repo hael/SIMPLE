@@ -45,11 +45,11 @@ type build
     type(sym)                           :: se                 !< symmetry elements object
     type(convergence)                   :: conv               !< object for convergence checking of the PRIME2D/3D approaches
     type(convergence_perptcl)           :: ppconv             !< per-particle convergence checking object
-    type(projector)                     :: img                !< individual image objects
+    type(image)                         :: img                !< individual image objects
+    type(projector)                     :: img_match          !< -"-
     type(image)                         :: img_pad            !< -"-
     type(image)                         :: img_tmp            !< -"-
     type(image)                         :: img_msk            !< -"-
-    type(image)                         :: img_filt           !< -"-
     type(image)                         :: img_copy           !< -"-
     type(projector)                     :: vol                !< -"-
     type(projector)                     :: vol_pad            !< -"-
@@ -69,7 +69,6 @@ type build
     type(reconstructor)                 :: recvol             !< object for reconstruction
     ! PRIME TOOLBOX
     type(image),            allocatable :: cavgs(:)           !< class averages (Wiener normalised references)
-    type(projector),        allocatable :: refs(:)            !< references
     type(image),            allocatable :: ctfsqsums(:)       !< CTF**2 sums for Wiener normalisation
     type(projector),        allocatable :: refvols(:)         !< reference volumes for quasi-continuous search
     type(mask_projector),   allocatable :: mskvols(:)         !< volumes masks for particle masking
@@ -195,13 +194,13 @@ contains
             ! build image objects
             ! box-sized ones
             call self%img%new([p%box,p%box,1],p%smpd,p%imgkind)
-            call self%img_copy%new([p%box,p%box,1],p%smpd,p%imgkind)
+            call self%img_match%new([p%boxmatch,p%boxmatch,1],p%smpd,p%imgkind)
+            call self%img_copy%new([p%boxmatch,p%boxmatch,1],p%smpd,p%imgkind)
             if( debug ) write(*,'(a)') 'did build box-sized image objects'
             ! boxmatch-sized ones
             call self%img_tmp%new([p%boxmatch,p%boxmatch,1],p%smpd,p%imgkind)
             call self%img_msk%new([p%boxmatch,p%boxmatch,1],p%smpd,p%imgkind)
             call self%mskimg%new([p%boxmatch, p%boxmatch, 1],p%smpd,p%imgkind)
-            call self%img_filt%new([p%box,p%box,1],p%smpd,p%imgkind)
             if( debug ) write(*,'(a)') 'did build boxmatch-sized image objects'
             ! boxpd-sized ones
             call self%img_pad%new([p%boxpd,p%boxpd,1],p%smpd,p%imgkind)
@@ -257,12 +256,12 @@ contains
             call self%se%kill
             call self%a%kill
             call self%e%kill
-            call self%img%kill_expanded
             call self%img%kill
+            call self%img_match%kill_expanded
+            call self%img_match%kill
             call self%img_copy%kill
             call self%img_tmp%kill
             call self%img_msk%kill
-            call self%img_filt%kill
             call self%img_pad%kill
             call self%vol%kill_expanded
             call self%vol%kill
@@ -419,11 +418,10 @@ contains
         integer    :: icls, alloc_stat, funit, io_stat
         call self%kill_hadamard_prime2D_tbox
         call self%raise_hard_ctf_exception(p)
-        allocate( self%cavgs(p%ncls), self%refs(p%ncls), self%ctfsqsums(p%ncls), stat=alloc_stat )
+        allocate( self%cavgs(p%ncls), self%ctfsqsums(p%ncls), stat=alloc_stat )
         call alloc_err('build_hadamard_prime2D_tbox; simple_build, 1', alloc_stat)
         do icls=1,p%ncls
             call self%cavgs(icls)%new([p%box,p%box,1],p%smpd,p%imgkind)
-            call self%refs(icls)%new([p%box,p%box,1],p%smpd,p%imgkind)
             call self%ctfsqsums(icls)%new([p%box,p%box,1],p%smpd,p%imgkind)
         end do
         if( str_has_substr(p%refine,'neigh') )then
@@ -447,10 +445,9 @@ contains
         if( self%hadamard_prime2D_tbox_exists )then
             do i=1,size(self%cavgs)
                 call self%cavgs(i)%kill
-                call self%refs(i)%kill
                 call self%ctfsqsums(i)%kill
             end do
-            deallocate(self%cavgs, self%refs, self%ctfsqsums)
+            deallocate(self%cavgs, self%ctfsqsums)
             self%hadamard_prime2D_tbox_exists = .false.
         endif
     end subroutine kill_hadamard_prime2D_tbox

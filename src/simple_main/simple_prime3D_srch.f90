@@ -82,6 +82,7 @@ type prime3D_srch
     procedure          :: get_ori
     procedure          :: get_oris
     procedure          :: store_solution
+    procedure          :: set_o_peaks
     procedure          :: get_o_peaks
     procedure          :: get_o_refs
     procedure          :: get_srch_order
@@ -395,7 +396,7 @@ contains
         real              :: cc_t_min_1, corr
         o_prev = a%get_ori(iptcl)
         corr   = max( 0., pftcc%corr(self%prev_ref, iptcl, self%prev_roind) )
-        if( corr > 1. .or. .not. is_a_number(corr) )then
+        if( corr - 1.0 > 1.0e-5 .or. .not. is_a_number(corr) )then
             print *, 'FLOATING POINT EXCEPTION ALARM; simple_prime3D_srch :: prep_corr4srch'
             print *, 'corr > 1. or isNaN'
             print *, 'corr = ', corr
@@ -1000,6 +1001,14 @@ contains
         call alloc_err( 'simple_prime3D_srch::get_srch_order', alloc_stat)
         inds(:) = self%srch_order(:)
     end function get_srch_order
+
+    !> \brief  for setting o_peaks
+    subroutine set_o_peaks( self, oris_in )
+        class(prime3D_srch), intent(inout) :: self
+        class(oris),         intent(in)    :: oris_in
+        self%o_peaks = oris_in
+        if( DEBUG ) write(*,'(A)') '>>> PRIME3D_SRCH::EXECUTED SORT_SHIFTED_PEAKS'
+    end subroutine set_o_peaks
 
     !>  \brief  is for getting o_peaks
     function get_o_peaks( self )result( out_os )

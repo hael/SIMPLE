@@ -58,7 +58,6 @@ contains
         type(build)   :: b
         integer       :: ncls_in_oritab, icls, fnr, file_stat
         p = params(cline)  ! parameters generated
-        p%boxmatch = p%box ! turns off boxmatch logics for 2D
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         call b%build_hadamard_prime2D_tbox(p) ! 2D Hadamard matcher built
         write(*,'(a)') '>>> GENERATING CLUSTER CENTERS'
@@ -138,7 +137,6 @@ contains
         converged    = .false.
         l_distr_exec = .false.
         p = params(cline)  ! parameters generated
-        p%boxmatch = p%box ! turns off boxmatch logics for 2D
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         call b%build_hadamard_prime2D_tbox(p) ! 2D Hadamard matcher built
         if( p%srch_inpl .eq. 'no' )then

@@ -5,6 +5,7 @@ use simple_defs               ! singleton
 use simple_jiffys             ! singleton
 use simple_cmdline            ! singleton
 use simple_math               ! singleton
+use simple_prime3D_srch,       only: prime3D_srch
 use simple_oris,               only: oris
 use simple_ori,                only: ori
 use simple_build,              only: build
@@ -28,6 +29,7 @@ real,              parameter :: LPLIM       = 10.
 ! module global objects
 type(build)               :: b
 type(params)              :: p
+type(prime3D_srch)        :: primesrch3D
 type(oris)                :: o_ptcls
 type(image), allocatable  :: imgs_ptcls(:)
 logical                   :: verbose=.false.
@@ -44,11 +46,10 @@ contains
         call cline_local%set('refine', 'no')
         call cline_local%set('nstates',1.)
         call setup_testenv( cline_local, be_verbose )
-        call test_stochastic_weights
         call test_sort_shifted_peaks
         call test_prep4srch
         call test_prepcorr4srch
-        call test_prep_reforis
+        call test_prep_reforis( cline_local )
         call shutdown_testenv
         ! refine = shc; nstates=1;
         write(*,*)'>>> REFINE=SHC; NSTATES=1'
@@ -58,52 +59,35 @@ contains
         call setup_testenv( cline_local, be_verbose )
         call test_prep4srch
         call test_prepcorr4srch
-        call test_prep_reforis
+        call test_prep_reforis( cline_local )
         call shutdown_testenv        
-        ! refine = no; nstates=4; 
+        ! ! refine = no; nstates=4; 
         write(*,*)'>>> REFINE=NO; NSTATES=',NSTATES
         cline_local = cline
         call cline_local%set('refine', 'no')
         call cline_local%set('nstates',real(NSTATES))
         call setup_testenv( cline_local, be_verbose )
-        call test_stochastic_weights
         call test_sort_shifted_peaks
         call test_prep4srch
         call test_prepcorr4srch
-        call test_prep_reforis
+        call test_prep_reforis( cline_local )
         call shutdown_testenv
-        ! refine = neigh; nstates=1;
-        write(*,*)'>>> REFINE=NEIGH; NSTATES=1'
-        cline_local = cline
-        call cline_local%set('refine', 'neigh')
-        call cline_local%set('nstates',1.)
-        call setup_testenv( cline_local, be_verbose )
-        call test_prep_reforis
-        call shutdown_testenv
-        ! refine = shcneigh; nstates=1;
-        write(*,*)'>>> REFINE=SHCNEIGH; NSTATES=1'
-        cline_local = cline
-        call cline_local%set('refine', 'shcneigh')
-        call cline_local%set('nstates',1.)
-        call setup_testenv( cline_local, be_verbose )
-        call test_prep_reforis
-        call shutdown_testenv
-        ! refine = qcontneigh; nstates=1;
-        write(*,*)'>>> REFINE=QCONTNEIGH; NSTATES=1'
-        cline_local = cline
-        call cline_local%set('refine', 'qcontneigh')
-        call cline_local%set('nstates',1.)
-        call setup_testenv( cline_local, be_verbose )
-        call test_prep_reforis
-        call shutdown_testenv
-        ! refine = qcontneigh; nstates=4;
-        write(*,*)'>>> REFINE=QCONTNEIGH; NSTATES=',NSTATES
-        cline_local = cline
-        call cline_local%set('refine', 'qcontneigh')
-        call cline_local%set('nstates',real(NSTATES))
-        call setup_testenv( cline_local, be_verbose )
-        call test_prep_reforis
-        call shutdown_testenv
+        ! ! refine = neigh; nstates=1;
+        ! write(*,*)'>>> REFINE=NEIGH; NSTATES=1'
+        ! cline_local = cline
+        ! call cline_local%set('refine', 'neigh')
+        ! call cline_local%set('nstates',1.)
+        ! call setup_testenv( cline_local, be_verbose )
+        ! call test_prep_reforis( cline_local )
+        ! call shutdown_testenv
+        ! ! refine = shcneigh; nstates=1;
+        ! write(*,*)'>>> REFINE=SHCNEIGH; NSTATES=1'
+        ! cline_local = cline
+        ! call cline_local%set('refine', 'shcneigh')
+        ! call cline_local%set('nstates',1.)
+        ! call setup_testenv( cline_local, be_verbose )
+        ! call test_prep_reforis( cline_local )
+        ! call shutdown_testenv
     end subroutine exec_prime3D_srch_test
 
     subroutine setup_testenv( cline, be_verbose )
@@ -139,18 +123,17 @@ contains
         ! generate orientations
         call o_ptcls%new(NPROJS)
         call o_ptcls%spiral
-        call o_ptcls%rnd_inpls
+        !call o_ptcls%rnd_inpls
         call o_ptcls%set_all2single('lp',LPLIM)
         call o_ptcls%write( orisname )
         if( verbose )print *,'orientations generated'
         ! create parameters and build
         p = params(cline)                     ! parameters generated
-        p%boxmatch = p%box                    !!!!!!!!!!!!!!!!!! 4 NOW
         ! instantiates builder
         call b%build_general_tbox(p, cline)   ! general objects built
         ! set resolution range
         p%kfromto(1) = 2
-        p%kfromto(2) = b%img%get_find(p%lp)
+        p%kfromto(2) = calc_fourier_index(p%lp, p%boxmatch, p%smpd)
         ! simulate images
         call b%vol%read(p%vols(1))
         imgs_ptcls = projvol(b%vol, o_ptcls, p)
@@ -160,7 +143,6 @@ contains
         call cline%set('stk',  ptclsname)
         call cline%set('oritab', orisname )
         p = params(cline)                     ! parameters generated
-        p%boxmatch = p%box                    !!!!!!!!!!!!!!!!!! 4 NOW
         call b%build_general_tbox(p, cline)   ! general objects built
         call b%build_hadamard_prime3D_tbox(p) ! prime objects built
         ! CALCULATE ANGULAR THRESHOLD
@@ -168,49 +150,63 @@ contains
         ! DETERMINE THE NUMBER OF PEAKS
         if( .not. cline%defined('npeaks') )then
             select case(p%refine)
-                case('no', 'neigh','qcont', 'qcontneigh')
+                case('no', 'neigh', 'adasym')
                     p%npeaks = min(MAXNPEAKS,b%e%find_npeaks(p%lp, p%moldiam))
+                    if( str_has_substr(p%refine,'adasym') ) p%npeaks = p%npeaks * p%nsym
                 case DEFAULT
                     p%npeaks = 1
             end select
         endif
         ! GENERATE PROJECTIONS (POLAR FTs)
         call b%a%calc_hard_ptcl_weights(p%frac)
-        call preppftcc4align( b, p, cline )
+        b%a = o_ptcls
+        call pftcc%new(NPROJS, [p%fromp,p%top], [p%boxmatch,p%boxmatch,1],&
+        p%kfromto, p%ring2, p%ctf)
+        call b%img_match%init_imgpolarizer( pftcc )
+        do i=1,NPROJS
+            call imgs_ptcls(i)%clip(b%img_match)
+            call b%img_match%mask(p%msk,'soft')
+            call b%img_match%fwd_ft
+            call b%img_match%imgpolarizer(pftcc, i, isptcl=.true.)
+            call b%img_match%imgpolarizer(pftcc, i, isptcl=.false.)
+        enddo
+        !call preppftcc4align( b, p, cline )
         ! The pftcc & primesrch3D objects are now globally available in the module
         ! because of the use simple_hadamard3D_matcher statement in the top
+        ! now instantiatable, so create it
+        call primesrch3D%new(b%a, p, pftcc)
         if( verbose )print *,'end setup_testenv'        
     end subroutine setup_testenv
 
     subroutine test_prep4srch
         use simple_prime_srch, only: prime_srch
-        type(prime_srch) :: srch_common
-        type(ori) :: o
+        type(ori) :: o, o_saved
         real      :: class,e3, shvec(2), x, y
         integer   :: nrefs, nrots, ind,i, state, proj
         nrefs = primesrch3D%get_ntotrefs()
         nrots = primesrch3D%get_nrots()
         ! refine=no,shc; states=1
-        srch_common = prime_srch( p )
         do i=1,NPROJS
             o = b%a%get_ori(i)
+            o_saved = o 
             call o%rnd_inpl( p%trs )
-            call o%set('class',real(i))
+            call o%set('proj',real(i))
             state = nint(o%get('state'))
             e3    = o%e3get()
-            ind   = srch_common%roind( 360.-e3 )
+            ind   = pftcc%get_roind( 360.-e3 )
             x     = o%get('x')
             y     = o%get('y')
             proj  = b%e%find_closest_proj( o, 1 )
-            call primesrch3D%prep4srch( o )
+            call b%a%set_ori(i, o)
+            call primesrch3D%prep4srch( pftcc, i, b%a, b%e )
             if(state.ne.primesrch3D%get_prevstate())stop 'Failed simple_prime3D_srch_tester:: test_prep4srch 1'
             shvec = primesrch3D%get_prevshvec()
             if( x.ne.shvec(1) )stop 'Failed simple_prime3D_srch_tester:: test_prep4srch 2'
             if( y.ne.shvec(2) )stop 'Failed simple_prime3D_srch_tester:: test_prep4srch 3'
             if( ind.ne.primesrch3D%get_prevroind() )stop 'Failed simple_prime3D_srch_tester:: test_prep4srch 4'
             if( proj.ne.primesrch3d%get_prevref() )stop 'Failed simple_prime3D_srch_tester:: test_prep4srch 5'
+            call b%a%set_ori(i,o_saved)
         enddo
-
         ! other cases
         if( verbose )print *,'end setup_prep4srch'
     end subroutine test_prep4srch
@@ -218,66 +214,53 @@ contains
     subroutine test_prepcorr4srch
         use simple_prime_srch, only: prime_srch
         use simple_rnd,        only: ran3
-        type(prime_srch) :: srch_common
         type(ori) :: o
-        real      :: prev_corr
+        real      :: prev_corr, corr
         integer   :: nrefs, nrots, ind,i, state, proj, j
         nrefs = primesrch3D%get_ntotrefs()
         nrots = primesrch3D%get_nrots()
-        srch_common = prime_srch( p )
         if( p%refine.eq.'no' .and. p%ctf.eq.'no' )then
             ! refine=no; states=1
             do j=1,10
                 do i=1,p%nptcls
                     o = b%a%get_ori(i)
                     prev_corr = ran3()
-                    call o%set('corr',prev_corr)
-                    call primesrch3D%prep4srch( o )
-                    call primesrch3D%prep_corr4srch(  pftcc, i, p%lp, o )
+                    call b%a%set(i,'corr',prev_corr)
+                    call primesrch3D%prep4srch( pftcc, i, b%a, b%e )
+                    call primesrch3D%prep_corr4srch(  pftcc, i, b%a, p%lp )
+                    corr = primesrch3D%get_prevcorr()
                     if( p%nstates==1 )then
-                        if( abs(2.*primesrch3D%get_prevcorr()-prev_corr-1.)>0.01 ) &
-                            & stop 'Failed in test_prepcorr4srch::simple_prime3D_srch_tester 1'
+                        if( abs(2.* corr - prev_corr) < 0.0001 )then
+                            print *, 'corr = ', corr
+                            stop 'Failed in test_prepcorr4srch::simple_prime3D_srch_tester 1'
+                        endif
                     else
-                        if( primesrch3D%get_prevcorr()<0.99 ) &
-                            & stop 'Failed in test_prepcorr4srch::simple_prime3D_srch_tester 2'
+                        
+                        if( corr < 0.99 )then
+                            print *, 'corr = ', corr
+                            stop 'Failed in test_prepcorr4srch::simple_prime3D_srch_tester 2'
+                        endif
                     endif
                 enddo
             enddo
         else
             do i=1,p%nptcls
-                o = b%a%get_ori(i)
-                prev_corr = ran3()
-                call o%set('corr',prev_corr)
-                call primesrch3D%prep4srch( o )
-                call primesrch3D%prep_corr4srch(  pftcc, i, p%lp, o )
-                if( primesrch3D%get_prevcorr()<0.99 ) &
-                    & stop 'Failed in test_prepcorr4srch::simple_prime3D_srch_tester 3'
+                call primesrch3D%prep4srch( pftcc, i, b%a, b%e )
+                call primesrch3D%prep_corr4srch(  pftcc, i, b%a, p%lp )
+                corr = primesrch3D%get_prevcorr()
+                if( corr < 0.99 )then
+                    print *, 'corr = ', corr
+                    stop 'Failed in test_prepcorr4srch::simple_prime3D_srch_tester 3'
+                endif
             enddo
         endif
-        call srch_common%kill
         if( verbose )print *,'end setup_prepcorr4srch'
     end subroutine test_prepcorr4srch
 
-    subroutine test_stochastic_weights
-        type(oris) :: test_os
-        real       :: wcorr, corrs(p%npeaks)
-        integer :: i
-        wcorr   = 0.
-        test_os = oris( p%npeaks )
-        call test_os%set_all2single('corr',0.66666)
-        call test_os%set(p%npeaks,'corr',-.00054)
-        call primesrch3D%stochastic_weights( wcorr, test_os )
-        corrs = test_os%get_all('corr')
-        do i=1,p%npeaks
-            print *,i,test_os%get(i,'corr'),test_os%get(i,'ow')
-        enddo
-        print *,wcorr
-        call test_os%kill
-    end subroutine test_stochastic_weights
-
     subroutine test_sort_shifted_peaks
-        type(oris) :: test_os
-        type(ori)  :: o
+        type(oris)        :: test_os
+        type(ori)         :: o
+        real, allocatable :: corrs(:)
         integer :: i,j,IND
         do j=1,5
             IND = MAXNPEAKS-j
@@ -289,13 +272,16 @@ contains
                 call test_os%set_ori(i,o)
             enddo
             call test_os%set(IND,'corr',.5+real(j)/10.)
-            call primesrch3D%sort_shifted_peaks( test_os )
+            call primesrch3D%set_o_peaks( test_os )
+            call primesrch3D%sort_shifted_peaks()
+            test_os = primesrch3D%get_o_peaks()
             if( nint(test_os%get(p%npeaks,'class')).ne.IND)print *,'Failed in simple_prime3D_srch_tester::test_sort_shifted_npeaks'
             call test_os%kill
         enddo
     end subroutine test_sort_shifted_peaks
 
-    subroutine test_prep_reforis
+    subroutine test_prep_reforis( cline)
+        class(cmdline),    intent(inout) :: cline
         type(oris) :: test_os
         type(ori)  :: o, oref, orefs
         integer    :: iptcl,i, ref,s, ind
@@ -305,31 +291,11 @@ contains
         select case(p%refine)
             case('no','shc')
                 if( p%nstates==1 )then
-                    test_os = oris( p%nspace )
-                    do iptcl=1,p%nptcls
-                        o = b%a%get_ori( iptcl )
-                        call preprefs4align(b, p, iptcl, pftcc) 
-                        call primesrch3D%prep4srch( o )
-                        test_os = primesrch3D%get_o_refs( p%nspace )
-                        ! e1
-                        vals = b%e%get_all('e1')
-                        test_vals = test_os%get_all('e1')
-                        if( any(abs(vals-test_vals)>TINY) )print *,'failed test_prep_reforis 1'
-                        ! e2
-                        vals = b%e%get_all('e2')
-                        test_vals = test_os%get_all('e2')
-                        if( any(abs(vals-test_vals)>TINY) )print *,'failed test_prep_reforis 2'
-                        ! e3
-                        vals = b%e%get_all('e3')
-                        test_vals = test_os%get_all('e3')
-                        if( any(abs(vals-test_vals)>TINY) )print *,'failed test_prep_reforis 3'
-                    enddo
+
                 else
                     test_os = oris( p%nspace*p%nstates )
                     do iptcl=1,p%nptcls
-                        o = b%a%get_ori( iptcl )
-                        call preprefs4align(b, p, iptcl, pftcc) 
-                        call primesrch3D%prep4srch( o )
+                        call primesrch3D%prep4srch( pftcc, iptcl, b%a, b%e )
                         test_os = primesrch3D%get_o_refs( p%nspace*p%nstates )
                         do ref=1,p%nspace
                             oref = test_os%get_ori(ref)
@@ -362,8 +328,7 @@ contains
                 if( p%nstates==1 )then
                     do iptcl=1,p%nptcls
                         o = b%a%get_ori( iptcl )
-                        call preprefs4align(b, p, iptcl, pftcc) 
-                        call primesrch3D%prep4srch( o, b%nnmat )
+                        call primesrch3D%prep4srch( pftcc, iptcl, b%a, b%e, b%nnmat )
                         srch_order = primesrch3D%get_srch_order()
                         if( minval(srch_order)<1 )stop 'Failed test_prep_reforis 32'
                         if( maxval(srch_order)>primesrch3D%get_ntotrefs() )stop 'Failed test_prep_reforis 33'
@@ -373,33 +338,7 @@ contains
                         enddo
                         deallocate( srch_order )
                     enddo
-                endif
-            case('qcontneigh')
-                if( p%nstates==1 )then
-                    do iptcl=1,p%nptcls
-                        o = b%a%get_ori( iptcl )
-                        call preprefs4align(b, p, iptcl, pftcc) 
-                        call primesrch3D%prep4srch( o )
-                        test_os = primesrch3D%get_o_refs( p%nnn )
-                        do ref=1,p%nnn
-                            oref = test_os%get_ori(ref)
-                            if( deg2rad(o.euldist.oref) > 2.*p%athres )stop 'Failed test_prep_reforis 41'
-                        enddo
-                        call test_os%kill
-                    enddo
-                else
-                    do iptcl=1,p%nptcls
-                        o = b%a%get_ori( iptcl )
-                        call preprefs4align(b, p, iptcl, pftcc) 
-                        call primesrch3D%prep4srch( o )
-                        test_os = primesrch3D%get_o_refs( p%nnn*p%nstates )
-                        do ref=1,p%nnn*p%nstates
-                            oref = test_os%get_ori(ref)
-                            if( deg2rad(o.euldist.oref) > 2.*p%athres )stop 'Failed test_prep_reforis 51'
-                        enddo
-                        call test_os%kill
-                    enddo
-                endif      
+                endif    
             case DEFAULT
                 stop 'not implemented yet'
         end select

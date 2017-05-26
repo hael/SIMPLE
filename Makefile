@@ -239,6 +239,8 @@ src_code: ;
 
 cpu_test_code: simple_optimiser_tester.o       \
                simple_scatter_orisrch_tester.o \
+               simple_prime2D_srch_tester.o    \
+               simple_prime3D_srch_tester.o    \
                simple_wiener2D_tester.o        \
                simple_ft_expanded_tester.o     \
                simple_speedtester.o            \

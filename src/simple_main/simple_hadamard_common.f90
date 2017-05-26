@@ -16,10 +16,10 @@ public :: read_img_from_stk, set_bp_range, set_bp_range2D,grid_ptcl, prepimg4ali
 &norm_struct_facts, preprefvol, prep2Dref
 private
 
-interface prep2Dref
-    module procedure prep2Dref_1
-    module procedure prep2Dref_2
-end interface
+! interface prep2Dref
+!     module procedure prep2Dref_1
+!     module procedure prep2Dref_2
+! end interface
 
 logical, parameter :: DEBUG     = .false.
 real,    parameter :: SHTHRESH  = 0.0001
@@ -33,7 +33,6 @@ contains
         class(params),  intent(inout) :: p
         integer,        intent(in)    :: iptcl
         integer :: stack_index
-        if( p%boxmatch < p%box ) call b%img%new([p%box,p%box,1], p%smpd)
         if( p%l_distr_exec )then
             stack_index = iptcl - p%fromp + 1
             call b%img%read(p%stk_part, stack_index)
@@ -105,7 +104,7 @@ contains
                 else if( cline%defined('lp') )then
                     p%kfromto(2) = calc_fourier_index( p%lp, p%boxmatch, p%smpd )
                 else if( cline%defined('find') )then
-                    p%kfromto(2) = p%find
+                    p%kfromto(2) = min(p%find,p%tofny)
                 else
                     write(*,*) 'no method available for setting the low-pass limit'
                     stop 'need fsc file, lp, or find; set_bp_range; simple_hadamard_common'
@@ -291,81 +290,84 @@ contains
             ! back to real-space
             call b%img%bwd_ft
             ! clip image if needed
-            if( p%boxmatch < p%box ) call b%img%clip_inplace([p%boxmatch,p%boxmatch,1]) ! SQUARE DIMS ASSUMED
+            call b%img%clip(b%img_match) ! SQUARE DIMS ASSUMED
             ! MASKING
             if( p%doautomsk )then
                 ! from volume
-                call b%mskvols(state)%apply_mask(b%img, o)
+                call b%mskvols(state)%apply_mask(b%img_match, o)
             else if( p%automsk .eq. 'cavg' )then
                 ! ab initio mask
-                call b%mskimg%apply_mask(b%img, nint(o%get('cls')))
-                !call automask2D(b%img, p)
+                call b%mskimg%apply_mask(b%img_match, nint(o%get('cls')))
+                !call automask2D(b%img_match, p)
             else              
                 ! apply a soft-edged mask
                 if( p%l_innermsk )then
-                    call b%img%mask(p%msk, 'soft', inner=p%inner, width=p%width)
+                    call b%img_match%mask(p%msk, 'soft', inner=p%inner, width=p%width)
                 else
-                    call b%img%mask(p%msk, 'soft')
+                    call b%img_match%mask(p%msk, 'soft')
                 endif
             endif
             ! return in Fourier space
-            call b%img%fwd_ft
+            call b%img_match%fwd_ft
         endif
         if( DEBUG ) write(*,*) '*** simple_hadamard_common ***: finished prepimg4align'
     end subroutine prepimg4align
 
-    subroutine prep2Dref_1( p, ref )
-        use simple_image, only: image
-        class(params),  intent(in)    :: p
-        class(image),   intent(inout) :: ref
-        ! normalise
-        call ref%norm
-        ! apply mask
-        if( p%l_innermsk )then
-            call ref%mask(p%msk, 'soft', inner=p%inner, width=p%width)
-        else 
-            call ref%mask(p%msk, 'soft')
-        endif
-        if( p%l_automsk ) call automask2D(ref, p)
-        ! move to Fourier space
-        call ref%fwd_ft
-    end subroutine prep2Dref_1
+    ! subroutine prep2Dref_1( p, ref )
+    !     use simple_image, only: image
+    !     class(params),  intent(in)    :: p
+    !     class(image),   intent(inout) :: ref
+    !     ! clip image if needed
+    !     if( p%boxmatch < p%box ) call ref%clip_inplace([p%boxmatch,p%boxmatch,1]) ! SQUARE DIMS ASSUMED
+    !     ! normalise
+    !     call ref%norm
+    !     ! apply mask
+    !     if( p%l_innermsk )then
+    !         call ref%mask(p%msk, 'soft', inner=p%inner, width=p%width)
+    !     else 
+    !         call ref%mask(p%msk, 'soft')
+    !     endif
+    !     if( p%l_automsk ) call automask2D(ref, p)
+    !     ! move to Fourier space
+    !     call ref%fwd_ft
+    ! end subroutine prep2Dref_1
 
-    subroutine prep2Dref_2( b, p, ref, icls )
+    subroutine prep2Dref( b, p, icls )
         use simple_image, only: image
         class(build),   intent(inout) :: b
         class(params),  intent(in)    :: p
-        class(image),   intent(inout) :: ref
         integer,        intent(in)    :: icls
         real :: xyz(3), sharg
         if( p%center.eq.'yes' .or. p%doshift )then
             ! center the reference
-            xyz   = ref%center(p%cenlp, 'no', p%msk, doshift=.false.)
+            xyz   = b%img%center(p%cenlp, 'no', p%msk, doshift=.false.)
             sharg = arg(xyz)
             if(sharg > CENTHRESH)then
                 ! apply shift and update the corresponding class parameters
-                call ref%shift(xyz(1), xyz(2))
+                call b%img%shift(xyz(1), xyz(2))
                 call b%a%add_shift2class(icls, -xyz(1:2))
             endif
         endif
+        ! clip image if needed
+        call b%img%clip(b%img_match)
         ! normalise
-        call ref%norm
+        call b%img_match%norm
         ! apply mask
         if( p%l_automsk )then
             ! automasking
-            call b%mskimg%update_cls(ref, icls)
-            ! call automask2D(ref, p)
+            call b%mskimg%update_cls(b%img_match, icls)
+            ! call automask2D(b%img_match, p)
         else
             ! soft masking
             if( p%l_innermsk )then
-                call ref%mask(p%msk, 'soft', inner=p%inner, width=p%width)
+                call b%img_match%mask(p%msk, 'soft', inner=p%inner, width=p%width)
             else 
-                call ref%mask(p%msk, 'soft')
+                call b%img_match%mask(p%msk, 'soft')
             endif
         endif
         ! move to Fourier space
-        call ref%fwd_ft
-    end subroutine prep2Dref_2
+        call b%img_match%fwd_ft
+    end subroutine prep2Dref
 
     subroutine preprefvol( b, p, cline, s, doexpand )
         class(build),      intent(inout) :: b

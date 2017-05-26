@@ -15,7 +15,7 @@ use simple_math              ! use all in there
 implicit none
 
 public :: prime3D_find_resrange, prime3D_exec, gen_random_model
-public :: preppftcc4align, prep_refs_pftcc4align, pftcc, primesrch3D
+public :: preppftcc4align, prep_refs_pftcc4align, pftcc
 private
 
 integer, parameter              :: MAXNPEAKS=10
@@ -39,17 +39,17 @@ contains
         integer :: lfny, alloc_stat, k, pos10, pos6
         call o%new(p%nspace)
         call o%spiral
-        lfny = b%img%get_lfny(1)
+        lfny = b%img_match%get_lfny(1)
         allocate( peaks(lfny), stat=alloc_stat )
         call alloc_err("In: prime3D_find_resrange, simple_hadamard3D_matcher", alloc_stat)
-        do k=2,b%img%get_lfny(1)
-            peaks(k) = real(o%find_npeaks(b%img%get_lp(k), p%moldiam))
+        do k=2,b%img_match%get_lfny(1)
+            peaks(k) = real(o%find_npeaks(b%img_match%get_lp(k), p%moldiam))
         end do
         peaks(1)  = peaks(2)
         pos10     = locate(peaks, lfny, 10.)
         pos6      = locate(peaks, lfny,  6.)
-        lp_start  = b%img%get_lp(pos10)
-        lp_finish = b%img%get_lp(pos6)
+        lp_start  = b%img_match%get_lp(pos10)
+        lp_finish = b%img_match%get_lp(pos6)
         deallocate(peaks)
         call o%kill
     end subroutine prime3D_find_resrange
@@ -399,7 +399,7 @@ contains
                 integer   :: cnt, s, iptcl, istate, ntot
                 if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PARTICLES'
                 ! initialize
-                call b%img%init_imgpolarizer(pftcc)
+                call b%img_match%init_imgpolarizer(pftcc)
                 ntot = p%top-p%fromp+1
                 cnt  = 0
                 do s=1,p%nstates
@@ -420,13 +420,11 @@ contains
                         call progress(cnt, ntot)
                         call read_img_from_stk( b, p, iptcl )
                         call prepimg4align(b, p, o)
-                        call b%img%imgpolarizer(pftcc, iptcl)
+                        call b%img_match%imgpolarizer(pftcc, iptcl)
                     end do
                     if( p%doautomsk )call b%mskvols(s)%kill_mskproj
                 end do
                 call progress(ntot, ntot)
-                ! restores b%img dimensions for clean exit
-                if( p%boxmatch < p%box )call b%img%new([p%box,p%box,1],p%smpd)
             end subroutine prep_pftcc_local
         
     end subroutine prep_ptcls_pftcc4align
