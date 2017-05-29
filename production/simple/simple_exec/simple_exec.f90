@@ -1434,9 +1434,10 @@ select case(prg)
         keys_optional(9)  = 'mirr'
         keys_optional(10) = 'top'
         keys_optional(11) = 'xfel'
+        keys_optional(12) = 'msk'
         ! parse command line
         if( describe ) call print_doc_projvol
-        call cline%parse(keys_required(:2), keys_optional(:11))
+        call cline%parse(keys_required(:2), keys_optional(:12))
         ! set defaults
         if( .not. cline%defined('wfun')  ) call cline%set('wfun', 'kb')
         if( .not. cline%defined('winsz') ) call cline%set('winsz', 1.5)

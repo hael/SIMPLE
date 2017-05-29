@@ -167,6 +167,10 @@ contains
             call b%vol%read(p%vols(1))
         endif
         if( debug ) print *, 'read volume'
+        ! masking
+        if(cline%defined('msk'))then
+            call b%vol%mask(p%msk, 'soft')
+        endif
         ! generate projections
         if( p%swap .eq. 'yes' ) call b%a%swape1e3
         if( cline%defined('top') )then
