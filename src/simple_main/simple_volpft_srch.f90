@@ -37,7 +37,7 @@ contains
         lims(6,1) = -trs
         lims(6,2) =  trs
         call ospec%specify('simplex', 6, ftol=1e-4, gtol=1e-4, limits=lims, nrestarts=NRESTARTS)
-        call ospec%set_costfun(vpftcc_cost)
+        ! call ospec%set_costfun(vpftcc_cost)
         ! generate optimizer objects with the factory
         call ofac%new(ospec, nlopt)
         ! set pointer to corrcalc object
@@ -58,7 +58,7 @@ contains
         if( allocated(inds)  ) deallocate(inds)
         allocate( corrs(noris), inds(noris) )
         do iori=1,noris
-            corrs(iori) = vpftcc_ptr%corr(iori)
+            ! corrs(iori) = vpftcc_ptr%corr(iori)
             inds(iori)  = iori
         end do
         call hpsort(noris, corrs, inds)
@@ -82,16 +82,16 @@ contains
         call o_best%set('z',shvec_best(3))
     end subroutine volpft_6dimsrch
 
-    function vpftcc_cost( vec, D ) result( cost )
-        integer, intent(in) :: D
-        real,    intent(in) :: vec(D)
-        real                :: cost
-        type(ori)           :: e
-        cost = 1.
-        if( any(abs(vec(4:6)) > trs) ) return ! barrier constraint
-        call e%new
-        call e%set_euler(vec(1:3))
-        cost = -vpftcc_ptr%corr(e, vec(4:6))
-    end function vpftcc_cost
+    ! function vpftcc_cost( vec, D ) result( cost )
+    !     integer, intent(in) :: D
+    !     real,    intent(in) :: vec(D)
+    !     real                :: cost
+    !     type(ori)           :: e
+    !     cost = 1.
+    !     if( any(abs(vec(4:6)) > trs) ) return ! barrier constraint
+    !     call e%new
+    !     call e%set_euler(vec(1:3))
+    !     cost = -vpftcc_ptr%corr(e, vec(4:6))
+    ! end function vpftcc_cost
 
 end module simple_volpft_srch

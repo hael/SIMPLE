@@ -34,13 +34,9 @@ type :: volpft_corrcalc
     procedure          :: exists
     ! INTERPOLATION METHODS
     procedure          :: extract_ref
-    procedure, private :: extract_target_1
-    procedure, private :: extract_target_2
+    procedure, private :: extract_target
     ! CORRELATORS
-    procedure, private :: corr_1
-    procedure, private :: corr_2
-    procedure, private :: corr_3
-    generic            :: corr => corr_1, corr_2, corr_3
+    procedure          :: corr
     ! DESTRUCTOR
     procedure          :: kill
 end type

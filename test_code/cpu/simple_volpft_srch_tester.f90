@@ -36,7 +36,7 @@ contains
         logical, optional, intent(in)    :: be_verbose
         call setup_testenv( cline, be_verbose )
         write(*,*) '****volpft_srch, init'
-        call test_volpft_srch
+        ! call test_volpft_srch
         write(*,*) '****volpft_srch, completed'
     end subroutine exec_volpft_srch_test
 
@@ -79,45 +79,45 @@ contains
         call vol_tmp%kill
     end subroutine setup_testenv
 
-    subroutine test_volpft_srch
-        type(ori)   :: o_best, e, ranori
-        real        :: corr_best, shvec(3), x, y, z, dist, sumdist, sherr, xf, yf, zf
-        integer     :: itest
-        sumdist = 0.
-        sherr   = 0.
-        do itest=1,NTESTS
-            call progress(itest,NTESTS)
-            call ranori%rnd_ori
-            x = ran3()*2*TRS-TRS
-            y = ran3()*2*TRS-TRS
-            z = ran3()*2*TRS-TRS
-            call ranori%set('x',x)
-            call ranori%set('y',y)
-            call ranori%set('z',z)
-            call vpftcc%extract_ref(ranori)
-            call vpftcc%shift_orig_ref([x,y,z])
-            call volpft_6dimsrch(NPEAKS, corr_best, o_best)
-            dist    = o_best.euldist.ranori
-            sumdist = sumdist+dist
-            xf = o_best%get('x')
-            yf = o_best%get('y')
-            zf = o_best%get('z')
-            sherr = sherr+euclid([x,y,z],[-xf,-yf,-zf])
-        end do
-        dist  = sumdist/real(NTESTS)
-        sherr = sherr/real(NTESTS*3)
-        if( verbose ) write(*,'(a,1x,f5.2)') 'SHIFT ERROR (IN PIXELS ): ', sherr
-        if( verbose ) write(*,'(a,1x,f5.2)') 'ROT   ERROR (IN DEGREES): ', dist
-        if( .not. test_passed() ) stop '****volpft_srch_tester FAILURE volpft_srch :: volpft_6dimsrch'
+    ! subroutine test_volpft_srch
+    !     type(ori)   :: o_best, e, ranori
+    !     real        :: corr_best, shvec(3), x, y, z, dist, sumdist, sherr, xf, yf, zf
+    !     integer     :: itest
+    !     sumdist = 0.
+    !     sherr   = 0.
+    !     do itest=1,NTESTS
+    !         call progress(itest,NTESTS)
+    !         call ranori%rnd_ori
+    !         x = ran3()*2*TRS-TRS
+    !         y = ran3()*2*TRS-TRS
+    !         z = ran3()*2*TRS-TRS
+    !         call ranori%set('x',x)
+    !         call ranori%set('y',y)
+    !         call ranori%set('z',z)
+    !         call vpftcc%extract_ref(ranori)
+    !         call vpftcc%shift_orig_ref([x,y,z])
+    !         call volpft_6dimsrch(NPEAKS, corr_best, o_best)
+    !         dist    = o_best.euldist.ranori
+    !         sumdist = sumdist+dist
+    !         xf = o_best%get('x')
+    !         yf = o_best%get('y')
+    !         zf = o_best%get('z')
+    !         sherr = sherr+euclid([x,y,z],[-xf,-yf,-zf])
+    !     end do
+    !     dist  = sumdist/real(NTESTS)
+    !     sherr = sherr/real(NTESTS*3)
+    !     if( verbose ) write(*,'(a,1x,f5.2)') 'SHIFT ERROR (IN PIXELS ): ', sherr
+    !     if( verbose ) write(*,'(a,1x,f5.2)') 'ROT   ERROR (IN DEGREES): ', dist
+    !     if( .not. test_passed() ) stop '****volpft_srch_tester FAILURE volpft_srch :: volpft_6dimsrch'
 
-        contains
+    !     contains
 
-            function test_passed() result( passed )
-                logical :: passed
-                passed = .false.
-                if( sherr < SHERR_LIM .and. dist < ROERR_LIM ) passed = .true.
-            end function test_passed
+    !         function test_passed() result( passed )
+    !             logical :: passed
+    !             passed = .false.
+    !             if( sherr < SHERR_LIM .and. dist < ROERR_LIM ) passed = .true.
+    !         end function test_passed
 
-    end subroutine test_volpft_srch
+    ! end subroutine test_volpft_srch
 
 end module simple_volpft_srch_tester

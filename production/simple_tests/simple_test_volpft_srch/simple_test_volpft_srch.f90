@@ -57,25 +57,25 @@ call volpft_srch_init(vpftcc, 5.)
 sumdist = 0.
 sherr   = 0.
 print *, 'running ', NTESTS, ' tests'
-do itest=1,NTESTS
-    call progress(itest,NTESTS)
-    call ranori%rnd_ori
-    x = ran3()*2*TRS-TRS
-    y = ran3()*2*TRS-TRS
-    z = ran3()*2*TRS-TRS
-    call ranori%set('x',x)
-    call ranori%set('y',y)
-    call ranori%set('z',z)
-    call vpftcc%extract_ref(ranori)
-    call vpftcc%shift_orig_ref([x,y,z])
-    call volpft_6dimsrch(NPEAKS, corr_best, o_best)
-    dist    = o_best.euldist.ranori
-    sumdist = sumdist+dist
-    xf = o_best%get('x')
-    yf = o_best%get('y')
-    zf = o_best%get('z')
-    sherr = sherr+euclid([x,y,z],[-xf,-yf,-zf])
-end do
+! do itest=1,NTESTS
+!     call progress(itest,NTESTS)
+!     call ranori%rnd_ori
+!     x = ran3()*2*TRS-TRS
+!     y = ran3()*2*TRS-TRS
+!     z = ran3()*2*TRS-TRS
+!     call ranori%set('x',x)
+!     call ranori%set('y',y)
+!     call ranori%set('z',z)
+!     call vpftcc%extract_ref(ranori)
+!     call vpftcc%shift_orig_ref([x,y,z])
+!     call volpft_6dimsrch(NPEAKS, corr_best, o_best)
+!     dist    = o_best.euldist.ranori
+!     sumdist = sumdist+dist
+!     xf = o_best%get('x')
+!     yf = o_best%get('y')
+!     zf = o_best%get('z')
+!     sherr = sherr+euclid([x,y,z],[-xf,-yf,-zf])
+! end do
 dist  = sumdist/real(NTESTS)
 sherr = sherr/real(NTESTS*3)
 print *, 'angular error: ', dist
