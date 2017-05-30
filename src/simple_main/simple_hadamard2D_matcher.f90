@@ -89,7 +89,7 @@ contains
         endif
 
         ! EXTREMAL LOGICS
-        if( frac_srch_space < 0.98 .or. p%extr_thresh > 0.025 )then
+        if( frac_srch_space < 98. .or. p%extr_thresh > 0.025 )then
             corr_thresh = b%a%extremal_bound(p%extr_thresh)
         else
             corr_thresh = -huge(corr_thresh)
@@ -151,7 +151,7 @@ contains
         p%oritab = p%outfile
         
         ! WIENER RESTORATION OF CLASS AVERAGES
-        if( frac_srch_space > 0.8 )then
+        if( frac_srch_space > 80. )then
             ! gridded rotation
             call prime2D_assemble_sums(b, p, grid=.true.)   
         else
@@ -225,7 +225,7 @@ contains
         type(image) :: batch_imgsum, cls_imgsum
         type(image), allocatable :: batch_imgs(:) 
         integer,     allocatable :: ptcls_inds(:), batches(:,:)
-        real      :: ang
+        real      :: w
         integer   :: icls, iptcl, istart, iend, inptcls, icls_pop
         integer   :: i, nbatches, batch, batchsz, cnt
         logical   :: l_grid
@@ -278,7 +278,7 @@ contains
                     call read_img_from_stk( b, p, iptcl )
                     batch_imgs(i) = b%img
                     ! CTF square sum & shift
-                    if( orientation%get('w') == 0. )cycle
+                    if( orientation%get('w') < TINY )cycle
                     call apply_ctf_and_shift(batch_imgs(i), orientation)
                 enddo
                 if( l_grid )then
@@ -288,11 +288,12 @@ contains
                     ! real space rotation
                     call batch_imgsum%new([p%box, p%box, 1], p%smpd)
                     do i = 1,batchsz
-                        iptcl       = istart - 1 + ptcls_inds(batches(batch,1)+i-1)
+                        iptcl = istart - 1 + ptcls_inds(batches(batch,1)+i-1)
                         orientation = b%a%get_ori(iptcl)
-                        if( orientation%get('w') == 0. )cycle
+                        w = orientation%get('w')
+                        if( w < TINY )cycle
                         call batch_imgs(i)%rtsq( -orientation%e3get(), 0., 0. )
-                        call batch_imgsum%add( batch_imgs(i) )
+                        call batch_imgsum%add(batch_imgs(i), w )
                     enddo
                 endif
                 ! batch summation

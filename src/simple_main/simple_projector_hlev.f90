@@ -244,7 +244,7 @@ contains
         !$omp schedule(auto) reduction(+:cmat)
         do i = 1, nimgs
             pw  = os%get(i,'w')
-            if( pw > 0. )then
+            if( pw > TINY )then
                 mat = rotmat2d( -os%e3get(i) )
                 do h = lims(1,1), lims(1,2)
                     do k = lims(2,1), lims(2,2)
