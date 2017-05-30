@@ -35,7 +35,7 @@ contains
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: converged
         logical   :: conv_larr(p%fromp:p%top) ! per-particle convergence flags
-        integer   :: iptcl, icls
+        integer   :: iptcl
         real      :: corr_thresh, frac_srch_space
         
         ! SET FRACTION OF SEARCH SPACE
@@ -151,7 +151,13 @@ contains
         p%oritab = p%outfile
         
         ! WIENER RESTORATION OF CLASS AVERAGES
-        call prime2D_assemble_sums(b, p)     
+        if( frac_srch_space > 0.8 )then
+            ! gridded rotation
+            call prime2D_assemble_sums(b, p, grid=.true.)   
+        else
+            ! real-space rotation
+            call prime2D_assemble_sums(b, p, grid=.false.)               
+        endif  
         if( DEBUG ) print *, 'DEBUG, hadamard2D_matcher; generated class averages'
         
         ! WRITE CLASS AVERAGES
@@ -206,21 +212,26 @@ contains
         !$omp end parallel do 
     end subroutine prime2D_init_sums
     
-    subroutine prime2D_assemble_sums( b, p )
+    subroutine prime2D_assemble_sums( b, p, grid )
         use simple_projector_hlev, only: rot_imgbatch
         use simple_map_reduce,     only: split_nobjs_even
         use simple_oris,           only: oris
         use simple_ctf,            only: ctf
-        class(build),   intent(inout) :: b
-        class(params),  intent(inout) :: p
+        class(build),      intent(inout) :: b
+        class(params),     intent(inout) :: p
+        logical, optional, intent(in)    :: grid
         type(oris)  :: a_here, batch_oris
         type(ori)   :: orientation
         type(image) :: batch_imgsum, cls_imgsum
         type(image), allocatable :: batch_imgs(:) 
         integer,     allocatable :: ptcls_inds(:), batches(:,:)
+        real      :: ang
         integer   :: icls, iptcl, istart, iend, inptcls, icls_pop
         integer   :: i, nbatches, batch, batchsz, cnt
+        logical   :: l_grid
         integer, parameter :: BATCHTHRSZ = 20
+        l_grid = .true.
+        if( present(grid) )l_grid = grid
         if( .not. p%l_distr_exec )then
             write(*,'(a)') '>>> ASSEMBLING CLASS SUMS'
         endif
@@ -270,8 +281,20 @@ contains
                     if( orientation%get('w') == 0. )cycle
                     call apply_ctf_and_shift(batch_imgs(i), orientation)
                 enddo
-                ! rotate batch
-                call rot_imgbatch(batch_imgs, batch_oris, batch_imgsum, p%msk)
+                if( l_grid )then
+                    ! rotate batch by gridding
+                    call rot_imgbatch(batch_imgs, batch_oris, batch_imgsum, p%msk)
+                else
+                    ! real space rotation
+                    call batch_imgsum%new([p%box, p%box, 1], p%smpd)
+                    do i = 1,batchsz
+                        iptcl       = istart - 1 + ptcls_inds(batches(batch,1)+i-1)
+                        orientation = b%a%get_ori(iptcl)
+                        if( orientation%get('w') == 0. )cycle
+                        call batch_imgs(i)%rtsq( -orientation%e3get(), 0., 0. )
+                        call batch_imgsum%add( batch_imgs(i) )
+                    enddo
+                endif
                 ! batch summation
                 call cls_imgsum%add( batch_imgsum )
                 ! batch cleanup
