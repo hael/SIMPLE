@@ -226,6 +226,7 @@ contains
         call chdict%push('dopick',        'execute picking step (in preproc){yes}')
         call chdict%push('nsig',          '# sigmas')
         call chdict%push('unidoc',        'unified resources and orientations doc')
+        call chdict%push('pgrp_known',    'point-group known a priori(yes|no){no}')
         initialised = .true.
     end subroutine init_cmd_dict
     

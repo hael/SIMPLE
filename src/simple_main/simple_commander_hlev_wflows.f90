@@ -171,8 +171,7 @@ contains
         ! command lines
         type(cmdline)         :: cline_prime3D_snhc
         type(cmdline)         :: cline_prime3D_init
-        ! type(cmdline)         :: cline_prime3D_refine1
-        type(cmdline)         :: cline_prime3D_refine2
+        type(cmdline)         :: cline_prime3D_refine
         type(cmdline)         :: cline_symsrch
         type(cmdline)         :: cline_recvol
         type(cmdline)         :: cline_projvol
@@ -193,11 +192,14 @@ contains
         ! delete possibly pre-existing stack_parts
         call del_files('stack_part', p_master%nparts, ext=p_master%ext)
         ! decide wether to search for the symmetry axis or put the point-group in from the start
+        ! if the point-group is considered known, it is put in from the start
         srch4symaxis = .false.
-        if( p_master%pgrp .ne. 'c1' )then
-            if(  p_master%pgrp(1:1).eq.'c'  .or. p_master%pgrp(1:1).eq.'C'&
-            .or. p_master%pgrp(1:2).eq.'d2' .or. p_master%pgrp(1:2).eq.'D2' )then
-                srch4symaxis = .true.
+        if( p_master%pgrp_known .eq. 'no' )then
+            if( p_master%pgrp .ne. 'c1' )then
+                if(  p_master%pgrp(1:1).eq.'c'  .or. p_master%pgrp(1:1).eq.'C'&
+                .or. p_master%pgrp(1:2).eq.'d2' .or. p_master%pgrp(1:2).eq.'D2' )then
+                    srch4symaxis = .true.
+                endif
             endif
         endif
         ! auto-scaling prep
@@ -218,8 +220,7 @@ contains
         ! prepare command lines from prototype master
         cline_prime3D_snhc    = cline
         cline_prime3D_init    = cline
-        ! cline_prime3D_refine1 = cline
-        cline_prime3D_refine2 = cline
+        cline_prime3D_refine = cline
         cline_symsrch         = cline
         cline_recvol          = cline
         cline_projvol         = cline
@@ -237,13 +238,7 @@ contains
         call cline_prime3D_init%set('dynlp',  'no') ! better be explicit about the dynlp
         call cline_prime3D_init%set('vol1',   trim(SNHCVOL)//trim(str_state)//p_master%ext)
         call cline_prime3D_init%set('oritab', SNHCDOC)
-        ! (3) PRIME3D REFINE STEP 1
-        ! call cline_prime3D_refine1%set('prg',    'prime3D')
-        ! call cline_prime3D_refine1%set('ctf',    'no')
-        ! call cline_prime3D_refine1%set('maxits', real(MAXITS_REFINE))
-        ! call cline_prime3D_refine1%set('dynlp',  'no') ! better be explicit about the dynlp
-        ! call cline_prime3D_refine1%set('refine', 'shc')
-        ! (4) SYMMETRY AXIS SEARCH
+        ! (3) SYMMETRY AXIS SEARCH
         if( srch4symaxis )then
             if( doautoscale )then
                 call scobj%update_smpd_msk(cline_symsrch, 'scaled')
@@ -251,8 +246,7 @@ contains
             endif
             ! need to replace original point-group flag with c1
             call cline_prime3D_snhc%set('pgrp', 'c1')
-            call cline_prime3D_init%set('pgrp', 'c1') 
-            ! call cline_prime3D_refine1%set('pgrp', 'c1')
+            call cline_prime3D_init%set('pgrp', 'c1')
             ! symsrch
             call cline_symsrch%set('prg', 'symsrch')
             call cline_symsrch%delete('stk')  ! volumetric symsrch
@@ -265,18 +259,18 @@ contains
             call cline_recvol%set('trs',  5.) ! to assure that shifts are being used
             call cline_recvol%set('ctf',  'no')
             call cline_recvol%set('oritab', 'symdoc.txt')
-            ! 2nd refinement step now uses the symmetrised vol and doc
-            call cline_prime3D_refine2%set('oritab', 'symdoc.txt')
-            call cline_prime3D_refine2%set('vol1', 'rec_sym'//p_master%ext)
+            ! refinement step now uses the symmetrised vol and doc
+            call cline_prime3D_refine%set('oritab', 'symdoc.txt')
+            call cline_prime3D_refine%set('vol1', 'rec_sym'//p_master%ext)
         endif
-        ! (5) PRIME3D REFINE STEP 2
-        call cline_prime3D_refine2%set('prg', 'prime3D')
-        call cline_prime3D_refine2%set('ctf', 'no')
-        call cline_prime3D_refine2%set('maxits', real(MAXITS_REFINE))
-        call cline_prime3D_refine2%set('dynlp', 'no') ! better be explicit about the dynlp
-        call cline_prime3D_refine2%set('lp', LPLIMS(2))
-        call cline_prime3D_refine2%set('refine', 'shc')
-        ! (6) RE-PROJECT VOLUME
+        ! (4) PRIME3D REFINE STEP
+        call cline_prime3D_refine%set('prg', 'prime3D')
+        call cline_prime3D_refine%set('ctf', 'no')
+        call cline_prime3D_refine%set('maxits', real(MAXITS_REFINE))
+        call cline_prime3D_refine%set('dynlp', 'no') ! better be explicit about the dynlp
+        call cline_prime3D_refine%set('lp', LPLIMS(2))
+        call cline_prime3D_refine%set('refine', 'shc')
+        ! (5) RE-PROJECT VOLUME
         call cline_projvol%set('prg', 'projvol')
         call cline_projvol%set('outstk', 'reprojs'//p_master%ext)
         call cline_projvol%delete('stk')
@@ -297,16 +291,6 @@ contains
         call xprime3D_distr%execute(cline_prime3D_init)
         iter = cline_prime3D_init%get_rarg('endit')
         call set_iter_dependencies
-        ! write(*,'(A)') '>>>'
-        ! write(*,'(A)') '>>> FIRST PRIME3D REFINEMENT STEP, REFINE=SHC'
-        ! write(*,'(A)') '>>>'
-        ! call cline_prime3D_refine1%set('startit', iter + 1.0)
-        ! call cline_prime3D_refine1%set('oritab', trim(oritab))
-        ! call cline_prime3D_refine1%set('vol1', trim(vol_iter))
-        ! call update_lp(cline_prime3D_refine1, 1)
-        ! call xprime3D_distr%execute(cline_prime3D_refine1)
-        ! iter = cline_prime3D_refine1%get_rarg('endit')
-        ! call set_iter_dependencies
         if( srch4symaxis )then
             write(*,'(A)') '>>>'
             write(*,'(A)') '>>> SYMMETRY AXIS SEARCH'
@@ -321,17 +305,17 @@ contains
             call xrecvol%execute(cline_recvol)
             call rename(trim(volfbody)//trim(str_state)//p_master%ext, 'rec_sym'//p_master%ext)
         else
-            ! 2nd refinement step needs to use iter dependent vol/oritab
-            call cline_prime3D_refine2%set('oritab', trim(oritab))
-            call cline_prime3D_refine2%set('vol1', trim(vol_iter))
+            ! refinement step needs to use iter dependent vol/oritab
+            call cline_prime3D_refine%set('oritab', trim(oritab))
+            call cline_prime3D_refine%set('vol1', trim(vol_iter))
         endif
         write(*,'(A)') '>>>'
-        write(*,'(A)') '>>> SECOND PRIME3D REFINEMENT STEP, REFINE=SHC'
+        write(*,'(A)') '>>> PRIME3D REFINEMENT STEP, REFINE=SHC'
         write(*,'(A)') '>>>'
-        call cline_prime3D_refine2%set('startit', iter + 1.0)
-        call update_lp(cline_prime3D_refine2, 2)
-        call xprime3D_distr%execute(cline_prime3D_refine2)
-        iter = cline_prime3D_refine2%get_rarg('endit')
+        call cline_prime3D_refine%set('startit', iter + 1.0)
+        call update_lp(cline_prime3D_refine, 2)
+        call xprime3D_distr%execute(cline_prime3D_refine)
+        iter = cline_prime3D_refine%get_rarg('endit')
         call set_iter_dependencies
         if( doautoscale )then
             write(*,'(A)') '>>>'

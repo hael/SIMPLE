@@ -68,6 +68,7 @@ type :: params
     character(len=3)      :: order='no'
     character(len=3)      :: outside='no'
     character(len=3)      :: pad='no'
+    character(len=3)      :: pgrp_known='no'
     character(len=3)      :: phaseplate='no'
     character(len=3)      :: phrand='no'
     character(len=3)      :: plot='no'
@@ -469,6 +470,7 @@ contains
         call check_carg('pad',            self%pad)
         call check_carg('ctffind_doc',    self%ctffind_doc)
         call check_carg('pgrp',           self%pgrp)
+        call check_carg('pgrp_known',     self%pgrp_known)
         call check_carg('phaseplate',     self%phaseplate)
         call check_carg('phrand',         self%phrand)
         call check_carg('prg',            self%prg)
