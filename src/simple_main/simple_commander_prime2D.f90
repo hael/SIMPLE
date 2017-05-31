@@ -137,9 +137,9 @@ contains
         logical      :: converged, l_distr_exec
         converged    = .false.
         l_distr_exec = .false.
-        p = params(cline)  ! parameters generated
+        p = params(cline)                                 ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
-        call b%build_hadamard_prime2D_tbox(p) ! 2D Hadamard matcher built
+        call b%build_hadamard_prime2D_tbox(p)             ! 2D Hadamard matcher built
         if( p%srch_inpl .eq. 'no' )then
             if( .not. cline%defined('oritab') )then
                 stop 'need oritab for this mode (srch_inpl=no) of execution!'

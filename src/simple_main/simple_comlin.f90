@@ -65,30 +65,26 @@ contains
     
     !>  \brief  is for calculating the joint common line correlation
     function corr( self ) result( cc )
+        !$ use omp_lib
+        !$ use omp_lib_kinds
         class(comlin), intent(inout) :: self
-        real    :: cc,cciter,corrs(self%nptcls),sums1(self%nptcls),sums2(self%nptcls)
+        real    :: cc,corrs(self%nptcls),sums1(self%nptcls),sums2(self%nptcls),ccarr(self%nptcls)
         integer :: i,j
         logical :: foundlines(self%nptcls)
-        cc = 0.
-        !$omp parallel do default(shared) private(i,j,cciter,corrs,sums1,sums2,foundlines)&
-        !$omp schedule(auto) reduction(+:cc)
+        !$omp parallel do collapse(2) default(shared) private(i,j,corrs,sums1,sums2,foundlines) &
+        !$omp schedule(static) proc_bind(close)
         do i=1,self%nptcls
-            corrs      = 0.
-            sums1      = 0.
-            sums2      = 0.
-            foundlines = .false.
             do j=1,self%nptcls
                 call self%extr_comlin(i, j, corrs(j), sums1(j), sums2(j), foundlines(j))
             end do
             if(any(foundlines)) then
-                cciter = calc_corr(sum(corrs,mask=foundlines),sum(sums1,mask=foundlines)*sum(sums2,mask=foundlines))
+                ccarr(i) = calc_corr(sum(corrs,mask=foundlines),sum(sums1,mask=foundlines)*sum(sums2,mask=foundlines))
             else
-                cciter = -1.
+                ccarr(i) = -1.
             endif
-            cc = cc + cciter
         end do
         !$omp end parallel do 
-        cc = cc/real(self%nptcls)
+        cc = sum(ccarr)/real(self%nptcls)
     end function corr
 
     !>  \brief  is for interpolating the common line between a pair of images
@@ -123,9 +119,13 @@ contains
         real               :: h1,k1,h2,k2,px,py,jx,jy,scalprod,abscom,line(2,2)
         real, dimension(3) :: comlin,tmp1,tmpb1,norm1,norm2
         complex            :: cline(self%lims(1):self%lims(2),2)
+        ! init
+        corr      = 0.
+        sumasq    = 0.
+        sumbsq    = 0.
+        foundline = .false.
         if( pind == j )then
             ! no self common lines
-            foundline = .false.
             return
         endif
         norm1    = self%a%get_normal(pind)
@@ -133,20 +133,18 @@ contains
         scalprod = dot_product(norm1, norm2)
         if( scalprod > 0.99 ) then
             ! identical planes have no common line
-            foundline = .false.
             return
         endif
         ! find intersection in 3D
         comlin(1) = norm1(2)*norm2(3)-norm1(3)*norm2(2)
         comlin(2) = norm1(3)*norm2(1)-norm1(1)*norm2(3)
         comlin(3) = norm1(1)*norm2(2)-norm1(2)*norm2(1)
-        abscom = sqrt(dot_product(comlin, comlin))
+        abscom    = sqrt(dot_product(comlin, comlin))
         if( abscom >= 0.0001 ) then
             ! normalize
             comlin(:) = comlin(:)/abscom
         else
             ! identical planes have no common line
-            foundline = .false.
             return
         endif
         ! comlin is the intersection in 3D, map to the
@@ -157,28 +155,23 @@ contains
         ! then map onto the reference:
         tmpb1 = matmul( self%a%get_mat(j), comlin )
         call projz( tmpb1, line(:,2) )
+        px = self%a%get(pind, 'x')
+        py = self%a%get(pind, 'y')
+        jx = self%a%get(j, 'x')
+        jy = self%a%get(j, 'y')
+        do k=self%lims(1),self%lims(2)
+            h1 = real(k)*line(1,1)
+            k1 = real(k)*line(2,1)
+            h2 = real(k)*line(1,2)
+            k2 = real(k)*line(2,2)
+            cline(k,1) = self%fpls(pind)%extr_fcomp(h1,k1,px,py)
+            cline(k,2) = self%fpls(j   )%extr_fcomp(h2,k2,jx,jy)
+            corr = corr + dot_product([real(cline(k,1)), aimag(cline(k,1))],&
+                &[real(cline(k,2)), aimag(cline(k,2))])
+            sumasq = sumasq+csq(cline(k,1)) 
+            sumbsq = sumbsq+csq(cline(k,2))
+        end do
         foundline = .true.
-        corr   = 0.
-        sumasq = 0.
-        sumbsq = 0.
-        if( foundline )then
-            px = self%a%get(pind, 'x')
-            py = self%a%get(pind, 'y')
-            jx = self%a%get(j, 'x')
-            jy = self%a%get(j, 'y')
-            do k=self%lims(1),self%lims(2)
-                h1 = real(k)*line(1,1)
-                k1 = real(k)*line(2,1)
-                h2 = real(k)*line(1,2)
-                k2 = real(k)*line(2,2)
-                cline(k,1) = self%fpls(pind)%extr_fcomp(h1,k1,px,py)
-                cline(k,2) = self%fpls(j   )%extr_fcomp(h2,k2,jx,jy)
-                corr = corr + dot_product([real(cline(k,1)), aimag(cline(k,1))],&
-                    &[real(cline(k,2)), aimag(cline(k,2))])
-                sumasq = sumasq+csq(cline(k,1)) 
-                sumbsq = sumbsq+csq(cline(k,2))
-            end do
-        endif
     end subroutine extr_comlin
     
     ! DESTRUCTOR

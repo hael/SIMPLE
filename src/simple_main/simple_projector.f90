@@ -1,5 +1,7 @@
 !>  \brief  SIMPLE projector class
 module simple_projector
+!$ use omp_lib
+!$ use omp_lib_kinds
 use simple_defs       ! use all in there
 use simple_kbinterpol ! use all in there
 use simple_image,     only: image
@@ -59,8 +61,7 @@ contains
 
      !>  \brief  is a constructor of the expanded Fourier matrix
     subroutine expand_cmat( self )
-        !$ use omp_lib
-        !$ use omp_lib_kinds
+        
         use simple_math, only: cyci_1d
         class(projector), intent(inout) :: self
         integer, allocatable :: cyck(:), cycm(:), cych(:)
@@ -98,7 +99,8 @@ contains
         enddo
         ! build expanded fourier components matrix
         self%cmat_exp = cmplx(0.,0.)
-        !$omp parallel do collapse(3) schedule(auto) default(shared) private(h,k,m,logi,phys)
+        !$omp parallel do collapse(3) schedule(static) default(shared)&
+        !$omp private(h,k,m,logi,phys) proc_bind(close)
         do h = self%ldim_exp(1,1),self%ldim_exp(1,2)
             do k = self%ldim_exp(2,1),self%ldim_exp(2,2)
                 do m = self%ldim_exp(3,1),self%ldim_exp(3,2)
@@ -150,8 +152,6 @@ contains
 
     !> \brief  extracts a Fourier plane from a volume (self)
     subroutine fproject( self, e, fplane, lp )
-        !$ use omp_lib
-        !$ use omp_lib_kinds
         class(projector), intent(inout) :: self
         class(ori),       intent(in)    :: e
         class(image),     intent(inout) :: fplane
@@ -166,7 +166,8 @@ contains
             lims = self%loop_lims(2) ! Nyqvist default low-pass limit
         endif
         sqlp = (maxval(lims(:,2)))**2
-        !$omp parallel do collapse(2) schedule(auto) default(shared) private(h,k,sqarg,vec,loc,logi,phys)
+        !$omp parallel do collapse(2) schedule(static) default(shared)&
+        !$omp private(h,k,sqarg,vec,loc,logi,phys) proc_bind(close)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 sqarg = h*h+k*k
@@ -188,8 +189,6 @@ contains
 
     !> \brief  extracts a Fourier plane from the expanded FT matrix of a volume (self)
     subroutine fproject_expanded( self, e, fplane, lp )
-        !$ use omp_lib
-        !$ use omp_lib_kinds
         class(projector), intent(inout) :: self
         class(ori),       intent(in)    :: e
         class(image),     intent(inout) :: fplane
@@ -206,8 +205,8 @@ contains
         endif
         fplane = cmplx(0.,0.)
         wdim   = 2*ceiling(self%harwin_exp) + 1 ! interpolation kernel window size
-        !$omp parallel do collapse(2) schedule(auto) default(shared)&
-        !$omp private(h,k,sqarg,loc,logi,phys)
+        !$omp parallel do collapse(2) schedule(static) default(shared)&
+        !$omp private(h,k,sqarg,loc,logi,phys) proc_bind(close)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 sqarg = dot_product([h,k],[h,k])
@@ -265,7 +264,8 @@ contains
                 end do
             else
                 ! threaded version
-                !$omp parallel do collapse(2) schedule(auto) default(shared) private(loc,vec,irot,k)
+                !$omp parallel do collapse(2) schedule(static) default(shared)&
+                !$omp private(loc,vec,irot,k) proc_bind(close)
                 do irot=1,pdim(1)
                     do k=pdim(2),pdim(3)
                         vec(:2) = pftcc%get_coord(irot,k) 
@@ -283,8 +283,6 @@ contains
     subroutine fproject_polar_expanded( self, iref, e, pftcc, serial )
         use simple_polarft_corrcalc, only: polarft_corrcalc
         use simple_math,             only: deg2rad
-        !$ use omp_lib
-        !$ use omp_lib_kinds
         class(projector),        intent(inout) :: self   !< projector object
         integer,                 intent(in)    :: iref   !< which reference
         class(ori),              intent(inout) :: e      !< orientation
@@ -312,7 +310,8 @@ contains
             end do
         else
             ! threaded version
-            !$omp parallel do collapse(2) schedule(auto) default(shared) private(irot,k,vec,loc)
+            !$omp parallel do collapse(2) schedule(static) default(shared)&
+            !$omp private(irot,k,vec,loc) proc_bind(close)
             do irot=1,pdim(1)
                 do k=pdim(2),pdim(3)
                     vec(:2) = pftcc%get_coord(irot,k)
@@ -329,8 +328,6 @@ contains
     subroutine img2polarft( self, ind, pftcc, isptcl )
         use simple_polarft_corrcalc, only: polarft_corrcalc
         use gnufor2
-        !$ use omp_lib
-        !$ use omp_lib_kinds
         class(projector),        intent(inout) :: self   !< instance
         integer,                 intent(in)    :: ind    !< logical particle index [fromp,top]
         class(polarft_corrcalc), intent(inout) :: pftcc  !< polarft_corrcalc object to be filled
@@ -354,7 +351,8 @@ contains
         pdim = pftcc%get_pdim(iisptcl)
         allocate( pft(pdim(1),pdim(2):pdim(3)), stat=alloc_stat )
         call alloc_err("In: img2polarft_2; simple_projector", alloc_stat)
-        !$omp parallel do collapse(2) schedule(auto) default(shared) private(i,k,vec)
+        !$omp parallel do collapse(2) schedule(static) default(shared)&
+        !$omp private(i,k,vec) proc_bind(close)
         do i=1,pdim(1)
             do k=pdim(2),pdim(3)
                 vec(:2)  = pftcc%get_coord(i,k)
@@ -477,8 +475,6 @@ contains
 
     !> \brief  initialises the image polarizer
     subroutine init_imgpolarizer( self, pftcc )
-        !$ use omp_lib
-        !$ use omp_lib_kinds
         use simple_math,             only: sqwin_2d, cyci_1d
         use simple_polarft_corrcalc, only: polarft_corrcalc
         class(projector),        intent(inout) :: self   !< projector instance
@@ -498,7 +494,8 @@ contains
                   &self%polweights_mat(1:pdim(1), pdim(2):pdim(3), 1:wlen),&
                   &w(1:wdim,1:wdim), stat=alloc_stat)
         call alloc_err('in simple_projector :: init_imgpolarizer', alloc_stat)
-        !$omp parallel do schedule(auto) default(shared) private(i,k,l,w,loc,cnt,win)
+        !$omp parallel do collapse(2) schedule(static) default(shared)&
+        !$omp private(i,k,l,w,loc,cnt,win) proc_bind(close)
         do i=1,pdim(1)
             do k=pdim(2),pdim(3)
                 ! polar coordinates
@@ -524,8 +521,6 @@ contains
 
     !> \brief  creates the polar Fourier transform
     subroutine imgpolarizer( self, pftcc, img_ind, isptcl )
-        !$ use omp_lib
-        !$ use omp_lib_kinds
         use simple_math, only: sqwin_2d, cyci_1d
         use simple_polarft_corrcalc, only: polarft_corrcalc
         class(projector),        intent(inout) :: self   !< projector instance
@@ -556,7 +551,8 @@ contains
         allocate( pft(pdim(1),pdim(2):pdim(3)), comps(1:windim,1:windim), stat=alloc_stat )
         call alloc_err("In: imgpolarizer; simple_projector", alloc_stat)
         lims = self%loop_lims(3)
-        !$omp parallel do collapse(2) schedule(auto) default(shared) private(i,k,l,m,logi,phys,comps,addr_l)
+        !$omp parallel do collapse(2) schedule(static) default(shared)&
+        !$omp private(i,k,l,m,logi,phys,comps,addr_l) proc_bind(close)
         do i=1,pdim(1)
             do k=pdim(2),pdim(3)
                 do l=1,windim

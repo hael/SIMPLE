@@ -244,9 +244,9 @@ contains
         real    :: dist
         ! first we allocate the table so that we immediately see what the memory usage is
         write(*,'(A)') '>>> ALLOCATING DISTANCE PD TABLE'
-        !$omp parallel default(shared) private(ib) 
+        !$omp parallel default(shared) private(ib) proc_bind(close)
         do ia=1,self%N-1
-            !$omp do schedule(auto) 
+            !$omp do schedule(static) 
             do ib=ia+1,self%N
                 call self%alloc_pair_d(ia,ib)    
             end do
@@ -257,7 +257,7 @@ contains
         write(*,'(A)') '>>> BUILDING DISTANCE PD TABLE'
         !$omp end single nowait
         do ia=1,self%N-1
-            !$omp do schedule(auto) 
+            !$omp do schedule(static) 
             do ib=ia+1,self%N
                 dist = distfun(ia,ib)
                 call self%set_pair_d(ia, ib, distfun(ia,ib))

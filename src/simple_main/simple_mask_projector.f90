@@ -12,26 +12,26 @@ implicit none
 public :: mask_projector
 private
 
-real,    parameter :: MSKWIDTH = 10.                    !< HALF SOFT MASK WIDTH (+/-)
+real,    parameter :: MSKWIDTH = 10.                     !< HALF SOFT MASK WIDTH (+/-)
 integer, parameter :: NPROJS   = 200
 logical, parameter :: DEBUG    = .false.
 
 type, extends(image) :: mask_projector
     private
-    type(oris)               :: o_msk                   !< reference orientations
-    type(image), allocatable :: img_msks(:)             !< masks
+    type(oris)               :: o_msk                    !< reference orientations
+    type(image), allocatable :: img_msks(:)              !< masks
     real                     :: smpd_here = 0.           !< maximum circular mask
-    real                     :: msk      = 0.           !< maximum circular mask
-    real                     :: amsklp   = 0.           !< maximum circular mask
-    real, allocatable        :: adamsks(:)              !< evaluated circular masks
-    real                     :: mskwidth = MSKWIDTH     !< +/- soft masking width
-    real                     :: dens     = 0.
-    real                     :: mw       = 0.
-    integer                  :: edge     = 1
-    integer                  :: binwidth = 1
-    integer                  :: n        = NPROJS       !< number of masks and/or projection directions
-    integer                  :: idim(3)  = 0            !< volume dimension
-    character(len=STDLEN)    :: mode     = 'circ'       !< circular or enveloppe masking
+    real                     :: msk       = 0.           !< maximum circular mask
+    real                     :: amsklp    = 0.           !< maximum circular mask
+    real, allocatable        :: adamsks(:)               !< evaluated circular masks
+    real                     :: mskwidth  = MSKWIDTH     !< +/- soft masking width
+    real                     :: dens      = 0.
+    real                     :: mw        = 0.
+    integer                  :: edge      = 1
+    integer                  :: binwidth  = 1
+    integer                  :: n         = NPROJS       !< number of masks and/or projection directions
+    integer                  :: idim(3)   = 0            !< volume dimension
+    character(len=STDLEN)    :: mode      = 'circ'       !< circular or enveloppe masking
     logical                  :: mskproj_exists = .false.
   contains
     ! CONSTRUCTORS
@@ -289,8 +289,8 @@ contains
         vec      = 0
         rmat     = self%get_rmat()
         incr_k   = matmul([0., 0., 1.], e%get_mat())
-        !$omp parallel default(shared) private(j,out_coos,rad,i,k,vec,rvec,rvec_k)
-        !$omp do schedule(auto)
+        !$omp parallel do default(shared) private(j,out_coos,rad,i,k,vec,rvec,rvec_k)&
+        !$omp schedule(static) proc_bind(close)
         do j=1,self%idim(2)-1
             out_coos(2) = real(j-orig(2))
             rad(2)      = out_coos(2)**2.
@@ -315,7 +315,7 @@ contains
                 enddo
             enddo
         enddo
-        !$omp end parallel
+        !$omp end parallel do
         deallocate(rmat)
         if( DEBUG )write(*,*)'simple_mask_projector::env_rproject done'
     end subroutine env_rproject

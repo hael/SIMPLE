@@ -217,11 +217,13 @@ contains
     
     !>  \brief  is for calculating all distances, assumes that  ptcl is read
     subroutine calc_dists( self, i )
+        !$ use omp_lib
+        !$ use omp_lib_kinds
         class(centre_clust), intent(inout) :: self
         integer,             intent(in)    :: i
         integer :: k
         real :: x
-        !$omp parallel do schedule(auto) default(shared) private(k,x)
+        !$omp parallel do schedule(static) default(shared) private(k,x) proc_bind(close)
         do k=1,self%ncls
             if( self%pops(k) > 0 )then
                 self%dists(k) = self%sq_dist(i,k)

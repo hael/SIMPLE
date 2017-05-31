@@ -21,6 +21,8 @@ contains
     
     !> \brief  for dividing a real or complex image with the instrument function
     subroutine divide_w_instr( img )
+        !$ use omp_lib
+        !$ use omp_lib_kinds
         use simple_jiffys, only: alloc_err
         class(image), intent(inout) :: img
         real, allocatable :: w1(:), w2(:), w3(:)
@@ -49,7 +51,7 @@ contains
         endif
         if( img%is_2d() ) w3 = 1.
         ! divide the image
-        !$omp parallel do collapse(3) schedule(auto) default(shared) private(i,j,k)
+        !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k) proc_bind(close)
         do i=lims(1,1),lims(1,2)
             do j=lims(2,1),lims(2,2)
                 do k=lims(3,1),lims(3,2)

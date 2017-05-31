@@ -1,4 +1,6 @@
 module simple_hadamard3D_matcher
+!$ use omp_lib
+!$ use omp_lib_kinds
 use simple_defs
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_prime3D_srch,     only: prime3D_srch
@@ -58,8 +60,6 @@ contains
         use simple_qsys_funs, only: qsys_job_finished
         use simple_oris,      only: oris
         use simple_strings,   only: int2str_pad
-        !$ use omp_lib
-        !$ use omp_lib_kinds
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         class(cmdline), intent(inout) :: cline
@@ -170,13 +170,13 @@ contains
         select case(p%refine)
             case( 'no','adasym','shc','snhc' )
                 if( p%oritab .eq. '' )then
-                    !$omp parallel do default(shared) schedule(guided) private(iptcl)
+                    !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                     do iptcl=p%fromp,p%top
                         call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp, greedy=.true.)
                     end do
                     !$omp end parallel do
                 else
-                    !$omp parallel do default(shared) schedule(guided) private(iptcl)
+                    !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                     do iptcl=p%fromp,p%top
                         call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp)
                     end do
@@ -184,7 +184,7 @@ contains
                 endif
             case('neigh','shcneigh')
                 if( p%oritab .eq. '' ) stop 'cannot run the refine=neigh mode without input oridoc (oritab)'
-                !$omp parallel do default(shared) schedule(guided) private(iptcl)
+                !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                 do iptcl=p%fromp,p%top
                     call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp, nnmat=b%nnmat)
                 end do
@@ -195,7 +195,7 @@ contains
                     write(*,'(A,F8.2)') '>>> PARTICLE RANDOMIZATION(%):', 100.*p%extr_thresh
                     write(*,'(A,F8.2)') '>>> CORRELATION THRESHOLD:    ', corr_thresh
                 endif
-                !$omp parallel do default(shared) schedule(guided) private(iptcl) reduction(+:statecnt)
+                !$omp parallel do default(shared) schedule(guided) private(iptcl) reduction(+:statecnt) proc_bind(close)
                 do iptcl=p%fromp,p%top
                     call primesrch3D(iptcl)%exec_prime3D_srch_het(pftcc, iptcl, b%a, b%e, corr_thresh, statecnt)
                 end do

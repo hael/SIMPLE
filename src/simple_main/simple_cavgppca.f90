@@ -1,5 +1,3 @@
-!==Class simple_
-!
 module simple_cavgppca
 use simple_defs
 use simple_oris,             only: oris
@@ -182,7 +180,7 @@ contains
         do i=1,self%n
             if( self%ptr_ptcls(i)%is_ft() )call self%ptr_ptcls(i)%bwd_ft
         enddo
-        !$omp parallel do default(shared) private(i,err,tmpD)
+        !$omp parallel do default(shared) private(i,err,tmpD) proc_bind(close)
         do i=1,self%n
             if( self%usemsk )then
                 call self%ptr_ptcls(i)%serialize(tmpD, self%msk)

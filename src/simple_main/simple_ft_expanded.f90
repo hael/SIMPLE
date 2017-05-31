@@ -1,4 +1,6 @@
 module simple_ft_expanded
+!$ use omp_lib
+!$ use omp_lib_kinds
 use simple_defs
 use simple_image,  only: image
 use simple_jiffys, only: alloc_err
@@ -230,7 +232,7 @@ contains
         if( present(w) ) ww = w
         if( self%existence )then
             if( self.eqdims.self2add )then
-                !$omp parallel workshare
+                !$omp parallel workshare proc_bind(close)
                 self%cmat = self%cmat + self2add%cmat*ww
                 !$omp end parallel workshare
             else
@@ -252,7 +254,7 @@ contains
         if( present(w) ) ww = w
         if( self%existence )then
             if( self.eqdims.self2subtr )then
-                !$omp parallel workshare
+                !$omp parallel workshare proc_bind(close)
                 self%cmat = self%cmat-ww*self2subtr%cmat
                 !$omp end parallel workshare
             else
@@ -277,7 +279,8 @@ contains
                 if( self.eqdims.self_out )then
                     shvec_here = shvec
                     if( self%ldim(3) == 1 ) shvec_here(3) = 0.
-                    !$omp parallel do collapse(3) schedule(auto) default(shared) private(hind,kind,lind,arg)
+                    !$omp parallel do collapse(3) schedule(static) default(shared) &
+                    !$omp private(hind,kind,lind,arg) proc_bind(close)
                     do hind=self%flims(1,1),self%flims(1,2)
                         do kind=self%flims(2,1),self%flims(2,2)
                             do lind=self%flims(3,1),self%flims(3,2)
@@ -335,7 +338,8 @@ contains
             call alloc_err("In: corr_shifted; simple_ft_expanded", alloc_stat)
             shvec_here = shvec
             if( self1%ldim(3) == 1 ) shvec_here(3) = 0.
-            !$omp parallel do collapse(3) schedule(auto) default(shared) private(hind,kind,lind,arg)
+            !$omp parallel do collapse(3) schedule(static) default(shared) &
+            !$omp private(hind,kind,lind,arg) proc_bind(close)
             do hind=self1%flims(1,1),self1%flims(1,2)
                 do kind=self1%flims(2,1),self1%flims(2,2)
                     do lind=self1%flims(3,1),self1%flims(3,2)

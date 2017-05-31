@@ -1,4 +1,6 @@
 module simple_volpft_corrcalc
+!$ use omp_lib
+!$ use omp_lib_kinds
 use simple_defs
 use simple_image,     only: image
 use simple_projector, only: projector
@@ -39,7 +41,7 @@ type :: volpft_corrcalc
     procedure          :: corr
     ! DESTRUCTOR
     procedure          :: kill
-end type
+end type volpft_corrcalc
 
 contains
 
@@ -147,7 +149,8 @@ contains
         real    :: mat(3,3), loc(3)
         if( present(e) )then
             mat = e%get_mat()
-            !$omp parallel do collapse(2) schedule(static) default(shared) private(ispace,k,loc)
+            !$omp parallel do collapse(2) schedule(static) default(shared)&
+            !$omp private(ispace,k,loc) proc_bind(close)
             do ispace=1,self%nspace
                 do k=self%kfromto(1),self%kfromto(2)
                     loc  = matmul(self%locs_ref(ispace,k,:),mat)
@@ -156,7 +159,8 @@ contains
             end do
             !$omp end parallel do
         else
-            !$omp parallel do collapse(2) schedule(static) default(shared) private(ispace,k)
+            !$omp parallel do collapse(2) schedule(static) default(shared)&
+            !$omp private(ispace,k) proc_bind(close)
             do ispace=1,self%nspace
                 do k=self%kfromto(1),self%kfromto(2)
                     self%vpft_ref(ispace,k) =&
@@ -189,7 +193,8 @@ contains
                 end do
             end do
         else
-            !$omp parallel do schedule(static) default(shared) private(ispace,k,loc)
+            !$omp parallel do schedule(static) default(shared)&
+            !$omp private(ispace,k,loc) proc_bind(close)
             do ispace=1,self%nspace
                 do k=self%kfromto(1),self%kfromto(2)
                     loc  = matmul(self%locs_ref(ispace,k,:),mat)
@@ -230,7 +235,6 @@ contains
     !     class(volpft_corrcalc), intent(inout) :: self
     !     real, intent(in) :: shvec(3)
     !     integer :: ispace, k, kind
-    !     !$omp parallel do schedule(auto) default(shared) private(ispace,k,kind)
     !     do ispace=1,self%nspace
     !         do k=self%kfromto(1),self%kfromto(2)
     !             kind = self%k_ind(k)
@@ -239,7 +243,6 @@ contains
     !             self%vol_ref%oshift(self%locs_ref(ispace,kind,:),shvec)
     !         end do
     !     end do
-    !     !$omp end parallel do
     !     self%sqsum_ref_sh = sum(csq(self%vpft_ref))
     ! end subroutine shift_ref
     
@@ -249,7 +252,6 @@ contains
     !     class(volpft_corrcalc), intent(inout) :: self
     !     real, intent(in) :: shvec(3)
     !     integer :: ispace, k, kind
-    !     !$omp parallel do schedule(auto) default(shared) private(ispace,k,kind)
     !     do ispace=1,self%nspace
     !         do k=self%kfromto(1),self%kfromto(2)
     !             kind = self%k_ind(k)
@@ -258,7 +260,6 @@ contains
     !             self%vol_ref%oshift(self%locs_ref(ispace,kind,:),shvec)
     !         end do
     !     end do
-    !     !$omp end parallel do
     !     self%sqsum_ref_sh = sum(csq(self%vpft_ref))
     ! end subroutine shift_orig_ref
 

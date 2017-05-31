@@ -9,6 +9,8 @@
 !! license terms ( http://license.janelia.org/license/jfrc_copyright_1_1.html )
 !!
 module simple_ctf
+!$ use omp_lib
+!$ use omp_lib_kinds
 use simple_defs
 implicit none
 
@@ -145,8 +147,6 @@ contains
     !>  \brief  is for making a CTF image
     !!          modes: abs, ctf, flip, flipneg, neg, square 
     subroutine ctf2img( self, img, dfx, mode, dfy, angast, bfac )
-        !$ use omp_lib
-        !$ use omp_lib_kinds
         use simple_image, only: image
         class(ctf),                 intent(inout) :: self        !< instance
         class(image),               intent(inout) :: img         !< image (output)
@@ -174,7 +174,8 @@ contains
         lims     = img%loop_lims(2)
         ldim     = img%get_ldim()
         inv_ldim = 1./real(ldim)
-        !$omp parallel do collapse(2) default(shared) private(h,hinv,k,kinv,spaFreqSq,ang,tval,phys) schedule(static)
+        !$omp parallel do collapse(2) default(shared) private(h,hinv,k,kinv,spaFreqSq,ang,tval,phys) &
+        !$omp schedule(static) proc_bind(close)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 hinv      = real(h) * inv_ldim(1)
@@ -299,8 +300,6 @@ contains
 
     !>  \brief  is for applying CTF to an image
     subroutine apply_and_shift( self, img, imgctfsq, x, y, dfx, mode, dfy, angast )
-        !$ use omp_lib
-        !$ use omp_lib_kinds
         use simple_image, only: image
         class(ctf),                 intent(inout) :: self     !< instance
         class(image),               intent(inout) :: img      !< modified image (output)
@@ -341,8 +340,8 @@ contains
         lims     = img%loop_lims(2)
         ldim     = img%get_ldim()
         inv_ldim = 1./real(ldim)
-        !$omp parallel do collapse(2) default(shared) &
-        !$omp& private(h,hinv,k,kinv,spaFreqSq,ang,tval,tvalsq,logi,phys,comp) schedule(static)
+        !$omp parallel do collapse(2) default(shared) proc_bind(close) &
+        !$omp private(h,hinv,k,kinv,spaFreqSq,ang,tval,tvalsq,logi,phys,comp) schedule(static)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 ! calculate CTF and CTF**2.0 values
@@ -507,8 +506,6 @@ contains
 
     !>  \brief  ctf class unit test
     subroutine test_ctf( nthr )
-        !$ use omp_lib
-        !$ use omp_lib_kinds
         use simple_image,  only: image
         use simple_rnd,    only: ran3
         use simple_jiffys, only: progress

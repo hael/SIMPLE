@@ -237,6 +237,8 @@ contains
     
     !>  \brief  is the kmeans unit test
     subroutine test_kmeans
+        !$ use omp_lib
+        !$ use omp_lib_kinds
         use simple_pair_dtab, only: pair_dtab
         use simple_math
         use simple_hac
@@ -260,9 +262,9 @@ contains
         do i=601,900
             datavecs(i,:) = 5.
         end do
-        !$omp parallel default(shared) private(ib) 
+        !$omp parallel default(shared) private(ib) proc_bind(close)
         do ia=1,100-1
-            !$omp do schedule(auto) 
+            !$omp do schedule(static) 
             do ib=ia+1,100
                 call pd%set_pair_d(ia, ib, euclid(datavecs(hacls%get_node(ia),:),datavecs(hacls%get_node(ib),:)))
             end do

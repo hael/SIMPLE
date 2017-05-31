@@ -1,4 +1,6 @@
 module simple_projector_hlev
+!$ use omp_lib
+!$ use omp_lib_kinds
 use simple_image,     only: image
 use simple_oris,      only: oris
 use simple_params,    only: params
@@ -106,8 +108,6 @@ contains
 
     !>  \brief  rotates a volume by Euler angle o using Fourier gridding
     function rotvol( vol, o, p ) result( rovol )
-        !$ use omp_lib
-        !$ use omp_lib_kinds
         class(image),     intent(inout) :: vol  !< volume to project
         class(ori),       intent(inout) :: o    !< orientation
         class(params),    intent(in)    :: p    !< parameters
@@ -122,7 +122,8 @@ contains
         call prep4cgrid(vol, vol_pad, p%msk)
         lims = vol_pad%loop_lims(2)
         write(*,'(A)') '>>> ROTATING VOLUME'
-        !$omp parallel do default(shared) private(h,k,l,loc,logi,phys) schedule(auto)
+        !$omp parallel do collapse(3) default(shared) private(h,k,l,loc,logi,phys)&
+        !$omp schedule(static) proc_bind(close)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 do l=lims(3,1),lims(3,2)
@@ -144,8 +145,6 @@ contains
 
     !>  \brief  rotates an image by angle ang using Fourier gridding
     subroutine rotimg( img, ang, msk, roimg, shellw )
-        !$ use omp_lib
-        !$ use omp_lib_kinds
         use simple_math, only: hyp
         class(image),     intent(inout) :: img       !< image to rotate
         real,             intent(in)    :: ang       !< angle of rotation
@@ -172,7 +171,8 @@ contains
         mat        = rotmat2d(ang)
         wzero      = 1.0
         if( doshellw ) wzero = maxval(shellw)
-        !$omp parallel do collapse(2) default(shared) private(h,k,loc,logi,phys,fwght,sh) schedule(auto)
+        !$omp parallel do collapse(2) default(shared) private(h,k,loc,logi,phys,fwght,sh)&
+        !$omp schedule(static) proc_bind(close)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)                
                 loc(:2) = matmul(real([h,k]),mat)
@@ -203,8 +203,6 @@ contains
     !>  \brief  rotates an image batch by angle ang using Fourier gridding
     !>          the weighted images sum is returned
     subroutine rot_imgbatch( imgs, os, imgsum, msk )
-        !$ use omp_lib
-        !$ use omp_lib_kinds
         use simple_kbinterpol ! use all in there
         use simple_math, only: cyci_1d, sqwin_2d, rotmat2d
         class(image), intent(inout) :: imgs(:)   !< image to rotate
@@ -241,7 +239,7 @@ contains
         &w(wdim, wdim), comps(wdim, wdim), stat=alloc_stat)
         cmat = zero
         !$omp parallel do default(shared) private(i,h,k,l,m,loc,mat,logi,phys,cyc1,cyc2,w,comps,win,incr,pw)&
-        !$omp schedule(auto) reduction(+:cmat)
+        !$omp schedule(static) reduction(+:cmat) proc_bind(close)
         do i = 1, nimgs
             pw  = os%get(i,'w')
             if( pw > TINY )then
@@ -273,7 +271,7 @@ contains
                         ! SUM( kernel x components )
                         cmat(h,k) = cmat(h,k) + pw * sum(w * comps)
                         ! above is an optimized version of:
-                        !cmat(h,k) = cmat(h,k) + pw * padded_imgs(i)%extr_gridfcomp( [loc(1),loc(2),0.] )
+                        ! cmat(h,k) = cmat(h,k) + pw * padded_imgs(i)%extr_gridfcomp( [loc(1),loc(2),0.] )
                     end do
                 end do
             endif
@@ -285,7 +283,8 @@ contains
         call imgsum%new(ldim_pd, smpd)
         call imgsum%set_ft(.true.)
         imgsum = zero
-        !$omp parallel do default(shared) private(h,k,logi,phys,comp) schedule(auto)
+        !$omp parallel do collapse(2) default(shared) private(h,k,logi,phys,comp)&
+        !$omp schedule(static) proc_bind(close)
         do h = lims(1,1),lims(1,2)
             do k = lims(2,1),lims(2,2)
                 comp = cmat(h, k)

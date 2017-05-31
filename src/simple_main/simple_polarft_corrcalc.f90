@@ -494,6 +494,8 @@ contains
 
     !>  \brief  is for reading particle pfts from file
     subroutine read_pfts_ptcls( self, fname )
+        !$ use omp_lib
+        !$ use omp_lib_kinds
         use simple_filehandling, only: get_fileunit
         class(polarft_corrcalc), intent(inout) :: self
         character(len=*),        intent(in)    :: fname
@@ -508,7 +510,7 @@ contains
         endif
         close(funit)
         ! memoize sqsum_ptcls
-        !$omp parallel do schedule(auto) default(shared) private(iptcl)
+        !$omp parallel do schedule(static) default(shared) private(iptcl) proc_bind(close)
         do iptcl=self%pfromto(1),self%pfromto(2)
             call self%memoize_sqsum_ptcl(iptcl)
         end do
@@ -588,7 +590,8 @@ contains
         integer               :: irot,k
         allocate( ctfmat(endrot,self%kfromto(1):self%kfromto(2)) )
         inv_ldim = 1./real(self%ldim)
-        !$omp parallel do collapse(2) default(shared) private(irot,k,hinv,kinv,spaFreqSq,ang) schedule(auto)
+        !$omp parallel do collapse(2) default(shared) private(irot,k,hinv,kinv,spaFreqSq,ang)&
+        !$omp schedule(static) proc_bind(close)
         do irot=1,endrot
             do k=self%kfromto(1),self%kfromto(2)
                 hinv           = self%polar(irot,k)*inv_ldim(1)

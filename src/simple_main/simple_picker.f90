@@ -153,7 +153,7 @@ contains
                 ntargets = ntargets + 1
                 target_positions(ntargets,:) = [xind,yind]
                 call mic_shrunken%window_slim([xind,yind], ldim_refs(1), ptcl_target)
-                !$omp parallel do schedule(auto) default(shared) private(iref)
+                !$omp parallel do schedule(static) default(shared) private(iref) proc_bind(close)
                 do iref=1,nrefs
                     corrs(iref) = refs(iref)%real_corr_prenorm(ptcl_target, sxx(iref))
                 end do
@@ -252,7 +252,7 @@ contains
         do ipeak=1,npeaks
             ipos = peak_positions(ipeak,:)
             mask = .false.
-            !$omp parallel do schedule(auto) default(shared) private(jpeak,jpos,dist)
+            !$omp parallel do schedule(static) default(shared) private(jpeak,jpos,dist) proc_bind(close)
             do jpeak=1,npeaks
                 jpos = peak_positions(jpeak,:)
                 dist = euclid(real(ipos),real(jpos))

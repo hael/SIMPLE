@@ -168,7 +168,7 @@ contains
                 end select
             enddo
             ! SERIAL SEARCHES
-            !$omp parallel do default(shared) schedule(guided) private(iptcl)
+            !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
             do iptcl = fromp, top
                 select case(p%refine)
                     case('yes')

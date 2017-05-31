@@ -1,4 +1,6 @@
 module simple_hadamard2D_matcher
+!$ use omp_lib
+!$ use omp_lib_kinds
 use simple_defs
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_prime2D_srch,     only: prime2D_srch
@@ -119,7 +121,7 @@ contains
         ! execute the search
         if( p%refine .eq. 'neigh' )then
             call del_file(p%outfile)
-            !$omp parallel do default(shared) schedule(guided) private(iptcl)
+            !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
             do iptcl=p%fromp,p%top
                 call primesrch2D(iptcl)%nn_srch(pftcc, iptcl, b%a, b%nnmat)
             end do
@@ -128,7 +130,7 @@ contains
             ! execute the search
             call del_file(p%outfile)
             if( p%oritab .eq. '' )then
-                !$omp parallel do default(shared) schedule(guided) private(iptcl)
+                !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                 do iptcl=p%fromp,p%top
                     call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, conv_larr(iptcl), greedy=.true.)
                 end do
@@ -138,7 +140,7 @@ contains
                     write(*,'(A,F8.2)') '>>> PARTICLE RANDOMIZATION(%):', 100.*p%extr_thresh
                     write(*,'(A,F8.2)') '>>> CORRELATION THRESHOLD:    ', corr_thresh
                 endif
-                !$omp parallel do default(shared) schedule(guided) private(iptcl)
+                !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                 do iptcl=p%fromp,p%top
                     call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, conv_larr(iptcl), extr_bound=corr_thresh)
                 end do
@@ -164,7 +166,6 @@ contains
         if( p%l_distr_exec )then
             call prime2D_write_partial_sums( b, p )
         else
-            !call prime2D_norm_sums( b, p )
             call prime2D_write_sums( b, p, which_iter )
         endif
 
@@ -204,7 +205,7 @@ contains
         class(build),  intent(inout) :: b
         class(params), intent(inout) :: p
         integer :: icls
-        !$omp parallel do schedule(static) default(shared) private(icls)
+        !$omp parallel do schedule(static) default(shared) private(icls) proc_bind(close)
         do icls=1,p%ncls
             b%cavgs(icls) = 0.
             b%ctfsqsums(icls) = cmplx(0.,0.)

@@ -116,6 +116,8 @@ contains
     
     !>  \brief  executes a move and updates the label and the per-particle similarities
     subroutine move( self, iptcl )
+        !$ use omp_lib
+        !$ use omp_lib_kinds
         class(shc_cluster), intent(inout) :: self
         integer,            intent(in)    :: iptcl
         real    :: new_sim
@@ -129,7 +131,7 @@ contains
         if( new_sim >= self%SPS(iptcl) )then
             self%labels(iptcl) = new_cls
             self%SPS(iptcl)    = new_sim
-            !$omp parallel do default(shared) private(jptcl) schedule(auto)
+            !$omp parallel do default(shared) private(jptcl) schedule(static) proc_bind(close)
             do jptcl=1,self%N
                 if( jptcl /= iptcl )then
                     if( self%labels(jptcl) == new_cls .or. self%labels(jptcl) == cls )then

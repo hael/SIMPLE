@@ -10,6 +10,8 @@
 !* all methods tested
 !
 module simple_oris
+!$ use omp_lib
+!$ use omp_lib_kinds
 use simple_defs
 use simple_ori,         only: ori
 use simple_math,        only: hpsort, is_a_number
@@ -2730,7 +2732,8 @@ contains
         integer                 :: i, j, npeaks
         tres = atan(res/(moldiam/2.))
         npeaksum = 0.
-        !$omp parallel do schedule(auto) default(shared) private(j,i,dists) reduction(+:npeaksum)
+        !$omp parallel do schedule(static) default(shared) proc_bind(close)&
+        !$omp private(j,i,dists) reduction(+:npeaksum)
         do j=1,self%n
             do i=1,self%n
                 dists(i) = self%o(i).euldist.self%o(j)
@@ -2738,7 +2741,7 @@ contains
             call hpsort(self%n, dists)
             do i=1,self%n
                 if( dists(i) <= tres )then
-                    npeaksum = npeaksum+1.
+                    npeaksum = npeaksum + 1.
                 else
                     exit
                 endif 
@@ -3129,7 +3132,7 @@ contains
         allocate( smat(self%n,self%n), stat=alloc_stat )
         call alloc_err("In: simple_oris :: gen_smat", alloc_stat)
         smat = 0.
-        !$omp parallel do schedule(auto) default(shared) private(i,j)
+        !$omp parallel do schedule(guided) default(shared) private(i,j) proc_bind(close)
         do i=1,self%n-1
             do j=i+1,self%n
                 smat(i,j) = -(self%o(i).geod.self%o(j))
@@ -3163,7 +3166,7 @@ contains
             class_weights = 1.0
         endif
         dists = 0.
-        !$omp parallel do schedule(auto) default(shared) private(i)
+        !$omp parallel do schedule(static) default(shared) private(i) proc_bind(close)
         do i=1,self%n
             dists(i) = self%o(i).geod.o
         end do

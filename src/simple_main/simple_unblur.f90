@@ -1,4 +1,6 @@
 module simple_unblur
+!$ use omp_lib
+!$ use omp_lib_kinds
 use simple_defs
 use simple_ft_expanded, only: ft_expanded
 use simple_image,       only: image
@@ -312,7 +314,7 @@ contains
                 rmat = frame_tmp%get_rmat()
                 rmat_pad = median( reshape(rmat(:,:,1),(/(ldim(1)*ldim(2))/)) )
                 rmat_pad(1:ldim(1),1:ldim(2)) = rmat(1:ldim(1),1:ldim(2),1)
-                !$omp parallel do collapse(2) schedule(auto) default(shared) private(i,j,win)
+                !$omp parallel do collapse(2) schedule(static) default(shared) private(i,j,win) proc_bind(close)
                 do i=1,ldim(1)
                     do j=1,ldim(2)
                         if( outliers(i,j) )then
@@ -387,7 +389,7 @@ contains
     subroutine calc_corrmat
         integer :: iframe, jframe
         corrmat = 1. ! diagonal elements are 1
-        !$omp parallel do schedule(auto) default(shared) private(iframe,jframe)
+        !$omp parallel do schedule(guided) default(shared) private(iframe,jframe) proc_bind(close)
         do iframe=1,nframes-1
             do jframe=iframe+1,nframes
                 corrmat(iframe,jframe) = movie_frames_ftexp_sh(iframe)%corr(movie_frames_ftexp_sh(jframe))
@@ -413,7 +415,7 @@ contains
         use simple_stat, only: corrs2weights
         integer :: iframe, jframe
         corrs = 0.
-        !$omp parallel do schedule(auto) default(shared) private(iframe,jframe)
+        !$omp parallel do schedule(static) default(shared) private(iframe,jframe) proc_bind(close)
         do iframe=1,nframes
             do jframe=1,nframes
                 if( jframe == iframe ) cycle

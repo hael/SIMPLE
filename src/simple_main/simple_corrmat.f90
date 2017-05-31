@@ -1,4 +1,6 @@
 module simple_corrmat
+!$ use omp_lib
+!$ use omp_lib_kinds
 use simple_image,  only: image
 use simple_jiffys, only: alloc_err, progress
 implicit none
@@ -61,7 +63,7 @@ contains
                     pairs(cnt,2) = jptcl
                 end do 
             end do
-            !$omp parallel do default(shared) private(ipair) schedule(auto)
+            !$omp parallel do default(shared) private(ipair) schedule(static) proc_bind(close)
             do ipair=1,ntot   
                 corrmat(pairs(ipair,1),pairs(ipair,2))=&
                 imgs(pairs(ipair,1))%real_corr(imgs(pairs(ipair,2)))
@@ -111,7 +113,7 @@ contains
             end do
         else ! Real-space correlation
             if( present(msk) ) call mskimg%disc(imgs_sel(1)%get_ldim(), imgs_sel(1)%get_smpd(), msk, npix)
-            !$omp parallel do default(shared) private(isel,iptcl) schedule(auto)
+            !$omp parallel do collapse(2) default(shared) private(isel,iptcl) schedule(static) proc_bind(close)
             do isel=1,nsel
                 do iptcl=1,norig
                     corrmat(isel,iptcl) = imgs_sel(isel)%real_corr(imgs_orig(iptcl))
@@ -121,60 +123,5 @@ contains
             call mskimg%kill
         endif
     end subroutine calc_cartesian_corrmat_2
-
-    ! OLD ROUITNE FOR THE CSHIFTED RUBBISH FROM THE OLD GPU-STYLE IMPLEMENTATION
-    ! subroutine project_corrmat3D_greedy( n, nr, corrmat3d, corrmat2d, inplmat )
-    !     integer, intent(in)  :: n, nr
-    !     real,    intent(in)  :: corrmat3d(n,n,nr)
-    !     real,    intent(out) :: corrmat2d(n,n)
-    !     integer, intent(out) :: inplmat(n,n)
-    !     real                 :: corrmat2dtmp(n,n)
-    !     integer              :: inplmattmp(n,n)
-    !     integer              :: indices(n), alloc_stat, iptcl, iref
-    !     !$omp parallel workshare
-    !     corrmat2dtmp = maxval(corrmat3d, dim=3)
-    !     inplmattmp   = maxloc(corrmat3d, dim=3)
-    !     forall( iptcl=1:n ) indices( iptcl ) = iptcl
-    !     !$omp end parallel workshare
-    !     do iref=1,n
-    !        if( iref /= 1 ) indices = cshift(indices, shift=1)
-    !        !$omp parallel do default(shared) private(iptcl) schedule(auto) 
-    !        do iptcl=1,n
-    !           inplmat(indices(iptcl),iref)   = inplmattmp(iref,iptcl)
-    !           corrmat2d(indices(iptcl),iref) = corrmat2dtmp(iref,iptcl)
-    !        end do
-    !        !$omp end parallel do
-    !     end do
-    ! end subroutine project_corrmat3D_greedy
-
-    ! OLD ROUITNE FOR THE CSHIFTED RUBBISH FROM THE OLD GPU-STYLE IMPLEMENTATION
-    ! subroutine project_corrmat3D_shc( n, nr, corrmat3d, pcorrs, corrmat2d, inplmat )
-    !     use simple_rnd, only: shcloc
-    !     integer, intent(in)  :: n, nr
-    !     real,    intent(in)  :: corrmat3d(n,n,nr), pcorrs(n)
-    !     real,    intent(out) :: corrmat2d(n,n)
-    !     integer, intent(out) :: inplmat(n,n)
-    !     integer              :: indices(n), this, alloc_stat, iptcl, iref, ncorrs
-    !     ncorrs = size(corrmat3d,3)
-    !     !$omp parallel workshare
-    !     forall( iptcl=1:n ) indices( iptcl ) = iptcl
-    !     !$omp end parallel workshare
-    !     do iref=1,n
-    !        if( iref /= 1 )then
-    !           indices = cshift(indices, shift=1)
-    !        endif
-    !        !$omp parallel do default(shared) private(iptcl,this) schedule(auto) 
-    !        do iptcl=1,n
-    !           this = shcloc(ncorrs, corrmat3d(iref,iptcl,:), pcorrs(indices(iptcl)))
-    !           inplmat(indices(iptcl),iref) = this
-    !           if( this > 1 )then
-    !               corrmat2d(indices(iptcl),iref) = corrmat3d(iref,iptcl,this)
-    !           else
-    !               corrmat2d(indices(iptcl),iref) = 0.
-    !           endif
-    !        end do
-    !        !$omp end parallel do
-    !     end do
-    ! end subroutine project_corrmat3D_shc
 
 end module simple_corrmat

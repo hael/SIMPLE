@@ -352,24 +352,20 @@ contains
         ! EVAL REC ERR
         p = 0.
         if( self%inplace )then
-            !$omp parallel default(shared), reduction(+:p), private(i,tmp)
-            !$omp do
+            !$omp parallel do default(shared), reduction(+:p), private(i,tmp) proc_bind(close)
             do i=1,self%N
                 tmp = matmul(self%W,self%E_zn(i,:,:))
                 p   = p+sqrt(sum((self%ptr_Dmat(i,:)-tmp(:,1))**2.))
             end do
-            !$omp end do nowait
-            !$omp end parallel
+            !$omp end parallel do
         else
             do i=1,self%N
                 ! read data vec
                 read(self%funit, rec=i) self%X(:,1)
-                !$omp parallel default(shared)
-                !$omp workshare
+                !$omp parallel workshare proc_bind(close)
                 tmp = matmul(self%W,self%E_zn(i,:,:))
-                !$omp end workshare nowait
-                !$omp end parallel
-                p = p+sqrt(sum((self%X(:,1)-tmp(:,1))**2.))
+                !$omp end parallel workshare
+                p = p + sqrt(sum((self%X(:,1)-tmp(:,1))**2.))
             end do
         endif
         if( .not. is_a_number(p) )err=-1

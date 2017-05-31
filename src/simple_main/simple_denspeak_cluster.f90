@@ -91,15 +91,17 @@ contains
     end function get_centers
 
     subroutine calc_rhos_and_deltas( self )
+        !$ use omp_lib
+        !$ use omp_lib_kinds
         class(denspeak_cluster), intent(inout) :: self
         integer :: i, loc(1)
-        !$omp parallel default(shared) private(i)
-        !$omp do schedule(auto)
+        !$omp parallel default(shared) private(i) proc_bind(close)
+        !$omp do schedule(static)
         do i=1,self%N
             self%rhos(i) = self%rho(i)
         end do
         !$omp end do
-        !$omp do schedule(auto)
+        !$omp do schedule(static)
         do i=1,self%N
             self%deltas(i) = self%delta(i)
         end do

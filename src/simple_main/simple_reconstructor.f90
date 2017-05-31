@@ -1,4 +1,6 @@
 module simple_reconstructor
+!$ use omp_lib
+!$ use omp_lib_kinds
 use simple_fftw3
 use simple_defs
 use simple_image,   only: image
@@ -273,8 +275,6 @@ contains
     end subroutine calc_tfun_vals
     
     subroutine inout_fplane( self, o, inoutmode, fpl, pwght, mul, shellweights )
-        !$ use omp_lib
-        !$ use omp_lib_kinds
         use simple_math, only: deg2rad, hyp
         use simple_ori,  only: ori
         class(reconstructor), intent(inout) :: self      !< instance
@@ -320,8 +320,8 @@ contains
         endif
         if(present(shellweights))then
             lfny = size(shellweights)
-            !$omp parallel do collapse(2) default(shared) schedule(auto)&
-            !$omp private(h,k,oshift,sh,pw,logi,phys)
+            !$omp parallel do collapse(2) default(shared) schedule(static)&
+            !$omp private(h,k,oshift,sh,pw,logi,phys) proc_bind(close)
             do h=lims(1,1),lims(1,2)
                 do k=lims(1,1),lims(1,2)
                     logi   = [h,k,0]
@@ -338,8 +338,8 @@ contains
             end do
             !$omp end parallel do
         else
-            !$omp parallel do collapse(2) default(shared) private(h,k,oshift,logi,phys)&
-            !$omp schedule(auto)
+            !$omp parallel do collapse(2) default(shared) schedule(static)&
+            !$omp private(h,k,oshift,logi,phys) proc_bind(close)
             do h=lims(1,1),lims(1,2)
                 do k=lims(1,1),lims(1,2)
                     logi   = [h,k,0]
@@ -361,7 +361,8 @@ contains
         ! set constants
         lims = self%loop_lims(2)
         if( self_out_present ) self_out = self
-        !$omp parallel do collapse(3) default(shared) private(h,k,l,phys) schedule(auto)
+        !$omp parallel do collapse(3) default(shared) private(h,k,l,phys)&
+        !$omp schedule(static) proc_bind(close)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 do l=lims(3,1),lims(3,2)
@@ -415,7 +416,7 @@ contains
          class(reconstructor), intent(inout) :: self
          class(reconstructor), intent(in)    :: self_in
          call self%add(self_in)
-         !$omp parallel workshare
+         !$omp parallel workshare proc_bind(close)
          self%rho = self%rho+self_in%rho
          !$omp end parallel workshare
     end subroutine sum
