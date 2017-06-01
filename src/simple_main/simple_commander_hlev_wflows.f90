@@ -157,7 +157,7 @@ contains
         logical,               parameter :: DEBUG=.false.
         real,                  parameter :: LPLIMS(2)=[20.,10.] ! default low-pass limits
         real,                  parameter :: CENLP=30.           ! consistency with prime3D
-        integer,               parameter :: MAXITS_SNHC=30, MAXITS_INIT=10, MAXITS_REFINE=40
+        integer,               parameter :: MAXITS_SNHC=30, MAXITS_INIT=15, MAXITS_REFINE=40
         integer,               parameter :: STATE=1, NPROJS_SYMSRCH=50
         character(len=32),     parameter :: ITERFBODY     = 'prime3Ddoc_'
         character(len=32),     parameter :: VOLFBODY      = 'recvol_state'

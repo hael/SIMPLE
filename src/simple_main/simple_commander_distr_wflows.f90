@@ -1184,9 +1184,14 @@ contains
                     ! post-process
                     vol = 'vol'//trim(int2str(state))
                     call cline_postproc_vol%set('vol1' , trim(vol_iter))
-                    fsc_file = 'fsc_state'//trim(str_state)//'.bin'
-                    call cline_postproc_vol%delete('lp')
-                    call cline_postproc_vol%set('fsc', trim(fsc_file))
+                    if(cline%defined('lp'))then
+                        ! set lp mode: nothing to do
+                    else
+                        ! fsc eo mode
+                        fsc_file = 'fsc_state'//trim(str_state)//'.bin'
+                        call cline_postproc_vol%delete('lp')
+                        call cline_postproc_vol%set('fsc', trim(fsc_file))
+                    endif
                     call xpostproc_vol%execute(cline_postproc_vol)
                     ! updates cmdlines & job description
                     call job_descr%set(trim(vol), trim(vol_iter))
@@ -1366,6 +1371,13 @@ contains
         ! read symmetry axes, sort & pick best
         call sym_os%new(comlin_srch_nproj)
         call sym_os%read(trim(SYMTAB))
+        ! DEV
+
+
+
+
+
+        ! END DEV
         order_inds  = sym_os%order_corr()
         symaxis_ori = sym_os%get_ori(order_inds(1))
         write(*,'(A)') '>>> FOUND SYMMETRY AXIS ORIENTATION:'
@@ -1402,7 +1414,7 @@ contains
         call syme%kill
         call o_shift%kill
         deallocate(order_inds)
-        call del_file(trim(SYMSHTAB)) ! FOR NOW
+        call del_file(trim(SYMSHTAB))
         do i = 1, p_master%nparts
             part_tab = trim(SYMFBODY)//int2str_pad(i, p_master%numlen)//'.txt'
             call del_file(trim(part_tab))
@@ -1410,6 +1422,57 @@ contains
         ! end gracefully
         call qsys_cleanup(p_master)
         call simple_end('**** SIMPLE_SYMSRCH NORMAL STOP ****')
+
+        contains
+
+            subroutine find_sym_peaks(sym_axes, sym_peaks)
+                use simple_math, only: rad2deg
+                class(oris), intent(inout) :: sym_axes
+                class(oris), intent(out)   :: sym_peaks
+                integer, allocatable :: sort_inds(:)
+                type(oris) :: axes, tmp_axes
+                type(ori)  :: axis, o
+                integer    :: iaxis, naxes, loc(1), ilabel, axis_ind, istate, n_sympeaks
+                integer, parameter :: MAXLABELS = 5
+                real,    parameter :: ANGTHRESH = 15. ! degrees
+                axes       = sym_axes
+                naxes      = axes%get_noris()
+                tmp_axes   = oris(MAXLABELS)
+                n_sympeaks = 0
+                ! geometric clustering
+                call axes%set_all2single('state', 0.)
+                call axes%swape1e3
+                sort_inds = axes%order_corr()
+                do ilabel = 1, MAXLABELS
+                    ! identify next best axis
+                    do iaxis = 1, naxes
+                        axis_ind = sort_inds(iaxis)
+                        if(nint(axes%get(axis_ind,'state')) == 0)exit
+                    enddo
+                    if(iaxis > naxes)exit
+                    axis = axes%get_ori(axis_ind)
+                    n_sympeaks = n_sympeaks + 1
+                    call tmp_axes%set_ori(ilabel, axis)
+                    ! flags axes within threshold
+                    do iaxis = 1,naxes
+                        axis_ind = sort_inds(iaxis)
+                        o        = axes%get_ori(axis_ind)
+                        istate   = nint(o%get('state'))
+                        if(istate /= 0)cycle
+                        if(rad2deg(axis.euldist.o) <= ANGTHRESH)then
+                            axis_ind = sort_inds(iaxis)
+                            call axes%set(axis_ind, 'state', real(ilabel))
+                        endif
+                    enddo
+                enddo
+                ! prep outcome
+                sym_peaks = oris(n_sympeaks)
+                do iaxis = 1, n_sympeaks
+                    call sym_peaks%set_ori(iaxis, tmp_axes%get_ori(iaxis))
+                enddo
+                deallocate(sort_inds)
+            end subroutine find_sym_peaks
+
     end subroutine exec_symsrch_distr
 
 end module simple_commander_distr_wflows
