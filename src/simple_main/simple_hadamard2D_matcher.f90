@@ -16,8 +16,7 @@ use simple_filterer          ! use all in there
 implicit none
 
 public :: prime2D_exec, prime2D_assemble_sums, prime2D_norm_sums, prime2D_assemble_sums_from_parts,&
-prime2D_write_sums, preppftcc4align, pftcc, prime2D_read_sums, prime2D_write_partial_sums,&
-prime2D_init_sums
+prime2D_write_sums, preppftcc4align, pftcc, prime2D_read_sums, prime2D_write_partial_sums
 private
 
 logical, parameter              :: DEBUG = .false.
@@ -109,7 +108,6 @@ contains
             p%outfile = 'prime2Ddoc_'//int2str_pad(which_iter,3)//'.txt'
             if( p%chunktag .ne. '' ) p%outfile= trim(p%chunktag)//trim(p%outfile)
         endif
-        call prime2D_init_sums( b, p )
 
         ! STOCHASTIC IMAGE ALIGNMENT
         allocate( primesrch2D(p%fromp:p%top) )
@@ -231,8 +229,9 @@ contains
         integer   :: i, nbatches, batch, batchsz, cnt
         logical   :: l_grid
         integer, parameter :: BATCHTHRSZ = 20
+        call prime2D_init_sums( b, p )
         l_grid = .true.
-        if( present(grid) )l_grid = grid
+        if( present(grid) ) l_grid = grid
         if( .not. p%l_distr_exec )then
             write(*,'(a)') '>>> ASSEMBLING CLASS SUMS'
         endif
