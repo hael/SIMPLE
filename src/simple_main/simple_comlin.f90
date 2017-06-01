@@ -71,7 +71,7 @@ contains
         real    :: cc,corrs(self%nptcls),sums1(self%nptcls),sums2(self%nptcls),ccarr(self%nptcls)
         integer :: i,j
         logical :: foundlines(self%nptcls)
-        !$omp parallel do collapse(2) default(shared) private(i,j,corrs,sums1,sums2,foundlines) &
+        !$omp parallel do default(shared) private(i,j,corrs,sums1,sums2,foundlines) &
         !$omp schedule(static) proc_bind(close)
         do i=1,self%nptcls
             do j=1,self%nptcls
@@ -83,7 +83,7 @@ contains
                 ccarr(i) = -1.
             endif
         end do
-        !$omp end parallel do 
+        !$omp end parallel do
         cc = sum(ccarr)/real(self%nptcls)
     end function corr
 

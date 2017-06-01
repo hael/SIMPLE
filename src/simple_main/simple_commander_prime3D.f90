@@ -246,12 +246,14 @@ contains
            stop 'need a starting low-pass limit (set lp or find)!'
         endif
         call b%build_hadamard_prime3D_tbox(p) ! prime3D objects built
+        startit = 1
+        if( cline%defined('startit') )startit = p%startit
         if( cline%defined('part') )then
             if( .not. cline%defined('outfile') ) stop 'need unique output file for parallel jobs'
             if( cline%defined('find') )then
                 p%lp = calc_lowpass_lim( p%find, p%boxmatch, p%smpd )
             endif
-            call prime3D_exec(b, p, cline, 0, update_res, converged) ! partition or not, depending on 'part'
+            call prime3D_exec(b, p, cline, startit, update_res, converged) ! partition or not, depending on 'part'
         else
             if( p%dynlp .eq. 'yes' )then
                 call prime3D_find_resrange( b, p, lpstart, lpstop ) ! determine resolution range
@@ -267,8 +269,6 @@ contains
                 endif
             endif
             p%find = calc_fourier_index( p%lp, p%boxmatch, p%smpd )
-            startit = 1
-            if( cline%defined('startit') ) startit = p%startit
             ! extremal dynamics
             if( cline%defined('extr_thresh') )then
                 ! all is well

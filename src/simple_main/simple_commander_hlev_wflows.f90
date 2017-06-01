@@ -218,12 +218,12 @@ contains
             smpd_target = smpd
         endif
         ! prepare command lines from prototype master
-        cline_prime3D_snhc    = cline
-        cline_prime3D_init    = cline
+        cline_prime3D_snhc   = cline
+        cline_prime3D_init   = cline
         cline_prime3D_refine = cline
-        cline_symsrch         = cline
-        cline_recvol          = cline
-        cline_projvol         = cline
+        cline_symsrch        = cline
+        cline_recvol         = cline
+        cline_projvol        = cline
         ! initialise command line parameters
         ! (1) INITIALIZATION BY STOCHASTIC NEIGHBORHOOD HILL-CLIMBING
         call cline_prime3D_snhc%set('prg',    'prime3D')

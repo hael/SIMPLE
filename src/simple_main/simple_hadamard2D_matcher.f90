@@ -294,7 +294,7 @@ contains
                         w = orientation%get('w')
                         if( w < TINY )cycle
                         call batch_imgs(i)%rtsq( -orientation%e3get(), 0., 0. )
-                        call batch_imgsum%add(batch_imgs(i), w )
+                        call batch_imgsum%add(batch_imgs(i), w)
                     enddo
                 endif
                 ! batch summation
