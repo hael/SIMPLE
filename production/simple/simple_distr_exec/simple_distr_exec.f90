@@ -666,8 +666,9 @@ select case(prg)
         keys_required(3)  = 'msk'
         keys_required(4)  = 'pgrp'
         keys_required(5)  = 'oritab'
-        keys_required(6)  = 'lp'
-        keys_required(7)  = 'nparts'
+        keys_required(6)  = 'outfile'
+        keys_required(7)  = 'lp'
+        keys_required(8)  = 'nparts'
         ! set optional keys
         keys_optional(1)  = 'nthr'
         keys_optional(2)  = 'cenlp'
@@ -675,7 +676,7 @@ select case(prg)
         keys_optional(4)  = 'nspace'
         ! parse command line
         if( describe ) call print_doc_symsrch
-        call cline%parse(keys_required(:7), keys_optional(:4))
+        call cline%parse(keys_required(:8), keys_optional(:4))
         ! set defaults
         if(cline%defined('compare'))stop 'Distributed execution of SYMSRCH does not support the COMPARE argument'
         ! set defaults
