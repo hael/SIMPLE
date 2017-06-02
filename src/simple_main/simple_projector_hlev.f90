@@ -205,7 +205,7 @@ contains
     subroutine rot_imgbatch( imgs, os, imgsum, msk )
         use simple_kbinterpol ! use all in there
         use simple_math, only: cyci_1d, sqwin_2d, rotmat2d
-        class(image), intent(inout) :: imgs(:)   !< image to rotate
+        class(image), intent(inout) :: imgs(:)   !< images to rotate
         type(oris),   intent(inout) :: os
         class(image), intent(inout) :: imgsum    !< rotated image
         real,         intent(in)    :: msk       !< mask radius (in pixels)

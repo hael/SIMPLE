@@ -46,6 +46,7 @@ contains
         class(cmdline),          intent(inout) :: cline
         type(params) :: p
         type(build)  :: b
+        integer      :: fnr, file_stat
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         select case(p%eo)
@@ -57,8 +58,13 @@ contains
                 stop 'unknonw eo flag; simple_commander_rec :: exec_recvol'
         end select
         call exec_rec_master(b, p, cline)
+        ! indicate completion (when run in a qsys env)
+        ! fnr = get_fileunit()
+        ! open(unit=fnr, FILE='RECVOL_FINISHED', STATUS='REPLACE', action='WRITE', iostat=file_stat)
+        ! call fopen_err('In: commander_rec :: exec_recvol', file_stat )
+        ! close( unit=fnr )
         ! end gracefully
-        call simple_end('**** SIMPLE_RECVOL NORMAL STOP ****', print_simple=.false.)    
+        call simple_end('**** SIMPLE_RECVOL NORMAL STOP ****', print_simple=.false.) 
     end subroutine exec_recvol
 
     subroutine exec_eo_volassemble( self, cline )

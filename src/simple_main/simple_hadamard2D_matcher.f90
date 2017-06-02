@@ -236,6 +236,7 @@ contains
             write(*,'(a)') '>>> ASSEMBLING CLASS SUMS'
         endif
         ! init
+        call prime2D_init_sums( b, p )
         if( p%l_distr_exec )then
             istart  = p%fromp
             iend    = p%top
