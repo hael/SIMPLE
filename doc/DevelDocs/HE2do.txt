@@ -4,6 +4,9 @@ random selection of images for prime2D init need to take state=0 into account
 need to have another go at the picker
 weighted multi-resolution state sorting by fitting B-factors?
 per-particle convergence for accelerated analysis?
+test specscore on cavgs
+rec_asym must be written out in ini3D when srch_symaxis=true
+make distributed flow for scale that operates on split stacks so that scaling can be done in parallel
 
 # unidoc points
 everything written to cwd

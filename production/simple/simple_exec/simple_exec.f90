@@ -1492,14 +1492,14 @@ select case(prg)
         ! set required keys
         keys_required(1) = 'vollist'
         keys_required(2) = 'smpd'
+        keys_required(3) = 'lp'
+        keys_required(4) = 'msk'
         ! set optional keys
         keys_optional(1) = 'nthr'
         keys_optional(2) = 'hp'
-        keys_optional(3) = 'lp'
-        keys_optional(4) = 'msk'
         ! parse command line
         if( describe ) call print_doc_volume_smat
-        call cline%parse(keys_required(:2), keys_optional(:4))
+        call cline%parse(keys_required(:4), keys_optional(:2))
         ! execute
         call xvolume_smat%execute(cline)
         

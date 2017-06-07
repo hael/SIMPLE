@@ -296,48 +296,42 @@ contains
     end subroutine exec_volops
     
     subroutine exec_volume_smat( self, cline )
-        use simple_image, only: image
+        use simple_projector, only: projector
+        use simple_ori,       only: ori
+        use simple_volpft_srch ! singleton
         class(volume_smat_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
-        type(params), target               :: p
-        integer                            :: funit, io_stat, cnt, npairs, npix, nvols
-        integer                            :: ivol, jvol, ldim(3), alloc_stat, ipair, ifoo
-        real, allocatable                  :: corrmat(:,:), corrs(:)
-        integer, allocatable               :: pairs(:,:)
-        type(image)                        :: vol1, vol2, mskimg
+        type(params), target    :: p
+        integer                 :: funit, io_stat, cnt, npairs, npix, nvols, box_sc
+        integer                 :: ivol, jvol, ldim(3), alloc_stat, ipair, ifoo, i
+        real                    :: smpd_sc, scale
+        type(projector)         :: vol1, vol2
+        type(ori)               :: o
+        logical, parameter      :: debug=.false.
+        real,                  allocatable :: corrmat(:,:), corrs(:)
+        integer,               allocatable :: pairs(:,:)
         character(len=STDLEN), allocatable :: vollist(:)
-        character(len=:), allocatable      :: fname
-        logical, parameter                 :: debug=.false.
-        p      = params(cline, .false.) ! constants & derived constants produced
-        nvols  = nlines(p%vollist)
+        character(len=:),      allocatable :: fname
+        complex,               allocatable :: cmat(:,:,:)
+        p = params(cline, .false.)              ! constants & derived constants produced
+        call read_filetable(p%vollist, vollist) ! reads in list of volumes
+        nvols  = size(vollist)
         npairs = (nvols*(nvols-1))/2
-        ! read in list of volumes
-        allocate(vollist(nvols))
-        funit = get_fileunit()
-        open(unit=funit, status='old', file=p%vollist)
-        do ivol=1,nvols
-            read(funit,'(a256)') vollist(ivol)
-            if( debug ) write(*,*) 'read volume: ', vollist(ivol)
-        end do
-        close(unit=funit)
         ! find logical dimension & make volumes for matching
         call find_ldim_nptcls(vollist(1), ldim, ifoo)
         if( debug ) write(*,*) 'found logical dimension: ', ldim
-        call vol1%new(ldim,p%smpd)
-        call vol2%new(ldim,p%smpd)
-        if( debug ) write(*,*) 'allocated volumes'
         if( cline%defined('part') )then
             npairs = p%top-p%fromp+1
             if( debug ) print *, 'allocating this number of similarities: ', npairs
             allocate(corrs(p%fromp:p%top), pairs(p%fromp:p%top,2), stat=alloc_stat)
-            call alloc_err('In: simple_comlin_smat, 1', alloc_stat)
+            call alloc_err('In: simple_volume_smat, 1', alloc_stat)
             ! read the pairs
             funit = get_fileunit()
             allocate(fname, source='pairs_part'//int2str_pad(p%part,p%numlen)//'.bin')
             if( .not. file_exists(fname) )then
                 write(*,*) 'file: ', fname, 'does not exist!'
                 write(*,*) 'If all pair_part* are not in cwd, please execute simple_split_pairs to generate the required files'
-                stop 'I/O error; simple_comlin_smat'
+                stop 'I/O error; simple_volume_smat'
             endif
             open(unit=funit, status='OLD', action='READ', file=fname, access='STREAM')
             if( debug ) print *, 'reading pairs in range: ', p%fromp, p%top
@@ -345,38 +339,19 @@ contains
             ! Check if the read was successful
             if( io_stat .ne. 0 )then
                 write(*,'(a,i0,2a)') '**ERROR(simple_volume_smat): I/O error ', io_stat, ' when reading file: ', fname
-                stop 'I/O error; simple_comlin_smat'
+                stop 'I/O error; simple_volume_smat'
             endif
             close(funit)
             deallocate(fname)
-            ! make real-space mask if needed
-            if( .not. cline%defined('lp') .and. cline%defined('msk') )then 
-                call mskimg%disc(vol1%get_ldim(), p%smpd, p%msk, npix)
-            endif
-            ! calculate the similarities
             cnt = 0
             do ipair=p%fromp,p%top
-                cnt = cnt+1
+                cnt = cnt + 1
                 call progress(cnt, npairs)
                 ivol = pairs(ipair,1)
                 jvol = pairs(ipair,2)
-                call vol1%read(vollist(ivol))
-                call vol2%read(vollist(jvol))
-                if( cline%defined('lp') )then
-                    if( cline%defined('msk') )then
-                        ! apply a soft-edged mask
-                        call vol1%mask(p%msk, 'soft')
-                        call vol2%mask(p%msk, 'soft')
-                    endif
-                    corrs(ipair) = vol1%corr(vol2,lp_dyn=p%lp,hp_dyn=p%hp)
-                else
-                    if( cline%defined('msk') )then
-                        ! apply a hard-edged mask
-                        call vol1%mask(p%msk, 'hard')
-                        call vol2%mask(p%msk, 'hard')
-                    endif
-                   corrs(ipair) = vol1%real_corr(vol2)
-                endif
+                call read_and_prep_vols( ivol, jvol )
+                o = volpft_srch_minimize() 
+                corrs(ipair) = o%get('corr')
             end do
             if( debug ) print *, 'did set this number of similarities: ', cnt
             ! write the similarities
@@ -387,25 +362,24 @@ contains
             ! Check if the write was successful
             if( io_stat .ne. 0 )then
                 write(*,'(a,i0,2a)') '**ERROR(simple_volume_smat): I/O error ', io_stat, ' when writing to: ', fname
-                stop 'I/O error; simple_comlin_smat'
+                stop 'I/O error; simple_volume_smat'
             endif
             close(funit)
             deallocate(fname, corrs, pairs)
         else
             ! generate similarity matrix
-            allocate(corrmat(nvols,nvols))
-            corrmat = 1.
+            allocate(corrmat(nvols,nvols), stat=alloc_stat)
+            call alloc_err('In: simple_volume_smat, 2', alloc_stat)
+            corrmat = -1.
+            forall(i=1:nvols) corrmat(i,i) = 1.0
             cnt = 0
-            do ivol=1,nvols-1
-                do jvol=ivol+1,nvols
-                    cnt = cnt+1
+            do ivol=1,nvols - 1
+                do jvol=ivol + 1,nvols
+                    cnt = cnt + 1
                     call progress(cnt, npairs)
-                    call vol1%read(vollist(ivol))
-                    if( debug ) write(*,*) 'read vol1: ', vollist(ivol)
-                    call vol2%read(vollist(jvol))
-                    if( debug ) write(*,*) 'read vol1: ', vollist(ivol)
-                    corrmat(ivol,jvol) = vol1%corr(vol2,lp_dyn=p%lp,hp_dyn=p%hp)
-                    if( debug ) write(*,*) 'corr ', ivol, jvol, corrmat(ivol,jvol)
+                    call read_and_prep_vols( ivol, jvol )
+                    o = volpft_srch_minimize() 
+                    corrmat(ivol,jvol) = o%get('corr')
                     corrmat(jvol,ivol) = corrmat(ivol,jvol)
                 end do
             end do
@@ -413,14 +387,42 @@ contains
             open(unit=funit, status='REPLACE', action='WRITE', file='vol_smat.bin', access='STREAM')
             write(unit=funit,pos=1,iostat=io_stat) corrmat
             if( io_stat .ne. 0 )then
-                write(*,'(a,i0,a)') 'I/O error ', io_stat, ' when writing to clin_smat.bin'
+                write(*,'(a,i0,a)') 'I/O error ', io_stat, ' when writing to vol_smat.bin'
                 stop 'I/O error; simple_volume_smat'
             endif
             close(funit)
             deallocate(corrmat)
         endif     
         ! end gracefully
-        call simple_end('**** SIMPLE_VOLUME_SMAT NORMAL STOP ****')        
+        call simple_end('**** SIMPLE_VOLUME_SMAT NORMAL STOP ****')
+
+        contains
+
+            subroutine read_and_prep_vols( ivol, jvol )
+                use simple_magic_boxes, only: autoscale
+                integer, intent(in) :: ivol, jvol
+                real :: smpd_target
+                call vol1%new(ldim,p%smpd)
+                call vol2%new(ldim,p%smpd)
+                call vol1%read(vollist(ivol))
+                call vol2%read(vollist(jvol))
+                if( p%boxmatch < p%box )then
+                    call vol1%clip_inplace([p%boxmatch,p%boxmatch,p%boxmatch])
+                    call vol2%clip_inplace([p%boxmatch,p%boxmatch,p%boxmatch]) 
+                endif
+                call vol1%mask(p%msk,'soft')
+                call vol2%mask(p%msk,'soft')
+                call vol1%fwd_ft
+                call vol2%fwd_ft
+                smpd_target = p%lp*LP2SMPDFAC
+                call autoscale(p%boxmatch, p%smpd, smpd_target, box_sc, smpd_sc, scale)
+                call vol1%clip_inplace([box_sc,box_sc,box_sc])
+                call vol2%clip_inplace([box_sc,box_sc,box_sc])
+                call vol1%set_smpd(smpd_sc)
+                call vol2%set_smpd(smpd_sc)
+                call volpft_srch_init(vol1, vol2, p%hp, p%lp)
+            end subroutine read_and_prep_vols
+
     end subroutine exec_volume_smat
 
 end module simple_commander_volops

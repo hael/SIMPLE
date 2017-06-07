@@ -109,13 +109,14 @@ contains
         cost = -self%pftcc_ptr%corr(self%reference, self%particle, rot, vec_here(2:3))
     end function inplsrch_costfun
     
-    function inplsrch_minimize( self, irot, shvec, rxy ) result( crxy )
+    function inplsrch_minimize( self, irot, shvec, rxy, fromto ) result( crxy )
         use simple_math, only: rotmat2d, enforce_cyclic_limit
         use simple_rnd,  only: ran3
         class(pftcc_inplsrch), intent(inout) :: self
         integer, optional,     intent(in) :: irot
         real,    optional,     intent(in) :: shvec(:)
         real,    optional,     intent(in) :: rxy(:)
+        integer, optional,     intent(in) :: fromto(2)
         logical           :: irot_here, shvec_here, rxy_here
         real, allocatable :: crxy(:)
         allocate(crxy(4))

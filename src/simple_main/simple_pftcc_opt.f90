@@ -17,8 +17,8 @@ abstract interface
 
     !>  \brief  is a constructor
     subroutine generic_new( self, pftcc, lims, shbarrier, nrestarts, vols) 
-        use simple_polarft_corrcalc, only: polarft_corrcalc
         use simple_projector,        only: projector
+        use simple_polarft_corrcalc, only: polarft_corrcalc
         import :: pftcc_opt
         class(pftcc_opt),                   intent(inout) :: self
         class(polarft_corrcalc),    target, intent(in)    :: pftcc
@@ -46,12 +46,13 @@ abstract interface
     end function generic_costfun
 
     !> \brief  minimization of the costfunction
-    function generic_minimize( self, irot, shvec, rxy ) result( crxy )
+    function generic_minimize( self, irot, shvec, rxy, fromto ) result( crxy )
         import :: pftcc_opt
         class(pftcc_opt),  intent(inout) :: self
         integer, optional, intent(in)    :: irot
         real,    optional, intent(in)    :: shvec(:)
         real,    optional, intent(in)    :: rxy(:)
+        integer, optional, intent(in)    :: fromto(2)
         real, allocatable  :: crxy(:)
     end function generic_minimize
 

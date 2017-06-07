@@ -106,12 +106,13 @@ contains
         cost = -self%pftcc_ptr%corr(self%reference, self%particle, 1, vec_here(4:5))
     end function srch_costfun
     
-    function srch_minimize( self, irot, shvec, rxy ) result( crxy )
+    function srch_minimize( self, irot, shvec, rxy, fromto ) result( crxy )
         use simple_math, only: enforce_cyclic_limit
         class(pftcc_srch),     intent(inout) :: self
         integer, optional,     intent(in)    :: irot
         real,    optional,     intent(in)    :: shvec(:)
         real,    optional,     intent(in)    :: rxy(:)
+        integer, optional,     intent(in)    :: fromto(2)
         real, allocatable :: crxy(:)
         real    :: cost_init, cost
         logical :: irot_here, shvec_here, rxy_here

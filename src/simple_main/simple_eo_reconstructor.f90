@@ -30,7 +30,7 @@ type :: eo_reconstructor
     procedure, private :: reset_odd
     procedure          :: reset_sum
     ! GETTERS
-    procedure          :: get_wfuns
+    procedure          :: get_kbwin
     procedure          :: get_res
     ! I/O
     ! writers
@@ -133,12 +133,12 @@ contains
     ! GETTERS
     
     !>  \brief  return the window functions used by eo_reconstructor
-    function get_wfuns( self ) result( wfs )
-        use simple_winfuns, only: winfuns
+    function get_kbwin( self ) result( wf )
+        use simple_kbinterpol, only: kbinterpol
         class(eo_reconstructor), intent(inout) :: self
-        type(winfuns) :: wfs
-        wfs = self%even%get_wfuns()
-    end function get_wfuns
+        type(kbinterpol) :: wf
+        wf = self%even%get_kbwin()
+    end function get_kbwin
     
     !> \brief  for gettign the resolution
     subroutine get_res( self, fsc05, fsc0143 )
@@ -355,13 +355,14 @@ contains
     !> \brief  for reconstructing Fourier volumes according to the orientations 
     !!         and states in o, assumes that stack is open   
     subroutine eorec( self, fname, p, o, se, state, vol, mul, part, fbody, wmat )
-        use simple_oris,     only: oris
-        use simple_sym,      only: sym
-        use simple_params,   only: params
-        use simple_gridding, only: prep4cgrid
-        use simple_imgfile,  only: imgfile
-        use simple_strings,  only: int2str_pad
-        use simple_jiffys,   only: find_ldim_nptcls, progress
+        use simple_oris,       only: oris
+        use simple_sym,        only: sym
+        use simple_params,     only: params
+        use simple_gridding,   only: prep4cgrid
+        use simple_imgfile,    only: imgfile
+        use simple_strings,    only: int2str_pad
+        use simple_jiffys,     only: find_ldim_nptcls, progress
+        use simple_kbinterpol, only: kbinterpol
         class(eo_reconstructor),    intent(inout) :: self      !< object
         character(len=*),           intent(in)    :: fname     !< spider/MRC stack filename
         class(params),              intent(in)    :: p         !< parameters
@@ -373,12 +374,14 @@ contains
         integer,          optional, intent(in)    :: part      !< partition (4 parallel rec)
         character(len=*), optional, intent(in)    :: fbody     !< body of output file
         real,             optional, intent(in)    :: wmat(:,:) !< shellweights
-        type(image) :: img, img_pad
-        integer     :: i, cnt, n, ldim(3), io_stat, filnum, state_glob
-        integer     :: statecnt(p%nstates), alloc_stat, state_here
-        logical     :: doshellweight
+        type(image)      :: img, img_pad
+        type(kbinterpol) :: kbwin
+        integer          :: i, cnt, n, ldim(3), io_stat, filnum, state_glob
+        integer          :: statecnt(p%nstates), alloc_stat, state_here
+        logical          :: doshellweight
         call find_ldim_nptcls(fname, ldim, n)
         if( n /= o%get_noris() ) stop 'inconsistent nr entries; eorec; simple_eo_reconstructor'
+        kbwin = self%get_kbwin() 
         doshellweight = present(wmat)
         ! stash global state index
         state_glob = state 
@@ -447,7 +450,7 @@ contains
                     if( p%l_xfel )then
                         call img%pad(img_pad)
                     else
-                        call prep4cgrid(img, img_pad, p%msk)
+                        call prep4cgrid(img, img_pad, p%msk, kbwin)
                     endif
                     if( p%pgrp == 'c1' )then
                         if( doshellweight )then

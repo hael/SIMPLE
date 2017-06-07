@@ -31,7 +31,6 @@ use simple_jiffys,              only: alloc_err
 use simple_mask_projector,      only: mask_projector
 use simple_projector,           only: projector
 use simple_filehandling         ! use all in there
-use simple_kbinterpol           ! use all in there
 implicit none
 
 public :: build, test_build
@@ -224,8 +223,6 @@ contains
             endif
             if( debug ) write(*,'(a)') 'did set default values'
         endif
-        ! initialize Kaiser-Bessel kernel
-        call init_kbiterpol(KBWINSZ, KBALPHA)
         ! build convergence checkers
         self%conv   = convergence(self%a, p, cline)
         self%ppconv = convergence_perptcl(self%a, p, cline)

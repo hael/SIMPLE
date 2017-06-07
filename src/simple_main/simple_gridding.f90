@@ -1,6 +1,7 @@
 module simple_gridding
-use simple_image,   only: image
-use simple_kbinterpol ! use all in there
+use simple_defs        ! use all in there
+use simple_image,      only: image
+use simple_kbinterpol, only: kbinterpol
 implicit none
 
 contains
@@ -8,23 +9,25 @@ contains
     ! bails when zero images
 
     !>  \brief  prepare image for gridding interpolation in Fourier space
-    subroutine prep4cgrid( img, img4grid, msk )
-        class(image), intent(inout)  :: img, img4grid
-        real,         intent(in)     :: msk
-        real                         :: med
-        call img%bwd_ft                                           ! make sure not FTed
+    subroutine prep4cgrid( img, img4grid, msk, kbwin )
+        class(image),       intent(inout) :: img, img4grid
+        real,               intent(in)    :: msk
+         class(kbinterpol), intent(in)    :: kbwin
+        real  :: med
+        call img%bwd_ft                      ! make sure not FTed
         med = img%median_pixel()
-        call img%pad(img4grid, backgr=med)                        ! padding in real space                     
-        call divide_w_instr(img4grid)                             ! division w instr in real space
-        call img4grid%fwd_ft                                      ! return the Fourier transform
+        call img%pad(img4grid, backgr=med)   ! padding in real space                     
+        call divide_w_instr(img4grid, kbwin) ! division w instr in real space
+        call img4grid%fwd_ft                 ! return the Fourier transform
     end subroutine prep4cgrid
     
     !> \brief  for dividing a real or complex image with the instrument function
-    subroutine divide_w_instr( img )
+    subroutine divide_w_instr( img, kbwin )
         !$ use omp_lib
         !$ use omp_lib_kinds
-        use simple_jiffys, only: alloc_err
-        class(image), intent(inout) :: img
+        use simple_jiffys,     only: alloc_err
+        class(image),      intent(inout) :: img
+        class(kbinterpol), intent(in)    :: kbwin
         real, allocatable :: w1(:), w2(:), w3(:)
         integer :: ldim(3), i, j, k, alloc_stat, lims(3,2)
         real    :: arg
@@ -76,7 +79,7 @@ contains
                     else
                         arg = ci/real(ldim_here)
                     endif
-                    w(i) = kb_instr(arg)
+                    w(i) = kbwin%instr(arg)
                     ci = ci+1.
                 end do
             end subroutine calc_w

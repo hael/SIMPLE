@@ -3,14 +3,14 @@ module simple_projector
 !$ use omp_lib
 !$ use omp_lib_kinds
 use simple_defs       ! use all in there
-use simple_kbinterpol ! use all in there
-use simple_image,     only: image
-use simple_ori,       only: ori
-use simple_oris,      only: oris
-use simple_params,    only: params
-use simple_gridding,  only: prep4cgrid
-use simple_jiffys,    only: alloc_err, progress
-use simple_math,      only: recwin_3d, euclid, sqwin_3d
+use simple_kbinterpol, only: kbinterpol
+use simple_image,      only: image
+use simple_ori,        only: ori
+use simple_oris,       only: oris
+use simple_params,     only: params
+use simple_gridding,   only: prep4cgrid
+use simple_jiffys,     only: alloc_err, progress
+use simple_math,       only: recwin_3d, euclid, sqwin_3d
 implicit none
 
 public :: projector
@@ -20,16 +20,18 @@ logical, parameter :: DEBUG = .true.
 
 type, extends(image) :: projector
     private
+    type(kbinterpol)      :: kbwin                   !< window function object
     integer               :: ldim_exp(3,2) = 0       !< expanded FT matrix limits
     complex, allocatable  :: cmat_exp(:,:,:)         !< expanded FT matrix
     real,    allocatable  :: polweights_mat(:,:,:)   !< polar weights matrix for the image to polar transformer
     integer, allocatable  :: polcyc1_mat(:,:,:)      !< image cyclic adresses for the image to polar transformer
     integer, allocatable  :: polcyc2_mat(:,:,:)      !< image cyclic adresses for the image to polar transformer
     logical, allocatable  :: is_in_mask(:,:,:)       !< neighbour matrix for the shape mask projector
-    real                  :: winsz     = 1.5         !< window half-width
-    real                  :: alpha     = 2.          !< oversampling ratio
-    real                  :: harwin    = 1.          !< rounded window half-width
-    real                  :: harwin_exp= 1.          !< rounded window half-width in expanded routines
+    real                  :: winsz      = 1.5        !< window half-width
+    real                  :: alpha      = 2.0        !< oversampling ratio
+    real                  :: harwin     = 1.0        !< rounded window half-width
+    real                  :: harwin_exp = 1.0        !< rounded window half-width in expanded routines
+    integer               :: wdim       = 0          !< window dimension
     logical               :: expanded_exists=.false. !< indicates FT matrix existence
   contains
     ! CONSTRUCTORS
@@ -47,7 +49,7 @@ type, extends(image) :: projector
     procedure, private :: fproject_polar_expanded
     procedure          :: img2polarft
     procedure          :: extr_gridfcomp
-    procedure, private :: interp_fcomp_expanded
+    procedure          :: interp_fcomp_expanded
     ! IMAGE TO POLAR TRANSFORMER
     procedure          :: init_imgpolarizer
     procedure          :: imgpolarizer
@@ -61,7 +63,6 @@ contains
 
      !>  \brief  is a constructor of the expanded Fourier matrix
     subroutine expand_cmat( self )
-        
         use simple_math, only: cyci_1d
         class(projector), intent(inout) :: self
         integer, allocatable :: cyck(:), cycm(:), cych(:)
@@ -71,12 +72,15 @@ contains
         ldim = self%get_ldim()
         if( .not.self%is_ft() ) stop 'volume needs to be FTed before call; expand_cmat; simple_image'
         if( ldim(3) == 1      ) stop 'only for volumes; expand_cmat; simple_image'
-        self%winsz         = get_kb_winsz()
-        self%harwin        = real(ceiling(self%winsz))
-        self%alpha         = get_kb_alpha()
+        self%kbwin         = kbinterpol(KBWINSZ, KBALPHA)
+        self%winsz         = KBWINSZ
+        self%harwin        = 1.0
+        self%harwin_exp    = 1.0
+        self%alpha         = KBALPHA
         lims               = self%loop_lims(3)
         self%ldim_exp(:,2) = maxval(abs(lims)) + ceiling(self%harwin_exp)
         self%ldim_exp(:,1) = -self%ldim_exp(:,2)
+        self%wdim          = 2*ceiling(self%harwin_exp) + 1
         allocate( self%cmat_exp( self%ldim_exp(1,1):self%ldim_exp(1,2),&
                                 &self%ldim_exp(2,1):self%ldim_exp(2,2),&
                                 &self%ldim_exp(3,1):self%ldim_exp(3,2)),&
@@ -194,7 +198,7 @@ contains
         class(image),     intent(inout) :: fplane
         real, optional,   intent(in)    :: lp
         real    :: loc(3)
-        integer :: h, k, sqarg, sqlp, wdim, lims(3,2), logi(3), phys(3)
+        integer :: h, k, sqarg, sqlp, lims(3,2), logi(3), phys(3)
         ! init
         if( present(lp) )then
             lims = self%loop_lims(1,lp)
@@ -204,7 +208,6 @@ contains
             sqlp = (maxval(lims(:,2)))**2
         endif
         fplane = cmplx(0.,0.)
-        wdim   = 2*ceiling(self%harwin_exp) + 1 ! interpolation kernel window size
         !$omp parallel do collapse(2) schedule(static) default(shared)&
         !$omp private(h,k,sqarg,loc,logi,phys) proc_bind(close)
         do h=lims(1,1),lims(1,2)
@@ -216,7 +219,7 @@ contains
                 loc  = matmul(real(logi), e%get_mat())
                 ! set fourier component
                 phys = self%comp_addr_phys(logi)
-                call fplane%set_fcomp(logi,phys,self%interp_fcomp_expanded(wdim, loc))
+                call fplane%set_fcomp(logi,phys,self%interp_fcomp_expanded(loc))
             end do
         end do
         !$omp end parallel do
@@ -288,7 +291,7 @@ contains
         class(ori),              intent(inout) :: e      !< orientation
         class(polarft_corrcalc), intent(inout) :: pftcc  !< object that holds the polar image
         logical, optional,       intent(in)    :: serial !< thread or serial
-        integer :: irot, k, wdim, ldim(3), pdim(3), ldim_polft(3)
+        integer :: irot, k, ldim(3), pdim(3), ldim_polft(3)
         real    :: vec(3), loc(3)
         logical :: l_serial = .false.
         if( present(serial) )l_serial = serial
@@ -297,7 +300,6 @@ contains
         ldim_polft(1:2) = ldim(1:2)
         ldim_polft(3)   = 1
         pdim   = pftcc%get_pdim(.false.)
-        wdim   = 2*ceiling(self%harwin_exp) + 1 ! interpolation kernel window size
         if( l_serial )then
             ! this is the serial version of the threaded version just below
             do irot=1,pdim(1)
@@ -305,7 +307,7 @@ contains
                     vec(:2) = pftcc%get_coord(irot,k)
                     vec(3)  = 0.
                     loc     = matmul(vec,e%get_mat())
-                    call pftcc%set_ref_fcomp(iref, irot, k, self%interp_fcomp_expanded( wdim, loc ))
+                    call pftcc%set_ref_fcomp(iref, irot, k, self%interp_fcomp_expanded(loc))
                 end do
             end do
         else
@@ -317,7 +319,7 @@ contains
                     vec(:2) = pftcc%get_coord(irot,k)
                     vec(3)  = 0.
                     loc     = matmul(vec,e%get_mat())
-                    call pftcc%set_ref_fcomp(iref, irot, k, self%interp_fcomp_expanded( wdim, loc ))
+                    call pftcc%set_ref_fcomp(iref, irot, k, self%interp_fcomp_expanded(loc))
                 end do
             end do
             !$omp end parallel do
@@ -383,7 +385,6 @@ contains
         complex  :: comp_sum
         integer  :: i, j, m, wdim, incr, lims(3,2), win(3,2), logi(3), phys(3)
         real     :: harwin_here
-        !harwin_here = 2.
         harwin_here = self%harwin_exp
         win  = sqwin_3d(loc(1),loc(2),loc(3), harwin_here)
         wdim = win(1,2) - win(1,1) + 1
@@ -400,8 +401,8 @@ contains
                 cyc1(i)  = cyci_1d(lims(1,:), win(1,1)+incr)
                 cyc2(i)  = cyci_1d(lims(2,:), win(2,1)+incr)
                 ! interpolation kernel matrix
-                w(i,:,1) = w(i,:,1) * kb_apod( real(win(1,1)+incr)-loc(1) )
-                w(:,i,1) = w(:,i,1) * kb_apod( real(win(2,1)+incr)-loc(2) )
+                w(i,:,1) = w(i,:,1) * self%kbwin%apod( real(win(1,1)+incr)-loc(1) )
+                w(:,i,1) = w(:,i,1) * self%kbwin%apod( real(win(2,1)+incr)-loc(2) )
             enddo
             ! fetch fourier components
             do i=1, wdim
@@ -428,9 +429,9 @@ contains
                 cyc2(i)  = cyci_1d(lims(2,:), win(2,1)+incr)
                 cyc3(i)  = cyci_1d(lims(3,:), win(3,1)+incr)
                 ! interpolation kernel matrix
-                w(i,:,:) = w(i,:,:) * kb_apod( real(win(1,1)+incr)-loc(1) )
-                w(:,i,:) = w(:,i,:) * kb_apod( real(win(2,1)+incr)-loc(2) )
-                w(:,:,i) = w(:,:,i) * kb_apod( real(win(3,1)+incr)-loc(3) )
+                w(i,:,:) = w(i,:,:) * self%kbwin%apod( real(win(1,1)+incr)-loc(1) )
+                w(:,i,:) = w(:,i,:) * self%kbwin%apod( real(win(2,1)+incr)-loc(2) )
+                w(:,:,i) = w(:,:,i) * self%kbwin%apod( real(win(3,1)+incr)-loc(3) )
             enddo
             ! fetch fourier components
             do i=1, wdim
@@ -451,21 +452,20 @@ contains
     end function extr_gridfcomp
 
     !>  \brief is to interpolate from the expanded complex matrix 
-    function interp_fcomp_expanded( self, wdim, loc )result( comp )
+    function interp_fcomp_expanded( self, loc )result( comp )
         class(projector), intent(inout) :: self
-        integer,          intent(in)    :: wdim
         real,             intent(in)    :: loc(3)
         complex :: comp
-        real    :: w(1:wdim,1:wdim,1:wdim)
+        real    :: w(1:self%wdim,1:self%wdim,1:self%wdim)
         integer :: i, win(3,2)
         ! interpolation kernel window
         win  = sqwin_3d(loc(1), loc(2), loc(3), self%harwin_exp)
         ! interpolation kernel matrix
         w = 1.
-        do i=1,wdim
-            w(i,:,:) = w(i,:,:) * kb_apod( real(win(1,1)+i-1)-loc(1) )
-            w(:,i,:) = w(:,i,:) * kb_apod( real(win(2,1)+i-1)-loc(2) )
-            w(:,:,i) = w(:,:,i) * kb_apod( real(win(3,1)+i-1)-loc(3) )
+        do i=1,self%wdim
+            w(i,:,:) = w(i,:,:) * self%kbwin%apod( real(win(1,1)+i-1)-loc(1) )
+            w(:,i,:) = w(:,i,:) * self%kbwin%apod( real(win(2,1)+i-1)-loc(2) )
+            w(:,:,i) = w(:,:,i) * self%kbwin%apod( real(win(3,1)+i-1)-loc(3) )
         end do
         ! SUM( kernel x components )
         comp = sum( w * self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2),win(3,1):win(3,2)) )
@@ -482,17 +482,16 @@ contains
         real, allocatable :: w(:,:)
         real              :: loc(2)
         integer           :: pdim(3), win(2,2), lims(3,2)
-        integer           :: i, k, l, wdim, wlen, alloc_stat, cnt
+        integer           :: i, k, l, wlen, alloc_stat, cnt
         if( .not. pftcc%exists() ) stop 'polarft_corrcalc object needs to be created; init_imgpolarizer; simple_projector'
         call self%kill_imgpolarizer
-        wdim = 2*ceiling(self%harwin_exp) + 1
-        wlen = wdim**2
+        wlen = self%wdim**2
         pdim = pftcc%get_pdim(.true.)
         lims = self%loop_lims(3)
-        allocate( self%polcyc1_mat(1:pdim(1), pdim(2):pdim(3), 1:wdim),&
-                  &self%polcyc2_mat(1:pdim(1), pdim(2):pdim(3), 1:wdim),&
+        allocate( self%polcyc1_mat(1:pdim(1), pdim(2):pdim(3), 1:self%wdim),&
+                  &self%polcyc2_mat(1:pdim(1), pdim(2):pdim(3), 1:self%wdim),&
                   &self%polweights_mat(1:pdim(1), pdim(2):pdim(3), 1:wlen),&
-                  &w(1:wdim,1:wdim), stat=alloc_stat)
+                  &w(1:self%wdim,1:self%wdim), stat=alloc_stat)
         call alloc_err('in simple_projector :: init_imgpolarizer', alloc_stat)
         !$omp parallel do collapse(2) schedule(static) default(shared)&
         !$omp private(i,k,l,w,loc,cnt,win) proc_bind(close)
@@ -503,11 +502,11 @@ contains
                 win = sqwin_2d(loc(1), loc(2), self%harwin_exp)
                 w   = 1.
                 cnt = 0
-                do l=1,wdim
+                do l=1,self%wdim
                     cnt = cnt + 1
                     ! interpolation weights
-                    w(l,:) = w(l,:) * kb_apod( real(win(1,1)+l-1)-loc(1) )
-                    w(:,l) = w(:,l) * kb_apod( real(win(2,1)+l-1)-loc(2) )
+                    w(l,:) = w(l,:) * self%kbwin%apod( real(win(1,1)+l-1)-loc(1) )
+                    w(:,l) = w(:,l) * self%kbwin%apod( real(win(2,1)+l-1)-loc(2) )
                     ! cyclic addresses
                     self%polcyc1_mat(i, k, cnt) = cyci_1d(lims(1,:), win(1,1)+l-1)
                     self%polcyc2_mat(i, k, cnt) = cyci_1d(lims(2,:), win(2,1)+l-1)

@@ -213,7 +213,7 @@ contains
             else
                 smpd_target = LPLIMS(2)*LP2SMPDFAC
             endif
-            call scobj%init(p_master, cline, SMPD_TARGET, STKSCALEDBODY)
+            call scobj%init(p_master, cline, smpd_target, STKSCALEDBODY)
         else
             smpd_target = smpd
         endif

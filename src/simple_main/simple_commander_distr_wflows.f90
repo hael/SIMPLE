@@ -112,7 +112,7 @@ contains
         use simple_commander_preproc
         class(unblur_ctffind_distr_commander), intent(inout) :: self
         class(cmdline),                        intent(inout) :: cline
-        character(len=32), parameter   :: UNIDOCFBODY = 'unindoc_'
+        character(len=32), parameter   :: UNIDOCFBODY = 'unidoc_'
         type(merge_algndocs_commander) :: xmerge_algndocs
         type(cmdline)  :: cline_merge_algndocs
         type(qsys_env) :: qenv
@@ -125,7 +125,7 @@ contains
         ! prepare merge_algndocs command line
         cline_merge_algndocs = cline
         call cline_merge_algndocs%set( 'nthr',    1.                    )
-        call cline_merge_algndocs%set( 'fbody',   'unindoc_'            )
+        call cline_merge_algndocs%set( 'fbody',   'unidoc_'             )
         call cline_merge_algndocs%set( 'nptcls',  real(p_master%nptcls) )
         call cline_merge_algndocs%set( 'ndocs',   real(p_master%nparts) )
         call cline_merge_algndocs%set( 'outfile', 'simple_unidoc.txt'   )
@@ -149,7 +149,7 @@ contains
         use simple_commander_preproc
         class(unblur_distr_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        character(len=32), parameter   :: UNIDOCFBODY = 'unindoc_'
+        character(len=32), parameter   :: UNIDOCFBODY = 'unidoc_'
         type(merge_algndocs_commander) :: xmerge_algndocs
         type(cmdline)  :: cline_merge_algndocs
         type(qsys_env) :: qenv
@@ -162,7 +162,7 @@ contains
         ! prepare merge_algndocs command line
         cline_merge_algndocs = cline
         call cline_merge_algndocs%set( 'nthr',    1.                    )
-        call cline_merge_algndocs%set( 'fbody',   'unindoc_'            )
+        call cline_merge_algndocs%set( 'fbody',   'unidoc_'             )
         call cline_merge_algndocs%set( 'nptcls',  real(p_master%nptcls) )
         call cline_merge_algndocs%set( 'ndocs',   real(p_master%nparts) )
         call cline_merge_algndocs%set( 'outfile', 'simple_unidoc.txt'   )

@@ -259,13 +259,15 @@ contains
     end subroutine prime3D_exec
 
     subroutine gen_random_model( b, p, nsamp_in )
-        use simple_ran_tabu, only: ran_tabu
+        use simple_ran_tabu,   only: ran_tabu
+        use simple_kbinterpol, only: kbinterpol
         class(build),      intent(inout) :: b
         class(params),     intent(inout) :: p
         integer, optional, intent(in)    :: nsamp_in
         type(ran_tabu)       :: rt
         integer, allocatable :: sample(:)
         integer              :: i, k, nsamp, alloc_stat
+        type(kbinterpol)     :: kbwin
         if( p%vols(1) == '' )then
             p%oritab = 'prime3D_startdoc.txt'
             call b%a%rnd_oris
@@ -293,6 +295,7 @@ contains
                 forall(i=1:nsamp) sample(i) = i
             endif
             write(*,'(A)') '>>> RECONSTRUCTING RANDOM MODEL'
+            kbwin = b%recvols(1)%get_kbwin()
             do i=1,nsamp
                 call progress(i, nsamp)
                 orientation = b%a%get_ori(sample(i))
@@ -300,7 +303,7 @@ contains
                 if( p%l_xfel )then
                     call b%img%pad(b%img_pad)
                 else
-                    call prep4cgrid(b%img, b%img_pad, p%msk)
+                    call prep4cgrid(b%img, b%img_pad, p%msk, kbwin)
                 endif
                 if( p%pgrp == 'c1' )then
                     call b%recvols(1)%inout_fplane(orientation, .true., b%img_pad)

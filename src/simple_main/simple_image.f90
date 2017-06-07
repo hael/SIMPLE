@@ -65,10 +65,12 @@ type :: image
     procedure          :: get
     procedure          :: get_rmat
     procedure          :: get_cmat
+    procedure          :: print_cmat
     procedure          :: expand_ft
     procedure          :: set
     procedure          :: set_rmat
     procedure          :: set_ldim
+    procedure          :: set_smpd
     procedure          :: get_slice
     procedure          :: set_slice
     procedure          :: get_npix
@@ -1046,6 +1048,11 @@ contains
         allocate(cmat(array_shape(1),array_shape(2),array_shape(3)), source=self%cmat)
     end function get_cmat
 
+    subroutine print_cmat( self )
+        class(image), intent(in) :: self
+        print *, self%cmat
+    end subroutine print_cmat
+
     !>  \brief  is for getting a Fourier plane using the old SIMPLE logics
     function expand_ft( self ) result( fplane )
          class(image), intent(in) :: self
@@ -1106,6 +1113,13 @@ contains
         integer,      intent(in)    :: ldim(3)
         self%ldim = ldim
     end subroutine set_ldim
+
+    !>  \brief  for setting smpd
+    subroutine set_smpd( self, smpd )
+        class(image), intent(inout) :: self
+        real,         intent(in)    :: smpd
+        self%smpd = smpd
+    end subroutine set_smpd
 
     !>  \brief is for getting a slice from a volume
     function get_slice( self3d, slice ) result( self2d )
