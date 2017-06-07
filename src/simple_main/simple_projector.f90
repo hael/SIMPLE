@@ -31,7 +31,7 @@ type, extends(image) :: projector
     real                  :: alpha      = 2.0        !< oversampling ratio
     real                  :: harwin     = 1.0        !< rounded window half-width
     real                  :: harwin_exp = 1.0        !< rounded window half-width in expanded routines
-    integer               :: wdim       = 0          !< window dimension
+    integer               :: wdim       = 0
     logical               :: expanded_exists=.false. !< indicates FT matrix existence
   contains
     ! CONSTRUCTORS
@@ -74,7 +74,7 @@ contains
         if( ldim(3) == 1      ) stop 'only for volumes; expand_cmat; simple_image'
         self%kbwin         = kbinterpol(KBWINSZ, KBALPHA)
         self%winsz         = KBWINSZ
-        self%harwin        = 1.0
+        self%harwin        = real(ceiling(self%winsz))
         self%harwin_exp    = 1.0
         self%alpha         = KBALPHA
         lims               = self%loop_lims(3)
@@ -485,9 +485,10 @@ contains
         integer           :: i, k, l, wlen, alloc_stat, cnt
         if( .not. pftcc%exists() ) stop 'polarft_corrcalc object needs to be created; init_imgpolarizer; simple_projector'
         call self%kill_imgpolarizer
-        wlen = self%wdim**2
-        pdim = pftcc%get_pdim(.true.)
-        lims = self%loop_lims(3)
+        self%wdim = 2*ceiling(self%harwin_exp) + 1
+        wlen      = self%wdim**2
+        pdim      = pftcc%get_pdim(.true.)
+        lims      = self%loop_lims(3)
         allocate( self%polcyc1_mat(1:pdim(1), pdim(2):pdim(3), 1:self%wdim),&
                   &self%polcyc2_mat(1:pdim(1), pdim(2):pdim(3), 1:self%wdim),&
                   &self%polweights_mat(1:pdim(1), pdim(2):pdim(3), 1:wlen),&
