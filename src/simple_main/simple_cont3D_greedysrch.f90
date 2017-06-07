@@ -95,8 +95,8 @@ contains
         self%state        = istate
         if( .not.self%state_exists(self%state) )stop 'state is empty; cont3D_greedysrch::prep_srch'
         ! correlation
-        call self%vols_ptr(self%state)%fproject_polar(self%ref, self%o_in,&
-        &self%pftcc_ptr, expanded=.true., serial=.true.)
+        call self%vols_ptr(self%state)%fproject_polar_expanded(self%ref, self%o_in,&
+        &self%pftcc_ptr, serial=.true.)
         self%prev_corr = self%pftcc_ptr%corr(self%ref, self%iptcl, 1, [0.,0.])
         ! specscore
         frc = self%pftcc_ptr%genfrc(self%ref, self%iptcl, 1)

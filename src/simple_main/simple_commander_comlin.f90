@@ -142,7 +142,7 @@ contains
         use simple_strings,        only: int2str_pad
         use simple_oris,           only: oris
         use simple_ori,            only: ori
-        use simple_projector_hlev, only: projvol
+        use simple_projector_hlev, only: projvol_expanded
         use simple_comlin_srch     ! use all in there
         class(symsrch_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
@@ -173,7 +173,8 @@ contains
         endif
         ! generate projections
         call b%vol%mask(p%msk, 'soft')
-        b%ref_imgs(1,:) = projvol(b%vol, b%e, p)
+        call b%vol%expand_cmat
+        b%ref_imgs(1,:) = projvol_expanded(b%vol, b%e, p)
         if( p%l_distr_exec .and. p%part > 1 )then
             ! do nothing
         else
@@ -215,6 +216,8 @@ contains
                 call os%write(p%outfile)
             endif
         endif
+        ! cleanup
+        call b%vol%kill_expanded
         ! end gracefully
         call simple_end('**** SIMPLE_SYMSRCH NORMAL STOP ****')
         ! indicate completion (when run in a qsys env)

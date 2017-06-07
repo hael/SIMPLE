@@ -125,7 +125,7 @@ contains
         ! dummy pftcc is only init here so the img polarizer can be initialized
         ! todo: write init_imgpolarizer constructor that does not require pftcc
         call pftcc%new(nrefs_per_ptcl, [1,1], [p%boxmatch,p%boxmatch,1],p%kfromto, p%ring2, p%ctf)
-        call b%img_match%init_imgpolarizer(pftcc)
+        call b%img_match%init_polarizer(pftcc)
         call pftcc%kill
 
         ! INITIALIZE
@@ -205,7 +205,7 @@ contains
             deallocate(pftccs, cont3Dsrch, cont3Dgreedysrch, batch_imgs)
         enddo
         ! CLEANUP SEARCH
-        call b%img_match%kill_expanded
+        call b%img_match%kill_polarizer
         do state=1,p%nstates
             call b%refvols(state)%kill_expanded
             call b%refvols(state)%kill
@@ -309,7 +309,7 @@ contains
         do iref=1,nrefs_per_ptcl
             oref  = orefs%get_ori(iref)
             state = nint(oref%get('state'))
-            call b%refvols(state)%fproject_polar(iref, oref, pftcc, expanded=.true.)
+            call b%refvols(state)%fproject_polar_expanded(iref, oref, pftcc)
         enddo          
     end subroutine prep_pftcc_refs
 
@@ -322,7 +322,7 @@ contains
         type(ori)  :: optcl
         optcl = b%a%get_ori(iptcl)
         call prepimg4align(b, p, optcl)
-        call b%img_match%imgpolarizer(pftcc, iptcl, isptcl=.true.)
+        call b%img_match%polarize(pftcc, iptcl, isptcl=.true.)
     end subroutine prep_pftcc_ptcl
 
 end module simple_cont3D_matcher

@@ -125,8 +125,10 @@ contains
         if( debug ) write(*,'(A)') '>>> DONE CALCULATING SNR:S'
         ! prepare for image generation
         call b%vol%read(p%vols(1))
+        call b%vol%mask(p%msk, 'soft')
         if( debug ) write(*,'(A)') '>>> DID READ VOL'
         call prep4cgrid(b%vol, b%vol_pad, p%msk, kbwin)
+        call b%vol%expand_cmat
         if( debug ) write(*,'(A)') '>>> DONE PREPARING FOR IMAGE GENERATION'
         write(*,'(A)') '>>> GENERATING IMAGES'
         cnt = 0
@@ -140,7 +142,7 @@ contains
             ! extract ori
             orientation = b%a%get_ori(i)
             ! project vol
-            call b%vol_pad%fproject(orientation, b%img_pad)
+            call b%vol_pad%fproject_expanded(orientation, b%img_pad)
             ! shift
             call b%img_pad%shift(orientation%get('x'),orientation%get('y'))
             if( cline%defined('bfac') )then
@@ -164,6 +166,7 @@ contains
                 call b%img%write(p%outstk, i)
             endif
         end do
+        call b%vol_pad%kill_expanded
         ! end gracefully
         call simple_end('**** SIMPLE_SIMIMGS NORMAL STOP ****')
     end subroutine exec_simimgs

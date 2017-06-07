@@ -43,7 +43,7 @@ contains
     end subroutine exec_wiener2D_test
 
     subroutine setup_testenv( cline, be_verbose )
-        use simple_projector_hlev, only: projvol
+        use simple_projector_hlev, only: projvol_expanded
         class(cmdline),    intent(inout) :: cline
         logical, optional, intent(in)    :: be_verbose
         type(oris) :: o_single
@@ -90,7 +90,7 @@ contains
         call o_single%new(1) 
         call o_single%set_euler(1, [0.,0.,0.])
         call b%vol%read(p%vols(1))
-        img_ref = projvol(b%vol, o_single,  p)
+        img_ref = projvol_expanded(b%vol, o_single,  p)
         call o_single%kill
     end subroutine setup_testenv
 

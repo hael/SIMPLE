@@ -14,51 +14,51 @@ implicit none
 
 contains
 
-    !>  \brief  generates an array of projection images of volume vol in orientations o
-    function projvol( vol, o, p, top ) result( imgs )   
-        class(image),      intent(inout) :: vol     !< volume to project
-        class(oris),       intent(inout) :: o       !< orientations
-        class(params),     intent(in)    :: p       !< parameters
-        integer, optional, intent(in)    :: top     !< stop index
-        type(image),      allocatable :: imgs(:)    !< resulting images
-        character(len=:), allocatable :: imgk
-        type(projector)  :: vol_pad
-        type(image)      :: img_pad
-        type(kbinterpol) :: kbwin
-        integer          :: n, i, alloc_stat
-        kbwin = kbinterpol(KBWINSZ, KBALPHA)
-        imgk  = vol%get_imgkind()
-        call vol_pad%new([p%boxpd,p%boxpd,p%boxpd], p%smpd, imgk)
-        if( imgk .eq. 'xfel' )then
-            call vol%pad(vol_pad)
-        else
-            call prep4cgrid(vol, vol_pad, p%msk, kbwin)
-        endif
-        call img_pad%new([p%boxpd,p%boxpd,1], p%smpd, imgk)
-        if( present(top) )then
-            n = top
-        else
-            n = o%get_noris()
-        endif
-        allocate( imgs(n), stat=alloc_stat )
-        call alloc_err('projvol; simple_projector', alloc_stat)
-        write(*,'(A)') '>>> GENERATES PROJECTIONS' 
-        do i=1,n
-            call progress(i, n)
-            call imgs(i)%new([p%box,p%box,1], p%smpd, imgk)
-            call vol_pad%fproject( o%get_ori(i), img_pad )
-            if( imgk .eq. 'xfel' )then
-                call img_pad%clip(imgs(i))
-            else
-                call img_pad%bwd_ft
-                call img_pad%clip(imgs(i))
-                ! HAD TO TAKE OUT BECAUSE PGI COMPILER BAILS
-                ! call imgs(i)%norm
-            endif
-        end do
-        call vol_pad%kill
-        call img_pad%kill
-    end function projvol
+    ! !>  \brief  generates an array of projection images of volume vol in orientations o
+    ! function projvol( vol, o, p, top ) result( imgs )   
+    !     class(image),      intent(inout) :: vol     !< volume to project
+    !     class(oris),       intent(inout) :: o       !< orientations
+    !     class(params),     intent(in)    :: p       !< parameters
+    !     integer, optional, intent(in)    :: top     !< stop index
+    !     type(image),      allocatable :: imgs(:)    !< resulting images
+    !     character(len=:), allocatable :: imgk
+    !     type(projector)  :: vol_pad
+    !     type(image)      :: img_pad
+    !     type(kbinterpol) :: kbwin
+    !     integer          :: n, i, alloc_stat
+    !     kbwin = kbinterpol(KBWINSZ, KBALPHA)
+    !     imgk  = vol%get_imgkind()
+    !     call vol_pad%new([p%boxpd,p%boxpd,p%boxpd], p%smpd, imgk)
+    !     if( imgk .eq. 'xfel' )then
+    !         call vol%pad(vol_pad)
+    !     else
+    !         call prep4cgrid(vol, vol_pad, p%msk, kbwin)
+    !     endif
+    !     call img_pad%new([p%boxpd,p%boxpd,1], p%smpd, imgk)
+    !     if( present(top) )then
+    !         n = top
+    !     else
+    !         n = o%get_noris()
+    !     endif
+    !     allocate( imgs(n), stat=alloc_stat )
+    !     call alloc_err('projvol; simple_projector', alloc_stat)
+    !     write(*,'(A)') '>>> GENERATES PROJECTIONS' 
+    !     do i=1,n
+    !         call progress(i, n)
+    !         call imgs(i)%new([p%box,p%box,1], p%smpd, imgk)
+    !         call vol_pad%fproject( o%get_ori(i), img_pad )
+    !         if( imgk .eq. 'xfel' )then
+    !             call img_pad%clip(imgs(i))
+    !         else
+    !             call img_pad%bwd_ft
+    !             call img_pad%clip(imgs(i))
+    !             ! HAD TO TAKE OUT BECAUSE PGI COMPILER BAILS
+    !             ! call imgs(i)%norm
+    !         endif
+    !     end do
+    !     call vol_pad%kill
+    !     call img_pad%kill
+    ! end function projvol
 
     !>  \brief  generates an array of projection images of volume vol in orientations o
     function projvol_expanded( vol, o, p, top, lp ) result( imgs )
@@ -127,6 +127,7 @@ contains
         call rovol_pad%set_ft(.true.)
         call rovol%new([p%box,p%box,p%box], p%smpd)
         call prep4cgrid(vol, vol_pad, p%msk, kbwin)
+        call vol_pad%expand_cmat
         lims = vol_pad%loop_lims(2)
         write(*,'(A)') '>>> ROTATING VOLUME'
         !$omp parallel do collapse(3) default(shared) private(h,k,l,loc,logi,phys)&
@@ -137,7 +138,7 @@ contains
                     logi = [h,k,l]
                     phys = rovol_pad%comp_addr_phys([h,k,l])
                     loc  = matmul(real(logi),o%get_mat())
-                    call rovol_pad%set_fcomp(logi, phys, vol_pad%extr_gridfcomp(loc))
+                    call rovol_pad%set_fcomp(logi, phys, vol_pad%interp_fcomp_expanded(loc))
                 end do 
             end do
         end do
@@ -212,7 +213,7 @@ contains
     !>  \brief  rotates an image batch by angle ang using Fourier gridding
     !>          the weighted images sum is returned
     subroutine rot_imgbatch( imgs, os, imgsum, msk )
-        use simple_math,       only: cyci_1d, sqwin_2d, rotmat2d
+        use simple_math, only: cyci_1d, sqwin_2d, rotmat2d
         class(image), intent(inout) :: imgs(:)   !< images to rotate
         type(oris),   intent(inout) :: os        !< orientations
         class(image), intent(inout) :: imgsum    !< reconstituted image
@@ -229,13 +230,13 @@ contains
         kbwin = kbinterpol(KBWINSZ, KBALPHA)
         ! init
         zero       = cmplx(0.,0.)
-        winsz      = 1.0
+        winsz      = KBWINSZ
         ldim       = imgs(1)%get_ldim()
         ldim_pd    = nint(KBALPHA)*ldim
         ldim_pd(3) = 1
         smpd       = imgs(1)%get_smpd()
         nimgs      = size(imgs)
-        wdim       = ceiling(nint(KBALPHA)*winsz) + 1
+        wdim       = ceiling(KBALPHA*winsz) + 1
         ! gridding
         allocate(padded_imgs(nimgs))
         do i = 1, nimgs

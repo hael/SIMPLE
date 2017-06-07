@@ -452,7 +452,7 @@ contains
         ! must be done here since constants in p are dynamically set
         call pftcc%new(p%ncls, [p%fromp,p%top], [p%boxmatch,p%boxmatch,1], p%kfromto, p%ring2, p%ctf)
         ! prepare the polarizers
-        call b%img_match%init_imgpolarizer(pftcc)
+        call b%img_match%init_polarizer(pftcc)
         ! prepare the automasker
         if( p%l_automsk )call b%mskimg%init2D( p, p%ncls )
         ! PREPARATION OF REFERENCES IN PFTCC
@@ -467,7 +467,7 @@ contains
                 b%img = b%cavgs(icls)
                 call prep2Dref(b, p, icls)
                 ! transfer to polar coordinates
-                call b%img_match%imgpolarizer(pftcc, icls, isptcl=.false.)
+                call b%img_match%polarize(pftcc, icls, isptcl=.false.)
             endif
         end do
         ! PREPARATION OF PARTICLES IN PFTCC
@@ -484,7 +484,7 @@ contains
             if( istate == 0 ) icls = 0
             call prepimg4align(b, p, o)
             ! transfer to polar coordinates
-            call b%img_match%imgpolarizer(pftcc, iptcl)
+            call b%img_match%polarize(pftcc, iptcl)
         end do
         if( debug ) write(*,*) '*** hadamard2D_matcher ***: finished preppftcc4align'
     end subroutine preppftcc4align
