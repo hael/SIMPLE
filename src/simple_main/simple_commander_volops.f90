@@ -301,14 +301,15 @@ contains
         use simple_volpft_srch ! singleton
         class(volume_smat_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
-        type(params), target    :: p
-        integer                 :: funit, io_stat, cnt, npairs, npix, nvols, box_sc, loc(1)
-        integer                 :: ivol, jvol, ldim(3), alloc_stat, ipair, ifoo, i, spat_med
-        integer                 :: furthest_from_spat_med
-        real                    :: smpd_sc, scale, corr_max, corr_min
-        type(projector)         :: vol1, vol2
-        type(ori)               :: o
-        logical, parameter      :: debug=.false.
+        type(params), target :: p
+        integer              :: funit, io_stat, cnt, npairs, npix, nvols, box_sc, loc(1)
+        integer              :: ivol, jvol, ldim(3), alloc_stat, ipair, ifoo, i, spat_med
+        integer              :: furthest_from_spat_med
+        real                 :: smpd_sc, scale, corr_max, corr_min, spat_med_corr
+        real                 :: furthest_from_spat_med_corr
+        type(projector)      :: vol1, vol2
+        type(ori)            :: o
+        logical, parameter   :: debug=.false.
         real,                  allocatable :: corrmat(:,:), corrs(:), corrs_avg(:)
         integer,               allocatable :: pairs(:,:)
         character(len=STDLEN), allocatable :: vollist(:)
@@ -391,10 +392,18 @@ contains
             do ivol=1,nvols
                 corrs_avg(ivol) = (sum(corrmat(ivol,:))-1.0)/real(nvols - 1)
             end do
-            loc                    = maxloc(corrs_avg)
-            spat_med               = loc(1)
-            loc                    = minloc(corrmat(spat_med,:))
-            furthest_from_spat_med = loc(1)
+            loc                         = maxloc(corrs_avg)
+            spat_med                    = loc(1)
+            spat_med_corr               = corrs_avg(spat_med)
+            loc                         = minloc(corrmat(spat_med,:))
+            furthest_from_spat_med      = loc(1)
+            furthest_from_spat_med_corr = corrmat(spat_med,furthest_from_spat_med)
+            write(*,'(a,1x,f7.4)') 'MAX VOL PAIR CORR          :', corr_max
+            write(*,'(a,1x,f7.4)') 'MIN VOL PAIR CORR          :', corr_min
+            write(*,'(a,1x,i7)'  ) 'SPATIAL MEDIAN             :', spat_med 
+            write(*,'(a,1x,f7.4)') 'SPATIAL MEDIAN CORR        :', spat_med_corr
+            write(*,'(a,1x,i7)'  ) 'FURTHEST FROM SPAT MED     :', furthest_from_spat_med
+            write(*,'(a,1x,f7.4)') 'FURTHEST FROM SPAT MED CORR:', furthest_from_spat_med_corr
             funit = get_fileunit()
             open(unit=funit, status='REPLACE', action='WRITE', file='vol_smat.bin', access='STREAM')
             write(unit=funit,pos=1,iostat=io_stat) corrmat
