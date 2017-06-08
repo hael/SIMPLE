@@ -686,7 +686,7 @@ select case(prg)
         else
             call cline%set('nptcls', cline%get_rarg('nspace'))
         endif
-        if(.not.cline%defined('cenlp')) call cline%set('cenlp',   30.)
+        if(.not.cline%defined('cenlp')) call cline%set('cenlp', 30.)
         ! execute
         call xsymsrch_distr%execute( cline )
 

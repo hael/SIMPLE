@@ -143,6 +143,7 @@ simple: simple_image.o                  \
         simple_gridding.o               \
         simple_polarft_corrcalc.o       \
         simple_projector.o              \
+        simple_polarizer.o              \
         simple_mask_projector.o         \
         simple_pftcc_opt.o              \
         simple_simplex_pftcc_opt.o      \
@@ -195,7 +196,8 @@ matcher: simple_picker.o                  \
          simple_hadamard2D_matcher.o      \
          simple_hadamard3D_matcher.o      ;
 
-s_other: simple_masker.o                  ;
+s_other: simple_masker.o                  \
+         simple_symsrcher.o               ;
 
 cluster_cavg: simple_matchpursuit.o       \
               simple_cavgppca.o           ;

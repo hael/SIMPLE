@@ -159,6 +159,8 @@ type :: image
     procedure, private :: bin_3
     generic            :: bin => bin_1, bin_2, bin_3
     procedure          :: bin_filament
+    procedure          :: bin_cylinder
+    procedure          :: cendist
     procedure          :: masscen
     procedure          :: center
     procedure          :: bin_inv
@@ -201,7 +203,9 @@ type :: image
     procedure          :: comp_addr_phys
     procedure          :: corr
     procedure          :: corr_shifted
-    procedure          :: real_corr
+    procedure, private :: real_corr_1
+    procedure, private :: real_corr_2
+    generic            :: real_corr => real_corr_1, real_corr_2
     procedure          :: prenorm4real_corr
     procedure          :: real_corr_prenorm
     procedure          :: rank_corr
@@ -2434,6 +2438,62 @@ contains
         self%rmat(xstart:xstop,:,1) = 1.
     end subroutine bin_filament
 
+    !>  \brief  is for creating a binary cyclinder along z-axis
+    subroutine bin_cylinder( self, rad, height )
+        class(image), intent(inout) :: self
+        real,         intent(in)    :: rad, height
+        type(image)       :: mask2d
+        real, allocatable :: plane(:,:,:)
+        real        :: centre(3)
+        integer     :: k
+        if( self%ldim(3) == 1 ) stop 'only for 3D images; simple_imge :: bin_cylinder '
+        centre = 1. + real(self%ldim-1)/2.
+        if( self%ft ) self%ft = .false.
+        call mask2d%new([self%ldim(1), self%ldim(2), 1], self%smpd)
+        mask2d = 1.
+        call mask2d%mask(rad, 'hard')
+        plane = mask2d%get_rmat()
+        self%rmat = 0.
+        do k = 1,self%ldim(3)
+            if( abs(real(k)-centre(3)) < height/2. )then
+                self%rmat(:self%ldim(1),:self%ldim(2),k) = plane(:,:,1)
+            endif
+        enddo
+        call mask2d%kill
+        deallocate(plane)
+    end subroutine bin_cylinder
+
+    !>  \brief  produces an image with square distance from the centre of the image
+    subroutine cendist( self )
+        class(image), intent(inout) :: self
+        real    :: centre(3), vec(3)
+        integer :: i, j, k, alloc_stat
+        if( self%is_ft() ) stop 'real space only; simple_image%distsq_img'
+        ! Builds square distance image
+        self = 0.
+        centre = real(self%ldim-1)/2.
+        if( self%is_2d() )then
+            ! 2D
+            do i=1,self%ldim(1)
+                self%rmat(i,:,1) = self%rmat(i,:,1) + (real(i)-centre(1))**2.
+            enddo
+            do i=1,self%ldim(2)
+                self%rmat(:,i,1) = self%rmat(:,i,1) + (real(i)-centre(2))**2.
+            enddo
+            self%rmat = sqrt(self%rmat)
+        else
+            ! 3D
+            do i=1,self%ldim(1)
+                do j=1,self%ldim(2)
+                    do k=1,self%ldim(3)
+                        vec = real([i,j,k]) - centre
+                        self%rmat(i,:,1) = dot_product(vec,vec)
+                    enddo
+                enddo
+            enddo
+        endif
+    end subroutine cendist
+
     !>  \brief  is for determining the center of mass of binarised image
     !!          only use this function for integer pixels shifting
     function masscen( self ) result( xyz )
@@ -2492,7 +2552,6 @@ contains
             call tmp%bin(thres)
         else
             call tmp%mask(rmsk, 'soft')
-            !call tmp%bin('nomsk')          ! the old fashioned way
             call tmp%bin('msk', rmsk)
         endif
         xyz = tmp%masscen()
@@ -3686,7 +3745,7 @@ contains
     end function corr_shifted
 
     !>  \brief is for calculating a real-space correlation coefficient between images
-    function real_corr( self1, self2 ) result( r )
+    function real_corr_1( self1, self2 ) result( r )
         class(image), intent(inout) :: self1, self2
         real, allocatable           :: diffmat1(:,:,:), diffmat2(:,:,:)
         real                        :: r,ax,ay,sxx,syy,sxy,npix 
@@ -3708,7 +3767,50 @@ contains
         sxy      = sum(diffmat1*diffmat2)
         deallocate(diffmat1,diffmat2)
         r = calc_corr(sxy,sxx*syy)
-    end function real_corr
+    end function real_corr_1
+
+    !>  \brief is for calculating a real-space correlation coefficient between images within a mask
+    !>  Input mask is assumed binarized
+    function real_corr_2( self1, self2, maskimg ) result( r )
+        class(image), intent(inout) :: self1, self2
+        class(image), intent(in)    :: maskimg
+        real,    allocatable        :: vec1(:), vec2(:), rmat(:,:,:)
+        logical, allocatable        :: mask(:,:,:)
+        integer :: npix
+        real    :: r, ax, ay, sxx, syy, sxy, rnpix
+        if( self1%ft .or. self2%ft ) stop 'cannot real-space correlate FTs; real_corr_mask; simple_image'
+        if( .not. (self1.eqdims.self2) )then
+            write(*,*) 'ldim self1: ', self1%ldim
+            write(*,*) 'ldim self2: ', self2%ldim
+            stop 'images to be correlated need to have same dims; real_corr_mask; simple_image'
+        endif
+        if( .not. (self1.eqdims.maskimg) )then
+            stop 'images and mask do have same dims; real_corr_mask; simple_image'
+        endif
+        ! build logical mask
+        rmat = maskimg%get_rmat()
+        allocate(mask(self1%ldim(1),self1%ldim(2),self1%ldim(3)))
+        mask = .false.
+        where(rmat > 0.5) mask = .true.
+        deallocate(rmat)
+        npix  = count(mask)
+        rnpix = real(npix)
+        ! vectorize
+        rmat = self1%get_rmat()
+        vec1 = pack(rmat, mask) 
+        deallocate(rmat)
+        rmat = self2%get_rmat()
+        vec2 = pack(rmat, mask) 
+        deallocate(rmat, mask)
+        ! correlation
+        vec1 = vec1 - sum(vec1)/rnpix
+        vec2 = vec2 - sum(vec2)/rnpix
+        sxx  = sum(vec1**2.)
+        syy  = sum(vec2**2.)
+        sxy  = sum(vec1 * vec2)
+        r    = calc_corr(sxy,sxx*syy)
+        deallocate(vec1,vec2)
+    end function real_corr_2
 
     !>  \brief is pre-normalise the reference in preparation for real_corr_prenorm
     subroutine prenorm4real_corr( self, sxx )
