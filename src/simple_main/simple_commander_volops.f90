@@ -302,13 +302,14 @@ contains
         class(volume_smat_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(params), target    :: p
-        integer                 :: funit, io_stat, cnt, npairs, npix, nvols, box_sc
-        integer                 :: ivol, jvol, ldim(3), alloc_stat, ipair, ifoo, i
-        real                    :: smpd_sc, scale
+        integer                 :: funit, io_stat, cnt, npairs, npix, nvols, box_sc, loc(1)
+        integer                 :: ivol, jvol, ldim(3), alloc_stat, ipair, ifoo, i, spat_med
+        integer                 :: furthest_from_spat_med
+        real                    :: smpd_sc, scale, corr_max, corr_min
         type(projector)         :: vol1, vol2
         type(ori)               :: o
         logical, parameter      :: debug=.false.
-        real,                  allocatable :: corrmat(:,:), corrs(:)
+        real,                  allocatable :: corrmat(:,:), corrs(:), corrs_avg(:)
         integer,               allocatable :: pairs(:,:)
         character(len=STDLEN), allocatable :: vollist(:)
         character(len=:),      allocatable :: fname
@@ -368,11 +369,13 @@ contains
             deallocate(fname, corrs, pairs)
         else
             ! generate similarity matrix
-            allocate(corrmat(nvols,nvols), stat=alloc_stat)
+            allocate(corrmat(nvols,nvols), corrs_avg(nvols), stat=alloc_stat)
             call alloc_err('In: simple_volume_smat, 2', alloc_stat)
             corrmat = -1.
             forall(i=1:nvols) corrmat(i,i) = 1.0
             cnt = 0
+            corr_max = -1.0
+            corr_min =  1.0
             do ivol=1,nvols - 1
                 do jvol=ivol + 1,nvols
                     cnt = cnt + 1
@@ -381,8 +384,17 @@ contains
                     o = volpft_srch_minimize() 
                     corrmat(ivol,jvol) = o%get('corr')
                     corrmat(jvol,ivol) = corrmat(ivol,jvol)
+                    if( corrmat(ivol,jvol) > corr_max ) corr_max = corrmat(ivol,jvol)
+                    if( corrmat(ivol,jvol) < corr_min ) corr_min = corrmat(ivol,jvol)
                 end do
             end do
+            do ivol=1,nvols
+                corrs_avg(ivol) = (sum(corrmat(ivol,:))-1.0)/real(nvols - 1)
+            end do
+            loc                    = maxloc(corrs_avg)
+            spat_med               = loc(1)
+            loc                    = minloc(corrmat(spat_med,:))
+            furthest_from_spat_med = loc(1)
             funit = get_fileunit()
             open(unit=funit, status='REPLACE', action='WRITE', file='vol_smat.bin', access='STREAM')
             write(unit=funit,pos=1,iostat=io_stat) corrmat

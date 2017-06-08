@@ -87,7 +87,6 @@ contains
         call espace%spiral
         allocate(corrs(ffromto(1):ffromto(2),0:359))
         ! grid search using the spiral geometry & ANGRES degree in-plane resolution
-        write(*,'(A)') '>>> GLOBAL ORIENTATION GRID SEARCH'
         serial = .true. ! since the below loop is parallel
         corrs  = -1.
         !$omp parallel do schedule(static) default(shared) private(iproj,euls,inpl) proc_bind(close)
@@ -126,7 +125,6 @@ contains
                 call resoris%set(iloc, 'corr', -cost)
             end do
         else
-            write(*,'(A)') '>>> CONTINOUS ORIENTATION REFINEMENT'
             ! refine the NBEST local optima
             ! order the local optima according to correlation
             order = resoris%order_corr()
