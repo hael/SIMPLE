@@ -192,7 +192,7 @@ contains
       integer,          intent(in)    :: nVars
       character(len=*), intent(inout) :: vin
       character(len=20), allocatable  :: v(:)
-      integer :: nargs_parse
+      integer :: nargs_parse, ind
 #ifdef _DEBUG
 #if _DEBUG > 1
       print *, " timer_profile_setup ", char(nLoops), "  ", char(nVars)
@@ -210,13 +210,25 @@ contains
           stop
       else
           call removepunct(vin)
+
 #ifdef _DEBUG
 #if _DEBUG > 1
           print *, " timer_profile_setup remove punct"
           print *, vin
 #endif
 #endif
+
           allocate(v(nVars))
+          ind = index(vin, ',')
+          if( ind == 0 )then
+              call replace(vin,' ', ',')
+  #ifdef _DEBUG
+#if _DEBUG > 1
+          print *, " timer_profile_setup no-comma token input"
+          print *, vin
+#endif
+#endif            
+          end if
           call parse(vin,',',v,nargs_parse)
 #ifdef _DEBUG
 #if _DEBUG > 1
