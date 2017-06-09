@@ -9,7 +9,7 @@ use simple_ori,               only: ori
 !use simple_masker,           only: automask
 use simple_cont3D_greedysrch, only: cont3D_greedysrch
 use simple_cont3D_srch,       only: cont3D_srch
-use simple_hadamard_common,   ! use all in there
+use simple_hadamard_common   ! use all in there
 use simple_math               ! use all in there
 implicit none
 
@@ -56,7 +56,7 @@ contains
         type(oris)           :: softoris
         type(ori)            :: orientation
         type(ran_tabu)       :: rt
-        integer              :: nbatches, batch, fromp, top, iptcl, state, alloc_stat, ind
+        integer              :: nbatches, batch, fromp, top, iptcl,iptcl_tmp, state, alloc_stat, ind
         ! AUTOMASKING DEACTIVATED FOR NOW
         ! MULTIPLE STATES DEACTIVATED FOR NOW
         if(p%nstates>1)stop 'MULTIPLE STATES DEACTIVATED FOR NOW; cont3D_matcher::cont3Dexec'
@@ -148,6 +148,7 @@ contains
                 &batch_imgs(fromp:top), stat=alloc_stat)
             call alloc_err('In pcont3D_matcher::pcont3D_exec_single',alloc_stat)
             do iptcl = fromp, top
+                
                 state = nint(b%a%get(iptcl, 'state'))
                 if(state == 0)cycle
                 ! stash raw image for rec
@@ -155,7 +156,7 @@ contains
                 batch_imgs(iptcl) = b%img
                 ! prep pftccs & ctf
                 call init_pftcc(p, iptcl, pftccs(iptcl))
-                call prep_pftcc_ptcl(b, p, iptcl, pftccs(iptcl))
+                call prep_pftcc_ptcl(b, p, iptcl_tmp, pftccs(iptcl))
                 if( p%ctf.ne.'no' )call pftccs(iptcl)%create_polar_ctfmats(p%smpd, b%a)
                 select case(p%refine)
                     case('yes')
@@ -290,7 +291,7 @@ contains
         use simple_ctf,   only: ctf
         class(build),               intent(inout) :: b
         class(params),              intent(inout) :: p
-        integer,                    intent(inout) :: iptcl
+        integer,                    intent(in) :: iptcl
         class(polarft_corrcalc),    intent(inout) :: pftcc
         type(ctf)   :: tfun
         type(image) :: ref_img, ctf_img
@@ -335,7 +336,7 @@ contains
     subroutine prep_pftcc_ptcl(b, p, iptcl, pftcc)
         class(build),               intent(inout) :: b
         class(params),              intent(inout) :: p
-        integer,                    intent(inout) :: iptcl
+        integer,                    intent(in) :: iptcl
         class(polarft_corrcalc),    intent(inout) :: pftcc
         type(ori)  :: optcl
         optcl = b%a%get_ori(iptcl)
