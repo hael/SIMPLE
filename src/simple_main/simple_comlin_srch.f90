@@ -31,6 +31,7 @@ class(optimizer), pointer :: nlopt=>null()    !< pointer to nonlinear optimizer
 type(oris)                :: a_copy           !< safe keeping for cost function
 type(oris)                :: resoris          !< for results storage and ranking
 type(oris)                :: espace           !< projection directions
+type(ori)                 :: oref             !< starting projection direction
 integer                   :: nptcls=0         !< nr of particles
 real                      :: eullims(3,2)=0.  !< Euler limits; only used to setup optimizer
 real                      :: optlims(5,2)=0.  !< Euler limits; only used to setup optimizer
@@ -222,6 +223,8 @@ contains
     function comlin_srch_minimize( otarget ) result( cxy )
         class(ori) :: otarget
         real       :: cxy(4)
+        oref    = otarget
+        call oref%swape1e3
         ospec%x = otarget%get_euler()
         ospec%nevals = 0
         call nlopt%minimize(ospec, cxy(1))
@@ -244,8 +247,8 @@ contains
     function comlin_srch_cost( vec, D ) result( cost )
         integer, intent(in)  :: D
         real,    intent(in)  :: vec(D)
-        type(ori) :: o
-        real      :: cost
+        type(ori) :: o, oswap
+        real      :: cost, euldist
         cost = 0.
         if(any(vec(1:3)-eullims(:,1) < 0.))then     ! lower limits
             cost = 1.
@@ -253,6 +256,15 @@ contains
             cost = 1.
         else
             call o%set_euler(vec)
+            !
+            oswap = o
+            call oswap%swape1e3
+            euldist = oswap.euldist.oref
+            if( euldist > PI/3. )then
+                cost = 1.
+                return
+            endif
+            !
             call bp%a%rot(o)
             call bp%se%apply2all(bp%a)
             cost = -bp%clins%corr()

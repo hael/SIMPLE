@@ -27,6 +27,8 @@ public :: print_fsc_commander
 public :: print_magic_boxes_commander
 public :: res_commander
 public :: shift_commander
+public :: sym_aggregate_commander
+public :: dsymsrch_commander
 private
 
 type, extends(commander_base) :: cluster_smat_commander
@@ -61,6 +63,14 @@ type, extends(commander_base) :: shift_commander
   contains
     procedure :: execute       => exec_shift
 end type shift_commander
+type, extends(commander_base) :: sym_aggregate_commander
+  contains
+    procedure :: execute       => exec_sym_aggregate
+end type sym_aggregate_commander
+type, extends(commander_base) :: dsymsrch_commander
+  contains
+    procedure :: execute       => exec_dsymsrch
+end type dsymsrch_commander
 
 contains
 
@@ -259,5 +269,150 @@ contains
         call b%a%write('shiftdoc.txt')
         call simple_end('**** SIMPLE_SHIFT NORMAL STOP ****')
     end subroutine exec_shift
+
+    subroutine exec_sym_aggregate( self, cline )
+        use simple_oris,  only: oris
+        use simple_ori,   only: ori
+        use simple_sym,   only: sym
+        use simple_image, only: image
+        use simple_projector_hlev, only: rotvol
+        class(sym_aggregate_commander), intent(inout) :: self
+        class(cmdline),                 intent(inout) :: cline
+        type(cmdline)      :: cline_c1
+        type(params)       :: p, p_c1
+        type(build)        :: b
+        type(oris)         :: e, sympeaks, sym_axes
+        type(ori)          :: symaxis, o
+        type(image)        :: symvol, asym_vol
+        type(sym)          :: se_c1
+        real               :: cc, rotmat(3,3)
+        integer            :: i, fnr, file_stat
+        integer, parameter :: MAXLABELS = 10   ! maximum numbers symmetry peaks
+        real,    parameter :: ANGTHRESH = 10.  ! maximum half-distance between symmetry peaks
+        p = params(cline)                   ! parameters generated
+        call b%build_general_tbox(p, cline) ! general objects built
+        ! init
+        e = b%a     ! b%a contains the references projections orientations
+        cline_c1 = cline
+        call cline_c1%set('pgrp', 'c1')
+        p_c1 = params(cline_c1)
+        call se_c1%new('c1')
+        call asym_vol%new([p%box,p%box,p%box], p%smpd)
+        call asym_vol%read(p%vols(1))
+        ! spherical mask
+        call b%mskvol%new([p%box,p%box,p%box], p%smpd)
+        b%mskvol = 1.
+        call b%mskvol%mask(p%msk, 'hard')
+        ! identify top ranking symmetry peaks
+        sym_axes = oris(nlines(p%oritab2))
+        call sym_axes%read(p%oritab2)
+        call find_sym_peaks(sym_axes, sympeaks)
+        ! reconstruct & correlate volumes
+        do i = 1, sympeaks%get_noris()
+            symaxis = sympeaks%get_ori(i)
+            b%a = e
+            call b%a%rot(symaxis)
+            ! symmetry
+            call rec_vol(p, b%se)
+            symvol = b%vol
+            !call symvol%mul(b%mskvol)
+            call symvol%write('sym_vol'//int2str_pad(i,2)//p%ext)
+            ! c1
+            rotmat = symaxis%get_mat()
+            call o%ori_from_rotmat(transpose(rotmat))
+            b%vol = rotvol(asym_vol, o, p)
+            call b%vol%bp(p%hp, p%lp)
+            call b%vol%mask(p%msk, 'soft')
+            !call rec_vol(p_c1, se_c1)
+            !call b%vol%mul(b%mskvol)
+            call b%vol%write('asym_vol'//int2str_pad(i,2)//p%ext)
+            ! correlation
+            cc = symvol%real_corr(b%vol, b%mskvol)
+            call sympeaks%set(i, 'corr', cc)
+        enddo
+        ! output
+        call sympeaks%write('sympeaks.txt')
+        call sympeaks%write(p%outfile)
+        ! the end
+        fnr = get_fileunit()
+        open(unit=fnr, FILE='SYM_AGGREGATE_FINISHED', STATUS='REPLACE', action='WRITE', iostat=file_stat)
+        call fopen_err('In: commander_misc :: sym_aggregate', file_stat )
+        close( unit=fnr )
+        call simple_end('**** SIMPLE_SYM_AGGREGATE NORMAL STOP ****')
+
+        contains
+
+            subroutine rec_vol( p, se )
+                type(params) :: p
+                type(sym)    :: se
+                call b%build_rec_tbox(p)
+                call b%recvol%rec(p%stk, p, b%a, se, 1)
+                call b%recvol%clip(b%vol)
+                call b%vol%bp(p%hp, p%lp)
+                call b%vol%mask(p%msk, 'soft')
+            end subroutine rec_vol
+
+            subroutine find_sym_peaks(sym_axes, sym_peaks)
+                use simple_math, only: rad2deg
+                class(oris), intent(inout) :: sym_axes
+                class(oris), intent(out)   :: sym_peaks
+                integer, allocatable :: sort_inds(:)
+                type(oris) :: axes, tmp_axes
+                type(ori)  :: axis, o
+                integer    :: iaxis, naxes, loc(1), ilabel, axis_ind, istate, n_sympeaks
+                axes       = sym_axes
+                naxes      = axes%get_noris()
+                tmp_axes   = oris(MAXLABELS)
+                n_sympeaks = 0
+                ! geometric clustering
+                call axes%set_all2single('state', 0.)
+                call axes%swape1e3
+                sort_inds = axes%order_corr()
+                do ilabel = 1, MAXLABELS
+                    ! identify next best axis
+                    do iaxis = 1, naxes
+                        axis_ind = sort_inds(iaxis)
+                        if(nint(axes%get(axis_ind,'state')) == 0)exit
+                    enddo
+                    if(iaxis > naxes)exit
+                    axis = axes%get_ori(axis_ind)
+                    n_sympeaks = n_sympeaks + 1
+                    call tmp_axes%set_ori(ilabel, axis)
+                    ! flags axes within threshold
+                    do iaxis = 1,naxes
+                        axis_ind = sort_inds(iaxis)
+                        o        = axes%get_ori(axis_ind)
+                        istate   = nint(o%get('state'))
+                        if(istate /= 0)cycle
+                        if(rad2deg(axis.euldist.o) <= ANGTHRESH)then
+                            axis_ind = sort_inds(iaxis)
+                            call axes%set(axis_ind, 'state', real(ilabel))
+                        endif
+                    enddo
+                enddo
+                ! prep outcome
+                write(*,'(A,I2)') '>>> SYMMETRY AXES PEAKS FOUND: ',n_sympeaks
+                sym_peaks = oris(n_sympeaks)
+                do iaxis = 1, n_sympeaks
+                    call sym_peaks%set_ori(iaxis, tmp_axes%get_ori(iaxis))
+                enddo
+                call sym_peaks%swape1e3
+                deallocate(sort_inds)
+            end subroutine find_sym_peaks
+
+    end subroutine exec_sym_aggregate
+
+    subroutine exec_dsymsrch( self, cline )
+        use simple_symsrcher, only: dsym_cylinder
+        class(dsymsrch_commander), intent(inout) :: self
+        class(cmdline),            intent(inout) :: cline
+        type(build)  :: b
+        type(params) :: p
+        p = params(cline)                   ! parameters generated
+        call b%build_general_tbox(p, cline) ! general objects built
+        call dsym_cylinder(p, b%a, b%vol)
+        call b%a%write(p%outfile)
+        call b%vol%write(p%outvol)
+    end subroutine exec_dsymsrch
 
 end module simple_commander_misc

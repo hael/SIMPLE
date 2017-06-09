@@ -70,6 +70,10 @@ type(check3D_conv_commander)       :: xcheck3D_conv
 ! COMMON-LINES PROGRAMS
 type(comlin_smat_commander)        :: xcomlin_smat
 type(symsrch_commander)            :: xsymsrch
+
+! SYMMETRY PROGRAMS
+type(sym_aggregate_commander)      :: xsym_aggregate
+type(dsymsrch_commander)           :: xdsymsrch
     
 ! MASK PROGRAMS
 type(mask_commander)               :: xmask
@@ -1120,7 +1124,67 @@ select case(prg)
         call cline%set('compare', 'no')
         ! execute
         call xsymsrch%execute(cline)
-        
+
+
+    ! SYMMETRY PROGRAMs
+
+    case( 'sym_aggregate' )
+        !==Program symsrch
+        !
+        ! <symsrch/begin>is a program for searching for the principal symmetry axis of a volume 
+        ! reconstructed without assuming any point-group symmetry. The program takes as input an 
+        ! asymmetrical 3D reconstruction. The alignment document for all the particle images 
+        ! that have gone into the 3D reconstruction and the desired point-group symmetry needs to 
+        ! be inputted. The 3D reconstruction is then projected in 50 (default option) even directions, 
+        ! common lines-based optimisation is used to identify the principal symmetry axis, the rotational 
+        ! transformation is applied to the inputted orientations, and a new alignment document is produced. 
+        ! Input this document to recvol together with the images and the point-group symmetry to generate a 
+        ! symmetrised map.<symsrch/end>
+        !        
+        ! set required keys
+        keys_required(1) = 'vol1'
+        keys_required(2) = 'smpd'
+        keys_required(3) = 'msk'
+        keys_required(4) = 'pgrp'
+        keys_required(5) = 'oritab'
+        keys_required(6) = 'oritab2'
+        keys_required(7) = 'outfile'
+        keys_required(8) = 'lp'
+        keys_required(9) = 'stk'
+        ! set optional keys
+        keys_optional(1) = 'nthr'        
+        keys_optional(2) = 'cenlp'
+        keys_optional(3) = 'hp'
+        ! parse command line
+        !if( describe ) call print_doc_symsrch
+        call cline%parse(keys_required(:9), keys_optional(:3))
+        ! set defaults
+        call cline%set('eo','no')
+        ! execute
+        call xsym_aggregate%execute(cline)        
+    case( 'dsymsrch' )
+        !==Program symsrch
+        !
+        ! <dsymsrch/begin><dsymsrch/end>
+        !        
+        ! set required keys
+        keys_required(1) = 'smpd'
+        keys_required(2) = 'msk'
+        keys_required(3) = 'pgrp'
+        keys_required(4) = 'stk'
+        ! set optional keys
+        keys_optional(1) = 'nthr'        
+        keys_optional(2) = 'cenlp'
+        keys_optional(3) = 'outfile'
+        keys_optional(4) = 'outvol'
+        ! parse command line
+        !if( describe ) call print_doc_symsrch
+        call cline%parse(keys_required(:4), keys_optional(:4))
+        ! set defaults
+        !
+        ! execute
+        call xdsymsrch%execute(cline)
+
     ! MASK PROGRAMS
 
     case( 'mask' )

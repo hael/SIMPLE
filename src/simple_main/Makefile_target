@@ -103,7 +103,8 @@ matcher: simple_picker.o                  \
          simple_hadamard2D_matcher.o      \
          simple_hadamard3D_matcher.o      ;
 
-s_other: simple_masker.o                  ;
+s_other: simple_masker.o                  \
+         simple_symsrcher.o               ;
 
 cluster_cavg: simple_matchpursuit.o       \
               simple_cavgppca.o           ;

@@ -1,0 +1,598 @@
+!>  \brief  SIMPLE projector class
+module simple_projector
+!$ use omp_lib
+!$ use omp_lib_kinds
+use simple_defs       ! use all in there
+use simple_kbinterpol ! use all in there
+use simple_image,     only: image
+use simple_ori,       only: ori
+use simple_oris,      only: oris
+use simple_params,    only: params
+use simple_gridding,  only: prep4cgrid
+use simple_jiffys,    only: alloc_err, progress
+use simple_math,      only: recwin_3d, euclid, sqwin_3d
+implicit none
+
+public :: projector
+private
+
+logical, parameter :: DEBUG = .true.
+
+type, extends(image) :: projector
+    private
+    integer               :: ldim_exp(3,2) = 0       !< expanded FT matrix limits
+    complex, allocatable  :: cmat_exp(:,:,:)         !< expanded FT matrix
+    real,    allocatable  :: polweights_mat(:,:,:)   !< polar weights matrix for the image to polar transformer
+    integer, allocatable  :: polcyc1_mat(:,:,:)      !< image cyclic adresses for the image to polar transformer
+    integer, allocatable  :: polcyc2_mat(:,:,:)      !< image cyclic adresses for the image to polar transformer
+    logical, allocatable  :: is_in_mask(:,:,:)       !< neighbour matrix for the shape mask projector
+    real                  :: winsz     = 1.5         !< window half-width
+    real                  :: alpha     = 2.          !< oversampling ratio
+    real                  :: harwin    = 1.          !< rounded window half-width
+    real                  :: harwin_exp= 1.          !< rounded window half-width in expanded routines
+    logical               :: expanded_exists=.false. !< indicates FT matrix existence
+  contains
+    ! CONSTRUCTORS
+    procedure          :: expand_cmat
+    ! GETTERS
+    procedure          :: get_harwin
+    procedure          :: get_harwin_exp
+    procedure          :: exp_exists
+    ! SETTERS
+    procedure          :: reset_expanded
+    ! FOURIER PROJECTORS
+    procedure          :: fproject
+    procedure          :: fproject_expanded
+    procedure          :: fproject_polar
+    procedure, private :: fproject_polar_expanded
+    procedure          :: img2polarft
+    procedure          :: extr_gridfcomp
+    procedure, private :: interp_fcomp_expanded
+    ! IMAGE TO POLAR TRANSFORMER
+    procedure          :: init_imgpolarizer
+    procedure          :: imgpolarizer
+    procedure, private :: kill_imgpolarizer
+    procedure          :: kill_expanded
+end type projector
+
+contains
+
+    ! CONSTRUCTOR
+
+     !>  \brief  is a constructor of the expanded Fourier matrix
+    subroutine expand_cmat( self )
+        
+        use simple_math, only: cyci_1d
+        class(projector), intent(inout) :: self
+        integer, allocatable :: cyck(:), cycm(:), cych(:)
+        integer :: h, k, m, alloc_stat, phys(3), logi(3)
+        integer :: lims(3,2), ldim(3)
+        call self%kill_expanded
+        ldim = self%get_ldim()
+        if( .not.self%is_ft() ) stop 'volume needs to be FTed before call; expand_cmat; simple_image'
+        if( ldim(3) == 1      ) stop 'only for volumes; expand_cmat; simple_image'
+        self%winsz         = get_kb_winsz()
+        self%harwin        = real(ceiling(self%winsz))
+        self%alpha         = get_kb_alpha()
+        lims               = self%loop_lims(3)
+        self%ldim_exp(:,2) = maxval(abs(lims)) + ceiling(self%harwin_exp)
+        self%ldim_exp(:,1) = -self%ldim_exp(:,2)
+        allocate( self%cmat_exp( self%ldim_exp(1,1):self%ldim_exp(1,2),&
+                                &self%ldim_exp(2,1):self%ldim_exp(2,2),&
+                                &self%ldim_exp(3,1):self%ldim_exp(3,2)),&
+                                &cych(self%ldim_exp(1,1):self%ldim_exp(1,2)),&
+                                &cyck(self%ldim_exp(2,1):self%ldim_exp(2,2)),&
+                                &cycm(self%ldim_exp(3,1):self%ldim_exp(3,2)), stat=alloc_stat)
+        call alloc_err("In: expand_cmat; simple_projector", alloc_stat)
+        ! pre-compute addresses in 2nd and 3rd dimension
+        do h = self%ldim_exp(1,1),self%ldim_exp(1,2)
+            cych(h) = h
+            if( h < lims(1,1) .or. h > lims(1,2) ) cych(h) = cyci_1d( lims(1,:),h )
+        enddo
+        do k = self%ldim_exp(2,1),self%ldim_exp(2,2)
+            cyck(k) = k
+            if( k < lims(2,1) .or. k > lims(2,2) ) cyck(k) = cyci_1d( lims(2,:),k )
+        enddo
+        do m = self%ldim_exp(3,1),self%ldim_exp(3,2)
+            cycm(m) = m
+            if( m < lims(3,1) .or. m > lims(3,2) ) cycm(m) = cyci_1d( lims(3,:),m )
+        enddo
+        ! build expanded fourier components matrix
+        self%cmat_exp = cmplx(0.,0.)
+        !$omp parallel do collapse(3) schedule(static) default(shared)&
+        !$omp private(h,k,m,logi,phys) proc_bind(close)
+        do h = self%ldim_exp(1,1),self%ldim_exp(1,2)
+            do k = self%ldim_exp(2,1),self%ldim_exp(2,2)
+                do m = self%ldim_exp(3,1),self%ldim_exp(3,2)
+                    logi = [cych(h),cyck(k),cycm(m)]
+                    phys = self%comp_addr_phys(logi)
+                    self%cmat_exp(h,k,m) = self%get_fcomp(logi, phys)
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+        deallocate( cych,cyck,cycm )
+        self%expanded_exists = .true.
+    end subroutine expand_cmat
+
+    ! GETTERS
+
+    !>  \brief  returns the hard window size for projection
+    function get_harwin( self ) result( winsz )
+        class(projector), intent(inout) :: self
+        real :: winsz
+        winsz = self%harwin
+    end function get_harwin
+
+    !>  \brief  returns the hard window size for projection from expanded matrix
+    function get_harwin_exp( self ) result( winsz )
+        class(projector), intent(inout) :: self
+        real :: winsz
+        winsz = self%harwin_exp
+    end function get_harwin_exp
+
+    !>  \brief  indicates expanded fourier matix existance
+    function exp_exists( self )result( answer )
+        class(projector), intent(inout) :: self
+        logical :: answer
+        answer = self%expanded_exists
+    end function exp_exists
+
+    ! SETTERS
+
+    !>  \brief  sets the expanded Fourier matrix to zero
+    subroutine reset_expanded( self )
+        class(projector), intent(inout) :: self
+        if( .not.self%expanded_exists )&
+            &stop 'expanded fourier matrix does not exist; simple_image::reset_expanded'
+        self%cmat_exp = cmplx(0.,0.)
+    end subroutine reset_expanded
+
+    ! FOURIER PROJECTORS
+
+    !> \brief  extracts a Fourier plane from a volume (self)
+    subroutine fproject( self, e, fplane, lp )
+        class(projector), intent(inout) :: self
+        class(ori),       intent(in)    :: e
+        class(image),     intent(inout) :: fplane
+        real, optional,   intent(in)    :: lp
+        real    :: vec(3), loc(3)
+        integer :: h, k, sqarg, sqlp, lims(3,2), logi(3), phys(3)
+        ! init
+        fplane = cmplx(0.,0.)
+        if( present(lp) )then
+            lims = self%loop_lims(1,lp)
+        else
+            lims = self%loop_lims(2) ! Nyqvist default low-pass limit
+        endif
+        sqlp = (maxval(lims(:,2)))**2
+        !$omp parallel do collapse(2) schedule(static) default(shared)&
+        !$omp private(h,k,sqarg,vec,loc,logi,phys) proc_bind(close)
+        do h=lims(1,1),lims(1,2)
+            do k=lims(2,1),lims(2,2)
+                sqarg = h*h+k*k
+                if( sqarg <= sqlp )then
+                    ! address
+                    vec(1) = real(h)
+                    vec(2) = real(k)
+                    vec(3) = 0.
+                    loc = matmul(vec,e%get_mat())
+                    ! set fourier component
+                    logi = [h,k,0]
+                    phys = self%comp_addr_phys(logi)
+                    call fplane%set_fcomp(logi,phys,self%extr_gridfcomp(loc))
+                endif
+            end do
+        end do
+        !$omp end parallel do
+    end subroutine fproject
+
+    !> \brief  extracts a Fourier plane from the expanded FT matrix of a volume (self)
+    subroutine fproject_expanded( self, e, fplane, lp )
+        class(projector), intent(inout) :: self
+        class(ori),       intent(in)    :: e
+        class(image),     intent(inout) :: fplane
+        real, optional,   intent(in)    :: lp
+        real    :: loc(3)
+        integer :: h, k, sqarg, sqlp, wdim, lims(3,2), logi(3), phys(3)
+        ! init
+        if( present(lp) )then
+            lims = self%loop_lims(1,lp)
+            sqlp = fplane%get_find(lp)**2
+        else
+            lims = self%loop_lims(2) 
+            sqlp = (maxval(lims(:,2)))**2
+        endif
+        fplane = cmplx(0.,0.)
+        wdim   = 2*ceiling(self%harwin_exp) + 1 ! interpolation kernel window size
+        !$omp parallel do collapse(2) schedule(static) default(shared)&
+        !$omp private(h,k,sqarg,loc,logi,phys) proc_bind(close)
+        do h=lims(1,1),lims(1,2)
+            do k=lims(2,1),lims(2,2)
+                sqarg = dot_product([h,k],[h,k])
+                if(sqarg > sqlp)cycle
+                ! address
+                logi = [h, k, 0]
+                loc  = matmul(real(logi), e%get_mat())
+                ! set fourier component
+                phys = self%comp_addr_phys(logi)
+                call fplane%set_fcomp(logi,phys,self%interp_fcomp_expanded(wdim, loc))
+            end do
+        end do
+        !$omp end parallel do
+    end subroutine fproject_expanded
+
+    !> \brief  extracts a polar FT from a volume (self)
+    subroutine fproject_polar( self, iref, e, pftcc, expanded, serial )
+        use simple_polarft_corrcalc, only: polarft_corrcalc
+        use simple_params, only: params
+        class(projector),        intent(inout) :: self  !< projector instance
+        integer,                 intent(in)    :: iref  !< logical reference index [1,nrefs]
+        class(ori),              intent(inout) :: e     !< orientation
+        class(polarft_corrcalc), intent(inout) :: pftcc !< polarft_corrcalc object to be filled
+        logical,       optional, intent(in)    :: expanded
+        logical,       optional, intent(in)    :: serial
+        integer :: irot, k, ldim_fvol(3), ldim_pft(3), pdim(3)
+        real    :: vec(3), loc(3)
+        logical :: l_exp, l_serial
+        l_exp    = .false.
+        l_serial = .false.
+        if(.not. self%is_ft())stop 'volume needs to be FTed before call; fproject_polar_1; simple_projector'
+        if( present(serial) )l_serial = serial
+        if( present(expanded) )then
+            l_exp = expanded
+            if( l_exp .and. .not. self%exp_exists() )&
+                &stop 'expanded fourier components matrix does not exists; fproject_polar_2; simple_projector'
+        endif
+        ldim_fvol = self%get_ldim()
+        ldim_pft  = pftcc%get_ldim()
+        if( .not. all(ldim_fvol(1:2) == ldim_pft(1:2)) ) stop 'nonconforming logical dimensions; fproject_polar_2; simple_projector'
+        pdim = pftcc%get_pdim(.false.)
+        if( l_exp )then
+            ! use of expanded routine
+            call self%fproject_polar_expanded(iref, e, pftcc, serial=l_serial)
+        else
+            if( l_serial )then
+                ! this is the serial version of the threaded version just below
+                do irot=1,pdim(1)
+                    do k=pdim(2),pdim(3)
+                        vec(:2) = pftcc%get_coord(irot,k) 
+                        vec(3)  = 0.
+                        loc     = matmul(vec,e%get_mat())
+                        call pftcc%set_ref_fcomp(iref, irot, k, self%extr_gridfcomp(loc))
+                    end do
+                end do
+            else
+                ! threaded version
+                !$omp parallel do collapse(2) schedule(static) default(shared)&
+                !$omp private(loc,vec,irot,k) proc_bind(close)
+                do irot=1,pdim(1)
+                    do k=pdim(2),pdim(3)
+                        vec(:2) = pftcc%get_coord(irot,k) 
+                        vec(3)  = 0.
+                        loc     = matmul(vec,e%get_mat())
+                        call pftcc%set_ref_fcomp(iref, irot, k, self%extr_gridfcomp(loc))
+                    end do
+                end do
+                !$omp end parallel do
+            endif
+        endif
+    end subroutine fproject_polar
+
+    !> \brief  extracts a polar FT from a volume's expanded FT (self)
+    subroutine fproject_polar_expanded( self, iref, e, pftcc, serial )
+        use simple_polarft_corrcalc, only: polarft_corrcalc
+        use simple_math,             only: deg2rad
+        class(projector),        intent(inout) :: self   !< projector object
+        integer,                 intent(in)    :: iref   !< which reference
+        class(ori),              intent(inout) :: e      !< orientation
+        class(polarft_corrcalc), intent(inout) :: pftcc  !< object that holds the polar image
+        logical, optional,       intent(in)    :: serial !< thread or serial
+        integer :: irot, k, wdim, ldim(3), pdim(3), ldim_polft(3)
+        real    :: vec(3), loc(3)
+        logical :: l_serial = .false.
+        if( present(serial) )l_serial = serial
+        ldim = self%get_ldim()
+        if(ldim(3) == 1)stop 'only for interpolation from 3D images; fproject_polar_1; simple_projector'
+        ldim_polft(1:2) = ldim(1:2)
+        ldim_polft(3)   = 1
+        pdim   = pftcc%get_pdim(.false.)
+        wdim   = 2*ceiling(self%harwin_exp) + 1 ! interpolation kernel window size
+        if( l_serial )then
+            ! this is the serial version of the threaded version just below
+            do irot=1,pdim(1)
+                do k=pdim(2),pdim(3)
+                    vec(:2) = pftcc%get_coord(irot,k)
+                    vec(3)  = 0.
+                    loc     = matmul(vec,e%get_mat())
+                    call pftcc%set_ref_fcomp(iref, irot, k, self%interp_fcomp_expanded( wdim, loc ))
+                end do
+            end do
+        else
+            ! threaded version
+            !$omp parallel do collapse(2) schedule(static) default(shared)&
+            !$omp private(irot,k,vec,loc) proc_bind(close)
+            do irot=1,pdim(1)
+                do k=pdim(2),pdim(3)
+                    vec(:2) = pftcc%get_coord(irot,k)
+                    vec(3)  = 0.
+                    loc     = matmul(vec,e%get_mat())
+                    call pftcc%set_ref_fcomp(iref, irot, k, self%interp_fcomp_expanded( wdim, loc ))
+                end do
+            end do
+            !$omp end parallel do
+        endif
+    end subroutine fproject_polar_expanded
+    
+    !> \brief  transfers a 2D Cartesian image (self) to polar Fourier
+    subroutine img2polarft( self, ind, pftcc, isptcl )
+        use simple_polarft_corrcalc, only: polarft_corrcalc
+        use gnufor2
+        class(projector),        intent(inout) :: self   !< instance
+        integer,                 intent(in)    :: ind    !< logical particle index [fromp,top]
+        class(polarft_corrcalc), intent(inout) :: pftcc  !< polarft_corrcalc object to be filled
+        logical, optional,       intent(in)    :: isptcl !< to indicate whether particle or reference
+        complex, allocatable :: pft(:,:)
+        integer :: i, k, ldim_img(3), ldim_pft(3), pdim(3), alloc_stat
+        real    :: vec(3)
+        logical :: iisptcl
+        iisptcl = .true.
+        if( present(isptcl) ) iisptcl = isptcl
+        ldim_img = self%get_ldim()
+        if( ldim_img(3) > 1 )      stop 'only for interpolation from 2D images; img2polarft_2; simple_projector'
+        if( .not. pftcc%exists() ) stop 'polarft_corrcalc object needs to be created; img2polarft_2; simple_projector'
+        ldim_pft = pftcc%get_ldim()
+        if( .not. all(ldim_img == ldim_pft) )then
+            print *, 'ldim_img: ', ldim_img
+            print *, 'ldim_pft: ', ldim_pft
+            stop 'logical dimensions do not match; img2polarft_2; simple_projector'
+        endif
+        if( .not. self%is_ft() ) stop 'image needs to FTed before this operation; simple_projector::img2polarft_2'
+        pdim = pftcc%get_pdim(iisptcl)
+        allocate( pft(pdim(1),pdim(2):pdim(3)), stat=alloc_stat )
+        call alloc_err("In: img2polarft_2; simple_projector", alloc_stat)
+        !$omp parallel do collapse(2) schedule(static) default(shared)&
+        !$omp private(i,k,vec) proc_bind(close)
+        do i=1,pdim(1)
+            do k=pdim(2),pdim(3)
+                vec(:2)  = pftcc%get_coord(i,k)
+                vec(3)   = 0.
+                pft(i,k) = self%extr_gridfcomp(vec)
+            end do
+        end do
+        !$omp end parallel do
+        if( iisptcl )then
+            call pftcc%set_ptcl_pft(ind, pft)
+        else
+            call pftcc%set_ref_pft(ind, pft)
+        endif
+        ! kill the remains
+        deallocate(pft)
+    end subroutine img2polarft
+
+    ! INTERPOLATORS
+    
+    !> \brief  extracts a Fourier component from a transform (self) by gridding
+    function extr_gridfcomp( self, loc ) result( comp_sum )
+        use simple_math, only: cyci_1d
+        class(projector), intent(inout) :: self
+        real,             intent(in)    :: loc(3)
+        complex, allocatable :: comps(:,:,:)
+        real,    allocatable :: w(:,:,:)
+        integer, allocatable :: cyc1(:), cyc2(:), cyc3(:)
+        complex  :: comp_sum
+        integer  :: i, j, m, wdim, incr, lims(3,2), win(3,2), logi(3), phys(3)
+        real     :: harwin_here
+        !harwin_here = 2.
+        harwin_here = self%harwin_exp
+        win  = sqwin_3d(loc(1),loc(2),loc(3), harwin_here)
+        wdim = win(1,2) - win(1,1) + 1
+        lims = self%loop_lims(3)
+        if( self%is_2d() )then
+            ! 2D
+            ! init
+            allocate( cyc1(wdim), cyc2(wdim), w(wdim, wdim, 1), comps(wdim, wdim, 1))
+            comps = cmplx(0.,0.)
+            w     = 1.
+            do i=1,wdim
+                incr = i-1
+                ! circular addresses
+                cyc1(i)  = cyci_1d(lims(1,:), win(1,1)+incr)
+                cyc2(i)  = cyci_1d(lims(2,:), win(2,1)+incr)
+                ! interpolation kernel matrix
+                w(i,:,1) = w(i,:,1) * kb_apod( real(win(1,1)+incr)-loc(1) )
+                w(:,i,1) = w(:,i,1) * kb_apod( real(win(2,1)+incr)-loc(2) )
+            enddo
+            ! fetch fourier components
+            do i=1, wdim
+                do j=1, wdim
+                    if(w(i,j,1) == 0.)cycle
+                    logi = [cyc1(i), cyc2(j), 0]
+                    phys = self%comp_addr_phys(logi)
+                    comps(i,j,1) = self%get_fcomp(logi, phys)
+                end do
+            end do
+            ! SUM( kernel x components )
+            comp_sum = sum(w * comps)
+            deallocate( w,comps,cyc1,cyc2 )
+        else
+            ! 3D
+            ! init
+            allocate( cyc1(wdim), cyc2(wdim), cyc3(wdim), w(wdim, wdim, wdim),comps(wdim, wdim, wdim))
+            comps = cmplx(0.,0.)
+            w     = 1.
+            do i=1, wdim
+                incr = i-1
+                ! circular addresses
+                cyc1(i)  = cyci_1d(lims(1,:), win(1,1)+incr)
+                cyc2(i)  = cyci_1d(lims(2,:), win(2,1)+incr)
+                cyc3(i)  = cyci_1d(lims(3,:), win(3,1)+incr)
+                ! interpolation kernel matrix
+                w(i,:,:) = w(i,:,:) * kb_apod( real(win(1,1)+incr)-loc(1) )
+                w(:,i,:) = w(:,i,:) * kb_apod( real(win(2,1)+incr)-loc(2) )
+                w(:,:,i) = w(:,:,i) * kb_apod( real(win(3,1)+incr)-loc(3) )
+            enddo
+            ! fetch fourier components
+            do i=1, wdim
+                do j=1, wdim
+                    if(all(w(i,j,:) == 0.))cycle
+                    do m=1, wdim
+                        if(w(i,j,m) == 0.)cycle
+                        logi = [cyc1(i), cyc2(j), cyc3(m)]
+                        phys = self%comp_addr_phys(logi)
+                        comps(i,j,m) = self%get_fcomp(logi, phys)
+                    enddo
+                end do
+            end do
+            ! SUM( kernel x components )
+            comp_sum = sum(w * comps)
+            deallocate( w,comps,cyc1,cyc2,cyc3 )
+        endif
+    end function extr_gridfcomp
+
+    !>  \brief is to interpolate from the expanded complex matrix 
+    function interp_fcomp_expanded( self, wdim, loc )result( comp )
+        class(projector), intent(inout) :: self
+        integer,          intent(in)    :: wdim
+        real,             intent(in)    :: loc(3)
+        complex :: comp
+        real    :: w(1:wdim,1:wdim,1:wdim)
+        integer :: i, win(3,2)
+        ! interpolation kernel window
+        win  = sqwin_3d(loc(1), loc(2), loc(3), self%harwin_exp)
+        ! interpolation kernel matrix
+        w = 1.
+        do i=1,wdim
+            w(i,:,:) = w(i,:,:) * kb_apod( real(win(1,1)+i-1)-loc(1) )
+            w(:,i,:) = w(:,i,:) * kb_apod( real(win(2,1)+i-1)-loc(2) )
+            w(:,:,i) = w(:,:,i) * kb_apod( real(win(3,1)+i-1)-loc(3) )
+        end do
+        ! SUM( kernel x components )
+        comp = sum( w * self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2),win(3,1):win(3,2)) )
+    end function interp_fcomp_expanded
+    
+    ! IMAGE TO POLAR FT TRANSFORMER
+
+    !> \brief  initialises the image polarizer
+    subroutine init_imgpolarizer( self, pftcc )
+        use simple_math,             only: sqwin_2d, cyci_1d
+        use simple_polarft_corrcalc, only: polarft_corrcalc
+        class(projector),        intent(inout) :: self   !< projector instance
+        class(polarft_corrcalc), intent(inout) :: pftcc  !< polarft_corrcalc object to be filled
+        real, allocatable :: w(:,:)
+        real              :: loc(2)
+        integer           :: pdim(3), win(2,2), lims(3,2)
+        integer           :: i, k, l, wdim, wlen, alloc_stat, cnt
+        if( .not. pftcc%exists() ) stop 'polarft_corrcalc object needs to be created; init_imgpolarizer; simple_projector'
+        call self%kill_imgpolarizer
+        wdim = 2*ceiling(self%harwin_exp) + 1
+        wlen = wdim**2
+        pdim = pftcc%get_pdim(.true.)
+        lims = self%loop_lims(3)
+        allocate( self%polcyc1_mat(1:pdim(1), pdim(2):pdim(3), 1:wdim),&
+                  &self%polcyc2_mat(1:pdim(1), pdim(2):pdim(3), 1:wdim),&
+                  &self%polweights_mat(1:pdim(1), pdim(2):pdim(3), 1:wlen),&
+                  &w(1:wdim,1:wdim), stat=alloc_stat)
+        call alloc_err('in simple_projector :: init_imgpolarizer', alloc_stat)
+        !$omp parallel do collapse(2) schedule(static) default(shared)&
+        !$omp private(i,k,l,w,loc,cnt,win) proc_bind(close)
+        do i=1,pdim(1)
+            do k=pdim(2),pdim(3)
+                ! polar coordinates
+                loc = pftcc%get_coord(i,k)
+                win = sqwin_2d(loc(1), loc(2), self%harwin_exp)
+                w   = 1.
+                cnt = 0
+                do l=1,wdim
+                    cnt = cnt + 1
+                    ! interpolation weights
+                    w(l,:) = w(l,:) * kb_apod( real(win(1,1)+l-1)-loc(1) )
+                    w(:,l) = w(:,l) * kb_apod( real(win(2,1)+l-1)-loc(2) )
+                    ! cyclic addresses
+                    self%polcyc1_mat(i, k, cnt) = cyci_1d(lims(1,:), win(1,1)+l-1)
+                    self%polcyc2_mat(i, k, cnt) = cyci_1d(lims(2,:), win(2,1)+l-1)
+                end do
+                self%polweights_mat(i,k,:) = reshape(w,(/wlen/))
+            enddo
+        enddo
+        !$omp end parallel do
+        deallocate(w)
+    end subroutine init_imgpolarizer
+
+    !> \brief  creates the polar Fourier transform
+    subroutine imgpolarizer( self, pftcc, img_ind, isptcl )
+        use simple_math, only: sqwin_2d, cyci_1d
+        use simple_polarft_corrcalc, only: polarft_corrcalc
+        class(projector),        intent(inout) :: self   !< projector instance
+        class(polarft_corrcalc), intent(inout) :: pftcc  !< polarft_corrcalc object to be filled
+        integer,                 intent(in)    :: img_ind
+        logical, optional,       intent(in)    :: isptcl
+        complex, allocatable :: pft(:,:), comps(:,:)
+        integer :: i, k, l, m, alloc_stat, windim, vecdim, addr_l
+        integer :: lims(3,2), ldim_img(3), ldim_pft(3), pdim(3), logi(3), phys(3)
+        logical :: iisptcl
+        if( .not. allocated(self%polweights_mat) )&
+        &stop 'the imgpolarizer has not been initialized!; simple_projector :: imgpolarizer'
+        iisptcl = .true.
+        if( present(isptcl) ) iisptcl = isptcl
+        ldim_img = self%get_ldim()
+        if( ldim_img(3) > 1 )      stop 'only for interpolation from 2D images; imgpolarizer; simple_projector'
+        if( .not. pftcc%exists() ) stop 'polarft_corrcalc object needs to be created; imgpolarizer; simple_projector'
+        ldim_pft = pftcc%get_ldim()
+        if( .not. all(ldim_img == ldim_pft) )then
+            print *, 'ldim_img: ', ldim_img
+            print *, 'ldim_pft: ', ldim_pft
+            stop 'logical dimensions do not match; imgpolarizer; simple_projector'
+        endif
+        if( .not.self%is_ft() ) stop 'image needs to FTed before this operation; simple_projector :: imgpolarizer'
+        pdim   = pftcc%get_pdim(iisptcl)
+        windim = 2*ceiling(self%harwin_exp) + 1
+        vecdim = windim**2
+        allocate( pft(pdim(1),pdim(2):pdim(3)), comps(1:windim,1:windim), stat=alloc_stat )
+        call alloc_err("In: imgpolarizer; simple_projector", alloc_stat)
+        lims = self%loop_lims(3)
+        !$omp parallel do collapse(2) schedule(static) default(shared)&
+        !$omp private(i,k,l,m,logi,phys,comps,addr_l) proc_bind(close)
+        do i=1,pdim(1)
+            do k=pdim(2),pdim(3)
+                do l=1,windim
+                    addr_l = self%polcyc1_mat(i,k,l)
+                    do m=1,windim
+                        logi = [addr_l,self%polcyc2_mat(i,k,m),0]
+                        phys = self%comp_addr_phys(logi)
+                        comps(l,m) = self%get_fcomp(logi,phys)
+                    enddo
+                enddo
+                pft(i,k) = dot_product(self%polweights_mat(i,k,:), reshape(comps,(/vecdim/)))
+            end do
+        end do
+        !$omp end parallel do
+        if( iisptcl )then
+            call pftcc%set_ptcl_pft(img_ind, pft)
+        else
+            call pftcc%set_ref_pft(img_ind, pft)
+        endif
+        ! kill the remains
+        deallocate(pft, comps)
+    end subroutine imgpolarizer
+
+    ! DESTRUCTORS
+
+    !>  \brief  is a destructor of impolarizer 
+    subroutine kill_imgpolarizer( self )
+        class(projector), intent(inout) :: self !< projector instance
+        if( allocated(self%polweights_mat) ) deallocate(self%polweights_mat)
+        if( allocated(self%polcyc1_mat)    ) deallocate(self%polcyc1_mat)
+        if( allocated(self%polcyc2_mat)    ) deallocate(self%polcyc2_mat)
+    end subroutine kill_imgpolarizer
+
+    !>  \brief  is a destructor of expanded matrices (imgpolarizer AND expanded projection of)
+    subroutine kill_expanded( self )
+        class(projector), intent(inout) :: self !< projector instance
+        call self%kill_imgpolarizer
+        if( allocated(self%cmat_exp) )deallocate(self%cmat_exp)    
+        self%ldim_exp        = 0
+        self%expanded_exists = .false.
+    end subroutine kill_expanded
+
+end module simple_projector

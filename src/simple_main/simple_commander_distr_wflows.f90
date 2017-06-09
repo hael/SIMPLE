@@ -1321,43 +1321,36 @@ contains
     ! SYMMETRY SEARCH
 
     subroutine exec_symsrch_distr( self, cline )
-        use simple_comlin_srch, only: comlin_srch_get_nproj
+        use simple_comlin_srch,    only: comlin_srch_get_nproj
+        use simple_commander_misc, only: sym_aggregate_commander
         use simple_math,    only: hpsort
         use simple_sym,     only: sym
         use simple_ori,     only: ori
         use simple_oris,    only: oris
         use simple_strings, only: int2str_pad, int2str
-        use simple_image, only: image
-        use simple_projector_hlev, only: rotvol
-        use simple_commander_volops,  only: postproc_vol_commander
-        use simple_commander_rec,     only: recvol_commander
         class(symsrch_distr_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(merge_algndocs_commander) :: xmerge_algndocs
+        type(sym_aggregate_commander)  :: xsym_aggregate
         type(cmdline)                  :: cline_merge_algndocs
-        type(cmdline)                  :: cline_recvol
-        type(cmdline)                  :: cline_pproc
-        type(recvol_commander)         :: xrecvol
-        type(postproc_vol_commander)   :: xpproc
+        type(cmdline)                  :: cline_sym_aggregate
         type(qsys_env)          :: qenv
         type(params)            :: p_master
         type(chash)             :: job_descr
         type(oris)              :: os, sym_os, o_shift, sym_os_ordered, sympeaks, e
         type(ori)               :: o, symaxis_ori
         type(sym)               :: syme
-        type(image)             :: rovol, vol
         integer,    allocatable :: order_inds(:)
-        real                    :: shvec(3), rotmat(3,3)
+        real                    :: shvec(3)
         integer                 :: i, comlin_srch_nproj
         character(len=STDLEN)   :: part_tab
-        character(len=32), parameter :: SYMFBODY   = 'symaxes_part'
-        character(len=32), parameter :: SYMTAB     = 'symaxes.txt'
-        character(len=32), parameter :: SYMSHTAB   = 'sym_3dshift.txt'
-        character(len=32), parameter :: SYMPROJSTK = 'sym_projs.mrc'
-        character(len=32), parameter :: SYMPROJTAB = 'sym_projs.txt'
-        logical,           parameter :: debug      = .false.
-        call cline%set('prg', 'symsrch')
-        ! vol1 need be default
+        character(len=32), parameter :: SYMFBODY    = 'symaxes_part'        ! symmetry axes doc (distributed mode)
+        character(len=32), parameter :: SYMTAB      = 'symaxes.txt'         ! continuous symmetry axes doc
+        character(len=32), parameter :: FINALSYMTAB = 'symaxes_final.txt'   ! final symmetry peaks doc
+        character(len=32), parameter :: SYMSHTAB    = 'sym_3dshift.txt'     ! volume 3D shift
+        character(len=32), parameter :: SYMPROJSTK  = 'sym_projs.mrc'       ! volume reference projections
+        character(len=32), parameter :: SYMPROJTAB  = 'sym_projs.txt'       ! volume reference projections doc
+        logical,           parameter :: debug = .false.
         ! make master parameters
         p_master          = params(cline, checkdistr=.false.)
         comlin_srch_nproj = comlin_srch_get_nproj()
@@ -1366,6 +1359,7 @@ contains
             stop 'number of partitions (npart) > nr of jobs, adjust!'
         endif
         ! setup the environment for distributed execution
+        call cline%set('prg', 'symsrch')
         call qenv%new(p_master)
         call cline%gen_job_descr(job_descr)
         ! schedule
@@ -1380,63 +1374,46 @@ contains
         ! merge docs
         call xmerge_algndocs%execute( cline_merge_algndocs )
         ! read symmetry axes, sort & pick best
-        call sym_os%new(comlin_srch_nproj)
-        call sym_os%read(trim(SYMTAB))
-        ! DEV
-        ! ! identify top ranking symmetry peaks
-        ! call find_sym_peaks(sym_os, sympeaks)
-        ! call sympeaks%write('sympeaks.txt')
-        ! ! reconstruct corresponding volumes
-        ! call cline_recvol%set('prg', 'recvol')
-        ! call cline_recvol%set('ctf', 'no')
-        ! call cline_recvol%set('eo',  'no')
-        ! call cline_recvol%set('lp',   p_master%lp)
-        ! call cline_recvol%set('smpd', p_master%smpd)
-        ! call cline_recvol%set('msk',  p_master%msk)
-        ! call cline_recvol%set('pgrp', p_master%pgrp)
-        ! call cline_recvol%set('stk',  SYMPROJSTK)
-        ! call cline_pproc%set('prg', 'postproc_vol')
-        ! call cline_pproc%set('lp',   p_master%lp)
-        ! call cline_pproc%set('smpd', p_master%smpd)
-        ! call cline_pproc%set('msk',  p_master%msk)
-        ! e = oris(p_master%nspace)
-        ! do i = 1, sympeaks%get_noris()
-        !     symaxis_ori = sympeaks%get_ori(i)
-        !     ! apply rotation to reference projections
-        !     call e%read(SYMPROJTAB)
-        !     call syme%apply_sym_with_shift(e, symaxis_ori, [0.,0.,0.])
-        !     call e%write('tmp_sym.txt')
-        !     ! reconstruct volume with symmetry
-        !     call cline_recvol%set('oritab', 'tmp_sym.txt')
-        !     call xrecvol%execute(cline_recvol)
-        !     !call qenv%exec_simple_prg_in_queue(cline_recvol, 'RECVOL', 'RECVOL_FINISHED')
-        !     ! mask and low-pass volume
-        !     call rename('recvol_state01'//p_master%ext, 'tmp_vol'//p_master%ext)
-        !     call cline_pproc%set('vol1','tmp_vol'//p_master%ext)
-        !     call xpproc%execute(cline_pproc)
-        !     !call qenv%exec_simple_prg_in_queue(cline_pproc, 'PPROC', 'PPROC_FINISHED')
-        !     ! apply reverse rotation to volume
-        !     call vol%new([p_master%box, p_master%box, p_master%box], p_master%smpd)
-        !     call vol%read('tmp_volpproc'//p_master%ext)
-        !     rotmat = symaxis_ori%get_mat()
-        !     call o%ori_from_rotmat( transpose(rotmat) )
-        !     rovol = rotvol(vol, o, p_master)
-        !     call rovol%write('sym_rovol_'//int2str_pad(i,1)//p_master%ext)
-        !     call vol%write('sym_vol_'//int2str_pad(i,1)//p_master%ext)
+        ! call sym_os%new(comlin_srch_nproj)
+        ! call sym_os%read(trim(SYMTAB))
+        ! order_inds  = sym_os%order_corr()
+        ! symaxis_ori = sym_os%get_ori(order_inds(1))
+        ! write(*,'(A)') '>>> FOUND SYMMETRY AXIS ORIENTATION:'
+        ! call symaxis_ori%print
+        ! ! sort the output
+        ! call sym_os_ordered%new(comlin_srch_nproj)
+        ! do i=1,comlin_srch_nproj
+        !     o = sym_os%get_ori(order_inds(i))
+        !     call sym_os_ordered%set_ori(i,o)
         ! enddo
-        ! END DEV
+        ! call del_file(SYMTAB)
+        ! call sym_os_ordered%write(SYMTAB)
+        ! prepare sym_aggregate command line
+        cline_sym_aggregate = cline
+        call cline_sym_aggregate%set( 'prg' ,    'sym_aggregate' )
+        call cline_sym_aggregate%set( 'oritab' , trim(SYMPROJTAB) )
+        call cline_sym_aggregate%set( 'oritab2', trim(SYMTAB) )
+        call cline_sym_aggregate%set( 'stk' ,    trim(SYMPROJSTK) )
+        call cline_sym_aggregate%set( 'outfile', trim(FINALSYMTAB) )
+        call cline_sym_aggregate%set( 'nspace',  real(p_master%nspace) )
+        call cline_sym_aggregate%set( 'eo', 'no' )
+        call qenv%exec_simple_prg_in_queue(cline_sym_aggregate,&
+        &'SYM_AGGREGATE', 'SYM_AGGREGATE_FINISHED')
+        ! read and sort 
+        call sym_os%new( nlines(trim(FINALSYMTAB)) )
+        call sym_os%read( trim(FINALSYMTAB) )
         order_inds  = sym_os%order_corr()
         symaxis_ori = sym_os%get_ori(order_inds(1))
         write(*,'(A)') '>>> FOUND SYMMETRY AXIS ORIENTATION:'
         call symaxis_ori%print
-        ! sort the output
-        call sym_os_ordered%new(comlin_srch_nproj)
-        do i=1,comlin_srch_nproj
+        call sym_os_ordered%new(sym_os%get_noris())
+        do i = 1, sym_os%get_noris()
             o = sym_os%get_ori(order_inds(i))
             call sym_os_ordered%set_ori(i,o)
         enddo
-        call del_file(SYMTAB)
-        call sym_os_ordered%write(SYMTAB)
+        call del_file(trim(FINALSYMTAB))
+        call sym_os_ordered%write(trim(FINALSYMTAB))
+        ! output
         if( cline%defined('oritab') )then
             ! transfer shift and symmetry to input orientations
             call syme%new(p_master%pgrp)
@@ -1469,59 +1446,6 @@ contains
         ! end gracefully
         call qsys_cleanup(p_master)
         call simple_end('**** SIMPLE_SYMSRCH NORMAL STOP ****')
-
-        contains
-
-            subroutine find_sym_peaks(sym_axes, sym_peaks)
-                use simple_math, only: rad2deg
-                class(oris), intent(inout) :: sym_axes
-                class(oris), intent(out)   :: sym_peaks
-                integer, allocatable :: sort_inds(:)
-                type(oris) :: axes, tmp_axes
-                type(ori)  :: axis, o
-                integer    :: iaxis, naxes, loc(1), ilabel, axis_ind, istate, n_sympeaks
-                integer, parameter :: MAXLABELS = 5
-                real,    parameter :: ANGTHRESH = 15. ! degrees
-                axes       = sym_axes
-                naxes      = axes%get_noris()
-                tmp_axes   = oris(MAXLABELS)
-                n_sympeaks = 0
-                ! geometric clustering
-                call axes%set_all2single('state', 0.)
-                call axes%swape1e3
-                sort_inds = axes%order_corr()
-                do ilabel = 1, MAXLABELS
-                    ! identify next best axis
-                    do iaxis = 1, naxes
-                        axis_ind = sort_inds(iaxis)
-                        if(nint(axes%get(axis_ind,'state')) == 0)exit
-                    enddo
-                    if(iaxis > naxes)exit
-                    axis = axes%get_ori(axis_ind)
-                    n_sympeaks = n_sympeaks + 1
-                    call tmp_axes%set_ori(ilabel, axis)
-                    ! flags axes within threshold
-                    do iaxis = 1,naxes
-                        axis_ind = sort_inds(iaxis)
-                        o        = axes%get_ori(axis_ind)
-                        istate   = nint(o%get('state'))
-                        if(istate /= 0)cycle
-                        if(rad2deg(axis.euldist.o) <= ANGTHRESH)then
-                            axis_ind = sort_inds(iaxis)
-                            call axes%set(axis_ind, 'state', real(ilabel))
-                        endif
-                    enddo
-                enddo
-                ! prep outcome
-                write(*,'(A,I2)') '>>> SYMMETRY AXES PEAKS FOUND: ',n_sympeaks
-                sym_peaks = oris(n_sympeaks)
-                do iaxis = 1, n_sympeaks
-                    call sym_peaks%set_ori(iaxis, tmp_axes%get_ori(iaxis))
-                enddo
-                call sym_peaks%swape1e3
-                deallocate(sort_inds)
-            end subroutine find_sym_peaks
-
     end subroutine exec_symsrch_distr
 
 end module simple_commander_distr_wflows
