@@ -1038,13 +1038,13 @@ void pipelineViewMasterOLD(std::string argstring){
 			entry = readdir(directory);
 		}
 		closedir(directory);
-	//	sort(pipelineviewlist.begin(), pipelineviewlist.end());
+    //	sort(pipelineviewlist.begin(), pipelineviewlist.end());
 
-	//	returnstring = "micrographs=";
-	//	for (std::vector<std::string>::iterator it=pipelineviewlist.begin(); it!=pipelineviewlist.end(); ++it){
-	//		returnstring.append(*it);
-	//		returnstring.append(";");
-	//	}
+    //	returnstring = "micrographs=";
+    //	for (std::vector<std::string>::iterator it=pipelineviewlist.begin(); it!=pipelineviewlist.end(); ++it){
+    //		returnstring.append(*it);
+    //		returnstring.append(";");
+    //	}
 		
 		select = dir;
 		select.append("/.selection");
@@ -1082,7 +1082,7 @@ void pipelineViewSlave(std::string argstring){
 		missingArgumentError("dir");
 	}
 	
-	if(micrographs == ""){
+  if(micrographs == ""){
 		missingArgumentError("micrographs");
 	}
 	
@@ -1115,17 +1115,17 @@ void pipelineViewSlave(std::string argstring){
 		pspec.replace(pspec.find("intg"), 4, "pspec");
 		pspec.insert(0, dir);
 		
-	//	ctf = micrograph;
-	//	ctf.replace(ctf.find(".mrc"), 4, ".txt");
-	//	ctf.replace(0,ctf.find("intg"), "");
-	//	ctf.replace(ctf.find("intg"), 4, "ctffind_output_part");
-	//	ctf.insert(0, dir);
+    //	ctf = micrograph;
+    //	ctf.replace(ctf.find(".mrc"), 4, ".txt");
+    //	ctf.replace(0,ctf.find("intg"), "");
+    //	ctf.replace(ctf.find("intg"), 4, "ctffind_output_part");
+    //	ctf.insert(0, dir);
 		
 		box = micrograph;
 		box.replace(box.find(".mrc"), 4, ".box");
 		box.insert(0, dir);
 		
-	//	std::cout << "ctf=" << micrograph << " " << readCTFParams(ctf) << std::endl;
+    //	std::cout << "ctf=" << micrograph << " " << readCTFParams(ctf) << std::endl;
 		std::cout << "pspec=" << micrograph << " image=" << pngFromMRC(pspec, std::strtof(pspecbrightness.c_str(), NULL), std::strtof(pspeccontrast.c_str(), NULL)) << std::endl;
 		std::cout << "thumb=" << micrograph << " image=" << pngFromMRC(thumb, std::strtof(thumbbrightness.c_str(), NULL), std::strtof(thumbcontrast.c_str(), NULL)) << std::endl;
 		boxes = readBoxes(box);

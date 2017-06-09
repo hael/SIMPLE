@@ -100,17 +100,18 @@ print MODULE  "    end function
         end do
     end function
     
-    subroutine test_args
+    subroutine test_args(vlist)
         use simple_filehandling, only: get_fileunit, nlines
+        character(len=STDLEN), intent(intout), optional :: vlist
         type(args) :: as
-        character(len=STDLEN) :: arg, errarg1, errarg2, errarg3, vlist, spath
+        character(len=STDLEN) :: arg, errarg1, errarg2, errarg3, spath
         integer :: funit, n, i
         write(*,'(a)') '**info(simple_args_unit_test): testing it all'
         write(*,'(a)') '**info(simple_args_unit_test, part 1): testing for args that should be present'
         as = args()
         funit = get_fileunit()
         spath = 'simple absolute path'
-        vlist = adjustl(trim(spath))//'/src/simple_main/simple_varlist.txt'
+        if(.not.present(vlist)) vlist = adjustl(trim(spath))//'/src/simple_main/simple_varlist.txt'
         n = nlines(vlist)
         open(unit=funit, status='old', action='read', file=vlist)
         do i=1,n

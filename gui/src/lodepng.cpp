@@ -30,9 +30,9 @@ Rename this file to lodepng.cpp to use it for C++, or to lodepng.c to use it for
 
 #include "lodepng.h"
 
-#include <limits.h>
-#include <stdio.h>
-#include <stdlib.h>
+#include <limits>
+#include <cstdio>
+#include <cstdlib>
 
 #if defined(_MSC_VER) && (_MSC_VER >= 1310) /*Visual Studio: A few warning types are not desired here.*/
 #pragma warning( disable : 4244 ) /*implicit conversions: not warned by gcc -Wall -Wextra and requires too much casts*/
@@ -363,6 +363,9 @@ static long lodepng_filesize(const char* filename)
 
   size = ftell(file);
   /* It may give LONG_MAX as directory size, this is invalid for us. */
+#ifndef LONG_MAX
+    const long int LONG_MAX =std::numeric_limits<int>::max();
+  #endif
   if(size == LONG_MAX) size = -1;
 
   fclose(file);
