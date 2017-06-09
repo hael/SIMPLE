@@ -35,7 +35,7 @@ contains
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: converged
-        logical   :: conv_larr(p%fromp:p%top) ! per-particle convergence flags
+        ! logical   :: conv_larr(p%fromp:p%top) ! per-particle convergence flags
         integer   :: iptcl
         real      :: corr_thresh, frac_srch_space
         
@@ -43,14 +43,14 @@ contains
         frac_srch_space = b%a%get_avg('frac')
 
         ! PER-PARTICLE CONVERGENCE
-        if( which_iter == 1 ) call del_file(p%ppconvfile)
-        if( file_exists(p%ppconvfile) )then
-            call b%ppconv%read(p%ppconvfile)
-        else
-            call b%ppconv%zero_joint_distr_olap
-        endif
-        call b%ppconv%set_conv_larr(conv_larr)
-        write(*,'(A,F8.2)') '>>> CONVERGED PARTICLES(%):', 100.*(real(count(conv_larr)) / real(p%top - p%fromp + 1))
+        ! if( which_iter == 1 ) call del_file(p%ppconvfile)
+        ! if( file_exists(p%ppconvfile) )then
+        !     call b%ppconv%read(p%ppconvfile)
+        ! else
+        !     call b%ppconv%zero_joint_distr_olap
+        ! endif
+        ! call b%ppconv%set_conv_larr(conv_larr)
+        ! write(*,'(A,F8.2)') '>>> CONVERGED PARTICLES(%):', 100.*(real(count(conv_larr)) / real(p%top - p%fromp + 1))
 
         ! PREP REFERENCES
         if( p%l_distr_exec )then
@@ -130,7 +130,8 @@ contains
             if( p%oritab .eq. '' )then
                 !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                 do iptcl=p%fromp,p%top
-                    call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, conv_larr(iptcl), greedy=.true.)
+                    ! call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, conv_larr(iptcl), greedy=.true.)
+                    call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, greedy=.true.)
                 end do
                 !$omp end parallel do
             else
@@ -140,7 +141,8 @@ contains
                 endif
                 !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                 do iptcl=p%fromp,p%top
-                    call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, conv_larr(iptcl), extr_bound=corr_thresh)
+                    ! call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, conv_larr(iptcl), extr_bound=corr_thresh)
+                    call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, extr_bound=corr_thresh)
                 end do
                 !$omp end parallel do
             endif
@@ -175,8 +177,8 @@ contains
         call pftcc%kill
 
         ! REPORT CONVERGENCE
-        call b%ppconv%update_joint_distr_olap
-        call b%ppconv%write(p%ppconvfile)
+        ! call b%ppconv%update_joint_distr_olap
+        ! call b%ppconv%write(p%ppconvfile)
         if( p%l_distr_exec )then
             call qsys_job_finished(p, 'simple_hadamard2D_matcher :: prime2D_exec')
         else

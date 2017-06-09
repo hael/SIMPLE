@@ -16,22 +16,19 @@ logical, parameter :: DEBUG = .true.
 
 type, extends(image) :: polarizer
     private
-    type(kbinterpol)      :: kbwin                   !< window function object
-    real,    allocatable  :: polweights_mat(:,:,:)   !< polar weights matrix for the image to polar transformer
-    integer, allocatable  :: polcyc1_mat(:,:,:)      !< image cyclic adresses for the image to polar transformer
-    integer, allocatable  :: polcyc2_mat(:,:,:)      !< image cyclic adresses for the image to polar transformer
-    real                  :: winsz      = 1.5        !< window half-width
-    real                  :: alpha      = 2.0        !< oversampling ratio
-    real                  :: harwin     = 1.0        !< rounded window half-width
-    real                  :: harwin_exp = 1.0        !< rounded window half-width in expanded routines
-    integer               :: wdim       = 0
-
+    type(kbinterpol)      :: kbwin                 !< window function object
+    real,    allocatable  :: polweights_mat(:,:,:) !< polar weights matrix for the image to polar transformer
+    integer, allocatable  :: polcyc1_mat(:,:,:)    !< image cyclic adresses for the image to polar transformer
+    integer, allocatable  :: polcyc2_mat(:,:,:)    !< image cyclic adresses for the image to polar transformer
+    real                  :: winsz      = 1.5      !< window half-width
+    real                  :: alpha      = 2.0      !< oversampling ratio
+    real                  :: harwin     = 1.0      !< rounded window half-width
+    real                  :: harwin_exp = 1.0      !< rounded window half-width in expanded routines
+    integer               :: wdim       = 0        !< win dim
   contains
-
-    ! IMAGE TO POLAR TRANSFORMER
-    procedure          :: init_polarizer
-    procedure          :: polarize
-    procedure          :: kill_polarizer    
+    procedure :: init_polarizer
+    procedure :: polarize
+    procedure :: kill_polarizer    
 end type polarizer
 
 contains
