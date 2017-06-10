@@ -246,6 +246,7 @@ type :: params
     integer :: state=1
     integer :: state2split=0
     integer :: stepsz=1
+    integer :: szsn=SZSN_INIT
     integer :: tofny=0
     integer :: tof=1
     integer :: top=1
@@ -593,6 +594,7 @@ contains
         call check_iarg('state',          self%state)
         call check_iarg('state2split',    self%state2split)
         call check_iarg('stepsz',         self%stepsz)
+        call check_iarg('szsn',           self%szsn)
         call check_iarg('tof',            self%tof)
         call check_iarg('top',            self%top)
         call check_iarg('tos',            self%tos)

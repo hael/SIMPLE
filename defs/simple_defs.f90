@@ -57,6 +57,9 @@ integer, parameter :: SPECWMINPOP=2000
 ! SNHC-related global vars
 character(len=32), parameter :: SNHCDOC = 'snhc_oris.txt'
 character(len=32), parameter :: SNHCVOL = 'snhc_recvol_state'
+integer,           parameter :: SZSN_INIT = 5
+integer,           parameter :: SZSN_STEP = 3
+integer,           parameter :: SZSN_MAX  = 20
 
 ! constants that control search and convergence
 real,    parameter :: FRAC_SH_LIM      = 80.0 ! at what frac to turn on the shift search

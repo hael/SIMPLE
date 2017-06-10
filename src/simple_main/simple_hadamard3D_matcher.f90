@@ -168,7 +168,13 @@ contains
         call del_file(p%outfile)
         if(p%ctf .ne. 'no') call pftcc%create_polar_ctfmats(p%smpd, b%a)
         select case(p%refine)
-            case( 'no','adasym','shc','snhc' )
+            case( 'snhc' )
+                !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
+                do iptcl=p%fromp,p%top
+                    call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp, szsn=p%szsn)
+                end do
+                !$omp end parallel do
+            case( 'no','adasym','shc' )
                 if( p%oritab .eq. '' )then
                     !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                     do iptcl=p%fromp,p%top

@@ -209,6 +209,7 @@ startit
 state
 state2split
 stepsz
+szsn
 tofny
 tof
 top

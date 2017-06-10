@@ -557,6 +557,7 @@ contains
                 self%pfts_ptcls(iptcl,:,k) = cmplx(0.,0.)
             endif
         end do
+        call self%memoize_sqsum_ptcl(iptcl)
     end subroutine shellnorm_ptcl
 
     subroutine prep_ref4corr( self, iptcl, iref, pft_ref, sqsum_ref )

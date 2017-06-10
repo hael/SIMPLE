@@ -737,7 +737,7 @@ contains
         character(len=STDLEN) :: vol, vol_iter, oritab, str, str_iter
         character(len=STDLEN) :: str_state, fsc_file, volassemble_output
         character(len=STDLEN) :: restart_file
-        real                  :: frac_srch_space
+        real                  :: frac_srch_space, corr, corr_prev
         integer               :: s, state, iter, i
         logical               :: vol_defined
         ! make master parameters
@@ -873,6 +873,7 @@ contains
         call cline%gen_job_descr(job_descr)
         ! MAIN LOOP
         iter = p_master%startit-1
+        corr = -1.
         do
             iter = iter+1
             str_iter = int2str_pad(iter,3)
@@ -883,6 +884,16 @@ contains
                 call os%read(trim(cline%get_carg('oritab')))
                 frac_srch_space = os%get_avg('frac')
                 call job_descr%set( 'oritab', trim(oritab) )
+                if( p_master%refine .eq. 'snhc' )then
+                    ! update stochastic neighborhood size if corr is not improving
+                    corr_prev = corr
+                    corr      = os%get_avg('corr')
+                    if( iter > 1 .and. corr <= corr_prev )then
+                        p_master%szsn = min(SZSN_MAX,p_master%szsn + SZSN_STEP)
+                    endif
+                    call job_descr%set('szsn', int2str(p_master%szsn))
+                    call cline%set('szsn', real(p_master%szsn))
+                endif
             endif
             ! exponential cooling of the randomization rate
             p_master%extr_thresh = p_master%extr_thresh * p_master%rrate
