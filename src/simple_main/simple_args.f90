@@ -146,14 +146,14 @@ contains
         self%args(114) = 'pdfile'
         self%args(115) = 'pgrp'
         self%args(116) = 'plaintexttab'
-        self%args(117) = 'ppconvfile'
-        self%args(118) = 'prg'
-        self%args(119) = 'refine'
-        self%args(120) = 'refs_msk'
-        self%args(121) = 'refs'
-        self%args(122) = 'speckind'
-        self%args(123) = 'split_mode'
-        self%args(124) = 'stk_part'
+        self%args(117) = 'prg'
+        self%args(118) = 'refine'
+        self%args(119) = 'refs_msk'
+        self%args(120) = 'refs'
+        self%args(121) = 'speckind'
+        self%args(122) = 'split_mode'
+        self%args(123) = 'stk_part'
+        self%args(124) = 'stk_part_fbody'
         self%args(125) = 'stk'
         self%args(126) = 'stk2'
         self%args(127) = 'stk3'
@@ -388,7 +388,7 @@ contains
         write(*,'(a)') '**info(simple_args_unit_test, part 1): testing for args that should be present'
         as = args()
         funit = get_fileunit()
-        spath = '/Users/creboul/Simple3'
+        spath = '/Users/hael/src/fortran/simple3.0'
         vlist = adjustl(trim(spath))//'/src/simple_main/simple_varlist.txt'
         n = nlines(vlist)
         open(unit=funit, status='old', action='read', file=vlist)

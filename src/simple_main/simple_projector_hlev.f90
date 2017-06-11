@@ -1,15 +1,15 @@
 module simple_projector_hlev
 !$ use omp_lib
 !$ use omp_lib_kinds
-use simple_image,       only: image
-use simple_oris,        only: oris
-use simple_params,      only: params
-use simple_gridding,    only: prep4cgrid
-use simple_ori,         only: ori
-use simple_math,        only: rotmat2d
-use simple_projector,   only: projector
- use simple_kbinterpol, only: kbinterpol
-use simple_jiffys       ! use all in there
+use simple_image,      only: image
+use simple_oris,       only: oris
+use simple_params,     only: params
+use simple_gridding,   only: prep4cgrid
+use simple_ori,        only: ori
+use simple_math,       only: rotmat2d
+use simple_projector,  only: projector
+use simple_kbinterpol, only: kbinterpol
+use simple_jiffys      ! use all in there
 implicit none
 
 contains
@@ -129,7 +129,7 @@ contains
         call rovol_pad%set_ft(.true.)
         call rovol%new(ldim, p%smpd)
         call prep4cgrid(vol, vol_pad, p%msk, kbwin)
-        call vol_pad%expand_cmat
+        ! call vol_pad%expand_cmat REMOVED BECAUSE SEE BELOW
         lims = vol_pad%loop_lims(2)
         write(*,'(A)') '>>> ROTATING VOLUME'
         !$omp parallel do collapse(3) default(shared) private(h,k,l,loc,logi,phys)&
@@ -140,7 +140,6 @@ contains
                     logi = [h,k,l]
                     phys = rovol_pad%comp_addr_phys([h,k,l])
                     loc  = matmul(real(logi),o%get_mat())
-                    !call rovol_pad%set_fcomp(logi, phys, vol_pad%interp_fcomp_expanded(loc))
                     call rovol_pad%set_fcomp(logi, phys, vol_pad%extr_gridfcomp(loc))
                 end do 
             end do

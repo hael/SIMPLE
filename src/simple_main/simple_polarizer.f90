@@ -16,15 +16,15 @@ logical, parameter :: DEBUG = .true.
 
 type, extends(image) :: polarizer
     private
-    type(kbinterpol)      :: kbwin                 !< window function object
-    real,    allocatable  :: polweights_mat(:,:,:) !< polar weights matrix for the image to polar transformer
-    integer, allocatable  :: polcyc1_mat(:,:,:)    !< image cyclic adresses for the image to polar transformer
-    integer, allocatable  :: polcyc2_mat(:,:,:)    !< image cyclic adresses for the image to polar transformer
-    real                  :: winsz      = 1.5      !< window half-width
-    real                  :: alpha      = 2.0      !< oversampling ratio
-    real                  :: harwin     = 1.0      !< rounded window half-width
-    real                  :: harwin_exp = 1.0      !< rounded window half-width in expanded routines
-    integer               :: wdim       = 0        !< win dim
+    type(kbinterpol)      :: kbwin                               !< window function object
+    real,    allocatable  :: polweights_mat(:,:,:)               !< polar weights matrix for the image to polar transformer
+    integer, allocatable  :: polcyc1_mat(:,:,:)                  !< image cyclic adresses for the image to polar transformer
+    integer, allocatable  :: polcyc2_mat(:,:,:)                  !< image cyclic adresses for the image to polar transformer
+    real                  :: winsz      = KBWINSZ                !< window half-width
+    real                  :: alpha      = KBALPHA                !< oversampling ratio
+    real                  :: harwin     = real(ceiling(KBWINSZ)) !< rounded window half-width
+    real                  :: harwin_exp = 1.0                    !< rounded window half-width in expanded routines
+    integer               :: wdim       = 2*ceiling(1.0) + 1     !< harwin_exp is argument to ceiling!< win dim
   contains
     procedure :: init_polarizer
     procedure :: polarize
@@ -48,7 +48,6 @@ contains
         if( .not. pftcc%exists() ) stop 'polarft_corrcalc object needs to be created; init_imgpolarizer; simple_projector'
         call self%kill_polarizer
         self%kbwin = kbinterpol(KBWINSZ, KBALPHA)
-        self%wdim  = 2*ceiling(self%harwin_exp) + 1
         wlen       = self%wdim**2
         pdim       = pftcc%get_pdim(.true.)
         lims       = self%loop_lims(3)

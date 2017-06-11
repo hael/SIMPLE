@@ -18,19 +18,19 @@ logical, parameter :: DEBUG = .true.
 
 type, extends(image) :: projector
     private
-    type(kbinterpol)      :: kbwin                   !< window function object
-    integer               :: ldim_exp(3,2) = 0       !< expanded FT matrix limits
-    complex, allocatable  :: cmat_exp(:,:,:)         !< expanded FT matrix
-    real,    allocatable  :: polweights_mat(:,:,:)   !< polar weights matrix for the image to polar transformer
-    integer, allocatable  :: polcyc1_mat(:,:,:)      !< image cyclic adresses for the image to polar transformer
-    integer, allocatable  :: polcyc2_mat(:,:,:)      !< image cyclic adresses for the image to polar transformer
-    logical, allocatable  :: is_in_mask(:,:,:)       !< neighbour matrix for the shape mask projector
-    real                  :: winsz      = 1.5        !< window half-width
-    real                  :: alpha      = 2.0        !< oversampling ratio
-    real                  :: harwin     = 1.0        !< rounded window half-width
-    real                  :: harwin_exp = 1.0        !< rounded window half-width in expanded routines
-    integer               :: wdim       = 0
-    logical               :: expanded_exists=.false. !< indicates FT matrix existence
+    type(kbinterpol)      :: kbwin                               !< window function object
+    integer               :: ldim_exp(3,2) = 0                   !< expanded FT matrix limits
+    complex, allocatable  :: cmat_exp(:,:,:)                     !< expanded FT matrix
+    real,    allocatable  :: polweights_mat(:,:,:)               !< polar weights matrix for the image to polar transformer
+    integer, allocatable  :: polcyc1_mat(:,:,:)                  !< image cyclic adresses for the image to polar transformer
+    integer, allocatable  :: polcyc2_mat(:,:,:)                  !< image cyclic adresses for the image to polar transformer
+    logical, allocatable  :: is_in_mask(:,:,:)                   !< neighbour matrix for the shape mask projector
+    real                  :: winsz      = KBWINSZ                !< window half-width
+    real                  :: alpha      = KBALPHA                !< oversampling ratio
+    real                  :: harwin     = real(ceiling(KBWINSZ)) !< rounded window half-width
+    real                  :: harwin_exp = 1.0                    !< rounded window half-width in expanded routines
+    integer               :: wdim       = 2*ceiling(1.0) + 1     !< harwin_exp is argument to ceiling
+    logical               :: expanded_exists=.false.             !< indicates FT matrix existence
   contains
     ! CONSTRUCTORS
     procedure          :: expand_cmat
@@ -50,7 +50,7 @@ contains
 
     ! CONSTRUCTOR
 
-     !>  \brief  is a constructor of the expanded Fourier matrix
+    !>  \brief  is a constructor of the expanded Fourier matrix
     subroutine expand_cmat( self )
         use simple_math, only: cyci_1d
         class(projector), intent(inout) :: self
@@ -62,14 +62,9 @@ contains
         if( .not.self%is_ft() ) stop 'volume needs to be FTed before call; expand_cmat; simple_projector'
         if( ldim(3) == 1      ) stop 'only for volumes; expand_cmat; simple_projector'
         self%kbwin         = kbinterpol(KBWINSZ, KBALPHA)
-        self%winsz         = KBWINSZ
-        self%harwin        = real(ceiling(self%winsz))
-        self%harwin_exp    = 1.0
-        self%alpha         = KBALPHA
         lims               = self%loop_lims(3)
         self%ldim_exp(:,2) = maxval(abs(lims)) + ceiling(self%harwin_exp)
         self%ldim_exp(:,1) = -self%ldim_exp(:,2)
-        self%wdim          = 2*ceiling(self%harwin_exp) + 1
         allocate( self%cmat_exp( self%ldim_exp(1,1):self%ldim_exp(1,2),&
                                 &self%ldim_exp(2,1):self%ldim_exp(2,2),&
                                 &self%ldim_exp(3,1):self%ldim_exp(3,2)),&
@@ -211,10 +206,13 @@ contains
         complex  :: comp_sum
         integer  :: i, j, m, wdim, incr, lims(3,2), win(3,2), logi(3), phys(3)
         real     :: harwin_here
+        ! this is neeed in case expand_cmat hasn't been called
+        self%kbwin  = kbinterpol(KBWINSZ, KBALPHA)
+        ! init
         harwin_here = self%harwin_exp
-        win  = sqwin_3d(loc(1),loc(2),loc(3), harwin_here)
-        wdim = win(1,2) - win(1,1) + 1
-        lims = self%loop_lims(3)
+        win         = sqwin_3d(loc(1),loc(2),loc(3), harwin_here)
+        wdim        = win(1,2) - win(1,1) + 1
+        lims        = self%loop_lims(3)
         if( self%is_2d() )then
             ! 2D
             ! init

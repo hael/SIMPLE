@@ -157,11 +157,9 @@ contains
         type(params)         :: p
         type(image)          :: img
         integer              :: iptcl, ipart, ldim(3), cnt, nimgs
-        character(len=4)     :: ext
         integer, allocatable :: parts(:,:)
         logical              :: either_defined
         p = params(cline) ! parameters generated
-        ext = '.'//fname2ext(p%stk)
         call find_ldim_nptcls(p%stk, ldim, nimgs)
         ldim(3) = 1
         call img%new(ldim,1.)
@@ -174,7 +172,7 @@ contains
                 cnt = cnt+1
                 call img%read(p%stk, iptcl)
                 if( p%neg .eq. 'yes' ) call img%neg
-                call img%write('stack_part'//int2str_pad(ipart,p%numlen)//ext, cnt)
+                call img%write(trim(p%stk_part), cnt)
             end do
         end do
         deallocate(parts)

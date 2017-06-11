@@ -290,7 +290,7 @@ contains
         integer, parameter :: MAXLABELS = 10   ! maximum numbers symmetry peaks
         real,    parameter :: ANGTHRESH = 10.  ! maximum half-distance between symmetry peaks
         p = params(cline)                      ! parameters generated
-        call b%build_general_tbox(p, cline)     ! general objects built
+        call b%build_general_tbox(p, cline)    ! general objects built
         ! init
         e = b%a ! b%a contains the orientations of the references projections 
         cline_c1 = cline
@@ -381,7 +381,7 @@ contains
                         o        = axes%get_ori(axis_ind)
                         istate   = nint(o%get('state'))
                         if(istate /= 0)cycle
-                        if(rad2deg(axis.euldist.o) <= ANGTHRESH)then
+                        if( rad2deg(axis.euldist.o) <= ANGTHRESH )then
                             axis_ind = sort_inds(iaxis)
                             call axes%set(axis_ind, 'state', real(ilabel))
                         endif
@@ -390,7 +390,7 @@ contains
                 ! prep outcome
                 write(*,'(A,I2)') '>>> SYMMETRY AXES PEAKS FOUND: ',n_sympeaks
                 sym_peaks = oris(n_sympeaks)
-                do iaxis = 1, n_sympeaks
+                do iaxis=1,n_sympeaks
                     call sym_peaks%set_ori(iaxis, tmp_axes%get_ori(iaxis))
                 enddo
                 call sym_peaks%swape1e3
