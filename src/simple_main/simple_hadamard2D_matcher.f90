@@ -443,7 +443,6 @@ contains
 
     !>  \brief  prepares the polarft corrcalc object for search
     subroutine preppftcc4align( b, p )
-        use simple_masker,       only: automask2D
         use simple_jiffys,       only: alloc_err
         class(build),  intent(inout) :: b
         class(params), intent(inout) :: p
@@ -456,7 +455,7 @@ contains
         ! prepare the polarizers
         call b%img_match%init_polarizer(pftcc)
         ! prepare the automasker
-        if( p%l_automsk )call b%mskimg%init2D( p, p%ncls )
+        if( p%l_automsk )call b%mskimg%init( p, p%ncls )
         ! PREPARATION OF REFERENCES IN PFTCC
         ! read references and transform into polar coordinates
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING REFERENCES'

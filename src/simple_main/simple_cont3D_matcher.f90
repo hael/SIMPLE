@@ -9,8 +9,8 @@ use simple_ori,               only: ori
 !use simple_masker,           only: automask
 use simple_cont3D_greedysrch, only: cont3D_greedysrch
 use simple_cont3D_srch,       only: cont3D_srch
-use simple_hadamard_common,   ! use all in there
-use simple_math               ! use all in there
+use simple_hadamard_common   ! use all in there
+use simple_math              ! use all in there
 implicit none
 
 public :: cont3D_exec
@@ -272,7 +272,7 @@ contains
         use simple_ctf,   only: ctf
         class(build),               intent(inout) :: b
         class(params),              intent(inout) :: p
-        integer,                    intent(inout) :: iptcl
+        integer,                    intent(in)    :: iptcl
         class(polarft_corrcalc),    intent(inout) :: pftcc
         type(ctf)   :: tfun
         type(image) :: ref_img, ctf_img
@@ -317,7 +317,7 @@ contains
     subroutine prep_pftcc_ptcl(b, p, iptcl, pftcc)
         class(build),               intent(inout) :: b
         class(params),              intent(inout) :: p
-        integer,                    intent(inout) :: iptcl
+        integer,                    intent(in)    :: iptcl
         class(polarft_corrcalc),    intent(inout) :: pftcc
         type(ori)  :: optcl
         optcl = b%a%get_ori(iptcl)
