@@ -173,6 +173,7 @@ contains
         endif
         ! generate projections
         call b%vol%mask(p%msk, 'soft')
+        call b%vol%fwd_ft
         call b%vol%expand_cmat
         b%ref_imgs(1,:) = projvol_expanded(b%vol, b%e, p)
         if( p%l_distr_exec .and. p%part > 1 )then

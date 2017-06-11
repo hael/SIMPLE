@@ -83,8 +83,10 @@ contains
                 self%locs_ref(isym,k,:) = matmul(vec,e%get_mat())
             end do
         end do
-        ! prepare for fast interpolation    
+        ! prepare for fast interpolation
+        call self%vol_ref%fwd_ft
         call self%vol_ref%expand_cmat
+        call self%vol_target%fwd_ft
         call self%vol_target%expand_cmat
         ! extract the reference lines
         call self%extract_ref

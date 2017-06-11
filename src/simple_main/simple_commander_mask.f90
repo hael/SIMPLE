@@ -119,7 +119,7 @@ contains
         write(*,'(A,F8.2,A)') '>>> AUTOMASK LOW-PASS:',        p%amsklp, ' ANGSTROMS'
         write(*,'(A,I3,A)')   '>>> AUTOMASK SOFT EDGE WIDTH:', p%edge,   ' PIXELS'
         p%outstk = add2fbody(p%stk, p%ext, 'msk')
-        call b%mskimg%init2D(p, p%nptcls, mode='cavg')
+        call b%mskimg%init(p, p%nptcls, mode='cavg')
         do iptcl=1,p%nptcls
             call b%img%read(p%stk, iptcl)
             call b%mskimg%update_cls(b%img, iptcl)
@@ -155,7 +155,10 @@ contains
             p%masks(istate)    = 'automask_state'//int2str_pad(istate,2)//p%ext
             p%vols_msk(istate) = add2fbody(p%vols(istate), p%ext, 'msk')
             call b%vol%read(p%vols(istate))
-            call automask(b, p, cline, b%vol,  b%mskvol, p%vols_msk(istate), p%masks(istate))
+            call b%mskvol%init(p, b%vol)
+            call b%mskvol%write(p%masks(istate))
+            call b%vol%write(p%vols_msk(istate))
+            !call automask(b, p, cline, b%vol,  b%mskvol, p%vols_msk(istate), p%masks(istate))
         end do
         ! end gracefully
         call simple_end('**** SIMPLE_AUTOMASK3D NORMAL STOP ****')

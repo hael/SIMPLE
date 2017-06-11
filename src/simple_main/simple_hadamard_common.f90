@@ -295,14 +295,13 @@ contains
             call b%img%clip(b%img_match) ! SQUARE DIMS ASSUMED
             ! MASKING
             if( p%doautomsk )then
-                ! from volume
+                ! 3D enveloppe from volume
                 call b%mskvols(state)%apply_mask(b%img_match, o)
             else if( p%automsk .eq. 'cavg' )then
-                ! ab initio mask
+                ! 2D ab initio mask
                 call b%mskimg%apply_mask(b%img_match, nint(o%get('cls')))
-                !call automask2D(b%img_match, p)
             else              
-                ! apply a soft-edged mask
+                ! soft-edged mask
                 if( p%l_innermsk )then
                     call b%img_match%mask(p%msk, 'soft', inner=p%inner, width=p%width)
                 else
@@ -339,7 +338,6 @@ contains
         if( p%l_automsk )then
             ! automasking
             call b%mskimg%update_cls(b%img_match, icls)
-            ! call automask2D(b%img_match, p)
         else
             ! soft masking
             if( p%l_innermsk )then
@@ -385,7 +383,7 @@ contains
             ! mask using a molecular envelope
             if( p%doautomsk )then
                 p%masks(s)   = 'automask_state'//int2str_pad(s,2)//p%ext
-                call b%mskvols(s)%init3D( p, b%vol )
+                call b%mskvols(s)%init( p, b%vol )
                 if( p%l_distr_exec )then
                     if( p%part == 1 )then
                         ! write files
