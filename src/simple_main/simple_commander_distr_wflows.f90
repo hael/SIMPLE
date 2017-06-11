@@ -328,7 +328,7 @@ contains
             call cline_cavgassemble%set('oritab', 'prime2D_startdoc.txt')
         endif
         ! split stack
-        if( stack_is_split(p_master%ext, qenv%parts, p_master%box) )then
+        if( stack_is_split(p_master%stk_part_fbody, p_master%ext, qenv%parts, p_master%box) )then
         else
             call xsplit%execute(cline)
         endif
@@ -407,7 +407,7 @@ contains
         if( .not. cline%defined('refs') .and. job_descr%isthere('automsk') ) call job_descr%delete('automsk')
 
         ! split stack
-        if( stack_is_split(p_master%ext, qenv%parts, p_master%box) )then
+        if( stack_is_split(p_master%stk_part_fbody, p_master%ext, qenv%parts, p_master%box) )then
         else
             call xsplit%execute(cline)
         endif
@@ -538,7 +538,7 @@ contains
             chunktag = 'chunk'//int2str_pad(ipart,numlen)
             call part_params(ipart)%set('chunk',    int2str(ipart))
             call part_params(ipart)%set('chunktag', chunktag)
-            call part_params(ipart)%set('stk', 'stack_part'//int2str_pad(ipart,numlen)//p_master%ext)
+            call part_params(ipart)%set('stk', trim(p_master%stk_part_fbody)//int2str_pad(ipart,numlen)//p_master%ext)
             if( cline%defined('deftab') )then
                 call read_part_and_write(qenv%parts(ipart,:), p_master%deftab, trim(chunktag)//'deftab.txt')
                 call part_params(ipart)%set('deftab', trim(chunktag)//'deftab.txt')
@@ -550,7 +550,7 @@ contains
             endif
         end do
         ! split stack
-        if( stack_is_split(p_master%ext, qenv%parts, p_master%box) )then
+        if( stack_is_split(p_master%stk_part_fbody, p_master%ext, qenv%parts, p_master%box) )then
         else
             call xsplit%execute(cline)
         endif
@@ -680,7 +680,7 @@ contains
             vol = trim('startvol_state01'//p_master%ext)
         endif
         ! split stack
-        if( stack_is_split(p_master%ext, qenv%parts, p_master%box) )then
+        if( stack_is_split(p_master%stk_part_fbody, p_master%ext, qenv%parts, p_master%box) )then
         else
             call xsplit%execute(cline)
         endif
@@ -787,7 +787,7 @@ contains
             call cline_volassemble%delete( trim(vol) )
         enddo
         ! SPLIT STACK
-        if( stack_is_split(p_master%ext, qenv%parts, p_master%box) )then
+        if( stack_is_split(p_master%stk_part_fbody, p_master%ext, qenv%parts, p_master%box) )then
         else
             call xsplit%execute(cline)
         endif
@@ -1106,7 +1106,7 @@ contains
             call cline_volassemble%delete( trim(vol) )
         enddo
         ! SPLIT STACK
-        if( stack_is_split(p_master%ext, qenv%parts, p_master%box) )then
+        if( stack_is_split(p_master%stk_part_fbody, p_master%ext, qenv%parts, p_master%box) )then
         else
             call xsplit%execute(cline)
         endif
@@ -1237,19 +1237,19 @@ contains
         use simple_commander_rec
         class(recvol_distr_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        logical, parameter                  :: debug=.false.
-        type(split_commander)               :: xsplit
-        type(qsys_env)                      :: qenv
-        type(params)                        :: p_master
-        character(len=STDLEN)               :: volassemble_output
-        type(chash)                         :: job_descr
+        logical, parameter    :: debug=.false.
+        type(split_commander) :: xsplit
+        type(qsys_env)        :: qenv
+        type(params)          :: p_master
+        character(len=STDLEN) :: volassemble_output
+        type(chash)           :: job_descr
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! setup the environment for distributed execution
         call qenv%new(p_master)
         call cline%gen_job_descr(job_descr)
         ! split stack
-        if( stack_is_split(p_master%ext, qenv%parts, p_master%box) )then
+        if( stack_is_split(p_master%stk_part_fbody, p_master%ext, qenv%parts, p_master%box) )then
         else
             call xsplit%execute(cline)
         endif

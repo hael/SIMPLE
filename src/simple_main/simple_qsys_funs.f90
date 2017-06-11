@@ -53,10 +53,11 @@ contains
         end do
     end subroutine qsys_cleanup
 
-    function stack_is_split( stkext, parts, box ) result( is_split_correctly )
+    function stack_is_split( stk_part_fbody, stkext, parts, box ) result( is_split_correctly )
+        character(len=*), intent(in)  :: stk_part_fbody
         character(len=4), intent(in)  :: stkext
         integer,          intent(in)  :: parts(:,:)
-        integer,          intent(in)  :: box 
+        integer,          intent(in)  :: box
         character(len=:), allocatable :: stack_part_fname
         logical, allocatable          :: stack_parts_exist(:) 
         integer :: ipart, numlen, nparts, sz, sz_correct, ldim(3)
@@ -65,7 +66,7 @@ contains
         allocate( stack_parts_exist(nparts) )
         numlen = len(int2str(nparts))
         do ipart=1,nparts
-            allocate(stack_part_fname, source='stack_part'//int2str_pad(ipart,numlen)//stkext)
+            allocate(stack_part_fname, source=trim(stk_part_fbody)//int2str_pad(ipart,numlen)//stkext)
             stack_parts_exist(ipart) = file_exists(stack_part_fname)
             deallocate(stack_part_fname)
         end do
@@ -74,7 +75,7 @@ contains
         if( is_split )then
             do ipart=1,nparts
                 sz_correct = parts(ipart,2)-parts(ipart,1)+1
-                allocate(stack_part_fname, source='stack_part'//int2str_pad(ipart,numlen)//stkext)
+                allocate(stack_part_fname, source=trim(stk_part_fbody)//int2str_pad(ipart,numlen)//stkext)
                 call find_ldim_nptcls(stack_part_fname, ldim, sz)
                 if( sz /= sz_correct )then
                     is_correct = .false.
@@ -90,7 +91,7 @@ contains
             end do
         endif
         is_split_correctly = is_split .and. is_correct
-        if( .not. is_split_correctly ) call del_files('stack_part', nparts, ext=stkext)
+        if( .not. is_split_correctly ) call del_files(trim(stk_part_fbody), nparts, ext=stkext)
     end function stack_is_split
 
     subroutine terminate_if_prg_in_cwd( prg )

@@ -190,7 +190,7 @@ contains
         ! set global state string
         str_state = int2str_pad(STATE,2)
         ! delete possibly pre-existing stack_parts
-        call del_files('stack_part', p_master%nparts, ext=p_master%ext)
+        call del_files(trim(p_master%stk_part_fbody), p_master%nparts, ext=p_master%ext)
         ! decide wether to search for the symmetry axis or put the point-group in from the start
         ! if the point-group is considered known, it is put in from the start
         srch4symaxis = .false.
@@ -427,7 +427,7 @@ contains
         p_master = params(cline, checkdistr=.false.)
 
         ! delete possibly pre-existing stack & pft parts
-        call del_files('stack_part', p_master%nparts, ext=p_master%ext)
+        call del_files(trim(p_master%stk_part_fbody), p_master%nparts, ext=p_master%ext)
         call del_files('ppfts_memoized_part', p_master%nparts, ext='.bin')
 
         ! prepare command lines from prototype master
