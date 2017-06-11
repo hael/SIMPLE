@@ -140,7 +140,8 @@ contains
                     logi = [h,k,l]
                     phys = rovol_pad%comp_addr_phys([h,k,l])
                     loc  = matmul(real(logi),o%get_mat())
-                    call rovol_pad%set_fcomp(logi, phys, vol_pad%interp_fcomp_expanded(loc))
+                    !call rovol_pad%set_fcomp(logi, phys, vol_pad%interp_fcomp_expanded(loc))
+                    call rovol_pad%set_fcomp(logi, phys, vol_pad%extr_gridfcomp(loc))
                 end do 
             end do
         end do
