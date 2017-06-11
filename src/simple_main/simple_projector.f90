@@ -59,8 +59,8 @@ contains
         integer :: lims(3,2), ldim(3)
         call self%kill_expanded
         ldim = self%get_ldim()
-        if( .not.self%is_ft() ) stop 'volume needs to be FTed before call; expand_cmat; simple_image'
-        if( ldim(3) == 1      ) stop 'only for volumes; expand_cmat; simple_image'
+        if( .not.self%is_ft() ) stop 'volume needs to be FTed before call; expand_cmat; simple_projector'
+        if( ldim(3) == 1      ) stop 'only for volumes; expand_cmat; simple_projector'
         self%kbwin         = kbinterpol(KBWINSZ, KBALPHA)
         self%winsz         = KBWINSZ
         self%harwin        = real(ceiling(self%winsz))
@@ -114,7 +114,7 @@ contains
     subroutine reset_expanded( self )
         class(projector), intent(inout) :: self
         if( .not.self%expanded_exists )&
-            &stop 'expanded fourier matrix does not exist; simple_image::reset_expanded'
+            &stop 'expanded fourier matrix does not exist; simple_projector::reset_expanded'
         self%cmat_exp = cmplx(0.,0.)
     end subroutine reset_expanded
 

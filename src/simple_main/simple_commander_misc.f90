@@ -289,10 +289,10 @@ contains
         integer            :: i, fnr, file_stat
         integer, parameter :: MAXLABELS = 10   ! maximum numbers symmetry peaks
         real,    parameter :: ANGTHRESH = 10.  ! maximum half-distance between symmetry peaks
-        p = params(cline)                   ! parameters generated
-        call b%build_general_tbox(p, cline) ! general objects built
+        p = params(cline)                      ! parameters generated
+        call b%build_general_tbox(p, cline)     ! general objects built
         ! init
-        e = b%a     ! b%a contains the references projections orientations
+        e = b%a ! b%a contains the orientations of the references projections 
         cline_c1 = cline
         call cline_c1%set('pgrp', 'c1')
         p_c1 = params(cline_c1)
@@ -372,7 +372,7 @@ contains
                     ! identify next best axis
                     do iaxis = 1, naxes
                         axis_ind = sort_inds(iaxis)
-                        if(nint(axes%get(axis_ind,'state')) == 0)exit
+                        if( nint(axes%get(axis_ind,'state') ) == 0)exit
                     enddo
                     if(iaxis > naxes)exit
                     axis = axes%get_ori(axis_ind)

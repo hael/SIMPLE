@@ -1,6 +1,6 @@
 expanding neighbourhood snhc +5 when not improving up to 20
 random selection of images for prime2D init need to take state=0 into account
-
+unidocs should be written as ingles in unblur_ctffind
 need to have another go at the picker
 weighted multi-resolution state sorting by fitting B-factors?
 test specscore on cavgs

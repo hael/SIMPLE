@@ -119,13 +119,15 @@ contains
         type(projector)  :: vol_pad
         type(image)      :: rovol_pad, rovol 
         type(kbinterpol) :: kbwin
-        integer          :: h,k,l,lims(3,2),logi(3),phys(3)
+        integer          :: h,k,l,lims(3,2),logi(3),phys(3),ldim(3),ldim_pd(3)
         real             :: loc(3)
-        kbwin  = kbinterpol(KBWINSZ, KBALPHA)
-        call vol_pad%new([p%boxpd,p%boxpd,p%boxpd], p%smpd)
-        rovol_pad = vol_pad
+        kbwin   = kbinterpol(KBWINSZ, KBALPHA)
+        ldim    = vol%get_ldim()
+        ldim_pd = nint(KBALPHA)*ldim
+        call vol_pad%new(ldim_pd, p%smpd)
+        call rovol_pad%new(ldim_pd, p%smpd)
         call rovol_pad%set_ft(.true.)
-        call rovol%new([p%box,p%box,p%box], p%smpd)
+        call rovol%new(ldim, p%smpd)
         call prep4cgrid(vol, vol_pad, p%msk, kbwin)
         call vol_pad%expand_cmat
         lims = vol_pad%loop_lims(2)
