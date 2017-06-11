@@ -172,7 +172,7 @@ contains
                 cnt = cnt+1
                 call img%read(p%stk, iptcl)
                 if( p%neg .eq. 'yes' ) call img%neg
-                call img%write(trim(p%stk_part), cnt)
+                call img%write(trim(p%stk_part_fbody)//int2str_pad(ipart,p%numlen)//p%ext, cnt)
             end do
         end do
         deallocate(parts)
