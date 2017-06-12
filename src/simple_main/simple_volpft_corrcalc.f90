@@ -105,7 +105,7 @@ contains
         do ispace=1,self%nspace
             do k=self%kfromto_vpft(1),self%kfromto_vpft(2)
                 self%vpft_ref(ispace,k) =&
-                self%vol_ref%interp_fcomp_expanded(self%locs_ref(ispace,k,:))
+                self%vol_ref%interp_fcomp(self%locs_ref(ispace,k,:))
             end do
         end do
         !$omp end parallel do
@@ -129,7 +129,7 @@ contains
             do ispace=1,self%nspace
                 do k=self%kfromto_vpft(1),self%kfromto_vpft(2)
                     loc  = matmul(self%locs_ref(ispace,k,:),mat)
-                    self%vpft_target(ispace,k) = self%vol_target%interp_fcomp_expanded(loc)
+                    self%vpft_target(ispace,k) = self%vol_target%interp_fcomp(loc)
                 end do
             end do
         else
@@ -138,7 +138,7 @@ contains
             do ispace=1,self%nspace
                 do k=self%kfromto_vpft(1),self%kfromto_vpft(2)
                     loc  = matmul(self%locs_ref(ispace,k,:),mat)
-                    self%vpft_target(ispace,k) = self%vol_target%interp_fcomp_expanded(loc)
+                    self%vpft_target(ispace,k) = self%vol_target%interp_fcomp(loc)
                 end do
             end do
             !$omp end parallel do

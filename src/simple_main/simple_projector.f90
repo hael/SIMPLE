@@ -39,9 +39,9 @@ type, extends(image) :: projector
     ! INTERPOLATOR
     procedure          :: extr_gridfcomp
     ! FOURIER PROJECTORS
-    procedure          :: fproject_expanded
-    procedure          :: fproject_polar_expanded
-    procedure          :: interp_fcomp_expanded
+    procedure          :: fproject
+    procedure          :: fproject_polar
+    procedure          :: interp_fcomp
     ! DESTRUCTOR
     procedure          :: kill_expanded
 end type projector
@@ -116,7 +116,7 @@ contains
     ! FOURIER PROJECTORS
 
     !> \brief  extracts a Fourier plane from the expanded FT matrix of a volume (self)
-    subroutine fproject_expanded( self, e, fplane, lp )
+    subroutine fproject( self, e, fplane, lp )
         class(projector), intent(inout) :: self
         class(ori),       intent(in)    :: e
         class(image),     intent(inout) :: fplane
@@ -143,14 +143,14 @@ contains
                 loc  = matmul(real(logi), e%get_mat())
                 ! set fourier component
                 phys = self%comp_addr_phys(logi)
-                call fplane%set_fcomp(logi,phys,self%interp_fcomp_expanded(loc))
+                call fplane%set_fcomp(logi,phys,self%interp_fcomp(loc))
             end do
         end do
         !$omp end parallel do
-    end subroutine fproject_expanded
+    end subroutine fproject
 
     !> \brief  extracts a polar FT from a volume's expanded FT (self)
-    subroutine fproject_polar_expanded( self, iref, e, pftcc, serial )
+    subroutine fproject_polar( self, iref, e, pftcc, serial )
         use simple_polarft_corrcalc, only: polarft_corrcalc
         use simple_math,             only: deg2rad
         class(projector),        intent(inout) :: self   !< projector object
@@ -174,7 +174,7 @@ contains
                     vec(:2) = pftcc%get_coord(irot,k)
                     vec(3)  = 0.
                     loc     = matmul(vec,e%get_mat())
-                    call pftcc%set_ref_fcomp(iref, irot, k, self%interp_fcomp_expanded(loc))
+                    call pftcc%set_ref_fcomp(iref, irot, k, self%interp_fcomp(loc))
                 end do
             end do
         else
@@ -186,16 +186,17 @@ contains
                     vec(:2) = pftcc%get_coord(irot,k)
                     vec(3)  = 0.
                     loc     = matmul(vec,e%get_mat())
-                    call pftcc%set_ref_fcomp(iref, irot, k, self%interp_fcomp_expanded(loc))
+                    call pftcc%set_ref_fcomp(iref, irot, k, self%interp_fcomp(loc))
                 end do
             end do
             !$omp end parallel do
         endif
-    end subroutine fproject_polar_expanded
+    end subroutine fproject_polar
 
     ! INTERPOLATORS
     
     !> \brief  extracts a Fourier component from a transform (self) by gridding
+    !!         not expanded
     function extr_gridfcomp( self, loc ) result( comp_sum )
         use simple_math, only: cyci_1d
         class(projector), intent(inout) :: self
@@ -276,7 +277,7 @@ contains
     end function extr_gridfcomp
 
     !>  \brief is to interpolate from the expanded complex matrix 
-    function interp_fcomp_expanded( self, loc )result( comp )
+    function interp_fcomp( self, loc )result( comp )
         class(projector), intent(inout) :: self
         real,             intent(in)    :: loc(3)
         complex :: comp
@@ -293,7 +294,7 @@ contains
         end do
         ! SUM( kernel x components )
         comp = sum( w * self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2),win(3,1):win(3,2)) )
-    end function interp_fcomp_expanded
+    end function interp_fcomp
     
 
     !>  \brief  is a destructor of expanded matrices (imgpolarizer AND expanded projection of)

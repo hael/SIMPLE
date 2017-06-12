@@ -376,7 +376,7 @@ contains
                 cnt = cnt+1
                 call progress(cnt, nrefs)
                 o = b%e%get_ori(iref)
-                call b%vol%fproject_polar_expanded(cnt, o, pftcc)
+                call b%vol%fproject_polar(cnt, o, pftcc)
             end do
         end do
         ! cleanup

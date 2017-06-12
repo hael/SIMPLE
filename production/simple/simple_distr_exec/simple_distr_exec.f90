@@ -66,7 +66,7 @@ select case(prg)
     case( 'preproc' )
         !==Program preproc
         !
-        ! <preproc/begin>is a program that executes unblur, ctffind & pick in sequence
+        ! <preproc/begin>is a program that executes unblur, ctffind and pick in sequence
         ! and in streaming mode as the microscope collects the data <preproc/end>
         !
         ! set required keys
@@ -125,7 +125,7 @@ select case(prg)
     case( 'unblur_ctffind' )
         !==Program unblur_ctffind
         !
-        ! <ctffind/begin>is a pipelined unblur + ctffind program<ctffind/end> 
+        ! <unblur_ctffind/begin>is a pipelined unblur + ctffind program<unblur_ctffind/end> 
         !
         ! set required keys
         keys_required(1)  = 'filetab'
@@ -160,7 +160,7 @@ select case(prg)
         keys_optional(23) = 'expastig'
         keys_optional(24) = 'phaseplate'
         ! parse command line
-        ! if( describe ) call print_doc_unblur_ctffind
+        if( describe ) call print_doc_unblur_ctffind
         call cline%parse(keys_required(:6), keys_optional(:24))
         ! set defaults
         call cline%set('dopick', 'no'     )
@@ -180,7 +180,9 @@ select case(prg)
     case( 'unblur' )
         !==Program unblur
         !
-        ! <unblur/begin>is a program for movie alignment or unblurring.
+        ! <unblur/begin>is a program for movie alignment or unblurring based on similar principles as
+        ! Grigorieffs program (hence the name). There are two important differences: automatic weighting of
+        ! the frames using a corrleation-based M-estimator and continuous optimisation of the shift parameters.
         ! Input is a textfile with absolute paths to movie files in addition to a few obvious input
         ! parameters<unblur/end>
         !
@@ -332,7 +334,7 @@ select case(prg)
         keys_optional(8) = 'outfile'
         keys_optional(9) = 'refs'  
         ! parse command line
-        ! if( describe ) call print_doc_makecavgs
+        if( describe ) call print_doc_makecavgs
         call cline%parse(keys_required(:4), keys_optional(:9))
         ! execute
         call xmakecavgs_distr%execute(cline)
@@ -468,19 +470,10 @@ select case(prg)
         !
         ! <prime3D/begin>is an ab inito reconstruction/refinement program based on probabilistic
         ! projection matching. PRIME is short for PRobabilistic Initial 3D Model generation for Single-
-        ! particle cryo-Electron microscopy. Do not search the origin shifts initially, when the model is 
-        ! of very low quality. If your images are far off centre, use stackops with option
-        ! shalgn=yes instead to shiftalign the images beforehand (the algorithm implemented is the 
-        ! same as EMANs cenalignint program). We recommend running the first round of PRIME with 
-        ! the default dynamic resolution stepping dynlp=yes. The dynlp option implements 
-        ! a heuristic resolution weighting/update scheme. The initial low-pass limit is set so that each
-        ! image receives ten nonzero orientation weights. When quasi-convergence has been reached, the limit 
-        ! is updated one Fourier index at the time until PRIME reaches the condition where six nonzero 
-        ! orientation weights are assigned to each image. FSC-based filtering is unfortunately not possible
-        ! to do in the ab initio reconstruction step, because when the orientations are mostly random, the 
-        ! FSC overestimates the resolution. Once the initial model has converged, we recommend start searching 
-        ! the shifts (by setting trs to some nonzero value) and applying the FSC for resolution-
-        ! weighting (by setting eo=yes)<prime3D/end>
+        ! particle cryo-Electron microscopy. There are a daunting number of options in PRIME3D. If you
+        ! are processing class averages we recommend that you instead use the simple_distr_exec prg=
+        ! ini3D_from_cavgs route for executing PRIME3D. Automated workflows for single- and multi-particle
+        ! refinement using prime3D are planned for the next release (3.0)<prime3D/end>
         !
         ! set required keys
         keys_required(1)  = 'stk'
@@ -695,8 +688,8 @@ select case(prg)
     case( 'tseries_track' )
         !==Program tseries_track
         !
-        ! <tseries_extract/begin>is a program for particle tracking in time-series data
-        ! <tseries_extract/end> 
+        ! <tseries_track/begin>is a program for particle tracking in time-series data
+        ! <tseries_track/end> 
         !
         ! set required keys
         keys_required(1) = 'filetab'
@@ -708,7 +701,7 @@ select case(prg)
         keys_optional(1) = 'lp'
         keys_optional(2) = 'offset'
         ! parse command line
-        ! if( describe ) call print_doc_tseries_track
+        if( describe ) call print_doc_tseries_track
         call cline%parse(keys_required(:5), keys_optional(:2))
         ! set defaults
         call cline%set('nthr', 1.0)
@@ -757,7 +750,7 @@ select case(prg)
     case( 'het_ensemble' )
         !==Program het_ensemble
         !
-        ! <het_ensemble/begin><het_ensemble/end> 
+        ! <het_ensemble/begin>is a program for heterogeneity analysis based on ensemble learning<het_ensemble/end> 
         !
         ! set required keys
         keys_required(1)  = 'stk'
@@ -781,7 +774,7 @@ select case(prg)
         keys_optional(9)  = 'width'
         keys_optional(10) = 'nspace'
         ! parse command line
-        ! if( describe ) call print_doc_het_ensemble
+        if( describe ) call print_doc_het_ensemble
         call cline%parse(keys_required(:9), keys_optional(:10))
         ! execute
         call xhet_ensemble%execute( cline )

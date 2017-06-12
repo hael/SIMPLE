@@ -14,54 +14,8 @@ implicit none
 
 contains
 
-    ! !>  \brief  generates an array of projection images of volume vol in orientations o
-    ! function projvol( vol, o, p, top ) result( imgs )   
-    !     class(image),      intent(inout) :: vol     !< volume to project
-    !     class(oris),       intent(inout) :: o       !< orientations
-    !     class(params),     intent(in)    :: p       !< parameters
-    !     integer, optional, intent(in)    :: top     !< stop index
-    !     type(image),      allocatable :: imgs(:)    !< resulting images
-    !     character(len=:), allocatable :: imgk
-    !     type(projector)  :: vol_pad
-    !     type(image)      :: img_pad
-    !     type(kbinterpol) :: kbwin
-    !     integer          :: n, i, alloc_stat
-    !     kbwin = kbinterpol(KBWINSZ, KBALPHA)
-    !     imgk  = vol%get_imgkind()
-    !     call vol_pad%new([p%boxpd,p%boxpd,p%boxpd], p%smpd, imgk)
-    !     if( imgk .eq. 'xfel' )then
-    !         call vol%pad(vol_pad)
-    !     else
-    !         call prep4cgrid(vol, vol_pad, p%msk, kbwin)
-    !     endif
-    !     call img_pad%new([p%boxpd,p%boxpd,1], p%smpd, imgk)
-    !     if( present(top) )then
-    !         n = top
-    !     else
-    !         n = o%get_noris()
-    !     endif
-    !     allocate( imgs(n), stat=alloc_stat )
-    !     call alloc_err('projvol; simple_projector', alloc_stat)
-    !     write(*,'(A)') '>>> GENERATES PROJECTIONS' 
-    !     do i=1,n
-    !         call progress(i, n)
-    !         call imgs(i)%new([p%box,p%box,1], p%smpd, imgk)
-    !         call vol_pad%fproject( o%get_ori(i), img_pad )
-    !         if( imgk .eq. 'xfel' )then
-    !             call img_pad%clip(imgs(i))
-    !         else
-    !             call img_pad%bwd_ft
-    !             call img_pad%clip(imgs(i))
-    !             ! HAD TO TAKE OUT BECAUSE PGI COMPILER BAILS
-    !             ! call imgs(i)%norm
-    !         endif
-    !     end do
-    !     call vol_pad%kill
-    !     call img_pad%kill
-    ! end function projvol
-
     !>  \brief  generates an array of projection images of volume vol in orientations o
-    function projvol_expanded( vol, o, p, top, lp ) result( imgs )
+    function projvol( vol, o, p, top, lp ) result( imgs )
         class(image),      intent(inout) :: vol     !< volume to project
         class(oris),       intent(inout) :: o       !< orientations
         class(params),     intent(inout) :: p       !< parameters
@@ -94,9 +48,9 @@ contains
             call progress(i, n)
             call imgs(i)%new([p%box,p%box,1], p%smpd, imgk)
             if( present(lp) )then
-                call vol_pad%fproject_expanded( o%get_ori(i), img_pad, lp=lp )
+                call vol_pad%fproject( o%get_ori(i), img_pad, lp=lp )
             else
-                call vol_pad%fproject_expanded( o%get_ori(i), img_pad )
+                call vol_pad%fproject( o%get_ori(i), img_pad )
             endif
             if( imgk .eq. 'xfel' )then
                 call img_pad%clip(imgs(i))
@@ -109,7 +63,7 @@ contains
         end do
         call vol_pad%kill
         call img_pad%kill
-    end function projvol_expanded
+    end function projvol
 
     !>  \brief  rotates a volume by Euler angle o using Fourier gridding
     function rotvol( vol, o, p ) result( rovol )

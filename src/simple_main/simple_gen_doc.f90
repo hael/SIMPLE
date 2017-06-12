@@ -132,6 +132,12 @@ contains
         stop
     end subroutine print_doc_ctfops
 
+    subroutine print_doc_dsymsrch
+        write(*,'(A)', advance='no') 'is a program for identifying rotational symmetries in class averages of D-symmet'
+        write(*,'(A)') 'ric molecules and generating a cylinder that matches the shape.'
+        stop
+    end subroutine print_doc_dsymsrch
+
     subroutine print_doc_eo_volassemble
         write(*,'(A)', advance='no') 'is a program that assembles volume(s) when the reconstruction program (recvol wi'
         write(*,'(A)', advance='no') 'th eo=yes) has been executed in distributed mode. inner applies a soft-edged inn'
@@ -158,17 +164,6 @@ contains
         stop
     end subroutine print_doc_filter
 
-    subroutine print_doc_find_nnimgs
-        write(*,'(A)', advance='no') 'is a program for cidentifying the nnn nearest neighbor images for each image in'
-        write(*,'(A)') 'the inputted stack'
-        stop
-    end subroutine print_doc_find_nnimgs
-
-    subroutine print_doc_het_init
-        write(*,'(A)') ''
-        stop
-    end subroutine print_doc_het_init
-
     subroutine print_doc_image_smat
         write(*,'(A)', advance='no') 'is a program for creating a similarity matrix based on common line correlation.'
         write(*,'(A)', advance='no') 'The idea being that it should be possible to cluster images based on their 3D si'
@@ -183,10 +178,11 @@ contains
         stop
     end subroutine print_doc_iminfo
 
-    subroutine print_doc_integrate_movies
-        write(*,'(A)') 'is a program for integrating DDD movies'
+    subroutine print_doc_makecavgs
+        write(*,'(A)', advance='no') 'is used  to produce class averages or initial random references for prime2D exec'
+        write(*,'(A)') 'ution.'
         stop
-    end subroutine print_doc_integrate_movies
+    end subroutine print_doc_makecavgs
 
     subroutine print_doc_makedeftab
         write(*,'(A)', advance='no') 'is a program for creating a SIMPLE conformant file of CTF parameter values (deft'
@@ -216,6 +212,11 @@ contains
         stop
     end subroutine print_doc_makeoris
 
+    subroutine print_doc_makepickrefs
+        write(*,'(A)') 'is a program for generating references for template-based particle picking'
+        stop
+    end subroutine print_doc_makepickrefs
+
     subroutine print_doc_map2ptcls
         write(*,'(A)', advance='no') 'is a program for mapping parameters that have been obtained using class averages'
         write(*,'(A)') ' to the individual particle images'
@@ -244,12 +245,6 @@ contains
         write(*,'(A)') 'buted mode'
         stop
     end subroutine print_doc_merge_nnmat
-
-    subroutine print_doc_merge_shellweights
-        write(*,'(A)', advance='no') 'is a program for merging partial shellweight matrices calculated in distributed'
-        write(*,'(A)') 'mode'
-        stop
-    end subroutine print_doc_merge_shellweights
 
     subroutine print_doc_merge_similarities
         write(*,'(A)', advance='no') 'is a program for merging similarities calculated between pairs of objects into a'
@@ -339,7 +334,7 @@ contains
     end subroutine print_doc_powerspecs
 
     subroutine print_doc_preproc
-        write(*,'(A)') 'is a program that executes unblur, ctffind & pick in sequence'
+        write(*,'(A)') 'is a program that executes unblur, ctffind and pick in sequence'
         stop
     end subroutine print_doc_preproc
 
@@ -349,32 +344,14 @@ contains
         stop
     end subroutine print_doc_prime2D
 
-    subroutine print_doc_prime2D_init
-        write(*,'(A)', advance='no') 'is used  to produce the initial random references for prime2D execution. The ran'
-        write(*,'(A)', advance='no') 'dom clustering and in-plane alignment is printed in the file prime2D_startdoc.tx'
-        write(*,'(A)', advance='no') 't produced by the program. This file is used together with the initial reference'
-        write(*,'(A)') 's (startcavgs.ext) to execute prime2D'
-        stop
-    end subroutine print_doc_prime2D_init
-
     subroutine print_doc_prime3D
         write(*,'(A)', advance='no') 'is an ab inito reconstruction/refinement program based on probabilistic projecti'
         write(*,'(A)', advance='no') 'on matching. PRIME is short for PRobabilistic Initial 3D Model generation for Si'
-        write(*,'(A)', advance='no') 'ngle- particle cryo-Electron microscopy. Do not search the origin shifts initial'
-        write(*,'(A)', advance='no') 'ly, when the model is of very low quality. If your images are far off centre, us'
-        write(*,'(A)', advance='no') 'e stackops with option shalgn=yes instead to shiftalign the images beforehand (t'
-        write(*,'(A)', advance='no') 'he algorithm implemented is the same as EMANs cenalignint program). We recommend'
-        write(*,'(A)', advance='no') ' running the first round of PRIME with the default dynamic resolution stepping d'
-        write(*,'(A)', advance='no') 'ynlp=yes. The dynlp option implements a heuristic resolution weighting/update sc'
-        write(*,'(A)', advance='no') 'heme. The initial low-pass limit is set so that each image receives ten nonzero'
-        write(*,'(A)', advance='no') 'orientation weights. When quasi-convergence has been reached, the limit is updat'
-        write(*,'(A)', advance='no') 'ed one Fourier index at the time until PRIME reaches the condition where six non'
-        write(*,'(A)', advance='no') 'zero orientation weights are assigned to each image. FSC-based filtering is unfo'
-        write(*,'(A)', advance='no') 'rtunately not possible to do in the ab initio reconstruction step, because when'
-        write(*,'(A)', advance='no') 'the orientations are mostly random, the FSC overestimates the resolution. Once t'
-        write(*,'(A)', advance='no') 'he initial model has converged, we recommend start searching the shifts (by sett'
-        write(*,'(A)', advance='no') 'ing trs to some nonzero value) and applying the FSC for resolution- weighting (b'
-        write(*,'(A)') 'y setting eo=yes)'
+        write(*,'(A)', advance='no') 'ngle- particle cryo-Electron microscopy. There are a daunting number of options'
+        write(*,'(A)', advance='no') 'in PRIME3D. If you are processing class averages we recommend that you instead u'
+        write(*,'(A)', advance='no') 'se the simple_distr_exec prg= ini3D_from_cavgs route for executing PRIME3D. Auto'
+        write(*,'(A)', advance='no') 'mated workflows for single- and multi-particle refinement using prime3D are plan'
+        write(*,'(A)') 'ned for the next release (3.0)'
         stop
     end subroutine print_doc_prime3D
 
@@ -400,6 +377,11 @@ contains
         write(*,'(A)') 'is a program for printing the binary FSC files produced by PRIME3D'
         stop
     end subroutine print_doc_print_fsc
+
+    subroutine print_doc_print_magic_boxes
+        write(*,'(A)') 'is a program for printing magic box sizes (fast FFT)'
+        stop
+    end subroutine print_doc_print_magic_boxes
 
     subroutine print_doc_projvol
         write(*,'(A)', advance='no') 'is a program for projecting a volume using interpolation in Fourier space. Input'
@@ -450,11 +432,6 @@ contains
         stop
     end subroutine print_doc_res
 
-    subroutine print_doc_respimg
-        write(*,'(A)') ''
-        stop
-    end subroutine print_doc_respimg
-
     subroutine print_doc_resrange
         write(*,'(A)', advance='no') 'is a program for estimating the resolution range used in the heuristic resolutio'
         write(*,'(A)', advance='no') 'n-stepping scheme in the PRIME3D initial model production procedure. The initial'
@@ -497,13 +474,6 @@ contains
         stop
     end subroutine print_doc_select_frames
 
-    subroutine print_doc_shellweight3D
-        write(*,'(A)', advance='no') 'is a program for calculating the shell-by-shell resolution weights in a global s'
-        write(*,'(A)', advance='no') 'ense, so that particles that do contribute with higher resolution information (a'
-        write(*,'(A)') 's measured by the FRC) are given the appropriate weight'
-        stop
-    end subroutine print_doc_shellweight3D
-
     subroutine print_doc_shift
         write(*,'(A)') 'is a program for shifting a stack according to shifts in oritab'
         stop
@@ -515,17 +485,17 @@ contains
         write(*,'(A)', advance='no') 'ti-slice simulation and it cannot be used for simulating molecules containing he'
         write(*,'(A)', advance='no') 'avy atoms. It does not even accept a PDB file as an input. Input is a cryo-EM ma'
         write(*,'(A)', advance='no') 'p, which we usually generate from a PDB file using EMANs program pdb2mrc. simimg'
-        write(*,'(A)', advance='no') 's then projects the volume using Fourier interpolation, applies 20% of the total'
-        write(*,'(A)', advance='no') ' noise to the images (pink noise), Fourier transforms them, and multiplies them'
-        write(*,'(A)', advance='no') 'with astigmatic CTF and B-factor. The images are inverse FTed before the remaini'
-        write(*,'(A)') 'ng 80% of the noise (white noise) is added'
+        write(*,'(A)', advance='no') 's then projects the volume using Fourier interpolation, adds 20% of the total no'
+        write(*,'(A)', advance='no') 'ise to the images (pink noise), Fourier transforms them, and multiplies them wit'
+        write(*,'(A)', advance='no') 'h astigmatic CTF and B-factor. The images are inverse FTed before the remaining'
+        write(*,'(A)') '80% of the noise (white noise) is added'
         stop
     end subroutine print_doc_simimgs
 
     subroutine print_doc_simmovie
         write(*,'(A)', advance='no') 'is a program for crude simulation of a DDD movie. Input is a set of projection i'
         write(*,'(A)', advance='no') 'mages to place. Movie frames are then generated related by randomly shifting the'
-        write(*,'(A)') ' base image and applying two different noise sources: shot and detector noise'
+        write(*,'(A)') ' base image and applying noise'
         stop
     end subroutine print_doc_simmovie
 
@@ -563,44 +533,62 @@ contains
         write(*,'(A)', advance='no') 'of particle images from the stack, set fromp and top. If you want to fish out a'
         write(*,'(A)', advance='no') 'number of particle images from your stack at random, set nran to some nonzero in'
         write(*,'(A)', advance='no') 'teger number less than nptcls. With avg=yes the global average of the inputted s'
-        write(*,'(A)', advance='no') 'tack is calculated. If you define frameavg to some integer number larger than on'
-        write(*,'(A)', advance='no') 'e averages with chunk sizes of frameavg are produced, which may be useful for an'
-        write(*,'(A)') 'alysis of dose-fractionated image series. neg inverts the contrast of the images'
+        write(*,'(A)', advance='no') 'tack is calculated. If you define nframesgrp to some integer number larger than'
+        write(*,'(A)', advance='no') 'one averages with chunk sizes of nframesgrp are produced, which may be useful fo'
+        write(*,'(A)', advance='no') 'r analysis of dose-fractionated image series. neg inverts the contrast of the im'
+        write(*,'(A)') 'ages'
         stop
     end subroutine print_doc_stackops
 
+    subroutine print_doc_sym_aggregate
+        write(*,'(A)', advance='no') 'is a program for robust identifiaction of the symmetry axis of a map using image'
+        write(*,'(A)') '-to-volume simiarity validation of the axis'
+        stop
+    end subroutine print_doc_sym_aggregate
+
     subroutine print_doc_symsrch
         write(*,'(A)', advance='no') 'is a program for searching for the principal symmetry axis of a volume reconstru'
-        write(*,'(A)', advance='no') 'cted without assuming any point-group symmetry or assessing the degree of symmet'
-        write(*,'(A)', advance='no') 'ry of class averages or individual particles of higher pointgroups (dn,t,o,i). T'
-        write(*,'(A)', advance='no') 'he program takes as input an asymmetrical reconstruction or stack of class avera'
-        write(*,'(A)', advance='no') 'ges/individual particles. For volumes, the alignment document for all the partic'
-        write(*,'(A)', advance='no') 'le images that have gone into the 3D reconstruction and the desired point-group'
-        write(*,'(A)', advance='no') 'symmetry needs to be inputted. The 3D reconstruction is then projected in 150 (d'
-        write(*,'(A)', advance='no') 'efault option) even directions, common lines-based optimisation is used to ident'
-        write(*,'(A)', advance='no') 'ify the principal symmetry axis, the rotational transformation is applied to the'
-        write(*,'(A)', advance='no') ' inputted orientations, and a new alignment document is produced. Input this doc'
-        write(*,'(A)', advance='no') 'ument to recvol together with the images and the point-group symmetry to generat'
-        write(*,'(A)', advance='no') 'e a symmetrised map. If you are unsure about the point-group, you should use the'
-        write(*,'(A)', advance='no') ' compare=yes mode and input the highest conceviable point-group. The program the'
-        write(*,'(A)', advance='no') 'n calculates probabilities for all lower groups inclusive. The class average/par'
-        write(*,'(A)', advance='no') 'ticle option operates in an equivalent fashion but with individual images. The o'
-        write(*,'(A)', advance='no') 'utput is then a per-image correlation value that informs about how well the imag'
-        write(*,'(A)', advance='no') 'e conforms to to inputted point-group. The state parameter allows you to apply s'
-        write(*,'(A)') 'ymmetry for the given state.'
+        write(*,'(A)', advance='no') 'cted without assuming any point-group symmetry. The program takes as input an as'
+        write(*,'(A)', advance='no') 'ymmetrical 3D reconstruction. The alignment document for all the particle images'
+        write(*,'(A)', advance='no') ' that have gone into the 3D reconstruction and the desired point-group symmetry'
+        write(*,'(A)', advance='no') 'needs to be inputted. The 3D reconstruction is then projected in 50 (default opt'
+        write(*,'(A)', advance='no') 'ion) even directions, common lines-based optimisation is used to identify the pr'
+        write(*,'(A)', advance='no') 'incipal symmetry axis, the rotational transformation is applied to the inputted'
+        write(*,'(A)', advance='no') 'orientations, and a new alignment document is produced. Input this document to r'
+        write(*,'(A)', advance='no') 'ecvol together with the images and the point-group symmetry to generate a symmet'
+        write(*,'(A)') 'rised map.'
         stop
     end subroutine print_doc_symsrch
 
+    subroutine print_doc_tseries_extract
+        write(*,'(A)', advance='no') 'is a program for creating overlapping chunks of nframesgrp frames from time-seri'
+        write(*,'(A)') 'es data'
+        stop
+    end subroutine print_doc_tseries_extract
+
     subroutine print_doc_tseries_split
-        write(*,'(A)') 'is a program for splitting time series'
+        write(*,'(A)') 'is a program for splitting a time-series stack and its associated orientations'
         stop
     end subroutine print_doc_tseries_split
 
+    subroutine print_doc_tseries_track
+        write(*,'(A)') 'is a program for particle tracking in time-series data'
+        stop
+    end subroutine print_doc_tseries_track
+
     subroutine print_doc_unblur
-        write(*,'(A)', advance='no') 'is a program for movie alignment or unblurring. Input is a textfile with absolut'
-        write(*,'(A)') 'e paths to movie files in addition to a few obvious input parameters'
+        write(*,'(A)', advance='no') 'is a program for movie alignment or unblurring based on similar principles as Gr'
+        write(*,'(A)', advance='no') 'igorieffs program (hence the name). There are two important differences: automat'
+        write(*,'(A)', advance='no') 'ic weighting of the frames using a corrleation-based M-estimator and continuous'
+        write(*,'(A)', advance='no') 'optimisation of the shift parameters. Input is a textfile with absolute paths to'
+        write(*,'(A)') ' movie files in addition to a few obvious input parameters'
         stop
     end subroutine print_doc_unblur
+
+    subroutine print_doc_unblur_ctffind
+        write(*,'(A)') 'is a pipelined unblur + ctffind program'
+        stop
+    end subroutine print_doc_unblur_ctffind
 
     subroutine print_doc_volassemble
         write(*,'(A)', advance='no') 'is a program that assembles volume(s) when the reconstruction program (recvol) h'
@@ -627,6 +615,11 @@ contains
         write(*,'(A)') 'is a program for creating a similarity matrix based on volume2volume correlation'
         stop
     end subroutine print_doc_volume_smat
+
+    subroutine print_doc_het_ensemble
+        write(*,'(A)') 'is a program for heterogeneity analysis based on ensemble learning'
+        stop
+    end subroutine print_doc_het_ensemble
 
     subroutine print_doc_ini3D_from_cavgs
         write(*,'(A)', advance='no') 'is a program for generating an initial 3D model from class averages obtained wit'
@@ -660,14 +653,13 @@ contains
         write(*,'(A)') 'corrcompare'
         write(*,'(A)') 'ctffind'
         write(*,'(A)') 'ctfops'
+        write(*,'(A)') 'dsymsrch'
         write(*,'(A)') 'eo_volassemble'
         write(*,'(A)') 'extract'
         write(*,'(A)') 'filter'
-        write(*,'(A)') 'find_nnimgs'
-        write(*,'(A)') 'het_init'
         write(*,'(A)') 'image_smat'
         write(*,'(A)') 'iminfo'
-        write(*,'(A)') 'integrate_movies'
+        write(*,'(A)') 'makecavgs'
         write(*,'(A)') 'makedeftab'
         write(*,'(A)') 'makeoris'
         write(*,'(A)') 'makepickrefs'
@@ -676,7 +668,6 @@ contains
         write(*,'(A)') 'masscen'
         write(*,'(A)') 'merge_algndocs'
         write(*,'(A)') 'merge_nnmat'
-        write(*,'(A)') 'merge_shellweights'
         write(*,'(A)') 'merge_similarities'
         write(*,'(A)') 'multiptcl_init'
         write(*,'(A)') 'noiseimgs'
@@ -690,23 +681,21 @@ contains
         write(*,'(A)') 'powerspecs'
         write(*,'(A)') 'preproc'
         write(*,'(A)') 'prime2D'
-        write(*,'(A)') 'prime2D_init'
         write(*,'(A)') 'prime3D'
         write(*,'(A)') 'prime3D_init'
         write(*,'(A)') 'print_cmd_dict'
         write(*,'(A)') 'print_dose_weights'
         write(*,'(A)') 'print_fsc'
+        write(*,'(A)') 'print_magic_boxes'
         write(*,'(A)') 'projvol'
         write(*,'(A)') 'rank_cavgs'
         write(*,'(A)') 'recvol'
         write(*,'(A)') 'res'
-        write(*,'(A)') 'respimg'
         write(*,'(A)') 'resrange'
         write(*,'(A)') 'rotmats2oris'
         write(*,'(A)') 'scale'
         write(*,'(A)') 'select'
         write(*,'(A)') 'select_frames'
-        write(*,'(A)') 'shellweight3D'
         write(*,'(A)') 'shift'
         write(*,'(A)') 'simimgs'
         write(*,'(A)') 'simmovie'
@@ -715,9 +704,13 @@ contains
         write(*,'(A)') 'split_pairs'
         write(*,'(A)') 'stack'
         write(*,'(A)') 'stackops'
+        write(*,'(A)') 'sym_aggregate'
         write(*,'(A)') 'symsrch'
+        write(*,'(A)') 'tseries_extract'
         write(*,'(A)') 'tseries_split'
+        write(*,'(A)') 'tseries_track'
         write(*,'(A)') 'unblur'
+        write(*,'(A)') 'unblur_ctffind'
         write(*,'(A)') 'volassemble'
         write(*,'(A)') 'volaverager'
         write(*,'(A)') 'volops'
@@ -726,17 +719,22 @@ contains
     end subroutine list_all_simple_programs
 
     subroutine list_all_simple_distr_programs
+        write(*,'(A)') 'comlin_smat'
+        write(*,'(A)') 'cont3D'
         write(*,'(A)') 'ctffind'
-        write(*,'(A)') 'find_nnimgs'
+        write(*,'(A)') 'het_ensemble'
         write(*,'(A)') 'ini3D_from_cavgs'
+        write(*,'(A)') 'makecavgs'
         write(*,'(A)') 'pick'
+        write(*,'(A)') 'preproc'
         write(*,'(A)') 'prime2D'
-        write(*,'(A)') 'prime2D_init'
         write(*,'(A)') 'prime3D'
         write(*,'(A)') 'prime3D_init'
         write(*,'(A)') 'recvol'
-        write(*,'(A)') 'shellweight3D'
+        write(*,'(A)') 'symsrch'
+        write(*,'(A)') 'tseries_track'
         write(*,'(A)') 'unblur'
+        write(*,'(A)') 'unblur_ctffind'
         write(*,'(A)') 'unblur_tomo'
         stop
     end subroutine list_all_simple_distr_programs

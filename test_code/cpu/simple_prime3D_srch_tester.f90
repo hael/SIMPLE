@@ -92,7 +92,7 @@ contains
 
     subroutine setup_testenv( cline, be_verbose )
         use simple_strings,        only: str_has_substr
-        use simple_projector_hlev, only: projvol_expanded
+        use simple_projector_hlev, only: projvol
         class(cmdline),    intent(inout) :: cline
         logical, optional, intent(in)    :: be_verbose
         type(ori)          :: o
@@ -137,8 +137,8 @@ contains
         ! simulate images
         call b%vol%read(p%vols(1))
         call b%vol%expand_cmat
-        imgs_ptcls = projvol_expanded(b%vol, o_ptcls, p)
-        call b%vol%kill_expanded 
+        imgs_ptcls = projvol(b%vol, o_ptcls, p)
+        call b%vol%kill_expanded
         do i=1,NPROJS
             call imgs_ptcls(i)%write(ptclsname, i)
         end do

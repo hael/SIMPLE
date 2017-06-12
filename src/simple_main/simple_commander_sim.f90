@@ -142,7 +142,7 @@ contains
             ! extract ori
             orientation = b%a%get_ori(i)
             ! project vol
-            call b%vol_pad%fproject_expanded(orientation, b%img_pad)
+            call b%vol_pad%fproject(orientation, b%img_pad)
             ! shift
             call b%img_pad%shift(orientation%get('x'),orientation%get('y'))
             if( cline%defined('bfac') )then

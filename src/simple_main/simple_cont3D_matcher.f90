@@ -309,7 +309,7 @@ contains
         do iref=1,nrefs_per_ptcl
             oref  = orefs%get_ori(iref)
             state = nint(oref%get('state'))
-            call b%refvols(state)%fproject_polar_expanded(iref, oref, pftcc)
+            call b%refvols(state)%fproject_polar(iref, oref, pftcc)
         enddo          
     end subroutine prep_pftcc_refs
 

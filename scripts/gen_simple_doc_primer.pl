@@ -224,6 +224,7 @@ sub str2latex{
     $str2convert =~ s/\}/\\}/g;
     $str2convert =~ s/\_/\\_/g;
     $str2convert =~ s/%/\\%/g;
+    $str2convert =~ s/#/\\#/g;
     $str2convert =~ s/in A/in \\AA\{\}/;
     return $str2convert;
 }

@@ -142,7 +142,7 @@ contains
         use simple_strings,        only: int2str_pad
         use simple_oris,           only: oris
         use simple_ori,            only: ori
-        use simple_projector_hlev, only: projvol_expanded
+        use simple_projector_hlev, only: projvol
         use simple_comlin_srch     ! use all in there
         class(symsrch_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
@@ -175,7 +175,7 @@ contains
         call b%vol%mask(p%msk, 'soft')
         call b%vol%fwd_ft
         call b%vol%expand_cmat
-        b%ref_imgs(1,:) = projvol_expanded(b%vol, b%e, p)
+        b%ref_imgs(1,:) = projvol(b%vol, b%e, p)
         if( p%l_distr_exec .and. p%part > 1 )then
             ! do nothing
         else

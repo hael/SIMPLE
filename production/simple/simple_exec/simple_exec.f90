@@ -182,7 +182,7 @@ select case(prg)
         ! nevertheless useful for testing purposes. It does not do any multi-slice simulation and it cannot be used for
         ! simulating molecules containing heavy atoms. It does not even accept a PDB file as an input. Input is a cryo-EM 
         ! map, which we usually generate from a PDB file using EMANs program pdb2mrc. simimgs then projects the 
-        ! volume using Fourier interpolation, applies 20% of the total noise to the images (pink noise), Fourier transforms 
+        ! volume using Fourier interpolation, adds 20% of the total noise to the images (pink noise), Fourier transforms 
         ! them, and multiplies them with astigmatic CTF and B-factor. The images are inverse FTed before the remaining 80% 
         ! of the noise (white noise) is added<simimgs/end>
         !
@@ -235,8 +235,7 @@ select case(prg)
         !==Program simmovie
         !
         ! <simmovie/begin>is a program for crude simulation of a DDD movie. Input is a set of projection images to place.
-        ! Movie frames are then generated related by randomly shifting the base image and applying two different noise
-        ! sources: shot and detector noise<simmovie/end>
+        ! Movie frames are then generated related by randomly shifting the base image and applying noise<simmovie/end>
         !
         ! set required keys
         keys_required(1)  = 'stk'
@@ -294,7 +293,7 @@ select case(prg)
     case( 'preproc' )
         !==Program preproc
         !
-        ! <preproc/begin>is a program that executes unblur, ctffind & pick in sequence
+        ! <preproc/begin>is a program that executes unblur, ctffind and pick in sequence
         ! <preproc/end>
         !
         ! set required keys
@@ -413,7 +412,9 @@ select case(prg)
     case( 'unblur' )
         !==Program unblur
         !
-        ! <unblur/begin>is a program for movie alignment or unblurring.
+        ! <unblur/begin>is a program for movie alignment or unblurring based on similar principles as
+        ! Grigorieffs program (hence the name). There are two important differences: automatic weighting of
+        ! the frames using a corrleation-based M-estimator and continuous optimisation of the shift parameters.
         ! Input is a textfile with absolute paths to movie files in addition to a few obvious input
         ! parameters<unblur/end>
         !
@@ -480,7 +481,7 @@ select case(prg)
     case( 'unblur_ctffind' )
         !==Program unblur_ctffind
         !
-        ! <ctffind/begin>is a pipelined unblur + ctffind program<ctffind/end> 
+        ! <unblur_ctffind/begin>is a pipelined unblur + ctffind program<unblur_ctffind/end> 
         !
         ! set required keys
         keys_required(1)  = 'filetab'
@@ -513,7 +514,7 @@ select case(prg)
         keys_optional(22) = 'expastig'
         keys_optional(23) = 'phaseplate'
         ! parse command line
-        ! if( describe ) call print_doc_unblur_ctffind
+        if( describe ) call print_doc_unblur_ctffind
         call cline%parse(keys_required(:5), keys_optional(:23))
         ! set defaults
         call cline%set('dopick', 'no'     )
@@ -553,7 +554,7 @@ select case(prg)
     case( 'makepickrefs' )
         !==Program pickrefs
         !
-        ! <pickrefs/begin>is a program for generating references for template-based particle picking<pickrefs/end> 
+        ! <makepickrefs/begin>is a program for generating references for template-based particle picking<makepickrefs/end> 
         !
         ! set required keys
         keys_required(1) = 'pgrp'
@@ -564,7 +565,7 @@ select case(prg)
         keys_optional(3) = 'stk'
         keys_optional(4) = 'neg'
         ! parse command line
-        ! if( describe ) call print_doc_makepickrefs
+        if( describe ) call print_doc_makepickrefs
         call cline%parse(keys_required(:1), keys_optional(:4))
         ! set defaults
         if( .not. cline%defined('neg') )  call cline%set('neg', 'yes')
@@ -642,7 +643,7 @@ select case(prg)
         keys_optional(8) = 'outfile'
         keys_optional(9) = 'refs'
         ! parse command line
-        ! if( describe ) call print_doc_makecavgs
+        if( describe ) call print_doc_makecavgs
         call cline%parse(keys_required(:3), keys_optional(:9))
         ! set defaults
         if( .not. cline%defined('eo') ) call cline%set('eo', 'no')
@@ -899,19 +900,10 @@ select case(prg)
         !
         ! <prime3D/begin>is an ab inito reconstruction/refinement program based on probabilistic
         ! projection matching. PRIME is short for PRobabilistic Initial 3D Model generation for Single-
-        ! particle cryo-Electron microscopy. Do not search the origin shifts initially, when the model is 
-        ! of very low quality. If your images are far off centre, use stackops with option
-        ! shalgn=yes instead to shiftalign the images beforehand (the algorithm implemented is the 
-        ! same as EMANs cenalignint program). We recommend running the first round of PRIME with 
-        ! the default dynamic resolution stepping dynlp=yes. The dynlp option implements 
-        ! a heuristic resolution weighting/update scheme. The initial low-pass limit is set so that each
-        ! image receives ten nonzero orientation weights. When quasi-convergence has been reached, the limit 
-        ! is updated one Fourier index at the time until PRIME reaches the condition where six nonzero 
-        ! orientation weights are assigned to each image. FSC-based filtering is unfortunately not possible
-        ! to do in the ab initio reconstruction step, because when the orientations are mostly random, the 
-        ! FSC overestimates the resolution. Once the initial model has converged, we recommend start searching 
-        ! the shifts (by setting trs to some nonzero value) and applying the FSC for resolution-
-        ! weighting (by setting eo=yes)<prime3D/end>
+        ! particle cryo-Electron microscopy. There are a daunting number of options in PRIME3D. If you
+        ! are processing class averages we recommend that you instead use the simple_distr_exec prg=
+        ! ini3D_from_cavgs route for executing PRIME3D. Automated workflows for single- and multi-particle
+        ! refinement using prime3D are planned for the next release (3.0)<prime3D/end>
         !
         ! set required keys
         keys_required(1)  = 'stk'
@@ -1131,15 +1123,8 @@ select case(prg)
     case( 'sym_aggregate' )
         !==Program symsrch
         !
-        ! <symsrch/begin>is a program for searching for the principal symmetry axis of a volume 
-        ! reconstructed without assuming any point-group symmetry. The program takes as input an 
-        ! asymmetrical 3D reconstruction. The alignment document for all the particle images 
-        ! that have gone into the 3D reconstruction and the desired point-group symmetry needs to 
-        ! be inputted. The 3D reconstruction is then projected in 50 (default option) even directions, 
-        ! common lines-based optimisation is used to identify the principal symmetry axis, the rotational 
-        ! transformation is applied to the inputted orientations, and a new alignment document is produced. 
-        ! Input this document to recvol together with the images and the point-group symmetry to generate a 
-        ! symmetrised map.<symsrch/end>
+        ! <sym_aggregate/begin>is a program for robust identifiaction of the symmetry axis 
+        ! of a map using image-to-volume simiarity validation of the axis<sym_aggregate/end>
         !        
         ! set required keys
         keys_required(1) = 'vol1'
@@ -1156,7 +1141,7 @@ select case(prg)
         keys_optional(2) = 'cenlp'
         keys_optional(3) = 'hp'
         ! parse command line
-        !if( describe ) call print_doc_symsrch
+        if( describe ) call print_doc_symsrch
         call cline%parse(keys_required(:9), keys_optional(:3))
         ! set defaults
         call cline%set('eo','no')
@@ -1165,7 +1150,8 @@ select case(prg)
     case( 'dsymsrch' )
         !==Program symsrch
         !
-        ! <dsymsrch/begin><dsymsrch/end>
+        ! <dsymsrch/begin>is a program for identifying rotational symmetries in class averages of 
+        ! D-symmetric molecules and generating a cylinder that matches the shape.<dsymsrch/end>
         !        
         ! set required keys
         keys_required(1) = 'smpd'
@@ -1178,7 +1164,7 @@ select case(prg)
         keys_optional(3) = 'outfile'
         keys_optional(4) = 'outvol'
         ! parse command line
-        !if( describe ) call print_doc_symsrch
+        if( describe ) call print_doc_symsrch
         call cline%parse(keys_required(:4), keys_optional(:4))
         ! set defaults
         !
@@ -1806,19 +1792,6 @@ select case(prg)
         call cline%parse( keys_required(:2),keys_optional(:21) )
         ! execute
         call xstackops%execute(cline)
-    ! case( 'fixmapheader' )
-    !     !==Program fixmapheader
-    !     !
-    !     ! <fixmapheader/begin> is a program for curing the header and setting rmsd <fixmapheader/end>
-    !     ! Required keys
-    !     keys_required(1) = 'vol1'
-    !     keys_required(2) = 'smpd'
-    !     keys_required(3) = 'outvol'
-    !     ! parse command line
-    !     ! if( describe ) call print_doc_fixmapheader
-    !     call cline%parse( keys_required(:3) )
-    !     ! execute
-    !     call xfixmapheader%execute(cline)
 
     ! MISCELLANOUS PROGRAMS
         
@@ -1914,7 +1887,7 @@ select case(prg)
         keys_required(1)  = 'smpd'
         keys_required(2)  = 'moldiam'
         ! parse command line
-        ! if( describe ) call print_doc_print_magig_boxes
+        if( describe ) call print_doc_print_magic_boxes
         call cline%parse(keys_required(:2))
         ! execute
         call xprint_magic_boxes%execute(cline)
@@ -2171,15 +2144,15 @@ select case(prg)
         ! set optional keys
         keys_optional(1)  = 'fbody'
         ! parse command line
-        ! if( describe ) call print_doc_tseries_extract
+        if( describe ) call print_doc_tseries_extract
         call cline%parse(keys_required(:3), keys_optional(:1))
         ! execute
         call xtseries_extract%execute(cline)
     case( 'tseries_track' )
         !==Program tseries_track
         !
-        ! <tseries_extract/begin>is a program for particle tracking in time-series data
-        ! <tseries_extract/end> 
+        ! <tseries_track/begin>is a program for particle tracking in time-series data
+        ! <tseries_track/end> 
         !
         ! set required keys
         keys_required(1) = 'filetab'
@@ -2194,7 +2167,7 @@ select case(prg)
         keys_optional(6)  = 'box'
         keys_optional(7)  = 'neg'
         ! parse command line
-        ! if( describe ) call print_doc_tseries_track
+        if( describe ) call print_doc_tseries_track
         call cline%parse(keys_required(:3), keys_optional(:7))
         ! set defaults
         if( .not. cline%defined('neg') ) call cline%set('neg', 'yes')
@@ -2214,7 +2187,7 @@ select case(prg)
         keys_required(4) = 'chunksz'
         keys_required(5) = 'stepsz'
         ! parse command line
-        ! if( describe ) call print_doc_tseries_split
+        if( describe ) call print_doc_tseries_split
         call cline%parse(keys_required(:5))
         ! execute
         call xtseries_split%execute(cline)

@@ -100,7 +100,7 @@ contains
         ! projection
         call o%new
         call o%set_euler(vec_here(1:3))
-        call self%vols_ptr(self%state)%fproject_polar_expanded(self%reference, o, self%pftcc_ptr,&
+        call self%vols_ptr(self%state)%fproject_polar(self%reference, o, self%pftcc_ptr,&
         &serial=.true.)
         ! correlation
         cost = -self%pftcc_ptr%corr(self%reference, self%particle, 1, vec_here(4:5))
