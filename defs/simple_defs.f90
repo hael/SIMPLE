@@ -78,4 +78,10 @@ logical :: l_distr_exec_glob
 ! global executable absolute path
 character(len=STDLEN) :: exec_abspath_glob
 
+#ifndef IMAGETYPESINGLE
+  integer, parameter :: fp_kind = DP
+#else
+  integer, parameter :: fp_kind = SP
+#endif
+
 end module simple_defs

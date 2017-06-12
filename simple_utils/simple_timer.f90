@@ -10,11 +10,11 @@
 !<------------------------------------
 module simple_timer
 !     use simple_jiffys ! singleton
-!     use simple_defs   ! singleton
-   use precision_m
-   implicit none
+use simple_defs   ! singleton
+!   use precision_m
+implicit none
 !  private :: raise_sys_error
-   private
+private
    integer(dp), public   :: clock_ticks_per_second = INT(0, dp) !< Number of counts per second
    integer(dp), public   :: last_time_point = INT(0, dp) !< Current timesamp
    integer, public       :: idx_elapsed = 0, num_elapsed = 3
@@ -220,16 +220,17 @@ contains
 
           allocate(v(nVars))
           ind = index(vin, ',')
-          if( ind == 0 )then
-              call replace(vin,' ', ',')
-  #ifdef _DEBUG
+          if( ind == 0 ) then
+              call parse(vin,' ', v,nargs_parse)
+#ifdef _DEBUG
 #if _DEBUG > 1
-          print *, " timer_profile_setup no-comma token input"
-          print *, vin
+              print *, " timer_profile_setup no-comma token input"
+              print *, vin
 #endif
-#endif            
+#endif
+          else 
+              call parse(vin,',',v,nargs_parse)
           end if
-          call parse(vin,',',v,nargs_parse)
 #ifdef _DEBUG
 #if _DEBUG > 1
           print *, " timer_profile_setup parsed tokens"

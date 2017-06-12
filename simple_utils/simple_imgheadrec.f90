@@ -13,8 +13,8 @@ type :: imgheadrec
     integer                  :: byte_position           !<  the position of the first byte of the record within the header.
     integer(kind=1), pointer :: byte_array(:) => null() !<  pointer to the array of bytes containing the actual header values
 contains
-    procedure ::  new
-    procedure ::  kill
+   procedure ::  new
+   procedure ::  kill
 end type
 
 type, extends(imgheadrec) :: int_imgheadrec

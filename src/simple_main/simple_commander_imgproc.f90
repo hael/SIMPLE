@@ -531,9 +531,9 @@ contains
                 else if( p%newbox > p%box )then
                     call b%vol%pad(vol2)
                 else
-                    vol2 = b%vol
+                    call vol2%copy(b%vol)
                 endif
-                b%vol = vol2
+                call b%vol%copy(vol2)
                 call b%vol%bwd_ft
                 scale = real(p%newbox)/real(p%box)
                 p%box = p%newbox
@@ -553,7 +553,7 @@ contains
                     endif
                     call b%vol%pad(vol2, backgr=med)
                 endif
-                b%vol = vol2
+                call b%vol%copy(vol2)
             else
                  write(*,'(a,1x,i5)') 'BOX SIZE AFTER SCALING:', p%newbox
             endif

@@ -75,7 +75,7 @@ contains
         integer  :: i, alloc_stat
         if( self%is_2d() )stop 'this routine is intended for 3D images only, simple_mask_projector::init_mskproj'
         call self%kill_mskproj
-        self      = img_inout
+        call self%copy(img_inout)
         self%idim = self%get_ldim()
         call self%init(p, mskwidth)
         ! 3D
@@ -217,15 +217,16 @@ contains
     subroutine bin_cavg( self, img )
         class(mask_projector), intent(inout) :: self
         class(image),          intent(inout) :: img
-        type(image) :: img_pad, img_copy
+        type(image) ::  img_copy
+        type(image) :: img_pad
         integer     :: ldim_pad(3)
         ! init
         ldim_pad(1:2) = self%idim(1:2)*2
         ldim_pad(3)   = 1
         call img_pad%new(ldim_pad,  self%get_smpd())
-        img_copy = img
+        call img_copy%copy(img)
         ! normalize
-        call img_copy%norm
+        call img_copy%norm()
         ! soft masking
         call img_copy%mask(self%msk, 'soft')
         ! pad

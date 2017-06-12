@@ -37,7 +37,9 @@
   character(255)::p_tokens= #__VA_ARGS__ ; \
   tn=tic();np=NLOOPS;                      \
   call timer_profile_setup(np,nv,p_tokens);
-#else
+
+#else  ! No STDC
+
 #define TPROFILER(NLOOPS,IDX,NTOKENS,TOKENS) \
  block;                                      \
  use simple_timer;                           \
@@ -48,7 +50,7 @@
  character(255)::p_tokens= #TOKENS;          \
  tn=tic();np=NLOOPS;                         \
  call timer_profile_setup(np,nv,p_tokens);
-#endif
+#endif  ! __STDC__
 
 
 #define TBEG(TOKEN) p_tmp = #TOKEN; \

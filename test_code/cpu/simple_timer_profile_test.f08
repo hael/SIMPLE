@@ -11,7 +11,7 @@
 #include "simple_timer.h"
 
 module simple_timer_profile_test
-   use precision_m
+   use simple_defs
    use simple_timer
    implicit none
    public:: exec_profiletest

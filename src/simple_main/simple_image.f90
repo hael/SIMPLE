@@ -1733,11 +1733,19 @@ contains
             if( self.eqdims.self_to_add )then
                 if( self%ft .eqv. self_to_add%ft )then
                     if( self%ft )then
+#ifdef PGI
+                        !$omp parallel workshare
+#else
                         !$omp parallel workshare proc_bind(close)
+#endif
                         self%cmat = self%cmat+ww*self_to_add%cmat
                         !$omp end parallel workshare
                     else
+#ifdef PGI
+                        !$omp parallel workshare
+#else
                         !$omp parallel workshare proc_bind(close)
+#endif
                         self%rmat = self%rmat+ww*self_to_add%rmat
                         !$omp end parallel workshare
                     endif
@@ -1748,7 +1756,7 @@ contains
                 stop 'cannot sum images of different dims; add_1; simple_image'
             endif
         else
-            self = self_to_add
+             call self%copy(self_to_add)
         endif
     end subroutine add_1
 
@@ -1849,11 +1857,20 @@ contains
         if( self.eqdims.self_to_subtr )then
             if( self%ft .eqv. self_to_subtr%ft )then
                 if( self%ft )then
+#ifdef PGI
+                    !$omp parallel workshare
+#else
+                    
                     !$omp parallel workshare proc_bind(close)
+#endif
                     self%cmat = self%cmat-ww*self_to_subtr%cmat
                     !$omp end parallel workshare
                 else
+#ifdef PGI
+                    !$omp parallel workshare
+#else
                     !$omp parallel workshare proc_bind(close)
+#endif
                     self%rmat = self%rmat-ww*self_to_subtr%rmat
                     !$omp end parallel workshare
                 endif
@@ -1974,12 +1991,20 @@ contains
         class(image), intent(inout) :: self
         real,         intent(in)    :: rc
         if( self%is_ft() )then
+#ifdef PGI
+            !$omp parallel workshare
+#else
             !$omp parallel workshare proc_bind(close)
+#endif
             self%cmat = self%cmat*rc
             !$omp end parallel workshare
         else
             if( self%imgkind .eq. 'xfel' ) stop 'rmat not allocated for xfel-kind images; simple_image::mul_2'
+#ifdef PGI
+            !$omp parallel workshare
+#else
             !$omp parallel workshare proc_bind(close)
+#endif
             self%rmat = self%rmat*rc
             !$omp end parallel workshare
         endif
@@ -1991,27 +2016,42 @@ contains
         class(image), intent(in)    :: self2mul
         if( self.eqdims.self2mul )then
             if( self%ft .and. self2mul%ft )then
+#ifdef PGI
+                !$omp parallel workshare
+#else
                 !$omp parallel workshare proc_bind(close)
+#endif
                 self%cmat = self%cmat*self2mul%cmat
                 !$omp end parallel workshare
             else if( self%ft .eqv. self2mul%ft )then
                 if( self%imgkind .eq. 'xfel' .or. self2mul%imgkind .eq. 'xfel' )&
                 stop 'rmat not allocated for xfel-kind images; simple_image::mul_3'
+#ifdef PGI
+                !$omp parallel workshare
+#else
                 !$omp parallel workshare proc_bind(close)
+#endif
                 self%rmat = self%rmat*self2mul%rmat
                 !$omp end parallel workshare
                 self%ft = .false.
             else if(self%ft)then
                 if( self2mul%imgkind .eq. 'xfel' )&
                 stop 'rmat not allocated for xfel-kind images; simple_image::mul_3'
+#ifdef PGI
+                !$omp parallel workshare
+#else
                 !$omp parallel workshare proc_bind(close)
+#endif
                 self%cmat = self%cmat*self2mul%rmat
                 !$omp end parallel workshare
             else
                 if( self%imgkind .eq. 'xfel' )&
                 stop 'rmat not allocated for xfel-kind images; simple_image::mul_3'
+#ifdef PGI
+                !$omp parallel workshare
+#else
                 !$omp parallel workshare proc_bind(close)
-                self%cmat = self%rmat*self2mul%cmat
+#endif                self%cmat = self%rmat*self2mul%cmat
                 !$omp end parallel workshare
                 self%ft = .true.
             endif
@@ -2031,8 +2071,13 @@ contains
         if( self.eqdims.self2mul )then
             lims = self%fit%loop_lims(1,lp)
             sqlim = (maxval(lims(:,2)))**2
+#ifdef PGI
+            !$omp parallel do collapse(3) default(shared)&
+            !$omp private(h,k,l,phys) schedule(static)
+#else
             !$omp parallel do collapse(3) default(shared)&
             !$omp private(h,k,l,phys) schedule(static) proc_bind(close)
+#endif
             do h=lims(1,1),lims(1,2)
                 do k=lims(2,1),lims(2,2)
                     do l=lims(3,1),lims(3,2)
@@ -2060,9 +2105,14 @@ contains
                 call self%new(self1%ldim, self1%smpd)
                 if( self1%ft .and. self2%ft )then
                     lims = self1%loop_lims(2)
-                    !$omp parallel default(shared) private(h,k,l,phys) proc_bind(close)                
-                    !$omp do collapse(3) schedule(static) 
-                    do h=lims(1,1),lims(1,2)
+#ifdef PGI
+                        !$omp parallel default(shared)  private(h,k,l,phys)
+                        !$omp do collapse(3) schedule(static)
+#else
+                        !$omp parallel default(shared) private(h,k,l,phys) proc_bind(close)
+                        !$omp do collapse(3) schedule(static) 
+#endif
+                        do h=lims(1,1),lims(1,2)
                         do k=lims(2,1),lims(2,2)
                             do l=lims(3,1),lims(3,2)
                                 phys = self%fit%comp_addr_phys([h,k,l])
@@ -2084,21 +2134,33 @@ contains
                 else if( self1%ft .eqv. self2%ft )then
                     if( self1%imgkind .eq. 'xfel' .or. self2%imgkind .eq. 'xfel' )&
                     stop 'rmat not allocated for xfel-kind images; simple_image::division(/)'
+#ifdef PGI
+                    !$omp parallel workshare
+#else
                     !$omp parallel workshare proc_bind(close)
+#endif
                     self%rmat = self1%rmat/self2%rmat
                     !$omp end parallel workshare
                     self%ft = .false.
                 else if(self1%ft)then
                     if( self2%imgkind .eq. 'xfel' )&
                     stop 'rmat not allocated for xfel-kind images; simple_image::division(/)'
+#ifdef PGI
+                    !$omp parallel workshare
+#else
                     !$omp parallel workshare proc_bind(close)
+#endif
                     self%cmat = self1%cmat/self2%rmat
                     !$omp end parallel workshare
                     self%ft = .true.
                 else
                     if( self1%imgkind .eq. 'xfel' )&
                     stop 'rmat not allocated for xfel-kind images; simple_image::division(/)'
+#ifdef PGI
+                    !$omp parallel workshare
+#else
                     !$omp parallel workshare proc_bind(close)
+#endif
                     self%cmat = self1%rmat/self2%cmat
                     !$omp end parallel workshare
                     self%ft = .true.
@@ -2209,9 +2271,17 @@ contains
         integer :: h, k, l, lims(3,2), phys(3)
         ! set constants
         lims = self_sum%loop_lims(2)
+#ifdef PGI
+        if( present(self_out) ) call self_out%copy(self_sum)
+        
+        !$omp parallel do collapse(3) default(shared) private(h,k,l,phys)&
+        !$omp schedule(static)
+#else
         if( present(self_out) ) self_out = self_sum
+
         !$omp parallel do collapse(3) default(shared) private(h,k,l,phys)&
         !$omp schedule(static) proc_bind(close)
+#endif
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 do l=lims(3,1),lims(3,2)
@@ -2884,8 +2954,13 @@ contains
         ! calculate the expectation value of the signal power in each shell
         expec_pow = self%spectrum('power')
         ! normalise
+#ifdef PGI
+        !$omp parallel do collapse(3) default(shared) private(h,k,l,sh,phys)&
+        !$omp schedule(static)
+#else
         !$omp parallel do collapse(3) default(shared) private(h,k,l,sh,phys)&
         !$omp schedule(static) proc_bind(close)
+#endif
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 do l=lims(3,1),lims(3,2)
@@ -2928,8 +3003,14 @@ contains
             didft = .true.
         endif
         lims = self%fit%loop_lims(2)
+#ifdef PGI
+        !$omp parallel do collapse(3) default(shared) private(k,j,i,res,phys,wght)&
+        !$omp  schedule(static)
+#else
         !$omp parallel do collapse(3) default(shared) proc_bind(close)&
-        !$omp private(k,j,i,res,phys,wght) schedule(static) 
+        !$omp private(k,j,i,res,phys,wght) schedule(static)
+#endif
+
         do k=lims(3,1),lims(3,2)
             do j=lims(2,1),lims(2,2)
                 do i=lims(1,1),lims(1,2)
@@ -3029,7 +3110,11 @@ contains
         wzero = maxval(filter)
         lims = self%fit%loop_lims(2)
         !$omp parallel do collapse(3) default(shared) private(h,k,l,sh,fwght)&
+#ifdef PGI
+        !$omp schedule(static)
+#else
         !$omp schedule(static) proc_bind(close)
+#endif
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 do l=lims(3,1),lims(3,2)
@@ -3065,7 +3150,11 @@ contains
                 endif
                 lims = self%fit%loop_lims(2)
                 !$omp parallel do collapse(3) default(shared) private(h,k,l,comp,fwght,phys)&
+#ifdef PGI
+                !$omp schedule(static)
+#else
                 !$omp schedule(static) proc_bind(close)
+#endif
                 do h=lims(1,1),lims(1,2)
                     do k=lims(2,1),lims(2,2)
                         do l=lims(3,1),lims(3,2)
@@ -3157,13 +3246,21 @@ contains
     subroutine square_root( self )
         class(image), intent(inout) :: self
         if( self%ft )then
+#ifdef PGI
+            !$omp parallel workshare
+#else            
             !$omp parallel workshare proc_bind(close)
+#endif
             where(real(self%cmat) > 0. )
                 self%cmat = sqrt(real(self%cmat))
             end where
             !$omp end parallel workshare
         else
+#ifdef PGI
+            !$omp parallel workshare
+#else
             !$omp parallel workshare proc_bind(close)
+#endif
             where(self%rmat > 0. )
                 self%rmat = sqrt(self%rmat)
             end where
@@ -3596,7 +3693,12 @@ contains
                 sqhp = 2 ! index 2 default high-pass limit
             endif
             !$omp parallel do collapse(3) default(shared) private(h,k,l,sqarg,phys)&
-            !$omp reduction(+:r,sumasq,sumbsq) schedule(static) proc_bind(close)
+            !$omp reduction(+:r,sumasq,sumbsq)&
+#ifdef PGI
+            !$omp schedule(static)
+#else
+            !$omp schedule(static) proc_bind(close)
+#endif
             do h=lims(1,1),lims(1,2)
                 do k=lims(2,1),lims(2,2)
                     do l=lims(3,1),lims(3,2)
@@ -3648,8 +3750,13 @@ contains
         else
             sqhp = 2 ! index 2 default high-pass limit
         endif
+#ifdef PGI
+        !$omp parallel do collapse(3) default(shared) private(h,k,l,sqarg,phys,shcomp)&
+        !$omp reduction(+:r,sumasq,sumbsq) schedule(static)
+#else
         !$omp parallel do collapse(3) default(shared) private(h,k,l,sqarg,phys,shcomp)&
         !$omp reduction(+:r,sumasq,sumbsq) schedule(static) proc_bind(close)
+#endif
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 do l=lims(3,1),lims(3,2)
@@ -3739,8 +3846,13 @@ contains
         npix  = product(self1%ldim)
         npixr = real(npix)
         sqsum = 0.
+#ifdef PGI
+        !$omp parallel do collapse(3) default(shared) private(i,j,k)&
+        !$omp reduction(+:sqsum) schedule(static)
+#else
         !$omp parallel do collapse(3) default(shared) private(i,j,k)&
         !$omp reduction(+:sqsum) schedule(static) proc_bind(close)
+#endif
         do i=1,self1%ldim(1)
             do j=1,self1%ldim(2)
                 do k=1,self1%ldim(3)
@@ -3761,8 +3873,13 @@ contains
         if( self1%ft .or. self2%ft ) stop 'cannot calculate distance between FTs; real_dist; simple_image'
         if( .not. (self1.eqdims.self2) ) stop 'images to be analyzed need to have same dims; real_dist; simple_image'
         r = 0.
+#ifdef PGI
+        !$omp parallel do collapse(3) default(shared) private(i,j,k) &
+        !$omp reduction(+:r) schedule(static)
+#else
         !$omp parallel do collapse(3) default(shared) private(i,j,k) &
         !$omp reduction(+:r) schedule(static) proc_bind(close)
+#endif
         do i=1,self1%ldim(1)
             do j=1,self1%ldim(2)
                 do k=1,self1%ldim(3)
@@ -3808,8 +3925,13 @@ contains
         sumasq = 0.
         sumbsq = 0.
         lims   = self1%fit%loop_lims(2)
+#ifdef PGI
+        !$omp parallel do collapse(3) default(shared) private(h,k,l,phys,sh)&
+        !$omp schedule(static)
+#else
         !$omp parallel do collapse(3) default(shared) private(h,k,l,phys,sh)&
         !$omp schedule(static) proc_bind(close)
+#endif
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 do l=lims(3,1),lims(3,2)
@@ -3855,8 +3977,13 @@ contains
         call alloc_err('In: get_nvoxshell, module: simple_image', alloc_stat)
         voxs = 0.
         lims = self%fit%loop_lims(2)
+#ifdef PGI
+        !$omp parallel do collapse(3) default(shared) private(h,k,l,sh)&
+        !$omp schedule(static)
+#else
         !$omp parallel do collapse(3) default(shared) private(h,k,l,sh)&
         !$omp schedule(static) proc_bind(close)
+#endif
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 do l=lims(3,1),lims(3,2)
@@ -3947,8 +4074,13 @@ contains
         call transfmats(2)%new(self%ldim,self%smpd)
         call transfmats(3)%new(self%ldim,self%smpd)
         lims = self%fit%loop_lims(2)
+#ifdef PGI
+        !$omp parallel do collapse(3) default(shared) private(arg,phys,h,k,l)&
+        !$omp schedule(static)
+#else
         !$omp parallel do collapse(3) default(shared) private(arg,phys,h,k,l)&
         !$omp schedule(static) proc_bind(close)
+#endif
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 do l=lims(3,1),lims(3,2)
@@ -4578,14 +4710,14 @@ contains
         endif
         if( present(z) )then
             if( x == 0. .and. y == 0. .and. z == 0. )then
-                if( present(imgout) ) imgout = self
+                if( present(imgout) ) call imgout%copy(self)
                 return
             endif
             if( self%ldim(1) == 1 ) stop 'cannot shift 2D FT in 3D; shift; simple_image'
             zz = z
         else
             if( x == 0. .and. y == 0. )then
-                if( present(imgout) ) imgout = self
+                if( present(imgout) ) call imgout%copy(self)
                 return
             endif
             zz = 0.
@@ -4602,8 +4734,13 @@ contains
         endif
         if( present(imgout) )then
             imgout%ft = .true.
+#ifdef PGI
+            !$omp parallel do collapse(3) default(shared) private(phys,h,k,l)&
+            !$omp schedule(static)
+#else
             !$omp parallel do collapse(3) default(shared) private(phys,h,k,l)&
             !$omp schedule(static) proc_bind(close)
+#endif
             do h=lims(1,1),lims(1,2)
                 do k=lims(2,1),lims(2,2)
                     do l=lims(3,1),lims(3,2)
@@ -4615,8 +4752,13 @@ contains
             end do
             !$omp end parallel do
         else
+#ifdef PGI
+            !$omp parallel do collapse(3) default(shared) private(phys,h,k,l)&
+            !$omp schedule(static)
+#else
             !$omp parallel do collapse(3) default(shared) private(phys,h,k,l)&
             !$omp schedule(static) proc_bind(close)
+#endif
             do h=lims(1,1),lims(1,2)
                 do k=lims(2,1),lims(2,2)
                     do l=lims(3,1),lims(3,2)
@@ -4922,7 +5064,7 @@ contains
             stop 'images not of same kind (xfel/em); simple_image::pad'
         endif
         if( self_in.eqdims.self_out )then
-            self_out = self_in
+            call self_out%copy(self_in)
             return
         endif
         if( self_out%ldim(1) >= self_in%ldim(1) .and. self_out%ldim(2) >= self_in%ldim(2)&
@@ -4931,8 +5073,14 @@ contains
                 self_out = cmplx(0.,0.)
                 if( self_in%imgkind .eq. 'xfel' )then
                     lims = self_in%fit%loop_lims(2)
+#ifdef PGI
+                    !$omp parallel do collapse(3) schedule(static) default(shared)&
+                    !$omp private(h,k,l,w,phys_out,phys_in)
+#else
+
                     !$omp parallel do collapse(3) schedule(static) default(shared)&
                     !$omp private(h,k,l,w,phys_out,phys_in) proc_bind(close)
+#endif
                     do h=lims(1,1),lims(1,2)
                         do k=lims(2,1),lims(2,2)
                             do l=lims(3,1),lims(3,2)
@@ -4945,8 +5093,13 @@ contains
                 else
                     antialw = self_in%hannw()
                     lims = self_in%fit%loop_lims(2)
+#ifdef PGI
+                    !$omp parallel do collapse(3) schedule(static) default(shared)&
+                    !$omp private(h,k,l,w,phys_out,phys_in)
+#else
                     !$omp parallel do collapse(3) schedule(static) default(shared)&
                     !$omp private(h,k,l,w,phys_out,phys_in) proc_bind(close)
+#endif
                     do h=lims(1,1),lims(1,2)
                         do k=lims(2,1),lims(2,2)
                             do l=lims(3,1),lims(3,2)
@@ -4976,7 +5129,11 @@ contains
                 else
                     self_out%rmat = 0.
                 endif
+#ifdef PGI
+                    !$omp parallel workshare
+#else
                 !$omp parallel workshare proc_bind(close)
+#endif
                 self_out%rmat(starts(1):stops(1),starts(2):stops(2),starts(3):stops(3)) =&
                 self_in%rmat(:self_in%ldim(1),:self_in%ldim(2),:self_in%ldim(3))
                 !$omp end parallel workshare
@@ -4995,7 +5152,7 @@ contains
             stop 'images not of same kind (xfel/em); simple_image::pad_mirr'
         endif
         if( self_in.eqdims.self_out )then
-            self_out = self_in
+            call self_out%copy(self_in)
             return
         endif
         if(self_in%is_3d())stop '2D images only; simple_image::pad_mirr'
@@ -5052,15 +5209,20 @@ contains
             stop 'images not of same kind (xfel/em); simple_image::clip'
         endif
         if( self_in.eqdims.self_out )then
-            self_out = self_in
+            call self_out%copy(self_in)
             return
         endif
         if( self_out%ldim(1) <= self_in%ldim(1) .and. self_out%ldim(2) <= self_in%ldim(2)&
         .and. self_out%ldim(3) <= self_in%ldim(3) )then
             if( self_in%ft )then
                 lims = self_out%fit%loop_lims(2)
+#ifdef PGI
+                !$omp parallel do collapse(3) schedule(static) default(shared)&
+                !$omp private(h,k,l,phys_out,phys_in)
+#else
                 !$omp parallel do collapse(3) schedule(static) default(shared)&
                 !$omp private(h,k,l,phys_out,phys_in) proc_bind(close)
+#endif
                 do h=lims(1,1),lims(1,2)
                     do k=lims(2,1),lims(2,2)
                         do l=lims(3,1),lims(3,2)
@@ -5086,7 +5248,11 @@ contains
                     starts(3) = 1
                     stops(3)  = 1
                 endif
+#ifdef PGI
+                    !$omp parallel workshare
+#else
                 !$omp parallel workshare proc_bind(close)
+#endif
                 self_out%rmat(:self_out%ldim(1),:self_out%ldim(2),:self_out%ldim(3))&
                 = self_in%rmat(starts(1):stops(1),starts(2):stops(2),starts(3):stops(3))
                 !$omp end parallel workshare
@@ -5102,7 +5268,7 @@ contains
         type(image)                 :: tmp
         call tmp%new(ldim, self%smpd)
         call self%clip(tmp)
-        self = tmp
+        call self%copy(tmp)
         call tmp%kill
     end subroutine clip_inplace
 
@@ -5293,9 +5459,9 @@ contains
         div     = 0.
         do while(ang < 359.99 )
             call self%rtsq(ang, 0., 0., rotated)
-            avg = avg+rotated
-            ang = ang+angstep
-            div = div+1.
+            call avg%add_1( rotated )
+            ang = ang + angstep
+            div = div + 1.
         end do
         call avg%div(div)
         call rotated%kill
@@ -5359,8 +5525,13 @@ contains
         !-(center plus shift)
         fixcenmshx = -ixcen-shx
         fiycenmshy = -iycen-shy
+#ifdef PGI
+        !$omp  parallel do default(shared) private(iy,yi,ycod,ysid,ix,xi,xold,yold)&
+        !$omp schedule(static) 
+#else
         !$omp parallel do default(shared) private(iy,yi,ycod,ysid,ix,xi,xold,yold)&
         !$omp schedule(static) proc_bind(close)
+#endif
         do iy=1,self_in%ldim(2)
             yi = iy+fiycenmshy
             if(yi < ry1) yi = min(yi+rye2, ry2)
@@ -5380,9 +5551,9 @@ contains
         self_here%rmat(:self_here%ldim(1),:self_here%ldim(2),1) = mat_out
         self_here%ft = .false.
         if( present(self_out) )then
-            self_out = self_here
+            call self_out%copy(self_here)
         else
-            self_in = self_here
+            call self_in%copy(self_here)
         endif
         call self_here%kill
         if( didft )then
@@ -5425,8 +5596,13 @@ contains
             rmat_pad(:,:) = median( reshape(self%rmat(:,:,1), (/(self%ldim(1)*self%ldim(2))/)) )
             rmat_pad(1:self%ldim(1), 1:self%ldim(2)) = &
                 &self%rmat(1:self%ldim(1),1:self%ldim(2),1)
+#ifdef PGI
+            !$omp parallel do collapse(2) schedule(static) default(shared) private(i,j,win)&
+            !$omp reduction(+:ncured) 
+#else
             !$omp parallel do collapse(2) schedule(static) default(shared) private(i,j,win)&
             !$omp reduction(+:ncured) proc_bind(close)
+#endif
             do i=1,self%ldim(1)
                 do j=1,self%ldim(2)
                     if( self%rmat(i,j,1)<lthresh .or. self%rmat(i,j,1)>uthresh )then

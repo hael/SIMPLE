@@ -360,7 +360,7 @@ contains
         self_out_present = present(self_out)
         ! set constants
         lims = self%loop_lims(2)
-        if( self_out_present ) self_out = self
+        if( self_out_present ) call self_out%copy(self)
         !$omp parallel do collapse(3) default(shared) private(h,k,l,phys)&
         !$omp schedule(static) proc_bind(close)
         do h=lims(1,1),lims(1,2)

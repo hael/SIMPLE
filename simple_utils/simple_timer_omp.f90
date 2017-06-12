@@ -4,7 +4,7 @@
 ! Michael Eager 2017-03-15
 
 module simple_timer_omp
-   use precision_m
+   use simple_defs
    use omp_lib
    implicit none
 

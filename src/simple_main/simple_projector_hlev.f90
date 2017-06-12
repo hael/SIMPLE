@@ -116,7 +116,7 @@ contains
         integer         :: h,k,l,lims(3,2),logi(3),phys(3)
         real            :: loc(3)
         call vol_pad%new([p%boxpd,p%boxpd,p%boxpd], p%smpd)
-        rovol_pad = vol_pad
+        call rovol_pad%copy(vol_pad)
         call rovol_pad%set_ft(.true.)
         call rovol%new([p%box,p%box,p%box], p%smpd)
         call prep4cgrid(vol, vol_pad, p%msk)
@@ -137,8 +137,7 @@ contains
         !$omp end parallel do
         call rovol_pad%bwd_ft
         call rovol_pad%clip(rovol)
-        ! HAD TO TAKE OUT BECAUSE PGI COMPILER BAILS
-        ! call rovol%norm
+        call rovol%norm()
         call vol_pad%kill
         call rovol_pad%kill
     end function rotvol

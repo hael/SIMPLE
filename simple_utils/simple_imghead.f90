@@ -274,7 +274,7 @@ contains
                 end do
                 call self%reset2default
                 if( present(ldim) )then
-                    self%nx = ldim(1)
+                    self%nx = ldim(1)  ! INTEL Error #6303: The assignment operation or the binary expression operation is invalid for the data types of the two operands.   [LDIM]
                     self%ny = ldim(2)
                     self%nz = ldim(3)
                     self%mx = ldim(1)

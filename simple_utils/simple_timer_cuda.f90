@@ -4,7 +4,7 @@
 ! Michael Eager 2017-03-15
 
 module simple_timer_cuda
-  use precision_m
+  use simple_defs
   use cudafor
 
   implicit none

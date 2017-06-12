@@ -153,7 +153,7 @@ contains
                 if(state == 0)cycle
                 ! stash raw image for rec
                 call read_img_from_stk(b, p, iptcl)
-                batch_imgs(iptcl) = b%img
+                call batch_imgs(iptcl)%copy(b%img)
                 ! prep pftccs & ctf
                 call init_pftcc(p, iptcl, pftccs(iptcl))
                 call prep_pftcc_ptcl(b, p, iptcl_tmp, pftccs(iptcl))
@@ -192,7 +192,7 @@ contains
                     state       = nint(orientation%get('state'))
                     if(state == 0)cycle
                     ind   = iptcl-fromp+1
-                    b%img = batch_imgs(iptcl)
+                    call b%img%copy(batch_imgs(iptcl))
                     if(p%npeaks == 1)then
                         if( p%eo.eq.'yes' )then
                             call grid_ptcl(b, p, orientation, ran_eo=real(eo_part(ind)))

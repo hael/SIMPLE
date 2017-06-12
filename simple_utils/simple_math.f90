@@ -333,7 +333,7 @@ contains
         ang = (res/(pi*diam))*360.
     end function
     
-    !> \brief  get the resolution in Å, given angle and diameter
+    !> \brief  get the resolution in angstrom, given angle and diameter
     pure function resang( ang, diam ) result( res )
         real, intent(in)  :: ang, diam 
         real :: res
@@ -1079,7 +1079,7 @@ contains
     ! function evaluations are typically 6 to 12 byt is allowed to be as many as 2*NTAB.
     ! You should therefore select a fairly large value for h but monitor the returned 
     ! err, decreasing h if it is not small. For functions whose characteristic x scale
-    ! is of order unity—take h to be a few tenths (5 degrees for correlation search)
+    ! is of order unity-take h to be a few tenths (5 degrees for correlation search)
         interface 
             function func( point ) result( val )
                 real, intent(in) :: point
@@ -1639,7 +1639,7 @@ contains
     subroutine eigsrt(d,v,n,np)
         integer, intent(in)    :: n,np
         real,    intent(inout) :: d(np),v(np,np)
-        ! Given the eigenvalues d and eigenvectors v as output from jacobi (§11.1) or tqli (§11.3),
+        ! Given the eigenvalues d and eigenvectors v as output from jacobi (section 11.1) or tqli (section 11.3),
         ! this routine sorts the eigenvalues into descending order, 
         ! and rearranges the columns of v correspondingly. The method is straight insertion.
         integer             :: i,j,k

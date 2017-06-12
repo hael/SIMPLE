@@ -86,8 +86,8 @@ contains
             write(funit,'(I7,I7,I7,I7,I7)') xind, yind, box, box, -3
             call frame_img%read(framenames(iframe),1)
             call frame_img%window_slim([xind,yind,1], box, reference)
-            if( neg .eq. 'yes' ) call reference%neg
-            call reference%norm
+            if( neg .eq. 'yes' ) call reference%neg()
+            call reference%norm()
             call reference%write(trim(fbody)//'.mrc', iframe)
         end do
         close(funit)

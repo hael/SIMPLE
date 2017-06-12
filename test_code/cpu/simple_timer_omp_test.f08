@@ -10,7 +10,7 @@
 #include "simple_timer.h"
 
 module simple_timer_omp_test
-   use precision_m
+   use simple_defs
    use simple_timer_omp
    implicit none
 
