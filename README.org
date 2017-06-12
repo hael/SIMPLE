@@ -1,0 +1,261 @@
+#+title: README.org
+#+options: toc:t title:nil
+
+#+name: simple_logo
+#+attr_html: :width 600 :alt Single-particle CryoEM Image Processing Linux Engine :align center
+[[file:gui/www/img/simple_logo.png][Single-particle Image Processing Linux Engine]]
+
+
+#+name: banner
+#+attr_html: :width 300 :align center
+ | [[http://opensource.org/licenses/GPL-3.0][http://img.shields.io/:license-gpl-blue.svg]] | [[https://github.com/hael/SIMPLE3.0][https://img.shields.io/badge/release-SIMPLE3.0-green.svg]]  |
+# | [[http://opensource.org/licenses/GPL-3.0][http://img.shields.io/:license-gpl-blue.svg]] | [[https://github.com/hael/SIMPLE3.0][{https://img.shields.io/badge/release-SIMPLE3.0-green.svg}]] | [[https://github.com/hael/SIMPLE3.0/blob/master/code_of_conduct.md][[[https://img.shields.io/badge/code%20of-conduct-ff69b4.svg?style=flat-square]]]] | [[http://makeapullrequest.com][[[https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square&logo=data%3Aimage%2Fpng%3Bbase64%2CiVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAACWFBMVEXXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWkrXWko2FeWCAAAAAXRSTlMAQObYZgAAAAFiS0dEAIgFHUgAAAAJcEhZcwAAI28AACNvATX8B%2FsAAAAHdElNRQfhBQMBMCLAfV85AAAAi0lEQVQ4y2NgIBYszkPmJc5ORZE9DgEJqNxmmPS%2B43AA4h5B5TIwbD5%2BHFnoKCoXYSBMBIW7CF0eAxChoPM4ARXHB4GCZEIKKA8H%2FCoWE1LAwIBfBVp6wQA1DPhVzMJMcyggCVuqxGI%2FLhWY6Z6QPKoK7HmHkDwDwxYC8gwMdSDprXiz6PHjpQxUBgCLDfI7GXNh5gAAAABJRU5ErkJggg%3D%3D]]]] |
+# |                                             |                                                            |                                                                                                                                                   |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+
+#+name: status
+#+attr_html:  :align center :width 500
+|        | [[https://img.shields.io/badge/GNU%2520Fortran-4.9%2520to%25207.1-blue.svg]]  | [[https://img.shields.io/badge/PGI%2520Fortran-16.10_0-blue.svg]] | [[https://img.shields.io/badge/Intel%2520Fortran-2017.2.174-blue.svg]] |
+| Ubuntu | http://img.shields.io/badge/build-success-green.svg         | http://img.shields.io/badge/build-success-green.svg           | http://img.shields.io/badge/build-failing-red.svg                  |
+| MacOSX | http://img.shields.io/badge/build-success-green.svg         |                                                               |                                                                    |
+| Win    |                                                             |                                                               |                                                                    |
+
+
+*Important Notices*
+
+-  version 3 uses cmake for compilation, not the previous perl scripts
+-  =master= branch file paths are *not* considered stable -- use =release v3.0=
+-  cloning this repository is *not* recommended unless you are going to
+   be contributing to development
+
+
+** What is SIMPLE?
+
+*S*ingle-particle *IM*age *Processing *L*inux *E*ngine ([[https://www.simplecryoem.com][SIMPLE]]) is a program
+package for cryo-EM image processing, focusing on /ab initio/ 3D reconstruction
+of low-symmetry single-particles. The SIMPLE back-end consists of an
+object-oriented numerical library written in modern Fortran. The SIMPLE
+front-end consists of a few standalone, interoperable components developed
+according to the ``Unix toolkit philosophy''.
+
+
+** Project Motivation
+
+See [[https://simplecryoem.org/index.html][Simple homepage]] 
+
+
+** Installation Options
+
+/Note/: Simple is designed for modern Fortran compilers, preferrably 2008+ compliant. It has been tested on Linux
+& macOS (OS X) only
+
+*** Release Download
+
+-  SIMPLE source code is available for download as in the [[https://github.com/hael/SIMPLE3.0/releases/latest][latest release]]. Older
+   versions are no longer supported but are still available on the [[http://simplecryoem.com][homepage]].
+
+https://github.com/hael/SIMPLE3.0/releases/latest
+
+*** Build from source
+-  Building SIMPLE with CMake requires a git client, a fortran compiler
+   (2008 standards compliant), perl (>= 6.0) and FFTW3 libraries.
+- _Warning: Link time optimisation  may take some time 
+-  FFTW3 -- CMake tries to find the necessary libraries in the system paths,
+   otherwise it uses pkg_config
+
+Clone the repository and create a build directory
+#+BEGIN_SRC sh
+    git clone https://github.com/hael/SIMPLE3.0.git
+    cd SIMPLE3.0
+    mkdir build
+    cd build
+#+end_src
+
+**** GNU/Linux
+Generate Unix Makefiles and build with make:
+
+#+BEGIN_SRC sh
+    cmake ..
+    make -j
+#+END_SRC
+
+Default installation is in the build directory. If you wish
+   to install SIMPLE to another location, use the following:
+
+#+BEGIN_SRC sh
+    cmake -DCMAKE_INSTALL_PREFIX=/opt/simple ../
+    make -j install
+#+END_SRC
+
+**** PGI Linux
+
+Shell environment variables FC and LD_LIBRARY_PATH are crucial in the cmake
+build to determine the fortran compiler and for finding the FFTW3 libraries.
+
+In a local file or in your home .bashrc file, add the following commands and then source it:
+#+BEGIN_SRC sh
+,## PGILINUX
+unset -v PGIVERSION PGITARGET PGIHOME PGIDIR PGI
+unset -v OMPI_VERSION OMPI_DIR PGI_OPTL_INCLUDE_DIRS PGI_OPTL_INCLUDE_DIRS
+
+function set_pgilinux(){
+
+    ## PGI Linux
+    export PGIVERSION=2016
+    export PGITARGET=linux86-64
+    export PGIHOME=/usr/local/pgi
+    export PGIDIR="${PGIHOME}/${PGITARGET}/${PGIVERSION}"
+    export CUDADIR="${PGIDIR}"/cuda/8.0
+    export PGI="${PGIHOME}"
+    export CC="${PGIDIR}"/bin/pgcc
+    export FC="${PGIDIR}"/bin/pgfortran
+    export F90="${PGIDIR}"/bin/pgf90
+    export F77="${PGIDIR}"/bin/pgf77
+    export CPP="${PGIDIR}/bin/pgcc -E"
+    export CXX="${PGIDIR}"/bin/pgc++
+    export PATH="${PGIDIR}/bin:${CUDADIR}/bin:${PATH}"
+    export MANPATH="${PGIDIR}/man:${MANPATH}"
+    export LD_LIBRARY_PATH="${PGIDIR}/lib:${CUDADIR}/lib64:${LD_LIBRARY_PATH}"
+    # if Debian/Ubuntu/Mint 
+    # may need to add /usr/lib/x86_64-linux-gnu
+    # to LD_LIBRARY_PATH
+    export OMPI_VERSION=1.10.2
+    export OMPI_DIR=/usr/local/pgi/linux86-64/2016/mpi/openmpi-1.10.2
+    export PGI_OPTL_INCLUDE_DIRS="${OMPI_DIR}"/include
+    export PGI_OPTL_LIB_DIRS="${OMPI_DIR}"/lib
+    export PATH="${OMPI_DIR}/bin:${PATH}"
+    export MANPATH="${OMPI_DIR}/share/man:${MANPATH}"
+    export LD_LIBRARY_PATH="${OMPI_DIR}/lib:${LD_LIBRARY_PATH}"
+}
+
+function unset_pgilinux(){
+    if test "${PGIDIR}" ; then # defined and not empty
+        export PATH=$( echo "${PATH}" | sed "s#${PGIDIR}[^:]*:##g" )
+              export LD_LIBRARY_PATH=$( echo "${LD_LIBRARY_PATH}" | sed "s#${PGIDIR}[^:]*:##g" )
+        export MANPATH=$( echo "${MANPATH}" | sed "s#${PGIDIR}/lib:##" )
+        if test "${OMPI_DIR}"; then
+            export PATH=$( echo "${PATH}"| sed "s#${OMPI_DIR}/bin:##")
+            export LD_LIBRARY_PATH=$( echo ${LD_LIBRARY_PATH}| sed "s#${OMPI_DIR}/lib:##")
+        fi
+        unset  PGI PGIVERSION PGITARGET PGIHOME PGIDIR PGI
+        unset  OMPI_VERSION OMPI_DIR PGI_OPTL_INCLUDE_DIRS PGI_OPTL_INCLUDE_DIRS
+        unset  F77 F90 CPP CC CXX FC
+    fi
+}
+set_pgilinux
+#+END_SRC
+
+
+Create a unique directory in the SIMPLE source directory and build with cmake:
+#+BEGIN_SRC sh
+    # source file_listed_above 
+    set_pgilinux   
+    mkdir build-pgi
+    cd build-pgi
+    cmake .. -DUSE_CUDA=1 FC=$FC  
+    make -j
+#+END_SRC
+
+
+**** Intel fortran
+
+Source the =ifortvars.sh= file from your Intel compiler source path
+#+BEGIN_SRC sh
+   source /opt/intel/bin/compilervars.sh -arch intel64
+   mkdir build-intel
+   cd build-intel
+   export FC=ifort
+   export CPP=fpp
+   export CC=icc
+   export CXX=icpc
+   cmake ..  
+   make -j
+#+END_SRC sh
+
+
+
+**** MacOSX/Apple
+Building with clang and Ninja can be done as simple as:
+
+#+BEGIN_SRC sh
+    export CXX=/usr/bin/clang++
+    export CC=/usr/bin/clang
+    cmake .. FC=$CC
+    make -j
+#+END_SRC
+
+
+**** Windows/MinGW
+Generate MinGW Makefiles and build with mingw32-make.exe:
+#+BEGIN_SRC sh
+ cmake -G "MinGW Makefiles" ..
+ mingw32-make.exe
+#+END_SRC
+
+**** Windows/MSVC 
+Generate Visual Studio 12 Solution and build the ALL_BUILD target:
+#+BEGIN_SRC sh
+ cmake -G "Visual Studio 12 2013" ..
+ cmake --build . --target ALL_BUILD --config Release
+
+#+END_SRC
+
+
+
+
+*** Testing
+
+**** Test the core components
+
+#+BEGIN_SRC sh
+    # Testing
+    make test
+    ctest --output-on-failure
+#+END_SRC
+
+**** Test the features
+
+Each of the following features have a test executable in the bin
+directory with a prefix =simple_test_=.
+
+#+BEGIN_EXAMPLE
+    binomial_para    parse       
+    cartcorr_sanity  ptcl_conv   
+    defocus_groups   scatsrch    
+    elem_bess        shelliter   
+    ft_expanded      speed       
+    imgfile          srch        
+    install          timer       
+    new_ori          units       
+    omp_timer        volpft_srch 
+    order_corr     
+#+END_EXAMPLE
+
+To run all the feature tests use:
+
+#+BEGIN_SRC sh
+    for test in bin/simple_test_*;do
+    ./$test
+    done
+#+END_SRC
+
+** Usage
+
+See  [[https://github.com/hael/SIMPLE3.0/doc/SimpleManual][User documentation]]
+
+** Contributing
+
+See [[file:doc/SimpleManual/simple3.0devel.tex][Developer Manual]]
+
+
+** Changelog
+
+See doc/ReleaseNotes
+
+** Licence
+
+SIMPLE is free software: you can redistribute it and/or modify it under the
+terms of the [[http://www.gnu.org/copyleft/gpl.html][GNU General Public License]] as published by the Free Software
+Foundation, either version 3 of the license, or (at your option) any later
+version. SIMPLE is distributed with the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE. See the [[http://www.gnu.org/licenses/gpl-3.0.html][GPL v3 licence]] for more details.
