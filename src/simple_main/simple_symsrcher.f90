@@ -103,9 +103,9 @@ contains
         call dsym_os%set_all('class', real(labels))
         ! rotates input oris to asymmetric unit
         call se%rotall_to_asym(dsym_os)
-        ! estimate height and cylinder radius
-        width  = sum(radii, mask=(labels==1)) / real(count(labels==1))
-        height = 2. * sum(radii, mask=(labels==2)) / real(count(labels==2))
+        ! estimate height and cylinder radius (0.9 to account for overestimation)
+        width  = 0.9 * (sum(radii, mask=(labels==1)) / real(count(labels==1)))
+        height = 0.9 * (2. * sum(radii, mask=(labels==2)) / real(count(labels==2)))
         !call cylinder%bin_cylinder(width, height)
         ! dummy top view
         topview = 0.
@@ -121,7 +121,6 @@ contains
         topview = roavg_img
         call topview%norm
         call topview%mask(p%msk, 'soft')
-        call topview%write('topview.mrc')    
         cylinder = 0.     
         do i=1,p%box
             if( abs( real(i-1)-real(p%box)/2. ) < height/2.)then

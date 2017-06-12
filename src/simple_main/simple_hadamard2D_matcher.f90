@@ -442,7 +442,7 @@ contains
         ! prepare the polarizers
         call b%img_match%init_polarizer(pftcc)
         ! prepare the automasker
-        if( p%l_automsk )call b%mskimg%init( p, p%ncls )
+        if( p%l_automsk )call b%mskimg%init(p, p%ncls)
         ! PREPARATION OF REFERENCES IN PFTCC
         ! read references and transform into polar coordinates
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING REFERENCES'

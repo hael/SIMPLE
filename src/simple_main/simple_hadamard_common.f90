@@ -338,6 +338,9 @@ contains
         if( p%l_automsk )then
             ! automasking
             call b%mskimg%update_cls(b%img_match, icls)
+            if( (p%l_distr_exec .and. p%part.eq.1) .or. (.not.p%l_distr_exec))then
+                call b%img_match%write(trim(p%refs)//'msk'//p%ext, icls)
+            endif
         else
             ! soft masking
             if( p%l_innermsk )then
