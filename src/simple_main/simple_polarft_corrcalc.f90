@@ -799,7 +799,7 @@ contains
         ! finalize cross-correlation
         cc = cc/sqrt(sqsum_ref_sh*self%sqsums_ptcls(iptcl))
     end function corr_2
-    
+
     ! DESTRUCTOR
 
     !>  \brief  is a destructor

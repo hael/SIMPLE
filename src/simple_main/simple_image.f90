@@ -2470,7 +2470,7 @@ contains
         integer :: i, j, k, alloc_stat
         if( self%is_ft() ) stop 'real space only; simple_image%distsq_img'
         ! Builds square distance image
-        self = 0.
+        self   = 0.
         centre = real(self%ldim-1)/2.
         if( self%is_2d() )then
             ! 2D
@@ -2480,18 +2480,19 @@ contains
             do i=1,self%ldim(2)
                 self%rmat(:,i,1) = self%rmat(:,i,1) + (real(i)-centre(2))**2.
             enddo
-            self%rmat = sqrt(self%rmat)
         else
             ! 3D
             do i=1,self%ldim(1)
-                do j=1,self%ldim(2)
-                    do k=1,self%ldim(3)
-                        vec = real([i,j,k]) - centre
-                        self%rmat(i,:,1) = dot_product(vec,vec)
-                    enddo
-                enddo
+                self%rmat(i,:,:) = self%rmat(i,:,:) + (real(i)-centre(1))**2.
+            enddo
+            do i=1,self%ldim(2)
+                self%rmat(:,i,:) = self%rmat(:,i,:) + (real(i)-centre(2))**2.
+            enddo
+            do i=1,self%ldim(3)
+                self%rmat(:,:,i) = self%rmat(:,:,i) + (real(i)-centre(3))**2.
             enddo
         endif
+        self%rmat = sqrt(self%rmat)
     end subroutine cendist
 
     !>  \brief  is for determining the center of mass of binarised image

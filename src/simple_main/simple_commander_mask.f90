@@ -119,7 +119,7 @@ contains
         write(*,'(A,F8.2,A)') '>>> AUTOMASK LOW-PASS:',        p%amsklp, ' ANGSTROMS'
         write(*,'(A,I3,A)')   '>>> AUTOMASK SOFT EDGE WIDTH:', p%edge,   ' PIXELS'
         p%outstk = add2fbody(p%stk, p%ext, 'msk')
-        call b%mskimg%init(p, p%nptcls, mode='cavg')
+        call b%mskimg%init(p, p%nptcls)
         do iptcl=1,p%nptcls
             call b%img%read(p%stk, iptcl)
             call b%mskimg%update_cls(b%img, iptcl)
