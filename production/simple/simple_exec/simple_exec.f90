@@ -36,7 +36,6 @@ implicit none
 type(noiseimgs_commander)          :: xnoiseimgs
 type(simimgs_commander)            :: xsimimgs
 type(simmovie_commander)           :: xsimmovie
-type(simsubtomo_commander)         :: xsimsubtomo
 
 ! PRE-PROCESSING PROGRAMS
 type(preproc_commander)            :: xpreproc
@@ -46,8 +45,6 @@ type(powerspecs_commander)         :: xpowerspecs
 type(unblur_commander)             :: xunblur
 type(ctffind_commander)            :: xctffind
 type(select_commander)             :: xselect
-type(makepickrefs_commander)       :: xmakepickrefs
-type(pick_commander)               :: xpick
 type(extract_commander)            :: xextract
 
 ! PRIME2D PROGRAMS
@@ -62,9 +59,7 @@ type(resrange_commander)           :: xresrange
 type(npeaks_commander)             :: xnpeaks
 type(nspace_commander)             :: xnspace
 type(prime3D_init_commander)       :: xprime3D_init
-type(multiptcl_init_commander)     :: xmultiptcl_init
 type(prime3D_commander)            :: xprime3D
-type(cont3D_commander)             :: xcont3D
 type(check3D_conv_commander)       :: xcheck3D_conv
     
 ! COMMON-LINES PROGRAMS
@@ -270,80 +265,9 @@ select case(prg)
         call cline%set('eo',   'no')
         ! execute
         call xsimmovie%execute(cline)
-    case( 'simsubtomo' )
-        !==Program simsubtomo
-        !
-        ! <simsubtomo/begin>is a program for crude simulation of a subtomograms<simsubtomo/end>
-        !
-        ! set required keys
-        keys_required(1) = 'vol1'
-        keys_required(2) = 'smpd'
-        keys_required(3) = 'nptcls'
-        keys_required(4) = 'snr'
-        ! set optional keys
-        keys_optional(1) = 'nthr'
-        ! parse command line
-        if( describe ) call print_doc_simsubtomo
-        call cline%parse(keys_required(:4), keys_optional(:1))
-        ! execute
-        call xsimsubtomo%execute(cline)
 
     ! PRE-PROCESSING PROGRAMS
 
-    case( 'preproc' )
-        !==Program preproc
-        !
-        ! <preproc/begin>is a program that executes unblur, ctffind and pick in sequence
-        ! <preproc/end>
-        !
-        ! set required keys
-        keys_required(1)   = 'filetab'
-        keys_required(2)   = 'smpd'
-        keys_required(3)   = 'kv'
-        keys_required(4)   = 'cs'
-        keys_required(5)   = 'fraca'
-        ! set optional keys
-        keys_optional(1)   = 'nthr'
-        keys_optional(2)   = 'refs'
-        keys_optional(3)   = 'fbody'
-        keys_optional(4)   = 'dose_rate'
-        keys_optional(5)   = 'exp_time'
-        keys_optional(6)   = 'lpstart'
-        keys_optional(7)   = 'lpstop'
-        keys_optional(8)   = 'trs'
-        keys_optional(9)   = 'pspecsz_unblur'
-        keys_optional(10)  = 'pspecsz_ctffind'
-        keys_optional(11)  = 'numlen'
-        keys_optional(12)  = 'startit'
-        keys_optional(13)  = 'scale'
-        keys_optional(14)  = 'nframesgrp'
-        keys_optional(15)  = 'fromf'
-        keys_optional(16)  = 'tof'
-        keys_optional(17)  = 'hp_ctffind'
-        keys_optional(18)  = 'lp_ctffind'
-        keys_optional(19)  = 'lp_pick'
-        keys_optional(20)  = 'dfmin'
-        keys_optional(21)  = 'dfmax'
-        keys_optional(22)  = 'astigstep'
-        keys_optional(23)  = 'expastig'
-        keys_optional(24)  = 'phaseplate'
-        keys_optional(25)  = 'thres'
-        keys_optional(26)  = 'rm_outliers'
-        keys_optional(27)  = 'nsig'
-        keys_optional(28)  = 'dopick'
-        ! parse command line
-        if( describe ) call print_doc_preproc
-        call cline%parse(keys_required(:5), keys_optional(:28))
-        ! set defaults
-        if( .not. cline%defined('trs')             ) call cline%set('trs',        5.)
-        if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',   15.)
-        if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',     8.)
-        if( .not. cline%defined('pspecsz_unblur')  ) call cline%set('pspecsz',  512.)
-        if( .not. cline%defined('pspecsz_ctffind') ) call cline%set('pspecsz', 1024.)
-        if( .not. cline%defined('hp_ctffind')      ) call cline%set('hp',        30.)
-        if( .not. cline%defined('lp_ctffind')      ) call cline%set('lp',         5.)
-        if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',   20.)
-        call xpreproc%execute(cline)
     case( 'select_frames' )
         !==Program select_frames
         !
@@ -412,9 +336,9 @@ select case(prg)
     case( 'unblur' )
         !==Program unblur
         !
-        ! <unblur/begin>is a program for movie alignment or unblurring based on similar principles as
+        ! <unblur/begin>is a program for movie alignment or unblurring based the same principal strategy as
         ! Grigorieffs program (hence the name). There are two important differences: automatic weighting of
-        ! the frames using a corrleation-based M-estimator and continuous optimisation of the shift parameters.
+        ! the frames using a correlation-based M-estimator and continuous optimisation of the shift parameters.
         ! Input is a textfile with absolute paths to movie files in addition to a few obvious input
         ! parameters<unblur/end>
         !
@@ -551,45 +475,6 @@ select case(prg)
         if( .not. cline%defined('outfile') )  call cline%set('outfile', 'selected_lines.txt')
         ! execute
         call xselect%execute(cline)
-    case( 'makepickrefs' )
-        !==Program pickrefs
-        !
-        ! <makepickrefs/begin>is a program for generating references for template-based particle picking<makepickrefs/end> 
-        !
-        ! set required keys
-        keys_required(1) = 'pgrp'
-        keys_required(2) = 'smpd'
-        ! set optional keys
-        keys_optional(1) = 'nthr'
-        keys_optional(2) = 'vol1'
-        keys_optional(3) = 'stk'
-        keys_optional(4) = 'neg'
-        ! parse command line
-        if( describe ) call print_doc_makepickrefs
-        call cline%parse(keys_required(:1), keys_optional(:4))
-        ! set defaults
-        if( .not. cline%defined('neg') )  call cline%set('neg', 'yes')
-        ! execute
-        call xmakepickrefs%execute(cline)
-    case( 'pick' )
-        !==Program pick
-        !
-        ! <pick/begin>is a template-based picker program<pick/end> 
-        !
-        ! set required keys
-        keys_required(1) = 'filetab'
-        keys_required(2) = 'refs'
-        keys_required(3) = 'smpd'
-        ! set optional keys
-        keys_optional(1) = 'nthr'
-        keys_optional(2) = 'lp'
-        keys_optional(3) = 'thres'
-        keys_optional(4) = 'rm_outliers'
-        ! parse command line
-        if( describe ) call print_doc_pick
-        call cline%parse(keys_required(:3), keys_optional(:4))
-        ! execute
-        call xpick%execute(cline)
     case( 'extract' )
         !==Program extract
         !
@@ -861,40 +746,6 @@ select case(prg)
         if( .not. cline%defined('nspace') ) call cline%set('nspace', 1000.)
         ! execute
         call xprime3D_init%execute(cline)
-    case( 'multiptcl_init' )
-        !==Program multiptcl_init
-        !
-        ! <multiptcl_init/begin>is a program for generating random initial models for initialisation of PRIME3D
-        ! when run in multiparticle mode<multiptcl_init/end> 
-        !
-        ! set required keys
-        keys_required(1)  = 'stk'
-        keys_required(2)  = 'smpd'
-        keys_required(3)  = 'ctf'
-        keys_required(4)  = 'pgrp'
-        keys_required(5)  = 'nstates'
-        keys_required(6)  = 'msk'
-        ! set optionnal keys
-        keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'oritab'
-        keys_optional(3)  = 'deftab'
-        keys_optional(4)  = 'inner'
-        keys_optional(5)  = 'width'
-        keys_optional(6)  = 'lp'
-        keys_optional(7)  = 'eo'
-        keys_optional(8)  = 'frac'
-        keys_optional(9)  = 'state2split'
-        keys_optional(10) = 'norec'
-        keys_optional(11) = 'mul'
-        keys_optional(12) = 'zero'
-        keys_optional(13) = 'tseries'
-        ! parse command line
-        if( describe ) call print_doc_multiptcl_init
-        call cline%parse(keys_required(:6), keys_optional(:13))
-        ! set defaults
-        if( .not. cline%defined('trs') ) call cline%set('trs', 3.) ! to assure that shifts are being used
-        !execute
-        call xmultiptcl_init%execute(cline)
     case( 'prime3D' )
         !==Program prime3D
         !
@@ -962,57 +813,7 @@ select case(prg)
             endif
         endif
         ! execute
-        call xprime3D%execute(cline)
-    case( 'cont3D' )
-        !==Program cont3D
-        !
-        ! <cont3D/begin>is a continuous refinement code under development<cont3D/end>
-        !
-        ! set required keys
-        keys_required(1)  = 'stk'
-        keys_required(2)  = 'vol1'
-        keys_required(3)  = 'smpd'
-        keys_required(4)  = 'msk'
-        keys_required(5)  = 'oritab'
-        keys_required(6)  = 'trs'
-        keys_required(7)  = 'ctf'
-        keys_required(8)  = 'pgrp'
-        ! set optional keys
-        keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'deftab'
-        keys_optional(3)  = 'frac'
-        keys_optional(4)  = 'automsk'
-        keys_optional(5)  = 'mw'
-        keys_optional(6)  = 'amsklp'
-        keys_optional(7)  = 'edge'
-        keys_optional(8)  = 'inner'
-        keys_optional(9)  = 'width'
-        keys_optional(10) = 'hp'
-        keys_optional(11) = 'lp'
-        keys_optional(12) = 'lpstop'
-        keys_optional(13) = 'startit'
-        keys_optional(14) = 'maxits'
-        keys_optional(15) = 'xfel'
-        keys_optional(16) = 'refine'
-        keys_optional(17) = 'eo'
-        ! parse command line
-        if( describe ) call print_doc_cont3D
-        call cline%parse(keys_required(:8), keys_optional(:17))
-        ! set defaults
-        call cline%set('dynlp', 'no')
-        if( cline%defined('eo') )then
-            if( cline%get_carg('eo').eq.'yes')then
-                if( cline%defined('lp') )stop 'Low-pass cannot be set with EO=YES'
-            else
-                if( .not.cline%defined('lp'))stop 'Low-pass must be defined with EO=NO'
-            endif
-        else
-            call cline%set('eo','no')
-        endif
-        if( .not.cline%defined('refine') )call cline%set('refine','yes')
-        if( .not.cline%defined('nspace') )call cline%set('nspace',1000.)
-        ! execute
-        call xcont3D%execute(cline)        
+        call xprime3D%execute(cline)    
     case( 'check3D_conv' )
         !==Program check3D_conv
         !
