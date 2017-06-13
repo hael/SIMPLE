@@ -70,7 +70,7 @@ ProcessorCount(NUM_JOBS)
 # include(CMakeAddFortranSubdirectory)
 # include(CMakeGraphVizOptions)
 include(CheckIncludeFiles)
-
+include("${CMAKE_SOURCE_DIR}/cmake/Modules/FortranOverride.cmake")
 include(${CMAKE_MODULE_PATH}/SimpleFortranOptions.cmake)
 #INCLUDE(${CMAKE_MODULE_PATH}/SetFortranFlags.cmake) 
 include(${CMAKE_MODULE_PATH}/SetParallelizationLibrary.cmake)

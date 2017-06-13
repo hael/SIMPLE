@@ -7,7 +7,7 @@
 # variables.
 if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
     # gfortran
-    set(dialect  "-ffree-form -std=f2008 -fimplicit-none")                     # language style
+    set(dialect  "-ffree-form -cpp -fimplicit-none")                     # language style
     set(checks   "-fbounds-check -fcheck-array-temporaries ")                  # checks
     set(warn     "-Wall -Wextra -Wimplicit-interface ")                        # warning flags
     set(fordebug "-DTRACE -fno-inline -fno-f2c -Og -fbacktrace")               # debug flags
@@ -30,16 +30,16 @@ if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
 
 elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
     # ifort
-    set(dialect  "-cpp -free -implicitnone -stand f08  -80")
+    set(dialect  "-fpp -free -implicitnone -stand f08  -80")
     set(checks   "-check bounds -check uninit")
     set(warn     "-warn all")
     set(fordebug "-debug -O0 -ftrapuv -debug all -check all")
     set(forspeed "-O3 -fp-model fast=2")
-    set(forpar   "-openmp")
+    set(forpar   "-qopenmp")
     set(target   "-xHOST -no-prec-div -static -fPIC")
     set(common   "${dialect} ${checks} ${target} ${warn} -DINTEL")
-  else()
-    message(" Fortran compiler not supported. Set FC environment variable")
+ # else()
+ #   message(" Fortran compiler not supported. Set FC environment variable")
   endif ()
     
     set(CMAKE_Fortran_FLAGS_RELEASE_INIT "${common} ${forspeed} ${forpar} ")

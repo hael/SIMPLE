@@ -10,23 +10,27 @@ string(TOUPPER "${CMAKE_BUILD_TYPE}" BT)
 
 if(BT STREQUAL "RELEASE")
   set(CMAKE_BUILD_TYPE RELEASE CACHE STRING
-    "Choose the type of build, options are DEBUG, RELEASE, or TESTING."
+    "Choose the type of build, options are DEBUG, RELEASE, RELWITHDEBINFO or TESTING."
     FORCE)
 elseif(BT STREQUAL "DEBUG")
   set (CMAKE_BUILD_TYPE DEBUG CACHE STRING
-    "Choose the type of build, options are DEBUG, RELEASE, or TESTING."
+    "Choose the type of build, options are DEBUG, RELEASE, RELWITHDEBINFO or TESTING."
+    FORCE)
+elseif(BT STREQUAL "RELWITHDEBINFO")
+  set (CMAKE_BUILD_TYPE RELWITHDEBINFO CACHE STRING
+    "Choose the type of build, options are DEBUG, RELEASE, RELWITHDEBINFO  or TESTING."
     FORCE)
 elseif(BT STREQUAL "TESTING")
   set (CMAKE_BUILD_TYPE TESTING CACHE STRING
-    "Choose the type of build, options are DEBUG, RELEASE, or TESTING."
+    "Choose the type of build, options are DEBUG, RELEASE, RELWITHDEBINFO or TESTING."
     FORCE)
 elseif(NOT BT)
   set(CMAKE_BUILD_TYPE RELEASE CACHE STRING
-    "Choose the type of build, options are DEBUG, RELEASE, or TESTING."
+    "Choose the type of build, options are DEBUG, RELEASE, RELWITHDEBINFO or TESTING."
     FORCE)
   message(STATUS "CMAKE_BUILD_TYPE not given, defaulting to RELEASE")
 else()
-  message(FATAL_ERROR "CMAKE_BUILD_TYPE not valid, choices are DEBUG, RELEASE, or TESTING")
+  message(FATAL_ERROR "CMAKE_BUILD_TYPE not valid, choices are DEBUG, RELEASE, RELWITHDEBINFO or TESTING")
 endif(BT STREQUAL "RELEASE")
 
 
@@ -191,7 +195,7 @@ elseif (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel" OR Fortran_COMPILER_NAME M
     set(CMAKE_SHARED_LINKER_FLAGS        "${CMAKE_SHARED_LINKER_FLAGS} -ip -ipo-separate -ipo-jobs=${NUM_JOBS}")
     set(CMAKE_STATIC_LINKER_FLAGS        "${CMAKE_STATIC_LINKER_FLAGS} -ip -ipo")
   endif(LINK_TIME_OPTIMISATION)
-
+  add_definitions("-DOPENMP") 
 
 elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR Fortran_COMPILER_NAME MATCHES "pgfortran.*")
   #############################################
