@@ -1,9 +1,9 @@
-#+title: README.org
+
 #+options: toc:t title:nil
 
 #+name: simple_logo
 #+attr_html: :width 600 :alt Single-particle CryoEM Image Processing Linux Engine :align center
-[[file:gui/www/img/simple_logo.png][Single-particle Image Processing Linux Engine]]
+[[https://github.com/hael/SIMPLE3.0/blob/cmake-feature/gui/www/img/simple_logo.png][Single-particle Image Processing Linux Engine]]
 
 
 #+name: banner

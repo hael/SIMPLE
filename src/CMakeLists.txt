@@ -95,6 +95,7 @@ set_target_properties(${SIMPLELIB}
   VERSION ${${PROJECT_NAME}_VERSION}
   COMPILE_FLAGS "${OpenMP_Fortran_FLAGS}"
   LINK_FLAGS "${OpenMP_Fortran_FLAGS}"
+  LINK_LIBRARIES "${EXTRA_LIBS}"
   JOB_POOL_LINK NUM_JOBS
   )
 

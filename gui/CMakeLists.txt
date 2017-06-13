@@ -12,12 +12,12 @@ set_target_properties(simple_ws PROPERTIES
 
 # POSIX threads
 
-SET_COMPILE_FLAG(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}"
-  CXX
-  "-mp"                 # PGI
-  "-pthreads"            # GNU
-  "-threads"            # Intel
-  )
+# SET_COMPILE_FLAG(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}"
+#   CXX
+#   "-mp"                 # PGI
+#   "-pthreads"           # GNU
+#   "-threads"            # Intel
+#   )
 
 
 add_executable(simple src/simple.cpp

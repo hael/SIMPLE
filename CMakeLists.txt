@@ -1,28 +1,28 @@
 cmake_minimum_required(VERSION 3.2 FATAL_ERROR)
-project(SIMPLE LANGUAGES Fortran C CXX)
+
+project(SIMPLE LANGUAGES Fortran C)
 
 
 #################################################################
 # VERSION and the Shared lib SOVERSION
 #################################################################
 
-set(${PROJECT_NAME}_VERSION 3.0.1)
-set(${PROJECT_NAME}_SOVERSION 3)
+set(${PROJECT_NAME}_VERSION 2.5)
+set(${PROJECT_NAME}_SOVERSION 2.5)
 
 #################################################################
 # DEFINE PATHS
 #################################################################
-
-set(SRC_PATH ${CMAKE_SOURCE_DIR}/src)
-set(LIB_SRC_PATH ${SRC_PATH}/lib)
-set(TEST_SRC_PATH ${SRC_PATH}/test)
+set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR})
 # Add our local modules to the module path
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 
 #################################################################
 # BUILD PATHS
 #################################################################
-
+set(SRC_PATH ${CMAKE_SOURCE_DIR}/src)
+set(LIB_SRC_PATH ${SRC_PATH}/lib)
+set(TEST_SRC_PATH ${SRC_PATH}/test)
 set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/lib)
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
 set(CMAKE_Fortran_MODULE_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
@@ -31,7 +31,6 @@ include_directories(${CMAKE_Fortran_MODULE_DIRECTORY})
 #################################################################
 # CONFIGURATION TYPES & BUILD MODE
 #################################################################
-
 set(CMAKE_CONFIGURATION_TYPES DEBUG RELEASE)
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE RELEASE CACHE STRING
@@ -71,7 +70,7 @@ ProcessorCount(NUM_JOBS)
 ## Debugging CMAKE
 # include(CMakeAddFortranSubdirectory)
 # include(CMakeGraphVizOptions)
-
+include(CheckIncludeFiles)
 include(${CMAKE_MODULE_PATH}/SimpleFortranOptions.cmake)
 #INCLUDE(${CMAKE_MODULE_PATH}/SetFortranFlags.cmake) 
 INCLUDE(${CMAKE_MODULE_PATH}/SetParallelizationLibrary.cmake)

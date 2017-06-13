@@ -127,7 +127,7 @@ message(STATUS "Fortran compiler ${CMAKE_Fortran_COMPILER_ID}")
 #############################################
 ## COMPLER SPECIFIC SETTINGS
 #############################################
-if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" AND Fortran_COMPILER_NAME MATCHES "gfortran*")
+if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" ) #AND Fortran_COMPILER_NAME MATCHES "gfortran*")
   #############################################
   #
   ## GNU fortran
@@ -225,30 +225,34 @@ elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR Fortran_COMPILER_NAME MATC
 
   #  CMAKE_EXE_LINKER_FLAGS
   if (LINK_TIME_OPTIMISATION)
-    set(CMAKE_Fortran_FLAGS                "${CMAKE_Fortran_FLAGS} -Mipa ")
-    set(CMAKE_EXE_LINKER_FLAGS           "${CMAKE_EXE_LINKER_FLAGS} -Mipa")
-    set(CMAKE_SHARED_LINKER_FLAGS        "${CMAKE_SHARED_LINKER_FLAGS} -Mipa")
-    set(CMAKE_STATIC_LINKER_FLAGS        "${CMAKE_STATIC_LINKER_FLAGS} -Mipa")
+    set(CMAKE_Fortran_FLAGS                "${CMAKE_Fortran_FLAGS} -Mipa=fast ")
+    set(CMAKE_EXE_LINKER_FLAGS           "${CMAKE_EXE_LINKER_FLAGS} -Mipa=fast")
+    set(CMAKE_SHARED_LINKER_FLAGS        "${CMAKE_SHARED_LINKER_FLAGS} -Mipa=fast")
+    set(CMAKE_STATIC_LINKER_FLAGS        "${CMAKE_STATIC_LINKER_FLAGS} -Mipa=fast")
   endif(LINK_TIME_OPTIMISATION)
 
 
 elseif ("${CMAKE_Fortran_COMPILER_ID}" MATCHES "Clang")
+
   #############################################
   ## APPLE Clang
   #############################################
-  find_package(LLVM REQUIRED CONFIG)
+   message ("Clang is not supported.  Please use GNU toolchain with either Homebrew, MacPorts or Fink.")
+  # find_package(LLVM REQUIRED CONFIG)
 
-  set(CMAKE_Fortran_FLAGS                "${CMAKE_Fortran_FLAGS_RELEASE_INIT} -Wno-mismatched-tags -Qunused-arguments")
-  if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-    # In OSX, clang requires "-stdlib=libc++" to support C++11
-    set(CMAKE_Fortran_FLAGS              "${CMAKE_Fortran_FLAGS} -stdlib=f2003")
-    set(CMAKE_EXE_LINKER_FLAGS           "-stdlib=libc++")
-  endif()
+  # set(CMAKE_Fortran_FLAGS                "${CMAKE_Fortran_FLAGS_RELEASE_INIT} -Wno-mismatched-tags -Qunused-arguments")
+  # if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+  #   # In OSX, clang requires "-stdlib=libc++" to support C++11
+  #   set(CMAKE_Fortran_FLAGS              "${CMAKE_Fortran_FLAGS} -stdlib=f2003")
+  #   set(CMAKE_EXE_LINKER_FLAGS           "-stdlib=libc++")
+  # endif()
+
 else ()
   #############################################
-  ## OTHER fortran
+  ## UNKNOWN fortran
   #############################################
-  message ("No optimized Fortran compiler flags are known, we just try -O2...")
+  message (STATUS " Fortran_COMPILER_NAME ${CMAKE_Fortran_COMPILER_ID}")
+  message (STATUS " Set environment variable FC to fortran compiler and rebuild cache.")
   set (CMAKE_Fortran_FLAGS_RELEASE "-O2")
   set (CMAKE_Fortran_FLAGS_DEBUG   "-O0 -g")
 endif () # COMPILER_ID
