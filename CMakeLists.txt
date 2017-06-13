@@ -1,7 +1,6 @@
 cmake_minimum_required(VERSION 3.2 FATAL_ERROR)
-
-project(SIMPLE LANGUAGES Fortran C)
-
+include("${CMAKE_SOURCE_DIR}/cmake/Modules/FortranOverride.cmake")
+project(SIMPLE LANGUAGES Fortran)
 
 #################################################################
 # VERSION and the Shared lib SOVERSION
@@ -71,9 +70,10 @@ ProcessorCount(NUM_JOBS)
 # include(CMakeAddFortranSubdirectory)
 # include(CMakeGraphVizOptions)
 include(CheckIncludeFiles)
+
 include(${CMAKE_MODULE_PATH}/SimpleFortranOptions.cmake)
 #INCLUDE(${CMAKE_MODULE_PATH}/SetFortranFlags.cmake) 
-INCLUDE(${CMAKE_MODULE_PATH}/SetParallelizationLibrary.cmake)
+include(${CMAKE_MODULE_PATH}/SetParallelizationLibrary.cmake)
 # Setup the LAPACK libraries.  This also takes care of peculiarities, such as
 # the fact the searching for MKL requires a C compiler, and that the results
 # are not stored in the cache. 
@@ -81,25 +81,25 @@ INCLUDE(${CMAKE_MODULE_PATH}/SetParallelizationLibrary.cmake)
 
 # There is an error in CMAKE with this flag for pgf90.  Unset it
 get_filename_component(FCNAME ${CMAKE_Fortran_COMPILER} NAME)
-IF(FCNAME STREQUAL "pgf90")
-    UNSET(CMAKE_SHARED_LIBRARY_LINK_Fortran_FLAGS)
-ENDIF(FCNAME STREQUAL "pgf90")
+if(FCNAME STREQUAL "pgf90")
+    unset(CMAKE_SHARED_LIBRARY_LINK_Fortran_FLAGS)
+endif(FCNAME STREQUAL "pgf90")
 
 ############################################################
 # Define the actual files and folders that make up the build
 ############################################################
 
 # Define the executable name
-SET(SIMPLE_EXE simple_exec)
+set(SIMPLE_EXE simple_exec)
 set(SIMPLE_DISTR_EXE simple_distr_exec)
 
 # Define the library name lib<name>.so
-SET(SIMPLELIB SIMPLE3)
+set(SIMPLELIB "SIMPLE${${PROJECT_NAME}_VERSION}")
 
 # Define some directories
-SET(SRC ${CMAKE_SOURCE_DIR}/src)
-SET(LIB ${CMAKE_BINARY_DIR}/lib)
-SET(BIN ${CMAKE_BINARY_DIR}/bin)
+set(SRC ${CMAKE_SOURCE_DIR}/src)
+set(LIB ${CMAKE_BINARY_DIR}/lib)
+set(BIN ${CMAKE_BINARY_DIR}/bin)
 set(EXESRC ${CMAKE_SOURCE_DIR}/production/simple)
 include_directories(${CMAKE_SOURCE_DIR}/simple_utils)
 

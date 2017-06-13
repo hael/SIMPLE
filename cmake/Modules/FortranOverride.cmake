@@ -7,14 +7,14 @@
 # variables.
 if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
     # gfortran
-    set(dialect  "-ffree-form -std=f2008 -fimplicit-none")                     #language style
-    set(checks   "-fbounds-check -fcheck-array-temporaries -fmax-errors=1 ")   #checks
-    set(warn     "-Wall -Wextra -Wimplicit-interface ")                        #warning flags
-    set(fordebug "-DTRACE -fno-inline -fno-f2c -Og -fbacktrace")               #debug flags
-    set(forspeed "-ffast-math -funroll-all-loops -fno-f2c -O3")                #optimisation
-    set(forpar   "-fopenmp -pthread")                                          #parallel flags
-    set(target   "-march=native -fPIC")                                        #platform
-    set(common   "${dialect} ${checks} ${target} ${warn} -DGNU")               #general
+    set(dialect  "-ffree-form -std=f2008 -fimplicit-none")                     # language style
+    set(checks   "-fbounds-check -fcheck-array-temporaries ")                  # checks
+    set(warn     "-Wall -Wextra -Wimplicit-interface ")                        # warning flags
+    set(fordebug "-DTRACE -fno-inline -fno-f2c -Og -fbacktrace")               # debug flags
+    set(forspeed "-ffast-math -funroll-all-loops -fno-f2c -O3")                # optimisation
+    set(forpar   "-fopenmp -pthread")                                          # parallel flags
+    set(target   "-march=native -fPIC")                                        # platform
+    set(common   "${dialect} ${checks} ${target} ${warn} -DGNU")               # general
 
   elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
     # pgfortran
@@ -49,4 +49,7 @@ elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
 # Make recent cmake not spam about stuff
 if(POLICY CMP0063)
     cmake_policy(SET CMP0063 OLD)
+endif()
+if(POLICY CMP0004)
+    cmake_policy(SET CMP0004 OLD)
 endif()

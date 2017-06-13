@@ -1408,7 +1408,7 @@ contains
         recsz = 120*4
         funit = 3
         open(unit=funit,access='STREAM',file='test_imghed.spi',&
-        action='READWRITE',status='UNKNOWN',convert='BIG_ENDIAN')
+        &action='READWRITE',status='UNKNOWN',convert='BIG_ENDIAN')
         call hed%write(funit)
         call hed2%read(funit)
         close(funit)
