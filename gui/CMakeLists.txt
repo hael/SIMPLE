@@ -1,4 +1,4 @@
-
+project(simple_gui)
 enable_language(CXX)
 
 add_executable(simple_ws src/simple_ws.cpp
@@ -11,10 +11,12 @@ set_target_properties(simple_ws PROPERTIES
   LANGUAGE CXX)
 
 # POSIX threads
+
 SET_COMPILE_FLAG(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}"
   CXX
-  "-pthread"            # GNU,PGI
-  "-thread"            # Intel
+  "-mp"                 # PGI
+  "-pthreads"            # GNU
+  "-threads"            # Intel
   )
 
 

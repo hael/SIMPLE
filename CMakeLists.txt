@@ -49,9 +49,11 @@ endif(NOT CMAKE_BUILD_TYPE)
 # OPTION(USE_MPI "Use the MPI library for parallelization" OFF)
 option(USE_OPENMP "Use OpenMP for parallelization" ON)
 option(USE_CUDA "GPU parallelisation" OFF)
-option(BUILD_TESTS "Build the test examples" OFF)
-option(BUILD_GUI "Build the simple GUI" OFF)
-option(LINK_TIME_OPTIMISATION "Enable link-time optimisation" ON)
+option(BUILD_TESTS "Build the test examples" ON)
+option(BUILD_GUI "Build the simple GUI" ON)
+option(BUILD_SHARED_LIBS "Build the simple library as shared" ON)
+
+option(LINK_TIME_OPTIMISATION "Enable link-time optimisation" OFF)
 
 #################################################################
 # SET default flags
@@ -141,11 +143,11 @@ endif()
 #################################################################
 # ENABLE TESTING
 #################################################################
-set(BUILDNAME ${CMAKE_Fortran_COMPILER_ID}_${CMAKE_BUILD_TYPE}_MKL=${${PROJECT_NAME}_ENABLE_MKL} CACHE STRING "Testing Intel MKL" )
-if(${PROJECT_NAME}_ENABLE_TESTS)
-  enable_testing()
-  include(CTest)
-endif()
+#set(BUILDNAME ${CMAKE_Fortran_COMPILER_ID}_${CMAKE_BUILD_TYPE}_MKL=${${PROJECT_NAME}_ENABLE_MKL} CACHE STRING "Testing Intel MKL" )
+#if(${PROJECT_NAME}_ENABLE_TESTS)
+#  enable_testing()
+#  include(CTest)
+#endif()
 
 #################################################################
 # STATIC LIBRARIES
