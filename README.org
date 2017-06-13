@@ -14,10 +14,10 @@
 
 #+name: status
 #+attr_html:  :align center :width 500
-|        | [[https://img.shields.io/badge/GNU%2520Fortran-4.9%2520to%25207.1-blue.svg]]  | [[https://img.shields.io/badge/PGI%2520Fortran-16.10_0-blue.svg]] | [[https://img.shields.io/badge/Intel%2520Fortran-2017.2.174-blue.svg]] |
-| Ubuntu | http://img.shields.io/badge/build-success-green.svg         | http://img.shields.io/badge/build-success-green.svg           | http://img.shields.io/badge/build-failing-red.svg                  |
-| MacOSX | http://img.shields.io/badge/build-success-green.svg         |                                                               |                                                                    |
-| Win    |                                                             |                                                               |                                                                    |
+|        | [[https://img.shields.io/badge/GNU%20Fortran-5.4%20to%207.1-blue.svg]] | [[https://img.shields.io/badge/PGI%20Fortran-16.10_0-blue.svg]] | [[https://img.shields.io/badge/Intel%20Fortran-2017.2.174-blue.svg]] |
+| Ubuntu | [[https://img.shields.io/badge/build-success-green.svg]]               | [[https://img.shields.io/badge/build-success-green.svg]]        | [[https://img.shields.io/badge/build-partial-orange.svg]]            |
+| MacOSX | [[https://img.shields.io/badge/build-success-green.svg]]               | [[https://img.shields.io/badge/build-INCOMATIBLE-gray.svg]]     | [[https://img.shields.io/badge/build-NA-gray.svg]]                   |
+| Win    |                                                                    |                                                             |                                                                  |
 
 
 *Important Notices*
