@@ -2051,7 +2051,8 @@ contains
                 !$omp parallel workshare
 #else
                 !$omp parallel workshare proc_bind(close)
-#endif                self%cmat = self%rmat*self2mul%cmat
+#endif
+                self%cmat = self%rmat*self2mul%cmat
                 !$omp end parallel workshare
                 self%ft = .true.
             endif
