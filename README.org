@@ -86,6 +86,13 @@ Default installation is in the build directory. If you wish
     make -j install
 #+END_SRC
 
+If your FFTW libraries were built locally or not found - you can modify the single and double precision libraries in the interactive CCMake or try
+#+BEGIN_SRC sh
+    cmake -DFFTW_DIR=/path/to/fftw ../
+    make -j
+#+END_SRC
+
+
 **** PGI Linux
 
 Shell environment variables FC and LD_LIBRARY_PATH are crucial in the cmake
