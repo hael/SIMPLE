@@ -3,7 +3,7 @@
 
 #+name: simple_logo
 #+attr_html: :width 600 :alt Single-particle CryoEM Image Processing Linux Engine :align center
-[[https://github.com/hael/SIMPLE3.0/blob/cmake-feature/gui/www/img/simple_logo.png][Single-particle Image Processing Linux Engine]]
+[[https://github.com/hael/SIMPLE3.0/blob/cmake-feature/gui/www/img/simple_logo.svg]]
 
 
 #+name: banner
@@ -16,7 +16,7 @@
 #+name: status
 #+attr_html:  :align center :width 500
 |                     | [[https://img.shields.io/badge/GNU-gfortran-blue.svg]]                                                           | [[https://img.shields.io/badge/Intel Fortran-ifort-blue.svg]] |
-| Ubuntu 14.10, 16.04 | [[https://img.shields.io/badge/build-v4.9-green.svg]]    --    [[https://img.shields.io/badge/build-v7.1-green.svg]] | [[https://img.shields.io/badge/build-v2017.2.174-green.svg]]  |
+| Ubuntu 14.10, 16.04 | [[https://img.shields.io/badge/build-v4.9-green.svg]]    -    [[https://img.shields.io/badge/build-v7.1-green.svg]]  | [[https://img.shields.io/badge/build-v2017.2.174-green.svg]]  |
 | MacOSX              | [[https://img.shields.io/badge/build-v4.9-green.svg]]                                                            | [[https://img.shields.io/badge/build-NA-gray.svg]]            |
 | Win                 | https://img.shields.io/badge/build-NA-gray.svg                                                               | https://img.shields.io/badge/build-NA-gray.svg            |
 
