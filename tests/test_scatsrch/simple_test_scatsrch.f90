@@ -1,0 +1,5 @@
+program simple_test_scatsrch
+use simple_scatter_orisrch_tester
+implicit none
+call exec_scatter_orisrch_test
+end program simple_test_scatsrch
