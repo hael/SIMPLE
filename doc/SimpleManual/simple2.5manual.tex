@@ -382,7 +382,7 @@ oritab3D  = table (text file) of 3D orientations(*.asc/*.txt)
 \end{verbatim}
 
 \subsection{Distributed Execution of SIMPLE on Multi-socket Workstations and Clusters}
-SIMPLE is executed primarily via \texttt{simple\_distr\_exec} that implements higher-level workflows intended for distributed execution on workstations and clusters using a hybrid parallelisation model (distributed \textit{and} shared memory) or via \texttt{simple\_exec}, which implements all individual SIMPLE programs and runs in shared-memory parallelisation mode. Please, beware that higher-level workflows can \textit{only} be executed via the distributed execution routine.  In cluster environments using a job scheduler (PBS, SLURM and SGE are supported by SIMPLE) the file \texttt{simple\_distr\_config.env} in the current working directory controls the execution.
+SIMPLE is executed primarily via \texttt{simple\_distr\_exec} that implements higher level workflows intended for distributed execution on workstations and clusters using a hybrid parallelisation model (distributed \textit{and} shared memory) or via \texttt{simple\_exec}, which implements all individual SIMPLE programs and runs in shared-memory parallelisation mode. Please, beware that the high-level workflows (\prgname{prime2D} and \prgname{ini3D\_from\_cavgs}, for example) can \textit{only} be executed via the distributed execution route.  In cluster environments using a job scheduler (PBS, SLURM and SGE are supported by SIMPLE) the file \texttt{simple\_distr\_config.env} in the current working directory controls the execution.
 \begin{verbatim}
 bash-3.2$ cat simple_distr_config.env 
 # CONFIGURATION FILE FOR DISTRIBUTED SIMPLE EXECUTION
