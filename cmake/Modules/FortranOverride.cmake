@@ -38,8 +38,10 @@ elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
     set(forpar   "-openmp")
     set(target   "-xHOST -no-prec-div -static -fPIC")
     set(common   "${dialect} ${checks} ${target} ${warn} -DINTEL")
-endif ()
-
+  else()
+    message(" Fortran compiler not supported. Set FC environment variable")
+  endif ()
+    
     set(CMAKE_Fortran_FLAGS_RELEASE_INIT "${common} ${forspeed} ${forpar} ")
     set(CMAKE_Fortran_FLAGS_DEBUG_INIT   "${common} ${fordebug} ${forpar} -g ")
 
