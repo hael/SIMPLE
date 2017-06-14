@@ -808,7 +808,11 @@ contains
                 end do
                 allocate(fname, source='extracted_oris.txt')
             endif
-            call o_here%write(fname)
+            if( cline%defined('outfile') )then
+                call o_here%write(p%outfile)
+            else
+                call o_here%write(fname)
+            endif
             goto 999
         endif
         ! state/class + frac
@@ -861,7 +865,11 @@ contains
                 end do
                 allocate(fname, source='extracted_oris_class'//int2str_pad(p%class,5)//'.txt')
             endif
-            call o_here%write(fname)
+            if( cline%defined('outfile') )then
+                call o_here%write(p%outfile)
+            else
+                call o_here%write(fname)
+            endif
             goto 999
         endif
         ! invert contrast

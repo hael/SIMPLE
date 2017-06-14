@@ -66,6 +66,7 @@
 \begin{minipage}[ht]{0.48\textwidth}
 \textbf{Contributors:}\\
 cyril.reboul@monash.edu\\
+michael.eager@monash.edu\\
 dominika.elmlund@monash.edu\\
 hans.elmlund@monash.edu\\
 \textbf{Adress:}\\
@@ -729,7 +730,7 @@ Although we seldom think about it explicitly, the most fundamental requirement o
 It is very hard to maintain the level of communication needed to develop a unified system of any size. We need ways of increasing communication and reducing complexity. We also need safety nets that prevent overcautious behaviour, such as developers duplicating functionality because they are afraid that they will break existing code. Of equal importance to prevent such undesired behaviours is that all developers are reaching a certain level of understanding of the system. Naturally, certain developers will have areas where they excel but there is a knowledge threshold that all the developers in the team must pass. We also need to respect the rules of the framework and in the same time not being afraid of introducing changes. It is a delicate balance. The team must cultivate a shared understanding of the ever-changing model. Practices may help, but the most fundamental one is to constantly update the \textit{ubiquitous language} definition. SIMPLE developers use Git for step-by-step, reproducible merge/build and automated test suites (both described below). Development sometimes occurs in spurts and sometimes stagnates, depending on the current workload of the team. However, we must strive to merge all code frequently and relentlessly exercise the  \textit{ubiquitous language} to hammer out a shared view of the model as the concepts evolve in different people's heads.
 
 \section{The SIMPLE Compilation Environment}
-Although seldomly discussed in length in any programming books, an effective method for code compilation is crucial. The developer that repeatedly needs to re-compile/test/re-compile/test/re-compile... would soon go mad with a clumsy time-consuming compilation environment. Fortran is particularly tricky to compile as order matters to a much larger extent than in C or C++ and circular references are not supported. We have therefore developed our own compilation environment based on a combo of shellscripts, makefiles and perl. 
+Although seldom discussed in length in any programming books, an effective method for code compilation is crucial. The developer that repeatedly needs to re-compile/test/re-compile/test/re-compile... would soon go mad with a clumsy time-consuming compilation environment. Fortran is particularly tricky to compile as order matters to a much larger extent than in C or C++ and circular references are not supported. We have therefore developed our own compilation environment based on a combo of shellscripts, makefiles and perl. 
 
 \subsection{\texttt{Makefile\_target} Files and Makefile Generation with \texttt{makemake}}
 If you execute \texttt{ls} is the SIMPLE root directory, you see something like
@@ -1072,6 +1073,7 @@ case( 'select_frames' )
 \end{verbatim}
 
 \section{SIMPLE Debugging}
+
 I am pretty old-school when it comes to debugging. My most advanced trick is to turn on the debug flag in \texttt{simple\_user\_input.pm}
 \begin{verbatim}
 # no debug mode: no, dubug mode: yes default: no
@@ -1082,21 +1084,14 @@ our$DEBUG_LEVEL = "low";
 \end{verbatim}
 This catches most common errors, such as out of bounds array indices etc. If you have hairy floating-point exceptions haunting you it may pay off to increase the debug level to \texttt{high}. However, beware that this mode will take ages to compile and execute. Often, simply printing and backtracking works as well. I have yet to find a good symbolic debugger for Fortran. If you find one, please let me know.
 
-
-\subsection{Timing class}
-\label{sec:org636d6da}
+\section{SIMPLE Timing and profiling}
 
 Fortran \texttt{system\_clock} traditionally used a clock rate of 1000 ticks per
 second. Since 2003, the standard allows for one billion ticks per second
 if a 64-bit integer is used. This gives nano-second timing support to the
-simple\(_{\text{timer}}\) module. The \texttt{simple\_timer} module can be used as a typical
-clock or as a profiling tool.
-
-The simple timer basic functions include \textbf{tic}, \textbf{toc}, \textbf{reset\texttt{\_}timer},
-\textbf{tdiff}. Other functions enable loop blocks and labelled profile blocks.
-
-Preprocessor defined macros in \texttt{simple\_timer.h} make debugging all the more SIMPLEr.
-The macros include:
+\texttt{simple\_timer} module. The \texttt{simple\_timer} module can be used as a typical
+clock or as a profiling tool. The simple timer basic functions include \textbf{tic}, \textbf{toc}, \textbf{reset\texttt{\_}timer},
+\textbf{tdiff}. Other functions enable loop blocks and labelled profile blocks. Preprocessor defined macros in \texttt{simple\_timer.h} make debugging all the more SIMPLEr. The macros include:
 \begin{itemize}
 \item \textbf{TBLOCK}  -- start the timer
 \item \textbf{TSTOP}   -- get elapsed time
@@ -1115,73 +1110,71 @@ output will exceed the default 132 characters in a line in standard fortran.
 Line length compiler arguments need to be employed; for gfortran this is
 -ffree-line-length-none.
 
-\subsubsection{Running the simple\(_{\text{timer}}\) module}
-\label{sec:orgc628b09}
-Demonstration of timing  in \texttt{simple\_timer\_basic\_test}:
- In-code assignment of time-stamps
- calculation of time difference \texttt{tdiff(t1,t2)}
-\begin{lstlisting}
-  use precision_m
-  use simple_timer
-..
-     integer(dp) :: t1,t2
-     real        :: etime
-..
-     t1 = tic()
-     do i = 1, nrep
-        c = cfac*c + b
-     end do
-     t2 = tic()
-     etime = tdiff(t2, t1)
-     write (*, '(A,1d20.10)') 'Time for simple evaluation (s) = ', etime
-\end{lstlisting}
+\subsection{Running the \texttt{simple\_timer} module}
 
-Calculating elapsed time without the additional step of tic and tdiff is
-   done using \texttt{toc(t1)}. If \textbf{toc} is called without an argument, the last
-   timestamp is used.
-\begin{lstlisting}
+Demonstration of timing  in \texttt{simple\_timer\_basic\_test}: In-code assignment of time-stamps calculation of time difference \texttt{tdiff(t1,t2)}
+
+\begin{verbatim}
+use precision_m
+use simple_timer
+..
+integer(dp) :: t1,t2
+real        :: etime
+..
+t1 = tic()
+do i = 1, nrep
+  c = cfac*c + b
+end do
+t2 = tic()
+etime = tdiff(t2, t1)
+write (*, '(A,1d20.10)') 'Time for simple evaluation (s) = ', etime
+\end{verbatim}
+
+Calculating elapsed time without the additional step of tic and tdiff is done using \texttt{toc(t1)}. If \textbf{toc} is called without an argument, the last timestamp is used.
+
+\begin{verbatim}
 t1 = tic()
 c=.1
 do i = 1, nrep
    c = cfac*c + b
 end do
 write (*, '(A,1d20.10)') "4.  toc in write ", toc(t1)
-\end{lstlisting}
+\end{verbatim}
 
-\subsection{Preprocessor defined macros in \texttt{simple\_timer.h}}
-\label{sec:orgf0c7a15}
+\subsection{Preprocessor defined macros in \texttt{simple\_timer}}
 
-Instead of declaring new variables t1,t2 and elapsed times, preprocessor
-macros are a quick way to debug without too much hassle. 
+Instead of declaring new variables t1,t2 and elapsed times, preprocessor macros offers convenience. 
 
-\begin{lstlisting}
+\begin{verbatim}
 \#include "simple_timer.h"
-   use precision_m
-   use simple_timer
+use precision_m
+use simple_timer
 ..
-     TBLOCK()
-     c=.1
-     do i = 1, nrep
-        c = cfac*c + b
-     end do
-     TSTOP()
-\end{lstlisting}
+TBLOCK()
+c=.1
+do i = 1, nrep
+  c = cfac*c + b
+end do
+TSTOP()
+\end{verbatim}
+
 After preprocessing, the source code in the example looks like:
-\begin{lstlisting}
+
+\begin{verbatim}
 print *,"TBLOCK:  Start timer: ", tic()
 c=.1
 do i=1,nrep
   c=cfac*c+b
 end do
 write(*,'(A,A,1i4,A,F20.10)') __FILE__,":",__LINE__,": Elapsed time (sec) ", toc()
-\end{lstlisting}
+\end{verbatim}
 
 The above code prints out the following:
-\begin{lstlisting}
+
+\begin{verbatim}
 TBLOCK:  Start timer:      1745765323619840
 test_code/cpu/simple_timer_basic_test.f08: 112: Elapsed time (sec)    0.0348173400
-\end{lstlisting}
-
+\end{verbatim}
 
 The \texttt{TIMER\_BLOCK} macro encapsulates code in a block construct. A simple
 example can be done over multiple lines (with conditions) or in one line.
@@ -1189,38 +1182,45 @@ The \texttt{TIMER\_BLOCK} requires that there are no commas in the encapsulated
 code and that all lines except the last require a semi-colon.
 
 The example below is in the basic timer testing file:
-\begin{lstlisting}
-    TIMER_BLOCK(
-    c=.1;
-    c=saxy(c)
+\begin{verbatim}
+TIMER_BLOCK(
+c=.1;
+c=saxy(c)
 , ' my block comment ')
-\end{lstlisting}
+\end{verbatim}
 This generates the following code on one line. 
-\begin{lstlisting}
-block; character(len=80) :: cblock,srcname; integer(dp) :: t1,srcline; t1=tic();srcline=131; cblock=trim(' my block comment '); srcname=trim("test_code/cpu/simple_timer_basic_test.f08"); c=.1; c=saxy(c); write(*,'(A,A,A,1i4,A ,A)') "TIMER_BLOCK:",trim(srcname),":",srcline,":",trim(cblock); write(*,'(A,1F20.10)') 'Elapsed time (sec): ', toc(t1); end block
-\end{lstlisting}
+
+\begin{verbatim}
+block; character(len=80) :: cblock,srcname; integer(dp) :: t1,
+srcline; t1=tic(); srcline=131; cblock=trim(' my block comment '); 
+srcname=trim("test_code/cpu/simple_timer_basic_test.f08"); 
+c=.1; c=saxy(c); write(*,'(A,A,A,1i4,A ,A)') "TIMER_BLOCK:",
+trim(srcname),":",srcline,":",trim(cblock); write(*,'(A,1F20.10)') 
+'Elapsed time (sec): ', toc(t1); end block
+\end{verbatim}
+
 and outputs:
-\begin{lstlisting}
+
+\begin{verbatim}
 TIMER_BLOCK:test_code/cpu/simple_timer_basic_test.f08: 134: my block comment
 Elapsed time (sec):         0.0000219840
-\end{lstlisting}
-
+\end{verbatim}
 
 \subsection{Timing loop blocks}
-\label{sec:org50e06d0}
 
-Most times, the timing routine is very short. To get a better estimate of
+Often, the routine subjected to timing is very short. To get a better estimate of
 the efficiency of the code block is to run through several times.
  
-\begin{lstlisting}
+\begin{verbatim}
 START_TIMER_LOOP(10)
  c=.1
  c=saxy(c)
 STOP_TIMER_LOOP_( 'my test loop comment')
-\end{lstlisting}
+\end{verbatim}
 
-Here, the simple dot product subroutine was run 10 times, with the longest runtime occuring in one of the first iterations.
-\begin{lstlisting}
+Here, the simple dot product subroutine was run 10 times, with the longest runtime occurring in one of the first iterations.
+
+\begin{verbatim}
  Size of elapsed array           10
 ******* TIMER LOOP my test loop comment
 *** Iterations:        10
@@ -1228,14 +1228,12 @@ Here, the simple dot product subroutine was run 10 times, with the longest runti
 *** Longest run(sec)     0.2840547900D-01    at   2
 *** Shortest run(sec)     0.2703258200D-01   at   9
 ******* TIMER LOOP **************
-\end{lstlisting}
+\end{verbatim}
 
 \subsection{Profiling}
-\label{sec:orgce5802e}
 
 Profiling tools such as \texttt{gprof} and \texttt{gcov} are good fun when you know how
-to use them. We have included some simple macros to do some profiling in
-small sections.  
+to use them. We have included some simple macros to do profiling in small sections.  
 
 The setup routine \texttt{timer\_profile\_setup} requires number of repetitions,
 number of tokens, and a list of tokens (separated by commas). A block
@@ -1245,7 +1243,7 @@ is no need to include a use statement in the main body -- only
 the \texttt{\#include "simple\_timer.h"} statement is necessary.
 
 Profiling example: 
-\begin{lstlisting}
+\begin{verbatim}
 TPROFILER(nrep, i, foo, bar)
 do i = 1, nrep
    TBEG(foo)
@@ -1257,17 +1255,17 @@ do i = 1, nrep
    if (mod(nrep, nrep/1000) .eq. 1) print *, 'Repetition ', i
 end do
 TREPORT(Testing profiler using macros)
-\end{lstlisting}
+\end{verbatim}
 
 for the first line \texttt{TPROFILER} declares a time-stamp
 for the whole block, and temporary strings to handle preprocessor macro strings:
-\begin{lstlisting}
+\begin{verbatim}
 block; use simple_timer; character(len=20)::p_tmp; character(len=255)::p_comment; integer(dp) :: np,tn; integer,parameter :: nv=2; character(255)::p_tokens= "foo, bar" ; print*,p_tokens; tn=tic();np=nrep; call timer_profile_setup(np,nv,p_tokens);
-\end{lstlisting}
+\end{verbatim}
 
 Producing the following output:
 
-\begin{lstlisting}
+\begin{verbatim}
 ** PROFILE REPORT : Testing profiler using macros
 ** FILE:LINE: simple_utils/simple_timer.f90: 428
 ** Iterations:   100000 timed loops
@@ -1282,11 +1280,7 @@ Producing the following output:
 ** Total time (sec):        0.763797D+01
 ** Average iteration (sec):        0.763797D-04
 ******* END Testing profiler using macros REPORT **************
-\end{lstlisting}
-
-
-
-
+\end{verbatim}
 
 \section{The SIMPLE Git Repository}
 We mostly try to keep the distributed version control system out of our way. All SIMPLE developers code in the same branch (the master branch). I prefer regular communication and regular push/pulls over fancy source code control procedures. Commit messages are of course important but I don't feel I need to read a novel for every commit (the repo will anyway tell me what has changed). We use a remote private repository (https://github.com/hael/SIMPLE3.0.git) and the recommended push/pull procedure is as follows:
@@ -1302,21 +1296,15 @@ We mostly try to keep the distributed version control system out of our way. All
 \item push your changes to the remote repository via \texttt{git push}
 \end{enumerate}
 
-
-
 \subsection{Feature development}
-\label{sec:org5fb5e43}
 
 When developing more advanced features of SIMPLE without disrupting the
-master branch, it is recommended to use the Fork/Branch to
-Merge/Pull-Request method (see a full rundown at
-\url{https://gist.github.com/Chaser324/ce0505fbed06b947d962}).
-
-To setup a feature branch:
+master branch, it is recommended to use the Fork/Branch to Merge/Pull-Request 
+method (see a full rundown at \url{https://gist.github.com/Chaser324/ce0505fbed06b947d962}). To setup a feature branch:
 
 \begin{enumerate}
+\setcounter{enumi}{0}
 \item Go to github.com/hael/SIMPLE3.0 and click on \texttt{Fork}, save to your personal repositories
-
 \item Clone your forked repo to your machine (this remote URL is called 'origin' by git)
 \end{enumerate}
 \begin{verbatim}
@@ -1324,6 +1312,7 @@ git clone git@github.com:USERNAME/SIMPLE3.0.git MYSIMPLE
 \end{verbatim}
 
 \begin{enumerate}
+\setcounter{enumi}{2}
 \item Add 'upstream' repo to list of remotes
 \end{enumerate}
 \begin{verbatim}
@@ -1331,7 +1320,8 @@ cd MYSIMPLE; git remote add upstream https://github.com/hael/SIMPLE3.0.git
 \end{verbatim}
 
 \begin{enumerate}
-\item Create a new branch, checkout the master branch first - you want your new branch to come from master
+\setcounter{enumi}{3}
+\item Create a new branch, checkout the master branch first \textemdash{}you want your new branch to come from master
 \end{enumerate}
 \begin{verbatim}
 git checkout master
@@ -1348,12 +1338,14 @@ git branch -va
 Once you have done some work and want to push back into the master branch you must do the following:
 
 \begin{enumerate}
+\setcounter{enumi}{4}
 \item Fetch any changes from the upstream repo:
 \end{enumerate}
 \begin{verbatim}
 git fetch upstream
 \end{verbatim}
 \begin{enumerate}
+\setcounter{enumi}{5}
 \item Merge with your new branch
 \end{enumerate}
 \begin{verbatim}
@@ -1362,8 +1354,8 @@ git merge upstream/master
 \end{verbatim}
 
 \begin{enumerate}
+\setcounter{enumi}{6}
 \item Make any changes that ensures the SIMPLE master builds correctly. Merge errors can be fixed with \texttt{git mergetool}
-
 \item Commit changes and push to your forked repository (do not push to upstream master)
 \end{enumerate}
 \begin{verbatim}
@@ -1372,30 +1364,35 @@ git push origin master
 \end{verbatim}
 
 \begin{enumerate}
+\setcounter{enumi}{8}
 \item Go to your fork on Github (\url{https://github.com:USERNAME/SIMPLE3.0.git}), open your branch and create pull request
 \end{enumerate}
 
+\subsection{For the more daring (i.e. quick fixes in master branch)}
 
-For the more daring (i.e. quick fixes in master branch):
 \begin{enumerate}
+\setcounter{enumi}{0}
 \item Fetch any changes from the upstream repo:
 \end{enumerate}
 \begin{verbatim}
 git fetch upstream
 \end{verbatim}
 \begin{enumerate}
+\setcounter{enumi}{1}
 \item Merge with your master branch (origin/master)
 \end{enumerate}
 \begin{verbatim}
 git merge upstream/master
 \end{verbatim}
 \begin{enumerate}
+\setcounter{enumi}{2}
 \item Commit changes
 \end{enumerate}
 \begin{verbatim}
 git commit -a -m" My witty commits to main branch"
 \end{verbatim}
 \begin{enumerate}
+\setcounter{enumi}{3}
 \item Push to upstream master
 \end{enumerate}
 \begin{verbatim}
