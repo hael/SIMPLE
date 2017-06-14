@@ -13,13 +13,13 @@ logical, parameter :: DEBUG     = .false.
 
 type qsys_ctrl
     private
-    character(len=STDLEN)          :: exec_binary      = ''      !< binary to execute in parallel
+    character(len=STDLEN)          :: exec_binary = ''           !< binary to execute in parallel
                                                                  !< trim(simplepath)//'/bin/simple_exec'
     character(len=32), allocatable :: script_names(:)            !< file names of generated scripts
     character(len=32), allocatable :: jobs_done_fnames(:)        !< touch files indicating completion
-    character(len=STDLEN)          :: pwd              = ''      !< working directory
-    class(qsys_base), pointer      :: myqsys           => null() !< pointer to polymorphic qsys object
-    integer, pointer               :: parts(:,:)       => null() !< defines the fromp/top ranges for all partitions
+    character(len=STDLEN)          :: pwd        = ''            !< working directory
+    class(qsys_base), pointer      :: myqsys     => null()       !< pointer to polymorphic qsys object
+    integer, pointer               :: parts(:,:) => null()       !< defines the fromp/top ranges for all partitions
     logical, allocatable           :: jobs_done(:)               !< to indicate completion of distributed scripts
     logical, allocatable           :: jobs_submitted(:)          !< to indicate which jobs have been submitted
     integer                        :: fromto_part(2)         = 0 !< defines the range of partitions controlled by this instance
@@ -66,12 +66,12 @@ contains
     
     !>  \brief  is a constructor
     function constructor( exec_binary, qsys_obj, parts, fromto_part, ncomputing_units, stream ) result( self )
-        character(len=*),          intent(in)    :: exec_binary      !< the binary that we want to execute in parallel
-        class(qsys_base),  target, intent(in)    :: qsys_obj         !< the object that defines the qeueuing system
-        integer,           target, intent(in)    :: parts(:,:)       !< defines the start_ptcl/stop_ptcl ranges  
-        integer,                   intent(in)    :: fromto_part(2)   !< defines the range of partitions controlled by this object
-        integer,                   intent(in)    :: ncomputing_units !< number of computing units (<= the number of parts controlled)
-        logical,                   intent(in)    :: stream           !< stream flag
+        character(len=*),         intent(in) :: exec_binary      !< the binary that we want to execute in parallel
+        class(qsys_base), target, intent(in) :: qsys_obj         !< the object that defines the qeueuing system
+        integer,          target, intent(in) :: parts(:,:)       !< defines the start_ptcl/stop_ptcl ranges  
+        integer,                  intent(in) :: fromto_part(2)   !< defines the range of partitions controlled by this object
+        integer,                  intent(in) :: ncomputing_units !< number of computing units (<= the number of parts controlled)
+        logical,                  intent(in) :: stream           !< stream flag
         type(qsys_ctrl) :: self
         call self%new(exec_binary, qsys_obj, parts, fromto_part, ncomputing_units, stream )
     end function constructor
@@ -79,16 +79,16 @@ contains
     !>  \brief  is a constructor
     subroutine new( self, exec_binary, qsys_obj, parts, fromto_part, ncomputing_units, stream )
         use simple_jiffys, only: alloc_err
-        class(qsys_ctrl),          intent(inout) :: self             !< the instance
-        character(len=*),          intent(in)    :: exec_binary      !< the binary that we want to execute in parallel
-        class(qsys_base),  target, intent(in)    :: qsys_obj         !< the object that defines the qeueuing system
-        integer,           target, intent(in)    :: parts(:,:)       !< defines the start_ptcl/stop_ptcl ranges  
-        integer,                   intent(in)    :: fromto_part(2)   !< defines the range of partitions controlled by this object
-        integer,                   intent(in)    :: ncomputing_units !< number of computing units (<= the number of parts controlled)
-        logical,                   intent(in)    :: stream           !< stream flag
+        class(qsys_ctrl),         intent(inout) :: self             !< the instance
+        character(len=*),         intent(in)    :: exec_binary      !< the binary that we want to execute in parallel
+        class(qsys_base), target, intent(in)    :: qsys_obj         !< the object that defines the qeueuing system
+        integer,          target, intent(in)    :: parts(:,:)       !< defines the start_ptcl/stop_ptcl ranges  
+        integer,                  intent(in)    :: fromto_part(2)   !< defines the range of partitions controlled by this object
+        integer,                  intent(in)    :: ncomputing_units !< number of computing units (<= the number of parts controlled)
+        logical,                  intent(in)    :: stream           !< stream flag
         integer :: alloc_stat, ipart
         call self%kill
-        self%stream                 = stream
+        self%stream                 =  stream
         self%exec_binary            =  exec_binary
         self%myqsys                 => qsys_obj
         self%parts                  => parts

@@ -124,7 +124,7 @@ contains
                 end do
                 !$omp end parallel do
             else
-                if(corr_thresh > 0.)then
+                if( corr_thresh > 0. )then
                     write(*,'(A,F8.2)') '>>> PARTICLE RANDOMIZATION(%):', 100.*p%extr_thresh
                     write(*,'(A,F8.2)') '>>> CORRELATION THRESHOLD:    ', corr_thresh
                 endif
@@ -142,7 +142,7 @@ contains
         p%oritab = p%outfile
         
         ! WIENER RESTORATION OF CLASS AVERAGES
-        if( frac_srch_space > 80. )then
+        if( frac_srch_space > FRAC_INTERPOL )then
             ! gridded rotation
             call prime2D_assemble_sums(b, p, grid=.true.)   
         else
@@ -299,7 +299,7 @@ contains
             ! class cleanup
             deallocate(ptcls_inds)
         enddo
-        if( .not.p%l_distr_exec )call prime2D_norm_sums( b, p )
+        if( .not.p%l_distr_exec ) call prime2D_norm_sums( b, p )
 
         contains
 

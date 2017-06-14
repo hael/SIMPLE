@@ -2494,32 +2494,29 @@ contains
             end do
             deallocate(order)
         else
-            do i=1,self%n
-                if( self%o(i)%get('state') > 0 )then
-                    call self%o(i)%set('w', 1.)
-                else
-                    call self%o(i)%set('w', 0.)
-                endif
-            end do
+            call self%set_all2single('w', 1.)
         endif
     end subroutine calc_hard_ptcl_weights_single
 
     !>  \brief  calculates hard weights based on ptcl ranking      
     subroutine calc_spectral_weights_single( self, frac )
-        use simple_stat, only: normalize_sigm_sparse
+        use simple_stat, only: normalize_sigm
         class(oris), intent(inout) :: self
         real,        intent(in)    :: frac
         real,    allocatable :: specscores(:), weights(:)
         integer, allocatable :: order(:)
-        real    :: w
+        real    :: w, minscore
         integer :: i, lim, n
-        call self%calc_hard_ptcl_weights_single( frac )
+        call self%calc_hard_ptcl_weights_single(frac)
         if( self%isthere('specscore') )then
             specscores = self%get_all('specscore')
+            weights    = pack(specscores, mask=specscores > TINY)
+            minscore   = minval(weights)
+            deallocate(weights)
             weights    = self%get_all('w')
-            where( weights < 0.5     ) weights = 0.
-            where( specscores < TINY ) weights = 0.
-            call normalize_sigm_sparse(weights)
+            weights    = specscores * weights - minscore
+            where( weights < 0. ) weights = 0.
+            call normalize_sigm(weights)            
             do i=1,self%n
                 call self%o(i)%set('w', weights(i))
             end do

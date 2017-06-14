@@ -63,6 +63,7 @@ integer,           parameter :: SZSN_MAX  = 20
 
 ! constants that control search and convergence
 real,    parameter :: FRAC_SH_LIM      = 80.0 ! at what frac to turn on the shift search
+real,    parameter :: FRAC_INTERPOL    = 60.0 ! at what frac to turn on the gridding interpolation (2D)
 real,    parameter :: EXTRINITHRESH    = 0.5
 real,    parameter :: EXTRTHRESH_CONST = 0.2
 real,    parameter :: LP2SMPDFAC       = 0.4125
