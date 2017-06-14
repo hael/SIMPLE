@@ -95,7 +95,7 @@ contains
         character(len=:),      allocatable :: fname_ctffind_ctrl, fname_unidoc_output
         character(len=:),      allocatable :: moviename_forctf, moviename_intg, outfile
         logical, parameter    :: DEBUG = .true.
-        character(len=STDLEN) :: boxfile
+        character(len=STDLEN) :: boxfile, dir_ptcls
         type(params) :: p
         type(oris)   :: os_uni
         type(ori)    :: orientation
@@ -114,6 +114,7 @@ contains
                 stop 'need references for picker or turn off picking with dopick=no'
             endif
         endif
+        dir_ptcls = trim(p%dir_target)//'particles'
         call read_filetable(p%filetab, movienames)
         nmovies = size(movienames)
         if( cline%defined('numlen') )then
@@ -195,10 +196,11 @@ contains
                 ! write unidoc
                 call os_uni%write(fname_unidoc_output)
                 cline_extract = cline
-                call cline_extract%set('smpd',    p%smpd)
-                call cline_extract%set('unidoc',  fname_unidoc_output)
-                call cline_extract%set('outfile', 'extract_params_movie'//int2str_pad(imovie,p%numlen)//'.txt')
-                call cline_extract%set('outstk',  'ptcls_from_movie'//int2str_pad(imovie,p%numlen)//p%ext)
+                call cline_extract%set('dir_ptcls', trim(dir_ptcls))
+                call cline_extract%set('smpd',      p%smpd)
+                call cline_extract%set('unidoc',    fname_unidoc_output)
+                call cline_extract%set('outfile',   'extract_params_movie'//int2str_pad(imovie,p%numlen)//'.txt')
+                call cline_extract%set('outstk',    'ptcls_from_movie'//int2str_pad(imovie,p%numlen)//p%ext)
                 call xextract%execute(cline_extract)
             endif
         end do
