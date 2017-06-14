@@ -212,7 +212,7 @@ contains
         character(len=:), allocatable      :: new_name
         type(image)                        :: img_frame
         logical, parameter                 :: debug = .false.
-        p = params(cline, checkdistr=.false.)            ! constants & derived constants produced
+        p = params(cline, checkdistr=.false.)           ! constants & derived constants produced
         call b%build_general_tbox(p,cline,do3d=.false.) ! general objects built
         call read_filetable(p%filetab, movienames)
         nmovies = size(movienames)

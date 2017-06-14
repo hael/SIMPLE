@@ -97,16 +97,16 @@ my @prgnames_sorted       = sort @prgnames;
 my @prgnames_distr_sorted = sort @prgnames_distr;
 if( $doc eq 'tex' ){
     print_full_latex_cmdlindict();
-    print '\section{SIMPLE Programs}'."\n";
-    foreach my $prg (@prgnames_sorted){
-        print_latex_instr($prg, %prginstr);
-        print_latex_usage($prg, %prgcmdlineinstr);
-    }
     print '\section{Distributed SIMPLE Workflows}'."\n";
     foreach my $prg (@prgnames_distr_sorted){
         print_latex_instr($prg, %prginstr_distr);
         print_latex_usage($prg, %prgcmdlineinstr_distr);
     }
+    print '\section{SIMPLE Programs}'."\n";
+    foreach my $prg (@prgnames_sorted){
+        print_latex_instr($prg, %prginstr);
+        print_latex_usage($prg, %prgcmdlineinstr);
+    }  
 }elsif( $doc eq 'web' ){
     foreach my $prg (@prgnames_sorted){
         print_html_instr($prg, %prginstr);
