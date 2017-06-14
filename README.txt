@@ -5,14 +5,13 @@
  
 simplecryoem.com
 
-
 ABOUT
 
 Single-particle IMage Processing Linux Engine is a program package for 
 cryo-EM image processing, focusing on ab initio 3D reconstruction of 
-low-symmetry single-particles. The SIMPLE back-end consists of an 
-object-oriented numerical library written in modern Fortran. The
-SIMPLE front-end consists of a few standalone, interoperable 
+single-particles with any point-group symmetry. The SIMPLE back-end 
+consists of an object-oriented numerical library written in modern 
+Fortran. The SIMPLE front-end consists of many standalone, interoperable 
 components developed according to the "Unix toolkit philosophy".
 
 SIMPLE is free software: you can redistribute it and/or modify it 
@@ -23,12 +22,11 @@ will be useful, but WITHOUT ANY WARRANTY; without even the implied
 warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See 
 the GNU General Public License for more details.
 
-
 INSTALLATION INSTRUCTIONS
 
 It is assumed that the software dependencies are already installed.
-For more detailed instructions regarding software requirements refer 
-to the SIMPLE 2.5 manual.
+For more detailed instructions regarding software requirements, please
+ refer to the SIMPLE 2.5 manual.
 
 System Requirements:
 
@@ -41,12 +39,12 @@ System Requirements:
 Installation:
 
 1. Create the directory in which you are going to install SIMPLE 
-(referred here as <simple_path>):
+(referred to here as <simple_path>):
 
     $ mkdir <simple_path>
 
-2. Unzip the SIMPLE 2.5 tarball in this directory. Assuming you have 
-downloaded the tarball in the <downloads> directory:
+2. Unzip the SIMPLE 2.5 tarball in this directory (assuming you have 
+downloaded the tarball in the <downloads> directory):
     
     $ mv <downloads>/SIMPLE2.5.tgz <simple path>
     $ cd <simple path>
@@ -58,19 +56,19 @@ downloaded the tarball in the <downloads> directory:
     $ mkdir build
     $ cd build
 
-4. compile and install SIMPLE 2.5:
+4. Compile and install SIMPLE 2.5:
 
     $ cmake ../
     $ make -j install
 
-This will lead to installing SIMPLE in the 'build' directory. If you
-wish to provide an alternative installation directory substitute step 4
+This will install SIMPLE in the 'build' directory. If you wish to 
+provide an alternative installation directory, substitute step 4
 with:
 
     $ cmake -DCMAKE_INSTALL_PREFIX=<alternative directory> ../
     $ make -j install
 
-Step 4 also assumes that gcc/gfortran and FFTW are installed in fairly 
+Step 4 assumes that gcc/gfortran and FFTW are installed in fairly 
 standard directories on your machine. In case you have a more exotic 
 setup you can provide the paths pointing to your custom gcc/gfortran & 
 FFTW by substituting step 4 with:
@@ -81,41 +79,28 @@ FFTW by substituting step 4 with:
 For instance, on MacOS Macports users may use: FC=/opt/local  
 FFTW_DIR=/opt/local; Fink users: FC=/sw/ FFTW_DIR=/sw/.
 
+TESTING THE BUILD
 
+    $ make test
+    $ ctest --output-on-failure
 
+TESTING THE MOST IMPORTANT FEATURES
 
+To ensure that SIMPLE has been correctly installed, we recommend 
+running the application simple_test_install. It will test the most 
+important components in the SIMPLE library  (those used by prime2D
+and  prime3D. Execute
 
+    $ simple_test_install 
 
-Testing
+The program will create its own folder SIMPLE\_TEST\_INSTALL*date*}
+where temporary files and information about each test are stored. Upon 
+succesful completion you should see
 
-Test the core components
+    $ **** SIMPLE_TEST_INSTALL NORMAL STOP ****
 
-# Testing
-make test
-ctest --output-on-failure
-Test the features
-
-Each of the following features have a test executable in the bin directory with a prefix simple_test_.
-
-binomial_para    parse       
-cartcorr_sanity  ptcl_conv   
-defocus_groups   scatsrch    
-elem_bess        shelliter   
-ft_expanded      speed       
-imgfile          srch        
-install          timer       
-new_ori          units       
-omp_timer        volpft_srch 
-order_corr     
-To run all the feature tests use:
-
-for test in bin/simple_test_*;do
-./$test
-done
-Usage
-
-See User documentation
-
-Changelog
-
-See doc/ReleaseNotes
+simple_test_install can be executed anywhere. After execution, the folder 
+created can be safely removed. If any of the individual tests fail an 
+error message will be displayed. If you detect an error, please carefully
+check the SIMPLE and FFTW installations and the gfortran version. If you 
+still have issues, please file a help ticket on the webpage.
