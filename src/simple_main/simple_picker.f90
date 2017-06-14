@@ -111,15 +111,17 @@ contains
         if( DEBUG ) call mic_shrunken%write('shrunken.mrc')
     end subroutine init_picker
 
-    subroutine exec_picker( boxname_out )
+    subroutine exec_picker( boxname_out, nptcls_out )
         character(len=STDLEN), intent(out) :: boxname_out
+        integer,               intent(out) :: nptcls_out
         call extract_peaks_and_background
         call distance_filter
         call refine_positions
         if( rm_outliers ) call remove_outliers
+        nptcls_out = count(selected_peak_positions)
         ! bring back coordinates to original sampling
         peak_positions_refined = nint(PICKER_SHRINK_REFINE)*peak_positions_refined
-        backgr_positions       = nint(PICKER_SHRINK_REFINE)*backgr_positions
+        backgr_positions = nint(PICKER_SHRINK_REFINE)*backgr_positions
         call write_boxfile
         boxname_out = boxname
     end subroutine exec_picker
@@ -272,10 +274,8 @@ contains
     end subroutine distance_filter
 
     subroutine refine_positions
-        integer                  :: ipeak, xrange(2), yrange(2), xind, yind, ref
-        ! type(image), allocatable :: target_imgs(:,:)
-        ! real,        allocatable :: target_corrs(:,:)
-        real                     :: corr, prev_corr, target_corr
+        integer :: ipeak, xrange(2), yrange(2), xind, yind, ref
+        real    :: corr, prev_corr, target_corr
         write(*,'(a)') '>>> REFINING POSITIONS'
         ! bring back coordinates to refinement sampling
         allocate( peak_positions_refined(npeaks,2), source=nint(PICKER_SHRINK/PICKER_SHRINK_REFINE)*peak_positions)
@@ -288,8 +288,6 @@ contains
                 prev_corr = corrmat(peak_positions(ipeak,1),peak_positions(ipeak,2))
                 ! refinement range
                 call srch_range(peak_positions_refined(ipeak,:))
-                ! allocate(target_imgs(xrange(1):xrange(2),yrange(1):yrange(2)),&
-                !          target_corrs(xrange(1):xrange(2),yrange(1):yrange(2)))
                 corr = -1
                 ! extract image, correlate, find peak
                 do xind=xrange(1),xrange(2)

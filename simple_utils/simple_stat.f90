@@ -281,6 +281,27 @@ contains
         !$omp end parallel workshare
     end subroutine normalize_sigm_3
 
+    !>  \brief  is for sigmoid normalisation [0,1]
+    subroutine normalize_sigm_sparse( arr )
+        real, intent(inout)  :: arr(:)
+        real                 :: smin, smax, delta
+        real,    parameter   :: nnet_const = exp(1.)-1.
+        logical, allocatable :: maskarr(:)
+        maskarr = arr > TINY
+        ! find minmax
+        smin    = minval(arr, mask=maskarr)
+        smax    = maxval(arr)
+        delta   = smax-smin
+        ! create [0,1]-normalized vector
+        !$omp parallel workshare default(shared)
+        where( maskarr )
+            arr = (exp((arr-smin)/delta)-1.)/nnet_const
+        else where
+            arr = 0.0
+        end where
+        !$omp end parallel workshare
+    end subroutine normalize_sigm_sparse
+
     !>  \brief  calculates the devation around point
     subroutine deviation( data, point, sdev, var, err )
         !$ use omp_lib

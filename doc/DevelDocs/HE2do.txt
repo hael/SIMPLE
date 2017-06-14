@@ -1,11 +1,21 @@
 expanding neighbourhood snhc +5 when not improving up to 20
 random selection of images for prime2D init need to take state=0 into account
-unidocs should be written as ingles in unblur_ctffind
+unidocs should be written as singles in unblur_ctffind
 need to have another go at the picker
 weighted multi-resolution state sorting by fitting B-factors?
 test specscore on cavgs
 rec_asym must be written out in ini3D when srch_symaxis=true
 make distributed flow for scale that operates on split stacks so that scaling can be done in parallel
+
+STREAMING MODE
+(1) generate per-micrograph stacks
+(2) Relion-style input mode for 
+
+
+range of defocus value treshold
+ctfres thresh
+separate 2D streaming 
+
 
 # unidoc points
 everything written to cwd

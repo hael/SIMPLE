@@ -52,7 +52,7 @@ contains
         endif
         ! make target directory
         call exec_cmdline('mkdir -p '//trim(adjustl(p_master%dir_target)))
-        nmovies      = 0
+        nmovies = 0
         nmovies_prev = 0
         do
             ! generate the filetable via system call

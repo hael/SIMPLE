@@ -165,13 +165,12 @@ select case(prg)
         ! set defaults
         call cline%set('dopick', 'no'     )
         call cline%set('prg',    'preproc')
-        if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz',               1024.)
-        if( .not. cline%defined('hp')      ) call cline%set('hp',                      30.)
-        if( .not. cline%defined('lp')      ) call cline%set('lp',                       5.)
-        if( .not. cline%defined('trs')     ) call cline%set('trs',                      5.)
-        if( .not. cline%defined('lpstart') ) call cline%set('lpstart',                 15.)
-        if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',                   8.)
-        if( .not. cline%defined('outfile') ) call cline%set('outfile', 'simple_unidoc.txt')
+        if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz', 1024.)
+        if( .not. cline%defined('hp')      ) call cline%set('hp',        30.)
+        if( .not. cline%defined('lp')      ) call cline%set('lp',         5.)
+        if( .not. cline%defined('trs')     ) call cline%set('trs',        5.)
+        if( .not. cline%defined('lpstart') ) call cline%set('lpstart',   15.)
+        if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',     8.)
         ! execute
         call xunblur_ctffind_distr%execute(cline)
 
@@ -245,10 +244,10 @@ select case(prg)
         if( describe ) call print_doc_unblur_tomo
         call cline%parse(keys_required(:3), keys_optional(:12))
         ! set defaults
-        if( .not. cline%defined('trs')     ) call cline%set('trs',      5.)
-        if( .not. cline%defined('lpstart') ) call cline%set('lpstart', 15.)
-        if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',   8.)
-        if( .not. cline%defined('tomo')    ) call cline%set('tomo',  'yes')
+        if( .not. cline%defined('trs')     ) call cline%set('trs',       5.)
+        if( .not. cline%defined('lpstart') ) call cline%set('lpstart',  15.)
+        if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',    8.)
+        if( .not. cline%defined('tomo')    ) call cline%set('tomo',   'yes')
         ! execute
         call xunblur_tomo_distr%execute(cline)
 
@@ -634,7 +633,7 @@ select case(prg)
         if( describe ) call print_doc_recvol
         call cline%parse(keys_required(:7), keys_optional(:10))
         ! set defaults
-        if( .not. cline%defined('trs') ) call cline%set('trs', 5.) ! to assure that shifts are being used
+        if( .not. cline%defined('trs') ) call cline%set('trs',  5.) ! to assure that shifts are being used
         if( .not. cline%defined('eo')  ) call cline%set('eo', 'no')
         ! execute
         call xrecvol_distr%execute( cline )

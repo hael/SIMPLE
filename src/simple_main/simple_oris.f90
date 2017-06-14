@@ -214,7 +214,7 @@ type(ori),  pointer  :: op(:)=>null()
 type(oris), pointer  :: ops  =>null()
 integer, allocatable :: classpops(:)
 logical, allocatable :: class_part_of_set(:)
-real,    allocatable :: class_weights(:)
+real,    allocatable :: class_weights(:), class_specscores(:)
 type(ori)            :: o_glob
 real                 :: angthres = 0.
 
@@ -2494,47 +2494,36 @@ contains
             end do
             deallocate(order)
         else
-            call self%set_all2single('w', 1.)
+            do i=1,self%n
+                if( self%o(i)%get('state') > 0 )then
+                    call self%o(i)%set('w', 1.)
+                else
+                    call self%o(i)%set('w', 0.)
+                endif
+            end do
         endif
     end subroutine calc_hard_ptcl_weights_single
 
     !>  \brief  calculates hard weights based on ptcl ranking      
     subroutine calc_spectral_weights_single( self, frac )
-        use simple_stat, only: normalize_sigm
+        use simple_stat, only: normalize_sigm_sparse
         class(oris), intent(inout) :: self
         real,        intent(in)    :: frac
         real,    allocatable :: specscores(:), weights(:)
         integer, allocatable :: order(:)
         real    :: w
         integer :: i, lim, n
+        call self%calc_hard_ptcl_weights_single( frac )
         if( self%isthere('specscore') )then
             specscores = self%get_all('specscore')
-            allocate(weights(self%n), source=specscores)
+            weights    = self%get_all('w')
+            where( weights < 0.5     ) weights = 0.
             where( specscores < TINY ) weights = 0.
-            call normalize_sigm(weights)
+            call normalize_sigm_sparse(weights)
             do i=1,self%n
                 call self%o(i)%set('w', weights(i))
             end do
             deallocate(specscores, weights)
-        else
-            call self%set_all2single('w', 1.)
-        endif
-        if( frac < 0.99 )then
-            order = self%order()
-            n = 0
-            do i=1,self%n
-                if( self%o(i)%get('state') > 0 ) n = n + 1
-            end do        
-            lim = nint(frac*real(n))
-            do i=1,self%n
-                w = self%o(order(i))%get('w')
-                if( i <= lim )then
-                    call self%o(order(i))%set('w', w)
-                else
-                    call self%o(order(i))%set('w', 0.)
-                endif           
-            end do
-            deallocate(order)
         endif
     end subroutine calc_spectral_weights_single
 

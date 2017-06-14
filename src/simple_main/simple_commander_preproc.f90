@@ -86,9 +86,11 @@ contains
         use simple_qsys_funs,    only: qsys_job_finished
         class(preproc_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
-        type(ctffind_iter) :: cfiter
-        type(unblur_iter)  :: ubiter
-        type(pick_iter)    :: piter
+        type(ctffind_iter)      :: cfiter
+        type(unblur_iter)       :: ubiter
+        type(pick_iter)         :: piter
+        type(extract_commander) :: xextract
+        type(cmdline)           :: cline_extract
         character(len=STDLEN), allocatable :: movienames(:)
         character(len=:),      allocatable :: fname_ctffind_ctrl, fname_unidoc_output
         character(len=:),      allocatable :: moviename_forctf, moviename_intg, outfile
@@ -99,7 +101,7 @@ contains
         type(ori)    :: orientation
         real         :: smpd_native, smpd_scaled
         integer      :: nmovies, fromto(2), imovie, ntot, movie_counter
-        integer      :: frame_counter, lfoo(3), nframes, i, movie_ind
+        integer      :: frame_counter, lfoo(3), nframes, i, movie_ind, nptcls_out
         p = params(cline, checkdistr=.false.) ! constants & derived constants produced
         if( p%scale > 1.05 )then
             stop 'scale cannot be > 1; simple_commander_preproc :: exec_preproc'
@@ -185,12 +187,25 @@ contains
             if( p%l_pick )then
                 movie_counter = movie_counter - 1
                 p%lp          = p%lp_pick
-                call piter%iterate(cline, p, movie_counter, moviename_intg, boxfile)
-                call os_uni%set(movie_counter, 'boxfile', trim(boxfile))
+                call piter%iterate(cline, p, movie_counter, moviename_intg, boxfile, nptcls_out)
+                call os_uni%set(movie_counter, 'boxfile', trim(boxfile)   )
+                call os_uni%set(movie_counter, 'nptcls',  real(nptcls_out))
+            endif
+            if( p%stream .eq. 'yes' )then
+                ! write unidoc
+                call os_uni%write(fname_unidoc_output)
+                cline_extract = cline
+                call cline_extract%set('stream',  'yes')
+                call cline_extract%set('outfile', 'extract_params_movie'//int2str_pad(imovie,p%numlen)//'.txt')
+                call cline_extract%set('outstk',  'ptcls_from_movie'//int2str_pad(imovie,p%numlen)//p%ext)
+                call cline_extract%set('smpd',    p%smpd)
+                call cline_extract%set('unidoc',  fname_unidoc_output)
             endif
         end do
-        ! write unidoc
-        call os_uni%write(fname_unidoc_output)
+        if( p%stream .eq. 'no' )then
+            ! write unidoc
+            call os_uni%write(fname_unidoc_output)
+        endif
         ! destruct
         call os_uni%kill
         deallocate(fname_ctffind_ctrl,fname_unidoc_output)
@@ -707,7 +722,7 @@ contains
         type(pick_iter) :: piter
         character(len=STDLEN), allocatable :: movienames_intg(:)
         character(len=STDLEN) :: boxfile
-        integer :: nmovies, fromto(2), imovie, ntot, movie_counter
+        integer :: nmovies, fromto(2), imovie, ntot, movie_counter, nptcls_out
         p = params(cline, checkdistr=.false.) ! constants & derived constants produced
         ! check filetab existence
         call read_filetable(p%filetab, movienames_intg)
@@ -728,7 +743,7 @@ contains
         ntot          = fromto(2) - fromto(1) + 1
         movie_counter = 0
         do imovie=fromto(1),fromto(2)
-            call piter%iterate(cline, p, movie_counter, movienames_intg(imovie), boxfile)
+            call piter%iterate(cline, p, movie_counter, movienames_intg(imovie), boxfile, nptcls_out)
             write(*,'(f4.0,1x,a)') 100.*(real(movie_counter)/real(ntot)), 'percent of the micrographs processed'
         end do
     end subroutine exec_pick

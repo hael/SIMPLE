@@ -70,6 +70,7 @@ contains
         call os%set(movie_counter, 'dfx',    ctfparams(1,2)/1.0e4)
         call os%set(movie_counter, 'dfy',    ctfparams(1,3)/1.0e4)
         call os%set(movie_counter, 'angast', ctfparams(1,4)      )
+        call os%set(movie_counter, 'ctfres', ctfparams(1,7)      )
         deallocate(ctfparams)
         call ctfparamfile%kill
     end subroutine iterate
