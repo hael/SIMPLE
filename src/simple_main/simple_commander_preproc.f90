@@ -195,7 +195,6 @@ contains
                 ! write unidoc
                 call os_uni%write(fname_unidoc_output)
                 cline_extract = cline
-                call cline_extract%set('stream',  'yes')
                 call cline_extract%set('smpd',    p%smpd)
                 call cline_extract%set('unidoc',  fname_unidoc_output)
                 call cline_extract%set('outfile', 'extract_params_movie'//int2str_pad(imovie,p%numlen)//'.txt')

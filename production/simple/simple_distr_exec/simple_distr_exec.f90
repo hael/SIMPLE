@@ -118,6 +118,7 @@ select case(prg)
         if( .not. cline%defined('hp_ctffind')      ) call cline%set('hp',        30.)
         if( .not. cline%defined('lp_ctffind')      ) call cline%set('lp',         5.)
         if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',   20.)
+        if( .not. cline%defined('stream')          ) call cline%set('stream',  'yes')
         call xpreproc_stream%execute(cline)
 
     ! PIPELINED UNBLUR + CTFFIND

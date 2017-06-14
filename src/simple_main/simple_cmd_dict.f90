@@ -217,7 +217,7 @@ contains
         call chdict%push('async',         'asynchronous mode of operation(yes|no){no}')
         call chdict%push('nrefs',         '# references used for picking{100}')
         call chdict%push('ext',           'file extension{.mrc}')
-        call chdict%push('stream',        'sream (real time) execution mode(yes|no){no}')
+        call chdict%push('stream',        'stream (real time) execution mode(yes|no){no}')
         call chdict%push('tseries',       'images represent a time-series(yes|no){no}')
         call chdict%push('offset',        'pixels offset{7}')
         call chdict%push('xcoord',        'x coordinate{0}')
