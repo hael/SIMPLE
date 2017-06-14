@@ -1,0 +1,31 @@
+subject line: RELEASE NOTE SIMPLE 2.5
+
+Dear All:
+
+We announce the release of a new version of our program package SIMPLE (v2.5) for single-particle cryo-EM ab initio 3D reconstruction (web: simplecryoem.com)
+
+New features include:
+
+* A new DDD movie pre-processing program that implements motion correction based the same principal strategy as Grigorieff's unblur. There are two important differences: automatic weighting of the frames using a correlation-based M-estimator and stochastic continuous optimisation of the shift parameters. This enables analysis of movies with severe pathologies due to radiation damage or extreme drift.
+
+* A new program for DDD movie pre-processing of tomographic tilt-series.
+
+* Improved simultaneous 2D alignment and clustering with PRIME2D using a hybrid extremal/stochastic hill-climbing search approach, Wiener restoration-based CTF correction and acceleration of the search using Hadamard projection matching. It is now possible to generate sub-nanometer resolution ab initio 3D reconstruction from class averages obtained with PRIME2D in a about 10 minutes on a laptop (MacBook Pro mid 2015, 2.8 GHz Intel i7, four physical cores).
+
+* Improved ab initio 3D reconstruction from class averages using stochastic neighbourhood hill-climbing for initialisation of the 3D orientation search, improving the success rate from around 40% to 90-100% for more challenging starting model generation problems, executed with the new program ini3D_from_cavgs.
+
+* Serial CPU code optimisation through data re-organisation and pipelining.
+
+* Improved parallel CPU performance through load balancing as well as data and algorithm re-organisation. It is now possible to process data sets of realistic size on laptops or lightweight workstations that cost less than 2,000 USD.
+
+* High-level workflows for 2D analysis and initial 3D model production that automates initialisation, update of search parameters and dynamic down-scaling of the images for improved performance.
+
+If you need help installing SIMPLE, optimising its execution for your computer architecture or experience any problems or bugs please use the contact form on the webpage (www.simplecryoem.com) to file a help ticket. We will endeavour to respond within two days.
+
+Happy image processing!
+
+The SIMPLE team:
+
+Cyril F Reboul
+Michael Eager
+Dominika & Hans Elmlund

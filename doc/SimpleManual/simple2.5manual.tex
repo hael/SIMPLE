@@ -100,7 +100,7 @@ SIMPLE is free software: you can redistribute it and/or modify it under the term
 \begin{itemize}
     \item[--] A new DDD movie pre-processing program \prgname{unblur} that implements motion correction based the same principal strategy as Grigorieff's program (hence the name). There are two important differences: automatic weighting of the frames using a correlation-based M-estimator and stochastic continuous optimisation of the shift parameters. This enables analysis of movies with severe pathologies due to radiation damage or extreme drift.
     \item[--] A new program \prgname{unblur\_tomo} for movie-processing of tomographic tilt-series.
-    \item[--] Improved simultaneous 2D alignment and clustering with \prgname{prime2D} using a hybrid extremal/stochastic hill-climbing search approach, Wiener restoration-based CTF correction and acceleration of the search using Hadamard projection matching. It is now possible to generate sub-nanometer resolution \textit{ab initio} 3D reconstruction from class averages obtained with  \prgname{prime2D}.
+    \item[--] Improved simultaneous 2D alignment and clustering with \prgname{prime2D} using a hybrid extremal/stochastic hill-climbing search approach, Wiener restoration-based CTF correction and acceleration of the search using Hadamard projection matching. It is now possible to generate sub-nanometer resolution \textit{ab initio} 3D reconstruction from class averages obtained with  \prgname{prime2D} in a about 10 minutes on a laptop (MacBook Pro mid 2015, 2.8 GHz Intel i7, four physical cores).
     \item[--] Improved \textit{ab initio} 3D reconstruction from class averages using stochastic neighbourhood hill-climbing for initialisation of the 3D orientation search, improving the success rate from around 40\% to 90-100\% for more challenging starting model generation problems, executed with program \prgname{ini3D\_from\_cavgs}
     \item[--] Serial CPU code optimisation through data re-organisation and pipelining.
     \item[--] Improved parallel CPU performance through load balancing as well as data and algorithm re-organisation. It is now possible to process data sets of realistic size on laptops or lightweight workstations that cost less than 2,000 USD.
@@ -435,6 +435,21 @@ However, beta testers have reported that srun job sometimes dies with no warning
 smpd=1.77 msk=100 ncls=600 nthr=8 nparts=10 >> PRIME2DOUT"
 \end{verbatim}
 where the \texttt{--wrap} flag automatically generates a bash script for the given command.
+
+\subsection{From Movies to \textit{ab initio} 3D reconstruction}
+These steps describe a typical SIMPLE workflow.
+\begin{enumerate}
+\item DDD (Direct Detector Device) movie alignment and frame-weighting using SIMPLE program \prgname{unblur}, executed with \texttt{simple\_distr\_exec}
+\item CTF parameter identification with the SIMPLE program \prgname{ctffind}, wrapping CTFFIND4 \citep{rohou2015ctffind4}, executed with \texttt{simple\_distr\_exec}
+\item Particle identification using EMAN2 \citep{Tang:2007aa} to generate \texttt{*.box} files
+\item Particle extraction with SIMPLE program \prgname{extract}, executed with \texttt{simple\_exec}
+\item 2D analysis using the SIMPLE \prgname{prime2D} distributed workflow, executed with \texttt{simple\_distr\_exec}
+\item \textit{Ab initio} 3D reconstruction from class averages using the SIMPLE \prgname{ini3D\_from\_cavgs} distributed workflow, executed with \texttt{simple\_distr\_exec}
+\item Mapping of class average selection and 3D class orientations to the particles using SIMPLE program \prgname{map2ptcls}, executed with \texttt{simple\_exec}
+\item Reconstruction of a 3D map from the individual particle images with SIMPLE program \prgname{recvol}, executed with \texttt{simple\_distr\_exec}
+\item Map refinement will be part of release 3.0
+\end{enumerate}
+For descriptions for how to execute the individual steps, please refer to the documentation of each program (below).
 
 \section{Command Line Dictionary}
 \begin{tabular}{ll}
