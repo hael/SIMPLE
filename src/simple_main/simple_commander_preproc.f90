@@ -114,7 +114,8 @@ contains
                 stop 'need references for picker or turn off picking with dopick=no'
             endif
         endif
-        dir_ptcls = trim(p%dir_target)//'particles'
+        dir_ptcls = trim(p%dir_target)//'/particles'
+        call exec_cmdline('mkdir -p '//trim(adjustl(dir_ptcls)))
         call read_filetable(p%filetab, movienames)
         nmovies = size(movienames)
         if( cline%defined('numlen') )then
@@ -199,8 +200,8 @@ contains
                 call cline_extract%set('dir_ptcls', trim(dir_ptcls))
                 call cline_extract%set('smpd',      p%smpd)
                 call cline_extract%set('unidoc',    fname_unidoc_output)
-                call cline_extract%set('outfile',   'extract_params_movie'//int2str_pad(imovie,p%numlen)//'.txt')
-                call cline_extract%set('outstk',    'ptcls_from_movie'//int2str_pad(imovie,p%numlen)//p%ext)
+                call cline_extract%set('outfile',   'extract_params_movie'//int2str_pad(movie_ind,p%numlen)//'.txt')
+                call cline_extract%set('outstk',    'ptcls_from_movie'//int2str_pad(movie_ind,p%numlen)//p%ext)
                 call xextract%execute(cline_extract)
             endif
         end do

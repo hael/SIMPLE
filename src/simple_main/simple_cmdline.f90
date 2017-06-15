@@ -59,7 +59,11 @@ contains
         type(args)            :: allowed_args
         integer               :: i, ri, cmdstat, cmdlen, cntbin, ikey
         integer               :: cnttxt, io_stat, nreq, cmdargcnt
-        cmdargcnt = command_argument_count()
+        logical               :: distr_exec
+        character(len=STDLEN) :: exec_name
+        call getarg(0,exec_name)
+        distr_exec = str_has_substr(exec_name,'distr')
+        cmdargcnt  = command_argument_count()
         call get_command(self%entire_line)
         if( debug ) print *, 'DEBUG(simple_cmdline, L61), command_argument_count: ', cmdargcnt
         if( present(keys_required) )then
@@ -73,7 +77,7 @@ contains
                 print *, 'DEBUG(simple_cmdline, L70), command_argument_count: ', cmdargcnt
             endif
             if( cmdargcnt < nreq )then
-                call print_cmdline(keys_required, keys_optional)
+                call print_cmdline(keys_required, keys_optional, distr=distr_exec)
                 stop
             else
                 ! indicate which variables are required
@@ -83,7 +87,7 @@ contains
             endif
         else
             if( cmdargcnt < 2 )then
-                call print_cmdline(keys_required, keys_optional)
+                call print_cmdline(keys_required, keys_optional, distr=distr_exec)
                 stop
             endif
         endif    
