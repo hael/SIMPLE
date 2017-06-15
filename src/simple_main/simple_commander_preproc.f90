@@ -115,7 +115,7 @@ contains
                 stop 'need references for picker or turn off picking with dopick=no'
             endif
         endif
-        dir_ptcls = trim(p%dir_target)//'/particles'
+        dir_ptcls = trim(p%dir_target)//'/particles/'
         call exec_cmdline('mkdir -p '//trim(adjustl(dir_ptcls)))
         call read_filetable(p%filetab, movienames)
         nmovies = size(movienames)
@@ -795,13 +795,13 @@ contains
         ! set output files
         if( cline%defined('outstk') )then
             if( cline%defined('dir_ptcls') )then
-                sumstack = trim(p%dir_ptcls)//trim(p%outstk)
+                sumstack = trim(p%dir_ptcls)//'/'//trim(p%outstk)
             else
                 sumstack = trim(p%outstk)
             endif
         else
             if( cline%defined('dir_ptcls') )then
-                sumstack = trim(p%dir_ptcls)//'sumstack'//p%ext
+                sumstack = trim(p%dir_ptcls)//'/sumstack'//p%ext
             else
                 sumstack = 'sumstack'//p%ext
             endif
@@ -809,13 +809,13 @@ contains
         sumstack_frames = add2fbody(sumstack, p%ext, '_frames_subset')
         if( cline%defined('outfile') )then
             if( cline%defined('dir_ptcls') )then
-                outfile = trim(p%dir_ptcls)//trim(p%outfile)
+                outfile = trim(p%dir_ptcls)//'/'//trim(p%outfile)
             else
                 outfile = trim(p%outfile)
             endif
         else
             if( cline%defined('dir_ptcls') )then
-                outfile = trim(p%dir_ptcls)//'extract_params.txt'
+                outfile = trim(p%dir_ptcls)//'/extract_params.txt'
             else
                 outfile = 'extract_params.txt'
             endif
