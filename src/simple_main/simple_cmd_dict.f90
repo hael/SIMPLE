@@ -242,15 +242,23 @@ contains
         call chdict%write(fname)
     end subroutine print_cmd_key_descr
         
-    subroutine print_cmdline( keys_required, keys_optional, fhandle )
+    subroutine print_cmdline( keys_required, keys_optional, fhandle, distr )
         use simple_strings, only: str_has_substr
         character(len=*), optional, intent(in) :: keys_required(:), keys_optional(:)
         integer,          optional, intent(in) :: fhandle
+        logical,          optional, intent(in) :: distr
         integer :: nreq, nopt
+        logical :: ddistr
+        ddistr = .false.
+        if( present(distr) ) ddistr = distr
         ! initialise if needed
         if( .not. initialised ) call init_cmd_dict
         write(*,'(a)') 'USAGE:'
-        write(*,'(a)') 'bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...'
+        if( ddistr )then
+            write(*,'(a)') 'bash-3.2$ simple_distr_exec prg=simple_program key1=val1 key2=val2 ...'
+        else
+            write(*,'(a)') 'bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...'
+        endif 
         ! print required
         if( present(keys_required) )then
             nreq =  size(keys_required)

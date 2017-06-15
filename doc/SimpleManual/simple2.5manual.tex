@@ -100,11 +100,11 @@ SIMPLE is free software: you can redistribute it and/or modify it under the term
 \begin{itemize}
     \item[--] A new DDD movie pre-processing program \prgname{unblur} that implements motion correction based the same principal strategy as Grigorieff's program (hence the name). There are two important differences: automatic weighting of the frames using a correlation-based M-estimator and stochastic continuous optimisation of the shift parameters. This enables analysis of movies with severe pathologies due to radiation damage or extreme drift.
     \item[--] A new program \prgname{unblur\_tomo} for movie-processing of tomographic tilt-series.
-    \item[--] Improved simultaneous 2D alignment and clustering with \prgname{prime2D} using a hybrid extremal/stochastic hill-climbing search approach, Wiener restoration-based CTF correction and acceleration of the search using Hadamard projection matching. It is now possible to generate sub-nanometer resolution \textit{ab initio} 3D reconstruction from class averages obtained with  \prgname{prime2D} in a about 10 minutes on a laptop (MacBook Pro mid 2015, 2.8 GHz Intel i7, four physical cores).
+    \item[--] Improved simultaneous 2D alignment and clustering with \prgname{prime2D} using a hybrid extremal/stochastic hill-climbing search approach, Wiener restoration-based CTF correction and acceleration of the search using Hadamard projection matching. It is now possible to generate a sub-nanometer resolution \textit{ab initio} 3D reconstruction from class averages obtained with  \prgname{prime2D} in a about 10 minutes on a laptop (MacBook Pro mid 2015, 2.8 GHz Intel i7, four physical cores).
     \item[--] Improved \textit{ab initio} 3D reconstruction from class averages using stochastic neighbourhood hill-climbing for initialisation of the 3D orientation search, improving the success rate from around 40\% to 90-100\% for more challenging starting model generation problems, executed with program \prgname{ini3D\_from\_cavgs}
     \item[--] Serial CPU code optimisation through data re-organisation and pipelining.
     \item[--] Improved parallel CPU performance through load balancing as well as data and algorithm re-organisation. It is now possible to process data sets of realistic size on laptops or lightweight workstations that cost less than 2,000 USD.
-    \item[--] High-level workflows for 2D analysis and initial 3D model production that automates initialisation, update of search parameters and dynamic down-scaling of the images for improved performance.
+    \item[--] High-level workflows for 2D analysis and initial 3D model generation that automates initialisation, update of search parameters and dynamic down-scaling of the images for improved performance.
 \end{itemize}
 
 \section{File Formats}
@@ -346,7 +346,7 @@ To obtain a description of the what command line options are available, execute
 \begin{verbatim}
 @!#> simple_distr_exec prg=prime2D
 USAGE:
-bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+bash-3.2$ simple_distr_exec prg=simple_program key1=val1 key2=val2 ...
 
 REQUIRED
 stk  = particle stack with all images(ptcls.ext)
@@ -680,13 +680,13 @@ For descriptions for how to execute the individual steps, please refer to the do
 \end{tabular}
 
 \section{Distributed SIMPLE Workflows}
-\subsection{Program: \prgname{comlin\_smat}}
+\subsection{Distributed Workflow: \prgname{comlin\_smat}}
 \label{comlin_smat}
 \prgname{comlin\_smat} is a program for creating a similarity matrix based on common line correlation. The idea being that it should be possible to cluster images based on their 3D similarity witout having a 3D model by only operating on class averages and find averages that fit well together in 3D
 
 \begin{verbatim}
 USAGE:
-bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+bash-3.2$ simple_distr_exec prg=simple_program key1=val1 key2=val2 ...
 
 REQUIRED
 stk    = particle stack with all images(ptcls.ext)
@@ -700,13 +700,13 @@ hp  = high-pass limit(in A)
 trs = maximum halfwidth shift(in pixels)
 \end{verbatim}
 
-\subsection{Program: \prgname{ctffind}}
+\subsection{Distributed Workflow: \prgname{ctffind}}
 \label{ctffind}
 \prgname{ctffind} is a wrapper program for CTFFIND4 (Grigorieff lab)
 
 \begin{verbatim}
 USAGE:
-bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+bash-3.2$ simple_distr_exec prg=simple_program key1=val1 key2=val2 ...
 
 REQUIRED
 filetab = list of files(*.txt/*.asc)
@@ -728,13 +728,13 @@ expastig   = expected astigmatism(in microns)
 phaseplate = images obtained with phaseplate(yes|no){no}
 \end{verbatim}
 
-\subsection{Program: \prgname{ini3D\_from\_cavgs}}
+\subsection{Distributed Workflow: \prgname{ini3D\_from\_cavgs}}
 \label{ini3D_from_cavgs}
 \prgname{ini3D\_from\_cavgs} is a program for generating an initial 3D model from class averages obtained with prime2D
 
 \begin{verbatim}
 USAGE:
-bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+bash-3.2$ simple_distr_exec prg=simple_program key1=val1 key2=val2 ...
 
 REQUIRED
 stk    = particle stack with all images(ptcls.ext)
@@ -763,13 +763,13 @@ autoscale  = automatic down-scaling(yes|no){yes}
 pgrp_known = point-group known a priori(yes|no){no}
 \end{verbatim}
 
-\subsection{Program: \prgname{makecavgs}}
+\subsection{Distributed Workflow: \prgname{makecavgs}}
 \label{makecavgs}
 \prgname{makecavgs} is used  to produce class averages or initial random references for prime2D execution. 
 
 \begin{verbatim}
 USAGE:
-bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+bash-3.2$ simple_distr_exec prg=simple_program key1=val1 key2=val2 ...
 
 REQUIRED
 stk    = particle stack with all images(ptcls.ext)
@@ -789,13 +789,13 @@ outfile  = output document
 refs     = initial2Dreferences.ext
 \end{verbatim}
 
-\subsection{Program: \prgname{prime2D}}
+\subsection{Distributed Workflow: \prgname{prime2D}}
 \label{prime2D}
 \prgname{prime2D} is a reference-free 2D alignment/clustering algorithm adopted from the prime3D probabilistic ab initio 3D reconstruction algorithm
 
 \begin{verbatim}
 USAGE:
-bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+bash-3.2$ simple_distr_exec prg=simple_program key1=val1 key2=val2 ...
 
 REQUIRED
 stk  = particle stack with all images(ptcls.ext)
@@ -830,13 +830,13 @@ autoscale = automatic down-scaling(yes|no){yes}
 oritab3D  = table (text file) of 3D orientations(*.asc/*.txt)
 \end{verbatim}
 
-\subsection{Program: \prgname{prime3D}}
+\subsection{Distributed Workflow: \prgname{prime3D}}
 \label{prime3D}
 \prgname{prime3D} is an ab inito reconstruction/refinement program based on probabilistic projection matching. PRIME is short for PRobabilistic Initial 3D Model generation for Single- particle cryo-Electron microscopy. There are a daunting number of options in PRIME3D. If you are processing class averages we recommend that you instead use the simple\_distr\_exec prg= ini3D\_from\_cavgs route for executing PRIME3D. Automated workflows for single- and multi-particle refinement using prime3D are planned for the next release (3.0)
 
 \begin{verbatim}
 USAGE:
-bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+bash-3.2$ simple_distr_exec prg=simple_program key1=val1 key2=val2 ...
 
 REQUIRED
 stk    = particle stack with all images(ptcls.ext)
@@ -882,13 +882,13 @@ rrate     = randomization rate{0.8}
 norec     = do not reconstruct volume(s)(yes|no){no}
 \end{verbatim}
 
-\subsection{Program: \prgname{prime3D\_init}}
+\subsection{Distributed Workflow: \prgname{prime3D\_init}}
 \label{prime3D_init}
 \prgname{prime3D\_init} is a program for generating a random initial model for initialisation of PRIME3D 
 
 \begin{verbatim}
 USAGE:
-bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+bash-3.2$ simple_distr_exec prg=simple_program key1=val1 key2=val2 ...
 
 REQUIRED
 stk    = particle stack with all images(ptcls.ext)
@@ -911,13 +911,13 @@ npeaks  = # nonzero orientation weights{1}
 xfel    = images are XFEL diffraction patterns(yes|no){no}
 \end{verbatim}
 
-\subsection{Program: \prgname{recvol}}
+\subsection{Distributed Workflow: \prgname{recvol}}
 \label{recvol}
 \prgname{recvol} is a program for reconstructing volumes from MRC and SPIDER stacks, given input orientations and state assignments. The algorithm is based on direct Fourier inversion with a Kaiser-Bessel (KB) interpolation kernel. This window function reduces the real-space ripple artifacts associated with direct moving windowed-sinc interpolation. The feature sought when implementing this algorithm was to enable quick, reliable reconstruction from aligned individual particle images. mul is used to scale the origin shifts if down-sampled were used for alignment and the original images are used for reconstruction. ctf=yes or ctf=flip turns on the Wiener restoration. If the images were phase-flipped set ctf=flip. amsklp, mw, and edge control the solvent mask: the low-pass limit used to generate the envelope; the molecular weight of the molecule (protein assumed but it works reasonably well also for RNA; slight modification of mw might be needed). The inner parameter controls the radius of the soft-edged mask used to remove the unordered DNA/RNA core of spherical icosahedral viruses
 
 \begin{verbatim}
 USAGE:
-bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+bash-3.2$ simple_distr_exec prg=simple_program key1=val1 key2=val2 ...
 
 REQUIRED
 stk    = particle stack with all images(ptcls.ext)
@@ -941,13 +941,13 @@ vol1    = input volume no1(invol1.ext)
 npeaks  = # nonzero orientation weights{1}
 \end{verbatim}
 
-\subsection{Program: \prgname{symsrch}}
+\subsection{Distributed Workflow: \prgname{symsrch}}
 \label{symsrch}
 \prgname{symsrch} is a program for searching for the principal symmetry axis of a volume reconstructed without assuming any point-group symmetry. The program takes as input an asymmetrical 3D reconstruction. The alignment document for all the particle images that have gone into the 3D reconstruction and the desired point-group symmetry needs to be inputted. The 3D reconstruction is then projected in 50 (default option) even directions, common lines-based optimisation is used to identify the principal symmetry axis, the rotational transformation is applied to the inputted orientations, and a new alignment document is produced. Input this document to recvol together with the images and the point-group symmetry to generate a symmetrised map. If you are unsure about the point-group, you should use the compare=yes mode and input the highest conceviable point-group. The program then calculates probabilities for all lower groups inclusive.
 
 \begin{verbatim}
 USAGE:
-bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+bash-3.2$ simple_distr_exec prg=simple_program key1=val1 key2=val2 ...
 
 REQUIRED
 vol1    = input volume no1(invol1.ext)
@@ -966,13 +966,13 @@ hp     = high-pass limit(in A)
 nspace = # projection directions
 \end{verbatim}
 
-\subsection{Program: \prgname{tseries\_track}}
+\subsection{Distributed Workflow: \prgname{tseries\_track}}
 \label{tseries_track}
 \prgname{tseries\_track} is a program for particle tracking in time-series data 
 
 \begin{verbatim}
 USAGE:
-bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+bash-3.2$ simple_distr_exec prg=simple_program key1=val1 key2=val2 ...
 
 REQUIRED
 filetab = list of files(*.txt/*.asc)
@@ -986,13 +986,13 @@ lp     = low-pass limit(in A)
 offset = pixels offset{7}
 \end{verbatim}
 
-\subsection{Program: \prgname{unblur}}
+\subsection{Distributed Workflow: \prgname{unblur}}
 \label{unblur}
 \prgname{unblur} is a program for movie alignment or unblurring based the same principal strategy as Grigorieffs program (hence the name). There are two important differences: automatic weighting of the frames using a correlation-based M-estimator and continuous optimisation of the shift parameters. Input is a textfile with absolute paths to movie files in addition to a few obvious input parameters
 
 \begin{verbatim}
 USAGE:
-bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+bash-3.2$ simple_distr_exec prg=simple_program key1=val1 key2=val2 ...
 
 REQUIRED
 filetab = list of files(*.txt/*.asc)
@@ -1019,13 +1019,13 @@ tof        = stop frame index
 nsig       = # sigmas
 \end{verbatim}
 
-\subsection{Program: \prgname{unblur\_ctffind}}
+\subsection{Distributed Workflow: \prgname{unblur\_ctffind}}
 \label{unblur_ctffind}
 \prgname{unblur\_ctffind} is a pipelined unblur + ctffind program
 
 \begin{verbatim}
 USAGE:
-bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+bash-3.2$ simple_distr_exec prg=simple_program key1=val1 key2=val2 ...
 
 REQUIRED
 filetab = list of files(*.txt/*.asc)
@@ -1062,13 +1062,13 @@ expastig   = expected astigmatism(in microns)
 phaseplate = images obtained with phaseplate(yes|no){no}
 \end{verbatim}
 
-\subsection{Program: \prgname{unblur\_tomo}}
+\subsection{Distributed Workflow: \prgname{unblur\_tomo}}
 \label{unblur_tomo}
 \prgname{unblur\_tomo} is a program for movie alignment or unblurring of tomographic movies. Input is a textfile with absolute paths to movie files in addition to a few obvious input parameters
 
 \begin{verbatim}
 USAGE:
-bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+bash-3.2$ simple_distr_exec prg=simple_program key1=val1 key2=val2 ...
 
 REQUIRED
 tomoseries = filetable of filetables of tomograms

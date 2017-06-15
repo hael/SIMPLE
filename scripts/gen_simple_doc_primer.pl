@@ -99,12 +99,12 @@ if( $doc eq 'tex' ){
     print_full_latex_cmdlindict();
     print '\section{Distributed SIMPLE Workflows}'."\n";
     foreach my $prg (@prgnames_distr_sorted){
-        print_latex_instr($prg, %prginstr_distr);
+        print_latex_instr(1, $prg, %prginstr_distr);
         print_latex_usage($prg, %prgcmdlineinstr_distr);
     }
     print '\section{SIMPLE Programs}'."\n";
     foreach my $prg (@prgnames_sorted){
-        print_latex_instr($prg, %prginstr);
+        print_latex_instr(0, $prg, %prginstr);
         print_latex_usage($prg, %prgcmdlineinstr);
     }  
 }elsif( $doc eq 'web' ){
@@ -179,11 +179,16 @@ sub print_full_latex_cmdlindict{
 
 sub print_latex_instr{
     # input is label and prginstr
+    my $distr = shift;
     my $label = shift;
     my %instr = @_;
     my $label_latex = $label;
     $label_latex =~ s/\_/\\_/g;
-    print '\subsection{Program: \prgname{'."$label_latex}}\n";
+    if( $distr == 0 ){
+        print '\subsection{Program: \prgname{'."$label_latex}}\n";
+    }else{
+        print '\subsection{Distributed Workflow: \prgname{'."$label_latex}}\n";
+    }    
     print '\label{'."$label}\n";
     if( defined($instr{$label}) ){
         my $prginstr_latex = str2latex($instr{$label});

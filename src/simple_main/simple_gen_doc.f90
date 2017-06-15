@@ -106,11 +106,6 @@ contains
         stop
     end subroutine print_doc_comlin_smat
 
-    subroutine print_doc_cont3D
-        write(*,'(A)') 'is a continuous refinement code under development'
-        stop
-    end subroutine print_doc_cont3D
-
     subroutine print_doc_convert
         write(*,'(A)') 'is a program for converting between SPIDER and MRC formats'
         stop
@@ -212,11 +207,6 @@ contains
         stop
     end subroutine print_doc_makeoris
 
-    subroutine print_doc_makepickrefs
-        write(*,'(A)') 'is a program for generating references for template-based particle picking'
-        stop
-    end subroutine print_doc_makepickrefs
-
     subroutine print_doc_map2ptcls
         write(*,'(A)', advance='no') 'is a program for mapping parameters that have been obtained using class averages'
         write(*,'(A)') ' to the individual particle images'
@@ -251,12 +241,6 @@ contains
         write(*,'(A)') ' similarity matrix that can be inputted to cluster_smat'
         stop
     end subroutine print_doc_merge_similarities
-
-    subroutine print_doc_multiptcl_init
-        write(*,'(A)', advance='no') 'is a program for generating random initial models for initialisation of PRIME3D'
-        write(*,'(A)') 'when run in multiparticle mode'
-        stop
-    end subroutine print_doc_multiptcl_init
 
     subroutine print_doc_noiseimgs
         write(*,'(A)') 'is a program for generating pure noise images'
@@ -318,11 +302,6 @@ contains
         stop
     end subroutine print_doc_oristats
 
-    subroutine print_doc_pick
-        write(*,'(A)') 'is a template-based picker program'
-        stop
-    end subroutine print_doc_pick
-
     subroutine print_doc_postproc_vol
         write(*,'(A)') 'is a program for post-processing of volumes'
         stop
@@ -332,11 +311,6 @@ contains
         write(*,'(A)') 'is a program for generating powerspectra from a stack or filetable'
         stop
     end subroutine print_doc_powerspecs
-
-    subroutine print_doc_preproc
-        write(*,'(A)') 'is a program that executes unblur, ctffind and pick in sequence'
-        stop
-    end subroutine print_doc_preproc
 
     subroutine print_doc_prime2D
         write(*,'(A)', advance='no') 'is a reference-free 2D alignment/clustering algorithm adopted from the prime3D p'
@@ -499,11 +473,6 @@ contains
         stop
     end subroutine print_doc_simmovie
 
-    subroutine print_doc_simsubtomo
-        write(*,'(A)') 'is a program for crude simulation of a subtomograms'
-        stop
-    end subroutine print_doc_simsubtomo
-
     subroutine print_doc_split
         write(*,'(A)', advance='no') 'is a program for splitting of image stacks into partitions for parallel executio'
         write(*,'(A)') 'n. This is done to reduce I/O latency'
@@ -577,11 +546,11 @@ contains
     end subroutine print_doc_tseries_track
 
     subroutine print_doc_unblur
-        write(*,'(A)', advance='no') 'is a program for movie alignment or unblurring based on similar principles as Gr'
-        write(*,'(A)', advance='no') 'igorieffs program (hence the name). There are two important differences: automat'
-        write(*,'(A)', advance='no') 'ic weighting of the frames using a corrleation-based M-estimator and continuous'
-        write(*,'(A)', advance='no') 'optimisation of the shift parameters. Input is a textfile with absolute paths to'
-        write(*,'(A)') ' movie files in addition to a few obvious input parameters'
+        write(*,'(A)', advance='no') 'is a program for movie alignment or unblurring based the same principal strategy'
+        write(*,'(A)', advance='no') ' as Grigorieffs program (hence the name). There are two important differences: a'
+        write(*,'(A)', advance='no') 'utomatic weighting of the frames using a correlation-based M-estimator and conti'
+        write(*,'(A)', advance='no') 'nuous optimisation of the shift parameters. Input is a textfile with absolute pa'
+        write(*,'(A)') 'ths to movie files in addition to a few obvious input parameters'
         stop
     end subroutine print_doc_unblur
 
@@ -616,11 +585,6 @@ contains
         stop
     end subroutine print_doc_volume_smat
 
-    subroutine print_doc_het_ensemble
-        write(*,'(A)') 'is a program for heterogeneity analysis based on ensemble learning'
-        stop
-    end subroutine print_doc_het_ensemble
-
     subroutine print_doc_ini3D_from_cavgs
         write(*,'(A)', advance='no') 'is a program for generating an initial 3D model from class averages obtained wit'
         write(*,'(A)') 'h prime2D'
@@ -648,7 +612,6 @@ contains
         write(*,'(A)') 'cluster_oris'
         write(*,'(A)') 'cluster_smat'
         write(*,'(A)') 'comlin_smat'
-        write(*,'(A)') 'cont3D'
         write(*,'(A)') 'convert'
         write(*,'(A)') 'corrcompare'
         write(*,'(A)') 'ctffind'
@@ -662,24 +625,20 @@ contains
         write(*,'(A)') 'makecavgs'
         write(*,'(A)') 'makedeftab'
         write(*,'(A)') 'makeoris'
-        write(*,'(A)') 'makepickrefs'
         write(*,'(A)') 'map2ptcls'
         write(*,'(A)') 'mask'
         write(*,'(A)') 'masscen'
         write(*,'(A)') 'merge_algndocs'
         write(*,'(A)') 'merge_nnmat'
         write(*,'(A)') 'merge_similarities'
-        write(*,'(A)') 'multiptcl_init'
         write(*,'(A)') 'noiseimgs'
         write(*,'(A)') 'norm'
         write(*,'(A)') 'npeaks'
         write(*,'(A)') 'nspace'
         write(*,'(A)') 'orisops'
         write(*,'(A)') 'oristats'
-        write(*,'(A)') 'pick'
         write(*,'(A)') 'postproc_vol'
         write(*,'(A)') 'powerspecs'
-        write(*,'(A)') 'preproc'
         write(*,'(A)') 'prime2D'
         write(*,'(A)') 'prime3D'
         write(*,'(A)') 'prime3D_init'
@@ -699,7 +658,6 @@ contains
         write(*,'(A)') 'shift'
         write(*,'(A)') 'simimgs'
         write(*,'(A)') 'simmovie'
-        write(*,'(A)') 'simsubtomo'
         write(*,'(A)') 'split'
         write(*,'(A)') 'split_pairs'
         write(*,'(A)') 'stack'
@@ -720,13 +678,9 @@ contains
 
     subroutine list_all_simple_distr_programs
         write(*,'(A)') 'comlin_smat'
-        write(*,'(A)') 'cont3D'
         write(*,'(A)') 'ctffind'
-        write(*,'(A)') 'het_ensemble'
         write(*,'(A)') 'ini3D_from_cavgs'
         write(*,'(A)') 'makecavgs'
-        write(*,'(A)') 'pick'
-        write(*,'(A)') 'preproc'
         write(*,'(A)') 'prime2D'
         write(*,'(A)') 'prime3D'
         write(*,'(A)') 'prime3D_init'

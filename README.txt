@@ -26,7 +26,7 @@ INSTALLATION INSTRUCTIONS
 
 It is assumed that the software dependencies are already installed.
 For more detailed instructions regarding software requirements, please
- refer to the SIMPLE 2.5 manual.
+refer to the SIMPLE 2.5 manual.
 
 System Requirements:
 
