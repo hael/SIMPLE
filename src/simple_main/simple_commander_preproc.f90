@@ -15,6 +15,7 @@ use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
 use simple_strings,        only: int2str, int2str_pad
+use simple_syscalls,       only: exec_cmdline
 use simple_jiffys          ! use all in there
 use simple_filehandling    ! use all in there
 implicit none
@@ -539,7 +540,6 @@ contains
 
     subroutine exec_select( self, cline )
         use simple_image,    only: image
-        use simple_syscalls, only: exec_cmdline
         use simple_corrmat   ! use all in there
         class(select_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
