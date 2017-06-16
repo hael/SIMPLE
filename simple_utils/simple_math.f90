@@ -1939,16 +1939,16 @@ contains
 
     !> \brief  calculates the summmed difference between two vectors
     pure function sum_diff( vec1, vec2 ) result( diff_sum )
-      real, intent(in)    :: vec1(:), vec2(:)
-      real                :: diff_sum
-      diff_sum = sum(vec1-vec2)
+        real, intent(in)    :: vec1(:), vec2(:)
+        real                :: diff_sum
+        diff_sum = sum(vec1-vec2)
     end function sum_diff
 
     !> \brief  calculates the summmed relative difference between two vectors
     pure function rel_sum_diff( vec1, vec2 ) result( diff_sum_rel )
-      real, intent(in)    :: vec1(:), vec2(:)
-      real                :: diff_sum_rel
-      diff_sum_rel = sum((vec1-vec2)/vec2)
+        real, intent(in)    :: vec1(:), vec2(:)
+        real                :: diff_sum_rel
+        diff_sum_rel = sum((vec1-vec2)/vec2)
     end function rel_sum_diff
     
     !> \brief  calculates the argument of a vector

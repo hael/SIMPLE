@@ -74,8 +74,6 @@ type :: polarft_corrcalc
     procedure          :: write_pfts_ptcls
     procedure          :: read_pfts_ptcls
     ! MODIFIERS
-    procedure          :: shellnorm_ref
-    procedure          :: shellnorm_ptcl
     procedure, private :: prep_ref4corr
     procedure          :: xfel_subtract_shell_mean
     ! CALCULATORS
@@ -86,6 +84,7 @@ type :: polarft_corrcalc
     procedure, private :: corr_1
     procedure, private :: corr_2
     generic            :: corr => corr_1, corr_2
+    procedure          :: manhattan_distance
     ! DESTRUCTOR
     procedure          :: kill
 end type polarft_corrcalc
@@ -181,12 +180,12 @@ contains
                     self%pfts_ptcls(self%pfromto(1):self%pfromto(2),self%ptclsz,self%kfromto(1):self%kfromto(2)),&
                     self%sqsums_ptcls(self%pfromto(1):self%pfromto(2)), stat=alloc_stat)
         call alloc_err('polarfts and sqsums; new; simple_polarft_corrcalc', alloc_stat)
-        self%pfts_refs     = zero
-        self%pfts_ptcls    = zero
-        self%sqsums_ptcls  = 0.
-        self%with_ctf = .false.
+        self%pfts_refs    = zero
+        self%pfts_ptcls   = zero
+        self%sqsums_ptcls = 0.
+        self%with_ctf     = .false.
         if( ctfflag .ne. 'no' ) self%with_ctf = .true.
-        self%existence     = .true.
+        self%existence    = .true.
     end subroutine new
 
     ! SETTERS
@@ -521,45 +520,6 @@ contains
     
     ! MODIFIERS
 
-    subroutine shellnorm_ref( self, iref )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: iref
-        integer :: k
-        real    :: pow(self%kfromto(1):self%kfromto(2)), norm
-        do k=self%kfromto(1),self%kfromto(2)
-            pow(k) = sum(real(self%pfts_refs(iref,:,k))*conjg(self%pfts_refs(iref,:,k)))
-        end do 
-        pow = pow/real(self%refsz)
-        do k=self%kfromto(1),self%kfromto(2)
-            if( pow(k) > TINY )then
-                norm = sqrt(pow(k))
-                self%pfts_refs(iref,:,k) = self%pfts_refs(iref,:,k)/norm
-            else
-                self%pfts_refs(iref,:,k) = cmplx(0.,0.)
-            endif
-        end do
-    end subroutine shellnorm_ref
-
-    subroutine shellnorm_ptcl( self, iptcl )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: iptcl
-        integer :: k
-        real    :: pow(self%kfromto(1):self%kfromto(2)), norm
-        do k=self%kfromto(1),self%kfromto(2)
-             pow(k) = sum(real(self%pfts_ptcls(iptcl,:,k))*conjg(self%pfts_ptcls(iptcl,:,k)))
-        end do
-        pow = pow/real(self%ptclsz)
-        do k=self%kfromto(1),self%kfromto(2)
-            if( pow(k) > TINY )then
-                norm = sqrt(pow(k))
-                self%pfts_ptcls(iptcl,:,k) = self%pfts_ptcls(iptcl,:,k)/norm
-            else
-                self%pfts_ptcls(iptcl,:,k) = cmplx(0.,0.)
-            endif
-        end do
-        call self%memoize_sqsum_ptcl(iptcl)
-    end subroutine shellnorm_ptcl
-
     subroutine prep_ref4corr( self, iptcl, iref, pft_ref, sqsum_ref )
         use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
@@ -799,6 +759,38 @@ contains
         ! finalize cross-correlation
         cc = cc/sqrt(sqsum_ref_sh*self%sqsums_ptcls(iptcl))
     end function corr_2
+
+    !>  \brief  for calculating the Manhattan distance between reference & particle
+    !!          This ought to be a better choice for the orientation weights
+    function manhattan_distance( self, iref, iptcl, irot ) result( dist )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref, iptcl, irot
+        integer :: k
+        real    :: pow_ref, pow_ptcl, norm, dist, sqsum_ref
+        complex(sp) :: pft_ref(self%refsz,self%kfromto(1):self%kfromto(2))
+        complex(sp) :: pft_ref_norm(self%refsz,self%kfromto(1):self%kfromto(2))
+        complex(sp) :: pft_ptcl_norm(self%refsz,self%kfromto(1):self%kfromto(2))
+        call self%prep_ref4corr(iptcl, iref, pft_ref, sqsum_ref)
+        do k=self%kfromto(1),self%kfromto(2)
+            pow_ref  = sum(real(pft_ref(:,k))*&
+                &conjg(pft_ref(:,k)))/real(self%refsz)
+            pow_ptcl = sum(real(self%pfts_ptcls(iptcl,irot:irot+self%winsz,k))*&
+                &conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,k)))/real(self%refsz)
+            if( pow_ref > TINY )then
+                norm = sqrt(pow_ref)
+                pft_ref_norm(:,k) = pft_ref(:,k)/norm
+            else
+                pft_ref_norm(:,k) = cmplx(0.,0.)
+            endif
+            if( pow_ptcl > TINY )then
+                norm = sqrt(pow_ptcl)
+                pft_ptcl_norm(:,k) = self%pfts_ptcls(iptcl,irot:irot+self%winsz,k)/norm
+            else
+                pft_ptcl_norm(:,k) = cmplx(0.,0.)
+            endif
+        end do
+        dist = sum(cabs(pft_ref_norm - pft_ptcl_norm))
+    end function manhattan_distance
 
     ! DESTRUCTOR
 

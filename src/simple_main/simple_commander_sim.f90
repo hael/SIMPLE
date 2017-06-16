@@ -128,7 +128,7 @@ contains
         call b%vol%mask(p%msk, 'soft')
         if( debug ) write(*,'(A)') '>>> DID READ VOL'
         call prep4cgrid(b%vol, b%vol_pad, p%msk, kbwin)
-        call b%vol%expand_cmat
+        call b%vol_pad%expand_cmat
         if( debug ) write(*,'(A)') '>>> DONE PREPARING FOR IMAGE GENERATION'
         write(*,'(A)') '>>> GENERATING IMAGES'
         cnt = 0

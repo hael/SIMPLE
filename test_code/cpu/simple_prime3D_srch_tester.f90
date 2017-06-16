@@ -136,6 +136,7 @@ contains
         p%kfromto(2) = calc_fourier_index(p%lp, p%boxmatch, p%smpd)
         ! simulate images
         call b%vol%read(p%vols(1))
+        call b%vol%fwd_ft
         call b%vol%expand_cmat
         imgs_ptcls = projvol(b%vol, o_ptcls, p)
         call b%vol%kill_expanded
@@ -200,7 +201,7 @@ contains
             y     = o%get('y')
             proj  = b%e%find_closest_proj( o, 1 )
             call b%a%set_ori(i, o)
-            call primesrch3D%prep4srch( pftcc, i, b%a, b%e )
+            call primesrch3D%prep4srch( pftcc, i, b%a, b%e, p%lp )
             if(state.ne.primesrch3D%get_prevstate())stop 'Failed simple_prime3D_srch_tester:: test_prep4srch 1'
             shvec = primesrch3D%get_prevshvec()
             if( x.ne.shvec(1) )stop 'Failed simple_prime3D_srch_tester:: test_prep4srch 2'
@@ -228,8 +229,7 @@ contains
                     o = b%a%get_ori(i)
                     prev_corr = ran3()
                     call b%a%set(i,'corr',prev_corr)
-                    call primesrch3D%prep4srch( pftcc, i, b%a, b%e )
-                    call primesrch3D%prep_corr4srch(  pftcc, i, b%a, p%lp )
+                    call primesrch3D%prep4srch( pftcc, i, b%a, b%e, p%lp )
                     corr = primesrch3D%get_prevcorr()
                     if( p%nstates==1 )then
                         if( abs(2.* corr - prev_corr) < 0.0001 )then
@@ -247,8 +247,7 @@ contains
             enddo
         else
             do i=1,p%nptcls
-                call primesrch3D%prep4srch( pftcc, i, b%a, b%e )
-                call primesrch3D%prep_corr4srch(  pftcc, i, b%a, p%lp )
+                call primesrch3D%prep4srch( pftcc, i, b%a, b%e, p%lp )
                 corr = primesrch3D%get_prevcorr()
                 if( corr < 0.99 )then
                     print *, 'corr = ', corr
@@ -297,7 +296,7 @@ contains
                 else
                     test_os = oris( p%nspace*p%nstates )
                     do iptcl=1,p%nptcls
-                        call primesrch3D%prep4srch( pftcc, iptcl, b%a, b%e )
+                        call primesrch3D%prep4srch( pftcc, iptcl, b%a, b%e, p%lp)
                         test_os = primesrch3D%get_o_refs( p%nspace*p%nstates )
                         do ref=1,p%nspace
                             oref = test_os%get_ori(ref)
@@ -330,7 +329,7 @@ contains
                 if( p%nstates==1 )then
                     do iptcl=1,p%nptcls
                         o = b%a%get_ori( iptcl )
-                        call primesrch3D%prep4srch( pftcc, iptcl, b%a, b%e, b%nnmat )
+                        call primesrch3D%prep4srch( pftcc, iptcl, b%a, b%e, p%lp, b%nnmat)
                         srch_order = primesrch3D%get_srch_order()
                         if( minval(srch_order)<1 )stop 'Failed test_prep_reforis 32'
                         if( maxval(srch_order)>primesrch3D%get_ntotrefs() )stop 'Failed test_prep_reforis 33'

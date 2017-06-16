@@ -6,7 +6,7 @@ We announce the release of a new version of our program package SIMPLE (v2.5) fo
  
 New features include:
  
-* A new DDD movie pre-processing program that implements motion correction based the same principal strategy as Grigorieff's Uunblur. There are two important differences: automatic weighting of the frames using a correlation-based M-estimator and stochastic continuous optimisation of the shift parameters. This enables analysis of movies with severe pathologies due to radiation damage or extreme drift.
+* A new DDD movie pre-processing program that implements motion correction based the same principal strategy as Grigorieff's Unblur. There are two important differences: automatic weighting of the frames using a correlation-based M-estimator and stochastic continuous optimisation of the shift parameters. This enables analysis of movies with severe pathologies due to radiation damage or extreme drift.
  
 * A new program for DDD movie pre-processing of tomographic tilt-series.
  

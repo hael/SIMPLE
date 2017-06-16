@@ -71,6 +71,7 @@ contains
         p%kfromto(2) = calc_fourier_index(p%lp, p%boxmatch, p%smpd)
         ! generate images
         call b%vol%read(p%vols(1))
+        call b%vol%fwd_ft
         call b%vol%expand_cmat
         imgs_refs  = projvol(b%vol, o_refs,  p)
         imgs_ptcls = projvol(b%vol, o_ptcls, p)
