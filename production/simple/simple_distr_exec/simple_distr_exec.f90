@@ -120,8 +120,13 @@ select case(prg)
         ! <unblur/begin>is a program for movie alignment or unblurring based the same principal strategy as
         ! Grigorieffs program (hence the name). There are two important differences: automatic weighting of
         ! the frames using a correlation-based M-estimator and continuous optimisation of the shift parameters.
-        ! Input is a textfile with absolute paths to movie files in addition to a few obvious input
-        ! parameters<unblur/end>
+        ! Input is a textfile with absolute paths to movie files in addition to a few input parameters, some
+        ! of which deserve a comment. If dose_rate and exp_time are given the individual frames will be 
+        ! low-pass filtered accordingly (dose-weighting strategy). If scale is given, the movie will be Fourier 
+        ! cropped according to the down-scaling factor (for super-resolution movies). If nframesgrp is given 
+        ! the frames will be pre-averaged in the given chunk size (Falcon 3 movies). If fromf/tof are given, 
+        ! a contiguous subset of frames will be averaged without any dose-weighting applied. 
+        ! <unblur/end>
         !
         ! set required keys
         keys_required(1)  = 'filetab'
@@ -155,11 +160,15 @@ select case(prg)
         ! execute
         call xunblur_distr%execute(cline)
     case( 'unblur_tomo' )
-        !==Program unblur
+        !==Program unblur_tomo
         !
         ! <unblur_tomo/begin>is a program for movie alignment or unblurring of tomographic movies.
-        ! Input is a textfile with absolute paths to movie files in addition to a few obvious input
-        ! parameters<unblur/end>
+        ! Input is a textfile with absolute paths to movie files in addition to a few input parameters, some
+        ! of which deserve a comment. The exp_doc document should contain per line exp_time=X and dose_rate=Y.
+        ! It is asssumed that the input list of movies (one per tilt) are ordered temporally. This is necessary
+        ! for correct dose-weighting of tomographic tilt series. If scale is given, the movie will be Fourier 
+        ! cropped according to the down-scaling factor (for super-resolution movies). If nframesgrp is given 
+        ! the frames will be pre-averaged in the given chunk size (Falcon 3 movies). <unblur_tomo/end>
         !
         ! set required keys
         keys_required(1)  = 'tomoseries'
@@ -266,38 +275,26 @@ select case(prg)
         keys_required(5)  = 'ctf'
         ! set optional keys
         keys_optional(1)  = 'nparts'
-        keys_optional(2)  = 'chunksz'
-        keys_optional(3)  = 'nthr'
-        keys_optional(4)  = 'ncunits'
-        keys_optional(5)  = 'deftab'
-        keys_optional(6)  = 'refs'
-        keys_optional(7)  = 'oritab'
-        keys_optional(8)  = 'hp'
-        keys_optional(9)  = 'lp'
-        keys_optional(10) = 'lpstart'
-        keys_optional(11) = 'lpstop'
-        keys_optional(12) = 'cenlp'
-        keys_optional(13) = 'trs'
-        keys_optional(14) = 'automsk'
-        keys_optional(15) = 'amsklp'
-        keys_optional(16) = 'inner'
-        keys_optional(17) = 'width'
-        keys_optional(18) = 'startit'
-        keys_optional(19) = 'maxits'
-        keys_optional(20) = 'filwidth'
-        keys_optional(21) = 'center'
-        keys_optional(22) = 'autoscale'
-        keys_optional(23) = 'oritab3D'
+        keys_optional(2)  = 'nthr'
+        keys_optional(3)  = 'ncunits'
+        keys_optional(4)  = 'deftab'
+        keys_optional(5)  = 'refs'
+        keys_optional(6)  = 'oritab'
+        keys_optional(7)  = 'hp'
+        keys_optional(8)  = 'lp'
+        keys_optional(9)  = 'lpstart'
+        keys_optional(10) = 'lpstop'
+        keys_optional(11) = 'cenlp'
+        keys_optional(12) = 'trs'
+        keys_optional(13) = 'inner'
+        keys_optional(14) = 'width'
+        keys_optional(15) = 'startit'
+        keys_optional(16) = 'maxits'
+        keys_optional(17) = 'center'
+        keys_optional(18) = 'autoscale'
         ! documentation
         if( describe ) call print_doc_prime2D
-        ! parse command line
-        ! call check_restart( entire_line, is_restart )
-        ! if( is_restart )then
-        !     call parse_restart('prime2D', entire_line, cline, keys_required(:7), keys_optional(:19))
-        ! else
-        !     call cline%parse( keys_required(:7), keys_optional(:19) )
-        ! endif
-        call cline%parse( keys_required(:5), keys_optional(:23) )
+        call cline%parse( keys_required(:5), keys_optional(:18) )
         ! set defaults
         if( .not. cline%defined('lpstart') ) call cline%set('lpstart',  15.)
         if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',    8.)
@@ -351,8 +348,10 @@ select case(prg)
     case('prime3D_init')
         !==Program prime3D_init
         !
-        ! <prime3D_init/begin>is a program for generating a random initial model for initialisation of PRIME3D
-        ! <prime3D_init/end> 
+        ! <prime3D_init/begin>is a program for generating a random initial model for initialisation of PRIME3D.
+        ! If the data set is large (>5000 images), generating a random model can be slow. To speedup, set 
+        ! nran to some smaller number, resulting in nran images selected randomly for 
+        ! reconstruction<prime3D_init/end> 
         !
         ! set required keys
         keys_required(1)  = 'stk'

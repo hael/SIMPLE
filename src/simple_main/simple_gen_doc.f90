@@ -550,7 +550,13 @@ contains
         write(*,'(A)', advance='no') ' as Grigorieffs program (hence the name). There are two important differences: a'
         write(*,'(A)', advance='no') 'utomatic weighting of the frames using a correlation-based M-estimator and conti'
         write(*,'(A)', advance='no') 'nuous optimisation of the shift parameters. Input is a textfile with absolute pa'
-        write(*,'(A)') 'ths to movie files in addition to a few obvious input parameters'
+        write(*,'(A)', advance='no') 'ths to movie files in addition to a few input parameters, some of which deserve'
+        write(*,'(A)', advance='no') 'a comment. If dose_rate and exp_time are given the individual frames will be low'
+        write(*,'(A)', advance='no') '-pass filtered accordingly (dose-weighting strategy). If scale is given, the mov'
+        write(*,'(A)', advance='no') 'ie will be Fourier cropped according to the down-scaling factor (for super-resol'
+        write(*,'(A)', advance='no') 'ution movies). If nframesgrp is given the frames will be pre-averaged in the giv'
+        write(*,'(A)', advance='no') 'en chunk size (Falcon 3 movies). If fromf/tof are given, a contiguous subset of'
+        write(*,'(A)') 'frames will be averaged without any dose-weighting applied.'
         stop
     end subroutine print_doc_unblur
 
@@ -593,8 +599,14 @@ contains
 
     subroutine print_doc_unblur_tomo
         write(*,'(A)', advance='no') 'is a program for movie alignment or unblurring of tomographic movies. Input is a'
-        write(*,'(A)', advance='no') ' textfile with absolute paths to movie files in addition to a few obvious input'
-        write(*,'(A)') 'parameters'
+        write(*,'(A)', advance='no') ' textfile with absolute paths to movie files in addition to a few input paramete'
+        write(*,'(A)', advance='no') 'rs, some of which deserve a comment. The exp_doc document should contain per lin'
+        write(*,'(A)', advance='no') 'e exp_time=X and dose_rate=Y. It is asssumed that the input list of movies (one'
+        write(*,'(A)', advance='no') 'per tilt) are ordered temporally. This is necessary for correct dose-weighting o'
+        write(*,'(A)', advance='no') 'f tomographic tilt series. If scale is given, the movie will be Fourier cropped'
+        write(*,'(A)', advance='no') 'according to the down-scaling factor (for super-resolution movies). If nframesgr'
+        write(*,'(A)', advance='no') 'p is given the frames will be pre-averaged in the given chunk size (Falcon 3 mov'
+        write(*,'(A)') 'ies).'
         stop
     end subroutine print_doc_unblur_tomo
 

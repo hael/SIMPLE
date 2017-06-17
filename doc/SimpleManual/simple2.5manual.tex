@@ -884,7 +884,7 @@ norec     = do not reconstruct volume(s)(yes|no){no}
 
 \subsection{Distributed Workflow: \prgname{prime3D\_init}}
 \label{prime3D_init}
-\prgname{prime3D\_init} is a program for generating a random initial model for initialisation of PRIME3D 
+\prgname{prime3D\_init} is a program for generating a random initial model for initialisation of PRIME3D. If the data set is large (>5000 images), generating a random model can be slow. To speedup, set nran to some smaller number, resulting in nran images selected randomly for reconstruction
 
 \begin{verbatim}
 USAGE:
@@ -988,7 +988,7 @@ offset = pixels offset{7}
 
 \subsection{Distributed Workflow: \prgname{unblur}}
 \label{unblur}
-\prgname{unblur} is a program for movie alignment or unblurring based the same principal strategy as Grigorieffs program (hence the name). There are two important differences: automatic weighting of the frames using a correlation-based M-estimator and continuous optimisation of the shift parameters. Input is a textfile with absolute paths to movie files in addition to a few obvious input parameters
+\prgname{unblur} is a program for movie alignment or unblurring based the same principal strategy as Grigorieffs program (hence the name). There are two important differences: automatic weighting of the frames using a correlation-based M-estimator and continuous optimisation of the shift parameters. Input is a textfile with absolute paths to movie files in addition to a few input parameters, some of which deserve a comment. If dose\_rate and exp\_time are given the individual frames will be low-pass filtered accordingly (dose-weighting strategy). If scale is given, the movie will be Fourier cropped according to the down-scaling factor (for super-resolution movies). If nframesgrp is given the frames will be pre-averaged in the given chunk size (Falcon 3 movies). If fromf/tof are given, a contiguous subset of frames will be averaged without any dose-weighting applied. 
 
 \begin{verbatim}
 USAGE:
@@ -1064,7 +1064,7 @@ phaseplate = images obtained with phaseplate(yes|no){no}
 
 \subsection{Distributed Workflow: \prgname{unblur\_tomo}}
 \label{unblur_tomo}
-\prgname{unblur\_tomo} is a program for movie alignment or unblurring of tomographic movies. Input is a textfile with absolute paths to movie files in addition to a few obvious input parameters
+\prgname{unblur\_tomo} is a program for movie alignment or unblurring of tomographic movies. Input is a textfile with absolute paths to movie files in addition to a few input parameters, some of which deserve a comment. The exp\_doc document should contain per line exp\_time=X and dose\_rate=Y. It is asssumed that the input list of movies (one per tilt) are ordered temporally. This is necessary for correct dose-weighting of tomographic tilt series. If scale is given, the movie will be Fourier cropped according to the down-scaling factor (for super-resolution movies). If nframesgrp is given the frames will be pre-averaged in the given chunk size (Falcon 3 movies). 
 
 \begin{verbatim}
 USAGE:
@@ -1924,24 +1924,21 @@ ncls = # clusters
 ctf  = ctf flag(yes|no|flip)
 
 OPTIONAL
-nthr     = # OpenMP threads{1}
-deftab   = text file with CTF info(*.txt/*.asc)
-oritab   = table (text file) of orientations(*.asc/*.txt)
-refs     = initial2Dreferences.ext
-hp       = high-pass limit(in A)
-lp       = low-pass limit(in A)
-lpstart  = start low-pass limit(in A){15}
-lpstop   = stop low-pass limit(in A){8}
-cenlp    = low-pass limit for binarisation in centering(in A){30 A}
-trs      = maximum halfwidth shift(in pixels)
-automsk  = envelope masking(yes|no|cavg){no}
-amsklp   = low-pass limit for envelope mask generation(in A)
-inner    = inner mask radius(in pixels)
-width    = falloff of inner mask(in pixels){10}
-startit  = start iterating from here
-maxits   = maximum # iterations
-center   = center image(s)/class average(s)/volume(s)(yes|no){no}
-oritab3D = table (text file) of 3D orientations(*.asc/*.txt)
+nthr    = # OpenMP threads{1}
+deftab  = text file with CTF info(*.txt/*.asc)
+oritab  = table (text file) of orientations(*.asc/*.txt)
+refs    = initial2Dreferences.ext
+hp      = high-pass limit(in A)
+lp      = low-pass limit(in A)
+lpstart = start low-pass limit(in A){15}
+lpstop  = stop low-pass limit(in A){8}
+cenlp   = low-pass limit for binarisation in centering(in A){30 A}
+trs     = maximum halfwidth shift(in pixels)
+inner   = inner mask radius(in pixels)
+width   = falloff of inner mask(in pixels){10}
+startit = start iterating from here
+maxits  = maximum # iterations
+center  = center image(s)/class average(s)/volume(s)(yes|no){no}
 \end{verbatim}
 
 \subsection{Program: \prgname{prime3D}}
@@ -2549,7 +2546,7 @@ neg     = invert contrast of images(yes|no)
 
 \subsection{Program: \prgname{unblur}}
 \label{unblur}
-\prgname{unblur} is a program for movie alignment or unblurring based the same principal strategy as Grigorieffs program (hence the name). There are two important differences: automatic weighting of the frames using a correlation-based M-estimator and continuous optimisation of the shift parameters. Input is a textfile with absolute paths to movie files in addition to a few obvious input parameters
+\prgname{unblur} is a program for movie alignment or unblurring based the same principal strategy as Grigorieffs program (hence the name). There are two important differences: automatic weighting of the frames using a correlation-based M-estimator and continuous optimisation of the shift parameters. Input is a textfile with absolute paths to movie files in addition to a few input parameters, some of which deserve a comment. If dose\_rate and exp\_time are given the individual frames will be low-pass filtered accordingly (dose-weighting strategy). If scale is given, the movie will be Fourier cropped according to the down-scaling factor (for super-resolution movies). If nframesgrp is given the frames will be pre-averaged in the given chunk size (Falcon 3 movies). If fromf/tof are given, a contiguous subset of frames will be averaged without any dose-weighting applied. 
 
 \begin{verbatim}
 USAGE:
