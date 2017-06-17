@@ -18,7 +18,7 @@ New features include:
  
 * Improved parallel CPU performance through load balancing as well as data and algorithm re-organisation. It is now possible to process data sets of realistic size on laptops or lightweight workstations that cost less than 2,000 USD.
  
-* High-level workflows for 2D analysis and initial 3D model generationproduction that automates initialisation, update of search parameters and dynamic down-scaling of the images for improved performance.
+* High-level workflows for 2D analysis and initial 3D model generation that automates initialisation, updates search parameters automatically and dynamically down-scales the images for improved performance.
  
 If you need help installing SIMPLE, optimising its execution for your computer architecture or experience any problems or bugs please use the contact form on the webpage (www.simplecryoem.com) to file a help ticket. We will endeavour to respond within two days.
  

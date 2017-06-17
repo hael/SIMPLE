@@ -412,11 +412,16 @@ select case(prg)
     case( 'unblur' )
         !==Program unblur
         !
-        ! <unblur/begin>is a program for movie alignment or unblurring based on similar principles as
+        ! <unblur/begin>is a program for movie alignment or unblurring based the same principal strategy as
         ! Grigorieffs program (hence the name). There are two important differences: automatic weighting of
-        ! the frames using a corrleation-based M-estimator and continuous optimisation of the shift parameters.
-        ! Input is a textfile with absolute paths to movie files in addition to a few obvious input
-        ! parameters<unblur/end>
+        ! the frames using a correlation-based M-estimator and continuous optimisation of the shift parameters.
+        ! Input is a textfile with absolute paths to movie files in addition to a few input parameters, some
+        ! of which deserve a comment. If dose_rate and exp_time are given the individual frames will be 
+        ! low-pass filtered accordingly (dose-weighting strategy). If scale is given, the movie will be Fourier 
+        ! cropped according to the down-scaling factor (for super-resolution movies). If nframesgrp is given 
+        ! the frames will be pre-averaged in the given chunk size (Falcon 3 movies). If fromf/tof are given, 
+        ! a contiguous subset of frames will be averaged without any dose-weighting applied. 
+        ! <unblur/end>
         !
         ! set required keys
         keys_required(1)  = 'filetab'

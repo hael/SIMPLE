@@ -180,11 +180,16 @@ select case(prg)
     case( 'unblur' )
         !==Program unblur
         !
-        ! <unblur/begin>is a program for movie alignment or unblurring based on similar principles as
+        ! <unblur/begin>is a program for movie alignment or unblurring based the same principal strategy as
         ! Grigorieffs program (hence the name). There are two important differences: automatic weighting of
-        ! the frames using a corrleation-based M-estimator and continuous optimisation of the shift parameters.
-        ! Input is a textfile with absolute paths to movie files in addition to a few obvious input
-        ! parameters<unblur/end>
+        ! the frames using a correlation-based M-estimator and continuous optimisation of the shift parameters.
+        ! Input is a textfile with absolute paths to movie files in addition to a few input parameters, some
+        ! of which deserve a comment. If dose_rate and exp_time are given the individual frames will be 
+        ! low-pass filtered accordingly (dose-weighting strategy). If scale is given, the movie will be Fourier 
+        ! cropped according to the down-scaling factor (for super-resolution movies). If nframesgrp is given 
+        ! the frames will be pre-averaged in the given chunk size (Falcon 3 movies). If fromf/tof are given, 
+        ! a contiguous subset of frames will be averaged without any dose-weighting applied. 
+        ! <unblur/end>
         !
         ! set required keys
         keys_required(1)  = 'filetab'
@@ -218,11 +223,15 @@ select case(prg)
         ! execute
         call xunblur_distr%execute(cline)
     case( 'unblur_tomo' )
-        !==Program unblur
+        !==Program unblur_tomo
         !
         ! <unblur_tomo/begin>is a program for movie alignment or unblurring of tomographic movies.
-        ! Input is a textfile with absolute paths to movie files in addition to a few obvious input
-        ! parameters<unblur/end>
+        ! Input is a textfile with absolute paths to movie files in addition to a few input parameters, some
+        ! of which deserve a comment. The exp_doc document should contain per line exp_time=X and dose_rate=Y.
+        ! It is asssumed that the input list of movies (one per tilt) are ordered temporally. This is necessary
+        ! for correct dose-weighting of tomographic tilt series. If scale is given, the movie will be Fourier 
+        ! cropped according to the down-scaling factor (for super-resolution movies). If nframesgrp is given 
+        ! the frames will be pre-averaged in the given chunk size (Falcon 3 movies). <unblur_tomo/end>
         !
         ! set required keys
         keys_required(1)  = 'tomoseries'
@@ -437,8 +446,10 @@ select case(prg)
     case('prime3D_init')
         !==Program prime3D_init
         !
-        ! <prime3D_init/begin>is a program for generating a random initial model for initialisation of PRIME3D
-        ! <prime3D_init/end> 
+        ! <prime3D_init/begin>is a program for generating a random initial model for initialisation of PRIME3D.
+        ! If the data set is large (>5000 images), generating a random model can be slow. To speedup, set 
+        ! nran to some smaller number, resulting in nran images selected randomly for 
+        ! reconstruction<prime3D_init/end> 
         !
         ! set required keys
         keys_required(1)  = 'stk'
