@@ -84,7 +84,7 @@ type :: polarft_corrcalc
     procedure, private :: corr_1
     procedure, private :: corr_2
     generic            :: corr => corr_1, corr_2
-    procedure          :: manhattan_distance
+    procedure          :: euclid
     ! DESTRUCTOR
     procedure          :: kill
 end type polarft_corrcalc
@@ -760,25 +760,25 @@ contains
         cc = cc/sqrt(sqsum_ref_sh*self%sqsums_ptcls(iptcl))
     end function corr_2
 
-    !>  \brief  for calculating the Manhattan distance between reference & particle
+    !>  \brief  for calculating the Euclidean distance between reference & particle
     !!          This ought to be a better choice for the orientation weights
-    function manhattan_distance( self, iref, iptcl, irot ) result( dist )
+    function euclid( self, iref, iptcl, irot ) result( dist )
+        use gnufor2
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl, irot
-        integer :: k
-        real    :: pow_ref, pow_ptcl, norm, dist, sqsum_ref
-        complex(sp) :: pft_ref(self%refsz,self%kfromto(1):self%kfromto(2))
+        integer     :: k, nk
+        real        :: pow_ref, pow_ptcl, norm, dist, sqsum_ref
         complex(sp) :: pft_ref_norm(self%refsz,self%kfromto(1):self%kfromto(2))
         complex(sp) :: pft_ptcl_norm(self%refsz,self%kfromto(1):self%kfromto(2))
-        call self%prep_ref4corr(iptcl, iref, pft_ref, sqsum_ref)
+        call self%prep_ref4corr(iptcl, iref, pft_ref_norm, sqsum_ref)
         do k=self%kfromto(1),self%kfromto(2)
-            pow_ref  = sum(real(pft_ref(:,k))*&
-                &conjg(pft_ref(:,k)))/real(self%refsz)
+            pow_ref  = sum(real(pft_ref_norm(:,k))*&
+                &conjg(pft_ref_norm(:,k)))/real(self%refsz)
             pow_ptcl = sum(real(self%pfts_ptcls(iptcl,irot:irot+self%winsz,k))*&
                 &conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,k)))/real(self%refsz)
             if( pow_ref > TINY )then
                 norm = sqrt(pow_ref)
-                pft_ref_norm(:,k) = pft_ref(:,k)/norm
+                pft_ref_norm(:,k) = pft_ref_norm(:,k)/norm
             else
                 pft_ref_norm(:,k) = cmplx(0.,0.)
             endif
@@ -789,8 +789,9 @@ contains
                 pft_ptcl_norm(:,k) = cmplx(0.,0.)
             endif
         end do
-        dist = sum(cabs(pft_ref_norm - pft_ptcl_norm))
-    end function manhattan_distance
+        nk   = self%refsz * (self%kfromto(2) - self%kfromto(1) + 1)
+        dist = sum(cabs(pft_ref_norm - pft_ptcl_norm)**2.0)/(nk * self%refsz)
+    end function euclid
 
     ! DESTRUCTOR
 

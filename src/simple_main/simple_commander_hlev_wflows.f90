@@ -158,7 +158,7 @@ contains
         real,                  parameter :: LPLIMS(2)=[20.,10.] ! default low-pass limits
         real,                  parameter :: CENLP=30.           ! consistency with prime3D
         integer,               parameter :: MAXITS_SNHC=30, MAXITS_INIT=15, MAXITS_REFINE=40
-        integer,               parameter :: STATE=1, NPROJS_SYMSRCH=50
+        integer,               parameter :: STATE=1, NPROJS_SYMSRCH=50, NPEAKS_REFINE=6
         character(len=32),     parameter :: ITERFBODY     = 'prime3Ddoc_'
         character(len=32),     parameter :: VOLFBODY      = 'recvol_state'
         character(len=STDLEN), parameter :: STKSCALEDBODY = 'stk_sc_ini3D_from_cavgs'
@@ -269,7 +269,8 @@ contains
         call cline_prime3D_refine%set('maxits', real(MAXITS_REFINE))
         call cline_prime3D_refine%set('dynlp', 'no') ! better be explicit about the dynlp
         call cline_prime3D_refine%set('lp', LPLIMS(2))
-        call cline_prime3D_refine%set('refine', 'shc')
+        call cline_prime3D_refine%set('refine', 'no')
+        call cline_prime3D_refine%set('npeaks', real(NPEAKS_REFINE))
         ! (5) RE-PROJECT VOLUME
         call cline_projvol%set('prg', 'projvol')
         call cline_projvol%set('outstk', 'reprojs'//p_master%ext)

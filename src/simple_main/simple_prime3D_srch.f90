@@ -73,7 +73,7 @@ type prime3D_srch
     ! CALCULATORS
     procedure, private :: gen_symnnmat
     procedure          :: prep_npeaks_oris
-    procedure          :: stochastic_weights_L1norm
+    procedure          :: stochastic_weights_L2norm
     procedure          :: sort_shifted_peaks
     ! GETTERS & SETTERS
     procedure          :: update_best
@@ -236,7 +236,7 @@ contains
             call self%inpl_srch(pftcc, iptcl) ! search shifts
             ! prepare weights and orientations
             call self%prep_npeaks_oris
-            call self%o_peaks%stochastic_weights(wcorr)
+            call self%stochastic_weights_L2norm(pftcc, iptcl, e, wcorr)
             if( self%doshift ) call self%sort_shifted_peaks
             call self%update_best(pftcc, iptcl, a)
             call a%set(iptcl, 'corr', wcorr)
@@ -315,7 +315,7 @@ contains
             call self%inpl_srch(pftcc, iptcl) ! search shifts
             ! prepare weights and orientations
             call self%prep_npeaks_oris
-            call self%o_peaks%stochastic_weights( wcorr )
+            call self%stochastic_weights_L2norm(pftcc, iptcl, e, wcorr)
             if( self%doshift ) call self%sort_shifted_peaks
             call self%update_best(pftcc, iptcl, a)
             call a%set(iptcl, 'corr', wcorr)
@@ -821,7 +821,7 @@ contains
     end subroutine prep_npeaks_oris
 
     !>  \brief  determines and updates stochastic weights
-    subroutine stochastic_weights_L1norm( self, pftcc, iptcl, e, wcorr )
+    subroutine stochastic_weights_L2norm( self, pftcc, iptcl, e, wcorr )
         class(prime3D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: iptcl
@@ -845,7 +845,7 @@ contains
             roind        = pftcc%get_roind(360.-o%e3get())
             proj         = e%find_closest_proj(o,1)
             ref          = (state - 1) * self%nprojs + proj
-            dists(ipeak) = pftcc%manhattan_distance(ref, iptcl, roind)
+            dists(ipeak) = pftcc%euclid(ref, iptcl, roind)
         end do
         ! calculate normalised weights and weighted corr
         ws    = exp(-dists)
@@ -854,7 +854,7 @@ contains
         ! update npeaks individual weights
         call self%o_peaks%set_all('ow', ws)
         deallocate(corrs)
-    end subroutine stochastic_weights_L1norm
+    end subroutine stochastic_weights_L2norm
 
     !> \brief  for sorting already shifted npeaks oris
     subroutine sort_shifted_peaks( self )
