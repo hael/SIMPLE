@@ -127,12 +127,6 @@ contains
             call b%img_msk%write('automasks2D'//p%ext, iptcl)
             call b%img%write(p%outstk, iptcl)
         end do
-        ! do iptcl=1,p%nptcls
-        !     call b%img%read(p%stk, iptcl)
-        !     call automask2D(b%img, p, b%img_msk)
-        !     call b%img_msk%write('automasks2D'//p%ext, iptcl)
-        !     call b%img%write(p%outstk, iptcl)
-        ! end do
         ! end gracefully
         call simple_end('**** SIMPLE_AUTOMASK2D NORMAL STOP ****')
     end subroutine exec_automask2D
@@ -155,10 +149,7 @@ contains
             p%masks(istate)    = 'automask_state'//int2str_pad(istate,2)//p%ext
             p%vols_msk(istate) = add2fbody(p%vols(istate), p%ext, 'msk')
             call b%vol%read(p%vols(istate))
-            call b%mskvol%init(p, b%vol)
-            call b%mskvol%write(p%masks(istate))
-            call b%vol%write(p%vols_msk(istate))
-            !call automask(b, p, cline, b%vol,  b%mskvol, p%vols_msk(istate), p%masks(istate))
+            call automask(b, p, cline, b%vol,  b%mskvol, p%vols_msk(istate), p%masks(istate))
         end do
         ! end gracefully
         call simple_end('**** SIMPLE_AUTOMASK3D NORMAL STOP ****')
