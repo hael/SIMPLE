@@ -1,5 +1,5 @@
 In any parallel region or OpenMP construct don’t use any constructors or destructors. Don’t update containers or iterators. Parallelise only
-old-school Firtran array statements and loops.
+old-school Fortran array statements and loops.
 
 omp_get_wtime()
 

@@ -17,44 +17,43 @@ logical, parameter :: DEBUG = .false.
 
 type prime3D_srch
     private
-    type(prime_srch)        :: srch_common             !< functionalities common to primesrch2D/3D
-    type(oris)              :: o_refs                  !< projection directions search space
-    type(oris)              :: o_peaks                 !< orientations of best npeaks oris
-    type(pftcc_shsrch)      :: shsrch_obj              !< origin shift search object
-    type(pftcc_inplsrch)    :: inplsrch_obj            !< in-plane search object
-    integer                 :: nrefs          = 0      !< total number of references (nstates*nprojs)
-    integer                 :: nnnrefs        = 0      !< total number of neighboring references (nstates*nnn)
-    integer                 :: nstates        = 0      !< number of states
-    integer                 :: nprojs         = 0      !< number of projections (same as number of oris in o_refs)
-    integer                 :: nrots          = 0      !< number of in-plane rotations in polar representation
-    integer                 :: npeaks         = 0      !< number of peaks (nonzero orientation weights)
-    integer                 :: nbetter        = 0      !< nr of better orientations identified
-    integer                 :: nrefs_eval     = 0      !< nr of references evaluated
-    integer                 :: nnn            = 0      !< number of nearest neighbors
-    integer                 :: nsym           = 0      !< symmetry order
-    integer                 :: prev_roind     = 0      !< previous in-plane rotation index
-    integer                 :: prev_state     = 0      !< previous state index
-    integer                 :: prev_ref       = 0      !< previous reference index
-    integer                 :: prev_proj      = 0      !< previous projection index
-    real                    :: prev_corr      = 1.     !< previous best correlation
-    real                    :: specscore      = 0.     !< spectral score
-    real                    :: prev_shvec(2)  = 0.     !< previous origin shift vector
-    real                    :: lims(2,2)      = 0.     !< shift search range limit
-    real                    :: athres         = 0.     !< angular threshold
-    real                    :: dfx            = 0.     !< ctf x-defocus
-    real                    :: dfy            = 0.     !< ctf y-defocus
-    real                    :: angast         = 0.     !< ctf astigmatism
-    integer, allocatable    :: proj_space_inds(:)      !< projection space index array
-    integer, allocatable    :: srch_order(:)           !< stochastic search order
-    integer, allocatable    :: nnmat_sym(:,:)          !< nearest neighbor matrix for adaptive symmetry refinement
-    logical, allocatable    :: state_exists(:)         !< indicates whether each state is populated
-    character(len=STDLEN)   :: refine        = ''      !< refinement flag
-    character(len=STDLEN)   :: ctf           = ''      !< ctf flag
-    character(len=STDLEN)   :: shbarr        = ''      !< shift barrier flag
-    character(len=STDLEN)   :: pgrp          = 'c1'    !< point-group symmetry
-    logical                 :: doshift       = .true.  !< origin shift search indicator
-    logical                 :: greedy_inpl   = .true.  !< indicator for whether in-plane search is greedy or not
-    logical                 :: exists        = .false. !< 2 indicate existence
+    type(oris)              :: o_refs                   !< projection directions search space
+    type(oris)              :: o_peaks                  !< orientations of best npeaks oris
+    type(pftcc_shsrch)      :: shsrch_obj               !< origin shift search object
+    type(pftcc_inplsrch)    :: inplsrch_obj             !< in-plane search object
+    integer                 :: nrefs          = 0       !< total number of references (nstates*nprojs)
+    integer                 :: nnnrefs        = 0       !< total number of neighboring references (nstates*nnn)
+    integer                 :: nstates        = 0       !< number of states
+    integer                 :: nprojs         = 0       !< number of projections (same as number of oris in o_refs)
+    integer                 :: nrots          = 0       !< number of in-plane rotations in polar representation
+    integer                 :: npeaks         = 0       !< number of peaks (nonzero orientation weights)
+    integer                 :: nbetter        = 0       !< nr of better orientations identified
+    integer                 :: nrefs_eval     = 0       !< nr of references evaluated
+    integer                 :: nnn            = 0       !< number of nearest neighbors
+    integer                 :: nsym           = 0       !< symmetry order
+    integer                 :: prev_roind     = 0       !< previous in-plane rotation index
+    integer                 :: prev_state     = 0       !< previous state index
+    integer                 :: prev_ref       = 0       !< previous reference index
+    integer                 :: prev_proj      = 0       !< previous projection index
+    real                    :: prev_corr      = 1.      !< previous best correlation
+    real                    :: specscore      = 0.      !< spectral score
+    real                    :: prev_shvec(2)  = 0.      !< previous origin shift vector
+    real                    :: lims(2,2)      = 0.      !< shift search range limit
+    real                    :: athres         = 0.      !< angular threshold
+    real                    :: dfx            = 0.      !< ctf x-defocus
+    real                    :: dfy            = 0.      !< ctf y-defocus
+    real                    :: angast         = 0.      !< ctf astigmatism
+    integer, allocatable    :: proj_space_inds(:)       !< projection space index array
+    integer, allocatable    :: srch_order(:)            !< stochastic search order
+    integer, allocatable    :: nnmat_sym(:,:)           !< nearest neighbor matrix for adaptive symmetry refinement
+    logical, allocatable    :: state_exists(:)          !< indicates whether each state is populated
+    character(len=STDLEN)   :: refine         = ''      !< refinement flag
+    character(len=STDLEN)   :: ctf            = ''      !< ctf flag
+    character(len=STDLEN)   :: shbarr         = ''      !< shift barrier flag
+    character(len=STDLEN)   :: pgrp           = 'c1'    !< point-group symmetry
+    logical                 :: doshift        = .true.  !< origin shift search indicator
+    logical                 :: greedy_inpl    = .true.  !< indicator for whether in-plane search is greedy or not
+    logical                 :: exists         = .false. !< 2 indicate existence
   contains
     ! CONSTRUCTOR
     procedure          :: new
@@ -106,6 +105,8 @@ end type prime3D_srch
 
 contains
 
+    ! CONSTRUCTOR
+
     !>  \brief  is a constructor
     subroutine new( self, a, p, pftcc )
         use simple_params, only: params
@@ -121,7 +122,6 @@ contains
         self%nprojs      =  p%nspace
         self%nrefs       =  self%nprojs*self%nstates
         self%nrots       =  round2even(twopi*real(p%ring2))
-        self%srch_common =  prime_srch(p)
         self%npeaks      =  p%npeaks
         self%nbetter     =  0
         self%nrefs_eval  =  0
@@ -334,9 +334,9 @@ contains
                 if( self%nstates > 1 ) state = nint( self%o_refs%get(iref, 'state') )
                 if( self%state_exists(state) )then
                     corrs     = pftcc%gencorrs(iref, iptcl) ! In-plane correlations
-                    loc       = maxloc(corrs)                      ! greedy in-plane
-                    inpl_ind  = loc(1)                             ! in-plane angle index
-                    inpl_corr = corrs(inpl_ind)                    ! max in plane correlation
+                    loc       = maxloc(corrs)               ! greedy in-plane
+                    inpl_ind  = loc(1)                      ! in-plane angle index
+                    inpl_corr = corrs(inpl_ind)             ! max in plane correlation
                     call self%store_solution(pftcc, iref, iref, inpl_ind, inpl_corr)
                     projspace_corrs( iref ) = inpl_corr ! stash in-plane correlation for sorting                   
                     ! update nbetter to keep track of how many improving solutions we have identified
@@ -358,11 +358,11 @@ contains
                 if( self%nstates>1 ) state = nint( self%o_refs%get(iref, 'state') )
                 if( self%state_exists( state ) )then
                     corrs     = pftcc%gencorrs(iref, iptcl) ! In-plane correlations
-                    loc       = maxloc(corrs)                      ! greedy in-plane
-                    inpl_ind  = loc(1)                             ! in-plane angle index
-                    inpl_corr = corrs(loc(1))                      ! max in plane correlation
+                    loc       = maxloc(corrs)               ! greedy in-plane
+                    inpl_ind  = loc(1)                      ! in-plane angle index
+                    inpl_corr = corrs(loc(1))               ! max in plane correlation
                     call self%store_solution(pftcc, iref, iref, inpl_ind, inpl_corr)
-                    projspace_corrs( iref ) = inpl_corr            ! stash in-plane correlation for sorting
+                    projspace_corrs( iref ) = inpl_corr     ! stash in-plane correlation for sorting
                     ! update nbetter to keep track of how many improving solutions we have identified
                     if( self%npeaks == 1 )then
                         if( inpl_corr > self%prev_corr ) self%nbetter = self%nbetter + 1
@@ -377,11 +377,11 @@ contains
                             iref_sym = self%nnmat_sym(iref,isym)
                             if( self%proj_space_inds(iref_sym) /= 0 ) cycle
                             corrs     = pftcc%gencorrs(iref_sym, iptcl) ! In-plane correlations
-                            loc       = maxloc(corrs)                          ! greedy in-plane
-                            inpl_ind  = loc(1)                                 ! in-plane angle index
-                            inpl_corr = corrs(loc(1))                          ! max in plane correlation
+                            loc       = maxloc(corrs)                   ! greedy in-plane
+                            inpl_ind  = loc(1)                          ! in-plane angle index
+                            inpl_corr = corrs(loc(1))                   ! max in plane correlation
                             call self%store_solution(pftcc, iref_sym, iref_sym, inpl_ind, inpl_corr)
-                            projspace_corrs( iref_sym ) = inpl_corr            ! stash in-plane correlation for sorting
+                            projspace_corrs( iref_sym ) = inpl_corr     ! stash in-plane correlation for sorting
                         end do
                     endif
                 endif
@@ -453,7 +453,7 @@ contains
                 state     = 1
                 if( self%nstates > 1 ) state = nint( self%o_refs%get(iref, 'state') )
                 if( self%state_exists( state ) )then
-                    corrs    = pftcc%gencorrs( iref, iptcl )      ! in-plane correlations 
+                    corrs    = pftcc%gencorrs( iref, iptcl )             ! in-plane correlations 
                     inpl_ind = shcloc(self%nrots, corrs, self%prev_corr) ! first improving in-plane index
                     if( inpl_ind > 0 ) inpl_corr = corrs( inpl_ind )     ! improving correlation found
                     self%nrefs_eval = self%nrefs_eval + 1                ! updates fractional search space
@@ -987,6 +987,7 @@ contains
         enddo
     end subroutine get_oris
 
+    !>  \brief  stash solution in o_refs
     subroutine store_solution( self, pftcc, ind, ref, inpl_ind, corr )
         class(prime3D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
@@ -1157,7 +1158,6 @@ contains
     subroutine kill( self )
         class(prime3D_srch), intent(inout) :: self !< instance
         if( self%exists )then
-            call self%srch_common%kill
             call self%o_peaks%kill
             call self%online_destruct
             if( allocated(self%state_exists) ) deallocate(self%state_exists)
