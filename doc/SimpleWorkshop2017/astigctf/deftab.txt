@@ -1,1 +1,0 @@
-kv=300 cs=2.7 fraca=0.1 dfx=3.0 dfy=4.5 angast=30

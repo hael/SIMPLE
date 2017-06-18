@@ -749,16 +749,9 @@ ncunits    = # computing units, can be < nparts{nparts}
 hp         = high-pass limit(in A)
 lp         = low-pass limit(in A)
 lpstop     = stop low-pass limit(in A){8}
-frac       = fraction of ptcls(0-1){1}
-automsk    = envelope masking(yes|no|cavg){no}
-mw         = molecular weight(in kD)
-amsklp     = low-pass limit for envelope mask generation(in A)
-edge       = edge size for softening molecular envelope(in pixels)
-binwidth   = binary layers grown for molecular envelope(in pixels){1}
 inner      = inner mask radius(in pixels)
 width      = falloff of inner mask(in pixels){10}
 nspace     = # projection directions
-shbarrier  = use shift search barrier constraint(yes|no){yes}
 autoscale  = automatic down-scaling(yes|no){yes}
 pgrp_known = point-group known a priori(yes|no){no}
 \end{verbatim}
@@ -806,7 +799,6 @@ ctf  = ctf flag(yes|no|flip)
 
 OPTIONAL
 nparts    = # partitions in distributed exection
-chunksz   = # images/orientations in chunk
 nthr      = # OpenMP threads{1}
 ncunits   = # computing units, can be < nparts{nparts}
 deftab    = text file with CTF info(*.txt/*.asc)
@@ -818,16 +810,12 @@ lpstart   = start low-pass limit(in A){15}
 lpstop    = stop low-pass limit(in A){8}
 cenlp     = low-pass limit for binarisation in centering(in A){30 A}
 trs       = maximum halfwidth shift(in pixels)
-automsk   = envelope masking(yes|no|cavg){no}
-amsklp    = low-pass limit for envelope mask generation(in A)
 inner     = inner mask radius(in pixels)
 width     = falloff of inner mask(in pixels){10}
 startit   = start iterating from here
 maxits    = maximum # iterations
-filwidth  = width of filament (in A)
 center    = center image(s)/class average(s)/volume(s)(yes|no){no}
 autoscale = automatic down-scaling(yes|no){yes}
-oritab3D  = table (text file) of 3D orientations(*.asc/*.txt)
 \end{verbatim}
 
 \subsection{Distributed Workflow: \prgname{prime3D}}
