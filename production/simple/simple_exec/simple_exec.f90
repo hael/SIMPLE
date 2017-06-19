@@ -1000,9 +1000,11 @@ select case(prg)
        keys_optional(11) = 'amsklp'
        keys_optional(12) = 'automsk'
        keys_optional(13) = 'smpd'
+       keys_optional(14)  = 'outstk'
+       keys_optional(15)  = 'outvol'
        ! parse command line
        if( describe ) call print_doc_mask
-       call cline%parse( keys_required(:2), keys_optional(:13))
+       call cline%parse( keys_required(:2), keys_optional(:15))
        ! execute
        call xmask%execute(cline)
     case( 'automask2D' )

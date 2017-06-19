@@ -108,19 +108,13 @@ if( $doc eq 'tex' ){
         print_latex_usage($prg, %prgcmdlineinstr);
     }  
 }elsif( $doc eq 'web' ){
+    print "************Distributed SIMPLE Workflows************\n";
+    foreach my $prg (@prgnames_distr_sorted){
+        print_html_instr($prg, %prginstr_distr);
+    }
+    print "************SIMPLE Programs************\n";
     foreach my $prg (@prgnames_sorted){
         print_html_instr($prg, %prginstr);
-    }
-    foreach my $prg (@prgnames_distr_sorted){
-        my$isthere = 0;
-        foreach my $prg_tmp (@prgnames_sorted){
-            if( $prg =~ /$prg_tmp$/ ){
-                $isthere = 1;
-            }
-        }
-        if( $isthere == 0 ){
-            print_html_instr($prg, %prginstr_distr);
-        }        
     }
 }elsif( $doc eq 'f90' ){
     print "module simple_gen_doc\n";
