@@ -3,11 +3,10 @@ module simple_reconstructor
 !$ use omp_lib_kinds
 use simple_fftw3
 use simple_defs
-use simple_image,   only: image
-use simple_winfuns, only: winfuns
-use simple_ctf,     only: ctf
-use simple_jiffys,  only: alloc_err
-use simple_kbinterpol ! use all in there
+use simple_image,      only: image
+use simple_ctf,        only: ctf
+use simple_jiffys,     only: alloc_err
+use simple_kbinterpol, only: kbinterpol
 implicit none
 
 public :: reconstructor
@@ -15,13 +14,12 @@ private
 
 type, extends(image) :: reconstructor
     private
-    type(winfuns)               :: wfuns                        !< window functions object
+    type(kbinterpol)            :: kbwin                        !< window function object
     type(c_ptr)                 :: kp                           !< c pointer for fftw allocation
     type(ctf)                   :: tfun                         !< CTF object
     real(kind=c_float), pointer :: rho(:,:,:)=>null()           !< sampling+CTF**2 density
     complex, allocatable        :: cmat_exp(:,:,:)              !< Fourier components of expanded reconstructor
     real,    allocatable        :: rho_exp(:,:,:)               !< sampling+CTF**2 density of expanded reconstructor
-    character(len=STDLEN)       :: wfun_str      = 'kb'         !< window function, string descriptor
     real                        :: winsz         = 1.           !< window half-width
     real                        :: alpha         = 2.           !< oversampling ratio
     real                        :: dens_const    = 1.           !< density estimation constant, old val: 1/nptcls
@@ -40,7 +38,7 @@ type, extends(image) :: reconstructor
     ! SETTERS
     procedure          :: reset
     ! GETTER
-    procedure          :: get_wfuns
+    procedure          :: get_kbwin
     ! I/O
     procedure          :: write_rho
     procedure          :: read_rho
@@ -85,7 +83,6 @@ contains
         if( self%ldim_img(3) < 2 ) stop 'reconstructor need to be 3D 4 now; alloc_rho; simple_reconstructor'
         call self%dealloc_rho
         self%dens_const = 1./real(p%nptcls)
-        self%wfun_str   = p%wfun
         self%winsz      = p%winsz
         self%alpha      = p%alpha
         self%ctfflag    = p%ctf
@@ -93,7 +90,7 @@ contains
         if( p%neg .eq. 'yes' ) self%tfneg = .true.
         self%tfastig = .false.
         if( p%tfplan%mode .eq. 'astig' ) self%tfastig = .true.
-        self%wfuns = winfuns(self%wfun_str,self%winsz,self%alpha)
+        self%kbwin = kbinterpol(self%winsz,self%alpha)
         ikind_tmp  = self%get_imgkind()
         self%ikind = ikind_tmp
         if( trim(self%ikind) .eq. 'xfel' )then
@@ -145,11 +142,11 @@ contains
     
     ! GETTERS
     
-    function get_wfuns( self ) result( wfs )
+    function get_kbwin( self ) result( wf )
         class(reconstructor), intent(inout) :: self
-        type(winfuns) :: wfs
-        wfs = self%wfuns
-    end function get_wfuns
+        type(kbinterpol) :: wf
+        wf = kbinterpol(self%winsz,self%alpha)
+    end function get_kbwin
     
     ! I/O
 
@@ -223,9 +220,9 @@ contains
             w = self%dens_const
         endif
         do i=1,wdim
-            where(w(i,:,:)>0.)w(i,:,:) = w(i,:,:) * self%wfuns%eval_apod(real(win(1,1)+i-1)-loc(1))
-            where(w(:,i,:)>0.)w(:,i,:) = w(:,i,:) * self%wfuns%eval_apod(real(win(2,1)+i-1)-loc(2))
-            where(w(:,:,i)>0.)w(:,:,i) = w(:,:,i) * self%wfuns%eval_apod(real(win(3,1)+i-1)-loc(3))
+            where(w(i,:,:)>0.)w(i,:,:) = w(i,:,:) * self%kbwin%apod(real(win(1,1)+i-1)-loc(1))
+            where(w(:,i,:)>0.)w(:,i,:) = w(:,i,:) * self%kbwin%apod(real(win(2,1)+i-1)-loc(2))
+            where(w(:,:,i)>0.)w(:,:,i) = w(:,:,i) * self%kbwin%apod(real(win(3,1)+i-1)-loc(3))
         enddo
         ! expanded matrices update
         if( inoutmode )then
@@ -521,7 +518,7 @@ contains
                     if( p%l_xfel )then
                         call img%pad(img_pd)
                     else
-                        call prep4cgrid(img, img_pd, p%msk)
+                        call prep4cgrid(img, img_pd, p%msk, self%kbwin)
                     endif
                     if( p%pgrp == 'c1' )then
                         if( doshellweight )then

@@ -212,7 +212,7 @@ contains
         type(build)       :: b
         integer           :: i, startit, s, n_states, cnt
         logical           :: update_res, converged
-        real              :: lpstart, lpstop
+        real              :: lpstart, lpstop, corr, corr_prev
         update_res = .false.
         converged  = .false.
         p = params(cline) ! parameters generated
@@ -282,9 +282,18 @@ contains
                     end do
                 endif
             endif
+            corr = -1
             do i=startit,p%maxits
                 p%extr_thresh = p%extr_thresh * p%rrate
                 call prime3D_exec(b, p, cline, i, update_res, converged)
+                if( .not. p%l_distr_exec .and. p%refine .eq. 'snhc' .and. .not. cline%defined('szsn') )then
+                    ! update stochastic neighborhood size if corr is not improving
+                    corr_prev = corr
+                    corr      = b%a%get_avg('corr')
+                    if( i > 1 .and. corr <= corr_prev )then
+                        p%szsn = min(SZSN_MAX,p%szsn + SZSN_STEP)
+                    endif
+                endif
                 if( update_res )then
                     ! dynamic low-pass
                     p%find = p%find+p%fstep

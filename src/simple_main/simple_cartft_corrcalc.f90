@@ -152,7 +152,7 @@ contains
         integer,                intent(in)    :: iref
         integer   :: s
         s = nint(o%get('state'))
-        call self%refvols(s)%fproject_expanded(o, self%img_refs(iref))
+        call self%refvols(s)%fproject(o, self%img_refs(iref))
         if( self%ctf .ne. 'no' )then
             call self%create_ctf_image(o)
             call self%img_refs(iref)%mul(self%img_ctf)
@@ -170,7 +170,7 @@ contains
         real, allocatable,      intent(out)   :: res(:), corrs(:)
         integer :: s
         s = nint(o%get('state'))
-        call self%refvols(s)%fproject_expanded(o, self%img_refs(iref))
+        call self%refvols(s)%fproject(o, self%img_refs(iref))
         if( self%ctf .ne. 'no' )then
             call self%create_ctf_image(o)
             call self%img_refs(iref)%mul(self%img_ctf)

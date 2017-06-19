@@ -16,11 +16,6 @@ public :: read_img_from_stk, set_bp_range, set_bp_range2D,grid_ptcl, prepimg4ali
 &norm_struct_facts, preprefvol, prep2Dref
 private
 
-! interface prep2Dref
-!     module procedure prep2Dref_1
-!     module procedure prep2Dref_2
-! end interface
-
 logical, parameter :: DEBUG     = .false.
 real,    parameter :: SHTHRESH  = 0.0001
 real,    parameter :: CENTHRESH = 0.01   ! threshold for performing volume/cavg centering in pixels
@@ -172,16 +167,23 @@ contains
 
     !>  \brief  grids one particle image to the volume
     subroutine grid_ptcl( b, p, orientation, os, shellweights, ran_eo )
+        use simple_kbinterpol, only: kbinterpol
         class(build),              intent(inout) :: b
         class(params),             intent(inout) :: p
         class(ori),                intent(inout) :: orientation
         class(oris),     optional, intent(inout) :: os
         real,            optional, intent(in)    :: shellweights(:)
         real,            optional, intent(in)    :: ran_eo
-        real      :: pw, ran, w
-        integer   :: jpeak, s, k
-        type(ori) :: orisoft, o_sym
-        logical   :: softrec
+        real             :: pw, ran, w
+        integer          :: jpeak, s, k
+        type(ori)        :: orisoft, o_sym
+        type(kbinterpol) :: kbwin
+        logical          :: softrec
+        if( p%eo .eq. 'yes' )then
+            kbwin = b%eorecvols(1)%get_kbwin()
+        else
+            kbwin = b%recvols(1)%get_kbwin()
+        endif
         softrec = .false.
         if( present(os) )then
             softrec = .true.
@@ -197,7 +199,7 @@ contains
             if( p%l_xfel )then
                 call b%img%pad(b%img_pad)
             else
-                call prep4cgrid(b%img, b%img_pad, p%msk)
+                call prep4cgrid(b%img, b%img_pad, p%msk, kbwin)
             endif
             if( DEBUG ) write(*,*) '*** simple_hadamard_common ***: prepared image for gridding'
             ran = ran3()
@@ -293,14 +295,13 @@ contains
             call b%img%clip(b%img_match) ! SQUARE DIMS ASSUMED
             ! MASKING
             if( p%doautomsk )then
-                ! from volume
+                ! 3D enveloppe from volume
                 call b%mskvols(state)%apply_mask(b%img_match, o)
             else if( p%automsk .eq. 'cavg' )then
-                ! ab initio mask
+                ! 2D ab initio mask
                 call b%mskimg%apply_mask(b%img_match, nint(o%get('cls')))
-                !call automask2D(b%img_match, p)
             else              
-                ! apply a soft-edged mask
+                ! soft-edged mask
                 if( p%l_innermsk )then
                     call b%img_match%mask(p%msk, 'soft', inner=p%inner, width=p%width)
                 else
@@ -312,25 +313,6 @@ contains
         endif
         if( DEBUG ) write(*,*) '*** simple_hadamard_common ***: finished prepimg4align'
     end subroutine prepimg4align
-
-    ! subroutine prep2Dref_1( p, ref )
-    !     use simple_image, only: image
-    !     class(params),  intent(in)    :: p
-    !     class(image),   intent(inout) :: ref
-    !     ! clip image if needed
-    !     if( p%boxmatch < p%box ) call ref%clip_inplace([p%boxmatch,p%boxmatch,1]) ! SQUARE DIMS ASSUMED
-    !     ! normalise
-    !     call ref%norm
-    !     ! apply mask
-    !     if( p%l_innermsk )then
-    !         call ref%mask(p%msk, 'soft', inner=p%inner, width=p%width)
-    !     else 
-    !         call ref%mask(p%msk, 'soft')
-    !     endif
-    !     if( p%l_automsk ) call automask2D(ref, p)
-    !     ! move to Fourier space
-    !     call ref%fwd_ft
-    ! end subroutine prep2Dref_1
 
     subroutine prep2Dref( b, p, icls )
         use simple_image, only: image
@@ -356,7 +338,9 @@ contains
         if( p%l_automsk )then
             ! automasking
             call b%mskimg%update_cls(b%img_match, icls)
-            ! call automask2D(b%img_match, p)
+            if( (p%l_distr_exec .and. p%part.eq.1) .or. (.not.p%l_distr_exec))then
+                call b%img_match%write(trim(p%refs)//'msk'//p%ext, icls)
+            endif
         else
             ! soft masking
             if( p%l_innermsk )then
@@ -402,7 +386,7 @@ contains
             ! mask using a molecular envelope
             if( p%doautomsk )then
                 p%masks(s)   = 'automask_state'//int2str_pad(s,2)//p%ext
-                call b%mskvols(s)%init3D( p, b%vol )
+                call b%mskvols(s)%init( p, b%vol )
                 if( p%l_distr_exec )then
                     if( p%part == 1 )then
                         ! write files

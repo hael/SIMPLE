@@ -74,6 +74,8 @@ type :: polarft_corrcalc
     procedure          :: write_pfts_ptcls
     procedure          :: read_pfts_ptcls
     ! MODIFIERS
+    procedure          :: shellnorm_ref
+    procedure          :: shellnorm_ptcl
     procedure, private :: prep_ref4corr
     procedure          :: xfel_subtract_shell_mean
     ! CALCULATORS
@@ -519,6 +521,45 @@ contains
     
     ! MODIFIERS
 
+    subroutine shellnorm_ref( self, iref )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref
+        integer :: k
+        real    :: pow(self%kfromto(1):self%kfromto(2)), norm
+        do k=self%kfromto(1),self%kfromto(2)
+            pow(k) = sum(real(self%pfts_refs(iref,:,k))*conjg(self%pfts_refs(iref,:,k)))
+        end do 
+        pow = pow/real(self%refsz)
+        do k=self%kfromto(1),self%kfromto(2)
+            if( pow(k) > TINY )then
+                norm = sqrt(pow(k))
+                self%pfts_refs(iref,:,k) = self%pfts_refs(iref,:,k)/norm
+            else
+                self%pfts_refs(iref,:,k) = cmplx(0.,0.)
+            endif
+        end do
+    end subroutine shellnorm_ref
+
+    subroutine shellnorm_ptcl( self, iptcl )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iptcl
+        integer :: k
+        real    :: pow(self%kfromto(1):self%kfromto(2)), norm
+        do k=self%kfromto(1),self%kfromto(2)
+             pow(k) = sum(real(self%pfts_ptcls(iptcl,:,k))*conjg(self%pfts_ptcls(iptcl,:,k)))
+        end do
+        pow = pow/real(self%ptclsz)
+        do k=self%kfromto(1),self%kfromto(2)
+            if( pow(k) > TINY )then
+                norm = sqrt(pow(k))
+                self%pfts_ptcls(iptcl,:,k) = self%pfts_ptcls(iptcl,:,k)/norm
+            else
+                self%pfts_ptcls(iptcl,:,k) = cmplx(0.,0.)
+            endif
+        end do
+        call self%memoize_sqsum_ptcl(iptcl)
+    end subroutine shellnorm_ptcl
+
     subroutine prep_ref4corr( self, iptcl, iref, pft_ref, sqsum_ref )
         use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
@@ -758,7 +799,7 @@ contains
         ! finalize cross-correlation
         cc = cc/sqrt(sqsum_ref_sh*self%sqsums_ptcls(iptcl))
     end function corr_2
-    
+
     ! DESTRUCTOR
 
     !>  \brief  is a destructor

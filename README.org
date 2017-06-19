@@ -5,20 +5,17 @@
 #+attr_html: :width 600 :alt Single-particle CryoEM Image Processing Linux Engine :align center
 [[https://github.com/hael/SIMPLE3.0/blob/cmake-feature/gui/www/img/simple_logo.svg]]
 
-
 #+name: banner
 #+attr_html: :width 300 :align center
  | [[https://opensource.org/licenses/GPL-3.0][https://img.shields.io/:license-gpl-blue.svg]] | [[https://github.com/hael/SIMPLE3.0/archive/release2.5.zip][https://img.shields.io/badge/SIMPLE-release2.5-green.svg]]  |
 
-
-
-
 #+name: status
 #+attr_html:  :align center :width 500
-|                     | [[https://img.shields.io/badge/GNU-gfortran-blue.svg]]                                                           | [[https://img.shields.io/badge/Intel Fortran-ifort-blue.svg]] |
-| Ubuntu 14.10, 16.04 | [[https://img.shields.io/badge/build-v4.9-green.svg]]    -    [[https://img.shields.io/badge/build-v7.1-green.svg]]  | [[https://img.shields.io/badge/build-v2017.2.174-green.svg]]  |
-| MacOSX              | [[https://img.shields.io/badge/build-v4.9-green.svg]]                                                            | [[https://img.shields.io/badge/build-NA-gray.svg]]            |
-| Win                 | https://img.shields.io/badge/build-NA-gray.svg                                                               | https://img.shields.io/badge/build-NA-gray.svg            |
+|                       | [[https://img.shields.io/badge/GNU-gfortran-blue.svg]]                                                    | [[https://img.shields.io/badge/Intel Fortran-ifort-blue.svg]] |
+| Ubuntu (14.10, 16.04) | [[https://img.shields.io/badge/build-v4.9-green.svg]] , [[https://img.shields.io/badge/build-v7.1-green.svg]] | [[https://img.shields.io/badge/build-v2017.2.174-green.svg]]  |
+| Centos (MASSIVE3)     | [[https://img.shields.io/badge/build-gcc5%20fftw3.3-green.svg]]                                           | [[https://img.shields.io/badge/build-intel/2016-green.svg]]   |
+| MacOSX (10.12)        | [[https://img.shields.io/badge/build-v4.9-green.svg]]                                                     | [[https://img.shields.io/badge/build-NA-gray.svg]]            |
+| Win                   | [[https://img.shields.io/badge/build-NA-gray.svg]]                                                        | [[https://img.shields.io/badge/build-NA-gray.svg]]           |
 
 
 *Important Notices*

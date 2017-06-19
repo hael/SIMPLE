@@ -32,11 +32,11 @@ for i in range(len(lines)):
 
 # keys equivalence
 key_dict = { 
-             'e1'    :'AngleRot',    # to comment to parse ctf parms only
-             'e2'    :'AngleTilt',   # to comment to parse ctf parms only
-             'e3'    :'AnglePsi',    # to comment to parse ctf parms only
-             'x'     :'OriginX',     # to comment to parse ctf parms only
-             'y'     :'OriginY',     # to comment to parse ctf parms only
+#             'e1'    :'AngleRot',    # to comment to parse ctf parms only
+#             'e2'    :'AngleTilt',   # to comment to parse ctf parms only
+#             'e3'    :'AnglePsi',    # to comment to parse ctf parms only
+#             'x'     :'OriginX',     # to comment to parse ctf parms only
+#             'y'     :'OriginY',     # to comment to parse ctf parms only
              'dfx'   :'DefocusU',
              'dfy'   :'DefocusV',
              'angast':'DefocusAngle',

@@ -188,26 +188,26 @@ contains
     ! SEARCH ROUTINES
 
     !>  \brief a master prime search routine
-    subroutine exec_prime2D_srch( self, pftcc, iptcl, a, lconv, greedy, extr_bound )
+    subroutine exec_prime2D_srch( self, pftcc, iptcl, a, greedy, extr_bound ) ! lconv
         class(prime2D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: iptcl
         class(oris),             intent(inout) :: a
-        logical,                 intent(in)    :: lconv
+        ! logical,                 intent(in)    :: lconv
         logical, optional,       intent(in)    :: greedy
         real,    optional,       intent(in)    :: extr_bound
         logical :: ggreedy
         ggreedy = .false.
         if( present(greedy) ) ggreedy = greedy
-        if( lconv )then
-            call self%shift_srch(pftcc, iptcl, a)
-        else
+        ! if( lconv )then
+        !     call self%shift_srch(pftcc, iptcl, a)
+        ! else
             if( ggreedy )then
                 call self%greedy_srch(pftcc, iptcl, a)
             else
                 call self%stochastic_srch(pftcc, iptcl, a, extr_bound)
             endif
-        endif        
+        ! endif        
         ! memory management (important for ompenMP distr over arrays of prime2D_srch objects)
         if( allocated(self%srch_order) ) deallocate(self%srch_order)
         if( DEBUG ) write(*,'(A)') '>>> PRIME2D_SRCH::EXECUTED PRIME2D_SRCH'

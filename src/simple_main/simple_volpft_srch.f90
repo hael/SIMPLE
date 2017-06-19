@@ -1,97 +1,145 @@
 module simple_volpft_srch
-use simple_opt_factory,     only: opt_factory
 use simple_opt_spec,        only: opt_spec
-use simple_optimizer,       only: optimizer
+use simple_pftcc_opt,       only: pftcc_opt
 use simple_volpft_corrcalc, only: volpft_corrcalc
-use simple_ori,             only: ori
+use simple_simplex_opt,     only: simplex_opt
 implicit none
 
-public :: volpft_srch_init, volpft_6dimsrch
+public :: volpft_srch_init, volpft_srch_minimize
 private
 
-type(opt_factory)               :: ofac                !< optimizer factory for Euler angles
-type(opt_spec)                  :: ospec               !< optimizer specification object for Euler angles
-class(optimizer), pointer       :: nlopt      =>null() !< pointer to nonlinear Euler optimizer
-class(volpft_corrcalc), pointer :: vpftcc_ptr =>null() !< pointer to pftcc object
-real, allocatable               :: corrs(:)            !< correlations
-integer, allocatable            :: inds(:)             !< orientation indices
-real                            :: trs                 !< shift half-range
-integer, parameter              :: NRESTARTS=5         !< number of restarts
+logical, parameter :: DEBUG  = .false.
+integer, parameter :: NPROJ  = 200
+integer, parameter :: NBEST  = 20
+integer, parameter :: ANGRES = 10
+
+type(volpft_corrcalc)           :: vpftcc               !< corr calculator
+type(opt_spec)                  :: ospec                !< optimizer specification object
+type(simplex_opt)               :: nlopt                !< optimizer object
+class(volpft_corrcalc), pointer :: vpftcc_ptr => null() !< vpftcc object
+integer                         :: nrestarts = 3        !< simplex restarts (randomized bounds)
+logical                         :: serial = .true.      !< controls shared-mem parallellization of corr calc
 
 contains
     
-    subroutine volpft_srch_init( vpftcc, trs_in )
-        class(volpft_corrcalc), target, intent(in) :: vpftcc
-        real,                           intent(in) :: trs_in
-        real :: lims(6,2)
-        trs = trs_in
-        ! make optimizer specs
-        lims      = 0.
+    subroutine volpft_srch_init( vol_ref, vol_target, hp, lp, nrestarts_in )
+        use simple_projector, only: projector
+        class(projector),  intent(in) :: vol_ref, vol_target
+        real,              intent(in) :: hp, lp
+        integer, optional, intent(in) :: nrestarts_in
+        real :: lims(3,2)
+        ! make the corr calculator
+        call vpftcc%new( vol_ref, vol_target, hp, lp )
+        ! set nrestarts
+        nrestarts = 3
+        if( present(nrestarts_in) ) nrestarts = nrestarts_in
+        ! make optimizer spec
+        lims = 0.
         lims(1,2) = 359.99
         lims(2,2) = 180.
         lims(3,2) = 359.99
-        lims(4,1) = -trs
-        lims(4,2) =  trs
-        lims(5,1) = -trs
-        lims(5,2) =  trs
-        lims(6,1) = -trs
-        lims(6,2) =  trs
-        call ospec%specify('simplex', 6, ftol=1e-4, gtol=1e-4, limits=lims, nrestarts=NRESTARTS)
-        ! call ospec%set_costfun(vpftcc_cost)
-        ! generate optimizer objects with the factory
-        call ofac%new(ospec, nlopt)
-        ! set pointer to corrcalc object
-        vpftcc_ptr => vpftcc
+        call ospec%specify('simplex', 3, ftol=1e-4,&
+        &gtol=1e-4, limits=lims, nrestarts=nrestarts, maxits=30)
+        call ospec%set_costfun(volpft_srch_costfun)
+        ! generate the simplex optimizer object 
+        call nlopt%new(ospec)
     end subroutine volpft_srch_init
-    
-    subroutine volpft_6dimsrch( npeaks, corr_best, o_best )
-        use simple_math, only: hpsort
-        integer,   intent(in)  :: npeaks
-        real,      intent(out) :: corr_best
-        type(ori), intent(out) :: o_best
-        integer   :: noris, ipeak, iori
-        type(ori) :: e
-        real      :: cost, cost_best, corr, shvec_best(3), rotmat(3,3)
-        ! discrete search over Euler angles
-        noris = vpftcc_ptr%get_nspace()
-        if( allocated(corrs) ) deallocate(corrs)
-        if( allocated(inds)  ) deallocate(inds)
-        allocate( corrs(noris), inds(noris) )
-        do iori=1,noris
-            ! corrs(iori) = vpftcc_ptr%corr(iori)
-            inds(iori)  = iori
-        end do
-        call hpsort(noris, corrs, inds)
-        ! continuous search over all parameters
-        call o_best%new
-        cost_best = 1.
-        do ipeak=noris,noris-npeaks+1,-1
-            e = vpftcc_ptr%get_ori(inds(ipeak))
-            ospec%x      = 0.
-            ospec%x(1:3) = e%get_euler()
-            call nlopt%minimize(ospec, cost)
-            if( cost < cost_best )then
-                cost_best = cost
-                corr_best = -cost
-                call o_best%set_euler(ospec%x(1:3))
-                shvec_best = ospec%x(4:6)
-            endif
-        end do
-        call o_best%set('x',shvec_best(1))
-        call o_best%set('y',shvec_best(2))
-        call o_best%set('z',shvec_best(3))
-    end subroutine volpft_6dimsrch
 
-    ! function vpftcc_cost( vec, D ) result( cost )
-    !     integer, intent(in) :: D
-    !     real,    intent(in) :: vec(D)
-    !     real                :: cost
-    !     type(ori)           :: e
-    !     cost = 1.
-    !     if( any(abs(vec(4:6)) > trs) ) return ! barrier constraint
-    !     call e%new
-    !     call e%set_euler(vec(1:3))
-    !     cost = -vpftcc_ptr%corr(e, vec(4:6))
-    ! end function vpftcc_cost
+    function volpft_srch_costfun( vec, D ) result( cost )
+        use simple_ori, only: ori
+        integer, intent(in) :: D
+        real,    intent(in) :: vec(D)
+        type(ori) :: e
+        real      :: cost
+        call e%new
+        call e%set_euler(vec)
+        cost = -vpftcc%corr(e, serial)
+    end function volpft_srch_costfun
+
+    !> \brief  minimization of the cost function
+    function volpft_srch_minimize( fromto ) result( orientation_best )
+        use simple_oris, only: oris
+        use simple_ori,  only: ori
+        integer, optional, intent(in) :: fromto(2)
+        integer                       :: ffromto(2), ntot, iproj, config_best(2), iloc, inpl
+        real                          :: euls(3), corr_best, cost
+        logical                       :: distr_exec
+        type(oris)                    :: espace, resoris
+        type(ori)                     :: orientation, orientation_best
+        integer, allocatable          :: order(:)
+        real,    allocatable          :: corrs(:,:)
+        ! flag distributed/shmem exec & set range
+        distr_exec = present(fromto)
+        if( distr_exec )then
+            ffromto = fromto
+        else
+            ffromto(1) = 1
+            ffromto(2) = NPROJ
+        endif
+        if( ffromto(1) < 1 .or. ffromto(2) > NPROJ )then
+            stop 'range out of bound; simple_volpft_srch :: volpft_srch_minimize'
+        endif
+        ntot = ffromto(2) - ffromto(1) + 1
+        ! create
+        call orientation%new
+        call resoris%new(NPROJ)
+        call espace%new(NPROJ)
+        call espace%spiral
+        allocate(corrs(ffromto(1):ffromto(2),0:359))
+        ! grid search using the spiral geometry & ANGRES degree in-plane resolution
+        serial = .true. ! since the below loop is parallel
+        corrs  = -1.
+        !$omp parallel do schedule(static) default(shared) private(iproj,euls,inpl) proc_bind(close)
+        do iproj=ffromto(1),ffromto(2)
+            euls = espace%get_euler(iproj)
+            do inpl=0,359,ANGRES
+                euls(3) = real(inpl)
+                corrs(iproj,inpl) = vpftcc%corr(euls, serial)
+            end do
+        end do
+        !$omp end parallel do
+        ! identify the best candidates (serial code)
+        do iproj=ffromto(1),ffromto(2)
+            corr_best   = -1.
+            config_best = 0
+            do inpl=0,359,ANGRES
+                if( corrs(iproj,inpl) > corr_best )then
+                    corr_best = corrs(iproj,inpl) 
+                    config_best(1) = iproj
+                    config_best(2) = inpl
+                endif
+            end do
+            ! set local in-plane optimum for iproj
+            orientation = espace%get_ori(config_best(1))
+            call orientation%e3set(real(config_best(2)))
+            call orientation%set('corr', corr_best)
+            call resoris%set_ori(iproj,orientation)
+        end do
+        serial = .false. ! since the simplex search (below) is not parallel, we parallelise the cost eval
+        if( distr_exec )then
+            ! refine all local optima
+            do iloc=ffromto(1),ffromto(2)
+                ospec%x = resoris%get_euler(iloc)
+                call nlopt%minimize(ospec, cost)
+                call resoris%set_euler(iloc, ospec%x)
+                call resoris%set(iloc, 'corr', -cost)
+            end do
+        else
+            ! refine the NBEST local optima
+            ! order the local optima according to correlation
+            order = resoris%order_corr()
+            ! refine the NBEST solutions
+            do iloc=1,NBEST
+                ospec%x = resoris%get_euler(order(iloc))
+                call nlopt%minimize(ospec, cost)
+                call resoris%set_euler(order(iloc), ospec%x)
+                call resoris%set(order(iloc), 'corr', -cost)
+            end do
+        endif
+        ! order the local optima according to correlation
+        order = resoris%order_corr()
+        ! return best
+        orientation_best = resoris%get_ori(order(1))
+    end function volpft_srch_minimize
 
 end module simple_volpft_srch

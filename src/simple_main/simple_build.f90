@@ -30,8 +30,8 @@ use simple_convergence_perptcl, only: convergence_perptcl
 use simple_jiffys,              only: alloc_err
 use simple_mask_projector,      only: mask_projector
 use simple_projector,           only: projector
+use simple_polarizer,           only: polarizer
 use simple_filehandling         ! use all in there
-use simple_kbinterpol           ! use all in there
 implicit none
 
 public :: build, test_build
@@ -46,7 +46,7 @@ type build
     type(convergence)                   :: conv               !< object for convergence checking of the PRIME2D/3D approaches
     type(convergence_perptcl)           :: ppconv             !< per-particle convergence checking object
     type(image)                         :: img                !< individual image objects
-    type(projector)                     :: img_match          !< -"-
+    type(polarizer)                     :: img_match          !< -"-
     type(image)                         :: img_pad            !< -"-
     type(image)                         :: img_tmp            !< -"-
     type(image)                         :: img_msk            !< -"-
@@ -224,8 +224,6 @@ contains
             endif
             if( debug ) write(*,'(a)') 'did set default values'
         endif
-        ! initialize Kaiser-Bessel kernel
-        call init_kbiterpol(KBWINSZ, KBALPHA)
         ! build convergence checkers
         self%conv   = convergence(self%a, p, cline)
         self%ppconv = convergence_perptcl(self%a, p, cline)
@@ -257,7 +255,7 @@ contains
             call self%a%kill
             call self%e%kill
             call self%img%kill
-            call self%img_match%kill_expanded
+            call self%img_match%kill_polarizer
             call self%img_match%kill
             call self%img_copy%kill
             call self%img_tmp%kill

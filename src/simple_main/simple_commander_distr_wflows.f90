@@ -112,7 +112,7 @@ contains
         use simple_commander_preproc
         class(unblur_ctffind_distr_commander), intent(inout) :: self
         class(cmdline),                        intent(inout) :: cline
-        character(len=32), parameter   :: UNIDOCFBODY = 'unindoc_'
+        character(len=32), parameter   :: UNIDOCFBODY = 'unidoc_'
         type(merge_algndocs_commander) :: xmerge_algndocs
         type(cmdline)  :: cline_merge_algndocs
         type(qsys_env) :: qenv
@@ -125,7 +125,7 @@ contains
         ! prepare merge_algndocs command line
         cline_merge_algndocs = cline
         call cline_merge_algndocs%set( 'nthr',    1.                    )
-        call cline_merge_algndocs%set( 'fbody',   'unindoc_'            )
+        call cline_merge_algndocs%set( 'fbody',   'unidoc_'             )
         call cline_merge_algndocs%set( 'nptcls',  real(p_master%nptcls) )
         call cline_merge_algndocs%set( 'ndocs',   real(p_master%nparts) )
         call cline_merge_algndocs%set( 'outfile', 'simple_unidoc.txt'   )
@@ -149,7 +149,7 @@ contains
         use simple_commander_preproc
         class(unblur_distr_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        character(len=32), parameter   :: UNIDOCFBODY = 'unindoc_'
+        character(len=32), parameter   :: UNIDOCFBODY = 'unidoc_'
         type(merge_algndocs_commander) :: xmerge_algndocs
         type(cmdline)  :: cline_merge_algndocs
         type(qsys_env) :: qenv
@@ -162,7 +162,7 @@ contains
         ! prepare merge_algndocs command line
         cline_merge_algndocs = cline
         call cline_merge_algndocs%set( 'nthr',    1.                    )
-        call cline_merge_algndocs%set( 'fbody',   'unindoc_'            )
+        call cline_merge_algndocs%set( 'fbody',   'unidoc_'             )
         call cline_merge_algndocs%set( 'nptcls',  real(p_master%nptcls) )
         call cline_merge_algndocs%set( 'ndocs',   real(p_master%nparts) )
         call cline_merge_algndocs%set( 'outfile', 'simple_unidoc.txt'   )
@@ -328,7 +328,7 @@ contains
             call cline_cavgassemble%set('oritab', 'prime2D_startdoc.txt')
         endif
         ! split stack
-        if( stack_is_split(p_master%ext, qenv%parts, p_master%box) )then
+        if( stack_is_split(p_master%stk_part_fbody, p_master%ext, qenv%parts, p_master%box) )then
         else
             call xsplit%execute(cline)
         endif
@@ -407,7 +407,7 @@ contains
         if( .not. cline%defined('refs') .and. job_descr%isthere('automsk') ) call job_descr%delete('automsk')
 
         ! split stack
-        if( stack_is_split(p_master%ext, qenv%parts, p_master%box) )then
+        if( stack_is_split(p_master%stk_part_fbody, p_master%ext, qenv%parts, p_master%box) )then
         else
             call xsplit%execute(cline)
         endif
@@ -538,7 +538,7 @@ contains
             chunktag = 'chunk'//int2str_pad(ipart,numlen)
             call part_params(ipart)%set('chunk',    int2str(ipart))
             call part_params(ipart)%set('chunktag', chunktag)
-            call part_params(ipart)%set('stk', 'stack_part'//int2str_pad(ipart,numlen)//p_master%ext)
+            call part_params(ipart)%set('stk', trim(p_master%stk_part_fbody)//int2str_pad(ipart,numlen)//p_master%ext)
             if( cline%defined('deftab') )then
                 call read_part_and_write(qenv%parts(ipart,:), p_master%deftab, trim(chunktag)//'deftab.txt')
                 call part_params(ipart)%set('deftab', trim(chunktag)//'deftab.txt')
@@ -550,7 +550,7 @@ contains
             endif
         end do
         ! split stack
-        if( stack_is_split(p_master%ext, qenv%parts, p_master%box) )then
+        if( stack_is_split(p_master%stk_part_fbody, p_master%ext, qenv%parts, p_master%box) )then
         else
             call xsplit%execute(cline)
         endif
@@ -680,7 +680,7 @@ contains
             vol = trim('startvol_state01'//p_master%ext)
         endif
         ! split stack
-        if( stack_is_split(p_master%ext, qenv%parts, p_master%box) )then
+        if( stack_is_split(p_master%stk_part_fbody, p_master%ext, qenv%parts, p_master%box) )then
         else
             call xsplit%execute(cline)
         endif
@@ -737,7 +737,7 @@ contains
         character(len=STDLEN) :: vol, vol_iter, oritab, str, str_iter
         character(len=STDLEN) :: str_state, fsc_file, volassemble_output
         character(len=STDLEN) :: restart_file
-        real                  :: frac_srch_space
+        real                  :: frac_srch_space, corr, corr_prev
         integer               :: s, state, iter, i
         logical               :: vol_defined
         ! make master parameters
@@ -787,7 +787,7 @@ contains
             call cline_volassemble%delete( trim(vol) )
         enddo
         ! SPLIT STACK
-        if( stack_is_split(p_master%ext, qenv%parts, p_master%box) )then
+        if( stack_is_split(p_master%stk_part_fbody, p_master%ext, qenv%parts, p_master%box) )then
         else
             call xsplit%execute(cline)
         endif
@@ -873,6 +873,7 @@ contains
         call cline%gen_job_descr(job_descr)
         ! MAIN LOOP
         iter = p_master%startit-1
+        corr = -1.
         do
             iter = iter+1
             str_iter = int2str_pad(iter,3)
@@ -883,6 +884,16 @@ contains
                 call os%read(trim(cline%get_carg('oritab')))
                 frac_srch_space = os%get_avg('frac')
                 call job_descr%set( 'oritab', trim(oritab) )
+                if( p_master%refine .eq. 'snhc' )then
+                    ! update stochastic neighborhood size if corr is not improving
+                    corr_prev = corr
+                    corr      = os%get_avg('corr')
+                    if( iter > 1 .and. corr <= corr_prev )then
+                        p_master%szsn = min(SZSN_MAX,p_master%szsn + SZSN_STEP)
+                    endif
+                    call job_descr%set('szsn', int2str(p_master%szsn))
+                    call cline%set('szsn', real(p_master%szsn))
+                endif
             endif
             ! exponential cooling of the randomization rate
             p_master%extr_thresh = p_master%extr_thresh * p_master%rrate
@@ -1095,7 +1106,7 @@ contains
             call cline_volassemble%delete( trim(vol) )
         enddo
         ! SPLIT STACK
-        if( stack_is_split(p_master%ext, qenv%parts, p_master%box) )then
+        if( stack_is_split(p_master%stk_part_fbody, p_master%ext, qenv%parts, p_master%box) )then
         else
             call xsplit%execute(cline)
         endif
@@ -1184,9 +1195,14 @@ contains
                     ! post-process
                     vol = 'vol'//trim(int2str(state))
                     call cline_postproc_vol%set('vol1' , trim(vol_iter))
-                    fsc_file = 'fsc_state'//trim(str_state)//'.bin'
-                    call cline_postproc_vol%delete('lp')
-                    call cline_postproc_vol%set('fsc', trim(fsc_file))
+                    if(cline%defined('lp'))then
+                        ! set lp mode: nothing to do
+                    else
+                        ! fsc eo mode
+                        fsc_file = 'fsc_state'//trim(str_state)//'.bin'
+                        call cline_postproc_vol%delete('lp')
+                        call cline_postproc_vol%set('fsc', trim(fsc_file))
+                    endif
                     call xpostproc_vol%execute(cline_postproc_vol)
                     ! updates cmdlines & job description
                     call job_descr%set(trim(vol), trim(vol_iter))
@@ -1221,19 +1237,19 @@ contains
         use simple_commander_rec
         class(recvol_distr_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        logical, parameter                  :: debug=.false.
-        type(split_commander)               :: xsplit
-        type(qsys_env)                      :: qenv
-        type(params)                        :: p_master
-        character(len=STDLEN)               :: volassemble_output
-        type(chash)                         :: job_descr
+        logical, parameter    :: debug=.false.
+        type(split_commander) :: xsplit
+        type(qsys_env)        :: qenv
+        type(params)          :: p_master
+        character(len=STDLEN) :: volassemble_output
+        type(chash)           :: job_descr
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! setup the environment for distributed execution
         call qenv%new(p_master)
         call cline%gen_job_descr(job_descr)
         ! split stack
-        if( stack_is_split(p_master%ext, qenv%parts, p_master%box) )then
+        if( stack_is_split(p_master%stk_part_fbody, p_master%ext, qenv%parts, p_master%box) )then
         else
             call xsplit%execute(cline)
         endif
@@ -1316,7 +1332,8 @@ contains
     ! SYMMETRY SEARCH
 
     subroutine exec_symsrch_distr( self, cline )
-        use simple_comlin_srch, only: comlin_srch_get_nproj
+        use simple_comlin_srch,    only: comlin_srch_get_nproj
+        use simple_commander_misc, only: sym_aggregate_commander
         use simple_math,    only: hpsort
         use simple_sym,     only: sym
         use simple_ori,     only: ori
@@ -1325,23 +1342,26 @@ contains
         class(symsrch_distr_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(merge_algndocs_commander) :: xmerge_algndocs
+        type(sym_aggregate_commander)  :: xsym_aggregate
         type(cmdline)                  :: cline_merge_algndocs
+        type(cmdline)                  :: cline_sym_aggregate
         type(qsys_env)          :: qenv
         type(params)            :: p_master
         type(chash)             :: job_descr
-        type(oris)              :: os, sym_os, o_shift, sym_os_ordered
+        type(oris)              :: os, sym_os, o_shift, sym_os_ordered, sympeaks, e
         type(ori)               :: o, symaxis_ori
         type(sym)               :: syme
         integer,    allocatable :: order_inds(:)
         real                    :: shvec(3)
         integer                 :: i, comlin_srch_nproj
         character(len=STDLEN)   :: part_tab
-        character(len=32), parameter :: SYMFBODY = 'symaxes_part'
-        character(len=32), parameter :: SYMTAB   = 'symaxes.txt'
-        character(len=32), parameter :: SYMSHTAB = 'sym_3dshift.txt'
-        logical,           parameter :: debug    = .false.
-        call cline%set('prg', 'symsrch')
-        ! vol1 need be default
+        character(len=32), parameter :: SYMFBODY    = 'symaxes_part'        ! symmetry axes doc (distributed mode)
+        character(len=32), parameter :: SYMTAB      = 'symaxes.txt'         ! continuous symmetry axes doc
+        character(len=32), parameter :: FINALSYMTAB = 'symaxes_final.txt'   ! final symmetry peaks doc
+        character(len=32), parameter :: SYMSHTAB    = 'sym_3dshift.txt'     ! volume 3D shift
+        character(len=32), parameter :: SYMPROJSTK  = 'sym_projs.mrc'       ! volume reference projections
+        character(len=32), parameter :: SYMPROJTAB  = 'sym_projs.txt'       ! volume reference projections doc
+        logical,           parameter :: debug = .false.
         ! make master parameters
         p_master          = params(cline, checkdistr=.false.)
         comlin_srch_nproj = comlin_srch_get_nproj()
@@ -1350,6 +1370,7 @@ contains
             stop 'number of partitions (npart) > nr of jobs, adjust!'
         endif
         ! setup the environment for distributed execution
+        call cline%set('prg', 'symsrch')
         call qenv%new(p_master)
         call cline%gen_job_descr(job_descr)
         ! schedule
@@ -1364,20 +1385,46 @@ contains
         ! merge docs
         call xmerge_algndocs%execute( cline_merge_algndocs )
         ! read symmetry axes, sort & pick best
-        call sym_os%new(comlin_srch_nproj)
-        call sym_os%read(trim(SYMTAB))
+        ! call sym_os%new(comlin_srch_nproj)
+        ! call sym_os%read(trim(SYMTAB))
+        ! order_inds  = sym_os%order_corr()
+        ! symaxis_ori = sym_os%get_ori(order_inds(1))
+        ! write(*,'(A)') '>>> FOUND SYMMETRY AXIS ORIENTATION:'
+        ! call symaxis_ori%print
+        ! ! sort the output
+        ! call sym_os_ordered%new(comlin_srch_nproj)
+        ! do i=1,comlin_srch_nproj
+        !     o = sym_os%get_ori(order_inds(i))
+        !     call sym_os_ordered%set_ori(i,o)
+        ! enddo
+        ! call del_file(SYMTAB)
+        ! call sym_os_ordered%write(SYMTAB)
+        ! prepare sym_aggregate command line
+        cline_sym_aggregate = cline
+        call cline_sym_aggregate%set( 'prg' ,    'sym_aggregate' )
+        call cline_sym_aggregate%set( 'oritab' , trim(SYMPROJTAB) )
+        call cline_sym_aggregate%set( 'oritab2', trim(SYMTAB) )
+        call cline_sym_aggregate%set( 'stk' ,    trim(SYMPROJSTK) )
+        call cline_sym_aggregate%set( 'outfile', trim(FINALSYMTAB) )
+        call cline_sym_aggregate%set( 'nspace',  real(p_master%nspace) )
+        call cline_sym_aggregate%set( 'eo', 'no' )
+        call qenv%exec_simple_prg_in_queue(cline_sym_aggregate,&
+        &'SYM_AGGREGATE', 'SYM_AGGREGATE_FINISHED')
+        ! read and sort 
+        call sym_os%new( nlines(trim(FINALSYMTAB)) )
+        call sym_os%read( trim(FINALSYMTAB) )
         order_inds  = sym_os%order_corr()
         symaxis_ori = sym_os%get_ori(order_inds(1))
         write(*,'(A)') '>>> FOUND SYMMETRY AXIS ORIENTATION:'
         call symaxis_ori%print
-        ! sort the output
-        call sym_os_ordered%new(comlin_srch_nproj)
-        do i=1,comlin_srch_nproj
+        call sym_os_ordered%new(sym_os%get_noris())
+        do i = 1, sym_os%get_noris()
             o = sym_os%get_ori(order_inds(i))
             call sym_os_ordered%set_ori(i,o)
         enddo
-        call del_file(SYMTAB)
-        call sym_os_ordered%write(SYMTAB)
+        call del_file(trim(FINALSYMTAB))
+        call sym_os_ordered%write(trim(FINALSYMTAB))
+        ! output
         if( cline%defined('oritab') )then
             ! transfer shift and symmetry to input orientations
             call syme%new(p_master%pgrp)
@@ -1402,7 +1449,7 @@ contains
         call syme%kill
         call o_shift%kill
         deallocate(order_inds)
-        call del_file(trim(SYMSHTAB)) ! FOR NOW
+        call del_file(trim(SYMSHTAB))
         do i = 1, p_master%nparts
             part_tab = trim(SYMFBODY)//int2str_pad(i, p_master%numlen)//'.txt'
             call del_file(trim(part_tab))

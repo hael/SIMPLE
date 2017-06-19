@@ -153,7 +153,9 @@ contains
         integer                       :: fnr, file_stat, comlin_srch_nbest, cnt, i, j
         real                          :: shvec(3)
         character(len=STDLEN)         :: fname_finished
-        character(len=32), parameter  :: SYMSHTAB = 'sym_3dshift.txt'
+        character(len=32), parameter  :: SYMSHTAB   = 'sym_3dshift.txt'
+        character(len=32), parameter  :: SYMPROJSTK = 'sym_projs.mrc'
+        character(len=32), parameter  :: SYMPROJTAB = 'sym_projs.txt'
         p = params(cline)                                   ! parameters generated
         call b%build_general_tbox(p, cline, .true., .true.) ! general objects built (no oritab reading)
         call b%build_comlin_tbox(p)                         ! objects for common lines based alignment built
@@ -171,7 +173,19 @@ contains
         endif
         ! generate projections
         call b%vol%mask(p%msk, 'soft')
+        call b%vol%fwd_ft
+        call b%vol%expand_cmat
         b%ref_imgs(1,:) = projvol(b%vol, b%e, p)
+        if( p%l_distr_exec .and. p%part > 1 )then
+            ! do nothing
+        else
+            ! writes projections images and orientations for subsequent reconstruction
+            ! only in local and distributed (part=1) modes
+            do i=1,b%e%get_noris()
+                call b%ref_imgs(1,i)%write(SYMPROJSTK, i)
+            enddo
+            call b%e%write(SYMPROJTAB)
+        endif
         ! expand over symmetry group
         cnt = 0
         do i=1,p%nptcls
@@ -203,6 +217,8 @@ contains
                 call os%write(p%outfile)
             endif
         endif
+        ! cleanup
+        call b%vol%kill_expanded
         ! end gracefully
         call simple_end('**** SIMPLE_SYMSRCH NORMAL STOP ****')
         ! indicate completion (when run in a qsys env)

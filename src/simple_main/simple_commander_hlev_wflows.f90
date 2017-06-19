@@ -157,7 +157,7 @@ contains
         logical,               parameter :: DEBUG=.false.
         real,                  parameter :: LPLIMS(2)=[20.,10.] ! default low-pass limits
         real,                  parameter :: CENLP=30.           ! consistency with prime3D
-        integer,               parameter :: MAXITS_SNHC=30, MAXITS_INIT=10, MAXITS_REFINE=40
+        integer,               parameter :: MAXITS_SNHC=30, MAXITS_INIT=15, MAXITS_REFINE=40
         integer,               parameter :: STATE=1, NPROJS_SYMSRCH=50
         character(len=32),     parameter :: ITERFBODY     = 'prime3Ddoc_'
         character(len=32),     parameter :: VOLFBODY      = 'recvol_state'
@@ -190,7 +190,7 @@ contains
         ! set global state string
         str_state = int2str_pad(STATE,2)
         ! delete possibly pre-existing stack_parts
-        call del_files('stack_part', p_master%nparts, ext=p_master%ext)
+        call del_files(trim(p_master%stk_part_fbody), p_master%nparts, ext=p_master%ext)
         ! decide wether to search for the symmetry axis or put the point-group in from the start
         ! if the point-group is considered known, it is put in from the start
         srch4symaxis = .false.
@@ -213,7 +213,7 @@ contains
             else
                 smpd_target = LPLIMS(2)*LP2SMPDFAC
             endif
-            call scobj%init(p_master, cline, SMPD_TARGET, STKSCALEDBODY)
+            call scobj%init(p_master, cline, smpd_target, STKSCALEDBODY)
         else
             smpd_target = smpd
         endif
@@ -427,7 +427,7 @@ contains
         p_master = params(cline, checkdistr=.false.)
 
         ! delete possibly pre-existing stack & pft parts
-        call del_files('stack_part', p_master%nparts, ext=p_master%ext)
+        call del_files(trim(p_master%stk_part_fbody), p_master%nparts, ext=p_master%ext)
         call del_files('ppfts_memoized_part', p_master%nparts, ext='.bin')
 
         ! prepare command lines from prototype master

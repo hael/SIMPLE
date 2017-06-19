@@ -146,7 +146,6 @@ type :: params
     character(len=STDLEN) :: pdfile='pdfile.bin'
     character(len=STDLEN) :: pgrp='c1'
     character(len=STDLEN) :: plaintexttab=''
-    character(len=STDLEN) :: ppconvfile=''
     character(len=STDLEN) :: prg=''
     character(len=STDLEN) :: refine='no'
     character(len=STDLEN) :: refs_msk=''
@@ -154,6 +153,7 @@ type :: params
     character(len=STDLEN) :: speckind='sqrt'
     character(len=STDLEN) :: split_mode='even'
     character(len=STDLEN) :: stk_part=''
+    character(len=STDLEN) :: stk_part_fbody='stack_part'
     character(len=STDLEN) :: stk=''
     character(len=STDLEN) :: stk2=''
     character(len=STDLEN) :: stk3=''
@@ -246,6 +246,7 @@ type :: params
     integer :: state=1
     integer :: state2split=0
     integer :: stepsz=1
+    integer :: szsn=SZSN_INIT
     integer :: tofny=0
     integer :: tof=1
     integer :: top=1
@@ -490,6 +491,7 @@ contains
         call check_carg('speckind',       self%speckind)
         call check_carg('srch_inpl',      self%srch_inpl)
         call check_carg('stats',          self%stats)
+        call check_carg('stk_part_fbody', self%stk_part_fbody)
         call check_carg('stream',         self%stream)
         call check_carg('swap',           self%swap)
         call check_carg('test',           self%test)
@@ -593,6 +595,7 @@ contains
         call check_iarg('state',          self%state)
         call check_iarg('state2split',    self%state2split)
         call check_iarg('stepsz',         self%stepsz)
+        call check_iarg('szsn',           self%szsn)
         call check_iarg('tof',            self%tof)
         call check_iarg('top',            self%top)
         call check_iarg('tos',            self%tos)
@@ -816,11 +819,9 @@ contains
         endif
         ! set name of partial files in parallel execution
         if( self%numlen > 0 )then
-            self%stk_part   = 'stack_part'//int2str_pad(self%part,self%numlen)//self%ext
-            self%ppconvfile = 'ppconv_part'//int2str_pad(self%part,self%numlen)//'.bin'
+            self%stk_part = trim(self%stk_part_fbody)//int2str_pad(self%part,self%numlen)//self%ext
         else
-            self%stk_part   = 'stack_part'//int2str(self%part)//self%ext
-            self%ppconvfile = 'ppconv_part'//int2str(self%part)//'.bin'
+            self%stk_part = trim(self%stk_part_fbody)//int2str(self%part)//self%ext
         endif
         ! Check for the existance of this file if part is defined on the command line
         if( cline%defined('part') )then
@@ -832,13 +833,7 @@ contains
                     write(*,*) 'Use simple_exec prg=split'
                     stop
                 endif
-            endif
-        else
-            if( cline%defined('chunktag') )then
-                self%ppconvfile = trim(self%chunktag)//'ppconv.bin'
-            else
-                self%ppconvfile = 'ppconv.bin'
-            endif   
+            endif 
         endif
         ! if we are doing chunk-based parallelisation...
         self%l_chunk_distr = .false.

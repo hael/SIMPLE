@@ -10,7 +10,7 @@ use simple_ori,               only: ori
 use simple_cont3D_greedysrch, only: cont3D_greedysrch
 use simple_cont3D_srch,       only: cont3D_srch
 use simple_hadamard_common   ! use all in there
-use simple_math               ! use all in there
+use simple_math              ! use all in there
 implicit none
 
 public :: cont3D_exec
@@ -39,7 +39,6 @@ contains
         use simple_qsys_funs,  only: qsys_job_finished
         use simple_strings,    only: int2str_pad
         use simple_projector,  only: projector
-        use simple_ran_tabu,   only: ran_tabu
         !$ use omp_lib
         !$ use omp_lib_kinds
         class(build),   intent(inout) :: b
@@ -52,7 +51,6 @@ contains
         type(polarft_corrcalc),  allocatable :: pftccs(:)
         integer,                 allocatable :: batches(:,:)
         ! other variables
-        integer, allocatable :: eo_part(:)
         type(oris)           :: softoris
         type(ori)            :: orientation
         type(ran_tabu)       :: rt
@@ -128,7 +126,7 @@ contains
         ! dummy pftcc is only init here so the img polarizer can be initialized
         ! todo: write init_imgpolarizer constructor that does not require pftcc
         call pftcc%new(nrefs_per_ptcl, [1,1], [p%boxmatch,p%boxmatch,1],p%kfromto, p%ring2, p%ctf)
-        call b%img_match%init_imgpolarizer(pftcc)
+        call b%img_match%init_polarizer(pftcc)
         call pftcc%kill
 
         ! INITIALIZE
@@ -181,12 +179,6 @@ contains
             !$omp end parallel do
             ! GRID & 3D REC
             if(p%norec .eq. 'no')then
-                if( p%eo.eq.'yes' )then
-                    rt = ran_tabu(top-fromp+1)
-                    call rt%balanced(2, eo_part)
-                    eo_part = eo_part - 1
-                    call rt%kill
-                endif
                 do iptcl = fromp, top
                     orientation = b%a%get_ori(iptcl)
                     state       = nint(orientation%get('state'))
@@ -194,21 +186,12 @@ contains
                     ind   = iptcl-fromp+1
                     call b%img%copy(batch_imgs(iptcl))
                     if(p%npeaks == 1)then
-                        if( p%eo.eq.'yes' )then
-                            call grid_ptcl(b, p, orientation, ran_eo=real(eo_part(ind)))
-                        else
-                            call grid_ptcl(b, p, orientation)
-                        endif
+                        call grid_ptcl(b, p, orientation)
                     else
                         softoris = cont3Dsrch(iptcl)%get_softoris()
-                        if( p%eo.eq.'yes' )then
-                            call grid_ptcl(b, p, orientation, os=softoris, ran_eo=real(eo_part(ind)))
-                        else
-                            call grid_ptcl(b, p, orientation, os=softoris)
-                        endif
+                        call grid_ptcl(b, p, orientation, os=softoris)
                     endif
                 enddo
-                if( p%eo.eq.'yes' )deallocate(eo_part)
             endif
             ! ORIENTATIONS OUTPUT: only here for now
             do iptcl = fromp, top
@@ -224,7 +207,7 @@ contains
             deallocate(pftccs, cont3Dsrch, cont3Dgreedysrch, batch_imgs)
         enddo
         ! CLEANUP SEARCH
-        call b%img_match%kill_expanded
+        call b%img_match%kill_polarizer
         do state=1,p%nstates
             call b%refvols(state)%kill_expanded
             call b%refvols(state)%kill
@@ -328,7 +311,7 @@ contains
         do iref=1,nrefs_per_ptcl
             oref  = orefs%get_ori(iref)
             state = nint(oref%get('state'))
-            call b%refvols(state)%fproject_polar(iref, oref, pftcc, expanded=.true.)
+            call b%refvols(state)%fproject_polar(iref, oref, pftcc)
         enddo          
     end subroutine prep_pftcc_refs
 
@@ -341,7 +324,7 @@ contains
         type(ori)  :: optcl
         optcl = b%a%get_ori(iptcl)
         call prepimg4align(b, p, optcl)
-        call b%img_match%imgpolarizer(pftcc, iptcl, isptcl=.true.)
+        call b%img_match%polarize(pftcc, iptcl, isptcl=.true.)
     end subroutine prep_pftcc_ptcl
 
 end module simple_cont3D_matcher

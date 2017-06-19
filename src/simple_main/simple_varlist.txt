@@ -114,7 +114,6 @@ pcastk
 pdfile
 pgrp
 plaintexttab
-ppconvfile
 prg
 refine
 refs_msk
@@ -122,6 +121,7 @@ refs
 speckind
 split_mode
 stk_part
+stk_part_fbody
 stk
 stk2
 stk3
@@ -209,6 +209,7 @@ startit
 state
 state2split
 stepsz
+szsn
 tofny
 tof
 top

@@ -68,24 +68,27 @@ contains
     end subroutine exec_noiseimgs
     
     subroutine exec_simimgs( self, cline )
-        use simple_ori,       only: ori
-        use simple_rnd,       only: ran3
-        use simple_math,      only: deg2rad
-        use simple_gridding,  only: prep4cgrid
-        use simple_simulator, only: simimg
-        use simple_ctf,       only: ctf
+        use simple_ori,        only: ori
+        use simple_rnd,        only: ran3
+        use simple_math,       only: deg2rad
+        use simple_gridding,   only: prep4cgrid
+        use simple_simulator,  only: simimg
+        use simple_ctf,        only: ctf
+        use simple_kbinterpol, only: kbinterpol
         class(simimgs_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(params)       :: p
         type(build)        :: b
         type(ori)          :: orientation
         type(ctf)          :: tfun
+        type(kbinterpol)   :: kbwin
         real               :: snr_pink, snr_detector, bfac, bfacerr, dfx, dfy, angast
         integer            :: i, cnt, ntot
         logical, parameter :: debug=.false.
         p = params(cline, .false.)          ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
-        tfun = ctf(p%smpd, p%kv, p%cs, p%fraca)
+        kbwin = kbinterpol(KBWINSZ, KBALPHA)
+        tfun  = ctf(p%smpd, p%kv, p%cs, p%fraca)
         if( .not. cline%defined('outstk') ) p%outstk = 'simimgs'//p%ext
         if( cline%defined('part') )then
             if( .not. cline%defined('outfile') ) stop 'need unique output file for parallel jobs'
@@ -122,8 +125,10 @@ contains
         if( debug ) write(*,'(A)') '>>> DONE CALCULATING SNR:S'
         ! prepare for image generation
         call b%vol%read(p%vols(1))
+        call b%vol%mask(p%msk, 'soft')
         if( debug ) write(*,'(A)') '>>> DID READ VOL'
-        call prep4cgrid(b%vol, b%vol_pad, p%msk)
+        call prep4cgrid(b%vol, b%vol_pad, p%msk, kbwin)
+        call b%vol%expand_cmat
         if( debug ) write(*,'(A)') '>>> DONE PREPARING FOR IMAGE GENERATION'
         write(*,'(A)') '>>> GENERATING IMAGES'
         cnt = 0
@@ -161,6 +166,7 @@ contains
                 call b%img%write(p%outstk, i)
             endif
         end do
+        call b%vol_pad%kill_expanded
         ! end gracefully
         call simple_end('**** SIMPLE_SIMIMGS NORMAL STOP ****')
     end subroutine exec_simimgs

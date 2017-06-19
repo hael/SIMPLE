@@ -168,7 +168,13 @@ contains
         call del_file(p%outfile)
         if(p%ctf .ne. 'no') call pftcc%create_polar_ctfmats(p%smpd, b%a)
         select case(p%refine)
-            case( 'no','adasym','shc','snhc' )
+            case( 'snhc' )
+                !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
+                do iptcl=p%fromp,p%top
+                    call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp, szsn=p%szsn)
+                end do
+                !$omp end parallel do
+            case( 'no','adasym','shc' )
                 if( p%oritab .eq. '' )then
                     !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                     do iptcl=p%fromp,p%top
@@ -259,13 +265,15 @@ contains
     end subroutine prime3D_exec
 
     subroutine gen_random_model( b, p, nsamp_in )
-        use simple_ran_tabu, only: ran_tabu
+        use simple_ran_tabu,   only: ran_tabu
+        use simple_kbinterpol, only: kbinterpol
         class(build),      intent(inout) :: b
         class(params),     intent(inout) :: p
         integer, optional, intent(in)    :: nsamp_in
         type(ran_tabu)       :: rt
         integer, allocatable :: sample(:)
         integer              :: i, k, nsamp, alloc_stat
+        type(kbinterpol)     :: kbwin
         if( p%vols(1) == '' )then
             p%oritab = 'prime3D_startdoc.txt'
             call b%a%rnd_oris
@@ -293,6 +301,7 @@ contains
                 forall(i=1:nsamp) sample(i) = i
             endif
             write(*,'(A)') '>>> RECONSTRUCTING RANDOM MODEL'
+            kbwin = b%recvols(1)%get_kbwin()
             do i=1,nsamp
                 call progress(i, nsamp)
                 orientation = b%a%get_ori(sample(i))
@@ -300,7 +309,7 @@ contains
                 if( p%l_xfel )then
                     call b%img%pad(b%img_pad)
                 else
-                    call prep4cgrid(b%img, b%img_pad, p%msk)
+                    call prep4cgrid(b%img, b%img_pad, p%msk, kbwin)
                 endif
                 if( p%pgrp == 'c1' )then
                     call b%recvols(1)%inout_fplane(orientation, .true., b%img_pad)
@@ -367,7 +376,7 @@ contains
                 cnt = cnt+1
                 call progress(cnt, nrefs)
                 o = b%e%get_ori(iref)
-                call b%vol%fproject_polar(cnt, o, pftcc, expanded=.true.)
+                call b%vol%fproject_polar(cnt, o, pftcc)
             end do
         end do
         ! cleanup
@@ -399,7 +408,7 @@ contains
                 integer   :: cnt, s, iptcl, istate, ntot
                 if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PARTICLES'
                 ! initialize
-                call b%img_match%init_imgpolarizer(pftcc)
+                call b%img_match%init_polarizer(pftcc)
                 ntot = p%top-p%fromp+1
                 cnt  = 0
                 do s=1,p%nstates
@@ -420,7 +429,7 @@ contains
                         call progress(cnt, ntot)
                         call read_img_from_stk( b, p, iptcl )
                         call prepimg4align(b, p, o)
-                        call b%img_match%imgpolarizer(pftcc, iptcl)
+                        call b%img_match%polarize(pftcc, iptcl)
                     end do
                     if( p%doautomsk )call b%mskvols(s)%kill_mskproj
                 end do

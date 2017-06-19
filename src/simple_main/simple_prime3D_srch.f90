@@ -505,14 +505,14 @@ contains
     ! SEARCH ROUTINES
     
     !>  \brief a master prime search routine
-    subroutine exec_prime3D_srch( self, pftcc, iptcl, a, e, lp, greedy, nnmat )
+    subroutine exec_prime3D_srch( self, pftcc, iptcl, a, e, lp, greedy, nnmat, szsn )
         class(prime3D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: iptcl
         class(oris),             intent(inout) :: a, e
         real,                    intent(in)    :: lp
         logical, optional,       intent(in)    :: greedy
-        integer, optional,       intent(in)    :: nnmat(self%nprojs,self%nnn)
+        integer, optional,       intent(in)    :: nnmat(self%nprojs,self%nnn), szsn
         logical :: ggreedy
         ggreedy = .false.
         if( present(greedy) ) ggreedy = greedy
@@ -520,7 +520,10 @@ contains
         if( ggreedy )then
             call self%greedy_srch( pftcc,  iptcl, a, e, lp, nnmat )
         else if( self%refine.eq.'snhc' )then
-            call self%stochastic_srch_snhc( pftcc, iptcl, a, e, lp )
+            if( .not. present(szsn) )then
+                stop 'refine=snhc mode needs optional input szsn; simple_prime3D_srch :: exec_prime3D_srch'
+            endif
+            call self%stochastic_srch_snhc( pftcc, iptcl, a, e, lp, szsn )
         else if( str_has_substr(self%refine,'shc') )then
             call self%stochastic_srch_shc( pftcc, iptcl, a, e, lp, nnmat )
         else
@@ -804,15 +807,15 @@ contains
     end subroutine stochastic_srch_shc
 
     !>  \brief  stochastic neighborhood hill-climbing
-    subroutine stochastic_srch_snhc( self, pftcc, iptcl, a, e, lp )
+    subroutine stochastic_srch_snhc( self, pftcc, iptcl, a, e, lp, szsn )
         class(prime3D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: iptcl
         class(oris),             intent(inout) :: a, e
         real,                    intent(in)    :: lp
+        integer,                 intent(in)    :: szsn
         real    :: projspace_corrs(self%nrefs)
         integer :: iref, isample
-        integer, parameter :: NREFS=5
         if( nint(a%get(iptcl,'state')) > 0 )then
             ! initialize
             call self%prep4srch(pftcc, iptcl, a, e)
@@ -822,11 +825,11 @@ contains
             self%proj_space_inds = 0
             projspace_corrs      = -1.
             ! search
-            do isample=1,NREFS
+            do isample=1,szsn
                 iref = self%srch_order(isample) ! set the stochastic reference index
                 call per_ref_srch(iref)         ! actual search
             end do
-            self%nrefs_eval = NREFS
+            self%nrefs_eval = szsn
             ! sort in correlation projection direction space
             call hpsort(self%nrefs, projspace_corrs, self%proj_space_inds) 
             ! output

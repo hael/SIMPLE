@@ -46,6 +46,7 @@ contains
         class(cmdline),          intent(inout) :: cline
         type(params) :: p
         type(build)  :: b
+        integer      :: fnr, file_stat
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         select case(p%eo)
@@ -58,7 +59,7 @@ contains
         end select
         call exec_rec_master(b, p, cline)
         ! end gracefully
-        call simple_end('**** SIMPLE_RECVOL NORMAL STOP ****', print_simple=.false.)    
+        call simple_end('**** SIMPLE_RECVOL NORMAL STOP ****', print_simple=.false.) 
     end subroutine exec_recvol
 
     subroutine exec_eo_volassemble( self, cline )

@@ -20,12 +20,10 @@ use simple_commander_hlev_wflows
 implicit none
 
 ! PRE-PROCESSING
-type(preproc_stream_commander)            :: xpreproc_stream
 type(unblur_ctffind_distr_commander)      :: xunblur_ctffind_distr
 type(unblur_distr_commander)              :: xunblur_distr
 type(unblur_tomo_movies_distr_commander)  :: xunblur_tomo_distr
 type(ctffind_distr_commander)             :: xctffind_distr
-type(pick_distr_commander)                :: xpick_distr
 ! PRIME2D
 type(makecavgs_distr_commander)           :: xmakecavgs_distr
 type(prime2D_autoscale_commander)         :: xprime2D_distr
@@ -34,14 +32,12 @@ type(comlin_smat_distr_commander)         :: xcomlin_smat_distr
 ! PRIME3D
 type(prime3D_init_distr_commander)        :: xprime3D_init_distr
 type(prime3D_distr_commander)             :: xprime3D_distr
-type(cont3D_distr_commander)              :: xcont3D_distr
 type(recvol_distr_commander)              :: xrecvol_distr
 type(symsrch_distr_commander)             :: xsymsrch_distr
 ! TIME-SERIES WORKFLOWS
 type(tseries_track_distr_commander)       :: xtseries_track_distr
 ! HIGH-LEVEL WORKFLOWS
 type(ini3D_from_cavgs_commander)          :: xini3D_from_cavgs
-type(het_ensemble_commander)              :: xhet_ensemble
 
 ! OTHER DECLARATIONS
 integer, parameter    :: MAXNKEYS=100, KEYLEN=32
@@ -61,71 +57,12 @@ if( str_has_substr(prg, 'simple_') ) stop 'giving program names with simple_* pr
 
 select case(prg)
 
-    ! PRE-PROCESSING STREAM, LINKING UNBLUR + CTFFIND + PICK
-
-    case( 'preproc' )
-        !==Program preproc
-        !
-        ! <preproc/begin>is a program that executes unblur, ctffind & pick in sequence
-        ! and in streaming mode as the microscope collects the data <preproc/end>
-        !
-        ! set required keys
-        keys_required(1)   = 'smpd'
-        keys_required(2)   = 'kv'
-        keys_required(3)   = 'cs'
-        keys_required(4)   = 'fraca'
-        keys_required(5)   = 'dir_movies'
-        keys_required(6)   = 'dir_target'
-        keys_required(7)   = 'ncunits'
-        ! set optional keys
-        keys_optional(1)   = 'nthr'
-        keys_optional(2)   = 'refs'
-        keys_optional(3)   = 'fbody'
-        keys_optional(4)   = 'dose_rate'
-        keys_optional(5)   = 'exp_time'
-        keys_optional(6)   = 'lpstart'
-        keys_optional(7)   = 'lpstop'
-        keys_optional(8)   = 'trs'
-        keys_optional(9)   = 'pspecsz_unblur'
-        keys_optional(10)  = 'pspecsz_ctffind'
-        keys_optional(11)  = 'numlen'
-        keys_optional(12)  = 'startit'
-        keys_optional(13)  = 'scale'
-        keys_optional(14)  = 'nframesgrp'
-        keys_optional(15)  = 'fromf'
-        keys_optional(16)  = 'tof'
-        keys_optional(17)  = 'hp_ctffind'
-        keys_optional(18)  = 'lp_ctffind'
-        keys_optional(19)  = 'lp_pick'
-        keys_optional(20)  = 'dfmin'
-        keys_optional(21)  = 'dfmax'
-        keys_optional(22)  = 'astigstep'
-        keys_optional(23)  = 'expastig'
-        keys_optional(24)  = 'phaseplate'
-        keys_optional(25)  = 'thres'
-        keys_optional(26)  = 'rm_outliers'
-        keys_optional(27)  = 'nsig'
-        keys_optional(28)  = 'dopick'
-        ! parse command line
-        if( describe ) call print_doc_preproc
-        call cline%parse(keys_required(:7), keys_optional(:28))
-        ! set defaults
-        if( .not. cline%defined('trs')             ) call cline%set('trs',        5.)
-        if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',   15.)
-        if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',     8.)
-        if( .not. cline%defined('pspecsz_unblur')  ) call cline%set('pspecsz',  512.)
-        if( .not. cline%defined('pspecsz_ctffind') ) call cline%set('pspecsz', 1024.)
-        if( .not. cline%defined('hp_ctffind')      ) call cline%set('hp',        30.)
-        if( .not. cline%defined('lp_ctffind')      ) call cline%set('lp',         5.)
-        if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',   20.)
-        call xpreproc_stream%execute(cline)
-
     ! PIPELINED UNBLUR + CTFFIND
 
     case( 'unblur_ctffind' )
         !==Program unblur_ctffind
         !
-        ! <ctffind/begin>is a pipelined unblur + ctffind program<ctffind/end> 
+        ! <unblur_ctffind/begin>is a pipelined unblur + ctffind program<unblur_ctffind/end> 
         !
         ! set required keys
         keys_required(1)  = 'filetab'
@@ -160,7 +97,7 @@ select case(prg)
         keys_optional(23) = 'expastig'
         keys_optional(24) = 'phaseplate'
         ! parse command line
-        ! if( describe ) call print_doc_unblur_ctffind
+        if( describe ) call print_doc_unblur_ctffind
         call cline%parse(keys_required(:6), keys_optional(:24))
         ! set defaults
         call cline%set('dopick', 'no'     )
@@ -180,7 +117,9 @@ select case(prg)
     case( 'unblur' )
         !==Program unblur
         !
-        ! <unblur/begin>is a program for movie alignment or unblurring.
+        ! <unblur/begin>is a program for movie alignment or unblurring based the same principal strategy as
+        ! Grigorieffs program (hence the name). There are two important differences: automatic weighting of
+        ! the frames using a correlation-based M-estimator and continuous optimisation of the shift parameters.
         ! Input is a textfile with absolute paths to movie files in addition to a few obvious input
         ! parameters<unblur/end>
         !
@@ -285,29 +224,6 @@ select case(prg)
         ! execute
         call xctffind_distr%execute(cline)
 
-    ! PARTICLE PICKER
-
-    case( 'pick' )
-        !==Program pick
-        !
-        ! <pick/begin>is a template-based picker program<pick/end> 
-        !
-        ! set required keys
-        keys_required(1) = 'filetab'
-        keys_required(2) = 'refs'
-        keys_required(3) = 'smpd'
-        keys_required(4) = 'nparts'
-        ! set optional keys
-        keys_optional(1) = 'nthr'
-        keys_optional(2) = 'lp'
-        keys_optional(3) = 'thres'
-        keys_optional(4) = 'rm_outliers'
-        ! parse command line
-        if( describe ) call print_doc_pick
-        call cline%parse(keys_required(:4), keys_optional(:4))
-        ! execute
-        call xpick_distr%execute(cline)
-
     ! PRIME2D
 
     case( 'makecavgs' )
@@ -332,7 +248,7 @@ select case(prg)
         keys_optional(8) = 'outfile'
         keys_optional(9) = 'refs'  
         ! parse command line
-        ! if( describe ) call print_doc_makecavgs
+        if( describe ) call print_doc_makecavgs
         call cline%parse(keys_required(:4), keys_optional(:9))
         ! execute
         call xmakecavgs_distr%execute(cline)
@@ -468,19 +384,10 @@ select case(prg)
         !
         ! <prime3D/begin>is an ab inito reconstruction/refinement program based on probabilistic
         ! projection matching. PRIME is short for PRobabilistic Initial 3D Model generation for Single-
-        ! particle cryo-Electron microscopy. Do not search the origin shifts initially, when the model is 
-        ! of very low quality. If your images are far off centre, use stackops with option
-        ! shalgn=yes instead to shiftalign the images beforehand (the algorithm implemented is the 
-        ! same as EMANs cenalignint program). We recommend running the first round of PRIME with 
-        ! the default dynamic resolution stepping dynlp=yes. The dynlp option implements 
-        ! a heuristic resolution weighting/update scheme. The initial low-pass limit is set so that each
-        ! image receives ten nonzero orientation weights. When quasi-convergence has been reached, the limit 
-        ! is updated one Fourier index at the time until PRIME reaches the condition where six nonzero 
-        ! orientation weights are assigned to each image. FSC-based filtering is unfortunately not possible
-        ! to do in the ab initio reconstruction step, because when the orientations are mostly random, the 
-        ! FSC overestimates the resolution. Once the initial model has converged, we recommend start searching 
-        ! the shifts (by setting trs to some nonzero value) and applying the FSC for resolution-
-        ! weighting (by setting eo=yes)<prime3D/end>
+        ! particle cryo-Electron microscopy. There are a daunting number of options in PRIME3D. If you
+        ! are processing class averages we recommend that you instead use the simple_distr_exec prg=
+        ! ini3D_from_cavgs route for executing PRIME3D. Automated workflows for single- and multi-particle
+        ! refinement using prime3D are planned for the next release (3.0)<prime3D/end>
         !
         ! set required keys
         keys_required(1)  = 'stk'
@@ -545,63 +452,6 @@ select case(prg)
         endif
         ! execute
         call xprime3D_distr%execute(cline)
-    case( 'cont3D' )
-        !==Program prime3D
-        !
-        ! <cont3D/begin><cont3D/end>
-        !
-        ! set required keys
-        keys_required(1)  = 'stk'
-        keys_required(2)  = 'smpd'
-        keys_required(3)  = 'msk'
-        keys_required(4)  = 'ctf'
-        keys_required(5)  = 'pgrp'
-        keys_required(6)  = 'oritab'
-        keys_required(7)  = 'trs'
-        keys_required(8)  = 'nparts'
-        ! set optional keys
-        keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'deftab'
-        keys_optional(3)  = 'vol1'
-        keys_optional(4)  = 'hp'
-        keys_optional(5)  = 'lp'
-        keys_optional(6)  = 'lpstop'
-        keys_optional(7)  = 'frac'
-        keys_optional(8)  = 'automsk'
-        keys_optional(9)  = 'mw'
-        keys_optional(10) = 'amsklp'
-        keys_optional(11) = 'edge'
-        keys_optional(12) = 'inner'
-        keys_optional(13) = 'width'
-        keys_optional(14) = 'startit'
-        keys_optional(15) = 'maxits'
-        keys_optional(16) = 'xfel'
-        keys_optional(17) = 'refine'
-        keys_optional(18) = 'eo'
-        ! documentation
-        if( describe ) call print_doc_cont3D
-        ! parse command line
-        call check_restart( entire_line, is_restart )
-        if( is_restart )then
-            call parse_restart('cont3D', entire_line, cline, keys_required(:8), keys_optional(:18))
-        else
-            call cline%parse( keys_required(:8), keys_optional(:18) )
-        endif
-        ! set defaults
-        if( cline%defined('eo') )then
-            if( cline%get_carg('eo').eq.'yes')then
-                if( cline%defined('lp') )stop 'Low-pass cannot be set with EO=YES'
-            else
-                if( .not.cline%defined('lp'))stop 'Low-pass must be defined with EO=NO'
-            endif
-        else
-            call cline%set('eo','no')
-        endif
-        call cline%set('dynlp', 'no')
-        if(.not.cline%defined('nspace'))call cline%set('nspace', 1000.)
-        if(.not.cline%defined('refine'))call cline%set('refine', 'yes')
-        ! execute
-        call xcont3D_distr%execute(cline)
     case( 'recvol' )
         !==Program recvol
         !
@@ -666,8 +516,9 @@ select case(prg)
         keys_required(3)  = 'msk'
         keys_required(4)  = 'pgrp'
         keys_required(5)  = 'oritab'
-        keys_required(6)  = 'lp'
-        keys_required(7)  = 'nparts'
+        keys_required(6)  = 'outfile'
+        keys_required(7)  = 'lp'
+        keys_required(8)  = 'nparts'
         ! set optional keys
         keys_optional(1)  = 'nthr'
         keys_optional(2)  = 'cenlp'
@@ -675,7 +526,7 @@ select case(prg)
         keys_optional(4)  = 'nspace'
         ! parse command line
         if( describe ) call print_doc_symsrch
-        call cline%parse(keys_required(:7), keys_optional(:4))
+        call cline%parse(keys_required(:8), keys_optional(:4))
         ! set defaults
         if(cline%defined('compare'))stop 'Distributed execution of SYMSRCH does not support the COMPARE argument'
         ! set defaults
@@ -685,7 +536,7 @@ select case(prg)
         else
             call cline%set('nptcls', cline%get_rarg('nspace'))
         endif
-        if(.not.cline%defined('cenlp')) call cline%set('cenlp',   30.)
+        if(.not.cline%defined('cenlp')) call cline%set('cenlp', 30.)
         ! execute
         call xsymsrch_distr%execute( cline )
 
@@ -694,8 +545,8 @@ select case(prg)
     case( 'tseries_track' )
         !==Program tseries_track
         !
-        ! <tseries_extract/begin>is a program for particle tracking in time-series data
-        ! <tseries_extract/end> 
+        ! <tseries_track/begin>is a program for particle tracking in time-series data
+        ! <tseries_track/end> 
         !
         ! set required keys
         keys_required(1) = 'filetab'
@@ -707,7 +558,7 @@ select case(prg)
         keys_optional(1) = 'lp'
         keys_optional(2) = 'offset'
         ! parse command line
-        ! if( describe ) call print_doc_tseries_track
+        if( describe ) call print_doc_tseries_track
         call cline%parse(keys_required(:5), keys_optional(:2))
         ! set defaults
         call cline%set('nthr', 1.0)
@@ -753,37 +604,6 @@ select case(prg)
         call cline%parse(keys_required(:5), keys_optional(:17))
         ! execute
         call xini3D_from_cavgs%execute( cline )
-    case( 'het_ensemble' )
-        !==Program het_ensemble
-        !
-        ! <het_ensemble/begin><het_ensemble/end> 
-        !
-        ! set required keys
-        keys_required(1)  = 'stk'
-        keys_required(2)  = 'smpd'
-        keys_required(3)  = 'oritab'
-        keys_required(4)  = 'msk'
-        keys_required(5)  = 'pgrp'
-        keys_required(6)  = 'ctf'
-        keys_required(7)  = 'nstates'
-        keys_required(8)  = 'lp'
-        keys_required(9)  = 'nparts'
-        ! set optional keys
-        keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'frac'
-        keys_optional(3)  = 'automsk'
-        keys_optional(4)  = 'mw'
-        keys_optional(5)  = 'amsklp'
-        keys_optional(6)  = 'edge'
-        keys_optional(7)  = 'binwidth'
-        keys_optional(8)  = 'inner'
-        keys_optional(9)  = 'width'
-        keys_optional(10) = 'nspace'
-        ! parse command line
-        ! if( describe ) call print_doc_het_ensemble
-        call cline%parse(keys_required(:9), keys_optional(:10))
-        ! execute
-        call xhet_ensemble%execute( cline )
     case DEFAULT
         write(*,'(a,a)') 'program key (prg) is: ', trim(prg)
         stop 'unsupported program'

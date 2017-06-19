@@ -50,7 +50,7 @@ contains
 
     subroutine exec_makecavgs( self, cline )
         use simple_hadamard2D_matcher, only: prime2D_assemble_sums, prime2D_write_sums, &
-        & prime2D_write_partial_sums, prime2D_init_sums
+        & prime2D_write_partial_sums
         use simple_qsys_funs, only: qsys_job_finished
         class(makecavgs_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
@@ -109,7 +109,6 @@ contains
                 call prime2D_write_sums(b, p)
             endif           
         else
-            call prime2D_init_sums( b, p ) 
             call prime2D_assemble_sums(b, p)
             if( p%l_distr_exec)then
                 call prime2D_write_partial_sums( b, p )

@@ -30,16 +30,16 @@ type, extends(image) :: mask_projector
     integer                  :: edge      = 1
     integer                  :: binwidth  = 1
     integer                  :: n         = NPROJS       !< number of masks and/or projection directions
-    integer                  :: idim(3)   = 0            !< volume dimension
+    integer                  :: idim(3)   = 0            !< image dimension
     character(len=STDLEN)    :: mode      = 'circ'       !< circular or enveloppe masking
     logical                  :: mskproj_exists = .false.
   contains
     ! CONSTRUCTORS
-    procedure          :: init3D
-    procedure          :: init2D
-    procedure, private :: init
+    procedure, private :: init3D
+    procedure, private :: init2D
+    generic            :: init => init3D, init2D
+    procedure, private :: init_parms
     ! CALCULATORS
-    procedure, private :: distsq_img 
     procedure, private :: calc_adamsk
     ! 2D CALCULATORS
     procedure          :: update_cls
@@ -65,6 +65,8 @@ contains
     ! CONSTRUCTOR
 
     !>  \brief  is a constructor
+    !>          on output the parent volume is the soft mask, the returned volume is enveloppe masked
+    !>          the mask applied to images with apply mask is a soft-edge adaptive circular mask
     subroutine init3D(self, p, img_inout, mode, nprojs, mskwidth)
         class(mask_projector),      intent(inout) :: self
         class(params),              intent(in)    :: p
@@ -77,7 +79,7 @@ contains
         call self%kill_mskproj
         call self%copy(img_inout)
         self%idim = self%get_ldim()
-        call self%init(p, mskwidth)
+        call self%init_parms(p, mskwidth)
         ! 3D
         self%mode = 'circ'
         if(present(nprojs))self%n = nprojs
@@ -88,6 +90,7 @@ contains
         ! endif
         select case(trim(self%mode))
             case('env')
+                ! not used. For stashing soft enveloppe masks to apply to images
                 allocate(self%img_msks(self%n), stat=alloc_stat)
                 call alloc_err('in simple_mask_projector::init3D 1', alloc_stat)
                 do i = 1, self%n
@@ -116,41 +119,26 @@ contains
     end subroutine init3D
 
     !>  \brief  is a constructor
-    subroutine init2D(self, p, ncls, mode)
+    !>          on exit the parent image is untouched
+    subroutine init2D(self, p, ncls)
         class(mask_projector),      intent(inout) :: self
         class(params),              intent(in)    :: p
         integer,                    intent(in)    :: ncls
-        character(len=*), optional, intent(in)    :: mode
-        type(ori)            :: o
-        integer              :: i, alloc_stat
+        integer              :: alloc_stat
         if( .not.self%is_2d() )stop 'this routine is intended for 2D images only, simple_mask_projector::mskref'
         call self%kill_mskproj
         self%idim = [p%boxmatch, p%boxmatch, 1]
         self%n    = ncls
-        call self%init(p)
-        if(present(mode))then
-            if(trim(mode).ne.'circ' .and. trim(mode).ne.'cavg')&
-            &stop 'Unknown 2D masking mode; simple_mask_projector::init'
-            self%mode = trim(mode)
-        endif
-        select case(trim(self%mode))
-            case('circ')
-                allocate(self%adamsks(self%n), stat=alloc_stat )
-                call alloc_err('in simple_mask_projector::init2D 1', alloc_stat)
-                self%adamsks = 0.
-            case('cavg')
-                allocate(self%img_msks(self%n), stat=alloc_stat )
-                call alloc_err('in simple_mask_projector::init2D 2', alloc_stat)
-                do i = 1, self%n
-                    call self%img_msks(i)%new([p%boxmatch, p%boxmatch, 1], p%smpd)
-                enddo
-        end select
+        call self%init_parms(p)
+        allocate(self%adamsks(self%n), stat=alloc_stat )
+        call alloc_err('in simple_mask_projector::init2D 1', alloc_stat)
+        self%adamsks = 0.
         self%mskproj_exists = .true.
-        if( DEBUG )write(*,*)'simple_mask_projector::init2D'
+        if( DEBUG )write(*,*)'simple_mask_projector::init2D done'
     end subroutine init2D
 
     !>  \brief  is a constructor
-    subroutine init(self, p, mskwidth)
+    subroutine init_parms(self, p, mskwidth)
         class(mask_projector), intent(inout) :: self
         class(params),         intent(in)    :: p
         real,        optional, intent(in)    :: mskwidth
@@ -165,8 +153,9 @@ contains
         self%smpd_here = p%smpd
         if(present(mskwidth))self%mskwidth = mskwidth
         self%mskwidth = min(self%mskwidth, real(minval(self%idim(:2)/2))-self%msk)
-        if( DEBUG )write(*,*)'simple_mask_projector::init done'
-    end subroutine init
+        if(self%mskwidth < 1.)stop 'incompatible dimensiosn in simple_mask_projector%init_parms'
+        if( DEBUG )write(*,*)'simple_mask_projector::init_parms done'
+    end subroutine init_parms
 
     ! CALCULATORS
 
@@ -174,21 +163,23 @@ contains
     real function calc_adamsk( self, img_msk )result( new_msk )
         class(mask_projector), intent(inout) :: self
         class(image),          intent(inout) :: img_msk
-        type(image) :: img_dsq, tmp_img
+        type(image) :: img_dist, tmp_img
         real        :: minmax(2)
         tmp_img = img_msk
-        call self%distsq_img(img_dsq)
+        call img_dist%new(self%idim, self%get_smpd())
+        call img_dist%cendist
         ! multiply enveloppe mask with square distance matrix
-        call tmp_img%mul(img_dsq)
+        call tmp_img%mul(img_dist)
         ! determine circular mask size
         minmax  = tmp_img%minmax()
-        new_msk = real(ceiling(sqrt(minmax(2))+self%mskwidth))
+        new_msk = real( ceiling(minmax(2) + self%mskwidth) )
         new_msk = min(new_msk, self%msk)
+        if( DEBUG )write(*,*)'simple_mask_projector::calc_adamsk done'
     end function calc_adamsk
 
     ! 2D CALCULATORS
 
-    !>  \brief  is for binarize the 2D image
+    !>  \brief  is for enveloppe masking the input image
     subroutine update_cls( self, ref, cls )
         class(mask_projector), intent(inout) :: self
         class(image),          intent(inout) :: ref
@@ -199,18 +190,14 @@ contains
         ! binarize image
         img = ref
         call self%bin_cavg(img)
-        if(trim(self%mode).eq.'circ')then
-            ! adaptive circular mask
-            self%adamsks(cls) = self%calc_adamsk(img)
-        endif
+        ! adaptive circular mask
+        self%adamsks(cls) = self%calc_adamsk(img)
         ! soft edge mask
         call img%cos_edge(self%edge)
         call img%norm('sigm')
-        if(trim(self%mode).eq.'cavg')then
-            ! stash for particle masking
-            self%img_msks(cls) = img
-        endif
+        ! apply enveloppe mask to reference
         call ref%mul(img)
+        if( DEBUG )write(*,*)'simple_mask_projector::update_cls done'
     end subroutine update_cls
 
     !>  \brief  is for binarizing the 2D image
@@ -244,6 +231,7 @@ contains
         ! clean
         call img_copy%kill
         call img_pad%kill
+        if( DEBUG )write(*,*)'simple_mask_projector::bin_cavg done'
     end subroutine bin_cavg
 
     ! 3D CALCULATORS
@@ -325,7 +313,6 @@ contains
         class(mask_projector), intent(inout) :: self
         type(image) :: img_msk
         type(ori)   :: o
-        real        :: new_msk
         integer     :: i
         call img_msk%new([self%idim(1), self%idim(2), 1], self%get_smpd())
         ! fills mask images from discrete orientations
@@ -348,30 +335,6 @@ contains
         if( DEBUG )write(*,*)'simple_mask_projector::build_3Dmsks done'
     end subroutine build_3Dmsks
 
-    !>  \brief  produces an image with square distance from the centre of the image
-    subroutine distsq_img( self, img )
-        class(mask_projector), intent(inout) :: self
-        class(image),          intent(inout) :: img
-        real, allocatable :: rmat(:,:,:)
-        real    :: centre(3)
-        integer :: i, alloc_stat
-        ! Builds square distance image
-        call img%new([self%idim(1), self%idim(2), 1], self%get_smpd())
-        allocate(rmat(1:self%idim(1),1:self%idim(2),1), stat=alloc_stat)
-        call alloc_err('simple_mask_projector::distsq_img', alloc_stat)
-        rmat   = 0.
-        centre = real(self%idim-1)/2.
-        do i=1,self%idim(1)
-            rmat(i,:,1) = rmat(i,:,1) + (real(i)-centre(1))**2.
-        enddo
-        do i=1,self%idim(2)
-            rmat(:,i,1) = rmat(:,i,1) + (real(i)-centre(2))**2.
-        enddo
-        call img%set_rmat(rmat)
-        deallocate(rmat)
-        if( DEBUG )write(*,*)'simple_mask_projector::distsq_img done'
-    end subroutine distsq_img
-
     ! MODIFIER
 
     !> \brief  applies the circular/envelope mask
@@ -385,14 +348,7 @@ contains
         if( any(ldim(:2)-self%idim(:2).ne.0) )stop 'Incompatible dimensions; simple_mask_projector::apply_mask2D'
         if( .not.self%is_2d() )stop 'erroneous function call; simple_mask_projector::apply_mask2D'
         if( cls > self%n )stop 'class index out of range; simple_mask_projector::apply_mask2D'
-        select case(trim(self%mode))
-            case('circ')
-                ! adaptive circular mask
-                call img%mask(self%adamsks(cls), 'soft')
-            case('cavg')
-                ! soft edge mask
-                call img%mul(self%img_msks(cls))
-        end select
+        call img%mask(self%adamsks(cls), 'soft')
         if( DEBUG )write(*,*)'simple_mask_projector::apply_mask2D done'
     end subroutine apply_mask2D
 
@@ -439,7 +395,7 @@ contains
         type(image) :: img_msk
         if( i > self%n )stop 'index out of range; simple_mask_projector%get_imgmsk'
         if(trim(self%mode).eq.'circ')then
-            call img_msk%new([self%idim(1),self%idim(2),1],self%smpd_here)
+            call img_msk%new([self%idim(1),self%idim(2),1], self%smpd_here)
             img_msk = 1.
             call img_msk%mask(self%adamsks(i), 'soft')
         else

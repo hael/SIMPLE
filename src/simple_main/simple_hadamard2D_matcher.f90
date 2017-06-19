@@ -16,8 +16,7 @@ use simple_filterer          ! use all in there
 implicit none
 
 public :: prime2D_exec, prime2D_assemble_sums, prime2D_norm_sums, prime2D_assemble_sums_from_parts,&
-prime2D_write_sums, preppftcc4align, pftcc, prime2D_read_sums, prime2D_write_partial_sums,&
-prime2D_init_sums
+prime2D_write_sums, preppftcc4align, pftcc, prime2D_read_sums, prime2D_write_partial_sums
 private
 
 logical, parameter              :: DEBUG = .false.
@@ -36,22 +35,11 @@ contains
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: converged
-        logical   :: conv_larr(p%fromp:p%top) ! per-particle convergence flags
         integer   :: iptcl
         real      :: corr_thresh, frac_srch_space
         
         ! SET FRACTION OF SEARCH SPACE
         frac_srch_space = b%a%get_avg('frac')
-
-        ! PER-PARTICLE CONVERGENCE
-        if( which_iter == 1 ) call del_file(p%ppconvfile)
-        if( file_exists(p%ppconvfile) )then
-            call b%ppconv%read(p%ppconvfile)
-        else
-            call b%ppconv%zero_joint_distr_olap
-        endif
-        call b%ppconv%set_conv_larr(conv_larr)
-        write(*,'(A,F8.2)') '>>> CONVERGED PARTICLES(%):', 100.*(real(count(conv_larr)) / real(p%top - p%fromp + 1))
 
         ! PREP REFERENCES
         if( p%l_distr_exec )then
@@ -109,7 +97,6 @@ contains
             p%outfile = 'prime2Ddoc_'//int2str_pad(which_iter,3)//'.txt'
             if( p%chunktag .ne. '' ) p%outfile= trim(p%chunktag)//trim(p%outfile)
         endif
-        call prime2D_init_sums( b, p )
 
         ! STOCHASTIC IMAGE ALIGNMENT
         allocate( primesrch2D(p%fromp:p%top) )
@@ -132,7 +119,8 @@ contains
             if( p%oritab .eq. '' )then
                 !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                 do iptcl=p%fromp,p%top
-                    call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, conv_larr(iptcl), greedy=.true.)
+                    ! call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, conv_larr(iptcl), greedy=.true.)
+                    call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, greedy=.true.)
                 end do
                 !$omp end parallel do
             else
@@ -142,7 +130,8 @@ contains
                 endif
                 !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                 do iptcl=p%fromp,p%top
-                    call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, conv_larr(iptcl), extr_bound=corr_thresh)
+                    ! call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, conv_larr(iptcl), extr_bound=corr_thresh)
+                    call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, extr_bound=corr_thresh)
                 end do
                 !$omp end parallel do
             endif
@@ -177,8 +166,6 @@ contains
         call pftcc%kill
 
         ! REPORT CONVERGENCE
-        call b%ppconv%update_joint_distr_olap
-        call b%ppconv%write(p%ppconvfile)
         if( p%l_distr_exec )then
             call qsys_job_finished(p, 'simple_hadamard2D_matcher :: prime2D_exec')
         else
@@ -231,12 +218,14 @@ contains
         integer   :: i, nbatches, batch, batchsz, cnt
         logical   :: l_grid
         integer, parameter :: BATCHTHRSZ = 20
+        call prime2D_init_sums( b, p )
         l_grid = .true.
-        if( present(grid) )l_grid = grid
+        if( present(grid) ) l_grid = grid
         if( .not. p%l_distr_exec )then
             write(*,'(a)') '>>> ASSEMBLING CLASS SUMS'
         endif
         ! init
+        call prime2D_init_sums( b, p )
         if( p%l_distr_exec )then
             istart  = p%fromp
             iend    = p%top
@@ -441,7 +430,6 @@ contains
 
     !>  \brief  prepares the polarft corrcalc object for search
     subroutine preppftcc4align( b, p )
-        use simple_masker,       only: automask2D
         use simple_jiffys,       only: alloc_err
         class(build),  intent(inout) :: b
         class(params), intent(inout) :: p
@@ -452,9 +440,9 @@ contains
         ! must be done here since constants in p are dynamically set
         call pftcc%new(p%ncls, [p%fromp,p%top], [p%boxmatch,p%boxmatch,1], p%kfromto, p%ring2, p%ctf)
         ! prepare the polarizers
-        call b%img_match%init_imgpolarizer(pftcc)
+        call b%img_match%init_polarizer(pftcc)
         ! prepare the automasker
-        if( p%l_automsk )call b%mskimg%init2D( p, p%ncls )
+        if( p%l_automsk )call b%mskimg%init(p, p%ncls)
         ! PREPARATION OF REFERENCES IN PFTCC
         ! read references and transform into polar coordinates
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING REFERENCES'
@@ -467,7 +455,7 @@ contains
                 b%img = b%cavgs(icls)
                 call prep2Dref(b, p, icls)
                 ! transfer to polar coordinates
-                call b%img_match%imgpolarizer(pftcc, icls, isptcl=.false.)
+                call b%img_match%polarize(pftcc, icls, isptcl=.false.)
             endif
         end do
         ! PREPARATION OF PARTICLES IN PFTCC
@@ -484,41 +472,9 @@ contains
             if( istate == 0 ) icls = 0
             call prepimg4align(b, p, o)
             ! transfer to polar coordinates
-            call b%img_match%imgpolarizer(pftcc, iptcl)
+            call b%img_match%polarize(pftcc, iptcl)
         end do
         if( debug ) write(*,*) '*** hadamard2D_matcher ***: finished preppftcc4align'
     end subroutine preppftcc4align
-
-    ! FOR SAFEKEEPING 24/05/17
-    ! subroutine prime2D_assemble_sums( b, p )
-    !     use simple_ctf, only: ctf
-    !     class(build),   intent(inout) :: b
-    !     class(params),  intent(inout) :: p
-    !     type(ori) :: orientation
-    !     integer   :: icls, iptcl, cnt, istart, iend, filtsz
-    !     if( .not. p%l_distr_exec ) write(*,'(a)') '>>> ASSEMBLING CLASS SUMS'
-    !     filtsz = b%img_pad%get_filtsz()
-    !     call prime2D_init_sums( b, p )
-    !     if( p%l_distr_exec )then
-    !         istart  = p%fromp
-    !         iend    = p%top
-    !     else
-    !         istart  = 1
-    !         iend    = p%nptcls
-    !     endif
-    !     cnt = 0
-    !     do iptcl=istart,iend
-    !         cnt = cnt+1
-    !         call progress( cnt, iend-istart+1 )
-    !         orientation = b%a%get_ori(iptcl)
-    !         if( nint(orientation%get('state')) > 0 )then
-    !             call read_img_from_stk( b, p, iptcl )
-    !             icls = nint(orientation%get('class'))
-    !             call wiener_restore2D_online(b%img, orientation, p%tfplan,&
-    !             &b%cavgs(icls), b%ctfsqsums(icls), p%msk)
-    !         endif
-    !     end do
-    !     if( .not. p%l_distr_exec ) call prime2D_norm_sums( b, p )
-    ! end subroutine prime2D_assemble_sums
 
 end module simple_hadamard2D_matcher
