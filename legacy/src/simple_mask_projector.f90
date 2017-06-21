@@ -13,13 +13,11 @@ public :: mask_projector
 private
 
 real,    parameter :: MSKWIDTH = 10.                     !< HALF SOFT MASK WIDTH (+/-)
-integer, parameter :: NPROJS   = 200
 logical, parameter :: DEBUG    = .false.
 
 type, extends(image) :: mask_projector
     private
     type(oris)               :: o_msk                    !< reference orientations
-    type(image), allocatable :: img_msks(:)              !< masks
     real                     :: smpd_here = 0.           !< maximum circular mask
     real                     :: msk       = 0.           !< maximum circular mask
     real                     :: amsklp    = 0.           !< maximum circular mask
@@ -29,16 +27,13 @@ type, extends(image) :: mask_projector
     real                     :: mw        = 0.
     integer                  :: edge      = 1
     integer                  :: binwidth  = 1
-    integer                  :: n         = NPROJS       !< number of masks and/or projection directions
+    integer                  :: n         = 0
     integer                  :: idim(3)   = 0            !< image dimension
-    character(len=STDLEN)    :: mode      = 'circ'       !< circular or enveloppe masking
     logical                  :: mskproj_exists = .false.
   contains
     ! CONSTRUCTORS
-    procedure, private :: init3D
-    procedure, private :: init2D
-    generic            :: init => init3D, init2D
-    procedure, private :: init_parms
+    procedure          :: init2D
+    procedure          :: automask3D
     ! CALCULATORS
     procedure, private :: calc_adamsk
     ! 2D CALCULATORS
@@ -47,11 +42,8 @@ type, extends(image) :: mask_projector
     ! 3D CALCULATORS
     procedure, private :: bin_vol
     procedure, private :: env_rproject 
-    procedure, private :: build_3Dmsks
     ! MODIFIER
-    procedure, private :: apply_mask2D
-    procedure, private :: apply_mask3D
-    generic            :: apply_mask => apply_mask2D, apply_mask3D
+    procedure          :: apply_mask2D
     ! GETTERS
     procedure          :: get_adamsk
     procedure          :: get_msk
@@ -64,61 +56,7 @@ contains
 
     ! CONSTRUCTOR
 
-    !>  \brief  is a constructor
-    !>          on output the parent volume is the soft mask, the returned volume is enveloppe masked
-    !>          the mask applied to images with apply mask is a soft-edge adaptive circular mask
-    subroutine init3D(self, p, img_inout, mode, nprojs, mskwidth)
-        class(mask_projector),      intent(inout) :: self
-        class(params),              intent(in)    :: p
-        class(projector),           intent(inout) :: img_inout
-        character(len=*), optional, intent(in)    :: mode
-        integer,          optional, intent(in)    :: nprojs
-        real,             optional, intent(in)    :: mskwidth
-        integer  :: i, alloc_stat
-        if( self%is_2d() )stop 'this routine is intended for 3D images only, simple_mask_projector::init_mskproj'
-        call self%kill_mskproj
-        self      = img_inout
-        self%idim = self%get_ldim()
-        call self%init_parms(p, mskwidth)
-        ! 3D
-        self%mode = 'circ'
-        if(present(nprojs))self%n = nprojs
-        ! if(present(mode))then
-        !     if(trim(mode).ne.'circ' .and. trim(mode).ne.'env')&
-        !     &stop 'Unknown 3D masking mode; simple_mask_projector::init'
-        !     self%mode = trim(mode)
-        ! endif
-        select case(trim(self%mode))
-            case('env')
-                ! not used. For stashing soft enveloppe masks to apply to images
-                allocate(self%img_msks(self%n), stat=alloc_stat)
-                call alloc_err('in simple_mask_projector::init3D 1', alloc_stat)
-                do i = 1, self%n
-                    call self%img_msks(i)%new([self%idim(1), self%idim(2), 1], self%get_smpd())
-                    self%img_msks(i) = 1.
-                enddo
-            case('circ')
-                allocate(self%adamsks(self%n), stat=alloc_stat)
-                call alloc_err('in simple_mask_projector::init3D 2', alloc_stat)
-                self%adamsks = 0.
-        end select
-        ! reference mask orientations
-        call self%o_msk%new(self%n)
-        call self%o_msk%spiral(p%nsym, p%eullims)
-        ! binarize volume
-        call self%bin_vol
-        ! produces and stashes masks
-        call self%build_3Dmsks
-        ! add volume soft edge
-        call self%cos_edge(self%edge)
-        ! apply mask to volume
-        call img_inout%mul(self)
-        ! exists
-        self%mskproj_exists = .true.
-        if( DEBUG )write(*,*)'simple_mask_projector::init done'
-    end subroutine init3D
-
-    !>  \brief  is a constructor
+    !>  \brief  is a 2D constructor
     !>          on exit the parent image is untouched
     subroutine init2D(self, p, ncls)
         class(mask_projector),      intent(inout) :: self
@@ -126,10 +64,20 @@ contains
         integer,                    intent(in)    :: ncls
         integer              :: alloc_stat
         if( .not.self%is_2d() )stop 'this routine is intended for 2D images only, simple_mask_projector::mskref'
+        if(.not.self%even_dims())stop 'even dimensions assumed; simple_mask_projector::init2D'
+        if(self%is_ft())         stop 'real space only; simple_mask_projector::init2D'
         call self%kill_mskproj
-        self%idim = [p%boxmatch, p%boxmatch, 1]
-        self%n    = ncls
-        call self%init_parms(p)
+        self%idim      = [p%boxmatch, p%boxmatch, 1]
+        self%n         = ncls
+        self%amsklp    = p%amsklp
+        self%msk       = p%msk
+        self%edge      = p%edge
+        self%dens      = p%dens
+        self%binwidth  = p%binwidth
+        self%mw        = p%mw
+        self%smpd_here = p%smpd
+        self%mskwidth  = min(self%mskwidth, real(minval(self%idim(:2)/2))-self%msk)
+        if(self%mskwidth < 1.)stop 'incompatible dimensiosn in simple_mask_projector%init_parms'
         allocate(self%adamsks(self%n), stat=alloc_stat )
         call alloc_err('in simple_mask_projector::init2D 1', alloc_stat)
         self%adamsks = 0.
@@ -137,25 +85,35 @@ contains
         if( DEBUG )write(*,*)'simple_mask_projector::init2D done'
     end subroutine init2D
 
-    !>  \brief  is a constructor
-    subroutine init_parms(self, p, mskwidth)
+    !>  \brief  is a 3D constructor and modifier
+    !>  On output the parent volume is the enveloppe mask
+    !>  The returned volume is enveloppe masked.
+    subroutine automask3D( self, vol_inout, amsklp, mw, binwidth, edge, dens )
         class(mask_projector), intent(inout) :: self
-        class(params),         intent(in)    :: p
-        real,        optional, intent(in)    :: mskwidth
-        if(.not.self%even_dims())stop 'even dimensions assumed; simple_mask_projector::init'
-        if(self%is_ft())         stop 'real space only; simple_mask_projector::init'
-        self%amsklp   = p%amsklp
-        self%msk      = p%msk
-        self%edge     = p%edge
-        self%dens     = p%dens
-        self%binwidth = p%binwidth
-        self%mw       = p%mw
-        self%smpd_here = p%smpd
-        if(present(mskwidth))self%mskwidth = mskwidth
-        self%mskwidth = min(self%mskwidth, real(minval(self%idim(:2)/2))-self%msk)
-        if(self%mskwidth < 1.)stop 'incompatible dimensiosn in simple_mask_projector%init_parms'
-        if( DEBUG )write(*,*)'simple_mask_projector::init_parms done'
-    end subroutine init_parms
+        class(image),          intent(inout) :: vol_inout
+        real,                  intent(in)    :: amsklp, mw, dens
+        integer,               intent(in)    :: binwidth, edge
+        logical :: was_ft
+        if( vol_inout%is_2d() )stop 'automask3D is intended for volumes only, simple_mask_projector%init_mskproj'
+        call self%kill_mskproj
+        self%amsklp    = amsklp
+        self%edge      = edge
+        self%dens      = dens
+        self%binwidth  = binwidth
+        self%mw        = mw
+        was_ft = vol_inout%is_ft()
+        if( vol_inout%is_ft() )call vol_inout%bwd_ft
+        self = vol_inout
+        ! binarize volume
+        call self%bin_vol
+        ! add volume soft edge
+        call self%cos_edge(self%edge)
+        ! apply mask to volume
+        call vol_inout%mul(self)
+        ! the end
+        if( was_ft )call vol_inout%fwd_ft
+        if( DEBUG )write(*,*)'simple_mask_projector::automask2D done'
+    end subroutine automask3D
 
     ! CALCULATORS
 
@@ -236,7 +194,7 @@ contains
     ! 3D CALCULATORS
 
     subroutine bin_vol( self )
-        use simple_math
+        use simple_math, only: nvoxfind
         class(mask_projector), intent(inout) :: self
         integer :: nnvox
         call self%bp(0., self%amsklp)
@@ -308,32 +266,6 @@ contains
         if( DEBUG )write(*,*)'simple_mask_projector::env_rproject done'
     end subroutine env_rproject
 
-    subroutine build_3Dmsks( self )
-        class(mask_projector), intent(inout) :: self
-        type(image) :: img_msk
-        type(ori)   :: o
-        integer     :: i
-        call img_msk%new([self%idim(1), self%idim(2), 1], self%get_smpd())
-        ! fills mask images from discrete orientations
-        do i = 1,self%n
-            o = self%o_msk%get_ori(i)
-            call self%env_rproject(o, img_msk)
-            select case(trim(self%mode))
-                case('circ')
-                    ! evaluates new mask
-                    self%adamsks(self%n) = self%calc_adamsk(img_msk)
-                case('env')
-                    ! add soft edge
-                    call img_msk%cos_edge(self%edge)
-                    ! stash
-                    self%img_msks(i) = img_msk
-            end select
-        enddo
-        ! cleanup
-        call img_msk%kill
-        if( DEBUG )write(*,*)'simple_mask_projector::build_3Dmsks done'
-    end subroutine build_3Dmsks
-
     ! MODIFIER
 
     !> \brief  applies the circular/envelope mask
@@ -351,29 +283,6 @@ contains
         if( DEBUG )write(*,*)'simple_mask_projector::apply_mask2D done'
     end subroutine apply_mask2D
 
-    subroutine apply_mask3D( self, img, o )
-        class(mask_projector), intent(inout) :: self
-        class(image),          intent(inout) :: img
-        class(ori),            intent(in)    :: o
-        integer :: ind, ldim(3)
-        ldim = img%get_ldim()
-        if( .not.img%is_2d() )stop 'only for images; simple_mask_projector::apply_mask3D'
-        if( any(ldim(:2)-self%idim(:2).ne.0) )stop 'Incompatible dimensions; simple_mask_projector::apply_mask3D'
-        if( self%is_2d() )stop 'erroneous function call; simple_mask_projector::apply_mask3D'
-        ! index to mask with closest projection direction
-        ind = self%o_msk%find_closest_proj( o )
-        ! apply
-        select case(trim(self%mode))
-            case('circ')
-                ! soft addaptive circular masking
-                call img%mask(self%adamsks(ind), 'soft')
-            case('env')
-                ! soft edge masking
-                call img%mul(self%img_msks(ind))
-        end select
-        if( DEBUG )write(*,*)'simple_mask_projector::apply_mask3D done'
-    end subroutine apply_mask3D
-
     ! GETTERS
 
     real function get_msk( self )
@@ -384,6 +293,7 @@ contains
     real function get_adamsk( self, i )
         class(mask_projector), intent(inout) :: self
         integer, intent(in) :: i
+        if( .not.allocated(self%adamsks) )stop 'adamask has not been calculated; simple_mask_projector%get_adamsk'
         if( i > self%n )stop 'index out of range; simple_mask_projector%get_adamsk'
         get_adamsk = self%adamsks(i)
     end function
@@ -393,13 +303,9 @@ contains
         integer,               intent(in)    :: i
         type(image) :: img_msk
         if( i > self%n )stop 'index out of range; simple_mask_projector%get_imgmsk'
-        if(trim(self%mode).eq.'circ')then
-            call img_msk%new([self%idim(1),self%idim(2),1], self%smpd_here)
-            img_msk = 1.
-            call img_msk%mask(self%adamsks(i), 'soft')
-        else
-            img_msk = self%img_msks(i)
-        endif
+        call img_msk%new([self%idim(1),self%idim(2),1], self%smpd_here)
+        img_msk = 1.
+        call img_msk%mask(self%adamsks(i), 'soft')
     end function
 
     ! DESTRUCTORS
@@ -407,17 +313,8 @@ contains
     !>  \brief  is the destructor
     subroutine kill_mskproj( self )
         class(mask_projector), intent(inout) :: self
-        integer :: i
-        if(self%mskproj_exists)then
-            call self%o_msk%kill
-            do i = 1,size(self%img_msks)
-                call self%img_msks(i)%kill
-            enddo
-            deallocate(self%img_msks, self%adamsks)
-        endif
-        self%mode     = 'circ'
         self%mskwidth = MSKWIDTH
-        self%n        = NPROJS
+        self%n        = 0
         self%msk      = 0.
         self%mskproj_exists = .false.
     end subroutine kill_mskproj

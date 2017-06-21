@@ -860,7 +860,7 @@ contains
             w = (cos(((rad-(maxrad-width))/width)*pi)+1.)/2.
         endif
     end function cosedge_3
-    
+
     !> \brief  two-dimensional gaussian edge
     pure function cosedge_inner_1( x, y, width, mskrad ) result( w )
         real, intent(in) :: x, y, width

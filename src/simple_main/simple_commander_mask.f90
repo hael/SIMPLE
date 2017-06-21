@@ -107,7 +107,7 @@ contains
     end subroutine exec_mask
 
     subroutine exec_automask2D( self, cline )
-        use simple_masker, only: automask2D
+        !use simple_masker, only: automask2D
         class(automask2D_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         type(params) :: p
@@ -119,7 +119,7 @@ contains
         write(*,'(A,F8.2,A)') '>>> AUTOMASK LOW-PASS:',        p%amsklp, ' ANGSTROMS'
         write(*,'(A,I3,A)')   '>>> AUTOMASK SOFT EDGE WIDTH:', p%edge,   ' PIXELS'
         p%outstk = add2fbody(p%stk, p%ext, 'msk')
-        call b%mskimg%init(p, p%nptcls)
+        call b%mskimg%init2D(p, p%nptcls)
         do iptcl=1,p%nptcls
             call b%img%read(p%stk, iptcl)
             call b%mskimg%update_cls(b%img, iptcl)
@@ -127,18 +127,12 @@ contains
             call b%img_msk%write('automasks2D'//p%ext, iptcl)
             call b%img%write(p%outstk, iptcl)
         end do
-        ! do iptcl=1,p%nptcls
-        !     call b%img%read(p%stk, iptcl)
-        !     call automask2D(b%img, p, b%img_msk)
-        !     call b%img_msk%write('automasks2D'//p%ext, iptcl)
-        !     call b%img%write(p%outstk, iptcl)
-        ! end do
         ! end gracefully
         call simple_end('**** SIMPLE_AUTOMASK2D NORMAL STOP ****')
     end subroutine exec_automask2D
     
     subroutine exec_automask3D( self, cline )
-        use simple_masker,  only: automask
+        !use simple_masker,  only: automask
         use simple_strings, only: int2str_pad
         class(automask3D_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
@@ -155,11 +149,10 @@ contains
             p%masks(istate)    = 'automask_state'//int2str_pad(istate,2)//p%ext
             p%vols_msk(istate) = add2fbody(p%vols(istate), p%ext, 'msk')
             call b%vol%read(p%vols(istate))
-            call b%mskvol%init(p, b%vol)
+            call b%mskvol%automask3D(b%vol, p%msk, p%amsklp, p%mw, p%binwidth, p%edge, p%dens)
             call b%mskvol%write(p%masks(istate))
             call b%vol%write(p%vols_msk(istate))
-            !call automask(b, p, cline, b%vol,  b%mskvol, p%vols_msk(istate), p%masks(istate))
-        end do
+            end do
         ! end gracefully
         call simple_end('**** SIMPLE_AUTOMASK3D NORMAL STOP ****')
     end subroutine exec_automask3D

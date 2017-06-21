@@ -3180,12 +3180,12 @@ contains
             call self%fwd_ft
             didft = .true.
         endif
-        lims = self%fit%loop_lims(2)
+        lp_freq = self%fit%get_find(1,lp) ! assuming square 4 now
+        lims    = self%fit%loop_lims(2)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 do l=lims(3,1),lims(3,2)
                     freq = hyp(real(h),real(k),real(l))
-                    lp_freq = self%fit%get_find(1,lp) ! assuming square 4 now
                     if(freq .gt. lp_freq)then
                         phys = self%fit%comp_addr_phys([h,k,l])
                         sgn1 = 1.
@@ -4776,7 +4776,7 @@ contains
         if( which=='soft' )then
             soft = .true.
         else if( which=='hard' )then
-            soft = .false. !!
+            soft = .false.
         else
             stop 'undefined which parameter; mask; simple_image'
         endif
@@ -4798,6 +4798,7 @@ contains
         else
             minlen = minval(self%ldim(1:2))
         endif
+        minlen = min(nint(2.*(mskrad+10.)), minlen) ! soft mask width limited to +/- 10 pixels
         ! init center as origin
         forall(i=1:self%ldim(1)) cis(i) = -real(self%ldim(1)-1)/2. + real(i-1)
         forall(i=1:self%ldim(2)) cjs(i) = -real(self%ldim(2)-1)/2. + real(i-1)
