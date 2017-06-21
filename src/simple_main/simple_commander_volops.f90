@@ -289,6 +289,7 @@ contains
             if( cline%defined('neg')  ) call b%vol%neg
             if( cline%defined('snr')  ) call b%vol%add_gauran(p%snr)
             if( cline%defined('mirr') ) call b%vol%mirror(p%mirr)
+            if( cline%defined('bfac') ) call b%vol%apply_bfac(p%bfac)
             call b%vol%write(p%outvol, del_if_exists=.true.)
         endif
         ! end gracefully

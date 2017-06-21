@@ -3001,6 +3001,9 @@ contains
             call self%fwd_ft
             didft = .true.
         endif
+
+        print *, 'bfac: ', b
+
         lims = self%fit%loop_lims(2)
         !$omp parallel do collapse(3) default(shared) proc_bind(close)&
         !$omp private(k,j,i,res,phys,wght) schedule(static) 
@@ -3015,7 +3018,7 @@ contains
             end do
         end do
         !$omp end parallel do
-        if( b < 0. ) call self%bp(0., 2.*self%smpd, 4.)
+        ! if( b < 0. ) call self%bp(0., 2.*self%smpd, 4.)
         if( didft ) call self%bwd_ft
     end subroutine apply_bfac
 

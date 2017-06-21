@@ -113,6 +113,7 @@ type :: oris
     procedure          :: rnd_oris
     procedure          :: rnd_proj_space
     procedure          :: rnd_neighbors
+    procedure          :: rnd_gau_neighbors
     procedure          :: rnd_ori
     procedure          :: rnd_cls
     procedure          :: ini_tseries
@@ -1445,6 +1446,28 @@ contains
             endif
         end do
     end subroutine rnd_neighbors
+
+    !>  \brief  generates nnn stochastic projection direction neighbors to o_prev
+    !!          with a sigma of the random Gaussian tilt angle of asig      
+    subroutine rnd_gau_neighbors( self, nnn, o_prev, asig, eullims )
+        use simple_rnd, only: gasdev
+        class(oris),    intent(inout) :: self
+        integer,        intent(in)    :: nnn
+        class(ori),     intent(in)    :: o_prev
+        real,           intent(in)    :: asig
+        real, optional, intent(inout) :: eullims(3,2)
+        type(ori) :: o_transform, o_rnd
+        integer   :: i
+        call o_transform%new
+        call self%new(nnn)
+        do i=1,nnn
+            call o_transform%rnd_euler(eullims)
+            call o_transform%e2set(gasdev(0., asig))
+            call o_transform%e3set(0.)
+            o_rnd = o_prev.compose.o_transform
+            call self%set_ori(i, o_rnd)
+        end do
+    end subroutine rnd_gau_neighbors
 
     !>  \brief  generate random projection direction space around a given one
     subroutine rnd_proj_space( self, nsample, o_prev, thres, eullims )
