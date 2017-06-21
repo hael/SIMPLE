@@ -418,7 +418,7 @@ contains
         contains
 
             subroutine centervol
-                real :: shvec(3)
+                real    :: shvec(3)
                 logical :: do_center
                 do_center = .true.
                 if( p%nstates > 1 )do_center = .false.
