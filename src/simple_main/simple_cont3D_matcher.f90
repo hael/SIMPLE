@@ -53,7 +53,6 @@ contains
         ! other variables
         type(oris)           :: softoris
         type(ori)            :: orientation
-        type(ran_tabu)       :: rt
         integer              :: nbatches, batch, fromp, top, iptcl,iptcl_tmp, state, alloc_stat, ind
         ! AUTOMASKING DEACTIVATED FOR NOW
         ! MULTIPLE STATES DEACTIVATED FOR NOW
@@ -136,7 +135,7 @@ contains
         endif
 
         ! BATCH PROCESSING
-        call del_file(p%outfile)      
+        call del_file(p%outfile)
         do batch = 1, nbatches
             ! BATCH INDICES
             fromp = p%fromp-1 + batches(batch,1)
@@ -146,7 +145,7 @@ contains
                 &batch_imgs(fromp:top), stat=alloc_stat)
             call alloc_err('In pcont3D_matcher::pcont3D_exec_single',alloc_stat)
             do iptcl = fromp, top
-                
+
                 state = nint(b%a%get(iptcl, 'state'))
                 if(state == 0)cycle
                 ! stash raw image for rec
@@ -232,7 +231,7 @@ contains
         else
             converged = b%conv%check_conv_cont3D()
         endif
-        
+
         ! DEALLOCATE
         deallocate(batches)
         deallocate(state_exists)
@@ -256,7 +255,7 @@ contains
         if( p%boxmatch < p%box )call b%vol%new([p%box,p%box,p%box], p%smpd) ! to double check
     end subroutine prep_vols
 
-    !>  \brief  initialize pftcc 
+    !>  \brief  initialize pftcc
     subroutine init_pftcc(p, iptcl, pftcc)
         class(params),              intent(inout) :: p
         integer,                    intent(in)    :: iptcl
@@ -268,7 +267,7 @@ contains
         endif
     end subroutine init_pftcc
 
-    !>  \brief  preps search space and performs reference projection 
+    !>  \brief  preps search space and performs reference projection
     subroutine prep_pftcc_refs(b, p, iptcl, pftcc)
         use simple_image, only: image
         use simple_ctf,   only: ctf
@@ -312,10 +311,10 @@ contains
             oref  = orefs%get_ori(iref)
             state = nint(oref%get('state'))
             call b%refvols(state)%fproject_polar(iref, oref, pftcc)
-        enddo          
+        enddo
     end subroutine prep_pftcc_refs
 
-    !>  \brief  particle projection into pftcc 
+    !>  \brief  particle projection into pftcc
     subroutine prep_pftcc_ptcl(b, p, iptcl, pftcc)
         class(build),               intent(inout) :: b
         class(params),              intent(inout) :: p
