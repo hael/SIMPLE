@@ -198,6 +198,7 @@ contains
         use simple_math, only: nvoxfind
         class(masker), intent(inout) :: self
         integer :: nnvox
+        call self%mask(self%msk, 'soft')
         call self%bp(0., self%amsklp)
         ! find nr of voxels corresponding to mw
         if( self%dens > 0. )then
