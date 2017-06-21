@@ -83,7 +83,6 @@ contains
         call rovol_pad%set_ft(.true.)
         call rovol%new(ldim, p%smpd)
         call prep4cgrid(vol, vol_pad, p%msk, kbwin)
-        ! call vol_pad%expand_cmat REMOVED BECAUSE SEE BELOW
         lims = vol_pad%loop_lims(2)
         write(*,'(A)') '>>> ROTATING VOLUME'
         !$omp parallel do collapse(3) default(shared) private(h,k,l,loc,logi,phys)&
@@ -92,8 +91,8 @@ contains
             do k=lims(2,1),lims(2,2)
                 do l=lims(3,1),lims(3,2)
                     logi = [h,k,l]
-                    phys = rovol_pad%comp_addr_phys([h,k,l])
-                    loc  = matmul(real(logi),o%get_mat())
+                    phys = rovol_pad%comp_addr_phys(logi)
+                    loc  = matmul(real(logi), o%get_mat())
                     call rovol_pad%set_fcomp(logi, phys, vol_pad%extr_gridfcomp(loc))
                 end do 
             end do
@@ -101,8 +100,7 @@ contains
         !$omp end parallel do
         call rovol_pad%bwd_ft
         call rovol_pad%clip(rovol)
-        ! HAD TO TAKE OUT BECAUSE PGI COMPILER BAILS
-        ! call rovol%norm
+        call rovol%norm()
         call vol_pad%kill
         call rovol_pad%kill
     end function rotvol

@@ -16,9 +16,9 @@ implicit none
 public :: cont3D_exec
 private
 
-integer,                   parameter :: BATCHSZ_MUL = 10   ! particles per thread
+integer,                   parameter :: BATCHSZ_MUL = 10    !< particles per thread
 integer,                   parameter :: MAXNPEAKS   = 10
-integer,                   parameter :: NREFS       = 50
+integer,                   parameter :: NREFS       = 50    !< number of references projection per stage used per particle
 logical,                   parameter :: DEBUG       = .false.
 type(polarft_corrcalc)               :: pftcc
 type(oris)                           :: orefs                   !< per particle projection direction search space
@@ -66,7 +66,7 @@ contains
         ! number of references per particle
         select case(p%refine)
             case('yes')
-                nrefs_per_ptcl = NREFS*neff_states
+                nrefs_per_ptcl = NREFS * neff_states
             case('greedy')
                 nrefs_per_ptcl = 1
             case DEFAULT
@@ -122,8 +122,6 @@ contains
         endif
 
         ! INIT IMGPOLARIZER
-        ! dummy pftcc is only init here so the img polarizer can be initialized
-        ! todo: write init_imgpolarizer constructor that does not require pftcc
         call pftcc%new(nrefs_per_ptcl, [1,1], [p%boxmatch,p%boxmatch,1],p%kfromto, p%ring2, p%ctf)
         call b%img_match%init_polarizer(pftcc)
         call pftcc%kill
@@ -268,16 +266,13 @@ contains
 
     !>  \brief  preps search space and performs reference projection 
     subroutine prep_pftcc_refs(b, p, iptcl, pftcc)
-        use simple_image, only: image
-        use simple_ctf,   only: ctf
         class(build),               intent(inout) :: b
         class(params),              intent(inout) :: p
         integer,                    intent(in)    :: iptcl
         class(polarft_corrcalc),    intent(inout) :: pftcc
-        type(ctf)   :: tfun
-        type(image) :: ref_img, ctf_img
         type(oris)  :: cone
         type(ori)   :: optcl, oref
+        integer, allocatable :: proj_inds(:), rnd_order(:)
         real        :: eullims(3,2),  dfx, dfy, angast
         integer     :: state, iref, cnt
         optcl = b%a%get_ori(iptcl)

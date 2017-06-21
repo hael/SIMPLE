@@ -16,10 +16,13 @@ type :: eo_reconstructor
     type(reconstructor)    :: eosum
     character(len=4)       :: ext
     real                   :: fsc05, fsc0143, smpd, msk, fny, inner=0., width=10.
+    real                   :: mw, amsklp=20., dens=1.
+    integer                :: binwidth=1, edge=10
     integer                :: box=0, nstates=1, numlen=2, lfny=0
-    logical                :: xfel=.false.
-    logical                :: wiener=.false.
-    logical                :: exists=.false.
+    logical                :: automsk = .false.
+    logical                :: xfel    = .false.
+    logical                :: wiener  = .false.
+    logical                :: exists  = .false.
   contains
     ! CONSTRUCTOR
     procedure          :: new
@@ -60,7 +63,6 @@ contains
     
     !>  \brief  is a constructor
     subroutine new(self, p )
-        use simple_ctf,    only: ctf
         class(eo_reconstructor),      intent(inout) :: self !< instance
         class(params), target,        intent(in)    :: p    !< parameters object (provides constants)
         type(image) :: imgtmp
@@ -69,16 +71,22 @@ contains
         ! set constants
         neg = .false.
         if( p%neg .eq. 'yes' ) neg = .true.
-        self%box     =  p%box
-        self%smpd    =  p%smpd
-        self%nstates =  p%nstates
-        self%inner   =  p%inner
-        self%width   =  p%width
-        self%fny     =  p%fny
-        self%ext     =  p%ext
-        self%numlen  =  p%numlen
-        self%msk     =  p%msk
-        self%xfel    =  p%l_xfel
+        self%box      = p%box
+        self%smpd     = p%smpd
+        self%nstates  = p%nstates
+        self%inner    = p%inner
+        self%width    = p%width
+        self%fny      = p%fny
+        self%ext      = p%ext
+        self%numlen   = p%numlen
+        self%msk      = p%msk
+        self%xfel     = p%l_xfel
+        self%binwidth = p%binwidth
+        self%mw       = p%mw
+        self%edge     = p%edge
+        self%amsklp   = p%amsklp
+        self%dens     = p%dens
+        self%automsk  = p%doautomsk
         ! create composites
         call self%even%new([p%boxpd,p%boxpd,p%boxpd], p%smpd, p%imgkind)
         call self%even%alloc_rho(p)
@@ -276,12 +284,14 @@ contains
     subroutine sampl_dens_correct_eos( self, state )
         use simple_strings,      only: int2str_pad
         use simple_filehandling, only: arr2file
-        use simple_math,         only: get_resolution
+        use simple_math,         only: get_resolution, calc_fourier_index
+        use simple_masker,       only: masker
         class(eo_reconstructor), intent(inout) :: self  !< instance
         integer,                 intent(in)    :: state !< state
         real, allocatable :: res(:), corrs(:)
         type(image)       :: even, odd
-        integer           :: j
+        type(masker)      :: volmasker
+        integer           :: j, find
         ! make clipped volumes
         if( self%xfel )then
             call even%new([self%box,self%box,self%box],self%smpd,imgkind='xfel')
@@ -305,25 +315,35 @@ contains
         call self%odd%clip(odd)
         if( self%xfel )then
             ! no masking or Fourier transformation
-        else    
-            if( self%inner > 1. )then
-                call even%mask(self%msk, 'soft', inner=self%inner, width=self%width) 
-                call odd%mask(self%msk, 'soft', inner=self%inner, width=self%width)
+        else
+            if( self%automsk )then
+                ! automasking
+                call volmasker%automask3D(even, self%msk, self%amsklp, self%mw, self%binwidth, self%edge, self%dens)
+                call volmasker%write('automsk_state'//int2str_pad(state,2)// '_even.mrc')
+                call volmasker%automask3D(odd, self%msk, self%amsklp, self%mw, self%binwidth, self%edge, self%dens)
+                call volmasker%write('automsk_state'//int2str_pad(state,2)// '_odd.mrc')
+                call volmasker%kill
             else
-                call even%mask(self%msk, 'soft') 
-                call odd%mask(self%msk, 'soft')
+                ! spherical masking
+                if( self%inner > 1. )then
+                    call even%mask(self%msk, 'soft', inner=self%inner, width=self%width) 
+                    call odd%mask(self%msk, 'soft', inner=self%inner, width=self%width)
+                else
+                    call even%mask(self%msk, 'soft') 
+                    call odd%mask(self%msk, 'soft')
+                endif
             endif
             ! forward FT
             call even%fwd_ft
             call odd%fwd_ft
+            ! calculate FSC
+            call even%fsc(odd, res, corrs)
+            do j=1,size(res)
+               write(*,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', corrs(j)
+            end do
         endif
-        ! calculate FSC
-        call even%fsc(odd, res, corrs)
+        ! save, get & print resolution
         call arr2file(corrs, 'fsc_state'//int2str_pad(state,2)//'.bin')
-        do j=1,size(res)
-           write(*,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', corrs(j)
-        end do
-        ! get & print resolution
         call get_resolution(corrs, res, self%fsc05, self%fsc0143)
         self%fsc05   = max(self%fsc05,self%fny) 
         self%fsc0143 = max(self%fsc0143,self%fny)

@@ -28,9 +28,9 @@ use simple_opt_spec,            only: opt_spec
 use simple_convergence,         only: convergence
 use simple_convergence_perptcl, only: convergence_perptcl
 use simple_jiffys,              only: alloc_err
-use simple_mask_projector,      only: mask_projector
 use simple_projector,           only: projector
 use simple_polarizer,           only: polarizer
+use simple_masker,              only: masker
 use simple_filehandling         ! use all in there
 implicit none
 
@@ -53,8 +53,8 @@ type build
     type(image)                         :: img_copy           !< -"-
     type(projector)                     :: vol                !< -"-
     type(projector)                     :: vol_pad            !< -"-
-    type(mask_projector)                :: mskimg             !< mask image
-    type(mask_projector)                :: mskvol             !< mask volume
+    type(masker)                        :: mskimg             !< mask image
+    type(masker)                        :: mskvol             !< mask volume
     ! CLUSTER TOOLBOX
     type(ppca)                          :: pca                !< 4 probabilistic pca
     type(centre_clust)                  :: cenclust           !< centre-based clustering object
@@ -71,7 +71,7 @@ type build
     type(image),            allocatable :: cavgs(:)           !< class averages (Wiener normalised references)
     type(image),            allocatable :: ctfsqsums(:)       !< CTF**2 sums for Wiener normalisation
     type(projector),        allocatable :: refvols(:)         !< reference volumes for quasi-continuous search
-    type(mask_projector),   allocatable :: mskvols(:)         !< volumes masks for particle masking
+    type(masker),           allocatable :: mskvols(:)         !< volumes masks for particle masking
     type(reconstructor),    allocatable :: recvols(:)         !< array of volumes for reconstruction
     type(eo_reconstructor), allocatable :: eorecvols(:)       !< array of volumes for eo-reconstruction
     real,    allocatable                :: ssnr(:,:)          !< spectral signal to noise rations
@@ -476,7 +476,7 @@ contains
         if( str_has_substr(p%refine,'neigh') )then
             call self%e%nearest_neighbors(p%nnn, self%nnmat)
         endif
-        if( p%doautomsk )then
+        if( p%doautomsk .or. p%mskfile.ne.'' )then
             allocate( self%mskvols(p%nstates), stat=alloc_stat )
             call alloc_err('build_hadamard_prime3D_tbox; simple_build, 3', alloc_stat)
             do s=1,p%nstates

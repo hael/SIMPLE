@@ -294,12 +294,9 @@ contains
             ! clip image if needed
             call b%img%clip(b%img_match) ! SQUARE DIMS ASSUMED
             ! MASKING
-            if( p%doautomsk )then
-                ! 3D enveloppe from volume
-                call b%mskvols(state)%apply_mask(b%img_match, o)
-            else if( p%automsk .eq. 'cavg' )then
+            if(p%l_automsk .and. p%automsk .eq. 'cavg')then
                 ! 2D ab initio mask
-                call b%mskimg%apply_mask(b%img_match, nint(o%get('cls')))
+                call b%mskimg%apply_mask2D(b%img_match, nint(o%get('cls')))
             else              
                 ! soft-edged mask
                 if( p%l_innermsk )then
@@ -335,7 +332,7 @@ contains
         ! normalise
         call b%img_match%norm
         ! apply mask
-        if( p%l_automsk )then
+        if(p%l_automsk .and. p%automsk .eq. 'cavg')then
             ! automasking
             call b%mskimg%update_cls(b%img_match, icls)
             if( (p%l_distr_exec .and. p%part.eq.1) .or. (.not.p%l_distr_exec))then
@@ -376,17 +373,23 @@ contains
         if( p%l_xfel )then
             ! no centering or masking
         else
-            ! mask volume using a spherical soft-edged mask
-            p%vols_msk(s) = add2fbody(p%vols(s), p%ext, 'msk')
-            if( p%l_innermsk )then
-                call b%vol%mask(p%msk, 'soft', inner=p%inner, width=p%width)
-            else
-                call b%vol%mask(p%msk, 'soft')
-            endif
-            ! mask using a molecular envelope
-            if( p%doautomsk )then
-                p%masks(s)   = 'automask_state'//int2str_pad(s,2)//p%ext
-                call b%mskvols(s)%init( p, b%vol )
+            if( cline%defined('mskfile') .or. p%doautomsk )then
+                ! mask volume using a spherical soft-edged mask
+                p%vols_msk(s) = add2fbody(p%vols(s), p%ext, 'msk')
+                if( cline%defined('mskfile') )then
+                    ! mask provided
+                    call b%mskvols(s)%new([p%box, p%box, p%box], p%smpd, p%imgkind)
+                    call b%mskvols(s)%read(p%mskfile)
+                    call b%mskvols(s)%clip_inplace([p%boxmatch,p%boxmatch,p%boxmatch])
+                    call b%mskvols(s)%norm_bin ! ensures [0;1] range
+                    call b%vol%mul(b%mskvols(s))
+                    p%masks(s) = 'mask_state'//int2str_pad(s,2)//p%ext
+                else
+                    ! automask
+                    call b%mskvols(s)%automask3D(b%vol, p%msk, p%amsklp, p%mw, p%binwidth, p%edge, p%dens)
+                    p%masks(s) = 'automask_state'//int2str_pad(s,2)//p%ext
+                endif
+                ! write masks
                 if( p%l_distr_exec )then
                     if( p%part == 1 )then
                         ! write files
@@ -397,6 +400,13 @@ contains
                     ! write files
                     call b%vol%write( p%vols_msk(s) )
                     call b%mskvols(s)%write( p%masks(s) )
+                endif               
+            else
+                ! circular masking
+                if( p%l_innermsk )then
+                    call b%vol%mask(p%msk, 'soft', inner=p%inner, width=p%width)
+                else
+                    call b%vol%mask(p%msk, 'soft')
                 endif
             endif
         endif
@@ -409,16 +419,19 @@ contains
 
             subroutine centervol
                 real :: shvec(3)
+                logical :: do_center
+                do_center = .true.
+                if( p%nstates > 1 )do_center = .false.
+                if( p%pgrp(:1) .ne. 'c' )do_center = .false.
+                if( cline%defined('mskfile') )do_center = .false.
                 ! centering only for single state, asymmetric and circular symmetric cases 
-                if( p%nstates==1 )then
-                    if(p%pgrp(:1) .eq. 'c')then
-                        shvec = b%vol%center(p%cenlp,'no',p%msk,doshift=.false.) ! find center of mass shift
-                        if( arg(shvec) > CENTHRESH )then
-                            if(p%pgrp .ne. 'c1') shvec(1:2) = 0.         ! shifts only along z-axis for C2 and above
-                            call b%vol%shift(shvec(1),shvec(2),shvec(3)) ! performs shift
-                            ! map back to particle oritentations
-                            if( cline%defined('oritab') )call b%a%map3dshift22d(-shvec(:), state=s)
-                        endif
+                if( do_center )then
+                    shvec = b%vol%center(p%cenlp,'no',p%msk,doshift=.false.) ! find center of mass shift
+                    if( arg(shvec) > CENTHRESH )then
+                        if(p%pgrp .ne. 'c1') shvec(1:2) = 0.         ! shifts only along z-axis for C2 and above
+                        call b%vol%shift(shvec(1),shvec(2),shvec(3)) ! performs shift
+                        ! map back to particle oritentations
+                        if( cline%defined('oritab') )call b%a%map3dshift22d(-shvec(:), state=s)
                     endif
                 endif
             end subroutine centervol

@@ -82,9 +82,8 @@ contains
         call simple_end('**** SIMPLE_CENVOL NORMAL STOP ****')
     end subroutine exec_cenvol
     
-    subroutine exec_postproc_vol(self,cline)
+    subroutine exec_postproc_vol(self, cline)
         use simple_estimate_ssnr ! use all in there
-        use simple_masker,       only: automask
         class(postproc_vol_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(params)      :: p
@@ -117,10 +116,10 @@ contains
         if( cline%defined('bfac') ) call b%vol%apply_bfac(p%bfac)
         ! masking
         call b%vol%bwd_ft
-        p%vols_msk(state) = add2fbody(trim(p%vols(state)), p%ext, 'msk')
         if( p%automsk .eq. 'yes' )then
+            call b%mskvol%automask3D(b%vol, p%msk, p%amsklp, p%mw, p%binwidth, p%edge, p%dens)
             p%masks(state) = 'automask_state'//int2str_pad(state,2)//p%ext
-            call automask(b, p, cline, b%vol, b%mskvol, p%vols_msk(state), p%masks(state))
+            call b%mskvol%write(p%masks(state))
         else
             call b%vol%mask(p%msk, 'soft')
         endif
