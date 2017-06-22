@@ -21,7 +21,7 @@ implicit none
 public :: comlin_smat_commander
 public :: symsrch_commander
 private
-
+#include "simple_local_flags.inc"
 type, extends(commander_base) :: comlin_smat_commander
   contains
     procedure :: execute      => exec_comlin_smat
@@ -32,7 +32,7 @@ type, extends(commander_base) :: symsrch_commander
 end type symsrch_commander
 
 contains
-    
+
     subroutine exec_comlin_smat( self, cline )
         use simple_comlin_srch   ! use all in there
         use simple_ori,          only: ori
@@ -49,7 +49,6 @@ contains
         integer                       :: ntot, npairs, ipair, fnr
         real,    allocatable          :: corrmat(:,:), corrs(:)
         integer, allocatable          :: pairs(:,:)
-        logical                       :: debug=.false.
         character(len=:), allocatable :: fname
         p = params(cline, .false.)                           ! constants & derived constants produced
         call b%build_general_tbox(p, cline, .false., .true.) ! general objects built (no oritab reading)

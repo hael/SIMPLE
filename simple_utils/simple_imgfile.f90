@@ -8,7 +8,7 @@
 !!  - MRC: http://www2.mrc-lmb.cam.ac.uk/image2000.html
 !!
 !! This class is based on a class used in CTFFIND4, developed by Alexis Rohou
-!! and Nikolaus Grigorieff at Janelia Farm. The below copyright statement therefore 
+!! and Nikolaus Grigorieff at Janelia Farm. The below copyright statement therefore
 !! needs to be included here:
 !! Copyright 2014 Howard Hughes Medical Institute
 !! All rights reserved
@@ -24,9 +24,7 @@ implicit none
 
 public :: imgfile
 private
-
-logical :: debug=.false.
-logical :: warn=.false.
+#include "simple_local_flags.inc"
 
 type imgfile
     private
@@ -67,12 +65,12 @@ contains
     procedure          :: setPixSz
     procedure          :: setRMSD
     procedure          :: setMode
-end type
+end type imgfile
 
 contains
-    
+
     ! CONSTRUCTOR
-    
+
     !>  \brief  constructs an imgfile object (file-handle)
     subroutine open( self, fname, ldim, smpd, del_if_exists, formatchar, readhead, rwaction )
         use simple_jiffys, only: alloc_err
@@ -90,12 +88,12 @@ contains
         if( present(readhead) ) rreadhead = readhead
         write_enabled = .true.
         if( present(rwaction) )then
-            if( rwaction .eq. 'READ' ) write_enabled = .false. 
+            if( rwaction .eq. 'READ' ) write_enabled = .false.
         endif
         call self%close_nowrite
         ! Remove leading blanks in fname
         self%fname = adjustl(fname)
-        if( debug ) print *, 'trying to open: ', self%fname
+        if( debug ) print *,  'trying to open: ', self%fname
         ! Work out which file format to use
         if( present(formatchar) )then
             format_descriptor = formatchar
@@ -105,30 +103,30 @@ contains
         if( format_descriptor .ne. 'N' )then
             self%head_format = format_descriptor
         else
-            self%head_format  = default_file_format 
+            self%head_format  = default_file_format
         endif
-        if( debug ) print *, 'format: ', self%head_format
+        if( debug ) print *,  'format: ', self%head_format
         ! Allocate head object
         select case(self%head_format)
             case('F')
                 allocate(MrcFeiImgHead :: self%overall_head)
-                if( debug ) print *, ' allocated MrcFeiImgHead'
+                if( debug ) print *,  ' allocated MrcFeiImgHead'
                 call self%overall_head%new(ldim)
             case ('M')
                 allocate(MrcImgHead :: self%overall_head)
-                if( debug ) print *, ' allocated MrcImgHead'
+                if( debug ) print *,  ' allocated MrcImgHead'
                 call self%overall_head%new(ldim)
-            case ('S')            
+            case ('S')
                 ! create header
                 allocate(SpiImgHead :: self%overall_head)
-                if( debug ) print *, ' allocated SpiImgHead'
+                if( debug ) print *,  ' allocated SpiImgHead'
                 call self%overall_head%new(ldim)
-                if( ldim(3) > 1 ) self%isvol = .true.          
+                if( ldim(3) > 1 ) self%isvol = .true.
             case DEFAULT
-                stop 'Unsupported file format; new; simple_imgfile' 
+                stop 'Unsupported file format; new; simple_imgfile'
         end select
         ! check endconv status
-        if( .not. allocated(endconv) )then    
+        if( .not. allocated(endconv) )then
             allocate(endconv, source='NATIVE')
         endif
         ! open the file
@@ -138,12 +136,12 @@ contains
             ! read header
             if( rreadhead )then
                 call self%overall_head%read(self%funit)
-                if( debug ) print *, 'did read header'
+                if( debug ) print *,  'did read header'
             endif
         else
             ! write header
             call self%overall_head%write(self%funit)
-            if( debug ) print *, 'did write header'
+            if( debug ) print *,  'did write header'
         endif
         if( write_enabled )then
             ! REPLACED WITH THIS ONE TO MAKE THE FLAG WAS_WRITTEN TO TRUE
@@ -157,15 +155,15 @@ contains
         self%existence = .true.
         if( debug ) write(*,*) '(imgfile::new) constructed an imgfile object (file-handle)'
     end subroutine open
-    
+
     !>  \brief is forprinting the header
     subroutine print_header( self )
         class(imgfile), intent(in) :: self
         call self%overall_head%print
     end subroutine print_header
-    
+
     ! CORE FUNCTIONALITY
-    
+
     !>  \brief open the file(s) for the imgfile
     subroutine open_local( self, del_if_exists, rwaction )
         class(imgfile),             intent(inout) :: self
@@ -197,7 +195,7 @@ contains
         class(imgfile), intent(inout) :: self
         if( is_open(self%funit) )then
             if( self%was_written_to )then
-                call self%overall_head%write(self%funit)                    
+                call self%overall_head%write(self%funit)
                 if( debug ) write(*,*) '(simple_imgfile::close) wrote overall_head'
             endif
             close(self%funit)
@@ -205,10 +203,10 @@ contains
         endif
         if( allocated(self%overall_head) ) call self%overall_head%kill
         if( allocated(self%overall_head) ) deallocate(self%overall_head)
-        self%was_written_to = .false.   
+        self%was_written_to = .false.
         self%existence = .false.
     end subroutine close
-    
+
     !>  \brief  close the file(s)
     subroutine close_nowrite( self )
         class(imgfile), intent(inout) :: self
@@ -219,7 +217,7 @@ contains
         endif
         if( allocated(self%overall_head) ) call self%overall_head%kill
         if( allocated(self%overall_head) ) deallocate(self%overall_head)
-        self%was_written_to = .false.   
+        self%was_written_to = .false.
         self%existence = .false.
     end subroutine close_nowrite
 
@@ -245,7 +243,7 @@ contains
 
     !>  \brief  for translating an image index to record indices in the stack
     subroutine slice2recpos( self, nr, hedinds, iminds )
-        class(imgfile), intent(in), target :: self 
+        class(imgfile), intent(in), target :: self
         integer, intent(in)                :: nr
         integer(kind=8), intent(out)       :: hedinds(2), iminds(2)
         integer                            :: cnt, j, dims(3)
@@ -277,7 +275,7 @@ contains
                 stop 'Format not supported; slice2recpos; simle_imgfile'
         end select
     end subroutine slice2recpos
-    
+
     !>  \brief  for translating an image index to record indices in the stack
     subroutine slice2bytepos( self, nr, hedinds, iminds )
         class(imgfile), intent(in)     :: self
@@ -298,7 +296,7 @@ contains
             iminds(2)  = iminds(2)*self%overall_head%getLenbyt()
         endif
     end subroutine slice2bytepos
-    
+
     subroutine print_slice2bytepos( self, n )
         class(imgfile), intent(in) :: self
         integer, intent(in)        :: n
@@ -311,9 +309,9 @@ contains
             'imgsz: ',  iminds(2)- iminds(1)+1
         end do
     end subroutine print_slice2bytepos
-    
+
     ! SLICE & HEADER I/O
-    
+
     !>  \brief  read a slice of the image file from disk into memory
     subroutine rSlice( self, slice_nr, rarr )
         class(imgfile), intent(inout)    :: self
@@ -429,7 +427,7 @@ contains
             end select
         endif
     end subroutine wHead
-    
+
     !>  \brief  read/write a set of contiguous slices of the image file from disk into memory.
     !!          The array of reals should have +2 elements in the first dimension.
     subroutine rwSlices( self, mode, first_slice, last_slice, rarr, ldim, is_ft, smpd, read_failure )
@@ -502,7 +500,7 @@ contains
                         ! nothing to do
                     type is (SpiImgHead)
                         ! Since we need to know the image dimensions in order to create a SPIDER
-                        ! file-handler there is no point in redefining the file dims. We should check that 
+                        ! file-handler there is no point in redefining the file dims. We should check that
                         ! first_slice == last_slice when we are writing to stacks though
                         if( .not. self%isvol )then
                             if( first_slice /= last_slice )then
@@ -525,7 +523,7 @@ contains
         endif
         arr_is_ready = arr_is_ready .and. (size(rarr,2) .eq. dims(2))
         if( .not. arr_is_ready )then
-            write(*,*) 'Array size: ', size(rarr,1), size(rarr,2), size(rarr,3)        
+            write(*,*) 'Array size: ', size(rarr,1), size(rarr,2), size(rarr,3)
             write(*,*) 'Dimensions: ', dims(1), dims(2), dims(3)
             stop 'Array is not properly allocated; rwSlices; simple_imgfile'
         endif
@@ -548,11 +546,11 @@ contains
                     write(*,*) '(imgfile::rwSlices) self%overall_head%bytesPerPix: ', self%overall_head%bytesPerPix()
                     write(*,*) '(imgfile::rwSlices) first dim: ',   dims(1)
                     write(*,*) '(imgfile::rwSlices) second dim: ',  dims(2)
-                    write(*,*) '(imgfile::rwSlices) first_slice: ', first_slice 
+                    write(*,*) '(imgfile::rwSlices) first_slice: ', first_slice
                     write(*,*) '(imgfile::rwSlices) first_byte: ',  first_byte
                     write(*,*) '(imgfile::rwSlices) hedbyteinds: ',  hedbyteinds
                     write(*,*) '(imgfile::rwSlices) imbyteinds: ',  imbyteinds
-                    stop 
+                    stop
                 endif
             case DEFAULT
                 stop 'Format not supported; rwSlices; simple_imgfile'
@@ -643,7 +641,7 @@ contains
                 case(4)
                     select case(self%head_format)
                         case('M','F')
-                            ! nothing to do 
+                            ! nothing to do
                         case('S')
                             if( .not. self%isvol )then
                                 ! for SPIDER stack we also need to create and write an image header
@@ -673,7 +671,7 @@ contains
                             endif
                     end select
 
-                    if( DEBUG )then
+                    if( debug )then
                         print *, 'size(rarr, dim1): ', size(rarr,1)
                         print *, 'size(rarr, dim2): ', size(rarr,2)
                         print *, 'size(rarr, dim3): ', size(rarr,3)
@@ -685,7 +683,7 @@ contains
                     deallocate(tmp_32bit_float_array)
                 case DEFAULT
                     print *, 'bit depth: ', int2str(self%overall_head%bytesPerPix())
-                    stop 'Unsupported bit-depth; rwSlices; simple_imgfile' 
+                    stop 'Unsupported bit-depth; rwSlices; simple_imgfile'
             end select
 
             ! stop
@@ -748,7 +746,7 @@ contains
     end subroutine rwSlices
 
     ! GETTERS, SETTERS, PRINTERS
-    
+
     !>  \brief  Print out basic information about the file
     subroutine print( self )
         class(imgfile), intent(in) :: self
@@ -790,7 +788,7 @@ contains
         class(imgfile), intent(in) :: self
         getIform = self%overall_head%getIform()
     end function getIform
-     
+
     !>  \brief  Return the format descriptor of the stack
     integer function getMode( self )
         class(imgfile), intent(in) :: self
@@ -804,7 +802,7 @@ contains
         call self%overall_head%setIform(iform)
         self%was_written_to = .true.
     end subroutine setIform
-    
+
     !>  \brief  Set the pixel size of the stack
     subroutine setPixSz( self, smpd )
         class(imgfile), intent(inout) :: self
@@ -828,7 +826,7 @@ contains
         call self%overall_head%setMode(mode)
         self%was_written_to = .true.
     end subroutine setMode
-    
+
     !>  \brief  for setting the logical dimensions
     subroutine setDims( self, ldim )
         class(imgfile), intent(inout) :: self
@@ -836,5 +834,5 @@ contains
         call self%overall_head%setDims(ldim)
         self%was_written_to = .true.
     end subroutine setDims
-    
+
 end module simple_imgfile

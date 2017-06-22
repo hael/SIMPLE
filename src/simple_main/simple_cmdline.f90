@@ -2,6 +2,7 @@
 !! The code is distributed with the hope that it will be useful, but WITHOUT ANY WARRANTY. 
 !! Redistribution or modification is regulated by the GNU General Public License.
 !! Hans Elmlund, 2011-08-17.
+
 module simple_cmdline
 use simple_defs
 use simple_cmd_dict
@@ -11,8 +12,7 @@ implicit none
 
 public :: cmdline
 private
-
-logical, parameter :: debug=.false.
+#include "simple_local_flags.inc"
 
 type cmdarg
     character(len=32)     :: key=''
@@ -65,17 +65,17 @@ contains
         distr_exec = str_has_substr(exec_name,'distr')
         cmdargcnt  = command_argument_count()
         call get_command(self%entire_line)
-        if( debug ) print *, 'DEBUG(simple_cmdline, L61), command_argument_count: ', cmdargcnt
+        if( debug ) print *, ' command_argument_count: ', cmdargcnt
         if( present(keys_required) )then
             if( str_has_substr(self%entire_line,'prg=') )then
                 nreq = size(keys_required)+1 ! +1 because prg part of command line
             else
                 nreq = size(keys_required)
             endif
-            if( debug )then
-                print *, 'DEBUG(simple_cmdline, L69), no keys required:       ', nreq
-                print *, 'DEBUG(simple_cmdline, L70), command_argument_count: ', cmdargcnt
-            endif
+
+                if( debug ) print *,  ' no keys required:       ', nreq
+                if( debug ) print *,  ' command_argument_count: ', cmdargcnt
+
             if( cmdargcnt < nreq )then
                 call print_cmdline(keys_required, keys_optional, distr=distr_exec)
                 stop
@@ -99,7 +99,7 @@ contains
         do i=1,self%argcnt 
             call get_command_argument(i, arg, cmdlen, cmdstat)
             if( cmdstat == -1 )then
-                write(*,*) 'ERROR! while parsing the command line; simple_cmdline :: parse'
+                write(*,*) 'ERROR! while parsing the command line: simple_cmdline :: parse'
                 write(*,*) 'The string length of argument: ', arg, 'is: ', cmdlen
                 write(*,*) 'which likely exceeds the length limit STDLEN'
                 write(*,*) 'Create a symbolic link with shorter name in the cwd'
@@ -109,7 +109,7 @@ contains
             call parse_local(arg)
         end do
         if( present(keys_required) )then
-            if( debug ) print *, 'DEBUG(simple_cmdline, L93), reached checker'
+            if( debug ) print *, ' reached checker'
             call self%check
         endif
         
@@ -161,12 +161,12 @@ contains
                         endif
                     endif
                     self%cmds(i)%defined = .true.
-                    if( debug )then
-                        write(*,*) 'DEBUG(simple_cmdline, L161), key/cval/rval/defined: ',&
-                        trim(self%cmds(i)%key), ' ', trim(self%cmds(i)%carg), self%cmds(i)%rarg, self%cmds(i)%defined
-                    endif
+                   
+                    if( debug ) print *,  'parse_local: key|cval|rval|defined: '
+                    if( debug ) print *,  trim(self%cmds(i)%key), ' ', trim(self%cmds(i)%carg), self%cmds(i)%rarg, self%cmds(i)%defined 
+                    
                 endif
-            end subroutine
+            end subroutine parse_local
             
     end subroutine parse
 

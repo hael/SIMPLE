@@ -149,7 +149,7 @@ contains
                         self%spec_linmin%nevals = 0
                         call linmin(self%spec_linmin,cost) ! minimize along it
                         spec%nevals = spec%nevals+self%spec_linmin%nevals
-                        if (abs(fptt-cost).gt.del) then
+                        if (abs(fptt-cost) > del) then
                             del=abs(fptt-cost)
                             ibig=i
                         end if
@@ -168,9 +168,9 @@ contains
                     end do
                     fptt=spec%costfun(ptt,spec%ndim)   ! function value at extrapolated point
                     spec%nevals = spec%nevals+1        ! increment nr ov cost fun evals counter
-                    if (fptt.ge.fp) cycle              ! one reason not to use new direction 
+                    if (fptt > fp) cycle              ! one reason not to use new direction 
                     t=2.*(fp-2.*cost+fptt)*(fp-cost-del)**2-del*(fp-fptt)**2
-                    if (t.ge.0.) cycle                 ! another reason not to use new direction
+                    if (t > 0.0) cycle                 ! another reason not to use new direction
                     self%spec_linmin%nevals = 0
                     call linmin(self%spec_linmin,cost) ! move to the minimum of the new direction
                     spec%nevals = spec%nevals+self%spec_linmin%nevals

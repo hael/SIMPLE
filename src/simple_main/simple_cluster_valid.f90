@@ -1,6 +1,8 @@
 module simple_cluster_valid
-use simple_jiffys, only: alloc_err
+    use simple_defs
+    use simple_jiffys, only: alloc_err
 implicit none
+#include "simple_local_flags.inc"
 
 !>  \brief  is the type definition for the validation class, driven by pointers since the data most likley
 !!          will anyway be allocated elsewhere
@@ -38,9 +40,7 @@ type cluster_valid
     procedure :: ratio_index
     ! DESTRUCTOR
     procedure :: kill
-end type
-
-logical :: debug=.false.
+end type cluster_valid
 
 contains
     

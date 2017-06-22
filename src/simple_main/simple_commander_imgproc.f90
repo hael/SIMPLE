@@ -18,7 +18,7 @@ use simple_strings,        only: int2str, int2str_pad
 use simple_filehandling    ! use all in there
 use simple_jiffys          ! use all in there
 implicit none
-
+#include "simple_local_flags.inc"
 public :: binarise_commander
 public :: convert_commander
 public :: corrcompare_commander
@@ -241,7 +241,6 @@ contains
         type(params) :: p
         type(build)  :: b
         type(ctf)    :: tfun
-        logical      :: debug = .false.
         real         :: dfx, dfy, angast
         p = params(cline)                     ! parameters generated
         call b%build_general_tbox(p, cline)   ! general objects built
@@ -355,7 +354,7 @@ contains
         type(build)          :: b
         integer              :: iptcl, alloc_stat, funit, io_stat
         real, allocatable    :: corrmat(:,:)
-        logical              :: debug=.false.
+
         p = params(cline, .false.)                           ! constants & derived constants produced
         call b%build_general_tbox(p, cline, .false., .true.) ! general objects built (no oritab reading)
         allocate(b%imgs_sym(p%nptcls), stat=alloc_stat)
@@ -603,7 +602,7 @@ contains
         character(len=:), allocatable         :: moviename
         type(image)                           :: mask, tmp, frameimg
         real                                  :: mm(2)
-        logical, parameter                    :: debug = .false.
+
         if( cline%defined('lp') )then
             if( .not. cline%defined('smpd') ) stop 'smpd (sampling distance) needs to be defined if lp is'
         endif

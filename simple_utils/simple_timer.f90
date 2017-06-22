@@ -14,6 +14,7 @@ use simple_defs   ! singleton
 !   use precision_m
 implicit none
 !  private :: raise_sys_error
+
 private
    integer(dp), public   :: clock_ticks_per_second = INT(0, dp) !< Number of counts per second
    integer(dp), public   :: last_time_point = INT(0, dp) !< Current timesamp
@@ -21,12 +22,12 @@ private
    integer, public       :: num_profile_loops, num_profile_vars
    logical, public       :: inloop = .false.
    integer, public       :: profile_counter
-   integer, parameter, public :: max_tokens = 10 ! number of entries in token dictionary
-   integer, parameter, public :: max_token_csize = 30 ! max char length of tokens
+   integer, parameter, public :: MAX_TOKENS = 10 ! number of entries in token dictionary
+   integer, parameter, public :: MAX_TOKEN_CHARSIZE = 30 ! max char length of tokens
    real(dp), allocatable, public :: elapsed_times(:)
    real(dp), allocatable, public :: profile_matrix(:, :)
-   integer(dp), dimension(max_tokens), public :: profile_last_timerstamp
-   character(len=max_token_csize), dimension(max_tokens), public :: profile_labels = ""
+   integer(dp), dimension(MAX_TOKENS), public :: profile_last_timerstamp
+   character(len=MAX_TOKEN_CHARSIZE), dimension(MAX_TOKENS), public :: profile_labels = ""
 
    public :: tic, tickrate
    public :: toc, tdiff, tocprint
@@ -202,7 +203,7 @@ contains
       if (nLoops .lt. 1) then
          print *, "timer_profile_setup error -- must have more than 1 loop"
          stop
-      elseif (nVars .gt. max_tokens .or. nVars .le. 0) then
+      elseif (nVars .gt. MAX_TOKENS .or. nVars .le. 0) then
           print*, "timer_profile_setup arg nVars error -- outside range"
           stop
       elseif (len_trim(vin)==0 )then
@@ -249,7 +250,7 @@ contains
 #endif
          ! profile_labels are a fixed size
          if (nVars .ge. 1 .and. v(1) .ne. "") then
-            if (len_trim(v(1)) .le. max_token_csize) then
+            if (len_trim(v(1)) .le. MAX_TOKEN_CHARSIZE) then
                profile_labels(1) = trim(adjustl(v(1)))
                num_profile_vars = 1
             else
@@ -257,7 +258,7 @@ contains
             end if
          end if
          if (nVars .ge. 2 .and. v(2) .ne. "") then
-            if (len_trim(v(2)) .le. max_token_csize) then
+            if (len_trim(v(2)) .le. MAX_TOKEN_CHARSIZE) then
                profile_labels(2) = trim(adjustl(v(2)))
                num_profile_vars = 2
             else
@@ -265,7 +266,7 @@ contains
             end if
          end if
          if (nVars .ge. 3 .and. v(3) .ne. "") then
-            if (len_trim(v(3)) .le. max_token_csize) then
+            if (len_trim(v(3)) .le. MAX_TOKEN_CHARSIZE) then
                profile_labels(3) = trim(adjustl(v(3)))
                num_profile_vars = 3
             else
@@ -273,7 +274,7 @@ contains
             end if
          end if
          if (nVars .ge. 4 .and. v(4) .ne. "") then
-            if (len_trim(v(4)) .le. max_token_csize) then
+            if (len_trim(v(4)) .le. MAX_TOKEN_CHARSIZE) then
                profile_labels(4) = trim(adjustl(v(4)))
                num_profile_vars = 4
             else
@@ -281,7 +282,7 @@ contains
             end if
          end if
          if (nVars .ge. 5 .and. v(5) .ne. "") then
-            if (len_trim(v(5)) .le. max_token_csize) then
+            if (len_trim(v(5)) .le. MAX_TOKEN_CHARSIZE) then
                profile_labels(5) = trim(adjustl(v(5)))
                num_profile_vars = 5
             else
@@ -289,7 +290,7 @@ contains
             end if
         end if
         if (nVars .ge. 6 .and. v(6) .ne. "") then
-            if (len_trim(v(6)) .le. max_token_csize) then
+            if (len_trim(v(6)) .le. MAX_TOKEN_CHARSIZE) then
                profile_labels(6) = trim(adjustl(v(6)))
                num_profile_vars = 6
             else
@@ -297,7 +298,7 @@ contains
             end if
          end if
          if (nVars .ge. 7 .and. v(7) .ne. "") then
-            if (len_trim(v(7)) .le. max_token_csize) then
+            if (len_trim(v(7)) .le. MAX_TOKEN_CHARSIZE) then
                profile_labels(7) = trim(adjustl(v(7)))
                num_profile_vars = 7
             else
@@ -305,7 +306,7 @@ contains
             end if
          end if
          if (nVars .ge. 8 .and. v(8) .ne. "") then
-            if (len_trim(v(8)) .le. max_token_csize) then
+            if (len_trim(v(8)) .le. MAX_TOKEN_CHARSIZE) then
                profile_labels(8) = trim(adjustl(v(8)))
                num_profile_vars = 8
             else
@@ -313,7 +314,7 @@ contains
             end if
          end if
          if (nVars .ge. 9 .and. v(9) .ne. "") then
-            if (len_trim(v(9)) .le. max_token_csize) then
+            if (len_trim(v(9)) .le. MAX_TOKEN_CHARSIZE) then
                profile_labels(9) = trim(adjustl(v(9)))
                num_profile_vars = 9
             else
@@ -321,7 +322,7 @@ contains
             end if
          end if
          if (nVars .ge. 10 .and. v(10) .ne. "") then
-            if (len_trim(v(10)) .le. max_token_csize) then
+            if (len_trim(v(10)) .le. MAX_TOKEN_CHARSIZE) then
                profile_labels(10) = trim(adjustl(v(10)))
                num_profile_vars = 10
             else

@@ -58,7 +58,6 @@ type, extends(image) :: reconstructor
 end type reconstructor
 
 real            :: dfx=0., dfy=0., angast=0.
-logical         :: debug=.false.
 real, parameter :: SHTHRESH=0.0001
 
 contains

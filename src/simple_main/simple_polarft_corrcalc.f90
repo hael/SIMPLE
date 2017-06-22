@@ -11,7 +11,6 @@ private
 
 ! CLASS PARAMETERS/VARIABLES
 complex(sp), parameter :: zero=cmplx(0.,0.) !< just a complex zero
-logical,     parameter :: DEBUG = .true.
 
 type :: polarft_corrcalc
     private

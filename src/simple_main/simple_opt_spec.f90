@@ -35,9 +35,10 @@ type :: opt_spec
     real, allocatable     :: sdevs(:)                         !< standard deviations of the variables, used in oasis
     real, allocatable     :: population(:,:)                  !< output solution population from the evolutionary approaches
     real, allocatable     :: peaks(:,:)                       !< output peaks (local optimal solutions)
-    logical               :: verbose   = .false.              !< verbose output of optimizer on/off
-    logical               :: debug     = .false.              !< debugging mode on/off
-    logical               :: warn      = .false.              !< warning mode on/off
+#include "simple_local_flags.inc"
+!    logical               :: verbose   = .false.              !< verbose output of optimizer on/off
+!    logical               :: opt_spec_debug = .false.         !< debugging mode on/off unique to opt_spec
+!    logical               :: warn      = .false.              !< warning mode on/off
     logical               :: converged = .false.              !< converged status
     logical               :: exists    = .false.              !< to indicate existence
   contains
@@ -47,7 +48,7 @@ type :: opt_spec
     procedure :: set_costfun
     procedure :: set_gcostfun
     procedure :: kill
-end type
+end type opt_spec
 
 !>  \brief  defines the cost function interface
 abstract interface
@@ -71,8 +72,8 @@ contains
 
     !>  \brief  specifies the optimization parameters
     subroutine specify( self, str_opt, ndim, mode, ldim, ftol, gtol, maxits,&
-    nrestarts, nsample, limits, cyclic, verbose, debug, npop,&
-    eps, cfac, warn, nbest, nstates, stepsz, npeaks, nnn )
+    nrestarts, nsample, limits, cyclic, verbose_arg, debug_arg, npop,&
+    eps, cfac, warn_arg, nbest, nstates, stepsz, npeaks, nnn )
         use simple_jiffys, only: alloc_err
         class(opt_spec),            intent(inout) :: self           !< instance
         character(len=*),           intent(in)    :: str_opt        !< string descriptor (of optimization routine to be used)
@@ -87,9 +88,9 @@ contains
         integer,          optional, intent(in)    :: nstates        !< nr of states
         real,             optional, intent(in)    :: limits(ndim,2) !< variable bounds
         logical,          optional, intent(in)    :: cyclic(ndim)   !< to indicate which variables are cyclic (Euler angles)
-        logical,          optional, intent(in)    :: verbose        !< verbose output of optimizer
-        logical,          optional, intent(in)    :: debug          !< debugging mode
-        logical,          optional, intent(in)    :: warn           !< warning mode
+        logical,          optional, intent(in)    :: verbose_arg    !< verbose output of optimizer
+        logical,          optional, intent(in)    :: debug_arg      !< debugging mode
+        logical,          optional, intent(in)    :: warn_arg       !< warning mode
         integer,          optional, intent(in)    :: npop           !< population size (4 evolutionary optimizers)
         integer,          optional, intent(in)    :: npeaks         !< number of peaks (local optima to identify)
         integer,          optional, intent(in)    :: nnn            !< number of nearest neighbors
@@ -154,12 +155,12 @@ contains
             call alloc_err('In: specify; simple_opt_spec, stepsz', alloc_stat)
             self%stepsz = stepsz
         endif
-        if(present(verbose)) self%verbose = verbose
+        if(present(verbose_arg)) self%verbose = verbose_arg
         if(present(npop))    self%npop    = npop
         if(present(cfac))    self%cfac    = cfac
         if(present(eps))     self%eps     = eps
-        if(present(debug))   self%debug   = debug
-        if(present(warn))    self%warn    = warn
+        if(present(debug_arg))   self%debug   = debug_arg
+        if(present(warn_arg))    self%warn    = warn_arg
         ! allocate
         if( self%npeaks > 0 )then
             allocate( self%peaks(self%npeaks,self%ndim+1), stat=alloc_stat )

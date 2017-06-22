@@ -14,10 +14,10 @@ implicit none
 
 public :: image, test_image
 private
+#include "simple_local_flags.inc"
 
 ! CLASS PARAMETERS/VARIABLES
-logical, parameter :: shift_to_phase_origin=.true.
-logical, parameter :: debug=.false.
+logical, parameter :: SHIFT_TO_PHASE_ORIGIN=.true.
 
 type :: image
     private
@@ -261,11 +261,11 @@ type :: image
     procedure          :: cure_outliers
     ! DESTRUCTOR
     procedure :: kill
-end type
+end type image
 
 interface image
     module procedure constructor
-end interface
+end interface image
 
 contains
 
@@ -666,7 +666,7 @@ contains
         integer               :: last_slice, ii, alloc_stat
         real                  :: smpd
         logical               :: isvol, err, iisxfel, ioimg_present
-        logical, parameter    :: DEBUG=.false.
+        logical, parameter    :: LOCAL_DEBUG=.false.
         real(dp), allocatable :: tmpmat1(:,:,:)
         real(sp), allocatable :: tmpmat2(:,:,:)
         ldim          = self%ldim
@@ -676,8 +676,8 @@ contains
         if( present(isxfel) ) iisxfel = isxfel
         if( iisxfel )then
             ! always assume EM-kind images on disk
-            if( debug ) print *, 'ldim: ', ldim
-            if( debug ) print *, 'smpd: ', smpd
+            if( LOCAL_DEBUG ) print *, 'ldim: ', ldim
+            if( LOCAL_DEBUG ) print *, 'smpd: ', smpd
             call self%new(ldim, smpd)
         endif
         isvol = .true. ! assume volume by default
@@ -4616,7 +4616,7 @@ contains
         class(image), intent(inout) :: self
         if( self%imgkind .eq. 'xfel' ) stop 'Fourier transformation of XFEL patterns not allowed; simple_image::fwd_ft'
         if( self%ft ) return
-        if( shift_to_phase_origin ) call self%shift_phorig
+        if( SHIFT_TO_PHASE_ORIGIN ) call self%shift_phorig
         call fftwf_execute_dft_r2c(self%plan_fwd,self%rmat,self%cmat)
         ! now scale the values so that a bwd_ft of the output yields the
         ! original image back, rather than a scaled version
@@ -4631,7 +4631,7 @@ contains
         if( self%ft )then
             call fftwf_execute_dft_c2r(self%plan_bwd,self%cmat,self%rmat)
             self%ft = .false.
-            if( shift_to_phase_origin ) call self%shift_phorig
+            if( SHIFT_TO_PHASE_ORIGIN ) call self%shift_phorig
         endif
     end subroutine bwd_ft
 

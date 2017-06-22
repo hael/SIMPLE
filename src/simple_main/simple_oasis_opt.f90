@@ -27,7 +27,7 @@ type, extends(optimizer) :: oasis_opt
     procedure :: minimize     => oasis_minimize
     procedure :: get_vertices => oasis_get_vertices
     procedure :: kill         => kill_oasis_opt
-end type
+end type oasis_opt
 
 contains
 

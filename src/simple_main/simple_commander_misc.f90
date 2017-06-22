@@ -30,6 +30,7 @@ public :: shift_commander
 public :: sym_aggregate_commander
 public :: dsymsrch_commander
 private
+#include "simple_local_flags.inc"
 
 type, extends(commander_base) :: cluster_smat_commander
   contains
@@ -90,7 +91,7 @@ contains
         real                :: avg_ratio, min_ratio, ratio, x, sim
         real, allocatable   :: validinds(:)
         integer, parameter  :: NRESTARTS=10
-        logical             :: debug=.false., done=.false.
+        logical             :: done=.false.
         p = params(cline,.false.)                        ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.)! general objects built
         ! obtain similarity matrix

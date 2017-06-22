@@ -1,4 +1,5 @@
 module simple_wiener2D_tester
+use simple_defs
 use simple_jiffys         ! singleton
 use simple_filterer       ! singleton
 use simple_params,        only: params
@@ -28,7 +29,7 @@ type(image), allocatable :: imgs(:), img_ref(:)
 type(simimgs_commander)  :: xsimimgs
 type(cmdline)            :: cline_here
 integer                  :: ldim(3)
-logical                  :: verbose=.false.
+#include "simple_local_flags.inc"
 
 contains
 

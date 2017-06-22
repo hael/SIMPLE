@@ -240,14 +240,14 @@ contains
     subroutine normalize_sigm_1( arr )
         real, intent(inout) :: arr(:)
         real                :: smin, smax, delta
-        real, parameter     :: nnet_const = exp(1.)-1.
+        real, parameter     :: NNET_CONST = exp(1.)-1.
         ! find minmax
         smin  = minval(arr)
         smax  = maxval(arr)
         delta = smax-smin
         ! create [0,1]-normalized vector
         !$omp parallel workshare default(shared)
-        arr = (exp((arr-smin)/delta)-1.)/nnet_const
+        arr = (exp((arr-smin)/delta)-1.)/NNET_CONST
         !$omp end parallel workshare
     end subroutine normalize_sigm_1
 
@@ -255,14 +255,14 @@ contains
     subroutine normalize_sigm_2( arr )
         real, intent(inout) :: arr(:,:)
         real                :: smin, smax, delta
-        real, parameter     :: nnet_const = exp(1.)-1.
+        real, parameter     :: NNET_CONST = exp(1.)-1.
         ! find minmax
         smin  = minval(arr)
         smax  = maxval(arr)
         delta = smax-smin
         ! create [0,1]-normalized vector
         !$omp parallel workshare default(shared)
-        arr = (exp((arr-smin)/delta)-1.)/nnet_const
+        arr = (exp((arr-smin)/delta)-1.)/NNET_CONST
         !$omp end parallel workshare
     end subroutine normalize_sigm_2
 
@@ -270,14 +270,14 @@ contains
     subroutine normalize_sigm_3( arr )
         real, intent(inout) :: arr(:,:,:)
         real                :: smin, smax, delta
-        real, parameter     :: nnet_const = exp(1.)-1.
+        real, parameter     :: NNET_CONST = exp(1.)-1.
         ! find minmax
         smin  = minval(arr)
         smax  = maxval(arr)
         delta = smax-smin
         ! create [0,1]-normalized vector
         !$omp parallel workshare default(shared)
-        arr = (exp((arr-smin)/delta)-1.)/nnet_const
+        arr = (exp((arr-smin)/delta)-1.)/NNET_CONST
         !$omp end parallel workshare
     end subroutine normalize_sigm_3
 

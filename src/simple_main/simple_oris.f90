@@ -22,6 +22,7 @@ implicit none
 
 public :: oris, test_oris
 private
+#include "simple_local_flags.inc"
 
 !>  \brief  aggregates ori objects
 type :: oris
@@ -1875,7 +1876,7 @@ contains
         real                 :: homo_cls
         real, allocatable    :: vals(:)
         integer, allocatable :: labelpops(:)
-        logical, parameter   :: debug=.false.
+        
         nlabels = self%get_nlabels()
         if( debug ) print *, 'number of labels: ', nlabels
         allocate(labelpops(nlabels))
@@ -1922,7 +1923,6 @@ contains
         real,             intent(out)   :: homo_cnt, homo_avg
         integer :: k, ncls
         real    :: cnt
-        logical, parameter :: debug=.false.
         if( which .eq. 'class' )then
             ncls = self%get_ncls()
         else if( which .eq. 'state' )then
@@ -2157,6 +2157,7 @@ contains
                     dfx = self%o(i)%get('dfx')+ran3()*dferr-dferr/2.
                     if( dfx > 0. ) exit
                 end do
+                
                 call self%o(i)%set('dfx', dfx)
             endif
             if( self%o(i)%isthere('dfy') )then

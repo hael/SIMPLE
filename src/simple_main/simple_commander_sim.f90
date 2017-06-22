@@ -24,7 +24,7 @@ public :: simimgs_commander
 public :: simmovie_commander
 public :: simsubtomo_commander
 private
-
+#include "simple_local_flags.inc"
 type, extends(commander_base) :: noiseimgs_commander
   contains
     procedure :: execute      => exec_noiseimgs
@@ -41,6 +41,7 @@ type, extends(commander_base) :: simsubtomo_commander
   contains
     procedure :: execute      => exec_simsubtomo
 end type simsubtomo_commander
+
 
 contains
 
@@ -84,7 +85,6 @@ contains
         type(kbinterpol)   :: kbwin
         real               :: snr_pink, snr_detector, bfac, bfacerr, dfx, dfy, angast
         integer            :: i, cnt, ntot
-        logical, parameter :: debug=.false.
         p = params(cline, .false.)          ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         kbwin = kbinterpol(KBWINSZ, KBALPHA)
@@ -189,7 +189,6 @@ contains
         integer, allocatable :: ptcl_positions(:,:)
         real, allocatable    :: shifts(:,:)
         logical              :: here
-        logical, parameter   :: debug=.false.
         p = params(cline)                     ! parameters generated
         if( p%box == 0 ) stop 'box=0, something is fishy!'
         call b%build_general_tbox(p, cline)   ! general objects built

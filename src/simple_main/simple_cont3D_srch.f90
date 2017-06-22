@@ -12,7 +12,7 @@ public :: cont3D_srch
 private
 
 real,    parameter :: E3HALFWINSZ = 90. !< in-plane angle half window size
-logical, parameter :: debug = .false.
+#include "simple_local_flags.inc"
 
 type cont3D_srch
     private
@@ -159,7 +159,7 @@ contains
             call greedy_inpl_srch(self%prev_ref, inpl_corr)
             self%nbetter = self%nbetter + 1
             self%neval   = self%nrefs
-        endif            
+        endif
         deallocate(roind_vec)
         if(debug)write(*,*)'simple_cont3D_srch::do_refs_srch done'
 
@@ -178,7 +178,7 @@ contains
                 call self%reforis%e3set(iref_here, e3)
                 call self%reforis%set(iref_here, 'corr', corr_here)
             end subroutine greedy_inpl_srch
-            
+
     end subroutine do_euler_srch
 
     !>  \brief  performs the shift search
@@ -214,7 +214,7 @@ contains
             endif
             call self%shiftedoris%set_ori(cnt, o)
         enddo
-        ! done        
+        ! done
         deallocate(corrs)
         if(debug)write(*,*)'simple_cont3d_src::do_shift_srch done'
     end subroutine do_shift_srch
@@ -262,7 +262,7 @@ contains
         call self%softoris%set_all2single('specscore', self%specscore)
         ! best orientation
         self%o_out = self%softoris%get_ori(self%npeaks)
-        call self%o_out%set('corr', wcorr)  
+        call self%o_out%set('corr', wcorr)
         ! angular distances & deviation
         euldist   = rad2deg( self%o_in.euldist.self%o_out )
         dist_inpl = rad2deg( self%o_in.inplrotdist.self%o_out )
@@ -300,7 +300,7 @@ contains
         call self%o_out%set('mi_proj',  mi_proj)
         call self%o_out%set('mi_inpl',  mi_inpl)
         call self%o_out%set('mi_state', mi_state)
-        call self%o_out%set('mi_joint', mi_joint)       
+        call self%o_out%set('mi_joint', mi_joint)
         ! frac
         frac = 100. * (real(self%neval)/real(self%nrefs))
         call self%o_out%set('frac', frac)

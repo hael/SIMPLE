@@ -24,6 +24,7 @@ contains
       real(dp)    :: etime, sysclockrate
       real(dp) ::  t1, t2
       integer(dp) :: i
+      if(.not.present(be_verbose)) be_verbose=.true.
       c = .1
       cfac = .25
       b = 1.

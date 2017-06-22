@@ -169,34 +169,34 @@ contains
     character(len=1):: ch,tok
     character(len=len_trim(str))::outstr
     integer :: lenstr,lensstr, k, i,j, ich, itoken
-    str=adjustl(str) 
-    tokens=adjustl(tokens)
-    lensstr=len_trim(tokens)
-    outstr=adjustl(str) ! initialise outstr
+    str = adjustl(str) 
+    tokens = adjustl(tokens)
+    lensstr = len_trim(tokens)
+    outstr = adjustl(str) ! initialise outstr
     do j=1,lensstr
-        str=adjustl(outstr)  ! update str for each element in sstr in case rch == ''
-        lenstr=len_trim(str) ! re-adjust length
-        outstr=''            ! reset outstr
-        k=0
-        tok=tokens(j:j)
-        itoken=iachar(tok)
+        str = adjustl(outstr)  ! update str for each element in sstr in case rch == ''
+        lenstr = len_trim(str) ! re-adjust length
+        outstr = ''            ! reset outstr
+        k = 0
+        tok = tokens(j:j)
+        itoken = iachar(tok)
         do i=1,lenstr
-            ch=str(i:i)
-            ich=iachar(ch)
+            ch = str(i:i)
+            ich = iachar(ch)
             if(ich == itoken) then  ! character in schs
                 if ( len_trim(rch) == 0 ) then
                     cycle
                 else
-                    k=k+1
-                    outstr(k:k)=rch
+                    k = k + 1
+                    outstr(k:k) = rch
                 end if
             else
-                k=k+1
-                outstr(k:k)=ch
+                k = k+1
+                outstr(k:k) = ch
             end if
         end do
     end do
-    str=adjustl(outstr)
+    str = adjustl(outstr)
     end subroutine replace
     
     !> \brief  removes punctuation (except comma) characters in string str
@@ -205,13 +205,13 @@ contains
     character(len=1):: ch
     character(len=len_trim(str))::outstr
     integer :: lenstr, k, i, ich
-    str=adjustl(str)
-    lenstr=len_trim(str)
-    outstr=''
-    k=0
+    str = adjustl(str)
+    lenstr = len_trim(str)
+    outstr = ''
+    k = 0
     do i=1,lenstr
-        ch=str(i:i)
-        ich=iachar(ch)
+        ch = str(i:i)
+        ich = iachar(ch)
         select case(ich)
         case(32:43)  ! ! " # $ % & ' ( ) * +  characters
             cycle
@@ -224,11 +224,11 @@ contains
         case(123:126) ! { | }
             cycle
         case default
-            k=k+1
-            outstr(k:k)=ch
+            k = k + 1
+            outstr(k:k) = ch
         end select
     end do
-    str=adjustl(outstr)
+    str = adjustl(outstr)
     end subroutine removepunct
 
     !> \brief  removes spaces, tabs, and control characters in string str
@@ -237,19 +237,19 @@ contains
         character(len=1):: ch
         character(len=len_trim(str))::outstr
         integer :: lenstr, k, i, ich
-        str=adjustl(str)
-        lenstr=len_trim(str)
-        outstr=''
-        k=0
+        str = adjustl(str)
+        lenstr = len_trim(str)
+        outstr = ''
+        k = 0
         do i=1,lenstr
-            ch=str(i:i)
-            ich=iachar(ch)
+            ch = str(i:i)
+            ich = iachar(ch)
             select case(ich)    
                 case(0:32)  ! space, tab, or control character
                     cycle       
                 case(33:)  
-                    k=k+1
-                    outstr(k:k)=ch
+                    k = k + 1
+                    outstr(k:k) = ch
             end select
         end do
         str=adjustl(outstr)

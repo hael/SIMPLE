@@ -16,7 +16,7 @@ end interface calc_cartesian_corrmat
 type(image)          :: mskimg
 integer, allocatable :: pairs(:,:)
 integer              :: nptcls, ntot, npix, norig, nsel
-logical              :: debug=.false.
+
     
 contains
     

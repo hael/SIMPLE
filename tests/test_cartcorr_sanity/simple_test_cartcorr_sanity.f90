@@ -4,9 +4,10 @@ use simple_ft_expanded, only: ft_expanded
 use simple_rnd,         only: ran3
 use simple_defs
 implicit none
+#include "simple_local_flags.inc"
+
 integer, parameter   :: NITS=100
 real, parameter      :: TRS=5.0
-logical, parameter   :: debug=.false.
 type(image)          :: img1, img2, tmp
 type(ft_expanded)    :: ftexp1, ftexp2
 integer              :: i
@@ -25,18 +26,18 @@ diff_old    = 0.
 diff_recast = 0.
 diff_corr   = 0. 
 do i=1,nits
-    if( debug ) print *, 'iteration: ', i
+    if( local_debug ) print *, 'iteration: ', i
     x           = real(nint(ran3()*2.0*TRS-TRS))
     y           = real(nint(ran3()*2.0*TRS-TRS))
-    if( debug ) print *, 'shifted:     ', x, y
+    if( local_debug ) print *, 'shifted:     ', x, y
     call img1%shift(x,y,imgout=img2)  
     cxy         = find_shift_old()
     old_corr    = cxy(1)
-    if( debug ) print *, 'neg(old):    ', -cxy(2:3)
+    if( local_debug ) print *, 'neg(old):    ', -cxy(2:3)
     diff_old    = diff_old+sum(abs(-cxy(2:3)-[x,y]))
     call ftexp2%new(img2,hp,lp)
     cxy         = find_shift_recast()
-    if( debug ) print *, 'neg(recast): ', -cxy(2:3)
+    if( local_debug ) print *, 'neg(recast): ', -cxy(2:3)
     diff_recast = diff_recast+sum(abs(-cxy(2:3)-[x,y]))
     diff_corr   = diff_corr+abs(old_corr-cxy(1))
 end do

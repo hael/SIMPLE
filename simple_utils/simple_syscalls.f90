@@ -136,29 +136,29 @@ contains
     subroutine sys_del_files( fbody, ext )
         character(len=*),      intent(in)  :: fbody, ext
         character(len=STDLEN), allocatable :: fnames(:)
-        character(len=STDLEN), parameter   :: ftab = 'ftab_from_sys_del_files.txt'
+        character(len=STDLEN), parameter   :: FTAB = 'ftab_from_sys_del_files.txt'
         integer :: i, last
-        call sys_gen_filetab(fbody, ext, ftab) ! filetable written to disc
-        call read_filetable(ftab, fnames)      ! filetable read back in
+        call sys_gen_filetab(fbody, ext, FTAB) ! filetable written to disc
+        call read_filetable(FTAB, fnames)      ! filetable read back in
         last = size(fnames)
         do i=1,last
             call del_file(fnames(i))
         end do
-        call del_file(ftab)
+        call del_file(FTAB)
         deallocate(fnames)
     end subroutine sys_del_files
 
     function sys_get_last_fname( fbody, ext ) result( fname )
         character(len=*),      intent(in)  :: fbody, ext
         character(len=STDLEN), allocatable :: fnames(:)
-        character(len=STDLEN), parameter   :: ftab = 'ftab_from_sys_find_last_fname.txt'
+        character(len=STDLEN), parameter   :: FTAB = 'ftab_from_sys_find_last_fname.txt'
         character(len=STDLEN) :: fname
         integer :: last
-        call sys_gen_filetab(fbody, ext, ftab) ! filetable written to disc
-        call read_filetable(ftab, fnames)      ! filetable read back in
+        call sys_gen_filetab(fbody, ext, FTAB) ! filetable written to disc
+        call read_filetable(FTAB, fnames)      ! filetable read back in
         last = size(fnames)                    
         fname = fnames(last)
-        call del_file(ftab)
+        call del_file(FTAB)
         deallocate(fnames)
     end function sys_get_last_fname
 

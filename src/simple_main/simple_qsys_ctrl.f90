@@ -9,7 +9,7 @@ public :: qsys_ctrl
 private
 
 integer, parameter :: SHORTTIME = 3
-logical, parameter :: DEBUG     = .false.
+logical, parameter :: LOCAL_DEBUG     = .false.
 
 type qsys_ctrl
     private
@@ -377,7 +377,7 @@ contains
         close( unit=fnr )
         call flush(fnr)
         call chmod(master_submit_script,'+x')
-        if( DEBUG )then
+        if( LOCAL_DEBUG )then
             call exec_cmdline('echo DISTRIBUTED MODE :: submitting scripts:')
             call exec_cmdline('ls -1 distr_simple_script_*')
         endif

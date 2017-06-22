@@ -26,7 +26,7 @@ public :: volaverager_commander
 public :: volops_commander
 public :: volume_smat_commander
 private
-
+#include "simple_local_flags.inc"
 type, extends(commander_base) :: cenvol_commander
   contains
     procedure :: execute      => exec_cenvol
@@ -61,7 +61,7 @@ contains
         type(build)          :: b
         real, allocatable    :: shvec(:,:)
         integer              :: istate
-        logical, parameter   :: debug=.false.
+        
         p = params(cline)                           ! parameters generated
         call b%build_general_tbox(p, cline, .true.) ! general objects built
         ! center volume(s)
@@ -140,7 +140,7 @@ contains
         type(image), allocatable :: imgs(:)
         integer                  :: i, loop_end
         real                     :: x, y, dfx, dfy, angast
-        logical, parameter       :: debug=.false.
+        
         if( .not. cline%defined('oritab') )then
             if( .not. cline%defined('nspace') ) stop 'need nspace (for number of projections)!'
         endif
@@ -166,7 +166,7 @@ contains
         else
             call b%vol%read(p%vols(1))
         endif
-        if( debug ) print *, 'read volume'
+        if( debug ) print *,  'read volume'
         ! masking
         if(cline%defined('msk'))then
             call b%vol%mask(p%msk, 'soft')
@@ -207,17 +207,18 @@ contains
         integer                            :: istate, ivol, nvols, funit_vols, numlen, ifoo
         character(len=:), allocatable      :: fname
         character(len=1)                   :: fformat
-        logical, parameter                 :: debug=.false.
+#include "simple_local_flags.inc"  ! this inserts debug here and overrides the module debug
+        
         p = params(cline) ! parameters generated
         ! read the volnames
         nvols = nlines(p%vollist)
-        if( debug ) print *, 'number of volumes: ', nvols
+        if( debug ) print *,  'number of volumes: ', nvols
         allocate(volnames(nvols))
         funit_vols = get_fileunit()
         open(unit=funit_vols, status='old', file=p%vollist)
         do ivol=1,nvols
             read(funit_vols,'(a256)') volnames(ivol)
-            if( debug ) print *, 'read volname: ', volnames(ivol)
+            if( debug ) print *,  'read volname: ', volnames(ivol)
         end do
         close(funit_vols)
         ! find logical dimension
@@ -239,24 +240,24 @@ contains
             case DEFAULT
                 stop 'This file format is not supported by SIMPLE; simple_volaverager'
         end select
-        if( debug ) print *, 'file extension: ', p%ext
+        if( debug ) print *,  'file extension: ', p%ext
         ! average the states
         call vol_avg%copy(b%vol)
         p%nstates = b%a%get_nstates()
-        if( debug ) print *, 'number of states: ', p%nstates
+        if( debug ) print *,  'number of states: ', p%nstates
         numlen = len(int2str(p%nstates))
         do istate=1,p%nstates
-            if( debug ) print *, 'processing state: ', istate
+            if( debug ) print *,  'processing state: ', istate
             ptcls = b%a%get_ptcls_in_state(istate)
             vol_avg = 0.
             do ivol=1,size(ptcls)
                 call b%vol%read(volnames(ptcls(ivol)))
-                if( debug ) print *, 'read volume: ', volnames(ptcls(ivol))
+                if( debug ) print *,  'read volume: ', volnames(ptcls(ivol))
                 call vol_avg%add(b%vol)
             end do
             call vol_avg%div(real(size(ptcls)))
             allocate(fname, source='sumvol_state'//int2str_pad(istate, numlen)//p%ext)
-            if( debug ) print *, 'trying to write volume to file: ', fname
+            if( debug ) print *,  'trying to write volume to file: ', fname
             call vol_avg%write(fname)
             deallocate(ptcls,fname)
         end do
@@ -309,7 +310,7 @@ contains
         real                 :: furthest_from_spat_med_corr
         type(projector)      :: vol1, vol2
         type(ori)            :: o
-        logical, parameter   :: debug=.false.
+#include "simple_local_flags.inc"   ! this overrides the module debug
         real,                  allocatable :: corrmat(:,:), corrs(:), corrs_avg(:)
         integer,               allocatable :: pairs(:,:)
         character(len=STDLEN), allocatable :: vollist(:)
@@ -321,10 +322,10 @@ contains
         npairs = (nvols*(nvols-1))/2
         ! find logical dimension & make volumes for matching
         call find_ldim_nptcls(vollist(1), ldim, ifoo)
-        if( debug ) write(*,*) 'found logical dimension: ', ldim
+        if( debug ) print *,  'found logical dimension: ', ldim
         if( cline%defined('part') )then
             npairs = p%top-p%fromp+1
-            if( debug ) print *, 'allocating this number of similarities: ', npairs
+            if( debug ) print *,  'allocating this number of similarities: ', npairs 
             allocate(corrs(p%fromp:p%top), pairs(p%fromp:p%top,2), stat=alloc_stat)
             call alloc_err('In: simple_volume_smat, 1', alloc_stat)
             ! read the pairs
@@ -336,7 +337,7 @@ contains
                 stop 'I/O error; simple_volume_smat'
             endif
             open(unit=funit, status='OLD', action='READ', file=fname, access='STREAM')
-            if( debug ) print *, 'reading pairs in range: ', p%fromp, p%top
+            if( debug ) print *,  'reading pairs in range: ', p%fromp, p%top
             read(unit=funit,pos=1,iostat=io_stat) pairs(p%fromp:p%top,:)
             ! Check if the read was successful
             if( io_stat .ne. 0 )then
@@ -355,7 +356,7 @@ contains
                 o = volpft_srch_minimize() 
                 corrs(ipair) = o%get('corr')
             end do
-            if( debug ) print *, 'did set this number of similarities: ', cnt
+            if( debug ) print *,  'did set this number of similarities: ', cnt
             ! write the similarities
             funit = get_fileunit()
             allocate(fname, source='similarities_part'//int2str_pad(p%part,p%numlen)//'.bin')

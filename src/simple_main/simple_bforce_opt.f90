@@ -14,8 +14,7 @@ implicit none
 
 public :: bforce_opt
 private
-
-logical :: debug=.false.
+#include "simple_local_flags.inc"
 
 type, extends(optimizer) :: bforce_opt
     private

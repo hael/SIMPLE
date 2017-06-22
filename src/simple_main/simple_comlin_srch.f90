@@ -14,8 +14,7 @@ implicit none
 public :: comlin_srch_init, comlin_srch_get_nproj, comlin_srch_get_nbest, comlin_srch_write_resoris,&
 comlin_srch_symaxis, comlin_srch_pair
 private
-
-logical, parameter :: DEBUG      = .false.
+#include "simple_local_flags.inc"
 integer, parameter :: NPROJ      = 200
 integer, parameter :: NBEST      = 20
 integer, parameter :: NBEST_PAIR = 10

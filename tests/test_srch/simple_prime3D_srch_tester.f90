@@ -136,7 +136,9 @@ contains
         p%kfromto(2) = calc_fourier_index(p%lp, p%boxmatch, p%smpd)
         ! simulate images
         call b%vol%read(p%vols(1))
+        call b%vol%expand_cmat
         imgs_ptcls = projvol(b%vol, o_ptcls, p)
+        call b%vol%kill_expanded
         do i=1,NPROJS
             call imgs_ptcls(i)%write(ptclsname, i)
         end do
@@ -162,13 +164,13 @@ contains
         b%a = o_ptcls
         call pftcc%new(NPROJS, [p%fromp,p%top], [p%boxmatch,p%boxmatch,1],&
         p%kfromto, p%ring2, p%ctf)
-        call b%img_match%init_imgpolarizer( pftcc )
+        call b%img_match%init_polarizer( pftcc )
         do i=1,NPROJS
             call imgs_ptcls(i)%clip(b%img_match)
             call b%img_match%mask(p%msk,'soft')
             call b%img_match%fwd_ft
-            call b%img_match%imgpolarizer(pftcc, i, isptcl=.true.)
-            call b%img_match%imgpolarizer(pftcc, i, isptcl=.false.)
+            call b%img_match%polarize(pftcc, i, isptcl=.true.)
+            call b%img_match%polarize(pftcc, i, isptcl=.false.)
         enddo
         !call preppftcc4align( b, p, cline )
         ! The pftcc & primesrch3D objects are now globally available in the module

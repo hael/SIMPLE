@@ -10,8 +10,8 @@ implicit none
 
 public :: exec_rec_master
 private
+#include "simple_local_flags.inc"
 
-logical :: debug=.false.
 
 contains
 

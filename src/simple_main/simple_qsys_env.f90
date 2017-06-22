@@ -8,6 +8,7 @@ use simple_qsys_funs     ! use all in there
 use simple_defs          ! use all in there   
 use simple_filehandling  ! use all in there
 implicit none
+#include "simple_local_flags.inc"
 
 type :: qsys_env
     integer, allocatable,      public  :: parts(:,:)
@@ -37,7 +38,7 @@ contains
         real                          :: rtpi, tot_time_sec
         logical                       :: sstream
         integer, parameter            :: MAXNKEYS = 30
-        logical, parameter            :: DEBUG = .true.
+        !DEBUG removed -- use simple_local_flags when debugging
         call self%kill
         sstream = .false.
         if( present(stream) ) sstream = stream

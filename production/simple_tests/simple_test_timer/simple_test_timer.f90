@@ -11,7 +11,7 @@ use simple_syscalls
 implicit none
 type(cmdline)     :: cline
 real              :: starttime, stoptime
-logical           :: be_verbose=.false.
+logical           :: be_verbose=.true.
 character(STDLEN) :: time
 call date_and_time(TIME=time)
 starttime = str2real(time)
@@ -22,7 +22,7 @@ endif
 !call cline%parse
 ! call cline%checkvar('nthr', 1)
 !call cline%check
-be_verbose = .true.
+
 !if( cline%defined('verbose') )then
 !    if( trim(cline%get_carg('verbose')) .eq. 'yes' )then
 !        be_verbose = .true.

@@ -8,7 +8,7 @@ implicit none
 public :: volpft_srch_init, volpft_srch_minimize
 private
 
-logical, parameter :: DEBUG  = .false.
+logical, parameter :: LOCAL_DEBUG  = .false.
 integer, parameter :: NPROJ  = 200
 integer, parameter :: NBEST  = 20
 integer, parameter :: ANGRES = 10

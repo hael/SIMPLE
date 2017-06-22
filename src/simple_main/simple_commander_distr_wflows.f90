@@ -660,7 +660,6 @@ contains
         use simple_commander_rec
         class(prime3D_init_distr_commander), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
-        logical, parameter    :: debug=.false.
         type(split_commander) :: xsplit
         type(cmdline)         :: cline_volassemble
         type(qsys_env)        :: qenv
@@ -1237,7 +1236,6 @@ contains
         use simple_commander_rec
         class(recvol_distr_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        logical, parameter    :: debug=.false.
         type(split_commander) :: xsplit
         type(qsys_env)        :: qenv
         type(params)          :: p_master
@@ -1276,7 +1274,6 @@ contains
         use simple_nrtxtfile,         only: nrtxtfile 
         class(tseries_track_distr_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
-        logical, parameter            :: debug=.false.
         type(qsys_env)                :: qenv
         type(params)                  :: p_master
         type(chash)                   :: job_descr
@@ -1361,7 +1358,6 @@ contains
         character(len=32), parameter :: SYMSHTAB    = 'sym_3dshift.txt'     ! volume 3D shift
         character(len=32), parameter :: SYMPROJSTK  = 'sym_projs.mrc'       ! volume reference projections
         character(len=32), parameter :: SYMPROJTAB  = 'sym_projs.txt'       ! volume reference projections doc
-        logical,           parameter :: debug = .false.
         ! make master parameters
         p_master          = params(cline, checkdistr=.false.)
         comlin_srch_nproj = comlin_srch_get_nproj()

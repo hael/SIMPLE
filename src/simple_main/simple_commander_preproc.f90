@@ -30,6 +30,7 @@ public :: makepickrefs_commander
 public :: pick_commander
 public :: extract_commander
 private
+#include "simple_local_flags.inc"
 
 type, extends(commander_base) :: preproc_commander
   contains
@@ -92,7 +93,6 @@ contains
         character(len=STDLEN), allocatable :: movienames(:)
         character(len=:),      allocatable :: fname_ctffind_ctrl, fname_unidoc_output
         character(len=:),      allocatable :: moviename_forctf, moviename_intg, outfile
-        logical, parameter    :: DEBUG = .true.
         character(len=STDLEN) :: boxfile
         type(params) :: p
         type(oris)   :: os_uni
@@ -211,7 +211,7 @@ contains
         character(len=STDLEN), allocatable :: movienames(:)
         character(len=:), allocatable      :: new_name
         type(image)                        :: img_frame
-        logical, parameter                 :: debug = .false.
+
         p = params(cline, checkdistr=.false.)           ! constants & derived constants produced
         call b%build_general_tbox(p,cline,do3d=.false.) ! general objects built
         call read_filetable(p%filetab, movienames)
@@ -275,7 +275,7 @@ contains
         type(image)                        :: tmp
         character(len=STDLEN), allocatable :: imgnames(:)
         integer                            :: iimg, nimgs, ldim(3), iimg_start, iimg_stop, ifoo
-        logical                            :: debug=.false.
+
         if( cline%defined('stk') .and. cline%defined('filetab') )then
             stop 'stk and filetab cannot both be defined; input either or!'
         endif
@@ -336,7 +336,7 @@ contains
         type(image)                        :: powspec, tmp, mask
         character(len=STDLEN), allocatable :: imgnames(:)
         integer                            :: iimg, nimgs, ldim(3), iimg_start, iimg_stop, ifoo
-        logical                            :: debug=.false.
+
         if( cline%defined('stk') .and. cline%defined('filetab') )then
             stop 'stk and filetab cannot both be defined; input either or!'
         endif
@@ -536,7 +536,7 @@ contains
         character(len=STDLEN)              :: cmd_str
         integer                            :: iimg, isel, nall, nsel, loc(1), ios, alloc_stat
         integer                            :: funit, ldim(3), ifoo, lfoo(3), io_stat
-        logical, parameter                 :: debug=.false.
+
         ! error check
         if( cline%defined('stk3') .or. cline%defined('filetab') )then
             ! all good
@@ -758,7 +758,7 @@ contains
         type(image)                        :: micrograph
         type(oris)                         :: outoris, os_uni
         logical                            :: err, params_present(3)
-        logical, parameter                 :: debug = .false.
+
         noutside = 0
         p = params(cline, checkdistr=.false.) ! constants & derived constants produced
         if( p%stream .eq. 'yes' )then

@@ -659,7 +659,7 @@ contains
             dt     = max(-1.0d0, min(1.0d0,rotmat(1,1)))
             radone = dacos(dt)
             radtwo = rotmat(2,1)
-            if(radtwo.lt.0.d0)then
+            if(radtwo < 0.d0)then
                 euls(3) = 2.d0*dpi-radone
                 euls(3) = euls(3)*(180.d0/dpi)
             else
@@ -672,7 +672,7 @@ contains
             dt     = max(-1.0d0,min(1.0d0,dt))
             radone = dacos(dt)
             radtwo = (rotmat(3,2)/sintha)
-            if(radtwo.lt.0.d0)then
+            if(radtwo < 0.d0)then
                 euls(1) = 2.d0*dpi-radone
                 euls(1) = euls(1)*(180.d0/dpi)
             else
@@ -683,7 +683,7 @@ contains
             dt     = max(-1.0d0,min(1.0d0,dt))
             radone = dacos(dt)
             radtwo = rotmat(2,3)/sintha
-            if(radtwo.lt.0.d0)then
+            if(radtwo < 0.d0)then
                 euls(3) = 2.d0*dpi-radone
                 euls(3) = euls(3)*(180.d0/dpi)
             else

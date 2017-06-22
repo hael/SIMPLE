@@ -11,8 +11,7 @@ implicit none
 
 public :: cont3D_greedysrch
 private
-
-logical, parameter :: debug = .false.
+#include "simple_local_flags.inc"
 
 type cont3D_greedysrch
     private

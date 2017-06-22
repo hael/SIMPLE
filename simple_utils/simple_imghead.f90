@@ -20,8 +20,8 @@ implicit none
 
 public :: ImgHead, MrcImgHead, MrcFeiImgHead, SpiImgHead, test_imghead
 private
+#include "simple_local_flags.inc"
 
-logical, parameter         :: debug=.false.
 integer, parameter         :: NREALS=104
 integer, parameter, public :: dataRbytes   = 1
 integer, parameter, public :: dataRinteger = 2

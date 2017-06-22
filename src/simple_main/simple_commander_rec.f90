@@ -37,8 +37,8 @@ type, extends(commander_base) :: volassemble_commander
   contains
     procedure :: execute      => exec_volassemble
 end type volassemble_commander
-
-contains
+logical , parameter                      :: debug=.false.
+contains 
 
     subroutine exec_recvol( self, cline )
         use simple_rec_master, only: exec_rec_master
@@ -73,7 +73,6 @@ contains
         real, allocatable             :: res05s(:), res0143s(:)
         real                          :: res
         integer                       :: part, s, alloc_stat, n, ss, state4name, file_stat, fnr
-        logical                       :: debug=.false.
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         call b%build_eo_rec_tbox(p)         ! reconstruction toolbox built
@@ -156,7 +155,6 @@ contains
         integer                       :: part, s, ss, endit, i, state4name, file_stat, fnr
         type(reconstructor)           :: recvol_read
         logical                       :: here(2)
-        logical, parameter            :: debug=.false.
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         call b%build_rec_tbox(p)            ! reconstruction toolbox built

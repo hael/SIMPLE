@@ -36,8 +36,7 @@ implicit none
 
 public :: build, test_build
 private
-
-logical :: debug=.false.
+#include "simple_local_flags.inc"
 
 type build
     ! GENERAL TOOLBOX
@@ -135,12 +134,12 @@ contains
         if( present(force_ctf) ) fforce_ctf = force_ctf
         ! seed the random number generator
         call seed_rnd
-        if( debug ) write(*,'(a)') 'seeded random number generator'
+        if( debug ) print *,  'seeded random number generator'
         ! set up symmetry functionality
         call self%se%new(p%pgrp)
         p%nsym    = self%se%get_nsym()
         p%eullims = self%se%srchrange()
-        if( debug ) write(*,'(a)') 'did setup symmetry functionality'
+        if( debug ) print *,  'did setup symmetry functionality'
         ! create object for orientations
         call self%a%new(p%nptcls)
         if( present(nooritab) )then
@@ -167,8 +166,8 @@ contains
                 endif
             endif
         endif
-        if( debug ) write(*,'(a)') 'created & filled object for orientations'  
-        if( debug ) write(*,'(a)') 'read deftab'
+        if( debug ) print *,  'created & filled object for orientations' 
+        if( debug ) print *,  'read deftab' 
         if( self%a%isthere('dfx') .and. self%a%isthere('dfy'))then
             p%tfplan%mode = 'astig'
         else if( self%a%isthere('dfx') )then
@@ -180,7 +179,7 @@ contains
             write(*,'(a)') 'WARNING! It looks like you want to do Wiener restoration (p%ctf .ne. no)'
             write(*,'(a)') 'but your input orientation table lacks defocus values'
         endif
-        if( debug ) write(*,'(a)') 'did set number of dimensions and ctfmode'
+        if( debug ) print *,  'did set number of dimensions and ctfmode'
         if( fforce_ctf ) call self%raise_hard_ctf_exception(p)
         ! generate discrete projection direction space
         call self%e%new( p%nspace )
@@ -189,14 +188,14 @@ contains
         else
             call self%e%spiral( p%nsym, p%eullims )
         endif
-        if( debug ) write(*,'(a)') 'generated discrete projection direction space'
+        if( debug ) print *,  'generated discrete projection direction space'
         if( p%box > 0 )then
             ! build image objects
             ! box-sized ones
             call self%img%new([p%box,p%box,1],p%smpd,p%imgkind)
             call self%img_match%new([p%boxmatch,p%boxmatch,1],p%smpd,p%imgkind)
             call self%img_copy%new([p%boxmatch,p%boxmatch,1],p%smpd,p%imgkind)
-            if( debug ) write(*,'(a)') 'did build box-sized image objects'
+            if( debug ) print *,  'did build box-sized image objects'
             ! boxmatch-sized ones
             call self%img_tmp%new([p%boxmatch,p%boxmatch,1],p%smpd,p%imgkind)
             call self%img_msk%new([p%boxmatch,p%boxmatch,1],p%smpd,p%imgkind)
@@ -222,7 +221,7 @@ contains
             if( .not. cline%defined('amsklp') .and. cline%defined('lp') )then
                 p%amsklp = self%img%get_lp(self%img%get_find(p%lp)-2)
             endif
-            if( debug ) write(*,'(a)') 'did set default values'
+            if( debug ) print *,  'did set default values'
         endif
         ! build convergence checkers
         self%conv   = convergence(self%a, p, cline)
@@ -286,8 +285,8 @@ contains
         call img%new([p%box,p%box,1], p%smpd, p%imgkind)
         p%ncomps = img%get_npix(p%msk)
         call img%kill
-        if( debug ) print *, 'ncomps (npixels): ', p%ncomps
-        if( debug ) print *, 'nvars (nfeatures): ', p%nvars
+        if( debug ) print *,  'ncomps (npixels): ', p%ncomps
+        if( debug ) print *,  'nvars (nfeatures): ', p%nvars
         call self%pca%new(p%nptcls, p%ncomps, p%nvars)
         call self%cenclust%new(self%features, self%a, p%nptcls, p%nvars, p%ncls)
         allocate( self%features(p%nptcls,p%nvars), stat=alloc_stat )

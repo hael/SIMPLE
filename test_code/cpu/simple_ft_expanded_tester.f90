@@ -1,7 +1,8 @@
 module simple_ft_expanded_tester
-use simple_ft_expanded, only: ft_expanded
-use simple_image,       only: image
-implicit none
+  use simple_defs
+  use simple_ft_expanded, only: ft_expanded
+  use simple_image,       only: image
+  implicit none
 
 public :: exec_ft_expanded_test
 private
@@ -129,14 +130,14 @@ contains
             shvecs(itst,3) = 0.
         end do
         actual = getabscpu(.true.)
-        delta  = getdiffcpu(.true.) 
-        write(*,'(a)') '>>> PROFILING STANDARD CORRELATOR' 
+        delta  = getdiffcpu(.true.)
+        write(*,'(a)') '>>> PROFILING STANDARD CORRELATOR'
         do itst=1,NTST
             corr = img_ref%corr_shifted(img_ptcl, shvecs(itst,:), lp_dyn=LP)
         end do
         actual = getabscpu(.true.)
         delta  = getdiffcpu(.true.)
-        write(*,'(a)') '>>> PROFILING FTEXP CORRELATOR' 
+        write(*,'(a)') '>>> PROFILING FTEXP CORRELATOR'
         !$omp parallel do schedule(auto) default(shared) private(itst)
         do itst=1,NTST
             corr = ftexp_ref%corr_shifted(ftexp_ptcl, shvecs(itst,:))

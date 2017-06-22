@@ -56,6 +56,7 @@ type, extends(commander_base) :: rotmats2oris_commander
    procedure :: execute      => exec_rotmats2oris
 end type rotmats2oris_commander
 
+logical, parameter                 :: debug=.false.
 contains
 
     subroutine exec_cluster_oris( self, cline )
@@ -326,7 +327,7 @@ contains
         logical, allocatable               :: statedoc_exists(:), selected(:)
         character(len=STDLEN)              :: statedoc
         real                               :: corr
-        logical, parameter                 :: debug=.false.
+      
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         ! find number of selected cavgs

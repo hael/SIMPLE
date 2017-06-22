@@ -5,11 +5,11 @@ implicit none
 
 public :: print_cmdline, test_cmd_dict, print_cmd_key_descr
 private
-
+#include "simple_local_flags.inc"
 integer, parameter :: NMAX=300
 type(chash)        :: chdict
 logical            :: initialised=.false.
-logical            :: debug=.false.
+
 
 contains
     
