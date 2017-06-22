@@ -82,7 +82,11 @@ find_path(FFTW_INCLUDE_DIRS
         ENV FFTW_ROOT
     PATHS
         /usr/include
-        /usr/local/include
+        /usr/local/include          #Homebrew
+        /opt/local/include          #MacPorts
+        /sw/include                 #Fink
+        /usr/opt/local/include
+        /usr/local/pgi/src/fftw/include
 )
 mark_as_advanced( FFTW_INCLUDE_DIRS )
 
@@ -97,7 +101,12 @@ find_library( FFTW_SINGLE_PRECISION_LIBRARIES
         ENV FFTW_ROOT
     PATHS
         /usr/lib
-        /usr/local/lib
+        /usr/lib/x86_64-linux-gnu
+        /usr/local/lib               # Homebrew
+        /opt/local/lib               # Macports
+        /usr/opt/local/lib
+        /sw/lib                      # Fink
+        /usr/local/pgi/src/fftw/lib  # PGI local build
     DOC "FFTW dynamic library"
 )
 mark_as_advanced( FFTW_SINGLE_PRECISION_LIBRARIES )
@@ -113,12 +122,61 @@ find_library( FFTW_DOUBLE_PRECISION_LIBRARIES
         ENV FFTW_ROOT
     PATHS
         /usr/lib
+        /usr/lib/x86_64-linux-gnu
         /usr/local/lib
+        /opt/local/lib
+        /sw/lib
+        /usr/local/pgi/src/fftw/lib
     DOC "FFTW dynamic library"
 )
 mark_as_advanced( FFTW_DOUBLE_PRECISION_LIBRARIES )
 
-set( FFTW_LIBRARIES ${FFTW_SINGLE_PRECISION_LIBRARIES} ${FFTW_DOUBLE_PRECISION_LIBRARIES} )
+if(USE_OPENMP)
+
+find_library( FFTW_SINGLE_PRECISION_LIBRARIES
+    NAMES fftw3f_omp libfftw3f-3_omp
+    HINTS
+        ${FFTW_ROOT}/lib
+        ${FFTW_ROOT}/.libs
+        ${FFTW_ROOT}
+        $ENV{FFTW_ROOT}/lib
+        $ENV{FFTW_ROOT}/.libs
+        ENV FFTW_ROOT
+    PATHS
+        /usr/lib
+        /usr/lib/x86_64-linux-gnu
+        /usr/local/lib               # Homebrew
+        /opt/local/lib               # Macports
+        /usr/opt/local/lib
+        /sw/lib                      # Fink
+        /usr/local/pgi/src/fftw/lib  # PGI local build
+    DOC "FFTW dynamic library"
+)
+mark_as_advanced( FFTW_SINGLE_PRECISION_LIBRARIES )
+else()
+find_library( FFTW_SINGLE_PRECISION_THREADED_LIBRARIES
+    NAMES fftw3f_threads libfftw3f-3_threads
+    HINTS
+        ${FFTW_ROOT}/lib
+        ${FFTW_ROOT}/.libs
+        ${FFTW_ROOT}
+        $ENV{FFTW_ROOT}/lib
+        $ENV{FFTW_ROOT}/.libs
+        ENV FFTW_ROOT
+    PATHS
+        /usr/lib
+        /usr/lib/x86_64-linux-gnu
+        /usr/local/lib               # Homebrew
+        /opt/local/lib               # Macports
+        /usr/opt/local/lib
+        /sw/lib                      # Fink
+        /usr/local/pgi/src/fftw/lib  # PGI local build
+    DOC "FFTW dynamic library"
+)
+mark_as_advanced( FFTW_SINGLE_PRECISION_THREADED_LIBRARIES )
+endif(USE_OPENMP)
+
+set( FFTW_LIBRARIES ${FFTW_SINGLE_PRECISION_THREADED_LIBRARIES} ${FFTW_SINGLE_PRECISION_LIBRARIES} ${FFTW_DOUBLE_PRECISION_LIBRARIES} )
 mark_as_advanced( FFTW_LIBRARIES )
 
 include( FindPackageHandleStandardArgs )
