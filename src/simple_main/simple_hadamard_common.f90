@@ -400,7 +400,8 @@ contains
                     ! write files
                     call b%vol%write( p%vols_msk(s) )
                     call b%mskvols(s)%write( p%masks(s) )
-                endif               
+                endif
+                call b%mskvols(s)%kill          
             else
                 ! circular masking
                 if( p%l_innermsk )then

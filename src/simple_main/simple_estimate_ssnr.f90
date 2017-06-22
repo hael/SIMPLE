@@ -208,13 +208,7 @@ contains
         nyq = size(corrs)
         allocate( filt(nyq) )
         filt = 0.
-        do k=1,nyq
-            if( corrs(k) >= 0. )then
-                filt(k) = 2.*corrs(k)/(corrs(k)+1.)
-            else
-                exit
-            endif
-        end do
+        where(corrs > 0.)filt = sqrt(2.*corrs / (corrs+1.))
     end function fsc2optlp
 
     !> \brief  converts the SSNR to FSC
