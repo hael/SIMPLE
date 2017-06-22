@@ -210,7 +210,7 @@ contains
         class(cmdline),           intent(inout) :: cline
         type(params)      :: p
         type(build)       :: b
-        integer           :: i, startit, s, n_states, cnt
+        integer           :: i, startit
         logical           :: update_res, converged
         real              :: lpstart, lpstop, corr, corr_prev
         update_res = .false.
@@ -312,9 +312,8 @@ contains
         class(cmdline),          intent(inout) :: cline
         type(params) :: p
         type(build)  :: b
-        integer      :: i, startit, iter
+        integer      :: i, startit
         logical      :: converged
-        iter      = 0
         converged = .false.
         p = params(cline) ! parameters generated
         select case(p%refine)
@@ -331,9 +330,11 @@ contains
         endif
         call b%build_general_tbox(p, cline)
         call b%build_cont3D_tbox(p)
+        startit = 1
+        if( cline%defined('startit') )startit = p%startit
         if( cline%defined('part') )then
             if( .not. cline%defined('outfile') ) stop 'need unique output file for parallel jobs'
-            call cont3D_exec(b, p, cline, iter, converged)   
+            call cont3D_exec(b, p, cline, startit, converged)   
         else
             startit = 1
             if( cline%defined('startit') )startit = p%startit

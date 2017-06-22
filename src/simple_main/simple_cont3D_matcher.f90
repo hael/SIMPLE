@@ -6,7 +6,6 @@ use simple_cmdline,           only: cmdline
 use simple_polarft_corrcalc,  only: polarft_corrcalc
 use simple_oris,              only: oris
 use simple_ori,               only: ori
-!use simple_masker,           only: automask
 use simple_cont3D_greedysrch, only: cont3D_greedysrch
 use simple_cont3D_srch,       only: cont3D_srch
 use simple_hadamard_common   ! use all in there
@@ -18,7 +17,7 @@ private
 
 integer,                   parameter :: BATCHSZ_MUL = 10    !< particles per thread
 integer,                   parameter :: MAXNPEAKS   = 10
-integer,                   parameter :: NREFS       = 50    !< number of references projection per stage used per particle
+integer,                   parameter :: NREFS       = 100   !< number of references projection per stage used per particle
 logical,                   parameter :: DEBUG       = .false.
 type(polarft_corrcalc)               :: pftcc
 type(oris)                           :: orefs                   !< per particle projection direction search space
@@ -54,7 +53,6 @@ contains
         type(oris)           :: softoris
         type(ori)            :: orientation
         integer              :: nbatches, batch, fromp, top, iptcl, state, alloc_stat, ind
-        ! AUTOMASKING DEACTIVATED FOR NOW
         ! MULTIPLE STATES DEACTIVATED FOR NOW
         if(p%nstates>1)stop 'MULTIPLE STATES DEACTIVATED FOR NOW; cont3D_matcher::cont3Dexec'
         ! INIT
@@ -83,7 +81,7 @@ contains
         reslim = p%lp
 
         ! CALCULATE ANGULAR THRESHOLD (USED BY THE SPARSE WEIGHTING SCHEME)
-        p%athres = rad2deg(atan(max(p%fny,p%lp)/(p%moldiam/2.)))
+        p%athres = 2. * rad2deg(atan(max(p%fny,p%lp)/(p%moldiam/2.)))
         if( p%refine.eq.'yes' )write(*,'(A,F6.2)')'>>> ANGULAR THRESHOLD: ', p%athres
 
         ! DETERMINE THE NUMBER OF PEAKS
@@ -247,9 +245,9 @@ contains
                 call b%refvols(state)%expand_cmat
             endif
         enddo
-        if( debug )write(*,*)'prep volumes done'
         ! bring back the original b%vol size
         if( p%boxmatch < p%box )call b%vol%new([p%box,p%box,p%box], p%smpd) ! to double check
+        if( debug )write(*,*)'prep volumes done'
     end subroutine prep_vols
 
     !>  \brief  initialize pftcc 
@@ -270,15 +268,16 @@ contains
         class(params),              intent(inout) :: p
         integer,                    intent(in)    :: iptcl
         class(polarft_corrcalc),    intent(inout) :: pftcc
-        type(oris)  :: cone
-        type(ori)   :: optcl, oref
-        integer, allocatable :: proj_inds(:), rnd_order(:)
-        real        :: eullims(3,2),  dfx, dfy, angast
-        integer     :: state, iref, cnt
+        type(oris) :: cone
+        type(ori)  :: optcl, oref
+        real       :: eullims(3,2)
+        integer    :: state, iref, cnt
         optcl = b%a%get_ori(iptcl)
         ! SEARCH SPACE PREP
         eullims = b%se%srchrange()
-        call cone%rnd_proj_space(NREFS, optcl, p%athres, eullims)
+        call cone%rnd_gau_neighbors(NREFS, optcl, p%athres, eullims)
+        call b%se%rotall_to_asym(cone)
+        !call cone%rnd_proj_space(NREFS, optcl, p%athres, eullims) ! old style uniform distribution
         call cone%set_euler(1, optcl%get_euler()) ! previous best is the first
         do iref = 1, NREFS
             call cone%e3set(iref, 0.)

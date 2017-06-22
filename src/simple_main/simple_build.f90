@@ -125,7 +125,7 @@ contains
         class(cmdline),    intent(inout) :: cline
         logical, optional, intent(in)    :: do3d, nooritab, force_ctf
         type(ran_tabu) :: rt
-        integer        :: alloc_stat, lfny, iptcl, partsz
+        integer        :: alloc_stat, lfny, partsz
         real           :: slask(3)
         logical        :: err, ddo3d, fforce_ctf
         call self%kill_general_tbox
@@ -245,7 +245,6 @@ contains
     !> \brief  destructs the general toolbox
     subroutine kill_general_tbox( self )
         class(build), intent(inout)  :: self
-        integer :: i, istart, istop
         if( self%general_tbox_exists )then
             call self%conv%kill
             call self%se%kill
@@ -410,7 +409,7 @@ contains
         class(build),  intent(inout) :: self
         class(params), intent(inout) :: p
         type(oris) :: os
-        integer    :: icls, alloc_stat, funit, io_stat
+        integer    :: icls, alloc_stat
         call self%kill_hadamard_prime2D_tbox
         call self%raise_hard_ctf_exception(p)
         allocate( self%cavgs(p%ncls), self%ctfsqsums(p%ncls), stat=alloc_stat )
@@ -452,7 +451,7 @@ contains
         use simple_strings, only: str_has_substr
         class(build),  intent(inout) :: self
         class(params), intent(in)    :: p
-        integer :: s, alloc_stat, i
+        integer :: s, alloc_stat
         call self%kill_hadamard_prime3D_tbox
         call self%raise_hard_ctf_exception(p)
         ! reconstruction objects
@@ -525,7 +524,7 @@ contains
     subroutine build_cont3D_tbox( self, p )
         class(build),  intent(inout) :: self
         class(params), intent(in)    :: p
-        integer :: s, alloc_stat, i
+        integer :: s, alloc_stat
         call self%kill_cont3D_tbox
         call self%raise_hard_ctf_exception(p)
         if( p%norec .eq. 'yes' )then
@@ -551,6 +550,10 @@ contains
         do s=1,p%nstates 
             call self%refvols(s)%new([p%boxmatch,p%boxmatch,p%boxmatch],p%smpd,p%imgkind)
         end do
+        if( p%doautomsk .or. p%mskfile.ne.'' )then
+            allocate( self%mskvols(p%nstates), stat=alloc_stat )
+            call alloc_err('build_hadamard_prime3D_tbox; simple_build, 3', alloc_stat)
+        endif
         write(*,'(A)') '>>> DONE BUILDING CONT3D TOOLBOX'
         self%cont3D_tbox_exists = .true.
     end subroutine build_cont3D_tbox
@@ -580,6 +583,13 @@ contains
                 end do
                 deallocate(self%refvols)
             endif
+            if( allocated(self%mskvols) )then
+                do i=1,size(self%mskvols)
+                    call self%mskvols(i)%kill_masker
+                    call self%mskvols(i)%kill
+                end do
+                deallocate(self%mskvols)
+            endif
             self%cont3D_tbox_exists = .false.
         endif
     end subroutine kill_cont3D_tbox
@@ -588,7 +598,7 @@ contains
     subroutine build_extremal3D_tbox( self, p )
         class(build),  intent(inout) :: self
         class(params), intent(in)    :: p
-        integer :: s, alloc_stat, i
+        integer :: alloc_stat
         call self%kill_extremal3D_tbox
         call self%raise_hard_ctf_exception(p)
         allocate( self%recvols(1), stat=alloc_stat )

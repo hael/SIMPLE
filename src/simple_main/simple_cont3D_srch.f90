@@ -99,14 +99,14 @@ contains
         allocate(self%state_exists(self%nstates))
         self%state_exists = a%get_state_exist(self%nstates)
         if( .not.self%state_exists(self%prev_state) )stop 'state is empty; cont3D_srch::prep_srch'
-        self%prev_roind = self%pftcc_ptr%get_roind(360.-self%o_in%e3get())
+        self%prev_roind = self%pftcc_ptr%get_roind(360. - self%o_in%e3get())
         self%prev_ref   = self%reforis%find_closest_proj(self%o_in) ! state not taken into account
         self%prev_corr  = self%pftcc_ptr%corr(self%prev_ref, self%iptcl, self%prev_roind)
         ! specscore
         frc = self%pftcc_ptr%genfrc(self%prev_ref, self%iptcl, self%prev_roind)
         self%specscore  = max(0., median_nocopy(frc))
         ! shift search object
-        call self%shsrch_obj%new(self%pftcc_ptr, self%lims)
+        call self%shsrch_obj%new(self%pftcc_ptr, self%lims, nrestarts=3)
         deallocate(frc)
         if( debug ) write(*,'(A)') '>>> cont3D_srch::END OF PREP_SRCH'
     end subroutine prep_srch
@@ -225,7 +225,7 @@ contains
         real,    allocatable :: corrs(:)
         integer, allocatable :: inds(:)
         type(ori) :: o
-        real      :: ws(self%npeaks), euldist_thresh, ang_sdev, dist_inpl
+        real      :: euldist_thresh, ang_sdev, dist_inpl
         real      :: frac, wcorr, euldist, mi_proj, mi_inpl, mi_state, mi_joint
         integer   :: i, state, roind, prev_state
         call self%softoris%new(self%npeaks)

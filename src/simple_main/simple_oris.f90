@@ -1457,12 +1457,17 @@ contains
         real,           intent(in)    :: asig
         real, optional, intent(inout) :: eullims(3,2)
         type(ori) :: o_transform, o_rnd
+        real      :: val
         integer   :: i
         call o_transform%new
         call self%new(nnn)
         do i=1,nnn
             call o_transform%rnd_euler(eullims)
-            call o_transform%e2set(gasdev(0., asig))
+            val = gasdev(0., asig)
+            do while(abs(val) > eullims(2,2))
+                val = gasdev(0., asig)
+            enddo
+            call o_transform%e2set(val)
             call o_transform%e3set(0.)
             o_rnd = o_prev.compose.o_transform
             call self%set_ori(i, o_rnd)

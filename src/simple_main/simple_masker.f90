@@ -339,42 +339,6 @@ end module simple_masker
 
 ! contains
     
-!     !>  \brief  is for generating a mask for solvent flattening of an image
-!     subroutine automask_1(img, p, img_msk, nvox )
-!         use simple_image,  only: image
-!         use simple_params, only: params
-!         use simple_math    ! use all in there
-!         class(image), intent(in)      :: img
-!         class(params), intent(in)     :: p
-!         class(image), intent(inout)   :: img_msk
-!         integer, intent(in), optional :: nvox
-!         type(image)                   :: img_tmp
-!         integer                       :: i, nnvox
-!         call img_msk%copy(img)        ! make a copy of the image
-!         if( img_msk%is_ft() )then     ! make sure that msk image is real 
-!             call img_msk%bwd_ft
-!         endif
-!         call img_msk%bp(0., p%amsklp) ! low-pass filter the mask image
-!         if( present(nvox) )then
-!             nnvox = nvox
-!         else
-!             ! find nr of voxels corresponding to mw
-!             if( p%dens > 0. )then
-!                 nnvox = nvoxfind(p%smpd, p%mw, p%dens)
-!             else
-!                 nnvox = nvoxfind(p%smpd, p%mw)     
-!             endif
-!             nnvox = nint(1.1*real(nnvox))     ! this is to compensate for the low-pass filtering
-!         endif
-!         call img_msk%bin(nnvox)               ! binarize
-!         if( present(nvox) )then
-!             ! todo
-!         else
-!             call img_msk%grow_bins(p%binwidth)
-!         endif
-!         call img_msk%cos_edge(p%edge) ! real-space filter based softening of the edge
-!     end subroutine automask_1
-    
 !     !>  \brief  is for generating and applying a mask for 
 !     !!          solvent flattening of an image
 !     subroutine automask_2(img, p, nvox )
