@@ -723,8 +723,6 @@ contains
         cc = sum(real( pft_ref * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:)) ))
         ! denominator
         cc = cc / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
-        ! check
-        ! if( cc >= 1. ) print *,'cc out of range', iref, iptcl, cc
     end function corr_1
 
     !>  \brief  for calculating the on-fly shifted correlation between reference iref and particle iptcl in rotation irot
@@ -763,7 +761,7 @@ contains
     !>  \brief  for calculating the Euclidean distance between reference & particle
     !!          This ought to be a better choice for the orientation weights
     function euclid( self, iref, iptcl, irot ) result( dist )
-        use gnufor2
+        use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl, irot
         integer     :: k, nk
@@ -772,10 +770,12 @@ contains
         complex(sp) :: pft_ptcl_norm(self%refsz,self%kfromto(1):self%kfromto(2))
         call self%prep_ref4corr(iptcl, iref, pft_ref_norm, sqsum_ref)
         do k=self%kfromto(1),self%kfromto(2)
-            pow_ref  = sum(real(pft_ref_norm(:,k))*&
-                &conjg(pft_ref_norm(:,k)))/real(self%refsz)
-            pow_ptcl = sum(real(self%pfts_ptcls(iptcl,irot:irot+self%winsz,k))*&
-                &conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,k)))/real(self%refsz)
+            ! pow_ref  = sum(real(pft_ref_norm(:,k))*&
+            !     &conjg(pft_ref_norm(:,k)))/real(self%refsz)
+            ! pow_ptcl = sum(real(self%pfts_ptcls(iptcl,irot:irot+self%winsz,k))*&
+            !     &conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,k)))/real(self%refsz)
+            pow_ref  = sum(csq(pft_ref_norm(:,k)))/real(self%refsz)
+            pow_ptcl = sum(csq(self%pfts_ptcls(iptcl,irot:irot+self%winsz,k)))/real(self%refsz)
             if( pow_ref > TINY )then
                 norm = sqrt(pow_ref)
                 pft_ref_norm(:,k) = pft_ref_norm(:,k)/norm

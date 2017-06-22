@@ -327,6 +327,7 @@ contains
         contains
 
             subroutine per_ref_srch( iref )
+                use simple_rnd, only: shcloc
                 integer, intent(in) :: iref
                 real    :: corrs(self%nrots), inpl_corr
                 integer :: loc(1), inpl_ind, state
@@ -334,9 +335,18 @@ contains
                 if( self%nstates > 1 ) state = nint( self%o_refs%get(iref, 'state') )
                 if( self%state_exists(state) )then
                     corrs     = pftcc%gencorrs(iref, iptcl) ! In-plane correlations
-                    loc       = maxloc(corrs)               ! greedy in-plane
-                    inpl_ind  = loc(1)                      ! in-plane angle index
-                    inpl_corr = corrs(inpl_ind)             ! max in plane correlation
+                    !!!!!!!!!!!!!!!
+                    inpl_ind = shcloc(self%nrots, corrs, self%prev_corr) ! first improving in-plane index
+                    if( inpl_ind > 0 )then
+                        ! improving correlation found
+                    else
+                        loc      = maxloc(corrs) ! greedy in-plane
+                        inpl_ind = loc(1)        ! in-plane angle index
+                    endif
+                    !!!!!!!!!!!!!!
+                    ! loc       = maxloc(corrs) ! greedy in-plane
+                    ! inpl_ind  = loc(1)        ! in-plane angle index
+                    inpl_corr = corrs(inpl_ind) ! max in plane correlation
                     call self%store_solution(pftcc, iref, iref, inpl_ind, inpl_corr)
                     projspace_corrs( iref ) = inpl_corr ! stash in-plane correlation for sorting                   
                     ! update nbetter to keep track of how many improving solutions we have identified
