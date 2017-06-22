@@ -5,16 +5,22 @@
 # modified if the default values are to be changed. Project specific compiler
 # flags should be set in the CMakeList.txt by setting the CMAKE_Fortran_FLAGS_*
 # variables.
+
 if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
     # gfortran
-    set(dialect  "-ffree-form -cpp -fimplicit-none")                     # language style
-    set(checks   "-fbounds-check -fcheck-array-temporaries ")                  # checks
-    set(warn     "-Wall -Wextra -Wimplicit-interface ")                        # warning flags
-    set(fordebug "-DTRACE -fno-inline -fno-f2c -Og -fbacktrace")               # debug flags
-    set(forspeed "-ffast-math -funroll-all-loops -fno-f2c -O3")                # optimisation
-    set(forpar   "-fopenmp -pthread")                                          # parallel flags
-    set(target   "-march=native -fPIC")                                        # platform
-    set(common   "${dialect} ${checks} ${target} ${warn} -DGNU")               # general
+    set(dialect  "-ffree-form -cpp -fimplicit-none  -ffree-line-length-none")                 # language style
+    set(checks   "-fcheck-array-temporaries  -frange-check -ffpe-trap=invalid,zero,overflow -fstack-protector -fstack-check") # checks
+    set(warn     "-Wall -Wextra -Wimplicit-interface  -Wline-truncation")                     # warning flags
+    set(fordebug "-pedantic -fno-inline -fno-f2c -Og -ggdb -fbacktrace -fbounds-check")       # debug flags
+    set(forspeed "-O3 -ffast-math -finline-functions -funroll-all-loops -fno-f2c ")           # optimisation
+    set(forpar   "-fopenmp -pthread ")                                                         # parallel flags
+    set(target   "-march=native -fPIC")                                                       # target platform
+    set(common   "${dialect} ${checks} ${target} ${warn} ")
+   if(Fortran_COMPILER_NAME MATCHES "f95*")
+     set(CMAKE_Fortran_COMPILER "gfortran")
+     set(CMAKE_CXX_COMPILER "g++")
+     set(CMAKE_C_COMPILER "gcc")
+   endif()
 
   elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
     # pgfortran
@@ -25,26 +31,26 @@ if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
     set(fordebug "-Minfo=all,ftn  -traceback -gopt -Mneginfo=all,ftn -Mnodwarf -Mpgicoff -traceback -Mprof -Mbound -C")
     set(forspeed "-Munroll -O4  -Mipa=fast -fast -Mcuda=fastmath,unroll -Mvect=nosizelimit,short,simd,sse -mp -acc ")
     set(forpar   "-Mconcur -Mconcur=bind,allcores -Mcuda=cuda8.0,cc60,flushz,fma ")
-    set(target   "-tp=p7-64 -m64 -fPIC ")
+    set(target   " -m64 -fPIC ")
     set(common   " ${dialect} ${checks} ${target} ${warn}  -DPGI")
 
-elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
+  elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
     # ifort
-    set(dialect  "-fpp -free -implicitnone -stand f08  -80")
-    set(checks   "-check bounds -check uninit")
+    # set(FC "ifort" CACHE PATH "Intel Fortran compiler")
+    set(dialect  "-fpp -free -implicitnone -std08  -80")
+    set(checks   "-check bounds -check uninit -assume buffered_io -assume byterecl -align sequence  -diag-disable 6477  -gen-interfaces ") # -mcmodel=medium -shared-intel
     set(warn     "-warn all")
     set(fordebug "-debug -O0 -ftrapuv -debug all -check all")
-    set(forspeed "-O3 -fp-model fast=2")
+    set(forspeed "-O3 -fp-model fast=2 -inline all -unroll-aggressive ")
     set(forpar   "-qopenmp")
     set(target   "-xHOST -no-prec-div -static -fPIC")
     set(common   "${dialect} ${checks} ${target} ${warn} -DINTEL")
  # else()
  #   message(" Fortran compiler not supported. Set FC environment variable")
   endif ()
-    
+
     set(CMAKE_Fortran_FLAGS_RELEASE_INIT "${common} ${forspeed} ${forpar} ")
     set(CMAKE_Fortran_FLAGS_DEBUG_INIT   "${common} ${fordebug} ${forpar} -g ")
-
 
 # Make recent cmake not spam about stuff
 if(POLICY CMP0063)
@@ -53,3 +59,6 @@ endif()
 if(POLICY CMP0004)
     cmake_policy(SET CMP0004 OLD)
 endif()
+set(CMAKE_Fortran_SOURCE_FILE_EXTENSIONS ${CMAKE_Fortran_SOURCE_FILE_EXTENSIONS} "f03;F03;f08;F08")
+set(OLDPATH ENV{PATH})
+
