@@ -29,7 +29,7 @@ type, extends(image) :: masker
     integer                  :: binwidth  = 1
     integer                  :: n         = 0
     integer                  :: idim(3)   = 0            !< image dimension
-    logical                  :: mskproj_exists = .false.
+    logical                  :: masker_exists = .false.
   contains
     ! CONSTRUCTORS
     procedure          :: init2D
@@ -49,7 +49,7 @@ type, extends(image) :: masker
     procedure          :: get_msk
     procedure          :: get_imgmsk
     ! DESTRUCTOR
-    procedure          :: kill_mskproj
+    procedure          :: kill_masker
 end type masker
 
 contains
@@ -66,7 +66,7 @@ contains
         if( .not.self%is_2d() )stop 'this routine is intended for 2D images only, simple_masker::mskref'
         if(.not.self%even_dims())stop 'even dimensions assumed; simple_masker::init2D'
         if(self%is_ft())         stop 'real space only; simple_masker::init2D'
-        call self%kill_mskproj
+        call self%kill_masker
         self%idim      = [p%boxmatch, p%boxmatch, 1]
         self%n         = ncls
         self%amsklp    = p%amsklp
@@ -81,7 +81,7 @@ contains
         allocate(self%adamsks(self%n), stat=alloc_stat )
         call alloc_err('in simple_masker::init2D 1', alloc_stat)
         self%adamsks = 0.
-        self%mskproj_exists = .true.
+        self%masker_exists = .true.
         if( DEBUG )write(*,*)'simple_masker::init2D done'
     end subroutine init2D
 
@@ -95,7 +95,7 @@ contains
         integer,               intent(in)    :: binwidth, edge
         logical :: was_ft
         if( vol_inout%is_2d() )stop 'automask3D is intended for volumes only, simple_masker%init_mskproj'
-        call self%kill_mskproj
+        call self%kill_masker
         self%msk       = msk
         self%amsklp    = amsklp
         self%edge      = edge
@@ -144,7 +144,7 @@ contains
         class(image),          intent(inout) :: ref
         integer,               intent(in)    :: cls
         type(image) :: img
-        if( .not.self%mskproj_exists )stop 'masker object has not be instantiated'
+        if( .not.self%masker_exists )stop 'masker object has not be instantiated'
         if( cls > self%n )stop 'class index out of range'
         ! binarize image
         img = ref
@@ -313,13 +313,13 @@ contains
     ! DESTRUCTORS
 
     !>  \brief  is the destructor
-    subroutine kill_mskproj( self )
+    subroutine kill_masker( self )
         class(masker), intent(inout) :: self
         self%mskwidth = MSKWIDTH
         self%n        = 0
         self%msk      = 0.
-        self%mskproj_exists = .false.
-    end subroutine kill_mskproj
+        self%masker_exists = .false.
+    end subroutine kill_masker
 
 end module simple_masker
 

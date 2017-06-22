@@ -151,6 +151,7 @@ contains
             call b%vol%read(p%vols(istate))
             call b%mskvol%automask3D(b%vol, p%msk, p%amsklp, p%mw, p%binwidth, p%edge, p%dens)
             call b%mskvol%write(p%masks(istate))
+            call b%mskvol%kill
             call b%vol%write(p%vols_msk(istate))
             end do
         ! end gracefully

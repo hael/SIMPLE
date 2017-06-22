@@ -425,7 +425,6 @@ contains
                         call prepimg4align(b, p, o)
                         call b%img_match%polarize(pftcc, iptcl)
                     end do
-                    if( p%doautomsk )call b%mskvols(s)%kill_mskproj
                 end do
                 call progress(ntot, ntot)
             end subroutine prep_pftcc_local

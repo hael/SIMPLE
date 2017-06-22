@@ -206,9 +206,6 @@ contains
             call self%img_pad%new([p%boxpd,p%boxpd,1],p%smpd,p%imgkind)
             if( ddo3d )then
                 call self%vol%new([p%box,p%box,p%box], p%smpd, p%imgkind)
-                if( p%automsk.eq.'yes' )then
-                    call self%mskvol%new([p%boxmatch,p%boxmatch,p%boxmatch],p%smpd,p%imgkind)
-                endif
                 call self%vol_pad%new([p%boxpd,p%boxpd,p%boxpd],p%smpd,p%imgkind)
             endif
             if( debug ) write(*,'(a)') 'did build boxpd-sized image objects'
@@ -263,9 +260,9 @@ contains
             call self%img_pad%kill
             call self%vol%kill_expanded
             call self%vol%kill
-            call self%mskvol%kill_mskproj
+            call self%mskvol%kill_masker
             call self%mskvol%kill
-            call self%mskimg%kill_mskproj
+            call self%mskimg%kill_masker
             call self%mskimg%kill
             call self%vol_pad%kill_expanded
             call self%vol_pad%kill
@@ -514,7 +511,7 @@ contains
             endif
             if( allocated(self%mskvols) )then
                 do i=1,size(self%mskvols)
-                    call self%mskvols(i)%kill_mskproj
+                    call self%mskvols(i)%kill_masker
                     call self%mskvols(i)%kill
                 end do
                 deallocate(self%mskvols)
