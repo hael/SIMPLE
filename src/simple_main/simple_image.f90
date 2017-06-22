@@ -3001,9 +3001,6 @@ contains
             call self%fwd_ft
             didft = .true.
         endif
-
-        print *, 'bfac: ', b
-
         lims = self%fit%loop_lims(2)
         !$omp parallel do collapse(3) default(shared) proc_bind(close)&
         !$omp private(k,j,i,res,phys,wght) schedule(static) 
