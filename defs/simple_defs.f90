@@ -87,4 +87,15 @@ character(len=STDLEN) :: exec_abspath_glob
   integer, parameter :: fp_kind = SP
 #endif
 
+#ifdef _DEBUG
+  logical :: global_debug=.true.
+#else
+  logical :: global_debug=.false.
+#endif
+  logical :: global_warn=.false.
+  logical :: global_verbose=.false.
+
+
 end module simple_defs
+
+
