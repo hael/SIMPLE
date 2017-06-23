@@ -1,5 +1,5 @@
 !>  \brief  SIMPLE command line parsing class
-!! The code is distributed with the hope that it will be useful, but WITHOUT ANY WARRANTY. 
+!! The code is distributed with the hope that it will be useful, but WITHOUT ANY WARRANTY.
 !! Redistribution or modification is regulated by the GNU General Public License.
 !! Hans Elmlund, 2011-08-17.
 
@@ -50,7 +50,7 @@ end type cmdline
 
 contains
 
-    !> \brief  for parsing the command line arguments passed as key=val 
+    !> \brief  for parsing the command line arguments passed as key=val
     subroutine parse( self, keys_required, keys_optional )
         use simple_args, only: args
         class(cmdline),             intent(inout) :: self
@@ -90,13 +90,13 @@ contains
                 call print_cmdline(keys_required, keys_optional, distr=distr_exec)
                 stop
             endif
-        endif    
+        endif
         allowed_args = args()
         self%totlen  = 0
         self%argcnt  = command_argument_count()
         cntbin = 0
         cnttxt = 0
-        do i=1,self%argcnt 
+        do i=1,self%argcnt
             call get_command_argument(i, arg, cmdlen, cmdstat)
             if( cmdstat == -1 )then
                 write(*,*) 'ERROR! while parsing the command line: simple_cmdline :: parse'
@@ -112,9 +112,9 @@ contains
             if( debug ) print *, ' reached checker'
             call self%check
         endif
-        
+
         contains
-        
+
             subroutine parse_local( arg )
                 character(len=*) :: arg
                 integer          :: pos1
@@ -154,20 +154,22 @@ contains
                         self%cmds(i)%rarg = str2real(adjustl(arg(pos1+1:)))
                     else
                         call str2int(adjustl(arg(pos1+1:)), io_stat, ri )
-                        if( io_stat==0 )then 
+                        if( io_stat==0 )then
                             self%cmds(i)%rarg = real(ri)
                         else
                             self%cmds(i)%carg = adjustl(arg(pos1+1:))
                         endif
                     endif
                     self%cmds(i)%defined = .true.
-                   
+
                     if( debug ) print *,  'parse_local: key|cval|rval|defined: '
-                    if( debug ) print *,  trim(self%cmds(i)%key), ' ', trim(self%cmds(i)%carg), self%cmds(i)%rarg, self%cmds(i)%defined 
-                    
+                    if( debug ) print *,  trim(self%cmds(i)%key), ' ', &
+                         &trim(self%cmds(i)%carg), self%cmds(i)%rarg, &
+                         &self%cmds(i)%defined
+
                 endif
             end subroutine parse_local
-            
+
     end subroutine parse
 
     !>  \brief  private copier
@@ -186,14 +188,14 @@ contains
         self%totlen          = self2copy%totlen
         self%ncheck          = self2copy%ncheck
     end subroutine copy
-    
+
     !>  \brief  polymorphic assignment (=)
     subroutine assign( self, self2copy )
         class(cmdline), intent(inout) :: self
         class(cmdline), intent(in)    :: self2copy
         call self%copy(self2copy)
     end subroutine assign
-    
+
     !> \brief  for setting a real valued command line argument
     subroutine set_1( self, key, rarg )
         class(cmdline),   intent(inout) :: self
@@ -205,12 +207,12 @@ contains
             self%argcnt                    = self%argcnt + 1
             self%cmds(self%argcnt)%key     = key
             self%cmds(self%argcnt)%rarg    = rarg
-            self%cmds(self%argcnt)%defined = .true. 
+            self%cmds(self%argcnt)%defined = .true.
         else
             self%cmds(which)%rarg    = rarg
         endif
     end subroutine set_1
-    
+
     !> \brief  for setting a char valued command line argument
     subroutine set_2( self, key, carg )
         class(cmdline),   intent(inout) :: self
@@ -222,7 +224,7 @@ contains
             self%argcnt                    = self%argcnt + 1
             self%cmds(self%argcnt)%key     = key
             self%cmds(self%argcnt)%carg    = carg
-            self%cmds(self%argcnt)%defined = .true. 
+            self%cmds(self%argcnt)%defined = .true.
         else
             self%cmds(which)%carg = carg
         endif
@@ -239,12 +241,12 @@ contains
             self%cmds( self%argcnt )%key     = ''
             self%cmds( self%argcnt )%carg    = ''
             self%cmds( self%argcnt )%rarg    = 0.
-            self%cmds( self%argcnt )%defined = .true. 
+            self%cmds( self%argcnt )%defined = .true.
             self%argcnt                      = self%argcnt - 1
         endif
     end subroutine delete
 
-    
+
     !> \brief  to set variables to be checked
     subroutine checkvar( self, str, nr )
         class(cmdline),   intent(inout) :: self
@@ -253,7 +255,7 @@ contains
         self%checker(nr) = str
         self%ncheck      = nr
     end subroutine checkvar
-    
+
     !> \brief  for checking that the passed array of keys are present in the struct
     subroutine check( self )
         use simple_jiffys, only: alloc_err
@@ -322,7 +324,7 @@ contains
         call hash%write( trim(fname) )
         call hash%kill
     end subroutine write
-    
+
     !>  \brief  reads a row of a text-file into the inputted hash, assuming key=value pairs
     subroutine read( self, fname, keys_required, keys_optional )
         use simple_chash
@@ -345,7 +347,7 @@ contains
             key = hash%get_key( i )
             arg = hash%get( i )
             call str2int(adjustl(arg), io_stat, ri )
-            if( io_stat == 0 )then 
+            if( io_stat == 0 )then
                 self%cmds(i)%rarg = real(ri)
             else
                 read(arg, *, iostat=io_stat) rval
@@ -406,7 +408,7 @@ contains
             endif
         end do
     end function lookup
-    
+
     !> \brief  for getting real args
     pure function get_rarg( self, key ) result( rval )
         class(cmdline),   intent(in) :: self
@@ -421,7 +423,7 @@ contains
             endif
         end do
     end function get_rarg
-    
+
     !> \brief  for getting char args
     pure function get_carg( self, key ) result( cval )
         class(cmdline),   intent(in)  :: self
