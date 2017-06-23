@@ -2260,23 +2260,13 @@ contains
         character(len=*), intent(in)    :: which
         real,             intent(out)   :: ave, sdev, var
         logical,          intent(out)   :: err
-        real, allocatable :: vals(:)
-        integer           :: alloc_stat, i, cnt, mystate
-        allocate( vals(self%n), stat=alloc_stat )
-        call alloc_err('In: stat_1, module: simple_oris', alloc_stat)
-        vals = 0.
-        ! fish values
-        cnt = 0
-        do i=1,self%n
-            mystate = nint(self%o(i)%get('state'))
-            if( mystate /= 0 )then
-                cnt = cnt+1
-                vals(cnt) = self%o(i)%get(which)
-            endif
-        end do
-        ! calculate statistics
-        call moment(vals(:cnt), ave, sdev, var, err)
-        deallocate(vals)
+        real,    allocatable :: vals(:), all_vals(:)
+        integer, allocatable :: states(:)
+        states   = nint( self%get_all('state') )
+        all_vals = self%get_all(which)
+        vals     = pack(states, mask=(states > 0))
+        call moment(vals, ave, sdev, var, err)
+        deallocate(vals, all_vals, states)
     end subroutine stats
     
     !>  \brief  is for calculating the minimum/maximum values of a variable
@@ -2532,7 +2522,6 @@ contains
         class(oris), intent(inout) :: self
         real,        intent(in)    :: frac
         real,    allocatable :: specscores(:), weights(:)
-        integer, allocatable :: order(:)
         real    :: w, minscore
         integer :: i, lim, n
         call self%calc_hard_ptcl_weights_single(frac)

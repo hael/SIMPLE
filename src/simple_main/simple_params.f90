@@ -381,16 +381,16 @@ contains
         class(params),     intent(inout) :: self
         class(cmdline),    intent(inout) :: cline
         logical, optional, intent(in)    :: checkdistr, allow_mix
-        integer                          :: i, s, ncls, ifoo, lfoo(3), cntfile, nthr_local
+        integer                          :: i, ncls, ifoo, lfoo(3), cntfile
         logical                          :: here, ccheckdistr, aamix
         character(len=STDLEN)            :: cwd_local, debug_local
         character(len=1)                 :: checkupfile(50)
         character(len=:), allocatable    :: conv
-        integer,          allocatable    :: parts(:,:)
         logical                          :: nparts_set
         logical                          :: vol_defined(MAXS)
         nparts_set        = .false.
         vol_defined(MAXS) = .false.
+        debug_local = 'no'
         ! take care of optionals
         ccheckdistr = .true.
         if( present(checkdistr) ) ccheckdistr = checkdistr

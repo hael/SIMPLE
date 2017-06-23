@@ -102,22 +102,9 @@ contains
             call b%a%calc_spectral_weights(p%frac)
         endif
 
-        ! PREPARE REFERENCE VOLUMES
+        ! PREPARE REFERENCE & RECONSTRUCTION VOLUMES
         call prep_vols(b, p, cline)
-
-        ! RESET RECVOLS
-        if(p%norec .eq. 'no')then
-            do state=1,p%nstates
-                if( state_exists(state) )then
-                    if( p%eo .eq. 'yes' )then
-                        call b%eorecvols(state)%reset_all
-                    else
-                        call b%recvols(state)%reset
-                    endif
-                endif
-            end do
-            if(debug)write(*,*)'*** pcont3D_matcher ***: did reset recvols'
-        endif
+        call preprecvols(b, p)
 
         ! INIT IMGPOLARIZER
         call pftcc%new(nrefs_per_ptcl, [1,1], [p%boxmatch,p%boxmatch,1],p%kfromto, p%ring2, p%ctf)

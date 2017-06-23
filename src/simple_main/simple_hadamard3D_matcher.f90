@@ -65,8 +65,8 @@ contains
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: update_res, converged
         type(oris)        :: prime3D_oris
-        real              :: norm, corr_thresh, corr_prev, corr
-        integer           :: iptcl, s, inptcls, prev_state, istate
+        real              :: norm, corr_thresh
+        integer           :: iptcl, inptcls, prev_state, istate
         integer           :: statecnt(p%nstates)
 
         inptcls = p%top - p%fromp + 1
@@ -146,16 +146,6 @@ contains
                 p%outfile = 'prime3Ddoc_'//int2str_pad(which_iter,3)//'.txt'
             endif
         endif
-        if(p%norec .eq. 'no')then
-            do s=1,p%nstates
-                if( p%eo .eq. 'yes' )then
-                    call b%eorecvols(s)%reset_all
-                else
-                    call b%recvols(s)%reset
-                endif
-            end do
-            if( DEBUG ) write(*,*) '*** hadamard3D_matcher ***: did reset recvols'
-        endif
 
         ! STOCHASTIC IMAGE ALIGNMENT
         ! create the search objects, need to re-create every round because parameters are changing
@@ -216,12 +206,17 @@ contains
                 write(*,*) 'The refinement mode: ', trim(p%refine), ' is unsupported'
                 stop
         end select
+        call pftcc%kill
+
         ! output orientations
         call b%a%write(p%outfile, [p%fromp,p%top])
         p%oritab = p%outfile
 
         ! volumetric 3d reconstruction
         if( p%norec .eq. 'no' )then
+            ! init volumes
+            call preprecvols(b, p)
+            ! reconstruction
             do iptcl=p%fromp,p%top
                 orientation = b%a%get_ori(iptcl)
                 prev_state  = nint( orientation%get('state') )
@@ -248,7 +243,6 @@ contains
             call primesrch3D(iptcl)%kill
         end do
         deallocate( primesrch3D )
-        call pftcc%kill
         call prime3D_oris%kill
 
         ! report convergence

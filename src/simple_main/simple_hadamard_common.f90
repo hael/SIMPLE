@@ -13,13 +13,12 @@ use simple_masker        ! use all in there
 implicit none
 
 public :: read_img_from_stk, set_bp_range, set_bp_range2D,grid_ptcl, prepimg4align, eonorm_struct_facts,&
-&norm_struct_facts, preprefvol, prep2Dref
+&norm_struct_facts, preprefvol, prep2Dref, preprecvols
 private
 
 logical, parameter :: DEBUG     = .false.
 real,    parameter :: SHTHRESH  = 0.0001
 real,    parameter :: CENTHRESH = 0.01   ! threshold for performing volume/cavg centering in pixels
-integer            :: glob_cnt  = 0      ! dev purpose only
     
 contains
 
@@ -240,6 +239,7 @@ contains
         endif
     end subroutine grid_ptcl
 
+    !>  \brief  prepares one particle image for alignment 
     subroutine prepimg4align( b, p, o )
         use simple_ctf, only: ctf
         class(build),   intent(inout) :: b
@@ -311,6 +311,7 @@ contains
         if( DEBUG ) write(*,*) '*** simple_hadamard_common ***: finished prepimg4align'
     end subroutine prepimg4align
 
+    !>  \brief  prepares one cluster centre image for alignment
     subroutine prep2Dref( b, p, icls )
         use simple_image, only: image
         class(build),   intent(inout) :: b
@@ -350,6 +351,30 @@ contains
         call b%img_match%fwd_ft
     end subroutine prep2Dref
 
+    !>  \brief  initializes all volumes for reconstruction
+    subroutine preprecvols( b, p )
+        class(build),   intent(inout) :: b
+        class(params),  intent(inout) :: p
+        integer :: istate
+        if( p%eo .eq. 'yes' )then
+            do istate = 1, p%nstates
+                if( b%a%get_statepop(istate) > 0)then
+                    call b%eorecvols(istate)%new(p)
+                    call b%eorecvols(istate)%reset_all
+                endif
+            end do
+        else
+            do istate = 1, p%nstates
+                if( b%a%get_statepop(istate) > 0)then
+                    call b%recvols(istate)%new([p%boxpd, p%boxpd, p%boxpd], p%smpd, p%imgkind)
+                    call b%recvols(istate)%alloc_rho(p)
+                    call b%recvols(istate)%reset
+                endif
+            end do
+        endif
+    end subroutine preprecvols
+
+    !>  \brief  prepares one volume for references extraction
     subroutine preprefvol( b, p, cline, s, doexpand )
         class(build),      intent(inout) :: b
         class(params),     intent(inout) :: p
@@ -436,7 +461,6 @@ contains
                     endif
                 endif
             end subroutine centervol
-            
     end subroutine preprefvol
     
     subroutine eonorm_struct_facts( b, p, res, which_iter )

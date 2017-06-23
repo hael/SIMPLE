@@ -319,9 +319,9 @@ contains
             if( self%automsk )then
                 ! automasking
                 call volmasker%automask3D(even, self%msk, self%amsklp, self%mw, self%binwidth, self%edge, self%dens)
-                call volmasker%write('automsk_state'//int2str_pad(state,2)// '_even.mrc')
+                call volmasker%write('automask_state'//int2str_pad(state,2)// '_even.mrc')
                 call volmasker%automask3D(odd, self%msk, self%amsklp, self%mw, self%binwidth, self%edge, self%dens)
-                call volmasker%write('automsk_state'//int2str_pad(state,2)// '_odd.mrc')
+                call volmasker%write('automask_state'//int2str_pad(state,2)// '_odd.mrc')
                 call volmasker%kill
             else
                 ! spherical masking

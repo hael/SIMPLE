@@ -17,12 +17,14 @@ use Exporter;
 @ISA = ("Exporter");
 use Config;
 @ISA = ('Exporter');
-@EXPORT = qw($ICOMPILE $FCOMPILER $PLATFORM $CUDADIR $FFTW_LIB $FFTW_INC $OBJDIR $MODDIR $DEBUG $DEBUG_LEVEL $CC_COMPILER $GCC_COMPILER $DOPENMP $DCUDA $DBENCH $SET_OPTIMIZATION $op_sys $architecture getPlatform );
+@EXPORT = qw($ICOMPILE $SIMPLE_PATH $FCOMPILER $PLATFORM $CUDADIR $FFTW_LIB $FFTW_INC $OBJDIR $MODDIR $DEBUG $DEBUG_LEVEL $CC_COMPILER $GCC_COMPILER $DOPENMP $DCUDA $DBENCH $SET_OPTIMIZATION $op_sys $architecture getPlatform );
 
 #####################################################################
 # User-defined variables controlling compilation                    #
 #####################################################################
 
+# enter the SIMPLE root path
+our$SIMPLE_PATH="/home/cyril/Simple3";
 # specifying the compiling directives
 # with OpenMP:  -fopenmp, CUDA: -DCUDA
 # Benchmarking: -DBENCH
@@ -35,7 +37,7 @@ getPlatform();
 # would you like to compile the library from scracth?
 # make cleanall before make and link: 0   make only and generate scripts : 2
 # make clean before make and link   : 1   link, compile production only  : 3 
-our$ICOMPILE = 2;
+our$ICOMPILE = 1;
 # the name compiler default(linux): cc, gcc, gfortran
 # the name compiler default(MacOSX): /usr/local/bin/gcc, /usr/local/bin/gcc,
 #                                    /usr/local/bin/gfortran
@@ -46,9 +48,9 @@ our$FCOMPILER = "gfortran";
 our$CUDADIR="";
 # enter the fftw lib default: /usr/lib/x86_64-linux-gnu for [linux]
 #                             /usr/local/lib for [MacOSX]
-our$FFTW_LIB="/usr/lib/x86_64-linux-gnu/";
+our$FFTW_LIB="/usr/local/fftw/3.3.4-gcc/lib/";
 # on clusters we need extra path after module load fftw/3.3.4-gcc to identify the FFTW header
-our$FFTW_INC="/usr/include";
+our$FFTW_INC="/usr/local/fftw/3.3.4-gcc/include/";
 # Modules and objects directories. default: obj/SIMPLEOFILES
 our$OBJDIR="obj/SIMPLEOFILES";
 our$MODDIR="obj/SIMPLEOFILES";
