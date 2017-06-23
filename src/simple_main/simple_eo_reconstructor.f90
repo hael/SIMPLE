@@ -148,7 +148,7 @@ contains
         wf = self%even%get_kbwin()
     end function get_kbwin
     
-    !> \brief  for gettign the resolution
+    !> \brief  for getting the resolution
     subroutine get_res( self, fsc05, fsc0143 )
         class(eo_reconstructor), intent(in)  :: self !< instance
         real,                    intent(out) :: fsc05, fsc0143

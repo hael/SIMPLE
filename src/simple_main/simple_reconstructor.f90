@@ -39,7 +39,6 @@ type, extends(image) :: reconstructor
     procedure          :: reset
     ! GETTER
     procedure          :: get_kbwin
-    procedure          :: get_ctfsqshell
     ! I/O
     procedure          :: write_rho
     procedure          :: read_rho
@@ -148,36 +147,7 @@ contains
         type(kbinterpol) :: wf
         wf = kbinterpol(self%winsz,self%alpha)
     end function get_kbwin
-    
-    !>  \brief 
-    subroutine get_ctfsqshell( self, ctfsqshell )
-        use simple_math, only: hyp
-        class(reconstructor) , intent(inout) :: self
-        real, allocatable,     intent(inout) :: ctfsqshell(:)
-        real     :: ctfsqsum
-        integer  :: n, lims(3,2), alloc_stat, sh, h, k, l
-        n = self%get_filtsz()
-        if( allocated(ctfsqshell) )deallocate(ctfsqshell)
-        allocate( ctfsqshell(n), stat=alloc_stat )
-        call alloc_err('In: get_ctfsqshell, module: simple_reconstructor', alloc_stat)
-        ctfsqshell = 1.
-        if( self%ctfflag.ne.'yes' )return
-        ctfsqshell = 0.
-        lims       = self%loop_lims(2)
-        !$omp parallel do collapse(3) default(shared) private(h,k,l,sh)&
-        !$omp schedule(static) proc_bind(close)
-        do h=lims(1,1),lims(1,2)
-            do k=lims(2,1),lims(2,2)
-                do l=lims(3,1),lims(3,2)
-                    ! find shell
-                    sh = nint(hyp(real(h),real(k),real(l)))
-                    if( sh == 0 .or. sh > n ) cycle
-                    ctfsqshell(sh) = ctfsqshell(sh) + self%rho(h,k,l)
-                end do
-            end do
-        end do
-        !$omp end parallel do
-    end subroutine get_ctfsqshell
+
     ! I/O
 
     subroutine write_rho( self, kernam )
