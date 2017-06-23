@@ -5,7 +5,11 @@
 # modified if the default values are to be changed. Project specific compiler
 # flags should be set in the CMakeList.txt by setting the CMAKE_Fortran_FLAGS_*
 # variables.
-
+if(NOT $ENV{FC} STREQUAL "")
+  set(CMAKE_Fortran_COMPILER_NAMES $ENV{FC})
+else()
+  set(CMAKE_Fortran_COMPILER_NAMES gfortran)
+endif()
 if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
     # gfortran
     set(dialect  "-ffree-form -cpp -fimplicit-none  -ffree-line-length-none")                 # language style
@@ -16,12 +20,7 @@ if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
     set(forpar   "-fopenmp -pthread ")                                                         # parallel flags
     set(target   "-march=native -fPIC")                                                       # target platform
     set(common   "${dialect} ${checks} ${target} ${warn} ")
-   if(Fortran_COMPILER_NAME MATCHES "f95*")
-     set(CMAKE_Fortran_COMPILER "gfortran")
-     set(CMAKE_CXX_COMPILER "g++")
-     set(CMAKE_C_COMPILER "gcc")
-   endif()
-
+#
   elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
     # pgfortran
     set(dialect  "-Mpreprocess -Mfreeform  -Mstandard -Mallocatable=03")
@@ -33,7 +32,7 @@ if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
     set(forpar   "-Mconcur -Mconcur=bind,allcores -Mcuda=cuda8.0,cc60,flushz,fma ")
     set(target   " -m64 -fPIC ")
     set(common   " ${dialect} ${checks} ${target} ${warn}  -DPGI")
-
+#
   elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
     # ifort
     # set(FC "ifort" CACHE PATH "Intel Fortran compiler")
@@ -45,13 +44,13 @@ if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
     set(forpar   "-qopenmp")
     set(target   "-xHOST -no-prec-div -static -fPIC")
     set(common   "${dialect} ${checks} ${target} ${warn} -DINTEL")
- # else()
- #   message(" Fortran compiler not supported. Set FC environment variable")
+# else()
+#   message(" Fortran compiler not supported. Set FC environment variable")
   endif ()
-
+#
     set(CMAKE_Fortran_FLAGS_RELEASE_INIT "${common} ${forspeed} ${forpar} ")
     set(CMAKE_Fortran_FLAGS_DEBUG_INIT   "${common} ${fordebug} ${forpar} -g ")
-
+#
 # Make recent cmake not spam about stuff
 if(POLICY CMP0063)
     cmake_policy(SET CMP0063 OLD)
@@ -59,6 +58,6 @@ endif()
 if(POLICY CMP0004)
     cmake_policy(SET CMP0004 OLD)
 endif()
-set(CMAKE_Fortran_SOURCE_FILE_EXTENSIONS ${CMAKE_Fortran_SOURCE_FILE_EXTENSIONS} "f03;F03;f08;F08")
-set(OLDPATH ENV{PATH})
+#
+set(ENV_PATH ENV{PATH})
 
