@@ -9,7 +9,7 @@
 #ADD_SUBDIRECTORY(${SRC}/utils ${LIB})
 
 
-file(GLOB DEFS_src "${CMAKE_SOURCE_DIR}/defs/*.f[90][08]" PARENT_SCOPE)
+file(GLOB DEFS_src "${CMAKE_SOURCE_DIR}/src/defs/*.f[90][08]" PARENT_SCOPE)
 # message(STATUS "DEFS ${DEFS_src}")
 
 
@@ -21,9 +21,9 @@ file(GLOB DEFS_src "${CMAKE_SOURCE_DIR}/defs/*.f[90][08]" PARENT_SCOPE)
 # string(REGEX REPLACE "\(.*\).o" "${CMAKE_SOURCE_DIR}/simple_utils/\\1.f90" UTILS_src ${UTILS_src})
 # message(STATUS "UTILS3 --${UTILS_src}--")
 
-file(GLOB UTILS_src "${CMAKE_SOURCE_DIR}/simple_utils/*.f90" PARENT_SCOPE)
-list(REMOVE_ITEM UTILS_src "${CMAKE_SOURCE_DIR}/simple_utils/simple_timer_cuda.f90")
-# list(APPEND UTILS_src ${UTILS_src} "${CMAKE_SOURCE_DIR}/simple_utils/cuda/precision_m.f90")
+file(GLOB UTILS_src "${CMAKE_SOURCE_DIR}/src/simple_utils/*.f90" PARENT_SCOPE)
+list(REMOVE_ITEM UTILS_src "${CMAKE_SOURCE_DIR}/src/simple_utils/simple_timer_cuda.f90")
+# list(APPEND UTILS_src ${UTILS_src} "${CMAKE_SOURCE_DIR}/src/simple_utils/cuda/precision_m.f90")
 # message(STATUS "UTILS3 --${UTILS_src}--")
 
 
@@ -66,7 +66,7 @@ set(CORELIB_src  ${DEFS_src} ${UTILS_src} ${SIMPLE_src})
 
 
 if (USE_CUDA)
-  list(APPEND UTILS_src ${UTILS_src} "${CMAKE_SOURCE_DIR}/simple_utils/simple_timer_cuda.f90")
+  list(APPEND UTILS_src ${UTILS_src} "${CMAKE_SOURCE_DIR}/src/simple_utils/simple_timer_cuda.f90")
 endif()
 
 

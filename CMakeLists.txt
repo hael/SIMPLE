@@ -48,7 +48,7 @@ endif(NOT CMAKE_BUILD_TYPE)
 option(USE_OPENMP "Use OpenMP for parallelization" ON)
 option(USE_CUDA "GPU parallelisation" OFF)
 option(BUILD_TESTS "Build the test examples" ON)
-option(BUILD_GUI "Build the simple GUI" ON)
+option(BUILD_GUI "Build the simple GUI" OFF)
 option(BUILD_SHARED_LIBS "Build the simple library as shared" ON)
 
 option(LINK_TIME_OPTIMISATION "Enable link-time optimisation" OFF)
@@ -101,7 +101,7 @@ set(SRC ${CMAKE_SOURCE_DIR}/src)
 set(LIB ${CMAKE_BINARY_DIR}/lib)
 set(BIN ${CMAKE_BINARY_DIR}/bin)
 set(EXESRC ${CMAKE_SOURCE_DIR}/production/simple)
-include_directories(${CMAKE_SOURCE_DIR}/simple_utils)
+include_directories(${CMAKE_SOURCE_DIR}/src/inc)
 
 # Have the .mod files placed in the lib folder
 set(CMAKE_Fortran_MODULE_DIRECTORY ${LIB})
@@ -134,9 +134,9 @@ add_subdirectory(${EXESRC} ${BIN})
 if (BUILD_TESTS)
   add_subdirectory(tests)
 endif()
-if (BUILD_GUI)
-  add_subdirectory(gui ${BIN}/gui)
-endif()
+#if (BUILD_GUI)
+#  add_subdirectory(gui ${BIN}/gui)
+#endif()
 
 
 #################################################################
