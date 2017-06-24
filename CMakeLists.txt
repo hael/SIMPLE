@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.2 FATAL_ERROR)
 include("${CMAKE_SOURCE_DIR}/cmake/Modules/FortranOverride.cmake")
-project(SIMPLE)
-enable_language(Fortran)
+project(SIMPLE Fortran)
+#enable_language( CXX C )
 include(${CMAKE_SOURCE_DIR}/cmake/Modules/GenericLogging.cmake)
 
 #################################################################
@@ -139,9 +139,9 @@ if (${PROJECT_NAME}_BUILD_TESTS)
   add_subdirectory(tests)
 endif()
 
-if (${PROJECT_NAME}_BUILD_GUI)
-  add_subdirectory(gui ${BIN}/gui)
-endif()
+#if (${PROJECT_NAME}_BUILD_GUI)
+#  add_subdirectory(gui ${BIN}/gui)
+#endif()
 
 
 #################################################################
