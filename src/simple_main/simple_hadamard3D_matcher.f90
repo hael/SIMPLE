@@ -236,6 +236,8 @@ contains
             else
                 call norm_struct_facts(b, p, which_iter)
             endif
+            ! destruct volumes
+            call killrecvols(b, p)
         endif
 
         ! destruct
@@ -268,6 +270,8 @@ contains
         integer              :: i, k, nsamp, alloc_stat
         type(kbinterpol)     :: kbwin
         if( p%vols(1) == '' )then
+            ! init volumes
+            call preprecvols(b, p)
             p%oritab = 'prime3D_startdoc.txt'
             call b%a%rnd_oris
             call b%a%zero_shifts
@@ -315,6 +319,7 @@ contains
             end do
             deallocate(sample)
             call norm_struct_facts(b, p)
+            call killrecvols(b, p)
         endif
     end subroutine gen_random_model
 

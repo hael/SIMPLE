@@ -13,7 +13,7 @@ use simple_masker        ! use all in there
 implicit none
 
 public :: read_img_from_stk, set_bp_range, set_bp_range2D,grid_ptcl, prepimg4align, eonorm_struct_facts,&
-&norm_struct_facts, preprefvol, prep2Dref, preprecvols
+&norm_struct_facts, preprefvol, prep2Dref, preprecvols, killrecvols
 private
 
 logical, parameter :: DEBUG     = .false.
@@ -373,6 +373,23 @@ contains
             end do
         endif
     end subroutine preprecvols
+
+    !>  \brief  destructs all volumes for reconstruction
+    subroutine killrecvols( b, p )
+        class(build),   intent(inout) :: b
+        class(params),  intent(inout) :: p
+        integer :: istate
+        if( p%eo .eq. 'yes' )then
+            do istate = 1, p%nstates
+                call b%eorecvols(istate)%kill
+            end do
+        else
+            do istate = 1, p%nstates
+                call b%recvols(istate)%dealloc_rho
+                call b%recvols(istate)%kill
+            end do
+        endif
+    end subroutine killrecvols
 
     !>  \brief  prepares one volume for references extraction
     subroutine preprefvol( b, p, cline, s, doexpand )
