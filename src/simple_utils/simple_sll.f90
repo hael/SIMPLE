@@ -39,7 +39,7 @@ type sll
     procedure, private :: assign
     generic :: assignment(=) => assign
     procedure :: append
-    procedure :: print
+    procedure :: display
     procedure :: size
     procedure :: kill
 end type sll
@@ -227,7 +227,7 @@ contains
     end function append
   
     !>  \brief  is for printing
-    subroutine print( self )
+    subroutine display( self )
         class(sll), intent(in)  :: self
         type(sll_node), pointer :: curr
         integer                 :: pos
@@ -237,10 +237,10 @@ contains
         do while( associated( curr ) )
           pos = pos+1
           write( *,* ) 'DATA IN NODE: ', pos
-          call curr%content%print
+          call curr%content%display
           curr => curr%next
         end do
-    end subroutine print
+    end subroutine display
     
     !>  \brief  returns the size of the list
     pure function size( self ) result( list_size )

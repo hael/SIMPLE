@@ -16,14 +16,14 @@
 !! license terms ( http://license.janelia.org/license/jfrc_copyright_1_1.html )
 !!
 module simple_imgfile
-use simple_filehandling
-use simple_imghead
-use simple_defs
-use gnufor2
-implicit none
+    use simple_defs
+    use simple_filehandling
+    use simple_imghead
+    use gnufor2
+    implicit none
 
-public :: imgfile
-private
+    public :: imgfile
+    private
 #include "simple_local_flags.inc"
 
 type imgfile
@@ -54,7 +54,7 @@ contains
     procedure          :: wHead
     procedure          :: rwSlices
     ! GETTERS, SETTERS, PRINTERS
-    procedure          :: print
+    procedure          :: print_imgfile
     procedure          :: getDims
     procedure          :: getDim
     procedure          :: getFname
@@ -66,11 +66,8 @@ contains
     procedure          :: setRMSD
     procedure          :: setMode
 end type imgfile
-
 contains
-
     ! CONSTRUCTOR
-
     !>  \brief  constructs an imgfile object (file-handle)
     subroutine open( self, fname, ldim, smpd, del_if_exists, formatchar, readhead, rwaction )
         use simple_jiffys, only: alloc_err
@@ -748,12 +745,12 @@ contains
     ! GETTERS, SETTERS, PRINTERS
 
     !>  \brief  Print out basic information about the file
-    subroutine print( self )
+    subroutine print_imgfile( self )
         class(imgfile), intent(in) :: self
         write(*,'(/2a)') 'Summary information for file ', trim(adjustl(self%fname))
         call self%overall_head%print_imghead()
         write(*,'(a)') ' '
-    end subroutine print
+    end subroutine print_imgfile
 
     !>  \brief  Return the dimension of the image stack
     function getDims( self )

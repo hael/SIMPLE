@@ -619,7 +619,7 @@ contains
                     call ioimg%open(fname, self%ldim, self%smpd, formatchar=formatchar, readhead=readhead, rwaction=rwaction)
                     if( debug )then
                         write(*,*) '**** DEBUG **** file info right after opening the file'
-                        call ioimg%print
+                        call ioimg%print_imgfile()
                     endif
                     ! data type: 0 image: signed 8-bit bytes rante -128 to 127
                     !            1 image: 16-bit halfwords
@@ -632,13 +632,13 @@ contains
                     call ioimg%open(fname, self%ldim, self%smpd, formatchar=formatchar, readhead=readhead, rwaction=rwaction)
                     if( debug )then
                         write(*,*) '**** DEBUG **** file info right after opening the file'
-                        call ioimg%print
+                        call ioimg%print_imgfile()
                     endif
                 case('S')
                     call ioimg%open(fname, self%ldim, self%smpd, formatchar=formatchar, readhead=readhead, rwaction=rwaction)
                     if( debug )then
                         write(*,*) '**** DEBUG **** file info right after opening the file'
-                        call ioimg%print
+                        call ioimg%print_imgfile()
                     endif
             end select
         else

@@ -14,7 +14,7 @@ type :: arr
     generic   :: assignment(=) => new_1, new_2
     procedure :: iget
     procedure :: rget
-    procedure :: print
+    procedure :: display
     procedure :: kill
 end type arr
 
@@ -54,11 +54,11 @@ contains
         endif
     end function
     
-    subroutine print( self )
+    subroutine display( self )
         class(arr), intent(in) :: self 
         if( allocated(self%iarr) ) print *, self%iarr
         if( allocated(self%rarr) ) print *, self%rarr
-    end subroutine
+    end subroutine display
     
     subroutine kill( self )
         class(arr), intent(inout) :: self

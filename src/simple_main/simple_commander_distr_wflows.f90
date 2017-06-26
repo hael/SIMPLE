@@ -1386,7 +1386,7 @@ contains
         ! order_inds  = sym_os%order_corr()
         ! symaxis_ori = sym_os%get_ori(order_inds(1))
         ! write(*,'(A)') '>>> FOUND SYMMETRY AXIS ORIENTATION:'
-        ! call symaxis_ori%print
+        ! call symaxis_ori%display()
         ! ! sort the output
         ! call sym_os_ordered%new(comlin_srch_nproj)
         ! do i=1,comlin_srch_nproj
@@ -1412,7 +1412,7 @@ contains
         order_inds  = sym_os%order_corr()
         symaxis_ori = sym_os%get_ori(order_inds(1))
         write(*,'(A)') '>>> FOUND SYMMETRY AXIS ORIENTATION:'
-        call symaxis_ori%print
+        call symaxis_ori%display()
         call sym_os_ordered%new(sym_os%get_noris())
         do i = 1, sym_os%get_noris()
             o = sym_os%get_ori(order_inds(i))

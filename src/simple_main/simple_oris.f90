@@ -83,7 +83,7 @@ type :: oris
     procedure          :: ang_sdev
     procedure          :: stochastic_weights
     procedure          :: included
-    procedure          :: print
+    procedure          :: print_
     procedure          :: print_chash_sizes
     procedure          :: print_mats
     ! SETTERS
@@ -1199,11 +1199,11 @@ contains
     end function included
     
     !>  \brief  is for printing
-    subroutine print( self, i )
+    subroutine print_( self, i )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: i
-        call self%o(i)%print
-    end subroutine print
+        call self%o(i)%display()
+    end subroutine print_
 
     !>  \brief  is for printing
     subroutine print_chash_sizes( self )
@@ -3404,17 +3404,17 @@ contains
             call os%rnd_oris(5.)
             write(*,*) '********'
             do i=1,100
-                call os%print(i)
+                call os%print_(i)
             end do
             call os2%rnd_oris(5.)
             write(*,*) '********'
             do i=1,100
-                call os2%print(i)
+                call os2%print_(i)
             end do
             ! call os%merge(os2)
             ! write(*,*) '********'
             ! do i=1,200
-            !     call os%print(i)
+            !     call os%print_(i)
             ! end do
         endif
         write(*,'(a)') '**info(simple_oris_unit_test, part2): testing assignment'
@@ -3472,7 +3472,7 @@ contains
         order = os%order()
         if( doprint )then
             do i=1,100
-                call os%print(order(i))
+                call os%print_(order(i))
             end do
             write(*,*) 'median:', os%median('lp')
         endif

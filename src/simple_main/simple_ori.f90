@@ -78,7 +78,7 @@ type :: ori
     procedure          :: ori2str
     ! PRINTING & I/O
     procedure          :: print_mat
-    procedure          :: print
+    procedure          :: display
     procedure          :: write
     procedure          :: read
     ! CALCULATORS
@@ -580,11 +580,11 @@ contains
     !>  \brief  prints oris data based on the existence of intent(in) character strings whose variable names are
     !! equivalent to the variables contained in the align derived type. The input character variables are printed
     !! first, preceeding printing of their associated value (key-value style for simple parsing of data)
-    subroutine print( self )
+    subroutine display( self )
         class(ori), intent(inout) :: self
-        call self%htab%print
+        call self%htab%print()
         call self%chtab%print_key_val_pairs
-    end subroutine print
+    end subroutine display
 
     !>  \brief  writes orientation info
     subroutine write( self, fhandle )
