@@ -317,12 +317,12 @@ contains
             call b%a%rot(symaxis)
             ! symmetry
             call rec_vol(p, b%se)
-            symvol = b%vol
+            call symvol%copy( b%vol )
             ! call symvol%write('sym_vol'//int2str_pad(i,2)//p%ext)
             ! c1
             rotmat = symaxis%get_mat()
             call o%ori_from_rotmat(transpose(rotmat))
-            b%vol = rotvol(asym_vol, o, p)
+            call b%vol%copy( rotvol(asym_vol, o, p) )
             call b%vol%bp(p%hp, p%lp)
             call b%vol%mask(p%msk, 'soft')
             ! call b%vol%write('asym_vol'//int2str_pad(i,2)//p%ext)

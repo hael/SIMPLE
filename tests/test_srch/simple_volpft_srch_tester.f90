@@ -65,7 +65,7 @@ contains
         call vol_tmp%new([p%box,p%box,p%box], p%smpd)
         call vol_tmp%read(p%vols(1))
         call ranori%rnd_ori
-        b%vol = rotvol(vol_tmp, ranori, p)
+        call b%vol%copy( rotvol(vol_tmp, ranori, p))
         call b%vol%write('vol_target_1.mrc')
         call b%vol%add_gauran(SNR)
         call b%vol%write('vol_target_2.mrc')

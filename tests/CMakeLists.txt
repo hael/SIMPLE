@@ -7,7 +7,6 @@ list(APPEND TESTDIRS
   test_binomial_para
   test_cartcorr_sanity
   test_defocus_groups
-  test_elem_bess
   test_ft_expanded
   test_imgfile
   test_install
@@ -21,8 +20,7 @@ list(APPEND TESTDIRS
   test_speed
   test_srch
   test_timer
-  test_units
-  test_volpft_srch )
+  test_units )
 
 
 foreach(TESTNAME ${TESTDIRS})

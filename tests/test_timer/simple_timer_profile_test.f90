@@ -33,12 +33,20 @@ contains
       b = 1.5
       xx = 12.0_dp
       if (be_verbose) print *, 'Fortran Timer and Profiler'
+#ifdef PGI
+      print *, 'PGI cannot process block statements'
+      stop
+#else
 
       call reset_timer()
       if (be_verbose) write (*, "(A)") ' '
       if (be_verbose) write (*, '(A)') '1.  Testing profiler using macros inside loop'
       c = .1
+#ifndef Intel
       TPROFILER(nrep, i, foo, bar)
+#else
+      TPROFILER(nrep, i, 2, foo bar)
+#endif
       do i = 1, nrep
          TBEG(foo)
          c = cfac*c + b
@@ -55,7 +63,32 @@ contains
       if (be_verbose) write (*, "(A)") ' '
       if (be_verbose) write (*, '(A)') '2.  Testing profiler using macros and seperate loops'
       c = .1
+#ifndef Intel
       TPROFILER(1, i, standard, subrout, common, empty)
+#else
+      TPROFILER(nrep, i, 2, foo bar)
+#endif
+      do i = 1, nrep
+         TBEG(foo)
+         c = cfac*c + b
+         TEND(foo)
+         TBEG(bar)
+         c = cfac*c + b
+         TEND(bar)
+         if (mod(nrep, nrep/1000) .eq. 1) print *, 'Repetition ', i
+
+      end do
+      TREPORT( Testing profiler using macros )
+
+      call reset_timer()
+      if (be_verbose) write (*, "(A)") ' '
+      if (be_verbose) write (*, '(A)') '2.  Testing profiler using macros and seperate loops'
+      c = .1
+#ifndef Intel
+      TPROFILER(1, i, standard, subrout, common, empty)
+#else
+      TPROFILER(1, i, 4, standard subrout common empty)
+#endif
       TBEG(standard)
       do i = 1, nrep
          c = cfac*c + b
@@ -82,7 +115,7 @@ contains
       TEND(empty)
 
       TREPORT( Testing different loop unrolling methods)
-
+#endif
    end subroutine exec_profiletest
 
    function saxy(c_in) result(c)

@@ -61,7 +61,7 @@ endif()
     #
   elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
     # pgfortran
-    set(dialect  "-Mpreprocess -Mfreeform  -Mstandard -Mallocatable=03")
+    set(dialect  "-Mpreprocess -Mfreeform  -Mstandard -Mallocatable=03 -Mextend")
     set(checks   "-Mdclchk  -Mchkptr -Mchkstk  -Munixlogical -Mlarge_arrays -Mflushz -Mdaz -Mfpmisalign")
     set(warn     "-Minform=warn")
     # bounds checking cannot be done in CUDA fortran or OpenACC GPU

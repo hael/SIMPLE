@@ -73,7 +73,7 @@ contains
         real               :: x, y
         integer            :: n, fnum, ier, i, alloc_stat, ldim(3)
         logical            :: err
-#include "simple_local_flags.inc"  ! logical, parameter :: debug=.false.
+#include "simple_local_flags.inc" 
         call find_ldim_nptcls(fnameStack, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'make_pattern_stack' )

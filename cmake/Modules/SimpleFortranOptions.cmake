@@ -19,16 +19,15 @@ else()
   endif()
 endif()
 
-set (CLANG_FAIL_MSG  "FATAL ERROR: SIMPLE cannot support Clang.
+set (CLANG_FAIL_MSG  "FATAL ERROR: SIMPLE cannot support Clang Preprocessor.
 Set FC,CC, and CPP environment variables to GNU compilers, e.g. in bash:
 export FC=/sw/bin/gfortran
 export CC=/sw/bin/gcc
 export CPP=/sw/bin/cpp-5
 
 Clang has overridden Gfortran links /usr/bin/gfortran GRRR!
-In PATH prepend  /usr/local/bin (Homebrew) or /opt/local/bin (MacPorts) or /sw/bin (FINK)
+Make sure you prepend  /usr/local/bin (Homebrew) or /opt/local/bin (MacPorts) or /sw/bin (FINK) to PATH.
 In LD_LIBRARY_PATH prepend the appropriate lib path.
-OR set FC, CC CPP variables with absolute paths.
     ")
 
 if(APPLE)
@@ -234,7 +233,7 @@ if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" ) #AND Fortran_COMPILER_NAME MAT
   set(CMAKE_Fortran_FLAGS                "${CMAKE_Fortran_FLAGS_RELEASE_INIT} ${EXTRA_FLAGS} ")
   # set(CMAKE_Fortran_FLAGS_DEBUG          "${CMAKE_Fortran_FLAGS_DEBUG_INIT} -O0 -g3 -Warray-bounds -Wcharacter-truncation -Wline-truncation -Wimplicit-interface -Wimplicit-procedure -Wunderflow -Wuninitialized -fcheck=all -fmodule-private -fbacktrace -dump-core -finit-real=nan " CACHE STRING "" FORCE)
   # set(CMAKE_Fortran_FLAGS_MINSIZEREL     "-Os ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
-  set(CMAKE_Fortran_FLAGS_RELEASE        "-O3 ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
+  set(CMAKE_Fortran_FLAGS_RELEASE        " ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
   set(CMAKE_Fortran_FLAGS_RELWITHDEBINFO "${CMAKE_Fortran_FLAGS_RELEASE_INIT} ${CMAKE_Fortran_FLAGS_DEBUG_INIT}")
   
   # #  CMAKE_EXE_LINKER_FLAGS
@@ -295,11 +294,12 @@ elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR Fortran_COMPILER_NAME MATC
   set(EXTRA_FLAGS "${EXTRA_FLAGS} -Mpreprocess -module ${CMAKE_Fortran_MODULE_DIRECTORY} -I${CMAKE_Fortran_MODULE_DIRECTORY}")
   # NVIDIA PGI Linux compiler
   set(CMAKE_CPP_COMPILER                "pgcc -E ")
+  set(CMAKE_CPP_COMPILER_FLAGS                " ")
   set(CMAKE_Fortran_FLAGS                "${CMAKE_Fortran_FLAGS_INIT} ${EXTRA_FLAGS}")
-  # set(CMAKE_Fortran_FLAGS_DEBUG          "${CMAKE_Fortran_FLAGS_DEBUG_INIT} -Minfo -Minform -Mneginfo")
+  set(CMAKE_Fortran_FLAGS_DEBUG          "${CMAKE_Fortran_FLAGS_DEBUG_INIT} ")
   # set(CMAKE_Fortran_FLAGS_MINSIZEREL     "${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
-  # set(CMAKE_Fortran_FLAGS_RELEASE        "-O3  ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
-  # set(CMAKE_Fortran_FLAGS_RELWITHDEBINFO "-gopt ${CMAKE_Fortran_FLAGS_RELEASE_INIT} -Mneginfo=all")
+  set(CMAKE_Fortran_FLAGS_RELEASE        "${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
+  set(CMAKE_Fortran_FLAGS_RELWITHDEBINFO "-gopt ${CMAKE_Fortran_FLAGS_RELEASE_INIT} -Mneginfo=all")
   # set(CMAKE_EXE_LINKER_FLAGS             "${CMAKE_EXE_LINKER_FLAGS_INIT} -acclibs -cudalibs -Mcudalib=cufft,curand")
   # #  CMAKE_SHARED_LINKER_FLAG
 

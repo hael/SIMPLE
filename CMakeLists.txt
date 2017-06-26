@@ -101,8 +101,11 @@ set(SIMPLELIB "SIMPLE${${PROJECT_NAME}_VERSION}")
 
 # Define some directories
 set(SRC ${CMAKE_SOURCE_DIR}/src)
+set(SCRIPTS ${CMAKE_SOURCE_DIR}/scripts)
 set(LIB ${CMAKE_BINARY_DIR}/lib)
 set(BIN ${CMAKE_BINARY_DIR}/bin)
+set(SCRP_BIN ${CMAKE_BINARY_DIR}/scripts)
+
 set(EXESRC ${CMAKE_SOURCE_DIR}/production/simple)
 include_directories(${CMAKE_SOURCE_DIR}/src/inc)
 
@@ -133,6 +136,12 @@ set(EXTRA_LIBS
 # The source for the SIMPLE binary and have it placed in the bin folder
 #################################################################
 add_subdirectory(${EXESRC} ${BIN})
+
+#################################################################
+# The script folder contains some handy perl scripts for running SIMPLE
+#################################################################
+add_subdirectory(${SCRIPTS} ${SCRP_BIN})
+
 
 if (${PROJECT_NAME}_BUILD_TESTS)
   add_subdirectory(tests)

@@ -11,8 +11,6 @@
 #ifndef SIMPLE_TIMER_H
 #define SIMPLE_TIMER_H
 
-
-
 /*  getting into ## preprocessor magic */
 #define CAT(prefix, suffix)            prefix ## suffix
 #define _UNIQUE_LABEL(prefix, suffix)  CAT(prefix, suffix)
@@ -38,7 +36,7 @@
   tn=tic();np=NLOOPS;                      \
   call timer_profile_setup(np,nv,p_tokens);
 
-#else  ! No STDC
+#else  
 
 #define TPROFILER(NLOOPS,IDX,NTOKENS,TOKENS) \
  block;                                      \
@@ -50,8 +48,8 @@
  character(255)::p_tokens= #TOKENS;          \
  tn=tic();np=NLOOPS;                         \
  call timer_profile_setup(np,nv,p_tokens);
-#endif  ! __STDC__
-
+#endif 
+  /* __STDC__  */
 
 #define TBEG(TOKEN) p_tmp = #TOKEN; \
  call timer_profile_start(trim(p_tmp))
@@ -86,18 +84,28 @@ end block
 #define TBREAK(TSTRING)                         \
   write(*,'(A,A,1i4,A,A,F20.10)') __FILE__,":",__LINE__,TSTRING," time (sec)" toc()
 
-
+#ifndef PGI
 #define START_TIMER_LOOP(NLOOP)  \
-  block;character(len=80) :: cblock;\
+  block;\
+  character(len=80) :: cblock;      \
   call timer_loop_start(NLOOP);     \
 do
-
 
 #define STOP_TIMER_LOOP_(COMMENT) \
   if (.not.in_timer_loop()) exit; \
   end do; \
   cblock=trim(COMMENT); \
   call timer_loop_end(trim(cblock));end block
+#else
+#define START_TIMER_LOOP(NLOOP)                 \
+  call timer_loop_start(NLOOP);                 \
+  do
+
+#define STOP_TIMER_LOOP_(COMMENT)               \
+  if (.not.in_timer_loop()) exit;               \
+  end do;                                       \
+  call timer_loop_end(#COMMENT)
+#endif
 
 
 /*   write(*,'(A,A,1i4)') __FILE__,":",__LINE__;   */
@@ -113,7 +121,7 @@ call timer_loop_end(cblock);end block
 
 
 
-#ifdef OPENMP
+#if defined(OPENMP) || defined(_OPENMP)
 
 #define TBLOCKOMP()                             \
   print *,"Start timer: ", ticOMP()
