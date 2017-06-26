@@ -124,7 +124,7 @@ contains
         else
             call xprime2D%execute(cline)
         endif
-        call cline_rank_cavgs%print
+        call cline_rank_cavgs%printline
         ! ranking
         call cline_rank_cavgs%set('oritab', trim(FINALDOC))
         call cline_rank_cavgs%set('stk',    'cavgs_final'//p_master%ext)

@@ -627,21 +627,21 @@ contains
                     endif
                 end do
                 self%nz       = spihed(1)
-                if( debug ) write(*,*) '(imghead::read) nz: ', self%nz
+                DebugPrint( ' nz: ', self%nz)
                 self%ny       = spihed(2)
-                if( debug ) write(*,*) '(imghead::read) ny: ', self%ny
+                DebugPrint( ' ny: ', self%ny)
                 self%irec     = spihed(3)
                 self%iform    = spihed(5)
-                if( debug ) write(*,*) '(imghead::read) iform: ', self%iform
+                DebugPrint(  ' iform: ', self%iform)
                 self%imami    = spihed(6)
                 self%fmax     = spihed(7)
                 self%fmin     = spihed(8)
                 self%av       = spihed(9)
                 self%sig      = spihed(10)
                 self%nx       = spihed(12)
-                if( debug ) write(*,*) '(imghead::read) nx: ', self%nx
+                DebugPrint( ' nx: ', self%nx)
                 self%labrec   = spihed(13)
-                if( debug ) write(*,*) '(imghead::read) labrec: ', self%labrec
+                DebugPrint( ' labrec: ', self%labrec)
                 self%iangle   = spihed(14)        
                 self%phi      = spihed(15)
                 self%theta    = spihed(16)
@@ -651,9 +651,9 @@ contains
                 self%zoff     = spihed(20)
                 self%scale    = spihed(21)
                 self%labbyt   = spihed(22)
-                if( debug ) write(*,*) '(imghead::read) labbyt: ', self%labbyt
+                DebugPrint() ' labbyt: ', self%labbyt
                 self%lenbyt   = spihed(23)
-                if( debug ) write(*,*) '(imghead::read) lenbyt: ', self%lenbyt
+                DebugPrint() ' lenbyt: ', self%lenbyt
                 self%istack   = spihed(24)               
                 self%maxim    = spihed(26)
                 self%imgnum   = spihed(27)
@@ -689,7 +689,7 @@ contains
             class DEFAULT
                 stop 'Format not supported; print; simle_imghead'
         end select
-        if( debug ) write(*,*) '(imghead::read) done'
+        DebugPrint( '(imghead::read) done')
     end subroutine
 
     !>  \brief write header data to disk
@@ -713,9 +713,9 @@ contains
             type is( SpiImgHead )
                 spihed = 0.
                 spihed(1)  = self%nz
-                if( debug ) write(*,*) '(imghead::write) nz: ', spihed(1)
+                DebugPrint( '::write nz: ', spihed(1) )
                 spihed(2)  = self%ny
-                if( debug ) write(*,*) '(imghead::write) ny: ', spihed(2)
+                DebugPrint( '::write ny: ', spihed(2) )
                 spihed(3)  = self%irec
                 spihed(5)  = self%iform
                 spihed(6)  = self%imami
@@ -724,9 +724,9 @@ contains
                 spihed(9)  = self%av
                 spihed(10) = self%sig
                 spihed(12) = self%nx
-                if( debug ) write(*,*) '(imghead::write) nx: ', spihed(12)
+                DebugPrint( '::write nx: ', spihed(12))
                 spihed(13) = self%labrec
-                if( debug ) write(*,*) '(imghead::write) labrec: ', spihed(13)
+                DebugPrint( '::write labrec: ', spihed(13))
                 spihed(14) = self%iangle
                 spihed(15) = self%phi
                 spihed(16) = self%theta
@@ -736,9 +736,9 @@ contains
                 spihed(20) = self%zoff
                 spihed(21) = self%scale
                 spihed(22) = self%labbyt
-                if( debug ) write(*,*) '(imghead::write) labbyt: ', spihed(22)
+                DebugPrint( '::write labbyt: ', spihed(22))
                 spihed(23) = self%lenbyt
-                if( debug ) write(*,*) '(imghead::write) lenbyt: ', spihed(23)
+                DebugPrint( '::write lenbyt: ', spihed(23))
                 spihed(24) = self%istack
                 spihed(26) = self%maxim
                 spihed(27) = self%imgnum
@@ -843,7 +843,7 @@ contains
         ! Take the bit pattern over from the 4byte integer to an array of 4 characters (each 1 byte)
         ich = transfer(i,ich)
         if( ich .eq. '0123' )then
-            if (debug) write(*,'(a)') '**debug(getLocalMachineStamp): machine is little-endian (dec/osf, intel, amd ...)'
+            DebugPrint( '**debug(getLocalMachineStamp): machine is little-endian (dec/osf, intel, amd ...)')
             !0100 0100
             machst(1)=68
             !0100 0001
@@ -851,7 +851,7 @@ contains
             machst(3)=0
             machst(4)=0
         elseif (ich.eq.'3210') then
-            if (debug) write(*,'(a)') '**debug(getLocalMachineStamp): machine is big-endian (sgi, sun, hp, ibm)'
+            DebugPrint( '**debug(getLocalMachineStamp): machine is big-endian (sgi, sun, hp, ibm)')
             !0001 0001
             machst(1)=17
             !0001 0001
@@ -859,7 +859,7 @@ contains
             machst(3)=0
             machst(4)=0
         else
-            if (debug) write(*,'(a)') '**debug(getLocalMachineStamp): mixed endianity machine (vax)'
+            DebugPrint( '**debug(getLocalMachineStamp): mixed endianity machine (vax)')
             !0010 0010
             machst(1)=34
             !0010 0001

@@ -1,67 +1,74 @@
-cmake_minimum_required(VERSION 3.2 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.5 FATAL_ERROR)
+set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 include("${CMAKE_SOURCE_DIR}/cmake/Modules/FortranOverride.cmake")
-project(SIMPLE LANGUAGES Fortran)
+
+
+project(SIMPLE Fortran)
+#enable_language( CXX C )
+#include(${CMAKE_SOURCE_DIR}/cmake/Modules/GenericLogging.cmake)
 
 #################################################################
-# VERSION and the Shared lib SOVERSION
+# VERSION 
 #################################################################
 
 set(${PROJECT_NAME}_VERSION 2.5)
 set(${PROJECT_NAME}_SOVERSION 2.5)
-
-#################################################################
-# DEFINE PATHS
-#################################################################
-set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR})
-# Add our local modules to the module path
-set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/Modules/")
-
-#################################################################
-# BUILD PATHS
-#################################################################
-set(SRC_PATH ${CMAKE_SOURCE_DIR}/src)
-set(LIB_SRC_PATH ${SRC_PATH}/lib)
-set(TEST_SRC_PATH ${SRC_PATH}/test)
-set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/lib)
-set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
-set(CMAKE_Fortran_MODULE_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
-include_directories(${CMAKE_Fortran_MODULE_DIRECTORY})
-
-#################################################################
-# CONFIGURATION TYPES & BUILD MODE
-#################################################################
-set(CMAKE_CONFIGURATION_TYPES DEBUG RELEASE)
-if(NOT CMAKE_BUILD_TYPE)
-  set(CMAKE_BUILD_TYPE RELEASE CACHE STRING
-    "Choose the type of build, options are: NONE DEBUG RELEASE"
-    FORCE)
-  set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS NONE DEBUG RELEASE)
-endif(NOT CMAKE_BUILD_TYPE)
+set(PROJECT_BRIEF "SIMPLE is a program package for cryo-EM image processing, focusing on ab initio 3D reconstruction of single-particles with any point-group symmetry")
 
 #################################################################
 # OPTIONS
 #################################################################
-
 # Set some options the user may choose
-# Uncomment the below if you want the user to choose a parallelization library
-# OPTION(USE_MPI "Use the MPI library for parallelization" OFF)
-option(USE_OPENMP "Use OpenMP for parallelization" ON)
-option(USE_CUDA "GPU parallelisation" OFF)
-option(BUILD_TESTS "Build the test examples" ON)
-option(BUILD_GUI "Build the simple GUI" OFF)
-option(BUILD_SHARED_LIBS "Build the simple library as shared" ON)
+option(USE_OPENMP "Use OpenMP for parallelization - debugging may disable OpemMP" ON)
+option(USE_OPENACC "Use OpenACC for auto GPU parallelization - debugging may disable OpemMP" ON)
+option(USE_CUDA "GPU NVIDIA - in development" OFF)
+option(${PROJECT_NAME}_BUILD_TESTS "Build the test examples" ON)
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/gui)
+option(${PROJECT_NAME}_BUILD_GUI "Build the simple GUI - not included in release2.5" OFF)
+endif()
+option(BUILD_SHARED_LIBS "Build the simple library as shared (default) or static" ON)
+option(ENABLE_LINK_TIME_OPTIMISATION "Enable link-time optimisation" OFF)
+OPTION(ENABLE_FAST_MATH_OPTIMISATION "Optimize code for fastmath." OFF)
+OPTION(ENABLE_PROFILE_OPTIMISATION "Optimize code for PFO." OFF)
+OPTION(ENABLE_AUTO_PARALLELISE "Optimize code for parallel systems." OFF)
+#flags for optimization level. You can only turn one of following option to ON, or leave all of them to OFF.
+OPTION(ENABLE_PROFILING "enable symbol generation without debug support" OFF)
+option(CPACK_GENERATOR "Enable build of distribution packages using CPack" OFF)
+#OPTION(ENABLE_OPTIMIZE_MACHINE "Optimize code for this specific computer (typ 5-10% speedup). Binaries may incompatible with some other computers." OFF)
+#OPTION(ENABLE_OPTIMIZE_PHI "Optimize code for the Intel compiler on the PHI" OFF)
+#OPTION(ENABLE_OPTIMIZE_WINDOWS_VC "Windows visual c++ specific optimization" OFF)
+if (APPLE)
+IF(CMAKE_SYSTEM MATCHES "Darwin-12*")
+        OPTION(ENABLE_OPTIMIZE_MOUNTAIN_LION "enable OSX 10.8/9 support" ON)
+ELSE(CMAKE_SYSTEM MATCHES "Darwin-12*")
+        OPTION(ENABLE_OPTIMIZE_MOUNTAIN_LION "enable OSX 10.8/9 support" OFF)
+ENDIF(CMAKE_SYSTEM MATCHES "Darwin-12*")
+endif()
 
-option(LINK_TIME_OPTIMISATION "Enable link-time optimisation" OFF)
+
 
 #################################################################
 # SET default flags
 #################################################################
+include(GNUInstallDirs)
 set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR})
+# Add our local modules to the module path
+set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/Modules/")
+set(SRC_PATH ${CMAKE_SOURCE_DIR}/src)
+set(LIB_SRC_PATH ${SRC_PATH}/lib)
+set(TEST_SRC_PATH ${SRC_PATH}/test)
+set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/lib)
+# Have the exec files placed in the bin folder
+set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
+# Have the .mod files placed in the lib folder
+set(CMAKE_Fortran_MODULE_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
+include_directories(${CMAKE_Fortran_MODULE_DIRECTORY})
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(EXTRA_LIBS "")
 set(NUM_JOBS 1)
 include(ProcessorCount)
 ProcessorCount(NUM_JOBS)
+set(BUILD_NAME ${CMAKE_Fortran_COMPILER_ID}_${CMAKE_BUILD_TYPE} CACHE STRING "Build name with compiler, type and FFT backend ")
 
 #################################################################
 # INCLUDES
@@ -70,29 +77,25 @@ ProcessorCount(NUM_JOBS)
 # include(CMakeAddFortranSubdirectory)
 # include(CMakeGraphVizOptions)
 include(CheckIncludeFiles)
-include("${CMAKE_SOURCE_DIR}/cmake/Modules/FortranOverride.cmake")
 include(${CMAKE_MODULE_PATH}/SimpleFortranOptions.cmake)
-#INCLUDE(${CMAKE_MODULE_PATH}/SetFortranFlags.cmake) 
-include(${CMAKE_MODULE_PATH}/SetParallelizationLibrary.cmake)
-# Setup the LAPACK libraries.  This also takes care of peculiarities, such as
-# the fact the searching for MKL requires a C compiler, and that the results
-# are not stored in the cache. 
-#INCLUDE(${CMAKE_MODULE_PATH}/SetUpLAPACK.cmake)
 
-# There is an error in CMAKE with this flag for pgf90.  Unset it
-get_filename_component(FCNAME ${CMAKE_Fortran_COMPILER} NAME)
-if(FCNAME STREQUAL "pgf90")
-    unset(CMAKE_SHARED_LIBRARY_LINK_Fortran_FLAGS)
-endif(FCNAME STREQUAL "pgf90")
 
 ############################################################
-# Define the actual files and folders that make up the build
+# Add definition macros to compilation
 ############################################################
+add_definitions(-DBUILD_NAME=${BUILD_NAME})
+# use _DEBUG since DEBUG or debug is used as a variable in some files
+# _DEBUG is defined by Intel Fortran on Windows 
+if(CMAKE_BUILD_TYPE STREQUAL "DEBUG")
+  add_definitions("-D_DEBUG") 
+endif()
 
-# Define the executable name
+############################################################
+# Define the main targets
+############################################################
+# Define the executable names
 set(SIMPLE_EXE simple_exec)
 set(SIMPLE_DISTR_EXE simple_distr_exec)
-
 # Define the library name lib<name>.so
 set(SIMPLELIB "SIMPLE${${PROJECT_NAME}_VERSION}")
 
@@ -105,7 +108,6 @@ include_directories(${CMAKE_SOURCE_DIR}/src/inc)
 
 # Have the .mod files placed in the lib folder
 set(CMAKE_Fortran_MODULE_DIRECTORY ${LIB})
-
 
 #   cmake_add_fortran_subdirectory(
 #    ${SRC}                  # name of subdirectory
@@ -131,22 +133,24 @@ set(EXTRA_LIBS
 # The source for the SIMPLE binary and have it placed in the bin folder
 #################################################################
 add_subdirectory(${EXESRC} ${BIN})
-if (BUILD_TESTS)
+
+if (${PROJECT_NAME}_BUILD_TESTS)
   add_subdirectory(tests)
 endif()
-#if (BUILD_GUI)
-#  add_subdirectory(gui ${BIN}/gui)
-#endif()
 
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/gui)
+if (${PROJECT_NAME}_BUILD_GUI)
+  add_subdirectory(gui ${BIN}/gui)
+endif()
+endif()
 
 #################################################################
 # ENABLE TESTING
 #################################################################
-#set(BUILDNAME ${CMAKE_Fortran_COMPILER_ID}_${CMAKE_BUILD_TYPE}_MKL=${${PROJECT_NAME}_ENABLE_MKL} CACHE STRING "Testing Intel MKL" )
-#if(${PROJECT_NAME}_ENABLE_TESTS)
-#  enable_testing()
-#  include(CTest)
-#endif()
+if(${PROJECT_NAME}_ENABLE_TESTS)
+  enable_testing()
+  include(CTest)
+endif()
 
 #################################################################
 # STATIC LIBRARIES
@@ -159,8 +163,13 @@ endif()
 #################################################################
 # Add a distclean target to the Makefile
 #################################################################
-add_custom_target(distclean 
+add_custom_target(distclean
     COMMAND ${CMAKE_COMMAND} -P ${CMAKE_MODULE_PATH}/distclean.cmake
 )
+include(CPack)
+include(${CMAKE_MODULE_PATH}/GenericLogging.cmake )
 
- include(${CMAKE_MODULE_PATH}/GenericLogging.cmake )
+#here we save a version file
+set(VERSION_FILE "${PROJECT_BINARY_DIR}/${PROJECTNAME}ConfigVersion.cmake")
+configure_file( "cmake/Modules/ProjectConfigVersion.cmake.in" ${VERSION_FILE} @ONLY )
+

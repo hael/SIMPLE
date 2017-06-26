@@ -3,7 +3,7 @@
 
 #+name: simple_logo
 #+attr_html: :width 600 :alt Single-particle CryoEM Image Processing Linux Engine :align center
-[[https://github.com/hael/SIMPLE3.0/blob/cmake-feature/gui/www/img/simple_logo.svg]]
+[[https://simplecyroem.com][https://github.com/hael/SIMPLE3.0/blob/cmake-feature/gui/www/img/simple_logo.svg]]
 
 #+name: banner
 #+attr_html: :width 300 :align center
@@ -11,11 +11,14 @@
 
 #+name: status
 #+attr_html:  :align center :width 500
-|                       | [[https://img.shields.io/badge/GNU-gfortran-blue.svg]]                                                    | [[https://img.shields.io/badge/Intel Fortran-ifort-blue.svg]] |
-| Ubuntu (14.10, 16.04) | [[https://img.shields.io/badge/build-v4.9-green.svg]] , [[https://img.shields.io/badge/build-v7.1-green.svg]] | [[https://img.shields.io/badge/build-v2017.2.174-green.svg]]  |
-| Centos (MASSIVE3)     | [[https://img.shields.io/badge/build-gcc5%20fftw3.3-green.svg]]                                           | [[https://img.shields.io/badge/build-intel/2016-green.svg]]   |
-| MacOSX (10.12)        | [[https://img.shields.io/badge/build-v4.9-green.svg]]                                                     | [[https://img.shields.io/badge/build-NA-gray.svg]]            |
-| Win                   | [[https://img.shields.io/badge/build-NA-gray.svg]]                                                        | [[https://img.shields.io/badge/build-NA-gray.svg]]           |
+#+caption: Developer -- Build success table
+|                       | GNU /gfortran/                                                                                        | Intel /ifort/                                            | Portland Group /pgfortran/                        |
+|-----------------------+-------------------------------------------------------------------------------------------------------+----------------------------------------------------------+---------------------------------------------------|
+| Ubuntu (14.10, 16.04) | [[https://img.shields.io/badge/build-v4.9-green.svg]] , [[https://img.shields.io/badge/build-v7.1-green.svg]] | [[https://img.shields.io/badge/build-v2017.2.174-green.svg]] | [[https://img.shields.io/badge/build-2016-green.svg]] |
+| Centos (MASSIVE3)     | [[https://img.shields.io/badge/build-gcc5%20fftw3.3-green.svg]]                                           | [[https://img.shields.io/badge/build-intel/2016-green.svg]]  | https://img.shields.io/badge/build-NA-gray.svg    |
+| MacOSX (10.12)        | [[https://img.shields.io/badge/build-v4.9-green.svg]]                                                     | [[https://img.shields.io/badge/build-NA-gray.svg]]           | https://img.shields.io/badge/build-NA-gray.svg    |
+| Win                   | [[https://img.shields.io/badge/build-NA-gray.svg]]                                                        | [[https://img.shields.io/badge/build-NA-gray.svg]]           | https://img.shields.io/badge/build-NA-gray.svg    |
+
 
 
 *Important Notices*
@@ -40,11 +43,10 @@ according to the ``Unix toolkit philosophy''.
 
 See [[https://simplecryoem.org/index.html][Simple homepage]] 
 
-
 ** Installation Options
 
-/Note/: Simple is designed for modern Fortran compilers, preferrably 2008+ compliant. It has been tested on Linux
-& macOS (OS X) only
+/Note/: Simple is designed for modern Fortran compilers, preferrably Fortran
+2008 compliant. It has been tested on Linux & macOS (OS X) only with GNU gfortran.
 
 *** Release Download
 
@@ -101,7 +103,8 @@ single and double precision libraries in the interactive =ccmake= or declare FFT
 #+END_SRC
 
 
-**** PGI Linux                                                          :noexport:
+
+**** PGI Linux                                        :noexport:
 
 Shell environment variables FC and LD_LIBRARY_PATH are crucial in the cmake
 build to determine the fortran compiler and for finding the FFTW3 libraries.
@@ -170,7 +173,6 @@ Create a unique directory in the SIMPLE source directory and build with cmake:
     make -j
 #+END_SRC
 
-
 **** Intel fortran
 
 Source the =ifortvars.sh= file from your Intel compiler source path
@@ -187,7 +189,6 @@ Source the =ifortvars.sh= file from your Intel compiler source path
 #+END_SRC sh
 
 
-
 **** MacOSX/Apple Clang                               :noexport:
 
 The GNU compiler is the preferred compiler.   
@@ -200,8 +201,7 @@ Building with clang and Ninja can be done as simple as:
     make -j
 #+END_SRC
 
-
-**** Windows/MinGW
+**** Windows/MinGW                                    :noexport:
 - ~Untested~
 Generate MinGW Makefiles and build with mingw32-make.exe:
 #+BEGIN_SRC sh
@@ -209,7 +209,7 @@ Generate MinGW Makefiles and build with mingw32-make.exe:
  mingw32-make.exe
 #+END_SRC
 
-**** Windows/MSVC 
+**** Windows/MSVC                                     :noexport:
 - ~Untested~
 Generate Visual Studio 12 Solution and build the ALL_BUILD target:
 #+BEGIN_SRC sh
@@ -222,7 +222,7 @@ Generate Visual Studio 12 Solution and build the ALL_BUILD target:
 
 *** Testing
 
-**** Test the core components                          :noexport:
+**** Unit testing with CTest                          :noexport:
 
 #+BEGIN_SRC sh
     # Testing
@@ -255,14 +255,14 @@ To run a typical test with 8 cores, use:
     ./simple_test_install nthr=8
 #+END_SRC
 
+
 ** Usage
 
-See  [[https://github.com/hael/SIMPLE3.0/doc/SimpleManual][User documentation]]
+Create user documentation with =make doc= or see [[http://simplecryoem.com/manuals.html][User documentation]] on the homepage.
 
 ** Contributing
 
 See [[file:doc/SimpleManual/simple3.0devel.tex][Developer Manual]]
-
 
 ** Changelog
 
@@ -276,3 +276,9 @@ Foundation, either version 3 of the license, or (at your option) any later
 version. SIMPLE is distributed with the hope that it will be useful, but WITHOUT
 ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the [[http://www.gnu.org/licenses/gpl-3.0.html][GPL v3 licence]] for more details.
+
+SIMPLE depends on FFTW which is liceneced under GPL ([[https://www.fftw.org][FFTW website]]).
+
+CTFFIND4 Copyright 2014 Howard Hughes Medical Institute
+ -  Use is subject to Janelia Farm Research Campus Software Copyright 1.1
+   license terms ( http://license.janelia.org/license/jfrc_copyright_1_1.html )
