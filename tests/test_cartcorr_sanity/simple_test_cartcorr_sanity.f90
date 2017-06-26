@@ -26,18 +26,18 @@ diff_old    = 0.
 diff_recast = 0.
 diff_corr   = 0. 
 do i=1,nits
-    if( local_debug ) print *, 'iteration: ', i
+    if( debug ) print *, 'iteration: ', i
     x           = real(nint(ran3()*2.0*TRS-TRS))
     y           = real(nint(ran3()*2.0*TRS-TRS))
-    if( local_debug ) print *, 'shifted:     ', x, y
+    if( debug ) print *, 'shifted:     ', x, y
     call img1%shift(x,y,imgout=img2)  
     cxy         = find_shift_old()
     old_corr    = cxy(1)
-    if( local_debug ) print *, 'neg(old):    ', -cxy(2:3)
+    if( debug ) print *, 'neg(old):    ', -cxy(2:3)
     diff_old    = diff_old+sum(abs(-cxy(2:3)-[x,y]))
     call ftexp2%new(img2,hp,lp)
     cxy         = find_shift_recast()
-    if( local_debug ) print *, 'neg(recast): ', -cxy(2:3)
+    if( debug ) print *, 'neg(recast): ', -cxy(2:3)
     diff_recast = diff_recast+sum(abs(-cxy(2:3)-[x,y]))
     diff_corr   = diff_corr+abs(old_corr-cxy(1))
 end do

@@ -15,6 +15,7 @@ implicit none
 public :: exec_volpft_srch_test
 private
 #include "simple_local_flags.inc"
+
 ! module global constants
 integer, parameter :: NTESTS=10, NPEAKS=3
 real,    parameter :: SNR=0.5, LPLIM=20.0, ROERR_LIM=2.0
@@ -24,7 +25,6 @@ type(params)    :: p
 type(build)     :: b
 type(projector) :: vol_ref
 type(cmdline)   :: cline_here
-logical         :: verbose=.false.
 
 contains
 

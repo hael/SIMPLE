@@ -14,7 +14,7 @@ implicit none
 
 public :: exec_prime2D_srch_test
 private
-
+#include "simple_local_flags.inc"
 ! module global constants
 integer,           parameter :: NPROJS      = 10
 character(len=32), parameter :: refsname    = 'prime2D_srch_test_refs.mrc'
@@ -29,7 +29,7 @@ type(params)             :: p
 type(oris)               :: o_refs, o_ptcls
 type(image), allocatable :: imgs_refs(:), imgs_ptcls(:)
 type(cmdline)            :: cline_here
-logical                  :: verbose=.true.
+
 
 contains
 
@@ -97,7 +97,7 @@ contains
         logical            :: assignments_correct(NPROJS)
         type(prime2D_srch) :: primesrch2D
         call primesrch2D%new(p, pftcc)
-        if( verbose ) write(*,*) 'testing primesrch2D :: greedy_srch in CPU mode'
+        VerbosePrint( 'testing primesrch2D :: greedy_srch in CPU mode')
         do iptcl=1,NPROJS
             call primesrch2D%prep4srch(pftcc, iptcl, b%a)
             call primesrch2D%greedy_srch(pftcc, iptcl, b%a)

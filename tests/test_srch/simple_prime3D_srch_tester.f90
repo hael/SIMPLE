@@ -16,7 +16,7 @@ implicit none
 public :: exec_prime3D_srch_test
 
 private
-
+#include "simple_local_flags.inc"
 ! module global constants
 integer,           parameter :: NPROJS      = 15
 integer,           parameter :: NSTATES     = 3
@@ -32,7 +32,7 @@ type(params)              :: p
 type(prime3D_srch)        :: primesrch3D
 type(oris)                :: o_ptcls
 type(image), allocatable  :: imgs_ptcls(:)
-logical                   :: verbose=.false.
+
 
 contains
 
@@ -119,14 +119,14 @@ contains
             call cline%set('vol3',cline%get_carg('vol1'))
             call cline%set('vol4',cline%get_carg('vol1'))
         endif
-        if( verbose )print *,'cline keys set'
+        VerbosePrint('cline keys set')
         ! generate orientations
         call o_ptcls%new(NPROJS)
         call o_ptcls%spiral
         !call o_ptcls%rnd_inpls
         call o_ptcls%set_all2single('lp',LPLIM)
         call o_ptcls%write( orisname )
-        if( verbose )print *,'orientations generated'
+        VerbosePrint( 'orientations generated' )
         ! create parameters and build
         p = params(cline)                     ! parameters generated
         ! instantiates builder
@@ -177,7 +177,7 @@ contains
         ! because of the use simple_hadamard3D_matcher statement in the top
         ! now instantiatable, so create it
         call primesrch3D%new(b%a, p, pftcc)
-        if( verbose )print *,'end setup_testenv'        
+        VerbosePrint( 'end setup_testenv' )
     end subroutine setup_testenv
 
     subroutine test_prep4srch
@@ -210,7 +210,7 @@ contains
             call b%a%set_ori(i,o_saved)
         enddo
         ! other cases
-        if( verbose )print *,'end setup_prep4srch'
+        VerbosePrint( 'end setup_prep4srch' )
     end subroutine test_prep4srch
 
     subroutine test_prepcorr4srch
@@ -256,7 +256,7 @@ contains
                 endif
             enddo
         endif
-        if( verbose )print *,'end setup_prepcorr4srch'
+        VerbosePrint( 'end setup_prepcorr4srch' )
     end subroutine test_prepcorr4srch
 
     subroutine test_sort_shifted_peaks
@@ -344,7 +344,7 @@ contains
             case DEFAULT
                 stop 'not implemented yet'
         end select
-        if( verbose )print *,'end prep_reforis'
+        VerbosePrint( 'end prep_reforis' )
     end subroutine test_prep_reforis
 
     subroutine shutdown_testenv

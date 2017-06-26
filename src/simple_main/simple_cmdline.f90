@@ -10,7 +10,7 @@ module simple_cmdline
   implicit none
 
   public :: cmdline
-!  private
+  private
 #include "simple_local_flags.inc"
   type cmdarg
      character(len=32) :: key=''

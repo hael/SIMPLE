@@ -88,7 +88,7 @@ if(DOXYGEN_FOUND)
             HINTS
             "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_ROOT}/Modules/"
             "${CMAKE_CURRENT_SOURCE_DIR}/config"
-            "${CMAKE_CURRENT_SOURCE_DIR}/cmake"
+            "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules"
             "${CMAKE_CURRENT_SOURCE_DIR}/doc" 
             NO_DEFAULT_PATH
             DOC "Path to the doxygen configuration template file")
