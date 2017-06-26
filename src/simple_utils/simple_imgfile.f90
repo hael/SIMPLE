@@ -150,7 +150,7 @@ contains
         else
             call self%overall_head%setPixSz(smpd)
         endif
-        if( debug ) call self%overall_head%print
+        if( debug ) call self%overall_head%print_imghead()
         ! The file-handle now exists
         self%existence = .true.
         DebugPrint  '(imgfile::new) constructed an imgfile object (file-handle)'
@@ -159,7 +159,7 @@ contains
     !>  \brief is forprinting the header
     subroutine print_header( self )
         class(imgfile), intent(in) :: self
-        call self%overall_head%print
+        call self%overall_head%print_imghead()
     end subroutine print_header
 
     ! CORE FUNCTIONALITY
@@ -751,7 +751,7 @@ contains
     subroutine print( self )
         class(imgfile), intent(in) :: self
         write(*,'(/2a)') 'Summary information for file ', trim(adjustl(self%fname))
-        call self%overall_head%print
+        call self%overall_head%print_imghead()
         write(*,'(a)') ' '
     end subroutine print
 

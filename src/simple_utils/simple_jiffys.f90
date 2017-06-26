@@ -110,7 +110,7 @@ contains
                     ldim = hed%getDims()
                     smpd = hed%getPixSz()
                     if( doprint )then
-                        call hed%print
+                        call hed%print_imghead
                         write(*,'(a,3(i0,1x))') 'Number of columns, rows, sections: ', ldim(1), ldim(2), ldim(3)
                         write(*,'(a,1x,f15.8)')  'Pixel size: ', smpd
                     endif
@@ -121,7 +121,7 @@ contains
                     open(unit=filnum, status='OLD', action='READ', file=fname, access='STREAM', convert='BIG_ENDIAN')
                     call hed%read(filnum)
                     close(filnum)
-                    if( doprint ) call hed%print
+                    if( doprint ) call hed%print_imghead
                 case DEFAULT
                     write(*,*) 'The inputted file is not an MRC file; get_mrcfile_info; simple_jiffys'
                     write(*,*) fname
