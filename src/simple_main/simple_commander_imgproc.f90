@@ -610,14 +610,14 @@ contains
         call b%build_general_tbox(p,cline,do3d=.false.) ! general stuff built
         call read_filetable(p%filetab, filenames)
         nfiles = size(filenames)
-        if( debug ) write(*,*) 'read the filenames'
+        DebugPrint  'read the filenames'
         if( cline%defined('xdim') .and. cline%defined('ydim') )then
             ldim = [p%xdim,p%ydim,1]
         else
             call find_ldim_nptcls(filenames(1),ldim,ifoo)
             ldim(3) = 1 ! to correct for the stupid 3:d dim of mrc stacks
         endif
-        if( debug ) write(*,*) 'logical dimension: ', ldim
+        DebugPrint  'logical dimension: ', ldim
         if( cline%defined('nframes') )then
             if( .not. cline%defined('fbody') ) stop 'need fbody (file body of output stacks) on the command line'
             if( mod(nfiles,p%nframes) .eq. 0 )then
@@ -671,7 +671,7 @@ contains
                     if( cline%defined('clip') )then
                         call b%img%clip(tmp)  
                         mm = tmp%minmax()
-                        if( debug ) print *, 'min/max: ', mm(1), mm(2)
+                        DebugPrint 'min/max: ', mm(1), mm(2)
                         call tmp%write(p%outstk, cnt)
                     else
                         call b%img%write(p%outstk, cnt)

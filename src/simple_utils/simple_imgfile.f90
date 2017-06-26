@@ -93,7 +93,7 @@ contains
         call self%close_nowrite
         ! Remove leading blanks in fname
         self%fname = adjustl(fname)
-        if( debug ) print *,  'trying to open: ', self%fname
+        DebugPrint   'trying to open: ', self%fname
         ! Work out which file format to use
         if( present(formatchar) )then
             format_descriptor = formatchar
@@ -105,21 +105,21 @@ contains
         else
             self%head_format  = default_file_format
         endif
-        if( debug ) print *,  'format: ', self%head_format
+        DebugPrint   'format: ', self%head_format
         ! Allocate head object
         select case(self%head_format)
             case('F')
                 allocate(MrcFeiImgHead :: self%overall_head)
-                if( debug ) print *,  ' allocated MrcFeiImgHead'
+                DebugPrint   ' allocated MrcFeiImgHead'
                 call self%overall_head%new(ldim)
             case ('M')
                 allocate(MrcImgHead :: self%overall_head)
-                if( debug ) print *,  ' allocated MrcImgHead'
+                DebugPrint   ' allocated MrcImgHead'
                 call self%overall_head%new(ldim)
             case ('S')
                 ! create header
                 allocate(SpiImgHead :: self%overall_head)
-                if( debug ) print *,  ' allocated SpiImgHead'
+                DebugPrint   ' allocated SpiImgHead'
                 call self%overall_head%new(ldim)
                 if( ldim(3) > 1 ) self%isvol = .true.
             case DEFAULT
@@ -136,12 +136,12 @@ contains
             ! read header
             if( rreadhead )then
                 call self%overall_head%read(self%funit)
-                if( debug ) print *,  'did read header'
+                DebugPrint   'did read header'
             endif
         else
             ! write header
             call self%overall_head%write(self%funit)
-            if( debug ) print *,  'did write header'
+            DebugPrint  'did write header'
         endif
         if( write_enabled )then
             ! REPLACED WITH THIS ONE TO MAKE THE FLAG WAS_WRITTEN TO TRUE
@@ -153,7 +153,7 @@ contains
         if( debug ) call self%overall_head%print
         ! The file-handle now exists
         self%existence = .true.
-        if( debug ) write(*,*) '(imgfile::new) constructed an imgfile object (file-handle)'
+        DebugPrint  '(imgfile::new) constructed an imgfile object (file-handle)'
     end subroutine open
 
     !>  \brief is forprinting the header
@@ -196,7 +196,7 @@ contains
         if( is_open(self%funit) )then
             if( self%was_written_to )then
                 call self%overall_head%write(self%funit)
-                if( debug ) write(*,*) '(simple_imgfile::close) wrote overall_head'
+                DebugPrint  '(simple_imgfile::close) wrote overall_head'
             endif
             close(self%funit)
             call flush(self%funit)
@@ -318,7 +318,7 @@ contains
         integer, intent(in)              :: slice_nr    !< Number of the slice to read in (the first slice in the file is numbered 1)
         real, intent(inout), allocatable :: rarr(:,:,:) !< Array of reals. Will be (re)allocated if needed
         call self%rwSlices('r',slice_nr,slice_nr,rarr)
-        if( debug ) write(*,*) '(imgfile::rSlice) read slice: ', slice_nr
+        DebugPrint  '(imgfile::rSlice) read slice: ', slice_nr
     end subroutine rSlice
 
     !>  \brief  write a slice of the image file from memory to disk
@@ -328,7 +328,7 @@ contains
         real, intent(inout)           :: rarr(:,:,:) !<  Array of reals. Will be (re)allocated if needed
         integer, intent(in)           :: ldim(3)     !<  Logical size of the array. This will be written to disk: rarr(1:ldim_1,:,:)
         call self%rwSlices('w',slice_nr,slice_nr,rarr,ldim)
-        if( debug ) write(*,*) '(imgfile::wSlice) wrote slice: ', slice_nr
+        DebugPrint  '(imgfile::wSlice) wrote slice: ', slice_nr
     end subroutine wSlice
 
     !>  \brief  reads an image or stack header
@@ -370,7 +370,7 @@ contains
                 type is (SpiImgHead)
                     call self%slice2bytepos(slice, hedbyteinds, imbyteinds)
                     first_byte = hedbyteinds(1)
-                    if( debug ) write(*,*) '(simple_imgfile::rHead) position of first byte: ', first_byte
+                    DebugPrint  '(simple_imgfile::rHead) position of first byte: ', first_byte
                     if( present(ldim) )then
                         call head%new( ldim=ldim )
                     else
@@ -387,7 +387,7 @@ contains
                     stop 'Format not supported; rHead; simle_imgfile'
             end select
         endif
-        if( debug ) write(*,*) '(simple_imgfile::rHead) read header from file'
+        DebugPrint  '(simple_imgfile::rHead) read header from file'
     end subroutine rHead
 
     !>  \brief  writes an image or stack header
@@ -464,7 +464,7 @@ contains
             type is (MrcImgHead)
                 ! Get the dims of the image file
                 dims = self%overall_head%getDims()
-                if( debug ) write(*,*) '(rwSlices :: simple_imgfile) dims gotten from overall_head: ', dims(1), dims(2), dims(3)
+                DebugPrint  '(rwSlices :: simple_imgfile) dims gotten from overall_head: ', dims(1), dims(2), dims(3)
             type is (MrcFeiImgHead)
                 ! all good
             type is (SpiImgHead)
@@ -477,7 +477,7 @@ contains
                 endif
                 ! Get the dims of the image file
                 dims = self%overall_head%getDims()
-                if( debug ) write(*,*) '(rwSlices :: simple_imgfile) dims gotten from overall_head: ', dims(1), dims(2), dims(3)
+                DebugPrint  '(rwSlices :: simple_imgfile) dims gotten from overall_head: ', dims(1), dims(2), dims(3)
             class DEFAULT
                 stop 'Format not supported; rwSlices; simle_imgfile'
         end select
@@ -485,7 +485,7 @@ contains
             dims(3) = last_slice-first_slice+1
         else if( mode .eq. 'w' )then
             if( present(ldim) )then
-                if( debug ) write(*,*) '(rwSlices :: simple_imgfile) ldims inputted: ', ldim(1), ldim(2), ldim(3)
+                DebugPrint  '(rwSlices :: simple_imgfile) ldims inputted: ', ldim(1), ldim(2), ldim(3)
                 ! Check that the array dims and the file dims are compatible.
                 select type(ptr)
                     type is (MrcImgHead)
@@ -494,7 +494,7 @@ contains
                         dims(1) = ldim(1)
                         dims(2) = size(rarr,2)
                         dims(3) = max(last_slice,dims(3))
-                        if( debug ) write(*,*) '(rwSlices :: simple_imgfile) dims set in overall_head: ', dims(1), dims(2), dims(3)
+                        DebugPrint  '(rwSlices :: simple_imgfile) dims set in overall_head: ', dims(1), dims(2), dims(3)
                         call self%overall_head%setDims(dims)
                     type is (MrcFeiImgHead)
                         ! nothing to do
@@ -696,9 +696,9 @@ contains
             ! May need to update file dims
             select case(self%head_format)
                 case('M')
-                    if( debug ) write(*,*) '(rwSlices :: simple_imgfile) last_slice: ', last_slice
+                    DebugPrint  '(rwSlices :: simple_imgfile) last_slice: ', last_slice
                     dims(3) = max(dims(3),last_slice)
-                    if( debug ) write(*,*) '(rwSlices :: simple_imgfile) updated dims to: ', dims(1), dims(2), dims(3)
+                    DebugPrint  '(rwSlices :: simple_imgfile) updated dims to: ', dims(1), dims(2), dims(3)
                     call self%overall_head%setDims(dims)
                 case('S')
                     if( .not. self%isvol )then
@@ -742,7 +742,7 @@ contains
             ! Remember that we wrote to the file
             self%was_written_to = .true.
         endif
-        if( debug ) write(*,*) '(imgfile::rwSlices) completed'
+        DebugPrint  '(imgfile::rwSlices) completed'
     end subroutine rwSlices
 
     ! GETTERS, SETTERS, PRINTERS

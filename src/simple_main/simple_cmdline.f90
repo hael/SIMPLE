@@ -61,15 +61,15 @@ contains
     distr_exec = str_has_substr(exec_name,'distr')
     cmdargcnt = command_argument_count()
     call get_command(self%entire_line)
-    DebugPrint( ' command_argument_count: ', cmdargcnt )
+    DebugPrint ' command_argument_count: ', cmdargcnt 
     if( present(keys_required) )then
        if( str_has_substr(self%entire_line,'prg=') )then
           nreq = size(keys_required)+1 ! +1 because prg part of command line
        else
           nreq = size(keys_required)
        endif
-       DebugPrint(  ' no keys required:       ', nreq )
-       DebugPrint( ' command_argument_count: ', cmdargcnt )
+       DebugPrint  ' no keys required:       ', nreq 
+       DebugPrint ' command_argument_count: ', cmdargcnt 
        if( cmdargcnt < nreq )then
           call print_cmdline(keys_required, keys_optional, distr=distr_exec)
           stop
@@ -103,7 +103,7 @@ contains
        call parse_local(arg)
     end do
     if( present(keys_required) )then
-       DebugPrint( ' reached checker' )
+       DebugPrint ' reached checker' 
        call self%check
     endif
   contains
@@ -153,8 +153,8 @@ contains
             endif
          endif
          self%cmds(i)%defined = .true.
-         DebugPrint(  'parse_local: key|cval|rval|defined: ' )
-         DebugPrint(  trim(self%cmds(i)%key), ' ', trim(self%cmds(i)%carg), self%cmds(i)%rarg, self%cmds(i)%defined )
+         DebugPrint  'parse_local: key|cval|rval|defined: ' 
+         DebugPrint  trim(self%cmds(i)%key), ' ', trim(self%cmds(i)%carg), self%cmds(i)%rarg, self%cmds(i)%defined 
       endif
     end subroutine parse_local
   end subroutine parse

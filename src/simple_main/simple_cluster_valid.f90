@@ -279,7 +279,7 @@ contains
                 deallocate(karr)
             endif
         end do
-        if( debug ) print *, 'finished gen_cohesion_metrics'
+        DebugPrint  'finished gen_cohesion_metrics'
     end subroutine gen_cohesion_metrics
     
     !>  \brief  calculates cohesion of the clusters in terms of distance
@@ -294,7 +294,7 @@ contains
             coh = coh+self%maxdists(k)+self%avgdists(k)
         end do
         coh = coh/real(2*self%ncls)
-        if( debug ) print *, 'calculated cohesion'
+        DebugPrint  'calculated cohesion'
     end function cohesion
 
     !>  \brief  calculates separation of the clusters in terms of distance
@@ -312,7 +312,7 @@ contains
             end do
         end do
         sep = sep/real(2*npairs)
-        if( debug ) print *, 'calculated separation'
+        DebugPrint  'calculated separation'
     end function separation
     
     !>  \brief  calculates the ratio index for cluster validation

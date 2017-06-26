@@ -250,7 +250,7 @@ contains
                 call b%refvols(state)%expand_cmat
             endif
         enddo
-        if( debug )write(*,*)'prep volumes done'
+        DebugPrint 'prep volumes done'
         ! bring back the original b%vol size
         if( p%boxmatch < p%box )call b%vol%new([p%box,p%box,p%box], p%smpd) ! to double check
     end subroutine prep_vols

@@ -738,7 +738,7 @@ contains
         if( self%stk .eq. '' .and. self%vols(1) .ne. '' )then
             call find_ldim_nptcls(self%vols(1), self%ldim, ifoo, endconv=conv)
             self%box  = self%ldim(1)
-            DebugPrint( 'found logical dimension of volume: ', self%ldim )
+            DebugPrint 'found logical dimension of volume: ', self%ldim 
         endif
         if( self%stk .ne. '' )then
             inquire(FILE=self%stk, EXIST=here)
@@ -747,14 +747,14 @@ contains
                 else
                     call find_ldim_nptcls(self%stk, self%ldim, ifoo, endconv=conv)
                     self%ldim(3) = 1
-                    DebugPrint( 'found logical dimension of stack: ', self%ldim )
+                    DebugPrint 'found logical dimension of stack: ', self%ldim 
                     self%box     = self%ldim(1)
                 endif
                 if( .not. cline%defined('nptcls') )then
                     ! get number of particles from stack
                      call find_ldim_nptcls(self%stk, self%ldim, self%nptcls, endconv=conv)
-                     DebugPrint( 'found logical dimension of stack: ', self%ldim )
-                     DebugPrint( 'found nr of ptcls from stack: ', self%nptcls )
+                     DebugPrint 'found logical dimension of stack: ', self%ldim 
+                     DebugPrint 'found nr of ptcls from stack: ', self%nptcls 
                      self%ldim(3) = 1
                 endif
             else
@@ -771,7 +771,7 @@ contains
                 else
                     call find_ldim_nptcls(self%refs, self%ldim, ifoo, endconv=conv)
                     self%ldim(3) = 1
-                    DebugPrint( 'found logical dimension of refs: ', self%ldim )
+                    DebugPrint 'found logical dimension of refs: ', self%ldim 
                     self%box = self%ldim(1)
                 endif
             else
@@ -972,7 +972,7 @@ contains
         if( file_exists(self%refs) )then
             ! get number of particles from stack
             call find_ldim_nptcls(self%refs, lfoo, ncls, endconv=conv)
-            DebugPrint( 'found ncls from refs: ', ncls )
+            DebugPrint 'found ncls from refs: ', ncls 
             if( cline%defined('ncls') )then
                 if( ncls /= self%ncls ) stop 'inputtend number of clusters (ncls) not&
                 &consistent with the number of references in stack (p%refs)'
@@ -1057,7 +1057,7 @@ contains
                       stop
                   endif
                   !self%nstates = i
-                 DebugPrint( nam, '=', self%vols(i) )
+                 DebugPrint nam, '=', self%vols(i) 
               endif
           end subroutine check_vol
 
@@ -1086,9 +1086,9 @@ contains
               logical          :: raise_exception
               if( cline%defined(file) )then
                   var = cline%get_carg(file)
-                  DebugPrint( 'var = ', var )
+                  DebugPrint 'var = ', var 
                   file_descr = fname2format(var)
-                  DebugPrint( 'file_descr = ', file_descr )
+                  DebugPrint 'file_descr = ', file_descr 
                   raise_exception = .false.
                   if( present(allowed1) )then
                       if( allowed1 == file_descr ) then
@@ -1130,7 +1130,7 @@ contains
                       case DEFAULT
                           stop 'This file format is not supported by SIMPLE; simple_params::check_file'
                   end select
-                  DebugPrint( file, '=', var )
+                  DebugPrint file, '=', var 
               endif
           end subroutine check_file
 
@@ -1209,7 +1209,7 @@ contains
               character(len=*), intent(out) :: var
               if( cline%defined(carg) )then
                   var = cline%get_carg(carg)
-                  DebugPrint( carg, '=', var )
+                  DebugPrint carg, '=', var 
               endif
           end subroutine check_carg
 
@@ -1218,7 +1218,7 @@ contains
               integer, intent(out) :: var
               if( cline%defined(iarg) )then
                   var = nint(cline%get_rarg(iarg))
-                  DebugPrint( iarg, '=', var )
+                  DebugPrint iarg, '=', var 
               endif
           end subroutine check_iarg
 
@@ -1229,7 +1229,7 @@ contains
               if( cline%defined(larg) )then
                   tmp =  NINT( cline%get_rarg(larg) )
                   var = tmp /= 0
-                  DebugPrint( larg, '=', var )
+                  DebugPrint larg, '=', var 
               endif
           end subroutine check_larg
 
@@ -1238,7 +1238,7 @@ contains
               real, intent(out) :: var
               if( cline%defined(rarg) )then
                   var = cline%get_rarg(rarg)
-                  DebugPrint( rarg, '=', var )
+                  DebugPrint rarg, '=', var 
               endif
           end subroutine check_rarg
         

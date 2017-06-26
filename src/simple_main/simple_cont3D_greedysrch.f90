@@ -72,7 +72,7 @@ contains
         self%shbarr     = p%shbarrier
         ! done
         self%exists = .true.
-        if( debug ) write(*,'(A)') '>>> cont3D_greedysrch::CONSTRUCTED NEW SIMPLE_cont3D_greedysrch OBJECT'
+        DebugPrint  '>>> cont3D_greedysrch::CONSTRUCTED NEW SIMPLE_cont3D_greedysrch OBJECT'
     end subroutine new
 
     ! PREP ROUTINES
@@ -105,7 +105,7 @@ contains
         &vols=self%vols_ptr)
         ! cleanup
         deallocate(frc)
-        if( debug ) write(*,'(A)') '>>> cont3D_greedysrch::END OF PREP_SRCH'
+        DebugPrint  '>>> cont3D_greedysrch::END OF PREP_SRCH'
     end subroutine prep_srch
 
     ! SEARCH ROUTINES
@@ -123,7 +123,7 @@ contains
         else
             call a%reject(iptcl)
         endif
-        if( debug ) write(*,'(A)') '>>> cont3D_greedysrch::END OF SRCH'
+        DebugPrint  '>>> cont3D_greedysrch::END OF SRCH'
     end subroutine exec_srch
 
     !>  \brief  performs the shift search

@@ -81,7 +81,7 @@ contains
             &stop 'Inconsistent number of references & orientations'
         ! done
         self%exists = .true.
-        if( debug ) write(*,'(A)') '>>> cont3D_srch::CONSTRUCTED NEW SIMPLE_cont3D_srch OBJECT'
+        DebugPrint  '>>> cont3D_srch::CONSTRUCTED NEW SIMPLE_cont3D_srch OBJECT'
     end subroutine new
 
     ! PREP ROUTINES
@@ -108,7 +108,7 @@ contains
         ! shift search object
         call self%shsrch_obj%new(self%pftcc_ptr, self%lims)
         deallocate(frc)
-        if( debug ) write(*,'(A)') '>>> cont3D_srch::END OF PREP_SRCH'
+        DebugPrint  '>>> cont3D_srch::END OF PREP_SRCH'
     end subroutine prep_srch
 
     ! SEARCH ROUTINES
@@ -132,7 +132,7 @@ contains
         else
             call a%reject(iptcl)
         endif
-        if( debug ) write(*,'(A)') '>>> cont3D_srch::END OF SRCH'
+        DebugPrint  '>>> cont3D_srch::END OF SRCH'
     end subroutine exec_srch
 
     !>  \brief  performs euler angles search

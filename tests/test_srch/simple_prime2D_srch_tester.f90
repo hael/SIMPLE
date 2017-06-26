@@ -97,7 +97,7 @@ contains
         logical            :: assignments_correct(NPROJS)
         type(prime2D_srch) :: primesrch2D
         call primesrch2D%new(p, pftcc)
-        VerbosePrint( 'testing primesrch2D :: greedy_srch in CPU mode')
+        VerbosePrint 'testing primesrch2D :: greedy_srch in CPU mode'
         do iptcl=1,NPROJS
             call primesrch2D%prep4srch(pftcc, iptcl, b%a)
             call primesrch2D%greedy_srch(pftcc, iptcl, b%a)

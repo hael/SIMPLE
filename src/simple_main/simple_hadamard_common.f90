@@ -95,7 +95,7 @@ contains
                     if( p%kfromto(2) == 1 )then
                         stop 'simple_math::get_lplim gives nonsensical result (==1)'
                     endif
-                    if( debug ) print *, ' extracted FSC info'
+                    DebugPrint ' extracted FSC info'
                 else if( cline%defined('lp') )then
                     p%kfromto(2) = calc_fourier_index( p%lp, p%boxmatch, p%smpd )
                 else if( cline%defined('find') )then
@@ -132,7 +132,7 @@ contains
             case DEFAULT
                 stop 'Unsupported eo flag; simple_hadamard_common'
         end select
-        if( debug ) print *, ' did set Fourier index range'
+        DebugPrint ' did set Fourier index range'
     end subroutine set_bp_range
 
     subroutine set_bp_range2D( b, p, cline, which_iter, frac_srch_space )
@@ -162,7 +162,7 @@ contains
             p%lp_dyn = lplim
             call b%a%set_all2single('lp',lplim)
         endif
-        if( debug ) write(*,*) '*** simple_hadamard_common ***: did set Fourier index range'
+        DebugPrint  '*** simple_hadamard_common ***: did set Fourier index range'
     end subroutine set_bp_range2D
 
     !>  \brief  grids one particle image to the volume
@@ -201,12 +201,12 @@ contains
             else
                 call prep4cgrid(b%img, b%img_pad, p%msk, kbwin)
             endif
-            if( debug ) write(*,*) '*** simple_hadamard_common ***: prepared image for gridding'
+            DebugPrint  '*** simple_hadamard_common ***: prepared image for gridding'
             ran = ran3()
             if( present(ran_eo) )ran = ran_eo 
             orisoft = orientation
             do jpeak=1,p%npeaks
-                if( debug ) write(*,*) '*** simple_hadamard_common ***: gridding, iteration:', jpeak
+                DebugPrint  '*** simple_hadamard_common ***: gridding, iteration:', jpeak
                 ! get ori info
                 if( softrec )then
                     orisoft =  os%get_ori(jpeak)
@@ -215,7 +215,7 @@ contains
                     w = 1.
                 endif
                 s = nint(orisoft%get('state'))
-                if( debug ) write(*,*) '*** simple_hadamard_common ***: got orientation'
+                DebugPrint  '*** simple_hadamard_common ***: got orientation'
                 if( p%frac < 0.99 ) w = w*pw
                 if( w > 0. )then
                     if( p%pgrp == 'c1' .or. str_has_substr(p%refine,'adasym') )then
@@ -235,7 +235,7 @@ contains
                         end do
                     endif
                 endif
-                if( debug ) write(*,*) '*** simple_hadamard_common ***: gridded ptcl'
+                DebugPrint  '*** simple_hadamard_common ***: gridded ptcl'
             end do
         endif
     end subroutine grid_ptcl
@@ -311,7 +311,7 @@ contains
             ! return in Fourier space
             call b%img_match%fwd_ft
         endif
-        if( debug ) write(*,*) '*** simple_hadamard_common ***: finished prepimg4align'
+        DebugPrint  '*** simple_hadamard_common ***: finished prepimg4align'
     end subroutine prepimg4align
 
     subroutine prep2Dref( b, p, icls )

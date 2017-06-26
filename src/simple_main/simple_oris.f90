@@ -1878,10 +1878,10 @@ contains
         integer, allocatable :: labelpops(:)
         
         nlabels = self%get_nlabels()
-        if( debug ) print *, 'number of labels: ', nlabels
+        DebugPrint  'number of labels: ', nlabels
         allocate(labelpops(nlabels))
-        if( debug ) print *, 'allocated labelpops'
-        if( debug ) print *, '>>> PROCESSING CLASS: ', icls
+        DebugPrint  'allocated labelpops'
+        DebugPrint  '>>> PROCESSING CLASS: ', icls
         ! get pop 
         if( which .eq. 'class' )then
             pop = self%get_cls_pop(icls)
@@ -1898,7 +1898,7 @@ contains
         else
             vals = self%get_arr('label', state=icls)
         endif
-        if( debug ) print *, nint(vals)
+        DebugPrint  nint(vals)
         ! count label occurences
         labelpops = 0
         do i=1,pop
@@ -1908,7 +1908,7 @@ contains
         medlab   = maxloc(labelpops)
         homo_cls = real(count(medlab(1) == nint(vals)))/real(pop)
         homo_avg = homo_avg+homo_cls
-        if( debug ) print *, '>>> CLASS HOMOGENEITY: ', homo_cls
+        DebugPrint  '>>> CLASS HOMOGENEITY: ', homo_cls
         ! apply homogeneity threshold
         if( homo_cls >= thres ) homo_cnt = homo_cnt+1.
         deallocate(labelpops)
@@ -1930,7 +1930,7 @@ contains
         else
             stop 'Unsupported which flag; simple_oris::homogeneity'
         endif
-        if( debug ) print *, 'number of clusters to analyse: ', ncls
+        DebugPrint  'number of clusters to analyse: ', ncls
         homo_cnt = 0.
         homo_avg = 0.
         cnt      = 0.

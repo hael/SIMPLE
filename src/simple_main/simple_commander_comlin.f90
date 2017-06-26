@@ -54,7 +54,7 @@ contains
         call b%build_general_tbox(p, cline, .false., .true.) ! general objects built (no oritab reading)
         allocate(b%imgs_sym(p%nptcls), stat=alloc_stat)
         call alloc_err('In: simple_comlin_smat, 1', alloc_stat)
-        if( debug ) print *, 'analysing this number of objects: ', p%nptcls
+        DebugPrint  'analysing this number of objects: ', p%nptcls
         do iptcl=1,p%nptcls
             call b%imgs_sym(iptcl)%new([p%box,p%box,1], p%smpd, p%imgkind)
             call b%imgs_sym(iptcl)%read(p%stk, iptcl)
@@ -66,7 +66,7 @@ contains
         b%clins = comlin(b%a, b%imgs_sym, p%lp)
         if( cline%defined('part') )then
             npairs = p%top - p%fromp + 1
-            if( debug ) print *, 'allocating this number of similarities: ', npairs
+            DebugPrint  'allocating this number of similarities: ', npairs
             allocate(corrs(p%fromp:p%top), pairs(p%fromp:p%top,2), stat=alloc_stat)
             call alloc_err('In: simple_comlin_smat, 1', alloc_stat)
             ! read the pairs
@@ -78,7 +78,7 @@ contains
                 stop 'I/O error; simple_comlin_smat'
             endif
             open(unit=funit, status='OLD', action='READ', file=fname, access='STREAM')
-            if( debug ) print *, 'reading pairs in range: ', p%fromp, p%top
+            DebugPrint  'reading pairs in range: ', p%fromp, p%top
             read(unit=funit,pos=1,iostat=io_stat) pairs(p%fromp:p%top,:)
             ! check if the read was successful
             if( io_stat .ne. 0 )then

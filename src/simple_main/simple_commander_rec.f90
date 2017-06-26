@@ -92,7 +92,7 @@ contains
             else
                 s = ss
             endif
-            if( debug ) write(*,*) 'processing state: ', s
+            DebugPrint  'processing state: ', s
             if( b%a%get_statepop( s ) == 0 )cycle           ! Empty state
             call b%eorecvol%reset_all
             do part=1,p%nparts
@@ -102,7 +102,7 @@ contains
                     state4name = s
                 endif
                 allocate(fname, source='recvol_state'//int2str_pad(state4name,2)//'_part'//int2str_pad(part,p%numlen))
-                if( debug ) write(*,*) 'processing file: ', fname
+                DebugPrint  'processing file: ', fname
                 call assemble(fname)
                 deallocate(fname)
             end do
@@ -173,7 +173,7 @@ contains
             else
                 s = ss
             endif
-            if( debug ) write(*,*) 'processing state: ', s
+            DebugPrint  'processing state: ', s
             if( b%a%get_statepop( s ) == 0 )cycle           ! Empty state
             call b%recvol%reset
             do part=1,p%nparts
@@ -183,7 +183,7 @@ contains
                     state4name = s
                 endif
                 allocate(fbody, source='recvol_state'//int2str_pad(state4name,2)//'_part'//int2str_pad(part,p%numlen))
-                if( debug ) write(*,*) 'processing fbody: ', fbody
+                DebugPrint  'processing fbody: ', fbody
                 do i=1,endit
                     if( cline%defined('even') .or. cline%defined('odd') )then
                         if( p%even .eq. 'yes' .and. p%odd .eq. 'no' )then

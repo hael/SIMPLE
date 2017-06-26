@@ -79,7 +79,9 @@ find_path(FFTW_INCLUDE_DIRS
         ${FFTW_ROOT}
         $ENV{FFTW_ROOT}/include
         $ENV{FFTW_ROOT}/api
+        ENV FFTWDIR
         ENV FFTW_ROOT
+        $ENV{FFTWDIR}/include
     PATHS
         /usr/include
         /usr/local/include          #Homebrew
@@ -87,6 +89,7 @@ find_path(FFTW_INCLUDE_DIRS
         /sw/include                 #Fink
         /usr/opt/local/include
         /usr/local/pgi/src/fftw/include
+        ${FFTWDIR}/include
 )
 mark_as_advanced( FFTW_INCLUDE_DIRS )
 
@@ -98,7 +101,10 @@ find_library( FFTW_SINGLE_PRECISION_LIBRARIES
         ${FFTW_ROOT}
         $ENV{FFTW_ROOT}/lib
         $ENV{FFTW_ROOT}/.libs
+        $ENV{FFTWLIB}
+        $ENV{FFTWDIR}/lib
         ENV FFTW_ROOT
+        ENV FFTWLIB
     PATHS
         /usr/lib
         /usr/lib/x86_64-linux-gnu
@@ -107,6 +113,7 @@ find_library( FFTW_SINGLE_PRECISION_LIBRARIES
         /usr/opt/local/lib
         /sw/lib                      # Fink
         /usr/local/pgi/src/fftw/lib  # PGI local build
+        ${FFTWDIR}/lib
     DOC "FFTW dynamic library"
 )
 mark_as_advanced( FFTW_SINGLE_PRECISION_LIBRARIES )
@@ -119,7 +126,10 @@ find_library( FFTW_DOUBLE_PRECISION_LIBRARIES
         ${FFTW_ROOT}
         $ENV{FFTW_ROOT}/lib
         $ENV{FFTW_ROOT}/.libs
+        $ENV{FFTWLIB}
+        $ENV{FFTWDIR}/lib
         ENV FFTW_ROOT
+        ENV FFTWLIB
     PATHS
         /usr/lib
         /usr/lib/x86_64-linux-gnu
@@ -127,6 +137,7 @@ find_library( FFTW_DOUBLE_PRECISION_LIBRARIES
         /opt/local/lib
         /sw/lib
         /usr/local/pgi/src/fftw/lib
+        ${FFTWDIR}/lib
     DOC "FFTW dynamic library"
 )
 mark_as_advanced( FFTW_DOUBLE_PRECISION_LIBRARIES )
@@ -140,6 +151,10 @@ find_library( FFTW_SINGLE_PRECISION_THREADED_LIBRARIES
         $ENV{FFTW_ROOT}/lib
         $ENV{FFTW_ROOT}/.libs
         ENV FFTW_ROOT
+        $ENV{FFTWLIB}
+        $ENV{FFTWDIR}/lib
+        ENV FFTW_ROOT
+        ENV FFTWLIB
     PATHS
         /usr/lib
         /usr/lib/x86_64-linux-gnu
@@ -148,6 +163,7 @@ find_library( FFTW_SINGLE_PRECISION_THREADED_LIBRARIES
         /usr/opt/local/lib
         /sw/lib                      # Fink
         /usr/local/pgi/src/fftw/lib  # PGI local build
+        ${FFTWDIR}/lib
     DOC "FFTW dynamic library"
 )
 mark_as_advanced( FFTW_SINGLE_PRECISION_THREADED_LIBRARIES )

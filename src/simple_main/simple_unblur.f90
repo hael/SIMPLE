@@ -258,7 +258,7 @@ contains
         call unblur_kill
         ! GET NUMBER OF FRAMES & DIM FROM STACK
         call find_ldim_nptcls(movie_stack_fname, ldim, nframes, endconv=endconv)
-        if( debug ) write(*,*) 'logical dimension: ', ldim
+        DebugPrint  'logical dimension: ', ldim
         ldim(3) = 1 ! to correct for the stupid 3:d dim of mrc stacks
         if( p%scale < 0.99 )then
             ldim_scaled(1) = round2even(real(ldim(1))*p%scale)
@@ -358,7 +358,7 @@ contains
             end do
         endif
         existence = .true.
-        if( debug ) write(*,*) 'unblur_init, done'
+        DebugPrint  'unblur_init, done'
     end subroutine unblur_init
 
     subroutine center_shifts( shifts )

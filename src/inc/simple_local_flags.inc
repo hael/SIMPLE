@@ -15,16 +15,20 @@
 
 #ifdef __PRETTY_FUNCTION__
 #ifndef DebugPrint
-#define DebugPrint(...) if( debug.or.global_debug ) print *, __FILE__,':',__LINE__,':',__PRETTY_FUNCTION__,':', __VA_ARGS__
+#define DebugPrint if( debug.or.global_debug ) print *, __FILENAME__,':',__LINE__,':',__PRETTY_FUNCTION__,':', 
 #endif
 #else
 #ifndef DebugPrint
-#define DebugPrint(...) if( debug.or.global_debug ) print *, __FILE__,':',__LINE__,':', __VA_ARGS__
+#define DebugPrint if( debug.or.global_debug ) print *, __FILENAME__,':',__LINE__,':', 
 #endif
 #endif
 #ifndef WarnPrint
-#define WarnPrint(...) if( warn.or.debug.or.global_warn.or.global_debug ) print *, __FILE__,':',__LINE__,':Warning:', __VA_ARGS__
+#define WarnPrint if( warn.or.debug.or.global_warn.or.global_debug ) print *, __FILENAME__,':',__LINE__,':Warning:', 
 #endif
 #ifndef VerbosePrint
-#define VerbosePrint(...) if( verbose.or.warn.or.debug.or.global_verbose.or.global_warn.or.global_debug ) print *,  __VA_ARGS__
+#define VerbosePrint if( verbose.or.warn.or.debug.or.global_verbose.or.global_warn.or.global_debug ) print *, 
 #endif
+#ifndef ErrorPrint
+#define ErrorPrint(ERRMSG) print *, __FILENAME__,':',__LINE__,':Error:', ERRMSG; stop
+#endif
+

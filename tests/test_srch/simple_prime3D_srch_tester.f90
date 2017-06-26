@@ -126,7 +126,7 @@ contains
         !call o_ptcls%rnd_inpls
         call o_ptcls%set_all2single('lp',LPLIM)
         call o_ptcls%write( orisname )
-        VerbosePrint( 'orientations generated' )
+        VerbosePrint 'orientations generated' 
         ! create parameters and build
         p = params(cline)                     ! parameters generated
         ! instantiates builder
@@ -177,7 +177,7 @@ contains
         ! because of the use simple_hadamard3D_matcher statement in the top
         ! now instantiatable, so create it
         call primesrch3D%new(b%a, p, pftcc)
-        VerbosePrint( 'end setup_testenv' )
+        VerbosePrint 'end setup_testenv' 
     end subroutine setup_testenv
 
     subroutine test_prep4srch
@@ -210,7 +210,7 @@ contains
             call b%a%set_ori(i,o_saved)
         enddo
         ! other cases
-        VerbosePrint( 'end setup_prep4srch' )
+        VerbosePrint 'end setup_prep4srch' 
     end subroutine test_prep4srch
 
     subroutine test_prepcorr4srch
@@ -256,7 +256,7 @@ contains
                 endif
             enddo
         endif
-        VerbosePrint( 'end setup_prepcorr4srch' )
+        VerbosePrint 'end setup_prepcorr4srch' 
     end subroutine test_prepcorr4srch
 
     subroutine test_sort_shifted_peaks
@@ -344,7 +344,7 @@ contains
             case DEFAULT
                 stop 'not implemented yet'
         end select
-        VerbosePrint( 'end prep_reforis' )
+        VerbosePrint 'end prep_reforis' 
     end subroutine test_prep_reforis
 
     subroutine shutdown_testenv

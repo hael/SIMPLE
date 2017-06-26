@@ -136,7 +136,7 @@ contains
                 !$omp end parallel do
             endif
         endif
-        if( debug ) print *, ' completed alignment'
+        DebugPrint  ' completed alignment'
         ! output orientations
         call b%a%write(p%outfile, [p%fromp,p%top])
         p%oritab = p%outfile
@@ -149,7 +149,7 @@ contains
             ! real-space rotation
             call prime2D_assemble_sums(b, p, grid=.false.)
         endif
-        if( debug ) print *,  ' generated class averages'
+        DebugPrint   ' generated class averages'
 
         ! WRITE CLASS AVERAGES
         if( p%l_distr_exec )then
@@ -474,7 +474,7 @@ contains
             ! transfer to polar coordinates
             call b%img_match%polarize(pftcc, iptcl)
         end do
-        if( debug ) write(*,*) '*** hadamard2D_matcher ***: finished preppftcc4align'
+        DebugPrint '*** hadamard2D_matcher ***: finished preppftcc4align'
     end subroutine preppftcc4align
 
 end module simple_hadamard2D_matcher
