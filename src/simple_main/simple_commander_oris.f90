@@ -26,7 +26,7 @@ public :: orisops_commander
 public :: oristats_commander
 public :: rotmats2oris_commander
 private
-
+#include "simple_local_flags.inc"
 type, extends(commander_base) :: cluster_oris_commander
  contains
    procedure :: execute      => exec_cluster_oris
@@ -56,7 +56,6 @@ type, extends(commander_base) :: rotmats2oris_commander
    procedure :: execute      => exec_rotmats2oris
 end type rotmats2oris_commander
 
-logical, parameter                 :: debug=.false.
 contains
 
     subroutine exec_cluster_oris( self, cline )

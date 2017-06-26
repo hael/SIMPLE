@@ -24,7 +24,7 @@ public :: recvol_commander
 public :: eo_volassemble_commander
 public :: volassemble_commander
 private
-
+#include "simple_local_flags.inc"
 type, extends(commander_base) :: recvol_commander
   contains
     procedure :: execute      => exec_recvol
@@ -37,7 +37,7 @@ type, extends(commander_base) :: volassemble_commander
   contains
     procedure :: execute      => exec_volassemble
 end type volassemble_commander
-logical , parameter                      :: debug=.false.
+
 contains 
 
     subroutine exec_recvol( self, cline )
