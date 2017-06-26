@@ -1232,8 +1232,8 @@ select case(prg)
         call cline%parse(keys_required(:3), keys_optional(:3))
         ! set defaults
         call cline%set('automsk', 'yes')
-        if( .not. cline%defined('amsklp') ) call cline%set('amsklp', 25.)
-        if( .not. cline%defined('edge')   ) call cline%set('edge', 20.)
+        if( .not. cline%defined('amsklp') ) call cline%set('amsklp', 20.)
+        if( .not. cline%defined('edge')   ) call cline%set('edge',   10.)
         ! execute
         call xautomask2D%execute(cline)
     case( 'automask3D' )

@@ -398,9 +398,9 @@ select case(prg)
         if( .not. cline%defined('lpstart') ) call cline%set('lpstart',  15.)
         if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',    8.)
         if( .not. cline%defined('eo')      ) call cline%set('eo',      'no')
-        if( .not. cline%defined('amsklp')  ) call cline%set('amsklp',   25.)
+        if( .not. cline%defined('amsklp')  ) call cline%set('amsklp',   20.)
         if( .not. cline%defined('cenlp')   ) call cline%set('cenlp',    30.)
-        if( .not. cline%defined('edge')    ) call cline%set('edge',     20.)
+        if( .not. cline%defined('edge')    ) call cline%set('edge',     10.)
         if( .not. cline%defined('center')  ) call cline%set('center', 'yes')
         if( .not. cline%defined('maxits')  ) call cline%set('maxits',   30.)
         if( cline%defined('nparts') .and. cline%defined('chunksz') )then
@@ -758,6 +758,9 @@ select case(prg)
         ! parse command line
         if( describe ) call print_doc_ini3D_from_cavgs
         call cline%parse(keys_required(:5), keys_optional(:17))
+        ! set defaults
+        if( .not. cline%defined('amsklp') ) call cline%set('amsklp', 20.)
+        if( .not. cline%defined('edge')   ) call cline%set('edge',   10.)
         ! execute
         call xini3D_from_cavgs%execute( cline )
     case( 'het_ensemble' )
@@ -790,6 +793,9 @@ select case(prg)
         ! parse command line
         if( describe ) call print_doc_het_ensemble
         call cline%parse(keys_required(:9), keys_optional(:10))
+        ! set defaults
+        if( .not. cline%defined('amsklp') ) call cline%set('amsklp', 20.)
+        if( .not. cline%defined('edge')   ) call cline%set('edge',   10.)
         ! execute
         call xhet_ensemble%execute( cline )
     case DEFAULT
