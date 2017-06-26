@@ -77,7 +77,7 @@ ${CLANG_FATAL_MSG} ")
   if(ACTUAL_FC_TARGET MATCHES "Clang|clang")
     find_file (
       APPLE_CPP_COMPILER
-      NAMES cpp- cpp-4.9 cpp-5 cpp-6
+      NAMES cpp- cpp-4.9 cpp-5 cpp-6 cpp5 cpp6
       PATHS /usr/local/bin /opt/local/bin /sw/bin 
       #  [PATH_SUFFIXES suffix1 [suffix2 ...]]
       DOC "GNU cpp preprocessor "
