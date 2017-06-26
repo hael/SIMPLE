@@ -339,8 +339,13 @@ select case(prg)
         ! <unblur/begin>is a program for movie alignment or unblurring based the same principal strategy as
         ! Grigorieffs program (hence the name). There are two important differences: automatic weighting of
         ! the frames using a correlation-based M-estimator and continuous optimisation of the shift parameters.
-        ! Input is a textfile with absolute paths to movie files in addition to a few obvious input
-        ! parameters<unblur/end>
+        ! Input is a textfile with absolute paths to movie files in addition to a few input parameters, some
+        ! of which deserve a comment. If dose_rate and exp_time are given the individual frames will be 
+        ! low-pass filtered accordingly (dose-weighting strategy). If scale is given, the movie will be Fourier 
+        ! cropped according to the down-scaling factor (for super-resolution movies). If nframesgrp is given 
+        ! the frames will be pre-averaged in the given chunk size (Falcon 3 movies). If fromf/tof are given, 
+        ! a contiguous subset of frames will be averaged without any dose-weighting applied. 
+        ! <unblur/end>
         !
         ! set required keys
         keys_required(1)  = 'filetab'
@@ -557,17 +562,14 @@ select case(prg)
         keys_optional(8)  = 'lpstop'
         keys_optional(9)  = 'cenlp'
         keys_optional(10) = 'trs'
-        keys_optional(11) = 'automsk'
-        keys_optional(12) = 'amsklp'
-        keys_optional(13) = 'inner'
-        keys_optional(14) = 'width'
-        keys_optional(15) = 'startit'
-        keys_optional(16) = 'maxits'
-        keys_optional(17) = 'center'
-        keys_optional(18) = 'oritab3D'
+        keys_optional(11) = 'inner'
+        keys_optional(12) = 'width'
+        keys_optional(13) = 'startit'
+        keys_optional(14) = 'maxits'
+        keys_optional(15) = 'center'
         ! parse command line
         if( describe ) call print_doc_prime2D
-        call cline%parse(keys_required(:5), keys_optional(:18))
+        call cline%parse(keys_required(:5), keys_optional(:15))
         ! set defaults
         if( .not. cline%defined('lpstart') ) call cline%set('lpstart',  15.)
         if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',    8.)
@@ -998,9 +1000,11 @@ select case(prg)
        keys_optional(11) = 'amsklp'
        keys_optional(12) = 'automsk'
        keys_optional(13) = 'smpd'
+       keys_optional(14)  = 'outstk'
+       keys_optional(15)  = 'outvol'
        ! parse command line
        if( describe ) call print_doc_mask
-       call cline%parse( keys_required(:2), keys_optional(:13))
+       call cline%parse( keys_required(:2), keys_optional(:15))
        ! execute
        call xmask%execute(cline)
     case( 'automask2D' )
@@ -1519,7 +1523,7 @@ select case(prg)
         keys_optional(7)  = 'newbox'
         keys_optional(8)  = 'clip'
         keys_optional(9)  = 'outvol'
-        keys_optional(10)  = 'outstk'
+        keys_optional(10) = 'outstk'
         keys_optional(11) = 'outstk2'
         ! parse command line
         if( describe ) call print_doc_scale
@@ -1554,8 +1558,8 @@ select case(prg)
         !
         ! <stackops/begin>is a program that provides standard single-particle image processing routines that are applied to MRC or SPIDER
         ! stacks. If you want to extract a particular state, give an alignment document (oritab) and set state
-        ! to the state that you want to extract. If you want to select the fraction of best particles (according to the goal function), input
-        ! an alignment doc (oritab) and set frac. You can combine the state and frac options. If you
+        ! to the state that you want to extract. If you want to select the fraction of best particles (according to the goal function), 
+        ! input an alignment doc (oritab) and set frac. You can combine the state and frac options. If you
         ! want to apply noise to images, give the desired signal-to-noise ratio via snr. If you want to calculate the autocorrelation
         ! function of your images set acf=yes. If you want to extract a contiguous subset of particle images from the stack, set 
         ! fromp and top. If you want to fish out a number of particle images from your stack at random, set nran to
