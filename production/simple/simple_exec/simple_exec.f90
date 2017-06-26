@@ -63,7 +63,6 @@ type(prime3D_commander)            :: xprime3D
 type(check3D_conv_commander)       :: xcheck3D_conv
     
 ! COMMON-LINES PROGRAMS
-type(comlin_smat_commander)        :: xcomlin_smat
 type(symsrch_commander)            :: xsymsrch
 
 ! SYMMETRY PROGRAMS
@@ -99,7 +98,6 @@ type(convert_commander)            :: xconvert
 type(corrcompare_commander)        :: xcorrcompare
 type(ctfops_commander)             :: xctfops
 type(filter_commander)             :: xfilter
-type(image_smat_commander)         :: ximage_smat
 type(norm_commander)               :: xnorm
 type(scale_commander)              :: xscale
 type(stack_commander)              :: xstack
@@ -107,7 +105,6 @@ type(stackops_commander)           :: xstackops
 ! type(fixmapheader_commander)       :: xfixmapheader
     
 ! MISCELLANOUS PROGRAMS
-type(cluster_smat_commander)       :: xcluster_smat
 type(masscen_commander)            :: xmasscen
 type(print_cmd_dict_commander)     :: xprint_cmd_dict
 type(print_dose_weights_commander) :: xprint_dose_weights
@@ -856,29 +853,6 @@ select case(prg)
     
     ! COMMON-LINES PROGRAMS
     
-    case( 'comlin_smat' )
-        !==Program comlin_smat
-        !
-        ! <comlin_smat/begin>is a program for creating a similarity matrix based on common
-        ! line correlation. The idea being that it should be possible to cluster images based
-        ! on their 3D similarity witout having a 3D model by only operating on class averages
-        ! and find averages that fit well together in 3D<comlin_smat/end>
-        !
-        ! set required keys
-        keys_required(1) = 'stk'
-        keys_required(2) = 'smpd'
-        keys_required(3) = 'lp'
-        keys_required(4) = 'msk'
-        ! set optional keys
-        keys_optional(1) = 'hp'
-        keys_optional(2) = 'trs'
-        ! parse command line
-        if( describe ) call print_doc_comlin_smat
-        call cline%parse(keys_required(:4), keys_optional(:2))
-        ! set defaults
-        if( .not. cline%defined('trs') ) call cline%set('trs', 3.0)
-        ! execute
-        call xcomlin_smat%execute(cline)
     case( 'symsrch' )
         !==Program symsrch
         !
@@ -1461,26 +1435,6 @@ select case(prg)
         call cline%parse(keys_required(:1), keys_optional(:8))
         ! execute
         call xfilter%execute(cline)
-    case( 'image_smat' )
-        !==Program image_smat
-        !
-        ! <image_smat/begin>is a program for creating a similarity matrix based on common line correlation. The idea
-        ! being that it should be possible to cluster images based on their 3D similarity witout having a 3D model
-        ! by only operating on class averages and find averages that fit well together in 3D<image_smat/end>
-        !
-        ! set required keys
-        keys_required(1)  = 'stk'
-        keys_required(2)  = 'smpd'
-        ! set optional keys
-        keys_optional(1)  = 'lp'
-        keys_optional(2)  = 'msk'
-        keys_optional(3)  = 'hp'
-        keys_optional(4)  = 'nthr'
-        ! parse command line
-        if( describe ) call print_doc_image_smat
-        call cline%parse(keys_required(:2), keys_optional(:4))
-        ! execute
-        call ximage_smat%execute(cline)
     case( 'norm' )
         !==Program norm
         !
@@ -1600,25 +1554,6 @@ select case(prg)
 
     ! MISCELLANOUS PROGRAMS
         
-    case( 'cluster_smat' )
-        !==Program cluster_smat
-        !
-        ! <cluster_smat/begin>is a program for clustering a similarity matrix and use
-        ! an combined cluster validation index to assess the quality of the clustering
-        ! based on the number of clusters<cluster_smat/end>
-        !
-        ! set required keys
-        keys_required(1) = 'nptcls'
-        keys_required(2) = 'fname'
-        keys_required(3) = 'ncls'
-        keys_required(4) = 'label'
-        ! set optional keys
-        keys_optional(1) = 'nthr'
-        ! parse command line
-        if( describe ) call print_doc_cluster_smat
-        call cline%parse(keys_required(:4), keys_optional(:1))
-        ! execute
-        call xcluster_smat%execute(cline)
     case( 'masscen' )
         !==Program masscen
         !
@@ -2029,22 +1964,7 @@ select case(prg)
         if( describe ) call print_doc_merge_nnmat
         call cline%parse( keys_required(:3) )
         ! execute
-        call xmerge_nnmat%execute(cline)
-    case( 'merge_similarities' )
-        !==Program merge_similarities
-        !
-        ! <merge_similarities/begin>is a program for merging similarities calculated between pairs of objects 
-        ! into a similarity matrix that can be inputted to cluster_smat<merge_similarities/end>
-        !
-        ! set required keys
-        keys_required(1)  = 'nptcls'
-        ! set optional keys
-        keys_optional(1)  = 'nparts'
-        ! parse command line
-        if( describe ) call print_doc_merge_similarities
-        call cline%parse(keys_required(:1), keys_optional(:1))
-        ! execute
-        call xmerge_similarities%execute(cline)    
+        call xmerge_nnmat%execute(cline)   
     case( 'split_pairs' )
         !==Program split_pairs
         !

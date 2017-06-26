@@ -20,25 +20,19 @@ use simple_commander_hlev_wflows
 implicit none
 
 ! PRE-PROCESSING
-type(unblur_ctffind_distr_commander)      :: xunblur_ctffind_distr
 type(unblur_distr_commander)              :: xunblur_distr
-type(unblur_tomo_movies_distr_commander)  :: xunblur_tomo_distr
 type(ctffind_distr_commander)             :: xctffind_distr
+type(unblur_ctffind_distr_commander)      :: xunblur_ctffind_distr
+type(unblur_tomo_movies_distr_commander)  :: xunblur_tomo_distr
 ! PRIME2D
 type(makecavgs_distr_commander)           :: xmakecavgs_distr
 type(prime2D_autoscale_commander)         :: xprime2D_distr
-! 3D SIMILARITY MATRIX GENERATION WITH COMMON LINES
-type(comlin_smat_distr_commander)         :: xcomlin_smat_distr
 ! PRIME3D
+type(ini3D_from_cavgs_commander)          :: xini3D_from_cavgs
 type(prime3D_init_distr_commander)        :: xprime3D_init_distr
 type(prime3D_distr_commander)             :: xprime3D_distr
 type(recvol_distr_commander)              :: xrecvol_distr
 type(symsrch_distr_commander)             :: xsymsrch_distr
-! TIME-SERIES WORKFLOWS
-type(tseries_track_distr_commander)       :: xtseries_track_distr
-! HIGH-LEVEL WORKFLOWS
-type(ini3D_from_cavgs_commander)          :: xini3D_from_cavgs
-
 ! OTHER DECLARATIONS
 integer, parameter    :: MAXNKEYS=100, KEYLEN=32
 character(len=KEYLEN) :: keys_required(MAXNKEYS)='', keys_optional(MAXNKEYS)=''
@@ -56,6 +50,90 @@ prg = arg(pos+1:) ! this is the program name
 if( str_has_substr(prg, 'simple_') ) stop 'giving program names with simple_* prefix is depreciated'
 
 select case(prg)
+
+    ! UNBLUR_MOVIES
+
+    case( 'unblur' )
+        !==Program unblur
+        !
+        ! <unblur/begin>is a distributed workflow for movie alignment or unblurring based the same 
+        ! principal strategy as Grigorieffs program (hence the name). There are two important 
+        ! differences: automatic weighting of the frames using a correlation-based M-estimator and 
+        ! continuous optimisation of the shift parameters. Input is a textfile with absolute paths 
+        ! to movie files in addition to a few input parameters, some of which deserve a comment. If 
+        ! dose_rate and exp_time are given the individual frames will be low-pass filtered accordingly
+        ! (dose-weighting strategy). If scale is given, the movie will be Fourier cropped according to 
+        ! the down-scaling factor (for super-resolution movies). If nframesgrp is given the frames will 
+        ! be pre-averaged in the given chunk size (Falcon 3 movies). If fromf/tof are given, a 
+        ! contiguous subset of frames will be averaged without any dose-weighting applied. 
+        ! <unblur/end>
+        !
+        ! set required keys
+        keys_required(1)  = 'filetab'
+        keys_required(2)  = 'smpd'
+        keys_required(3)  = 'nparts'
+        ! set optional keys
+        keys_optional(1)  = 'nthr'
+        keys_optional(2)  = 'ncunits'
+        keys_optional(3)  = 'fbody'
+        keys_optional(4)  = 'dose_rate'
+        keys_optional(5)  = 'exp_time'
+        keys_optional(6)  = 'lpstart'
+        keys_optional(7)  = 'lpstop'
+        keys_optional(8)  = 'trs'
+        keys_optional(9)  = 'kv'
+        keys_optional(10) = 'pspecsz'
+        keys_optional(11) = 'numlen'
+        keys_optional(12) = 'startit'
+        keys_optional(13) = 'scale'
+        keys_optional(14) = 'nframesgrp'
+        keys_optional(15) = 'fromf'
+        keys_optional(16) = 'tof'
+        keys_optional(17) = 'nsig'
+        ! parse command line
+        if( describe ) call print_doc_unblur
+        call cline%parse(keys_required(:3), keys_optional(:17))
+        ! set defaults
+        if( .not. cline%defined('trs')     ) call cline%set('trs',      5.)
+        if( .not. cline%defined('lpstart') ) call cline%set('lpstart', 15.)
+        if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',   8.)
+        ! execute
+        call xunblur_distr%execute(cline)
+
+    ! CTFFIND
+
+    case( 'ctffind' )
+        !==Program ctffind
+        !
+        ! <ctffind/begin>is a distributed workflow that wraps CTFFIND4 (Grigorieff lab)<ctffind/end> 
+        !
+        ! set required keys
+        keys_required(1) = 'filetab'
+        keys_required(2) = 'smpd'
+        keys_required(3) = 'kv'
+        keys_required(4) = 'cs'
+        keys_required(5) = 'fraca'
+        keys_required(6) = 'nparts'
+        ! set optional keys
+        keys_optional(1) = 'ncunits'
+        keys_optional(2) = 'pspecsz'
+        keys_optional(3) = 'hp'
+        keys_optional(4) = 'lp'
+        keys_optional(5) = 'dfmin'
+        keys_optional(6) = 'dfmax'
+        keys_optional(7) = 'astigstep'
+        keys_optional(8) = 'expastig'
+        keys_optional(9) = 'phaseplate'
+        ! parse command line
+        if( describe ) call print_doc_ctffind
+        call cline%parse(keys_required(:6), keys_optional(:9))
+        ! set defaults
+        call cline%set('nthr', 1.0)
+        if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz', 1024.)
+        if( .not. cline%defined('hp')      ) call cline%set('hp',        30.)
+        if( .not. cline%defined('lp')      ) call cline%set('lp',         5.)
+        ! execute
+        call xctffind_distr%execute(cline)
 
     ! PIPELINED UNBLUR + CTFFIND
 
@@ -112,54 +190,8 @@ select case(prg)
         ! execute
         call xunblur_ctffind_distr%execute(cline)
 
-    ! UNBLUR_MOVIES
-
-    case( 'unblur' )
-        !==Program unblur
-        !
-        ! <unblur/begin>is a distributed workflow for movie alignment or unblurring based the same 
-        ! principal strategy as Grigorieffs program (hence the name). There are two important 
-        ! differences: automatic weighting of the frames using a correlation-based M-estimator and 
-        ! continuous optimisation of the shift parameters. Input is a textfile with absolute paths 
-        ! to movie files in addition to a few input parameters, some of which deserve a comment. If 
-        ! dose_rate and exp_time are given the individual frames will be low-pass filtered accordingly
-        ! (dose-weighting strategy). If scale is given, the movie will be Fourier cropped according to 
-        ! the down-scaling factor (for super-resolution movies). If nframesgrp is given the frames will 
-        ! be pre-averaged in the given chunk size (Falcon 3 movies). If fromf/tof are given, a 
-        ! contiguous subset of frames will be averaged without any dose-weighting applied. 
-        ! <unblur/end>
-        !
-        ! set required keys
-        keys_required(1)  = 'filetab'
-        keys_required(2)  = 'smpd'
-        keys_required(3)  = 'nparts'
-        ! set optional keys
-        keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'ncunits'
-        keys_optional(3)  = 'fbody'
-        keys_optional(4)  = 'dose_rate'
-        keys_optional(5)  = 'exp_time'
-        keys_optional(6)  = 'lpstart'
-        keys_optional(7)  = 'lpstop'
-        keys_optional(8)  = 'trs'
-        keys_optional(9)  = 'kv'
-        keys_optional(10) = 'pspecsz'
-        keys_optional(11) = 'numlen'
-        keys_optional(12) = 'startit'
-        keys_optional(13) = 'scale'
-        keys_optional(14) = 'nframesgrp'
-        keys_optional(15) = 'fromf'
-        keys_optional(16) = 'tof'
-        keys_optional(17) = 'nsig'
-        ! parse command line
-        if( describe ) call print_doc_unblur
-        call cline%parse(keys_required(:3), keys_optional(:17))
-        ! set defaults
-        if( .not. cline%defined('trs')     ) call cline%set('trs',      5.)
-        if( .not. cline%defined('lpstart') ) call cline%set('lpstart', 15.)
-        if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',   8.)
-        ! execute
-        call xunblur_distr%execute(cline)
+    ! UNBLUR FOR TOMOGRAPHY
+    
     case( 'unblur_tomo' )
         !==Program unblur_tomo
         !
@@ -198,41 +230,6 @@ select case(prg)
         if( .not. cline%defined('tomo')    ) call cline%set('tomo',  'yes')
         ! execute
         call xunblur_tomo_distr%execute(cline)
-
-    ! CTFFIND
-
-    case( 'ctffind' )
-        !==Program ctffind
-        !
-        ! <ctffind/begin>is a distributed workflow that wraps CTFFIND4 (Grigorieff lab)<ctffind/end> 
-        !
-        ! set required keys
-        keys_required(1) = 'filetab'
-        keys_required(2) = 'smpd'
-        keys_required(3) = 'kv'
-        keys_required(4) = 'cs'
-        keys_required(5) = 'fraca'
-        keys_required(6) = 'nparts'
-        ! set optional keys
-        keys_optional(1) = 'ncunits'
-        keys_optional(2) = 'pspecsz'
-        keys_optional(3) = 'hp'
-        keys_optional(4) = 'lp'
-        keys_optional(5) = 'dfmin'
-        keys_optional(6) = 'dfmax'
-        keys_optional(7) = 'astigstep'
-        keys_optional(8) = 'expastig'
-        keys_optional(9) = 'phaseplate'
-        ! parse command line
-        if( describe ) call print_doc_ctffind
-        call cline%parse(keys_required(:6), keys_optional(:9))
-        ! set defaults
-        call cline%set('nthr', 1.0)
-        if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz', 1024.)
-        if( .not. cline%defined('hp')      ) call cline%set('hp',        30.)
-        if( .not. cline%defined('lp')      ) call cline%set('lp',         5.)
-        ! execute
-        call xctffind_distr%execute(cline)
 
     ! PRIME2D
 
@@ -315,37 +312,37 @@ select case(prg)
             stop 'eiter nparts or chunksz need to be part of command line'
         endif
         call xprime2D_distr%execute(cline)
-
-    ! 3D SIMILARITY MATRIX GENERATION WITH COMMON LINES
-
-    case( 'comlin_smat' )
-        !==Program comlin_smat
-        !
-        ! <comlin_smat/begin>is a distributed workflow for creating a similarity matrix based on 
-        ! common line correlation. The idea being that it should be possible to cluster images based
-        ! on their 3D similarity witout having a 3D model by only operating on class averages
-        ! and find averages that fit well together in 3D<comlin_smat/end>
-        !
-        ! set required keys
-        keys_required(1) = 'stk'
-        keys_required(2) = 'smpd'
-        keys_required(3) = 'lp'
-        keys_required(4) = 'msk'
-        keys_required(5) = 'nparts'
-        ! set optional keys
-        keys_optional(1) = 'hp'
-        keys_optional(2) = 'trs'
-        ! parse command line
-        if( describe ) call print_doc_comlin_smat
-        call cline%parse(keys_required(:5), keys_optional(:2))
-        ! set defaults
-        call cline%set('nthr', 1.0)
-        if( .not. cline%defined('trs') ) call cline%set('trs', 3.0)
-        ! execute
-        call xcomlin_smat_distr%execute(cline) 
         
     ! PRIME3D
 
+    case( 'ini3D_from_cavgs' )
+        !==Program ini3D_from_cavgs
+        !
+        ! <ini3D_from_cavgs/begin>is a distributed workflow for generating an initial 
+        ! 3D model from class averages obtained with prime2D<ini3D_from_cavgs/end> 
+        !
+        ! set required keys
+        keys_required(1)  = 'stk'
+        keys_required(2)  = 'smpd'
+        keys_required(3)  = 'msk'
+        keys_required(4)  = 'pgrp'
+        keys_required(5)  = 'nparts'
+        ! set optional keys
+        keys_optional(1)  = 'nthr'
+        keys_optional(2)  = 'ncunits'
+        keys_optional(3)  = 'hp'
+        keys_optional(4)  = 'lp'
+        keys_optional(5)  = 'lpstop'
+        keys_optional(6)  = 'inner'
+        keys_optional(7)  = 'width'
+        keys_optional(8)  = 'nspace'
+        keys_optional(9)  = 'autoscale'
+        keys_optional(10) = 'pgrp_known'
+        ! parse command line
+        if( describe ) call print_doc_ini3D_from_cavgs
+        call cline%parse(keys_required(:5), keys_optional(:10))
+        ! execute
+        call xini3D_from_cavgs%execute( cline )
     case('prime3D_init')
         !==Program prime3D_init
         !
@@ -540,66 +537,8 @@ select case(prg)
         if(.not.cline%defined('cenlp')) call cline%set('cenlp', 30.)
         ! execute
         call xsymsrch_distr%execute( cline )
-
-    ! TIME-SERIES DISTRIBUTED WORKFLOWS
-
-    case( 'tseries_track' )
-        !==Program tseries_track
-        !
-        ! <tseries_track/begin>is a distributed workflow for particle tracking 
-        ! in time-series data <tseries_track/end> 
-        !
-        ! set required keys
-        keys_required(1) = 'filetab'
-        keys_required(2) = 'fbody'
-        keys_required(3) = 'smpd'
-        keys_required(4) = 'boxfile'
-        keys_required(5) = 'ncunits'
-        ! set optional keys
-        keys_optional(1) = 'lp'
-        keys_optional(2) = 'offset'
-        ! parse command line
-        if( describe ) call print_doc_tseries_track
-        call cline%parse(keys_required(:5), keys_optional(:2))
-        ! set defaults
-        call cline%set('nthr', 1.0)
-        if( .not. cline%defined('neg') ) call cline%set('neg', 'yes')
-        if( .not. cline%defined('lp')  ) call cline%set('lp',    2.0)
-        ! execute
-        call xtseries_track_distr%execute( cline )
-
-    ! HIGH-LEVEL DISTRIBUTED WORKFLOWS
-
-    case( 'ini3D_from_cavgs' )
-        !==Program ini3D_from_cavgs
-        !
-        ! <ini3D_from_cavgs/begin>is a distributed workflow for generating an initial 
-        ! 3D model from class averages obtained with prime2D<ini3D_from_cavgs/end> 
-        !
-        ! set required keys
-        keys_required(1)  = 'stk'
-        keys_required(2)  = 'smpd'
-        keys_required(3)  = 'msk'
-        keys_required(4)  = 'pgrp'
-        keys_required(5)  = 'nparts'
-        ! set optional keys
-        keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'ncunits'
-        keys_optional(3)  = 'hp'
-        keys_optional(4)  = 'lp'
-        keys_optional(5)  = 'lpstop'
-        keys_optional(6)  = 'inner'
-        keys_optional(7)  = 'width'
-        keys_optional(8)  = 'nspace'
-        keys_optional(9)  = 'autoscale'
-        keys_optional(10) = 'pgrp_known'
-        ! parse command line
-        if( describe ) call print_doc_ini3D_from_cavgs
-        call cline%parse(keys_required(:5), keys_optional(:10))
-        ! execute
-        call xini3D_from_cavgs%execute( cline )
     case DEFAULT
         write(*,'(a,a)') 'program key (prg) is: ', trim(prg)
-        stop 'unsupported program'
+        stop 'unsupported distributed workflow'
     end select
 end program simple_distr_exec

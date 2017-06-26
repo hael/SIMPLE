@@ -1,0 +1,407 @@
+<p><img src="./SIMPLE_logo/rawlogo" alt="image" /></p>
+<p>[ht]<span>0.48</span> <strong>Contributors:</strong><br />
+cyril.reboul@monash.edu<br />
+michael.eager@monash.edu<br />
+dominika.elmlund@monash.edu<br />
+hans.elmlund@monash.edu<br />
+<strong>Adress:</strong><br />
+Dept. Biochemistry and Molecular Biology<br />
+School of Biomedical Sciences<br />
+Monash University, Bldg. 77<br />
+Clayton, VIC, Australia, 3800<br />
+<strong>Webpage:</strong><br />
+www.simplecryoem.com<br />
+<strong>Contact:</strong><br />
+<a href="http://simplecryoem.com/contact.html" class="uri">http://simplecryoem.com/contact.html</a><br />
+dominika@simplecryoem.com<br />
+</p>
+<h1 id="from-movies-to-ab-initio-3d-reconstruction">From Movies to <em>ab initio</em> 3D reconstruction</h1>
+<p>These steps describe a typical SIMPLE workflow.</p>
+<ol>
+<li><p>DDD (Direct Detector Device) movie alignment and frame-weighting using SIMPLE program , executed with <code>simple_distr_exec</code></p></li>
+<li><p>CTF parameter identification with the SIMPLE program , wrapping CTFFIND4 <span class="citation" data-cites="rohou2015ctffind4"></span>, executed with <code>simple_distr_exec</code></p></li>
+<li><p>Particle identification using EMAN2 <span class="citation" data-cites="Tang:2007aa"></span> to generate <code>*.box</code> files</p></li>
+<li><p>Particle extraction with SIMPLE program , executed with <code>simple_exec</code></p></li>
+<li><p>2D analysis using the SIMPLE distributed workflow, executed with <code>simple_distr_exec</code></p></li>
+<li><p><em>Ab initio</em> 3D reconstruction from class averages using the SIMPLE distributed workflow, executed with <code>simple_distr_exec</code></p></li>
+<li><p>Mapping of class average selection and 3D class orientations to the particles using SIMPLE program , executed with <code>simple_exec</code></p></li>
+<li><p>Reconstruction of a 3D map from the individual particle images with SIMPLE program , executed with <code>simple_distr_exec</code></p></li>
+<li><p>Map refinement will be part of release 3.0</p></li>
+</ol>
+<h2 id="this-tutorial-will-cover">This Tutorial will Cover</h2>
+<ol>
+<li><p>DDD (Direct Detector Device) movie pre-processing</p></li>
+<li><p>2D analysis with PRIME2D</p></li>
+<li><p><em>ab initio</em> 3D reconstruction from class averages using</p></li>
+</ol>
+<p>with the SIMPLE program package version 2.5 available for download on the SIMPLE homepage <a href="http://simplecryoem.com" class="uri">http://simplecryoem.com</a>.</p>
+<h2 id="execution-of-simple">Execution of SIMPLE</h2>
+<p>SIMPLE is executed primarily via <code>simple_distr_exec</code> that implements higher level workflows intended for distributed execution on workstations and clusters using a hybrid parallelisation model (distributed <em>and</em> shared memory). SIMPLE can also be executed via <code>simple_exec</code>, which implements all individual SIMPLE programs and runs in shared-memory parallelisation mode. Please, beware that the high-level workflows ( and , for example) can <em>only</em> be executed via the distributed execution route. In cluster environments using a job scheduler (PBS, SLURM and SGE are supported by SIMPLE) the file <code>simple_distr_config.env</code> in the current working directory controls the execution.</p>
+<pre><code>bash-3.2$ cat simple_distr_config.env 
+# CONFIGURATION FILE FOR DISTRIBUTED SIMPLE EXECUTION
+
+# ABSOLUTE PATH TO SIMPLE ROOT DIRECTORY
+simple_path           = /scratch/m3earlyadopters/simple/simple/
+
+# ESTIMATED TIME PER IMAGE (IN SECONDS)
+time_per_image        = 600
+
+# USER DETAILS
+user_account          = el85 
+user_email            = hans.elmlund@monash.edu
+user_project          = 
+
+# QSYS DETAILS (qsys_name=&lt;local|slurm|pbs&gt;)
+qsys_name             = slurm
+qsys_partition        = m3a
+qsys_qos              =
+qsys_reservation      = simple
+
+# JOB DETAILS
+job_ntasks            = 1
+job_memory_per_task   = 48000
+job_name              = taf-dna-part2
+job_ntasks_per_socket = 1</code></pre>
+<p>This file is auto-generated on workstations, but it needs to be edited by the user in cluster environments. If you need help configuring distributed SIMPLE execution, please file a help ticket on the webpage. The two most important parameters for distributed execution is the number of partitions <code>nparts</code> and the number of shared-memory CPU threads <code>nthr</code>. A rule of thumb for good performance on multi-socket workstations is to minimise the number of parts and maximising the number of threads subject to never having fewer parts than sockets. The shared memory parallelisation does not benefit from the use of a larger number of threads than the number of logical threads available on a socket. To check the number of processors on a linux system, execute <code>nproc</code> in the terminal. Consider a heterogeneous cluster with N nodes, two CPU sockets per node and six CPUs per socket.</p>
+<p>[][h] <img src="./CPUtopo/cputopo" alt="image" /></p>
+<p>If you are unsure how to configure your SIMPLE execution please file a help ticket.</p>
+<h1 id="ddd-movie-pre-processing">DDD Movie Pre-processing</h1>
+<h2 id="motion-correction">Motion Correction</h2>
+<p>During image acquisition, beam induced motion, charging and stage drift introduce blurring in the integrated movies. The individual frames need to be aligned with respect to one another in order to restore high-resolution information. Because of radiation damage, the electron dose is kept low during image acquisition, resulting in a very low signal-to-noise ratio (SNR) of the individual movie frames. SIMPLE implements a program called for simultaneous motion-correction, frame-weighting and dose-weighting, with the objective of maximising the SNR of the integrated movie in a motion- and dose-dependent manner. Input is a text file <code>filetab</code>, simply listing the individual movies in <code>*.mrc</code> format, the pixel-to-pixel (or sampling) distance <code>smpd</code> (in Å), the number of CPU threads to use <code>nthr</code>, the template name of the outputted files <code>fbody</code>, in addition to a number of other optional parameters that we will not be concerned with here. If we execute <code>simple_distr_exec prg=unblur</code> in the prompt, we obtain brief instructions for how to run the program:</p>
+<pre><code>bash-3.2$ simple_distr_exec prg=unblur_movies
+USAGE:
+bash-3.2$ simple_distr_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+filetab = list of files(*.txt/*.asc)
+smpd    = sampling distance, same as EMANs apix(in A)
+nparts  = # partitions in distributed exection
+
+OPTIONAL
+nthr       = # OpenMP threads{1}
+ncunits    = # computing units, can be &lt; nparts{nparts}
+fbody      = file body
+dose_rate  = dose rate(in e/A2/s)
+exp_time   = expusure time(in s)
+lpstart    = start low-pass limit(in A){15}
+lpstop     = stop low-pass limit(in A){8}
+trs        = maximum halfwidth shift(in pixels)
+kv         = acceleration voltage(in kV){300.}
+pspecsz    = size of power spectrum(in pixels)
+numlen     = length of number string
+startit    = start iterating from here
+scale      = image scale factor{1}
+nframesgrp = # frames to group before unblur(Falcon 3){0}
+fromf      = start frame index
+tof        = stop frame index
+nsig       = # sigmas</code></pre>
+<p>Output consists of four files per movie (<code>movie1.mrc</code> in this example):</p>
+<ol>
+<li><p><code>&lt;fbody&gt;_intg1.mrc</code> is the frame-weighted, motion-corrected sum</p></li>
+<li><p><code>&lt;fbody&gt;_forctf1.mrc</code> is the un-weighted sum of the aligned individual frames</p></li>
+<li><p><code>&lt;fbody&gt;_pspec1.mrc</code> is the power-spectrum of the uncorrected unweighted movie sum (left) and the corrected weighted movie sum (right)</p></li>
+<li><p><code>&lt;fbody&gt;_thumb1.mrc</code> is a down-scaled version of <code>&lt;fbody&gt;_intg1.mrc</code></p></li>
+</ol>
+<p>The <code>*forctf*</code> output is created because weighting the frames may degrade the contrast transfer function (CTF) signal and this file will therefore later be used to determine the CTF parameters of the integrated movie. The <code>*intg*</code> image is the dose-weighted one you will use for particle picking and extract your identified individual particle images from. The <code>*pspec*</code> and <code>*thumb*</code> outputs are diagnostic. Please, check so that the Thon rings are concentric and have similar radial intensity distribution in any given resolution shell after alignment (right part of power-spectrum)if not, trash the image. If you have downloaded the example data folder, please execute</p>
+<pre><code>bash-3.2$ cd 1_DDD-movie-proc/
+bash-3.2$ ls
+data
+bash-3.2$ ls ./data/
+4comparison  boxfiles  info.txt  movie1.mrc  movie2.mrc
+bash-3.2$ cat ./data/info.txt 
+molecule: proteasome
+exp_time=7.6s
+dose_rate=7e/A2/s
+kv=300
+cs=2.7
+smpd=5.26
+fraca=0.1
+bash-3.2$ ls ./data/movie* &gt; movies.txt
+bash-3.2$ cat movies.txt 
+./data/movie1.mrc
+./data/movie2.mrc</code></pre>
+<p>These movies are of proteasome molecules in ice (EMPIAR-10025), exposed for <code>exp_time=7.6</code> s with a dose rate of <code>dose_rate=7</code> e/Å<span class="math inline"><em></em><sup>2</sup></span>/s. The electron microscope used to acquire these images has an acceleration voltage of <code>kv=300</code> kV and a spherical aberration constant of <code>cs=2.7</code> mm. We have downscaled these images for more rapid processing to a sampling distance of <code>smpd=5.26</code> Å and we will assume 10% amplitude contrast when fitting the CTF <code>fraca=0.1</code>. First, we need to create a file table, listing the movies to be processed with .</p>
+<pre><code>bash-3.2$ ls data/movie* &gt; movies.txt</code></pre>
+<p>To see what this file contains, execute:</p>
+<pre><code>bash-3.2$ cat movies.txt 
+data/movie1.mrc
+data/movie2.mrc</code></pre>
+<p>Next, we execute the program.</p>
+<pre><code>bash-3.2$ simple_distr_exec prg=unblur filetab=movies.txt smpd=5.26 
+nparts=2 nthr=12 fbody=proteasome dose_rate=7 exp_time=7.6 kv=300 
+fbody=proteasome</code></pre>
+<p>The first thing that happens is that all individual movie frames are read in and Fourier transformed. The algorithm is iterative and based on registration of the individual frames to a weighted average, where the weights are determined based on the agreement between the frames and the average. The algorithm automatically updates the resolution limit as the alignment accuracy improves, <em>i.e.</em> using only low-resolution Fourier components at first when the alignment errors are large and large movements need to be identified. It then successively updates the resolution limit as the alignment accuracy improves. When no improvements can be identified, the procedure stops. The outputted image files are:</p>
+<pre><code>bash-3.2$ ls
+data                    proteasome_forctf2.mrc  proteasome_pspec2.mrc    
+movies.txt              proteasome_intg1.mrc    proteasome_thumb1.mrc
+simple_unidoc.txt       proteasome_intg2.mrc    proteasome_thumb2.mrc
+proteasome_forctf1.mrc  proteasome_pspec1.mrc   simple_distr_config.env</code></pre>
+<p>The first images we inspect are the power spectra. For visualisation, use the EMAN2 program <code>e2display.py</code>. Execute <code>e2display.py</code> in the current working directory, click on one of the <code>*pspec*</code> files and then <code>Show 2D</code>.</p>
+<p>[][h] <img src="./pspec/pspec" alt="image" /></p>
+<p>To get an idea of the effect of the movie pre-processing in real-space, expand the data folder from within <code>e2display.py</code>, then expand the <code>4comparison</code> folder and click on the <code>proteasome_straight_intg1.mrc</code> file, followed by <code>Show 2D+</code>. Do the same for the corrected movie <code>proteasome_intg1.mrc</code> and compare the two images.</p>
+<figure>
+<img src="./straightvsintg/straightvsintg" alt="The uncorrected movie, integrated without alignment, is blurred and lacks high-resolution contrast, whereas the corrected movie has much higher contrast and better definition." /><figcaption>The uncorrected movie, integrated without alignment, is blurred and lacks high-resolution contrast, whereas the corrected movie has much higher contrast and better definition.</figcaption>
+</figure>
+<p>[breakable,colback=white,colframe=orange,width=+12mm,enlarge left by=-6mm]</p>
+<h2 id="using-simple-in-the-wildpower-spectrum-analysis-and-movie-selection">Using SIMPLE in the WildPower Spectrum Analysis and Movie Selection</h2>
+<p>In a real-life scenario, all images in a data set are never perfect. A truck may come driving by the EM suite and cause drift, someone may pass the EM room transporting a big piece of metal, causing the energy filter to become misaligned, or the pump of the autoloader may have been accidentally turned on. The list could be made long. Therefore, it is important that we take a good look at our data. The first round of screening is usually done by looking at power spectrathe <code>*pspec*</code> files produced by . Typically, you will have executed <code>unblur</code> in distributed mode in a cluster environment (described below) and a stack of power spectra called <code>unblur_pspecs.mrc</code> has then been produced. We use EMAN2 to look at the power spectra and Steve will introduce you to EMAN2 in the next session but you can use whatever GUI you like to make the selection. SIMPLE supports MRC and SPIDER files but does not allow you to mix formats, so if you need to convert between MRC and SPIDER file formats, use SIMPLE program</p>
+<pre><code>bash-3.2$ simple_exec prg=convert
+USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+OPTIONAL
+stk    = particle stack with all images(ptcls.ext)
+vol1   = input volume no1(invol1.ext)
+outstk = output image stack
+outvol = output volume{outvol.ext}</code></pre>
+<p>Once you have made the selection and have the two stacks <code>unblur_pspecs.mrc</code> and <code>good_pspecs.mrc</code> or whatever you select to call them you can propagate the selection to your <code>*intg*</code> and <code>*forctf*</code> files using SIMPLE program</p>
+<pre><code>bash-3.2$ simple_exec prg=select
+USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+stk  = particle stack with all images(ptcls.ext)
+stk2 = 2nd stack(in map2ptcls/select: selected(cavgs).ext)
+
+OPTIONAL
+nthr       = nr of OpenMP threads{1}
+stk3       = 3d stack (in map2ptcls/select: (cavgs)2selectfrom.ext)
+filetab    = list of files(*.txt/*.asc)
+outfile    = output document
+outstk     = output image stack
+dir_select = move selected files to here{selected}
+dir_reject = move rejected files to here{rejected}</code></pre>
+<p>You would then execute twice. In the first pass to select your <code>*intg*</code> files:</p>
+<pre><code>bash-3.2$ ls *intg* &gt; intg_movies.txt
+bash-3.2$ simple_exec prg=select stk=unblur_pspecs.mrc stk2=good_pspecs.mrc nthr=8 
+filetab=intg_movies.txt dir_select=intg_selected dir_reject=intg_rejected</code></pre>
+<p>and in the second pass to select your <code>*forctf*</code> files:</p>
+<pre><code>bash-3.2$ ls *forctf* &gt; forctf_movies.txt
+bash-3.2$ simple_exec prg=select stk=unblur_pspecs.mrc stk2=good_pspecs.mrc nthr=8 
+filetab=forctf_movies.txt dir_select=forctf_selected dir_reject=forctf_rejected</code></pre>
+<p>[][h] <img src="./spectra/pspecs" alt="image" /></p>
+<h2 id="ctf-parameter-determination">CTF Parameter Determination</h2>
+<p>The contrast transfer function (CTF) mathematically describes how aberrations in a transmission electron microscope modify the recorded image. The assumption we rely on is that the image is a projection of the Coulomb potential distribution of the specimen, convoluted (multiplied in Fourier space) with the CTF and with Gaussian noise added. All 3D reconstruction methodology rely on this or slight variations of this assumption. The CTF is an oscillatory function (we saw the effect of it in the power spectrum in Figure 1) and the frequency of the oscillations depends on the spherical aberration constant <code>cs</code> in mm, which is an instrument specific constant, and the defocus in microns, which we systematically vary during image acquisition. The reason that we vary the defocus during data collection is that we want to avoid systematic lack of information in certain resolution regions, as no information other than noise is present in the zero crossings of the CTF. By varying the defocus we shift the positions of the zero crossings of the CTF. If astigmatism is present in the image, the Thon rings are no longer radially symmetric but elliptical and we need to take this into account as well.</p>
+<p>The CTF has two components: one phase contrast component (giving rise to the same kind of contrast as in a medical X-ray image) and one amplitude contrast component (giving rise to the same kind of contrast as when you put your hand on a projector, omitting photons to create a shadow image). Most of the contrast in biological cryo-EM are due to change in phase. In fact, the fraction of amplitude contrast has been measured to be around 10% for proteins. In summary, we need six parameters to determine the parameters of the CTF: the acceleration voltage <code>kv</code>, the spherical aberration constant <code>cs</code>, the fraction of amplitude contrast <code>fraca</code>, the defocus in the x-direction <code>dfx</code>, the defocus in the y-direction <code>dfy</code> and the angle of astigmatism <code>angast</code>. The <code>kv</code>, <code>cs</code>, and <code>fraca</code> we treat as constants. Although we measure the defocus and astigmatism during data acquisition, the accuracies of these measurements are too crude to be useful for image processing. However, the protein itself, the carbon support and the ice scatters sufficiently for us to be able to generate a power spectrum that accurately represents the CTF power. This is typically done by extracting overlapping boxes from the micrograph, for every box calculating a power spectrum and averaging all power spectra over a micrograph to enhance the CTF signal. Using a parametric model for the CTF of the form CTF=A_<span>phase</span>sin()+A_<span>amp</span>cos() where <span class="math inline"><em>A</em><sub><em>p</em><em>h</em><em>a</em><em>s</em><em>e</em></sub> = 0.9</span>, <span class="math inline"><em>A</em><sub><em>a</em><em>m</em><em>p</em></sub> = 0.1</span> and the phase shift <span class="math inline"><em>ϕ</em></span> <span class="math inline">$\phi=\pi{}\lambda{}s^{2}(D-\frac{\lambda{}^{2}s^{2}C_{s}}{2})$</span> where <span class="math inline"><em>λ</em></span> is the electron wavelength, <span class="math inline"><em>s</em></span> is spatial frequency, <span class="math inline"><em>D</em></span> is defocus and <span class="math inline"><em>C</em><sub><em>s</em></sub></span> is the spherical aberration constant, we can determine the parameters we need.</p>
+<figure>
+<img src="./astigctf/astigctf" alt="Non-astigmatic CTF (left) vs. astigmatic CTF (middle) and schematic 1D CTF profile (right)" /><figcaption>Non-astigmatic CTF (left) vs. astigmatic CTF (middle) and schematic 1D CTF profile (right)</figcaption>
+</figure>
+<p>SIMPLE implements a wrapper program called that executes CTFFIND4 <span class="citation" data-cites="rohou2015ctffind4"></span> version 4.1.X, producing a SIMPLE conforming CTF parameter document <code>deftab</code>. Input is a text file <code>filetab</code>, simply listing the individual integrated movies in <code>*.mrc</code> format, the pixel-to-pixel (or sampling) distance <code>smpd</code> (in Å), the acceleration voltage of the electron microscope <code>kv</code> (in kV), the spherical aberration constant <code>cs</code> in mm and the fraction of amplitude contrast <code>fraca</code> in addition to a number of other optional parameters that we will not be concerned with here. If we execute <code>simple_distr_exec prg=ctffind</code> in the prompt, we obtain brief instructions for how to run the program:</p>
+<pre><code>bash-3.2$ simple_exec prg=ctffind
+USAGE:
+bash-3.2$ simple_distr_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+filetab = list of files(*.txt/*.asc)
+smpd    = sampling distance, same as EMANs apix(in A)
+kv      = acceleration voltage(in kV){300.}
+cs      = spherical aberration constant(in mm){2.7}
+fraca   = fraction of amplitude contrast used for fitting CTF{0.07}
+nparts  = # partitions in distributed exection
+
+OPTIONAL
+ncunits    = # computing units, can be &lt; nparts{nparts}
+pspecsz    = size of power spectrum(in pixels)
+hp         = high-pass limit(in A)
+lp         = low-pass limit(in A)
+dfmin      = minimum expected defocus(in microns)
+dfmax      = maximum expected defocus(in microns)
+astigstep  = step size for astigamtism search(in microns)
+expastig   = expected astigmatism(in microns)
+phaseplate = images obtained with phaseplate(yes|no){no}</code></pre>
+<p>Output is a text file with defocus parameters <code>ctffind_output.txt</code>. First, we need to create a file table, listing the integrated movies to be processed with .</p>
+<pre><code>bash-3.2$ ls proteasome_forctf* &gt; ctf_movies.txt</code></pre>
+<p>As explained above, the <code>*forctf*</code> output is created because weighted averaging may degrade the contrast transfer function (CTF) signal and this un-weighted average is therefore used to determine the CTF parameters of the integrated movie. Next, we execute the program.</p>
+<pre><code>bash-3.2$ simple_distr_exec prg=ctffind filetab=ctf_movies.txt smpd=5.26
+kv=300 cs=2.7 fraca=0.1 nparts=2</code></pre>
+<p>Output is the file <code>ctffind_output.txt</code>.</p>
+<p>In SIMPLE, we have yet to implement a particle picker but rely on EMAN1.9 and EMAN2 for particle identification. However, if you have <code>*.box</code> files obtained with EMAN you can extract the particle images and their associated CTF parameters using SIMPLE. To illustrate this functionality, we have prepared box files in the <code>data</code> folder for use in conjunction with SIMPLE program . As before, we need to prepare file tables. First, we prepare a file table for the motion corrected integrated movies:</p>
+<pre><code>bash-3.2$ ls proteasome_intg* &gt; intg_movies.txt</code></pre>
+<p>Second, for the box files:</p>
+<pre><code>bash-3.2$ ls ./data/boxfiles/*box &gt; boxfiles.txt</code></pre>
+<p>Finally, we execute the program:</p>
+<pre><code>bash-3.2$ simple_exec prg=extract filetab=intg_movies.txt boxtab=boxfiles.txt
+smpd=5.26 ctffind_doc=ctffind_output.txt 
+&gt;&gt;&gt; DONE PROCESSING PARAMETERS
+&gt;&gt;&gt; DONE BUILDING GENERAL TOOLBOX
+  100%  |==================================================| done.
+       _______ _____ _______  _____         _______
+       |______   |   |  |  | |_____] |      |______
+       ______| __|__ |  |  | |       |_____ |______
+ 
+ _)_ ( _   _     ) o  _             _   _   _   o  _   _
+ (_   ) ) )_)   (  ( ) ) (_( \)    )_) ) ) (_(  ( ) ) )_)
+         (_                  (\   (_         _)      (_
+
+**** SIMPLE_EXTRACT NORMAL STOP ****</code></pre>
+<p>Output is a particle stack <code>sumstack.mrc</code> and its associated parameter file <code>extract_params.txt</code>.</p>
+<h1 id="d-analysis-with-prime2d">2D Analysis with PRIME2D</h1>
+<p>Algorithms that can rapidly discover clusters corresponding to sets of images with similar projection direction and conformational state play an important role in single-particle analysis. Identification of such clusters allows for enhancement of the signal-to-noise ratio (SNR) by averaging and gives a first glimpse into the character of a dataset. Therefore, clustering algorithms play a pivotal role in initial data quality assessment, <em>ab initio</em> 3D reconstruction and analysis of heterogeneous single-particle populations. SIMPLE implements a probabilistic algorithm for simultaneous 2D alignment and clustering, called . The version we are going to use here is an improved version of the published code <span class="citation" data-cites="reboul2016stochastic"></span>. Grouping tens of thousands of images into several hundred clusters is a computationally intensive job. Therefore, we will now introduce the execution route for running SIMPLE jobs in a distributed computing environment.</p>
+<h2 id="prime2d-analysis-of-trpv1-membrane-receptor-images">PRIME2D Analysis of TRPV1 Membrane Receptor Images</h2>
+<p>The computers we are currently using have four i7 processors in a single socket, hyper-threaded so it looks like we have eight. We are now going to pretend that we have two CPU sockets with four CPUs each for the purpose of demonstration. Go to the <code>PRIME2D</code> directory and check things out.</p>
+<pre><code>bash-3.2$ cd ../2_PRIME2D/
+bash-3.2$ ls
+data/
+bash-3.2$ ls data/
+info.txt                 trpv1_extract_params.txt trpv1_ptcls.mrc
+bash-3.2$ cat data/info.txt 
+smpd=2.43
+kv=300.
+cs=2.0
+fraca=0.1
+ctf=flip
+msk=36
+box=128</code></pre>
+<p>The key-value pair <code>ctf=flip</code> means that the images have been “phase-flipped”, <em>i.e.</em> the contrast bands inverted by the CTF have been reverted simply by multiplying the Fourier transform of the image with the sign of the CTF. The individual particle images are quite noisy and it is difficult to gain any understanding about the imaged structure from these images, which represent a subset of particles from a larger TRPV1 data set (EMPIAR-10005).</p>
+<p>[][h] <img src="./trpv1ptcls" alt="image" /></p>
+<p>In order to cluster the images, execute:</p>
+<pre><code>bash-3.2$ simple_distr_exec prg=prime2D stk=./data/trpv1_ptcls.mrc smpd=2.43 msk=36 
+ncls=5 ctf=flip nparts=2 nthr=4 deftab=./data/trpv1_extract_params.txt</code></pre>
+<p>For every iteration, we expect to see the following output in the terminal:</p>
+<pre><code>&gt;&gt;&gt;
+&gt;&gt;&gt; ITERATION     10
+&gt;&gt;&gt;
+DISTRIBUTED MODE :: submitting scripts:
+distr_simple_script_1
+distr_simple_script_2
+appending output to nohup.out
+appending output to nohup.out
+&gt;&gt;&gt; DONE PROCESSING PARAMETERS
+**** SIMPLE_MERGE_ALGNDOCS NORMAL STOP ****
+&gt;&gt;&gt; DONE PROCESSING PARAMETERS
+&gt;&gt;&gt; DONE BUILDING GENERAL TOOLBOX
+&gt;&gt;&gt; DONE BUILDING HADAMARD PRIME2D TOOLBOX
+**** SIMPLE_CAVGASSEMBLE NORMAL STOP ****
+&gt;&gt;&gt; DONE PROCESSING PARAMETERS
+&gt;&gt;&gt; DONE BUILDING GENERAL TOOLBOX
+&gt;&gt;&gt; JOINT    DISTRIBUTION OVERLAP:       0.6757
+&gt;&gt;&gt; CLASS    DISTRIBUTION OVERLAP:       0.8030
+&gt;&gt;&gt; IN-PLANE DISTRIBUTION OVERLAP:       0.5485
+&gt;&gt;&gt; AVERAGE IN-PLANE ANGULAR DISTANCE:     13.8
+&gt;&gt;&gt; PERCENTAGE OF SEARCH SPACE SCANNED:    89.6
+&gt;&gt;&gt; CORRELATION:                         0.5618
+&gt;&gt;&gt; CONVERGED: .NO.
+**** SIMPLE_CHECK2D_CONV NORMAL STOP ****</code></pre>
+<p>The distribution overlap represents the agreement between the alignment and clustering parameters from the present and previous iteration. The most important metric, however, is the fraction of search space scanned. is based on stochastic hill climbing optimisation, which relies on the so-called first improvement heuristic. This means that not all references are matched for each particle in each round but only as many as is required to find an improving solution, which is instantly accepted. Therefore, in the beginning of the search only few references need to be evaluated to find improving configurations (percentage of search space is low) whereas when convergence to a local (or global) optimum has been achieved most if not all references need to be evaluated (percentage of search space is high). Convergence is based on the class overlap and the fraction of search space scanned. Upon completion of the calculation, we see</p>
+<pre><code>&gt;&gt;&gt; CONVERGED: .YES.
+**** SIMPLE_CHECK2D_CONV NORMAL STOP ****
+&gt;&gt;&gt; DONE PROCESSING PARAMETERS
+&gt;&gt;&gt; DONE BUILDING GENERAL TOOLBOX
+CLASS:     4 POP:  489
+CLASS:     2 POP:  433
+CLASS:     3 POP:  301
+CLASS:     5 POP:  202
+CLASS:     1 POP:  194
+**** SIMPLE_RANK_CAVGS NORMAL STOP ****
+       _______ _____ _______  _____         _______
+       |______   |   |  |  | |_____] |      |______
+       ______| __|__ |  |  | |       |_____ |______
+ 
+ _)_ ( _   _     ) o  _             _   _   _   o  _   _
+ (_   ) ) )_)   (  ( ) ) (_( \)    )_) ) ) (_(  ( ) ) )_)
+         (_                  (\   (_         _)      (_
+
+**** SIMPLE_DISTR_PRIME2D NORMAL STOP ****</code></pre>
+<p>[][h] <img src="./trpv1iters/trpv1iters" alt="image" /></p>
+<p>[breakable,colback=white,colframe=orange,width=+12mm,enlarge left by=-6mm]</p>
+<h2 id="using-simple-in-the-wildselecting-good-class-averages-and-mapping-the-selection-to-the-particles">Using SIMPLE in the WildSelecting Good Class Averages and Mapping the Selection to the Particles</h2>
+<p>Most data sets contain images other than perfect particle images (false positives). Sometimes the particles tend to form micro-aggregations and are lying too close to each other or on top of each other. When automatic or semi-automatic particle identification procedures are used, ice-contaminations and carbon edges are often mistaken for particles. Therefore, it is good practice to first cluster the images into 100-200 classes and clean out the unwanted images before proceeding with grouping the data into a larger number of classes and calculating an initial 3D model. You can map the selection done on class averages back to the particle images using the SIMPLE program .</p>
+<pre><code>bash-3.2$ simple_exec prg=map2ptcls
+USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+stk    = particle stack with all images(ptcls.ext)
+stk2   = 2nd stack(in map2ptcls/select: selected(cavgs).ext)
+stk3   = 3d stack (in map2ptcls/select: (cavgs)2selectfrom.ext)
+oritab = table (text file) of orientations(*.asc/*.txt)
+
+OPTIONAL
+oritab2   = 2nd table (text file) of orientations(*.asc/*.txt)
+comlindoc = shc_clustering_nclsX.txt
+doclist   = list of oritabs for different states
+deftab    = text file with CTF info(*.txt/*.asc)
+outfile   = output document
+mul       = origin shift multiplication factor{1}
+nthr      = nr of OpenMP threads{1}</code></pre>
+<p>If your converged class averages from are <code>cavgs_iter021.mrc</code> and your selected ones are <code>selected.mrc</code>, then you map the selection back to the particle images with the command:</p>
+<pre><code>bash-3.2$ simple_exec prg=map2ptcls stk=sumstack.mrc stk2=selected.mrc
+stk3=cavgs_iter21.mrc oritab=prime2Ddoc_021.txt nthr=8</code></pre>
+<p>creating a file <code>mapped_ptcls_params.txt</code> that you can input with flag <code>oritab</code> to <code>simple_distr_exec prg=prime2D</code> to execute a second pass of clustering using the clean set of particles.</p>
+<h1 id="ab-initio-3d-reconstruction-from-class-averages-using-prime3d"><em>Ab initio</em> 3D Reconstruction from Class Averages Using PRIME3D</h1>
+<p>A major obstacle to achieving near-atomic resolution with single-particle cryo-EM is the problem of generating an accurate <em>de novo</em> 3D reconstruction. Many cryo-EM structures are therefore solved by alignment of the images to <em>a priori</em> models. The use of prior information, in the form of either a starting model from an independent source or an assumption of a particular point-group symmetry, is associated with the risk of introducing model bias. The model bias phenomenon is often illustrated by alignment of pure noise images to an image of Einstein. The image of Einstein is almost perfectly reproduced when the aligned noise images are averaged. It is often stated that low-pass filtering of X-ray maps, before they are used as starting models, eliminates model bias. This is a misunderstanding, as any model can be convincingly reproduced from noisy images <span class="citation" data-cites="henderson2013avoiding"></span>. Most refinement software, such as FREALIGN <span class="citation" data-cites="Grigorieff:2007aa"></span>, RELION <span class="citation" data-cites="Scheres:2012aa"></span>, or projection matching <span class="citation" data-cites="penczek1994ribosome Hohn:2007aa Tang:2007aa"></span>, depends on an accurate starting model for convergence to a high-resolution map. If the starting model is not supported by the images, there is a potent risk of introducing model bias. To what degree a starting model can bias the final 3D structure needs to be better characterised by methodological studies. We introduced the PRIME3D algorithm <span class="citation" data-cites="Elmlund:2013aa"></span> to remove the requirement for <em>a priori</em> structural knowledge and open the method to the study of particles with novel structure. Robust algorithms for <em>ab initio</em> 3D reconstruction are particularly important for the analysis of small particles with low symmetry.</p>
+<h2 id="analysis-of-ribosome-class-averages-using-the-program">Analysis of Ribosome Class Averages Using the Program</h2>
+<p>SIMPLE was designed primarily for processing single-particle images of molecules with low or no internal symmetry. There are not an awful lot of data sets of asymmetric molecules publicly available, but one of the most popular specimensone that we all recognise the structure ofis the ribosome. Although the initial idea with PRIME3D was to overcome the need for 2D clustering and generate an accurate 3D map straight from the noisy individual images, we have found that 2D analysis is extremely useful for weeding out bad data and enhancing SNR prior to 3D analysis. Processing class averages also makes 3D model validation easier as we can simply compare re-projections of the 3D map with the signal-enhanced class averages used to obtain the 3D reconstruction. We pre-calculated 2D class averages with PRIME 2D from a publicly available ribosome data set (EMPIAR-10028). These are located in the <code>3_PRIME3D/data</code> folder. Please <code>cd</code> to this folder and have a look at the class averages with EMAN2.</p>
+<figure>
+<img src="./ribocavgs" alt="Ribosome class averages obtained with PRIME2D." /><figcaption>Ribosome class averages obtained with PRIME2D.</figcaption>
+</figure>
+<p>As before, the parameters associated with the class averages are listed in the <code>info.txt</code> file.</p>
+<pre><code>bash-3.2$ cat ./data/info.txt 
+smpd=2.68
+msk=80
+pgrp=c1</code></pre>
+<p>Input to is a stack of class averages <code>stk</code>, sampling distance <code>smpd</code> in Å, mask radius <code>msk</code> in pixels, point-group symmetry <code>pgrp</code> (<code>c1</code> in this case), the number of CPU threads <code>nthr</code> and the number of partitions to divide the job into <code>nparts</code>. The output from is a 3D model <code>rec_final.mrc</code> and re-projections of this model in the orientations assigned to the class averages <code>reprojs.mrc</code>. If we execute <code>simple_distr_exec prg=ini3D_from_cavgs</code> in the prompt, we obtain brief instructions for how to run the program:</p>
+<pre><code>bash-3.2$ simple_distr_exec prg=ini3D_from_cavgs
+USAGE:
+bash-3.2$ simple_distr_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+stk    = particle stack with all images(ptcls.ext)
+smpd   = sampling distance, same as EMANs apix(in A)
+msk    = mask radius(in pixels)
+pgrp   = point-group symmetry(cn|dn|t|o|i)
+nparts = # partitions in distributed exection
+
+OPTIONAL
+nthr       = # OpenMP threads{1}
+ncunits    = # computing units, can be &lt; nparts{nparts}
+hp         = high-pass limit(in A)
+lp         = low-pass limit(in A)
+lpstop     = stop low-pass limit(in A){8}
+inner      = inner mask radius(in pixels)
+width      = falloff of inner mask(in pixels){10}
+nspace     = # projection directions
+autoscale  = automatic down-scaling(yes|no){yes}
+pgrp_known = point-group known a priori(yes|no){no}</code></pre>
+<p>In order to reconstruct an <em>ab initio</em> 3D reconstruction, please execute:</p>
+<pre><code>bash-3.2$ simple_distr_exec prg=ini3D_from_cavgs stk=./data/pfrib80S_cavgs.mrc
+smpd=2.68 msk=80 pgrp=c1 nthr=4 nparts=2 nthr_master=8</code></pre>
+<p>For every iteration, we expect to see an output similar to that of PRIME2D in the terminal:</p>
+<pre><code>&gt;&gt;&gt;
+&gt;&gt;&gt; ITERATION      4
+&gt;&gt;&gt;
+DISTRIBUTED MODE :: submitting scripts:
+distr_simple_script_1
+distr_simple_script_2
+appending output to nohup.out
+appending output to nohup.out
+&gt;&gt;&gt; DONE PROCESSING PARAMETERS
+**** SIMPLE_MERGE_ALGNDOCS NORMAL STOP ****
+&gt;&gt;&gt; DONE PROCESSING PARAMETERS
+&gt;&gt;&gt; DONE BUILDING GENERAL TOOLBOX
+&gt;&gt;&gt; DONE BUILDING RECONSTRUCTION TOOLBOX
+**** SIMPLE_VOLASSEMBLE NORMAL STOP ****
+&gt;&gt;&gt; DONE PROCESSING PARAMETERS
+&gt;&gt;&gt; DONE BUILDING GENERAL TOOLBOX
+&gt;&gt;&gt; ANGLE OF FEASIBLE REGION:              14.6
+&gt;&gt;&gt; JOINT    DISTRIBUTION OVERLAP:       0.0775
+&gt;&gt;&gt; CLASS    DISTRIBUTION OVERLAP:       0.0600
+&gt;&gt;&gt; IN-PLANE DISTRIBUTION OVERLAP:       0.0950
+&gt;&gt;&gt; AVERAGE ANGULAR DISTANCE BTW ORIS:     63.7
+&gt;&gt;&gt; AVERAGE IN-PLANE ANGULAR DISTANCE:     16.8
+&gt;&gt;&gt; PERCENTAGE OF SEARCH SPACE SCANNED:    53.9
+&gt;&gt;&gt; CORRELATION:                         0.9536
+&gt;&gt;&gt; ANGULAR SDEV OF MODEL:                28.06
+&gt;&gt;&gt; UPDATE LOW-PASS LIMIT: .NO.
+&gt;&gt;&gt; CONVERGED: .NO.
+**** SIMPLE_CHECK3D_CONV NORMAL STOP ****</code></pre>
+<figure>
+<img src="./Pfrib3D/Pfrib3D" alt="Progress of the 3D model throughout the stochastic PRIME3D search (top). Class averages vs. re-projections of the converged 3D reconstruction (bottom)." /><figcaption>Progress of the 3D model throughout the stochastic PRIME3D search (top). Class averages vs. re-projections of the converged 3D reconstruction (bottom).</figcaption>
+</figure>
+<p>The overlap parameters are very similar to those in but the <code>CLASS DISTRIBUTION OVERLAP</code> now corresponds to projection directions rather than 2D classes. New statistics include <code>AVERAGE ANGULAR DISTANCE BTW ORIS</code>, which is the average angular distance (in degrees) between the present and the previous sets of best orientations. Since every particle image is assigned a distribution of orientations with associated weight factors, there is also an estimate of the angular standard deviation of the model <code>ANGULAR SDEV OF MODEL</code>. For asymmetric molecules, we expect the angular standard deviation to decrease as the procedure approaches convergence. However, if we reconstruct symmetric molecules with <code>pgrp=c1</code> or asymmetric molecules with pseudo symmetries, the angular standard deviation may increase with the number of iterations as the orientations become randomly distributed over the symmetry related configurations. Please, use UCSF Chimera to view the reconstructed density (icon on desktop). The <code>*pproc*</code> output is the post-processed volume (for initial model generation this is simply the volume low-pass filtered with the low-pass limit used for alignment).</p>
+<p>[breakable,colback=white,colframe=orange,width=+12mm,enlarge left by=-6mm]</p>
+<h2 id="using-simple-in-the-wildmapping-class-orientations-and-selection-to-the-particles">Using SIMPLE in the WildMapping Class Orientations and Selection to the Particles</h2>
+<p>In a real-life scenario, you would have used a carefully selected set of class averages <code>selected.mrc</code> to obtain your initial 3D model. In order to map this selection and to compose the 3D orientations assigned to the class averages with the 2D orientations/class parameters obtained with and produce a 3D alignment/selection at the particle level, use . The command is similar to that introduced above. If your converged class averages from are <code>cavgs_iter021.mrc</code>, your selected ones are <code>selected.mrc</code>, and your 3D alignment doc is <code>prime3Ddoc_030.txt</code> then you do the mapping with the command:</p>
+<pre><code>bash-3.2$ simple_exec prg=map2ptcls stk=sumstack.mrc stk2=selected.mrc
+stk3=cavgs_iter21.mrc oritab=prime2Ddoc_021.txt oritab2=prime3Ddoc_030.txt nthr=8</code></pre>
+<p>creating a file <code>mapped_ptcls_params.txt</code> that you can input with flag <code>oritab</code> to <code>simple_distr_exec prg=recvol</code> to reconstruct a volume from particle images.</p>

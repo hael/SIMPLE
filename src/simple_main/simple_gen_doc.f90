@@ -91,21 +91,6 @@ contains
         stop
     end subroutine print_doc_cluster_oris
 
-    subroutine print_doc_cluster_smat
-        write(*,'(A)', advance='no') 'is a program for clustering a similarity matrix and use an combined cluster vali'
-        write(*,'(A)', advance='no') 'dation index to assess the quality of the clustering based on the number of clus'
-        write(*,'(A)') 'ters'
-        stop
-    end subroutine print_doc_cluster_smat
-
-    subroutine print_doc_comlin_smat
-        write(*,'(A)', advance='no') 'is a program for creating a similarity matrix based on common line correlation.'
-        write(*,'(A)', advance='no') 'The idea being that it should be possible to cluster images based on their 3D si'
-        write(*,'(A)', advance='no') 'milarity witout having a 3D model by only operating on class averages and find a'
-        write(*,'(A)') 'verages that fit well together in 3D'
-        stop
-    end subroutine print_doc_comlin_smat
-
     subroutine print_doc_convert
         write(*,'(A)') 'is a program for converting between SPIDER and MRC formats'
         stop
@@ -158,14 +143,6 @@ contains
         write(*,'(A)') 'is a program for filtering stacks/volumes'
         stop
     end subroutine print_doc_filter
-
-    subroutine print_doc_image_smat
-        write(*,'(A)', advance='no') 'is a program for creating a similarity matrix based on common line correlation.'
-        write(*,'(A)', advance='no') 'The idea being that it should be possible to cluster images based on their 3D si'
-        write(*,'(A)', advance='no') 'milarity witout having a 3D model by only operating on class averages and find a'
-        write(*,'(A)') 'verages that fit well together in 3D'
-        stop
-    end subroutine print_doc_image_smat
 
     subroutine print_doc_iminfo
         write(*,'(A)', advance='no') 'is a program for printing header information in MRC and SPIDER stacks and volume'
@@ -235,12 +212,6 @@ contains
         write(*,'(A)') 'buted mode'
         stop
     end subroutine print_doc_merge_nnmat
-
-    subroutine print_doc_merge_similarities
-        write(*,'(A)', advance='no') 'is a program for merging similarities calculated between pairs of objects into a'
-        write(*,'(A)') ' similarity matrix that can be inputted to cluster_smat'
-        stop
-    end subroutine print_doc_merge_similarities
 
     subroutine print_doc_noiseimgs
         write(*,'(A)') 'is a program for generating pure noise images'
@@ -592,21 +563,21 @@ contains
     end subroutine print_doc_volume_smat
 
     subroutine print_doc_ini3D_from_cavgs
-        write(*,'(A)', advance='no') 'is a program for generating an initial 3D model from class averages obtained wit'
-        write(*,'(A)') 'h prime2D'
+        write(*,'(A)', advance='no') 'is a distributed workflow for generating an initial 3D model from class averages'
+        write(*,'(A)') ' obtained with prime2D'
         stop
     end subroutine print_doc_ini3D_from_cavgs
 
     subroutine print_doc_unblur_tomo
-        write(*,'(A)', advance='no') 'is a program for movie alignment or unblurring of tomographic movies. Input is a'
-        write(*,'(A)', advance='no') ' textfile with absolute paths to movie files in addition to a few input paramete'
-        write(*,'(A)', advance='no') 'rs, some of which deserve a comment. The exp_doc document should contain per lin'
-        write(*,'(A)', advance='no') 'e exp_time=X and dose_rate=Y. It is asssumed that the input list of movies (one'
-        write(*,'(A)', advance='no') 'per tilt) are ordered temporally. This is necessary for correct dose-weighting o'
-        write(*,'(A)', advance='no') 'f tomographic tilt series. If scale is given, the movie will be Fourier cropped'
-        write(*,'(A)', advance='no') 'according to the down-scaling factor (for super-resolution movies). If nframesgr'
-        write(*,'(A)', advance='no') 'p is given the frames will be pre-averaged in the given chunk size (Falcon 3 mov'
-        write(*,'(A)') 'ies).'
+        write(*,'(A)', advance='no') 'is a distributed workflow for movie alignment or unblurring of tomographic movie'
+        write(*,'(A)', advance='no') 's. Input is a textfile with absolute paths to movie files in addition to a few i'
+        write(*,'(A)', advance='no') 'nput parameters, some of which deserve a comment. The exp_doc document should co'
+        write(*,'(A)', advance='no') 'ntain per line exp_time=X and dose_rate=Y. It is asssumed that the input list of'
+        write(*,'(A)', advance='no') ' movies (one per tilt) are ordered temporally. This is necessary for correct dos'
+        write(*,'(A)', advance='no') 'e-weighting of tomographic tilt series. If scale is given, the movie will be Fou'
+        write(*,'(A)', advance='no') 'rier cropped according to the down-scaling factor (for super-resolution movies).'
+        write(*,'(A)', advance='no') ' If nframesgrp is given the frames will be pre-averaged in the given chunk size'
+        write(*,'(A)') '(Falcon 3 movies).'
         stop
     end subroutine print_doc_unblur_tomo
 
@@ -622,8 +593,6 @@ contains
         write(*,'(A)') 'check_box'
         write(*,'(A)') 'check_nptcls'
         write(*,'(A)') 'cluster_oris'
-        write(*,'(A)') 'cluster_smat'
-        write(*,'(A)') 'comlin_smat'
         write(*,'(A)') 'convert'
         write(*,'(A)') 'corrcompare'
         write(*,'(A)') 'ctffind'
@@ -632,7 +601,6 @@ contains
         write(*,'(A)') 'eo_volassemble'
         write(*,'(A)') 'extract'
         write(*,'(A)') 'filter'
-        write(*,'(A)') 'image_smat'
         write(*,'(A)') 'iminfo'
         write(*,'(A)') 'makecavgs'
         write(*,'(A)') 'makedeftab'
@@ -642,7 +610,6 @@ contains
         write(*,'(A)') 'masscen'
         write(*,'(A)') 'merge_algndocs'
         write(*,'(A)') 'merge_nnmat'
-        write(*,'(A)') 'merge_similarities'
         write(*,'(A)') 'noiseimgs'
         write(*,'(A)') 'norm'
         write(*,'(A)') 'npeaks'
@@ -689,7 +656,6 @@ contains
     end subroutine list_all_simple_programs
 
     subroutine list_all_simple_distr_programs
-        write(*,'(A)') 'comlin_smat'
         write(*,'(A)') 'ctffind'
         write(*,'(A)') 'ini3D_from_cavgs'
         write(*,'(A)') 'makecavgs'
@@ -698,7 +664,6 @@ contains
         write(*,'(A)') 'prime3D_init'
         write(*,'(A)') 'recvol'
         write(*,'(A)') 'symsrch'
-        write(*,'(A)') 'tseries_track'
         write(*,'(A)') 'unblur'
         write(*,'(A)') 'unblur_ctffind'
         write(*,'(A)') 'unblur_tomo'
