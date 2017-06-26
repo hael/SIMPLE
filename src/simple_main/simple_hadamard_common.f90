@@ -88,7 +88,7 @@ contains
                             b%ssnr(s,:) = 0.
                         endif
                     end do
-                    loc   = maxloc(mapres)
+                    loc    = maxloc(mapres)
                     lp_ind = get_lplim(b%fsc(loc(1),:))
                     p%kfromto(2) = calc_fourier_index( resarr(lp_ind), p%boxmatch, p%smpd )
                     if( p%kfromto(2) == 1 )then

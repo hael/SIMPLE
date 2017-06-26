@@ -379,35 +379,39 @@ contains
     ! ENSEMBLE HETEROGEINITY ANALYSIS
 
     subroutine exec_het_ensemble( self, cline )
-        use simple_commander_rec,     only: recvol_commander
-        use simple_strings,           only: int2str_pad
-        use simple_oris,              only: oris
-        use simple_combinatorics,     only: diverse_labeling, shc_aggregation
-        use simple_filehandling,      only: file_exists, del_file
+        use simple_commander_rec,    only: recvol_commander
+        use simple_commander_volops, only: postproc_vol_commander, projvol_commander
+        use simple_strings,          only: int2str_pad
+        use simple_oris,             only: oris
+        use simple_combinatorics,    only: diverse_labeling, shc_aggregation
+        use simple_filehandling,     only: file_exists, del_file
         class(het_ensemble_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         ! constants
-        logical,               parameter :: DEBUG=.false.
-        integer,               parameter :: MAXITS_INIT=50, NREPEATS=5
-        character(len=32),     parameter :: HETFBODY    = 'hetrep_'
-        character(len=32),     parameter :: REPEATFBODY = 'hetdoc_'
-        character(len=32),     parameter :: VOLFBODY    = 'recvol_state'
+        logical,            parameter :: DEBUG=.false.
+        integer,            parameter :: MAXITS_INIT=50, NREPEATS=5
+        character(len=32),  parameter :: HETFBODY    = 'hetrep_'
+        character(len=32),  parameter :: REPEATFBODY = 'hetdoc_'
+        character(len=32),  parameter :: VOLFBODY    = 'recvol_state'
         ! distributed commanders
         type(prime3D_distr_commander) :: xprime3D_distr
         type(recvol_distr_commander)  :: xrecvol_distr        
         ! shared-mem commanders
-        !
+        type(postproc_vol_commander)  :: xpostproc_vol
+        type(projvol_commander)       :: xprojvol
         ! command lines
         type(cmdline)                 :: cline_prime3D_master
         type(cmdline)                 :: cline_prime3D
         type(cmdline)                 :: cline_recvol_distr
+        type(cmdline)                 :: cline_postproc_vol
+        type(cmdline)                 :: cline_projvol
         ! other variables
         integer,               allocatable :: labels(:,:), labels_incl(:,:), consensus(:)
         character(len=STDLEN), allocatable :: init_docs(:), final_docs(:)
         logical,               allocatable :: included(:)
         type(params)                  :: p_master
         type(oris)                    :: os
-        character(len=STDLEN)         :: oritab, vol1, vol2, fname
+        character(len=STDLEN)         :: oritab, vol1, vol2, fsc, str_state
         integer                       :: irepeat, state, iter, n_incl, it
         ! some init
         allocate(init_docs(NREPEATS), final_docs(NREPEATS))
@@ -434,6 +438,10 @@ contains
         ! prepare command lines from prototype master
         cline_recvol_distr = cline
         call cline_recvol_distr%set('prg', 'recvol')
+        call cline_recvol_distr%set('eo', 'yes')
+        call cline_recvol_distr%delete('lp')
+        cline_postproc_vol = cline
+        call cline_recvol_distr%set('prg', 'postproc_vol')
         call cline_recvol_distr%set('eo', 'yes')
         call cline_recvol_distr%delete('lp')
         cline_prime3D_master = cline
@@ -502,22 +510,35 @@ contains
         deallocate(init_docs, final_docs, labels_incl, consensus, labels, included)
 
         ! FINAL RECONSTRUCTION
+        ! distributed reconstruction
         call cline_recvol_distr%set('oritab', trim(oritab))
         call xrecvol_distr%execute(cline_recvol_distr)
+        ! post-process
+        do state = 1, p_master%nstates
+            str_state = int2str_pad(state, 2)
+            vol1 = 'recvol_state'//trim(str_state)//p_master%ext
+            call cline_postproc_vol%set('vol1', trim(vol1))
+            fsc = 'fsc_state'//trim(str_state)//'.bin'
+            call cline_postproc_vol%set('fsc', trim(fsc))
+            if(file_exists(vol1) .and. file_exists(fsc))then
+                call xpostproc_vol%execute(cline_postproc_vol)
+            endif
+        enddo
 
         ! end gracefully
         call simple_end('**** SIMPLE_HET_ENSEMBLE NORMAL STOP ****')        
         contains
 
             subroutine prime3d_cleanup
+                character(len=STDLEN) :: fname
                 ! delete starting volumes
-                do state=1,p_master%nstates
+                do state = 1, p_master%nstates
                     vol1 = 'startvol_state'//int2str_pad(state,2)//p_master%ext
                     if(file_exists(vol1))call del_file(vol1)
                 enddo
                 ! delete iterations volumes & documents
-                do it=1,iter-1
-                    do state=1,p_master%nstates
+                do it = 1, iter-1
+                    do state = 1, p_master%nstates
                         vol1 = trim(VOLFBODY)//int2str_pad(state,2)//'_iter'//int2str_pad(it,3)//p_master%ext
                         if(file_exists(vol1))call del_file(vol1)
                         vol1 = trim(VOLFBODY)//int2str_pad(state,2)//'_iter'//int2str_pad(it,3)//'pproc'//p_master%ext
@@ -527,7 +548,7 @@ contains
                     if(file_exists(oritab))call del_file(oritab)
                 enddo
                 ! delete restart documents
-                do it=1,iter
+                do it = 1, iter
                     fname = 'prime3D_restart_iter'//int2str_pad(it,3)//'.txt'
                     if(file_exists(fname))call del_file(fname)
                 enddo
@@ -546,7 +567,6 @@ contains
                     call rename(trim(vol1), trim(vol2))
                 enddo
             end subroutine stash_volumes
-
     end subroutine exec_het_ensemble
 
 end module simple_commander_hlev_wflows

@@ -611,6 +611,7 @@ contains
                         call o%set_shift( crxy(3:4) )
                         call self%o_refs%set_ori( ref, o )
                     endif
+                    ! deallocate(crxy)
                 else
                     call self%shsrch_obj%set_indices(ref, iptcl, inpl_ind)
                     cxy = self%shsrch_obj%minimize()
@@ -619,6 +620,7 @@ contains
                         call o%set_shift( cxy(2:3) )
                         call self%o_refs%set_ori( ref, o )
                     endif
+                    ! deallocate(cxy)
                 endif
             end do
         endif
@@ -686,7 +688,6 @@ contains
             self%prev_corr = corr
         endif
         ! prep specscore
-        
         frc = pftcc%genfrc(self%prev_ref, iptcl, self%prev_roind)
         self%specscore = max(0., median_nocopy(frc))
         if( DEBUG ) write(*,'(A)') '>>> PRIME3D_SRCH::PREPARED FOR SIMPLE_PRIME3D_SRCH'

@@ -101,7 +101,7 @@ contains
         ! optimal low-pass filt
         if( cline%defined('fsc') )then
             if( file_exists(p%fsc) )then
-                fsc = file2rarr(p%fsc)
+                fsc   = file2rarr(p%fsc)
                 optlp = fsc2optlp(fsc)
             else
                 write(*,*) 'FSC file: ', trim(p%fsc), ' not in cwd'
@@ -109,7 +109,7 @@ contains
             endif
             res = b%vol%get_res()
             call get_resolution( fsc, res, fsc05, fsc0143 )
-            where(res < fsc0143)optlp = 0.
+            where(res < fsc0143) optlp = 0.
             call b%vol%apply_filter(optlp)
         else if( cline%defined('lp') )then
             call b%vol%bp(0., p%lp)

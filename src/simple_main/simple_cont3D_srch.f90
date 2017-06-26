@@ -3,6 +3,7 @@ use simple_defs
 use simple_params,           only: params
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_pftcc_shsrch,     only: pftcc_shsrch
+use simple_pftcc_inplsrch,   only: pftcc_inplsrch
 use simple_oris,             only: oris
 use simple_ori,              only: ori
 use simple_math              ! use all in there
@@ -18,6 +19,7 @@ type cont3D_srch
     private
     class(polarft_corrcalc), pointer :: pftcc_ptr => null() !< polar fourier correlation calculator
     type(pftcc_shsrch)               :: shsrch_obj          !< shift search object
+    type(pftcc_inplsrch)             :: inplsrch_obj        !< in-plane search object
     type(oris)                       :: reforis             !< per ptcl search space and result of euler angles search
     type(oris)                       :: softoris            !< references returned
     type(oris)                       :: shiftedoris         !< references whose shifts are searched
@@ -38,6 +40,7 @@ type cont3D_srch
     integer                 :: npeaks     = 0      !< number of references returned
     integer                 :: nrefs      = 0      !< number of references in search space
     integer                 :: nrots      = 0      !< number of in-plane rotations
+    character(len=STDLEN)   :: shbarr = ''         !< shift barrier flag
     character(len=STDLEN)   :: refine = ''
     logical                 :: exists = .false.
   contains
@@ -46,6 +49,7 @@ type cont3D_srch
     ! PREP ROUTINES
     procedure, private :: prep_srch
     procedure, private :: prep_softoris
+    procedure, private :: stochastic_weights_L2norm
     ! SEARCH ROUTINES
     procedure          :: exec_srch
     procedure, private :: do_euler_srch
@@ -68,13 +72,14 @@ contains
         class(polarft_corrcalc), target, intent(in)    :: pftcc
         call self%kill
         ! set constants
-        self%pftcc_ptr    => pftcc
+        self%pftcc_ptr => pftcc
         self%reforis   = e
         self%npeaks    = p%npeaks
         self%lims(:,1) = -p%trs
         self%lims(:,2) =  p%trs
         self%angthresh = p%athres
         self%nstates   = p%nstates
+        self%shbarr    =  p%shbarrier
         self%nrefs     = self%pftcc_ptr%get_nrefs()
         self%nrots     = self%pftcc_ptr%get_nrots()
         if(self%reforis%get_noris().ne.self%nrefs)&
@@ -105,9 +110,10 @@ contains
         ! specscore
         frc = self%pftcc_ptr%genfrc(self%prev_ref, self%iptcl, self%prev_roind)
         self%specscore  = max(0., median_nocopy(frc))
-        ! shift search object
-        call self%shsrch_obj%new(self%pftcc_ptr, self%lims, nrestarts=3)
         deallocate(frc)
+        ! shift search object
+        call self%shsrch_obj%new(self%pftcc_ptr, self%lims, self%shbarr, nrestarts=3)
+        call self%inplsrch_obj%new(self%pftcc_ptr, self%lims, self%shbarr, nrestarts=3)
         if( debug ) write(*,'(A)') '>>> cont3D_srch::END OF PREP_SRCH'
     end subroutine prep_srch
 
@@ -183,20 +189,21 @@ contains
 
     !>  \brief  performs the shift search
     subroutine do_shift_srch( self )
-        use simple_pftcc_shsrch      ! use all in there
         class(cont3D_srch), intent(inout) :: self
         real, allocatable :: corrs(:)
         type(ori)         :: o
-        real, allocatable :: cxy(:)
+        real, allocatable :: cxy(:), crxy(:)
         real              :: prev_shift_vec(2), corr
         integer           :: ref_inds(self%nrefs), i, iref, inpl_ind, cnt
+        logical :: greedy_inpl = .true.
         call self%shiftedoris%new(self%npeaks)
+        prev_shift_vec = self%o_in%get_shift()
         ! SORT ORIENTATIONS
         ref_inds = (/ (i, i=1, self%nrefs) /)
         corrs    = self%reforis%get_all('corr')
         call hpsort(self%nrefs, corrs, ref_inds)
-        ! SHIFT SEARCH
-        prev_shift_vec = self%o_in%get_shift()
+        deallocate(corrs)
+        ! IN-PLANE/SHIFT SEARCH
         cnt = 0
         do i = self%nrefs-self%npeaks+1,self%nrefs
             cnt      = cnt+1
@@ -204,18 +211,33 @@ contains
             o        = self%reforis%get_ori(iref)
             corr     = o%get('corr')
             inpl_ind = self%pftcc_ptr%get_roind(360.-o%e3get())
-            call self%shsrch_obj%set_indices(iref, self%iptcl, inpl_ind)
-            cxy = self%shsrch_obj%minimize()
-            if(cxy(1) >= corr)then
-                call o%set('corr', cxy(1))
-                call o%set_shift(cxy(2:) + prev_shift_vec)
+            if( greedy_inpl )then
+                ! in-plane search
+                call self%inplsrch_obj%set_indices(iref, self%iptcl)
+                crxy = self%inplsrch_obj%minimize(irot=inpl_ind)
+                if(crxy(1) >= corr)then
+                    call o%set('corr', crxy(1))
+                    call o%e3set(360. - crxy(2))
+                    call o%set_shift(crxy(3:4) + prev_shift_vec)
+                else
+                    call o%set_shift(prev_shift_vec)
+                endif
+                deallocate(crxy)
             else
-                call o%set_shift(prev_shift_vec)
+                ! shift search
+                call self%shsrch_obj%set_indices(iref, self%iptcl, inpl_ind)
+                cxy = self%shsrch_obj%minimize()
+                if(cxy(1) >= corr)then
+                    call o%set('corr', cxy(1))
+                    call o%set_shift(cxy(2:) + prev_shift_vec)
+                else
+                    call o%set_shift(prev_shift_vec)
+                endif
+                deallocate(cxy)
             endif
+            ! stores solution
             call self%shiftedoris%set_ori(cnt, o)
         enddo
-        ! done        
-        deallocate(corrs)
         if(debug)write(*,*)'simple_cont3d_src::do_shift_srch done'
     end subroutine do_shift_srch
 
@@ -244,12 +266,13 @@ contains
             self%softoris = self%shiftedoris
         endif
         ! stochastic weights and weighted correlation
-        if(self%npeaks > 1)then
-            call self%softoris%stochastic_weights( wcorr )
-        else
-            call self%softoris%set(1, 'ow', 1.)
-            wcorr = self%softoris%get(1, 'corr')
-        endif
+        call self%stochastic_weights_L2norm(wcorr)
+        ! if(self%npeaks > 1)then
+        !     call self%softoris%stochastic_weights( wcorr )
+        ! else
+        !     call self%softoris%set(1, 'ow', 1.)
+        !     wcorr = self%softoris%get(1, 'corr')
+        ! endif
         ! variables inherited from input ori: CTF, w, lp
         if(self%o_in%isthere('dfx'))   call self%softoris%set_all2single('dfx',self%o_in%get('dfx'))
         if(self%o_in%isthere('dfy'))   call self%softoris%set_all2single('dfy',self%o_in%get('dfy'))
@@ -308,6 +331,38 @@ contains
         if(debug)write(*,*)'simple_cont3D_srch::prep_softoris done'
     end subroutine prep_softoris
 
+    !>  \brief  determines and updates stochastic weights
+    subroutine stochastic_weights_L2norm( self, wcorr )
+        class(cont3D_srch),      intent(inout) :: self
+        real,                    intent(out)   :: wcorr
+        real              :: ws(self%npeaks), dists(self%npeaks)
+        real, allocatable :: corrs(:)
+        type(ori)         :: o
+        integer           :: roind, ref, ipeak
+        if( self%npeaks == 1 )then
+            call self%softoris%set(1, 'ow', 1.)
+            wcorr = self%softoris%get(1, 'corr')
+            return
+        endif
+        ! get correlations
+        corrs = self%softoris%get_all('corr')
+        ! calculate L1 norms
+        do ipeak = 1, self%npeaks
+            o     = self%softoris%get_ori(ipeak)
+            roind = self%pftcc_ptr%get_roind(360.-o%e3get())
+            ref   = self%reforis%find_closest_proj(o, 1)
+            dists(ipeak) = self%pftcc_ptr%euclid(ref, self%iptcl, roind)
+        end do
+        ! calculate normalised weights and weighted corr
+        ws    = exp(-dists)
+        ws    = ws/sum(ws)
+        wcorr = sum(ws*corrs)
+        ! update npeaks individual weights
+        call self%softoris%set_all('ow', ws)
+        ! cleanup
+        deallocate(corrs)
+    end subroutine stochastic_weights_L2norm
+
     ! GETTERS
 
     !>  \brief  returns the solution set of orientations
@@ -339,12 +394,14 @@ contains
     subroutine kill( self )
         class(cont3D_srch), intent(inout) :: self
         call self%shsrch_obj%kill
+        !call self%inplsrch_obj%kill
         self%pftcc_ptr => null()
         call self%shiftedoris%kill
         call self%softoris%kill
         call self%reforis%kill
         call self%o_in%kill
         call self%o_out%kill
+        if(allocated(self%state_exists))deallocate(self%state_exists)
         self%iptcl  = 0
         self%exists = .false.
     end subroutine kill

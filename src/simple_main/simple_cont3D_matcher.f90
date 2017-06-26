@@ -24,7 +24,6 @@ type(oris)                           :: orefs                   !< per particle 
 type(cont3D_srch),       allocatable :: cont3Dsrch(:)
 type(cont3D_greedysrch), allocatable :: cont3Dgreedysrch(:)
 logical, allocatable                 :: state_exists(:)
-real                                 :: reslim          = 0.
 !real                                 :: frac_srch_space = 0.   ! so far unused
 integer                              :: nptcls          = 0
 integer                              :: nrefs_per_ptcl  = 0
@@ -46,13 +45,15 @@ contains
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: converged
         ! batches-related variables
-        type(projector),         allocatable :: batch_imgs(:)
-        type(polarft_corrcalc),  allocatable :: pftccs(:)
-        integer,                 allocatable :: batches(:,:)
+        type(projector),        allocatable :: batch_imgs(:)
+        type(polarft_corrcalc), allocatable :: pftccs(:)
+        integer,                allocatable :: batches(:,:)
+        integer    :: nbatches, batch
         ! other variables
-        type(oris)           :: softoris
-        type(ori)            :: orientation
-        integer              :: nbatches, batch, fromp, top, iptcl, state, alloc_stat, ind
+        type(oris) :: softoris
+        type(ori)  :: orientation
+        real       :: reslim
+        integer    :: fromp, top, iptcl, state, alloc_stat
         ! MULTIPLE STATES DEACTIVATED FOR NOW
         if(p%nstates>1)stop 'MULTIPLE STATES DEACTIVATED FOR NOW; cont3D_matcher::cont3Dexec'
         ! INIT
@@ -78,7 +79,6 @@ contains
 
         ! SET BAND-PASS LIMIT RANGE
         call set_bp_range( b, p, cline )
-        reslim = p%lp
 
         ! CALCULATE ANGULAR THRESHOLD (USED BY THE SPARSE WEIGHTING SCHEME)
         p%athres = 2. * rad2deg(atan(max(p%fny,p%lp)/(p%moldiam/2.)))
@@ -88,7 +88,7 @@ contains
         select case(p%refine)
             case('yes')
                 if( .not. cline%defined('npeaks') )then
-                    p%npeaks = min(MAXNPEAKS,b%e%find_npeaks(p%lp, p%moldiam))
+                    p%npeaks = min(MAXNPEAKS, b%e%find_npeaks(p%lp, p%moldiam))
                 endif
                 write(*,'(A,I2)')'>>> NPEAKS: ', p%npeaks
             case DEFAULT
@@ -104,7 +104,7 @@ contains
 
         ! PREPARE REFERENCE & RECONSTRUCTION VOLUMES
         call prep_vols(b, p, cline)
-        call preprecvols(b, p)
+        if(p%norec .eq. 'no')call preprecvols(b, p)
 
         ! INIT IMGPOLARIZER
         call pftcc%new(nrefs_per_ptcl, [1,1], [p%boxmatch,p%boxmatch,1],p%kfromto, p%ring2, p%ctf)
@@ -164,7 +164,6 @@ contains
                     orientation = b%a%get_ori(iptcl)
                     state       = nint(orientation%get('state'))
                     if(state == 0)cycle
-                    ind   = iptcl-fromp+1
                     b%img = batch_imgs(iptcl)
                     if(p%npeaks == 1)then
                         call grid_ptcl(b, p, orientation)
@@ -193,6 +192,7 @@ contains
             call b%refvols(state)%kill_expanded
             call b%refvols(state)%kill
         enddo
+        deallocate(batches, state_exists)
 
         ! ORIENTATIONS OUTPUT
         !call b%a%write(p%outfile, [p%fromp,p%top])
@@ -205,6 +205,7 @@ contains
             else
                 call norm_struct_facts(b, p, which_iter)
             endif
+            call killrecvols(b, p)
         endif
 
         ! REPORT CONVERGENCE
@@ -213,10 +214,6 @@ contains
         else
             converged = b%conv%check_conv_cont3D()
         endif
-        
-        ! DEALLOCATE
-        deallocate(batches)
-        deallocate(state_exists)
     end subroutine cont3D_exec
 
     !>  \brief  preps volumes for projection
@@ -227,13 +224,15 @@ contains
         integer :: state
         do state=1,p%nstates
             if( state_exists(state) )then
+                call b%vol%new([p%box,p%box,p%box],p%smpd) 
                 call preprefvol( b, p, cline, state, doexpand=.false. )
                 b%refvols(state) = b%vol
                 call b%refvols(state)%expand_cmat
             endif
         enddo
+        call b%vol%kill
         ! bring back the original b%vol size
-        if( p%boxmatch < p%box )call b%vol%new([p%box,p%box,p%box], p%smpd) ! to double check
+        if( p%boxmatch < p%box )call b%vol%new([p%box,p%box,p%box], p%smpd)
         if( debug )write(*,*)'prep volumes done'
     end subroutine prep_vols
 
@@ -261,10 +260,13 @@ contains
         integer    :: state, iref, cnt
         optcl = b%a%get_ori(iptcl)
         ! SEARCH SPACE PREP
-        eullims = b%se%srchrange()
+        eullims      = 0.
+        eullims(:,2) = 360.
+        eullims(2,2) = 180.
         call cone%rnd_gau_neighbors(NREFS, optcl, p%athres, eullims)
         call b%se%rotall_to_asym(cone)
-        !call cone%rnd_proj_space(NREFS, optcl, p%athres, eullims) ! old style uniform distribution
+        ! eullims = b%se%srchrange()
+        ! call cone%rnd_proj_space(NREFS, optcl, p%athres, eullims) ! old style uniform distribution
         call cone%set_euler(1, optcl%get_euler()) ! previous best is the first
         do iref = 1, NREFS
             call cone%e3set(iref, 0.)
