@@ -2,7 +2,7 @@
 
 ####### The project path #####
 
-Simple_source=/home/hael/src/simple
+Simple_source=/Users/hael/src/fortran/simple3.0
 
 ####### The switches #####
 
@@ -12,9 +12,9 @@ DBENCH =
 
 ####### The compilers paths #####
 
-CCCOMP=gcc-5
-GCC=g++-5
-GFORTRAN=gfortran-5
+CCCOMP=
+GCC=
+GFORTRAN=gfortran
 
 ####### The CUDA paths #####
 
@@ -30,9 +30,9 @@ MODDIR=obj/SIMPLEOFILES
 ##############
 
 CC=$(CCCOMP)
-CFLAGS= -O3 -O -DLINUX -fopenmp -DOPENMP   
+CFLAGS= -O3 -O -DMACOSX -fopenmp -DOPENMP   
 CCLIB=$(CC) -c $(CFLAGS) -I $(MODDIR)  -I$(Simple_source)/simple_utils        \
-                         -I /usr/include/
+                         -I /sw/include/
 
 ##############
 # Preprocessor .#
@@ -40,17 +40,17 @@ CCLIB=$(CC) -c $(CFLAGS) -I $(MODDIR)  -I$(Simple_source)/simple_utils        \
 
 FPP=cpp-5 
 FPPFLAGS= -P $(DOPENMP) -J $(MODDIR) -I $(OBJDIR) -I $(MODDIR) -I$(Simple_source)/simple_utils  \
-                         -I /usr/include/
+                         -I /sw/include/
 
 ################
 # C++ compiler.#
 ################
 
 CPP=$(GCC)
-CPPFLAGS=-DADD_ -O3 -DLINUX -fopenmp -DOPENMP   
+CPPFLAGS=-DADD_ -O3 -DMACOSX -fopenmp -DOPENMP   
 CPPCLIB=$(CPP) -c $(CPPFLAGS) -I $(MODDIR)  -I$(Simple_source)/simple_utils        \
                               -I $(Simple_source)/test_code                           \
-                              -I /usr/include/
+                              -I /sw/include/
 
 #######################
 # Fortran 90 compiler.#
@@ -58,7 +58,7 @@ CPPCLIB=$(CPP) -c $(CPPFLAGS) -I $(MODDIR)  -I$(Simple_source)/simple_utils     
 
 # $(DLIB)
 F90C=$(GFORTRAN)
-F90FLAGS=-ffree-form -cpp -fPIC -fno-second-underscore -ffree-line-length-none -O3 -DLINUX -fopenmp -DOPENMP    $(FFLAGS)
+F90FLAGS=-fimplicit-none -fall-intrinsics -ffree-form -cpp -fpic -fno-second-underscore -ffree-line-length-none -O3 -DMACOSX -fopenmp -DOPENMP    $(FFLAGS)
 F90CLIB=$(F90C) -c $(F90FLAGS) -I $(MODDIR)  -I$(Simple_source)/simple_utils  \
                              -J $(MODDIR)                      \
 

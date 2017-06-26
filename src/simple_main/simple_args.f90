@@ -388,7 +388,7 @@ contains
         write(*,'(a)') '**info(simple_args_unit_test, part 1): testing for args that should be present'
         as = args()
         funit = get_fileunit()
-        spath = '/home/hael/src/simple'
+        spath = '/Users/hael/src/fortran/simple3.0'
         vlist = adjustl(trim(spath))//'/src/simple_main/simple_varlist.txt'
         n = nlines(vlist)
         open(unit=funit, status='old', action='read', file=vlist)

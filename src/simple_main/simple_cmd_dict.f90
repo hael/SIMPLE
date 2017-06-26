@@ -195,7 +195,7 @@ contains
         call chdict%push('verbose',       'verbosity flag (yes|no){no}')
         call chdict%push('nnn',           '# nearest neighbors{500}')
         call chdict%push('dose_rate',     'dose rate(in e/A2/s)')
-        call chdict%push('exp_time',      'expusure time(in s)')
+        call chdict%push('exp_time',      'exposure time(in s)')
         call chdict%push('tomo',          'tomography mode(yes|no){no}')
         call chdict%push('dcrit_rel',     'critical distance relative to box(0-1){0.5}')
         call chdict%push('wiener',        'Wiener restoration mode(full|highres){highres}')
