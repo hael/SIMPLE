@@ -1,4 +1,1 @@
-#pragma once
-//this file is auto generated and defines a 
-//string capturing the current git SHA1 code
-#define SIMPLE_GIT_VERSION "libSIMPLE git SHA1 is @SIMPLE_GIT_VERSION@"
+character(len=STDLEN) :: SIMPLE_GIT_VERSION="@SIMPLE_GIT_VERSION@"

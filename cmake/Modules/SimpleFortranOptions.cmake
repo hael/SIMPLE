@@ -36,9 +36,11 @@ if(APPLE)
   #    include(${CMAKE_ROOT}/Modules/Platform/Darwin-GNU-Fortran.cmake)
   #    __darwin_compiler_gnu(Fortran)
 
-  if (CMAKE_Fortran_COMPILER_ID STREQUAL "Clang" OR "${CMAKE_GENERATOR}" MATCHES "XCode")
-    message( FATAL_ERROR "${CLANG_FATAL_MSG}" )
-  elseif(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU" )
+  # if (CMAKE_Fortran_COMPILER_ID STREQUAL "Clang" OR "${CMAKE_GENERATOR}" MATCHES "XCode")
+
+  #   message( FATAL_ERROR "${CLANG_FATAL_MSG}" )
+
+  # elseif(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU" )
     message(STATUS "Making sure your Mac OS X GNU compiler points to the correct binary")
     if(Fortran_COMPILER_NAME MATCHES "gfortran*")
       execute_process(COMMAND ${CMAKE_Fortran_COMPILER} --version
@@ -61,13 +63,13 @@ ${CLANG_FATAL_MSG}")
       endif()
     endif()
   endif()
-  execute_process(COMMAND ${CMAKE_C_COMPILER} --version
-    OUTPUT_VARIABLE ACTUAL_FC_TARGET
-    OUTPUT_STRIP_TRAILING_WHITESPACE)
-  if(ACTUAL_FC_TARGET MATCHES "Clang|clang")
-    message( FATAL_ERROR "-- C compiler links to Clang --
-${CLANG_FATAL_MSG} ")
-  endif()
+#   execute_process(COMMAND ${CMAKE_C_COMPILER} --version
+#     OUTPUT_VARIABLE ACTUAL_FC_TARGET
+#     OUTPUT_STRIP_TRAILING_WHITESPACE)
+#   if(ACTUAL_FC_TARGET MATCHES "Clang|clang")
+#     message( FATAL_ERROR "-- C compiler links to Clang --
+# ${CLANG_FATAL_MSG} ")
+#   endif()
 
 
   execute_process(COMMAND ${CMAKE_CPP_COMPILER} --version
@@ -110,7 +112,7 @@ FATAL: In-source builds are not allowed.
        You should create separate directory for build files.
 ")
     endif()
-  endif()
+#  endif()
 endif(APPLE)
 
 set(CMAKE_Fortran_SOURCE_FILE_EXTENSIONS ${CMAKE_Fortran_SOURCE_FILE_EXTENSIONS} "f03;F03;f08;F08")

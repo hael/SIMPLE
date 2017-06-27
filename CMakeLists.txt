@@ -176,9 +176,33 @@ add_custom_target(distclean
     COMMAND ${CMAKE_COMMAND} -P ${CMAKE_MODULE_PATH}/distclean.cmake
 )
 include(CPack)
-include(${CMAKE_MODULE_PATH}/GenericLogging.cmake )
+# include(${CMAKE_MODULE_PATH}/GenericLogging.cmake )
 
-#here we save a version file
+  # Enable Doxygen build with 'make doxygen'
+  option(ENABLE_DOXYGEN "Enable a 'make doc' target for Doxygen documentation")
+  if (ENABLE_DOXYGEN)
+    include(UseDoxygen OPTIONAL)
+ add_doxygen(
+     mydoc
+     INPUT
+         "${CMAKE_SOURCE_DIR}/src"
+         "${CMAKE_CURRENT_SOURCE_DIR}/pages"
+     STRIP_FROM_PATH
+         "${CMAKE_SOURCE_DIR}/src/inc"
+     STRIP_FROM_INC_PATH
+         "${CMAKE_SOURCE_DIR}/src/inc"
+     EXCLUDE_PATTERNS
+         */gnufor2/*
+     EXCLUDE_SYMBOLS
+         *debug*
+         *verbose*
+     ALL
+ )
+  endif()
+
+
+
+# here we save a version file
 set(VERSION_FILE "${PROJECT_BINARY_DIR}/${PROJECTNAME}ConfigVersion.cmake")
 configure_file( "cmake/Modules/ProjectConfigVersion.cmake.in" ${VERSION_FILE} @ONLY )
 

@@ -6,19 +6,26 @@
 # flags should be set in the CMakeList.txt by setting the CMAKE_Fortran_FLAGS_*
 # variables.
 
+
+
 if(NOT $ENV{FC} STREQUAL "")
   set(CMAKE_Fortran_COMPILER_NAMES $ENV{FC})
 else()
   set(CMAKE_Fortran_COMPILER_NAMES gfortran)
   set(ENV{FC} "gfortran")
-  set(ENV{CC} "gcc")
-  set(ENV{CXX} "g++")
+endif()
+if(NOT $ENV{CPP} STREQUAL "")
+  set(CMAKE_Fortran_COMPILER_NAMES $ENV{CPP})
+else()
+  set(CMAKE_Fortran_COMPILER_NAMES cpp)
+  set(ENV{FC} "cpp")
 endif()
 
   # If user specifies the build type, use theirs, otherwise use release
   if (NOT DEFINED CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "")
   endif()
+
   # Look at system to see what if any options are available because
   # of build environment
   #include(SystemDefines)
@@ -39,11 +46,6 @@ endif()
   # We want to create dynamic libraries
   set(BUILD_SHARED_LIBS true)
 
-  # Enable Doxygen build with 'make doxygen'
-  option(ENABLE_DOXYGEN "Enable a 'make doc' target for Doxygen documentation")
-  if (ENABLE_DOXYGEN)
-    include(UseDoxygen)
-  endif()
 
   ###########  SETTING UP PREPROCESSOR ################
   #include(PlatformDefines)
