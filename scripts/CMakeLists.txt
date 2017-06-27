@@ -31,12 +31,11 @@ sam2emanbox.pl
 simmovies.pl
 simple_args_generator.pl
 split_filetab.pl
-tab2space.pl
-)
+tab2space.pl)
 
 foreach(PERL_SCRIPT ${SIMPLE_PERL_SCRIPTS})
   install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/${PERL_SCRIPT}
-    RUNTIME DESTINATION ${SCRP_BIN}
+    DESTINATION ${SCRP_BIN}
     PERMISSIONS OWNER_READ GROUP_READ WORLD_READ OWNER_EXECUTE GROUP_EXECUTE WORLD_EXECUTE
     )
 endforeach()

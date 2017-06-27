@@ -5,7 +5,7 @@
 # Add the source files
 set(SIMPLE_EXE_src "${CMAKE_CURRENT_SOURCE_DIR}/simple_exec/simple_exec.f90")
 set(SIMPLE_DISTR_src "${CMAKE_CURRENT_SOURCE_DIR}/simple_distr_exec/simple_distr_exec.f90")
-link_directories(${LIB})
+#  link_directories(${LIB})
 
 # Define the executable in terms of the source files
 
