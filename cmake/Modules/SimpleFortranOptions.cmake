@@ -4,8 +4,8 @@
 # Make sure that the default build type is RELEASE if not specified.
 ####################################################################
 include(${CMAKE_MODULE_PATH}/SetCompileFlag.cmake)
-include(${CMAKE_ROOT}/Modules/CMakeDetermineFortranCompiler.cmake)
-include(${CMAKE_ROOT}/Modules/CMakeDetermineCCompiler.cmake)
+#include(${CMAKE_ROOT}/Modules/CMakeDetermineFortranCompiler.cmake)
+#include(${CMAKE_ROOT}/Modules/CMakeDetermineCCompiler.cmake)
 
 if(NOT $ENV{CPP} STREQUAL "")
   set(CMAKE_CPP_COMPILER $ENV{CPP})
@@ -14,8 +14,6 @@ else()
     set(CMAKE_CPP_COMPILER fpp)
   elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
     set(CMAKE_CPP_COMPILER "pgcc -E")
-  else()
-    set(CMAKE_CPP_COMPILER cpp)
   endif()
 endif()
 
@@ -31,7 +29,7 @@ In LD_LIBRARY_PATH prepend the appropriate lib path.
     ")
 
 if(APPLE)
-  # Try setting the GNU compiler
+  message(STATUS  "Try setting the GNU compiler")
   #    include(${CMAKE_ROOT}/Modules/Compiler/GNU-Fortran.cmake)
   #    include(${CMAKE_ROOT}/Modules/Platform/Darwin-GNU-Fortran.cmake)
   #    __darwin_compiler_gnu(Fortran)
@@ -62,7 +60,7 @@ ${CLANG_FATAL_MSG}")
         endif()
       endif()
     endif()
-  endif()
+#  endif()
 #   execute_process(COMMAND ${CMAKE_C_COMPILER} --version
 #     OUTPUT_VARIABLE ACTUAL_FC_TARGET
 #     OUTPUT_STRIP_TRAILING_WHITESPACE)
@@ -72,10 +70,10 @@ ${CLANG_FATAL_MSG}")
 #   endif()
 
 
-  execute_process(COMMAND ${CMAKE_CPP_COMPILER} --version
-    OUTPUT_VARIABLE ACTUAL_FC_TARGET
-    OUTPUT_STRIP_TRAILING_WHITESPACE)
-  if(ACTUAL_FC_TARGET MATCHES "Clang|clang")
+  #execute_process(COMMAND ${CMAKE_CPP_COMPILER} --version
+  #  OUTPUT_VARIABLE ACTUAL_FC_TARGET
+  #  OUTPUT_STRIP_TRAILING_WHITESPACE)
+  #if(ACTUAL_FC_TARGET MATCHES "Clang|clang")
     find_file (
       APPLE_CPP_COMPILER
       NAMES cpp- cpp-4.9 cpp-5 cpp-6 cpp5 cpp6
@@ -85,7 +83,7 @@ ${CLANG_FATAL_MSG}")
       #  [NO_DEFAULT_PATH]
       #  [NO_CMAKE_ENVIRONMENT_PATH]
       #  [NO_CMAKE_PATH]
-      NO_SYSTEM_ENVIRONMENT_PATH
+      # NO_SYSTEM_ENVIRONMENT_PATH
       #  [NO_CMAKE_SYSTEM_PATH]
       #  [CMAKE_FIND_ROOT_PATH_BOTH |
       #   ONLY_CMAKE_FIND_ROOT_PATH |
@@ -111,8 +109,8 @@ ${CLANG_FATAL_MSG}")
 FATAL: In-source builds are not allowed.
        You should create separate directory for build files.
 ")
-    endif()
-#  endif()
+   # endif()
+  endif()
 endif(APPLE)
 
 set(CMAKE_Fortran_SOURCE_FILE_EXTENSIONS ${CMAKE_Fortran_SOURCE_FILE_EXTENSIONS} "f03;F03;f08;F08")

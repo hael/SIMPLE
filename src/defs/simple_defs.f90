@@ -94,8 +94,8 @@ character(len=STDLEN) :: exec_abspath_glob
 #endif
   logical :: global_warn=.false.
   logical :: global_verbose=.false.
-  character(len=STDLEN) :: build_descr = "@BUILD_NAME@"
-#include "GitVersion.h"
+  character(len=STDLEN) :: build_descr = "BUILD_NAME"
+#include "GitVersion.inc"
 
 end module simple_defs
 

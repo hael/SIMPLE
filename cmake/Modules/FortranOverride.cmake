@@ -15,10 +15,10 @@ else()
   set(ENV{FC} "gfortran")
 endif()
 if(NOT $ENV{CPP} STREQUAL "")
-  set(CMAKE_Fortran_COMPILER_NAMES $ENV{CPP})
+  set(CMAKE_CPP_COMPILER_NAMES $ENV{CPP})
 else()
-  set(CMAKE_Fortran_COMPILER_NAMES cpp)
-  set(ENV{FC} "cpp")
+  set(CMAKE_CPP_COMPILER_NAMES cpp-5)
+  set(ENV{CPP} "cpp-5")
 endif()
 
   # If user specifies the build type, use theirs, otherwise use release
@@ -98,5 +98,5 @@ endif()
     cmake_policy(SET CMP0004 OLD)
   endif()
   #
-  set(ENV_PATH ENV{PATH})
+  #  set(ENV_PATH ENV{PATH})
 
