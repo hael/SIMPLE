@@ -214,6 +214,47 @@ add_definitions(-D${CMAKE_Fortran_COMPILER_ID})
 message(STATUS "Fortran compiler ${CMAKE_Fortran_COMPILER_ID}")
 
 
+  if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+    # gfortran
+    set(dialect  "-ffree-form -cpp -fimplicit-none  -ffree-line-length-none")                 # language style
+    set(checks   "-fcheck-array-temporaries  -frange-check -ffpe-trap=invalid,zero,overflow -fstack-protector -fstack-check") # checks
+    set(warn     "-Wall -Wextra -Wimplicit-interface  -Wline-truncation")                     # warning flags
+    set(fordebug "-pedantic -fno-inline -fno-f2c -Og -ggdb -fbacktrace -fbounds-check")       # debug flags
+    set(forspeed "-O3 -ffast-math -finline-functions -funroll-all-loops -fno-f2c ")           # optimisation
+    set(forpar   "-fopenmp -pthread ")                                                         # parallel flags
+    set(target   "-march=native -fPIC")                                                       # target platform
+    set(common   "${dialect} ${checks} ${target} ")
+    #
+  elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
+    # pgfortran
+    set(dialect  "-Mpreprocess -Mfreeform  -Mstandard -Mallocatable=03 -Mextend")
+    set(checks   "-Mdclchk  -Mchkptr -Mchkstk  -Munixlogical -Mlarge_arrays -Mflushz -Mdaz -Mfpmisalign")
+    set(warn     "-Minform=warn")
+    # bounds checking cannot be done in CUDA fortran or OpenACC GPU
+    set(fordebug "-Minfo=all,ftn  -traceback -gopt -Mneginfo=all,ftn -Mnodwarf -Mpgicoff -traceback -Mprof -Mbound -C")
+    set(forspeed "-Munroll -O4  -Mipa=fast -fast -Mcuda=fastmath,unroll -Mvect=nosizelimit,short,simd,sse -mp -acc ")
+    set(forpar   "-Mconcur -Mconcur=bind,allcores -Mcuda=cuda8.0,cc60,flushz,fma ")
+    set(target   " -m64 -fPIC ")
+    set(common   " ${dialect} ${checks} ${target} ${warn}  -DPGI")
+    #
+  elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
+    # ifort
+    # set(FC "ifort" CACHE PATH "Intel Fortran compiler")
+    set(dialect  "-fpp -free -implicitnone -std08  -80")
+    set(checks   "-check bounds -check uninit -assume buffered_io -assume byterecl -align sequence  -diag-disable 6477  -gen-interfaces ") # -mcmodel=medium -shared-intel
+    #-fpe-all=0 -fp-stack-check -fstack-protector-all -ftrapuv -no-ftz -std03
+    set(warn     "-warn all")
+    set(fordebug "-debug -O0 -ftrapuv -debug all -check all")
+    set(forspeed "-O3 -fp-model fast=2 -inline all -unroll-aggressive ")
+    set(forpar   "-qopenmp")
+    set(target   "-xHOST -no-prec-div -static -fPIC")
+    set(common   "${dialect} ${checks} ${target} ${warn} -DINTEL")
+    # else()
+    #   message(" Fortran compiler not supported. Set FC environment variable")
+  endif ()
+  set(CMAKE_Fortran_FLAGS_RELEASE_INIT "${common} ${forspeed} ${forpar} " )
+  set(CMAKE_Fortran_FLAGS_DEBUG_INIT   "${common} ${warn} ${fordebug} ${forpar} -g ")
+ 
 #############################################
 ## COMPLER SPECIFIC SETTINGS
 #############################################
@@ -230,10 +271,11 @@ if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" ) #AND Fortran_COMPILER_NAME MAT
   endif ()
   set(EXTRA_FLAGS "${EXTRA_FLAGS} -cpp -fimplicit-none -fall-intrinsics -ffree-line-length-none ")
   set(CMAKE_CPP_COMPILER_FLAGS           "-E -w -C -CC -P")
+
   set(CMAKE_Fortran_FLAGS                "${CMAKE_Fortran_FLAGS_RELEASE_INIT} ${EXTRA_FLAGS} ")
-  # set(CMAKE_Fortran_FLAGS_DEBUG          "${CMAKE_Fortran_FLAGS_DEBUG_INIT} -O0 -g3 -Warray-bounds -Wcharacter-truncation -Wline-truncation -Wimplicit-interface -Wimplicit-procedure -Wunderflow -Wuninitialized -fcheck=all -fmodule-private -fbacktrace -dump-core -finit-real=nan " CACHE STRING "" FORCE)
+  # set(CMAKE_Fortran_FLAGS_DEBUG         "${CMAKE_Fortran_FLAGS_DEBUG_INIT} -O0 -g3 -Warray-bounds -Wcharacter-truncation -Wline-truncation -Wimplicit-interface -Wimplicit-procedure -Wunderflow -Wuninitialized -fcheck=all -fmodule-private -fbacktrace -dump-core -finit-real=nan " CACHE STRING "" FORCE)
   # set(CMAKE_Fortran_FLAGS_MINSIZEREL     "-Os ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
-  set(CMAKE_Fortran_FLAGS_RELEASE        " ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
+  set(CMAKE_Fortran_FLAGS_RELEASE        "${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
   set(CMAKE_Fortran_FLAGS_RELWITHDEBINFO "${CMAKE_Fortran_FLAGS_RELEASE_INIT} ${CMAKE_Fortran_FLAGS_DEBUG_INIT}")
   
   # #  CMAKE_EXE_LINKER_FLAGS
@@ -264,10 +306,10 @@ elseif (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel" OR Fortran_COMPILER_NAME M
   #
   #############################################
   set(EXTRA_FLAGS "${EXTRA_FLAGS} -fpp -I${MKLROOT}/include  -assume realloc_lhs -assume source_include")
-  #-fpe-all=0 -fp-stack-check -fstack-protector-all -ftrapuv -no-ftz -std03
+  #
   set(CMAKE_AR                           "xiar")
   set(CMAKE_CPP_COMPILER                 "fpp")
-  set(CMAKE_CPP_COMPILER_FLAGS                "  -noJ -B -C -P")
+  set(CMAKE_CPP_COMPILER_FLAGS           "  -noJ -B -C -P")
   set(CMAKE_Fortran_FLAGS                "${CMAKE_Fortran_FLAGS_INIT} ${EXTRA_FLAGS}")
   set(CMAKE_Fortran_FLAGS_DEBUG          "${CMAKE_Fortran_FLAGS_DEBUG_INIT} -O0 -debug all -check all -warn all -extend-source 132 -traceback -gen-interfaces")
   # set(CMAKE_Fortran_FLAGS_MINSIZEREL     "-Os ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
@@ -649,8 +691,7 @@ endif()
 #set(CMAKE_FCPP_FLAGS " -C -P ") # Retain comments due to fortran slash-slash
 #set(CMAKE_Fortran_CREATE_PREPROCESSED_SOURCE "${CMAKE_FCPP_COMPILER} <DEFINES> <INCLUDES> <FLAGS> -E <SOURCE> > <PREPROCESSED_SOURCE>")
 
-set(CMAKE_Fortran_FLAGS_DEBUG "${CMAKE_Fortran_FLAGS} -D__FILENAME__='\"$(subst ${CMAKE_SOURCE_DIR}/,,$(abspath $<))\"'")
-set(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS} -D__FILENAME__='\"$(subst ${CMAKE_SOURCE_DIR}/,,$(abspath $<))\"'")
+add_definitions(" -D__FILENAME__='\"$(subst ${CMAKE_SOURCE_DIR}/,,$(abspath $<))\"'")
 
 # Override Fortran preprocessor
 set(CMAKE_Fortran_COMPILE_OBJECT "grep --silent '#include' <SOURCE> && ( ${CMAKE_CPP_COMPILER} ${CMAKE_CPP_COMPILER_FLAGS} -DOPENMP <DEFINES> <INCLUDES> <SOURCE> > <OBJECT>.f90 &&  <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> \${FFLAGS} -c <OBJECT>.f90 -o <OBJECT> ) || <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> \${FFLAGS} -c <SOURCE> -o <OBJECT>")

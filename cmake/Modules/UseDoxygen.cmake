@@ -86,10 +86,11 @@ find_package(Doxygen)
 if(DOXYGEN_FOUND)
     find_file(DOXYFILE_IN "Doxyfile.in"
             HINTS
-            "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_ROOT}/Modules/"
+            "${CMAKE_CURRENT_SOURCE_DIR}" 
             "${CMAKE_CURRENT_SOURCE_DIR}/config"
             "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules"
-            "${CMAKE_CURRENT_SOURCE_DIR}/doc" 
+            "${CMAKE_CURRENT_SOURCE_DIR}/doc"
+            "${CMAKE_ROOT}/Modules/"
             NO_DEFAULT_PATH
             DOC "Path to the doxygen configuration template file")
             
@@ -101,7 +102,7 @@ if(DOXYGEN_FOUND)
 endif()
 
 if(DOXYGEN_FOUND AND DOXYFILE_IN_FOUND)
-    usedoxygen_set_default(DOXYFILE_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/doc"
+    usedoxygen_set_default(DOXYFILE_OUTPUT_DIR "doc"
         PATH "Doxygen output directory")
     usedoxygen_set_default(DOXYFILE_HTML_DIR "html"
         STRING "Doxygen HTML output directory")
@@ -109,7 +110,7 @@ if(DOXYGEN_FOUND AND DOXYFILE_IN_FOUND)
         PATH "Input files source directory")
     usedoxygen_set_default(DOXYFILE_EXTRA_SOURCE_DIRS ""
         STRING "Additional source files/directories separated by space")
-    set(DOXYFILE_SOURE_DIRS "\"${DOXYFILE_SOURCE_DIR}\" ${DOXYFILE_EXTRA_SOURCES}")
+    set(DOXYFILE_SOURCE_DIRS "\"${DOXYFILE_SOURCE_DIR}\" ${DOXYFILE_EXTRA_SOURCES}")
 
     usedoxygen_set_default(DOXYFILE_LATEX YES BOOL "Generate LaTeX API documentation" OFF)
     usedoxygen_set_default(DOXYFILE_LATEX_DIR "latex" STRING "LaTex output directory")

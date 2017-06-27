@@ -17,8 +17,25 @@ endif()
 if(NOT $ENV{CPP} STREQUAL "")
   set(CMAKE_CPP_COMPILER_NAMES $ENV{CPP})
 else()
-  set(CMAKE_CPP_COMPILER_NAMES cpp-5)
-  set(ENV{CPP} "cpp-5")
+  find_file (
+      CMAKE_CPP_COMPILER_NAMES
+      NAMES cpp- cpp-4.9 cpp-5 cpp-6 cpp5 cpp6 cpp
+      PATHS /usr/local/bin /opt/local/bin /sw/bin /usr/bin
+      #  [PATH_SUFFIXES suffix1 [suffix2 ...]]
+      DOC "GNU cpp preprocessor "
+      #  [NO_DEFAULT_PATH]
+      #  [NO_CMAKE_ENVIRONMENT_PATH]
+      #  [NO_CMAKE_PATH]
+      # NO_SYSTEM_ENVIRONMENT_PATH
+      #  [NO_CMAKE_SYSTEM_PATH]
+      #  [CMAKE_FIND_ROOT_PATH_BOTH |
+      #   ONLY_CMAKE_FIND_ROOT_PATH |
+      #   NO_CMAKE_FIND_ROOT_PATH]
+      )
+  if(NOT EXISTS ${CMAKE_CPP_COMPILER_NAMES})
+    set(CMAKE_CPP_COMPILER_NAMES cpp-5)
+    endif()
+  set(ENV{CPP} ${CMAKE_CPP_COMPILER_NAMES})
 endif()
 
   # If user specifies the build type, use theirs, otherwise use release
@@ -87,7 +104,7 @@ endif()
     # else()
     #   message(" Fortran compiler not supported. Set FC environment variable")
   endif ()
-  set(CMAKE_Fortran_FLAGS_RELEASE_INIT "${common} ${forspeed} ${forpar} ")
+  set(CMAKE_Fortran_FLAGS_RELEASE_INIT "${common} ${forspeed} ${forpar} " )
   set(CMAKE_Fortran_FLAGS_DEBUG_INIT   "${common} ${fordebug} ${forpar} -g ")
   #
   # Make recent cmake not spam about stuff
@@ -97,6 +114,3 @@ endif()
   if(POLICY CMP0004)
     cmake_policy(SET CMP0004 OLD)
   endif()
-  #
-  #  set(ENV_PATH ENV{PATH})
-

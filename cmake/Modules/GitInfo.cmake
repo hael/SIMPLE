@@ -16,8 +16,7 @@ ELSE()
 SET(SIMPLE_GIT_VERSION "Simple tgz/zip release 2.5")
 ENDIF(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/.git)
 
-
 MESSAGE( STATUS "Git version: ${SIMPLE_GIT_VERSION}" )
-
-CONFIGURE_FILE(${CMAKE_MODULE_PATH}/GitVersion.h.in 
-${CMAKE_CURRENT_SOURCE_DIR}/src/inc/GitVersion.inc @ONLY)
+MESSAGE( STATUS "Git version template : ${CMAKE_MODULE_PATH}/GitVersion.h.in" )
+MESSAGE( STATUS "Git version template : ${CMAKE_BINARY_DIR}/lib/simple/GitVersion.inc")
+CONFIGURE_FILE(${CMAKE_MODULE_PATH}/GitVersion.h.in  ${CMAKE_BINARY_DIR}/lib/simple/GitVersion.inc @ONLY)

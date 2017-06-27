@@ -2,25 +2,13 @@
 ########################################
 # Set up how to compile the tests
 ########################################
+file(GLOB TESTDIRS
+  LIST_DIRECTORIES true
+  RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
+  test_*
+  )
+message( STATUS "Test directories ${TESTDIRS}")
 
-list(APPEND TESTDIRS
-  test_binomial_para
-  test_cartcorr_sanity
-  test_defocus_groups
-  test_ft_expanded
-  test_imgfile
-  test_install
-  test_new_ori
-  test_omp_timer
-  test_order_corr
-  test_parse
-  test_ptcl_conv
-  test_scatsrch
-  test_shelliter
-  test_speed
-  test_srch
-  test_timer
-  test_units )
 
 
 foreach(TESTNAME ${TESTDIRS})
@@ -88,3 +76,29 @@ foreach(TESTNAME ${TESTDIRS})
 endif()
 endforeach(TESTNAME)
 
+
+# Default CTest tests
+#
+list(APPEND CTESTDIRS
+  test_imgfile
+  test_install
+  test_parse
+  test_speed
+  test_srch
+  test_timer
+  test_units )
+
+add_test(NAME test_parse
+  CONFIGURATIONS Debug|Release
+  WORKING_DIRECTORY bin
+  COMMAND simple_test_parse nthr=4) 
+
+add_test(NAME test_units
+  CONFIGURATIONS Debug|Release
+  WORKING_DIRECTORY bin
+  COMMAND simple_test_units nthr=4) 
+
+add_test(NAME test_timer
+  CONFIGURATIONS Debug|Release
+  WORKING_DIRECTORY bin
+  COMMAND simple_test_timer ) 

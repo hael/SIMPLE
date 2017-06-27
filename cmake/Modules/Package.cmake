@@ -1,20 +1,25 @@
 if(CPACK_GENERATOR)
   # common package information
   set(CPACK_PACKAGE_NAME "${PACKAGE_NAME}")
-  set(CPACK_PACKAGE_VENDOR "Elmlund Lab")
-  set(CPACK_PACKAGE_VERSION "${PACKAGE_VERSION}")
+  set(CPACK_PACKAGE_VENDOR "Elmlund Lab -- Monash University")
+  set(CPACK_PACKAGE_VERSION "${SIMPLE_VERSION}")
+  set(CPACK_PACKAGE_VERSION_MAJOR "${SIMPLE_VERSION_MAJOR}")
+  set(CPACK_PACKAGE_VERSION_MINOR "${SIMPLE_VERSION_MINOR}")
+  set(CPACK_PACKAGE_VERSION_PATCH "${SIMPLE_GIT_VERSION}")
+  set(CPACK_SET_DESTDIR "/usr/local")
   set(CPACK_PACKAGE_DESCRIPTION_SUMMARY
-    "cryo Electron Microscope Image Processor")
+    "SIMPLE is a SIngle-particle cryo electron Microscope Image Processing Engine")
   set(CPACK_DEBIAN_PACKAGE_DESCRIPTION "${CPACK_PACKAGE_DESCRIPTION_SUMMARY}")
-  #set(CPACK_RESOURCE_FILE_WELCOME "${CMAKE_CURRENT_LIST_DIR}/README.md")
-  #set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_LIST_DIR}/LICENSE")
-  set(CPACK_RESOURCE_FILE_README "${CMAKE_CURRENT_LIST_DIR}/README.md")
+  #set(CPACK_RESOURCE_FILE_WELCOME "${CMAKE_SOURCE_DIR}/README.txt")
+  set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/LICENSE")
+  set(CPACK_RESOURCE_FILE_README "${CMAKE_SOURCE_DIR}/README.txt")
   set(CPACK_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
   set(CPACK_PACKAGE_CONTACT "Hans Elmlund <Hans.Elmlund@monash.edu>")
   set(CPACK_OUTPUT_FILE_PREFIX packages)
   set(CPACK_PACKAGE_RELOCATABLE true)
   set(CPACK_MONOLITHIC_INSTALL true)
-
+  SET(CPACK_PACKAGE_INSTALL_DIRECTORY "simple ${SIMPLE_VERSION}.${SIMPLE_GIT_VERSION}")
+  SET(CPACK_SOURCE_PACKAGE_FILE_NAME "simple-${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CPACK_PACKAGE_VERSION_PATCH}")
   # Prefix Debug/Nightly release
   set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}")
   if(NIGHTLY)
@@ -45,10 +50,9 @@ if(CPACK_GENERATOR)
     # Debian package
   elseif(CPACK_GENERATOR MATCHES "DEB")
     # https://github.com/hhvm/packaging/tree/master/hhvm/deb
-    set(CPACK_DEBIAN_PACKAGE_DEPENDS "binutils, libfftw3-dev, libfftw3-bin,"
-      "gfortran, cmake,"
-      " libc6, libgcc1, libpng12-0, libstdc++6, ")
-    set(CPACK_DEBIAN_PACKAGE_SECTION "web")
+    set(CPACK_DEBIAN_PACKAGE_DEPENDS "binutils, libfftw3-dev,"
+      "gfortran, cmake")
+    set(CPACK_DEBIAN_PACKAGE_SECTION "science")
     set(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
     set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "http://simplecryoem.org")
     set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "amd64")
@@ -60,9 +64,9 @@ if(CPACK_GENERATOR)
     # https://github.com/pld-linux/hhvm
     # https://github.com/hhvm/packaging/tree/master/hhvm/rpm/fedora20/rpmbuild/
     set(CPACK_RPM_PACKAGE_REQUIRES "binutils-devel, cmake >= 2.8.7, "
-      "gcc >= 6:4.6.0, libstdc++-devel >= 6:4.3, ")
-    set(CPACK_RPM_PACKAGE_GROUP "Development/Languages")
-    set(CPACK_RPM_PACKAGE_LICENSE "GPL3+ and BSD")
+      "gcc >= 6:4.6.0, libstdc++-devel >= 6:4.3, libfftw3-devel   ")
+    set(CPACK_RPM_PACKAGE_GROUP "Applications/Engineering")
+    set(CPACK_RPM_PACKAGE_LICENSE "GPL3+ ")
     set(CPACK_RPM_PACKAGE_URL "http://simplecryoem.org")
     set(CPACK_RPM_PACKAGE_ARCHITECTURE "x86_64")
     set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_FILE_NAME}"
@@ -70,4 +74,5 @@ if(CPACK_GENERATOR)
       "-${CPACK_RPM_PACKAGE_ARCHITECTURE}")
   endif()
   include(CPack)
-  endif()
+  message( STATUS "CPack setup complete")
+endif()
