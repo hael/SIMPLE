@@ -81,7 +81,7 @@ if(Fortran_COMPILER_NAME MATCHES "gfortran*")
       NAMES gfortran- gfortran-4.9 gfortran-5 gfortran-6 gfortran5 gfortran6
       PATHS /usr/local/bin /opt/local/bin /sw/bin /usr/bin
       #  [PATH_SUFFIXES suffix1 [suffix2 ...]]
-      DOC "Searing for GNU gfortran preprocessor "
+      DOC "Searching for GNU gfortran preprocessor "
       #  [NO_DEFAULT_PATH]
       #  [NO_CMAKE_ENVIRONMENT_PATH]
       NO_CMAKE_PATH
@@ -203,12 +203,12 @@ message(STATUS "Fortran compiler ${CMAKE_Fortran_COMPILER_ID}")
 if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
   # gfortran
   set(preproc  "-cpp -P ")
-  set(dialect  "-ffree-form  -fimplicit-none  -ffree-line-length-none")                       # language style
+  set(dialect  "-ffree-form  -fimplicit-none  -ffree-line-length-none -fno-second-underscore")                       # language style
   set(checks   "-fcheck-array-temporaries -frange-check -fstack-protector -fstack-check")     # checks
   set(warn     "-Wall -Wextra -Wimplicit-interface ${checks} ")                                        # warning flags
   set(fordebug "-pedantic -fno-inline -fno-f2c -Og -ggdb -fbacktrace -fbounds-check  -ffpe-trap=invalid,zero,overflow")       # debug flags
 # -O0 -g3 -Warray-bounds -Wcharacter-truncation -Wline-truncation -Wimplicit-interface -Wimplicit-procedure -Wunderflow -Wuninitialized -fcheck=all -fmodule-private -fbacktrace -dump-core -finit-real=nan
-  set(forspeed "-O3    ")                                # optimisation
+  set(forspeed "-O3  ")                                # optimisation
   set(forpar   "-fopenmp  ")                                                                  # parallel flags
   set(target   "${GNUNATIVE} -fPIC")                                                         # target platform
   set(common   "${preproc} ${dialect} ${target} ")
@@ -386,6 +386,11 @@ if (IMAGE_TYPE_DOUBLE)
   set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -DIMAGETYPEDOUBLE" )
 endif()
 
+if(APPLE)
+add_definitions("-DMACOSX")
+else()
+add_definitions("-DLINUX")
+endif()
 
 ################################################################
 # Compiler-specific C++11/Modern fortran activation.
