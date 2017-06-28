@@ -1,9 +1,9 @@
-
+# -*- mode: org -*-
 #+options: toc:t title:nil
 
 #+name: simple_logo
 #+attr_html: :width 600 :alt Single-particle CryoEM Image Processing Linux Engine :align center
-[[https://simplecyroem.com][https://github.com/hael/SIMPLE3.0/blob/cmake-feature/gui/www/img/simple_logo.svg]]
+[[https://simplecyroem.com][https://github.com/hael/SIMPLE3.0/blob/release2.5/doc/SimpleTutorials2017/SIMPLE_logo/rawlogo.png]]
 
 #+name: banner
 #+attr_html: :width 300 :align center
@@ -12,12 +12,13 @@
 #+name: status
 #+attr_html:  :align center :width 500
 #+caption: Developer -- Build success table
-|                       | GNU /gfortran/                                                                                        | Intel /ifort/                                            | Portland Group /pgfortran/                        |
-|-----------------------+-------------------------------------------------------------------------------------------------------+----------------------------------------------------------+---------------------------------------------------|
-| Ubuntu (14.10, 16.04) | [[https://img.shields.io/badge/build-v4.9-green.svg]] , [[https://img.shields.io/badge/build-v7.1-green.svg]] | [[https://img.shields.io/badge/build-v2017.2.174-green.svg]] | [[https://img.shields.io/badge/build-2016-green.svg]] |
-| Centos (MASSIVE3)     | [[https://img.shields.io/badge/build-gcc5%20fftw3.3-green.svg]]                                           | [[https://img.shields.io/badge/build-intel/2016-green.svg]]  | https://img.shields.io/badge/build-NA-gray.svg    |
-| MacOSX (10.12)        | [[https://img.shields.io/badge/build-v4.9-green.svg]]                                                     | [[https://img.shields.io/badge/build-NA-gray.svg]]           | https://img.shields.io/badge/build-NA-gray.svg    |
-| Win                   | [[https://img.shields.io/badge/build-NA-gray.svg]]                                                        | [[https://img.shields.io/badge/build-NA-gray.svg]]           | https://img.shields.io/badge/build-NA-gray.svg    |
+|                       | GNU /gfortran/ and FFTW                                                                                                                                                          | Intel /ifort/ and MKL                                    | Portland Group /pgfortran/  and PGI compiled FFTW |
+|-----------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+----------------------------------------------------------+---------------------------------------------------|
+| Ubuntu (14.10, 16.04) | [[https://img.shields.io/badge/build-v4.9-green.svg]] [[https://img.shields.io/badge/build-v5.4-green.svg]]  [[https://img.shields.io/badge/build-v7.1-green.svg]]                           | [[https://img.shields.io/badge/build-v2017.2.174-green.svg]] | [[https://img.shields.io/badge/build-2016-green.svg]] |
+| Centos (MASSIVE3)     | [[https://img.shields.io/badge/build-v5-green.svg]]                                                                                                                                  | [[https://img.shields.io/badge/build-intel/2016-green.svg]]  | https://img.shields.io/badge/build-NA-gray.svg    |
+| ThinkStation          | [[https://img.shields.io/badge/build-v4.9-green.svg]]                                                                                                                                                                               |                                                          |                                                   |
+| MacOSX (10.12)        | [[https://img.shields.io/badge/build-Brew_gcc4.9-green.svg]]  [[https://img.shields.io/badge/build-Macports_gcc5.4-green.svg]]  [[https://img.shields.io/badge/build-Fink_gcc4.9-green.svg]] | [[https://img.shields.io/badge/build-NA-gray.svg]]           | https://img.shields.io/badge/build-NA-red.svg     |
+| Win                   | [[https://img.shields.io/badge/build-TODO-gray.svg]]                                                                                                                                 | [[https://img.shields.io/badge/build-TODO-gray.svg]]         | https://img.shields.io/badge/build-NA-gray.svg    |
 
 
 
@@ -29,19 +30,6 @@
    be contributing to development
 
 
-** What is SIMPLE?
-
-*S*ingle-particle *IM*age *Processing *L*inux *E*ngine ([[https://www.simplecryoem.com][SIMPLE]]) is a program
-package for cryo-EM image processing, focusing on /ab initio/ 3D reconstruction
-of low-symmetry single-particles. The SIMPLE back-end consists of an
-object-oriented numerical library written in modern Fortran. The SIMPLE
-front-end consists of a few standalone, interoperable components developed
-according to the ``Unix toolkit philosophy''.
-
-
-** Project Motivation
-
-See [[https://simplecryoem.org/index.html][Simple homepage]] 
 
 ** Installation Options
 
@@ -103,8 +91,23 @@ single and double precision libraries in the interactive =ccmake= or declare FFT
 #+END_SRC
 
 
+**** Intel fortran
 
-**** PGI Linux                                        :noexport:
+Source the =ifortvars.sh= file from your Intel compiler source path
+#+BEGIN_SRC sh
+   source /opt/intel/bin/compilervars.sh -arch intel64
+   mkdir build-intel
+   cd build-intel
+   export FC=ifort
+   export CPP=fpp
+
+   cmake ..  
+   make -j
+#+END_SRC sh
+
+
+
+**** PGI Linux   (Unsupported)
 
 Shell environment variables FC and LD_LIBRARY_PATH are crucial in the cmake
 build to determine the fortran compiler and for finding the FFTW3 libraries.
@@ -173,33 +176,10 @@ Create a unique directory in the SIMPLE source directory and build with cmake:
     make -j
 #+END_SRC
 
-**** Intel fortran
-
-Source the =ifortvars.sh= file from your Intel compiler source path
-#+BEGIN_SRC sh
-   source /opt/intel/bin/compilervars.sh -arch intel64
-   mkdir build-intel
-   cd build-intel
-   export FC=ifort
-   export CPP=fpp
-   export CC=icc
-   export CXX=icpc
-   cmake ..  
-   make -j
-#+END_SRC sh
-
-
-**** MacOSX/Apple Clang                               :noexport:
+**** MacOSX/Apple Clang    (Unsupported)                           :noexport:
 
 The GNU compiler is the preferred compiler.   
-Building with clang and Ninja can be done as simple as:
-
-#+BEGIN_SRC sh
-    export CXX=/usr/bin/clang++
-    export CC=/usr/bin/clang
-    cmake .. FC=$CC
-    make -j
-#+END_SRC
+Building with clang will be rejected by CMake.
 
 **** Windows/MinGW                                    :noexport:
 - ~Untested~
@@ -216,7 +196,6 @@ Generate Visual Studio 12 Solution and build the ALL_BUILD target:
  cmake -G "Visual Studio 12 2013" ..
  cmake --build . --target ALL_BUILD --config Release
 #+END_SRC
-
 
 
 

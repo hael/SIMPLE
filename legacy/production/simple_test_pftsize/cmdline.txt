@@ -1,6 +1,0 @@
- simple_test_pftsize box=300 smpd=1.77 nspace=1000 lp=5 msk=110                                                                                                                                                                                                  
- box    300.000000    
- smpd    1.76999998    
- nspace    1000.00000    
- lp    5.00000000    
- msk    110.000000    
