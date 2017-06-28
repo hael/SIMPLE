@@ -1,7 +1,7 @@
 !==Class simple_commander_volops
 !
-! This class contains the set of concrete volops (volume operations) commanders of the SIMPLE library. This class provides the glue between the reciver 
-! (main reciever is simple_exec program) and the abstract action, which is simply execute (defined by the base class: simple_commander_base). 
+! This class contains the set of concrete volops (volume operations) commanders of the SIMPLE library. This class provides the glue between the reciver
+! (main reciever is simple_exec program) and the abstract action, which is simply execute (defined by the base class: simple_commander_base).
 ! Later we can use the composite pattern to create MacroCommanders (or workflows)
 !
 ! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
@@ -53,7 +53,7 @@ type, extends(commander_base) :: volume_smat_commander
 end type volume_smat_commander
 
 contains
-    
+
     subroutine exec_cenvol( self, cline )
         class(cenvol_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
@@ -61,7 +61,7 @@ contains
         type(build)          :: b
         real, allocatable    :: shvec(:,:)
         integer              :: istate
-        
+
         p = params(cline)                           ! parameters generated
         call b%build_general_tbox(p, cline, .true.) ! general objects built
         ! center volume(s)
@@ -69,7 +69,7 @@ contains
         do istate=1,p%nstates
             call b%vol%read(p%vols(istate))
             shvec(istate,:) = b%vol%center(p%cenlp,'no',p%msk)
-            if( istate == 1 ) call b%vol%write(p%outvol) 
+            if( istate == 1 ) call b%vol%write(p%outvol)
             if( debug )then
                 call b%vol%shift(-shvec(istate,1), -shvec(istate,2), -shvec(istate,3))
                 call b%vol%write('shifted_vol_state'//int2str(istate)//p%ext)
@@ -81,7 +81,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_CENVOL NORMAL STOP ****')
     end subroutine exec_cenvol
-    
+
     subroutine exec_postproc_vol(self,cline)
         use simple_estimate_ssnr ! use all in there
         use simple_masker,       only: automask
@@ -129,7 +129,7 @@ contains
         call b%vol%write(p%outvol)
         call simple_end('**** SIMPLE_POSTPROC_VOL NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_postproc_vol
-    
+
     subroutine exec_projvol( self, cline )
         use simple_image,          only: image
         use simple_projector_hlev, only: projvol
@@ -140,7 +140,7 @@ contains
         type(image), allocatable :: imgs(:)
         integer                  :: i, loop_end
         real                     :: x, y, dfx, dfy, angast
-        
+
         if( .not. cline%defined('oritab') )then
             if( .not. cline%defined('nspace') ) stop 'need nspace (for number of projections)!'
         endif
@@ -194,7 +194,7 @@ contains
         call b%a%write('projvol_oris.txt')
         call simple_end('**** SIMPLE_PROJVOL NORMAL STOP ****')
     end subroutine exec_projvol
-    
+
     subroutine exec_volaverager( self, cline )
         use simple_image, only: image
         class(volaverager_commander), intent(inout) :: self
@@ -207,8 +207,7 @@ contains
         integer                            :: istate, ivol, nvols, funit_vols, numlen, ifoo
         character(len=:), allocatable      :: fname
         character(len=1)                   :: fformat
-#include "simple_local_flags.inc"  ! this inserts debug here and overrides the module debug
-        
+#include "simple_local_flags.inc"
         p = params(cline) ! parameters generated
         ! read the volnames
         nvols = nlines(p%vollist)
@@ -264,13 +263,13 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_VOLAVERAGER NORMAL STOP ****')
     end subroutine exec_volaverager
-    
+
     subroutine exec_volops( self, cline )
         class(volops_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(params) :: p
         type(build)  :: b
-        logical      :: here 
+        logical      :: here
         p = params(cline,checkdistr=.false.)        ! constants & derived constants produced, mode=2
         call b%build_general_tbox(p, cline)         ! general objects built
         call b%vol%new([p%box,p%box,p%box], p%smpd) ! reallocate vol (boxmatch issue)
@@ -295,7 +294,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_VOLOPS NORMAL STOP ****')
     end subroutine exec_volops
-    
+
     subroutine exec_volume_smat( self, cline )
         use simple_projector, only: projector
         use simple_ori,       only: ori
@@ -325,7 +324,7 @@ contains
         DebugPrint   'found logical dimension: ', ldim
         if( cline%defined('part') )then
             npairs = p%top-p%fromp+1
-            DebugPrint   'allocating this number of similarities: ', npairs 
+            DebugPrint   'allocating this number of similarities: ', npairs
             allocate(corrs(p%fromp:p%top), pairs(p%fromp:p%top,2), stat=alloc_stat)
             call alloc_err('In: simple_volume_smat, 1', alloc_stat)
             ! read the pairs
@@ -353,7 +352,7 @@ contains
                 ivol = pairs(ipair,1)
                 jvol = pairs(ipair,2)
                 call read_and_prep_vols( ivol, jvol )
-                o = volpft_srch_minimize() 
+                o = volpft_srch_minimize()
                 corrs(ipair) = o%get('corr')
             end do
             DebugPrint   'did set this number of similarities: ', cnt
@@ -383,7 +382,7 @@ contains
                     cnt = cnt + 1
                     call progress(cnt, npairs)
                     call read_and_prep_vols( ivol, jvol )
-                    o = volpft_srch_minimize() 
+                    o = volpft_srch_minimize()
                     corrmat(ivol,jvol) = o%get('corr')
                     corrmat(jvol,ivol) = corrmat(ivol,jvol)
                     if( corrmat(ivol,jvol) > corr_max ) corr_max = corrmat(ivol,jvol)
@@ -401,7 +400,7 @@ contains
             furthest_from_spat_med_corr = corrmat(spat_med,furthest_from_spat_med)
             write(*,'(a,1x,f7.4)') 'MAX VOL PAIR CORR          :', corr_max
             write(*,'(a,1x,f7.4)') 'MIN VOL PAIR CORR          :', corr_min
-            write(*,'(a,1x,i7)'  ) 'SPATIAL MEDIAN             :', spat_med 
+            write(*,'(a,1x,i7)'  ) 'SPATIAL MEDIAN             :', spat_med
             write(*,'(a,1x,f7.4)') 'SPATIAL MEDIAN CORR        :', spat_med_corr
             write(*,'(a,1x,i7)'  ) 'FURTHEST FROM SPAT MED     :', furthest_from_spat_med
             write(*,'(a,1x,f7.4)') 'FURTHEST FROM SPAT MED CORR:', furthest_from_spat_med_corr
@@ -414,7 +413,7 @@ contains
             endif
             close(funit)
             deallocate(corrmat)
-        endif     
+        endif
         ! end gracefully
         call simple_end('**** SIMPLE_VOLUME_SMAT NORMAL STOP ****')
 
@@ -430,7 +429,7 @@ contains
                 call vol2%read(vollist(jvol))
                 if( p%boxmatch < p%box )then
                     call vol1%clip_inplace([p%boxmatch,p%boxmatch,p%boxmatch])
-                    call vol2%clip_inplace([p%boxmatch,p%boxmatch,p%boxmatch]) 
+                    call vol2%clip_inplace([p%boxmatch,p%boxmatch,p%boxmatch])
                 endif
                 call vol1%mask(p%msk,'soft')
                 call vol2%mask(p%msk,'soft')
