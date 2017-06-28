@@ -1,19 +1,19 @@
 
-
 ####################################################################
 # Make sure that the default build type is RELEASE if not specified.
 ####################################################################
 include(${CMAKE_MODULE_PATH}/SetCompileFlag.cmake)
+enable_language(Fortran C)
 #include(${CMAKE_ROOT}/Modules/CMakeDetermineFortranCompiler.cmake)
 #include(${CMAKE_ROOT}/Modules/CMakeDetermineCCompiler.cmake)
 
 if(NOT $ENV{CPP} STREQUAL "")
-  set(CMAKE_CPP_COMPILER $ENV{CPP})
+  set(TMP_CPP_COMPILER $ENV{CPP})
 else()
   if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel")
-    set(CMAKE_CPP_COMPILER fpp)
+    set(TMP_CPP_COMPILER fpp)
   elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
-    set(CMAKE_CPP_COMPILER "pgcc -E")
+    set(TMP_CPP_COMPILER "pgcc -E")
   endif()
 endif()
 
@@ -28,90 +28,76 @@ Make sure you prepend  /usr/local/bin (Homebrew) or /opt/local/bin (MacPorts) or
 In LD_LIBRARY_PATH prepend the appropriate lib path.
     ")
 
-if(APPLE)
-  message(STATUS  "Try setting the GNU compiler")
-  #    include(${CMAKE_ROOT}/Modules/Compiler/GNU-Fortran.cmake)
-  #    include(${CMAKE_ROOT}/Modules/Platform/Darwin-GNU-Fortran.cmake)
-  #    __darwin_compiler_gnu(Fortran)
-
-  # if (CMAKE_Fortran_COMPILER_ID STREQUAL "Clang" OR "${CMAKE_GENERATOR}" MATCHES "XCode")
-
-  #   message( FATAL_ERROR "${CLANG_FATAL_MSG}" )
-
-  # elseif(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU" )
-    message(STATUS "Making sure your Mac OS X GNU compiler points to the correct binary")
-    if(Fortran_COMPILER_NAME MATCHES "gfortran*")
-      execute_process(COMMAND ${CMAKE_Fortran_COMPILER} --version
-        OUTPUT_VARIABLE ACTUAL_FC_TARGET
-        OUTPUT_STRIP_TRAILING_WHITESPACE)
-      if(ACTUAL_FC_TARGET MATCHES "Clang|clang")
-        if(NOT EXIST "${CMAKE_Fortran_COMPILER}-")
-          message( FATAL_ERROR  "Cannot find ${CMAKE_Fortran_COMPILER}- 
+message(STATUS "Making sure your preprocessor points to the correct binary")
+execute_process(COMMAND "${TMP_CPP_COMPILER}" --version
+  OUTPUT_VARIABLE ACTUAL_FC_TARGET
+  OUTPUT_STRIP_TRAILING_WHITESPACE)
+if(ACTUAL_FC_TARGET MATCHES "Clang|clang")
+  message(STATUS "Found cpp is actually Clang -- Trying other paths")
+  find_file (
+    TMP_CPP_COMPILER
+    NAMES cpp- cpp-4.9 cpp-5 cpp-6 cpp5 cpp6
+    PATHS /usr/local/bin /opt/local/bin /sw/bin /usr/bin
+    #  [PATH_SUFFIXES suffix1 [suffix2 ...]]
+    DOC "Searing for GNU cpp preprocessor "
+    #  [NO_DEFAULT_PATH]
+    #  [NO_CMAKE_ENVIRONMENT_PATH]
+    NO_CMAKE_PATH
+    NO_SYSTEM_ENVIRONMENT_PATH
+    #  [NO_CMAKE_SYSTEM_PATH]
+    #  [CMAKE_FIND_ROOT_PATH_BOTH |
+    #   ONLY_CMAKE_FIND_ROOT_PATH |
+    #   NO_CMAKE_FIND_ROOT_PATH]
+    )
+  if(NOT EXISTS "${TMP_CPP_COMPILER}")
+    message( FATAL_ERROR  "Cannot find GNU cpp compiler -- 
 ${CLANG_FATAL_MSG}")
-        endif()
-        execute_process(COMMAND ${CMAKE_Fortran_COMPILER}- --version
-          OUTPUT_VARIABLE ACTUAL_FC_TARGET
-          OUTPUT_STRIP_TRAILING_WHITESPACE)
-        if(ACTUAL_FC_TARGET MATCHES "Clang|clang")
-          message( FATAL_ERROR  "--Fortran compiler links to Clang --
-${CLANG_FATAL_MSG}")
-        else()
-          set(CMAKE_Fortran_COMPILER "${CMAKE_Fortran_COMPILER}-")
-        endif()
-      endif()
-    endif()
-#  endif()
-#   execute_process(COMMAND ${CMAKE_C_COMPILER} --version
-#     OUTPUT_VARIABLE ACTUAL_FC_TARGET
-#     OUTPUT_STRIP_TRAILING_WHITESPACE)
-#   if(ACTUAL_FC_TARGET MATCHES "Clang|clang")
-#     message( FATAL_ERROR "-- C compiler links to Clang --
-# ${CLANG_FATAL_MSG} ")
-#   endif()
+  endif()
+endif()
+set(CMAKE_CPP_COMPILER ${TMP_CPP_COMPILER})
 
 
-  #execute_process(COMMAND ${CMAKE_CPP_COMPILER} --version
-  #  OUTPUT_VARIABLE ACTUAL_FC_TARGET
-  #  OUTPUT_STRIP_TRAILING_WHITESPACE)
-  #if(ACTUAL_FC_TARGET MATCHES "Clang|clang")
+
+#if(APPLE)
+#  message(STATUS  "Try setting the GNU compiler")
+#    include(${CMAKE_ROOT}/Modules/Compiler/GNU-Fortran.cmake)
+#    include(${CMAKE_ROOT}/Modules/Platform/Darwin-GNU-Fortran.cmake)
+#    __darwin_compiler_gnu(Fortran)
+
+# if (CMAKE_Fortran_COMPILER_ID STREQUAL "Clang" OR "${CMAKE_GENERATOR}" MATCHES "XCode")
+
+#   message( FATAL_ERROR "${CLANG_FATAL_MSG}" )
+
+# elseif(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU" )
+message(STATUS "Making sure your Fortran compiler points to the correct binary")
+if(Fortran_COMPILER_NAME MATCHES "gfortran*")
+  execute_process(COMMAND ${CMAKE_Fortran_COMPILER} --version
+    OUTPUT_VARIABLE ACTUAL_FC_TARGET
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+  if(ACTUAL_FC_TARGET MATCHES "Clang|clang")
+    message(STATUS "gfortran points to Clang -- Trying other paths")
     find_file (
-      APPLE_CPP_COMPILER
-      NAMES cpp- cpp-4.9 cpp-5 cpp-6 cpp5 cpp6
-      PATHS /usr/local/bin /opt/local/bin /sw/bin 
+      CMAKE_Fortran_COMPILER
+      NAMES gfortran- gfortran-4.9 gfortran-5 gfortran-6 gfortran5 gfortran6
+      PATHS /usr/local/bin /opt/local/bin /sw/bin /usr/bin
       #  [PATH_SUFFIXES suffix1 [suffix2 ...]]
-      DOC "GNU cpp preprocessor "
+      DOC "Searing for GNU gfortran preprocessor "
       #  [NO_DEFAULT_PATH]
       #  [NO_CMAKE_ENVIRONMENT_PATH]
-      #  [NO_CMAKE_PATH]
-      # NO_SYSTEM_ENVIRONMENT_PATH
+      NO_CMAKE_PATH
+      NO_SYSTEM_ENVIRONMENT_PATH
       #  [NO_CMAKE_SYSTEM_PATH]
       #  [CMAKE_FIND_ROOT_PATH_BOTH |
       #   ONLY_CMAKE_FIND_ROOT_PATH |
       #   NO_CMAKE_FIND_ROOT_PATH]
       )
-
-    if(NOT EXISTS "${APPLE_CPP_COMPILER}")
-      message( FATAL_ERROR  "Cannot find GNU cpp compiler -- 
+    if(NOT EXIST "${CMAKE_Fortran_COMPILER}")
+      message( FATAL_ERROR  "Cannot find ${CMAKE_Fortran_COMPILER} -- 
 ${CLANG_FATAL_MSG}")
     endif()
-
-    execute_process(COMMAND "${APPLE_CPP_COMPILER}" --version
-      OUTPUT_VARIABLE ACTUAL_FC_TARGET
-      OUTPUT_STRIP_TRAILING_WHITESPACE)
-    if(ACTUAL_FC_TARGET MATCHES "Clang|clang")
-      message( FATAL_ERROR  "${CLANG_FATAL_MSG}  -- CPP compiler ${CMAKE_CPP_COMPILER} links to Clang")
-    endif()
-    set(CMAKE_CPP_COMPILER ${APPLE_CPP_COMPILER})
-    
-    # Disable in-source builds to prevent source tree corruption.
-    if(" ${CMAKE_SOURCE_DIR}" STREQUAL " ${CMAKE_BINARY_DIR}")
-      message(FATAL_ERROR "
-FATAL: In-source builds are not allowed.
-       You should create separate directory for build files.
-")
-   # endif()
   endif()
-endif(APPLE)
+endif()
+
 
 set(CMAKE_Fortran_SOURCE_FILE_EXTENSIONS ${CMAKE_Fortran_SOURCE_FILE_EXTENSIONS} "f03;F03;f08;F08")
 # Make sure the build type is uppercase
@@ -160,13 +146,6 @@ endif(BT STREQUAL "RELEASE")
 get_filename_component (Fortran_COMPILER_NAME ${CMAKE_Fortran_COMPILER} NAME)
 message(STATUS "Fortran compiler: ${Fortran_COMPILER_NAME}")
 
-#option(EXECUTION_PROFILER "Enable the execution profiler" OFF)
-#option(ENABLE_SSP "Enabled GCC/LLVM stack-smashing protection" OFF)
-#option(STATIC_CXX_LIB "Statically link libstd++ and libgcc." OFF)
-#option(ENABLE_AVX2 "Enable the use of AVX2 instructions" OFF)
-#option(CLANG_FORCE_LIBSTDCXX "Force libstdc++ when building against Clang/LLVM" OFF)
-#option(ENABLE_TRACE "Enable tracing in release build" OFF)
-
 #################################################################
 # FFLAGS depend on the compiler and the build type
 #################################################################
@@ -214,47 +193,47 @@ add_definitions(-D${CMAKE_Fortran_COMPILER_ID})
 message(STATUS "Fortran compiler ${CMAKE_Fortran_COMPILER_ID}")
 
 
-  if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
-    # gfortran
-    set(dialect  "-ffree-form -cpp -fimplicit-none  -ffree-line-length-none")                 # language style
-    set(checks   "-fcheck-array-temporaries  -frange-check -ffpe-trap=invalid,zero,overflow -fstack-protector -fstack-check") # checks
-    set(warn     "-Wall -Wextra -Wimplicit-interface  -Wline-truncation")                     # warning flags
-    set(fordebug "-pedantic -fno-inline -fno-f2c -Og -ggdb -fbacktrace -fbounds-check")       # debug flags
-    set(forspeed "-O3 -ffast-math -finline-functions -funroll-all-loops -fno-f2c ")           # optimisation
-    set(forpar   "-fopenmp -pthread ")                                                         # parallel flags
-    set(target   "-march=native -fPIC")                                                       # target platform
-    set(common   "${dialect} ${checks} ${target} ")
-    #
-  elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
-    # pgfortran
-    set(dialect  "-Mpreprocess -Mfreeform  -Mstandard -Mallocatable=03 -Mextend")
-    set(checks   "-Mdclchk  -Mchkptr -Mchkstk  -Munixlogical -Mlarge_arrays -Mflushz -Mdaz -Mfpmisalign")
-    set(warn     "-Minform=warn")
-    # bounds checking cannot be done in CUDA fortran or OpenACC GPU
-    set(fordebug "-Minfo=all,ftn  -traceback -gopt -Mneginfo=all,ftn -Mnodwarf -Mpgicoff -traceback -Mprof -Mbound -C")
-    set(forspeed "-Munroll -O4  -Mipa=fast -fast -Mcuda=fastmath,unroll -Mvect=nosizelimit,short,simd,sse -mp -acc ")
-    set(forpar   "-Mconcur -Mconcur=bind,allcores -Mcuda=cuda8.0,cc60,flushz,fma ")
-    set(target   " -m64 -fPIC ")
-    set(common   " ${dialect} ${checks} ${target} ${warn}  -DPGI")
-    #
-  elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
-    # ifort
-    # set(FC "ifort" CACHE PATH "Intel Fortran compiler")
-    set(dialect  "-fpp -free -implicitnone -std08  -80")
-    set(checks   "-check bounds -check uninit -assume buffered_io -assume byterecl -align sequence  -diag-disable 6477  -gen-interfaces ") # -mcmodel=medium -shared-intel
-    #-fpe-all=0 -fp-stack-check -fstack-protector-all -ftrapuv -no-ftz -std03
-    set(warn     "-warn all")
-    set(fordebug "-debug -O0 -ftrapuv -debug all -check all")
-    set(forspeed "-O3 -fp-model fast=2 -inline all -unroll-aggressive ")
-    set(forpar   "-qopenmp")
-    set(target   "-xHOST -no-prec-div -static -fPIC")
-    set(common   "${dialect} ${checks} ${target} ${warn} -DINTEL")
-    # else()
-    #   message(" Fortran compiler not supported. Set FC environment variable")
-  endif ()
-  set(CMAKE_Fortran_FLAGS_RELEASE_INIT "${common} ${forspeed} ${forpar} " )
-  set(CMAKE_Fortran_FLAGS_DEBUG_INIT   "${common} ${warn} ${fordebug} ${forpar} -g ")
- 
+if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+  # gfortran
+  set(dialect  "-ffree-form -cpp -fimplicit-none  -ffree-line-length-none")                 # language style
+  set(checks   "-fcheck-array-temporaries  -frange-check -ffpe-trap=invalid,zero,overflow -fstack-protector -fstack-check") # checks
+  set(warn     "-Wall -Wextra -Wimplicit-interface  -Wline-truncation")                     # warning flags
+  set(fordebug "-pedantic -fno-inline -fno-f2c -Og -ggdb -fbacktrace -fbounds-check")       # debug flags
+  set(forspeed "-O3 -ffast-math -finline-functions -funroll-all-loops -fno-f2c ")           # optimisation
+  set(forpar   "-fopenmp -pthread ")                                                         # parallel flags
+  set(target   "-march=native -fPIC")                                                       # target platform
+  set(common   "${dialect} ${checks} ${target} ")
+  #
+elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
+  # pgfortran
+  set(dialect  "-Mpreprocess -Mfreeform  -Mstandard -Mallocatable=03 -Mextend")
+  set(checks   "-Mdclchk  -Mchkptr -Mchkstk  -Munixlogical -Mlarge_arrays -Mflushz -Mdaz -Mfpmisalign")
+  set(warn     "-Minform=warn")
+  # bounds checking cannot be done in CUDA fortran or OpenACC GPU
+  set(fordebug "-Minfo=all,ftn  -traceback -gopt -Mneginfo=all,ftn -Mnodwarf -Mpgicoff -traceback -Mprof -Mbound -C")
+  set(forspeed "-Munroll -O4  -Mipa=fast -fast -Mcuda=fastmath,unroll -Mvect=nosizelimit,short,simd,sse -mp -acc ")
+  set(forpar   "-Mconcur -Mconcur=bind,allcores -Mcuda=cuda8.0,cc60,flushz,fma ")
+  set(target   " -m64 -fPIC ")
+  set(common   " ${dialect} ${checks} ${target} ${warn}  -DPGI")
+  #
+elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
+  # ifort
+  # set(FC "ifort" CACHE PATH "Intel Fortran compiler")
+  set(dialect  "-fpp -free -implicitnone -std08  -80")
+  set(checks   "-check bounds -check uninit -assume buffered_io -assume byterecl -align sequence  -diag-disable 6477  -gen-interfaces ") # -mcmodel=medium -shared-intel
+  #-fpe-all=0 -fp-stack-check -fstack-protector-all -ftrapuv -no-ftz -std03
+  set(warn     "-warn all")
+  set(fordebug "-debug -O0 -ftrapuv -debug all -check all")
+  set(forspeed "-O3 -fp-model fast=2 -inline all -unroll-aggressive ")
+  set(forpar   "-qopenmp")
+  set(target   "-xHOST -no-prec-div -static -fPIC")
+  set(common   "${dialect} ${checks} ${target} ${warn} -DINTEL")
+  # else()
+  #   message(" Fortran compiler not supported. Set FC environment variable")
+endif ()
+set(CMAKE_Fortran_FLAGS_RELEASE_INIT "${common} ${forspeed} ${forpar} " )
+set(CMAKE_Fortran_FLAGS_DEBUG_INIT   "${common} ${warn} ${fordebug} ${forpar} -g ")
+
 #############################################
 ## COMPLER SPECIFIC SETTINGS
 #############################################
