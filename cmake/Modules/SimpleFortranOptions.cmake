@@ -202,15 +202,15 @@ message(STATUS "Fortran compiler ${CMAKE_Fortran_COMPILER_ID}")
 
 if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
   # gfortran
-  set(preproc  "-cpp -P ")
-  set(dialect  "-ffree-form  -fimplicit-none  -ffree-line-length-none -fno-second-underscore")                       # language style
-  set(checks   "-fcheck-array-temporaries -frange-check -fstack-protector -fstack-check")     # checks
-  set(warn     "-Wall -Wextra -Wimplicit-interface ${checks} ")                                        # warning flags
-  set(fordebug "-pedantic -fno-inline -fno-f2c -Og -ggdb -fbacktrace -fbounds-check  -ffpe-trap=invalid,zero,overflow")       # debug flags
-# -O0 -g3 -Warray-bounds -Wcharacter-truncation -Wline-truncation -Wimplicit-interface -Wimplicit-procedure -Wunderflow -Wuninitialized -fcheck=all -fmodule-private -fbacktrace -dump-core -finit-real=nan
-  set(forspeed "-O3  ")                                # optimisation
-  set(forpar   "-fopenmp  ")                                                                  # parallel flags
-  set(target   "${GNUNATIVE} -fPIC")                                                         # target platform
+  set(preproc  "-cpp -P ")                                                                      # preprocessor flags
+  set(dialect  "-ffree-form  -fimplicit-none  -ffree-line-length-none -fno-second-underscore")  # language style
+  set(checks   "-fcheck-array-temporaries -frange-check -fstack-protector -fstack-check")       # checks
+  set(warn     "-Wall -Wextra -Wimplicit-interface ${checks} ")                                 # warning flags
+  set(fordebug "-pedantic -fno-inline -fno-f2c -Og -ggdb -fbacktrace -fbounds-check  ")         # debug flags
+# -O0 -g3 -Warray-bounds -Wcharacter-truncation -Wline-truncation -Wimplicit-interface -Wimplicit-procedure -Wunderflow -Wuninitialized -fcheck=all -fmodule-private -fbacktrace -dump-core -finit-real=nan -ffpe-trap=invalid,zero,overflow
+  set(forspeed "-O3    ")                                                                       # optimisation
+  set(forpar   "-fopenmp  ")                                                                    # parallel flags
+  set(target   "${GNUNATIVE} -fPIC")                                                            # target platform
   set(common   "${preproc} ${dialect} ${target} ")
   #
 elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
@@ -229,7 +229,7 @@ elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
 elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
   # ifort
   # set(FC "ifort" CACHE PATH "Intel Fortran compiler")
-  set(dialect  "-fpp -free -implicitnone -std08  -80")
+  set(dialect  "-fpp -free -implicitnone -std08 -80 -extend-source")
   set(checks   "-check bounds -check uninit -assume buffered_io -assume byterecl -align sequence  -diag-disable 6477  -gen-interfaces ") # -mcmodel=medium -shared-intel
   #-fpe-all=0 -fp-stack-check -fstack-protector-all -ftrapuv -no-ftz -std03
   set(warn     "-warn all")
@@ -258,13 +258,13 @@ if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" ) #AND Fortran_COMPILER_NAME MAT
   if (NOT (GFC_VERSION VERSION_GREATER 4.8 OR GFC_VERSION VERSION_EQUAL 4.8))
     message(FATAL_ERROR "${PROJECT_NAME} requires gfortran 4.8 or greater.")
   endif ()
-  set(EXTRA_FLAGS "${EXTRA_FLAGS} ")
+  set(EXTRA_FLAGS "${EXTRA_FLAGS} -DEXTRA")
   set(CMAKE_CPP_COMPILER_FLAGS           "-E -w -C -CC -P")
 
-  set(CMAKE_Fortran_FLAGS                "${CMAKE_Fortran_FLAGS_RELEASE_INIT} ${EXTRA_FLAGS} ")
-  # set(CMAKE_Fortran_FLAGS_DEBUG         "${CMAKE_Fortran_FLAGS_DEBUG_INIT} )
+  set(CMAKE_Fortran_FLAGS                " ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
+  set(CMAKE_Fortran_FLAGS_DEBUG          " ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_DEBUG_INIT}" )
   # set(CMAKE_Fortran_FLAGS_MINSIZEREL     "-Os ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
-  set(CMAKE_Fortran_FLAGS_RELEASE        "${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
+  set(CMAKE_Fortran_FLAGS_RELEASE        " ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
   set(CMAKE_Fortran_FLAGS_RELWITHDEBINFO "${CMAKE_Fortran_FLAGS_RELEASE_INIT} ${CMAKE_Fortran_FLAGS_DEBUG_INIT}")
   
   # #  CMAKE_EXE_LINKER_FLAGS
@@ -420,7 +420,7 @@ endif()
 # SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -pg")
 # SET(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -pg")
 
-if (APPLE)
+if (APPLE AND USE_CUDA)
   message(STATUS "Applied CUDA OpenMP macOS workaround")
   set(CUDA_PROPAGATE_HOST_FLAGS OFF)
   set(CMAKE_SHARED_LIBRARY_CXX_FLAGS_BACKUP "${CMAKE_SHARED_LIBRARY_CXX_FLAGS}")
@@ -484,22 +484,6 @@ endif()
 
 
 
-# # Preprocessing
-# # message(STATUS "Testing flag cpp")
-# # SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS}"
-# #   Fortran REQUIRED
-# #   "-fpp"                # Intel
-# #   "-cpp"                # GNU
-# #   "-Mpreprocess"        # PGI
-# #   )
-# # free form
-# message(STATUS "Testing flag free-form")
-# SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS}"
-#   Fortran 
-#   "-ffree-form"       # GNU
-#   "-free"             # Intel
-#   "-Mfreeform"        # PGI
-#   )
 # # line length
 # message(STATUS "Testing flag no line length")
 # SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS}"
@@ -510,10 +494,10 @@ endif()
 #   "-list-line-len=264"        # Intel
 #   )
 
-# ###################
-# ### DEBUG FLAGS ###
-# ###################
-# ## Disable optimizations
+###################
+### DEBUG FLAGS ###
+###################
+## Disable optimizations
 # message(STATUS "Testing debug flags")
 # SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_DEBUG "${CMAKE_Fortran_FLAGS_DEBUG}"
 #   Fortran 
@@ -572,7 +556,7 @@ endif()
 #SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
 #  Fortran
 #  "-unroll-aggressive"        # Intel
-#  "-funroll-all-loops"            # GNU, Intel, Clang
+#  "-funroll-all-loops"        # GNU, Intel, Clang
 #  "/unroll"                   # Intel Windows
 #  "-Munroll"                  # Portland Group
 #  )
@@ -701,3 +685,25 @@ if(CODE_COVERAGE)
   endif(CMAKE_COMPILER_IS_GNUCXX)
 endif()
 
+if(APPLE)
+  #https://cmake.org/Wiki/CMake_RPATH_handling
+  # use, i.e. don't skip the full RPATH for the build tree
+SET(CMAKE_SKIP_BUILD_RPATH  FALSE)
+
+# when building, don't use the install RPATH already
+# (but later on when installing)
+SET(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE) 
+
+SET(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
+
+# add the automatically determined parts of the RPATH
+# which point to directories outside the build tree to the install RPATH
+SET(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+
+
+# the RPATH to be used when installing, but only if it's not a system directory
+LIST(FIND CMAKE_PLATFORM_IMPLICIT_LINK_DIRECTORIES "${CMAKE_INSTALL_PREFIX}/lib" isSystemDir)
+IF("${isSystemDir}" STREQUAL "-1")
+   SET(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
+ ENDIF("${isSystemDir}" STREQUAL "-1")
+endif(APPLE)
