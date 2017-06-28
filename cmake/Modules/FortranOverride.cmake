@@ -62,7 +62,9 @@ endif()
 
   # We want to create dynamic libraries
   set(BUILD_SHARED_LIBS true)
-
+  
+  include(GNUInstallDirs)
+  set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR})
 
   ###########  SETTING UP PREPROCESSOR ################
   #include(PlatformDefines)
@@ -106,7 +108,9 @@ endif()
   endif ()
   set(CMAKE_Fortran_FLAGS_RELEASE_INIT "${common} ${forspeed} ${forpar} " )
   set(CMAKE_Fortran_FLAGS_DEBUG_INIT   "${common} ${fordebug} ${forpar} -g ")
-  #
+  message( STATUS "CMAKE_Fortran_FLAGS_RELEASE_INIT: ${CMAKE_Fortran_FLAGS_RELEASE_INIT}") 
+  message( STATUS "CMAKE_Fortran_FLAGS_DEBUG_INIT: ${CMAKE_Fortran_FLAGS_DEBUG_INIT}")
+ #
   # Make recent cmake not spam about stuff
   if(POLICY CMP0063)
     cmake_policy(SET CMP0063 OLD)

@@ -1,9 +1,11 @@
 cmake_minimum_required(VERSION 3.5 FATAL_ERROR)
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 include("${CMAKE_SOURCE_DIR}/cmake/Modules/FortranOverride.cmake")
+set(CMAKE_INSTALL_PREFIX ${CMAKE_CURRENT_BINARY_DIR})
 
 project(SIMPLE Fortran)
 #enable_language( CXX C )
+
 set(PROJECT_BRIEF "SIMPLE is a program package for cryo-EM image processing,
 focusing on ab initio 3D reconstruction of single-particles with any point-group symmetry")
 
@@ -53,8 +55,6 @@ endif()
 # SET default flags
 #
 #################################################################
-set(CMAKE_INSTALL_PREFIX "${PROJECT_BINARY_DIR}")
-include(GNUInstallDirs)
 # Add our local modules to the module path
 #set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/")
 set(SRC_PATH ${CMAKE_CURRENT_SOURCE_DIR}/src)
@@ -109,6 +109,7 @@ set(SIMPLELIB "SIMPLE${${PROJECT_NAME}_VERSION}")
 # Define some directories
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/inc)
 include_directories(${PROJECT_BINARY_DIR}/lib/simple)
+include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
 #   cmake_add_fortran_subdirectory(
 #    ${SRC}                  # name of subdirectory
@@ -243,7 +244,7 @@ add_custom_target(distclean
 
 # here we save a version file
 set(VERSION_FILE "${CMAKE_INSTALL_LIBDIR}/simple/CMake/${PROJECTNAME}ConfigVersion.cmake")
-configure_file( "${CMAKE_CURRENT_SOURCE_PATH}cmake/Modules/ProjectConfigVersion.cmake.in" ${VERSION_FILE} @ONLY )
+configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/ProjectConfigVersion.cmake.in" ${VERSION_FILE} @ONLY )
 
 # modules / depends
 FILE(GLOB SIMPLE_CMAKE_FILES "cmake/Modules/*.cmake")
@@ -252,11 +253,15 @@ INSTALL(
   DESTINATION "${CMAKE_INSTALL_LIBDIR}/simple/CMake"
   COMPONENT dev)
 
-
-
+message( STATUS "Set runtime variables ")
+configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/scripts/add2.bashrc.template"  ${CMAKE_CURRENT_BINARY_DIR}/add2.bashrc @ONLY )
+configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/scripts/add2.tcshrc.template"  ${CMAKE_CURRENT_BINARY_DIR}/add2.tcshrc @ONLY )
+install(FILES  ${CMAKE_CURRENT_BINARY_DIR}/add2.bashrc ${CMAKE_CURRENT_BINARY_DIR}/add2.tcshrc DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR})
 #
 # CPack
 #
+
 include(${CMAKE_MODULE_PATH}/Package.cmake)
 
 include(${CMAKE_MODULE_PATH}/GenericLogging.cmake)
