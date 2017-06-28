@@ -40,13 +40,6 @@ OPTION(ENABLE_AUTO_PARALLELISE "Optimize code for parallel systems." OFF)
 #flags for optimization level. You can only turn one of following option to ON, or leave all of them to OFF.
 OPTION(ENABLE_PROFILING "enable symbol generation without debug support" OFF)
 #option(CPACK_GENERATOR "Enable build of distribution packages using CPack" TGZ)
-if (APPLE)
-IF(CMAKE_SYSTEM MATCHES "Darwin-12*")
-        OPTION(ENABLE_OPTIMIZE_MOUNTAIN_LION "enable OSX 10.8/9 support" ON)
-ELSE(CMAKE_SYSTEM MATCHES "Darwin-12*")
-        OPTION(ENABLE_OPTIMIZE_MOUNTAIN_LION "enable OSX 10.8/9 support" OFF)
-ENDIF(CMAKE_SYSTEM MATCHES "Darwin-12*")
-endif()
 
 
 
