@@ -195,18 +195,21 @@ message(STATUS "Fortran compiler ${CMAKE_Fortran_COMPILER_ID}")
 
 if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
   # gfortran
-  set(dialect  "-ffree-form -cpp -fimplicit-none  -ffree-line-length-none")                 # language style
-  set(checks   "-fcheck-array-temporaries  -frange-check -ffpe-trap=invalid,zero,overflow -fstack-protector -fstack-check") # checks
-  set(warn     "-Wall -Wextra -Wimplicit-interface  -Wline-truncation")                     # warning flags
-  set(fordebug "-pedantic -fno-inline -fno-f2c -Og -ggdb -fbacktrace -fbounds-check")       # debug flags
-  set(forspeed "-O3 -ffast-math -finline-functions -funroll-all-loops -fno-f2c ")           # optimisation
-  set(forpar   "-fopenmp -pthread ")                                                         # parallel flags
-  set(target   "-march=native -fPIC")                                                       # target platform
-  set(common   "${dialect} ${checks} ${target} ")
+  set(preproc  "-cpp -P ")
+  set(dialect  "-ffree-form  -fimplicit-none  -ffree-line-length-none")                       # language style
+  set(checks   "-fcheck-array-temporaries -frange-check -fstack-protector -fstack-check")     # checks
+  set(warn     "-Wall -Wextra -Wimplicit-interface  ")                                        # warning flags
+  set(fordebug "-pedantic -fno-inline -fno-f2c -Og -ggdb -fbacktrace -fbounds-check  -ffpe-trap=invalid,zero,overflow")       # debug flags
+# -O0 -g3 -Warray-bounds -Wcharacter-truncation -Wline-truncation -Wimplicit-interface -Wimplicit-procedure -Wunderflow -Wuninitialized -fcheck=all -fmodule-private -fbacktrace -dump-core -finit-real=nan
+  set(forspeed "-O3  -finline-functions -funroll-all-loops  ")                                # optimisation
+  set(forpar   "-fopenmp  ")                                                                  # parallel flags
+  set(target   "-march=native -fPIC")                                                         # target platform
+  set(common   "${preproc} ${dialect} ${checks} ${target} ")
   #
 elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
   # pgfortran
-  set(dialect  "-Mpreprocess -Mfreeform  -Mstandard -Mallocatable=03 -Mextend")
+  set(preproc  "-Mpreprocess")
+  set(dialect "-Mfreeform  -Mstandard -Mallocatable=03 -Mextend")
   set(checks   "-Mdclchk  -Mchkptr -Mchkstk  -Munixlogical -Mlarge_arrays -Mflushz -Mdaz -Mfpmisalign")
   set(warn     "-Minform=warn")
   # bounds checking cannot be done in CUDA fortran or OpenACC GPU
@@ -214,7 +217,7 @@ elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
   set(forspeed "-Munroll -O4  -Mipa=fast -fast -Mcuda=fastmath,unroll -Mvect=nosizelimit,short,simd,sse -mp -acc ")
   set(forpar   "-Mconcur -Mconcur=bind,allcores -Mcuda=cuda8.0,cc60,flushz,fma ")
   set(target   " -m64 -fPIC ")
-  set(common   " ${dialect} ${checks} ${target} ${warn}  -DPGI")
+  set(common   "${preproc} ${dialect} ${checks} ${target} ${warn}  -DPGI")
   #
 elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
   # ifort
@@ -252,7 +255,7 @@ if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" ) #AND Fortran_COMPILER_NAME MAT
   set(CMAKE_CPP_COMPILER_FLAGS           "-E -w -C -CC -P")
 
   set(CMAKE_Fortran_FLAGS                "${CMAKE_Fortran_FLAGS_RELEASE_INIT} ${EXTRA_FLAGS} ")
-  # set(CMAKE_Fortran_FLAGS_DEBUG         "${CMAKE_Fortran_FLAGS_DEBUG_INIT} -O0 -g3 -Warray-bounds -Wcharacter-truncation -Wline-truncation -Wimplicit-interface -Wimplicit-procedure -Wunderflow -Wuninitialized -fcheck=all -fmodule-private -fbacktrace -dump-core -finit-real=nan " CACHE STRING "" FORCE)
+  # set(CMAKE_Fortran_FLAGS_DEBUG         "${CMAKE_Fortran_FLAGS_DEBUG_INIT} )
   # set(CMAKE_Fortran_FLAGS_MINSIZEREL     "-Os ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
   set(CMAKE_Fortran_FLAGS_RELEASE        "${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
   set(CMAKE_Fortran_FLAGS_RELWITHDEBINFO "${CMAKE_Fortran_FLAGS_RELEASE_INIT} ${CMAKE_Fortran_FLAGS_DEBUG_INIT}")
@@ -591,16 +594,16 @@ if(ENABLE_LINK_TIME_OPTIMISATION)
     # PGI
     )
 endif(ENABLE_LINK_TIME_OPTIMISATION)
-if(ENABLE_AUTOMATIC_VECTORIZATION)
-  # Interprocedural (link-time) optimizations
-  SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
-    Fortran
-    "-m"              # Intel ( may need to use -ipo-separate in case of multi-file problems)
-    "/Qipo"             # Intel Windows
-    "-flto "            # GNU
-    "-Mvect"    # Portland Group
-    )
-endif()
+#if(ENABLE_AUTOMATIC_VECTORIZATION)
+#   # Interprocedural (link-time) optimizations
+#   SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
+#     Fortran
+#     "-m"              # Intel ( may need to use -ipo-separate in case of multi-file problems)
+#     "/Qipo"             # Intel Windows
+#     "-flto "            # GNU
+#     "-Mvect"    # Portland Group
+#     )
+# endif()
 
 # # Fast math code
 # SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
@@ -627,14 +630,14 @@ if (ENABLE_FAST_MATH_OPTIMISATION)
 endif(ENABLE_FAST_MATH_OPTIMISATION)
 
 # Auto parallelize
-if (ENABLE_AUTO_PARALLELISE)
-  SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
-    Fortran
-    "-parallel -opt-report-phase=par -opt-report:5"            # Intel (Linux)
-    "/Qparallel /Qopt-report-phase=par /Qopt-report:5"         # Intel (Windows)
-    "-Mconcur"                                                 # PGI
-    )
-endif()
+# if (ENABLE_AUTO_PARALLELISE)
+#   SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
+#     Fortran
+#     "-parallel -opt-report-phase=par -opt-report:5"            # Intel (Linux)
+#     "/Qparallel /Qopt-report-phase=par /Qopt-report:5"         # Intel (Windows)
+#     "-Mconcur"                                                 # PGI
+#     )
+# endif()
 
 # Auto parallelize with OpenACC
 if (USE_OPENACC)
