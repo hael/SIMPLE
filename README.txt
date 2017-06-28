@@ -67,6 +67,7 @@ with:
     $ cmake -DCMAKE_INSTALL_PREFIX=<alternative directory> ../
     $ make -j install
 
+
 Step 4 assumes that gcc/gfortran and FFTW are installed in fairly standard
 directories on your machine. In case you have a more exotic setup you can
 provide the paths pointing to your custom gcc/gfortran & FFTW by substituting
@@ -79,6 +80,23 @@ For instance, on MacOS
  - Macports users may use: FC=/opt/local/bin/gfortran FFTW_DIR=/opt/local;
  - Fink users: FC=/sw/bin/gfortran FFTW_DIR=/sw/; and
  - Homebrew users" FC=/usr/local/bin/gfortran FFTW_DIR=/usr/local/
+
+5. Set the environment variables
+
+To run SIMPLE the bin and scripts paths need to be in the PATH environment
+variable, as well as the lib path in the LD_LIBRARY_PATH variable. The
+SIMPLE_PATH environment variable must also be defined. The example shell scripts
+add2.bashrc and add2.tcshrc with the necessary instructions were generated during the build step.
+
+For immediate use for running and testing:
+    $ source add2.bashrc
+or, for TCSH/CSH users:
+    $ source add2.tcshrc
+
+For permanent installation BASH users should add the contents of add2.bashrc to your <HOME>/.bashrc
+    $ cat add2.bashrc >> ~/.bashrc
+and for TCSH/CSH users:
+    $ cat add2.tcshrc >> ~/.tcshrc
 
 
 TESTING THE BUILD

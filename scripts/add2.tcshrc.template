@@ -1,7 +1,7 @@
 
 setenv SIMPLE_EMAIL="my.name@uni.edu"
 setenv SIMPLE_QSYS="local"
-setenv SIMPLE_SOURCE_PATH @CMAKE_SOURCE_PATH@
-export SIMPLE_PATH=@CMAKE_BINARY_PATH@
+setenv SIMPLE_SOURCE_PATH @CMAKE_SOURCE_DIR@
+export SIMPLE_PATH=@CMAKE_BINARY_DIR@
 set path=(${SIMPLE_PATH}/scripts ${SIMPLE_PATH}/bin $path)
 set ld_library_path=(${SIMPLE_PATH}/lib $ld_library_path)

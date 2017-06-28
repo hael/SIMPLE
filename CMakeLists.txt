@@ -169,6 +169,8 @@ add_subdirectory(${SCRIPTS_PATH} ${SCRP_BIN})
 #################################################################
 
 if (${PROJECT_NAME}_BUILD_TESTS)
+  enable_testing()
+  include(CTest)
   add_subdirectory(tests)
 endif()
 
@@ -184,15 +186,6 @@ if (${PROJECT_NAME}_BUILD_GUI)
 endif()
 endif()
 
-#################################################################
-#
-# ENABLE CTEST
-#
-#################################################################
-if(${PROJECT_NAME}_ENABLE_TESTS)
-  enable_testing()
-  include(CTest)
-endif()
 
 #################################################################
 #
