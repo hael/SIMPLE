@@ -175,6 +175,13 @@ ProcessorCount(NUM_JOBS)
 
 
 
+# There is some bug where -march=native doesn't work on Mac
+IF(APPLE)
+  SET(GNUNATIVE "-mtune=native")
+ELSE()
+  SET(GNUNATIVE "-march=native")
+ENDIF(APPLE)
+
 ##############################################
 # Linker            (FROM FACEBOOK HHVM)
 #############################################
@@ -198,13 +205,13 @@ if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
   set(preproc  "-cpp -P ")
   set(dialect  "-ffree-form  -fimplicit-none  -ffree-line-length-none")                       # language style
   set(checks   "-fcheck-array-temporaries -frange-check -fstack-protector -fstack-check")     # checks
-  set(warn     "-Wall -Wextra -Wimplicit-interface  ")                                        # warning flags
+  set(warn     "-Wall -Wextra -Wimplicit-interface ${checks} ")                                        # warning flags
   set(fordebug "-pedantic -fno-inline -fno-f2c -Og -ggdb -fbacktrace -fbounds-check  -ffpe-trap=invalid,zero,overflow")       # debug flags
 # -O0 -g3 -Warray-bounds -Wcharacter-truncation -Wline-truncation -Wimplicit-interface -Wimplicit-procedure -Wunderflow -Wuninitialized -fcheck=all -fmodule-private -fbacktrace -dump-core -finit-real=nan
-  set(forspeed "-O3  -finline-functions -funroll-all-loops  ")                                # optimisation
+  set(forspeed "-O3    ")                                # optimisation
   set(forpar   "-fopenmp  ")                                                                  # parallel flags
-  set(target   "-march=native -fPIC")                                                         # target platform
-  set(common   "${preproc} ${dialect} ${checks} ${target} ")
+  set(target   "${GNUNATIVE} -fPIC")                                                         # target platform
+  set(common   "${preproc} ${dialect} ${target} ")
   #
 elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
   # pgfortran
@@ -251,7 +258,7 @@ if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" ) #AND Fortran_COMPILER_NAME MAT
   if (NOT (GFC_VERSION VERSION_GREATER 4.8 OR GFC_VERSION VERSION_EQUAL 4.8))
     message(FATAL_ERROR "${PROJECT_NAME} requires gfortran 4.8 or greater.")
   endif ()
-  set(EXTRA_FLAGS "${EXTRA_FLAGS} -cpp -fimplicit-none -fall-intrinsics -ffree-line-length-none ")
+  set(EXTRA_FLAGS "${EXTRA_FLAGS} ")
   set(CMAKE_CPP_COMPILER_FLAGS           "-E -w -C -CC -P")
 
   set(CMAKE_Fortran_FLAGS                "${CMAKE_Fortran_FLAGS_RELEASE_INIT} ${EXTRA_FLAGS} ")
@@ -446,13 +453,6 @@ else()
 endif()
 
 
-# There is some bug where -march=native doesn't work on Mac
-IF(APPLE)
-  SET(GNUNATIVE "-mtune=native")
-ELSE()
-  SET(GNUNATIVE "-march=native")
-ENDIF(APPLE)
-
 ################################################################
 # Generic Flags 
 ################################################################
@@ -567,7 +567,7 @@ ENDIF(APPLE)
 #SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
 #  Fortran
 #  "-unroll-aggressive"        # Intel
-#  "-funroll-loops"            # GNU, Intel, Clang
+#  "-funroll-all-loops"            # GNU, Intel, Clang
 #  "/unroll"                   # Intel Windows
 #  "-Munroll"                  # Portland Group
 #  )
@@ -676,7 +676,7 @@ endif()
 add_definitions(" -D__FILENAME__='\"$(subst ${CMAKE_SOURCE_DIR}/,,$(abspath $<))\"'")
 
 # Override Fortran preprocessor
-set(CMAKE_Fortran_COMPILE_OBJECT "grep --silent '#include' <SOURCE> && ( ${CMAKE_CPP_COMPILER} ${CMAKE_CPP_COMPILER_FLAGS} -DOPENMP <DEFINES> <INCLUDES> <SOURCE> > <OBJECT>.f90 &&  <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> \${FFLAGS} -c <OBJECT>.f90 -o <OBJECT> ) || <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> \${FFLAGS} -c <SOURCE> -o <OBJECT>")
+set(CMAKE_Fortran_COMPILE_OBJECT "grep --silent '#include' <SOURCE> && ( ${CMAKE_CPP_COMPILER} ${CMAKE_CPP_COMPILER_FLAGS} -DOPENMP <DEFINES> <INCLUDES> <SOURCE> > <OBJECT>.f90 &&  <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <OBJECT>.f90 -o <OBJECT> ) || <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <SOURCE> -o <OBJECT>")
 
 
 # Option for code coverage
