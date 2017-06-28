@@ -6,7 +6,7 @@ use simple_cmdline,           only: cmdline
 use simple_polarft_corrcalc,  only: polarft_corrcalc
 use simple_oris,              only: oris
 use simple_ori,               only: ori
-use simple_cont3D_greedysrch, only: cont3D_greedysrch
+use simple_cont3D_de_srch,    only: cont3D_de_srch
 use simple_cont3D_srch,       only: cont3D_srch
 use simple_hadamard_common   ! use all in there
 use simple_math              ! use all in there
@@ -22,7 +22,7 @@ logical,                   parameter :: DEBUG       = .false.
 type(polarft_corrcalc)               :: pftcc
 type(oris)                           :: orefs                   !< per particle projection direction search space
 type(cont3D_srch),       allocatable :: cont3Dsrch(:)
-type(cont3D_greedysrch), allocatable :: cont3Dgreedysrch(:)
+type(cont3D_de_srch),    allocatable :: cont3Ddesrch(:)
 logical, allocatable                 :: state_exists(:)
 !real                                 :: frac_srch_space = 0.   ! so far unused
 integer                              :: nptcls          = 0
@@ -66,7 +66,7 @@ contains
         select case(p%refine)
             case('yes')
                 nrefs_per_ptcl = NREFS * neff_states
-            case('greedy')
+            case('de')
                 nrefs_per_ptcl = 1
             case DEFAULT
                 stop 'Uknown refinement mode; pcont3D_matcher::cont3D_exec'
@@ -91,8 +91,11 @@ contains
                     p%npeaks = min(MAXNPEAKS, b%e%find_npeaks(p%lp, p%moldiam))
                 endif
                 write(*,'(A,I2)')'>>> NPEAKS: ', p%npeaks
+            case('de')
+                p%npeaks = 10
+                write(*,'(A,I2)')'>>> NPEAKS: ', p%npeaks
             case DEFAULT
-                p%npeaks = 1
+                stop 'Uknown refinement mode; pcont3D_matcher::cont3D_exec'
         end select
 
         ! SETUP WEIGHTS FOR THE 3D RECONSTRUCTION
@@ -124,7 +127,7 @@ contains
             fromp = p%fromp-1 + batches(batch,1)
             top   = p%fromp-1 + batches(batch,2)
             ! PREP BATCH
-            allocate(pftccs(fromp:top), cont3Dsrch(fromp:top), cont3Dgreedysrch(fromp:top),&
+            allocate(pftccs(fromp:top), cont3Dsrch(fromp:top), cont3Ddesrch(fromp:top),&
                 &batch_imgs(fromp:top), stat=alloc_stat)
             call alloc_err('In pcont3D_matcher::pcont3D_exec_single',alloc_stat)
             do iptcl = fromp, top
@@ -141,8 +144,8 @@ contains
                     case('yes')
                         call prep_pftcc_refs(b, p, iptcl, pftccs(iptcl))
                         call cont3Dsrch(iptcl)%new(p, orefs, pftccs(iptcl))
-                    case('greedy')
-                        call cont3Dgreedysrch(iptcl)%new(p, pftccs(iptcl), b%refvols)
+                    case('de')
+                        call cont3Ddesrch(iptcl)%new(p, pftccs(iptcl), b%refvols)
                     case DEFAULT
                         stop 'Uknown refinement mode; pcont3D_matcher::cont3D_exec'
                 end select
@@ -153,11 +156,15 @@ contains
                 select case(p%refine)
                     case('yes')
                         call cont3Dsrch(iptcl)%exec_srch(b%a, iptcl)
-                    case('greedy')
-                        call cont3Dgreedysrch(iptcl)%exec_srch(b%a, iptcl, 1, 1)
+                    case('de')
+                        call cont3Ddesrch(iptcl)%exec_srch(b%a, iptcl, 1, 1)
                 end select
             enddo
             !$omp end parallel do
+            ! ORIENTATIONS OUTPUT: only here for now
+            do iptcl = fromp, top
+                call b%a%write(iptcl, p%outfile)
+            enddo
             ! GRID & 3D REC
             if(p%norec .eq. 'no')then
                 do iptcl = fromp, top
@@ -168,23 +175,24 @@ contains
                     if(p%npeaks == 1)then
                         call grid_ptcl(b, p, orientation)
                     else
-                        softoris = cont3Dsrch(iptcl)%get_softoris()
+                        select case(p%refine)
+                            case('yes')
+                                softoris = cont3Dsrch(iptcl)%get_softoris()
+                            case('de')
+                                softoris = cont3Ddesrch(iptcl)%get_softoris()
+                        end select
                         call grid_ptcl(b, p, orientation, os=softoris)
                     endif
                 enddo
             endif
-            ! ORIENTATIONS OUTPUT: only here for now
-            do iptcl = fromp, top
-                call b%a%write(iptcl, p%outfile)
-            enddo
             ! CLEANUP BATCH
             do iptcl = fromp, top
                 call cont3Dsrch(iptcl)%kill
-                call cont3Dgreedysrch(iptcl)%kill
+                call cont3Ddesrch(iptcl)%kill
                 call pftccs(iptcl)%kill
                 call batch_imgs(iptcl)%kill
             enddo
-            deallocate(pftccs, cont3Dsrch, cont3Dgreedysrch, batch_imgs)
+            deallocate(pftccs, cont3Dsrch, cont3Ddesrch, batch_imgs)
         enddo
         ! CLEANUP SEARCH
         call b%img_match%kill_polarizer
@@ -200,6 +208,7 @@ contains
 
         ! NORMALIZE STRUCTURE FACTORS
         if(p%norec .eq. 'no')then
+            call b%vol%new([p%box, p%box,p%box], p%smpd)
             if( p%eo .eq. 'yes' )then
                 call eonorm_struct_facts(b, p, reslim, which_iter)
             else

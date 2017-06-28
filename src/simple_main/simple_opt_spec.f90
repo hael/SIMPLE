@@ -162,7 +162,7 @@ contains
         if(present(warn))    self%warn    = warn
         ! allocate
         if( self%npeaks > 0 )then
-            allocate( self%peaks(self%npeaks,self%ndim+1), stat=alloc_stat )
+            allocate( self%peaks(self%npeaks,self%ndim+1), source=1., stat=alloc_stat )
             call alloc_err('In: specify; simple_opt_spec, peaks', alloc_stat)
         endif
         select case(str_opt)
@@ -249,7 +249,7 @@ contains
 #endif
         self%gcostfun => fun
     end subroutine set_gcostfun
-    
+
     !>  \brief  is a destructor
     subroutine kill( self )
         class(opt_spec), intent(inout) :: self !< instance

@@ -112,8 +112,10 @@ contains
         self%specscore  = max(0., median_nocopy(frc))
         deallocate(frc)
         ! shift search object
-        call self%shsrch_obj%new(self%pftcc_ptr, self%lims, self%shbarr, nrestarts=3)
-        call self%inplsrch_obj%new(self%pftcc_ptr, self%lims, self%shbarr, nrestarts=3)
+        call self%shsrch_obj%new(self%pftcc_ptr, self%lims,&
+        &shbarrier=self%shbarr, nrestarts=3)
+        call self%inplsrch_obj%new(self%pftcc_ptr, self%lims,&
+        &shbarrier=self%shbarr, nrestarts=3)
         if( debug ) write(*,'(A)') '>>> cont3D_srch::END OF PREP_SRCH'
     end subroutine prep_srch
 

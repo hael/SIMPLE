@@ -12,8 +12,8 @@ use simple_math          ! use all in there
 use simple_masker        ! use all in there
 implicit none
 
-public :: read_img_from_stk, set_bp_range, set_bp_range2D,grid_ptcl, prepimg4align, eonorm_struct_facts,&
-&norm_struct_facts, preprefvol, prep2Dref, preprecvols, killrecvols
+public :: read_img_from_stk, set_bp_range, set_bp_range2D, grid_ptcl, prepimg4align,&
+&eonorm_struct_facts, norm_struct_facts, preprefvol, prep2Dref, preprecvols, killrecvols
 private
 
 logical, parameter :: DEBUG     = .false.
@@ -174,7 +174,7 @@ contains
         real,            optional, intent(in)    :: shellweights(:)
         real,            optional, intent(in)    :: ran_eo
         real             :: pw, ran, w
-        integer          :: jpeak, s, k
+        integer          :: jpeak, s, k, npeaks
         type(ori)        :: orisoft, o_sym
         type(kbinterpol) :: kbwin
         logical          :: softrec
@@ -184,13 +184,15 @@ contains
             kbwin = b%recvols(1)%get_kbwin()
         endif
         softrec = .false.
+        npeaks  = 1
         if( present(os) )then
             softrec = .true.
-            if( p%npeaks /= os%get_noris() )&
-                &stop 'non-congruent number of orientations; simple_hadamard_common :: grid_ptcl'
+            npeaks  = os%get_noris()
+            ! if( p%npeaks /= os%get_noris() )&
+            !     &stop 'non-congruent number of orientations; simple_hadamard_common :: grid_ptcl'
         endif
-        if( p%npeaks>1 .and. .not.softrec )&
-            stop 'need optional primesrch3D input when npeaks > 1; simple_hadamard_common :: grid_ptcl'
+        ! if( p%npeaks>1 .and. .not.softrec )&
+        !     stop 'need optional primesrch3D input when npeaks > 1; simple_hadamard_common :: grid_ptcl'
         pw = orientation%get('w')
         if( pw > 0. )then
             ! prepare image for gridding
@@ -204,7 +206,8 @@ contains
             ran = ran3()
             if( present(ran_eo) )ran = ran_eo 
             orisoft = orientation
-            do jpeak=1,p%npeaks
+            ! do jpeak=1,p%npeaks
+            do jpeak = 1, npeaks
                 if( DEBUG ) write(*,*) '*** simple_hadamard_common ***: gridding, iteration:', jpeak
                 ! get ori info
                 if( softrec )then
@@ -393,14 +396,20 @@ contains
 
     !>  \brief  prepares one volume for references extraction
     subroutine preprefvol( b, p, cline, s, doexpand )
+        use simple_filehandling,  only: arr2file
+        use simple_estimate_ssnr, only: fsc2optlp
+        use simple_filterer,      only: resample_filter
         class(build),      intent(inout) :: b
         class(params),     intent(inout) :: p
         class(cmdline),    intent(inout) :: cline
         integer,           intent(in)    :: s
         logical, optional, intent(in)    :: doexpand
+        real, allocatable     :: res(:), res_match(:), fom_filter(:), fom_filter_match(:), fsc(:)
+        character(len=STDLEN) :: fsc_file
         logical :: l_doexpand = .true.
         if( present(doexpand) ) l_doexpand = doexpand
         if( p%boxmatch < p%box )call b%vol%new([p%box,p%box,p%box],p%smpd) ! ensure correct dim
+        if( p%eo.eq.'yes' )res = b%vol%get_res()
         call b%vol%read(p%vols(s), isxfel=p%l_xfel)
         if( p%l_xfel )then
             ! no centering
@@ -455,6 +464,23 @@ contains
         endif
         ! FT volume
         call b%vol%fwd_ft
+        ! FOM filter
+        ! if( p%eo.eq.'yes' )then
+        !     fsc_file = 'fsc_state'//int2str_pad(s,2)//'.bin'
+        !     if( file_exists(fsc_file) )then
+        !         fsc = file2rarr(fsc_file)
+        !         fom_filter = fsc2optlp(fsc)
+        !         if( p%boxmatch .eq. p%box )then
+        !             call b%vol%apply_filter(fom_filter)
+        !         else
+        !             res_match = b%vol%get_res()
+        !             fom_filter_match = resample_filter(fom_filter, res, res_match)
+        !             call b%vol%apply_filter(fom_filter_match)
+        !             deallocate(res_match, fom_filter_match)
+        !         endif
+        !         deallocate(fsc, res, fom_filter)
+        !     endif
+        ! endif
         ! expand for fast interpolation
         if( l_doexpand )call b%vol%expand_cmat
 

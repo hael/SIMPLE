@@ -1,0 +1,328 @@
+module simple_cont3D_de_srch
+use simple_defs
+use simple_params,           only: params
+use simple_polarft_corrcalc, only: polarft_corrcalc
+use simple_projector,        only: projector
+use simple_oris,             only: oris
+use simple_ori,              only: ori
+use simple_pftcc_srch,       only: pftcc_srch
+use simple_math              ! use all in there
+implicit none
+
+public :: cont3D_de_srch
+private
+
+integer, parameter :: MAXITS = 5 * 200
+logical, parameter :: debug  = .false.
+
+type cont3D_de_srch
+    private
+    class(polarft_corrcalc), pointer :: pftcc_ptr   => null()  !< polar fourier correlation calculator
+    class(projector),        pointer :: vols_ptr(:) => null()  !< volumes for projection
+    type(pftcc_srch)                 :: srch_obj               !< shift search object
+    type(ori)                        :: o_in                   !< input orientation
+    type(ori)                        :: o_out                  !< best orientation found
+    type(oris)                       :: o_peaks                !< best orientation found
+    logical,             allocatable :: state_exists(:)        !< indicates whether each state is populated
+    real                             :: lims(5,2)     = 0.     !< shift search limits
+    real                             :: prev_corr     = -1.    !< previous correlation
+    real                             :: prev_shift(2) = 0.     !< previous correlation
+    real                             :: angthresh     = 0.     !< angular threshold
+    real                             :: specscore     = 0.     !< previous spectral score
+    integer                          :: npeaks        = 0      !< number of peaks
+    integer                          :: iptcl         = 0      !< orientation general index
+    integer                          :: ref           = 0      !< previous ref
+    integer                          :: prev_ref      = 0      !< previous ref
+    integer                          :: state         = 0      !< previous state
+    integer                          :: prev_state    = 0      !< previous state
+    integer                          :: nstates       = 0      !< number of states
+    character(len=STDLEN)            :: shbarr        = 'yes'  !< shift barrier flag
+    character(len=STDLEN)            :: refine        = ''     !< 
+    logical                          :: exists = .false.
+
+  contains
+    ! CONSTRUCTOR
+    procedure          :: new
+    ! PREP ROUTINES
+    procedure, private :: prep_srch
+    procedure, private :: prep_oris
+    procedure, private :: stochastic_weights_L2norm
+    ! SEARCH ROUTINES
+    procedure          :: exec_srch
+    procedure, private :: do_srch
+    ! GETTERS/SETTERS
+    procedure          :: get_best_ori
+    procedure          :: get_softoris
+    procedure          :: does_exist
+    ! DESTRUCTOR
+    procedure          :: kill
+end type cont3D_de_srch
+
+contains
+
+    !>  \brief  is a constructor
+    subroutine new( self, p, pftcc, vols)
+        class(cont3D_de_srch),              intent(inout) :: self  !< instance
+        class(params),                   intent(in)    :: p     !< parameters
+        class(polarft_corrcalc), target, intent(in)    :: pftcc
+        class(projector),        target, intent(in)    :: vols(:)    !< references
+        call self%kill
+        ! set constants
+        self%pftcc_ptr  => pftcc
+        self%vols_ptr   => vols
+        self%lims(:3,:) = p%eullims
+        self%lims(4,:)  = [-p%trs, p%trs]
+        self%lims(5,:)  = [-p%trs, p%trs]
+        self%nstates    = p%nstates
+        if( size(vols).ne.self%nstates )stop 'Inconsistent number of volumes; cont3D_de_srch::new'
+        self%angthresh  = p%athres
+        self%shbarr     = p%shbarrier
+        self%npeaks     = p%npeaks
+        self%refine     = p%refine
+        self%nstates    = p%nstates
+        ! done
+        self%exists = .true.
+        if( debug ) write(*,'(A)') '>>> cont3D_de_srch::CONSTRUCTED NEW SIMPLE_cont3D_de_srch OBJECT'
+    end subroutine new
+
+    ! PREP ROUTINES
+
+    !>  \brief  is the master search routine
+    subroutine prep_srch(self, a, iptcl, iref, istate)
+        class(cont3D_de_srch), intent(inout) :: self
+        class(oris),        intent(inout) :: a
+        integer,            intent(in)    :: iptcl, iref, istate
+        real, allocatable :: frc(:)
+        self%iptcl      = iptcl
+        self%ref        = iref
+        self%state      = istate
+        self%o_in       = a%get_ori(self%iptcl)
+        self%prev_shift = self%o_in%get_shift()
+        ! state
+        allocate(self%state_exists(self%nstates))
+        self%state_exists = a%get_state_exist(self%nstates)
+        self%state        = istate
+        if( .not.self%state_exists(self%state) )stop 'state is empty; cont3D_de_srch::prep_srch'
+        ! target correlation
+        call self%vols_ptr(self%state)%fproject_polar(self%ref, self%o_in,&
+        &self%pftcc_ptr, serial=.true.)
+        self%prev_corr = self%pftcc_ptr%corr(self%ref, self%iptcl, self%state, [0.,0.])
+        ! spectral score
+        frc = self%pftcc_ptr%genfrc(self%ref, self%iptcl, 1)
+        self%specscore = max(0., median_nocopy(frc))
+        ! DE search object
+        call self%srch_obj%new(self%pftcc_ptr, self%lims, shbarrier=self%shbarr,&
+        &npeaks=self%npeaks, maxits=MAXITS, vols=self%vols_ptr)
+        ! cleanup
+        deallocate(frc)
+        if( debug ) write(*,'(A)') '>>> cont3D_de_srch::END OF PREP_SRCH'
+    end subroutine prep_srch
+
+    ! SEARCH ROUTINES
+
+    !>  \brief  is the master search routine
+    subroutine exec_srch( self, a, iptcl, iref, istate )
+        class(cont3D_de_srch), intent(inout) :: self
+        class(oris),           intent(inout) :: a
+        integer,               intent(in)    :: iptcl, iref, istate
+        real, allocatable :: peaks(:,:)
+        if(nint(a%get(iptcl,'state')) > 0)then
+            call self%prep_srch(a, iptcl, iref, istate)
+            call self%do_srch(peaks)
+            call self%prep_oris(peaks)
+            deallocate(peaks)
+            call a%set_ori(self%iptcl, self%o_out)
+        else
+            call a%reject(iptcl)
+        endif
+        if( debug ) write(*,'(A)') '>>> cont3D_de_srch::END OF SRCH'
+    end subroutine exec_srch
+
+    !>  \brief  performs the shift search
+    subroutine do_srch( self, peaks )
+        class(cont3D_de_srch), intent(inout) :: self
+        real, allocatable,     intent(out)   :: peaks(:,:)
+        real, allocatable :: solution(:)
+        real :: euls(3)
+        euls = self%o_in%get_euler()
+        call self%srch_obj%set_indices(self%ref, self%iptcl, state=self%state)
+        solution = self%srch_obj%minimize(rxy=euls)
+        call self%srch_obj%get_peaks(peaks)      ! search outcome
+        deallocate(solution)
+    end subroutine do_srch
+
+    !>  \brief  updates solutions orientations
+    subroutine prep_oris( self, peaks )
+        use simple_strings, only: int2str
+        class(cont3D_de_srch), intent(inout) :: self
+        real,                  intent(inout) :: peaks(:,:)
+        real,    allocatable :: corrs(:)
+        integer, allocatable :: inds(:)
+        type(ori)  :: o
+        type(oris) :: os
+        real       :: euldist_thresh, ang_sdev, dist_inpl, wcorr, prev_shift(2)
+        real       :: frac, euldist, mi_proj, mi_inpl, mi_state, mi_joint
+        integer    :: i, state, roind, prev_state, prev_roind, nevals, cnt
+        ! UPDATES SCOPE NPEAKS VALUE
+        self%npeaks = count(peaks(:,6) > 0.)
+        ! init
+        nevals     = self%srch_obj%get_nevals()
+        prev_shift = self%o_in%get_shift()
+        call self%o_peaks%new(self%npeaks)
+        call os%new(self%npeaks)
+        ! o_peaks <- ospec peaks
+        cnt = 0
+        do i = 1, size(peaks(:,6))
+            if( peaks(i,6) <= 0. )cycle
+            cnt = cnt + 1
+            o   = self%o_in
+            ! no in-plane convention as taken care of at online extraction
+            call o%set_euler(peaks(i,1:3))
+             ! shift addition
+            call o%set_shift(peaks(i,4:5) + prev_shift)
+            call o%set('corr', peaks(i,6))
+            call os%set_ori(cnt, o)
+        enddo
+        ! sorting
+        if(self%npeaks > 1)then
+            allocate(inds(self%npeaks))
+            inds  = (/ (i, i=1,self%npeaks) /)
+            corrs = os%get_all('corr')
+            call hpsort(self%npeaks, corrs, inds)
+            do i = 1, self%npeaks
+                o = os%get_ori(inds(i))
+                call self%o_peaks%set_ori(i, o)
+            enddo
+            deallocate(corrs, inds)
+        else
+            self%o_peaks = os
+        endif
+        ! spectral score
+        call self%o_peaks%set_all2single('specscore', self%specscore)
+        ! best orientation & stochastic weights and weighted correlation
+        call self%stochastic_weights_L2norm(wcorr)
+        self%o_out = self%o_peaks%get_ori(self%npeaks)
+        call self%o_out%set('corr', wcorr)  
+        ! angular distances & deviation
+        euldist   = rad2deg( self%o_in.euldist.self%o_out )
+        dist_inpl = rad2deg( self%o_in.inplrotdist.self%o_out )
+        ang_sdev  = self%o_peaks%ang_sdev(self%refine, self%nstates, self%npeaks)
+        call self%o_out%set('dist', euldist)
+        call self%o_out%set('dist_inpl', dist_inpl)
+        call self%o_out%set('sdev', ang_sdev)
+        ! overlap between distributions
+        euldist_thresh = max(0.1, self%angthresh/10.)
+        prev_roind = self%pftcc_ptr%get_roind(360.-self%o_out%e3get())
+        roind      = self%pftcc_ptr%get_roind(360.-self%o_in%e3get())
+        mi_proj  = 0.
+        mi_inpl  = 0.
+        mi_state = 0.
+        mi_joint = 0.
+        if( euldist < 0.1 )then
+            mi_proj  = mi_proj + 1.
+            mi_joint = mi_joint + 1.
+        endif
+        if(prev_roind == roind)then
+            mi_inpl  = mi_inpl  + 1.
+            mi_joint = mi_joint + 1.
+        endif
+        if(self%nstates > 1)then
+            state      = nint(self%o_out%get('state'))
+            prev_state = nint(self%o_in%get('state'))
+            if(prev_state == state)then
+                mi_state = mi_state + 1.
+                mi_joint = mi_joint + 1.
+            endif
+            mi_joint = mi_joint/3.
+        else
+            mi_joint = mi_joint/2.
+        endif
+        call self%o_out%set('proj', 0.)
+        call self%o_out%set('mi_proj',  mi_proj)
+        call self%o_out%set('mi_inpl',  mi_inpl)
+        call self%o_out%set('mi_state', mi_state)
+        call self%o_out%set('mi_joint', mi_joint)       
+        ! frac
+        if( nevals > nint(real(MAXITS)*.9) )then
+            frac = 100.
+        else
+            frac = 100.*(real(MAXITS)-real(nevals)) / real(MAXITS)
+        endif
+        call self%o_out%set('frac', frac)
+        if(debug)write(*,*)'simple_cont3D_srch::prep_softoris done'
+    end subroutine prep_oris
+
+    !>  \brief  determines and updates stochastic weights
+    subroutine stochastic_weights_L2norm( self, wcorr )
+        class(cont3D_de_srch), intent(inout) :: self
+        real,                    intent(out)   :: wcorr
+        real              :: ws(self%npeaks), dists(self%npeaks)
+        real, allocatable :: corrs(:)
+        type(ori)         :: o
+        integer           :: ipeak
+        if( self%npeaks == 1 )then
+            call self%o_peaks%set(1, 'ow', 1.)
+            wcorr = self%o_peaks%get(1, 'corr')
+            return
+        endif
+        ! get correlations
+        corrs = self%o_peaks%get_all('corr')
+        ! calculate L1 norms
+        do ipeak = 1, self%npeaks
+            o = self%o_peaks%get_ori(ipeak)
+            call self%vols_ptr(self%state)%fproject_polar(self%ref, o,&
+            &self%pftcc_ptr, serial=.true.)
+            dists(ipeak) = self%pftcc_ptr%euclid(self%ref, self%iptcl, 1)
+        end do
+        ! calculate normalised weights and weighted corr
+        ws    = exp(-dists)
+        ws    = ws/sum(ws)
+        wcorr = sum(ws*corrs)
+        ! update npeaks individual weights
+        call self%o_peaks%set_all('ow', ws)
+        ! cleanup
+        deallocate(corrs)
+    end subroutine stochastic_weights_L2norm
+
+    ! GETTERS
+
+    !>  \brief  returns the solution set of orientations
+    function get_softoris( self )result( os )
+        class(cont3D_de_srch), intent(inout) :: self
+        type(oris) :: os
+        if(.not.self%exists)stop 'search has not been performed; cont3D_de_srch::get_softoris'
+        os = self%o_peaks
+    end function get_softoris
+
+    !>  \brief  returns the best solution orientation
+    function get_best_ori( self )result( o )
+        class(cont3D_de_srch), intent(inout) :: self
+        type(ori) :: o
+        if(.not.self%exists)stop 'search has not been performed; cont3D_de_srch::get_best_ori'
+        o = self%o_out
+    end function get_best_ori
+
+    ! GETTERS/SETTERS
+
+    !>  \brief  whether object has been initialized
+    logical function does_exist( self )
+        class(cont3D_de_srch), intent(inout) :: self
+        does_exist = self%exists
+    end function does_exist
+
+    ! DESTRUCTOR
+
+    !>  \brief  is the destructor
+    subroutine kill( self )
+        class(cont3D_de_srch), intent(inout) :: self
+        call self%srch_obj%kill
+        self%pftcc_ptr => null()
+        self%vols_ptr  => null()
+        call self%o_in%kill
+        call self%o_out%kill
+        call self%o_peaks%kill
+        if( allocated(self%state_exists) )deallocate(self%state_exists)
+        self%exists = .false.
+    end subroutine kill
+
+end module simple_cont3D_de_srch

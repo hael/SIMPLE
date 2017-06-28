@@ -156,8 +156,8 @@ contains
         endif
         self%exists = .true.
         ! create in-plane search objects
-        call self%shsrch_obj%new(pftcc, self%lims, self%shbarr)
-        call self%inplsrch_obj%new(pftcc, self%lims, self%shbarr)
+        call self%shsrch_obj%new(pftcc, self%lims, shbarrier=self%shbarr)
+        call self%inplsrch_obj%new(pftcc, self%lims, shbarrier=self%shbarr)
         if( DEBUG ) write(*,'(A)') '>>> PRIME3D_SRCH::CONSTRUCTED NEW SIMPLE_PRIME3D_SRCH OBJECT'
     end subroutine new
 

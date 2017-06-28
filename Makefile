@@ -147,6 +147,7 @@ simple: simple_image.o                  \
         simple_masker.o                 \
         simple_pftcc_opt.o              \
         simple_simplex_pftcc_opt.o      \
+        simple_de_pftcc_opt.o           \
         simple_projector_hlev.o         \
         simple_volpft_corrcalc.o        \
         simple_ft_shsrch.o              \
@@ -163,7 +164,7 @@ simple: simple_image.o                  \
         simple_prime2D_srch.o           \
         simple_prime3D_srch.o           \
         simple_cont3D_srch.o            \
-        simple_cont3D_greedysrch.o      \
+        simple_cont3D_de_srch.o         \
         simple_procimgfile.o            ;
 
 build: simple_pair_dtab.o               \

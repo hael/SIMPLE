@@ -19,7 +19,6 @@ type, extends(optimizer) :: bfgs_opt
   contains
     procedure :: new          => new_bfgs_opt
     procedure :: minimize     => bfgs_minimize
-    procedure :: get_vertices => bfgs_get_vertices
     procedure :: kill         => kill_bfgs_opt
 end type
 
@@ -173,15 +172,6 @@ contains
             end subroutine
 
     end subroutine
-
-    !> \brief  dummy procedure, only defined in simplex
-    subroutine bfgs_get_vertices( self, spec, vertices, costs )
-        use simple_opt_spec,           only: opt_spec
-        class(bfgs_opt),    intent(inout) :: self
-        class(opt_spec),    intent(inout) :: spec
-        real, allocatable,  intent(inout) :: vertices(:,:), costs(:)
-        stop 'procedure only defined for simplex optimisation'
-    end subroutine bfgs_get_vertices
 
     !> \brief  is a destructor
     subroutine kill_bfgs_opt( self )

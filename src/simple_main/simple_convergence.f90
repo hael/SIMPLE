@@ -245,11 +245,13 @@ contains
             case('yes')
                 ! PRIME3D-LIKE CONVERGENCE
                 converged = self%check_conv3D( update_res )
-            case('greedy')
+            case('de')
                 self%corr      = self%bap%get_avg('corr')
                 self%dist      = self%bap%get_avg('dist')
                 self%dist_inpl = self%bap%get_avg('dist_inpl')
                 self%mi_inpl   = self%bap%get_avg('mi_inpl')
+                self%sdev      = self%bap%get_avg('sdev')
+                self%frac      = self%bap%get_avg('frac')
                 !self%mi_state  = self%bap%get_avg('mi_state')
                 write(*,'(A,1X,F7.1)') '>>> ANGLE OF FEASIBLE REGION:          ', self%pp%athres
                 write(*,'(A,1X,F7.4)') '>>> IN-PLANE DISTRIBUTION OVERLAP:     ', self%mi_inpl
@@ -257,8 +259,9 @@ contains
                 !write(*,'(A,1X,F7.4)') '>>> STATE DISTRIBUTION OVERLAP:        ', self%mi_state
                 write(*,'(A,1X,F7.1)') '>>> AVERAGE ANGULAR DISTANCE BTW ORIS: ', self%dist
                 write(*,'(A,1X,F7.1)') '>>> AVERAGE IN-PLANE ANGULAR DISTANCE: ', self%dist_inpl
+                write(*,'(A,1X,F7.1)') '>>> PERCENTAGE OF SEARCH SPACE SCANNED:', self%frac
                 write(*,'(A,1X,F7.4)') '>>> CORRELATION:                       ', self%corr
-                ! determine convergence
+                write(*,'(A,1X,F7.2)') '>>> ANGULAR SDEV OF MODEL:             ', self%sdev                ! determine convergence
                 if( self%pp%nstates == 1 )then
                     if(  self%dist    < self%pp%athres/5. .and.&
                         &self%mi_inpl > MI_INPL_LIM )then

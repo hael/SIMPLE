@@ -25,7 +25,6 @@ type, extends(optimizer) :: oasis_opt
   contains
     procedure :: new          => new_oasis_opt
     procedure :: minimize     => oasis_minimize
-    procedure :: get_vertices => oasis_get_vertices
     procedure :: kill         => kill_oasis_opt
 end type
 
@@ -204,15 +203,6 @@ contains
             end subroutine
 
     end subroutine
-
-    !> \brief  dummy procedure, only defined in simplex
-    subroutine oasis_get_vertices( self, spec, vertices, costs )
-        use simple_opt_spec,           only: opt_spec
-        class(oasis_opt), intent(inout) :: self
-        class(opt_spec),    intent(inout) :: spec
-        real, allocatable,  intent(inout) :: vertices(:,:), costs(:)
-        stop 'procedure only defined for simplex optimisation'
-    end subroutine oasis_get_vertices
 
     !> \brief  is a destructor
     subroutine kill_oasis_opt( self )

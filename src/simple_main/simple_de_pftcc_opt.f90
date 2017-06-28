@@ -1,11 +1,10 @@
-module simple_de_opt
-use simple_defs
-use simple_optimizer, only: optimizer
+module simple_de_pftcc_opt
+use simple_pftcc_opt, only: pftcc_opt
 use simple_opt_spec,  only: opt_spec
 use simple_rnd,       only: ran3, irnd_uni
 implicit none
 
-public :: de_opt
+public :: de_pftcc_opt
 private
 
 integer, parameter :: N_GENERAL = 136,    N_VALLEY = 126,    N_MULTIMODAL = 103,    N_FLAT = 106
@@ -13,7 +12,7 @@ real,    parameter :: F_GENERAL = 0.2790, F_VALLEY = 0.4027, F_MULTIMODAL = 0.39
 real,    parameter :: X_GENERAL = 0.9813, X_VALLEY = 0.9211, X_MULTIMODAL = 0.9794, X_FLAT = 0.3345
 logical, parameter :: DEBUG = .false.
 
-type, extends(optimizer) :: de_opt
+type :: de_pftcc_opt
     private
     real, allocatable :: pop(:,:)          !< solution vector population
     real, allocatable :: costs(:)          !< costs
@@ -25,15 +24,15 @@ type, extends(optimizer) :: de_opt
     procedure :: new          => new_de
     procedure :: minimize     => de_minimize
     procedure :: kill         => kill_de
-end type de_opt
+end type de_pftcc_opt
 
 contains
     
     !> \brief  is a constructor
     subroutine new_de( self, spec )
         use simple_jiffys, only: alloc_err
-        class(de_opt),   intent(inout) :: self !< instance
-        class(opt_spec), intent(inout) :: spec !< specification
+        class(de_pftcc_opt), intent(inout) :: self !< instance
+        class(opt_spec),     intent(inout) :: spec !< specification
         integer :: alloc_stat
         ! destruct if exists
         call self%kill
@@ -68,18 +67,17 @@ contains
     end subroutine new_de
     
     !> \brief  is the particle swarm minimize minimization routine
-    subroutine de_minimize( self, spec, lowest_cost )
-        class(de_opt),   intent(inout) :: self        !< instance     
-        class(opt_spec), intent(inout) :: spec        !< specification
-        real,            intent(out)   :: lowest_cost !< lowest cost
+    subroutine de_minimize( self, spec, funcontainer, lowest_cost )
+        use simple_math, only: hpsort
+        class(de_pftcc_opt), intent(inout) :: self        !< instance     
+        class(opt_spec),     intent(inout) :: spec        !< specification
+        class(pftcc_opt),    intent(inout) :: funcontainer !< container for the cost function
+        real,                intent(out)   :: lowest_cost !< lowest cost
+        integer, allocatable :: inds(:)
+        real    :: L
         integer :: t      ! iteration counter
         integer :: npeaks ! number of local minima
-        real    :: rtol   ! relative tolerance
-        real    :: L
-        integer :: loc(1), nworse, X, i, j
-        if( .not. associated(spec%costfun) )then
-            stop 'cost function not associated in opt_spec; de_minimize; simple_de_opt'
-        endif        
+        integer :: loc(1), nworse, X, i, j  
         ! obtain initial solutions by randomized bounds
         do i=1,spec%npop
             do j=1,spec%ndim
@@ -94,7 +92,7 @@ contains
         end do
         ! calculate initial costs
         do i=1,spec%npop
-            self%costs(i) = spec%costfun(self%pop(i,:), spec%ndim)
+            self%costs(i) = funcontainer%costfun(self%pop(i,:), spec%ndim)
             spec%nevals = spec%nevals+1
         end do
         loc       = minloc(self%costs)
@@ -113,15 +111,30 @@ contains
             endif
             if( nworse == spec%npop ) exit ! if no better solutions have been found in the last 4*ndim iterations
         end do
+        ! report
         lowest_cost = self%costs(self%best)
         spec%x = self%pop(self%best,:)
+        if( npeaks == spec%npeaks )then
+            ! alles klar
+        else
+            ! reports peaks as top-ranking individuals
+            if(allocated(spec%peaks))deallocate(spec%peaks)
+            allocate(spec%peaks(spec%npeaks,6), source=1.)
+            allocate(inds(spec%npop))
+            inds  = (/ (i, i=1,spec%npop) /)
+            call hpsort(spec%npeaks, self%costs, inds)
+            spec%peaks(:,6)   = self%costs(inds(spec%npop-spec%npeaks+1:)) 
+            spec%peaks(:,1:5) = self%pop(inds(spec%npop-spec%npeaks+1:),:)
+            where(spec%peaks(:,6) >= 0.)spec%peaks(:,6) = 1.
+            deallocate(inds)
+        endif
 
       contains
         
         subroutine update_agent( X )
             integer, intent(in) :: X
             integer :: a, rb, b, i
-            real :: trial(spec%ndim), cost_trial, L
+            real :: trial(spec%ndim), cost_trial
             ! select random disjoint pair
             a  = irnd_uni(spec%npop)
             rb = irnd_uni(spec%npop-1)
@@ -142,7 +155,7 @@ contains
                 endif
             end do
             ! calculate cost 
-            cost_trial  = spec%costfun(trial, spec%ndim)
+            cost_trial  = funcontainer%costfun(trial, spec%ndim)
             spec%nevals = spec%nevals + 1
             ! update pop if better solution is found
             if( cost_trial < self%costs(X) )then
@@ -170,12 +183,11 @@ contains
 
     !> \brief  is a destructor
     subroutine kill_de( self )
-        class(de_opt), intent(inout) :: self !< instance
-        integer :: i
+        class(de_pftcc_opt), intent(inout) :: self !< instance
         if( self%exists )then
             deallocate(self%pop,self%costs)
             self%exists = .false.
         endif
     end subroutine kill_de
 
-end module simple_de_opt
+end module simple_de_pftcc_opt

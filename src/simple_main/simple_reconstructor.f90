@@ -166,6 +166,7 @@ contains
             write(*,'(2a)') 'IO error message was: ', io_message
             stop 'I/O error; write_rho; simple_reconstructor'
         endif
+        call flush(filnum)
         close(unit=filnum)
     end subroutine write_rho
     

@@ -23,7 +23,6 @@ type :: simplex_pftcc_opt
   contains
     procedure :: new
     procedure :: minimize
-    procedure :: get_vertices
     procedure :: kill
 end type simplex_pftcc_opt
 
@@ -47,8 +46,6 @@ contains
 
     !> \brief  restarted simplex minimization
     subroutine minimize( self, spec, funcontainer, lowest_cost )
-        !$ use omp_lib
-        !$ use omp_lib_kinds
         use simple_opt_spec, only: opt_spec
         use simple_opt_subs, only: amoeba
         use simple_rnd,      only: ran3
@@ -110,27 +107,6 @@ contains
             end subroutine init
         
     end subroutine minimize
-
-    !> \brief  returns all polytope vertices & costs of solution
-    subroutine get_vertices( self, spec, vertices, costs )
-        use simple_opt_spec, only: opt_spec
-        use simple_jiffys,   only: alloc_err
-        class(simplex_pftcc_opt), intent(inout) :: self
-        class(opt_spec),          intent(inout) :: spec
-        real, allocatable,        intent(inout) :: vertices(:,:), costs(:)
-        integer           :: n, alloc_stat
-        if( spec%str_opt .ne. 'simplex' )then
-            stop 'subroutine only defined fot the simplex optimizer; simple_simplex_pftcc_opt::get_simplex_vertices'
-        endif
-        if( .not.self%exists )then
-            stop 'simplex optmization object does not exist; simple_simplex_pftcc_opt::get_vertices'
-        endif
-        n = size(self%y)
-        allocate( vertices(n+1,n), costs(n+1), stat=alloc_stat )
-        call alloc_err('In simple_simplex_pftcc_opt; get_simplex_vertices', alloc_stat)
-        vertices = self%p
-        costs    = self%y
-    end subroutine get_vertices
 
     !> \brief  is a destructor
     subroutine kill( self )

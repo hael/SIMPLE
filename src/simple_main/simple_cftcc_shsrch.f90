@@ -85,26 +85,8 @@ contains
         ospec%x = 0.
         ! search
         call nlopt%minimize(ospec, cost)
-        if( ospec%str_opt.eq.'simplex')then
-            ! soft matching
-            o_new = o
-            call nlopt%get_vertices( ospec, vertices, costs )
-            call os%new(3)
-            do i = 1,3
-                o_new = o
-                call o_new%set('corr', -costs(i))
-                call o_new%set_shift(prev_shvec-vertices(i,:))
-                call os%set_ori(i, o_new)
-            enddo
-            call prep_soft_oris( wcorr, os )
-            corr = wcorr
-            call o%set('ow', os%get(1,'ow'))
-            deallocate(vertices, costs)
-        else
-            ! hard matching
-            corr = -cost
-            call o%set('ow', 1.)
-        endif
+        corr = -cost
+        call o%set('ow', 1.)
         call o%set('corr', corr)
         ! shifts must be obtained by vector addition
         ! the reference is rotated upon projection: no need to rotate the shift

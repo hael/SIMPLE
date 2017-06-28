@@ -28,18 +28,19 @@ type, extends(pftcc_opt) :: pftcc_shsrch
     procedure :: costfun     => shsrch_costfun
     procedure :: minimize    => shsrch_minimize
     procedure :: get_nevals  => shsrch_get_nevals
+    procedure :: get_peaks   => shsrch_get_peaks
     procedure :: kill
 end type pftcc_shsrch
 
 contains
 
-    subroutine shsrch_new( self, pftcc, lims, shbarrier, nrestarts, vols )
+    subroutine shsrch_new( self, pftcc, lims, shbarrier, nrestarts, npeaks, maxits, vols )
         use simple_projector,        only: projector
         class(pftcc_shsrch),                intent(inout) :: self
         class(polarft_corrcalc),    target, intent(in)    :: pftcc
         real,                               intent(in)    :: lims(:,:)
         character(len=*), optional,         intent(in)    :: shbarrier
-        integer,          optional,         intent(in)    :: nrestarts
+        integer,          optional,         intent(in)    :: nrestarts, npeaks, maxits
         class(projector), optional, target, intent(in)    :: vols(:)
         ! flag the barrier constraint
         self%shbarr = .true.
@@ -140,6 +141,13 @@ contains
         integer :: nevals
         nevals = self%ospec%nevals
     end function shsrch_get_nevals
+
+    subroutine shsrch_get_peaks( self, peaks )
+        class(pftcc_shsrch), intent(inout) :: self
+        real, allocatable,   intent(out)   :: peaks(:,:)
+        allocate(peaks(1,2))
+        peaks(1,:) = self%ospec%x
+    end subroutine shsrch_get_peaks
 
     subroutine kill( self )
         class(pftcc_shsrch), intent(inout) :: self
