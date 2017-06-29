@@ -10,9 +10,9 @@
 % Set formats for each heading level
 \usepackage{sectsty}
 \allsectionsfont{\usefont{OT1}{phv}{bc}{n}\selectfont}
-\sectionfont{\color{MidnightBlue}}              % sets colour of sections
-\subsectionfont{\color{MidnightBlue}}        % sets colour of subsections
-\subsubsectionfont{\color{MidnightBlue}}  % sets colour of subsections
+\sectionfont{\color{MidnightBlue}}             % sets colour of sections
+\subsectionfont{\color{MidnightBlue}}       % sets colour of subsections
+\subsubsectionfont{\color{MidnightBlue}} % sets colour of subsections
 % Other shit
 \usepackage{algorithm}
 \usepackage{amsfonts}
@@ -239,7 +239,7 @@ To get an idea of the effect of the movie pre-processing in real-space, expand t
 
 \begin{tcolorbox}[breakable,colback=white,colframe=orange,width=\dimexpr\textwidth+12mm\relax,enlarge left by=-6mm]
 \subsection{Using SIMPLE in the Wild\textemdash{}Power Spectrum Analysis and Movie Selection}
-In a real-life scenario, all images in a data set are never perfect. A truck may come driving by the EM suite and cause drift, someone may pass the EM room transporting a big piece of metal, causing the energy filter to become misaligned, or the pump of the autoloader may have been accidentally turned on. The list could be made long. Therefore, it is important that we take a good look at our data. The first round of screening is usually done by looking at power spectra\textemdash{}the \texttt{*pspec*} files produced by \prgname{unblur}. Typically, you will have executed \texttt{unblur} in distributed mode in a cluster environment (described below) and a stack of power spectra called \texttt{unblur\_pspecs.mrc} has then been produced. We use EMAN2 to look at the power spectra and Steve will introduce you to EMAN2 in the next session but you can use whatever GUI you like to make the selection. SIMPLE supports MRC and SPIDER files but does not allow you to mix formats, so if you need to convert between MRC and SPIDER file formats, use SIMPLE program \prgname{convert}
+In a real-life scenario, all images in a data set are never perfect. A truck may come driving by the EM suite and cause drift, someone may pass the EM room transporting a big piece of metal, causing the energy filter to become misaligned, or the pump of the autoloader may have been accidentally turned on. The list could be made long. Therefore, it is important that we take a good look at our data. The first round of screening is usually done by looking at power spectra\textemdash{}the \texttt{*pspec*} files produced by \prgname{unblur}. Typically, you will have executed \texttt{unblur} in distributed mode in a cluster environment (described below) and a stack of power spectra called \texttt{unblur\_pspecs.mrc} has then been produced. We use EMAN2 to look at the power spectra but you can use whatever GUI you like to make the selection. SIMPLE supports MRC and SPIDER files but does not allow you to mix formats, so if you need to convert between MRC and SPIDER file formats, use SIMPLE program \prgname{convert}
 \begin{verbatim}
 bash-3.2$ simple_exec prg=convert
 USAGE:
@@ -371,7 +371,7 @@ smpd=5.26 ctffind_doc=ctffind_output.txt
 Output is a particle stack \texttt{sumstack.mrc} and its associated parameter file \texttt{extract\_params.txt}.
 
 \section{2D Analysis with PRIME2D}
-Algorithms that can rapidly discover clusters corresponding to sets of images with similar projection direction and conformational state play an important role in single-particle analysis. Identification of such clusters allows for enhancement of the signal-to-noise ratio (SNR) by averaging and gives a first glimpse into the character of a dataset. Therefore, clustering algorithms play a pivotal role in initial data quality assessment, \textit{ab initio} 3D reconstruction and analysis of heterogeneous single-particle populations. SIMPLE implements a probabilistic algorithm for simultaneous 2D alignment and clustering, called \prgname{prime2D}. The version we are going to use here is an improved version of the published code \citep{reboul2016stochastic}. Grouping tens of thousands of images into several hundred clusters is a computationally intensive job. Therefore, we will now introduce the execution route for running SIMPLE jobs in a distributed computing environment.
+Algorithms that can rapidly discover clusters corresponding to sets of images with similar projection direction and conformational state play an important role in single-particle analysis. Identification of such clusters allows for enhancement of the signal-to-noise ratio (SNR) by averaging and gives a first glimpse into the character of a dataset. Therefore, clustering algorithms play a pivotal role in initial data quality assessment, \textit{ab initio} 3D reconstruction and analysis of heterogeneous single-particle populations. SIMPLE implements a probabilistic algorithm for simultaneous 2D alignment and clustering, called \prgname{prime2D}. The version we are going to use here is an improved version of the published code released in SIMPLE 2.1 (submitted manuscript). Grouping tens of thousands of images into several hundred clusters is a computationally intensive job. Therefore, we will now introduce the execution route for running SIMPLE jobs in a distributed computing environment.
 
 \subsection{PRIME2D Analysis of TRPV1 Membrane Receptor Images}
 The computers we are currently using have four i7 processors in a single socket, hyper-threaded so it looks like we have eight. We are now going to pretend that we have two CPU sockets with four CPUs each for the purpose of demonstration. Go to the \texttt{PRIME2D} directory and check things out.
@@ -565,7 +565,7 @@ appending output to nohup.out
 \includegraphics[keepaspectratio=true,scale=0.6]{./Pfrib3D/Pfrib3D}
 \caption{Progress of the 3D model throughout the stochastic PRIME3D search (top). Class averages vs. re-projections of the converged 3D reconstruction (bottom).}
 \end{figure}
-The overlap parameters are very similar to those in \prgname{prime2D} but the \texttt{CLASS DISTRIBUTION OVERLAP} now corresponds to projection directions rather than 2D classes. New statistics include \texttt{AVERAGE ANGULAR DISTANCE BTW ORIS}, which is the average angular distance (in degrees) between the present and the previous sets of best orientations. Since every particle image is assigned a distribution of orientations with associated weight factors, there is also an estimate of the angular standard deviation of the model \texttt{ANGULAR SDEV OF MODEL}. For asymmetric molecules, we expect the angular standard deviation to decrease as the procedure approaches convergence. However, if we reconstruct symmetric molecules with \texttt{pgrp=c1} or asymmetric molecules with pseudo symmetries, the angular standard deviation may increase with the number of iterations as the orientations become randomly  distributed over the symmetry related configurations. Please, use UCSF Chimera to view the reconstructed density (icon on desktop). The \texttt{*pproc*} output is the post-processed volume (for initial model generation this is simply the volume low-pass filtered with the low-pass limit used for alignment).
+The overlap parameters are very similar to those in \prgname{prime2D} but the \texttt{CLASS DISTRIBUTION OVERLAP} now corresponds to projection directions rather than 2D classes. New statistics include \texttt{AVERAGE ANGULAR DISTANCE BTW ORIS}, which is the average angular distance (in degrees) between the present and the previous sets of best orientations. Since every particle image is assigned a distribution of orientations with associated weight factors, there is also an estimate of the angular standard deviation of the model \texttt{ANGULAR SDEV OF MODEL}. For asymmetric molecules, we expect the angular standard deviation to decrease as the procedure approaches convergence. However, if we reconstruct symmetric molecules with \texttt{pgrp=c1} or asymmetric molecules with pseudo symmetries, the angular standard deviation may increase with the number of iterations as the orientations become randomly  distributed over the symmetry related configurations. Please, use UCSF Chimera to view the reconstructed density. The \texttt{*pproc*} output is the post-processed volume (for initial model generation this is simply the volume low-pass filtered with the low-pass limit used for alignment).
 
 \begin{tcolorbox}[breakable,colback=white,colframe=orange,width=\dimexpr\textwidth+12mm\relax,enlarge left by=-6mm]
 \subsection{Using SIMPLE in the Wild\textemdash{}Mapping Class Orientations and Selection to the Particles}
@@ -577,6 +577,112 @@ stk3=cavgs_iter21.mrc oritab=prime2Ddoc_021.txt oritab2=prime3Ddoc_030.txt nthr=
 creating a file \texttt{mapped\_ptcls\_params.txt} that you can input with flag \texttt{oritab} to \texttt{simple\_distr\_exec prg=recvol} to reconstruct a volume from particle images.
 \end{tcolorbox}
 
+\section{Reconstruction of Symmetrical Structures with SIMPLE}
+To illustrate how to use the SIMPLE suite, we provide the following workflow including all commands executed when reconstructing the D2 symmetric beta-galactosidase particle. It consists of three steps
+\begin{enumerate}
+\item 2D alignment and clustering of the images
+\item Symmetric \textit{ab initio} 3D reconstruction and refinement on class averages in the D2 symmetry point group in one automated step
+\item Final resolution estimate from single particles images
+\end{enumerate}
+We used a dataset of 5,500 256x256 images. After extraction of the images from the micrographs, the image stack is named \texttt{sumstack.mrc} and the corresponding CTF parameters (obtained with CTFFIND) are contained in a document called \texttt{extract\_params.txt}. Both files are located in the \texttt{./stack} folder.
+
+\subsection{In-plane alignment and clustering}
+We first create a working directory called \texttt{2d} where PRIME2D will perform the 2D alignment and clustering of the images.
+\begin{verbatim}
+        $ mkdir 2d
+        $ cd 2d
+\end{verbatim}
+Now, we execute the PRIME2D workflow with a single command line
+\begin{verbatim}
+        $ nohup simple_distr_exec prg=prime2D stk=../stack/sumstack.mrc 
+        smpd=1.62 msk=88 ncls=100 ctf=yes deftab=../stack/extract_params.txt 
+        nparts=2 nthr=4 >& PRIME2DOUT &
+\end{verbatim}
+The \texttt{stk} argument points to the location of the images. Throughout the different steps of this workflow we will use a circular mask radius of 88 pixels (\texttt{msk=88}) and a sampling distance of 1.62 Angstroms/pixel (\texttt{smpd=1.62}). With the \texttt{ncls} argument we specify how many cluster centres (or class averages) will be produced. In this case one hundred clusters means we aim at producing 55 images per cluster. Values up to 100-150 are also valid choices but in this case would only produce 30-40 cluster centres. With the argument \texttt{ctf=yes} we turn on the Wiener restoration of the cluster centres. Accordingly, we provide the defocus parameters with the \texttt{deftab} argument.
+
+Finally, we specify how to perform the calculations. With \texttt{nparts=2} and \texttt{nthr=4} all the computations will be split into two batches of 4 threads each. All PRIME2D standard output is written to the PRIME2DOUT log file. At each PRIME2D iteration class averages are produced along with the corresponding document containing in-plane parameters and cluster assignment of all the images, named \texttt{cavgs\_iterXXX.mrc} and \texttt{prime2Ddoc\_XXX.txt}, respectively.
+
+Upon completion after 15-20 iterations, PRIME2D produces the classes averages (\texttt{cavgs\_final.mrc}) and a final document containing in-plane parameters and cluster assignment of all the images (\texttt{prime2Ddoc\_final.txt}). An additional stack is also generated that contains the class averages ranked by population (\texttt{cavgs\_final\_ranked.mrc}).
+
+You may remove the temporary files generated by PRIME2D by typing (this should of course never be done while the application is running)
+\begin{verbatim}
+        $ prime_cleanup.pl
+\end{verbatim}
+Visual examination of the 100 class averages shows numerous images with distinctive, symmetric, features of beta-galactosidase. One can also note blurrier images with less contrast. Typically, these correspond to lowly populated classes where the weaker SNR is likely to contribute little to the subsequent 3D reconstruction. We therefore discard them from the next \textit{ab initio} 3D reconstruction step, together with class averages that correspond to ice and likely inaccurate particle picking. This can be done with your image visualisation software of choice, such as EMAN. The resulting class averages stack (~70-80 images) is named \texttt{cavgs\_selected.mrc}
+
+\begin{SCfigure}[][h]
+\includegraphics[keepaspectratio=true,scale=0.8]{./bgal/bgal_cavgs}
+\caption{\texttt{cavgs\_final\_ranked.mrc}}
+\end{SCfigure}
+\begin{SCfigure}[][h]
+\includegraphics[keepaspectratio=true,scale=0.8]{./bgal/bgal_cavgs_sel}
+\caption{\texttt{cavgs\_selected.mrc}}
+\end{SCfigure}
+
+\subsection{\textit{Ab initio} 3D reconstruction from class averages}
+
+We are now ready to generate an \textit{ab initio} 3D reconstruction based on the selected cluster centres. With the following we create a new working directory for this step
+\begin{verbatim}
+        $ cd ..
+        $ mkdir 3d_cavg
+        $ cd 3d_cavg
+\end{verbatim}
+and execute the automated workflow \texttt{ini3D\_from\_cavgs}
+\begin{verbatim}
+        $ nohup simple_distr_exec prg=ini3D_from_cavgs stk=../2d/cavgs_selected.mrc 
+        smpd=1.62 msk=88 pgrp=d2 pgrp_known=yes nparts=2 nthr=4 >& INI3DOUT &
+\end{verbatim}
+This command line is very similar to the one used to run PRIME2D. The image stack (\texttt{stk=?}) is the previously selected class averages. In our 2x4 CPUs workstation this step is completed after a dozen iterations in just 8 to 9 minutes.
+
+This automated workflow uses its own scheme to low-pass filter images and volumes. For more challenging cases, it may be preferable to set the low-pass limit to 20-25 Angstroms; for class averages derived from negative stain images to 30-35 Angstroms. This is achieved by setting the \texttt{lp} argument to the desired value (e.g. \texttt{lp=25.0}).
+
+It is possible to start with no symmetry assumed, perform a symmetry search in a specific point-group and use it for refinement by simply removing the \texttt{pgrp\_known=yes} argument. In cases of low symmetry order (e.g. C2, C4, D2) the \texttt{pgrp\_known} key performs well but can sometimes fail, especially for small proteins whose shape exhibit pseudo-axes of symmetry. Given that \texttt{ini3D\_from\_cavgs} takes less than 10 minutes to complete, it is a good strategy to restart this step a handful of times to assess the robustness of the volume produced. One can also start from an asymmetric reconstruction and then search for the symmetry as mentioned above.
+
+\texttt{ini3D\_from\_cavgs}, like PRIME2D, generates files at each iteration: documents with the 3D alignments parameters (\texttt{prime3Ddoc\_XXX.txt}) and the corresponding volumes. The volumes with the \textit{pproc} suffix (standing for \textit{post-processed}) are masked and low-pass filtered to the current resolution and are thus amenable to visual examination. Updates to the resolution are reported in the log file produced (\texttt{INI3DOUT}). A final volume (\texttt{rec\_final.mrc}) is also reconstructed to the original scale of the images/class averages. Temporary files can be deleted as done in step 1.
+\begin{SCfigure}[][h]
+\includegraphics[keepaspectratio=true,scale=0.6]{./bgal/bgal_maps}
+\caption{3D reconstructions obtained}
+\end{SCfigure}
+The \textit{ab inito} 3D model generated is indeed in excellent agreement with previous beta-galactosidase maps and crystallographic structures, but the volumes display the alternate known handedness. To mirror one volume to the correct handedness (then named for instance \texttt{vol\_mirr.mrc}) type
+\begin{verbatim}
+        $ simple_exec prg=volops smpd=1.62 vol1=recvol_state01_iter012pproc.mrc 
+        outvol=vol_mirr.mrc
+\end{verbatim}
+\texttt{ini3D\_from\_cavgs} also automatically generates re-projections of \texttt{rec\_final.mrc} (\texttt{reprojs.mrc}) in orientations directly comparable to the selected cluster centres obtained in step 1. Excellent agreement between re-projections and cluster centres validates that the final reconstruction is representative of the class averages.
+
+\subsection{Resolution estimate from single-particle images}
+To calculate the resolution of the map obtained we calculate the Fourier Shell Correlation (FSC) from even and odd half-maps with the 0.143 resolution threshold. To do so, we need to reconstruct the half-maps from particles. We do this in as separate folder
+\begin{verbatim}
+        $ cd ..
+        $ mkdir rec_ptcls
+        $ cd rec_ptcls
+\end{verbatim}
+First, we need to combine the 2D parameters of the particle images (cluster assignment and in-plane parameters; from step 1) with the 3D parameters derived for the class averages (from step 2):
+\begin{verbatim}
+        $ simple_exec prg=map2ptcls stk=../stack/sumstack.mrc
+        stk2=../2d/cavgs_selected.mrc stk3=../2d/cavgs_final.mrc
+        oritab=../2d/prime2Ddoc_final.txt 
+        oritab3D=../3d_cavg/prime3Ddoc_final.txt nthr=4
+\end{verbatim}
+\noindent{}The arguments used are as follows
+\begin{itemize}
+\item[--] \texttt{stk:} original stack of images
+\item[--] \texttt{stk2:} stack of \textit{selected} cluster centres
+\item[--] \texttt{stk3:} stack of cluster centres used for the selection (e.g., to produce \texttt{stk2})
+\item[--] \texttt{oritab:} document produced by PRIME2D corresponding to \texttt{stk3}
+\item[--] \texttt{oritab3D:} document produced by \prgname{ini3D\_from\_cavgs} corresponding to \texttt{stk2}
+\end{itemize}
+This generates a document named \texttt{mapped\_params\_ptcls.txt} that we can directly use to reconstruct a new map from the particle images and calculate the resolution
+\begin{verbatim}
+        $ simple_distr_exec prg=recvol eo=yes stk=../stack/sumstack.mrc 
+        oritab=mapped_params_ptcls.txt smpd=1.62 msk=88 ctf=yes 
+        pgrp=d2 nparts=2 nthr=4 >& EOREC
+\end{verbatim}
+This will only takes a few minutes and will print out the FSC values in the EOREC file. The \texttt{eo=yes} option specifies that the resolution will be calculated from the FSC between the even/odd halves of the dataset. The final reconstruction is the \texttt{recvol\_state01.mrc}. The end of the RESOLUTION file produced gives you the calculated resolution
+\begin{verbatim}
+        >>> RESOLUTION AT FSC=0.143 DETERMINED TO:    9.87
+        >>> RESOLUTION AT FSC=0.500 DETERMINED TO:  13.38
+\end{verbatim}
 \bibliographystyle{elsarticle-harv}
 \bibliography{Prime2bibfile}
 
