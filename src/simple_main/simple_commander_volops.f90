@@ -309,7 +309,8 @@ contains
         real                 :: furthest_from_spat_med_corr
         type(projector)      :: vol1, vol2
         type(ori)            :: o
-#include "simple_local_flags.inc"   ! this overrides the module debug
+        ! this overrides the module debug
+#include "simple_local_flags.inc"
         real,                  allocatable :: corrmat(:,:), corrs(:), corrs_avg(:)
         integer,               allocatable :: pairs(:,:)
         character(len=STDLEN), allocatable :: vollist(:)
