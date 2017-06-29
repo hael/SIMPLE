@@ -8,6 +8,7 @@ type, abstract :: pftcc_opt
   contains
     procedure(generic_new),          deferred :: new
     procedure(generic_set_indices),  deferred :: set_indices
+    procedure(generic_set_inipop),   deferred :: set_inipop
     procedure(generic_costfun),      deferred :: costfun
     procedure(generic_minimize),     deferred :: minimize
     procedure(generic_get_nevals),   deferred :: get_nevals
@@ -36,6 +37,13 @@ abstract interface
         integer,           intent(in)    :: ref, ptcl
         integer, optional, intent(in)    :: rot, state
     end subroutine generic_set_indices
+
+    !>  \brief  is a setter
+    subroutine generic_set_inipop( self, inipop )
+        import :: pftcc_opt
+        class(pftcc_opt),  intent(inout) :: self
+        real,              intent(in)    :: inipop(:,:)
+    end subroutine generic_set_inipop
 
     !>  \brief  is the cost function
     function generic_costfun( self, vec, D ) result( cost )

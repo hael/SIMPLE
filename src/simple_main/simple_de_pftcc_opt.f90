@@ -21,9 +21,10 @@ type :: de_pftcc_opt
     real              :: CR = X_MULTIMODAL !< cross-over rate
     logical           :: exists = .false.  !< to indicate existence
   contains
-    procedure :: new          => new_de
-    procedure :: minimize     => de_minimize
-    procedure :: kill         => kill_de
+    procedure          :: new          => new_de
+    procedure, private :: init_pop
+    procedure          :: minimize     => de_minimize
+    procedure          :: kill         => kill_de
 end type de_pftcc_opt
 
 contains
@@ -65,7 +66,36 @@ contains
         self%exists = .true. ! indicates existence
         if( spec%DEBUG ) write(*,*) 'created new differential evolution population'
     end subroutine new_de
-    
+
+    !> \brief  is the particle swarm population initialization routine
+    subroutine init_pop( self, ospec )
+        class(de_pftcc_opt), intent(inout) :: self        !< instance     
+        class(opt_spec),     intent(inout) :: ospec        !< specification
+        integer :: i, n_ini
+        ! obtain initial solutions by randomized bounds
+        do i = 1, ospec%npop
+            self%pop(i,:) = gen_individual()
+        end do
+        if( allocated(ospec%inipopulation) )then
+            ! provided init population, overrides previous best
+            n_ini = size(ospec%inipopulation, dim=1)
+            self%pop(1:n_ini,:) = ospec%inipopulation
+        endif
+        ! set one point in the swarm to best point in spec
+        if( .not. all(ospec%x == 0.) )self%pop(1,:) = ospec%x
+
+        contains
+            function gen_individual( )result( individual )
+                real    :: L, individual(ospec%ndim)
+                integer :: j
+                individual = 0.
+                do j = 1, ospec%ndim
+                    L = ospec%limits(j,2) - ospec%limits(j,1)
+                    individual(j) = ospec%limits(j,1) + L*ran3()
+                end do
+            end function gen_individual
+    end subroutine init_pop
+
     !> \brief  is the particle swarm minimize minimization routine
     subroutine de_minimize( self, spec, funcontainer, lowest_cost )
         use simple_math, only: hpsort
@@ -74,26 +104,17 @@ contains
         class(pftcc_opt),    intent(inout) :: funcontainer !< container for the cost function
         real,                intent(out)   :: lowest_cost !< lowest cost
         integer, allocatable :: inds(:)
-        real    :: L
         integer :: t      ! iteration counter
         integer :: npeaks ! number of local minima
-        integer :: loc(1), nworse, X, i, j  
-        ! obtain initial solutions by randomized bounds
-        do i=1,spec%npop
-            do j=1,spec%ndim
-                L = spec%limits(j,2)-spec%limits(j,1)
-                self%pop(i,j) = spec%limits(j,1)+ran3()*L
-            end do
-            if( i == 1 )then
-                if( .not. all(spec%x == 0.) )then ! set one point in the swarm to best point in spec
-                    self%pop(1,:)= spec%x
-                endif
-            endif
-        end do
+        integer :: loc(1), nworse, X, i
+        ! initialization
+        call self%init_pop(spec)
+        do i = 1,spec%npop
+        enddo
         ! calculate initial costs
         do i=1,spec%npop
             self%costs(i) = funcontainer%costfun(self%pop(i,:), spec%ndim)
-            spec%nevals = spec%nevals+1
+            spec%nevals   = spec%nevals+1
         end do
         loc       = minloc(self%costs)
         self%best = loc(1)

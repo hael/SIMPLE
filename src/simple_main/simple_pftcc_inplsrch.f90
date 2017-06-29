@@ -24,6 +24,7 @@ type, extends(pftcc_opt) :: pftcc_inplsrch
   contains
     procedure :: new         => inplsrch_new
     procedure :: set_indices => inplsrch_set_indices
+    procedure :: set_inipop  => inplsrch_set_inipop
     procedure :: costfun     => inplsrch_costfun
     procedure :: minimize    => inplsrch_minimize
     procedure :: get_nevals  => inplsrch_get_nevals
@@ -75,6 +76,13 @@ contains
         self%reference = ref 
         self%particle  = ptcl
     end subroutine inplsrch_set_indices
+
+    !>  \brief  is a setter
+    subroutine inplsrch_set_inipop( self, inipop )
+        class(pftcc_inplsrch), intent(inout) :: self
+        real,                  intent(in)    :: inipop(:,:)
+        stop 'Not for simplex use; simple_pftcc_inplsrch%srch_set_inipop'
+    end subroutine inplsrch_set_inipop
 
     function inplsrch_costfun( self, vec, D ) result( cost )
         use simple_math, only: rotmat2d, enforce_cyclic_limit

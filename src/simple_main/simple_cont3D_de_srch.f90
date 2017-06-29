@@ -12,8 +12,11 @@ implicit none
 public :: cont3D_de_srch
 private
 
-integer, parameter :: MAXITS = 5 * 200
-logical, parameter :: debug  = .false.
+integer, parameter :: NDOF           = 5
+integer, parameter :: maxits_per_dof = 250
+integer, parameter :: MAXITS         = NDOF * maxits_per_dof
+integer, parameter :: NINIPOP        = 50
+logical, parameter :: debug = .false.
 
 type cont3D_de_srch
     private
@@ -29,6 +32,7 @@ type cont3D_de_srch
     real                             :: prev_shift(2) = 0.     !< previous correlation
     real                             :: angthresh     = 0.     !< angular threshold
     real                             :: specscore     = 0.     !< previous spectral score
+    real                             :: trs           = 0.     !< shift limit
     integer                          :: npeaks        = 0      !< number of peaks
     integer                          :: iptcl         = 0      !< orientation general index
     integer                          :: ref           = 0      !< previous ref
@@ -71,8 +75,9 @@ contains
         self%pftcc_ptr  => pftcc
         self%vols_ptr   => vols
         self%lims(:3,:) = p%eullims
-        self%lims(4,:)  = [-p%trs, p%trs]
-        self%lims(5,:)  = [-p%trs, p%trs]
+        self%trs        = p%trs
+        self%lims(4,:)  = [-self%trs, self%trs]
+        self%lims(5,:)  = [-self%trs, self%trs]
         self%nstates    = p%nstates
         if( size(vols).ne.self%nstates )stop 'Inconsistent number of volumes; cont3D_de_srch::new'
         self%angthresh  = p%athres
@@ -92,7 +97,7 @@ contains
         class(cont3D_de_srch), intent(inout) :: self
         class(oris),        intent(inout) :: a
         integer,            intent(in)    :: iptcl, iref, istate
-        real, allocatable :: frc(:)
+        real, allocatable :: frc(:), inipop(:,:)
         self%iptcl      = iptcl
         self%ref        = iref
         self%state      = istate
@@ -113,9 +118,33 @@ contains
         ! DE search object
         call self%srch_obj%new(self%pftcc_ptr, self%lims, shbarrier=self%shbarr,&
         &npeaks=self%npeaks, maxits=MAXITS, vols=self%vols_ptr)
+        call self%srch_obj%set_indices(self%ref, self%iptcl, state=self%state)
+        call gen_inipop()
+        call self%srch_obj%set_inipop(inipop)
         ! cleanup
-        deallocate(frc)
+        deallocate(frc, inipop)
         if( debug ) write(*,'(A)') '>>> cont3D_de_srch::END OF PREP_SRCH'
+
+        contains
+
+            subroutine gen_inipop()
+                type(oris) :: orefs
+                type(ori)  :: o
+                integer    :: i
+                allocate( inipop(NINIPOP, NDOF) )
+                call orefs%rnd_gau_neighbors(NINIPOP, self%o_in, self%angthresh, self%lims(:3,:))
+                do i = 1, NINIPOP
+                    if(i == 1)then
+                        o = self%o_in
+                        call o%set_shift([0.,0.])
+                    else
+                        o = orefs%get_ori(i)
+                        call o%rnd_shift(self%trs)
+                    endif
+                    inipop(i,:3)  = o%get_euler()   ! angles
+                    inipop(i,4:5) = o%get_shift()   ! shift
+                enddo
+            end subroutine gen_inipop
     end subroutine prep_srch
 
     ! SEARCH ROUTINES
@@ -145,7 +174,6 @@ contains
         real, allocatable :: solution(:)
         real :: euls(3)
         euls = self%o_in%get_euler()
-        call self%srch_obj%set_indices(self%ref, self%iptcl, state=self%state)
         solution = self%srch_obj%minimize(rxy=euls)
         call self%srch_obj%get_peaks(peaks)      ! search outcome
         deallocate(solution)
@@ -160,14 +188,12 @@ contains
         integer, allocatable :: inds(:)
         type(ori)  :: o
         type(oris) :: os
-        real       :: euldist_thresh, ang_sdev, dist_inpl, wcorr, prev_shift(2)
-        real       :: frac, euldist, mi_proj, mi_inpl, mi_state, mi_joint
-        integer    :: i, state, roind, prev_state, prev_roind, nevals, cnt
+        real       :: ang_sdev, dist_inpl, wcorr
+        real       :: euldist, mi_proj, mi_inpl, mi_state, mi_joint
+        integer    :: i, state, roind, prev_state, prev_roind, cnt
         ! UPDATES SCOPE NPEAKS VALUE
         self%npeaks = count(peaks(:,6) > 0.)
         ! init
-        nevals     = self%srch_obj%get_nevals()
-        prev_shift = self%o_in%get_shift()
         call self%o_peaks%new(self%npeaks)
         call os%new(self%npeaks)
         ! o_peaks <- ospec peaks
@@ -179,7 +205,7 @@ contains
             ! no in-plane convention as taken care of at online extraction
             call o%set_euler(peaks(i,1:3))
              ! shift addition
-            call o%set_shift(peaks(i,4:5) + prev_shift)
+            call o%set_shift(peaks(i,4:5) + self%prev_shift)
             call o%set('corr', peaks(i,6))
             call os%set_ori(cnt, o)
         enddo
@@ -211,14 +237,13 @@ contains
         call self%o_out%set('dist_inpl', dist_inpl)
         call self%o_out%set('sdev', ang_sdev)
         ! overlap between distributions
-        euldist_thresh = max(0.1, self%angthresh/10.)
         prev_roind = self%pftcc_ptr%get_roind(360.-self%o_out%e3get())
         roind      = self%pftcc_ptr%get_roind(360.-self%o_in%e3get())
         mi_proj  = 0.
         mi_inpl  = 0.
         mi_state = 0.
         mi_joint = 0.
-        if( euldist < 0.1 )then
+        if( euldist < 0.2 )then
             mi_proj  = mi_proj + 1.
             mi_joint = mi_joint + 1.
         endif
@@ -242,13 +267,8 @@ contains
         call self%o_out%set('mi_inpl',  mi_inpl)
         call self%o_out%set('mi_state', mi_state)
         call self%o_out%set('mi_joint', mi_joint)       
-        ! frac
-        if( nevals > nint(real(MAXITS)*.9) )then
-            frac = 100.
-        else
-            frac = 100.*(real(MAXITS)-real(nevals)) / real(MAXITS)
-        endif
-        call self%o_out%set('frac', frac)
+        ! frac (unused in convergence)
+        call self%o_out%set('frac', 100.)
         if(debug)write(*,*)'simple_cont3D_srch::prep_softoris done'
     end subroutine prep_oris
 

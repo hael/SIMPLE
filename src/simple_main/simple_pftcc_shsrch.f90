@@ -25,6 +25,7 @@ type, extends(pftcc_opt) :: pftcc_shsrch
   contains
     procedure :: new         => shsrch_new
     procedure :: set_indices => shsrch_set_indices
+    procedure :: set_inipop  => shsrch_set_inipop
     procedure :: costfun     => shsrch_costfun
     procedure :: minimize    => shsrch_minimize
     procedure :: get_nevals  => shsrch_get_nevals
@@ -74,6 +75,13 @@ contains
         self%particle  = ptcl
         if( present(rot) ) self%rot = rot
     end subroutine shsrch_set_indices
+
+    !>  \brief  is a setter
+    subroutine shsrch_set_inipop( self, inipop )
+        class(pftcc_shsrch), intent(inout) :: self
+        real,                intent(in)    :: inipop(:,:)
+        stop 'Not for simplex use; simple_pftcc_shsrch%srch_set_inipop'
+    end subroutine shsrch_set_inipop
 
     function shsrch_costfun( self, vec, D ) result( cost )
         class(pftcc_shsrch), intent(inout) :: self

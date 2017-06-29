@@ -296,13 +296,12 @@ contains
         call self%o_out%set('dist_inpl', dist_inpl)
         call self%o_out%set('sdev', ang_sdev)
         ! overlap between distributions
-        euldist_thresh = max(0.1, self%angthresh/10.)
         roind    = self%pftcc_ptr%get_roind(360.-self%o_out%e3get())
         mi_proj  = 0.
         mi_inpl  = 0.
         mi_state = 0.
         mi_joint = 0.
-        if( euldist < 0.1 )then
+        if( euldist < 0.2 )then
             mi_proj  = mi_proj + 1.
             mi_joint = mi_joint + 1.
         endif

@@ -251,7 +251,6 @@ contains
                 self%dist_inpl = self%bap%get_avg('dist_inpl')
                 self%mi_inpl   = self%bap%get_avg('mi_inpl')
                 self%sdev      = self%bap%get_avg('sdev')
-                self%frac      = self%bap%get_avg('frac')
                 !self%mi_state  = self%bap%get_avg('mi_state')
                 write(*,'(A,1X,F7.1)') '>>> ANGLE OF FEASIBLE REGION:          ', self%pp%athres
                 write(*,'(A,1X,F7.4)') '>>> IN-PLANE DISTRIBUTION OVERLAP:     ', self%mi_inpl
@@ -259,7 +258,6 @@ contains
                 !write(*,'(A,1X,F7.4)') '>>> STATE DISTRIBUTION OVERLAP:        ', self%mi_state
                 write(*,'(A,1X,F7.1)') '>>> AVERAGE ANGULAR DISTANCE BTW ORIS: ', self%dist
                 write(*,'(A,1X,F7.1)') '>>> AVERAGE IN-PLANE ANGULAR DISTANCE: ', self%dist_inpl
-                write(*,'(A,1X,F7.1)') '>>> PERCENTAGE OF SEARCH SPACE SCANNED:', self%frac
                 write(*,'(A,1X,F7.4)') '>>> CORRELATION:                       ', self%corr
                 write(*,'(A,1X,F7.2)') '>>> ANGULAR SDEV OF MODEL:             ', self%sdev                ! determine convergence
                 if( self%pp%nstates == 1 )then

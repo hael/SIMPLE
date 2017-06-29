@@ -28,6 +28,7 @@ type, extends(pftcc_opt) :: pftcc_srch
   contains
     procedure           :: new         => srch_new
     procedure           :: set_indices => srch_set_indices
+    procedure           :: set_inipop  => srch_set_inipop
     procedure           :: costfun     => srch_costfun
     procedure           :: minimize    => srch_minimize
     procedure           :: get_nevals  => srch_get_nevals
@@ -79,6 +80,7 @@ contains
         self%maxshift = real(maxval(self%ldim))/2.
     end subroutine srch_new
     
+    !>  \brief  is a setter
     subroutine srch_set_indices( self, ref, ptcl, rot, state )
         class(pftcc_srch), intent(inout) :: self
         integer,           intent(in)    :: ref, ptcl
@@ -87,6 +89,17 @@ contains
         self%particle  = ptcl
         self%state     = state
     end subroutine srch_set_indices
+
+    !>  \brief  is a setter
+    subroutine srch_set_inipop( self, inipop )
+        class(pftcc_srch), intent(inout) :: self
+        real,              intent(in)    :: inipop(:,:)
+        integer :: i
+        call self%ospec%set_inipop(inipop)
+        do i = 1, size(self%ospec%inipopulation, dim=1)
+            call self%check_lims(self%ospec%inipopulation(i,:))
+        enddo
+    end subroutine srch_set_inipop
 
     function srch_costfun( self, vec, D ) result( cost )
         use simple_math, only: enforce_cyclic_limit
@@ -196,6 +209,7 @@ contains
         class(pftcc_srch), intent(inout) :: self
         self%pftcc_ptr => null()
         self%vols_ptr  => null()
+        call self%ospec%kill
     end subroutine kill
 
 end module simple_pftcc_srch

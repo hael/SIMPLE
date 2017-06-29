@@ -53,6 +53,7 @@ type :: ori
     generic            :: rnd_euler => rnd_euler_1, rnd_euler_2
     procedure          :: rnd_ori
     procedure          :: rnd_inpl
+    procedure          :: rnd_shift
     procedure          :: revshsgn
     ! GETTERS
     procedure          :: exists
@@ -393,19 +394,26 @@ contains
         class(ori), intent(inout)  :: self
         real, intent(in), optional :: trs
         real :: x, y
-        if( present(trs) )then
-            if( abs(trs) < 1e-3 )then
-                x = 0.
-                y = 0.
-            else
-                x = ran3()*2*trs-trs
-                y = ran3()*2*trs-trs
-            endif
-            call self%set('x', x)
-            call self%set('y', y)
-        endif
+        if( present(trs) )call self%rnd_shift(trs)
         call self%e3set(ran3()*359.99)
     end subroutine rnd_inpl
+
+    !>  \brief  for generating random in-plane parameters
+    subroutine rnd_shift( self, trs )
+        use simple_rnd, only: ran3
+        class(ori), intent(inout)  :: self
+        real,       intent(in)     :: trs
+        real :: x, y
+        if( abs(trs) < 1e-3 )then
+            x = 0.
+            y = 0.
+        else
+            x = ran3()*2*trs-trs
+            y = ran3()*2*trs-trs
+        endif
+        call self%set('x', x)
+        call self%set('y', y)
+    end subroutine rnd_shift
     
     !>  \brief  for reversing the shift signs (to fit convention)
     subroutine revshsgn( self )
