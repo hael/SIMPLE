@@ -289,7 +289,7 @@ print TCSH 'set path=(${SIMPLE_PATH}/scripts ${SIMPLE_PATH}/bin $path)', "\n";
 close(TCSH);
 
 # Compile and install gui
-#compile_gui();
+compile_gui();
 
 my $finishdir = getcwd();
 finish_message($finishdir);

@@ -24,14 +24,10 @@ the GNU General Public License for more details.
 
 INSTALLATION INSTRUCTIONS
 
-It is assumed that the software dependencies are already installed.
-For more detailed instructions regarding software requirements, please
-refer to the SIMPLE 2.5 manual.
-
 System Requirements:
 
-    - Linux: Ubuntu 15.04 and above
-    - MacOs: 10.10 and above
+    - Linux: (Ubuntu we use 15.04 and above)
+    - MacOSX: 10.10 and above
     - CMake 3.2 and above
     - FFTW 3.3 and above
     - GNU toolchain (gcc & gfortran) 4.9 to 5.4
@@ -50,7 +46,7 @@ downloaded the tarball in the <downloads> directory):
     $ cd <simple path>
     $ tar -xzf SIMPLE2.5.tgz
 
-3. Create a directory for the compilation:
+3. Create a directory for the build:
 
     $ cd simple2.5
     $ mkdir build
@@ -93,7 +89,7 @@ and  prime3D. Execute
 
     $ simple_test_install 
 
-The program will create its own folder SIMPLE\_TEST\_INSTALL*date*}
+The program will create its own folder SIMPLE_TEST_INSTALL*date*
 where temporary files and information about each test are stored. Upon 
 succesful completion you should see
 
