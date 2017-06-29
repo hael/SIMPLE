@@ -6,9 +6,7 @@ set(CMAKE_INSTALL_PREFIX ${CMAKE_CURRENT_BINARY_DIR})
 project(SIMPLE Fortran)
 #enable_language( CXX C )
 
-set(PROJECT_BRIEF "SIMPLE is a program package for cryo-EM image processing,
-focusing on ab initio 3D reconstruction of single-particles with any point-group symmetry")
-
+set(PROJECT_BRIEF "SIMPLE is a program package for cryo-EM image processing")
 
 #################################################################
 #
