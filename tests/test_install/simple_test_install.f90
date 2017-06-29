@@ -11,12 +11,12 @@ implicit none
 type( image )         :: cube, img
 real                  :: smpd
 integer               :: box, nspace, msk
-character(8)          :: date
+character(len=8)      :: date
 character(len=STDLEN) :: folder, cmd
 character(len=300)    :: command
 call seed_rnd
 call date_and_time(date=date)
-folder = './SIMPLE_TEST_INSTALL_'//date
+folder = trim('./SIMPLE_TEST_INSTALL_'//date)
 command = 'mkdir ' // trim( folder )
 call exec_cmdline( trim(command) )
 call chdir( trim(folder) )

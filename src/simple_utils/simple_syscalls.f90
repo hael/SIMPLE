@@ -70,8 +70,8 @@ contains
         character(len=*),  intent(in) :: cmdline
         logical, optional, intent(in) :: wait
         character(len=STDLEN) :: cmsg
-        integer :: estat, cstat, exec_stat
-        logical :: doprint = .true., wwait = .true.
+        integer               :: estat, cstat, exec_stat
+        logical               :: doprint = .true., wwait = .true.
 #if defined(PGI)
         call system(trim(adjustl(cmdline)))
 #elif defined(INTEL)
@@ -103,7 +103,7 @@ contains
             write(*,*)'cmdstat = ',cmdstat,' command could not be executed: ', trim(adjustl(cmd))
             err = .true.
         endif
-        if( err ) write(*,*) trim(cmdmsg)
+        ! if( err ) write(*,*) 'cmdmsg',trim(adjustl(cmdmsg))
     end subroutine raise_sys_error
 
     function sys_get_env_var( name ) result( varval )

@@ -5957,7 +5957,7 @@ contains
                 call img%shift( 10., 5. )
                 if( doplot ) call img%vis
                 xyz = img%masscen()
-                call img%shift(real(int(xyz(1))),real(int(xyz(2))))
+                call img%shift(-real(int(xyz(1))),-real(int(xyz(2))))
                 if( doplot ) call img%vis
                 call img%serialize(pcavec2, msk)
                 if( pearsn(pcavec1, pcavec2) > 0.9 ) passed = .true.
