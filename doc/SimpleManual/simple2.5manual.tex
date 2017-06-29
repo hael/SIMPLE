@@ -129,172 +129,99 @@ and adding \texttt{deftab=deftab.txt} and \texttt{ctf=yes} to the PRIME command 
 \subsection{Parameter File Conversions}
 The \texttt{SIMPLE/scripts} folder contains a perl-script (\texttt{convert\_frealign2simple.pl}) to convert a Frealing parameter file to a SIMPLE parameter file. This is easy, since both software internally use the \href{http://spider.wadsworth.org/spider_doc/spider/docs/euler.html}{\textbf{\textcolor{BurntOrange}{Spider Euler angle convention}}}. Other packages may use other conventions. There's also a \texttt{convert\_relion2simple.pl} for extracting CTF parameters from RELION \texttt{*.star} files and a \texttt{relion2emanbox.pl} script for converting box files obtained with RELION to the EMAN \texttt{*.box} format used by SIMPLE.
 
-\section{Installation}
-\label{install}
+\section{Installation Instructions}
 
 \subsection{System requirements}
-\label{sysreq}
-
-\subsubsection{Hardware}
-\label{hardware}
-
 \begin{itemize}
-	\item [CPU]
-	\begin{itemize}
-		\item[--] Linux
-		\item[--] MacOSX (Yosemite and El Capitan, \textit{i.e.} 10.10 and above)
-	\end{itemize}
+	\item[--] Linux (we use Ubuntu 15.04 and above)
+	\item[--] MacOSX: 10.10 and above
+	\item[--] CMake 3.2 and above
+	\item[--] FFTW 3.3 and above
+	\item[--] GNU toolchain (gcc \& gfortran) 4.9 to 5.4
 \end{itemize}
 
-\subsubsection{Software}
-\label{soft}
+\subsection{Installation}
+\noindent{}\textbf{Step 1:} Create the directory in which you are going to install SIMPLE (referred to here as \texttt{<simple\_path>})
 
-\begin{itemize}
-	\item [CPU]
-	\begin{itemize}
-		\item[--] GNU tool chain 4.9 and above.
-		\item[--] FFTW-3 (The Fastest Fourier Transform in the West library)
-	\end{itemize}
-\end{itemize}
-
-\subsection{Compiling SIMPLE}
-\label{compilepc}
-To check the compiler version, execute
 \begin{verbatim}
-@!#> gfortran --version
-GNU Fortran (GCC) 4.9.1
-Copyright (C) 2014 Free Software Foundation, Inc.
-\end{verbatim}
-To check whether the FFTW library is installed, open the package manager installed on our system (in our case \texttt{Synaptic} but other systems may have others, such as \texttt{YaST}, \texttt{apt} etc.) and search for \texttt{fftw} and see that the \texttt{libfftw3-single-3} is installed on the system. We \texttt{cd} to the directory  where we have our software installed (\texttt{<my software location>}) and copy the tar ball there
-\begin{verbatim}
-@!#> cd <my software location>
-@!#> cp ~/Downloads/simple.tar.gz .
-\end{verbatim}
-Next, we unpack the tar ball and \texttt{cd} to the simple directory
-\begin{verbatim}
-@!#> gunzip simple.tar.gz
-@!#> tar -xvf simple.tar
-@!#> cd simple/
-\end{verbatim}
-We open the \texttt{simple\_user\_input.pm} file in our favourite text editor. There are a few lines that needs to be edited:
-\begin{verbatim}
-...
-26  # enter the SIMPLE root path
-27  our$SIMPLE_PATH="/Users/hael/src/fortran/simple";
-...
-\end{verbatim}
-Line 27 \texttt{our\$SIMPLE\_PATH = "/Users/hael/src/fortran/simple/"} is replaced with\\
-\texttt{our\$SIMPLE\_PATH$=$"<my software location>/simple/"}. This is the path in which the software will be installed.
-\begin{verbatim}
-...
-46  our$FCOMPILER = "gfortran-5";
-...
-\end{verbatim}
-Line 46 \texttt{our\$FCOMPILER = "gfortran-5";} is the command that executes the \texttt{gfortran} compiler. On a mac, using the fink package manager, this command would be \texttt{/sw/bin/gfortran}.
-\begin{verbatim}
-...
-49  # enter the fftw lib default: /usr/lib/x86_64-linux-gnu for [linux]
-50  #                             /usr/local/lib for [MacOSX]
-51  our$FFTW_LIB="/usr/lib/x86_64-linux-gnu";
-52  # on clusters we need extra path after module load fftw/3.3.4-gcc
-53  our$FFTW_INC="/usr/include/";
-...
-\end{verbatim}
-Lines 51 and 53 specify the FFTW library and include directories. On a mac, using the fink package manager, these locations would be \texttt{our\$FFTW\_LIB="/sw/lib";} and \texttt{our\$FFTW\_INC="/sw/include/";}, respectively. We save and close the configuration file and execute:
-\begin{verbatim}
-@!#> ./compileSIMPLE.pl 
-*********************************************************
-* Checking and printing the input directories...        *
-*********************************************************
-SIMPLE_PATH          : /Users/hael/src/fortran/simple
-SIMPLE_SRC_PATH      : /Users/hael/src/fortran/simple/src/simple_main
-SIMPLE_PROD_PATH     : /Users/hael/src/fortran/simple/production
-SIMPLE_TEST_PROD_PATH: /Users/hael/src/fortran/simple/production/simple_tests
-SIMPLE_SCRIPTS_PATH  : /Users/hael/src/fortran/simple/scripts
-*********************************************************
-Moving to dir: /Users/hael/src/fortran/simple/src/simple_main
-Executing simple_args_generator.pl in dir: /Users/hael/src/fortran/simple...
-Moving to dir: /Users/hael/src/fortran/simple
-Generating Makefile_macros: /Users/hael/src/fortran/simple
-/sw/bin/gfortran -c -fimplicit-none -fall-intrinsics -ffree-form -cpp -fpic...
-...
-darwin, Platform = 0
-Architecture: darwin-thread-multi-2level
-
-Moving to dir: /Users/hael/src/fortran/simple/production
-Generating compile_and_link: /Users/hael/src/fortran/simple/production
-Moving to dir: /Users/hael/src/fortran/simple
-Compiling production codes:
->>> COMPILING & LINKING: simple_test_shelliter
->>> COMPILING & LINKING: simple_test_autoscale
->>> COMPILING & LINKING: simple_test_scatsrch
->>> COMPILING & LINKING: simple_test_ft_expanded
->>> COMPILING & LINKING: simple_exec
->>> COMPILING & LINKING: simple_test_volpft_srch
->>> COMPILING & LINKING: simple_test_srch
->>> COMPILING & LINKING: simple_test_units
->>> COMPILING & LINKING: simple_test_cartcorr_sanity
->>> COMPILING & LINKING: simple_test_imgfile
->>> COMPILING & LINKING: simple_distr_exec
-Compilation of SIMPLE completed in dir: /Users/hael/src/fortran/simple
-\end{verbatim}
-Compilation was succesful and we see that a new directory \texttt{/bin} has been created in the simple directory in addition to two text files \texttt{add2.bashrc} and \texttt{add2.tcshrc}
-\begin{verbatim}
-@!#> cat add2.bashrc 
-export SIMPLE_EMAIL="my.name@uni.edu"
-export SIMPLE_QSYS="local"
-export SIMPLE_PATH=/Users/hael/src/fortran/simple
-export PATH=${SIMPLE_PATH}/scripts:${SIMPLE_PATH}/bin:$PATH
-@!#> cat add2.tcshrc 
-setenv SIMPLE_EMAIL="my.name@uni.edu"
-setenv SIMPLE_QSYS="local"
-setenv SIMPLE_PATH /Users/hael/src/fortran/simple
-set path=(${SIMPLE_PATH}/scripts ${SIMPLE_PATH}/bin $path)
-\end{verbatim}
-On this machine we use the bash shell, so we add the lines in \texttt{add2.bashrc} to the \texttt{.bashrc} file. This is done by using a text editor, such as \texttt{gedit}, to edit the hidden file \texttt{.bashrc} located in your home folder.
-\begin{verbatim}
-@!#> cd
-@!#> gedit .bashrc 
+        @!#> mkdir <simple_path>
 \end{verbatim}
 
-\subsection{Compilation troubleshooting}
-\label{compiletrouble}
+\noindent{}\textbf{Step 2:} Unzip the SIMPLE 2.5 tarball in this directory (assuming you have downloaded the tarball in the \texttt{<downloads>} directory)
 
-\subsubsection{FFTW}
-If not already installed, the FFTW-3 library needs to be installed. Most Linux package managers \texttt{YaST}, \texttt{Synaptic}, \texttt{apt-get} etc. provide the FFTW-3 library. On a Mac system the \texttt{Fink} and \texttt{Macports} package managers provide the FFTW-3 library or it can be obtained from: \url{http://www.fftw.org/install/mac.html}. SIMPLE relies on the single-precision FFTW library. Typically we will need to
 \begin{verbatim}
-@!#> ./configure --enable-floats --enable-threads
-@!#> make
-@!#> sudo make install
-\end{verbatim}
-The \texttt{--enable floats} \texttt{--enable-threads} directives are critical as SIMPLE uses multi-threaded single-precision Fourier transforms. We check that we have in the lib folder (typically: \texttt{/usr/local/lib/}):
-\begin{verbatim}
-libfftw3.a libfftw3.la
-libfftw3f.a libfftw3f.la
-libfftw3f_threads.a libfftw3f_threads.la
+        @!#> mv <downloads>/SIMPLE2.5.tgz <simple path>
+        @!#> cd <simple path>
+        @!#> tar -xzf SIMPLE2.5.tgz
 \end{verbatim}
 
-\subsection{Installation on a Linux Cluster}
-\label{inst_clusters_linux}
+\noindent{}\textbf{Step 3:} Create a directory for the build
+
+\begin{verbatim}
+        @!#> cd simple2.5
+        @!#> mkdir build
+        @!#> cd build
+\end{verbatim}
+
+\noindent{}\textbf{Step 4:} Compile and install SIMPLE 2.5
+
+\begin{verbatim}
+        @!#> cmake ../
+        @!#> make -j install
+\end{verbatim}
+
+This will install SIMPLE in the 'build' directory. If you wish to provide an alternative installation directory, substitute step 4 with
+
+\begin{verbatim}
+        @!#> cmake -DCMAKE_INSTALL_PREFIX=<alternative directory> ../
+        @!#> make -j install
+\end{verbatim}
+
+\noindent{}Step 4 assumes that gcc/gfortran and FFTW are installed in fairly standard directories on your machine. In case you have a 
+more exotic setup you can provide the paths pointing to your custom gcc/gfortran \& FFTW by substituting step 4 with
+
+\begin{verbatim}
+        @!#> FC=<gcc/gfortran path> FFTW_DIR=<FFTW path> cmake ../
+        @!#> make -j install
+\end{verbatim}
+
+\noindent{}For instance, on MacOS Macports users may use: \texttt{FC=/opt/local FFTW\_DIR=/opt/local}; Fink users: \texttt{FC=/sw/ FFTW\_DIR=/sw/}.
+To test the build, please execute
+
+\begin{verbatim}
+        @!#> make test
+        @!#> ctest --output-on-failure
+\end{verbatim}
+
+\subsection{Testing the Most Important Features}
+
+\noindent{}To ensure that SIMPLE has been correctly installed, we recommend running the application \texttt{simple\_test\_install}. It will test the most 
+important components in the SIMPLE library  (those used by prime2D and  prime3D). Execute
+
+\begin{verbatim}
+        @!#> simple_test_install 
+\end{verbatim}
+
+\noindent{}The program will create its own folder \texttt{SIMPLE\_TEST\_INSTALL*date*} where temporary files and information about each 
+test are stored. Upon succesful completion you should see
+
+\begin{verbatim}
+        @!#> **** SIMPLE_TEST_INSTALL NORMAL STOP ****
+\end{verbatim}
+
+\noindent{}\texttt{simple\_test\_install} can be executed anywhere. After execution, the folder created can be safely removed. If any of the individual 
+tests fail an error message will be displayed. If you detect an error, please carefully check the SIMPLE and FFTW installations 
+and the gfortran version. If you still have issues, please file a help ticket on the webpage.
+
+\subsection{Installation/Configuration on a Linux Cluster}
 
 Installation on a Linux cluster is essentially the same as on a Linux workstation with the exception that the appropriate modules need to be loaded before installation and execution. On a typical SLURM cluster
 \begin{verbatim}
-@!#> module load fftw/3.3.4-gcc
-@!#> module load gcc/4.9.1
-@!#> module load lapack/3.4.2 
+        @!#> module load fftw/3.3.4-gcc
+        @!#> module load gcc/4.9.1
+        @!#> module load lapack/3.4.2 
 \end{verbatim}
 The instructions for how to execute SIMPLE in distributed environments (clusters or workstations with more than one CPU socket) are described below \label{distr}.
-
-\subsection{Testing the SIMPLE Installation}
-To ensure that SIMPLE has been correctly installed, we recommend running the application \prgname{simple\_test\_install}. It will test the most important components in the SIMPLE library  (those used by \prgname{prime2D} and \prgname{prime3D}). Execute
-\begin{verbatim}
-@!#> simple_test_install 
-\end{verbatim}
-The program will create its own folder (\texttt{SIMPLE\_TEST\_INSTALL*date*}) where temporary files and information about each test are stored. Upon succesful completion you should see
-\begin{verbatim}
-**** SIMPLE_TEST_INSTALL NORMAL STOP ****
-\end{verbatim}
-\prgname{simple\_test\_install} can be executed anywhere. After execution, the folder created can be safely removed. If any of the individual tests fail an error message will be displayed. If you detect an error, please carefully check the SIMPLE and FFTW installations and the \texttt{gfortran} version. If you still have issues, please file a help ticket on the webpage.
 
 \section{SIMPLE Usage}
 
@@ -520,7 +447,7 @@ For descriptions for how to execute the individual steps, please refer to the do
 \texttt{errify          }&{ introduce error(yes|no)\{no\}}\\
 \texttt{even            }&{ calculate even eo-pair(yes|no)\{no\}}\\
 \texttt{exp\_doc         }&{ specifying exp\_time and dose\_rate per tomogram}\\
-\texttt{exp\_time        }&{ expusure time(in s)}\\
+\texttt{exp\_time        }&{ exposure time(in s)}\\
 \texttt{expastig        }&{ expected astigmatism(in microns)}\\
 \texttt{ext             }&{ file extension\{.mrc\}}\\
 \texttt{fbody           }&{ file body}\\
@@ -679,30 +606,10 @@ For descriptions for how to execute the individual steps, please refer to the do
 \begin{tabular}{ll}
 \end{tabular}
 
-\section{Distributed SIMPLE Workflows}
-\subsection{Distributed Workflow: \prgname{comlin\_smat}}
-\label{comlin_smat}
-\prgname{comlin\_smat} is a program for creating a similarity matrix based on common line correlation. The idea being that it should be possible to cluster images based on their 3D similarity witout having a 3D model by only operating on class averages and find averages that fit well together in 3D
-
-\begin{verbatim}
-USAGE:
-bash-3.2$ simple_distr_exec prg=simple_program key1=val1 key2=val2 ...
-
-REQUIRED
-stk    = particle stack with all images(ptcls.ext)
-smpd   = sampling distance, same as EMANs apix(in A)
-lp     = low-pass limit(in A)
-msk    = mask radius(in pixels)
-nparts = # partitions in distributed exection
-
-OPTIONAL
-hp  = high-pass limit(in A)
-trs = maximum halfwidth shift(in pixels)
-\end{verbatim}
-
+\section{Distributed SIMPLE Workflows in Alphabetical Order}
 \subsection{Distributed Workflow: \prgname{ctffind}}
 \label{ctffind}
-\prgname{ctffind} is a wrapper program for CTFFIND4 (Grigorieff lab)
+\prgname{ctffind} is a distributed workflow that wraps CTFFIND4 (Grigorieff lab)
 
 \begin{verbatim}
 USAGE:
@@ -730,7 +637,7 @@ phaseplate = images obtained with phaseplate(yes|no){no}
 
 \subsection{Distributed Workflow: \prgname{ini3D\_from\_cavgs}}
 \label{ini3D_from_cavgs}
-\prgname{ini3D\_from\_cavgs} is a program for generating an initial 3D model from class averages obtained with prime2D
+\prgname{ini3D\_from\_cavgs} is a distributed workflow for generating an initial 3D model from class averages obtained with prime2D
 
 \begin{verbatim}
 USAGE:
@@ -758,7 +665,7 @@ pgrp_known = point-group known a priori(yes|no){no}
 
 \subsection{Distributed Workflow: \prgname{makecavgs}}
 \label{makecavgs}
-\prgname{makecavgs} is used  to produce class averages or initial random references for prime2D execution. 
+\prgname{makecavgs} is a distributed workflowused for producing class averages or initial random references for prime2D execution. 
 
 \begin{verbatim}
 USAGE:
@@ -784,7 +691,7 @@ refs     = initial2Dreferences.ext
 
 \subsection{Distributed Workflow: \prgname{prime2D}}
 \label{prime2D}
-\prgname{prime2D} is a reference-free 2D alignment/clustering algorithm adopted from the prime3D probabilistic ab initio 3D reconstruction algorithm
+\prgname{prime2D} is a distributed workflow implementing reference-free 2D alignment/clustering algorithm adopted from the prime3D probabilistic ab initio 3D reconstruction algorithm
 
 \begin{verbatim}
 USAGE:
@@ -820,7 +727,7 @@ autoscale = automatic down-scaling(yes|no){yes}
 
 \subsection{Distributed Workflow: \prgname{prime3D}}
 \label{prime3D}
-\prgname{prime3D} is an ab inito reconstruction/refinement program based on probabilistic projection matching. PRIME is short for PRobabilistic Initial 3D Model generation for Single- particle cryo-Electron microscopy. There are a daunting number of options in PRIME3D. If you are processing class averages we recommend that you instead use the simple\_distr\_exec prg= ini3D\_from\_cavgs route for executing PRIME3D. Automated workflows for single- and multi-particle refinement using prime3D are planned for the next release (3.0)
+\prgname{prime3D} is a distributed workflow for ab inito reconstruction/refinement based on probabilistic projection matching. PRIME is short for PRobabilistic Initial 3D Model generation for Single-particle cryo-Electron microscopy. There are a daunting number of options in PRIME3D. If you are processing class averages we recommend that you instead use the simple\_distr\_exec prg=ini3D\_from\_cavgs route for executing PRIME3D. Automated workflows for single- and multi-particle refinement using prime3D are planned for the next release (3.0)
 
 \begin{verbatim}
 USAGE:
@@ -872,7 +779,7 @@ norec     = do not reconstruct volume(s)(yes|no){no}
 
 \subsection{Distributed Workflow: \prgname{prime3D\_init}}
 \label{prime3D_init}
-\prgname{prime3D\_init} is a program for generating a random initial model for initialisation of PRIME3D. If the data set is large (>5000 images), generating a random model can be slow. To speedup, set nran to some smaller number, resulting in nran images selected randomly for reconstruction
+\prgname{prime3D\_init} is a distributed workflow for generating a random initial model for initialisation of PRIME3D. If the data set is large (>5000 images), generating a random model can be slow. To speedup, set nran to some smaller number, resulting in nran images selected randomly for reconstruction
 
 \begin{verbatim}
 USAGE:
@@ -901,7 +808,7 @@ xfel    = images are XFEL diffraction patterns(yes|no){no}
 
 \subsection{Distributed Workflow: \prgname{recvol}}
 \label{recvol}
-\prgname{recvol} is a program for reconstructing volumes from MRC and SPIDER stacks, given input orientations and state assignments. The algorithm is based on direct Fourier inversion with a Kaiser-Bessel (KB) interpolation kernel. This window function reduces the real-space ripple artifacts associated with direct moving windowed-sinc interpolation. The feature sought when implementing this algorithm was to enable quick, reliable reconstruction from aligned individual particle images. mul is used to scale the origin shifts if down-sampled were used for alignment and the original images are used for reconstruction. ctf=yes or ctf=flip turns on the Wiener restoration. If the images were phase-flipped set ctf=flip. amsklp, mw, and edge control the solvent mask: the low-pass limit used to generate the envelope; the molecular weight of the molecule (protein assumed but it works reasonably well also for RNA; slight modification of mw might be needed). The inner parameter controls the radius of the soft-edged mask used to remove the unordered DNA/RNA core of spherical icosahedral viruses
+\prgname{recvol} is a distributed workflow for reconstructing volumes from MRC and SPIDER stacks, given input orientations and state assignments. The algorithm is based on direct Fourier inversion with a Kaiser-Bessel (KB) interpolation kernel. This window function reduces the real-space ripple artifacts associated with direct moving windowed-sinc interpolation. The feature sought when implementing this algorithm was to enable quick, reliable reconstruction from aligned individual particle images. mul is used to scale the origin shifts if down-sampled were used for alignment and the original images are used for reconstruction. ctf=yes or ctf=flip turns on the Wiener restoration. If the images were phase-flipped set ctf=flip. amsklp, mw, and edge control the solvent mask: the low-pass limit used to generate the envelope; the molecular weight of the molecule (protein assumed but it works reasonably well also for RNA; slight modification of mw might be needed). The inner parameter controls the radius of the soft-edged mask used to remove the unordered DNA/RNA core of spherical icosahedral viruses
 
 \begin{verbatim}
 USAGE:
@@ -931,7 +838,7 @@ npeaks  = # nonzero orientation weights{1}
 
 \subsection{Distributed Workflow: \prgname{symsrch}}
 \label{symsrch}
-\prgname{symsrch} is a program for searching for the principal symmetry axis of a volume reconstructed without assuming any point-group symmetry. The program takes as input an asymmetrical 3D reconstruction. The alignment document for all the particle images that have gone into the 3D reconstruction and the desired point-group symmetry needs to be inputted. The 3D reconstruction is then projected in 50 (default option) even directions, common lines-based optimisation is used to identify the principal symmetry axis, the rotational transformation is applied to the inputted orientations, and a new alignment document is produced. Input this document to recvol together with the images and the point-group symmetry to generate a symmetrised map. If you are unsure about the point-group, you should use the compare=yes mode and input the highest conceviable point-group. The program then calculates probabilities for all lower groups inclusive.
+\prgname{symsrch} is a distributed workflow for searching for the principal symmetry axis of a volume reconstructed without assuming any point-group symmetry. The program takes as input an asymmetrical 3D reconstruction. The alignment document for all the particle images that have gone into the 3D reconstruction and the desired point-group symmetry needs to be inputted. The 3D reconstruction is then projected in 50 (default option) even directions, common lines-based optimisation is used to identify the principal symmetry axis, the rotational transformation is applied to the inputted orientations, and a new alignment document is produced. Input this document to recvol together with the images and the point-group symmetry to generate a symmetrised map. If you are unsure about the point-group, you should use the compare=yes mode and input the highest conceviable point-group. The program then calculates probabilities for all lower groups inclusive.
 
 \begin{verbatim}
 USAGE:
@@ -954,29 +861,9 @@ hp     = high-pass limit(in A)
 nspace = # projection directions
 \end{verbatim}
 
-\subsection{Distributed Workflow: \prgname{tseries\_track}}
-\label{tseries_track}
-\prgname{tseries\_track} is a program for particle tracking in time-series data 
-
-\begin{verbatim}
-USAGE:
-bash-3.2$ simple_distr_exec prg=simple_program key1=val1 key2=val2 ...
-
-REQUIRED
-filetab = list of files(*.txt/*.asc)
-fbody   = file body
-smpd    = sampling distance, same as EMANs apix(in A)
-boxfile = file with EMAN particle coordinates(*.txt/*.asc)
-ncunits = # computing units, can be < nparts{nparts}
-
-OPTIONAL
-lp     = low-pass limit(in A)
-offset = pixels offset{7}
-\end{verbatim}
-
 \subsection{Distributed Workflow: \prgname{unblur}}
 \label{unblur}
-\prgname{unblur} is a program for movie alignment or unblurring based the same principal strategy as Grigorieffs program (hence the name). There are two important differences: automatic weighting of the frames using a correlation-based M-estimator and continuous optimisation of the shift parameters. Input is a textfile with absolute paths to movie files in addition to a few input parameters, some of which deserve a comment. If dose\_rate and exp\_time are given the individual frames will be low-pass filtered accordingly (dose-weighting strategy). If scale is given, the movie will be Fourier cropped according to the down-scaling factor (for super-resolution movies). If nframesgrp is given the frames will be pre-averaged in the given chunk size (Falcon 3 movies). If fromf/tof are given, a contiguous subset of frames will be averaged without any dose-weighting applied. 
+\prgname{unblur} is a distributed workflow for movie alignment or unblurring based the same principal strategy as Grigorieffs program (hence the name). There are two important differences: automatic weighting of the frames using a correlation-based M-estimator and continuous optimisation of the shift parameters. Input is a textfile with absolute paths to movie files in addition to a few input parameters, some of which deserve a comment. If dose\_rate and exp\_time are given the individual frames will be low-pass filtered accordingly (dose-weighting strategy). If scale is given, the movie will be Fourier cropped according to the down-scaling factor (for super-resolution movies). If nframesgrp is given the frames will be pre-averaged in the given chunk size (Falcon 3 movies). If fromf/tof are given, a contiguous subset of frames will be averaged without any dose-weighting applied. 
 
 \begin{verbatim}
 USAGE:
@@ -992,7 +879,7 @@ nthr       = # OpenMP threads{1}
 ncunits    = # computing units, can be < nparts{nparts}
 fbody      = file body
 dose_rate  = dose rate(in e/A2/s)
-exp_time   = expusure time(in s)
+exp_time   = exposure time(in s)
 lpstart    = start low-pass limit(in A){15}
 lpstop     = stop low-pass limit(in A){8}
 trs        = maximum halfwidth shift(in pixels)
@@ -1009,7 +896,7 @@ nsig       = # sigmas
 
 \subsection{Distributed Workflow: \prgname{unblur\_ctffind}}
 \label{unblur_ctffind}
-\prgname{unblur\_ctffind} is a pipelined unblur + ctffind program
+\prgname{unblur\_ctffind} is a pipelined distributed workflow: unblur + ctffind program
 
 \begin{verbatim}
 USAGE:
@@ -1028,7 +915,7 @@ nthr       = # OpenMP threads{1}
 ncunits    = # computing units, can be < nparts{nparts}
 fbody      = file body
 dose_rate  = dose rate(in e/A2/s)
-exp_time   = expusure time(in s)
+exp_time   = exposure time(in s)
 lpstart    = start low-pass limit(in A){15}
 lpstop     = stop low-pass limit(in A){8}
 trs        = maximum halfwidth shift(in pixels)
@@ -1052,7 +939,7 @@ phaseplate = images obtained with phaseplate(yes|no){no}
 
 \subsection{Distributed Workflow: \prgname{unblur\_tomo}}
 \label{unblur_tomo}
-\prgname{unblur\_tomo} is a program for movie alignment or unblurring of tomographic movies. Input is a textfile with absolute paths to movie files in addition to a few input parameters, some of which deserve a comment. The exp\_doc document should contain per line exp\_time=X and dose\_rate=Y. It is asssumed that the input list of movies (one per tilt) are ordered temporally. This is necessary for correct dose-weighting of tomographic tilt series. If scale is given, the movie will be Fourier cropped according to the down-scaling factor (for super-resolution movies). If nframesgrp is given the frames will be pre-averaged in the given chunk size (Falcon 3 movies). 
+\prgname{unblur\_tomo} is a distributed workflow for movie alignment or unblurring of tomographic movies. Input is a textfile with absolute paths to movie files in addition to a few input parameters, some of which deserve a comment. The exp\_doc document should contain per line exp\_time=X and dose\_rate=Y. It is asssumed that the input list of movies (one per tilt) are ordered temporally. This is necessary for correct dose-weighting of tomographic tilt series. If scale is given, the movie will be Fourier cropped according to the down-scaling factor (for super-resolution movies). If nframesgrp is given the frames will be pre-averaged in the given chunk size (Falcon 3 movies). 
 
 \begin{verbatim}
 USAGE:
@@ -1078,7 +965,7 @@ nframesgrp = # frames to group before unblur(Falcon 3){0}
 nsig       = # sigmas
 \end{verbatim}
 
-\section{SIMPLE Programs}
+\section{SIMPLE Programs in Alphabetical Order}
 \subsection{Program: \prgname{automask2D}}
 \label{automask2D}
 \prgname{automask2D} is a program for solvent flattening of class averages. The algorithm for background removal is based on low-pass filtering and binarization. First, the class averages are low-pass filtered to amsklp. Binary representatives are then generated by assigning foreground pixels using sortmeans. A cosine function softens the edge of the binary mask before it is  multiplied with the unmasked input averages to accomplish flattening
@@ -1281,43 +1168,6 @@ OPTIONAL
 nthr = # OpenMP threads{1}
 \end{verbatim}
 
-\subsection{Program: \prgname{cluster\_smat}}
-\label{cluster_smat}
-\prgname{cluster\_smat} is a program for clustering a similarity matrix and use an combined cluster validation index to assess the quality of the clustering based on the number of clusters
-
-\begin{verbatim}
-USAGE:
-bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
-
-REQUIRED
-nptcls = # images in stk/# orientations in oritab
-fname  = file name
-ncls   = # clusters
-label  = discrete label(class|state){class}
-
-OPTIONAL
-nthr = # OpenMP threads{1}
-\end{verbatim}
-
-\subsection{Program: \prgname{comlin\_smat}}
-\label{comlin_smat}
-\prgname{comlin\_smat} is a program for creating a similarity matrix based on common line correlation. The idea being that it should be possible to cluster images based on their 3D similarity witout having a 3D model by only operating on class averages and find averages that fit well together in 3D
-
-\begin{verbatim}
-USAGE:
-bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
-
-REQUIRED
-stk  = particle stack with all images(ptcls.ext)
-smpd = sampling distance, same as EMANs apix(in A)
-lp   = low-pass limit(in A)
-msk  = mask radius(in pixels)
-
-OPTIONAL
-hp  = high-pass limit(in A)
-trs = maximum halfwidth shift(in pixels)
-\end{verbatim}
-
 \subsection{Program: \prgname{convert}}
 \label{convert}
 \prgname{convert} is a program for converting between SPIDER and MRC formats 
@@ -1487,25 +1337,6 @@ phrand = phase randomize(yes|no){no}
 bfac   = bfactor for sharpening/low-pass filtering(in A**2){200.}
 \end{verbatim}
 
-\subsection{Program: \prgname{image\_smat}}
-\label{image_smat}
-\prgname{image\_smat} is a program for creating a similarity matrix based on common line correlation. The idea being that it should be possible to cluster images based on their 3D similarity witout having a 3D model by only operating on class averages and find averages that fit well together in 3D
-
-\begin{verbatim}
-USAGE:
-bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
-
-REQUIRED
-stk  = particle stack with all images(ptcls.ext)
-smpd = sampling distance, same as EMANs apix(in A)
-
-OPTIONAL
-lp   = low-pass limit(in A)
-msk  = mask radius(in pixels)
-hp   = high-pass limit(in A)
-nthr = # OpenMP threads{1}
-\end{verbatim}
-
 \subsection{Program: \prgname{iminfo}}
 \label{iminfo}
 \prgname{iminfo} is a program for printing header information in MRC and SPIDER stacks and volumes
@@ -1656,6 +1487,8 @@ binwidth = binary layers grown for molecular envelope(in pixels){1}
 amsklp   = low-pass limit for envelope mask generation(in A)
 automsk  = envelope masking(yes|no|cavg){no}
 smpd     = sampling distance, same as EMANs apix(in A)
+outstk   = output image stack
+outvol   = output volume{outvol.ext}
 \end{verbatim}
 
 \subsection{Program: \prgname{masscen}}
@@ -1705,21 +1538,6 @@ REQUIRED
 nptcls = # images in stk/# orientations in oritab
 nparts = # partitions in distributed exection
 nnn    = # nearest neighbors{500}
-\end{verbatim}
-
-\subsection{Program: \prgname{merge\_similarities}}
-\label{merge_similarities}
-\prgname{merge\_similarities} is a program for merging similarities calculated between pairs of objects into a similarity matrix that can be inputted to cluster\_smat
-
-\begin{verbatim}
-USAGE:
-bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
-
-REQUIRED
-nptcls = # images in stk/# orientations in oritab
-
-OPTIONAL
-nparts = # partitions in distributed exection
 \end{verbatim}
 
 \subsection{Program: \prgname{noiseimgs}}
@@ -2029,7 +1847,7 @@ bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
 
 REQUIRED
 nframes   = # frames{30}
-exp_time  = expusure time(in s)
+exp_time  = exposure time(in s)
 dose_rate = dose rate(in e/A2/s)
 box       = square image size(in pixels)
 smpd      = sampling distance, same as EMANs apix(in A)
@@ -2548,7 +2366,7 @@ OPTIONAL
 nthr       = # OpenMP threads{1}
 fbody      = file body
 dose_rate  = dose rate(in e/A2/s)
-exp_time   = expusure time(in s)
+exp_time   = exposure time(in s)
 lpstart    = start low-pass limit(in A){15}
 lpstop     = stop low-pass limit(in A){8}
 trs        = maximum halfwidth shift(in pixels)
@@ -2583,7 +2401,7 @@ OPTIONAL
 nthr       = # OpenMP threads{1}
 fbody      = file body
 dose_rate  = dose rate(in e/A2/s)
-exp_time   = expusure time(in s)
+exp_time   = exposure time(in s)
 lpstart    = start low-pass limit(in A){15}
 lpstop     = stop low-pass limit(in A){8}
 trs        = maximum halfwidth shift(in pixels)

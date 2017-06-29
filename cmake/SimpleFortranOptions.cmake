@@ -2,11 +2,11 @@
 ####################################################################
 # Make sure that the default build type is RELEASE if not specified.
 ####################################################################
-include(${CMAKE_MODULE_PATH}/SetCompileFlag.cmake)
-enable_language(Fortran C)
+include(SetCompileFlag)
+
 #include(${CMAKE_ROOT}/Modules/CMakeDetermineFortranCompiler.cmake)
 #include(${CMAKE_ROOT}/Modules/CMakeDetermineCCompiler.cmake)
-
+if(NOT CMAKE_CPP_COMPILER)
 if(NOT $ENV{CPP} STREQUAL "")
   set(TMP_CPP_COMPILER $ENV{CPP})
 else()
@@ -16,6 +16,10 @@ else()
     set(TMP_CPP_COMPILER "pgcc -E")
   endif()
 endif()
+else()
+set(TMP_CPP_COMPILER ${CMAKE_CPP_COMPILER})
+endif()
+
 
 set (CLANG_FAIL_MSG  "FATAL ERROR: SIMPLE cannot support Clang Preprocessor.
 Set FC,CC, and CPP environment variables to GNU compilers, e.g. in bash:
@@ -36,18 +40,10 @@ if(ACTUAL_FC_TARGET MATCHES "Clang|clang")
   message(STATUS "Found cpp is actually Clang -- Trying other paths")
   find_file (
     TMP_CPP_COMPILER
-    NAMES cpp- cpp-4.9 cpp-5 cpp-6 cpp5 cpp6
+    NAMES cpp- cpp-4.9 cpp-5 cpp5 cpp-6 cpp6
     PATHS /usr/local/bin /opt/local/bin /sw/bin /usr/bin
     #  [PATH_SUFFIXES suffix1 [suffix2 ...]]
     DOC "Searing for GNU cpp preprocessor "
-    #  [NO_DEFAULT_PATH]
-    #  [NO_CMAKE_ENVIRONMENT_PATH]
-    NO_CMAKE_PATH
-    NO_SYSTEM_ENVIRONMENT_PATH
-    #  [NO_CMAKE_SYSTEM_PATH]
-    #  [CMAKE_FIND_ROOT_PATH_BOTH |
-    #   ONLY_CMAKE_FIND_ROOT_PATH |
-    #   NO_CMAKE_FIND_ROOT_PATH]
     )
   if(NOT EXISTS "${TMP_CPP_COMPILER}")
     message( FATAL_ERROR  "Cannot find GNU cpp compiler -- 
@@ -58,17 +54,6 @@ set(CMAKE_CPP_COMPILER ${TMP_CPP_COMPILER})
 
 
 
-#if(APPLE)
-#  message(STATUS  "Try setting the GNU compiler")
-#    include(${CMAKE_ROOT}/Modules/Compiler/GNU-Fortran.cmake)
-#    include(${CMAKE_ROOT}/Modules/Platform/Darwin-GNU-Fortran.cmake)
-#    __darwin_compiler_gnu(Fortran)
-
-# if (CMAKE_Fortran_COMPILER_ID STREQUAL "Clang" OR "${CMAKE_GENERATOR}" MATCHES "XCode")
-
-#   message( FATAL_ERROR "${CLANG_FATAL_MSG}" )
-
-# elseif(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU" )
 message(STATUS "Making sure your Fortran compiler points to the correct binary")
 if(Fortran_COMPILER_NAME MATCHES "gfortran*")
   execute_process(COMMAND ${CMAKE_Fortran_COMPILER} --version
@@ -82,14 +67,6 @@ if(Fortran_COMPILER_NAME MATCHES "gfortran*")
       PATHS /usr/local/bin /opt/local/bin /sw/bin /usr/bin
       #  [PATH_SUFFIXES suffix1 [suffix2 ...]]
       DOC "Searching for GNU gfortran preprocessor "
-      #  [NO_DEFAULT_PATH]
-      #  [NO_CMAKE_ENVIRONMENT_PATH]
-      NO_CMAKE_PATH
-      NO_SYSTEM_ENVIRONMENT_PATH
-      #  [NO_CMAKE_SYSTEM_PATH]
-      #  [CMAKE_FIND_ROOT_PATH_BOTH |
-      #   ONLY_CMAKE_FIND_ROOT_PATH |
-      #   NO_CMAKE_FIND_ROOT_PATH]
       )
     if(NOT EXIST "${CMAKE_Fortran_COMPILER}")
       message( FATAL_ERROR  "Cannot find ${CMAKE_Fortran_COMPILER} -- 
@@ -100,45 +77,6 @@ endif()
 
 
 set(CMAKE_Fortran_SOURCE_FILE_EXTENSIONS ${CMAKE_Fortran_SOURCE_FILE_EXTENSIONS} "f03;F03;f08;F08")
-# Make sure the build type is uppercase
-string(TOUPPER "${CMAKE_BUILD_TYPE}" BT)
-
-#################################################################
-# CONFIGURATION TYPES & BUILD MODE
-#################################################################
-set(CMAKE_CONFIGURATION_TYPES DEBUG RELEASE RELWITHDEBINFO )
-if(NOT CMAKE_BUILD_TYPE)
-  set(CMAKE_BUILD_TYPE RELEASE CACHE STRING
-    "Choose the type of build, options are: NONE DEBUG RELEASE RELWITHDEBINFO"
-    FORCE)
-  set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS NONE DEBUG RELEASE RELWITHDEBINFO)
-endif(NOT CMAKE_BUILD_TYPE)
-
-if(BT STREQUAL "RELEASE")
-  set(CMAKE_BUILD_TYPE RELEASE CACHE STRING
-    "Choose the type of build, options are DEBUG, RELEASE, RELWITHDEBINFO or TESTING."
-    FORCE)
-elseif(BT STREQUAL "DEBUG")
-  set (CMAKE_BUILD_TYPE DEBUG CACHE STRING
-    "Choose the type of build, options are DEBUG, RELEASE, RELWITHDEBINFO or TESTING."
-    FORCE)
-elseif(BT STREQUAL "RELWITHDEBINFO")
-  set (CMAKE_BUILD_TYPE RELWITHDEBINFO CACHE STRING
-    "Choose the type of build, options are DEBUG, RELEASE, RELWITHDEBINFO  or TESTING."
-    FORCE)
-elseif(BT STREQUAL "TESTING")
-  set (CMAKE_BUILD_TYPE TESTING CACHE STRING
-    "Choose the type of build, options are DEBUG, RELEASE, RELWITHDEBINFO or TESTING."
-    FORCE)
-elseif(NOT BT)
-  set(CMAKE_BUILD_TYPE RELEASE CACHE STRING
-    "Choose the type of build, options are DEBUG, RELEASE, RELWITHDEBINFO or TESTING."
-    FORCE)
-  message(STATUS "CMAKE_BUILD_TYPE not given, defaulting to RELEASE")
-else()
-  message(FATAL_ERROR "CMAKE_BUILD_TYPE not valid, choices are DEBUG, RELEASE, RELWITHDEBINFO or TESTING")
-endif(BT STREQUAL "RELEASE")
-
 
 #################################################################
 # Setting up options
@@ -153,34 +91,8 @@ message(STATUS "Fortran compiler: ${Fortran_COMPILER_NAME}")
 include(ProcessorCount)
 ProcessorCount(NUM_JOBS)
 
-# if (${ENABLE_HARD_OPTIMIZE})
-#   if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" ) #AND Fortran_COMPILER_NAME MATCHES "gfortran*")
-#     set(EXTRA_FLAGS "${EXTRA_FLAGS}  -O3 -ffast-math -funroll-all-loops")
-#   elseif (${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR Fortran_COMPILER_NAME MATCHES "pgf*")
-#     set(EXTRA_FLAGS "${EXTRA_FLAGS}  -O3 -fast ")
-#   elseif (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel" OR Fortran_COMPILER_NAME MATCHES "ifort*")
-#     set(EXTRA_FLAGS "${EXTRA_FLAGS}  -O3 -inline all -unroll-aggressive -fast ")
-#   endif ()
-# endif ()
-
-# #if (${${PROJECT_NAME}_ENABLE_OPENMP})
-# #  find_package( OpenMP )
-# #  if (${OPENMP_FOUND})
-# #    set(EXTRA_FLAGS ${OpenMP_Fortran_FLAGS})
-# #    add_definitions("-DOPENMP")
-# #  else ()
-# #    option(${PROJECT_NAME}_ENABLE_OPENMP "To activate the OpenMP extensions for Fortran" OFF)
-# #  endif ()
-# #endif ()
 
 
-
-# There is some bug where -march=native doesn't work on Mac
-IF(APPLE)
-  SET(GNUNATIVE "-mtune=native")
-ELSE()
-  SET(GNUNATIVE "-march=native")
-ENDIF(APPLE)
 
 ##############################################
 # Linker            (FROM FACEBOOK HHVM)
@@ -200,50 +112,6 @@ add_definitions(-D${CMAKE_Fortran_COMPILER_ID})
 message(STATUS "Fortran compiler ${CMAKE_Fortran_COMPILER_ID}")
 
 
-if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
-  # gfortran
-  set(preproc  "-cpp -P ")                                                                      # preprocessor flags
-  set(dialect  "-ffree-form  -fimplicit-none  -ffree-line-length-none -fno-second-underscore")  # language style
-  set(checks   "-fcheck-array-temporaries -frange-check -fstack-protector -fstack-check")       # checks
-  set(warn     "-Wall -Wextra -Wimplicit-interface ${checks} ")                                 # warning flags
-  set(fordebug "-pedantic -fno-inline -fno-f2c -Og -ggdb -fbacktrace -fbounds-check  ")         # debug flags
-# -O0 -g3 -Warray-bounds -Wcharacter-truncation -Wline-truncation -Wimplicit-interface -Wimplicit-procedure -Wunderflow -Wuninitialized -fcheck=all -fmodule-private -fbacktrace -dump-core -finit-real=nan -ffpe-trap=invalid,zero,overflow
-  set(forspeed "-O3    ")                                                                       # optimisation
-  set(forpar   "-fopenmp  ")                                                                    # parallel flags
-  set(target   "${GNUNATIVE} -fPIC")                                                            # target platform
-  set(common   "${preproc} ${dialect} ${target} ")
-  #
-elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
-  # pgfortran
-  set(preproc  "-Mpreprocess")
-  set(dialect "-Mfreeform  -Mstandard -Mallocatable=03 -Mextend")
-  set(checks   "-Mdclchk  -Mchkptr -Mchkstk  -Munixlogical -Mlarge_arrays -Mflushz -Mdaz -Mfpmisalign")
-  set(warn     "-Minform=warn")
-  # bounds checking cannot be done in CUDA fortran or OpenACC GPU
-  set(fordebug "-Minfo=all,ftn  -traceback -gopt -Mneginfo=all,ftn -Mnodwarf -Mpgicoff -traceback -Mprof -Mbound -C")
-  set(forspeed "-Munroll -O4  -Mipa=fast -fast -Mcuda=fastmath,unroll -Mvect=nosizelimit,short,simd,sse -mp -acc ")
-  set(forpar   "-Mconcur -Mconcur=bind,allcores -Mcuda=cuda8.0,cc60,flushz,fma ")
-  set(target   " -m64 -fPIC ")
-  set(common   "${preproc} ${dialect} ${checks} ${target} ${warn}  -DPGI")
-  #
-elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
-  # ifort
-  # set(FC "ifort" CACHE PATH "Intel Fortran compiler")
-  set(dialect  "-fpp -free -implicitnone -std08 -80 -extend-source")
-  set(checks   "-check bounds -check uninit -assume buffered_io -assume byterecl -align sequence  -diag-disable 6477  -gen-interfaces ") # -mcmodel=medium -shared-intel
-  #-fpe-all=0 -fp-stack-check -fstack-protector-all -ftrapuv -no-ftz -std03
-  set(warn     "-warn all")
-  set(fordebug "-debug -O0 -ftrapuv -debug all -check all")
-  set(forspeed "-O3 -fp-model fast=2 -inline all -unroll-aggressive ")
-  set(forpar   "-qopenmp")
-  set(target   "-xHOST -no-prec-div -static -fPIC")
-  set(common   "${dialect} ${checks} ${target} ${warn} -DINTEL")
-  # else()
-  #   message(" Fortran compiler not supported. Set FC environment variable")
-endif ()
-set(CMAKE_Fortran_FLAGS_RELEASE_INIT "${common} ${forspeed} ${forpar} " )
-set(CMAKE_Fortran_FLAGS_DEBUG_INIT   "${common} ${warn} ${fordebug} ${forpar} -g ")
-
 #############################################
 ## COMPLER SPECIFIC SETTINGS
 #############################################
@@ -255,17 +123,17 @@ if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" ) #AND Fortran_COMPILER_NAME MAT
   #############################################
   execute_process(
     COMMAND ${CMAKE_Fortran_COMPILER} -dumpversion OUTPUT_VARIABLE GFC_VERSION)
-  if (NOT (GFC_VERSION VERSION_GREATER 4.8 OR GFC_VERSION VERSION_EQUAL 4.8))
-    message(FATAL_ERROR "${PROJECT_NAME} requires gfortran 4.8 or greater.")
+  if (NOT (GFC_VERSION VERSION_GREATER 4.9 OR GFC_VERSION VERSION_EQUAL 4.9))
+    message(FATAL_ERROR "${PROJECT_NAME} requires gfortran 4.9 to 5.4")
   endif ()
-  set(EXTRA_FLAGS "${EXTRA_FLAGS} -DEXTRA")
+  set(EXTRA_FLAGS "${EXTRA_FLAGS}")
   set(CMAKE_CPP_COMPILER_FLAGS           "-E -w -C -CC -P")
 
   set(CMAKE_Fortran_FLAGS                " ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
   set(CMAKE_Fortran_FLAGS_DEBUG          " ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_DEBUG_INIT}" )
   # set(CMAKE_Fortran_FLAGS_MINSIZEREL     "-Os ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
   set(CMAKE_Fortran_FLAGS_RELEASE        " ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
-  set(CMAKE_Fortran_FLAGS_RELWITHDEBINFO "${CMAKE_Fortran_FLAGS_RELEASE_INIT} ${CMAKE_Fortran_FLAGS_DEBUG_INIT}")
+  set(CMAKE_Fortran_FLAGS_RELWITHDEBINFO "${CMAKE_Fortran_FLAGS_RELEASE_INIT} ${CMAKE_Fortran_FLAGS_DEBUG_INIT} ${EXTRA_FLAGS}")
   
   # #  CMAKE_EXE_LINKER_FLAGS
   # if (LINK_TIME_OPTIMISATION)
@@ -299,11 +167,11 @@ elseif (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel" OR Fortran_COMPILER_NAME M
   set(CMAKE_AR                           "xiar")
   set(CMAKE_CPP_COMPILER                 "fpp")
   set(CMAKE_CPP_COMPILER_FLAGS           "  -noJ -B -C -P")
-  set(CMAKE_Fortran_FLAGS                "${CMAKE_Fortran_FLAGS_INIT} ${EXTRA_FLAGS}")
-  set(CMAKE_Fortran_FLAGS_DEBUG          "${CMAKE_Fortran_FLAGS_DEBUG_INIT} -O0 -debug all -check all -warn all -extend-source 132 -traceback -gen-interfaces")
+  set(CMAKE_Fortran_FLAGS                " ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
+  set(CMAKE_Fortran_FLAGS_DEBUG          " ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_DEBUG_INIT}")
   # set(CMAKE_Fortran_FLAGS_MINSIZEREL     "-Os ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
-  set(CMAKE_Fortran_FLAGS_RELEASE        "-O3 ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
-  set(CMAKE_Fortran_FLAGS_RELWITHDEBINFO "${CMAKE_Fortran_FLAGS_RELEASE_INIT} ${CMAKE_Fortran_FLAGS_DEBUG_INIT}")
+  set(CMAKE_Fortran_FLAGS_RELEASE        "-O3 ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
+  set(CMAKE_Fortran_FLAGS_RELWITHDEBINFO "${CMAKE_Fortran_FLAGS_RELEASE_INIT} ${CMAKE_Fortran_FLAGS_DEBUG_INIT} ${EXTRA_FLAGS}")
   # set(CMAKE_EXE_LINKER_FLAGS             "${CMAKE_EXE_LINKER_FLAGS_INIT}")
   # set(CMAKE_SHARED_LINKER_FLAGS          "${CMAKE_SHARED_LINKER_FLAGS_INIT} ${EXTRA_LIBS}")
   # set(CMAKE_STATIC_LINKER_FLAGS          "${CMAKE_STATIC_LINKER_FLAGS_INIT} ${EXTRA_LIBS}")
@@ -324,13 +192,13 @@ elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR Fortran_COMPILER_NAME MATC
   set(PGICOMPILER ON)
   set(EXTRA_FLAGS "${EXTRA_FLAGS} -Mpreprocess -module ${CMAKE_Fortran_MODULE_DIRECTORY} -I${CMAKE_Fortran_MODULE_DIRECTORY}")
   # NVIDIA PGI Linux compiler
-  set(CMAKE_CPP_COMPILER                "pgcc -E ")
-  set(CMAKE_CPP_COMPILER_FLAGS                " ")
-  set(CMAKE_Fortran_FLAGS                "${CMAKE_Fortran_FLAGS_INIT} ${EXTRA_FLAGS}")
-  set(CMAKE_Fortran_FLAGS_DEBUG          "${CMAKE_Fortran_FLAGS_DEBUG_INIT} ")
+  set(CMAKE_CPP_COMPILER                 "pgcc -E ")
+  set(CMAKE_CPP_COMPILER_FLAGS           " ")
+  set(CMAKE_Fortran_FLAGS                " ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
+  set(CMAKE_Fortran_FLAGS_DEBUG          " ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_DEBUG_INIT}")
   # set(CMAKE_Fortran_FLAGS_MINSIZEREL     "${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
-  set(CMAKE_Fortran_FLAGS_RELEASE        "${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
-  set(CMAKE_Fortran_FLAGS_RELWITHDEBINFO "-gopt ${CMAKE_Fortran_FLAGS_RELEASE_INIT} -Mneginfo=all")
+  set(CMAKE_Fortran_FLAGS_RELEASE        "${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
+  set(CMAKE_Fortran_FLAGS_RELWITHDEBINFO "-gopt ${CMAKE_Fortran_FLAGS_RELEASE_INIT} ${CMAKE_Fortran_DEBUG_INIT} -Mneginfo=all")
   # set(CMAKE_EXE_LINKER_FLAGS             "${CMAKE_EXE_LINKER_FLAGS_INIT} -acclibs -cudalibs -Mcudalib=cufft,curand")
   # #  CMAKE_SHARED_LINKER_FLAG
 
@@ -341,11 +209,12 @@ elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR Fortran_COMPILER_NAME MATC
   set(CUDA_USE_STATIC_CUDA_RUNTIME OFF)
   set(CUDA_rt_LIBRARY  /usr/lib/x86_64-linux-gnu/librt.so)
   ## PGI does not have the OpenMP proc_bind option
-  add_definitions("-Dproc_bind\\(close\\)=\"\"")  # disable proc_bind in OMP 
+  add_definitions("-Dproc_bind\\(close\\)=\"\"")  # disable proc_bind in OMP
+
+
   # #  add_definitions("-module ${CMAKE_Fortran_MODULE_DIRECTORY}") # pgc++ doesn't have -module
   #   set(CMAKE_SHARED_LINKER_FLAGS          "${CMAKE_SHARED_LINKER_FLAGS_INIT} ${EXTRA_LIBS}  -module ${CMAKE_Fortran_MODULE_DIRECTORY}")
   #   set(CMAKE_STATIC_LINKER_FLAGS        "${CMAKE_STATIC_LINKER_FLAGS_INIT} ${EXTRA_LIBS}  -module ${CMAKE_Fortran_MODULE_DIRECTORY}")
-
   #   #  CMAKE_EXE_LINKER_FLAGS
   #   if (LINK_TIME_OPTIMISATION)
   #     set(CMAKE_Fortran_FLAGS                "${CMAKE_Fortran_FLAGS} -Mipa=fast ")
@@ -362,7 +231,6 @@ elseif ("${CMAKE_Fortran_COMPILER_ID}" MATCHES "Clang")
   #############################################
   message ("Clang is not supported.  Please use GNU toolchain with either Homebrew, MacPorts or Fink.")
   # find_package(LLVM REQUIRED CONFIG)
-
   # set(CMAKE_Fortran_FLAGS                "${CMAKE_Fortran_FLAGS_RELEASE_INIT} -Wno-mismatched-tags -Qunused-arguments")
   # if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   #   # In OSX, clang requires "-stdlib=libc++" to support C++11
@@ -669,12 +537,13 @@ set(CMAKE_Fortran_COMPILE_OBJECT "grep --silent '#include' <SOURCE> && ( ${CMAKE
 
 
 # Option for code coverage
+if(VERBOSE)
 option(CODE_COVERAGE "Build code coverage results, requires GCC compiler (forces Debug build)" OFF)
 if(CODE_COVERAGE)
-  if(CMAKE_COMPILER_IS_GNUCXX)
-    set(CMAKE_CXX_FLAGS_DEBUG
-      "${CMAKE_CXX_FLAGS_DEBUG} -fprofile-arcs -ftest-coverage")
-    set(CMAKE_BUILD_TYPE Debug CACHE STRING "" FORCE)
+  if(CMAKE_COMPILER_IS_GNUC)
+    set(CMAKE_Fortran_FLAGS_DEBUG
+      "${CMAKE_Fortran_FLAGS_DEBUG} -fprofile-arcs -ftest-coverage")
+    set(CMAKE_BUILD_TYPE DEBUG CACHE STRING "" FORCE)
 
     # Ensure that CDash targets are always enabled if coverage is enabled.
     if (NOT CDASH_SUPPORT)
@@ -682,10 +551,13 @@ if(CODE_COVERAGE)
       set(CDASH_SUPPORT ON CACHE BOOL "${HELP_STRING}" FORCE)
       message(STATUS "Enabling CDash targets as coverage has been enabled.")
     endif()
-  endif(CMAKE_COMPILER_IS_GNUCXX)
+  endif(CMAKE_COMPILER_IS_GNUC)
+endif()
 endif()
 
-if(APPLE)
+
+set(CMAKE_INSTALL_DO_STRIP FALSE)
+if(UNIX)
   #https://cmake.org/Wiki/CMake_RPATH_handling
   # use, i.e. don't skip the full RPATH for the build tree
 SET(CMAKE_SKIP_BUILD_RPATH  FALSE)
@@ -700,10 +572,10 @@ SET(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
 # which point to directories outside the build tree to the install RPATH
 SET(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
-
 # the RPATH to be used when installing, but only if it's not a system directory
 LIST(FIND CMAKE_PLATFORM_IMPLICIT_LINK_DIRECTORIES "${CMAKE_INSTALL_PREFIX}/lib" isSystemDir)
 IF("${isSystemDir}" STREQUAL "-1")
    SET(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
  ENDIF("${isSystemDir}" STREQUAL "-1")
-endif(APPLE)
+endif(UNIX)
+

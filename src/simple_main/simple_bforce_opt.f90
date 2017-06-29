@@ -46,7 +46,7 @@ contains
         self%pb = spec%limits(:,1)
         self%pc = spec%limits(:,1)
         if( all(spec%stepsz == 0.) ) stop 'step size (stepsz) not set in&
-        specification (opt_spec); new_bforce_opt; simple_bforce_opt'
+        &specification (opt_spec); new_bforce_opt; simple_bforce_opt'
         ! initialize best cost to huge number
         self%yb = huge(x)
         self%exists = .true. ! indicates existence
@@ -66,10 +66,10 @@ contains
         ! generate initial vector (lower bounds)
         spec%x = spec%limits(:,1)
         DebugPrint  'generated initial vector'
-        ! set best & current point to best point in spec
+        ! set best and current point to best point in spec
         self%pb = spec%x
         self%pc = spec%x
-        DebugPrint  'did set best & current point'
+        DebugPrint  'did set best and current point'
         ! set best cost
         spec%nevals = 0
         self%yb     = spec%costfun(self%pb, spec%ndim)
