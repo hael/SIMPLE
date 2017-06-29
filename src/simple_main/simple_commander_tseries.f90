@@ -130,7 +130,7 @@ contains
             endif
         else if( cline%defined('xcoord') .and. cline%defined('ycoord') )then
             if( .not. cline%defined('box') ) stop 'need box to be part of command linefor this mode of&
-            execution; simple_commander_tseries :: exec_tseries_track'
+            &execution; simple_commander_tseries :: exec_tseries_track'
             allocate( boxdata(1,2) )
             boxdata(1,1) = real(p%xcoord)
             boxdata(1,2) = real(p%ycoord)

@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.2 FATAL_ERROR)
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake" "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 include(FortranOverride)
 if(NOT CMAKE_INSTALL_PREFIX)
-  set(CMAKE_INSTALL_PREFIX $ENV{PWD})
+  set(CMAKE_INSTALL_PREFIX "")
 endif()
 project(SIMPLE Fortran)
 #enable_language( CXX C )
@@ -182,7 +182,7 @@ endif()
 #
 #################################################################
 add_custom_target(distclean
-  COMMAND ${CMAKE_COMMAND} -P ${CMAKE_MODULE_PATH}/distclean.cmake
+  COMMAND ${CMAKE_COMMAND} -P ${CMAKE_SOURCE_DIR}/cmake/distclean.cmake
   )
 
 # here we save a version file
@@ -204,7 +204,7 @@ install(FILES  ${CMAKE_CURRENT_BINARY_DIR}/add2.bashrc ${CMAKE_CURRENT_BINARY_DI
   CONFIGURATIONS DEBUG|RELEASE
   PERMISSIONS  OWNER_READ GROUP_READ WORLD_READ
    )
-message( STATUS "REMEMBER TO COPY add2.*shrc TO YOUR $HOME/.bashrc or .tcshrc ")
+
 
 if(VERBOSE) #only for the fool-hardy
   option(ENABLE_LINK_TIME_OPTIMISATION "Enable link-time optimisation" OFF)
