@@ -36,7 +36,7 @@ if(ACTUAL_FC_TARGET MATCHES "Clang|clang")
   message(STATUS "Found cpp is actually Clang -- Trying other paths")
   find_file (
     TMP_CPP_COMPILER
-    NAMES cpp- cpp-4.9 cpp-5 cpp-6 cpp5 cpp6
+    NAMES cpp- cpp-4.9 cpp-5 cpp5 cpp-6 cpp6
     PATHS /usr/local/bin /opt/local/bin /sw/bin /usr/bin
     #  [PATH_SUFFIXES suffix1 [suffix2 ...]]
     DOC "Searing for GNU cpp preprocessor "
@@ -255,8 +255,8 @@ if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" ) #AND Fortran_COMPILER_NAME MAT
   #############################################
   execute_process(
     COMMAND ${CMAKE_Fortran_COMPILER} -dumpversion OUTPUT_VARIABLE GFC_VERSION)
-  if (NOT (GFC_VERSION VERSION_GREATER 4.8 OR GFC_VERSION VERSION_EQUAL 4.8))
-    message(FATAL_ERROR "${PROJECT_NAME} requires gfortran 4.8 or greater.")
+  if (NOT (GFC_VERSION VERSION_GREATER 4.9 OR GFC_VERSION VERSION_EQUAL 4.9))
+    message(FATAL_ERROR "${PROJECT_NAME} requires gfortran 4.9 to 5.4")
   endif ()
   set(EXTRA_FLAGS "${EXTRA_FLAGS} -DEXTRA")
   set(CMAKE_CPP_COMPILER_FLAGS           "-E -w -C -CC -P")
