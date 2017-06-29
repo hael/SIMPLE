@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.2 FATAL_ERROR)
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake" "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 include(FortranOverride)
-if(NOT CMAKE_INSTALL_PREFIX)
-  set(CMAKE_INSTALL_PREFIX "")
-endif()
+# Default installation in build directory
+  set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR})
+
 project(SIMPLE Fortran)
 #enable_language( CXX C )
 
@@ -58,7 +58,9 @@ set(NUM_JOBS 1)
 include(ProcessorCount)
 ProcessorCount(NUM_JOBS)
 set(BUILD_NAME ${CMAKE_Fortran_COMPILER_ID}_${CMAKE_BUILD_TYPE} CACHE STRING "Build name with compiler, type and FFT backend ")
-
+if(NOT CMAKE_INSTALL_PREFIX)
+  set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR})
+endif()
 #################################################################
 # INCLUDES
 #################################################################

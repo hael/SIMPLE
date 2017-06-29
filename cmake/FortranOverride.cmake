@@ -73,8 +73,9 @@ FATAL: In-source builds are not allowed.
 	  include(GitInfo)
   endif()
 
-  # We want to create dynamic libraries
-  set(BUILD_SHARED_LIBS true)
+  # We want to create static libraries
+  set(BUILD_SHARED_LIBS FALSE)
+  set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR})
   include(GNUInstallDirs)
   # There is some bug where -march=native doesn't work on Mac
   IF(APPLE)
