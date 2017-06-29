@@ -1,8 +1,9 @@
-cmake_minimum_required(VERSION 3.5 FATAL_ERROR)
-set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/Modules/")
-include("${CMAKE_SOURCE_DIR}/cmake/Modules/FortranOverride.cmake")
-set(CMAKE_INSTALL_PREFIX ${CMAKE_CURRENT_BINARY_DIR})
-
+cmake_minimum_required(VERSION 3.2 FATAL_ERROR)
+set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake" "${CMAKE_SOURCE_DIR}/cmake/Modules/")
+include(FortranOverride)
+if(NOT CMAKE_INSTALL_PREFIX)
+  set(CMAKE_INSTALL_PREFIX $ENV{PWD})
+endif()
 project(SIMPLE Fortran)
 #enable_language( CXX C )
 
@@ -19,29 +20,19 @@ set(SIMPLE_VERSION_MAJOR 2)
 set(SIMPLE_VERSION_MINOR 5)
 set(SIMPLE_VERSION "${SIMPLE_VERSION_MAJOR}.${SIMPLE_VERSION_MINOR}")
 
-
 #################################################################
 #
 # OPTIONS
 #
 #################################################################
 option(USE_OPENMP "Use OpenMP for parallelization - debugging may disable OpemMP" ON )
-#option(USE_OPENACC "Use OpenACC for auto GPU parallelization - debugging may disable OpemMP" ON)
+#option(USE_OPENACC "Use OpenACC for auto GPU parallelization - debugging may disable OpenMP" ON)
 #option(USE_CUDA "GPU NVIDIA - in development" OFF)
 option(${PROJECT_NAME}_BUILD_TESTS "Build the test examples" ON)
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/gui)
   option(${PROJECT_NAME}_BUILD_GUI "Build the simple GUI - not included in release2.5" OFF)
 endif()
 option(BUILD_SHARED_LIBS "Build the simple library as shared (default) or static" ON)
-option(ENABLE_LINK_TIME_OPTIMISATION "Enable link-time optimisation" OFF)
-OPTION(ENABLE_FAST_MATH_OPTIMISATION "Optimize code for fastmath." OFF)
-OPTION(ENABLE_PROFILE_OPTIMISATION "Optimize code for PFO." OFF)
-OPTION(ENABLE_AUTO_PARALLELISE "Optimize code for parallel systems." OFF)
-#flags for optimization level. You can only turn one of following option to ON, or leave all of them to OFF.
-OPTION(ENABLE_PROFILING "enable symbol generation without debug support" OFF)
-#option(CPACK_GENERATOR "Enable build of distribution packages using CPack" TGZ)
-
-
 
 #################################################################
 #
@@ -71,11 +62,8 @@ set(BUILD_NAME ${CMAKE_Fortran_COMPILER_ID}_${CMAKE_BUILD_TYPE} CACHE STRING "Bu
 #################################################################
 # INCLUDES
 #################################################################
-## Debugging CMAKE
-# include(CMakeAddFortranSubdirectory)
-# include(CMakeGraphVizOptions)
 include(CheckIncludeFiles)
-include(${CMAKE_MODULE_PATH}/SimpleFortranOptions.cmake)
+include(SimpleFortranOptions)
 
 
 ############################################################
@@ -162,8 +150,7 @@ add_subdirectory(${SCRIPTS_PATH} ${SCRP_BIN})
 #################################################################
 
 if (${PROJECT_NAME}_BUILD_TESTS)
-  enable_testing()
-  include(CTest)
+
   add_subdirectory(tests)
 endif()
 
@@ -174,11 +161,10 @@ endif()
 #
 #################################################################
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/gui)
-if (${PROJECT_NAME}_BUILD_GUI)
-  add_subdirectory(gui ${BIN}/gui)
+  if (${PROJECT_NAME}_BUILD_GUI)
+    add_subdirectory(gui ${BIN}/gui)
+  endif()
 endif()
-endif()
-
 
 #################################################################
 #
@@ -187,7 +173,7 @@ endif()
 #################################################################
 # Try to search first static libraries
 if(NOT ${BUILD_SHARED_LIBS})
-  set(CMAKE_FIND_LIBRARY_SUFFIXES ".a ${CMAKE_FIND_LIBRARY_SUFFIXES}")
+  set(CMAKE_FIND_LIBRARY_SUFFIXES "${CMAKE_FIND_LIBRARY_SUFFIXES} .a")
 endif()
 
 #################################################################
@@ -199,10 +185,48 @@ add_custom_target(distclean
   COMMAND ${CMAKE_COMMAND} -P ${CMAKE_MODULE_PATH}/distclean.cmake
   )
 
+# here we save a version file
+set(VERSION_FILE "${CMAKE_INSTALL_LIBDIR}/simple/CMake/${PROJECTNAME}ConfigVersion.cmake")
+configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/ProjectConfigVersion.cmake.in" ${VERSION_FILE} @ONLY )
 
+# modules / depends
+FILE(GLOB SIMPLE_CMAKE_FILES "cmake/Modules/*.cmake")
+INSTALL(
+  FILES ${SIMPLE_CMAKE_FILES}
+  DESTINATION "${CMAKE_INSTALL_LIBDIR}/simple/CMake"
+  COMPONENT dev)
 
+message( STATUS "Set runtime variables ")
+configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/scripts/add2.bashrc.template"  ${CMAKE_CURRENT_BINARY_DIR}/add2.bashrc @ONLY )
+configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/scripts/add2.tcshrc.template"  ${CMAKE_CURRENT_BINARY_DIR}/add2.tcshrc @ONLY )
+install(FILES  ${CMAKE_CURRENT_BINARY_DIR}/add2.bashrc ${CMAKE_CURRENT_BINARY_DIR}/add2.tcshrc
+  DESTINATION ${CMAKE_INSTALL_PREFIX}
+  CONFIGURATIONS DEBUG|RELEASE
+  PERMISSIONS  OWNER_READ GROUP_READ WORLD_READ
+   )
+message( STATUS "REMEMBER TO COPY add2.*shrc TO YOUR $HOME/.bashrc or .tcshrc ")
 
-  # Enable Doxygen build with 'make doxygen'
+if(VERBOSE) #only for the fool-hardy
+  option(ENABLE_LINK_TIME_OPTIMISATION "Enable link-time optimisation" OFF)
+  OPTION(ENABLE_FAST_MATH_OPTIMISATION "Optimize code for fastmath." OFF)
+  OPTION(ENABLE_PROFILE_OPTIMISATION "Optimize code for PFO." OFF)
+  OPTION(ENABLE_AUTO_PARALLELISE "Optimize code for parallel systems." OFF)
+  #flags for optimization level. You can only turn one of following option to ON, or leave all of them to OFF.
+  OPTION(ENABLE_PROFILING "enable symbol generation without debug support" OFF)
+  option(CPACK_GENERATOR "Enable build of distribution packages using CPack" TGZ)
+
+  #
+  # CPack
+  #
+  include(SimplePackage)
+  #
+  # CTest
+  #
+  enable_testing()
+  include(CTest)
+  #
+  # Doxygen
+  #
   option(ENABLE_DOXYGEN "Enable a 'make docs' target for Doxygen documentation")
   if (ENABLE_DOXYGEN)
     add_custom_target(doc
@@ -227,27 +251,20 @@ add_custom_target(distclean
  #     ALL
  # )
   endif()
+  ## Debugging CMAKE
+  # include(CMakeAddFortranSubdirectory)
+  # include(CMakeGraphVizOptions)
+  include(GenericLogging)
+endif()
 
-# here we save a version file
-set(VERSION_FILE "${CMAKE_INSTALL_LIBDIR}/simple/CMake/${PROJECTNAME}ConfigVersion.cmake")
-configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/ProjectConfigVersion.cmake.in" ${VERSION_FILE} @ONLY )
 
-# modules / depends
-FILE(GLOB SIMPLE_CMAKE_FILES "cmake/Modules/*.cmake")
-INSTALL(
-  FILES ${SIMPLE_CMAKE_FILES}
-  DESTINATION "${CMAKE_INSTALL_LIBDIR}/simple/CMake"
-  COMPONENT dev)
-
-message( STATUS "Set runtime variables ")
-configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/scripts/add2.bashrc.template"  ${CMAKE_CURRENT_BINARY_DIR}/add2.bashrc @ONLY )
-configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/scripts/add2.tcshrc.template"  ${CMAKE_CURRENT_BINARY_DIR}/add2.tcshrc @ONLY )
-install(FILES  ${CMAKE_CURRENT_BINARY_DIR}/add2.bashrc ${CMAKE_CURRENT_BINARY_DIR}/add2.tcshrc DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
-set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR})
-#
-# CPack
-#
-
-include(${CMAKE_MODULE_PATH}/Package.cmake)
-
-include(${CMAKE_MODULE_PATH}/GenericLogging.cmake)
+set(POST_INSTALL_SCRIPT ${CMAKE_SOURCE_DIR}/cmake/PostInstallMessage.cmake)
+install(
+    CODE 
+    "
+    execute_process(COMMAND \"${CMAKE_COMMAND}\"
+                            -DCMAKE_SYSTEM_NAME=${CMAKE_SYSTEM_NAME}
+                            -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX} 
+                            -P \"${POST_INSTALL_SCRIPT}\")
+    "
+)
