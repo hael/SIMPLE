@@ -7,7 +7,7 @@
 add_custom_target(simple_args ALL
   COMMAND SIMPLE_PATH=${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/scripts/simple_args_generator.pl
   DEPENDS "${CMAKE_SOURCE_DIR}/scripts/simple_args_generator.pl" "${CMAKE_CURRENT_SOURCE_DIR}/simple_main/simple_params.f90"
-  BYPRODUCTS "${CMAKE_BINARY_DIR}/lib/simple/simple_args.f90" "${CMAKE_BINARY_DIR}/lib/simple/simple_args_varlist.txt"
+  BYPRODUCTS "${CMAKE_BINARY_DIR}/lib/simple/simple_args.f90" "${CMAKE_BINARY_DIR}/lib/simple/simple_varlist.txt"
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/simple_main
   USES_TERMINAL
   )
@@ -72,7 +72,7 @@ install(TARGETS ${SIMPLELIB}
   RUNTIME DESTINATION lib
   )
 #install varlist for testing in production
-install(FILES "${CMAKE_BINARY_DIR}/lib/simple/simple_args_varlist.txt"
+install(FILES "${CMAKE_BINARY_DIR}/lib/simple/simple_varlist.txt"
   DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/simple/")
 
 # Make sure the compiler can find include files for our SIMPLE library

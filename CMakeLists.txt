@@ -142,6 +142,7 @@ add_subdirectory(${SCRIPTS_PATH})
 #
 #################################################################
 if (${PROJECT_NAME}_BUILD_TESTS)
+  include(CTest)
   add_subdirectory(tests)
 endif()
 
@@ -214,7 +215,6 @@ if(VERBOSE) #only for the fool-hardy
   # CTest
   #
   enable_testing()
-  include(CTest)
   #
   # Doxygen
   #
