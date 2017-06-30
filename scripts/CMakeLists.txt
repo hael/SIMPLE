@@ -1,7 +1,6 @@
 
 include(${CMAKE_ROOT}/Modules/FindPerl.cmake)
 
-
 list(APPEND SIMPLE_PERL_SCRIPTS
 cleanSIMPLEout.pl
 convert_frealign2simple.pl
@@ -30,6 +29,7 @@ restart.pl
 sam2emanbox.pl
 simmovies.pl
 simple_args_generator.pl
+simple_args_varlist.pl
 split_filetab.pl
 tab2space.pl)
 
@@ -52,5 +52,5 @@ install(DIRECTORY  ${CMAKE_CURRENT_SOURCE_DIR}
 install(FILES simple_distr_config.env
   DESTINATION  ${CMAKE_INSTALL_PREFIX}
   CONFIGURATIONS DEBUG|RELEASE
-  PERMISSIONS  OWNER_READ GROUP_READ WORLD_READ
+  PERMISSIONS  OWNER_READ OWNER_WRITE GROUP_READ GROUP_WRITE WORLD_READ WORLD_WRITE
   )

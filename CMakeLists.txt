@@ -1,8 +1,6 @@
 cmake_minimum_required(VERSION 3.2 FATAL_ERROR)
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake" "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 include(FortranOverride)
-# Default installation in build directory
-  set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR})
 
 project(SIMPLE Fortran)
 #enable_language( CXX C )
@@ -30,7 +28,7 @@ option(${PROJECT_NAME}_BUILD_TESTS "Build the test examples" ON)
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/gui)
   option(${PROJECT_NAME}_BUILD_GUI "Build the simple GUI - not included in release2.5" OFF)
 endif()
-option(BUILD_SHARED_LIBS "Build the simple library as shared (default) or static" ON)
+option(BUILD_SHARED_LIBS "Build the simple library as shared or static (default)" OFF)
 
 #################################################################
 #
@@ -39,26 +37,16 @@ option(BUILD_SHARED_LIBS "Build the simple library as shared (default) or static
 #################################################################
 # Add our local modules to the module path
 #set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/")
-set(SRC_PATH ${CMAKE_CURRENT_SOURCE_DIR}/src)
-set(SCRIPTS_PATH ${CMAKE_CURRENT_SOURCE_DIR}/scripts)
-set(TEST_SRC_PATH ${CMAKE_CURRENT_SOURCE_PATH}/test)
-set(PROD_SRC_PATH ${CMAKE_CURRENT_SOURCE_DIR}/production/simple)
-# Have the exec files placed in the bin folder
-set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
-set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/lib)
-set(SCRP_BIN ${CMAKE_BINARY_DIR}/scripts)
-# Have the .mod files placed in the lib folder
-set(CMAKE_Fortran_MODULE_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
-include_directories(${CMAKE_Fortran_MODULE_DIRECTORY})
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(SRC_PATH "${CMAKE_CURRENT_SOURCE_DIR}/src")
+set(SCRIPTS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/scripts")
+set(TEST_SRC_PATH "${CMAKE_CURRENT_SOURCE_DIR}/tests")
+set(PROD_SRC_PATH "${CMAKE_CURRENT_SOURCE_DIR}/production/simple")
 set(EXTRA_LIBS "")
 set(NUM_JOBS 1)
 include(ProcessorCount)
 ProcessorCount(NUM_JOBS)
 set(BUILD_NAME ${CMAKE_Fortran_COMPILER_ID}_${CMAKE_BUILD_TYPE} CACHE STRING "Build name with compiler, type and FFT backend ")
-if(NOT CMAKE_INSTALL_PREFIX)
-  set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR})
-endif()
+
 #################################################################
 # INCLUDES
 #################################################################
@@ -81,6 +69,13 @@ endif()
 ############################################################
 # Define the main targets
 ############################################################
+# Have the .mod files placed in the lib folder
+set(CMAKE_Fortran_MODULE_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
+include_directories(${CMAKE_Fortran_MODULE_DIRECTORY})
+set(EXECUTABLE_OUTPUT_DIRECTORY "${CMAKE_INSTALL_BINDIR}")
+set(LIBRARY_OUTPUT_DIRECTORY "${CMAKE_INSTALL_LIBDIR}")
+set(SCRIPTS_OUTPUT_DIRECTORY "${CMAKE_INSTALL_PREFIX}/scripts")
+
 # Define the executable names
 set(SIMPLE_SERIAL_EXE simple_exec)
 set(SIMPLE_DISTR_EXE simple_distr_exec)
@@ -112,7 +107,7 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR})
 #
 #################################################################
 
-add_subdirectory(${SRC_PATH} ${LIBRARY_OUTPUT_PATH})
+add_subdirectory(${SRC_PATH} ${LIBRARY_OUTPUT_DIRECTORY})
 set(EXTRA_LIBS
   ${SIMPLELIB}
   ${CMAKE_THREAD_LIBS_INIT}
@@ -125,9 +120,8 @@ set(EXTRA_LIBS
 # ADD PRODUCTION EXECUTABLES
 #
 #################################################################
-
 # The source for the SIMPLE binary and have it placed in the bin folder
-add_subdirectory(${PROD_SRC_PATH} ${EXECUTABLE_OUTPUT_PATH})
+add_subdirectory(${PROD_SRC_PATH} ${EXECUTABLE_OUTPUT_DIRECTORY})
 
 
 
@@ -136,9 +130,8 @@ add_subdirectory(${PROD_SRC_PATH} ${EXECUTABLE_OUTPUT_PATH})
 # ADD SCRIPTS
 #
 #################################################################
-
 # The script folder contains some handy perl scripts for running SIMPLE
-add_subdirectory(${SCRIPTS_PATH} ${SCRP_BIN})
+add_subdirectory(${SCRIPTS_PATH})
 
 
 
@@ -148,9 +141,7 @@ add_subdirectory(${SCRIPTS_PATH} ${SCRP_BIN})
 # ENABLE TESTING
 #
 #################################################################
-
 if (${PROJECT_NAME}_BUILD_TESTS)
-
   add_subdirectory(tests)
 endif()
 
@@ -162,7 +153,7 @@ endif()
 #################################################################
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/gui)
   if (${PROJECT_NAME}_BUILD_GUI)
-    add_subdirectory(gui ${BIN}/gui)
+    add_subdirectory(gui  ${CMAKE_INSTALL_BINDIR}/gui)
   endif()
 endif()
 
@@ -186,11 +177,11 @@ add_custom_target(distclean
   )
 
 # here we save a version file
-set(VERSION_FILE "${CMAKE_INSTALL_LIBDIR}/simple/CMake/${PROJECTNAME}ConfigVersion.cmake")
+set(VERSION_FILE "${CMAKE_INSTALL_LIBDIR}/simple/CMake/${PROJECT_NAME}ConfigVersion.cmake")
 configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/ProjectConfigVersion.cmake.in" ${VERSION_FILE} @ONLY )
 
 # modules / depends
-FILE(GLOB SIMPLE_CMAKE_FILES "cmake/Modules/*.cmake")
+FILE(GLOB SIMPLE_CMAKE_FILES "cmake/Modules/*.cmake" )
 INSTALL(
   FILES ${SIMPLE_CMAKE_FILES}
   DESTINATION "${CMAKE_INSTALL_LIBDIR}/simple/CMake"
@@ -202,7 +193,7 @@ configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/scripts/add2.tcshrc.template"  ${CM
 install(FILES  ${CMAKE_CURRENT_BINARY_DIR}/add2.bashrc ${CMAKE_CURRENT_BINARY_DIR}/add2.tcshrc
   DESTINATION ${CMAKE_INSTALL_PREFIX}
   CONFIGURATIONS DEBUG|RELEASE
-  PERMISSIONS  OWNER_READ GROUP_READ WORLD_READ
+  PERMISSIONS   OWNER_READ OWNER_WRITE GROUP_READ GROUP_WRITE WORLD_READ WORLD_WRITE
    )
 
 
@@ -264,7 +255,8 @@ install(
     "
     execute_process(COMMAND \"${CMAKE_COMMAND}\"
                             -DCMAKE_SYSTEM_NAME=${CMAKE_SYSTEM_NAME}
-                            -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX} 
+                            -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}
+                            -DBUILD_SHARED_LIBS=${BUILD_SHARED_LIBS}
                             -P \"${POST_INSTALL_SCRIPT}\")
     "
 )

@@ -40,7 +40,6 @@ set(SIMPLE_DISTR_src "${CMAKE_CURRENT_SOURCE_DIR}/simple_distr_exec/simple_distr
 
 
 
-
 add_executable(${SIMPLE_SERIAL_EXE} ${SIMPLE_EXEC_src})
 add_executable(${SIMPLE_DISTR_EXE} ${SIMPLE_DISTR_src})
 
@@ -85,15 +84,9 @@ ENDIF(USE_OPENMP)
 # link our previously created shared library "shared" to the exectable "main"
 
 
-
-
-#####################################
-# Tell how to install this executable
-#####################################
-
 install(TARGETS ${SIMPLE_SERIAL_EXE}
-  ARCHIVE DESTINATION bin
-  RUNTIME DESTINATION bin)
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_BINDIR}
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(TARGETS ${SIMPLE_DISTR_EXE}
-  ARCHIVE DESTINATION bin
-  RUNTIME DESTINATION bin)
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_BINDIR}
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

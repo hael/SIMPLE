@@ -66,17 +66,12 @@ FATAL: In-source builds are not allowed.
   # Bring in helper functions for dealing with CACHE INTERNAL variables
   include(CacheInternalHelpers)
 
-  #figure out our git version
-  option(UPDATE_GIT_VERSION_INFO "update git version info in source tree" ON)
-  mark_as_advanced(UPDATE_GIT_VERSION_INFO)
-  if(UPDATE_GIT_VERSION_INFO)
-	  include(GitInfo)
-  endif()
-
   # We want to create static libraries
   set(BUILD_SHARED_LIBS FALSE)
-  set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR})
   include(GNUInstallDirs)
+  if("${CMAKE_INSTALL_PREFIX}" STREQUAL "/usr/local")
+    set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR})
+  endif()
   # There is some bug where -march=native doesn't work on Mac
   IF(APPLE)
     SET(GNUNATIVE "-mtune=native")

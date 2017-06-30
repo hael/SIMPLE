@@ -5,7 +5,7 @@
 file(GLOB TESTDIRS
   LIST_DIRECTORIES true
   RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
-  test_*
+  "test_*"
   )
 message( STATUS "Test directories ${TESTDIRS}")
 
@@ -71,12 +71,14 @@ foreach(TESTNAME ${TESTDIRS})
         LANGUAGE Fortran)
     endif(USE_OPENMP)
 
-    install(TARGETS ${TESTEXE} RUNTIME DESTINATION bin)
+    install(TARGETS ${TESTEXE}
+      ARCHIVE DESTINATION ${CMAKE_INSTALL_BINDIR}
+      RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 endif()
 endforeach(TESTNAME)
 
-
+#
 # Default CTest tests
 #
 list(APPEND CTESTDIRS
@@ -90,15 +92,21 @@ list(APPEND CTESTDIRS
 
 add_test(NAME test_parse
   CONFIGURATIONS Debug|Release
-  WORKING_DIRECTORY bin
-  COMMAND simple_test_parse nthr=4) 
+  WORKING_DIRECTORY ${CMAKE_INSTALL_BINDIR}
+  COMMAND simple_test_parse nthr=4 verbose=yes) 
+
+add_test(NAME test_install
+  CONFIGURATIONS Debug|Release
+  WORKING_DIRECTORY ${CMAKE_INSTALL_BINDIR}
+  COMMAND simple_test_install nthr=4 verbose=yes) 
+
 
 add_test(NAME test_units
   CONFIGURATIONS Debug|Release
-  WORKING_DIRECTORY bin
+  WORKING_DIRECTORY ${CMAKE_INSTALL_BINDIR}
   COMMAND simple_test_units nthr=4) 
 
 add_test(NAME test_timer
   CONFIGURATIONS Debug|Release
-  WORKING_DIRECTORY bin
-  COMMAND simple_test_timer ) 
+  WORKING_DIRECTORY ${CMAKE_INSTALL_BINDIR}
+  COMMAND simple_test_timer verbose=yes debug=yes) 

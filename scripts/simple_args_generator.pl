@@ -6,8 +6,8 @@ my @lines;
 my @vars;
 my$varlistfile;
 my$simple_argsfile;
-$varlistfile=$ENV{'SIMPLE_PATH'}.'/tests/simple_varlist.txt';
-$simple_argsfile=$ENV{'SIMPLE_PATH'}.'/lib/simple_args.f90';
+$varlistfile=$ENV{'SIMPLE_PATH'}.'/lib/simple/simple_varlist.txt';
+$simple_argsfile=$ENV{'SIMPLE_PATH'}.'/lib/simple/simple_args.f90';
 open(PARAMS, "< simple_params.f90") or die "Cannot open simple_params.f90\n";
 @lines = <PARAMS>;
 close(PARAMS);
@@ -51,7 +51,7 @@ unlink($simple_argsfile);
 open(MODULE, "> ".$simple_argsfile) or die "Cannot open simple_args.f90\n";
 print MODULE "!==Class simple_args
 !
-! simple_args is for error checking of the SIMPLE command line arguments.
+!\> \\brief simple_args is for error checking of the SIMPLE command line arguments.
 ! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_. Redistribution
 ! or modification is regulated by the GNU General Public License. *Author:* Hans Elmlund, 2011-08-18.
 !
@@ -63,7 +63,7 @@ implicit none
 
 public :: args, test_args
 private
-
+#include \"simple_local_flags.inc\"
 integer, parameter :: NARGMAX=500
 
 type args
@@ -112,28 +112,30 @@ print MODULE  "    end function
         character(len=STDLEN) :: arg, errarg1, errarg2, errarg3, spath, srcpath
         integer :: funit, n, i
         integer,dimension(13) :: buff
-        integer :: status
+        integer :: status,length
         write(*,'(a)') '**info(simple_args_unit_test): testing it all'
         write(*,'(a)') '**info(simple_args_unit_test, part 1): testing for args that should be present'
         as = args()
         funit = get_fileunit()
         write(*,'(a)') '**info(simple_args_unit_test): getting SIMPLE_PATH env variable'
-        call getenv(\"SIMPLE_PATH\",spath) ! 'simple absolute path'
+        call get_environment_variable(\"SIMPLE_PATH\",spath,LENGTH=length,STATUS=status) ! 'simple absolute path'
+        if( status /= 0 ) ErrorPrint(\"get_environment_variable failed to find SIMPLE_PATH!!!\")
         write(*,'(a)') '**info(simple_args_unit_test): getting SIMPLE_SOURCE_PATH env variable'
-        call getenv(\"SIMPLE_SOURCE_PATH\",srcpath) ! 'simple absolute source path'
+        call get_environment_variable(\"SIMPLE_SOURCE_PATH\",srcpath,LENGTH=length,STATUS=status) ! 'simple absolute source path'
+        if( status /= 0 ) ErrorPrint(\"get_environment_variable failed to find SIMPLE_SOURCE_PATH!!!\")
         spath=adjustl(trim(spath))
         srcpath=adjustl(trim(spath))
         if(present(vlist))then
-          vlist=adjustl(trim(vlist))
+            vlist=adjustl(trim(vlist))
         else
-                vlist = adjustl(trim(spath)) // '/tests/simple_varlist.txt'
+            vlist = adjustl(trim(spath)) // '/lib/simple/simple_varlist.txt'
         end if
         write(*,'(a)') '**info(simple_args_unit_test): checking varlist file'
         call stat(vlist , buff, status)
         if(status /= 0)then
-            write(*,'(a)') '**Warning(simple_args_unit_test): varlist not in <build dir>/tests,  calling simple_args_varlist'
+            WarnPrint \"simple_args_unit_test: varlist not in <build dir>/lib/simple/,  calling simple_args_varlist\"
             call system(\"simple_args_varlist.pl\",status)
-            if(status /= 0) print *,\"**FAIL(simple_args_unit_test):  simple_args_varlist.pl failed\"
+            if(status /= 0) ErrorPrint(\"simple_args_unit_test:  simple_args_varlist.pl failed\")
         end if
         n = nlines(vlist)
         open(unit=funit, status='old', action='read', file=vlist)

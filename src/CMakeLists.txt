@@ -4,6 +4,13 @@
 # Better config and build alternative to old perl compile process
 ##########################################################################
 
+add_custom_target(simple_args ALL
+  COMMAND SIMPLE_PATH=${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/scripts/simple_args_generator.pl
+  DEPENDS "${CMAKE_SOURCE_DIR}/scripts/simple_args_generator.pl" "${CMAKE_CURRENT_SOURCE_DIR}/simple_main/simple_params.f90"
+  BYPRODUCTS "${CMAKE_BINARY_DIR}/lib/simple/simple_args.f90" "${CMAKE_BINARY_DIR}/lib/simple/simple_args_varlist.txt"
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/simple_main
+  USES_TERMINAL
+  )
 
 file(GLOB DEFS_src "${CMAKE_CURRENT_SOURCE_DIR}/defs/*.f[90][08]" PARENT_SCOPE)
 file(GLOB UTILS_src "${CMAKE_CURRENT_SOURCE_DIR}/simple_utils/*.f90" PARENT_SCOPE)
@@ -18,7 +25,7 @@ endif()
 # Simple_main folder
 ##########################################################################
 file(GLOB SIMPLE_src "${CMAKE_CURRENT_SOURCE_DIR}/simple_main/*.f[09][0-9]" PARENT_SCOPE)
-
+list(APPEND SIMPLE_src "${CMAKE_BINARY_DIR}/lib/simple/simple_args.f90")
 
 # Remove unused files
 list(REMOVE_ITEM SIMPLE_src
@@ -49,7 +56,7 @@ else()
     SOVERSION ${${PROJECT_NAME}_VERSION}
     )
 endif()
-
+add_dependencies(${SIMPLELIB} simple_args)
 set_target_properties(${SIMPLELIB}
   PROPERTIES
   VERSION ${${PROJECT_NAME}_VERSION}
@@ -62,7 +69,11 @@ set_target_properties(${SIMPLELIB}
 install(TARGETS ${SIMPLELIB}
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
+  RUNTIME DESTINATION lib
   )
+#install varlist for testing in production
+install(FILES "${CMAKE_BINARY_DIR}/lib/simple/simple_args_varlist.txt"
+  DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/simple/")
 
 # Make sure the compiler can find include files for our SIMPLE library
 # when other libraries or executables link to it
