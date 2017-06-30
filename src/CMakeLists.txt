@@ -49,12 +49,16 @@ if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel")
     SOVERSION ${${PROJECT_NAME}_VERSION}
     )
 else()
-  add_library(${SIMPLELIB} SHARED ${SIMPLECORELIB})
-  SET_TARGET_PROPERTIES(${SIMPLELIB}
-    PROPERTIES
-    LINKER_LANGUAGE Fortran
-    SOVERSION ${${PROJECT_NAME}_VERSION}
-    )
+  if(BUILD_SHARED_LIBS)
+    add_library(${SIMPLELIB} SHARED ${SIMPLECORELIB})
+    SET_TARGET_PROPERTIES(${SIMPLELIB}
+      PROPERTIES
+      LINKER_LANGUAGE Fortran
+      SOVERSION ${${PROJECT_NAME}_VERSION}
+      )
+  else()
+    add_library(${SIMPLELIB} STATIC ${SIMPLECORELIB})
+  endif()
 endif()
 add_dependencies(${SIMPLELIB} simple_args)
 set_target_properties(${SIMPLELIB}
@@ -67,9 +71,9 @@ set_target_properties(${SIMPLELIB}
   )
 
 install(TARGETS ${SIMPLELIB}
-  ARCHIVE DESTINATION lib
-  LIBRARY DESTINATION lib
-  RUNTIME DESTINATION lib
+  ARCHIVE DESTINATION "${CMAKE_INSTALL_PREFIX}/lib"
+  LIBRARY DESTINATION "${CMAKE_INSTALL_PREFIX}/lib"
+  RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}/lib"
   )
 #install varlist for testing in production
 install(FILES "${CMAKE_BINARY_DIR}/lib/simple/simple_varlist.txt"

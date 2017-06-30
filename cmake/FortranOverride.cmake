@@ -67,7 +67,7 @@ FATAL: In-source builds are not allowed.
   include(CacheInternalHelpers)
 
   # We want to create static libraries
-  set(BUILD_SHARED_LIBS FALSE)
+  set(BUILD_SHARED_LIBS OFF)
   include(GNUInstallDirs)
   if("${CMAKE_INSTALL_PREFIX}" STREQUAL "/usr/local")
     set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR})
@@ -114,14 +114,15 @@ FATAL: In-source builds are not allowed.
     set(preproc  "-fpp")
     set(dialect  "-free -implicitnone -std08  ")
     set(checks   "-check bounds -check uninit -assume buffered_io -assume byterecl -align sequence  -diag-disable 6477  -gen-interfaces ") # -mcmodel=medium -shared-intel
-    set(warn     "-warn all")
+    set(warn     "-warn all ${checks}")
     set(fordebug "-debug -O0 -ftrapuv -debug all -check all")
     set(forspeed "-O3 -fp-model fast=2 -inline all -unroll-aggressive ")
     set(forpar   "-qopenmp")
     set(target   "-no-prec-div -static -fPIC")
-    set(common   "${dialect} ${checks} ${target} ${warn} -DINTEL")
+    set(common   "${preproc} ${dialect} ${target} -DINTEL")
     # else()
     #   message(" Fortran compiler not supported. Set FC environment variable")
+    
   endif ()
   set(CMAKE_Fortran_FLAGS_RELEASE_INIT "${common} ${forspeed} ${forpar}"  CACHE STRING "Default release flags -- do not edit" FORCE)
   set(CMAKE_Fortran_FLAGS_DEBUG_INIT  "${common} ${fordebug} ${forpar} -g"  CACHE STRING "Default debug flags -- do not edit" FORCE)

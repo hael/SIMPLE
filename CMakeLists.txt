@@ -115,14 +115,6 @@ set(EXTRA_LIBS
 # link_directories(${LIB})
 
 
-#################################################################
-#
-# ADD PRODUCTION EXECUTABLES
-#
-#################################################################
-# The source for the SIMPLE binary and have it placed in the bin folder
-add_subdirectory(${PROD_SRC_PATH} ${EXECUTABLE_OUTPUT_DIRECTORY})
-
 
 
 #################################################################
@@ -142,7 +134,9 @@ add_subdirectory(${SCRIPTS_PATH})
 #
 #################################################################
 if (${PROJECT_NAME}_BUILD_TESTS)
-  include(CTest)
+  if(VERBOSE)
+    include(CTest)
+  endif()
   add_subdirectory(tests)
 endif()
 
@@ -215,6 +209,7 @@ if(VERBOSE) #only for the fool-hardy
   # CTest
   #
   enable_testing()
+
   #
   # Doxygen
   #
@@ -248,15 +243,15 @@ if(VERBOSE) #only for the fool-hardy
   include(GenericLogging)
 endif()
 
+#################################################################
+#
+# ADD PRODUCTION EXECUTABLES
+#
+#################################################################
+# The source for the SIMPLE binary and have it placed in the bin folder
+add_subdirectory(${PROD_SRC_PATH} ${EXECUTABLE_OUTPUT_DIRECTORY})
 
-set(POST_INSTALL_SCRIPT ${CMAKE_SOURCE_DIR}/cmake/PostInstallMessage.cmake)
-install(
-    CODE 
-    "
-    execute_process(COMMAND \"${CMAKE_COMMAND}\"
-                            -DCMAKE_SYSTEM_NAME=${CMAKE_SYSTEM_NAME}
-                            -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}
-                            -DBUILD_SHARED_LIBS=${BUILD_SHARED_LIBS}
-                            -P \"${POST_INSTALL_SCRIPT}\")
-    "
-)
+
+
+add_subdirectory(${CMAKE_SOURCE_DIR}/cmake/PostInstall)
+

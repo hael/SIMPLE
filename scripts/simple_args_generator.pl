@@ -118,11 +118,12 @@ print MODULE  "    end function
         as = args()
         funit = get_fileunit()
         write(*,'(a)') '**info(simple_args_unit_test): getting SIMPLE_PATH env variable'
-        call get_environment_variable(\"SIMPLE_PATH\",spath,LENGTH=length,STATUS=status) ! 'simple absolute path'
-        if( status /= 0 ) ErrorPrint(\"get_environment_variable failed to find SIMPLE_PATH!!!\")
+        call get_environment_variable(\"SIMPLE_PATH\",spath,LENGTH=length,STATUS=status)
+if( status /= 0 ) ErrorPrint(\"get_environment_variable failed to find SIMPLE_PATH!!!\")
         write(*,'(a)') '**info(simple_args_unit_test): getting SIMPLE_SOURCE_PATH env variable'
-        call get_environment_variable(\"SIMPLE_SOURCE_PATH\",srcpath,LENGTH=length,STATUS=status) ! 'simple absolute source path'
-        if( status /= 0 ) ErrorPrint(\"get_environment_variable failed to find SIMPLE_SOURCE_PATH!!!\")
+        ! 'simple absolute source path'
+        call get_environment_variable(\"SIMPLE_SOURCE_PATH\",srcpath,LENGTH=length,STATUS=status) 
+if( status /= 0 ) ErrorPrint(\"get_environment_variable failed to find SIMPLE_SOURCE_PATH!!!\")
         spath=adjustl(trim(spath))
         srcpath=adjustl(trim(spath))
         if(present(vlist))then
@@ -133,9 +134,9 @@ print MODULE  "    end function
         write(*,'(a)') '**info(simple_args_unit_test): checking varlist file'
         call stat(vlist , buff, status)
         if(status /= 0)then
-            WarnPrint \"simple_args_unit_test: varlist not in <build dir>/lib/simple/,  calling simple_args_varlist\"
+WarnPrint \" varlist not in lib/simple/,  calling simple_args_varlist\"
             call system(\"simple_args_varlist.pl\",status)
-            if(status /= 0) ErrorPrint(\"simple_args_unit_test:  simple_args_varlist.pl failed\")
+if(status /= 0) ErrorPrint(\"simple_args_unit_test:  simple_args_varlist.pl failed\")
         end if
         n = nlines(vlist)
         open(unit=funit, status='old', action='read', file=vlist)
