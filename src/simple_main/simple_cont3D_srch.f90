@@ -269,12 +269,6 @@ contains
         endif
         ! stochastic weights and weighted correlation
         call self%stochastic_weights_L2norm(wcorr)
-        ! if(self%npeaks > 1)then
-        !     call self%softoris%stochastic_weights( wcorr )
-        ! else
-        !     call self%softoris%set(1, 'ow', 1.)
-        !     wcorr = self%softoris%get(1, 'corr')
-        ! endif
         ! variables inherited from input ori: CTF, w, lp
         if(self%o_in%isthere('dfx'))   call self%softoris%set_all2single('dfx',self%o_in%get('dfx'))
         if(self%o_in%isthere('dfy'))   call self%softoris%set_all2single('dfy',self%o_in%get('dfy'))
@@ -298,33 +292,18 @@ contains
         ! overlap between distributions
         roind    = self%pftcc_ptr%get_roind(360.-self%o_out%e3get())
         mi_proj  = 0.
-        mi_inpl  = 0.
         mi_state = 0.
-        mi_joint = 0.
-        if( euldist < 0.2 )then
-            mi_proj  = mi_proj + 1.
-            mi_joint = mi_joint + 1.
-        endif
-        if(self%prev_roind == roind)then
-            mi_inpl  = mi_inpl  + 1.
-            mi_joint = mi_joint + 1.
-        endif
+        if( euldist < 0.2 )mi_proj  = mi_proj + 1.
         if(self%nstates > 1)then
             state      = nint(self%o_out%get('state'))
             prev_state = nint(self%o_in%get('state'))
-            if(prev_state == state)then
-                mi_state = mi_state + 1.
-                mi_joint = mi_joint + 1.
-            endif
-            mi_joint = mi_joint/3.
-        else
-            mi_joint = mi_joint/2.
+            if(prev_state == state)mi_state = mi_state + 1.
         endif
         call self%o_out%set('proj', 0.)
         call self%o_out%set('mi_proj',  mi_proj)
-        call self%o_out%set('mi_inpl',  mi_inpl)
         call self%o_out%set('mi_state', mi_state)
-        call self%o_out%set('mi_joint', mi_joint)       
+        if(self%o_in%isthere('mi_inpl')) call self%o_out%set('mi_inpl', 100.)
+        if(self%o_in%isthere('mi_joint'))call self%o_out%set('mi_joint', 100.)
         ! frac
         frac = 100. * (real(self%neval)/real(self%nrefs))
         call self%o_out%set('frac', frac)

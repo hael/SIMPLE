@@ -35,6 +35,7 @@ real(sp), parameter :: MINTRSSDEV=0.5
 real(sp), parameter :: FTOL=1e-4
 real(dp), parameter :: DSMALL=1e-6
 real(dp), parameter :: pisqr = PI*PI   ! PI^2.
+real(sp), parameter :: ATHRES_LIM = 5.
 
 ! plan for the CTF
 type :: ctfplan

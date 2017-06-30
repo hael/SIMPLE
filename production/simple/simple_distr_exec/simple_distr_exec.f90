@@ -584,12 +584,13 @@ select case(prg)
         keys_optional(16) = 'xfel'
         keys_optional(17) = 'refine'
         keys_optional(18) = 'eo'
+        keys_optional(19) = 'athres'
         ! documentation
         if( describe ) call print_doc_cont3D
         ! parse command line
         call check_restart( entire_line, is_restart )
         if( is_restart )then
-            call parse_restart('cont3D', entire_line, cline, keys_required(:8), keys_optional(:18))
+            call parse_restart('cont3D', entire_line, cline, keys_required(:8), keys_optional(:19))
         else
             call cline%parse( keys_required(:8), keys_optional(:18) )
         endif

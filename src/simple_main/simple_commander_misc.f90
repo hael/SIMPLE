@@ -315,14 +315,14 @@ contains
             ! symmetry
             call rec_vol(p, b%se)
             symvol = b%vol
-            ! call symvol%write('sym_vol'//int2str_pad(i,2)//p%ext)
+            call symvol%write('sym_vol'//int2str_pad(i,2)//p%ext)
             ! c1
             rotmat = symaxis%get_mat()
             call o%ori_from_rotmat(transpose(rotmat))
             b%vol = rotvol(asym_vol, o, p)
             call b%vol%bp(p%hp, p%lp)
             call b%vol%mask(p%msk, 'soft')
-            ! call b%vol%write('asym_vol'//int2str_pad(i,2)//p%ext)
+            call b%vol%write('asym_vol'//int2str_pad(i,2)//p%ext)
             ! correlation
             cc = symvol%real_corr(b%vol, b%mskvol)
             call sympeaks%set(i, 'corr', cc)

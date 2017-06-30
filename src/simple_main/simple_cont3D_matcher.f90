@@ -81,8 +81,9 @@ contains
         call set_bp_range( b, p, cline )
 
         ! CALCULATE ANGULAR THRESHOLD (USED BY THE SPARSE WEIGHTING SCHEME)
-        p%athres = 2. * rad2deg(atan(max(p%fny,p%lp)/(p%moldiam/2.)))
-        if( p%refine.eq.'yes' )write(*,'(A,F6.2)')'>>> ANGULAR THRESHOLD: ', p%athres
+        if( .not.cline%defined('athres') ) p%athres = max(p%lp, ATHRES_LIM)
+        write(*,'(A,F6.2)')'>>> ANGULAR THRESHOLD: ', p%athres
+
 
         ! DETERMINE THE NUMBER OF PEAKS
         select case(p%refine)
@@ -115,7 +116,7 @@ contains
         call pftcc%kill
 
         ! INITIALIZE
-        write(*,'(A,1X,I3)')'>>> CONTINUOUS POLAR-FT ORIENTATION SEARCH, ITERATION:', which_iter
+        write(*,'(A,1X,I3)')'>>> CONTINUOUS ORIENTATION SEARCH, ITERATION:', which_iter
         if( .not. p%l_distr_exec )then
             p%outfile = 'cont3Ddoc_'//int2str_pad(which_iter,3)//'.txt'
         endif
