@@ -12,13 +12,16 @@
 #+name: status
 #+attr_html:  :align center :width 500
 #+caption: Developer -- Build success table
-|                       | GNU /gfortran/ and FFTW                                                                                                                                                          | Intel /ifort/ and MKL                                    | Portland Group /pgfortran/  and PGI compiled FFTW |
-|-----------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+----------------------------------------------------------+---------------------------------------------------|
-| Ubuntu (14.10, 16.04) | [[https://img.shields.io/badge/build-v4.9-green.svg]] [[https://img.shields.io/badge/build-v5.4-green.svg]]  [[https://img.shields.io/badge/build-v7.1-green.svg]]                           | [[https://img.shields.io/badge/build-v2017.2.174-green.svg]] | [[https://img.shields.io/badge/build-2016-green.svg]] |
-| Centos (MASSIVE3)     | [[https://img.shields.io/badge/build-v5-green.svg]]                                                                                                                                  | [[https://img.shields.io/badge/build-intel/2016-green.svg]]  | https://img.shields.io/badge/build-NA-gray.svg    |
-| ThinkStation          | [[https://img.shields.io/badge/build-v4.9-green.svg]]                                                                                                                                                                               |                                                          |                                                   |
-| MacOSX (10.12)        | [[https://img.shields.io/badge/build-Brew_gcc4.9-green.svg]]  [[https://img.shields.io/badge/build-Macports_gcc5.4-green.svg]]  [[https://img.shields.io/badge/build-Fink_gcc4.9-green.svg]] | [[https://img.shields.io/badge/build-NA-gray.svg]]           | https://img.shields.io/badge/build-NA-red.svg     |
-| Win                   | [[https://img.shields.io/badge/build-TODO-gray.svg]]                                                                                                                                 | [[https://img.shields.io/badge/build-TODO-gray.svg]]         | https://img.shields.io/badge/build-NA-gray.svg    |
+|                       | GNU /gfortran/ and FFTW                                                                                                                                                          | Intel /ifort/ and MKL                                     | Portland Group /pgfortran/  and PGI compiled FFTW  |
+|-----------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------+----------------------------------------------------|
+| Ubuntu (14.10, 16.04) | [[https://img.shields.io/badge/build-v4.9-green.svg]] [[https://img.shields.io/badge/build-v5.4-green.svg]]  [[https://img.shields.io/badge/build-v7.1-green.svg]]                           | [[https://img.shields.io/badge/build-v2017.2.174-yellow.svg]] | [[https://img.shields.io/badge/build-2016-yellow.svg]] |
+| Centos (MASSIVE3)     | [[https://img.shields.io/badge/build-v5-green.svg]]                                                                                                                                  | [[https://img.shields.io/badge/build-v2016-yellow.svg]]       | https://img.shields.io/badge/build-NA-gray.svg     |
+| ThinkStation          | [[https://img.shields.io/badge/build-v4.9-green.svg]]                                                                                                                                |                                                           |                                                    |
+| iMac (10.10)          | [[https://img.shields.io/badge/build-MacPorts_gcc4.9-green.svg]]                                                                                                                     | [[https://img.shields.io/badge/build-NA-gray.svg]]            | https://img.shields.io/badge/build-NA-gray.svg     |
+| MacOSX MacBookPro     | https://img.shields.io/badge/build-Brew_gcc4.9-green.svg https://img.shields.io/badge/build-Brew_gcc7.0-green.svg                                                                |                                                           |                                                    |
+| MacOSX (10.12)        | [[https://img.shields.io/badge/build-Brew_gcc4.9-green.svg]]  [[https://img.shields.io/badge/build-Macports_gcc5.4-green.svg]]  [[https://img.shields.io/badge/build-Fink_gcc4.9-green.svg]] | [[https://img.shields.io/badge/build-NA-gray.svg]]            | https://img.shields.io/badge/build-NA-gray.svg     |
+| Win                   | [[https://img.shields.io/badge/build-TODO-gray.svg]]                                                                                                                                 | [[https://img.shields.io/badge/build-TODO-gray.svg]]          | https://img.shields.io/badge/build-NA-gray.svg     |
+|                       |                                                                                                                                                                                  |                                                           |                                                    |
 
 
 
@@ -203,6 +206,8 @@ Generate Visual Studio 12 Solution and build the ALL_BUILD target:
 
 **** Unit testing with CTest                          :noexport:
 
+Add unit tests with CTest using =add_test()=.
+
 #+BEGIN_SRC sh
     # Testing
     make test
@@ -231,7 +236,7 @@ To run a typical test with 8 cores, use:
 
 #+BEGIN_SRC sh
     cd bin
-    ./simple_test_install nthr=8
+    ./simple_test_install nthr=4
 #+END_SRC
 
 
@@ -242,6 +247,36 @@ Create user documentation with =make doc= or see [[http://simplecryoem.com/manua
 ** Contributing
 
 See [[file:doc/SimpleManual/simple3.0devel.tex][Developer Manual]]
+
+All developer options can be used in CMake when using the VERBOSE arg.
+
+: ccmake -DVERBOSE=1
+
+The dev options include:
+ - ENABLE_DOXYGEN
+ - CPACK_GENERATOR   {TGZ, RPM, DEB, ZIP}
+ - CTest
+ - CodeCoverage
+ - ENABLE_PROFILING   
+
+Optimisation flags include:
+ - ENABLE_LINK_TIME_OPTIMISATION
+ - ENABLE_FAST_MATH_OPTIMISATION
+ - ENABLE_PROFILE_OPTIMISATION
+
+Further development and optimisation should go in cmake/SimpleFortranOptions.cmake.
+Critical production should go in cmake/FortranOverride.cmake (all forced options are set here and should not change for users.)
+
+*** Building Doxygen API documentation
+
+: cmake -DVERBOSE=1 -DENABLE_DOXYGEN=ON
+: make doc
+
+*** Building Tarball package
+
+: ccmake -DVERBOSE=1 -DCPACK_GENERATOR=TGZ
+: make package
+
 
 ** Changelog
 

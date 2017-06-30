@@ -79,87 +79,91 @@ end interface
 
 contains
 
-    function constructor( ) result( self )
-        type(args) :: self\n";
+function constructor( ) result( self )
+    type(args) :: self\n";
 my$j;
 foreach my$i (0 .. $#vars){
   $j = $i+1;
-  my$str = "        self%args(".$j.") = '".$vars[$i]."'\n";
+  my$str = "    self%args(".$j.") = '".$vars[$i]."'\n";
   print MODULE $str;
 }
 $j++;
-print MODULE  "        self%args(".$j.") = ''\n";
-print MODULE  "    end function
+print MODULE  "    self%args(".$j.") = ''\n";
+print MODULE  "end function
 
-    function is_present( self, arg ) result( yep )
-        class(args), intent(in)      :: self
-        character(len=*), intent(in) :: arg
-        integer :: i
-        logical :: yep
-        yep = .false.
-        do i=1,NARGMAX
-            if( self%args(i) .eq. arg )then
-                yep = .true.
-                return
-            endif
-        end do
-    end function
-
-    subroutine test_args(vlist)
-        use simple_filehandling, only: get_fileunit, nlines
-        character(len=STDLEN), intent(inout), optional :: vlist
-        type(args) :: as
-        character(len=STDLEN) :: arg, errarg1, errarg2, errarg3, spath, srcpath
-        integer :: funit, n, i
-        integer,dimension(13) :: buff
-        integer :: status,length
-        write(*,'(a)') '**info(simple_args_unit_test): testing it all'
-        write(*,'(a)') '**info(simple_args_unit_test, part 1): testing for args that should be present'
-        as = args()
-        funit = get_fileunit()
-        write(*,'(a)') '**info(simple_args_unit_test): getting SIMPLE_PATH env variable'
-        call get_environment_variable(\"SIMPLE_PATH\",spath,LENGTH=length,STATUS=status)
-if( status /= 0 ) ErrorPrint(\"get_environment_variable failed to find SIMPLE_PATH!!!\")
-        write(*,'(a)') '**info(simple_args_unit_test): getting SIMPLE_SOURCE_PATH env variable'
-        ! 'simple absolute source path'
-        call get_environment_variable(\"SIMPLE_SOURCE_PATH\",srcpath,LENGTH=length,STATUS=status) 
-if( status /= 0 ) ErrorPrint(\"get_environment_variable failed to find SIMPLE_SOURCE_PATH!!!\")
-        spath=adjustl(trim(spath))
-        srcpath=adjustl(trim(spath))
-        if(present(vlist))then
-            vlist=adjustl(trim(vlist))
-        else
-            vlist = adjustl(trim(spath)) // '/lib/simple/simple_varlist.txt'
-        end if
-        write(*,'(a)') '**info(simple_args_unit_test): checking varlist file'
-        call stat(vlist , buff, status)
-        if(status /= 0)then
-WarnPrint \" varlist not in lib/simple/,  calling simple_args_varlist\"
-            call system(\"simple_args_varlist.pl\",status)
-if(status /= 0) ErrorPrint(\"simple_args_unit_test:  simple_args_varlist.pl failed\")
-        end if
-        n = nlines(vlist)
-        open(unit=funit, status='old', action='read', file=vlist)
-        do i=1,n
-            read(funit,*) arg
-            if( as%is_present(arg) )then
-                ! alles gut
-            else
-                write(*,'(a)') 'this argument should be present: ', arg
-                stop 'part 1 of the unit test failed'
-            endif
-        end do
-        close(funit)
-        errarg1 = 'XXXXXXX'
-        errarg2 = 'YYYYYY'
-        errarg3 = 'ZZZZZZ'
-        write(*,'(a)') '**info(simple_args_unit_test, part 2): testing for args that should NOT be present'
-        if( as%is_present(errarg1) .or. as%is_present(errarg2) .or. as%is_present(errarg3) )then
-            write(*,'(a)') 'the tested argumnets should NOT be present'
-            stop 'part 2 of the unit test failed'
+function is_present( self, arg ) result( yep )
+    class(args), intent(in)      :: self
+    character(len=*), intent(in) :: arg
+    integer :: i
+    logical :: yep
+    yep = .false.
+    do i=1,NARGMAX
+        if( self%args(i) .eq. arg )then
+            yep = .true.
+            return
         endif
-        write(*,'(a)') 'SIMPLE_ARGS_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
-    end subroutine
+    end do
+end function
+
+subroutine test_args()
+    use simple_filehandling, only: get_fileunit, nlines
+    type(args) :: as
+    character(len=STDLEN) :: arg, errarg1, errarg2, errarg3, spath, srcpath
+    integer :: funit, n, i
+    integer,dimension(13) :: buff
+    integer :: status,length1,length2
+    character(len=STDLEN) :: vlist = '/lib/simple/simple_varlist.txt'
+    write(*,'(a)') '**info(simple_args_unit_test): testing it all'
+    write(*,'(a)') '**info(simple_args_unit_test, part 1): testing for args that should be present'
+    verbose=.true.
+    as = args()
+    funit = get_fileunit()
+    write(*,'(a)') '**info(simple_args_unit_test): getting SIMPLE_PATH env variable'
+    call getenv(\"SIMPLE_PATH\",spath)
+    spath=adjustl(trim(spath))
+    VerbosePrint 'get_environment_variable found SIMPLE_PATH ', trim(spath)
+    write(*,'(a)') '**info(simple_args_unit_test): getting SIMPLE_SOURCE_PATH env variable'
+    call getenv(\"SIMPLE_SOURCE_PATH\",srcpath)
+    srcpath=adjustl(trim(srcpath))
+    VerbosePrint 'get_environment_variable found SIMPLE_SOURCE_PATH ', trim(srcpath)
+    VerbosePrint 'appending varlist '
+    vlist = trim(spath) // trim(vlist)
+    VerbosePrint 'varlist: ', trim(adjustl(vlist))
+    write(*,'(a)') '**info(simple_args_unit_test): checking varlist file'
+    call stat(vlist , buff, status)
+    if(status /= 0)then
+      print *,' varlist not in lib/simple/,  calling simple_args_varlist.pl'
+      call system(\"simple_args_varlist.pl\",status)
+      if(status /= 0) then
+         VerbosePrint 'simple_args_unit_test:  simple_args_varlist.pl failed'
+      end if
+      call stat(vlist , buff, status)
+      if(status /= 0)then
+        print *,' varlist still not in lib/simple/ after calling simple_args_varlist.pl'
+      end if
+    end if
+    n = nlines(vlist)
+    open(unit=funit, status='old', action='read', file=vlist)
+    do i=1,n
+        read(funit,*) arg
+        if( as%is_present(arg) )then
+            ! alles gut
+        else
+            write(*,'(a)') 'this argument should be present: ', arg
+            stop 'part 1 of the unit test failed'
+        endif
+    end do
+    close(funit)
+    errarg1 = 'XXXXXXX'
+    errarg2 = 'YYYYYY'
+    errarg3 = 'ZZZZZZ'
+    write(*,'(a)') '**info(simple_args_unit_test, part 2): testing for args that should NOT be present'
+    if( as%is_present(errarg1) .or. as%is_present(errarg2) .or. as%is_present(errarg3) )then
+        write(*,'(a)') 'the tested argumnets should NOT be present'
+        stop 'part 2 of the unit test failed'
+    endif
+    write(*,'(a)') 'SIMPLE_ARGS_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
+end subroutine
 
 end module simple_args\n";
 close(MODULE);
