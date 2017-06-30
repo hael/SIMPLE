@@ -11,3 +11,7 @@
 \BOOKMARK [1][-]{section.4}{Ab initio 3D Reconstruction from Class Averages Using PRIME3D}{}% 11
 \BOOKMARK [2][-]{subsection.4.1}{Analysis of Ribosome Class Averages Using the ini3D\137from\137cavgs Program}{section.4}% 12
 \BOOKMARK [2][-]{subsection.4.2}{Using SIMPLE in the Wild\204Mapping Class Orientations and Selection to the Particles}{section.4}% 13
+\BOOKMARK [1][-]{section.5}{Reconstruction of Symmetrical Structures with SIMPLE}{}% 14
+\BOOKMARK [2][-]{subsection.5.1}{In-plane alignment and clustering}{section.5}% 15
+\BOOKMARK [2][-]{subsection.5.2}{Ab initio 3D reconstruction from class averages}{section.5}% 16
+\BOOKMARK [2][-]{subsection.5.3}{Resolution estimate from single-particle images}{section.5}% 17
