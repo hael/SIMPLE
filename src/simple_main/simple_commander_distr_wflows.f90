@@ -304,7 +304,6 @@ contains
         use simple_commander_mask
         class(makecavgs_distr_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
-        logical, parameter    :: DEBUG=.false.
         type(split_commander) :: xsplit
         type(cmdline)         :: cline_cavgassemble
         type(qsys_env)        :: qenv
@@ -351,7 +350,6 @@ contains
         class(prime2D_distr_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         ! constants
-        logical,               parameter :: DEBUG           = .true.
         character(len=32),     parameter :: ALGNFBODY       = 'algndoc_'
         character(len=32),     parameter :: ITERFBODY       = 'prime2Ddoc_'
         character(len=32),     parameter :: CAVGS_ITERFBODY = 'cavgs_iter'
@@ -707,7 +705,6 @@ contains
         class(prime3D_distr_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         ! constants
-        logical,           parameter :: DEBUG=.false.
         character(len=32), parameter :: ALGNFBODY    = 'algndoc_'
         character(len=32), parameter :: VOLFBODY     = 'recvol_state'
         character(len=32), parameter :: ITERFBODY    = 'prime3Ddoc_'
@@ -1038,7 +1035,6 @@ contains
         class(cont3D_distr_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         ! constants
-        logical,           parameter :: DEBUG=.false.
         character(len=32), parameter :: ALGNFBODY    = 'algndoc_'
         character(len=32), parameter :: ITERFBODY    = 'cont3Ddoc_'
         character(len=32), parameter :: VOLFBODY     = 'recvol_state'

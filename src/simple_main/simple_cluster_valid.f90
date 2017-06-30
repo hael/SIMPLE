@@ -1,3 +1,4 @@
+!> Cluster search module
 module simple_cluster_valid
     use simple_defs
     use simple_jiffys, only: alloc_err

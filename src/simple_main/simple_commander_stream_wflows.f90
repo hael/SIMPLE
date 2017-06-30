@@ -28,7 +28,6 @@ contains
         use simple_commander_preproc, only: preproc_commander
         class(preproc_stream_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
-        logical,               parameter   :: DEBUG = .true.
         character(len=STDLEN), parameter   :: FILETABNAME='movieftab_preproc_stream.txt'
         integer,               parameter   :: SHORTTIME = 15
         character(len=STDLEN), allocatable :: movienames(:)

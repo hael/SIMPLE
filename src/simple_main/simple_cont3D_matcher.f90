@@ -19,7 +19,7 @@ private
 integer,                   parameter :: BATCHSZ_MUL = 10   ! particles per thread
 integer,                   parameter :: MAXNPEAKS   = 10
 integer,                   parameter :: NREFS       = 50
-logical,                   parameter :: LOCAL_DEBUG       = .false.
+
 type(polarft_corrcalc)               :: pftcc
 type(oris)                           :: orefs                   !< per particle projection direction search space
 type(cont3D_srch),       allocatable :: cont3Dsrch(:)

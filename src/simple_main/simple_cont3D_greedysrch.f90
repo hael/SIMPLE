@@ -1,3 +1,4 @@
+!> \brief Greedy search method 
 module simple_cont3D_greedysrch
 use simple_defs
 use simple_params,           only: params

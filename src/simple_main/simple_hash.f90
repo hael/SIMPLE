@@ -1,3 +1,4 @@
+!> Simple hash module
 module simple_hash
 use simple_defs
 use simple_strings ! use all in there

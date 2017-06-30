@@ -1,3 +1,4 @@
+!> \brief Abstract module for commander classes
 module simple_commander_base
 implicit none
 

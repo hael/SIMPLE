@@ -666,7 +666,6 @@ contains
         integer               :: last_slice, ii, alloc_stat
         real                  :: smpd
         logical               :: isvol, err, iisxfel, ioimg_present
-        logical, parameter    :: LOCAL_DEBUG=.false.
         real(dp), allocatable :: tmpmat1(:,:,:)
         real(sp), allocatable :: tmpmat2(:,:,:)
         ldim          = self%ldim
@@ -676,8 +675,8 @@ contains
         if( present(isxfel) ) iisxfel = isxfel
         if( iisxfel )then
             ! always assume EM-kind images on disk
-            if( LOCAL_DEBUG ) print *, 'ldim: ', ldim
-            if( LOCAL_DEBUG ) print *, 'smpd: ', smpd
+            DebugPrint 'ldim: ', ldim
+            DebugPrint 'smpd: ', smpd
             call self%new(ldim, smpd)
         endif
         isvol = .true. ! assume volume by default

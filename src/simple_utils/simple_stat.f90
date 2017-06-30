@@ -698,7 +698,7 @@ contains
 
     end function get_jointhist
 
-    !>   \biref In information theory, the Hamming distance between two strings of equal length 
+    !>   \brief In information theory, the Hamming distance between two strings of equal length 
     !!          is the number of positions at which the corresponding symbols are different. 
     function hamming_dist( x, y ) result( dist )
         integer, intent(in) :: x(:), y(:)

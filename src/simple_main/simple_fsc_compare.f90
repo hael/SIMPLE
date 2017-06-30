@@ -1,3 +1,4 @@
+!> \brief FSC comparison module
 module simple_fsc_compare
 implicit none
     
@@ -17,7 +18,7 @@ type :: fsc_compare
     generic            :: calc_weights => calc_weights_1, calc_weights_2
     procedure, private :: rank
     procedure          :: kill
-end type
+ end type fsc_compare
 
 interface fsc_compare
     module procedure constructor

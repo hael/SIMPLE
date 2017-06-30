@@ -1,3 +1,4 @@
+!> Generic Prime 2D/3D search module
 module simple_hadamard_common
 use simple_defs
 use simple_cmdline,      only: cmdline

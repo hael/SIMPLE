@@ -7,15 +7,8 @@
 # this is the top level directory of your build tree
 MESSAGE( STATUS "CMAKE_BINARY_DIR:         " ${CMAKE_BINARY_DIR} )
 
-# if you are building in-source, this is the same as CMAKE_CURRENT_SOURCE_DIR, otherwise this
-# is the directory where the compiled or generated files from the current CMakeLists.txt will go to
-MESSAGE( STATUS "CMAKE_CURRENT_BINARY_DIR: " ${CMAKE_CURRENT_BINARY_DIR} )
-
 # this is the directory, from which cmake was started, i.e. the top level source directory
 MESSAGE( STATUS "CMAKE_SOURCE_DIR:         " ${CMAKE_SOURCE_DIR} )
-
-# this is the directory where the currently processed CMakeLists.txt is located in
-MESSAGE( STATUS "CMAKE_CURRENT_SOURCE_DIR: " ${CMAKE_CURRENT_SOURCE_DIR} )
 
 # contains the full path to the top level directory of your build tree
 MESSAGE( STATUS "PROJECT_BINARY_DIR: " ${PROJECT_BINARY_DIR} )
@@ -23,14 +16,6 @@ MESSAGE( STATUS "PROJECT_BINARY_DIR: " ${PROJECT_BINARY_DIR} )
 # contains the full path to the root of your project source directory,
 # i.e. to the nearest directory where CMakeLists.txt contains the PROJECT() command
 MESSAGE( STATUS "PROJECT_SOURCE_DIR: " ${PROJECT_SOURCE_DIR} )
-
-# set this variable to specify a common place where CMake should put all executable files
-# (instead of CMAKE_CURRENT_BINARY_DIR)
-MESSAGE( STATUS "EXECUTABLE_OUTPUT_PATH: " ${EXECUTABLE_OUTPUT_PATH} )
-
-# set this variable to specify a common place where CMake should put all libraries
-# (instead of CMAKE_CURRENT_BINARY_DIR)
-MESSAGE( STATUS "LIBRARY_OUTPUT_PATH:     " ${LIBRARY_OUTPUT_PATH} )
 
 # tell CMake to search first in directories listed in CMAKE_MODULE_PATH
 # when you use FIND_PACKAGE() or INCLUDE()
@@ -74,7 +59,7 @@ MESSAGE( STATUS "WIN32: " ${WIN32} )
 
 # is TRUE on Apple OS X
 MESSAGE( STATUS "APPLE: " ${APPLE} )
-
+if(WIN32)
 # is TRUE when using the MinGW compiler in Windows
 MESSAGE( STATUS "MINGW: " ${MINGW} )
 
@@ -84,6 +69,7 @@ MESSAGE( STATUS "CYGWIN: " ${CYGWIN} )
 # is TRUE on Windows when using a Borland compiler
 MESSAGE( STATUS "BORLAND: " ${BORLAND} )
 
+
 # Microsoft compiler
 MESSAGE( STATUS "MSVC: " ${MSVC} )
 MESSAGE( STATUS "MSVC_IDE: " ${MSVC_IDE} )
@@ -92,7 +78,7 @@ MESSAGE( STATUS "MSVC70: " ${MSVC70} )
 MESSAGE( STATUS "MSVC71: " ${MSVC71} )
 MESSAGE( STATUS "MSVC80: " ${MSVC80} )
 MESSAGE( STATUS "CMAKE_COMPILER_2005: " ${CMAKE_COMPILER_2005} )
-
+endif()
 
 # set this to true if you don't want to rebuild the object files if the rules have changed,
 # but not the actual source files or headers (e.g. if you changed the some compiler switches)
@@ -171,6 +157,10 @@ MESSAGE( STATUS "CMAKE_Fortran_CREATE_PREPROCESSED_SOURCE: " ${CMAKE_Fortran_CRE
 
 # the compiler used for Fortran files
 MESSAGE( STATUS "CMAKE_Fortran_COMPILER: " ${CMAKE_Fortran_COMPILER} )
+# if you are building in-source, this is the same as CMAKE_SOURCE_DIR, otherwise
+# this is the top level directory of your build tree
+MESSAGE( STATUS "CMAKE_INSTALL_PREFIX:         " ${CMAKE_INSTALL_PREFIX} )
+
 #
 #MESSAGE( STATUS ": " ${} )
 

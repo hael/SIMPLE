@@ -1,7 +1,7 @@
 !> \brief SIMPLE command line parsing class
-!! The code is distributed with the hope that it will be useful, but WITHOUT ANY WARRANTY.
-!! Redistribution or modification is regulated by the GNU General Public License.
-!! Hans Elmlund, 2011-08-17.
+! The code is distributed with the hope that it will be useful, but WITHOUT ANY WARRANTY.
+! Redistribution or modification is regulated by the GNU General Public License.
+! Hans Elmlund, 2011-08-17.
 module simple_cmdline
   use simple_defs
   use simple_cmd_dict

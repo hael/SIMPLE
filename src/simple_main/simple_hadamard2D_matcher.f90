@@ -303,7 +303,7 @@ contains
 
         contains
 
-            ! image is shifted and Fted on exit and the class CTF square sum updated
+            !> image is shifted and Fted on exit and the class CTF square sum updated
             subroutine apply_ctf_and_shift( img, o )
                 class(image), intent(inout) :: img
                 class(ori),   intent(inout) :: o

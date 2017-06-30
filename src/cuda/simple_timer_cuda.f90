@@ -1,14 +1,13 @@
 != Module simple_timer_cuda
 !
-! TODO Working for pgi fortran but not gfortran/cuda8
-! Michael Eager 2017-03-15
-
+!! TODO Working for pgi fortran but not gfortran/cuda8
+!!
+!! Michael Eager 2017-03-15
 module simple_timer_cuda
   use simple_defs
   use cudafor
-
   implicit none
-
+  !> 
   type timer_cuda
 #ifdef PGI
     type(cudaEvent) :: start_point=>null()

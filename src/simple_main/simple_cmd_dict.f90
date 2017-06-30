@@ -1,3 +1,4 @@
+!> Command dictionary module
 module simple_cmd_dict
 use simple_chash, only: chash
 use simple_defs
@@ -10,9 +11,7 @@ integer, parameter :: NMAX=300
 type(chash)        :: chdict
 logical            :: initialised=.false.
 
-
 contains
-    
     subroutine init_cmd_dict
         call chdict%new(NMAX)
         call chdict%push('acf',           'calculate autocorrelation function(yes|no){no}')

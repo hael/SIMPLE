@@ -1,3 +1,4 @@
+!> Simple projector class
 module simple_projector
 !$ use omp_lib
 !$ use omp_lib_kinds
@@ -13,8 +14,6 @@ implicit none
 
 public :: projector
 private
-
-logical, parameter :: DEBUG = .true.
 
 type, extends(image) :: projector
     private

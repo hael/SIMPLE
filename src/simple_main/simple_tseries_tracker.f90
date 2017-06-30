@@ -13,7 +13,7 @@ private
 
 integer,               allocatable :: particle_locations(:,:)
 character(len=STDLEN), allocatable :: framenames(:)
-logical, parameter     :: DEBUG=.true., DOPRINT=.true.
+logical, parameter     :: DOPRINT=.true.
 type(image)            :: frame_img, reference
 integer                :: ldim(3), nframes, box, nx, ny, offset
 real                   :: smpd, sxx, lp

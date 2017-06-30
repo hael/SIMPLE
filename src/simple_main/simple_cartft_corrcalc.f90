@@ -1,3 +1,4 @@
+!> \brief CTF correlation calculator module
 module simple_cartft_corrcalc
 use simple_defs
 use simple_params,    only: params

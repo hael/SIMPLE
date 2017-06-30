@@ -32,6 +32,7 @@ command = 'mkdir '//folder
 call exec_cmdline( trim(command) )
 call chdir(folder)
 call test_cmd_dict           ! pass with PGI
+call test_args               ! pass with PGI
 call test_build              ! NOT HAPPY: get_ldim in img class bails with PGI
 call test_ftiter             ! pass with PGI
 call test_ori                ! pass with PGI
@@ -43,7 +44,6 @@ call test_hac                ! NOT HAPPY
 call test_kmeans             ! NOT HAPPY
 call test_shc_cluster        ! pass with PGI
 call test_aff_prop           ! pass with PGI
-call test_args               ! pass with PGI
 call test_online_var         ! pass with PGI
 call test_hash               ! pass with PGI
 call test_ft_shsrch          ! pass with PGI

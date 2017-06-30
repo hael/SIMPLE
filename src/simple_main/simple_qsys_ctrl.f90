@@ -7,9 +7,8 @@ implicit none
 
 public :: qsys_ctrl
 private
-
+#include "simple_local_flags.inc"
 integer, parameter :: SHORTTIME = 3
-logical, parameter :: LOCAL_DEBUG     = .false.
 
 type qsys_ctrl
     private
@@ -377,7 +376,7 @@ contains
         close( unit=fnr )
         call flush(fnr)
         call chmod(master_submit_script,'+x')
-        if( LOCAL_DEBUG )then
+        if( debug.or.global_debug )then
             call exec_cmdline('echo DISTRIBUTED MODE :: submitting scripts:')
             call exec_cmdline('ls -1 distr_simple_script_*')
         endif

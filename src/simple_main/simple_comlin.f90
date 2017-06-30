@@ -1,3 +1,4 @@
+!> \brief Common line correlation module
 module simple_comlin
 use simple_defs    ! use all in there
 use simple_image,  only: image 

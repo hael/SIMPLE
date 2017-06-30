@@ -1,6 +1,6 @@
 !==Class simple_args
 !
-! simple_args is for error checking of the SIMPLE command line arguments. 
+!> simple_args is for error checking of the SIMPLE command line arguments. 
 ! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_. Redistribution 
 ! or modification is regulated by the GNU General Public License. *Author:* Hans Elmlund, 2011-08-18.
 ! 
@@ -20,7 +20,7 @@ type args
     character(len=STDLEN) :: args(NARGMAX)
   contains
     procedure :: is_present
-end type 
+ end type args
 
 interface args
     module procedure constructor 
