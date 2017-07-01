@@ -137,7 +137,10 @@ contains
         double precision , parameter :: prot_d = 1.43d0            ! g/ml
         double precision , parameter :: one_da = 1.66053892173e-27 ! kg
         da_per_ml = (prot_d*1e-3)/one_da
-        pix_per_ml = ((1e-2)**3)/((smpd*1e-10)**3)
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        ! pix_per_ml = ((1e-2)**3)/((smpd*1e-10)**3)
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        pix_per_ml = ((1e-3)**3)/((smpd*1e-10)**3)
         prot_d2 = da_per_ml/pix_per_ml ! protein density in da per pixel
         nvox = nint(mwkda*1000.d0/prot_d2)
     end function

@@ -90,9 +90,9 @@ contains
     !>  The returned volume is enveloppe masked.
     subroutine automask3D( self, vol_inout, msk, amsklp, mw, binwidth, edge, dens )
         class(masker), intent(inout) :: self
-        class(image),          intent(inout) :: vol_inout
-        real,                  intent(in)    :: msk, amsklp, mw, dens
-        integer,               intent(in)    :: binwidth, edge
+        class(image),  intent(inout) :: vol_inout
+        real,          intent(in)    :: msk, amsklp, mw, dens
+        integer,       intent(in)    :: binwidth, edge
         logical :: was_ft
         if( vol_inout%is_2d() )stop 'automask3D is intended for volumes only, simple_masker%init_mskproj'
         call self%kill_masker
@@ -138,11 +138,11 @@ contains
 
     ! 2D CALCULATORS
 
-    !>  \brief  is for enveloppe masking the input image
+    !>  \brief  is for envelope masking the input image
     subroutine update_cls( self, ref, cls )
         class(masker), intent(inout) :: self
-        class(image),          intent(inout) :: ref
-        integer,               intent(in)    :: cls
+        class(image),  intent(inout) :: ref
+        integer,       intent(in)    :: cls
         type(image) :: img
         if( .not.self%masker_exists )stop 'masker object has not be instantiated'
         if( cls > self%n )stop 'class index out of range'
@@ -162,7 +162,7 @@ contains
     !>  \brief  is for binarizing the 2D image
     subroutine bin_cavg( self, img )
         class(masker), intent(inout) :: self
-        class(image),          intent(inout) :: img
+        class(image),  intent(inout) :: img
         type(image) :: img_pad, img_copy
         integer     :: ldim_pad(3)
         ! init
@@ -206,7 +206,9 @@ contains
         else
             nnvox = nvoxfind(self%get_smpd(), self%mw)     
         endif
+        !????????????????????????????????????????
         nnvox = nint(1.1*real(nnvox))   ! this is to compensate for the low-pass filter
+        !????????????????????????????????????????
         ! binarize
         call self%bin(nnvox)
         ! binary layers
