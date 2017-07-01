@@ -132,17 +132,17 @@ contains
     !> \brief  to find the volume in number of voxels, given molecular weight
     pure function nvoxfind_1( smpd, mwkda ) result( nvox )
         real, intent(in)             :: smpd, mwkda
-        double precision             :: da_per_ml, pix_per_ml, prot_d2
         integer                      :: nvox
-        double precision , parameter :: prot_d = 1.43d0            ! g/ml
-        double precision , parameter :: one_da = 1.66053892173e-27 ! kg
-        da_per_ml = (prot_d*1e-3)/one_da
-        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        ! pix_per_ml = ((1e-2)**3)/((smpd*1e-10)**3)
-        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        pix_per_ml = ((1e-3)**3)/((smpd*1e-10)**3)
-        prot_d2 = da_per_ml/pix_per_ml ! protein density in da per pixel
-        nvox = nint(mwkda*1000.d0/prot_d2)
+        double precision , parameter :: prot_d = 1.43d0            ! g/cm**3
+        double precision , parameter :: one_da = 1.66053892173e-27 ! kg/Da
+        double precision             :: Da_per_vox
+        ! prot_d in g / A**3    = prot_d * 1e-24
+        ! voxel volume in A**3  = smpd**3
+        ! mass of protein in Da = mwkda*1e3
+        ! mass of protein in kg = (mwda*1e3)*one_da
+        ! mass of protein in g  = ((mwkda*1e3)*one_da)*1e3
+        ! therefore number of voxels in protein is:
+        nvox = nint((((mwkda*1e3)*one_da)*1e3) / (prot_d * 1e-24 * (smpd**3)))
     end function
     
     !> \brief  to find the volume in number of voxels, given molecular weight

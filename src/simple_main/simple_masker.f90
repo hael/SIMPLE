@@ -12,24 +12,24 @@ implicit none
 public :: masker
 private
 
-real,    parameter :: MSKWIDTH = 10.                     !< HALF SOFT MASK WIDTH (+/-)
+real,    parameter :: MSKWIDTH = 10.              !< HALF SOFT MASK WIDTH (+/-)
 logical, parameter :: DEBUG    = .false.
 
 type, extends(image) :: masker
     private
-    type(oris)               :: o_msk                    !< reference orientations
-    real                     :: smpd_here = 0.           !< maximum circular mask
-    real                     :: msk       = 0.           !< maximum circular mask
-    real                     :: amsklp    = 0.           !< maximum circular mask
-    real, allocatable        :: adamsks(:)               !< evaluated circular masks
-    real                     :: mskwidth  = MSKWIDTH     !< +/- soft masking width
-    real                     :: dens      = 0.
-    real                     :: mw        = 0.
-    integer                  :: edge      = 1
-    integer                  :: binwidth  = 1
-    integer                  :: n         = 0
-    integer                  :: idim(3)   = 0            !< image dimension
-    logical                  :: masker_exists = .false.
+    type(oris)        :: o_msk                    !< reference orientations
+    real              :: smpd_here = 0.           !< maximum circular mask
+    real              :: msk       = 0.           !< maximum circular mask
+    real              :: amsklp    = 0.           !< maximum circular mask
+    real, allocatable :: adamsks(:)               !< evaluated circular masks
+    real              :: mskwidth  = MSKWIDTH     !< +/- soft masking width
+    real              :: dens      = 0.
+    real              :: mw        = 0.
+    integer           :: edge      = 1
+    integer           :: binwidth  = 1
+    integer           :: n         = 0
+    integer           :: idim(3)   = 0            !< image dimension
+    logical           :: masker_exists = .false.
   contains
     ! CONSTRUCTORS
     procedure          :: init2D
@@ -86,8 +86,8 @@ contains
     end subroutine init2D
 
     !>  \brief  is a 3D constructor and modifier
-    !>  On output the parent volume is the enveloppe mask
-    !>  The returned volume is enveloppe masked.
+    !>  On output the parent volume is the envelope mask
+    !>  The returned volume is envelope masked.
     subroutine automask3D( self, vol_inout, msk, amsklp, mw, binwidth, edge, dens )
         class(masker), intent(inout) :: self
         class(image),  intent(inout) :: vol_inout
@@ -121,7 +121,7 @@ contains
     !>  \brief  is for getting the adaptive circular mask
     real function calc_adamsk( self, img_msk )result( new_msk )
         class(masker), intent(inout) :: self
-        class(image),          intent(inout) :: img_msk
+        class(image),  intent(inout) :: img_msk
         type(image) :: img_dist, tmp_img
         real        :: minmax(2)
         tmp_img = img_msk
@@ -207,7 +207,7 @@ contains
             nnvox = nvoxfind(self%get_smpd(), self%mw)     
         endif
         !????????????????????????????????????????
-        nnvox = nint(1.1*real(nnvox))   ! this is to compensate for the low-pass filter
+        ! nnvox = nint(1.1*real(nnvox)) ! this was probably compensation for inaccurate calculation in nvoxfind
         !????????????????????????????????????????
         ! binarize
         call self%bin(nnvox)
