@@ -70,6 +70,7 @@ real,    parameter :: EXTRTHRESH_CONST = 0.2
 real,    parameter :: LP2SMPDFAC       = 0.4125
 integer, parameter :: LPLIM1ITERBOUND  = 5
 integer, parameter :: LPLIM3ITERBOUND  = 7
+integer, parameter :: GRIDNPEAKS       = 3
 
 ! endianness conversion
 character(len=:), allocatable :: endconv

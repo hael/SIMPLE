@@ -195,6 +195,7 @@ type :: params
     integer :: jptcl=1
     integer :: jumpsz=0
     integer :: kfromto(2)
+    integer :: kstop_grid=0
     integer :: ldim(3)=0
     integer :: maxits=500
     integer :: maxp=0
@@ -224,6 +225,7 @@ type :: params
     integer :: nrots=0
     integer :: nspace=1000
     integer :: nstates=1
+    integer :: nsub=300
     integer :: nsym=1
     integer :: nthr=1
     integer :: nthr_master=1
@@ -306,6 +308,7 @@ type :: params
     real    :: kv=300.
     real    :: lam=0.5
     real    :: lp_dyn=20.
+    real    :: lp_grid=20.
     real    :: lp=20.
     real    :: lp_ctffind=5.0
     real    :: lp_pick=20.
@@ -572,6 +575,7 @@ contains
         call check_iarg('nrefs',          self%nrefs)
         call check_iarg('nrestarts',      self%nrestarts)
         call check_iarg('nspace',         self%nspace)
+        call check_iarg('nsub',           self%nsub)
         call check_iarg('nstates',        self%nstates)
         call check_iarg('class',          self%class)
         call check_iarg('nparts',         self%nparts)
@@ -649,6 +653,7 @@ contains
         call check_rarg('lam',            self%lam)
         call check_rarg('lp',             self%lp)
         call check_rarg('lp_ctffind',     self%lp_ctffind)
+        call check_rarg('lp_grid',        self%lp_grid)
         call check_rarg('lp_pick',        self%lp_pick)
         call check_rarg('lpstart',        self%lpstart)
         call check_rarg('lpstop',         self%lpstop)

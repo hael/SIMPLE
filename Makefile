@@ -85,6 +85,7 @@ s_utes: simple_arr.o              \
         simple_stat.o             \
         simple_online_var.o       \
         simple_ran_tabu.o         \
+	simple_combinatorics.o    \
         simple_testfuns.o         ;
 
 s_utils: simple_timer_omp.o    \
@@ -177,7 +178,6 @@ build: simple_pair_dtab.o               \
        simple_denspeak_cluster.o        \
        simple_aff_prop.o                \
        simple_clusterer.o               \
-       simple_combinatorics.o           \
        simple_ppca.o                    \
        simple_estimate_ssnr.o           \
        simple_reconstructor.o           \

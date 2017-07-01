@@ -159,6 +159,7 @@ ind
 iptcl
 jptcl
 jumpsz
+kstop_grid
 maxits
 maxp
 minp
@@ -187,6 +188,7 @@ nrestarts
 nrots
 nspace
 nstates
+nsub
 nsym
 nthr
 nthr_master
@@ -267,6 +269,7 @@ inner
 kv
 lam
 lp_dyn
+lp_grid
 lp
 lp_ctffind
 lp_pick

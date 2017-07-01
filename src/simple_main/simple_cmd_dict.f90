@@ -135,7 +135,7 @@ contains
         call chdict%push('pspecsz',       'size of power spectrum(in pixels)')
         call chdict%push('pspecsz_unblur','size of power spectrum 4 unblur(in pixels)')
         call chdict%push('pspecsz_ctffind','size of power spectrum 4 ctffind(in pixels)')
-        call chdict%push('refine',        'refinement mode(no|shc|neigh|shcneigh|adasym|shift){no}')
+        call chdict%push('refine',        'refinement mode(no|shc|neigh|shcneigh){no}')
         call chdict%push('refs',          'initial2Dreferences.ext')
         call chdict%push('rm_outliers',   'remove outliers{yes}')
         call chdict%push('rnd',           'random(yes|no){no}')
@@ -228,6 +228,8 @@ contains
         call chdict%push('unidoc',        'unified resources and orientations doc')
         call chdict%push('pgrp_known',    'point-group known a priori(yes|no){no}')
         call chdict%push('szsn',          'size of stochastic neighborhood{5}')
+        call chdict%push('nsub',          '# proj dirs in coarse grid search{300}')
+        call chdict%push('lp_grid',       'low-pass limit in coarse grid search(in A){20 A}')
         initialised = .true.
     end subroutine init_cmd_dict
     

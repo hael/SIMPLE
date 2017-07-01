@@ -79,7 +79,9 @@ type :: polarft_corrcalc
     ! CALCULATORS
     procedure, private :: create_polar_ctfmat
     procedure          :: create_polar_ctfmats
-    procedure          :: gencorrs
+    procedure, private :: gencorrs_1
+    procedure, private :: gencorrs_2
+    generic            :: gencorrs => gencorrs_1, gencorrs_2
     procedure          :: genfrc
     procedure, private :: corr_1
     procedure, private :: corr_2
@@ -520,18 +522,24 @@ contains
     
     ! MODIFIERS
 
-    subroutine prep_ref4corr( self, iptcl, iref, pft_ref, sqsum_ref )
+    subroutine prep_ref4corr( self, iptcl, iref, pft_ref, sqsum_ref, kstop )
         use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iptcl, iref
         complex(sp),             intent(out)   :: pft_ref(self%refsz,self%kfromto(1):self%kfromto(2))
         real(sp),                intent(out)   :: sqsum_ref
+        integer, optional,       intent(in)    :: kstop
         if( self%with_ctf )then
             pft_ref = self%pfts_refs(iref,:,:) * self%ctfmats(iptcl,:,:)
         else
             pft_ref = self%pfts_refs(iref,:,:)
         endif
-        sqsum_ref = sum(csq(pft_ref))
+        if( present(kstop) )then
+            sqsum_ref = sum(csq(pft_ref(:,self%kfromto(1):kstop)))
+
+        else
+            sqsum_ref = sum(csq(pft_ref))
+        endif
     end subroutine prep_ref4corr
 
     !>  \brief  is for preparing for XFEL pattern corr calc
@@ -637,7 +645,7 @@ contains
     end subroutine create_polar_ctfmats
 
     !>  \brief  is for generating rotational correlations
-    function gencorrs( self, iref, iptcl, roind_vec ) result( cc )
+    function gencorrs_1( self, iref, iptcl, roind_vec ) result( cc )
         use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self        !< instance
         integer,                 intent(in)    :: iref, iptcl !< ref & ptcl indices
@@ -666,7 +674,47 @@ contains
             ! denominator
             cc = cc / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
         endif
-    end function gencorrs
+    end function gencorrs_1
+
+    !>  \brief  is for generating rotational correlations
+    function gencorrs_2( self, iref, iptcl, kstop, roind_vec ) result( cc )
+        use simple_math, only: csq
+        class(polarft_corrcalc), intent(inout) :: self        !< instance
+        integer,                 intent(in)    :: iref, iptcl !< ref & ptcl indices
+        integer,                 intent(in)    :: kstop       !< last frequency
+        integer,       optional, intent(in)    :: roind_vec(:)
+        complex(sp) :: pft_ref(self%refsz,self%kfromto(1):self%kfromto(2))
+        real(sp)    :: cc(self%nrots), sqsum_ref, sqsum_ptcl
+        integer     :: irot, i
+        call self%prep_ref4corr(iptcl, iref, pft_ref, sqsum_ref, kstop)
+        if( self%xfel )then
+            sqsum_ptcl = sum(real(self%pfts_ptcls(iptcl,:self%refsz,self%kfromto(1):kstop))**2.)
+        else
+            sqsum_ptcl = sum(csq(self%pfts_ptcls(iptcl,:self%refsz,self%kfromto(1):kstop)))
+        endif
+        if( present(roind_vec) )then
+            ! calculates only corrs for rotational indices provided in roind_vec
+            ! see get_win_roind. returns -1. when not calculated
+            if( any(roind_vec<=0) .or. any(roind_vec>self%nrots) )&
+                &stop 'index out of range; simple_polarft_corrcalc::gencorrs'
+            cc = -1.
+            do i = 1, size(roind_vec)
+                irot = roind_vec(i)
+                cc(irot) = sum(real( pft_ref(:,self%kfromto(1):kstop) * &
+                    conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,self%kfromto(1):kstop)) ))      
+                cc(irot) = cc(irot) / sqrt(sqsum_ref * sqsum_ptcl)
+            end do
+        else
+            ! all rotations
+            ! numerator
+            do irot = 1, self%nrots
+                cc(irot) = sum(real( pft_ref(:,self%kfromto(1):kstop) * &
+                    conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,self%kfromto(1):kstop)) ))
+            end do
+            ! denominator
+            cc = cc / sqrt(sqsum_ref * sqsum_ptcl)
+        endif
+    end function gencorrs_2
 
     !>  \brief  is for generating resolution dependent correlations
     function genfrc( self, iref, iptcl, irot ) result( frc )
@@ -770,10 +818,6 @@ contains
         complex(sp) :: pft_ptcl_norm(self%refsz,self%kfromto(1):self%kfromto(2))
         call self%prep_ref4corr(iptcl, iref, pft_ref_norm, sqsum_ref)
         do k=self%kfromto(1),self%kfromto(2)
-            ! pow_ref  = sum(real(pft_ref_norm(:,k))*&
-            !     &conjg(pft_ref_norm(:,k)))/real(self%refsz)
-            ! pow_ptcl = sum(real(self%pfts_ptcls(iptcl,irot:irot+self%winsz,k))*&
-            !     &conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,k)))/real(self%refsz)
             pow_ref  = sum(csq(pft_ref_norm(:,k)))/real(self%refsz)
             pow_ptcl = sum(csq(self%pfts_ptcls(iptcl,irot:irot+self%winsz,k)))/real(self%refsz)
             if( pow_ref > TINY )then

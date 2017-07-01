@@ -46,6 +46,7 @@ contains
         integer               :: s, loc(1), lp_ind
         character(len=STDLEN) :: fsc_fname
         logical               :: fsc_bin_exists(p%nstates), all_fsc_bin_exist
+        
         select case(p%eo)
             case('yes')
                 ! check all fsc_state*.bin exist
@@ -131,6 +132,9 @@ contains
             case DEFAULT
                 stop 'Unsupported eo flag; simple_hadamard_common'
         end select
+        ! set highest Fourier index for coarse grid search
+        p%kstop_grid = calc_fourier_index(p%lp_grid, p%boxmatch, p%smpd)
+        if( p%kstop_grid > p%kfromto(2) ) p%kstop_grid = p%kfromto(2)
         if( DEBUG ) write(*,*) '*** simple_hadamard_common ***: did set Fourier index range'
     end subroutine set_bp_range
 
@@ -220,7 +224,7 @@ contains
                 if( DEBUG ) write(*,*) '*** simple_hadamard_common ***: got orientation'
                 if( p%frac < 0.99 ) w = w*pw
                 if( w > 0. )then
-                    if( p%pgrp == 'c1' .or. str_has_substr(p%refine,'adasym') )then
+                    if( p%pgrp == 'c1' )then
                         if( p%eo .eq. 'yes' )then
                             call b%eorecvols(s)%grid_fplane(orisoft, b%img_pad, pwght=w, ran=ran, shellweights=shellweights)
                         else

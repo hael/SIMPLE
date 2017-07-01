@@ -78,6 +78,7 @@ type build
     real,    allocatable                :: fsc(:,:)           !< Fourier shell correlation
     integer, allocatable                :: nnmat(:,:)         !< matrix with nearest neighbor indices
     integer, allocatable                :: pbatch(:)          !< particle index batch
+    integer, allocatable                :: grid_projs(:)      !< projection directions for coarse grid search
     ! PRIVATE EXISTENCE VARIABLES
     logical, private                    :: general_tbox_exists          = .false.
     logical, private                    :: cluster_tbox_exists          = .false.
@@ -182,13 +183,10 @@ contains
         endif
         if( debug ) write(*,'(a)') 'did set number of dimensions and ctfmode'
         if( fforce_ctf ) call self%raise_hard_ctf_exception(p)
-        ! generate discrete projection direction space
+        ! generate discrete projection direction spaces
         call self%e%new( p%nspace )
-        if( str_has_substr(p%refine,'adasym') )then
-            call self%e%spiral
-        else
-            call self%e%spiral( p%nsym, p%eullims )
-        endif
+        call self%e%spiral( p%nsym, p%eullims )
+        self%grid_projs = self%e%create_proj_subspace(p%nsub, p%nsym, p%eullims )
         if( debug ) write(*,'(a)') 'generated discrete projection direction space'
         if( p%box > 0 )then
             ! build image objects

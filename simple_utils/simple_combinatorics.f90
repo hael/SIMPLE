@@ -22,6 +22,42 @@ contains
         call rt%kill
     end function diverse_labeling
 
+    function merge_into_disjoint_set( nprojs, nnn, nnmat, which_nns ) result( disjoint )
+        integer, intent(in)  :: nprojs, nnn, nnmat(nprojs,nnn), which_nns(:)
+        integer, allocatable :: disjoint(:)
+        logical :: isthere(nprojs)
+        integer :: iproj, cnt, i, inn, ndisjoint
+        isthere   = .false.
+        ndisjoint = size(which_nns)
+        ! count the number of set members
+        cnt = 0
+        do i=1,ndisjoint
+            do inn=1,nnn
+                if( isthere(nnmat(which_nns(i),inn)) )then
+                    ! element already in disjoint set
+                else
+                    cnt = cnt + 1
+                    isthere(nnmat(which_nns(i),inn)) = .true.
+                endif
+            end do
+        end do
+        ! set them
+        allocate(disjoint(cnt))
+        isthere = .false.
+        cnt     = 0
+        do i=1,ndisjoint
+            do inn=1,nnn
+                if( isthere(nnmat(which_nns(i),inn)) )then
+                    ! element already in disjoint set
+                else
+                    cnt = cnt + 1
+                    disjoint(cnt) = nnmat(which_nns(i),inn)
+                    isthere(disjoint(cnt)) = .true.
+                endif
+            end do
+        end do
+    end function merge_into_disjoint_set
+
     subroutine shc_aggregation( nrepeats, nptcls, labels, consensus )
         use simple_math, only: hpsort
         integer, intent(in)    :: nrepeats, nptcls

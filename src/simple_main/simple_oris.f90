@@ -171,6 +171,9 @@ type :: oris
     procedure          :: find_closest_projs
     procedure          :: find_closest_ori
     procedure          :: find_closest_oris
+    procedure, private :: create_proj_subspace_1
+    procedure, private :: create_proj_subspace_2
+    generic            :: create_proj_subspace => create_proj_subspace_1, create_proj_subspace_2
     procedure          :: discretize
     procedure          :: nearest_neighbors
     procedure          :: find_angres
@@ -2614,6 +2617,42 @@ contains
             oriinds(i) = inds(i)
         end do
     end subroutine find_closest_oris
+
+    !>  \brief  to identify a subspace of projection directions
+    function create_proj_subspace_1( self, nsub ) result( subspace_projs )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: nsub
+        type(ori)            :: o
+        type(oris)           :: suboris
+        integer, allocatable :: subspace_projs(:)
+        integer :: isub
+        call suboris%new(nsub)
+        call suboris%spiral
+        allocate( subspace_projs(nsub) )
+        do isub=1,nsub
+            o = suboris%get_ori(isub)
+            subspace_projs(isub) = self%find_closest_proj(o)
+        end do
+    end function create_proj_subspace_1
+
+    !>  \brief  to identify a subspace of projection directions
+    function create_proj_subspace_2( self, nsub, nsym, eullims ) result( subspace_projs )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: nsub
+        integer,     intent(in)    :: nsym
+        real,        intent(in)    :: eullims(3,2)
+        type(ori)            :: o
+        type(oris)           :: suboris
+        integer, allocatable :: subspace_projs(:)
+        integer :: isub
+        call suboris%new(nsub)
+        call suboris%spiral(nsym, eullims)
+        allocate( subspace_projs(nsub) )
+        do isub=1,nsub
+            o = suboris%get_ori(isub)
+            subspace_projs(isub) = self%find_closest_proj(o)
+        end do
+    end function create_proj_subspace_2
     
     !>  \brief  method for discretization of the projection directions
     subroutine discretize( self, n )
