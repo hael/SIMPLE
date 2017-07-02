@@ -1,4 +1,4 @@
-\begin{thebibliography}{9}
+\begin{thebibliography}{8}
 \expandafter\ifx\csname natexlab\endcsname\relax\def\natexlab#1{#1}\fi
 \expandafter\ifx\csname url\endcsname\relax
   \def\url#1{\texttt{#1}}\fi
@@ -30,12 +30,6 @@ Penczek, P.~A., Grassucci, R.~A., Frank, J., 1994. The ribosome at improved
   resolution: new techniques for merging and orientation refinement in 3d
   cryo-electron microscopy of biological particles. Ultramicroscopy 53~(3),
   251--270.
-
-\bibitem[{Reboul et~al.(2016)Reboul, Bonnet, Elmlund, and
-  Elmlund}]{reboul2016stochastic}
-Reboul, C.~F., Bonnet, F., Elmlund, D., Elmlund, H., 2016. A stochastic hill
-  climbing approach for simultaneous 2d alignment and clustering of cryogenic
-  electron microscopy images. Structure 24~(6), 988--996.
 
 \bibitem[{Rohou and Grigorieff(2015)}]{rohou2015ctffind4}
 Rohou, A., Grigorieff, N., 2015. Ctffind4: Fast and accurate defocus estimation

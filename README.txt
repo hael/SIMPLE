@@ -26,7 +26,7 @@ INSTALLATION INSTRUCTIONS
 
 System Requirements:
 
-    - Linux: (Ubuntu we use 15.04 and above)
+    - Linux: (we use Ubuntu 15.04 and above)
     - MacOSX: 10.10 and above
     - CMake 3.2 and above
     - FFTW 3.3 and above
@@ -72,10 +72,34 @@ FFTW by substituting step 4 with:
     $ FC=<gcc/gfortran path> FFTW_DIR=<FFTW path> cmake ../
     $ make -j install
 
-For instance, on MacOS Macports users may use: FC=/opt/local  
-FFTW_DIR=/opt/local; Fink users: FC=/sw/ FFTW_DIR=/sw/.
+For instance, on MacOS 
+- Macports users may use: FC=/opt/local/bin/gfortran FFTW_DIR=/opt/local;
+- Fink users: FC=/sw/bin/gfortran FFTW_DIR=/sw/; and
+- Homebrew users: FC=/usr/local/bin/gfortran FFTW_DIR=/usr/local/
 
-TESTING THE BUILD
+5. To run SIMPLE, the bin and scripts paths need to be in the PATH 
+environment variable and the lib path in the LD_LIBRARY_PATH variable. 
+The SIMPLE_PATH environment variable must also be defined. The shell 
+scripts add2.bashrc and add2.tcshrc containing the necessary instructions 
+were generated during the build step. For immediate use for running and 
+testing, execute
+
+    $ source add2.bashrc
+
+or, for TCSH/CSH users:
+
+    $ source add2.tcshrc
+
+For permanent installation BASH users should add the contents of add2.bashrc 
+to your <HOME>/.bashrc
+
+    $ cat add2.bashrc >> ~/.bashrc
+
+or for TCSH/CSH users:
+
+    $ cat add2.tcshrc >> ~/.tcshrc
+
+To test the build, please execute
 
     $ make test
     $ ctest --output-on-failure

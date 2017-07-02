@@ -147,7 +147,7 @@ The \texttt{SIMPLE/scripts} folder contains a perl-script (\texttt{convert\_frea
         @!#> mkdir <simple_path>
 \end{verbatim}
 
-\noindent{}\textbf{Step 2:} Unzip the SIMPLE 2.5 tarball in this directory (assuming you have downloaded the tarball in the \texttt{<downloads>} directory)
+\noindent{}\textbf{Step 2:} Unzip the SIMPLE 2.5 tar ball in this directory (assuming you have downloaded the tar ball in the \texttt{<downloads>} directory)
 
 \begin{verbatim}
         @!#> mv <downloads>/SIMPLE2.5.tgz <simple path>
@@ -170,7 +170,7 @@ The \texttt{SIMPLE/scripts} folder contains a perl-script (\texttt{convert\_frea
         @!#> make -j install
 \end{verbatim}
 
-This will install SIMPLE in the 'build' directory. If you wish to provide an alternative installation directory, substitute step 4 with
+\noindent{}This will install SIMPLE in the \texttt{'build'} directory. If you wish to provide an alternative installation directory, substitute step 4 with
 
 \begin{verbatim}
         @!#> cmake -DCMAKE_INSTALL_PREFIX=<alternative directory> ../
@@ -185,12 +185,37 @@ more exotic setup you can provide the paths pointing to your custom gcc/gfortran
         @!#> make -j install
 \end{verbatim}
 
-\noindent{}For instance, on MacOS Macports users may use: \texttt{FC=/opt/local FFTW\_DIR=/opt/local}; Fink users: \texttt{FC=/sw/ FFTW\_DIR=/sw/}.
-To test the build, please execute
+\noindent{}For instance, on MacOS:
+\begin{itemize}
+	\item[--] Macports users may use: FC=/opt/local/bin/gfortran FFTW\_DIR=/opt/local;
+	\item[--] Fink users: FC=/sw/bin/gfortran FFTW\_DIR=/sw/; and
+	\item[--] Homebrew users: FC=/usr/local/bin/gfortran FFTW\_DIR=/usr/local/
+\end{itemize}
 
+\noindent{}\textbf{Step 5:} To run SIMPLE, the bin and scripts paths need to be in the \texttt{PATH} environment
+variable and the lib path in the \texttt{LD\_LIBRARY\_PATH} variable. The \texttt{SIMPLE\_PATH} environment
+ variable must also be defined. The shell scripts \texttt{add2.bashrc} and \texttt{add2.tcshrc} containing the necessary 
+ instructions were generated during the build step. For immediate use for running and testing, execute
 \begin{verbatim}
-        @!#> make test
-        @!#> ctest --output-on-failure
+    @!#> source add2.bashrc
+\end{verbatim}
+\noindent{}or, for TCSH/CSH users:
+\begin{verbatim}
+    @!#> source add2.tcshrc
+\end{verbatim}
+
+\noindent{}For permanent installation \texttt{BASH} users should add the contents of \texttt{add2.bashrc} to your \texttt{<HOME>/.bashrc}
+\begin{verbatim}
+    @!#> cat add2.bashrc >> ~/.bashrc
+\end{verbatim}
+\noindent{}or for TCSH/CSH users:
+\begin{verbatim}
+    @!#> cat add2.tcshrc >> ~/.tcshrc
+\end{verbatim}
+\noindent{}To test the build, please execute
+\begin{verbatim}
+    @!#> make test
+    @!#> ctest --output-on-failure
 \end{verbatim}
 
 \subsection{Testing the Most Important Features}
