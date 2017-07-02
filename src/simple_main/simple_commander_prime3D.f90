@@ -229,7 +229,6 @@ contains
         endif
         if( p%doautomsk )then
             ! automasking specifics
-            if(.not. cline%defined('edge')) p%edge = max(12, ceiling(0.05*real(p%box)))
             write(*,'(A,I3)') '>>> AUTOMASKING BINARY LAYERS:', p%binwidth
             write(*,'(A,I3)') '>>> AUTOMASKING SOFT LAYERS:  ', p%edge
             write(*,'(A,F6.1)') '>>> AUTOMASKING LOW-PASS:   ', p%amsklp
