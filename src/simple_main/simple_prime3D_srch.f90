@@ -269,16 +269,19 @@ contains
     end subroutine greedy_srch
 
     !>  \brief  greedy hill-climbing (4 initialisation)
-    subroutine greedy_subspace_srch( self, pftcc, iptcl, a, grid_projs, target_projs )
+    subroutine greedy_subspace_srch( self, pftcc, iptcl, a, e, grid_projs, target_projs )
         class(prime3D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: iptcl
-        class(oris),             intent(inout) :: a
+        class(oris),             intent(inout) :: a, e
         integer,                 intent(in)    :: grid_projs(:)
         integer,                 intent(inout) :: target_projs(:)
-        real    :: projspace_corrs(self%nrefs)
-        integer :: iref, isample, nrefs, state, ntargets, cnt
+        real      :: projspace_corrs(self%nrefs)
+        integer   :: iref, isample, nrefs, state, ntargets, cnt, prev_proj
+        type(ori) :: o_prev
         if( nint(a%get(iptcl,'state')) > 0 )then
+            o_prev    = a%get_ori(iptcl)
+            prev_proj = e%find_closest_proj(o_prev,1)
             ! initialize
             self%proj_space_inds = 0
             projspace_corrs      = -1.
@@ -294,10 +297,16 @@ contains
             call hpsort(self%nrefs, projspace_corrs, self%proj_space_inds)
             ! return target points
             ntargets = size(target_projs)
-            cnt = 0
+            target_projs(1) = prev_proj ! previous always part of the targets
+            cnt = 1 ! because we have one in there already
             do isample=self%nrefs,self%nrefs - ntargets + 1,-1
-                cnt = cnt + 1
-                target_projs(cnt) = self%proj_space_inds(isample)
+                if( target_projs(1) == self%proj_space_inds(isample) )then
+                    ! direction is already in target set
+                else
+                    cnt = cnt + 1
+                    target_projs(cnt) = self%proj_space_inds(isample)
+                    if( cnt == ntargets ) exit
+                endif
             end do
         else
             call a%reject(iptcl)
@@ -322,7 +331,6 @@ contains
 
     end subroutine greedy_subspace_srch
 
-
     !>  \brief  executes the stochastic soft orientation search
     subroutine stochastic_srch( self, pftcc, iptcl, a, e, lp, nnmat, grid_projs )
         class(prime3D_srch),     intent(inout) :: self
@@ -338,7 +346,7 @@ contains
             if( str_has_substr(self%refine, 'neigh') )then
                 ! for neighbour modes we do a coarse grid search first
                 if( .not. present(grid_projs) ) stop 'need optional grid_projs 4 subspace srch; prime3D_srch :: stochastic_srch'
-                call self%greedy_subspace_srch(pftcc, iptcl, a, grid_projs, target_projs)
+                call self%greedy_subspace_srch(pftcc, iptcl, a, e, grid_projs, target_projs)
                 ! initialize
                 call self%prep4srch(pftcc, iptcl, a, e, lp, nnmat, target_projs)
                 nrefs = self%nnnrefs
@@ -420,7 +428,7 @@ contains
             if( str_has_substr(self%refine, 'neigh') )then
                 ! for neighbour modes we do a coarse grid search first
                 if( .not. present(grid_projs) ) stop 'need optional grid_projs 4 subspace srch; prime3D_srch :: stochastic_srch_shc'
-                call self%greedy_subspace_srch(pftcc, iptcl, a, grid_projs, target_projs)
+                call self%greedy_subspace_srch(pftcc, iptcl, a, e, grid_projs, target_projs)
                 ! initialize
                 call self%prep4srch(pftcc, iptcl, a, e, lp, nnmat, target_projs)
                 nrefs = self%nnnrefs
@@ -640,8 +648,6 @@ contains
         endif
         if( DEBUG ) write(*,'(A)') '>>> PRIME3D_SRCH::FINISHED INPL SEARCH'
     end subroutine inpl_srch
-
-    ! PREPARATION ROUTINES
 
     !>  \brief  prepares reference indices for the search & fetches ctf
     subroutine prep4srch( self, pftcc, iptcl, a, e, lp, nnmat, target_projs )
