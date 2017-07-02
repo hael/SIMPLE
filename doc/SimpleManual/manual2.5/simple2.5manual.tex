@@ -46,7 +46,7 @@
 \begin{document}
 \begin{figure}
 \centering
-\includegraphics[keepaspectratio=true,scale=0.6]{./SIMPLE_logo/rawlogo}
+\includegraphics[keepaspectratio=true,scale=0.6]{../SIMPLE_logo/rawlogo}
 %\caption{}
 \end{figure}
 
@@ -364,7 +364,7 @@ job_ntasks_per_socket = 1
 \end{verbatim}
 This file is auto-generated on workstations, but it needs to be edited by the user in cluster environments. If you need help configuring distributed SIMPLE execution, please file a help ticket on the webpage. The two most important parameters for distributed execution is the number of partitions \texttt{nparts} and the number of shared-memory CPU threads \texttt{nthr}. A rule of thumb for good performance on multi-socket workstations is to minimise the number of parts and maximising the number of threads subject to never having fewer parts than sockets. The shared memory parallelisation does not benefit from the use of a larger number of threads than the number of logical threads available on a socket. To check the number of processors on a linux system, execute \texttt{nproc} in the terminal. Consider a heterogeneous cluster with N nodes, two CPU sockets per node and six CPUs per socket.
 \begin{SCfigure}[][h]
-\includegraphics[keepaspectratio=true,scale=0.6]{./CPUtopo/cputopo}
+\includegraphics[keepaspectratio=true,scale=0.6]{../CPUtopo/cputopo}
 \caption{\textbf{Configuration of the parallel PRIME-2D/3D execution on a heterogeneous cluster.} We here represent the nodes in  a heterogeneous cluster by two sockets with six CPUs each and 32Gb RAM/node. The best performance of PRIME--2D/3D is going to be obtained by partitioning  the jobs into \texttt{npart=2N} partitions, where \texttt{N} is the number of nodes. Each partition will then execute six threads \texttt{nthr=6} and these six threads will get access to half the RAM on the node (\texttt{memory=16000}) because we have two sockets per node that need to share the RAM between them}
 \end{SCfigure}
 If you are unsure how to configure your SIMPLE execution please file a help ticket.
