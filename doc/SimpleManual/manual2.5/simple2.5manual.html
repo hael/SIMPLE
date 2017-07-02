@@ -1,0 +1,2605 @@
+<p><img src="./SIMPLE_logo/rawlogo" alt="image" /></p>
+<p>[ht]<span>0.48</span> <strong>Contributors:</strong><br />
+cyril.reboul@monash.edu<br />
+michael.eager@monash.edu<br />
+dominika.elmlund@monash.edu<br />
+hans.elmlund@monash.edu<br />
+<strong>Adress:</strong><br />
+Dept. Biochemistry and Molecular Biology<br />
+School of Biomedical Sciences<br />
+Monash University, Bldg. 77<br />
+Clayton, VIC, Australia, 3800<br />
+<strong>Webpage:</strong><br />
+www.simplecryoem.com<br />
+<strong>Contact:</strong><br />
+<a href="http://simplecryoem.com/contact.html" class="uri">http://simplecryoem.com/contact.html</a><br />
+dominika@simplecryoem.com<br />
+</p>
+<blockquote>
+<p><strong>“Keep it SIMPLE stupid”</strong><br />
+(<em>Kelly Johnson</em>; lead engineer at the Lockheed Skunk Works, coined the famous KISS principle stating that systems work best if they are kept simple rather than made complex. Therefore, simplicity should be a key goal in design and unnecessary complexity should be avoided.)</p>
+</blockquote>
+<blockquote>
+<p><strong>“Everything should be made as SIMPLE as possible, but no SIMPLEr”</strong><br />
+(<em>Albert Einstein</em>)</p>
+</blockquote>
+<blockquote>
+<p><strong>“Complex theories do not work, SIMPLE algorithms do”</strong><br />
+(<em>Vladimir N. Vapnik</em>; author of <em>The Nature of Statistical Learning Theory</em>)</p>
+</blockquote>
+<h1 id="about-simple">About SIMPLE</h1>
+<p><strong>S</strong>ingle-particle <strong>IM</strong>age <strong>P</strong>rocessing <strong>L</strong>inux <strong>E</strong>ngine (<a href="www.simplecryoem.com"><strong></strong></a>) is a program package for cryo-EM image processing, focusing on <em>ab initio</em> 3D reconstruction of single-particles with any point-group symmetry. The SIMPLE back-end consists of an object-oriented numerical library written in modern Fortran. The SIMPLE front-end consists of many standalone, interoperable components developed according to the “Unix toolkit philosophy”.</p>
+<p>SIMPLE is free software: you can redistribute it and/or modify it under the terms of the <a href="http://www.gnu.org/copyleft/gpl.html"><strong></strong></a> as published by the Free Software Foundation, either version 3 of the license, or (at your option) any later version. SIMPLE is distributed with the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the <a href="http://www.gnu.org/copyleft/gpl.html"><strong></strong></a> for more details.</p>
+<h2 id="what-is-new-in-simple-release-2.5">What is new in SIMPLE release 2.5?</h2>
+<ul>
+<li><p>A new DDD movie pre-processing program that implements motion correction based the same principal strategy as Grigorieff’s program (hence the name). There are two important differences: automatic weighting of the frames using a correlation-based M-estimator and stochastic continuous optimisation of the shift parameters. This enables analysis of movies with severe pathologies due to radiation damage or extreme drift.</p></li>
+<li><p>A new program for movie-processing of tomographic tilt-series.</p></li>
+<li><p>Improved simultaneous 2D alignment and clustering with using a hybrid extremal/stochastic hill-climbing search approach, Wiener restoration-based CTF correction and acceleration of the search using Hadamard projection matching. It is now possible to generate a sub-nanometer resolution <em>ab initio</em> 3D reconstruction from class averages obtained with in a about 10 minutes on a laptop (MacBook Pro mid 2015, 2.8 GHz Intel i7, four physical cores).</p></li>
+<li><p>Improved <em>ab initio</em> 3D reconstruction from class averages using stochastic neighbourhood hill-climbing for initialisation of the 3D orientation search, improving the success rate from around 40% to 90-100% for more challenging starting model generation problems, executed with program</p></li>
+<li><p>Serial CPU code optimisation through data re-organisation and pipelining.</p></li>
+<li><p>Improved parallel CPU performance through load balancing as well as data and algorithm re-organisation. It is now possible to process data sets of realistic size on laptops or lightweight workstations that cost less than 2,000 USD.</p></li>
+<li><p>High-level workflows for 2D analysis and initial 3D model generation that automates initialisation, update of search parameters and dynamic down-scaling of the images for improved performance.</p></li>
+</ul>
+<h1 id="file-formats">File Formats</h1>
+<h2 id="image-file-formats">Image File Formats</h2>
+<p>SIMPLE supports SPIDER (<code>*.spi</code>) and MRC (<code>*.mrc</code>) formats for image stacks and volumes. The MRC file handling classes are shared with the the FREALIX program for helical reconstruction <span class="citation" data-cites="Rohou:2014aa"></span>. RELION <span class="citation" data-cites="Scheres:2012aa"></span> uses the convention that MRC stacks have the suffix <code>*.mrcs</code> and volumes the suffix <code>*.mrc</code>. This is to overcome the annoyance that it is not possible to tell from an MRC file header whether a MRC file is a volume or a stack. With SIMPLE you can select to use either the <code>*.mrcs</code> or <code>*.mrc</code> suffix for stacks. The way that we keep track of whether a file is a volume or stack is via the command line key value. The key-value pairs <code>vol1=rec.mrc</code> and <code>vol2=rec2.mrc</code> refer to volumes whereas the key-value pairs <code>stk=ptcls.mrc</code> and <code>stk2=ptcls2.mrc</code> refer to stacks.</p>
+<h2 id="simple-parameter-file-format">SIMPLE Parameter File Format</h2>
+<p>The SIMPLE text-files used for parameter input/output use a <code>key=value</code> syntax of the form</p>
+<pre><code>e1=80. e2=100. e3=5.5 x=1.23 y=4.25 dfx=2.56 dfy=2.54 angast=30.5 state=1</code></pre>
+<p>to represent per-particle information. Internally, the orientation information is stored in a dynamic hash data structure, which gives the file format high flexibility. Therefore, writing conversion scripts to allow interchange of parameters between SIMPLE and other packages is easy. SIMPLE uses the same conventions as FREALIGN <span class="citation" data-cites="Grigorieff:2007aa"></span> to represent orientations and CTF parameters. The CTF parameterisation obtained by CTFFIND <span class="citation" data-cites="Mindell:2003aa"></span> can be directly plugged into SIMPLE, for example by creating a file <code>deftab.txt</code>, looking like</p>
+<pre><code>kv=300 cs=2.7 fraca=0.07 dfx=2.56 dfy=2.76 angast=30.5
+kv=300 cs=2.7 fraca=0.07 dfx=3.50 dfy=3.33 angast=60.0
+kv=300 cs=2.7 fraca=0.07 dfx=1.98 dfy=2.02 angast=120.5
+...</code></pre>
+<p>and adding <code>deftab=deftab.txt</code> and <code>ctf=yes</code> to the PRIME command line (if the images are phase-flipped, this should be indicated by <code>ctf=flip</code>). Note that we now include <code>kv</code>, <code>cs</code>, and <code>fraca</code> in the document listing the CTF parameters. Having all the CTF parameters listed per particle allows easy merging of data sets from different microscopes. SIMPLE now implements a wrapper program for CTFFIND version 4.1.X and newer, producing a SIMPLE conforming document by executing CTFFIND in parallel (via <code>simple_distr_exec prg=ctffind</code>). If you have obtained CTF parameters with CTFFIND by other means (via RELION, for example) you can provide a plain text file with the two defocus values and the angle of astigmatism to the SIMPLE program and it will take care of the formatting and unit conversions for you.</p>
+<h2 id="parameter-file-conversions">Parameter File Conversions</h2>
+<p>The <code>SIMPLE/scripts</code> folder contains a perl-script (<code>convert_frealign2simple.pl</code>) to convert a Frealing parameter file to a SIMPLE parameter file. This is easy, since both software internally use the <a href="http://spider.wadsworth.org/spider_doc/spider/docs/euler.html"><strong></strong></a>. Other packages may use other conventions. There’s also a <code>convert_relion2simple.pl</code> for extracting CTF parameters from RELION <code>*.star</code> files and a <code>relion2emanbox.pl</code> script for converting box files obtained with RELION to the EMAN <code>*.box</code> format used by SIMPLE.</p>
+<h1 id="installation-instructions">Installation Instructions</h1>
+<h2 id="system-requirements">System requirements</h2>
+<ul>
+<li><p>Linux (we use Ubuntu 15.04 and above)</p></li>
+<li><p>MacOSX: 10.10 and above</p></li>
+<li><p>CMake 3.2 and above</p></li>
+<li><p>FFTW 3.3 and above</p></li>
+<li><p>GNU toolchain (gcc &amp; gfortran) 4.9 to 5.4</p></li>
+</ul>
+<h2 id="installation">Installation</h2>
+<p><strong>Step 1:</strong> Create the directory in which you are going to install SIMPLE (referred to here as <code>&lt;simple_path&gt;</code>)</p>
+<pre><code>        @!#&gt; mkdir &lt;simple_path&gt;</code></pre>
+<p><strong>Step 2:</strong> Unzip the SIMPLE 2.5 tar ball in this directory (assuming you have downloaded the tar ball in the <code>&lt;downloads&gt;</code> directory)</p>
+<pre><code>        @!#&gt; mv &lt;downloads&gt;/SIMPLE2.5.tgz &lt;simple path&gt;
+        @!#&gt; cd &lt;simple path&gt;
+        @!#&gt; tar -xzf SIMPLE2.5.tgz</code></pre>
+<p><strong>Step 3:</strong> Create a directory for the build</p>
+<pre><code>        @!#&gt; cd simple2.5
+        @!#&gt; mkdir build
+        @!#&gt; cd build</code></pre>
+<p><strong>Step 4:</strong> Compile and install SIMPLE 2.5</p>
+<pre><code>        @!#&gt; cmake ../
+        @!#&gt; make -j install</code></pre>
+<p>This will install SIMPLE in the <code>’build’</code> directory. If you wish to provide an alternative installation directory, substitute step 4 with</p>
+<pre><code>        @!#&gt; cmake -DCMAKE_INSTALL_PREFIX=&lt;alternative directory&gt; ../
+        @!#&gt; make -j install</code></pre>
+<p>Step 4 assumes that gcc/gfortran and FFTW are installed in fairly standard directories on your machine. In case you have a more exotic setup you can provide the paths pointing to your custom gcc/gfortran &amp; FFTW by substituting step 4 with</p>
+<pre><code>        @!#&gt; FC=&lt;gcc/gfortran path&gt; FFTW_DIR=&lt;FFTW path&gt; cmake ../
+        @!#&gt; make -j install</code></pre>
+<p>For instance, on MacOS:</p>
+<ul>
+<li><p>Macports users may use: FC=/opt/local/bin/gfortran FFTW_DIR=/opt/local;</p></li>
+<li><p>Fink users: FC=/sw/bin/gfortran FFTW_DIR=/sw/; and</p></li>
+<li><p>Homebrew users: FC=/usr/local/bin/gfortran FFTW_DIR=/usr/local/</p></li>
+</ul>
+<p><strong>Step 5:</strong> To run SIMPLE, the bin and scripts paths need to be in the <code>PATH</code> environment variable and the lib path in the <code>LD_LIBRARY_PATH</code> variable. The <code>SIMPLE_PATH</code> environment variable must also be defined. The shell scripts <code>add2.bashrc</code> and <code>add2.tcshrc</code> containing the necessary instructions were generated during the build step. For immediate use for running and testing, execute</p>
+<pre><code>    @!#&gt; source add2.bashrc</code></pre>
+<p>or, for TCSH/CSH users:</p>
+<pre><code>    @!#&gt; source add2.tcshrc</code></pre>
+<p>For permanent installation <code>BASH</code> users should add the contents of <code>add2.bashrc</code> to your <code>&lt;HOME&gt;/.bashrc</code></p>
+<pre><code>    @!#&gt; cat add2.bashrc &gt;&gt; ~/.bashrc</code></pre>
+<p>or for TCSH/CSH users:</p>
+<pre><code>    @!#&gt; cat add2.tcshrc &gt;&gt; ~/.tcshrc</code></pre>
+<p>To test the build, please execute</p>
+<pre><code>    @!#&gt; make test
+    @!#&gt; ctest --output-on-failure</code></pre>
+<h2 id="testing-the-most-important-features">Testing the Most Important Features</h2>
+<p>To ensure that SIMPLE has been correctly installed, we recommend running the application <code>simple_test_install</code>. It will test the most important components in the SIMPLE library (those used by prime2D and prime3D). Execute</p>
+<pre><code>        @!#&gt; simple_test_install </code></pre>
+<p>The program will create its own folder <code>SIMPLE_TEST_INSTALL*date*</code> where temporary files and information about each test are stored. Upon succesful completion you should see</p>
+<pre><code>        @!#&gt; **** SIMPLE_TEST_INSTALL NORMAL STOP ****</code></pre>
+<p><code>simple_test_install</code> can be executed anywhere. After execution, the folder created can be safely removed. If any of the individual tests fail an error message will be displayed. If you detect an error, please carefully check the SIMPLE and FFTW installations and the gfortran version. If you still have issues, please file a help ticket on the webpage.</p>
+<h2 id="installationconfiguration-on-a-linux-cluster">Installation/Configuration on a Linux Cluster</h2>
+<p>Installation on a Linux cluster is essentially the same as on a Linux workstation with the exception that the appropriate modules need to be loaded before installation and execution. On a typical SLURM cluster</p>
+<pre><code>        @!#&gt; module load fftw/3.3.4-gcc
+        @!#&gt; module load gcc/4.9.1
+        @!#&gt; module load lapack/3.4.2 </code></pre>
+<p>The instructions for how to execute SIMPLE in distributed environments (clusters or workstations with more than one CPU socket) are described below [distr].</p>
+<h1 id="simple-usage">SIMPLE Usage</h1>
+<h2 id="simple-help-tools">SIMPLE Help Tools</h2>
+<p>In attempt to reduce the dependency on the manual, we have packaged a lot of the documentation in the software itself. For example</p>
+<pre><code>@!#&gt; simple_exec prg=list
+automask2D
+automask3D
+binarise
+boxconvs
+cavgassemble
+cenvol
+check2D_conv
+check3D_conv
+...</code></pre>
+<p>lists all programs executed with <code>simple_exec</code> (shared-memory parallelisation) and</p>
+<pre><code>@!#&gt; simple_distr_exec prg=list
+comlin_smat
+ctffind
+ini3D_from_cavgs
+makecavgs
+prime2D
+prime3D
+prime3D_init
+recvol
+symsrch
+tseries_track
+unblur
+unblur_ctffind
+unblur_tomo</code></pre>
+<p>lists all distributed workflows executed with <code>simple_distr_exec</code>. If you don’t quite remember which program you are looking for but remember that it was called <code>prime</code> something, you could execute</p>
+<pre><code>@!#&gt; simple_distr_exec prg=list | grep prime
+prime2D
+prime3D
+prime3D_init</code></pre>
+<p>If you want a description for a particular program, for example , execute</p>
+<pre><code>@!#&gt; simple_distr_exec prg=prime2D describe=yes
+is a reference-free 2D alignment/clustering algorithm adopted from the 
+prime3D probabilistic ab initio 3D reconstruction algorithm</code></pre>
+<p>To obtain a description of the what command line options are available, execute</p>
+<pre><code>@!#&gt; simple_distr_exec prg=prime2D
+USAGE:
+bash-3.2$ simple_distr_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+stk  = particle stack with all images(ptcls.ext)
+smpd = sampling distance, same as EMANs apix(in A)
+msk  = mask radius(in pixels)
+ncls = # clusters
+ctf  = ctf flag(yes|no|flip)
+
+OPTIONAL
+nparts    = # partitions in distributed exection
+chunksz   = # images/orientations in chunk
+nthr      = # OpenMP threads{1}
+ncunits   = # computing units, can be &lt; nparts{nparts}
+deftab    = text file with CTF info(*.txt/*.asc)
+refs      = initial2Dreferences.ext
+oritab    = table (text file) of orientations(*.asc/*.txt)
+hp        = high-pass limit(in A)
+lp        = low-pass limit(in A)
+lpstart   = start low-pass limit(in A){15}
+lpstop    = stop low-pass limit(in A){8}
+cenlp     = low-pass limit for binarisation in centering(in A){30 A}
+trs       = maximum halfwidth shift(in pixels)
+automsk   = envelope masking(yes|no|cavg){no}
+amsklp    = low-pass limit for envelope mask generation(in A)
+inner     = inner mask radius(in pixels)
+width     = falloff of inner mask(in pixels){10}
+startit   = start iterating from here
+maxits    = maximum # iterations
+filwidth  = width of filament (in A)
+center    = center image(s)/class average(s)/volume(s)(yes|no){no}
+autoscale = automatic down-scaling(yes|no){yes}
+oritab3D  = table (text file) of 3D orientations(*.asc/*.txt)</code></pre>
+<h2 id="execution-of-simple">Execution of SIMPLE</h2>
+<p>SIMPLE is executed primarily via <code>simple_distr_exec</code> that implements higher level workflows intended for distributed execution on workstations and clusters using a hybrid parallelisation model (distributed <em>and</em> shared memory). SIMPLE can also be executed via <code>simple_exec</code>, which implements all individual SIMPLE programs and runs in shared-memory parallelisation mode. Please, beware that the high-level workflows ( and , for example) can <em>only</em> be executed via the distributed execution route. In cluster environments using a job scheduler (PBS, SLURM and SGE are supported by SIMPLE) the file <code>simple_distr_config.env</code> in the current working directory controls the execution.</p>
+<pre><code>bash-3.2$ cat simple_distr_config.env 
+# CONFIGURATION FILE FOR DISTRIBUTED SIMPLE EXECUTION
+
+# ABSOLUTE PATH TO SIMPLE ROOT DIRECTORY
+simple_path           = /scratch/m3earlyadopters/simple/simple/
+
+# ESTIMATED TIME PER IMAGE (IN SECONDS)
+time_per_image        = 600
+
+# USER DETAILS
+user_account          = el85 
+user_email            = hans.elmlund@monash.edu
+user_project          = 
+
+# QSYS DETAILS (qsys_name=&lt;local|slurm|pbs&gt;)
+qsys_name             = slurm
+qsys_partition        = m3a
+qsys_qos              =
+qsys_reservation      = simple
+
+# JOB DETAILS
+job_ntasks            = 1
+job_memory_per_task   = 48000
+job_name              = taf-dna-part2
+job_ntasks_per_socket = 1</code></pre>
+<p>This file is auto-generated on workstations, but it needs to be edited by the user in cluster environments. If you need help configuring distributed SIMPLE execution, please file a help ticket on the webpage. The two most important parameters for distributed execution is the number of partitions <code>nparts</code> and the number of shared-memory CPU threads <code>nthr</code>. A rule of thumb for good performance on multi-socket workstations is to minimise the number of parts and maximising the number of threads subject to never having fewer parts than sockets. The shared memory parallelisation does not benefit from the use of a larger number of threads than the number of logical threads available on a socket. To check the number of processors on a linux system, execute <code>nproc</code> in the terminal. Consider a heterogeneous cluster with N nodes, two CPU sockets per node and six CPUs per socket.</p>
+<p>[][h] <img src="./CPUtopo/cputopo" alt="image" /></p>
+<p>If you are unsure how to configure your SIMPLE execution please file a help ticket.</p>
+<p>We normally let run in the background on the login node of our cluster. An example of how to distribute using ten nodes is provided below.</p>
+<pre><code>@!#&gt; nohup simple_distr_exec prg=prime2D stk=ptcls.mrc smpd=1.77 msk=100
+ncls=600 nthr=8 nparts=10 &gt;&gt; PRIME2DOUT &amp;</code></pre>
+<p>Another option available on clusters that use the SLURM scheduler is to use the <code>srun</code> command for via</p>
+<pre><code>@!#&gt; srun --ntasks=1 --ntasks-per-socket=1 --cpus-per-task=1 --mem=32000 
+--time=2-0:0:0 --output=PRIME2DOUT.%j --error=PRIME2DERR.%j
+simple_distr_exec prg=prime2D stk=ptcls.mrc smpd=1.77 msk=100
+ncls=600 nthr=8 nparts=10 &amp;</code></pre>
+<p>However, beta testers have reported that srun job sometimes dies with no warning, possibly because of the low tolerance for network errors. A more robust route may be to use <code>sbatch</code> as follows</p>
+<pre><code>@!#&gt;  sbatch -p MYCLUSTER --wrap=&quot;simple_distr_exec prg=prime2D stk=ptcls.mrc 
+smpd=1.77 msk=100 ncls=600 nthr=8 nparts=10 &gt;&gt; PRIME2DOUT&quot;</code></pre>
+<p>where the <code>–wrap</code> flag automatically generates a bash script for the given command.</p>
+<h2 id="from-movies-to-ab-initio-3d-reconstruction">From Movies to <em>ab initio</em> 3D reconstruction</h2>
+<p>These steps describe a typical SIMPLE workflow.</p>
+<ol>
+<li><p>DDD (Direct Detector Device) movie alignment and frame-weighting using SIMPLE program , executed with <code>simple_distr_exec</code></p></li>
+<li><p>CTF parameter identification with the SIMPLE program , wrapping CTFFIND4 <span class="citation" data-cites="rohou2015ctffind4"></span>, executed with <code>simple_distr_exec</code></p></li>
+<li><p>Particle identification using EMAN2 <span class="citation" data-cites="Tang:2007aa"></span> to generate <code>*.box</code> files</p></li>
+<li><p>Particle extraction with SIMPLE program , executed with <code>simple_exec</code></p></li>
+<li><p>2D analysis using the SIMPLE distributed workflow, executed with <code>simple_distr_exec</code></p></li>
+<li><p><em>Ab initio</em> 3D reconstruction from class averages using the SIMPLE distributed workflow, executed with <code>simple_distr_exec</code></p></li>
+<li><p>Mapping of class average selection and 3D class orientations to the particles using SIMPLE program , executed with <code>simple_exec</code></p></li>
+<li><p>Reconstruction of a 3D map from the individual particle images with SIMPLE program , executed with <code>simple_distr_exec</code></p></li>
+<li><p>Map refinement will be part of release 3.0</p></li>
+</ol>
+<p>For descriptions for how to execute the individual steps, please refer to the documentation of each program (below).</p>
+<h1 id="command-line-dictionary">Command Line Dictionary</h1>
+<table>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;"><code>acf </code></td>
+<td style="text-align: left;"><span> calculate autocorrelation function(yes|no){no}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>amsklp </code></td>
+<td style="text-align: left;"><span> low-pass limit for envelope mask generation(in Å)</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>angastunit </code></td>
+<td style="text-align: left;"><span> angle of astigmatism unit (radians|degrees){degrees}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>angerr </code></td>
+<td style="text-align: left;"><span> angular error(in degrees){0}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>append </code></td>
+<td style="text-align: left;"><span> append in context of files(yes|no){no}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>astigerr </code></td>
+<td style="text-align: left;"><span> astigmatism error(in microns)</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>astigstep </code></td>
+<td style="text-align: left;"><span> step size for astigamtism search(in microns)</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>async </code></td>
+<td style="text-align: left;"><span> asynchronous mode of operation(yes|no){no}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>athres </code></td>
+<td style="text-align: left;"><span> angular threshold(in degrees)</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>automsk </code></td>
+<td style="text-align: left;"><span> envelope masking(yes|no|cavg){no}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>autoscale </code></td>
+<td style="text-align: left;"><span> automatic down-scaling(yes|no){yes}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>avg </code></td>
+<td style="text-align: left;"><span> calculate average(yes|no)</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>bfac </code></td>
+<td style="text-align: left;"><span> bfactor for sharpening/low-pass filtering(in Å**2){200.}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>bfacerr </code></td>
+<td style="text-align: left;"><span> bfactor error in simulated images(in Å**2){0}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>bin </code></td>
+<td style="text-align: left;"><span> binarise image(yes|no){no}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>binwidth </code></td>
+<td style="text-align: left;"><span> binary layers grown for molecular envelope(in pixels){1}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>box </code></td>
+<td style="text-align: left;"><span> square image size(in pixels)</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>boxconvsz </code></td>
+<td style="text-align: left;"><span> size of box used for box-convolution(in pixels)</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>boxfile </code></td>
+<td style="text-align: left;"><span> file with EMAN particle coordinates(*.txt/*.asc)</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>boxtab </code></td>
+<td style="text-align: left;"><span> table (text file) of files with EMAN particle coordinates(*.txt/*.asc)</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>cenlp </code></td>
+<td style="text-align: left;"><span> low-pass limit for binarisation in centering(in Å){30 A}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>center </code></td>
+<td style="text-align: left;"><span> center image(s)/class average(s)/volume(s)(yes|no){no}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>chunksz </code></td>
+<td style="text-align: left;"><span> # images/orientations in chunk</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>class </code></td>
+<td style="text-align: left;"><span> cluster identity</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>clip </code></td>
+<td style="text-align: left;"><span> clipped image box size(in pixels)</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>clustvalid </code></td>
+<td style="text-align: left;"><span> validate clustering(yes|homo|no){no}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>comlindoc </code></td>
+<td style="text-align: left;"><span> shc_clustering_nclsX.txt</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>compare </code></td>
+<td style="text-align: left;"><span> do comparison(yes|no){no}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>corner </code></td>
+<td style="text-align: left;"><span> corner size(in pixels){0}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>countvox </code></td>
+<td style="text-align: left;"><span> count # voxels(yes|no){no}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>cs </code></td>
+<td style="text-align: left;"><span> spherical aberration constant(in mm){2.7}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>ctf </code></td>
+<td style="text-align: left;"><span> ctf flag(yes|no|flip)</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>ctffind_doc </code></td>
+<td style="text-align: left;"><span> per-micrograph CTF parameters to transfer</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>ctfsq </code></td>
+<td style="text-align: left;"><span> apply ctf**2 to the images(yes|no){no}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>ctfsqspec </code></td>
+<td style="text-align: left;"><span> filename of ctf**2 spectrum{ctfsqspec_state01.bin}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>ctfstats </code></td>
+<td style="text-align: left;"><span> calculate ctf statistics(yes|no){no}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>cube </code></td>
+<td style="text-align: left;"><span> side size(in pixels){0}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>dcrit_rel </code></td>
+<td style="text-align: left;"><span> critical distance relative to box(0-1){0.5}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>defocus </code></td>
+<td style="text-align: left;"><span> defocus(in microns){3.}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>deftab </code></td>
+<td style="text-align: left;"><span> text file with CTF info(*.txt/*.asc)</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>dferr </code></td>
+<td style="text-align: left;"><span> defocus error(in microns){1.0}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>dfmax </code></td>
+<td style="text-align: left;"><span> maximum expected defocus(in microns)</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>dfmin </code></td>
+<td style="text-align: left;"><span> minimum expected defocus(in microns)</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>dfunit </code></td>
+<td style="text-align: left;"><span> defocus unit (A|microns){microns}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>dir </code></td>
+<td style="text-align: left;"><span> directory</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>dir_movies </code></td>
+<td style="text-align: left;"><span> grab *.mrc/*.mrcs files from here</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>dir_reject </code></td>
+<td style="text-align: left;"><span> move rejected files to here{rejected}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>dir_select </code></td>
+<td style="text-align: left;"><span> move selected files to here{selected}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>dir_target </code></td>
+<td style="text-align: left;"><span> put output here</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>discrete </code></td>
+<td style="text-align: left;"><span> discrete(yes|no){no}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>diverse </code></td>
+<td style="text-align: left;"><span> diverse or not flag (yes|no){no}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>doclist </code></td>
+<td style="text-align: left;"><span> list of oritabs for different states</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>dopick </code></td>
+<td style="text-align: left;"><span> execute picking step (in preproc){yes}</span></td>
+</tr>
+</tbody>
+</table>
+<table>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;"><code>dose_rate </code></td>
+<td style="text-align: left;"><span> dose rate(in e/A2/s)</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>dynlp </code></td>
+<td style="text-align: left;"><span> automatic resolution limit update(yes|no){yes}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>e1 </code></td>
+<td style="text-align: left;"><span> 1st Euler(in degrees){0}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>e2 </code></td>
+<td style="text-align: left;"><span> 2nd Euler(in degrees){0}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>e3 </code></td>
+<td style="text-align: left;"><span> 3d Euler(in degrees){0}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>edge </code></td>
+<td style="text-align: left;"><span> edge size for softening molecular envelope(in pixels)</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>endian </code></td>
+<td style="text-align: left;"><span> endiannesss of files(big|little|native){native}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>eo </code></td>
+<td style="text-align: left;"><span> use FSC for filtering and low-pass limit update(yes|no){no}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>errify </code></td>
+<td style="text-align: left;"><span> introduce error(yes|no){no}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>even </code></td>
+<td style="text-align: left;"><span> calculate even eo-pair(yes|no){no}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>exp_doc </code></td>
+<td style="text-align: left;"><span> specifying exp_time and dose_rate per tomogram</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>exp_time </code></td>
+<td style="text-align: left;"><span> exposure time(in s)</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>expastig </code></td>
+<td style="text-align: left;"><span> expected astigmatism(in microns)</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>ext </code></td>
+<td style="text-align: left;"><span> file extension{.mrc}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>fbody </code></td>
+<td style="text-align: left;"><span> file body</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>filetab </code></td>
+<td style="text-align: left;"><span> list of files(*.txt/*.asc)</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>filwidth </code></td>
+<td style="text-align: left;"><span> width of filament (in Å)</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>find </code></td>
+<td style="text-align: left;"><span> Fourier index</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>fname </code></td>
+<td style="text-align: left;"><span> file name</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>frac </code></td>
+<td style="text-align: left;"><span> fraction of ptcls(0-1){1}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>fraca </code></td>
+<td style="text-align: left;"><span> fraction of amplitude contrast used for fitting CTF{0.07}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>fracdeadhot </code></td>
+<td style="text-align: left;"><span> fraction of dead or hot pixels{0.01}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>fromf </code></td>
+<td style="text-align: left;"><span> start frame index</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>fromp </code></td>
+<td style="text-align: left;"><span> start ptcl index</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>fsc </code></td>
+<td style="text-align: left;"><span> binary file with FSC info{fsc_state01.bin}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>ft2img </code></td>
+<td style="text-align: left;"><span> convert Fourier transform to real image of power(yes|no){no}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>grow </code></td>
+<td style="text-align: left;"><span> # binary layers to grow(in pixels)</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>guinier </code></td>
+<td style="text-align: left;"><span> calculate Guinier plot(yes|no){no}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>hfun </code></td>
+<td style="text-align: left;"><span> function used for normalization(sigm|tanh|lin){sigm}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>hist </code></td>
+<td style="text-align: left;"><span> give variable for histogram plot</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>hp </code></td>
+<td style="text-align: left;"><span> high-pass limit(in Å)</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>hp_ctffind </code></td>
+<td style="text-align: left;"><span> high-pass limit 4 ctffind(in Å)</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>iares </code></td>
+<td style="text-align: left;"><span> integer angular resolution{10}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>infile </code></td>
+<td style="text-align: left;"><span> table (text file) of inputs(*.asc/*.txt)</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>inner </code></td>
+<td style="text-align: left;"><span> inner mask radius(in pixels)</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>jumpsz </code></td>
+<td style="text-align: left;"><span> size of contigous segment</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>kv </code></td>
+<td style="text-align: left;"><span> acceleration voltage(in kV){300.}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>label </code></td>
+<td style="text-align: left;"><span> discrete label(class|state){class}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>lp </code></td>
+<td style="text-align: left;"><span> low-pass limit(in Å)</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>lp_ctffind </code></td>
+<td style="text-align: left;"><span> low-pass limit 4 ctffind(in Å)</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>lp_pick </code></td>
+<td style="text-align: left;"><span> low-pass limit 4 picker(in Å)</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>lpstart </code></td>
+<td style="text-align: left;"><span> start low-pass limit(in Å){15}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>lpstop </code></td>
+<td style="text-align: left;"><span> stop low-pass limit(in Å){8}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>masscen </code></td>
+<td style="text-align: left;"><span> center using binarisation and mass centering(yes|no){no}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>maxits </code></td>
+<td style="text-align: left;"><span> maximum # iterations</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>minp </code></td>
+<td style="text-align: left;"><span> minimum cluster population</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>mirr </code></td>
+<td style="text-align: left;"><span> mirror(no|x|y){no}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>moldiam </code></td>
+<td style="text-align: left;"><span> molecular diameter(in Å)</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>msk </code></td>
+<td style="text-align: left;"><span> mask radius(in pixels)</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>mskfile </code></td>
+<td style="text-align: left;"><span> maskfile.ext</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>msktype </code></td>
+<td style="text-align: left;"><span> type of mask(hard|soft){soft}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>mul </code></td>
+<td style="text-align: left;"><span> origin shift multiplication factor{1}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>mw </code></td>
+<td style="text-align: left;"><span> molecular weight(in kD)</span></td>
+</tr>
+</tbody>
+</table>
+<table>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;"><code>ncls </code></td>
+<td style="text-align: left;"><span> # clusters</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>ncunits </code></td>
+<td style="text-align: left;"><span> # computing units, can be &lt; nparts{nparts}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>ndiscrete </code></td>
+<td style="text-align: left;"><span> # discrete orientations</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>ndocs </code></td>
+<td style="text-align: left;"><span> # documents</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>neg </code></td>
+<td style="text-align: left;"><span> invert contrast of images(yes|no)</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>newbox </code></td>
+<td style="text-align: left;"><span> new box for scaling (by Fourier padding/clipping</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>nframes </code></td>
+<td style="text-align: left;"><span> # frames{30}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>nframesgrp </code></td>
+<td style="text-align: left;"><span> # frames to group before unblur(Falcon 3){0}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>nnn </code></td>
+<td style="text-align: left;"><span> # nearest neighbors{500}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>noise </code></td>
+<td style="text-align: left;"><span> noise initialisation(yes|no){no}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>noise_norm </code></td>
+<td style="text-align: left;"><span> normalise based on sdev of background(yes|no){no}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>norec </code></td>
+<td style="text-align: left;"><span> do not reconstruct volume(s)(yes|no){no}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>norm </code></td>
+<td style="text-align: left;"><span> do statistical normalisation avg</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>nparts </code></td>
+<td style="text-align: left;"><span> # partitions in distributed exection</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>npeaks </code></td>
+<td style="text-align: left;"><span> # nonzero orientation weights{1}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>npix </code></td>
+<td style="text-align: left;"><span> # pixles/voxels in binary representation</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>nptcls </code></td>
+<td style="text-align: left;"><span> # images in stk/# orientations in oritab</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>nran </code></td>
+<td style="text-align: left;"><span> # random images to select</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>nrefs </code></td>
+<td style="text-align: left;"><span> # references used for picking{100}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>nrepeats </code></td>
+<td style="text-align: left;"><span> # times to restart workflow{1}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>nsig </code></td>
+<td style="text-align: left;"><span> # sigmas</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>nspace </code></td>
+<td style="text-align: left;"><span> # projection directions</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>nstates </code></td>
+<td style="text-align: left;"><span> # states to reconstruct</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>nthr </code></td>
+<td style="text-align: left;"><span> # OpenMP threads{1}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>nthr_master </code></td>
+<td style="text-align: left;"><span> # OpenMP threads on master node{1}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>numlen </code></td>
+<td style="text-align: left;"><span> length of number string</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>nvox </code></td>
+<td style="text-align: left;"><span> # voxels{0}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>odd </code></td>
+<td style="text-align: left;"><span> calculate odd eo-pair(yes|no){no}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>offset </code></td>
+<td style="text-align: left;"><span> pixels offset{7}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>opt </code></td>
+<td style="text-align: left;"><span> optimiser (powell|simplex|oasis|bforce|pso|de){simplex}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>order </code></td>
+<td style="text-align: left;"><span> order ptcls according to correlation(yes|no){no}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>oritab </code></td>
+<td style="text-align: left;"><span> table (text file) of orientations(*.asc/*.txt)</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>oritab2 </code></td>
+<td style="text-align: left;"><span> 2nd table (text file) of orientations(*.asc/*.txt)</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>oritab3D </code></td>
+<td style="text-align: left;"><span> table (text file) of 3D orientations(*.asc/*.txt)</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>outer </code></td>
+<td style="text-align: left;"><span> outer mask radius(in pixels)</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>outfile </code></td>
+<td style="text-align: left;"><span> output document</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>outside </code></td>
+<td style="text-align: left;"><span> extract boxes outside the micrograph boundaries(yes|no){no}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>outstk </code></td>
+<td style="text-align: left;"><span> output image stack</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>outstk2 </code></td>
+<td style="text-align: left;"><span> output image stack 2nd</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>outvol </code></td>
+<td style="text-align: left;"><span> output volume{outvol.ext}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>pgrp </code></td>
+<td style="text-align: left;"><span> point-group symmetry(cn|dn|t|o|i)</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>pgrp_known </code></td>
+<td style="text-align: left;"><span> point-group known a priori(yes|no){no}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>phaseplate </code></td>
+<td style="text-align: left;"><span> images obtained with phaseplate(yes|no){no}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>phrand </code></td>
+<td style="text-align: left;"><span> phase randomize(yes|no){no}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>plaintexttab </code></td>
+<td style="text-align: left;"><span> plain text file of input parameters</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>plot </code></td>
+<td style="text-align: left;"><span> make plot(yes|no){no}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>prg </code></td>
+<td style="text-align: left;"><span> SIMPLE program to execute</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>pspecsz </code></td>
+<td style="text-align: left;"><span> size of power spectrum(in pixels)</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>pspecsz_ctffind </code></td>
+<td style="text-align: left;"><span> size of power spectrum 4 ctffind(in pixels)</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>pspecsz_unblur </code></td>
+<td style="text-align: left;"><span> size of power spectrum 4 unblur(in pixels)</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>refine </code></td>
+<td style="text-align: left;"><span> refinement mode(no|shc|neigh|shcneigh|adasym|shift){no}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>refs </code></td>
+<td style="text-align: left;"><span> initial2Dreferences.ext</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>rm_outliers </code></td>
+<td style="text-align: left;"><span> remove outliers{yes}</span></td>
+</tr>
+</tbody>
+</table>
+<table>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;"><code>rnd </code></td>
+<td style="text-align: left;"><span> random(yes|no){no}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>rrate </code></td>
+<td style="text-align: left;"><span> randomization rate{0.8}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>scale </code></td>
+<td style="text-align: left;"><span> image scale factor{1}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>scale2 </code></td>
+<td style="text-align: left;"><span> image scale factor 2nd{1}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>shalgn </code></td>
+<td style="text-align: left;"><span> do 2D shift alignment(yes|no){no}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>shbarrier </code></td>
+<td style="text-align: left;"><span> use shift search barrier constraint(yes|no){yes}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>shell_norm </code></td>
+<td style="text-align: left;"><span> normalise based on power spectrum (yes|no){no}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>shellw </code></td>
+<td style="text-align: left;"><span> shell-weight reconstruction (yes|no)</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>sherr </code></td>
+<td style="text-align: left;"><span> shift error(in pixels){2}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>single </code></td>
+<td style="text-align: left;"><span> simulate a single image(yes|no){no}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>smpd </code></td>
+<td style="text-align: left;"><span> sampling distance, same as EMANs apix(in Å)</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>snr </code></td>
+<td style="text-align: left;"><span> signal-to-noise ratio</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>soften </code></td>
+<td style="text-align: left;"><span> soften envelope with cosine edge(yes|no){no}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>speckind </code></td>
+<td style="text-align: left;"><span> power spectrum kind(amp|square|phase|real|log|sqrt){sqrt}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>srch_inpl </code></td>
+<td style="text-align: left;"><span> search in-plane degrees of freedom(yes|no){yes}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>startit </code></td>
+<td style="text-align: left;"><span> start iterating from here</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>state </code></td>
+<td style="text-align: left;"><span> state to extract</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>state2split </code></td>
+<td style="text-align: left;"><span> state group to split</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>stats </code></td>
+<td style="text-align: left;"><span> provide statistics(yes|no){yes}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>stepsz </code></td>
+<td style="text-align: left;"><span> size of step{0}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>stk </code></td>
+<td style="text-align: left;"><span> particle stack with all images(ptcls.ext)</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>stk2 </code></td>
+<td style="text-align: left;"><span> 2nd stack(in map2ptcls/select: selected(cavgs).ext)</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>stk3 </code></td>
+<td style="text-align: left;"><span> 3d stack (in map2ptcls/select: (cavgs)2selectfrom.ext)</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>stream </code></td>
+<td style="text-align: left;"><span> sream (real time) execution mode(yes|no){no}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>szsn </code></td>
+<td style="text-align: left;"><span> size of stochastic neighborhood{5}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>thres </code></td>
+<td style="text-align: left;"><span> threshold (binarisation: 0-1; distance filer: in pixels)</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>tof </code></td>
+<td style="text-align: left;"><span> stop frame index</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>tomo </code></td>
+<td style="text-align: left;"><span> tomography mode(yes|no){no}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>tomoseries </code></td>
+<td style="text-align: left;"><span> filetable of filetables of tomograms</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>top </code></td>
+<td style="text-align: left;"><span> stop particle index</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>trs </code></td>
+<td style="text-align: left;"><span> maximum halfwidth shift(in pixels)</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>trsstats </code></td>
+<td style="text-align: left;"><span> provide origin shift statistics(yes|no){no}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>tseries </code></td>
+<td style="text-align: left;"><span> images represent a time-series(yes|no){no}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>unidoc </code></td>
+<td style="text-align: left;"><span> unified resources and orientations doc</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>verbose </code></td>
+<td style="text-align: left;"><span> verbose output(yes|no)</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>vis </code></td>
+<td style="text-align: left;"><span> visualise(yes|no)</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>vol1 </code></td>
+<td style="text-align: left;"><span> input volume no1(invol1.ext)</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>vol2 </code></td>
+<td style="text-align: left;"><span> input volume no2(invol2.ext)</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>vollist </code></td>
+<td style="text-align: left;"><span> table (text file) of volume files(*.txt/*.asc)</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>voltab </code></td>
+<td style="text-align: left;"><span> table (text file) of volume files(*.txt/*.asc)</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>voltab2 </code></td>
+<td style="text-align: left;"><span> 2nd table (text file) of volume files(*.txt/*.asc)</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>which_iter </code></td>
+<td style="text-align: left;"><span> iteration nr</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>width </code></td>
+<td style="text-align: left;"><span> falloff of inner mask(in pixels){10}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>wiener </code></td>
+<td style="text-align: left;"><span> Wiener restoration mode(full|highres){highres}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>xcoord </code></td>
+<td style="text-align: left;"><span> x coordinate{0}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>xdim </code></td>
+<td style="text-align: left;"><span> x dimension(in pixles)</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>xfel </code></td>
+<td style="text-align: left;"><span> images are XFEL diffraction patterns(yes|no){no}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>xsh </code></td>
+<td style="text-align: left;"><span> x shift(in pixels){0}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>ycoord </code></td>
+<td style="text-align: left;"><span> y coordinate{0}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>ydim </code></td>
+<td style="text-align: left;"><span> y dimension(in pixles)</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>ysh </code></td>
+<td style="text-align: left;"><span> y shift(in pixels){0}</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>zero </code></td>
+<td style="text-align: left;"><span> zeroing(yes|no){no}</span></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>zsh </code></td>
+<td style="text-align: left;"><span> z shift(in pixels){0}</span></td>
+</tr>
+</tbody>
+</table>
+<table>
+<tbody>
+</tbody>
+</table>
+<h1 id="distributed-simple-workflows-in-alphabetical-order">Distributed SIMPLE Workflows in Alphabetical Order</h1>
+<h2 id="ctffind">Distributed Workflow: </h2>
+<p>is a distributed workflow that wraps CTFFIND4 (Grigorieff lab)</p>
+<pre><code>USAGE:
+bash-3.2$ simple_distr_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+filetab = list of files(*.txt/*.asc)
+smpd    = sampling distance, same as EMANs apix(in A)
+kv      = acceleration voltage(in kV){300.}
+cs      = spherical aberration constant(in mm){2.7}
+fraca   = fraction of amplitude contrast used for fitting CTF{0.07}
+nparts  = # partitions in distributed exection
+
+OPTIONAL
+ncunits    = # computing units, can be &lt; nparts{nparts}
+pspecsz    = size of power spectrum(in pixels)
+hp         = high-pass limit(in A)
+lp         = low-pass limit(in A)
+dfmin      = minimum expected defocus(in microns)
+dfmax      = maximum expected defocus(in microns)
+astigstep  = step size for astigamtism search(in microns)
+expastig   = expected astigmatism(in microns)
+phaseplate = images obtained with phaseplate(yes|no){no}</code></pre>
+<h2 id="ini3D_from_cavgs">Distributed Workflow: </h2>
+<p>is a distributed workflow for generating an initial 3D model from class averages obtained with prime2D</p>
+<pre><code>USAGE:
+bash-3.2$ simple_distr_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+stk    = particle stack with all images(ptcls.ext)
+smpd   = sampling distance, same as EMANs apix(in A)
+msk    = mask radius(in pixels)
+pgrp   = point-group symmetry(cn|dn|t|o|i)
+nparts = # partitions in distributed exection
+
+OPTIONAL
+nthr       = # OpenMP threads{1}
+ncunits    = # computing units, can be &lt; nparts{nparts}
+hp         = high-pass limit(in A)
+lp         = low-pass limit(in A)
+lpstop     = stop low-pass limit(in A){8}
+inner      = inner mask radius(in pixels)
+width      = falloff of inner mask(in pixels){10}
+nspace     = # projection directions
+autoscale  = automatic down-scaling(yes|no){yes}
+pgrp_known = point-group known a priori(yes|no){no}</code></pre>
+<h2 id="makecavgs">Distributed Workflow: </h2>
+<p>is a distributed workflowused for producing class averages or initial random references for prime2D execution.</p>
+<pre><code>USAGE:
+bash-3.2$ simple_distr_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+stk    = particle stack with all images(ptcls.ext)
+smpd   = sampling distance, same as EMANs apix(in A)
+ctf    = ctf flag(yes|no|flip)
+nparts = # partitions in distributed exection
+
+OPTIONAL
+nthr     = # OpenMP threads{1}
+ncunits  = # computing units, can be &lt; nparts{nparts}
+ncls     = # clusters
+deftab   = text file with CTF info(*.txt/*.asc)
+oritab   = table (text file) of orientations(*.asc/*.txt)
+filwidth = width of filament (in A)
+mul      = origin shift multiplication factor{1}
+outfile  = output document
+refs     = initial2Dreferences.ext</code></pre>
+<h2 id="prime2D">Distributed Workflow: </h2>
+<p>is a distributed workflow implementing reference-free 2D alignment/clustering algorithm adopted from the prime3D probabilistic ab initio 3D reconstruction algorithm</p>
+<pre><code>USAGE:
+bash-3.2$ simple_distr_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+stk  = particle stack with all images(ptcls.ext)
+smpd = sampling distance, same as EMANs apix(in A)
+msk  = mask radius(in pixels)
+ncls = # clusters
+ctf  = ctf flag(yes|no|flip)
+
+OPTIONAL
+nparts    = # partitions in distributed exection
+nthr      = # OpenMP threads{1}
+ncunits   = # computing units, can be &lt; nparts{nparts}
+deftab    = text file with CTF info(*.txt/*.asc)
+refs      = initial2Dreferences.ext
+oritab    = table (text file) of orientations(*.asc/*.txt)
+hp        = high-pass limit(in A)
+lp        = low-pass limit(in A)
+lpstart   = start low-pass limit(in A){15}
+lpstop    = stop low-pass limit(in A){8}
+cenlp     = low-pass limit for binarisation in centering(in A){30 A}
+trs       = maximum halfwidth shift(in pixels)
+inner     = inner mask radius(in pixels)
+width     = falloff of inner mask(in pixels){10}
+startit   = start iterating from here
+maxits    = maximum # iterations
+center    = center image(s)/class average(s)/volume(s)(yes|no){no}
+autoscale = automatic down-scaling(yes|no){yes}</code></pre>
+<h2 id="prime3D">Distributed Workflow: </h2>
+<p>is a distributed workflow for ab inito reconstruction/refinement based on probabilistic projection matching. PRIME is short for PRobabilistic Initial 3D Model generation for Single-particle cryo-Electron microscopy. There are a daunting number of options in PRIME3D. If you are processing class averages we recommend that you instead use the simple_distr_exec prg=ini3D_from_cavgs route for executing PRIME3D. Automated workflows for single- and multi-particle refinement using prime3D are planned for the next release (3.0)</p>
+<pre><code>USAGE:
+bash-3.2$ simple_distr_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+stk    = particle stack with all images(ptcls.ext)
+smpd   = sampling distance, same as EMANs apix(in A)
+msk    = mask radius(in pixels)
+ctf    = ctf flag(yes|no|flip)
+pgrp   = point-group symmetry(cn|dn|t|o|i)
+nparts = # partitions in distributed exection
+
+OPTIONAL
+nthr      = # OpenMP threads{1}
+ncunits   = # computing units, can be &lt; nparts{nparts}
+deftab    = text file with CTF info(*.txt/*.asc)
+vol1      = input volume no1(invol1.ext)
+oritab    = table (text file) of orientations(*.asc/*.txt)
+trs       = maximum halfwidth shift(in pixels)
+hp        = high-pass limit(in A)
+lp        = low-pass limit(in A)
+cenlp     = low-pass limit for binarisation in centering(in A){30 A}
+dynlp     = automatic resolution limit update(yes|no){yes}
+lpstart   = start low-pass limit(in A){15}
+lpstop    = stop low-pass limit(in A){8}
+eo        = use FSC for filtering and low-pass limit update(yes|no){no}
+refine    = refinement mode(no|shc|neigh|shcneigh|adasym|shift){no}
+frac      = fraction of ptcls(0-1){1}
+automsk   = envelope masking(yes|no|cavg){no}
+mw        = molecular weight(in kD)
+amsklp    = low-pass limit for envelope mask generation(in A)
+edge      = edge size for softening molecular envelope(in pixels)
+binwidth  = binary layers grown for molecular envelope(in pixels){1}
+inner     = inner mask radius(in pixels)
+width     = falloff of inner mask(in pixels){10}
+nspace    = # projection directions
+nstates   = # states to reconstruct
+npeaks    = # nonzero orientation weights{1}
+startit   = start iterating from here
+maxits    = maximum # iterations
+shbarrier = use shift search barrier constraint(yes|no){yes}
+noise     = noise initialisation(yes|no){no}
+xfel      = images are XFEL diffraction patterns(yes|no){no}
+nnn       = # nearest neighbors{500}
+rrate     = randomization rate{0.8}
+norec     = do not reconstruct volume(s)(yes|no){no}</code></pre>
+<h2 id="prime3D_init">Distributed Workflow: </h2>
+<p>is a distributed workflow for generating a random initial model for initialisation of PRIME3D. If the data set is large (&gt;5000 images), generating a random model can be slow. To speedup, set nran to some smaller number, resulting in nran images selected randomly for reconstruction</p>
+<pre><code>USAGE:
+bash-3.2$ simple_distr_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+stk    = particle stack with all images(ptcls.ext)
+smpd   = sampling distance, same as EMANs apix(in A)
+msk    = mask radius(in pixels)
+ctf    = ctf flag(yes|no|flip)
+pgrp   = point-group symmetry(cn|dn|t|o|i)
+nparts = # partitions in distributed exection
+
+OPTIONAL
+nthr    = # OpenMP threads{1}
+ncunits = # computing units, can be &lt; nparts{nparts}
+deftab  = text file with CTF info(*.txt/*.asc)
+lp      = low-pass limit(in A)
+inner   = inner mask radius(in pixels)
+width   = falloff of inner mask(in pixels){10}
+nspace  = # projection directions
+nran    = # random images to select
+npeaks  = # nonzero orientation weights{1}
+xfel    = images are XFEL diffraction patterns(yes|no){no}</code></pre>
+<h2 id="recvol">Distributed Workflow: </h2>
+<p>is a distributed workflow for reconstructing volumes from MRC and SPIDER stacks, given input orientations and state assignments. The algorithm is based on direct Fourier inversion with a Kaiser-Bessel (KB) interpolation kernel. This window function reduces the real-space ripple artifacts associated with direct moving windowed-sinc interpolation. The feature sought when implementing this algorithm was to enable quick, reliable reconstruction from aligned individual particle images. mul is used to scale the origin shifts if down-sampled were used for alignment and the original images are used for reconstruction. ctf=yes or ctf=flip turns on the Wiener restoration. If the images were phase-flipped set ctf=flip. amsklp, mw, and edge control the solvent mask: the low-pass limit used to generate the envelope; the molecular weight of the molecule (protein assumed but it works reasonably well also for RNA; slight modification of mw might be needed). The inner parameter controls the radius of the soft-edged mask used to remove the unordered DNA/RNA core of spherical icosahedral viruses</p>
+<pre><code>USAGE:
+bash-3.2$ simple_distr_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+stk    = particle stack with all images(ptcls.ext)
+smpd   = sampling distance, same as EMANs apix(in A)
+oritab = table (text file) of orientations(*.asc/*.txt)
+msk    = mask radius(in pixels)
+ctf    = ctf flag(yes|no|flip)
+pgrp   = point-group symmetry(cn|dn|t|o|i)
+nparts = # partitions in distributed exection
+
+OPTIONAL
+nthr    = # OpenMP threads{1}
+ncunits = # computing units, can be &lt; nparts{nparts}
+eo      = use FSC for filtering and low-pass limit update(yes|no){no}
+deftab  = text file with CTF info(*.txt/*.asc)
+frac    = fraction of ptcls(0-1){1}
+mw      = molecular weight(in kD)
+mul     = origin shift multiplication factor{1}
+state   = state to extract
+vol1    = input volume no1(invol1.ext)
+npeaks  = # nonzero orientation weights{1}</code></pre>
+<h2 id="symsrch">Distributed Workflow: </h2>
+<p>is a distributed workflow for searching for the principal symmetry axis of a volume reconstructed without assuming any point-group symmetry. The program takes as input an asymmetrical 3D reconstruction. The alignment document for all the particle images that have gone into the 3D reconstruction and the desired point-group symmetry needs to be inputted. The 3D reconstruction is then projected in 50 (default option) even directions, common lines-based optimisation is used to identify the principal symmetry axis, the rotational transformation is applied to the inputted orientations, and a new alignment document is produced. Input this document to recvol together with the images and the point-group symmetry to generate a symmetrised map. If you are unsure about the point-group, you should use the compare=yes mode and input the highest conceviable point-group. The program then calculates probabilities for all lower groups inclusive.</p>
+<pre><code>USAGE:
+bash-3.2$ simple_distr_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+vol1    = input volume no1(invol1.ext)
+smpd    = sampling distance, same as EMANs apix(in A)
+msk     = mask radius(in pixels)
+pgrp    = point-group symmetry(cn|dn|t|o|i)
+oritab  = table (text file) of orientations(*.asc/*.txt)
+outfile = output document
+lp      = low-pass limit(in A)
+nparts  = # partitions in distributed exection
+
+OPTIONAL
+nthr   = # OpenMP threads{1}
+cenlp  = low-pass limit for binarisation in centering(in A){30 A}
+hp     = high-pass limit(in A)
+nspace = # projection directions</code></pre>
+<h2 id="unblur">Distributed Workflow: </h2>
+<p>is a distributed workflow for movie alignment or unblurring based the same principal strategy as Grigorieffs program (hence the name). There are two important differences: automatic weighting of the frames using a correlation-based M-estimator and continuous optimisation of the shift parameters. Input is a textfile with absolute paths to movie files in addition to a few input parameters, some of which deserve a comment. If dose_rate and exp_time are given the individual frames will be low-pass filtered accordingly (dose-weighting strategy). If scale is given, the movie will be Fourier cropped according to the down-scaling factor (for super-resolution movies). If nframesgrp is given the frames will be pre-averaged in the given chunk size (Falcon 3 movies). If fromf/tof are given, a contiguous subset of frames will be averaged without any dose-weighting applied.</p>
+<pre><code>USAGE:
+bash-3.2$ simple_distr_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+filetab = list of files(*.txt/*.asc)
+smpd    = sampling distance, same as EMANs apix(in A)
+nparts  = # partitions in distributed exection
+
+OPTIONAL
+nthr       = # OpenMP threads{1}
+ncunits    = # computing units, can be &lt; nparts{nparts}
+fbody      = file body
+dose_rate  = dose rate(in e/A2/s)
+exp_time   = exposure time(in s)
+lpstart    = start low-pass limit(in A){15}
+lpstop     = stop low-pass limit(in A){8}
+trs        = maximum halfwidth shift(in pixels)
+kv         = acceleration voltage(in kV){300.}
+pspecsz    = size of power spectrum(in pixels)
+numlen     = length of number string
+startit    = start iterating from here
+scale      = image scale factor{1}
+nframesgrp = # frames to group before unblur(Falcon 3){0}
+fromf      = start frame index
+tof        = stop frame index
+nsig       = # sigmas</code></pre>
+<h2 id="unblur_ctffind">Distributed Workflow: </h2>
+<p>is a pipelined distributed workflow: unblur + ctffind program</p>
+<pre><code>USAGE:
+bash-3.2$ simple_distr_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+filetab = list of files(*.txt/*.asc)
+smpd    = sampling distance, same as EMANs apix(in A)
+kv      = acceleration voltage(in kV){300.}
+cs      = spherical aberration constant(in mm){2.7}
+fraca   = fraction of amplitude contrast used for fitting CTF{0.07}
+nparts  = # partitions in distributed exection
+
+OPTIONAL
+nthr       = # OpenMP threads{1}
+ncunits    = # computing units, can be &lt; nparts{nparts}
+fbody      = file body
+dose_rate  = dose rate(in e/A2/s)
+exp_time   = exposure time(in s)
+lpstart    = start low-pass limit(in A){15}
+lpstop     = stop low-pass limit(in A){8}
+trs        = maximum halfwidth shift(in pixels)
+pspecsz    = size of power spectrum(in pixels)
+numlen     = length of number string
+startit    = start iterating from here
+scale      = image scale factor{1}
+nframesgrp = # frames to group before unblur(Falcon 3){0}
+fromf      = start frame index
+tof        = stop frame index
+nsig       = # sigmas
+outfile    = output document
+hp         = high-pass limit(in A)
+lp         = low-pass limit(in A)
+dfmin      = minimum expected defocus(in microns)
+dfmax      = maximum expected defocus(in microns)
+astigstep  = step size for astigamtism search(in microns)
+expastig   = expected astigmatism(in microns)
+phaseplate = images obtained with phaseplate(yes|no){no}</code></pre>
+<h2 id="unblur_tomo">Distributed Workflow: </h2>
+<p>is a distributed workflow for movie alignment or unblurring of tomographic movies. Input is a textfile with absolute paths to movie files in addition to a few input parameters, some of which deserve a comment. The exp_doc document should contain per line exp_time=X and dose_rate=Y. It is asssumed that the input list of movies (one per tilt) are ordered temporally. This is necessary for correct dose-weighting of tomographic tilt series. If scale is given, the movie will be Fourier cropped according to the down-scaling factor (for super-resolution movies). If nframesgrp is given the frames will be pre-averaged in the given chunk size (Falcon 3 movies).</p>
+<pre><code>USAGE:
+bash-3.2$ simple_distr_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+tomoseries = filetable of filetables of tomograms
+exp_doc    = specifying exp_time and dose_rate per tomogram
+smpd       = sampling distance, same as EMANs apix(in A)
+
+OPTIONAL
+nthr       = # OpenMP threads{1}
+ncunits    = # computing units, can be &lt; nparts{nparts}
+lpstart    = start low-pass limit(in A){15}
+lpstop     = stop low-pass limit(in A){8}
+trs        = maximum halfwidth shift(in pixels)
+kv         = acceleration voltage(in kV){300.}
+pspecsz    = size of power spectrum(in pixels)
+numlen     = length of number string
+startit    = start iterating from here
+scale      = image scale factor{1}
+nframesgrp = # frames to group before unblur(Falcon 3){0}
+nsig       = # sigmas</code></pre>
+<h1 id="simple-programs-in-alphabetical-order">SIMPLE Programs in Alphabetical Order</h1>
+<h2 id="automask2D">Program: </h2>
+<p>is a program for solvent flattening of class averages. The algorithm for background removal is based on low-pass filtering and binarization. First, the class averages are low-pass filtered to amsklp. Binary representatives are then generated by assigning foreground pixels using sortmeans. A cosine function softens the edge of the binary mask before it is multiplied with the unmasked input averages to accomplish flattening</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+stk  = particle stack with all images(ptcls.ext)
+smpd = sampling distance, same as EMANs apix(in A)
+msk  = mask radius(in pixels)
+
+OPTIONAL
+nthr   = # OpenMP threads{1}
+amsklp = low-pass limit for envelope mask generation(in A)
+edge   = edge size for softening molecular envelope(in pixels)</code></pre>
+<h2 id="automask3D">Program: </h2>
+<p>is a program for solvent flattening of a volume. The algorithm for background removal is based on low-pass filtering and binarization. First, the volume is low-pass filtered to amsklp. A binary volume is then generated by assigning foreground pixels (=1) based on the volume calculated from the molecular weight. A cosine function softens the edge of the binary mask before it is multiplied with the unmasked input to generate the flattened map</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+vol1 = input volume no1(invol1.ext)
+smpd = sampling distance, same as EMANs apix(in A)
+msk  = mask radius(in pixels)
+mw   = molecular weight(in kD)
+
+OPTIONAL
+nthr     = # OpenMP threads{1}
+vol2     = input volume no2(invol2.ext)
+amsklp   = low-pass limit for envelope mask generation(in A)
+edge     = edge size for softening molecular envelope(in pixels)
+binwidth = binary layers grown for molecular envelope(in pixels){1}</code></pre>
+<h2 id="binarise">Program: </h2>
+<p>is a program for binarisation of stacks and volumes</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+OPTIONAL
+nthr   = # OpenMP threads{1}
+stk    = particle stack with all images(ptcls.ext)
+vol1   = input volume no1(invol1.ext)
+thres  = threshold (binarisation: 0-1; distance filer: in pixels)
+npix   = # pixles/voxels in binary representation
+grow   = # binary layers to grow(in pixels)
+edge   = edge size for softening molecular envelope(in pixels)
+neg    = invert contrast of images(yes|no)
+outvol = output volume{outvol.ext}
+outstk = output image stack</code></pre>
+<h2 id="boxconvs">Program: </h2>
+<p>is a program for averaging overlapping boxes across a micrograph in order to check if gain correction was appropriately done</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+fbody = file body
+
+OPTIONAL
+stk       = particle stack with all images(ptcls.ext)
+filetab   = list of files(*.txt/*.asc)
+boxconvsz = size of box used for box-convolution(in pixels)
+startit   = start iterating from here</code></pre>
+<h2 id="cavgassemble">Program: </h2>
+<p>is a program that assembles class averages when the clustering program (prime2D) has been executed in distributed mode</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+stk    = particle stack with all images(ptcls.ext)
+smpd   = sampling distance, same as EMANs apix(in A)
+oritab = table (text file) of orientations(*.asc/*.txt)
+nparts = # partitions in distributed exection
+ctf    = ctf flag(yes|no|flip)
+
+OPTIONAL
+nthr       = # OpenMP threads{1}
+which_iter = iteration nr
+refs       = initial2Dreferences.ext</code></pre>
+<h2 id="cenvol">Program: </h2>
+<p>is a program for centering a volume and mapping the shift parameters back to the particle images</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+vol1 = input volume no1(invol1.ext)
+smpd = sampling distance, same as EMANs apix(in A)
+
+OPTIONAL
+oritab  = table (text file) of orientations(*.asc/*.txt)
+outfile = output document
+cenlp   = low-pass limit for binarisation in centering(in A){30 A}</code></pre>
+<h2 id="check2D_conv">Program: </h2>
+<p>is a program for checking if a PRIME2D run has converged. The statistics outputted include (1) the overlap between the distribution of parameters for succesive runs. (2) The percentage of search space scanned, i.e. how many reference images are evaluated on average. (3) The average correlation between the images and their corresponding best matching reference section. If convergence to a local optimum is achieved, the fraction increases. Convergence is achieved if the parameter distribution overlap is larger than 0.95 and more than 99% of the reference sections need to be searched to find an improving solution</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+smpd   = sampling distance, same as EMANs apix(in A)
+box    = square image size(in pixels)
+oritab = table (text file) of orientations(*.asc/*.txt)
+nptcls = # images in stk/# orientations in oritab
+
+OPTIONAL
+lp = low-pass limit(in A)</code></pre>
+<h2 id="check3D_conv">Program: </h2>
+<p>is a program for checking if a PRIME3D run has converged. The statistics outputted include (1) angle of feasible region, which is proportional to the angular resolution of the set of discrete projection directions being searched. (2) The average angular distance between orientations in the present and previous iteration. In the early iterations, the distance is large because a diverse set of orientations is explored. If convergence to a local optimum is achieved, the distance decreases. (3) The percentage of search space scanned, i.e. how many reference images are evaluated on average. (4) The average correlation between the images and their corresponding best matching reference sections. (5) The average standard deviation of the Euler angles. Convergence is achieved if the angular distance between the orientations in successive iterations falls significantly below the angular resolution of the search space and more than 99% of the reference sections need to be matched on average</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+smpd   = sampling distance, same as EMANs apix(in A)
+box    = square image size(in pixels)
+oritab = table (text file) of orientations(*.asc/*.txt)
+nptcls = # images in stk/# orientations in oritab
+pgrp   = point-group symmetry(cn|dn|t|o|i)
+
+OPTIONAL
+lp      = low-pass limit(in A)
+nstates = # states to reconstruct
+eo      = use FSC for filtering and low-pass limit update(yes|no){no}
+nspace  = # projection directions
+find    = Fourier index
+refine  = refinement mode(no|shc|neigh|shcneigh|adasym|shift){no}</code></pre>
+<h2 id="check_box">Program: </h2>
+<p>is a program for checking the image dimensions of MRC and SPIDER stacks and volumes</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+OPTIONAL
+stk  = particle stack with all images(ptcls.ext)
+vol1 = input volume no1(invol1.ext)</code></pre>
+<h2 id="check_nptcls">Program: </h2>
+<p>is a program for checking the number of images in MRC and SPIDER stacks</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+stk = particle stack with all images(ptcls.ext)</code></pre>
+<h2 id="cluster_oris">Program: </h2>
+<p>is a program for clustering orientations based on geodesic distance</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+oritab = table (text file) of orientations(*.asc/*.txt)
+ncls   = # clusters
+
+OPTIONAL
+nthr = # OpenMP threads{1}</code></pre>
+<h2 id="convert">Program: </h2>
+<p>is a program for converting between SPIDER and MRC formats</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+OPTIONAL
+stk    = particle stack with all images(ptcls.ext)
+vol1   = input volume no1(invol1.ext)
+outstk = output image stack
+outvol = output volume{outvol.ext}</code></pre>
+<h2 id="corrcompare">Program: </h2>
+<p>is a program for comparing stacked images using real-space and Fourier-based approaches</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+stk  = particle stack with all images(ptcls.ext)
+stk2 = 2nd stack(in map2ptcls/select: selected(cavgs).ext)
+
+OPTIONAL
+msk   = mask radius(in pixels)
+stats = provide statistics(yes|no){yes}
+lp    = low-pass limit(in A)
+smpd  = sampling distance, same as EMANs apix(in A)</code></pre>
+<h2 id="ctffind">Program: </h2>
+<p>is a wrapper program for CTFFIND4 (Grigorieff lab)</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+filetab = list of files(*.txt/*.asc)
+smpd    = sampling distance, same as EMANs apix(in A)
+kv      = acceleration voltage(in kV){300.}
+cs      = spherical aberration constant(in mm){2.7}
+fraca   = fraction of amplitude contrast used for fitting CTF{0.07}
+
+OPTIONAL
+pspecsz    = size of power spectrum(in pixels)
+hp         = high-pass limit(in A)
+lp         = low-pass limit(in A)
+dfmin      = minimum expected defocus(in microns)
+dfmax      = maximum expected defocus(in microns)
+astigstep  = step size for astigamtism search(in microns)
+expastig   = expected astigmatism(in microns)
+phaseplate = images obtained with phaseplate(yes|no){no}</code></pre>
+<h2 id="ctfops">Program: </h2>
+<p>is a program for applying CTF to stacked images</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+smpd = sampling distance, same as EMANs apix(in A)
+ctf  = ctf flag(yes|no|flip)
+
+OPTIONAL
+stk    = particle stack with all images(ptcls.ext)
+outstk = output image stack
+neg    = invert contrast of images(yes|no)
+oritab = table (text file) of orientations(*.asc/*.txt)
+deftab = text file with CTF info(*.txt/*.asc)
+bfac   = bfactor for sharpening/low-pass filtering(in A**2){200.}</code></pre>
+<h2 id="dsymsrch">Program: </h2>
+<p>is a program for identifying rotational symmetries in class averages of D-symmetric molecules and generating a cylinder that matches the shape.</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+smpd = sampling distance, same as EMANs apix(in A)
+msk  = mask radius(in pixels)
+pgrp = point-group symmetry(cn|dn|t|o|i)
+stk  = particle stack with all images(ptcls.ext)
+
+OPTIONAL
+nthr    = # OpenMP threads{1}
+cenlp   = low-pass limit for binarisation in centering(in A){30 A}
+outfile = output document
+outvol  = output volume{outvol.ext}</code></pre>
+<h2 id="eo_volassemble">Program: </h2>
+<p>is a program that assembles volume(s) when the reconstruction program (recvol with eo=yes) has been executed in distributed mode. inner applies a soft-edged inner mask. An inner mask is used for icosahedral virus reconstruction, because the DNA or RNA core is often unordered and if not removed it may negatively impact the alignment. The width parameter controls the fall-off of the edge of the inner mask</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+stk    = particle stack with all images(ptcls.ext)
+nparts = # partitions in distributed exection
+smpd   = sampling distance, same as EMANs apix(in A)
+msk    = mask radius(in pixels)
+oritab = table (text file) of orientations(*.asc/*.txt)
+ctf    = ctf flag(yes|no|flip)
+
+OPTIONAL
+nthr    = # OpenMP threads{1}
+deftab  = text file with CTF info(*.txt/*.asc)
+mul     = origin shift multiplication factor{1}
+state   = state to extract
+nstates = # states to reconstruct</code></pre>
+<h2 id="extract">Program: </h2>
+<p>is a program that extracts particle images from DDD movies or integrated movies. Boxfiles are assumed to be in EMAN format but we provide a conversion script (relion2emanbox.pl) for *.star files containing particle coordinates obtained with Relion. The program creates one stack per movie frame as well as a stack of corrected framesums. In addition to single-particle image stacks, the program produces a parameter file extract_params.txt that can be used in conjunction with other SIMPLE programs. We obtain CTF parameters with CTFFIND4</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+smpd = sampling distance, same as EMANs apix(in A)
+
+OPTIONAL
+unidoc      = unified resources and orientations doc
+filetab     = list of files(*.txt/*.asc)
+boxtab      = table (text file) of files with EMAN particle coordinates(*.txt/*.asc)
+ctffind_doc = per-micrograph CTF parameters to transfer
+neg         = invert contrast of images(yes|no)
+box         = square image size(in pixels)
+outside     = extract boxes outside the micrograph boundaries(yes|no){no}</code></pre>
+<h2 id="filter">Program: </h2>
+<p>is a program for filtering stacks/volumes</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+smpd = sampling distance, same as EMANs apix(in A)
+
+OPTIONAL
+stk    = particle stack with all images(ptcls.ext)
+vol1   = input volume no1(invol1.ext)
+outstk = output image stack
+outvol = output volume{outvol.ext}
+lp     = low-pass limit(in A)
+hp     = high-pass limit(in A)
+phrand = phase randomize(yes|no){no}
+bfac   = bfactor for sharpening/low-pass filtering(in A**2){200.}</code></pre>
+<h2 id="iminfo">Program: </h2>
+<p>is a program for printing header information in MRC and SPIDER stacks and volumes</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+fname = file name
+
+OPTIONAL
+box    = square image size(in pixels)
+smpd   = sampling distance, same as EMANs apix(in A)
+stats  = provide statistics(yes|no){yes}
+endian = endiannesss of files(big|little|native){native}</code></pre>
+<h2 id="makecavgs">Program: </h2>
+<p>is used to produce class averages or initial random references for prime2D execution.</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+stk  = particle stack with all images(ptcls.ext)
+smpd = sampling distance, same as EMANs apix(in A)
+ctf  = ctf flag(yes|no|flip)
+
+OPTIONAL
+nthr     = # OpenMP threads{1}
+ncls     = # clusters
+deftab   = text file with CTF info(*.txt/*.asc)
+oritab   = table (text file) of orientations(*.asc/*.txt)
+filwidth = width of filament (in A)
+mul      = origin shift multiplication factor{1}
+tseries  = images represent a time-series(yes|no){no}
+outfile  = output document
+refs     = initial2Dreferences.ext</code></pre>
+<h2 id="makedeftab">Program: </h2>
+<p>is a program for creating a SIMPLE conformant file of CTF parameter values (deftab). Input is either an earlier SIMPLE deftab/oritab. The purpose is to get the kv, cs, and fraca parameters as part of the CTF input doc as that is the new convention. The other alternative is to input a plain text file with CTF parameters dfx, dfy, angast according to the Frealign convention. Unit conversions are dealt with using optional variables. The units refer to the units in the inputted document</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+smpd    = sampling distance, same as EMANs apix(in A)
+kv      = acceleration voltage(in kV){300.}
+cs      = spherical aberration constant(in mm){2.7}
+fraca   = fraction of amplitude contrast used for fitting CTF{0.07}
+outfile = output document
+
+OPTIONAL
+plaintexttab = plain text file of input parameters
+oritab       = table (text file) of orientations(*.asc/*.txt)
+deftab       = text file with CTF info(*.txt/*.asc)
+dfunit       = defocus unit (A|microns){microns}
+angastunit   = angle of astigmatism unit (radians|degrees){degrees}</code></pre>
+<h2 id="makeoris">Program: </h2>
+<p>is a program for making SIMPLE orientation/parameter files (text files containing input parameters and/or parameters estimated by prime2D or prime3D). The program generates random Euler angles e1.in.[0,360], e2.in.[0,180], and e3.in.[0,360] and random origin shifts x.in.[-trs,yrs] and y.in.[-trs,yrs]. If ndiscrete is set to an integer number &gt; 0, the orientations produced are randomly sampled from the set of ndiscrete quasi-even projection directions, and the in-plane parameters are assigned randomly. If even=yes, then all nptcls orientations are assigned quasi-even projection directions,and random in-plane parameters. If nstates is set to some integer number &gt; 0, then states are assigned randomly .in.[1,nstates]. If zero=yes in this mode of execution, the projection directions are zeroed and only the in-plane parameters are kept intact. If errify=yes and astigerr is defined, then uniform random astigmatism errors are introduced .in.[-astigerr,astigerr]</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+nptcls = # images in stk/# orientations in oritab
+
+OPTIONAL
+nthr      = # OpenMP threads{1}
+minp      = minimum cluster population
+ncls      = # clusters
+outfile   = output document
+trs       = maximum halfwidth shift(in pixels)
+nstates   = # states to reconstruct
+pgrp      = point-group symmetry(cn|dn|t|o|i)
+ctf       = ctf flag(yes|no|flip)
+defocus   = defocus(in microns){3.}
+angerr    = angular error(in degrees){0}
+sherr     = shift error(in pixels){2}
+dferr     = defocus error(in microns){1.0}
+even      = calculate even eo-pair(yes|no){no}
+zero      = zeroing(yes|no){no}
+discrete  = discrete(yes|no){no}
+ndiscrete = # discrete orientations
+diverse   = diverse or not flag (yes|no){no}
+state     = state to extract
+nspace    = # projection directions
+iares     = integer angular resolution{10}</code></pre>
+<h2 id="map2ptcls">Program: </h2>
+<p>is a program for mapping parameters that have been obtained using class averages to the individual particle images</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+stk    = particle stack with all images(ptcls.ext)
+stk2   = 2nd stack(in map2ptcls/select: selected(cavgs).ext)
+stk3   = 3d stack (in map2ptcls/select: (cavgs)2selectfrom.ext)
+oritab = table (text file) of orientations(*.asc/*.txt)
+
+OPTIONAL
+nthr      = # OpenMP threads{1}
+oritab3D  = table (text file) of 3D orientations(*.asc/*.txt)
+comlindoc = shc_clustering_nclsX.txt
+doclist   = list of oritabs for different states
+deftab    = text file with CTF info(*.txt/*.asc)
+outfile   = output document
+mul       = origin shift multiplication factor{1}</code></pre>
+<h2 id="mask">Program: </h2>
+<p>is a program for masking images and volumes. If you want to mask your images with a spherical mask with a soft falloff, set msk to the radius in pixels</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+msk  = mask radius(in pixels)
+smpd = sampling distance, same as EMANs apix(in A)
+
+OPTIONAL
+stk      = particle stack with all images(ptcls.ext)
+vol1     = input volume no1(invol1.ext)
+msktype  = type of mask(hard|soft){soft}
+inner    = inner mask radius(in pixels)
+width    = falloff of inner mask(in pixels){10}
+outer    = outer mask radius(in pixels)
+nthr     = # OpenMP threads{1}
+mw       = molecular weight(in kD)
+edge     = edge size for softening molecular envelope(in pixels)
+binwidth = binary layers grown for molecular envelope(in pixels){1}
+amsklp   = low-pass limit for envelope mask generation(in A)
+automsk  = envelope masking(yes|no|cavg){no}
+smpd     = sampling distance, same as EMANs apix(in A)
+outstk   = output image stack
+outvol   = output volume{outvol.ext}</code></pre>
+<h2 id="masscen">Program: </h2>
+<p>is a program for centering images acccording to their centre of mass</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+stk  = particle stack with all images(ptcls.ext)
+smpd = sampling distance, same as EMANs apix(in A)
+lp   = low-pass limit(in A)
+
+OPTIONAL
+msk    = mask radius(in pixels)
+neg    = invert contrast of images(yes|no)
+thres  = threshold (binarisation: 0-1; distance filer: in pixels)
+outstk = output image stack</code></pre>
+<h2 id="merge_algndocs">Program: </h2>
+<p>is a program for merging alignment documents from SIMPLE runs in distributed mode</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+fbody   = file body
+nptcls  = # images in stk/# orientations in oritab
+ndocs   = # documents
+outfile = output document</code></pre>
+<h2 id="merge_nnmat">Program: </h2>
+<p>is a program for merging partial nearest neighbour matrices calculated in distributed mode</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+nptcls = # images in stk/# orientations in oritab
+nparts = # partitions in distributed exection
+nnn    = # nearest neighbors{500}</code></pre>
+<h2 id="noiseimgs">Program: </h2>
+<p>is a program for generating pure noise images</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+box    = square image size(in pixels)
+nptcls = # images in stk/# orientations in oritab</code></pre>
+<h2 id="norm">Program: </h2>
+<p>is a program for normalization of MRC or SPIDER stacks and volumes. If you want to normalise your images inputted with stk, set norm=yes. hfun (e.g. hfun=sigm) controls the normalisation function. If you want to perform noise normalisation of the images set noise_norm=yes given a mask radius msk (pixels). If you want to normalise your images or volume (vol1) with respect to their power spectrum set shell_norm=yes</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+smpd = sampling distance, same as EMANs apix(in A)
+
+OPTIONAL
+stk        = particle stack with all images(ptcls.ext)
+msk        = mask radius(in pixels)
+norm       = do statistical normalisation avg
+noise_norm = normalise based on sdev of background(yes|no){no}
+shell_norm = normalise based on power spectrum (yes|no){no}
+hfun       = function used for normalization(sigm|tanh|lin){sigm}
+nthr       = # OpenMP threads{1}</code></pre>
+<h2 id="npeaks">Program: </h2>
+<p>is a program for checking the number of nonzero orientation weights (number of correlation peaks included in the weighted reconstruction)</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+smpd = sampling distance, same as EMANs apix(in A)
+box  = square image size(in pixels)
+lp   = low-pass limit(in A)
+
+OPTIONAL
+nspace  = # projection directions
+moldiam = molecular diameter(in A)
+pgrp    = point-group symmetry(cn|dn|t|o|i)</code></pre>
+<h2 id="nspace">Program: </h2>
+<p>is a program for calculating the expected resolution obtainable with different values of nspace (number of discrete projection directions used for discrete search)</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+moldiam = molecular diameter(in A)</code></pre>
+<h2 id="orisops">Program: </h2>
+<p>is a program for analyzing SIMPLE orientation/parameter files (text files containing input parameters and/or parameters estimated by prime2D or prime3D). If only oritab is inputted, there are a few options available. If errify=yes, then the program introduces uniform random angular errors .in.[-angerr,angerr], and uniform origin shift errors .in.[-sherr,sherr], and uniform random defocus errors .in.[-dferr,dferr]. If nstates &gt; 1 then random states are assigned .in.[1,nstates]. If mirr=2d, then the Euler angles in oritab are mirrored according to the relation e1=e1, e2=180.+e2, e3=-e3. If mirr=3d, then the Euler angles in oritab are mirrored according to the relation R=M(M*R), where R is the rotation matrix calculated from the Euler angle triplet and M is a 3D reflection matrix (like a unit matrix but with the 3,3-component sign swapped). If e1, e2, or e3 is inputted, the orientations in oritab are rotated correspondingly. If you input state as well, you rotate only the orientations assigned to state state. If mul is defined, you multiply the origin shifts with mul. If zero=yes, then the shifts are zeroed. If none of the above described parameter are defined, and oritab is still defined, the program projects the 3D orientation into the xy-plane and plots the resulting vector (this is useful for checking orientation coverage)</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+OPTIONAL
+oritab    = table (text file) of orientations(*.asc/*.txt)
+nptcls    = # images in stk/# orientations in oritab
+plot      = make plot(yes|no){no}
+outfile   = output document
+e1        = 1st Euler(in degrees){0}
+e2        = 2nd Euler(in degrees){0}
+e3        = 3d Euler(in degrees){0}
+trs       = maximum halfwidth shift(in pixels)
+nstates   = # states to reconstruct
+pgrp      = point-group symmetry(cn|dn|t|o|i)
+defocus   = defocus(in microns){3.}
+deftab    = text file with CTF info(*.txt/*.asc)
+angerr    = angular error(in degrees){0}
+sherr     = shift error(in pixels){2}
+dferr     = defocus error(in microns){1.0}
+zero      = zeroing(yes|no){no}
+discrete  = discrete(yes|no){no}
+ndiscrete = # discrete orientations
+state     = state to extract
+errify    = introduce error(yes|no){no}
+mul       = origin shift multiplication factor{1}
+mirr      = mirror(no|x|y){no}
+xsh       = x shift(in pixels){0}
+ysh       = y shift(in pixels){0}
+zsh       = z shift(in pixels){0}</code></pre>
+<h2 id="oristats">Program: </h2>
+<p>is a program for analyzing SIMPLE orientation/parameter files (text files containing input parameters and/or parameters estimated by prime2D or prime3D). If two orientation tables (oritab and oritab2) are inputted, the program provides statistics of the distances between the orientations in the two documents. These statistics include the sum of angular distances between the orientations, the average angular distance between the orientations, the standard deviation of angular distances, the minimum angular distance, and the maximum angular distance</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+oritab = table (text file) of orientations(*.asc/*.txt)
+
+OPTIONAL
+nptcls     = # images in stk/# orientations in oritab
+oritab2    = 2nd table (text file) of orientations(*.asc/*.txt)
+outfile    = output document
+nstates    = # states to reconstruct
+state      = state to extract
+ctfstats   = calculate ctf statistics(yes|no){no}
+trsstats   = provide origin shift statistics(yes|no){no}
+hist       = give variable for histogram plot
+ncls       = # clusters
+minp       = minimum cluster population
+clustvalid = validate clustering(yes|homo|no){no}
+thres      = threshold (binarisation: 0-1; distance filer: in pixels)</code></pre>
+<h2 id="postproc_vol">Program: </h2>
+<p>is a program for post-processing of volumes</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+vol1 = input volume no1(invol1.ext)
+smpd = sampling distance, same as EMANs apix(in A)
+msk  = mask radius(in pixels)
+
+OPTIONAL
+fsc      = binary file with FSC info{fsc_state01.bin}
+lp       = low-pass limit(in A)
+mw       = molecular weight(in kD)
+bfac     = bfactor for sharpening/low-pass filtering(in A**2){200.}
+automsk  = envelope masking(yes|no|cavg){no}
+amsklp   = low-pass limit for envelope mask generation(in A)
+edge     = edge size for softening molecular envelope(in pixels)
+binwidth = binary layers grown for molecular envelope(in pixels){1}</code></pre>
+<h2 id="powerspecs">Program: </h2>
+<p>is a program for generating powerspectra from a stack or filetable</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+smpd  = sampling distance, same as EMANs apix(in A)
+fbody = file body
+
+OPTIONAL
+nthr     = # OpenMP threads{1}
+stk      = particle stack with all images(ptcls.ext)
+filetab  = list of files(*.txt/*.asc)
+pspecsz  = size of power spectrum(in pixels)
+speckind = power spectrum kind(amp|square|phase|real|log|sqrt){sqrt}
+startit  = start iterating from here
+lp       = low-pass limit(in A)
+clip     = clipped image box size(in pixels)</code></pre>
+<h2 id="prime2D">Program: </h2>
+<p>is a reference-free 2D alignment/clustering algorithm adopted from the prime3D probabilistic ab initio 3D reconstruction algorithm</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+stk  = particle stack with all images(ptcls.ext)
+smpd = sampling distance, same as EMANs apix(in A)
+msk  = mask radius(in pixels)
+ncls = # clusters
+ctf  = ctf flag(yes|no|flip)
+
+OPTIONAL
+nthr    = # OpenMP threads{1}
+deftab  = text file with CTF info(*.txt/*.asc)
+oritab  = table (text file) of orientations(*.asc/*.txt)
+refs    = initial2Dreferences.ext
+hp      = high-pass limit(in A)
+lp      = low-pass limit(in A)
+lpstart = start low-pass limit(in A){15}
+lpstop  = stop low-pass limit(in A){8}
+cenlp   = low-pass limit for binarisation in centering(in A){30 A}
+trs     = maximum halfwidth shift(in pixels)
+inner   = inner mask radius(in pixels)
+width   = falloff of inner mask(in pixels){10}
+startit = start iterating from here
+maxits  = maximum # iterations
+center  = center image(s)/class average(s)/volume(s)(yes|no){no}</code></pre>
+<h2 id="prime3D">Program: </h2>
+<p>is an ab inito reconstruction/refinement program based on probabilistic projection matching. PRIME is short for PRobabilistic Initial 3D Model generation for Single- particle cryo-Electron microscopy. There are a daunting number of options in PRIME3D. If you are processing class averages we recommend that you instead use the simple_distr_exec prg= ini3D_from_cavgs route for executing PRIME3D. Automated workflows for single- and multi-particle refinement using prime3D are planned for the next release (3.0)</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+stk  = particle stack with all images(ptcls.ext)
+vol1 = input volume no1(invol1.ext)
+smpd = sampling distance, same as EMANs apix(in A)
+msk  = mask radius(in pixels)
+ctf  = ctf flag(yes|no|flip)
+pgrp = point-group symmetry(cn|dn|t|o|i)
+
+OPTIONAL
+nthr      = # OpenMP threads{1}
+vol2      = input volume no2(invol2.ext)
+oritab    = table (text file) of orientations(*.asc/*.txt)
+deftab    = text file with CTF info(*.txt/*.asc)
+trs       = maximum halfwidth shift(in pixels)
+hp        = high-pass limit(in A)
+lp        = low-pass limit(in A)
+cenlp     = low-pass limit for binarisation in centering(in A){30 A}
+dynlp     = automatic resolution limit update(yes|no){yes}
+lpstart   = start low-pass limit(in A){15}
+lpstop    = stop low-pass limit(in A){8}
+eo        = use FSC for filtering and low-pass limit update(yes|no){no}
+refine    = refinement mode(no|shc|neigh|shcneigh|adasym|shift){no}
+frac      = fraction of ptcls(0-1){1}
+automsk   = envelope masking(yes|no|cavg){no}
+mw        = molecular weight(in kD)
+amsklp    = low-pass limit for envelope mask generation(in A)
+edge      = edge size for softening molecular envelope(in pixels)
+binwidth  = binary layers grown for molecular envelope(in pixels){1}
+inner     = inner mask radius(in pixels)
+width     = falloff of inner mask(in pixels){10}
+nspace    = # projection directions
+nstates   = # states to reconstruct
+npeaks    = # nonzero orientation weights{1}
+startit   = start iterating from here
+maxits    = maximum # iterations
+shbarrier = use shift search barrier constraint(yes|no){yes}
+noise     = noise initialisation(yes|no){no}
+xfel      = images are XFEL diffraction patterns(yes|no){no}
+nnn       = # nearest neighbors{500}
+rrate     = randomization rate{0.8}
+norec     = do not reconstruct volume(s)(yes|no){no}</code></pre>
+<h2 id="prime3D_init">Program: </h2>
+<p>is a program for generating a random initial model for initialisation of PRIME3D. If the data set is large (&gt;5000 images), generating a random model can be slow. To speedup, set nran to some smaller number, resulting in nran images selected randomly for reconstruction</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+stk  = particle stack with all images(ptcls.ext)
+smpd = sampling distance, same as EMANs apix(in A)
+msk  = mask radius(in pixels)
+ctf  = ctf flag(yes|no|flip)
+pgrp = point-group symmetry(cn|dn|t|o|i)
+
+OPTIONAL
+nthr   = # OpenMP threads{1}
+deftab = text file with CTF info(*.txt/*.asc)
+lp     = low-pass limit(in A)
+inner  = inner mask radius(in pixels)
+width  = falloff of inner mask(in pixels){10}
+nspace = # projection directions
+nran   = # random images to select
+npeaks = # nonzero orientation weights{1}
+xfel   = images are XFEL diffraction patterns(yes|no){no}</code></pre>
+<h2 id="print_cmd_dict">Program: </h2>
+<p>is a program for printing the command line key dictonary</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+OPTIONAL
+outfile = output document</code></pre>
+<h2 id="print_dose_weights">Program: </h2>
+<p>is a program for printing the dose weights applied to individual frames</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+nframes   = # frames{30}
+exp_time  = exposure time(in s)
+dose_rate = dose rate(in e/A2/s)
+box       = square image size(in pixels)
+smpd      = sampling distance, same as EMANs apix(in A)
+
+OPTIONAL
+kv = acceleration voltage(in kV){300.}</code></pre>
+<h2 id="print_fsc">Program: </h2>
+<p>is a program for printing the binary FSC files produced by PRIME3D</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+smpd = sampling distance, same as EMANs apix(in A)
+box  = square image size(in pixels)
+fsc  = binary file with FSC info{fsc_state01.bin}</code></pre>
+<h2 id="print_magic_boxes">Program: </h2>
+<p>is a program for printing magic box sizes (fast FFT)</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+smpd    = sampling distance, same as EMANs apix(in A)
+moldiam = molecular diameter(in A)</code></pre>
+<h2 id="projvol">Program: </h2>
+<p>is a program for projecting a volume using interpolation in Fourier space. Input is a SPIDER or MRC volume. Output is a stack of projection images of the same format as the inputted volume. Projections are generated by extraction of central sections from the Fourier volume and back transformation of the 2D FTs. nspace controls the number of projection images generated with quasi-even projection directions. The oritab parameter allows you to input the orientations that you wish to have your volume projected in. If rnd=yes, random rather than quasi-even projections are generated, trs then controls the halfwidth of the random origin shift. Less commonly used parameters are pgrp, which controls the point-group symmetry c (rotational), d (dihedral), t (tetrahedral), o (octahedral) or i (icosahedral). The point-group symmetry is used to restrict the set of projections to within the asymmetric unit. neg inverts the contrast of the projections. mirr=yes mirrors the projection by modifying the Euler angles. If mirr=x or mirr=y the projection is physically mirrored after it has been generated</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+vol1 = input volume no1(invol1.ext)
+smpd = sampling distance, same as EMANs apix(in A)
+
+OPTIONAL
+nspace = # projection directions
+outstk = output image stack
+oritab = table (text file) of orientations(*.asc/*.txt)
+nthr   = # OpenMP threads{1}
+rnd    = random(yes|no){no}
+trs    = maximum halfwidth shift(in pixels)
+pgrp   = point-group symmetry(cn|dn|t|o|i)
+neg    = invert contrast of images(yes|no)
+mirr   = mirror(no|x|y){no}
+top    = stop particle index
+xfel   = images are XFEL diffraction patterns(yes|no){no}
+msk    = mask radius(in pixels)</code></pre>
+<h2 id="rank_cavgs">Program: </h2>
+<p>is a program for ranking class averages by decreasing population, given the stack of class averages (stk argument) and the 2D orientations document (oritab) generated by prime2D</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+stk    = particle stack with all images(ptcls.ext)
+oritab = table (text file) of orientations(*.asc/*.txt)
+
+OPTIONAL
+outstk = output image stack</code></pre>
+<h2 id="recvol">Program: </h2>
+<p>is a program for reconstructing volumes from MRC and SPIDER stacks, given input orientations and state assignments. The algorithm is based on direct Fourier inversion with a Kaiser-Bessel (KB) interpolation kernel. This window function reduces the real-space ripple artifacts associated with direct moving windowed-sinc interpolation. The feature sought when implementing this algorithm was to enable quick, reliable reconstruction from aligned individual particle images. mul is used to scale the origin shifts if down-sampled were used for alignment and the original images are used for reconstruction. ctf=yes or ctf=flip turns on the Wiener restoration. If the images were phase-flipped set ctf=flip. amsklp, mw, and edge control the solvent mask: the low-pass limit used to generate the envelope; the molecular weight of the molecule (protein assumed but it works reasonably well also for RNA; slight modification of mw might be needed). The inner parameter controls the radius of the soft-edged mask used to remove the unordered DNA/RNA core of spherical icosahedral viruses</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+stk    = particle stack with all images(ptcls.ext)
+smpd   = sampling distance, same as EMANs apix(in A)
+oritab = table (text file) of orientations(*.asc/*.txt)
+msk    = mask radius(in pixels)
+ctf    = ctf flag(yes|no|flip)
+pgrp   = point-group symmetry(cn|dn|t|o|i)
+
+OPTIONAL
+nthr   = # OpenMP threads{1}
+eo     = use FSC for filtering and low-pass limit update(yes|no){no}
+deftab = text file with CTF info(*.txt/*.asc)
+frac   = fraction of ptcls(0-1){1}
+mw     = molecular weight(in kD)
+mul    = origin shift multiplication factor{1}
+state  = state to extract
+refine = refinement mode(no|shc|neigh|shcneigh|adasym|shift){no}
+npeaks = # nonzero orientation weights{1}</code></pre>
+<h2 id="res">Program: </h2>
+<p>is a program for checking the low-pass resolution limit for a given Fourier index</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+smpd = sampling distance, same as EMANs apix(in A)
+find = Fourier index
+box  = square image size(in pixels)</code></pre>
+<h2 id="resrange">Program: </h2>
+<p>is a program for estimating the resolution range used in the heuristic resolution-stepping scheme in the PRIME3D initial model production procedure. The initial low-pass limit is set so that each image receives ten nonzero orientation weights. When quasi-convergence has been reached, the limit is updated one Fourier index at the time, until PRIME reaches the condition where six nonzero orientation weights are assigned to each image. FSC-based filtering is unfortunately not possible to do in the ab initio 3D reconstruction step, because when the orientations are mostly random, the FSC overestimates the resolution. This program is used internally when executing PRIME in distributed mode. We advise you to check the starting and stopping low-pass limits before executing PRIME3D using this program. The resolution range estimate depends on the molecular diameter, which is estimated based on the box size. If you want to override this estimate, set moldiam to the desired value (in Å). This may be necessary if your images have a lot of background padding. However, for starting model generation it is probably better to clip the images snugly around the particle, because smaller images equal less computation</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+smpd = sampling distance, same as EMANs apix(in A)
+
+OPTIONAL
+nthr    = # OpenMP threads{1}
+nspace  = # projection directions
+pgrp    = point-group symmetry(cn|dn|t|o|i)
+box     = square image size(in pixels)
+moldiam = molecular diameter(in A)</code></pre>
+<h2 id="rotmats2oris">Program: </h2>
+<p>converts a text file (9 records per line) describing rotation matrices into a SIMPLE oritab</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+infile = table (text file) of inputs(*.asc/*.txt)
+
+OPTIONAL
+outfile = output document</code></pre>
+<h2 id="scale">Program: </h2>
+<p>is a program that provides re-scaling and clipping routines for MRC or SPIDER stacks and volumes</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+smpd = sampling distance, same as EMANs apix(in A)
+
+OPTIONAL
+stk     = particle stack with all images(ptcls.ext)
+vol1    = input volume no1(invol1.ext)
+filetab = list of files(*.txt/*.asc)
+msk     = mask radius(in pixels)
+scale   = image scale factor{1}
+scale2  = image scale factor 2nd{1}
+newbox  = new box for scaling (by Fourier padding/clipping
+clip    = clipped image box size(in pixels)
+outvol  = output volume{outvol.ext}
+outstk  = output image stack
+outstk2 = output image stack 2nd</code></pre>
+<h2 id="select">Program: </h2>
+<p>is a program for selecting files based on image correlation matching</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+stk  = particle stack with all images(ptcls.ext)
+stk2 = 2nd stack(in map2ptcls/select: selected(cavgs).ext)
+
+OPTIONAL
+nthr       = # OpenMP threads{1}
+stk3       = 3d stack (in map2ptcls/select: (cavgs)2selectfrom.ext)
+filetab    = list of files(*.txt/*.asc)
+outfile    = output document
+outstk     = output image stack
+dir_select = move selected files to here{selected}
+dir_reject = move rejected files to here{rejected}</code></pre>
+<h2 id="select_frames">Program: </h2>
+<p>is a program for selecting contiguous segments of frames from DDD movies</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+filetab = list of files(*.txt/*.asc)
+fbody   = file body
+fromf   = start frame index
+tof     = stop frame index
+smpd    = sampling distance, same as EMANs apix(in A)
+
+OPTIONAL
+startit = start iterating from here</code></pre>
+<h2 id="shift">Program: </h2>
+<p>is a program for shifting a stack according to shifts in oritab</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+stk    = particle stack with all images(ptcls.ext)
+smpd   = sampling distance, same as EMANs apix(in A)
+oritab = table (text file) of orientations(*.asc/*.txt)
+
+OPTIONAL
+outstk = output image stack
+mul    = origin shift multiplication factor{1}</code></pre>
+<h2 id="simimgs">Program: </h2>
+<p>is a program for simulating cryo-EM images. It is not a very sophisticated simulator, but it is nevertheless useful for testing purposes. It does not do any multi-slice simulation and it cannot be used for simulating molecules containing heavy atoms. It does not even accept a PDB file as an input. Input is a cryo-EM map, which we usually generate from a PDB file using EMANs program pdb2mrc. simimgs then projects the volume using Fourier interpolation, adds 20% of the total noise to the images (pink noise), Fourier transforms them, and multiplies them with astigmatic CTF and B-factor. The images are inverse FTed before the remaining 80% of the noise (white noise) is added</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+vol1   = input volume no1(invol1.ext)
+smpd   = sampling distance, same as EMANs apix(in A)
+msk    = mask radius(in pixels)
+nptcls = # images in stk/# orientations in oritab
+snr    = signal-to-noise ratio
+
+OPTIONAL
+nthr      = # OpenMP threads{1}
+xsh       = x shift(in pixels){0}
+ysh       = y shift(in pixels){0}
+sherr     = shift error(in pixels){2}
+oritab    = table (text file) of orientations(*.asc/*.txt)
+outfile   = output document
+outstk    = output image stack
+single    = simulate a single image(yes|no){no}
+ndiscrete = # discrete orientations
+diverse   = diverse or not flag (yes|no){no}
+pgrp      = point-group symmetry(cn|dn|t|o|i)
+ctf       = ctf flag(yes|no|flip)
+kv        = acceleration voltage(in kV){300.}
+cs        = spherical aberration constant(in mm){2.7}
+fraca     = fraction of amplitude contrast used for fitting CTF{0.07}
+deftab    = text file with CTF info(*.txt/*.asc)
+defocus   = defocus(in microns){3.}
+dferr     = defocus error(in microns){1.0}
+astigerr  = astigmatism error(in microns)
+bfac      = bfactor for sharpening/low-pass filtering(in A**2){200.}
+bfacerr   = bfactor error in simulated images(in A**2){0}</code></pre>
+<h2 id="simmovie">Program: </h2>
+<p>is a program for crude simulation of a DDD movie. Input is a set of projection images to place. Movie frames are then generated related by randomly shifting the base image and applying noise</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+stk  = particle stack with all images(ptcls.ext)
+smpd = sampling distance, same as EMANs apix(in A)
+msk  = mask radius(in pixels)
+xdim = x dimension(in pixles)
+ydim = y dimension(in pixles)
+snr  = signal-to-noise ratio
+
+OPTIONAL
+nthr    = # OpenMP threads{1}
+nframes = # frames{30}
+trs     = maximum halfwidth shift(in pixels)
+vis     = visualise(yes|no)
+kv      = acceleration voltage(in kV){300.}
+cs      = spherical aberration constant(in mm){2.7}
+fraca   = fraction of amplitude contrast used for fitting CTF{0.07}
+deftab  = text file with CTF info(*.txt/*.asc)
+defocus = defocus(in microns){3.}
+bfac    = bfactor for sharpening/low-pass filtering(in A**2){200.}</code></pre>
+<h2 id="split">Program: </h2>
+<p>is a program for splitting of image stacks into partitions for parallel execution. This is done to reduce I/O latency</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+stk = particle stack with all images(ptcls.ext)
+
+OPTIONAL
+nparts = # partitions in distributed exection
+neg    = invert contrast of images(yes|no)
+ncls   = # clusters
+nspace = # projection directions</code></pre>
+<h2 id="split_pairs">Program: </h2>
+<p>is a program for splitting calculations between pairs of objects into balanced partitions</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+nptcls = # images in stk/# orientations in oritab
+nparts = # partitions in distributed exection</code></pre>
+<h2 id="stack">Program: </h2>
+<p>is a program for stacking individual images or multiple stacks into one</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+filetab = list of files(*.txt/*.asc)
+outstk  = output image stack
+
+OPTIONAL
+lp      = low-pass limit(in A)
+smpd    = sampling distance, same as EMANs apix(in A)
+clip    = clipped image box size(in pixels)
+nframes = # frames{30}
+fbody   = file body
+numlen  = length of number string
+xdim    = x dimension(in pixles)
+ydim    = y dimension(in pixles)
+endian  = endiannesss of files(big|little|native){native}</code></pre>
+<h2 id="stackops">Program: </h2>
+<p>is a program that provides standard single-particle image processing routines that are applied to MRC or SPIDER stacks. If you want to extract a particular state, give an alignment document (oritab) and set state to the state that you want to extract. If you want to select the fraction of best particles (according to the goal function), input an alignment doc (oritab) and set frac. You can combine the state and frac options. If you want to apply noise to images, give the desired signal-to-noise ratio via snr. If you want to calculate the autocorrelation function of your images set acf=yes. If you want to extract a contiguous subset of particle images from the stack, set fromp and top. If you want to fish out a number of particle images from your stack at random, set nran to some nonzero integer number less than nptcls. With avg=yes the global average of the inputted stack is calculated. If you define nframesgrp to some integer number larger than one averages with chunk sizes of nframesgrp are produced, which may be useful for analysis of dose-fractionated image series. neg inverts the contrast of the images</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+stk  = particle stack with all images(ptcls.ext)
+smpd = sampling distance, same as EMANs apix(in A)
+
+OPTIONAL
+oritab     = table (text file) of orientations(*.asc/*.txt)
+outstk     = output image stack
+mirr       = mirror(no|x|y){no}
+nran       = # random images to select
+frac       = fraction of ptcls(0-1){1}
+state      = state to extract
+class      = cluster identity
+neg        = invert contrast of images(yes|no)
+acf        = calculate autocorrelation function(yes|no){no}
+avg        = calculate average(yes|no)
+nframesgrp = # frames to group before unblur(Falcon 3){0}
+vis        = visualise(yes|no)
+snr        = signal-to-noise ratio
+fromp      = start ptcl index
+top        = stop particle index
+stk2       = 2nd stack(in map2ptcls/select: selected(cavgs).ext)
+nptcls     = # images in stk/# orientations in oritab
+append     = append in context of files(yes|no){no}
+order      = order ptcls according to correlation(yes|no){no}
+bfac       = bfactor for sharpening/low-pass filtering(in A**2){200.}
+outfile    = output document</code></pre>
+<h2 id="sym_aggregate">Program: </h2>
+<p>is a program for robust identifiaction of the symmetry axis of a map using image-to-volume simiarity validation of the axis</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+vol1    = input volume no1(invol1.ext)
+smpd    = sampling distance, same as EMANs apix(in A)
+msk     = mask radius(in pixels)
+pgrp    = point-group symmetry(cn|dn|t|o|i)
+oritab  = table (text file) of orientations(*.asc/*.txt)
+oritab2 = 2nd table (text file) of orientations(*.asc/*.txt)
+outfile = output document
+lp      = low-pass limit(in A)
+stk     = particle stack with all images(ptcls.ext)
+
+OPTIONAL
+nthr  = # OpenMP threads{1}
+cenlp = low-pass limit for binarisation in centering(in A){30 A}
+hp    = high-pass limit(in A)</code></pre>
+<h2 id="symsrch">Program: </h2>
+<p>is a program for searching for the principal symmetry axis of a volume reconstructed without assuming any point-group symmetry. The program takes as input an asymmetrical 3D reconstruction. The alignment document for all the particle images that have gone into the 3D reconstruction and the desired point-group symmetry needs to be inputted. The 3D reconstruction is then projected in 50 (default option) even directions, common lines-based optimisation is used to identify the principal symmetry axis, the rotational transformation is applied to the inputted orientations, and a new alignment document is produced. Input this document to recvol together with the images and the point-group symmetry to generate a symmetrised map.</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+vol1    = input volume no1(invol1.ext)
+smpd    = sampling distance, same as EMANs apix(in A)
+msk     = mask radius(in pixels)
+pgrp    = point-group symmetry(cn|dn|t|o|i)
+oritab  = table (text file) of orientations(*.asc/*.txt)
+outfile = output document
+lp      = low-pass limit(in A)
+
+OPTIONAL
+nthr   = # OpenMP threads{1}
+cenlp  = low-pass limit for binarisation in centering(in A){30 A}
+hp     = high-pass limit(in A)
+nspace = # projection directions</code></pre>
+<h2 id="tseries_extract">Program: </h2>
+<p>is a program for creating overlapping chunks of nframesgrp frames from time-series data</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+filetab    = list of files(*.txt/*.asc)
+smpd       = sampling distance, same as EMANs apix(in A)
+nframesgrp = # frames to group before unblur(Falcon 3){0}
+
+OPTIONAL
+fbody = file body</code></pre>
+<h2 id="tseries_split">Program: </h2>
+<p>is a program for splitting a time-series stack and its associated orientations</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+stk     = particle stack with all images(ptcls.ext)
+oritab  = table (text file) of orientations(*.asc/*.txt)
+smpd    = sampling distance, same as EMANs apix(in A)
+chunksz = # images/orientations in chunk
+stepsz  = size of step{0}</code></pre>
+<h2 id="tseries_track">Program: </h2>
+<p>is a program for particle tracking in time-series data</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+filetab = list of files(*.txt/*.asc)
+fbody   = file body
+smpd    = sampling distance, same as EMANs apix(in A)
+
+OPTIONAL
+lp      = low-pass limit(in A)
+boxfile = file with EMAN particle coordinates(*.txt/*.asc)
+xcoord  = x coordinate{0}
+ycoord  = y coordinate{0}
+offset  = pixels offset{7}
+box     = square image size(in pixels)
+neg     = invert contrast of images(yes|no)</code></pre>
+<h2 id="unblur">Program: </h2>
+<p>is a program for movie alignment or unblurring based the same principal strategy as Grigorieffs program (hence the name). There are two important differences: automatic weighting of the frames using a correlation-based M-estimator and continuous optimisation of the shift parameters. Input is a textfile with absolute paths to movie files in addition to a few input parameters, some of which deserve a comment. If dose_rate and exp_time are given the individual frames will be low-pass filtered accordingly (dose-weighting strategy). If scale is given, the movie will be Fourier cropped according to the down-scaling factor (for super-resolution movies). If nframesgrp is given the frames will be pre-averaged in the given chunk size (Falcon 3 movies). If fromf/tof are given, a contiguous subset of frames will be averaged without any dose-weighting applied.</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+filetab = list of files(*.txt/*.asc)
+smpd    = sampling distance, same as EMANs apix(in A)
+
+OPTIONAL
+nthr       = # OpenMP threads{1}
+fbody      = file body
+dose_rate  = dose rate(in e/A2/s)
+exp_time   = exposure time(in s)
+lpstart    = start low-pass limit(in A){15}
+lpstop     = stop low-pass limit(in A){8}
+trs        = maximum halfwidth shift(in pixels)
+pspecsz    = size of power spectrum(in pixels)
+numlen     = length of number string
+startit    = start iterating from here
+scale      = image scale factor{1}
+nframesgrp = # frames to group before unblur(Falcon 3){0}
+tomo       = tomography mode(yes|no){no}
+fromf      = start frame index
+tof        = stop frame index
+nsig       = # sigmas
+outfile    = output document</code></pre>
+<h2 id="unblur_ctffind">Program: </h2>
+<p>is a pipelined unblur + ctffind program</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+filetab = list of files(*.txt/*.asc)
+smpd    = sampling distance, same as EMANs apix(in A)
+kv      = acceleration voltage(in kV){300.}
+cs      = spherical aberration constant(in mm){2.7}
+fraca   = fraction of amplitude contrast used for fitting CTF{0.07}
+
+OPTIONAL
+nthr       = # OpenMP threads{1}
+fbody      = file body
+dose_rate  = dose rate(in e/A2/s)
+exp_time   = exposure time(in s)
+lpstart    = start low-pass limit(in A){15}
+lpstop     = stop low-pass limit(in A){8}
+trs        = maximum halfwidth shift(in pixels)
+pspecsz    = size of power spectrum(in pixels)
+numlen     = length of number string
+startit    = start iterating from here
+scale      = image scale factor{1}
+nframesgrp = # frames to group before unblur(Falcon 3){0}
+fromf      = start frame index
+tof        = stop frame index
+nsig       = # sigmas
+outfile    = output document
+hp         = high-pass limit(in A)
+lp         = low-pass limit(in A)
+dfmin      = minimum expected defocus(in microns)
+dfmax      = maximum expected defocus(in microns)
+astigstep  = step size for astigamtism search(in microns)
+expastig   = expected astigmatism(in microns)
+phaseplate = images obtained with phaseplate(yes|no){no}</code></pre>
+<h2 id="volassemble">Program: </h2>
+<p>is a program that assembles volume(s) when the reconstruction program (recvol) has been executed in distributed mode. odd is used to assemble the odd reconstruction, even is used to assemble the even reconstruction, eo is used to assemble both the even and the odd reconstruction and state is used to assemble the inputted state. Normally, you do not fiddle with these parameters. They are used internally</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+stk    = particle stack with all images(ptcls.ext)
+nparts = # partitions in distributed exection
+smpd   = sampling distance, same as EMANs apix(in A)
+oritab = table (text file) of orientations(*.asc/*.txt)
+
+OPTIONAL
+nthr  = # OpenMP threads{1}
+even  = calculate even eo-pair(yes|no){no}
+odd   = calculate odd eo-pair(yes|no){no}
+eo    = use FSC for filtering and low-pass limit update(yes|no){no}
+state = state to extract
+xfel  = images are XFEL diffraction patterns(yes|no){no}</code></pre>
+<h2 id="volaverager">Program: </h2>
+<p>is a program for averaging volumes according to state label in oritab</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+vollist = table (text file) of volume files(*.txt/*.asc)
+oritab  = table (text file) of orientations(*.asc/*.txt)
+
+OPTIONAL
+nthr = # OpenMP threads{1}</code></pre>
+<h2 id="volops">Program: </h2>
+<p>provides standard single-particle image processing routines that are applied to MRC or SPIDER volumes</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+vol1 = input volume no1(invol1.ext)
+
+OPTIONAL
+nthr    = # OpenMP threads{1}
+guinier = calculate Guinier plot(yes|no){no}
+smpd    = sampling distance, same as EMANs apix(in A)
+hp      = high-pass limit(in A)
+lp      = low-pass limit(in A)
+neg     = invert contrast of images(yes|no)
+snr     = signal-to-noise ratio
+mirr    = mirror(no|x|y){no}
+outvol  = output volume{outvol.ext}</code></pre>
+<h2 id="volume_smat">Program: </h2>
+<p>is a program for creating a similarity matrix based on volume2volume correlation</p>
+<pre><code>USAGE:
+bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+
+REQUIRED
+vollist = table (text file) of volume files(*.txt/*.asc)
+smpd    = sampling distance, same as EMANs apix(in A)
+lp      = low-pass limit(in A)
+msk     = mask radius(in pixels)
+
+OPTIONAL
+nthr = # OpenMP threads{1}
+hp   = high-pass limit(in A)</code></pre>
