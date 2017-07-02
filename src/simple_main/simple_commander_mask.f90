@@ -39,14 +39,17 @@ end type automask3D_commander
 contains
   
     subroutine exec_mask( self, cline )
-        use simple_procimgfile,   only: mask_imgfile
+        use simple_image,       only: image
+        use simple_procimgfile, only: mask_imgfile
         class(mask_commander), intent(inout) :: self
         class(cmdline),        intent(inout) :: cline
         type(build)                :: b
         type(params)               :: p
         type(automask2D_commander) :: automask2D
         type(automask3D_commander) :: automask3D
+        type(image)                :: mskvol
         logical                    :: here
+        integer                    :: ldim(3)
         p = params(cline)                   ! parameters generated
         p%boxmatch = p%box                  ! turns off boxmatch logics
         call b%build_general_tbox(p, cline) ! general objects built
@@ -81,7 +84,17 @@ contains
             inquire(FILE=p%vols(1), EXIST=here)
             if( .not.here )stop 'Cannot find input volume'
             call b%vol%read(p%vols(1))
-            if( p%automsk.eq.'yes' )then
+            if( cline%defined('mskfile') )then
+                ! from file
+                here = .false.
+                inquire(FILE=p%mskfile, EXIST=here)
+                if( .not. here ) stop 'Cannot find input mskfile'
+                ldim = b%vol%get_ldim()
+                call mskvol%new(ldim, p%smpd)
+                call mskvol%read(p%mskfile)
+                call b%vol%mul(mskvol)
+                if( p%outvol .ne. '' )call b%vol%write(p%outvol, del_if_exists=.true.)
+            else if( p%automsk.eq.'yes' )then
                 ! auto
                 call exec_automask3D( automask3D, cline )
             else if( cline%defined('msk') )then

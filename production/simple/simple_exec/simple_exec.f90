@@ -91,6 +91,7 @@ type(check_nptcls_commander)       :: xcheck_nptcls
 type(iminfo_commander)             :: ximinfo
 
 ! VOLOPS PROGRAMS
+type(fsc_commander)                :: xfsc
 type(cenvol_commander)             :: xcenvol
 type(postproc_vol_commander)       :: xpostproc_vol
 type(projvol_commander)            :: xprojvol
@@ -1205,9 +1206,10 @@ select case(prg)
        keys_optional(13) = 'smpd'
        keys_optional(14) = 'outstk'
        keys_optional(15) = 'outvol'
+       keys_optional(16) = 'mskfile'
        ! parse command line
        if( describe ) call print_doc_mask
-       call cline%parse( keys_required(:2), keys_optional(:15))
+       call cline%parse( keys_required(:2), keys_optional(:16))
        ! execute
        call xmask%execute(cline)
     case( 'automask2D' )
@@ -1418,7 +1420,22 @@ select case(prg)
         call ximinfo%execute(cline)
         
     ! VOLOPS PROGRAMS
-    
+
+    case( 'fsc' )
+        !==Program fsc
+        !
+        ! <fsc/begin>is a program for calculating the FSC between the two input volumes. No modifications 
+        ! are done to the volumes, which allow you to test different masking options and see how they 
+        ! affect the FSCs<fsc/end>
+        !
+        keys_required(1) = 'smpd'
+        keys_required(2) = 'vol1'
+        keys_required(3) = 'vol2'
+        ! parse command line
+        ! if( describe ) call print_doc_fsc
+        call cline%parse(keys_required(:3))
+        ! execute
+        call xfsc%execute(cline)
     case( 'cenvol' )
         !==Program cenvol
         !

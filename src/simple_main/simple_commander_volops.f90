@@ -19,6 +19,7 @@ use simple_jiffys          ! use all in there
 use simple_filehandling    ! use all in there
 implicit none
 
+public :: fsc_commander
 public :: cenvol_commander
 public :: postproc_vol_commander
 public :: projvol_commander
@@ -27,6 +28,11 @@ public :: volops_commander
 public :: volume_smat_commander
 private
 
+
+type, extends(commander_base) :: fsc_commander
+  contains
+    procedure :: execute      => exec_fsc
+end type fsc_commander
 type, extends(commander_base) :: cenvol_commander
   contains
     procedure :: execute      => exec_cenvol
@@ -53,6 +59,37 @@ type, extends(commander_base) :: volume_smat_commander
 end type volume_smat_commander
 
 contains
+
+    subroutine exec_fsc( self, cline )
+        use simple_image, only: image
+        use simple_math,  only: get_resolution
+        class(fsc_commander), intent(inout) :: self
+        class(cmdline),       intent(inout) :: cline
+        type(params)      :: p
+        type(image)       :: even, odd
+        integer           :: j
+        real              :: res_fsc05, res_fsc0143
+        real, allocatable :: res(:), corrs(:)
+        p = params(cline)
+        ! read even/odd pair
+        call even%new([p%box,p%box,p%box], p%smpd)
+        call odd%new([p%box,p%box,p%box], p%smpd)
+        call odd%read(p%vols(1))
+        call even%read(p%vols(2))
+        ! forward FT
+        call even%fwd_ft
+        call odd%fwd_ft
+        ! calculate FSC
+        call even%fsc(odd, res, corrs)
+        do j=1,size(res)
+           write(*,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', corrs(j)
+        end do
+        call get_resolution(corrs, res, res_fsc05, res_fsc0143)
+        write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', res_fsc0143
+        write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', res_fsc05
+        call even%kill
+        call odd%kill
+    end subroutine exec_fsc
     
     subroutine exec_cenvol( self, cline )
         class(cenvol_commander), intent(inout) :: self
