@@ -230,6 +230,7 @@ contains
         call chdict%push('szsn',          'size of stochastic neighborhood{5}')
         call chdict%push('nsub',          '# proj dirs in coarse grid search{300}')
         call chdict%push('lp_grid',       'low-pass limit in coarse grid search(in A){20 A}')
+        call chdict%push('remap_classes', 'remove empty and renumber and/or expand # classes(yes|no){no}')
         initialised = .true.
     end subroutine init_cmd_dict
     

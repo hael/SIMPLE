@@ -635,22 +635,23 @@ select case(prg)
         ! for prime2D execution. <makecavgs/end> 
         !
         ! set required keys
-        keys_required(1) = 'stk'
-        keys_required(2) = 'smpd'
-        keys_required(3) = 'ctf'
+        keys_required(1)  = 'stk'
+        keys_required(2)  = 'smpd'
+        keys_required(3)  = 'ctf'
         ! set optional keys
-        keys_optional(1) = 'nthr'
-        keys_optional(2) = 'ncls'
-        keys_optional(3) = 'deftab'
-        keys_optional(4) = 'oritab'
-        keys_optional(5) = 'filwidth'
-        keys_optional(6) = 'mul'
-        keys_optional(7) = 'tseries'
-        keys_optional(8) = 'outfile'
-        keys_optional(9) = 'refs'
+        keys_optional(1)  = 'nthr'
+        keys_optional(2)  = 'ncls'
+        keys_optional(3)  = 'deftab'
+        keys_optional(4)  = 'oritab'
+        keys_optional(5)  = 'filwidth'
+        keys_optional(6)  = 'mul'
+        keys_optional(7)  = 'tseries'
+        keys_optional(8)  = 'outfile'
+        keys_optional(9)  = 'refs'
+        keys_optional(10) = 'remap_classes'
         ! parse command line
         if( describe ) call print_doc_makecavgs
-        call cline%parse(keys_required(:3), keys_optional(:9))
+        call cline%parse(keys_required(:3), keys_optional(:10))
         ! set defaults
         if( .not. cline%defined('eo') ) call cline%set('eo', 'no')
         ! execute

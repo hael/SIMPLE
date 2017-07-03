@@ -321,7 +321,7 @@ contains
         call cline_cavgassemble%set('nthr',1.)
         call cline_cavgassemble%set('prg', 'cavgassemble')
         if( cline%defined('outfile') )then
-            ! because outfile is output from distributed exec of makecavsg
+            ! because outfile is output from distributed exec of makecavgs
             call cline_cavgassemble%set('oritab', p_master%outfile)
         else
             ! because prime2D_startdoc.txt is default output in the absence of outfile

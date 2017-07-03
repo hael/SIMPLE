@@ -43,6 +43,7 @@ phaseplate
 phrand
 plot
 readwrite
+remap_classes
 restart
 rnd
 rm_outliers
@@ -312,6 +313,7 @@ l_autoscale
 l_dose_weight
 l_innermsk
 l_pick
+l_remap_classes
 l_xfel
 vol1
 vol2

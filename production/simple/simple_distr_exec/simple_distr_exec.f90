@@ -329,23 +329,24 @@ select case(prg)
         ! initial random references for prime2D execution. <makecavgs/end> 
         !
         ! set required keys
-        keys_required(1) = 'stk'
-        keys_required(2) = 'smpd'
-        keys_required(3) = 'ctf'
-        keys_required(4) = 'nparts'
+        keys_required(1)  = 'stk'
+        keys_required(2)  = 'smpd'
+        keys_required(3)  = 'ctf'
+        keys_required(4)  = 'nparts'
         ! set optional keys
-        keys_optional(1) = 'nthr'
-        keys_optional(2) = 'ncunits'
-        keys_optional(3) = 'ncls'
-        keys_optional(4) = 'deftab'
-        keys_optional(5) = 'oritab'
-        keys_optional(6) = 'filwidth'
-        keys_optional(7) = 'mul'
-        keys_optional(8) = 'outfile'
-        keys_optional(9) = 'refs'  
+        keys_optional(1)  = 'nthr'
+        keys_optional(2)  = 'ncunits'
+        keys_optional(3)  = 'ncls'
+        keys_optional(4)  = 'deftab'
+        keys_optional(5)  = 'oritab'
+        keys_optional(6)  = 'filwidth'
+        keys_optional(7)  = 'mul'
+        keys_optional(8)  = 'outfile'
+        keys_optional(9)  = 'refs'
+        keys_optional(10) = 'remap_classes'
         ! parse command line
         if( describe ) call print_doc_makecavgs
-        call cline%parse(keys_required(:4), keys_optional(:9))
+        call cline%parse(keys_required(:4), keys_optional(:10))
         ! execute
         call xmakecavgs_distr%execute(cline)
     case( 'prime2D' )
