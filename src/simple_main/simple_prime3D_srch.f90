@@ -180,7 +180,7 @@ contains
         if( present(greedy) ) ggreedy = greedy
         call self%online_allocate
         if( ggreedy )then
-            call self%greedy_srch( pftcc,  iptcl, a, e, lp, nnmat )
+            call self%greedy_srch( pftcc,  iptcl, a, e, lp, nnmat, grid_projs )
         else if( self%refine.eq.'snhc' )then
             if( .not. present(szsn) )then
                 stop 'refine=snhc mode needs optional input szsn; simple_prime3D_srch :: exec_prime3D_srch'
@@ -209,16 +209,28 @@ contains
     end subroutine exec_prime3D_srch_het
 
     !>  \brief  greedy hill-climbing (4 initialisation)
-    subroutine greedy_srch( self, pftcc, iptcl, a, e, lp, nnmat )
+    subroutine greedy_srch( self, pftcc, iptcl, a, e, lp, nnmat, grid_projs )
         class(prime3D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: iptcl
         class(oris),             intent(inout) :: a, e
         real,                    intent(in)    :: lp
-        integer, optional,       intent(in)    :: nnmat(self%nprojs,self%nnn_static)
+        integer, optional,       intent(in)    :: nnmat(self%nprojs,self%nnn_static), grid_projs(:)
         real    :: projspace_corrs(self%nrefs),wcorr
-        integer :: iref,isample,nrefs
+        integer :: iref,isample,nrefs,target_projs(GRIDNPEAKS)
         if( nint(a%get(iptcl,'state')) > 0 )then
+            if( str_has_substr(self%refine, 'neigh') )then
+                ! for neighbour modes we do a coarse grid search first
+                if( .not. present(grid_projs) ) stop 'need optional grid_projs 4 subspace srch; prime3D_srch :: greedy_srch'
+                call self%greedy_subspace_srch(pftcc, iptcl, a, e, grid_projs, target_projs)
+                ! initialize
+                call self%prep4srch(pftcc, iptcl, a, e, lp, nnmat, target_projs)
+                nrefs = self%nnnrefs
+            else
+                ! initialize
+                call self%prep4srch(pftcc, iptcl, a, e, lp)
+                nrefs = self%nrefs
+            endif
             ! initialize
             call self%prep4srch(pftcc, iptcl, a, e, lp, nnmat)
             self%nbetter         = 0
@@ -226,7 +238,7 @@ contains
             self%proj_space_inds = 0
             projspace_corrs      = -1.
             nrefs = self%nrefs
-            if( self%refine.eq.'neigh' ) nrefs = self%nnnrefs 
+            if( str_has_substr(self%refine, 'neigh') ) nrefs = self%nnnrefs 
             ! search
             do isample=1,nrefs
                 iref = self%srch_order(isample) ! set the reference index
@@ -679,7 +691,7 @@ contains
             case( 'no','shc','snhc' )                                                  ! DISCRETE CASE
                 call self%prep_reforis(e)                                              ! search space & order prep
                 self%prev_ref = self%o_refs%find_closest_proj(o_prev, self%prev_state) ! find closest ori with same state
-            case( 'neigh','shcneigh' )                                                 ! DISCRETE CASE WITH NEIGHBOURHOOD
+            case( 'neigh','shcneigh', 'greedyneigh' )                                  ! DISCRETE CASE WITH NEIGHBOURHOOD
                 nnvec = merge_into_disjoint_set(self%nprojs, self%nnn_static, nnmat, target_projs) ! disjoint nearest neighbour set
                 call self%prep_reforis(e, nnvec=nnvec)                                 ! search space & order prep
                 self%prev_ref = self%o_refs%find_closest_proj(o_prev, self%prev_state) ! find closest ori with same state
