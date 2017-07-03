@@ -134,7 +134,7 @@ contains
         real, intent(in)             :: smpd, mwkda
         integer                      :: nvox
         double precision , parameter :: prot_d = 1.43d0            ! g/cm**3
-        double precision , parameter :: one_da = 1.66053892173e-27 ! kg/Da
+        double precision , parameter :: one_da = 1.66053892173e-24 ! g/Da
         double precision             :: Da_per_vox
         ! prot_d in g / A**3    = prot_d * 1e-24
         ! voxel volume in A**3  = smpd**3
@@ -142,7 +142,7 @@ contains
         ! mass of protein in kg = (mwda*1e3)*one_da
         ! mass of protein in g  = ((mwkda*1e3)*one_da)*1e3
         ! therefore number of voxels in protein is:
-        nvox = nint((((mwkda*1e3)*one_da)*1e3) / (prot_d * 1e-24 * (smpd**3)))
+        nvox = nint((((mwkda*1e3)*one_da)) / (prot_d * 1e-24 * (smpd**3)))
     end function
     
     !> \brief  to find the volume in number of voxels, given molecular weight

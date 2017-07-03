@@ -106,7 +106,8 @@ contains
         do istate=1,p%nstates
             call b%vol%read(p%vols(istate))
             shvec(istate,:) = b%vol%center(p%cenlp,'no',p%msk)
-            if( istate == 1 ) call b%vol%write(p%outvol) 
+            print *, shvec
+            if( istate == 1 ) call b%vol%write(p%outvol)
             if( debug )then
                 call b%vol%shift(-shvec(istate,1), -shvec(istate,2), -shvec(istate,3))
                 call b%vol%write('shifted_vol_state'//int2str(istate)//p%ext)

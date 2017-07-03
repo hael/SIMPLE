@@ -143,6 +143,51 @@ contains
         if( debug ) write(*,'(A)') '>>> cont3D_srch::END OF SRCH'
     end subroutine exec_srch
 
+    ! !>  \brief  performs euler angles search
+    ! subroutine do_euler_srch( self )
+    !     class(cont3D_srch), intent(inout) :: self
+    !     integer, allocatable :: roind_vec(:)    ! slice of in-plane angles
+    !     real                 :: inpl_corr
+    !     integer              :: iref
+    !     ! init
+    !     self%nbetter = 0
+    !     self%neval   = 0
+    !     roind_vec    = self%pftcc_ptr%get_win_roind(360.-self%o_in%e3get(), E3HALFWINSZ)
+    !     ! search
+    !     ! the input search space in stochastic, so no need for a randomized search order
+    !     do iref = 1,self%nrefs
+    !         if(iref == self%prev_ref)cycle
+    !         call greedy_inpl_srch(iref, inpl_corr)
+    !         self%neval = self%neval+1
+    !         if(inpl_corr >= self%prev_corr)self%nbetter = self%nbetter+1
+    !         if(self%nbetter >= self%npeaks)exit
+    !     enddo
+    !     if( self%nbetter<self%npeaks )then
+    !         ! previous reference considered last
+    !         call greedy_inpl_srch(self%prev_ref, inpl_corr)
+    !         self%nbetter = self%nbetter + 1
+    !         self%neval   = self%nrefs
+    !     endif            
+    !     deallocate(roind_vec)
+    !     if(debug)write(*,*)'simple_cont3D_srch::do_refs_srch done'
+
+    !     contains
+
+    !         subroutine greedy_inpl_srch(iref_here, corr_here)
+    !             integer, intent(in)    :: iref_here
+    !             real,    intent(inout) :: corr_here
+    !             real    :: corrs(self%nrots), e3
+    !             integer :: loc(1), inpl_ind
+    !             corrs     = self%pftcc_ptr%gencorrs(iref_here, self%iptcl, roind_vec=roind_vec)
+    !             loc       = maxloc(corrs)
+    !             inpl_ind  = loc(1)
+    !             corr_here = corrs(inpl_ind)
+    !             e3 = 360. - self%pftcc_ptr%get_rot(inpl_ind)
+    !             call self%reforis%e3set(iref_here, e3)
+    !             call self%reforis%set(iref_here, 'corr', corr_here)
+    !         end subroutine greedy_inpl_srch
+    ! end subroutine do_euler_srch
+
     !>  \brief  performs euler angles search
     subroutine do_euler_srch( self )
         class(cont3D_srch), intent(inout) :: self
@@ -152,23 +197,16 @@ contains
         ! init
         self%nbetter = 0
         self%neval   = 0
-        roind_vec    = self%pftcc_ptr%get_win_roind(360.-self%o_in%e3get(), E3HALFWINSZ)
+        ! roind_vec    = self%pftcc_ptr%get_win_roind(360.-self%o_in%e3get(), E3HALFWINSZ)
         ! search
         ! the input search space in stochastic, so no need for a randomized search order
         do iref = 1,self%nrefs
-            if(iref == self%prev_ref)cycle
             call greedy_inpl_srch(iref, inpl_corr)
             self%neval = self%neval+1
             if(inpl_corr >= self%prev_corr)self%nbetter = self%nbetter+1
-            if(self%nbetter >= self%npeaks)exit
-        enddo
-        if( self%nbetter<self%npeaks )then
-            ! previous reference considered last
-            call greedy_inpl_srch(self%prev_ref, inpl_corr)
-            self%nbetter = self%nbetter + 1
-            self%neval   = self%nrefs
-        endif            
-        deallocate(roind_vec)
+            ! if(self%nbetter >= self%npeaks)exit
+        enddo         
+        ! deallocate(roind_vec)
         if(debug)write(*,*)'simple_cont3D_srch::do_refs_srch done'
 
         contains
@@ -178,7 +216,8 @@ contains
                 real,    intent(inout) :: corr_here
                 real    :: corrs(self%nrots), e3
                 integer :: loc(1), inpl_ind
-                corrs     = self%pftcc_ptr%gencorrs(iref_here, self%iptcl, roind_vec=roind_vec)
+                ! corrs     = self%pftcc_ptr%gencorrs(iref_here, self%iptcl, roind_vec=roind_vec)
+                corrs     = self%pftcc_ptr%gencorrs(iref_here, self%iptcl)
                 loc       = maxloc(corrs)
                 inpl_ind  = loc(1)
                 corr_here = corrs(inpl_ind)
@@ -293,7 +332,7 @@ contains
         roind    = self%pftcc_ptr%get_roind(360.-self%o_out%e3get())
         mi_proj  = 0.
         mi_state = 0.
-        if( euldist < 0.2 )mi_proj  = mi_proj + 1.
+        if( euldist < 0.25 )mi_proj  = mi_proj + 1.
         if(self%nstates > 1)then
             state      = nint(self%o_out%get('state'))
             prev_state = nint(self%o_in%get('state'))
@@ -302,11 +341,12 @@ contains
         call self%o_out%set('proj', 0.)
         call self%o_out%set('mi_proj',  mi_proj)
         call self%o_out%set('mi_state', mi_state)
-        if(self%o_in%isthere('mi_inpl')) call self%o_out%set('mi_inpl', 100.)
-        if(self%o_in%isthere('mi_joint'))call self%o_out%set('mi_joint', 100.)
+        if(self%o_in%isthere('mi_inpl')) call self%o_out%set('mi_inpl', 1.)
+        if(self%o_in%isthere('mi_joint'))call self%o_out%set('mi_joint', 1.)
         ! frac
-        frac = 100. * (real(self%neval)/real(self%nrefs))
-        call self%o_out%set('frac', frac)
+        ! frac = 100. * (real(self%neval)/real(self%nrefs))
+        ! call self%o_out%set('frac', frac)
+        call self%o_out%set('frac', 100.)
         ! done
         if(debug)write(*,*)'simple_cont3D_srch::prep_softoris done'
     end subroutine prep_softoris

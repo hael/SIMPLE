@@ -237,28 +237,22 @@ contains
         real              :: min_state_mi_joint
         logical           :: converged, update_res
         integer           :: iptcl, istate
-        if( self%pp%athres==0. )then
+        if( .not.self%pcline%defined('athres') )then
             ! required for distributed mode
-            self%pp%athres = rad2deg(atan(max(self%pp%fny,self%pp%lp)/(self%pp%moldiam/2.)))
+            self%pp%athres = max(self%pp%lp, ATHRES_LIM)
         endif
         select case(self%pp%refine)
             case('yes')
                 self%corr      = self%bap%get_avg('corr')
                 self%dist      = self%bap%get_avg('dist')
-                self%frac      = self%bap%get_avg('frac')
                 self%mi_proj   = self%bap%get_avg('mi_proj')
                 self%mi_state  = self%bap%get_avg('mi_state')
                 self%sdev      = self%bap%get_avg('sdev')
-                if( self%pp%athres==0. .or. (.not.self%pcline%defined('athres')) )then
-                    ! required for distributed mode
-                    self%pp%athres = max(self%pp%lp, ATHRES_LIM)
-                endif
                 write(*,'(A,1X,F7.1)') '>>> ANGLE OF FEASIBLE REGION:          ', self%pp%athres
                 write(*,'(A,1X,F7.4)') '>>> PROJ     DISTRIBUTION OVERLAP:     ', self%mi_proj
                 if( self%pp%nstates > 1 )&
                 write(*,'(A,1X,F7.4)') '>>> STATE DISTRIBUTION OVERLAP:        ', self%mi_state
                 write(*,'(A,1X,F7.1)') '>>> AVERAGE ANGULAR DISTANCE BTW ORIS: ', self%dist
-                write(*,'(A,1X,F7.1)') '>>> PERCENTAGE OF SEARCH SPACE SCANNED:', self%frac
                 write(*,'(A,1X,F7.4)') '>>> CORRELATION:                       ', self%corr
                 write(*,'(A,1X,F7.2)') '>>> ANGULAR SDEV OF MODEL:             ', self%sdev
                 if( self%pp%nstates == 1 )then
@@ -274,21 +268,19 @@ contains
             case('de')
                 self%corr      = self%bap%get_avg('corr')
                 self%dist      = self%bap%get_avg('dist')
-                self%dist_inpl = self%bap%get_avg('dist_inpl')
                 self%mi_inpl   = self%bap%get_avg('mi_inpl')
                 self%sdev      = self%bap%get_avg('sdev')
-                !self%mi_state  = self%bap%get_avg('mi_state')
+                self%mi_proj   = self%bap%get_avg('mi_proj')
+                self%mi_state  = self%bap%get_avg('mi_state')
                 write(*,'(A,1X,F7.1)') '>>> ANGLE OF FEASIBLE REGION:          ', self%pp%athres
-                write(*,'(A,1X,F7.4)') '>>> IN-PLANE DISTRIBUTION OVERLAP:     ', self%mi_inpl
-                !if( self%pp%nstates > 1 )&
-                !write(*,'(A,1X,F7.4)') '>>> STATE DISTRIBUTION OVERLAP:        ', self%mi_state
+                write(*,'(A,1X,F7.4)') '>>> PROJ     DISTRIBUTION OVERLAP:     ', self%mi_proj
+                if( self%pp%nstates > 1 )&
+                write(*,'(A,1X,F7.4)') '>>> STATE DISTRIBUTION OVERLAP:        ', self%mi_state
                 write(*,'(A,1X,F7.1)') '>>> AVERAGE ANGULAR DISTANCE BTW ORIS: ', self%dist
-                write(*,'(A,1X,F7.1)') '>>> AVERAGE IN-PLANE ANGULAR DISTANCE: ', self%dist_inpl
                 write(*,'(A,1X,F7.4)') '>>> CORRELATION:                       ', self%corr
                 write(*,'(A,1X,F7.2)') '>>> ANGULAR SDEV OF MODEL:             ', self%sdev                ! determine convergence
                 if( self%pp%nstates == 1 )then
-                    if( self%dist    < self%pp%athres/5. .and.&
-                        &self%mi_inpl > MI_INPL_LIM )then
+                    if( self%mi_proj > MI_CLASS_LIM_3D )then
                         write(*,'(A)') '>>> CONVERGED: .YES.'
                         converged = .true.
                     else

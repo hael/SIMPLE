@@ -379,7 +379,7 @@ contains
             loc     = maxloc( maplp )
             p%state = loc(1)            ! state with worst low-pass
             p%lp    = maplp( p%state )  ! worst lp
-            p%fsc   =  'fsc_state'//int2str_pad(p%state,2)//'.bin'
+            p%fsc   = 'fsc_state'//int2str_pad(p%state,2)//'.bin'
             deallocate(maplp)
             limset = .true.
         endif
@@ -398,27 +398,40 @@ contains
             stop 'No method available to set low-pass limit! ABORTING...'
         endif
         ! calculate angular threshold
-        p%athres = rad2deg(atan(p%lp/(p%moldiam/2.)))
+        select case(p%refine)
+            case('yes','de')
+                p%athres = max(p%lp, ATHRES_LIM)
+            case DEFAULT
+                p%athres = rad2deg(atan(p%lp/(p%moldiam/2.)))
+        end select
         ! check convergence
         if( cline%defined('update_res') )then
             update_res = .false.
             if( cline%get_carg('update_res').eq.'yes' )update_res = .true.
-            if(  cline%get_carg('update_res').eq.'no' .and. p%refine.eq.'het')then
+            if( cline%get_carg('update_res').eq.'no' .and. p%refine.eq.'het')then
                 converged = b%conv%check_conv_het()
             else
-                converged = b%conv%check_conv3D( update_res )
+                select case(p%refine)
+                    case('yes','de')
+                        converged = b%conv%check_conv_cont3D()
+                    case DEFAULT
+                        converged = b%conv%check_conv3D()
+                end select
             endif
         else
-            if( p%refine.eq.'het')then
-                converged = b%conv%check_conv_het()
-            else
-                converged = b%conv%check_conv3D()
-            endif
+            select case(p%refine)
+                case('het')
+                    converged = b%conv%check_conv_het()
+                case('yes','de')
+                    converged = b%conv%check_conv_cont3D()
+                case DEFAULT
+                    converged = b%conv%check_conv3D()
+            end select                 
         endif
         ! reports convergence, shift activation, resolution update and
         ! fraction of search space scanned to the distr commander
         if( p%doshift )then
-            call cline%set('trs', p%trs)        ! activates shift serach
+            call cline%set('trs', p%trs)        ! activates shift search
         endif
         if( converged )then
             call cline%set('converged', 'yes')

@@ -192,11 +192,7 @@ contains
         if( present(os) )then
             softrec = .true.
             npeaks  = os%get_noris()
-            ! if( p%npeaks /= os%get_noris() )&
-            !     &stop 'non-congruent number of orientations; simple_hadamard_common :: grid_ptcl'
         endif
-        ! if( p%npeaks>1 .and. .not.softrec )&
-        !     stop 'need optional primesrch3D input when npeaks > 1; simple_hadamard_common :: grid_ptcl'
         pw = orientation%get('w')
         if( pw > 0. )then
             ! prepare image for gridding
@@ -400,9 +396,6 @@ contains
 
     !>  \brief  prepares one volume for references extraction
     subroutine preprefvol( b, p, cline, s, doexpand )
-        use simple_filehandling,  only: arr2file
-        use simple_estimate_ssnr, only: fsc2optlp
-        use simple_filterer,      only: resample_filter
         class(build),      intent(inout) :: b
         class(params),     intent(inout) :: p
         class(cmdline),    intent(inout) :: cline
@@ -468,23 +461,6 @@ contains
         endif
         ! FT volume
         call b%vol%fwd_ft
-        ! FOM filter
-        ! if( p%eo.eq.'yes' )then
-        !     fsc_file = 'fsc_state'//int2str_pad(s,2)//'.bin'
-        !     if( file_exists(fsc_file) )then
-        !         fsc = file2rarr(fsc_file)
-        !         fom_filter = fsc2optlp(fsc)
-        !         if( p%boxmatch .eq. p%box )then
-        !             call b%vol%apply_filter(fom_filter)
-        !         else
-        !             res_match = b%vol%get_res()
-        !             fom_filter_match = resample_filter(fom_filter, res, res_match)
-        !             call b%vol%apply_filter(fom_filter_match)
-        !             deallocate(res_match, fom_filter_match)
-        !         endif
-        !         deallocate(fsc, res, fom_filter)
-        !     endif
-        ! endif
         ! expand for fast interpolation
         if( l_doexpand )call b%vol%expand_cmat
 
@@ -494,9 +470,9 @@ contains
                 real    :: shvec(3)
                 logical :: do_center
                 do_center = .true.
-                if( .not. cline%defined('center') .and. p%center.eq.'no' )do_center = .false.
-                if( p%nstates > 1 )do_center = .false.
-                if( p%pgrp(:1) .ne. 'c' )do_center = .false.
+                if( p%center.eq.'no' )        do_center = .false.
+                if( p%nstates > 1 )           do_center = .false.
+                if( p%pgrp(:1) .ne. 'c' )     do_center = .false.
                 if( cline%defined('mskfile') )do_center = .false.
                 ! centering only for single state, asymmetric and circular symmetric cases 
                 if( do_center )then

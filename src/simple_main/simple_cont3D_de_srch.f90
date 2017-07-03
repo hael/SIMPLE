@@ -13,9 +13,10 @@ public :: cont3D_de_srch
 private
 
 integer, parameter :: NDOF           = 5
-integer, parameter :: maxits_per_dof = 250
+integer, parameter :: maxits_per_dof = 400
 integer, parameter :: MAXITS         = NDOF * maxits_per_dof
 integer, parameter :: NINIPOP        = 50
+integer, parameter :: NINIPOP_HIGH   = 80 ! < 107
 logical, parameter :: debug = .false.
 
 type cont3D_de_srch
@@ -130,10 +131,17 @@ contains
             subroutine gen_inipop()
                 type(oris) :: orefs
                 type(ori)  :: o
-                integer    :: i
-                allocate( inipop(NINIPOP, NDOF) )
-                call orefs%rnd_gau_neighbors(NINIPOP, self%o_in, self%angthresh, self%lims(:3,:))
-                do i = 1, NINIPOP
+                integer    :: i, npop
+                if( self%npeaks == 1 )then
+                    npop = NINIPOP
+                else
+                    npop = NINIPOP
+                    ! increases local initial population upon previous failure
+                    if( self%o_in%get('ow') > 0.99 )npop = NINIPOP_HIGH
+                endif
+                allocate( inipop(npop, NDOF) )
+                call orefs%rnd_gau_neighbors(npop, self%o_in, self%angthresh, self%lims(:3,:))
+                do i = 1, npop
                     if(i == 1)then
                         o = self%o_in
                         call o%set_shift([0.,0.])
@@ -237,36 +245,21 @@ contains
         call self%o_out%set('dist_inpl', dist_inpl)
         call self%o_out%set('sdev', ang_sdev)
         ! overlap between distributions
-        prev_roind = self%pftcc_ptr%get_roind(360.-self%o_out%e3get())
-        roind      = self%pftcc_ptr%get_roind(360.-self%o_in%e3get())
         mi_proj  = 0.
-        mi_inpl  = 0.
         mi_state = 0.
-        mi_joint = 0.
-        if( euldist < 0.2 )then
+        if( euldist < 0.25 )then
             mi_proj  = mi_proj + 1.
-            mi_joint = mi_joint + 1.
-        endif
-        if(prev_roind == roind)then
-            mi_inpl  = mi_inpl  + 1.
-            mi_joint = mi_joint + 1.
         endif
         if(self%nstates > 1)then
             state      = nint(self%o_out%get('state'))
             prev_state = nint(self%o_in%get('state'))
-            if(prev_state == state)then
-                mi_state = mi_state + 1.
-                mi_joint = mi_joint + 1.
-            endif
-            mi_joint = mi_joint/3.
-        else
-            mi_joint = mi_joint/2.
+            if(prev_state == state)mi_state = mi_state + 1.
         endif
         call self%o_out%set('proj', 0.)
         call self%o_out%set('mi_proj',  mi_proj)
-        call self%o_out%set('mi_inpl',  mi_inpl)
+        call self%o_out%set('mi_inpl',  1.)
         call self%o_out%set('mi_state', mi_state)
-        call self%o_out%set('mi_joint', mi_joint)       
+        call self%o_out%set('mi_joint', 1.)       
         ! frac (unused in convergence)
         call self%o_out%set('frac', 100.)
         if(debug)write(*,*)'simple_cont3D_srch::prep_softoris done'

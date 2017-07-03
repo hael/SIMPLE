@@ -2553,7 +2553,7 @@ contains
             call tmp%bin(thres)
         else
             call tmp%mask(rmsk, 'soft')
-            call tmp%bin('msk', rmsk)
+            call tmp%bin('nomsk', rmsk)
         endif
         xyz = tmp%masscen()
         if( l_doshift )then
@@ -4005,8 +4005,8 @@ contains
     !!          logi in a Fourier transform caused by the origin shift in shvec
     function oshift_1( self, logi, shvec, ldim ) result( comp )
         class(image), intent(in)      :: self
-        real, intent(in)              :: logi(3)
-        real, intent(in)              :: shvec(3)
+        real,    intent(in)           :: logi(3)
+        real,    intent(in)           :: shvec(3)
         integer, intent(in), optional :: ldim
         complex                       :: comp
         real                          :: arg, shvec_here(3)
