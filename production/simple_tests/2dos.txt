@@ -1,5 +1,0 @@
-tester modules to write
-
-test_volpft_srch (and integrate with test_srch)
-test_correlators (merge: test_cartcorr_sanity, test_cartesian_corr, test_new_corrcalc)
-test_img_io (merge all i/o related stuff in image unit test with test_imgfile)
