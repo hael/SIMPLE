@@ -52,7 +52,7 @@ contains
             return
         endif
         call str2int(str, io_stat, ifoo )
-        if( io_stat==0 )then 
+        if( io_stat==0 )then
             allocate( format, source='int' )
             return
         endif
@@ -60,7 +60,7 @@ contains
     end function str2format
 
     !> \brief  parses the string 'str' into arguments args(1), ..., args(nargs) based on
-    !!         the delimiters contained in the string 'delim'. The integer output variable 
+    !!         the delimiters contained in the string 'delim'. The integer output variable
     !!         nargs contains the number of arguments found.
     subroutine parse(str,delim,args,nargs)
         character(len=*), intent(inout) :: str
@@ -74,7 +74,7 @@ contains
         na=size(args)
         do i=1,na
             args(i)=''
-        end do  
+        end do
         nargs=0
         lenstr=len_trim(str)
         if(lenstr==0) return
@@ -83,11 +83,11 @@ contains
             if(len_trim(str) == 0) exit
             nargs=nargs+1
             call split(str,delim,args(nargs))
-        end do   
+        end do
         str=strsav
     end subroutine parse
-    
-    !> \brief  converts multiple spaces and tabs to single spaces; 
+
+    !> \brief  converts multiple spaces and tabs to single spaces;
     !!         deletes control characters; removes initial spaces.
     subroutine compact(str)
         character(len=*), intent(inout) :: str
@@ -117,7 +117,7 @@ contains
         end do
         str=adjustl(outstr)
     end subroutine compact
-    
+
     !> \brief  finds the first instance of a character 'delim' in the
     !!         the string 'str'. The characters before the found delimiter are
     !!         output in 'before'. The characters after the found delimiter are
@@ -136,7 +136,7 @@ contains
         before=''
         do i=1,lenstr
             ch=str(i:i)
-            ipos=index(delim,ch)         
+            ipos=index(delim,ch)
             if(ipos == 0)then ! character is not a delimiter
                 k=k+1
                 before(k:k)=ch
@@ -147,7 +147,7 @@ contains
                 exit
             end if
             cha=str(i+1:i+1)  ! character is a space delimiter
-            iposa=index(delim,cha) 
+            iposa=index(delim,cha)
             if(iposa > 0)then ! next character is a delimiter
                 str=str(i+2:)
                 exit
@@ -160,7 +160,7 @@ contains
         str=adjustl(str)      ! remove initial spaces
         return
     end subroutine split
-    
+
     !> \brief  replace any tokens in string (str) with char rch
     subroutine replace(str, tokens, rch)
     character(len=*), intent(inout) :: str
@@ -169,7 +169,7 @@ contains
     character(len=1):: ch,tok
     character(len=len_trim(str))::outstr
     integer :: lenstr,lensstr, k, i,j, ich, itoken
-    str = adjustl(str) 
+    str = adjustl(str)
     tokens = adjustl(tokens)
     lensstr = len_trim(tokens)
     outstr = adjustl(str) ! initialise outstr
@@ -198,7 +198,7 @@ contains
     end do
     str = adjustl(outstr)
     end subroutine replace
-    
+
     !> \brief  removes punctuation (except comma) characters in string str
     subroutine removepunct(str)
     character(len=*), intent(inout) :: str
@@ -244,17 +244,17 @@ contains
         do i=1,lenstr
             ch = str(i:i)
             ich = iachar(ch)
-            select case(ich)    
+            select case(ich)
                 case(0:32)  ! space, tab, or control character
-                    cycle       
-                case(33:)  
+                    cycle
+                case(33:)
                     k = k + 1
                     outstr(k:k) = ch
             end select
         end do
         str=adjustl(outstr)
     end subroutine removesp
-    
+
     !> \brief  converts number string to a single precision real number
     function str2real(str) result(rval)
         character(len=*), intent(in) ::str
@@ -263,14 +263,14 @@ contains
         character(len=100) :: io_msg
         read(str, *, iostat=io_stat, iomsg=io_msg) rval
         if( io_stat .ne. 0 )then
-            write(*,*) 'iomsg: ', trim(io_msg) 
+            write(*,*) 'iomsg: ', trim(io_msg)
             stop 'ERROR(I/O); simple_strings :: str2real'
         endif
     end function str2real
-    
+
     !> \brief  converts a real number to a string
     function real2str(rval) result(str)
-        real, intent(in)  :: rval 
+        real, intent(in)  :: rval
         character(len=32) :: str
         write(str,*) rval
         call removesp(str)
@@ -281,7 +281,7 @@ contains
         integer, intent(in)           :: intg
         character(len=:), allocatable :: string
         integer :: ndigs_int
-	    if( intg < 0 )then
+        if( intg < 0 )then
             stop 'cannot convert negative intg 2 str; simple_strings :: int2str'
         else if (intg .eq. 0) then
             ndigs_int = 1
@@ -317,7 +317,7 @@ contains
         endif
         deallocate(str_tmp)
     end function int2str_pad
-    
+
     !>  \brief  turns a string into an integer variable
     subroutine str2int( string, io_stat, ivar )
         character(len=*), intent(in)  :: string
@@ -517,11 +517,11 @@ contains
         endif
     end function cntRecsPerLine
 
-    !> \brief  Lexographical sort. On input, strArr is a one-dimensional array of character strings to be 
-    !!         sorted in ascending lexical order. On output, strArr is the sorted array. The characters of 
-    !!         the elements of the string array are not modified. If blanks or punctuation characters are 
+    !> \brief  Lexographical sort. On input, strArr is a one-dimensional array of character strings to be
+    !!         sorted in ascending lexical order. On output, strArr is the sorted array. The characters of
+    !!         the elements of the string array are not modified. If blanks or punctuation characters are
     !!         to be ignored, this needs to be taken care of before calling.
-    subroutine lexSort( strArr, CaseSens ) 
+    subroutine lexSort( strArr, CaseSens )
         character(len=*),  intent(inout) :: strArr(:)
         logical, optional, intent(in)    :: CaseSens
         integer, allocatable :: indexarray(:)
@@ -529,89 +529,89 @@ contains
         logical              :: LCaseSens
         LCaseSens = .false.
         if( present(CaseSens) ) LCaseSens = CaseSens
-        low  = 1 
-        high = size(strArr) 
+        low  = 1
+        high = size(strArr)
         allocate(indexarray(high), stat=alloc_stat)
         if( alloc_stat /= 0 ) then
             write(*,'(a)') 'ERROR: Allocation failure!'
             write(*,'(a)') 'In: lexSort; simple_strings'
             stop
         endif
-        indexarray = (/(k,k=low,high)/) 
-        call quicksort(low, high) 
-        strArr = strArr(indexarray) 
+        indexarray = (/(k,k=low,high)/)
+        call quicksort(low, high)
+        strArr = strArr(indexarray)
         deallocate(indexarray)
-    
+
       contains
-      
+
           recursive subroutine quicksort( low, high )
-              integer, intent (in) :: low, high 
-              integer :: pivotlocation 
-              if( low < high )then 
-                  call partition(low, high, pivotlocation) 
-                  call quicksort(low, pivotlocation-1) 
-                  call quicksort(pivotlocation+1, high) 
-              end if 
+              integer, intent (in) :: low, high
+              integer :: pivotlocation
+              if( low < high )then
+                  call partition(low, high, pivotlocation)
+                  call quicksort(low, pivotlocation-1)
+                  call quicksort(pivotlocation+1, high)
+              end if
           end subroutine quicksort
-      
+
           subroutine partition( low, high, pivotlocation )
-              integer, intent (in) :: low, high 
-              integer, intent(out) :: pivotlocation 
-              integer :: k, lastsmall 
-              call swap(indexarray(low), indexarray((low+high)/2)) 
-              lastsmall = low 
-              do k=low+1,high 
-                  if(strComp(strArr(indexarray(k)), strArr(indexarray(low))))then 
-                      lastsmall = lastsmall + 1 
-                      call swap(indexarray(lastsmall), indexarray(k)) 
-                  end if 
-              end do 
-              call swap(indexarray(low), indexarray(lastsmall)) 
-              pivotlocation = lastsmall 
+              integer, intent (in) :: low, high
+              integer, intent(out) :: pivotlocation
+              integer :: k, lastsmall
+              call swap(indexarray(low), indexarray((low+high)/2))
+              lastsmall = low
+              do k=low+1,high
+                  if(strComp(strArr(indexarray(k)), strArr(indexarray(low))))then
+                      lastsmall = lastsmall + 1
+                      call swap(indexarray(lastsmall), indexarray(k))
+                  end if
+              end do
+              call swap(indexarray(low), indexarray(lastsmall))
+              pivotlocation = lastsmall
           end subroutine partition
-      
-          subroutine swap( m, n ) 
-              integer, intent (inout) :: m, n 
-              integer :: temp 
-              temp = m 
-              m = n 
-              n = temp 
+
+          subroutine swap( m, n )
+              integer, intent (inout) :: m, n
+              integer :: temp
+              temp = m
+              m = n
+              n = temp
           end subroutine swap
-      
-          function strComp( p, q ) result( lexLess ) 
-              character(len=*), intent(in) :: p, q 
-              logical :: lexLess 
-              integer :: kq, k 
-              if( LCaseSens )then 
-                  lexLess = p < q 
-              else 
-                  kq = 1 
-                  do k=1,max(len_trim(p),len_trim(q)) 
-                      if( UpperCase(p(k:k)) == UpperCase(q(k:k)) )then 
-                          cycle 
-                      else 
-                          kq = k 
-                          exit 
-                      end if 
-                  end do 
-                  lexLess = UpperCase(p(kq:kq)) < UpperCase(q(kq:kq)) 
-              end if 
+
+          function strComp( p, q ) result( lexLess )
+              character(len=*), intent(in) :: p, q
+              logical :: lexLess
+              integer :: kq, k
+              if( LCaseSens )then
+                  lexLess = p < q
+              else
+                  kq = 1
+                  do k=1,max(len_trim(p),len_trim(q))
+                      if( UpperCase(p(k:k)) == UpperCase(q(k:k)) )then
+                          cycle
+                      else
+                          kq = k
+                          exit
+                      end if
+                  end do
+                  lexLess = UpperCase(p(kq:kq)) < UpperCase(q(kq:kq))
+              end if
           end function strComp
-      
-          function UpperCase( letter ) result( L ) 
-              character(len=*), intent (in) :: letter 
-              character(len=1)              :: L 
+
+          function UpperCase( letter ) result( L )
+              character(len=*), intent (in) :: letter
+              character(len=1)              :: L
               character(len=26), parameter  :: Lower = "abcdefghijklmnopqrstuvwxyz"
-              character(len=26), parameter  :: Upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ" 
-              integer :: k 
-              k = index(Lower, letter) 
-              if (k > 0) then 
-                  L = Upper(k:k) 
-              else 
-                  L = letter 
-              end if 
+              character(len=26), parameter  :: Upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+              integer :: k
+              k = index(Lower, letter)
+              if (k > 0) then
+                  L = Upper(k:k)
+              else
+                  L = letter
+              end if
           end function UpperCase
-        
+
     end subroutine lexSort
-    
+
 end module simple_strings

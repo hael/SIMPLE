@@ -14,7 +14,7 @@
 #+caption: Developer -- Build success table
 |                       | GNU /gfortran/ and FFTW                                                                                                                                                          | Intel /ifort/ and MKL                                     | Portland Group /pgfortran/  and PGI compiled FFTW  |
 |-----------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------+----------------------------------------------------|
-| Ubuntu (14.10, 16.04) | [[https://img.shields.io/badge/build-v4.9-green.svg]] [[https://img.shields.io/badge/build-v5.4-green.svg]]  [[https://img.shields.io/badge/build-v7.1-green.svg]]                           | [[https://img.shields.io/badge/build-v2017.2.174-yellow.svg]] | [[https://img.shields.io/badge/build-2016-yellow.svg]] |
+| Ubuntu (14.10, 16.04) | [[https://img.shields.io/badge/build-v4.9-green.svg]] [[https://img.shields.io/badge/build-v5.4-green.svg]]  [[https://img.shields.io/badge/build-v7.1-green.svg]]                           | [[https://img.shields.io/badge/build-v2017.2.174-green.svg]]  | [[https://img.shields.io/badge/build-2016-yellow.svg]] |
 | Centos (MASSIVE3)     | [[https://img.shields.io/badge/build-v5-green.svg]]                                                                                                                                  | [[https://img.shields.io/badge/build-v2016-yellow.svg]]       | https://img.shields.io/badge/build-NA-gray.svg     |
 | ThinkStation          | [[https://img.shields.io/badge/build-v4.9-green.svg]]                                                                                                                                |                                                           |                                                    |
 | iMac (10.10)          | [[https://img.shields.io/badge/build-MacPorts_gcc4.9-green.svg]]                                                                                                                     | [[https://img.shields.io/badge/build-NA-gray.svg]]            | https://img.shields.io/badge/build-NA-gray.svg     |
@@ -96,14 +96,13 @@ single and double precision libraries in the interactive =ccmake= or declare FFT
 
 **** Intel fortran
 
-Source the =ifortvars.sh= file from your Intel compiler source path
+Source the =compilervars.sh= file from your Intel compiler source path
 #+BEGIN_SRC sh
-   source /opt/intel/bin/compilervars.sh -arch intel64
+   source /opt/intel/bin/compilervars.sh intel64
    mkdir build-intel
    cd build-intel
    export FC=ifort
    export CPP=fpp
-
    cmake ..  
    make -j
 #+END_SRC sh
@@ -165,7 +164,6 @@ function unset_pgilinux(){
         unset  F77 F90 CPP CC CXX FC
     fi
 }
-set_pgilinux
 #+END_SRC
 
 
@@ -242,11 +240,11 @@ To run a typical test with 8 cores, use:
 
 ** Usage
 
-Create user documentation with =make doc= or see [[http://simplecryoem.com/manuals.html][User documentation]] on the homepage.
+See [[http://simplecryoem.com/manuals.html][User documentation]] on the homepage
 
 ** Contributing
 
-See [[file:doc/SimpleManual/simple3.0devel.tex][Developer Manual]]
+Create documentation with =make doc= (see below) or see the [[file:doc/SimpleManual/simple3.0devel.tex][Developer Manual]]
 
 All developer options can be used in CMake when using the VERBOSE arg.
 
@@ -291,7 +289,7 @@ version. SIMPLE is distributed with the hope that it will be useful, but WITHOUT
 ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the [[http://www.gnu.org/licenses/gpl-3.0.html][GPL v3 licence]] for more details.
 
-SIMPLE depends on FFTW which is liceneced under GPL ([[https://www.fftw.org][FFTW website]]).
+SIMPLE depends on FFTW which is licenced under GPL ([[https://www.fftw.org][FFTW website]]).
 
 CTFFIND4 Copyright 2014 Howard Hughes Medical Institute
  -  Use is subject to Janelia Farm Research Campus Software Copyright 1.1

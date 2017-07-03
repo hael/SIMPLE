@@ -20,4 +20,4 @@ s_utes: simple_arr.o              \
 
 s_utils: simple_timer_omp.o    \
          simple_timer.o       \
-	       simple_syscalls.o  ;
+         simple_syscalls.o  ;

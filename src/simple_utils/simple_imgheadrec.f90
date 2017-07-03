@@ -53,9 +53,9 @@ interface assignment(=)
 end interface
 
 contains
-    
+
     ! CONSTRUCTORS
-    
+
     !>  \brief constructor
     function constructor( index_position, byte_position, byte_array, length ) result( self )
         integer, intent(in)                 :: index_position !<  the position of the record within the file header. starting at 1 and incrementing
@@ -82,9 +82,9 @@ contains
                 if (present(length)) self%length = length
         end select
     end subroutine
-    
+
     ! SETTERS
-    
+
     subroutine setIntg(self,value)
         use, intrinsic :: iso_c_binding
         class(int_imgheadrec), intent(inout) :: self    !<  header record
@@ -120,7 +120,7 @@ contains
         character(len=:), allocatable         :: tmp_string
         allocate(character(len=self%length) :: tmp_string)
         write(tmp_string,'(a'//int2str(self%length)//')') value
-        self%byte_array(self%byte_position:self%byte_position+self%length-1) = transfer(tmp_string,self%byte_array)            
+        self%byte_array(self%byte_position:self%byte_position+self%length-1) = transfer(tmp_string,self%byte_array)
     end subroutine
 
     !>  \brief  read value from header record (to be used on RHS of assignments)
@@ -185,11 +185,11 @@ contains
         allocate(character(len=self%length) :: getChar)
         getChar = transfer(self%byte_array(self%byte_position:self%byte_position+self%length-1),getChar)
     end function
-    
+
     !>  \brief destructor
     subroutine kill(self)
         class(imgheadrec), intent(inout) :: self
         if(associated(self%byte_array)) nullify(self%byte_array)
     end subroutine
-    
+
 end module simple_imgheadrec

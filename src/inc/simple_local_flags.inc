@@ -15,18 +15,18 @@
 
 #ifdef __PRETTY_FUNCTION__
 #ifndef DebugPrint
-#define DebugPrint if( debug.or.global_debug ) print *, __FILENAME__,':',__LINE__,':',__PRETTY_FUNCTION__,':', 
+#define DebugPrint if(debug.or.global_debug) print *, __FILENAME__,':',__LINE__,':',__PRETTY_FUNCTION__,':', 
 #endif
 #else
 #ifndef DebugPrint
-#define DebugPrint if( debug.or.global_debug ) print *, __FILENAME__,':',__LINE__,':', 
+#define DebugPrint if(debug.or.global_debug) print *, __FILENAME__,':',__LINE__,':', 
 #endif
 #endif
 #ifndef WarnPrint
-#define WarnPrint if( warn.or.debug.or.global_warn.or.global_debug ) print *, __FILENAME__,':',__LINE__,':Warning:', 
+#define WarnPrint if(warn.or.debug.or.global_debug) print *, __FILENAME__,':',__LINE__,':Warning:', 
 #endif
 #ifndef VerbosePrint
-#define VerbosePrint if( verbose.or.warn.or.debug.or.global_verbose.or.global_warn.or.global_debug ) print *, 
+#define VerbosePrint if(verbose.or.global_verbose.or.debug.or.global_debug) print *,
 #endif
 #ifndef ErrorPrint
 #define ErrorPrint(ERRMSG) print *, __FILENAME__,':',__LINE__,':Error:', ERRMSG; stop

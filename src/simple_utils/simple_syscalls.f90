@@ -4,7 +4,7 @@
 ! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
 ! Redistribution or modification is regulated by the GNU General Public License.
 ! *Author:* Hans Elmlund, 2009-10-01.
-! 
+!
 !==Changes are documented below
 !
 !* incorporated in the _SIMPLE_ library, HE 2009-10-01
@@ -52,7 +52,7 @@ contains
     end function getabscpu
 
     !> is for getting the relative cpu-time
-    function getdiffcpu( lprint ) result( delta )   
+    function getdiffcpu( lprint ) result( delta )
         logical, intent(in) :: lprint
         real                :: tarray(2)
         real                :: delta
@@ -98,7 +98,7 @@ contains
         if( exitstat /= 0 )then
             write(*,*)'System error', exitstat,' for command: ', trim(adjustl(cmd))
             err = .true.
-        endif 
+        endif
         if( cmdstat /= 0 )then
             write(*,*)'cmdstat = ',cmdstat,' command could not be executed: ', trim(adjustl(cmd))
             err = .true.
@@ -156,7 +156,7 @@ contains
         integer :: last
         call sys_gen_filetab(fbody, ext, FTAB) ! filetable written to disc
         call read_filetable(FTAB, fnames)      ! filetable read back in
-        last = size(fnames)                    
+        last = size(fnames)
         fname = fnames(last)
         call del_file(FTAB)
         deallocate(fnames)
@@ -186,7 +186,7 @@ contains
         call sleepqq(msecs)
 #else
         call sleep(secs)
-#endif        
+#endif
     end subroutine simple_sleep
 
     function waitforfileclose( funit )result( all_good )
