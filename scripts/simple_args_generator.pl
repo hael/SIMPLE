@@ -6,7 +6,7 @@ my @lines;
 my @vars;
 my$varlistfile;
 my$simple_argsfile;
-$varlistfile=$ENV{'SIMPLE_PATH'}.'/lib/simple/simple_varlist.txt';
+$varlistfile=$ENV{'SIMPLE_PATH'}.'/tests/simple_varlist.txt';
 $simple_argsfile=$ENV{'SIMPLE_PATH'}.'/lib/simple/simple_args.f90';
 open(PARAMS, "< simple_params.f90") or die "Cannot open simple_params.f90\n";
 @lines = <PARAMS>;
@@ -108,11 +108,11 @@ end function
 subroutine test_args()
     use simple_filehandling, only: get_fileunit, nlines
     type(args) :: as
-    character(len=STDLEN) :: arg, errarg1, errarg2, errarg3, spath, srcpath
+    character(len=STDLEN) :: vfilename,arg, errarg1, errarg2, errarg3, spath, srcpath
     integer :: funit, n, i
     integer,dimension(13) :: buff
     integer :: status,length1,length2
-    character(len=STDLEN) :: vlist = '/lib/simple/simple_varlist.txt'
+    character(len=STDLEN) :: varlist = 'simple/simple_varlist.txt'
     write(*,'(a)') '**info(simple_args_unit_test): testing it all'
     write(*,'(a)') '**info(simple_args_unit_test, part 1): testing for args that should be present'
     verbose=.true.
@@ -127,23 +127,31 @@ subroutine test_args()
     srcpath=adjustl(trim(srcpath))
     VerbosePrint 'get_environment_variable found SIMPLE_SOURCE_PATH ', trim(srcpath)
     VerbosePrint 'appending varlist '
-    vlist = trim(spath) // trim(vlist)
-    VerbosePrint 'varlist: ', trim(adjustl(vlist))
+    vfilename = trim(spath) // '/lib/' // trim(varlist)
+    VerbosePrint 'varlist: ', trim(adjustl(vfilename))
     write(*,'(a)') '**info(simple_args_unit_test): checking varlist file'
-    call stat(vlist , buff, status)
+    call stat(vfilename , buff, status)
     if(status /= 0)then
-      print *,' varlist not in lib/simple/,  calling simple_args_varlist.pl'
+      print *,' varlist not in lib/simple/,  checking lib64/simple'
+    vfilename = trim(spath) // '/lib64/' // trim(varlist)
+    VerbosePrint 'varlist: ', trim(adjustl(vfilename))
+    write(*,'(a)') '**info(simple_args_unit_test): checking varlist file'
+    call stat(vfilename , buff, status)
+    if(status /= 0)then
+      print *,' varlist not in lib64/simple/,  calling simple_args_varlist.pl'
+
       call system(\"simple_args_varlist.pl\",status)
       if(status /= 0) then
          VerbosePrint 'simple_args_unit_test:  simple_args_varlist.pl failed'
       end if
-      call stat(vlist , buff, status)
+      call stat(vfilename , buff, status)
       if(status /= 0)then
         print *,' varlist still not in lib/simple/ after calling simple_args_varlist.pl'
       end if
     end if
-    n = nlines(vlist)
-    open(unit=funit, status='old', action='read', file=vlist)
+   end if
+    n = nlines(vfilename)
+    open(unit=funit, status='old', action='read', file=vfilename)
     do i=1,n
         read(funit,*) arg
         if( as%is_present(arg) )then
