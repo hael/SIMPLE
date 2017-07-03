@@ -71,13 +71,13 @@ set_target_properties(${SIMPLELIB}
   )
 
 install(TARGETS ${SIMPLELIB}
-  ARCHIVE DESTINATION "${CMAKE_INSTALL_PREFIX}/lib"
-  LIBRARY DESTINATION "${CMAKE_INSTALL_PREFIX}/lib"
-  RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}/lib"
+  ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+  LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+  RUNTIME DESTINATION "${CMAKE_INSTALL_LIBDIR}"
   )
 #install varlist for testing in production
 install(FILES "${CMAKE_BINARY_DIR}/lib/simple/simple_varlist.txt"
-  DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/simple/")
+  DESTINATION "${CMAKE_INSTALL_LIBDIR}/simple/")
 
 # Make sure the compiler can find include files for our SIMPLE library
 # when other libraries or executables link to it

@@ -59,7 +59,7 @@ include(SimpleFortranOptions)
 # Add definition macros unique to compilation
 #
 ############################################################
-add_definitions(-DBUILD_NAME=${BUILD_NAME})
+add_definitions("-DBUILD_NAME=${BUILD_NAME}")
 # use _DEBUG since DEBUG or debug is used as a variable in some files
 # _DEBUG is defined by Intel Fortran on Windows 
 if(CMAKE_BUILD_TYPE STREQUAL "DEBUG")
@@ -83,7 +83,7 @@ set(SIMPLELIB "SIMPLE${${PROJECT_NAME}_VERSION}")
 
 # Define some directories
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/inc)
-include_directories(${PROJECT_BINARY_DIR}/lib/simple)
+include_directories(${CMAKE_BINARY_DIR}/lib/simple)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
 #   cmake_add_fortran_subdirectory(
@@ -99,22 +99,17 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR})
 #    )
 
 
-
 #################################################################
 #
-# CREATE libSIMPLE2.5.so
+# CREATE libSIMPLE2.5
 #
 #################################################################
-
-add_subdirectory(${SRC_PATH} ${LIBRARY_OUTPUT_DIRECTORY})
+add_subdirectory(${SRC_PATH} lib)
 set(EXTRA_LIBS
   ${SIMPLELIB}
   ${CMAKE_THREAD_LIBS_INIT}
   ${EXTRA_LIBS})
 # link_directories(${LIB})
-
-
-
 
 #################################################################
 #
@@ -123,9 +118,6 @@ set(EXTRA_LIBS
 #################################################################
 # The script folder contains some handy perl scripts for running SIMPLE
 add_subdirectory(${SCRIPTS_PATH})
-
-
-
 
 #################################################################
 #
@@ -138,7 +130,6 @@ if (${PROJECT_NAME}_BUILD_TESTS)
   endif()
   add_subdirectory(tests)
 endif()
-
 
 #################################################################
 #
@@ -153,7 +144,7 @@ endif()
 
 #################################################################
 #
-# IN CASE THE USER WANTS STATIC LIBRARIES
+# STATIC LIBRARIES
 #
 #################################################################
 # Try to search first static libraries
@@ -175,10 +166,13 @@ set(VERSION_FILE "${CMAKE_INSTALL_LIBDIR}/simple/CMake/${PROJECT_NAME}ConfigVers
 configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/ProjectConfigVersion.cmake.in" ${VERSION_FILE} @ONLY )
 
 # modules / depends
-FILE(GLOB SIMPLE_CMAKE_FILES "cmake/Modules/*.cmake" )
+FILE(GLOB_RECURSE SIMPLE_CMAKE_FILES 
+    LIST_DIRECTORIES false 
+    RELATIVE ${CMAKE_SOURCE_DIR} "*.cmake" )
 INSTALL(
   FILES ${SIMPLE_CMAKE_FILES}
   DESTINATION "${CMAKE_INSTALL_LIBDIR}/simple/CMake"
+  CONFIGURATIONS DEBUG
   COMPONENT dev)
 
 message( STATUS "Set runtime variables ")
