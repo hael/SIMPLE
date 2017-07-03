@@ -529,14 +529,16 @@ select case(prg)
         keys_optional(31) = 'nnn'
         keys_optional(32) = 'rrate'
         keys_optional(33) = 'norec'
+        keys_optional(34) = 'nsub'
+        keys_optional(35) = 'lp_grid'
         ! documentation
         if( describe ) call print_doc_prime3D
         ! parse command line
         call check_restart( entire_line, is_restart )
         if( is_restart )then
-            call parse_restart('prime3D', entire_line, cline, keys_required(:6), keys_optional(:34))
+            call parse_restart('prime3D', entire_line, cline, keys_required(:6), keys_optional(:35))
         else
-            call cline%parse( keys_required(:6), keys_optional(:33) )
+            call cline%parse( keys_required(:6), keys_optional(:35) )
         endif
         ! set defaults
         if( .not. cline%defined('nspace')                  ) call cline%set('nspace', 1000.)

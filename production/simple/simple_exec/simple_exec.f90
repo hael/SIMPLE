@@ -951,9 +951,11 @@ select case(prg)
         keys_optional(30) = 'nnn'
         keys_optional(31) = 'rrate'
         keys_optional(32) = 'norec'
+        keys_optional(33) = 'nsub'
+        keys_optional(34) = 'lp_grid'
         ! parse command line
         if( describe ) call print_doc_prime3D
-        call cline%parse(keys_required(:6), keys_optional(:32))
+        call cline%parse(keys_required(:6), keys_optional(:34))
         ! set defaults
         if( .not. cline%defined('nspace')                  ) call cline%set('nspace', 1000.)
         if( cline%defined('lp') .or. cline%defined('find') ) call cline%set('dynlp',   'no')

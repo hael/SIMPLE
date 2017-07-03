@@ -92,7 +92,7 @@ dominika@simplecryoem.com\\
 
 \section{About SIMPLE}
 
-\textbf{S}ingle-particle \textbf{IM}age \textbf{P}rocessing \textbf{L}inux \textbf{E}ngine (\href{www.simplecryoem.com}{\textbf{\textcolor{BurntOrange}{SIMPLE}}}) is a program package for cryo-EM image processing, focusing on \textit{ab initio} 3D reconstruction of single-particles with any point-group symmetry. The SIMPLE back-end consists of an object-oriented numerical library written in modern Fortran. The SIMPLE front-end consists of a few standalone, interoperable components developed according to the ``Unix toolkit philosophy''.
+\textbf{S}ingle-particle \textbf{IM}age \textbf{P}rocessing \textbf{L}inux \textbf{E}ngine (\href{www.simplecryoem.com}{\textbf{\textcolor{BurntOrange}{SIMPLE}}}) is a program package for cryo-EM image processing, focusing on \textit{ab initio} 3D reconstruction of single-particles with any point-group symmetry. The SIMPLE back-end consists of an object-oriented numerical library written in modern Fortran. The SIMPLE front-end consists of many standalone, interoperable components developed according to the ``Unix toolkit philosophy''.
 
 SIMPLE is free software: you can redistribute it and/or modify it under the terms of the \href{http://www.gnu.org/copyleft/gpl.html}{\textbf{\textcolor{BurntOrange}{GNU General Public License}}} as published by the Free Software Foundation, either version 3 of the license, or (at your option) any later version. SIMPLE is distributed with the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the \href{http://www.gnu.org/copyleft/gpl.html}{\textbf{\textcolor{BurntOrange}{GNU General Public License}}} for more details.
 
@@ -125,172 +125,123 @@ and adding \texttt{deftab=deftab.txt} and \texttt{ctf=yes} to the PRIME command 
 \subsection{Parameter File Conversions}
 The \texttt{SIMPLE/scripts} folder contains a perl-script (\texttt{convert\_frealign2simple.pl}) to convert a Frealing parameter file to a SIMPLE parameter file. This is easy, since both software internally use the \href{http://spider.wadsworth.org/spider_doc/spider/docs/euler.html}{\textbf{\textcolor{BurntOrange}{Spider Euler angle convention}}}. Other packages may use other conventions. There's also a \texttt{convert\_relion2simple.pl} for extracting CTF parameters from RELION \texttt{*.star} files and a \texttt{relion2emanbox.pl} script for converting box files obtained with RELION to the EMAN \texttt{*.box} format used by SIMPLE.
 
-\section{Installation}
-\label{install}
+\section{Installation Instructions}
 
 \subsection{System requirements}
-\label{sysreq}
-
-\subsubsection{Hardware}
-\label{hardware}
-
 \begin{itemize}
-	\item [CPU]
-	\begin{itemize}
-		\item[--] Linux
-		\item[--] MacOSX (Yosemite and El Capitan, \textit{i.e.} 10.10 and above)
-	\end{itemize}
+	\item[--] Linux (we use Ubuntu 15.04 and above)
+	\item[--] MacOSX: 10.10 and above
+	\item[--] CMake 3.2 and above
+	\item[--] FFTW 3.3 and above
+	\item[--] GNU toolchain (gcc \& gfortran) 4.9 to 5.4
 \end{itemize}
 
-\subsubsection{Software}
-\label{soft}
+\subsection{Installation}
+\noindent{}\textbf{Step 1:} Create the directory in which you are going to install SIMPLE (referred to here as \texttt{<simple\_path>})
 
+\begin{verbatim}
+        @!#> mkdir <simple_path>
+\end{verbatim}
+
+\noindent{}\textbf{Step 2:} Unzip the SIMPLE 3.0 tar ball in this directory (assuming you have downloaded the tar ball in the \texttt{<downloads>} directory)
+
+\begin{verbatim}
+        @!#> mv <downloads>/SIMPLE3.0.tgz <simple path>
+        @!#> cd <simple path>
+        @!#> tar -xzf SIMPLE3.0.tgz
+\end{verbatim}
+
+\noindent{}\textbf{Step 3:} Create a directory for the build
+
+\begin{verbatim}
+        @!#> cd simple3.0
+        @!#> mkdir build
+        @!#> cd build
+\end{verbatim}
+
+\noindent{}\textbf{Step 4:} Compile and install SIMPLE 3.0
+
+\begin{verbatim}
+        @!#> cmake ../
+        @!#> make -j install
+\end{verbatim}
+
+\noindent{}This will install SIMPLE in the \texttt{'build'} directory. If you wish to provide an alternative installation directory, substitute step 4 with
+
+\begin{verbatim}
+        @!#> cmake -DCMAKE_INSTALL_PREFIX=<alternative directory> ../
+        @!#> make -j install
+\end{verbatim}
+
+\noindent{}Step 4 assumes that gcc/gfortran and FFTW are installed in fairly standard directories on your machine. In case you have a 
+more exotic setup you can provide the paths pointing to your custom gcc/gfortran \& FFTW by substituting step 4 with
+
+\begin{verbatim}
+        @!#> FC=<gcc/gfortran path> FFTW_DIR=<FFTW path> cmake ../
+        @!#> make -j install
+\end{verbatim}
+
+\noindent{}For instance, on MacOS:
 \begin{itemize}
-	\item [CPU]
-	\begin{itemize}
-		\item[--] GNU tool chain 4.9 and above.
-		\item[--] FFTW-3 (The Fastest Fourier Transform in the West library)
-	\end{itemize}
+	\item[--] Macports users may use: FC=/opt/local/bin/gfortran FFTW\_DIR=/opt/local;
+	\item[--] Fink users: FC=/sw/bin/gfortran FFTW\_DIR=/sw/; and
+	\item[--] Homebrew users: FC=/usr/local/bin/gfortran FFTW\_DIR=/usr/local/
 \end{itemize}
 
-\subsection{Compiling SIMPLE}
-\label{compilepc}
-To check the compiler version, execute
+\noindent{}\textbf{Step 5:} To run SIMPLE, the bin and scripts paths need to be in the \texttt{PATH} environment
+variable and the lib path in the \texttt{LD\_LIBRARY\_PATH} variable. The \texttt{SIMPLE\_PATH} environment
+ variable must also be defined. The shell scripts \texttt{add2.bashrc} and \texttt{add2.tcshrc} containing the necessary 
+ instructions were generated during the build step. For immediate use for running and testing, execute
 \begin{verbatim}
-@!#> gfortran --version
-GNU Fortran (GCC) 4.9.1
-Copyright (C) 2014 Free Software Foundation, Inc.
+    @!#> source add2.bashrc
 \end{verbatim}
-To check whether the FFTW library is installed, open the package manager installed on our system (in our case \texttt{Synaptic} but other systems may have others, such as \texttt{YaST}, \texttt{apt} etc.) and search for \texttt{fftw} and see that the \texttt{libfftw3-single-3} is installed on the system. We \texttt{cd} to the directory  where we have our software installed (\texttt{<my software location>}) and copy the tar ball there
+\noindent{}or, for TCSH/CSH users:
 \begin{verbatim}
-@!#> cd <my software location>
-@!#> cp ~/Downloads/simple.tar.gz .
-\end{verbatim}
-Next, we unpack the tar ball and \texttt{cd} to the simple directory
-\begin{verbatim}
-@!#> gunzip simple.tar.gz
-@!#> tar -xvf simple.tar
-@!#> cd simple/
-\end{verbatim}
-We open the \texttt{simple\_user\_input.pm} file in our favourite text editor. There are a few lines that needs to be edited:
-\begin{verbatim}
-...
-26  # enter the SIMPLE root path
-27  our$SIMPLE_PATH="/Users/hael/src/fortran/simple";
-...
-\end{verbatim}
-Line 27 \texttt{our\$SIMPLE\_PATH = "/Users/hael/src/fortran/simple/"} is replaced with\\
-\texttt{our\$SIMPLE\_PATH$=$"<my software location>/simple/"}. This is the path in which the software will be installed.
-\begin{verbatim}
-...
-46  our$FCOMPILER = "gfortran-5";
-...
-\end{verbatim}
-Line 46 \texttt{our\$FCOMPILER = "gfortran-5";} is the command that executes the \texttt{gfortran} compiler. On a mac, using the fink package manager, this command would be \texttt{/sw/bin/gfortran}.
-\begin{verbatim}
-...
-49  # enter the fftw lib default: /usr/lib/x86_64-linux-gnu for [linux]
-50  #                             /usr/local/lib for [MacOSX]
-51  our$FFTW_LIB="/usr/lib/x86_64-linux-gnu";
-52  # on clusters we need extra path after module load fftw/3.3.4-gcc
-53  our$FFTW_INC="/usr/include/";
-...
-\end{verbatim}
-Lines 51 and 53 specify the FFTW library and include directories. On a mac, using the fink package manager, these locations would be \texttt{our\$FFTW\_LIB="/sw/lib";} and \texttt{our\$FFTW\_INC="/sw/include/";}, respectively. We save and close the configuration file and execute:
-\begin{verbatim}
-@!#> ./compileSIMPLE.pl 
-*********************************************************
-* Checking and printing the input directories...        *
-*********************************************************
-SIMPLE_PATH          : /Users/hael/src/fortran/simple
-SIMPLE_SRC_PATH      : /Users/hael/src/fortran/simple/src/simple_main
-SIMPLE_PROD_PATH     : /Users/hael/src/fortran/simple/production
-SIMPLE_TEST_PROD_PATH: /Users/hael/src/fortran/simple/production/simple_tests
-SIMPLE_SCRIPTS_PATH  : /Users/hael/src/fortran/simple/scripts
-*********************************************************
-Moving to dir: /Users/hael/src/fortran/simple/src/simple_main
-Executing simple_args_generator.pl in dir: /Users/hael/src/fortran/simple...
-Moving to dir: /Users/hael/src/fortran/simple
-Generating Makefile_macros: /Users/hael/src/fortran/simple
-/sw/bin/gfortran -c -fimplicit-none -fall-intrinsics -ffree-form -cpp -fpic...
-...
-darwin, Platform = 0
-Architecture: darwin-thread-multi-2level
-
-Moving to dir: /Users/hael/src/fortran/simple/production
-Generating compile_and_link: /Users/hael/src/fortran/simple/production
-Moving to dir: /Users/hael/src/fortran/simple
-Compiling production codes:
->>> COMPILING & LINKING: simple_test_shelliter
->>> COMPILING & LINKING: simple_test_autoscale
->>> COMPILING & LINKING: simple_test_scatsrch
->>> COMPILING & LINKING: simple_test_ft_expanded
->>> COMPILING & LINKING: simple_exec
->>> COMPILING & LINKING: simple_test_volpft_srch
->>> COMPILING & LINKING: simple_test_srch
->>> COMPILING & LINKING: simple_test_units
->>> COMPILING & LINKING: simple_test_cartcorr_sanity
->>> COMPILING & LINKING: simple_test_imgfile
->>> COMPILING & LINKING: simple_distr_exec
-Compilation of SIMPLE completed in dir: /Users/hael/src/fortran/simple
-\end{verbatim}
-Compilation was succesful and we see that a new directory \texttt{/bin} has been created in the simple directory in addition to two text files \texttt{add2.bashrc} and \texttt{add2.tcshrc}
-\begin{verbatim}
-@!#> cat add2.bashrc 
-export SIMPLE_EMAIL="my.name@uni.edu"
-export SIMPLE_QSYS="local"
-export SIMPLE_PATH=/Users/hael/src/fortran/simple
-export PATH=${SIMPLE_PATH}/scripts:${SIMPLE_PATH}/bin:$PATH
-@!#> cat add2.tcshrc 
-setenv SIMPLE_EMAIL="my.name@uni.edu"
-setenv SIMPLE_QSYS="local"
-setenv SIMPLE_PATH /Users/hael/src/fortran/simple
-set path=(${SIMPLE_PATH}/scripts ${SIMPLE_PATH}/bin $path)
-\end{verbatim}
-On this machine we use the bash shell, so we add the lines in \texttt{add2.bashrc} to the \texttt{.bashrc} file. This is done by using a text editor, such as \texttt{gedit}, to edit the hidden file \texttt{.bashrc} located in your home folder.
-\begin{verbatim}
-@!#> cd
-@!#> gedit .bashrc 
+    @!#> source add2.tcshrc
 \end{verbatim}
 
-\subsection{Compilation troubleshooting}
-\label{compiletrouble}
-
-\subsubsection{FFTW}
-If not already installed, the FFTW-3 library needs to be installed. Most Linux package managers \texttt{YaST}, \texttt{Synaptic}, \texttt{apt-get} etc. provide the FFTW-3 library. On a Mac system the \texttt{Fink} and \texttt{Macports} package managers provide the FFTW-3 library or it can be obtained from: \url{http://www.fftw.org/install/mac.html}. SIMPLE relies on the single-precision FFTW library. Typically we will need to
+\noindent{}For permanent installation \texttt{BASH} users should add the contents of \texttt{add2.bashrc} to your \texttt{<HOME>/.bashrc}
 \begin{verbatim}
-@!#> ./configure --enable-floats --enable-threads
-@!#> make
-@!#> sudo make install
+    @!#> cat add2.bashrc >> ~/.bashrc
 \end{verbatim}
-The \texttt{--enable floats} \texttt{--enable-threads} directives are critical as SIMPLE uses multi-threaded single-precision Fourier transforms. We check that we have in the lib folder (typically: \texttt{/usr/local/lib/}):
+\noindent{}or for TCSH/CSH users:
 \begin{verbatim}
-libfftw3.a libfftw3.la
-libfftw3f.a libfftw3f.la
-libfftw3f_threads.a libfftw3f_threads.la
+    @!#> cat add2.tcshrc >> ~/.tcshrc
+\end{verbatim}
+\noindent{}To test the build, please execute
+\begin{verbatim}
+    @!#> make test
+    @!#> ctest --output-on-failure
 \end{verbatim}
 
-\subsection{Installation on a Linux Cluster}
-\label{inst_clusters_linux}
+\subsection{Testing the Most Important Features}
+
+\noindent{}To ensure that SIMPLE has been correctly installed, we recommend running the application \texttt{simple\_test\_install}. It will test the most 
+important components in the SIMPLE library  (those used by prime2D and  prime3D). Execute
+
+\begin{verbatim}
+        @!#> simple_test_install 
+\end{verbatim}
+
+\noindent{}The program will create its own folder \texttt{SIMPLE\_TEST\_INSTALL*date*} where temporary files and information about each 
+test are stored. Upon succesful completion you should see
+
+\begin{verbatim}
+        @!#> **** SIMPLE_TEST_INSTALL NORMAL STOP ****
+\end{verbatim}
+
+\noindent{}\texttt{simple\_test\_install} can be executed anywhere. After execution, the folder created can be safely removed. If any of the individual 
+tests fail an error message will be displayed. If you detect an error, please carefully check the SIMPLE and FFTW installations 
+and the gfortran version. If you still have issues, please file a help ticket on the webpage.
+
+\subsection{Installation/Configuration on a Linux Cluster}
 
 Installation on a Linux cluster is essentially the same as on a Linux workstation with the exception that the appropriate modules need to be loaded before installation and execution. On a typical SLURM cluster
 \begin{verbatim}
-@!#> module load fftw/3.3.4-gcc
-@!#> module load gcc/4.9.1
-@!#> module load lapack/3.4.2 
+        @!#> module load fftw/3.3.4-gcc
+        @!#> module load gcc/4.9.1
 \end{verbatim}
 The instructions for how to execute SIMPLE in distributed environments (clusters or workstations with more than one CPU socket) are described below \label{distr}.
-
-\subsection{Testing the SIMPLE Installation}
-To ensure that SIMPLE has been correctly installed, we recommend running the application \prgname{simple\_test\_install}. It will test the most important components in the SIMPLE library  (those used by \prgname{prime2D} and \prgname{prime3D}). Execute
-\begin{verbatim}
-@!#> simple_test_install 
-\end{verbatim}
-The program will create its own folder (\texttt{SIMPLE\_TEST\_INSTALL*date*}) where temporary files and information about each test are stored. Upon succesful completion you should see
-\begin{verbatim}
-**** SIMPLE_TEST_INSTALL NORMAL STOP ****
-\end{verbatim}
-\prgname{simple\_test\_install} can be executed anywhere. After execution, the folder created can be safely removed. If any of the individual tests fail an error message will be displayed. If you detect an error, please carefully check the SIMPLE and FFTW installations and the \texttt{gfortran} version. If you still have issues, please file a help ticket on the webpage.
 
 \section{SIMPLE Usage}
 
@@ -342,7 +293,7 @@ To obtain a description of the what command line options are available, execute
 \begin{verbatim}
 @!#> simple_distr_exec prg=prime2D
 USAGE:
-bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+bash-3.2$ simple_distr_exec prg=simple_program key1=val1 key2=val2 ...
 
 REQUIRED
 stk  = particle stack with all images(ptcls.ext)
