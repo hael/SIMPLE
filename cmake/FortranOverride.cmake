@@ -85,12 +85,13 @@ FATAL: In-source builds are not allowed.
     # gfortran
     set(preproc  "-cpp -P ")                                                                      # preprocessor flags
     set(dialect  "-ffree-form  -fimplicit-none  -ffree-line-length-none -fno-second-underscore")  # language style
-    set(forspeed "-O3 ")                                                                          # optimisation
+    set(warnings "-Wampersand -Wsurprising -Wtabs -Wline-truncation -Winteger-division -Wreal-q-constant  ")
+    set(forspeed "-O3  ${warnings}")                                                              # optimisation
     set(forpar   "-fopenmp  ")                                                                    # parallel flags
-    set(target   "${GNUNATIVE} -fPIC")                                                            # target platform
+    set(target   "${GNUNATIVE} -fPIC ")                                                           # target platform
     set(common   "${preproc} ${dialect} ${target} -DGNU ")
     set(checks   "-fcheck-array-temporaries -frange-check -fstack-protector -fstack-check")       # checks
-    set(warn     "-Wall -Wextra -Wimplicit-interface ${checks}")                                  # warning flags
+    set(warn     "-Wall -Wextra -Wimplicit-interface -Wdangling-else ${checks}")                  # extra warning flags
     set(fordebug "-O0 -g -pedantic -fno-inline -fno-f2c -Og -ggdb -fbacktrace -fbounds-check  ")  # debug flags
     # -O0 -g3 -Warray-bounds -Wcharacter-truncation -Wline-truncation -Wimplicit-interface
     # -Wimplicit-procedure -Wunderflow -Wuninitialized -fcheck=all -fmodule-private -fbacktrace -dump-core -finit-real=nan -ffpe-trap=invalid,zero,overflow
@@ -122,7 +123,8 @@ FATAL: In-source builds are not allowed.
     set(common   "${preproc} ${dialect} ${target} -DINTEL")
     # else()
     #   message(" Fortran compiler not supported. Set FC environment variable")
-    
+    set(MKLROOT $ENV{MKLROOT})
+
   endif ()
   set(CMAKE_Fortran_FLAGS_RELEASE_INIT "${common} ${forspeed} ${forpar}"  CACHE STRING "Default release flags -- do not edit" FORCE)
   set(CMAKE_Fortran_FLAGS_DEBUG_INIT  "${common} ${fordebug} ${forpar} -g"  CACHE STRING "Default debug flags -- do not edit" FORCE)

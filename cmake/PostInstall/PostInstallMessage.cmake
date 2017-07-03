@@ -20,7 +20,7 @@ message("For minimal installation to work correctly add:\n${CMAKE_INSTALL_PREFIX
 if(BUILD_SHARED_LIBS)
 message("For shared or dynamic builds: ")
 if ("${CMAKE_SYSTEM_NAME}" MATCHES "Darwin")
-	message("Please add ${CMAKE_INSTALL_PREFIX}/lib to one of: \n\tDYLD_LIBRARY_PATH or\n\tDYLD_FALLBACK_LIBRARY_PATH or\n\tRPATH or\n\t RUNPATH")
+	message("MacOS users please add ${CMAKE_INSTALL_PREFIX}/lib to one of: \n\tDYLD_LIBRARY_PATH or\n\tDYLD_FALLBACK_LIBRARY_PATH or\n\tRPATH ")
 else()
 	message("Please add ${CMAKE_INSTALL_PREFIX}/lib to LD_LIBRARY_PATH")
 endif()

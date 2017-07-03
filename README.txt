@@ -82,14 +82,16 @@ For instance, on MacOS
 To run SIMPLE the bin and scripts paths need to be in the PATH environment
 variable, as well as the lib path in the LD_LIBRARY_PATH variable. The
 SIMPLE_PATH environment variable must also be defined. The example shell scripts
-add2.bashrc and add2.tcshrc with the necessary instructions were generated during the build step.
+add2.bashrc and add2.tcshrc with the necessary instructions were generated
+during the build step.
 
 For immediate use for running and testing:
     $ source add2.bashrc
 or, for TCSH/CSH users:
     $ source add2.tcshrc
 
-For permanent installation BASH users should add the contents of add2.bashrc to your <HOME>/.bashrc
+For permanent installation BASH users should add the contents of add2.bashrc to
+your <HOME>/.bashrc:
     $ cat add2.bashrc >> ~/.bashrc
 and for TCSH/CSH users:
     $ cat add2.tcshrc >> ~/.tcshrc
@@ -97,14 +99,10 @@ and for TCSH/CSH users:
 
 TESTING THE BUILD
 
-    $ make test
-    $ ctest --output-on-failure
-
-TESTING THE MOST IMPORTANT FEATURES
-
 To ensure that SIMPLE has been correctly installed, we recommend running the
 application simple_test_install. It will test the most important components in
-the SIMPLE library (those used by prime2D and prime3D. Execute
+the SIMPLE library (those used by prime2D and prime3D. Execute the following in
+a separate terminal to ensure the environment variables are set by your rc file:
 
     $ simple_test_install 
 

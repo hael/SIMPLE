@@ -46,7 +46,7 @@ set(NUM_JOBS 1)
 include(ProcessorCount)
 ProcessorCount(NUM_JOBS)
 set(BUILD_NAME ${CMAKE_Fortran_COMPILER_ID}_${CMAKE_BUILD_TYPE} CACHE STRING "Build name with compiler, type and FFT backend ")
-
+set(CMAKE_Fortran_MODULE_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
 #################################################################
 # INCLUDES
 #################################################################
@@ -70,7 +70,6 @@ endif()
 # Define the main targets
 ############################################################
 # Have the .mod files placed in the lib folder
-set(CMAKE_Fortran_MODULE_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
 include_directories(${CMAKE_Fortran_MODULE_DIRECTORY})
 set(EXECUTABLE_OUTPUT_DIRECTORY "${CMAKE_INSTALL_BINDIR}")
 set(LIBRARY_OUTPUT_DIRECTORY "${CMAKE_INSTALL_LIBDIR}")
@@ -183,8 +182,13 @@ INSTALL(
   COMPONENT dev)
 
 message( STATUS "Set runtime variables ")
-configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/scripts/add2.bashrc.template"  ${CMAKE_CURRENT_BINARY_DIR}/add2.bashrc @ONLY )
-configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/scripts/add2.tcshrc.template"  ${CMAKE_CURRENT_BINARY_DIR}/add2.tcshrc @ONLY )
+if(NOT BUILD_SHARED_LIBS)
+  configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/scripts/add2.bashrc.template"  ${CMAKE_CURRENT_BINARY_DIR}/add2.bashrc @ONLY )
+  configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/scripts/add2.tcshrc.template"  ${CMAKE_CURRENT_BINARY_DIR}/add2.tcshrc @ONLY )
+else()
+configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/scripts/add2.bashrc.sharedtemplate"  ${CMAKE_CURRENT_BINARY_DIR}/add2.bashrc @ONLY )
+  configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/scripts/add2.tcshrc.sharedtemplate"  ${CMAKE_CURRENT_BINARY_DIR}/add2.tcshrc @ONLY )
+  endif()
 install(FILES  ${CMAKE_CURRENT_BINARY_DIR}/add2.bashrc ${CMAKE_CURRENT_BINARY_DIR}/add2.tcshrc
   DESTINATION ${CMAKE_INSTALL_PREFIX}
   CONFIGURATIONS DEBUG|RELEASE
@@ -252,6 +256,6 @@ endif()
 add_subdirectory(${PROD_SRC_PATH} ${EXECUTABLE_OUTPUT_DIRECTORY})
 
 
-
+# Add message at end of installation
 add_subdirectory(${CMAKE_SOURCE_DIR}/cmake/PostInstall)
 

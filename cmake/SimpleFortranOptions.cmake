@@ -170,11 +170,11 @@ elseif (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel" OR Fortran_COMPILER_NAME M
   ## INTEL fortran
   #
   #############################################
-  set(EXTRA_FLAGS "${EXTRA_FLAGS} -fpp -I${MKLROOT}/include  -assume realloc_lhs -assume source_include")
+  set(EXTRA_FLAGS "${EXTRA_FLAGS} -fpp -I${MKLROOT}/include -list-line-len=264 -assume realloc_lhs -assume source_include")
   #
   set(CMAKE_AR                           "xiar")
   set(CMAKE_CPP_COMPILER                 "fpp")
-  set(CMAKE_CPP_COMPILER_FLAGS           "  -noJ -B -C -P")
+  set(CMAKE_CPP_COMPILER_FLAGS           " -noJ -B -C -P")
   set(CMAKE_Fortran_FLAGS                " ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
   set(CMAKE_Fortran_FLAGS_DEBUG          " ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_DEBUG_INIT}")
   # set(CMAKE_Fortran_FLAGS_MINSIZEREL     "-Os ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
@@ -310,13 +310,18 @@ endif()
 ################################################################
 if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel")
   # Append MKL FFTW interface libs
+  # https://software.intel.com/en-us/articles/intel-mkl-main-libraries-contain-fftw3-interfaces
+  set(MKLROOT $ENV{MKLROOT})
+  if( NOT "${MKLROOT}" STREQUAL "")
   if(BUILD_SHARED_LIBS)
     set(EXTRA_LIBS   ${EXTRA_LIBS} -L${MKLROOT}/lib/intel64 -lmkl_intel_ilp64 -lmkl_intel_thread -lmkl_core -liomp5 -lpthread -lm -ldl )
   else()
     set(EXTRA_LIBS    ${EXTRA_LIBS} -Wl,--start-group ${MKLROOT}/lib/intel64/libmkl_intel_ilp64.a ${MKLROOT}/lib/intel64/libmkl_intel_thread.a ${MKLROOT}/lib/intel64/libmkl_core.a -Wl,--end-group -liomp5 -lpthread -lm -ldl)
   endif()
   set(BUILD_NAME "${BUILD_NAME}_MKL" )
-
+  else()
+    message( FATAL_ERROR "MKLROOT undefined. Set Intel MKL environment variables by sourcing the relevant shell script (typically in /opt/intel/bin), for example: source /opt/intel/bin/compilervars.sh intel64")
+  endif()
 else()
   if (FFTW_DIR)
     set(FFTW_ROOT ${FFTW_DIR})
@@ -337,15 +342,6 @@ endif()
 ################################################################
 # Generic Flags 
 ################################################################
-
-# # Don't add underscores in symbols for C-compatability
-# message(STATUS "Testing flag no underscore")
-# SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS}"
-#   Fortran
-#   "-fnosecond-underscore"     # GNU
-#   "-Mnosecond_underscore" # PGI
-#   "-assume nounderscore"  # Intel
-#   )
 
 
 # Optimize for the host's architecture
@@ -538,7 +534,7 @@ endif()
 #set(CMAKE_FCPP_FLAGS " -C -P ") # Retain comments due to fortran slash-slash
 #set(CMAKE_Fortran_CREATE_PREPROCESSED_SOURCE "${CMAKE_FCPP_COMPILER} <DEFINES> <INCLUDES> <FLAGS> -E <SOURCE> > <PREPROCESSED_SOURCE>")
 
-add_definitions(" -D__FILENAME__='\"$(subst ${CMAKE_SOURCE_DIR}/,,$(abspath $<))\"'")
+add_definitions(" -D__FILENAME__='\"$(notdir $<)\"'")
 
 # Override Fortran preprocessor
 set(CMAKE_Fortran_COMPILE_OBJECT "grep --silent '#include' <SOURCE> && ( ${CMAKE_CPP_COMPILER} ${CMAKE_CPP_COMPILER_FLAGS} -DOPENMP <DEFINES> <INCLUDES> <SOURCE> > <OBJECT>.f90 &&  <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <OBJECT>.f90 -o <OBJECT> ) || <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <SOURCE> -o <OBJECT>")
