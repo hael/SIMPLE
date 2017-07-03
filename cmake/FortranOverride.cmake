@@ -86,7 +86,7 @@ FATAL: In-source builds are not allowed.
     set(preproc  "-cpp -P ")                                                                      # preprocessor flags
     set(dialect  "-ffree-form  -fimplicit-none  -ffree-line-length-none -fno-second-underscore")  # language style
     set(warnings "-Wampersand -Wsurprising -Wtabs -Wline-truncation -Winteger-division -Wreal-q-constant  ")
-    set(forspeed "-O3  ${warnings}")                                                              # optimisation
+    set(forspeed "-O3 ")                                                              # optimisation
     set(forpar   "-fopenmp  ")                                                                    # parallel flags
     set(target   "${GNUNATIVE} -fPIC ")                                                           # target platform
     set(common   "${preproc} ${dialect} ${target} -DGNU ")
