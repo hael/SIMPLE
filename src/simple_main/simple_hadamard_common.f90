@@ -494,6 +494,7 @@ contains
                 real    :: shvec(3)
                 logical :: do_center
                 do_center = .true.
+                if( .not. cline%defined('center') .and. p%center.eq.'no' )do_center = .false.
                 if( p%nstates > 1 )do_center = .false.
                 if( p%pgrp(:1) .ne. 'c' )do_center = .false.
                 if( cline%defined('mskfile') )do_center = .false.
@@ -508,6 +509,7 @@ contains
                     endif
                 endif
             end subroutine centervol
+            
     end subroutine preprefvol
     
     subroutine eonorm_struct_facts( b, p, res, which_iter )

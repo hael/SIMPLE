@@ -2505,11 +2505,11 @@ contains
         if( self%ft )                  stop 'masscen not implemented for FTs; masscen; simple_image'
         spix = 0.
         xyz  = 0.
-        ci   = -real(self%ldim(1)-1)/2.
+        ci   = -real(self%ldim(1))/2.
         do i=1,self%ldim(1)
-            cj = -real(self%ldim(2)-1)/2.
+            cj = -real(self%ldim(2))/2.
             do j=1,self%ldim(2)
-                ck = -real(self%ldim(3)-1)/2.
+                ck = -real(self%ldim(3))/2.
                 do k=1,self%ldim(3)
                     pix  = self%get([i,j,k])
                     xyz  = xyz + pix * [ci, cj, ck]
