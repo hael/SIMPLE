@@ -123,7 +123,7 @@ TESTING THE BUILD
 
 To ensure that SIMPLE has been correctly installed, we recommend running the
 application simple_test_install. It will test the most important components in
-the SIMPLE library (those used by prime2D and prime3D. Execute the following in
+the SIMPLE library (those used by prime2D and prime3D). Execute the following in
 a separate terminal to ensure the environment variables are set by your rc file:
 
     $ simple_test_install 
