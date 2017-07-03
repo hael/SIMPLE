@@ -78,6 +78,12 @@ endif()
 
 set(CMAKE_Fortran_SOURCE_FILE_EXTENSIONS ${CMAKE_Fortran_SOURCE_FILE_EXTENSIONS} "f03;F03;f08;F08")
 
+  if(CMAKE_INSTALL_LIBDIR MATCHES "lib64")
+    set(CMAKE_INSTALL_LIBDIR "lib" CACHE STRING "" FORCE)
+  endif()			  
+
+
+
   #figure out our git version
   option(UPDATE_GIT_VERSION_INFO "update git version info in source tree" ON)
   mark_as_advanced(UPDATE_GIT_VERSION_INFO)
