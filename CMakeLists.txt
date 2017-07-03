@@ -128,7 +128,7 @@ if (${PROJECT_NAME}_BUILD_TESTS)
   if(VERBOSE)
     include(CTest)
   endif()
-  add_subdirectory(tests bin)
+  add_subdirectory(tests)
 endif()
 
 #################################################################
@@ -255,7 +255,7 @@ endif()
 #
 #################################################################
 # The source for the SIMPLE binary and have it placed in the bin folder
-add_subdirectory(${PROD_SRC_PATH} ${EXECUTABLE_OUTPUT_DIRECTORY})
+add_subdirectory(${PROD_SRC_PATH} ${CMAKE_INSTALL_BINDIR})
 
 
 # Add message at end of installation
