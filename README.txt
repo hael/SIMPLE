@@ -72,7 +72,6 @@ step 4 with:
     $ FC=<gfortran absolute path> FFTW_DIR=<FFTW path> cmake ../
     $ make -j install
 
-<<<<<<< variant A
 For instance, on MacOS
  - Macports users may use: FC=/opt/local/bin/gfortran FFTW_DIR=/opt/local;
  - Fink users: FC=/sw/bin/gfortran FFTW_DIR=/sw/; and
@@ -96,16 +95,6 @@ your <HOME>/.bashrc:
     $ cat add2.bashrc >> ~/.bashrc
 and for TCSH/CSH users:
     $ cat add2.tcshrc >> ~/.tcshrc
-
->>>>>>> variant B
-For instance, on MacOS 
-- Macports users may use: FC=/opt/local/bin/gfortran FFTW_DIR=/opt/local;
-- Fink users: FC=/sw/bin/gfortran FFTW_DIR=/sw/; and
-- Homebrew users: FC=/usr/local/bin/gfortran FFTW_DIR=/usr/local/
-####### Ancestor
-For instance, on MacOS Macports users may use: FC=/opt/local  
-FFTW_DIR=/opt/local; Fink users: FC=/sw/ FFTW_DIR=/sw/.
-======= end
 
 5. To run SIMPLE, the bin and scripts paths need to be in the PATH 
 environment variable and the lib path in the LD_LIBRARY_PATH variable. 
