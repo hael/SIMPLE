@@ -224,7 +224,7 @@ contains
         endif
         if( str_has_substr(p%refine,'neigh') .or. p%refine .eq. 'shift' )then
             if( .not. cline%defined('oritab') )then
-                stop 'need oritab input for execution of prime3D with refine mode'
+                stop 'need oritab input for execution of prime3D with this refine mode'
             endif
         endif
         if( p%doautomsk )then

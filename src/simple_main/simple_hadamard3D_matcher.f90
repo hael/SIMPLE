@@ -85,7 +85,7 @@ contains
         ! DETERMINE THE NUMBER OF PEAKS
         if( .not. cline%defined('npeaks') )then
             select case(p%refine)
-                case('no', 'neigh')
+                case('no', 'neigh', 'greedy', 'greedyneigh')
                     p%npeaks = min(MAXNPEAKS,b%e%find_npeaks(p%lp, p%moldiam))
                 case DEFAULT
                     p%npeaks = 1
@@ -180,7 +180,21 @@ contains
                 if( p%oritab .eq. '' ) stop 'cannot run the refine=neigh mode without input oridoc (oritab)'
                 !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                 do iptcl=p%fromp,p%top
-                    call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp, nnmat=b%nnmat, grid_projs=b%grid_projs)
+                    call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a,&
+                        b%e, p%lp, nnmat=b%nnmat, grid_projs=b%grid_projs)
+                end do
+                !$omp end parallel do
+            case('greedy')
+                !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
+                do iptcl=p%fromp,p%top
+                    call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp, greedy=.true.)
+                end do
+                !$omp end parallel do
+            case('greedyneigh')
+                !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
+                do iptcl=p%fromp,p%top
+                    call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp,&
+                        greedy=.true., nnmat=b%nnmat, grid_projs=b%grid_projs)
                 end do
                 !$omp end parallel do
             case('het')

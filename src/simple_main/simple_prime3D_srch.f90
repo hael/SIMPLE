@@ -180,7 +180,7 @@ contains
         if( present(greedy) ) ggreedy = greedy
         call self%online_allocate
         if( ggreedy )then
-            call self%greedy_srch( pftcc,  iptcl, a, e, lp, nnmat, grid_projs )
+            call self%greedy_srch(pftcc,  iptcl, a, e, lp, nnmat, grid_projs)
         else if( self%refine.eq.'snhc' )then
             if( .not. present(szsn) )then
                 stop 'refine=snhc mode needs optional input szsn; simple_prime3D_srch :: exec_prime3D_srch'
@@ -208,7 +208,7 @@ contains
         if( DEBUG ) write(*,'(A)') '>>> PRIME3D_SRCH::EXECUTED PRIME3D_HET_SRCH'
     end subroutine exec_prime3D_srch_het
 
-    !>  \brief  greedy hill-climbing (4 initialisation)
+    !>  \brief  greedy hill-climbing
     subroutine greedy_srch( self, pftcc, iptcl, a, e, lp, nnmat, grid_projs )
         class(prime3D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
@@ -231,8 +231,6 @@ contains
                 call self%prep4srch(pftcc, iptcl, a, e, lp)
                 nrefs = self%nrefs
             endif
-            ! initialize
-            call self%prep4srch(pftcc, iptcl, a, e, lp, nnmat)
             self%nbetter         = 0
             self%nrefs_eval      = 0
             self%proj_space_inds = 0
@@ -688,7 +686,7 @@ contains
         if( self%prev_state > self%nstates ) stop 'previous best state outside boundary; prep4srch; simple_prime3D_srch'
         if( .not. self%state_exists(self%prev_state) ) stop 'empty previous state; prep4srch; simple_prime3D_srch'
         select case( self%refine )
-            case( 'no','shc','snhc' )                                                  ! DISCRETE CASE
+            case( 'no','shc','snhc','greedy' )                                         ! DISCRETE CASE
                 call self%prep_reforis(e)                                              ! search space & order prep
                 self%prev_ref = self%o_refs%find_closest_proj(o_prev, self%prev_state) ! find closest ori with same state
             case( 'neigh','shcneigh', 'greedyneigh' )                                  ! DISCRETE CASE WITH NEIGHBOURHOOD
@@ -743,8 +741,10 @@ contains
         integer        :: i, end, cnt, istate, iproj
         type(ori)      :: o
         ! dynamic update of number of nearest neighbours
-        self%nnn     = size(nnvec)
-        self%nnnrefs =  self%nnn*self%nstates
+        if( present(nnvec) )then
+            self%nnn     = size(nnvec)
+            self%nnnrefs =  self%nnn*self%nstates
+        endif
         ! on exit all the oris are clean and only the out-of-planes, 
         ! state & proj fields are present
         if( allocated(self%srch_order) ) deallocate(self%srch_order)

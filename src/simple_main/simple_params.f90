@@ -986,7 +986,7 @@ contains
         ! fix translation param
         self%trs = abs(self%trs)
         if( .not. cline%defined('trs') )then
-            if( self%refine.eq.'no' .or. self%refine.eq.'shc' .or. self%refine.eq.'qcont' )then
+            if( self%refine.eq.'no' .or. self%refine.eq.'snhc' )then
                 self%trs = 0.
             else
                 self%trs = 1.
