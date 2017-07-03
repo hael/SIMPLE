@@ -5,8 +5,8 @@ use simple_filehandling, only: get_fileunit
 use simple_jiffys,       only: alloc_err
 implicit none
 
-logical, private :: debug = .false.
-
+#include "simple_local_flags.inc"
+public ::  split_nobjs_even,split_nobjs_in_chunks,split_pairs_in_parts,merge_similarities_from_parts,merge_rmat_from_parts
 contains
     
     !>  \brief  for generating balanced partitions of nobjs objects
@@ -17,9 +17,9 @@ contains
         allocate(parts(nparts,2), stat=alloc_stat)
         call alloc_err('In: simple_map_reduce :: split_nobjs_even', alloc_stat)
         nobjs_per_part = nobjs/nparts
-        if( debug ) print *, 'nobjs_per_part: ', nobjs_per_part
+        DebugPrint   'nobjs_per_part: ', nobjs_per_part
         leftover = nobjs-nobjs_per_part*nparts
-        if( debug ) print *, 'leftover: ', leftover
+        DebugPrint   'leftover: ', leftover
         istop  = 0
         istart = 0
         do ipart=1,nparts
@@ -100,11 +100,11 @@ contains
         integer              :: ipart, io_stat, numlen
         integer, allocatable :: pairs(:,:), parts(:,:)
         character(len=:), allocatable :: fname
-        logical, parameter :: DEBUG = .false.
+        
         ! generate all pairs
-        if( DEBUG ) print *, 'DEBUG(split_pairs_in_parts), nobjs: ', nobjs
+        DebugPrint  ' split_pairs_in_parts nobjs: ', nobjs
         npairs = (nobjs*(nobjs-1))/2
-        if( DEBUG ) print *, 'DEBUG(split_pairs_in_parts), npairs: ', npairs
+        DebugPrint  'split_pairs_in_parts, npairs: ', npairs
         allocate( pairs(npairs,2), stat=alloc_stat )
         cnt = 0
         do i=1,nobjs-1
@@ -123,7 +123,7 @@ contains
             funit = get_fileunit()
             allocate(fname, source='pairs_part'//int2str_pad(ipart,numlen)//'.bin')
             open(unit=funit, status='REPLACE', action='WRITE', file=fname, access='STREAM')
-            if( DEBUG ) print *, 'writing pairs in range: ', parts(ipart,1), parts(ipart,2)
+            DebugPrint   'writing pairs in range: ', parts(ipart,1), parts(ipart,2)
             write(unit=funit,pos=1,iostat=io_stat) pairs(parts(ipart,1):parts(ipart,2),:)
             ! Check if the write was successful
             if( io_stat .ne. 0 )then
@@ -147,8 +147,8 @@ contains
         character(len=:), allocatable :: fname
         ! allocate pairs and similarities
         npairs = (nobjs*(nobjs-1))/2
-        if( debug ) print *, 'analysing this number of objects: ', nobjs
-        if( debug ) print *, 'analysing this number of pairs: ', npairs
+        DebugPrint   'analysing this number of objects: ', nobjs
+        DebugPrint   'analysing this number of pairs: ', npairs
         allocate( smat(nobjs,nobjs), pairs(npairs,2), stat=alloc_stat )
         call alloc_err('In: simple_map_reduce::merge_similarities_from_parts, 1', alloc_stat)
         ! initialise similarities
@@ -175,7 +175,7 @@ contains
             close(funit)
             deallocate(fname)
             ! retrieve the similarities
-            if( debug ) print *, 'allocating this number of similarities: ', parts(ipart,2)-parts(ipart,1)+1
+            DebugPrint   'allocating this number of similarities: ', parts(ipart,2)-parts(ipart,1)+1
             allocate(sims(parts(ipart,1):parts(ipart,2)), stat=alloc_stat)
             call alloc_err('In: simple_map_reduce::merge_similarities_from_parts, 2', alloc_stat)
             allocate(fname, source='similarities_part'//int2str_pad(ipart,numlen)//'.bin')

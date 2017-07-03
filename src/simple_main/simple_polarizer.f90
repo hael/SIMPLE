@@ -12,8 +12,6 @@ implicit none
 public :: polarizer
 private
 
-logical, parameter :: DEBUG = .true.
-
 type, extends(image) :: polarizer
     private
     type(kbinterpol)      :: kbwin                               !< window function object

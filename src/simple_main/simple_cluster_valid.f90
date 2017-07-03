@@ -1,6 +1,9 @@
+!> Cluster search module
 module simple_cluster_valid
-use simple_jiffys, only: alloc_err
+    use simple_defs
+    use simple_jiffys, only: alloc_err
 implicit none
+#include "simple_local_flags.inc"
 
 !>  \brief  is the type definition for the validation class, driven by pointers since the data most likley
 !!          will anyway be allocated elsewhere
@@ -38,9 +41,7 @@ type cluster_valid
     procedure :: ratio_index
     ! DESTRUCTOR
     procedure :: kill
-end type
-
-logical :: debug=.false.
+end type cluster_valid
 
 contains
     
@@ -279,7 +280,7 @@ contains
                 deallocate(karr)
             endif
         end do
-        if( debug ) print *, 'finished gen_cohesion_metrics'
+        DebugPrint  'finished gen_cohesion_metrics'
     end subroutine gen_cohesion_metrics
     
     !>  \brief  calculates cohesion of the clusters in terms of distance
@@ -294,7 +295,7 @@ contains
             coh = coh+self%maxdists(k)+self%avgdists(k)
         end do
         coh = coh/real(2*self%ncls)
-        if( debug ) print *, 'calculated cohesion'
+        DebugPrint  'calculated cohesion'
     end function cohesion
 
     !>  \brief  calculates separation of the clusters in terms of distance
@@ -312,7 +313,7 @@ contains
             end do
         end do
         sep = sep/real(2*npairs)
-        if( debug ) print *, 'calculated separation'
+        DebugPrint  'calculated separation'
     end function separation
     
     !>  \brief  calculates the ratio index for cluster validation

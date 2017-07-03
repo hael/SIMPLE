@@ -26,7 +26,7 @@ public :: orisops_commander
 public :: oristats_commander
 public :: rotmats2oris_commander
 private
-
+#include "simple_local_flags.inc"
 type, extends(commander_base) :: cluster_oris_commander
  contains
    procedure :: execute      => exec_cluster_oris
@@ -326,19 +326,19 @@ contains
         logical, allocatable               :: statedoc_exists(:), selected(:)
         character(len=STDLEN)              :: statedoc
         real                               :: corr
-        logical, parameter                 :: debug=.false.
+      
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         ! find number of selected cavgs
         call find_ldim_nptcls(p%stk2, lfoo, nsel)
-        if( debug ) print *, 'nsel: ', nsel
+        DebugPrint  'nsel: ', nsel
         ! find number of original cavgs
         call find_ldim_nptcls(p%stk3, lfoo, p%ncls)
-        if( debug ) print *, 'ncls: ', p%ncls
+        DebugPrint  'ncls: ', p%ncls
         if( p%ncls < nsel ) stop 'nr of original clusters cannot be less than the number of selected ones'
         ! find number of lines in input document
         nlines_oritab = nlines(p%oritab)
-        if( debug ) print *, 'nlines_oritab: ', nlines_oritab
+        DebugPrint  'nlines_oritab: ', nlines_oritab
         if( nlines_oritab /= p%nptcls ) stop 'nr lines in oritab .ne. nr images in particle stack; must be congruent!'
         if( cline%defined('deftab') )then
             nlines_deftab = nlines(p%deftab)
@@ -374,11 +374,11 @@ contains
             loc                     = maxloc(correlations(isel,:))
             labeler(isel)%cls_orig  = loc(1)
             selected(loc(1))        = .true.
-            if( debug ) print *, 'found orig clsind: ', labeler(isel)%cls_orig
+            DebugPrint  'found orig clsind: ', labeler(isel)%cls_orig
             labeler(isel)%cls_sel   = isel
-            if( debug ) print *, 'selected class index: ', labeler(isel)%cls_sel
+            DebugPrint  'selected class index: ', labeler(isel)%cls_sel
             labeler(isel)%particles = b%a%get_cls_pinds(labeler(isel)%cls_orig)
-            if( debug ) print *, 'got this number of partices: ', size(labeler(isel)%particles)
+            DebugPrint  'got this number of partices: ', size(labeler(isel)%particles)
         end do
         ! erase deselected (by setting their state to zero)
         do icls=1,p%ncls

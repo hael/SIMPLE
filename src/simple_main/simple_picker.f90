@@ -15,7 +15,7 @@ private
 integer,          parameter   :: MAXKMIT  = 20
 integer,          parameter   :: SPECNCLS = 10
 real,             parameter   :: BOXFRAC  = 0.5
-logical,          parameter   :: DEBUG=.true., DOPRINT=.true.
+logical,          parameter   :: WRITESHRUNKEN=.true., DOPRINT=.true.
 type(image)                   :: micrograph, mic_shrunken, mic_shrunken_refine, ptcl_target
 type(image),      allocatable :: refs(:), refs_refine(:)
 logical,          allocatable :: selected_peak_positions(:), is_a_peak(:,:)
@@ -108,7 +108,7 @@ contains
         call micrograph%clip(mic_shrunken_refine)
         call mic_shrunken%bwd_ft
         call mic_shrunken_refine%bwd_ft
-        if( DEBUG ) call mic_shrunken%write('shrunken.mrc')
+        if( WRITESHRUNKEN ) call mic_shrunken%write('shrunken.mrc')
     end subroutine init_picker
 
     subroutine exec_picker( boxname_out )

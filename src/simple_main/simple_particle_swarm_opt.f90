@@ -7,7 +7,7 @@ implicit none
 
 public :: particle_swarm_opt
 private
-
+#include "simple_local_flags.inc"
 type, extends(optimizer) :: particle_swarm_opt
     private
     real, allocatable :: swarm(:,:)       !< particle positions
@@ -24,8 +24,6 @@ type, extends(optimizer) :: particle_swarm_opt
     procedure :: kill         => kill_particle_swarm
 end type particle_swarm_opt
 
-logical, parameter :: debug=.false.
-
 contains
     
     !> \brief  is a constructor
@@ -40,7 +38,8 @@ contains
         allocate(self%swarm(spec%npop,spec%ndim), self%velocities(spec%npop,spec%ndim), stat=alloc_stat)
         call alloc_err("In: new_particle_swarm_opt, 1", alloc_stat)
         self%exists = .true. ! indicates existence
-        if( spec%debug ) write(*,*) 'created new particle swarm'
+        if( spec%debug ) write(*,*) 'created new particle swarm (spec debug)'
+        DebugPrint 'created new particle swarm (instance)'
     end subroutine new_particle_swarm
     
     !> \brief  is the particle swarm minimize minimization routine
@@ -65,7 +64,7 @@ contains
             ! update a randomly selected particle
             call update_particle(irnd_uni(spec%npop))
             if( spec%npeaks > 0 )then
-                ! exit when we have identified spec%npeaks local optima
+                ! exit when we have idetified spec%npeaks local optima
                 if( npeaks == spec%npeaks ) exit
             endif
             if( nworse == 5*spec%npop ) exit ! if no better solutions have been found in the last 5*npop iterations

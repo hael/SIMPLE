@@ -10,7 +10,7 @@ implicit none
 
 public :: unblur_movie, unblur_calc_sums, unblur_calc_sums_tomo
 private
-
+#include "simple_local_flags.inc"
 interface unblur_calc_sums
     module procedure unblur_calc_sums_1
     module procedure unblur_calc_sums_2
@@ -36,7 +36,7 @@ integer                         :: ldim_scaled(3) = [0,0,0]   !< shrunken logica
 real                            :: maxshift       = 0.        !< maximum halfwidth shift
 real                            :: hp             = 0.        !< high-pass limit
 real                            :: lp             = 0.        !< low-pass limit
-real                            :: resstep        = 0.        !< resolution step size (in Å)
+real                            :: resstep        = 0.        !< resolution step size (in angstrom)
 real                            :: smpd           = 0.        !< sampling distance
 real                            :: smpd_scaled    = 0.        !< sampling distance
 real                            :: corr_saved     = 0.        !< opt corr for local opt saved
@@ -46,7 +46,6 @@ real                            :: nsig_here      = 6.0       !< nr of sigmas (f
 logical                         :: do_dose_weight = .false.   !< dose weight or not
 logical                         :: doscale        = .false.   !< scale or not
 logical                         :: doprint        = .true.    !< print out correlations
-logical                         :: debug          = .false.   !< debug or not
 logical                         :: profile        = .true.    !< profiling mode or not
 logical                         :: existence      = .false.   !< to indicate existence
 
@@ -54,7 +53,7 @@ integer, parameter :: MITSREF    = 30 !< max nr iterations of refinement optimis
 real,    parameter :: SMALLSHIFT = 2. !< small initial shift to blur out fixed pattern noise
 
 contains
-    
+
     subroutine unblur_movie( movie_stack_fname, p, corr, smpd_out, nsig )
         use simple_oris,        only: oris
         use simple_strings,     only: int2str
@@ -109,7 +108,7 @@ contains
                 corrs(iframe)        = cxy(1)
                 ! add the subtracted movie frame back to the weighted sum
                 call add_movie_frame( iframe )
-            end do            
+            end do
             frac_improved = real(nimproved)/real(nframes)*100.
             if( doprint ) write(*,'(a,1x,f4.0)') 'This % of frames improved their alignment: ', frac_improved
             call center_shifts(opt_shifts)
@@ -144,10 +143,10 @@ contains
         ! put the best local optimum back
         corr         = corr_saved
         opt_shifts   = opt_shifts_saved
-        frameweights = frameweights_saved        
+        frameweights = frameweights_saved
         call shift_frames(opt_shifts)
         ! print
-        if( corr < 0. )then 
+        if( corr < 0. )then
             if( doprint ) write(*,'(a)') '>>> WARNING! OPTIMAL CORRELATION < 0.0'
             if( doprint ) write(*,'(a,7x,f7.4)') '>>> OPTIMAL CORRELATION:', corr
         endif
@@ -160,9 +159,9 @@ contains
         if( doprint ) write(*,'(a,7x,f7.4)') '>>> MAX WEIGHT         :', maxw
         ! report the sampling distance of the possibly scaled movies
         smpd_out = smpd_scaled
-        
+
         contains
-            
+
             subroutine update_res( thres_corrfrac, thres_frac_improved, which_update )
                 real,    intent(in) :: thres_corrfrac, thres_frac_improved
                 integer, intent(in) :: which_update
@@ -173,7 +172,7 @@ contains
                     ! need to re-make the ftexps
                     do iframe=1,nframes
                         call movie_frames_ftexp(iframe)%new(movie_frames_scaled(iframe), hp, lp)
-                        call movie_frames_ftexp_sh(iframe)%new(movie_frames_ftexp(iframe))  
+                        call movie_frames_ftexp_sh(iframe)%new(movie_frames_ftexp(iframe))
                     end do
                     ! need to update the shifts
                     call shift_frames(opt_shifts)
@@ -191,7 +190,7 @@ contains
                     didupdateres = .true.
                 endif
             end subroutine update_res
-                    
+
     end subroutine unblur_movie
 
     subroutine unblur_calc_sums_1( movie_sum, movie_sum_corrected, movie_sum_ctf )
@@ -243,7 +242,7 @@ contains
         movie_sum = movie_sum_global
         call movie_sum%bwd_ft
     end subroutine unblur_calc_sums_tomo
-     
+
     subroutine unblur_init( movie_stack_fname, p )
         use simple_jiffys, only: find_ldim_nptcls, alloc_err, progress
         use simple_math,   only: round2even, median
@@ -256,10 +255,10 @@ contains
         integer, parameter   :: HWINSZ = 6
         real,    allocatable :: rmat(:,:,:), rmat_pad(:,:), win(:,:)
         logical, allocatable :: outliers(:,:)
-        call unblur_kill  
+        call unblur_kill
         ! GET NUMBER OF FRAMES & DIM FROM STACK
         call find_ldim_nptcls(movie_stack_fname, ldim, nframes, endconv=endconv)
-        if( debug ) write(*,*) 'logical dimension: ', ldim
+        DebugPrint  'logical dimension: ', ldim
         ldim(3) = 1 ! to correct for the stupid 3:d dim of mrc stacks
         if( p%scale < 0.99 )then
             ldim_scaled(1) = round2even(real(ldim(1))*p%scale)
@@ -271,11 +270,13 @@ contains
             doscale     = .false.
         endif
         ! SET SAMPLING DISTANCE
-        smpd        = p%smpd 
+        smpd        = p%smpd
         smpd_scaled = p%smpd/p%scale
-        if( debug ) write(*,*) 'logical dimension of frame: ',        ldim
-        if( debug ) write(*,*) 'scaled logical dimension of frame: ', ldim_scaled
-        if( debug ) write(*,*) 'number of frames: ',                  nframes
+        if( debug ) then
+            write(*,*) 'logical dimension of frame: ',        ldim
+            write(*,*) 'scaled logical dimension of frame: ', ldim_scaled
+            write(*,*) 'number of frames: ',                  nframes
+        end if
         maxshift = p%trs/p%scale
         ! set fixed frame (all others are shifted by reference to this at 0,0)
         fixed_frame = nint(real(nframes)/2.)
@@ -328,7 +329,7 @@ contains
                 call movie_frames_scaled(iframe)%new(ldim_scaled, smpd_scaled)
                 call frame_tmp%fwd_ft
                 call frame_tmp%clip(movie_frames_scaled(iframe))
-                call movie_frames_ftexp(iframe)%new(movie_frames_scaled(iframe), hp, lp) 
+                call movie_frames_ftexp(iframe)%new(movie_frames_scaled(iframe), hp, lp)
                 call movie_frames_ftexp_sh(iframe)%new(movie_frames_ftexp(iframe))
             enddo
         else
@@ -338,7 +339,7 @@ contains
                 call frame_tmp%read(movie_stack_fname, iframe, rwaction='READ')
                 call frame_tmp%fwd_ft
                 call frame_tmp%clip(movie_frames_scaled(iframe))
-                call movie_frames_ftexp(iframe)%new(movie_frames_scaled(iframe), hp, lp) 
+                call movie_frames_ftexp(iframe)%new(movie_frames_scaled(iframe), hp, lp)
                 call movie_frames_ftexp_sh(iframe)%new(movie_frames_ftexp(iframe))
             end do
         endif
@@ -357,7 +358,7 @@ contains
             end do
         endif
         existence = .true.
-        if( debug ) write(*,*) 'unblur_init, done'
+        DebugPrint  'unblur_init, done'
     end subroutine unblur_init
 
     subroutine center_shifts( shifts )
@@ -373,7 +374,7 @@ contains
             if( abs(shifts(iframe,2)) < 1e-6 ) shifts(iframe,2) = 0.
         end do
     end subroutine center_shifts
-    
+
     subroutine shift_frames( shifts )
         real, intent(in) :: shifts(nframes,2)
         integer :: iframe
@@ -385,7 +386,7 @@ contains
             call movie_frames_ftexp(iframe)%shift(shvec, movie_frames_ftexp_sh(iframe))
         end do
     end subroutine shift_frames
-    
+
     subroutine calc_corrmat
         integer :: iframe, jframe
         corrmat = 1. ! diagonal elements are 1
@@ -423,7 +424,7 @@ contains
             end do
             corrs(iframe) = corrs(iframe)/real(nframes-1)
         end do
-        !$omp end parallel do 
+        !$omp end parallel do
         frameweights = corrs2weights(corrs)
     end subroutine corrmat2weights
 
@@ -530,7 +531,7 @@ contains
         if( frameweights(iframe) > 0. )&
         &call movie_sum_global_ftexp%subtr(movie_frames_ftexp_sh(iframe), w=frameweights(iframe))
     end subroutine subtract_movie_frame
-    
+
     subroutine unblur_kill
         integer :: iframe
         if( existence )then

@@ -1,3 +1,4 @@
+!> Command dictionary module
 module simple_cmd_dict
 use simple_chash, only: chash
 use simple_defs
@@ -5,14 +6,12 @@ implicit none
 
 public :: print_cmdline, test_cmd_dict, print_cmd_key_descr
 private
-
+#include "simple_local_flags.inc"
 integer, parameter :: NMAX=300
 type(chash)        :: chdict
 logical            :: initialised=.false.
-logical            :: debug=.false.
 
 contains
-    
     subroutine init_cmd_dict
         call chdict%new(NMAX)
         call chdict%push('acf',           'calculate autocorrelation function(yes|no){no}')
@@ -262,7 +261,7 @@ contains
         ! print required
         if( present(keys_required) )then
             nreq =  size(keys_required)
-            if( debug ) print *, '# required keys provided: ', nreq
+            DebugPrint  '# required keys provided: ', nreq
             if( nreq > 0 )then
                 write(*,'(a)') ''
                 write(*,'(a)') 'REQUIRED'
@@ -272,7 +271,7 @@ contains
         ! print optionals
         if( present(keys_optional) )then
             nopt = size(keys_optional)
-            if( debug ) print *, '# optional keys provided: ', nopt
+            DebugPrint  '# optional keys provided: ', nopt
             if( nopt > 0 )then
                 write(*,'(a)') ''
                 write(*,'(a)') 'OPTIONAL'

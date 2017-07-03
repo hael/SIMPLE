@@ -58,7 +58,6 @@ type, extends(image) :: reconstructor
 end type reconstructor
 
 real            :: dfx=0., dfy=0., angast=0.
-logical         :: debug=.false.
 real, parameter :: SHTHRESH=0.0001
 
 contains
@@ -357,7 +356,7 @@ contains
         self_out_present = present(self_out)
         ! set constants
         lims = self%loop_lims(2)
-        if( self_out_present ) self_out = self
+        if( self_out_present ) call self_out%copy(self)
         !$omp parallel do collapse(3) default(shared) private(h,k,l,phys)&
         !$omp schedule(static) proc_bind(close)
         do h=lims(1,1),lims(1,2)

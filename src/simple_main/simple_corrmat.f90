@@ -1,3 +1,4 @@
+!> \brief Module for calculation of cartesian correlation matricies
 module simple_corrmat
 !$ use omp_lib
 !$ use omp_lib_kinds
@@ -16,7 +17,7 @@ end interface calc_cartesian_corrmat
 type(image)          :: mskimg
 integer, allocatable :: pairs(:,:)
 integer              :: nptcls, ntot, npix, norig, nsel
-logical              :: debug=.false.
+
     
 contains
     

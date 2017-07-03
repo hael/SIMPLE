@@ -1,9 +1,9 @@
 !==Class simple_ppca
 !
 ! simple_ppca is the SIMPLE class for probabilistic principal component analysis.
-! This code should be able to deal with many millions of particle images. 
-! The code is distributed with the hope that it will be useful, but _WITHOUT_ 
-! _ANY_ _WARRANTY_. Redistribution or modification is regulated by the 
+! This code should be able to deal with many millions of particle images.
+! The code is distributed with the hope that it will be useful, but _WITHOUT_
+! _ANY_ _WARRANTY_. Redistribution or modification is regulated by the
 ! GNU General Public License. *Author:* Hans Elmlund, 2011-09-03.
 !
 !==Changes are documented below
@@ -106,15 +106,15 @@ contains
         self%E_znzn = 0.
         self%existence = .true.
     end subroutine new
-    
+
     ! GETTERS
-    
+
     !>  \brief  is for getting the eigenvalues after rotation to the orthogonal basis
     function get_evals( self )result( e )
         class(ppca), intent(inout) :: self
         real :: e(self%Q)
         e = self%evals
-    end function get_evals        
+    end function get_evals
 
     !>  \brief  is for getting a feature vector
     function get_feat( self, i ) result( feat )
@@ -123,7 +123,7 @@ contains
         real, allocatable          :: feat(:)
         allocate(feat(self%Q), source=self%E_zn(i,:,1))
     end function get_feat
-    
+
     !>  \brief  is for getting a pointer to the features (that become exposed)
     function get_feats_ptr( self ) result( ptr )
         class(ppca), intent(inout), target :: self
@@ -166,7 +166,7 @@ contains
 
     !>  \brief  is for sampling the generative model at a given image index for a subset of features
     !>  should only be used if rotation onto orthogonal basis has been performed
-    function generate_cumul( self, i, feats, AVG ) result( dat ) 
+    function generate_cumul( self, i, feats, AVG ) result( dat )
         class(ppca),    intent(inout) :: self
         integer,        intent(in)    :: i, feats(2)
         real, optional, intent(in)    :: AVG(self%D)
@@ -178,7 +178,7 @@ contains
     end function generate_cumul
 
     !>  \brief  is for sampling the generative model at a given image index
-    function generate_1( self, i, AVG ) result( dat ) 
+    function generate_1( self, i, AVG ) result( dat )
         class(ppca),    intent(inout) :: self
         integer,        intent(in)    :: i
         real, optional, intent(in)    :: AVG(self%D)
@@ -222,9 +222,9 @@ contains
             dat = tmp2(:,1)
         endif
     end function generate_2
-    
+
     ! CALCULATORS
-    
+
     !>  \brief  doing it all
     subroutine master( self, datastk, recsz, featstk, maxpcaits, feats_txt )
         use simple_filehandling, only: get_fileunit, fopen_err
@@ -263,7 +263,7 @@ contains
                 write(*,'(A)') 'ERROR, in matrix inversion, iteration:', k
                 write(*,'(A)') 'RESTARTING'
                 call self%init
-                k = 0 
+                k = 0
                 cycle
             endif
             if( self%doprint.and.(k == 1 .or. mod(k,5) == 0) )then
@@ -359,20 +359,22 @@ contains
             end do
             !$omp end parallel do
         else
-            do i=1,self%N
-                ! read data vec
-                read(self%funit, rec=i) self%X(:,1)
-                !$omp parallel workshare proc_bind(close)
-                tmp = matmul(self%W,self%E_zn(i,:,:))
-                !$omp end parallel workshare
-                p = p + sqrt(sum((self%X(:,1)-tmp(:,1))**2.))
-            end do
-        endif
+            ! do i=1,self%N
+            !     ! read data vec
+            !     read(self%funit, rec=i) self%X(:,1)
+            !     !$omp parallel  proc_bind(close)
+            !     !$omp workshare
+            !     tmp = matmul(self%W,self%E_zn(i,:,:))
+            !     !$omp end workshare
+            !     !$omp end parallel
+            !     p = p + sqrt(sum((self%X(:,1)-tmp(:,1))**2.))
+            ! end do
+ endif
         if( .not. is_a_number(p) )err=-1
     end subroutine em_opt
 
     ! DESTRUCTOR
-    
+
     !>  \brief  is a destructor
     subroutine kill( self )
         class(ppca), intent(inout) :: self
@@ -386,5 +388,5 @@ contains
             self%ptr_Dmat  => null()
         endif
     end subroutine kill
-    
+
 end module simple_ppca

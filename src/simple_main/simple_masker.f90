@@ -152,7 +152,7 @@ contains
         call img_pad%clip(img_msk)
         call img_msk%norm('sigm')
         call img%mul(img_msk)
-        if( present(img_msk_out) ) img_msk_out = img_msk
+        if( present(img_msk_out) ) call img_msk_out%copy(img_msk)
         call img_copy%kill
         call img_pad%kill
         call img_msk%kill

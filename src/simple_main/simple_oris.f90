@@ -22,6 +22,7 @@ implicit none
 
 public :: oris, test_oris
 private
+#include "simple_local_flags.inc"
 
 !>  \brief  aggregates ori objects
 type :: oris
@@ -82,7 +83,7 @@ type :: oris
     procedure          :: ang_sdev
     procedure          :: stochastic_weights
     procedure          :: included
-    procedure          :: print
+    procedure          :: print_
     procedure          :: print_chash_sizes
     procedure          :: print_mats
     ! SETTERS
@@ -1198,11 +1199,11 @@ contains
     end function included
     
     !>  \brief  is for printing
-    subroutine print( self, i )
+    subroutine print_( self, i )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: i
-        call self%o(i)%print
-    end subroutine print
+        call self%o(i)%display()
+    end subroutine print_
 
     !>  \brief  is for printing
     subroutine print_chash_sizes( self )
@@ -1875,12 +1876,12 @@ contains
         real                 :: homo_cls
         real, allocatable    :: vals(:)
         integer, allocatable :: labelpops(:)
-        logical, parameter   :: debug=.false.
+        
         nlabels = self%get_nlabels()
-        if( debug ) print *, 'number of labels: ', nlabels
+        DebugPrint  'number of labels: ', nlabels
         allocate(labelpops(nlabels))
-        if( debug ) print *, 'allocated labelpops'
-        if( debug ) print *, '>>> PROCESSING CLASS: ', icls
+        DebugPrint  'allocated labelpops'
+        DebugPrint  '>>> PROCESSING CLASS: ', icls
         ! get pop 
         if( which .eq. 'class' )then
             pop = self%get_cls_pop(icls)
@@ -1897,7 +1898,7 @@ contains
         else
             vals = self%get_arr('label', state=icls)
         endif
-        if( debug ) print *, nint(vals)
+        DebugPrint  nint(vals)
         ! count label occurences
         labelpops = 0
         do i=1,pop
@@ -1907,7 +1908,7 @@ contains
         medlab   = maxloc(labelpops)
         homo_cls = real(count(medlab(1) == nint(vals)))/real(pop)
         homo_avg = homo_avg+homo_cls
-        if( debug ) print *, '>>> CLASS HOMOGENEITY: ', homo_cls
+        DebugPrint  '>>> CLASS HOMOGENEITY: ', homo_cls
         ! apply homogeneity threshold
         if( homo_cls >= thres ) homo_cnt = homo_cnt+1.
         deallocate(labelpops)
@@ -1922,7 +1923,6 @@ contains
         real,             intent(out)   :: homo_cnt, homo_avg
         integer :: k, ncls
         real    :: cnt
-        logical, parameter :: debug=.false.
         if( which .eq. 'class' )then
             ncls = self%get_ncls()
         else if( which .eq. 'state' )then
@@ -1930,7 +1930,7 @@ contains
         else
             stop 'Unsupported which flag; simple_oris::homogeneity'
         endif
-        if( debug ) print *, 'number of clusters to analyse: ', ncls
+        DebugPrint  'number of clusters to analyse: ', ncls
         homo_cnt = 0.
         homo_avg = 0.
         cnt      = 0.
@@ -2157,6 +2157,7 @@ contains
                     dfx = self%o(i)%get('dfx')+ran3()*dferr-dferr/2.
                     if( dfx > 0. ) exit
                 end do
+                
                 call self%o(i)%set('dfx', dfx)
             endif
             if( self%o(i)%isthere('dfy') )then
@@ -3403,17 +3404,17 @@ contains
             call os%rnd_oris(5.)
             write(*,*) '********'
             do i=1,100
-                call os%print(i)
+                call os%print_(i)
             end do
             call os2%rnd_oris(5.)
             write(*,*) '********'
             do i=1,100
-                call os2%print(i)
+                call os2%print_(i)
             end do
             ! call os%merge(os2)
             ! write(*,*) '********'
             ! do i=1,200
-            !     call os%print(i)
+            !     call os%print_(i)
             ! end do
         endif
         write(*,'(a)') '**info(simple_oris_unit_test, part2): testing assignment'
@@ -3471,7 +3472,7 @@ contains
         order = os%order()
         if( doprint )then
             do i=1,100
-                call os%print(order(i))
+                call os%print_(order(i))
             end do
             write(*,*) 'median:', os%median('lp')
         endif

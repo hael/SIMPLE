@@ -49,7 +49,6 @@ contains
         class(prime2D_autoscale_commander), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         ! constants
-        logical,           parameter :: DEBUG           = .false.
         integer,           parameter :: MAXITS_STAGE1   = 10
         character(len=32), parameter :: CAVGS_ITERFBODY = 'cavgs_iter'
         character(len=32), parameter :: STKSCALEDBODY   = 'stk_sc_prime2D'
@@ -125,7 +124,7 @@ contains
         else
             call xprime2D%execute(cline)
         endif
-        call cline_rank_cavgs%print
+        call cline_rank_cavgs%printline
         ! ranking
         call cline_rank_cavgs%set('oritab', trim(FINALDOC))
         call cline_rank_cavgs%set('stk',    'cavgs_final'//p_master%ext)
@@ -154,7 +153,6 @@ contains
         class(ini3D_from_cavgs_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         ! constants
-        logical,               parameter :: DEBUG=.false.
         real,                  parameter :: LPLIMS(2)=[20.,10.] ! default low-pass limits
         real,                  parameter :: CENLP=30.           ! consistency with prime3D
         integer,               parameter :: MAXITS_SNHC=30, MAXITS_INIT=15, MAXITS_REFINE=40
@@ -386,7 +384,7 @@ contains
         class(het_ensemble_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         ! constants
-        logical,               parameter :: DEBUG=.false.
+
         integer,               parameter :: MAXITS_INIT=50, NREPEATS=5
         character(len=32),     parameter :: HETFBODY    = 'hetrep_'
         character(len=32),     parameter :: REPEATFBODY = 'hetdoc_'

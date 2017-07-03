@@ -9,13 +9,13 @@
 !! license terms ( http://license.janelia.org/license/jfrc_copyright_1_1.html )
 !!
 module simple_bforce_opt
+use simple_defs
 use simple_optimizer, only: optimizer
 implicit none
 
 public :: bforce_opt
 private
-
-logical :: debug=.false.
+#include "simple_local_flags.inc"
 
 type, extends(optimizer) :: bforce_opt
     private
@@ -46,11 +46,11 @@ contains
         self%pb = spec%limits(:,1)
         self%pc = spec%limits(:,1)
         if( all(spec%stepsz == 0.) ) stop 'step size (stepsz) not set in&
-        specification (opt_spec); new_bforce_opt; simple_bforce_opt'
+        &specification (opt_spec); new_bforce_opt; simple_bforce_opt'
         ! initialize best cost to huge number
         self%yb = huge(x)
         self%exists = .true. ! indicates existence
-        if( debug ) write(*,'(a)') 'created new bforce_opt object'
+        DebugPrint  'created new bforce_opt object'
     end subroutine
     
     !> \brief  brute force minimization
@@ -65,11 +65,11 @@ contains
         endif
         ! generate initial vector (lower bounds)
         spec%x = spec%limits(:,1)
-        if( debug ) write(*,'(a)') 'generated initial vector'
-        ! set best & current point to best point in spec
+        DebugPrint  'generated initial vector'
+        ! set best and current point to best point in spec
         self%pb = spec%x
         self%pc = spec%x
-        if( debug ) write(*,'(a)') 'did set best & current point'
+        DebugPrint  'did set best and current point'
         ! set best cost
         spec%nevals = 0
         self%yb     = spec%costfun(self%pb, spec%ndim)
@@ -78,7 +78,7 @@ contains
         ! search: we will start at the lowest value for each dimension, then 
         ! go in steps of stepsz until we get to the upper bounds
         spec%niter = 0
-        if( debug ) write(*,'(a)') 'starting brute force search'
+        DebugPrint  'starting brute force search'
         do while( srch_not_done() )
             y = spec%costfun(self%pc, spec%ndim)
             spec%nevals = spec%nevals+1
@@ -86,7 +86,7 @@ contains
             if( y <= self%yb )then
                 self%yb = y       ! updating the best cost 
                 self%pb = self%pc ! updating the best solution
-                if( debug ) write(*,*) 'Found better best, cost:', self%yb 
+                DebugPrint  'Found better best, cost:', self%yb 
             endif
         end do
         spec%x = self%pb
@@ -114,7 +114,7 @@ contains
                         exit
                     endif
                 end do
-                if( debug ) write(*,*) 'New configuration:', self%pc(:)
+                DebugPrint  'New configuration:', self%pc(:)
             end function
             
     end subroutine

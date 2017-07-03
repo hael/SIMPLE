@@ -19,9 +19,8 @@ implicit none
 public :: prime3D_find_resrange, prime3D_exec, gen_random_model
 public :: preppftcc4align, prep_refs_pftcc4align, pftcc
 private
-
+#include "simple_local_flags.inc"
 integer, parameter              :: MAXNPEAKS=10
-logical, parameter              :: DEBUG=.false.
 type(polarft_corrcalc)          :: pftcc
 type(prime3D_srch), allocatable :: primesrch3D(:)
 real                            :: reslim
@@ -81,7 +80,7 @@ contains
         ! CALCULATE ANGULAR THRESHOLD (USED BY THE SPARSE WEIGHTING SCHEME)
         p%athres = rad2deg(atan(max(p%fny,p%lp)/(p%moldiam/2.)))
         reslim   = p%lp
-        if( DEBUG ) write(*,*) '*** hadamard3D_matcher ***: calculated angular threshold (used by the sparse weighting scheme)'
+        DebugPrint '*** hadamard3D_matcher ***: calculated angular threshold (used by the sparse weighting scheme)'
 
         ! DETERMINE THE NUMBER OF PEAKS
         if( .not. cline%defined('npeaks') )then
@@ -92,7 +91,7 @@ contains
                 case DEFAULT
                     p%npeaks = 1
             end select
-            if( DEBUG ) write(*,*) '*** hadamard3D_matcher ***: determined the number of peaks'
+            DebugPrint '*** hadamard3D_matcher ***: determined the number of peaks'
         endif
 
         ! RANDOM MODEL GENERATION
@@ -102,7 +101,7 @@ contains
             else
                 call gen_random_model(b, p)
             endif
-            if( DEBUG ) write(*,*) '*** hadamard3D_matcher ***: generated random model'
+            DebugPrint '*** hadamard3D_matcher ***: generated random model'
         endif
 
         ! SETUP WEIGHTS
@@ -155,7 +154,7 @@ contains
                     call b%recvols(s)%reset
                 endif
             end do
-            if( DEBUG ) write(*,*) '*** hadamard3D_matcher ***: did reset recvols'
+            DebugPrint '*** hadamard3D_matcher ***: did reset recvols'
         endif
 
         ! STOCHASTIC IMAGE ALIGNMENT
@@ -346,7 +345,7 @@ contains
         call prep_ptcls_pftcc4align( b, p, ppfts_fname )
         ! subtract the mean shell values for xfel correlations
         if( p%l_xfel ) call pftcc%xfel_subtract_shell_mean()
-        if( DEBUG ) write(*,*) '*** hadamard3D_matcher ***: finished preppftcc4align'
+        DebugPrint '*** hadamard3D_matcher ***: finished preppftcc4align'
     end subroutine preppftcc4align
 
     subroutine prep_refs_pftcc4align( b, p, cline )

@@ -18,13 +18,13 @@ implicit none
 public :: prime2D_exec, prime2D_assemble_sums, prime2D_norm_sums, prime2D_assemble_sums_from_parts,&
 prime2D_write_sums, preppftcc4align, pftcc, prime2D_read_sums, prime2D_write_partial_sums
 private
+#include "simple_local_flags.inc"
 
-logical, parameter              :: DEBUG = .false.
 type(polarft_corrcalc)          :: pftcc
 type(prime2D_srch), allocatable :: primesrch2D(:)
 
 contains
-    
+
     !>  \brief  is the prime2D algorithm
     subroutine prime2D_exec( b, p, cline, which_iter, converged )
         use simple_qsys_funs,   only: qsys_job_finished
@@ -37,7 +37,7 @@ contains
         logical,        intent(inout) :: converged
         integer   :: iptcl
         real      :: corr_thresh, frac_srch_space
-        
+
         ! SET FRACTION OF SEARCH SPACE
         frac_srch_space = b%a%get_avg('frac')
 
@@ -68,7 +68,7 @@ contains
                         call prime2D_read_sums( b, p )
                     endif
                 endif
-            endif 
+            endif
         endif
 
         ! SETUP WEIGHTS
@@ -87,7 +87,7 @@ contains
 
         ! SET FOURIER INDEX RANGE
         call set_bp_range2D( b, p, cline, which_iter, frac_srch_space )
-        
+
         ! GENERATE REFERENCE & PARTICLE POLAR FTs
         call preppftcc4align( b, p )
 
@@ -101,7 +101,7 @@ contains
         ! STOCHASTIC IMAGE ALIGNMENT
         allocate( primesrch2D(p%fromp:p%top) )
         do iptcl=p%fromp,p%top
-            call primesrch2D(iptcl)%new(p, pftcc) 
+            call primesrch2D(iptcl)%new(p, pftcc)
         end do
         ! calculate CTF matrices
         if( p%ctf .ne. 'no' ) call pftcc%create_polar_ctfmats(p%smpd, b%a)
@@ -136,21 +136,21 @@ contains
                 !$omp end parallel do
             endif
         endif
-        if( DEBUG ) print *, 'DEBUG, hadamard2D_matcher; completed alignment'
+        DebugPrint  ' completed alignment'
         ! output orientations
         call b%a%write(p%outfile, [p%fromp,p%top])
         p%oritab = p%outfile
-        
+
         ! WIENER RESTORATION OF CLASS AVERAGES
         if( frac_srch_space > 80. )then
             ! gridded rotation
-            call prime2D_assemble_sums(b, p, grid=.true.)   
+            call prime2D_assemble_sums(b, p, grid=.true.)
         else
             ! real-space rotation
-            call prime2D_assemble_sums(b, p, grid=.false.)               
-        endif  
-        if( DEBUG ) print *, 'DEBUG, hadamard2D_matcher; generated class averages'
-        
+            call prime2D_assemble_sums(b, p, grid=.false.)
+        endif
+        DebugPrint   ' generated class averages'
+
         ! WRITE CLASS AVERAGES
         if( p%l_distr_exec )then
             call prime2D_write_partial_sums( b, p )
@@ -173,21 +173,21 @@ contains
             converged = b%conv%check_conv2D()
         endif
     end subroutine prime2D_exec
-    
+
     subroutine prime2D_read_sums( b, p )
         class(build),  intent(inout) :: b
         class(params), intent(inout) :: p
         integer :: icls
         if( file_exists(p%refs) )then
             do icls=1,p%ncls
-                call b%cavgs(icls)%read(p%refs, icls)                
+                call b%cavgs(icls)%read(p%refs, icls)
             end do
         else
             write(*,*) 'File does not exists: ', trim(p%refs)
             stop 'In: simple_hadamard2D_matcher :: prime2D_read_sums'
         endif
     end subroutine prime2D_read_sums
-    
+
     subroutine prime2D_init_sums( b, p )
         class(build),  intent(inout) :: b
         class(params), intent(inout) :: p
@@ -197,9 +197,9 @@ contains
             b%cavgs(icls) = 0.
             b%ctfsqsums(icls) = cmplx(0.,0.)
         end do
-        !$omp end parallel do 
+        !$omp end parallel do
     end subroutine prime2D_init_sums
-    
+
     subroutine prime2D_assemble_sums( b, p, grid )
         use simple_projector_hlev, only: rot_imgbatch
         use simple_map_reduce,     only: split_nobjs_even
@@ -211,7 +211,7 @@ contains
         type(oris)  :: a_here, batch_oris
         type(ori)   :: orientation
         type(image) :: batch_imgsum, cls_imgsum
-        type(image), allocatable :: batch_imgs(:) 
+        type(image), allocatable :: batch_imgs(:)
         integer,     allocatable :: ptcls_inds(:), batches(:,:)
         real      :: w
         integer   :: icls, iptcl, istart, iend, inptcls, icls_pop
@@ -229,7 +229,7 @@ contains
         if( p%l_distr_exec )then
             istart  = p%fromp
             iend    = p%top
-            inptcls = iend - istart +1 
+            inptcls = iend - istart +1
             call a_here%new(inptcls)
             cnt = 0
             do iptcl = istart, iend
@@ -303,7 +303,7 @@ contains
 
         contains
 
-            ! image is shifted and Fted on exit and the class CTF square sum updated
+            !> image is shifted and Fted on exit and the class CTF square sum updated
             subroutine apply_ctf_and_shift( img, o )
                 class(image), intent(inout) :: img
                 class(ori),   intent(inout) :: o
@@ -344,7 +344,7 @@ contains
             end subroutine apply_ctf_and_shift
 
     end subroutine prime2D_assemble_sums
-    
+
     subroutine prime2D_assemble_sums_from_parts( b, p )
         class(build),  intent(inout) :: b
         class(params), intent(inout) :: p
@@ -379,7 +379,7 @@ contains
         end do
         call prime2D_norm_sums( b, p )
     end subroutine prime2D_assemble_sums_from_parts
-    
+
     subroutine prime2D_write_partial_sums( b, p )
         class(build),  intent(inout) :: b
         class(params), intent(inout) :: p
@@ -387,7 +387,7 @@ contains
         do icls=1,p%ncls
             call b%cavgs(icls)%write('cavgs_part'//int2str_pad(p%part,p%numlen)//p%ext, icls)
             call b%ctfsqsums(icls)%write('ctfsqsums_part'//int2str_pad(p%part,p%numlen)//p%ext, icls)
-        end do 
+        end do
     end subroutine prime2D_write_partial_sums
 
     subroutine prime2D_norm_sums( b, p )
@@ -403,7 +403,7 @@ contains
             endif
         end do
     end subroutine prime2D_norm_sums
-    
+
     subroutine prime2D_write_sums( b, p, which_iter, fname )
         class(build),               intent(inout) :: b
         class(params),              intent(inout) :: p
@@ -448,7 +448,7 @@ contains
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING REFERENCES'
         do icls=1,p%ncls
             call progress(icls, p%ncls)
-            pop = 2 
+            pop = 2
             if( p%oritab /= '' ) pop = b%a%get_cls_pop(icls)
             if( pop > 1 )then
                 ! prepare the reference
@@ -474,7 +474,7 @@ contains
             ! transfer to polar coordinates
             call b%img_match%polarize(pftcc, iptcl)
         end do
-        if( debug ) write(*,*) '*** hadamard2D_matcher ***: finished preppftcc4align'
+        DebugPrint '*** hadamard2D_matcher ***: finished preppftcc4align'
     end subroutine preppftcc4align
 
 end module simple_hadamard2D_matcher

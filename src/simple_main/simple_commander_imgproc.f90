@@ -18,7 +18,7 @@ use simple_strings,        only: int2str, int2str_pad
 use simple_filehandling    ! use all in there
 use simple_jiffys          ! use all in there
 implicit none
-
+#include "simple_local_flags.inc"
 public :: binarise_commander
 public :: convert_commander
 public :: corrcompare_commander
@@ -241,7 +241,6 @@ contains
         type(params) :: p
         type(build)  :: b
         type(ctf)    :: tfun
-        logical      :: debug = .false.
         real         :: dfx, dfy, angast
         p = params(cline)                     ! parameters generated
         call b%build_general_tbox(p, cline)   ! general objects built
@@ -355,7 +354,7 @@ contains
         type(build)          :: b
         integer              :: iptcl, alloc_stat, funit, io_stat
         real, allocatable    :: corrmat(:,:)
-        logical              :: debug=.false.
+
         p = params(cline, .false.)                           ! constants & derived constants produced
         call b%build_general_tbox(p, cline, .false., .true.) ! general objects built (no oritab reading)
         allocate(b%imgs_sym(p%nptcls), stat=alloc_stat)
@@ -526,9 +525,9 @@ contains
                 else if( p%newbox > p%box )then
                     call b%vol%pad(vol2)
                 else
-                    vol2 = b%vol
+                    call vol2%copy(b%vol)
                 endif
-                b%vol = vol2
+                call b%vol%copy(vol2)
                 call b%vol%bwd_ft
                 scale = real(p%newbox)/real(p%box)
                 p%box = p%newbox
@@ -548,7 +547,7 @@ contains
                     endif
                     call b%vol%pad(vol2, backgr=med)
                 endif
-                b%vol = vol2
+                call b%vol%copy(vol2)
             else
                  write(*,'(a,1x,i5)') 'BOX SIZE AFTER SCALING:', p%newbox
             endif
@@ -603,7 +602,7 @@ contains
         character(len=:), allocatable         :: moviename
         type(image)                           :: mask, tmp, frameimg
         real                                  :: mm(2)
-        logical, parameter                    :: debug = .false.
+
         if( cline%defined('lp') )then
             if( .not. cline%defined('smpd') ) stop 'smpd (sampling distance) needs to be defined if lp is'
         endif
@@ -611,14 +610,14 @@ contains
         call b%build_general_tbox(p,cline,do3d=.false.) ! general stuff built
         call read_filetable(p%filetab, filenames)
         nfiles = size(filenames)
-        if( debug ) write(*,*) 'read the filenames'
+        DebugPrint  'read the filenames'
         if( cline%defined('xdim') .and. cline%defined('ydim') )then
             ldim = [p%xdim,p%ydim,1]
         else
             call find_ldim_nptcls(filenames(1),ldim,ifoo)
             ldim(3) = 1 ! to correct for the stupid 3:d dim of mrc stacks
         endif
-        if( debug ) write(*,*) 'logical dimension: ', ldim
+        DebugPrint  'logical dimension: ', ldim
         if( cline%defined('nframes') )then
             if( .not. cline%defined('fbody') ) stop 'need fbody (file body of output stacks) on the command line'
             if( mod(nfiles,p%nframes) .eq. 0 )then
@@ -672,7 +671,7 @@ contains
                     if( cline%defined('clip') )then
                         call b%img%clip(tmp)  
                         mm = tmp%minmax()
-                        if( debug ) print *, 'min/max: ', mm(1), mm(2)
+                        DebugPrint 'min/max: ', mm(1), mm(2)
                         call tmp%write(p%outstk, cnt)
                     else
                         call b%img%write(p%outstk, cnt)

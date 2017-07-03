@@ -30,6 +30,7 @@ public :: makepickrefs_commander
 public :: pick_commander
 public :: extract_commander
 private
+#include "simple_local_flags.inc"
 
 type, extends(commander_base) :: preproc_commander
   contains
@@ -92,7 +93,6 @@ contains
         character(len=STDLEN), allocatable :: movienames(:)
         character(len=:),      allocatable :: fname_ctffind_ctrl, fname_unidoc_output
         character(len=:),      allocatable :: moviename_forctf, moviename_intg, outfile
-        logical, parameter    :: DEBUG = .true.
         character(len=STDLEN) :: boxfile
         type(params) :: p
         type(oris)   :: os_uni
@@ -211,7 +211,7 @@ contains
         character(len=STDLEN), allocatable :: movienames(:)
         character(len=:), allocatable      :: new_name
         type(image)                        :: img_frame
-        logical, parameter                 :: debug = .false.
+
         p = params(cline, checkdistr=.false.)           ! constants & derived constants produced
         call b%build_general_tbox(p,cline,do3d=.false.) ! general objects built
         call read_filetable(p%filetab, movienames)
@@ -220,10 +220,10 @@ contains
         if( cline%defined('startit') )then
             call find_ldim_nptcls(movienames(p%startit), ldim, ifoo)
         endif
-        if( debug ) write(*,*) 'logical dimension: ', ldim
+        DebugPrint  'logical dimension: ', ldim
         ldim(3) = 1 ! to correct for the stupide 3:d dim of mrc stacks
         numlen = len(int2str(nmovies))
-        if( debug ) write(*,*) 'length of number string: ', numlen
+        DebugPrint  'length of number string: ', numlen
         ! determine loop range
         if( cline%defined('part') )then
             if( cline%defined('fromp') .and. cline%defined('top') )then
@@ -239,7 +239,7 @@ contains
             fromto(2) = nmovies
             ntot      = nmovies
         endif
-        if( debug ) write(*,*) 'fromto: ', fromto(1), fromto(2)
+        DebugPrint  'fromto: ', fromto(1), fromto(2)
         call img_frame%new([ldim(1),ldim(2),1], p%smpd)
         ! loop over exposures (movies)
         cnt2 = 0
@@ -250,7 +250,7 @@ contains
             cnt2 = cnt2+1
             ! get number of frames from stack
             call find_ldim_nptcls(movienames(movie), lfoo, nframes)
-            if( debug ) write(*,*) 'number of frames: ', nframes
+            DebugPrint  'number of frames: ', nframes
             ! create new name
             allocate(new_name, source=trim(adjustl(p%fbody))//int2str_pad(movie, numlen)//p%ext)
             cnt = 0
@@ -275,7 +275,7 @@ contains
         type(image)                        :: tmp
         character(len=STDLEN), allocatable :: imgnames(:)
         integer                            :: iimg, nimgs, ldim(3), iimg_start, iimg_stop, ifoo
-        logical                            :: debug=.false.
+
         if( cline%defined('stk') .and. cline%defined('filetab') )then
             stop 'stk and filetab cannot both be defined; input either or!'
         endif
@@ -297,17 +297,17 @@ contains
         else
             call read_filetable(p%filetab, imgnames)
             nimgs = size(imgnames)
-            if( debug ) write(*,*) 'read the img filenames'
+            DebugPrint  'read the img filenames'
             ! get logical dimension of micrographs
             call find_ldim_nptcls(imgnames(1), ldim, ifoo)
             ldim(3) = 1 ! to correct for the stupide 3:d dim of mrc stacks
-            if( debug ) write(*,*) 'logical dimension: ', ldim
+            DebugPrint  'logical dimension: ', ldim
             call b%img%new(ldim, p%smpd) ! img re-generated (to account for possible non-square)
             ! determine loop range
             iimg_start = 1
             if( cline%defined('startit') ) iimg_start = p%startit
             iimg_stop  = nimgs
-            if( debug ) write(*,*) 'fromto: ', iimg_start, iimg_stop
+            DebugPrint  'fromto: ', iimg_start, iimg_stop
             ! do it
             tmp = 0.0
             do iimg=iimg_start,iimg_stop
@@ -336,7 +336,7 @@ contains
         type(image)                        :: powspec, tmp, mask
         character(len=STDLEN), allocatable :: imgnames(:)
         integer                            :: iimg, nimgs, ldim(3), iimg_start, iimg_stop, ifoo
-        logical                            :: debug=.false.
+
         if( cline%defined('stk') .and. cline%defined('filetab') )then
             stop 'stk and filetab cannot both be defined; input either or!'
         endif
@@ -365,17 +365,17 @@ contains
         else
             call read_filetable(p%filetab, imgnames)
             nimgs = size(imgnames)
-            if( debug ) write(*,*) 'read the img filenames'
+            DebugPrint  'read the img filenames'
             ! get logical dimension of micrographs
             call find_ldim_nptcls(imgnames(1), ldim, ifoo)
             ldim(3) = 1 ! to correct for the stupide 3:d dim of mrc stacks
-            if( debug ) write(*,*) 'logical dimension: ', ldim
+            DebugPrint  'logical dimension: ', ldim
             call b%img%new(ldim, p%smpd) ! img re-generated (to account for possible non-square)
             ! determine loop range
             iimg_start = 1
             if( cline%defined('startit') ) iimg_start = p%startit
             iimg_stop  = nimgs
-            if( debug ) write(*,*) 'fromto: ', iimg_start, iimg_stop
+            DebugPrint  'fromto: ', iimg_start, iimg_stop
             ! do it
             tmp = 0.0
             do iimg=iimg_start,iimg_stop
@@ -536,7 +536,7 @@ contains
         character(len=STDLEN)              :: cmd_str
         integer                            :: iimg, isel, nall, nsel, loc(1), ios, alloc_stat
         integer                            :: funit, ldim(3), ifoo, lfoo(3), io_stat
-        logical, parameter                 :: debug=.false.
+
         ! error check
         if( cline%defined('stk3') .or. cline%defined('filetab') )then
             ! all good
@@ -596,7 +596,7 @@ contains
             loc = maxloc(correlations(isel,:))
             selected(isel) = loc(1)
             lselected(selected(isel)) = .true.
-            if( debug ) print *, 'selected: ', loc(1), ' with corr: ', correlations(isel,loc(1))
+            DebugPrint 'selected: ', loc(1), ' with corr: ', correlations(isel,loc(1))
         end do
         if( cline%defined('filetab') )then
             ! read filetable
@@ -758,7 +758,7 @@ contains
         type(image)                        :: micrograph
         type(oris)                         :: outoris, os_uni
         logical                            :: err, params_present(3)
-        logical, parameter                 :: debug = .false.
+
         noutside = 0
         p = params(cline, checkdistr=.false.) ! constants & derived constants produced
         if( p%stream .eq. 'yes' )then
@@ -828,12 +828,12 @@ contains
             if( .not. file_exists(p%boxtab)    ) stop 'inputted boxtab does not exist in cwd'
             nmovies = nlines(p%filetab)
             nboxfiles = nlines(p%boxtab)
-            if( debug ) write(*,*) 'nboxfiles: ', nboxfiles
+            DebugPrint  'nboxfiles: ', nboxfiles
             if( nmovies /= nboxfiles ) stop 'number of entries in inputted files do not match!'
             call read_filetable(p%filetab, movienames)
             call read_filetable(p%boxtab,  boxfilenames)
         endif
-        if( debug ) write(*,*) 'nmovies: ', nmovies
+        DebugPrint  'nmovies: ', nmovies
 
         ! remove possibly pre-existing output file
         call del_file(outfile)
@@ -864,7 +864,7 @@ contains
         call micrograph%new([ldim(1),ldim(2),1], p%smpd)
         call outoris%new(nptcls)
         pind = 0
-        if( debug ) write(*,*) 'made outoris'
+        DebugPrint  'made outoris'
 
         ! loop over exposures (movies)
         niter    = 0
@@ -931,7 +931,7 @@ contains
                     stop
                 endif
             endif
-            if( debug ) write(*,*) 'did check box parsing'
+            DebugPrint  'did check box parsing'
     
             ! get number of frames from stack
             call find_ldim_nptcls(movienames(movie), lfoo, nframes )
@@ -979,7 +979,7 @@ contains
                         endif
                     endif
                 end do
-                if( debug ) write(*,*) 'did set CTF parameters dfx/dfy/angast/ctfres: ', dfx, dfy, angast, ctfres
+                DebugPrint  'did set CTF parameters dfx/dfy/angast/ctfres: ', dfx, dfy, angast, ctfres
             endif
     
             ! extract windows

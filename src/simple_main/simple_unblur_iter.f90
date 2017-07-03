@@ -12,8 +12,7 @@ implicit none
 
 public :: unblur_iter
 private
-
-logical, parameter :: DEBUG = .false.
+#include "simple_local_flags.inc"
 
 type :: unblur_iter
     private
@@ -100,11 +99,10 @@ contains
             else
                 call unblur_calc_sums(self%moviesum, self%moviesum_corrected, self%moviesum_ctf)
             endif
-            if( DEBUG )then
-                print *, 'ldim(moviesum):           ', self%moviesum%get_ldim()
-                print *, 'ldim(moviesum_corrected): ', self%moviesum_corrected%get_ldim()
-                print *, 'ldim(moviesum_ctf):       ', self%moviesum_ctf%get_ldim()
-            endif
+            DebugPrint 'ldim(moviesum):           ', self%moviesum%get_ldim()
+            DebugPrint 'ldim(moviesum_corrected): ', self%moviesum_corrected%get_ldim()
+            DebugPrint 'ldim(moviesum_ctf):       ', self%moviesum_ctf%get_ldim()
+            
         endif
         ! generate power-spectra
         self%pspec_sum         = self%moviesum%mic2spec(p%pspecsz, self%speckind)

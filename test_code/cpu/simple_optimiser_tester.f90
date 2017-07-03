@@ -7,6 +7,7 @@ implicit none
 
 public :: exec_optimiser_test
 private
+#include "simple_local_flags.inc"
 
 ! module global constants
 integer, parameter        :: NOPTS=5         ! nr of optimizers
@@ -25,24 +26,24 @@ class(optimizer), pointer :: opt_ptr=>null() ! the generic optimizer object
 integer, allocatable      :: success(:,:)    ! sucess counter
 integer, allocatable      :: nevals(:,:)     ! number of function evaluations required
 integer                   :: totfails(NOPTS) ! number of total failures
-logical                   :: verbose=.false. ! verbose output or not
+
 
 contains
 
     subroutine exec_optimiser_test( be_verbose )
         logical, optional, intent(in)    :: be_verbose
-        verbose = .false.
+        verbose = .true.
         if( present(be_verbose) ) verbose = be_verbose
-        write(*,*) '****optimiser_test, init'
+        VerbosePrint '****optimiser_test, init'
         call test_bound_routine
         call test_all_optimizers
-        write(*,*) '****optimiser_test, completed'
+        VerbosePrint  '****optimiser_test, completed' 
     end subroutine exec_optimiser_test
 
     subroutine test_bound_routine
         real           :: lims(2,2), vec(2)
         integer        :: i
-        if( verbose ) write(*,*) 'testing the bound routine'
+        VerbosePrint 'testing the bound routine' 
         lims = 0.
         lims(1,2) = 360.
         lims(2,2) = 180.

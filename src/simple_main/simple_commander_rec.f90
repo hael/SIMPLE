@@ -24,7 +24,7 @@ public :: recvol_commander
 public :: eo_volassemble_commander
 public :: volassemble_commander
 private
-
+#include "simple_local_flags.inc"
 type, extends(commander_base) :: recvol_commander
   contains
     procedure :: execute      => exec_recvol
@@ -38,7 +38,7 @@ type, extends(commander_base) :: volassemble_commander
     procedure :: execute      => exec_volassemble
 end type volassemble_commander
 
-contains
+contains 
 
     subroutine exec_recvol( self, cline )
         use simple_rec_master, only: exec_rec_master
@@ -73,7 +73,6 @@ contains
         real, allocatable             :: res05s(:), res0143s(:)
         real                          :: res
         integer                       :: part, s, alloc_stat, n, ss, state4name, file_stat, fnr
-        logical                       :: debug=.false.
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         call b%build_eo_rec_tbox(p)         ! reconstruction toolbox built
@@ -93,7 +92,7 @@ contains
             else
                 s = ss
             endif
-            if( debug ) write(*,*) 'processing state: ', s
+            DebugPrint  'processing state: ', s
             if( b%a%get_statepop( s ) == 0 )cycle           ! Empty state
             call b%eorecvol%reset_all
             do part=1,p%nparts
@@ -103,7 +102,7 @@ contains
                     state4name = s
                 endif
                 allocate(fname, source='recvol_state'//int2str_pad(state4name,2)//'_part'//int2str_pad(part,p%numlen))
-                if( debug ) write(*,*) 'processing file: ', fname
+                DebugPrint  'processing file: ', fname
                 call assemble(fname)
                 deallocate(fname)
             end do
@@ -156,7 +155,6 @@ contains
         integer                       :: part, s, ss, endit, i, state4name, file_stat, fnr
         type(reconstructor)           :: recvol_read
         logical                       :: here(2)
-        logical, parameter            :: debug=.false.
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         call b%build_rec_tbox(p)            ! reconstruction toolbox built
@@ -175,7 +173,7 @@ contains
             else
                 s = ss
             endif
-            if( debug ) write(*,*) 'processing state: ', s
+            DebugPrint  'processing state: ', s
             if( b%a%get_statepop( s ) == 0 )cycle           ! Empty state
             call b%recvol%reset
             do part=1,p%nparts
@@ -185,7 +183,7 @@ contains
                     state4name = s
                 endif
                 allocate(fbody, source='recvol_state'//int2str_pad(state4name,2)//'_part'//int2str_pad(part,p%numlen))
-                if( debug ) write(*,*) 'processing fbody: ', fbody
+                DebugPrint  'processing fbody: ', fbody
                 do i=1,endit
                     if( cline%defined('even') .or. cline%defined('odd') )then
                         if( p%even .eq. 'yes' .and. p%odd .eq. 'no' )then

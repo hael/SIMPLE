@@ -1,8 +1,10 @@
 !==Class simple_commander_misc
 !
-! This class contains the set of concrete miscellanous commanders of the SIMPLE library. This class provides the glue between the reciver 
-! (main reciever is simple_exec program) and the abstract action, which is simply execute (defined by the base class: simple_commander_base). 
-! Later we can use the composite pattern to create MacroCommanders (or workflows)
+! This class contains the set of concrete miscellanous commanders of the SIMPLE
+! library. This class provides the glue between the reciver (main reciever is
+! simple_exec program) and the abstract action, which is simply execute (defined
+! by the base class: simple_commander_base). Later we can use the composite
+! pattern to create MacroCommanders (or workflows)
 !
 ! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
 ! Redistribution and modification is regulated by the GNU General Public License.
@@ -30,6 +32,7 @@ public :: shift_commander
 public :: sym_aggregate_commander
 public :: dsymsrch_commander
 private
+#include "simple_local_flags.inc"
 
 type, extends(commander_base) :: cluster_smat_commander
   contains
@@ -90,7 +93,7 @@ contains
         real                :: avg_ratio, min_ratio, ratio, x, sim
         real, allocatable   :: validinds(:)
         integer, parameter  :: NRESTARTS=10
-        logical             :: debug=.false., done=.false.
+        logical             :: done=.false.
         p = params(cline,.false.)                        ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.)! general objects built
         ! obtain similarity matrix
@@ -130,7 +133,7 @@ contains
             validinds(ncls) = avg_ratio/real(NRESTARTS)
         end do
         ncls_stop = 0
-        done = .false. 
+        done = .false.
         do ncls=2,p%ncls
             write(*,'(a,1x,f9.3,8x,a,1x,i3)') 'COHESION/SEPARATION RATIO INDEX: ', validinds(ncls), ' NCLS: ', ncls
             call b%a%read('shc_clustering_ncls'//int2str_pad(ncls,numlen)//'.txt')
@@ -221,9 +224,9 @@ contains
         real              :: res0143, res05
         p = params(cline) ! parameters generated
         call img%new([p%box,p%box,1], p%smpd)
-        res = img%get_res() 
+        res = img%get_res()
         fsc = file2rarr(p%fsc)
-        do k=1,size(fsc) 
+        do k=1,size(fsc)
         write(*,'(A,1X,F6.2,1X,A,1X,F15.3)') '>>> RESOLUTION:', res(k), '>>> FSC:', fsc(k)
         end do
         ! get & print resolution
@@ -244,7 +247,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_PRINT_MAGIC_BOXES NORMAL STOP ****')
     end subroutine exec_print_magic_boxes
-    
+
     subroutine exec_res( self, cline )
         class(res_commander), intent(inout) :: self
         class(cmdline),       intent(inout) :: cline
@@ -292,7 +295,7 @@ contains
         p = params(cline)                      ! parameters generated
         call b%build_general_tbox(p, cline)    ! general objects built
         ! init
-        e = b%a ! b%a contains the orientations of the references projections 
+        e = b%a ! b%a contains the orientations of the references projections
         cline_c1 = cline
         call cline_c1%set('pgrp', 'c1')
         p_c1 = params(cline_c1)
@@ -314,12 +317,12 @@ contains
             call b%a%rot(symaxis)
             ! symmetry
             call rec_vol(p, b%se)
-            symvol = b%vol
+            call symvol%copy( b%vol )
             ! call symvol%write('sym_vol'//int2str_pad(i,2)//p%ext)
             ! c1
             rotmat = symaxis%get_mat()
             call o%ori_from_rotmat(transpose(rotmat))
-            b%vol = rotvol(asym_vol, o, p)
+            call b%vol%copy( rotvol(asym_vol, o, p) )
             call b%vol%bp(p%hp, p%lp)
             call b%vol%mask(p%msk, 'soft')
             ! call b%vol%write('asym_vol'//int2str_pad(i,2)//p%ext)

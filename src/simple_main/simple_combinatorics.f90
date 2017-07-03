@@ -27,7 +27,7 @@ contains
         integer, intent(in)    :: nrepeats, nptcls
         integer, intent(inout) :: labels(nrepeats,nptcls), consensus(nptcls)
         integer, parameter     :: MAXITS   = 1000
-        real,    parameter     :: TINYTINY = 1e-40
+        real,    parameter     :: TINYTINY = 1e-40               !Intel warn too small for kind=4 real
         logical, parameter     :: DOPRINT  = .false.
         integer, allocatable   :: counts(:), labels_consensus(:,:)
         integer :: nlabels, loc(1), rp(2), it, irnd, inds(nrepeats)

@@ -7,7 +7,6 @@ use simple_syscalls
 implicit none
 type(cmdline)     :: cline
 real              :: starttime, stoptime
-logical           :: be_verbose=.false.
 character(STDLEN) :: time
 call date_and_time(TIME=time)
 starttime = str2real(time)
@@ -21,10 +20,10 @@ call cline%check
 be_verbose = .false.
 if( cline%defined('verbose') )then
     if( trim(cline%get_carg('verbose')) .eq. 'yes' )then
-        be_verbose = .true.
+        global_verbose = .true.
     endif
 endif
-call exec_speedtest(cline, be_verbose)
+call exec_speedtest(cline, global_verbose)
 call date_and_time(TIME=time)
 stoptime = str2real(time)
 write(*,'(a,1x,f9.2)') 'time elapsed (s): ', stoptime - starttime

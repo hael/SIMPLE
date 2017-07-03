@@ -1,9 +1,9 @@
 !==Class simple_winfuns
 !
-! the simple_winfuns provides interfaces and definitions for the window/instrument functions used in the SIMPLE library. 
-! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_. Redistribution 
+!> the simple_winfuns provides interfaces and definitions for the window/instrument functions used in the SIMPLE library.
+! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_. Redistribution
 ! or modification is regulated by the GNU General Public License. *Author:* Hans Elmlund, 2013-08-12.
-! 
+!
 !==Changes are documented below
 !
 ! RELEVANT INFO:
@@ -12,14 +12,14 @@
 ! Jackson 1991, Least Relative Aliased Energy on a 1X grid
 !           Gaussian Kaiser-Bessel
 !             var       beta
-! W=3       0.4241    1.9980     
+! W=3       0.4241    1.9980
 ! W=4       0.4927    2.3934
 ! W=5       0.4839    3.3800
 
 ! Beatty 2005, 2X grid
 !           Jackson   Beatty
 !             beta     beta
-! W=3        6.6875   6.4861     
+! W=3        6.6875   6.4861
 ! W=4        9.1375   8.9962
 ! W=5       11.5250  11.4410
 !
@@ -37,7 +37,7 @@ type :: winfuns
     procedure(ifun), pointer, nopass :: instr_fun=>null() !< instrument function
     real :: Whalf=0.                                      !< window halfwidth
     real :: alpha=0.                                      !< oversampling (padding) fatcor
-    real :: W=0.                                          !< window fullwidth      
+    real :: W=0.                                          !< window fullwidth
     real :: beta=0.                                       !< KB shape factor
     real :: betasq, twooW, twoW, oneoW, piW, pioW
     real :: bmanc1, bmanc2, bmanc3, bmanc4, bmanc5, bmanc6, bmanc7
@@ -108,12 +108,12 @@ contains
             self%beta=pi*sqrt((self%W**2./self%alpha**2.)*(self%alpha-0.5)**2.-0.8)
         endif
         self%betasq = self%beta*self%beta
-        self%twooW = 2./self%W 
-        self%twoW = 2.*self%W 
-        self%oneoW = 1./self%W 
+        self%twooW = 2./self%W
+        self%twoW = 2.*self%W
+        self%oneoW = 1./self%W
         self%piW = pi*self%W
         self%pioW = pi/self%W
-        self%bmanc1=21./50.            
+        self%bmanc1=21./50.
         self%bmanc2=2./25.
         self%bmanc3=pi/self%Whalf
         self%bmanc4=twopi/self%Whalf
@@ -148,21 +148,21 @@ contains
                 stop
         end select
     end function
-    
+
     !> \brief  2 check which window function
     function which( self ) result( this )
         class(winfuns), intent(in) :: self
         character(len=STDLEN) :: this
         this = self%wfun_str
     end function
-    
+
     !> \brief  2 get window half-width
     function get_Whalf( self ) result( Whalf )
         class(winfuns), intent(in) :: self
         real :: Whalf
         Whalf = self%Whalf
     end function
-    
+
     !> \brief  2 evaluate the apodization function
     function eval_apod( self, x ) result( r )
         class(winfuns), intent(in) :: self
@@ -170,7 +170,7 @@ contains
         real :: r
         r = self%apod_fun(self,x)
     end function
-    
+
     !> \brief  2 evaluate the instrument function
     function eval_instr( self, x ) result( r )
         class(winfuns), intent(in) :: self
@@ -178,11 +178,11 @@ contains
         real :: r
         r = self%instr_fun(self,x)
     end function
-    
+
     ! APODIZATION/INSTRUMENT FUNCTION PAIRS
-    
+
     ! BLACKMANN
-    
+
     !>  \brief  is the Blackmann apodization function
     function bman_apod( self, x ) result( r ) ! OK
         class(winfuns), intent(in) :: self
@@ -194,7 +194,7 @@ contains
         endif
         r = self%bmanc1+0.5*cos(self%bmanc3*x)+self%bmanc2*cos(self%bmanc4*x)
     end function
-    
+
     !>  \brief  is the Blackmann instrument function
     function bman_instr( self, x ) result( r )
         class(winfuns), intent(in) :: self
@@ -215,9 +215,9 @@ contains
             r = (self%Whalf*(self%bmanc5-self%bmanc6*arg)*r)/div
         endif
     end function
-    
+
     ! HANNING
-    
+
     !>  \brief  is the Hanning apodization function
     function hann_apod( self, x ) result( r )
         class(winfuns), intent(in) :: self
@@ -230,7 +230,7 @@ contains
         r = cos(self%pioW*x)
         r = r*r
     end function
-    
+
     !>  \brief  is the Hanning instrument function
     function hann_instr( self, x ) result( r )
         class(winfuns), intent(in) :: self
@@ -251,9 +251,9 @@ contains
             r = (self%Whalf*r)/div
         endif
     end function
-    
+
     ! KAISER-BESSEL
-    
+
     !>  \brief  is the Kaiser-Bessel apodization function, abs(x) <= Whalf
     function kb_apod( self, x ) result( r ) ! OK
         class(winfuns), intent(in) :: self
@@ -267,7 +267,7 @@ contains
         arg = 1.-arg*arg
         r = self%oneoW*bessi0(self%beta*sqrt(arg))
     end function
-    
+
     !>  \brief  is the Kaiser-Bessel instrument function
     function kb_instr( self, x ) result( r )
         class(winfuns), intent(in) :: self
@@ -286,9 +286,9 @@ contains
             r = 1
         endif
     end function
-    
+
     ! LINEAR
-    
+
     !>  \brief  returns the normalized linear apodization function of x
     !!          if x = 0., linear = 1. if x .ge. 1.0, linear = 0.
     !!          also called Bartlett window
@@ -302,7 +302,7 @@ contains
         else
             r = 1.-ax/self%Whalf
         endif
-    end function 
+    end function
 
     !>  \brief  the instrument function to linear interpolation kernel
     function lin_instr( self, x ) result( r )
@@ -312,9 +312,9 @@ contains
         arg = self%sinc_apod(x*self%Whalf)
         r = self%Whalf*arg*arg
     end function
-    
+
     ! NEAREST NEIGHBOR
-    
+
     !>  \brief  nearest neighbor apodization function, returns 0.0 if abs(x) .gt. 0.5, else 1.0
     !!          warning: make sure that x is positive!
     function nn_apod( self, x ) result( r )
@@ -335,7 +335,7 @@ contains
         real :: r
         r = self%sinc_apod(x*self%Whalf)
     end function
-    
+
     ! SINC
 
     !>  \brief  is a normalized sinc apodization function
@@ -354,7 +354,7 @@ contains
             r = sin(arg)/(arg)
         endif
     end function
-    
+
     !>  \brief  returns the instrument function to sinc, which is a rectangle
     function sinc_instr( self, x ) result( r )
         class(winfuns), intent(in) :: self
@@ -366,7 +366,7 @@ contains
             r = 1.
         endif
     end function
-    
+
     ! BESSEL FUNCTION FOR THE KAISER-BESSEL WINDOW
 
     !>  \brief returns the modified Bessel function I0(x) for any real x
@@ -385,7 +385,7 @@ contains
                 &y*(qs(4)+y*(qs(5)+y*(qs(6)+y*(qs(7)+y*(qs(8)+y*qs(9)))))))))
         endif
     end function bessi0
-    
+
     !>  \brief returns the modified Bessel function I0(x) for any real x
     ! function bessi0(x) result(bess)
     !     real, intent(in) :: x
@@ -405,7 +405,7 @@ contains
     !         bess = (exp(ax)/sqrt(ax))*(q1+y*(q2+y*(q3+y*(q4+y*(q5+y*(q6+y*(q7+y*(q8+y*q9))))))))
     !     endif
     ! end function
-    
+
     !>  \brief returns the modified Bessel function I0(x) for positive real x
     ! function bessk0(x) result(bess)
     !     real, intent(in) :: x
@@ -422,5 +422,5 @@ contains
     !         bess = (exp(-x)/sqrt(x))*(q1+y*(q2+y*(q3+y*(q4+y*(q5+y*(q6+y*(q7)))))))
     !     endif
     ! end function
-  
+
 end module simple_winfuns

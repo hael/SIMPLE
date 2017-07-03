@@ -14,8 +14,7 @@ implicit none
 public :: comlin_srch_init, comlin_srch_get_nproj, comlin_srch_get_nbest, comlin_srch_write_resoris,&
 comlin_srch_symaxis, comlin_srch_pair
 private
-
-logical, parameter :: DEBUG      = .false.
+#include "simple_local_flags.inc"
 integer, parameter :: NPROJ      = 200
 integer, parameter :: NBEST      = 20
 integer, parameter :: NBEST_PAIR = 10
@@ -178,7 +177,7 @@ contains
             ! return best
             orientation_best = resoris%get_ori(order(1))
             write(*,'(A)') '>>> FOUND REFINED SYMMETRY AXIS ORIENTATION'
-            call orientation_best%print
+            call orientation_best%display()
         endif
     end subroutine comlin_srch_symaxis
 

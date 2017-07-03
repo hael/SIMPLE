@@ -20,8 +20,7 @@ implicit none
 
 public :: params
 private
-
-logical, parameter :: debug=.false.
+#include "simple_local_flags.inc"
 
 type :: params
     ! global objects
@@ -41,7 +40,6 @@ type :: params
     character(len=3)      :: countvox='no'
     character(len=3)      :: ctfstats='no'
     character(len=3)      :: cure='no'
-    character(len=3)      :: debug='no'
     character(len=3)      :: discrete='no'
     character(len=3)      :: diverse='no'
     character(len=3)      :: doalign='yes'
@@ -383,7 +381,7 @@ contains
         logical, optional, intent(in)    :: checkdistr, allow_mix
         integer                          :: i, s, ncls, ifoo, lfoo(3), cntfile, nthr_local
         logical                          :: here, ccheckdistr, aamix
-        character(len=STDLEN)            :: cwd_local, debug_local
+        character(len=STDLEN)            :: cwd_local, debug_str
         character(len=1)                 :: checkupfile(50)
         character(len=:), allocatable    :: conv
         integer,          allocatable    :: parts(:,:)
@@ -423,8 +421,11 @@ contains
         call check_carg('ctf',            self%ctf)
         call check_carg('ctfstats',       self%ctfstats)
         call check_carg('cure',           self%cure)
-        call check_carg('debug',          self%debug)
-        debug_local = self%debug
+        call check_carg('debug',          debug_str)
+        if (debug_str == 'yes')then
+            global_debug = .true.  ! from simple_params
+            debug = .true.         ! from simple_local_flags
+        end if
         call check_carg('deftab',         self%deftab)
         call check_carg('dfunit',         self%dfunit)
         call check_carg('dir',            self%dir)
@@ -500,7 +501,12 @@ contains
         call check_carg('tomoseries',     self%tomoseries)
         call check_carg('trsstats',       self%trsstats)
         call check_carg('tseries',        self%tseries)
+        
         call check_carg('verbose',        self%verbose)
+        if(self%verbose == 'yes')then
+            global_verbose = .true.
+            verbose = .true.
+        end if
         call check_carg('vis',            self%vis)
         call check_carg('vol',            self%vol)
         call check_carg('wfun',           self%wfun)
@@ -732,7 +738,7 @@ contains
         if( self%stk .eq. '' .and. self%vols(1) .ne. '' )then
             call find_ldim_nptcls(self%vols(1), self%ldim, ifoo, endconv=conv)
             self%box  = self%ldim(1)
-            if( debug ) print *, 'found logical dimension of volume: ', self%ldim
+            DebugPrint 'found logical dimension of volume: ', self%ldim 
         endif
         if( self%stk .ne. '' )then
             inquire(FILE=self%stk, EXIST=here)
@@ -741,14 +747,14 @@ contains
                 else
                     call find_ldim_nptcls(self%stk, self%ldim, ifoo, endconv=conv)
                     self%ldim(3) = 1
-                    if( debug ) print *, 'found logical dimension of stack: ', self%ldim
+                    DebugPrint 'found logical dimension of stack: ', self%ldim 
                     self%box     = self%ldim(1)
                 endif
                 if( .not. cline%defined('nptcls') )then
                     ! get number of particles from stack
                      call find_ldim_nptcls(self%stk, self%ldim, self%nptcls, endconv=conv)
-                     if( debug ) print *, 'found logical dimension of stack: ', self%ldim
-                     if( debug ) print *, 'found nr of ptcls from stack: ', self%nptcls
+                     DebugPrint 'found logical dimension of stack: ', self%ldim 
+                     DebugPrint 'found nr of ptcls from stack: ', self%nptcls 
                      self%ldim(3) = 1
                 endif
             else
@@ -765,7 +771,7 @@ contains
                 else
                     call find_ldim_nptcls(self%refs, self%ldim, ifoo, endconv=conv)
                     self%ldim(3) = 1
-                    if( debug ) print *, 'found logical dimension of refs: ', self%ldim
+                    DebugPrint 'found logical dimension of refs: ', self%ldim 
                     self%box = self%ldim(1)
                 endif
             else
@@ -966,7 +972,7 @@ contains
         if( file_exists(self%refs) )then
             ! get number of particles from stack
             call find_ldim_nptcls(self%refs, lfoo, ncls, endconv=conv)
-            if( debug ) print *, 'found ncls from refs: ', ncls
+            DebugPrint 'found ncls from refs: ', ncls 
             if( cline%defined('ncls') )then
                 if( ncls /= self%ncls ) stop 'inputtend number of clusters (ncls) not&
                 &consistent with the number of references in stack (p%refs)'
@@ -1051,7 +1057,7 @@ contains
                       stop
                   endif
                   !self%nstates = i
-                  if( self%debug == 'yes' ) write(*,*) nam, '=', self%vols(i)
+                 DebugPrint nam, '=', self%vols(i) 
               endif
           end subroutine check_vol
 
@@ -1080,9 +1086,9 @@ contains
               logical          :: raise_exception
               if( cline%defined(file) )then
                   var = cline%get_carg(file)
-                  if( debug ) write(*,*) 'var = ', var
+                  DebugPrint 'var = ', var 
                   file_descr = fname2format(var)
-                  if( debug ) write(*,*) 'file_descr = ', file_descr
+                  DebugPrint 'file_descr = ', file_descr 
                   raise_exception = .false.
                   if( present(allowed1) )then
                       if( allowed1 == file_descr ) then
@@ -1124,7 +1130,7 @@ contains
                       case DEFAULT
                           stop 'This file format is not supported by SIMPLE; simple_params::check_file'
                   end select
-                  if( debug_local == 'yes' ) write(*,*) file, '=', var
+                  DebugPrint file, '=', var 
               endif
           end subroutine check_file
 
@@ -1203,7 +1209,7 @@ contains
               character(len=*), intent(out) :: var
               if( cline%defined(carg) )then
                   var = cline%get_carg(carg)
-                  if( debug_local == 'yes' ) write(*,*) carg, '=', var
+                  DebugPrint carg, '=', var 
               endif
           end subroutine check_carg
 
@@ -1212,16 +1218,27 @@ contains
               integer, intent(out) :: var
               if( cline%defined(iarg) )then
                   var = nint(cline%get_rarg(iarg))
-                  if( debug_local == 'yes' ) write(*,*) iarg, '=', var
+                  DebugPrint iarg, '=', var 
               endif
           end subroutine check_iarg
+
+          subroutine check_larg( larg, var )
+              character(len=*), intent(in)  :: larg
+              logical, intent(out) :: var
+              integer :: tmp
+              if( cline%defined(larg) )then
+                  tmp =  NINT( cline%get_rarg(larg) )
+                  var = tmp /= 0
+                  DebugPrint larg, '=', var 
+              endif
+          end subroutine check_larg
 
           subroutine check_rarg( rarg, var )
               character(len=*), intent(in)  :: rarg
               real, intent(out) :: var
               if( cline%defined(rarg) )then
                   var = cline%get_rarg(rarg)
-                  if( debug_local == 'yes' ) write(*,*) rarg, '=', var
+                  DebugPrint rarg, '=', var 
               endif
           end subroutine check_rarg
         

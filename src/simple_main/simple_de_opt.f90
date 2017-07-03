@@ -11,7 +11,7 @@ private
 integer, parameter :: N_general = 136,    N_valley = 126,    N_multimodal = 103,    N_flat = 106
 real, parameter    :: F_general = 0.2790, F_valley = 0.4027, F_multimodal = 0.3976, F_flat = 0.5860
 real, parameter    :: X_general = 0.9813, X_valley = 0.9211, X_multimodal = 0.9794, X_flat = 0.3345
-logical, parameter :: debug = .false.
+
 
 type, extends(optimizer) :: de_opt
     private

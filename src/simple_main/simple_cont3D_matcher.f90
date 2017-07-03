@@ -15,11 +15,11 @@ implicit none
 
 public :: cont3D_exec
 private
-
+#include "simple_local_flags.inc"
 integer,                   parameter :: BATCHSZ_MUL = 10   ! particles per thread
 integer,                   parameter :: MAXNPEAKS   = 10
 integer,                   parameter :: NREFS       = 50
-logical,                   parameter :: DEBUG       = .false.
+
 type(polarft_corrcalc)               :: pftcc
 type(oris)                           :: orefs                   !< per particle projection direction search space
 type(cont3D_srch),       allocatable :: cont3Dsrch(:)
@@ -53,7 +53,7 @@ contains
         ! other variables
         type(oris)           :: softoris
         type(ori)            :: orientation
-        integer              :: nbatches, batch, fromp, top, iptcl, state, alloc_stat, ind
+        integer              :: nbatches, batch, fromp, top, iptcl,iptcl_tmp, state, alloc_stat, ind
         ! AUTOMASKING DEACTIVATED FOR NOW
         ! MULTIPLE STATES DEACTIVATED FOR NOW
         if(p%nstates>1)stop 'MULTIPLE STATES DEACTIVATED FOR NOW; cont3D_matcher::cont3Dexec'
@@ -135,7 +135,7 @@ contains
         endif
 
         ! BATCH PROCESSING
-        call del_file(p%outfile)      
+        call del_file(p%outfile)
         do batch = 1, nbatches
             ! BATCH INDICES
             fromp = p%fromp-1 + batches(batch,1)
@@ -145,14 +145,15 @@ contains
                 &batch_imgs(fromp:top), stat=alloc_stat)
             call alloc_err('In pcont3D_matcher::pcont3D_exec_single',alloc_stat)
             do iptcl = fromp, top
+
                 state = nint(b%a%get(iptcl, 'state'))
                 if(state == 0)cycle
                 ! stash raw image for rec
                 call read_img_from_stk(b, p, iptcl)
-                batch_imgs(iptcl) = b%img
+                call batch_imgs(iptcl)%copy(b%img)
                 ! prep pftccs & ctf
                 call init_pftcc(p, iptcl, pftccs(iptcl))
-                call prep_pftcc_ptcl(b, p, iptcl, pftccs(iptcl))
+                call prep_pftcc_ptcl(b, p, iptcl_tmp, pftccs(iptcl))
                 if( p%ctf.ne.'no' )call pftccs(iptcl)%create_polar_ctfmats(p%smpd, b%a)
                 select case(p%refine)
                     case('yes')
@@ -182,7 +183,7 @@ contains
                     state       = nint(orientation%get('state'))
                     if(state == 0)cycle
                     ind   = iptcl-fromp+1
-                    b%img = batch_imgs(iptcl)
+                    call b%img%copy(batch_imgs(iptcl))
                     if(p%npeaks == 1)then
                         call grid_ptcl(b, p, orientation)
                     else
@@ -230,7 +231,7 @@ contains
         else
             converged = b%conv%check_conv_cont3D()
         endif
-        
+
         ! DEALLOCATE
         deallocate(batches)
         deallocate(state_exists)
@@ -249,12 +250,12 @@ contains
                 call b%refvols(state)%expand_cmat
             endif
         enddo
-        if( debug )write(*,*)'prep volumes done'
+        DebugPrint 'prep volumes done'
         ! bring back the original b%vol size
         if( p%boxmatch < p%box )call b%vol%new([p%box,p%box,p%box], p%smpd) ! to double check
     end subroutine prep_vols
 
-    !>  \brief  initialize pftcc 
+    !>  \brief  initialize pftcc
     subroutine init_pftcc(p, iptcl, pftcc)
         class(params),              intent(inout) :: p
         integer,                    intent(in)    :: iptcl
@@ -266,13 +267,13 @@ contains
         endif
     end subroutine init_pftcc
 
-    !>  \brief  preps search space and performs reference projection 
+    !>  \brief  preps search space and performs reference projection
     subroutine prep_pftcc_refs(b, p, iptcl, pftcc)
         use simple_image, only: image
         use simple_ctf,   only: ctf
         class(build),               intent(inout) :: b
         class(params),              intent(inout) :: p
-        integer,                    intent(in)    :: iptcl
+        integer,                    intent(in) :: iptcl
         class(polarft_corrcalc),    intent(inout) :: pftcc
         type(ctf)   :: tfun
         type(image) :: ref_img, ctf_img
@@ -310,14 +311,14 @@ contains
             oref  = orefs%get_ori(iref)
             state = nint(oref%get('state'))
             call b%refvols(state)%fproject_polar(iref, oref, pftcc)
-        enddo          
+        enddo
     end subroutine prep_pftcc_refs
 
-    !>  \brief  particle projection into pftcc 
+    !>  \brief  particle projection into pftcc
     subroutine prep_pftcc_ptcl(b, p, iptcl, pftcc)
         class(build),               intent(inout) :: b
         class(params),              intent(inout) :: p
-        integer,                    intent(in)    :: iptcl
+        integer,                    intent(in) :: iptcl
         class(polarft_corrcalc),    intent(inout) :: pftcc
         type(ori)  :: optcl
         optcl = b%a%get_ori(iptcl)

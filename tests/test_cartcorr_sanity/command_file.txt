@@ -1,0 +1,10 @@
+set terminal x11 persist title  "Gnuplot"
+set nokey
+unset border
+unset xtics
+unset ytics
+unset colorbox
+set palette gray
+plot "data_file.txt" with image
+pause 0
+q

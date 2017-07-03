@@ -1,4 +1,4 @@
-module simple_kbinterpol
+module simple_kbinterpol_elemental
 use simple_defs
 implicit none
 
@@ -94,5 +94,5 @@ contains
                 &y*(qs(4)+y*(qs(5)+y*(qs(6)+y*(qs(7)+y*(qs(8)+y*qs(9)))))))))
         endif
     end function bessi0
-
-end module simple_kbinterpol
+    
+    end module simple_kbinterpol_elemental

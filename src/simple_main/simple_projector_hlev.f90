@@ -101,8 +101,7 @@ contains
         !$omp end parallel do
         call rovol_pad%bwd_ft
         call rovol_pad%clip(rovol)
-        ! HAD TO TAKE OUT BECAUSE PGI COMPILER BAILS
-        ! call rovol%norm
+        call rovol%norm()
         call vol_pad%kill
         call rovol_pad%kill
     end function rotvol
