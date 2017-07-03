@@ -6,8 +6,13 @@ my @lines;
 my @vars;
 my$varlistfile;
 my$simple_argsfile;
-$varlistfile=$ENV{'SIMPLE_PATH'}.'/tests/simple_varlist.txt';
+if ( -d $ENV{'SIMPLE_PATH'}.'/lib64'){
+$varlistfile=$ENV{'SIMPLE_PATH'}.'/lib64/simple/simple_varlist.txt';
+$simple_argsfile=$ENV{'SIMPLE_PATH'}.'/lib64/simple/simple_args.f90';
+}else {
+$varlistfile=$ENV{'SIMPLE_PATH'}.'/lib/simple/simple_varlist.txt';
 $simple_argsfile=$ENV{'SIMPLE_PATH'}.'/lib/simple/simple_args.f90';
+}
 open(PARAMS, "< simple_params.f90") or die "Cannot open simple_params.f90\n";
 @lines = <PARAMS>;
 close(PARAMS);
