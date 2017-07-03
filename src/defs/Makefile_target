@@ -1,3 +1,0 @@
-defs_code: simple_defs.o      \
-           simple_defs_conv.o \
-           simple_fftw3.o     ;
