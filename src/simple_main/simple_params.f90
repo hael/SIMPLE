@@ -71,6 +71,7 @@ type :: params
     character(len=3)      :: phrand='no'
     character(len=3)      :: plot='no'
     character(len=3)      :: readwrite='no'
+    character(len=3)      :: remap_classes='no'
     character(len=3)      :: restart='no'
     character(len=3)      :: rnd='no'
     character(len=3)      :: rm_outliers='yes'
@@ -341,17 +342,18 @@ type :: params
     real    :: ysh=0.
     real    :: zsh=0.
     ! logical variables in ascending alphabetical order
-    logical :: cyclic(7)     = .false.
-    logical :: l_distr_exec  = .false.
-    logical :: l_chunk_distr = .false.
-    logical :: doautomsk     = .false.
-    logical :: doshift       = .false.
-    logical :: l_automsk     = .false.
-    logical :: l_autoscale   = .false.
-    logical :: l_dose_weight = .false. 
-    logical :: l_innermsk    = .false. 
-    logical :: l_pick        = .false.
-    logical :: l_xfel        = .false.
+    logical :: cyclic(7)       = .false.
+    logical :: l_distr_exec    = .false.
+    logical :: l_chunk_distr   = .false.
+    logical :: doautomsk       = .false.
+    logical :: doshift         = .false.
+    logical :: l_automsk       = .false.
+    logical :: l_autoscale     = .false.
+    logical :: l_dose_weight   = .false. 
+    logical :: l_innermsk      = .false. 
+    logical :: l_pick          = .false.
+    logical :: l_remap_classes = .false.
+    logical :: l_xfel          = .false.
   contains
     procedure :: new
 end type params
@@ -479,6 +481,7 @@ contains
         call check_carg('readwrite',      self%readwrite)
         call check_carg('refine',         self%refine)
         call check_carg('refs',           self%refs)
+        call check_carg('remap_classes',  self%remap_classes)
         call check_carg('restart',        self%restart)
         call check_carg('rm_outliers',    self%rm_outliers)
         call check_carg('rnd',            self%rnd)
@@ -980,6 +983,9 @@ contains
                 self%ncls = ncls
             endif
         endif
+        ! set remap_classes flag
+        self%l_remap_classes = .false.
+        if( self%remap_classes .eq. 'yes' ) self%l_remap_classes = .true.
         ! set to particle index if not defined in cmdlin
         if( .not. cline%defined('top') ) self%top = self%nptcls
         ! set the number of input orientations

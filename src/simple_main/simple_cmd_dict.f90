@@ -227,6 +227,7 @@ contains
         call chdict%push('unidoc',        'unified resources and orientations doc')
         call chdict%push('pgrp_known',    'point-group known a priori(yes|no){no}')
         call chdict%push('szsn',          'size of stochastic neighborhood{5}')
+        call chdict%push('remap_classes', 'remove empty and renumber and/or expand # classes(yes|no){no}')
         initialised = .true.
     end subroutine init_cmd_dict
     
