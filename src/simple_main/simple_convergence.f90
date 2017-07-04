@@ -268,7 +268,6 @@ contains
             case('de')
                 self%corr      = self%bap%get_avg('corr')
                 self%dist      = self%bap%get_avg('dist')
-                self%mi_inpl   = self%bap%get_avg('mi_inpl')
                 self%sdev      = self%bap%get_avg('sdev')
                 self%mi_proj   = self%bap%get_avg('mi_proj')
                 self%mi_state  = self%bap%get_avg('mi_state')

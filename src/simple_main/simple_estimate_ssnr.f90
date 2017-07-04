@@ -209,6 +209,7 @@ contains
         allocate( filt(nyq) )
         filt = 0.
         where( corrs > 0. ) filt = sqrt( 2. * corrs / (corrs + 1.) )
+        where( filt  > 0.9999 ) filt = 0.9999
     end function fsc2optlp
 
     !> \brief  converts the SSNR to FSC

@@ -3,7 +3,6 @@ use simple_opt_spec,          only: opt_spec
 use simple_pftcc_opt,         only: pftcc_opt
 use simple_polarft_corrcalc,  only: polarft_corrcalc
 use simple_projector,         only: projector
-use simple_simplex_pftcc_opt, only: simplex_pftcc_opt
 use simple_de_pftcc_opt,      only: de_pftcc_opt
 use simple_defs               ! use all in there
 implicit none
@@ -14,7 +13,6 @@ private
 type, extends(pftcc_opt) :: pftcc_srch
     private
     type(opt_spec)                   :: ospec                  !< optimizer specification object
-    !type(simplex_pftcc_opt)          :: nlopt_simplex          !< simplex optimizer object
     type(de_pftcc_opt)               :: nlopt                  !< simplex optimizer object
     class(polarft_corrcalc), pointer :: pftcc_ptr   => null()  !< pointer to pftcc object
     class(projector),        pointer :: vols_ptr(:) => null()  !< pointer to pftcc object
@@ -58,16 +56,17 @@ contains
         srchlims = lims
         ndim     = 5
         if( present(nrestarts) )self%nrestarts = nrestarts 
-        npeaks_here = 1
-        if(present(npeaks))npeaks_here = npeaks
         maxits_here = 1000 * ndim
         if(present(maxits))maxits_here = maxits
-        ! simplex
-        !call self%ospec%specify('simplex', ndim, ftol=1e-3,&
-        !&gtol=1e-4, limits=srchlims, nrestarts=self%nrestarts)
         ! de
-        call self%ospec%specify('de', ndim, limits=srchlims,&
-        &nrestarts=1, maxits=maxits_here, npeaks=npeaks_here)
+        if(present(npeaks))then
+            npeaks_here = npeaks
+            call self%ospec%specify('de', ndim, limits=srchlims,&
+            &nrestarts=1, maxits=maxits_here, npeaks=npeaks_here)
+        else
+            call self%ospec%specify('de', ndim, limits=srchlims,&
+            &nrestarts=1, maxits=maxits_here)
+        endif
         ! generate the simplex optimizer object 
         call self%nlopt%new(self%ospec)
         ! set pointer to corrcalc object

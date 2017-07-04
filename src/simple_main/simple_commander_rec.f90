@@ -78,6 +78,7 @@ contains
         call b%build_general_tbox(p, cline) ! general objects built
         call b%build_eo_rec_tbox(p)         ! reconstruction toolbox built
         call b%eorecvol%kill_exp            ! reduced meory usage
+        call b%mskvol%kill                 ! reduced memory usage
         allocate(res05s(p%nstates), res0143s(p%nstates), stat=alloc_stat)
         call alloc_err("In: simple_eo_volassemble", alloc_stat)
         res0143s = 0.
@@ -86,7 +87,6 @@ contains
         call b%vol%new([p%box,p%box,p%box], p%smpd, p%imgkind)
         call eorecvol_read%new(p)
         call eorecvol_read%kill_exp        ! reduced memory usage
-        call b%mskvol%kill                 ! reduced memory usage
         n = p%nstates*p%nparts
         do ss=1,p%nstates
             if( cline%defined('state') )then

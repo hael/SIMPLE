@@ -13,10 +13,10 @@ public :: cont3D_de_srch
 private
 
 integer, parameter :: NDOF           = 5
-integer, parameter :: maxits_per_dof = 400
+integer, parameter :: maxits_per_dof = 300
 integer, parameter :: MAXITS         = NDOF * maxits_per_dof
-integer, parameter :: NINIPOP        = 50
-integer, parameter :: NINIPOP_HIGH   = 80 ! < 107
+integer, parameter :: NINIPOP        = 50 ! <= 107
+integer, parameter :: NINIPOP_HIGH   = 80 ! <= 107
 logical, parameter :: debug = .false.
 
 type cont3D_de_srch
@@ -118,7 +118,10 @@ contains
         self%specscore = max(0., median_nocopy(frc))
         ! DE search object
         call self%srch_obj%new(self%pftcc_ptr, self%lims, shbarrier=self%shbarr,&
-        &npeaks=self%npeaks, maxits=MAXITS, vols=self%vols_ptr)
+        &maxits=MAXITS, vols=self%vols_ptr)
+        ! less greedy version:
+        ! call self%srch_obj%new(self%pftcc_ptr, self%lims, shbarrier=self%shbarr,&
+        ! &npeaks=self%npeaks, maxits=MAXITS, vols=self%vols_ptr)
         call self%srch_obj%set_indices(self%ref, self%iptcl, state=self%state)
         call gen_inipop()
         call self%srch_obj%set_inipop(inipop)
@@ -255,14 +258,13 @@ contains
             prev_state = nint(self%o_in%get('state'))
             if(prev_state == state)mi_state = mi_state + 1.
         endif
-        call self%o_out%set('proj', 0.)
+        if(self%o_in%isthere('proj'))     call self%o_out%set('proj', 0.)
+        if(self%o_in%isthere('mi_inpl'))  call self%o_out%set('mi_inpl',  1.)
+        if(self%o_in%isthere('mi_joint')) call self%o_out%set('mi_joint', 1.)       
         call self%o_out%set('mi_proj',  mi_proj)
-        call self%o_out%set('mi_inpl',  1.)
         call self%o_out%set('mi_state', mi_state)
-        call self%o_out%set('mi_joint', 1.)       
-        ! frac (unused in convergence)
         call self%o_out%set('frac', 100.)
-        if(debug)write(*,*)'simple_cont3D_srch::prep_softoris done'
+        if(debug)write(*,*)'simple_cont3D_srch::prep_oris done'
     end subroutine prep_oris
 
     !>  \brief  determines and updates stochastic weights
