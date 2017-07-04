@@ -1,8 +1,12 @@
-!==Class simple_params
+!>simple_params
 !
-! simple_params provides global distribution of constants and derived constants used in the SIMPLE library.
+!! simple_params provides global distribution of constants and derived constants
+!! used in the SIMPLE library.
+!
 ! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_. Redistribution
-! or modification is regulated by the GNU General Public License. *Author:* Hans Elmlund, 2011-08-18.
+! or modification is regulated by the GNU General Public License.
+!
+! *Author:* Hans Elmlund, 2011-08-18.
 !
 !==Changes are documented below
 !
@@ -27,329 +31,329 @@ type :: params
     type(ori)             :: ori_glob
     type(ctfplan)         :: tfplan
     ! yes/no decision variables in ascending alphabetical order
-    character(len=3)      :: acf='no'
-    character(len=3)      :: append='no'
-    character(len=3)      :: async='no'
-    character(len=3)      :: automsk='no'
-    character(len=3)      :: autoscale='yes'
-    character(len=3)      :: avg='no'
-    character(len=3)      :: bin='no'
-    character(len=3)      :: center='no'
-    character(len=3)      :: clustvalid='no'
-    character(len=3)      :: compare='no'
-    character(len=3)      :: countvox='no'
-    character(len=3)      :: ctfstats='no'
+    character(len=3)      :: acf='no'          !< calculate autocorrelation function(yes|no){no}
+    character(len=3)      :: append='no'       !< append in context of files(yes|no){no}
+    character(len=3)      :: async='no'        !< asynchronous (yes|no){no}
+    character(len=3)      :: automsk='no'      !< envelope masking(yes|no|cavg){no}
+    character(len=3)      :: autoscale='yes'   !< automatic down-scaling(yes|no){yes}
+    character(len=3)      :: avg='no'          !< calc average automatic (yes|no){no}
+    character(len=3)      :: bin='no'          !< binarise image(yes|no){no}
+    character(len=3)      :: center='no'       !< center image(s)/class average(s)/volume(s)(yes|no){no}
+    character(len=3)      :: clustvalid='no'   !< validate clustering(yes|homo|no){no}
+    character(len=3)      :: compare='no'      !< do comparison(yes|no){no}
+    character(len=3)      :: countvox='no'     !< count # voxels(yes|no){no}
+    character(len=3)      :: ctfstats='no'     !< calculate ctf statistics(yes|no){no}
     character(len=3)      :: cure='no'
-    character(len=3)      :: discrete='no'
-    character(len=3)      :: diverse='no'
+    character(len=3)      :: discrete='no'     !< be discrete(yes|no){no}
+    character(len=3)      :: diverse='no'      !< diverse or not flag (yes|no){no}
     character(len=3)      :: doalign='yes'
     character(len=3)      :: dopca='yes'
     character(len=3)      :: dopick='yes'
     character(len=3)      :: doprint='no'
-    character(len=3)      :: dynlp='yes'
-    character(len=3)      :: eo='yes'
-    character(len=3)      :: errify='no'
-    character(len=3)      :: even='no'
-    character(len=3)      :: ft2img='no'
-    character(len=3)      :: guinier='no'
+    character(len=3)      :: dynlp='yes'       !< automatic resolution limit update(yes|no){yes}
+    character(len=3)      :: eo='yes'          !< use FSC for filtering and low-pass limit update(yes|no){no}
+    character(len=3)      :: errify='no'       !< introduce error(yes|no){no}
+    character(len=3)      :: even='no'         !< calculate even eo-pair(yes|no){no}
+    character(len=3)      :: ft2img='no'       !< convert Fourier transform to real image of power(yes|no){no}
+    character(len=3)      :: guinier='no'      !< calculate Guinier plot(yes|no){no}
     character(len=3)      :: kmeans='yes'
     character(len=3)      :: local='no'
-    character(len=3)      :: masscen='no'
+    character(len=3)      :: masscen='no'      !< center using binarisation and mass centering(yes|no){no}
     character(len=3)      :: merge='no'
-    character(len=3)      :: mirr='no'
-    character(len=3)      :: neg='no'
+    character(len=3)      :: mirr='no'         !< mirror(no|x|y){no}
+    character(len=3)      :: neg='no'          !< invert contrast of images(yes|no)
     character(len=3)      :: noise_norm ='no'
-    character(len=3)      :: noise='no'
-    character(len=3)      :: norec='no'
-    character(len=3)      :: norm='no'
-    character(len=3)      :: odd='no'
-    character(len=3)      :: order='no'
-    character(len=3)      :: outside='no'
+    character(len=3)      :: noise='no'        !< noise initialisation(yes|no){no}
+    character(len=3)      :: norec='no'        !< do not reconstruct volume(s)(yes|no){no}
+    character(len=3)      :: norm='no'         !< do statistical normalisation avg
+    character(len=3)      :: odd='no'          !< calculate odd eo-pair(yes|no){no}
+    character(len=3)      :: order='no'        !< order ptcls according to correlation(yes|no){no}
+    character(len=3)      :: outside='no'      !< extract boxes outside the micrograph boundaries(yes|no){no}
     character(len=3)      :: pad='no'
-    character(len=3)      :: pgrp_known='no'
-    character(len=3)      :: phaseplate='no'
-    character(len=3)      :: phrand='no'
-    character(len=3)      :: plot='no'
+    character(len=3)      :: pgrp_known='no'   !< point-group known a priori(yes|no){no}
+    character(len=3)      :: phaseplate='no'   !< images obtained with phaseplate(yes|no){no}
+    character(len=3)      :: phrand='no'       !< phase randomize(yes|no){no}
+    character(len=3)      :: plot='no'         !< make plot(yes|no){no}
     character(len=3)      :: readwrite='no'
     character(len=3)      :: restart='no'
-    character(len=3)      :: rnd='no'
-    character(len=3)      :: rm_outliers='yes'
+    character(len=3)      :: rnd='no'          !< random(yes|no){no}
+    character(len=3)      :: rm_outliers='yes' !< remove outliers{yes}
     character(len=3)      :: roalgn='no'
     character(len=3)      :: round='no'
-    character(len=3)      :: shalgn='no'
+    character(len=3)      :: shalgn='no'       !< do 2D shift alignment(yes|no){no}
     character(len=3)      :: shellnorm='no'
-    character(len=3)      :: shbarrier='yes'
-    character(len=3)      :: single='no'
-    character(len=3)      :: soften='no'
-    character(len=3)      :: srch_inpl='yes'
-    character(len=3)      :: stats='no'
-    character(len=3)      :: stream='no'
+    character(len=3)      :: shbarrier='yes'   !< use shift search barrier constraint(yes|no){yes}
+    character(len=3)      :: single='no'       !< simulate a single image(yes|no){no}
+    character(len=3)      :: soften='no'       !< soften envelope with cosine edge(yes|no){no}
+    character(len=3)      :: srch_inpl='yes'   !< search in-plane degrees of freedom(yes|no){yes}
+    character(len=3)      :: stats='no'        !< provide statistics(yes|no){yes}
+    character(len=3)      :: stream='no'       !< sream (real time) execution mode(yes|no){no}
     character(len=3)      :: swap='no'
     character(len=3)      :: test='no'
-    character(len=3)      :: tomo='no'
+    character(len=3)      :: tomo='no'         !< tomography mode(yes|no){no}
     character(len=3)      :: time='no'
-    character(len=3)      :: trsstats='no'
-    character(len=3)      :: tseries='no'
-    character(len=3)      :: verbose='no'
-    character(len=3)      :: vis='no'
-    character(len=3)      :: xfel='no'
-    character(len=3)      :: zero='no'
+    character(len=3)      :: trsstats='no'     !< provide origin shift statistics(yes|no){no}
+    character(len=3)      :: tseries='no'      !< images represent a time-series(yes|no){no}
+    character(len=3)      :: verbose='no'      !< verbosity flag (yes|no){no}
+    character(len=3)      :: vis='no'          !< visualise(yes|no)
+    character(len=3)      :: xfel='no'         !< images are XFEL diffraction patterns(yes|no){no}
+    character(len=3)      :: zero='no'         !< zeroing(yes|no){no}
     ! other fixed length character variables in ascending alphabetical order
-    character(len=STDLEN) :: angastunit='degrees'
-    character(len=STDLEN) :: boxfile=''
-    character(len=STDLEN) :: boxtab=''
+    character(len=STDLEN) :: angastunit='degrees' !< angle of astigmatism unit (radians|degrees){degrees}
+    character(len=STDLEN) :: boxfile=''           !< file with EMAN particle coordinates(.txt/.asc)
+    character(len=STDLEN) :: boxtab=''            !< table (text file) of files with EMAN particle coordinates(.txt/.asc)
     character(len=STDLEN) :: boxtype='eman'
     character(len=STDLEN) :: chunktag=''
     character(len=STDLEN) :: clsdoc=''
-    character(len=STDLEN) :: comlindoc=''
-    character(len=STDLEN) :: ctf='no'
+    character(len=STDLEN) :: comlindoc=''         !< shc_clustering_nclsX.txt
+    character(len=STDLEN) :: ctf='no'             !< ctf flag(yes|no|flip)
     character(len=STDLEN) :: cwd=''
-    character(len=STDLEN) :: deftab=''
-    character(len=STDLEN) :: dfunit='microns'
-    character(len=STDLEN) :: dir=''
-    character(len=STDLEN) :: dir_movies=''
-    character(len=STDLEN) :: dir_reject='rejected'
-    character(len=STDLEN) :: dir_select='selected'
-    character(len=STDLEN) :: dir_target=''
+    character(len=STDLEN) :: deftab=''            !< text file with CTF info(.txt/.asc)
+    character(len=STDLEN) :: dfunit='microns'     !< defocus unit (A|microns){microns}
+    character(len=STDLEN) :: dir=''               !< directory
+    character(len=STDLEN) :: dir_movies=''        !< grab mrc mrcs files from here
+    character(len=STDLEN) :: dir_reject='rejected'!< move rejected files to here{rejected}
+    character(len=STDLEN) :: dir_select='selected'!< move selected files to here{selected}
+    character(len=STDLEN) :: dir_target=''        !< put output here
     character(len=STDLEN) :: dir_ptcls=''
-    character(len=STDLEN) :: doclist=''
-    character(len=STDLEN) :: endian='native'
+    character(len=STDLEN) :: doclist=''           !< list of oritabs for different states
+    character(len=STDLEN) :: endian='native'      !< endiannesss of files(big|little|native){native}
     character(len=STDLEN) :: exec_abspath=''
-    character(len=STDLEN) :: exp_doc=''
-    character(len=4)      :: ext='.mrc'
+    character(len=STDLEN) :: exp_doc=''           !< specifying exp_time and dose_rate per tomogram
+    character(len=4)      :: ext='.mrc'           !< file extension{.mrc}
     character(len=STDLEN) :: extrmode='all'
-    character(len=STDLEN) :: fbody=''
+    character(len=STDLEN) :: fbody=''             !< file body
     character(len=STDLEN) :: featstk='expecstk.bin'
-    character(len=STDLEN) :: filetab=''
-    character(len=STDLEN) :: fname=''
-    character(len=STDLEN) :: fsc='fsc_state01.bin'
-    character(len=STDLEN) :: hfun='sigm'
-    character(len=STDLEN) :: hist='corr'
+    character(len=STDLEN) :: filetab=''           !< list of files(.txt/.asc)
+    character(len=STDLEN) :: fname=''             !< file name
+    character(len=STDLEN) :: fsc='fsc_state01.bin'!< binary file with FSC info{fsc_state01.bin}
+    character(len=STDLEN) :: hfun='sigm'          !< function used for normalization(sigm|tanh|lin){sigm}
+    character(len=STDLEN) :: hist='corr'          !< give variable for histogram plot
     character(len=STDLEN) :: imgkind='em'
-    character(len=STDLEN) :: infile='infile.txt'
-    character(len=STDLEN) :: label='class'
+    character(len=STDLEN) :: infile='infile.txt'  !< table (text file) of inputs(.asc/.txt)
+    character(len=STDLEN) :: label='class'        !< discrete label(class|state){class}
     character(len=STDLEN) :: masks(MAXS)=''
-    character(len=STDLEN) :: mskfile=''
-    character(len=STDLEN) :: msktype='soft'
-    character(len=STDLEN) :: opt='simplex'
-    character(len=STDLEN) :: oritab=''
-    character(len=STDLEN) :: oritab2=''
-    character(len=STDLEN) :: oritab3D=''
-    character(len=STDLEN) :: outfile='outfile.txt'
-    character(len=STDLEN) :: outstk=''
-    character(len=STDLEN) :: outstk2=''
-    character(len=STDLEN) :: outvol=''
-    character(len=STDLEN) :: ctffind_doc=''
+    character(len=STDLEN) :: mskfile=''           !< maskfile.ext
+    character(len=STDLEN) :: msktype='soft'       !< type of mask(hard|soft){soft}
+    character(len=STDLEN) :: opt='simplex'        !< optimiser (powell|simplex|oasis|bforce|pso|de){simplex}
+    character(len=STDLEN) :: oritab=''            !< table (text file) of orientations(.asc/.txt)
+    character(len=STDLEN) :: oritab2=''           !< 2nd table (text file) of orientations(.asc/.txt)
+    character(len=STDLEN) :: oritab3D=''          !< table (text file) of 3D orientations(.asc/.txt)
+    character(len=STDLEN) :: outfile='outfile.txt'!< output document
+    character(len=STDLEN) :: outstk=''            !< output image stack
+    character(len=STDLEN) :: outstk2=''           !< output image stack 2nd
+    character(len=STDLEN) :: outvol=''            !< output volume{outvol.ext}
+    character(len=STDLEN) :: ctffind_doc=''       !< per-micrograph CTF parameters to transfer
     character(len=STDLEN) :: pcastk='pcavecinstk.bin'
     character(len=STDLEN) :: pdfile='pdfile.bin'
-    character(len=STDLEN) :: pgrp='c1'
-    character(len=STDLEN) :: plaintexttab=''
-    character(len=STDLEN) :: prg=''
+    character(len=STDLEN) :: pgrp='c1'            !< point-group symmetry(cn|dn|t|o|i)
+    character(len=STDLEN) :: plaintexttab=''      !< plain text file of input parameters
+    character(len=STDLEN) :: prg=''               !< SIMPLE program to execute
     character(len=STDLEN) :: refine='no'
     character(len=STDLEN) :: refs_msk=''
-    character(len=STDLEN) :: refs=''
-    character(len=STDLEN) :: speckind='sqrt'
+    character(len=STDLEN) :: refs=''              !< initial2Dreferences.ext
+    character(len=STDLEN) :: speckind='sqrt'      !< power spectrum kind(amp|square|phase|real|log|sqrt){sqrt}
     character(len=STDLEN) :: split_mode='even'
     character(len=STDLEN) :: stk_part=''
     character(len=STDLEN) :: stk_part_fbody='stack_part'
-    character(len=STDLEN) :: stk=''
-    character(len=STDLEN) :: stk2=''
-    character(len=STDLEN) :: stk3=''
-    character(len=STDLEN) :: tomoseries=''
-    character(len=STDLEN) :: unidoc=''
+    character(len=STDLEN) :: stk=''               !< particle stack with all images(ptcls.ext)
+    character(len=STDLEN) :: stk2=''              !< 2nd stack(in map2ptcls/select: selected(cavgs).ext)
+    character(len=STDLEN) :: stk3=''              !< 3d stack (in map2ptcls/select: (cavgs)2selectfrom.ext)
+    character(len=STDLEN) :: tomoseries=''        !< filetable of filetables of tomograms
+    character(len=STDLEN) :: unidoc=''            !< unified resources and orientations doc
     character(len=STDLEN) :: vol=''
-    character(len=STDLEN) :: vollist=''
+    character(len=STDLEN) :: vollist=''           !< table (text file) of volume files(.txt/.asc)
     character(len=STDLEN) :: vols_msk(MAXS)=''
     character(len=STDLEN) :: vols(MAXS)=''
-    character(len=STDLEN) :: voltab=''
-    character(len=STDLEN) :: voltab2=''
+    character(len=STDLEN) :: voltab=''            !< table (text file) of volume files(.txt/.asc)
+    character(len=STDLEN) :: voltab2=''           !< 2nd table (text file) of volume files(.txt/.asc)
     character(len=STDLEN) :: wfun='kb'
     ! integer variables in ascending alphabetical order
     integer :: astep=1
     integer :: avgsz=0
     integer :: batchsz=0
-    integer :: binwidth=1
-    integer :: box=0
-    integer :: boxconvsz=256
+    integer :: binwidth=1          !< binary layers grown for molecular envelope(in pixels){1}
+    integer :: box=0               !< square image size(in pixels)
+    integer :: boxconvsz=256       !< size of box used for box-convolution(in pixels)
     integer :: boxmatch=0
     integer :: boxpd=0
     integer :: chunk=0
-    integer :: chunksz=0
-    integer :: class=1
-    integer :: clip=0
-    integer :: corner=0
-    integer :: cube=0
-    integer :: edge=14
-    integer :: find=1
-    integer :: nframesgrp=0
-    integer :: fromf=1
-    integer :: fromp=1
+    integer :: chunksz=0           !< # images/orientations in chunk
+    integer :: class=1             !< cluster identity
+    integer :: clip=0              !< clipped image box size(in pixels)
+    integer :: corner=0            !< corner size(in pixels){0}
+    integer :: cube=0              !< side size(in pixels){0}
+    integer :: edge=14             !< edge size for softening molecular envelope(in pixels)
+    integer :: find=1              !< Fourier index
+    integer :: nframesgrp=0        !< # frames to group before unblur(Falcon 3){0}
+    integer :: fromf=1             !< start frame index
+    integer :: fromp=1             !< start ptcl index
     integer :: froms=1
     integer :: fstep=1
-    integer :: grow=0
-    integer :: iares=10
+    integer :: grow=0              !< # binary layers to grow(in pixels)
+    integer :: iares=10            !< integer angular resolution{10}
     integer :: ind=0
     integer :: iptcl=1
     integer :: jptcl=1
-    integer :: jumpsz=0
+    integer :: jumpsz=0            !< size of contigous segment
     integer :: kfromto(2)
     integer :: ldim(3)=0
-    integer :: maxits=500
+    integer :: maxits=500          !< maximum # iterations
     integer :: maxp=0
-    integer :: minp=10
+    integer :: minp=10             !< minimum cluster population
     integer :: mrcmode=2
     integer :: navgs=1
-    integer :: ncunits=0
+    integer :: ncunits=0           !< # computing units, can be < nparts{nparts}
     integer :: nbest=100
     integer :: nboot=0
-    integer :: ncls=500
+    integer :: ncls=500            !< # clusters
     integer :: ncomps=0
-    integer :: ndiscrete=0
-    integer :: ndocs=0
-    integer :: newbox=0
+    integer :: ndiscrete=0         !< # discrete orientations
+    integer :: ndocs=0             !< # documents
+    integer :: newbox=0            !< new box for scaling (by Fourier padding/clipping
     integer :: newbox2=0
-    integer :: nframes=0
+    integer :: nframes=0           !< # frames{30}
     integer :: nmembers=0
-    integer :: nnn=50
+    integer :: nnn=50              !< # nearest neighbors{500}
     integer :: noris=0
-    integer :: nparts=1
-    integer :: npeaks=1
-    integer :: npix=0
-    integer :: nptcls=1
-    integer :: nran=0
-    integer :: nrefs=100
+    integer :: nparts=1            !< # partitions in distributed exection
+    integer :: npeaks=1            !< # nonzero orientation weights{1}
+    integer :: npix=0              !< # pixles/voxels in binary representation
+    integer :: nptcls=1            !< # images in stk/# orientations in oritab
+    integer :: nran=0              !< # random images to select
+    integer :: nrefs=100           !< # references used for picking{100}
     integer :: nrestarts=1
     integer :: nrots=0
-    integer :: nspace=1000
-    integer :: nstates=1
+    integer :: nspace=1000         !< # projection directions
+    integer :: nstates=1           !< # states to reconstruct
     integer :: nsym=1
-    integer :: nthr=1
-    integer :: nthr_master=1
-    integer :: numlen=0
+    integer :: nthr=1              !< # OpenMP threads{1}
+    integer :: nthr_master=1       !< # OpenMP threads on master node{1}
+    integer :: numlen=0            !< length of number string
     integer :: nvalid=0
     integer :: nvars=30
-    integer :: nvox=0
-    integer :: offset=7
+    integer :: nvox=0              !< # voxels{0}
+    integer :: offset=7            !< pixels offset{7}
     integer :: part=1
     integer :: pcasz=0
     integer :: ppca=0
-    integer :: pspecsz=512
-    integer :: pspecsz_unblur=512
+    integer :: pspecsz=512         !< size of power spectrum(in pixels)
+    integer :: pspecsz_unblur=512  !< size of power spectrum 4 unblur(in pixels)
     integer :: pspecsz_ctffind=1024
     integer :: ptcl=1
     integer :: ring1=2
     integer :: ring2=0
     integer :: spec=0
-    integer :: startit=1
-    integer :: state=1
-    integer :: state2split=0
-    integer :: stepsz=1
-    integer :: szsn=SZSN_INIT
+    integer :: startit=1           !< start iterating from here
+    integer :: state=1             !< state to extract
+    integer :: state2split=0       !< state group to split
+    integer :: stepsz=1            !< size of step{0}
+    integer :: szsn=SZSN_INIT      !< size of stochastic neighborhood{5}
     integer :: tofny=0
-    integer :: tof=1
+    integer :: tof=1               !< stop frame index
     integer :: top=1
     integer :: tos=1
     integer :: trsstep=1
     integer :: update=1000
-    integer :: which_iter=0
-    integer :: xcoord=0
-    integer :: ycoord=0
-    integer :: xdim=0
+    integer :: which_iter=0        !< iteration nr
+    integer :: xcoord=0            !< x coordinate{0}
+    integer :: ycoord=0            !< y coordinate{0}
+    integer :: xdim=0              !< x dimension(in pixles)
     integer :: xdimpd=0
-    integer :: ydim=0
-    ! real variables in ascending alphabetical order  
+    integer :: ydim=0              !< y dimension(in pixles)
+    ! real variables in ascending alphabetical order
     real    :: alpha=2.
-    real    :: amsklp=20.
-    real    :: angerr=0.
+    real    :: amsklp=20.          !< low-pass limit for envelope mask generation(in A)
+    real    :: angerr=0.           !< angular error(in degrees){0}
     real    :: ares=7.
-    real    :: astigerr=0.
-    real    :: astigstep=0.05
-    real    :: athres=0.
+    real    :: astigerr=0.         !< astigmatism error(in microns)
+    real    :: astigstep=0.05      !< step size for astigamtism search(in microns)
+    real    :: athres=0.           !< angular threshold(in degrees)
     real    :: batchfrac=1.0
-    real    :: bfac=200
-    real    :: bfacerr=50.
-    real    :: cenlp=30.
-    real    :: cs=2.7
+    real    :: bfac=200            !< bfactor for sharpening/low-pass filtering(in A**2){200.}
+    real    :: bfacerr=50.         !< bfactor error in simulated images(in A**2){0}
+    real    :: cenlp=30.           !< low-pass limit for binarisation in centering(in A){30 A}
+    real    :: cs=2.7              !< spherical aberration constant(in mm){2.7}
     real    :: ctfreslim=8.
-    real    :: dcrit_rel=0.5
+    real    :: dcrit_rel=0.5       !< critical distance relative to box(0-1){0.5}
     real    :: deflim=4.
-    real    :: defocus=3.
+    real    :: defocus=3.          !< defocus(in microns){3.}
     real    :: dens=0.
-    real    :: dferr=1.
-    real    :: dfmax=7.0
-    real    :: dfmin=0.5
+    real    :: dferr=1.            !< defocus error(in microns){1.0}
+    real    :: dfmax=7.0           !< maximum expected defocus(in microns)
+    real    :: dfmin=0.5           !< minimum expected defocus(in microns)
     real    :: dfsdev=0.1
-    real    :: dose_rate=30.0
+    real    :: dose_rate=30.0      !< dose rate(in e/A2/s)
     real    :: dstep=0.
     real    :: dsteppd=0.
-    real    :: e1=0.
-    real    :: e2=0.
-    real    :: e3=0.
+    real    :: e1=0.               !< 1st Euler(in degrees){0}
+    real    :: e2=0.               !< 2nd Euler(in degrees){0}
+    real    :: e3=0.               !< 3d Euler(in degrees){0}
     real    :: eps=0.003
     real    :: extr_thresh=EXTRINITHRESH
     real    :: eullims(3,2)=0.
-    real    :: expastig=0.1
-    real    :: exp_time=2.0
-    real    :: filwidth=0.
+    real    :: expastig=0.1       !< expected astigmatism(in microns)
+    real    :: exp_time=2.0       !< exposure time(in s)
+    real    :: filwidth=0.        !< width of filament (in A)
     real    :: fny=0.
-    real    :: frac=1.
-    real    :: fraca=0.07
-    real    :: fracdeadhot=0.05
+    real    :: frac=1.            !< fraction of ptcls(0-1){1}
+    real    :: fraca=0.07         !< fraction of amplitude contrast used for fitting CTF{0.07}
+    real    :: fracdeadhot=0.05   !< fraction of dead or hot pixels{0.01}
     real    :: fraczero=0.
     real    :: ftol=1e-6
     real    :: gw=0.5
-    real    :: hp=100.
-    real    :: hp_ctffind=30.
-    real    :: inner=0.
-    real    :: kv=300.
+    real    :: hp=100.            !< high-pass limit(in A)
+    real    :: hp_ctffind=30.     !< high-pass limit 4 ctffind(in A)
+    real    :: inner=0.           !< inner mask radius(in pixels)
+    real    :: kv=300.            !< acceleration voltage(in kV){300.}
     real    :: lam=0.5
     real    :: lp_dyn=20.
-    real    :: lp=20.
-    real    :: lp_ctffind=5.0
-    real    :: lp_pick=20.
+    real    :: lp=20.             !< low-pass limit(in A)
+    real    :: lp_ctffind=5.0     !< low-pass limit 4 ctffind(in A)
+    real    :: lp_pick=20.        !< low-pass limit 4 picker(in A)
     real    :: lplims2D(3)
     real    :: lpmed=20.
-    real    :: lpstart=0.
-    real    :: lpstop=7.0
+    real    :: lpstart=0.         !< start low-pass limit(in A){15}
+    real    :: lpstop=7.0         !< stop low-pass limit(in A){8}
     real    :: lpvalid=20.
-    real    :: moldiam=140.
+    real    :: moldiam=140.       !< molecular diameter(in A)
     real    :: moment=0.
-    real    :: msk=0.
-    real    :: mul=1.
-    real    :: mw=0.
+    real    :: msk=0.             !< mask radius(in pixels)
+    real    :: mul=1.             !< origin shift multiplication factor{1}
+    real    :: mw=0.              !< molecular weight(in kD)
     real    :: neigh=0.2
-    real    :: nsig=2.5
+    real    :: nsig=2.5           !< # sigmas
     real    :: optlims(7,2)=0.
-    real    :: outer=0.
-    real    :: phranlp=35.
-    real    :: power=2.
-    real    :: rrate=0.8
-    real    :: scale=1.
-    real    :: scale2=1.
-    real    :: sherr=0.
-    real    :: smpd=2.
+    real    :: outer=0.           !< outer mask radius(in pixels)
+    real    :: phranlp=35.        !< low-pass phase randomize(yes|no){no}
+    real    :: power=2.           !<
+    real    :: rrate=0.8          !< randomization rate{0.8}
+    real    :: scale=1.           !< image scale factor{1}
+    real    :: scale2=1.          !< image scale factor 2nd{1}
+    real    :: sherr=0.           !< shift error(in pixels){2}
+    real    :: smpd=2.            !< sampling distance, same as EMANs apix(in A)
     real    :: smpd_targets2D(2)
-    real    :: snr
-    real    :: thres=0.
+    real    :: snr=0.             !< signal-to-noise ratio
+    real    :: thres=0.           !< threshold (binarisation: 0-1; distance filer: in pixels)
     real    :: time_per_image=200.
     real    :: time_per_frame=0.
-    real    :: trs=0.
+    real    :: trs=0.             !< maximum halfwidth shift(in pixels)
     real    :: var=1.
-    real    :: width=10.
+    real    :: width=10.          !< falloff of inner mask(in pixels){10}
     real    :: winsz=1.
-    real    :: xsh=0.
-    real    :: ysh=0.
-    real    :: zsh=0.
+    real    :: xsh=0.             !< x shift(in pixels){0}
+    real    :: ysh=0.             !< y shift(in pixels){0}
+    real    :: zsh=0.             !< z shift(in pixels){0}
     ! logical variables in ascending alphabetical order
     logical :: cyclic(7)     = .false.
-    logical :: l_distr_exec  = .false.
-    logical :: l_chunk_distr = .false.
-    logical :: doautomsk     = .false.
+    logical :: doautomsk     = .false.        !< envelope masking(yes|no|cavg){no}
     logical :: doshift       = .false.
     logical :: l_automsk     = .false.
     logical :: l_autoscale   = .false.
-    logical :: l_dose_weight = .false. 
-    logical :: l_innermsk    = .false. 
+    logical :: l_chunk_distr = .false.
+    logical :: l_distr_exec  = .false.
+    logical :: l_dose_weight = .false.
+    logical :: l_innermsk    = .false.
     logical :: l_pick        = .false.
     logical :: l_xfel        = .false.
   contains
@@ -361,13 +365,13 @@ interface params
 end interface
 
 contains
-    
+
     !> \brief  is a constructor
     function constructor( cline, checkdistr, allow_mix ) result( self )
         class(cmdline),    intent(inout) :: cline
         logical, optional, intent(in)    :: checkdistr, allow_mix
         type(params) :: self
-        call self%new( cline, checkdistr, allow_mix )    
+        call self%new( cline, checkdistr, allow_mix )
     end function constructor
 
     !> \brief  is a constructor
@@ -501,7 +505,7 @@ contains
         call check_carg('tomoseries',     self%tomoseries)
         call check_carg('trsstats',       self%trsstats)
         call check_carg('tseries',        self%tseries)
-        
+
         call check_carg('verbose',        self%verbose)
         if(self%verbose == 'yes')then
             global_verbose = .true.
@@ -738,7 +742,7 @@ contains
         if( self%stk .eq. '' .and. self%vols(1) .ne. '' )then
             call find_ldim_nptcls(self%vols(1), self%ldim, ifoo, endconv=conv)
             self%box  = self%ldim(1)
-            DebugPrint 'found logical dimension of volume: ', self%ldim 
+            DebugPrint 'found logical dimension of volume: ', self%ldim
         endif
         if( self%stk .ne. '' )then
             inquire(FILE=self%stk, EXIST=here)
@@ -747,14 +751,14 @@ contains
                 else
                     call find_ldim_nptcls(self%stk, self%ldim, ifoo, endconv=conv)
                     self%ldim(3) = 1
-                    DebugPrint 'found logical dimension of stack: ', self%ldim 
+                    DebugPrint 'found logical dimension of stack: ', self%ldim
                     self%box     = self%ldim(1)
                 endif
                 if( .not. cline%defined('nptcls') )then
                     ! get number of particles from stack
                      call find_ldim_nptcls(self%stk, self%ldim, self%nptcls, endconv=conv)
-                     DebugPrint 'found logical dimension of stack: ', self%ldim 
-                     DebugPrint 'found nr of ptcls from stack: ', self%nptcls 
+                     DebugPrint 'found logical dimension of stack: ', self%ldim
+                     DebugPrint 'found nr of ptcls from stack: ', self%nptcls
                      self%ldim(3) = 1
                 endif
             else
@@ -771,7 +775,7 @@ contains
                 else
                     call find_ldim_nptcls(self%refs, self%ldim, ifoo, endconv=conv)
                     self%ldim(3) = 1
-                    DebugPrint 'found logical dimension of refs: ', self%ldim 
+                    DebugPrint 'found logical dimension of refs: ', self%ldim
                     self%box = self%ldim(1)
                 endif
             else
@@ -839,7 +843,7 @@ contains
                     write(*,*) 'Use simple_exec prg=split'
                     stop
                 endif
-            endif 
+            endif
         endif
         ! if we are doing chunk-based parallelisation...
         self%l_chunk_distr = .false.
@@ -852,10 +856,10 @@ contains
         endif
         ! OpenMP threads
         if( cline%defined('nthr') )then
-!$          call omp_set_num_threads(self%nthr)       
+!$          call omp_set_num_threads(self%nthr)
         else
 !$          self%nthr = omp_get_max_threads()
-!$          call omp_set_num_threads(self%nthr)   
+!$          call omp_set_num_threads(self%nthr)
         endif
         nthr_glob = self%nthr
         if( .not. cline%defined('nthr_master') )then
@@ -930,7 +934,7 @@ contains
         if( .not.cline%defined('mw') .and. self%automsk.eq.'yes') &
             write(*,*) 'WARNING! MW argument not provided in conjunction with AUTOMSK'
         if( self%doautomsk )then
-            if( self%edge <= 0    ) stop 'Invalid value for edge' 
+            if( self%edge <= 0    ) stop 'Invalid value for edge'
             if( self%binwidth < 0 ) stop 'Invalid value for binwidth'
         endif
         ! scaling stuff
@@ -972,7 +976,7 @@ contains
         if( file_exists(self%refs) )then
             ! get number of particles from stack
             call find_ldim_nptcls(self%refs, lfoo, ncls, endconv=conv)
-            DebugPrint 'found ncls from refs: ', ncls 
+            DebugPrint 'found ncls from refs: ', ncls
             if( cline%defined('ncls') )then
                 if( ncls /= self%ncls ) stop 'inputtend number of clusters (ncls) not&
                 &consistent with the number of references in stack (p%refs)'
@@ -1043,7 +1047,7 @@ contains
         write(*,'(A)') '>>> DONE PROCESSING PARAMETERS'
 
       contains
-          
+
           subroutine check_vol( i )
               integer, intent(in) :: i
               character(len=STDLEN) :: nam
@@ -1057,7 +1061,7 @@ contains
                       stop
                   endif
                   !self%nstates = i
-                 DebugPrint nam, '=', self%vols(i) 
+                 DebugPrint nam, '=', self%vols(i)
               endif
           end subroutine check_vol
 
@@ -1086,9 +1090,9 @@ contains
               logical          :: raise_exception
               if( cline%defined(file) )then
                   var = cline%get_carg(file)
-                  DebugPrint 'var = ', var 
+                  DebugPrint 'var = ', var
                   file_descr = fname2format(var)
-                  DebugPrint 'file_descr = ', file_descr 
+                  DebugPrint 'file_descr = ', file_descr
                   raise_exception = .false.
                   if( present(allowed1) )then
                       if( allowed1 == file_descr ) then
@@ -1130,7 +1134,7 @@ contains
                       case DEFAULT
                           stop 'This file format is not supported by SIMPLE; simple_params::check_file'
                   end select
-                  DebugPrint file, '=', var 
+                  DebugPrint file, '=', var
               endif
           end subroutine check_file
 
@@ -1209,7 +1213,7 @@ contains
               character(len=*), intent(out) :: var
               if( cline%defined(carg) )then
                   var = cline%get_carg(carg)
-                  DebugPrint carg, '=', var 
+                  DebugPrint carg, '=', var
               endif
           end subroutine check_carg
 
@@ -1218,7 +1222,7 @@ contains
               integer, intent(out) :: var
               if( cline%defined(iarg) )then
                   var = nint(cline%get_rarg(iarg))
-                  DebugPrint iarg, '=', var 
+                  DebugPrint iarg, '=', var
               endif
           end subroutine check_iarg
 
@@ -1229,7 +1233,7 @@ contains
               if( cline%defined(larg) )then
                   tmp =  NINT( cline%get_rarg(larg) )
                   var = tmp /= 0
-                  DebugPrint larg, '=', var 
+                  DebugPrint larg, '=', var
               endif
           end subroutine check_larg
 
@@ -1238,10 +1242,10 @@ contains
               real, intent(out) :: var
               if( cline%defined(rarg) )then
                   var = cline%get_rarg(rarg)
-                  DebugPrint rarg, '=', var 
+                  DebugPrint rarg, '=', var
               endif
           end subroutine check_rarg
-        
+
     end subroutine new
 
 end module simple_params

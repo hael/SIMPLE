@@ -1,6 +1,6 @@
-!==Class simple_simplex_opt
+!> simple_simplex_opt
 !
-! Minimization of an externally defined function by the simplex method of Nelder and Mead
+!! Minimization of an externally defined function by the simplex method of Nelder and Mead
 ! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_. 
 ! Redistribution or modification is regulated by the GNU General Public License. 
 ! *Author:* Hans Elmlund, 2013-10-15

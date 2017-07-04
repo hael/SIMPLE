@@ -5,8 +5,8 @@ module simple_cluster_valid
 implicit none
 #include "simple_local_flags.inc"
 
-!>  \brief  is the type definition for the validation class, driven by pointers since the data most likley
-!!          will anyway be allocated elsewhere
+!>  \brief is the type definition for the validation class, driven by pointers
+!>  since the data most likley will anyway be allocated elsewhere
 type cluster_valid
     integer              :: nptcls     = 0   !< number of particles being clustered
     integer              :: npairs     = 0   !< number of particle pairs

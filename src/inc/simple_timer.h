@@ -1,12 +1,12 @@
-/*
-  C/FORTRAN  preprocessor macros for timing module blocks
-  Note: __PRETTY_FUNCTION__ is GNU specific and not standard
-        __FILE__ is standard but is different some compilers
-        __LINE__ is defined in the standard
-
-
-     2017    Michael Eager (michael.eager@monash.edu)
-*/
+/** Simple timer macros
+ * C/FORTRAN  preprocessor macros for timing module blocks
+ * Note: __PRETTY_FUNCTION__ is GNU specific and not standard
+ *       __FILE__ is standard but is different some compilers
+ *       __LINE__ is defined in the standard
+ *
+ *
+ *    2017    Michael Eager (michael.eager@monash.edu)
+ **/
 
 #ifndef SIMPLE_TIMER_H
 #define SIMPLE_TIMER_H

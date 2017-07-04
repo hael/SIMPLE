@@ -1,8 +1,10 @@
-!==Class simple_commander_imgproc
+!> simple_commander_imgproc
 !
-! This class contains the set of concrete general image processing commanders of the SIMPLE library. This class provides the glue 
-! between the reciver (main reciever is simple_exec program) and the abstract action, which is simply execute (defined by the base 
-! class: simple_commander_base). Later we can use the composite pattern to create MacroCommanders (or workflows)
+!! This class contains the set of concrete general image processing commanders
+!! of the SIMPLE library. This class provides the glue between the reciver (main
+!! reciever is simple_exec program) and the abstract action, which is simply
+!! execute (defined by the base class: simple_commander_base). Later we can use
+!! the composite pattern to create MacroCommanders (or workflows)
 !
 ! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
 ! Redistribution and modification is regulated by the GNU General Public License.
@@ -73,7 +75,7 @@ type, extends(commander_base) :: stackops_commander
 end type stackops_commander
 
 contains
-    
+    !> binarise is a program for binarisation of stacks and volumes
     subroutine exec_binarise( self, cline )
         class(binarise_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
@@ -130,7 +132,7 @@ contains
             end subroutine
                 
     end subroutine exec_binarise
-    
+    !> convert is a program for converting between SPIDER and MRC formats
     subroutine exec_convert( self, cline )
         class(convert_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
@@ -154,7 +156,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_CONVERT NORMAL STOP ****')
     end subroutine exec_convert
-
+    !> corrcompare is a wrapper program for CTFFIND4 (Grigorieff lab)
     subroutine exec_corrcompare( self, cline )
         use simple_image, only: image
         use simple_stat,  only: moment
@@ -232,7 +234,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_CORRCOMPARE NORMAL STOP ****')
     end subroutine exec_corrcompare
-
+    !> ctfops is a program for applying CTF to stacked images
     subroutine exec_ctfops( self, cline )
         use simple_procimgfile, only: apply_ctf_imgfile
         use simple_ctf,         only: ctf
@@ -287,7 +289,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_CTFOPS NORMAL STOP ****')
     end subroutine exec_ctfops
-
+    !> filter is a program for stacking individual images or multiple stacks into one
     subroutine exec_filter( self, cline )
         use simple_procimgfile, only: bp_imgfile, phase_rand_imgfile
         class(filter_commander), intent(inout) :: self
@@ -342,7 +344,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_FILTER NORMAL STOP ****')
     end subroutine exec_filter
-    
+   !> volume/image_smat is a program for creating a similarity matrix based on volume2volume correlation
     subroutine exec_image_smat(self, cline)
         use simple_corrmat  ! use all in there
         use simple_ori,     only: ori
@@ -386,6 +388,13 @@ contains
         call simple_end('**** SIMPLE_IMAGE_SMAT NORMAL STOP ****')
     end subroutine exec_image_smat
 
+
+    !> norm is a program for normalization of MRC or SPIDER stacks and volumes. 
+    !! If you want to normalise your images inputted with stk, set norm=yes.
+    !! hfun (e.g. hfun=sigm) controls the normalisation function. If you want to
+    !! perform noise normalisation of the images set noise_norm=yes given a mask
+    !! radius msk (pixels). If you want to normalise your images or volume
+    !! (vol1) with respect to their power spectrum set shell_norm=yes
     subroutine exec_norm( self, cline )
         use simple_procimgfile,   only: norm_imgfile, noise_norm_imgfile, shellnorm_imgfile
         class(norm_commander), intent(inout) :: self
@@ -443,7 +452,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_NORM NORMAL STOP ****')
     end subroutine exec_norm
-    
+    !> sclae is a program that provides re-scaling and clipping routines for MRC or SPIDER stacks and volumes
     subroutine exec_scale( self, cline )
         use simple_procimgfile  ! use all in there
         use simple_image,       only: image
@@ -588,7 +597,8 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_SCALE NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_scale
-    
+
+    !> stack is a program for stacking individual images or multiple stacks into one
     subroutine exec_stack( self, cline )
         use simple_imgfile,      only: imgfile
         use simple_image,        only: image
@@ -683,7 +693,23 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_STACK NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_stack
-
+    !> stackops is a program that provides standard single-particle image
+    !> processing routines that are applied to MRC or SPIDER stacks.
+    !! If you want to extract a particular state, give an alignment document
+    !! (oritab) and set state to the state that you want' to extract. If you
+    !! want to select the fraction of best particles (according to t he goal
+    !! function), input an alignment doc (oritab) and set frac. You can combine
+    !! the state and frac options. If you want to apply noise to images, give
+    !! the desired signal-to-noise ratio via snr. If you want to calculate the
+    !! autocorrelation function of your images set acf=yes. If you want to
+    !! extract a contiguous subset of particle images from the stack, set fromp
+    !! and top. If you want to fish out a number of particle images from your
+    !! stack at random, set nran to some nonzero in teger number less than
+    !! nptcls. With avg=yes the global average of the input stack is calculated.
+    !! If you define nframesgrp to some integer number larger than one averages
+    !! with chunk sizes of nframesgrp are produced, which may be useful for
+    !! analysis of dose-fractionated image series. neg inverts the contrast of
+    !! the images
     subroutine exec_stackops( self, cline )
         use simple_ran_tabu,    only: ran_tabu
         use simple_procimgfile, only: neg_imgfile, acf_imgfile, frameavg_imgfile

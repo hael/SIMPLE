@@ -8,7 +8,7 @@ real, private, parameter :: SHTHRESH=0.0001
 
 contains
 
-    ! DOSE FILTERING (Grant, Grigorieff eLife 2015)
+    !> DOSE FILTERING (Grant, Grigorieff eLife 2015)
 
     !>  \brief input is template image, accumulative dose (in e/A2) and acceleration voltage
     !!         output is filter coefficients
@@ -59,7 +59,7 @@ contains
         end do
     end function resample_filter
     
-    ! WIENER RESTORATION ROUTINES
+    !> WIENER RESTORATION ROUTINES
 
     !>  \brief does the Wiener restoration of aligned images in 2D
     !!   only for testing

@@ -1,8 +1,10 @@
-!==Class simple_commander_comlin
-!
-! This class contains the set of concrete common-lines commanders of the SIMPLE library. This class provides the glue between the reciver 
-! (main reciever is simple_exec program) and the abstract action, which is simply execute (defined by the base class: simple_commander_base). 
-! Later we can use the composite pattern to create MacroCommanders (or workflows)
+!> simple_commander_comlin SIMPLE class
+!!
+!! This class contains the set of concrete common-lines commanders of the SIMPLE
+!! library. This class provides the glue between the reciver (main reciever is
+!! simple_exec program) and the abstract action, which is simply execute
+!! (defined by the base class: simple_commander_base). Later we can use the
+!! composite pattern to create MacroCommanders (or workflows)
 !
 ! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
 ! Redistribution and modification is regulated by the GNU General Public License.
@@ -32,7 +34,7 @@ type, extends(commander_base) :: symsrch_commander
 end type symsrch_commander
 
 contains
-
+!> comlin_smat commander for common-line search
     subroutine exec_comlin_smat( self, cline )
         use simple_comlin_srch   ! use all in there
         use simple_ori,          only: ori
@@ -136,7 +138,18 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_COMLIN_SMAT NORMAL STOP ****')
     end subroutine exec_comlin_smat
-    
+    !> symsrch commander for symmetry searching
+    !! is a program for searching for the principal symmetry axis of a volume
+    !! reconstructed without assuming any point-group symmetry. The program
+    !! takes as input an asymmetrical 3D reconstruction. The alignment document
+    !! for all the particle images that have gone into the 3D reconstruction and
+    !! the desired point-group symmetry needs to be inputted. The 3D
+    !! reconstruction is then projected in 50 (default option) even directions,
+    !! common lines-based optimisation is used to identify the principal
+    !! symmetry axis, the rotational transformation is applied to the inputted
+    !! orientations, and a new alignment document is produced. Input this
+    !! document to recvol together with the images and the point-group symmetry
+    !! to generate a symmetrised map
     subroutine exec_symsrch( self, cline )
         use simple_strings,        only: int2str_pad
         use simple_oris,           only: oris

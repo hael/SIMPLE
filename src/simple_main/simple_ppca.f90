@@ -1,6 +1,4 @@
-!==Class simple_ppca
-!
-! simple_ppca is the SIMPLE class for probabilistic principal component analysis.
+!> simple_ppca is the SIMPLE class for probabilistic principal component analysis.
 ! This code should be able to deal with many millions of particle images.
 ! The code is distributed with the hope that it will be useful, but _WITHOUT_
 ! _ANY_ _WARRANTY_. Redistribution or modification is regulated by the

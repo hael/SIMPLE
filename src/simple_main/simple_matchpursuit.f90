@@ -1,5 +1,5 @@
-!==Class simple_matchingpursuit
-!
+!> simple matching pursuit module
+!!
 module simple_matchpursuit
 use simple_defs
 use simple_jiffys, only: alloc_err
@@ -79,9 +79,9 @@ contains
     !>  \brief  performs pearson correlation-based matching pursuit & returns feature index
     subroutine exec( self, featlims, featlim, limit )
         class(matchpursuit), intent(inout)     :: self
-        integer, intent(in)                    :: featlims(2) ! range of features to cycle trhough
-        integer, intent(inout)                 :: featlim     ! return value
-        real,    intent(in), optional          :: limit       ! optional convergence criterion
+        integer, intent(in)                    :: featlims(2) !< range of features to cycle trhough
+        integer, intent(inout)                 :: featlim     !< feature index (return value)
+        real,    intent(in), optional          :: limit       !< optional convergence criterion
         integer :: i, feat_ini
         real    :: avgcc, avgcc_prev
         real    :: lim

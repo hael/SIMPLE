@@ -439,9 +439,9 @@ contains
         use simple_math, only: hpsort
         class(ctf), intent(in)    :: self
         real,       intent(in)    :: phase_shifts(:)
-        real,       intent(in)    :: ang
-        real,       intent(inout) :: spaFreqSq(:) ! assumed to be 2x size of phase_shift array
-        integer,    intent(out)   :: nsols
+        real,       intent(in)    :: ang             !< angle (radians)
+        real,       intent(inout) :: spaFreqSq(:)    !< assumed to be 2x size of phase_shift array
+        integer,    intent(out)   :: nsols           !< num of solutions
         integer :: i
         real    :: curr_sols(2)
         integer :: curr_nsols

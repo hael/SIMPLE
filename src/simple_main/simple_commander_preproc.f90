@@ -1,8 +1,10 @@
-!==Class simple_commander_preproc
-!
-! This class contains the set of concrete preprocessing commanders of the SIMPLE library. This class provides the glue between the reciver 
-! (main reciever is simple_exec program) and the abstract action, which is simply execute (defined by the base class: simple_commander_base). 
-! Later we can use the composite pattern to create MacroCommanders (or workflows)
+!> simple_commander_preproc Preprocessor interface class
+!!
+!! This class contains the set of concrete preprocessing commanders of the
+!! SIMPLE library. This class provides the glue between the reciver (main
+!! reciever is simple_exec program) and the abstract action, which is simply
+!! execute (defined by the base class: simple_commander_base). Later we can use
+!! the composite pattern to create MacroCommanders (or workflows)
 !
 ! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
 ! Redistribution and modification is regulated by the GNU General Public License.
@@ -76,7 +78,7 @@ end type extract_commander
 contains
 
     ! UNBLUR + CTFFIND + PICK + EXTRACT IN SEQUENCE
-
+!> preproc is a pipelined unblur + ctffind  + pick + extract in sequence program
     subroutine exec_preproc( self, cline )
         use simple_unblur_iter,  only: unblur_iter
         use simple_ctffind_iter, only: ctffind_iter
@@ -198,7 +200,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_PREPROC NORMAL STOP ****')
     end subroutine exec_preproc
-
+    !> select_framesis a program for selecting contiguous segments of frames from DDD movies
     subroutine exec_select_frames( self, cline )
         use simple_imgfile, only: imgfile
         use simple_image,   only: image
@@ -265,7 +267,8 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_SELECT_FRAMES NORMAL STOP ****')
     end subroutine exec_select_frames
-    
+    !> boxconvs is a program for averaging overlapping boxes across a micrograph
+    !! in order to check if gain correction was appropriately done
     subroutine exec_boxconvs( self, cline )
         use simple_image, only: image
         class(boxconvs_commander), intent(inout) :: self
@@ -325,7 +328,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_BOXCONVS NORMAL STOP ****')
     end subroutine exec_boxconvs
-
+    !> powerspecs is a program for generating powerspectra from a stack or filetable
     subroutine exec_powerspecs( self, cline )
         use simple_imgfile, only: imgfile
         use simple_image,   only: image
@@ -393,6 +396,18 @@ contains
         call simple_end('**** SIMPLE_POWERSPECS NORMAL STOP ****')
     end subroutine exec_powerspecs
 
+    !> unblur is a program for movie alignment or unblurring based the same principal strategy
+    !! as Grigorieffs program (hence the name). There are two important
+    !! differences: automatic weighting of the frames using a correlation-based
+    !! M-estimator and continuous optimisation of the shift parameters. Input is
+    !! a textfile with absolute paths to movie files in addition to a few input
+    !! parameters, some of which deserve a comment. If dose_rate and exp_time
+    !! are given the individual frames will be low-pass filtered accordingly
+    !! (dose-weighting strategy). If scale is given, the mov ie will be Fourier
+    !! cropped according to the down-scaling factor (for super-resolution
+    !! movies). If nframesgrp is given the frames will be pre-averaged in the
+    !! giv en chunk size (Falcon 3 movies). If fromf/tof are given, a contiguous
+    !! subset of frames will be averaged without any dose-weighting applied.
     subroutine exec_unblur( self, cline )
         use simple_unblur_iter, only: unblur_iter
         use simple_oris,        only: oris
@@ -469,6 +484,7 @@ contains
         call simple_end('**** SIMPLE_UNBLUR NORMAL STOP ****')
     end subroutine exec_unblur
 
+!> ctffind  is a wrapper program for CTFFIND4 (Grigorieff lab)
     subroutine exec_ctffind( self, cline )
         use simple_ctffind_iter, only: ctffind_iter
         use simple_oris,         only: oris
@@ -518,7 +534,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_CTFFIND NORMAL STOP ****')
     end subroutine exec_ctffind
-
+    !> select is a program for selecting files based on image correlation matching
     subroutine exec_select( self, cline )
         use simple_image,    only: image
         use simple_syscalls, only: exec_cmdline
@@ -636,7 +652,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_SELECT NORMAL STOP ****')
     end subroutine exec_select
-
+    !> makepickrefs make picker references
     subroutine exec_makepickrefs( self, cline )
         use simple_commander_volops,  only: projvol_commander
         use simple_commander_imgproc, only: stackops_commander, scale_commander
@@ -698,7 +714,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_MAKEPICKREFS NORMAL STOP ****')
     end subroutine exec_makepickrefs
-
+    !> pick particles 
     subroutine exec_pick( self, cline)
         use simple_pick_iter, only: pick_iter
         class(pick_commander), intent(inout) :: self
@@ -732,7 +748,15 @@ contains
             write(*,'(f4.0,1x,a)') 100.*(real(movie_counter)/real(ntot)), 'percent of the micrographs processed'
         end do
     end subroutine exec_pick
-    
+
+    !> extract is a program that extracts particle images from DDD movies or integrated movies.
+    !! Boxfiles are assumed to be in EMAN format but we provide a conversion
+    !! script (relion2emanbox.pl) for *.star files containing particle
+    !! coordinates obtained with Relion. The program creates one stack per movie
+    !! frame as well as a stack of corrected framesums. In addition to
+    !! single-particle image stacks, the program produces a parameter file
+    !! extract_params.txt that can be used in conjunction with other SIMPLE
+    !! programs. We obtain CTF parameters with CTFFIND4
     subroutine exec_extract( self, cline )
         use simple_nrtxtfile, only: nrtxtfile
         use simple_imgfile,   only: imgfile

@@ -1,7 +1,7 @@
 !> \brief FSC comparison module
 module simple_fsc_compare
 implicit none
-    
+
 type :: fsc_compare
     private
     real,    pointer     :: pfscs(:,:) => null()

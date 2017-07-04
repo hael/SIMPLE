@@ -6,6 +6,7 @@ include(SetCompileFlag)
 
 #include(${CMAKE_ROOT}/Modules/CMakeDetermineFortranCompiler.cmake)
 #include(${CMAKE_ROOT}/Modules/CMakeDetermineCCompiler.cmake)
+## Double check cpp is not Clang
 if(NOT CMAKE_CPP_COMPILER)
 if(NOT $ENV{CPP} STREQUAL "")
   set(TMP_CPP_COMPILER $ENV{CPP})
@@ -32,27 +33,6 @@ Make sure you prepend  /usr/local/bin (Homebrew) or /opt/local/bin (MacPorts) or
 In LD_LIBRARY_PATH prepend the appropriate lib path.
     ")
 
-message(STATUS "Making sure your preprocessor points to the correct binary")
-execute_process(COMMAND "${TMP_CPP_COMPILER}" --version
-  OUTPUT_VARIABLE ACTUAL_FC_TARGET
-  OUTPUT_STRIP_TRAILING_WHITESPACE)
-if(ACTUAL_FC_TARGET MATCHES "Clang|clang")
-  message(STATUS "Found cpp is actually Clang -- Trying other paths")
-  find_file (
-    TMP_CPP_COMPILER
-    NAMES cpp- cpp-4.9 cpp-5 cpp5 cpp-6 cpp6
-    PATHS /usr/local/bin /opt/local/bin /sw/bin /usr/bin
-    #  [PATH_SUFFIXES suffix1 [suffix2 ...]]
-    DOC "Searing for GNU cpp preprocessor "
-    )
-  if(NOT EXISTS "${TMP_CPP_COMPILER}")
-    message( FATAL_ERROR  "Cannot find GNU cpp compiler -- 
-${CLANG_FATAL_MSG}")
-  endif()
-endif()
-set(CMAKE_CPP_COMPILER ${TMP_CPP_COMPILER})
-
-
 
 message(STATUS "Making sure your Fortran compiler points to the correct binary")
 if(Fortran_COMPILER_NAME MATCHES "gfortran*")
@@ -74,6 +54,31 @@ ${CLANG_FATAL_MSG}")
     endif()
   endif()
 endif()
+
+get_filename_component(FORTRAN_PARENT_DIR ${CMAKE_Fortran_COMPILER} PATH)
+message(STATUS "FORTRAN_PARENT_DIR ${FORTRAN_PARENT_DIR}")
+
+message(STATUS "Making sure your preprocessor points to the correct binary")
+execute_process(COMMAND "${TMP_CPP_COMPILER}" --version
+  OUTPUT_VARIABLE ACTUAL_FC_TARGET
+  OUTPUT_STRIP_TRAILING_WHITESPACE)
+if(ACTUAL_FC_TARGET MATCHES "Clang|clang")
+  message(STATUS "Found cpp is actually Clang -- Trying other paths")
+  find_file (
+    TMP_CPP_COMPILER cpp-
+    NAMES  cpp-6 cpp6 cpp-5 cpp5 cpp-4.9 cpp
+    PATHS ${FORTRAN_PARENT_DIR} /usr/local/bin /opt/local/bin /sw/bin /usr/bin
+    #  [PATH_SUFFIXES suffix1 [suffix2 ...]]
+    DOC "Searching for GNU cpp preprocessor "
+    )
+  if(NOT EXISTS "${TMP_CPP_COMPILER}")
+    message( FATAL_ERROR  "Cannot find GNU cpp compiler -- 
+${CLANG_FATAL_MSG}")
+  endif()
+endif()
+set(CMAKE_CPP_COMPILER ${TMP_CPP_COMPILER})
+
+
 
 
 set(CMAKE_Fortran_SOURCE_FILE_EXTENSIONS ${CMAKE_Fortran_SOURCE_FILE_EXTENSIONS} "f03;F03;f08;F08")
@@ -543,6 +548,7 @@ endif()
 add_definitions(" -D__FILENAME__='\"$(notdir $<)\"'")
 
 # Override Fortran preprocessor
+# block constructs (F2008), unlimited polymorphism and variadic macros (not included in F2003 -- but is part of C99 )
 set(CMAKE_Fortran_COMPILE_OBJECT "grep --silent '#include' <SOURCE> && ( ${CMAKE_CPP_COMPILER} ${CMAKE_CPP_COMPILER_FLAGS} -DOPENMP <DEFINES> <INCLUDES> <SOURCE> > <OBJECT>.f90 &&  <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <OBJECT>.f90 -o <OBJECT> ) || <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <SOURCE> -o <OBJECT>")
 
 

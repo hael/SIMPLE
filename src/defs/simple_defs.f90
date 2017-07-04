@@ -1,7 +1,8 @@
-!!
-!!
 !> \brief Simple_defs is the main singleton module for all the global variables
 !!
+!! DEBUG and VERBOSE modes can be enabled at compile-time or run-time
+!! BUILD_DESC uses the cmake build to describe <GNU/Intel/PGI>_<RELEASE/DEBUG>_<FFTW/MKL>
+!! SimpleGitVersion include file contains the string definitions for SIMPLE_PATH and version info 
 module simple_defs
 use, intrinsic :: iso_c_binding
 implicit none
@@ -51,20 +52,20 @@ real,    parameter :: PICKER_SHRINK        = 4.
 real,    parameter :: PICKER_SHRINK_REFINE = 2.
 integer, parameter :: PICKER_OFFSET        = 3
 
-! constants for interpolation
+!! constants for interpolation
 real, parameter :: KBWINSZ = 1.5    ! interpolation window size
 real, parameter :: KBALPHA = 2.0    ! interpolation alpha (smoothing constant)
 
 integer, parameter :: SPECWMINPOP=2000 ! minimum population for spectral weighting
 
-! SNHC-related global vars
+!! SNHC-related global vars
 character(len=32), parameter :: SNHCDOC = 'snhc_oris.txt'
 character(len=32), parameter :: SNHCVOL = 'snhc_recvol_state'
 integer,           parameter :: SZSN_INIT = 5
 integer,           parameter :: SZSN_STEP = 3
 integer,           parameter :: SZSN_MAX  = 20
 
-! constants that control search and convergence
+!! constants that control search and convergence
 real,    parameter :: FRAC_SH_LIM      = 80.0 ! at what frac to turn on the shift search
 real,    parameter :: EXTRINITHRESH    = 0.5
 real,    parameter :: EXTRTHRESH_CONST = 0.2
@@ -82,7 +83,7 @@ character(len=STDLEN) :: exec_abspath_glob ! global executable absolute path
 #else
   integer, parameter :: fp_kind = SP
 #endif
-
+!! Debugging and print verbosity flags
 #ifdef _DEBUG
   logical :: global_debug=.true.           ! global debugging flag
 #else
@@ -92,7 +93,7 @@ character(len=STDLEN) :: exec_abspath_glob ! global executable absolute path
   logical :: global_verbose=.false.        ! global flag for verbosity
   character(len=STDLEN) :: build_descr = "BUILD_NAME" ! Cmake defines the build name
 
-! append SIMPLE_VERSION and SIMPLE_GIT_VERSION strings to simple_defs
+!! append SIMPLE_VERSION and SIMPLE_GIT_VERSION strings to simple_defs
 #include "SimpleGitVersion.h"
 
 end module simple_defs

@@ -62,7 +62,7 @@ contains
 
     !>  \brief  is a constructor
     subroutine new( self, p, e, pftcc)
-        class(cont3D_srch),             intent(inout) :: self  !< instance
+        class(cont3D_srch),              intent(inout) :: self  !< instance
         class(params),                   intent(in)    :: p     !< parameters
         class(oris),                     intent(in)    :: e     !< references
         class(polarft_corrcalc), target, intent(in)    :: pftcc
@@ -88,7 +88,7 @@ contains
 
     !>  \brief  is the master search routine
     subroutine prep_srch(self, a, iptcl)
-        class(cont3D_srch), intent(inout) :: self
+        class(cont3D_srch),  intent(inout) :: self
         class(oris),         intent(inout) :: a
         integer,             intent(in)    :: iptcl
         real, allocatable :: frc(:)
@@ -138,7 +138,7 @@ contains
     !>  \brief  performs euler angles search
     subroutine do_euler_srch( self )
         class(cont3D_srch), intent(inout) :: self
-        integer, allocatable :: roind_vec(:)    ! slice of in-plane angles
+        integer, allocatable :: roind_vec(:)    !< slice of in-plane angles
         real                 :: inpl_corr
         integer              :: iref
         ! init

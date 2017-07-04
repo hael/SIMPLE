@@ -1,10 +1,10 @@
-!==Class simple_commander_misc
+!> simple_commander_misc
 !
-! This class contains the set of concrete miscellanous commanders of the SIMPLE
-! library. This class provides the glue between the reciver (main reciever is
-! simple_exec program) and the abstract action, which is simply execute (defined
-! by the base class: simple_commander_base). Later we can use the composite
-! pattern to create MacroCommanders (or workflows)
+!! This class contains the set of concrete miscellanous commanders of the SIMPLE
+!! library. This class provides the glue between the reciver (main reciever is
+!! simple_exec program) and the abstract action, which is simply execute (defined
+!! by the base class: simple_commander_base). Later we can use the composite
+!! pattern to create MacroCommanders (or workflows)
 !
 ! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
 ! Redistribution and modification is regulated by the GNU General Public License.
@@ -158,7 +158,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_CLUSTER_SMAT NORMAL STOP ****')
     end subroutine exec_cluster_smat
-
+    !> Calculate centre of mass 
     subroutine exec_masscen( self, cline )
         use simple_procimgfile, only: masscen_imgfile
         class(masscen_commander), intent(inout) :: self
@@ -175,7 +175,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_MASSCEN NORMAL STOP ****')
     end subroutine exec_masscen
-
+    !> for printing the command line key dictonary
     subroutine exec_print_cmd_dict( self, cline )
         use simple_cmd_dict
         class(print_cmd_dict_commander), intent(inout) :: self
@@ -185,7 +185,7 @@ contains
         call print_cmd_key_descr( p%outfile )
         call simple_end('**** SIMPLE_PRINT_CMD_DICT NORMAL STOP ****')
     end subroutine exec_print_cmd_dict
-
+    !> is a program for printing the dose weights applied to individual frames
     subroutine exec_print_dose_weights( self, cline )
         use simple_image,    only: image
         use simple_filterer, only: acc_dose2filter
@@ -211,7 +211,7 @@ contains
         call dummy_img%kill
         call simple_end('**** SIMPLE_PRINT_DOSE_WEIGHTS NORMAL STOP ****')
     end subroutine exec_print_dose_weights
-
+    !> print_fsc  is a program for printing the binary FSC files produced by PRIME3D
     subroutine exec_print_fsc( self, cline )
         use simple_math,  only: get_resolution, get_lplim
         use simple_image, only: image
@@ -236,7 +236,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_PRINT_FSC NORMAL STOP ****')
     end subroutine exec_print_fsc
-
+    !> print_magic_boxesis a program for printing magic box sizes (fast FFT)
     subroutine exec_print_magic_boxes( self, cline )
         use simple_magic_boxes, only: print_magic_box_range
         class(print_magic_boxes_commander), intent(inout) :: self
@@ -258,7 +258,7 @@ contains
         write(*,'(A,1X,f7.2)') '>>> LOW-PASS LIMIT:', lp
         call simple_end('**** SIMPLE_RES NORMAL STOP ****')
     end subroutine exec_res
-
+    !> shift is a program for shifting a stack according to shifts in oritab
     subroutine exec_shift( self, cline )
         use simple_procimgfile, only: shift_imgfile
         class(shift_commander), intent(inout) :: self
@@ -272,7 +272,8 @@ contains
         call b%a%write('shiftdoc.txt')
         call simple_end('**** SIMPLE_SHIFT NORMAL STOP ****')
     end subroutine exec_shift
-
+    !> sym_aggregateis a program for robust identifiaction of the symmetry axis
+    !> of a map using image-to-volume simiarity validation of the axis
     subroutine exec_sym_aggregate( self, cline )
         use simple_oris,  only: oris
         use simple_ori,   only: ori
@@ -401,7 +402,8 @@ contains
             end subroutine find_sym_peaks
 
     end subroutine exec_sym_aggregate
-
+    !> dsymsrch is a program for identifying rotational symmetries in class averages
+    !> of D-symmetric molecules and generating a cylinder that matches the shape.
     subroutine exec_dsymsrch( self, cline )
         use simple_symsrcher, only: dsym_cylinder
         class(dsymsrch_commander), intent(inout) :: self

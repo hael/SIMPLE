@@ -1,8 +1,10 @@
-!==Class simple_commander_distr_wflows
-!
-! This class contains the set of concrete commanders responsible for execution of parallel (or distributed)
-! workflows in SIMPLE. This class provides the glue between the reciver (main reciever is simple_distr_exec 
-! program) and the abstract action, which is simply execute (defined by the base class: simple_commander_base).
+!> simple_commander_distr_wflows
+!!
+!! This class contains the set of concrete commanders responsible for execution
+!! of parallel (or distributed) workflows in SIMPLE. This class provides the
+!! glue between the reciver (main reciever is simple_distr_exec program) and the
+!! abstract action, which is simply execute (defined by the base class:
+!! simple_commander_base).
 !
 ! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
 ! Redistribution and modification is regulated by the GNU General Public License.
@@ -107,7 +109,7 @@ integer, parameter :: KEYLEN=32
 contains
 
     ! PIPELINED UNBLUR + CTFFIND
-
+    !> unblur_ctffind_distr is a distributed version of the pipelined unblur + ctffind programs
     subroutine exec_unblur_ctffind_distr( self, cline )
         use simple_commander_preproc
         class(unblur_ctffind_distr_commander), intent(inout) :: self
@@ -274,7 +276,7 @@ contains
     end subroutine exec_ctffind_distr
 
     ! PICKER
-
+    !> distributed version of picker
     subroutine exec_pick_distr( self, cline )
         use simple_commander_preproc
         class(pick_distr_commander), intent(inout) :: self
@@ -296,8 +298,8 @@ contains
         call simple_end('**** SIMPLE_DISTR_PICK NORMAL STOP ****')
     end subroutine exec_pick_distr
 
-    ! PARALLEL CLASS AVERAGE GENERATION
-
+    !! PARALLEL CLASS AVERAGE GENERATION
+!> makecavgs_distr parallel class average generation
     subroutine exec_makecavgs_distr( self, cline )
         use simple_commander_prime2D
         use simple_commander_distr
@@ -340,7 +342,9 @@ contains
     end subroutine exec_makecavgs_distr
 
     ! PRIME2D
-
+    !> parallel prime2d
+    !! Prime2D is a reference-free 2D alignment/clustering algorithm adopted
+    !! from the prime3D probabilistic ab initio 3D reconstruction algorithm
     subroutine exec_prime2D_distr( self, cline )
         use simple_commander_prime2D ! use all in there
         use simple_commander_distr   ! use all in there
@@ -484,7 +488,8 @@ contains
     end subroutine exec_prime2D_distr
 
     ! PRIME2D CHUNK-BASED DISTRIBUTION 
-
+    !> parallel Prime2D_chuck
+    !! prime2d chunk-based distribution 
     subroutine exec_prime2D_chunk_distr( self, cline )
         use simple_commander_prime2D ! use all in there
         use simple_commander_distr   ! use all in there
@@ -614,9 +619,8 @@ contains
             end subroutine read_part_and_write
 
     end subroutine exec_prime2D_chunk_distr
-
-    ! 3D SIMILARITY MATRIX GENERATION WITH COMMON LINES
-
+    !> parallel comlin_smat
+    !! comlin_smat calculates the 3d similarity matrix generation with common lines
     subroutine exec_comlin_smat_distr( self, cline )
         use simple_commander_comlin, only: comlin_smat_commander
         use simple_commander_distr,  only: merge_similarities_commander
@@ -652,7 +656,7 @@ contains
     end subroutine exec_comlin_smat_distr
 
     ! PRIME3D_INIT
-
+    !> initialise prime3D in parallel
     subroutine exec_prime3D_init_distr( self, cline )
         use simple_commander_prime3D
         use simple_commander_rec
@@ -693,8 +697,14 @@ contains
         call simple_end('**** SIMPLE_DISTR_PRIME3D_INIT NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_prime3D_init_distr
 
-    ! PRIME3D
-
+    !> PRIME3D is an ab inito reconstruction/refinement program based on
+    !> probabilistic projection matching.
+    !! PRIME is short for PRobabilistic Initial 3D Model generation for
+    !! Single-particle cryo-Electron microscopy. There are a daunting number of
+    !! options in PRIME3D. If you are processing class averages we recommend
+    !! that you instead use the simple_distr_exec prg= ini3D_from_cavgs route
+    !! for executing PRIME3D. Automated workflows for single- and multi-particle
+    !! refinement using prime3D are planned for the next release (3.0)
     subroutine exec_prime3D_distr( self, cline )
         use simple_commander_prime3D
         use simple_commander_mask
@@ -1226,8 +1236,23 @@ contains
         call simple_end('**** SIMPLE_DISTR_CONT3D NORMAL STOP ****')
     end subroutine exec_cont3D_distr
 
-    ! RECVOL
-
+    !> parallel recvol
+    !! recvol is a program for reconstructing volumes from MRC and SPIDER
+    !! stacks, given input orientations and state assignments. The algorithm is
+    !! based on direct Fourier inversion with a Kaiser-Bessel (KB) interpolation
+    !! kernel. This window function reduces the real-space ripple artifacts
+    !! associated with direct moving windowed-sinc interpolation. The feature
+    !! sought when implementing this algorithm was to enable quick, reliable
+    !! reconstruction from aligned individual particle images. mul is used to
+    !! scale the origin shifts if down-sampled were used for alignment and the
+    !! original images are used for reconstruction. ctf=yes or ctf=flip turns on
+    !! the Wiener restoration. If the images were phase-flipped set ctf=flip.
+    !! amsklp, mw, and edge control the solvent mask: the low-pass limit used to
+    !! generate the envelope; the molecular weight of the molecule (protein
+    !! assumed but it works reasonably well also for RNA; slight modification of
+    !! mw might be needed). The inner parameter controls the radius of the
+    !! soft-edged mask used to remove the unordered DNA/RNA core of spherical
+    !! icosahedral viruses
     subroutine exec_recvol_distr( self, cline )
         use simple_commander_rec
         class(recvol_distr_commander), intent(inout) :: self
@@ -1264,8 +1289,8 @@ contains
         call simple_end('**** SIMPLE_RECVOL NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_recvol_distr
 
-    ! TIME-SERIES ROUTINES
-
+    !> parallel TIME-SERIES ROUTINES
+    !! tseries_track_distr  is a program for particle tracking in time-series data
     subroutine exec_tseries_track_distr( self, cline )
         use simple_nrtxtfile,         only: nrtxtfile 
         class(tseries_track_distr_commander), intent(inout) :: self
@@ -1322,8 +1347,18 @@ contains
         call simple_end('**** SIMPLE_TSERIES_TRACK NORMAL STOP ****')
     end subroutine exec_tseries_track_distr
 
-    ! SYMMETRY SEARCH
-
+    !> parallel SYMMETRY SEARCH
+    !! symsrch_distr is a program for searching for the principal symmetry axis
+    !! of a volume reconstructed without assuming any point-group symmetry. The
+    !! program takes as input an asymmetrical 3D reconstruction. The alignment
+    !! document for all the particle images that have gone into the 3D
+    !! reconstruction and the desired point-group symmetry needs to be inputted.
+    !! The 3D reconstruction is then projected in 50 (default option) even
+    !! directions, common lines-based optimisation is used to identify the
+    !! principal symmetry axis, the rotational transformation is applied to the
+    !! inputted orientations, and a new alignment document is produced. Input
+    !! this document to recvol together with the images and the point-group
+    !! symmetry to generate a symmet
     subroutine exec_symsrch_distr( self, cline )
         use simple_comlin_srch,    only: comlin_srch_get_nproj
         use simple_commander_misc, only: sym_aggregate_commander

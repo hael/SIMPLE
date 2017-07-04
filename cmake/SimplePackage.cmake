@@ -1,7 +1,22 @@
 if(CPACK_GENERATOR)
+  get_filename_component(cpack_build_dir "${CMAKE_BINARY_DIR}" ABSOLUTE)
+  get_filename_component(cpack_source_dir "${CMAKE_SOURCE_DIR}" ABSOLUTE)
+ # if("${cpack_build_dir}" STREQUAL "${cpack_source_dir}")
+ endif()
+
+if(CPACK_GENERATOR)
+
+  if("${CPACK_GENERATOR}" STREQUAL "ON")
+    set(CPACK_GENERATOR "TGZ")
+    set(CPACK_SOURCE_TBZ2  OFF)
+    set(CPACK_SOURCE_TZ    OFF)
+    set(CPACK_SOURCE_TXZ   OFF)
+    set(CPACK_SOURCE_ZIP   ON)
+
+  endif()
   # common package information
-  set(CPACK_PACKAGE_NAME "${PACKAGE_NAME}")
-  set(CPACK_PACKAGE_VENDOR "Elmlund Lab -- Monash University")
+  set(CPACK_PACKAGE_NAME "SIMPLE")
+  set(CPACK_PACKAGE_VENDOR "Elmlund Lab -- Monash University -- 2017")
   set(CPACK_PACKAGE_VERSION "${SIMPLE_VERSION}")
   set(CPACK_PACKAGE_VERSION_MAJOR "${SIMPLE_VERSION_MAJOR}")
   set(CPACK_PACKAGE_VERSION_MINOR "${SIMPLE_VERSION_MINOR}")
@@ -21,7 +36,7 @@ if(CPACK_GENERATOR)
   SET(CPACK_PACKAGE_INSTALL_DIRECTORY "simple ${SIMPLE_VERSION}.${SIMPLE_GIT_VERSION}")
   SET(CPACK_SOURCE_PACKAGE_FILE_NAME "simple-${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CPACK_PACKAGE_VERSION_PATCH}")
   # Prefix Debug/Nightly release
-  set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}")
+  set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}")
   if(NIGHTLY)
     set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_FILE_NAME}-nightly")
     #execute_process(COMMAND "date +%Y.%m.%d" OUTPUT_VARIABLE NIGHTLY_DATE)
@@ -54,7 +69,7 @@ if(CPACK_GENERATOR)
       "gfortran, cmake")
     set(CPACK_DEBIAN_PACKAGE_SECTION "science")
     set(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
-    set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "http://simplecryoem.org")
+    set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://simplecryoem.org")
     set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "amd64")
     set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_FILE_NAME}"
       "-${CPACK_PACKAGE_VERSION}"
@@ -67,7 +82,7 @@ if(CPACK_GENERATOR)
       "gcc >= 6:4.6.0, libstdc++-devel >= 6:4.3, libfftw3-devel   ")
     set(CPACK_RPM_PACKAGE_GROUP "Applications/Engineering")
     set(CPACK_RPM_PACKAGE_LICENSE "GPL3+ ")
-    set(CPACK_RPM_PACKAGE_URL "http://simplecryoem.org")
+    set(CPACK_RPM_PACKAGE_URL "https://simplecryoem.org")
     set(CPACK_RPM_PACKAGE_ARCHITECTURE "x86_64")
     set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_FILE_NAME}"
       "-${CPACK_PACKAGE_VERSION}"

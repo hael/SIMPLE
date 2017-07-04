@@ -1,6 +1,8 @@
-!==Class simple_oris
+!> simple_oris module
+!!
+!! simple_oris handles orientation information.
 !
-! simple_oris handles orientation information. The code is distributed with the hope that it will be useful,
+!    The code is distributed with the hope that it will be useful,
 ! but _WITHOUT_ _ANY_ _WARRANTY_. Redistribution or modification is regulated by the GNU General Public License. 
 ! *Author:* Hans Elmlund, 2009-05-26
 !
@@ -205,11 +207,11 @@ type :: oris
     procedure          :: cls_overlap
     ! DESTRUCTOR
     procedure          :: kill
-end type
+end type oris
 
 interface oris
     module procedure constructor
-end interface
+end interface oris
 
 type(ori),  pointer  :: op(:)=>null()
 type(oris), pointer  :: ops  =>null()
@@ -223,7 +225,7 @@ contains
 
     ! CONSTRUCTORS
     
-    !>  \brief  is a constructor
+    !>  \brief  is an abstract constructor
     function constructor( n ) result( self )
         integer, intent(in) :: n
         type(oris) :: self
@@ -309,7 +311,7 @@ contains
 
     !>  \brief  is a getter   
     subroutine getter_1( self, i, key, val )
-        class(oris),                    intent(inout) :: self
+        class(oris),                   intent(inout) :: self
         integer,                       intent(in)    :: i
         character(len=*),              intent(in)    :: key
         character(len=:), allocatable, intent(inout) :: val
@@ -371,7 +373,7 @@ contains
             vals(i) = tmp
         enddo
     end subroutine getter_all_2
-    
+
     !>  \brief  is for getting the i:th rotation matrix
     pure function get_mat( self, i ) result( mat )
         class(oris), intent(in) :: self
@@ -1451,10 +1453,10 @@ contains
     subroutine rnd_proj_space( self, nsample, o_prev, thres, eullims )
         use simple_math, only: rad2deg
         class(oris),          intent(inout) :: self
-        integer,              intent(in)    :: nsample
-        class(ori), optional, intent(inout) :: o_prev
-        real,       optional, intent(inout) :: eullims(3,2)
-        real,       optional, intent(in)    :: thres ! half-angle of spherical cap
+        integer,              intent(in)    :: nsample      !<
+        class(ori), optional, intent(inout) :: o_prev       !< orientation
+        real,       optional, intent(inout) :: eullims(3,2) !<
+        real,       optional, intent(in)    :: thres        !< half-angle of spherical cap
         type(ori) :: o_stoch
         integer   :: i
         logical   :: within_lims, found

@@ -1,9 +1,11 @@
-!==Class simple_commander_distr
-!
-! This class contains the set of concrete distr commanders of the SIMPLE library used to provide pre/post processing routines
-! for SIMPLE when executed in distributed mode. This class provides the glue between the reciver (main reciever is simple_exec 
-! program) and the abstract action, which is simply execute (defined by the base class: simple_commander_base). 
-! Later we can use the composite pattern to create MacroCommanders (or workflows)
+!> simple_commander_distr
+!!
+!! This class contains the set of concrete distr commanders of the SIMPLE
+!! library used to provide pre/post processing routines for SIMPLE when executed
+!! in distributed mode. This class provides the glue between the reciver (main
+!! reciever is simple_exec program) and the abstract action, which is simply
+!! execute (defined by the base class: simple_commander_base). Later we can use
+!! the composite pattern to create MacroCommanders (or workflows)
 !
 ! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
 ! Redistribution and modification is regulated by the GNU General Public License.
@@ -49,7 +51,7 @@ type, extends(commander_base) :: split_commander
 end type split_commander
 
 contains
-
+!> for merging alignment documents from SIMPLE runs in distributed mode
     subroutine exec_merge_algndocs( self, cline )
         use simple_oris, only: oris
         use simple_map_reduce ! use all in there
@@ -96,7 +98,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_MERGE_ALGNDOCS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_merge_algndocs
-
+    !> merge_nnmat is a program for merging partial nearest neighbour matrices calculated in distributed mode
     subroutine exec_merge_nnmat( self, cline )
         use simple_map_reduce, only: merge_nnmat_from_parts
         class(merge_nnmat_commander), intent(inout) :: self
@@ -138,7 +140,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_MERGE_SIMILARITIES NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_merge_similarities
-
+!> split_pairs is a program for splitting calculations between pairs of objects into balanced partitions
     subroutine exec_split_pairs( self, cline )
         use simple_map_reduce, only: split_pairs_in_parts
         class(split_pairs_commander), intent(inout) :: self
@@ -148,7 +150,8 @@ contains
         call split_pairs_in_parts(p%nptcls, p%nparts)
         call simple_end('**** SIMPLE_SPLIT_PAIRS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_split_pairs
-
+    !> split is a program for splitting of image stacks into partitions for parallel execution.
+    !! This is done to reduce I/O latency
     subroutine exec_split( self, cline )
         use simple_map_reduce ! use all in there
         use simple_image, only: image

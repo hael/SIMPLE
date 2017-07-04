@@ -1,8 +1,9 @@
-!! -*- mode: f90 -*-
-!!
+! -*- mode: f90 -*-
+!> Simple debug and vebose flags
 !! simple_local_flags.inc is for insertion
-!! into modules or subroutines.  The flags:
-!! debug, warn, verbose
+!! into modules or subroutines.  The flags
+!! debug, warn, verbose can dictate how much is
+!! printed to the terminal
 #if defined(_DEBUG)
     logical :: debug=.true.
     logical :: warn=.true.
@@ -31,4 +32,3 @@
 #ifndef ErrorPrint
 #define ErrorPrint(ERRMSG) print *, __FILENAME__,':',__LINE__,':Error:', ERRMSG; stop
 #endif
-

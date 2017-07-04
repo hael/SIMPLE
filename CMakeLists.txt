@@ -228,11 +228,8 @@ if(VERBOSE) #only for the fool-hardy
    #
    # User manual
    #
-   add_custom_target(manual
-     (mkdir doc || true) && cd doc && cp -r  ${CMAKE_SOURCE_DIR}/doc/SimpleManual ./ && cd SimpleManual && convert CPUtopo/cputopo.ai CPUtopo/cputopo.png && pdflatex ${CMAKE_SOURCE_DIR}/doc/SimpleManual/simple2.5manual.tex && xdg-open simple2.5manual.pdf
-      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-      COMMENT "Generating user documentation with LaTeX" VERBATIM
-      )
+   add_subdirectory(doc/SimpleManual)
+
   ## Debugging CMAKE
   # include(CMakeAddFortranSubdirectory)
   # include(CMakeGraphVizOptions)

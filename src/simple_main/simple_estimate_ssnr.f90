@@ -4,9 +4,9 @@ use simple_image, only: image
 implicit none
 
 contains
-    
+
     ! ESTIMATION ROUTINES FOR THE 2D ANALYSIS
-    
+
     !>  \brief make a fake ssnr estimate, useful for testing purposes
     function fake_ssnr( img, lplim, width ) result( ssnr )
         class(image), intent(in)   :: img
@@ -33,7 +33,7 @@ contains
         ssnr = fsc2ssnr(fsc)
         deallocate(fsc,res)
     end function fake_ssnr
-    
+
     !>  \brief estimate the SSNR using Unser's method
     !!         this routine is too slow in practice but it was useful for prototyping
     function estimate_ssnr( imgs, os, msk, tfun, tfplan ) result( ssnr )
@@ -70,7 +70,7 @@ contains
                     angast = 0.
             end select
             select case(tfplan%flag)
-                case('mul','no') 
+                case('mul','no')
                     ! do nothing
                 case('yes')  ! multiply with CTF
                     call tfun%apply(imgs(iptcl), dfx, 'ctf', dfy, angast)
@@ -123,7 +123,7 @@ contains
         call fdiff%kill
         call favg%kill
     end function estimate_ssnr
-    
+
     !>  \brief estimate the noise power spectrum in an highly optimised online fashion
     !!         it is assumed that img is rotated, shifted and multiplied with the CTF
     !!         Hence, the reference should be multiplied with the square of the CTF
@@ -181,11 +181,11 @@ contains
         deallocate(specnoise)
         call favg%kill
         call fimg%kill
-        call fdiff%kill        
+        call fdiff%kill
     end subroutine estimate_specnoise_online
-    
+
     ! ESTIMATION ROUTINES FOR THE 3D ANALYSIS
-    
+
     !> \brief  converts the FSC to SSNR (the 2.* is because of the division of the data)
     function fsc2ssnr( corrs ) result( ssnr )
         real, intent(in)  :: corrs(:)
@@ -199,7 +199,7 @@ contains
             ssnr(k) = (2.*fsc)/(1.-fsc)
         end do
     end function fsc2ssnr
-    
+
     !> \brief  converts the FSC to the optimal low-pass filter
     function fsc2optlp( corrs ) result( filt )
         real, intent(in)           :: corrs(:) !< fsc plot (correlations)
@@ -228,7 +228,7 @@ contains
             corrs(k) = ssnr(k)/(ssnr(k)+1.)
         end do
     end function ssnr2fsc
-    
+
     !> \brief  converts the SSNR 2 the optimal low-pass filter
     function ssnr2optlp( ssnr ) result( w )
         real, intent(in)  :: ssnr(:)
@@ -240,7 +240,7 @@ contains
             w(k) = ssnr(k)/(ssnr(k)+1.)
         end do
     end function ssnr2optlp
-    
+
     !> \brief  calculates the particle SSNR in 2D (Grigorieff)
     function estimate_pssnr2D( avr, fsc ) result( pssnr )
         use simple_AVratios, only: AVratios
@@ -250,7 +250,7 @@ contains
         pssnr = fsc2ssnr(fsc)
         pssnr = pssnr*avr%Abox_o_Aptcl()*avr%Vmsk_o_Vbox()
     end function estimate_pssnr2D
-    
+
     !> \brief  calculates the particle SSNR in 3D (Grigorieff)
     function estimate_pssnr3D( avr, fsc ) result( pssnr )
         use simple_AVratios, only: AVratios
@@ -260,7 +260,7 @@ contains
         pssnr = estimate_pssnr2D(avr, fsc)
         pssnr = pssnr*avr%Vbox_o_Vptcl()*avr%Aptcl_o_Abox()
     end function estimate_pssnr3D
-    
+
     !> \brief  calculates the particle SSNR in 2D (Grigorieff)
     function from_ssnr_estimate_pssnr2D( avr, ssnr ) result( pssnr )
         use simple_AVratios, only: AVratios
@@ -270,7 +270,7 @@ contains
         allocate(pssnr(size(ssnr)), source=ssnr)
         pssnr = pssnr*avr%Abox_o_Aptcl()*avr%Vmsk_o_Vbox()
     end function from_ssnr_estimate_pssnr2D
-    
+
     !> \brief  calculates the particle SSNR in 3D (Grigorieff)
     function from_ssnr_estimate_pssnr3D( avr, ssnr ) result( pssnr )
         use simple_AVratios, only: AVratios
@@ -281,5 +281,4 @@ contains
         pssnr = pssnr*avr%Vbox_o_Vptcl()*avr%Aptcl_o_Abox()
     end function from_ssnr_estimate_pssnr3D
 
-end module simple_estimate_ssnr          
-        
+end module simple_estimate_ssnr

@@ -1,9 +1,10 @@
-! Author: Alexey Kuznetsov
-! Modified: 28/12/2008
-! this Fortran90 module contains a collection of subroutines for plotting data,
-! including 2D, 3D plots, surfaces, polar coordinates, histograms
-! it is a modification of the GNUFOR interface written by John Burkardt:
-! http://orion.math.iastate.edu/burkardt/g_src/gnufor/gnufor.html 
+!> GNUplot interface module
+!! Author: Alexey Kuznetsov
+!! Modified: 28/12/2008
+!! this Fortran90 module contains a collection of subroutines for plotting data,
+!! including 2D, 3D plots, surfaces, polar coordinates, histograms
+!! it is a modification of the GNUFOR interface written by John Burkardt:
+!! http://orion.math.iastate.edu/burkardt/g_src/gnufor/gnufor.html 
 !***********************************************************************************
  module gnufor2
  implicit none
