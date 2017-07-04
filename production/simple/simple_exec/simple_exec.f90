@@ -1290,22 +1290,24 @@ select case(prg)
         ! the unordered DNA/RNA core of spherical icosahedral viruses<recvol/end>
         !
         ! set required keys
-        keys_required(1) = 'stk'
-        keys_required(2) = 'smpd'
-        keys_required(3) = 'oritab'
-        keys_required(4) = 'msk'
-        keys_required(5) = 'ctf'
-        keys_required(6) = 'pgrp'
+        keys_required(1)  = 'stk'
+        keys_required(2)  = 'smpd'
+        keys_required(3)  = 'oritab'
+        keys_required(4)  = 'msk'
+        keys_required(5)  = 'ctf'
+        keys_required(6)  = 'pgrp'
         ! set optional keys
-        keys_optional(1) = 'nthr'
-        keys_optional(2) = 'eo'
-        keys_optional(3) = 'deftab'
-        keys_optional(4) = 'frac'
-        keys_optional(5) = 'mw'
-        keys_optional(6) = 'mul'
-        keys_optional(7) = 'state'
-        keys_optional(8) = 'refine'
-        keys_optional(9) = 'npeaks'
+        keys_optional(1)  = 'nthr'
+        keys_optional(2)  = 'eo'
+        keys_optional(3)  = 'deftab'
+        keys_optional(4)  = 'frac'
+        keys_optional(5)  = 'mul'
+        keys_optional(6)  = 'state'
+        keys_optional(7)  = 'automsk'
+        keys_optional(8)  = 'mw'
+        keys_optional(9)  = 'amsklp'
+        keys_optional(10) = 'edge'
+        keys_optional(11) = 'binwidth'
         ! parse command line
         if( describe ) call print_doc_recvol
         call cline%parse(keys_required(:6), keys_optional(:9))

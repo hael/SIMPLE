@@ -182,7 +182,7 @@ type :: params
     integer :: clip=0
     integer :: corner=0
     integer :: cube=0
-    integer :: edge=14
+    integer :: edge=3
     integer :: find=1
     integer :: nframesgrp=0
     integer :: fromf=1

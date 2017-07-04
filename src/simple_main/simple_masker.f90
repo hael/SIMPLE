@@ -25,7 +25,7 @@ type, extends(image) :: masker
     real              :: mskwidth  = MSKWIDTH     !< +/- soft masking width
     real              :: dens      = 0.
     real              :: mw        = 0.
-    integer           :: edge      = 1
+    integer           :: edge      = 3
     integer           :: binwidth  = 1
     integer           :: n         = 0
     integer           :: idim(3)   = 0            !< image dimension

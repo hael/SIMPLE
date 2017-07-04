@@ -11,18 +11,18 @@ private
 
 type :: eo_reconstructor
     private
-    type(reconstructor)    :: even
-    type(reconstructor)    :: odd
-    type(reconstructor)    :: eosum
-    character(len=4)       :: ext
-    real                   :: fsc05, fsc0143, smpd, msk, fny, inner=0., width=10.
-    real                   :: mw, amsklp=20., dens=1.
-    integer                :: binwidth=1, edge=10
-    integer                :: box=0, nstates=1, numlen=2, lfny=0
-    logical                :: automsk = .false.
-    logical                :: xfel    = .false.
-    logical                :: wiener  = .false.
-    logical                :: exists  = .false.
+    type(reconstructor) :: even
+    type(reconstructor) :: odd
+    type(reconstructor) :: eosum
+    character(len=4)    :: ext
+    real                :: fsc05, fsc0143, smpd, msk, fny, inner=0., width=10.
+    real                :: mw, amsklp=20., dens=1.
+    integer             :: binwidth=1, edge=3
+    integer             :: box=0, nstates=1, numlen=2, lfny=0
+    logical             :: automsk = .false.
+    logical             :: xfel    = .false.
+    logical             :: wiener  = .false.
+    logical             :: exists  = .false.
   contains
     ! CONSTRUCTOR
     procedure          :: new
