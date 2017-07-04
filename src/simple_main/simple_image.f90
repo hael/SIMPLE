@@ -4937,6 +4937,7 @@ contains
         else
             minlen = minval(self%ldim(1:2))
         endif
+        minlen = min(nint(2.*(mskrad+10.)), minlen) ! soft mask width limited to +/- 10 pixels
         ! init center as origin
         forall(i=1:self%ldim(1)) cis(i) = -real(self%ldim(1)-1)/2. + real(i-1)
         forall(i=1:self%ldim(2)) cjs(i) = -real(self%ldim(2)-1)/2. + real(i-1)

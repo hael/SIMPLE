@@ -62,7 +62,7 @@ contains
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         call b%build_hadamard_prime2D_tbox(p) ! 2D Hadamard matcher built
         write(*,'(a)') '>>> GENERATING CLUSTER CENTERS'
-        if( cline%defined('oritab') )then
+        if( cline%defined('oritab') .and. p%l_remap_classes )then
             call b%a%remap_classes
             ncls_in_oritab = b%a%get_ncls()
             if( cline%defined('ncls') )then
@@ -73,6 +73,8 @@ contains
             else
                 p%ncls = ncls_in_oritab
             endif
+        else if( cline%defined('oritab') )then
+            if( .not. cline%defined('ncls') ) p%ncls = b%a%get_ncls()
         else if( p%tseries .eq. 'yes' )then
             if( .not. cline%defined('ncls') )then
                 stop '# class averages (ncls) need to be part of command line when tseries=yes'

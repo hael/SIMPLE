@@ -114,7 +114,6 @@ contains
         res  = maxval(res0143s)
         p%lp = max( p%lpstop,res )
         write(*,'(a,1x,F6.2)') '>>> LOW-PASS LIMIT:', p%lp
-        write(0,'(a)') "GENERATED VOLUMES: recvol*.ext"
         call eorecvol_read%kill
         ! end gracefully
         call simple_end('**** SIMPLE_EO_VOLASSEMBLE NORMAL STOP ****', print_simple=.false.)

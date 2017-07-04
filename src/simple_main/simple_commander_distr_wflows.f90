@@ -742,7 +742,6 @@ contains
         type(oris)            :: os
         character(len=STDLEN) :: vol, vol_iter, oritab, str, str_iter
         character(len=STDLEN) :: str_state, fsc_file, volassemble_output
-        character(len=STDLEN) :: restart_file
         real                  :: frac_srch_space, corr, corr_prev
         integer               :: s, state, iter, i
         logical               :: vol_defined
@@ -1016,16 +1015,8 @@ contains
                     call cline_check3D_conv%set( 'find', real(p_master%find) )
                endif
             endif
-            if( p_master%refine .ne. 'snhc' )then
-                ! RESTART
-                restart_file = trim(RESTARTFBODY)//'_iter'//int2str_pad( iter, 3)//'.txt'
-                call cline%write( restart_file )
-            endif
         end do
         call qsys_cleanup(p_master)
-        ! RESTART
-        restart_file = trim(RESTARTFBODY)//'_iter'//int2str_pad( iter, 3)//'.txt'
-        call cline%write( restart_file )
         ! report the last iteration on exit
         call cline%delete( 'startit' )
         call cline%set('endit', real(iter))
