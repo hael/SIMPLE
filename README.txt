@@ -72,14 +72,15 @@ For minimal installation to work correctly add:
 <your src path>/Simple-release/build/scripts
 to your PATH environment variable.
 ==========================================================================
-Scanning dependencies of target distclean
-Built target distclean
 """
 
+When the build and installation directories are the same (default) and you are
+happy with the install, you may want to clean compilation-generated and
+unnecessary files using distclean.
 
-The final step of the installation will clean out the build directory using distclean. 
-If you wish to provide an alternative installation directory, substitute step 4
-with:
+    $ make distclean
+
+If you wish to provide an alternative installation directory, substitute step 4 with:
 
     $ cmake -DCMAKE_INSTALL_PREFIX=<alternative directory> ../
     $ make -j install
