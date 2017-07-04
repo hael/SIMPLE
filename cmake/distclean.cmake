@@ -4,12 +4,12 @@
 # We want to start from the top of the source dir, so if we are in build
 # we want to start one directory up
 GET_FILENAME_COMPONENT(BASEDIR ${CMAKE_SOURCE_DIR} NAME)
-IF(${BASEDIR} STREQUAL "build")
-    SET(TOPDIR "${CMAKE_SOURCE_DIR}/..")
-ELSE()
+#IF(${BASEDIR} STREQUAL "build")
+#    SET(TOPDIR "${CMAKE_SOURCE_DIR}/..")
+#ELSE()
     SET(TOPDIR "${CMAKE_SOURCE_DIR}")
-ENDIF()
-
+#ENDIF()
+message(STATUS "TOPDIR ${TOPDIR}")
 MACRO(GET_PARENT_DIRECTORIES search_string return_list grandparents)
     FILE(GLOB_RECURSE new_list ${search_string})
     SET(dir_list "")
@@ -33,25 +33,26 @@ FILE(GLOB_RECURSE CMAKECACHE "${TOPDIR}/*CMakeCache.txt")
 FILE(GLOB_RECURSE CMAKEINSTALL "${TOPDIR}/*cmake_install.cmake"
                                "${TOPDIR}/*install_manifest.txt")
 FILE(GLOB_RECURSE MAKEFILE "${TOPDIR}/*Makefile")
+FILE(GLOB_RECURSE MODFILES RELATIVE "${TOPDIR}" "*.mod")
 FILE(GLOB_RECURSE CMAKETESTFILES "${TOPDIR}/*CTestTestfile.cmake")
-SET(TOPDIRECTORIES "${TOPDIR}/lib" 
-                   "${TOPDIR}/test"
-                   "${TOPDIR}/bin"
-)
+SET(TOPDIRECTORIES "${TOPDIR}/cmake" "${TOPDIR}/tests" "${TOPDIR}/bin/tests" "${TOPDIR}/bin/simple" 
+  )
 
 # CMake has trouble finding directories recursively, so locate these
 # files and then save the parent directory of the files
 GET_PARENT_DIRECTORIES(Makefile.cmake CMAKEFILES 0)
+GET_PARENT_DIRECTORIES(CMakeDirectoryInformation.cmake SUBDIRECTORIES 0) 
 GET_PARENT_DIRECTORIES(LastTest.log CMAKETESTING 1)
 
 # Place these files and directories into a list
-SET(DEL ${TOPDIRECTORIES}
-        ${CMAKECACHE}
+SET(DEL ${CMAKECACHE}
         ${CMAKEINSTALL}
         ${MAKEFILE}
         ${CMAKEFILES}
         ${CMAKETESTING}
         ${CMAKETESTFILES}
+        ${SUBDIRECTORIES}
+         ${TOPDIRECTORIES}
 )
 
 # If we are not in the build dir, delete that as well
@@ -63,6 +64,7 @@ ENDIF()
 # Loop over the directories and delete each one
 FOREACH(D ${DEL})
     IF(EXISTS ${D})
-        FILE(REMOVE_RECURSE ${D})
+message(STATUS "Removing ${D}")
+      FILE(REMOVE_RECURSE ${D})
     ENDIF()
 ENDFOREACH()

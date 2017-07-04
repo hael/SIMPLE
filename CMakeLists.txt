@@ -24,6 +24,7 @@ set(SIMPLE_VERSION "${SIMPLE_VERSION_MAJOR}.${SIMPLE_VERSION_MINOR}")
 option(USE_OPENMP "Use OpenMP for parallelization - debugging may disable OpemMP" ON )
 #option(USE_OPENACC "Use OpenACC for auto GPU parallelization - debugging may disable OpenMP" ON)
 #option(USE_CUDA "GPU NVIDIA - in development" OFF)
+
 option(${PROJECT_NAME}_BUILD_TESTS "Build the test examples" ON)
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/gui)
   option(${PROJECT_NAME}_BUILD_GUI "Build the simple GUI - not included in release2.5" OFF)
@@ -119,17 +120,6 @@ set(EXTRA_LIBS
 # The script folder contains some handy perl scripts for running SIMPLE
 add_subdirectory(${SCRIPTS_PATH})
 
-#################################################################
-#
-# ENABLE TESTING
-#
-#################################################################
-if (${PROJECT_NAME}_BUILD_TESTS)
-  if(VERBOSE)
-    include(CTest)
-  endif()
-  add_subdirectory(tests)
-endif()
 
 #################################################################
 #
@@ -255,7 +245,7 @@ endif()
 #
 #################################################################
 # The source for the SIMPLE binary and have it placed in the bin folder
-add_subdirectory(${PROD_SRC_PATH} ${CMAKE_INSTALL_BINDIR})
+add_subdirectory(production bin)
 
 
 # Add message at end of installation

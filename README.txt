@@ -56,15 +56,36 @@ the tarball in the <downloads> directory):
     $ cmake ../
     $ make -j install
 
-This will install SIMPLE in the 'build' directory. If you wish to 
-provide an alternative installation directory, substitute step 4
+This will install SIMPLE in the 'build' directory, clean out all unecessary
+files and will finish with the following message (a reminder for step 5 below):
+"""
+Installation complete.
+==========================================================================
+Please ensure the following variables are set properly in add2.*rc file:
+    SIMPLE_EMAIL SIMPLE_QSYS SIMPLE_PATH SIMPLE_SOURCE_PATH
+To use SIMPLE, append the relevant add2.* to your HOME shell rc file:
+  bash$ cat add2.bashrc >> ~/.bashrc
+  tcsh$ cat add2.tcshrc >> ~/.tcshrc
+==========================================================================
+For minimal installation to work correctly add:
+<your src path>/Simple-release/build/bin and
+<your src path>/Simple-release/build/scripts
+to your PATH environment variable.
+==========================================================================
+Scanning dependencies of target distclean
+Built target distclean
+"""
+
+
+The final step of the installation will clean out the build directory using distclean. 
+If you wish to provide an alternative installation directory, substitute step 4
 with:
 
     $ cmake -DCMAKE_INSTALL_PREFIX=<alternative directory> ../
     $ make -j install
 
 
-Step 4 assumes that gcc/gfortran and FFTW are installed in fairly standard
+Step 4 assumes that GNU gfortran and FFTW are installed in fairly standard
 directories on your machine. In case you have a more exotic setup you can
 provide the paths pointing to your custom gcc/gfortran & FFTW by substituting
 step 4 with:
