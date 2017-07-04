@@ -38,9 +38,8 @@ contains
             else
                 nnvox = nvoxfind(p%smpd, p%mw)     
             endif
-            nnvox = nint(1.1*real(nnvox))     ! this is to compensate for the low-pass filtering
         endif
-        call img_msk%bin(nnvox)               ! binarize
+        call img_msk%bin(nnvox)      ! binarize
         if( present(nvox) )then
             ! todo
         else
