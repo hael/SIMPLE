@@ -83,13 +83,15 @@ contains
     end subroutine exec_cenvol
 
     subroutine exec_postproc_vol(self,cline)
+        use simple_math, only: get_resolution
         use simple_estimate_ssnr ! use all in there
         use simple_masker,       only: automask
         class(postproc_vol_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(params)      :: p
         type(build)       :: b
-        real, allocatable :: fsc(:), optlp(:)
+        real, allocatable :: fsc(:), optlp(:), res(:)
+        real              :: fsc0143, fsc05
         integer           :: k, state
         state = 1
         ! pre-proc
@@ -106,6 +108,9 @@ contains
                 write(*,*) 'FSC file: ', trim(p%fsc), ' not in cwd'
                 stop
             endif
+            res = b%vol%get_res()
+            call get_resolution( fsc, res, fsc05, fsc0143 )
+            where(res < fsc0143) optlp = 0.
             call b%vol%apply_filter(optlp)
         else if( cline%defined('lp') )then
             call b%vol%bp(0., p%lp)
