@@ -396,17 +396,19 @@ contains
 
     !>  \brief  prepares one volume for references extraction
     subroutine preprefvol( b, p, cline, s, doexpand )
+        use simple_filterer, only: resample_filter
+        use simple_estimate_ssnr, only: fsc2optlp
         class(build),      intent(inout) :: b
         class(params),     intent(inout) :: p
         class(cmdline),    intent(inout) :: cline
         integer,           intent(in)    :: s
         logical, optional, intent(in)    :: doexpand
-        real, allocatable     :: res(:), res_match(:), fom_filter(:), fom_filter_match(:), fsc(:)
+        real, allocatable     :: res(:), res_match(:), fom(:), fom_match(:), fsc(:)
         character(len=STDLEN) :: fsc_file
         logical :: l_doexpand = .true.
         if( present(doexpand) ) l_doexpand = doexpand
         if( p%boxmatch < p%box )call b%vol%new([p%box,p%box,p%box],p%smpd) ! ensure correct dim
-        if( p%eo.eq.'yes' )res = b%vol%get_res()
+        if( p%eo.eq.'yes' )res = b%vol%get_res()    ! for FOM filtering
         call b%vol%read(p%vols(s), isxfel=p%l_xfel)
         if( p%l_xfel )then
             ! no centering
@@ -461,6 +463,28 @@ contains
         endif
         ! FT volume
         call b%vol%fwd_ft
+       ! FOM filter
+        if( p%eo.eq.'yes' )then
+            ! if( cline%defined('fsc') )then
+            !     fsc_file = trim(p%fsc)
+            ! else
+            !     fsc_file = 'fsc_state'//int2str_pad(s,2)//'.bin'
+            ! endif
+            ! if( file_exists(fsc_file) )then
+            !     fsc = file2rarr(fsc_file)
+            !     fom = fsc2optlp(fsc)
+            !     if( p%boxmatch .eq. p%box )then
+            !         call b%vol%apply_filter(fom)
+            !     else
+            !         res_match = b%vol%get_res()
+            !         fom_match = resample_filter(fom, res, res_match)
+            !         call b%vol%apply_filter(fom_match)
+            !         deallocate(res_match, fom_match)
+            !     endif
+            !     deallocate(fsc, fom)
+            ! endif
+            deallocate(res)
+        endif
         ! expand for fast interpolation
         if( l_doexpand )call b%vol%expand_cmat
 

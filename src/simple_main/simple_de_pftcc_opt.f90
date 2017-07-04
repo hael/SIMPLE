@@ -77,14 +77,14 @@ contains
             self%pop(i,:) = gen_individual()
         end do
         if( allocated(ospec%inipopulation) )then
-            ! provided init population, overrides previous best
+            ! provided init population
             n_ini = size(ospec%inipopulation, dim=1)
             self%pop(1:n_ini,:) = ospec%inipopulation
         endif
         ! set one point in the swarm to best point in spec
         if( .not. all(ospec%x == 0.) )self%pop(1,:) = ospec%x
-
         contains
+
             function gen_individual( )result( individual )
                 real    :: L, individual(ospec%ndim)
                 integer :: j
@@ -109,8 +109,6 @@ contains
         integer :: loc(1), nworse, X, i
         ! initialization
         call self%init_pop(spec)
-        do i = 1,spec%npop
-        enddo
         ! calculate initial costs
         do i=1,spec%npop
             self%costs(i) = funcontainer%costfun(self%pop(i,:), spec%ndim)
@@ -135,69 +133,77 @@ contains
         ! report
         lowest_cost = self%costs(self%best)
         spec%x = self%pop(self%best,:)
-        if( npeaks == spec%npeaks )then
-            ! alles klar
-        else
-            ! reports peaks as top-ranking individuals
+        if( spec%npeaks == 0 )then
+            ! peaks <- population
             if(allocated(spec%peaks))deallocate(spec%peaks)
-            allocate(spec%peaks(spec%npeaks,6), source=1.)
-            allocate(inds(spec%npop))
-            inds  = (/ (i, i=1,spec%npop) /)
-            call hpsort(spec%npeaks, self%costs, inds)
-            spec%peaks(:,6)   = self%costs(inds(spec%npop-spec%npeaks+1:)) 
-            spec%peaks(:,1:5) = self%pop(inds(spec%npop-spec%npeaks+1:),:)
+            allocate(spec%peaks(spec%npop,6), source=1.)
+            spec%peaks(:,6)   = self%costs 
+            spec%peaks(:,1:5) = self%pop
             where(spec%peaks(:,6) >= 0.)spec%peaks(:,6) = 1.
-            deallocate(inds)
+        else
+            if( npeaks == spec%npeaks )then
+                ! alles klar
+            else
+                ! reports peaks as top-ranking individuals
+                if(allocated(spec%peaks))deallocate(spec%peaks)
+                allocate(spec%peaks(spec%npeaks,6), source=1.)
+                allocate(inds(spec%npop))
+                inds  = (/ (i, i=1,spec%npop) /)
+                call hpsort(spec%npeaks, self%costs, inds)
+                spec%peaks(:,6)   = self%costs(inds(spec%npop-spec%npeaks+1:)) 
+                spec%peaks(:,1:5) = self%pop(inds(spec%npop-spec%npeaks+1:),:)
+                where(spec%peaks(:,6) >= 0.)spec%peaks(:,6) = 1.
+                deallocate(inds)
+                print *,'2'
+            endif
         endif
+        contains
 
-      contains
-        
-        subroutine update_agent( X )
-            integer, intent(in) :: X
-            integer :: a, rb, b, i
-            real :: trial(spec%ndim), cost_trial
-            ! select random disjoint pair
-            a  = irnd_uni(spec%npop)
-            rb = irnd_uni(spec%npop-1)
-            b  = a+rb 
-            if( b <= spec%npop )then
-            else
-                b = a+rb-spec%npop
-            endif
-            ! create a trial solution
-            do i=1,spec%ndim
-                if( i == X .or. ran3() < self%CR )then
-                    trial(i) = self%pop(self%best,i)+self%F*(self%pop(a,i)-self%pop(b,i))
-                    ! enforce limits 
-                    trial(i) = min(spec%limits(i,2),trial(i))
-                    trial(i) = max(spec%limits(i,1),trial(i))
+            subroutine update_agent( X )
+                integer, intent(in) :: X
+                integer :: a, rb, b, i
+                real :: trial(spec%ndim), cost_trial
+                ! select random disjoint pair
+                a  = irnd_uni(spec%npop)
+                rb = irnd_uni(spec%npop-1)
+                b  = a+rb 
+                if( b <= spec%npop )then
                 else
-                    trial(i) = self%pop(X,i) 
+                    b = a+rb-spec%npop
                 endif
-            end do
-            ! calculate cost 
-            cost_trial  = funcontainer%costfun(trial, spec%ndim)
-            spec%nevals = spec%nevals + 1
-            ! update pop if better solution is found
-            if( cost_trial < self%costs(X) )then
-                nworse = 0
-                self%pop(X,:) = trial
-                self%costs(X) = cost_trial
-                ! update global best if needed
-                if( cost_trial < self%costs(self%best) ) self%best = X
-                if( spec%npeaks > 0 )then
-                    ! we will output local optima
-                    if( cost_trial < spec%yb )then
-                        npeaks = npeaks+1
-                        spec%peaks(npeaks,:spec%ndim)  = trial
-                        spec%peaks(npeaks,spec%ndim+1) = cost_trial
+                ! create a trial solution
+                do i=1,spec%ndim
+                    if( i == X .or. ran3() < self%CR )then
+                        trial(i) = self%pop(self%best,i)+self%F*(self%pop(a,i)-self%pop(b,i))
+                        ! enforce limits 
+                        trial(i) = min(spec%limits(i,2),trial(i))
+                        trial(i) = max(spec%limits(i,1),trial(i))
+                    else
+                        trial(i) = self%pop(X,i) 
                     endif
+                end do
+                ! calculate cost 
+                cost_trial  = funcontainer%costfun(trial, spec%ndim)
+                spec%nevals = spec%nevals + 1
+                ! update pop if better solution is found
+                if( cost_trial < self%costs(X) )then
+                    nworse = 0
+                    self%pop(X,:) = trial
+                    self%costs(X) = cost_trial
+                    ! update global best if needed
+                    if( cost_trial < self%costs(self%best) ) self%best = X
+                    if( spec%npeaks > 0 )then
+                        ! we will output local optima
+                        if( cost_trial < spec%yb )then
+                            npeaks = npeaks+1
+                            spec%peaks(npeaks,:spec%ndim)  = trial
+                            spec%peaks(npeaks,spec%ndim+1) = cost_trial
+                        endif
+                    endif
+                else
+                    nworse = nworse + 1
                 endif
-            else
-                nworse = nworse + 1
-            endif
-        end subroutine update_agent
-        
+            end subroutine update_agent
     end subroutine de_minimize
 
     ! GETTERS
