@@ -13,4 +13,5 @@ add_latex_document(simple2-5_usermanual.tex
 
  install(FILES ${CMAKE_CURRENT_BINARY_DIR}/simple2-5_usermanual.pdf
    DESTINATION "${CMAKE_INSTALL_PREFIX}/doc"
-   CONFIGURATIONS RELEASE)
+   CONFIGURATIONS RELEASE
+   RENAME Simple2-5_User_Manual.pdf OPTIONAL)
