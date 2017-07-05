@@ -313,7 +313,7 @@ contains
             call cline_prime3D_refine%set('vol1', trim(vol_iter))
         endif
         write(*,'(A)') '>>>'
-        write(*,'(A)') '>>> PRIME3D REFINEMENT STEP, REFINE=SHC'
+        write(*,'(A)') '>>> PRIME3D REFINEMENT STEP'
         write(*,'(A)') '>>>'
         call cline_prime3D_refine%set('startit', iter + 1.0)
         call update_lp(cline_prime3D_refine, 2)

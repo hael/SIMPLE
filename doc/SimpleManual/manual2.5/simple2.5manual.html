@@ -1,4 +1,4 @@
-<p><img src="./SIMPLE_logo/rawlogo" alt="image" /></p>
+<p><img src="../SIMPLE_logo/rawlogo" alt="image" /></p>
 <p>[ht]<span>0.48</span> <strong>Contributors:</strong><br />
 cyril.reboul@monash.edu<br />
 michael.eager@monash.edu<br />
@@ -77,7 +77,23 @@ kv=300 cs=2.7 fraca=0.07 dfx=1.98 dfy=2.02 angast=120.5
 <p><strong>Step 4:</strong> Compile and install SIMPLE 2.5</p>
 <pre><code>        @!#&gt; cmake ../
         @!#&gt; make -j install</code></pre>
-<p>This will install SIMPLE in the <code>’build’</code> directory. If you wish to provide an alternative installation directory, substitute step 4 with</p>
+<p>This will install SIMPLE in the <code>’build’</code> directory, clean out all unnecessary files and will finish with the following message (a reminder for step 5 below):</p>
+<pre><code>Installation complete.
+==========================================================================
+Please ensure the following variables are set properly in add2.*rc file:
+    SIMPLE_EMAIL SIMPLE_QSYS SIMPLE_PATH SIMPLE_SOURCE_PATH
+To use SIMPLE, append the relevant add2.* to your HOME shell rc file:
+  bash$ cat add2.bashrc &gt;&gt; ~/.bashrc
+  tcsh$ cat add2.tcshrc &gt;&gt; ~/.tcshrc
+==========================================================================
+For minimal installation to work correctly add:
+&lt;your src path&gt;/Simple-release/build/bin and
+&lt;your src path&gt;/Simple-release/build/scripts
+to your PATH environment variable.
+==========================================================================</code></pre>
+<p>When the build and installation directories are the same (default) and you are happy with the install, you may want to clean compilation-generated and unnecessary files using <code>distclean</code>.</p>
+<pre><code>        @!#&gt; make distclean</code></pre>
+<p>If you wish to provide an alternative installation directory, substitute step 4 with</p>
 <pre><code>        @!#&gt; cmake -DCMAKE_INSTALL_PREFIX=&lt;alternative directory&gt; ../
         @!#&gt; make -j install</code></pre>
 <p>Step 4 assumes that gcc/gfortran and FFTW are installed in fairly standard directories on your machine. In case you have a more exotic setup you can provide the paths pointing to your custom gcc/gfortran &amp; FFTW by substituting step 4 with</p>
@@ -89,7 +105,10 @@ kv=300 cs=2.7 fraca=0.07 dfx=1.98 dfy=2.02 angast=120.5
 <li><p>Fink users: FC=/sw/bin/gfortran FFTW_DIR=/sw/; and</p></li>
 <li><p>Homebrew users: FC=/usr/local/bin/gfortran FFTW_DIR=/usr/local/</p></li>
 </ul>
-<p><strong>Step 5:</strong> To run SIMPLE, the bin and scripts paths need to be in the <code>PATH</code> environment variable and the lib path in the <code>LD_LIBRARY_PATH</code> variable. The <code>SIMPLE_PATH</code> environment variable must also be defined. The shell scripts <code>add2.bashrc</code> and <code>add2.tcshrc</code> containing the necessary instructions were generated during the build step. For immediate use for running and testing, execute</p>
+<p><br />
+<strong>Step 5:</strong> Set the environment variables.</p>
+<p><br />
+To run SIMPLE, the bin and scripts paths need to be in the <code>PATH</code> environment variable. The <code>SIMPLE_PATH</code> environment variable must also be defined. The shell scripts <code>add2.bashrc</code> and <code>add2.tcshrc</code> containing the necessary instructions were generated during the build step. For immediate use for running and testing, execute</p>
 <pre><code>    @!#&gt; source add2.bashrc</code></pre>
 <p>or, for TCSH/CSH users:</p>
 <pre><code>    @!#&gt; source add2.tcshrc</code></pre>
@@ -97,10 +116,7 @@ kv=300 cs=2.7 fraca=0.07 dfx=1.98 dfy=2.02 angast=120.5
 <pre><code>    @!#&gt; cat add2.bashrc &gt;&gt; ~/.bashrc</code></pre>
 <p>or for TCSH/CSH users:</p>
 <pre><code>    @!#&gt; cat add2.tcshrc &gt;&gt; ~/.tcshrc</code></pre>
-<p>To test the build, please execute</p>
-<pre><code>    @!#&gt; make test
-    @!#&gt; ctest --output-on-failure</code></pre>
-<h2 id="testing-the-most-important-features">Testing the Most Important Features</h2>
+<h2 id="testing-the-build">Testing the Build</h2>
 <p>To ensure that SIMPLE has been correctly installed, we recommend running the application <code>simple_test_install</code>. It will test the most important components in the SIMPLE library (those used by prime2D and prime3D). Execute</p>
 <pre><code>        @!#&gt; simple_test_install </code></pre>
 <p>The program will create its own folder <code>SIMPLE_TEST_INSTALL*date*</code> where temporary files and information about each test are stored. Upon succesful completion you should see</p>
@@ -109,8 +125,7 @@ kv=300 cs=2.7 fraca=0.07 dfx=1.98 dfy=2.02 angast=120.5
 <h2 id="installationconfiguration-on-a-linux-cluster">Installation/Configuration on a Linux Cluster</h2>
 <p>Installation on a Linux cluster is essentially the same as on a Linux workstation with the exception that the appropriate modules need to be loaded before installation and execution. On a typical SLURM cluster</p>
 <pre><code>        @!#&gt; module load fftw/3.3.4-gcc
-        @!#&gt; module load gcc/4.9.1
-        @!#&gt; module load lapack/3.4.2 </code></pre>
+        @!#&gt; module load gcc/4.9.1</code></pre>
 <p>The instructions for how to execute SIMPLE in distributed environments (clusters or workstations with more than one CPU socket) are described below [distr].</p>
 <h1 id="simple-usage">SIMPLE Usage</h1>
 <h2 id="simple-help-tools">SIMPLE Help Tools</h2>
@@ -213,7 +228,7 @@ job_memory_per_task   = 48000
 job_name              = taf-dna-part2
 job_ntasks_per_socket = 1</code></pre>
 <p>This file is auto-generated on workstations, but it needs to be edited by the user in cluster environments. If you need help configuring distributed SIMPLE execution, please file a help ticket on the webpage. The two most important parameters for distributed execution is the number of partitions <code>nparts</code> and the number of shared-memory CPU threads <code>nthr</code>. A rule of thumb for good performance on multi-socket workstations is to minimise the number of parts and maximising the number of threads subject to never having fewer parts than sockets. The shared memory parallelisation does not benefit from the use of a larger number of threads than the number of logical threads available on a socket. To check the number of processors on a linux system, execute <code>nproc</code> in the terminal. Consider a heterogeneous cluster with N nodes, two CPU sockets per node and six CPUs per socket.</p>
-<p>[][h] <img src="./CPUtopo/cputopo" alt="image" /></p>
+<p>[][h] <img src="../CPUtopo/cputopo" alt="image" /></p>
 <p>If you are unsure how to configure your SIMPLE execution please file a help ticket.</p>
 <p>We normally let run in the background on the login node of our cluster. An example of how to distribute using ten nodes is provided below.</p>
 <pre><code>@!#&gt; nohup simple_distr_exec prg=prime2D stk=ptcls.mrc smpd=1.77 msk=100

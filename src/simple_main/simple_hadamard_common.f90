@@ -501,7 +501,7 @@ contains
             deallocate(res)
         endif
         ! expand for fast interpolation
-        if( l_doexpand )call b%vol%expand_cmat            
+        if( l_doexpand )call b%vol%expand_cmat     
     end subroutine preprefvol
     
     subroutine eonorm_struct_facts( b, p, res, which_iter )

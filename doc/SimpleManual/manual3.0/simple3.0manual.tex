@@ -166,7 +166,34 @@ The \texttt{SIMPLE/scripts} folder contains a perl-script (\texttt{convert\_frea
         @!#> make -j install
 \end{verbatim}
 
-\noindent{}This will install SIMPLE in the \texttt{'build'} directory. If you wish to provide an alternative installation directory, substitute step 4 with
+\noindent{}This will install SIMPLE in the \texttt{'build'} directory, clean out all unnecessary
+files and will finish with the following message (a reminder for step 5 below):
+
+\begin{verbatim}
+Installation complete.
+==========================================================================
+Please ensure the following variables are set properly in add2.*rc file:
+    SIMPLE_EMAIL SIMPLE_QSYS SIMPLE_PATH SIMPLE_SOURCE_PATH
+To use SIMPLE, append the relevant add2.* to your HOME shell rc file:
+  bash$ cat add2.bashrc >> ~/.bashrc
+  tcsh$ cat add2.tcshrc >> ~/.tcshrc
+==========================================================================
+For minimal installation to work correctly add:
+<your src path>/Simple-release/build/bin and
+<your src path>/Simple-release/build/scripts
+to your PATH environment variable.
+==========================================================================
+\end{verbatim}
+
+\noindent{}When the build and installation directories are the same (default) and you are
+happy with the install, you may want to clean compilation-generated and
+unnecessary files using \texttt{distclean}.
+
+\begin{verbatim}
+        @!#> make distclean
+\end{verbatim}
+
+\noindent{}If you wish to provide an alternative installation directory, substitute step 4 with
 
 \begin{verbatim}
         @!#> cmake -DCMAKE_INSTALL_PREFIX=<alternative directory> ../
@@ -188,10 +215,12 @@ more exotic setup you can provide the paths pointing to your custom gcc/gfortran
 	\item[--] Homebrew users: FC=/usr/local/bin/gfortran FFTW\_DIR=/usr/local/
 \end{itemize}
 
-\noindent{}\textbf{Step 5:} To run SIMPLE, the bin and scripts paths need to be in the \texttt{PATH} environment
-variable and the lib path in the \texttt{LD\_LIBRARY\_PATH} variable. The \texttt{SIMPLE\_PATH} environment
- variable must also be defined. The shell scripts \texttt{add2.bashrc} and \texttt{add2.tcshrc} containing the necessary 
- instructions were generated during the build step. For immediate use for running and testing, execute
+\noindent{}\\\textbf{Step 5:} Set the environment variables.
+
+\noindent{}\\To run SIMPLE, the bin and scripts paths need to be in the \texttt{PATH} environment
+variable. The \texttt{SIMPLE\_PATH} environment variable must also be defined. The 
+shell scripts \texttt{add2.bashrc} and \texttt{add2.tcshrc} containing the necessary
+instructions were generated during the build step. For immediate use for running and testing, execute
 \begin{verbatim}
     @!#> source add2.bashrc
 \end{verbatim}
@@ -208,13 +237,8 @@ variable and the lib path in the \texttt{LD\_LIBRARY\_PATH} variable. The \textt
 \begin{verbatim}
     @!#> cat add2.tcshrc >> ~/.tcshrc
 \end{verbatim}
-\noindent{}To test the build, please execute
-\begin{verbatim}
-    @!#> make test
-    @!#> ctest --output-on-failure
-\end{verbatim}
 
-\subsection{Testing the Most Important Features}
+\subsection{Testing the Build}
 
 \noindent{}To ensure that SIMPLE has been correctly installed, we recommend running the application \texttt{simple\_test\_install}. It will test the most 
 important components in the SIMPLE library  (those used by prime2D and  prime3D). Execute
