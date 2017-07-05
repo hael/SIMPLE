@@ -113,9 +113,9 @@ contains
         deallocate(frc)
         ! shift search object
         call self%shsrch_obj%new(self%pftcc_ptr, self%lims,&
-        &shbarrier=self%shbarr, nrestarts=3)
+        &shbarrier=self%shbarr, nrestarts=5)
         call self%inplsrch_obj%new(self%pftcc_ptr, self%lims,&
-        &shbarrier=self%shbarr, nrestarts=3)
+        &shbarrier=self%shbarr, nrestarts=5)
         if( debug ) write(*,'(A)') '>>> cont3D_srch::END OF PREP_SRCH'
     end subroutine prep_srch
 
@@ -146,7 +146,7 @@ contains
     !>  \brief  performs euler angles search
     subroutine do_euler_srch( self )
         class(cont3D_srch), intent(inout) :: self
-        integer, allocatable :: roind_vec(:)    ! slice of in-plane angles
+        !integer, allocatable :: roind_vec(:)    ! slice of in-plane angles
         real                 :: inpl_corr
         integer              :: iref
         ! init

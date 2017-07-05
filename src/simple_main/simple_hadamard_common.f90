@@ -206,7 +206,6 @@ contains
             ran = ran3()
             if( present(ran_eo) )ran = ran_eo 
             orisoft = orientation
-            ! do jpeak=1,p%npeaks
             do jpeak = 1, npeaks
                 if( DEBUG ) write(*,*) '*** simple_hadamard_common ***: gridding, iteration:', jpeak
                 ! get ori info
@@ -412,7 +411,7 @@ contains
         l_doexpand = .true.
         if( present(doexpand) ) l_doexpand = doexpand
         if( p%boxmatch < p%box )call b%vol%new([p%box,p%box,p%box],p%smpd) ! ensure correct dim
-        if( p%eo.eq.'yes' )res = b%vol%get_res()    ! for FOM filtering
+        !if( p%eo.eq.'yes' )res = b%vol%get_res()    ! for FOM filtering
         call b%vol%read(p%vols(s), isxfel=p%l_xfel)
         if( p%l_xfel )then
             ! no centering
@@ -498,7 +497,7 @@ contains
             !     endif
             !     deallocate(fsc, fom)
             ! endif
-            deallocate(res)
+            ! deallocate(res)
         endif
         ! expand for fast interpolation
         if( l_doexpand )call b%vol%expand_cmat     

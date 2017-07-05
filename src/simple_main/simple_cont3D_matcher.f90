@@ -16,15 +16,14 @@ public :: cont3D_exec
 private
 
 integer,                   parameter :: BATCHSZ_MUL = 10    !< particles per thread
-integer,                   parameter :: MAXNPEAKS   = 10
 integer,                   parameter :: NREFS       = 100   !< number of references projection per stage used per particle
+integer,                   parameter :: MAXNPEAKS   = 30
 logical,                   parameter :: DEBUG       = .false.
 type(polarft_corrcalc)               :: pftcc
 type(oris)                           :: orefs                   !< per particle projection direction search space
 type(cont3D_srch),       allocatable :: cont3Dsrch(:)
 type(cont3D_de_srch),    allocatable :: cont3Ddesrch(:)
 logical, allocatable                 :: state_exists(:)
-!real                                 :: frac_srch_space = 0.   ! so far unused
 integer                              :: nptcls          = 0
 integer                              :: nrefs_per_ptcl  = 0
 integer                              :: neff_states     = 0
@@ -34,6 +33,7 @@ contains
     !>  \brief  is the 3D continous algorithm
     subroutine cont3D_exec( b, p, cline, which_iter, converged )
         use simple_map_reduce, only: split_nobjs_even
+        use simple_ran_tabu,   only: ran_tabu
         use simple_qsys_funs,  only: qsys_job_finished
         use simple_strings,    only: int2str_pad
         use simple_projector,  only: projector
@@ -48,12 +48,14 @@ contains
         type(projector),        allocatable :: batch_imgs(:)
         type(polarft_corrcalc), allocatable :: pftccs(:)
         integer,                allocatable :: batches(:,:)
-        integer    :: nbatches, batch
+        integer                             :: nbatches, batch
         ! other variables
-        type(oris) :: softoris
-        type(ori)  :: orientation
-        real       :: reslim
-        integer    :: fromp, top, iptcl, state, alloc_stat
+        integer, allocatable :: eopart(:)
+        type(ran_tabu)       :: rt
+        type(oris)           :: softoris
+        type(ori)            :: orientation
+        real                 :: reslim
+        integer              :: fromp, top, iptcl, state, alloc_stat
         ! MULTIPLE STATES DEACTIVATED FOR NOW
         if(p%nstates>1)stop 'MULTIPLE STATES DEACTIVATED FOR NOW; cont3D_matcher::cont3Dexec'
         ! INIT
@@ -71,8 +73,6 @@ contains
             case DEFAULT
                 stop 'Uknown refinement mode; pcont3D_matcher::cont3D_exec'
         end select
-        ! Fraction of the search space
-        ! frac_srch_space = b%a%get_avg('frac')      ! unused
         ! batches
         nbatches = ceiling(real(nptcls)/real(p%nthr*BATCHSZ_MUL))
         batches  = split_nobjs_even(nptcls, nbatches)
@@ -87,17 +87,13 @@ contains
 
         ! DETERMINE THE NUMBER OF PEAKS
         select case(p%refine)
-            case('yes')
-                if( .not. cline%defined('npeaks') )then
-                    p%npeaks = min(MAXNPEAKS, b%e%find_npeaks(p%lp, p%moldiam))
-                endif
-                write(*,'(A,I2)')'>>> NPEAKS: ', p%npeaks
-            case('de')
-                p%npeaks = 10
-                write(*,'(A,I2)')'>>> NPEAKS: ', p%npeaks
+            case('yes','de')
+                if( .not. cline%defined('npeaks') )p%npeaks = MAXNPEAKS
+                p%npeaks = min(MAXNPEAKS, p%npeaks)
             case DEFAULT
                 stop 'Uknown refinement mode; pcont3D_matcher::cont3D_exec'
         end select
+        write(*,'(A,I2)')'>>> NPEAKS: ', p%npeaks
 
         ! SETUP WEIGHTS FOR THE 3D RECONSTRUCTION
         if( p%nptcls <= SPECWMINPOP )then
@@ -108,7 +104,13 @@ contains
 
         ! PREPARE REFERENCE & RECONSTRUCTION VOLUMES
         call prep_vols(b, p, cline)
-        if(p%norec .eq. 'no')call preprecvols(b, p)
+        if(p%norec .eq. 'no')then
+            call preprecvols(b, p)
+            allocate(eopart(p%fromp:p%top), source=0)
+            rt = ran_tabu(nptcls)
+            call rt%balanced(2, eopart)
+            eopart = eopart - 1
+        endif
 
         ! INIT IMGPOLARIZER
         call pftcc%new(nrefs_per_ptcl, [1,1], [p%boxmatch,p%boxmatch,1],p%kfromto, p%ring2, p%ctf)
@@ -174,7 +176,7 @@ contains
                     if(state == 0)cycle
                     b%img = batch_imgs(iptcl)
                     if(p%npeaks == 1)then
-                        call grid_ptcl(b, p, orientation)
+                        call grid_ptcl(b, p, orientation, ran_eo=real(eopart(iptcl)))
                     else
                         select case(p%refine)
                             case('yes')
@@ -182,7 +184,7 @@ contains
                             case('de')
                                 softoris = cont3Ddesrch(iptcl)%get_softoris()
                         end select
-                        call grid_ptcl(b, p, orientation, os=softoris)
+                        call grid_ptcl(b, p, orientation, os=softoris, ran_eo=real(eopart(iptcl)))
                     endif
                 enddo
             endif
@@ -201,6 +203,7 @@ contains
             call b%refvols(state)%kill_expanded
             call b%refvols(state)%kill
         enddo
+        if(p%norec .eq. 'no')deallocate(eopart)
         deallocate(batches, state_exists)
 
         ! ORIENTATIONS OUTPUT
