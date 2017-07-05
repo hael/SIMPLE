@@ -248,7 +248,7 @@ contains
         p%nptcls = nlines(p%oritab) 
         call b%a%new(p%nptcls)
         call b%a%read(p%oritab)
-        order = b%a%order_cls()
+        order = b%a%order_cls(p%ncls)
         do iclass=1,p%ncls
             write(*,'(a,1x,i5,1x,a,i5)') 'CLASS:', order(iclass), 'POP:', b%a%get_cls_pop(order(iclass))
             call b%img%read(p%stk, order(iclass))
