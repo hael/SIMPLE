@@ -35,7 +35,7 @@ type :: params
     character(len=3)      :: autoscale='yes'
     character(len=3)      :: avg='no'
     character(len=3)      :: bin='no'
-    character(len=3)      :: center='no'
+    character(len=3)      :: center='yes'
     character(len=3)      :: clustvalid='no'
     character(len=3)      :: compare='no'
     character(len=3)      :: countvox='no'

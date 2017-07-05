@@ -387,13 +387,6 @@ select case(prg)
         keys_optional(23) = 'oritab3D'
         ! documentation
         if( describe ) call print_doc_prime2D
-        ! parse command line
-        ! call check_restart( entire_line, is_restart )
-        ! if( is_restart )then
-        !     call parse_restart('prime2D', entire_line, cline, keys_required(:7), keys_optional(:19))
-        ! else
-        !     call cline%parse( keys_required(:7), keys_optional(:19) )
-        ! endif
         call cline%parse( keys_required(:5), keys_optional(:23) )
         ! set defaults
         if( .not. cline%defined('lpstart') ) call cline%set('lpstart',  15.)
@@ -402,7 +395,6 @@ select case(prg)
         if( .not. cline%defined('amsklp')  ) call cline%set('amsklp',   20.)
         if( .not. cline%defined('cenlp')   ) call cline%set('cenlp',    30.)
         if( .not. cline%defined('edge')    ) call cline%set('edge',     10.)
-        if( .not. cline%defined('center')  ) call cline%set('center', 'yes')
         if( .not. cline%defined('maxits')  ) call cline%set('maxits',   30.)
         if( cline%defined('nparts') .and. cline%defined('chunksz') )then
             stop 'nparts and chunksz cannot simultaneously be part of command line'

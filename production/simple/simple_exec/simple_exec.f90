@@ -697,7 +697,6 @@ select case(prg)
         if( .not. cline%defined('cenlp')   ) call cline%set('cenlp',    30.)
         if( .not. cline%defined('edge')    ) call cline%set('edge',     20.)
         if( .not. cline%defined('eo')      ) call cline%set('eo',      'no')
-        if( .not. cline%defined('center')  ) call cline%set('center', 'yes')
         if( .not. cline%defined('maxits')  ) call cline%set('maxits',   30.)
         ! execute
         call xprime2D%execute(cline)

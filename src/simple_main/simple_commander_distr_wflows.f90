@@ -403,7 +403,7 @@ contains
         call cline_check2D_conv%set('box', real(p_master%box))
         call cline_check2D_conv%set('nptcls', real(p_master%nptcls))
         call cline_cavgassemble%set('prg', 'cavgassemble')
-        call cline_makecavgs%set('prg',   'makecavgs')
+        call cline_makecavgs%set('prg', 'makecavgs')
         if( .not. cline%defined('refs') .and. job_descr%isthere('automsk') ) call job_descr%delete('automsk')
 
         ! split stack
@@ -418,7 +418,7 @@ contains
                 call cline_makecavgs%set('refs', p_master%refs)
                 call xmakecavgs%execute(cline_makecavgs)
             else
-                call random_selection_from_imgfile(p_master%stk, p_master%refs, p_master%ncls, p_master%smpd)
+                call random_selection_from_imgfile(p_master%stk, p_master%refs, p_master%ncls, p_master%smpd)               
             endif
         endif
         if( cline%defined('extr_thresh') )then
