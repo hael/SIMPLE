@@ -315,17 +315,20 @@ contains
         DebugPrint  '*** simple_hadamard_common ***: finished prepimg4align'
     end subroutine prepimg4align
 
+    !>  \brief  prepares one cluster centre image for alignment
     subroutine prep2Dref( b, p, icls )
         use simple_image, only: image
-        class(build),   intent(inout) :: b
-        class(params),  intent(in)    :: p
-        integer,        intent(in)    :: icls
+        class(build),      intent(inout) :: b
+        class(params),     intent(in)    :: p
+        integer,           intent(in)    :: icls
         real :: xyz(3), sharg
-        if( p%center.eq.'yes' .or. p%doshift )then
+        ! p%center:  user gets opportunity to turn on/off centering
+        ! p%doshift: search space fraction controlled centering (or not)
+        if( p%center .eq. 'yes' .and. p%doshift )then
             ! center the reference
             xyz   = b%img%center(p%cenlp, 'no', p%msk, doshift=.false.)
             sharg = arg(xyz)
-            if(sharg > CENTHRESH)then
+            if( sharg > CENTHRESH )then
                 ! apply shift and update the corresponding class parameters
                 call b%img%shift(xyz(1), xyz(2))
                 call b%a%add_shift2class(icls, -xyz(1:2))
@@ -336,7 +339,7 @@ contains
         ! normalise
         call b%img_match%norm
         ! apply mask
-        if( p%l_automsk )then
+        if(p%l_automsk .and. p%automsk .eq. 'cavg')then
             ! automasking
             call b%mskimg%update_cls(b%img_match, icls)
             if( (p%l_distr_exec .and. p%part.eq.1) .or. (.not.p%l_distr_exec))then
@@ -354,20 +357,36 @@ contains
         call b%img_match%fwd_ft
     end subroutine prep2Dref
 
+    !>  \brief  prepares one volume for references extraction
     subroutine preprefvol( b, p, cline, s, doexpand )
         class(build),      intent(inout) :: b
         class(params),     intent(inout) :: p
         class(cmdline),    intent(inout) :: cline
         integer,           intent(in)    :: s
         logical, optional, intent(in)    :: doexpand
-        logical :: l_doexpand = .true.
+        real, allocatable     :: res(:), res_match(:), fom(:), fom_match(:), fsc(:)
+        character(len=STDLEN) :: fsc_file
+        logical               :: l_doexpand, do_center
+        real                  :: shvec(3)
+        l_doexpand = .true.
         if( present(doexpand) ) l_doexpand = doexpand
         if( p%boxmatch < p%box )call b%vol%new([p%box,p%box,p%box],p%smpd) ! ensure correct dim
         call b%vol%read(p%vols(s), isxfel=p%l_xfel)
         if( p%l_xfel )then
             ! no centering
         else
-            if( p%doshift )call centervol
+            do_center = .true.
+            if( p%center .eq. 'no' .or. p%nstates > 1 .or. .not. p%doshift .or.&
+                p%pgrp(:1) .ne. 'c' .or. cline%defined('mskfile') ) do_center = .false.
+            if( do_center )then
+                shvec = b%vol%center(p%cenlp,'no',p%msk,doshift=.false.) ! find center of mass shift
+                if( arg(shvec) > CENTHRESH )then
+                    if( p%pgrp .ne. 'c1' ) shvec(1:2) = 0.       ! shifts only along z-axis for C2 and above
+                    call b%vol%shift(shvec(1),shvec(2),shvec(3)) ! performs shift
+                    ! map back to particle oritentations
+                    if( cline%defined('oritab') )call b%a%map3dshift22d(-shvec(:), state=s)
+                endif
+            endif
         endif
         ! clip
         if( p%boxmatch < p%box )then
@@ -404,26 +423,7 @@ contains
         ! FT volume
         call b%vol%fwd_ft
         ! expand for fast interpolation
-        if( l_doexpand )call b%vol%expand_cmat
-
-        contains
-
-            subroutine centervol
-                real :: shvec(3)
-                ! centering only for single state, asymmetric and circular symmetric cases 
-                if( p%nstates==1 )then
-                    if(p%pgrp(:1) .eq. 'c')then
-                        shvec = b%vol%center(p%cenlp,'no',p%msk,doshift=.false.) ! find center of mass shift
-                        if( arg(shvec) > CENTHRESH )then
-                            if(p%pgrp .ne. 'c1') shvec(1:2) = 0.         ! shifts only along z-axis for C2 and above
-                            call b%vol%shift(shvec(1),shvec(2),shvec(3)) ! performs shift
-                            ! map back to particle oritentations
-                            if( cline%defined('oritab') )call b%a%map3dshift22d(-shvec(:), state=s)
-                        endif
-                    endif
-                endif
-            end subroutine centervol
-            
+        if( l_doexpand )call b%vol%expand_cmat     
     end subroutine preprefvol
     
     subroutine eonorm_struct_facts( b, p, res, which_iter )

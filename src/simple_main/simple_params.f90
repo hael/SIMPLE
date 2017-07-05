@@ -38,7 +38,7 @@ type :: params
     character(len=3)      :: autoscale='yes'   !< automatic down-scaling(yes|no){yes}
     character(len=3)      :: avg='no'          !< calc average automatic (yes|no){no}
     character(len=3)      :: bin='no'          !< binarise image(yes|no){no}
-    character(len=3)      :: center='no'       !< center image(s)/class average(s)/volume(s)(yes|no){no}
+    character(len=3)      :: center='yes'      !< center image(s)/class average(s)/volume(s)(yes|no){no}
     character(len=3)      :: clustvalid='no'   !< validate clustering(yes|homo|no){no}
     character(len=3)      :: compare='no'      !< do comparison(yes|no){no}
     character(len=3)      :: countvox='no'     !< count # voxels(yes|no){no}

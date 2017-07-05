@@ -2382,14 +2382,16 @@ contains
     end function order_corr
     
     !>  \brief  orders clusters according to population
-    function order_cls( self ) result( arr )
+    function order_cls( self, ncls ) result( arr )
         class(oris), intent(inout), target :: self
+        integer,     intent(in)            :: ncls
         integer, allocatable :: arr(:)
-        integer :: i, alloc_stat, ncls
+        integer :: i, alloc_stat
         ops => self
-        ncls = self%get_ncls()
+        if(ncls <= 0) stop 'invalid number of classes; simple_oris%order_cls'
         allocate(arr(ncls), classpops(ncls), stat=alloc_stat)
         call alloc_err('order_cls; simple_oris', alloc_stat)
+        classpops = 0
         ! calculate class populations
         do i=1,ncls
             classpops(i) = self%get_cls_pop(i)

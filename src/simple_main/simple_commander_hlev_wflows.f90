@@ -113,8 +113,10 @@ contains
             call os%mul_shifts(1./scale_stage2)
             call os%write(FINALDOC)
             cline_makecavgs = cline
-            call cline_makecavgs%delete('ncls')
             call cline_makecavgs%delete('chunksz')
+            if( p_master%l_chunk_distr )then
+                call cline_makecavgs%delete('ncls')
+            endif
             call cline_makecavgs%set('prg',   'makecavgs')
             call cline_makecavgs%set('oritab', trim(FINALDOC))
             call cline_makecavgs%set('nparts', real(nparts))
