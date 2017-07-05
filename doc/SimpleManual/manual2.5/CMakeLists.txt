@@ -5,7 +5,7 @@ add_latex_document(simple2-5_usermanual.tex
 #   IMAGE_DIRS ../SIMPLE_logo ../CPUtopo
 #   "${CMAKE_CURRENT_SOURCE_DIR}/SIMPLE_logo"
 #   "${CMAKE_CURRENT_SOURCE_DIR}/CPUtopo"
-   IMAGES ../SIMPLE_logo/rawlogo.png ../CPUtopo/cputopo.png
+   IMAGES ../SIMPLE_logo/rawlogo.png ../CPUtopo/cputopo.ai
    TARGET_NAME Simple2.5_User_Manual
    FORCE_PDF
    EXCLUDE_FROM_ALL
