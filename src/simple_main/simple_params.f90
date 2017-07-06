@@ -148,6 +148,7 @@ type :: params
     character(len=STDLEN) :: pgrp='c1'
     character(len=STDLEN) :: plaintexttab=''
     character(len=STDLEN) :: prg=''
+    character(len=STDLEN) :: real_filter=''
     character(len=STDLEN) :: refine='no'
     character(len=STDLEN) :: refs_msk=''
     character(len=STDLEN) :: refs=''
@@ -300,6 +301,7 @@ type :: params
     real    :: frac=1.
     real    :: fraca=0.07
     real    :: fracdeadhot=0.05
+    real    :: frac_outliers=0.
     real    :: fraczero=0.
     real    :: ftol=1e-6
     real    :: gw=0.5
@@ -481,6 +483,7 @@ contains
         call check_carg('phrand',         self%phrand)
         call check_carg('prg',            self%prg)
         call check_carg('readwrite',      self%readwrite)
+        call check_carg('real_filter',    self%real_filter)
         call check_carg('refine',         self%refine)
         call check_carg('refs',           self%refs)
         call check_carg('remap_classes',  self%remap_classes)
@@ -646,6 +649,7 @@ contains
         call check_rarg('frac',           self%frac)
         call check_rarg('fraca',          self%fraca)
         call check_rarg('fracdeadhot',    self%fracdeadhot)
+        call check_rarg('frac_outliers',  self%frac_outliers)
         call check_rarg('fraczero',       self%fraczero)
         call check_rarg('ftol',           self%ftol)
         call check_rarg('gw',             self%gw)

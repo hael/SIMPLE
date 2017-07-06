@@ -156,8 +156,8 @@ type :: image
     procedure          :: nbackground
     procedure, private :: bin_1
     procedure, private :: bin_2
-    procedure, private :: bin_3
-    generic            :: bin => bin_1, bin_2, bin_3
+    generic            :: bin => bin_1, bin_2
+    procedure          :: bin_kmeans
     procedure          :: bin_filament
     procedure          :: bin_cylinder
     procedure          :: cendist
@@ -183,6 +183,8 @@ type :: image
     generic            :: apply_filter => apply_filter_1, apply_filter_2
     procedure          :: phase_rand
     procedure          :: hannw
+    procedure          :: real_space_filter
+    procedure          :: sobel
     ! CALCULATORS
     procedure          :: square_root
     procedure          :: maxcoord
@@ -548,7 +550,7 @@ contains
             ss = cyci_1d([1,self%ldim(1)], s)
             do t=j-winsz,j+winsz
                 tt = cyci_1d([1,self%ldim(2)], t)
-                if( self%is_3d() )then
+                if( self%ldim(3) > 1 )then
                     do u=k-winsz,k+winsz
                         uu          = cyci_1d([1,self%ldim(3)], u)
                         pixels(cnt) = self%rmat(ss,tt,uu)
@@ -2357,31 +2359,19 @@ contains
     end subroutine bin_2
 
     !>  \brief  is for binarizing an image using k-means to identify the background/
-    !!          foreground distributions for the image or within a spherical mask
-    subroutine bin_3( self, which, mskrad )
-        class(image),     intent(inout) :: self
-        character(len=*), intent(in)    :: which
-        real, optional,   intent(in)    :: mskrad
-        real, allocatable :: forsort(:)
-        type(image)       :: maskimg
+    !!          foreground distributions for the image
+    subroutine bin_kmeans( self, frac_outliers )
+        class(image),   intent(inout) :: self
+        real, optional, intent(in)    :: frac_outliers
+        real, allocatable :: forsort(:), foreground_pixels(:), dists(:)
         real              :: cen1, cen2, sum1, sum2, val1, val2, sumvals
-        integer           :: cnt1, cnt2, i, l, npix, halfnpix
+        real              :: foreground_cen, background_cen, dist_thresh
+        integer           :: cnt1, cnt2, i, l, npix, halfnpix, noutliers
+        integer           :: nforeground, ninliers
+        type(image)       :: binimg
         if( self%ft ) stop 'only for real images; bin_3; simple image'
         ! sort the pixels to initialize k-means
-        select case(which)
-            case('msk')
-                if(.not.present(mskrad))stop 'missing radius; bin_3; simple image'
-                call maskimg%new(self%ldim, self%smpd)
-                maskimg%rmat = 1.
-                call maskimg%mask(mskrad, 'hard')
-                forsort = pack(self%rmat(:self%ldim(1), :self%ldim(2), :self%ldim(3)),&
-                    &maskimg%rmat(:self%ldim(1), :self%ldim(2), :self%ldim(3)) > 0.5 )
-            case('full', 'nomsk')
-                forsort = pack(self%rmat(:self%ldim(1), :self%ldim(2), :self%ldim(3)), .true.)
-                ! forsort = self%packer() ! Intel hickup
-            case DEFAULT
-                stop 'Unknown argument which ; bin_3; simple image'
-        end select
+        forsort = pack(self%rmat, .true.)
         npix = size(forsort)
         call hpsort(npix, forsort)
         halfnpix = nint(real(npix)/2.)
@@ -2405,22 +2395,53 @@ contains
         end do
         ! assign values to the centers
         if( cen1 > cen2 )then
-            val1 = 1.
-            val2 = 0.
+            val1           = 1.
+            val2           = 0.
+            foreground_cen = cen1
+            background_cen = cen2
         else
-            val1 = 0.
-            val2 = 1.
+            val1           = 0.
+            val2           = 1.
+            foreground_cen = cen2
+            background_cen = cen1
         endif
-        ! last pass to binarize the image
-        where( (cen1-self%rmat)**2. < (cen2-self%rmat)**2. )
-            self%rmat = val1
-        elsewhere
-            self%rmat = val2
-        end where
-        if(which .eq. 'msk')call self%mul(maskimg)
-        deallocate(forsort)
-        call maskimg%kill
-    end subroutine bin_3
+        if( present(frac_outliers) )then
+            if( .not. frac_outliers > 0. ) stop 'frac_outliers must be > 0.; simple_image :: bin_kmeans'
+            ! create a binary volume (including outliers)
+            call binimg%new(self%ldim, self%smpd)
+            where( (cen1 - self%rmat)**2. < (cen2 - self%rmat)**2. )
+                binimg%rmat = val1
+            elsewhere
+                binimg%rmat = val2
+            end where
+            ! extract foreground pixels
+            foreground_pixels = pack(self%rmat, binimg%rmat > 0.5)
+            nforeground       = size(foreground_pixels)
+            noutliers         = max(1,nint(frac_outliers * real(nforeground)))
+            ninliers          = nforeground - noutliers
+            ! calculate "distances"
+            allocate(dists(nforeground))
+            dists = (foreground_cen - foreground_pixels)**2./&
+                    (background_cen - foreground_pixels)**2.
+            ! identify threshold
+            call hpsort(nforeground, dists)
+            dist_thresh = dists(ninliers)
+            ! binarize the image
+            where( binimg%rmat > 0.5 .and. (foreground_cen - self%rmat)**2. <  dist_thresh )
+                self%rmat = 1.0
+            elsewhere
+                self%rmat = 0.0
+            end where
+            call binimg%kill
+        else
+            ! binarize the image
+            where( (cen1 - self%rmat)**2. < (cen2 - self%rmat)**2. )
+                self%rmat = val1
+            elsewhere
+                self%rmat = val2
+            end where
+        endif
+    end subroutine bin_kmeans
 
     !>  \brief  is for creating a binary filament
     subroutine bin_filament( self, width_A )
@@ -2553,7 +2574,7 @@ contains
             call tmp%bin(thres)
         else
             call tmp%mask(rmsk, 'soft')
-            call tmp%bin('nomsk', rmsk)
+            call tmp%bin_kmeans
         endif
         xyz = tmp%masscen()
         if( l_doshift )then
@@ -3224,6 +3245,157 @@ contains
             w(k) = wfuns%eval_apod(real(k))
         end do
     end function hannw
+
+    !>  \brief average and median filtering in real-space
+    subroutine real_space_filter( self, winsz, which, self_out )
+        use simple_winfuns, only: winfuns
+        class(image),     intent(inout) :: self
+        integer,          intent(in)    :: winsz
+        character(len=*), intent(in)    :: which
+        class(image),     intent(out)   :: self_out
+        real, allocatable     :: pixels(:), wfvals(:)
+        integer               :: n, i, j, k, cnt
+        real                  :: rn, wfun(-winsz:winsz), norm 
+        type(winfuns)         :: fwin
+        character(len=STDLEN) :: wstr
+        ! check the number of pixels in window
+        pixels = self%win2arr(1, 1, 1, winsz)
+        n = size(pixels)
+        rn = real(n)
+        allocate(wfvals(n))
+        ! make the window function
+        wstr = 'bman'
+        fwin = winfuns(wstr, real(WINSZ), 1.0)
+        ! sample the window function
+        do i=-winsz,winsz
+            wfun(i) = fwin%eval_apod(real(i))
+        end do
+        ! memoize wfun vals & normalisation constant
+        norm = 0.
+        cnt  = 0
+        if( self%ldim(3) == 1 )then
+            do i=-winsz,winsz
+                do j=-winsz,winsz
+                    cnt = cnt + 1
+                    wfvals(cnt) = wfun(i) * wfun(j)
+                    norm = norm + wfvals(cnt)
+                end do
+            end do
+        else
+            do i=-winsz,winsz
+                do j=-winsz,winsz
+                    do k=-winsz,winsz
+                        cnt = cnt + 1
+                        wfvals(cnt) = wfun(i) * wfun(j) * wfun(k)
+                        norm = norm + wfvals(cnt)
+                    end do
+                end do
+            end do
+        endif
+        ! make the output image
+        call self_out%new(self%ldim, self%smpd)
+        ! filter
+        if( self%ldim(3) == 1 )then
+            select case(which)
+                case('median')
+                    !$omp parallel do collapse(2) default(shared) private(i,j,pixels) schedule(static) proc_bind(close)
+                    do i=1,self%ldim(1)
+                        do j=1,self%ldim(2)
+                            pixels = self%win2arr(i, j, 1, winsz)
+                            self_out%rmat(i,j,1) = median_nocopy(pixels)
+                        end do
+                    end do
+                    !$omp end parallel do
+                case('average')
+                    !$omp parallel do collapse(2) default(shared) private(i,j,pixels) schedule(static) proc_bind(close)
+                    do i=1,self%ldim(1)
+                        do j=1,self%ldim(2)
+                            pixels = self%win2arr(i, j, 1, winsz)
+                            self_out%rmat(i,j,1) = sum(pixels)/rn
+                        end do
+                    end do
+                    !$omp end parallel do
+                case('bman')
+                    !$omp parallel do collapse(2) default(shared) private(i,j,pixels) schedule(static) proc_bind(close)
+                    do i=1,self%ldim(1)
+                        do j=1,self%ldim(2)
+                            pixels = self%win2arr(i, j, 1, winsz)
+                            self_out%rmat(i,j,1) = sum(pixels * wfvals) / norm
+                        end do
+                    end do
+                    !$omp end parallel do
+                case DEFAULT
+                    stop 'unknown filter type; simple_image :: real_space_filter'
+            end select
+        else
+            select case(which)
+                case('median')
+                    !$omp parallel do collapse(3) default(shared) private(i,j,k,pixels) schedule(static) proc_bind(close)
+                    do i=1,self%ldim(1)
+                        do j=1,self%ldim(2)
+                            do k=1,self%ldim(3)
+                                pixels = self%win2arr(i, j, k, winsz)
+                                self_out%rmat(i,j,k) = median_nocopy(pixels)
+                            end do 
+                        end do
+                    end do
+                    !$omp end parallel do
+                case('average')
+                    !$omp parallel do collapse(3) default(shared) private(i,j,k,pixels) schedule(static) proc_bind(close)
+                    do i=1,self%ldim(1)
+                        do j=1,self%ldim(2)
+                            do k=1,self%ldim(3)
+                                pixels = self%win2arr(i, j, k, winsz)
+                                self_out%rmat(i,j,k) = sum(pixels)/rn
+                            end do 
+                        end do
+                    end do
+                    !$omp end parallel do
+                case('bman')
+                    !$omp parallel do collapse(3) default(shared) private(i,j,k,pixels) schedule(static) proc_bind(close)
+                    do i=1,self%ldim(1)
+                        do j=1,self%ldim(2)
+                            do k=1,self%ldim(3)
+                                pixels = self%win2arr(i, j, k, winsz)
+                                self_out%rmat(i,j,k) = sum(pixels * wfvals) / norm
+                            end do 
+                        end do
+                    end do
+                    !$omp end parallel do
+                case DEFAULT
+                    stop 'unknown filter type; simple_image :: real_space_filter'
+            end select
+        endif
+    end subroutine real_space_filter
+
+    !>  \brief is a 18th-neighbourhood Sobel filter (gradients magnitude)
+    subroutine sobel( self )
+        class(image), intent(inout) :: self
+        integer                     :: alloc_stat, i,j,k
+        real, allocatable           :: rmat(:,:,:)
+        real                        :: val, dx, dy, dz, kernel(3,3)
+        if( self%is_ft() )stop 'real space only; simple_image%sobel'
+        i( self%ldim(3) == 1 )stop 'Volumes only; simple_image%sobel'
+        allocate(rmat(self%ldim(1), self%ldim(2), self%ldim(3)), source=0., stat=alloc_stat)
+        call alloc_err("In: sobel; simple_image", alloc_stat)
+        kernel      = 0.
+        kernel(1,:) = -1
+        kernel(1,2) = -2.
+        kernel(3,:) = 1
+        kernel(3,2) = 2.
+        do i = 2, self%ldim(1) - 1
+            do j = 2, self%ldim(2) - 1
+                do k = 2, self%ldim(3) - 1
+                    dx = sum( kernel * self%rmat(i-1:i+1, j-1:j+1, k)       )
+                    dy = sum( kernel * self%rmat(i,       j-1:j+1, k-1:k+1) )
+                    dz = sum( kernel * self%rmat(i-1:i+1, j,       k-1:k+1) )
+                    rmat(i,j,k) = sqrt( dx**2.+dy**2.+dz**2. ) / 8.
+                enddo
+            enddo
+        enddo
+        self%rmat(:self%ldim(1), :self%ldim(2), :self%ldim(3)) = rmat(:,:,:)
+        deallocate(rmat)
+    end subroutine sobel
 
     ! CALCULATORS
     

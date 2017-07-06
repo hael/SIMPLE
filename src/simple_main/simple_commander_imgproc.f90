@@ -100,8 +100,9 @@ contains
             end do
         else if( cline%defined('vol1') )then
             call b%build_general_tbox(p, cline)              ! general objects built
-            call doit(b%vol)
             call b%vol%read(p%vols(1))
+            call doit(b%vol)
+            call b%vol%write(p%outvol)
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_BINARISE NORMAL STOP ****')
@@ -116,10 +117,14 @@ contains
                 else if( cline%defined('npix') )then
                     call img_or_vol%bin(p%npix)
                 else
-                    call img_or_vol%bin('nomsk')
+                    if( cline%defined('frac_outliers') )then
+                        call img_or_vol%bin_kmeans(p%frac_outliers)
+                    else
+                        call img_or_vol%bin_kmeans
+                    endif
                 endif
-                write(*,'(a,1x,i9)') 'NO FOREGROUND PIXELS:', img_or_vol%nforeground()
-                write(*,'(a,1x,i9)') 'NO BACKGROUND PIXELS:', img_or_vol%nbackground()
+                write(*,'(a,1x,i9)') '# FOREGROUND PIXELS:', img_or_vol%nforeground()
+                write(*,'(a,1x,i9)') '# BACKGROUND PIXELS:', img_or_vol%nbackground()
                 if( cline%defined('grow') )then
                     do igrow=1,p%grow
                         call img_or_vol%grow_bin
@@ -290,11 +295,13 @@ contains
     end subroutine exec_ctfops
 
     subroutine exec_filter( self, cline )
-        use simple_procimgfile, only: bp_imgfile, phase_rand_imgfile
+        use simple_procimgfile, only: bp_imgfile, phase_rand_imgfile, real_filter_imgfile
+        use simple_image,       only: image
         class(filter_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(params) :: p
         type(build)  :: b
+        type(image)  :: vol_tmp
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         if( cline%defined('stk') )then
@@ -308,6 +315,10 @@ contains
                     call bp_imgfile(p%stk, p%outstk, p%smpd, 0., p%lp)
                 else if( cline%defined('hp') )then
                     call bp_imgfile(p%stk, p%outstk, p%smpd, p%hp, 0.)
+                ! real-space
+                else if( cline%defined('real_filter') )then
+                    if( .not. cline%defined('winsz') ) stop 'need winsz input for real-space filtering; commander_imgproc :: exec_filter'
+                    call real_filter_imgfile(p%stk, p%outstk, p%smpd, trim(p%real_filter), nint(p%winsz))
                 else
                     stop 'Nothing to do!'
                 endif
@@ -331,6 +342,12 @@ contains
                     call b%vol%bp(p%hp,0.)
                 else if( cline%defined('lp') )then
                     call b%vol%bp(0.,p%lp)
+                ! real-space
+                else if( cline%defined('real_filter') )then
+                    if( .not. cline%defined('winsz') ) stop 'need winsz input for real-space filtering; commander_imgproc :: exec_filter'
+                    call b%vol%real_space_filter(nint(p%winsz), p%real_filter, vol_tmp)
+                    b%vol = vol_tmp
+                    call vol_tmp%kill
                 else
                     stop 'Nothing to do!'
                 endif

@@ -661,10 +661,10 @@ contains
     !>  \brief  is for band-pass filtering
     subroutine bp_imgfile( fname2filter, fname, smpd, hp, lp )
         character(len=*), intent(in) :: fname2filter, fname
-        real, intent(in) :: smpd, hp, lp
-        type(image)      :: img
-        integer          :: n, i, ldim(3)
-        real, parameter  :: width=10.
+        real,             intent(in) :: smpd, hp, lp
+        type(image)     :: img
+        integer         :: n, i, ldim(3)
+        real, parameter :: width=10.
         call find_ldim_nptcls(fname2filter, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'bp_imgfile' )
@@ -678,6 +678,30 @@ contains
         end do
         call img%kill
     end subroutine bp_imgfile
+
+    !>  \brief  is for real-space filtering
+    subroutine real_filter_imgfile( fname2filter, fname, smpd, which_filter, winsz )
+        character(len=*), intent(in) :: fname2filter, fname
+        real,             intent(in) :: smpd
+        character(len=*), intent(in) :: which_filter
+        integer,          intent(in) :: winsz
+        type(image)     :: img, img_filt
+        integer         :: n, i, ldim(3)
+        call find_ldim_nptcls(fname2filter, ldim, n)
+        ldim(3) = 1
+        call raise_exception_imgfile( n, ldim, 'real_filter_imgfile' )
+        call img%new(ldim,smpd)
+        call img_filt%new(ldim,smpd)
+        write(*,'(a)') '>>> REAL-SPACE FILTERING IMAGES'
+        do i=1,n
+            call progress(i,n)
+            call img%read(fname2filter, i)
+            call img%real_space_filter(winsz, which_filter, img_filt)
+            call img_filt%write(fname, i)
+        end do
+        call img%kill
+        call img_filt%kill
+    end subroutine real_filter_imgfile
     
     !>  \brief  is for phase randomization
     subroutine phase_rand_imgfile( fname2process, fname, smpd, lp )
@@ -860,7 +884,7 @@ contains
             if( present(thres) )then
                 call img%bin(thres)
             else
-                call img%bin('nomsk')
+                call img%bin_kmeans
             endif
             if( didft ) call img%fwd_ft
             call img%write(fname, i)

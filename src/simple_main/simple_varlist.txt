@@ -116,6 +116,7 @@ pdfile
 pgrp
 plaintexttab
 prg
+real_filter
 refine
 refs_msk
 refs
@@ -261,6 +262,7 @@ fny
 frac
 fraca
 fracdeadhot
+frac_outliers
 fraczero
 ftol
 gw
