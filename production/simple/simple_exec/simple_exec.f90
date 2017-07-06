@@ -1671,19 +1671,21 @@ select case(prg)
         ! <filter/end> 
         !
         ! Required keys
-        keys_required(1) = 'smpd'
+        keys_required(1)  = 'smpd'
         ! Optional keys
-        keys_optional(1) = 'stk'
-        keys_optional(2) = 'vol1'
-        keys_optional(3) = 'outstk'
-        keys_optional(4) = 'outvol'
-        keys_optional(5) = 'lp'
-        keys_optional(6) = 'hp'
-        keys_optional(7) = 'phrand'
-        keys_optional(8) = 'bfac'
+        keys_optional(1)  = 'stk'
+        keys_optional(2)  = 'vol1'
+        keys_optional(3)  = 'outstk'
+        keys_optional(4)  = 'outvol'
+        keys_optional(5)  = 'lp'
+        keys_optional(6)  = 'hp'
+        keys_optional(7)  = 'phrand'
+        keys_optional(8)  = 'bfac'
+        keys_optional(9)  = 'winsz'
+        keys_optional(10) = 'real_filter'
         ! parse command line
         if( describe ) call print_doc_filter
-        call cline%parse(keys_required(:1), keys_optional(:8))
+        call cline%parse(keys_required(:1), keys_optional(:10))
         ! execute
         call xfilter%execute(cline)
     case( 'image_smat' )

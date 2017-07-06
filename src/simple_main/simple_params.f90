@@ -148,6 +148,7 @@ type :: params
     character(len=STDLEN) :: pgrp='c1'
     character(len=STDLEN) :: plaintexttab=''
     character(len=STDLEN) :: prg=''
+    character(len=STDLEN) :: real_filter=''
     character(len=STDLEN) :: refine='no'
     character(len=STDLEN) :: refs_msk=''
     character(len=STDLEN) :: refs=''
@@ -482,6 +483,7 @@ contains
         call check_carg('phrand',         self%phrand)
         call check_carg('prg',            self%prg)
         call check_carg('readwrite',      self%readwrite)
+        call check_carg('real_filter',    self%real_filter)
         call check_carg('refine',         self%refine)
         call check_carg('refs',           self%refs)
         call check_carg('remap_classes',  self%remap_classes)

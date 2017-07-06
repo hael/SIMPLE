@@ -116,6 +116,7 @@ pdfile
 pgrp
 plaintexttab
 prg
+real_filter
 refine
 refs_msk
 refs

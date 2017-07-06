@@ -3247,48 +3247,100 @@ contains
 
     !>  \brief average and median filtering in real-space
     subroutine real_space_filter( self, winsz, which, self_out )
+        use simple_winfuns, only: winfuns
         class(image),     intent(inout) :: self
         integer,          intent(in)    :: winsz
         character(len=*), intent(in)    :: which
         class(image),     intent(out)   :: self_out
-        real, allocatable :: pixels(:)
-        integer           :: n, i, j, k
-        real              :: rn
-        call self_out%new(self%ldim, self%smpd)
+        real, allocatable     :: pixels(:), wfvals(:)
+        integer               :: n, i, j, k, cnt
+        real                  :: rn, wfun(-winsz:winsz), norm 
+        type(winfuns)         :: fwin
+        character(len=STDLEN) :: wstr
+        ! check the number of pixels in window
         pixels = self%win2arr(1, 1, 1, winsz)
-        n      = size(pixels)
-        rn     = real(n)
+        n = size(pixels)
+        rn = real(n)
+        allocate(wfvals(n))
+        ! make the window function
+        wstr = 'bman'
+        fwin = winfuns(wstr, real(WINSZ), 1.0)
+        ! sample the window function
+        do i=-winsz,winsz
+            wfun(i) = fwin%eval_apod(real(i))
+        end do
+        ! memoize wfun vals & normalisation constant
+        norm = 0.
+        cnt  = 0
+        if( self%ldim(3) == 1 )then
+            do i=-winsz,winsz
+                do j=-winsz,winsz
+                    cnt = cnt + 1
+                    wfvals(cnt) = wfun(i) * wfun(j)
+                    norm = norm + wfvals(cnt)
+                end do
+            end do
+        else
+            do i=-winsz,winsz
+                do j=-winsz,winsz
+                    do k=-winsz,winsz
+                        cnt = cnt + 1
+                        wfvals(cnt) = wfun(i) * wfun(j) * wfun(k)
+                        norm = norm + wfvals(cnt)
+                    end do
+                end do
+            end do
+        endif
+        ! make the output image
+        call self_out%new(self%ldim, self%smpd)
+        ! filter
         if( self%ldim(3) == 1 )then
             select case(which)
                 case('median')
+                    !$omp parallel do collapse(2) default(shared) private(i,j,pixels) schedule(static) proc_bind(close)
                     do i=1,self%ldim(1)
                         do j=1,self%ldim(2)
                             pixels = self%win2arr(i, j, 1, winsz)
-                            self_out%rmat(i,j,1) = median(pixels)
+                            self_out%rmat(i,j,1) = median_nocopy(pixels)
                         end do
                     end do
+                    !$omp end parallel do
                 case('average')
+                    !$omp parallel do collapse(2) default(shared) private(i,j,pixels) schedule(static) proc_bind(close)
                     do i=1,self%ldim(1)
                         do j=1,self%ldim(2)
                             pixels = self%win2arr(i, j, 1, winsz)
                             self_out%rmat(i,j,1) = sum(pixels)/rn
                         end do
                     end do
+                    !$omp end parallel do
+                case('bman')
+                    !$omp parallel do collapse(2) default(shared) private(i,j,pixels) schedule(static) proc_bind(close)
+                    do i=1,self%ldim(1)
+                        do j=1,self%ldim(2)
+                            pixels = self%win2arr(i, j, 1, winsz)
+                            self_out%rmat(i,j,1) = sum(pixels * wfvals) / norm
+                        end do
+                    end do
+                    !$omp end parallel do
                 case DEFAULT
                     stop 'unknown filter type; simple_image :: real_space_filter'
             end select
         else
             select case(which)
                 case('median')
+                    !$omp parallel do collapse(3) default(shared) private(i,j,k,pixels) schedule(static) proc_bind(close)
                     do i=1,self%ldim(1)
                         do j=1,self%ldim(2)
                             do k=1,self%ldim(3)
                                 pixels = self%win2arr(i, j, k, winsz)
-                                self_out%rmat(i,j,k) = median(pixels)
+                                self_out%rmat(i,j,k) = median_nocopy(pixels)
                             end do 
                         end do
                     end do
+                    !$omp end parallel do
                 case('average')
+                    !$omp parallel do collapse(3) default(shared) private(i,j,k,pixels) schedule(static) proc_bind(close)
                     do i=1,self%ldim(1)
                         do j=1,self%ldim(2)
                             do k=1,self%ldim(3)
@@ -3297,6 +3349,18 @@ contains
                             end do 
                         end do
                     end do
+                    !$omp end parallel do
+                case('bman')
+                    !$omp parallel do collapse(3) default(shared) private(i,j,k,pixels) schedule(static) proc_bind(close)
+                    do i=1,self%ldim(1)
+                        do j=1,self%ldim(2)
+                            do k=1,self%ldim(3)
+                                pixels = self%win2arr(i, j, k, winsz)
+                                self_out%rmat(i,j,k) = sum(pixels * wfvals) / norm
+                            end do 
+                        end do
+                    end do
+                    !$omp end parallel do
                 case DEFAULT
                     stop 'unknown filter type; simple_image :: real_space_filter'
             end select

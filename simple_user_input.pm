@@ -41,16 +41,16 @@ our$ICOMPILE = 2;
 # the name compiler default(linux): cc, gcc, gfortran
 # the name compiler default(MacOSX): /usr/local/bin/gcc, /usr/local/bin/gcc,
 #                                    /usr/local/bin/gfortran
-our$CC_COMPILER = "";
-our$GCC_COMPILER = "";
+our$CC_COMPILER = "gcc-5";
+our$GCC_COMPILER = "g++-5";
 our$FCOMPILER = "gfortran-5";
 # enter the CUDA libary path default: /usr/local/cuda
 our$CUDADIR="";
 # enter the fftw lib default: /usr/lib/x86_64-linux-gnu for [linux]
 #                             /usr/local/lib for [MacOSX]
-our$FFTW_LIB="/usr/lib/x86_64-linux-gnu/";
+our$FFTW_LIB="/usr/lib/x86_64-linux-gnu";
 # on clusters we need extra path after module load fftw/3.3.4-gcc to identify the FFTW header
-our$FFTW_INC="/usr/lib";
+our$FFTW_INC="/usr/include/";
 # Modules and objects directories. default: obj/SIMPLEOFILES
 our$OBJDIR="obj/SIMPLEOFILES";
 our$MODDIR="obj/SIMPLEOFILES";

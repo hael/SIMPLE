@@ -232,6 +232,8 @@ contains
         call chdict%push('nsub',          '# proj dirs in coarse grid search{300}')
         call chdict%push('lp_grid',       'low-pass limit in coarse grid search(in A){20 A}')
         call chdict%push('remap_classes', 'remove empty and renumber and/or expand # classes(yes|no){no}')
+        call chdict%push('real_filter',   'real-space filter kind(median|average|bman)')
+        call chdict%push('winsz',         'half-width of window for real-space filter(in pixels)')
         initialised = .true.
     end subroutine init_cmd_dict
     
