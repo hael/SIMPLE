@@ -46,6 +46,7 @@ type :: eo_reconstructor
     procedure, private :: read_odd
     ! INTERPOLATION
     procedure          :: grid_fplane
+    procedure          :: grid_fplane_dev
     procedure          :: compress_exp
     procedure          :: sum_eos ! for merging even and odd into sum
     procedure          :: sum     ! for summing eo_recs obtained by parallell exec
@@ -229,7 +230,7 @@ contains
     ! INTERPOLATION
     
     !> \brief  for gridding a Fourier plane
-    subroutine grid_fplane(self, o, fpl, pwght, mul, ran, shellweights, expanded)
+    subroutine grid_fplane(self, o, fpl, pwght, mul, ran, shellweights)
         use simple_ori, only: ori
         use simple_rnd, only: ran3
         class(eo_reconstructor), intent(inout) :: self            !< instance
@@ -239,10 +240,7 @@ contains
         real, optional,          intent(in)    :: mul             !< shift multiplication factor
         real, optional,          intent(in)    :: ran             !< external random number
         real, optional,          intent(in)    :: shellweights(:) !< resolution weights
-        logical, optional,       intent(in)    :: expanded        !< whether to use expanded routines
         real    :: rran
-        logical :: l_exp = .false.
-        if(present(expanded))l_exp = expanded
         if( present(ran) )then
             rran = ran
         else
@@ -256,6 +254,30 @@ contains
             &pwght=pwght, mul=mul, shellweights=shellweights)
         endif
     end subroutine grid_fplane
+
+    !> \brief  for gridding a Fourier plane
+    subroutine grid_fplane_dev(self, o, fpl, norm, pwght, mul, ran)
+        use simple_ori, only: ori
+        use simple_rnd, only: ran3
+        class(eo_reconstructor), intent(inout) :: self            !< instance
+        class(ori),              intent(inout) :: o               !< orientation
+        class(image),            intent(inout) :: fpl             !< Fourier plane
+        class(image),            intent(inout) :: norm            !< 
+        real, optional,          intent(in)    :: pwght           !< external particle weight (affects both fplane and rho)
+        real, optional,          intent(in)    :: mul             !< shift multiplication factor
+        real, optional,          intent(in)    :: ran             !< external random number
+        real    :: rran
+        if( present(ran) )then
+            rran = ran
+        else
+            rran = ran3()
+        endif
+        if( rran > 0.5 )then
+            call self%even%inout_fplane_dev(o, .true., fpl, pwght=pwght, mul=mul, norm=norm)
+        else
+            call self%odd%inout_fplane_dev(o, .true., fpl, pwght=pwght, mul=mul, norm=norm)
+        endif
+    end subroutine grid_fplane_dev
     
     !> \brief  for summing the even odd pairs, resulting sum in self%even
     subroutine sum_eos( self )
@@ -475,10 +497,9 @@ contains
                     if( p%pgrp == 'c1' )then
                         if( doshellweight )then
                             call self%grid_fplane(orientation, img_pad, pwght=pw, mul=mul,&
-                                &shellweights=wmat(i,:), expanded=.true.)
+                                &shellweights=wmat(i,:))
                         else
-                            call self%grid_fplane(orientation, img_pad, pwght=pw, mul=mul,&
-                                &expanded=.true.)
+                            call self%grid_fplane(orientation, img_pad, pwght=pw, mul=mul)
                         endif
                     else
                         ran = ran3()
@@ -486,10 +507,9 @@ contains
                             o_sym = se%apply(orientation, j)
                             if( doshellweight )then
                                 call self%grid_fplane(o_sym, img_pad, pwght=pw, mul=mul, ran=ran,&
-                                    &shellweights=wmat(i,:), expanded=.true.)
+                                    &shellweights=wmat(i,:))
                             else
-                                call self%grid_fplane(o_sym, img_pad, pwght=pw, mul=mul, ran=ran,&
-                                    &expanded=.true.)
+                                call self%grid_fplane(o_sym, img_pad, pwght=pw, mul=mul, ran=ran)
                             endif
                         end do
                     endif

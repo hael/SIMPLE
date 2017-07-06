@@ -176,7 +176,11 @@ contains
                     if(state == 0)cycle
                     b%img = batch_imgs(iptcl)
                     if(p%npeaks == 1)then
-                        call grid_ptcl(b, p, orientation, ran_eo=real(eopart(iptcl)))
+                        if( p%eo.eq.'yes' )then
+                            call grid_ptcl_dev(b, p, orientation, ran_eo=real(eopart(iptcl)))
+                        else
+                            call grid_ptcl_dev(b, p, orientation)
+                        endif
                     else
                         select case(p%refine)
                             case('yes')
@@ -184,7 +188,11 @@ contains
                             case('de')
                                 softoris = cont3Ddesrch(iptcl)%get_softoris()
                         end select
-                        call grid_ptcl(b, p, orientation, os=softoris, ran_eo=real(eopart(iptcl)))
+                        if( p%eo.eq.'yes' )then
+                            call grid_ptcl_dev(b, p, orientation, os=softoris, ran_eo=real(eopart(iptcl)))
+                        else
+                            call grid_ptcl_dev(b, p, orientation, os=softoris)
+                        endif
                     endif
                 enddo
             endif
