@@ -860,7 +860,7 @@ contains
             if( present(thres) )then
                 call img%bin(thres)
             else
-                call img%bin('nomsk')
+                call img%bin_kmeans
             endif
             if( didft ) call img%fwd_ft
             call img%write(fname, i)

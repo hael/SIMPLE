@@ -72,6 +72,7 @@ contains
         call chdict%push('frac',          'fraction of ptcls(0-1){1}')
         call chdict%push('fraca',         'fraction of amplitude contrast used for fitting CTF{0.07}')
         call chdict%push('fracdeadhot',   'fraction of dead or hot pixels{0.01}')
+        call chdict%push('frac_outliers', 'fraction of outliers(0-1){0.0}')
         call chdict%push('nframesgrp',    '# frames to group before unblur(Falcon 3){0}')
         call chdict%push('fromp',         'start ptcl index')
         call chdict%push('fsc',           'binary file with FSC info{fsc_state01.bin}')

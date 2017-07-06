@@ -100,8 +100,9 @@ contains
             end do
         else if( cline%defined('vol1') )then
             call b%build_general_tbox(p, cline)              ! general objects built
-            call doit(b%vol)
             call b%vol%read(p%vols(1))
+            call doit(b%vol)
+            call b%vol%write(p%outvol)
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_BINARISE NORMAL STOP ****')
@@ -116,7 +117,11 @@ contains
                 else if( cline%defined('npix') )then
                     call img_or_vol%bin(p%npix)
                 else
-                    call img_or_vol%bin('nomsk')
+                    if( cline%defined('frac_outliers') )then
+                        call img_or_vol%bin_kmeans(p%frac_outliers)
+                    else
+                        call img_or_vol%bin_kmeans
+                    endif
                 endif
                 write(*,'(a,1x,i9)') 'NO FOREGROUND PIXELS:', img_or_vol%nforeground()
                 write(*,'(a,1x,i9)') 'NO BACKGROUND PIXELS:', img_or_vol%nbackground()

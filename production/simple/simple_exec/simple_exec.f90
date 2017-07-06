@@ -1600,9 +1600,10 @@ select case(prg)
         keys_optional(8)  = 'neg'
         keys_optional(9)  = 'outvol'
         keys_optional(10) = 'outstk'
+        keys_optional(11) = 'frac_outliers'
         ! parse command line
         if( describe ) call print_doc_binarise
-        call cline%parse(keys_optional=keys_optional(:10))
+        call cline%parse(keys_optional=keys_optional(:11))
         ! execute
         call xbinarise%execute(cline)
     case( 'convert' )
