@@ -24,7 +24,11 @@ use Config;
 #####################################################################
 
 # enter the SIMPLE root path
+<<<<<<< Updated upstream
 our$SIMPLE_PATH="/home/hael/src/simple";
+=======
+our$SIMPLE_PATH="/home/cyril/Simple3";
+>>>>>>> Stashed changes
 # specifying the compiling directives
 # with OpenMP:  -fopenmp, CUDA: -DCUDA
 # Benchmarking: -DBENCH
@@ -48,9 +52,15 @@ our$FCOMPILER = "gfortran-5";
 our$CUDADIR="";
 # enter the fftw lib default: /usr/lib/x86_64-linux-gnu for [linux]
 #                             /usr/local/lib for [MacOSX]
+<<<<<<< Updated upstream
 our$FFTW_LIB="/usr/lib/x86_64-linux-gnu";
 # on clusters we need extra path after module load fftw/3.3.4-gcc to identify the FFTW header
 our$FFTW_INC="/usr/include/";
+=======
+our$FFTW_LIB="/usr/local/fftw/3.3.4-gcc/lib/";
+# on clusters we need extra path after module load fftw/3.3.4-gcc to identify the FFTW header
+our$FFTW_INC="/usr/local/fftw/3.3.4-gcc/include/";
+>>>>>>> Stashed changes
 # Modules and objects directories. default: obj/SIMPLEOFILES
 our$OBJDIR="obj/SIMPLEOFILES";
 our$MODDIR="obj/SIMPLEOFILES";

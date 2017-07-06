@@ -184,6 +184,7 @@ type :: image
     procedure          :: phase_rand
     procedure          :: hannw
     procedure          :: real_space_filter
+    procedure          :: sobel
     ! CALCULATORS
     procedure          :: square_root
     procedure          :: maxcoord
@@ -3366,6 +3367,35 @@ contains
             end select
         endif
     end subroutine real_space_filter
+
+    !>  \brief is a 18th-neighbourhood Sobel filter (gradients magnitude)
+    subroutine sobel( self )
+        class(image), intent(inout) :: self
+        integer                     :: alloc_stat, i,j,k
+        real, allocatable           :: rmat(:,:,:)
+        real                        :: val, dx, dy, dz, kernel(3,3)
+        if( self%is_ft() )stop 'real space only; simple_image%sobel'
+        i( self%ldim(3) == 1 )stop 'Volumes only; simple_image%sobel'
+        allocate(rmat(self%ldim(1), self%ldim(2), self%ldim(3)), source=0., stat=alloc_stat)
+        call alloc_err("In: sobel; simple_image", alloc_stat)
+        kernel      = 0.
+        kernel(1,:) = -1
+        kernel(1,2) = -2.
+        kernel(3,:) = 1
+        kernel(3,2) = 2.
+        do i = 2, self%ldim(1) - 1
+            do j = 2, self%ldim(2) - 1
+                do k = 2, self%ldim(3) - 1
+                    dx = sum( kernel * self%rmat(i-1:i+1, j-1:j+1, k)       )
+                    dy = sum( kernel * self%rmat(i,       j-1:j+1, k-1:k+1) )
+                    dz = sum( kernel * self%rmat(i-1:i+1, j,       k-1:k+1) )
+                    rmat(i,j,k) = sqrt( dx**2.+dy**2.+dz**2. ) / 8.
+                enddo
+            enddo
+        enddo
+        self%rmat(:self%ldim(1), :self%ldim(2), :self%ldim(3)) = rmat(:,:,:)
+        deallocate(rmat)
+    end subroutine sobel
 
     ! CALCULATORS
     
