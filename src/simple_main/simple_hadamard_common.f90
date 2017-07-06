@@ -364,10 +364,8 @@ contains
         class(cmdline),    intent(inout) :: cline
         integer,           intent(in)    :: s
         logical, optional, intent(in)    :: doexpand
-        real, allocatable     :: res(:), res_match(:), fom(:), fom_match(:), fsc(:)
-        character(len=STDLEN) :: fsc_file
-        logical               :: l_doexpand, do_center
-        real                  :: shvec(3)
+        logical :: l_doexpand, do_center
+        real    :: shvec(3)
         l_doexpand = .true.
         if( present(doexpand) ) l_doexpand = doexpand
         if( p%boxmatch < p%box )call b%vol%new([p%box,p%box,p%box],p%smpd) ! ensure correct dim
