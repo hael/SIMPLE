@@ -3375,7 +3375,7 @@ contains
         real, allocatable           :: rmat(:,:,:)
         real                        :: val, dx, dy, dz, kernel(3,3)
         if( self%is_ft() )stop 'real space only; simple_image%sobel'
-        i( self%ldim(3) == 1 )stop 'Volumes only; simple_image%sobel'
+        if( self%ldim(3) == 1 )stop 'Volumes only; simple_image%sobel'
         allocate(rmat(self%ldim(1), self%ldim(2), self%ldim(3)), source=0., stat=alloc_stat)
         call alloc_err("In: sobel; simple_image", alloc_stat)
         kernel      = 0.
