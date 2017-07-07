@@ -159,7 +159,11 @@ contains
         ! masking
         call b%vol%bwd_ft
         if( p%automsk .eq. 'yes' )then
-            call b%mskvol%automask3D(b%vol, p%msk, p%amsklp, p%mw, p%binwidth, p%edge, p%dens)
+            if( cline%defined('frac_outliers') )then
+                call b%mskvol%automask3D(b%vol, p%msk, p%amsklp, p%mw, p%binwidth, p%edge, p%dens, p%frac_outliers)
+            else
+                call b%mskvol%automask3D(b%vol, p%msk, p%amsklp, p%mw, p%binwidth, p%edge, p%dens)
+            endif
             p%masks(state) = 'automask_state'//int2str_pad(state,2)//p%ext
             call b%mskvol%write(p%masks(state))
         else

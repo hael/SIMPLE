@@ -685,22 +685,20 @@ contains
         real,             intent(in) :: smpd
         character(len=*), intent(in) :: which_filter
         integer,          intent(in) :: winsz
-        type(image)     :: img, img_filt
+        type(image)     :: img
         integer         :: n, i, ldim(3)
         call find_ldim_nptcls(fname2filter, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'real_filter_imgfile' )
         call img%new(ldim,smpd)
-        call img_filt%new(ldim,smpd)
         write(*,'(a)') '>>> REAL-SPACE FILTERING IMAGES'
         do i=1,n
             call progress(i,n)
             call img%read(fname2filter, i)
-            call img%real_space_filter(winsz, which_filter, img_filt)
-            call img_filt%write(fname, i)
+            call img%real_space_filter(winsz, which_filter)
+            call img%write(fname, i)
         end do
         call img%kill
-        call img_filt%kill
     end subroutine real_filter_imgfile
     
     !>  \brief  is for phase randomization

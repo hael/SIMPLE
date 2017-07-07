@@ -3247,17 +3247,17 @@ contains
     end function hannw
 
     !>  \brief average and median filtering in real-space
-    subroutine real_space_filter( self, winsz, which, self_out )
+    subroutine real_space_filter( self, winsz, which )
         use simple_winfuns, only: winfuns
         class(image),     intent(inout) :: self
         integer,          intent(in)    :: winsz
         character(len=*), intent(in)    :: which
-        class(image),     intent(out)   :: self_out
         real, allocatable     :: pixels(:), wfvals(:)
         integer               :: n, i, j, k, cnt
         real                  :: rn, wfun(-winsz:winsz), norm 
         type(winfuns)         :: fwin
         character(len=STDLEN) :: wstr
+        type(image)           :: img_filt
         ! check the number of pixels in window
         pixels = self%win2arr(1, 1, 1, winsz)
         n = size(pixels)
@@ -3293,7 +3293,7 @@ contains
             end do
         endif
         ! make the output image
-        call self_out%new(self%ldim, self%smpd)
+        call img_filt%new(self%ldim, self%smpd)
         ! filter
         if( self%ldim(3) == 1 )then
             select case(which)
@@ -3302,7 +3302,7 @@ contains
                     do i=1,self%ldim(1)
                         do j=1,self%ldim(2)
                             pixels = self%win2arr(i, j, 1, winsz)
-                            self_out%rmat(i,j,1) = median_nocopy(pixels)
+                            img_filt%rmat(i,j,1) = median_nocopy(pixels)
                         end do
                     end do
                     !$omp end parallel do
@@ -3311,7 +3311,7 @@ contains
                     do i=1,self%ldim(1)
                         do j=1,self%ldim(2)
                             pixels = self%win2arr(i, j, 1, winsz)
-                            self_out%rmat(i,j,1) = sum(pixels)/rn
+                            img_filt%rmat(i,j,1) = sum(pixels)/rn
                         end do
                     end do
                     !$omp end parallel do
@@ -3320,7 +3320,7 @@ contains
                     do i=1,self%ldim(1)
                         do j=1,self%ldim(2)
                             pixels = self%win2arr(i, j, 1, winsz)
-                            self_out%rmat(i,j,1) = sum(pixels * wfvals) / norm
+                            img_filt%rmat(i,j,1) = sum(pixels * wfvals) / norm
                         end do
                     end do
                     !$omp end parallel do
@@ -3335,7 +3335,7 @@ contains
                         do j=1,self%ldim(2)
                             do k=1,self%ldim(3)
                                 pixels = self%win2arr(i, j, k, winsz)
-                                self_out%rmat(i,j,k) = median_nocopy(pixels)
+                                img_filt%rmat(i,j,k) = median_nocopy(pixels)
                             end do 
                         end do
                     end do
@@ -3346,7 +3346,7 @@ contains
                         do j=1,self%ldim(2)
                             do k=1,self%ldim(3)
                                 pixels = self%win2arr(i, j, k, winsz)
-                                self_out%rmat(i,j,k) = sum(pixels)/rn
+                                img_filt%rmat(i,j,k) = sum(pixels)/rn
                             end do 
                         end do
                     end do
@@ -3357,7 +3357,7 @@ contains
                         do j=1,self%ldim(2)
                             do k=1,self%ldim(3)
                                 pixels = self%win2arr(i, j, k, winsz)
-                                self_out%rmat(i,j,k) = sum(pixels * wfvals) / norm
+                                img_filt%rmat(i,j,k) = sum(pixels * wfvals) / norm
                             end do 
                         end do
                     end do
@@ -3366,6 +3366,8 @@ contains
                     stop 'unknown filter type; simple_image :: real_space_filter'
             end select
         endif
+        self = img_filt
+        call img_filt%kill
     end subroutine real_space_filter
 
     !>  \brief is a 18th-neighbourhood Sobel filter (gradients magnitude)

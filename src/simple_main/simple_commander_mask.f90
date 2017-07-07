@@ -20,7 +20,6 @@ implicit none
 
 public :: mask_commander
 public :: automask2D_commander
-public :: automask3D_commander
 private
 
 type, extends(commander_base) :: mask_commander
@@ -31,10 +30,6 @@ type, extends(commander_base) :: automask2D_commander
   contains
     procedure :: execute      => exec_automask2D
 end type automask2D_commander
-type, extends(commander_base) :: automask3D_commander
-  contains
-    procedure :: execute      => exec_automask3D
-end type automask3D_commander
 
 contains
   
@@ -46,7 +41,7 @@ contains
         type(build)                :: b
         type(params)               :: p
         type(automask2D_commander) :: automask2D
-        type(automask3D_commander) :: automask3D
+        ! type(automask3D_commander) :: automask3D
         type(image)                :: mskvol
         logical                    :: here
         integer                    :: ldim(3)
@@ -95,8 +90,7 @@ contains
                 call b%vol%mul(mskvol)
                 if( p%outvol .ne. '' )call b%vol%write(p%outvol, del_if_exists=.true.)
             else if( p%automsk.eq.'yes' )then
-                ! auto
-                call exec_automask3D( automask3D, cline )
+                stop '3D automasking now deferred to program: postproc_vol'
             else if( cline%defined('msk') )then
                 ! spherical
                 if( cline%defined('inner') )then
@@ -143,32 +137,5 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_AUTOMASK2D NORMAL STOP ****')
     end subroutine exec_automask2D
-    
-    subroutine exec_automask3D( self, cline )
-        !use simple_masker,  only: automask
-        use simple_strings, only: int2str_pad
-        class(automask3D_commander), intent(inout) :: self
-        class(cmdline),              intent(inout) :: cline
-        type(params) :: p
-        type(build)  :: b
-        integer      :: istate
-        p = params(cline)                   ! parameters generated
-        p%boxmatch = p%box                  ! turns off boxmatch logics
-        call b%build_general_tbox(p, cline) ! general objects built
-        write(*,'(A,F14.1,A)') '>>> AUTOMASK LOW-PASS:',            p%amsklp,  ' ANGSTROMS'
-        write(*,'(A,I7,A)')    '>>> AUTOMASK SOFT EDGE WIDTH:',     p%edge,    ' PIXEL(S)'
-        write(*,'(A,I3,A)')    '>>> AUTOMASK BINARY LAYERS WIDTH:', p%binwidth,' PIXEL(S)'
-        do istate=1,p%nstates
-            p%masks(istate)    = 'automask_state'//int2str_pad(istate,2)//p%ext
-            p%vols_msk(istate) = add2fbody(p%vols(istate), p%ext, 'msk')
-            call b%vol%read(p%vols(istate))
-            call b%mskvol%automask3D(b%vol, p%msk, p%amsklp, p%mw, p%binwidth, p%edge, p%dens)
-            call b%mskvol%write(p%masks(istate))
-            call b%mskvol%kill
-            call b%vol%write(p%vols_msk(istate))
-            end do
-        ! end gracefully
-        call simple_end('**** SIMPLE_AUTOMASK3D NORMAL STOP ****')
-    end subroutine exec_automask3D
 
 end module simple_commander_mask

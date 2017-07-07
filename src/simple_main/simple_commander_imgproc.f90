@@ -296,12 +296,10 @@ contains
 
     subroutine exec_filter( self, cline )
         use simple_procimgfile, only: bp_imgfile, phase_rand_imgfile, real_filter_imgfile
-        use simple_image,       only: image
         class(filter_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(params) :: p
         type(build)  :: b
-        type(image)  :: vol_tmp
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         if( cline%defined('stk') )then
@@ -345,9 +343,7 @@ contains
                 ! real-space
                 else if( cline%defined('real_filter') )then
                     if( .not. cline%defined('winsz') ) stop 'need winsz input for real-space filtering; commander_imgproc :: exec_filter'
-                    call b%vol%real_space_filter(nint(p%winsz), p%real_filter, vol_tmp)
-                    b%vol = vol_tmp
-                    call vol_tmp%kill
+                    call b%vol%real_space_filter(nint(p%winsz), p%real_filter)
                 else
                     stop 'Nothing to do!'
                 endif

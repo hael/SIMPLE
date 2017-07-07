@@ -12,23 +12,25 @@ implicit none
 public :: masker
 private
 
-real,    parameter :: MSKWIDTH = 10.              !< HALF SOFT MASK WIDTH (+/-)
-logical, parameter :: DEBUG    = .false.
+real,    parameter :: MSKWIDTH = 10.     !< HALF SOFT MASK WIDTH (+/-)
+logical, parameter :: DEBUG    = .false. !< debug flag
+integer, parameter :: WINSZ    = 3       !< real-space filter half-width window
 
 type, extends(image) :: masker
     private
-    type(oris)        :: o_msk                    !< reference orientations
-    real              :: smpd_here = 0.           !< maximum circular mask
-    real              :: msk       = 0.           !< maximum circular mask
-    real              :: amsklp    = 0.           !< maximum circular mask
-    real, allocatable :: adamsks(:)               !< evaluated circular masks
-    real              :: mskwidth  = MSKWIDTH     !< +/- soft masking width
-    real              :: dens      = 0.
-    real              :: mw        = 0.
-    integer           :: edge      = 3
-    integer           :: binwidth  = 1
-    integer           :: n         = 0
-    integer           :: idim(3)   = 0            !< image dimension
+    type(oris)        :: o_msk                     !< reference orientations
+    real              :: smpd_here     = 0.        !< maximum circular mask
+    real              :: msk           = 0.        !< maximum circular mask
+    real              :: amsklp        = 0.        !< maximum circular mask
+    real, allocatable :: adamsks(:)                !< evaluated circular masks
+    real              :: mskwidth      = MSKWIDTH  !< +/- soft masking width
+    real              :: dens          = 0.
+    real              :: mw            = 0.
+    real              :: frac_outliers = 0.
+    integer           :: edge          = 3
+    integer           :: binwidth      = 1
+    integer           :: n             = 0
+    integer           :: idim(3)       = 0         !< image dimension
     logical           :: masker_exists = .false.
   contains
     ! CONSTRUCTORS
@@ -88,20 +90,27 @@ contains
     !>  \brief  is a 3D constructor and modifier
     !>  On output the parent volume is the envelope mask
     !>  The returned volume is envelope masked.
-    subroutine automask3D( self, vol_inout, msk, amsklp, mw, binwidth, edge, dens )
-        class(masker), intent(inout) :: self
-        class(image),  intent(inout) :: vol_inout
-        real,          intent(in)    :: msk, amsklp, mw, dens
-        integer,       intent(in)    :: binwidth, edge
+    subroutine automask3D( self, vol_inout, msk, amsklp, mw, binwidth, edge, dens, frac_outliers )
+        class(masker),  intent(inout) :: self
+        class(image),   intent(inout) :: vol_inout
+        real,           intent(in)    :: msk, amsklp, mw, dens
+        integer,        intent(in)    :: binwidth, edge
+        real, optional, intent(in)    :: frac_outliers    
         logical :: was_ft
         if( vol_inout%is_2d() )stop 'automask3D is intended for volumes only, simple_masker%init_mskproj'
         call self%kill_masker
         self%msk       = msk
         self%amsklp    = amsklp
+        self%mw        = mw
+        self%binwidth  = binwidth
         self%edge      = edge
         self%dens      = dens
-        self%binwidth  = binwidth
-        self%mw        = mw
+        self%frac_outliers = 0.
+        if( present(frac_outliers) ) self%frac_outliers = frac_outliers
+        write(*,'(A,F7.1,A)') '>>> AUTOMASK LOW-PASS:           ', self%amsklp,  ' ANGSTROMS'
+        write(*,'(A,I7,A)'  ) '>>> AUTOMASK SOFT EDGE WIDTH:    ', self%edge,    ' PIXEL(S)'
+        write(*,'(A,I7,A)'  ) '>>> AUTOMASK BINARY LAYERS WIDTH:', self%binwidth,' PIXEL(S)'
+        write(*,'(A,F7.1,A)') '>>> AUTOMASK MOLECULAR WEIGHT:   ', self%mw,      ' kDa'
         was_ft = vol_inout%is_ft()
         if( vol_inout%is_ft() )call vol_inout%bwd_ft
         self = vol_inout
@@ -154,7 +163,7 @@ contains
         ! soft edge mask
         call img%cos_edge(self%edge)
         call img%norm('sigm')
-        ! apply enveloppe mask to reference
+        ! apply envelope mask to reference
         call ref%mul(img)
         if( DEBUG )write(*,*)'simple_masker::update_cls done'
     end subroutine update_cls
@@ -163,34 +172,18 @@ contains
     subroutine bin_cavg( self, img )
         class(masker), intent(inout) :: self
         class(image),  intent(inout) :: img
-        type(image) :: img_pad, img_copy
-        integer     :: ldim_pad(3)
-        ! init
-        ldim_pad(1:2) = self%idim(1:2)*2
-        ldim_pad(3)   = 1
-        call img_pad%new(ldim_pad,  self%get_smpd())
-        img_copy = img
         ! normalize
-        call img_copy%norm()
+        call img%norm()
         ! soft masking
-        call img_copy%mask(self%msk, 'soft')
-        ! pad
-        call img_copy%pad(img_pad) ! need be padded?
+        call img%mask(self%msk, 'soft')
         ! low-pass
-        call img_pad%fwd_ft
-        call img_pad%bp(0., self%amsklp)
-        call img_pad%bwd_ft
+        call img%bp(0., self%amsklp)
         ! binarize within mask
-        call img_pad%mask(self%msk, 'hard')
-        call img_pad%bin_kmeans
+        call img%mask(self%msk, 'hard')
+        call img%bin_kmeans
         ! add one layer 
-        call img_pad%grow_bins(1)
-        ! clip
-        call img_pad%clip(img)
-        ! clean
-        call img_copy%kill
-        call img_pad%kill
-        if( DEBUG )write(*,*)'simple_masker::bin_cavg done'
+        call img%grow_bins(1)
+        if( DEBUG ) write(*,*)'simple_masker::bin_cavg done'
     end subroutine bin_cavg
 
     ! 3D CALCULATORS
@@ -199,7 +192,18 @@ contains
         use simple_math, only: nvoxfind
         class(masker), intent(inout) :: self
         integer :: nnvox
+        ! normalize
+        call self%norm()
+        ! spherical mask first
         call self%mask(self%msk, 'soft')
+        ! binarize high-res map (assumed to be FOM filtered)
+        if( self%frac_outliers > 0. )then
+            call self%bin_kmeans(self%frac_outliers)
+        else
+            call self%bin_kmeans
+        endif
+        ! apply smoothening real-space filter (to be able to FT)
+        call self%real_space_filter( WINSZ, 'average')
         call self%bp(0., self%amsklp)
         ! find nr of voxels corresponding to mw
         if( self%dens > 0. )then
@@ -207,11 +211,10 @@ contains
         else
             nnvox = nvoxfind(self%get_smpd(), self%mw)     
         endif
-        ! binarize
+        ! binarize again
         call self%bin(nnvox)
         ! binary layers
         call self%grow_bins(self%binwidth)
-        call self%norm_bin
         if( DEBUG )write(*,*)'simple_masker::bin_vol done'
     end subroutine bin_vol
 
@@ -290,7 +293,7 @@ contains
     real function get_msk( self )
         class(masker), intent(inout) :: self
         get_msk = self%msk
-    end function
+    end function get_msk
 
     real function get_adamsk( self, i )
         class(masker), intent(inout) :: self
@@ -298,7 +301,7 @@ contains
         if( .not.allocated(self%adamsks) )stop 'adamask has not been calculated; simple_masker%get_adamsk'
         if( i > self%n )stop 'index out of range; simple_masker%get_adamsk'
         get_adamsk = self%adamsks(i)
-    end function
+    end function get_adamsk
 
     function get_imgmsk( self, i )result( img_msk )
         class(masker), intent(inout) :: self
@@ -308,7 +311,7 @@ contains
         call img_msk%new([self%idim(1),self%idim(2),1], self%smpd_here)
         img_msk = 1.
         call img_msk%mask(self%adamsks(i), 'soft')
-    end function
+    end function get_imgmsk
 
     ! DESTRUCTORS
 
@@ -322,130 +325,3 @@ contains
     end subroutine kill_masker
 
 end module simple_masker
-
-
-! module simple_masker
-! implicit none
-
-! !public  :: automask, automask2D
-! private
-
-! interface automask
-!     module procedure automask_1
-!     module procedure automask_2
-!     module procedure automask_3
-!     module procedure automask_4
-! end interface
-
-! contains
-    
-!     !>  \brief  is for generating and applying a mask for 
-!     !!          solvent flattening of an image
-!     subroutine automask_2(img, p, nvox )
-!         use simple_image,  only: image
-!         use simple_params, only: params
-!         class(image), intent(inout)   :: img
-!         class(params), intent(in)     :: p
-!         integer, intent(in), optional :: nvox
-!         logical                       :: didft
-!         type(image)                   :: mask
-!         didft = .false.
-!         if( img%is_ft() )then
-!             call img%bwd_ft
-!             didft = .true.
-!         endif
-!         call automask_1(img, p, mask, nvox)
-!         call img%mul(mask)
-!         call mask%kill
-!         if( didft ) call img%fwd_ft
-!     end subroutine automask_2
-    
-!     !>  \brief  is for generating, applying, and writing to file 
-!     !!           a mask for solvent flattening of an image
-!     subroutine automask_3( b, p, cline, recvol, maskvol, volnam, masknam )
-!         use simple_build,   only: build
-!         use simple_params,  only: params
-!         use simple_cmdline, only: cmdline
-!         use simple_image,   only: image
-!         class(build),   intent(inout) :: b
-!         class(params),  intent(in)    :: p
-!         class(cmdline), intent(inout) :: cline
-!         class(image),   intent(inout) :: recvol, maskvol
-!         character(len=*), intent(in)  :: volnam, masknam
-!         if( .not. recvol%exists() )  stop 'recvol not allocated; automask_3; simple_masker'
-!         if( .not. maskvol%exists() ) stop 'maskvol not allocated; automask_3; simple_masker'
-!         call automask_4( b, p, cline, recvol, maskvol )
-!         if( cline%defined('nvox') )then
-!             call maskvol%write(masknam, del_if_exists=.true.)
-!         else if( cline%defined('mw') )then
-!             call maskvol%write(masknam, del_if_exists=.true.)
-!         else if( cline%defined('mskfile') )then
-!             call maskvol%write(p%mskfile, del_if_exists=.true.)
-!         endif
-!         call recvol%write(volnam, del_if_exists=.true.)
-!     end subroutine automask_3
-    
-!     !>  \brief  is for generating & applying a mask for solvent flattening of an image
-!     subroutine automask_4( b, p, cline, recvol, maskvol )
-!         use simple_build,   only: build
-!         use simple_params,  only: params
-!         use simple_cmdline, only: cmdline
-!         use simple_image,   only: image
-!         class(build),   intent(inout) :: b
-!         class(params),  intent(in)    :: p
-!         class(cmdline), intent(inout) :: cline
-!         class(image), intent(inout)   :: recvol, maskvol
-!         if( .not. recvol%exists() )  stop 'recvol not allocated; automask_3; simple_masker'
-!         if( .not. maskvol%exists() ) stop 'maskvol not allocated; automask_3; simple_masker'
-!         if( cline%defined('nvox') )then
-!             call automask_1(recvol, p, maskvol, p%nvox)
-!             !call maskvol%mask(p%msk,'soft') ! for now
-!             call recvol%mul(maskvol)         
-!         else if( cline%defined('mw') )then
-!             call automask_1(recvol, p, maskvol)
-!             !call maskvol%mask(p%msk,'soft') ! for now
-!             call recvol%mul(maskvol)
-!             !call recvol%mask(p%msk,'soft')
-!         else if( cline%defined('mskfile') )then
-!             !call maskvol%mask(p%msk,'soft') ! for now
-!             call recvol%mul(maskvol) 
-!         endif
-!     end subroutine automask_4
-    
-!     !>  \brief  is for automasking in 2D
-!     subroutine automask2D( img, p, img_msk_out )
-!         use simple_params,  only: params
-!         use simple_image,   only: image
-!         class(image),           intent(inout) :: img
-!         class(params),          intent(in)    :: p
-!         class(image), optional, intent(out)   :: img_msk_out
-!         type(image) :: img_pad, img_msk, img_copy
-!         integer     :: ldim(3), ldim_pad(3)
-!         real        :: smpd, rslask
-!         ldim = img%get_ldim()
-!         smpd = img%get_smpd()
-!         if( ldim(3) > 1 ) stop 'not for 3D images; simple_masker :: automask_5'
-!         ldim_pad(1:2) = ldim(1:2)*2
-!         ldim_pad(3)   = 1
-!         call img_pad%new(ldim_pad, smpd)
-!         call img_msk%new(ldim,     smpd)
-!         img_copy = img
-!         call img_copy%norm
-!         call img_copy%mask(p%msk, 'soft')
-!         call img_copy%pad(img_pad)
-!         call img_pad%fwd_ft
-!         call img_pad%bp(0., p%amsklp)
-!         call img_pad%bwd_ft
-!         call img_pad%bin('msk', p%msk)
-!         call img_pad%grow_bin
-!         call img_pad%cos_edge(p%edge)
-!         call img_pad%clip(img_msk)
-!         call img_msk%norm('sigm')
-!         call img%mul(img_msk)
-!         if( present(img_msk_out) ) img_msk_out = img_msk
-!         call img_copy%kill
-!         call img_pad%kill
-!         call img_msk%kill
-!     end subroutine automask2D
-
-! end module simple_masker
