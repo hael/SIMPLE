@@ -627,10 +627,9 @@ select case(prg)
         keys_optional(6)  = 'mskfile'
         keys_optional(7)  = 'mul'
         keys_optional(8)  = 'state'
-        keys_optional(9)  = 'vol1'
         ! parse command line
         if( describe ) call print_doc_recvol
-        call cline%parse(keys_required(:7), keys_optional(:9))
+        call cline%parse(keys_required(:7), keys_optional(:8))
         ! set defaults
         if( .not. cline%defined('trs') ) call cline%set('trs',  5.) ! to assure that shifts are being used
         if( .not. cline%defined('eo')  ) call cline%set('eo', 'no')

@@ -808,15 +808,17 @@ contains
 
     !>  \brief  for calculating the Euclidean distance between reference & particle
     !!          This ought to be a better choice for the orientation weights
-    function euclid( self, iref, iptcl, irot ) result( dist )
+    function euclid( self, iref, iptcl, irot, fom ) result( dist )
         use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl, irot
+        real,                    intent(in)    :: fom(:)
         integer     :: k, nk
         real        :: pow_ref, pow_ptcl, norm, dist, sqsum_ref
         complex(sp) :: pft_ref_norm(self%refsz,self%kfromto(1):self%kfromto(2))
         complex(sp) :: pft_ptcl_norm(self%refsz,self%kfromto(1):self%kfromto(2))
         call self%prep_ref4corr(iptcl, iref, pft_ref_norm, sqsum_ref)
+        dist = 0.
         do k=self%kfromto(1),self%kfromto(2)
             pow_ref  = sum(csq(pft_ref_norm(:,k)))/real(self%refsz)
             pow_ptcl = sum(csq(self%pfts_ptcls(iptcl,irot:irot+self%winsz,k)))/real(self%refsz)
@@ -832,9 +834,9 @@ contains
             else
                 pft_ptcl_norm(:,k) = cmplx(0.,0.)
             endif
-        end do
-        nk   = self%refsz * (self%kfromto(2) - self%kfromto(1) + 1)
-        dist = sum(cabs(pft_ref_norm - pft_ptcl_norm)**2.0)/(nk * self%refsz)
+            dist = dist + sum(cabs(fom(k)*(pft_ref_norm(:,k) - pft_ptcl_norm(:,k)))**2.0)
+        end do 
+        dist = dist/real(self%refsz * (self%kfromto(2) - self%kfromto(1) + 1))
     end function euclid
 
     ! DESTRUCTOR

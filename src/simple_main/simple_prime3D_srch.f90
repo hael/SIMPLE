@@ -17,6 +17,7 @@ logical, parameter :: DEBUG = .false.
 
 type prime3D_srch
     private
+    real, pointer           :: pfom(:,:) => null()      !< pointer to FOM filter
     type(oris)              :: o_refs                   !< projection directions search space
     type(oris)              :: o_peaks                  !< orientations of best npeaks oris
     type(pftcc_shsrch)      :: shsrch_obj               !< origin shift search object
@@ -109,16 +110,18 @@ contains
     ! CONSTRUCTOR
 
     !>  \brief  is a constructor
-    subroutine new( self, a, p, pftcc )
+    subroutine new( self, a, p, pftcc, fom )
         use simple_params, only: params
-        class(prime3D_srch),             intent(inout) :: self  !< instance
-        class(oris),                     intent(inout) :: a     !< ptcls oris
-        class(params),                   intent(in)    :: p     !< parameters
-        class(polarft_corrcalc), target, intent(inout) :: pftcc !< correlator
+        class(prime3D_srch),     intent(inout) :: self     !< instance
+        class(oris),             intent(inout) :: a        !< oris
+        class(params),           intent(in)    :: p        !< parameters
+        class(polarft_corrcalc), intent(inout) :: pftcc    !< correlator
+        real, target,            intent(in)    :: fom(:,:) !< FOM filter
         integer  :: alloc_stat
         ! destroy possibly pre-existing instance
         call self%kill
         ! set constants
+        self%pfom        => fom
         self%nstates     =  p%nstates
         self%nprojs      =  p%nspace
         self%nrefs       =  self%nprojs*self%nstates
@@ -879,12 +882,14 @@ contains
             roind        = pftcc%get_roind(360.-o%e3get())
             proj         = e%find_closest_proj(o,1)
             ref          = (state - 1) * self%nprojs + proj
-            dists(ipeak) = pftcc%euclid(ref, iptcl, roind)
+            dists(ipeak) = pftcc%euclid(ref, iptcl, roind, self%pfom(state,:))
         end do
         ! calculate normalised weights and weighted corr
         ws    = exp(-dists)
         ws    = ws/sum(ws)
-        wcorr = sum(ws*corrs) 
+        wcorr = sum(ws*corrs)
+        print *, '*****************'
+        print *, ws
         ! update npeaks individual weights
         call self%o_peaks%set_all('ow', ws)
         deallocate(corrs)
@@ -1191,6 +1196,7 @@ contains
     subroutine kill( self )
         class(prime3D_srch), intent(inout) :: self !< instance
         if( self%exists )then
+            self%pfom => null()
             call self%o_peaks%kill
             call self%online_destruct
             if( allocated(self%state_exists) ) deallocate(self%state_exists)

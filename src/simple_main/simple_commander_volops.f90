@@ -120,12 +120,14 @@ contains
     end subroutine exec_cenvol
     
     subroutine exec_postproc_vol(self, cline)
-        use simple_math, only: get_resolution
+        use simple_math,  only: get_resolution
+        use simple_image, only: image 
         use simple_estimate_ssnr ! use all in there
         class(postproc_vol_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(params)      :: p
         type(build)       :: b
+        type(image)       :: vol_copy
         real, allocatable :: fsc(:), optlp(:), res(:)
         real              :: fsc0143, fsc05
         integer           :: k, state
@@ -154,23 +156,27 @@ contains
             write(*,*) 'no method for low-pass filtering defined; give fsc or lp on command line'
             stop 'comple_commander_volops :: exec_postproc_vol'
         endif
+        vol_copy = b%vol
         ! B-fact
         if( cline%defined('bfac') ) call b%vol%apply_bfac(p%bfac)
         ! masking
         call b%vol%bwd_ft
+        call vol_copy%bwd_ft
         if( p%automsk .eq. 'yes' )then
             if( cline%defined('frac_outliers') )then
-                call b%mskvol%automask3D(b%vol, p%msk, p%amsklp, p%mw, p%binwidth, p%edge, p%dens, p%frac_outliers)
+                call b%mskvol%automask3D(vol_copy, p%msk, p%amsklp, p%mw, p%binwidth, p%edge, p%dens, p%frac_outliers)
             else
-                call b%mskvol%automask3D(b%vol, p%msk, p%amsklp, p%mw, p%binwidth, p%edge, p%dens)
+                call b%mskvol%automask3D(vol_copy, p%msk, p%amsklp, p%mw, p%binwidth, p%edge, p%dens)
             endif
             call b%mskvol%write('automask'//p%ext)
+            call b%vol%mul(b%mskvol)
         else
             call b%vol%mask(p%msk, 'soft')
         endif
         ! output
         p%outvol = add2fbody(trim(p%vols(state)), p%ext, 'pproc')
         call b%vol%write(p%outvol)
+        call vol_copy%kill
         call simple_end('**** SIMPLE_POSTPROC_VOL NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_postproc_vol
     

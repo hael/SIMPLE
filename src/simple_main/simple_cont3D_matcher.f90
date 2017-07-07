@@ -147,9 +147,9 @@ contains
                 select case(p%refine)
                     case('yes')
                         call prep_pftcc_refs(b, p, iptcl, pftccs(iptcl))
-                        call cont3Dsrch(iptcl)%new(p, orefs, pftccs(iptcl))
+                        call cont3Dsrch(iptcl)%new(p, orefs, pftccs(iptcl), b%fom)
                     case('de')
-                        call cont3Ddesrch(iptcl)%new(p, pftccs(iptcl), b%refvols)
+                        call cont3Ddesrch(iptcl)%new(p, pftccs(iptcl), b%refvols, b%fom)
                     case DEFAULT
                         stop 'Uknown refinement mode; pcont3D_matcher::cont3D_exec'
                 end select

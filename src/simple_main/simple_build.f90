@@ -75,6 +75,7 @@ type build
     type(eo_reconstructor), allocatable :: eorecvols(:)       !< array of volumes for eo-reconstruction
     real,    allocatable                :: ssnr(:,:)          !< spectral signal to noise rations
     real,    allocatable                :: fsc(:,:)           !< Fourier shell correlation
+    real,    allocatable                :: fom(:,:)           !< FOM filter
     integer, allocatable                :: nnmat(:,:)         !< matrix with nearest neighbor indices
     integer, allocatable                :: pbatch(:)          !< particle index batch
     integer, allocatable                :: grid_projs(:)      !< projection directions for coarse grid search
@@ -125,7 +126,7 @@ contains
         class(cmdline),    intent(inout) :: cline
         logical, optional, intent(in)    :: do3d, nooritab, force_ctf
         type(ran_tabu) :: rt
-        integer        :: alloc_stat, lfny, partsz
+        integer        :: alloc_stat, lfny, partsz, lfny_match
         real           :: slask(3)
         logical        :: err, ddo3d, fforce_ctf
         call self%kill_general_tbox
@@ -207,11 +208,14 @@ contains
             endif
             if( debug ) write(*,'(a)') 'did build boxpd-sized image objects'
             ! build arrays
-            lfny = self%img%get_lfny(1)            
-            allocate( self%ssnr(p%nstates,lfny), self%fsc(p%nstates,lfny), stat=alloc_stat )
+            lfny = self%img%get_lfny(1)
+            lfny_match = self%img_match%get_lfny(1)         
+            allocate( self%ssnr(p%nstates,lfny), self%fsc(p%nstates,lfny),&
+                self%fom(p%nstates,lfny_match), stat=alloc_stat )
             call alloc_err("In: build_general_tbox; simple_build, 1", alloc_stat)
             self%ssnr = 0.
             self%fsc  = 0.
+            self%fom  = 1.
             ! set default amsklp
             if( .not. cline%defined('amsklp') .and. cline%defined('lp') )then
                 p%amsklp = self%img%get_lp(self%img%get_find(p%lp)-2)
@@ -263,7 +267,7 @@ contains
             call self%vol_pad%kill_expanded
             call self%vol_pad%kill
             if( allocated(self%ssnr) )then
-                deallocate(self%ssnr, self%fsc)
+                deallocate(self%ssnr, self%fsc, self%fom)
             endif
             self%general_tbox_exists = .false.
         endif

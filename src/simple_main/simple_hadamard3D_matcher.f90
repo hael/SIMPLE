@@ -150,7 +150,7 @@ contains
         ! create the search objects, need to re-create every round because parameters are changing
         allocate( primesrch3D(p%fromp:p%top) )
         do iptcl=p%fromp,p%top
-            call primesrch3D(iptcl)%new(b%a, p, pftcc)
+            call primesrch3D(iptcl)%new(b%a, p, pftcc, b%fom)
         end do
         ! execute the search
         call del_file(p%outfile)

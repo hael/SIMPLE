@@ -167,6 +167,7 @@ type :: image
     procedure          :: grow_bin
     procedure          :: grow_bins
     procedure          :: cos_edge
+    procedure          :: remove_edge
     procedure          :: increment
     ! FILTERS
     procedure          :: acf
@@ -2812,6 +2813,15 @@ contains
             end function local_versine
 
     end subroutine cos_edge
+
+    !>  \brief  remove edge from binary image
+    subroutine remove_edge( self )
+        class(image), intent(inout) :: self
+        if( self%ft ) stop 'only for real binary images (not FTed ones); simple_image :: remove_edge'
+        if( any(self%rmat > 1.0001) .or. any(self%rmat < 0. ))&
+        stop 'input to remove edge not binary; simple_image :: remove_edge'
+        where( self%rmat < 0.999 ) self%rmat = 0.
+    end subroutine remove_edge
 
     !>  \brief  increments the logi pixel value with incr
     subroutine increment( self, logi, incr )

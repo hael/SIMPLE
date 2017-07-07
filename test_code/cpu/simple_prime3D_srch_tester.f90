@@ -177,7 +177,7 @@ contains
         ! The pftcc & primesrch3D objects are now globally available in the module
         ! because of the use simple_hadamard3D_matcher statement in the top
         ! now instantiatable, so create it
-        call primesrch3D%new(b%a, p, pftcc)
+        call primesrch3D%new(b%a, p, pftcc, b%fom)
         if( verbose )print *,'end setup_testenv'        
     end subroutine setup_testenv
 

@@ -125,6 +125,16 @@ contains
         if( DEBUG )write(*,*)'simple_masker::automask3D done'
     end subroutine automask3D
 
+    !>  \brief  is for initialising the envelope mask used to extract 2D masks
+    subroutine envproject3D_init( self, vol_amask_soft )
+        class(masker), intent(inout) :: self
+        class(image),  intent(in)    :: vol_amask_soft
+        ! soft-edged automask should be part of it on startup
+        self = vol_amask_soft
+        ! remove the edge
+        call self%remove_edge()
+    end subroutine envproject3D_init
+
     ! CALCULATORS
 
     !>  \brief  is for getting the adaptive circular mask
@@ -223,8 +233,8 @@ contains
         !$ use omp_lib
         !$ use omp_lib_kinds
         class(masker), intent(inout) :: self   !< projector instance
-        class(ori),            intent(inout) :: e      !< Euler angle
-        type(image),           intent(inout) :: img    !< resulting projection image
+        class(ori),    intent(inout) :: e      !< Euler angle
+        type(image),   intent(inout) :: img    !< resulting projection image
         real, allocatable :: rmat(:,:,:)
         real              :: out_coos(3), maxrad, rad(3), thresh
         real              :: incr_k(3), rvec(3), rvec_k(3)
@@ -255,8 +265,7 @@ contains
                     out_coos(3) = real(k-orig(3))
                     rad(3)      = rad(1)+out_coos(3)**2.
                     ! check that we are within the radius
-                    if(rad(3) > sqmaxrad)cycle
-                    !vec    = orig + floor( matmul(out_coos,e%get_mat()) ) ! the old way
+                    if( rad(3) > sqmaxrad )cycle
                     rvec_k = rvec + out_coos(3)*incr_k
                     vec    = floor(rvec_k)
                     if( any( rmat(vec(1):vec(1)+1, vec(2):vec(2)+1, vec(3):vec(3)+1) > thresh))then

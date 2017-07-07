@@ -38,16 +38,16 @@ contains
     
     subroutine set_bp_range( b, p, cline )
         use simple_math,          only: calc_fourier_index
-        use simple_estimate_ssnr, only: fsc2ssnr
+        use simple_estimate_ssnr, only: fsc2ssnr, fsc2optlp
+        use simple_filterer,      only: resample_filter
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         class(cmdline), intent(inout) :: cline
-        real, allocatable     :: resarr(:), tmp_arr(:)
+        real, allocatable     :: resarr(:), tmp_arr(:), fom_tmp(:), res_match(:)
         real                  :: fsc0143, fsc05, mapres(p%nstates)
         integer               :: s, loc(1), lp_ind
         character(len=STDLEN) :: fsc_fname
         logical               :: fsc_bin_exists(p%nstates), all_fsc_bin_exist
-        
         select case(p%eo)
             case('yes')
                 ! check all fsc_state*.bin exist
@@ -69,24 +69,25 @@ contains
                             ! these are the 'classical' resolution measures
                             fsc_fname   = adjustl('fsc_state'//int2str_pad(s,2)//'.bin')
                             tmp_arr     = file2rarr(trim(fsc_fname))
-                            if(size(tmp_arr) > size(b%fsc(s,:)))then
-                                ! TO REMOVE
-                                ! ugly patch for backward compatibility
-                                b%fsc(s,:)  = tmp_arr(1:size(b%fsc(s,:)))
-                                deallocate(tmp_arr)
-                            else
-                                ! must become default
-                                b%fsc(s,:)  = tmp_arr(:)
-                                deallocate(tmp_arr)
-                                !b%fsc(s,:)  = file2rarr(trim(fsc_fname))                             
-                            endif
+                            b%fsc(s,:)  = tmp_arr(:)
+                            deallocate(tmp_arr)
                             b%ssnr(s,:) = fsc2ssnr(b%fsc(s,:))
                             call get_resolution(b%fsc(s,:), resarr, fsc05, fsc0143)
                             mapres(s)   = fsc0143
+                            fom_tmp = fsc2optlp(b%fsc(s,:))
+                            if( p%boxmatch .eq. p%box )then
+                                b%fom(s,:) = fom_tmp
+                            else
+                                res_match  = b%img_match%get_res()
+                                b%fom(s,:) = resample_filter(fom_tmp, resarr, res_match)
+                                deallocate(res_match)
+                            endif
+                            deallocate(fom_tmp)
                         else
                             ! empty state
                             mapres(s)   = 0.
                             b%fsc(s,:)  = 0.
+                            b%fom(s,:)  = 1.
                             b%ssnr(s,:) = 0.
                         endif
                     end do
@@ -259,7 +260,7 @@ contains
         character(len=STDLEN) :: ctf_flag 
         real             :: pw, ran, w, dfx, dfy, angast
         integer          :: jpeak, s, k, npeaks
-                logical          :: softrec
+        logical          :: softrec
         if( p%eo .eq. 'yes' )then
             kbwin = b%eorecvols(1)%get_kbwin()
         else
@@ -499,21 +500,16 @@ contains
 
     !>  \brief  prepares one volume for references extraction
     subroutine preprefvol( b, p, cline, s, doexpand )
-        use simple_filterer, only: resample_filter
-        use simple_estimate_ssnr, only: fsc2optlp
         class(build),      intent(inout) :: b
         class(params),     intent(inout) :: p
         class(cmdline),    intent(inout) :: cline
         integer,           intent(in)    :: s
         logical, optional, intent(in)    :: doexpand
-        real, allocatable     :: res(:), res_match(:), fom(:), fom_match(:), fsc(:)
-        character(len=STDLEN) :: fsc_file
-        logical               :: l_doexpand, do_center
-        real                  :: shvec(3)
+        logical :: l_doexpand, do_center
+        real    :: shvec(3)
         l_doexpand = .true.
         if( present(doexpand) ) l_doexpand = doexpand
         if( p%boxmatch < p%box )call b%vol%new([p%box,p%box,p%box],p%smpd) ! ensure correct dim
-        !if( p%eo.eq.'yes' )res = b%vol%get_res()    ! for FOM filtering
         call b%vol%read(p%vols(s), isxfel=p%l_xfel)
         if( p%l_xfel )then
             ! no centering
@@ -655,6 +651,7 @@ contains
                 call b%recvols(s)%write(p%vols(s), del_if_exists=.true.)
                 call b%recvols(s)%write_rho('rho_'//trim(adjustl(fbody))//p%ext)
                 deallocate(fbody)
+            else
                 if( p%refine .eq. 'snhc' )then
                      p%vols(s) = trim(SNHCVOL)//int2str_pad(s,2)//p%ext
                 else
