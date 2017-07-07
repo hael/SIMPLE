@@ -252,13 +252,14 @@ contains
         class(ori),                intent(inout) :: orientation
         class(oris),     optional, intent(inout) :: os
         real,            optional, intent(in)    :: ran_eo
-        real             :: pw, ran, w, dfx, dfy, angast
-        integer          :: jpeak, s, k, npeaks
         type(ctf)        :: tfun
         type(image)      :: ctf_img, norm_img
         type(ori)        :: orisoft, o_sym
         type(kbinterpol) :: kbwin
-        logical          :: softrec
+        character(len=STDLEN) :: ctf_flag 
+        real             :: pw, ran, w, dfx, dfy, angast
+        integer          :: jpeak, s, k, npeaks
+                logical          :: softrec
         if( p%eo .eq. 'yes' )then
             kbwin = b%eorecvols(1)%get_kbwin()
         else
@@ -285,6 +286,8 @@ contains
             orisoft = orientation
             ! ctf
             if( p%ctf.ne.'no' )then
+                ctf_flag = p%ctf
+                if( p%ctf.eq.'yes' )ctf_flag = 'ctf'
                 call ctf_img%new(b%img_pad%get_ldim(), b%img_pad%get_smpd())
                 call ctf_img%set_ft(.true.)
                 tfun = ctf(ctf_img%get_smpd(), orisoft%get('kv'), orisoft%get('cs'), orisoft%get('fraca'))
@@ -293,7 +296,7 @@ contains
                 angast = 0.
                 if( orisoft%isthere('dfy') )   dfy     = orisoft%get('dfy')
                 if( orisoft%isthere('angast') )angast  = orisoft%get('angast')
-                call tfun%ctf2img(ctf_img, dfx, p%ctf, dfy, angast, ctfsqimg=norm_img)
+                call tfun%ctf2img(ctf_img, dfx, ctf_flag, dfy, angast, ctfsqimg=norm_img)
                 call b%img_pad%mul(ctf_img)
                 call ctf_img%kill
             else

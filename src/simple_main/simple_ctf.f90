@@ -211,14 +211,18 @@ contains
             ! ctf squared
             call ctfsqimg%new(img%get_ldim(), img%get_smpd())
             call ctfsqimg%set_ft(.true.)
+            !$omp parallel do collapse(2) default(shared) private(h,hinv,k,kinv,spaFreqSq,ang,tval,phys) &
+            !$omp schedule(static) proc_bind(close)
             do h=lims(1,1),lims(1,2)
                 do k=lims(2,1),lims(2,2)
+                    phys   = img%comp_addr_phys([h,k,0])
                     tval   = img%get_fcomp([h,k,0], phys)
                     tvalsq = min(1.,max(tval**2.,0.001))
                     ! stored as complex for dimensions congruence!!
                     call ctfsqimg%set_fcomp([h,k,0], phys, cmplx(tvalsq,0.))
                 enddo
             enddo
+            !$omp end parallel do 
         endif
     end subroutine ctf2img
 

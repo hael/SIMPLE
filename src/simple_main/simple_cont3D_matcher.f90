@@ -110,6 +110,7 @@ contains
             rt = ran_tabu(nptcls)
             call rt%balanced(2, eopart)
             eopart = eopart - 1
+            call rt%kill
         endif
 
         ! INIT IMGPOLARIZER
