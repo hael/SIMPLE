@@ -153,7 +153,7 @@ contains
         type(params)                  :: p
         type(build)                   :: b
         character(len=:), allocatable :: fbody
-        character(len=STDLEN)         :: recvolname
+        character(len=STDLEN)         :: recvolname, rho_name
         integer                       :: part, s, ss, endit, i, state4name, file_stat, fnr
         type(reconstructor)           :: recvol_read
         logical                       :: here(2)
@@ -191,10 +191,10 @@ contains
                     if( cline%defined('even') .or. cline%defined('odd') )then
                         if( p%even .eq. 'yes' .and. p%odd .eq. 'no' )then
                             p%vols(s) = fbody//'_even'//p%ext
-                            p%masks(s) = 'rho_'//fbody//'_even'//p%ext
+                            rho_name  = 'rho_'//fbody//'_even'//p%ext
                         else if( p%odd .eq. 'yes' .and. p%even .eq. 'no' )then
                             p%vols(s) = fbody//'_odd'//p%ext
-                            p%masks(s) = 'rho_'//fbody//'_odd'//p%ext
+                            rho_name  = 'rho_'//fbody//'_odd'//p%ext
                         else if( p%odd .eq. 'yes' .and. p%even .eq. 'yes' )then
                             stop 'ERROR! Cannot have even=yes and odd=yes simultaneously'
                         endif
@@ -202,17 +202,17 @@ contains
                         if( p%eo .eq. 'yes' )then
                             if( i == 1 )then
                                 p%vols(s) = fbody//'_odd'//p%ext
-                                p%masks(s) = 'rho_'//fbody//'_odd'//p%ext
+                                rho_name  = 'rho_'//fbody//'_odd'//p%ext
                             else
                                 p%vols(s) = fbody//'_even'//p%ext
-                                p%masks(s) = 'rho_'//fbody//'_even'//p%ext
+                                rho_name  = 'rho_'//fbody//'_even'//p%ext
                             endif   
                         else
-                            p%vols(s)  = fbody//p%ext
-                            p%masks(s) = 'rho_'//fbody//p%ext
+                            p%vols(s) = fbody//p%ext
+                            rho_name  = 'rho_'//fbody//p%ext
                         endif
                     endif
-                    call assemble(p%vols(s), p%masks(s))
+                    call assemble(p%vols(s), trim(rho_name))
                 end do
                 deallocate(fbody)
             end do

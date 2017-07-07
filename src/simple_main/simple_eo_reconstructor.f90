@@ -11,18 +11,17 @@ private
 
 type :: eo_reconstructor
     private
-    type(reconstructor) :: even
-    type(reconstructor) :: odd
-    type(reconstructor) :: eosum
-    character(len=4)    :: ext
-    real                :: fsc05, fsc0143, smpd, msk, fny, inner=0., width=10.
-    real                :: mw, amsklp=20., dens=1.
-    integer             :: binwidth=1, edge=3
-    integer             :: box=0, nstates=1, numlen=2, lfny=0
-    logical             :: automsk = .false.
-    logical             :: xfel    = .false.
-    logical             :: wiener  = .false.
-    logical             :: exists  = .false.
+    type(reconstructor)    :: even
+    type(reconstructor)    :: odd
+    type(reconstructor)    :: eosum
+    type(image)            :: envmask
+    character(len=4)       :: ext
+    real                   :: fsc05, fsc0143, smpd, msk, fny, inner=0., width=10.
+    integer                :: box=0, nstates=1, numlen=2, lfny=0
+    logical                :: automsk = .false.
+    logical                :: xfel    = .false.
+    logical                :: wiener  = .false.
+    logical                :: exists  = .false.
   contains
     ! CONSTRUCTOR
     procedure          :: new
@@ -64,31 +63,31 @@ contains
     
     !>  \brief  is a constructor
     subroutine new(self, p )
-        class(eo_reconstructor),      intent(inout) :: self !< instance
-        class(params), target,        intent(in)    :: p    !< parameters object (provides constants)
+        use simple_filehandling, only: file_exists
+        class(eo_reconstructor), intent(inout) :: self !< instance
+        class(params), target,   intent(in)    :: p    !< parameters object (provides constants)
         type(image) :: imgtmp
         logical     :: neg  
         call self%kill
         ! set constants
         neg = .false.
         if( p%neg .eq. 'yes' ) neg = .true.
-        self%box      = p%box
-        self%smpd     = p%smpd
-        self%nstates  = p%nstates
-        self%inner    = p%inner
-        self%width    = p%width
-        self%fny      = p%fny
-        self%ext      = p%ext
-        self%numlen   = p%numlen
-        self%msk      = p%msk
-        self%xfel     = p%l_xfel
-        self%binwidth = p%binwidth
-        self%mw       = p%mw
-        self%edge     = p%edge
-        self%amsklp   = p%amsklp
-        self%dens     = p%dens
-        self%automsk  = p%doautomsk
+        self%box     = p%box
+        self%smpd    = p%smpd
+        self%nstates = p%nstates
+        self%inner   = p%inner
+        self%width   = p%width
+        self%fny     = p%fny
+        self%ext     = p%ext
+        self%numlen  = p%numlen
+        self%msk     = p%msk
+        self%xfel    = p%l_xfel
+        self%automsk = file_exists(p%mskfile)
         ! create composites
+        if( self%automsk )then
+            call self%envmask%new([p%box,p%box,p%box], p%smpd)
+            call self%envmask%read(p%mskfile)
+        endif
         call self%even%new([p%boxpd,p%boxpd,p%boxpd], p%smpd, p%imgkind)
         call self%even%alloc_rho(p)
         call self%even%set_ft(.true.)
@@ -339,12 +338,8 @@ contains
             ! no masking or Fourier transformation
         else
             if( self%automsk )then
-                ! automasking
-                call volmasker%automask3D(even, self%msk, self%amsklp, self%mw, self%binwidth, self%edge, self%dens)
-                call volmasker%write('automask_state'//int2str_pad(state,2)// '_even.mrc')
-                call volmasker%automask3D(odd, self%msk, self%amsklp, self%mw, self%binwidth, self%edge, self%dens)
-                call volmasker%write('automask_state'//int2str_pad(state,2)// '_odd.mrc')
-                call volmasker%kill
+                call even%mul(self%envmask)
+                call odd%mul(self%envmask)
             else
                 ! spherical masking
                 if( self%inner > 1. )then
@@ -534,6 +529,7 @@ contains
         class(eo_reconstructor), intent(inout)   :: self !< instance
         if( self%exists )then
             ! kill composites
+            call self%envmask%kill
             call self%even%dealloc_rho
             call self%even%kill
             call self%odd%dealloc_rho

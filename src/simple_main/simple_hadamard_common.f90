@@ -539,35 +539,13 @@ contains
         if( p%l_xfel )then
             ! no centering or masking
         else
-            if( cline%defined('mskfile') .or. p%doautomsk )then
-                ! mask volume using a spherical soft-edged mask
-                p%vols_msk(s) = add2fbody(p%vols(s), p%ext, 'msk')
-                if( cline%defined('mskfile') )then
-                    ! mask provided
-                    call b%mskvols(s)%new([p%box, p%box, p%box], p%smpd, p%imgkind)
-                    call b%mskvols(s)%read(p%mskfile)
-                    call b%mskvols(s)%clip_inplace([p%boxmatch,p%boxmatch,p%boxmatch])
-                    call b%mskvols(s)%norm_bin ! ensures [0;1] range
-                    call b%vol%mul(b%mskvols(s))
-                    p%masks(s) = 'mask_state'//int2str_pad(s,2)//p%ext
-                else
-                    ! automask
-                    call b%mskvols(s)%automask3D(b%vol, p%msk, p%amsklp, p%mw, p%binwidth, p%edge, p%dens)
-                    p%masks(s) = 'automask_state'//int2str_pad(s,2)//p%ext
-                endif
-                ! write masks
-                if( p%l_distr_exec )then
-                    if( p%part == 1 )then
-                        ! write files
-                        call b%vol%write( p%vols_msk(s) )
-                        call b%mskvols(s)%write( p%masks(s) )
-                    endif
-                else
-                    ! write files
-                    call b%vol%write( p%vols_msk(s) )
-                    call b%mskvols(s)%write( p%masks(s) )
-                endif
-                call b%mskvols(s)%kill          
+            if( cline%defined('mskfile') )then
+                ! mask provided
+                call b%mskvol%new([p%box, p%box, p%box], p%smpd, p%imgkind)
+                call b%mskvol%read(p%mskfile)
+                call b%mskvol%clip_inplace([p%boxmatch,p%boxmatch,p%boxmatch])
+                call b%mskvol%norm_bin ! ensures [0;1] range
+                call b%vol%mul(b%mskvol)
             else
                 ! circular masking
                 if( p%l_innermsk )then
@@ -631,7 +609,7 @@ contains
                 if( present(which_iter) )then
                     p%vols(s) = 'recvol_state'//int2str_pad(s,2)//'_iter'//int2str_pad(which_iter,3)//p%ext
                 else
-                     p%vols(s) = 'startvol_state'//int2str_pad(s,2)//p%ext
+                    p%vols(s) = 'startvol_state'//int2str_pad(s,2)//p%ext
                 endif
                 call b%eorecvols(s)%sum_eos
                 call b%eorecvols(s)%sampl_dens_correct_eos(s)
@@ -673,12 +651,10 @@ contains
             if( p%l_distr_exec )then
                 allocate(fbody, source='recvol_state'//int2str_pad(s,2)//'_part'//int2str_pad(p%part,p%numlen))
                 p%vols(s)  = trim(adjustl(fbody))//p%ext
-                p%masks(s) = 'rho_'//trim(adjustl(fbody))//p%ext
                 call b%recvols(s)%compress_exp
                 call b%recvols(s)%write(p%vols(s), del_if_exists=.true.)
-                call b%recvols(s)%write_rho(p%masks(s))
+                call b%recvols(s)%write_rho('rho_'//trim(adjustl(fbody))//p%ext)
                 deallocate(fbody)
-            else
                 if( p%refine .eq. 'snhc' )then
                      p%vols(s) = trim(SNHCVOL)//int2str_pad(s,2)//p%ext
                 else

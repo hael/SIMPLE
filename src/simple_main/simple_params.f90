@@ -131,7 +131,6 @@ type :: params
     character(len=STDLEN) :: imgkind='em'
     character(len=STDLEN) :: infile='infile.txt'
     character(len=STDLEN) :: label='class'
-    character(len=STDLEN) :: masks(MAXS)=''
     character(len=STDLEN) :: mskfile=''
     character(len=STDLEN) :: msktype='soft'
     character(len=STDLEN) :: opt='simplex'
@@ -163,7 +162,6 @@ type :: params
     character(len=STDLEN) :: unidoc=''
     character(len=STDLEN) :: vol=''
     character(len=STDLEN) :: vollist=''
-    character(len=STDLEN) :: vols_msk(MAXS)=''
     character(len=STDLEN) :: vols(MAXS)=''
     character(len=STDLEN) :: voltab=''
     character(len=STDLEN) :: voltab2=''
@@ -1203,11 +1201,6 @@ contains
           end subroutine double_check_file_formats
 
           subroutine mkfnames
-              integer :: i
-              do i=1,self%nstates
-                  self%vols_msk(i) = add2fbody(self%vols(i), self%ext, 'msk')
-                  self%masks(i)    = 'automask_state'//int2str_pad(i,2)//self%ext
-              end do
               if( .not. cline%defined('outstk')  ) self%outstk  = 'outstk'//self%ext
               if( .not. cline%defined('outstk2') ) self%outstk2 = 'outstk2'//self%ext
               if( .not. cline%defined('outvol')  ) self%outvol  = 'outvol'//self%ext

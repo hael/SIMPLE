@@ -164,8 +164,7 @@ contains
             else
                 call b%mskvol%automask3D(b%vol, p%msk, p%amsklp, p%mw, p%binwidth, p%edge, p%dens)
             endif
-            p%masks(state) = 'automask_state'//int2str_pad(state,2)//p%ext
-            call b%mskvol%write(p%masks(state))
+            call b%mskvol%write('automask'//p%ext)
         else
             call b%vol%mask(p%msk, 'soft')
         endif

@@ -71,7 +71,6 @@ type build
     type(image),            allocatable :: cavgs(:)           !< class averages (Wiener normalised references)
     type(image),            allocatable :: ctfsqsums(:)       !< CTF**2 sums for Wiener normalisation
     type(projector),        allocatable :: refvols(:)         !< reference volumes for quasi-continuous search
-    type(masker),           allocatable :: mskvols(:)         !< volumes masks for particle masking
     type(reconstructor),    allocatable :: recvols(:)         !< array of volumes for reconstruction
     type(eo_reconstructor), allocatable :: eorecvols(:)       !< array of volumes for eo-reconstruction
     real,    allocatable                :: ssnr(:,:)          !< spectral signal to noise rations
@@ -463,13 +462,6 @@ contains
         if( str_has_substr(p%refine,'neigh') )then
             call self%e%nearest_neighbors(p%nnn, self%nnmat)
         endif
-        if( p%doautomsk .or. p%mskfile.ne.'' )then
-            allocate( self%mskvols(p%nstates), stat=alloc_stat )
-            call alloc_err('build_hadamard_prime3D_tbox; simple_build, 3', alloc_stat)
-            do s=1,p%nstates
-                call self%mskvols(s)%new([p%boxmatch,p%boxmatch,p%boxmatch],p%smpd,p%imgkind)
-            end do
-        endif
         write(*,'(A)') '>>> DONE BUILDING HADAMARD PRIME3D TOOLBOX'
         self%hadamard_prime3D_tbox_exists = .true.
     end subroutine build_hadamard_prime3D_tbox
@@ -491,20 +483,6 @@ contains
                     call self%recvols(i)%kill
                 end do
                 deallocate(self%recvols)
-            endif
-            if( allocated(self%refvols) )then
-                do i=1,size(self%refvols)
-                    call self%refvols(i)%kill_expanded
-                    call self%refvols(i)%kill
-                end do
-                deallocate(self%refvols)
-            endif
-            if( allocated(self%mskvols) )then
-                do i=1,size(self%mskvols)
-                    call self%mskvols(i)%kill_masker
-                    call self%mskvols(i)%kill
-                end do
-                deallocate(self%mskvols)
             endif
             if( allocated(self%nnmat) ) deallocate(self%nnmat)
             self%hadamard_prime3D_tbox_exists = .false.
@@ -534,10 +512,6 @@ contains
         do s=1,p%nstates 
             call self%refvols(s)%new([p%boxmatch,p%boxmatch,p%boxmatch],p%smpd,p%imgkind)
         end do
-        if( p%doautomsk .or. p%mskfile.ne.'' )then
-            allocate( self%mskvols(p%nstates), stat=alloc_stat )
-            call alloc_err('build_hadamard_prime3D_tbox; simple_build, 3', alloc_stat)
-        endif
         write(*,'(A)') '>>> DONE BUILDING CONT3D TOOLBOX'
         self%cont3D_tbox_exists = .true.
     end subroutine build_cont3D_tbox
@@ -566,13 +540,6 @@ contains
                     call self%refvols(i)%kill
                 end do
                 deallocate(self%refvols)
-            endif
-            if( allocated(self%mskvols) )then
-                do i=1,size(self%mskvols)
-                    call self%mskvols(i)%kill_masker
-                    call self%mskvols(i)%kill
-                end do
-                deallocate(self%mskvols)
             endif
             self%cont3D_tbox_exists = .false.
         endif

@@ -932,34 +932,29 @@ select case(prg)
         keys_optional(12) = 'eo'
         keys_optional(13) = 'refine'
         keys_optional(14) = 'frac'
-        keys_optional(15) = 'automsk'
-        keys_optional(16) = 'mw'
-        keys_optional(17) = 'amsklp'
-        keys_optional(18) = 'edge'
-        keys_optional(19) = 'binwidth'
-        keys_optional(20) = 'inner'
-        keys_optional(21) = 'width'
-        keys_optional(22) = 'nspace'
-        keys_optional(23) = 'nstates'
-        keys_optional(24) = 'npeaks'
-        keys_optional(25) = 'startit'
-        keys_optional(26) = 'maxits'
-        keys_optional(27) = 'shbarrier'
-        keys_optional(28) = 'noise'
-        keys_optional(29) = 'xfel'
-        keys_optional(30) = 'nnn'
-        keys_optional(31) = 'rrate'
-        keys_optional(32) = 'norec'
-        keys_optional(33) = 'nsub'
-        keys_optional(34) = 'lp_grid'
+        keys_optional(15) = 'mskfile'
+        keys_optional(16) = 'inner'
+        keys_optional(17) = 'width'
+        keys_optional(18) = 'nspace'
+        keys_optional(19) = 'nstates'
+        keys_optional(20) = 'npeaks'
+        keys_optional(21) = 'startit'
+        keys_optional(22) = 'maxits'
+        keys_optional(23) = 'shbarrier'
+        keys_optional(24) = 'noise'
+        keys_optional(25) = 'xfel'
+        keys_optional(26) = 'nnn'
+        keys_optional(27) = 'rrate'
+        keys_optional(28) = 'norec'
+        keys_optional(29) = 'nsub'
+        keys_optional(30) = 'lp_grid'
         ! parse command line
         if( describe ) call print_doc_prime3D
-        call cline%parse(keys_required(:6), keys_optional(:34))
+        call cline%parse(keys_required(:6), keys_optional(:30))
         ! set defaults
         if( .not. cline%defined('nspace')                  ) call cline%set('nspace', 1000.)
         if( cline%defined('lp') .or. cline%defined('find') ) call cline%set('dynlp',   'no')
         if( .not. cline%defined('cenlp')                   ) call cline%set('cenlp',    30.)
-        if( .not. cline%defined('amsklp')                  ) call cline%set('amsklp',   25.)
         if( .not. cline%defined('refine') )then
              call cline%set('refine',  'no')
         else
@@ -988,24 +983,21 @@ select case(prg)
         keys_optional(1)  = 'nthr'
         keys_optional(2)  = 'deftab'
         keys_optional(3)  = 'frac'
-        keys_optional(4)  = 'automsk'
-        keys_optional(5)  = 'mw'
-        keys_optional(6)  = 'amsklp'
-        keys_optional(7)  = 'edge'
-        keys_optional(8)  = 'inner'
-        keys_optional(9)  = 'width'
-        keys_optional(10) = 'hp'
-        keys_optional(11) = 'lp'
-        keys_optional(12) = 'lpstop'
-        keys_optional(13) = 'startit'
-        keys_optional(14) = 'maxits'
-        keys_optional(15) = 'xfel'
-        keys_optional(16) = 'refine'
-        keys_optional(17) = 'eo'
-        keys_optional(18) = 'athres'
+        keys_optional(4)  = 'mskfile'
+        keys_optional(5)  = 'inner'
+        keys_optional(6)  = 'width'
+        keys_optional(7)  = 'hp'
+        keys_optional(8)  = 'lp'
+        keys_optional(9)  = 'lpstop'
+        keys_optional(10) = 'startit'
+        keys_optional(11) = 'maxits'
+        keys_optional(12) = 'xfel'
+        keys_optional(13) = 'refine'
+        keys_optional(14) = 'eo'
+        keys_optional(15) = 'athres'
         ! parse command line
         if( describe ) call print_doc_cont3D
-        call cline%parse(keys_required(:8), keys_optional(:18))
+        call cline%parse(keys_required(:8), keys_optional(:15))
         ! set defaults
         call cline%set('dynlp', 'no')
         if( cline%defined('eo') )then
@@ -1253,11 +1245,9 @@ select case(prg)
         ! implementing this algorithm was to enable quick, reliable reconstruction from aligned individual 
         ! particle images. mul is used to scale the origin shifts if down-sampled 
         ! were used for alignment and the original images are used for reconstruction. ctf=yes or ctf=flip 
-        ! turns on the Wiener restoration. If the images were phase-flipped set ctf=flip. amsklp, mw, and edge 
-        ! control the solvent mask: the low-pass limit used to generate the envelope; the molecular weight of the 
-        ! molecule (protein assumed but it works reasonably well also for RNA; slight modification of mw 
-        ! might be needed). The inner parameter controls the radius of the soft-edged mask used to remove 
-        ! the unordered DNA/RNA core of spherical icosahedral viruses<recvol/end>
+        ! turns on the Wiener restoration. If the images were phase-flipped set ctf=flip. The inner parameter 
+        ! controls the radius of the soft-edged mask used to remove the unordered DNA/RNA core of spherical 
+        ! icosahedral viruses<recvol/end>
         !
         ! set required keys
         keys_required(1)  = 'stk'
@@ -1273,14 +1263,10 @@ select case(prg)
         keys_optional(4)  = 'frac'
         keys_optional(5)  = 'mul'
         keys_optional(6)  = 'state'
-        keys_optional(7)  = 'automsk'
-        keys_optional(8)  = 'mw'
-        keys_optional(9)  = 'amsklp'
-        keys_optional(10) = 'edge'
-        keys_optional(11) = 'binwidth'
+        keys_optional(7)  = 'mskfile'
         ! parse command line
         if( describe ) call print_doc_recvol
-        call cline%parse(keys_required(:6), keys_optional(:9))
+        call cline%parse(keys_required(:6), keys_optional(:7))
         ! set defaults
         if( .not. cline%defined('trs') ) call cline%set('trs', 5.) ! to assure that shifts are being used
         if( .not. cline%defined('eo')  ) call cline%set('eo', 'no')
@@ -1309,9 +1295,10 @@ select case(prg)
         keys_optional(3)  = 'mul'
         keys_optional(4)  = 'state'
         keys_optional(5)  = 'nstates'
+        keys_optional(6)  = 'mskfile'
         ! parse command line
         if( describe ) call print_doc_eo_volassemble
-        call cline%parse(keys_required(:6), keys_optional(:5))
+        call cline%parse(keys_required(:6), keys_optional(:6))
         ! set defaults
         if( cline%defined('state') ) call cline%set('nstates', 1.) ! to assure that shifts are being used
         ! execute
