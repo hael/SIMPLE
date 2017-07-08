@@ -182,6 +182,7 @@ type :: params
     integer :: corner=0
     integer :: cube=0
     integer :: edge=3
+    integer :: edge2D=10
     integer :: find=1
     integer :: nframesgrp=0
     integer :: fromf=1
@@ -350,7 +351,6 @@ type :: params
     logical :: cyclic(7)       = .false.
     logical :: l_distr_exec    = .false.
     logical :: l_chunk_distr   = .false.
-    logical :: doautomsk       = .false.
     logical :: doshift         = .false.
     logical :: l_automsk       = .false.
     logical :: l_autoscale     = .false.
@@ -549,6 +549,7 @@ contains
         call check_iarg('corner',         self%corner)
         call check_iarg('cube',           self%cube)
         call check_iarg('edge',           self%edge)
+        call check_iarg('edge2D',         self%edge2D)
         call check_iarg('find',           self%find)
         call check_iarg('nframesgrp',     self%nframesgrp)
         call check_iarg('fromf',          self%fromf)
@@ -928,15 +929,7 @@ contains
         if( .not. cline%defined('outer') ) self%outer = self%msk
         ! checks automask related values
         self%l_automsk = .false.
-        self%doautomsk = .false.
         if( self%automsk .eq. 'yes' ) self%l_automsk = .true.
-        if( cline%defined('mw') .and. self%automsk .ne. 'no' ) self%doautomsk = .true.
-        if( .not.cline%defined('mw') .and. self%automsk.eq.'yes') &
-            write(*,*) 'WARNING! MW argument not provided in conjunction with AUTOMSK'
-        if( self%doautomsk )then
-            if( self%edge <= 0    ) stop 'Invalid value for edge' 
-            if( self%binwidth < 0 ) stop 'Invalid value for binwidth'
-        endif
         ! scaling stuff
         self%l_autoscale = .false.
         if( self%autoscale .eq. 'yes' ) self%l_autoscale = .true.

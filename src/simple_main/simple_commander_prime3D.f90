@@ -227,12 +227,6 @@ contains
                 stop 'need oritab input for execution of prime3D with this refine mode'
             endif
         endif
-        if( p%doautomsk )then
-            ! automasking specifics
-            write(*,'(A,I3)') '>>> AUTOMASKING BINARY LAYERS:', p%binwidth
-            write(*,'(A,I3)') '>>> AUTOMASKING SOFT LAYERS:  ', p%edge
-            write(*,'(A,F6.1)') '>>> AUTOMASKING LOW-PASS:   ', p%amsklp
-        endif
         call b%build_general_tbox(p, cline)   ! general objects built
         if( .not. cline%defined('eo') ) p%eo = 'no' ! default
         if( p%eo .eq. 'yes' ) p%dynlp = 'no'    

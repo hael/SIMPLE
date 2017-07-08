@@ -742,15 +742,6 @@ contains
                 call ioimg%rwSlices('r',first_slice,last_slice,self%rmat,&
                 &self%ldim,self%ft,self%smpd,read_failure=read_failure)
                 if( .not. ioimg_present ) call ioimg%close
-                ! normalize if volume
-                if( self%is_3d() .and. .not. iisxfel )then
-                    err = .false.
-                    if( .not. self%ft ) call self%norm(err=err)
-                    if( err )then
-                        write(*,*) 'Normalization error, trying to read: ', fname
-                        stop
-                    endif
-                endif
                 if( iisxfel ) call self%em2xfel
             end subroutine read_local
 

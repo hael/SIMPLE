@@ -149,6 +149,7 @@ clip
 corner
 cube
 edge
+edge2D
 find
 nframesgrp
 fromf
@@ -308,7 +309,6 @@ ysh
 zsh
 l_distr_exec
 l_chunk_distr
-doautomsk
 doshift
 l_automsk
 l_autoscale

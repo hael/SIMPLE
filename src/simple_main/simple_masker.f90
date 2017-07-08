@@ -36,6 +36,7 @@ type, extends(image) :: masker
     ! CONSTRUCTORS
     procedure          :: init2D
     procedure          :: automask3D
+    procedure          :: init_envmask2D
     ! CALCULATORS
     procedure, private :: calc_adamsk
     ! 2D CALCULATORS
@@ -44,8 +45,9 @@ type, extends(image) :: masker
     ! 3D CALCULATORS
     procedure, private :: bin_vol
     procedure, private :: env_rproject 
-    ! MODIFIER
+    ! MODIFIERS 
     procedure          :: apply_mask2D
+    procedure          :: apply_envmask2D
     ! GETTERS
     procedure          :: get_adamsk
     procedure          :: get_msk
@@ -126,14 +128,14 @@ contains
     end subroutine automask3D
 
     !>  \brief  is for initialising the envelope mask used to extract 2D masks
-    subroutine envproject3D_init( self, vol_amask_soft )
+    !!          it is assumed that the mask is already set in the image part of the object
+    subroutine init_envmask2D( self, msk )
         class(masker), intent(inout) :: self
-        class(image),  intent(in)    :: vol_amask_soft
-        ! soft-edged automask should be part of it on startup
-        self = vol_amask_soft
-        ! remove the edge
-        call self%remove_edge()
-    end subroutine envproject3D_init
+        real,          intent(in)    :: msk
+        self%idim    = self%get_ldim()
+        self%msk     = msk
+        call self%remove_edge
+    end subroutine init_envmask2D
 
     ! CALCULATORS
 
@@ -236,11 +238,11 @@ contains
         class(ori),    intent(inout) :: e      !< Euler angle
         type(image),   intent(inout) :: img    !< resulting projection image
         real, allocatable :: rmat(:,:,:)
-        real              :: out_coos(3), maxrad, rad(3), thresh
-        real              :: incr_k(3), rvec(3), rvec_k(3)
-        integer           :: orig(3), i, j, k, sqmaxrad, vec(3)
+        real    :: out_coos(3), maxrad, rad(3), thresh
+        real    :: incr_k(3), rvec(3), rvec_k(3)
+        integer :: orig(3), i, j, k, sqmaxrad, vec(3)
         ! init
-        thresh   = 0.9999             ! prior soft masking is discarded
+        thresh   = 0.5
         img      = 0.
         orig     = self%idim/2+1
         maxrad   = min(self%msk, real(minval(self%idim(1:2)))/2.-1.)
@@ -249,6 +251,13 @@ contains
         rad      = 0.
         vec      = 0
         rmat     = self%get_rmat()
+        if( DEBUG )then
+            print *, 'maxrad:       ', maxrad
+            print *, 'sqmaxrad:     ', sqmaxrad
+            print *, 'maxval(rmat): ', maxval(rmat)
+            print *, 'minval(rmat): ', minval(rmat)
+            print *, 'self%idim:    ', self%idim
+        endif
         incr_k   = matmul([0., 0., 1.], e%get_mat())
         !$omp parallel do default(shared) private(j,out_coos,rad,i,k,vec,rvec,rvec_k)&
         !$omp schedule(static) proc_bind(close)
@@ -280,13 +289,13 @@ contains
         if( DEBUG )write(*,*)'simple_masker::env_rproject done'
     end subroutine env_rproject
 
-    ! MODIFIER
+    ! MODIFIERS
 
     !> \brief  applies the circular/envelope mask
     subroutine apply_mask2D( self, img, cls )
         class(masker), intent(inout) :: self
-        class(image),          intent(inout) :: img
-        integer,               intent(in)    :: cls
+        class(image),  intent(inout) :: img
+        integer,       intent(in)    :: cls
         integer :: ldim(3)
         ldim = img%get_ldim()
         if( .not.img%is_2d())stop 'only for images; simple_masker::apply_mask2D'
@@ -296,6 +305,27 @@ contains
         call img%mask(self%adamsks(cls), 'soft')
         if( DEBUG )write(*,*)'simple_masker::apply_mask2D done'
     end subroutine apply_mask2D
+
+    !> \brief  applies the envelope mask
+    subroutine apply_envmask2D( self, o, img, edge )
+        class(masker),     intent(inout) :: self
+        class(ori),        intent(inout) :: o
+        class(image),      intent(inout) :: img
+        integer, optional, intent(in)    :: edge
+        type(image) :: mask2D
+        integer     :: ldim(3), eedge
+        real        :: smpd
+        eedge = 10
+        if( present(edge) ) eedge = edge
+        ldim    = self%get_ldim()
+        smpd    = self%get_smpd()
+        ldim(3) = 1
+        call mask2D%new(ldim, smpd)
+        call self%env_rproject(o, mask2D)
+        ! add soft edge
+        call mask2D%cos_edge(eedge)
+        call img%mul(mask2D)
+    end subroutine apply_envmask2D
 
     ! GETTERS
 

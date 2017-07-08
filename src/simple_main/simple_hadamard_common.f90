@@ -399,9 +399,11 @@ contains
             ! clip image if needed
             call b%img%clip(b%img_match) ! SQUARE DIMS ASSUMED
             ! MASKING
-            if(p%l_automsk .and. p%automsk .eq. 'cavg')then
+            if( p%l_automsk .and. p%automsk .eq. 'cavg' )then
                 ! 2D ab initio mask
                 call b%mskimg%apply_mask2D(b%img_match, nint(o%get('cls')))
+            else if( p%l_automsk )then
+                call b%mskvol%apply_envmask2D(o, b%img_match, p%edge2D)
             else              
                 ! soft-edged mask
                 if( p%l_innermsk )then
@@ -511,6 +513,7 @@ contains
         if( present(doexpand) ) l_doexpand = doexpand
         if( p%boxmatch < p%box )call b%vol%new([p%box,p%box,p%box],p%smpd) ! ensure correct dim
         call b%vol%read(p%vols(s), isxfel=p%l_xfel)
+        call b%vol%norm ! because auto-normalisation on read is taken out
         if( p%l_xfel )then
             ! no centering
         else
@@ -540,8 +543,13 @@ contains
                 call b%mskvol%new([p%box, p%box, p%box], p%smpd, p%imgkind)
                 call b%mskvol%read(p%mskfile)
                 call b%mskvol%clip_inplace([p%boxmatch,p%boxmatch,p%boxmatch])
-                call b%mskvol%norm_bin ! ensures [0;1] range
+                ! no need for the below line anymore as I (HE) removed auto-normalisation on read
+                ! call b%mskvol%norm_bin ! ensures [0;1] range
                 call b%vol%mul(b%mskvol)
+                ! re-initialise the object for 2D envelope masking
+                call b%mskvol%init_envmask2D(p%msk)
+                ! don't use this for any 3D work from now on, because the soft edge is removed
+                ! on initialisation
             else
                 ! circular masking
                 if( p%l_innermsk )then
@@ -553,28 +561,6 @@ contains
         endif
         ! FT volume
         call b%vol%fwd_ft
-        ! FOM filter
-        if( p%eo.eq.'yes' )then
-            ! if( cline%defined('fsc') )then
-            !     fsc_file = trim(p%fsc)
-            ! else
-            !     fsc_file = 'fsc_state'//int2str_pad(s,2)//'.bin'
-            ! endif
-            ! if( file_exists(fsc_file) )then
-            !     fsc = file2rarr(fsc_file)
-            !     fom = fsc2optlp(fsc)
-            !     if( p%boxmatch .eq. p%box )then
-            !         call b%vol%apply_filter(fom)
-            !     else
-            !         res_match = b%vol%get_res()
-            !         fom_match = resample_filter(fom, res, res_match)
-            !         call b%vol%apply_filter(fom_match)
-            !         deallocate(res_match, fom_match)
-            !     endif
-            !     deallocate(fsc, fom)
-            ! endif
-            ! deallocate(res)
-        endif
         ! expand for fast interpolation
         if( l_doexpand )call b%vol%expand_cmat     
     end subroutine preprefvol
