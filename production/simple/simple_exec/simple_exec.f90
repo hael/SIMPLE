@@ -1437,9 +1437,10 @@ select case(prg)
         keys_optional(7)  = 'edge'
         keys_optional(8)  = 'binwidth'
         keys_optional(9)  = 'frac_outliers'
+        keys_optional(10) = 'thres'
         ! parse command line
         if( describe ) call print_doc_postproc_vol
-        call cline%parse(keys_required(:3), keys_optional(:9))
+        call cline%parse(keys_required(:3), keys_optional(:10))
         ! execute
         call xpostproc_vol%execute(cline)
     case( 'projvol' )

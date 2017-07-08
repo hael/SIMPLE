@@ -163,8 +163,10 @@ contains
         call b%vol%bwd_ft
         call vol_copy%bwd_ft
         if( p%automsk .eq. 'yes' )then
-            if( cline%defined('frac_outliers') )then
-                call b%mskvol%automask3D(vol_copy, p%msk, p%amsklp, p%mw, p%binwidth, p%edge, p%dens, p%frac_outliers)
+            if( cline%defined('thres') )then
+                call b%mskvol%automask3D(vol_copy, p%msk, p%amsklp, p%mw, p%binwidth, p%edge, p%dens, pix_thres=p%thres)
+            else if( cline%defined('frac_outliers') )then
+                call b%mskvol%automask3D(vol_copy, p%msk, p%amsklp, p%mw, p%binwidth, p%edge, p%dens, frac_outliers=p%frac_outliers)
             else
                 call b%mskvol%automask3D(vol_copy, p%msk, p%amsklp, p%mw, p%binwidth, p%edge, p%dens)
             endif

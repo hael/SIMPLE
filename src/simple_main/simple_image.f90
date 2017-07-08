@@ -262,6 +262,7 @@ type :: image
     procedure          :: bwd_logft
     procedure          :: shift
     procedure          :: cure_outliers
+    procedure          :: zero_below
     ! DESTRUCTOR
     procedure :: kill
 end type
@@ -5739,6 +5740,13 @@ contains
             deallocate( win, rmat_pad )
         endif
     end subroutine cure_outliers
+
+    !>  \brief  zero pixels below thres
+    subroutine zero_below( self, thres )
+        class(image), intent(inout) :: self
+        real,         intent(in)    :: thres
+        where( self%rmat < thres ) self%rmat = 0.
+    end subroutine zero_below
 
     !>  \brief  is the image class unit test
     subroutine test_image( doplot )

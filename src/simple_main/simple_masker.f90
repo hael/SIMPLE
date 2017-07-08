@@ -27,6 +27,7 @@ type, extends(image) :: masker
     real              :: dens          = 0.
     real              :: mw            = 0.
     real              :: frac_outliers = 0.
+    real              :: pix_thres     = 0.
     integer           :: edge          = 3
     integer           :: binwidth      = 1
     integer           :: n             = 0
@@ -43,7 +44,8 @@ type, extends(image) :: masker
     procedure          :: update_cls
     procedure, private :: bin_cavg
     ! 3D CALCULATORS
-    procedure, private :: bin_vol
+    procedure, private :: bin_vol_kmeans
+    procedure, private :: bin_vol_thres
     procedure, private :: env_rproject 
     ! MODIFIERS 
     procedure          :: apply_mask2D
@@ -67,7 +69,7 @@ contains
         class(params),              intent(in)    :: p
         integer,                    intent(in)    :: ncls
         integer              :: alloc_stat
-        if( .not.self%is_2d() )stop 'this routine is intended for 2D images only, simple_masker::mskref'
+        if( .not.self%is_2d() )  stop 'this routine is intended for 2D images only, simple_masker::mskref'
         if(.not.self%even_dims())stop 'even dimensions assumed; simple_masker::init2D'
         if(self%is_ft())         stop 'real space only; simple_masker::init2D'
         call self%kill_masker
@@ -92,12 +94,12 @@ contains
     !>  \brief  is a 3D constructor and modifier
     !>  On output the parent volume is the envelope mask
     !>  The returned volume is envelope masked.
-    subroutine automask3D( self, vol_inout, msk, amsklp, mw, binwidth, edge, dens, frac_outliers )
+    subroutine automask3D( self, vol_inout, msk, amsklp, mw, binwidth, edge, dens, frac_outliers, pix_thres )
         class(masker),  intent(inout) :: self
         class(image),   intent(inout) :: vol_inout
         real,           intent(in)    :: msk, amsklp, mw, dens
         integer,        intent(in)    :: binwidth, edge
-        real, optional, intent(in)    :: frac_outliers    
+        real, optional, intent(in)    :: frac_outliers, pix_thres
         logical :: was_ft
         if( vol_inout%is_2d() )stop 'automask3D is intended for volumes only, simple_masker%init_mskproj'
         call self%kill_masker
@@ -109,6 +111,8 @@ contains
         self%dens      = dens
         self%frac_outliers = 0.
         if( present(frac_outliers) ) self%frac_outliers = frac_outliers
+        self%pix_thres = 0.
+        if( present(pix_thres)     ) self%pix_thres     = pix_thres 
         write(*,'(A,F7.1,A)') '>>> AUTOMASK LOW-PASS:           ', self%amsklp,  ' ANGSTROMS'
         write(*,'(A,I7,A)'  ) '>>> AUTOMASK SOFT EDGE WIDTH:    ', self%edge,    ' PIXEL(S)'
         write(*,'(A,I7,A)'  ) '>>> AUTOMASK BINARY LAYERS WIDTH:', self%binwidth,' PIXEL(S)'
@@ -117,7 +121,11 @@ contains
         if( vol_inout%is_ft() )call vol_inout%bwd_ft
         self = vol_inout
         ! binarize volume
-        call self%bin_vol
+        if( present(pix_thres) )then
+            call self%bin_vol_thres
+        else
+            call self%bin_vol_kmeans 
+        endif
         ! add volume soft edge
         call self%cos_edge(self%edge)
         ! apply mask to volume
@@ -200,7 +208,7 @@ contains
 
     ! 3D CALCULATORS
 
-    subroutine bin_vol( self )
+    subroutine bin_vol_kmeans( self )
         use simple_math, only: nvoxfind
         class(masker), intent(inout) :: self
         integer :: nnvox
@@ -208,7 +216,6 @@ contains
         call self%norm()
         ! spherical mask first
         call self%mask(self%msk, 'soft')
-        ! binarize high-res map (assumed to be FOM filtered)
         if( self%frac_outliers > 0. )then
             call self%bin_kmeans(self%frac_outliers)
         else
@@ -228,7 +235,27 @@ contains
         ! binary layers
         call self%grow_bins(self%binwidth)
         if( DEBUG )write(*,*)'simple_masker::bin_vol done'
-    end subroutine bin_vol
+    end subroutine bin_vol_kmeans
+
+    subroutine bin_vol_thres( self )
+        use simple_math, only: nvoxfind
+        class(masker), intent(inout) :: self
+        integer :: nnvox
+        call self%zero_below(self%pix_thres)
+        call self%real_space_filter( WINSZ, 'average')
+        call self%bp(0., self%amsklp)
+        ! find nr of voxels corresponding to mw
+        if( self%dens > 0. )then
+            nnvox = nvoxfind(self%get_smpd(), self%mw, self%dens)
+        else
+            nnvox = nvoxfind(self%get_smpd(), self%mw)     
+        endif
+        ! binarize again
+        call self%bin(nnvox)
+        ! binary layers
+        call self%grow_bins(self%binwidth)
+        if( DEBUG )write(*,*)'simple_masker::bin_vol done'
+    end subroutine bin_vol_thres
 
     !>  \brief  volume mask projector
     subroutine env_rproject(self, e, img)
