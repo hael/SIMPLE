@@ -130,7 +130,7 @@ contains
         type(image)       :: vol_copy
         real, allocatable :: fsc(:), optlp(:), res(:)
         real              :: fsc0143, fsc05
-        integer           :: k, state
+        integer           :: k, state, ldim(3)
         state = 1
         ! pre-proc
         p = params(cline, checkdistr=.false.) ! constants & derived constants produced, mode=2
@@ -164,6 +164,8 @@ contains
         call vol_copy%bwd_ft
         if( cline%defined('mskfile') )then
             if( file_exists(p%mskfile) )then
+                ldim = b%vol%get_ldim()
+                call b%mskvol%new(ldim, p%smpd)
                 call b%mskvol%read(p%mskfile)
                 call b%vol%mul(b%mskvol)
             else

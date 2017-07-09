@@ -377,17 +377,18 @@ select case(prg)
         keys_optional(13) = 'trs'
         keys_optional(14) = 'automsk'
         keys_optional(15) = 'amsklp'
-        keys_optional(16) = 'inner'
-        keys_optional(17) = 'width'
-        keys_optional(18) = 'startit'
-        keys_optional(19) = 'maxits'
-        keys_optional(20) = 'filwidth'
-        keys_optional(21) = 'center'
-        keys_optional(22) = 'autoscale'
-        keys_optional(23) = 'oritab3D'
+        keys_optional(16) = 'edge'
+        keys_optional(17) = 'inner'
+        keys_optional(18) = 'width'
+        keys_optional(19) = 'startit'
+        keys_optional(20) = 'maxits'
+        keys_optional(21) = 'filwidth'
+        keys_optional(22) = 'center'
+        keys_optional(23) = 'autoscale'
+        keys_optional(24) = 'oritab3D'
         ! documentation
         if( describe ) call print_doc_prime2D
-        call cline%parse( keys_required(:5), keys_optional(:23) )
+        call cline%parse( keys_required(:5), keys_optional(:24) )
         ! set defaults
         if( .not. cline%defined('lpstart') ) call cline%set('lpstart',  15.)
         if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',    8.)
