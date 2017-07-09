@@ -885,11 +885,14 @@ contains
             dists(ipeak) = pftcc%euclid(ref, iptcl, roind, self%pfom(state,:))
         end do
         ! calculate normalised weights and weighted corr
+        ! EXPERIMENTAL
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         ws    = exp(-dists)
-        ws    = ws/sum(ws)
-        wcorr = sum(ws*corrs)
-        print *, '*****************'
-        print *, ws
+        ! print *, '********************'
+        ! print *, ws
+        ! ws    = ws/sum(ws)
+        wcorr = sum(ws*corrs)/sum(ws)
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         ! update npeaks individual weights
         call self%o_peaks%set_all('ow', ws)
         deallocate(corrs)

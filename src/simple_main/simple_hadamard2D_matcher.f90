@@ -72,11 +72,14 @@ contains
         endif
 
         ! SETUP WEIGHTS
-        if( p%nptcls <= SPECWMINPOP )then
-            call b%a%calc_hard_ptcl_weights(p%frac)
-        else
-            call b%a%calc_spectral_weights(p%frac)
-        endif
+        ! EXPERIMENTAL
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        ! if( p%nptcls <= SPECWMINPOP )then
+        !     call b%a%calc_hard_ptcl_weights(p%frac)
+        ! else
+        !     call b%a%calc_spectral_weights(p%frac)
+        ! endif
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
         ! EXTREMAL LOGICS
         if( frac_srch_space < 98. .or. p%extr_thresh > 0.025 )then

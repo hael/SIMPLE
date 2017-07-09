@@ -195,7 +195,8 @@ contains
             softrec = .true.
             npeaks  = os%get_noris()
         endif
-        pw = orientation%get('w')
+        pw = 1.0
+        if( orientation%isthere('w') ) pw = orientation%get('w')
         if( pw > 0. )then
             ! prepare image for gridding
             ! using the uncorrected/unmodified image as input
@@ -402,8 +403,10 @@ contains
             if( p%l_envmsk .and. p%automsk .eq. 'cavg' )then
                 ! 2D ab initio mask
                 call b%mskimg%apply_mask2D(b%img_match, nint(o%get('cls')))
-            else if( p%l_envmsk )then
-                call b%mskvol%apply_envmask2D(o, b%img_match, p%edge2D)
+            !!! 2BE REPLACED WITH ADAPTIVE 2D MASKING
+            ! else if( p%l_envmsk )then
+            !     call b%mskvol%apply_envmask2D(o, b%img_match, p%edge2D)
+            !!! 2BE REPLACED WITH ADAPTIVE 2D MASKING
             else              
                 ! soft-edged mask
                 if( p%l_innermsk )then

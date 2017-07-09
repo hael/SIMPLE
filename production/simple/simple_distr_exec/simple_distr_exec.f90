@@ -741,7 +741,7 @@ select case(prg)
         keys_optional(16) = 'pgrp_known'
         ! parse command line
         if( describe ) call print_doc_ini3D_from_cavgs
-        call cline%parse(keys_required(:5), keys_optional(:1))
+        call cline%parse(keys_required(:5), keys_optional(:16))
         ! set defaults
         if( .not. cline%defined('amsklp') ) call cline%set('amsklp', 20.)
         if( .not. cline%defined('edge')   ) call cline%set('edge',   10.)

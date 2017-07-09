@@ -133,14 +133,18 @@ contains
         call self%htab%set('e3',0.)
         call self%htab%set('x',0.)
         call self%htab%set('y',0.)
-        call self%htab%set('mi',0.)
-        call self%htab%set('mi_hard',0.)
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        ! call self%htab%set('mi',0.)
+        ! call self%htab%set('mi_hard',0.)
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         call self%htab%set('dist',180.)
         call self%htab%set('state',1.)
-        call self%htab%set('corr',-1.)
-        call self%htab%set('w',1.)
-        call self%htab%set('class',1.)
-        call self%htab%set('mirr',0.)
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        ! call self%htab%set('corr',-1.)
+        ! call self%htab%set('w',1.)
+        ! call self%htab%set('class',1.)
+        ! call self%htab%set('mirr',0.)
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         call self%htab%set('frac',0.)
         self%chtab = chash(NNAMES)
         self%existence = .true.
@@ -165,21 +169,25 @@ contains
     subroutine reject( self )
         class(ori), intent(inout) :: self
         call self%set_euler([0.,0.,0.])
-        call self%htab%set('e1',0.)
-        call self%htab%set('e2',0.)
-        call self%htab%set('e3',0.)
-        call self%htab%set('x',0.)
-        call self%htab%set('y',0.)
-        call self%htab%set('mi',0.)
-        call self%htab%set('mi_hard',0.)
-        call self%htab%set('dist',180.)
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        ! call self%htab%set('e1',0.)
+        ! call self%htab%set('e2',0.)
+        ! call self%htab%set('e3',0.)
+        ! call self%htab%set('x',0.)
+        ! call self%htab%set('y',0.)
+        ! call self%htab%set('mi',0.)
+        ! call self%htab%set('mi_hard',0.)
+        ! call self%htab%set('dist',180.)
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         call self%htab%set('state',0.)
-        call self%htab%set('corr',-1.)
-        call self%htab%set('w',0.)
-        call self%htab%set('class',0.)
-        call self%htab%set('mirr',0.)
-        call self%htab%set('frac',0.)
-        call self%htab%set('specscore',0.)
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        ! call self%htab%set('cor.r',-1.)
+        ! call self%htab%set('w',0.)
+        ! call self%htab%set('class',0.)
+        ! call self%htab%set('mirr',0.)
+        ! call self%htab%set('frac',0.)
+        ! call self%htab%set('specscore',0.)
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     end subroutine reject
     
     !>  \brief  is a polymorphic assigner
@@ -337,7 +345,7 @@ contains
         self%normal = matmul(zvec, self%rmat)
     end subroutine rnd_euler_1
 
-    !>  \brief  for generating a random Euler angle neighbor to o_prev 
+    !>  \brief  for generating a random Euler angle neighbour to o_prev 
     subroutine rnd_euler_2( self, o_prev, athres, proj )
         use simple_math, only: deg2rad
         class(ori),        intent(inout) :: self   !< instance
