@@ -352,7 +352,7 @@ type :: params
     logical :: l_distr_exec    = .false.
     logical :: l_chunk_distr   = .false.
     logical :: doshift         = .false.
-    logical :: l_automsk       = .false.
+    logical :: l_envmsk       = .false.
     logical :: l_autoscale     = .false.
     logical :: l_dose_weight   = .false. 
     logical :: l_innermsk      = .false. 
@@ -928,8 +928,15 @@ contains
         ! set default outer mask value
         if( .not. cline%defined('outer') ) self%outer = self%msk
         ! checks automask related values
-        self%l_automsk = .false.
-        if( self%automsk .eq. 'yes' ) self%l_automsk = .true.
+        self%l_envmsk = .false.
+        if( self%automsk .eq. 'yes' ) self%l_envmsk = .true.
+        if( cline%defined('mskfile') )then
+            if( .not. file_exists(self%mskfile) )then
+                write(*,*) 'file: ', trim(self%mskfile)
+                stop 'input mask file not in cwd'
+            endif
+            self%l_envmsk = .true.
+        endif
         ! scaling stuff
         self%l_autoscale = .false.
         if( self%autoscale .eq. 'yes' ) self%l_autoscale = .true.

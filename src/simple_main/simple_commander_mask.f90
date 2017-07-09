@@ -41,7 +41,6 @@ contains
         type(build)                :: b
         type(params)               :: p
         type(automask2D_commander) :: automask2D
-        ! type(automask3D_commander) :: automask3D
         type(image)                :: mskvol
         logical                    :: here
         integer                    :: ldim(3)

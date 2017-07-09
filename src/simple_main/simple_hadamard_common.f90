@@ -399,10 +399,10 @@ contains
             ! clip image if needed
             call b%img%clip(b%img_match) ! SQUARE DIMS ASSUMED
             ! MASKING
-            if( p%l_automsk .and. p%automsk .eq. 'cavg' )then
+            if( p%l_envmsk .and. p%automsk .eq. 'cavg' )then
                 ! 2D ab initio mask
                 call b%mskimg%apply_mask2D(b%img_match, nint(o%get('cls')))
-            else if( p%l_automsk )then
+            else if( p%l_envmsk )then
                 call b%mskvol%apply_envmask2D(o, b%img_match, p%edge2D)
             else              
                 ! soft-edged mask
@@ -442,7 +442,7 @@ contains
         ! normalise
         call b%img_match%norm
         ! apply mask
-        if(p%l_automsk .and. p%automsk .eq. 'cavg')then
+        if(p%l_envmsk .and. p%automsk .eq. 'cavg')then
             ! automasking
             call b%mskimg%update_cls(b%img_match, icls)
             if( (p%l_distr_exec .and. p%part.eq.1) .or. (.not.p%l_distr_exec))then

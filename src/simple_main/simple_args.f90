@@ -342,7 +342,7 @@ contains
         self%args(310) = 'l_distr_exec'
         self%args(311) = 'l_chunk_distr'
         self%args(312) = 'doshift'
-        self%args(313) = 'l_automsk'
+        self%args(313) = 'l_envmsk'
         self%args(314) = 'l_autoscale'
         self%args(315) = 'l_dose_weight'
         self%args(316) = 'l_innermsk'

@@ -310,7 +310,7 @@ zsh
 l_distr_exec
 l_chunk_distr
 doshift
-l_automsk
+l_envmsk
 l_autoscale
 l_dose_weight
 l_innermsk

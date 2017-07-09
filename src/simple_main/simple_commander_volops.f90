@@ -162,7 +162,15 @@ contains
         ! masking
         call b%vol%bwd_ft
         call vol_copy%bwd_ft
-        if( p%automsk .eq. 'yes' )then
+        if( cline%defined('mskfile') )then
+            if( file_exists(p%mskfile) )then
+                call b%mskvol%read(p%mskfile)
+                call b%vol%mul(b%mskvol)
+            else
+                write(*,*) 'file: ', trim(p%mskfile)
+                stop 'maskfile does not exists in cwd'                
+            endif
+        else if( p%automsk .eq. 'yes' )then
             if( cline%defined('thres') )then
                 call b%mskvol%automask3D(vol_copy, p%msk, p%amsklp, p%mw, p%binwidth, p%edge, p%dens, pix_thres=p%thres)
             else if( cline%defined('frac_outliers') )then
