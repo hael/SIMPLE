@@ -63,7 +63,7 @@ contains
 
     !>  \brief does the Wiener restoration of aligned images in 2D
     !!   only for testing
-    subroutine wiener_restore2D( img_set, o_set, tfplan, img_rec, msk, shellw )
+    subroutine wiener_restore2D( img_set, o_set, tfplan, img_rec, msk )
         use simple_oris,  only: oris
         use simple_ori,   only: ori
         class(image),     intent(inout) :: img_set(:)
@@ -71,15 +71,12 @@ contains
         type(ctfplan),    intent(in)    :: tfplan
         class(image),     intent(inout) :: img_rec
         real,             intent(in)    :: msk
-        real, optional,   intent(in)    :: shellw(:,:)
         integer           :: ldim(3), ldim_pad(3), nimgs, iptcl
         type(ori)         :: o
         type(image)       :: ctfsqsum
         real              :: smpd
-        logical           :: doshellw
         if( o_set%get_noris() /= size(img_set) )&
         stop 'nr of imgs and oris not consistent; simple_filterer :: wiener_restore2D_1'
-        doshellw = present(shellw)
         ! set constants
         ldim     = img_set(1)%get_ldim()
         smpd     = img_set(1)%get_smpd()
@@ -92,13 +89,8 @@ contains
         ! average in the assumption of infinite signal
         do iptcl=1,nimgs
             o = o_set%get_ori(iptcl)
-            if( doshellw )then
-                call wiener_restore2D_online(img_set(iptcl), o,&
-                &tfplan, img_rec, ctfsqsum, msk, shellw(iptcl,:))
-            else
-                call wiener_restore2D_online(img_set(iptcl), o,&
-                &tfplan, img_rec, ctfsqsum, msk)
-            endif
+            call wiener_restore2D_online(img_set(iptcl), o,&
+            &tfplan, img_rec, ctfsqsum, msk)
         end do
         ! do the density correction
         call img_rec%fwd_ft
@@ -110,7 +102,7 @@ contains
 
     !>  \brief does the online Wiener restoration of 2D images, including shift+rotations
     !!         the image is left shifted and Fourier transformed on output
-    subroutine wiener_restore2D_online( img, o, tfplan, img_rec, ctfsqsum, msk, shellw, add )
+    subroutine wiener_restore2D_online( img, o, tfplan, img_rec, ctfsqsum, msk, add )
         use simple_ori,            only: ori
         use simple_ctf,            only: ctf
         use simple_projector_hlev, only: rotimg
@@ -120,7 +112,6 @@ contains
         class(image),      intent(inout) :: img_rec
         class(image),      intent(inout) :: ctfsqsum
         real,              intent(in)    :: msk
-        real,    optional, intent(in)    :: shellw(:)
         logical, optional, intent(in)    :: add
         type(image) :: roimg, ctfsq
         type(ctf)   :: tfun
@@ -150,7 +141,6 @@ contains
         end select
         x = -o%get('x')
         y = -o%get('y')
-        w =  o%get('w')
         ! apply
         call img%fwd_ft
         ! take care of the nominator
@@ -163,14 +153,14 @@ contains
                 call tfun%apply_and_shift(img, ctfsq, x, y, dfx, '', dfy, angast)
         end select
         ! griding-based image rotation and filtering
-        call rotimg(img, -o%e3get(), msk, roimg, shellw)
+        call rotimg(img, -o%e3get(), msk, roimg)
         ! assemble img_rec sum
         if( aadd )then
-            call img_rec%add(roimg,w)
-            call ctfsqsum%add(ctfsq,w)
+            call img_rec%add(roimg)
+            call ctfsqsum%add(ctfsq)
         else
-            call img_rec%subtr(roimg,w)
-            call ctfsqsum%subtr(ctfsq,w)
+            call img_rec%subtr(roimg)
+            call ctfsqsum%subtr(ctfsq)
         endif
         call roimg%kill
         call ctfsq%kill
