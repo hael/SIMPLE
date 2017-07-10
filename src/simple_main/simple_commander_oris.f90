@@ -361,11 +361,7 @@ contains
             call imgs_cls(icls)%read(p%stk3, icls)
         end do
         write(*,'(a)') '>>> CALCULATING CORRELATIONS'
-        if( cline%defined('scale') )then
-            call calc_cartesian_corrmat(imgs_sel, imgs_cls, correlations, p%scale)
-        else
-            call calc_cartesian_corrmat(imgs_sel, imgs_cls, correlations)
-        endif
+        call calc_cartesian_corrmat(imgs_sel, imgs_cls, correlations)
         ! find selected clusters & map selected to original clusters & extract the particle indices
         allocate(labeler(nsel), selected(p%ncls))
         ! initialise selection array

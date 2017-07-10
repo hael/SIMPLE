@@ -182,7 +182,6 @@ type :: params
     integer :: corner=0
     integer :: cube=0
     integer :: edge=3
-    integer :: edge2D=10
     integer :: find=1
     integer :: nframesgrp=0
     integer :: fromf=1
@@ -549,7 +548,6 @@ contains
         call check_iarg('corner',         self%corner)
         call check_iarg('cube',           self%cube)
         call check_iarg('edge',           self%edge)
-        call check_iarg('edge2D',         self%edge2D)
         call check_iarg('find',           self%find)
         call check_iarg('nframesgrp',     self%nframesgrp)
         call check_iarg('fromf',          self%fromf)

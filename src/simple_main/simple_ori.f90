@@ -31,6 +31,7 @@ type :: ori
     ! CONSTRUCTOR
     procedure          :: new_ori
     procedure          :: new => new_ori
+    procedure          :: new_ori_clean
     procedure          :: ori_from_rotmat
     ! SETTERS
     procedure          :: reject
@@ -133,22 +134,19 @@ contains
         call self%htab%set('e3',0.)
         call self%htab%set('x',0.)
         call self%htab%set('y',0.)
-        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        ! call self%htab%set('mi',0.)
-        ! call self%htab%set('mi_hard',0.)
-        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         call self%htab%set('dist',180.)
         call self%htab%set('state',1.)
-        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        ! call self%htab%set('corr',-1.)
-        ! call self%htab%set('w',1.)
-        ! call self%htab%set('class',1.)
-        ! call self%htab%set('mirr',0.)
-        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         call self%htab%set('frac',0.)
         self%chtab = chash(NNAMES)
         self%existence = .true.
     end subroutine new_ori
+
+    !>  \brief  is a constructor
+    subroutine new_ori_clean( self )
+        class(ori), intent(inout) :: self
+        self%chtab = chash(NNAMES)
+        self%existence = .true.
+    end subroutine new_ori_clean
     
     !>  \brief  is a parameterized constructor
     subroutine ori_from_rotmat( self, rotmat )
@@ -169,25 +167,7 @@ contains
     subroutine reject( self )
         class(ori), intent(inout) :: self
         call self%set_euler([0.,0.,0.])
-        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        ! call self%htab%set('e1',0.)
-        ! call self%htab%set('e2',0.)
-        ! call self%htab%set('e3',0.)
-        ! call self%htab%set('x',0.)
-        ! call self%htab%set('y',0.)
-        ! call self%htab%set('mi',0.)
-        ! call self%htab%set('mi_hard',0.)
-        ! call self%htab%set('dist',180.)
-        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         call self%htab%set('state',0.)
-        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        ! call self%htab%set('cor.r',-1.)
-        ! call self%htab%set('w',0.)
-        ! call self%htab%set('class',0.)
-        ! call self%htab%set('mirr',0.)
-        ! call self%htab%set('frac',0.)
-        ! call self%htab%set('specscore',0.)
-        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     end subroutine reject
     
     !>  \brief  is a polymorphic assigner

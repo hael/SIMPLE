@@ -75,27 +75,19 @@ contains
         endif
     end subroutine calc_cartesian_corrmat_1
     
-    subroutine calc_cartesian_corrmat_2( imgs_sel, imgs_orig, corrmat, msk, lp, scale )
+    subroutine calc_cartesian_corrmat_2( imgs_sel, imgs_orig, corrmat, msk, lp )
         use simple_magic_boxes, only: autoscale
         type(image),       intent(inout) :: imgs_sel(:), imgs_orig(:)
         real, allocatable, intent(out)   :: corrmat(:,:)
-        real, optional,    intent(in)    :: msk, lp, scale
-        integer :: iptcl, isel, alloc_stat, cnt, ldim(3), box_sc
-        real    :: smpd, smpd_target, smpd_sc, sscale
-        logical :: doscale, doftcalc, domsk
+        real, optional,    intent(in)    :: msk, lp
+        integer :: iptcl, isel, alloc_stat, cnt, ldim(3)
+        logical :: doftcalc, domsk
         ! set const
         norig    = size(imgs_orig)
         nsel     = size(imgs_sel)
-        ldim     = imgs_sel(1)%get_ldim()
-        smpd     = imgs_sel(1)%get_smpd()
         ! set operation modes
         domsk    = present(msk)
         doftcalc = present(lp)
-        doscale  = present(scale) 
-        if( doscale )then
-            smpd_target = smpd/scale
-            call autoscale(ldim(1), smpd, smpd_target, box_sc, smpd_sc, sscale)
-        endif
         ! prep sel imgs for corrcalc
         do iptcl=1,nsel
             if( doftcalc )then
@@ -104,13 +96,6 @@ contains
                 call imgs_sel(iptcl)%mask(msk, 'soft')
                 ! Fourier transform
                 call imgs_sel(iptcl)%fwd_ft
-                ! scale
-                call imgs_sel(iptcl)%clip_inplace([box_sc,box_sc,1])
-            else
-                ! scale
-                call imgs_sel(iptcl)%fwd_ft
-                call imgs_sel(iptcl)%clip_inplace([box_sc,box_sc,1])
-                call imgs_sel(iptcl)%bwd_ft
             endif
         end do
         ! prep orig imgs for corrcalc
@@ -120,13 +105,6 @@ contains
                 call imgs_orig(iptcl)%mask(msk, 'soft')
                 ! Fourier transform
                 call imgs_orig(iptcl)%fwd_ft
-                ! scale
-                call imgs_orig(iptcl)%clip_inplace([box_sc,box_sc,1])
-            else
-                ! scale
-                call imgs_orig(iptcl)%fwd_ft
-                call imgs_orig(iptcl)%clip_inplace([box_sc,box_sc,1])
-                call imgs_orig(iptcl)%bwd_ft
             endif
         end do
         if( allocated(corrmat) ) deallocate(corrmat)
@@ -141,11 +119,7 @@ contains
             end do
         else ! Real-space correlation
             if( domsk)then
-                if( doscale )then
-                    call mskimg%disc(imgs_sel(1)%get_ldim(), imgs_sel(1)%get_smpd(), sscale*msk, npix)
-                else
-                    call mskimg%disc(imgs_sel(1)%get_ldim(), imgs_sel(1)%get_smpd(), msk, npix)
-                endif
+                call mskimg%disc(imgs_sel(1)%get_ldim(), imgs_sel(1)%get_smpd(), msk, npix)
             endif
             !$omp parallel do collapse(2) default(shared) private(isel,iptcl) schedule(static) proc_bind(close)
             do isel=1,nsel

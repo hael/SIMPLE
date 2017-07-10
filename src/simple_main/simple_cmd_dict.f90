@@ -61,7 +61,6 @@ contains
         call chdict%push('e2',            '2nd Euler(in degrees){0}')
         call chdict%push('e3',            '3d Euler(in degrees){0}')
         call chdict%push('edge',          'edge size for softening molecular envelope(in pixels){3}')
-        call chdict%push('edge2D',        'edge size for softening 2D molecular envelope(in pixels){10}')
         call chdict%push('endian',        'endiannesss of files(big|little|native){native}')
         call chdict%push('eo',            'use FSC for filtering and low-pass limit update(yes|no){no}')
         call chdict%push('errify',        'introduce error(yes|no){no}')

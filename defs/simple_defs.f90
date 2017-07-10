@@ -43,6 +43,9 @@ type :: ctfplan
     character(len=STDLEN) :: flag='' !< flag: <mul|flip|no> 
 end type ctfplan
 
+! constants for masks
+real, parameter :: COSMSKHALFWIDTH = 3.0
+
 ! constants for picker
 real,    parameter :: PICKER_SHRINK        = 4.
 real,    parameter :: PICKER_SHRINK_REFINE = 2.

@@ -28,7 +28,6 @@ public :: volops_commander
 public :: volume_smat_commander
 private
 
-
 type, extends(commander_base) :: fsc_commander
   contains
     procedure :: execute      => exec_fsc
@@ -173,13 +172,7 @@ contains
                 stop 'maskfile does not exists in cwd'                
             endif
         else if( p%automsk .eq. 'yes' )then
-            if( cline%defined('thres') )then
-                call b%mskvol%automask3D(vol_copy, p%msk, p%amsklp, p%mw, p%binwidth, p%edge, p%dens, pix_thres=p%thres)
-            else if( cline%defined('frac_outliers') )then
-                call b%mskvol%automask3D(vol_copy, p%msk, p%amsklp, p%mw, p%binwidth, p%edge, p%dens, frac_outliers=p%frac_outliers)
-            else
-                call b%mskvol%automask3D(vol_copy, p%msk, p%amsklp, p%mw, p%binwidth, p%edge, p%dens)
-            endif
+            call b%mskvol%automask3D(p, vol_copy)
             call b%mskvol%write('automask'//p%ext)
             call b%vol%mul(b%mskvol)
         else

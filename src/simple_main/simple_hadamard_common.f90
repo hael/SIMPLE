@@ -401,12 +401,11 @@ contains
             call b%img%clip(b%img_match) ! SQUARE DIMS ASSUMED
             ! MASKING
             if( p%l_envmsk .and. p%automsk .eq. 'cavg' )then
-                ! 2D ab initio mask
-                call b%mskimg%apply_mask2D(b%img_match, nint(o%get('cls')))
-            !!! 2BE REPLACED WITH ADAPTIVE 2D MASKING
-            ! else if( p%l_envmsk )then
-            !     call b%mskvol%apply_envmask2D(o, b%img_match, p%edge2D)
-            !!! 2BE REPLACED WITH ADAPTIVE 2D MASKING
+                ! 2D adaptive cos-edge mask
+                call b%mskimg%apply_adamask2ptcl_2D(b%img_match, nint(o%get('cls')))
+            else if( p%l_envmsk )then
+                ! 3D adaptive cos-edge mask
+                call b%mskvol%apply_adamask2ptcl_3D(o, b%img_match)
             else              
                 ! soft-edged mask
                 if( p%l_innermsk )then
@@ -447,7 +446,7 @@ contains
         ! apply mask
         if(p%l_envmsk .and. p%automsk .eq. 'cavg')then
             ! automasking
-            call b%mskimg%update_cls(b%img_match, icls)
+            call b%mskimg%apply_2Denvmask22Dref(b%img_match, icls)
             if( (p%l_distr_exec .and. p%part.eq.1) .or. (.not.p%l_distr_exec))then
                 call b%img_match%write(trim(p%refs)//'msk'//p%ext, icls)
             endif

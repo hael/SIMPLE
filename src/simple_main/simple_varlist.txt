@@ -149,7 +149,6 @@ clip
 corner
 cube
 edge
-edge2D
 find
 nframesgrp
 fromf

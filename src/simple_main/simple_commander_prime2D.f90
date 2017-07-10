@@ -250,7 +250,8 @@ contains
         call b%a%read(p%oritab)
         order = b%a%order_cls(p%ncls)
         do iclass=1,p%ncls
-            write(*,'(a,1x,i5,1x,a,i5)') 'CLASS:', order(iclass), 'POP:', b%a%get_cls_pop(order(iclass))
+            write(*,'(a,1x,i5,a,1x,i5,1x,a,i5)') 'CLASS:', order(iclass),&
+            &'CLASS_RANK:', iclass ,'POP:', b%a%get_cls_pop(order(iclass)) 
             call b%img%read(p%stk, order(iclass))
             call b%img%write(p%outstk, iclass)
         end do

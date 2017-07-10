@@ -128,9 +128,7 @@ contains
         call b%mskimg%init2D(p, p%nptcls)
         do iptcl=1,p%nptcls
             call b%img%read(p%stk, iptcl)
-            call b%mskimg%update_cls(b%img, iptcl)
-            b%img_msk = b%mskimg%get_imgmsk(iptcl)
-            call b%img_msk%write('automasks2D'//p%ext, iptcl)
+            call b%mskimg%apply_2Denvmask22Dref(b%img, iptcl)
             call b%img%write(p%outstk, iptcl)
         end do
         ! end gracefully
