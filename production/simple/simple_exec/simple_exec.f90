@@ -2020,9 +2020,10 @@ select case(prg)
        keys_optional(5)  = 'deftab'
        keys_optional(6)  = 'outfile'
        keys_optional(7)  = 'mul'
+       keys_optional(8)  = 'scale'
        ! parse command line
        if( describe ) call print_doc_map2ptcls
-       call cline%parse(keys_required(:4), keys_optional(:7))
+       call cline%parse(keys_required(:4), keys_optional(:8))
        ! set defaults
        if( .not. cline%defined('outfile') ) call cline%set('outfile', 'mapped_ptcls_params.txt')
        ! execute

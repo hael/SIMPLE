@@ -62,38 +62,11 @@ contains
 
     ! CONSTRUCTOR
 
-    !>  \brief  is a 2D constructor
-    !>          on exit the parent image is untouched
-    subroutine init2D(self, p, ncls)
-        class(masker),      intent(inout) :: self
-        class(params),              intent(in)    :: p
-        integer,                    intent(in)    :: ncls
-        integer              :: alloc_stat
-        if( .not.self%is_2d() )  stop 'this routine is intended for 2D images only, simple_masker::mskref'
-        if(.not.self%even_dims())stop 'even dimensions assumed; simple_masker::init2D'
-        if(self%is_ft())         stop 'real space only; simple_masker::init2D'
-        call self%kill_masker
-        self%idim      = [p%boxmatch, p%boxmatch, 1]
-        self%n         = ncls
-        self%amsklp    = p%amsklp
-        self%msk       = p%msk
-        self%edge      = p%edge
-        self%dens      = p%dens
-        self%binwidth  = p%binwidth
-        self%mw        = p%mw
-        self%smpd_here = p%smpd
-        self%mskwidth  = min(self%mskwidth, real(minval(self%idim(:2)/2))-self%msk)
-        if(self%mskwidth < 1.)stop 'incompatible dimensiosn in simple_masker%init_parms'
-        allocate(self%adamsks(self%n), stat=alloc_stat )
-        call alloc_err('in simple_masker::init2D 1', alloc_stat)
-        self%adamsks = 0.
-        self%masker_exists = .true.
-        if( DEBUG )write(*,*)'simple_masker::init2D done'
-    end subroutine init2D
+    
 
     !>  \brief  is a 3D constructor and modifier
     !>  On output the parent volume is the envelope mask
-    !>  The returned volume is envelope masked.
+    !>  The returned volume is envelope masked
     subroutine automask3D( self, vol_inout, msk, amsklp, mw, binwidth, edge, dens, frac_outliers, pix_thres )
         class(masker),  intent(inout) :: self
         class(image),   intent(inout) :: vol_inout
@@ -135,6 +108,35 @@ contains
         if( DEBUG )write(*,*)'simple_masker::automask3D done'
     end subroutine automask3D
 
+    !>  \brief  is a 2D constructor
+    !>          on exit the parent image is untouched
+    subroutine init2D(self, p, ncls)
+        class(masker),      intent(inout) :: self
+        class(params),              intent(in)    :: p
+        integer,                    intent(in)    :: ncls
+        integer              :: alloc_stat
+        if( .not.self%is_2d() )  stop 'this routine is intended for 2D images only, simple_masker::mskref'
+        if(.not.self%even_dims())stop 'even dimensions assumed; simple_masker::init2D'
+        if(self%is_ft())         stop 'real space only; simple_masker::init2D'
+        call self%kill_masker
+        self%idim      = [p%boxmatch, p%boxmatch, 1]
+        self%n         = ncls
+        self%amsklp    = p%amsklp
+        self%msk       = p%msk
+        self%edge      = p%edge
+        self%dens      = p%dens
+        self%binwidth  = p%binwidth
+        self%mw        = p%mw
+        self%smpd_here = p%smpd
+        self%mskwidth  = min(self%mskwidth, real(minval(self%idim(:2)/2))-self%msk)
+        if(self%mskwidth < 1.)stop 'incompatible dimensiosn in simple_masker%init_parms'
+        allocate(self%adamsks(self%n), stat=alloc_stat )
+        call alloc_err('in simple_masker::init2D 1', alloc_stat)
+        self%adamsks = 0.
+        self%masker_exists = .true.
+        if( DEBUG )write(*,*)'simple_masker::init2D done'
+    end subroutine init2D
+
     !>  \brief  is for initialising the envelope mask used to extract 2D masks
     !!          it is assumed that the mask is already set in the image part of the object
     subroutine init_envmask2D( self, msk )
@@ -148,15 +150,15 @@ contains
     ! CALCULATORS
 
     !>  \brief  is for getting the adaptive circular mask
-    real function calc_adamsk( self, img_msk )result( new_msk )
+    function calc_adamsk( self, img_msk )result( new_msk )
         class(masker), intent(inout) :: self
         class(image),  intent(inout) :: img_msk
         type(image) :: img_dist, tmp_img
-        real        :: minmax(2)
+        real        :: minmax(2), new_msk
         tmp_img = img_msk
         call img_dist%new(self%idim, self%get_smpd())
         call img_dist%cendist
-        ! multiply enveloppe mask with square distance matrix
+        ! multiply envelope mask with square distance matrix
         call tmp_img%mul(img_dist)
         ! determine circular mask size
         minmax  = tmp_img%minmax()
@@ -167,7 +169,7 @@ contains
 
     ! 2D CALCULATORS
 
-    !>  \brief  is for envelope masking the input image
+    !>  \brief  is for envelope masking the input image in prime2D
     subroutine update_cls( self, ref, cls )
         class(masker), intent(inout) :: self
         class(image),  intent(inout) :: ref

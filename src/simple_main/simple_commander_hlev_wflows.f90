@@ -134,11 +134,6 @@ contains
         call cline_rank_cavgs%set('outstk', 'cavgs_final_ranked'//p_master%ext)
         call xrank_cavgs%execute( cline_rank_cavgs )
         ! cleanup
-        if( cline%defined('chunksz') )then
-            call sys_del_files('chunk', '.bin')
-        else
-            call del_files('ppconv_part', p_master%nparts, ext='.bin')
-        endif
         call del_file('prime2D_startdoc.txt')
         call del_file('start2Drefs'//p_master%ext)
         ! end gracefully

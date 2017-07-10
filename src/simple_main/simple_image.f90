@@ -2482,7 +2482,7 @@ contains
         class(image), intent(inout) :: self
         real    :: centre(3), vec(3)
         integer :: i, j, k, alloc_stat
-        if( self%is_ft() ) stop 'real space only; simple_image%distsq_img'
+        if( self%is_ft() ) stop 'real space only; simple_image%cendist'
         ! Builds square distance image
         self   = 0.
         centre = real(self%ldim-1)/2.
