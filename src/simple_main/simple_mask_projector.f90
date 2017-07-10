@@ -1,4 +1,4 @@
-!>  \brief  SIMPLE projector class
+!>  \brief  SIMPLE class  mask projector
 module simple_mask_projector
 use simple_defs       ! use all in there
 use simple_image,     only: image
@@ -12,8 +12,9 @@ implicit none
 public :: mask_projector
 private
 #include "simple_local_flags.inc"
+
 real,    parameter :: MSKWIDTH = 10.                     !< HALF SOFT MASK WIDTH (+/-)
-integer, parameter :: NPROJS   = 200                     ! num of projectors
+integer, parameter :: NPROJS   = 200                     !< num of projectors
 
 
 type, extends(image) :: mask_projector
@@ -46,7 +47,7 @@ type, extends(image) :: mask_projector
     procedure, private :: bin_cavg
     ! 3D CALCULATORS
     procedure, private :: bin_vol
-    procedure, private :: env_rproject 
+    procedure, private :: env_rproject
     procedure, private :: build_3Dmsks
     ! MODIFIER
     procedure, private :: apply_mask2D
@@ -224,7 +225,7 @@ contains
         call img_pad%bwd_ft
         ! binarize within mask
         call img_pad%bin('msk', self%msk)
-        ! add one layer 
+        ! add one layer
         call img_pad%grow_bins(1)
         ! clip
         call img_pad%clip(img)
@@ -245,7 +246,7 @@ contains
         if( self%dens > 0. )then
             nnvox = nvoxfind(self%get_smpd(), self%mw, self%dens)
         else
-            nnvox = nvoxfind(self%get_smpd(), self%mw)     
+            nnvox = nvoxfind(self%get_smpd(), self%mw)
         endif
         nnvox = nint(1.1*real(nnvox))   ! this is to compensate for the low-pass filter
         ! binarize

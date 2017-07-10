@@ -1,3 +1,4 @@
+!> Simple optimisation module: DE optimisation
 module simple_de_opt
 use simple_defs
 use simple_optimizer, only: optimizer

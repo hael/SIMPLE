@@ -1,3 +1,4 @@
+!> simple module: image reconstruction
 module simple_rec_master
 use simple_defs
 use simple_build,     only: build

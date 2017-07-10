@@ -7,7 +7,7 @@ private
 type softmax_weights
     private
     integer           :: n
-    real              :: t=1. ! temperature factor, hardens the distribution close to 0
+    real              :: t=1. !< temperature factor, hardens the distribution close to 0
     real, allocatable :: w(:)
   contains
     procedure, private :: get_1

@@ -1,4 +1,4 @@
-!> simple_commander_volops
+!> Simple commander module: volume operations interface
 !
 !! This class contains the set of concrete volops (volume operations) commanders
 !! of the SIMPLE library. This class provides the glue between the reciver (main

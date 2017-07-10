@@ -1,5 +1,6 @@
+!-------------------------------
 !> simple_pair_dtab
-
+!--------------------------------
 module simple_pair_dtab
 use simple_jiffys, only: alloc_err
 implicit none

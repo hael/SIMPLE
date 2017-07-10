@@ -1,6 +1,4 @@
-!>  \brief  Class to deal with image files on disks
-!!
-!!  The following file formats are (will be) supported:!>  \brief  Class to deal with image files on disks
+!>  \brief Simple class to deal with image files on disks
 !!
 !!  The following file formats are (will be) supported:
 !!  - Imagic: http://imagescience.de/formats/index.htm
@@ -196,7 +194,7 @@ contains
                 DebugPrint  '(simple_imgfile::close) wrote overall_head'
             endif
             close(self%funit)
-            call flush(self%funit)
+            flush(self%funit)
         endif
         if( allocated(self%overall_head) ) call self%overall_head%kill
         if( allocated(self%overall_head) ) deallocate(self%overall_head)
@@ -210,7 +208,7 @@ contains
         integer :: ret
         if( is_open(self%funit) )then
             close(self%funit)
-            call flush(self%funit)
+            flush(self%funit)
         endif
         if( allocated(self%overall_head) ) call self%overall_head%kill
         if( allocated(self%overall_head) ) deallocate(self%overall_head)

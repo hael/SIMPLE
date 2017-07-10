@@ -1,3 +1,4 @@
+!> Simple filehandling class
 module simple_filehandling
 use simple_defs
 implicit none
@@ -7,8 +8,8 @@ interface arr2file
     module procedure arr2file_2
 end interface arr2file
 
-! Declare the interface for POSIX fsync function
 interface
+    !> Declare the interface for POSIX fsync function
     function fsync (fd) bind(c,name="fsync")
     use iso_c_binding, only: c_int
         integer(c_int), value :: fd
@@ -18,7 +19,7 @@ end interface
 
 contains
 
-    !> \brief  is for counting the number of lines in a textfile
+    !> \brief return the number of lines in a textfile
     function nlines( fname ) result( n )
         character(len=*), intent(in) :: fname
         integer          :: n, funit, ios
@@ -43,7 +44,7 @@ contains
         endif
     end function nlines
 
-    !> \brief  is returning the size of a binary file
+    !> \brief  return the size of a binary file
     function filelength( fname ) result( filesz )
         character(len=*), intent(in) :: fname
         integer                      :: filesz, funit, ios, cnt
@@ -71,7 +72,7 @@ contains
         endif
     end function filelength
 
-    !> \brief  is returning the record size of a binary file
+    !> \brief  return the record size of a binary file
     function reclength( fname, nentries ) result( recsz )
         character(len=*), intent(in) :: fname
         integer,          intent(in) :: nentries
@@ -79,7 +80,7 @@ contains
         recsz = filelength(fname)/nentries
     end function reclength
 
-    !> \brief   find file size in bytes
+    !> \brief  return file size in bytes
     function file_size(fname) result(sz)
         character(len=*), intent(in) :: fname
         integer(kind=8)              :: sz

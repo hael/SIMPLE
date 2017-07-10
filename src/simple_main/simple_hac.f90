@@ -1,4 +1,4 @@
-!> simple hierarchical clustering module
+!> Simple hierarchical clustering module
 !
 ! simple_hac is the SIMPLE class for hierarchical clustering. The code is 
 ! distributed with the hope that it will be useful, but _WITHOUT_ 

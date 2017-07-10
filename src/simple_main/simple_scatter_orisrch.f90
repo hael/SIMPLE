@@ -1,3 +1,4 @@
+!> Simple ori methods module: scatter orientation search 
 module simple_scatter_orisrch
 use simple_defs
 use simple_oris, only: oris

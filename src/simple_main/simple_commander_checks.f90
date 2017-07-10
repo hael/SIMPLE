@@ -1,4 +1,4 @@
-!> simple_commander_checks
+!> Simple commander module: check commander
 !! This class contains the set of concrete checks commanders of the SIMPLE
 !! library (used for checking image stack/volume parameters). This class
 !! provides the glue between the reciver (main reciever is simple_exec program)

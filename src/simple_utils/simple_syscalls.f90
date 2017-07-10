@@ -1,6 +1,6 @@
-!==Module simple_syscalls
+!> Simple system call module
 !
-! simple_syscalls is a little module for calculating the relative and actual CPU-time.
+!! simple_syscalls is a little module for using basic system functions e.g. CPU_time.
 ! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
 ! Redistribution or modification is regulated by the GNU General Public License.
 ! *Author:* Hans Elmlund, 2009-10-01.
@@ -188,6 +188,38 @@ contains
         call sleep(secs)
 #endif
     end subroutine simple_sleep
+
+    !>  Wrapper for system call
+    subroutine sys_stat( filename, buffer, status )
+#if defined(INTEL)
+        use ifport
+#endif
+        character(len=*),  intent(in) :: filename
+        integer,dimension(13), intent(inout) :: buffer
+        integer, intent(inout) :: status
+        character(len=STDLEN) :: cmsg
+        integer               :: estat, cstat, exec_stat
+        logical               :: doprint = .true.
+        logical exists
+#if defined(INTEL)
+        cmsg = ' failed to find '//trim(adjustl(filename))
+        inquire(FILE = trim(adjustl(filename)), IOMSG=cmsg, EXIST = exists )
+        if(exists)then
+            status = 0
+        else
+            status = -1
+        end if
+#else
+        call stat(trim(adjustl(filename)), buffer, status)
+        if( doprint )then
+            write(*,*) 'command: stat ', trim(adjustl(filename))
+            write(*,*) 'status of execution: ', status
+        endif
+        status = exec_stat
+#endif
+    end subroutine sys_stat
+
+    
 
     function waitforfileclose( funit )result( all_good )
         integer, intent(inout) :: funit

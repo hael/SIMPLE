@@ -1,3 +1,4 @@
+!> Simple image module: Time series tracker
 module simple_tseries_tracker
 !$ use omp_lib
 !$ use omp_lib_kinds

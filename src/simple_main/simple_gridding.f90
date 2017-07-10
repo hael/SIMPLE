@@ -1,3 +1,4 @@
+!> Simple image module: gridding utilities
 module simple_gridding
 use simple_defs        ! use all in there
 use simple_image,      only: image

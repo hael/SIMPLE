@@ -1,3 +1,4 @@
+!> Simple optimisation class - abstract factory module
 module simple_opt_factory
 use simple_optimizer,          only: optimizer
 use simple_opt_spec,           only: opt_spec
@@ -20,7 +21,7 @@ type :: opt_factory
   contains
     procedure :: new                   
     procedure :: kill
-end type
+end type opt_factory
 
 contains
 

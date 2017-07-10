@@ -1,4 +1,5 @@
 !>  \brief  SIMPLE polarft_corrcalc class
+
 module simple_polarft_corrcalc
 use simple_defs      ! use all in there
 use simple_params,   only: params

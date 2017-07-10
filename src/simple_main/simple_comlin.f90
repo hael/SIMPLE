@@ -1,4 +1,4 @@
-!> \brief Common line correlation module
+!> Simple image ops module: common-line correlation
 module simple_comlin
 use simple_defs    ! use all in there
 use simple_image,  only: image 

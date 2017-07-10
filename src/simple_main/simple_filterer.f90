@@ -13,8 +13,8 @@ contains
     !>  \brief input is template image, accumulative dose (in e/A2) and acceleration voltage
     !!         output is filter coefficients
     function acc_dose2filter( img, acc_dose, kV ) result( filter )
-        type(image), intent(in) :: img
-        real,        intent(in) :: acc_dose, kV
+        type(image), intent(in) :: img           !< imput image
+        real,        intent(in) :: acc_dose, kV  !< accumulative dose (in e/A2) and acceleration voltage
         real, allocatable       :: filter(:)
         integer :: find, sz
         sz = img%get_filtsz()
@@ -28,9 +28,11 @@ contains
     !!         output is resolution dependent weight applied to individual frames
     !!         before correlation search and averaging
     real function dose_weight( acc_dose, spat_freq, kV )
-        real, intent(in) :: acc_dose, spat_freq, kV
+        real, intent(in) :: acc_dose                !< accumulative dose (in e/A2)
+        real, intent(in) :: spat_freq               !< spatial frequency (in 1/A)
+        real, intent(in) :: kV                      !< accelleration voltage
         real, parameter  :: A=0.245, B=-1.665, C=2.81, kV_factor=0.75
-        real :: critical_exp ! critical exposure (only depends on spatial frequency)
+        real             :: critical_exp !< critical exposure (only depends on spatial frequency)
         critical_exp = A*(spat_freq**B)+C
         if( abs(kV-300.) < 0.001 )then
             ! critical exposure does not need modification
@@ -47,7 +49,7 @@ contains
     function resample_filter( filt_orig, res_orig, res_new ) result( filt_resamp )
         use simple_math, only: find
         real, intent(in)  :: filt_orig(:), res_orig(:), res_new(:)
-        real, allocatable :: filt_resamp(:)
+        real, allocatable :: filt_resamp(:)                 !< output filter array
         integer :: filtsz_orig, filtsz_resamp, k, ind
         real    :: dist
         filtsz_orig   = size(filt_orig)
@@ -66,16 +68,16 @@ contains
     subroutine wiener_restore2D( img_set, o_set, tfplan, img_rec, msk, shellw )
         use simple_oris,  only: oris
         use simple_ori,   only: ori
-        class(image),     intent(inout) :: img_set(:)
-        class(oris),      intent(inout) :: o_set
-        type(ctfplan),    intent(in)    :: tfplan
-        class(image),     intent(inout) :: img_rec
-        real,             intent(in)    :: msk
-        real, optional,   intent(in)    :: shellw(:,:)
+        class(image),     intent(inout) :: img_set(:) !< input images
+        class(oris),      intent(inout) :: o_set      !< set of oris objects
+        type(ctfplan),    intent(in)    :: tfplan     !< CTF plan 
+        class(image),     intent(inout) :: img_rec     !< reconstructed image
+        real,             intent(in)    :: msk         !< mask
+        real, optional,   intent(in)    :: shellw(:,:) !< weighted shell
         integer           :: ldim(3), ldim_pad(3), nimgs, iptcl
         type(ori)         :: o
         type(image)       :: ctfsqsum
-        real              :: smpd
+        real              :: smpd         !< sampling distance
         logical           :: doshellw
         if( o_set%get_noris() /= size(img_set) )&
         stop 'nr of imgs and oris not consistent; simple_filterer :: wiener_restore2D_1'
@@ -114,14 +116,14 @@ contains
         use simple_ori,            only: ori
         use simple_ctf,            only: ctf
         use simple_projector_hlev, only: rotimg
-        class(image),      intent(inout) :: img
-        class(ori),        intent(inout) :: o
-        type(ctfplan),     intent(in)    :: tfplan
-        class(image),      intent(inout) :: img_rec
-        class(image),      intent(inout) :: ctfsqsum
-        real,              intent(in)    :: msk
-        real,    optional, intent(in)    :: shellw(:)
-        logical, optional, intent(in)    :: add
+        class(image),      intent(inout) :: img       !< input image
+        class(ori),        intent(inout) :: o         !< ori object
+        type(ctfplan),     intent(in)    :: tfplan    !< CTF plan object
+        class(image),      intent(inout) :: img_rec   !< reconstructed image
+        class(image),      intent(inout) :: ctfsqsum  !< instrument CTF filter
+        real,              intent(in)    :: msk       !< mask
+        real,    optional, intent(in)    :: shellw(:) !< weighting shell
+        logical, optional, intent(in)    :: add       !< add or subtr  rotation and ctfsumsq
         type(image) :: roimg, ctfsq
         type(ctf)   :: tfun
         integer     :: ldim(3)

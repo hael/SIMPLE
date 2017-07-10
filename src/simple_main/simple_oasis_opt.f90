@@ -1,4 +1,4 @@
-!> simple_oasis_opt
+!> Simple optimisation module: oasis method
 !
 !! Minimization of an externally defined function by the OASIS method of Hans Elmlund.
 !! OASIS stands for Optimization by Adaptive Sampling around Important Solutions.

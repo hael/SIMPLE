@@ -1,4 +1,4 @@
-!==Module simple_rnd
+!> Simple random number generation module
 !
 ! simple_rnd contains routines for generation of random numbers. The code is distributed 
 ! with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_. Redistribution

@@ -1,4 +1,4 @@
-!> \brief Module for calculation of cartesian correlation matricies
+!> \brief Simple module for calculation of cartesian correlation matricies
 module simple_corrmat
 !$ use omp_lib
 !$ use omp_lib_kinds

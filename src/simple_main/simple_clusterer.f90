@@ -1,4 +1,4 @@
-!> Simple cluster oris module
+!> Simple orientation cluster module
 module simple_clusterer
 use simple_defs
 implicit none

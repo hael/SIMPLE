@@ -274,7 +274,7 @@ contains
             end do
             call self%reset2default
             if( present(ldim) )then
-                self%nx = ldim(1)  ! INTEL Error #6303: The assignment operation or the binary expression operation is invalid for the data types of the two operands.   [LDIM]
+                self%nx = INT( ldim(1) ) ! Intel warning
                 self%ny = ldim(2)
                 self%nz = ldim(3)
                 self%mx = ldim(1)
@@ -500,7 +500,7 @@ contains
                 self%iform = -22.
             else
                 stop 'undefined file type, setMinimal; simple_imghead'
-            endif
+            endif 
             self%irec = real(ldim(2), kind=4)+self%labrec ! Total number of records (including header records)
             ! in each image of a simple image or stacked image file
             self%sig = -1.         ! Standard deviation of data. A value of -1.0 or 0.0
@@ -599,7 +599,7 @@ contains
             write(*,'(a,1x,f7.0)') 'Micrograph window number:                                        ', self%num
             write(*,'(a,1x,f7.0)') 'Global image number:                                             ', self%glonum
             class DEFAULT
-            stop 'Format not supported; print; simle_imghead'
+            stop 'Format not supported; print; simple_imghead'
         end select
     end subroutine print_imghead
 

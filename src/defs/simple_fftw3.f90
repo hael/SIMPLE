@@ -59,7 +59,7 @@ module simple_fftw3
       integer(C_INT), value :: sign
       integer(C_INT), value :: flags
     end function fftw_plan_dft
-    
+
     type(C_PTR) function fftw_plan_dft_1d(n,in,out,sign,flags) bind(C, name='fftw_plan_dft_1d')
       import
       integer(C_INT), value :: n
@@ -68,7 +68,7 @@ module simple_fftw3
       integer(C_INT), value :: sign
       integer(C_INT), value :: flags
     end function fftw_plan_dft_1d
-    
+
     type(C_PTR) function fftw_plan_dft_2d(n0,n1,in,out,sign,flags) bind(C, name='fftw_plan_dft_2d')
       import
       integer(C_INT), value :: n0
@@ -78,7 +78,7 @@ module simple_fftw3
       integer(C_INT), value :: sign
       integer(C_INT), value :: flags
     end function fftw_plan_dft_2d
-    
+
     type(C_PTR) function fftw_plan_dft_3d(n0,n1,n2,in,out,sign,flags) bind(C, name='fftw_plan_dft_3d')
       import
       integer(C_INT), value :: n0
@@ -89,7 +89,7 @@ module simple_fftw3
       integer(C_INT), value :: sign
       integer(C_INT), value :: flags
     end function fftw_plan_dft_3d
-    
+
     type(C_PTR) function fftw_plan_many_dft(rank,n,howmany,in,inembed,istride,idist,out,onembed,ostride,odist,sign,flags) &
                          bind(C, name='fftw_plan_many_dft')
       import
@@ -107,7 +107,7 @@ module simple_fftw3
       integer(C_INT), value :: sign
       integer(C_INT), value :: flags
     end function fftw_plan_many_dft
-    
+
     type(C_PTR) function fftw_plan_guru_dft(rank,dims,howmany_rank,howmany_dims,in,out,sign,flags) &
                          bind(C, name='fftw_plan_guru_dft')
       import
@@ -120,7 +120,7 @@ module simple_fftw3
       integer(C_INT), value :: sign
       integer(C_INT), value :: flags
     end function fftw_plan_guru_dft
-    
+
     type(C_PTR) function fftw_plan_guru_split_dft(rank,dims,howmany_rank,howmany_dims,ri,ii,ro,io,flags) &
                          bind(C, name='fftw_plan_guru_split_dft')
       import
@@ -134,7 +134,7 @@ module simple_fftw3
       real(C_DOUBLE), dimension(*), intent(out) :: io
       integer(C_INT), value :: flags
     end function fftw_plan_guru_split_dft
-    
+
     type(C_PTR) function fftw_plan_guru64_dft(rank,dims,howmany_rank,howmany_dims,in,out,sign,flags) &
                          bind(C, name='fftw_plan_guru64_dft')
       import
@@ -147,7 +147,7 @@ module simple_fftw3
       integer(C_INT), value :: sign
       integer(C_INT), value :: flags
     end function fftw_plan_guru64_dft
-    
+
     type(C_PTR) function fftw_plan_guru64_split_dft(rank,dims,howmany_rank,howmany_dims,ri,ii,ro,io,flags) &
                          bind(C, name='fftw_plan_guru64_split_dft')
       import
@@ -161,14 +161,14 @@ module simple_fftw3
       real(C_DOUBLE), dimension(*), intent(out) :: io
       integer(C_INT), value :: flags
     end function fftw_plan_guru64_split_dft
-    
+
     subroutine fftw_execute_dft(p,in,out) bind(C, name='fftw_execute_dft')
       import
       type(C_PTR), value :: p
       complex(C_DOUBLE_COMPLEX), dimension(*), intent(inout) :: in
       complex(C_DOUBLE_COMPLEX), dimension(*), intent(out) :: out
     end subroutine fftw_execute_dft
-    
+
     subroutine fftw_execute_split_dft(p,ri,ii,ro,io) bind(C, name='fftw_execute_split_dft')
       import
       type(C_PTR), value :: p
@@ -177,7 +177,7 @@ module simple_fftw3
       real(C_DOUBLE), dimension(*), intent(out) :: ro
       real(C_DOUBLE), dimension(*), intent(out) :: io
     end subroutine fftw_execute_split_dft
-    
+
     type(C_PTR) function fftw_plan_many_dft_r2c(rank,n,howmany,in,inembed,istride,idist,out,onembed,ostride,odist,flags) &
                          bind(C, name='fftw_plan_many_dft_r2c')
       import
@@ -194,7 +194,7 @@ module simple_fftw3
       integer(C_INT), value :: odist
       integer(C_INT), value :: flags
     end function fftw_plan_many_dft_r2c
-    
+
     type(C_PTR) function fftw_plan_dft_r2c(rank,n,in,out,flags) bind(C, name='fftw_plan_dft_r2c')
       import
       integer(C_INT), value :: rank
@@ -203,7 +203,7 @@ module simple_fftw3
       complex(C_DOUBLE_COMPLEX), dimension(*), intent(out) :: out
       integer(C_INT), value :: flags
     end function fftw_plan_dft_r2c
-    
+
     type(C_PTR) function fftw_plan_dft_r2c_1d(n,in,out,flags) bind(C, name='fftw_plan_dft_r2c_1d')
       import
       integer(C_INT), value :: n
@@ -211,7 +211,7 @@ module simple_fftw3
       complex(C_DOUBLE_COMPLEX), dimension(*), intent(out) :: out
       integer(C_INT), value :: flags
     end function fftw_plan_dft_r2c_1d
-    
+
     type(C_PTR) function fftw_plan_dft_r2c_2d(n0,n1,in,out,flags) bind(C, name='fftw_plan_dft_r2c_2d')
       import
       integer(C_INT), value :: n0
@@ -220,7 +220,7 @@ module simple_fftw3
       complex(C_DOUBLE_COMPLEX), dimension(*), intent(out) :: out
       integer(C_INT), value :: flags
     end function fftw_plan_dft_r2c_2d
-    
+
     type(C_PTR) function fftw_plan_dft_r2c_3d(n0,n1,n2,in,out,flags) bind(C, name='fftw_plan_dft_r2c_3d')
       import
       integer(C_INT), value :: n0
@@ -230,7 +230,7 @@ module simple_fftw3
       complex(C_DOUBLE_COMPLEX), dimension(*), intent(out) :: out
       integer(C_INT), value :: flags
     end function fftw_plan_dft_r2c_3d
-    
+
     type(C_PTR) function fftw_plan_many_dft_c2r(rank,n,howmany,in,inembed,istride,idist,out,onembed,ostride,odist,flags) &
                          bind(C, name='fftw_plan_many_dft_c2r')
       import
@@ -247,7 +247,7 @@ module simple_fftw3
       integer(C_INT), value :: odist
       integer(C_INT), value :: flags
     end function fftw_plan_many_dft_c2r
-    
+
     type(C_PTR) function fftw_plan_dft_c2r(rank,n,in,out,flags) bind(C, name='fftw_plan_dft_c2r')
       import
       integer(C_INT), value :: rank
@@ -256,7 +256,7 @@ module simple_fftw3
       real(C_DOUBLE), dimension(*), intent(out) :: out
       integer(C_INT), value :: flags
     end function fftw_plan_dft_c2r
-    
+
     type(C_PTR) function fftw_plan_dft_c2r_1d(n,in,out,flags) bind(C, name='fftw_plan_dft_c2r_1d')
       import
       integer(C_INT), value :: n
@@ -264,7 +264,7 @@ module simple_fftw3
       real(C_DOUBLE), dimension(*), intent(out) :: out
       integer(C_INT), value :: flags
     end function fftw_plan_dft_c2r_1d
-    
+
     type(C_PTR) function fftw_plan_dft_c2r_2d(n0,n1,in,out,flags) bind(C, name='fftw_plan_dft_c2r_2d')
       import
       integer(C_INT), value :: n0
@@ -273,7 +273,7 @@ module simple_fftw3
       real(C_DOUBLE), dimension(*), intent(out) :: out
       integer(C_INT), value :: flags
     end function fftw_plan_dft_c2r_2d
-    
+
     type(C_PTR) function fftw_plan_dft_c2r_3d(n0,n1,n2,in,out,flags) bind(C, name='fftw_plan_dft_c2r_3d')
       import
       integer(C_INT), value :: n0
@@ -283,7 +283,7 @@ module simple_fftw3
       real(C_DOUBLE), dimension(*), intent(out) :: out
       integer(C_INT), value :: flags
     end function fftw_plan_dft_c2r_3d
-    
+
     type(C_PTR) function fftw_plan_guru_dft_r2c(rank,dims,howmany_rank,howmany_dims,in,out,flags) &
                          bind(C, name='fftw_plan_guru_dft_r2c')
       import
@@ -295,7 +295,7 @@ module simple_fftw3
       complex(C_DOUBLE_COMPLEX), dimension(*), intent(out) :: out
       integer(C_INT), value :: flags
     end function fftw_plan_guru_dft_r2c
-    
+
     type(C_PTR) function fftw_plan_guru_dft_c2r(rank,dims,howmany_rank,howmany_dims,in,out,flags) &
                          bind(C, name='fftw_plan_guru_dft_c2r')
       import
@@ -307,7 +307,7 @@ module simple_fftw3
       real(C_DOUBLE), dimension(*), intent(out) :: out
       integer(C_INT), value :: flags
     end function fftw_plan_guru_dft_c2r
-    
+
     type(C_PTR) function fftw_plan_guru_split_dft_r2c(rank,dims,howmany_rank,howmany_dims,in,ro,io,flags) &
                          bind(C, name='fftw_plan_guru_split_dft_r2c')
       import
@@ -320,7 +320,7 @@ module simple_fftw3
       real(C_DOUBLE), dimension(*), intent(out) :: io
       integer(C_INT), value :: flags
     end function fftw_plan_guru_split_dft_r2c
-    
+
     type(C_PTR) function fftw_plan_guru_split_dft_c2r(rank,dims,howmany_rank,howmany_dims,ri,ii,out,flags) &
                          bind(C, name='fftw_plan_guru_split_dft_c2r')
       import
@@ -333,7 +333,7 @@ module simple_fftw3
       real(C_DOUBLE), dimension(*), intent(out) :: out
       integer(C_INT), value :: flags
     end function fftw_plan_guru_split_dft_c2r
-    
+
     type(C_PTR) function fftw_plan_guru64_dft_r2c(rank,dims,howmany_rank,howmany_dims,in,out,flags) &
                          bind(C, name='fftw_plan_guru64_dft_r2c')
       import
@@ -345,7 +345,7 @@ module simple_fftw3
       complex(C_DOUBLE_COMPLEX), dimension(*), intent(out) :: out
       integer(C_INT), value :: flags
     end function fftw_plan_guru64_dft_r2c
-    
+
     type(C_PTR) function fftw_plan_guru64_dft_c2r(rank,dims,howmany_rank,howmany_dims,in,out,flags) &
                          bind(C, name='fftw_plan_guru64_dft_c2r')
       import
@@ -357,7 +357,7 @@ module simple_fftw3
       real(C_DOUBLE), dimension(*), intent(out) :: out
       integer(C_INT), value :: flags
     end function fftw_plan_guru64_dft_c2r
-    
+
     type(C_PTR) function fftw_plan_guru64_split_dft_r2c(rank,dims,howmany_rank,howmany_dims,in,ro,io,flags) &
                          bind(C, name='fftw_plan_guru64_split_dft_r2c')
       import
@@ -370,7 +370,7 @@ module simple_fftw3
       real(C_DOUBLE), dimension(*), intent(out) :: io
       integer(C_INT), value :: flags
     end function fftw_plan_guru64_split_dft_r2c
-    
+
     type(C_PTR) function fftw_plan_guru64_split_dft_c2r(rank,dims,howmany_rank,howmany_dims,ri,ii,out,flags) &
                          bind(C, name='fftw_plan_guru64_split_dft_c2r')
       import
@@ -383,21 +383,21 @@ module simple_fftw3
       real(C_DOUBLE), dimension(*), intent(out) :: out
       integer(C_INT), value :: flags
     end function fftw_plan_guru64_split_dft_c2r
-    
+
     subroutine fftw_execute_dft_r2c(p,in,out) bind(C, name='fftw_execute_dft_r2c')
       import
       type(C_PTR), value :: p
       real(C_DOUBLE), dimension(*), intent(inout) :: in
       complex(C_DOUBLE_COMPLEX), dimension(*), intent(out) :: out
     end subroutine fftw_execute_dft_r2c
-    
+
     subroutine fftw_execute_dft_c2r(p,in,out) bind(C, name='fftw_execute_dft_c2r')
       import
       type(C_PTR), value :: p
       complex(C_DOUBLE_COMPLEX), dimension(*), intent(inout) :: in
       real(C_DOUBLE), dimension(*), intent(out) :: out
     end subroutine fftw_execute_dft_c2r
-    
+
     subroutine fftw_execute_split_dft_r2c(p,in,ro,io) bind(C, name='fftw_execute_split_dft_r2c')
       import
       type(C_PTR), value :: p
@@ -405,7 +405,7 @@ module simple_fftw3
       real(C_DOUBLE), dimension(*), intent(out) :: ro
       real(C_DOUBLE), dimension(*), intent(out) :: io
     end subroutine fftw_execute_split_dft_r2c
-    
+
     subroutine fftw_execute_split_dft_c2r(p,ri,ii,out) bind(C, name='fftw_execute_split_dft_c2r')
       import
       type(C_PTR), value :: p
@@ -413,7 +413,7 @@ module simple_fftw3
       real(C_DOUBLE), dimension(*), intent(inout) :: ii
       real(C_DOUBLE), dimension(*), intent(out) :: out
     end subroutine fftw_execute_split_dft_c2r
-    
+
     type(C_PTR) function fftw_plan_many_r2r(rank,n,howmany,in,inembed,istride,idist,out,onembed,ostride,odist,kind,flags) &
                          bind(C, name='fftw_plan_many_r2r')
       import
@@ -431,7 +431,7 @@ module simple_fftw3
       integer(C_FFTW_R2R_KIND), dimension(*), intent(in) :: kind
       integer(C_INT), value :: flags
     end function fftw_plan_many_r2r
-    
+
     type(C_PTR) function fftw_plan_r2r(rank,n,in,out,kind,flags) bind(C, name='fftw_plan_r2r')
       import
       integer(C_INT), value :: rank
@@ -441,7 +441,7 @@ module simple_fftw3
       integer(C_FFTW_R2R_KIND), dimension(*), intent(in) :: kind
       integer(C_INT), value :: flags
     end function fftw_plan_r2r
-    
+
     type(C_PTR) function fftw_plan_r2r_1d(n,in,out,kind,flags) bind(C, name='fftw_plan_r2r_1d')
       import
       integer(C_INT), value :: n
@@ -450,7 +450,7 @@ module simple_fftw3
       integer(C_FFTW_R2R_KIND), value :: kind
       integer(C_INT), value :: flags
     end function fftw_plan_r2r_1d
-    
+
     type(C_PTR) function fftw_plan_r2r_2d(n0,n1,in,out,kind0,kind1,flags) bind(C, name='fftw_plan_r2r_2d')
       import
       integer(C_INT), value :: n0
@@ -461,7 +461,7 @@ module simple_fftw3
       integer(C_FFTW_R2R_KIND), value :: kind1
       integer(C_INT), value :: flags
     end function fftw_plan_r2r_2d
-    
+
     type(C_PTR) function fftw_plan_r2r_3d(n0,n1,n2,in,out,kind0,kind1,kind2,flags) bind(C, name='fftw_plan_r2r_3d')
       import
       integer(C_INT), value :: n0
@@ -474,7 +474,7 @@ module simple_fftw3
       integer(C_FFTW_R2R_KIND), value :: kind2
       integer(C_INT), value :: flags
     end function fftw_plan_r2r_3d
-    
+
     type(C_PTR) function fftw_plan_guru_r2r(rank,dims,howmany_rank,howmany_dims,in,out,kind,flags) &
                          bind(C, name='fftw_plan_guru_r2r')
       import
@@ -487,7 +487,7 @@ module simple_fftw3
       integer(C_FFTW_R2R_KIND), dimension(*), intent(in) :: kind
       integer(C_INT), value :: flags
     end function fftw_plan_guru_r2r
-    
+
     type(C_PTR) function fftw_plan_guru64_r2r(rank,dims,howmany_rank,howmany_dims,in,out,kind,flags) &
                          bind(C, name='fftw_plan_guru64_r2r')
       import
@@ -500,121 +500,126 @@ module simple_fftw3
       integer(C_FFTW_R2R_KIND), dimension(*), intent(in) :: kind
       integer(C_INT), value :: flags
     end function fftw_plan_guru64_r2r
-    
+
     subroutine fftw_execute_r2r(p,in,out) bind(C, name='fftw_execute_r2r')
       import
       type(C_PTR), value :: p
       real(C_DOUBLE), dimension(*), intent(inout) :: in
       real(C_DOUBLE), dimension(*), intent(out) :: out
     end subroutine fftw_execute_r2r
-    
+
     subroutine fftw_destroy_plan(p) bind(C, name='fftw_destroy_plan')
       import
       type(C_PTR), value :: p
     end subroutine fftw_destroy_plan
-    
+
     subroutine fftw_forget_wisdom() bind(C, name='fftw_forget_wisdom')
       import
     end subroutine fftw_forget_wisdom
-    
+
     subroutine fftw_cleanup() bind(C, name='fftw_cleanup')
       import
     end subroutine fftw_cleanup
-    
+
     subroutine fftw_set_timelimit(t) bind(C, name='fftw_set_timelimit')
       import
       real(C_DOUBLE), value :: t
     end subroutine fftw_set_timelimit
-    
+
     subroutine fftw_plan_with_nthreads(nthreads) bind(C, name='fftw_plan_with_nthreads')
       import
       integer(C_INT), value :: nthreads
     end subroutine fftw_plan_with_nthreads
-    
+
     integer(C_INT) function fftw_init_threads() bind(C, name='fftw_init_threads')
       import
     end function fftw_init_threads
-    
+
     subroutine fftw_cleanup_threads() bind(C, name='fftw_cleanup_threads')
       import
     end subroutine fftw_cleanup_threads
-    
+
     integer(C_INT) function fftw_export_wisdom_to_filename(filename) bind(C, name='fftw_export_wisdom_to_filename')
       import
       character(C_CHAR), dimension(*), intent(in) :: filename
     end function fftw_export_wisdom_to_filename
-    
+
     subroutine fftw_export_wisdom_to_file(output_file) bind(C, name='fftw_export_wisdom_to_file')
       import
       type(C_PTR), value :: output_file
     end subroutine fftw_export_wisdom_to_file
-    
+
     type(C_PTR) function fftw_export_wisdom_to_string() bind(C, name='fftw_export_wisdom_to_string')
       import
     end function fftw_export_wisdom_to_string
-    
+
     subroutine fftw_export_wisdom(write_char,data) bind(C, name='fftw_export_wisdom')
       import
       type(C_FUNPTR), value :: write_char
       type(C_PTR), value :: data
     end subroutine fftw_export_wisdom
-    
+
     integer(C_INT) function fftw_import_system_wisdom() bind(C, name='fftw_import_system_wisdom')
       import
     end function fftw_import_system_wisdom
-    
+
     integer(C_INT) function fftw_import_wisdom_from_filename(filename) bind(C, name='fftw_import_wisdom_from_filename')
       import
       character(C_CHAR), dimension(*), intent(in) :: filename
     end function fftw_import_wisdom_from_filename
-    
+
     integer(C_INT) function fftw_import_wisdom_from_file(input_file) bind(C, name='fftw_import_wisdom_from_file')
       import
       type(C_PTR), value :: input_file
     end function fftw_import_wisdom_from_file
-    
+
     integer(C_INT) function fftw_import_wisdom_from_string(input_string) bind(C, name='fftw_import_wisdom_from_string')
       import
       character(C_CHAR), dimension(*), intent(in) :: input_string
     end function fftw_import_wisdom_from_string
-    
+
     integer(C_INT) function fftw_import_wisdom(read_char,data) bind(C, name='fftw_import_wisdom')
       import
       type(C_FUNPTR), value :: read_char
       type(C_PTR), value :: data
     end function fftw_import_wisdom
-    
+
     subroutine fftw_fprint_plan(p,output_file) bind(C, name='fftw_fprint_plan')
       import
       type(C_PTR), value :: p
       type(C_PTR), value :: output_file
     end subroutine fftw_fprint_plan
-    
+
     subroutine fftw_print_plan(p) bind(C, name='fftw_print_plan')
       import
       type(C_PTR), value :: p
     end subroutine fftw_print_plan
-    
+
+    type(C_PTR) function fftw_sprint_plan(p) bind(C, name='fftw_sprint_plan')
+      import
+      type(C_PTR), value :: p
+    end function fftw_sprint_plan
+
     type(C_PTR) function fftw_malloc(n) bind(C, name='fftw_malloc')
       import
       integer(C_SIZE_T), value :: n
     end function fftw_malloc
-    
+
     type(C_PTR) function fftw_alloc_real(n) bind(C, name='fftw_alloc_real')
       import
       integer(C_SIZE_T), value :: n
     end function fftw_alloc_real
-    
+
     type(C_PTR) function fftw_alloc_complex(n) bind(C, name='fftw_alloc_complex')
       import
       integer(C_SIZE_T), value :: n
     end function fftw_alloc_complex
-    
+
     subroutine fftw_free(p) bind(C, name='fftw_free')
       import
       type(C_PTR), value :: p
     end subroutine fftw_free
-    
+
     subroutine fftw_flops(p,add,mul,fmas) bind(C, name='fftw_flops')
       import
       type(C_PTR), value :: p
@@ -622,17 +627,22 @@ module simple_fftw3
       real(C_DOUBLE), intent(out) :: mul
       real(C_DOUBLE), intent(out) :: fmas
     end subroutine fftw_flops
-    
+
     real(C_DOUBLE) function fftw_estimate_cost(p) bind(C, name='fftw_estimate_cost')
       import
       type(C_PTR), value :: p
     end function fftw_estimate_cost
-    
+
     real(C_DOUBLE) function fftw_cost(p) bind(C, name='fftw_cost')
       import
       type(C_PTR), value :: p
     end function fftw_cost
-    
+
+    integer(C_INT) function fftw_alignment_of(p) bind(C, name='fftw_alignment_of')
+      import
+      real(C_DOUBLE), dimension(*), intent(out) :: p
+    end function fftw_alignment_of
+
   end interface
 
   type, bind(C) :: fftwf_iodim
@@ -652,7 +662,7 @@ module simple_fftw3
       integer(C_INT), value :: sign
       integer(C_INT), value :: flags
     end function fftwf_plan_dft
-    
+
     type(C_PTR) function fftwf_plan_dft_1d(n,in,out,sign,flags) bind(C, name='fftwf_plan_dft_1d')
       import
       integer(C_INT), value :: n
@@ -661,7 +671,7 @@ module simple_fftw3
       integer(C_INT), value :: sign
       integer(C_INT), value :: flags
     end function fftwf_plan_dft_1d
-    
+
     type(C_PTR) function fftwf_plan_dft_2d(n0,n1,in,out,sign,flags) bind(C, name='fftwf_plan_dft_2d')
       import
       integer(C_INT), value :: n0
@@ -671,7 +681,7 @@ module simple_fftw3
       integer(C_INT), value :: sign
       integer(C_INT), value :: flags
     end function fftwf_plan_dft_2d
-    
+
     type(C_PTR) function fftwf_plan_dft_3d(n0,n1,n2,in,out,sign,flags) bind(C, name='fftwf_plan_dft_3d')
       import
       integer(C_INT), value :: n0
@@ -682,7 +692,7 @@ module simple_fftw3
       integer(C_INT), value :: sign
       integer(C_INT), value :: flags
     end function fftwf_plan_dft_3d
-    
+
     type(C_PTR) function fftwf_plan_many_dft(rank,n,howmany,in,inembed,istride,idist,out,onembed,ostride,odist,sign,flags) &
                          bind(C, name='fftwf_plan_many_dft')
       import
@@ -700,7 +710,7 @@ module simple_fftw3
       integer(C_INT), value :: sign
       integer(C_INT), value :: flags
     end function fftwf_plan_many_dft
-    
+
     type(C_PTR) function fftwf_plan_guru_dft(rank,dims,howmany_rank,howmany_dims,in,out,sign,flags) &
                          bind(C, name='fftwf_plan_guru_dft')
       import
@@ -713,7 +723,7 @@ module simple_fftw3
       integer(C_INT), value :: sign
       integer(C_INT), value :: flags
     end function fftwf_plan_guru_dft
-    
+
     type(C_PTR) function fftwf_plan_guru_split_dft(rank,dims,howmany_rank,howmany_dims,ri,ii,ro,io,flags) &
                          bind(C, name='fftwf_plan_guru_split_dft')
       import
@@ -727,7 +737,7 @@ module simple_fftw3
       real(C_FLOAT), dimension(*), intent(out) :: io
       integer(C_INT), value :: flags
     end function fftwf_plan_guru_split_dft
-    
+
     type(C_PTR) function fftwf_plan_guru64_dft(rank,dims,howmany_rank,howmany_dims,in,out,sign,flags) &
                          bind(C, name='fftwf_plan_guru64_dft')
       import
@@ -740,7 +750,7 @@ module simple_fftw3
       integer(C_INT), value :: sign
       integer(C_INT), value :: flags
     end function fftwf_plan_guru64_dft
-    
+
     type(C_PTR) function fftwf_plan_guru64_split_dft(rank,dims,howmany_rank,howmany_dims,ri,ii,ro,io,flags) &
                          bind(C, name='fftwf_plan_guru64_split_dft')
       import
@@ -754,14 +764,14 @@ module simple_fftw3
       real(C_FLOAT), dimension(*), intent(out) :: io
       integer(C_INT), value :: flags
     end function fftwf_plan_guru64_split_dft
-    
+
     subroutine fftwf_execute_dft(p,in,out) bind(C, name='fftwf_execute_dft')
       import
       type(C_PTR), value :: p
       complex(C_FLOAT_COMPLEX), dimension(*), intent(inout) :: in
       complex(C_FLOAT_COMPLEX), dimension(*), intent(out) :: out
     end subroutine fftwf_execute_dft
-    
+
     subroutine fftwf_execute_split_dft(p,ri,ii,ro,io) bind(C, name='fftwf_execute_split_dft')
       import
       type(C_PTR), value :: p
@@ -770,7 +780,7 @@ module simple_fftw3
       real(C_FLOAT), dimension(*), intent(out) :: ro
       real(C_FLOAT), dimension(*), intent(out) :: io
     end subroutine fftwf_execute_split_dft
-    
+
     type(C_PTR) function fftwf_plan_many_dft_r2c(rank,n,howmany,in,inembed,istride,idist,out,onembed,ostride,odist,flags) &
                          bind(C, name='fftwf_plan_many_dft_r2c')
       import
@@ -787,7 +797,7 @@ module simple_fftw3
       integer(C_INT), value :: odist
       integer(C_INT), value :: flags
     end function fftwf_plan_many_dft_r2c
-    
+
     type(C_PTR) function fftwf_plan_dft_r2c(rank,n,in,out,flags) bind(C, name='fftwf_plan_dft_r2c')
       import
       integer(C_INT), value :: rank
@@ -796,7 +806,7 @@ module simple_fftw3
       complex(C_FLOAT_COMPLEX), dimension(*), intent(out) :: out
       integer(C_INT), value :: flags
     end function fftwf_plan_dft_r2c
-    
+
     type(C_PTR) function fftwf_plan_dft_r2c_1d(n,in,out,flags) bind(C, name='fftwf_plan_dft_r2c_1d')
       import
       integer(C_INT), value :: n
@@ -804,7 +814,7 @@ module simple_fftw3
       complex(C_FLOAT_COMPLEX), dimension(*), intent(out) :: out
       integer(C_INT), value :: flags
     end function fftwf_plan_dft_r2c_1d
-    
+
     type(C_PTR) function fftwf_plan_dft_r2c_2d(n0,n1,in,out,flags) bind(C, name='fftwf_plan_dft_r2c_2d')
       import
       integer(C_INT), value :: n0
@@ -813,7 +823,7 @@ module simple_fftw3
       complex(C_FLOAT_COMPLEX), dimension(*), intent(out) :: out
       integer(C_INT), value :: flags
     end function fftwf_plan_dft_r2c_2d
-    
+
     type(C_PTR) function fftwf_plan_dft_r2c_3d(n0,n1,n2,in,out,flags) bind(C, name='fftwf_plan_dft_r2c_3d')
       import
       integer(C_INT), value :: n0
@@ -823,7 +833,7 @@ module simple_fftw3
       complex(C_FLOAT_COMPLEX), dimension(*), intent(out) :: out
       integer(C_INT), value :: flags
     end function fftwf_plan_dft_r2c_3d
-    
+
     type(C_PTR) function fftwf_plan_many_dft_c2r(rank,n,howmany,in,inembed,istride,idist,out,onembed,ostride,odist,flags) &
                          bind(C, name='fftwf_plan_many_dft_c2r')
       import
@@ -840,7 +850,7 @@ module simple_fftw3
       integer(C_INT), value :: odist
       integer(C_INT), value :: flags
     end function fftwf_plan_many_dft_c2r
-    
+
     type(C_PTR) function fftwf_plan_dft_c2r(rank,n,in,out,flags) bind(C, name='fftwf_plan_dft_c2r')
       import
       integer(C_INT), value :: rank
@@ -849,7 +859,7 @@ module simple_fftw3
       real(C_FLOAT), dimension(*), intent(out) :: out
       integer(C_INT), value :: flags
     end function fftwf_plan_dft_c2r
-    
+
     type(C_PTR) function fftwf_plan_dft_c2r_1d(n,in,out,flags) bind(C, name='fftwf_plan_dft_c2r_1d')
       import
       integer(C_INT), value :: n
@@ -857,7 +867,7 @@ module simple_fftw3
       real(C_FLOAT), dimension(*), intent(out) :: out
       integer(C_INT), value :: flags
     end function fftwf_plan_dft_c2r_1d
-    
+
     type(C_PTR) function fftwf_plan_dft_c2r_2d(n0,n1,in,out,flags) bind(C, name='fftwf_plan_dft_c2r_2d')
       import
       integer(C_INT), value :: n0
@@ -866,7 +876,7 @@ module simple_fftw3
       real(C_FLOAT), dimension(*), intent(out) :: out
       integer(C_INT), value :: flags
     end function fftwf_plan_dft_c2r_2d
-    
+
     type(C_PTR) function fftwf_plan_dft_c2r_3d(n0,n1,n2,in,out,flags) bind(C, name='fftwf_plan_dft_c2r_3d')
       import
       integer(C_INT), value :: n0
@@ -876,7 +886,7 @@ module simple_fftw3
       real(C_FLOAT), dimension(*), intent(out) :: out
       integer(C_INT), value :: flags
     end function fftwf_plan_dft_c2r_3d
-    
+
     type(C_PTR) function fftwf_plan_guru_dft_r2c(rank,dims,howmany_rank,howmany_dims,in,out,flags) &
                          bind(C, name='fftwf_plan_guru_dft_r2c')
       import
@@ -888,7 +898,7 @@ module simple_fftw3
       complex(C_FLOAT_COMPLEX), dimension(*), intent(out) :: out
       integer(C_INT), value :: flags
     end function fftwf_plan_guru_dft_r2c
-    
+
     type(C_PTR) function fftwf_plan_guru_dft_c2r(rank,dims,howmany_rank,howmany_dims,in,out,flags) &
                          bind(C, name='fftwf_plan_guru_dft_c2r')
       import
@@ -900,7 +910,7 @@ module simple_fftw3
       real(C_FLOAT), dimension(*), intent(out) :: out
       integer(C_INT), value :: flags
     end function fftwf_plan_guru_dft_c2r
-    
+
     type(C_PTR) function fftwf_plan_guru_split_dft_r2c(rank,dims,howmany_rank,howmany_dims,in,ro,io,flags) &
                          bind(C, name='fftwf_plan_guru_split_dft_r2c')
       import
@@ -913,7 +923,7 @@ module simple_fftw3
       real(C_FLOAT), dimension(*), intent(out) :: io
       integer(C_INT), value :: flags
     end function fftwf_plan_guru_split_dft_r2c
-    
+
     type(C_PTR) function fftwf_plan_guru_split_dft_c2r(rank,dims,howmany_rank,howmany_dims,ri,ii,out,flags) &
                          bind(C, name='fftwf_plan_guru_split_dft_c2r')
       import
@@ -926,7 +936,7 @@ module simple_fftw3
       real(C_FLOAT), dimension(*), intent(out) :: out
       integer(C_INT), value :: flags
     end function fftwf_plan_guru_split_dft_c2r
-    
+
     type(C_PTR) function fftwf_plan_guru64_dft_r2c(rank,dims,howmany_rank,howmany_dims,in,out,flags) &
                          bind(C, name='fftwf_plan_guru64_dft_r2c')
       import
@@ -938,7 +948,7 @@ module simple_fftw3
       complex(C_FLOAT_COMPLEX), dimension(*), intent(out) :: out
       integer(C_INT), value :: flags
     end function fftwf_plan_guru64_dft_r2c
-    
+
     type(C_PTR) function fftwf_plan_guru64_dft_c2r(rank,dims,howmany_rank,howmany_dims,in,out,flags) &
                          bind(C, name='fftwf_plan_guru64_dft_c2r')
       import
@@ -950,7 +960,7 @@ module simple_fftw3
       real(C_FLOAT), dimension(*), intent(out) :: out
       integer(C_INT), value :: flags
     end function fftwf_plan_guru64_dft_c2r
-    
+
     type(C_PTR) function fftwf_plan_guru64_split_dft_r2c(rank,dims,howmany_rank,howmany_dims,in,ro,io,flags) &
                          bind(C, name='fftwf_plan_guru64_split_dft_r2c')
       import
@@ -963,7 +973,7 @@ module simple_fftw3
       real(C_FLOAT), dimension(*), intent(out) :: io
       integer(C_INT), value :: flags
     end function fftwf_plan_guru64_split_dft_r2c
-    
+
     type(C_PTR) function fftwf_plan_guru64_split_dft_c2r(rank,dims,howmany_rank,howmany_dims,ri,ii,out,flags) &
                          bind(C, name='fftwf_plan_guru64_split_dft_c2r')
       import
@@ -976,21 +986,21 @@ module simple_fftw3
       real(C_FLOAT), dimension(*), intent(out) :: out
       integer(C_INT), value :: flags
     end function fftwf_plan_guru64_split_dft_c2r
-    
+
     subroutine fftwf_execute_dft_r2c(p,in,out) bind(C, name='fftwf_execute_dft_r2c')
       import
       type(C_PTR), value :: p
       real(C_FLOAT), dimension(*), intent(inout) :: in
       complex(C_FLOAT_COMPLEX), dimension(*), intent(out) :: out
     end subroutine fftwf_execute_dft_r2c
-    
+
     subroutine fftwf_execute_dft_c2r(p,in,out) bind(C, name='fftwf_execute_dft_c2r')
       import
       type(C_PTR), value :: p
       complex(C_FLOAT_COMPLEX), dimension(*), intent(inout) :: in
       real(C_FLOAT), dimension(*), intent(out) :: out
     end subroutine fftwf_execute_dft_c2r
-    
+
     subroutine fftwf_execute_split_dft_r2c(p,in,ro,io) bind(C, name='fftwf_execute_split_dft_r2c')
       import
       type(C_PTR), value :: p
@@ -998,7 +1008,7 @@ module simple_fftw3
       real(C_FLOAT), dimension(*), intent(out) :: ro
       real(C_FLOAT), dimension(*), intent(out) :: io
     end subroutine fftwf_execute_split_dft_r2c
-    
+
     subroutine fftwf_execute_split_dft_c2r(p,ri,ii,out) bind(C, name='fftwf_execute_split_dft_c2r')
       import
       type(C_PTR), value :: p
@@ -1006,7 +1016,7 @@ module simple_fftw3
       real(C_FLOAT), dimension(*), intent(inout) :: ii
       real(C_FLOAT), dimension(*), intent(out) :: out
     end subroutine fftwf_execute_split_dft_c2r
-    
+
     type(C_PTR) function fftwf_plan_many_r2r(rank,n,howmany,in,inembed,istride,idist,out,onembed,ostride,odist,kind,flags) &
                          bind(C, name='fftwf_plan_many_r2r')
       import
@@ -1024,7 +1034,7 @@ module simple_fftw3
       integer(C_FFTW_R2R_KIND), dimension(*), intent(in) :: kind
       integer(C_INT), value :: flags
     end function fftwf_plan_many_r2r
-    
+
     type(C_PTR) function fftwf_plan_r2r(rank,n,in,out,kind,flags) bind(C, name='fftwf_plan_r2r')
       import
       integer(C_INT), value :: rank
@@ -1034,7 +1044,7 @@ module simple_fftw3
       integer(C_FFTW_R2R_KIND), dimension(*), intent(in) :: kind
       integer(C_INT), value :: flags
     end function fftwf_plan_r2r
-    
+
     type(C_PTR) function fftwf_plan_r2r_1d(n,in,out,kind,flags) bind(C, name='fftwf_plan_r2r_1d')
       import
       integer(C_INT), value :: n
@@ -1043,7 +1053,7 @@ module simple_fftw3
       integer(C_FFTW_R2R_KIND), value :: kind
       integer(C_INT), value :: flags
     end function fftwf_plan_r2r_1d
-    
+
     type(C_PTR) function fftwf_plan_r2r_2d(n0,n1,in,out,kind0,kind1,flags) bind(C, name='fftwf_plan_r2r_2d')
       import
       integer(C_INT), value :: n0
@@ -1054,7 +1064,7 @@ module simple_fftw3
       integer(C_FFTW_R2R_KIND), value :: kind1
       integer(C_INT), value :: flags
     end function fftwf_plan_r2r_2d
-    
+
     type(C_PTR) function fftwf_plan_r2r_3d(n0,n1,n2,in,out,kind0,kind1,kind2,flags) bind(C, name='fftwf_plan_r2r_3d')
       import
       integer(C_INT), value :: n0
@@ -1067,7 +1077,7 @@ module simple_fftw3
       integer(C_FFTW_R2R_KIND), value :: kind2
       integer(C_INT), value :: flags
     end function fftwf_plan_r2r_3d
-    
+
     type(C_PTR) function fftwf_plan_guru_r2r(rank,dims,howmany_rank,howmany_dims,in,out,kind,flags) &
                          bind(C, name='fftwf_plan_guru_r2r')
       import
@@ -1080,7 +1090,7 @@ module simple_fftw3
       integer(C_FFTW_R2R_KIND), dimension(*), intent(in) :: kind
       integer(C_INT), value :: flags
     end function fftwf_plan_guru_r2r
-    
+
     type(C_PTR) function fftwf_plan_guru64_r2r(rank,dims,howmany_rank,howmany_dims,in,out,kind,flags) &
                          bind(C, name='fftwf_plan_guru64_r2r')
       import
@@ -1093,121 +1103,126 @@ module simple_fftw3
       integer(C_FFTW_R2R_KIND), dimension(*), intent(in) :: kind
       integer(C_INT), value :: flags
     end function fftwf_plan_guru64_r2r
-    
+
     subroutine fftwf_execute_r2r(p,in,out) bind(C, name='fftwf_execute_r2r')
       import
       type(C_PTR), value :: p
       real(C_FLOAT), dimension(*), intent(inout) :: in
       real(C_FLOAT), dimension(*), intent(out) :: out
     end subroutine fftwf_execute_r2r
-    
+
     subroutine fftwf_destroy_plan(p) bind(C, name='fftwf_destroy_plan')
       import
       type(C_PTR), value :: p
     end subroutine fftwf_destroy_plan
-    
+
     subroutine fftwf_forget_wisdom() bind(C, name='fftwf_forget_wisdom')
       import
     end subroutine fftwf_forget_wisdom
-    
+
     subroutine fftwf_cleanup() bind(C, name='fftwf_cleanup')
       import
     end subroutine fftwf_cleanup
-    
+
     subroutine fftwf_set_timelimit(t) bind(C, name='fftwf_set_timelimit')
       import
       real(C_DOUBLE), value :: t
     end subroutine fftwf_set_timelimit
-    
+
     subroutine fftwf_plan_with_nthreads(nthreads) bind(C, name='fftwf_plan_with_nthreads')
       import
       integer(C_INT), value :: nthreads
     end subroutine fftwf_plan_with_nthreads
-    
+
     integer(C_INT) function fftwf_init_threads() bind(C, name='fftwf_init_threads')
       import
     end function fftwf_init_threads
-    
+
     subroutine fftwf_cleanup_threads() bind(C, name='fftwf_cleanup_threads')
       import
     end subroutine fftwf_cleanup_threads
-    
+
     integer(C_INT) function fftwf_export_wisdom_to_filename(filename) bind(C, name='fftwf_export_wisdom_to_filename')
       import
       character(C_CHAR), dimension(*), intent(in) :: filename
     end function fftwf_export_wisdom_to_filename
-    
+
     subroutine fftwf_export_wisdom_to_file(output_file) bind(C, name='fftwf_export_wisdom_to_file')
       import
       type(C_PTR), value :: output_file
     end subroutine fftwf_export_wisdom_to_file
-    
+
     type(C_PTR) function fftwf_export_wisdom_to_string() bind(C, name='fftwf_export_wisdom_to_string')
       import
     end function fftwf_export_wisdom_to_string
-    
+
     subroutine fftwf_export_wisdom(write_char,data) bind(C, name='fftwf_export_wisdom')
       import
       type(C_FUNPTR), value :: write_char
       type(C_PTR), value :: data
     end subroutine fftwf_export_wisdom
-    
+
     integer(C_INT) function fftwf_import_system_wisdom() bind(C, name='fftwf_import_system_wisdom')
       import
     end function fftwf_import_system_wisdom
-    
+
     integer(C_INT) function fftwf_import_wisdom_from_filename(filename) bind(C, name='fftwf_import_wisdom_from_filename')
       import
       character(C_CHAR), dimension(*), intent(in) :: filename
     end function fftwf_import_wisdom_from_filename
-    
+
     integer(C_INT) function fftwf_import_wisdom_from_file(input_file) bind(C, name='fftwf_import_wisdom_from_file')
       import
       type(C_PTR), value :: input_file
     end function fftwf_import_wisdom_from_file
-    
+
     integer(C_INT) function fftwf_import_wisdom_from_string(input_string) bind(C, name='fftwf_import_wisdom_from_string')
       import
       character(C_CHAR), dimension(*), intent(in) :: input_string
     end function fftwf_import_wisdom_from_string
-    
+
     integer(C_INT) function fftwf_import_wisdom(read_char,data) bind(C, name='fftwf_import_wisdom')
       import
       type(C_FUNPTR), value :: read_char
       type(C_PTR), value :: data
     end function fftwf_import_wisdom
-    
+
     subroutine fftwf_fprint_plan(p,output_file) bind(C, name='fftwf_fprint_plan')
       import
       type(C_PTR), value :: p
       type(C_PTR), value :: output_file
     end subroutine fftwf_fprint_plan
-    
+
     subroutine fftwf_print_plan(p) bind(C, name='fftwf_print_plan')
       import
       type(C_PTR), value :: p
     end subroutine fftwf_print_plan
-    
+
+    type(C_PTR) function fftwf_sprint_plan(p) bind(C, name='fftwf_sprint_plan')
+      import
+      type(C_PTR), value :: p
+    end function fftwf_sprint_plan
+
     type(C_PTR) function fftwf_malloc(n) bind(C, name='fftwf_malloc')
       import
       integer(C_SIZE_T), value :: n
     end function fftwf_malloc
-    
+
     type(C_PTR) function fftwf_alloc_real(n) bind(C, name='fftwf_alloc_real')
       import
       integer(C_SIZE_T), value :: n
     end function fftwf_alloc_real
-    
+
     type(C_PTR) function fftwf_alloc_complex(n) bind(C, name='fftwf_alloc_complex')
       import
       integer(C_SIZE_T), value :: n
     end function fftwf_alloc_complex
-    
+
     subroutine fftwf_free(p) bind(C, name='fftwf_free')
       import
       type(C_PTR), value :: p
     end subroutine fftwf_free
-    
+
     subroutine fftwf_flops(p,add,mul,fmas) bind(C, name='fftwf_flops')
       import
       type(C_PTR), value :: p
@@ -1215,17 +1230,31 @@ module simple_fftw3
       real(C_DOUBLE), intent(out) :: mul
       real(C_DOUBLE), intent(out) :: fmas
     end subroutine fftwf_flops
-    
+
     real(C_DOUBLE) function fftwf_estimate_cost(p) bind(C, name='fftwf_estimate_cost')
       import
       type(C_PTR), value :: p
     end function fftwf_estimate_cost
-    
+
     real(C_DOUBLE) function fftwf_cost(p) bind(C, name='fftwf_cost')
       import
       type(C_PTR), value :: p
     end function fftwf_cost
-    
+
+    integer(C_INT) function fftwf_alignment_of(p) bind(C, name='fftwf_alignment_of')
+      import
+      real(C_FLOAT), dimension(*), intent(out) :: p
+    end function fftwf_alignment_of
+
+    integer(C_INT) function fftw_strlen(s) bind(C, name='strlen')
+        import
+        type(C_PTR), value :: s
+    end function fftw_strlen
+
+    subroutine fftw_free_str(p) bind(C, name='free')
+        import
+        type(C_PTR), value :: p
+    end subroutine fftw_free_str
   end interface
- 
+
 end module simple_fftw3

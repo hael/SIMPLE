@@ -83,7 +83,7 @@ contains
             if( vec(1) >= 180. .and. vec(1) <= 360. .and. vec(2) >= 90. .and. vec(2) <= 180. )then
             else
                 stop '****optimiser_tester bound test5 failed!'
-            endif 
+            endif
             vec(1) = -1.
             vec(2) = -1.
             call check_and_correct_vec(spec, vec)
@@ -92,9 +92,9 @@ contains
                 stop '****optimiser_testerbound test6 failed!'
             endif
         end do
-        
+
         contains
-        
+
             !> \brief  check the vector with respect to the limits
             subroutine check_and_correct_vec( spec, vec )
                 use simple_opt_spec, only: opt_spec
@@ -105,7 +105,7 @@ contains
                 real                        :: cen, halfwidth, ulim
                 do j=1,spec%ndim
                     if( spec%cyclic(j) ) then
-                        do while(vec(j) < spec%limits(j,1)) 
+                        do while(vec(j) < spec%limits(j,1))
                             vec(j) = vec(j)+spec%limits(j,2)
                         end do
                         do while(vec(j) > spec%limits(j,2))
@@ -126,9 +126,9 @@ contains
                     endif
                 end do
             end subroutine
-        
+
     end subroutine test_bound_routine
-    
+
     !>  \brief  master test routine
     subroutine test_all_optimizers
         use simple_jiffys, only: progress
@@ -171,9 +171,9 @@ contains
                     write(*,'(a,1x,a,1x,i2)') str_opts(i), ' sometimes succeeds with function:', k
                 else if( success(i,k) >= NTESTS/2  )then
                     write(*,'(a,1x,a,1x,i2)') str_opts(i), '     often succeeds with function:', k
-                else 
-                    print *, 'weird success:', success(i,k) 
-                endif 
+                else
+                    print *, 'weird success:', success(i,k)
+                endif
             end do
         end do
         ! normalize the nevals matrix
@@ -184,7 +184,7 @@ contains
                 maxeval = neval
             endif
         end do
-        ! print results    
+        ! print results
         write(*,*) ''
         write(*,'(a)') '>>> TEST RESULTS'
         do i=1,NOPTS
@@ -193,7 +193,7 @@ contains
             ' nevals: ', 100.*real(sum(nevals(i,:)))/(real(NTESTS*nfuns)*maxeval)
         end do
         deallocate(success,nevals)
-        ! Finally, we thest the brute-force one
+        ! Finally, we test the brute-force one
         call simple_test_bforce_opt
     end subroutine test_all_optimizers
 
@@ -204,7 +204,7 @@ contains
         integer, intent(in)         :: wopt, wfun, ndim !< which optimizer, which test function, dimension of problem
         procedure(testfun), pointer :: costfun_ptr      !< pointer 2 test function
         real :: h(ndim), gmin, range(2), lowest_cost, lims(ndim,2), rtol
-        h = 1.      
+        h = 1.
         call get_testfun(wfun, ndim, gmin, range, costfun_ptr) ! get testfun, gmin is the global min, range is limits
         lims(:,1) = range(1)
         lims(:,2) = range(2)
@@ -219,7 +219,7 @@ contains
         if( sqrt((lowest_cost-gmin)**2.) <= TOL )then
             success(wopt,wfun) = success(wopt,wfun)+1
             nevals(wopt,wfun)  = nevals(wopt,wfun)+spec%nevals
-        end if    
+        end if
     end subroutine test_optimizer
 
     subroutine simple_test_bforce_opt
@@ -245,7 +245,7 @@ contains
             ! test passed
         else
             write(*,*) 'dist from global opt (0,0): ', dist
-            write(*,*) 'cost obtained (lowest=0):   ', lowest_cost 
+            write(*,*) 'cost obtained (lowest=0):   ', lowest_cost
             stop '****optimiser_test FAILURE bforce_opt'
         endif
     end subroutine simple_test_bforce_opt

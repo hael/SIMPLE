@@ -1,3 +1,4 @@
+!> Simple optimisation method: Shift search of pftcc objects
 module simple_pftcc_shsrch
 use simple_opt_spec,          only: opt_spec
 use simple_pftcc_opt,         only: pftcc_opt
@@ -51,7 +52,7 @@ contains
         ! make optimizer spec
         call self%ospec%specify('simplex', 2, ftol=1e-4,&
         &gtol=1e-4, limits=lims, nrestarts=self%nrestarts)
-        ! generate the simplex optimizer object 
+        ! generate the simplex optimizer object
         call self%nlopt%new(self%ospec)
         ! set pointer to corrcalc object
         self%pftcc_ptr => pftcc
@@ -64,12 +65,12 @@ contains
         self%rotmat(1,1) = 1.
         self%rotmat(2,2) = 1.
     end subroutine shsrch_new
-    
+
     subroutine shsrch_set_indices( self, ref, ptcl, rot, state )
         class(pftcc_shsrch), intent(inout) :: self
         integer,             intent(in)    :: ref, ptcl
         integer, optional,   intent(in)    :: rot, state
-        self%reference = ref 
+        self%reference = ref
         self%particle  = ptcl
         if( present(rot) ) self%rot = rot
     end subroutine shsrch_set_indices
@@ -78,8 +79,8 @@ contains
         class(pftcc_shsrch), intent(inout) :: self
         integer,             intent(in)    :: D
         real,                intent(in)    :: vec(D)
-        real    :: vec_here(2)    ! current set of values
-        real    :: rotvec_here(2) ! current set of values rotated to frame of reference
+        real    :: vec_here(2)    !< current set of values
+        real    :: rotvec_here(2) !< current set of values rotated to frame of reference
         real    :: cost
         vec_here = vec
         if( abs(vec(1)) < 1e-6 ) vec_here(1) = 0.
@@ -134,7 +135,7 @@ contains
         self%rotmat(1,1) = 1.
         self%rotmat(2,2) = 1.
     end function shsrch_minimize
-    
+
     function shsrch_get_nevals( self ) result( nevals )
         class(pftcc_shsrch), intent(inout) :: self
         integer :: nevals
@@ -145,5 +146,5 @@ contains
         class(pftcc_shsrch), intent(inout) :: self
         self%pftcc_ptr => null()
     end subroutine kill
-    
+
 end module simple_pftcc_shsrch

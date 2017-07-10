@@ -1,9 +1,9 @@
-!==module simple_math
+!> Simple math module
 !
 ! simple_math contains various mathematical subroutines and functions. the code is distributed with the hope
-! that it will be useful, but _without_ _any_ _warranty_. redistribution or modification is regulated by the 
+! that it will be useful, but _without_ _any_ _warranty_. redistribution or modification is regulated by the
 ! gnu general public license. *author:* hans elmlund, 2009-05-12.
-! 
+!
 !==changes are documented below
 !* incorporated in the _simple_ library, he 2009-06-25
 !
@@ -128,28 +128,29 @@ end interface
 contains
 
     ! JIFFYS
-    
+
     !> \brief  to find the volume in number of voxels, given molecular weight
     pure function nvoxfind_1( smpd, mwkda ) result( nvox )
         real, intent(in)             :: smpd, mwkda
         integer                      :: nvox
-        double precision , parameter :: prot_d = 1.43d0            ! g/cm**3
-        double precision , parameter :: one_da = 1.66053892173e-27 ! kg/Da
-        ! prot_d in g / A**3    = prot_d * 1e-24
-        ! voxel volume in A**3  = smpd**3
-        ! mass of protein in Da = mwkda*1e3
-        ! mass of protein in kg = (mwda*1e3)*one_da
-        ! mass of protein in g  = ((mwkda*1e3)*one_da)*1e3
-        ! therefore number of voxels in protein is:
+        double precision , parameter :: prot_d = 1.43d0            !< protein density g/cm**3
+        double precision , parameter :: one_da = 1.66053892173e-27 !< kg/Da
+        !! prot_d in g / A**3    = prot_d * 1e-24
+        !! voxel volume in A**3  = smpd**3
+        !! mass of protein in Da = mwkda*1e3
+        !! mass of protein in kg = (mwda*1e3)*one_da
+        !! mass of protein in g  = ((mwkda*1e3)*one_da)*1e3
+        !! therefore number of voxels in protein is:
         nvox = nint((((mwkda*1e3)*one_da)*1e3) / (prot_d * 1e-24 * (smpd**3)))
     end function
-    
+
     !> \brief  to find the volume in number of voxels, given molecular weight
     pure function nvoxfind_2( smpd, mwkda, dens ) result( nvox )
-        real, intent(in) :: smpd, mwkda      ! sampling distance & molecular weight
-        real, intent(in) :: dens             ! density in Da/A3 
-        real             :: vol_per_pix, vol ! volume per pixel & volume
-        integer          :: nvox             ! nr of voxels
+        real, intent(in) :: smpd             !< sampling distance
+        real, intent(in) :: mwkda            !< molecular weight
+        real, intent(in) :: dens             !< density in Da/A3
+        real             :: vol_per_pix, vol !< volume per pixel & volume
+        integer          :: nvox             !< nr of voxels
         vol_per_pix = smpd**3.
         vol = (mwkda*1000.)/dens
         nvox = nint(vol/vol_per_pix)
@@ -161,7 +162,7 @@ contains
         real             :: rad
         rad = (deg/180.)*pi
     end function
-    
+
     !> \brief  converts from radians to degrees
     pure function rad2deg_1( rad ) result( deg )
         real(sp), intent(in) :: rad
@@ -175,7 +176,7 @@ contains
         real(dp)             :: deg
         deg = (rad/DPI)*180.d0
     end function
-    
+
     !>  \brief  Convert acceleration voltage in kV into electron wavelength in Angstroms
     pure function kV2wl( kV ) result( kV_to_wl )
         real, intent(in):: kV
@@ -183,23 +184,23 @@ contains
         local_kV = kV*1e3
         kV_to_wl = 12.26/sqrt(1000.0*kV+0.9784*(1000.0*kV)**2/(10.0**6.0))
     end function
-    
+
     !> \brief  converts from correlation to euclidean distance
     pure function corr2dist( corr ) result( dist )
         real, intent(in) :: corr
         real :: dist
         dist = 1.-corr
     end function
-    
+
     !> \brief  converts from euclidean distance to correlation
     pure function dist2corr( dist ) result( corr )
         real, intent(in) :: dist
         real :: corr
         corr = dist+1
     end function
-    
-    !> \brief  to check if val is even 
-    pure function is_even_1( val ) result( is )    
+
+    !> \brief  to check if val is even
+    pure function is_even_1( val ) result( is )
         integer, intent(in) :: val
         logical :: is
         is = .false.
@@ -207,7 +208,7 @@ contains
     end function
 
     !> \brief  to check if all vals in array are even
-    pure function is_even_2( arr ) result( yep ) 
+    pure function is_even_2( arr ) result( yep )
         integer, intent(in) :: arr(:)
         logical :: yep, test(size(arr))
         integer :: i
@@ -217,7 +218,7 @@ contains
         end do
         yep = all(test)
     end function
-    
+
     !>  \brief  is for checking the numerical soundness of an vector
     subroutine check4nans3D_1( arr )
         real, intent(in)  :: arr(:,:,:)
@@ -226,7 +227,7 @@ contains
         call check4nans_1(arr1d)
         deallocate(arr1d)
     end subroutine
-    
+
     !>  \brief  is for checking the numerical soundness of an vector
     subroutine check4nans3D_2( arr )
         complex, intent(in)  :: arr(:,:,:)
@@ -235,7 +236,7 @@ contains
         call check4nans_2(arr1d)
         deallocate(arr1d)
     end subroutine
-    
+
     !>  \brief  is for checking the numerical soundness of an vector
     subroutine check4nans2D_1( arr )
         real, intent(in)  :: arr(:,:)
@@ -244,7 +245,7 @@ contains
         call check4nans_1(arr1d)
         deallocate(arr1d)
     end subroutine
-    
+
     !>  \brief  is for checking the numerical soundness of an vector
     subroutine check4nans2D_2( arr )
         complex, intent(in)  :: arr(:,:)
@@ -253,7 +254,7 @@ contains
         call check4nans_2(arr1d)
         deallocate(arr1d)
     end subroutine
-    
+
     !>  \brief  is for checking the numerical soundness of an vector
     subroutine check4nans_1( arr )
         real, intent(in) :: arr(:)
@@ -270,7 +271,7 @@ contains
             write(*,*) 'found NaNs in inputted vector; simple_math::check4nans_1', n_nans
         endif
     end subroutine
-    
+
     !>  \brief  is for checking the numerical soundness of an vector
     subroutine check4nans_2( arr )
         complex, intent(in) :: arr(:)
@@ -287,13 +288,13 @@ contains
             write(*,*) 'found NaNs in inputted vector; simple_math::check4nans_2', n_nans
         endif
     end subroutine
-    
+
     !> \brief returns true if the argument is odd
     pure elemental logical function is_odd(i)
         integer, intent(in) :: i
         is_odd = btest(i,0)
     end function
-    
+
     !> \brief  for rounding to closest even
     function round2even( val ) result( ev )
         real, intent(in) :: val
@@ -310,7 +311,7 @@ contains
             endif
         endif
     end function
-    
+
      !> \brief  for rounding to closest even
     function round2odd( val ) result( ev )
         real, intent(in) :: val
@@ -327,17 +328,17 @@ contains
             endif
         endif
     end function
-    
+
     !> \brief  get the angular resultion in degrees, given diameter and resolution
     pure function angres( res, diam ) result( ang )
-        real, intent(in)  :: res, diam 
+        real, intent(in)  :: res, diam
         real :: ang
         ang = (res/(pi*diam))*360.
     end function
-    
+
     !> \brief  get the resolution in angstrom, given angle and diameter
     pure function resang( ang, diam ) result( res )
-        real, intent(in)  :: ang, diam 
+        real, intent(in)  :: ang, diam
         real :: res
         res = (ang/360.)*(pi*diam)
     end function
@@ -353,14 +354,14 @@ contains
             is = .false.
         endif
     end function
-    
+
     !> \brief  validity check of complex number (so that it is not nan)
     pure function is_a_number_2( complex_number ) result( is )
         complex, intent(in) :: complex_number
         logical             :: is
         is = is_a_number_1(real(complex_number)) .and. is_a_number_1(aimag(complex_number))
     end function
-    
+
     !> \brief  converts string descriptors of c and d pointgroups to euler angle limits
     subroutine pgroup_to_lim(pgroup, p1, p2, t1, t2, csym )
         character(len=*), intent(in) :: pgroup
@@ -381,8 +382,8 @@ contains
         p1 = 0.
         p2 = 359.9999/real(csym)
     end subroutine
-    
-    !> \brief  to put the which element (if it exists) last in the array, 
+
+    !> \brief  to put the which element (if it exists) last in the array,
     !!         swapping it with its present position
     subroutine put_last( which, arr )
         integer, intent(in)    :: which
@@ -402,7 +403,7 @@ contains
             endif
         endif
     end subroutine
-    
+
     !> \brief  reverses an integer array
     subroutine reverse_iarr( iarr )
         integer, intent(inout) :: iarr(:)
@@ -421,7 +422,7 @@ contains
             j = j+1
             iswap   = iarr(j)
             iarr(j) = iarr(i)
-            iarr(i) = iswap 
+            iarr(i) = iswap
         end do
     end subroutine
 
@@ -444,10 +445,10 @@ contains
             j = j+1
             rswap   = rarr(j)
             rarr(j) = rarr(i)
-            rarr(i) = rswap 
+            rarr(i) = rswap
         end do
     end subroutine
-    
+
     !> \brief  reverses a complex array
     subroutine reverse_carr( carr )
         complex, intent(inout) :: carr(:)
@@ -467,11 +468,11 @@ contains
             j = j+1
             cswap   = carr(j)
             carr(j) = carr(i)
-            carr(i) = cswap 
+            carr(i) = cswap
         end do
     end subroutine
-    
-    !> \brief  implements the sortmeans algorithm       
+
+    !> \brief  implements the sortmeans algorithm
     subroutine sortmeans( dat, maxits, means, labels )
         real,                 intent(in)  :: dat(:)
         integer,              intent(in)  :: maxits
@@ -502,7 +503,7 @@ contains
             ! find closest
             do i=1,ndat
                 loc = minloc((means-dat(i))**2.0)
-                if( labels(i) /= loc(1) ) changes = changes + 1 
+                if( labels(i) /= loc(1) ) changes = changes + 1
                 labels(i) = loc(1)
             end do
             ! update means
@@ -518,7 +519,7 @@ contains
         end do
         deallocate(dat_sorted, mask)
     end subroutine sortmeans
-    
+
     !> \brief  calculates the number of common integers in two arrays
     function common_ints( arr1, arr2 ) result( n )
         integer, intent(in) :: arr1(:), arr2(:)
@@ -542,7 +543,7 @@ contains
             x = x+lim
         end do
     end subroutine enforce_cyclic_limit
-    
+
     !> \brief  one-dimensional cyclic index generation
     pure function cyci_1d( lims, i ) result( ind )
         integer, intent(in) :: lims(2), i
@@ -556,7 +557,7 @@ contains
             ind = lims(2)-del+1
         endif
     end function
-    
+
     !> \brief  4 shifting variables
     subroutine shft(a,b,c,d)
         real, intent(out)   :: a
@@ -616,7 +617,7 @@ contains
         win(1) = floor(x-real(winsz))
         win(2) = ceiling(x+real(winsz))
     end function
-    
+
     !>  \brief  two-dimensional hard window
     pure function recwin_2d( x, y, winsz ) result( win )
         real, intent(in) :: x, y      !< input point
@@ -625,7 +626,7 @@ contains
         win(1,:) = recwin_1d(x,winsz)
         win(2,:) = recwin_1d(y,winsz)
     end function
-    
+
     !>  \brief  three-dimensional hard window
     pure function recwin_3d( x, y, z, winsz ) result( win )
         real, intent(in) :: x, y, z   !< input point
@@ -637,7 +638,7 @@ contains
     end function
 
     ! USEFUL MATHEMATICAL FUNCTIONS
-    
+
     !> \brief  takes the logarithm of the positive elements of an array
     subroutine logarr(arr)
         real, intent(inout) :: arr(:)
@@ -648,8 +649,8 @@ contains
             endif
         end do
     end subroutine
-   
-    !> \brief  returns acos with the argument's absolute value limited to 1. 
+
+    !> \brief  returns acos with the argument's absolute value limited to 1.
     !!         this seems to be necessary due to small numerical inaccuracies.
     pure function myacos( arg ) result( r )
         real, intent(in) :: arg
@@ -658,7 +659,7 @@ contains
         y = sign(x,arg)
         r = acos(y)
     end function
-    
+
     !> \brief  sinc function
     function sinc( x ) result( r )
         real, intent(in) :: x
@@ -670,7 +671,7 @@ contains
             r = sin(arg)/(arg)
         endif
     end function
-    
+
     !> \brief  is a truncated Gaussian window function (used for masking in simple_image)
     function gauwfun( x, alpha ) result( w )
         real, intent(in) :: x, alpha
@@ -678,14 +679,14 @@ contains
         var = alpha*2.
         w = 2.**(-(x/var)**2.)
     end function
-    
+
     !> \brief  is a Gaussian function (for calculating the probability given x, mean & sigma)
     function gaussian_1( x, mean, sigma ) result( r )
         real, intent(in) :: x, mean, sigma
         real :: r
         r = (1./(sigma*sqrt(twopi)))*exp(-(x-mean)**2./(2.*(sigma*sigma)))
     end function
-    
+
     !> \brief  is a Gaussian function (for calculating the probability given dist & sigma)
     function gaussian_2( dist, sigma ) result( r )
         real, intent(in) :: dist, sigma
@@ -694,7 +695,7 @@ contains
     end function
 
     ! COMPLEX STUFF
-    
+
     !> \brief  is for calculating the phase angle of a Fourier component
     elemental pure function phase_angle( comp ) result( phase )
     ! phase angle only meaningful when cabs(comp) is well above the noise level
@@ -714,7 +715,7 @@ contains
         endif
         phase = atan(nom/denom)
     end function
-    
+
     !> \brief  is for complex squaring
     elemental pure function csq_1( a ) result( sq )
         complex(sp), intent(in) :: a
@@ -752,7 +753,7 @@ contains
             sq = y*y*(1.+frac*frac)
         endif
     end function csq_2
-    
+
     !> \brief  is for calculating complex arg/abs/modulus, from numerical recepies
     elemental pure function mycabs( a ) result( myabs )
         complex, intent(in) :: a
@@ -771,7 +772,7 @@ contains
             myabs = y*sqrt(1.+frac*frac)
         endif
     end function
-    
+
     !> \brief  normalized correlation coefficient between two complex numbers
     function ccorr( c1, c2 ) result( corr )
         complex, intent(in) :: c1, c2
@@ -784,7 +785,7 @@ contains
     end function
 
     ! edge functions
-    
+
     !> \brief  two-dimensional hard edge
     pure function hardedge_1( x, y, mskrad ) result( w )
         real,intent(in) :: x, y, mskrad
@@ -792,7 +793,7 @@ contains
         w = 1.
         if( x**2.+y**2. > mskrad**2. ) w = 0.
     end function
-    
+
     !> \brief  three-dimensional hard edge
     pure function hardedge_2( x, y, z, mskrad ) result( w )
         real,intent(in) :: x, y, z, mskrad
@@ -800,7 +801,7 @@ contains
         w = 1.
         if( x**2.+y**2.+z**2. > mskrad**2. ) w = 0.
     end function
-    
+
     !> \brief  two-dimensional hard edge
     pure function hardedge_inner_1( x, y, mskrad ) result( w )
         real,intent(in) :: x, y, mskrad
@@ -808,7 +809,7 @@ contains
         w = 0.
         if( sqrt(x**2+y**2) > mskrad ) w = 1.
     end function
-    
+
     !> \brief  three-dimensional hard edge
     pure function hardedge_inner_2( x, y, z, mskrad ) result( w )
         real,intent(in) :: x, y, z, mskrad
@@ -862,7 +863,7 @@ contains
             w = (cos(((rad-(maxrad-width))/width)*pi)+1.)/2.
         endif
     end function cosedge_3
-    
+
     !> \brief  two-dimensional gaussian edge
     pure function cosedge_inner_1( x, y, width, mskrad ) result( w )
         real, intent(in) :: x, y, width
@@ -877,7 +878,7 @@ contains
             w = (1.+cos(pi*(mskrad-rad)/width))/2.0
         endif
     end function
-    
+
     !> \brief  two-dimensional gaussian edge
     pure function cosedge_inner_2( x, y, z, width, mskrad ) result( w )
         real, intent(in) :: x, y, z, width
@@ -892,9 +893,9 @@ contains
             w = (1.+cos(pi*(mskrad-rad)/width))/2.0
         endif
     end function
-    
+
     ! FOURIER STUFF
-    
+
     !> \brief  is for working out the fourier dimension
     pure function fdim( d ) result( fd )
         integer, intent(in) :: d
@@ -905,14 +906,14 @@ contains
             fd = (d-1)/2+1
         endif
     end function
-    
+
     !> \brief  returns the shell to which the voxel with address h,k,l belongs
     pure function shell( h, k, l ) result( sh )
         integer, intent(in) :: h, k, l
         integer :: sh
         sh = nint(sqrt(real(h**2+k**2+l**2)))
     end function
-    
+
     !> \brief  calculates the resolution values given Fourier shell correlations & resolution values
     subroutine get_resolution( corrs, res, fsc05, fsc0143 )
         real, intent(in)  :: corrs(:), res(:)
@@ -950,7 +951,7 @@ contains
             fsc05 = res(ires05)
         endif
     end subroutine
-    
+
     !> \brief  returns the Fourier index of the resolution limit
     function get_lplim( fsc ) result( k )
         real, intent(in) :: fsc(:)
@@ -969,14 +970,14 @@ contains
             endif
         end do
     end function
-    
+
     !> \brief  returns the Fourier index of res
     integer pure function calc_fourier_index( res, box, smpd )
         real, intent(in)    :: res, smpd
         integer, intent(in) :: box
         calc_fourier_index = (real(box-1)*smpd)/res
     end function calc_fourier_index
-    
+
     !> \brief  returns the Fourier index of res
     real pure function calc_lowpass_lim( find, box, smpd )
         integer, intent(in) :: find, box
@@ -1004,21 +1005,21 @@ contains
             corr = 0.
         endif
     end function
-    
+
     ! NUMERICAL STUFF
-    
+
     !>  \brief  This routine computes the nth stage of refinement of an extended trapezoidal
-    !!          rule. func is the function to be integrated between limits a and b. When 
+    !!          rule. func is the function to be integrated between limits a and b. When
     !!          called with n=1, the routine returns as s the crudest estimate of the integral.
-    !!          Subsequent calls with n=2,3,... (in that sequential order) will improve the 
-    !!          accuracy of s by adding 2**(n-2) additional interior points. s should not be 
+    !!          Subsequent calls with n=2,3,... (in that sequential order) will improve the
+    !!          accuracy of s by adding 2**(n-2) additional interior points. s should not be
     !!          modified between sequential calls (from Numerical Recepies)
     subroutine trapzd( func, a, b, s, n )
-        interface 
+        interface
             function func( point ) result( val )
                 real, intent(in) :: point
                 real :: val
-            end function 
+            end function
         end interface
         real, intent(in)    :: a, b
         real, intent(inout) :: s
@@ -1040,17 +1041,17 @@ contains
             s = 0.5*(s+(b-a)*sum/tnm) ! replaces s by its refined value
         endif
     end subroutine
-    
+
     !>  \brief  Returns as s the integral of the function func from a to b. The parameters EPS
     !!          can be set to the desired fractional accuracy and JMAX so that 2 to the power
     !!          JMAX-1 is the maximum allowed number of steps. Integration is performed by Simpson's
     !!          rule (from Numerical Recepies)
     function qsimp( func, a, b ) result( s )
-        interface 
+        interface
             function func( point ) result( val )
                 real, intent(in) :: point
                 real :: val
-            end function 
+            end function
         end interface
         real, intent(in)   :: a, b
         real               :: s, os, ost, st
@@ -1070,7 +1071,7 @@ contains
         !write(*,'(a)') 'too many steps in qsimp; simple_math'
     end function
 
-    !>  \brief  Returns the derivative of a function func at a point x by Ridders' 
+    !>  \brief  Returns the derivative of a function func at a point x by Ridders'
     !!          method of polynomial extrapolation. The value h is input as an estimated
     !!          initial stepsize; it need not to be small but rather should be an
     !!          increment in x over which func changes substantially. An estimate of
@@ -1079,18 +1080,18 @@ contains
     ! Parameters: Stepsize is decreased by CON at each iteration. Max size of tableu is
     ! set by NTAB. Return when error is SAFE worse than the best so far. The number of
     ! function evaluations are typically 6 to 12 byt is allowed to be as many as 2*NTAB.
-    ! You should therefore select a fairly large value for h but monitor the returned 
+    ! You should therefore select a fairly large value for h but monitor the returned
     ! err, decreasing h if it is not small. For functions whose characteristic x scale
     ! is of order unity-take h to be a few tenths (5 degrees for correlation search)
-        interface 
+        interface
             function func( point ) result( val )
                 real, intent(in) :: point
                 real :: val
-            end function 
+            end function
         end interface
         integer, parameter :: NTAB=10                                   !< max size of tableu
         real, parameter    :: CON=1.4, CON2=CON*CON, BIG=1.E30, SAFE=2. !< real params
-        real, intent(in)   :: x, h                                      !< point & step 
+        real, intent(in)   :: x, h                                      !< point & step
         real, intent(out)  :: err, df                                   !< estimated error and gradient
         real               :: errt, fac, hh, a(NTAB,NTAB)
         integer            :: i, j
@@ -1098,7 +1099,7 @@ contains
         hh = h
         a(1,1) = (func(x+hh)-func(x-hh))/(2.*hh)
         err = BIG
-        do i=2,NTAB          ! successive columns in the Neville tableu will go to 
+        do i=2,NTAB          ! successive columns in the Neville tableu will go to
             hh     = hh/CON  ! smaller stepsizes and higher orders of extrapolation
             a(1,i) = (func(x+hh)-func(x-hh))/(2.*hh) ! try new smaller stepsize
             fac    = CON2
@@ -1108,7 +1109,7 @@ contains
                 errt   = max(abs(a(j,i)-a(j-1,i)), abs(a(j,i)-a(j-1,i-1)))
                 ! The error strategy is to compare each new extrapolation to one order lower,
                 ! both at the present stepsize and the previous one
-                if( errt .le. err )then ! If error decreased save the better answer 
+                if( errt .le. err )then ! If error decreased save the better answer
                     err = errt
                     df  = a(j,i)
                 endif
@@ -1116,24 +1117,24 @@ contains
             ! If higher order is worse by a significant factor SAFE, then quit early
             if( abs(a(i,i)-a(i-1,i-1)) .ge. SAFE*err ) return
         end do
-    end subroutine  
-    
+    end subroutine
+
     ! LINEAR ALGEBRA STUFF
-    
+
     !> \brief  subroutine to find the inverse of a square matrix
     !!         author : louisda16th a.k.a ashwith j. rego
     !!         reference : algorithm explained at:
-    !!         http://math.uww.edu/~mcfarlat/inverse.htm           
+    !!         http://math.uww.edu/~mcfarlat/inverse.htm
     !!         http://www.tutor.ms.unimelb.edu.au/matrix/matrix_inverse.html
     subroutine matinv(matrix, inverse, n, errflg)
         integer, intent(in)  :: n
-        integer, intent(out) :: errflg  !return error status. -1 for error, 0 for normal
-        real, intent(in), dimension(n,n)  :: matrix  !input matrix
-        real, intent(out), dimension(n,n) :: inverse !inverted matrix
+        integer, intent(out) :: errflg  !< return error status. -1 for error, 0 for normal
+        real, intent(in), dimension(n,n)  :: matrix  !< input matrix
+        real, intent(out), dimension(n,n) :: inverse !< inverted matrix
         logical :: flag = .true.
         integer :: i, j, k
         real :: m
-        real, dimension(n,2*n) :: augmatrix !augmented matrix
+        real, dimension(n,2*n) :: augmatrix !< augmented matrix
         ! augment input matrix with an identity matrix
         do i=1,n
             do j=1,2*n
@@ -1145,7 +1146,7 @@ contains
                     augmatrix(i,j) = 0
                 endif
             end do
-        end do 
+        end do
         ! reduce augmented matrix to upper traingular form
         do k=1,n-1
             if( augmatrix(k,k) == 0. )then
@@ -1165,7 +1166,7 @@ contains
                     endif
                 end do
             endif
-            do j=k+1, n                       
+            do j=k+1, n
                 m = augmatrix(j,k)/augmatrix(k,k)
                 do i=k,2*n
                     augmatrix(j,i) = augmatrix(j,i)-m*augmatrix(k,i)
@@ -1179,14 +1180,14 @@ contains
                 errflg = -1
                 return
             endif
-        end do  
+        end do
         !make diagonal elements as 1
         do i=1,n
             m = augmatrix(i,i)
-            do j=i,2*n                               
+            do j=i,2*n
                 augmatrix(i,j) = augmatrix(i,j)/m
             end do
-        end do  
+        end do
         !reduced right side half of augmented matrix to identity matrix
         do k=n-1,1,-1
             do i=1,k
@@ -1195,7 +1196,7 @@ contains
                     augmatrix(i,j) = augmatrix(i,j)-augmatrix(k+1,j)*m
                 end do
             end do
-        end do                                  
+        end do
         ! store answer
         do i=1,n
             do j=1,n
@@ -1204,18 +1205,18 @@ contains
         end do
         errflg = 0
     end subroutine
-    
+
     !> \brief  subroutine to find the inverse of a square matrix
     !!         author : louisda16th a.k.a ashwith j. rego
     !!         reference : algorithm explained at:
-    !!         http://math.uww.edu/~mcfarlat/inverse.htm           
+    !!         http://math.uww.edu/~mcfarlat/inverse.htm
     !!         http://www.tutor.ms.unimelb.edu.au/matrix/matrix_inverse.html
     subroutine matinv_D(matrix, inverse, n, errflg)
       use simple_defs
       integer, intent(in)  :: n
-        integer, intent(out) :: errflg  !return error status. -1 for error, 0 for normal
-        real(dp), intent(in), dimension(n,n)  :: matrix  !input matrix
-        real(dp), intent(out), dimension(n,n) :: inverse !inverted matrix
+        integer, intent(out) :: errflg  !< return error status. -1 for error, 0 for normal
+        real(dp), intent(in), dimension(n,n)  :: matrix  !< input matrix
+        real(dp), intent(out), dimension(n,n) :: inverse !< inverted matrix
         logical :: flag = .true.
         integer :: i, j, k
         real(dp) :: m
@@ -1231,7 +1232,7 @@ contains
                     augmatrix(i,j) = 0.0d0
                 endif
             end do
-        end do 
+        end do
         ! reduce augmented matrix to upper traingular form
         do k=1,n-1
             if( augmatrix(k,k) == 0.d0 )then
@@ -1251,7 +1252,7 @@ contains
                     endif
                 end do
             endif
-            do j=k+1, n                       
+            do j=k+1, n
                 m = augmatrix(j,k)/augmatrix(k,k)
                 do i=k,2*n
                     augmatrix(j,i) = augmatrix(j,i)-m*augmatrix(k,i)
@@ -1265,14 +1266,14 @@ contains
                 errflg = -1.d0
                 return
             endif
-        end do  
+        end do
         !make diagonal elements as 1
         do i=1,n
             m = augmatrix(i,i)
-            do j=i,2*n                               
+            do j=i,2*n
                 augmatrix(i,j) = augmatrix(i,j)/m
             end do
-        end do  
+        end do
         !reduced right side half of augmented matrix to identity matrix
         do k=n-1,1,-1
             do i=1,k
@@ -1281,7 +1282,7 @@ contains
                     augmatrix(i,j) = augmatrix(i,j)-augmatrix(k+1,j)*m
                 end do
             end do
-        end do                                  
+        end do
         ! store answer
         do i=1,n
             do j=1,n
@@ -1290,8 +1291,8 @@ contains
         end do
         errflg = 0
     end subroutine matinv_D
-  
-    !> \brief  least squares straight line fit, from Sjors, he took it from 
+
+    !> \brief  least squares straight line fit, from Sjors, he took it from
     !!         http://mathworld.wolfram.com/LeastSquaresFitting.html
     !!         ss_xx = sum_i x_i^2 - n * ave_x^2
     !!         ss_yy = sum_i y_i^2 - n * ave_y^2
@@ -1329,7 +1330,7 @@ contains
         intercept = real(ave_y-slope*ave_x)
         corr      = real((ss_xy*ss_xy)/(ss_xx*ss_yy))
     end subroutine
-    
+
     !> \brief  trace of a square matrix
     pure function tr( matrix, n ) result( sum )
         integer, intent(in) :: n
@@ -1341,7 +1342,7 @@ contains
             sum = sum+matrix(i,i)
         end do
     end function tr
-    
+
     !> \brief  determinant of a square matrix, matrix is modified
     function det( matrix, n ) result( d )
         integer, intent(in)   :: n
@@ -1359,7 +1360,7 @@ contains
             d = d*matrix(j,j) ! this returns d as +-1
         end do
     end function
-    
+
     !> \brief  determinant of a square matrix, matrix is modified
     function det_D( matrix, n ) result( d )
         integer, intent(in)   :: n
@@ -1389,7 +1390,7 @@ contains
             mat(i,i) = diagvals(i)
         end do
     end function
-    
+
     !> \brief  to allocate a one-dim array with zeros
     function zeros_1( n ) result( a )
         integer, intent(in) :: n
@@ -1399,7 +1400,7 @@ contains
         call alloc_err("In: zeros_1; simple_math", alloc_stat)
         a = 0.
     end function
-    
+
     !> \brief  to allocate a two-dim array with zeros
     function zeros_2( n1, n2 ) result( a )
         integer, intent(in) :: n1, n2
@@ -1409,7 +1410,7 @@ contains
         call alloc_err("In: zeros_2; simple_math", alloc_stat)
         a = 0.
     end function
-    
+
     !> \brief  lu decomposition, nr
     subroutine ludcmp(a,n,np,indx,d,err)
         integer :: n,np,indx(n),nmax
@@ -1478,7 +1479,7 @@ contains
         end do
         if(abs(a(n,n))<tiny)a(n,n)=tiny
     end subroutine ludcmp
-    
+
     !> \brief  lu decomposition, nr
     subroutine ludcmp_D(a,n,np,indx,d,err)
         integer :: n,np,indx(n),nmax
@@ -1565,14 +1566,14 @@ contains
         nrot = 0
         do i=1,50
             sm=0.
-            do ip=1,n-1 
+            do ip=1,n-1
                 do iq=ip+1,n
                     sm=sm+abs(a(ip,iq))
                 enddo
             enddo
             if(sm.eq.0.)return
             if(i.lt.4)then
-                tresh=0.2*sm/n**2 
+                tresh=0.2*sm/n**2
             else
                 tresh=0.
             endif
@@ -1630,19 +1631,19 @@ contains
             enddo
             do ip=1,n
                 b(ip)=b(ip)+z(ip)
-                d(ip)=b(ip) 
-                z(ip)=0. 
+                d(ip)=b(ip)
+                z(ip)=0.
             enddo
         enddo
         write(*,*)' Too many iterations in Jacobi'
-    end subroutine jacobi          
+    end subroutine jacobi
 
     !>  \brief sorts eigenvalues and eigenvectors from jacobi routine in descending order
     subroutine eigsrt(d,v,n,np)
         integer, intent(in)    :: n,np
         real,    intent(inout) :: d(np),v(np,np)
         ! Given the eigenvalues d and eigenvectors v as output from jacobi (section 11.1) or tqli (section 11.3),
-        ! this routine sorts the eigenvalues into descending order, 
+        ! this routine sorts the eigenvalues into descending order,
         ! and rearranges the columns of v correspondingly. The method is straight insertion.
         integer             :: i,j,k
         real                :: p
@@ -1919,7 +1920,7 @@ contains
             ang  = ang+angstep
         end do
     end subroutine
-    
+
     !>  \brief  is for calculating the radius
     function hyp( x1, x2, x3 ) result( h )
         real, intent(in) :: x1, x2
@@ -1935,7 +1936,7 @@ contains
     !> \brief  calculates the euclidean distance between two vectors of dimension _n_
     pure function euclid( vec1, vec2 ) result( dist )
         real, intent(in)    :: vec1(:), vec2(:)
-        real                :: dist     
+        real                :: dist
         dist = sqrt(sum((vec1-vec2)**2.))
     end function
 
@@ -1952,20 +1953,20 @@ contains
       real                :: diff_sum_rel
       diff_sum_rel = sum((vec1-vec2)/vec2)
     end function rel_sum_diff
-    
+
     !> \brief  calculates the argument of a vector
     pure function arg( vec ) result( length )
         real, intent(in) :: vec(:)
         real :: length
         length = sqrt(sum(vec**2.))
     end function
-     
+
     !> \brief  normalizes the length of a vector to 1
     subroutine normvec( vec )
         real, intent(inout) :: vec(:)
         vec = vec/arg(vec)
     end subroutine
-    
+
     !> \brief  projects a 3d vector in the _z_-direction
     subroutine projz( vec3, vec2 )
         real, intent(in)  :: vec3(3)
@@ -1973,7 +1974,7 @@ contains
         vec2(1) = vec3(1)
         vec2(2) = vec3(2)
     end subroutine
-    
+
     !> \brief  calculates a 2d vector in the _xy_ plane rotated _ang_ degrees.
     subroutine get_radial_line( ang, lin )
         real, intent(in) :: ang
@@ -1982,9 +1983,9 @@ contains
         mat = rotmat2d( ang )
         u(1) = 0.
         u(2) = 1.
-        lin = matmul(u,mat) 
+        lin = matmul(u,mat)
     end subroutine
-    
+
     !> \brief  is for 2d rotation matrix generation
     pure function rotmat2d( ang ) result( mat )
         real, intent(in) :: ang ! in degrees
@@ -1995,7 +1996,7 @@ contains
         mat(2,1) = -mat(1,2)
         mat(2,2) = mat(1,1)
     end function
-    
+
     !>  extracts in-plane parameters from transformation matrix
     subroutine transfmat2inpls( R, psi, tx, ty )
         real,intent(inout) :: psi,tx,ty
@@ -2005,7 +2006,7 @@ contains
         tx  = R(1,3)
         ty  = R(2,3)
     end subroutine transfmat2inpls
-    
+
     !>  in-plane parameters to 3x3 transformation matrix
     function make_transfmat( psi, tx, ty )result( R )
         real,intent(in) :: psi,tx,ty
@@ -2022,11 +2023,11 @@ contains
         R(2,3) = ty
         R(3,3) = 1.
     end function make_transfmat
-    
+
     !> \brief  generates polar coordinates
     subroutine gen_polar_coords( kfromto, ring2, coords, angtab )
         integer, intent(in)            :: kfromto(2), ring2
-        real, allocatable, intent(out) :: coords(:,:,:), angtab(:) 
+        real, allocatable, intent(out) :: coords(:,:,:), angtab(:)
         integer                        :: nradial_lines
         real                           :: dang
         integer                        :: i, j, alloc_stat
@@ -2045,9 +2046,9 @@ contains
             angtab(i) = rad2deg(angtab(i))
         end do
     end subroutine gen_polar_coords
-    
+
     ! INTERPOLATION
-    
+
     !>  \brief  rational function interpolation & extrapolation, from NR
     !!          Given arrays xa(:) and ya(:) and a value of x, this routine
     !!          returns a value of y and an accuracy estimate dy
@@ -2100,7 +2101,7 @@ contains
         end do
         deallocate(c,d)
     end subroutine
-    
+
     !>  \brief  quadratic interpolation in 2D, from spider
     function quadri(xx, yy, fdata, nx, ny) result(q)
         integer, intent(in) :: nx, ny
@@ -2122,24 +2123,24 @@ contains
         im1 = i-1
         jp1 = j+1
         jm1 = j-1
-        if(ip1 .gt. nx) ip1 = ip1-nx   
+        if(ip1 .gt. nx) ip1 = ip1-nx
         if(im1 .lt. 1) im1 = im1+nx
-        if(jp1 .gt. ny) jp1 = jp1-ny       
+        if(jp1 .gt. ny) jp1 = jp1-ny
         if(jm1 .lt. 1) jm1 = jm1+ny
         f0 = fdata(i,j)
         c1 = fdata(ip1,j)-f0
         c2 = (c1-f0+fdata(im1,j))*0.5
-        c3 = fdata(i,jp1)-f0 
-        c4 = (c3-f0+fdata(i,jm1))*0.5 
+        c3 = fdata(i,jp1)-f0
+        c4 = (c3-f0+fdata(i,jm1))*0.5
         dxb = (dx0-1)
         dyb = (dy0-1)
         ! hxc & hyc are either 1 or -1
         hxc = int(sign(1.0,dx0))
-        hyc = int(sign(1.0,dy0)) 
+        hyc = int(sign(1.0,dy0))
         ic = i+hxc
         jc = j+hyc
         if(ic .gt. nx)then
-           ic = ic-nx    
+           ic = ic-nx
         elseif (ic .lt. 1)then
            ic = ic+nx
         endif
@@ -2149,10 +2150,10 @@ contains
            jc = jc+ny
         endif
         c5 = ((fdata(ic,jc)-f0-hxc*c1-(hxc*(hxc-1.0))&
-        *c2-hyc*c3-(hyc*(hyc-1.0))*c4)*(hxc*hyc)) 
+        *c2-hyc*c3-(hyc*(hyc-1.0))*c4)*(hxc*hyc))
         q = f0+dx0*(c1+dxb*c2+dy0*c5)+dy0*(c3+dyb*c4)
     end function
-    
+
     subroutine parabl(z,xsh,ysh,peakv)
         real, intent(in) :: z(3,3)
         real(dp) :: dz(3,3)
@@ -2172,7 +2173,7 @@ contains
         if(abs(denom)<TINY) return
         ysh   = real((c4*c5-2.d0*c2*c6)/denom-2.d0)
         xsh   = real((c2*c5-2.*c4*c3)/denom-2.d0)
-        dpeakv = 4.*c1*c3*c6-c1*c5*c5-c2*c2*c6+c2*c4*c5-c4*c4*c3        
+        dpeakv = 4.*c1*c3*c6-c1*c5*c5-c2*c2*c6+c2*c4*c5-c4*c4*c3
         peakv = real(dpeakv/denom)
         ! limit interplation to +/- 1. range
         if(ysh .lt. -1.) ysh = -1.
@@ -2180,7 +2181,7 @@ contains
         if(xsh .lt. -1.) xsh = -1.
         if(xsh .gt.  1.) xsh = 1.
     end subroutine
-    
+
     ! SORTING
 
     function peakfinder( vals, npeaks ) result( peakpos )
@@ -2198,14 +2199,14 @@ contains
             mask(loc(1)) = .false.
         end do
     end function peakfinder
-    
+
     !> \brief  rheapsort from numerical recepies (largest last)
     subroutine hpsort_1( n, rarr, iarr )
         integer, intent(in)    :: n
         real, intent(inout)    :: rarr(n)
         integer, intent(inout) :: iarr(n)
         integer                :: i, ir, j, l, ia
-        real                   :: ra    
+        real                   :: ra
         if( n < 2) return
         l  = n/2+1
         ir = n
@@ -2245,7 +2246,7 @@ contains
             end do
         end do
     end subroutine
-    
+
     !> \brief  rheapsort from numerical recepies (largest last)
     subroutine hpsort_2( n, iarr )
         integer, intent(in)    :: n
@@ -2284,7 +2285,7 @@ contains
             end do
         end do
     end subroutine
-    
+
     !> \brief  rheapsort from numerical recepies (largest last)
     subroutine hpsort_3( n, iarr, p1_lt_p2 )
         integer, intent(in)    :: n
@@ -2329,9 +2330,9 @@ contains
             end do
         end do
     end subroutine
-    
+
     !> \brief  rheapsort from numerical recepies (largest last)
-    subroutine hpsort_4( n, rarr ) 
+    subroutine hpsort_4( n, rarr )
         integer, intent(in) :: n
         real, intent(inout) :: rarr(n)
         integer             :: i, ir, j, l
@@ -2369,13 +2370,13 @@ contains
             end do
         end do
     end subroutine
-    
+
     !> \brief  rheapsort from numerical recepies (largest last)
     subroutine hpsort_5( n, rarr, rarr2 )
         integer, intent(in)    :: n
         real, intent(inout)    :: rarr(n), rarr2(n)
         integer                :: i, ir, j, l
-        real                   :: ra, ra2  
+        real                   :: ra, ra2
         if( n < 2) return
         l  = n/2+1
         ir = n
@@ -2415,7 +2416,7 @@ contains
             end do
         end do
     end subroutine
-    
+
     !> \brief  selecting the size(rheap) largest
     subroutine hpsel_1( rarr, rheap )
         real, intent(inout) :: rarr(:), rheap(:)
@@ -2447,7 +2448,7 @@ contains
             endif
         end do
     end subroutine
-    
+
     !> \brief  selecting the size(rheap) largest
     subroutine hpsel_2( rarr, rheap, iheap )
         real, intent(inout)    :: rarr(:), rheap(:)
@@ -2489,10 +2490,10 @@ contains
             endif
         end do
     end subroutine
-  
+
     ! SEARCHING
-    
-    !> \brief  given an array arr(1:n), and given value x, locate returns a value j such that x is 
+
+    !> \brief  given an array arr(1:n), and given value x, locate returns a value j such that x is
     !!         between arr(j) and arr(j+1). arr(1:n) must be monotonic, either increasing or decreasing.
     !!         j=0 or j=n is returned to indicate that x is out of range, from numerical recepies
     pure function locate_1( arr, n, x ) result( j )
@@ -2515,9 +2516,9 @@ contains
             j = n-1
         else
             j = jl
-        endif     
+        endif
     end function
-    
+
     !> \brief  given an array arr(1:n), and given value x, locate returns a value j such that x is
     ! between arr(j) and arr(j+1). arr(1:n) must be monotonic, either increasing or decreasing.
     ! j=0 or j=n is returned to indicate that x is out of range, from numerical recepies
@@ -2541,15 +2542,15 @@ contains
             j = n-1
         else
             j = jl
-        endif     
+        endif
     end function
-    
+
     !> \brief  for finding closest element in an ordered list
     subroutine find_1( arr, n, x, j, dist1 )
         integer, intent(in)  :: n
         real,    intent(in)  :: arr(n), x
-        real,    intent(out) :: dist1      
-        integer, intent(out) :: j  
+        real,    intent(out) :: dist1
+        integer, intent(out) :: j
         real                 :: dist2
         j = max(1,locate_1( arr, n, x ))
         dist1 = arr(j)-x
@@ -2561,13 +2562,13 @@ contains
             endif
         endif
     end subroutine find_1
-    
+
     !> \brief  for finding closest element in an ordered list
     subroutine find_2( arr, n, x, j, dist1 )
         integer, intent(in)  :: n
         integer, intent(in)  :: arr(n), x
-        integer, intent(out) :: dist1      
-        integer, intent(out) :: j  
+        integer, intent(out) :: dist1
+        integer, intent(out) :: j
         integer              :: dist2
         j = max(1,locate_2( arr, n, x ))
         dist1 = arr(j)-x
@@ -2579,7 +2580,7 @@ contains
             endif
         endif
     end subroutine find_2
-    
+
     !> \brief  for calculating the median
     function median( arr ) result( val )
         real, intent(in)  :: arr(:)
@@ -2606,7 +2607,7 @@ contains
         endif
         deallocate(copy)
     end function
-    
+
     !> \brief  for calculating the median
     function median_nocopy( arr ) result( val )
         real, intent(inout) :: arr(:)
@@ -2628,7 +2629,7 @@ contains
             val  = (val1+val2)/2.
         endif
     end function
-    
+
     !> \brief  for selecting kth largest, array is modified
     real function selec_1(k,n,arr)
       integer k,n
@@ -2688,7 +2689,7 @@ contains
       endif
       goto 2
     end function
-    
+
     !> \brief  selecting kth largest, array is modified
     integer function selec_2(k,n,arr)
       integer :: k,n

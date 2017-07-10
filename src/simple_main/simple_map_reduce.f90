@@ -1,3 +1,4 @@
+!> Simple map reduce module:  distributed resource allocation
 module simple_map_reduce
 use simple_defs
 use simple_strings,      only: int2str, int2str_pad

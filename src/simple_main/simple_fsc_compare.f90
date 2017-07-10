@@ -1,4 +1,4 @@
-!> \brief FSC comparison module
+!> \brief Simple module: FSC comparison
 module simple_fsc_compare
 implicit none
 

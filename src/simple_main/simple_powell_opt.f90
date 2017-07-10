@@ -1,4 +1,4 @@
-!> simple_powell_opt
+!> Simple optimisation module: Powell's direction optimisation
 !!
 !! Minimization of an externally defined function by Powell's direction set method
 !

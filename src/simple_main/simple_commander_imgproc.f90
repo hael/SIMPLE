@@ -1,4 +1,4 @@
-!> simple_commander_imgproc
+!> Simple commander module: image processing interface
 !
 !! This class contains the set of concrete general image processing commanders
 !! of the SIMPLE library. This class provides the glue between the reciver (main
@@ -107,9 +107,9 @@ contains
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_BINARISE NORMAL STOP ****')
-        
+
         contains
-            
+
             subroutine doit( img_or_vol )
                 use simple_image, only: image
                 class(image), intent(inout) :: img_or_vol
@@ -130,7 +130,7 @@ contains
                 if( cline%defined('edge') ) call img_or_vol%cos_edge(p%edge)
                 if( cline%defined('neg')  ) call img_or_vol%bin_inv
             end subroutine
-                
+
     end subroutine exec_binarise
     !> convert is a program for converting between SPIDER and MRC formats
     subroutine exec_convert( self, cline )
@@ -146,7 +146,7 @@ contains
                 call progress(iptcl, p%nptcls)
                 call b%img%read(p%stk, iptcl)
                 call b%img%write(p%outstk, iptcl)
-            end do 
+            end do
         else if( cline%defined('vol1') )then
             call b%vol%read(p%vols(1))
             call b%img%write(p%outvol)
@@ -279,7 +279,7 @@ contains
                         call apply_ctf_imgfile(p%stk, p%outstk, b%a, p%smpd, 'neg')
                     else
                         call apply_ctf_imgfile(p%stk, p%outstk, b%a, p%smpd, 'ctf')
-                    endif                
+                    endif
                 case DEFAULT
                     stop 'Unknown ctf argument'
             end select
@@ -389,7 +389,7 @@ contains
     end subroutine exec_image_smat
 
 
-    !> norm is a program for normalization of MRC or SPIDER stacks and volumes. 
+    !> norm is a program for normalization of MRC or SPIDER stacks and volumes.
     !! If you want to normalise your images inputted with stk, set norm=yes.
     !! hfun (e.g. hfun=sigm) controls the normalisation function. If you want to
     !! perform noise normalisation of the images set noise_norm=yes given a mask
@@ -546,13 +546,13 @@ contains
             if( cline%defined('clip') )then
                 ! Clipping
                 call vol2%new([p%clip,p%clip,p%clip],p%smpd)
-                if( p%clip < p%box )then 
+                if( p%clip < p%box )then
                     call b%vol%clip(vol2)
                 else
                     if( cline%defined('msk') )then
-                        call b%vol%stats( 'background', ave, sdev, var, med, p%msk ) 
+                        call b%vol%stats( 'background', ave, sdev, var, med, p%msk )
                     else
-                        call b%vol%stats( 'background', ave, sdev, var, med ) 
+                        call b%vol%stats( 'background', ave, sdev, var, med )
                     endif
                     call b%vol%pad(vol2, backgr=med)
                 endif
@@ -592,7 +592,7 @@ contains
                 deallocate(fname)
             end do
         else
-            stop 'SIMPLE_SCALE needs input image(s) or volume or filetable!'          
+            stop 'SIMPLE_SCALE needs input image(s) or volume or filetable!'
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_SCALE NORMAL STOP ****', print_simple=.false.)
@@ -679,7 +679,7 @@ contains
                     cnt = cnt+1
                     call b%img%read(filenames(ifile), iimg, readhead=.false., rwaction='READ')
                     if( cline%defined('clip') )then
-                        call b%img%clip(tmp)  
+                        call b%img%clip(tmp)
                         mm = tmp%minmax()
                         DebugPrint 'min/max: ', mm(1), mm(2)
                         call tmp%write(p%outstk, cnt)

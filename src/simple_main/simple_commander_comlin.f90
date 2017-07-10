@@ -1,4 +1,4 @@
-!> simple_commander_comlin SIMPLE class
+!> Simple commander module: common-line commander
 !!
 !! This class contains the set of concrete common-lines commanders of the SIMPLE
 !! library. This class provides the glue between the reciver (main reciever is

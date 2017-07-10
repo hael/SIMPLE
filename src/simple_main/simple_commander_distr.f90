@@ -1,4 +1,4 @@
-!> simple_commander_distr
+!> Simple commander module: distributed mode interface
 !!
 !! This class contains the set of concrete distr commanders of the SIMPLE
 !! library used to provide pre/post processing routines for SIMPLE when executed
@@ -91,7 +91,7 @@ contains
             do j=1,nj
                 read(funit,fmt='(A)') line
                 write(funit_merge,fmt='(A)') trim(line)
-            end do 
+            end do
             close(funit)
         end do
         close(funit_merge)
@@ -119,7 +119,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_MERGE_NNMAT NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_merge_nnmat
-    
+
     subroutine exec_merge_similarities( self, cline )
         use simple_map_reduce, only: merge_similarities_from_parts
         class(merge_similarities_commander), intent(inout) :: self

@@ -1,3 +1,6 @@
+!!
+!> Simple search module: Prime2D method
+!!
 module simple_prime2D_srch
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_pftcc_shsrch,     only: pftcc_shsrch

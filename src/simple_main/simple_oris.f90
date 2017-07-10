@@ -1453,9 +1453,9 @@ contains
     subroutine rnd_proj_space( self, nsample, o_prev, thres, eullims )
         use simple_math, only: rad2deg
         class(oris),          intent(inout) :: self
-        integer,              intent(in)    :: nsample      !<
+        integer,              intent(in)    :: nsample      !< # samples
         class(ori), optional, intent(inout) :: o_prev       !< orientation
-        real,       optional, intent(inout) :: eullims(3,2) !<
+        real,       optional, intent(inout) :: eullims(3,2) !< Euler limits
         real,       optional, intent(in)    :: thres        !< half-angle of spherical cap
         type(ori) :: o_stoch
         integer   :: i
@@ -3311,8 +3311,8 @@ contains
     
     !>  \brief  returns cluster population overlap between two already clustered orientations sets
     function cls_overlap( self, os, key ) result( overlap )
-        class(oris),      intent(inout)   :: self ! previous oris
-        type(oris),       intent(inout)   :: os   ! new oris (eg number of clusters clusters > number of self clusters)
+        class(oris),      intent(inout)   :: self !< previous oris
+        type(oris),       intent(inout)   :: os   !< new oris (eg number of clusters clusters > number of self clusters)
         character(len=*), intent(in)      :: key
         integer, allocatable              :: cls_pop(:), pop_spawn(:)
         real                              :: overlap, ov

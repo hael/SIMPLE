@@ -1,3 +1,4 @@
+!> Simple module for scaling images or stacks
 module simple_scaler
 use simple_cmdline, only: cmdline
 use simple_defs     ! use all in there

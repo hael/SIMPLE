@@ -1,3 +1,4 @@
+!> Simple image module: generate mask from images
 module simple_masker
 implicit none
 

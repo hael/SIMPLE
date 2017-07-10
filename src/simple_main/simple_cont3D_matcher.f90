@@ -16,7 +16,7 @@ implicit none
 public :: cont3D_exec
 private
 #include "simple_local_flags.inc"
-integer,                   parameter :: BATCHSZ_MUL = 10   ! particles per thread
+integer,                   parameter :: BATCHSZ_MUL = 10   !< particles per thread
 integer,                   parameter :: MAXNPEAKS   = 10
 integer,                   parameter :: NREFS       = 50
 
@@ -27,9 +27,9 @@ type(cont3D_greedysrch), allocatable :: cont3Dgreedysrch(:)
 logical, allocatable                 :: state_exists(:)
 real                                 :: reslim          = 0.
 !real                                 :: frac_srch_space = 0.   ! so far unused
-integer                              :: nptcls          = 0
+integer                              :: nptcls          = 0     !< number of particles processed
 integer                              :: nrefs_per_ptcl  = 0
-integer                              :: neff_states     = 0
+integer                              :: neff_states     = 0     !< number of non-empty states
 
 contains
 

@@ -1,3 +1,4 @@
+!> Simple hash module
 module simple_chash
 use simple_defs
 implicit none

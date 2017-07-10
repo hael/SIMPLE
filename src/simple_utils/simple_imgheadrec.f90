@@ -1,4 +1,5 @@
-!>  \brief  image header records are contained in image headers. Each contains a piece of information regarding the image file.
+!>  \brief Simple image header recorder class
+!! Records are contained in image headers. Each contains a piece of information regarding the image file.
 module simple_imgheadrec
 use simple_defs
 implicit none
@@ -15,7 +16,7 @@ type :: imgheadrec
 contains
    procedure ::  new
    procedure ::  kill
-end type
+end type imgheadrec
 
 type, extends(imgheadrec) :: int_imgheadrec
 contains
@@ -23,7 +24,7 @@ contains
     procedure          ::  get => getIntg
     procedure, private ::  setIntg
     generic            ::  assignment(=) => setIntg
-end type
+end type int_imgheadrec
 
 type, extends(imgheadrec) :: real_imgheadrec
 contains
@@ -31,7 +32,7 @@ contains
     procedure          :: get => getReal
     procedure, private :: SetReal
     generic            :: assignment(=) => SetReal
-end type
+end type real_imgheadrec
 
 type, extends(imgheadrec) :: char_imgheadrec
 integer :: length=0 !<  length of the string of characters
@@ -40,11 +41,11 @@ contains
     procedure          :: get => getChar
     procedure, private :: SetChar
     generic            :: assignment(=) => SetChar
-end type
+end type char_imgheadrec
 
 interface imgrec
     module procedure constructor
-end interface
+end interface imgrec
 
 interface assignment(=)
     module procedure  getIntgAssign

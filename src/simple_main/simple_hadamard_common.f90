@@ -1,4 +1,4 @@
-!> Generic Prime 2D/3D search module
+!> Simple Hadamard module: Generic Prime 2D/3D search module
 module simple_hadamard_common
 use simple_defs
 use simple_cmdline,      only: cmdline
@@ -19,9 +19,9 @@ private
 #include "simple_local_flags.inc"
 
 real,    parameter :: SHTHRESH  = 0.0001
-real,    parameter :: CENTHRESH = 0.01   ! threshold for performing volume/cavg centering in pixels
-integer            :: glob_cnt  = 0      ! dev purpose only
-    
+real,    parameter :: CENTHRESH = 0.01   !< threshold for performing volume/cavg centering in pixels
+integer            :: glob_cnt  = 0      !< dev purpose only
+
 contains
 
     subroutine read_img_from_stk( b, p, iptcl )
@@ -36,7 +36,7 @@ contains
             call b%img%read(p%stk, iptcl)
         endif
     end subroutine read_img_from_stk
-    
+
     subroutine set_bp_range( b, p, cline )
         use simple_math,          only: calc_fourier_index
         use simple_estimate_ssnr, only: fsc2ssnr
@@ -78,7 +78,7 @@ contains
                                 ! must become default
                                 b%fsc(s,:)  = tmp_arr(:)
                                 deallocate(tmp_arr)
-                                !b%fsc(s,:)  = file2rarr(trim(fsc_fname))                             
+                                !b%fsc(s,:)  = file2rarr(trim(fsc_fname))
                             endif
                             b%ssnr(s,:) = fsc2ssnr(b%fsc(s,:))
                             call get_resolution(b%fsc(s,:), resarr, fsc05, fsc0143)
@@ -145,7 +145,7 @@ contains
         real,           intent(in)    :: frac_srch_space
         real :: lplim
         p%kfromto(1) = max(2, calc_fourier_index(p%hp, p%boxmatch, p%smpd))
-        if( cline%defined('lp') )then        
+        if( cline%defined('lp') )then
             ! set Fourier index range
             p%kfromto(2) = calc_fourier_index(p%lp, p%boxmatch, p%smpd)
             p%lp_dyn     = p%lp
@@ -204,7 +204,7 @@ contains
             endif
             DebugPrint  '*** simple_hadamard_common ***: prepared image for gridding'
             ran = ran3()
-            if( present(ran_eo) )ran = ran_eo 
+            if( present(ran_eo) )ran = ran_eo
             orisoft = orientation
             do jpeak=1,p%npeaks
                 DebugPrint  '*** simple_hadamard_common ***: gridding, iteration:', jpeak
@@ -280,7 +280,7 @@ contains
             ! deal with CTF
             select case(p%ctf)
                 case('mul')  ! images have been multiplied with the CTF, no CTF-dependent weighting of the correlations
-                    stop 'ctf=mul is not supported; simple_hadamard_common :: prepimg4align' 
+                    stop 'ctf=mul is not supported; simple_hadamard_common :: prepimg4align'
                 case('no')   ! do nothing
                 case('yes')  ! do nothing
                 case('flip') ! flip back
@@ -301,7 +301,7 @@ contains
             else if( p%automsk .eq. 'cavg' )then
                 ! 2D ab initio mask
                 call b%mskimg%apply_mask(b%img_match, nint(o%get('cls')))
-            else              
+            else
                 ! soft-edged mask
                 if( p%l_innermsk )then
                     call b%img_match%mask(p%msk, 'soft', inner=p%inner, width=p%width)
@@ -349,7 +349,7 @@ contains
             ! soft masking
             if( p%l_innermsk )then
                 call b%img_match%mask(p%msk, 'soft', inner=p%inner, width=p%width)
-            else 
+            else
                 call b%img_match%mask(p%msk, 'soft')
             endif
         endif
@@ -421,9 +421,9 @@ contains
         ! FT volume
         call b%vol%fwd_ft
         ! expand for fast interpolation
-        if( l_doexpand )call b%vol%expand_cmat     
+        if( l_doexpand )call b%vol%expand_cmat
     end subroutine preprefvol
-    
+
     subroutine eonorm_struct_facts( b, p, res, which_iter )
         use simple_image, only: image
         class(build),      intent(inout) :: b
@@ -476,7 +476,7 @@ contains
             p%lp = min(p%lp,max(p%lpstop,res))
         endif
     end subroutine eonorm_struct_facts
-    
+
     subroutine norm_struct_facts( b, p, which_iter )
         class(build),      intent(inout) :: b
         class(params),     intent(inout) :: p

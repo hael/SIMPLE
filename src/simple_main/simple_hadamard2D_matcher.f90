@@ -1,3 +1,4 @@
+!> Simple Hadamard module: Prime2D method 
 module simple_hadamard2D_matcher
 !$ use omp_lib
 !$ use omp_lib_kinds

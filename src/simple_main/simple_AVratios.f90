@@ -1,8 +1,9 @@
+!> Simple module for converting atomic and volume modes
 module simple_AVratios
 use simple_defs
 implicit none
 
-type AVratios
+type AVratios 
     private
     real :: Vbox=0., Vmsk=0., Vptcl=0.
     real :: Abox=0., Amsk=0., Aptcl=0.
@@ -16,7 +17,7 @@ type AVratios
     procedure :: Abox_o_Aptcl
     procedure :: Aptcl_o_Abox
     procedure :: Amsk_o_Aptcl
-end type
+end type AVratios
 
 interface AVratios
     module procedure constructor
@@ -26,8 +27,10 @@ contains
 
     !> \brief  is a constructor
     function constructor( vol_ldim, img_ldim, msk, smpd, mw ) result( self )
-        integer, intent(in)        :: vol_ldim(3), img_ldim(3) !< volume & image logical dimensions
-        real, intent(in)           :: msk, smpd                !< mask radius (pixels) & sampling distance (in A)
+        integer, intent(in)        :: vol_ldim(3)              !< volume logical dimensions
+        integer, intent(in)        :: img_ldim(3)              !< image logical dimensions
+        real, intent(in)           :: msk                      !< mask radius (pixels)
+        real, intent(in)           :: smpd                     !< sampling distance (in Angstrom)
         real, intent(in), optional :: mw                       !< Molecular weight (in kDa)
         type(AVratios) :: self
         self%Vbox = real(product(vol_ldim))

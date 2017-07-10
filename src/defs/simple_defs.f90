@@ -2,22 +2,22 @@
 !!
 !! DEBUG and VERBOSE modes can be enabled at compile-time or run-time
 !! BUILD_DESC uses the cmake build to describe <GNU/Intel/PGI>_<RELEASE/DEBUG>_<FFTW/MKL>
-!! SimpleGitVersion include file contains the string definitions for SIMPLE_PATH and version info 
+!! SimpleGitVersion include file contains the string definitions for SIMPLE_PATH and version info
 module simple_defs
 use, intrinsic :: iso_c_binding
 implicit none
-character(len=1), parameter :: default_file_format = 'M' ! 'I', 'M' or 'S' for imagic, mrc, spider
-integer, parameter  :: IMPORTANT=10 ! number of solutions considered important
-integer, parameter  :: MAXS=99      ! maximum number of states
-integer, parameter  :: STDLEN=256   ! standard string length
+character(len=1), parameter :: default_file_format = 'M' !<  'I', 'M' or 'S' for imagic, mrc, spider
+integer, parameter  :: IMPORTANT=10 !< number of solutions considered important
+integer, parameter  :: MAXS=99      !< maximum number of states
+integer, parameter  :: STDLEN=256   !< standard string length
 integer, parameter  :: short = selected_int_kind(4)
 integer, parameter  :: long  = selected_int_kind(9)
 integer, parameter  :: longer  = selected_int_kind(16)
 integer, parameter  :: I4B = SELECTED_INT_KIND(9)
 integer, parameter  :: I2B = SELECTED_INT_KIND(4)
 integer, parameter  :: I1B = SELECTED_INT_KIND(2)
-integer, parameter  :: SP = KIND(1.0)        ! single float precision
-integer, parameter  :: DP = KIND(1.0D0)      ! double float precision
+integer, parameter  :: SP = KIND(1.0)        !< single float precision
+integer, parameter  :: DP = KIND(1.0D0)      !< double float precision
 integer, parameter  :: DOUBLE = KIND(1.0D0)
 integer, parameter  :: SPC = KIND((1.0,1.0))
 integer, parameter  :: DPC = KIND((1.0D0,1.0D0))
@@ -41,22 +41,22 @@ real(sp), parameter :: FTOL=1e-4
 real(dp), parameter :: DSMALL=1e-6
 real(dp), parameter :: pisqr = PI*PI   ! PI^2.
 
-! plan for the CTF
+!> plan for the CTF
 type :: ctfplan
     character(len=STDLEN) :: mode='' !< astig/noastig
-    character(len=STDLEN) :: flag='' !< flag: <mul|flip|no> 
+    character(len=STDLEN) :: flag='' !< flag: <mul|flip|no>
 end type ctfplan
 
-! constants for picker
+!! constants for picker
 real,    parameter :: PICKER_SHRINK        = 4.
 real,    parameter :: PICKER_SHRINK_REFINE = 2.
 integer, parameter :: PICKER_OFFSET        = 3
 
 !! constants for interpolation
-real, parameter :: KBWINSZ = 1.5    ! interpolation window size
-real, parameter :: KBALPHA = 2.0    ! interpolation alpha (smoothing constant)
+real, parameter :: KBWINSZ = 1.5    !< interpolation window size
+real, parameter :: KBALPHA = 2.0    !< interpolation alpha (smoothing constant)
 
-integer, parameter :: SPECWMINPOP=2000 ! minimum population for spectral weighting
+integer, parameter :: SPECWMINPOP=2000 !< minimum population for spectral weighting
 
 !! SNHC-related global vars
 character(len=32), parameter :: SNHCDOC = 'snhc_oris.txt'
@@ -66,17 +66,17 @@ integer,           parameter :: SZSN_STEP = 3
 integer,           parameter :: SZSN_MAX  = 20
 
 !! constants that control search and convergence
-real,    parameter :: FRAC_SH_LIM      = 80.0 ! at what frac to turn on the shift search
+real,    parameter :: FRAC_SH_LIM      = 80.0 !< at what frac to turn on the shift search
 real,    parameter :: EXTRINITHRESH    = 0.5
 real,    parameter :: EXTRTHRESH_CONST = 0.2
 real,    parameter :: LP2SMPDFAC       = 0.4125
 integer, parameter :: LPLIM1ITERBOUND  = 5
 integer, parameter :: LPLIM3ITERBOUND  = 7
 
-character(len=:), allocatable :: endconv   ! endianness conversion
-integer(kind=c_int):: nthr_glob            ! number of threads global variable
-logical :: l_distr_exec_glob               ! global distributed execution flag
-character(len=STDLEN) :: exec_abspath_glob ! global executable absolute path
+character(len=:), allocatable :: endconv   !< endianness conversion
+integer(kind=c_int):: nthr_glob            !< number of threads global variable
+logical :: l_distr_exec_glob               !< global distributed execution flag
+character(len=STDLEN) :: exec_abspath_glob !< global executable absolute path
 
 #ifndef IMAGETYPESINGLE
   integer, parameter :: fp_kind = DP
@@ -85,17 +85,21 @@ character(len=STDLEN) :: exec_abspath_glob ! global executable absolute path
 #endif
 !! Debugging and print verbosity flags
 #ifdef _DEBUG
-  logical :: global_debug=.true.           ! global debugging flag
+  logical :: global_debug=.true.          !< global debugging flag
+  logical :: global_verbose=.true.        !< global flag for verbosity set to TRUE in debug mode
 #else
   logical :: global_debug=.false.
+#ifdef VERBOSE
+  logical :: global_verbose=.true.        !< global flag for verbosity TRUE with VERBOSE compilation flag
+#else
+  logical :: global_verbose=.false.       !< global flag for verbosity FALSE by default
 #endif
-  logical :: global_warn=.false.
-  logical :: global_verbose=.false.        ! global flag for verbosity
-  character(len=STDLEN) :: build_descr = "BUILD_NAME" ! Cmake defines the build name
+#endif
+  logical :: global_warn=.false.          !<
 
-!! append SIMPLE_VERSION and SIMPLE_GIT_VERSION strings to simple_defs
+  character(len=STDLEN) :: build_descr = BUILD_NAME !< compiler, build type and FFT backend
+
+  !! append SIMPLE_VERSION and SIMPLE_GIT_VERSION strings to simple_defs
 #include "SimpleGitVersion.h"
 
 end module simple_defs
-
-

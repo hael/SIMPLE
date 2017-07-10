@@ -1,4 +1,4 @@
-!=Module simple_timer_omp
+!> Simple timer module using OpenMP functions
 !
 !
 ! Michael Eager 2017-03-15

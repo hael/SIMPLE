@@ -1,4 +1,4 @@
-!> Command dictionary module
+!> Simple command dictionary module
 module simple_cmd_dict
 use simple_chash, only: chash
 use simple_defs

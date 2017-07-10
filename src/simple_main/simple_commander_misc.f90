@@ -1,4 +1,4 @@
-!> simple_commander_misc
+!> Simple commander module: miscellanous commanders
 !
 !! This class contains the set of concrete miscellanous commanders of the SIMPLE
 !! library. This class provides the glue between the reciver (main reciever is
@@ -291,8 +291,8 @@ contains
         type(sym)          :: se_c1
         real               :: cc, rotmat(3,3)
         integer            :: i, fnr, file_stat
-        integer, parameter :: MAXLABELS = 10   ! maximum numbers symmetry peaks
-        real,    parameter :: ANGTHRESH = 10.  ! maximum half-distance between symmetry peaks
+        integer, parameter :: MAXLABELS = 10   !< maximum numbers symmetry peaks
+        real,    parameter :: ANGTHRESH = 10.  !< maximum half-distance between symmetry peaks
         p = params(cline)                      ! parameters generated
         call b%build_general_tbox(p, cline)    ! general objects built
         ! init

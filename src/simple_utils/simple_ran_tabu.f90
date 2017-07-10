@@ -1,9 +1,8 @@
-
-!> simple_ran_tabu contains routines for generation of directed random numbers.
-! The code is distributed 
+!> Simple random tabulated module contains routines for generation of directed random numbers.
+! The code is distributed
 ! with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_. Redistribution
 ! or modification is regulated by the GNU General Public License. *Author:* Hans Elmlund, 2009-05-12.
-! 
+!
 !==Changes are documented below
 !* incorporated in the _SIMPLE_ library, HE 2009-06-25
 !* OOD 2003, HE 2012-06-15
@@ -92,7 +91,7 @@ contains
         self%avail(i) = .true.
     end subroutine remove
 
-    !>  \brief  generates a uniform random integer [_1_,_NP_] not tabu, 
+    !>  \brief  generates a uniform random integer [_1_,_NP_] not tabu,
     !!          used to direct Monte Carlo search out of forbidden regions.
     function irnd( self ) result( ir )
         use simple_rnd, only: irnd_uni
@@ -111,12 +110,12 @@ contains
         integer,         intent(out) :: irnd, jrnd
         irnd = self%irnd()
         jrnd = irnd
-        do while( irnd == jrnd ) 
+        do while( irnd == jrnd )
             jrnd = self%irnd()
         end do
     end subroutine irnd_pair
-    
-    !>  \brief  generates a normal random integer [_1_,_NP_] not tabu, 
+
+    !>  \brief  generates a normal random integer [_1_,_NP_] not tabu,
     !!          used to direct Monte Carlo search out of forbidden regions.
     function irnd_gau( self, mean, stdev ) result( irnd )
         use simple_rnd, only: irnd_gasdev
@@ -129,7 +128,7 @@ contains
             if( self%avail(irnd) ) return
         end do
     end function irnd_gau
-    
+
     !>  \brief  generates a multinomal random integer not tabu
     function mnomal( self, pvec ) result( irnd )
         use simple_rnd, only: multinomal
@@ -166,7 +165,7 @@ contains
             call self%reset
             do i=1,szrndiarr
                 rndiarr(i) = self%irnd()
-                call self%insert(rndiarr(i))  
+                call self%insert(rndiarr(i))
             end do
             call self%reset
         endif
@@ -223,9 +222,9 @@ contains
             call self%ne_mnomal_iarr( pmat(iptcl,:), nnmat(iptcl,:))
         end do
     end function stoch_nnmat
-    
+
     !>  \brief  shuffles an integer array
-    subroutine shuffle( self, shuffled ) 
+    subroutine shuffle( self, shuffled )
         class(ran_tabu), intent(inout) :: self
         integer,         intent(inout) :: shuffled(self%NP)
         integer :: tmp(self%NP), irnd, i
@@ -233,14 +232,14 @@ contains
         do i=1,self%NP
             irnd = self%irnd()
             tmp(i) = shuffled(irnd)
-            call self%insert(irnd)  
+            call self%insert(irnd)
         end do
         shuffled = tmp
         call self%reset
     end subroutine shuffle
-    
+
     !>  \brief  creates a balanced randomised paritioning over nstates states
-    subroutine balanced( self, nstates, iarr ) 
+    subroutine balanced( self, nstates, iarr )
         class(ran_tabu), intent(inout) :: self
         integer,         intent(in)    :: nstates
         integer,         intent(inout) :: iarr(self%NP)
@@ -255,7 +254,7 @@ contains
         end do
         call self%shuffle(iarr)
     end subroutine balanced
-    
+
     !>  \brief  is a destructor
     subroutine kill( self )
         class(ran_tabu), intent(inout) :: self

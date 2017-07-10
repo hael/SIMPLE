@@ -1,3 +1,4 @@
+!> Simple optimisation method: generic pftcc optimisation
 module simple_pftcc_opt
 implicit none
 

@@ -1,8 +1,8 @@
-!> simple_sym is for symmetry adaption.
+!> Simple ori module for symmetry adaption.
 ! The code is distributed with the hope that it will be useful,
-! but _WITHOUT_ _ANY_ _WARRANTY_. Redistribution or modification is regulated by the GNU General Public 
+! but _WITHOUT_ _ANY_ _WARRANTY_. Redistribution or modification is regulated by the GNU General Public
 ! License. *Author:* Hans Elmlund, 2009-05-12.
-! 
+!
 !==Changes are documented below
 !
 module simple_sym
@@ -158,36 +158,36 @@ contains
         real                      :: eullims(3,2)
         eullims = self%eullims
     end function srchrange
-    
-    !>  \brief  to check which point-group symmetry 
+
+    !>  \brief  to check which point-group symmetry
     pure function which( self ) result( pgrp )
         class(sym), intent(in) :: self
         character(len=3) :: pgrp
         pgrp = self%pgrp
     end function which
-    
-    !>  \brief  is a getter 
+
+    !>  \brief  is a getter
     pure function get_nsym( self ) result( n )
         class(sym), intent(in) :: self
         integer :: n
         n = self%n
     end function get_nsym
 
-    !>  \brief  is a getter 
+    !>  \brief  is a getter
     pure function get_pgrp( self ) result( pgrp_str )
         class(sym), intent(in) :: self
         character(len=3) :: pgrp_str
         pgrp_str = self%pgrp
     end function get_pgrp
 
-    !>  \brief  is a getter 
+    !>  \brief  is a getter
     function get_nsubgrp( self )result( n )
         class(sym) :: self
         integer :: n
         n = size(self%subgrps)
     end function get_nsubgrp
 
-    !>  \brief  is a getter 
+    !>  \brief  is a getter
     function get_subgrp( self, i )result( symobj )
         class(sym),intent(in) :: self
         type(sym) :: symobj
@@ -200,15 +200,15 @@ contains
         symobj = sym(self%subgrps(i))
     end function get_subgrp
 
-    !>  \brief  is a 
+    !>  \brief  is a
     subroutine get_all_cd_subgrps( self, subgrps )
         use simple_math,                   only: is_even
         class(sym), intent(inout)             :: self
-        integer                               :: i, cnt, alloc_stat        
+        integer                               :: i, cnt, alloc_stat
         character(len=1)                      :: pgrp
         character(len=3),allocatable          :: pgrps(:), subgrps(:)
         allocate( pgrps(self%n), stat=alloc_stat )
-        call alloc_err( 'get_all_cd_subgrps; simple_sym; 1', alloc_stat )            
+        call alloc_err( 'get_all_cd_subgrps; simple_sym; 1', alloc_stat )
         pgrp = self%pgrp(1:1)
         cnt  = 0
         if( pgrp=='c' )then
@@ -228,23 +228,23 @@ contains
             stop
         endif
         allocate( subgrps(cnt), stat=alloc_stat )
-        call alloc_err( 'get_all_cd_subgrps; simple_sym; 2', alloc_stat )            
+        call alloc_err( 'get_all_cd_subgrps; simple_sym; 2', alloc_stat )
         do i=1,cnt
             subgrps(i) = pgrps(i)
         enddo
         deallocate(pgrps)
 
         contains
-            
+
             function fmtsymstr( symtype, iord )result( ostr )
                 integer, intent(in)           :: iord
                 character(len=1), intent(in)  :: symtype
                 character(len=2)              :: ord
                 character(len=3)              :: ostr
                 write(ord,'(I2)') iord
-                write(ostr,'(A1,A2)') symtype, adjustl(ord) 
+                write(ostr,'(A1,A2)') symtype, adjustl(ord)
             end function fmtsymstr
-            
+
     end subroutine get_all_cd_subgrps
 
     !>  \brief  Returns array of all symmetry subgroups in c &/| d
@@ -319,7 +319,7 @@ contains
         enddo
     end subroutine rotall_to_asym
 
-    !>  \brief  is a getter 
+    !>  \brief  is a getter
     function get_symori( self, symop ) result( e_sym )
         use simple_ori, only: ori
         class(sym), intent(inout) :: self
@@ -327,7 +327,7 @@ contains
         type(ori) :: e_sym
         e_sym = self%e_sym%get_ori(symop)
     end function get_symori
-    
+
     !>  \brief  is a symmetry adaptor
     subroutine apply2all( self, e_in )
         use simple_ori, only: ori
@@ -386,15 +386,15 @@ contains
                 call os%rot(i,symaxis_ori)
                 o = os%get_ori(i)
                 call self%rot_to_asym(o)
-                call os%set_ori(i, o) 
+                call os%set_ori(i, o)
             end do
         else
-            call os%map3dshift22d( shvec ) 
+            call os%map3dshift22d( shvec )
             call os%rot(symaxis_ori)
             call self%rotall_to_asym(os)
         endif
     end subroutine apply_sym_with_shift
-    
+
     !>  \brief  SPIDER code for making c and d symmetries
     subroutine make_c_and_d( self )
         class(sym), intent(inout) :: self
@@ -414,9 +414,9 @@ contains
               call self%e_sym%set_euler(cnt,real(matextract(g)))
            end do
            if(self%pgrp(1:1).ne.'d' .and. self%pgrp(1:1).ne.'D') return
-        end do 
+        end do
     end subroutine make_c_and_d
-    
+
     !>  \brief  hardcoded euler angles taken from SPARX
     subroutine make_o( self )
         class(sym), intent(inout) :: self
@@ -436,7 +436,7 @@ contains
             call self%e_sym%set_euler(cnt,real([0.d0, 180.d0, phi]))
         enddo
     end subroutine make_o
-    
+
     !>  \brief  SPIDER code for making tetahedral symmetry
     !!          tetrahedral, with 3axis align w/z axis, point on +ve x axis
     subroutine make_t( self )
@@ -497,15 +497,15 @@ contains
                 psi = i*delta5+deltan
                 phi = j*delta5
                 call self%e_sym%set_euler(cnt, real([psi,theta,phi]))
-            end do 
+            end do
         end do
     end subroutine make_i
-    
+
     !>  \brief Sets the array of subgroups (character identifier) including itself
     subroutine set_subgrps( self )
         use simple_math, only: is_even
         class(sym), intent(inout)     :: self
-        integer                       :: i, cnt, alloc_stat        
+        integer                       :: i, cnt, alloc_stat
         character(len=1)              :: pgrp
         character(len=3), allocatable :: pgrps(:)
         allocate( pgrps(self%n), stat=alloc_stat )
@@ -517,7 +517,7 @@ contains
             else
                 cnt        = cnt+1
                 pgrps(cnt) = self%pgrp
-            endif              
+            endif
         else if( pgrp.eq.'d' )then
             if( is_even(self%n/2) )then
                 call getevensym('c', self%n/2)
@@ -532,30 +532,30 @@ contains
             endif
         else if( pgrp.eq.'t' )then
             cnt      = 4
-            pgrps(1) = 'c2' 
-            pgrps(2) = 'c3' 
-            pgrps(3) = 'd2'         
-            pgrps(4) = 't'         
-        else if( pgrp.eq.'o' )then                
-            cnt      = 8               
-            pgrps(1) = 'c2' 
-            pgrps(2) = 'c3' 
-            pgrps(3) = 'c4' 
-            pgrps(4) = 'd2'        
-            pgrps(5) = 'd3'        
-            pgrps(6) = 'd4'        
-            pgrps(7) = 't'  
-            pgrps(8) = 'o'  
-        else if( pgrp.eq.'i' )then                
-            cnt      = 8               
-            pgrps(1) = 'c2' 
-            pgrps(2) = 'c3' 
-            pgrps(3) = 'c5' 
-            pgrps(4) = 'd2'        
-            pgrps(5) = 'd3'  
+            pgrps(1) = 'c2'
+            pgrps(2) = 'c3'
+            pgrps(3) = 'd2'
+            pgrps(4) = 't'
+        else if( pgrp.eq.'o' )then
+            cnt      = 8
+            pgrps(1) = 'c2'
+            pgrps(2) = 'c3'
+            pgrps(3) = 'c4'
+            pgrps(4) = 'd2'
+            pgrps(5) = 'd3'
+            pgrps(6) = 'd4'
+            pgrps(7) = 't'
+            pgrps(8) = 'o'
+        else if( pgrp.eq.'i' )then
+            cnt      = 8
+            pgrps(1) = 'c2'
+            pgrps(2) = 'c3'
+            pgrps(3) = 'c5'
+            pgrps(4) = 'd2'
+            pgrps(5) = 'd3'
             pgrps(6) = 'd5'
-            pgrps(7) = 't'         
-            pgrps(8) = 'i'   
+            pgrps(7) = 't'
+            pgrps(8) = 'i'
         endif
         if( allocated(self%subgrps) )deallocate( self%subgrps )
         allocate( self%subgrps(cnt), stat=alloc_stat )
@@ -565,7 +565,7 @@ contains
         deallocate(pgrps)
 
         contains
-            
+
             subroutine getevensym( cstr, o )
                 integer          :: o
                 character(len=1) :: cstr
@@ -575,18 +575,18 @@ contains
                         cnt = cnt+1
                         pgrps(cnt) = fmtsymstr(cstr, i)
                     endif
-                enddo                    
+                enddo
             end subroutine getevensym
 
             function fmtsymstr( symtype, iord )result( ostr )
+                character(len=1), intent(in)  :: symtype !< symmetry type
                 integer, intent(in)           :: iord
-                character(len=1), intent(in)  :: symtype
-                character(len=2)              :: ord
-                character(len=3)              :: ostr
+                character(len=2)              :: ord     !< order
+                character(len=3)              :: ostr    !< concatenation of symtype and iord
                 write(ord,'(I2)') iord
-                write(ostr,'(A1,A2)') symtype, adjustl(ord) 
+                write(ostr,'(A1,A2)') symtype, adjustl(ord)
             end function fmtsymstr
-            
+
     end subroutine set_subgrps
 
     !>  \brief  is a destructor
@@ -595,11 +595,11 @@ contains
         if( allocated(self%subgrps) )deallocate( self%subgrps )
         call self%e_sym%kill
     end subroutine kill
-    
+
     ! PRIVATE STUFF
-    
+
     !>  \brief  from SPIDER, creates a rotation matrix around either x or z assumes
-    !!          rotation ccw looking towards 0 from +axis accepts 2 arguments, 
+    !!          rotation ccw looking towards 0 from +axis accepts 2 arguments,
     !!          0=x or 1=z (first reg.)and rot angle in deg.(second reg.)
     function matcreate( inxorz, indegr ) result( newmat )
         integer, intent(in)          :: inxorz
@@ -611,7 +611,7 @@ contains
         ! change input of degrees to radians for fortran
         inrad = indegr*(dpi/180.d0)
         ! for x rot matrix, place 1 and add cos&sin values
-        if( inxorz .eq. 0 )then  
+        if( inxorz .eq. 0 )then
             newmat(1,1) = 1.d0
             newmat(2,2) = cos(inrad)
             newmat(3,3) = cos(inrad)
@@ -628,11 +628,11 @@ contains
             stop 'Unsupported matrix spec; matcreate; simple_ori'
         endif
     end function matcreate
-    
+
     !>  \brief  from SPIDER, used to calculate the angles SPIDER expects from rot. matrix.
-    !!          assumes sin(theta) is positive (0-180 deg), euls(3) is returned in the 
+    !!          assumes sin(theta) is positive (0-180 deg), euls(3) is returned in the
     !!          SPIDER convention psi, theta, phi
-    function matextract( rotmat ) result( euls ) 
+    function matextract( rotmat ) result( euls )
         double precision, intent(inout) :: rotmat(3,3)
         double precision :: euls(3),radtha,sintha
         double precision :: radone,radtwo,dt

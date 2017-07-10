@@ -1,3 +1,4 @@
+!< Simple commander module: interface to stream-based workflows
 module simple_commander_stream_wflows
 use simple_defs
 use simple_cmdline,           only: cmdline

@@ -1,3 +1,4 @@
+!> Simple optimisation module: common-line mode search
 module simple_comlin_srch
 use simple_defs
 use simple_build,       only: build

@@ -1,12 +1,12 @@
-!==Module simple_timer
+
 !
-!>\brief High resolution timer in fortran
+!> Simple timer module: High resolution timer in fortran
 !
-! Version 0.1:  64 bit INT implementation of system_clock
-!  present in gfortran and pgfortran
-! Version 0.2: Special loop and profiling timers added May 2017
+!! Version 0.1:  64 bit INT implementation of system_clock
+!!  present in gfortran and pgfortran
+!! Version 0.2: Special loop and profiling timers added May 2017
 !
-! Michael Eager 2017
+!! \author Michael Eager 2017
 !<------------------------------------
 module simple_timer
 !     use simple_jiffys ! singleton
@@ -22,8 +22,8 @@ private
    integer, public       :: num_profile_loops, num_profile_vars
    logical, public       :: inloop = .false.
    integer, public       :: profile_counter
-   integer, parameter, public :: MAX_TOKENS = 10 ! number of entries in token dictionary
-   integer, parameter, public :: MAX_TOKEN_CHARSIZE = 30 ! max char length of tokens
+   integer, parameter, public :: MAX_TOKENS = 10 !> number of entries in token dictionary
+   integer, parameter, public :: MAX_TOKEN_CHARSIZE = 30 !< max char length of tokens
    real(dp), allocatable, public :: elapsed_times(:)
    real(dp), allocatable, public :: profile_matrix(:, :)
    integer(dp), dimension(MAX_TOKENS), public :: profile_last_timerstamp

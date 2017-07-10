@@ -1,3 +1,4 @@
+!>  Simple image module: estimation routines for 2D analysis
 module simple_estimate_ssnr
 use simple_defs
 use simple_image, only: image
@@ -9,9 +10,9 @@ contains
 
     !>  \brief make a fake ssnr estimate, useful for testing purposes
     function fake_ssnr( img, lplim, width ) result( ssnr )
-        class(image), intent(in)   :: img
-        real, intent(in)           :: lplim
-        real, intent(in), optional :: width
+        class(image), intent(in)   :: img           !< image object
+        real, intent(in)           :: lplim         !< low-pass limit
+        real, intent(in), optional :: width         !< window width
         real, allocatable :: ssnr(:), fsc(:), res(:)
         integer           :: nyq, k
         real              :: freq, wwidth, lplim_freq
@@ -39,7 +40,7 @@ contains
     function estimate_ssnr( imgs, os, msk, tfun, tfplan ) result( ssnr )
         use simple_oris, only: oris
         use simple_ctf, only: ctf
-        class(image),     intent(inout) :: imgs(:)
+        class(image),     intent(inout) :: imgs(:) !< image objects
         class(oris),      intent(inout) :: os
         real,             intent(in)    :: msk
         class(ctf),       intent(inout) :: tfun
@@ -130,13 +131,13 @@ contains
     subroutine estimate_specnoise_online( avg, img, msk, o, tfun, tfplan, specnoisesum, inner_width )
         use simple_ori, only: ori
         use simple_ctf, only: ctf
-        class(image),     intent(inout) :: avg
-        class(image),     intent(inout) :: img
-        real,             intent(in)    :: msk
-        class(ori),       intent(inout) :: o
-        class(ctf),       intent(inout) :: tfun
-        type(ctfplan),    intent(in)    :: tfplan
-        real,             intent(inout) :: specnoisesum(:)
+        class(image),     intent(inout) :: avg !< image average object
+        class(image),     intent(inout) :: img !< image object
+        real,             intent(in)    :: msk !< mask
+        class(ori),       intent(inout) :: o   !< orientation object
+        class(ctf),       intent(inout) :: tfun !< CTF object
+        type(ctfplan),    intent(in)    :: tfplan !< plan object
+        real,             intent(inout) :: specnoisesum(:) 
         real, optional,   intent(in)    :: inner_width(2)
         type(image)       :: fdiff, favg, fimg
         real, allocatable :: specnoise(:)
@@ -188,8 +189,8 @@ contains
 
     !> \brief  converts the FSC to SSNR (the 2.* is because of the division of the data)
     function fsc2ssnr( corrs ) result( ssnr )
-        real, intent(in)  :: corrs(:)
-        real, allocatable :: ssnr(:)
+        real, intent(in)  :: corrs(:) !<  instrument FSC 
+        real, allocatable :: ssnr(:) !<  instrument SSNR
         integer :: nyq, k
         real    :: fsc
         nyq = size(corrs)
@@ -219,8 +220,8 @@ contains
 
     !> \brief  converts the SSNR to FSC
     function ssnr2fsc( ssnr ) result( corrs )
-        real, intent(in)  :: ssnr(:)
-        real, allocatable :: corrs(:)
+        real, intent(in)  :: ssnr(:)  !< input SSNR array
+        real, allocatable :: corrs(:) !< output FSC result
         integer :: nyq, k
         nyq = size(ssnr)
         allocate( corrs(nyq) )
@@ -231,8 +232,8 @@ contains
 
     !> \brief  converts the SSNR 2 the optimal low-pass filter
     function ssnr2optlp( ssnr ) result( w )
-        real, intent(in)  :: ssnr(:)
-        real, allocatable :: w(:)
+        real, intent(in)  :: ssnr(:) !<  instrument SSNR
+        real, allocatable :: w(:) !<  FIR low-pass filter
         integer :: nyq, k
         nyq = size(ssnr)
         allocate( w(nyq) )
@@ -245,8 +246,8 @@ contains
     function estimate_pssnr2D( avr, fsc ) result( pssnr )
         use simple_AVratios, only: AVratios
         class(AVratios), intent(in) :: avr
-        real, intent(in)            :: fsc(:)
-        real, allocatable :: pssnr(:)
+        real, intent(in)            :: fsc(:)  !<  instrument FSC
+        real, allocatable :: pssnr(:) !<  particle SSNR
         pssnr = fsc2ssnr(fsc)
         pssnr = pssnr*avr%Abox_o_Aptcl()*avr%Vmsk_o_Vbox()
     end function estimate_pssnr2D
@@ -255,8 +256,8 @@ contains
     function estimate_pssnr3D( avr, fsc ) result( pssnr )
         use simple_AVratios, only: AVratios
         class(AVratios), intent(in) :: avr
-        real, intent(in)            :: fsc(:)
-        real, allocatable :: pssnr(:)
+        real, intent(in)            :: fsc(:) !<  instrument FSC
+        real, allocatable :: pssnr(:) !<  particle SSNR
         pssnr = estimate_pssnr2D(avr, fsc)
         pssnr = pssnr*avr%Vbox_o_Vptcl()*avr%Aptcl_o_Abox()
     end function estimate_pssnr3D
@@ -265,8 +266,8 @@ contains
     function from_ssnr_estimate_pssnr2D( avr, ssnr ) result( pssnr )
         use simple_AVratios, only: AVratios
         class(AVratios), intent(in) :: avr
-        real, intent(in)            :: ssnr(:)
-        real, allocatable :: pssnr(:)
+        real, intent(in)            :: ssnr(:) !<  instrument SSNR
+        real, allocatable :: pssnr(:) !<  particle SSNR
         allocate(pssnr(size(ssnr)), source=ssnr)
         pssnr = pssnr*avr%Abox_o_Aptcl()*avr%Vmsk_o_Vbox()
     end function from_ssnr_estimate_pssnr2D
@@ -275,8 +276,8 @@ contains
     function from_ssnr_estimate_pssnr3D( avr, ssnr ) result( pssnr )
         use simple_AVratios, only: AVratios
         class(AVratios), intent(in) :: avr
-        real, intent(in)            :: ssnr(:)
-        real, allocatable :: pssnr(:)
+        real, intent(in)            :: ssnr(:) !<  instrument SSNR
+        real, allocatable :: pssnr(:)           !<  particle SSNR
         pssnr = from_ssnr_estimate_pssnr2D(avr, ssnr)
         pssnr = pssnr*avr%Vbox_o_Vptcl()*avr%Aptcl_o_Abox()
     end function from_ssnr_estimate_pssnr3D

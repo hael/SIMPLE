@@ -1,9 +1,8 @@
-
 !> simple_jiffys provides jiffys.
-! The code is distributed with the hope that it will be useful, 
-! but _WITHOUT_ _ANY_ _WARRANTY_. Redistribution or modification is regulated by the GNU General 
+! The code is distributed with the hope that it will be useful,
+! but _WITHOUT_ _ANY_ _WARRANTY_. Redistribution or modification is regulated by the GNU General
 ! Public License. *Author:* Hans Elmlund, 2011-08-18.
-! 
+!
 !==Changes are documented below
 !
 module simple_jiffys
@@ -37,7 +36,7 @@ contains
         character(len=:), allocatable :: conv
         character(len=1)              :: form
         logical                       :: ddoprint
-        ddoprint = .false. 
+        ddoprint = .false.
         if( present(doprint) ) ddoprint = doprint
         if( present(formatchar) )then
             form = formatchar
@@ -85,7 +84,7 @@ contains
         endif
         has_ldim_nptcls = .true.
     end function has_ldim_nptcls
-    
+
     !>  \brief is for gettign a part of the info in a MRC image header
     subroutine get_mrcfile_info( fname, ldim, form, smpd, doprint )
         use simple_imghead, only: ImgHead, MrcImgHead, MrcFeiImgHead
@@ -133,7 +132,7 @@ contains
             stop
         endif
     end subroutine get_mrcfile_info
-    
+
     !>  \brief is for gettign a part of the info in a SPIDER image header
     subroutine get_spifile_info( fname, ldim, iform, maxim, smpd, conv, doprint )
         character(len=*), intent(in)               :: fname
@@ -155,7 +154,7 @@ contains
                     call print_spihed
                     return
                 endif
-                open(unit=filnum, status='OLD', action='READ', file=fname, access='STREAM', convert='BIG_ENDIAN') ! 
+                open(unit=filnum, status='OLD', action='READ', file=fname, access='STREAM', convert='BIG_ENDIAN') !
                 call read_spihed
                 close(filnum)
                 if( .not. any(ldim < 1) )then
@@ -163,7 +162,7 @@ contains
                     call print_spihed
                     return
                 endif
-                open(unit=filnum, status='OLD', action='READ', file=fname, access='STREAM', convert='LITTLE_ENDIAN') ! 
+                open(unit=filnum, status='OLD', action='READ', file=fname, access='STREAM', convert='LITTLE_ENDIAN') !
                 call read_spihed
                 close(filnum)
                 if( .not. any(ldim < 1) )then
@@ -181,9 +180,9 @@ contains
             write(*,*) fname
             stop
         endif
-        
+
         contains
-            
+
             subroutine read_spihed
                 cnt = 0
                 do i=1,40*4,4
@@ -195,7 +194,7 @@ contains
                 maxim = int(spihed(26))
                 smpd  = spihed(38)
             end subroutine
-            
+
             subroutine print_spihed
                 if( doprint )then
                     write(*,'(a,3(i0,1x))') 'Number of columns, rows, sections: ', int(spihed(12)), int(spihed(2)), int(spihed(1))
@@ -204,7 +203,7 @@ contains
                     write(*,'(a,1x,f7.3)')  'Pixel size: ', spihed(38)
                 endif
             end subroutine
-            
+
     end subroutine get_spifile_info
 
     !> \brief  for reading raw images using stream access
@@ -225,7 +224,7 @@ contains
         endif
         close(filnum)
     end subroutine read_raw_image
-    
+
     !> \brief  for writing raw images using stream access
     subroutine write_raw_image( fname, mat, first_byte )
         character(len=*), intent(in) :: fname
@@ -244,9 +243,9 @@ contains
         endif
         close(filnum)
     end subroutine write_raw_image
-    
+
     ! EXCEPTION-HANDLING JIFFYS
-    
+
     !> \brief  is for raising command line exception
     subroutine cmdline_err( cmdstat, cmdlen, arg, pos )
         integer, intent(in)          :: cmdstat, cmdlen, pos
@@ -267,7 +266,7 @@ contains
         endif
     end subroutine cmdline_err
 
-    !> \brief  is for checking allocation 
+    !> \brief  is for checking allocation
     subroutine alloc_err( message, alloc_stat )
         character(len=*), intent(in) :: message
         integer, intent(in)          :: alloc_stat
@@ -277,7 +276,7 @@ contains
             stop
         endif
     end subroutine alloc_err
-        
+
     ! PRETTY PROGRESS & ENDING JIFFYS
 
      subroutine progress( i, n )
@@ -289,7 +288,7 @@ contains
             if( i >= n ) write(*,*) ''
         endif
     end subroutine progress
-    
+
     !> \brief is for printing a progress bar
     subroutine progress_gfortran(i, imax)
         integer, intent(in) :: i, imax
@@ -303,7 +302,7 @@ contains
                 ! write new bar and percentage
                 write(6,'(2x,1a4,2x,1a1,256a1)', advance='no') '100%','|', ('=', k=1,50)
                 write(6,'(a)') '| done.'
-                flush 6            
+                flush 6
             else
                 prev = nint( 100.*real(i-1)/real(imax) )
                 curr = nint( 100.*real(i)/real(imax) )
@@ -328,34 +327,34 @@ contains
         if( pprint_simple )then
             write(*,'(A)') "       _______ _____ _______  _____         _______"
             write(*,'(A)') "       |______   |   |  |  | |_____] |      |______"
-            write(*,'(A)') "       ______| __|__ |  |  | |       |_____ |______"      
-            write(*,'(A)') " "                                                            
-            write(*,'(A)') " _)_ ( _   _     ) o  _             _   _   _   o  _   _"  
-            write(*,'(A)') " (_   ) ) )_)   (  ( ) ) (_( \)    )_) ) ) (_(  ( ) ) )_)"   
+            write(*,'(A)') "       ______| __|__ |  |  | |       |_____ |______  v2.5"
+            write(*,'(A)') " "
+            write(*,'(A)') " _)_ ( _   _     ) o  _             _   _   _   o  _   _"
+            write(*,'(A)') " (_   ) ) )_)   (  ( ) ) (_( \)    )_) ) ) (_(  ( ) ) )_)"
             write(*,'(A)') "         (_                  (\   (_         _)      (_"
             write(*,'(A)') ""
         endif
         write(*,'(A)') str
     end subroutine simple_end
-  
+
     !> \brief  for pretty haloween ending
     subroutine haloween_end( str )
         character(len=*), intent(in) :: str
-        write(*,'(A)') " #"     
+        write(*,'(A)') " #"
         write(*,'(A)') " ##"
-        write(*,'(A)') " ###"   
-        write(*,'(A)') "  ####"   
+        write(*,'(A)') " ###"
+        write(*,'(A)') "  ####"
         write(*,'(A)') "   #####              _______ _____ _______  _____         _______"
         write(*,'(A)') "   #######            |______   |   |  |  | |_____] |      |______"
-        write(*,'(A)') "    #######           ______| __|__ |  |  | |       |_____ |______"
+        write(*,'(A)') "    #######           ______| __|__ |  |  | |       |_____ |______  v2.5"
         write(*,'(A)') "    ########"
         write(*,'(A)') "    #########    _)_ ( _   _     ) o  _             _   _   _   o  _   _"
         write(*,'(A)') "    ##########   (_   ) ) )_)   (  ( ) ) (_( \)    )_) ) ) (_(  ( ) ) )_)"
         write(*,'(A)') "    ##########            (_                  (\   (_         _)      (_"
         write(*,'(A)') "   ###########"
-        write(*,'(A)') " ##############                                                    #"          
+        write(*,'(A)') " ##############                                                    #"
         write(*,'(A)') "###############                                                    #"
-        write(*,'(A)') " ##############                                                   ##" 
+        write(*,'(A)') " ##############                                                   ##"
         write(*,'(A)') "   #############                                                 ##"
         write(*,'(A)') "    #############                                              ###"
         write(*,'(A)') "    ###############                                         #####"
@@ -387,9 +386,9 @@ contains
         write(*,'(A)') "                                  #"
         write(*,'(A)') str
     end subroutine haloween_end
-    
+
     ! ASSERTIONS AND SWAPS FROM NR
-    
+
     function assert_eq_2(n1,n2,string)
         character(len=*), intent(in) :: string
         integer, intent(in) :: n1,n2
@@ -413,7 +412,7 @@ contains
             stop 'program terminated by assert_eq_3; simple_jiffys'
         end if
     end function assert_eq_3
-          
+
     function assert_eq_4(n1,n2,n3,n4,string)
         character(len=*), intent(in) :: string
         integer, intent(in) :: n1,n2,n3,n4
@@ -425,7 +424,7 @@ contains
             stop 'program terminated by assert_eq_4; simple_jiffys'
         end if
     end function assert_eq_4
-    
+
     function assert_eq_n(nn,string)
         character(len=*), intent(in) :: string
         integer, dimension(:), intent(in) :: nn
@@ -437,7 +436,7 @@ contains
             stop 'program terminated by assert_eq_n; simple_jiffys'
         end if
     end function assert_eq_n
-    
+
     subroutine swap_i(a,b)
           integer, intent(inout) :: a,b
           integer :: dum

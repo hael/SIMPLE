@@ -1,3 +1,4 @@
+!> Generic string operations class
 module simple_strings
 use simple_defs ! singleton
 use, intrinsic :: iso_c_binding
@@ -11,7 +12,7 @@ C_NEW_LINE // C_CARRIAGE_RETURN // C_VERTICAL_TAB
 character(kind=c_char,len=*), parameter :: BLANK_C_CHARACTERS = C_NULL_CHAR // C_HORIZONTAL_TAB
 character(len=*), parameter :: BLANK_CHARACTERS =  ' '//BLANK_C_CHARACTERS
 character(len=*), parameter :: BLANKS_AND_NEW_LINES = BLANK_CHARACTERS // NEW_LINES_C
-character(len=*), parameter :: INTEGER_DIGITS = '10' ! Maximum number of digits expected when reading an integer
+character(len=*), parameter :: INTEGER_DIGITS = '10' !< Maximum number of digits expected when reading an integer
 
 private :: LOWER_CASE_LETTERS, UPPER_CASE_LETTERS, INTEGERS, NEW_LINES_C, BLANK_C_CHARACTERS,&
 BLANK_CHARACTERS, BLANKS_AND_NEW_LINES, INTEGER_DIGITS
@@ -163,16 +164,16 @@ contains
 
     !> \brief  replace any tokens in string (str) with char rch
     subroutine replace(str, tokens, rch)
-    character(len=*), intent(inout) :: str
-    character(len=*), intent(inout) :: tokens     ! array of searchable chars
-    character(len=1), intent(in) :: rch     ! replace any element in tokens with char
-    character(len=1):: ch,tok
-    character(len=len_trim(str))::outstr
+    character(len=*), intent(inout) :: str        !< input string
+    character(len=*), intent(inout) :: tokens     !< array of searchable chars
+    character(len=1), intent(in) :: rch           !< replace any element in tokens with char
+    character(len=1)             :: ch,tok
+    character(len=len_trim(str)) :: outstr
     integer :: lenstr,lensstr, k, i,j, ich, itoken
     str = adjustl(str)
     tokens = adjustl(tokens)
     lensstr = len_trim(tokens)
-    outstr = adjustl(str) ! initialise outstr
+    outstr = adjustl(str)           ! initialise outstr
     do j=1,lensstr
         str = adjustl(outstr)  ! update str for each element in sstr in case rch == ''
         lenstr = len_trim(str) ! re-adjust length
@@ -257,7 +258,7 @@ contains
 
     !> \brief  converts number string to a single precision real number
     function str2real(str) result(rval)
-        character(len=*), intent(in) ::str
+        character(len=*), intent(in) :: str
         real    :: rval
         integer :: io_stat
         character(len=100) :: io_msg
@@ -413,7 +414,7 @@ contains
 
     !>  \brief  Find the first non-blank character in a string and return its position.
     pure integer function firstNonBlank( string, back )
-        character(len=*), intent(in)  :: string
+        character(len=*), intent(in)  :: string !< input string
         logical, optional, intent(in) :: back !<  if .true., we'll look for the last non-blank character in the string
         logical ::  bback
         ! reverse?
@@ -424,7 +425,7 @@ contains
 
     !>  \brief  find the first blank character in a string and return its position.
     pure integer function firstBlank(string, back)
-        character(len=*), intent(in)  :: string
+        character(len=*), intent(in)  :: string !< input string
         logical, optional, intent(in) :: back !<  if .true., we'll look for the last blank character in the string
         logical ::  bback
         ! reverse?
@@ -438,9 +439,9 @@ contains
 
     !>  \brief  test whether two strings are equal, ignoring blank characters
     logical function stringsAreEqual(instr1, instr2, case_sensitive)
-        character(len=*), intent(in)  :: instr1
-        character(len=*), intent(in)  :: instr2
-        logical, optional, intent(in) :: case_sensitive
+        character(len=*), intent(in)  :: instr1 !< input string
+        character(len=*), intent(in)  :: instr2 !< input string
+        logical, optional, intent(in) :: case_sensitive  !< is the comparison case-sensitive
         integer :: first_non_blank_1, first_non_blank_2
         integer :: last_non_blank_1, last_non_blank_2
         logical :: ccase_sensitive
@@ -517,13 +518,14 @@ contains
         endif
     end function cntRecsPerLine
 
-    !> \brief  Lexographical sort. On input, strArr is a one-dimensional array of character strings to be
-    !!         sorted in ascending lexical order. On output, strArr is the sorted array. The characters of
-    !!         the elements of the string array are not modified. If blanks or punctuation characters are
-    !!         to be ignored, this needs to be taken care of before calling.
+    !> \brief  Lexographical sort.
+    !> \param strArr is a one-dimensional array of character strings to be  sorted in ascending lexical order.
+    !>   the sorted array. The characters of
+    !>         the elements of the string array are not modified. If blanks or punctuation characters are
+    !>         to be ignored, this needs to be taken care of before calling.
     subroutine lexSort( strArr, CaseSens )
         character(len=*),  intent(inout) :: strArr(:)
-        logical, optional, intent(in)    :: CaseSens
+        logical, optional, intent(in)    :: CaseSens  !< case-sensitive sorting
         integer, allocatable :: indexarray(:)
         integer              :: low, high, alloc_stat, k
         logical              :: LCaseSens

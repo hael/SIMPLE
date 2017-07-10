@@ -1,3 +1,4 @@
+!> Simple optimisation module: Fourier-expanded shift search
 module simple_ftexp_shsrch
 use simple_opt_factory, only: opt_factory
 use simple_opt_spec,    only: opt_spec
@@ -7,7 +8,7 @@ use simple_image,       only: image
 implicit none
 
 public :: ftexp_shsrch_init, ftexp_shsrch_reset_ptrs, ftexp_shsrch_minimize, test_ftexp_shsrch
-private
+private 
 
 type(opt_factory)             :: ofac              !< optimizer factory
 type(opt_spec)                :: ospec             !< optimizer specification object
@@ -20,7 +21,7 @@ real,    parameter            :: TOL=1e-4          !< tolerance parameter
 integer, parameter            :: MAXITS=30         !< maximum number of iterations
 
 contains
-    
+    !> Initialise  ftexp_shsrch
     subroutine ftexp_shsrch_init( ref, ptcl, lims, opt, nrestarts_in )
         class(ft_expanded), target, intent(in) :: ref, ptcl
         real,                       intent(in) :: lims(2,2)
@@ -53,14 +54,14 @@ contains
         reference => ref 
         particle  => ptcl
     end subroutine ftexp_shsrch_reset_ptrs
-    
+    !> Cost function
     function ftexp_shsrch_cost( vec, D ) result( cost )
         integer, intent(in) :: D
         real,    intent(in) :: vec(D)
         real :: cost
         cost = -reference%corr_shifted(particle, -vec)
     end function ftexp_shsrch_cost
-    
+    !> Main search routine
     function ftexp_shsrch_minimize( prev_corr, prev_shift ) result( cxy )
         real, optional, intent(in) :: prev_corr, prev_shift(2)
         real :: cxy(3), maxshift, maxlim, lims(2,2)

@@ -1,3 +1,6 @@
+!!
+!> Simple search module: symmetry search method
+!!
 module simple_symsrcher
 use simple_defs
 use simple_math

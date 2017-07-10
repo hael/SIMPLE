@@ -1,4 +1,4 @@
-!>  \brief  Class to deal with text files of numbers
+!>  \brief Simple file module: Class to deal with text files of numbers
 module simple_nrtxtfile
 use simple_defs
 use simple_strings ! use all in there

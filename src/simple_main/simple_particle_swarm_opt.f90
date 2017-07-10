@@ -1,3 +1,4 @@
+!> Simple optimisation module:  particle swarm optimisation
 module simple_particle_swarm_opt
 use simple_defs
 use simple_optimizer, only: optimizer
@@ -25,7 +26,7 @@ type, extends(optimizer) :: particle_swarm_opt
 end type particle_swarm_opt
 
 contains
-    
+
     !> \brief  is a constructor
     subroutine new_particle_swarm( self, spec )
         use simple_jiffys,   only: alloc_err
@@ -41,16 +42,16 @@ contains
         if( spec%debug ) write(*,*) 'created new particle swarm (spec debug)'
         DebugPrint 'created new particle swarm (instance)'
     end subroutine new_particle_swarm
-    
+
     !> \brief  is the particle swarm minimize minimization routine
     subroutine particle_swarm_minimize( self, spec, lowest_cost )
-        class(particle_swarm_opt), intent(inout) :: self        !< instance     
+        class(particle_swarm_opt), intent(inout) :: self        !< instance
         class(opt_spec), intent(inout)           :: spec        !< specification
         real, intent(out)                        :: lowest_cost !< lowest cost
-        integer :: t                ! iteration counter
-        integer :: npeaks           ! number of local minima
-        real    :: rtol             ! relative tolerance
-        real    :: costs(spec%npop) ! particle costs
+        integer :: t                !< iteration counter
+        integer :: npeaks           !< number of local minima
+        real    :: rtol             !< relative tolerance
+        real    :: costs(spec%npop) !< particle costs
         integer :: loc(1), nworse
         if( .not. associated(spec%costfun) )then
             stop 'cost function not associated in opt_spec; particle_swarm_minimize; simple_particle_swarm_opt'
@@ -71,9 +72,9 @@ contains
         end do
         lowest_cost = self%yb
         spec%x = self%swarm(self%best,:)
-        
+
       contains
-        
+
         !> \brief  initialize the particle positions & velocities
         subroutine init
             integer :: i, j
@@ -106,7 +107,7 @@ contains
             self%best = loc(1)
             self%yb   = costs(self%best)
         end subroutine init
-        
+
         subroutine update_particle( i )
             integer, intent(in) :: i
             integer :: j
@@ -145,7 +146,7 @@ contains
                 nworse = nworse+1
             endif
         end subroutine update_particle
-    
+
     end subroutine particle_swarm_minimize
 
     !> \brief  dummy procedure, only defined in simplex
@@ -165,5 +166,5 @@ contains
             self%exists = .false.
         endif
     end subroutine kill_particle_swarm
-    
+
 end module simple_particle_swarm_opt

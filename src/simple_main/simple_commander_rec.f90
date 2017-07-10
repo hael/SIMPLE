@@ -1,4 +1,4 @@
-!> simple_commander_rec
+!> Simple commander module: 3D volume reconstruction interface
 !!
 !! This class contains the set of concrete 3D reconstruction commanders of the
 !! SIMPLE library. This class provides the glue between the reciver (main

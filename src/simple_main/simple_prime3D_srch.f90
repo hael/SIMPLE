@@ -1,4 +1,6 @@
-!> Prime3D search module
+!!
+!> Simple search module: Prime3D method
+!!
 module simple_prime3D_srch
 use simple_defs
 use simple_prime_srch,       only: prime_srch

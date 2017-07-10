@@ -1,6 +1,7 @@
 module simple_ft_expanded_tester
-use simple_ft_expanded, only: ft_expanded
-use simple_image,       only: image
+    use simple_defs
+    use simple_ft_expanded, only: ft_expanded
+    use simple_image,       only: image
 implicit none
 
 public :: exec_ft_expanded_test

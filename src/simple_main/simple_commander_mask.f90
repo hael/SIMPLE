@@ -1,4 +1,4 @@
-!> simple_commander_mask
+!> Simple commander module: mask interface
 !
 !! This class contains the set of concrete mask commanders of the SIMPLE
 !! library. This class provides the glue between the reciver (main reciever is

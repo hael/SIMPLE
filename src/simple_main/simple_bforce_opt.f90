@@ -1,4 +1,4 @@
-!> simple_bforce_opt brute force optimisation
+!> Simple optimisation module: brute force optimisation
 !!
 !! This class is based on a class used in CTFFIND4, developed by Alexis Rohou
 !! and Nikolaus Grigorieff at Janelia Farm. The below copyright statement therefore 

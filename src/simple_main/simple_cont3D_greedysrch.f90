@@ -57,9 +57,9 @@ contains
     !>  \brief  is a constructor
     subroutine new( self, p, pftcc, vols)
         class(cont3D_greedysrch),              intent(inout) :: self  !< instance
-        class(params),                   intent(in)    :: p     !< parameters
-        class(polarft_corrcalc), target, intent(in)    :: pftcc
-        class(projector),        target, intent(in)    :: vols(:)    !< references
+        class(params),                   intent(in)    :: p          !< parameters
+        class(polarft_corrcalc), target, intent(in)    :: pftcc      !< polar fourier correlation calculator
+        class(projector),        target, intent(in)    :: vols(:)    !< reference volumes
         call self%kill
         ! set constants
         self%pftcc_ptr  => pftcc

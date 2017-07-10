@@ -1,3 +1,4 @@
+!> Simple optimisation module:  generic optimisation subroutines 
 module simple_opt_subs
 implicit none
 
@@ -5,12 +6,12 @@ logical :: warn=.false.
 
 contains
 
-    !>  \brief  given an optimizer specification object spec, and n dimensional point spec%x 
-    !!          and a n dimensional direction spec%xi, linmin moves and resets spec%x 
-    !!          to where the function spec%costfun(spec%x) takes on a minimum along the 
-    !!          direction spec%xi from spec%x, and replaces spec%xi by the actual vector 
-    !!          displacement that spec%x was moved. Returns as lowest_cost the value of 
-    !!          spec%cosfun at the returned location spec%x. All accomplished by calling the 
+    !>  \brief  given an optimizer specification object spec, and n dimensional point spec%x
+    !!          and a n dimensional direction spec%xi, linmin moves and resets spec%x
+    !!          to where the function spec%costfun(spec%x) takes on a minimum along the
+    !!          direction spec%xi from spec%x, and replaces spec%xi by the actual vector
+    !!          displacement that spec%x was moved. Returns as lowest_cost the value of
+    !!          spec%cosfun at the returned location spec%x. All accomplished by calling the
     !!          routines mnbrak and brent. No derivatives needed
     subroutine linmin(spec,lowest_cost)
         use simple_opt_spec, only: opt_spec
@@ -21,21 +22,21 @@ contains
         if( spec%str_opt .ne. 'linmin' )then
             stop 'this optimzer specification object not 4 linmin; simple_opt_subs'
         endif
-        if( .not. associated(spec%costfun) )then 
+        if( .not. associated(spec%costfun) )then
             stop 'cost function not associated in opt_spec; linmin; simple_opt_subs'
         endif
         ax=0. ! initial guess for brackets
         xx=1.
         bx=2.
         call mnbrak(ax,xx,bx,fa,fx,fb)
-        lowest_cost=brent(ax,xx,bx,xmin)        
+        lowest_cost=brent(ax,xx,bx,xmin)
         do j=1,spec%ndim ! construct return vec
             spec%xi(j)=xmin*spec%xi(j)
             spec%x(j)=spec%x(j)+spec%xi(j)
         end do
-        
+
         contains
-        
+
             !>  \brief  routine for evaluating the move along the line direction
             function eval_move(x) result(r)
                 real, intent(in) :: x
@@ -47,12 +48,12 @@ contains
                 r = spec%costfun(spec%xt,spec%ndim)
                 spec%nevals = spec%nevals+1
             end function eval_move
-            
+
             !>  \brief  routine for initially bracketing a minimum
             !!          given the function eval_move(x), and given distinct initial points ax and
             !!          bx, this routine searches in the downhill direction (defined by
             !!          eval_move as evaluated at the initial points) and returns new points
-            !!          ax, bx, cx which bracket a minimum of the function. Function values at 
+            !!          ax, bx, cx which bracket a minimum of the function. Function values at
             !!          the three points, fa, fb and fc are also returned
             !!          PARAMETERS: GOLD is the default ratio by which successive intervals
             !!          are magnified; GLIMIT is the maximum magnification allowed for
@@ -119,11 +120,11 @@ contains
                     fc=fu
                 end do
             end subroutine mnbrak
-            
+
             !>  \brief  Brent's method in one dimension
             !!          Given the eval_move function, and a bracketing triplet of abscissas
-            !!          ax,bx,cx (such that bx is between ax and cx, and f(bx) is less 
-            !!          than both f(ax) and f(cx)), this routine isolates the minimum 
+            !!          ax,bx,cx (such that bx is between ax and cx, and f(bx) is less
+            !!          than both f(ax) and f(cx)), this routine isolates the minimum
             !!          to a fractional precision of about spec%ftol using Brent's method.
             !!          The abscissa of the minimum is returned in xmin, and the minimum
             !!          function value is the returned function value
@@ -210,7 +211,7 @@ contains
             end function brent
 
     end subroutine linmin
-    
+
     !>  \brief  line search routine (relying on gradient evals, used in BFGS)
     subroutine lnsrch(n,xold,fold,g,p,x,f,stpmax,check,func,nevals)
         integer :: n, nevals
@@ -223,7 +224,7 @@ contains
                 integer, intent(in) :: D
                 real,    intent(in) :: vec(D)
                 real                :: cost
-            end function 
+            end function
         end interface
         integer :: i
         real    :: a,alam,alam2,alamin,b,disc,f2,fold2
@@ -290,9 +291,9 @@ contains
     end subroutine lnsrch
 
     !>  \brief  multidimensional minimization of the function func(x) (x(1:ndim) is a vector in ndim dimensions)
-    !!          by the downhill simplex method of Nelder and Mead. The matrix p(1:ndim+1,1:ndim) is input/output. 
+    !!          by the downhill simplex method of Nelder and Mead. The matrix p(1:ndim+1,1:ndim) is input/output.
     !!          Its ndim+1 rows are ndim-dimensional vectors which are the vertices of the starting simplex. Input
-    !!          is also the vector y(1:ndim+1), whose components must be pre-initialized to the values of funk evaluated at the 
+    !!          is also the vector y(1:ndim+1), whose components must be pre-initialized to the values of funk evaluated at the
     !!          ndim+1 vertices (rows) of p. ftol is the fractional convergence tolerance to be achieved in the function
     !!          value. On output, p and y will have been reset to ndim+1 new points all within ftol of a minimum
     !!          function value, and iter gives the number of function evaluations taken.
@@ -317,13 +318,13 @@ contains
         integer         :: ihi,ndim
         real, dimension(size(p,2)) :: psum
         call amoeba_private
-       
+
         contains
-       
+
             subroutine amoeba_private
                  use simple_jiffys, only: assert_eq, swap
                 integer :: i,ilo,inhi,loc(1)
-                real :: rtol,ysave,ytry,ytmp    
+                real :: rtol,ysave,ytry,ytmp
                 ndim=assert_eq(size(p,2),size(p,1)-1,size(y)-1,size(pb),'amoeba; simple_opt_subs')
                 iter=0
                 psum(:)=sum(p(:,:),dim=1)
@@ -364,7 +365,7 @@ contains
                         iter=iter+1
                         if(ytry >= ysave)then ! can’t seem to get rid of that high point
                             p(:,:)=0.5*(p(:,:)+spread(p(ilo,:),1,size(p,1))) ! better contract around the lowest (best) point
-                            do i=1,ndim+1 
+                            do i=1,ndim+1
                                 if(i /= ilo)then
                                     y(i)=func(p(i,:),ndim)
                                     nevals = nevals+1
@@ -381,7 +382,7 @@ contains
                     yb    = y(1)
                 endif
             end subroutine amoeba_private
-            
+
             !>  \brief  extrapolates by a factor fac through the face of the simplex across from the
             !!          high point, tries it, and replaces the high point if the new point is better
             function amotry(fac)
@@ -405,26 +406,28 @@ contains
     end subroutine amoeba
 
     !>  \brief  multidimensional minimization of the function func(x) (x(1:ndim) is a vector in ndim dimensions)
-    !!          by simulated annealing combined with the downhill contsa method of Nelder and Mead. The matrix p(1:ndim+1,1:ndim) 
+    !!          by simulated annealing combined with the downhill contsa method of Nelder and Mead. The matrix p(1:ndim+1,1:ndim)
     !!          is input/output. Its ndim+1 rows are ndim-dimensional vectors which are the vertices of the starting contsa. Input
-    !!          is also the vector y(1:ndim+1), whose components must be pre-initialized to the values of funk evaluated at the 
+    !!          is also the vector y(1:ndim+1), whose components must be pre-initialized to the values of funk evaluated at the
     !!          ndim+1 vertices (rows) of p. ftol is the fractional convergence tolerance to be achieved in the function
     !!          value. The routine makes iter function evaluations at an annealign temperature of temptr, then returns. You should
     !!          then decrease temptr according to your annealing schedule, reset iter, and call the routine again (leaving other
-    !!          arguments unaltered between calls). If iter iter is returned with a positive value, then early convergence and return 
-    !!          occured.    
+    !!          arguments unaltered between calls). If iter iter is returned with a positive value, then early convergence and return
+    !!          occured.
     subroutine amebsa(p,y,pb,yb,ftol,func,iter,temptr)
         use simple_rnd, only: ran3arr, ran3
         real, intent(inout)    :: p(:,:)      !< input contsa
         real, intent(inout)    :: y(:)        !< const function vals of input siomplex
         real, intent(inout)    :: pb(:)       !< for updating the best point
         real, intent(inout)    :: yb          !< for updating the cost of best point
-        real, intent(in)       :: ftol,temptr !< fractional tolerance and temp 
+        real, intent(in)       :: ftol        !< fractional tolerance
         integer, intent(inout) :: iter        !< iteration, ***note the difference from the amoeba routine***
                                               !! this gives the number of iterations to be executed at the given temp-level
-                                              !! and is decreased, so positive value on return indicates early convergence
-        interface
-            function func( vec, D ) result( cost ) !< the external function used for callback
+        !! and is decreased, so positive value on return indicates early convergence
+         real, intent(in)       :: temptr !<  temp
+         interface
+             !< the external function used for callback
+             function func( vec, D ) result( cost )
                 integer, intent(in) :: d
                 real, intent(in)    :: vec(D)
                 real :: cost
@@ -436,7 +439,7 @@ contains
         call amebsa_private
 
         contains
-           
+
         subroutine amebsa_private
             use simple_jiffys, only: assert_eq, swap
             integer :: i,ilo,inhi,loc(1)
@@ -455,7 +458,7 @@ contains
                 yhi=yt(ihi)
                 yt(ihi)=ylo
                 loc=maxloc(yt)
-                inhi=loc(1)  
+                inhi=loc(1)
                 ynhi=yt(inhi)
                 ! Compute the fractional range from highest to lowest and return if satisfactory
                 rtol=2.0*abs(yhi-ylo)/(abs(yhi)+abs(ylo)) ! relative tolerance
@@ -489,7 +492,7 @@ contains
                 end if
             end do
         end subroutine amebsa_private
-        
+
         !>  \brief  extrapolates by a factor fac through the face of the contsa across from the
         !!          high point, tries it, and replaces the high point if the new point is better
         function amotsa(fac)
@@ -515,9 +518,9 @@ contains
             end if
             amotsa=yflu
         end function amotsa
-        
+
     end subroutine amebsa
-    
+
     !> \brief  stochastic hill climbing selection rule for distance arrays
     function shc_selector( dists, old_ind ) result( new_ind )
         use simple_ran_tabu, only: ran_tabu
@@ -544,7 +547,7 @@ contains
         endif
         call rt%kill
     end function shc_selector
-    
+
     !> \brief  check the vector with respect to the limits
     subroutine check_and_correct_vec( spec, vec, corrected )
         use simple_opt_spec, only: opt_spec
@@ -557,7 +560,7 @@ contains
         ccorrected = .false.
         do j=1,spec%ndim
             if( spec%cyclic(j) ) then
-                do while(vec(j) < spec%limits(j,1)) 
+                do while(vec(j) < spec%limits(j,1))
                     vec(j) = vec(j)+spec%limits(j,2)
                     ccorrected = .true.
                 end do

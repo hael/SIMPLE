@@ -1,3 +1,4 @@
+!> Simple optimisation method: Basic search of pftcc objects
 module simple_pftcc_srch
 use simple_opt_spec,          only: opt_spec
 use simple_pftcc_opt,         only: pftcc_opt
@@ -36,11 +37,11 @@ contains
 
     subroutine srch_new( self, pftcc, lims, shbarrier, nrestarts, vols )
         class(pftcc_srch),                  intent(inout) :: self
-        class(polarft_corrcalc),    target, intent(in)    :: pftcc
-        real,                               intent(in)    :: lims(:,:)
-        character(len=*), optional,         intent(in)    :: shbarrier
-        integer,          optional,         intent(in)    :: nrestarts
-        class(projector), optional, target, intent(in)    :: vols(:)
+        class(polarft_corrcalc),    target, intent(in)    :: pftcc      !< correllation calc object in polar Fourier form
+        real,                               intent(in)    :: lims(:,:)  !< search limits
+        character(len=*), optional,         intent(in)    :: shbarrier  !< bool set shbarr
+        integer,          optional,         intent(in)    :: nrestarts  !< number of restarts
+        class(projector), optional, target, intent(in)    :: vols(:)    !< projection volumes
         real :: srchlims(5,2)
         ! flag the barrier constraint
         self%shbarr = .true.

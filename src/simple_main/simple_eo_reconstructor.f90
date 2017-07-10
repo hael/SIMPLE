@@ -1,3 +1,4 @@
+!> Simple image module: 3D volume reconstruction with EO
 module simple_eo_reconstructor
 use simple_defs
 use simple_reconstructor, only: reconstructor
@@ -15,10 +16,12 @@ type :: eo_reconstructor
     type(reconstructor)    :: odd
     type(reconstructor)    :: eosum
     character(len=4)       :: ext
-    real                   :: fsc05, fsc0143, smpd, msk, fny, inner=0., width=10.
+    real                   :: fsc05      !<   target resolution a FSC=0.5
+    real                   :: fsc0143    !<   target resolution a FSC=0.143
+    real                   :: smpd, msk, fny, inner=0., width=10.
     integer                :: box=0, nstates=1, numlen=2, lfny=0
     logical                :: xfel=.false.
-    logical                :: wiener=.false.
+    logical                :: wiener=.false. !< filtered 
     logical                :: exists=.false.
   contains
     ! CONSTRUCTOR
@@ -44,8 +47,8 @@ type :: eo_reconstructor
     ! INTERPOLATION
     procedure          :: grid_fplane
     procedure          :: compress_exp
-    procedure          :: sum_eos ! for merging even and odd into sum
-    procedure          :: sum     ! for summing eo_recs obtained by parallell exec
+    procedure          :: sum_eos !< for merging even and odd into sum
+    procedure          :: sum     !< for summing eo_recs obtained by parallell exec
     procedure          :: sampl_dens_correct_eos
     procedure          :: sampl_dens_correct_sum
     procedure          :: eorec
@@ -140,7 +143,9 @@ contains
         wf = self%even%get_kbwin()
     end function get_kbwin
 
-    !> \brief  for gettign the resolution
+    !> \brief  for getting the resolution
+    !> \param fsc05  target resolution a FSC=0.5
+    !> \param fsc0143  target resolution a FSC=0.143
     subroutine get_res( self, fsc05, fsc0143 )
         class(eo_reconstructor), intent(in)  :: self !< instance
         real,                    intent(out) :: fsc05, fsc0143
@@ -153,7 +158,7 @@ contains
     !>  \brief  write the even and odd reconstructions
     subroutine write_eos( self, fbody )
         class(eo_reconstructor), intent(inout) :: self
-        character(len=*),        intent(in)    :: fbody
+        character(len=*),        intent(in)    :: fbody !< filename
         call self%write_even(fbody)
         call self%write_odd(fbody)
     end subroutine write_eos

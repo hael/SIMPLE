@@ -1,4 +1,4 @@
-!> Cluster search module
+!> Simple cluster search module
 module simple_cluster_valid
     use simple_defs
     use simple_jiffys, only: alloc_err
@@ -44,9 +44,9 @@ type cluster_valid
 end type cluster_valid
 
 contains
-    
+
     ! CONSTRUCTOR
-    
+
     !>  \brief  is a constructor
     subroutine new( self, o, ncls, which, S, D )
         use simple_oris, only: oris
@@ -72,7 +72,7 @@ contains
             case('class')
             case('subclass')
             case DEFAULT
-                stop 'unknown which tag, which=<state|class|subclass>; simple_cluster_valid::new' 
+                stop 'unknown which tag, which=<state|class|subclass>; simple_cluster_valid::new'
         end select
         ! allocate
         allocate( self%labels(self%nptcls), self%centers(self%ncls), self%maxdists(self%ncls),&
@@ -107,9 +107,9 @@ contains
         endif
         self%exists = .true.
     end subroutine new
-    
+
     ! GETTERS
-    
+
     !>  \brief  get population of a cluster
     function get_clspop( self, class ) result( pop )
         class(cluster_valid), intent(inout) :: self
@@ -120,7 +120,7 @@ contains
             if( self%labels(iptcl) == class ) pop = pop+1
         end do
     end function get_clspop
-    
+
     !>  \brief  get an array of particle indices within a cluster (class)
     function get_clsarr( self, class, pop ) result( arr )
         class(cluster_valid), intent(inout) :: self
@@ -130,16 +130,16 @@ contains
         allocate( arr(pop), stat=alloc_stat )
         call alloc_err( 'In: simple_cluster_valid::get_clsarr', alloc_stat )
         cnt = 0
-        do iptcl=1,self%nptcls 
+        do iptcl=1,self%nptcls
             if( self%labels(iptcl) == class )then
                 cnt = cnt+1
                 arr(cnt) = iptcl
             endif
         end do
     end function get_clsarr
-    
+
     ! CALCULATORS
-    
+
     !>  \brief  calculates cluster separation metrics
     subroutine define_centers( self )
         class(cluster_valid), intent(inout) :: self
@@ -233,7 +233,7 @@ contains
         ncl_pairs     = (self%ncls*(self%ncls-1))/2
         self%sepavg_cen = self%sepavg_cen/real(ncl_pairs)
     end subroutine gen_separation_metrics
-    
+
     !>  \brief  calculates an array of all cluster cohesions
     subroutine gen_cohesion_metrics( self )
         class(cluster_valid), intent(inout) :: self
@@ -246,7 +246,7 @@ contains
         do k=1,self%ncls
             sz = self%get_clspop(k)
             if( sz > 1 )then
-                karr = self%get_clsarr(k,sz)            
+                karr = self%get_clsarr(k,sz)
                 ! calculate sum and maximum distance between all points assigned to the cluster
                 dmax = 0.
                 dsum = 0.
@@ -282,7 +282,7 @@ contains
         end do
         DebugPrint  'finished gen_cohesion_metrics'
     end subroutine gen_cohesion_metrics
-    
+
     !>  \brief  calculates cohesion of the clusters in terms of distance
     !!          we want to minimize cohesion
     function cohesion( self ) result( coh )
@@ -315,7 +315,7 @@ contains
         sep = sep/real(2*npairs)
         DebugPrint  'calculated separation'
     end function separation
-    
+
     !>  \brief  calculates the ratio index for cluster validation
     !!          which tries to balance between cohesion and separation
     !!          we want to minimize this index
@@ -327,13 +327,13 @@ contains
     end function ratio_index
 
     ! DESTRUCTOR
-    
+
     !>  \brief  is a destructor
     subroutine kill( self )
         class(cluster_valid), intent(inout) :: self
         if( self%exists )then
             self%nptcls = 0
-            self%npairs = 0 
+            self%npairs = 0
             self%ncls   = 0
             deallocate(self%labels, self%centers, self%sepmat, self%avgdists_cen,&
             self%mindists, self%maxdists, self%avgdists, self%maxdists_cen)
@@ -342,5 +342,5 @@ contains
             self%exists =.false.
         endif
     end subroutine kill
-        
+
 end module simple_cluster_valid

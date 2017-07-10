@@ -1,4 +1,4 @@
-!> simple_simplex_opt
+!> Simple optimisation module: Simplex optimisation method
 !
 !! Minimization of an externally defined function by the simplex method of Nelder and Mead
 ! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_. 

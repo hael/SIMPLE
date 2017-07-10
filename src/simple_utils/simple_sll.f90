@@ -1,6 +1,4 @@
-
-!
-!> simple_sll is a runtime polymorphic singly linked list class. 
+!> Simple module: runtime polymorphic singly linked list class. 
 ! The code is distributed with the hope that it will be useful, but 
 ! _WITHOUT_ _ANY_ _WARRANTY_. Redistribution or modification is
 ! regulated by the GNU General Public License. 
@@ -18,15 +16,17 @@ implicit none
 public :: sll
 private
 
+!> List node type
+!!
 type sll_node
 ! contains the array _content_ and a pointer _next_ to the nextcoming node
     type(arr) :: content
     type(sll_node), pointer :: next=>null()
 end type sll_node
-
+!> Singly-linked list
+!> contains the list. In this implementation I have separated the head of the 
+!> list from the rest of the list (Donald Knuth-style) 
 type sll
-! contains the list. In this implementation I have separated the head of the 
-! list from the rest of the list (Donald Knuth-style) 
     private
     integer                 :: list_size=0
     type(sll_node), pointer :: head=>null()

@@ -1,28 +1,29 @@
-!> simple_winfuns windowing functions
+!> Simple math module:  windowing functions
 !
-!! the simple_winfuns provides interfaces and definitions for the window/instrument functions used in the SIMPLE library.
+!! the simple_winfuns provides interfaces and definitions for the
+!! window/instrument functions used in the SIMPLE library.
 ! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_. Redistribution
 ! or modification is regulated by the GNU General Public License. *Author:* Hans Elmlund, 2013-08-12.
 !
 !==Changes are documented below
 !
-! RELEVANT INFO:
-! http://mathworld.wolfram.com/ApodizationFunction.html
-!
-! Jackson 1991, Least Relative Aliased Energy on a 1X grid
-!           Gaussian Kaiser-Bessel
-!             var       beta
-! W=3       0.4241    1.9980
-! W=4       0.4927    2.3934
-! W=5       0.4839    3.3800
-
-! Beatty 2005, 2X grid
-!           Jackson   Beatty
-!             beta     beta
-! W=3        6.6875   6.4861
-! W=4        9.1375   8.9962
-! W=5       11.5250  11.4410
-!
+!! RELEVANT INFO:
+!! http://mathworld.wolfram.com/ApodizationFunction.html
+!!
+!! Jackson 1991, Least Relative Aliased Energy on a 1X grid
+!!           Gaussian Kaiser-Bessel
+!!             var       beta
+!! W=3       0.4241    1.9980
+!! W=4       0.4927    2.3934
+!! W=5       0.4839    3.3800
+!!
+!! Beatty 2005, 2X grid
+!!           Jackson   Beatty
+!!             beta     beta
+!! W=3        6.6875   6.4861
+!! W=4        9.1375   8.9962
+!! W=5       11.5250  11.4410
+!!
 module simple_winfuns
 use simple_defs
 implicit none
@@ -36,7 +37,7 @@ type :: winfuns
     procedure(wfun), pointer, nopass :: apod_fun=>null()  !< apodization function
     procedure(ifun), pointer, nopass :: instr_fun=>null() !< instrument function
     real :: Whalf=0.                                      !< window halfwidth
-    real :: alpha=0.                                      !< oversampling (padding) fatcor
+    real :: alpha=0.                                      !< oversampling (padding) factor
     real :: W=0.                                          !< window fullwidth
     real :: beta=0.                                       !< KB shape factor
     real :: betasq, twooW, twoW, oneoW, piW, pioW

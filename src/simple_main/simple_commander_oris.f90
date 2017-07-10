@@ -159,7 +159,7 @@ contains
                         if( nrecs > 1 )  line(2) = line(2)/1.0e4
                     case( 'microns' )
                         ! nothing to do
-                    case DEFAULT 
+                    case DEFAULT
                         stop 'unsupported dfunit; simple_commander_oris :: exec_makedeftab'
                 end select
                 select case(p%angastunit)
@@ -167,7 +167,7 @@ contains
                         if( nrecs == 3 ) line(3) = rad2deg(line(3))
                     case( 'degrees' )
                         ! nothing to do
-                    case DEFAULT 
+                    case DEFAULT
                         stop 'unsupported angastunit; simple_commander_oris :: exec_makedeftab'
                 end select
                 call b%a%set(iptcl, 'smpd',  p%smpd )
@@ -250,7 +250,7 @@ contains
                         call b%a%set_ori(cnt, orientation)
                     end do
                 end do
-                if( p%zero .ne. 'yes' ) call b%a%rnd_inpls(p%trs) 
+                if( p%zero .ne. 'yes' ) call b%a%rnd_inpls(p%trs)
             endif
         else if( cline%defined('ndiscrete') )then
             if( p%ndiscrete > 0 )then
@@ -332,7 +332,7 @@ contains
         class(cmdline),             intent(inout) :: cline
         type state_organiser
             integer, allocatable :: particles(:)
-            integer              :: cls_orig = 0 
+            integer              :: cls_orig = 0
             integer              :: cls_sel  = 0
             integer              :: istate   = 0
             type(ori)            :: ori3d
@@ -344,14 +344,14 @@ contains
         type(state_organiser), allocatable :: labeler(:)
         type(image),           allocatable :: imgs_sel(:), imgs_cls(:)
         real,                  allocatable :: correlations(:,:)
-        integer,               allocatable :: statepops(:), state_particles(:), rejected_particles(:)  
+        integer,               allocatable :: statepops(:), state_particles(:), rejected_particles(:)
         integer                            :: isel, nsel, loc(1), iptcl, pind, icls
         integer                            :: nlines_oritab, nlines_oritab3D, nlines_comlindoc, nlines_deftab
         integer                            :: cnt, istate, funit, iline, nls, lfoo(3)
         logical, allocatable               :: statedoc_exists(:), selected(:)
         character(len=STDLEN)              :: statedoc
         real                               :: corr
-      
+
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         ! find number of selected cavgs
@@ -371,7 +371,7 @@ contains
         endif
         if( cline%defined('doclist') )then
             if( .not. cline%defined('comlindoc') )then
-                if( nlines(p%doclist) /= 1 ) stop 'need a comlindoc together with statelist'        
+                if( nlines(p%doclist) /= 1 ) stop 'need a comlindoc together with statelist'
             endif
         endif
         if( cline%defined('comlindoc') .and. cline%defined('oritab3D') )&
@@ -459,7 +459,7 @@ contains
                 labeler(isel)%istate = nint(labeler(isel)%ori3d%get('state'))
                 corr                 = labeler(isel)%ori3d%get('corr')
                 do iptcl=1,size(labeler(isel)%particles)
-                    ! get particle index 
+                    ! get particle index
                     pind = labeler(isel)%particles(iptcl)
                     ! get 2d ori
                     ori2d = b%a%get_ori(pind)
@@ -467,7 +467,7 @@ contains
                         call ori2d%set('x', p%mul*ori2d%get('x'))
                         call ori2d%set('y', p%mul*ori2d%get('y'))
                     endif
-                    ! transfer original parameters in b%a 
+                    ! transfer original parameters in b%a
                     ori_comp = b%a%get_ori(pind)
                     ! compose ori3d and ori2d
                     call labeler(isel)%ori3d%compose3d2d(ori2d, ori_comp)
@@ -578,7 +578,7 @@ contains
         call b%a%write(p%outfile)
         call simple_end('**** SIMPLE_MAP2PTCLS NORMAL STOP ****')
     end subroutine exec_map2ptcls
-   
+
     subroutine exec_orisops(self,cline)
         use simple_ori,  only: ori
         use simple_math, only: normvec
@@ -603,7 +603,7 @@ contains
             call orientation%new
             call orientation%e1set(p%e1)
             call orientation%e2set(p%e2)
-            call orientation%e3set(p%e3) 
+            call orientation%e3set(p%e3)
             if( cline%defined('state') )then
                 do i=1,b%a%get_noris()
                     s = nint(b%a%get(i, 'state'))
@@ -619,7 +619,7 @@ contains
             call b%a%mul_shifts(p%mul)
         endif
         if( p%zero  .eq. 'yes' ) call b%a%zero_shifts
-        if( p%plot  .eq. 'yes' )then ! plot polar vectors                          
+        if( p%plot  .eq. 'yes' )then ! plot polar vectors
             do i=1,b%a%get_noris()
                 normal = b%a%get_normal(i)
                 write(*,'(1x,f7.2,3x,f7.2)') normal(1), normal(2)
@@ -664,12 +664,12 @@ contains
                 percen = percen + b%a%cls_corr_sigthresh(icls, p%nsig)
             end do
             percen = percen/real(ncls)
-            write(*,*) percen, ' % of the particles included at sigma ', p%nsig 
+            write(*,*) percen, ' % of the particles included at sigma ', p%nsig
         endif
         call b%a%write(p%outfile)
         call simple_end('**** SIMPLE_ORISOPS NORMAL STOP ****')
     end subroutine exec_orisops
-    
+
 !! oristats is a program for analyzing SIMPLE orientation/parameter files (text files
 !! containing input parameters and/or parameters estimated by prime2D or
 !! prime3D). If two orientation tables (oritab and oritab2) are inputted, the

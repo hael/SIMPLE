@@ -1,4 +1,4 @@
-!> simple_commander_distr_wflows
+!> Simple commander module: parallel (or distributed) workflows
 !!
 !! This class contains the set of concrete commanders responsible for execution
 !! of parallel (or distributed) workflows in SIMPLE. This class provides the
@@ -1374,12 +1374,12 @@ contains
         real                    :: shvec(3)
         integer                 :: i, comlin_srch_nproj
         character(len=STDLEN)   :: part_tab
-        character(len=32), parameter :: SYMFBODY    = 'symaxes_part'        ! symmetry axes doc (distributed mode)
-        character(len=32), parameter :: SYMTAB      = 'symaxes.txt'         ! continuous symmetry axes doc
-        character(len=32), parameter :: FINALSYMTAB = 'symaxes_final.txt'   ! final symmetry peaks doc
-        character(len=32), parameter :: SYMSHTAB    = 'sym_3dshift.txt'     ! volume 3D shift
-        character(len=32), parameter :: SYMPROJSTK  = 'sym_projs.mrc'       ! volume reference projections
-        character(len=32), parameter :: SYMPROJTAB  = 'sym_projs.txt'       ! volume reference projections doc
+        character(len=32), parameter :: SYMFBODY    = 'symaxes_part'        !< symmetry axes doc (distributed mode)
+        character(len=32), parameter :: SYMTAB      = 'symaxes.txt'         !< continuous symmetry axes doc
+        character(len=32), parameter :: FINALSYMTAB = 'symaxes_final.txt'   !< final symmetry peaks doc
+        character(len=32), parameter :: SYMSHTAB    = 'sym_3dshift.txt'     !< volume 3D shift
+        character(len=32), parameter :: SYMPROJSTK  = 'sym_projs.mrc'       !< volume reference projections
+        character(len=32), parameter :: SYMPROJTAB  = 'sym_projs.txt'       !< volume reference projections doc
         ! make master parameters
         p_master          = params(cline, checkdistr=.false.)
         comlin_srch_nproj = comlin_srch_get_nproj()

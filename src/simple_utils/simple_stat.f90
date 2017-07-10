@@ -1,3 +1,4 @@
+!> Simple math module: statistics utility functions
 module simple_stat
 use simple_defs ! singleton
 use simple_math, only: hpsort

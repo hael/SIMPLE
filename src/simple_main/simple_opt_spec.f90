@@ -1,3 +1,4 @@
+!> Simple optimisation module: core specification module
 module simple_opt_spec
 use simple_defs
 implicit none
@@ -80,7 +81,8 @@ contains
         integer,                    intent(in)    :: ndim           !< problem dimensionality
         character(len=*), optional, intent(in)    :: mode           !< mode string descriptor
         integer,          optional, intent(in)    :: ldim           !< second problem dimensionality 
-        real,             optional, intent(in)    :: ftol,gtol      !< fractional convergence tolerance to be achieved in costfun/gradient
+        real,             optional, intent(in)    :: ftol           !< fractional convergence tolerance to be achieved in costfun
+        real,             optional, intent(in)    :: gtol           !< fractional convergence tolerance to be achieved in gradient
         integer,          optional, intent(in)    :: maxits         !< maximum number of iterations
         integer,          optional, intent(in)    :: nbest          !< nr of best solutions used to update the CE model
         integer,          optional, intent(in)    :: nrestarts      !< number of restarts
@@ -218,10 +220,11 @@ contains
         class(opt_spec), intent(inout) :: self !< instance        
 #if defined (PGI)
         ! GNU COMPILER DOES NOT COPE W EXTERNAL
-        real, external :: fun
+        real, external :: fun !< defines cost function interface
 #else
         ! PGI COMPILER DOES NOT COPE W INTERFACE
-        interface !< defines cost function interface
+        interface
+            !< defines cost function interface
             function fun( vec, D ) result(cost)
                 integer, intent(in) :: D
                 real,    intent(in) :: vec(D)
@@ -237,10 +240,11 @@ contains
         class(opt_spec), intent(inout) :: self !< instance
 #if defined (PGI)
         ! GNU COMPILER DOES NOT COPE W EXTERNAL
-        real, external  :: fun
+        real, external  :: fun !< defines cost function gradient interface
 #else
         ! PGI COMPILER DOES NOT COPE W INTERFACE
-        interface !< defines cost function gradient interface
+        interface
+            !< defines cost function gradient interface
             function fun( vec, D ) result( grad )
                 integer, intent(in)    :: D
                 real,    intent(inout) :: vec( D )

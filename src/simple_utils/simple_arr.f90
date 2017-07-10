@@ -1,10 +1,11 @@
-
+!> Simple array class
+!>
 module simple_arr
 implicit none
 
 public :: arr
 private
-
+!> General array type
 type :: arr
     private
     integer, allocatable :: iarr(:)

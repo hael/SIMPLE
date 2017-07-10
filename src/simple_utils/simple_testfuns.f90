@@ -1,7 +1,7 @@
 !> simple_testfuns singleton provides 20 mathematical test functions for evaluating unconstrained optimization procedures. 1-9 are generalized test functions (of arbitrary dimension) whereas functions 10-20 are two-dimensional test functions.
-!The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_. 
+!The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
 ! Redistribution or modification is regulated by the GNU General Public License. *Author:* Hans Elmlund, 2014-01-07.
-! 
+!
 !==Changes are documented below
 !
 ! RELEVANT INFO:
@@ -11,14 +11,14 @@
 module simple_testfuns
 use simple_defs
 implicit none
-    
+
 !>  \brief  defines the test function interface
 abstract interface
     function testfun( vec, D ) result( cost )
         integer, intent(in) :: D
         real, intent(in)    :: vec(D)
         real                :: cost
-    end function 
+    end function
 end interface
 
 contains
@@ -37,9 +37,9 @@ contains
         range(2) = 10.
         range(1) = -range(2)
         select case(i)
-        
+
             ! MANY LOCAL MINIMA (MULTIMODAL)
-        
+
             case(1)
                 !>  \brief  Ackley's function
                 !!          global minimum: f(0,...,0) = 0
@@ -82,9 +82,9 @@ contains
                 ptr => testfun6
                 range(2) = 100.
                 range(1) = -range(2)
-                
+
             ! BOWL-SHAPED (UNIMODAL)
-                
+
             case(7)
                 !>  \brief  Sphere function
                 !!          global minimum: f(0,...,0) = 0
@@ -111,9 +111,9 @@ contains
                 ptr => testfun10
                 range(2) = real(d)
                 range(1) = -range(2)
-                
+
             ! WAVY BOWLS
-            
+
             case(11)
                 !>  \brief  2nd Perm function
                 !!          global minimum: f(1,2,3,...,d) = 0
@@ -139,9 +139,9 @@ contains
                 ptr => testfun13
                 range(2) = 10.24
                 range(1) = -range(2)
-                
+
             ! PLATE-SHAPED
-                
+
             case(14)
                 !>  \brief  Zakharov function
                 !!          global minimum: f(0,...,0) = 0
@@ -149,9 +149,9 @@ contains
                 ptr => testfun14
                 range(2) = 10.
                 range(1) = -5.
-                
+
             ! VALLEY-SHAPED
-                
+
             case(15)
                 !>  \brief  Dixon-Price function
                 !!          global minimum: f(x(1),...,x(d)) = 0 at x(i) = 2**(-(2**i-2)/(2**i))
@@ -167,9 +167,9 @@ contains
                 ptr => testfun16
                 range(2) = 10.
                 range(1) = -5.
-                
+
             ! OTHER
-            
+
             case(17)
                 !>  \brief  Pinter's function
                 !!          global minimum: f(0,...,0) = 0
@@ -188,16 +188,16 @@ contains
                 !>  \brief  Step function
                 !!          global minimum: f(0.5,...,0.5) = 0
                 !!          search domain: [-100,100]
-                !!          The presence of many flat plateus and steep ridges presents 
+                !!          The presence of many flat plateus and steep ridges presents
                 !!          difficulties for algorithms based on gradient information
                 ptr => testfun19
                 range(2) = 100.
                 range(1) = -range(2)
-                
+
             ! TWO-DIMENSIONAL TEST FUNCTIONS
-            
+
             ! MANY LOCAL MINIMA (MULTIMODAL)
-            
+
              case(20)
                 !>  \brief  Drop-wave function
                 !!          global minimum: f(0,0) = -1
@@ -208,7 +208,7 @@ contains
                 gmin = -1.
             case(21)
                 !>  \brief Eggholder function
-                !!         global minimum: f(512,404.2319) = -959.6407 
+                !!         global minimum: f(512,404.2319) = -959.6407
                 !!         search domain: [-512,512]
                 ptr => testfun21
                 range(2) = 512.
@@ -230,14 +230,14 @@ contains
                 ptr => testfun23
             case(24)
                 !>  \brief Schaffer function N.2
-                !!         global minimum: f(0,0) = 0 
+                !!         global minimum: f(0,0) = 0
                 !!         search domain: [-100,100]
                 ptr => testfun24
                 range(2) = 100.
                 range(1) = -range(2)
             case(25)
                 !>  \brief Schaffer function N.4
-                !!         global minimum: f(0,1.25313) = 0.292579 
+                !!         global minimum: f(0,1.25313) = 0.292579
                 !!         search domain: [-100,100]
                 ptr => testfun25
                 range(2) = 100.
@@ -253,7 +253,7 @@ contains
                 gmin = -186.7309
 
             ! PLATE-SHAPED
-            
+
             case(27)
                 !>  \brief  Booth's function
                 !!          global minimum: f(1,3) = 0
@@ -268,7 +268,7 @@ contains
                 ptr => testfun28
 
             ! VALLEY-SHAPED
-            
+
             case(29)
                 !>  \brief  three-hump camel function
                 !!          global minimum: f(0,0) = 0
@@ -287,7 +287,7 @@ contains
                 gmin     = -1.0316
 
             ! OTHER
-                
+
             case(31)
                 !>  \brief  Beale's function
                 !!          global minimum: f(3,0.5) = 0
@@ -309,11 +309,11 @@ contains
                 stop 'Unknown function index; get_testfun; simple_testfuns'
         end select
     end subroutine
-    
+
     ! GENERALIZED TEST FUNCTIONS
-    
+
     ! MANY LOCAL MINIMA (MULTIMODAL)
-    
+
     !>  \brief  Ackley's function
     !!          global minimum: f(0,...,0) = 0
     !!          search domain: [-32,32]
@@ -330,7 +330,7 @@ contains
         end do
         r = 20.+exp(1.)-20.*exp(-0.2*sqrt(r/real(d)))-exp(s/real(d))
     end function
-    
+
     !>  \brief  Griewank's function
     !!          global minimum: f(0,...,0) = 0
     !!          search domain: [-600,600]
@@ -347,7 +347,7 @@ contains
         end do
         r = r-s+1
     end function
-    
+
     !>  \brief  Levy function
     !!          global minimum: f(1,...,1) = 0
     !!          search domain: [-10,10]
@@ -369,7 +369,7 @@ contains
         end do
         r = r+last
     end function
-    
+
     !>  \brief  Rastrigin's function
     !!          global minimum: f(0,...,0) = 0
     !!          search domain: [-5.12,5.12]
@@ -383,7 +383,7 @@ contains
             r = r+x(i)**2.-10.*cos(twopi*x(i))
         end do
     end function
-    
+
     !>  \brief  Schwefel's function
     !!          global minimum: f(420.9687,...,420.9687) = 0
     !!          search domain: [-500,500]
@@ -399,7 +399,7 @@ contains
         end do
         r = 418.9829*real(d)-r
     end function
-    
+
     !>  \brief  Salomon's function
     !!          global minimum: f(0,...,0) = 0
     !!          search domain: [-100,100]
@@ -415,9 +415,9 @@ contains
         end do
         r = 1.+0.1*sqrt(r)-cos(twopi*sqrt(r))
     end function
-    
+
     ! BOWL-SHAPED (UNIMODAL)
-    
+
     !>  \brief  Sphere function
     !!          global minimum: f(0,...,0) = 0
     !!          search domain: [-5.12,5.12]
@@ -431,7 +431,7 @@ contains
             r = r+x(i)**2.
         end do
     end function
-    
+
     !>  \brief  SumSquares function
     !!          global minimum: f(0,...,0) = 0
     !!          search domain: [-10,10]
@@ -459,7 +459,7 @@ contains
             r = r+abs(x(i))**real(i+1)
         end do
     end function
-    
+
     !>  \brief  1st Perm function
     !!          global minimum: f(1,1/2,1/3,...,1/d) = 0
     !!          search domain: [-d,d]
@@ -472,16 +472,16 @@ contains
         do i=1,d
             ii = real(i)
             r_inner = 0.
-            do j=1,d 
+            do j=1,d
                 jj = real(j)
-                r_inner = r_inner+(jj+10.)*(x(j)**ii-(1./jj)**ii)   
+                r_inner = r_inner+(jj+10.)*(x(j)**ii-(1./jj)**ii)
             end do
             r = r+r_inner**2.
         end do
     end function
-    
+
     ! WAVY BOWLS
-    
+
     !>  \brief  2nd Perm function
     !!          global minimum: f(1,2,3,...,d) = 0
     !!          search domain: [-d,d]
@@ -495,14 +495,14 @@ contains
         do i=1,d
             ii = real(i)
             r_inner = 0.
-            do j=1,d 
+            do j=1,d
                 jj = real(j)
                 r_inner = r_inner+(jj**ii+0.5)*((x(j)/jj)**ii-1.)
             end do
             r = r+r_inner**2.
         end do
     end function
-    
+
     !>  \brief  Styblinski-Tang function
     !!          global minimum: f(-2.903534,...,-2.903534) = -39.16599*d
     !!          search domain: [-5,5]
@@ -518,7 +518,7 @@ contains
         end do
         r = r/2.
     end function
-    
+
     !>  \brief  Whitley's function
     !!          global minimum: f(1,...,1) = 0
     !!          search domain: [-10.24,10.24]
@@ -536,9 +536,9 @@ contains
             end do
         end do
     end function
-    
+
     ! PLATE-SHAPED (UNIMODAL)
-    
+
     !>  \brief  Zakharov function
     !!          global minimum: f(0,...,0) = 0
     !!          search domain: [-5,10]
@@ -556,9 +556,9 @@ contains
         end do
         r = s1+s2**2.+s2**4
     end function
-    
-    ! VALLEY-SHAPED 
-    
+
+    ! VALLEY-SHAPED
+
     !>  \brief  Dixon-Price function
     !!          global minimum: f(x(1),...,x(d)) = 0 at x(i) = 2**(-(2**i-2)/(2**i))
     !!          search domain: [-10,10]
@@ -572,7 +572,7 @@ contains
             r = r+real(i)*(2.*x(i)**2.-x(i-1))**2.
         end do
     end function
-    
+
     !>  \brief  Rosenbrock's (banana) function
     !!          global minimum: f(1,...,1) = 0
     !!          search domain: [-5,10]
@@ -587,9 +587,9 @@ contains
             r = r+100.*(x(i+1)-x(i)**2.)**2.+(x(i)-1.)**2.
         end do
     end function
-    
+
     ! OTHER
-    
+
     !>  \brief  Pinter's function
     !!          global minimum: f(0,...,0) = 0
     !!          search domain: [-100,100]
@@ -621,7 +621,7 @@ contains
         end do
         r = sum1+sum2+sum3
     end function
-    
+
     !>  \brief  MultiMod function
     !!          global minimum: f(0,...,0) = 0
     !!          search domain: [-10,10]
@@ -641,11 +641,11 @@ contains
             r = r+abx*mabx
         end do
     end function
-    
+
     !>  \brief  Step function
     !!          global minimum: f(0.5,...,0.5) = 0
     !!          search domain: [-100,100]
-    !!          The presence of many flat plateus and steep ridges presents 
+    !!          The presence of many flat plateus and steep ridges presents
     !!          difficulties for algorithms based on gradient information
     function testfun19( x, d ) result( r )
         integer, intent(in) :: d
@@ -660,9 +660,9 @@ contains
     end function
 
     ! TWO-DIMENSIONAL TEST FUNCTIONS
-    
+
     ! MANY LOCAL MINIMA (MULTIMODAL)
-    
+
     !>  \brief  Drop-wave function
     !!          global minimum: f(0,0) = -1
     !!          search domain: [-5.12,5.12]
@@ -674,9 +674,9 @@ contains
         frac2 = 0.5*(x(1)**2.+x(2)**2.)+2.
         r = -frac1/frac2
     end function
-    
+
     !>  \brief Eggholder function
-    !!         global minimum: f(512,404.2319) = -959.6407 
+    !!         global minimum: f(512,404.2319) = -959.6407
     !!         search domain: [-512,512]
     function testfun21( x, d )result( r )
         integer, intent(in) :: d ! d=2
@@ -684,7 +684,7 @@ contains
         real :: r
         r = -(x(2)+47.)*sin(sqrt(abs(x(2)+x(1)/2.+47.)))-x(1)*sin(sqrt(abs(x(1)-(x(2)+47.))))
     end function
-    
+
     !>  \brief  Holder table function
     !!          global minimum: f(8.05502,9.66459)   = -19.2085
     !!          global minimum: f(8.05502,-9.66459)  = -19.2085
@@ -699,7 +699,7 @@ contains
         fact2 = exp(abs(1.-sqrt(x(1)**2.+x(2)**2.)/pi))
         r = -abs(fact1*fact2)
     end function
-        
+
     !>  \brief  Levy function N.13
     !!          global minimum: f(1,1) = 0
     !!          search domain: [-10,10]
@@ -712,9 +712,9 @@ contains
         term3 = (x(2)-1.)**2*(1.+(sin(2.*pi*x(2)))**2.)
         r = term1+term2+term3
     end function
-    
+
     !>  \brief Schaffer function N.2
-    !!         global minimum: f(0,0) = 0 
+    !!         global minimum: f(0,0) = 0
     !!         search domain: [-100,100]
     function testfun24( x, d )result( r )
         integer, intent(in) :: d ! d=2
@@ -722,9 +722,9 @@ contains
         real :: r
         r = 0.5+(sin(x(1)**2.-x(2)**2.)**2.-0.5)/(1.+0.001*(x(1)**2.+x(2)**2.))**2.
     end function
-    
+
     !>  \brief Schaffer function N.4
-    !!         global minimum: f(0,1.25313) = 0.292579 
+    !!         global minimum: f(0,1.25313) = 0.292579
     !!         search domain: [-100,100]
     function testfun25( x, d )result( r )
         integer, intent(in) :: d ! d=2
@@ -732,7 +732,7 @@ contains
         real :: r
         r = 0.5+(cos(sin(abs(x(1)**2.-x(2)**2.)))-0.5)/(1.+0.001*(x(1)**2.+x(2)**2.))**2.
     end function
-    
+
     !>  \brief Shubert function
     !!         global minimum: f(unknonw) = -186.7309
     !!         search domain: [-5.12,5.12]
@@ -750,9 +750,9 @@ contains
         end do
         r = sum1*sum2
     end function
-    
+
     ! PLATE-SHAPED
-    
+
     !>  \brief  Booth's function
     !!          global minimum: f(1,3) = 0
     !!          search domain: [-10,10]
@@ -762,7 +762,7 @@ contains
         real :: r
         r = (x(1)+2.*x(2)-7.)**2.+(2.*x(1)+x(2)-5.)**2.
     end function
-    
+
     !>  \brief  Matya's function
     !!          global minimum: f(0,0) = 0
     !!          search domain: [-10,-10]
@@ -772,9 +772,9 @@ contains
         real :: r
         r = 0.26*(x(1)**2.+x(2)**2)-0.48*x(1)*x(2)
     end function
-    
+
     ! VALLEY-SHAPED
-    
+
     !>  \brief  three-hump camel function
     !!          global minimum: f(0,0) = 0
     !!          search domain: [-5,-5]
@@ -784,7 +784,7 @@ contains
         real :: r
         r = 2.*x(1)**2.-1.05*x(1)**4.+x(1)**6./6.+x(1)*x(2)+x(2)**2.
     end function
-    
+
     !>  \brief  six-hump camel function
     !!          global minimum: f(0.0898,-0.7126) = -1.0316
     !!          global minimum: f(-0.0898,0.7126) = -1.0316
@@ -798,9 +798,9 @@ contains
         term3 = (-4.+4.*x(2)**2.)*x(2)**2.
         r = term1+term2+term3
     end function
-    
+
     ! OTHER
-    
+
     !>  \brief  Beale's function
     !!          global minimum: f(3,0.5) = 0
     !!          search domain: [-4.5,4.5]
@@ -811,7 +811,7 @@ contains
         real :: r
         r = (1.5-x(1)+x(1)*x(2))**2.+(2.25-x(1)+x(1)*x(2)**2.)**2.+(2.625-x(1)+x(1)*x(2)**3.)**2.
     end function
-    
+
     !>  \brief Goldstein-Price function
     !!         global minimum: f(0,-1) = 3
     !!         search domain: [-2,2]
@@ -824,11 +824,11 @@ contains
         term2 = 19.-14.*x(1)+3.*x(1)**2.-14.*x(2)+6.*x(1)*x(2)+3.*x(2)**2.
         term3 = 2.*x(1)-3.*x(2)
         term4 = 18.-32.*x(1)+12.*x(1)**2.+48*x(2)-36.*x(1)*x(2)+27.*x(2)**2.
-        r = (1.+term1*term1*term2)*(30.+term3*term3*term4)        
+        r = (1.+term1*term1*term2)*(30.+term3*term3*term4)
 !        r = (1.+(x(1)+x(2)+1)**2.*(19.-14.*x(1)+&
 !        3.*x(1)**2.-14.*x(2)+6.*x(1)*x(2)+3.*x(2)**2.))&
 !        *(30.+(2.*x(1)-3.*x(2))**2.*(18.-32.*x(1)+12.*x(1)**2.+&
 !        48*x(2)-36.*x(1)*x(2)+27.*x(2)**2.))
     end function
-    
+
 end module

@@ -1,5 +1,5 @@
-!> simple affinity propogation module
-!
+!> Simple affinity propogation module
+!!
 !! simple_aff_prop is the SIMPLE class for clustering by affinity propagation.
 !! Affinity propagation is based on loopy belief propagation.
 !!

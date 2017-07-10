@@ -1,3 +1,4 @@
+!> Simple clustering module: stochastic hill climbing module for clustering
 module simple_shc_cluster
 use simple_oris, only: oris
 use simple_rnd,  only: irnd_uni
@@ -10,7 +11,7 @@ type shc_cluster
     private
     integer              :: ncls              !< number of clusters
     integer              :: N                 !< number of elements to cluster
-    class(oris), pointer :: o_ptr=>null()     !< ponter to orientation data struct
+    class(oris), pointer :: o_ptr=>null()     !< pointer to orientation data struct
     integer, allocatable :: labels(:)         !< cluster labels
     real                 :: MINS=-1.          !< minimum similarity
     real, pointer        :: S(:,:)            !< pointer to similarity marix
