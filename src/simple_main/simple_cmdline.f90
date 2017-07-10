@@ -244,7 +244,6 @@ contains
         endif
     end subroutine delete
 
-    
     !> \brief  to set variables to be checked
     subroutine checkvar( self, str, nr )
         class(cmdline),   intent(inout) :: self

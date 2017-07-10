@@ -138,7 +138,7 @@ contains
         call seed_rnd
         if( debug ) write(*,'(a)') 'seeded random number generator'
         ! set up symmetry functionality
-        call self%se%new(p%pgrp)
+        call self%se%new(trim(p%pgrp))
         p%nsym    = self%se%get_nsym()
         p%eullims = self%se%srchrange()
         if( debug ) write(*,'(a)') 'did setup symmetry functionality'

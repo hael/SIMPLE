@@ -90,6 +90,7 @@ contains
             call scobj%scale_exec
             ! execute stage 1
             cline_prime2D_stage1 = cline
+            call cline_prime2D_stage1%delete('automsk') ! deletes possible automsk flag from stage 1
             call cline_prime2D_stage1%set('maxits', real(MAXITS_STAGE1))
             call xprime2D%execute(cline_prime2D_stage1)
             ! prepare stage 2 input -- re-scale 
@@ -104,6 +105,10 @@ contains
             call os%write(FINALDOC)
             ! prepare stage 2 input -- command line
             cline_prime2D_stage2 = cline
+            ! if automsk .eq. yes, we need to replace it with cavg
+            if( p_master%automsk .eq. 'yes' )then
+                call cline_prime2D_stage2%set('automsk', 'cavg')
+            endif
             call cline_prime2D_stage2%delete('deftab')
             call cline_prime2D_stage2%set('oritab',  trim(FINALDOC))
             call cline_prime2D_stage2%set('startit', real(MAXITS_STAGE1 + 1))

@@ -1,7 +1,6 @@
 acf
 append
 async
-automsk
 autoscale
 avg
 bin
@@ -54,7 +53,6 @@ shellnorm
 shbarrier
 single
 soften
-srch_inpl
 stats
 stream
 swap
@@ -68,6 +66,7 @@ vis
 xfel
 zero
 angastunit
+automsk
 boxfile
 boxtab
 boxtype

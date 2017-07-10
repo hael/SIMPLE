@@ -188,7 +188,7 @@ contains
     end subroutine apply_3Denvmask2ptcl
 
     !>  \brief  is for envelope masking of the referecne in prime2D
-    !!          with memoization of the adaptive curcular 2D mask radius
+    !!          with memoization of the adaptive circular 2D mask radius
     subroutine apply_2Denvmask22Dref( self, ref, cls )
         class(masker), intent(inout) :: self
         class(image),  intent(inout) :: ref

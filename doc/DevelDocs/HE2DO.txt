@@ -1,2 +1,2 @@
 fsc files should have iter flag
-replace edge with edge2D where appropriate
+parallel scaling on split stacks

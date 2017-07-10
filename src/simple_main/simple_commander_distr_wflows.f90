@@ -404,7 +404,7 @@ contains
         call cline_check2D_conv%set('nptcls', real(p_master%nptcls))
         call cline_cavgassemble%set('prg', 'cavgassemble')
         call cline_makecavgs%set('prg', 'makecavgs')
-        if( .not. cline%defined('refs') .and. job_descr%isthere('automsk') ) call job_descr%delete('automsk')
+        if( job_descr%isthere('automsk') ) call job_descr%delete('automsk')
 
         ! split stack
         if( stack_is_split(p_master%stk_part_fbody, p_master%ext, qenv%parts, p_master%box) )then
@@ -463,8 +463,9 @@ contains
             ! check convergence
             call cline_check2D_conv%set('oritab', trim(oritab))
             call xcheck2D_conv%execute(cline_check2D_conv)
+            frac_srch_space = 0.
+            if( iter > 1 ) frac_srch_space = cline_check2D_conv%get_rarg('frac')
             ! the below activates shifting & automasking
-            frac_srch_space = cline_check2D_conv%get_rarg('frac')
             if( frac_srch_space >= FRAC_SH_LIM .or. cline_check2D_conv%defined('trs') )then
                 if( .not.job_descr%isthere('trs') )then
                     ! activates shift search
@@ -473,7 +474,7 @@ contains
                 endif
                 if( cline%defined('automsk') )then
                     ! activates masking
-                    if( cline%get_carg('automsk') .ne. 'no' ) call job_descr%set('automsk','yes')
+                    if( cline%get_carg('automsk') .ne. 'no' ) call job_descr%set('automsk','cavg')
                 endif
             endif
             if( cline_check2D_conv%get_carg('converged').eq.'yes' .or. iter==p_master%maxits ) exit

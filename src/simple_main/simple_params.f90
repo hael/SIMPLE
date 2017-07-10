@@ -31,7 +31,6 @@ type :: params
     character(len=3)      :: acf='no'
     character(len=3)      :: append='no'
     character(len=3)      :: async='no'
-    character(len=3)      :: automsk='no'
     character(len=3)      :: autoscale='yes'
     character(len=3)      :: avg='no'
     character(len=3)      :: bin='no'
@@ -84,7 +83,6 @@ type :: params
     character(len=3)      :: shbarrier='yes'
     character(len=3)      :: single='no'
     character(len=3)      :: soften='no'
-    character(len=3)      :: srch_inpl='yes'
     character(len=3)      :: stats='no'
     character(len=3)      :: stream='no'
     character(len=3)      :: swap='no'
@@ -99,6 +97,7 @@ type :: params
     character(len=3)      :: zero='no'
     ! other fixed length character variables in ascending alphabetical order
     character(len=STDLEN) :: angastunit='degrees'
+    character(len=4)      :: automsk='no'
     character(len=STDLEN) :: boxfile=''
     character(len=STDLEN) :: boxtab=''
     character(len=STDLEN) :: boxtype='eman'
@@ -495,7 +494,6 @@ contains
         call check_carg('single',         self%single)
         call check_carg('soften',         self%soften)
         call check_carg('speckind',       self%speckind)
-        call check_carg('srch_inpl',      self%srch_inpl)
         call check_carg('stats',          self%stats)
         call check_carg('stk_part_fbody', self%stk_part_fbody)
         call check_carg('stream',         self%stream)
@@ -927,7 +925,7 @@ contains
         if( .not. cline%defined('outer') ) self%outer = self%msk
         ! checks automask related values
         self%l_envmsk = .false.
-        if( self%automsk .eq. 'yes' ) self%l_envmsk = .true.
+        if( self%automsk .ne. 'no' ) self%l_envmsk = .true.
         if( cline%defined('mskfile') )then
             if( .not. file_exists(self%mskfile) )then
                 write(*,*) 'file: ', trim(self%mskfile)

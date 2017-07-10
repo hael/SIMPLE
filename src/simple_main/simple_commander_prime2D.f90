@@ -83,11 +83,7 @@ contains
             if( .not. cline%defined('ncls') )then
                 stop 'If no oritab is provided ncls (# class averages) need to be part of command line'
             endif
-            if( p%srch_inpl .eq. 'yes' )then
-                call b%a%rnd_cls(p%ncls)
-            else
-                call b%a%rnd_cls(p%ncls, srch_inpl=.false.)
-            endif
+            call b%a%rnd_cls(p%ncls)
         endif
         if( cline%defined('outfile') )then
             p%oritab = p%outfile
@@ -141,11 +137,6 @@ contains
         p = params(cline)                                 ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         call b%build_hadamard_prime2D_tbox(p)             ! 2D Hadamard matcher built
-        if( p%srch_inpl .eq. 'no' )then
-            if( .not. cline%defined('oritab') )then
-                stop 'need oritab for this mode (srch_inpl=no) of execution!'
-            endif
-        endif
         if( cline%defined('refs') )then
             call find_ldim_nptcls(p%refs, lfoo, ncls_from_refs)
             ! consistency check
@@ -250,7 +241,7 @@ contains
         call b%a%read(p%oritab)
         order = b%a%order_cls(p%ncls)
         do iclass=1,p%ncls
-            write(*,'(a,1x,i5,a,1x,i5,1x,a,i5)') 'CLASS:', order(iclass),&
+            write(*,'(a,1x,i5,1x,a,1x,i5,1x,a,i5)') 'CLASS:', order(iclass),&
             &'CLASS_RANK:', iclass ,'POP:', b%a%get_cls_pop(order(iclass)) 
             call b%img%read(p%stk, order(iclass))
             call b%img%write(p%outstk, iclass)

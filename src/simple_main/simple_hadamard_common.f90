@@ -254,14 +254,14 @@ contains
         class(ori),                intent(inout) :: orientation
         class(oris),     optional, intent(inout) :: os
         real,            optional, intent(in)    :: ran_eo
-        type(ctf)        :: tfun
-        type(image)      :: ctf_img, norm_img
-        type(ori)        :: orisoft, o_sym
-        type(kbinterpol) :: kbwin
+        type(ctf)             :: tfun
+        type(image)           :: ctf_img, norm_img
+        type(ori)             :: orisoft, o_sym
+        type(kbinterpol)      :: kbwin
         character(len=STDLEN) :: ctf_flag 
-        real             :: pw, ran, w, dfx, dfy, angast
-        integer          :: jpeak, s, k, npeaks
-        logical          :: softrec
+        real                  :: pw, ran, w, dfx, dfy, angast
+        integer               :: jpeak, s, k, npeaks
+        logical               :: softrec
         if( p%eo .eq. 'yes' )then
             kbwin = b%eorecvols(1)%get_kbwin()
         else
@@ -348,18 +348,19 @@ contains
     !>  \brief  prepares one particle image for alignment 
     subroutine prepimg4align( b, p, o )
         use simple_ctf, only: ctf
-        class(build),   intent(inout) :: b
-        class(params),  intent(inout) :: p
-        type(ori),      intent(inout) :: o
+        class(build),      intent(inout) :: b
+        class(params),     intent(inout) :: p
+        type(ori),         intent(inout) :: o
         type(ctf) :: tfun
         real      :: x, y, dfx, dfy, angast
-        integer   :: state
+        integer   :: state, cls
         if( p%l_xfel )then
             ! nothing to do 4 now
             return
         else
-            x = o%get('x')
-            y = o%get('y')
+            x     = o%get('x')
+            y     = o%get('y')
+            cls   = nint(o%get('class'))
             state = nint(o%get('state'))
             ! move to Fourier space
             call b%img%fwd_ft
@@ -402,7 +403,7 @@ contains
             ! MASKING
             if( p%l_envmsk .and. p%automsk .eq. 'cavg' )then
                 ! 2D adaptive cos-edge mask
-                call b%mskimg%apply_adamask2ptcl_2D(b%img_match, nint(o%get('cls')))
+                call b%mskimg%apply_adamask2ptcl_2D(b%img_match, cls)
             else if( p%l_envmsk )then
                 ! 3D adaptive cos-edge mask
                 call b%mskvol%apply_adamask2ptcl_3D(o, b%img_match)
@@ -444,11 +445,13 @@ contains
         ! normalise
         call b%img_match%norm
         ! apply mask
-        if(p%l_envmsk .and. p%automsk .eq. 'cavg')then
+        if( p%l_envmsk .and. p%automsk .eq. 'cavg' )then
             ! automasking
             call b%mskimg%apply_2Denvmask22Dref(b%img_match, icls)
-            if( (p%l_distr_exec .and. p%part.eq.1) .or. (.not.p%l_distr_exec))then
-                call b%img_match%write(trim(p%refs)//'msk'//p%ext, icls)
+            if( p%l_chunk_distr )then
+                call b%img_match%write(trim(p%chunktag)//'automasked_refs'//p%ext, icls)
+            else if( (p%l_distr_exec .and. p%part.eq.1) .or. (.not. p%l_distr_exec) )then
+                call b%img_match%write('automasked_refs'//p%ext, icls)
             endif
         else
             ! soft masking

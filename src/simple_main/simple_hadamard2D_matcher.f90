@@ -112,7 +112,6 @@ contains
             if( p%oritab .eq. '' )then
                 !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                 do iptcl=p%fromp,p%top
-                    ! call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, conv_larr(iptcl), greedy=.true.)
                     call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, greedy=.true.)
                 end do
                 !$omp end parallel do
@@ -123,7 +122,6 @@ contains
                 endif
                 !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                 do iptcl=p%fromp,p%top
-                    ! call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, conv_larr(iptcl), extr_bound=corr_thresh)
                     call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, extr_bound=corr_thresh)
                 end do
                 !$omp end parallel do
@@ -430,7 +428,7 @@ contains
         ! prepare the polarizers
         call b%img_match%init_polarizer(pftcc)
         ! prepare the automasker
-        if(p%l_envmsk .and. p%automsk .eq. 'cavg') call b%mskimg%init2D(p, p%ncls)
+        if( p%l_envmsk .and. p%automsk .eq. 'cavg' ) call b%mskimg%init2D(p, p%ncls)
         ! PREPARATION OF REFERENCES IN PFTCC
         ! read references and transform into polar coordinates
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING REFERENCES'
@@ -454,10 +452,7 @@ contains
             cnt = cnt+1
             call progress(cnt, p%top-p%fromp+1)
             call read_img_from_stk( b, p, iptcl )
-            o      = b%a%get_ori(iptcl)
-            icls   = nint(o%get('class'))
-            istate = nint(o%get('state'))
-            if( istate == 0 ) icls = 0
+            o = b%a%get_ori(iptcl)
             call prepimg4align(b, p, o)
             ! transfer to polar coordinates
             call b%img_match%polarize(pftcc, iptcl)

@@ -151,7 +151,6 @@ contains
         call chdict%push('snr',           'signal-to-noise ratio')
         call chdict%push('soften',        'soften envelope with cosine edge(yes|no){no}')
         call chdict%push('speckind',      'power spectrum kind(amp|square|phase|real|log|sqrt){sqrt}')
-        call chdict%push('srch_inpl',     'search in-plane degrees of freedom(yes|no){yes}')
         call chdict%push('startit',       'start iterating from here')
         call chdict%push('state',         'state to extract')
         call chdict%push('state2split',   'state group to split')
