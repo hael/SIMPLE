@@ -341,7 +341,6 @@ contains
             end do
         endif
         ! cleanup
-        call ctf_img%kill
         call norm_img%kill
     end subroutine grid_ptcl_dev
 
@@ -610,6 +609,8 @@ contains
                     ! mask
                     call b%vol%mask(p%msk, 'soft')
                     call b%vol%write(pprocvol)
+                    ! update resolutions for local execution mode
+                    call b%eorecvols(s)%get_res(res05s(s), res0143s(s))
                 endif
             endif
         end do

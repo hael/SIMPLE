@@ -257,7 +257,7 @@ contains
         real, optional,       intent(in)    :: pwght     !< external particle weight (affects both fplane and rho)
         real, optional,       intent(in)    :: ctfsq     !< 
         real, allocatable :: w(:,:,:)
-        real              :: vec(3), loc(3), tvalsq
+        real              :: dvec(3), vec(3), loc(3), tvalsq, pw
         integer           :: i, win(3,2), wdim
         if(comp == cmplx(0.,0.)) return
         ! calculate non-uniform sampling location
@@ -267,17 +267,19 @@ contains
         win  = sqwin_3d(loc(1), loc(2), loc(3), self%winsz)
         wdim = 2*ceiling(self%winsz) + 1
         ! (weighted) kernel values
-        allocate(w(wdim, wdim, wdim), source=self%dens_const)
-        if( present(pwght) )w = w*pwght
+        pw = self%dens_const
+        if( present(pwght) )pw = pw*pwght
+        allocate(w(wdim, wdim, wdim), source=pw)
         if( present(ctfsq) )then
             tvalsq = ctfsq
         else
             tvalsq = 1.
         endif
         do i=1,wdim
-            where(w(i,:,:)>0.)w(i,:,:) = w(i,:,:) * self%kbwin%apod(real(win(1,1)+i-1)-loc(1))
-            where(w(:,i,:)>0.)w(:,i,:) = w(:,i,:) * self%kbwin%apod(real(win(2,1)+i-1)-loc(2))
-            where(w(:,:,i)>0.)w(:,:,i) = w(:,:,i) * self%kbwin%apod(real(win(3,1)+i-1)-loc(3))
+            dvec = real(win(:,1)+i-1) - loc
+            where(w(i,:,:)>0.)w(i,:,:) = w(i,:,:) * self%kbwin%apod( dvec(1) )
+            where(w(:,i,:)>0.)w(:,i,:) = w(:,i,:) * self%kbwin%apod( dvec(2) )
+            where(w(:,:,i)>0.)w(:,:,i) = w(:,:,i) * self%kbwin%apod( dvec(3) )
         enddo
         ! expanded matrices update
         if( inoutmode )then
@@ -327,7 +329,7 @@ contains
     end subroutine calc_tfun_vals
     
     subroutine inout_fplane( self, o, inoutmode, fpl, pwght, mul, shellweights )
-        use simple_math, only: deg2rad, hyp
+        use simple_math, only: hyp
         use simple_ori,  only: ori
         class(reconstructor), intent(inout) :: self      !< instance
         class(ori),           intent(inout) :: o         !< orientation
@@ -405,7 +407,6 @@ contains
     end subroutine inout_fplane
 
     subroutine inout_fplane_dev( self, o, inoutmode, fpl, norm, pwght, mul)
-        use simple_math, only: deg2rad, hyp
         use simple_ori,  only: ori
         class(reconstructor),   intent(inout) :: self      !< instance
         class(ori),             intent(inout) :: o         !< orientation
@@ -414,33 +415,25 @@ contains
         class(image),           intent(inout) :: norm      !< CTFsquared (or 1.0)
         real,    optional,      intent(in)    :: pwght     !< external particle weight (affects both fplane and rho)
         real,    optional,      intent(in)    :: mul
-        integer :: h, k, lims(3,2), sh, lfny, logi(3), phys(3)
+        integer :: h, k, lims(3,2), logi(3), phys(3)
         complex :: oshift
-        real    :: x, y, xtmp, ytmp, pw
+        real    :: pw, shift(3)
         if( .not. fpl%is_ft() )       stop 'image need to be FTed; inout_fplane; simple_reconstructor'
         if( .not. (self.eqsmpd.fpl) ) stop 'scaling not yet implemented; inout_fplane; simple_reconstructor'
-        oshift = cmplx(1.,0.)
-        lims   = self%loop_lims(2)
-        x      = o%get('x')
-        y      = o%get('y')
-        xtmp   = 0.
-        ytmp   = 0.
-        if( abs(x) > SHTHRESH .or. abs(y) > SHTHRESH )then ! shift the image prior to insertion
-            if( present(mul) )then
-                x = x*mul
-                y = y*mul
-            endif
-            xtmp = x
-            ytmp = y
-            if( abs(x) < 1e-6 ) xtmp = 0.
-            if( abs(y) < 1e-6 ) ytmp = 0.
+        lims       = self%loop_lims(2)
+        oshift     = cmplx(1.,0.)
+        shift      = 0.
+        shift(1:2) = o%get_shift()
+        if( any(abs(shift(1:2)) > SHTHRESH) )then ! shift the image prior to insertion
+            if( present(mul) ) shift(1:2) = mul * shift(1:2)
         endif
+        where( abs(shift(1:2)) < 1.e-6 )shift(1:2) = 0.
         !$omp parallel do collapse(2) default(shared) schedule(static)&
         !$omp private(h,k,oshift,logi,phys) proc_bind(close)
         do h=lims(1,1),lims(1,2)
             do k=lims(1,1),lims(1,2)
                 logi   = [h,k,0]
-                oshift = fpl%oshift(logi, [-xtmp,-ytmp,0.], ldim=2)
+                oshift = fpl%oshift(logi, -shift, ldim=2)
                 phys   = fpl%comp_addr_phys(logi)
                 call self%inout_fcomp_dev(h, k, o, inoutmode, fpl%get_fcomp(logi,phys), oshift,&
                 &pwght=pwght, ctfsq=real(norm%get_fcomp(logi,phys)))
