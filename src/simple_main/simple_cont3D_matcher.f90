@@ -79,6 +79,7 @@ contains
 
         ! SET BAND-PASS LIMIT RANGE
         call set_bp_range( b, p, cline )
+        reslim = p%lp
 
         ! CALCULATE ANGULAR THRESHOLD (USED BY THE SPARSE WEIGHTING SCHEME)
         if( .not.cline%defined('athres') ) p%athres = max(p%lp, ATHRES_LIM)
@@ -190,6 +191,7 @@ contains
                                 softoris = cont3Ddesrch(iptcl)%get_softoris()
                         end select
                         if( p%eo.eq.'yes' )then
+                            ! call grid_ptcl(b, p, orientation, os=softoris, ran_eo=real(eopart(iptcl)))
                             call grid_ptcl_dev(b, p, orientation, os=softoris, ran_eo=real(eopart(iptcl)))
                         else
                             call grid_ptcl_dev(b, p, orientation, os=softoris)
