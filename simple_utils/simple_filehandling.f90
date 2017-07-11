@@ -136,9 +136,9 @@ contains
         close(unit=fnr)
     end subroutine make_filetable
 
-     !> \brief  is for making a file-table (to be able to commander execute programs that depend on them)
+    !> \brief  is for making a file-table (to be able to commander execute programs that depend on them)
     subroutine make_multitab_filetable( tabname, tab1, tab2, tab3, tab4 )
-         use simple_strings, only: int2str, int2str_pad
+        use simple_strings, only: int2str, int2str_pad
         character(len=*),                intent(in) :: tabname
         character(len=STDLEN),           intent(in) :: tab1(:), tab2(:)
         character(len=STDLEN), optional, intent(in) :: tab3(:), tab4(:)
@@ -220,6 +220,23 @@ contains
             stop 'IO error; is_open; simple_filehandling'
         endif
     end function is_open
+
+    !>  \brief  check whether a IO unit is current open
+    subroutine file_stats( fname, fstat, vals )
+        character(len=*),     intent(in)  :: fname
+        integer,              intent(out) :: fstat
+        integer, allocatable, intent(out) :: vals(:)
+        if( file_exists(trim(adjustl(fname))) )then
+            allocate(vals(13), source=0)
+            call stat(trim(adjustl(fname)), vals, status=fstat)
+            if( fstat.ne.0 )then
+                print *, 'Error simple_filehandling%file_stats for file:', trim(adjustl(fname))
+            endif
+        else
+            fstat = 0
+            print *, 'Unknown file: ',trim(adjustl(fname))
+        endif
+    end subroutine file_stats
 
     !> \brief  is for adding to filebody
     function add2fbody( fname, suffix, str ) result( newname )

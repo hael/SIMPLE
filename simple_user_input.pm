@@ -24,7 +24,7 @@ use Config;
 #####################################################################
 
 # enter the SIMPLE root path
-our$SIMPLE_PATH="/Users/creboul/Simple3";
+our$SIMPLE_PATH="/home/cyril/Simple3";
 # specifying the compiling directives
 # with OpenMP:  -fopenmp, CUDA: -DCUDA
 # Benchmarking: -DBENCH
@@ -48,9 +48,9 @@ our$FCOMPILER = "gfortran";
 our$CUDADIR="";
 # enter the fftw lib default: /usr/lib/x86_64-linux-gnu for [linux]
 #                             /usr/local/lib for [MacOSX]
-our$FFTW_LIB="/opt/local/lib/";
+our$FFTW_LIB="/usr/local/fftw/3.3.4-gcc/lib/";
 # on clusters we need extra path after module load fftw/3.3.4-gcc to identify the FFTW header
-our$FFTW_INC="/opt/local/include/";
+our$FFTW_INC="/usr/local/fftw/3.3.4-gcc/include/";
 # Modules and objects directories. default: obj/SIMPLEOFILES
 our$OBJDIR="obj/SIMPLEOFILES";
 our$MODDIR="obj/SIMPLEOFILES";
@@ -59,7 +59,7 @@ our$SET_OPTIMIZATION = 3;
 # debug mode
 # no debug mode: no, dubug mode: yes default: no
 # if debug = yes the opmization level = null
-our$DEBUG = "no";
+our$DEBUG = "yes";
 # debugging level "low" or "high"
 our$DEBUG_LEVEL = "low";
 
