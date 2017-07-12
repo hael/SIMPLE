@@ -71,12 +71,12 @@ contains
         logical, optional, intent(in) :: wait
         character(len=STDLEN) :: cmsg
         integer :: estat, cstat, exec_stat
-        logical :: doprint = .true., wwait = .true.
+        logical :: l_doprint = .true., wwait = .true.
 #if defined(PGI)
         call system(trim(adjustl(cmdline)))
 #elif defined(INTEL)
         exec_stat = system(trim(adjustl(cmdline)))
-        if( doprint )then
+        if( l_doprint )then
             write(*,*) 'command: ', trim(adjustl(cmdline))
             write(*,*) 'status of execution: ', exec_stat
         endif

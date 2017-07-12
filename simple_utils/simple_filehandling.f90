@@ -208,7 +208,7 @@ contains
         inquire(file=trim(adjustl(fname)), exist=file_exists)
     end function file_exists
 
-    !>  \brief  check whether a IO unit is current open
+    !>  \brief  check whether a IO unit is currently opened
     logical function is_open( unit_number )
         integer, intent(in)   :: unit_number
         integer               :: io_status
@@ -220,6 +220,19 @@ contains
             stop 'IO error; is_open; simple_filehandling'
         endif
     end function is_open
+
+    !>  \brief  check whether a file is currently opened
+    logical function is_file_open( fname )
+        character(len=*), intent(in)  :: fname
+        integer               :: io_status
+        character(len=STDLEN) :: io_message
+        io_status = 0
+        inquire(file=fname, opened=is_file_open,iostat=io_status,iomsg=io_message)
+        if (io_status .ne. 0) then
+            print *, 'is_open: IO error ', io_status, ': ', trim(adjustl(io_message))
+            stop 'IO error; is_file_open; simple_filehandling'
+        endif
+    end function is_file_open
 
     !>  \brief  check whether a IO unit is current open
     subroutine file_stats( fname, fstat, vals )

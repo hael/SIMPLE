@@ -13,20 +13,21 @@ type moviewatcher
     private
         character(len=STDLEN)              :: cwd       = ''    !< CWD
         character(len=STDLEN)              :: watch_dir = ''    !< movies directory to watch
-        character(len=STDLEN), allocatable :: past_farray(:)    !< history of movies detected
+        character(len=STDLEN), allocatable :: history(:)        !< history of movies detected
+        integer                            :: n_history = 0     !< history of movies detected
         integer                            :: report_time       !< time ellapsed prior to processing
         integer                            :: starttime         !< time of first watch
         integer                            :: ellapsedtime      !< time ellapsed between last and first watch
-        integer                            :: n_watch = 0       !< number of times the folder has been watched
-        integer                            :: n_fails = 0       !< number of times a watch has resulted in some error
-        logical                            :: doprint = .false.
+        integer                            :: n_watch   = 0     !< number of times the folder has been watched
+        integer                            :: n_fails   = 0     !< number of times a watch has resulted in some error
+        logical                            :: doprint   = .false.
 
   contains
 
     ! doers
     procedure          :: watch
     procedure, private :: is_past
-    procedure, private :: add2past
+    procedure, private :: add2history
     ! destructor
     procedure          :: kill
 
@@ -65,18 +66,18 @@ contains
     end function constructor
 
     !>  \brief  is the watching procedure
-    subroutine watch( self, n_newfiles, new_files )
+    subroutine watch( self, n_files, files )
         class(moviewatcher),           intent(inout) :: self
-        integer,                       intent(out)   :: n_newfiles
-        character(len=*), allocatable, intent(out)   :: new_files(:)
+        integer,                       intent(out)   :: n_files
+        character(len=*), allocatable, intent(out)   :: files(:)
         character(len=STDLEN), allocatable :: farray(:)
         integer,               allocatable :: stats(:)
         integer               :: tnow, last_accessed, last_modified, last_status_change ! in seconds
-        integer               :: i, n_files, fstat, fail_cnt
+        integer               :: i, fstat, fail_cnt, alloc_stat, n_lsfiles
         character(len=STDLEN) :: fname, abs_fname
-        logical               :: is_closed
+        logical               :: is_closed, has_new
+        has_new      = .false.
         fail_cnt     = 0
-        n_newfiles   = 0
         self%n_watch = self%n_watch + 1
         ! updates timing
         if( self%n_watch .eq. 1 )then
@@ -90,38 +91,32 @@ contains
         ! builds files array
         call sys_gen_mrcfiletab(self%watch_dir, trim(FILETABNAME))
         call read_filetable( trim(FILETABNAME), farray )
-        n_files  = size(farray)
-        if( n_files .eq. 0 )then
-            n_newfiles = 0
+        n_lsfiles  = size(farray)
+        if( n_lsfiles .eq. 0 )then
+            if(allocated(self%history))deallocate(self%history)
             return
         endif
         ! identifies files to report
-        do i = 1, n_files
+        do i = 1, n_lsfiles
             fname = trim(adjustl(farray(i)))
             if( self%is_past(fname) )then
                 ! already been reported, nothing to do
             else
                 abs_fname = trim(self%cwd)//'/'//trim(adjustl(fname))
                 call file_stats(trim(abs_fname), fstat, stats)
-                !is_closed = .not. is_open(abs_fname)
+                is_closed = .not. is_file_open(abs_fname)
                 if( fstat.eq.0 )then
                     ! new file identified
                     last_accessed      = tnow - stats( 9)
                     last_modified      = tnow - stats(10)
                     last_status_change = tnow - stats(11)
-                    if( (last_accessed > self%report_time) .and. (last_modified > self%report_time)&
-                    &.and. (last_status_change > self%report_time) )then
+                    if(    (last_accessed      > self%report_time)&
+                    &.and. (last_modified      > self%report_time)&
+                    &.and. (last_status_change > self%report_time)&
+                    &.and. is_closed )then
                         ! new file to report
-                        call addf2report( fname )
-                        n_newfiles = n_newfiles + 1
-                        if( self%doprint )print *, 'To report: ', trim(fname)
-                    else
-                        if( self%doprint )print *, 'Detected : ', trim(fname)
-                    endif
-                    if(self%doprint)then
-                        print *,'last accessed     :', ctime(stats( 9)), last_accessed
-                        print *,'last_modified     :', ctime(stats(10)), last_modified
-                        print *,'last_status_change:', ctime(stats(11)), last_status_change
+                        call self%add2history( fname )
+                        print *,'New_movie: ', trim(abs_fname), ', ',ctime(maxval(stats(9:11)))
                     endif
                 else
                     ! some error occured
@@ -135,61 +130,44 @@ contains
         if( fail_cnt > 0 )self%n_fails = self%n_fails + 1
         if( self%n_fails > FAIL_THRESH )then
             ! DO SOMETHING
+            print *, 'Warning: unknown failure occured, simple_moviewatcher%watch'
         endif
-        ! Add reported files to history
-        do i = 1, n_newfiles
-            call self%add2past( new_files(i) )
-        enddo
-        if( self%doprint )then
-            print *, 'Reporting ', n_newfiles, ' files:'
-            do i = 1, n_newfiles
-                print *,i,trim(new_files(i))
-            enddo
+        ! report
+        if(allocated(files))deallocate(files)
+        n_files = self%n_history
+        if( n_files > 0 )then
+            allocate(files(n_files), stat=alloc_stat)
+            call alloc_err("In: simple_moviewatcher%watch", alloc_stat)
+            files = self%history
         endif
         ! cleanup
         deallocate(farray)
-        contains
-
-            subroutine addf2report( f_name )
-                character(len=*),      intent(in)  :: f_name
-                character(len=STDLEN), allocatable :: tmp_farr(:)
-                integer :: n
-                if( .not.allocated(new_files) )then
-                    n = 0
-                    allocate(new_files(1))
-                else
-                    n = size(new_files)
-                    allocate(tmp_farr(n))
-                    tmp_farr(:) = new_files(:)
-                    deallocate(new_files)
-                    allocate(new_files(n+1))
-                    new_files(:n)  = tmp_farr
-                    deallocate(tmp_farr)
-                endif
-                new_files(n+1) = trim(adjustl(f_name))
-            end subroutine addf2report
     end subroutine watch
 
     !>  \brief  is for adding to the history of already reported files
-    subroutine add2past( self, fname )
+    subroutine add2history( self, fname )
         class(moviewatcher), intent(inout) :: self
         character(len=*),    intent(in)    :: fname
         character(len=STDLEN), allocatable :: tmp_farr(:)
-        integer :: n
-        if( .not.allocated(self%past_farray) )then
+        integer :: n, alloc_stat
+        if( .not.allocated(self%history) )then
             n = 0
-            allocate(self%past_farray(1))
+            allocate(self%history(1), stat=alloc_stat)
+            call alloc_err("In: simple_moviewatcher%add2history 2", alloc_stat)
         else
-            n = size(self%past_farray)
-            allocate(tmp_farr(n))
-            tmp_farr(:) = self%past_farray
-            deallocate(self%past_farray)
-            allocate(self%past_farray(n+1))
-            self%past_farray(:n) = tmp_farr
+            n = size(self%history)
+            allocate(tmp_farr(n), stat=alloc_stat)
+            call alloc_err("In: simple_moviewatcher%add2history 2", alloc_stat)
+            tmp_farr(:) = self%history
+            deallocate(self%history)
+            allocate(self%history(n+1), stat=alloc_stat)
+            call alloc_err("In: simple_moviewatcher%add2history 3", alloc_stat)
+            self%history(:n) = tmp_farr
             deallocate(tmp_farr)
         endif
-        self%past_farray( n+1 ) = trim(adjustl(fname))
-    end subroutine
+        self%history(n+1) = trim(adjustl(fname))
+        self%n_history    = self%n_history + 1
+    end subroutine add2history
 
     !>  \brief  is for checking a file has already been reported
     logical function is_past( self, fname )
@@ -197,9 +175,9 @@ contains
         character(len=*),    intent(in)    :: fname
         integer :: i
         is_past = .false.
-        if( allocated(self%past_farray) )then
-            do i = 1, size(self%past_farray)
-                if( trim(adjustl(fname)) .eq. trim(adjustl(self%past_farray(i))) )then
+        if( allocated(self%history) )then
+            do i = 1, size(self%history)
+                if( trim(adjustl(fname)) .eq. trim(adjustl(self%history(i))) )then
                     is_past = .true.
                     return
                 endif
@@ -214,12 +192,13 @@ contains
         class(moviewatcher), intent(inout) :: self
         self%cwd       = ''
         self%watch_dir = ''
-        if(allocated(self%past_farray))deallocate(self%past_farray)
+        if(allocated(self%history))deallocate(self%history)
         self%report_time  = 0
         self%starttime    = 0
         self%ellapsedtime = 0
         self%n_watch      = 0
         self%n_fails      = 0
+        self%n_history    = 0
         self%doprint      = .false.
     end subroutine kill
 
