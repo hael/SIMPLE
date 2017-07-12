@@ -13,7 +13,6 @@ use simple_strings,      only: str_has_substr
 use simple_jiffys,       only: cmdline_err
 use simple_filehandling, only: extract_abspath
 use simple_gen_doc
-use simple_restart
 use simple_commander_stream_wflows
 use simple_commander_distr_wflows
 use simple_commander_hlev_wflows
@@ -49,7 +48,7 @@ character(len=KEYLEN) :: keys_required(MAXNKEYS)='', keys_optional(MAXNKEYS)=''
 character(len=STDLEN) :: arg, prg, entire_line
 type(cmdline)         :: cline
 integer               :: cmdstat, cmdlen, pos
-logical               :: describe, is_restart
+logical               :: describe
 call get_command_argument(1, arg, cmdlen, cmdstat)
 call get_command(entire_line)
 if( str_has_substr(entire_line, 'prg=list') ) call list_all_simple_distr_programs
@@ -524,12 +523,7 @@ select case(prg)
         ! documentation
         if( describe ) call print_doc_prime3D
         ! parse command line
-        call check_restart( entire_line, is_restart )
-        if( is_restart )then
-            call parse_restart('prime3D', entire_line, cline, keys_required(:6), keys_optional(:31))
-        else
-            call cline%parse( keys_required(:6), keys_optional(:31) )
-        endif
+        call cline%parse( keys_required(:6), keys_optional(:31) )
         ! set defaults
         if( .not. cline%defined('nspace')                  ) call cline%set('nspace', 1000.)
         if( cline%defined('lp') .or. cline%defined('find') ) call cline%set('dynlp',   'no')
@@ -576,12 +570,7 @@ select case(prg)
         ! documentation
         if( describe ) call print_doc_cont3D
         ! parse command line
-        call check_restart( entire_line, is_restart )
-        if( is_restart )then
-            call parse_restart('cont3D', entire_line, cline, keys_required(:8), keys_optional(:16))
-        else
-            call cline%parse( keys_required(:8), keys_optional(:16) )
-        endif
+        call cline%parse( keys_required(:8), keys_optional(:16) )
         ! set defaults
         if( cline%defined('eo') )then
             if( cline%get_carg('eo').eq.'yes')then

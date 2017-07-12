@@ -134,8 +134,7 @@ general: simple_hash.o            \
          simple_kbinterpol.o      \
          simple_winfuns.o         \
          simple_fsc_compare.o     \
-         simple_moviewatcher.o    \
-         simple_restart.o         ;
+         simple_moviewatcher.o    ;
 
 simple: simple_image.o                  \
         simple_ft_expanded.o            \

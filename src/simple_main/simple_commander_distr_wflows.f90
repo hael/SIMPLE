@@ -713,7 +713,6 @@ contains
         character(len=32), parameter :: ALGNFBODY    = 'algndoc_'
         character(len=32), parameter :: VOLFBODY     = 'recvol_state'
         character(len=32), parameter :: ITERFBODY    = 'prime3Ddoc_'
-        character(len=32), parameter :: RESTARTFBODY = 'prime3D_restart'
         ! commanders
         type(prime3D_init_distr_commander)  :: xprime3D_init_distr
         type(recvol_distr_commander)        :: xrecvol_distr
@@ -737,7 +736,6 @@ contains
         type(oris)            :: os
         character(len=STDLEN) :: vol, vol_iter, oritab, str, str_iter
         character(len=STDLEN) :: str_state, fsc_file, volassemble_output
-        character(len=STDLEN) :: restart_file
         real                  :: frac_srch_space, corr, corr_prev
         integer               :: s, state, iter, i
         logical               :: vol_defined
@@ -1010,16 +1008,8 @@ contains
                     call cline_check3D_conv%set( 'find', real(p_master%find) )
                endif
             endif
-            if( p_master%refine .ne. 'snhc' )then
-                ! RESTART
-                restart_file = trim(RESTARTFBODY)//'_iter'//int2str_pad( iter, 3)//'.txt'
-                call cline%write( restart_file )
-            endif
         end do
         call qsys_cleanup(p_master)
-        ! RESTART
-        restart_file = trim(RESTARTFBODY)//'_iter'//int2str_pad( iter, 3)//'.txt'
-        call cline%write( restart_file )
         ! report the last iteration on exit
         call cline%delete( 'startit' )
         call cline%set('endit', real(iter))
@@ -1043,7 +1033,6 @@ contains
         character(len=32), parameter :: ALGNFBODY    = 'algndoc_'
         character(len=32), parameter :: ITERFBODY    = 'cont3Ddoc_'
         character(len=32), parameter :: VOLFBODY     = 'recvol_state'
-        character(len=32), parameter :: RESTARTFBODY = 'cont3D_restart'
         ! ! commanders
         type(recvol_distr_commander)   :: xrecvol_distr
         type(merge_algndocs_commander) :: xmerge_algndocs
@@ -1063,7 +1052,6 @@ contains
         type(oris)            :: os
         character(len=STDLEN) :: vol, vol_iter, oritab, str, str_iter
         character(len=STDLEN) :: str_state, fsc_file, volassemble_output
-        character(len=STDLEN) :: restart_file
         real                  :: frac_srch_space
         integer               :: s, state, iter
         logical               :: vol_defined
@@ -1208,9 +1196,6 @@ contains
                     call cline%set(trim(vol), trim(vol_iter))
                 endif
             enddo
-            ! RESTART
-            restart_file = trim(RESTARTFBODY)//'_iter'//int2str_pad( iter, 3)//'.txt'
-            call cline%write( restart_file )
             ! CONVERGENCE
             call cline_check3D_conv%set('oritab', trim(oritab))
             call xcheck3D_conv%execute(cline_check3D_conv )
