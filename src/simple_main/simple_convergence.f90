@@ -303,7 +303,8 @@ contains
                 write(*,'(A,1X,F7.4)') '>>> CORRELATION:                       ', self%corr
                 write(*,'(A,1X,F7.2)') '>>> ANGULAR SDEV OF MODEL:             ', self%sdev                ! determine convergence
                 if( self%pp%nstates == 1 )then
-                    if( self%mi_proj > MI_CLASS_LIM_3D )then
+                    if( (self%mi_proj > MI_CLASS_LIM_3D) .and.&
+                        &( self%frac  >  FRAC_LIM) )then
                         write(*,'(A)') '>>> CONVERGED: .YES.'
                         converged = .true.
                     else

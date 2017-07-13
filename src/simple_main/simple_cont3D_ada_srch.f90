@@ -265,7 +265,7 @@ contains
             endif
             ! euler search
             call greedy_inpl_srch(inpl_corr)
-            if(inpl_corr >= self%curr_corr)then
+            if(inpl_corr > self%curr_corr)then
                 self%curr_corr = inpl_corr
                 self%nbetter   = self%nbetter+1
                 self%o_best    = o
