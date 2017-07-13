@@ -13,9 +13,9 @@ public :: cont3D_de_srch
 private
 
 integer, parameter :: NDOF           = 5
-integer, parameter :: maxits_per_dof = 300
+integer, parameter :: maxits_per_dof = 400
 integer, parameter :: MAXITS         = NDOF * maxits_per_dof
-integer, parameter :: NINIPOP        = 50 ! <= 107
+integer, parameter :: NINIPOP        = 40 ! <= 107
 integer, parameter :: NINIPOP_HIGH   = 80 ! <= 107
 logical, parameter :: debug = .false.
 
@@ -253,7 +253,7 @@ contains
         ! overlap between distributions
         mi_proj  = 0.
         mi_state = 0.
-        if( euldist < 0.25 )then
+        if( euldist < 0.5 )then
             mi_proj  = mi_proj + 1.
         endif
         if(self%nstates > 1)then

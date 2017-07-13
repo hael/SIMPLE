@@ -139,14 +139,11 @@ contains
         self%ospec%x(1)   = ran3()*360.
         self%ospec%nevals = 0
         if( rxy_here )then
-            self%ospec%x(1) = rxy(1)
-            self%ospec%x(2) = rxy(2)
-            self%ospec%x(3) = rxy(3)
+            self%ospec%x(1:3) = rxy(1:3)
         endif
         if( irot_here ) self%ospec%x(1) = self%pftcc_ptr%get_rot(irot)
         if( shvec_here )then
-            self%ospec%x(1) = shvec(1)
-            self%ospec%x(2) = shvec(2)
+            self%ospec%x(1:2) = shvec(1:2)
         endif
         ! minimisation
         call self%nlopt%minimize(self%ospec, self, crxy(1))

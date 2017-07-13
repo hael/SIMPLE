@@ -20,7 +20,7 @@ type, extends(image) :: reconstructor
     real(kind=c_float), pointer :: rho(:,:,:)=>null()           !< sampling+CTF**2 density
     complex, allocatable        :: cmat_exp(:,:,:)              !< Fourier components of expanded reconstructor
     real,    allocatable        :: rho_exp(:,:,:)               !< sampling+CTF**2 density of expanded reconstructor
-    real                        :: winsz         = 1.           !< window half-width
+    real                        :: winsz         = 1.          !< window half-width
     real                        :: alpha         = 2.           !< oversampling ratio
     real                        :: dens_const    = 1.           !< density estimation constant, old val: 1/nptcls
     integer                     :: lfny          = 0            !< Nyqvist Fourier index
@@ -195,7 +195,7 @@ contains
     subroutine inout_fcomp( self, h, k, e, inoutmode, comp, oshift, pwght)
         use simple_ori,    only: ori
         use simple_math,   only: sqwin_3d
-        class(reconstructor), intent(inout) :: self      !< the objetc
+        class(reconstructor), intent(inout) :: self      !< the object
         integer,              intent(in)    :: h, k      !< Fourier indices
         class(ori),           intent(inout) :: e         !< orientation
         logical,              intent(in)    :: inoutmode !< add = .true., subtract = .false.
@@ -248,7 +248,7 @@ contains
     subroutine inout_fcomp_dev( self, h, k, e, inoutmode, comp, oshift, pwght, ctfsq)
         use simple_ori,    only: ori
         use simple_math,   only: sqwin_3d
-        class(reconstructor), intent(inout) :: self      !< the objetc
+        class(reconstructor), intent(inout) :: self      !< the object
         integer,              intent(in)    :: h, k      !< Fourier indices
         class(ori),           intent(inout) :: e         !< orientation
         logical,              intent(in)    :: inoutmode !< add = .true., subtract = .false.
@@ -297,7 +297,7 @@ contains
             self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
             &self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) - tvalsq*w
         endif
-        deallocate(w)
+        !deallocate(w)
     end subroutine inout_fcomp_dev
 
     subroutine calc_tfun_vals( self, vec, tval, tvalsq )
@@ -417,7 +417,7 @@ contains
         real,    optional,      intent(in)    :: mul
         integer :: h, k, lims(3,2), logi(3), phys(3)
         complex :: oshift
-        real    :: pw, shift(3)
+        real    :: shift(3)
         if( .not. fpl%is_ft() )       stop 'image need to be FTed; inout_fplane; simple_reconstructor'
         if( .not. (self.eqsmpd.fpl) ) stop 'scaling not yet implemented; inout_fplane; simple_reconstructor'
         lims       = self%loop_lims(2)

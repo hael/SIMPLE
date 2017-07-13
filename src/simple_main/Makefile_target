@@ -71,6 +71,7 @@ simple: simple_image.o                  \
         simple_prime2D_srch.o           \
         simple_prime3D_srch.o           \
         simple_cont3D_srch.o            \
+        simple_cont3D_ada_srch.o         \
         simple_cont3D_de_srch.o         \
         simple_procimgfile.o            ;
 

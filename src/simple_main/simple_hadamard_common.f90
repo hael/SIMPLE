@@ -601,6 +601,8 @@ contains
                 call b%eorecvols(s)%sampl_dens_correct_eos(s)
                 call b%eorecvols(s)%sampl_dens_correct_sum(b%vol)
                 call b%vol%write(p%vols(s), del_if_exists=.true.)
+                ! update resolutions for local execution mode
+                call b%eorecvols(s)%get_res(res05s(s), res0143s(s))
                 if( present(which_iter) )then
                     ! post-process volume
                     pprocvol = add2fbody(trim(p%vols(s)), p%ext, 'pproc')
@@ -612,8 +614,6 @@ contains
                     ! mask
                     call b%vol%mask(p%msk, 'soft')
                     call b%vol%write(pprocvol)
-                    ! update resolutions for local execution mode
-                    call b%eorecvols(s)%get_res(res05s(s), res0143s(s))
                 endif
             endif
         end do

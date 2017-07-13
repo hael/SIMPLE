@@ -308,7 +308,7 @@ contains
         converged = .false.
         p = params(cline) ! parameters generated
         select case(p%refine)
-            case('yes','de')
+            case('yes','de','ada')
                 ! alles klar  
             case DEFAULT
                 stop 'unknown refinement mode; simple_commander_prime3D%exec_cont3D'                 

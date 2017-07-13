@@ -290,7 +290,7 @@ contains
         roind    = self%pftcc_ptr%get_roind(360.-self%o_out%e3get())
         mi_proj  = 0.
         mi_state = 0.
-        if( euldist < 0.25 )mi_proj  = mi_proj + 1.
+        if( euldist < 0.5 )mi_proj  = mi_proj + 1.
         if(self%nstates > 1)then
             state      = nint(self%o_out%get('state'))
             prev_state = nint(self%o_in%get('state'))
@@ -331,9 +331,12 @@ contains
             dists(ipeak) = self%pftcc_ptr%euclid(ref, self%iptcl, roind, self%pfom(1,:))
         end do
         ! calculate normalised weights and weighted corr
+        ! ws    = exp(-dists)
+        ! ws    = ws/sum(ws)
+        ! wcorr = sum(ws*corrs)
+        !
         ws    = exp(-dists)
-        ws    = ws/sum(ws)
-        wcorr = sum(ws*corrs)
+        wcorr = sum(ws*corrs)/sum(ws)
         ! update npeaks individual weights
         call self%softoris%set_all('ow', ws)
         ! cleanup
@@ -372,7 +375,6 @@ contains
         class(cont3D_srch), intent(inout) :: self
         self%pfom => null()
         call self%shsrch_obj%kill
-        !call self%inplsrch_obj%kill
         self%pftcc_ptr => null()
         call self%shiftedoris%kill
         call self%softoris%kill
