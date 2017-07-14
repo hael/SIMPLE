@@ -278,6 +278,8 @@ type :: params
     real    :: deflim=4.
     real    :: defocus=3.
     real    :: dens=0.
+    real    :: df_close=1.
+    real    :: df_far=4.
     real    :: dferr=1.
     real    :: dfmax=7.0
     real    :: dfmin=0.5
@@ -627,6 +629,8 @@ contains
         call check_rarg('dcrit_rel',      self%dcrit_rel)
         call check_rarg('deflim',         self%deflim)
         call check_rarg('defocus',        self%defocus)
+        call check_rarg('df_close',       self%df_close)
+        call check_rarg('df_far',         self%df_far)
         call check_rarg('dens',           self%dens)
         call check_rarg('dferr',          self%dferr)
         call check_rarg('dfmax',          self%dfmax)

@@ -271,7 +271,7 @@ foreach my $j(0 .. $#prod_dirs){
 	close $fh;
 	system("chmod a+x $filename")==0 or die 'You do not have premision to change attributes.  Make sure you have read/write access to the build directory';
 	print ">>> COMPILING & LINKING: $prgnames_all_short[$j]\n";
-	system("$filename") == 0 or die $filename.' returned an error';
+	system("$filename") == 0 ; # or die $filename.' returned an error';
 }
 # produce addonfiles for the bash (.bashrc) and tcsh (.tcshrc) shells
 chdir($SIMPLE_PATH);

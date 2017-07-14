@@ -713,7 +713,8 @@ contains
         type(oris)                               :: o_here
         integer,          allocatable            :: pinds(:)
         character(len=:), allocatable            :: fname
-        integer :: i, s, cnt, nincl, alloc_stat, lfoo(3), np1,np2,ntot
+        integer :: i, s, ipst, cnt, cnt2, cnt3, nincl, alloc_stat, lfoo(3), np1,np2,ntot
+        real    :: p_ctf, p_dfx
         p = params(cline)                               ! parameters generated
         call b%build_general_tbox(p, cline)             ! general objects built
         call img%new([p%box,p%box,1],p%smpd,p%imgkind)  ! image created
@@ -942,6 +943,56 @@ contains
             call copy_imgfile(p%stk, p%outstk, p%smpd, fromto=[p%fromp,p%top])
             goto 999
         endif
+        !set state flag on basis of ctfreslim and/or defocus limits
+        if( cline%defined('ctfreslim') .or. cline%defined('df_close') .or. cline%defined('df_far')) then
+            if( p%oritab == '' ) stop 'need input orientation doc for fishing expedition; simple_stackops'   
+            !first do selection on basis of ctfreslim
+            if( cline%defined('ctfreslim') )then
+                cnt=0
+                do i=1,p%nptcls
+                    call progress(i, p%nptcls)
+                    p_ctf = (b%a%get(i, 'ctfres'))
+                    if( p_ctf > p%ctfreslim ) then
+                        cnt=cnt+1
+                        call b%a%set(i, 'state', 0.)
+                    endif
+                end do 
+                print *, 'ctfreslim                  --> ptcls set state 1: ', (p%nptcls-cnt), ' ptcls set state 0: ', cnt
+            endif
+            !now select on defocus limits
+            if( cline%defined('df_close') .and. .not. cline%defined('df_far') ) stop 'need both df_close and df_far for state setting on basis of defocus values'
+            if( cline%defined('df_far') .and. .not. cline%defined('df_close') ) stop 'need both df_close and df_far for state setting on basis of defocus values'
+            if( cline%defined('df_close') ) then
+                cnt2=0
+                do i=1,p%nptcls
+                    call progress(i, p%nptcls)
+                    p_dfx = (b%a%get(i, 'dfx'))
+                    if( (p_dfx < p%df_close ) .or. (p_dfx > p%df_far) ) then
+                        cnt2=cnt2+1
+                        call b%a%set(i, 'state', 0.)
+                    endif
+                end do 
+                print *, 'defocus limits             --> ptcls set state 1: ', (p%nptcls-cnt2), ' ptcls set state 0: ', cnt2
+            endif
+            !if both ctfreslim and defocus limits were set now work out the overall change in states and report on what has happened
+             if( cline%defined('ctfreslim') .and. cline%defined('df_close')) then
+                cnt3=0
+                do i=1,p%nptcls
+                    ipst = (b%a%get(i, 'state'))
+                    if( ipst == 0) then
+                        cnt3 = cnt3+1
+                    endif
+                end do 
+                print *, 'ctfreslim + defocus limits --> ptcls set state 1: ', (p%nptcls-cnt3), ' ptcls set state 0: ', cnt3
+            endif
+            !write the oritab with appropriate states
+            call del_file(p%outfile)
+            do i=1,p%nptcls
+            call progress(i, p%nptcls)
+            call b%a%write(i, p%outfile)
+            end do
+            goto 999
+        endif   
         ! default
         write(*,*)'Nothing to do!'
         ! end gracefully

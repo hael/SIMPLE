@@ -242,6 +242,8 @@ dcrit_rel
 deflim
 defocus
 dens
+df_close
+df_far
 dferr
 dfmax
 dfmin

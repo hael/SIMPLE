@@ -233,6 +233,9 @@ contains
         call chdict%push('remap_classes', 'remove empty and renumber and/or expand # classes(yes|no){no}')
         call chdict%push('real_filter',   'real-space filter kind(median|average|bman)')
         call chdict%push('winsz',         'half-width of window for real-space filter(in pixels)')
+        call chdict%push('ctfreslim',     'ctf resolution (A) for setting state flag {8 A}')
+        call chdict%push('df_close',      'close to focus defocus limit for setting state flag {1 micron}')
+        call chdict%push('df_far',        'far from focus defoucs limit for setting state flag {4 microns}')
         initialised = .true.
     end subroutine init_cmd_dict
     
