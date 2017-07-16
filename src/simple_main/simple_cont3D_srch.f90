@@ -27,23 +27,21 @@ type cont3D_srch
     type(ori)                        :: o_in                !< input orientation
     type(ori)                        :: o_out               !< best orientation found
     logical,             allocatable :: state_exists(:)     !< indicates whether each state is populated
-    real                    :: lims(2,2)  = 0.     !< shift search limits
-    real                    :: prev_corr  = -1.    !< previous correlation
-    real                    :: angthresh  = 0.     !< angular threshold
-    real                    :: specscore  = 0.     !< previous spectral score
-    integer                 :: iptcl      = 0      !< orientation general index
-    integer                 :: prev_ref   = 0      !< previous reference
-    integer                 :: prev_roind = 0      !< previous in-plane rotational index
-    integer                 :: prev_state = 0      !< previous state
-    integer                 :: nstates    = 0      !< number of states
-    integer                 :: nbetter    = 0      !< number of improving references found
-    integer                 :: neval      = 0      !< number of references evaluated
-    integer                 :: npeaks     = 0      !< number of references returned
-    integer                 :: nrefs      = 0      !< number of references in search space
-    integer                 :: nrots      = 0      !< number of in-plane rotations
-    character(len=STDLEN)   :: shbarr = ''         !< shift barrier flag
-    character(len=STDLEN)   :: refine = ''
-    logical                 :: exists = .false.
+    real                             :: lims(2,2)  = 0.     !< shift search limits
+    real                             :: prev_corr  = -1.    !< previous correlation
+    real                             :: angthresh  = 0.     !< angular threshold
+    real                             :: specscore  = 0.     !< previous spectral score
+    integer                          :: iptcl      = 0      !< orientation general index
+    integer                          :: prev_ref   = 0      !< previous reference
+    integer                          :: prev_roind = 0      !< previous in-plane rotational index
+    integer                          :: prev_state = 0      !< previous state
+    integer                          :: nstates    = 0      !< number of states
+    integer                          :: npeaks     = 0      !< number of references returned
+    integer                          :: nrefs      = 0      !< number of references in search space
+    integer                          :: nrots      = 0      !< number of in-plane rotations
+    character(len=STDLEN)            :: shbarr = ''         !< shift barrier flag
+    character(len=STDLEN)            :: refine = ''
+    logical                          :: exists = .false.
   contains
     ! CONSTRUCTOR
     procedure          :: new
@@ -82,7 +80,7 @@ contains
         self%lims(:,2) =  p%trs
         self%angthresh = p%athres
         self%nstates   = p%nstates
-        self%shbarr    =  p%shbarrier
+        self%shbarr    = p%shbarrier
         self%nrefs     = self%pftcc_ptr%get_nrefs()
         self%nrots     = self%pftcc_ptr%get_nrots()
         if(self%reforis%get_noris().ne.self%nrefs)&
@@ -152,17 +150,11 @@ contains
         !integer, allocatable :: roind_vec(:)    ! slice of in-plane angles
         real                 :: inpl_corr
         integer              :: iref
-        ! init
-        self%nbetter = 0
-        self%neval   = 0
         ! roind_vec    = self%pftcc_ptr%get_win_roind(360.-self%o_in%e3get(), E3HALFWINSZ)
         ! search
         ! the input search space in stochastic, so no need for a randomized search order
         do iref = 1,self%nrefs
             call greedy_inpl_srch(iref, inpl_corr)
-            self%neval = self%neval+1
-            if(inpl_corr >= self%prev_corr)self%nbetter = self%nbetter+1
-            ! if(self%nbetter >= self%npeaks)exit
         enddo         
         ! deallocate(roind_vec)
         if(debug)write(*,*)'simple_cont3D_srch::do_refs_srch done'
@@ -290,7 +282,7 @@ contains
         roind    = self%pftcc_ptr%get_roind(360.-self%o_out%e3get())
         mi_proj  = 0.
         mi_state = 0.
-        if( euldist < 0.5 )mi_proj  = mi_proj + 1.
+        if( euldist < 0.8 )mi_proj  = mi_proj + 1.
         if(self%nstates > 1)then
             state      = nint(self%o_out%get('state'))
             prev_state = nint(self%o_in%get('state'))
@@ -334,9 +326,9 @@ contains
         ! ws    = exp(-dists)
         ! ws    = ws/sum(ws)
         ! wcorr = sum(ws*corrs)
-        !
+        ! calculate weights and weighted corr
         ws    = exp(-dists)
-        wcorr = sum(ws*corrs)/sum(ws)
+        wcorr = sum(ws*corrs) / sum(ws)
         ! update npeaks individual weights
         call self%softoris%set_all('ow', ws)
         ! cleanup

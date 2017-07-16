@@ -17,8 +17,8 @@ public :: cont3D_exec
 private
 
 integer,                   parameter :: BATCHSZ_MUL = 20    !< particles per thread
-integer,                   parameter :: NREFS       = 50    !< number of references projection per stage used per particle
-integer,                   parameter :: MAXNPEAKS   = 20    !< number of peaks for soft reconstruction
+integer,                   parameter :: NREFS       = 100   !< number of references projection per stage used per particle
+integer,                   parameter :: MAXNPEAKS   = 10    !< number of peaks for soft reconstruction
 logical,                   parameter :: DEBUG       = .false.
 type(oris)                           :: orefs               !< per particle projection direction search space (refine=yes)
 type(cont3D_srch),       allocatable :: cont3Dsrch(:)       !< pftcc array for refine=yes
@@ -289,16 +289,15 @@ contains
         integer    :: state, iref, cnt
         optcl = b%a%get_ori(iptcl)
         ! SEARCH SPACE PREP
-        eullims      = 0.
-        eullims(:,2) = 360.
-        eullims(2,2) = 180.
+        eullims = b%se%srchrange()
+        ! call cone%rnd_proj_space(NREFS, optcl, p%athres, eullims) ! old style uniform stochastic distribution
         call cone%rnd_gau_neighbors(NREFS, optcl, p%athres, eullims)
         call cone%set_euler(1, optcl%get_euler()) ! previous best is the first
         do iref = 1, NREFS
             call cone%e3set(iref, 0.)
         enddo
         ! replicates to states
-        if( p%nstates==1 )then
+        if( p%nstates == 1 )then
             call cone%set_all2single('state', 1.)
             orefs = cone
         else
@@ -334,7 +333,7 @@ contains
         call b%img_match%polarize(pftcc, iptcl, isptcl=.true.)
     end subroutine prep_pftcc_ptcl
 
-    !>  \brief  is for uniform distribution of the even/odd pairs
+    !>  \brief  is for balanced distribution of the even/odd pairs
     subroutine prep_eopairs(b, p, eopart)
         use simple_ran_tabu, only: ran_tabu
         class(build),      intent(inout) :: b
