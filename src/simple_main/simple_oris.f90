@@ -2512,7 +2512,7 @@ contains
                 endif
             end do        
             lim   = nint(frac*real(n))
-            order = self%order()
+            order = self%order() ! specscore ranking
             do i=1,self%n
                 if( i <= lim )then
                     call self%o(order(i))%set('w', 1.)
