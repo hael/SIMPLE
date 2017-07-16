@@ -2502,12 +2502,17 @@ contains
         integer, allocatable :: order(:)
         integer :: i, lim, n
         if( frac < 0.99 )then
-            order = self%order()
             n = 0
             do i=1,self%n
-                if( self%o(i)%get('state') > 0 ) n = n+1
+                if( self%o(i)%get('state') > 0. )then
+                    n = n+1
+                else
+                    ! ensures rejected from frac threshold
+                    call self%o(i)%reject
+                endif
             end do        
-            lim = nint(frac*real(n))
+            lim   = nint(frac*real(n))
+            order = self%order()
             do i=1,self%n
                 if( i <= lim )then
                     call self%o(order(i))%set('w', 1.)

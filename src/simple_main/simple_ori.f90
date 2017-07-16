@@ -166,8 +166,11 @@ contains
     !>  \brief  sets parameters for particle rejection
     subroutine reject( self )
         class(ori), intent(inout) :: self
-        call self%set_euler([0.,0.,0.])
-        call self%htab%set('state',0.)
+        call self%set_euler([0., 0., 0.])
+        call self%set_shift([0., 0.])
+        call self%htab%set('state', 0.)
+        if( self%isthere('corr') )     call self%htab%set('corr',     -1.)
+        if( self%isthere('specscore') )call self%htab%set('specscore', 0.)
     end subroutine reject
     
     !>  \brief  is a polymorphic assigner
