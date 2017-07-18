@@ -1,3 +1,6 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 module simple_hadamard3D_matcher
 !$ use omp_lib
 !$ use omp_lib_kinds

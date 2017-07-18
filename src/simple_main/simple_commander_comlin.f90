@@ -1,3 +1,6 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 !> Simple commander module: common-line commander
 !!
 !! This class contains the set of concrete common-lines commanders of the SIMPLE

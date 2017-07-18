@@ -1,3 +1,6 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 module simple_cont3D_srch
 use simple_defs
 use simple_params,           only: params
@@ -65,7 +68,7 @@ contains
         class(cont3D_srch),              intent(inout) :: self  !< instance
         class(params),                   intent(in)    :: p     !< parameters
         class(oris),                     intent(in)    :: e     !< references
-        class(polarft_corrcalc), target, intent(in)    :: pftcc
+        class(polarft_corrcalc), target, intent(in)    :: pftcc !< polar fourier correlation calculator
         call self%kill
         ! set constants
         self%pftcc_ptr    => pftcc
@@ -89,8 +92,8 @@ contains
     !>  \brief  is the master search routine
     subroutine prep_srch(self, a, iptcl)
         class(cont3D_srch),  intent(inout) :: self
-        class(oris),         intent(inout) :: a
-        integer,             intent(in)    :: iptcl
+        class(oris),         intent(inout) :: a     !< oris object        
+        integer,             intent(in)    :: iptcl !< index to ori in a  
         real, allocatable :: frc(:)
         if(iptcl == 0)stop 'ptcl index mismatch; cont3D_srch::do_srch'
         self%iptcl      = iptcl
@@ -116,8 +119,8 @@ contains
     !>  \brief  is the master search routine
     subroutine exec_srch( self, a, iptcl )
         class(cont3D_srch), intent(inout) :: self
-        class(oris),        intent(inout) :: a
-        integer,            intent(in)    :: iptcl
+        class(oris),        intent(inout) :: a       !< oris object - references
+        integer,            intent(in)    :: iptcl   !< index to ori in a
         if(nint(a%get(iptcl,'state')) > 0)then
             ! INIT
             call self%prep_srch(a, iptcl)
@@ -137,7 +140,7 @@ contains
 
     !>  \brief  performs euler angles search
     subroutine do_euler_srch( self )
-        class(cont3D_srch), intent(inout) :: self
+        class(cont3D_srch), intent(inout) :: self 
         integer, allocatable :: roind_vec(:)    !< slice of in-plane angles
         real                 :: inpl_corr
         integer              :: iref
@@ -164,7 +167,7 @@ contains
         if(debug)write(*,*)'simple_cont3D_srch::do_refs_srch done'
 
         contains
-
+            !> greedy inplane search
             subroutine greedy_inpl_srch(iref_here, corr_here)
                 integer, intent(in)    :: iref_here
                 real,    intent(inout) :: corr_here

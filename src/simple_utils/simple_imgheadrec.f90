@@ -1,5 +1,14 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 !>  \brief Simple image header recorder class
-!! Records are contained in image headers. Each contains a piece of information regarding the image file.
+!! Records are contained in image headers. Each contains a piece of information
+!! regarding the image file.
+!
+! The SIMPLE code is distributed with the hope that it will be
+! useful, but WITHOUT ANY WARRANTY. Redistribution and modification is regulated
+! by the GNU General Public License.
+! -----------------------------------------------------------------------------!
 module simple_imgheadrec
 use simple_defs
 implicit none

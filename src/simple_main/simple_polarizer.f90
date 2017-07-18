@@ -1,3 +1,6 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 module simple_polarizer
 !$ use omp_lib
 !$ use omp_lib_kinds
@@ -26,7 +29,7 @@ type, extends(image) :: polarizer
   contains
     procedure :: init_polarizer
     procedure :: polarize
-    procedure :: kill_polarizer    
+    procedure :: kill_polarizer
 end type polarizer
 
 contains
@@ -138,7 +141,7 @@ contains
 
     ! DESTRUCTOR
 
-    !>  \brief  is a destructor of impolarizer 
+    !>  \brief  is a destructor of impolarizer
     subroutine kill_polarizer( self )
         class(polarizer), intent(inout) :: self !< projector instance
         if( allocated(self%polweights_mat) ) deallocate(self%polweights_mat)
@@ -147,4 +150,3 @@ contains
     end subroutine kill_polarizer
 
 end module simple_polarizer
-

@@ -1,3 +1,6 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 !> Simple optimisation method: generic pftcc optimisation
 module simple_pftcc_opt
 implicit none

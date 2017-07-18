@@ -158,49 +158,51 @@ if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
   # gfortran
   set(preproc  "-cpp -P ")                                                                      # preprocessor flags
   set(dialect  "-ffree-form  -fimplicit-none  -ffree-line-length-none -fno-second-underscore")  # language style
-  set(warnings "-Wampersand -Wsurprising -Wtabs -Wline-truncation -Winteger-division -Wreal-q-constant  ")
-  set(forspeed "-O3 ")                                                              # optimisation
+  set(warn     "-Wampersand -Wsurprising -Wtabs -Wline-truncation -Winteger-division -Wreal-q-constant ")
+  set(forspeed "-O3")                                                                           # optimisation
   set(forpar   "-fopenmp  ")                                                                    # parallel flags
   set(target   "${GNUNATIVE} -fPIC ")                                                           # target platform
   set(common   "${preproc} ${dialect} ${target} -DGNU ")
-  set(checks   "-fcheck-array-temporaries -frange-check -fstack-protector -fstack-check")       # checks
-  set(warn     "-Wall -Wextra -Wimplicit-interface -Wdangling-else ${checks}")                  # extra warning flags
-  set(fordebug "-O0 -g -pedantic -fno-inline -fno-f2c -Og -ggdb -fbacktrace -fbounds-check  ")  # debug flags
+  set(checks   "-fcheck-array-temporaries -frange-check -fstack-protector -fstack-check -fbounds-check") # checks
+  set(warnDebug "-Wall -Wextra -Wimplicit-interface -Wdangling-else ${checks}")                 # extra warning flags
+  set(fordebug "-O0 -g -pedantic -fno-inline -fno-f2c -Og -ggdb -fbacktrace  ${warnDebug} ")    # debug flags
   # -O0 -g3 -Warray-bounds -Wcharacter-truncation -Wline-truncation -Wimplicit-interface
   # -Wimplicit-procedure -Wunderflow -Wuninitialized -fcheck=all -fmodule-private -fbacktrace -dump-core -finit-real=nan -ffpe-trap=invalid,zero,overflow
   #
 elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
   # pgfortran
-  set(preproc  "-Mpreprocess")
-  set(dialect  "-Mpreprocess -Mfreeform  -Mstandard -Mallocatable=03 -Mextend")
-  set(checks   "-Mdclchk  -Mchkptr -Mchkstk  -Munixlogical -Mlarge_arrays -Mflushz -Mdaz -Mfpmisalign")
-  set(warn     "-Minform=warn")
+  set(preproc  "-Mpreprocess ")
+  set(dialect  "-Mfreeform -Mstandard -Mallocatable=03 -Mextend -Mnosecond_underscore")
+  set(checks   "-Mdclchk -Mchkptr -Mchkstk  -Munixlogical -Mlarge_arrays -Mflushz -Mdaz -Mfpmisalign")
+  set(warn     "-Minform=warn -Minfo=all,ftn ${checks}")
   # bounds checking cannot be done in CUDA fortran or OpenACC GPU
-  set(fordebug "-Minfo=all,ftn  -traceback -gopt -Mneginfo=all,ftn -Mnodwarf -Mpgicoff -traceback -Mprof -Mbound -C")
-  set(forspeed "-Munroll -O4  -Mipa=fast -fast -Mcuda=fastmath,unroll -Mvect=nosizelimit,short,simd,sse -mp -acc ")
-  set(forpar   "-Mconcur -Mconcur=bind,allcores -Mcuda=cuda8.0,cc60,flushz,fma ")
+  set(fordebug "${warn}  -traceback -gopt -Mneginfo=all,ftn -Mnodwarf -Mpgicoff -traceback -Mprof  ")
+  set(forspeed "-O3 " ) # -Munroll -O4  -Mipa=fast -fast -Mcuda=fastmath,unroll -Mvect=nosizelimit,short,simd,sse  ")
+  set(forpar   " -mp -acc -Mcuda=cc60") # -Mconcur=bind,allcores -Mcuda=cuda8.0,cc60,flushz,fma
   set(target   " -m64 -fPIC ")
-  set(common   " ${dialect} ${checks} ${target} ${warn}  -DPGI")
+  set(common   "${preproc} ${dialect} ${target}  -DPGI")
   #
+  set(FFTWDIR "/usr/local/pgi/src/fftw/")
+
 elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
   # ifort
   # set(FC "ifort" CACHE PATH "Intel Fortran compiler")
   set(preproc  "-fpp")
-  set(dialect  "-free -implicitnone -std08  ")
-  set(checks   "-check bounds -check uninit -assume buffered_io -assume byterecl -align sequence  -diag-disable 6477  -gen-interfaces ") # -mcmodel=medium -shared-intel
-  set(warn     "-warn all ${checks}")
-  set(fordebug "-debug -O0 -ftrapuv -debug all -check all")
+  set(dialect  "-free -implicitnone -std08  -list-line-len=264 -diag-disable 6477  -gen-interfaces  ")
+  set(checks   "-check bounds -check uninit -assume buffered_io ") # -mcmodel=medium -shared-intel
+  set(warn     "-warn all ")
+  set(fordebug "-debug -O0 -ftrapuv -debug all -check all ${warn} -assume byterecl -align sequence  -diag-disable 6477  -gen-interfaces ")
   set(forspeed "-O3 -fp-model fast=2 -inline all -unroll-aggressive ")
   set(forpar   "-qopenmp")
   set(target   "-no-prec-div -static -fPIC")
-  set(common   "${preproc} ${dialect} ${target} -DINTEL")
+  set(common   "${preproc} ${dialect} ${checks} ${target} -DINTEL")
   # else()
   #   message(" Fortran compiler not supported. Set FC environment variable")
   set(MKLROOT $ENV{MKLROOT})
 
 endif ()
-set(CMAKE_Fortran_FLAGS_RELEASE_INIT "${common} ${forspeed} ${forpar}"  CACHE STRING "Default release flags -- do not edit" FORCE)
-set(CMAKE_Fortran_FLAGS_DEBUG_INIT  "${common} ${fordebug} ${forpar} -g"  CACHE STRING "Default debug flags -- do not edit" FORCE)
+set(CMAKE_Fortran_FLAGS_RELEASE_INIT "${common} ${forspeed} ${forpar}"  CACHE STRING "Default release flags -- this cannot be edited (see cmake/FortranOverride.cmake) -- Use CMAKE_Fortran_FLAGS_RELEASE instead" FORCE)
+set(CMAKE_Fortran_FLAGS_DEBUG_INIT  "${common} ${fordebug} ${forpar} -g"  CACHE STRING "Default debug flags -- this cannot be edited (see cmake/FortranOverride.cmake -- Use CMAKE_Fortran_FLAGS_DEBUG instead)" FORCE)
 message( STATUS "CMAKE_Fortran_FLAGS_RELEASE_INIT: ${CMAKE_Fortran_FLAGS_RELEASE_INIT}") 
 message( STATUS "CMAKE_Fortran_FLAGS_DEBUG_INIT: ${CMAKE_Fortran_FLAGS_DEBUG_INIT}")
 # 

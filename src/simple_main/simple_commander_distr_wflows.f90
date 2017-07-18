@@ -1,3 +1,6 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 !> Simple commander module: parallel (or distributed) workflows
 !!
 !! This class contains the set of concrete commanders responsible for execution

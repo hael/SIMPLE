@@ -1,6 +1,13 @@
-!< Simple commander module: interface to stream-based workflows
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!< Simple commander module:  to stream-based workflow interface
+!!
+!!
 module simple_commander_stream_wflows
 use simple_defs
+use simple_filehandling       ! use all in there
+use simple_syscalls           ! use all in there
 use simple_cmdline,           only: cmdline
 use simple_chash,             only: chash
 use simple_params,            only: params
@@ -8,9 +15,7 @@ use simple_commander_base,    only: commander_base
 use simple_strings,           only: real2str
 use simple_commander_preproc, only: preproc_commander
 use simple_qsys_env,          only: qsys_env
-use simple_filehandling       ! use all in there
 use simple_qsys_funs          ! use all in there
-use simple_syscalls           ! use all in there
 implicit none
 
 public :: preproc_stream_commander

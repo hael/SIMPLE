@@ -1,6 +1,9 @@
-!==Module simple_restart
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> simple_restart
 !
-! This is a small module for handling tasks related to restart
+!! This is a small module for handling tasks related to restart
 !
 ! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
 ! Redistribution and modification is regulated by the GNU General Public License.

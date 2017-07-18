@@ -1,10 +1,13 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 !> Simple affinity propogation module
 !!
 !! simple_aff_prop is the SIMPLE class for clustering by affinity propagation.
 !! Affinity propagation is based on loopy belief propagation.
 !!
 !  The code is distributed with the hope that it will be useful, but _WITHOUT_
-! _ANY_ _WARRANTY_. Redistribution or modification is regulated by the 
+! _ANY_ _WARRANTY_. Redistribution or modification is regulated by the
 ! GNU General Public License.
 ! *Author:* Hans Elmlund, 2011-09-03.
 !
@@ -44,7 +47,7 @@ type aff_prop
     procedure :: get_resp
     ! DESTRUCTOR
     procedure :: kill
-end type
+end type aff_prop
 
 contains
 
@@ -53,8 +56,8 @@ contains
     !>  \brief  is a constructor
     subroutine new( self, N, S, ftol, lam, pref, maxits, convits )
         class(aff_prop),   intent(inout) :: self
-        integer,           intent(in)    :: N
-        real,    target,   intent(inout) :: S(N,N)
+        integer,           intent(in)    :: N               !< nr of data entries
+        real,    target,   intent(inout) :: S(N,N)          !< pointer to similarity matrix
         real,    optional, intent(in)    :: ftol, lam, pref
         integer, optional, intent(in)    :: maxits, convits
         integer :: alloc_stat, i, j
@@ -69,7 +72,7 @@ contains
         if( present(convits) ) self%convits = convits
         ! calculate similarity characteristics
         call analyze_smat(s, .false., self%Smin, self%Smax)
-        ! low pref [0.1,1] leads to small numbers of clusters and 
+        ! low pref [0.1,1] leads to small numbers of clusters and
         ! high pref leads to large numbers of clusters
         ppref = self%Smin
         if( present(pref) ) ppref = pref
@@ -99,15 +102,16 @@ contains
         self%I      = 0
         self%I2     = 0
         self%dA     = 0.
-        self%exists = .true.        
+        self%exists = .true.
     end subroutine new
 
     ! PROPAGATOR
-    
+
     !>  \brief  is the message passing algorithm
     subroutine propagate( self, centers, labels, simsum )
         class(aff_prop),      intent(inout) :: self
-        integer, allocatable, intent(out)   :: centers(:), labels(:)
+        integer, allocatable, intent(out)   :: centers(:)
+        integer, allocatable, intent(out)   :: labels(:)
         real,                 intent(out)   :: simsum
         real, allocatable :: similarities(:)
         real              :: x, realmax
@@ -128,7 +132,7 @@ contains
         self%dA   = 0.
         convits   = 0
         ncls      = 0
-        ! iterate        
+        ! iterate
         do i=1,self%maxits
             ! FIRST, COMPUTE THE RESPONSIBILITIES
             self%Rold = self%R
@@ -218,7 +222,7 @@ contains
     end function get_resp
 
     ! UNIT TEST
-    
+
     !>  \brief  is the aff_prop unit test
     subroutine test_aff_prop
         real                 :: datavecs(900,5)
@@ -274,9 +278,9 @@ contains
             write(*,'(a)') 'SIMPLE_AFF_PROP_UNIT_TEST FAILED!'
         endif
     end subroutine test_aff_prop
-    
+
     ! DESTRUCTOR
-    
+
     subroutine kill( self )
         class(aff_prop), intent(inout) :: self
         if( self%exists )then

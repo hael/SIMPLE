@@ -1,3 +1,6 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 !> Simple CTF module: scattered search 
 module simple_cftcc_scatsrch
 use simple_scatter_orisrch, only: scatter_orisrch

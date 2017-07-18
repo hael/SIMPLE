@@ -72,11 +72,12 @@
 #-----------------------------------------------
 
 find_path(FFTW_INCLUDE_DIRS
-    NAMES fftw3.h
+    NAMES fftw3.f03
     HINTS
         ${FFTW_ROOT}/include
         ${FFTW_ROOT}/api
         ${FFTW_ROOT}
+        ${FFTWDIR}/include
         $ENV{FFTW_ROOT}/include
         $ENV{FFTW_ROOT}/api
         ENV FFTWDIR
@@ -99,6 +100,7 @@ find_library( FFTW_SINGLE_PRECISION_LIBRARIES
         ${FFTW_ROOT}/lib
         ${FFTW_ROOT}/.libs
         ${FFTW_ROOT}
+        ${FFTWDIR}/lib
         $ENV{FFTW_ROOT}/lib
         $ENV{FFTW_ROOT}/.libs
         $ENV{FFTWLIB}
@@ -106,6 +108,7 @@ find_library( FFTW_SINGLE_PRECISION_LIBRARIES
         ENV FFTW_ROOT
         ENV FFTWLIB
     PATHS
+        ${FFTWDIR}/lib
         /usr/lib
         /usr/lib/x86_64-linux-gnu
         /usr/local/lib               # Homebrew
@@ -113,7 +116,6 @@ find_library( FFTW_SINGLE_PRECISION_LIBRARIES
         /usr/opt/local/lib
         /sw/lib                      # Fink
         /usr/local/pgi/src/fftw/lib  # PGI local build
-        ${FFTWDIR}/lib
     DOC "FFTW dynamic library"
 )
 mark_as_advanced( FFTW_SINGLE_PRECISION_LIBRARIES )
@@ -124,6 +126,7 @@ find_library( FFTW_DOUBLE_PRECISION_LIBRARIES
         ${FFTW_ROOT}/lib
         ${FFTW_ROOT}/.libs
         ${FFTW_ROOT}
+        ${FFTWDIR}/lib
         $ENV{FFTW_ROOT}/lib
         $ENV{FFTW_ROOT}/.libs
         $ENV{FFTWLIB}
@@ -131,6 +134,7 @@ find_library( FFTW_DOUBLE_PRECISION_LIBRARIES
         ENV FFTW_ROOT
         ENV FFTWLIB
     PATHS
+         ${FFTWDIR}/lib
         /usr/lib
         /usr/lib/x86_64-linux-gnu
         /usr/local/lib
@@ -143,11 +147,12 @@ find_library( FFTW_DOUBLE_PRECISION_LIBRARIES
 mark_as_advanced( FFTW_DOUBLE_PRECISION_LIBRARIES )
 
 find_library( FFTW_SINGLE_PRECISION_THREADED_LIBRARIES
-    NAMES fftw3f_threads libfftw3f-3_threads
+    NAMES fftw3f_threads libfftw3f-3_threads fftw3f_omp 
     HINTS
         ${FFTW_ROOT}/lib
         ${FFTW_ROOT}/.libs
         ${FFTW_ROOT}
+        ${FFTWDIR}/lib
         $ENV{FFTW_ROOT}/lib
         $ENV{FFTW_ROOT}/.libs
         ENV FFTW_ROOT
@@ -156,6 +161,7 @@ find_library( FFTW_SINGLE_PRECISION_THREADED_LIBRARIES
         ENV FFTW_ROOT
         ENV FFTWLIB
     PATHS
+        ${FFTWDIR}/lib
         /usr/lib
         /usr/lib/x86_64-linux-gnu
         /usr/local/lib               # Homebrew

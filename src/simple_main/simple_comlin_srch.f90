@@ -1,3 +1,6 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 !> Simple optimisation module: common-line mode search
 module simple_comlin_srch
 use simple_defs
@@ -43,9 +46,9 @@ contains
 
     subroutine comlin_srch_init( b, p, opt_str, mode )
         class(build),  target, intent(in) :: b
-        class(params), target, intent(in) :: p
-        character(len=*),      intent(in) :: opt_str
-        character(len=*),      intent(in) :: mode
+        class(params), target, intent(in) :: p           !< Parameters
+        character(len=*),      intent(in) :: opt_str     !< 'simplex', 'de' or 'oasis' search type
+        character(len=*),      intent(in) :: mode        !< 'sym' or 'pair' mode
         character(len=8) :: str_opt= 'simplex'
         bp     => b
         pp     => p

@@ -1,3 +1,6 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 !> Simple commander module: image processing interface
 !
 !! This class contains the set of concrete general image processing commanders
@@ -8,8 +11,10 @@
 !
 ! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
 ! Redistribution and modification is regulated by the GNU General Public License.
-! *Authors:* Cyril Reboul & Hans Elmlund 2016
 !
+! @author Cyril Reboul & Hans Elmlund
+! @date 2016
+!------------------------------------------------------------------------------!
 module simple_commander_imgproc
 use simple_defs
 use simple_cmdline,        only: cmdline
@@ -133,6 +138,18 @@ contains
 
     end subroutine exec_binarise
     !> convert is a program for converting between SPIDER and MRC formats
+    !! @see doc/SimpleTutorials2017/Tutorial.html?#using-simple-in-the-wildpower-spectrum-analysis-and-movie-selection
+    !!
+    !! bash-3.2$ `simple_exec prg=convert'
+    !!USAGE:
+    !!bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+    !!    
+    !!OPTIONAL
+    !!stk    = particle stack with all images(ptcls.ext)
+    !!vol1   = input volume no1(invol1.ext)
+    !!outstk = output image stack
+    !!outvol = output volume{outvol.ext}
+    !!
     subroutine exec_convert( self, cline )
         class(convert_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline

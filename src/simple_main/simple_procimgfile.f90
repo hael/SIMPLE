@@ -1,3 +1,6 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 !>  \brief  SIMPLE stack image processing routines for SPIDER/MRC files
 module simple_procimgfile
     use simple_defs
@@ -868,10 +871,12 @@ contains
         call img%kill
     end subroutine bin_imgfile
 
-    !>  \brief  is for making an average of the entire stack
+    !>   make_avg_imgfile is for making an average of the entire stack
+    !! \param fname stack filename
+    !! \param avgname output filename
     subroutine make_avg_imgfile( fname, avgname, smpd )
         character(len=*), intent(in) :: fname, avgname
-        real,             intent(in) :: smpd
+        real,             intent(in) :: smpd              !<  sample resolution
         type(image)                  :: avg, img
         integer                      :: i, n, ldim(3)
         call find_ldim_nptcls(fname, ldim, n)
@@ -889,7 +894,7 @@ contains
         call avg%div(real(n))
         call avg%write(avgname,1)
     end subroutine make_avg_imgfile
-
+    !>  random_selection_from_imgfile
     subroutine random_selection_from_imgfile( fname2selfrom, fname, nran, smpd )
         use simple_ran_tabu, only: ran_tabu
         character(len=*), intent(in) :: fname2selfrom, fname

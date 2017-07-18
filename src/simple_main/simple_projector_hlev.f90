@@ -1,3 +1,7 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple HLEV projector module
 module simple_projector_hlev
 !$ use omp_lib
 !$ use omp_lib_kinds

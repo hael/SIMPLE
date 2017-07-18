@@ -1,13 +1,18 @@
-!> Simple module: runtime polymorphic singly linked list class. 
-! The code is distributed with the hope that it will be useful, but 
-! _WITHOUT_ _ANY_ _WARRANTY_. Redistribution or modification is
-! regulated by the GNU General Public License. 
-! *Author:* Dominika Elmlund, 2009-05-25.
-! 
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple module: runtime polymorphic singly linked list class.
+!!
+!! @author Dominika Elmlund, 2009-05-25.
+!!
 !==Changes are documented below
-!
+!!
 !* incorporated in the _SIMPLE_ library, HE 2009-06-25
 !
+! The SIMPLE code is distributed with the hope that it will be
+! useful, but WITHOUT ANY WARRANTY. Redistribution and modification is regulated
+! by the GNU General Public License.
+! -----------------------------------------------------------------------------!
 module simple_sll
 use simple_defs
 use simple_arr, only: arr
@@ -24,8 +29,8 @@ type sll_node
     type(sll_node), pointer :: next=>null()
 end type sll_node
 !> Singly-linked list
-!> contains the list. In this implementation I have separated the head of the 
-!> list from the rest of the list (Donald Knuth-style) 
+!> contains the list. In this implementation I have separated the head of the
+!> list from the rest of the list (Donald Knuth-style)
 type sll
     private
     integer                 :: list_size=0
@@ -34,7 +39,7 @@ type sll
     procedure :: new
     procedure :: add
     procedure :: get
-    procedure :: set 
+    procedure :: set
     procedure :: del
     procedure, private :: assign
     generic :: assignment(=) => assign
@@ -50,14 +55,14 @@ end interface sll
 
 contains
 
-    !>  \brief  is a constructor that allocates the head of the list 
+    !>  \brief  is a constructor that allocates the head of the list
     !! and nullifies its pointer to the nextcoming node
     function constructor() result(self)
         type(sll) :: self
         call self%new
     end function constructor
 
-    !>  \brief  is a constructor that allocates the head of the list 
+    !>  \brief  is a constructor that allocates the head of the list
     !! and nullifies its pointer to the nextcoming node
     subroutine new(self)
         class(sll), intent(inout) :: self
@@ -65,8 +70,8 @@ contains
         allocate(self%head)     ! allocate memory for the object
         nullify(self%head%next) ! start with an empty list
     end subroutine new
-    
-    !>  \brief  does polymorphic addition of a node to the end of 
+
+    !>  \brief  does polymorphic addition of a node to the end of
     !! the singly linked list and updates the list size
     subroutine add( self, iarr, rarr )
         class(sll),        intent(inout) :: self
@@ -74,7 +79,7 @@ contains
         real, optional,    intent(in)    :: rarr(:)
         type(sll_node), pointer          :: prev, curr
         ! initialization, begin at the 0:th position
-        prev => self%head 
+        prev => self%head
         curr => prev%next
         do while( associated(curr) )! find location to insert new node
           prev => curr
@@ -83,11 +88,11 @@ contains
         allocate( curr ) ! insert it at the end of the list
         if( present(iarr) ) curr%content = iarr
         if( present(rarr) ) curr%content = rarr
-        self%list_size = self%list_size+1  
+        self%list_size = self%list_size+1
         ! Redirect the old last
         prev%next => curr
     end subroutine add
-    
+
     !>  \brief  is a polymorphic getter
     subroutine get( self, pos, iarr, rarr )
         class(sll),                     intent(in)  :: self
@@ -117,7 +122,7 @@ contains
             rarr = curr%content%rget()
         endif
     end subroutine get
-    
+
     !>  \brief  is a polymorphic setter
     subroutine set( self, pos, iarr, rarr )
         class(sll),        intent(in) :: self
@@ -141,7 +146,7 @@ contains
         if( present(iarr) ) curr%content = iarr
         if( present(rarr) ) curr%content = rarr
     end subroutine set
-    
+
     !>  \brief  deallocates a sll node and redirects the pointer to next node
     subroutine del( self, pos )
         class(sll), intent(inout) :: self
@@ -159,7 +164,7 @@ contains
         if( .not. associated(curr) ) then ! end of list
             self%list_size = 0
             return
-        endif     
+        endif
         counter = 0
         do ! find node to delete
           counter = counter+1
@@ -171,9 +176,9 @@ contains
           endif
         end do
         ! delete the node
-        if( associated( curr%next ) ) then       
+        if( associated( curr%next ) ) then
           prev%next => curr%next          ! redirect pointer
-          call curr%content%kill          ! free space for the content    
+          call curr%content%kill          ! free space for the content
           deallocate( curr )              ! free space for node
           nullify( curr )
         else
@@ -183,7 +188,7 @@ contains
         endif
         self%list_size = self%list_size-1 ! update the list size
     end subroutine del
-    
+
     !>  \brief  clones a sll
     subroutine assign( self, self_in )
         class(sll), intent(in)    :: self_in
@@ -194,8 +199,8 @@ contains
         ! make resulting list a replica of self_in
         self%head%next => self_in%head%next
     end subroutine assign
-   
-    !>  \brief is joining two singly linked lists together. The first node of 
+
+    !>  \brief is joining two singly linked lists together. The first node of
     !! the second list (_self2_) is joined with the last node of the first list
     !! (_self1_). The input lists do not exist anymore after this operation.
     function append( self1, self2 ) result( self )
@@ -225,15 +230,15 @@ contains
         nullify( self2%head )
         self2%list_size = 0
     end function append
-  
+
     !>  \brief  is for printing
     subroutine display( self )
         class(sll), intent(in)  :: self
         type(sll_node), pointer :: curr
         integer                 :: pos
-        ! initialization, begin at the 1:th position 
+        ! initialization, begin at the 1:th position
         curr => self%head%next
-        pos  = 0 ! with pos set to 0 
+        pos  = 0 ! with pos set to 0
         do while( associated( curr ) )
           pos = pos+1
           write( *,* ) 'DATA IN NODE: ', pos
@@ -241,14 +246,14 @@ contains
           curr => curr%next
         end do
     end subroutine display
-    
+
     !>  \brief  returns the size of the list
     pure function size( self ) result( list_size )
         class(sll), intent(in) :: self
         integer                :: list_size
-        list_size = self%list_size   
+        list_size = self%list_size
     end function size
-    
+
     !>  \brief  is a destructor
     subroutine kill( self )
         class(sll), intent(inout) :: self

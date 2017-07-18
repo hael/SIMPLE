@@ -1,3 +1,6 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 !> Simple image module: Time series tracker
 module simple_tseries_tracker
 !$ use omp_lib
@@ -20,7 +23,13 @@ integer                :: ldim(3), nframes, box, nx, ny, offset
 real                   :: smpd, sxx, lp
 
 contains
-
+    !> initialise time series tracker
+    !! @param filetabname file table name
+    !! @param boxcoord box coordinates
+    !! @param box_in box input value
+    !! @param offset_in offset input value
+    !! @param smpd_in smpd input value
+    !! @param lp_in lp input value
     subroutine init_tracker( filetabname, boxcoord, box_in, offset_in, smpd_in, lp_in  )
         character(len=*), intent(in) :: filetabname
         integer,          intent(in) :: boxcoord(2), box_in, offset_in
@@ -32,14 +41,14 @@ contains
         smpd   = smpd_in
         lp     = lp_in
         call read_filetable(filetabname, framenames)
-        nframes = size(framenames)  
+        nframes = size(framenames)
         call find_ldim_nptcls(framenames(1),ldim,n)
         if( n == 1 .and. ldim(3) == 1 )then
             ! all ok
         else
             write(*,*) 'ldim(3): ', ldim(3)
             write(*,*) 'nframes: ', n
-            stop 'simple_tseries_tracker :: init_tracker; assumes one frame per file' 
+            stop 'simple_tseries_tracker :: init_tracker; assumes one frame per file'
         endif
         nx = ldim(1) - box
         ny = ldim(2) - box
@@ -52,7 +61,7 @@ contains
         particle_locations(1,1) = boxcoord(1)
         particle_locations(1,2) = boxcoord(2)
     end subroutine init_tracker
-
+    !> time series particle tracker
     subroutine track_particle
         use simple_jiffys, only: progress
         integer :: pos(2), pos_refined(2), iframe
@@ -73,7 +82,7 @@ contains
             call update_reference(pos)
         end do
     end subroutine track_particle
-
+    !> write results of time series tracker
     subroutine write_tracked_series( fbody, neg )
         use simple_filehandling, only: get_fileunit
         character(len=*), intent(in) :: fbody

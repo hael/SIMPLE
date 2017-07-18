@@ -1,3 +1,6 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 !> simple optimisation module: Simplex optimisation on pft correlations
 !
 !! Minimization of an externally defined function by the simplex method of Nelder and Mead
@@ -116,7 +119,7 @@ contains
         use simple_opt_spec, only: opt_spec
         use simple_jiffys,   only: alloc_err
         class(simplex_pftcc_opt), intent(inout) :: self
-        class(opt_spec),          intent(inout) :: spec
+        class(opt_spec),          intent(inout) :: spec      !< optimisation params
         real, allocatable,        intent(inout) :: vertices(:,:), costs(:)
         integer           :: n, alloc_stat
         if( spec%str_opt .ne. 'simplex' )then

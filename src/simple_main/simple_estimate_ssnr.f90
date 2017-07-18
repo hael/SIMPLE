@@ -1,3 +1,6 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 !>  Simple image module: estimation routines for 2D analysis
 module simple_estimate_ssnr
 use simple_defs
@@ -41,10 +44,10 @@ contains
         use simple_oris, only: oris
         use simple_ctf, only: ctf
         class(image),     intent(inout) :: imgs(:) !< image objects
-        class(oris),      intent(inout) :: os
-        real,             intent(in)    :: msk
-        class(ctf),       intent(inout) :: tfun
-        type(ctfplan),    intent(in)    :: tfplan
+        class(oris),      intent(inout) :: os      !< orientation set object
+        real,             intent(in)    :: msk     !< mask
+        class(ctf),       intent(inout) :: tfun    !< Instrument CTF
+        type(ctfplan),    intent(in)    :: tfplan  !< CTF plan object
         type(image)       :: favg, fdiff
         integer           :: ldim(3), iptcl
         real, allocatable :: spec(:), specsum(:), ssnr(:), specdiff(:), specdiffsum(:), s(:)
@@ -137,8 +140,8 @@ contains
         class(ori),       intent(inout) :: o   !< orientation object
         class(ctf),       intent(inout) :: tfun !< CTF object
         type(ctfplan),    intent(in)    :: tfplan !< plan object
-        real,             intent(inout) :: specnoisesum(:) 
-        real, optional,   intent(in)    :: inner_width(2)
+        real,             intent(inout) :: specnoisesum(:)  !< sum of the spectral noise
+        real, optional,   intent(in)    :: inner_width(2)   !< mask width
         type(image)       :: fdiff, favg, fimg
         real, allocatable :: specnoise(:)
         real              :: dfx, dfy, angast
@@ -245,7 +248,7 @@ contains
     !> \brief  calculates the particle SSNR in 2D (Grigorieff)
     function estimate_pssnr2D( avr, fsc ) result( pssnr )
         use simple_AVratios, only: AVratios
-        class(AVratios), intent(in) :: avr
+        class(AVratios), intent(in) :: avr     !< Atomic to volume conversion object
         real, intent(in)            :: fsc(:)  !<  instrument FSC
         real, allocatable :: pssnr(:) !<  particle SSNR
         pssnr = fsc2ssnr(fsc)
@@ -255,7 +258,7 @@ contains
     !> \brief  calculates the particle SSNR in 3D (Grigorieff)
     function estimate_pssnr3D( avr, fsc ) result( pssnr )
         use simple_AVratios, only: AVratios
-        class(AVratios), intent(in) :: avr
+        class(AVratios), intent(in) :: avr !< Atomic to volume conversion object
         real, intent(in)            :: fsc(:) !<  instrument FSC
         real, allocatable :: pssnr(:) !<  particle SSNR
         pssnr = estimate_pssnr2D(avr, fsc)
@@ -265,7 +268,7 @@ contains
     !> \brief  calculates the particle SSNR in 2D (Grigorieff)
     function from_ssnr_estimate_pssnr2D( avr, ssnr ) result( pssnr )
         use simple_AVratios, only: AVratios
-        class(AVratios), intent(in) :: avr
+        class(AVratios), intent(in) :: avr !< Atomic to volume conversion object
         real, intent(in)            :: ssnr(:) !<  instrument SSNR
         real, allocatable :: pssnr(:) !<  particle SSNR
         allocate(pssnr(size(ssnr)), source=ssnr)
@@ -275,7 +278,7 @@ contains
     !> \brief  calculates the particle SSNR in 3D (Grigorieff)
     function from_ssnr_estimate_pssnr3D( avr, ssnr ) result( pssnr )
         use simple_AVratios, only: AVratios
-        class(AVratios), intent(in) :: avr
+        class(AVratios), intent(in) :: avr !< Atomic to volume conversion object
         real, intent(in)            :: ssnr(:) !<  instrument SSNR
         real, allocatable :: pssnr(:)           !<  particle SSNR
         pssnr = from_ssnr_estimate_pssnr2D(avr, ssnr)

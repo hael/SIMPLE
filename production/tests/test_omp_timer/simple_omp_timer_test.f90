@@ -1,6 +1,17 @@
-
-
-
+!------------------------------------------------------------------------------!
+! SIMPLE , Elmlund & Elmlund Lab,     simplecryoem.com                         !
+!------------------------------------------------------------------------------!
+!> test program for simple_timer_omp
+!!
+!! Test the OpenMP timing functions in the SIMPLE library.
+!!
+!! @author
+!! Michael Eager 2017
+!
+! The code is distributed with the hope that it will be useful, but WITHOUT ANY
+! WARRANTY. Redistribution and modification is regulated by the GNU General
+! Public License.
+! -----------------------------------------------------------------------------!
 program simple_omp_timer_test
 use simple_defs
 use simple_timer
@@ -28,8 +39,8 @@ be_verbose = .true.
 !        be_verbose = .true.
 !    endif
 !endif
-call exec_OMPtimertest(be_verbose)
+call exec_OpenMP_timer_test(be_verbose)
 call date_and_time(TIME=time)
 stoptime = str2real(time)
-write(*,'(a,1x,f9.2)') 'time elapsed (s): ', stoptime - starttime
+write(*,'(a,1x,f9.2)') '\n <<< \ndate_and_time elapsed (s): ', stoptime - starttime
 end program simple_omp_timer_test

@@ -1,3 +1,6 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 !> Simple optimisation module: brute force optimisation
 !!
 !! This class is based on a class used in CTFFIND4, developed by Alexis Rohou

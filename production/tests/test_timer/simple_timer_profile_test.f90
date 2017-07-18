@@ -1,11 +1,22 @@
-
+!------------------------------------------------------------------------------!
+! SIMPLE , Elmlund & Elmlund Lab,     simplecryoem.com                         !
+!------------------------------------------------------------------------------!
+!> test module for profiling routines in simple_timer
+!!
+!! Test the profile timing functions in the SIMPLE library.
+!!
+!! @author
+!! Michael Eager 2017
+!
+! The code is distributed with the hope that it will be useful, but WITHOUT ANY
+! WARRANTY. Redistribution and modification is regulated by the GNU General
+! Public License.
+! -----------------------------------------------------------------------------!
 #if defined  _WIN32
 #define DEV_NULL "nul"
 #else
 #define DEV_NULL "/dev/null"
 #endif
-
-#define NREP_MAX INT(10000000,8)
 
 
 #include "simple_timer.h"
@@ -18,7 +29,7 @@ module simple_timer_profile_test
 contains
    subroutine exec_profiletest(be_verbose)
       logical, optional, intent(in)    :: be_verbose
-      integer(dp), parameter :: nrep = 100000_dp
+      integer(dp), parameter :: nrep = INT(100000,dp)
       real(dp)    :: c, cfac, b
       common b, c, cfac
       real(dp)    :: xx, etime, sysclockrate
@@ -42,10 +53,10 @@ contains
       if (be_verbose) write (*, "(A)") ' '
       if (be_verbose) write (*, '(A)') '1.  Testing profiler using macros inside loop'
       c = .1
-#ifndef Intel
+#ifndef INTEL
       TPROFILER(nrep, i, foo, bar)
 #else
-      TPROFILER(nrep, i, 2, foo bar)
+      TPROFILER(nrep, i, foo bar)
 #endif
       do i = 1, nrep
          TBEG(foo)
@@ -63,10 +74,10 @@ contains
       if (be_verbose) write (*, "(A)") ' '
       if (be_verbose) write (*, '(A)') '2.  Testing profiler using macros and seperate loops'
       c = .1
-#ifndef Intel
+#ifndef INTEL
       TPROFILER(1, i, standard, subrout, common, empty)
 #else
-      TPROFILER(nrep, i, 2, foo bar)
+      TPROFILER(nrep, i,  foo bar)
 #endif
       do i = 1, nrep
          TBEG(foo)
@@ -84,10 +95,10 @@ contains
       if (be_verbose) write (*, "(A)") ' '
       if (be_verbose) write (*, '(A)') '2.  Testing profiler using macros and seperate loops'
       c = .1
-#ifndef Intel
+#ifndef INTEL
       TPROFILER(1, i, standard, subrout, common, empty)
 #else
-      TPROFILER(1, i, 4, standard subrout common empty)
+      TPROFILER(1, i, standard subrout common empty)
 #endif
       TBEG(standard)
       do i = 1, nrep
@@ -120,7 +131,7 @@ contains
 
    function saxy(c_in) result(c)
       real(dp), intent(in) :: c_in
-      integer(dp), parameter :: nrep = NREP_MAX
+      integer(dp), parameter :: nrep = INT(100000,dp)
       real(dp)              :: c, cfac, b
       integer(dp)           :: i
       b = 1.

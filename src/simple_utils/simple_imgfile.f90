@@ -1,4 +1,7 @@
-!>  \brief Simple class to deal with image files on disks
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> \brief Simple class to deal with image files on disks
 !!
 !!  The following file formats are (will be) supported:
 !!  - Imagic: http://imagescience.de/formats/index.htm
@@ -13,6 +16,13 @@
 !! Use is subject to Janelia Farm Research Campus Software Copyright 1.1
 !! license terms ( http://license.janelia.org/license/jfrc_copyright_1_1.html )
 !!
+!! Modifications by Cyril Reboul, Michael Eager & Hans Elmlund
+!! 
+! The SIMPLE code is distributed with the hope that it will be
+! useful, but WITHOUT ANY WARRANTY. Redistribution and modification is regulated
+! by the GNU General Public License.
+! -----------------------------------------------------------------------------!
+
 module simple_imgfile
     use simple_defs
     use simple_filehandling
@@ -162,8 +172,8 @@ contains
     !>  \brief open the file(s) for the imgfile
     subroutine open_local( self, del_if_exists, rwaction )
         class(imgfile),             intent(inout) :: self
-        logical, optional,          intent(in) :: del_if_exists
-        character(len=*), optional, intent(in) :: rwaction
+        logical, optional,          intent(in) :: del_if_exists !< overwrite flag 
+        character(len=*), optional, intent(in) :: rwaction      !< read/write flag
         character(len=9) :: rw_str
         character(len=7) :: stat_str
         ! We need to prepare a string for the open statement
@@ -181,7 +191,11 @@ contains
         endif
         ! Get an IO unit number for the head file
         self%funit = get_fileunit()
+#ifdef INTEL
+        open(unit=self%funit,access='STREAM',file=self%fname,action=rw_str,status=stat_str)
+#else
         open(unit=self%funit,access='STREAM',file=self%fname,action=rw_str,status=stat_str,convert=endconv)
+#endif
         self%was_written_to = .false.
     end subroutine open_local
 
@@ -239,8 +253,8 @@ contains
     !>  \brief  for translating an image index to record indices in the stack
     subroutine slice2recpos( self, nr, hedinds, iminds )
         class(imgfile), intent(in), target :: self
-        integer, intent(in)                :: nr
-        integer(kind=8), intent(out)       :: hedinds(2), iminds(2)
+        integer, intent(in)                :: nr      !< num images
+        integer(kind=8), intent(out)       :: hedinds(2), iminds(2) !< indecies 
         integer                            :: cnt, j, dims(3)
         class(imghead), pointer            :: ptr=>null()
         ptr => self%overall_head
@@ -274,9 +288,9 @@ contains
     !>  \brief  for translating an image index to record indices in the stack
     subroutine slice2bytepos( self, nr, hedinds, iminds )
         class(imgfile), intent(in)     :: self
-        integer, intent(in)            :: nr
-        integer(kind=8), intent(inout) :: hedinds(2), iminds(2)
-        integer                        :: cnt, j
+        integer, intent(in)            :: nr                    !< num in stack    
+        integer(kind=8), intent(inout) :: hedinds(2), iminds(2) !< index   
+        integer                        :: cnt, j                
         if( nr < 0 )then
             stop 'cannot have negative slice indices; slice2bytepos; simple_imgfile'
         else if( nr == 0 )then
@@ -328,10 +342,10 @@ contains
 
     !>  \brief  reads an image or stack header
     subroutine rHead( self, slice, head, ldim )
-        class(imgfile), intent(inout), target :: self
-        integer, intent(in)                   :: slice
-        class(imghead), intent(inout)         :: head
-        integer, intent(inout), optional      :: ldim(3)
+        class(imgfile), intent(inout), target :: self      !<   
+        integer, intent(in)                   :: slice     !< stack slice or zero for individual    
+        class(imghead), intent(inout)         :: head      !< img head object
+        integer, intent(inout), optional      :: ldim(3)   !< for reading the overall stack header of SPIDER files
         class(imghead), pointer               :: ptr
         integer(kind=8) :: hedbyteinds(2), imbyteinds(2), first_byte
         ptr => self%overall_head
@@ -387,9 +401,9 @@ contains
 
     !>  \brief  writes an image or stack header
     subroutine wHead( self, slice, head )
-        class(imgfile), intent(inout), target   :: self
-        integer, intent(in)                     :: slice
-        class(imghead), intent(inout), optional :: head
+        class(imgfile), intent(inout), target   :: self       
+        integer, intent(in)                     :: slice   !< stack slice
+        class(imghead), intent(inout), optional :: head    !< img head object
         class(imghead), pointer                 :: ptr=>null()
         integer(kind=8) :: hedbyteinds(2), imbyteinds(2), first_byte
         if( slice == 0 )then
@@ -439,7 +453,7 @@ contains
         integer, optional,      intent(in)    :: ldim(3)      !< Logical size of the array. This will be written to disk: rarr(1:ldim(1),:,:)
         logical, optional,      intent(in)    :: is_ft        !< to indicate FT status of image
         real,    optional,      intent(in)    :: smpd         !< sampling distance
-        logical, optional,      intent(out)   :: read_failure
+        logical, optional,      intent(out)   :: read_failure !< status of file io ops
         real(kind=4),    allocatable :: tmp_32bit_float_array(:,:,:)
         integer(kind=1), allocatable :: tmp_byte_array(:,:,:)
         integer(kind=2), allocatable :: tmp_16bit_int_array(:,:,:)
@@ -801,7 +815,7 @@ contains
     !>  \brief  Set the pixel size of the stack
     subroutine setPixSz( self, smpd )
         class(imgfile), intent(inout) :: self
-        real, intent(in)              :: smpd
+        real, intent(in)              :: smpd !< sample resolution or pixel size (angstroms)
         call self%overall_head%setPixSz(smpd)
         self%was_written_to = .true.
     end subroutine setPixSz
@@ -809,7 +823,7 @@ contains
     !>  \brief  Set the pixel size of the stack
     subroutine setRMSD( self, dev )
         class(imgfile), intent(inout) :: self
-        real,           intent(in)    :: dev
+        real,           intent(in)    :: dev !< rmsd 
         call self%overall_head%setRMSD(dev)
         self%was_written_to = .true.
     end subroutine setRMSD
@@ -817,7 +831,7 @@ contains
     !>  \brief  Set the mode of the MRC file
     subroutine setMode( self, mode )
         class(imgfile), intent(inout) :: self
-        integer, intent(in)           :: mode
+        integer, intent(in)           :: mode !< MRC mode type
         call self%overall_head%setMode(mode)
         self%was_written_to = .true.
     end subroutine setMode
@@ -825,7 +839,7 @@ contains
     !>  \brief  for setting the logical dimensions
     subroutine setDims( self, ldim )
         class(imgfile), intent(inout) :: self
-        integer, intent(in)           :: ldim(3)
+        integer, intent(in)           :: ldim(3) !< dimensions
         call self%overall_head%setDims(ldim)
         self%was_written_to = .true.
     end subroutine setDims

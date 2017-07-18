@@ -1,3 +1,6 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 !> simple_commander_oris
 !
 !! This class contains the set of concrete commanders for orientation data
@@ -323,6 +326,8 @@ contains
     end subroutine exec_makeoris
     !! map2ptcls is a program for mapping parameters that have been obtained using class averages
     !!  to the individual particle images
+    !! @see doc/SimpleTutorials2017/Tutorials.html?#using-simple-in-the-wildselecting-good-class-averages-and-mapping-the-selection-to-the-particles
+    !! @see doc/SimpleTutorials2017/Tutorials.html?#resolution-estimate-from-single-particle-images
     subroutine exec_map2ptcls( self, cline )
         use simple_oris,    only: oris
         use simple_ori,     only: ori

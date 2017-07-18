@@ -1,10 +1,12 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 !> simple_jiffys provides jiffys.
-! The code is distributed with the hope that it will be useful,
-! but _WITHOUT_ _ANY_ _WARRANTY_. Redistribution or modification is regulated by the GNU General
-! Public License. *Author:* Hans Elmlund, 2011-08-18.
 !
-!==Changes are documented below
-!
+! The SIMPLE code is distributed with the hope that it will be
+! useful, but WITHOUT ANY WARRANTY. Redistribution and modification is regulated
+! by the GNU General Public License.
+! -----------------------------------------------------------------------------!
 module simple_jiffys
 use simple_defs         ! singleton
 use simple_filehandling ! singleton
@@ -13,16 +15,12 @@ implicit none
 interface assert_eq
     module procedure assert_eq_2,assert_eq_3,assert_eq_4,assert_eq_n
 end interface assert_eq
-
 interface swap
     module procedure swap_i,swap_r,swap_rv,swap_c, swap_cv,swap_cm,&
-    masked_swap_rs,masked_swap_rv,masked_swap_rm
+    &masked_swap_rs,masked_swap_rv,masked_swap_rm
 end interface swap
-
 contains
-
     ! FILE-HANDLING JIFFYS
-
     !>  \brief  is for finding logical dimension and number of particles in stack
     subroutine find_ldim_nptcls( fname, ldim, nptcls, doprint, formatchar, endconv )
         character(len=*),                        intent(in)  :: fname      !< filename
@@ -103,7 +101,11 @@ contains
                     allocate(MrcImgHead :: hed)
                     call hed%new
                     filnum = get_fileunit()
+#ifdef INTEL
+                    open(unit=filnum, status='OLD', action='READ', file=fname, access='STREAM')
+#else
                     open(unit=filnum, status='OLD', action='READ', file=fname, access='STREAM', convert='NATIVE')
+#endif
                     call hed%read(filnum)
                     close(filnum)
                     ldim = hed%getDims()
@@ -117,7 +119,11 @@ contains
                     allocate(MrcImgHead :: hed)
                     call hed%new
                     filnum = get_fileunit()
+#ifdef INTEL
+                    open(unit=filnum, status='OLD', action='READ', file=fname, access='STREAM')
+#else
                     open(unit=filnum, status='OLD', action='READ', file=fname, access='STREAM', convert='BIG_ENDIAN')
+#endif
                     call hed%read(filnum)
                     close(filnum)
                     if( doprint ) call hed%print_imghead
@@ -146,7 +152,11 @@ contains
             if( fname2format(fname) .eq. 'S' )then
                 if( allocated(conv) ) deallocate(conv)
                 filnum = get_fileunit()
+#ifdef INTEL
+                open(unit=filnum, status='OLD', action='READ', file=fname, access='STREAM')
+#else
                 open(unit=filnum, status='OLD', action='READ', file=fname, access='STREAM', convert='NATIVE')
+#endif
                 call read_spihed
                 close(filnum)
                 if( .not. any(ldim < 1) )then
@@ -154,7 +164,11 @@ contains
                     call print_spihed
                     return
                 endif
+#ifdef INTEL
+                open(unit=filnum, status='OLD', action='READ', file=fname, access='STREAM')
+#else
                 open(unit=filnum, status='OLD', action='READ', file=fname, access='STREAM', convert='BIG_ENDIAN') !
+#endif
                 call read_spihed
                 close(filnum)
                 if( .not. any(ldim < 1) )then
@@ -162,7 +176,11 @@ contains
                     call print_spihed
                     return
                 endif
+#ifdef INTEL
+                open(unit=filnum, status='OLD', action='READ', file=fname, access='STREAM')
+#else
                 open(unit=filnum, status='OLD', action='READ', file=fname, access='STREAM', convert='LITTLE_ENDIAN') !
+#endif
                 call read_spihed
                 close(filnum)
                 if( .not. any(ldim < 1) )then
@@ -214,7 +232,11 @@ contains
         integer :: filnum, io_stat
         character(len=100) :: io_message
         filnum = get_fileunit()
+#ifdef INTEL
+        open(unit=filnum, status='OLD', action='READ', file=fname, access='STREAM')
+#else
         open(unit=filnum, status='OLD', action='READ', file=fname, access='STREAM', convert='NATIVE')
+#endif
         read(unit=filnum,pos=first_byte,iostat=io_stat,iomsg=io_message) mat
         ! Check the read was successful
         if( io_stat .ne. 0 )then

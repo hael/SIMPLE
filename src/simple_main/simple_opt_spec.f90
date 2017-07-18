@@ -1,3 +1,6 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 !> Simple optimisation module: core specification module
 module simple_opt_spec
 use simple_defs
@@ -57,7 +60,7 @@ abstract interface
         integer, intent(in) :: D
         real,    intent(in) :: vec(D)
         real                :: cost
-    end function 
+    end function
 end interface
 
 !>  \brief  defines the cost function gradient interface
@@ -66,10 +69,10 @@ abstract interface
         integer, intent(in)    :: D
         real,    intent(inout) :: vec(D)
         real                   :: grad(D)
-    end function 
+    end function
 end interface
 
-contains      
+contains
 
     !>  \brief  specifies the optimization parameters
     subroutine specify( self, str_opt, ndim, mode, ldim, ftol, gtol, maxits,&
@@ -80,7 +83,7 @@ contains
         character(len=*),           intent(in)    :: str_opt        !< string descriptor (of optimization routine to be used)
         integer,                    intent(in)    :: ndim           !< problem dimensionality
         character(len=*), optional, intent(in)    :: mode           !< mode string descriptor
-        integer,          optional, intent(in)    :: ldim           !< second problem dimensionality 
+        integer,          optional, intent(in)    :: ldim           !< second problem dimensionality
         real,             optional, intent(in)    :: ftol           !< fractional convergence tolerance to be achieved in costfun
         real,             optional, intent(in)    :: gtol           !< fractional convergence tolerance to be achieved in gradient
         integer,          optional, intent(in)    :: maxits         !< maximum number of iterations
@@ -180,12 +183,12 @@ contains
                 self%xt = 0.
             case DEFAULT
                 allocate( self%x(self%ndim), stat=alloc_stat )
-                call alloc_err('In: specify; simple_opt_spec, DEFAULT', alloc_stat) 
+                call alloc_err('In: specify; simple_opt_spec, DEFAULT', alloc_stat)
         end select
         self%x  = 0.
         self%exists = .true.
     end subroutine specify
-    
+
     !>  \brief  to change optimizer
     subroutine change_opt( self, str_opt )
         class(opt_spec), intent(inout) :: self    !< instance
@@ -214,10 +217,10 @@ contains
         endif
         self%limits = lims
     end subroutine set_limits
-    
+
     !>  \brief  sets the cost function in the spec object
     subroutine set_costfun( self, fun )
-        class(opt_spec), intent(inout) :: self !< instance        
+        class(opt_spec), intent(inout) :: self !< instance
 #if defined (PGI)
         ! GNU COMPILER DOES NOT COPE W EXTERNAL
         real, external :: fun !< defines cost function interface
@@ -229,12 +232,12 @@ contains
                 integer, intent(in) :: D
                 real,    intent(in) :: vec(D)
                 real :: cost
-            end function 
+            end function
         end interface
 #endif
         self%costfun => fun
     end subroutine set_costfun
-    
+
     !>  \brief  sets the gradient function in the spec object
     subroutine set_gcostfun( self, fun )
         class(opt_spec), intent(inout) :: self !< instance
@@ -249,12 +252,12 @@ contains
                 integer, intent(in)    :: D
                 real,    intent(inout) :: vec( D )
                 real :: grad( D )
-            end function 
+            end function
         end interface
 #endif
         self%gcostfun => fun
     end subroutine set_gcostfun
-    
+
     !>  \brief  is a destructor
     subroutine kill( self )
         class(opt_spec), intent(inout) :: self !< instance
@@ -273,5 +276,5 @@ contains
             self%exists = .false.
         endif
     end subroutine kill
-    
+
 end module simple_opt_spec

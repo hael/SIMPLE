@@ -30,6 +30,8 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/gui)
   option(${PROJECT_NAME}_BUILD_GUI "Build the simple GUI - not included in release2.5" OFF)
 endif()
 option(BUILD_SHARED_LIBS "Build the simple library as shared or static (default)" OFF)
+option(BUILD_DOCS "Enable the generation of PDF manuals and doxygen API documentation" OFF)
+
 
 #################################################################
 #
@@ -51,6 +53,7 @@ set(CMAKE_Fortran_MODULE_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
 #################################################################
 # INCLUDES
 #################################################################
+# include(CMakeAddFortranSubdirectory)
 include(CheckIncludeFiles)
 include(SimpleFortranOptions)
 
@@ -60,11 +63,11 @@ include(SimpleFortranOptions)
 # Add definition macros unique to compilation
 #
 ############################################################
-add_definitions("-DBUILD_NAME=${BUILD_NAME}")
+add_definitions("-DBUILD_NAME=\"${BUILD_NAME}\"")
 # use _DEBUG since DEBUG or debug is used as a variable in some files
-# _DEBUG is defined by Intel Fortran on Windows 
+# _DEBUG is defined by Intel Fortran on Windows
 if(CMAKE_BUILD_TYPE STREQUAL "DEBUG")
-  add_definitions("-D_DEBUG") 
+  add_definitions("-D_DEBUG")
 endif()
 
 ############################################################
@@ -156,8 +159,8 @@ set(VERSION_FILE "${CMAKE_INSTALL_LIBDIR}/simple/CMake/${PROJECT_NAME}ConfigVers
 configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/ProjectConfigVersion.cmake.in" ${VERSION_FILE} @ONLY )
 
 # modules / depends
-FILE(GLOB_RECURSE SIMPLE_CMAKE_FILES 
-    LIST_DIRECTORIES false 
+FILE(GLOB_RECURSE SIMPLE_CMAKE_FILES
+    LIST_DIRECTORIES false
     RELATIVE ${CMAKE_SOURCE_DIR} "*.cmake" )
 INSTALL(
   FILES ${SIMPLE_CMAKE_FILES}
@@ -177,8 +180,43 @@ install(FILES  ${CMAKE_CURRENT_BINARY_DIR}/add2.bashrc ${CMAKE_CURRENT_BINARY_DI
   DESTINATION ${CMAKE_INSTALL_PREFIX}
   CONFIGURATIONS DEBUG|RELEASE
   PERMISSIONS   OWNER_READ OWNER_WRITE GROUP_READ GROUP_WRITE WORLD_READ WORLD_WRITE
-   )
+  )
 
+  if(${BUILD_DOCS} OR VERBOSE)
+
+    #
+    # User manual and tutorial
+    #
+    add_subdirectory(doc)
+
+    #
+    # Doxygen
+    #
+    option(ENABLE_DOXYGEN "Enable a 'make docs' target for Doxygen documentation" ON)
+    if (ENABLE_DOXYGEN)
+      add_custom_target(doc
+        ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        COMMENT "Generating API documentation with Doxygen" VERBATIM
+        )
+      include(UseDoxygen OPTIONAL)
+      # add_doxygen(
+      #     docs
+      #     INPUT
+      #         "${CMAKE_SOURCE_DIR}/src"
+      #     STRIP_FROM_PATH
+      #         "${CMAKE_SOURCE_DIR}/src/inc"
+      #     STRIP_FROM_INC_PATH
+      #         "${CMAKE_SOURCE_DIR}/src/inc"
+      #     EXCLUDE_PATTERNS
+      #         */gnufor2/*
+      #     EXCLUDE_SYMBOLS
+      #         *debug*
+      #         *verbose*
+      #     ALL
+      # )
+    endif()
+  endif()
 
 if(VERBOSE) #only for the fool-hardy
   option(ENABLE_LINK_TIME_OPTIMISATION "Enable link-time optimisation" OFF)
@@ -190,51 +228,20 @@ if(VERBOSE) #only for the fool-hardy
   option(CPACK_GENERATOR "Enable build of distribution packages using CPack" TGZ)
 
   #
-  # CPack
-  #
-  include(SimplePackage)
-  #
   # CTest
   #
   enable_testing()
-
   #
-  # Doxygen
+  # CPack
   #
-  option(ENABLE_DOXYGEN "Enable a 'make docs' target for Doxygen documentation")
-  if (ENABLE_DOXYGEN)
-    add_custom_target(doc
-      ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile
-      WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-      COMMENT "Generating API documentation with Doxygen" VERBATIM
-      )
-    include(UseDoxygen OPTIONAL)
- # add_doxygen(
- #     docs
- #     INPUT
- #         "${CMAKE_SOURCE_DIR}/src"
- #     STRIP_FROM_PATH
- #         "${CMAKE_SOURCE_DIR}/src/inc"
- #     STRIP_FROM_INC_PATH
- #         "${CMAKE_SOURCE_DIR}/src/inc"
- #     EXCLUDE_PATTERNS
- #         */gnufor2/*
- #     EXCLUDE_SYMBOLS
- #         *debug*
- #         *verbose*
- #     ALL
- # )
-   endif()
-   #
-   # User manual
-   #
-   add_subdirectory(doc/SimpleManual)
-
+  option(CPACK_GENERATOR "Enable build of distribution packages using CPack" OFF)
+  include(SimplePackage)
   ## Debugging CMAKE
-  # include(CMakeAddFortranSubdirectory)
-  # include(CMakeGraphVizOptions)
+  include(CMakeGraphVizOptions)
   include(GenericLogging)
 endif()
+
+
 
 #################################################################
 #
@@ -247,4 +254,3 @@ add_subdirectory(production bin)
 
 # Add message at end of installation
 add_subdirectory(${CMAKE_SOURCE_DIR}/cmake/PostInstall)
-

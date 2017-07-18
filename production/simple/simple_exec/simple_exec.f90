@@ -1,15 +1,24 @@
-!==Program simple_exec
+!------------------------------------------------------------------------------!
+! SIMPLE , Elmlund & Elmlund Lab,     simplecryoem.com                         !
+!------------------------------------------------------------------------------!
+!> SIMPLE_EXEC is the primary program of SIMPLE 
 !
-! <simple_exec/begin> executes every individual program in the SIMPLE library. To list all programs type
-! simple_exec prg=list. To execute program prime3D type simple_exec prg=prime3D and instructions are given. 
-! simple_exec is the client of the commanders that create concrete commander objects (xsimimgs etc.) and 
-! prepares their reciever (cmdline). In this case, simple_exec is also the invoker as it executes the request. 
-! <simple_exec/end>
+!! @detail `simple_exec' executes every individual program in the SIMPLE library.
+!! To list all programs type `simple_exec prg=list'.
+!!
+!! To execute program prime3D type simple_exec prg=prime3D and instructions are
+!! given. simple_exec is the client of the commanders that create concrete
+!! commander objects (xsimimgs etc.) and prepares their reciever (cmdline). In
+!! this case, simple_exec is also the invoker as it executes the request.
+! 
 !
-! The code is distributed with the hope that it will be useful, but WITHOUT ANY WARRANTY.
-! Redistribution and modification is regulated by the GNU General Public License.
-! Authors: Cyril Reboul & Hans Elmlund 2016
+!! @author Cyril Reboul & Hans Elmlund 2016
 !
+! The code is distributed with the hope that it will be useful, but WITHOUT ANY
+! WARRANTY. Redistribution and modification is regulated by the GNU General
+! Public License.
+! -----------------------------------------------------------------------------!
+
 program simple_exec
 use simple_defs
 use simple_cmdline, only: cmdline

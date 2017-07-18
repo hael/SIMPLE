@@ -1,3 +1,9 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 !>  \brief  SIMPLE image class
 module simple_image
 !$ use omp_lib
@@ -598,7 +604,7 @@ contains
         class(image),               intent(inout) :: self
         character(len=*),           intent(in)    :: fname        !< filename of image
         class(imgfile),             intent(inout) :: ioimg        !< file object
-        character(len=1), optional, intent(in)    :: formatchar
+        character(len=1), optional, intent(in)    :: formatchar   ! image type format (M,F,S)
         logical,          optional, intent(in)    :: readhead
         character(len=*), optional, intent(in)    :: rwaction
         character(len=1) :: form
@@ -653,13 +659,13 @@ contains
         use simple_filehandling, only: fname2format, file_exists
         class(image),               intent(inout) :: self
         character(len=*),           intent(in)    :: fname        !< filename of image
-        integer,          optional, intent(in)    :: i
+        integer,          optional, intent(in)    :: i            !< file index in stack
         class(imgfile),   optional, intent(inout) :: ioimg        !< image IO object
-        logical,          optional, intent(in)    :: isxfel
-        character(len=1), optional, intent(in)    :: formatchar
+        logical,          optional, intent(in)    :: isxfel       !< is the file Xfel
+        character(len=1), optional, intent(in)    :: formatchar   !< image type (M,F,S)
         logical,          optional, intent(in)    :: readhead
-        character(len=*), optional, intent(in)    :: rwaction
-        logical,          optional, intent(out)   :: read_failure
+        character(len=*), optional, intent(in)    :: rwaction     !< read mode
+        logical,          optional, intent(out)   :: read_failure !< file i/o status
         type(imgfile)         :: ioimg_local
         character(len=1)      :: form
         integer               :: ldim(3), iform, first_slice, mode
@@ -815,8 +821,8 @@ contains
     subroutine write( self, fname, i, del_if_exists, formatchar )
         class(image),               intent(inout) :: self
         character(len=*),           intent(in)    :: fname !< filename of image
-        integer,          optional, intent(in)    :: i
-        logical,          optional, intent(in)    :: del_if_exists
+        integer,          optional, intent(in)    :: i     !< file index in stack/part
+        logical,          optional, intent(in)    :: del_if_exists !< overwrite
         character(len=1), optional, intent(in)    :: formatchar
         type(image) :: tmpimg
         real        :: dev
@@ -837,8 +843,8 @@ contains
         use simple_filehandling, only: fname2format
         class(image),               intent(inout) :: self
         character(len=*),           intent(in)    :: fname !< filename of image
-        integer,          optional, intent(in)    :: i
-        logical,          optional, intent(in)    :: del_if_exists
+        integer,          optional, intent(in)    :: i             !< file index in stack/part
+        logical,          optional, intent(in)    :: del_if_exists !< overwrite
         character(len=1), optional, intent(in)    :: formatchar
         real,             optional, intent(in)    :: rmsd
         type(imgfile)     :: ioimg

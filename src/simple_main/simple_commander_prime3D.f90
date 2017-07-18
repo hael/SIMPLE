@@ -1,3 +1,6 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 !> simple_commander_prime3D
 !
 !! This class contains the set of concrete prime3D commanders of the SIMPLE
@@ -5,6 +8,32 @@
 !! simple_exec program) and the abstract action, which is simply execute
 !! (defined by the base class: simple_commander_base). Later we can use the
 !! composite pattern to create MacroCommanders (or workflows)
+!!
+!!
+!! @see  doc/SimpleTutorials2017/Tutorials.html?#ab-initio-3d-reconstruction-from-class-averages-using-prime3d
+!! Ab initio 3D Reconstruction from Class Averages Using PRIME3D
+!!
+!! A major obstacle to achieving near-atomic resolution with single-particle
+!! cryo-EM is the problem of generating an accurate de novo 3D reconstruction.
+!! Many cryo-EM structures are therefore solved by alignment of the images to a
+!! priori models. The use of prior information, in the form of either a starting
+!! model from an independent source or an assumption of a particular point-group
+!! symmetry, is associated with the risk of introducing model bias. The model
+!! bias phenomenon is often illustrated by alignment of pure noise images to an
+!! image of Einstein. The image of Einstein is almost perfectly reproduced when
+!! the aligned noise images are averaged. It is often stated that low-pass
+!! filtering of X-ray maps, before they are used as starting models, eliminates
+!! model bias. This is a misunderstanding, as any model can be convincingly
+!! reproduced from noisy images . Most refinement software, such as FREALIGN ,
+!! RELION , or projection matching , depends on an accurate starting model for
+!! convergence to a high-resolution map. If the starting model is not supported
+!! by the images, there is a potent risk of introducing model bias. To what
+!! degree a starting model can bias the final 3D structure needs to be better
+!! characterised by methodological studies. We introduced the PRIME3D algorithm
+!! to remove the requirement for a priori structural knowledge and open the
+!! method to the study of particles with novel structure. Robust algorithms for
+!! ab initio 3D reconstruction are particularly important for the analysis of
+!! small particles with low symmetry.
 !
 ! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
 ! Redistribution and modification is regulated by the GNU General Public License.
@@ -203,7 +232,9 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_MULTIPTCL_INIT NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_multiptcl_init
-    
+
+    !> PRIME3D is a SIMPLE program
+
     subroutine exec_prime3D( self, cline )
         use simple_math, only: calc_lowpass_lim, calc_fourier_index
         use simple_hadamard3D_matcher, only: prime3D_exec, prime3D_find_resrange
@@ -307,7 +338,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_PRIME3D NORMAL STOP ****')
     end subroutine exec_prime3D
-
+    !> CONT3D is a SIMPLE program
     subroutine exec_cont3D( self, cline )
         use simple_cont3D_matcher,         only: cont3D_exec
         class(cont3D_commander), intent(inout) :: self
@@ -347,7 +378,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_CONT3D NORMAL STOP ****')
     end subroutine exec_cont3D
-    
+    !> CHECK3D_CONV is a SIMPLE program
     subroutine exec_check3D_conv( self, cline )
         use simple_math,    only: rad2deg, get_lplim
         class(check3D_conv_commander), intent(inout) :: self

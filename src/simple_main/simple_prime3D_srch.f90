@@ -1,4 +1,6 @@
-!!
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 !> Simple search module: Prime3D method
 !!
 module simple_prime3D_srch

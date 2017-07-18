@@ -1,4 +1,18 @@
+
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 !> Simple math module: statistics utility functions
+!
+!! simple_stat contains various statistical subroutines and functions.
+!! @author Cyril Reboul & Hans Elmlund
+!!
+
+!
+! The SIMPLE code is distributed with the hope that it will be
+! useful, but WITHOUT ANY WARRANTY. Redistribution and modification is regulated
+! by the GNU General Public License.
+! -----------------------------------------------------------------------------!
 module simple_stat
 use simple_defs ! singleton
 use simple_math, only: hpsort
@@ -39,7 +53,7 @@ contains
 
     ! VISUALIZATION
 
-    !>  \brief  prints a primitive histogram given an array of real data
+    !>    prints a primitive histogram given an array of real data
     subroutine plot_hist( arr, bins, sc )
         real, intent(in)    :: arr(:)
         integer, intent(in) :: bins, sc
@@ -74,14 +88,14 @@ contains
 
     ! MOMENTS/NORMALIZATION
 
-    !>  \brief  given a 1D real array of data, this routine returns its mean: _ave_,
+    !>    given a 1D real array of data, this routine returns its mean: _ave_,
     !!          standard deviation: _sdev_, and variance: _var_
     subroutine moment_1( data, ave, sdev, var, err )
         !$ use omp_lib
         !$ use omp_lib_kinds
-        real,    intent(out) :: ave, sdev, var
-        logical, intent(out) :: err
-        real,    intent(in)  :: data(:)
+        real,    intent(out) :: ave, sdev, var !<  ave Geometric average,  sdev standard deviation  var variance
+        logical, intent(out) :: err            !< error status
+        real,    intent(in)  :: data(:)        !< input data
         integer              :: n, i
         real                 :: ep, nr, dev
         err = .false.
@@ -115,14 +129,14 @@ contains
         endif
     end subroutine moment_1
 
-    !>  \brief  given a 2D real array of data, this routine returns its mean: _ave_,
+    !>    given a 2D real array of data, this routine returns its mean: _ave_,
     !!          standard deviation: _sdev_, and variance: _var_
     subroutine moment_2( data, ave, sdev, var, err )
         !$ use omp_lib
         !$ use omp_lib_kinds
-        real, intent(out)    :: ave, sdev, var
-        logical, intent(out) :: err
-        real, intent(in)     :: data(:,:)
+        real, intent(out)    :: ave, sdev, var   !<  ave Geometric average,  sdev standard deviation  var variance
+        logical, intent(out) :: err              !< error status
+        real, intent(in)     :: data(:,:)        !< input data
         integer              :: nx, ny, n, i, j
         real                 :: ep, nr, dev
         err = .false.
@@ -160,14 +174,14 @@ contains
         endif
     end subroutine moment_2
 
-    !>  \brief  given a 3D real array of data, this routine returns its mean: _ave_,
+    !>    given a 3D real array of data, this routine returns its mean: _ave_,
     !!          standard deviation: _sdev_, and variance: _var_
     subroutine moment_3( data, ave, sdev, var, err )
         !$ use omp_lib
         !$ use omp_lib_kinds
-        real, intent(out)    :: ave, sdev, var
-        logical, intent(out) :: err
-        real, intent(in)     :: data(:,:,:)
+        real, intent(out)    :: ave, sdev, var    !<  ave Geometric average,  sdev standard deviation  var variance
+        logical, intent(out) :: err               !< error status
+        real, intent(in)     :: data(:,:,:)       !< input data
         integer              :: nx, ny, nz, n, i, j, k
         real                 :: ep, nr, dev
         err = .false.
@@ -207,41 +221,41 @@ contains
         endif
     end subroutine moment_3
 
-    !>  \brief  is for statistical normalization of an array
+    !>    is for statistical normalization of an array
     subroutine normalize_1( arr, err )
-        real, intent(inout)  :: arr(:)
-        real                 :: ave, sdev, var
-        logical, intent(out) :: err
+        real, intent(inout)  :: arr(:)           !< input data
+        real                 :: ave, sdev, var   !< temp stats
+        logical, intent(out) :: err              !< error status
         call moment_1( arr, ave, sdev, var, err )
         if( err ) return
         arr = (arr-ave)/sdev ! array op
     end subroutine normalize_1
 
-    !>  \brief  is for statistical normalization of a 2D matrix
+    !>    is for statistical normalization of a 2D matrix
     subroutine normalize_2( arr, err )
-        real, intent(inout)  :: arr(:,:)
-        real                 :: ave, sdev, var
-        logical, intent(out) :: err
+        real, intent(inout)  :: arr(:,:)         !< input data   
+        real                 :: ave, sdev, var   !< temp stats   
+        logical, intent(out) :: err              !< error status 
         call moment_2( arr, ave, sdev, var, err )
         if( err ) return
         arr = (arr-ave)/sdev ! array op
     end subroutine normalize_2
 
-    !>  \brief  is for statistical normalization of a 3D matrix
+    !>    is for statistical normalization of a 3D matrix
     subroutine normalize_3( arr, err )
-        real, intent(inout)  :: arr(:,:,:)
-        real                 :: ave, sdev, var
-        logical, intent(out) :: err
+        real, intent(inout)  :: arr(:,:,:)       !< input data   
+        real                 :: ave, sdev, var   !< temp stats   
+        logical, intent(out) :: err              !< error status 
         call moment_3( arr, ave, sdev, var, err )
         if( err ) return
         arr = (arr-ave)/sdev ! array op
     end subroutine normalize_3
 
-    !>  \brief  is for sigmoid normalisation [0,1]
+    !>    is for sigmoid normalisation [0,1]
     subroutine normalize_sigm_1( arr )
-        real, intent(inout) :: arr(:)
-        real                :: smin, smax, delta
-        real, parameter     :: NNET_CONST = exp(1.)-1.
+        real, intent(inout) :: arr(:)                    !< input data   
+        real                :: smin, smax, delta         ! temp stats   
+        real, parameter     :: NNET_CONST = exp(1.)-1.    
         ! find minmax
         smin  = minval(arr)
         smax  = maxval(arr)
@@ -252,9 +266,9 @@ contains
         !$omp end parallel workshare
     end subroutine normalize_sigm_1
 
-    !>  \brief  is for sigmoid normalisation [0,1]
+    !>    is for sigmoid normalisation [0,1]
     subroutine normalize_sigm_2( arr )
-        real, intent(inout) :: arr(:,:)
+        real, intent(inout) :: arr(:,:) !< input data   
         real                :: smin, smax, delta
         real, parameter     :: NNET_CONST = exp(1.)-1.
         ! find minmax
@@ -267,9 +281,9 @@ contains
         !$omp end parallel workshare
     end subroutine normalize_sigm_2
 
-    !>  \brief  is for sigmoid normalisation [0,1]
+    !>    is for sigmoid normalisation [0,1]
     subroutine normalize_sigm_3( arr )
-        real, intent(inout) :: arr(:,:,:)
+        real, intent(inout) :: arr(:,:,:) !< input data   
         real                :: smin, smax, delta
         real, parameter     :: NNET_CONST = exp(1.)-1.
         ! find minmax
@@ -282,13 +296,13 @@ contains
         !$omp end parallel workshare
     end subroutine normalize_sigm_3
 
-    !>  \brief  calculates the devation around point
+    !>    calculates the devation around point
     subroutine deviation( data, point, sdev, var, err )
         !$ use omp_lib
         !$ use omp_lib_kinds
-        real, intent(out)    :: sdev, var
-        logical, intent(out) :: err
-        real, intent(in)     :: data(:), point
+        real, intent(out)    :: sdev, var       !<  sdev standard deviation  var variance
+        logical, intent(out) :: err             !< error status 
+        real, intent(in)     :: data(:), point  !< input data and deviation point
         integer              :: n, i
         real                 :: ep, nr, dev
         err = .false.
@@ -311,9 +325,9 @@ contains
 
     ! CORRELATION
 
-    !>  \brief  calculates Pearson's correlation coefficient
+    !>    calculates Pearson's correlation coefficient
     function pearsn_1( x, y ) result( r )
-        real, intent(in) :: x(:),y(:)
+        real, intent(in) :: x(:),y(:)         !<  x input data,  y reference data 
         real    :: r,ax,ay,sxx,syy,sxy,xt,yt
         integer :: j, n
         n = size(x)
@@ -336,9 +350,9 @@ contains
         r = max(-1.,min(1.,sxy/sqrt(sxx*syy)))
     end function pearsn_1
 
-    !>  \brief  calculates Pearson's correlation coefficient
+    !>    calculates Pearson's correlation coefficient
     function pearsn_2( x, y ) result( r )
-        real, intent(in) :: x(:,:),y(:,:)
+        real, intent(in) :: x(:,:),y(:,:)      !<  x input data,  y reference data 
         real    :: r,ax,ay,sxx,syy,sxy,xt,yt
         integer :: i, j, nx, ny
         nx = size(x,1)
@@ -364,9 +378,9 @@ contains
         r = max(-1.,min(1.,sxy/sqrt(sxx*syy)))
     end function pearsn_2
 
-    !>  \brief  calculates Pearson's correlation coefficient
+    !>    calculates Pearson's correlation coefficient
     function pearsn_3( x, y ) result( r )
-        real, intent(in) :: x(:,:,:),y(:,:,:)
+        real, intent(in) :: x(:,:,:),y(:,:,:)       !<  x input data,  y reference data 
         real    :: r,ax,ay,az,sxx,syy,sxy,xt,yt
         integer :: i, j, k, nx, ny, nz
         nx = size(x,1)
@@ -396,9 +410,10 @@ contains
         r = max(-1.,min(1.,sxy/sqrt(sxx*syy)))
     end function pearsn_3
 
-    !>  \brief  calculates the Pearson correlation for pre-normalized data
+    !>    calculates the Pearson correlation for pre-normalized data
     function pearsn_prenorm( x, y ) result( r )
-        real    :: x(:),y(:),r,sxx,syy,sxy,den
+        real    :: x(:),y(:)      !<  x input data,  y reference data 
+        real    :: r,sxx,syy,sxy,den 
         integer :: j, n
         n = size(x)
         if( size(y) /= n ) stop 'Arrays not equal size, in pearsn_prenorm, module: simple_stat'
@@ -470,10 +485,10 @@ contains
 
     ! INTEGER STUFF
 
-    !>  \brief  is for rank transformation of an array
+    !>    is for rank transformation of an array
     subroutine rank_transform_1( arr )
         use simple_jiffys, only: alloc_err
-        real, intent(inout)  :: arr(:)
+        real, intent(inout)  :: arr(:)  !< array to be modified 
         integer              :: j, n, alloc_stat
         integer, allocatable :: order(:)
         real, allocatable    :: vals(:)
@@ -491,10 +506,10 @@ contains
         deallocate(vals, order)
     end subroutine rank_transform_1
 
-    !>  \brief  is for rank transformation of a 2D matrix
+    !>    is for rank transformation of a 2D matrix
     subroutine rank_transform_2( mat )
         use simple_jiffys, only: alloc_err
-        real, intent(inout)   :: mat(:,:)
+        real, intent(inout)   :: mat(:,:)  !< matrix to be modified 
         integer, allocatable  :: order(:), indices(:,:)
         real, allocatable     :: vals(:)
         integer               :: n, alloc_stat, i, j, cnt, nx, ny
@@ -520,10 +535,10 @@ contains
         deallocate(vals, order, indices)
     end subroutine rank_transform_2
 
-    !>  \brief  Spearman rank correlation
+    !>    Spearman rank correlation
     function spear( n, pi1, pi2 ) result( corr )
         integer, intent(in) :: n
-        real, intent(in)    :: pi1(n), pi2(n)
+        real, intent(in)    :: pi1(n), pi2(n)  !<  pi1 test data 1  pi2 test data 2 
         real                :: corr, sqsum, rn
         integer             :: k
         rn = real(n)
@@ -534,14 +549,18 @@ contains
         corr = 1.-(6.*sqsum)/(rn**3.-rn)
     end function spear
 
-    !>  \brief  Kolmogorov-Smirnov test to deduce equivalence or non-equivalence between two distributions.
-    !!          The routine returns the K-S statistic d, and the significance level prob for the null hypothesis
-    !!          that the data sets are drawn from the same distribution. Small values for prob show that the cumulative
-    !!          distribution function of data1 is significantly different from that of data2. The input arrays are
-    !!          modified (sorted)
+    !>   Kolmogorov-Smirnov test to deduce equivalence or non-equivalence
+    !>  between two distributions.
+    !!          The routine returns the K-S statistic d, and the significance
+    !!          level prob for the null hypothesis that the data sets are drawn
+    !!          from the same distribution. Small values for prob show that the
+    !!          cumulative distribution function of data1 is significantly
+    !!          different from that of data2. The input arrays are modified
+    !!          (sorted)
     subroutine kstwo( data1, n1, data2, n2, d, prob )
         integer, intent(in) :: n1, n2
-        real, intent(inout) :: data1(n1), data2(n2), d, prob
+        real, intent(inout) :: data1(n1), data2(n2), d, prob  !<  data1 distribution 1,
+        !  data2 distribution 2,  d K-S statistic
         integer             :: j1, j2
         real                :: d1, d2, dt, en1, en2, en, fn1, fn2
         call hpsort( n1, data1 )
@@ -593,11 +612,11 @@ contains
 
     end subroutine kstwo
 
-    !>  \brief  4 statistical analysis of similarity matrix
+    !>    4 statistical analysis of similarity matrix
     subroutine analyze_smat( s, symmetrize, smin, smax )
-        real, intent(inout) :: s(:,:)
-        logical, intent(in) :: symmetrize
-        real, intent(out)   :: smin, smax
+        real, intent(inout) :: s(:,:)          !< similarity matrix
+        logical, intent(in) :: symmetrize      !< force diag symmetry
+        real, intent(out)   :: smin, smax      !<  smin minimum similarity,  smax maximum similarity
         integer             :: i, j, n, npairs
         if( size(s,1) .ne. size(s,2) )then
             stop 'not a similarity matrix; analyze_smat; simple_stat'
@@ -617,7 +636,7 @@ contains
 
     ! SPECIAL FUNCTIONS
 
-    !>  \brief  is the factorial function
+    !>    is the factorial function
     recursive function factorial( n )result( f )
         integer, intent(in) :: n
         integer :: f
@@ -630,7 +649,7 @@ contains
         endif
     end function factorial
 
-    !>  \brief  is the binomial coefficient
+    !>    is the binomial coefficient
     function bin_coeff( n, k )result( val )
         integer, intent(in) :: n, k
         integer :: val
@@ -640,10 +659,10 @@ contains
         val = factorial(n) / (factorial(k) * factorial(n-k))
     end function bin_coeff
 
-    !>  \brief  generates a primitive histogram given an array of real data
+    !>    generates a primitive histogram given an array of real data
     function get_hist( arr, nbins )result( h )
-        real, intent(in)     :: arr(:)
-        integer, intent(in)  :: nbins
+        real, intent(in)     :: arr(:) !< input array
+        integer, intent(in)  :: nbins  !< num histogram bins
         real                 :: binwidth, minv, maxv
         integer, allocatable :: h(:)
         integer              :: bin, i, n
@@ -662,11 +681,11 @@ contains
         end do
     end function get_hist
 
-    !>  \brief  generates a primitive joint histogram given two arrays of real data
+    !>    generates a primitive joint histogram given two arrays of real data
     function get_jointhist( arr1, arr2, nbins )result( h )
-        real,    intent(in)  :: arr1(:), arr2(:)
-        integer, intent(in)  :: nbins
-        integer, allocatable :: h(:,:)
+        real,    intent(in)  :: arr1(:), arr2(:)   !< input arrays        
+        integer, intent(in)  :: nbins              !< num histogram bins 
+        integer, allocatable :: h(:,:)             !< output histogram 
         real                 :: binwidth1, minv1
         real                 :: binwidth2, minv2
         integer              :: i, n, bin1, bin2
@@ -699,8 +718,8 @@ contains
 
     end function get_jointhist
 
-    !>   \brief In information theory, the Hamming distance between two strings of equal length 
-    !!          is the number of positions at which the corresponding symbols are different. 
+    !>    In information theory, the Hamming distance between two strings of equal length
+    !!          is the number of positions at which the corresponding symbols are different.
     function hamming_dist( x, y ) result( dist )
         integer, intent(in) :: x(:), y(:)
         real :: dist
@@ -708,10 +727,14 @@ contains
         dist = real(count( x /= y ))
     end function hamming_dist
 
-    !>  \brief is the Normalized Mutual Information (in bits)
+    !>   is the Normalized Mutual Information (in bits)
+    !! Mutual Information \f$ I(X;Y)=\sum_{y\in Y}\sum_{x\in X}p(x,y)\log{\left({\frac{p(x,y)}{p(x)\,p(y)}}\right)} \f$
+    !! Normalised MI also known as Information Quality Ratio (IQR)
+    !! \f$ IQR(X,Y)=E\left[I(X;Y)\right]={\frac{I(X;Y)}{\mathrm{H} (X,Y)}}={\frac {\sum_{x\in X}\sum_{y\in Y}p(x,y)\log {p(x)p(y)}}{\sum _{x\in X}\sum _{y\in Y}p(x,y)\log {p(x,y)}}-1} \f$
+    !! @see https://en.wikipedia.org/wiki/Mutual_information#Normalized_variants
     function nmi( x, y, nbins )result( val )
-        real,    intent(in)  :: x(:), y(:)
-        integer, intent(in)  :: nbins
+        real,    intent(in)  :: x(:), y(:)    !<  x input reference  y input test 
+        integer, intent(in)  :: nbins         !< num histogram bins 
         real,    allocatable :: rh(:,:), pxs(:), pys(:)
         real    :: mi, val, ex, ey, pxy, px, py, logtwo
         integer :: i, j, n
@@ -754,9 +777,9 @@ contains
         val = max(0.,val)
     end function nmi
 
-    !>  \brief  calculates rand index
+    !>    calculates rand index
     function rand_index( x, y ) result( rind )
-        integer, intent(in) :: x(:),y(:)
+        integer, intent(in) :: x(:),y(:) !<  x input reference  y input test 
         integer  :: i,j, n, a,b,cd
         real     :: rind
         n = size(x)
@@ -786,9 +809,10 @@ contains
         if( rind<0. )stop 'Error in simple_stat%rand_index 2'
     end function rand_index
 
-    !>  \brief  calculates Jaccard index
+    !>    calculates Jaccard index
+    !! \f$  J(A,B) = \frac{|A \cap B|}{|A \cup B|} = \frac{|A \cap B|}{|A| + |B| - |A \cap B|} \f$
     function jaccard_index( x, y )result( jind )
-        integer, intent(in) :: x(:), y(:)
+        integer, intent(in) :: x(:), y(:) !<  x input reference  y input test 
         real :: jind
         integer  :: i,j, n, a,cd
         n = size(x)
@@ -813,9 +837,10 @@ contains
         if( jind<0. )stop 'Error in simple_stat%jaccard_index 2'
     end function jaccard_index
 
-    !>  \brief  calculates Jaccard distance
+    !>    calculates Jaccard distance
+    !! \f$  d_J(A,B) = 1 - J(A,B) = \frac{ |A \cup B| - |A \cap B| }{ |A \cup B| } \f$
     function jaccard_dist( x, y )result( jdist )
-        integer, intent(in) :: x(:), y(:)
+        integer, intent(in) :: x(:), y(:)  !<  x input reference,  y input test 
         real :: jdist
         if( size(x) /= size(y) )stop 'Inconsistent dimensions in simple_stat%jaccard_dist'
         jdist = 1. - jaccard_index( x,y )

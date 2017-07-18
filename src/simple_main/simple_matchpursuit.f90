@@ -1,3 +1,9 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 !> Simple module: matching pursuit
 !!  pearson correlation-based matching pursuit
 module simple_matchpursuit
@@ -42,9 +48,9 @@ contains
     !>  \brief  is a constructor
     !>  should only be used if rotation onto orthogonal basis has been performed
     subroutine new( self, W, E, AVG, D, fname, doprint )
-        class(matchpursuit), intent(inout) :: self
-        real, intent(in), pointer          :: W(:,:),E(:,:)
-        real, intent(in), target           :: AVG(:)
+        class(matchpursuit), intent(inout) :: self 
+        real, intent(in), pointer          :: W(:,:),E(:,:) !< loadings (DxQ) and expectations (NxQ)
+        real, intent(in), target           :: AVG(:)     !< data average (D)
         real, intent(in), target, optional :: D(:,:)     !< arr for inplace matching (not to be used with fname)
         character( len=STDLEN),   optional :: fname      !< filename used for matching , disables inplace
         logical, intent(in),      optional :: doprint
@@ -107,7 +113,7 @@ contains
         use simple_stat,                    only: pearsn
         class(matchpursuit), intent(inout)     :: self
         real, intent(inout)      :: avgcc
-        integer, intent(in)      :: feats(2)
+        integer, intent(in)      :: feats(2)  !< resampling for subset features
         real    :: obs(self%D)    !< observed D-dimensional data
         real    :: model(self%D)  !< re-sampled
         real    :: X(self%D,1)

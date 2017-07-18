@@ -1,20 +1,16 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 program test_binomial_para
 use simple_chash,   only: chash
 use simple_strings, only: int2str
 use simple_defs     ! use all in there
 implicit none
 
-
-
-
 integer,               parameter   :: NPARTS=10 
 character(len=STDLEN), allocatable :: labels(:)
 type(chash),           allocatable :: work_assignments(:)
 integer :: i, nlayers, njobs, n, nworkers
-
-
-
-
 
 ! figure out how many workers are needed
 if( mod(NPARTS,2) == 0. )then
@@ -38,12 +34,9 @@ do i=1,nworkers
     call work_assignments(i)%new(nlayers)
 end do
 
-
 ! re-prep labels
 deallocate(labels)
 call prep_labels(NPARTS)
-
-
 
 contains
 

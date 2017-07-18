@@ -102,13 +102,13 @@ if(DOXYGEN_FOUND)
 endif()
 
 if(DOXYGEN_FOUND AND DOXYFILE_IN_FOUND)
-    usedoxygen_set_default(DOXYFILE_OUTPUT_DIR "doc"
+    usedoxygen_set_default(DOXYFILE_OUTPUT_DIR "${CMAKE_BINARY_DIR}/doc"
         PATH "Doxygen output directory")
     usedoxygen_set_default(DOXYFILE_HTML_DIR "html"
         STRING "Doxygen HTML output directory")
     usedoxygen_set_default(DOXYFILE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}"
         PATH "Input files source directory")
-    usedoxygen_set_default(DOXYFILE_EXTRA_SOURCE_DIRS ""
+    usedoxygen_set_default(DOXYFILE_EXTRA_SOURCE_DIRS "${CMAKE_BINARY_DIR}/lib/simple"
         STRING "Additional source files/directories separated by space")
     set(DOXYFILE_SOURCE_DIRS "\"${DOXYFILE_SOURCE_DIR}\" ${DOXYFILE_EXTRA_SOURCES}")
 

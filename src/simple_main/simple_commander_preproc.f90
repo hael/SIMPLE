@@ -1,4 +1,7 @@
-!> Simple commander module: Preprocessor interface class
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple commander module: Preprocessor class
 !!
 !! This class contains the set of concrete preprocessing commanders of the
 !! SIMPLE library. This class provides the glue between the reciver (main
@@ -12,13 +15,13 @@
 !
 module simple_commander_preproc
 use simple_defs
+use simple_jiffys          ! use all in there
+use simple_filehandling    ! use all in there
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
 use simple_strings,        only: int2str, int2str_pad
-use simple_jiffys          ! use all in there
-use simple_filehandling    ! use all in there
 implicit none
 
 public :: preproc_commander
@@ -32,7 +35,6 @@ public :: makepickrefs_commander
 public :: pick_commander
 public :: extract_commander
 private
-#include "simple_local_flags.inc"
 
 type, extends(commander_base) :: preproc_commander
   contains
@@ -78,7 +80,7 @@ end type extract_commander
 contains
 
     ! UNBLUR + CTFFIND + PICK + EXTRACT IN SEQUENCE
-    !> preproc is a pipelined unblur + ctffind  + pick + extract in sequence program
+    !> PREPROC is a pipelined unblur + ctffind  + pick + extract in sequence program
     subroutine exec_preproc( self, cline )
         use simple_unblur_iter,  only: unblur_iter
         use simple_ctffind_iter, only: ctffind_iter
@@ -201,7 +203,7 @@ contains
         call simple_end('**** SIMPLE_PREPROC NORMAL STOP ****')
     end subroutine exec_preproc
 
-    !> select_framesis a program for selecting contiguous segments of frames from DDD movies
+    !> SELECT_FRAMESIS a program for selecting contiguous segments of frames from DDD movies
     subroutine exec_select_frames( self, cline )
         use simple_imgfile, only: imgfile
         use simple_image,   only: image
@@ -214,7 +216,7 @@ contains
         character(len=STDLEN), allocatable :: movienames(:)
         character(len=:), allocatable      :: new_name
         type(image)                        :: img_frame
-
+#include "simple_local_flags.inc"
         p = params(cline, checkdistr=.false.)           ! constants & derived constants produced
         call b%build_general_tbox(p,cline,do3d=.false.) ! general objects built
         call read_filetable(p%filetab, movienames)
@@ -268,7 +270,8 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_SELECT_FRAMES NORMAL STOP ****')
     end subroutine exec_select_frames
-    !> boxconvs is a program for averaging overlapping boxes across a micrograph
+
+    !> BOXCONVS is a program for averaging overlapping boxes across a micrograph
     !! in order to check if gain correction was appropriately done
     subroutine exec_boxconvs( self, cline )
         use simple_image, only: image
@@ -279,7 +282,7 @@ contains
         type(image)                        :: tmp
         character(len=STDLEN), allocatable :: imgnames(:)
         integer                            :: iimg, nimgs, ldim(3), iimg_start, iimg_stop, ifoo
-
+#include "simple_local_flags.inc"
         if( cline%defined('stk') .and. cline%defined('filetab') )then
             stop 'stk and filetab cannot both be defined; input either or!'
         endif
@@ -330,7 +333,7 @@ contains
         call simple_end('**** SIMPLE_BOXCONVS NORMAL STOP ****')
     end subroutine exec_boxconvs
 
-    !> powerspecs is a program for generating powerspectra from a stack or filetable
+    !> POWERSPECS is a program for generating powerspectra from a stack or filetable
     subroutine exec_powerspecs( self, cline )
         use simple_imgfile, only: imgfile
         use simple_image,   only: image
@@ -341,7 +344,7 @@ contains
         type(image)                        :: powspec, tmp, mask
         character(len=STDLEN), allocatable :: imgnames(:)
         integer                            :: iimg, nimgs, ldim(3), iimg_start, iimg_stop, ifoo
-
+#include "simple_local_flags.inc"
         if( cline%defined('stk') .and. cline%defined('filetab') )then
             stop 'stk and filetab cannot both be defined; input either or!'
         endif
@@ -398,18 +401,29 @@ contains
         call simple_end('**** SIMPLE_POWERSPECS NORMAL STOP ****')
     end subroutine exec_powerspecs
 
-    !> unblur is a program for movie alignment or unblurring based the same principal strategy
-    !! as Grigorieffs program (hence the name). There are two important
-    !! differences: automatic weighting of the frames using a correlation-based
-    !! M-estimator and continuous optimisation of the shift parameters. Input is
-    !! a textfile with absolute paths to movie files in addition to a few input
-    !! parameters, some of which deserve a comment. If dose_rate and exp_time
-    !! are given the individual frames will be low-pass filtered accordingly
-    !! (dose-weighting strategy). If scale is given, the mov ie will be Fourier
-    !! cropped according to the down-scaling factor (for super-resolution
-    !! movies). If nframesgrp is given the frames will be pre-averaged in the
-    !! giv en chunk size (Falcon 3 movies). If fromf/tof are given, a contiguous
-    !! subset of frames will be averaged without any dose-weighting applied.
+    !> UNBLUR is a program for movie alignment or unblurring based the same principal strategy
+    !> as Grigorieffs program (hence the name).
+    !!
+    !! There are two important differences: automatic weighting of the frames
+    !! using a correlation-based M-estimator and continuous optimisation of the
+    !! shift parameters. Input is a text file with absolute paths to movie files
+    !! in addition to a few input parameters, some of which deserve a comment.
+    !! If dose_rate and exp_time are given the individual frames will be
+    !! low-pass filtered accordingly (dose-weighting strategy). If scale is
+    !! given, the movie will be Fourier cropped according to the down-scaling
+    !! factor (for super-resolution movies). If nframesgrp is given the frames
+    !! will be pre-averaged in the given chunk size (Falcon 3 movies). If
+    !! fromf/tof are given, a contiguous subset of frames will be averaged
+    !! without any dose-weighting applied.
+    !! @see doc/SimpleTutorials2017/Tutorials.html?#motion-correction
+    !! EXAMPLE:
+    !! ```sh
+    !! cat movies.txt 
+    !!    data/movie1.mrc
+    !!    data/movie2.mrc
+    !! simple_distr_exec prg=unblur filetab=movies.txt smpd=5.26 nparts=2 nthr=12 fbody=proteasome dose_rate=7 exp_time=7.6 kv=300
+    !!```
+    !! 
     subroutine exec_unblur( self, cline )
         use simple_unblur_iter, only: unblur_iter
         use simple_oris,        only: oris
@@ -487,6 +501,7 @@ contains
     end subroutine exec_unblur
 
     !> ctffind  is a wrapper program for CTFFIND4 (Grigorieff lab)
+    !! @see doc/SimpleTutorials2017/Tutorial.html?#ctf-parameter-determination
     subroutine exec_ctffind( self, cline )
         use simple_ctffind_iter, only: ctffind_iter
         use simple_oris,         only: oris
@@ -537,7 +552,27 @@ contains
         call simple_end('**** SIMPLE_CTFFIND NORMAL STOP ****')
     end subroutine exec_ctffind
 
-    !> select is a program for selecting files based on image correlation matching
+    !> SELECT is a program for selecting files based on image correlation matching
+    !!
+    !! @see doc/SimpleTutorials2017/Tutorial.html?#prime2d-analysis-of-trpv1-membrane-receptor-images
+    !! ```sh
+    !! simple_exec prg=select
+    !!  USAGE:
+    !!  bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+    !!
+    !!  REQUIRED
+    !!  stk  = particle stack with all images(ptcls.ext)
+    !!  stk2 = 2nd stack(in map2ptcls/select: selected(cavgs).ext)
+    !!
+    !!  OPTIONAL
+    !!  nthr       = nr of OpenMP threads{1}
+    !!  stk3       = 3d stack (in map2ptcls/select: (cavgs)2selectfrom.ext)
+    !!  filetab    = list of files(*.txt / *.asc)
+    !!  outfile    = output document
+    !!  outstk     = output image stack
+    !!  dir_select = move selected files to here{selected}
+    !!  dir_reject = move rejected files to here{rejected}
+    !! ```
     subroutine exec_select( self, cline )
         use simple_image,    only: image
         use simple_syscalls, only: exec_cmdline
@@ -555,7 +590,7 @@ contains
         character(len=STDLEN)              :: cmd_str
         integer                            :: iimg, isel, nall, nsel, loc(1), ios, alloc_stat
         integer                            :: funit, ldim(3), ifoo, lfoo(3), io_stat
-
+#include "simple_local_flags.inc"
         ! error check
         if( cline%defined('stk3') .or. cline%defined('filetab') )then
             ! all good
@@ -656,7 +691,7 @@ contains
         call simple_end('**** SIMPLE_SELECT NORMAL STOP ****')
     end subroutine exec_select
 
-    !> makepickrefs make picker references
+    !> MAKEPICKREFS is a program to make picker references
     subroutine exec_makepickrefs( self, cline )
         use simple_commander_volops,  only: projvol_commander
         use simple_commander_imgproc, only: stackops_commander, scale_commander
@@ -718,7 +753,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_MAKEPICKREFS NORMAL STOP ****')
     end subroutine exec_makepickrefs
-    !> pick particles
+    !> PICK is a program to pick particles
     subroutine exec_pick( self, cline)
         use simple_pick_iter, only: pick_iter
         class(pick_commander), intent(inout) :: self
@@ -753,7 +788,7 @@ contains
         end do
     end subroutine exec_pick
 
-    !> extract is a program that extracts particle images from DDD movies or integrated movies.
+    !> \brief EXTRACT is a program that extracts particle images from DDD movies or integrated movies.
     !! Boxfiles are assumed to be in EMAN format but we provide a conversion
     !! script (relion2emanbox.pl) for *.star files containing particle
     !! coordinates obtained with Relion. The program creates one stack per movie
@@ -786,7 +821,7 @@ contains
         type(image)                        :: micrograph
         type(oris)                         :: outoris, os_uni
         logical                            :: err, params_present(3)
-
+#include "simple_local_flags.inc"
         noutside = 0
         p = params(cline, checkdistr=.false.) ! constants & derived constants produced
         if( p%stream .eq. 'yes' )then

@@ -1,4 +1,17 @@
-!> Generic string operations class
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple sting operations class
+!
+!! simple_string contains various string manipulation subroutines and functions.
+!! Adapted from George Benthien's string module http://gbenthien.net/strings/str-index.html
+!!
+!! Modification and additions by Cyril Reboul, Michael Eager & Hans Elmlund
+!
+! The SIMPLE code is distributed with the hope that it will be
+! useful, but WITHOUT ANY WARRANTY. Redistribution and modification is regulated
+! by the GNU General Public License.
+! -----------------------------------------------------------------------------!
 module simple_strings
 use simple_defs ! singleton
 use, intrinsic :: iso_c_binding
@@ -214,11 +227,11 @@ contains
         ch = str(i:i)
         ich = iachar(ch)
         select case(ich)
-        case(32:43)  ! ! " # $ % & ' ( ) * +  characters
+        case(32:43)  ! exclamation double-quote hash dollar percent ampersand quote ( ) * +  characters
             cycle
-        case(45:47)  ! . - / characters
+        case(45:47)  ! . - fwd-slash characters
             cycle
-        case(58:64)  ! : ; < = > ? @ characters
+        case(58:64)  ! : ; < = > question-mark at characters
             cycle
         case(91:94)  !  _ ^ [ ] characters
             cycle

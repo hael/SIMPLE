@@ -1,3 +1,6 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 module simple_ctffind_iter
 use simple_syscalls,  only: exec_cmdline
 use simple_nrtxtfile, only: nrtxtfile

@@ -1,4 +1,7 @@
 #!/usr/bin/perl
+#------------------------------------------------------------------------------!
+# SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+#------------------------------------------------------------------------------!
 use warnings;
 use strict;
 # read the simple_params.f90 into an array

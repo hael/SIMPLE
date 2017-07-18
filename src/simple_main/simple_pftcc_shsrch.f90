@@ -1,3 +1,6 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 !> Simple optimisation method: Shift search of pftcc objects
 module simple_pftcc_shsrch
 use simple_opt_spec,          only: opt_spec
@@ -33,15 +36,15 @@ type, extends(pftcc_opt) :: pftcc_shsrch
 end type pftcc_shsrch
 
 contains
-
+    !> shift search method constructor
     subroutine shsrch_new( self, pftcc, lims, shbarrier, nrestarts, vols )
         use simple_projector,        only: projector
         class(pftcc_shsrch),                intent(inout) :: self
-        class(polarft_corrcalc),    target, intent(in)    :: pftcc
-        real,                               intent(in)    :: lims(:,:)
-        character(len=*), optional,         intent(in)    :: shbarrier
-        integer,          optional,         intent(in)    :: nrestarts
-        class(projector), optional, target, intent(in)    :: vols(:)
+        class(polarft_corrcalc),    target, intent(in)    :: pftcc     !< pointer to pftcc object              
+        real,                               intent(in)    :: lims(:,:) !< logical dimension of Cartesian image
+        character(len=*), optional,         intent(in)    :: shbarrier !< shift barrier constraint or not       
+        integer,          optional,         intent(in)    :: nrestarts !< simplex restarts (randomized bounds)  
+        class(projector), optional, target, intent(in)    :: vols(:)   !< projector volume objects
         ! flag the barrier constraint
         self%shbarr = .true.
         if( present(shbarrier) )then
@@ -77,8 +80,8 @@ contains
 
     function shsrch_costfun( self, vec, D ) result( cost )
         class(pftcc_shsrch), intent(inout) :: self
-        integer,             intent(in)    :: D
-        real,                intent(in)    :: vec(D)
+        integer,             intent(in)    :: D          !< size of vec
+        real,                intent(in)    :: vec(D)     !< input search values
         real    :: vec_here(2)    !< current set of values
         real    :: rotvec_here(2) !< current set of values rotated to frame of reference
         real    :: cost
@@ -100,13 +103,14 @@ contains
         cost = -self%pftcc_ptr%corr(self%reference, self%particle, self%rot, vec_here)
     end function shsrch_costfun
 
+    !> \todo This function needs fixing - only self is modified
     function shsrch_minimize( self, irot, shvec, rxy, fromto ) result( cxy )
         use simple_math, only: rotmat2d
         class(pftcc_shsrch), intent(inout) :: self
-        integer, optional,   intent(in)    :: irot
-        real,    optional,   intent(in)    :: shvec(:)
-        real,    optional,   intent(in)    :: rxy(:)
-        integer, optional,   intent(in)    :: fromto(2)
+        integer, optional,   intent(in)    :: irot        !< index of rotation (obsolete)
+        real,    optional,   intent(in)    :: shvec(:)    !< search values vector (obsolete)
+        real,    optional,   intent(in)    :: rxy(:)      !< (obsolete)
+        integer, optional,   intent(in)    :: fromto(2)   !< (obsolete)
         real              :: cost, cost_init
         real, allocatable :: cxy(:)
         allocate(cxy(3))

@@ -1,3 +1,6 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 module simple_volpft_corrcalc
 !$ use omp_lib
 !$ use omp_lib_kinds
@@ -181,7 +184,7 @@ contains
         endif
     end subroutine kill
 
-    !>  \brief  shifts the reference lines
+    ! >  \brief  shifts the reference lines
     ! subroutine shift_ref( self, shvec )
     !     use simple_math, only: csq
     !     class(volpft_corrcalc), intent(inout) :: self
@@ -198,7 +201,7 @@ contains
     !     self%sqsum_ref_sh = sum(csq(self%vpft_ref))
     ! end subroutine shift_ref
     
-    !>  \brief  shifts the reference lines
+    ! >  \brief  shifts the reference lines
     ! subroutine shift_orig_ref( self, shvec )
     !     use simple_math, only: csq
     !     class(volpft_corrcalc), intent(inout) :: self

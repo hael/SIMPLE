@@ -1,3 +1,10 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+
 module simple_filterer
 use simple_defs
 use simple_image,     only: image
@@ -12,6 +19,7 @@ contains
 
     !>  \brief input is template image, accumulative dose (in e/A2) and acceleration voltage
     !!         output is filter coefficients
+    !! \f$  A_\mathsf{dose} = \int^{N}_{1} \mathsf{dose\_weight}(a,F,V),\ e/A^{2}  \f$ 
     function acc_dose2filter( img, acc_dose, kV ) result( filter )
         type(image), intent(in) :: img           !< imput image
         real,        intent(in) :: acc_dose, kV  !< accumulative dose (in e/A2) and acceleration voltage
@@ -27,6 +35,9 @@ contains
     !>  \brief input is accumulative dose (in e/A2) and spatial frequency (in 1/A)
     !!         output is resolution dependent weight applied to individual frames
     !!         before correlation search and averaging
+    !!
+    !! \f$  \mathsf{dose\_weight}(a,F,V) = \exp\left(- \frac{A_\mathsf{dose}}{k\times (2.0\timesA\times f^B + C)} \right), \f$
+    !! where \f$k\f$ is 0.75 for \f$V<200\f$ kV, 1.0 for \f$200 <= V <= 300\f$
     real function dose_weight( acc_dose, spat_freq, kV )
         real, intent(in) :: acc_dose                !< accumulative dose (in e/A2)
         real, intent(in) :: spat_freq               !< spatial frequency (in 1/A)

@@ -1,13 +1,20 @@
-!==Program simple_distr_exec
+!------------------------------------------------------------------------------!
+! SIMPLE  v2.5          Elmlund & Elmlund Lab       simplecryoem.com           !
+!------------------------------------------------------------------------------!
+!> SIMPLE_DISTR_EXEC executes the parallel (or distributed workflows) of SIMPLE
 !
-! <simple_distr_exec/begin> executes the parallel (or distributed workflows) of SIMPLE <simple_distr_exec/end>
+!! @detail `simple_distr_exec' executes most individual programs in the SIMPLE
+!! library. To list all programs type `simple_distr_exec prg=list'. See
+!! `simple_exec' for a more detailed list.
 !
-! The code is distributed with the hope that it will be useful, but WITHOUT ANY WARRANTY.
-! Redistribution and modification is regulated by the GNU General Public License.
-! Authors: Cyril Reboul & Hans Elmlund 2016
+!! @author Cyril Reboul & Hans Elmlund 
 !
+! The code is distributed with the hope that it will be useful, but WITHOUT ANY
+! WARRANTY. Redistribution and modification is regulated by the GNU General
+! Public License.
+! -----------------------------------------------------------------------------!
 program simple_distr_exec
-use simple_defs  
+use simple_defs
 use simple_cmdline,      only: cmdline
 use simple_strings,      only: str_has_substr
 use simple_jiffys,       only: cmdline_err
@@ -56,16 +63,16 @@ select case(prg)
     case( 'unblur' )
         !==Program unblur
         !
-        ! <unblur/begin>is a distributed workflow for movie alignment or unblurring based the same 
-        ! principal strategy as Grigorieffs program (hence the name). There are two important 
-        ! differences: automatic weighting of the frames using a correlation-based M-estimator and 
-        ! continuous optimisation of the shift parameters. Input is a textfile with absolute paths 
-        ! to movie files in addition to a few input parameters, some of which deserve a comment. If 
+        ! <unblur/begin>is a distributed workflow for movie alignment or unblurring based the same
+        ! principal strategy as Grigorieffs program (hence the name). There are two important
+        ! differences: automatic weighting of the frames using a correlation-based M-estimator and
+        ! continuous optimisation of the shift parameters. Input is a textfile with absolute paths
+        ! to movie files in addition to a few input parameters, some of which deserve a comment. If
         ! dose_rate and exp_time are given the individual frames will be low-pass filtered accordingly
-        ! (dose-weighting strategy). If scale is given, the movie will be Fourier cropped according to 
-        ! the down-scaling factor (for super-resolution movies). If nframesgrp is given the frames will 
-        ! be pre-averaged in the given chunk size (Falcon 3 movies). If fromf/tof are given, a 
-        ! contiguous subset of frames will be averaged without any dose-weighting applied. 
+        ! (dose-weighting strategy). If scale is given, the movie will be Fourier cropped according to
+        ! the down-scaling factor (for super-resolution movies). If nframesgrp is given the frames will
+        ! be pre-averaged in the given chunk size (Falcon 3 movies). If fromf/tof are given, a
+        ! contiguous subset of frames will be averaged without any dose-weighting applied.
         ! <unblur/end>
         !
         ! set required keys
@@ -105,7 +112,7 @@ select case(prg)
     case( 'ctffind' )
         !==Program ctffind
         !
-        ! <ctffind/begin>is a distributed workflow that wraps CTFFIND4 (Grigorieff lab)<ctffind/end> 
+        ! <ctffind/begin>is a distributed workflow that wraps CTFFIND4 (Grigorieff lab)<ctffind/end>
         !
         ! set required keys
         keys_required(1) = 'filetab'
@@ -140,7 +147,7 @@ select case(prg)
     case( 'unblur_ctffind' )
         !==Program unblur_ctffind
         !
-        ! <unblur_ctffind/begin>is a pipelined distributed workflow: unblur + ctffind program<unblur_ctffind/end> 
+        ! <unblur_ctffind/begin>is a pipelined distributed workflow: unblur + ctffind program<unblur_ctffind/end>
         !
         ! set required keys
         keys_required(1)  = 'filetab'
@@ -191,7 +198,7 @@ select case(prg)
         call xunblur_ctffind_distr%execute(cline)
 
     ! UNBLUR FOR TOMOGRAPHY
-    
+
     case( 'unblur_tomo' )
         !==Program unblur_tomo
         !
@@ -199,8 +206,8 @@ select case(prg)
         ! Input is a textfile with absolute paths to movie files in addition to a few input parameters, some
         ! of which deserve a comment. The exp_doc document should contain per line exp_time=X and dose_rate=Y.
         ! It is asssumed that the input list of movies (one per tilt) are ordered temporally. This is necessary
-        ! for correct dose-weighting of tomographic tilt series. If scale is given, the movie will be Fourier 
-        ! cropped according to the down-scaling factor (for super-resolution movies). If nframesgrp is given 
+        ! for correct dose-weighting of tomographic tilt series. If scale is given, the movie will be Fourier
+        ! cropped according to the down-scaling factor (for super-resolution movies). If nframesgrp is given
         ! the frames will be pre-averaged in the given chunk size (Falcon 3 movies). <unblur_tomo/end>
         !
         ! set required keys
@@ -236,8 +243,8 @@ select case(prg)
     case( 'makecavgs' )
         !==Program makecavgs
         !
-        ! <makecavgs/begin>is a distributed workflowused for producing class averages or 
-        ! initial random references for prime2D execution. <makecavgs/end> 
+        ! <makecavgs/begin>is a distributed workflowused for producing class averages or
+        ! initial random references for prime2D execution. <makecavgs/end>
         !
         ! set required keys
         keys_required(1)  = 'stk'
@@ -263,7 +270,7 @@ select case(prg)
     case( 'prime2D' )
         !==Program prime2D
         !
-        ! <prime2D/begin>is a distributed workflow implementing reference-free 2D alignment/clustering 
+        ! <prime2D/begin>is a distributed workflow implementing reference-free 2D alignment/clustering
         ! algorithm adopted from the prime3D probabilistic ab initio 3D reconstruction algorithm<prime2D/end>
         !
         ! set required keys
@@ -312,14 +319,14 @@ select case(prg)
             stop 'eiter nparts or chunksz need to be part of command line'
         endif
         call xprime2D_distr%execute(cline)
-        
+
     ! PRIME3D
 
     case( 'ini3D_from_cavgs' )
         !==Program ini3D_from_cavgs
         !
-        ! <ini3D_from_cavgs/begin>is a distributed workflow for generating an initial 
-        ! 3D model from class averages obtained with prime2D<ini3D_from_cavgs/end> 
+        ! <ini3D_from_cavgs/begin>is a distributed workflow for generating an initial
+        ! 3D model from class averages obtained with prime2D<ini3D_from_cavgs/end>
         !
         ! set required keys
         keys_required(1)  = 'stk'
@@ -346,17 +353,17 @@ select case(prg)
     case('prime3D_init')
         !==Program prime3D_init
         !
-        ! <prime3D_init/begin>is a distributed workflow for generating a random initial model for 
-        ! initialisation of PRIME3D. If the data set is large (>5000 images), generating a random 
-        ! model can be slow. To speedup, set nran to some smaller number, resulting in nran images 
-        ! selected randomly for reconstruction<prime3D_init/end> 
+        ! <prime3D_init/begin>is a distributed workflow for generating a random initial model for
+        ! initialisation of PRIME3D. If the data set is large (>5000 images), generating a random
+        ! model can be slow. To speedup, set nran to some smaller number, resulting in nran images
+        ! selected randomly for reconstruction<prime3D_init/end>
         !
         ! set required keys
         keys_required(1)  = 'stk'
         keys_required(2)  = 'smpd'
         keys_required(3)  = 'msk'
         keys_required(4)  = 'ctf'
-        keys_required(5)  = 'pgrp' 
+        keys_required(5)  = 'pgrp'
         keys_required(6)  = 'nparts'
         ! set optional keys
         keys_optional(1)  = 'nthr'
@@ -368,7 +375,7 @@ select case(prg)
         keys_optional(7)  = 'nspace'
         keys_optional(8)  = 'nran'
         keys_optional(9)  = 'npeaks'
-        keys_optional(10) = 'xfel'        
+        keys_optional(10) = 'xfel'
         ! parse command line
         if( describe ) call print_doc_prime3D_init
         call cline%parse(keys_required(:6), keys_optional(:10))
@@ -379,12 +386,12 @@ select case(prg)
     case( 'prime3D' )
         !==Program prime3D
         !
-        ! <prime3D/begin>is a distributed workflow for ab inito reconstruction/refinement based on 
-        ! probabilistic projection matching. PRIME is short for PRobabilistic Initial 3D Model 
-        ! generation for Single-particle cryo-Electron microscopy. There are a daunting number of 
-        ! options in PRIME3D. If you are processing class averages we recommend that you instead 
-        ! use the simple_distr_exec prg=ini3D_from_cavgs route for executing PRIME3D. Automated 
-        ! workflows for single- and multi-particle refinement using prime3D are planned for the 
+        ! <prime3D/begin>is a distributed workflow for ab inito reconstruction/refinement based on
+        ! probabilistic projection matching. PRIME is short for PRobabilistic Initial 3D Model
+        ! generation for Single-particle cryo-Electron microscopy. There are a daunting number of
+        ! options in PRIME3D. If you are processing class averages we recommend that you instead
+        ! use the simple_distr_exec prg=ini3D_from_cavgs route for executing PRIME3D. Automated
+        ! workflows for single- and multi-particle refinement using prime3D are planned for the
         ! next release (3.0)<prime3D/end>
         !
         ! set required keys
@@ -453,17 +460,17 @@ select case(prg)
     case( 'recvol' )
         !==Program recvol
         !
-        ! <recvol/begin>is a distributed workflow for reconstructing volumes from MRC and SPIDER stacks, 
+        ! <recvol/begin>is a distributed workflow for reconstructing volumes from MRC and SPIDER stacks,
         ! given input orientations and state assignments. The algorithm is based on direct Fourier inversion
-        ! with a Kaiser-Bessel (KB) interpolation kernel. This window function reduces the real-space ripple 
-        ! artifacts associated with direct moving windowed-sinc interpolation. The feature sought when 
-        ! implementing this algorithm was to enable quick, reliable reconstruction from aligned individual 
-        ! particle images. mul is used to scale the origin shifts if down-sampled 
-        ! were used for alignment and the original images are used for reconstruction. ctf=yes or ctf=flip 
-        ! turns on the Wiener restoration. If the images were phase-flipped set ctf=flip. amsklp, mw, and edge 
-        ! control the solvent mask: the low-pass limit used to generate the envelope; the molecular weight of 
-        ! the molecule (protein assumed but it works reasonably well also for RNA; slight modification of mw 
-        ! might be needed). The inner parameter controls the radius of the soft-edged mask used to remove 
+        ! with a Kaiser-Bessel (KB) interpolation kernel. This window function reduces the real-space ripple
+        ! artifacts associated with direct moving windowed-sinc interpolation. The feature sought when
+        ! implementing this algorithm was to enable quick, reliable reconstruction from aligned individual
+        ! particle images. mul is used to scale the origin shifts if down-sampled
+        ! were used for alignment and the original images are used for reconstruction. ctf=yes or ctf=flip
+        ! turns on the Wiener restoration. If the images were phase-flipped set ctf=flip. amsklp, mw, and edge
+        ! control the solvent mask: the low-pass limit used to generate the envelope; the molecular weight of
+        ! the molecule (protein assumed but it works reasonably well also for RNA; slight modification of mw
+        ! might be needed). The inner parameter controls the radius of the soft-edged mask used to remove
         ! the unordered DNA/RNA core of spherical icosahedral viruses<recvol/end>
         !
         ! set required keys
@@ -496,18 +503,18 @@ select case(prg)
     case( 'symsrch' )
         !==Program symsrch
         !
-        ! <symsrch/begin>is a distributed workflow for searching for the principal symmetry axis of a volume 
-        ! reconstructed without assuming any point-group symmetry. The program takes as input an 
-        ! asymmetrical 3D reconstruction. The alignment document for all the particle images 
-        ! that have gone into the 3D reconstruction and the desired point-group symmetry needs to 
-        ! be inputted. The 3D reconstruction is then projected in 50 (default option) even directions, 
-        ! common lines-based optimisation is used to identify the principal symmetry axis, the rotational 
-        ! transformation is applied to the inputted orientations, and a new alignment document is produced. 
-        ! Input this document to recvol together with the images and the point-group symmetry to generate a 
-        ! symmetrised map. If you are unsure about the point-group, you should use the compare=yes mode and 
-        ! input the highest conceviable point-group. The program then calculates probabilities for all lower 
+        ! <symsrch/begin>is a distributed workflow for searching for the principal symmetry axis of a volume
+        ! reconstructed without assuming any point-group symmetry. The program takes as input an
+        ! asymmetrical 3D reconstruction. The alignment document for all the particle images
+        ! that have gone into the 3D reconstruction and the desired point-group symmetry needs to
+        ! be inputted. The 3D reconstruction is then projected in 50 (default option) even directions,
+        ! common lines-based optimisation is used to identify the principal symmetry axis, the rotational
+        ! transformation is applied to the inputted orientations, and a new alignment document is produced.
+        ! Input this document to recvol together with the images and the point-group symmetry to generate a
+        ! symmetrised map. If you are unsure about the point-group, you should use the compare=yes mode and
+        ! input the highest conceviable point-group. The program then calculates probabilities for all lower
         ! groups inclusive.<symsrch/end>
-        !       
+        !
         ! set required keys
         keys_required(1)  = 'vol1'
         keys_required(2)  = 'smpd'

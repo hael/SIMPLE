@@ -1,3 +1,7 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple batch-processing manager - Factory module
 module simple_qsys_factory
 use simple_qsys_base,  only: qsys_base
 use simple_qsys_local, only: qsys_local

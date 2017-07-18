@@ -1,3 +1,6 @@
+#------------------------------------------------------------------------------!
+# SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+#------------------------------------------------------------------------------!
 
 ####################################################################
 # Make sure that the default build type is RELEASE if not specified.
@@ -8,17 +11,17 @@ include(SetCompileFlag)
 #include(${CMAKE_ROOT}/Modules/CMakeDetermineCCompiler.cmake)
 ## Double check cpp is not Clang
 if(NOT CMAKE_CPP_COMPILER)
-if(NOT $ENV{CPP} STREQUAL "")
-  set(TMP_CPP_COMPILER $ENV{CPP})
-else()
-  if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel")
-    set(TMP_CPP_COMPILER fpp)
-  elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
-    set(TMP_CPP_COMPILER "pgcc -E")
+  if(NOT $ENV{CPP} STREQUAL "")
+    set(TMP_CPP_COMPILER $ENV{CPP})
+  else()
+    if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel")
+      set(TMP_CPP_COMPILER fpp)
+    elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
+      set(TMP_CPP_COMPILER "pgcc -E")
+    endif()
   endif()
-endif()
 else()
-set(TMP_CPP_COMPILER ${CMAKE_CPP_COMPILER})
+  set(TMP_CPP_COMPILER ${CMAKE_CPP_COMPILER})
 endif()
 
 
@@ -59,6 +62,7 @@ get_filename_component(FORTRAN_PARENT_DIR ${CMAKE_Fortran_COMPILER} PATH)
 message(STATUS "FORTRAN_PARENT_DIR ${FORTRAN_PARENT_DIR}")
 
 message(STATUS "Making sure your preprocessor points to the correct binary")
+if(TMP_CPP_COMPILER MATCHES "cpp*")
 execute_process(COMMAND "${TMP_CPP_COMPILER}" --version
   OUTPUT_VARIABLE ACTUAL_FC_TARGET
   OUTPUT_STRIP_TRAILING_WHITESPACE)
@@ -76,6 +80,7 @@ if(ACTUAL_FC_TARGET MATCHES "Clang|clang")
 ${CLANG_FATAL_MSG}")
   endif()
 endif()
+endif()
 set(CMAKE_CPP_COMPILER ${TMP_CPP_COMPILER})
 
 
@@ -83,18 +88,18 @@ set(CMAKE_CPP_COMPILER ${TMP_CPP_COMPILER})
 
 set(CMAKE_Fortran_SOURCE_FILE_EXTENSIONS ${CMAKE_Fortran_SOURCE_FILE_EXTENSIONS} "f03;F03;f08;F08")
 
-  if(CMAKE_INSTALL_LIBDIR MATCHES "lib64")
-    set(CMAKE_INSTALL_LIBDIR "lib" CACHE STRING "" FORCE)
-  endif()			  
+if(CMAKE_INSTALL_LIBDIR MATCHES "lib64")
+  set(CMAKE_INSTALL_LIBDIR "lib" CACHE STRING "" FORCE)
+endif()			  
 
 
 
-  #figure out our git version
-  option(UPDATE_GIT_VERSION_INFO "update git version info in source tree" ON)
-  mark_as_advanced(UPDATE_GIT_VERSION_INFO)
-  if(UPDATE_GIT_VERSION_INFO)
-	  include(GitInfo)
-  endif()
+#figure out our git version
+option(UPDATE_GIT_VERSION_INFO "update git version info in source tree" ON)
+mark_as_advanced(UPDATE_GIT_VERSION_INFO)
+if(UPDATE_GIT_VERSION_INFO)
+	include(GitInfo)
+endif()
 
 
 #################################################################
@@ -110,7 +115,7 @@ message(STATUS "Fortran compiler: ${Fortran_COMPILER_NAME}")
 include(ProcessorCount)
 ProcessorCount(NUM_JOBS)
 
-
+OPTION(BUILD_WITH_COVERAGE "Added code coverage flags" OFF)
 
 
 ##############################################
@@ -146,12 +151,12 @@ if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" ) #AND Fortran_COMPILER_NAME MAT
     message(FATAL_ERROR "${PROJECT_NAME} requires gfortran 4.9 to 5.4")
   endif ()
   set(EXTRA_FLAGS "${EXTRA_FLAGS}")
-  set(CMAKE_CPP_COMPILER_FLAGS           "-E -w -C -CC -P")
+  set(CMAKE_CPP_COMPILER_FLAGS           "-E -w -C -CC -P") # only seen by preprocessor if #include is present
 
-  set(CMAKE_Fortran_FLAGS                " ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
-  set(CMAKE_Fortran_FLAGS_DEBUG          " ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_DEBUG_INIT}" )
+  set(CMAKE_Fortran_FLAGS                " ${EXTRA_FLAGS} ") #${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
+  set(CMAKE_Fortran_FLAGS_DEBUG          " ${EXTRA_FLAGS} ") #${CMAKE_Fortran_FLAGS_DEBUG_INIT}" )
   # set(CMAKE_Fortran_FLAGS_MINSIZEREL     "-Os ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
-  set(CMAKE_Fortran_FLAGS_RELEASE        " ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
+  set(CMAKE_Fortran_FLAGS_RELEASE        " ${EXTRA_FLAGS} ") #${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
   set(CMAKE_Fortran_FLAGS_RELWITHDEBINFO "${CMAKE_Fortran_FLAGS_RELEASE_INIT} ${CMAKE_Fortran_FLAGS_DEBUG_INIT} ${EXTRA_FLAGS}")
   
   # #  CMAKE_EXE_LINKER_FLAGS
@@ -188,8 +193,8 @@ elseif (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel" OR Fortran_COMPILER_NAME M
   set(CMAKE_CPP_COMPILER_FLAGS           " -noJ -B -C -P")
   set(CMAKE_Fortran_FLAGS                " ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
   set(CMAKE_Fortran_FLAGS_DEBUG          " ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_DEBUG_INIT}")
-  # set(CMAKE_Fortran_FLAGS_MINSIZEREL     "-Os ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
-  set(CMAKE_Fortran_FLAGS_RELEASE        "-O3 ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
+  # set(CMAKE_Fortran_FLAGS_MINSIZEREL    "-Os ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
+  set(CMAKE_Fortran_FLAGS_RELEASE        " ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
   set(CMAKE_Fortran_FLAGS_RELWITHDEBINFO "${CMAKE_Fortran_FLAGS_RELEASE_INIT} ${CMAKE_Fortran_FLAGS_DEBUG_INIT} ${EXTRA_FLAGS}")
   # set(CMAKE_EXE_LINKER_FLAGS             "${CMAKE_EXE_LINKER_FLAGS_INIT}")
   # set(CMAKE_SHARED_LINKER_FLAGS          "${CMAKE_SHARED_LINKER_FLAGS_INIT} ${EXTRA_LIBS}")
@@ -209,7 +214,7 @@ elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR Fortran_COMPILER_NAME MATC
   #############################################
   message(STATUS "NVIDIA PGI Linux compiler")
   set(PGICOMPILER ON)
-  set(EXTRA_FLAGS "${EXTRA_FLAGS} -Mpreprocess -module ${CMAKE_Fortran_MODULE_DIRECTORY} -I${CMAKE_Fortran_MODULE_DIRECTORY}")
+  set(EXTRA_FLAGS "${EXTRA_FLAGS} -module ${CMAKE_Fortran_MODULE_DIRECTORY} -I${CMAKE_Fortran_MODULE_DIRECTORY}")
   # NVIDIA PGI Linux compiler
   set(CMAKE_CPP_COMPILER                 "pgcc -E ")
   set(CMAKE_CPP_COMPILER_FLAGS           " ")
@@ -218,8 +223,9 @@ elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR Fortran_COMPILER_NAME MATC
   # set(CMAKE_Fortran_FLAGS_MINSIZEREL     "${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
   set(CMAKE_Fortran_FLAGS_RELEASE        "${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
   set(CMAKE_Fortran_FLAGS_RELWITHDEBINFO "-gopt ${CMAKE_Fortran_FLAGS_RELEASE_INIT} ${CMAKE_Fortran_DEBUG_INIT} -Mneginfo=all")
-  # set(CMAKE_EXE_LINKER_FLAGS             "${CMAKE_EXE_LINKER_FLAGS_INIT} -acclibs -cudalibs -Mcudalib=cufft,curand")
-  # #  CMAKE_SHARED_LINKER_FLAG
+  set(CMAKE_EXE_LINKER_FLAGS             "${CMAKE_EXE_LINKER_FLAGS_INIT} -acclibs -cudalibs -Mcudalib=cufft,curand")
+  set(CMAKE_SHARED_LINKER_FLAG           "${CMAKE_SHARED_LINKER_FLAGS_INIT} -acclibs -cudalibs -Mcudalib=cufft,curand")
+  set(CMAKE_STATIC_LINKER_FLAG           "${CMAKE_SHARED_LINKER_FLAGS_INIT} -acclibs -cudalibs -Mcudalib=cufft,curand")
 
   ################################################################
   # CUDA PGI Default options
@@ -274,9 +280,9 @@ if (IMAGE_TYPE_DOUBLE)
 endif()
 
 if(APPLE)
-add_definitions("-DMACOSX")
+  add_definitions("-DMACOSX")
 else()
-add_definitions("-DLINUX")
+  add_definitions("-DLINUX")
 endif()
 
 ################################################################
@@ -324,12 +330,12 @@ if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel")
   # https://software.intel.com/en-us/articles/intel-mkl-main-libraries-contain-fftw3-interfaces
   set(MKLROOT $ENV{MKLROOT})
   if( NOT "${MKLROOT}" STREQUAL "")
-  if(BUILD_SHARED_LIBS)
-    set(EXTRA_LIBS   ${EXTRA_LIBS} -L${MKLROOT}/lib/intel64 -lmkl_intel_ilp64 -lmkl_intel_thread -lmkl_core -liomp5 -lpthread -lm -ldl )
-  else()
-    set(EXTRA_LIBS    ${EXTRA_LIBS} -Wl,--start-group ${MKLROOT}/lib/intel64/libmkl_intel_ilp64.a ${MKLROOT}/lib/intel64/libmkl_intel_thread.a ${MKLROOT}/lib/intel64/libmkl_core.a -Wl,--end-group -liomp5 -lpthread -lm -ldl)
-  endif()
-  set(BUILD_NAME "${BUILD_NAME}_MKL" )
+    if(BUILD_SHARED_LIBS)
+      set(EXTRA_LIBS   ${EXTRA_LIBS} -L${MKLROOT}/lib/intel64 -lmkl_intel_ilp64 -lmkl_intel_thread -lmkl_core -liomp5 -lpthread -lm -ldl )
+    else()
+      set(EXTRA_LIBS    ${EXTRA_LIBS} -Wl,--start-group ${MKLROOT}/lib/intel64/libmkl_intel_ilp64.a ${MKLROOT}/lib/intel64/libmkl_intel_thread.a ${MKLROOT}/lib/intel64/libmkl_core.a -Wl,--end-group -liomp5 -lpthread -lm -ldl)
+    endif()
+    set(BUILD_NAME "${BUILD_NAME}_MKL" )
   else()
     message( FATAL_ERROR "MKLROOT undefined. Set Intel MKL environment variables by sourcing the relevant shell script (typically in /opt/intel/bin), for example: source /opt/intel/bin/compilervars.sh intel64")
   endif()
@@ -501,16 +507,17 @@ if (ENABLE_FAST_MATH_OPTIMISATION)
     )
 endif(ENABLE_FAST_MATH_OPTIMISATION)
 
+if  (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI" OR CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
 # Auto parallelize
-# if (ENABLE_AUTO_PARALLELISE)
-#   SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
-#     Fortran
-#     "-parallel -opt-report-phase=par -opt-report:5"            # Intel (Linux)
-#     "/Qparallel /Qopt-report-phase=par /Qopt-report:5"         # Intel (Windows)
-#     "-Mconcur"                                                 # PGI
-#     )
-# endif()
-
+ if (ENABLE_AUTO_PARALLELISE)
+   SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
+     Fortran
+     "-parallel -opt-report-phase=par -opt-report:5"            # Intel (Linux)
+     "/Qparallel /Qopt-report-phase=par /Qopt-report:5"         # Intel (Windows)
+     "-Mconcur=bind,allcores"                                                 # PGI
+     )
+ endif()
+endif()
 # Auto parallelize with OpenACC
 if (USE_OPENACC)
   SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
@@ -553,22 +560,24 @@ set(CMAKE_Fortran_COMPILE_OBJECT "grep --silent '#include' <SOURCE> && ( ${CMAKE
 
 
 # Option for code coverage
-if(VERBOSE)
-option(CODE_COVERAGE "Build code coverage results, requires GCC compiler (forces Debug build)" OFF)
-if(CODE_COVERAGE)
-  if(CMAKE_COMPILER_IS_GNUC)
-    set(CMAKE_Fortran_FLAGS_DEBUG
-      "${CMAKE_Fortran_FLAGS_DEBUG} -fprofile-arcs -ftest-coverage")
-    set(CMAKE_BUILD_TYPE DEBUG CACHE STRING "" FORCE)
-
-    # Ensure that CDash targets are always enabled if coverage is enabled.
-    if (NOT CDASH_SUPPORT)
-      get_property(HELP_STRING CACHE CDASH_SUPPORT PROPERTY HELPSTRING)
-      set(CDASH_SUPPORT ON CACHE BOOL "${HELP_STRING}" FORCE)
-      message(STATUS "Enabling CDash targets as coverage has been enabled.")
-    endif()
-  endif(CMAKE_COMPILER_IS_GNUC)
-endif()
+if(VERBOSE OR ${BUILD_WITH_COVERAGE})
+  option(CODE_COVERAGE "Build code coverage results, requires GCC compiler (forces Debug build)" OFF)
+  if(CODE_COVERAGE OR ${BUILD_WITH_COVERAGE} )
+    if(CMAKE_COMPILER_IS_GNUC)
+      set(CMAKE_Fortran_FLAGS_DEBUG
+        "${CMAKE_Fortran_FLAGS_DEBUG} -fprofile-arcs -ftest-coverage")
+      set(CMAKE_BUILD_TYPE DEBUG CACHE STRING "" FORCE)
+      SET(CMAKE_EXE_LINKER_FLAGS      "-fprofile-arcs -ftest-coverage")
+      SET(CMAKE_SHARED_LINKER_FLAGS   "-fprofile-arcs -ftest-coverage")
+      SET(CMAKE_STATIC_LINKER_FLAGS   "-fprofile-arcs -ftest-coverage")
+      # Ensure that CDash targets are always enabled if coverage is enabled.
+      if (NOT CDASH_SUPPORT)
+        get_property(HELP_STRING CACHE CDASH_SUPPORT PROPERTY HELPSTRING)
+        set(CDASH_SUPPORT ON CACHE BOOL "${HELP_STRING}" FORCE)
+        message(STATUS "Enabling CDash targets as coverage has been enabled.")
+      endif()
+    endif(CMAKE_COMPILER_IS_GNUC)
+  endif()
 endif()
 
 

@@ -1,3 +1,6 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 !> simple module: image reconstruction
 module simple_rec_master
 use simple_defs
@@ -97,7 +100,7 @@ contains
         write(*,'(a)') "GENERATED VOLUMES: recvol*.ext"
         call qsys_job_finished( p, 'simple_rec_master :: exec_rec')
     end subroutine exec_rec
-    
+    !> even odd reconstruction routine
     subroutine exec_eorec( b, p, cline, fbody_in, wmat )
         use simple_strings, only: int2str_pad
         class(build),               intent(inout) :: b

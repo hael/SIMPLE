@@ -1,10 +1,15 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 !> simple_commander_prime2D
 !! This class contains the set of concrete prime2D commanders of the SIMPLE
 !! library. This class provides the glue between the reciver (main reciever is
 !! simple_exec program) and the abstract action, which is simply execute
 !! (defined by the base class: simple_commander_base). Later we can use the
 !! composite pattern to create MacroCommanders (or workflows)
-!
+!!
+!! @see doc/SimpleTutorials2017/Tutorial.html?#d-analysis-with-prime2d
+!!
 ! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
 ! Redistribution and modification is regulated by the GNU General Public License.
 ! *Authors:* Cyril Reboul & Hans Elmlund 2016
@@ -48,7 +53,7 @@ type, extends(commander_base) :: rank_cavgs_commander
 end type rank_cavgs_commander
 
 contains
-
+    !> MAKECAVGS is a SIMPLE program to create class-averages
     subroutine exec_makecavgs( self, cline )
         use simple_hadamard2D_matcher, only: prime2D_assemble_sums, prime2D_write_sums, &
         & prime2D_write_partial_sums
@@ -127,7 +132,22 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_MAKECAVGS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_makecavgs
-    
+    !> Prime2D  implementation of a bespoke probabilistic algorithm for simultaneous 2D alignment and clustering
+    !! @see doc/SimpleTutorials2017/Tutorial.html?#d-analysis-with-prime2d
+    !!
+    !!    Algorithms that can rapidly discover clusters corresponding to sets of
+    !!    images with similar projection direction and conformational state play
+    !!    an important role in single-particle analysis. Identification of such
+    !!    clusters allows for enhancement of the signal-to-noise ratio (SNR) by
+    !!    averaging and gives a first glimpse into the character of a dataset.
+    !!    Therefore, clustering algorithms play a pivotal role in initial data
+    !!    quality assessment, ab initio 3D reconstruction and analysis of
+    !!    heterogeneous single-particle populations. SIMPLE implements a
+    !!    probabilistic algorithm for simultaneous 2D alignment and clustering,
+    !!    called . The version we are going to use here is an improved version
+    !!    of the published code released in SIMPLE 2.1 (submitted manuscript).
+    !!    Grouping tens of thousands of images into several hundred clusters is
+    !!    a computationally intensive job. 
     subroutine exec_prime2D( self, cline )
         use simple_hadamard2D_matcher, only: prime2D_exec
         use simple_qsys_funs,          only: qsys_job_finished

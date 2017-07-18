@@ -1,3 +1,6 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 !> Simple optimisation module: inplace search of projections in Fourier domain 
 module simple_pftcc_inplsrch
 use simple_opt_spec,          only: opt_spec

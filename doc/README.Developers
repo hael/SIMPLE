@@ -5,32 +5,44 @@
 #+attr_html: :width 600 :alt Single-particle CryoEM Image Processing Linux Engine :align center
 [[https://simplecyroem.com][https://github.com/hael/SIMPLE3.0/blob/release2.5/doc/SimpleTutorials2017/SIMPLE_logo/rawlogo.png]]
 
-#+name: banner
-#+attr_html: :width 300 :align center
- | [[https://opensource.org/licenses/GPL-3.0][https://img.shields.io/:license-gpl-blue.svg]] | [[https://github.com/hael/SIMPLE3.0/archive/release2.5.zip][https://img.shields.io/badge/SIMPLE-release2.5-green.svg]]  |
-
-#+name: status
-#+attr_html:  :align center :width 500
-#+caption: Developer -- Build success table
-|                       | GNU /gfortran/ and FFTW                                                                                                                                                          | Intel /ifort/ and MKL                                     | Portland Group /pgfortran/  and PGI compiled FFTW  |
-|-----------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------+----------------------------------------------------|
-| Ubuntu (14.10, 16.04) | [[https://img.shields.io/badge/build-v4.9-green.svg]] [[https://img.shields.io/badge/build-v5.4-green.svg]]  [[https://img.shields.io/badge/build-v7.1-green.svg]]                           | [[https://img.shields.io/badge/build-v2017.2.174-green.svg]]  | [[https://img.shields.io/badge/build-2016-yellow.svg]] |
-| Centos (MASSIVE3)     | [[https://img.shields.io/badge/build-v5-green.svg]]                                                                                                                                  | [[https://img.shields.io/badge/build-v2016-yellow.svg]]       | https://img.shields.io/badge/build-NA-gray.svg     |
-| ThinkStation          | [[https://img.shields.io/badge/build-v4.9-green.svg]]                                                                                                                                |                                                           |                                                    |
-| iMac (10.10)          | [[https://img.shields.io/badge/build-MacPorts_gcc4.9-green.svg]]                                                                                                                     | [[https://img.shields.io/badge/build-NA-gray.svg]]            | https://img.shields.io/badge/build-NA-gray.svg     |
-| MacOSX MacBookPro     | https://img.shields.io/badge/build-Brew_gcc4.9-green.svg https://img.shields.io/badge/build-Brew_gcc7.0-green.svg                                                                |                                                           |                                                    |
-| MacOSX (10.12)        | [[https://img.shields.io/badge/build-Brew_gcc4.9-green.svg]]  [[https://img.shields.io/badge/build-Macports_gcc5.4-green.svg]]  [[https://img.shields.io/badge/build-Fink_gcc4.9-green.svg]] | [[https://img.shields.io/badge/build-NA-gray.svg]]            | https://img.shields.io/badge/build-NA-gray.svg     |
-| Win                   | [[https://img.shields.io/badge/build-TODO-gray.svg]]                                                                                                                                 | [[https://img.shields.io/badge/build-TODO-gray.svg]]          | https://img.shields.io/badge/build-NA-gray.svg     |
-|                       |                                                                                                                                                                                  |                                                           |                                                    |
-
-
-
 *Important Notices*
 
 -  version 3 uses cmake for compilation, not the previous perl scripts
 -  =master= branch file paths are *not* considered stable -- use =release2.5=
 -  cloning this repository is *not* recommended unless you are going to
    be contributing to development
+
+
+#+name: banner
+#+attr_html: :width 300 :align center
+ | [[https://opensource.org/licenses/GPL-3.0][https://img.shields.io/:license-gpl-blue.svg]] | [[https://github.com/hael/SIMPLE3.0/archive/release2.5.zip][https://img.shields.io/badge/Package-release2.5.zip-green.svg]] |  [[https://github.com/hael/SIMPLE3.0/][https://img.shields.io/badge/Github-SIMPLE3.0-white.svg]]       |
+
+* Build status
+#+name: status
+#+attr_html:  :align center :width 500
+#+caption: Release2.5 -- Build success table
+|                       | GNU /gfortran/ and FFTW                                                                                                                                                          | Intel /ifort/ and MKL                                     | Portland Group /pgfortran/  and PGI compiled FFTW  |
+|-----------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------+----------------------------------------------------|
+| Ubuntu (16.04)        | [[https://img.shields.io/badge/build-v5.4-green.svg]]  [[https://img.shields.io/badge/build-v7.1-green.svg]]                                                                                 | [[https://img.shields.io/badge/build-v2017.2.174-green.svg]]  | [[https://img.shields.io/badge/build-2016-yellow.svg]] |
+| Centos (MASSIVE3)     | [[https://img.shields.io/badge/build-v5-green.svg]]                                                                                                                                  | [[https://img.shields.io/badge/build-v2016-yellow.svg]]       | |
+| ThinkStation          | [[https://img.shields.io/badge/build-v4.9-green.svg]]                                                                                                                                |     | |
+| iMac (10.10)          | [[https://img.shields.io/badge/build-MacPorts_gcc4.9-green.svg]]                                                                                                                     |     | |
+| MacOSX MacBookPro     | [[https://img.shields.io/badge/build-Brew_gcc4.9-green.svg]]     |                                                           |                                                    |
+| MacOSX (10.12)        | [[https://img.shields.io/badge/build-Brew_v4.9-green.svg]]  [[https://img.shields.io/badge/build-Ports_v5.4-green.svg]]  [[https://img.shields.io/badge/build-Fink_v4.9-green.svg]]          |     | |
+| Win                   | [[https://img.shields.io/badge/build-TODO-gray.svg]]                                                                                                                                 |     | |
+
+
+#+name: masterstatus
+#+attr_html:  :align center :width 500
+#+caption: Master Repository -- Build success table
+|                   | GNU /gfortran/ and FFTW                                  | Intel /ifort/ and MKL                                    | Portland Group /pgfortran/  and PGI compiled FFTW  |
+|-------------------+----------------------------------------------------------+----------------------------------------------------------+----------------------------------------------------|
+| Ubuntu (16.04)    | [[https://img.shields.io/badge/build-v5.4_7.x-green.svg]]    | [[https://img.shields.io/badge/build-v2017.2.174-green.svg]] | [[https://img.shields.io/badge/build-2016-yellow.svg]] |
+| Centos (MASSIVE3) | [[https://img.shields.io/badge/build-v5-green.svg]]          | [[https://img.shields.io/badge/build-v2016-yellow.svg]]      | [[https://img.shields.io/badge/build-NA-gray.svg]]     |
+| ThinkStation      | [[https://img.shields.io/badge/build-v4.9-green.svg]]        |                                                          |                                                    |
+| MacBookPro        | [[https://img.shields.io/badge/build-Brew_gcc4.9-green.svg]] |                                                          |                                                    |
+
+
 
 
 

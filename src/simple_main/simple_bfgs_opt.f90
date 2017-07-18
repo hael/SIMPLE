@@ -1,3 +1,6 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 !> simple optimisation module: bfgs 
 !
 !> Minimization of an externally defined function by the nonlinear conjugate gradient method

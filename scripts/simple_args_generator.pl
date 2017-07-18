@@ -1,18 +1,25 @@
 #!/usr/bin/perl
+#------------------------------------------------------------------------------!
+# SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+#------------------------------------------------------------------------------!
 use warnings;
 use strict;
+use File::Compare;
 # read the simple_params.f90 into an array
 my @lines;
 my @vars;
-my$varlistfile;
+my$varlistfile;my$tmp_varlist;
 my$simple_argsfile;
+my$tmp_argsfile;
 if ( -d $ENV{'SIMPLE_PATH'}.'/lib64'){
-$varlistfile=$ENV{'SIMPLE_PATH'}.'/lib64/simple/simple_varlist.txt';
-$simple_argsfile=$ENV{'SIMPLE_PATH'}.'/lib64/simple/simple_args.f90';
+    $varlistfile=$ENV{'SIMPLE_PATH'}.'/lib64/simple/simple_varlist.txt';
+    $simple_argsfile=$ENV{'SIMPLE_PATH'}.'/lib64/simple/simple_args.f90';
 }else {
-$varlistfile=$ENV{'SIMPLE_PATH'}.'/lib/simple/simple_varlist.txt';
-$simple_argsfile=$ENV{'SIMPLE_PATH'}.'/lib/simple/simple_args.f90';
+    $varlistfile=$ENV{'SIMPLE_PATH'}.'/lib/simple/simple_varlist.txt';
+    $simple_argsfile=$ENV{'SIMPLE_PATH'}.'/lib/simple/simple_args.f90';
 }
+$tmp_varlist=$ENV{'SIMPLE_PATH'}.'/simple_varlist.tmp';
+$tmp_argsfile=$ENV{'SIMPLE_PATH'}.'/simple_args.tmp';
 open(PARAMS, "< simple_params.f90") or die "Cannot open simple_params.f90\n";
 @lines = <PARAMS>;
 close(PARAMS);
@@ -45,15 +52,21 @@ foreach my$i (1 .. 20){
   push(@vars,$str);
 }
 
-unlink(${varlistfile});
-open(VLIST, "> ".${varlistfile}) or die "Cannot open simple_varlist.txt\n";
+unlink(${tmp_varlist});
+open(VLIST, "> ".${tmp_varlist}) or die "Cannot open simple_varlist.txt\n";
 foreach (@vars){
   print VLIST $_, "\n";
 }
 close(VLIST);
+if ( -e ${varlistfile} && (compare( ${varlistfile}, ${tmp_varlist})==0) ){
+unlink(${tmp_varlist})# do nothing
+     } else {
+    rename  ${tmp_varlist},${varlistfile}
+     }
+
 # generate the code
-unlink($simple_argsfile);
-open(MODULE, "> ".$simple_argsfile) or die "Cannot open simple_args.f90\n";
+unlink($tmp_argsfile);
+open(MODULE, "> ".$tmp_argsfile) or die "Cannot open simple_args.f90\n";
 print MODULE "!==Class simple_args
 !
 !\> \\brief simple_args is for error checking of the SIMPLE command line arguments.
@@ -68,7 +81,7 @@ implicit none
 
 public :: args, test_args
 private
-#include \"simple_local_flags.inc\"
+
 integer, parameter :: NARGMAX=500
 
 type args
@@ -112,6 +125,7 @@ end function
 
 subroutine test_args()
     use simple_filehandling, only: get_fileunit, nlines
+    use simple_syscalls
     type(args) :: as
     character(len=STDLEN) :: vfilename,arg, errarg1, errarg2, errarg3, spath, srcpath
     integer :: funit, n, i
@@ -120,41 +134,39 @@ subroutine test_args()
     character(len=STDLEN) :: varlist = 'simple/simple_varlist.txt'
     write(*,'(a)') '**info(simple_args_unit_test): testing it all'
     write(*,'(a)') '**info(simple_args_unit_test, part 1): testing for args that should be present'
-    verbose=.true.
+    
     as = args()
     funit = get_fileunit()
     write(*,'(a)') '**info(simple_args_unit_test): getting SIMPLE_PATH env variable'
     call getenv(\"SIMPLE_PATH\",spath)
     spath=adjustl(trim(spath))
-    VerbosePrint 'get_environment_variable found SIMPLE_PATH ', trim(spath)
+    print *, 'get_environment_variable found SIMPLE_PATH ', trim(spath)
     write(*,'(a)') '**info(simple_args_unit_test): getting SIMPLE_SOURCE_PATH env variable'
     call getenv(\"SIMPLE_SOURCE_PATH\",srcpath)
     srcpath=adjustl(trim(srcpath))
-    VerbosePrint 'get_environment_variable found SIMPLE_SOURCE_PATH ', trim(srcpath)
-    VerbosePrint 'appending varlist '
-    vfilename = trim(spath) // '/lib/' // trim(varlist)
-    VerbosePrint 'varlist: ', trim(adjustl(vfilename))
-    write(*,'(a)') '**info(simple_args_unit_test): checking varlist file'
-    call stat(vfilename , buff, status)
+    print *, 'get_environment_variable found SIMPLE_SOURCE_PATH ', trim(srcpath)
+    print *, 'appending varlist '
+    vfilename = trim(adjustl(spath)) // '/lib/' // trim(adjustl(varlist))
+    vfilename = trim(adjustl(vfilename))
+    print *, 'varlist: ', trim(adjustl(vfilename))
+    write(*,'(a,a)') '**info(simple_args_unit_test): checking varlist file ',trim(adjustl(vfilename))
+    call sys_stat(trim(adjustl(vfilename)), buff, status)
     if(status /= 0)then
       print *,' varlist not in lib/simple/,  checking lib64/simple'
-    vfilename = trim(spath) // '/lib64/' // trim(varlist)
-    VerbosePrint 'varlist: ', trim(adjustl(vfilename))
-    write(*,'(a)') '**info(simple_args_unit_test): checking varlist file'
-    call stat(vfilename , buff, status)
-    if(status /= 0)then
-      print *,' varlist not in lib64/simple/,  calling simple_args_varlist.pl'
-
-      call system(\"simple_args_varlist.pl\",status)
-      if(status /= 0) then
-         VerbosePrint 'simple_args_unit_test:  simple_args_varlist.pl failed'
-      end if
-      call stat(vfilename , buff, status)
+      vfilename = trim(adjustl(spath)) // '/lib64/' // trim(adjustl(varlist))
+      vfilename = trim(adjustl(vfilename))
+      print *, 'varlist: ', trim(adjustl(vfilename))
+      write(*,'(a)') '**info(simple_args_unit_test): checking varlist file'
+      call sys_stat(trim(adjustl(vfilename)) , buff, status)
       if(status /= 0)then
-        print *,' varlist still not in lib/simple/ after calling simple_args_varlist.pl'
+        print *,' varlist not in lib64/simple/,  calling simple_args_varlist.pl'
+        call exec_cmdline(\"simple_args_varlist.pl\")
+        call sys_stat(trim(adjustl(vfilename)) , buff, status)
+        if(status /= 0)then
+          print *,' varlist still not in lib/simple/ after calling simple_args_varlist.pl'
+        end if
       end if
     end if
-   end if
     n = nlines(vfilename)
     open(unit=funit, status='old', action='read', file=vfilename)
     do i=1,n
@@ -180,3 +192,10 @@ end subroutine
 
 end module simple_args\n";
 close(MODULE);
+
+if ( -e ${simple_argsfile} && (compare(${simple_argsfile}, ${tmp_argsfile}) == 0)) {
+      unlink(${tmp_argsfile}) # do nothing
+     }
+ else {
+    rename  ${tmp_argsfile},${simple_argsfile}
+ }

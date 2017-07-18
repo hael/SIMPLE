@@ -1,3 +1,6 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 !> \brief SIMPLE command line parsing class
 ! The code is distributed with the hope that it will be useful, but WITHOUT ANY WARRANTY.
 ! Redistribution or modification is regulated by the GNU General Public License.
@@ -8,10 +11,10 @@ module simple_cmdline
   use simple_chash, only: chash
   use simple_strings, only: str2int, str2real, str_has_substr, real2str, int2str
   implicit none
-
   public :: cmdline
   private
 #include "simple_local_flags.inc"
+!> key/value pair type
   type cmdarg
      character(len=32) :: key=''
      character(len=STDLEN) :: carg=''

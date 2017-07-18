@@ -1,3 +1,6 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 !> Simple commander module: 3D volume reconstruction interface
 !!
 !! This class contains the set of concrete 3D reconstruction commanders of the
@@ -5,7 +8,8 @@
 !! reciever is simple_exec program) and the abstract action, which is simply
 !! execute (defined by the base class: simple_commander_base). Later we can use
 !! the composite pattern to create MacroCommanders (or workflows)
-!
+!!
+!! @see doc/SimpleTutorials2017/Tutorials.html?#reconstruction-of-symmetrical-structures-with-simple
 ! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
 ! Redistribution and modification is regulated by the GNU General Public License.
 ! *Authors:* Cyril Reboul & Hans Elmlund 2016
@@ -41,7 +45,25 @@ type, extends(commander_base) :: volassemble_commander
 end type volassemble_commander
 
 contains 
-
+    !> RECVOL is a SIMPLE program to reconstruct volumes from EM stacks and their estimated orientations
+    !!
+    !! @see doc/SimpleTutorials2017/Tutorials.html?#resolution-estimate-from-single-particle-images
+    !!
+    !! `map2ptcls' generates a document named mapped_params_ptcls.txt that we can directly use to reconstruct a new map from the particle images and calculate the resolution
+    !!
+    !! ```sh
+    !! simple_distr_exec prg=recvol eo=yes stk=../stack/sumstack.mrc \
+    !!    oritab=mapped_params_ptcls.txt smpd=1.62 msk=88 ctf=yes \
+    !!    pgrp=d2 nparts=2 nthr=4 >& EOREC
+    !!```
+    !!    This will only takes a few minutes and will print out the FSC values
+    !!    in the EOREC file. The eo=yes option specifies that the resolution
+    !!    will be calculated from the FSC between the even/odd halves of the
+    !!    dataset. The final reconstruction is the recvol_state01.mrc. The end
+    !!    of the RESOLUTION file produced gives you the calculated resolution
+    !!
+    !!    >>> RESOLUTION AT FSC=0.143 DETERMINED TO:    9.87
+    !!    >>> RESOLUTION AT FSC=0.500 DETERMINED TO:  13.38
     subroutine exec_recvol( self, cline )
         use simple_rec_master, only: exec_rec_master
         class(recvol_commander), intent(inout) :: self
@@ -63,7 +85,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_RECVOL NORMAL STOP ****', print_simple=.false.) 
     end subroutine exec_recvol
-
+    !> EO_VOLASSEMBLE is a SIMPLE program to reconstruct volume with EO enabled
     subroutine exec_eo_volassemble( self, cline )
         use simple_eo_reconstructor, only: eo_reconstructor
         class(eo_volassemble_commander), intent(inout) :: self
@@ -144,7 +166,7 @@ contains
             end subroutine normalize
 
     end subroutine exec_eo_volassemble
-    
+     !> VOLASSEMBLE is a SIMPLE program to reconstruct volumes
     subroutine exec_volassemble( self, cline )
         use simple_reconstructor, only: reconstructor
         class(volassemble_commander), intent(inout) :: self

@@ -1,3 +1,6 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 !> \brief Simple module for calculation of cartesian correlation matricies
 module simple_corrmat
 !$ use omp_lib

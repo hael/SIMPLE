@@ -193,33 +193,46 @@ contains
     subroutine sys_stat( filename, buffer, status )
 #if defined(INTEL)
         use ifport
+#elif defined(PGI)
+        include 'lib3f.h'
+#include "simple_local_flags.inc"
+        
 #endif
         character(len=*),  intent(in) :: filename
         integer,dimension(13), intent(inout) :: buffer
         integer, intent(inout) :: status
         character(len=STDLEN) :: cmsg
-        integer               :: estat, cstat, exec_stat
+        integer,allocatable   :: statb(:)
+        integer               :: stato
         logical               :: doprint = .true.
         logical exists
+        
 #if defined(INTEL)
         cmsg = ' failed to find '//trim(adjustl(filename))
         inquire(FILE = trim(adjustl(filename)), IOMSG=cmsg, EXIST = exists )
-        if(exists)then
-            status = 0
-        else
-            status = -1
-        end if
+        status = INT(exists)
+#elif defined(PGI)
+        debug=.true.
+!        allocate(statb(13))
+        stato =  stat(trim(adjustl(filename)), statb)
+        DebugPrint 'stato ', stato
+        DebugPrint 'size of statb ', size(statb)
+        status = stato
+!        cmsg = ' failed to find '//trim(adjustl(filename))
+!        inquire(FILE = trim(adjustl(filename)), IOMSG=cmsg, EXIST=exists )
+!        stato = INT(exists)
+!        status = stato
+
 #else
         call stat(trim(adjustl(filename)), buffer, status)
+#endif
         if( doprint )then
             write(*,*) 'command: stat ', trim(adjustl(filename))
             write(*,*) 'status of execution: ', status
         endif
-        status = exec_stat
-#endif
+
     end subroutine sys_stat
 
-    
 
     function waitforfileclose( funit )result( all_good )
         integer, intent(inout) :: funit

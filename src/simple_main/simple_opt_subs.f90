@@ -1,4 +1,7 @@
-!> Simple optimisation module:  generic optimisation subroutines 
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple optimisation module:  generic optimisation subroutines
 module simple_opt_subs
 implicit none
 
@@ -7,12 +10,13 @@ logical :: warn=.false.
 contains
 
     !>  \brief  given an optimizer specification object spec, and n dimensional point spec%x
-    !!          and a n dimensional direction spec%xi, linmin moves and resets spec%x
-    !!          to where the function spec%costfun(spec%x) takes on a minimum along the
-    !!          direction spec%xi from spec%x, and replaces spec%xi by the actual vector
-    !!          displacement that spec%x was moved. Returns as lowest_cost the value of
-    !!          spec%cosfun at the returned location spec%x. All accomplished by calling the
-    !!          routines mnbrak and brent. No derivatives needed
+    !!          and an n dimensional direction spec%xi, linmin moves and resets
+    !!          spec%x to where the function spec%costfun(spec%x) takes on a
+    !!          minimum along the direction spec%xi from spec%x, and replaces
+    !!          spec%xi by the actual vector displacement that spec%x was moved.
+    !!          Returns as lowest_cost the value of spec%cosfun at the returned
+    !!          location spec%x. All accomplished by calling the routines mnbrak
+    !!          and brent. No derivatives needed
     subroutine linmin(spec,lowest_cost)
         use simple_opt_spec, only: opt_spec
         class(opt_spec), intent(inout) :: spec
@@ -50,14 +54,15 @@ contains
             end function eval_move
 
             !>  \brief  routine for initially bracketing a minimum
-            !!          given the function eval_move(x), and given distinct initial points ax and
-            !!          bx, this routine searches in the downhill direction (defined by
-            !!          eval_move as evaluated at the initial points) and returns new points
-            !!          ax, bx, cx which bracket a minimum of the function. Function values at
-            !!          the three points, fa, fb and fc are also returned
-            !!          PARAMETERS: GOLD is the default ratio by which successive intervals
-            !!          are magnified; GLIMIT is the maximum magnification allowed for
-            !!          parabolic-fit step
+            !!          given the function eval_move(x), and given distinct
+            !!          initial points ax and bx, this routine searches in the
+            !!          downhill direction (defined by eval_move as evaluated at
+            !!          the initial points) and returns new points ax, bx, cx
+            !!          which bracket a minimum of the function. Function values
+            !!          at the three points, fa, fb and fc are also returned
+            !!          PARAMETERS: GOLD is the default ratio by which
+            !!          successive intervals are magnified; GLIMIT is the
+            !!          maximum magnification allowed for parabolic-fit step
             subroutine mnbrak(ax,bx,cx,fa,fb,fc)
                 real, intent(inout) :: ax,bx,cx
                 real, intent(out)   :: fa,fb,fc
@@ -122,11 +127,12 @@ contains
             end subroutine mnbrak
 
             !>  \brief  Brent's method in one dimension
-            !!          Given the eval_move function, and a bracketing triplet of abscissas
-            !!          ax,bx,cx (such that bx is between ax and cx, and f(bx) is less
-            !!          than both f(ax) and f(cx)), this routine isolates the minimum
-            !!          to a fractional precision of about spec%ftol using Brent's method.
-            !!          The abscissa of the minimum is returned in xmin, and the minimum
+            !!          Given the eval_move function, and a bracketing triplet
+            !!          of abscissas ax,bx,cx (such that bx is between ax and
+            !!          cx, and f(bx) is less than both f(ax) and f(cx)), this
+            !!          routine isolates the minimum to a fractional precision
+            !!          of about spec%ftol using Brent's method. The abscissa of
+            !!          the minimum is returned in xmin, and the minimum
             !!          function value is the returned function value
             function brent(ax,bx,cx,xmin) result(rbrent)
                 use simple_math, only: shft
@@ -290,13 +296,18 @@ contains
         end do
     end subroutine lnsrch
 
-    !>  \brief  multidimensional minimization of the function func(x) (x(1:ndim) is a vector in ndim dimensions)
-    !!          by the downhill simplex method of Nelder and Mead. The matrix p(1:ndim+1,1:ndim) is input/output.
-    !!          Its ndim+1 rows are ndim-dimensional vectors which are the vertices of the starting simplex. Input
-    !!          is also the vector y(1:ndim+1), whose components must be pre-initialized to the values of funk evaluated at the
-    !!          ndim+1 vertices (rows) of p. ftol is the fractional convergence tolerance to be achieved in the function
-    !!          value. On output, p and y will have been reset to ndim+1 new points all within ftol of a minimum
-    !!          function value, and iter gives the number of function evaluations taken.
+    !> \brief multidimensional minimization of the function func(x) (x(1:ndim)
+    !>          is a vector in ndim dimensions) by the downhill simplex method
+    !>          of Nelder and Mead.
+    !!          The matrix p(1:ndim+1,1:ndim) is input/output. Its ndim+1 rows
+    !!          are ndim-dimensional vectors which are the vertices of the
+    !!          starting simplex. Input is also the vector y(1:ndim+1), whose
+    !!          components must be pre-initialized to the values of funk
+    !!          evaluated at the ndim+1 vertices (rows) of p. ftol is the
+    !!          fractional convergence tolerance to be achieved in the function
+    !!          value. On output, p and y will have been reset to ndim+1 new
+    !!          points all within ftol of a minimum function value, and iter
+    !!          gives the number of function evaluations taken.
     subroutine amoeba(p,y,pb,yb,ftol,func,iter,itmax,nevals)
         real,    intent(inout) :: p(:,:) !< the ndim+1 rows of p are ndim vec:s which are the vertices of the starting simplex
                                          !! the best point is put in slot 1 upon convergence
@@ -405,15 +416,21 @@ contains
 
     end subroutine amoeba
 
-    !>  \brief  multidimensional minimization of the function func(x) (x(1:ndim) is a vector in ndim dimensions)
-    !!          by simulated annealing combined with the downhill contsa method of Nelder and Mead. The matrix p(1:ndim+1,1:ndim)
-    !!          is input/output. Its ndim+1 rows are ndim-dimensional vectors which are the vertices of the starting contsa. Input
-    !!          is also the vector y(1:ndim+1), whose components must be pre-initialized to the values of funk evaluated at the
-    !!          ndim+1 vertices (rows) of p. ftol is the fractional convergence tolerance to be achieved in the function
-    !!          value. The routine makes iter function evaluations at an annealign temperature of temptr, then returns. You should
-    !!          then decrease temptr according to your annealing schedule, reset iter, and call the routine again (leaving other
-    !!          arguments unaltered between calls). If iter iter is returned with a positive value, then early convergence and return
-    !!          occured.
+    !>  \brief multidimensional minimization of the function func(x) (x(1:ndim)
+    !>          is a vector in ndim dimensions) by simulated annealing combined with the
+    !>          downhill contsa method of Nelder and Mead.
+    !!          The matrix p(1:ndim+1,1:ndim) is input/output. Its ndim+1 rows
+    !!          are ndim-dimensional vectors which are the vertices of the
+    !!          starting contsa. Input is also the vector y(1:ndim+1), whose
+    !!          components must be pre-initialized to the values of funk
+    !!          evaluated at the ndim+1 vertices (rows) of p. ftol is the
+    !!          fractional convergence tolerance to be achieved in the function
+    !!          value. The routine makes iter function evaluations at an
+    !!          annealign temperature of temptr, then returns. You should then
+    !!          decrease temptr according to your annealing schedule, reset
+    !!          iter, and call the routine again (leaving other arguments
+    !!          unaltered between calls). If iter iter is returned with a
+    !!          positive value, then early convergence and return occured.
     subroutine amebsa(p,y,pb,yb,ftol,func,iter,temptr)
         use simple_rnd, only: ran3arr, ran3
         real, intent(inout)    :: p(:,:)      !< input contsa
@@ -421,8 +438,9 @@ contains
         real, intent(inout)    :: pb(:)       !< for updating the best point
         real, intent(inout)    :: yb          !< for updating the cost of best point
         real, intent(in)       :: ftol        !< fractional tolerance
-        integer, intent(inout) :: iter        !< iteration, ***note the difference from the amoeba routine***
-                                              !! this gives the number of iterations to be executed at the given temp-level
+        integer, intent(inout) :: iter        !< iteration,
+        !! ***note the difference from the amoeba routine***
+        !! this gives the number of iterations to be executed at the given temp-level
         !! and is decreased, so positive value on return indicates early convergence
          real, intent(in)       :: temptr !<  temp
          interface

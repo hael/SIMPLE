@@ -27,8 +27,8 @@ contains
     !>  \brief  updates the mean and variance
     subroutine add( self, x, w )
         class(online_var), intent(inout) :: self
-        real(sp), intent(in)             :: x
-        real(sp), intent(in), optional   :: w
+        real(sp), intent(in)             :: x !< new input
+        real(sp), intent(in), optional   :: w !< new input weight
         real(dp) :: temp, delta, R, ww
         ww = 1.
         if( present(w) )then
@@ -51,7 +51,7 @@ contains
     !>  \brief  for re-setting the mean (needed for cyclic variables)
     subroutine reset_mean( self, mean ) 
         class(online_var), intent(inout) :: self
-        real(sp), intent(in)             :: mean
+        real(sp), intent(in)             :: mean !< new mean
         self%mean = dble(mean)
     end subroutine reset_mean
     

@@ -27,3 +27,14 @@ add2.bashrc
 add2.tcshrc
 simple_user_input.pm
 doc/html/
+# Latex derived
+*.dvi
+*.ps
+*.spl
+*.bbl
+*.blg
+*.aux
+*.out
+*.pdf
+*.synctex.gz
+*.toc

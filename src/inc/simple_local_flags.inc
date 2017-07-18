@@ -1,9 +1,17 @@
-! -*- mode: f90 -*-
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5 Elmlund & Elmlund Lab simplecryoem.com !
+!------------------------------------------------------------------------------!
 !> Simple debug and vebose flags
-!! simple_local_flags.inc is for insertion
-!! into modules or subroutines.  The flags
-!! debug, warn, verbose can dictate how much is
-!! printed to the terminal
+!!
+!! simple_local_flags.inc is for insertion into modules or subroutines. The
+!! flags debug, warn, verbose can dictate how much is printed to the terminal
+!
+!! @author Michael Eager
+!
+! The code is distributed with the hope that it will be useful, but WITHOUT ANY
+! WARRANTY. Redistribution and modification is regulated by the GNU General
+! Public License.
+!-----------------------------------------------------------------------------!
 #if defined(_DEBUG)
     logical :: debug=.true.
     logical :: warn=.true.
@@ -14,8 +22,8 @@
     logical :: verbose=.false.
 #endif
 
-#define _WPRINT_FILE_LINE_(F,L) if(debug.or.global_debug) write (*,'(A,A,I0,A)',advance='no') F,':',L,':';
-#define _PRINT_FILE_LINE_(myF,myLine) if(debug.or.global_debug) print *, myF//':myLine',
+#define _WPRINT_FILE_LINE_(FFFF,LLLL) if(debug.or.global_debug)write(*,'(A,A,I0,A)',advance='no') FFFF,':',LLLL,':';
+#define _PRINT_FILE_LINE_(myFILE,myLine) if(debug.or.global_debug) print *, myFILE//':myLine',
 
 #ifdef __PRETTY_FUNCTION__
 # ifndef DebugPrint

@@ -1,8 +1,19 @@
+!------------------------------------------------------------------------------!
+! SIMPLE , Elmlund & Elmlund Lab,     simplecryoem.com                         !
+!------------------------------------------------------------------------------!
 !> \brief Simple_defs is the main singleton module for all the global variables
-!!
+!
 !! DEBUG and VERBOSE modes can be enabled at compile-time or run-time
 !! BUILD_DESC uses the cmake build to describe <GNU/Intel/PGI>_<RELEASE/DEBUG>_<FFTW/MKL>
 !! SimpleGitVersion include file contains the string definitions for SIMPLE_PATH and version info
+!
+!! \author Cyril Reboul, Michael Eager & Hans Elmlund 
+!
+! The code is distributed with the hope that it will be useful, but WITHOUT ANY
+! WARRANTY. Redistribution and modification is regulated by the GNU General
+! Public License.
+! -----------------------------------------------------------------------------!
+
 module simple_defs
 use, intrinsic :: iso_c_binding
 implicit none
@@ -78,28 +89,29 @@ integer(kind=c_int):: nthr_glob            !< number of threads global variable
 logical :: l_distr_exec_glob               !< global distributed execution flag
 character(len=STDLEN) :: exec_abspath_glob !< global executable absolute path
 
-#ifndef IMAGETYPESINGLE
-  integer, parameter :: fp_kind = DP
+#ifndef IMAGE_SINGLE_PRECISION
+  integer, parameter :: img_kind = DP
 #else
-  integer, parameter :: fp_kind = SP
+  integer, parameter :: img_kind = SP
 #endif
+
+  integer, parameter :: fp_kind = DP
+
 !! Debugging and print verbosity flags
 #ifdef _DEBUG
   logical :: global_debug=.true.          !< global debugging flag
   logical :: global_verbose=.true.        !< global flag for verbosity set to TRUE in debug mode
 #else
-  logical :: global_debug=.false.
+  logical :: global_debug=.false.         !< global flag for debugging disabled
 #ifdef VERBOSE
   logical :: global_verbose=.true.        !< global flag for verbosity TRUE with VERBOSE compilation flag
 #else
   logical :: global_verbose=.false.       !< global flag for verbosity FALSE by default
 #endif
 #endif
-  logical :: global_warn=.false.          !<
+  logical :: global_warn=.false.          !< warning flag
 
-  character(len=STDLEN) :: build_descr = BUILD_NAME !< compiler, build type and FFT backend
-
-  !! append SIMPLE_VERSION and SIMPLE_GIT_VERSION strings to simple_defs
+!! append SIMPLE_VERSION and SIMPLE_GIT_VERSION strings to simple_defs
 #include "SimpleGitVersion.h"
 
 end module simple_defs

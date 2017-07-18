@@ -1,3 +1,6 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 !> Simple commander module: miscellanous commanders
 !
 !! This class contains the set of concrete miscellanous commanders of the SIMPLE

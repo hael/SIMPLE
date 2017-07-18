@@ -1,20 +1,29 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 !> Simple random tabulated module contains routines for generation of directed random numbers.
-! The code is distributed
-! with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_. Redistribution
-! or modification is regulated by the GNU General Public License. *Author:* Hans Elmlund, 2009-05-12.
+!>
+!! simple_math contains various mathematical subroutines and functions.
+!! @author Cyril Reboul & Hans Elmlund
+!! 
 !
-!==Changes are documented below
+!==changes are documented below
 !* incorporated in the _SIMPLE_ library, HE 2009-06-25
 !* OOD 2003, HE 2012-06-15
 !
+! The SIMPLE code is distributed with the hope that it will be
+! useful, but WITHOUT ANY WARRANTY. Redistribution and modification is regulated
+! by the GNU General Public License.
+! -----------------------------------------------------------------------------!
 module simple_ran_tabu
 use simple_jiffys, only: alloc_err
 implicit none
 
 type :: ran_tabu
     private
-    integer :: NP=0, N_tabus=0 ! integer ranges from 1 to NP
-    logical, allocatable :: avail(:)
+    integer :: NP=0       !< integer ranges from 1 to NP
+    integer :: N_tabus=0 
+    logical, allocatable :: avail(:) !< flags for checking availability
   contains
     procedure :: reset
     procedure :: insert
@@ -40,7 +49,7 @@ contains
 
     !>  \brief  is a constructor
     function constructor( NP ) result( self )
-        integer, intent(in) :: NP
+        integer, intent(in) :: NP    !< max number of tabus
         type(ran_tabu)      :: self
         integer             :: alloc_stat
         call self%kill
@@ -61,7 +70,7 @@ contains
     !>  \brief  is for insertion of a tabu
     subroutine insert( self, i )
         class(ran_tabu), intent(inout) :: self
-        integer,         intent(in)    :: i
+        integer,         intent(in)    :: i !< input tabu
         if( self%avail(i) ) then
             self%N_tabus = self%N_tabus + 1
             if( self%N_tabus > self%NP ) stop 'nr of tabus larger than NP; insert; simple_ran_tabu'
@@ -72,7 +81,7 @@ contains
     !>  \brief  is for checking tabu status
     function is( self, i ) result( yep )
         class(ran_tabu), intent(in) :: self
-        integer,         intent(in) :: i
+        integer,         intent(in) :: i !< query tabu
         logical :: yep
         if( allocated(self%avail) )then
             yep = .not. self%avail(i)
@@ -84,7 +93,7 @@ contains
     !>  \brief  is for removal of a tabu
     subroutine remove( self, i )
         class(ran_tabu), intent(inout) :: self
-        integer,         intent(in)    :: i
+        integer,         intent(in)    :: i  !< remove tabu
         if( .not. self%avail(i) )then
             self%N_tabus = self%N_tabus - 1
         endif
@@ -107,7 +116,7 @@ contains
     !>  \brief  generates a random disjoint pair
     subroutine irnd_pair( self, irnd, jrnd )
         class(ran_tabu), intent(in)  :: self
-        integer,         intent(out) :: irnd, jrnd
+        integer,         intent(out) :: irnd, jrnd !< random integer
         irnd = self%irnd()
         jrnd = irnd
         do while( irnd == jrnd )
@@ -117,10 +126,12 @@ contains
 
     !>  \brief  generates a normal random integer [_1_,_NP_] not tabu,
     !!          used to direct Monte Carlo search out of forbidden regions.
+    !!  \param mean Gaussian mean
+    !!  \param stdev Gaussian standard deviation
     function irnd_gau( self, mean, stdev ) result( irnd )
         use simple_rnd, only: irnd_gasdev
         class(ran_tabu), intent(in) :: self
-        real,            intent(in) :: mean, stdev
+        real,            intent(in) :: mean, stdev  
         integer :: irnd
         if( self%N_tabus == self%NP ) stop 'all numbers tabu; irnd_gau; simple_ran_tabu'
         do
@@ -133,7 +144,7 @@ contains
     function mnomal( self, pvec ) result( irnd )
         use simple_rnd, only: multinomal
         class(ran_tabu), intent(in) :: self
-        real,            intent(in) :: pvec(self%NP)
+        real,            intent(in) :: pvec(self%NP) !< multinomal vector
         integer :: irnd, nrepeats
         if( self%N_tabus == self%NP ) stop 'all numbers tabu; mnomal; simple_ran_tabu'
         nrepeats = 0
@@ -154,7 +165,7 @@ contains
     !>  \brief  generates sequence of uniform random numbers [_1_,_NP_] without repetition
     subroutine ne_ran_iarr( self, rndiarr )
         class(ran_tabu), intent(inout) :: self
-        integer,         intent(out)   :: rndiarr(:)
+        integer,         intent(out)   :: rndiarr(:) !< random integer array
         integer :: i, szrndiarr
         szrndiarr = size(rndiarr)
         if( szrndiarr + self%N_tabus > self%NP ) then
@@ -174,8 +185,8 @@ contains
     !>  \brief  generates sequence of uniform random numbers [_1_,_NP_] without repetition
     subroutine ne_mnomal_iarr( self, pvec, rndiarr )
         class(ran_tabu), intent(inout) :: self
-        real,            intent(in)    :: pvec(self%NP)
-        integer,         intent(out)   :: rndiarr(:)
+        real,            intent(in)    :: pvec(self%NP) !< multinomal vector
+        integer,         intent(out)   :: rndiarr(:) !< random integer array
         integer        :: i, szrndiarr, nsample, irnd, cnt
         type(ran_tabu) :: rt4shuffle
         szrndiarr = size(rndiarr)
@@ -212,9 +223,9 @@ contains
     !>  \brief  stochastic nearest neighbor generation
     function stoch_nnmat( self, pfromto, nnn, pmat ) result( nnmat )
         class(ran_tabu), intent(inout) :: self
-        integer,         intent(in)    :: pfromto(2), nnn
-        real,            intent(in)    :: pmat(pfromto(1):pfromto(2),self%NP)
-        integer, allocatable :: nnmat(:,:)
+        integer,         intent(in)    :: pfromto(2), nnn                     !< pmat range 
+        real,            intent(in)    :: pmat(pfromto(1):pfromto(2),self%NP) !< multinomal array
+        integer, allocatable :: nnmat(:,:) !> output nearest neigh matrix
         integer :: iptcl, alloc_stat
         allocate(nnmat(pfromto(1):pfromto(2),nnn), stat=alloc_stat)
         call alloc_err('In: simple_ran_tabu; stoch_nnmat', alloc_stat)
@@ -226,7 +237,7 @@ contains
     !>  \brief  shuffles an integer array
     subroutine shuffle( self, shuffled )
         class(ran_tabu), intent(inout) :: self
-        integer,         intent(inout) :: shuffled(self%NP)
+        integer,         intent(inout) :: shuffled(self%NP)  !< integer array for shuffling
         integer :: tmp(self%NP), irnd, i
         call self%reset
         do i=1,self%NP
@@ -241,8 +252,8 @@ contains
     !>  \brief  creates a balanced randomised paritioning over nstates states
     subroutine balanced( self, nstates, iarr )
         class(ran_tabu), intent(inout) :: self
-        integer,         intent(in)    :: nstates
-        integer,         intent(inout) :: iarr(self%NP)
+        integer,         intent(in)    :: nstates !< num states
+        integer,         intent(inout) :: iarr(self%NP) !< integer array for partitioning
         integer :: i, s
         i = 0
         do while( i < self%NP )

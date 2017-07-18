@@ -1,9 +1,12 @@
-!>  \brief  Module with type and routine definitions to deal with image file headers
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Module with type and routine definitions to deal with image file headers
 !!
-!!  The following file formats are (or will be) supported:
-!!  - imagic: http://imagescience.de/formats/index.htm
-!!  - spider: http://www.wadsworth.org/spider_doc/spider/docs/image_doc.html
-!!  - mrc: http://www2.mrc-lmb.cam.ac.uk/image2000.html
+!!  The following file formats are (will be) supported:
+!!  - Imagic: http://imagescience.de/formats/index.htm
+!!  - Spider: http://www.wadsworth.org/spider_doc/spider/docs/image_doc.html
+!!  - MRC: http://www2.mrc-lmb.cam.ac.uk/image2000.html
 !!
 !! This class is based on a class used in CTFFIND4, developed by Alexis Rohou
 !! and Nikolaus Grigorieff at Janelia Farm. The below copyright statement therefore
@@ -13,6 +16,12 @@
 !! Use is subject to Janelia Farm Research Campus Software Copyright 1.1
 !! license terms ( http://license.janelia.org/license/jfrc_copyright_1_1.html )
 !!
+!! Modifications by Cyril Reboul, Michael Eager & Hans Elmlund
+!! 
+! The SIMPLE code is distributed with the hope that it will be
+! useful, but WITHOUT ANY WARRANTY. Redistribution and modification is regulated
+! by the GNU General Public License.
+! -----------------------------------------------------------------------------!
 module simple_imghead
     use simple_imgheadrec, only: int_imgheadrec, real_imgheadrec, char_imgheadrec
     use simple_defs ! singleton
@@ -1408,7 +1417,11 @@ contains
         recsz = 120*4
         funit = 3
         open(unit=funit,access='STREAM',file='test_imghed.spi',&
-             &action='READWRITE',status='UNKNOWN',convert='BIG_ENDIAN')
+             &action='READWRITE',status='UNKNOWN',&
+#ifndef INTEL
+            &convert='BIG_ENDIAN'&
+#endif
+            &)
         call hed%write(funit)
         call hed2%read(funit)
         close(funit)

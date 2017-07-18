@@ -1,5 +1,12 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5 Elmlund & Elmlund Lab simplecryoem.com !
+!------------------------------------------------------------------------------!
 !> Simple array class
-!>
+!
+! The code is distributed with the hope that it will be useful, but WITHOUT ANY
+! WARRANTY. Redistribution and modification is regulated by the GNU General
+! Public License.
+!-----------------------------------------------------------------------------!
 module simple_arr
 implicit none
 
@@ -24,21 +31,21 @@ contains
 
     subroutine new_1( self, iarr )
         class(arr), intent(inout) :: self
-        integer, intent(in) :: iarr(:)
+        integer, intent(in) :: iarr(:)        !< input integer array
         if( allocated(self%iarr) ) deallocate( self%iarr )
         allocate( self%iarr(size(iarr)), source=iarr )
     end subroutine
 
     subroutine new_2( self, rarr )
         class(arr), intent(inout) :: self
-        real, intent(in) :: rarr(:)
+        real, intent(in) :: rarr(:)           !< input float array
         if( allocated(self%rarr) ) deallocate( self%rarr )
         allocate( self%rarr(size(rarr)), source=rarr )
     end subroutine
 
     function iget( self ) result( iarr )
         class(arr), intent(in) :: self
-        integer, allocatable   :: iarr(:)
+        integer, allocatable   :: iarr(:)  !< output integer array
         if( allocated(self%iarr) )then
             allocate( iarr(size(self%iarr)), source=self%iarr )
         else
@@ -48,7 +55,7 @@ contains
 
     function rget( self ) result( rarr )
         class(arr), intent(in) :: self
-        real, allocatable      :: rarr(:)
+        real, allocatable      :: rarr(:) !< output float array
         if( allocated(self%rarr) )then
             allocate( rarr(size(self%rarr)), source=self%rarr )
         else

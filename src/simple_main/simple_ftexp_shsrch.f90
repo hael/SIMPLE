@@ -1,3 +1,6 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 !> Simple optimisation module: Fourier-expanded shift search
 module simple_ftexp_shsrch
 use simple_opt_factory, only: opt_factory
@@ -8,7 +11,7 @@ use simple_image,       only: image
 implicit none
 
 public :: ftexp_shsrch_init, ftexp_shsrch_reset_ptrs, ftexp_shsrch_minimize, test_ftexp_shsrch
-private 
+private
 
 type(opt_factory)             :: ofac              !< optimizer factory
 type(opt_spec)                :: ospec             !< optimizer specification object
@@ -28,7 +31,7 @@ contains
         character(len=*), optional, intent(in) :: opt
         integer,          optional, intent(in) :: nrestarts_in
         ! set pointers
-        reference => ref 
+        reference => ref
         particle  => ptcl
         ! set opt_str & nrestarts
         if( allocated(opt_str) ) deallocate(opt_str)
@@ -38,7 +41,7 @@ contains
             allocate(opt_str, source='simplex')
         endif
         nrestarts = 1
-        if( present(nrestarts_in) ) nrestarts = nrestarts_in        
+        if( present(nrestarts_in) ) nrestarts = nrestarts_in
         ! make optimizer spec
         call ospec%specify(opt_str, 2, ftol=TOL, gtol=TOL,&
         limits=lims, nrestarts=nrestarts )
@@ -47,11 +50,11 @@ contains
         ! generate optimizer object with the factory
         call ofac%new(ospec, nlopt)
     end subroutine ftexp_shsrch_init
-    
+
     subroutine ftexp_shsrch_reset_ptrs( ref, ptcl )
         class(ft_expanded), intent(in), target :: ref, ptcl
         ! re-set pointers
-        reference => ref 
+        reference => ref
         particle  => ptcl
     end subroutine ftexp_shsrch_reset_ptrs
     !> Cost function
@@ -92,7 +95,7 @@ contains
             endif
         endif
     end function ftexp_shsrch_minimize
-    
+
     subroutine test_ftexp_shsrch
         use simple_rnd, only: ran3
         type(image)       :: img_ref, img_ptcl
@@ -121,5 +124,5 @@ contains
         end do
         write(*,'(a)') 'SIMPLE_ftexp_shsrch_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
     end subroutine test_ftexp_shsrch
-    
+
 end module simple_ftexp_shsrch

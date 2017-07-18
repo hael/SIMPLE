@@ -1,3 +1,6 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 !> Simple optimisation class - abstract factory module
 module simple_opt_factory
 use simple_optimizer,          only: optimizer
@@ -19,7 +22,7 @@ type :: opt_factory
     private
     class(optimizer), allocatable :: optimizer_type
   contains
-    procedure :: new                   
+    procedure :: new
     procedure :: kill
 end type opt_factory
 
@@ -27,7 +30,7 @@ contains
 
     !> \brief  is a constructor
     subroutine new( self, spec, ptr )
-        class(opt_factory), target, intent(inout) :: self !< instance 
+        class(opt_factory), target, intent(inout) :: self !< instance
         class(opt_spec),            intent(inout) :: spec !< specification
         class(optimizer), pointer                 :: ptr  !< pointer to constructed object
         ptr => null()
@@ -54,7 +57,7 @@ contains
         call self%optimizer_type%new(spec)
         ptr => self%optimizer_type
     end subroutine
-    
+
     !> \brief  is a destructor
     subroutine kill( self )
         class(opt_factory), intent(inout) :: self

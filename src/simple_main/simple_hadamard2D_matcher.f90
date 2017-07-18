@@ -1,3 +1,6 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 !> Simple Hadamard module: Prime2D method 
 module simple_hadamard2D_matcher
 !$ use omp_lib

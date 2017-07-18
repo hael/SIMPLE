@@ -1,3 +1,6 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 !> Simple commander module: check commander
 !! This class contains the set of concrete checks commanders of the SIMPLE
 !! library (used for checking image stack/volume parameters). This class

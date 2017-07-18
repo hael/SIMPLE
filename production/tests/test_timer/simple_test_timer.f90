@@ -1,6 +1,17 @@
-
-
- 
+!------------------------------------------------------------------------------!
+! SIMPLE , Elmlund & Elmlund Lab,     simplecryoem.com                         !
+!------------------------------------------------------------------------------!
+!> test program for simple_timer
+!!
+!! Test the timing functions in the SIMPLE library.
+!!
+!! @author
+!! Michael Eager 2017
+!
+! The code is distributed with the hope that it will be useful, but WITHOUT ANY
+! WARRANTY. Redistribution and modification is regulated by the GNU General
+! Public License.
+! -----------------------------------------------------------------------------!
 program simple_test_timer
 use simple_defs
 use simple_timer_basic_test

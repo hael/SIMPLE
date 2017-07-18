@@ -1,11 +1,22 @@
-/** Simple timer macros
- * C/FORTRAN  preprocessor macros for timing module blocks
- * Note: __PRETTY_FUNCTION__ is GNU specific and not standard
- *       __FILE__ is standard but is different some compilers
- *       __LINE__ is defined in the standard
+/*-----------------------------------------------------------------------------*/
+/* SIMPLE v2.5          Elmlund & Elmlund Lab         simplecryoem.com         */
+/*-----------------------------------------------------------------------------*/
+/**> Simple timer macros
+ * @brief C/FORTRAN preprocessor macros for timing module blocks
+ * simple timer macros with variadic arg support
+ * Note: __FILENAME__ is used instead of __FILE__.
+ * __FILE__ is standard but is different some compilers
+ * __LINE__ is defined in the standard
+ * Intel preprocessor fpp does not support variadic macros
+ * PGI does not like block command statements
+ * See simple_test_timer and the basic and profile test modules
  *
+ * @author
+ *       Michael Eager
  *
- *    2017    Michael Eager (michael.eager@monash.edu)
+ * Revisions:
+ * Original TBLOCK TSTOP  TIMER_LOOP
+ * Profiling required variadic macros and C preprocessor
  **/
 
 #ifndef SIMPLE_TIMER_H
@@ -20,7 +31,7 @@
 
 #ifdef __STDC__
 /* calculate the number of arguments in macro - max 10 */
-/* C99 __VA_ARGS__ versions */ 
+/* C99 __VA_ARGS__ versions */
 #define c99_count(...)    _c99_count1 ( , ##__VA_ARGS__)/* */
 #define _c99_count1(...)  _c99_count2 (__VA_ARGS__,10,9,8,7,6,5,4,3,2,1,0)
 #define _c99_count2(_,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9,n,...) n
@@ -30,25 +41,24 @@
   use simple_timer;                      \
   character(len=20)::p_tmp;              \
   character(len=255)::p_comment;         \
-  integer(dp) :: IDX,np,tn;              \
+  integer :: IDX,np; integer(timer_int_kind):: tn; \
   integer,parameter :: nv=c99_count (__VA_ARGS__);\
   character(255)::p_tokens= #__VA_ARGS__ ; \
   tn=tic();np=NLOOPS;                      \
   call timer_profile_setup(np,nv,p_tokens);
 
-#else  
+#else
 
-#define TPROFILER(NLOOPS,IDX,NTOKENS,TOKENS) \
+#define TPROFILER(NLOOPS,IDX,TOKENS) \
  block;                                      \
  use simple_timer;                           \
  character(len=20)::p_tmp;                   \
  character(len=255)::p_comment;              \
- integer(dp) :: IDX,np,tn;                   \
- integer :: nv=NTOKENS;                      \
+ integer :: IDX,np; integer(timer_int_kind):: tn;   \
  character(255)::p_tokens= #TOKENS;          \
  tn=tic();np=NLOOPS;                         \
- call timer_profile_setup(np,nv,p_tokens);
-#endif 
+ call timer_profile_setup(np,-1,p_tokens);
+#endif
   /* __STDC__  */
 
 #define TBEG(TOKEN) p_tmp = #TOKEN; \
@@ -69,20 +79,20 @@
 block; \
  use simple_timer;\
 character(len=80) :: comment_,srcname; \
-integer(dp) :: t1,srcline; \
+ integer(timer_int_kind) :: t1;integer :: srcline;  \
 t1=tic();srcline=__LINE__; \
  comment_=trim(adjustl(COMMENT)); \
-srcname=trim(__FILE__); \
+srcname=trim(__FILENAME__); \
 YBLOCK; \
  write(*,'(A,A,A,1i4,A,A,A,1ES20.6)') "TIMER_BLOCK:",trim(srcname),":",srcline,":",trim(adjustl(comment_)),': Elapsed time (sec): ', toc(t1); \
 end block
 
 
 #define TSTOP()                                 \
-  write(*,'(A,A,1i4,A,F20.10)') __FILE__,":",__LINE__,": Elapsed time (sec) ", toc()
+  write(*,'(A,A,1i4,A,F20.10)') __FILENAME__,":",__LINE__,": Elapsed time (sec) ", toc()
 
 #define TBREAK(TSTRING)                         \
-  write(*,'(A,A,1i4,A,A,F20.10)') __FILE__,":",__LINE__,TSTRING," time (sec)" toc()
+  write(*,'(A,A,1i4,A,A,F20.10)') __FILENAME__,":",__LINE__,TSTRING," time (sec)" toc()
 
 #ifndef PGI
 #define START_TIMER_LOOP(NLOOP)  \
@@ -108,7 +118,7 @@ do
 #endif
 
 
-/*   write(*,'(A,A,1i4)') __FILE__,":",__LINE__;   */
+/*   write(*,'(A,A,1i4)') __FILENAME__,":",__LINE__;   */
 
 #define TIMER_BLOCK_LOOP(NLOOP,COMMENT,YBLOCK) block;      \
   character(len=*) :: cblock=trim(COMMENT);                \
@@ -117,17 +127,17 @@ do
 end do;\
 call timer_loop_end(cblock);end block
 
-/*  write(*,'(A,A,1i4)') __FILE__,":",__LINE__; */
+/*  write(*,'(A,A,1i4)') __FILENAME__,":",__LINE__; */
 
 
 
 #if defined(OPENMP) || defined(_OPENMP)
 
-#define TBLOCKOMP()                             \
-  print *,"Start timer: ", ticOMP()
+#define TBLOCK_omp()                             \
+  print *,"Start timer: ", tic_omp()
 
-#define TSTOPOMP()                              \
-  write(*,'(A,A,1i4,A,1d20.10)') __FILE__,":",__LINE__,": Elapsed time (s) ", tocOMP()
+#define TSTOP_omp()                              \
+  write(*,'(A,A,1i4,A,1d20.10)') __FILENAME__,":",__LINE__,": Elapsed time (s) ", toc_omp()
 
 #endif /*OPENMP*/
 
@@ -140,10 +150,10 @@ call timer_loop_end(cblock);end block
 #define GPU_STOPWATCH( EVALBLOCK )              \
 use simple_timer_cuda;                          \
 type(cudaEvent) :: __t1;                        \
-real(fp_kind) :: elapsed;                       \
+real(timer_int_kind) :: elapsed;  \
 starttime = tic();                              \
 EVALBLOCK  ;                                    \
-  print *, "__FILE__:__LINE__: CUDA Event timer (sec): ", toc(__t1)
+  print *, "__FILENAME__:__LINE__: CUDA Event timer (sec): ", toc(__t1)
 
 #endif
 
@@ -152,8 +162,8 @@ double, precision :: __t1,__t2;                 \
 call cpu_time(__t);                             \
 EVALBLOCK  ;                                    \
 call cpu_time(__t2);                            \
-print *, "__FILE__:__LINE__: CPU wall time (sec): ", __t2-__t1
+print *, "__FILENAME__:__LINE__: CPU wall time (sec): ", __t2-__t1
 
 
-
-#endif  /* SIMPLE_TIMER_H */
+#endif
+/* SIMPLE_TIMER_H */

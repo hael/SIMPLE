@@ -1,4 +1,8 @@
-!> Simple ori module for symmetry adaption.
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple orientation module for symmetry adaption
+!
 ! The code is distributed with the hope that it will be useful,
 ! but _WITHOUT_ _ANY_ _WARRANTY_. Redistribution or modification is regulated by the GNU General Public
 ! License. *Author:* Hans Elmlund, 2009-05-12.
@@ -19,7 +23,9 @@ type sym
     type(oris)                    :: e_sym                 !< symmetry eulers
     character(len=3), allocatable :: subgrps(:)            !< subgroups
     real                          :: eullims(3,2)= 0.      !< euler angles limits (asymetric unit)
-    integer                       :: n=1, ncsym=1, ndsym=1 !< nr of symmetry ops
+    integer                       :: n=1                   !< nr of symmetry ops
+    integer                       :: ncsym=1               !< num of order C sym
+    integer                       :: ndsym=1               !< num of order D sym
     integer                       :: t_or_o=0              !< tetahedral or octahedral symmetry
     character(len=3)              :: pgrp='c1'             !< point-group symmetry
     logical                       :: c_or_d=.false.        !< c- or d-symmetry
@@ -68,7 +74,7 @@ contains
 
     !>  \brief  is a constructor
     function constructor( pgrp) result( self )
-        character(len=*), intent(in) :: pgrp
+        character(len=*), intent(in) :: pgrp !< sym group string
         type(sym)                    :: self
         call self%new(pgrp)
     end function constructor
@@ -77,7 +83,7 @@ contains
     subroutine new( self, pgrp )
         use simple_ori, only: ori
         class(sym), intent(inout)    :: self
-        character(len=*), intent(in) :: pgrp
+        character(len=*), intent(in) :: pgrp !< sym group string
         call self%kill
         self%c_or_d = .false.
         self%n      = 1
@@ -130,7 +136,7 @@ contains
     function build_srchrange( self ) result( eullims )
         use simple_ori, only: ori
         class(sym), intent(inout) :: self
-        real                      :: eullims(3,2)
+        real                      :: eullims(3,2) !< 3-axis search range
         eullims(:,1) = 0.
         eullims(:,2) = 360.
         eullims(2,2) = 180.
@@ -155,14 +161,14 @@ contains
     function srchrange( self ) result( eullims )
         use simple_ori, only: ori
         class(sym), intent(inout) :: self
-        real                      :: eullims(3,2)
+        real                      :: eullims(3,2) !< 3-axis search range
         eullims = self%eullims
     end function srchrange
 
     !>  \brief  to check which point-group symmetry
     pure function which( self ) result( pgrp )
         class(sym), intent(in) :: self
-        character(len=3) :: pgrp
+        character(len=3) :: pgrp        !< sym group string
         pgrp = self%pgrp
     end function which
 
@@ -176,14 +182,14 @@ contains
     !>  \brief  is a getter
     pure function get_pgrp( self ) result( pgrp_str )
         class(sym), intent(in) :: self
-        character(len=3) :: pgrp_str
+        character(len=3) :: pgrp_str  !< sym group string
         pgrp_str = self%pgrp
     end function get_pgrp
 
     !>  \brief  is a getter
     function get_nsubgrp( self )result( n )
         class(sym) :: self
-        integer :: n
+        integer :: n      !< size of sym groups
         n = size(self%subgrps)
     end function get_nsubgrp
 
@@ -200,8 +206,8 @@ contains
         symobj = sym(self%subgrps(i))
     end function get_subgrp
 
-    !>  \brief  is a
-    subroutine get_all_cd_subgrps( self, subgrps )
+    !>  get_all_cd_subgrps
+    subroutine get_all_cd_subgrps( self, subgrps)
         use simple_math,                   only: is_even
         class(sym), intent(inout)             :: self
         integer                               :: i, cnt, alloc_stat
@@ -235,19 +241,18 @@ contains
         deallocate(pgrps)
 
         contains
-
             function fmtsymstr( symtype, iord )result( ostr )
-                integer, intent(in)           :: iord
-                character(len=1), intent(in)  :: symtype
+                integer, intent(in)           :: iord     !< order index
+                character(len=1), intent(in)  :: symtype  !< symmetry
                 character(len=2)              :: ord
-                character(len=3)              :: ostr
+                character(len=3)              :: ostr     !< formatted output string
                 write(ord,'(I2)') iord
                 write(ostr,'(A1,A2)') symtype, adjustl(ord)
             end function fmtsymstr
 
     end subroutine get_all_cd_subgrps
 
-    !>  \brief  Returns array of all symmetry subgroups in c &/| d
+    !>  \brief  Returns array of all symmetry subgroups in c and d
     function get_all_subgrps( self )result( subgrps )
         class(sym), intent(inout)             :: self
         character(len=3),allocatable          :: subgrps(:)
@@ -277,9 +282,9 @@ contains
     !>  \brief  is a symmetry adaptor
     function apply( self, e_in, symop ) result( e_sym )
         use simple_ori, only: ori
-        class(sym), intent(inout) :: self
-        class(ori), intent(inout) :: e_in
-        integer, intent(in)       :: symop
+        class(sym), intent(inout) :: self  !<
+        class(ori), intent(inout) :: e_in  !< orientation object
+        integer, intent(in)       :: symop !< sym operation
         type(ori)                 :: e_sym, e_symop, e_tmp
         e_sym   = e_in ! transfer of parameters
         e_symop = self%e_sym%get_ori(symop)
@@ -308,8 +313,8 @@ contains
     !>  \brief  rotates orientations to the asymmetric unit
     subroutine rotall_to_asym( self, osyms )
         use simple_ori, only: ori
-        class(sym),  intent(inout) :: self
-        class(oris), intent(inout) :: osyms
+        class(sym),  intent(inout) :: self     !<
+        class(oris), intent(inout) :: osyms    !<
         type(ori) :: o
         integer   :: i
         do i = 1, osyms%get_noris()
@@ -322,8 +327,8 @@ contains
     !>  \brief  is a getter
     function get_symori( self, symop ) result( e_sym )
         use simple_ori, only: ori
-        class(sym), intent(inout) :: self
-        integer, intent(in)       :: symop
+        class(sym), intent(inout) :: self    !<
+        integer, intent(in)       :: symop   !<
         type(ori) :: e_sym
         e_sym = self%e_sym%get_ori(symop)
     end function get_symori
@@ -331,8 +336,8 @@ contains
     !>  \brief  is a symmetry adaptor
     subroutine apply2all( self, e_in )
         use simple_ori, only: ori
-        class(sym),  intent(inout) :: self
-        class(oris), intent(inout) :: e_in
+        class(sym),  intent(inout) :: self       !<
+        class(oris), intent(inout) :: e_in       !<
         type(ori)                  :: orientation
         integer                    :: j, cnt
         cnt = 0
@@ -347,8 +352,8 @@ contains
     !>  \brief  whether or not an orientation falls within the asymetric unit
     function within_asymunit( self, o )result( is_within )
         use simple_ori, only: ori
-        class(sym), intent(inout) :: self
-        class(ori), intent(in)    :: o
+        class(sym), intent(inout) :: self !<
+        class(ori), intent(in)    :: o    !< orientation object
         logical :: is_within
         real    :: euls(3)
         euls = o%get_euler()
@@ -364,16 +369,16 @@ contains
 
     !>  \brief  4 writing the symmetry orientations 2 file
     subroutine write( self, orifile )
-        class(sym), intent(inout)    :: self
-        character(len=*), intent(in) :: orifile
+        class(sym), intent(inout)    :: self    !<
+        character(len=*), intent(in) :: orifile !< filename
         call self%e_sym%write(orifile)
     end subroutine write
-
+    !>  apply symmetry orientations with shift
     subroutine apply_sym_with_shift( self, os, symaxis_ori, shvec, state )
         use simple_ori, only: ori
         class(sym),        intent(inout) :: self
-        class(oris),       intent(inout) :: os
-        class(ori),        intent(in)    :: symaxis_ori
+        class(oris),       intent(inout) :: os          !< output orientations
+        class(ori),        intent(in)    :: symaxis_ori !< input orientations
         real,              intent(in)    :: shvec(3)
         integer, optional, intent(in)    :: state
         type(ori) :: o
@@ -438,7 +443,7 @@ contains
     end subroutine make_o
 
     !>  \brief  SPIDER code for making tetahedral symmetry
-    !!          tetrahedral, with 3axis align w/z axis, point on +ve x axis
+    !>          tetrahedral, with 3axis align w/z axis, point on +ve x axis
     subroutine make_t( self )
         class(sym), intent(inout) :: self
         double precision :: tester,dt,degree,psi,theta,phi
@@ -567,8 +572,8 @@ contains
         contains
 
             subroutine getevensym( cstr, o )
-                integer          :: o
-                character(len=1) :: cstr
+                integer,intent(in)           :: o     !< order
+                character(len=1), intent(in) :: cstr  !< sym type 
                 integer          :: i
                 do i=2,o
                     if( (mod( o, i).eq.0) )then
@@ -579,15 +584,15 @@ contains
             end subroutine getevensym
 
             function fmtsymstr( symtype, iord )result( ostr )
-                character(len=1), intent(in)  :: symtype !< symmetry type
-                integer, intent(in)           :: iord
-                character(len=2)              :: ord     !< order
-                character(len=3)              :: ostr    !< concatenation of symtype and iord
+                character(len=1), intent(in)  :: symtype !< 'c', 'd', 't' or 'i' symmetry type
+                integer, intent(in)           :: iord    !< order
+                character(len=2)              :: ord     !< temp
+                character(len=3)              :: ostr    !< formatted output
                 write(ord,'(I2)') iord
                 write(ostr,'(A1,A2)') symtype, adjustl(ord)
             end function fmtsymstr
 
-    end subroutine set_subgrps
+        end subroutine set_subgrps
 
     !>  \brief  is a destructor
     subroutine kill( self )
@@ -602,9 +607,9 @@ contains
     !!          rotation ccw looking towards 0 from +axis accepts 2 arguments,
     !!          0=x or 1=z (first reg.)and rot angle in deg.(second reg.)
     function matcreate( inxorz, indegr ) result( newmat )
-        integer, intent(in)          :: inxorz
-        double precision, intent(in) :: indegr
-        double precision             :: newmat(3,3)
+        integer, intent(in)          :: inxorz  !< input axis
+        double precision, intent(in) :: indegr  !< input rotation angle
+        double precision             :: newmat(3,3) !< output rot. matrix
         double precision             :: inrad
         ! create blank rotation matrix
         newmat = 0.d0
@@ -629,11 +634,11 @@ contains
         endif
     end function matcreate
 
-    !>  \brief  from SPIDER, used to calculate the angles SPIDER expects from rot. matrix.
-    !!          assumes sin(theta) is positive (0-180 deg), euls(3) is returned in the
-    !!          SPIDER convention psi, theta, phi
+    !> \brief  from SPIDER, used to calculate the angles SPIDER expects from rot. matrix.
+    !!  rotmat assumes sin(theta) is positive (0-180 deg),
+    !! \return euls(3) is returned in the SPIDER convention psi, theta, phi
     function matextract( rotmat ) result( euls )
-        double precision, intent(inout) :: rotmat(3,3)
+        double precision, intent(inout) :: rotmat(3,3) !<  rotmat rotational matrix
         double precision :: euls(3),radtha,sintha
         double precision :: radone,radtwo,dt
         ! calculate euls(2) from lower/right corner

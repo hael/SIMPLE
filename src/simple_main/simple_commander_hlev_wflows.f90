@@ -1,10 +1,13 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 !> Simple commander module: high-level workflows
 !
 !! This class contains commanders responsible for execution of high-level workflows in SIMPLE. This class provides 
 !! the glue between the reciver (main reciever is simple_distr_exec) and the abstract action, which is simply execute 
 !! (defined by the base class: simple_commander_base).
 !
-! The code is hlevibuted with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
+! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
 ! Redistribution and modification is regulated by the GNU General Public License.
 ! *Authors:* Hans Elmlund 2017
 !
@@ -144,8 +147,14 @@ contains
         call simple_end('**** SIMPLE_PRIME2D NORMAL STOP ****')
     end subroutine exec_prime2D_autoscale
 
-    ! GENERATE INITIAL 3D MODEL FROM CLASS AVERAGES
-
+    !> ini3D_from_cavgs is a SIMPLE program to generate initial 3d model from class averages
+    !! @see  doc/SimpleTutorials2017/Tutorials.html?#ab-initio-3d-reconstruction-from-class-averages
+    !!
+    !! Example:
+    !! ```sh
+    !!nohup simple_distr_exec prg=ini3D_from_cavgs stk=../2d/cavgs_selected.mrc \
+    !!    smpd=1.62 msk=88 pgrp=d2 pgrp_known=yes nparts=2 nthr=4 >& INI3DOUT &
+    !!```
     subroutine exec_ini3D_from_cavgs( self, cline )
         use simple_commander_volops,  only: projvol_commander
         use simple_commander_rec,     only: recvol_commander
@@ -376,7 +385,7 @@ contains
     end subroutine exec_ini3D_from_cavgs
 
     ! ENSEMBLE HETEROGEINITY ANALYSIS
-
+    !> het_ensemble is a SIMPLE program for ensemble heterogeinity analysis
     subroutine exec_het_ensemble( self, cline )
         use simple_commander_rec,     only: recvol_commander
         use simple_strings,           only: int2str_pad

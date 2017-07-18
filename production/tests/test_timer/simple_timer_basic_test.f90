@@ -1,11 +1,24 @@
-
+!------------------------------------------------------------------------------!
+! SIMPLE , Elmlund & Elmlund Lab,     simplecryoem.com                         !
+!------------------------------------------------------------------------------!
+!> test basic routines for simple_timer
+!!
+!! Test the basic timing functions in the SIMPLE library.
+!!
+!! @author
+!! Michael Eager 2017
+!
+! The code is distributed with the hope that it will be useful, but WITHOUT ANY
+! WARRANTY. Redistribution and modification is regulated by the GNU General
+! Public License.
+! -----------------------------------------------------------------------------!
 #if defined  _WIN32
 #define DEV_NULL "nul"
 #else
 #define DEV_NULL "/dev/null"
 #endif
 
-#define NREP_MAX INT(10000000,8)
+#define NREP_MAX INT(100000,dp)
 
 #include "simple_timer.h"
 
@@ -17,7 +30,7 @@ module simple_timer_basic_test
 contains
   subroutine exec_timertest(be_verbose)
     logical,optional,intent(in)    :: be_verbose
-    integer(dp),parameter :: nrep=10000000_dp
+    integer(dp),parameter :: nrep=NREP_MAX
     real(dp)    :: xx,c,cfac,b
     real(dp)    :: etime,sysclockrate
     integer(dp) ::  t1,t2

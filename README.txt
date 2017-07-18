@@ -18,7 +18,7 @@ SIMPLE is free software: you can redistribute it and/or modify it under the
 terms of the GNU General Public License as published by the Free Software
 Foundation, either version 3 of the license, or (at your option) any later
 version. SIMPLE is distributed with the hope that it will be useful, but WITHOUT
-ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ANY WARRANTY, without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 INSTALLATION INSTRUCTIONS
@@ -94,8 +94,8 @@ step 4 with:
     $ make -j install
 
 For instance, on MacOS
- - Macports users may use: FC=/opt/local/bin/gfortran FFTW_DIR=/opt/local;
- - Fink users: FC=/sw/bin/gfortran FFTW_DIR=/sw/; and
+ - Macports users may use: FC=/opt/local/bin/gfortran FFTW_DIR=/opt/local
+ - Fink users: FC=/sw/bin/gfortran FFTW_DIR=/sw/ and
  - Homebrew users" FC=/usr/local/bin/gfortran FFTW_DIR=/usr/local/
 
 5. Set the environment variables

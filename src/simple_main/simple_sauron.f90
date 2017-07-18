@@ -1,3 +1,6 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 !> SAURON: SIMPLE Attempt to a Unified Resources and Orientations Notebook
 !> is a module that provides support for one-line per one particle input/output for the SIMPLE suite
 module simple_sauron

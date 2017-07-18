@@ -68,18 +68,18 @@ end interface
 contains
 
     !> \brief is a constructor
+    !! \param costfun Cost minimisation/maximisation function
+    !! \param acceptfun Definition of completion function
     function constructor( params, nevars, N, L, costfun, acceptfun  ) result( self )
         integer, intent(in) :: N         !< nr of individuals to optimize (nr of ptcls)
         integer, intent(in) :: L         !< vector length (problem dimensionality)
         integer, intent(in) :: params(L) !< array with nr of params per discrete variable
         logical, intent(in) :: nevars(L) !< indicates which variables that are not allowed to be equal to each other
         interface
-            !> Cost minimisation/maximisation function
             function costfun( vec, i, N, L ) result( cost )
                 integer, intent(in) :: N, L, vec(N,L), i
                 real                :: cost
             end function costfun
-            !> Definition of completion function
             subroutine acceptfun( vec, i, L )
                 integer, intent(in) :: L, vec(L), i
             end subroutine
@@ -89,6 +89,8 @@ contains
     end function
 
     !> \brief is a constructor
+    !> \param costfun Cost minimisation/maximisation function
+    !> \param acceptfun Definition of completion function
     subroutine new( self, params, nevars, N, L, costfun, acceptfun )
         class(sa_opt), intent(inout) :: self      !< object
         integer, intent(in)          :: N         !< nr of individuals to optimize (nr of ptcls)
@@ -143,7 +145,7 @@ contains
         use simple_rnd,    only: irnd_uni
         use simple_jiffys, only: progress
         class(sa_opt), intent(inout)  :: self
-        real, intent(in)              :: cost_err    !< Convergence factor, range of error 
+        real, intent(in)              :: cost_err    !< Convergence factor, range of error
         real, intent(in)              :: T_init, TC, T_lowlim
         integer, intent(in)           :: max_rearr   !< maximum number of rearrangements per T_-level
         integer, intent(out)          :: out_solution(self%N,self%L) !< final output of params

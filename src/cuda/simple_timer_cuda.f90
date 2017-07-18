@@ -1,4 +1,4 @@
-!= Module simple_timer_cuda
+!> Simple CUDA timer module
 !
 !! TODO Working for pgi fortran but not gfortran/cuda8
 !!
