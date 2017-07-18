@@ -1054,7 +1054,7 @@ contains
         class(prime3D_srch), intent(inout) :: self
         class(oris),         intent(in)    :: oris_in
         self%o_peaks = oris_in
-        if( DEBUG ) write(*,'(A)') '>>> PRIME3D_SRCH::EXECUTED SORT_SHIFTED_PEAKS'
+        if( DEBUG ) write(*,'(A)') '>>> PRIME3D_SRCH::EXECUTED SET_O_PEAKS'
     end subroutine set_o_peaks
 
     !>  \brief  is for getting o_peaks

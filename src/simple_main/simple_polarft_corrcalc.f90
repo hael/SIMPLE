@@ -834,7 +834,8 @@ contains
             else
                 pft_ptcl_norm(:,k) = cmplx(0.,0.)
             endif
-            dist = dist + sum(cabs(fom(k)*(pft_ref_norm(:,k) - pft_ptcl_norm(:,k)))**2.0)
+            ! dist = dist + sum(cabs(fom(k)*(pft_ref_norm(:,k) - pft_ptcl_norm(:,k)))**2.0)
+            dist = dist + fom(k) * sum(cabs(pft_ref_norm(:,k) - pft_ptcl_norm(:,k))**2.0)
         end do 
         dist = dist/real(self%refsz * (self%kfromto(2) - self%kfromto(1) + 1))
     end function euclid

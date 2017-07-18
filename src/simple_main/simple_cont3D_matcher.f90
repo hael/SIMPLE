@@ -179,9 +179,9 @@ contains
                     b%img = batch_imgs(iptcl)
                     if(p%npeaks == 1)then
                         if( p%eo.eq.'yes' )then
-                            call grid_ptcl_dev(b, p, orientation, ran_eo=eopart(iptcl) )
+                            call grid_ptcl(b, p, orientation, ran_eo=eopart(iptcl) )
                         else
-                            call grid_ptcl_dev(b, p, orientation)
+                            call grid_ptcl(b, p, orientation)
                         endif
                     else
                         select case(p%refine)
@@ -194,10 +194,8 @@ contains
                         end select
                         if( p%eo.eq.'yes' )then
                             call grid_ptcl(b, p, orientation, os=softoris, ran_eo=eopart(iptcl) )
-                            ! call grid_ptcl_dev(b, p, orientation, os=softoris, ran_eo=eopart(iptcl) )
                         else
                             call grid_ptcl(b, p, orientation, os=softoris )
-                            ! call grid_ptcl_dev(b, p, orientation, os=softoris)
                         endif
                     endif
                 enddo

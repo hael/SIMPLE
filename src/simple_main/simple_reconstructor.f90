@@ -44,10 +44,8 @@ type, extends(image) :: reconstructor
     procedure          :: read_rho
     ! INTERPOLATION
     procedure, private :: inout_fcomp
-    procedure, private :: inout_fcomp_dev
     procedure, private :: calc_tfun_vals
     procedure          :: inout_fplane
-    procedure          :: inout_fplane_dev
     procedure          :: sampl_dens_correct
     procedure          :: compress_exp
     ! SUMMATION
@@ -244,61 +242,6 @@ contains
         endif
         deallocate(w)
     end subroutine inout_fcomp
-   
-    subroutine inout_fcomp_dev( self, h, k, e, inoutmode, comp, oshift, pwght, ctfsq)
-        use simple_ori,    only: ori
-        use simple_math,   only: sqwin_3d
-        class(reconstructor), intent(inout) :: self      !< the object
-        integer,              intent(in)    :: h, k      !< Fourier indices
-        class(ori),           intent(inout) :: e         !< orientation
-        logical,              intent(in)    :: inoutmode !< add = .true., subtract = .false.
-        complex,              intent(in)    :: comp      !< input component, if not given only sampling density calculation
-        complex,              intent(in)    :: oshift    !< origin shift
-        real, optional,       intent(in)    :: pwght     !< external particle weight (affects both fplane and rho)
-        real, optional,       intent(in)    :: ctfsq     !< 
-        real, allocatable :: w(:,:,:)
-        real              :: dvec(3), vec(3), loc(3), tvalsq, pw
-        integer           :: i, win(3,2), wdim
-        if(comp == cmplx(0.,0.)) return
-        ! calculate non-uniform sampling location
-        vec = [real(h), real(k), 0.]
-        loc = matmul(vec, e%get_mat())
-        ! initiate kernel matrix
-        win  = sqwin_3d(loc(1), loc(2), loc(3), self%winsz)
-        wdim = 2*ceiling(self%winsz) + 1
-        ! (weighted) kernel values
-        pw = self%dens_const
-        if( present(pwght) )pw = pw*pwght
-        allocate(w(wdim, wdim, wdim), source=pw)
-        if( present(ctfsq) )then
-            tvalsq = ctfsq
-        else
-            tvalsq = 1.
-        endif
-        do i=1,wdim
-            dvec = real(win(:,1)+i-1) - loc
-            where(w(i,:,:)>0.)w(i,:,:) = w(i,:,:) * self%kbwin%apod( dvec(1) )
-            where(w(:,i,:)>0.)w(:,i,:) = w(:,i,:) * self%kbwin%apod( dvec(2) )
-            where(w(:,:,i)>0.)w(:,:,i) = w(:,:,i) * self%kbwin%apod( dvec(3) )
-        enddo
-        ! expanded matrices update
-        if( inoutmode )then
-            ! addition
-            ! CTF and w modulates the component before origin shift
-            self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
-            &self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) + (comp*w)*oshift
-            self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
-            &self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) + tvalsq*w
-        else
-            ! substraction
-            ! CTF and w modulates the component before origin shift
-            self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
-            &self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) - (comp*w)*oshift
-            self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
-            &self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) - tvalsq*w
-        endif
-        !deallocate(w)
-    end subroutine inout_fcomp_dev
 
     subroutine calc_tfun_vals( self, vec, tval, tvalsq )
         use simple_math, only: hyp
@@ -405,42 +348,6 @@ contains
             !$omp end parallel do
         endif
     end subroutine inout_fplane
-
-    subroutine inout_fplane_dev( self, o, inoutmode, fpl, norm, pwght, mul)
-        use simple_ori,  only: ori
-        class(reconstructor),   intent(inout) :: self      !< instance
-        class(ori),             intent(inout) :: o         !< orientation
-        logical,                intent(in)    :: inoutmode !< add = .true., subtract = .false.
-        class(image),           intent(inout) :: fpl       !< Fourier plane
-        class(image),           intent(inout) :: norm      !< CTFsquared (or 1.0)
-        real,    optional,      intent(in)    :: pwght     !< external particle weight (affects both fplane and rho)
-        real,    optional,      intent(in)    :: mul
-        integer :: h, k, lims(3,2), logi(3), phys(3)
-        complex :: oshift
-        real    :: shift(3)
-        if( .not. fpl%is_ft() )       stop 'image need to be FTed; inout_fplane; simple_reconstructor'
-        if( .not. (self.eqsmpd.fpl) ) stop 'scaling not yet implemented; inout_fplane; simple_reconstructor'
-        lims       = self%loop_lims(2)
-        oshift     = cmplx(1.,0.)
-        shift      = 0.
-        shift(1:2) = o%get_shift()
-        if( any(abs(shift(1:2)) > SHTHRESH) )then ! shift the image prior to insertion
-            if( present(mul) ) shift(1:2) = mul * shift(1:2)
-        endif
-        where( abs(shift(1:2)) < 1.e-6 )shift(1:2) = 0.
-        !$omp parallel do collapse(2) default(shared) schedule(static)&
-        !$omp private(h,k,oshift,logi,phys) proc_bind(close)
-        do h=lims(1,1),lims(1,2)
-            do k=lims(1,1),lims(1,2)
-                logi   = [h,k,0]
-                oshift = fpl%oshift(logi, -shift, ldim=2)
-                phys   = fpl%comp_addr_phys(logi)
-                call self%inout_fcomp_dev(h, k, o, inoutmode, fpl%get_fcomp(logi,phys), oshift,&
-                &pwght=pwght, ctfsq=real(norm%get_fcomp(logi,phys)))
-            end do
-        end do
-        !$omp end parallel do
-    end subroutine inout_fplane_dev
 
     subroutine sampl_dens_correct( self, self_out )
         class(reconstructor),   intent(inout) :: self

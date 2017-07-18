@@ -13,8 +13,7 @@ use simple_masker        ! use all in there
 implicit none
 
 public :: read_img_from_stk, set_bp_range, set_bp_range2D, grid_ptcl, prepimg4align,&
-&eonorm_struct_facts, norm_struct_facts, preprefvol, prep2Dref, preprecvols, killrecvols,&
-&grid_ptcl_dev
+&eonorm_struct_facts, norm_struct_facts, preprefvol, prep2Dref, preprecvols, killrecvols
 private
 
 logical, parameter :: DEBUG     = .false.
@@ -243,106 +242,6 @@ contains
             end do
         endif
     end subroutine grid_ptcl
-
-    !>  \brief  grids one particle image to the volume
-    subroutine grid_ptcl_dev( b, p, orientation, os, ran_eo )
-        use simple_kbinterpol, only: kbinterpol
-        use simple_image,      only: image
-        use simple_ctf,        only: ctf
-        class(build),              intent(inout) :: b
-        class(params),             intent(inout) :: p
-        class(ori),                intent(inout) :: orientation
-        class(oris),     optional, intent(inout) :: os
-        real,            optional, intent(in)    :: ran_eo
-        type(ctf)             :: tfun
-        type(image)           :: ctf_img, norm_img
-        type(ori)             :: orisoft, o_sym
-        type(kbinterpol)      :: kbwin
-        character(len=STDLEN) :: ctf_flag 
-        real                  :: pw, ran, w, dfx, dfy, angast
-        integer               :: jpeak, s, k, npeaks
-        logical               :: softrec
-        if( p%eo .eq. 'yes' )then
-            kbwin = b%eorecvols(1)%get_kbwin()
-        else
-            kbwin = b%recvols(1)%get_kbwin()
-        endif
-        softrec = .false.
-        npeaks  = 1
-        if( present(os) )then
-            softrec = .true.
-            npeaks  = os%get_noris()
-        endif
-        pw = orientation%get('w')
-        if( pw > 0. )then
-            ! prepare image for gridding
-            ! using the uncorrected/unmodified image as input
-            if( p%l_xfel )then
-                call b%img%pad(b%img_pad)
-            else
-                call prep4cgrid(b%img, b%img_pad, p%msk, kbwin)
-            endif
-            if( DEBUG ) write(*,*) '*** simple_hadamard_common ***: prepared image for gridding'
-            ran = ran3()
-            if( present(ran_eo) )ran = ran_eo 
-            orisoft = orientation
-            ! ctf
-            if( p%ctf.ne.'no' )then
-                ctf_flag = p%ctf
-                if( p%ctf.eq.'yes' )ctf_flag = 'ctf'
-                call ctf_img%new(b%img_pad%get_ldim(), b%img_pad%get_smpd())
-                call ctf_img%set_ft(.true.)
-                tfun = ctf(ctf_img%get_smpd(), orisoft%get('kv'), orisoft%get('cs'), orisoft%get('fraca'))
-                dfx  = orisoft%get('dfx')
-                dfy    = 0.
-                angast = 0.
-                if( orisoft%isthere('dfy') )   dfy     = orisoft%get('dfy')
-                if( orisoft%isthere('angast') )angast  = orisoft%get('angast')
-                call tfun%ctf2img(ctf_img, dfx, ctf_flag, dfy, angast, ctfsqimg=norm_img)
-                call b%img_pad%mul(ctf_img)
-                call ctf_img%kill
-            else
-                call norm_img%new(b%img_pad%get_ldim(), b%img_pad%get_smpd())
-                call norm_img%set_ft(.true.)
-                norm_img = cmplx(1., 0.)             
-            endif
-            ! main loop
-            do jpeak = 1, npeaks
-                if( DEBUG ) write(*,*) '*** simple_hadamard_common ***: gridding, iteration:', jpeak
-                ! get ori info
-                if( softrec )then
-                    orisoft =  os%get_ori(jpeak)
-                    w = orisoft%get('ow')
-                else
-                    w = 1.
-                endif
-                s = nint(orisoft%get('state'))
-                if( DEBUG ) write(*,*) '*** simple_hadamard_common ***: got orientation'
-                if( p%frac < 0.99 ) w = w*pw
-                if( w > 0. )then
-                    if( p%pgrp == 'c1' )then
-                        if( p%eo .eq. 'yes' )then
-                            call b%eorecvols(s)%grid_fplane_dev(orisoft, b%img_pad, norm_img, pwght=w, ran=ran)
-                        else
-                            call b%recvols(s)%inout_fplane_dev(orisoft, .true., b%img_pad, norm_img, pwght=w)
-                        endif
-                    else
-                        do k=1,b%se%get_nsym()
-                            o_sym = b%se%apply(orisoft, k)
-                            if( p%eo .eq. 'yes' )then
-                                call b%eorecvols(s)%grid_fplane_dev(o_sym, b%img_pad, norm_img, pwght=w, ran=ran)
-                            else
-                                call b%recvols(s)%inout_fplane_dev(o_sym, .true., b%img_pad, norm_img, pwght=w)
-                            endif
-                        end do
-                    endif
-                endif
-                if( DEBUG ) write(*,*) '*** simple_hadamard_common ***: gridded ptcl'
-            end do
-        endif
-        ! cleanup
-        call norm_img%kill
-    end subroutine grid_ptcl_dev
 
     !>  \brief  prepares one particle image for alignment 
     subroutine prepimg4align( b, p, o )

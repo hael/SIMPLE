@@ -45,12 +45,12 @@ type :: eo_reconstructor
     procedure, private :: read_odd
     ! INTERPOLATION
     procedure          :: grid_fplane
-    procedure          :: grid_fplane_dev
     procedure          :: compress_exp
     procedure          :: sum_eos ! for merging even and odd into sum
     procedure          :: sum     ! for summing eo_recs obtained by parallell exec
     procedure          :: sampl_dens_correct_eos
     procedure          :: sampl_dens_correct_sum
+    ! RECONSTRUCTION
     procedure          :: eorec
     ! DESTRUCTOR
     procedure          :: kill_exp
@@ -253,30 +253,6 @@ contains
             &pwght=pwght, mul=mul, shellweights=shellweights)
         endif
     end subroutine grid_fplane
-
-    !> \brief  for gridding a Fourier plane
-    subroutine grid_fplane_dev(self, o, fpl, norm, pwght, mul, ran)
-        use simple_ori, only: ori
-        use simple_rnd, only: ran3
-        class(eo_reconstructor), intent(inout) :: self            !< instance
-        class(ori),              intent(inout) :: o               !< orientation
-        class(image),            intent(inout) :: fpl             !< Fourier plane
-        class(image),            intent(inout) :: norm            !< 
-        real, optional,          intent(in)    :: pwght           !< external particle weight (affects both fplane and rho)
-        real, optional,          intent(in)    :: mul             !< shift multiplication factor
-        real, optional,          intent(in)    :: ran             !< external random number
-        real    :: rran
-        if( present(ran) )then
-            rran = ran
-        else
-            rran = ran3()
-        endif
-        if( rran > 0.5 )then
-            call self%even%inout_fplane_dev(o, .true., fpl, pwght=pwght, mul=mul, norm=norm)
-        else
-            call self%odd%inout_fplane_dev(o, .true., fpl, pwght=pwght, mul=mul, norm=norm)
-        endif
-    end subroutine grid_fplane_dev
     
     !> \brief  for summing the even odd pairs, resulting sum in self%even
     subroutine sum_eos( self )
