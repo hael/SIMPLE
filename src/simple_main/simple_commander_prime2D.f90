@@ -90,7 +90,18 @@ contains
         else
             p%oritab = 'prime2D_startdoc.txt'
         endif
+        ! Multiplication
         if( p%mul > 1. ) call b%a%mul_shifts(p%mul)
+        ! Setup weights
+        if( p%weights2D.eq.'yes' )then
+            if( p%nptcls <= SPECWMINPOP )then
+                call b%a%calc_hard_ptcl_weights(p%frac)
+            else
+                call b%a%calc_spectral_weights(p%frac)
+            endif
+        else
+            call b%a%set_all2single('w', 1.)
+        endif
         if( p%l_distr_exec .and. nint(cline%get_rarg('part')) .eq. 1 )then
             call b%a%write(p%oritab)
         endif
@@ -107,16 +118,6 @@ contains
                 call prime2D_write_sums(b, p)
             endif           
         else
-            ! setup weights
-            if( p%weights2D.eq.'yes' )then
-                if( p%nptcls <= SPECWMINPOP )then
-                    call b%a%calc_hard_ptcl_weights(p%frac)
-                else
-                    call b%a%calc_spectral_weights(p%frac)
-                endif
-            else
-                call b%a%calc_hard_ptcl_weights(p%frac)
-            endif
             ! assembly
             call prime2D_assemble_sums(b, p)
             if( p%l_distr_exec)then

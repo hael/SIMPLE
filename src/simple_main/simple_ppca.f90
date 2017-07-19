@@ -362,9 +362,9 @@ contains
             do i=1,self%N
                 ! read data vec
                 read(self%funit, rec=i) self%X(:,1)
-                !$omp parallel workshare proc_bind(close)
+                !!$omp parallel workshare proc_bind(close)  ! for gcc6 compliance
                 tmp = matmul(self%W,self%E_zn(i,:,:))
-                !$omp end parallel workshare
+                !!$omp end parallel workshare
                 p = p + sqrt(sum((self%X(:,1)-tmp(:,1))**2.))
             end do
         endif

@@ -49,8 +49,8 @@ contains
                 call b%a%calc_spectral_weights(p%frac)
             endif
         else
-            ! defaults to hard weighing
-            call b%a%calc_hard_ptcl_weights(p%frac)
+            ! defaults to unitary weights
+            call b%a%set_all2single('w', 1.)
         endif
 
         ! PREP REFERENCES
