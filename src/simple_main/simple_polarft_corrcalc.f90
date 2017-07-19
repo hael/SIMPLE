@@ -536,7 +536,6 @@ contains
         endif
         if( present(kstop) )then
             sqsum_ref = sum(csq(pft_ref(:,self%kfromto(1):kstop)))
-
         else
             sqsum_ref = sum(csq(pft_ref))
         endif

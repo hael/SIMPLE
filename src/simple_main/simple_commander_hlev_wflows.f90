@@ -443,9 +443,9 @@ contains
         call cline_recvol_distr%set('eo', 'yes')
         call cline_recvol_distr%delete('lp')
         cline_postproc_vol = cline
-        call cline_recvol_distr%set('prg', 'postproc_vol')
-        call cline_recvol_distr%set('eo', 'yes')
-        call cline_recvol_distr%delete('lp')
+        call cline_postproc_vol%set('prg', 'postproc_vol')
+        call cline_postproc_vol%set('eo', 'yes')
+        call cline_postproc_vol%delete('lp')
         cline_prime3D_master = cline
         call cline_prime3D_master%set('prg', 'prime3D')
         call cline_prime3D_master%set('startit', 1.)

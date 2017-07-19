@@ -107,6 +107,17 @@ contains
                 call prime2D_write_sums(b, p)
             endif           
         else
+            ! setup weights
+            if( p%weights2D.eq.'yes' )then
+                if( p%nptcls <= SPECWMINPOP )then
+                    call b%a%calc_hard_ptcl_weights(p%frac)
+                else
+                    call b%a%calc_spectral_weights(p%frac)
+                endif
+            else
+                call b%a%calc_hard_ptcl_weights(p%frac)
+            endif
+            ! assembly
             call prime2D_assemble_sums(b, p)
             if( p%l_distr_exec)then
                 call prime2D_write_partial_sums( b, p )

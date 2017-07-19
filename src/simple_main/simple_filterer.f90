@@ -116,7 +116,7 @@ contains
         type(image) :: roimg, ctfsq
         type(ctf)   :: tfun
         integer     :: ldim(3)
-        real        :: angast,dfx,dfy,x,y,smpd,w
+        real        :: angast, dfx, dfy, x, y, smpd, w
         logical     :: aadd
         aadd = .true.
         if( present(add) ) aadd = add
@@ -141,6 +141,7 @@ contains
         end select
         x = -o%get('x')
         y = -o%get('y')
+        w = o%get('w')
         ! apply
         call img%fwd_ft
         ! take care of the nominator
@@ -156,11 +157,11 @@ contains
         call rotimg(img, -o%e3get(), msk, roimg)
         ! assemble img_rec sum
         if( aadd )then
-            call img_rec%add(roimg)
-            call ctfsqsum%add(ctfsq)
+            call img_rec%add(roimg, w)
+            call ctfsqsum%add(ctfsq, w)
         else
-            call img_rec%subtr(roimg)
-            call ctfsqsum%subtr(ctfsq)
+            call img_rec%subtr(roimg, w)
+            call ctfsqsum%subtr(ctfsq, w)
         endif
         call roimg%kill
         call ctfsq%kill

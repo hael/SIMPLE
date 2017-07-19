@@ -94,6 +94,7 @@ type :: params
     character(len=3)      :: verbose='no'
     character(len=3)      :: vis='no'
     character(len=3)      :: xfel='no'
+    character(len=3)      :: weights2D='no'
     character(len=3)      :: zero='no'
     ! other fixed length character variables in ascending alphabetical order
     character(len=STDLEN) :: angastunit='degrees'
@@ -510,6 +511,7 @@ contains
         call check_carg('vis',            self%vis)
         call check_carg('vol',            self%vol)
         call check_carg('wfun',           self%wfun)
+        call check_carg('weights2D',      self%weights2D)
         call check_carg('xfel',           self%xfel)
         call check_carg('zero',           self%zero)
         call check_file('boxfile',        self%boxfile,'T')

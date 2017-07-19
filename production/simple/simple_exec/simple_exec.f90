@@ -648,11 +648,12 @@ select case(prg)
         keys_optional(8)  = 'outfile'
         keys_optional(9)  = 'refs'
         keys_optional(10) = 'remap_classes'
+        keys_optional(11) = 'weights2D'
         ! parse command line
         if( describe ) call print_doc_makecavgs
-        call cline%parse(keys_required(:3), keys_optional(:10))
+        call cline%parse(keys_required(:3), keys_optional(:11))
         ! set defaults
-        if( .not. cline%defined('eo') ) call cline%set('eo', 'no')
+        if( .not. cline%defined('weights2D') ) call cline%set('weights2D', 'no')
         ! execute
         call xmakecavgs%execute(cline)
     case( 'prime2D' )
@@ -687,17 +688,19 @@ select case(prg)
         keys_optional(17) = 'maxits'
         keys_optional(18) = 'center'
         keys_optional(19) = 'oritab3D'
+        keys_optional(20) = 'weights2D'
         ! parse command line
         if( describe ) call print_doc_prime2D
-        call cline%parse(keys_required(:5), keys_optional(:19))
+        call cline%parse(keys_required(:5), keys_optional(:20))
         ! set defaults
-        if( .not. cline%defined('lpstart') ) call cline%set('lpstart',  15.)
-        if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',    8.)
-        if( .not. cline%defined('amsklp')  ) call cline%set('amsklp',   20.)
-        if( .not. cline%defined('cenlp')   ) call cline%set('cenlp',    30.)
-        if( .not. cline%defined('edge')    ) call cline%set('edge',     10.)
-        if( .not. cline%defined('eo')      ) call cline%set('eo',      'no')
-        if( .not. cline%defined('maxits')  ) call cline%set('maxits',   30.)
+        if( .not. cline%defined('lpstart')   ) call cline%set('lpstart',  15.)
+        if( .not. cline%defined('lpstop')    ) call cline%set('lpstop',    8.)
+        if( .not. cline%defined('amsklp')    ) call cline%set('amsklp',   20.)
+        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',    30.)
+        if( .not. cline%defined('edge')      ) call cline%set('edge',     10.)
+        if( .not. cline%defined('eo')        ) call cline%set('eo',      'no')
+        if( .not. cline%defined('maxits')    ) call cline%set('maxits',   30.)
+        if( .not. cline%defined('weights2D') ) call cline%set('weights2D','no')
         ! execute
         call xprime2D%execute(cline)
     case( 'cavgassemble' )
