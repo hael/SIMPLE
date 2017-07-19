@@ -64,6 +64,7 @@ tseries
 verbose
 vis
 xfel
+weights2D
 zero
 angastunit
 automsk

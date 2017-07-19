@@ -2,7 +2,7 @@
 
 ####### The project path #####
 
-Simple_source=/Users/cyrilreboul/Simple3
+Simple_source=/Users/susan/src/fortran/simple3.0
 
 ####### The switches #####
 
@@ -32,7 +32,7 @@ MODDIR=obj/SIMPLEOFILES
 CC=$(CCCOMP)
 CFLAGS= -O3 -O -DMACOSX -fopenmp -DOPENMP   
 CCLIB=$(CC) -c $(CFLAGS) -I $(MODDIR)  -I$(Simple_source)/simple_utils        \
-                         -I /opt/local/include/
+                         -I /sw//include/
 
 ##############
 # Preprocessor .#
@@ -40,7 +40,7 @@ CCLIB=$(CC) -c $(CFLAGS) -I $(MODDIR)  -I$(Simple_source)/simple_utils        \
 
 FPP=cpp 
 FPPFLAGS= -P $(DOPENMP) -J $(MODDIR) -I $(OBJDIR) -I $(MODDIR) -I$(Simple_source)/simple_utils  \
-                         -I /opt/local/include/
+                         -I /sw//include/
 
 ################
 # C++ compiler.#
@@ -50,7 +50,7 @@ CPP=$(GCC)
 CPPFLAGS=-DADD_ -O3 -DMACOSX -fopenmp -DOPENMP   
 CPPCLIB=$(CPP) -c $(CPPFLAGS) -I $(MODDIR)  -I$(Simple_source)/simple_utils        \
                               -I $(Simple_source)/test_code                           \
-                              -I /opt/local/include/
+                              -I /sw//include/
 
 #######################
 # Fortran 90 compiler.#

@@ -236,6 +236,7 @@ contains
         call chdict%push('ctfreslim',     'ctf resolution (A) for setting state flag {8 A}')
         call chdict%push('df_close',      'close to focus defocus limit for setting state flag {1 micron}')
         call chdict%push('df_far',        'far from focus defoucs limit for setting state flag {4 microns}')
+        call chdict%push('weights2D',     'spectral weighting in 2D (yes|no){no}')
         initialised = .true.
     end subroutine init_cmd_dict
     
