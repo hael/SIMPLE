@@ -362,7 +362,7 @@ contains
             call self%eosum%clip(reference)
         endif
     end subroutine sampl_dens_correct_sum
-    
+
     ! RECONSTRUCTION
     
     !> \brief  for reconstructing Fourier volumes according to the orientations 

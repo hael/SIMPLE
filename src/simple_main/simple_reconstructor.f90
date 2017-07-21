@@ -20,7 +20,7 @@ type, extends(image) :: reconstructor
     real(kind=c_float), pointer :: rho(:,:,:)=>null()           !< sampling+CTF**2 density
     complex, allocatable        :: cmat_exp(:,:,:)              !< Fourier components of expanded reconstructor
     real,    allocatable        :: rho_exp(:,:,:)               !< sampling+CTF**2 density of expanded reconstructor
-    real                        :: winsz         = 1.          !< window half-width
+    real                        :: winsz         = 1.           !< window half-width
     real                        :: alpha         = 2.           !< oversampling ratio
     real                        :: dens_const    = 1.           !< density estimation constant, old val: 1/nptcls
     integer                     :: lfny          = 0            !< Nyqvist Fourier index
@@ -50,6 +50,7 @@ type, extends(image) :: reconstructor
     procedure          :: compress_exp
     ! SUMMATION
     procedure          :: sum
+    procedure          :: invctfsq_shellsum
     ! RECONSTRUCTION
     procedure          :: rec
     ! DESTRUCTORS
@@ -417,6 +418,52 @@ contains
          self%rho = self%rho+self_in%rho
          !$omp end parallel workshare
     end subroutine sum
+
+    ! for summing the spectral inverse CTF square sum
+    ! untested
+    subroutine invctfsq_shellsum( self, invctfsqsum  )
+        use simple_math, only: hyp
+        class(reconstructor), intent(inout) :: self
+        real,    allocatable, intent(out)   :: invctfsqsum(:)
+        real,    allocatable :: ctfsqsum(:)
+        integer, allocatable :: sh_cnt(:)
+        integer :: sh, h, k, l, n, lfny, lims(3,2), phys(3)
+        if( .not.self%rho_allocated )stop 'Invalid call; simple_reconstructor%invctfsq_shellsum'
+        n    = self%get_filtsz()
+        lfny = self%get_lfny(1)
+        lims = self%loop_lims(2)
+        allocate(invctfsqsum(n), ctfsqsum(n), sh_cnt(n))
+        invctfsqsum = 0.
+        ctfsqsum    = 0.
+        sh_cnt      = 0
+        !$omp parallel do collapse(3) default(shared) private(sh,h,k,l,phys)&
+        !$omp reduction(+:ctfsqsum,sh_cnt) schedule(static) proc_bind(close)
+        do h=lims(1,1),lims(1,2)
+            do k=lims(2,1),lims(2,2)
+                do l=lims(3,1),lims(3,2)
+                    sh = nint(hyp(real(h),real(k),real(l)))
+                    if(sh > lfny)cycle
+                    phys = self%comp_addr_phys([h,k,l])
+                    ctfsqsum(sh) = ctfsqsum(sh) + self%rho(phys(1), phys(2), phys(3))
+                    sh_cnt(sh)   = sh_cnt(sh) + 1
+                end do
+            end do
+        end do
+        !$omp end parallel do
+        do k = 1, n
+            if( sh_cnt(k) == 0 )then
+                invctfsqsum(k) = 0.0
+            else
+                if( ctfsqsum(k) < TINY )then
+                    invctfsqsum = 0.0
+                else
+                    invctfsqsum(k) = real(sh_cnt(k)) / ctfsqsum(k)
+                endif
+            endif
+        enddo
+        where( invctfsqsum < TINY )invctfsqsum = 0.0
+        deallocate(ctfsqsum, sh_cnt)
+    end subroutine invctfsq_shellsum
     
     ! RECONSTRUCTION
     

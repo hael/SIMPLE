@@ -93,6 +93,7 @@ extrmode
 fbody
 featstk
 filetab
+filter
 fname
 fsc
 hfun

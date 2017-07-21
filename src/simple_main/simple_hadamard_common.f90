@@ -245,13 +245,15 @@ contains
 
     !>  \brief  prepares one particle image for alignment 
     subroutine prepimg4align( b, p, o )
-        use simple_ctf, only: ctf
+        use simple_filterer, only: resample_filter
+        use simple_ctf,      only: ctf
         class(build),      intent(inout) :: b
         class(params),     intent(inout) :: p
         type(ori),         intent(inout) :: o
-        type(ctf) :: tfun
-        real      :: x, y, dfx, dfy, angast
-        integer   :: state, cls
+        type(ctf)         :: tfun
+        real, allocatable :: filter(:) 
+        real              :: x, y, dfx, dfy, angast
+        integer           :: state, cls
         if( p%l_xfel )then
             ! nothing to do 4 now
             return
@@ -312,6 +314,31 @@ contains
                 else
                     call b%img_match%mask(p%msk, 'soft')
                 endif
+            endif
+            ! image filtering
+            if( p%filter.ne.'no' .and. p%eo.eq.'yes')then
+                select case(p%filter)
+                    case( 'ssnr' )
+                        ! dummy implementation for testing
+                        call b%img_match%shellnorm
+                        if( p%box.eq.p%boxmatch )then
+                            filter = b%ssnr(state,:)
+                        else
+                            filter = resample_filter(b%ssnr(state,:), b%img%get_res(), b%img_match%get_res())
+                        endif
+                        filter = sqrt(filter + 1.0)
+                        call b%img_match%apply_filter( filter )                                
+                    ! old pssnr implementation 
+                    ! case( 'pssnr' )
+                    !     call b%img%shellnorm
+                    !     call tfun%ctf2img(b%img_copy, dfx, 'square', dfy, angast)
+                    !     call b%img_copy%apply_filter( **pssnr** )
+                    !     call b%img_copy%add(1.0)
+                    !     call b%img_copy%square_root
+                    !     call b%img%apply_filter(b%img_copy)
+                    case DEFAULT
+                        stop 'Unknown filter; simple_hadamard_common%prepimg4align'
+                end select
             endif
             ! return in Fourier space
             call b%img_match%fwd_ft

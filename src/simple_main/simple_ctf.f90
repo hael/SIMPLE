@@ -146,7 +146,7 @@ contains
     
     !>  \brief  is for making a CTF image
     !!          modes: abs, ctf, flip, flipneg, neg, square 
-    subroutine ctf2img( self, img, dfx, mode, dfy, angast, bfac, ctfsqimg )
+    subroutine ctf2img( self, img, dfx, mode, dfy, angast, bfac )
         use simple_image, only: image
         class(ctf),                 intent(inout) :: self        !< instance
         class(image),               intent(inout) :: img         !< image (output)
@@ -155,7 +155,6 @@ contains
         real,             optional, intent(in)    :: dfy         !< defocus y-axis
         real,             optional, intent(in)    :: angast      !< angle of astigmatism
         real,             optional, intent(in)    :: bfac        !< bfactor
-        class(image),     optional, intent(out)   :: ctfsqimg    !< ctf squared image (output)
         integer :: lims(3,2),h,k,phys(3),hh,kk,ldim(3)
         real    :: ang, tval, tvalsq, ddfy, aangast, spaFreqSq, hinv
         real    :: kinv, inv_ldim(3)
@@ -207,23 +206,6 @@ contains
         end do
         !$omp end parallel do 
         if( present(bfac) ) call img%apply_bfac(bfac) 
-        if( present(ctfsqimg) )then
-            ! ctf squared
-            call ctfsqimg%new(img%get_ldim(), img%get_smpd())
-            call ctfsqimg%set_ft(.true.)
-            !$omp parallel do collapse(2) default(shared) private(h,hinv,k,kinv,spaFreqSq,ang,tval,phys) &
-            !$omp schedule(static) proc_bind(close)
-            do h=lims(1,1),lims(1,2)
-                do k=lims(2,1),lims(2,2)
-                    phys   = img%comp_addr_phys([h,k,0])
-                    tval   = img%get_fcomp([h,k,0], phys)
-                    tvalsq = min(1.,max(tval**2.,0.001))
-                    ! stored as complex for dimensions congruence!!
-                    call ctfsqimg%set_fcomp([h,k,0], phys, cmplx(tvalsq,0.))
-                enddo
-            enddo
-            !$omp end parallel do 
-        endif
     end subroutine ctf2img
 
     !>  \brief  is for making a CTF spectrum (1d)
