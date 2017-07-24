@@ -46,16 +46,16 @@ end type sa_opt
 
 !>  \brief  defines the function interfaces
 abstract interface
-    !> Cost minimisation/maximisation function of optimisation
+    !> Template for cost minimisation/maximisation function of optimisation
     function costfun( vec, i, N, L ) result( cost )
         integer, intent(in) :: N, L, vec(N,L), i
         real                :: cost
     end function costfun
-    !> Definition of completion function of optimisation
+    !> Template for completion function of optimisation
     subroutine acceptfun( vec, i, L )
         integer, intent(in) :: L, vec(L), i
     end subroutine acceptfun
-    !< Current state of optimisation
+    !< Template for current state of optimisation
     subroutine statefun( T, Tinit )
         real, intent(in) :: T, Tinit
     end subroutine
@@ -309,10 +309,10 @@ contains
     !> \brief combinatorial minimization by simple hill climbing
     subroutine minimize_climb( self, max_rearr, in_solution, out_solution, cost )
         class(sa_opt), intent(inout) :: self
-        integer, intent(in)          :: max_rearr
-        integer, intent(in)          :: in_solution(self%N,self%L)
-        integer, intent(out)         :: out_solution(self%N,self%L)
-        real, intent(out)            :: cost
+        integer, intent(in)          :: max_rearr !< limit rearranging
+        integer, intent(in)          :: in_solution(self%N,self%L)  !< input solution
+        integer, intent(out)         :: out_solution(self%N,self%L) !< output of optimisation
+        real, intent(out)            :: cost                        !< best result
         real                         :: joint_cost
         integer                      :: i, j
         ! Initialization based on input

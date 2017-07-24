@@ -18,6 +18,12 @@ end interface
 contains
     
     !>  \brief  is for generating a mask for solvent flattening of an image
+    !>
+    !! \param p param object
+    !! \param nvox num mask voxels
+    !! \param img  image volume
+    !! \param img_msk mask volume
+    !!
     subroutine automask_1(img, p, img_msk, nvox )
         use simple_image,  only: image
         use simple_params, only: params
@@ -54,6 +60,10 @@ contains
     
     !>  \brief  is for generating and applying a mask for 
     !!          solvent flattening of an image
+    !>
+    !! \param p param object
+    !! \param nvox num masking voxels
+    !! \param img reconstructed image volume
     subroutine automask_2(img, p, nvox )
         use simple_image,  only: image
         use simple_params, only: params
@@ -75,6 +85,15 @@ contains
     
     !>  \brief  is for generating, applying, and writing to file 
     !!           a mask for solvent flattening of an image
+    !> automask_3
+    !! \param b build object
+    !! \param p param object
+    !! \param cline command line
+    !! \param recvol reconstructed image volume
+    !! \param maskvol mask volume
+    !! \param volnam filename of volume
+    !! \param masknam filename of mask
+    !!
     subroutine automask_3( b, p, cline, recvol, maskvol, volnam, masknam )
         use simple_build,   only: build
         use simple_params,  only: params
@@ -98,7 +117,14 @@ contains
         call recvol%write(volnam, del_if_exists=.true.)
     end subroutine automask_3
     
-    !>  \brief  is for generating & applying a mask for solvent flattening of an image
+    !>  \brief automask_4 is for generating & applying a mask for solvent flattening of an image
+    !>
+    !! \param b build object
+    !! \param p param object
+    !! \param cline command line
+    !! \param recvol reconstructed image volume
+    !! \param maskvol mask volume
+    !!
     subroutine automask_4( b, p, cline, recvol, maskvol )
         use simple_build,   only: build
         use simple_params,  only: params
@@ -126,6 +152,11 @@ contains
     end subroutine automask_4
     
     !>  \brief  is for automasking in 2D
+    !> automask2D
+    !! \param img input image 
+    !! \param p params
+    !! \param img_msk_out output masked image 
+    !!
     subroutine automask2D( img, p, img_msk_out )
         use simple_params,  only: params
         use simple_image,   only: image

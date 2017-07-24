@@ -1,9 +1,6 @@
 !------------------------------------------------------------------------------!
 ! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
 !------------------------------------------------------------------------------!
-!------------------------------------------------------------------------------!
-! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
 !> simple_ori
 !
 !! simple_ori handles orientational information.
@@ -638,12 +635,14 @@ contains
     end subroutine shift
 
     !>  \brief  is for composing Euler angles
+    !! multiplication of two rotation matrices commute (n>2 not)
+    !! the composed rotation matrix is constructed
+    !! \param self1,self2 ori class type rotational matrices
     function compeuler( self1, self2 ) result( self_out )
         class(ori), intent(in) :: self1, self2
         type(ori) :: self_out
         call self_out%new_ori
-        self_out%rmat = matmul(self2%rmat,self1%rmat)  ! multiplication of two rotation matrices commute (n>2 not)
-        ! the composed rotation matrix is constructed
+        self_out%rmat = matmul(self2%rmat,self1%rmat) 
         ! convert to euler
         self_out%euls = m2euler(self_out%rmat)
         call self_out%set('e1',self_out%euls(1))
@@ -653,6 +652,7 @@ contains
     end function compeuler
 
     !>  combines 3d and 2d oris and flags for ptcl mirroring
+    !! \param ori3d,ori2d,o_out ori class type rotational matrices
     subroutine compose3d2d( ori3d, ori2d, o_out )
         use simple_math, only: make_transfmat, transfmat2inpls
         class(ori), intent(inout) :: ori3d, ori2d, o_out
@@ -692,7 +692,7 @@ contains
     subroutine map3dshift22d( self, sh3d )
         use simple_math, only: deg2rad
         class(ori), intent(inout) :: self
-        real, intent(in)          :: sh3d(3)
+        real, intent(in)          :: sh3d(3) !< 3D shift 
         real                      :: old_x,old_y,x,y,cx,cy
         real                      :: u(3),v(3),shift(3)
         real                      :: phi,cosphi,sinphi
@@ -757,6 +757,8 @@ contains
         self%normal = matmul(zvec, self%rmat)
     end subroutine mirror2d
 
+
+    !! \param self1,self2 ori class type rotational matrices
     subroutine oripair_diverse( self1, self2 )
         use simple_simplex_opt, only: simplex_opt
         use simple_opt_spec,    only: opt_spec
@@ -823,10 +825,13 @@ contains
         angthres = 0.
     end subroutine oripair_diverse_projdir
 
-    !>  \brief  if mode='median' this function creates a spatial median rotation matrix
+    !>  \brief creates a spatial median or maximally diverse rotation matrix
+    !!  if mode='median' this function creates a spatial median rotation matrix
     !!          that is "in between" the two inputted rotation matrices in a geodesic
     !!          distance sense and if mode='diverse' it creates the rotation matrix that
     !!          is maximally diverse with respect to the inputted two
+    !! \param mode 'median' or 'diverse'
+    !! \param self1,self2 ori class type rotaional matrices
     function ori_generator( self1, self2, mode ) result( oout )
         use simple_simplex_opt, only: simplex_opt
         use simple_opt_spec,    only: opt_spec
@@ -888,6 +893,7 @@ contains
     !!          Larochelle, P.M., Murray, A.P., Angeles, J., A distance metric for finite
     !!          sets of rigid-body displacement in the polar decomposition. ASME J. Mech. Des.
     !!          129, 883–886 (2007)
+    !! \param self1,self2 ori class type rotational matrices
     pure real function geodesic_dist( self1, self2 )
         class(ori), intent(in) :: self1, self2
         real :: Imat(3,3), sumsq, diffmat(3,3)
@@ -905,6 +911,7 @@ contains
     end function geodesic_dist
 
     !>  \brief  this is the same metric as above, scaled to [0,pi]
+    !! \param self1,self2 ori class type rotational matrices
     pure real function geodesic_dist_scaled( self1, self2 )
         class(ori), intent(in) :: self1, self2
         real, parameter :: old_max = 2.*sqrt(2.)
@@ -914,6 +921,7 @@ contains
     ! CLASSIC DISTANCE METRICS
 
     !>  \brief  calculates the distance (in radians) btw two Euler angles
+    !! \param self1,self2 ori class type rotational matrices
     pure function euldist( self1, self2 ) result( dist )
         use simple_math, only: myacos
         class(ori), intent(in) :: self1, self2
@@ -922,6 +930,7 @@ contains
     end function euldist
 
     !>  \brief  calculates the distance (in radians) btw all df:s
+    !! \param self1,self2 ori class type rotaional matrices
     pure function inpldist( self1, self2 ) result( dist )
         use simple_math, only: myacos, rotmat2d
         class(ori), intent(in) :: self1, self2
@@ -929,7 +938,8 @@ contains
         dist = ((self1.inplrotdist.self2)+(self1.euldist.self2))/2.
     end function inpldist
 
-     !>  \brief  calculates the distance (in radians) btw the in-plane rotations
+    !>  \brief  calculates the distance (in radians) btw the in-plane rotations
+    !! \param self1,self2 ori class type rotaional matrices
     pure function inplrotdist( self1, self2 ) result( dist )
         use simple_math, only: myacos, rotmat2d
         class(ori), intent(in) :: self1, self2
@@ -954,6 +964,7 @@ contains
     ! PRIVATE STUFF
 
     !>  \brief  makes a rotation matrix from a Spider format Euler triplet
+    !! \param e1,e2,e3 Euler triplet
     pure function euler2m( e1, e2, e3 ) result( r )
         real, intent(in)     :: e1, e2, e3
         real, dimension(3,3) :: r1, r2, r3, r, tmp

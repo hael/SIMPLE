@@ -47,7 +47,7 @@ type :: ftiter
     procedure :: comp_addr_logi
     ! TESTS
     procedure, private :: test_addr
-end type
+end type ftiter
 
 interface ftiter
     module procedure constructor
@@ -293,7 +293,7 @@ contains
         endif
     end function comp_addr_phys
 
-    !>  \brief  Convert physical address to logical address. Complex image.
+    !> \brief Convert physical address to logical address. Complex image.
     function comp_addr_logi(self,phys) result(logi)
         class(ftiter), intent(in) :: self
         integer,       intent(in) :: phys(3) !<  Physical address

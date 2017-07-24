@@ -3,8 +3,8 @@
 !------------------------------------------------------------------------------!
 !> Simple commander module: high-level workflows
 !
-!! This class contains commanders responsible for execution of high-level workflows in SIMPLE. This class provides 
-!! the glue between the reciver (main reciever is simple_distr_exec) and the abstract action, which is simply execute 
+!! This class contains commanders responsible for execution of high-level workflows in SIMPLE. This class provides
+!! the glue between the reciver (main reciever is simple_distr_exec) and the abstract action, which is simply execute
 !! (defined by the base class: simple_commander_base).
 !
 ! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
@@ -60,7 +60,7 @@ contains
         type(makecavgs_distr_commander)              :: xmakecavgs
         type(prime2D_distr_commander),       target  :: xprime2D_distr
         type(prime2D_chunk_distr_commander), target  :: xprime2D_chunk_distr
-        class(commander_base),               pointer :: xprime2D => null() 
+        class(commander_base),               pointer :: xprime2D => null()
         type(rank_cavgs_commander)                   :: xrank_cavgs
         ! command lines
         type(cmdline) :: cline_prime2D_stage1
@@ -94,7 +94,7 @@ contains
             cline_prime2D_stage1 = cline
             call cline_prime2D_stage1%set('maxits', real(MAXITS_STAGE1))
             call xprime2D%execute(cline_prime2D_stage1)
-            ! prepare stage 2 input -- re-scale 
+            ! prepare stage 2 input -- re-scale
             call scobj%uninit(cline) ! puts back the old command line
             call scobj%init(p_master, cline, p_master%smpd_targets2D(2), STKSCALEDBODY)
             scale_stage2 = scobj%get_scaled_var('scale')
@@ -148,7 +148,7 @@ contains
     end subroutine exec_prime2D_autoscale
 
     !> ini3D_from_cavgs is a SIMPLE program to generate initial 3d model from class averages
-    !! @see  doc/SimpleTutorials2017/Tutorials.html?#ab-initio-3d-reconstruction-from-class-averages
+    !! @see  http://simplecryoem.com/tutorials.html?#ab-initio-3d-reconstruction-from-class-averages
     !!
     !! Example:
     !! ```sh
@@ -360,7 +360,7 @@ contains
                 character(len=3) :: str_iter
                 str_iter = int2str_pad(nint(iter),3)
                 oritab   = trim(ITERFBODY)//trim(str_iter)//'.txt'
-                vol_iter = trim(VOLFBODY)//trim(str_state)//'_iter'//trim(str_iter)//p_master%ext                
+                vol_iter = trim(VOLFBODY)//trim(str_state)//'_iter'//trim(str_iter)//p_master%ext
             end subroutine set_iter_dependencies
 
             subroutine update_lp( cl, refine_step )
@@ -402,7 +402,7 @@ contains
         character(len=32),     parameter :: VOLFBODY    = 'recvol_state'
         ! distributed commanders
         type(prime3D_distr_commander) :: xprime3D_distr
-        type(recvol_distr_commander)  :: xrecvol_distr        
+        type(recvol_distr_commander)  :: xrecvol_distr
         ! shared-mem commanders
         !
         ! command lines
@@ -450,7 +450,7 @@ contains
         call cline_prime3D_master%set('maxits', real(MAXITS_INIT))
         call cline_prime3D_master%set('refine', 'het')
         call cline_prime3D_master%set('dynlp', 'no')
-        call cline_prime3D_master%set('lp', p_master%lp) 
+        call cline_prime3D_master%set('lp', p_master%lp)
 
         ! GENERATE DIVERSE INITIAL LABELS
         write(*,'(A)') '>>>'
@@ -514,7 +514,7 @@ contains
         call xrecvol_distr%execute(cline_recvol_distr)
 
         ! end gracefully
-        call simple_end('**** SIMPLE_HET_ENSEMBLE NORMAL STOP ****')        
+        call simple_end('**** SIMPLE_HET_ENSEMBLE NORMAL STOP ****')
         contains
 
             subroutine prime3d_cleanup

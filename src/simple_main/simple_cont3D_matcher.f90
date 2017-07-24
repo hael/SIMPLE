@@ -1,6 +1,7 @@
 !------------------------------------------------------------------------------!
 ! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
 !------------------------------------------------------------------------------!
+!> Simple matcher class:  3D continous algorithm
 module simple_cont3D_matcher
 use simple_defs
 use simple_build,             only: build
@@ -20,18 +21,18 @@ public :: cont3D_exec
 private
 #include "simple_local_flags.inc"
 integer,                   parameter :: BATCHSZ_MUL = 10   !< particles per thread
-integer,                   parameter :: MAXNPEAKS   = 10
-integer,                   parameter :: NREFS       = 50
+integer,                   parameter :: MAXNPEAKS   = 10   !< Max num peaks
+integer,                   parameter :: NREFS       = 50   !< Max num of references
 
-type(polarft_corrcalc)               :: pftcc
+type(polarft_corrcalc)               :: pftcc                   !< polar fourier correlation calculator
 type(oris)                           :: orefs                   !< per particle projection direction search space
-type(cont3D_srch),       allocatable :: cont3Dsrch(:)
-type(cont3D_greedysrch), allocatable :: cont3Dgreedysrch(:)
+type(cont3D_srch),       allocatable :: cont3Dsrch(:)           !< cont 3D  search objects
+type(cont3D_greedysrch), allocatable :: cont3Dgreedysrch(:)     !< cont 3D greedy search objects
 logical, allocatable                 :: state_exists(:)
 real                                 :: reslim          = 0.
 !real                                 :: frac_srch_space = 0.   ! so far unused
 integer                              :: nptcls          = 0     !< number of particles processed
-integer                              :: nrefs_per_ptcl  = 0
+integer                              :: nrefs_per_ptcl  = 0     !< number of references per particle
 integer                              :: neff_states     = 0     !< number of non-empty states
 
 contains
@@ -44,11 +45,11 @@ contains
         use simple_projector,  only: projector
         !$ use omp_lib
         !$ use omp_lib_kinds
-        class(build),   intent(inout) :: b
-        class(params),  intent(inout) :: p
-        class(cmdline), intent(inout) :: cline
-        integer,        intent(in)    :: which_iter
-        logical,        intent(inout) :: converged
+        class(build),   intent(inout) :: b               !< build object
+        class(params),  intent(inout) :: p               !< params object
+        class(cmdline), intent(inout) :: cline           !< command line input
+        integer,        intent(in)    :: which_iter      !< iteration
+        logical,        intent(inout) :: converged       !< have converged
         ! batches-related variables
         type(projector),         allocatable :: batch_imgs(:)
         type(polarft_corrcalc),  allocatable :: pftccs(:)
@@ -242,9 +243,9 @@ contains
 
     !>  \brief  preps volumes for projection
     subroutine prep_vols( b, p, cline )
-        class(build),   intent(inout) :: b
-        class(params),  intent(inout) :: p
-        class(cmdline), intent(inout) :: cline
+        class(build),   intent(inout) :: b           !< build object
+        class(params),  intent(inout) :: p           !< params object
+        class(cmdline), intent(inout) :: cline       !< command line input
         integer :: state
         do state=1,p%nstates
             if( state_exists(state) )then
@@ -260,9 +261,9 @@ contains
 
     !>  \brief  initialize pftcc
     subroutine init_pftcc(p, iptcl, pftcc)
-        class(params),              intent(inout) :: p
-        integer,                    intent(in)    :: iptcl
-        class(polarft_corrcalc),    intent(inout) :: pftcc
+        class(params),              intent(inout) :: p        !< params object
+        integer,                    intent(in)    :: iptcl    !< index to particle
+        class(polarft_corrcalc),    intent(inout) :: pftcc    !< calculator object
         if( p%l_xfel )then
             call pftcc%new(nrefs_per_ptcl, [iptcl,iptcl], [p%boxmatch,p%boxmatch,1],p%kfromto, p%ring2, p%ctf, isxfel='yes')
         else
@@ -274,10 +275,10 @@ contains
     subroutine prep_pftcc_refs(b, p, iptcl, pftcc)
         use simple_image, only: image
         use simple_ctf,   only: ctf
-        class(build),               intent(inout) :: b
-        class(params),              intent(inout) :: p
-        integer,                    intent(in) :: iptcl
-        class(polarft_corrcalc),    intent(inout) :: pftcc
+        class(build),               intent(inout) :: b      !< build object
+        class(params),              intent(inout) :: p      !< params object
+        integer,                    intent(in) :: iptcl     !< index to particle
+        class(polarft_corrcalc),    intent(inout) :: pftcc  !< calculator and storage object
         type(ctf)   :: tfun
         type(image) :: ref_img, ctf_img
         type(oris)  :: cone
@@ -319,10 +320,10 @@ contains
 
     !>  \brief  particle projection into pftcc
     subroutine prep_pftcc_ptcl(b, p, iptcl, pftcc)
-        class(build),               intent(inout) :: b
-        class(params),              intent(inout) :: p
-        integer,                    intent(in) :: iptcl
-        class(polarft_corrcalc),    intent(inout) :: pftcc
+        class(build),               intent(inout) :: b        !< build object
+        class(params),              intent(inout) :: p        !< params object
+        integer,                    intent(in) :: iptcl       !< index to particle
+        class(polarft_corrcalc),    intent(inout) :: pftcc    !< calculator object
         type(ori)  :: optcl
         optcl = b%a%get_ori(iptcl)
         call prepimg4align(b, p, optcl)

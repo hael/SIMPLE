@@ -399,17 +399,17 @@ contains
 
     !>  \brief  Find the ctf argument (phase shift) values at which CTF=ctf_value
     !!
-    !!  According to Wolfram Alpha, the solutions to a*cos(t) + b*sin(t) = c are:
-    !!  1)  t = 2 (atan((b-sqrt(a^2+b^2-c^2))/(a+c))+pi*n),   with n an integer
-    !!  2)  t = 2 (atan((b+sqrt(a^2+b^2-c^2))/(a+c))+pi*n),   with n an integer
+    !!  According to Wolfram Alpha, the solutions to \f$a*\cos(t) + b*\sin(t) = c \f$ are:
+    !!  1)  \f$ t = 2 (\atan((b-\sqrt(a^2+b^2-c^2))/(a+c))+\pi*n) \f$,   with n an integer
+    !!  2)  \f$ t = 2 (\atan((b+\sqrt(a^2+b^2-c^2))/(a+c))+\pi*n) \f$,   with n an integer
     !!
     !!  The above two solutions only hold if:
-    !!                  a+c != 0
-    !!                 -b*sqrt(a**2+b**2-c**2)+a**2+ac+b**2 != 0   [for solution 1]
-    !!                  b*sqrt(a**2+b**2-c**2)+a**2+ac+b**2 != 0   [for solution 2]
+    !!                \f$  a+c != 0 \f$
+    !!                \f$ -b*\sqrt(a^2+b^2-c^2)+a^2+ac+b^2 != 0 \f$  [for solution 1]
+    !!                \f$  b*\sqrt(a^2+b^2-c^2)+a^2+ac+b^2 != 0 \f$  [for solution 2]
     !!
     !!  In our case, a = - ampl_const
-    !!           and b = - sqrt(1-ampl_const**2)
+    !!           and b = \f$ - \sqrt(1-\mathsf{ampl_const}^2) \f$
     !!               c = ctf_value
     !!  and t is the "argument" to the ctf (i.e. the phase shift), which can be "converted" to a spatial frequency
     subroutine solve4PhSh( self, sols, ctf_value )
@@ -439,7 +439,7 @@ contains
         enddo
     end subroutine solve4PhSh
 
-    !>  \brief  Compute set of squared spatial frequencies at which the given phase shift is obtained by the CTF
+    !>  \brief  sqFreq4PhSh Compute set of squared spatial frequencies at which the given phase shift is obtained by the CTF
     subroutine sqFreq4PhSh( self, phase_shifts, ang, spaFreqSq, nsols )
         use simple_math, only: hpsort
         class(ctf), intent(in)    :: self

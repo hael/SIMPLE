@@ -54,10 +54,13 @@ contains
     ! CONSTRUCTOR
 
     !>  \brief  is a constructor
+    !! \param N  num of data entries
+    !! \param S pointer to similarity matrix
+    !! \param  ftol,lam,pref,maxits,convits Initialise aff_prop type variables
     subroutine new( self, N, S, ftol, lam, pref, maxits, convits )
         class(aff_prop),   intent(inout) :: self
-        integer,           intent(in)    :: N               !< nr of data entries
-        real,    target,   intent(inout) :: S(N,N)          !< pointer to similarity matrix
+        integer,           intent(in)    :: N               
+        real,    target,   intent(inout) :: S(N,N)          
         real,    optional, intent(in)    :: ftol, lam, pref
         integer, optional, intent(in)    :: maxits, convits
         integer :: alloc_stat, i, j
@@ -110,9 +113,9 @@ contains
     !>  \brief  is the message passing algorithm
     subroutine propagate( self, centers, labels, simsum )
         class(aff_prop),      intent(inout) :: self
-        integer, allocatable, intent(out)   :: centers(:)
-        integer, allocatable, intent(out)   :: labels(:)
-        real,                 intent(out)   :: simsum
+        integer, allocatable, intent(out)   :: centers(:) !< cluster centres
+        integer, allocatable, intent(out)   :: labels(:)  !< cluster lablse
+        real,                 intent(out)   :: simsum     !< similarity sum
         real, allocatable :: similarities(:)
         real              :: x, realmax
         integer           :: i, j, k, alloc_stat, ncls, loc(1), convits, ncls_prev

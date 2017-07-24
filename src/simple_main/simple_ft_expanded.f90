@@ -1,10 +1,7 @@
 !------------------------------------------------------------------------------!
 ! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
 !------------------------------------------------------------------------------!
-!------------------------------------------------------------------------------!
-! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-
+!> Simple class expanded Fourier transform functions of images
 module simple_ft_expanded
 !$ use omp_lib
 !$ use omp_lib_kinds

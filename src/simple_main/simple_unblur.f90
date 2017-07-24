@@ -1,3 +1,15 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> simple_unblur
+!
+!! simple_unblur Attempts to remove EM artifacts in micrographs
+!
+! The code is distributed with the
+! hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_. Redistribution or
+! modification is regulated by the GNU General Public License.
+!
+!------------------------------------------------------------------------------!
 module simple_unblur
 !$ use omp_lib
 !$ use omp_lib_kinds
@@ -53,18 +65,18 @@ integer, parameter :: MITSREF    = 30 !< max nr iterations of refinement optimis
 real,    parameter :: SMALLSHIFT = 2. !< small initial shift to blur out fixed pattern noise
 
 contains
-
+    !> Unblur EM micrograph stacks
     subroutine unblur_movie( movie_stack_fname, p, corr, smpd_out, nsig )
         use simple_oris,        only: oris
         use simple_strings,     only: int2str
         use simple_rnd,         only: ran3
         use simple_stat,        only: corrs2weights, moment
         use simple_ftexp_shsrch ! use all in there
-        character(len=*), intent(in)    :: movie_stack_fname
-        class(params),    intent(inout) :: p
-        real,             intent(out)   :: corr
-        real,             intent(out)   :: smpd_out
-        real, optional,   intent(in)    :: nsig
+        character(len=*), intent(in)    :: movie_stack_fname    !< filename 
+        class(params),    intent(inout) :: p                    !< param object
+        real,             intent(out)   :: corr                 !< ave correlation per frame
+        real,             intent(out)   :: smpd_out             !< sampling distance of the possibly scaled movies
+        real, optional,   intent(in)    :: nsig                 !<nr of sigmas (for outlier removal)
         real    :: ave, sdev, var, minw, maxw
         real    :: cxy(3), lims(2,2), corr_prev, frac_improved, corrfrac
         integer :: iframe, iter, nimproved, ires, updateres, i
@@ -160,8 +172,10 @@ contains
         ! report the sampling distance of the possibly scaled movies
         smpd_out = smpd_scaled
 
-        contains
-
+    contains
+        !> update resolution of movie
+            !! \param  thres_corrfrac threshold corecction factor
+            !! \param  thres_frac_improved threshold for fractional improvement
             subroutine update_res( thres_corrfrac, thres_frac_improved, which_update )
                 real,    intent(in) :: thres_corrfrac, thres_frac_improved
                 integer, intent(in) :: which_update
@@ -192,7 +206,10 @@ contains
             end subroutine update_res
 
     end subroutine unblur_movie
-
+    !> Calulate stack sums 
+    !! \param movie_sum movie stack sums
+    !! \param movie_sum_corrected corrected movie stack sums
+    !! \param movie_sum_ctf CTF sum
     subroutine unblur_calc_sums_1( movie_sum, movie_sum_corrected, movie_sum_ctf )
         type(image), intent(out) :: movie_sum, movie_sum_corrected, movie_sum_ctf
         integer :: iframe
@@ -209,7 +226,9 @@ contains
         movie_sum = movie_sum_global
         call movie_sum%bwd_ft
     end subroutine unblur_calc_sums_1
-
+    !> Calulate stack sums in range 
+    !! \param fromto ranges
+    !! \param movie_sum_corrected corrected movie stack sums
     subroutine unblur_calc_sums_2( movie_sum_corrected, fromto )
         type(image), intent(out) :: movie_sum_corrected
         integer,     intent(in)  :: fromto(2)
@@ -223,10 +242,13 @@ contains
         call movie_sum_corrected%bwd_ft
         do_dose_weight = l_tmp
     end subroutine unblur_calc_sums_2
-
+    !> Calulate stack sums per time frame
+    !! \param movie_sum movie stack sums
+    !! \param movie_sum_corrected corrected movie stack sums
+    !! \param movie_sum_ctf CTF sum
     subroutine unblur_calc_sums_tomo( frame_counter, time_per_frame, movie_sum, movie_sum_corrected, movie_sum_ctf )
-        integer,     intent(inout) :: frame_counter
-        real,        intent(in)    :: time_per_frame
+        integer,     intent(inout) :: frame_counter  !< frame counter
+        real,        intent(in)    :: time_per_frame !< time resolution
         type(image), intent(out)   :: movie_sum, movie_sum_corrected, movie_sum_ctf
         integer :: iframe
         ! calculate the sum for CTF estimation
@@ -242,12 +264,12 @@ contains
         movie_sum = movie_sum_global
         call movie_sum%bwd_ft
     end subroutine unblur_calc_sums_tomo
-
+    !> Initialise unblur
     subroutine unblur_init( movie_stack_fname, p )
         use simple_jiffys, only: find_ldim_nptcls, alloc_err, progress
         use simple_math,   only: round2even, median
-        character(len=*), intent(in)    :: movie_stack_fname
-        class(params),    intent(inout) :: p
+        character(len=*), intent(in)    :: movie_stack_fname  !< input filename of stack
+        class(params),    intent(inout) :: p                  !< params object
         type(image)          :: tmpmovsum
         real                 :: moldiam, dimo4
         integer              :: alloc_stat, iframe, ncured, wisz, deadhot(2), i, j, winsz
@@ -362,7 +384,7 @@ contains
     end subroutine unblur_init
 
     subroutine center_shifts( shifts )
-        real, intent(inout) :: shifts(nframes,2)
+        real, intent(inout) :: shifts(nframes,2) !< 2D origin shifts
         real    :: xsh, ysh
         integer :: iframe
         xsh = -shifts(fixed_frame,1)

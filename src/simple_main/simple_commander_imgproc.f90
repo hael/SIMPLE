@@ -138,7 +138,7 @@ contains
 
     end subroutine exec_binarise
     !> convert is a program for converting between SPIDER and MRC formats
-    !! @see doc/SimpleTutorials2017/Tutorial.html?#using-simple-in-the-wildpower-spectrum-analysis-and-movie-selection
+    !! @see http://simplecryoem.com/tutorials.html?#using-simple-in-the-wildpower-spectrum-analysis-and-movie-selection
     !!
     !! bash-3.2$ `simple_exec prg=convert'
     !!USAGE:
@@ -469,7 +469,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_NORM NORMAL STOP ****')
     end subroutine exec_norm
-    !> sclae is a program that provides re-scaling and clipping routines for MRC or SPIDER stacks and volumes
+    !> scale is a program that provides re-scaling and clipping routines for MRC or SPIDER stacks and volumes
     subroutine exec_scale( self, cline )
         use simple_procimgfile  ! use all in there
         use simple_image,       only: image

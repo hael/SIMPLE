@@ -90,7 +90,7 @@ contains
         use simple_math,         only: round2even
         use simple_qsys_funs,    only: qsys_job_finished
         class(preproc_commander), intent(inout) :: self
-        class(cmdline),           intent(inout) :: cline
+        class(cmdline),           intent(inout) :: cline !< command line 
         type(ctffind_iter) :: cfiter
         type(unblur_iter)  :: ubiter
         type(pick_iter)    :: piter
@@ -415,7 +415,7 @@ contains
     !! will be pre-averaged in the given chunk size (Falcon 3 movies). If
     !! fromf/tof are given, a contiguous subset of frames will be averaged
     !! without any dose-weighting applied.
-    !! @see doc/SimpleTutorials2017/Tutorials.html?#motion-correction
+    !! @see http://simplecryoem.com/tutorials.html?#motion-correction
     !! EXAMPLE:
     !! ```sh
     !! cat movies.txt 
@@ -431,7 +431,7 @@ contains
         use simple_math,        only: round2even
         use simple_qsys_funs,   only: qsys_job_finished
         class(unblur_commander), intent(inout) :: self
-        class(cmdline),          intent(inout) :: cline
+        class(cmdline),          intent(inout) :: cline !< command line input
         type(params)      :: p
         type(unblur_iter) :: ubiter
         type(oris)        :: os_uni
@@ -501,13 +501,13 @@ contains
     end subroutine exec_unblur
 
     !> ctffind  is a wrapper program for CTFFIND4 (Grigorieff lab)
-    !! @see doc/SimpleTutorials2017/Tutorial.html?#ctf-parameter-determination
+    !! @see http://simplecryoem.com/tutorials.html?#ctf-parameter-determination
     subroutine exec_ctffind( self, cline )
         use simple_ctffind_iter, only: ctffind_iter
         use simple_oris,         only: oris
         use simple_qsys_funs,    only: qsys_job_finished
         class(ctffind_commander), intent(inout) :: self
-        class(cmdline),           intent(inout) :: cline
+        class(cmdline),           intent(inout) :: cline  !< command line input
         type(params)                       :: p
         type(ctffind_iter)                 :: cfiter
         character(len=STDLEN), allocatable :: movienames_forctf(:)
@@ -554,7 +554,7 @@ contains
 
     !> SELECT is a program for selecting files based on image correlation matching
     !!
-    !! @see doc/SimpleTutorials2017/Tutorial.html?#prime2d-analysis-of-trpv1-membrane-receptor-images
+    !! @see http://simplecryoem.com/tutorials.html?#prime2d-analysis-of-trpv1-membrane-receptor-images
     !! ```sh
     !! simple_exec prg=select
     !!  USAGE:
@@ -578,7 +578,7 @@ contains
         use simple_syscalls, only: exec_cmdline
         use simple_corrmat   ! use all in there
         class(select_commander), intent(inout) :: self
-        class(cmdline),          intent(inout) :: cline
+        class(cmdline),          intent(inout) :: cline !< command line input
         type(params)                       :: p
         type(build)                        :: b
         type(image)                        :: stk3_img
@@ -697,7 +697,7 @@ contains
         use simple_commander_imgproc, only: stackops_commander, scale_commander
         use simple_procimgfile,       only: neg_imgfile
         class(makepickrefs_commander), intent(inout) :: self
-        class(cmdline),                intent(inout) :: cline
+        class(cmdline),                intent(inout) :: cline !< command line input
         character(STDLEN), parameter :: ORIFILE='pickrefs_oris.txt'
         integer, parameter           :: NREFS=100
         type(params)                 :: p
@@ -757,7 +757,7 @@ contains
     subroutine exec_pick( self, cline)
         use simple_pick_iter, only: pick_iter
         class(pick_commander), intent(inout) :: self
-        class(cmdline),        intent(inout) :: cline
+        class(cmdline),        intent(inout) :: cline !< command line input
         type(params)    :: p
         type(pick_iter) :: piter
         character(len=STDLEN), allocatable :: movienames_intg(:)
@@ -804,7 +804,7 @@ contains
         use simple_oris,      only: oris
         use simple_stat,      only: moment
         class(extract_commander), intent(inout) :: self
-        class(cmdline),           intent(inout) :: cline
+        class(cmdline),           intent(inout) :: cline !< command line input
         type(params)                       :: p
         type(build)                        :: b
         integer                            :: nmovies, nboxfiles, nframes, pind

@@ -1,6 +1,7 @@
 !------------------------------------------------------------------------------!
 ! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
 !------------------------------------------------------------------------------!
+!> Simple class Hadamard3D matcher is the workhorse for Prime3D
 module simple_hadamard3D_matcher
 !$ use omp_lib
 !$ use omp_lib_kinds
@@ -32,7 +33,7 @@ type(ori)                       :: orientation, o_sym
 character(len=:), allocatable   :: ppfts_fname
 
 contains
-
+!> Find resolution range in Prime3D search
     subroutine prime3D_find_resrange( b, p, lp_start, lp_finish )
         use simple_oris, only: oris
         class(build),  intent(inout) :: b
@@ -57,7 +58,7 @@ contains
         deallocate(peaks)
         call o%kill
     end subroutine prime3D_find_resrange
-
+    !> Execute prime3D (Hadamard method)
     subroutine prime3D_exec( b, p, cline, which_iter, update_res, converged )
         use simple_qsys_funs, only: qsys_job_finished
         use simple_oris,      only: oris
@@ -269,9 +270,9 @@ contains
     subroutine gen_random_model( b, p, nsamp_in )
         use simple_ran_tabu,   only: ran_tabu
         use simple_kbinterpol, only: kbinterpol
-        class(build),      intent(inout) :: b
-        class(params),     intent(inout) :: p
-        integer, optional, intent(in)    :: nsamp_in
+        class(build),      intent(inout) :: b         !< build object
+        class(params),     intent(inout) :: p         !< param object
+        integer, optional, intent(in)    :: nsamp_in  !< num input samples
         type(ran_tabu)       :: rt
         integer, allocatable :: sample(:)
         integer              :: i, k, nsamp, alloc_stat
@@ -326,11 +327,11 @@ contains
             call norm_struct_facts(b, p)
         endif
     end subroutine gen_random_model
-
+    !> Prepare alignment search using polar projection Fourier cross correlation
     subroutine preppftcc4align( b, p, cline, ppfts_fname )
-        class(build),               intent(inout) :: b
-        class(params),              intent(inout) :: p
-        class(cmdline),             intent(inout) :: cline
+        class(build),               intent(inout) :: b       !< build object
+        class(params),              intent(inout) :: p       !< param object
+        class(cmdline),             intent(inout) :: cline   !< command line
         character(len=*), optional, intent(in)    :: ppfts_fname
         integer :: nrefs
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PRIME3D SEARCH ENGINE'
@@ -350,11 +351,11 @@ contains
         if( p%l_xfel ) call pftcc%xfel_subtract_shell_mean()
         DebugPrint '*** hadamard3D_matcher ***: finished preppftcc4align'
     end subroutine preppftcc4align
-
+    !> Prepare reference images and create polar projections
     subroutine prep_refs_pftcc4align( b, p, cline )
-        class(build),   intent(inout) :: b
-        class(params),  intent(inout) :: p
-        class(cmdline), intent(inout) :: cline
+        class(build),   intent(inout) :: b          !< build object
+        class(params),  intent(inout) :: p          !< param object
+        class(cmdline), intent(inout) :: cline      !< command line
         type(ori) :: o
         integer   :: cnt, s, iref, nrefs
         ! PREPARATION OF REFERENCES IN PFTCC
@@ -386,10 +387,10 @@ contains
         ! bring back the original b%vol size for clean exit
         if( p%boxmatch < p%box )call b%vol%new([p%box,p%box,p%box], p%smpd)
     end subroutine prep_refs_pftcc4align
-
+    !> Prepare particle images and create polar projections
     subroutine prep_ptcls_pftcc4align( b, p, ppfts_fname )
-        class(build),               intent(inout) :: b
-        class(params),              intent(inout) :: p
+        class(build),               intent(inout) :: b          !< build object
+        class(params),              intent(inout) :: p          !< param object
         character(len=*), optional, intent(in)    :: ppfts_fname
         ! read particle images and create polar projections
         if( present(ppfts_fname) )then

@@ -1,9 +1,6 @@
 !------------------------------------------------------------------------------!
 ! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
 !------------------------------------------------------------------------------!
-!------------------------------------------------------------------------------!
-! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
 !> Simple module: matching pursuit
 !!  pearson correlation-based matching pursuit
 module simple_matchpursuit

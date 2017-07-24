@@ -10,7 +10,7 @@
 !! composite pattern to create MacroCommanders (or workflows)
 !!
 !!
-!! @see  doc/SimpleTutorials2017/Tutorials.html?#ab-initio-3d-reconstruction-from-class-averages-using-prime3d
+!! @see  http://simplecryoem.com/tutorials.html?#ab-initio-3d-reconstruction-from-class-averages-using-prime3d
 !! Ab initio 3D Reconstruction from Class Averages Using PRIME3D
 !!
 !! A major obstacle to achieving near-atomic resolution with single-particle
@@ -72,7 +72,7 @@ type, extends(commander_base) :: nspace_commander
  contains
    procedure :: execute      => exec_nspace
 end type nspace_commander
-type, extends(commander_base) :: prime3D_init_commander 
+type, extends(commander_base) :: prime3D_init_commander
   contains
     procedure :: execute      => exec_prime3D_init
 end type prime3D_init_commander
@@ -118,7 +118,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_RESRANGE NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_resrange
-    
+
     subroutine exec_npeaks( self, cline )
         use simple_oris, only: oris
         class(npeaks_commander), intent(inout) :: self
@@ -132,7 +132,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_NPEAKS NORMAL STOP ****')
     end subroutine exec_npeaks
-    
+
     subroutine exec_nspace(self,cline)
         use simple_math, only: resang
         use simple_oris, only: oris
@@ -151,7 +151,7 @@ contains
         end do
         call simple_end('**** SIMPLE_NSPACE NORMAL STOP ****')
     end subroutine exec_nspace
-    
+
     subroutine exec_prime3D_init( self, cline )
         use simple_hadamard3D_matcher, only: gen_random_model, prime3D_find_resrange
         class(prime3D_init_commander), intent(inout) :: self
@@ -271,7 +271,7 @@ contains
         endif
         call b%build_general_tbox(p, cline)   ! general objects built
         if( .not. cline%defined('eo') ) p%eo = 'no' ! default
-        if( p%eo .eq. 'yes' ) p%dynlp = 'no'    
+        if( p%eo .eq. 'yes' ) p%dynlp = 'no'
         if( cline%defined('lp') .or. cline%defined('find')&
         .or. p%eo .eq. 'yes' .or. p%dynlp .eq. 'yes' )then
             ! alles ok!
@@ -352,9 +352,9 @@ contains
         p = params(cline) ! parameters generated
         select case(p%refine)
             case('yes','greedy')
-                ! alles klar  
+                ! alles klar
             case DEFAULT
-                stop 'unknown refinement mode; simple_commander_prime3D%exec_cont3D'                 
+                stop 'unknown refinement mode; simple_commander_prime3D%exec_cont3D'
         end select
         if( p%xfel .eq. 'yes' )then
             if( cline%defined('msk') .or. cline%defined('mw') .or.&
@@ -366,12 +366,12 @@ contains
         call b%build_cont3D_tbox(p)
         if( cline%defined('part') )then
             if( .not. cline%defined('outfile') ) stop 'need unique output file for parallel jobs'
-            call cont3D_exec(b, p, cline, iter, converged)   
+            call cont3D_exec(b, p, cline, iter, converged)
         else
             startit = 1
             if( cline%defined('startit') )startit = p%startit
             do i=startit,p%maxits
-                call cont3D_exec(b, p, cline, i, converged)  
+                call cont3D_exec(b, p, cline, i, converged)
                 if(converged) exit
             end do
         endif

@@ -16,7 +16,7 @@ contains
     !>  \brief  is for raising exception
     subroutine raise_exception_imgfile( n, ldim, routine )
         integer, intent(in) :: n, ldim(3)
-        character(len=*)    :: routine
+        character(len=*)    :: routine      !< Error message caller
         if( n < 1 .or. any(ldim == 0))then
             write(*,*) routine
             write(*,*) 'The input stack is corrupt!'
@@ -26,11 +26,12 @@ contains
         endif
     end subroutine raise_exception_imgfile
 
-    !>  \brief  is for copying
+    !>  \brief  is for copying image file
+    !! \param fname2copy,fname Filenames to copy
     subroutine copy_imgfile( fname2copy, fname, smpd, fromto )
         character(len=*),  intent(in) :: fname2copy, fname
-        real,              intent(in) :: smpd
-        integer, optional, intent(in) :: fromto(2)
+        real,              intent(in) :: smpd       !< sampling distance
+        integer, optional, intent(in) :: fromto(2)  !< ranges
         type(image) :: img
         integer     :: n, i, cnt, ldim(3)
         call find_ldim_nptcls(fname2copy, ldim, n)
@@ -66,9 +67,9 @@ contains
         use simple_math,         only: check4nans
         use simple_jiffys,       only: alloc_err
         character(len=*),            intent(in)    :: fnameStack, fnamePatterns
-        real,                        intent(in)    :: mskrad
+        real,                        intent(in)    :: mskrad       !< mask radius
         integer,                     intent(out)   :: D, recsz
-        real, allocatable, optional, intent(out)   :: avg(:)
+        real, allocatable, optional, intent(out)   :: avg(:)       !< frame stack average
         class(oris),       optional, intent(inout) :: otab
         character(len=*),  optional, intent(in)    :: hfun
         type(image)        :: img

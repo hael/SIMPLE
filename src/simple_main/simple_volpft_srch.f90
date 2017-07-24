@@ -24,7 +24,7 @@ integer                         :: nrestarts = 3        !< simplex restarts (ran
 logical                         :: serial = .true.      !< controls shared-mem parallellization of corr calc
 
 contains
-    
+    !> Initialise  volume correllation search
     subroutine volpft_srch_init( vol_ref, vol_target, hp, lp, nrestarts_in )
         use simple_projector, only: projector
         class(projector),  intent(in) :: vol_ref, vol_target
@@ -47,7 +47,7 @@ contains
         ! generate the simplex optimizer object 
         call nlopt%new(ospec)
     end subroutine volpft_srch_init
-
+    !> Cost-function of  volume correllation search
     function volpft_srch_costfun( vec, D ) result( cost )
         use simple_ori, only: ori
         integer, intent(in) :: D
@@ -59,7 +59,7 @@ contains
         cost = -vpftcc%corr(e, serial)
     end function volpft_srch_costfun
 
-    !> \brief  minimization of the cost function
+    !> Execute volume correllation search: Minimization of the cost function
     function volpft_srch_minimize( fromto ) result( orientation_best )
         use simple_oris, only: oris
         use simple_ori,  only: ori

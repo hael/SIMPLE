@@ -24,16 +24,16 @@ type ppca
     integer              :: D           !< nr of components in each data vec
     integer              :: Q           !< nr of components in each latent vec
     integer              :: funit       !< file handle data stack
-    real, pointer        :: ptr_Dmat(:,:) => null()
-    real, allocatable    :: evals(:)
+    real, pointer        :: ptr_Dmat(:,:) => null() !< pointer to D matrix
+    real, allocatable    :: evals(:)    !< evaluations
     real, allocatable    :: W(:,:)      !< principal subspace, defined by the W columns
     real, allocatable    :: E_zn(:,:,:) !< expectations (feature vecs)
     real, allocatable    :: W_1(:,:), W_2(:,:), W_3(:,:), Wt(:,:)
     real, allocatable    :: M(:,:), Minv(:,:), MinvWt(:,:), X(:,:), E_znzn(:,:)
     logical              :: inplace     = .false. !< controls whether PPCA performed in memory
     logical              :: dorot       = .false. !< is to perform final orthogonal basis rotation
-    logical              :: existence   = .false.
-    logical              :: doprint     = .false.
+    logical              :: existence   = .false. !< kill object flag
+    logical              :: doprint     = .false. !< verbose printing
   contains
     ! CONSTRUCTOR
     procedure          :: new
@@ -54,13 +54,14 @@ type ppca
     procedure, private :: em_opt
     ! DESTRUCTOR
     procedure :: kill
-end type
+end type ppca
 
 contains
 
     ! CONSTRUCTORS
 
-     !>  \brief  is a constructor
+    !>  \brief  is a constructor
+    !! \param N,D,Q num of data vectors and their components
     function constructor( N, D, Q, Dmat ) result( self )
         real, intent(in), dimension(:,:), optional :: Dmat
         integer, intent(in)           :: N, D, Q
@@ -69,9 +70,11 @@ contains
     end function constructor
 
     !>  \brief  is a constructor
+    !! \param N,D,Q num of data vectors and their components
+    !! \param dorot create evaluations vector and perform final orthogonal basis rotation
     subroutine new( self, N, D, Q, Dmat, dorot, doprint )
         class(ppca), intent(inout)         :: self
-        real, intent(in), dimension(:,:), optional, target :: Dmat
+        real, intent(in), dimension(:,:), optional, target :: Dmat  !< \todo no fallback if Dmat not pre-allocated (simple_build)
         integer, intent(in)                :: N, D, Q
         logical, intent(in), optional      :: dorot, doprint
         integer                            :: alloc_stat
@@ -121,7 +124,7 @@ contains
     !>  \brief  is for getting a feature vector
     function get_feat( self, i ) result( feat )
         class(ppca), intent(inout) :: self
-        integer, intent(in)        :: i
+        integer, intent(in)        :: i     !< index of feature vector
         real, allocatable          :: feat(:)
         allocate(feat(self%Q), source=self%E_zn(i,:,1))
     end function get_feat
@@ -168,10 +171,11 @@ contains
 
     !>  \brief  is for sampling the generative model at a given image index for a subset of features
     !>  should only be used if rotation onto orthogonal basis has been performed
+    !! \param i image index
     function generate_cumul( self, i, feats, AVG ) result( dat )
         class(ppca),    intent(inout) :: self
-        integer,        intent(in)    :: i, feats(2)
-        real, optional, intent(in)    :: AVG(self%D)
+        integer,        intent(in)    :: i, feats(2) !< subset of features
+        real, optional, intent(in)    :: AVG(self%D) !< average matrix of size D
         real, allocatable :: dat(:)
         real :: tmp(self%D,1)
         tmp = matmul(self%W(:,feats(1):feats(2)),self%E_zn(i,feats(1):feats(2),:))
@@ -227,13 +231,17 @@ contains
 
     ! CALCULATORS
 
-    !>  \brief  doing it all
+    !>  Principle component analysis master
+    !! \param datastk data stack
+    !! \param featstk feature stack
+    !! \param recsz record size
+    !! \param maxpcaits Maximum iterations for PCA
     subroutine master( self, datastk, recsz, featstk, maxpcaits, feats_txt )
         use simple_filehandling, only: get_fileunit, fopen_err
         class(ppca),                intent(inout) :: self
         character(len=*),           intent(in)    :: datastk, featstk
         integer,                    intent(in)    :: recsz, maxpcaits
-        character(len=*), optional, intent(in)    :: feats_txt
+        character(len=*), optional, intent(in)    :: feats_txt !< features text
         integer :: k, file_stat, funit2, recsz2, err, fhandle_txt
         real    :: p, p_prev
         self%doprint = .true.

@@ -1,7 +1,7 @@
 !------------------------------------------------------------------------------!
 ! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
 !------------------------------------------------------------------------------!
-!> \brief Greedy search method 
+!> \brief Simple search class: greedy search 
 module simple_cont3D_greedysrch
 use simple_defs
 use simple_params,           only: params
@@ -81,7 +81,7 @@ contains
 
     ! PREP ROUTINES
 
-    !>  \brief  is the master search routine
+    !>  \brief  is the search routine's initialiser
     subroutine prep_srch(self, a, iptcl, iref, istate)
         class(cont3D_greedysrch), intent(inout) :: self
         class(oris),        intent(inout) :: a

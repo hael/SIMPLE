@@ -1,8 +1,8 @@
 !------------------------------------------------------------------------------!
 ! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
 !------------------------------------------------------------------------------!
-!< Simple commander module:  to stream-based workflow interface
-!!
+!> Simple commander module:  stream-based workflow interface
+!! Pre-process single-particle ddds in streaming mode
 !!
 module simple_commander_stream_wflows
 use simple_defs
@@ -28,12 +28,11 @@ end type preproc_stream_commander
 
 contains
 
-    ! PRE-PROCESS SINGLE-PARTICLE DDDs IN STREAMING MODE
-
+    !> Pre-process single-particle ddds in streaming mode
     subroutine exec_preproc_stream( self, cline )
         use simple_commander_preproc, only: preproc_commander
         class(preproc_stream_commander), intent(inout) :: self
-        class(cmdline),                  intent(inout) :: cline
+        class(cmdline),                  intent(inout) :: cline     !< command line
         character(len=STDLEN), parameter   :: FILETABNAME='movieftab_preproc_stream.txt'
         integer,               parameter   :: SHORTTIME = 15
         character(len=STDLEN), allocatable :: movienames(:)

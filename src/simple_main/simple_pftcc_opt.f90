@@ -1,7 +1,7 @@
 !------------------------------------------------------------------------------!
 ! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
 !------------------------------------------------------------------------------!
-!> Simple optimisation method: generic pftcc optimisation
+!> Simple optimisation method: generic polar Fourier cross-correlation optimisation
 module simple_pftcc_opt
 implicit none
 
@@ -19,7 +19,7 @@ end type  pftcc_opt
 
 abstract interface
 
-    !>  \brief  is a constructor
+    !>  \brief  is a virtual constructor of generic polar Fourier cross-correlation optimisation class
     subroutine generic_new( self, pftcc, lims, shbarrier, nrestarts, vols) 
         use simple_projector,        only: projector
         use simple_polarft_corrcalc, only: polarft_corrcalc
@@ -32,7 +32,7 @@ abstract interface
         class(projector), optional, target, intent(in)    :: vols(:)
     end subroutine generic_new
 
-    !>  \brief  is a setter
+    !>  \brief  is a virtual setter
     subroutine generic_set_indices( self, ref, ptcl, rot, state )
         import :: pftcc_opt
         class(pftcc_opt),  intent(inout) :: self
@@ -40,7 +40,7 @@ abstract interface
         integer, optional, intent(in)    :: rot, state
     end subroutine generic_set_indices
 
-    !>  \brief  is the cost function
+    !>  \brief  is the virtual cost function
     function generic_costfun( self, vec, D ) result( cost )
         import :: pftcc_opt
         class(pftcc_opt), intent(inout) :: self
@@ -49,7 +49,7 @@ abstract interface
         real :: cost
     end function generic_costfun
 
-    !> \brief  minimization of the costfunction
+    !> \brief  Virtual minimization of the costfunction
     function generic_minimize( self, irot, shvec, rxy, fromto ) result( crxy )
         import :: pftcc_opt
         class(pftcc_opt),  intent(inout) :: self
@@ -60,7 +60,7 @@ abstract interface
         real, allocatable  :: crxy(:)
     end function generic_minimize
 
-    !> \brief  getter for number of function evaluations
+    !> \brief  Virtual getter for number of function evaluations
     function generic_get_nevals( self ) result( nevals )
         import :: pftcc_opt
         class(pftcc_opt), intent(inout) :: self

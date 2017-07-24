@@ -1,10 +1,7 @@
 !------------------------------------------------------------------------------!
 ! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
 !------------------------------------------------------------------------------!
-!------------------------------------------------------------------------------!
-! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-
+!> Simple filter class
 module simple_filterer
 use simple_defs
 use simple_image,     only: image
@@ -16,12 +13,11 @@ real, private, parameter :: SHTHRESH=0.0001
 contains
 
     !> DOSE FILTERING (Grant, Grigorieff eLife 2015)
-
-    !>  \brief input is template image, accumulative dose (in e/A2) and acceleration voltage
+    !! input is template image, accumulative dose (in e/A2) and acceleration voltage
     !!         output is filter coefficients
-    !! \f$  A_\mathsf{dose} = \int^{N}_{1} \mathsf{dose\_weight}(a,F,V),\ e/A^{2}  \f$ 
+    !! \f$  A_\mathsf{dose} = \int^{N}_{1} \mathsf{dose\_weight}(a,F,V),\ e/A^{2}  \f$
     function acc_dose2filter( img, acc_dose, kV ) result( filter )
-        type(image), intent(in) :: img           !< imput image
+        type(image), intent(in) :: img           !< input image
         real,        intent(in) :: acc_dose, kV  !< accumulative dose (in e/A2) and acceleration voltage
         real, allocatable       :: filter(:)
         integer :: find, sz
@@ -32,11 +28,12 @@ contains
         end do
     end function acc_dose2filter
 
-    !>  \brief input is accumulative dose (in e/A2) and spatial frequency (in 1/A)
+    !>  \brief Calculate dose weight. Input is accumulative dose (in e/A2) and
+    !>  spatial frequency (in 1/A)
     !!         output is resolution dependent weight applied to individual frames
     !!         before correlation search and averaging
     !!
-    !! \f$  \mathsf{dose\_weight}(a,F,V) = \exp\left(- \frac{A_\mathsf{dose}}{k\times (2.0\timesA\times f^B + C)} \right), \f$
+    !! \f$  \mathsf{dose\_weight}(a,F,V) = \exp\left(- \frac{A_\mathsf{dose}}{k\times (2.0\times A\times f^B + C)} \right), \f$
     !! where \f$k\f$ is 0.75 for \f$V<200\f$ kV, 1.0 for \f$200 <= V <= 300\f$
     real function dose_weight( acc_dose, spat_freq, kV )
         real, intent(in) :: acc_dose                !< accumulative dose (in e/A2)
@@ -71,7 +68,7 @@ contains
             filt_resamp(k) = filt_orig(ind)
         end do
     end function resample_filter
-    
+
     !> WIENER RESTORATION ROUTINES
 
     !>  \brief does the Wiener restoration of aligned images in 2D
@@ -81,7 +78,7 @@ contains
         use simple_ori,   only: ori
         class(image),     intent(inout) :: img_set(:) !< input images
         class(oris),      intent(inout) :: o_set      !< set of oris objects
-        type(ctfplan),    intent(in)    :: tfplan     !< CTF plan 
+        type(ctfplan),    intent(in)    :: tfplan     !< CTF plan
         class(image),     intent(inout) :: img_rec     !< reconstructed image
         real,             intent(in)    :: msk         !< mask
         real, optional,   intent(in)    :: shellw(:,:) !< weighted shell
@@ -145,7 +142,7 @@ contains
         ! set constants
         ldim = img%get_ldim()
         smpd = img%get_smpd()
-        ! create & init objs 
+        ! create & init objs
         call ctfsq%new(ldim, smpd)
         call ctfsq%set_ft(.true.)
         if( tfplan%flag .ne. 'no' )&

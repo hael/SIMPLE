@@ -1,11 +1,11 @@
 !------------------------------------------------------------------------------!
 ! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
 !------------------------------------------------------------------------------!
-!> simple optimisation module: bfgs 
+!> simple optimisation module: bfgs
 !
 !> Minimization of an externally defined function by the nonlinear conjugate gradient method
-! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_. 
-! Redistribution or modification is regulated by the GNU General Public License. 
+! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
+! Redistribution or modification is regulated by the GNU General Public License.
 ! *Author:* Hans Elmlund, 2013-10-15
 !
 module simple_bfgs_opt
@@ -27,7 +27,7 @@ type, extends(optimizer) :: bfgs_opt
 end type
 
 contains
-    
+
     !> \brief  is a constructor
     subroutine new_bfgs_opt( self, spec )
         use simple_opt_spec, only: opt_spec
@@ -47,7 +47,7 @@ contains
         self%p      = 0.
         self%exists = .true.
     end subroutine
-    
+
     !>  \brief  nonlinear conjugate gradient minimizer
     subroutine bfgs_minimize( self, spec, lowest_cost )
         use simple_opt_spec, only: opt_spec
@@ -56,7 +56,7 @@ contains
         class(opt_spec), intent(inout) :: spec        !< specification
         real, intent(out)              :: lowest_cost !< minimum function value
         integer                        :: avgniter,i
-        if( .not. associated(spec%costfun) )then 
+        if( .not. associated(spec%costfun) )then
             stop 'cost function not associated in opt_spec; bfgs_minimize; simple_bfgs_opt'
         endif
         if( .not. associated(spec%gcostfun) )then
@@ -81,7 +81,7 @@ contains
         spec%x      = self%p
 
         contains
-        
+
             !>  \brief  nonlinear conjugate gradient minimizer
             subroutine bfgsmin
                 real, parameter :: STPMX=100.,EPS=3.e-8,TOLX=4.*EPS
@@ -195,5 +195,5 @@ contains
             self%exists = .false.
         endif
     end subroutine
- 
+
 end module simple_bfgs_opt
