@@ -394,9 +394,9 @@ contains
             end do
         end do
         ! references filtering
-        if( p%eo.eq.'yes' )then
+        if( p%eo.eq.'yes' .and. p%filter.ne.'no' )then
             select case( p%filter )
-                case( 'no' )
+                case( 'no', 'fom', 'fomsq' )
                     ! nothing to do 
                 case( 'ssnr' )
                     ! dummy scheme for testing
@@ -417,11 +417,8 @@ contains
                         enddo
                         deallocate( filter )
                     enddo
-                case( 'pssnr' )
-                    ! nothing to do
-                    ! the volume should be shell normalized then filtered with sqrt(pssnr) (?)
                 case DEFAULT
-                    stop 'Unknown filter; simple_hadamard3D_matcher; prep_refs_pftcc4align'
+                    stop 'Uknown filter; simple_hadamard3D_matcher%prep_refs_pftcc4align'
             end select
         endif
         ! cleanup

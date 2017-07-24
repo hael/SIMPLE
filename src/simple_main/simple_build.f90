@@ -452,7 +452,7 @@ contains
         use simple_strings, only: str_has_substr
         class(build),  intent(inout) :: self
         class(params), intent(in)    :: p
-        integer :: s, alloc_stat
+        integer :: s, alloc_stat, nnn
         call self%kill_hadamard_prime3D_tbox
         call self%raise_hard_ctf_exception(p)
         ! reconstruction objects
@@ -464,7 +464,8 @@ contains
             call alloc_err('build_hadamard_prime3D_tbox; simple_build, 2', alloc_stat)
         endif
         if( str_has_substr(p%refine,'neigh') )then
-            call self%e%nearest_neighbors(p%nnn, self%nnmat)
+            nnn = p%nnn
+            call self%se%nearest_neighbors(self%e, nnn, self%nnmat)
         endif
         write(*,'(A)') '>>> DONE BUILDING HADAMARD PRIME3D TOOLBOX'
         self%hadamard_prime3D_tbox_exists = .true.

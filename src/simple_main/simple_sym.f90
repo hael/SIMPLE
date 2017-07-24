@@ -41,6 +41,7 @@ type sym
     procedure          :: within_asymunit
     procedure          :: write
     procedure          :: apply_sym_with_shift
+    procedure          :: nearest_neighbors
     procedure, private :: build_srchrange
     procedure, private :: make_c_and_d
     procedure, private :: make_t
@@ -395,7 +396,53 @@ contains
             call self%rotall_to_asym(os)
         endif
     end subroutine apply_sym_with_shift
-    
+
+    !>  \brief  is for retrieving nearest neighbors in symmetric cases 
+    subroutine nearest_neighbors( self, asym_os, k, nnmat )
+        use simple_ori,  only: ori
+        use simple_math, only: hpsort
+        class(sym),           intent(inout) :: self
+        type(oris),           intent(inout) :: asym_os !< sampled orientations from asymetric unit, eg from spiral with symmetry
+        integer,              intent(inout) :: k
+        integer, allocatable, intent(inout) :: nnmat(:,:)
+        real,    allocatable :: dists(:)
+        integer, allocatable :: inds(:)
+        type(ori)  :: oasym, osym, oj
+        integer    :: i, j, n_os, alloc_stat, isym
+        if( trim(self%pgrp).eq.'c1' )then
+            call asym_os%nearest_neighbors(k, nnmat)
+        else
+            n_os = asym_os%get_noris()
+            allocate( nnmat(n_os,k), stat=alloc_stat )
+            call alloc_err("In: nearest_neighbors 1; simple_sym", alloc_stat)
+            allocate(dists(n_os), inds(n_os), stat=alloc_stat)
+            call alloc_err("In: nearest_neighbors 2; simple_sym", alloc_stat)
+            do i = 1, n_os
+                dists = 360.
+                oasym = asym_os%get_ori(i)
+                do isym = 1, self%n
+                    if(isym == 1)then
+                        osym = oasym
+                    else
+                        osym = self%apply(oasym, isym)
+                    endif
+                    do j = 1, n_os
+                        if( j == i )then
+                            dists(j) = 0.
+                        else
+                            oj = asym_os%get_ori(j)
+                            dists(j) = min(dists(j), osym.geod.oj)
+                        endif
+                    enddo
+                enddo
+                inds = (/(j,j=1,n_os)/)
+                call hpsort(n_os, dists, inds)
+                nnmat(i,:) = inds(:k)
+            enddo
+            deallocate(inds, dists)
+        endif
+    end subroutine nearest_neighbors
+
     !>  \brief  SPIDER code for making c and d symmetries
     subroutine make_c_and_d( self )
         class(sym), intent(inout) :: self

@@ -2962,10 +2962,10 @@ contains
     !>  \brief for normalising each shell to uniform (=1) power
     subroutine shellnorm( self )
         class(image), intent(inout) :: self
-        real, allocatable           :: expec_pow(:)
-        logical                     :: didbwdft
-        integer                     :: sh, h, k, l, phys(3), lfny, lims(3,2)
-        real                        :: icomp, avg
+        real, allocatable  :: expec_pow(:)
+        logical            :: didbwdft
+        integer            :: sh, h, k, l, phys(3), lfny, lims(3,2)
+        real               :: icomp, avg
         ! subtract average in real space
         didbwdft = .false.
         if( self%ft )then
@@ -3004,6 +3004,7 @@ contains
         phys  = self%fit%comp_addr_phys([0,0,0])
         icomp = aimag(self%cmat(phys(1),phys(2),phys(3)))
         self%cmat(phys(1),phys(2),phys(3)) = cmplx(1.,icomp)
+        ! Fourier plan upon return
         if( didbwdft )then
             ! return in Fourier space
         else

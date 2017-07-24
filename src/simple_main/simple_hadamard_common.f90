@@ -42,7 +42,7 @@ contains
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         class(cmdline), intent(inout) :: cline
-        real, allocatable     :: resarr(:), tmp_arr(:), fom_tmp(:), res_match(:)
+        real, allocatable     :: resarr(:), tmp_arr(:), fom_tmp(:)
         real                  :: fsc0143, fsc05, mapres(p%nstates)
         integer               :: s, loc(1), lp_ind
         character(len=STDLEN) :: fsc_fname
@@ -77,9 +77,7 @@ contains
                             if( p%boxmatch .eq. p%box )then
                                 b%fom(s,:) = fom_tmp
                             else
-                                res_match  = b%img_match%get_res()
-                                b%fom(s,:) = resample_filter(fom_tmp, resarr, res_match)
-                                deallocate(res_match)
+                                b%fom(s,:) = resample_filter(fom_tmp, resarr, b%img_match%get_res())
                             endif
                             deallocate(fom_tmp)
                         else
@@ -318,9 +316,11 @@ contains
             ! image filtering
             if( p%filter.ne.'no' .and. p%eo.eq.'yes')then
                 select case(p%filter)
+                    case( 'no', 'fom', 'fomsq' )
+                        ! nothing to do
                     case( 'ssnr' )
                         ! dummy implementation for testing
-                        call b%img_match%shellnorm
+                        call b%img_match%shellnorm()
                         if( p%box.eq.p%boxmatch )then
                             filter = b%ssnr(state,:)
                         else
@@ -328,20 +328,20 @@ contains
                         endif
                         filter = sqrt(filter + 1.0)
                         call b%img_match%apply_filter( filter )                                
-                    ! old pssnr implementation 
-                    ! case( 'pssnr' )
-                    !     call b%img%shellnorm
-                    !     call tfun%ctf2img(b%img_copy, dfx, 'square', dfy, angast)
-                    !     call b%img_copy%apply_filter( **pssnr** )
-                    !     call b%img_copy%add(1.0)
-                    !     call b%img_copy%square_root
-                    !     call b%img%apply_filter(b%img_copy)
+                        ! old pssnr implementation 
+                        ! case( 'pssnr' )
+                        !     call b%img%shellnorm
+                        !     call tfun%ctf2img(b%img_copy, dfx, 'square', dfy, angast)
+                        !     call b%img_copy%apply_filter( **pssnr** )
+                        !     call b%img_copy%add(1.0)
+                        !     call b%img_copy%square_root
+                        !     call b%img%apply_filter(b%img_copy)
                     case DEFAULT
-                        stop 'Unknown filter; simple_hadamard_common%prepimg4align'
+                        stop 'Uknown filter; simple_hadamard_common%prepimg4align'
                 end select
-            endif
             ! return in Fourier space
             call b%img_match%fwd_ft
+            endif
         endif
         if( DEBUG ) write(*,*) '*** simple_hadamard_common ***: finished prepimg4align'
     end subroutine prepimg4align
@@ -432,11 +432,13 @@ contains
 
     !>  \brief  prepares one volume for references extraction
     subroutine preprefvol( b, p, cline, s, doexpand )
+        use simple_filterer, only: resample_filter
         class(build),      intent(inout) :: b
         class(params),     intent(inout) :: p
         class(cmdline),    intent(inout) :: cline
         integer,           intent(in)    :: s
         logical, optional, intent(in)    :: doexpand
+        real, allocatable :: filter(:)
         logical :: l_doexpand, do_center
         real    :: shvec(3)
         l_doexpand = .true.
@@ -487,6 +489,28 @@ contains
                 else
                     call b%vol%mask(p%msk, 'soft')
                 endif
+            endif
+        endif
+        ! Volume filtering
+        if( p%eo.eq.'yes' .and. p%filter.ne.'no' )then
+            select case(p%filter)
+                case( 'no', 'ssnr' )
+                    ! nothing to do
+                case( 'fom' )
+                    ! Rosenthal & Henderson, 2003
+                    filter = b%fom(s,:)
+                case( 'fomsq' )
+                    ! Penczek, 2010
+                    filter = b%fom(s,:)**2.0
+                case DEFAULT
+                    stop 'Uknown filter; simple_hadamard_common%preprefvol'
+            end select
+            if( allocated(filter) )then
+                call b%vol%shellnorm()
+                where( filter > 0.9999 )filter = 0.99999
+                where( filter < TINY   )filter = 0.0
+                call b%vol%apply_filter(filter)
+                deallocate(filter)
             endif
         endif
         ! FT volume
