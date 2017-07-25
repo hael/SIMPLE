@@ -332,7 +332,7 @@ astigstep  = step size for astigamtism search(in microns)
 expastig   = expected astigmatism(in microns)
 phaseplate = images obtained with phaseplate(yes|no){no}
 \end{verbatim}
-Output is a text file with defocus parameters \texttt{ctffind\_output.txt}. First, we need to create a file table, listing the integrated movies to be processed with  \prgname{ctffind}.
+Output is a text file with defocus parameters \texttt{ctffind\_output\_merged.txt}. First, we need to create a file table, listing the integrated movies to be processed with  \prgname{ctffind}.
 \begin{verbatim}
 bash-3.2$ ls proteasome_forctf* > ctf_movies.txt
 \end{verbatim}
@@ -341,7 +341,7 @@ As explained above, the \texttt{*forctf*} output is created because weighted ave
 bash-3.2$ simple_distr_exec prg=ctffind filetab=ctf_movies.txt smpd=5.26
 kv=300 cs=2.7 fraca=0.1 nparts=2
 \end{verbatim}
-Output is the file \texttt{ctffind\_output.txt}.
+Output is the file \texttt{ctffind\_output\_merged.txt}.
 
 In SIMPLE, we have yet to implement a particle picker but rely on EMAN1.9 and EMAN2 for particle identification. However, if you have \texttt{*.box} files obtained with EMAN you can extract the particle images and their associated CTF parameters using SIMPLE. To illustrate this functionality, we have prepared box files in the \texttt{data} folder for use in conjunction with SIMPLE program \prgname{extract}. As before, we need to prepare file tables. First, we prepare a file table for the motion corrected integrated movies:
 \begin{verbatim}
@@ -354,7 +354,7 @@ bash-3.2$ ls ./data/boxfiles/*box > boxfiles.txt
 Finally, we execute the program:
 \begin{verbatim}
 bash-3.2$ simple_exec prg=extract filetab=intg_movies.txt boxtab=boxfiles.txt
-smpd=5.26 ctffind_doc=ctffind_output.txt 
+smpd=5.26 ctffind_doc=ctffind_output_merged.txt 
 >>> DONE PROCESSING PARAMETERS
 >>> DONE BUILDING GENERAL TOOLBOX
   100%  |==================================================| done.
@@ -528,7 +528,7 @@ pgrp_known = point-group known a priori(yes|no){no}\end{verbatim}
 In order to reconstruct an \textit{ab initio} 3D reconstruction, please execute:
 \begin{verbatim}
 bash-3.2$ simple_distr_exec prg=ini3D_from_cavgs stk=./data/pfrib80S_cavgs.mrc
-smpd=2.68 msk=80 pgrp=c1 nthr=4 nparts=2 nthr_master=8
+smpd=2.68 msk=80 pgrp=c1 nthr=4 nparts=2
 \end{verbatim}
 For every iteration, we expect to see an output similar to that of PRIME2D in the terminal:
 \begin{verbatim}
@@ -589,7 +589,7 @@ We used a dataset of 5,500 256x256 images. After extraction of the images from t
 \subsection{In-plane alignment and clustering}
 We first create a working directory called \texttt{2d} where PRIME2D will perform the 2D alignment and clustering of the images.
 \begin{verbatim}
-	$ cd 4_SYM_STRUCTURES
+        $ cd 4_SYM_STRUCTURES
         $ mkdir 2d
         $ cd 2d
 \end{verbatim}

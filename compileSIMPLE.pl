@@ -591,7 +591,7 @@ sub make_Makefile_macros {
     print $mkma qq[# Preprocessor .#\n];
     print $mkma qq[##############\n];
     print $mkma qq[\n];
-    print $mkma qq[FPP=cpp \n];
+    print $mkma qq[FPP=cpp-5 \n];
     print $mkma qq[FPPFLAGS= -P \$(DOPENMP) -J \$(MODDIR) -I \$(OBJDIR) -I \$(MODDIR) -I\$(Simple_source)/simple_utils  \\\n];
     if( $DCUDA =~ /DCUDA/ ) {
         print $mkma qq[     \$(DCUDA)           -I \$(CUDADIR)/include/                                  \\\n];

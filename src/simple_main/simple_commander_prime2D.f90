@@ -95,12 +95,12 @@ contains
         ! Setup weights
         if( p%weights2D.eq.'yes' )then
             if( p%nptcls <= SPECWMINPOP )then
-                call b%a%calc_hard_ptcl_weights(p%frac)
+                call b%a%set_all2single('w', 1.0)
             else
-                call b%a%calc_spectral_weights(p%frac)
+                call b%a%calc_spectral_weights(1.0)
             endif
         else
-            call b%a%set_all2single('w', 1.)
+            call b%a%set_all2single('w', 1.0)
         endif
         if( p%l_distr_exec .and. nint(cline%get_rarg('part')) .eq. 1 )then
             call b%a%write(p%oritab)

@@ -44,13 +44,13 @@ contains
         ! SETUP WEIGHTS
         if( p%weights2D.eq.'yes' )then
             if( p%nptcls <= SPECWMINPOP )then
-                call b%a%calc_hard_ptcl_weights(p%frac)
+                call b%a%set_all2single('w', 1.0)
             else
-                call b%a%calc_spectral_weights(p%frac)
+                call b%a%calc_spectral_weights(1.0)
             endif
         else
             ! defaults to unitary weights
-            call b%a%set_all2single('w', 1.)
+            call b%a%set_all2single('w', 1.0)
         endif
 
         ! PREP REFERENCES

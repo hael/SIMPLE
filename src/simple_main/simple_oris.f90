@@ -2427,16 +2427,16 @@ contains
         integer, allocatable :: inds(:)
         type(oris) :: os
         integer    :: i, nstates, s, pop
-        logical    :: ibystate
-        ibystate = .false.
-        if( present(bystate) )ibystate = bystate
-        if( .not.ibystate )then
+        logical    :: l_bystate
+        l_bystate = .false.
+        if( present(bystate) ) l_bystate = bystate
+        if( .not.l_bystate )then
             ! treated as single state
             call self%calc_hard_ptcl_weights_single( frac )
         else
             ! per state frac
             nstates = self%get_nstates()
-            if( nstates==1 )then
+            if( nstates == 1 )then
                 call self%calc_hard_ptcl_weights_single( frac )
             else
                 do s=1,nstates
@@ -2465,10 +2465,10 @@ contains
         integer, allocatable :: inds(:)
         type(oris) :: os
         integer    :: i, nstates, s, pop
-        logical    :: ibystate
-        ibystate = .false.
-        if( present(bystate) )ibystate = bystate
-        if( .not.ibystate )then
+        logical    :: l_bystate
+        l_bystate = .false.
+        if( present(bystate) ) l_bystate = bystate
+        if( .not.l_bystate )then
             ! treated as single state
             call self%calc_spectral_weights_single( frac )
         else
