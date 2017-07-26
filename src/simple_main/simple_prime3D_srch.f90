@@ -1004,9 +1004,10 @@ contains
         integer,                 intent(in)    :: iptcl
         class(oris),             intent(inout) :: e
         real,                    intent(out)   :: wcorr
-        real, allocatable :: corrs(:), frc(:), ws(:), frcmeds(:)
-        type(ori)         :: o
-        integer           :: state, roind, proj, ref, ipeak, npeaks
+        real,    allocatable :: corrs(:), frc(:), ws(:), frcmeds(:), logws(:)
+        integer, allocatable :: order(:) 
+        type(ori) :: o
+        integer   :: state, roind, proj, ref, ipeak, npeaks
         if( self%npeaks == 1 )then
             call self%o_peaks%set(1,'ow',1.0)
             wcorr = self%o_peaks%get(1,'corr')
@@ -1018,7 +1019,7 @@ contains
         else
             npeaks = self%npeaks
         endif
-        allocate( ws(npeaks), frcmeds(npeaks) )
+        allocate( ws(npeaks), frcmeds(npeaks), logws(npeaks) )
         do ipeak=1,npeaks
             o            = self%o_peaks%get_ori(ipeak)
             state        = nint(o%get('state'))
@@ -1033,6 +1034,12 @@ contains
         ! so that when diff==0 the weights are maximum and when
         ! diff==corrmax the weights are minimum
         ws    = exp(-(1.-frcmeds))
+        logws = log(ws)
+        order = (/(ipeak,ipeak=1,npeaks)/)
+        call hpsort(npeaks, logws, order)
+        call reverse(order)
+        call reverse(logws)
+        forall(ipeak=1:npeaks) ws(order(ipeak)) = exp(sum(logws(:ipeak))) 
         ! weighted corr
         wcorr = sum(ws*corrs)/sum(ws)
         ! update npeaks individual weights
