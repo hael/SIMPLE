@@ -643,12 +643,12 @@ contains
         type(ori)         :: o
         real, allocatable :: corrs(:)
         real              :: inpl_corrs(self%npeaks,self%nrots), e3, cc, cxy(3), thresh
-        integer           :: ipeak, iref, cnt, ncorrs, inpl_ind, irot
+        integer           :: ipeak, iref, cnt, ncorrs, inpl_ind, irot, ind
         integer           :: peaks_projs(self%npeaks_inpl), loc(1)
         ! re-generate in-plane corrs
         inpl_corrs = 0.
         cnt = 0 
-        do ipeak = self%nrefs, self%nrefs-self%npeaks+1, -1
+        do ipeak = self%nrefs,self%nrefs-self%npeaks + 1, -1
             iref = self%proj_space_inds( ipeak )
             cnt = cnt + 1 
             inpl_corrs(cnt,:) = pftcc%gencorrs(iref, iptcl)
@@ -657,25 +657,34 @@ contains
         corrs  = pack(inpl_corrs, .true.)
         ncorrs = self%npeaks * self%nrots
         call hpsort( ncorrs, corrs )
-        thresh = corrs(ncorrs - self%npeaks_inpl + 1)
-        if( count( corrs >= thresh ) .ne. self%npeaks_inpl )then
-            stop 'thresholding logics flawed; simple_prime3D_srch :: inpl_peaks'
-        endif
+        ind    = ncorrs
+        thresh = corrs(ind)
+        do while( count( corrs >= thresh ) < self%npeaks_inpl )
+            ind = ind - 1
+            thresh = corrs(ind)
+        end do
         deallocate(corrs)
         cnt = 0
         do ipeak=1,self%npeaks
             do irot=1,self%nrots
                 if( inpl_corrs(ipeak,irot) >= thresh )then
                     cnt  = cnt + 1
+                    ! the below is because of count( corrs >= thresh ) < self%npeaks_inpl
+                    ! in case two or more correlation values are equal
+                    if( cnt > self%npeaks_inpl ) exit
+                    ! extract peak info
                     iref = self%proj_space_inds(self%nrefs - ipeak + 1)
                     peaks_projs(cnt) = iref
                     o    = self%o_refs%get_ori( iref )
                     e3   = 360. - pftcc%get_rot( irot )
-                    call o%set('e3',   e3  )  ! stash psi
+                    call o%set('e3',   e3  )                    ! stash psi
                     call o%set('corr', inpl_corrs(ipeak,irot))  ! stash correlation
                     call self%o_peaks%set_ori(cnt, o)
                 endif
             end do
+            ! the below is because of count( corrs >= thresh ) < self%npeaks_inpl
+            ! in case two or more correlation values are equal
+            if( cnt > self%npeaks_inpl ) exit
         end do
         ! shift search
         do ipeak =1, self%npeaks_inpl
