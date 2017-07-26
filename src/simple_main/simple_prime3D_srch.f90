@@ -224,7 +224,6 @@ contains
 
     !>  \brief  greedy hill-climbing
     subroutine greedy_srch( self, pftcc, iptcl, a, e, lp, nnmat, grid_projs )
-        use simple_strings,  only: int2str_pad
         class(prime3D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: iptcl
@@ -272,7 +271,6 @@ contains
             call self%stochastic_weights(pftcc, iptcl, e, wcorr)           
             call self%update_best(pftcc, iptcl, a)
             call a%set(iptcl, 'corr', wcorr)
-            call self%o_peaks%write('ptcl_'//int2str_pad(iptcl,4)//'.txt')
         else
             call a%reject(iptcl)
         endif
