@@ -17,7 +17,6 @@ logical, parameter :: DEBUG = .false.
 
 type prime3D_srch
     private
-    real, pointer           :: pfom(:,:) => null()      !< pointer to FOM filter
     type(oris)              :: o_refs                   !< projection directions search space
     type(oris)              :: o_peaks                  !< orientations of best npeaks oris
     type(pftcc_shsrch)      :: shsrch_obj               !< origin shift search object
@@ -38,6 +37,7 @@ type prime3D_srch
     integer                 :: prev_ref       = 0       !< previous reference index
     integer                 :: prev_proj      = 0       !< previous projection index
     integer                 :: kstop_grid     = 0       !< Frequency limit of first coarse grid search
+    integer                 :: npeaks_inpl    = 0       !< total # peaks, including in-plane ones
     real                    :: prev_corr      = 1.      !< previous best correlation
     real                    :: specscore      = 0.      !< spectral score
     real                    :: prev_shvec(2)  = 0.      !< previous origin shift vector
@@ -53,9 +53,11 @@ type prime3D_srch
     character(len=STDLEN)   :: ctf            = ''      !< ctf flag
     character(len=STDLEN)   :: shbarr         = ''      !< shift barrier flag
     character(len=STDLEN)   :: pgrp           = 'c1'    !< point-group symmetry
-    logical                 :: doshift        = .true.  !< origin shift search indicator
-    logical                 :: greedy_inpl    = .true.  !< indicator for whether in-plane search is greedy or not
+    character(len=STDLEN)   :: eo             = 'no'    !< wheteher to weigh distances
+    logical                 :: doshift        = .true.  !< 2 indicate whether 2 serch shifts
+    logical                 :: greedy_inpl    = .true.  !< 2 indicate whether in-plane search is greedy or not
     logical                 :: exists         = .false. !< 2 indicate existence
+    logical                 :: do_weight_inpl = .false. !< 2 indicate whether to weight in-plane rotations
   contains
     ! CONSTRUCTOR
     procedure          :: new
@@ -68,6 +70,7 @@ type prime3D_srch
     procedure, private :: stochastic_srch_shc
     procedure, private :: stochastic_srch_snhc
     procedure, private :: stochastic_srch_het
+    procedure, private :: inpl_peaks
     procedure          :: inpl_srch
     ! PREPARATION ROUTINES
     procedure          :: prep4srch
@@ -75,7 +78,7 @@ type prime3D_srch
     ! CALCULATORS
     procedure          :: prep_npeaks_oris
     procedure          :: stochastic_weights_L2norm
-    procedure          :: sort_shifted_peaks
+    procedure          :: stochastic_weights
     ! GETTERS & SETTERS
     procedure          :: update_best
     procedure          :: get_ori
@@ -105,28 +108,29 @@ type prime3D_srch
     procedure          :: kill
 end type prime3D_srch
 
+integer, parameter :: INPL_EXPAND_FAC = 3
+
 contains
 
     ! CONSTRUCTOR
 
     !>  \brief  is a constructor
-    subroutine new( self, a, p, pftcc, fom )
+    subroutine new( self, a, p, pftcc )
         use simple_params, only: params
         class(prime3D_srch),     intent(inout) :: self     !< instance
         class(oris),             intent(inout) :: a        !< oris
         class(params),           intent(in)    :: p        !< parameters
         class(polarft_corrcalc), intent(inout) :: pftcc    !< correlator
-        real, target,            intent(in)    :: fom(:,:) !< FOM filter
         integer  :: alloc_stat
         ! destroy possibly pre-existing instance
         call self%kill
         ! set constants
-        self%pfom        => fom
         self%nstates     =  p%nstates
         self%nprojs      =  p%nspace
         self%nrefs       =  self%nprojs*self%nstates
         self%nrots       =  round2even(twopi*real(p%ring2))
         self%npeaks      =  p%npeaks
+        self%npeaks_inpl =  INPL_EXPAND_FAC * self%npeaks
         self%nbetter     =  0
         self%nrefs_eval  =  0
         self%athres      =  p%athres
@@ -140,6 +144,7 @@ contains
         self%pgrp        =  p%pgrp
         self%kstop_grid  =  p%kstop_grid
         self%greedy_inpl = .true.
+        self%eo          =  p%eo
         if( str_has_substr(self%refine,'shc') )then
             if( self%npeaks > 1 ) stop 'npeaks must be equal to 1 with refine=shc|shcneigh'
             self%greedy_inpl = .false.
@@ -152,8 +157,14 @@ contains
             call alloc_err('In: new; simple_prime3D_srch, 1', alloc_stat)
             self%state_exists = .true.
         endif
+        self%do_weight_inpl = .false.
+        if( str_has_substr(self%refine, 'neigh') .and. self%npeaks > 1 ) self%do_weight_inpl = .true.
         ! generate oris oject in which the best npeaks refs will be stored
-        call self%o_peaks%new(self%npeaks)
+        if( self%do_weight_inpl )then
+            call self%o_peaks%new(self%npeaks_inpl)
+        else
+            call self%o_peaks%new(self%npeaks)
+        endif
         ! updates option to search shift
         self%doshift = p%doshift
         if( self%doshift )then
@@ -213,6 +224,7 @@ contains
 
     !>  \brief  greedy hill-climbing
     subroutine greedy_srch( self, pftcc, iptcl, a, e, lp, nnmat, grid_projs )
+        use simple_strings,  only: int2str_pad
         class(prime3D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: iptcl
@@ -248,14 +260,19 @@ contains
             ! in greedy mode, we evaluate all refs
             self%nrefs_eval = nrefs
             ! sort in correlation projection direction space
-            call hpsort(self%nrefs, projspace_corrs, self%proj_space_inds) 
-            call self%inpl_srch(pftcc, iptcl) ! search shifts
-            ! prepare weights and orientations
+            call hpsort(self%nrefs, projspace_corrs, self%proj_space_inds)
+            ! take care of the in-planes
+            if( self%do_weight_inpl )then
+                call self%inpl_peaks(pftcc, iptcl)
+            else
+                call self%inpl_srch(pftcc, iptcl) ! search shifts
+            endif
+            ! prepare weights & orientation
             call self%prep_npeaks_oris
-            call self%stochastic_weights_L2norm(pftcc, iptcl, e, wcorr)
-            if( self%doshift ) call self%sort_shifted_peaks
+            call self%stochastic_weights(pftcc, iptcl, e, wcorr)           
             call self%update_best(pftcc, iptcl, a)
             call a%set(iptcl, 'corr', wcorr)
+            call self%o_peaks%write('ptcl_'//int2str_pad(iptcl,4)//'.txt')
         else
             call a%reject(iptcl)
         endif
@@ -387,8 +404,7 @@ contains
             call self%inpl_srch(pftcc, iptcl) ! search shifts
             ! prepare weights and orientations
             call self%prep_npeaks_oris
-            call self%stochastic_weights_L2norm(pftcc, iptcl, e, wcorr)
-            if( self%doshift ) call self%sort_shifted_peaks
+            call self%stochastic_weights(pftcc, iptcl, e, wcorr)
             call self%update_best(pftcc, iptcl, a)
             call a%set(iptcl, 'corr', wcorr)
         else
@@ -621,7 +637,64 @@ contains
         endif
         if( DEBUG ) write(*,'(A)') '>>> PRIME3D_SRCH::FINISHED HET SEARCH'
     end subroutine stochastic_srch_het
-    
+
+    subroutine inpl_peaks( self, pftcc, iptcl )
+        class(prime3D_srch),     intent(inout) :: self
+        class(polarft_corrcalc), intent(inout) :: pftcc
+        integer,                 intent(in)    :: iptcl
+        type(ori)         :: o
+        real, allocatable :: corrs(:)
+        real              :: inpl_corrs(self%npeaks,self%nrots), e3, cc, cxy(3), thresh
+        integer           :: ipeak, iref, cnt, ncorrs, inpl_ind, irot
+        integer           :: peaks_projs(self%npeaks_inpl), loc(1)
+        ! re-generate in-plane corrs
+        inpl_corrs = 0.
+        cnt = 0 
+        do ipeak = self%nrefs, self%nrefs-self%npeaks+1, -1
+            iref = self%proj_space_inds( ipeak )
+            cnt = cnt + 1 
+            inpl_corrs(cnt,:) = pftcc%gencorrs(iref, iptcl)
+        enddo
+        ! find corr thresh
+        corrs  = pack(inpl_corrs, .true.)
+        ncorrs = self%npeaks * self%nrots
+        call hpsort( ncorrs, corrs )
+        thresh = corrs(ncorrs - self%npeaks_inpl + 1)
+        if( count( corrs >= thresh ) .ne. self%npeaks_inpl )then
+            stop 'thresholding logics flawed; simple_prime3D_srch :: inpl_peaks'
+        endif
+        deallocate(corrs)
+        cnt = 0
+        do ipeak=1,self%npeaks
+            do irot=1,self%nrots
+                if( inpl_corrs(ipeak,irot) >= thresh )then
+                    cnt  = cnt + 1
+                    iref = self%proj_space_inds(self%nrefs - ipeak + 1)
+                    peaks_projs(cnt) = iref
+                    o    = self%o_refs%get_ori( iref )
+                    e3   = 360. - pftcc%get_rot( irot )
+                    call o%set('e3',   e3  )  ! stash psi
+                    call o%set('corr', inpl_corrs(ipeak,irot))  ! stash correlation
+                    call self%o_peaks%set_ori(cnt, o)
+                endif
+            end do
+        end do
+        ! shift search
+        do ipeak =1, self%npeaks_inpl
+            iref     = peaks_projs(ipeak)
+            o        = self%o_peaks%get_ori( ipeak )
+            cc       = o%get('corr')
+            inpl_ind = pftcc%get_roind( 360.-o%e3get() )
+            call self%shsrch_obj%set_indices(iref, iptcl, inpl_ind)
+            cxy = self%shsrch_obj%minimize()
+            if( cxy(1) >= cc )then
+                call o%set('corr', cxy(1))
+                call o%set_shift( cxy(2:3) )
+                call self%o_peaks%set_ori( ipeak, o )
+            endif
+        end do
+    end subroutine inpl_peaks
+
     !>  \brief  executes the in-plane search for discrete mode
     subroutine inpl_srch( self, pftcc, iptcl )
         class(prime3D_srch),     intent(inout) :: self
@@ -646,7 +719,6 @@ contains
                         call o%set_shift( crxy(3:4) )
                         call self%o_refs%set_ori( ref, o )
                     endif
-                    ! deallocate(crxy)
                 else
                     call self%shsrch_obj%set_indices(ref, iptcl, inpl_ind)
                     cxy = self%shsrch_obj%minimize()
@@ -655,7 +727,6 @@ contains
                         call o%set_shift( cxy(2:3) )
                         call self%o_refs%set_ori( ref, o )
                     endif
-                    ! deallocate(cxy)
                 endif
             end do
         endif
@@ -735,7 +806,6 @@ contains
 
     !>  \brief  prepares the search space (ref oris) & search order per particle
     subroutine prep_reforis( self, e, nnvec )
-        use simple_strings,  only: int2str_pad
         use simple_ran_tabu, only: ran_tabu
         class(prime3D_srch),  intent(inout) :: self
         class(oris),          intent(inout) :: e
@@ -789,26 +859,39 @@ contains
 
     !>  \brief retrieves and preps npeaks orientations for reconstruction
     subroutine prep_npeaks_oris( self )
-        class(prime3D_srch), intent(inout) :: self
-        type(ori) :: o, o_new
-        real      :: euls(3), shvec(2)
-        real      :: corr, ow, frac, ang_sdev
-        integer   :: ipeak, cnt, ref, state, proj
-        integer   :: neff_states ! number of effective (non-empty) states
+        use simple_sym, only: sym
+        class(prime3D_srch),   intent(inout) :: self
+        type(ori)  :: o, o_new, o_best
+        type(oris) :: sym_os, o_peaks
+        type(sym)  :: se
+        real, allocatable :: corrs(:)
+        real       :: euls(3), shvec(2)
+        real       :: corr, frac, ang_sdev, dist, mindist
+        integer    :: ipeak, cnt, ref, state, proj, isym, loc(1), npeaks
+        integer    :: neff_states ! number of effective (non-empty) states
         ! empty states
         neff_states = 1
         if( self%nstates > 1 ) neff_states = count( self%state_exists )
-        ! init
-        call self%o_peaks%new( self%npeaks )
-        do ipeak=1,self%npeaks
-            ! get ipeak-th ori
-            cnt = self%nrefs - self%npeaks + ipeak
-            ref = self%proj_space_inds( cnt )
-            if( ref < 1 .or. ref > self%nrefs )then
-                print *, 'ref: ', ref
-                stop 'ref index out of bound; simple_prime3D_srch::prep_npeaks_oris'
+        ! init npeaks
+        if( self%do_weight_inpl) then
+            npeaks = self%npeaks_inpl
+        else
+            npeaks = self%npeaks
+        endif
+        call o_peaks%new(npeaks)
+        do ipeak = 1, npeaks
+            if(self%do_weight_inpl)then
+                o = self%o_peaks%get_ori(ipeak)
+            else
+                ! get ipeak-th ori
+                cnt = self%nrefs - self%npeaks + ipeak
+                ref = self%proj_space_inds( cnt )
+                if( ref < 1 .or. ref > self%nrefs )then
+                    print *, 'ref: ', ref
+                    stop 'ref index out of bound; simple_prime3D_srch::prep_npeaks_oris'
+                endif
+                o = self%o_refs%get_ori( ref )
             endif
-            o = self%o_refs%get_ori( ref )
             ! grab info
             state = nint( o%get('state') )
             if( .not. self%state_exists(state) )then
@@ -818,7 +901,6 @@ contains
             proj  = nint( o%get('proj') )
             corr  = o%get('corr')
             if( .not. is_a_number(corr) ) stop 'correlation is NaN in simple_prime3D_srch::prep_npeaks_oris'
-            ow    = o%get('ow')
             euls  = o%get_euler()
             ! add shift
             shvec = self%prev_shvec
@@ -832,9 +914,8 @@ contains
             call o_new%set('state', real(state))
             call o_new%set('proj',  real(proj) )
             call o_new%set('corr',  corr       )
-            call o_new%set('ow',    ow         )
             ! stashes in self
-            call self%o_peaks%set_ori( ipeak, o_new )
+            call o_peaks%set_ori( ipeak, o_new )
         enddo
         ! other variables
         if( str_has_substr(self%refine, 'neigh') )then
@@ -842,18 +923,46 @@ contains
         else
             frac = 100.*real(self%nrefs_eval) / real(self%nprojs * neff_states)
         endif
-        call self%o_peaks%set_all2single('frac',   frac    )
-        call self%o_peaks%set_all2single('mi_hard',0.      )
-        call self%o_peaks%set_all2single('dist',   0.      )
-        ang_sdev = self%o_peaks%ang_sdev(self%refine, self%nstates, self%npeaks)
-        call self%o_peaks%set_all2single('sdev',   ang_sdev)
+        call o_peaks%set_all2single('frac',   frac    )
+        call o_peaks%set_all2single('mi_hard',0.      )
+        call o_peaks%set_all2single('dist',   0.      )
+        ! angular standard deviation
+        if( trim(self%pgrp).eq.'c1' )then
+            ang_sdev = o_peaks%ang_sdev(self%refine, self%nstates, npeaks)
+        else
+            if(npeaks <= 2)then
+                ang_sdev = 0.
+            else
+                corrs = o_peaks%get_all('corr')
+                loc = maxloc(corrs)
+                o_best = o_peaks%get_ori(loc(1))
+                call se%new(trim(self%pgrp))
+                sym_os = o_peaks
+                do ipeak = 1, npeaks
+                    if(ipeak == loc(1))cycle
+                    o       = o_peaks%get_ori(ipeak)
+                    mindist = o.euldist.o_best
+                    do isym = 2, se%get_nsym()
+                        o_new = se%apply(o, isym)
+                        dist  = o_new.euldist.o_best
+                        if( dist < mindist)then
+                            mindist = dist
+                            call sym_os%set_ori(ipeak, o_new)
+                        endif
+                    enddo
+                enddo
+                ang_sdev = sym_os%ang_sdev(self%refine, self%nstates, npeaks)
+            endif         
+        endif
+        call o_peaks%set_all2single('sdev',   ang_sdev)
         ! ctf parameters
         if( self%ctf.ne.'no' )then
-            call self%o_peaks%set_all2single('dfx',   self%dfx   )
-            call self%o_peaks%set_all2single('dfy',   self%dfy   )
-            call self%o_peaks%set_all2single('angast',self%angast)
+            call o_peaks%set_all2single('dfx',   self%dfx   )
+            call o_peaks%set_all2single('dfy',   self%dfy   )
+            call o_peaks%set_all2single('angast',self%angast)
         endif
-        ! DEBUG
+        ! the end
+        self%o_peaks = o_peaks
         if( DEBUG ) write(*,'(A)') '>>> PRIME3D_SRCH::EXECUTED PREP_NPEAKS_ORIS'
     end subroutine prep_npeaks_oris
 
@@ -873,18 +982,16 @@ contains
             wcorr = self%o_peaks%get(1,'corr')
             return
         endif
-        ! get correlations
         corrs = self%o_peaks%get_all('corr')
-        ! calculate L1 norms
         do ipeak=1,self%npeaks
             o            = self%o_peaks%get_ori(ipeak)
             state        = nint(o%get('state'))
             roind        = pftcc%get_roind(360.-o%e3get())
             proj         = e%find_closest_proj(o,1)
             ref          = (state - 1) * self%nprojs + proj
-            dists(ipeak) = pftcc%euclid(ref, iptcl, roind, self%pfom(state,:))
+            dists(ipeak) = pftcc%euclid(ref, iptcl, roind)
         end do
-        ! calculate normalised weights and weighted corr
+        ! calculate weights and weighted corr
         ws    = exp(-dists)
         wcorr = sum(ws*corrs)/sum(ws)
         ! update npeaks individual weights
@@ -892,25 +999,48 @@ contains
         deallocate(corrs)
     end subroutine stochastic_weights_L2norm
 
-    !> \brief  for sorting already shifted npeaks oris
-    subroutine sort_shifted_peaks( self )
-        class(prime3D_srch), intent(inout) :: self
-        type(oris)        :: o_sorted
+    !>  \brief  determines and updates stochastic weights
+    subroutine stochastic_weights( self, pftcc, iptcl, e, wcorr )
+        class(prime3D_srch),     intent(inout) :: self
+        class(polarft_corrcalc), intent(inout) :: pftcc
+        integer,                 intent(in)    :: iptcl
+        class(oris),             intent(inout) :: e
+        real,                    intent(out)   :: wcorr
+        real, allocatable :: corrs(:), frc(:), ws(:), frcmeds(:)
         type(ori)         :: o
-        real, allocatable :: corrs(:)
-        integer           :: i, inds(self%npeaks)
-        if( self%o_peaks%get_noris() /= self%npeaks ) stop 'invalid number of oris in simple_prime3D_srch :: sort_shifted_peaks'
-        call o_sorted%new( self%npeaks )
+        integer           :: state, roind, proj, ref, ipeak, npeaks
+        if( self%npeaks == 1 )then
+            call self%o_peaks%set(1,'ow',1.0)
+            wcorr = self%o_peaks%get(1,'corr')
+            return
+        endif
         corrs = self%o_peaks%get_all('corr')
-        inds  = (/(i,i=1,self%npeaks)/)
-        call hpsort(self%npeaks, corrs, inds)
-        do i=1,self%npeaks
-            o = self%o_peaks%get_ori( inds(i) )
-            call o_sorted%set_ori( i,o )
-        enddo
-        self%o_peaks = o_sorted
-        if( DEBUG ) write(*,'(A)') '>>> PRIME3D_SRCH::EXECUTED SORT_SHIFTED_PEAKS'
-    end subroutine sort_shifted_peaks
+        if( self%do_weight_inpl )then
+            npeaks = self%npeaks_inpl
+        else
+            npeaks = self%npeaks
+        endif
+        allocate( ws(npeaks), frcmeds(npeaks) )
+        do ipeak=1,npeaks
+            o            = self%o_peaks%get_ori(ipeak)
+            state        = nint(o%get('state'))
+            roind        = pftcc%get_roind(360.-o%e3get())
+            proj         = e%find_closest_proj(o,1)
+            ref          = (state - 1) * self%nprojs + proj
+            frc = pftcc%genfrc(ref, iptcl, roind)
+            frcmeds(ipeak) = max(0., median_nocopy(frc))
+            deallocate(frc)
+        end do
+        ! calculate the exponential of the negative distances
+        ! so that when diff==0 the weights are maximum and when
+        ! diff==corrmax the weights are minimum
+        ws    = exp(-(1.-frcmeds))
+        ! weighted corr
+        wcorr = sum(ws*corrs)/sum(ws)
+        ! update npeaks individual weights
+        call self%o_peaks%set_all('ow', ws)
+        deallocate(corrs)
+    end subroutine stochastic_weights
 
     ! GETTERS & SETTERS
     
@@ -921,11 +1051,14 @@ contains
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: iptcl
         class(oris),             intent(inout) :: a
-        type(ori) :: o_new, o_old
-        real      :: euldist, mi_joint, mi_proj, mi_inpl, mi_state
-        integer   :: roind,state
-        o_old   = a%get_ori(iptcl)
-        o_new   = self%o_peaks%get_ori(self%npeaks)
+        type(ori)         :: o_new, o_old
+        real, allocatable :: corrs(:)
+        real              :: euldist, mi_joint, mi_proj, mi_inpl, mi_state
+        integer           :: roind, state, best_loc(1)
+        o_old    = a%get_ori(iptcl)
+        corrs    = self%o_peaks%get_all('corr')
+        best_loc = maxloc(corrs) 
+        o_new    = self%o_peaks%get_ori(best_loc(1))
         ! angular distance
         euldist   = rad2deg( o_old.euldist.o_new )
         ! new params
@@ -978,7 +1111,7 @@ contains
         call a%set(iptcl, 'sdev',  o_new%get('sdev') )
         ! stash and return
         o_new = a%get_ori(iptcl)
-        call self%o_peaks%set_ori(self%npeaks, o_new)
+        call self%o_peaks%set_ori(best_loc(1), o_new)
         if( DEBUG ) write(*,'(A)') '>>> PRIME3D_SRCH::GOT BEST ORI'
     end subroutine update_best
 
@@ -1193,7 +1326,6 @@ contains
     subroutine kill( self )
         class(prime3D_srch), intent(inout) :: self !< instance
         if( self%exists )then
-            self%pfom => null()
             call self%o_peaks%kill
             call self%online_destruct
             if( allocated(self%state_exists) ) deallocate(self%state_exists)

@@ -17,7 +17,6 @@ logical, parameter :: debug = .false.
 
 type cont3D_ada_srch
     private
-    real,                    pointer :: pfom(:,:)              !< FOM filter pointer
     class(polarft_corrcalc), pointer :: pftcc_ptr   => null()  !< polar fourier correlation calculator
     class(projector),        pointer :: vols_ptr(:) => null()  !< volumes for projection
     type(pftcc_inplsrch)             :: inplsrch_obj        !< in-plane search object
@@ -71,17 +70,15 @@ end type cont3D_ada_srch
 contains
 
     !>  \brief  is a constructor
-    subroutine new( self, p, pftcc, vols, fom )
+    subroutine new( self, p, pftcc, vols )
         class(cont3D_ada_srch),           intent(inout) :: self     !< instance
         class(params),                   intent(in)    :: p        !< parameters
         class(polarft_corrcalc), target, intent(in)    :: pftcc    !< corrcalc obj
         class(projector),        target, intent(in)    :: vols(:)  !< references
-        real,                    target, intent(in)    :: fom(:,:) !< FOM filter 
         call self%kill
         ! set constants
         self%pftcc_ptr  => pftcc
         self%vols_ptr   => vols
-        self%pfom       => fom
         self%lims(:3,:) = p%eullims
         self%trs        = p%trs
         self%lims(4,:)  = [-self%trs, self%trs]
@@ -354,7 +351,7 @@ contains
             iroind = self%pftcc_ptr%get_roind(360.-o%e3get())
             !!!!!!!!!!!!!!! note state default 1 here
             iref   = self%o_srch%find_closest_proj(o, 1)
-            dists(ipeak) = self%pftcc_ptr%euclid(iref, self%iptcl, iroind, self%pfom(1,:))
+            dists(ipeak) = self%pftcc_ptr%euclid(iref, self%iptcl, iroind)
         end do
         ! calculate weights and weighted corr
         ws    = exp(-dists)
@@ -396,7 +393,6 @@ contains
     !>  \brief  is the destructor
     subroutine kill( self )
         class(cont3D_ada_srch), intent(inout) :: self
-        self%pfom      => null()
         self%pftcc_ptr => null()
         self%vols_ptr  => null()
         call self%o_in%kill

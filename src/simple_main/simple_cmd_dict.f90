@@ -67,7 +67,6 @@ contains
         call chdict%push('even',          'calculate even eo-pair(yes|no){no}')
         call chdict%push('fbody',         'file body')
         call chdict%push('filetab',       'list of files(*.txt/*.asc)')
-        call chdict%push('filter',        'filtering scheme for image alignment')
         call chdict%push('find',          'Fourier index')
         call chdict%push('fname',         'file name')
         call chdict%push('frac',          'fraction of ptcls(0-1){1}')

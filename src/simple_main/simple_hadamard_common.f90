@@ -37,12 +37,10 @@ contains
     
     subroutine set_bp_range( b, p, cline )
         use simple_math,          only: calc_fourier_index
-        use simple_estimate_ssnr, only: fsc2ssnr, fsc2optlp
-        use simple_filterer,      only: resample_filter
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         class(cmdline), intent(inout) :: cline
-        real, allocatable     :: resarr(:), tmp_arr(:), fom_tmp(:)
+        real, allocatable     :: resarr(:), tmp_arr(:)
         real                  :: fsc0143, fsc05, mapres(p%nstates)
         integer               :: s, loc(1), lp_ind
         character(len=STDLEN) :: fsc_fname
@@ -70,22 +68,12 @@ contains
                             tmp_arr     = file2rarr(trim(fsc_fname))
                             b%fsc(s,:)  = tmp_arr(:)
                             deallocate(tmp_arr)
-                            b%ssnr(s,:) = fsc2ssnr(b%fsc(s,:))
                             call get_resolution(b%fsc(s,:), resarr, fsc05, fsc0143)
                             mapres(s)   = fsc0143
-                            fom_tmp = fsc2optlp(b%fsc(s,:))
-                            if( p%boxmatch .eq. p%box )then
-                                b%fom(s,:) = fom_tmp
-                            else
-                                b%fom(s,:) = resample_filter(fom_tmp, resarr, b%img_match%get_res())
-                            endif
-                            deallocate(fom_tmp)
                         else
                             ! empty state
                             mapres(s)   = 0.
                             b%fsc(s,:)  = 0.
-                            b%fom(s,:)  = 1.
-                            b%ssnr(s,:) = 0.
                         endif
                     end do
                     loc    = maxloc(mapres)
@@ -243,13 +231,11 @@ contains
 
     !>  \brief  prepares one particle image for alignment 
     subroutine prepimg4align( b, p, o )
-        use simple_filterer, only: resample_filter
         use simple_ctf,      only: ctf
         class(build),      intent(inout) :: b
         class(params),     intent(inout) :: p
         type(ori),         intent(inout) :: o
         type(ctf)         :: tfun
-        real, allocatable :: filter(:) 
         real              :: x, y, dfx, dfy, angast
         integer           :: state, cls
         if( p%l_xfel )then
@@ -313,35 +299,8 @@ contains
                     call b%img_match%mask(p%msk, 'soft')
                 endif
             endif
-            ! image filtering
-            if( p%filter.ne.'no' .and. p%eo.eq.'yes')then
-                select case(p%filter)
-                    case( 'no', 'fom', 'fomsq' )
-                        ! nothing to do
-                    case( 'ssnr' )
-                        ! dummy implementation for testing
-                        call b%img_match%shellnorm()
-                        if( p%box.eq.p%boxmatch )then
-                            filter = b%ssnr(state,:)
-                        else
-                            filter = resample_filter(b%ssnr(state,:), b%img%get_res(), b%img_match%get_res())
-                        endif
-                        filter = sqrt(filter + 1.0)
-                        call b%img_match%apply_filter( filter )                                
-                        ! old pssnr implementation 
-                        ! case( 'pssnr' )
-                        !     call b%img%shellnorm
-                        !     call tfun%ctf2img(b%img_copy, dfx, 'square', dfy, angast)
-                        !     call b%img_copy%apply_filter( **pssnr** )
-                        !     call b%img_copy%add(1.0)
-                        !     call b%img_copy%square_root
-                        !     call b%img%apply_filter(b%img_copy)
-                    case DEFAULT
-                        stop 'Uknown filter; simple_hadamard_common%prepimg4align'
-                end select
             ! return in Fourier space
             call b%img_match%fwd_ft
-            endif
         endif
         if( DEBUG ) write(*,*) '*** simple_hadamard_common ***: finished prepimg4align'
     end subroutine prepimg4align
@@ -432,7 +391,7 @@ contains
 
     !>  \brief  prepares one volume for references extraction
     subroutine preprefvol( b, p, cline, s, doexpand )
-        use simple_filterer, only: resample_filter
+        use simple_estimate_ssnr, only: fsc2optlp
         class(build),      intent(inout) :: b
         class(params),     intent(inout) :: p
         class(cmdline),    intent(inout) :: cline
@@ -449,6 +408,15 @@ contains
         if( p%l_xfel )then
             ! no centering
         else
+            ! Volume filtering
+            if( p%eo.eq.'yes' )then
+                ! Rosenthal & Henderson, 2003 
+                call b%vol%fwd_ft
+                filter = fsc2optlp(b%fsc(s,:))
+                call b%vol%shellnorm()
+                call b%vol%apply_filter(filter)
+            endif
+            ! centering            
             do_center = .true.
             if( p%center .eq. 'no' .or. p%nstates > 1 .or. .not. p%doshift .or.&
                 p%pgrp(:1) .ne. 'c' .or. cline%defined('mskfile') ) do_center = .false.
@@ -461,6 +429,8 @@ contains
                     if( cline%defined('oritab') )call b%a%map3dshift22d(-shvec(:), state=s)
                 endif
             endif
+            ! back to real space
+            call b%vol%bwd_ft
         endif
         ! clip
         if( p%boxmatch < p%box )then
@@ -491,28 +461,6 @@ contains
                 endif
             endif
         endif
-        ! Volume filtering
-        if( p%eo.eq.'yes' .and. p%filter.ne.'no' )then
-            select case(p%filter)
-                case( 'no', 'ssnr' )
-                    ! nothing to do
-                case( 'fom' )
-                    ! Rosenthal & Henderson, 2003
-                    filter = b%fom(s,:)
-                case( 'fomsq' )
-                    ! Penczek, 2010
-                    filter = b%fom(s,:)**2.0
-                case DEFAULT
-                    stop 'Uknown filter; simple_hadamard_common%preprefvol'
-            end select
-            if( allocated(filter) )then
-                call b%vol%shellnorm()
-                where( filter > 0.9999 )filter = 0.99999
-                where( filter < TINY   )filter = 0.0
-                call b%vol%apply_filter(filter)
-                deallocate(filter)
-            endif
-        endif
         ! FT volume
         call b%vol%fwd_ft
         ! expand for fast interpolation
@@ -525,6 +473,7 @@ contains
         class(params),     intent(inout) :: p
         real,              intent(inout) :: res
         integer, optional, intent(in)    :: which_iter
+        real,     allocatable :: invctfsq(:)
         integer               :: s
         real                  :: res05s(p%nstates), res0143s(p%nstates)
         character(len=STDLEN) :: pprocvol

@@ -150,7 +150,7 @@ contains
         ! create the search objects, need to re-create every round because parameters are changing
         allocate( primesrch3D(p%fromp:p%top) )
         do iptcl=p%fromp,p%top
-            call primesrch3D(iptcl)%new(b%a, p, pftcc, b%fom)
+            call primesrch3D(iptcl)%new(b%a, p, pftcc)
         end do
         ! prep ctf & filter
         if(p%ctf .ne. 'no') call pftcc%create_polar_ctfmats(p%smpd, b%a)
@@ -362,12 +362,10 @@ contains
     end subroutine preppftcc4align
 
     subroutine prep_refs_pftcc4align( b, p, cline )
-        use simple_filterer, only: resample_filter
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         class(cmdline), intent(inout) :: cline
         type(ori)         :: o
-        real, allocatable :: filter(:)
         integer           :: cnt, s, iref, nrefs
         ! PREPARATION OF REFERENCES IN PFTCC
         ! read reference volumes and create polar projections
@@ -393,34 +391,6 @@ contains
                 call b%vol%fproject_polar(cnt, o, pftcc)
             end do
         end do
-        ! references filtering
-        if( p%eo.eq.'yes' .and. p%filter.ne.'no' )then
-            select case( p%filter )
-                case( 'no', 'fom', 'fomsq' )
-                    ! nothing to do 
-                case( 'ssnr' )
-                    ! dummy scheme for testing
-                    call pftcc%shellnorm_refs
-                    do s = 1, p%nstates
-                        if( b%a%get_statepop(s) == 0 )cycle
-                        if( p%boxmatch.eq.p%box )then
-                            filter = b%ssnr(s,:)
-                        else
-                            filter = resample_filter(b%ssnr(s,:), b%img%get_res(), b%img_match%get_res())
-                        endif
-                        filter = sqrt(filter)
-                        where( filter > 0.999 )filter = 1.0
-                        where( filter < TINY ) filter = 0.0
-                        do iref = 1, p%nspace
-                            if( nint(b%e%get(iref, 'state')) .ne. s )cycle
-                            call pftcc%filter_ref( iref, filter )
-                        enddo
-                        deallocate( filter )
-                    enddo
-                case DEFAULT
-                    stop 'Uknown filter; simple_hadamard3D_matcher%prep_refs_pftcc4align'
-            end select
-        endif
         ! cleanup
         call b%vol%kill_expanded
         ! bring back the original b%vol size for clean exit

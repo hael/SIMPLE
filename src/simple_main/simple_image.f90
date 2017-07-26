@@ -2561,6 +2561,7 @@ contains
         endif
         if(neg .eq. 'yes') call tmp%neg
         call tmp%bp(0., lp)
+        if( tmp%ft ) call tmp%bwd_ft
         if( present(thres) )then
             call tmp%mask(rmsk, 'soft')
             call tmp%norm_bin

@@ -387,11 +387,12 @@ contains
         integer,          optional, intent(in)    :: part      !< partition (4 parallel rec)
         character(len=*), optional, intent(in)    :: fbody     !< body of output file
         real,             optional, intent(in)    :: wmat(:,:) !< shellweights
-        type(image)      :: img, img_pad
-        type(kbinterpol) :: kbwin
-        integer          :: i, cnt, n, ldim(3), io_stat, filnum, state_glob
-        integer          :: statecnt(p%nstates), alloc_stat, state_here
-        logical          :: doshellweight
+        type(image)       :: img, img_pad
+        type(kbinterpol)  :: kbwin
+        real, allocatable :: invctfsq(:)
+        integer           :: i, cnt, n, ldim(3), io_stat, filnum, state_glob
+        integer           :: statecnt(p%nstates), alloc_stat, state_here
+        logical           :: doshellweight
         call find_ldim_nptcls(fname, ldim, n)
         if( n /= o%get_noris() ) stop 'inconsistent nr entries; eorec; simple_eo_reconstructor'
         kbwin = self%get_kbwin() 

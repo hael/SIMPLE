@@ -21,7 +21,6 @@ logical, parameter :: debug = .false.
 
 type cont3D_de_srch
     private
-    real,                    pointer :: pfom(:,:)              !< FOM filter pointer
     class(polarft_corrcalc), pointer :: pftcc_ptr   => null()  !< polar fourier correlation calculator
     class(projector),        pointer :: vols_ptr(:) => null()  !< volumes for projection
     type(pftcc_srch)                 :: srch_obj               !< shift search object
@@ -67,17 +66,15 @@ end type cont3D_de_srch
 contains
 
     !>  \brief  is a constructor
-    subroutine new( self, p, pftcc, vols, fom )
+    subroutine new( self, p, pftcc, vols )
         class(cont3D_de_srch),           intent(inout) :: self     !< instance
         class(params),                   intent(in)    :: p        !< parameters
         class(polarft_corrcalc), target, intent(in)    :: pftcc    !< corrcalc obj
         class(projector),        target, intent(in)    :: vols(:)  !< references
-        real,                    target, intent(in)    :: fom(:,:) !< FOM filter 
         call self%kill
         ! set constants
         self%pftcc_ptr  => pftcc
         self%vols_ptr   => vols
-        self%pfom       => fom
         self%lims(:3,:) = p%eullims
         self%trs        = p%trs
         self%lims(4,:)  = [-self%trs, self%trs]
@@ -290,8 +287,7 @@ contains
             o = self%o_peaks%get_ori(ipeak)
             call self%vols_ptr(self%state)%fproject_polar(self%ref, o,&
             &self%pftcc_ptr, serial=.true.)
-            !!!!!!!!!!!!!!! note state default 1 here
-            dists(ipeak) = self%pftcc_ptr%euclid(self%ref, self%iptcl, 1, self%pfom(1,:))
+            dists(ipeak) = self%pftcc_ptr%euclid(self%ref, self%iptcl, 1)
         end do
         ! calculate normalised weights and weighted corr
         ws    = exp(-dists)
@@ -334,7 +330,6 @@ contains
     !>  \brief  is the destructor
     subroutine kill( self )
         class(cont3D_de_srch), intent(inout) :: self
-        self%pfom => null()
         call self%srch_obj%kill
         self%pftcc_ptr => null()
         self%vols_ptr  => null()

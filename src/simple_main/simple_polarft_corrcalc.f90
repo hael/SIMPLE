@@ -76,10 +76,6 @@ type :: polarft_corrcalc
     ! MODIFIERS
     procedure, private :: prep_ref4corr
     procedure          :: xfel_subtract_shell_mean
-    procedure          :: shellnorm_refs
-    procedure, private :: shellnorm_ref
-    procedure          :: filter_refs
-    procedure          :: filter_ref
     ! CALCULATORS
     procedure, private :: create_polar_ctfmat
     procedure          :: create_polar_ctfmats
@@ -523,75 +519,6 @@ contains
         end do
         !$omp end parallel do
     end subroutine read_pfts_ptcls
-
-    !>  \brief  is for whitening references, should be done prior to CTF multiplication.
-    subroutine shellnorm_refs( self )
-        !$ use omp_lib
-        !$ use omp_lib_kinds
-        class(polarft_corrcalc), intent(inout) :: self
-        integer :: iref
-        !$omp parallel do default(shared) private(iref) schedule(static) proc_bind(close)
-        do iref = 1, self%nrefs
-            call self%shellnorm_ref( iref )
-        enddo
-        !$omp end parallel do
-    end subroutine shellnorm_refs
-
-    !>  \brief  is for a whitening reference.
-    subroutine shellnorm_ref( self, iref )
-        use simple_math, only: csq
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: iref
-        integer     :: k
-        real        :: pow_ref, norm
-        complex(sp) :: pft_ref(self%refsz, self%kfromto(1):self%kfromto(2))
-        pft_ref = self%pfts_refs(iref,:,:)
-        do k = self%kfromto(1), self%kfromto(2)
-            pow_ref  = sum(csq(pft_ref(:,k))) / real(self%refsz)
-            if( pow_ref > TINY )then
-                pft_ref(:,k) = pft_ref(:,k) / sqrt(pow_ref)
-            else
-                pft_ref(:,k) = cmplx(0.,0.)
-            endif
-        end do 
-        self%pfts_refs(iref,:,:) = pft_ref
-    end subroutine shellnorm_ref
-
-    !>  \brief  is for filtering references. Should be done prior to CTF multiplication.
-    subroutine filter_refs( self, filter )
-        !$ use omp_lib
-        !$ use omp_lib_kinds
-        use simple_math, only: csq
-        class(polarft_corrcalc), intent(inout) :: self
-        real,                    intent(inout) :: filter(:)
-        integer :: iref
-        if( size(filter) < (self%kfromto(2)-self%kfromto(1)+1) )stop 'Non-congruent filter dimension; simple_polarft_corrcalc%filter_refs'
-        !$omp parallel do default(shared) private(iref) schedule(static) proc_bind(close)
-        do iref = 1, self%nrefs
-            call self%filter_ref( iref, filter )
-        enddo
-        !$omp end parallel do
-    end subroutine filter_refs
-
-    !>  \brief  is for filtering a reference.
-    subroutine filter_ref( self, iref, filter )
-        use simple_math, only: csq
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: iref
-        real,                    intent(in)    :: filter(:)
-        integer     :: k
-        complex(sp) :: pft_ref(self%refsz, self%kfromto(1):self%kfromto(2))
-        if( size(filter) < (self%kfromto(2)-self%kfromto(1)+1) )stop 'Non-congruent filter dimension; simple_polarft_corrcalc%filter_ref'
-        pft_ref = self%pfts_refs(iref,:,:)
-        do k = self%kfromto(1), self%kfromto(2)
-            if( filter(k) > TINY )then
-                pft_ref(:,k) = pft_ref(:,k) * filter(k)
-            else
-                pft_ref(:,k) = cmplx(0.,0.)
-            endif
-        end do 
-        self%pfts_refs(iref,:,:) = pft_ref
-    end subroutine filter_ref
     
     ! MODIFIERS
 
@@ -880,40 +807,15 @@ contains
 
     !>  \brief  for calculating the Euclidean distance between reference & particle
     !!          This ought to be a better choice for the orientation weights
-    function euclid( self, iref, iptcl, irot, fom ) result( dist )
+    function euclid( self, iref, iptcl, irot ) result( dist )
         use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl, irot
-        real,          optional, intent(in)    :: fom(:)
-        integer     :: k, nk
-        real        :: pow_ref, pow_ptcl, norm, dist, sqsum_ref
-        complex(sp) :: pft_ref_norm(self%refsz,self%kfromto(1):self%kfromto(2))
-        complex(sp) :: pft_ptcl_norm(self%refsz,self%kfromto(1):self%kfromto(2))
-        call self%prep_ref4corr(iptcl, iref, pft_ref_norm, sqsum_ref)
-        dist = 0.
-        do k=self%kfromto(1),self%kfromto(2)
-            pow_ref  = sum(csq(pft_ref_norm(:,k)))/real(self%refsz)
-            pow_ptcl = sum(csq(self%pfts_ptcls(iptcl,irot:irot+self%winsz,k)))/real(self%refsz)
-            if( pow_ref > TINY )then
-                norm = sqrt(pow_ref)
-                pft_ref_norm(:,k) = pft_ref_norm(:,k)/norm
-            else
-                pft_ref_norm(:,k) = cmplx(0.,0.)
-            endif
-            if( pow_ptcl > TINY )then
-                norm = sqrt(pow_ptcl)
-                pft_ptcl_norm(:,k) = self%pfts_ptcls(iptcl,irot:irot+self%winsz,k)/norm
-            else
-                pft_ptcl_norm(:,k) = cmplx(0.,0.)
-            endif
-            if( present(fom) )then
-                ! dist = dist + sum(cabs(fom(k)*(pft_ref_norm(:,k) - pft_ptcl_norm(:,k)))**2.0)
-                dist = dist + fom(k) * sum(cabs(pft_ref_norm(:,k) - pft_ptcl_norm(:,k))**2.0)
-            else
-                dist = dist + sum(cabs(pft_ref_norm(:,k) - pft_ptcl_norm(:,k))**2.0)                
-            endif
-        end do 
-        dist = dist/real(self%refsz * (self%kfromto(2) - self%kfromto(1) + 1))
+        real        :: dist, sqsum_ref
+        complex(sp) :: pft_ref(self%refsz,self%kfromto(1):self%kfromto(2))
+        call self%prep_ref4corr(iptcl, iref, pft_ref, sqsum_ref)
+        dist = sum(cabs(pft_ref - self%pfts_ptcls(iptcl,irot:irot+self%winsz,:))**2.0)&
+               & /real(self%refsz * (self%kfromto(2) - self%kfromto(1) + 1))
     end function euclid
 
     ! DESTRUCTOR

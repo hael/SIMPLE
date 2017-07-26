@@ -17,7 +17,6 @@ logical, parameter :: debug = .false.
 
 type cont3D_srch
     private
-    real,                    pointer :: pfom(:,:)           !< FOM filter pointer
     class(polarft_corrcalc), pointer :: pftcc_ptr => null() !< polar fourier correlation calculator
     type(pftcc_shsrch)               :: shsrch_obj          !< shift search object
     type(pftcc_inplsrch)             :: inplsrch_obj        !< in-plane search object
@@ -64,16 +63,14 @@ end type cont3D_srch
 contains
 
     !>  \brief  is a constructor
-    subroutine new( self, p, e, pftcc, fom)
+    subroutine new( self, p, e, pftcc )
         class(cont3D_srch),             intent(inout) :: self     !< instance
         class(params),                   intent(in)   :: p        !< parameters
         class(oris),                     intent(in)   :: e        !< references
         class(polarft_corrcalc), target, intent(in)   :: pftcc    !< corrcalc obj
-        real,                    target, intent(in)   :: fom(:,:) !< FOM filter 
         call self%kill
         ! set constants
         self%pftcc_ptr => pftcc
-        self%pfom      => fom
         self%reforis   = e
         self%npeaks    = p%npeaks
         self%lims(:,1) = -p%trs
@@ -319,8 +316,7 @@ contains
             o     = self%softoris%get_ori(ipeak)
             roind = self%pftcc_ptr%get_roind(360.-o%e3get())
             ref   = self%reforis%find_closest_proj(o, 1)
-            !!!!!!!!!!!!!!! note state default 1 here
-            dists(ipeak) = self%pftcc_ptr%euclid(ref, self%iptcl, roind, self%pfom(1,:))
+            dists(ipeak) = self%pftcc_ptr%euclid(ref, self%iptcl, roind)
         end do
         ! calculate normalised weights and weighted corr
         ! ws    = exp(-dists)
@@ -365,7 +361,6 @@ contains
     !>  \brief  is the destructor
     subroutine kill( self )
         class(cont3D_srch), intent(inout) :: self
-        self%pfom => null()
         call self%shsrch_obj%kill
         self%pftcc_ptr => null()
         call self%shiftedoris%kill

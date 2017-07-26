@@ -525,26 +525,19 @@ select case(prg)
         keys_optional(29) = 'norec'
         keys_optional(30) = 'nsub'
         keys_optional(31) = 'lp_grid'
-        keys_optional(32) = 'filter'
         ! documentation
         if( describe ) call print_doc_prime3D
         ! parse command line
-        call cline%parse( keys_required(:6), keys_optional(:32) )
+        call cline%parse( keys_required(:6), keys_optional(:31) )
         ! set defaults
         if( .not. cline%defined('nspace')                  ) call cline%set('nspace', 1000.)
         if( cline%defined('lp') .or. cline%defined('find') ) call cline%set('dynlp',   'no')
         if( .not. cline%defined('cenlp')                   ) call cline%set('cenlp',    30.)
         if( .not. cline%defined('refine')                  ) call cline%set('refine',  'no')
-        if( .not. cline%defined('filter')                  ) call cline%set('filter', 'no')
         if( .not. cline%defined('eo') )then
             call cline%set('eo', 'no')
-            call cline%set('filter', 'no')
         else
-            if( cline%get_carg('eo').eq.'yes' )then
-                call cline%set('dynlp','no')
-            else
-                call cline%set('filter', 'no')
-            endif
+            if( cline%get_carg('eo').eq.'yes' )call cline%set('dynlp','no')
         endif
         ! execute
         call xprime3D_distr%execute(cline)

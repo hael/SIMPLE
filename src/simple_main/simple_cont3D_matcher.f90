@@ -144,11 +144,11 @@ contains
                 select case(p%refine)
                     case('yes')
                         call prep_pftcc_refs(b, p, iptcl, pftccs(iptcl))
-                        call cont3Dsrch(iptcl)%new(p, orefs, pftccs(iptcl), b%fom)
+                        call cont3Dsrch(iptcl)%new(p, orefs, pftccs(iptcl))
                     case('de')
-                        call cont3Ddesrch(iptcl)%new(p, pftccs(iptcl), b%refvols, b%fom)
+                        call cont3Ddesrch(iptcl)%new(p, pftccs(iptcl), b%refvols)
                     case('ada')
-                        call cont3Dadasrch(iptcl)%new(p, pftccs(iptcl), b%refvols, b%fom)
+                        call cont3Dadasrch(iptcl)%new(p, pftccs(iptcl), b%refvols)
                     case DEFAULT
                         stop 'Unknown refinement mode; pcont3D_matcher::cont3D_exec'
                 end select

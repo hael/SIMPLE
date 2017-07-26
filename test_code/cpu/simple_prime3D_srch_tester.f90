@@ -46,7 +46,6 @@ contains
         call cline_local%set('refine', 'no')
         call cline_local%set('nstates',1.)
         call setup_testenv( cline_local, be_verbose )
-        call test_sort_shifted_peaks
         call test_prep4srch
         call test_prepcorr4srch
         call test_prep_reforis( cline_local )
@@ -67,7 +66,6 @@ contains
         call cline_local%set('refine', 'no')
         call cline_local%set('nstates',real(NSTATES))
         call setup_testenv( cline_local, be_verbose )
-        call test_sort_shifted_peaks
         call test_prep4srch
         call test_prepcorr4srch
         call test_prep_reforis( cline_local )
@@ -177,7 +175,7 @@ contains
         ! The pftcc & primesrch3D objects are now globally available in the module
         ! because of the use simple_hadamard3D_matcher statement in the top
         ! now instantiatable, so create it
-        call primesrch3D%new(b%a, p, pftcc, b%fom)
+        call primesrch3D%new(b%a, p, pftcc)
         if( verbose )print *,'end setup_testenv'        
     end subroutine setup_testenv
 
@@ -257,29 +255,6 @@ contains
         endif
         if( verbose )print *,'end setup_prepcorr4srch'
     end subroutine test_prepcorr4srch
-
-    subroutine test_sort_shifted_peaks
-        type(oris)        :: test_os
-        type(ori)         :: o
-        real, allocatable :: corrs(:)
-        integer :: i,j,IND
-        do j=1,5
-            IND = MAXNPEAKS-j
-            test_os = oris( p%npeaks )
-            do i=1,p%npeaks
-                call o%rnd_ori
-                call o%set('class',real(i))
-                call o%set('corr',real(i)/(4.*real(p%npeaks)))
-                call test_os%set_ori(i,o)
-            enddo
-            call test_os%set(IND,'corr',.5+real(j)/10.)
-            call primesrch3D%set_o_peaks( test_os )
-            call primesrch3D%sort_shifted_peaks()
-            test_os = primesrch3D%get_o_peaks()
-            if( nint(test_os%get(p%npeaks,'class')).ne.IND)print *,'Failed in simple_prime3D_srch_tester::test_sort_shifted_npeaks'
-            call test_os%kill
-        enddo
-    end subroutine test_sort_shifted_peaks
 
     subroutine test_prep_reforis( cline)
         class(cmdline),    intent(inout) :: cline

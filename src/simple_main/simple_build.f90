@@ -73,9 +73,7 @@ type build
     type(projector),        allocatable :: refvols(:)         !< reference volumes for quasi-continuous search
     type(reconstructor),    allocatable :: recvols(:)         !< array of volumes for reconstruction
     type(eo_reconstructor), allocatable :: eorecvols(:)       !< array of volumes for eo-reconstruction
-    real,    allocatable                :: ssnr(:,:)          !< spectral signal to noise rations
     real,    allocatable                :: fsc(:,:)           !< Fourier shell correlation
-    real,    allocatable                :: fom(:,:)           !< FOM filter
     integer, allocatable                :: nnmat(:,:)         !< matrix with nearest neighbor indices
     integer, allocatable                :: pbatch(:)          !< particle index batch
     integer, allocatable                :: grid_projs(:)      !< projection directions for coarse grid search
@@ -210,12 +208,8 @@ contains
             ! build arrays
             lfny = self%img%get_lfny(1)
             lfny_match = self%img_match%get_lfny(1)         
-            allocate( self%ssnr(p%nstates,lfny), self%fsc(p%nstates,lfny),&
-                self%fom(p%nstates,lfny_match), stat=alloc_stat )
+            allocate( self%fsc(p%nstates,lfny), source=0., stat=alloc_stat )
             call alloc_err("In: build_general_tbox; simple_build, 1", alloc_stat)
-            self%ssnr = 0.
-            self%fsc  = 0.
-            self%fom  = 1.
             ! set default amsklp
             if( .not. cline%defined('amsklp') .and. cline%defined('lp') )then
                 p%amsklp = self%img%get_lp(self%img%get_find(p%lp)-2)
@@ -266,9 +260,7 @@ contains
             call self%mskimg%kill
             call self%vol_pad%kill_expanded
             call self%vol_pad%kill
-            if( allocated(self%ssnr) )then
-                deallocate(self%ssnr, self%fsc, self%fom)
-            endif
+            if( allocated(self%fsc) )deallocate(self%fsc)
             self%general_tbox_exists = .false.
         endif
     end subroutine kill_general_tbox

@@ -124,7 +124,6 @@ type :: params
     character(len=STDLEN) :: fbody=''
     character(len=STDLEN) :: featstk='expecstk.bin'
     character(len=STDLEN) :: filetab=''
-    character(len=STDLEN) :: filter='no'
     character(len=STDLEN) :: fname=''
     character(len=STDLEN) :: fsc='fsc_state01.bin'
     character(len=STDLEN) :: hfun='sigm'
@@ -454,7 +453,6 @@ contains
         call check_carg('exp_doc',        self%exp_doc)
         call check_carg('extrmode',       self%extrmode)
         call check_carg('fbody',          self%fbody)
-        call check_carg('filter',         self%filter)
         call check_carg('ft2img',         self%ft2img)
         call check_carg('guinier',        self%guinier)
         call check_carg('hfun',           self%hfun)
