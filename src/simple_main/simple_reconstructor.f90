@@ -50,7 +50,6 @@ type, extends(image) :: reconstructor
     procedure          :: compress_exp
     ! SUMMATION
     procedure          :: sum
-    procedure          :: invctfsq_shellsum
     ! RECONSTRUCTION
     procedure          :: rec
     ! DESTRUCTORS
@@ -272,7 +271,7 @@ contains
         endif
     end subroutine calc_tfun_vals
     
-    subroutine inout_fplane( self, o, inoutmode, fpl, pwght, mul, shellweights )
+    subroutine inout_fplane( self, o, inoutmode, fpl, pwght, mul )
         use simple_math, only: hyp
         use simple_ori,  only: ori
         class(reconstructor), intent(inout) :: self      !< instance
@@ -281,7 +280,6 @@ contains
         class(image),         intent(inout) :: fpl       !< Fourier plane
         real,    optional,    intent(in)    :: pwght     !< external particle weight (affects both fplane and rho)
         real,    optional,    intent(in)    :: mul
-        real,    optional,    intent(in)    :: shellweights(:)
         integer :: h, k, lims(3,2), sh, lfny, logi(3), phys(3)
         complex :: oshift
         real    :: x, y, xtmp, ytmp, pw
@@ -315,39 +313,18 @@ contains
             ytmp = y
             if( abs(x) < 1e-6 ) xtmp = 0.
             if( abs(y) < 1e-6 ) ytmp = 0.
-        endif
-        if(present(shellweights))then
-            lfny = size(shellweights)
-            !$omp parallel do collapse(2) default(shared) schedule(static)&
-            !$omp private(h,k,oshift,sh,pw,logi,phys) proc_bind(close)
-            do h=lims(1,1),lims(1,2)
-                do k=lims(1,1),lims(1,2)
-                    logi   = [h,k,0]
-                    sh     = min(max(1,nint(hyp(real(h),real(k)))),lfny)
-                    oshift = fpl%oshift(logi, [-xtmp,-ytmp,0.], ldim=2)
-                    if( pwght_present )then
-                        pw = pwght*shellweights(sh)
-                    else
-                        pw = shellweights(sh)
-                    endif
-                    phys = fpl%comp_addr_phys(logi)
-                    call self%inout_fcomp(h,k,o,inoutmode,fpl%get_fcomp(logi,phys),oshift,pw)
-                end do
+        endif       
+        !$omp parallel do collapse(2) default(shared) schedule(static)&
+        !$omp private(h,k,oshift,logi,phys) proc_bind(close)
+        do h=lims(1,1),lims(1,2)
+            do k=lims(1,1),lims(1,2)
+                logi   = [h,k,0]
+                oshift = fpl%oshift(logi, [-xtmp,-ytmp,0.], ldim=2)
+                phys   = fpl%comp_addr_phys(logi)
+                call self%inout_fcomp(h,k,o,inoutmode,fpl%get_fcomp(logi,phys),oshift,pwght)
             end do
-            !$omp end parallel do
-        else
-            !$omp parallel do collapse(2) default(shared) schedule(static)&
-            !$omp private(h,k,oshift,logi,phys) proc_bind(close)
-            do h=lims(1,1),lims(1,2)
-                do k=lims(1,1),lims(1,2)
-                    logi   = [h,k,0]
-                    oshift = fpl%oshift(logi, [-xtmp,-ytmp,0.], ldim=2)
-                    phys   = fpl%comp_addr_phys(logi)
-                    call self%inout_fcomp(h,k,o,inoutmode,fpl%get_fcomp(logi,phys),oshift,pwght)
-                end do
-            end do
-            !$omp end parallel do
-        endif
+        end do
+        !$omp end parallel do
     end subroutine inout_fplane
 
     subroutine sampl_dens_correct( self, self_out )
@@ -418,56 +395,10 @@ contains
          self%rho = self%rho+self_in%rho
          !$omp end parallel workshare
     end subroutine sum
-
-    ! for summing the spectral inverse CTF square sum
-    ! untested
-    subroutine invctfsq_shellsum( self, invctfsqsum  )
-        use simple_math, only: hyp
-        class(reconstructor), intent(inout) :: self
-        real,    allocatable, intent(out)   :: invctfsqsum(:)
-        real,    allocatable :: ctfsqsum(:)
-        integer, allocatable :: sh_cnt(:)
-        integer :: sh, h, k, l, n, lfny, lims(3,2), phys(3)
-        if( .not.self%rho_allocated )stop 'Invalid call; simple_reconstructor%invctfsq_shellsum'
-        n    = self%get_filtsz()
-        lfny = self%get_lfny(1)
-        lims = self%loop_lims(2)
-        allocate(invctfsqsum(n), ctfsqsum(n), sh_cnt(n))
-        invctfsqsum = 0.
-        ctfsqsum    = 0.
-        sh_cnt      = 0
-        !$omp parallel do collapse(3) default(shared) private(sh,h,k,l,phys)&
-        !$omp reduction(+:ctfsqsum,sh_cnt) schedule(static) proc_bind(close)
-        do h=lims(1,1),lims(1,2)
-            do k=lims(2,1),lims(2,2)
-                do l=lims(3,1),lims(3,2)
-                    sh = nint(hyp(real(h),real(k),real(l)))
-                    if(sh > lfny)cycle
-                    phys = self%comp_addr_phys([h,k,l])
-                    ctfsqsum(sh) = ctfsqsum(sh) + self%rho(phys(1), phys(2), phys(3))
-                    sh_cnt(sh)   = sh_cnt(sh) + 1
-                end do
-            end do
-        end do
-        !$omp end parallel do
-        do k = 1, n
-            if( sh_cnt(k) == 0 )then
-                invctfsqsum(k) = 0.0
-            else
-                if( ctfsqsum(k) < TINY )then
-                    invctfsqsum = 0.0
-                else
-                    invctfsqsum(k) = real(sh_cnt(k)) / ctfsqsum(k)
-                endif
-            endif
-        enddo
-        where( invctfsqsum < TINY )invctfsqsum = 0.0
-        deallocate(ctfsqsum, sh_cnt)
-    end subroutine invctfsq_shellsum
     
     ! RECONSTRUCTION
     
-    subroutine rec( self, fname, p, o, se, state, mul, eo, part, wmat )
+    subroutine rec( self, fname, p, o, se, state, mul, eo, part )
         use simple_oris,     only: oris
         use simple_sym,      only: sym
         use simple_params,   only: params
@@ -482,14 +413,11 @@ contains
         real,    optional,    intent(in)    :: mul       !< shift multiplication factor
         integer, optional,    intent(in)    :: eo        !< even(2) or odd(1)
         integer, optional,    intent(in)    :: part      !< partition (4 parallel rec)
-        real,    optional,    intent(in)    :: wmat(:,:) !< shellweights
         type(image) :: img, img_pd
         integer     :: statecnt(p%nstates), i, cnt, n, ldim(3)
         integer     :: state_here, state_glob
-        logical     :: doshellweight
         call find_ldim_nptcls(fname, ldim, n)
         if( n /= o%get_noris() ) stop 'inconsistent nr entries; rec; simple_reconstructor'
-        doshellweight = present(wmat)
         ! stash global state index
         state_glob = state 
         ! make random number generator
@@ -568,21 +496,11 @@ contains
                         call prep4cgrid(img, img_pd, p%msk, self%kbwin)
                     endif
                     if( p%pgrp == 'c1' )then
-                        if( doshellweight )then
-                            call self%inout_fplane(orientation, .true., img_pd, pwght=pw, mul=mul,&
-                                &shellweights=wmat(i,:))
-                        else
-                            call self%inout_fplane(orientation, .true., img_pd, pwght=pw, mul=mul)
-                        endif
+                        call self%inout_fplane(orientation, .true., img_pd, pwght=pw, mul=mul)
                     else
                         do j=1,se%get_nsym()
                             o_sym = se%apply(orientation, j)
-                            if( doshellweight )then
-                                call self%inout_fplane(o_sym, .true., img_pd, pwght=pw, mul=mul,&
-                                    &shellweights=wmat(i,:))
-                            else
-                                call self%inout_fplane(o_sym, .true., img_pd, pwght=pw, mul=mul)
-                            endif
+                            call self%inout_fplane(o_sym, .true., img_pd, pwght=pw, mul=mul)
                         end do
                     endif
                 endif

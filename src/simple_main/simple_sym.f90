@@ -34,6 +34,7 @@ type sym
     procedure          :: apply2all
     procedure          :: rot_to_asym
     procedure          :: rotall_to_asym
+    procedure          :: sym_euldist
     procedure          :: get_symori
     procedure          :: get_nsubgrp
     procedure          :: get_subgrp
@@ -320,6 +321,36 @@ contains
             call osyms%set_ori(i, o)
         enddo
     end subroutine rotall_to_asym
+
+    !>  \brief  determines euler distance and corresponding symmetrized
+    !>          orientation between two orientations
+    subroutine sym_euldist( self, oref, oasym, euldist )
+        use simple_ori,  only: ori
+        use simple_math, only: rad2deg
+        class(sym), intent(inout) :: self
+        class(ori), intent(in)    :: oref   !< is the untouched reference
+        class(ori), intent(inout) :: oasym  !< is outputted as symmetrized
+        real,       intent(out)   :: euldist
+        type(ori) :: o, osym
+        real      :: dist
+        integer   :: isym
+        euldist = oasym.euldist.oref
+        if( self%n == 1 )then
+            ! C1: nothing to do
+        else
+            osym = oasym
+            do isym = 2, self%n
+                o    = self%apply(oasym, isym)
+                dist = o.euldist.oref
+                if( dist < euldist )then
+                    euldist = dist
+                    osym = o
+                endif
+            enddo
+            oasym = osym
+        endif
+        euldist = rad2deg( euldist )
+    end subroutine sym_euldist
 
     !>  \brief  is a getter 
     function get_symori( self, symop ) result( e_sym )

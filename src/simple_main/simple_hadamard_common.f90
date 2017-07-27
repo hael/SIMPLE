@@ -156,13 +156,12 @@ contains
     end subroutine set_bp_range2D
 
     !>  \brief  grids one particle image to the volume
-    subroutine grid_ptcl( b, p, orientation, os, shellweights, ran_eo )
+    subroutine grid_ptcl( b, p, orientation, os, ran_eo )
         use simple_kbinterpol, only: kbinterpol
         class(build),              intent(inout) :: b
         class(params),             intent(inout) :: p
         class(ori),                intent(inout) :: orientation
         class(oris),     optional, intent(inout) :: os
-        real,            optional, intent(in)    :: shellweights(:)
         real,            optional, intent(in)    :: ran_eo
         real             :: pw, ran, w
         integer          :: jpeak, s, k, npeaks
@@ -209,17 +208,17 @@ contains
                 if( w > 0. )then
                     if( p%pgrp == 'c1' )then
                         if( p%eo .eq. 'yes' )then
-                            call b%eorecvols(s)%grid_fplane(orisoft, b%img_pad, pwght=w, ran=ran, shellweights=shellweights)
+                            call b%eorecvols(s)%grid_fplane(orisoft, b%img_pad, pwght=w, ran=ran)
                         else
-                            call b%recvols(s)%inout_fplane(orisoft, .true., b%img_pad, pwght=w, shellweights=shellweights)
+                            call b%recvols(s)%inout_fplane(orisoft, .true., b%img_pad, pwght=w)
                         endif
                     else
                         do k=1,b%se%get_nsym()
                             o_sym = b%se%apply(orisoft, k)
                             if( p%eo .eq. 'yes' )then
-                                call b%eorecvols(s)%grid_fplane(o_sym, b%img_pad, pwght=w, ran=ran, shellweights=shellweights)
+                                call b%eorecvols(s)%grid_fplane(o_sym, b%img_pad, pwght=w, ran=ran)
                             else
-                                call b%recvols(s)%inout_fplane(o_sym, .true., b%img_pad, pwght=w, shellweights=shellweights)
+                                call b%recvols(s)%inout_fplane(o_sym, .true., b%img_pad, pwght=w)
                             endif
                         end do
                     endif
