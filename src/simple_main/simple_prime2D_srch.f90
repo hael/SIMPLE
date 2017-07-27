@@ -1,6 +1,7 @@
 module simple_prime2D_srch
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_pftcc_shsrch,     only: pftcc_shsrch
+use simple_pftcc_bfacsrch,   only: pftcc_bfacsrch
 use simple_prime_srch,       only: prime_srch
 use simple_oris,             only: oris
 use simple_defs              ! use all in there
@@ -16,23 +17,26 @@ type prime2D_srch
     private
     type(prime_srch)     :: srch_common          !< functionalities common to primesrch2D/3D
     type(pftcc_shsrch )  :: shsrch_obj           !< shift search object
-    integer              :: nrefs         = 0    !< number of references
-    integer              :: nrots         = 0    !< number of in-plane rotations in polar representation
-    integer              :: nrefs_eval    = 0    !< nr of references evaluated
-    integer              :: prev_class    = 0    !< previous class index
-    integer              :: best_class    = 0    !< best class index found by search
-    integer              :: prev_rot      = 0    !< previous in-plane rotation index
-    integer              :: best_rot      = 0    !< best in-plane rotation found by search
-    integer              :: nthr          = 0    !< number of threads
-    integer              :: fromp         = 1    !< from particle index
-    integer              :: top           = 1    !< to particle index
-    integer              :: nnn           = 0    !< # nearest neighbors
-    real                 :: trs           = 0.   !< shift range parameter [-trs,trs]
-    real                 :: prev_shvec(2) = 0.   !< previous origin shift vector
-    real                 :: best_shvec(2) = 0.   !< best ishift vector found by search
+    type(pftcc_bfacsrch) :: bfacsrch_obj         !< B-factor search object
+    integer              :: nrefs         =  0   !< number of references
+    integer              :: nrots         =  0   !< number of in-plane rotations in polar representation
+    integer              :: nrefs_eval    =  0   !< nr of references evaluated
+    integer              :: prev_class    =  0   !< previous class index
+    integer              :: best_class    =  0   !< best class index found by search
+    integer              :: prev_rot      =  0   !< previous in-plane rotation index
+    integer              :: best_rot      =  0   !< best in-plane rotation found by search
+    integer              :: nthr          =  0   !< number of threads
+    integer              :: fromp         =  1   !< from particle index
+    integer              :: top           =  1   !< to particle index
+    integer              :: nnn           =  0   !< # nearest neighbors
+    real                 :: trs           =  0.  !< shift range parameter [-trs,trs]
+    real                 :: prev_shvec(2) =  0.  !< previous origin shift vector
+    real                 :: best_shvec(2) =  0.  !< best shift vector found by search
+    real                 :: best_bfac     =  0.  !< best B-factor found by search
     real                 :: prev_corr     = -1.  !< previous best correlation
     real                 :: best_corr     = -1.  !< best corr found by search
-    real                 :: specscore     = 0.   !< spectral score
+    real                 :: bfac_corr     = -1.  !< corr after B-factor optimisation
+    real                 :: specscore     =  0.  !< spectral score
     integer, allocatable :: srch_order(:)        !< stochastic search order
     logical              :: doshift = .true.     !< origin shift search indicator
     logical              :: exists  = .false.    !< 2 indicate existence
@@ -42,7 +46,6 @@ type prime2D_srch
     ! GETTERS
     procedure          :: get_nrots
     procedure          :: update_best
-    !procedure          :: get_roind
     ! PREPARATION ROUTINE
     procedure          :: prep4srch
     ! SEARCH ROUTINES
@@ -50,10 +53,11 @@ type prime2D_srch
     procedure          :: greedy_srch
     procedure          :: stochastic_srch
     procedure          :: nn_srch
-    procedure          :: shift_srch
-    procedure, private :: shift_srch_local
+    procedure, private :: shift_srch
+    procedure          :: bfac_srch
+    procedure, private :: bfac_srch_local
     ! DESTRUCTOR
-    procedure :: kill
+    procedure          :: kill
 end type prime2D_srch
 
 contains
@@ -67,7 +71,7 @@ contains
         class(params),           intent(in)    :: p
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer :: alloc_stat, i
-        real    :: lims(2,2)
+        real    :: lims(2,2), lims_bfac(1,2)
         ! destroy possibly pre-existing instance
         call self%kill
         ! set constants
@@ -87,6 +91,9 @@ contains
         lims(2,1)        = -self%trs
         lims(2,2)        =  self%trs
         call self%shsrch_obj%new(pftcc, lims)
+        lims_bfac(1,1)   = -50.
+        lims_bfac(1,2)   =  0.
+        call self%bfacsrch_obj%new(pftcc, lims_bfac)
         ! the instance now exists
         self%exists = .true.
         if( DEBUG ) write(*,'(A)') '>>> PRIME2D_SRCH::CONSTRUCTED NEW SIMPLE_PRIME2D_SRCH OBJECT'
@@ -110,7 +117,7 @@ contains
         class(oris),             intent(inout) :: a
         type(ori) :: o_new, o_old
         real      :: euls(3), mi_class, mi_inpl, mi_joint
-        ! get previous oruentation
+        ! get previous orientation
         o_old = a%get_ori(iptcl)
         o_new = o_old
         ! get in-plane angle
@@ -161,9 +168,9 @@ contains
         real, allocatable :: frc(:)
         type(ran_tabu)    :: rt
         ! find previous discrete alignment parameters
-        self%prev_class = nint(a%get(iptcl,'class'))                  ! class index
+        self%prev_class = nint(a%get(iptcl,'class'))           ! class index
         self%prev_rot   = pftcc%get_roind(360.-a%e3get(iptcl)) ! in-plane angle index
-        self%prev_shvec = [a%get(iptcl,'x'),a%get(iptcl,'y')]         ! shift vector
+        self%prev_shvec = [a%get(iptcl,'x'),a%get(iptcl,'y')]  ! shift vector
         ! set best to previous best by default
         self%best_class = self%prev_class         
         self%best_rot   = self%prev_rot
@@ -187,33 +194,28 @@ contains
 
     ! SEARCH ROUTINES
 
-    !>  \brief a master prime search routine
-    subroutine exec_prime2D_srch( self, pftcc, iptcl, a, greedy, extr_bound ) ! lconv
+    !>  \brief the master prime search routine
+    subroutine exec_prime2D_srch( self, pftcc, iptcl, a, greedy, extr_bound )
         class(prime2D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: iptcl
         class(oris),             intent(inout) :: a
-        ! logical,                 intent(in)    :: lconv
         logical, optional,       intent(in)    :: greedy
         real,    optional,       intent(in)    :: extr_bound
         logical :: ggreedy
         ggreedy = .false.
         if( present(greedy) ) ggreedy = greedy
-        ! if( lconv )then
-        !     call self%shift_srch(pftcc, iptcl, a)
-        ! else
-            if( ggreedy )then
-                call self%greedy_srch(pftcc, iptcl, a)
-            else
-                call self%stochastic_srch(pftcc, iptcl, a, extr_bound)
-            endif
-        ! endif        
+        if( ggreedy )then
+            call self%greedy_srch(pftcc, iptcl, a)
+        else
+            call self%stochastic_srch(pftcc, iptcl, a, extr_bound)
+        endif
         ! memory management (important for ompenMP distr over arrays of prime2D_srch objects)
         if( allocated(self%srch_order) ) deallocate(self%srch_order)
         if( DEBUG ) write(*,'(A)') '>>> PRIME2D_SRCH::EXECUTED PRIME2D_SRCH'
     end subroutine exec_prime2D_srch
 
-    !>  \brief  executes stochastic rotational search
+    !>  \brief  executes greedy rotational search (for initialisation)
     subroutine greedy_srch( self, pftcc, iptcl, a )
         class(prime2D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
@@ -237,7 +239,7 @@ contains
                 endif    
             end do
             self%nrefs_eval = self%nrefs
-            call self%shift_srch_local(iptcl)
+            call self%shift_srch(iptcl)
             call self%update_best(pftcc, iptcl, a)
         else
             call a%reject(iptcl)
@@ -301,7 +303,7 @@ contains
                 self%best_corr  = self%prev_corr
                 self%best_rot   = self%prev_rot
             endif
-            call self%shift_srch_local(iptcl)
+            call self%shift_srch(iptcl)
             call self%update_best(pftcc, iptcl, a)
         else
             call a%reject(iptcl)
@@ -347,7 +349,7 @@ contains
                 endif    
             end do
             self%nrefs_eval = self%nrefs
-            call self%shift_srch_local(iptcl)
+            call self%shift_srch(iptcl)
             call self%update_best(pftcc, iptcl, a)
         else
             call a%reject(iptcl)
@@ -355,25 +357,8 @@ contains
         if( DEBUG ) write(*,'(A)') '>>> PRIME2D_SRCH::FINISHED NEAREST-NEIGHBOR SEARCH'
     end subroutine nn_srch
 
-    !>  \brief  executes the shift search over one reference
-    subroutine shift_srch( self, pftcc, iptcl, a )
-        class(prime2D_srch),     intent(inout) :: self
-        class(polarft_corrcalc), intent(inout) :: pftcc
-        integer,                 intent(in)    :: iptcl
-        class(oris),             intent(inout) :: a
-        if( nint(a%get(iptcl,'state')) > 0 )then
-            call self%prep4srch( pftcc, iptcl, a )
-            self%nrefs_eval = self%nrefs
-            call self%shift_srch_local(iptcl)
-            call self%update_best(pftcc, iptcl, a)
-        else
-            call a%reject(iptcl)
-        endif
-        if( DEBUG ) write(*,'(A)') '>>> PRIME2D_SRCH::FINISHED SHIFT SEARCH'
-    end subroutine shift_srch
-
-    !>  \brief  executes the shift search over one reference
-    subroutine shift_srch_local( self, iptcl )
+    !>  \brief  executes the shift search over the best matching reference
+    subroutine shift_srch( self, iptcl )
         class(prime2D_srch), intent(inout) :: self
         integer,             intent(in)    :: iptcl
         real :: cxy(3), corr_before, corr_after
@@ -389,7 +374,49 @@ contains
             endif
         endif
         if( DEBUG ) write(*,'(A)') '>>> PRIME2D_SRCH::FINISHED SHIFT SEARCH'
-    end subroutine shift_srch_local
+    end subroutine shift_srch
+
+    !>  \brief  executes B-factor search
+    subroutine bfac_srch( self, pftcc, iptcl, a )
+        class(prime2D_srch),     intent(inout) :: self
+        class(polarft_corrcalc), intent(inout) :: pftcc
+        integer,                 intent(in)    :: iptcl
+        class(oris),             intent(inout) :: a
+        if( nint(a%get(iptcl,'state')) > 0 )then
+            call self%prep4srch( pftcc, iptcl, a )
+            self%nrefs_eval = self%nrefs
+            call self%bfac_srch_local(iptcl)
+            call self%update_best(pftcc, iptcl, a)
+
+            ! here 4 now
+            call a%set(iptcl, 'bfac_corr', self%bfac_corr)
+            call a%set(iptcl, 'bfac',      self%best_bfac)
+
+        else
+            call a%reject(iptcl)
+        endif
+        if( DEBUG ) write(*,'(A)') '>>> PRIME2D_SRCH::FINISHED SHIFT SEARCH'
+    end subroutine bfac_srch
+
+    !>  \brief  executes B-factor search on the best matching reference
+    subroutine bfac_srch_local( self, iptcl )
+        class(prime2D_srch), intent(inout) :: self
+        integer,             intent(in)    :: iptcl
+        real :: cb(2), corr_before, corr_after
+        self%best_bfac = 0.
+        corr_before    = self%best_corr
+        call self%bfacsrch_obj%set_indices(self%best_class, iptcl, self%best_rot)
+        cb = self%bfacsrch_obj%minimize()
+        corr_after = cb(1)
+        if( corr_after > corr_before )then
+            self%bfac_corr = cb(1)
+            self%best_bfac = cb(2)
+        else
+            self%bfac_corr = corr_before
+            self%best_bfac = 0.
+        endif
+        if( DEBUG ) write(*,'(A)') '>>> PRIME2D_SRCH::FINISHED B-FACTOR SEARCH'
+    end subroutine bfac_srch_local
 
     ! DESTRUCTOR
 

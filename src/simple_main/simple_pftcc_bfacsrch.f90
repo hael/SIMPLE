@@ -71,7 +71,7 @@ contains
         integer,               intent(in)    :: D
         real,                  intent(in)    :: vec(D)
         real :: cost
-        cost = -self%pftcc_ptr%corr(self%reference, self%particle, self%rot, vec(1))
+        ! cost = -self%pftcc_ptr%corr(self%reference, self%particle, self%rot, vec(1))
     end function bfacsrch_costfun
 
     function bfacsrch_minimize( self, irot, shvec, rxy, fromto ) result( cb )
