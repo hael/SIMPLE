@@ -1,4 +1,3 @@
-#if 0
 /*-----------------------------------------------------------------------------*/
 /* SIMPLE v2.5          Elmlund & Elmlund Lab         simplecryoem.com         */
 /*-----------------------------------------------------------------------------*/
@@ -19,7 +18,7 @@
 * Original TBLOCK TSTOP  TIMER_LOOP
 * Profiling required variadic macros and C preprocessor
 **/
-#endif
+
 #ifndef SIMPLE_TIMER_H
 #define SIMPLE_TIMER_H
 
@@ -61,7 +60,8 @@
  tn=tic();\
  np=NLOOPS;\
  call timer_profile_setup(np,-1,p_tokens);
- #endif
+
+#endif
 
 #define TBEG(TOKEN) p_tmp = #TOKEN; \
  call timer_profile_start(trim(p_tmp))
@@ -138,10 +138,11 @@ call timer_loop_end(cblock);end block
 #define TSTOP_omp()                              \
   write(*,'(A,A,1i4,A,1d20.10)') __FILENAME__,":",__LINE__,": Elapsed time (s) ", toc_omp()
 
-#endif /*OPENMP*/
+#endif
+  /*OPENMP*/
 
 
-#ifdef CUDA
+#if defined(CUDA)
 #define GPU_STOPWATCH( EVALBLOCK )              \
 use simple_timer_cuda;                          \
 type(cudaEvent) :: __t1;                        \

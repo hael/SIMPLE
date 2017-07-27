@@ -129,7 +129,8 @@ contains
     if (be_verbose) write (*,"(A)") ' '
     if (be_verbose) write (*,'(A)') '8.  Testing timed_loop in subroutine '
     c=test_loop()
-#ifndef PGI
+
+#if !defined(PGI)
     call reset_timer()
     if (be_verbose) write (*,"(A)") ' '
     if (be_verbose) write (*,'(A)') '9.  Testing timed loop macro '
@@ -142,7 +143,7 @@ contains
     call reset_timer()
     if (be_verbose) write (*,"(A)") ' '
     if (be_verbose) write (*,'(A)') '10.  Testing timed block macro '
-#ifdef __STDC__
+#if defined(__STDC__)
     TIMER_BLOCK(
     c=.1;
     c=saxy(c)
