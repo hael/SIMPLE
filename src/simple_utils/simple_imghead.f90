@@ -1408,6 +1408,7 @@ contains
     end subroutine kill
 
     subroutine test_imghead
+        use simple_filehandling
         class(ImgHead), allocatable :: hed, hed2
         integer :: recsz, funit, dims(3), dims2(3)
         write(*,'(a)') '**info(simple_imghead_unit_test): testing read/write capabilities'
@@ -1415,7 +1416,7 @@ contains
         call hed%new([120,120,1])
         call hed2%new([120,120,1])
         recsz = 120*4
-        funit = 3
+        funit = get_fileunit()
         open(unit=funit,access='STREAM',file='test_imghed.spi',&
              &action='READWRITE',status='UNKNOWN',&
 #ifndef INTEL

@@ -412,6 +412,18 @@ contains
         cwd_local = self%cwd
         ! get absolute path of executable
         call getarg(0,self%exec_abspath)
+        call check_carg('debug',          debug_str)
+        if (debug_str == 'yes')then
+            global_debug = .true.  ! from simple_params
+            debug = .true.         ! from simple_local_flags.inc
+        end if
+        call check_carg('verbose',        self%verbose)
+        if(self%verbose == 'yes')then
+            global_verbose = .true.
+            verbose = .true.
+        end if
+
+
         ! checkers in ascending alphabetical order
         call check_carg('acf',            self%acf)
         call check_carg('angastunit',     self%angastunit)
@@ -431,10 +443,6 @@ contains
         call check_carg('ctfstats',       self%ctfstats)
         call check_carg('cure',           self%cure)
         call check_carg('debug',          debug_str)
-        if (debug_str == 'yes')then
-            global_debug = .true.  ! from simple_params
-            debug = .true.         ! from simple_local_flags
-        end if
         call check_carg('deftab',         self%deftab)
         call check_carg('dfunit',         self%dfunit)
         call check_carg('dir',            self%dir)
@@ -511,17 +519,12 @@ contains
         call check_carg('tomoseries',     self%tomoseries)
         call check_carg('trsstats',       self%trsstats)
         call check_carg('tseries',        self%tseries)
-
-        call check_carg('verbose',        self%verbose)
-        if(self%verbose == 'yes')then
-            global_verbose = .true.
-            verbose = .true.
-        end if
         call check_carg('vis',            self%vis)
         call check_carg('vol',            self%vol)
         call check_carg('wfun',           self%wfun)
         call check_carg('xfel',           self%xfel)
         call check_carg('zero',           self%zero)
+        ! File args
         call check_file('boxfile',        self%boxfile,'T')
         call check_file('boxtab',         self%boxtab,'T')
         call check_file('clsdoc',         self%clsdoc,'S','T')
@@ -547,6 +550,7 @@ contains
         call check_file('vollist',        self%vollist, 'T')
         call check_file('voltab',         self%voltab,  'T')
         call check_file('voltab2',        self%voltab2, 'T')
+        ! Integer args
         call check_iarg('astep',          self%astep)
         call check_iarg('avgsz',          self%avgsz)
         call check_iarg('binwidth',       self%binwidth)
@@ -622,6 +626,7 @@ contains
         call check_iarg('xcoord',         self%xcoord)
         call check_iarg('ycoord',         self%ycoord)
         call check_iarg('ydim',           self%ydim)
+        ! Float args
         call check_rarg('alpha',          self%alpha)
         call check_rarg('amsklp',         self%amsklp)
         call check_rarg('angerr',         self%angerr)

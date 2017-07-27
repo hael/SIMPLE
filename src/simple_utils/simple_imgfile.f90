@@ -207,8 +207,9 @@ contains
                 call self%overall_head%write(self%funit)
                 DebugPrint  '(simple_imgfile::close) wrote overall_head'
             endif
+      !      flush(fnum(self%funit))
             close(self%funit)
-            flush(self%funit)
+           
         endif
         if( allocated(self%overall_head) ) call self%overall_head%kill
         if( allocated(self%overall_head) ) deallocate(self%overall_head)
@@ -221,8 +222,9 @@ contains
         class(imgfile), intent(inout) :: self
         integer :: ret
         if( is_open(self%funit) )then
+        !    flush(fnum(self%funit))
             close(self%funit)
-            flush(self%funit)
+            
         endif
         if( allocated(self%overall_head) ) call self%overall_head%kill
         if( allocated(self%overall_head) ) deallocate(self%overall_head)
