@@ -25,6 +25,7 @@ type :: polarft_corrcalc
     integer                  :: winsz      = 0         !< size of moving window in correlation calculations
     integer                  :: ldim(3)    = 0         !< logical dimensions of original cartesian image
     integer                  :: kfromto(2) = 0         !< Fourier index range
+    real(sp)                 :: smpd       = 0.        !< sampling distance
     real(sp),    allocatable :: sqsums_ptcls(:)        !< memoized square sums for the correlation calculations
     real(sp),    allocatable :: angtab(:)              !< table of in-plane angles (in degrees)
     real(sp),    allocatable :: argtransf(:,:)         !< argument transfer constants for shifting the references
@@ -85,7 +86,8 @@ type :: polarft_corrcalc
     procedure          :: genfrc
     procedure, private :: corr_1
     procedure, private :: corr_2
-    generic            :: corr => corr_1, corr_2
+    procedure, private :: corr_3
+    generic            :: corr => corr_1, corr_2, corr_3
     procedure          :: euclid
     ! DESTRUCTOR
     procedure          :: kill
@@ -96,10 +98,11 @@ contains
     ! CONSTRUCTORS
     
     !>  \brief  is a constructor
-    subroutine new( self, nrefs, pfromto, ldim, kfromto, ring2, ctfflag, isxfel )
+    subroutine new( self, nrefs, pfromto, ldim, smpd, kfromto, ring2, ctfflag, isxfel )
         use simple_math, only: rad2deg, is_even, round2even
         class(polarft_corrcalc),    intent(inout) :: self
         integer,                    intent(in)    :: nrefs, pfromto(2), ldim(3), kfromto(2), ring2
+        real,                       intent(in)    :: smpd
         character(len=*),           intent(in)    :: ctfflag
         character(len=*), optional, intent(in)    :: isxfel
         integer  :: alloc_stat, irot, k
@@ -155,6 +158,7 @@ contains
         self%winsz   = self%refsz - 1                  !< size of moving window in correlation cacluations
         self%ptclsz  = self%nrots * 2                  !< size of particle (2*nrots)
         self%ldim    = ldim                            !< logical dimensions of original cartesian image
+        self%smpd    = smpd                            !< sampling distance
         self%kfromto = kfromto                         !< Fourier index range
         ! generate polar coordinates
         allocate( self%polar(self%ptclsz,self%kfromto(1):self%kfromto(2)), self%angtab(self%nrots), stat=alloc_stat)
@@ -613,11 +617,10 @@ contains
     end function create_polar_ctfmat
 
     !>  \brief  is for generating all matrices of CTF values
-    subroutine create_polar_ctfmats( self, smpd, a )
+    subroutine create_polar_ctfmats( self, a )
         use simple_ctf,  only: ctf
         use simple_oris, only: oris
         class(polarft_corrcalc), intent(inout) :: self
-        real(sp),                intent(in)    :: smpd
         class(oris),             intent(inout) :: a
         type(ctf) :: tfun
         integer   :: iptcl,alloc_stat 
@@ -638,7 +641,7 @@ contains
                 dfy    = a%get(iptcl, 'dfy'   )
                 angast = a%get(iptcl, 'angast')
             endif
-            tfun = ctf(smpd, kv, cs, fraca)
+            tfun = ctf(self%smpd, kv, cs, fraca)
             self%ctfmats(iptcl,:,:) = self%create_polar_ctfmat(tfun, dfx, dfy, angast, self%refsz)
         end do
     end subroutine create_polar_ctfmats
@@ -768,7 +771,7 @@ contains
         if( sqsum_ref < TINY ) return
         ! numerator
         cc = sum(real( pft_ref * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:)) ))
-        ! denominator
+        ! finalize cross-correlation
         cc = cc / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
     end function corr_1
 
@@ -805,8 +808,49 @@ contains
         cc = cc/sqrt(sqsum_ref_sh*self%sqsums_ptcls(iptcl))
     end function corr_2
 
+    !>  \brief  for calculating cross-correlation with B-factor weighted particle PFT
+    function corr_3( self, iref, iptcl, irot, bfac ) result( cc )
+        use simple_math, only: csq
+        class(polarft_corrcalc), intent(inout) :: self              !< instance
+        integer,                 intent(in)    :: iref, iptcl, irot !< reference, particle, rotation
+        real,                    intent(in)    :: bfac              !< samplign distance, B-factor
+        complex(sp) :: pft_ptcl(self%ptclsz,self%kfromto(1):self%kfromto(2))
+        complex(sp) :: pft_ref(self%refsz,self%kfromto(1):self%kfromto(2))
+        real    :: cc, sqsum_ptcl, sqsum_ref
+        integer :: k
+        cc = 0.
+        ! apply B-factor
+        do k=self%kfromto(1),self%kfromto(2)
+            pft_ptcl(:,k) = self%pfts_ptcls(iptcl,irot:irot+self%winsz,k) * eval_bfac(k)
+        end do
+        ! calculate particle PFT square sum
+        sqsum_ptcl = sum(csq(pft_ptcl(:self%refsz,:)))
+        ! floating point check
+        if( sqsum_ptcl < TINY ) return
+        ! prepare reference
+        call self%prep_ref4corr(iptcl, iref, pft_ref, sqsum_ref)
+        ! floating point check
+        if( sqsum_ref < TINY ) return
+        ! numerator
+        cc = sum(real( pft_ref * conjg(pft_ptcl) ))
+        ! finalize cross-correlation
+        cc = cc / sqrt(sqsum_ref * sqsum_ptcl)
+
+        contains
+
+            real function eval_bfac( k )
+                integer, intent(in) :: k
+                real :: res
+                res = real(k)/(real(self%ldim(1))*self%smpd) ! assuming square dimensions
+                eval_bfac = max(0.,exp(-(bfac/4.)*res*res))
+            end function eval_bfac
+
+    end function corr_3
+
     !>  \brief  for calculating the Euclidean distance between reference & particle
-    !!          This ought to be a better choice for the orientation weights
+    !!          it is unclear what this distance represents as the reference volume
+    !!          is whitened and then FOM filtered whereas no normalisations or SNR-
+    !!          based resolution weights are applied to the particle image.
     function euclid( self, iref, iptcl, irot ) result( dist )
         use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self

@@ -3032,7 +3032,7 @@ contains
         do k=lims(3,1),lims(3,2)
             do j=lims(2,1),lims(2,2)
                 do i=lims(1,1),lims(1,2)
-                    res = sqrt(real(k*k+j*j+i*i))/(self%ldim(1)*self%smpd) ! assuming square dimensions
+                    res = sqrt(real(k*k+j*j+i*i))/(real(self%ldim(1))*self%smpd) ! assuming square dimensions
                     phys = self%fit%comp_addr_phys([i,j,k])
                     wght = max(0.,exp(-(b/4.)*res*res))
                     self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3))*wght

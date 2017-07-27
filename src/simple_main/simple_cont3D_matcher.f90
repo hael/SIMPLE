@@ -111,7 +111,7 @@ contains
         endif
 
         ! INIT IMGPOLARIZER
-        call pftcc%new(nrefs_per_ptcl, [1,1], [p%boxmatch,p%boxmatch,1],p%kfromto, p%ring2, p%ctf)
+        call pftcc%new(nrefs_per_ptcl, [1,1], [p%boxmatch,p%boxmatch,1], p%smpd, p%kfromto, p%ring2, p%ctf)
         call b%img_match%init_polarizer(pftcc)
         call pftcc%kill
 
@@ -140,7 +140,7 @@ contains
                 ! prep pftccs & ctf
                 call init_pftcc(p, iptcl, pftccs(iptcl))
                 call prep_pftcc_ptcl(b, p, iptcl, pftccs(iptcl))
-                if( p%ctf.ne.'no' )call pftccs(iptcl)%create_polar_ctfmats(p%smpd, b%a)
+                if( p%ctf.ne.'no' )call pftccs(iptcl)%create_polar_ctfmats(b%a)
                 select case(p%refine)
                     case('yes')
                         call prep_pftcc_refs(b, p, iptcl, pftccs(iptcl))
@@ -269,9 +269,9 @@ contains
         integer,                    intent(in)    :: iptcl
         class(polarft_corrcalc),    intent(inout) :: pftcc
         if( p%l_xfel )then
-            call pftcc%new(nrefs_per_ptcl, [iptcl,iptcl], [p%boxmatch,p%boxmatch,1],p%kfromto, p%ring2, p%ctf, isxfel='yes')
+            call pftcc%new(nrefs_per_ptcl, [iptcl,iptcl], [p%boxmatch,p%boxmatch,1], p%smpd, p%kfromto, p%ring2, p%ctf, isxfel='yes')
         else
-            call pftcc%new(nrefs_per_ptcl, [iptcl,iptcl], [p%boxmatch,p%boxmatch,1],p%kfromto, p%ring2, p%ctf)
+            call pftcc%new(nrefs_per_ptcl, [iptcl,iptcl], [p%boxmatch,p%boxmatch,1], p%smpd, p%kfromto, p%ring2, p%ctf)
         endif
     end subroutine init_pftcc
 

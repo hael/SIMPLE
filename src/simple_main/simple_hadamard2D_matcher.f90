@@ -109,7 +109,7 @@ contains
             call primesrch2D(iptcl)%new(p, pftcc) 
         end do
         ! calculate CTF matrices
-        if( p%ctf .ne. 'no' ) call pftcc%create_polar_ctfmats(p%smpd, b%a)
+        if( p%ctf .ne. 'no' ) call pftcc%create_polar_ctfmats(b%a)
         ! execute the search
         if( p%refine .eq. 'neigh' )then
             call del_file(p%outfile)
@@ -440,7 +440,7 @@ contains
         integer   :: filtsz, alloc_stat, filnum, io_stat
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PRIME2D SEARCH ENGINE'
         ! must be done here since constants in p are dynamically set
-        call pftcc%new(p%ncls, [p%fromp,p%top], [p%boxmatch,p%boxmatch,1], p%kfromto, p%ring2, p%ctf)
+        call pftcc%new(p%ncls, [p%fromp,p%top], [p%boxmatch,p%boxmatch,1], p%smpd, p%kfromto, p%ring2, p%ctf)
         ! prepare the polarizers
         call b%img_match%init_polarizer(pftcc)
         ! prepare the automasker

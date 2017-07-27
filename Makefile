@@ -156,6 +156,7 @@ simple: simple_image.o                  \
         simple_volpft_srch.o            \
         simple_pftcc_shsrch.o           \
         simple_pftcc_inplsrch.o         \
+        simple_pftcc_bfacsrch.o         \
         simple_pftcc_srch.o             \
         simple_filterer.o               \
         simple_unblur.o                 \

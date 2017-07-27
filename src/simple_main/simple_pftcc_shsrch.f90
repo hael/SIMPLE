@@ -36,7 +36,7 @@ end type pftcc_shsrch
 contains
 
     subroutine shsrch_new( self, pftcc, lims, shbarrier, nrestarts, npeaks, maxits, vols )
-        use simple_projector,        only: projector
+        use simple_projector, only: projector
         class(pftcc_shsrch),                intent(inout) :: self
         class(polarft_corrcalc),    target, intent(in)    :: pftcc
         real,                               intent(in)    :: lims(:,:)
@@ -73,10 +73,10 @@ contains
         integer, optional,   intent(in)    :: rot, state
         self%reference = ref 
         self%particle  = ptcl
+        self%rot = 1
         if( present(rot) ) self%rot = rot
     end subroutine shsrch_set_indices
 
-    !>  \brief  is a setter
     subroutine shsrch_set_inipop( self, inipop )
         class(pftcc_shsrch), intent(inout) :: self
         real,                intent(in)    :: inipop(:,:)
