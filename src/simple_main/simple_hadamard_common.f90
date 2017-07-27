@@ -181,7 +181,7 @@ contains
         endif
         pw = 1.0
         if( orientation%isthere('w') ) pw = orientation%get('w')
-        if( pw > 0. )then
+        if( pw > TINY )then
             ! prepare image for gridding
             ! using the uncorrected/unmodified image as input
             if( p%l_xfel )then
@@ -197,7 +197,7 @@ contains
                 if( DEBUG ) write(*,*) '*** simple_hadamard_common ***: gridding, iteration:', jpeak
                 ! get ori info
                 if( softrec )then
-                    orisoft =  os%get_ori(jpeak)
+                    orisoft = os%get_ori(jpeak)
                     w = orisoft%get('ow')
                 else
                     w = 1.
@@ -205,7 +205,7 @@ contains
                 s = nint(orisoft%get('state'))
                 if( DEBUG ) write(*,*) '*** simple_hadamard_common ***: got orientation'
                 if( p%frac < 0.99 ) w = w*pw
-                if( w > 0. )then
+                if( w > TINY )then
                     if( p%pgrp == 'c1' )then
                         if( p%eo .eq. 'yes' )then
                             call b%eorecvols(s)%grid_fplane(orisoft, b%img_pad, pwght=w, ran=ran)

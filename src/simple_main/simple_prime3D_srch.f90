@@ -14,6 +14,7 @@ public :: prime3D_srch
 private
 
 logical, parameter :: DEBUG = .false.
+real,    parameter :: FACTWEIGHTS_THRESH = 0.001
 
 type prime3D_srch
     private
@@ -27,6 +28,7 @@ type prime3D_srch
     integer                 :: nprojs         = 0       !< # projections (same as # oris in o_refs)
     integer                 :: nrots          = 0       !< # in-plane rotations in polar representation
     integer                 :: npeaks         = 0       !< # peaks (nonzero orientation weights)
+    integer                 :: npeaks_inpl    = 0       !< total # peaks, including in-plane ones
     integer                 :: nbetter        = 0       !< # better orientations identified
     integer                 :: nrefs_eval     = 0       !< # references evaluated
     integer                 :: nnn_static     = 0       !< # nearest neighbors (static)
@@ -37,7 +39,6 @@ type prime3D_srch
     integer                 :: prev_ref       = 0       !< previous reference index
     integer                 :: prev_proj      = 0       !< previous projection index
     integer                 :: kstop_grid     = 0       !< Frequency limit of first coarse grid search
-    integer                 :: npeaks_inpl    = 0       !< total # peaks, including in-plane ones
     real                    :: prev_corr      = 1.      !< previous best correlation
     real                    :: specscore      = 0.      !< spectral score
     real                    :: prev_shvec(2)  = 0.      !< previous origin shift vector
@@ -130,7 +131,6 @@ contains
         self%nrefs       =  self%nprojs*self%nstates
         self%nrots       =  round2even(twopi*real(p%ring2))
         self%npeaks      =  p%npeaks
-        self%npeaks_inpl =  INPL_EXPAND_FAC * self%npeaks
         self%nbetter     =  0
         self%nrefs_eval  =  0
         self%athres      =  p%athres
@@ -158,7 +158,11 @@ contains
             self%state_exists = .true.
         endif
         self%do_weight_inpl = .false.
-        if( str_has_substr(self%refine, 'neigh') .and. self%npeaks > 1 ) self%do_weight_inpl = .true.
+        if( str_has_substr(self%refine, 'neigh') .and. self%npeaks > 1 )then
+            self%do_weight_inpl = .true.
+            self%npeaks_inpl    = INPL_EXPAND_FAC * self%npeaks
+            self%npeaks         = nint( real(self%npeaks_inpl)/2. )
+        endif
         ! generate oris oject in which the best npeaks refs will be stored
         if( self%do_weight_inpl )then
             call self%o_peaks%new(self%npeaks_inpl)
@@ -268,7 +272,7 @@ contains
             endif
             ! prepare weights & orientation
             call self%prep_npeaks_oris
-            call self%stochastic_weights(pftcc, iptcl, e, wcorr)           
+            call self%stochastic_weights(pftcc, iptcl, e, wcorr)
             call self%update_best(pftcc, iptcl, a)
             call a%set(iptcl, 'corr', wcorr)
         else
@@ -988,6 +992,12 @@ contains
         ! calculate weights and weighted corr
         ws    = exp(-dists)
         wcorr = sum(ws*corrs)/sum(ws)
+        ! thresholding of the weights
+        if( self%do_weight_inpl )then
+            where( ws < FACTWEIGHTS_THRESH ) ws = 0.
+        else
+            ! all are included
+        endif
         ! update npeaks individual weights
         call self%o_peaks%set_all('ow', ws)
         deallocate(corrs)
@@ -1038,6 +1048,12 @@ contains
         forall(ipeak=1:npeaks) ws(order(ipeak)) = exp(sum(logws(:ipeak))) 
         ! weighted corr
         wcorr = sum(ws*corrs)/sum(ws)
+        ! thresholding of the weights
+        if( self%do_weight_inpl )then
+            where( ws < FACTWEIGHTS_THRESH ) ws = 0.
+        else
+            ! all are included
+        endif
         ! update npeaks individual weights
         call self%o_peaks%set_all('ow', ws)
         deallocate(corrs)
@@ -1128,10 +1144,11 @@ contains
         integer,             intent(in)    :: ipeak
         class(ori),          intent(inout) :: o2update
         real      :: euls(3), x, y, rstate, ow
-        integer   :: ind
+        integer   :: ind, npeaks
         if( str_has_substr(self%refine,'shc') .and. ipeak /= 1 ) stop 'get_ori not for shc-modes; simple_prime3D_srch'
-        if( ipeak < 1 .or. ipeak > self%npeaks ) stop 'Invalid index in simple_prime3D_srch::get_ori'
-        ind    = self%npeaks - ipeak + 1
+        npeaks = self%o_peaks%get_noris()
+        if( ipeak < 1 .or. ipeak > npeaks ) stop 'Invalid index in simple_prime3D_srch::get_ori'
+        ind    = npeaks - ipeak + 1
         euls   = self%o_peaks%get_euler( ind )
         x      = self%o_peaks%get( ind, 'x'    )
         y      = self%o_peaks%get( ind, 'y'    )
@@ -1154,9 +1171,10 @@ contains
         class(oris),         intent(inout) :: os
         class(ori),          intent(inout) :: o
         type(ori) :: o_new
-        integer   :: ipeak
-        call os%new( self%npeaks )
-        do ipeak=1,self%npeaks
+        integer   :: ipeak, npeaks
+        npeaks = self%o_peaks%get_noris()
+        call os%new( npeaks )
+        do ipeak=1,npeaks
             o_new = o
             call self%get_ori(ipeak, o_new)
             call os%set_ori(ipeak, o_new)

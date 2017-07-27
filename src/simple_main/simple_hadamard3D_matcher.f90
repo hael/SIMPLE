@@ -78,7 +78,7 @@ contains
         call set_bp_range( b, p, cline )
 
         ! CALCULATE ANGULAR THRESHOLD (USED BY THE SPARSE WEIGHTING SCHEME)
-        p%athres = rad2deg(atan(max(p%fny,p%lp)/(p%moldiam/2.)))
+        p%athres = rad2deg( atan(max(p%fny,p%lp)/(p%moldiam/2.) ))
         reslim   = p%lp
         if( DEBUG ) write(*,*) '*** hadamard3D_matcher ***: calculated angular threshold (used by the sparse weighting scheme)'
 

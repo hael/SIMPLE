@@ -283,17 +283,12 @@ contains
         class(polarft_corrcalc),    intent(inout) :: pftcc
         type(oris) :: cone
         type(ori)  :: optcl, oref
-        real       :: eullims(3,2)
         integer    :: state, iref, cnt
         optcl = b%a%get_ori(iptcl)
-        ! SEARCH SPACE PREP
-        eullims = b%se%srchrange()
-        ! call cone%rnd_proj_space(NREFS, optcl, p%athres, eullims) ! old style uniform stochastic distribution
-        call cone%rnd_gau_neighbors(NREFS, optcl, p%athres, eullims)
+        call cone%rnd_gau_neighbors(NREFS, optcl, p%athres)
+        if( trim(p%pgrp).ne.'c1' )call b%se%rotall_to_asym(cone)
         call cone%set_euler(1, optcl%get_euler()) ! previous best is the first
-        do iref = 1, NREFS
-            call cone%e3set(iref, 0.)
-        enddo
+        call cone%set_all2single('e3', 0.)
         ! replicates to states
         if( p%nstates == 1 )then
             call cone%set_all2single('state', 1.)

@@ -121,7 +121,7 @@ contains
         self%sdev      = self%bap%get_avg('sdev')
         if( self%pp%athres==0. )then
             ! required for distributed mode
-            self%pp%athres = rad2deg(atan(max(self%pp%fny,self%pp%lp)/(self%pp%moldiam/2.)))
+            self%pp%athres = rad2deg( atan(max(self%pp%fny, self%pp%lp)/(self%pp%moldiam/2.)) )
         endif
         write(*,'(A,1X,F7.1)') '>>> ANGLE OF FEASIBLE REGION:          ', self%pp%athres
         write(*,'(A,1X,F7.4)') '>>> JOINT    DISTRIBUTION OVERLAP:     ', self%mi_joint
