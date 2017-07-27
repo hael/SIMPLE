@@ -111,6 +111,7 @@ contains
     end subroutine ran3arr
 
     !>  \brief  returns a random array [-1,1]
+    !! \param n dimension of required rand array
     function randn_1( n ) result( a )
         integer, intent(in) :: n
         real, allocatable   :: a(:)
@@ -123,6 +124,7 @@ contains
     end function randn_1
 
     !>  \brief  returns a random matrix [-1,1]
+    !! \param n1,n2 dimensions of required rand array
     function randn_2( n1, n2 ) result( a )
         integer, intent(in) :: n1, n2
         real, allocatable   :: a(:,:)
@@ -142,7 +144,7 @@ contains
     !!          number _u_ drawn between zero and one, we take _b_ = _1_._0_
     !!          when _u_ <= _p_ and _b_ = _0_._0_ otherwise
     function bran( p ) result( b )
-        real, intent(in)       :: p
+        real, intent(in)       :: p !< probablility
         real                   :: b
         ! generate the Bernoulli random number
         if( ran3() <= p ) then

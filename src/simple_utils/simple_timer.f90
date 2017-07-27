@@ -10,7 +10,7 @@
 !!     ...
 !!     write(*,'(A,F20.10)') ">>> Elapsed time (sec) ", toc()
 !! 
-!! @author Michael Eager 2017
+!! \author Michael Eager 2017
 !! REVISIONS:
 !! Version 0.1:  64 bit INT implementation of system_clock
 !!  present in gfortran and pgfortran
@@ -38,7 +38,7 @@ private
    integer(timer_int_kind), public   :: last_time_point = INT(0, timer_int_kind)        !< Current timesamp
    integer, public       :: idx_elapsed = 0, num_elapsed = 3
    integer, public       :: num_profile_loops, num_profile_vars
-   logical, public       :: inloop = .false.
+   logical, public       :: in_loop = .false.
    integer, public       :: profile_counter
    integer, parameter, public :: MAX_TOKENS = 10                          !< number of entries in token dictionary
    integer, parameter, public :: MAX_TOKEN_CHARSIZE = 30                  !< max char length of tokens
@@ -135,11 +135,11 @@ contains
    end subroutine now
 
 !< in_timer_loop checks the time within a timer loop
-! It does not start the timer or set the inloop variable
+! It does not start the timer or set the in_loop variable
 ! \return  Returns false on the final loop- so that timer_loop_end can finish
    logical function in_timer_loop()
       in_timer_loop = .false.
-      if (.not. inloop) then
+      if (.not. in_loop) then
          print *, "Failed timer_loop: Timer loop did not start"
       else
          if (idx_elapsed .lt. num_elapsed) then
@@ -160,7 +160,7 @@ contains
          allocate (elapsed_times(num_elapsed))
          idx_elapsed = 1
          dummytimestamp = tic()
-         inloop = .true.
+         in_loop = .true.
       end if
 DebugPrint 'Size of elapsed array ', size(elapsed_times)
 
@@ -178,7 +178,7 @@ DebugPrint 'Size of elapsed array ', size(elapsed_times)
             stop "Timer loop error - comment string must be less than 128 characters"
          end if
       end if
-      if (.not. inloop) then
+      if (.not. in_loop) then
          print *, "Failed timer_loop_end: Timer loop did not start"
       else
          write (*, '(A,A)') "******* TIMER LOOP ", trim(strcomment)
@@ -197,7 +197,7 @@ DebugPrint 'Size of elapsed array ', size(elapsed_times)
             write (*, '(A,1i8)') '*** Failed at iteration ', idx_elapsed
          end if
          write (*, '(A)') "******* TIMER LOOP **************"
-         inloop = .false.
+         in_loop = .false.
          if (allocated(elapsed_times)) then
             deallocate (elapsed_times)
          end if
@@ -207,7 +207,7 @@ DebugPrint 'Size of elapsed array ', size(elapsed_times)
    !< Setup profiling
    subroutine timer_profile_setup(nLoops, nVars, vin)
    use simple_strings
-      integer(timer_int_kind),      intent(in)    :: nLoops
+      integer,          intent(in)    :: nLoops
       integer,          intent(in)    :: nVars
       character(len=*), intent(inout) :: vin
       character(len=20), allocatable  :: v(:)
@@ -223,7 +223,8 @@ DebugPrint 'Size of elapsed array ', size(elapsed_times)
       end if
 
       if (nLoops .lt. 1) then
-         DebugPrint "timer_profile_setup error -- must have more than 1 loop"
+
+          DebugPrint "timer_profile_setup error -- must have more than 1 loop"
          stop
       elseif (nargs_parse .gt. MAX_TOKENS .or. nargs_parse .le. 0) then
           print*, "timer_profile_setup  nargs_parse error -- outside range"
@@ -244,7 +245,6 @@ DebugPrint 'Size of elapsed array ', size(elapsed_times)
               call parse(vin,' ', v,nargs_parse)
               DebugPrint " timer_profile_setup no-comma token input"
               DebugPrint vin
-
           else 
               call parse(vin,',',v,tmp_nargs)
           end if
@@ -349,17 +349,16 @@ DebugPrint 'Size of elapsed array ', size(elapsed_times)
       allocate (profile_matrix(num_profile_loops, num_profile_vars))
       profile_matrix = REAL(0.0, timer_int_kind)
       profile_last_timerstamp = INT(0, timer_int_kind)
-DebugPrint  " Profile matrix size ", size(profile_matrix, 1), size(profile_matrix, 2)
+      DebugPrint  " Profile matrix size ", size(profile_matrix, 1), size(profile_matrix, 2)
       DebugPrint profile_matrix(1:10, 1:2)
-
    end subroutine timer_profile_setup
 
-!< Within profile loop - start timer with token 'LABEL'
-   subroutine timer_profile_start(LABEL)
-      character(len=*), intent(in) :: LABEL
+   !< Within profile loop - start timer with token 
+   subroutine timer_profile_start(token)
+      character(len=*), intent(in) :: token
       integer ::  ival
       do ival = 1, num_profile_vars
-         if (.not. (INDEX(profile_labels(ival), trim(adjustl(LABEL))) == 0)) then
+         if (.not. (INDEX(profile_labels(ival), trim(adjustl(token))) == 0)) then
             profile_last_timerstamp(ival) = tic()
             exit
          end if
@@ -367,7 +366,7 @@ DebugPrint  " Profile matrix size ", size(profile_matrix, 1), size(profile_matri
 
       if (ival .gt. num_profile_vars) then
          write (*, '(A,A,A,1i10)') "Error Timer_Profile_start:", &
-            trim(adjustl(LABEL)), " label index outside range ", ival
+            trim(adjustl(token)), " label index outside range ", ival
 #ifdef _DEBUG
       else
          DebugPrint "Label: ", profile_labels(ival), " time stamp "
@@ -375,20 +374,17 @@ DebugPrint  " Profile matrix size ", size(profile_matrix, 1), size(profile_matri
       end if
    end subroutine timer_profile_start
 
-!< Within profile loop - get elapsed time for token 'LABEL' and reset
-   subroutine timer_profile_break(LABEL)
-      character(len=*), intent(in) :: LABEL
+   !< Within profile loop - get elapsed time for token 'token' and reset
+   subroutine timer_profile_break(token)
+      character(len=*), intent(in) :: token
       integer(timer_int_kind) :: tmp_tstamp = INT(0, timer_int_kind)
       integer ::  ival = 0, iloop = 0
 !
 ! Need bounds checking of timestamps and matrix
       do ival = 1, num_profile_vars
          iloop = 0
-         if (.not. (INDEX(profile_labels(ival), trim(adjustl(LABEL))) == 0)) then
-
+         if (.not. (INDEX(profile_labels(ival), trim(adjustl(token))) == 0)) then
              DebugPrint  'Timer profile break: Found label ', profile_labels(ival)
-
-
             do iloop = 1, num_profile_loops
                if (profile_matrix(iloop, ival) .eq. 0) then
                   tmp_tstamp = tic()
@@ -402,7 +398,7 @@ DebugPrint  " Profile matrix size ", size(profile_matrix, 1), size(profile_matri
       end do
       if (tmp_tstamp .eq. 0) then
          write (*, '(A,2i8,A)') "Error profile: No time stamp created. loop,val,label:", &
-            iloop, ival, trim(adjustl(LABEL))
+            iloop, ival, trim(adjustl(token))
       end if
       if (ival .gt. num_profile_vars + 1) then
          write (*, '(A,1i8)') "Error profile: label index outside range ", ival
@@ -451,8 +447,8 @@ DebugPrint  " Profile matrix size ", size(profile_matrix, 1), size(profile_matri
                   MAXVAL(profile_matrix(:, ival), MASK=(profile_matrix(:, ival) /= 0.), DIM=1), &
                   '    at ', MAXLOC(profile_matrix(:, ival), MASK=(profile_matrix(:, ival) /= 0.), DIM=1)
                write (*, '(A,1ES20.6,A,1i10)') "**** Shortest run(sec) ", &
-                  MINVAL(profile_matrix(:, ival), MASK=(profile_matrix(:, ival) /= 0.), DIM=1), &
-                  '   at ', MINLOC(profile_matrix(:, ival), MASK=(profile_matrix(:, ival) /= 0.), DIM=1)
+                  &REAL(MINVAL(profile_matrix(:, ival), MASK=(profile_matrix(:, ival) /= 0.0_dp), DIM=1),dp), &
+                  &'   at ', INT(MINLOC(profile_matrix(:, ival), MASK=(profile_matrix(:, ival) /= 0.), DIM=1),sp)
             end if
          end do
          write (*, '(A,1d20.6)') "** Total time (sec):", totaltime
@@ -470,32 +466,32 @@ DebugPrint  " Profile matrix size ", size(profile_matrix, 1), size(profile_matri
 !!! Testing I4 system_clock
 
 
-!< Get system_clock timestamp
+   !< Get system_clock timestamp
    integer(kind=4) function tic_i4()
        call system_clock(count=tic_i4)
         last_time_point = INT(tic_i4, timer_int_kind)
    end function tic_i4
 
 
-!< Get the clock tick count per second
+   !< Get the clock tick count per second
    integer(kind=4) function tickrate_i4()
       tickrate_i4 = INT(0, kind=4)
       call system_clock(count_rate=tickrate_i4)
       clock_ticks_per_second = INT(tickrate_i4, timer_int_kind)
    end function tickrate_i4
 
-!< Calculate the time from two timestamps
+   !< Calculate the time from two timestamps
    real function tdiff_i4(tfinal, tstart)
       integer(kind=4), intent(in) :: tfinal
       integer(kind=4), intent(in) :: tstart
       integer(kind=4) :: ticks_per_second
       call system_clock(count_rate=ticks_per_second)
-! Calulate the time difference
+      ! Calulate the time difference
       tdiff_i4 = REAL(tfinal - tstart, kind=4)/REAL(ticks_per_second, kind=4)
    end function tdiff_i4
 
-!< Complete the timing regime using a reference timestamp or the one
-!  in last_time_point
+   !< Complete the timing regime using a reference timestamp or the one
+   !  in last_time_point
    real function toc_i4(tstart)
       integer(kind=4), intent(inout), optional ::  tstart
       integer(kind=4)                          ::  end_point

@@ -1,9 +1,7 @@
 !------------------------------------------------------------------------------!
 ! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
 !------------------------------------------------------------------------------!
-!> simple_ori
-!
-!! simple_ori handles orientational information.
+!> Simple ori class handles orientational information.
 !
 ! The code is distributed with the
 ! hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_. Redistribution or
@@ -110,7 +108,7 @@ type :: ori
     generic            :: operator(.inplrotdist.) => inplrotdist
     ! DESTRUCTOR
     procedure          :: kill
-end type
+end type ori
 
 interface ori
     module procedure constructor

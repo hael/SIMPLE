@@ -14,19 +14,12 @@
 ! useful, but WITHOUT ANY WARRANTY. Redistribution and modification is regulated
 ! by the GNU General Public License.
 ! -----------------------------------------------------------------------------!
-
 module simple_math
 use simple_defs
 use simple_jiffys
 implicit none
 
-private :: warn, pi, cosedge_1, cosedge_2, cosedge_3, hardedge_1, hardedge_2,&
-find_1, find_2, locate_1, locate_2, selec, selec_1, selec_2, hpsort_1, hpsort_2,&
-hpsort_3, reverse_iarr, reverse_rarr, reverse_carr
 public
-
-logical, parameter :: warn=.false.
-
 interface is_a_number
     module procedure is_a_number_1
     module procedure is_a_number_2
@@ -132,19 +125,30 @@ interface csq
     module procedure csq_2
 end interface
 
+logical, parameter,private :: warn=.false.
+
+!private :: warn, pi, cosedge_1, cosedge_2, cosedge_3, hardedge_1, hardedge_2,&
+!find_1, find_2, locate_1, locate_2, selec, selec_1, selec_2, hpsort_1, hpsort_2,&
+!hpsort_3, reverse_iarr, reverse_rarr,g reverse_carr
+
 
 contains
 
     ! JIFFYS
 
-    !>   to find the volume in number of voxels, given molecular weight
-    !! prot_d in g / A**3    = prot_d * 1e-24
-    !! voxel volume in A**3  = smpd**3
-    !! mass of protein in Da = mwkda*1e3
-    !! mass of protein in kg = (mwda*1e3)*one_da
-    !! mass of protein in g  = ((mwkda*1e3)*one_da)*1e3
+    !>  nvoxfind_1  to find the volume in number of voxels, given molecular weight
+    !! \param smpd sampling distance in angstroms (SI unit \f$\si{\angstrom}= \SI{1e-10}{\metre}\f$)
+    !! \param mwkda molecular weight \f$M_{\mathsf{molecule}}\f$ in kDa (SI unit \f$\si{\kilo\dalton}= \SI{1e-10}{\metre}\f$, one dalton is the mass of 1 hydrogen atom  \SI{1.6727e-27}{\kilogram}\f$)
+    !! Protein density \f$\rho_{\mathsf{prot}} \text{ is defined as } \si{1.43}{\gram\per\centimetre\cubed}\f$
+    !! protein density in \f$\si{\gram\per\angstrom\cubed},\ \rho_{\mathsf{prot}\si{\angstrom}} = \rho_{\mathsf{prot}} \num{1e-24}\f$
+    !! unit voxel volume v in \f$\si{\per\angstrom\cubed},\ v  = \mathsf{smpd}^3 \f$
+    !! mass of protein in Da, \f$M_\mathsf{prot Da} = \mathsf{mwkda}\times\num{1e3}\f$
+    !! mass of protein in kg \f$M_\mathsf{kg prot} = M_\mathsf{prot Da}*M_{Hydrogen (\mathsf{kg/Da})\f$
+    !! mass of protein in g\f$  = ((mwkda*1e3)*one_da)*1e3\f$
     !! therefore number of voxels in protein is:
-    !! \f$ N_{\mathsf{vox}} = \nint {frac{(w_{\\mathsf{molecule}} \times D_{\mathsf{Da to kg}})*10^3)} {\left(\rho_{\mathsf{protein density}}\times 10^{-24}_{\mathsf{Ang^3 cm^3}}} \times \frac{1}{\mathsf{dx}^3}} \f$
+    !! \f$ N_{\mathsf{vox}} = \frac{ M_{\mathsf{molecule}} }{ \rho_{\mathsf{prot}} \times \frac{1}{v^3} \f$
+    !! \f$                     \sim \nint {frac{\mathsf{mwkda}\times\num{1e3}\times\num{1.66e-27)} {\num{1.43}\times\num{1e-24}} \times \frac{1}{\mathsf{smpd}^3}}} \f$
+    !! we must also assume the number of voxels are discrete, hence we must round to the nearest integer
     pure function nvoxfind_1( smpd, mwkda ) result( nvox )
         real, intent(in) :: smpd             !< sampling distance
         real, intent(in) :: mwkda            !< molecular weight
@@ -170,29 +174,30 @@ contains
 
     !>   converts between radians and degrees
     pure function deg2rad( deg ) result( rad )
-        real, intent(in) :: deg  
-        real             :: rad  
+        real, intent(in) :: deg  !< angle (degrees)
+        real             :: rad  !< angle (radians)
         rad = (deg/180.)*pi
     end function
 
     !>   converts from radians to degrees
     pure function rad2deg_1( rad ) result( deg )
-        real(sp), intent(in) :: rad  
-        real(sp)             :: deg  
+        real(sp), intent(in) :: rad  !< angle (radians)
+        real(sp)             :: deg  !< angle (degrees)
         deg = (rad/PI)*180.
     end function
 
     !>   converts from radians to degrees
     pure function rad2deg_2( rad ) result( deg )
-        real(dp), intent(in) :: rad  
-        real(dp)             :: deg  
+        real(dp), intent(in) :: rad  !< angle (radians)
+        real(dp)             :: deg  !< angle (degrees)
         deg = (rad/DPI)*180.d0
     end function
 
     !>    Convert acceleration voltage in kV into electron wavelength in Angstroms
+    !! \f$ \lambda (\si{\angstrom}) =  \frac{12.26}{\sqrt{(eV+0.9784 eV^2) / 10^6 }} \f$
     pure function kV2wl( kV ) result( kV_to_wl )
-        real, intent(in):: kV         
-        real :: kV_to_wl, local_kV    
+        real, intent(in):: kV         !< acceleration voltage in \f$\si{\kilo\volt}\f$
+        real :: kV_to_wl, local_kV    !< electron wavelength in Angstroms \f$\si{\angstrom}\f$
 !!        local_kV = kV*1e3
 !!        kV_to_wl = 12.26/sqrt(1000.0*kV+0.9784*(1000.0*kV)**2/(10.0**6.0))
         local_kV = kV*1e3
@@ -201,30 +206,30 @@ contains
 
     !>   converts from correlation to euclidean distance
     pure function corr2dist( corr ) result( dist )
-        real, intent(in) :: corr   
-        real :: dist               
+        real, intent(in) :: corr   !< query correlation
+        real :: dist
         dist = 1.-corr
     end function
 
     !>   converts from euclidean distance to correlation
     pure function dist2corr( dist ) result( corr )
-        real, intent(in) :: dist  
-        real :: corr              
+        real, intent(in) :: dist  !< query distance
+        real :: corr
         corr = dist+1
     end function
 
     !>   to check if val is even
     pure function is_even_1( val ) result( is )
-        integer, intent(in) :: val  
-        logical :: is               
+        integer, intent(in) :: val  !< query val
+        logical :: is
         is = .false.
         if( mod(val,2) == 0 ) is = .true.
     end function
 
     !>   to check if all vals in array are even
     pure function is_even_2( arr ) result( yep )
-        integer, intent(in) :: arr(:)     
-        logical :: yep                    
+        integer, intent(in) :: arr(:)     !< query vector
+        logical :: yep
         logical :: test(size(arr))
         integer :: i
         test = .false.
@@ -236,8 +241,8 @@ contains
 
     !>    is for checking the numerical soundness of an vector
     subroutine check4nans3D_1( arr )
-        real, intent(in)  :: arr(:,:,:)   
-        real, allocatable :: arr1d(:)     
+        real, intent(in)  :: arr(:,:,:)   !< query vector
+        real, allocatable :: arr1d(:)
         arr1d = pack(arr, .true.)
         call check4nans_1(arr1d)
         deallocate(arr1d)
@@ -245,8 +250,8 @@ contains
 
     !>    is for checking the numerical soundness of an vector
     subroutine check4nans3D_2( arr )
-        complex, intent(in)  :: arr(:,:,:)    
-        complex, allocatable :: arr1d(:)      
+        complex, intent(in)  :: arr(:,:,:)    !< query vector
+        complex, allocatable :: arr1d(:)
         arr1d = pack(arr, .true.)
         call check4nans_2(arr1d)
         deallocate(arr1d)
@@ -254,8 +259,8 @@ contains
 
     !>    is for checking the numerical soundness of an vector
     subroutine check4nans2D_1( arr )
-        real, intent(in)  :: arr(:,:)   
-        real, allocatable :: arr1d(:)   
+        real, intent(in)  :: arr(:,:)   !< query vector
+        real, allocatable :: arr1d(:)
         arr1d = pack(arr, .true.)
         call check4nans_1(arr1d)
         deallocate(arr1d)
@@ -263,8 +268,8 @@ contains
 
     !>    is for checking the numerical soundness of an vector
     subroutine check4nans2D_2( arr )
-        complex, intent(in)  :: arr(:,:)   
-        complex, allocatable :: arr1d(:)   
+        complex, intent(in)  :: arr(:,:)   !< query vector
+        complex, allocatable :: arr1d(:)
         arr1d = pack(arr, .true.)
         call check4nans_2(arr1d)
         deallocate(arr1d)
@@ -272,7 +277,7 @@ contains
 
     !>    is for checking the numerical soundness of an vector
     subroutine check4nans_1( arr )
-        real, intent(in) :: arr(:)   
+        real, intent(in) :: arr(:)   !< query vector
         integer :: i, n_nans
         n_nans = 0
         do i=1,size(arr)
@@ -289,7 +294,7 @@ contains
 
     !>    is for checking the numerical soundness of an vector
     subroutine check4nans_2( arr )
-        complex, intent(in) :: arr(:)   
+        complex, intent(in) :: arr(:)   !< query vector
         integer :: i, n_nans
         n_nans = 0
         do i=1,size(arr)
@@ -306,13 +311,13 @@ contains
 
     !>  returns true if the argument is odd
     pure elemental logical function is_odd(i)
-        integer, intent(in) :: i   
+        integer, intent(in) :: i    !< query value
         is_odd = btest(i,0)
     end function
 
     !>   for rounding to closest even
     function round2even( val ) result( ev )
-        real, intent(in) :: val            
+        real, intent(in) :: val            !< query value
         integer :: ev, rounded, remainer
         rounded = nint(val)
         remainer = nint(val-real(rounded))
@@ -329,7 +334,7 @@ contains
 
      !>   for rounding to closest even
     function round2odd( val ) result( ev )
-        real, intent(in) :: val         
+        real, intent(in) :: val          !< query value
         integer :: ev, rounded, remainer
         rounded = nint(val)
         remainer = nint(val-real(rounded))
@@ -345,16 +350,18 @@ contains
     end function
 
     !>   get the angular resultion in degrees, given diameter and resolution
+    !! \param res,diam spatial resolution (\f$\si{\per\angstrom}\f$) and diameter(\f$\si{\angstrom}\f$)
     pure function angres( res, diam ) result( ang )
-        real, intent(in)  :: res, diam  !< spatial resolution (angstrom) and diameter
+        real, intent(in)  :: res, diam
         real :: ang                     !< angular resultion in degrees
         ang = (res/(pi*diam))*360.
     end function
 
     !>   get the resolution in angstrom, given angle and diameter
+    !! \param ang,diam angular resolution (degrees) and diameter (\f$\si{\angstrom}\f$)
     pure function resang( ang, diam ) result( res )
-        real, intent(in)  :: ang, diam   !< angular resolution (degrees) and diameter (angstrom)
-        real :: res                      !< spatial resolution (angstrom)
+        real, intent(in)  :: ang, diam
+        real :: res                      !< spatial resolution (\f$\si{\per\angstrom}\f$)
         res = (ang/360.)*(pi*diam)
     end function
 
@@ -378,9 +385,10 @@ contains
     end function
 
     !>   converts string descriptors of c and d pointgroups to euler angle limits
+    !! \param  t1,t2,p1,p2  euler angle limits
     subroutine pgroup_to_lim(pgroup, p1, p2, t1, t2, csym )
-        character(len=*), intent(in) :: pgroup
-        integer, intent(out)         :: csym
+        character(len=*), intent(in) :: pgroup !< pointgroup
+        integer, intent(out)         :: csym   !< sym token
         real, intent(out)            :: t1, t2, p1, p2
         if( pgroup(1:1) .eq. 'c' )then
             t1     = 0.
@@ -492,7 +500,7 @@ contains
         real,                 intent(in)  :: dat(:) !< array for input
         integer,              intent(in)  :: maxits !< limit sort
         real,                 intent(out) :: means(:)!< array for output
-        integer, allocatable, intent(out) :: labels(:)
+        integer, allocatable, intent(out) :: labels(:)!< labels for output
         logical, allocatable :: mask(:)
         integer :: ncls, ndat, alloc_stat, clssz, i, j, cnt_means, loc(1), changes
         real, allocatable :: dat_sorted(:)
@@ -605,7 +613,8 @@ contains
     ! gridpoints(ix,iy,iz,:) = real([ix,iy,iz])-loc
 
 
-    ! !>    three-dimensional symmetric hard window
+    !>    two-dimensional symmetric hard window
+    !! \param x,y      input points
     pure function sqwin_2d( x, y, winsz ) result( win )
         real, intent(in) :: x,y      !< input point
         real, intent(in) :: winsz    !< window size
@@ -614,7 +623,8 @@ contains
         win(2,:) = sqwin_1d(y,winsz)
     end function
 
-    ! !>    three-dimensional symmetric hard window
+    !>    three-dimensional symmetric hard window
+    !! \param x,y,z      input points
     pure function sqwin_3d( x, y, z, winsz ) result( win )
         real, intent(in) :: x,y,z    !< input point
         real, intent(in) :: winsz    !< window size
@@ -624,7 +634,7 @@ contains
         win(3,:) = sqwin_1d(z,winsz)
     end function
 
-    ! !>    one-dimensional hard window
+    !>    one-dimensional hard window
     pure function recwin_1d( x, winsz ) result( win )
         real, intent(in) :: x       !< input point
         real, intent(in) :: winsz   !< window size
@@ -634,6 +644,7 @@ contains
     end function
 
     !>    two-dimensional hard window
+    !! \param x,y      input points
     pure function recwin_2d( x, y, winsz ) result( win )
         real, intent(in) :: x, y      !< input point
         real, intent(in) :: winsz     !< window size
@@ -643,6 +654,7 @@ contains
     end function
 
     !>    three-dimensional hard window
+    !! \param x,y,z      input points
     pure function recwin_3d( x, y, z, winsz ) result( win )
         real, intent(in) :: x, y, z   !< input point
         real, intent(in) :: winsz     !< window size
@@ -656,7 +668,7 @@ contains
 
     !>   takes the logarithm of the positive elements of an array
     subroutine logarr(arr)
-        real, intent(inout) :: arr(:)
+        real, intent(inout) :: arr(:)  !< input array
         integer :: i
         do i=1,size(arr)
             if( arr(i) > 0. )then
@@ -668,7 +680,7 @@ contains
     !>   returns acos with the argument's absolute value limited to 1.
     !!         this seems to be necessary due to small numerical inaccuracies.
     pure function myacos( arg ) result( r )
-        real, intent(in) :: arg
+        real, intent(in) :: arg     !< input (radians)
         real             :: r, x, y
         x = min(1.,abs(arg))
         y = sign(x,arg)
@@ -677,7 +689,7 @@ contains
 
     !>   sinc function
     function sinc( x ) result( r )
-        real, intent(in) :: x
+        real, intent(in) :: x       !< input (radians)
         real             :: r, arg
         if( abs(x) < 0.00000001 ) then
             r = 1.
@@ -900,7 +912,7 @@ contains
     !>   two-dimensional gaussian edge
     pure function cosedge_inner_2( x, y, z, width, mskrad ) result( w )
         real, intent(in) :: x, y, z, width
-        real, intent(in) :: mskrad
+        real, intent(in) :: mskrad !< mask radius
         real             :: w, rad
         rad = sqrt(x**2.+y**2.+z**2.)
         if( rad .lt. mskrad-width )then
@@ -933,7 +945,7 @@ contains
     end function
 
     !>   calculates the resolution values given corrs and res params
-    !! \param corrs Fourier shell correlations 
+    !! \param corrs Fourier shell correlations
     !! \param res resolution value
     subroutine get_resolution( corrs, res, fsc05, fsc0143 )
         real, intent(in)  :: corrs(:), res(:) !<  corrs Fourier shell correlation
@@ -991,25 +1003,25 @@ contains
         end do
     end function
 
-    !>   returns the Fourier index of res
+    !>   returns the Fourier index of resolution \f$ (\si{\per\angstrom}) \f$
     integer pure function calc_fourier_index( res, box, smpd )
-        real, intent(in)    :: res, smpd !<  smpd pixel size,  res resolution
+        real, intent(in)    :: res, smpd !<  smpd pixel size,  res resolution \f$ (\si{\angstrom}) \f$
         integer, intent(in) :: box       !< box size
-        calc_fourier_index = (real(box-1)*smpd)/res
+        calc_fourier_index = nint((real(box-1)*smpd)/res)
     end function calc_fourier_index
 
     !>   returns the Fourier index of res
     real pure function calc_lowpass_lim( find, box, smpd )
         integer, intent(in) :: find, box !< box size
-        real, intent(in)    :: smpd      !< smpd pixel size
+        real, intent(in)    :: smpd      !< smpd pixel size \f$ (\si{\angstrom}) \f$
         calc_lowpass_lim = (real(box-1)*smpd)/real(find)
     end function calc_lowpass_lim
 
     !>   calculates a corr coeff based on sum cross prod and denominator
-    !! \param sxy cross prod sum 
+    !! \param sxy cross prod sum
     !! \param den denominator
     function calc_corr( sxy, den ) result( corr )
-        real, intent(in) :: sxy, den 
+        real, intent(in) :: sxy, den
         real :: corr                 !< output corr coeff
         if( den > 0. )then
             corr = sxy/sqrt(den)
@@ -1039,7 +1051,7 @@ contains
     !! \param  func is the function to be integrated between limits a and b.
     !! \param  a lower limits of func
     !! \param  b upper limits of func
-    
+    !!
     subroutine trapzd( func, a, b, s, n )
         interface
             function func( point ) result( val )
@@ -1170,9 +1182,9 @@ contains
                 if(j <= n )then
                     augmatrix(i,j) = matrix(i,j)
                 else if((i+n) == j)then
-                    augmatrix(i,j) = 1
+                    augmatrix(i,j) = 1.
                 else
-                    augmatrix(i,j) = 0
+                    augmatrix(i,j) = 0.
                 endif
             end do
         end do
@@ -1189,7 +1201,7 @@ contains
                         exit
                     endif
                     if(flag .eqv. .false.)then
-                        inverse = 0
+                        inverse = 0.
                         errflg = -1
                         return
                     endif
@@ -1256,7 +1268,7 @@ contains
                 if(j <= n )then
                     augmatrix(i,j) = matrix(i,j)
                 else if((i+n) == j)then
-                    augmatrix(i,j) = 1
+                    augmatrix(i,j) = 1.0d0
                 else
                     augmatrix(i,j) = 0.0d0
                 endif
@@ -1326,12 +1338,12 @@ contains
     !!         ss_xx = sum_i x_i^2 - n * ave_x^2
     !!         ss_yy = sum_i y_i^2 - n * ave_y^2
     !!         ss_xy = sum_i x_i * y_i - n * ave_x * n ave_y
-    !!         slope = xx_xy / ss_xx
-    !!         intercept = ave_y - slope * ave_x
-    !!         corr_coeff = ss_xy^2 / (ss_xx * ss_yy)
+    !! \param  slope  Linear gradient: slope = xx_xy / ss_xx
+    !!  \param intercept y-intercept:  intercept = ave_y - slope * ave_x
+    !!  \param corr Correlation coefficient: corr_coeff = ss_xy^2 / (ss_xx * ss_yy)
     subroutine fit_straight_line( n, datavec, slope, intercept, corr )
-        integer, intent(in) :: n
-        real, intent(in)    :: datavec(n,2)
+        integer, intent(in) :: n                                            !< size of vector
+        real, intent(in)    :: datavec(n,2)                                 !< input vector
         real, intent(out)   :: slope, intercept, corr
         double precision    :: ave_x, ave_y, ss_xx, ss_yy, ss_xy, x, y, dn
         integer             :: i
@@ -1580,9 +1592,9 @@ contains
 
     !>  jacobi SVD, NR
     subroutine jacobi( a, n, np, d, v, nrot)
+        integer, intent(in)    :: n,np
         real,    intent(inout) :: a(np,np), v(np,np), d(np)
         integer, intent(inout) :: nrot
-        integer, intent(in)    :: n,np
         real                   :: c,g,h,s,sm,t,tau,theta,tresh,b(n), z(n)
         integer                :: i,j,ip,iq
         v = 0.
@@ -1933,9 +1945,9 @@ contains
 
     !>   for generating a spiraling path in 2d
     subroutine spiral_2d( np, trs, vecs )
-        integer, intent(in) :: np
-        real, intent(in)    :: trs
-        real, intent(out)   :: vecs(np,2)
+        integer, intent(in) :: np         !< total num of points
+        real, intent(in)    :: trs        !< radial step size
+        real, intent(out)   :: vecs(np,2) !< output vector of spiral coords
         real                :: angstep, ang, normstep, norm
         integer             :: i
         angstep  = 360./(real(np)/trs)
@@ -2081,8 +2093,9 @@ contains
     !>    rational function interpolation & extrapolation, from NR
     !!          Given arrays xa(:) and ya(:) and a value of x, this routine
     !!          returns a value of y and an accuracy estimate dy
+    !! \param xa,ya  input line
     subroutine ratint(xa, ya, x, y, dy)
-        real, intent(in)  :: xa(:), ya(:), x  !< input line and position
+        real, intent(in)  :: xa(:), ya(:), x  !< x position
         real, intent(out) :: y, dy            !< est value and accuracy
         real, parameter   :: TINY = 1.e-25
         real, allocatable :: c(:), d(:)
@@ -2096,7 +2109,7 @@ contains
         hh = abs(x-xa(1))
         do i=1,n
             h = abs(x-xa(i))
-            if( h.eq.0. )then
+            if( h == 0. )then
                 y  = ya(i)
                 dy = 0.
                 return
@@ -2115,12 +2128,12 @@ contains
                 h = xa(i+m)-x
                 t = (xa(i)-x)*d(i)/h ! h never zero, since tested in initialization loop
                 dd = t-c(i+1)
-                if( dd.eq.0. ) stop 'failure in ratint; simple_math'
+                if( dd == 0. ) stop 'failure in ratint; simple_math'
                 dd = w/dd
                 d(i) = c(i+1)*dd
                 c(i) = t*dd
             end do
-            if( 2*ns.lt.n-m )then
+            if( 2*ns < n-m )then
                 dy = c(ns+1)
             else
                 dy = d(ns)
@@ -2578,8 +2591,8 @@ contains
     subroutine find_1( arr, n, x, j, dist1 )
         integer, intent(in)  :: n           !< size of list
         real,    intent(in)  :: arr(n), x   !< list and search value
-        real,    intent(out) :: dist1      
-        integer, intent(out) :: j          
+        real,    intent(out) :: dist1
+        integer, intent(out) :: j
         real                 :: dist2
         j = max(1,locate_1( arr, n, x ))
         dist1 = arr(j)-x
@@ -2596,8 +2609,8 @@ contains
     subroutine find_2( arr, n, x, j, dist1 )
         integer, intent(in)  :: n         !< size of list
         integer, intent(in)  :: arr(n), x !< list and search value
-        integer, intent(out) :: dist1    
-        integer, intent(out) :: j        
+        integer, intent(out) :: dist1
+        integer, intent(out) :: j
         integer              :: dist2
         j = max(1,locate_2( arr, n, x ))
         dist1 = arr(j)-x

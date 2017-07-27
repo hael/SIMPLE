@@ -22,20 +22,17 @@
     logical :: verbose=.false.
 #endif
 
-#define _WPRINT_FILE_LINE_(FFFF,LLLL) if(debug.or.global_debug)write(*,'(A,A,I0,A)',advance='no') FFFF,':',LLLL,':';
+#define _WPRINT_FILE_LINE_(FFFF,LLLL) if(debug.or.global_debug)write(*,'(A,A,I0,A)',advance='no') FFFF,':',LLLL,': ';
 #define _PRINT_FILE_LINE_(myFILE,myLine) if(debug.or.global_debug) print *, myFILE//':myLine',
 
 #ifdef __PRETTY_FUNCTION__
 # ifndef DebugPrint
 #  define DebugPrint _PRINT_FILE_LINE_( __FILENAME__  , __LINE__ ); if(debug.or.global_debug) print *,__PRETTY_FUNCTION__,':',
-    
 # endif
 #else
 # ifndef DebugPrint
 #  if defined(_DEBUG) || ! defined(PGI)
 #   define DebugPrint _WPRINT_FILE_LINE_(__FILENAME__,__LINE__)if(debug.or.global_debug) print *,
-
-!    if(debug.or.global_debug) print *, __FILENAME__,':',__LINE__,':',
 #  else
 #   define DebugPrint ! /* Disabled debug printing*/
 #  endif

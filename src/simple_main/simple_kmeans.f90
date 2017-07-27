@@ -24,7 +24,7 @@ type kmeans
     integer               :: N                              !< nr of ptcls
     integer               :: D                              !< dimension of data vec
     integer               :: ncls                           !< nr of classes
-    class(oris), pointer  :: o_ptr                          !< ponter to orientation data struct
+    class(oris), pointer  :: o_ptr                          !< pionter to orientation data struct
     logical               :: existence=.false.              !< indicates existence
   contains
     procedure :: new
@@ -51,11 +51,18 @@ end interface
 contains
 
     !>  \brief  is a constructor
+    !! \param vecs data vectors
+    !! \param o oris object for storing cluster info
+    !! \param N  nr of ptcls
+    !! \param D  dimension of data
+    !! \param ncls  nr of classes
+    !! \return function
+    !!
     function constructor( vecs, o, N, D, ncls ) result( self )
         use simple_oris,  only: oris
-        class(oris), intent(in), target :: o          !< for storing cluster info
-        integer, intent(in)             :: N, D, ncls !< params
-        real, intent(in), target        :: vecs(N,D)  !< data vectors
+        class(oris), intent(in), target :: o
+        integer, intent(in)             :: N, D, ncls
+        real, intent(in), target        :: vecs(N,D)
         type(kmeans)                    :: self
         call self%new( vecs, o, N, D, ncls )
     end function
@@ -109,7 +116,7 @@ contains
     !>  \brief  this one does it all
     subroutine refine( self, maxits )
         class(kmeans), intent(inout) :: self
-        integer, intent(in)          :: maxits
+        integer, intent(in)          :: maxits  !< max iterations
         integer                      :: i, it
         real                         :: adist, adist_prev, x
         write(*,'(A)') '>>> K-MEANS REFINEMENT'
@@ -171,8 +178,8 @@ contains
     !>  \brief  is for subtracting the contribution from ptcl, assumes that ptcl is read
     subroutine subtr_ptcl( self, i, cls )
         class(kmeans), intent(inout) :: self
-        integer, intent(in)          :: i
-        integer, intent(in)          :: cls
+        integer, intent(in)          :: i   !< index of particle
+        integer, intent(in)          :: cls !< num of class
         if( cls /= 0 )then
             self%sums(cls,:) = self%sums(cls,:)-self%vecs(i,:)
             self%pops(cls)   = self%pops(cls)-1
@@ -183,8 +190,8 @@ contains
     !>  \brief  is for adding the contribution from ptcl i, assumes that ptcl is read
     subroutine add_ptcl( self, i, cls )
         class(kmeans), intent(inout) :: self
-        integer, intent(in)          :: i
-        integer, intent(in)          :: cls
+        integer, intent(in)          :: i   !< index of particle
+        integer, intent(in)          :: cls !< num of class
         self%sums(cls,:) = self%sums(cls,:)+self%vecs(i,:)
         self%pops(cls)   = self%pops(cls)+1
         self%avgs(cls,:) = self%sums(cls,:)/real(self%pops(cls))
@@ -193,7 +200,7 @@ contains
     !>  \brief  is for claculating all distances, assumes that  ptcl is read
     subroutine calc_dists( self, i )
         class(kmeans), intent(inout) :: self
-        integer, intent(in) :: i
+        integer, intent(in) :: i !< index of particle
         integer :: k
         real :: x
         do k=1,self%ncls
@@ -209,8 +216,8 @@ contains
     function sq_dist( self, i, k ) result( dist )
         use simple_math, only: euclid
         class(kmeans), intent(in) :: self
-        integer, intent(in)       :: i
-        integer, intent(in)       :: k
+        integer, intent(in)       :: i !< index of particle
+        integer, intent(in)       :: k !< index of average particle
         real :: dist
         dist = euclid(self%vecs(i,:),self%avgs(k,:))**2.
     end function

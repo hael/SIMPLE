@@ -54,8 +54,9 @@ contains
     ! VISUALIZATION
 
     !>    prints a primitive histogram given an array of real data
+    !! \param  bins,sc histogram bins and scale
     subroutine plot_hist( arr, bins, sc )
-        real, intent(in)    :: arr(:)
+        real, intent(in)    :: arr(:) !< input data
         integer, intent(in) :: bins, sc
         real                :: a(bins), minv, maxv, mean, std, var, binwidth
         integer             :: h(bins), bin, i, j, n
@@ -90,12 +91,14 @@ contains
 
     !>    given a 1D real array of data, this routine returns its mean: _ave_,
     !!          standard deviation: _sdev_, and variance: _var_
+    !! \param data input data
+    !! \param ave,sdev,var  Geometric average,   standard deviation  and variance
     subroutine moment_1( data, ave, sdev, var, err )
         !$ use omp_lib
         !$ use omp_lib_kinds
-        real,    intent(out) :: ave, sdev, var !<  ave Geometric average,  sdev standard deviation  var variance
+        real,    intent(out) :: ave, sdev, var
         logical, intent(out) :: err            !< error status
-        real,    intent(in)  :: data(:)        !< input data
+        real,    intent(in)  :: data(:)
         integer              :: n, i
         real                 :: ep, nr, dev
         err = .false.
@@ -131,10 +134,12 @@ contains
 
     !>    given a 2D real array of data, this routine returns its mean: _ave_,
     !!          standard deviation: _sdev_, and variance: _var_
+    !! \param data input data
+    !! \param ave,sdev,var  Geometric mean, standard deviation and variance
     subroutine moment_2( data, ave, sdev, var, err )
         !$ use omp_lib
         !$ use omp_lib_kinds
-        real, intent(out)    :: ave, sdev, var   !<  ave Geometric average,  sdev standard deviation  var variance
+        real, intent(out)    :: ave, sdev, var
         logical, intent(out) :: err              !< error status
         real, intent(in)     :: data(:,:)        !< input data
         integer              :: nx, ny, n, i, j
@@ -176,10 +181,12 @@ contains
 
     !>    given a 3D real array of data, this routine returns its mean: _ave_,
     !!          standard deviation: _sdev_, and variance: _var_
+    !! \param data input data
+    !! \param ave,sdev,var  Geometric average,   standard deviation  and variance
     subroutine moment_3( data, ave, sdev, var, err )
         !$ use omp_lib
         !$ use omp_lib_kinds
-        real, intent(out)    :: ave, sdev, var    !<  ave Geometric average,  sdev standard deviation  var variance
+        real, intent(out)    :: ave, sdev, var
         logical, intent(out) :: err               !< error status
         real, intent(in)     :: data(:,:,:)       !< input data
         integer              :: nx, ny, nz, n, i, j, k
@@ -233,9 +240,9 @@ contains
 
     !>    is for statistical normalization of a 2D matrix
     subroutine normalize_2( arr, err )
-        real, intent(inout)  :: arr(:,:)         !< input data   
-        real                 :: ave, sdev, var   !< temp stats   
-        logical, intent(out) :: err              !< error status 
+        real, intent(inout)  :: arr(:,:)         !< input data
+        real                 :: ave, sdev, var   !< temp stats
+        logical, intent(out) :: err              !< error status
         call moment_2( arr, ave, sdev, var, err )
         if( err ) return
         arr = (arr-ave)/sdev ! array op
@@ -243,9 +250,9 @@ contains
 
     !>    is for statistical normalization of a 3D matrix
     subroutine normalize_3( arr, err )
-        real, intent(inout)  :: arr(:,:,:)       !< input data   
-        real                 :: ave, sdev, var   !< temp stats   
-        logical, intent(out) :: err              !< error status 
+        real, intent(inout)  :: arr(:,:,:)       !< input data
+        real                 :: ave, sdev, var   !< temp stats
+        logical, intent(out) :: err              !< error status
         call moment_3( arr, ave, sdev, var, err )
         if( err ) return
         arr = (arr-ave)/sdev ! array op
@@ -253,9 +260,9 @@ contains
 
     !>    is for sigmoid normalisation [0,1]
     subroutine normalize_sigm_1( arr )
-        real, intent(inout) :: arr(:)                    !< input data   
-        real                :: smin, smax, delta         ! temp stats   
-        real, parameter     :: NNET_CONST = exp(1.)-1.    
+        real, intent(inout) :: arr(:)                    !< input data
+        real                :: smin, smax, delta         ! temp stats
+        real, parameter     :: NNET_CONST = exp(1.)-1.
         ! find minmax
         smin  = minval(arr)
         smax  = maxval(arr)
@@ -268,7 +275,7 @@ contains
 
     !>    is for sigmoid normalisation [0,1]
     subroutine normalize_sigm_2( arr )
-        real, intent(inout) :: arr(:,:) !< input data   
+        real, intent(inout) :: arr(:,:) !< input data
         real                :: smin, smax, delta
         real, parameter     :: NNET_CONST = exp(1.)-1.
         ! find minmax
@@ -283,7 +290,7 @@ contains
 
     !>    is for sigmoid normalisation [0,1]
     subroutine normalize_sigm_3( arr )
-        real, intent(inout) :: arr(:,:,:) !< input data   
+        real, intent(inout) :: arr(:,:,:) !< input data
         real                :: smin, smax, delta
         real, parameter     :: NNET_CONST = exp(1.)-1.
         ! find minmax
@@ -297,11 +304,13 @@ contains
     end subroutine normalize_sigm_3
 
     !>    calculates the devation around point
+    !! \param data input data
+    !! \param sdev standard deviation
     subroutine deviation( data, point, sdev, var, err )
         !$ use omp_lib
         !$ use omp_lib_kinds
-        real, intent(out)    :: sdev, var       !<  sdev standard deviation  var variance
-        logical, intent(out) :: err             !< error status 
+        real, intent(out)    :: sdev, var       !< var variance
+        logical, intent(out) :: err             !< error status
         real, intent(in)     :: data(:), point  !< input data and deviation point
         integer              :: n, i
         real                 :: ep, nr, dev
@@ -323,11 +332,128 @@ contains
         if( abs(var) < TINY ) err = .true.
     end subroutine deviation
 
+    !>    given a 2D real array of data, this routine returns its windowed mean
+    !! \param data input data
+    !! \param winsz window size
+    !! \param ave output array
+    subroutine mean_2D( data, winsz, ave, err )
+        !$ use omp_lib
+        !$ use omp_lib_kinds
+        real, intent(out), allocatable    :: ave(:,:)
+        integer, intent(in) :: winsz
+        logical, intent(out) :: err              !< error status
+        real, intent(in)     :: data(:,:)        !< input data
+        integer              :: nx, ny, i, j, h, k, px, py, tmpcnt
+        real                 :: n, tmpave, nrpatch
+        err = .false.
+        nx = size(data,1)
+        ny = size(data,2)
+        allocate(ave(nx,ny))
+        n  = nx*ny
+        if( n <= 1 ) then
+            write(*,*) 'ERROR: n must be at least 2'
+            write(*,*) 'In: mean_2D, module: simple_stat.f90'
+            stop
+        endif
+        if( winsz > nx/2 .or. winsz > ny/2  ) then
+            write(*,*) 'ERROR: winsz must be smaller than half image dimensions'
+            write(*,*) 'In: mean_2D, module: simple_stat.f90'
+            stop
+        endif
+        ! calc average
+        !$omp parallel do default(shared) private(i,j) schedule(auto)
+        do i=1,nx
+            do j=1,ny
+                tmpave=0.
+                tmpcnt=0
+                do px=-winsz,winsz
+                    ! reflect on x- boundary
+                    h= i+px
+                    h = merge(i - px,  h,  (h < 1).or.(h > nx)) 
+                    do py=-winsz,winsz
+                        k= j + py
+                        k = merge(j - py, k, (k < 1).or.(k > ny))
+                        ! calc avg of window
+                        tmpave = tmpave + data(h,k)
+                        tmpcnt = tmpcnt+1
+                    end do
+                end do
+                ! calc avg of window
+                if( tmpcnt < 1) err = .true.
+                ave(i,j) = tmpave / REAL(tmpcnt)
+
+            end do
+        end do
+        !$omp end parallel do
+    
+    end subroutine mean_2D
+    !> stdev_2D Standard deviation 2D filter
+    !! \param data 2D array
+    !! \param winsz window size
+    !! \param ave Average (mean) 2D filter
+    !! \param stdev Output std dev filter
+    !! \param var Optional output variance 2D array
+    !! \param err error flag
+    !!
+    subroutine stdev_2D( data, winsz, ave, stdev, var, err)
+        !$ use omp_lib
+        !$ use omp_lib_kinds
+        integer, intent(in) :: winsz
+        real, intent(in)     :: data(:,:), ave(:,:)        !< input data
+        real, intent(out), allocatable  :: stdev(:,:),var(:,:)
+        logical, intent(out) :: err              !< error status
+        integer              :: nx, ny, i, j, h, k,px,py, tmpcnt
+        real                 :: n, tmpdev, nr, tmpvar, ep
+        err = .false.
+        nx = size(data,1)
+        ny = size(data,2)
+        allocate(stdev(nx,ny),var(nx,ny))
+        n  = nx*ny
+        if( n <= 1 ) then
+            write(*,*) 'ERROR: n must be at least 2'
+            write(*,*) 'In: mean_2D, module: simple_stat.f90'
+            stop
+        endif
+        if( winsz > nx/2 .or. winsz > ny/2  ) then
+            write(*,*) 'ERROR: winsz must be smaller than half image dimensions'
+            write(*,*) 'In: mean_2D, module: simple_stat.f90'
+            stop
+        endif
+        ! calc average
+        !$omp parallel do default(shared) private(i,j) schedule(auto)
+        do i=1,nx
+            do j=1,ny
+                ep=0.;tmpdev=0.; tmpvar=0.
+                tmpcnt=0
+                do px=-winsz,winsz
+                    ! reflect on x- boundary
+                    h= i+px
+                    h = merge(i - px,  h,  (h < 1).or.(h > nx)) 
+                    do py=-winsz,winsz
+                        k= j + py
+                        k = merge(j - py, k, (k < 1).or.(k > ny))
+                        tmpdev = data(h,k)-ave(h,k)
+                        ep = ep+tmpdev
+                        tmpvar = tmpvar+tmpdev*tmpdev
+                        tmpcnt = tmpcnt+1
+                    end do
+                end do
+                ! calc avg of window
+                nr = REAL(tmpcnt)
+                var(i,j) = (tmpvar-( (ep**2.) / nr)) / REAL(nr -1.)
+                stdev(i,j) = sqrt(var(i,j)); if( abs(var(i,j)) < TINY ) err = .true.
+            end do
+        end do
+        !$omp end parallel do
+    
+    end subroutine stdev_2D
     ! CORRELATION
 
     !>    calculates Pearson's correlation coefficient
+    !! \param x input reference array
+    !! \param y input test array
     function pearsn_1( x, y ) result( r )
-        real, intent(in) :: x(:),y(:)         !<  x input data,  y reference data 
+        real, intent(in) :: x(:),y(:)
         real    :: r,ax,ay,sxx,syy,sxy,xt,yt
         integer :: j, n
         n = size(x)
@@ -351,8 +477,10 @@ contains
     end function pearsn_1
 
     !>    calculates Pearson's correlation coefficient
+    !! \param x input reference array
+    !! \param y input test array
     function pearsn_2( x, y ) result( r )
-        real, intent(in) :: x(:,:),y(:,:)      !<  x input data,  y reference data 
+        real, intent(in) :: x(:,:),y(:,:)
         real    :: r,ax,ay,sxx,syy,sxy,xt,yt
         integer :: i, j, nx, ny
         nx = size(x,1)
@@ -379,8 +507,10 @@ contains
     end function pearsn_2
 
     !>    calculates Pearson's correlation coefficient
+    !! \param x input reference array
+    !! \param y input test array
     function pearsn_3( x, y ) result( r )
-        real, intent(in) :: x(:,:,:),y(:,:,:)       !<  x input data,  y reference data 
+        real, intent(in) :: x(:,:,:),y(:,:,:)
         real    :: r,ax,ay,az,sxx,syy,sxy,xt,yt
         integer :: i, j, k, nx, ny, nz
         nx = size(x,1)
@@ -411,9 +541,11 @@ contains
     end function pearsn_3
 
     !>    calculates the Pearson correlation for pre-normalized data
+    !! \param x input reference array
+    !! \param y input test array
     function pearsn_prenorm( x, y ) result( r )
-        real    :: x(:),y(:)      !<  x input data,  y reference data 
-        real    :: r,sxx,syy,sxy,den 
+        real    :: x(:),y(:)
+        real    :: r,sxx,syy,sxy,den
         integer :: j, n
         n = size(x)
         if( size(y) /= n ) stop 'Arrays not equal size, in pearsn_prenorm, module: simple_stat'
@@ -437,7 +569,7 @@ contains
     end function pearsn_prenorm
 
     function corrs2weights( corrs ) result( weights )
-        real, intent(in)  :: corrs(:)
+        real, intent(in)  :: corrs(:) !< correlation input
         real, allocatable :: weights(:), corrs_copy(:), expnegdists(:)
         real, parameter   :: THRESHOLD=1.5
         real    :: maxminratio, normfac, corrmax, corrmin
@@ -488,7 +620,7 @@ contains
     !>    is for rank transformation of an array
     subroutine rank_transform_1( arr )
         use simple_jiffys, only: alloc_err
-        real, intent(inout)  :: arr(:)  !< array to be modified 
+        real, intent(inout)  :: arr(:)  !< array to be modified
         integer              :: j, n, alloc_stat
         integer, allocatable :: order(:)
         real, allocatable    :: vals(:)
@@ -509,7 +641,7 @@ contains
     !>    is for rank transformation of a 2D matrix
     subroutine rank_transform_2( mat )
         use simple_jiffys, only: alloc_err
-        real, intent(inout)   :: mat(:,:)  !< matrix to be modified 
+        real, intent(inout)   :: mat(:,:)  !< matrix to be modified
         integer, allocatable  :: order(:), indices(:,:)
         real, allocatable     :: vals(:)
         integer               :: n, alloc_stat, i, j, cnt, nx, ny
@@ -536,9 +668,10 @@ contains
     end subroutine rank_transform_2
 
     !>    Spearman rank correlation
+    !<  \param pi1,pi2 test and reference data
     function spear( n, pi1, pi2 ) result( corr )
         integer, intent(in) :: n
-        real, intent(in)    :: pi1(n), pi2(n)  !<  pi1 test data 1  pi2 test data 2 
+        real, intent(in)    :: pi1(n), pi2(n)  !<  pi1 test data 1  pi2 test data 2
         real                :: corr, sqsum, rn
         integer             :: k
         rn = real(n)
@@ -557,10 +690,12 @@ contains
     !!          cumulative distribution function of data1 is significantly
     !!          different from that of data2. The input arrays are modified
     !!          (sorted)
+    !! \param  data1,data2 distribution arrays
+    !! \param  n1,n2 size of distribution arrays
+    !! \param  d K-S statistic
     subroutine kstwo( data1, n1, data2, n2, d, prob )
         integer, intent(in) :: n1, n2
-        real, intent(inout) :: data1(n1), data2(n2), d, prob  !<  data1 distribution 1,
-        !  data2 distribution 2,  d K-S statistic
+        real, intent(inout) :: data1(n1), data2(n2), d, prob  !< significance
         integer             :: j1, j2
         real                :: d1, d2, dt, en1, en2, en, fn1, fn2
         call hpsort( n1, data1 )
@@ -590,7 +725,7 @@ contains
         prob = probks((en+0.12+0.11/en)*d) ! significance
 
         contains
-
+            !< Calculate K-S significance test
             function probks( alam ) result( p )
                 real, intent(in) :: alam
                 real :: p, a2, fac, term, termbf
@@ -612,11 +747,13 @@ contains
 
     end subroutine kstwo
 
-    !>    4 statistical analysis of similarity matrix
+    !>    4 statistical analysis of similarity matrix, returns smin,smax
+    !! \param smin minimum similarity
+    !! \param smax maximum similarity
     subroutine analyze_smat( s, symmetrize, smin, smax )
         real, intent(inout) :: s(:,:)          !< similarity matrix
         logical, intent(in) :: symmetrize      !< force diag symmetry
-        real, intent(out)   :: smin, smax      !<  smin minimum similarity,  smax maximum similarity
+        real, intent(out)   :: smin, smax
         integer             :: i, j, n, npairs
         if( size(s,1) .ne. size(s,2) )then
             stop 'not a similarity matrix; analyze_smat; simple_stat'
@@ -638,7 +775,7 @@ contains
 
     !>    is the factorial function
     recursive function factorial( n )result( f )
-        integer, intent(in) :: n
+        integer, intent(in) :: n !< factorial arg
         integer :: f
         if( n < 0 )then
             stop 'Negative factorial in simple_stat%factorial'
@@ -682,36 +819,38 @@ contains
     end function get_hist
 
     !>    generates a primitive joint histogram given two arrays of real data
-    function get_jointhist( arr1, arr2, nbins )result( h )
-        real,    intent(in)  :: arr1(:), arr2(:)   !< input arrays        
-        integer, intent(in)  :: nbins              !< num histogram bins 
-        integer, allocatable :: h(:,:)             !< output histogram 
+    !! \param x input reference array
+    !! \param y input test array
+    function get_jointhist( x, y, nbins )result( h )
+        real,    intent(in)  :: x(:), y(:)
+        integer, intent(in)  :: nbins              !< num histogram bins
+        integer, allocatable :: h(:,:)             !< output histogram
         real                 :: binwidth1, minv1
         real                 :: binwidth2, minv2
         integer              :: i, n, bin1, bin2
         if( nbins<2 )stop 'Invalib number of bins in simple_stat%get_hist'
         ! first array
-        n         = size(arr1,1)
-        if( n/=size(arr2,1) )stop 'Invalid dimensions in simple_stat%get_joint_hist'
-        minv1     = minval(arr1)
-        binwidth1 = ( maxval(arr1)-minv1 ) / real( nbins )
+        n         = size(x,1)
+        if( n/=size(y,1) )stop 'Invalid dimensions in simple_stat%get_joint_hist'
+        minv1     = minval(x)
+        binwidth1 = ( maxval(x)-minv1 ) / real( nbins )
         ! second array
-        minv2     = minval(arr2)
-        binwidth2 = ( maxval(arr2)-minv2 ) / real( nbins )
+        minv2     = minval(y)
+        binwidth2 = ( maxval(y)-minv2 ) / real( nbins )
         ! Joint
         allocate( h(nbins,nbins) )
         h = 0
         do i=1,n
-            bin1 = bin( arr1(i), minv1, binwidth1 )
-            bin2 = bin( arr2(i), minv2, binwidth2 )
+            bin1 = bin( x(i), minv1, binwidth1 )
+            bin2 = bin( y(i), minv2, binwidth2 )
             h( bin1, bin2 ) = h( bin1, bin2 ) + 1
         end do
 
         contains
-            function bin( x, minv, width )result( ind )
-                real, intent(in) :: x,minv,width
+            function bin( v, minv, width )result( ind )
+                real, intent(in) :: v,minv,width
                 integer :: ind
-                ind = nint( (x-minv)/width ) ! int(1.+(arr(i)-minv)/binwidth)
+                ind = nint( (v-minv)/width ) ! int(1.+(arr(i)-minv)/binwidth)
                 ind = max(1,ind)
                 ind = min(ind,nbins)
             end function bin
@@ -720,6 +859,8 @@ contains
 
     !>    In information theory, the Hamming distance between two strings of equal length
     !!          is the number of positions at which the corresponding symbols are different.
+    !! \param x input reference array
+    !! \param y input test array
     function hamming_dist( x, y ) result( dist )
         integer, intent(in) :: x(:), y(:)
         real :: dist
@@ -729,12 +870,17 @@ contains
 
     !>   is the Normalized Mutual Information (in bits)
     !! Mutual Information \f$ I(X;Y)=\sum_{y\in Y}\sum_{x\in X}p(x,y)\log{\left({\frac{p(x,y)}{p(x)\,p(y)}}\right)} \f$
+    !!
     !! Normalised MI also known as Information Quality Ratio (IQR)
-    !! \f$ IQR(X,Y)=E\left[I(X;Y)\right]={\frac{I(X;Y)}{\mathrm{H} (X,Y)}}={\frac {\sum_{x\in X}\sum_{y\in Y}p(x,y)\log {p(x)p(y)}}{\sum _{x\in X}\sum _{y\in Y}p(x,y)\log {p(x,y)}}-1} \f$
+    !! \f$ IQR(X,Y)=E\left[I(X;Y)\right]={\frac{I(X;Y)}{\mathrm{H}(X,Y)}}=
+    !!   {\frac{\sum_{x\in X}\sum_{y\in Y}p(x,y)\log {p(x)p(y)}}
+    !!   {\sum _{x\in X}\sum _{y\in Y}p(x,y)\log {p(x,y)}}-1} \f$
     !! @see https://en.wikipedia.org/wiki/Mutual_information#Normalized_variants
+    !! \param x input reference array
+    !! \param y input test array
     function nmi( x, y, nbins )result( val )
-        real,    intent(in)  :: x(:), y(:)    !<  x input reference  y input test 
-        integer, intent(in)  :: nbins         !< num histogram bins 
+        real,    intent(in)  :: x(:), y(:)
+        integer, intent(in)  :: nbins         !< num histogram bins
         real,    allocatable :: rh(:,:), pxs(:), pys(:)
         real    :: mi, val, ex, ey, pxy, px, py, logtwo
         integer :: i, j, n
@@ -769,17 +915,19 @@ contains
                 mi = mi + pxy * log( pxy/ (px*py) ) / logtwo
             enddo
         enddo
-        if( ex/=0. .and. ey/=0. )then
+        if( ex /= 0.0 .and. ey /= 0.0 )then
             val = mi / sqrt(ex*ey)
         else
-            val = 0.
+            val = 0.0
         endif
         val = max(0.,val)
     end function nmi
 
     !>    calculates rand index
+    !! \param x input reference array
+    !! \param y input test array
     function rand_index( x, y ) result( rind )
-        integer, intent(in) :: x(:),y(:) !<  x input reference  y input test 
+        integer, intent(in) :: x(:),y(:)
         integer  :: i,j, n, a,b,cd
         real     :: rind
         n = size(x)
@@ -811,8 +959,10 @@ contains
 
     !>    calculates Jaccard index
     !! \f$  J(A,B) = \frac{|A \cap B|}{|A \cup B|} = \frac{|A \cap B|}{|A| + |B| - |A \cap B|} \f$
+    !! \param x input reference array
+    !! \param y input test array
     function jaccard_index( x, y )result( jind )
-        integer, intent(in) :: x(:), y(:) !<  x input reference  y input test 
+        integer, intent(in) :: x(:), y(:)
         real :: jind
         integer  :: i,j, n, a,cd
         n = size(x)
@@ -839,8 +989,10 @@ contains
 
     !>    calculates Jaccard distance
     !! \f$  d_J(A,B) = 1 - J(A,B) = \frac{ |A \cup B| - |A \cap B| }{ |A \cup B| } \f$
+    !! \param x input reference array
+    !! \param y input test array
     function jaccard_dist( x, y )result( jdist )
-        integer, intent(in) :: x(:), y(:)  !<  x input reference,  y input test 
+        integer, intent(in) :: x(:), y(:)
         real :: jdist
         if( size(x) /= size(y) )stop 'Inconsistent dimensions in simple_stat%jaccard_dist'
         jdist = 1. - jaccard_index( x,y )

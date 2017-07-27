@@ -141,6 +141,7 @@ contains
     !!        T_init=1000000, TC=0.9, max_rearr=10**L*N, and T_lowlim=0.01. The parameter max_rearr (maximum
     !!        number of rearrangements per T_-level) affects performance and CPU time most, requires testing
     !!        for specific problems.
+    !! \param T_init,TC,T_lowlim state variables, initial, critial and lower limit
     subroutine minimize( self, cost_err, T_init, TC, max_rearr, T_lowlim, out_solution, cost )
         use simple_rnd,    only: irnd_uni
         use simple_jiffys, only: progress
@@ -230,9 +231,9 @@ contains
     subroutine minimize_one_chain( self, T, max_rearr, cost )
         use simple_rnd, only: irnd_uni
         class(sa_opt), intent(inout) :: self
-        real, intent(in)             :: T
+        real, intent(in)             :: T          !< state variable
         integer, intent(in)          :: max_rearr  !< maximum number of rearrangements per T_-level
-        real, intent(out)            :: cost
+        real, intent(out)            :: cost       !< minimisation value
         integer                      :: i, j, nr_rearr, olds(self%L)
         real                         :: cost_perm
         ! initialize costs

@@ -1,9 +1,8 @@
 
-
+# Do not use BIBFILES unless you plan to add citations
 add_latex_document(simple3-0_devel.tex
-   BIBFILES Prime2bibfile.bib
    IMAGES ../SIMPLE_logo/rawlogo.png ./Commander/Commander.png ./LayeredArch/layered_arch.png ./SuppleDesign/SuppleDesign.png
-   TARGET_NAME DeveloperGuide-Simple3
+   TARGET_NAME SimpleDeveloperGuide
    FORCE_PDF
    EXCLUDE_FROM_ALL
    EXCLUDE_FROM_DEFAULTS)
@@ -11,4 +10,4 @@ add_latex_document(simple3-0_devel.tex
  install(FILES ${CMAKE_CURRENT_BINARY_DIR}/simple3-0_devel.pdf
    DESTINATION "${CMAKE_INSTALL_PREFIX}/doc"
    CONFIGURATIONS RELEASE
-   RENAME Developer_Guide.pdf OPTIONAL)
+   RENAME SimpleDeveloperGuide.pdf OPTIONAL)

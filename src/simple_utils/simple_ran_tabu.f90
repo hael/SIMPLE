@@ -5,7 +5,7 @@
 !>
 !! simple_math contains various mathematical subroutines and functions.
 !! @author Cyril Reboul & Hans Elmlund
-!! 
+!!
 !
 !==changes are documented below
 !* incorporated in the _SIMPLE_ library, HE 2009-06-25
@@ -22,7 +22,7 @@ implicit none
 type :: ran_tabu
     private
     integer :: NP=0       !< integer ranges from 1 to NP
-    integer :: N_tabus=0 
+    integer :: N_tabus=0
     logical, allocatable :: avail(:) !< flags for checking availability
   contains
     procedure :: reset
@@ -113,10 +113,11 @@ contains
         end do
     end function irnd
 
-    !>  \brief  generates a random disjoint pair
+    !>  \brief  generate random disjoint pair
+    !! \param irnd,jrnd  random integers
     subroutine irnd_pair( self, irnd, jrnd )
         class(ran_tabu), intent(in)  :: self
-        integer,         intent(out) :: irnd, jrnd !< random integer
+        integer,         intent(out) :: irnd, jrnd
         irnd = self%irnd()
         jrnd = irnd
         do while( irnd == jrnd )
@@ -131,7 +132,7 @@ contains
     function irnd_gau( self, mean, stdev ) result( irnd )
         use simple_rnd, only: irnd_gasdev
         class(ran_tabu), intent(in) :: self
-        real,            intent(in) :: mean, stdev  
+        real,            intent(in) :: mean, stdev
         integer :: irnd
         if( self%N_tabus == self%NP ) stop 'all numbers tabu; irnd_gau; simple_ran_tabu'
         do
@@ -223,7 +224,7 @@ contains
     !>  \brief  stochastic nearest neighbor generation
     function stoch_nnmat( self, pfromto, nnn, pmat ) result( nnmat )
         class(ran_tabu), intent(inout) :: self
-        integer,         intent(in)    :: pfromto(2), nnn                     !< pmat range 
+        integer,         intent(in)    :: pfromto(2), nnn                     !< pmat range
         real,            intent(in)    :: pmat(pfromto(1):pfromto(2),self%NP) !< multinomal array
         integer, allocatable :: nnmat(:,:) !> output nearest neigh matrix
         integer :: iptcl, alloc_stat

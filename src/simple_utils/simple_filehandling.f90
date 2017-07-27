@@ -29,7 +29,7 @@ contains
 
     !> \brief return the number of lines in a textfile
     function nlines( fname ) result( n )
-        character(len=*), intent(in) :: fname
+        character(len=*), intent(in) :: fname !< input filename
         integer          :: n, funit, ios
         logical          :: here
         character(len=1) :: junk
@@ -54,7 +54,7 @@ contains
 
     !> \brief  return the size of a binary file
     function filelength( fname ) result( filesz )
-        character(len=*), intent(in) :: fname
+        character(len=*), intent(in) :: fname !< input filename
         integer                      :: filesz, funit, ios, cnt
         logical                      :: here
         character(len=1)             :: junk
@@ -82,22 +82,22 @@ contains
 
     !> \brief  return the record size of a binary file
     function reclength( fname, nentries ) result( recsz )
-        character(len=*), intent(in) :: fname
-        integer,          intent(in) :: nentries
+        character(len=*), intent(in) :: fname     !< input filename
+        integer,          intent(in) :: nentries  !< total num of entries
         integer                      :: recsz
         recsz = filelength(fname)/nentries
     end function reclength
 
     !> \brief  return file size in bytes
     function file_size(fname) result(sz)
-        character(len=*), intent(in) :: fname
+        character(len=*), intent(in) :: fname !< input filename
         integer(kind=8)              :: sz
         inquire(file=trim(adjustl(fname)),size=sz)
     end function file_size
 
     !> \brief  is for deleting a file
     subroutine del_file( file )
-        character(len=*), intent(in) :: file
+        character(len=*), intent(in) :: file !< input filename
         integer :: fnr, file_stat
         if( file_exists(file) )then
             fnr = get_fileunit()
@@ -108,17 +108,17 @@ contains
 
     !> \brief  is for deleting consequtively numbered files with padded number strings
     subroutine del_files( body, n, ext, numlen, suffix )
-        character(len=*),           intent(in) :: body
-        integer,                    intent(in) :: n
-        character(len=*), optional, intent(in) :: ext
-        integer,          optional, intent(in) :: numlen
-        character(len=*), optional, intent(in) :: suffix
+        character(len=*),           intent(in) :: body !< input filename body
+        integer,                    intent(in) :: n    !< total num for del, formatted as body[n].ext  
+        character(len=*), optional, intent(in) :: ext  !< input filename extension
+        integer,          optional, intent(in) :: numlen !< number length
+        character(len=*), optional, intent(in) :: suffix !< file suffix
         character(len=STDLEN), allocatable :: names(:)
         integer :: ifile
         if( present(ext) )then
             names = make_filenames( body, n, ext, numlen=numlen, suffix=suffix )
         else
-            names = make_dirnames( body, n, numlen=numlen) 
+            names = make_dirnames( body, n, numlen=numlen)
         endif
         do ifile=1,n
             if( file_exists(names(ifile)) ) call del_file(names(ifile))
@@ -127,12 +127,12 @@ contains
 
     !> \brief  is for making a file-table (to be able to commander execute programs that depend on them)
     subroutine make_filetable( tabname, n, body, ext, numlen, suffix )
-        character(len=*),           intent(in) :: tabname
-        integer,                    intent(in) :: n
-        character(len=*),           intent(in) :: body
-        character(len=*),           intent(in) :: ext
-        integer,          optional, intent(in) :: numlen
-        character(len=*), optional, intent(in) :: suffix
+        character(len=*),           intent(in) :: tabname !< file-table (string)
+        integer,                    intent(in) :: n       !< total num of files
+        character(len=*),           intent(in) :: body    !< filename body
+        character(len=*),           intent(in) :: ext     !< filename extension
+        integer,          optional, intent(in) :: numlen  !< number length
+        character(len=*), optional, intent(in) :: suffix  !< file suffix
         character(len=STDLEN), allocatable :: names(:)
         integer :: ifile, fnr, file_stat
         names = make_filenames( body, n, ext, numlen=numlen, suffix=suffix )
@@ -141,14 +141,15 @@ contains
         call fopen_err('simple_filehandling :: make_filetable', file_stat)
         do ifile=1,n
             write(fnr,'(a)') trim(names(ifile))
-        end do 
+        end do
         close(unit=fnr)
     end subroutine make_filetable
 
-     !> \brief  is for making a file-table (to be able to commander execute programs that depend on them)
+    !> \brief  is for making a file-table (to be able to commander execute programs that depend on them)
+    !! \param tab1,tab2,tab3,tab4 input filenames
     subroutine make_multitab_filetable( tabname, tab1, tab2, tab3, tab4 )
          use simple_strings, only: int2str, int2str_pad
-        character(len=*),                intent(in) :: tabname
+        character(len=*),                intent(in) :: tabname           !< file-table filename
         character(len=STDLEN),           intent(in) :: tab1(:), tab2(:)
         character(len=STDLEN), optional, intent(in) :: tab3(:), tab4(:)
         integer :: ntabs, n, fnr, ifile, file_stat
@@ -165,7 +166,7 @@ contains
             &//' '//trim(tab3(ifile))
             if( ntabs == 4 ) write(fnr,'(a)') trim(tab1(ifile))//' '//trim(tab2(ifile))&
             &//' '//trim(tab3(ifile))//' '//trim(tab4(ifile))
-        end do 
+        end do
         close(unit=fnr)
     end subroutine make_multitab_filetable
 
@@ -188,6 +189,7 @@ contains
     end function get_fileunit
 
     !> \brief  is for checking file kind
+    !> \param fname,suffix string args to check suffix
     function file_kind( fname, suffix ) result( yep )
         character(len=*), intent(in) :: fname, suffix
         integer :: pos
@@ -202,8 +204,8 @@ contains
 
     !> \brief  is for checking file open status
     subroutine fopen_err( message, file_stat )
-        character(len=*), intent(in) :: message
-        integer, intent(in)          :: file_stat
+        character(len=*), intent(in) :: message  !< error message
+        integer, intent(in)          :: file_stat!< error status
         if( file_stat /= 0 ) then
             write(*,'(a)') 'ERROR: File opening failure!'
             write(*,'(a)') message
@@ -238,29 +240,30 @@ contains
         pos = index(fname, suffix) ! position of suffix
         allocate(newname, source=fname(:pos-1)//trim(str)//trim(suffix))
     end function add2fbody
-    
+
     !> \brief  is for extracting the body of a file
     function get_fbody( fname, suffix ) result( fbody )
-        character(len=*), intent(in) :: fname, suffix
+        character(len=*), intent(in) :: fname, suffix !< file extension
         character(len=STDLEN)        :: fbody
         integer :: pos
         pos = index(fname, '.'//suffix) ! position of suffix
         fbody = fname(:pos-1)
     end function get_fbody
-    
+
     !> \brief  is for putting a new extension on filename
+    !! \param fname Input filename
     function fname_new_ext( fname, suffix ) result( new_fname )
-        character(len=*), intent(in)  :: fname, suffix
+        character(len=*), intent(in)  :: fname, suffix !< filename and new file extension
         character(len=STDLEN)         :: fbody, new_fname
         character(len=:), allocatable :: ext
         ext   = fname2ext(trim(fname))
         fbody = get_fbody(trim(fname), ext)
         new_fname = trim(fbody)//'.'//trim(suffix)
     end function fname_new_ext
-    
+
     !>  \brief  Return the 3-letter extension of a fname if present (without the period)
     pure function fname2ext( fname )
-        character(len=*), intent(in)  :: fname
+        character(len=*), intent(in)  :: fname    !< filename
         character(len=:), allocatable :: fname2ext
         integer :: length, pos
         length = len_trim(fname)
@@ -273,7 +276,7 @@ contains
     end function fname2ext
 
     pure function remove_abspath( fname ) result( new_fname)
-        character(len=*), intent(in)  :: fname
+        character(len=*), intent(in)  :: fname     !< abs filename
         character(len=:), allocatable :: new_fname
         integer :: length, pos
         length = len_trim(fname)
@@ -286,8 +289,8 @@ contains
     end function remove_abspath
 
     pure function extract_abspath( fname ) result( abspath )
-        character(len=*), intent(in)  :: fname
-        character(len=:), allocatable :: abspath
+        character(len=*), intent(in)  :: fname !< abs filename
+        character(len=:), allocatable :: abspath !< abs file path
         integer :: length, pos
         length = len_trim(fname)
         pos = scan(fname(1:length),'/',back=.true.)
@@ -297,8 +300,8 @@ contains
     !>  \brief  returns the integer number identifier of a filename
     subroutine fname2ind( str, ivar )
         use simple_strings, only: map_str_nrs, str2int
-        character(len=*), intent(in)  :: str
-        integer,          intent(out) :: ivar
+        character(len=*), intent(in)  :: str    !< abs filename
+        integer,          intent(out) :: ivar   !< file index number
         logical, allocatable          :: pos(:)
         character(len=:), allocatable :: str_copy
         integer :: j, lstr, io_stat, nrrange(2)
@@ -326,7 +329,7 @@ contains
         if( allocated(str_copy) ) deallocate(str_copy)
     end subroutine fname2ind
 
-    !>  \brief  returns numbered names (body) with 0-padded integer strings 
+    !>  \brief  returns numbered names (body) with 0-padded integer strings
     function make_dirnames( body, n, numlen ) result( names )
         use simple_strings, only: int2str, int2str_pad
         character(len=*),  intent(in) :: body
@@ -342,7 +345,7 @@ contains
         end do
     end function make_dirnames
 
-    !>  \brief  returns numbered file-names with 0-padded integer strings 
+    !>  \brief  returns numbered file-names with 0-padded integer strings
     function make_filenames( body, n, ext, numlen, suffix ) result( names )
         use simple_strings, only: int2str, int2str_pad
         character(len=*),           intent(in) :: body, ext
@@ -372,7 +375,7 @@ contains
     !!         if .hed: I
     !!         else: N
     pure function fname2format( fname )
-        character(len=*), intent(in)  :: fname
+        character(len=*), intent(in)  :: fname        !< input filename
         character(len=1)              :: fname2format
         character(len=:), allocatable :: extension
         extension = fname2ext(fname)
@@ -393,8 +396,9 @@ contains
                 fname2format = 'N'
         end select
     end function fname2format
-    
+
     !>  \brief  to check if same file format
+    !! \param fname1,fname2 input filenames
     pure logical function same_format( fname1, fname2 )
         character(len=*), intent(in) :: fname1, fname2
         character(len=1) :: form1, form2
@@ -405,8 +409,8 @@ contains
 
     !>  \brief  reads a filetable into an array
     subroutine read_filetable( filetable, filenames )
-        character(len=*),                   intent(in)  :: filetable
-        character(len=STDLEN), allocatable, intent(out) :: filenames(:)
+        character(len=*),                   intent(in)  :: filetable    !< input table filename
+        character(len=STDLEN), allocatable, intent(out) :: filenames(:) !< array of filenames
         integer :: nl, funit, alloc_stat, iline
         nl    = nlines(filetable)
         funit = get_fileunit()
@@ -425,8 +429,8 @@ contains
 
     !>  \brief  writes a filetable array to a text file
     subroutine write_filetable( filetable, filenames )
-        character(len=*),      intent(in)  :: filetable
-        character(len=STDLEN), intent(in) :: filenames(:)
+        character(len=*),      intent(in)  :: filetable  !< output table filename
+        character(len=STDLEN), intent(in) :: filenames(:)!< array of filenames
         integer :: nl, funit, iline
         nl = size(filenames)
         funit = get_fileunit()
@@ -439,8 +443,8 @@ contains
 
     !> \brief  for converting a file generated by txtfile2arr back to an array
     function txtfile2rarr( fnam ) result( arr )
-        character(len=*), intent(in) :: fnam
-        real, allocatable :: arr(:)
+        character(len=*), intent(in) :: fnam    !< input table filename
+        real, allocatable :: arr(:)             !< array of filenames
         integer :: i, n, alloc_stat, funit
         logical :: here
         inquire(FILE=fnam, EXIST=here)
@@ -463,8 +467,9 @@ contains
             stop 'file does not exist; txtfile2rarr; simple_filehandling'
         endif
     end function txtfile2rarr
-    
+
     !> \brief  merging two text files into a single array
+    !! \param file1,file2 input filenames for merging
     function merge_txtfiles( file1, file2 )  result( arr )
         character(len=*), intent(in) :: file1, file2
         character(len=STDLEN), allocatable :: arr(:)
@@ -510,11 +515,11 @@ contains
         end do
         close(funit)
     end function merge_txtfiles
-    
+
     !> \brief  for converting a file generated by file2arr back to an array
     function file2iarr( fnam ) result( arr )
-        character(len=*), intent(in) :: fnam
-        integer, allocatable :: arr(:)
+        character(len=*), intent(in) :: fnam             !< input table filename 
+        integer, allocatable :: arr(:)                   !< array of filenames   
         integer :: recsz, i, n, alloc_stat, funit, ival
         logical :: here
         inquire(FILE=fnam, EXIST=here)
@@ -541,8 +546,8 @@ contains
 
     !> \brief  for converting a real array 2 file
     subroutine arr2file_1( arr, fnam )
-        real,             intent(in) :: arr(:)
-        character(len=*), intent(in) :: fnam
+        real,             intent(in) :: arr(:)    !< array of filenames
+        character(len=*), intent(in) :: fnam      !< input table filename 
         real    :: rval
         integer :: recsz, i, funit
         inquire(iolength=recsz) rval
@@ -555,11 +560,11 @@ contains
         end do
         close(funit)
     end subroutine arr2file_1
-    
+
     !> \brief  for converting a file generated by arr2file back to an array
     function file2rarr( fnam ) result( arr )
-        character(len=*), intent(in) :: fnam
-        real, allocatable            :: arr(:)
+        character(len=*), intent(in) :: fnam  !< input table filename 
+        real, allocatable            :: arr(:) !< array of filenames
         real    :: rval
         integer :: recsz, i, n, alloc_stat, funit
         logical :: here
@@ -582,14 +587,14 @@ contains
             close(funit)
         else
             write(*,*) fnam, ' does not exist; file2rarr; simple_filehandling'
-            stop 
+            stop
         endif
     end function file2rarr
-    
+
     !> \brief  for converting an integer array 2 file
     subroutine arr2file_2( arr, fnam )
-        integer,          intent(in) :: arr(:)
-        character(len=*), intent(in) :: fnam
+        integer,          intent(in) :: arr(:)!< array of data
+        character(len=*), intent(in) :: fnam !< output filename 
         integer :: recsz, i, funit, ival
         inquire(iolength=recsz) ival
         ival = size(arr)
@@ -601,11 +606,11 @@ contains
         end do
         close(funit)
     end subroutine arr2file_2
-    
+
     !> \brief  for converting a real 2D array 2 file
     subroutine arr2D2file( arr, fnam )
-        real,             intent(in) :: arr(:,:)
-        character(len=*), intent(in) :: fnam
+        real,             intent(in) :: arr(:,:) !< array of data
+        character(len=*), intent(in) :: fnam     !< output filename 
         real    :: dim1, dim2
         integer :: funit, io_stat
         dim1 = real(size(arr,dim=1))
@@ -632,11 +637,11 @@ contains
         endif
         close(funit)
     end subroutine arr2D2file
-    
+
     !> \brief  for converting a real 2D array 2 file
     function file2arr2D( fnam ) result( arr )
-        character(len=*), intent(in) :: fnam
-        real, allocatable :: arr(:,:)
+        character(len=*), intent(in) :: fnam   !< input filename 
+        real, allocatable :: arr(:,:)          !< array of data    
         real    :: dim1r, dim2r
         integer :: dim1, dim2, funit, io_stat, alloc_stat
         funit = get_fileunit()
@@ -670,11 +675,11 @@ contains
         endif
         close(funit)
     end function file2arr2D
-    
+
     !> \brief  for converting a real array 2 file
     subroutine arr2txtfile( arr, fnam )
-        real,             intent(in) :: arr(:)
-        character(len=*), intent(in) :: fnam
+        real,             intent(in) :: arr(:) !< array of data  
+        character(len=*), intent(in) :: fnam !< output filename 
         integer :: i, funit
         funit = get_fileunit()
         open(unit=funit, status='replace', file=fnam)

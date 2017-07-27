@@ -148,15 +148,15 @@ if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" ) #AND Fortran_COMPILER_NAME MAT
   execute_process(
     COMMAND ${CMAKE_Fortran_COMPILER} -dumpversion OUTPUT_VARIABLE GFC_VERSION)
   if (NOT (GFC_VERSION VERSION_GREATER 4.9 OR GFC_VERSION VERSION_EQUAL 4.9))
-    message(FATAL_ERROR "${PROJECT_NAME} requires gfortran 4.9 to 5.4")
+    message(FATAL_ERROR "${PROJECT_NAME} requires gfortran version 4.9 or above")
   endif ()
   set(EXTRA_FLAGS "${EXTRA_FLAGS}")
-  set(CMAKE_CPP_COMPILER_FLAGS           "-E -w -C -CC -P") # only seen by preprocessor if #include is present
+  set(CMAKE_CPP_COMPILER_FLAGS           "-E -w -C -P") # only seen by preprocessor if #include is present
 
   set(CMAKE_Fortran_FLAGS                " ${EXTRA_FLAGS} ") #${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
-  set(CMAKE_Fortran_FLAGS_DEBUG          " ${EXTRA_FLAGS} ") #${CMAKE_Fortran_FLAGS_DEBUG_INIT}" )
+  set(CMAKE_Fortran_FLAGS_DEBUG          " ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_DEBUG_INIT}" )
   # set(CMAKE_Fortran_FLAGS_MINSIZEREL     "-Os ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
-  set(CMAKE_Fortran_FLAGS_RELEASE        " ${EXTRA_FLAGS} ") #${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
+  set(CMAKE_Fortran_FLAGS_RELEASE        " ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
   set(CMAKE_Fortran_FLAGS_RELWITHDEBINFO "${CMAKE_Fortran_FLAGS_RELEASE_INIT} ${CMAKE_Fortran_FLAGS_DEBUG_INIT} ${EXTRA_FLAGS}")
   
   # #  CMAKE_EXE_LINKER_FLAGS

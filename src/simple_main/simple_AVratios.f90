@@ -33,8 +33,8 @@ contains
         integer, intent(in)        :: vol_ldim(3)              !< volume logical dimensions
         integer, intent(in)        :: img_ldim(3)              !< image logical dimensions
         real, intent(in)           :: msk                      !< mask radius (pixels)
-        real, intent(in)           :: smpd                     !< sampling distance (in Angstrom)
-        real, intent(in), optional :: mw                       !< Molecular weight (in kDa)
+        real, intent(in)           :: smpd                     !< sampling distance (in \f$\si{\angstrom}\f$)
+        real, intent(in), optional :: mw                       !< Molecular weight (in \f$\si{\kilo\dalton}\f$)
         type(AVratios) :: self
         self%Vbox = real(product(vol_ldim))
         self%Abox = real(product(img_ldim))

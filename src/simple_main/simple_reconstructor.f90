@@ -1,7 +1,7 @@
 !------------------------------------------------------------------------------!
 ! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
 !------------------------------------------------------------------------------!
-!> Simple particle reconstruction module
+!> Simple class for particle reconstruction
 module simple_reconstructor
 !$ use omp_lib
 !$ use omp_lib_kinds
@@ -73,7 +73,7 @@ contains
         use simple_math,   only: fdim
         class(reconstructor), intent(inout) :: self  !< instance
         class(params),        intent(in)    :: p     !< parameters
-        logical, optional,    intent(in)    :: expand
+        logical, optional,    intent(in)    :: expand!< exapanded matricies flag
         character(len=:), allocatable :: ikind_tmp
         integer :: rho_shape(3), rho_lims(3,2), lims(3,2), rho_exp_lims(3,2), ldim_exp(3,2)
         integer :: alloc_stat, dim, maxlims
@@ -144,19 +144,19 @@ contains
     end subroutine reset
 
     ! GETTERS
-
+    !> get the kbintpol window
     function get_kbwin( self ) result( wf )
         class(reconstructor), intent(inout) :: self
-        type(kbinterpol) :: wf
+        type(kbinterpol) :: wf   !< return kbintpol window
         wf = kbinterpol(self%winsz,self%alpha)
     end function get_kbwin
 
     ! I/O
-
+    !>Write rectructed image
     subroutine write_rho( self, kernam )
         use simple_filehandling, only: get_fileunit, fopen_err, del_file
         class(reconstructor), intent(in) :: self
-        character(len=*),     intent(in) :: kernam
+        character(len=*),     intent(in) :: kernam !< kernel name
         character(len=100) :: io_message
         integer :: filnum, ier, io_stat
         call del_file(trim(kernam))
@@ -171,11 +171,11 @@ contains
         endif
         close(unit=filnum)
     end subroutine write_rho
-
+    !> Read reconstructed image
     subroutine read_rho( self, kernam )
         use simple_filehandling, only: get_fileunit, fopen_err
         class(reconstructor), intent(inout) :: self
-        character(len=*),     intent(in)    :: kernam
+        character(len=*),     intent(in)    :: kernam !< kernel name
         character(len=100) :: io_message
         integer :: filnum, ier, io_stat
         filnum = get_fileunit( )
@@ -282,8 +282,8 @@ contains
         logical,              intent(in)    :: inoutmode !< add = .true., subtract = .false.
         class(image),         intent(inout) :: fpl       !< Fourier plane
         real,    optional,    intent(in)    :: pwght     !< external particle weight (affects both fplane and rho)
-        real,    optional,    intent(in)    :: mul
-        real,    optional,    intent(in)    :: shellweights(:)
+        real,    optional,    intent(in)    :: mul       !< multiplying factor
+        real,    optional,    intent(in)    :: shellweights(:) !< 
         integer :: h, k, lims(3,2), sh, lfny, logi(3), phys(3)
         complex :: oshift
         real    :: x, y, xtmp, ytmp, pw
@@ -352,6 +352,9 @@ contains
         endif
     end subroutine inout_fplane
 
+    !> sampl_dens_correct Correct sample density
+    !! \param self_out corrected image output
+    !! 
     subroutine sampl_dens_correct( self, self_out )
         class(reconstructor),   intent(inout) :: self
         class(image), optional, intent(inout) :: self_out
@@ -429,7 +432,7 @@ contains
         use simple_params,   only: params
         use simple_jiffys,   only: find_ldim_nptcls, progress
         use simple_gridding  ! use all in there
-        class(reconstructor), intent(inout) :: self      !< object
+        class(reconstructor), intent(inout) :: self      !< this object
         character(len=*),     intent(inout) :: fname     !< spider/MRC stack filename
         class(params),        intent(in)    :: p         !< parameters
         class(oris),          intent(inout) :: o         !< orientations
@@ -501,7 +504,7 @@ contains
 
         contains
 
-            !> \brief  the densty reconstruction functionality
+            !> \brief  the density reconstruction functionality
             subroutine rec_dens
                 use simple_ori, only: ori
                 type(ori) :: orientation, o_sym

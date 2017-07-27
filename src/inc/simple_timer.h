@@ -1,24 +1,25 @@
+#if 0
 /*-----------------------------------------------------------------------------*/
 /* SIMPLE v2.5          Elmlund & Elmlund Lab         simplecryoem.com         */
 /*-----------------------------------------------------------------------------*/
-/**> Simple timer macros
- * @brief C/FORTRAN preprocessor macros for timing module blocks
- * simple timer macros with variadic arg support
- * Note: __FILENAME__ is used instead of __FILE__.
- * __FILE__ is standard but is different some compilers
- * __LINE__ is defined in the standard
- * Intel preprocessor fpp does not support variadic macros
- * PGI does not like block command statements
- * See simple_test_timer and the basic and profile test modules
- *
- * @author
- *       Michael Eager
- *
- * Revisions:
- * Original TBLOCK TSTOP  TIMER_LOOP
- * Profiling required variadic macros and C preprocessor
- **/
-
+/** Simple timer macros
+* \brief C/FORTRAN preprocessor macros for timing module blocks
+* simple timer macros with variadic arg support
+* Note: __FILENAME__ is used instead of __FILE__.
+* __FILE__ is standard but is different some compilers
+* __LINE__ is defined in the standard
+* Intel preprocessor fpp does not support variadic macros
+* PGI does not like block command statements
+* See simple_test_timer and the basic and profile test modules
+*
+* \author
+*       Michael Eager
+*
+* Revisions:
+* Original TBLOCK TSTOP  TIMER_LOOP
+* Profiling required variadic macros and C preprocessor
+**/
+#endif
 #ifndef SIMPLE_TIMER_H
 #define SIMPLE_TIMER_H
 
@@ -28,38 +29,39 @@
 #define UNIQUE_LABEL(prefix)           _UNIQUE_LABEL(prefix, __LINE__)
 
 
-
-#ifdef __STDC__
-/* calculate the number of arguments in macro - max 10 */
-/* C99 __VA_ARGS__ versions */
-#define c99_count(...)    _c99_count1 ( , ##__VA_ARGS__)/* */
+#if 0
+/*calculate the number of arguments in macro - max 10*/
+/*C99 __VA_ARGS__ versions */
+#define c99_count(...)    _c99_count1 ( , ##__VA_ARGS__)
 #define _c99_count1(...)  _c99_count2 (__VA_ARGS__,10,9,8,7,6,5,4,3,2,1,0)
 #define _c99_count2(_,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9,n,...) n
 
 
 #define TPROFILER(NLOOPS,IDX,...)  block;\
-  use simple_timer;                      \
-  character(len=20)::p_tmp;              \
-  character(len=255)::p_comment;         \
-  integer :: IDX,np; integer(timer_int_kind):: tn; \
+  use simple_timer;\
+  character(len=20)::p_tmp;\
+  character(len=255)::p_comment;\
+  integer :: IDX,np;\
+  integer(timer_int_kind):: tn;\
   integer,parameter :: nv=c99_count (__VA_ARGS__);\
   character(255)::p_tokens= #__VA_ARGS__ ; \
-  tn=tic();np=NLOOPS;                      \
+  tn=tic();\
+  np=NLOOPS;\
   call timer_profile_setup(np,nv,p_tokens);
 
 #else
 
-#define TPROFILER(NLOOPS,IDX,TOKENS) \
- block;                                      \
- use simple_timer;                           \
- character(len=20)::p_tmp;                   \
- character(len=255)::p_comment;              \
- integer :: IDX,np; integer(timer_int_kind):: tn;   \
- character(255)::p_tokens= #TOKENS;          \
- tn=tic();np=NLOOPS;                         \
+#define TPROFILER(NLOOPS,IDX,TOKENS) block;\
+ use simple_timer;\
+ character(len=20)::p_tmp;\
+ character(len=255)::p_comment;\
+ integer :: IDX,np;\
+ integer(timer_int_kind):: tn;\
+ character(len=255)::p_tokens= #TOKENS; \
+ tn=tic();\
+ np=NLOOPS;\
  call timer_profile_setup(np,-1,p_tokens);
-#endif
-  /* __STDC__  */
+ #endif
 
 #define TBEG(TOKEN) p_tmp = #TOKEN; \
  call timer_profile_start(trim(p_tmp))
@@ -118,7 +120,6 @@ do
 #endif
 
 
-/*   write(*,'(A,A,1i4)') __FILENAME__,":",__LINE__;   */
 
 #define TIMER_BLOCK_LOOP(NLOOP,COMMENT,YBLOCK) block;      \
   character(len=*) :: cblock=trim(COMMENT);                \
@@ -126,8 +127,6 @@ do
   if (.not.in_timer_loop()) exit; \
 end do;\
 call timer_loop_end(cblock);end block
-
-/*  write(*,'(A,A,1i4)') __FILENAME__,":",__LINE__; */
 
 
 
@@ -140,10 +139,6 @@ call timer_loop_end(cblock);end block
   write(*,'(A,A,1i4,A,1d20.10)') __FILENAME__,":",__LINE__,": Elapsed time (s) ", toc_omp()
 
 #endif /*OPENMP*/
-
-
-
-/* now your watch has ended */
 
 
 #ifdef CUDA
@@ -166,4 +161,3 @@ print *, "__FILENAME__:__LINE__: CPU wall time (sec): ", __t2-__t1
 
 
 #endif
-/* SIMPLE_TIMER_H */

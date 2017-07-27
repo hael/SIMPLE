@@ -17,7 +17,7 @@
 !! license terms ( http://license.janelia.org/license/jfrc_copyright_1_1.html )
 !!
 !! Modifications by Cyril Reboul, Michael Eager & Hans Elmlund
-!! 
+!!
 ! The SIMPLE code is distributed with the hope that it will be
 ! useful, but WITHOUT ANY WARRANTY. Redistribution and modification is regulated
 ! by the GNU General Public License.
@@ -172,7 +172,7 @@ contains
     !>  \brief open the file(s) for the imgfile
     subroutine open_local( self, del_if_exists, rwaction )
         class(imgfile),             intent(inout) :: self
-        logical, optional,          intent(in) :: del_if_exists !< overwrite flag 
+        logical, optional,          intent(in) :: del_if_exists !< overwrite flag
         character(len=*), optional, intent(in) :: rwaction      !< read/write flag
         character(len=9) :: rw_str
         character(len=7) :: stat_str
@@ -251,10 +251,11 @@ contains
     end function get_format
 
     !>  \brief  for translating an image index to record indices in the stack
+    !! \param[out] hedinds,iminds header and image indices in the stack
     subroutine slice2recpos( self, nr, hedinds, iminds )
         class(imgfile), intent(in), target :: self
         integer, intent(in)                :: nr      !< num images
-        integer(kind=8), intent(out)       :: hedinds(2), iminds(2) !< indecies 
+        integer(kind=8), intent(out)       :: hedinds(2), iminds(2)
         integer                            :: cnt, j, dims(3)
         class(imghead), pointer            :: ptr=>null()
         ptr => self%overall_head
@@ -286,11 +287,12 @@ contains
     end subroutine slice2recpos
 
     !>  \brief  for translating an image index to record indices in the stack
+    !! \param[out] hedinds,iminds indices in the stack
     subroutine slice2bytepos( self, nr, hedinds, iminds )
         class(imgfile), intent(in)     :: self
-        integer, intent(in)            :: nr                    !< num in stack    
-        integer(kind=8), intent(inout) :: hedinds(2), iminds(2) !< index   
-        integer                        :: cnt, j                
+        integer, intent(in)            :: nr                    !< num in stack
+        integer(kind=8), intent(inout) :: hedinds(2), iminds(2)
+        integer                        :: cnt, j
         if( nr < 0 )then
             stop 'cannot have negative slice indices; slice2bytepos; simple_imgfile'
         else if( nr == 0 )then
@@ -342,8 +344,8 @@ contains
 
     !>  \brief  reads an image or stack header
     subroutine rHead( self, slice, head, ldim )
-        class(imgfile), intent(inout), target :: self      !<   
-        integer, intent(in)                   :: slice     !< stack slice or zero for individual    
+        class(imgfile), intent(inout), target :: self      !<
+        integer, intent(in)                   :: slice     !< stack slice or zero for individual
         class(imghead), intent(inout)         :: head      !< img head object
         integer, intent(inout), optional      :: ldim(3)   !< for reading the overall stack header of SPIDER files
         class(imghead), pointer               :: ptr
@@ -401,7 +403,7 @@ contains
 
     !>  \brief  writes an image or stack header
     subroutine wHead( self, slice, head )
-        class(imgfile), intent(inout), target   :: self       
+        class(imgfile), intent(inout), target   :: self
         integer, intent(in)                     :: slice   !< stack slice
         class(imghead), intent(inout), optional :: head    !< img head object
         class(imghead), pointer                 :: ptr=>null()
@@ -823,7 +825,7 @@ contains
     !>  \brief  Set the pixel size of the stack
     subroutine setRMSD( self, dev )
         class(imgfile), intent(inout) :: self
-        real,           intent(in)    :: dev !< rmsd 
+        real,           intent(in)    :: dev !< rmsd
         call self%overall_head%setRMSD(dev)
         self%was_written_to = .true.
     end subroutine setRMSD

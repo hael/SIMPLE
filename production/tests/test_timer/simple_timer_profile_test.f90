@@ -18,7 +18,6 @@
 #define DEV_NULL "/dev/null"
 #endif
 
-
 #include "simple_timer.h"
 
 module simple_timer_profile_test
@@ -26,8 +25,11 @@ module simple_timer_profile_test
    use simple_timer
    implicit none
    public:: exec_profiletest
+
+
 contains
-   subroutine exec_profiletest(be_verbose)
+
+    subroutine exec_profiletest(be_verbose)
       logical, optional, intent(in)    :: be_verbose
       integer(dp), parameter :: nrep = INT(100000,dp)
       real(dp)    :: c, cfac, b
@@ -35,7 +37,8 @@ contains
       real(dp)    :: xx, etime, sysclockrate
       integer(dp) ::  t1, t2
       integer(dp) :: i, j
-
+#include "simple_local_flags.inc"
+      if(present(be_verbose)) verbose=be_verbose
       !    The following is a Statement function
       ! slaxpy(x,y,z)= x*y+z
 
@@ -43,21 +46,19 @@ contains
       cfac = .25
       b = 1.5
       xx = 12.0_dp
-      if (be_verbose) print *, 'Fortran Timer and Profiler'
+      if (verbose) print *, 'Fortran Timer and Profiler'
 #ifdef PGI
       print *, 'PGI cannot process block statements'
       stop
 #else
 
       call reset_timer()
-      if (be_verbose) write (*, "(A)") ' '
-      if (be_verbose) write (*, '(A)') '1.  Testing profiler using macros inside loop'
+      if (verbose) write (*, "(A)") ' '
+      if (verbose) write (*, '(A)') '1.  Testing profiler using macros inside loop'
       c = .1
-#ifndef INTEL
-      TPROFILER(nrep, i, foo, bar)
-#else
+
       TPROFILER(nrep, i, foo bar)
-#endif
+
       do i = 1, nrep
          TBEG(foo)
          c = cfac*c + b
@@ -71,14 +72,12 @@ contains
       TREPORT( Testing profiler using macros )
 
       call reset_timer()
-      if (be_verbose) write (*, "(A)") ' '
-      if (be_verbose) write (*, '(A)') '2.  Testing profiler using macros and seperate loops'
+      if (verbose) write (*, "(A)") ' '
+      if (verbose) write (*, '(A)') '2.  Testing profiler using macros and seperate loops'
       c = .1
-#ifndef INTEL
-      TPROFILER(1, i, standard, subrout, common, empty)
-#else
+
       TPROFILER(nrep, i,  foo bar)
-#endif
+
       do i = 1, nrep
          TBEG(foo)
          c = cfac*c + b
@@ -92,14 +91,12 @@ contains
       TREPORT( Testing profiler using macros )
 
       call reset_timer()
-      if (be_verbose) write (*, "(A)") ' '
-      if (be_verbose) write (*, '(A)') '2.  Testing profiler using macros and seperate loops'
+      if (verbose) write (*, "(A)") ' '
+      if (verbose) write (*, '(A)') '2.  Testing profiler using macros and seperate loops'
       c = .1
-#ifndef INTEL
-      TPROFILER(1, i, standard, subrout, common, empty)
-#else
+
       TPROFILER(1, i, standard subrout common empty)
-#endif
+
       TBEG(standard)
       do i = 1, nrep
          c = cfac*c + b
@@ -109,11 +106,7 @@ contains
       c = .1
       c = saxy(c)
       TEND(subrout)
-      ! TBEG(statement)
-      ! do i=1,nrep
-      !     c = slaxpy(cfac,c,b)
-      ! end do
-      ! TEND(statement)
+
       TBEG(common)
       do i = 1, nrep
          call scsaxpy
@@ -125,8 +118,9 @@ contains
       end do
       TEND(empty)
 
-      TREPORT( Testing different loop unrolling methods)
+      TREPORT( Testing different loop unrolling methods )
 #endif
+
    end subroutine exec_profiletest
 
    function saxy(c_in) result(c)
@@ -156,3 +150,4 @@ contains
    end subroutine scsaxpy
 
 end module simple_timer_profile_test
+

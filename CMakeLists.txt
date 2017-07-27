@@ -5,7 +5,7 @@ include(FortranOverride)
 project(SIMPLE Fortran)
 #enable_language( CXX C )
 
-set(PROJECT_BRIEF "SIMPLE is a program package for cryo-EM image processing")
+set(PROJECT_BRIEF "SIMPLE is a program package for cryo-EM image processing (https://simplecryoem.com)")
 
 #################################################################
 #

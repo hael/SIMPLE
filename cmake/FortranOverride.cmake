@@ -19,7 +19,7 @@ if(NOT $ENV{CPP} STREQUAL "")
   set(CMAKE_CPP_COMPILER_NAMES $ENV{CPP})
 else()
   find_file (CMAKE_CPP_COMPILER_NAMES
-    NAMES cpp- cpp-4.9 cpp-5 cpp-6 cpp5 cpp6 cpp
+    NAMES cpp- cpp-6 cpp6 cpp-5 cpp5 cpp-4.9 cpp
     PATHS /usr/local/bin /opt/local/bin /sw/bin /usr/bin
     #  [PATH_SUFFIXES suffix1 [suffix2 ...]]
     DOC "GNU cpp preprocessor "
@@ -151,8 +151,11 @@ IF(APPLE)
 ELSE()
   SET(GNUNATIVE "-march=native")
 ENDIF(APPLE)
-###########  SETTING UP PREPROCESSOR ################
+
+
+###########  SETTING UP PROCESSING FLAGS ################
 #include(PlatformDefines)
+
 message( STATUS "CMAKE_Fortran_COMPILER_ID: ${CMAKE_Fortran_COMPILER_ID}")
 if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
   # gfortran
@@ -164,7 +167,7 @@ if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
   set(target   "${GNUNATIVE} -fPIC ")                                                           # target platform
   set(common   "${preproc} ${dialect} ${target} -DGNU ")
   set(checks   "-fcheck-array-temporaries -frange-check -fstack-protector -fstack-check -fbounds-check") # checks
-  set(warnDebug "-Wall -Wextra -Wimplicit-interface -Wdangling-else ${checks}")                 # extra warning flags
+  set(warnDebug "-Wall -Wextra -Wimplicit-interface  ${checks}")                                # extra warning flags
   set(fordebug "-O0 -g -pedantic -fno-inline -fno-f2c -Og -ggdb -fbacktrace  ${warnDebug} ")    # debug flags
   # -O0 -g3 -Warray-bounds -Wcharacter-truncation -Wline-truncation -Wimplicit-interface
   # -Wimplicit-procedure -Wunderflow -Wuninitialized -fcheck=all -fmodule-private -fbacktrace -dump-core -finit-real=nan -ffpe-trap=invalid,zero,overflow

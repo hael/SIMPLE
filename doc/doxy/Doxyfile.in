@@ -48,7 +48,7 @@ PROJECT_BRIEF          ="@PROJECT_BRIEF@"
 # and the maximum width should not exceed 200 pixels. Doxygen will copy the logo
 # to the output directory.
 
-PROJECT_LOGO           = @CMAKE_SOURCE_DIR@/doc/SimpleManual/SIMPLE_logo/rawlogo.png
+PROJECT_LOGO           = "@PROJECT_LOGO@"
 
 # The OUTPUT_DIRECTORY tag is used to specify the (relative or absolute) 
 # base path where the generated documentation will be put. 
@@ -771,9 +771,7 @@ WARN_LOGFILE           =
 # spaces. See also FILE_PATTERNS and EXTENSION_MAPPING
 # Note: If this tag is empty the current directory is searched.
 
-INPUT                  = @DOXYFILE_SOURCE_DIRS@ \
-                       "@CMAKE_BINARY_DIR@/lib/simple" \
-                       "@CMAKE_SOURCE_DIR@/doc/doxy/mainpage.txt" 
+INPUT                  = @DOXYFILE_SOURCE_DIRS@
 
 # This tag can be used to specify the character encoding of the source files
 # that doxygen parses. Internally doxygen uses the UTF-8 encoding. Doxygen uses
@@ -847,21 +845,20 @@ EXCLUDE_PATTERNS       = "*/.*" \
 # Note that the wildcards are matched against the file with absolute path, so to
 # exclude all test directories use the pattern */test/*
 
-EXCLUDE_SYMBOLS        = test_*
+EXCLUDE_SYMBOLS        = "test_*" "self"  "*self*"  "*/*self*/*"
 
 # The EXAMPLE_PATH tag can be used to specify one or more files or directories
 # that contain example code fragments that are included (see the \include
 # command).
 
-EXAMPLE_PATH           =  # ${EXAMPLES_DIR}/ \
-#			${SNIPPETS_DIR}
+EXAMPLE_PATH           =  
 
 # If the value of the EXAMPLE_PATH tag contains directories, you can use the
 # EXAMPLE_PATTERNS tag to specify one or more wildcard pattern (like *.cpp and
 # *.h) to filter out the source-files in the directories. If left blank all
 # files are included.
 
-EXAMPLE_PATTERNS       =*.f90 \
+EXAMPLE_PATTERNS       = *.f90 \
                          *.f08 \
                          *.cuf
 
@@ -1080,7 +1077,7 @@ HTML_FILE_EXTENSION    = .html
 # of the possible markers and block names see the documentation.
 # This tag requires that the tag GENERATE_HTML is set to YES.
 
-HTML_HEADER            = @CMAKE_SOURCE_DIR@/doc/doxy/header.htm
+HTML_HEADER            = @PROJECT_HEADER@
 
 # The HTML_FOOTER tag can be used to specify a user-defined HTML footer for each
 # generated HTML page. If the tag is left blank doxygen will generate a standard
@@ -1090,7 +1087,7 @@ HTML_HEADER            = @CMAKE_SOURCE_DIR@/doc/doxy/header.htm
 # that doxygen normally uses.
 # This tag requires that the tag GENERATE_HTML is set to YES.
 
-HTML_FOOTER            = @CMAKE_SOURCE_DIR@/doc/doxy/footer.htm
+HTML_FOOTER            = @PROJECT_FOOTER@
 
 # The HTML_STYLESHEET tag can be used to specify a user-defined cascading style
 # sheet that is used by each HTML page. It can be used to fine-tune the look of
@@ -1115,7 +1112,7 @@ HTML_STYLESHEET        =
 # list). For an example see the documentation.
 # This tag requires that the tag GENERATE_HTML is set to YES.
 
-HTML_EXTRA_STYLESHEET  = @CMAKE_SOURCE_DIR@/doc/doxy/simple.css
+HTML_EXTRA_STYLESHEET  = @PROJECT_CSS@
 
 # The HTML_EXTRA_FILES tag can be used to specify one or more extra images or
 # other source files which should be copied to the HTML output directory. Note
@@ -1642,7 +1639,7 @@ PAPER_TYPE             = a4wide
 # If left blank no extra packages will be included.
 # This tag requires that the tag GENERATE_LATEX is set to YES.
 
-EXTRA_PACKAGES         = amsfonts amsmath amssymb 
+EXTRA_PACKAGES         = amsfonts amsmath amssymb siunitx
 
 # The LATEX_HEADER tag can be used to specify a personal LaTeX header for the
 # generated LaTeX document. The header should contain everything until the first

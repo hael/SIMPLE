@@ -30,15 +30,15 @@
 #  DOXYFILE_EXTRA_SOURCES - Additional source diretories/files for Doxygen to scan.
 #   The Paths should be in double quotes and separated by space. e.g.:
 #    "${CMAKE_CURRENT_BINARY_DIR}/foo.c" "${CMAKE_CURRENT_BINARY_DIR}/bar/"
-#  
+#
 #  DOXYFILE_OUTPUT_DIR - Path where the Doxygen output is stored.
 #   Defaults to "${CMAKE_CURRENT_BINARY_DIR}/doc".
-#  
+#
 #  DOXYFILE_LATEX - ON/OFF; Set to "ON" if you want the LaTeX documentation
 #   to be built.
 #  DOXYFILE_LATEX_DIR - Directory relative to DOXYFILE_OUTPUT_DIR where
 #   the Doxygen LaTeX output is stored. Defaults to "latex".
-#  
+#
 #  DOXYFILE_HTML_DIR - Directory relative to DOXYFILE_OUTPUT_DIR where
 #   the Doxygen html output is stored. Defaults to "html".
 #
@@ -59,9 +59,9 @@
 # 2. Redistributions in binary form must reproduce the copyright
 #    notice, this list of conditions and the following disclaimer in the
 #    documentation and/or other materials provided with the distribution.
-# 3. The name of the author may not be used to endorse or promote products 
+# 3. The name of the author may not be used to endorse or promote products
 #    derived from this software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
 # IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
 # OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
@@ -86,16 +86,17 @@ find_package(Doxygen)
 if(DOXYGEN_FOUND)
     find_file(DOXYFILE_IN "Doxyfile.in"
             HINTS
-            "${CMAKE_CURRENT_SOURCE_DIR}" 
+            "${CMAKE_CURRENT_SOURCE_DIR}"
             "${CMAKE_CURRENT_SOURCE_DIR}/config"
             "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules"
             "${CMAKE_CURRENT_SOURCE_DIR}/doc"
+            "${CMAKE_CURRENT_SOURCE_DIR}/doc/doxy"
             "${CMAKE_ROOT}/Modules/"
             NO_DEFAULT_PATH
             DOC "Path to the doxygen configuration template file")
-            
+
             message(STATUS "DOXYFILE_IN = ${DOXYFILE_IN}")
-            
+
     set(DOXYFILE "${CMAKE_CURRENT_BINARY_DIR}/Doxyfile")
     include(FindPackageHandleStandardArgs)
     find_package_handle_standard_args(DOXYFILE_IN DEFAULT_MSG "DOXYFILE_IN")
@@ -106,9 +107,9 @@ if(DOXYGEN_FOUND AND DOXYFILE_IN_FOUND)
         PATH "Doxygen output directory")
     usedoxygen_set_default(DOXYFILE_HTML_DIR "html"
         STRING "Doxygen HTML output directory")
-    usedoxygen_set_default(DOXYFILE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}"
+    usedoxygen_set_default(DOXYFILE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src"
         PATH "Input files source directory")
-    usedoxygen_set_default(DOXYFILE_EXTRA_SOURCE_DIRS "${CMAKE_BINARY_DIR}/lib/simple"
+      usedoxygen_set_default(DOXYFILE_EXTRA_SOURCE_DIRS  "${CMAKE_CURRENT_SOURCE_DIR}/production ${CMAKE_BINARY_DIR}/lib/simple ${CMAKE_CURRENT_SOURCE_DIR}/doc/doxy/mainpage.txt"
         STRING "Additional source files/directories separated by space")
     set(DOXYFILE_SOURCE_DIRS "\"${DOXYFILE_SOURCE_DIR}\" ${DOXYFILE_EXTRA_SOURCES}")
 
@@ -119,14 +120,14 @@ if(DOXYGEN_FOUND AND DOXYFILE_IN_FOUND)
         DOXYFILE_SOURCE_DIR DOXYFILE_EXTRA_SOURCE_DIRS DOXYFILE_IN)
 
 
-    set_property(DIRECTORY 
+    set_property(DIRECTORY
         APPEND PROPERTY
         ADDITIONAL_MAKE_CLEAN_FILES
         "${DOXYFILE_OUTPUT_DIR}/${DOXYFILE_HTML_DIR}")
 
     add_custom_target(doxygen
         COMMAND ${DOXYGEN_EXECUTABLE}
-            ${DOXYFILE} 
+            ${DOXYFILE}
         COMMENT "Writing documentation to ${DOXYFILE_OUTPUT_DIR}..."
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
@@ -163,8 +164,10 @@ if(DOXYGEN_FOUND AND DOXYFILE_IN_FOUND)
         set(DOXYFILE_GENERATE_LATEX "NO")
     endif()
 
-
-
+    usedoxygen_set_default(PROJECT_LOGO "${CMAKE_SOURCE_DIR}/doc/SimpleManual/SIMPLE_logo/rawlogo.png" PATH "Project logo")
+    usedoxygen_set_default(PROJECT_FOOTER "${CMAKE_SOURCE_DIR}/doc/doxy/footer.htm" PATH "Project HTML footer")
+    usedoxygen_set_default(PROJECT_HEADER "${CMAKE_SOURCE_DIR}/doc/doxy/header.htm" PATH "Project HTML header")
+    usedoxygen_set_default(PROJECT_CSS "${CMAKE_SOURCE_DIR}/doc/doxy/simple.css" PATH "Project css file")
     configure_file(${DOXYFILE_IN} Doxyfile @ONLY)
 
     get_target_property(DOC_TARGET doc TYPE)
