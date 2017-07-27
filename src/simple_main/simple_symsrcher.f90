@@ -62,8 +62,8 @@ contains
             corrs(i) = read_img%real_corr(roavg_img, img_msk)
             ! radii
             call read_img%bp(0., p%cenlp)
-            call read_img%mask(p%msk, 'soft')
-            call read_img%bin('msk', p%msk)
+            call read_img%mask(p%msk, 'hard')
+            call read_img%bin_kmeans
             call read_img%write('bin.mrc',i)
             call read_img%mul(dist_img)
             minmax = read_img%minmax()

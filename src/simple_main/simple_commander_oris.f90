@@ -1,13 +1,12 @@
 !------------------------------------------------------------------------------!
 ! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
 !------------------------------------------------------------------------------!
-!> simple_commander_oris
-!
-!! This class contains the set of concrete commanders for orientation data
-!! management in the SIMPLE library. This class provides the glue between the
-!! reciver (main reciever is simple_exec program) and the abstract action, which
-!! is simply execute (defined by the base class: simple_commander_base). Later
-!! we can use the composite pattern to create MacroCommanders (or workflows)
+!> simple_commander_oris This class contains the set of concrete commanders for
+!> orientation data management in the SIMPLE library.
+!! This class provides the glue between the reciver (main reciever is
+!! simple_exec program) and the abstract action, which is simply execute
+!! (defined by the base class: simple_commander_base). Later we can use the
+!! composite pattern to create MacroCommanders (or workflows)
 !
 ! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
 ! Redistribution and modification is regulated by the GNU General Public License.
@@ -99,7 +98,7 @@ contains
         call simple_end('**** SIMPLE_CLUSTER_ORIS NORMAL STOP ****')
     end subroutine exec_cluster_oris
 
-  !!  makedeftab is a program for creating a SIMPLE conformant file of CTF
+  !>  makedeftab is a program for creating a SIMPLE conformant file of CTF
   !!  parameter values (deftab). Input is either an earlier SIMPLE
   !!  deftab/oritab. The purpose is to get the kv, cs, and fraca parameters as
   !!  part of the CTF input doc as that is the new convention. The other
@@ -191,20 +190,20 @@ contains
         call simple_end('**** SIMPLE_MAKEDEFTAB NORMAL STOP ****')
     end subroutine exec_makedeftab
 
-!! makeoris is a program for making SIMPLE orientation/parameter files (text
-!! files containing input parameters and/or parameters estimated by prime2D or
-!! prime3D). The program generates random Euler angles e1.in.[0,360],
-!! e2.in.[0,180], and e3.in.[0,360] and random origin shifts x.in.[-trs,yrs] and
-!! y.in.[-trs,yrs]. If ndiscrete is set to an integer number > 0, the
-!! orientations produced are randomly sampled from the set of ndiscrete
-!! quasi-even projection directions, and the in-plane parameters are assigned
-!! randomly. If even=yes, then all nptcls orientations are assigned quasi-even
-!! projection directions,and random in-plane parameters. If nstates is set to
-!! some integer number > 0, then states are assigned randomly .in.[1,nstates].
-!! If zero=yes in this mode of execution, the projection directions are zeroed
-!! and only the in-plane parameters are kept intact. If errify=yes and astigerr
-!! is defined, then uniform random astigmatism errors are introduced
-!! .in.[-astigerr,astigerr]
+    !> makeoris is a program for making SIMPLE orientation/parameter files (text
+    !! files containing input parameters and/or parameters estimated by prime2D or
+    !! prime3D). The program generates random Euler angles e1.in.[0,360],
+    !! e2.in.[0,180], and e3.in.[0,360] and random origin shifts x.in.[-trs,yrs] and
+    !! y.in.[-trs,yrs]. If ndiscrete is set to an integer number > 0, the
+    !! orientations produced are randomly sampled from the set of ndiscrete
+    !! quasi-even projection directions, and the in-plane parameters are assigned
+    !! randomly. If even=yes, then all nptcls orientations are assigned quasi-even
+    !! projection directions,and random in-plane parameters. If nstates is set to
+    !! some integer number > 0, then states are assigned randomly .in.[1,nstates].
+    !! If zero=yes in this mode of execution, the projection directions are zeroed
+    !! and only the in-plane parameters are kept intact. If errify=yes and astigerr
+    !! is defined, then uniform random astigmatism errors are introduced
+    !! .in.[-astigerr,astigerr]
     subroutine exec_makeoris( self, cline )
         use simple_ori,           only: ori
         use simple_oris,          only: oris
@@ -324,7 +323,8 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_MAKEORIS NORMAL STOP ****')
     end subroutine exec_makeoris
-    !! map2ptcls is a program for mapping parameters that have been obtained using class averages
+
+    !> map2ptcls is a program for mapping parameters that have been obtained using class averages
     !!  to the individual particle images
     !! @see http://simplecryoem.com/tutorials.html?#using-simple-in-the-wildselecting-good-class-averages-and-mapping-the-selection-to-the-particles
     !! @see http://simplecryoem.com/tutorials.html?#resolution-estimate-from-single-particle-images
@@ -350,10 +350,10 @@ contains
         type(image),           allocatable :: imgs_sel(:), imgs_cls(:)
         real,                  allocatable :: correlations(:,:)
         integer,               allocatable :: statepops(:), state_particles(:), rejected_particles(:)
+        logical,               allocatable :: statedoc_exists(:), selected(:)
         integer                            :: isel, nsel, loc(1), iptcl, pind, icls
         integer                            :: nlines_oritab, nlines_oritab3D, nlines_comlindoc, nlines_deftab
         integer                            :: cnt, istate, funit, iline, nls, lfoo(3)
-        logical, allocatable               :: statedoc_exists(:), selected(:)
         character(len=STDLEN)              :: statedoc
         real                               :: corr
 
@@ -361,14 +361,11 @@ contains
         call b%build_general_tbox(p, cline) ! general objects built
         ! find number of selected cavgs
         call find_ldim_nptcls(p%stk2, lfoo, nsel)
-        DebugPrint  'nsel: ', nsel
         ! find number of original cavgs
         call find_ldim_nptcls(p%stk3, lfoo, p%ncls)
-        DebugPrint  'ncls: ', p%ncls
         if( p%ncls < nsel ) stop 'nr of original clusters cannot be less than the number of selected ones'
         ! find number of lines in input document
         nlines_oritab = nlines(p%oritab)
-        DebugPrint  'nlines_oritab: ', nlines_oritab
         if( nlines_oritab /= p%nptcls ) stop 'nr lines in oritab .ne. nr images in particle stack; must be congruent!'
         if( cline%defined('deftab') )then
             nlines_deftab = nlines(p%deftab)
@@ -404,11 +401,8 @@ contains
             loc                     = maxloc(correlations(isel,:))
             labeler(isel)%cls_orig  = loc(1)
             selected(loc(1))        = .true.
-            DebugPrint  'found orig clsind: ', labeler(isel)%cls_orig
             labeler(isel)%cls_sel   = isel
-            DebugPrint  'selected class index: ', labeler(isel)%cls_sel
             labeler(isel)%particles = b%a%get_cls_pinds(labeler(isel)%cls_orig)
-            DebugPrint  'got this number of partices: ', size(labeler(isel)%particles)
         end do
         ! erase deselected (by setting their state to zero)
         do icls=1,p%ncls
@@ -454,7 +448,7 @@ contains
         if( cline%defined('oritab3D') )then
             if( .not. file_exists(p%oritab3D) ) stop 'Inputted oritab3D does not exist in the cwd'
             nlines_oritab3D = nlines(p%oritab3D)
-            if( nlines_oritab3D /= nsel ) stop 'Nr lines in oritab3D /= nr of selected cavgs'
+            if( nlines_oritab3D /= nsel ) stop '# lines in oritab3D /= nr of selected cavgs'
             o_oritab3D = oris(nsel)
             call o_oritab3D%read(p%oritab3D)
             ! compose orientations and set states
@@ -675,14 +669,14 @@ contains
         call simple_end('**** SIMPLE_ORISOPS NORMAL STOP ****')
     end subroutine exec_orisops
 
-!! oristats is a program for analyzing SIMPLE orientation/parameter files (text files
-!! containing input parameters and/or parameters estimated by prime2D or
-!! prime3D). If two orientation tables (oritab and oritab2) are inputted, the
-!! program provides statistics of the distances between the orientations in the
-!! two documents. These statistics include the sum of angular distances between
-!! the orientations, the average angular distance between the orientations, the
-!! standard deviation of angular distances, the minimum angular distance, and
-!! the maximum angular distance
+    !> oristats is a program for analyzing SIMPLE orientation/parameter files (text files
+    !! containing input parameters and/or parameters estimated by prime2D or
+    !! prime3D). If two orientation tables (oritab and oritab2) are inputted, the
+    !! program provides statistics of the distances between the orientations in the
+    !! two documents. These statistics include the sum of angular distances between
+    !! the orientations, the average angular distance between the orientations, the
+    !! standard deviation of angular distances, the minimum angular distance, and
+    !! the maximum angular distance
     subroutine exec_oristats(self,cline)
         use simple_oris, only: oris
         class(oristats_commander), intent(inout) :: self
@@ -772,6 +766,7 @@ contains
         999 call simple_end('**** SIMPLE_ORISTATS NORMAL STOP ****')
     end subroutine exec_oristats
 
+    !> convert rotation matrix to orientation oris class
     subroutine exec_rotmats2oris( self, cline )
         use simple_oris,      only: oris
         use simple_ori,       only: ori

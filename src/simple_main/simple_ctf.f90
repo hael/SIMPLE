@@ -161,7 +161,7 @@ contains
         real,             optional, intent(in)    :: angast      !< angle of astigmatism
         real,             optional, intent(in)    :: bfac        !< bfactor
         integer :: lims(3,2),h,k,phys(3),hh,kk,ldim(3)
-        real    :: ang,tval,ddfy,aangast,spaFreqSq,hinv
+        real    :: ang, tval, tvalsq, ddfy, aangast, spaFreqSq, hinv
         real    :: kinv, inv_ldim(3)
         if( img%is_3d() )then
             print *, 'ldim: ', img%get_ldim()

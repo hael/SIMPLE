@@ -325,7 +325,7 @@ contains
         call cline_cavgassemble%set('nthr',1.)
         call cline_cavgassemble%set('prg', 'cavgassemble')
         if( cline%defined('outfile') )then
-            ! because outfile is output from distributed exec of makecavsg
+            ! because outfile is output from distributed exec of makecavgs
             call cline_cavgassemble%set('oritab', p_master%outfile)
         else
             ! because prime2D_startdoc.txt is default output in the absence of outfile
@@ -408,8 +408,8 @@ contains
         call cline_check2D_conv%set('box', real(p_master%box))
         call cline_check2D_conv%set('nptcls', real(p_master%nptcls))
         call cline_cavgassemble%set('prg', 'cavgassemble')
-        call cline_makecavgs%set('prg',   'makecavgs')
-        if( .not. cline%defined('refs') .and. job_descr%isthere('automsk') ) call job_descr%delete('automsk')
+        call cline_makecavgs%set('prg', 'makecavgs')
+        if( job_descr%isthere('automsk') ) call job_descr%delete('automsk')
 
         ! split stack
         if( stack_is_split(p_master%stk_part_fbody, p_master%ext, qenv%parts, p_master%box) )then
@@ -423,7 +423,7 @@ contains
                 call cline_makecavgs%set('refs', p_master%refs)
                 call xmakecavgs%execute(cline_makecavgs)
             else
-                call random_selection_from_imgfile(p_master%stk, p_master%refs, p_master%ncls, p_master%smpd)
+                call random_selection_from_imgfile(p_master%stk, p_master%refs, p_master%ncls, p_master%smpd)               
             endif
         endif
         if( cline%defined('extr_thresh') )then
@@ -468,8 +468,9 @@ contains
             ! check convergence
             call cline_check2D_conv%set('oritab', trim(oritab))
             call xcheck2D_conv%execute(cline_check2D_conv)
+            frac_srch_space = 0.
+            if( iter > 1 ) frac_srch_space = cline_check2D_conv%get_rarg('frac')
             ! the below activates shifting & automasking
-            frac_srch_space = cline_check2D_conv%get_rarg('frac')
             if( frac_srch_space >= FRAC_SH_LIM .or. cline_check2D_conv%defined('trs') )then
                 if( .not.job_descr%isthere('trs') )then
                     ! activates shift search
@@ -478,7 +479,7 @@ contains
                 endif
                 if( cline%defined('automsk') )then
                     ! activates masking
-                    if( cline%get_carg('automsk') .ne. 'no' ) call job_descr%set('automsk','yes')
+                    if( cline%get_carg('automsk') .ne. 'no' ) call job_descr%set('automsk','cavg')
                 endif
             endif
             if( cline_check2D_conv%get_carg('converged').eq.'yes' .or. iter==p_master%maxits ) exit
@@ -721,7 +722,6 @@ contains
         character(len=32), parameter :: ALGNFBODY    = 'algndoc_'
         character(len=32), parameter :: VOLFBODY     = 'recvol_state'
         character(len=32), parameter :: ITERFBODY    = 'prime3Ddoc_'
-        character(len=32), parameter :: RESTARTFBODY = 'prime3D_restart'
         ! commanders
         type(prime3D_init_distr_commander)  :: xprime3D_init_distr
         type(recvol_distr_commander)        :: xrecvol_distr
@@ -754,7 +754,6 @@ contains
         call os%new(p_master%nptcls)
 
         ! options check
-        !if( p_master%automsk.eq.'yes' )stop 'Automasking not supported yet' ! automask deactivated for now
         if( p_master%nstates>1 .and. p_master%dynlp.eq.'yes' )&
             &stop 'Incompatible options: nstates>1 and dynlp=yes'
         if( p_master%automsk.eq.'yes' .and. p_master%dynlp.eq.'yes' )&
@@ -1042,7 +1041,6 @@ contains
         character(len=32), parameter :: ALGNFBODY    = 'algndoc_'
         character(len=32), parameter :: ITERFBODY    = 'cont3Ddoc_'
         character(len=32), parameter :: VOLFBODY     = 'recvol_state'
-        character(len=32), parameter :: RESTARTFBODY = 'cont3D_restart'
         ! ! commanders
         type(recvol_distr_commander)   :: xrecvol_distr
         type(merge_algndocs_commander) :: xmerge_algndocs
@@ -1062,7 +1060,6 @@ contains
         type(oris)            :: os
         character(len=STDLEN) :: vol, vol_iter, oritab, str, str_iter
         character(len=STDLEN) :: str_state, fsc_file, volassemble_output
-        character(len=STDLEN) :: restart_file
         real                  :: frac_srch_space
         integer               :: s, state, iter
         logical               :: vol_defined
@@ -1071,7 +1068,6 @@ contains
         ! make oritab
         call os%new(p_master%nptcls)
         ! options check
-        if( p_master%automsk.eq.'yes' )stop 'Automasking not supported yet' ! automask deactivated for now
         if( p_master%nstates>1 .and. p_master%dynlp.eq.'yes' )&
             &stop 'Incompatible options: nstates>1 and dynlp=yes'
         if( p_master%automsk.eq.'yes' .and. p_master%dynlp.eq.'yes' )&
@@ -1208,9 +1204,6 @@ contains
                     call cline%set(trim(vol), trim(vol_iter))
                 endif
             enddo
-            ! RESTART
-            restart_file = trim(RESTARTFBODY)//'_iter'//int2str_pad( iter, 3)//'.txt'
-            call cline%write( restart_file )
             ! CONVERGENCE
             call cline_check3D_conv%set('oritab', trim(oritab))
             call xcheck3D_conv%execute(cline_check3D_conv )

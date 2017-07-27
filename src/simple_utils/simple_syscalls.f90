@@ -1,3 +1,6 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 !> Simple system call module
 !
 !! simple_syscalls is a little module for using basic system functions e.g. CPU_time.
@@ -70,13 +73,13 @@ contains
         character(len=*),  intent(in) :: cmdline
         logical, optional, intent(in) :: wait
         character(len=STDLEN) :: cmsg
-        integer               :: estat, cstat, exec_stat
-        logical               :: doprint = .true., wwait = .true.
+        integer :: estat, cstat, exec_stat
+        logical :: l_doprint = .true., wwait = .true.
 #if defined(PGI)
         call system(trim(adjustl(cmdline)))
 #elif defined(INTEL)
         exec_stat = system(trim(adjustl(cmdline)))
-        if( doprint )then
+        if( l_doprint )then
             write(*,*) 'command: ', trim(adjustl(cmdline))
             write(*,*) 'status of execution: ', exec_stat
         endif
@@ -103,7 +106,7 @@ contains
             write(*,*)'cmdstat = ',cmdstat,' command could not be executed: ', trim(adjustl(cmd))
             err = .true.
         endif
-        ! if( err ) write(*,*) 'cmdmsg',trim(adjustl(cmdmsg))
+        ! if( err ) write(*,*) trim(adjustl(cmdmsg))
     end subroutine raise_sys_error
 
     function sys_get_env_var( name ) result( varval )
@@ -136,29 +139,29 @@ contains
     subroutine sys_del_files( fbody, ext )
         character(len=*),      intent(in)  :: fbody, ext
         character(len=STDLEN), allocatable :: fnames(:)
-        character(len=STDLEN), parameter   :: FTAB = 'ftab_from_sys_del_files.txt'
+        character(len=STDLEN), parameter   :: ftab = 'ftab_from_sys_del_files.txt'
         integer :: i, last
-        call sys_gen_filetab(fbody, ext, FTAB) ! filetable written to disc
-        call read_filetable(FTAB, fnames)      ! filetable read back in
+        call sys_gen_filetab(fbody, ext, ftab) ! filetable written to disc
+        call read_filetable(ftab, fnames)      ! filetable read back in
         last = size(fnames)
         do i=1,last
             call del_file(fnames(i))
         end do
-        call del_file(FTAB)
+        call del_file(ftab)
         deallocate(fnames)
     end subroutine sys_del_files
 
     function sys_get_last_fname( fbody, ext ) result( fname )
         character(len=*),      intent(in)  :: fbody, ext
         character(len=STDLEN), allocatable :: fnames(:)
-        character(len=STDLEN), parameter   :: FTAB = 'ftab_from_sys_find_last_fname.txt'
+        character(len=STDLEN), parameter   :: ftab = 'ftab_from_sys_find_last_fname.txt'
         character(len=STDLEN) :: fname
         integer :: last
-        call sys_gen_filetab(fbody, ext, FTAB) ! filetable written to disc
-        call read_filetable(FTAB, fnames)      ! filetable read back in
-        last = size(fnames)
+        call sys_gen_filetab(fbody, ext, ftab) ! filetable written to disc
+        call read_filetable(ftab, fnames)      ! filetable read back in
+        last = size(fnames)                    
         fname = fnames(last)
-        call del_file(FTAB)
+        call del_file(ftab)
         deallocate(fnames)
     end function sys_get_last_fname
 
@@ -186,7 +189,7 @@ contains
         call sleepqq(msecs)
 #else
         call sleep(secs)
-#endif
+#endif        
     end subroutine simple_sleep
 
     !>  Wrapper for system call

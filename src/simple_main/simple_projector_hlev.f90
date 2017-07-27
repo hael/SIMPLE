@@ -87,7 +87,6 @@ contains
         call rovol_pad%set_ft(.true.)
         call rovol%new(ldim, p%smpd)
         call prep4cgrid(vol, vol_pad, p%msk, kbwin)
-        ! call vol_pad%expand_cmat REMOVED BECAUSE SEE BELOW
         lims = vol_pad%loop_lims(2)
         write(*,'(A)') '>>> ROTATING VOLUME'
         !$omp parallel do collapse(3) default(shared) private(h,k,l,loc,logi,phys)&
@@ -96,8 +95,8 @@ contains
             do k=lims(2,1),lims(2,2)
                 do l=lims(3,1),lims(3,2)
                     logi = [h,k,l]
-                    phys = rovol_pad%comp_addr_phys([h,k,l])
-                    loc  = matmul(real(logi),o%get_mat())
+                    phys = rovol_pad%comp_addr_phys(logi)
+                    loc  = matmul(real(logi), o%get_mat())
                     call rovol_pad%set_fcomp(logi, phys, vol_pad%extr_gridfcomp(loc))
                 end do 
             end do
@@ -111,21 +110,18 @@ contains
     end function rotvol
 
     !>  \brief  rotates an image by angle ang using Fourier gridding
-    subroutine rotimg( img, ang, msk, roimg, shellw )
+    subroutine rotimg( img, ang, msk, roimg )
         use simple_math, only: hyp
-        class(image),     intent(inout) :: img       !< image to rotate
-        real,             intent(in)    :: ang       !< angle of rotation
-        real,             intent(in)    :: msk       !< mask radius (in pixels)
-        class(image),     intent(out)   :: roimg     !< rotated image
-        real, optional,   intent(in)    :: shellw(:) !< shell-weights
+        class(image),     intent(inout) :: img   !< image to rotate
+        real,             intent(in)    :: ang   !< angle of rotation
+        real,             intent(in)    :: msk   !< mask radius (in pixels)
+        class(image),     intent(out)   :: roimg !< rotated image
         type(projector)  :: img_pad 
         type(image)      :: roimg_pad
         type(kbinterpol) :: kbwin
         integer          :: h,k,lims(3,2),ldim(3),ldim_pd(3),logi(3),phys(3),sh,nyq
-        real             :: loc(3),mat(2,2),smpd,fwght,wzero
-        logical          :: doshellw
+        real             :: loc(3),mat(2,2),smpd
         kbwin      = kbinterpol(KBWINSZ, KBALPHA)
-        doshellw   = present(shellw)
         ldim       = img%get_ldim()
         ldim_pd    = 2*ldim
         ldim_pd(3) = 1
@@ -137,10 +133,8 @@ contains
         roimg_pad  = cmplx(0.,0.)
         call prep4cgrid(img, img_pad, msk, kbwin)
         lims       = img_pad%loop_lims(2)
-        mat        = rotmat2d(ang)
-        wzero      = 1.0
-        if( doshellw ) wzero = maxval(shellw)
-        !$omp parallel do collapse(2) default(shared) private(h,k,loc,logi,phys,fwght,sh)&
+        mat        = rotmat2d(ang) 
+        !$omp parallel do collapse(2) default(shared) private(h,k,loc,logi,phys,sh)&
         !$omp schedule(static) proc_bind(close)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)                
@@ -148,18 +142,7 @@ contains
                 loc(3)  = 0.
                 logi    = [h,k,0]
                 phys    = img_pad%comp_addr_phys(logi)
-                fwght   = 1.0
-                if( doshellw )then
-                    sh = nint(hyp(real(h),real(k)))
-                    if( sh > nyq )then
-                        fwght = 0.
-                    else if( sh == 0 )then
-                        fwght = wzero
-                    else
-                        fwght = shellw(sh)
-                    endif
-                endif
-                call roimg_pad%set_fcomp(logi, phys, fwght * img_pad%extr_gridfcomp(loc))
+                call roimg_pad%set_fcomp(logi, phys, img_pad%extr_gridfcomp(loc))
             end do
         end do
         !$omp end parallel do
@@ -211,7 +194,7 @@ contains
         !$omp parallel do default(shared) private(i,h,k,l,m,loc,mat,logi,phys,cyc1,cyc2,w,comps,win,incr,pw)&
         !$omp schedule(static) reduction(+:cmat) proc_bind(close)
         do i = 1, nimgs
-            pw  = os%get(i,'w')
+            pw = os%get(i, 'w')
             if( pw > TINY )then
                 mat = rotmat2d( -os%e3get(i) )
                 do h = lims(1,1), lims(1,2)
@@ -241,7 +224,7 @@ contains
                         ! SUM( kernel x components )
                         cmat(h,k) = cmat(h,k) + pw * sum(w * comps)
                         ! above is an optimized version of:
-                        ! cmat(h,k) = cmat(h,k) + pw * padded_imgs(i)%extr_gridfcomp( [loc(1),loc(2),0.] )
+                        ! cmat(h,k) = cmat(h,k) + padded_imgs(i)%extr_gridfcomp( [loc(1),loc(2),0.] )
                     end do
                 end do
             endif

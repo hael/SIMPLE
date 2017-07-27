@@ -119,6 +119,7 @@ type :: oris
     procedure          :: rnd_oris
     procedure          :: rnd_proj_space
     procedure          :: rnd_neighbors
+    procedure          :: rnd_gau_neighbors
     procedure          :: rnd_ori
     procedure          :: rnd_cls
     procedure          :: ini_tseries
@@ -176,6 +177,9 @@ type :: oris
     procedure          :: find_closest_projs
     procedure          :: find_closest_ori
     procedure          :: find_closest_oris
+    procedure, private :: create_proj_subspace_1
+    procedure, private :: create_proj_subspace_2
+    generic            :: create_proj_subspace => create_proj_subspace_1, create_proj_subspace_2
     procedure          :: discretize
     procedure          :: nearest_neighbors
     procedure          :: find_angres
@@ -220,7 +224,7 @@ type(ori),  pointer  :: op(:)=>null()
 type(oris), pointer  :: ops  =>null()
 integer, allocatable :: classpops(:)
 logical, allocatable :: class_part_of_set(:)
-real,    allocatable :: class_weights(:)
+real,    allocatable :: class_weights(:), class_specscores(:)
 type(ori)            :: o_glob
 real                 :: angthres = 0.
 
@@ -1452,6 +1456,33 @@ contains
         end do
     end subroutine rnd_neighbors
 
+    !>  \brief  generates nnn stochastic projection direction neighbors to o_prev
+    !!          with a sigma of the random Gaussian tilt angle of asig      
+    subroutine rnd_gau_neighbors( self, nnn, o_prev, asig, eullims )
+        use simple_rnd, only: gasdev
+        class(oris),    intent(inout) :: self
+        integer,        intent(in)    :: nnn
+        class(ori),     intent(in)    :: o_prev
+        real,           intent(in)    :: asig
+        real, optional, intent(inout) :: eullims(3,2)
+        type(ori) :: o_transform, o_rnd
+        real      :: val
+        integer   :: i
+        call o_transform%new
+        call self%new(nnn)
+        do i=1,nnn
+            call o_transform%rnd_euler(eullims)
+            val = gasdev(0., asig)
+            do while(abs(val) > eullims(2,2))
+                val = gasdev(0., asig)
+            enddo
+            call o_transform%e2set(val)
+            call o_transform%e3set(0.)
+            o_rnd = o_prev.compose.o_transform
+            call self%set_ori(i, o_rnd)
+        end do
+    end subroutine rnd_gau_neighbors
+
     !>  \brief  generate random projection direction space around a given one
     subroutine rnd_proj_space( self, nsample, o_prev, thres, eullims )
         use simple_math, only: rad2deg
@@ -2238,23 +2269,13 @@ contains
         character(len=*), intent(in)    :: which
         real,             intent(out)   :: ave, sdev, var
         logical,          intent(out)   :: err
-        real, allocatable :: vals(:)
-        integer           :: alloc_stat, i, cnt, mystate
-        allocate( vals(self%n), stat=alloc_stat )
-        call alloc_err('In: stat_1, module: simple_oris', alloc_stat)
-        vals = 0.
-        ! fish values
-        cnt = 0
-        do i=1,self%n
-            mystate = nint(self%o(i)%get('state'))
-            if( mystate /= 0 )then
-                cnt = cnt+1
-                vals(cnt) = self%o(i)%get(which)
-            endif
-        end do
-        ! calculate statistics
-        call moment(vals(:cnt), ave, sdev, var, err)
-        deallocate(vals)
+        real,    allocatable :: vals(:), all_vals(:)
+        integer, allocatable :: states(:)
+        states   = nint( self%get_all('state') )
+        all_vals = self%get_all(which)
+        vals     = pack(states, mask=(states > 0))
+        call moment(vals, ave, sdev, var, err)
+        deallocate(vals, all_vals, states)
     end subroutine stats
     
     !>  \brief  is for calculating the minimum/maximum values of a variable
@@ -2393,6 +2414,7 @@ contains
         ops => self
         if(ncls <= 0) stop 'invalid number of classes; simple_oris%order_cls'
         allocate(arr(ncls), classpops(ncls), stat=alloc_stat)
+        classpops = 0
         call alloc_err('order_cls; simple_oris', alloc_stat)
         classpops = 0
         ! calculate class populations
@@ -2412,16 +2434,16 @@ contains
         integer, allocatable :: inds(:)
         type(oris) :: os
         integer    :: i, nstates, s, pop
-        logical    :: ibystate
-        ibystate = .false.
-        if( present(bystate) )ibystate = bystate
-        if( .not.ibystate )then
+        logical    :: l_bystate
+        l_bystate = .false.
+        if( present(bystate) ) l_bystate = bystate
+        if( .not.l_bystate )then
             ! treated as single state
             call self%calc_hard_ptcl_weights_single( frac )
         else
             ! per state frac
             nstates = self%get_nstates()
-            if( nstates==1 )then
+            if( nstates == 1 )then
                 call self%calc_hard_ptcl_weights_single( frac )
             else
                 do s=1,nstates
@@ -2450,10 +2472,10 @@ contains
         integer, allocatable :: inds(:)
         type(oris) :: os
         integer    :: i, nstates, s, pop
-        logical    :: ibystate
-        ibystate = .false.
-        if( present(bystate) )ibystate = bystate
-        if( .not.ibystate )then
+        logical    :: l_bystate
+        l_bystate = .false.
+        if( present(bystate) ) l_bystate = bystate
+        if( .not.l_bystate )then
             ! treated as single state
             call self%calc_spectral_weights_single( frac )
         else
@@ -2487,12 +2509,17 @@ contains
         integer, allocatable :: order(:)
         integer :: i, lim, n
         if( frac < 0.99 )then
-            order = self%order()
             n = 0
             do i=1,self%n
-                if( self%o(i)%get('state') > 0 ) n = n+1
+                if( self%o(i)%get('state') > 0. )then
+                    n = n+1
+                else
+                    ! ensures rejected from frac threshold
+                    call self%o(i)%reject
+                endif
             end do        
-            lim = nint(frac*real(n))
+            lim   = nint(frac*real(n))
+            order = self%order() ! specscore ranking
             do i=1,self%n
                 if( i <= lim )then
                     call self%o(order(i))%set('w', 1.)
@@ -2512,37 +2539,22 @@ contains
         class(oris), intent(inout) :: self
         real,        intent(in)    :: frac
         real,    allocatable :: specscores(:), weights(:)
-        integer, allocatable :: order(:)
-        real    :: w
+        real    :: w, minscore
         integer :: i, lim, n
+        call self%calc_hard_ptcl_weights_single(frac)
         if( self%isthere('specscore') )then
             specscores = self%get_all('specscore')
-            allocate(weights(self%n), source=specscores)
-            where( specscores < TINY ) weights = 0.
-            call normalize_sigm(weights)
+            weights    = pack(specscores, mask=specscores > TINY)
+            minscore   = minval(weights)
+            deallocate(weights)
+            weights    = self%get_all('w')
+            weights    = specscores * weights - minscore
+            where( weights < 0. ) weights = 0.
+            call normalize_sigm(weights)            
             do i=1,self%n
                 call self%o(i)%set('w', weights(i))
             end do
             deallocate(specscores, weights)
-        else
-            call self%set_all2single('w', 1.)
-        endif
-        if( frac < 0.99 )then
-            order = self%order()
-            n = 0
-            do i=1,self%n
-                if( self%o(i)%get('state') > 0 ) n = n + 1
-            end do        
-            lim = nint(frac*real(n))
-            do i=1,self%n
-                w = self%o(order(i))%get('w')
-                if( i <= lim )then
-                    call self%o(order(i))%set('w', w)
-                else
-                    call self%o(order(i))%set('w', 0.)
-                endif           
-            end do
-            deallocate(order)
         endif
     end subroutine calc_spectral_weights_single
 
@@ -2619,6 +2631,42 @@ contains
             oriinds(i) = inds(i)
         end do
     end subroutine find_closest_oris
+
+    !>  \brief  to identify a subspace of projection directions
+    function create_proj_subspace_1( self, nsub ) result( subspace_projs )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: nsub
+        type(ori)            :: o
+        type(oris)           :: suboris
+        integer, allocatable :: subspace_projs(:)
+        integer :: isub
+        call suboris%new(nsub)
+        call suboris%spiral
+        allocate( subspace_projs(nsub) )
+        do isub=1,nsub
+            o = suboris%get_ori(isub)
+            subspace_projs(isub) = self%find_closest_proj(o)
+        end do
+    end function create_proj_subspace_1
+
+    !>  \brief  to identify a subspace of projection directions
+    function create_proj_subspace_2( self, nsub, nsym, eullims ) result( subspace_projs )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: nsub
+        integer,     intent(in)    :: nsym
+        real,        intent(in)    :: eullims(3,2)
+        type(ori)            :: o
+        type(oris)           :: suboris
+        integer, allocatable :: subspace_projs(:)
+        integer :: isub
+        call suboris%new(nsub)
+        call suboris%spiral(nsym, eullims)
+        allocate( subspace_projs(nsub) )
+        do isub=1,nsub
+            o = suboris%get_ori(isub)
+            subspace_projs(isub) = self%find_closest_proj(o)
+        end do
+    end function create_proj_subspace_2
     
     !>  \brief  method for discretization of the projection directions
     subroutine discretize( self, n )

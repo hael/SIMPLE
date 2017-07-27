@@ -28,20 +28,22 @@ type, extends(pftcc_opt) :: pftcc_inplsrch
   contains
     procedure :: new         => inplsrch_new
     procedure :: set_indices => inplsrch_set_indices
+    procedure :: set_inipop  => inplsrch_set_inipop
     procedure :: costfun     => inplsrch_costfun
     procedure :: minimize    => inplsrch_minimize
     procedure :: get_nevals  => inplsrch_get_nevals
+    procedure :: get_peaks   => inplsrch_get_peaks
 end type pftcc_inplsrch
 
 contains
 
-    subroutine inplsrch_new( self, pftcc, lims, shbarrier, nrestarts, vols )
+    subroutine inplsrch_new( self, pftcc, lims, shbarrier, nrestarts, npeaks, maxits, vols )
         use simple_projector, only: projector
         class(pftcc_inplsrch),              intent(inout) :: self
         class(polarft_corrcalc),    target, intent(in)    :: pftcc
         real,                               intent(in)    :: lims(:,:)
         character(len=*), optional,         intent(in)    :: shbarrier
-        integer,          optional,         intent(in)    :: nrestarts
+        integer,          optional,         intent(in)    :: nrestarts, npeaks, maxits
         class(projector), optional, target, intent(in)    :: vols(:)
         real :: inpllims(3,2)
         ! flag the barrier constraint
@@ -78,6 +80,13 @@ contains
         self%reference = ref 
         self%particle  = ptcl
     end subroutine inplsrch_set_indices
+
+    !>  \brief  is a setter
+    subroutine inplsrch_set_inipop( self, inipop )
+        class(pftcc_inplsrch), intent(inout) :: self
+        real,                  intent(in)    :: inipop(:,:)
+        stop 'Not for simplex use; simple_pftcc_inplsrch%srch_set_inipop'
+    end subroutine inplsrch_set_inipop
 
     function inplsrch_costfun( self, vec, D ) result( cost )
         use simple_math, only: rotmat2d, enforce_cyclic_limit
@@ -134,14 +143,11 @@ contains
         self%ospec%x(1)   = ran3()*360.
         self%ospec%nevals = 0
         if( rxy_here )then
-            self%ospec%x(1) = rxy(1)
-            self%ospec%x(2) = rxy(2)
-            self%ospec%x(3) = rxy(3)
+            self%ospec%x(1:3) = rxy(1:3)
         endif
         if( irot_here ) self%ospec%x(1) = self%pftcc_ptr%get_rot(irot)
         if( shvec_here )then
-            self%ospec%x(1) = shvec(1)
-            self%ospec%x(2) = shvec(2)
+            self%ospec%x(1:2) = shvec(1:2)
         endif
         ! minimisation
         call self%nlopt%minimize(self%ospec, self, crxy(1))
@@ -169,5 +175,12 @@ contains
         integer :: nevals
         nevals = self%ospec%nevals
     end function  inplsrch_get_nevals
+
+    subroutine inplsrch_get_peaks( self, peaks )
+        class(pftcc_inplsrch), intent(inout) :: self
+        real, allocatable,     intent(out)   :: peaks(:,:)
+        allocate(peaks(1,3))
+        peaks(1,:) = self%ospec%x
+    end subroutine inplsrch_get_peaks
     
 end module simple_pftcc_inplsrch

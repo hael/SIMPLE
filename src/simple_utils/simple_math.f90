@@ -153,8 +153,8 @@ contains
         real, intent(in) :: smpd             !< sampling distance
         real, intent(in) :: mwkda            !< molecular weight
         integer          :: nvox             !< nr of voxels
-        double precision , parameter :: prot_d = 1.43d0            !< protein density g/cm**3
-        double precision , parameter :: one_da = 1.66053892173e-27 !< kg/Da
+        double precision , parameter :: prot_d = 1.43d0            ! g/cm**3
+        double precision , parameter :: one_da = 1.66053892173e-27 ! kg/Da
 !        nvox = nint((((mwkda*1e3)*one_da)*1e3) / (prot_d * 1e-24 * (smpd**3)))
         nvox = nint((mwkda*one_da*1e30) / (prot_d * (smpd**3.)))
 
@@ -164,7 +164,7 @@ contains
     pure function nvoxfind_2( smpd, mwkda, dens ) result( nvox )
         real, intent(in) :: smpd             !< sampling distance
         real, intent(in) :: mwkda            !< molecular weight
-        real, intent(in) :: dens             !< density in Da/A3
+        real, intent(in) :: dens             !< density in Da/A3  \f$\si{\dalton\per\angstrom\cubed}\f$
         real             :: vol_per_pix, vol !< volume per pixel & volume
         integer          :: nvox             !< nr of voxels
         vol_per_pix = smpd**3.
@@ -196,7 +196,7 @@ contains
     !>    Convert acceleration voltage in kV into electron wavelength in Angstroms
     !! \f$ \lambda (\si{\angstrom}) =  \frac{12.26}{\sqrt{(eV+0.9784 eV^2) / 10^6 }} \f$
     pure function kV2wl( kV ) result( kV_to_wl )
-        real, intent(in):: kV         !< acceleration voltage in \f$\si{\kilo\volt}\f$
+        real, intent(in):: kV         !< acceleration voltage in \f$\si{\kilovolt}\f$
         real :: kV_to_wl, local_kV    !< electron wavelength in Angstroms \f$\si{\angstrom}\f$
 !!        local_kV = kV*1e3
 !!        kV_to_wl = 12.26/sqrt(1000.0*kV+0.9784*(1000.0*kV)**2/(10.0**6.0))
@@ -350,10 +350,11 @@ contains
     end function
 
     !>   get the angular resultion in degrees, given diameter and resolution
-    !! \param res,diam spatial resolution (\f$\si{\per\angstrom}\f$) and diameter(\f$\si{\angstrom}\f$)
+    !! \param res,diam spatial resolution (\f$\si{\per\angstrom}\f$)
+    !! \param diam diameter (\f$\si{\angstrom}\f$)
     pure function angres( res, diam ) result( ang )
         real, intent(in)  :: res, diam
-        real :: ang                     !< angular resultion in degrees
+        real :: ang                     !< angular resolution in degrees
         ang = (res/(pi*diam))*360.
     end function
 
@@ -388,7 +389,7 @@ contains
     !! \param  t1,t2,p1,p2  euler angle limits
     subroutine pgroup_to_lim(pgroup, p1, p2, t1, t2, csym )
         character(len=*), intent(in) :: pgroup !< pointgroup
-        integer, intent(out)         :: csym   !< sym token
+        integer, intent(out)         :: csym   !< symmetry token
         real, intent(out)            :: t1, t2, p1, p2
         if( pgroup(1:1) .eq. 'c' )then
             t1     = 0.
@@ -497,10 +498,10 @@ contains
 
     !>   implements the sortmeans algorithm
     subroutine sortmeans( dat, maxits, means, labels )
-        real,                 intent(in)  :: dat(:) !< array for input
-        integer,              intent(in)  :: maxits !< limit sort
-        real,                 intent(out) :: means(:)!< array for output
-        integer, allocatable, intent(out) :: labels(:)!< labels for output
+        real,                 intent(in)  :: dat(:)    !< array for input
+        integer,              intent(in)  :: maxits    !< limit sort
+        real,                 intent(out) :: means(:)  !< array for output
+        integer, allocatable, intent(out) :: labels(:) !< labels for output
         logical, allocatable :: mask(:)
         integer :: ncls, ndat, alloc_stat, clssz, i, j, cnt_means, loc(1), changes
         real, allocatable :: dat_sorted(:)
@@ -894,7 +895,7 @@ contains
         endif
     end function cosedge_3
 
-    !>   two-dimensional gaussian edge
+    !> \brief  two-dimensional gaussian edge
     pure function cosedge_inner_1( x, y, width, mskrad ) result( w )
         real, intent(in) :: x, y, width  !< input points and width
         real, intent(in) :: mskrad       !< mask radius
@@ -1983,16 +1984,16 @@ contains
 
     !>   calculates the summmed difference between two vectors
     pure function sum_diff( vec1, vec2 ) result( diff_sum )
-      real, intent(in)    :: vec1(:), vec2(:)
-      real                :: diff_sum
-      diff_sum = sum(vec1-vec2)
+        real, intent(in)    :: vec1(:), vec2(:)
+        real                :: diff_sum
+        diff_sum = sum(vec1-vec2)
     end function sum_diff
 
     !>   calculates the summmed relative difference between two vectors
     pure function rel_sum_diff( vec1, vec2 ) result( diff_sum_rel )
-      real, intent(in)    :: vec1(:), vec2(:)
-      real                :: diff_sum_rel
-      diff_sum_rel = sum((vec1-vec2)/vec2)
+        real, intent(in)    :: vec1(:), vec2(:)
+        real                :: diff_sum_rel
+        diff_sum_rel = sum((vec1-vec2)/vec2)
     end function rel_sum_diff
 
     !>   calculates the argument of a vector

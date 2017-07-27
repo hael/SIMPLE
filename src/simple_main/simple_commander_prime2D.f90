@@ -89,18 +89,25 @@ contains
             if( .not. cline%defined('ncls') )then
                 stop 'If no oritab is provided ncls (# class averages) need to be part of command line'
             endif
-            if( p%srch_inpl .eq. 'yes' )then
-                call b%a%rnd_cls(p%ncls)
-            else
-                call b%a%rnd_cls(p%ncls, srch_inpl=.false.)
-            endif
+            call b%a%rnd_cls(p%ncls)
         endif
         if( cline%defined('outfile') )then
             p%oritab = p%outfile
         else
             p%oritab = 'prime2D_startdoc.txt'
         endif
+        ! Multiplication
         if( p%mul > 1. ) call b%a%mul_shifts(p%mul)
+        ! Setup weights
+        if( p%weights2D.eq.'yes' )then
+            if( p%nptcls <= SPECWMINPOP )then
+                call b%a%set_all2single('w', 1.0)
+            else
+                call b%a%calc_spectral_weights(1.0)
+            endif
+        else
+            call b%a%set_all2single('w', 1.0)
+        endif
         if( p%l_distr_exec .and. nint(cline%get_rarg('part')) .eq. 1 )then
             call b%a%write(p%oritab)
         endif
@@ -117,6 +124,7 @@ contains
                 call prime2D_write_sums(b, p)
             endif           
         else
+            ! assembly
             call prime2D_assemble_sums(b, p)
             if( p%l_distr_exec)then
                 call prime2D_write_partial_sums( b, p )
@@ -162,11 +170,6 @@ contains
         p = params(cline)                                 ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         call b%build_hadamard_prime2D_tbox(p)             ! 2D Hadamard matcher built
-        if( p%srch_inpl .eq. 'no' )then
-            if( .not. cline%defined('oritab') )then
-                stop 'need oritab for this mode (srch_inpl=no) of execution!'
-            endif
-        endif
         if( cline%defined('refs') )then
             call find_ldim_nptcls(p%refs, lfoo, ncls_from_refs)
             ! consistency check
@@ -271,7 +274,8 @@ contains
         call b%a%read(p%oritab)
         order = b%a%order_cls(p%ncls)
         do iclass=1,p%ncls
-            write(*,'(a,1x,i5,1x,a,i5)') 'CLASS:', order(iclass), 'POP:', b%a%get_cls_pop(order(iclass))
+            write(*,'(a,1x,i5,1x,a,1x,i5,1x,a,i5)') 'CLASS:', order(iclass),&
+            &'CLASS_RANK:', iclass ,'POP:', b%a%get_cls_pop(order(iclass)) 
             call b%img%read(p%stk, order(iclass))
             call b%img%write(p%outstk, iclass)
         end do

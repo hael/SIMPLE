@@ -243,7 +243,7 @@ contains
         class(cmdline),           intent(inout) :: cline
         type(params)      :: p
         type(build)       :: b
-        integer           :: i, startit, s, n_states, cnt
+        integer           :: i, startit
         logical           :: update_res, converged
         real              :: lpstart, lpstop, corr, corr_prev
         update_res = .false.
@@ -257,17 +257,8 @@ contains
         endif
         if( str_has_substr(p%refine,'neigh') .or. p%refine .eq. 'shift' )then
             if( .not. cline%defined('oritab') )then
-                stop 'need oritab input for execution of prime3D with refine mode'
+                stop 'need oritab input for execution of prime3D with this refine mode'
             endif
-        endif
-        if( p%doautomsk )then
-            ! automasking specifics
-            if(p%oritab .eq. '')stop 'need oritab input for automasking'
-            if(.not. cline%defined('binwidth'))p%binwidth = min( 8, ceiling(0.04*real(p%box)))
-            if(.not. cline%defined('edge'))    p%edge     = max(12, ceiling(0.05*real(p%box)))
-            write(*,'(A,I3)') '>>> AUTOMASKING BINARY LAYERS:', p%binwidth
-            write(*,'(A,I3)') '>>> AUTOMASKING SOFT LAYERS:  ', p%edge
-            write(*,'(A,F6.1)') '>>> AUTOMASKING LOW-PASS:   ', p%amsklp
         endif
         call b%build_general_tbox(p, cline)   ! general objects built
         if( .not. cline%defined('eo') ) p%eo = 'no' ! default
@@ -345,14 +336,13 @@ contains
         class(cmdline),          intent(inout) :: cline
         type(params) :: p
         type(build)  :: b
-        integer      :: i, startit, iter
+        integer      :: i, startit
         logical      :: converged
-        iter      = 0
         converged = .false.
         p = params(cline) ! parameters generated
         select case(p%refine)
-            case('yes','greedy')
-                ! alles klar
+            case('yes','de','ada')
+                ! alles klar  
             case DEFAULT
                 stop 'unknown refinement mode; simple_commander_prime3D%exec_cont3D'
         end select
@@ -364,9 +354,11 @@ contains
         endif
         call b%build_general_tbox(p, cline)
         call b%build_cont3D_tbox(p)
+        startit = 1
+        if( cline%defined('startit') )startit = p%startit
         if( cline%defined('part') )then
             if( .not. cline%defined('outfile') ) stop 'need unique output file for parallel jobs'
-            call cont3D_exec(b, p, cline, iter, converged)
+            call cont3D_exec(b, p, cline, startit, converged)   
         else
             startit = 1
             if( cline%defined('startit') )startit = p%startit
@@ -414,7 +406,7 @@ contains
             loc     = maxloc( maplp )
             p%state = loc(1)            ! state with worst low-pass
             p%lp    = maplp( p%state )  ! worst lp
-            p%fsc   =  'fsc_state'//int2str_pad(p%state,2)//'.bin'
+            p%fsc   = 'fsc_state'//int2str_pad(p%state,2)//'.bin'
             deallocate(maplp)
             limset = .true.
         endif
@@ -433,27 +425,40 @@ contains
             stop 'No method available to set low-pass limit! ABORTING...'
         endif
         ! calculate angular threshold
-        p%athres = rad2deg(atan(p%lp/(p%moldiam/2.)))
+        select case(p%refine)
+            case('yes','de')
+                p%athres = max(p%lp, ATHRES_LIM)
+            case DEFAULT
+                p%athres = rad2deg(atan(p%lp/(p%moldiam/2.)))
+        end select
         ! check convergence
         if( cline%defined('update_res') )then
             update_res = .false.
             if( cline%get_carg('update_res').eq.'yes' )update_res = .true.
-            if(  cline%get_carg('update_res').eq.'no' .and. p%refine.eq.'het')then
+            if( cline%get_carg('update_res').eq.'no' .and. p%refine.eq.'het')then
                 converged = b%conv%check_conv_het()
             else
-                converged = b%conv%check_conv3D( update_res )
+                select case(p%refine)
+                    case('yes','de')
+                        converged = b%conv%check_conv_cont3D()
+                    case DEFAULT
+                        converged = b%conv%check_conv3D()
+                end select
             endif
         else
-            if( p%refine.eq.'het')then
-                converged = b%conv%check_conv_het()
-            else
-                converged = b%conv%check_conv3D()
-            endif
+            select case(p%refine)
+                case('het')
+                    converged = b%conv%check_conv_het()
+                case('yes','de')
+                    converged = b%conv%check_conv_cont3D()
+                case DEFAULT
+                    converged = b%conv%check_conv3D()
+            end select                 
         endif
         ! reports convergence, shift activation, resolution update and
         ! fraction of search space scanned to the distr commander
         if( p%doshift )then
-            call cline%set('trs', p%trs)        ! activates shift serach
+            call cline%set('trs', p%trs)        ! activates shift search
         endif
         if( converged )then
             call cline%set('converged', 'yes')

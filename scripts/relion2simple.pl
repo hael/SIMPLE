@@ -42,11 +42,17 @@ foreach my $line (@reliondoc){
 
 foreach my $i ($last_header_line + 1 .. $#reliondoc){
     my $line = $reliondoc[$i];
+    my $val;
     chomp ($line);
     $line =~ s/^\s+//;
     my @line_split = split(/\s+/, $line);
     foreach my $i (0 .. $#which_columns){
-        print "$simple_tags[$which_tags[$i]]=$line_split[$which_columns[$i]-1] ";
+        if( $simple_tags[$which_tags[$i]] =~ /df/ ){
+            $val = $line_split[$which_columns[$i]-1]/10000.;
+        }else{
+            $val = $line_split[$which_columns[$i]-1];
+        }
+        print "$simple_tags[$which_tags[$i]]=$val ";
     }
     print "\n";
 }

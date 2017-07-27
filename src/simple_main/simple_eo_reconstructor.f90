@@ -18,14 +18,16 @@ type :: eo_reconstructor
     type(reconstructor)    :: even
     type(reconstructor)    :: odd
     type(reconstructor)    :: eosum
+    type(image)            :: envmask
     character(len=4)       :: ext
-    real                   :: fsc05      !<   target resolution a FSC=0.5
-    real                   :: fsc0143    !<   target resolution a FSC=0.143
+    real                   :: fsc05      !<   target resolution at FSC=0.5
+    real                   :: fsc0143    !<   target resolution at FSC=0.143
     real                   :: smpd, msk, fny, inner=0., width=10.
     integer                :: box=0, nstates=1, numlen=2, lfny=0
-    logical                :: xfel=.false.
-    logical                :: wiener=.false. !< filtered 
-    logical                :: exists=.false.
+    logical                :: automsk = .false.
+    logical                :: xfel    = .false.
+    logical                :: wiener  = .false.
+    logical                :: exists  = .false.
   contains
     ! CONSTRUCTOR
     procedure          :: new
@@ -54,6 +56,7 @@ type :: eo_reconstructor
     procedure          :: sum     !< for summing eo_recs obtained by parallell exec
     procedure          :: sampl_dens_correct_eos
     procedure          :: sampl_dens_correct_sum
+    ! RECONSTRUCTION
     procedure          :: eorec
     ! DESTRUCTOR
     procedure          :: kill_exp
@@ -66,26 +69,31 @@ contains
 
     !>  \brief  is a constructor
     subroutine new(self, p )
-        use simple_ctf,    only: ctf
-        class(eo_reconstructor),      intent(inout) :: self !< instance
-        class(params), target,        intent(in)    :: p    !< parameters object (provides constants)
+        use simple_filehandling, only: file_exists
+        class(eo_reconstructor), intent(inout) :: self !< instance
+        class(params), target,   intent(in)    :: p    !< parameters object (provides constants)
         type(image) :: imgtmp
-        logical     :: neg
+        logical     :: neg  
         call self%kill
         ! set constants
         neg = .false.
         if( p%neg .eq. 'yes' ) neg = .true.
-        self%box     =  p%box
-        self%smpd    =  p%smpd
-        self%nstates =  p%nstates
-        self%inner   =  p%inner
-        self%width   =  p%width
-        self%fny     =  p%fny
-        self%ext     =  p%ext
-        self%numlen  =  p%numlen
-        self%msk     =  p%msk
-        self%xfel    =  p%l_xfel
+        self%box     = p%box
+        self%smpd    = p%smpd
+        self%nstates = p%nstates
+        self%inner   = p%inner
+        self%width   = p%width
+        self%fny     = p%fny
+        self%ext     = p%ext
+        self%numlen  = p%numlen
+        self%msk     = p%msk
+        self%xfel    = p%l_xfel
+        self%automsk = file_exists(p%mskfile)
         ! create composites
+        if( self%automsk )then
+            call self%envmask%new([p%box,p%box,p%box], p%smpd)
+            call self%envmask%read(p%mskfile)
+        endif
         call self%even%new([p%boxpd,p%boxpd,p%boxpd], p%smpd, p%imgkind)
         call self%even%alloc_rho(p)
         call self%even%set_ft(.true.)
@@ -229,7 +237,7 @@ contains
     ! INTERPOLATION
 
     !> \brief  for gridding a Fourier plane
-    subroutine grid_fplane(self, o, fpl, pwght, mul, ran, shellweights, expanded)
+    subroutine grid_fplane(self, o, fpl, pwght, mul, ran, shellweights)
         use simple_ori, only: ori
         use simple_rnd, only: ran3
         class(eo_reconstructor), intent(inout) :: self            !< instance
@@ -239,10 +247,7 @@ contains
         real, optional,          intent(in)    :: mul             !< shift multiplication factor
         real, optional,          intent(in)    :: ran             !< external random number
         real, optional,          intent(in)    :: shellweights(:) !< resolution weights
-        logical, optional,       intent(in)    :: expanded        !< whether to use expanded routines
         real    :: rran
-        logical :: l_exp = .false.
-        if(present(expanded))l_exp = expanded
         if( present(ran) )then
             rran = ran
         else
@@ -284,12 +289,14 @@ contains
     subroutine sampl_dens_correct_eos( self, state )
         use simple_strings,      only: int2str_pad
         use simple_filehandling, only: arr2file
-        use simple_math,         only: get_resolution
+        use simple_math,         only: get_resolution, calc_fourier_index
+        use simple_masker,       only: masker
         class(eo_reconstructor), intent(inout) :: self  !< instance
         integer,                 intent(in)    :: state !< state
         real, allocatable :: res(:), corrs(:)
         type(image)       :: even, odd
-        integer           :: j
+        type(masker)      :: volmasker
+        integer           :: j, find
         ! make clipped volumes
         if( self%xfel )then
             call even%new([self%box,self%box,self%box],self%smpd,imgkind='xfel')
@@ -314,24 +321,30 @@ contains
         if( self%xfel )then
             ! no masking or Fourier transformation
         else
-            if( self%inner > 1. )then
-                call even%mask(self%msk, 'soft', inner=self%inner, width=self%width)
-                call odd%mask(self%msk, 'soft', inner=self%inner, width=self%width)
+            if( self%automsk )then
+                call even%mul(self%envmask)
+                call odd%mul(self%envmask)
             else
-                call even%mask(self%msk, 'soft')
-                call odd%mask(self%msk, 'soft')
+                ! spherical masking
+                if( self%inner > 1. )then
+                    call even%mask(self%msk, 'soft', inner=self%inner, width=self%width) 
+                    call odd%mask(self%msk, 'soft', inner=self%inner, width=self%width)
+                else
+                    call even%mask(self%msk, 'soft') 
+                    call odd%mask(self%msk, 'soft')
+                endif
             endif
             ! forward FT
             call even%fwd_ft
             call odd%fwd_ft
+            ! calculate FSC
+            call even%fsc(odd, res, corrs)
+            do j=1,size(res)
+               write(*,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', corrs(j)
+            end do
         endif
-        ! calculate FSC
-        call even%fsc(odd, res, corrs)
+        ! save, get & print resolution
         call arr2file(corrs, 'fsc_state'//int2str_pad(state,2)//'.bin')
-        do j=1,size(res)
-           write(*,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', corrs(j)
-        end do
-        ! get & print resolution
         call get_resolution(corrs, res, self%fsc05, self%fsc0143)
         self%fsc05   = max(self%fsc05,self%fny)
         self%fsc0143 = max(self%fsc0143,self%fny)
@@ -382,11 +395,12 @@ contains
         integer,          optional, intent(in)    :: part      !< partition (4 parallel rec)
         character(len=*), optional, intent(in)    :: fbody     !< body of output file
         real,             optional, intent(in)    :: wmat(:,:) !< shellweights
-        type(image)      :: img, img_pad
-        type(kbinterpol) :: kbwin
-        integer          :: i, cnt, n, ldim(3), io_stat, filnum, state_glob
-        integer          :: statecnt(p%nstates), alloc_stat, state_here
-        logical          :: doshellweight
+        type(image)       :: img, img_pad
+        type(kbinterpol)  :: kbwin
+        real, allocatable :: invctfsq(:)
+        integer           :: i, cnt, n, ldim(3), io_stat, filnum, state_glob
+        integer           :: statecnt(p%nstates), alloc_stat, state_here
+        logical           :: doshellweight
         call find_ldim_nptcls(fname, ldim, n)
         if( n /= o%get_noris() ) stop 'inconsistent nr entries; eorec; simple_eo_reconstructor'
         kbwin = self%get_kbwin()
@@ -463,10 +477,9 @@ contains
                     if( p%pgrp == 'c1' )then
                         if( doshellweight )then
                             call self%grid_fplane(orientation, img_pad, pwght=pw, mul=mul,&
-                                &shellweights=wmat(i,:), expanded=.true.)
+                                &shellweights=wmat(i,:))
                         else
-                            call self%grid_fplane(orientation, img_pad, pwght=pw, mul=mul,&
-                                &expanded=.true.)
+                            call self%grid_fplane(orientation, img_pad, pwght=pw, mul=mul)
                         endif
                     else
                         ran = ran3()
@@ -474,10 +487,9 @@ contains
                             o_sym = se%apply(orientation, j)
                             if( doshellweight )then
                                 call self%grid_fplane(o_sym, img_pad, pwght=pw, mul=mul, ran=ran,&
-                                    &shellweights=wmat(i,:), expanded=.true.)
+                                    &shellweights=wmat(i,:))
                             else
-                                call self%grid_fplane(o_sym, img_pad, pwght=pw, mul=mul, ran=ran,&
-                                    &expanded=.true.)
+                                call self%grid_fplane(o_sym, img_pad, pwght=pw, mul=mul, ran=ran)
                             endif
                         end do
                     endif
@@ -502,6 +514,7 @@ contains
         class(eo_reconstructor), intent(inout)   :: self !< instance
         if( self%exists )then
             ! kill composites
+            call self%envmask%kill
             call self%even%dealloc_rho
             call self%even%kill
             call self%odd%dealloc_rho

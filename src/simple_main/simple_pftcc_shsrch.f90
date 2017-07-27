@@ -29,21 +29,25 @@ type, extends(pftcc_opt) :: pftcc_shsrch
   contains
     procedure :: new         => shsrch_new
     procedure :: set_indices => shsrch_set_indices
+    procedure :: set_inipop  => shsrch_set_inipop
     procedure :: costfun     => shsrch_costfun
     procedure :: minimize    => shsrch_minimize
     procedure :: get_nevals  => shsrch_get_nevals
+    procedure :: get_peaks   => shsrch_get_peaks
     procedure :: kill
 end type pftcc_shsrch
 
 contains
-    !> shift search method constructor
-    subroutine shsrch_new( self, pftcc, lims, shbarrier, nrestarts, vols )
+
+    subroutine shsrch_new( self, pftcc, lims, shbarrier, nrestarts, npeaks, maxits, vols )
         use simple_projector,        only: projector
         class(pftcc_shsrch),                intent(inout) :: self
-        class(polarft_corrcalc),    target, intent(in)    :: pftcc     !< pointer to pftcc object              
+        class(polarft_corrcalc),    target, intent(in)    :: pftcc     !< pointer to pftcc object
         real,                               intent(in)    :: lims(:,:) !< logical dimension of Cartesian image
-        character(len=*), optional,         intent(in)    :: shbarrier !< shift barrier constraint or not       
-        integer,          optional,         intent(in)    :: nrestarts !< simplex restarts (randomized bounds)  
+        character(len=*), optional,         intent(in)    :: shbarrier !< shift barrier constraint or not
+        integer,          optional,         intent(in)    :: nrestarts !< simplex restarts (randomized bounds)
+        integer,          optional,         intent(in)    :: npeaks    !< # peaks
+        integer,          optional,         intent(in)    :: maxits    !< maximum iterations
         class(projector), optional, target, intent(in)    :: vols(:)   !< projector volume objects
         ! flag the barrier constraint
         self%shbarr = .true.
@@ -78,6 +82,13 @@ contains
         if( present(rot) ) self%rot = rot
     end subroutine shsrch_set_indices
 
+    !>  \brief  is a setter
+    subroutine shsrch_set_inipop( self, inipop )
+        class(pftcc_shsrch), intent(inout) :: self
+        real,                intent(in)    :: inipop(:,:)
+        stop 'Not for simplex use; simple_pftcc_shsrch%srch_set_inipop'
+    end subroutine shsrch_set_inipop
+
     function shsrch_costfun( self, vec, D ) result( cost )
         class(pftcc_shsrch), intent(inout) :: self
         integer,             intent(in)    :: D          !< size of vec
@@ -103,7 +114,7 @@ contains
         cost = -self%pftcc_ptr%corr(self%reference, self%particle, self%rot, vec_here)
     end function shsrch_costfun
 
-    !> \todo This function needs fixing - only self is modified
+    
     function shsrch_minimize( self, irot, shvec, rxy, fromto ) result( cxy )
         use simple_math, only: rotmat2d
         class(pftcc_shsrch), intent(inout) :: self
@@ -145,6 +156,13 @@ contains
         integer :: nevals
         nevals = self%ospec%nevals
     end function shsrch_get_nevals
+
+    subroutine shsrch_get_peaks( self, peaks )
+        class(pftcc_shsrch), intent(inout) :: self
+        real, allocatable,   intent(out)   :: peaks(:,:)
+        allocate(peaks(1,2))
+        peaks(1,:) = self%ospec%x
+    end subroutine shsrch_get_peaks
 
     subroutine kill( self )
         class(pftcc_shsrch), intent(inout) :: self

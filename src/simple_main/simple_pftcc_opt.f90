@@ -12,15 +12,17 @@ type, abstract :: pftcc_opt
   contains
     procedure(generic_new),          deferred :: new
     procedure(generic_set_indices),  deferred :: set_indices
+    procedure(generic_set_inipop),   deferred :: set_inipop
     procedure(generic_costfun),      deferred :: costfun
     procedure(generic_minimize),     deferred :: minimize
     procedure(generic_get_nevals),   deferred :: get_nevals
+    procedure(generic_get_peaks),    deferred :: get_peaks
 end type  pftcc_opt
 
 abstract interface
 
-    !>  \brief  is a virtual constructor of generic polar Fourier cross-correlation optimisation class
-    subroutine generic_new( self, pftcc, lims, shbarrier, nrestarts, vols) 
+    !>  \brief  is a constructor
+    subroutine generic_new( self, pftcc, lims, shbarrier, nrestarts, npeaks, maxits, vols) 
         use simple_projector,        only: projector
         use simple_polarft_corrcalc, only: polarft_corrcalc
         import :: pftcc_opt
@@ -28,7 +30,7 @@ abstract interface
         class(polarft_corrcalc),    target, intent(in)    :: pftcc
         real,                               intent(in)    :: lims(:,:)
         character(len=*), optional,         intent(in)    :: shbarrier
-        integer,          optional,         intent(in)    :: nrestarts
+        integer,          optional,         intent(in)    :: nrestarts, npeaks, maxits
         class(projector), optional, target, intent(in)    :: vols(:)
     end subroutine generic_new
 
@@ -40,7 +42,14 @@ abstract interface
         integer, optional, intent(in)    :: rot, state
     end subroutine generic_set_indices
 
-    !>  \brief  is the virtual cost function
+    !>  \brief  is a setter
+    subroutine generic_set_inipop( self, inipop )
+        import :: pftcc_opt
+        class(pftcc_opt),  intent(inout) :: self
+        real,              intent(in)    :: inipop(:,:)
+    end subroutine generic_set_inipop
+
+    !>  \brief  is the cost function
     function generic_costfun( self, vec, D ) result( cost )
         import :: pftcc_opt
         class(pftcc_opt), intent(inout) :: self
@@ -66,6 +75,13 @@ abstract interface
         class(pftcc_opt), intent(inout) :: self
         integer :: nevals
     end function generic_get_nevals
+
+    !> \brief  getter for number of function evaluations
+    subroutine generic_get_peaks( self, peaks )
+        import :: pftcc_opt
+        class(pftcc_opt), intent(inout) :: self
+        real, allocatable, intent(out)  :: peaks(:,:)
+    end subroutine generic_get_peaks
 
 end interface
 

@@ -45,6 +45,18 @@ contains
         ! SET FRACTION OF SEARCH SPACE
         frac_srch_space = b%a%get_avg('frac')
 
+        ! SETUP WEIGHTS
+        if( p%weights2D.eq.'yes' )then
+            if( p%nptcls <= SPECWMINPOP )then
+                call b%a%set_all2single('w', 1.0)
+            else
+                call b%a%calc_spectral_weights(1.0)
+            endif
+        else
+            ! defaults to unitary weights
+            call b%a%set_all2single('w', 1.0)
+        endif
+
         ! PREP REFERENCES
         if( p%l_distr_exec )then
             if( .not. cline%defined('refs') )then
@@ -73,13 +85,6 @@ contains
                     endif
                 endif
             endif
-        endif
-
-        ! SETUP WEIGHTS
-        if( p%nptcls <= SPECWMINPOP )then
-            call b%a%calc_hard_ptcl_weights(p%frac)
-        else
-            call b%a%calc_spectral_weights(p%frac)
         endif
 
         ! EXTREMAL LOGICS
@@ -123,18 +128,16 @@ contains
             if( p%oritab .eq. '' )then
                 !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                 do iptcl=p%fromp,p%top
-                    ! call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, conv_larr(iptcl), greedy=.true.)
                     call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, greedy=.true.)
                 end do
                 !$omp end parallel do
             else
-                if(corr_thresh > 0.)then
+                if( corr_thresh > 0. )then
                     write(*,'(A,F8.2)') '>>> PARTICLE RANDOMIZATION(%):', 100.*p%extr_thresh
                     write(*,'(A,F8.2)') '>>> CORRELATION THRESHOLD:    ', corr_thresh
                 endif
                 !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                 do iptcl=p%fromp,p%top
-                    ! call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, conv_larr(iptcl), extr_bound=corr_thresh)
                     call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, extr_bound=corr_thresh)
                 end do
                 !$omp end parallel do
@@ -146,7 +149,7 @@ contains
         p%oritab = p%outfile
 
         ! WIENER RESTORATION OF CLASS AVERAGES
-        if( frac_srch_space > 80. )then
+        if( frac_srch_space > FRAC_INTERPOL )then
             ! gridded rotation
             call prime2D_assemble_sums(b, p, grid=.true.)
         else
@@ -212,17 +215,16 @@ contains
         class(build),      intent(inout) :: b
         class(params),     intent(inout) :: p
         logical, optional, intent(in)    :: grid
-        type(oris)  :: a_here, batch_oris
-        type(ori)   :: orientation
-        type(image) :: batch_imgsum, cls_imgsum
-        type(image), allocatable :: batch_imgs(:)
+        type(oris)               :: a_here, batch_oris
+        type(ori)                :: orientation
+        type(image)              :: batch_imgsum, cls_imgsum
+        type(image), allocatable :: batch_imgs(:) 
         integer,     allocatable :: ptcls_inds(:), batches(:,:)
         real      :: w
         integer   :: icls, iptcl, istart, iend, inptcls, icls_pop
         integer   :: i, nbatches, batch, batchsz, cnt
         logical   :: l_grid
         integer, parameter :: BATCHTHRSZ = 20
-        call prime2D_init_sums( b, p )
         l_grid = .true.
         if( present(grid) ) l_grid = grid
         if( .not. p%l_distr_exec )then
@@ -303,7 +305,7 @@ contains
             ! class cleanup
             deallocate(ptcls_inds)
         enddo
-        if( .not.p%l_distr_exec )call prime2D_norm_sums( b, p )
+        if( .not.p%l_distr_exec ) call prime2D_norm_sums( b, p )
 
         contains
 
@@ -313,7 +315,7 @@ contains
                 class(ori),   intent(inout) :: o
                 type(image) :: ctfsq
                 type(ctf)   :: tfun
-                real        :: dfx, dfy, angast, w, x, y
+                real        :: dfx, dfy, angast, x, y, pw
                 call ctfsq%new(img%get_ldim(), p%smpd)
                 call ctfsq%set_ft(.true.)
                 if( p%tfplan%flag .ne. 'no' )&
@@ -329,9 +331,9 @@ contains
                         dfy    = dfx
                         angast = 0.
                 end select
-                x = -o%get('x')
-                y = -o%get('y')
-                w =  o%get('w')
+                x  = -o%get('x')
+                y  = -o%get('y')
+                pw = o%get('w')
                 ! apply
                 call img%fwd_ft
                 ! take care of the nominator
@@ -344,7 +346,7 @@ contains
                         call tfun%apply_and_shift(img, ctfsq, x, y, dfx, '', dfy, angast)
                 end select
                 ! add to sum
-                call  b%ctfsqsums(icls)%add(ctfsq, w)
+                call  b%ctfsqsums(icls)%add(ctfsq, pw)
             end subroutine apply_ctf_and_shift
 
     end subroutine prime2D_assemble_sums
@@ -446,7 +448,7 @@ contains
         ! prepare the polarizers
         call b%img_match%init_polarizer(pftcc)
         ! prepare the automasker
-        if( p%l_automsk )call b%mskimg%init(p, p%ncls)
+        if( p%l_envmsk .and. p%automsk .eq. 'cavg' ) call b%mskimg%init2D(p, p%ncls)
         ! PREPARATION OF REFERENCES IN PFTCC
         ! read references and transform into polar coordinates
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING REFERENCES'
@@ -470,10 +472,7 @@ contains
             cnt = cnt+1
             call progress(cnt, p%top-p%fromp+1)
             call read_img_from_stk( b, p, iptcl )
-            o      = b%a%get_ori(iptcl)
-            icls   = nint(o%get('class'))
-            istate = nint(o%get('state'))
-            if( istate == 0 ) icls = 0
+            o = b%a%get_ori(iptcl)
             call prepimg4align(b, p, o)
             ! transfer to polar coordinates
             call b%img_match%polarize(pftcc, iptcl)

@@ -9,9 +9,9 @@
 !! by the base class: simple_commander_base). Later we can use the composite
 !! pattern to create MacroCommanders (or workflows)
 !
-! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
-! Redistribution and modification is regulated by the GNU General Public License.
-! *Authors:* Cyril Reboul & Hans Elmlund 2016
+! The code is distributed with the hope that it will be useful, but _WITHOUT_
+! _ANY_ _WARRANTY_. Redistribution and modification is regulated by the GNU
+! General Public License. *Authors:* Cyril Reboul & Hans Elmlund 2016
 !
 module simple_commander_misc
 use simple_defs
@@ -161,6 +161,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_CLUSTER_SMAT NORMAL STOP ****')
     end subroutine exec_cluster_smat
+
     !> Calculate centre of mass 
     subroutine exec_masscen( self, cline )
         use simple_procimgfile, only: masscen_imgfile
@@ -178,6 +179,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_MASSCEN NORMAL STOP ****')
     end subroutine exec_masscen
+
     !> for printing the command line key dictonary
     subroutine exec_print_cmd_dict( self, cline )
         use simple_cmd_dict
@@ -188,6 +190,7 @@ contains
         call print_cmd_key_descr( p%outfile )
         call simple_end('**** SIMPLE_PRINT_CMD_DICT NORMAL STOP ****')
     end subroutine exec_print_cmd_dict
+
     !> is a program for printing the dose weights applied to individual frames
     subroutine exec_print_dose_weights( self, cline )
         use simple_image,    only: image
@@ -214,6 +217,7 @@ contains
         call dummy_img%kill
         call simple_end('**** SIMPLE_PRINT_DOSE_WEIGHTS NORMAL STOP ****')
     end subroutine exec_print_dose_weights
+
     !> print_fsc  is a program for printing the binary FSC files produced by PRIME3D
     subroutine exec_print_fsc( self, cline )
         use simple_math,  only: get_resolution, get_lplim
@@ -239,6 +243,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_PRINT_FSC NORMAL STOP ****')
     end subroutine exec_print_fsc
+
     !> print_magic_boxesis a program for printing magic box sizes (fast FFT)
     subroutine exec_print_magic_boxes( self, cline )
         use simple_magic_boxes, only: print_magic_box_range
@@ -251,6 +256,7 @@ contains
         call simple_end('**** SIMPLE_PRINT_MAGIC_BOXES NORMAL STOP ****')
     end subroutine exec_print_magic_boxes
 
+    !> find the resolution, or low-pass limit
     subroutine exec_res( self, cline )
         class(res_commander), intent(inout) :: self
         class(cmdline),       intent(inout) :: cline
@@ -261,6 +267,7 @@ contains
         write(*,'(A,1X,f7.2)') '>>> LOW-PASS LIMIT:', lp
         call simple_end('**** SIMPLE_RES NORMAL STOP ****')
     end subroutine exec_res
+
     !> shift is a program for shifting a stack according to shifts in oritab
     subroutine exec_shift( self, cline )
         use simple_procimgfile, only: shift_imgfile
@@ -275,6 +282,7 @@ contains
         call b%a%write('shiftdoc.txt')
         call simple_end('**** SIMPLE_SHIFT NORMAL STOP ****')
     end subroutine exec_shift
+
     !> sym_aggregateis a program for robust identifiaction of the symmetry axis
     !> of a map using image-to-volume simiarity validation of the axis
     subroutine exec_sym_aggregate( self, cline )
@@ -322,14 +330,14 @@ contains
             ! symmetry
             call rec_vol(p, b%se)
             call symvol%copy( b%vol )
-            ! call symvol%write('sym_vol'//int2str_pad(i,2)//p%ext)
+             call symvol%write('sym_vol'//int2str_pad(i,2)//p%ext)
             ! c1
             rotmat = symaxis%get_mat()
             call o%ori_from_rotmat(transpose(rotmat))
             call b%vol%copy( rotvol(asym_vol, o, p) )
             call b%vol%bp(p%hp, p%lp)
             call b%vol%mask(p%msk, 'soft')
-            ! call b%vol%write('asym_vol'//int2str_pad(i,2)//p%ext)
+            call b%vol%write('asym_vol'//int2str_pad(i,2)//p%ext)
             ! correlation
             cc = symvol%real_corr(b%vol, b%mskvol)
             call sympeaks%set(i, 'corr', cc)
@@ -404,7 +412,8 @@ contains
                 deallocate(sort_inds)
             end subroutine find_sym_peaks
 
-    end subroutine exec_sym_aggregate
+        end subroutine exec_sym_aggregate
+
     !> dsymsrch is a program for identifying rotational symmetries in class averages
     !> of D-symmetric molecules and generating a cylinder that matches the shape.
     subroutine exec_dsymsrch( self, cline )

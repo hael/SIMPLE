@@ -12,23 +12,22 @@ implicit none
 public :: de_opt
 private
 
-integer, parameter :: N_general = 136,    N_valley = 126,    N_multimodal = 103,    N_flat = 106
-real, parameter    :: F_general = 0.2790, F_valley = 0.4027, F_multimodal = 0.3976, F_flat = 0.5860
-real, parameter    :: X_general = 0.9813, X_valley = 0.9211, X_multimodal = 0.9794, X_flat = 0.3345
-
+integer, parameter :: N_GENERAL = 136,    N_VALLEY = 126,    N_MULTIMODAL = 103,    N_FLAT = 106
+real,    parameter :: F_GENERAL = 0.2790, F_VALLEY = 0.4027, F_MULTIMODAL = 0.3976, F_FLAT = 0.5860
+real,    parameter :: X_GENERAL = 0.9813, X_VALLEY = 0.9211, X_MULTIMODAL = 0.9794, X_FLAT = 0.3345
+#include "simple_local_flags.inc"
 
 type, extends(optimizer) :: de_opt
     private
     real, allocatable :: pop(:,:)          !< solution vector population
     real, allocatable :: costs(:)          !< costs
     integer           :: best              !< index of best population member
-    real              :: F  = F_multimodal !< amplification factor
-    real              :: CR = X_multimodal !< cross-over rate
+    real              :: F  = F_MULTIMODAL !< amplification factor
+    real              :: CR = X_MULTIMODAL !< cross-over rate
     logical           :: exists = .false.  !< to indicate existence
   contains
     procedure :: new          => new_de
     procedure :: minimize     => de_minimize
-    procedure :: get_vertices => de_get_vertices
     procedure :: kill         => kill_de
 end type de_opt
 
@@ -45,47 +44,66 @@ contains
         ! adjust control parameters according to mode
         select case(trim(spec%str_mode))
             case('general')
-                spec%npop = N_general
-                self%F    = F_general
-                self%CR   = X_general
+                spec%npop = N_GENERAL
+                self%F    = F_GENERAL
+                self%CR   = X_GENERAL
             case('valley')
-                spec%npop = N_valley
-                self%F    = F_valley
-                self%CR   = X_valley
+                spec%npop = N_VALLEY
+                self%F    = F_VALLEY
+                self%CR   = X_VALLEY
             case('multimodal')
-                spec%npop = N_multimodal
-                self%F    = F_multimodal
-                self%CR   = X_multimodal
+                spec%npop = N_MULTIMODAL
+                self%F    = F_MULTIMODAL
+                self%CR   = X_MULTIMODAL
             case('flat')
-                spec%npop = N_flat
-                self%F    = F_flat
-                self%CR   = X_flat
+                spec%npop = N_FLAT
+                self%F    = F_FLAT
+                self%CR   = X_FLAT
             case DEFAULT
-                spec%npop = N_multimodal
-                self%F    = F_multimodal
-                self%CR   = X_multimodal
+                spec%npop = N_MULTIMODAL
+                self%F    = F_MULTIMODAL
+                self%CR   = X_MULTIMODAL
         end select
         ! allocate
         allocate(self%pop(spec%npop,spec%ndim), self%costs(spec%npop), stat=alloc_stat)
         call alloc_err("In: new_de; simple_de_opt", alloc_stat)
         self%exists = .true. ! indicates existence
-        if( spec%debug ) write(*,*) 'created new differential evolution population'
+        if( spec%DEBUG ) write(*,*) 'created new differential evolution population'
     end subroutine new_de
     
     !> \brief  is the particle swarm minimize minimization routine
     subroutine de_minimize( self, spec, lowest_cost )
-        class(de_opt), intent(inout)   :: self        !< instance     
+        class(de_opt),   intent(inout) :: self        !< instance     
         class(opt_spec), intent(inout) :: spec        !< specification
-        real, intent(out)              :: lowest_cost !< lowest cost
-        integer :: t                ! iteration counter
-        integer :: npeaks           ! number of local minima
-        real    :: rtol             ! relative tolerance
-        integer :: loc(1), nworse, X
+        real,            intent(out)   :: lowest_cost !< lowest cost
+        integer :: t      ! iteration counter
+        integer :: npeaks ! number of local minima
+        real    :: rtol   ! relative tolerance
+        real    :: L
+        integer :: loc(1), nworse, X, i, j
         if( .not. associated(spec%costfun) )then
             stop 'cost function not associated in opt_spec; de_minimize; simple_de_opt'
-        endif
-        ! initialize
-        call init
+        endif        
+        ! obtain initial solutions by randomized bounds
+        do i=1,spec%npop
+            do j=1,spec%ndim
+                L = spec%limits(j,2)-spec%limits(j,1)
+                self%pop(i,j) = spec%limits(j,1)+ran3()*L
+            end do
+            if( i == 1 )then
+                if( .not. all(spec%x == 0.) )then ! set one point in the swarm to best point in spec
+                    self%pop(1,:)= spec%x
+                endif
+            endif
+        end do
+        ! calculate initial costs
+        do i=1,spec%npop
+            self%costs(i) = spec%costfun(self%pop(i,:), spec%ndim)
+            spec%nevals = spec%nevals+1
+        end do
+        loc       = minloc(self%costs)
+        self%best = loc(1)
+        ! initialize the remains
         spec%nevals = 0
         npeaks      = 0
         nworse      = 0
@@ -103,31 +121,6 @@ contains
         spec%x = self%pop(self%best,:)
 
       contains
-
-        !> \brief  initialize the population & set best
-        subroutine init
-            integer :: i, j
-            real :: L
-            ! obtain initial solutions by randomized bounds
-            do i=1,spec%npop
-                do j=1,spec%ndim
-                    L = spec%limits(j,2)-spec%limits(j,1)
-                    self%pop(i,j) = spec%limits(j,1)+ran3()*L
-                end do
-                if( i == 1 )then
-                    if( .not. all(spec%x == 0.) )then ! set one point in the swarm to best point in spec
-                        self%pop(1,:)= spec%x
-                    endif
-                endif
-            end do
-            ! calculate initial costs
-            do i=1,spec%npop
-                self%costs(i) = spec%costfun(self%pop(i,:), spec%ndim)
-                spec%nevals = spec%nevals+1
-            end do
-            loc       = minloc(self%costs)
-            self%best = loc(1)
-        end subroutine init
         
         subroutine update_agent( X )
             integer, intent(in) :: X
@@ -153,8 +146,8 @@ contains
                 endif
             end do
             ! calculate cost 
-            cost_trial = spec%costfun(trial, spec%ndim)
-            spec%nevals = spec%nevals+1
+            cost_trial  = spec%costfun(trial, spec%ndim)
+            spec%nevals = spec%nevals + 1
             ! update pop if better solution is found
             if( cost_trial < self%costs(X) )then
                 nworse = 0
@@ -171,22 +164,13 @@ contains
                     endif
                 endif
             else
-                nworse = nworse+1
+                nworse = nworse + 1
             endif
         end subroutine update_agent
         
     end subroutine de_minimize
 
     ! GETTERS
-
-    !> \brief  dummy procedure, only defined in simplex
-    subroutine de_get_vertices( self, spec, vertices, costs )
-        use simple_opt_spec,           only: opt_spec
-        class(de_opt), intent(inout) :: self
-        class(opt_spec),    intent(inout) :: spec
-        real, allocatable,  intent(inout) :: vertices(:,:), costs(:)
-        stop 'procedure only defined for simplex optimisation'
-    end subroutine de_get_vertices
 
     !> \brief  is a destructor
     subroutine kill_de( self )

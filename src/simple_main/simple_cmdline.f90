@@ -11,10 +11,12 @@ module simple_cmdline
   use simple_chash, only: chash
   use simple_strings, only: str2int, str2real, str_has_substr, real2str, int2str
   implicit none
+
   public :: cmdline
   private
 #include "simple_local_flags.inc"
-!> key/value pair type
+
+!> cmdarg key/value pair command-line type
   type cmdarg
      character(len=32) :: key=''
      character(len=STDLEN) :: carg=''
@@ -47,8 +49,10 @@ module simple_cmdline
      procedure             :: get_rarg
      procedure             :: get_carg
      procedure             :: gen_job_descr
-  end type cmdline
+ end type cmdline
+
 contains
+
   !> \brief for parsing the command line arguments passed as key=val
   subroutine parse( self, keys_required, keys_optional )
     use simple_args, only: args
@@ -109,7 +113,9 @@ contains
        DebugPrint ' reached checker' 
        call self%check
     endif
-  contains
+contains
+
+
     subroutine parse_local( arg )
       character(len=*) :: arg
       integer :: pos1
@@ -218,7 +224,8 @@ contains
     else
        self%cmds(which)%carg = carg
     endif
-  end subroutine set_2
+end subroutine set_2
+
   !> \brief for removing a command line argument
   subroutine delete( self, key )
     class(cmdline), intent(inout) :: self
@@ -288,7 +295,8 @@ contains
        stop
     endif
     deallocate( cmderr )
-  end subroutine check
+end subroutine check
+
   !> \brief  for writing the command line
   subroutine printline( self )
     class(cmdline), intent(inout) :: self
@@ -300,7 +308,8 @@ contains
           write(*,*) trim(self%cmds(i)%key), ' ', trim(self%cmds(i)%carg)
        endif
     end do
-  end subroutine printline
+end subroutine printline
+
   !>  \brief  writes the hash to file
   subroutine write( self, fname )
     use simple_chash
@@ -380,7 +389,8 @@ contains
           return
        endif
     end do
-  end function defined
+end function defined
+
   !> \brief for looking up a key
   function lookup( self, key ) result( which )
     class(cmdline), intent(in) :: self
@@ -393,7 +403,8 @@ contains
           return
        endif
     end do
-  end function lookup
+end function lookup
+
   !> \brief for getting real args
   pure function get_rarg( self, key ) result( rval )
     class(cmdline), intent(in) :: self
@@ -422,6 +433,7 @@ contains
        endif
     end do
   end function get_carg
+
   !> \brief for generating a job description (prg overrides prg in cline)
   subroutine gen_job_descr( self, hash, prg )
     class(cmdline), intent(in) :: self
@@ -442,4 +454,5 @@ contains
        call hash%set('prg', trim(prg))
     endif
   end subroutine gen_job_descr
+
 end module simple_cmdline

@@ -25,7 +25,7 @@ type :: polarft_corrcalc
     integer                  :: ring2      = 0         !< radius of molecule
     integer                  :: refsz      = 0         !< size of reference (nrots/2) (number of vectors used for matching)
     integer                  :: ptclsz     = 0         !< size of particle (2*nrots)
-    integer                  :: winsz      = 0         !< size of moving window in correlation cacluations
+    integer                  :: winsz      = 0         !< size of moving window in correlation calculations
     integer                  :: ldim(3)    = 0         !< logical dimensions of original cartesian image
     integer                  :: kfromto(2) = 0         !< Fourier index range
     real(sp),    allocatable :: sqsums_ptcls(:)        !< memoized square sums for the correlation calculations
@@ -77,18 +77,19 @@ type :: polarft_corrcalc
     procedure          :: write_pfts_ptcls
     procedure          :: read_pfts_ptcls
     ! MODIFIERS
-    procedure          :: shellnorm_ref
-    procedure          :: shellnorm_ptcl
     procedure, private :: prep_ref4corr
     procedure          :: xfel_subtract_shell_mean
     ! CALCULATORS
     procedure, private :: create_polar_ctfmat
     procedure          :: create_polar_ctfmats
-    procedure          :: gencorrs
+    procedure, private :: gencorrs_1
+    procedure, private :: gencorrs_2
+    generic            :: gencorrs => gencorrs_1, gencorrs_2
     procedure          :: genfrc
     procedure, private :: corr_1
     procedure, private :: corr_2
     generic            :: corr => corr_1, corr_2
+    procedure          :: euclid
     ! DESTRUCTOR
     procedure          :: kill
 end type polarft_corrcalc
@@ -184,12 +185,12 @@ contains
                     self%pfts_ptcls(self%pfromto(1):self%pfromto(2),self%ptclsz,self%kfromto(1):self%kfromto(2)),&
                     self%sqsums_ptcls(self%pfromto(1):self%pfromto(2)), stat=alloc_stat)
         call alloc_err('polarfts and sqsums; new; simple_polarft_corrcalc', alloc_stat)
-        self%pfts_refs     = zero
-        self%pfts_ptcls    = zero
-        self%sqsums_ptcls  = 0.
-        self%with_ctf = .false.
+        self%pfts_refs    = zero
+        self%pfts_ptcls   = zero
+        self%sqsums_ptcls = 0.
+        self%with_ctf     = .false.
         if( ctfflag .ne. 'no' ) self%with_ctf = .true.
-        self%existence     = .true.
+        self%existence    = .true.
     end subroutine new
 
     ! SETTERS
@@ -524,57 +525,23 @@ contains
     
     ! MODIFIERS
 
-    subroutine shellnorm_ref( self, iref )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: iref
-        integer :: k
-        real    :: pow(self%kfromto(1):self%kfromto(2)), norm
-        do k=self%kfromto(1),self%kfromto(2)
-            pow(k) = sum(real(self%pfts_refs(iref,:,k))*conjg(self%pfts_refs(iref,:,k)))
-        end do 
-        pow = pow/real(self%refsz)
-        do k=self%kfromto(1),self%kfromto(2)
-            if( pow(k) > TINY )then
-                norm = sqrt(pow(k))
-                self%pfts_refs(iref,:,k) = self%pfts_refs(iref,:,k)/norm
-            else
-                self%pfts_refs(iref,:,k) = cmplx(0.,0.)
-            endif
-        end do
-    end subroutine shellnorm_ref
-
-    subroutine shellnorm_ptcl( self, iptcl )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: iptcl
-        integer :: k
-        real    :: pow(self%kfromto(1):self%kfromto(2)), norm
-        do k=self%kfromto(1),self%kfromto(2)
-             pow(k) = sum(real(self%pfts_ptcls(iptcl,:,k))*conjg(self%pfts_ptcls(iptcl,:,k)))
-        end do
-        pow = pow/real(self%ptclsz)
-        do k=self%kfromto(1),self%kfromto(2)
-            if( pow(k) > TINY )then
-                norm = sqrt(pow(k))
-                self%pfts_ptcls(iptcl,:,k) = self%pfts_ptcls(iptcl,:,k)/norm
-            else
-                self%pfts_ptcls(iptcl,:,k) = cmplx(0.,0.)
-            endif
-        end do
-        call self%memoize_sqsum_ptcl(iptcl)
-    end subroutine shellnorm_ptcl
-
-    subroutine prep_ref4corr( self, iptcl, iref, pft_ref, sqsum_ref )
+    subroutine prep_ref4corr( self, iptcl, iref, pft_ref, sqsum_ref, kstop )
         use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iptcl, iref
         complex(sp),             intent(out)   :: pft_ref(self%refsz,self%kfromto(1):self%kfromto(2))
         real(sp),                intent(out)   :: sqsum_ref
+        integer, optional,       intent(in)    :: kstop
         if( self%with_ctf )then
             pft_ref = self%pfts_refs(iref,:,:) * self%ctfmats(iptcl,:,:)
         else
             pft_ref = self%pfts_refs(iref,:,:)
         endif
-        sqsum_ref = sum(csq(pft_ref))
+        if( present(kstop) )then
+            sqsum_ref = sum(csq(pft_ref(:,self%kfromto(1):kstop)))
+        else
+            sqsum_ref = sum(csq(pft_ref))
+        endif
     end subroutine prep_ref4corr
 
     !>  \brief  is for preparing for XFEL pattern corr calc
@@ -680,7 +647,7 @@ contains
     end subroutine create_polar_ctfmats
 
     !>  \brief  is for generating rotational correlations
-    function gencorrs( self, iref, iptcl, roind_vec ) result( cc )
+    function gencorrs_1( self, iref, iptcl, roind_vec ) result( cc )
         use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self        !< instance
         integer,                 intent(in)    :: iref, iptcl !< ref & ptcl indices
@@ -709,7 +676,47 @@ contains
             ! denominator
             cc = cc / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
         endif
-    end function gencorrs
+    end function gencorrs_1
+
+    !>  \brief  is for generating rotational correlations
+    function gencorrs_2( self, iref, iptcl, kstop, roind_vec ) result( cc )
+        use simple_math, only: csq
+        class(polarft_corrcalc), intent(inout) :: self        !< instance
+        integer,                 intent(in)    :: iref, iptcl !< ref & ptcl indices
+        integer,                 intent(in)    :: kstop       !< last frequency
+        integer,       optional, intent(in)    :: roind_vec(:)
+        complex(sp) :: pft_ref(self%refsz,self%kfromto(1):self%kfromto(2))
+        real(sp)    :: cc(self%nrots), sqsum_ref, sqsum_ptcl
+        integer     :: irot, i
+        call self%prep_ref4corr(iptcl, iref, pft_ref, sqsum_ref, kstop)
+        if( self%xfel )then
+            sqsum_ptcl = sum(real(self%pfts_ptcls(iptcl,:self%refsz,self%kfromto(1):kstop))**2.)
+        else
+            sqsum_ptcl = sum(csq(self%pfts_ptcls(iptcl,:self%refsz,self%kfromto(1):kstop)))
+        endif
+        if( present(roind_vec) )then
+            ! calculates only corrs for rotational indices provided in roind_vec
+            ! see get_win_roind. returns -1. when not calculated
+            if( any(roind_vec<=0) .or. any(roind_vec>self%nrots) )&
+                &stop 'index out of range; simple_polarft_corrcalc::gencorrs'
+            cc = -1.
+            do i = 1, size(roind_vec)
+                irot = roind_vec(i)
+                cc(irot) = sum(real( pft_ref(:,self%kfromto(1):kstop) * &
+                    conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,self%kfromto(1):kstop)) ))      
+                cc(irot) = cc(irot) / sqrt(sqsum_ref * sqsum_ptcl)
+            end do
+        else
+            ! all rotations
+            ! numerator
+            do irot = 1, self%nrots
+                cc(irot) = sum(real( pft_ref(:,self%kfromto(1):kstop) * &
+                    conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,self%kfromto(1):kstop)) ))
+            end do
+            ! denominator
+            cc = cc / sqrt(sqsum_ref * sqsum_ptcl)
+        endif
+    end function gencorrs_2
 
     !>  \brief  is for generating resolution dependent correlations
     function genfrc( self, iref, iptcl, irot ) result( frc )
@@ -766,8 +773,6 @@ contains
         cc = sum(real( pft_ref * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:)) ))
         ! denominator
         cc = cc / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
-        ! check
-        ! if( cc >= 1. ) print *,'cc out of range', iref, iptcl, cc
     end function corr_1
 
     !>  \brief  for calculating the on-fly shifted correlation between reference iref and particle iptcl in rotation irot
@@ -802,6 +807,19 @@ contains
         ! finalize cross-correlation
         cc = cc/sqrt(sqsum_ref_sh*self%sqsums_ptcls(iptcl))
     end function corr_2
+
+    !>  \brief  for calculating the Euclidean distance between reference & particle
+    !!          This ought to be a better choice for the orientation weights
+    function euclid( self, iref, iptcl, irot ) result( dist )
+        use simple_math, only: csq
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref, iptcl, irot
+        real        :: dist, sqsum_ref
+        complex(sp) :: pft_ref(self%refsz,self%kfromto(1):self%kfromto(2))
+        call self%prep_ref4corr(iptcl, iref, pft_ref, sqsum_ref)
+        dist = sum(cabs(pft_ref - self%pfts_ptcls(iptcl,irot:irot+self%winsz,:))**2.0)&
+               & /real(self%refsz * (self%kfromto(2) - self%kfromto(1) + 1))
+    end function euclid
 
     ! DESTRUCTOR
 

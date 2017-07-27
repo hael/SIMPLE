@@ -107,8 +107,9 @@ contains
             end do
         else if( cline%defined('vol1') )then
             call b%build_general_tbox(p, cline)              ! general objects built
-            call doit(b%vol)
             call b%vol%read(p%vols(1))
+            call doit(b%vol)
+            call b%vol%write(p%outvol)
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_BINARISE NORMAL STOP ****')
@@ -123,10 +124,14 @@ contains
                 else if( cline%defined('npix') )then
                     call img_or_vol%bin(p%npix)
                 else
-                    call img_or_vol%bin('nomsk')
+                    if( cline%defined('frac_outliers') )then
+                        call img_or_vol%bin_kmeans(p%frac_outliers)
+                    else
+                        call img_or_vol%bin_kmeans
+                    endif
                 endif
-                write(*,'(a,1x,i9)') 'NO FOREGROUND PIXELS:', img_or_vol%nforeground()
-                write(*,'(a,1x,i9)') 'NO BACKGROUND PIXELS:', img_or_vol%nbackground()
+                write(*,'(a,1x,i9)') '# FOREGROUND PIXELS:', img_or_vol%nforeground()
+                write(*,'(a,1x,i9)') '# BACKGROUND PIXELS:', img_or_vol%nbackground()
                 if( cline%defined('grow') )then
                     do igrow=1,p%grow
                         call img_or_vol%grow_bin
@@ -308,7 +313,7 @@ contains
     end subroutine exec_ctfops
     !> filter is a program for stacking individual images or multiple stacks into one
     subroutine exec_filter( self, cline )
-        use simple_procimgfile, only: bp_imgfile, phase_rand_imgfile
+        use simple_procimgfile, only: bp_imgfile, phase_rand_imgfile, real_filter_imgfile
         class(filter_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(params) :: p
@@ -326,6 +331,10 @@ contains
                     call bp_imgfile(p%stk, p%outstk, p%smpd, 0., p%lp)
                 else if( cline%defined('hp') )then
                     call bp_imgfile(p%stk, p%outstk, p%smpd, p%hp, 0.)
+                ! real-space
+                else if( cline%defined('real_filter') )then
+                    if( .not. cline%defined('winsz') ) stop 'need winsz input for real-space filtering; commander_imgproc :: exec_filter'
+                    call real_filter_imgfile(p%stk, p%outstk, p%smpd, trim(p%real_filter), nint(p%winsz))
                 else
                     stop 'Nothing to do!'
                 endif
@@ -349,6 +358,10 @@ contains
                     call b%vol%bp(p%hp,0.)
                 else if( cline%defined('lp') )then
                     call b%vol%bp(0.,p%lp)
+                ! real-space
+                else if( cline%defined('real_filter') )then
+                    if( .not. cline%defined('winsz') ) stop 'need winsz input for real-space filtering; commander_imgproc :: exec_filter'
+                    call b%vol%real_space_filter(nint(p%winsz), p%real_filter)
                 else
                     stop 'Nothing to do!'
                 endif
@@ -742,7 +755,8 @@ contains
         type(oris)                               :: o_here
         integer,          allocatable            :: pinds(:)
         character(len=:), allocatable            :: fname
-        integer :: i, s, cnt, nincl, alloc_stat, lfoo(3), np1,np2,ntot
+        integer :: i, s, ipst, cnt, cnt2, cnt3, nincl, alloc_stat, lfoo(3), np1,np2,ntot
+        real    :: p_ctf, p_dfx
         p = params(cline)                               ! parameters generated
         call b%build_general_tbox(p, cline)             ! general objects built
         call img%new([p%box,p%box,1],p%smpd,p%imgkind)  ! image created
@@ -850,7 +864,11 @@ contains
                 end do
                 allocate(fname, source='extracted_oris.txt')
             endif
-            call o_here%write(fname)
+            if( cline%defined('outfile') )then
+                call o_here%write(p%outfile)
+            else
+                call o_here%write(fname)
+            endif
             goto 999
         endif
         ! state/class + frac
@@ -903,7 +921,11 @@ contains
                 end do
                 allocate(fname, source='extracted_oris_class'//int2str_pad(p%class,5)//'.txt')
             endif
-            call o_here%write(fname)
+            if( cline%defined('outfile') )then
+                call o_here%write(p%outfile)
+            else
+                call o_here%write(fname)
+            endif
             goto 999
         endif
         ! invert contrast
@@ -963,6 +985,56 @@ contains
             call copy_imgfile(p%stk, p%outstk, p%smpd, fromto=[p%fromp,p%top])
             goto 999
         endif
+        !set state flag on basis of ctfreslim and/or defocus limits
+        if( cline%defined('ctfreslim') .or. cline%defined('df_close') .or. cline%defined('df_far')) then
+            if( p%oritab == '' ) stop 'need input orientation doc for fishing expedition; simple_stackops'   
+            !first do selection on basis of ctfreslim
+            if( cline%defined('ctfreslim') )then
+                cnt=0
+                do i=1,p%nptcls
+                    call progress(i, p%nptcls)
+                    p_ctf = (b%a%get(i, 'ctfres'))
+                    if( p_ctf > p%ctfreslim ) then
+                        cnt=cnt+1
+                        call b%a%set(i, 'state', 0.)
+                    endif
+                end do 
+                print *, 'ctfreslim                  --> ptcls set state 1: ', (p%nptcls-cnt), ' ptcls set state 0: ', cnt
+            endif
+            !now select on defocus limits
+            if( cline%defined('df_close') .and. .not. cline%defined('df_far') ) stop 'need both df_close and df_far for state setting on basis of defocus values'
+            if( cline%defined('df_far') .and. .not. cline%defined('df_close') ) stop 'need both df_close and df_far for state setting on basis of defocus values'
+            if( cline%defined('df_close') ) then
+                cnt2=0
+                do i=1,p%nptcls
+                    call progress(i, p%nptcls)
+                    p_dfx = (b%a%get(i, 'dfx'))
+                    if( (p_dfx < p%df_close ) .or. (p_dfx > p%df_far) ) then
+                        cnt2=cnt2+1
+                        call b%a%set(i, 'state', 0.)
+                    endif
+                end do 
+                print *, 'defocus limits             --> ptcls set state 1: ', (p%nptcls-cnt2), ' ptcls set state 0: ', cnt2
+            endif
+            !if both ctfreslim and defocus limits were set now work out the overall change in states and report on what has happened
+             if( cline%defined('ctfreslim') .and. cline%defined('df_close')) then
+                cnt3=0
+                do i=1,p%nptcls
+                    ipst = (b%a%get(i, 'state'))
+                    if( ipst == 0) then
+                        cnt3 = cnt3+1
+                    endif
+                end do 
+                print *, 'ctfreslim + defocus limits --> ptcls set state 1: ', (p%nptcls-cnt3), ' ptcls set state 0: ', cnt3
+            endif
+            !write the oritab with appropriate states
+            call del_file(p%outfile)
+            do i=1,p%nptcls
+            call progress(i, p%nptcls)
+            call b%a%write(i, p%outfile)
+            end do
+            goto 999
+        endif   
         ! default
         write(*,*)'Nothing to do!'
         ! end gracefully

@@ -16,15 +16,14 @@ use simple_math          ! use all in there
 use simple_masker        ! use all in there
 implicit none
 
-public :: read_img_from_stk, set_bp_range, set_bp_range2D,grid_ptcl, prepimg4align, eonorm_struct_facts,&
-&norm_struct_facts, preprefvol, prep2Dref
+public :: read_img_from_stk, set_bp_range, set_bp_range2D, grid_ptcl, prepimg4align,&
+&eonorm_struct_facts, norm_struct_facts, preprefvol, prep2Dref, preprecvols, killrecvols
 private
 #include "simple_local_flags.inc"
 
 real,    parameter :: SHTHRESH  = 0.0001
-real,    parameter :: CENTHRESH = 0.01   !< threshold for performing volume/cavg centering in pixels
-integer            :: glob_cnt  = 0      !< dev purpose only
-
+real,    parameter :: CENTHRESH = 0.01   ! threshold for performing volume/cavg centering in pixels
+    
 contains
 
     subroutine read_img_from_stk( b, p, iptcl )
@@ -42,7 +41,6 @@ contains
 
     subroutine set_bp_range( b, p, cline )
         use simple_math,          only: calc_fourier_index
-        use simple_estimate_ssnr, only: fsc2ssnr
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         class(cmdline), intent(inout) :: cline
@@ -72,28 +70,17 @@ contains
                             ! these are the 'classical' resolution measures
                             fsc_fname   = adjustl('fsc_state'//int2str_pad(s,2)//'.bin')
                             tmp_arr     = file2rarr(trim(fsc_fname))
-                            if(size(tmp_arr) > size(b%fsc(s,:)))then
-                                ! TO REMOVE
-                                ! ugly patch for backward compatibility
-                                b%fsc(s,:)  = tmp_arr(1:size(b%fsc(s,:)))
-                                deallocate(tmp_arr)
-                            else
-                                ! must become default
-                                b%fsc(s,:)  = tmp_arr(:)
-                                deallocate(tmp_arr)
-                                !b%fsc(s,:)  = file2rarr(trim(fsc_fname))
-                            endif
-                            b%ssnr(s,:) = fsc2ssnr(b%fsc(s,:))
+                            b%fsc(s,:)  = tmp_arr(:)
+                            deallocate(tmp_arr)
                             call get_resolution(b%fsc(s,:), resarr, fsc05, fsc0143)
                             mapres(s)   = fsc0143
                         else
                             ! empty state
                             mapres(s)   = 0.
                             b%fsc(s,:)  = 0.
-                            b%ssnr(s,:) = 0.
                         endif
                     end do
-                    loc   = maxloc(mapres)
+                    loc    = maxloc(mapres)
                     lp_ind = get_lplim(b%fsc(loc(1),:))
                     p%kfromto(2) = calc_fourier_index( resarr(lp_ind), p%boxmatch, p%smpd )
                     if( p%kfromto(2) == 1 )then
@@ -136,7 +123,10 @@ contains
             case DEFAULT
                 stop 'Unsupported eo flag; simple_hadamard_common'
         end select
-        DebugPrint ' did set Fourier index range'
+        ! set highest Fourier index for coarse grid search
+        p%kstop_grid = calc_fourier_index(p%lp_grid, p%boxmatch, p%smpd)
+        if( p%kstop_grid > p%kfromto(2) ) p%kstop_grid = p%kfromto(2)
+        DebugPrint '*** simple_hadamard_common ***: did set Fourier index range'
     end subroutine set_bp_range
 
     subroutine set_bp_range2D( b, p, cline, which_iter, frac_srch_space )
@@ -179,7 +169,7 @@ contains
         real,            optional, intent(in)    :: shellweights(:)
         real,            optional, intent(in)    :: ran_eo
         real             :: pw, ran, w
-        integer          :: jpeak, s, k
+        integer          :: jpeak, s, k, npeaks
         type(ori)        :: orisoft, o_sym
         type(kbinterpol) :: kbwin
         logical          :: softrec
@@ -189,14 +179,13 @@ contains
             kbwin = b%recvols(1)%get_kbwin()
         endif
         softrec = .false.
+        npeaks  = 1
         if( present(os) )then
             softrec = .true.
-            if( p%npeaks /= os%get_noris() )&
-                &stop 'non-congruent number of orientations; simple_hadamard_common :: grid_ptcl'
+            npeaks  = os%get_noris()
         endif
-        if( p%npeaks>1 .and. .not.softrec )&
-            stop 'need optional primesrch3D input when npeaks > 1; simple_hadamard_common :: grid_ptcl'
-        pw = orientation%get('w')
+        pw = 1.0
+        if( orientation%isthere('w') ) pw = orientation%get('w')
         if( pw > 0. )then
             ! prepare image for gridding
             ! using the uncorrected/unmodified image as input
@@ -209,7 +198,7 @@ contains
             ran = ran3()
             if( present(ran_eo) )ran = ran_eo
             orisoft = orientation
-            do jpeak=1,p%npeaks
+            do jpeak=1, npeaks
                 DebugPrint  '*** simple_hadamard_common ***: gridding, iteration:', jpeak
                 ! get ori info
                 if( softrec )then
@@ -222,7 +211,7 @@ contains
                 DebugPrint  '*** simple_hadamard_common ***: got orientation'
                 if( p%frac < 0.99 ) w = w*pw
                 if( w > 0. )then
-                    if( p%pgrp == 'c1' .or. str_has_substr(p%refine,'adasym') )then
+                    if( p%pgrp == 'c1' )then
                         if( p%eo .eq. 'yes' )then
                             call b%eorecvols(s)%grid_fplane(orisoft, b%img_pad, pwght=w, ran=ran, shellweights=shellweights)
                         else
@@ -244,20 +233,22 @@ contains
         endif
     end subroutine grid_ptcl
 
+    !>  \brief  prepares one particle image for alignment 
     subroutine prepimg4align( b, p, o )
-        use simple_ctf, only: ctf
-        class(build),   intent(inout) :: b
-        class(params),  intent(inout) :: p
-        type(ori),      intent(inout) :: o
-        type(ctf) :: tfun
-        real      :: x, y, dfx, dfy, angast
-        integer   :: state
+        use simple_ctf,      only: ctf
+        class(build),      intent(inout) :: b
+        class(params),     intent(inout) :: p
+        type(ori),         intent(inout) :: o
+        type(ctf)         :: tfun
+        real              :: x, y, dfx, dfy, angast
+        integer           :: state, cls
         if( p%l_xfel )then
             ! nothing to do 4 now
             return
         else
-            x = o%get('x')
-            y = o%get('y')
+            x     = o%get('x')
+            y     = o%get('y')
+            cls   = nint(o%get('class'))
             state = nint(o%get('state'))
             ! move to Fourier space
             call b%img%fwd_ft
@@ -298,13 +289,13 @@ contains
             ! clip image if needed
             call b%img%clip(b%img_match) ! SQUARE DIMS ASSUMED
             ! MASKING
-            if( p%doautomsk )then
-                ! 3D enveloppe from volume
-                call b%mskvols(state)%apply_mask(b%img_match, o)
-            else if( p%automsk .eq. 'cavg' )then
-                ! 2D ab initio mask
-                call b%mskimg%apply_mask(b%img_match, nint(o%get('cls')))
-            else
+            if( p%l_envmsk .and. p%automsk .eq. 'cavg' )then
+                ! 2D adaptive cos-edge mask
+                call b%mskimg%apply_adamask2ptcl_2D(b%img_match, cls)
+            else if( p%l_envmsk )then
+                ! 3D adaptive cos-edge mask
+                call b%mskvol%apply_adamask2ptcl_3D(o, b%img_match)
+            else              
                 ! soft-edged mask
                 if( p%l_innermsk )then
                     call b%img_match%mask(p%msk, 'soft', inner=p%inner, width=p%width)
@@ -342,11 +333,13 @@ contains
         ! normalise
         call b%img_match%norm
         ! apply mask
-        if(p%l_automsk .and. p%automsk .eq. 'cavg')then
+        if( p%l_envmsk .and. p%automsk .eq. 'cavg' )then
             ! automasking
-            call b%mskimg%update_cls(b%img_match, icls)
-            if( (p%l_distr_exec .and. p%part.eq.1) .or. (.not.p%l_distr_exec))then
-                call b%img_match%write(trim(p%refs)//'msk'//p%ext, icls)
+            call b%mskimg%apply_2Denvmask22Dref(b%img_match, icls)
+            if( p%l_chunk_distr )then
+                call b%img_match%write(trim(p%chunktag)//'automasked_refs'//p%ext, icls)
+            else if( (p%l_distr_exec .and. p%part.eq.1) .or. (.not. p%l_distr_exec) )then
+                call b%img_match%write('automasked_refs'//p%ext, icls)
             endif
         else
             ! soft masking
@@ -360,22 +353,74 @@ contains
         call b%img_match%fwd_ft
     end subroutine prep2Dref
 
+    !>  \brief  initializes all volumes for reconstruction
+    subroutine preprecvols( b, p )
+        class(build),   intent(inout) :: b
+        class(params),  intent(inout) :: p
+        integer :: istate
+        if( p%eo .eq. 'yes' )then
+            do istate = 1, p%nstates
+                if( b%a%get_statepop(istate) > 0)then
+                    call b%eorecvols(istate)%new(p)
+                    call b%eorecvols(istate)%reset_all
+                endif
+            end do
+        else
+            do istate = 1, p%nstates
+                if( b%a%get_statepop(istate) > 0)then
+                    call b%recvols(istate)%new([p%boxpd, p%boxpd, p%boxpd], p%smpd, p%imgkind)
+                    call b%recvols(istate)%alloc_rho(p)
+                    call b%recvols(istate)%reset
+                endif
+            end do
+        endif
+    end subroutine preprecvols
+
+    !>  \brief  destructs all volumes for reconstruction
+    subroutine killrecvols( b, p )
+        class(build),   intent(inout) :: b
+        class(params),  intent(inout) :: p
+        integer :: istate
+        if( p%eo .eq. 'yes' )then
+            do istate = 1, p%nstates
+                call b%eorecvols(istate)%kill
+            end do
+        else
+            do istate = 1, p%nstates
+                call b%recvols(istate)%dealloc_rho
+                call b%recvols(istate)%kill
+            end do
+        endif
+    end subroutine killrecvols
+
     !>  \brief  prepares one volume for references extraction
     subroutine preprefvol( b, p, cline, s, doexpand )
+        use simple_estimate_ssnr, only: fsc2optlp
         class(build),      intent(inout) :: b
         class(params),     intent(inout) :: p
         class(cmdline),    intent(inout) :: cline
         integer,           intent(in)    :: s
         logical, optional, intent(in)    :: doexpand
+        real, allocatable :: filter(:)
         logical :: l_doexpand, do_center
         real    :: shvec(3)
         l_doexpand = .true.
         if( present(doexpand) ) l_doexpand = doexpand
         if( p%boxmatch < p%box )call b%vol%new([p%box,p%box,p%box],p%smpd) ! ensure correct dim
         call b%vol%read(p%vols(s), isxfel=p%l_xfel)
+        call b%vol%norm ! because auto-normalisation on read is taken out
         if( p%l_xfel )then
             ! no centering
         else
+            ! Volume filtering
+            if( p%eo.eq.'yes' )then
+                ! Rosenthal & Henderson, 2003 
+                call b%vol%fwd_ft
+                filter = fsc2optlp(b%fsc(s,:))
+                call b%vol%shellnorm()
+                call b%vol%apply_filter(filter)
+            endif
+            ! centering            
             do_center = .true.
             if( p%center .eq. 'no' .or. p%nstates > 1 .or. .not. p%doshift .or.&
                 p%pgrp(:1) .ne. 'c' .or. cline%defined('mskfile') ) do_center = .false.
@@ -388,6 +433,8 @@ contains
                     if( cline%defined('oritab') )call b%a%map3dshift22d(-shvec(:), state=s)
                 endif
             endif
+            ! back to real space
+            call b%vol%bwd_ft
         endif
         ! clip
         if( p%boxmatch < p%box )then
@@ -397,42 +444,40 @@ contains
         if( p%l_xfel )then
             ! no centering or masking
         else
-            ! mask volume using a spherical soft-edged mask
-            p%vols_msk(s) = add2fbody(p%vols(s), p%ext, 'msk')
-            if( p%l_innermsk )then
-                call b%vol%mask(p%msk, 'soft', inner=p%inner, width=p%width)
+            if( cline%defined('mskfile') )then
+                ! mask provided
+                call b%mskvol%new([p%box, p%box, p%box], p%smpd, p%imgkind)
+                call b%mskvol%read(p%mskfile)
+                call b%mskvol%clip_inplace([p%boxmatch,p%boxmatch,p%boxmatch])
+                ! no need for the below line anymore as I (HE) removed auto-normalisation on read
+                ! call b%mskvol%norm_bin ! ensures [0;1] range
+                call b%vol%mul(b%mskvol)
+                ! re-initialise the object for 2D envelope masking
+                call b%mskvol%init_envmask2D(p%msk)
+                ! don't use this for any 3D work from now on, because the soft edge is removed
+                ! on initialisation
             else
-                call b%vol%mask(p%msk, 'soft')
-            endif
-            ! mask using a molecular envelope
-            if( p%doautomsk )then
-                p%masks(s)   = 'automask_state'//int2str_pad(s,2)//p%ext
-                call b%mskvols(s)%init( p, b%vol )
-                if( p%l_distr_exec )then
-                    if( p%part == 1 )then
-                        ! write files
-                        call b%vol%write( p%vols_msk(s) )
-                        call b%mskvols(s)%write( p%masks(s) )
-                    endif
+                ! circular masking
+                if( p%l_innermsk )then
+                    call b%vol%mask(p%msk, 'soft', inner=p%inner, width=p%width)
                 else
-                    ! write files
-                    call b%vol%write( p%vols_msk(s) )
-                    call b%mskvols(s)%write( p%masks(s) )
+                    call b%vol%mask(p%msk, 'soft')
                 endif
             endif
         endif
         ! FT volume
         call b%vol%fwd_ft
         ! expand for fast interpolation
-        if( l_doexpand )call b%vol%expand_cmat
+        if( l_doexpand )call b%vol%expand_cmat     
     end subroutine preprefvol
-
+    
     subroutine eonorm_struct_facts( b, p, res, which_iter )
         use simple_image, only: image
         class(build),      intent(inout) :: b
         class(params),     intent(inout) :: p
         real,              intent(inout) :: res
         integer, optional, intent(in)    :: which_iter
+        real,     allocatable :: invctfsq(:)
         integer               :: s
         real                  :: res05s(p%nstates), res0143s(p%nstates)
         character(len=STDLEN) :: pprocvol
@@ -453,12 +498,14 @@ contains
                 if( present(which_iter) )then
                     p%vols(s) = 'recvol_state'//int2str_pad(s,2)//'_iter'//int2str_pad(which_iter,3)//p%ext
                 else
-                     p%vols(s) = 'startvol_state'//int2str_pad(s,2)//p%ext
+                    p%vols(s) = 'startvol_state'//int2str_pad(s,2)//p%ext
                 endif
                 call b%eorecvols(s)%sum_eos
                 call b%eorecvols(s)%sampl_dens_correct_eos(s)
                 call b%eorecvols(s)%sampl_dens_correct_sum(b%vol)
                 call b%vol%write(p%vols(s), del_if_exists=.true.)
+                ! update resolutions for local execution mode
+                call b%eorecvols(s)%get_res(res05s(s), res0143s(s))
                 if( present(which_iter) )then
                     ! post-process volume
                     pprocvol = add2fbody(trim(p%vols(s)), p%ext, 'pproc')
@@ -495,10 +542,9 @@ contains
             if( p%l_distr_exec )then
                 allocate(fbody, source='recvol_state'//int2str_pad(s,2)//'_part'//int2str_pad(p%part,p%numlen))
                 p%vols(s)  = trim(adjustl(fbody))//p%ext
-                p%masks(s) = 'rho_'//trim(adjustl(fbody))//p%ext
                 call b%recvols(s)%compress_exp
                 call b%recvols(s)%write(p%vols(s), del_if_exists=.true.)
-                call b%recvols(s)%write_rho(p%masks(s))
+                call b%recvols(s)%write_rho('rho_'//trim(adjustl(fbody))//p%ext)
                 deallocate(fbody)
             else
                 if( p%refine .eq. 'snhc' )then

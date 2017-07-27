@@ -3,13 +3,14 @@
 !------------------------------------------------------------------------------!
 !> Simple commander module: high-level workflows
 !
-!! This class contains commanders responsible for execution of high-level workflows in SIMPLE. This class provides
-!! the glue between the reciver (main reciever is simple_distr_exec) and the abstract action, which is simply execute
-!! (defined by the base class: simple_commander_base).
+!! This class contains commanders responsible for execution of high-level
+!! workflows in SIMPLE. This class provides the glue between the reciver (main
+!! reciever is simple_distr_exec) and the abstract action, which is simply
+!! execute (defined by the base class: simple_commander_base).
 !
-! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
-! Redistribution and modification is regulated by the GNU General Public License.
-! *Authors:* Hans Elmlund 2017
+! The code is distributed with the hope that it will be useful, but _WITHOUT_
+! _ANY_ _WARRANTY_. Redistribution and modification is regulated by the GNU
+! General Public License. *Authors:* Hans Elmlund 2017
 !
 module simple_commander_hlev_wflows
 use simple_defs
@@ -92,6 +93,7 @@ contains
             call scobj%scale_exec
             ! execute stage 1
             cline_prime2D_stage1 = cline
+            call cline_prime2D_stage1%delete('automsk') ! deletes possible automsk flag from stage 1
             call cline_prime2D_stage1%set('maxits', real(MAXITS_STAGE1))
             call xprime2D%execute(cline_prime2D_stage1)
             ! prepare stage 2 input -- re-scale
@@ -106,6 +108,10 @@ contains
             call os%write(FINALDOC)
             ! prepare stage 2 input -- command line
             cline_prime2D_stage2 = cline
+            ! if automsk .eq. yes, we need to replace it with cavg
+            if( p_master%automsk .eq. 'yes' )then
+                call cline_prime2D_stage2%set('automsk', 'cavg')
+            endif
             call cline_prime2D_stage2%delete('deftab')
             call cline_prime2D_stage2%set('oritab',  trim(FINALDOC))
             call cline_prime2D_stage2%set('startit', real(MAXITS_STAGE1 + 1))
@@ -136,11 +142,6 @@ contains
         call cline_rank_cavgs%set('outstk', 'cavgs_final_ranked'//p_master%ext)
         call xrank_cavgs%execute( cline_rank_cavgs )
         ! cleanup
-        if( cline%defined('chunksz') )then
-            call sys_del_files('chunk', '.bin')
-        else
-            call del_files('ppconv_part', p_master%nparts, ext='.bin')
-        endif
         call del_file('prime2D_startdoc.txt')
         call del_file('start2Drefs'//p_master%ext)
         ! end gracefully
@@ -167,7 +168,7 @@ contains
         real,                  parameter :: LPLIMS(2)=[20.,10.] !< default low-pass limits
         real,                  parameter :: CENLP=30.           !< consistency with prime3D
         integer,               parameter :: MAXITS_SNHC=30, MAXITS_INIT=15, MAXITS_REFINE=40
-        integer,               parameter :: STATE=1, NPROJS_SYMSRCH=50
+        integer,               parameter :: STATE=1, NPROJS_SYMSRCH=50, NPEAKS_REFINE=6
         character(len=32),     parameter :: ITERFBODY     = 'prime3Ddoc_'
         character(len=32),     parameter :: VOLFBODY      = 'recvol_state'
         character(len=STDLEN), parameter :: STKSCALEDBODY = 'stk_sc_ini3D_from_cavgs'
@@ -278,7 +279,8 @@ contains
         call cline_prime3D_refine%set('maxits', real(MAXITS_REFINE))
         call cline_prime3D_refine%set('dynlp', 'no') ! better be explicit about the dynlp
         call cline_prime3D_refine%set('lp', LPLIMS(2))
-        call cline_prime3D_refine%set('refine', 'shc')
+        call cline_prime3D_refine%set('refine', 'no')
+        call cline_prime3D_refine%set('npeaks', real(NPEAKS_REFINE))
         ! (5) RE-PROJECT VOLUME
         call cline_projvol%set('prg', 'projvol')
         call cline_projvol%set('outstk', 'reprojs'//p_master%ext)
@@ -319,7 +321,7 @@ contains
             call cline_prime3D_refine%set('vol1', trim(vol_iter))
         endif
         write(*,'(A)') '>>>'
-        write(*,'(A)') '>>> PRIME3D REFINEMENT STEP, REFINE=SHC'
+        write(*,'(A)') '>>> PRIME3D REFINEMENT STEP'
         write(*,'(A)') '>>>'
         call cline_prime3D_refine%set('startit', iter + 1.0)
         call update_lp(cline_prime3D_refine, 2)
@@ -387,15 +389,15 @@ contains
     ! ENSEMBLE HETEROGEINITY ANALYSIS
     !> het_ensemble is a SIMPLE program for ensemble heterogeinity analysis
     subroutine exec_het_ensemble( self, cline )
-        use simple_commander_rec,     only: recvol_commander
-        use simple_strings,           only: int2str_pad
-        use simple_oris,              only: oris
-        use simple_combinatorics,     only: diverse_labeling, shc_aggregation
-        use simple_filehandling,      only: file_exists, del_file
+        use simple_commander_rec,    only: recvol_commander
+        use simple_commander_volops, only: postproc_vol_commander, projvol_commander
+        use simple_strings,          only: int2str_pad
+        use simple_oris,             only: oris
+        use simple_combinatorics,    only: diverse_labeling, shc_aggregation
+        use simple_filehandling,     only: file_exists, del_file
         class(het_ensemble_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         ! constants
-
         integer,               parameter :: MAXITS_INIT=50, NREPEATS=5
         character(len=32),     parameter :: HETFBODY    = 'hetrep_'
         character(len=32),     parameter :: REPEATFBODY = 'hetdoc_'
@@ -404,18 +406,21 @@ contains
         type(prime3D_distr_commander) :: xprime3D_distr
         type(recvol_distr_commander)  :: xrecvol_distr
         ! shared-mem commanders
-        !
+        type(postproc_vol_commander)  :: xpostproc_vol
+        type(projvol_commander)       :: xprojvol
         ! command lines
         type(cmdline)                 :: cline_prime3D_master
         type(cmdline)                 :: cline_prime3D
         type(cmdline)                 :: cline_recvol_distr
+        type(cmdline)                 :: cline_postproc_vol
+        type(cmdline)                 :: cline_projvol
         ! other variables
         integer,               allocatable :: labels(:,:), labels_incl(:,:), consensus(:)
         character(len=STDLEN), allocatable :: init_docs(:), final_docs(:)
         logical,               allocatable :: included(:)
         type(params)                  :: p_master
         type(oris)                    :: os
-        character(len=STDLEN)         :: oritab, vol1, vol2, fname
+        character(len=STDLEN)         :: oritab, vol1, vol2, fsc, str_state
         integer                       :: irepeat, state, iter, n_incl, it
         ! some init
         allocate(init_docs(NREPEATS), final_docs(NREPEATS))
@@ -444,6 +449,10 @@ contains
         call cline_recvol_distr%set('prg', 'recvol')
         call cline_recvol_distr%set('eo', 'yes')
         call cline_recvol_distr%delete('lp')
+        cline_postproc_vol = cline
+        call cline_postproc_vol%set('prg', 'postproc_vol')
+        call cline_postproc_vol%set('eo', 'yes')
+        call cline_postproc_vol%delete('lp')
         cline_prime3D_master = cline
         call cline_prime3D_master%set('prg', 'prime3D')
         call cline_prime3D_master%set('startit', 1.)
@@ -510,22 +519,35 @@ contains
         deallocate(init_docs, final_docs, labels_incl, consensus, labels, included)
 
         ! FINAL RECONSTRUCTION
+        ! distributed reconstruction
         call cline_recvol_distr%set('oritab', trim(oritab))
         call xrecvol_distr%execute(cline_recvol_distr)
+        ! post-process
+        do state = 1, p_master%nstates
+            str_state = int2str_pad(state, 2)
+            vol1 = 'recvol_state'//trim(str_state)//p_master%ext
+            call cline_postproc_vol%set('vol1', trim(vol1))
+            fsc = 'fsc_state'//trim(str_state)//'.bin'
+            call cline_postproc_vol%set('fsc', trim(fsc))
+            if(file_exists(vol1) .and. file_exists(fsc))then
+                call xpostproc_vol%execute(cline_postproc_vol)
+            endif
+        enddo
 
         ! end gracefully
         call simple_end('**** SIMPLE_HET_ENSEMBLE NORMAL STOP ****')
         contains
 
             subroutine prime3d_cleanup
+                character(len=STDLEN) :: fname
                 ! delete starting volumes
-                do state=1,p_master%nstates
+                do state = 1, p_master%nstates
                     vol1 = 'startvol_state'//int2str_pad(state,2)//p_master%ext
                     if(file_exists(vol1))call del_file(vol1)
                 enddo
                 ! delete iterations volumes & documents
-                do it=1,iter-1
-                    do state=1,p_master%nstates
+                do it = 1, iter-1
+                    do state = 1, p_master%nstates
                         vol1 = trim(VOLFBODY)//int2str_pad(state,2)//'_iter'//int2str_pad(it,3)//p_master%ext
                         if(file_exists(vol1))call del_file(vol1)
                         vol1 = trim(VOLFBODY)//int2str_pad(state,2)//'_iter'//int2str_pad(it,3)//'pproc'//p_master%ext
@@ -535,7 +557,7 @@ contains
                     if(file_exists(oritab))call del_file(oritab)
                 enddo
                 ! delete restart documents
-                do it=1,iter
+                do it = 1, iter
                     fname = 'prime3D_restart_iter'//int2str_pad(it,3)//'.txt'
                     if(file_exists(fname))call del_file(fname)
                 enddo
@@ -554,7 +576,6 @@ contains
                     call rename(trim(vol1), trim(vol2))
                 enddo
             end subroutine stash_volumes
-
     end subroutine exec_het_ensemble
 
 end module simple_commander_hlev_wflows

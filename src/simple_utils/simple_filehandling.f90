@@ -148,8 +148,8 @@ contains
     !> \brief  is for making a file-table (to be able to commander execute programs that depend on them)
     !! \param tab1,tab2,tab3,tab4 input filenames
     subroutine make_multitab_filetable( tabname, tab1, tab2, tab3, tab4 )
-         use simple_strings, only: int2str, int2str_pad
-        character(len=*),                intent(in) :: tabname           !< file-table filename
+        use simple_strings, only: int2str, int2str_pad
+        character(len=*),                intent(in) :: tabname
         character(len=STDLEN),           intent(in) :: tab1(:), tab2(:)
         character(len=STDLEN), optional, intent(in) :: tab3(:), tab4(:)
         integer :: ntabs, n, fnr, ifile, file_stat
@@ -219,7 +219,7 @@ contains
         inquire(file=trim(adjustl(fname)), exist=file_exists)
     end function file_exists
 
-    !>  \brief  check whether a IO unit is current open
+    !>  \brief  check whether a IO unit is currently opened
     logical function is_open( unit_number )
         integer, intent(in)   :: unit_number
         integer               :: io_status
@@ -231,6 +231,36 @@ contains
             stop 'IO error; is_open; simple_filehandling'
         endif
     end function is_open
+
+    !>  \brief  check whether a file is currently opened
+    logical function is_file_open( fname )
+        character(len=*), intent(in)  :: fname
+        integer               :: io_status
+        character(len=STDLEN) :: io_message
+        io_status = 0
+        inquire(file=fname, opened=is_file_open,iostat=io_status,iomsg=io_message)
+        if (io_status .ne. 0) then
+            print *, 'is_open: IO error ', io_status, ': ', trim(adjustl(io_message))
+            stop 'IO error; is_file_open; simple_filehandling'
+        endif
+    end function is_file_open
+
+    !>  \brief  check whether a IO unit is current open
+    subroutine file_stats( fname, fstat, vals )
+        character(len=*),     intent(in)  :: fname
+        integer,              intent(out) :: fstat
+        integer, allocatable, intent(out) :: vals(:)
+        if( file_exists(trim(adjustl(fname))) )then
+            allocate(vals(13), source=0)
+            call stat(trim(adjustl(fname)), vals, status=fstat)
+            if( fstat.ne.0 )then
+                print *, 'Error simple_filehandling%file_stats for file:', trim(adjustl(fname))
+            endif
+        else
+            fstat = 0
+            print *, 'Unknown file: ',trim(adjustl(fname))
+        endif
+    end subroutine file_stats
 
     !> \brief  is for adding to filebody
     function add2fbody( fname, suffix, str ) result( newname )

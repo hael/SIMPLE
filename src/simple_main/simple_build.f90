@@ -30,9 +30,9 @@ use simple_opt_spec,            only: opt_spec
 use simple_convergence,         only: convergence
 use simple_convergence_perptcl, only: convergence_perptcl
 use simple_jiffys,              only: alloc_err
-use simple_mask_projector,      only: mask_projector
 use simple_projector,           only: projector
 use simple_polarizer,           only: polarizer
+use simple_masker,              only: masker
 use simple_filehandling         ! use all in there
 implicit none
 
@@ -54,8 +54,8 @@ type build
     type(image)                         :: img_copy           !< -"-
     type(projector)                     :: vol                !< -"-
     type(projector)                     :: vol_pad            !< -"-
-    type(mask_projector)                :: mskimg             !< mask image
-    type(mask_projector)                :: mskvol             !< mask volume
+    type(masker)                        :: mskimg             !< mask image
+    type(masker)                        :: mskvol             !< mask volume
     ! CLUSTER TOOLBOX
     type(ppca)                          :: pca                !< 4 probabilistic pca
     type(centre_clust)                  :: cenclust           !< centre-based clustering object
@@ -72,13 +72,12 @@ type build
     type(image),            allocatable :: cavgs(:)           !< class averages (Wiener normalised references)
     type(image),            allocatable :: ctfsqsums(:)       !< CTF**2 sums for Wiener normalisation
     type(projector),        allocatable :: refvols(:)         !< reference volumes for quasi-continuous search
-    type(mask_projector),   allocatable :: mskvols(:)         !< volumes masks for particle masking
     type(reconstructor),    allocatable :: recvols(:)         !< array of volumes for reconstruction
     type(eo_reconstructor), allocatable :: eorecvols(:)       !< array of volumes for eo-reconstruction
-    real,    allocatable                :: ssnr(:,:)          !< spectral signal to noise rations
     real,    allocatable                :: fsc(:,:)           !< Fourier shell correlation
     integer, allocatable                :: nnmat(:,:)         !< matrix with nearest neighbor indices
     integer, allocatable                :: pbatch(:)          !< particle index batch
+    integer, allocatable                :: grid_projs(:)      !< projection directions for coarse grid search
     ! PRIVATE EXISTENCE VARIABLES
     logical, private                    :: general_tbox_exists          = .false.
     logical, private                    :: cluster_tbox_exists          = .false.
@@ -126,7 +125,7 @@ contains
         class(cmdline),    intent(inout) :: cline
         logical, optional, intent(in)    :: do3d, nooritab, force_ctf
         type(ran_tabu) :: rt
-        integer        :: alloc_stat, lfny, iptcl, partsz
+        integer        :: alloc_stat, lfny, partsz, lfny_match
         real           :: slask(3)
         logical        :: err, ddo3d, fforce_ctf
         call self%kill_general_tbox
@@ -138,7 +137,7 @@ contains
         call seed_rnd
         DebugPrint   'seeded random number generator'
         ! set up symmetry functionality
-        call self%se%new(p%pgrp)
+        call self%se%new(trim(p%pgrp))
         p%nsym    = self%se%get_nsym()
         p%eullims = self%se%srchrange()
         DebugPrint   'did setup symmetry functionality'
@@ -183,14 +182,11 @@ contains
         endif
         DebugPrint   'did set number of dimensions and ctfmode'
         if( fforce_ctf ) call self%raise_hard_ctf_exception(p)
-        ! generate discrete projection direction space
+        ! generate discrete projection direction spaces
         call self%e%new( p%nspace )
-        if( str_has_substr(p%refine,'adasym') )then
-            call self%e%spiral
-        else
-            call self%e%spiral( p%nsym, p%eullims )
-        endif
-        DebugPrint   'generated discrete projection direction space'
+        call self%e%spiral( p%nsym, p%eullims )
+        self%grid_projs = self%e%create_proj_subspace(p%nsub, p%nsym, p%eullims )
+        DebugPrint 'generated discrete projection direction space'
         if( p%box > 0 )then
             ! build image objects
             ! box-sized ones
@@ -207,18 +203,14 @@ contains
             call self%img_pad%new([p%boxpd,p%boxpd,1],p%smpd,p%imgkind)
             if( ddo3d )then
                 call self%vol%new([p%box,p%box,p%box], p%smpd, p%imgkind)
-                if( p%automsk.eq.'yes' )then
-                    call self%mskvol%new([p%boxmatch,p%boxmatch,p%boxmatch],p%smpd,p%imgkind)
-                endif
                 call self%vol_pad%new([p%boxpd,p%boxpd,p%boxpd],p%smpd,p%imgkind)
             endif
             DebugPrint  'did build boxpd-sized image objects'
             ! build arrays
             lfny = self%img%get_lfny(1)
-            allocate( self%ssnr(p%nstates,lfny), self%fsc(p%nstates,lfny), stat=alloc_stat )
+            lfny_match = self%img_match%get_lfny(1)         
+            allocate( self%fsc(p%nstates,lfny), source=0., stat=alloc_stat )
             call alloc_err("In: build_general_tbox; simple_build, 1", alloc_stat)
-            self%ssnr = 0.
-            self%fsc  = 0.
             ! set default amsklp
             if( .not. cline%defined('amsklp') .and. cline%defined('lp') )then
                 p%amsklp = self%img%get_lp(self%img%get_find(p%lp)-2)
@@ -249,7 +241,6 @@ contains
     !> \brief  destructs the general toolbox
     subroutine kill_general_tbox( self )
         class(build), intent(inout)  :: self
-        integer :: i, istart, istop
         if( self%general_tbox_exists )then
             call self%conv%kill
             call self%se%kill
@@ -264,15 +255,13 @@ contains
             call self%img_pad%kill
             call self%vol%kill_expanded
             call self%vol%kill
-            call self%mskvol%kill_mskproj
+            call self%mskvol%kill_masker
             call self%mskvol%kill
-            call self%mskimg%kill_mskproj
+            call self%mskimg%kill_masker
             call self%mskimg%kill
             call self%vol_pad%kill_expanded
             call self%vol_pad%kill
-            if( allocated(self%ssnr) )then
-                deallocate(self%ssnr, self%fsc)
-            endif
+            if( allocated(self%fsc) )deallocate(self%fsc)
             self%general_tbox_exists = .false.
         endif
     end subroutine kill_general_tbox
@@ -414,7 +403,7 @@ contains
         class(build),  intent(inout) :: self
         class(params), intent(inout) :: p
         type(oris) :: os
-        integer    :: icls, alloc_stat, funit, io_stat
+        integer    :: icls, alloc_stat
         call self%kill_hadamard_prime2D_tbox
         call self%raise_hard_ctf_exception(p)
         allocate( self%cavgs(p%ncls), self%ctfsqsums(p%ncls), stat=alloc_stat )
@@ -456,33 +445,20 @@ contains
         use simple_strings, only: str_has_substr
         class(build),  intent(inout) :: self
         class(params), intent(in)    :: p
-        integer :: s, alloc_stat, i
+        integer :: s, alloc_stat, nnn
         call self%kill_hadamard_prime3D_tbox
         call self%raise_hard_ctf_exception(p)
         ! reconstruction objects
         if( p%eo .eq. 'yes' )then
             allocate( self%eorecvols(p%nstates), stat=alloc_stat )
             call alloc_err('build_hadamard_prime3D_tbox; simple_build, 1', alloc_stat)
-            do s=1,p%nstates
-                call self%eorecvols(s)%new(p)
-            end do
         else
             allocate( self%recvols(p%nstates), stat=alloc_stat )
             call alloc_err('build_hadamard_prime3D_tbox; simple_build, 2', alloc_stat)
-            do s=1,p%nstates
-                call self%recvols(s)%new([p%boxpd,p%boxpd,p%boxpd],p%smpd,p%imgkind)
-                call self%recvols(s)%alloc_rho(p)
-            end do
         endif
         if( str_has_substr(p%refine,'neigh') )then
-            call self%e%nearest_neighbors(p%nnn, self%nnmat)
-        endif
-        if( p%doautomsk )then
-            allocate( self%mskvols(p%nstates), stat=alloc_stat )
-            call alloc_err('build_hadamard_prime3D_tbox; simple_build, 3', alloc_stat)
-            do s=1,p%nstates
-                call self%mskvols(s)%new([p%boxmatch,p%boxmatch,p%boxmatch],p%smpd,p%imgkind)
-            end do
+            nnn = p%nnn
+            call self%se%nearest_neighbors(self%e, nnn, self%nnmat)
         endif
         write(*,'(A)') '>>> DONE BUILDING HADAMARD PRIME3D TOOLBOX'
         self%hadamard_prime3D_tbox_exists = .true.
@@ -506,20 +482,6 @@ contains
                 end do
                 deallocate(self%recvols)
             endif
-            if( allocated(self%refvols) )then
-                do i=1,size(self%refvols)
-                    call self%refvols(i)%kill_expanded
-                    call self%refvols(i)%kill
-                end do
-                deallocate(self%refvols)
-            endif
-            if( allocated(self%mskvols) )then
-                do i=1,size(self%mskvols)
-                    call self%mskvols(i)%kill_mskproj
-                    call self%mskvols(i)%kill
-                end do
-                deallocate(self%mskvols)
-            endif
             if( allocated(self%nnmat) ) deallocate(self%nnmat)
             self%hadamard_prime3D_tbox_exists = .false.
         endif
@@ -529,7 +491,7 @@ contains
     subroutine build_cont3D_tbox( self, p )
         class(build),  intent(inout) :: self
         class(params), intent(in)    :: p
-        integer :: s, alloc_stat, i
+        integer :: s, alloc_stat
         call self%kill_cont3D_tbox
         call self%raise_hard_ctf_exception(p)
         if( p%norec .eq. 'yes' )then
@@ -538,16 +500,9 @@ contains
             if( p%eo .eq. 'yes' )then
                 allocate( self%eorecvols(p%nstates), stat=alloc_stat )
                 call alloc_err('build_hadamard_prime3D_tbox; simple_build, 1', alloc_stat)
-                do s=1,p%nstates
-                    call self%eorecvols(s)%new(p)
-                end do
             else
                 allocate( self%recvols(p%nstates), stat=alloc_stat )
                 call alloc_err('build_hadamard_prime3D_tbox; simple_build, 2', alloc_stat)
-                do s=1,p%nstates
-                    call self%recvols(s)%new([p%boxpd,p%boxpd,p%boxpd],p%smpd,p%imgkind)
-                    call self%recvols(s)%alloc_rho(p)
-                end do
             endif
         endif
         allocate( self%refvols(p%nstates), stat=alloc_stat)
@@ -592,7 +547,7 @@ contains
     subroutine build_extremal3D_tbox( self, p )
         class(build),  intent(inout) :: self
         class(params), intent(in)    :: p
-        integer :: s, alloc_stat, i
+        integer :: alloc_stat
         call self%kill_extremal3D_tbox
         call self%raise_hard_ctf_exception(p)
         allocate( self%recvols(1), stat=alloc_stat )

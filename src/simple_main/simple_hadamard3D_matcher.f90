@@ -13,7 +13,6 @@ use simple_build,            only: build
 use simple_params,           only: params
 use simple_cmdline,          only: cmdline
 use simple_gridding,         only: prep4cgrid
-use simple_masker,           only: automask
 use simple_strings,          only: str_has_substr
 use simple_cont3D_matcher    ! use all in there
 use simple_hadamard_common   ! use all in there
@@ -69,8 +68,8 @@ contains
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: update_res, converged
         type(oris)        :: prime3D_oris
-        real              :: norm, corr_thresh, corr_prev, corr
-        integer           :: iptcl, s, inptcls, prev_state, istate
+        real              :: norm, corr_thresh
+        integer           :: iptcl, inptcls, prev_state, istate
         integer           :: statecnt(p%nstates)
 
         inptcls = p%top - p%fromp + 1
@@ -89,9 +88,8 @@ contains
         ! DETERMINE THE NUMBER OF PEAKS
         if( .not. cline%defined('npeaks') )then
             select case(p%refine)
-                case('no', 'neigh', 'adasym')
+                case('no', 'neigh', 'greedy', 'greedyneigh')
                     p%npeaks = min(MAXNPEAKS,b%e%find_npeaks(p%lp, p%moldiam))
-                    if( str_has_substr(p%refine,'adasym') ) p%npeaks = p%npeaks * p%nsym
                 case DEFAULT
                     p%npeaks = 1
             end select
@@ -150,16 +148,6 @@ contains
                 p%outfile = 'prime3Ddoc_'//int2str_pad(which_iter,3)//'.txt'
             endif
         endif
-        if(p%norec .eq. 'no')then
-            do s=1,p%nstates
-                if( p%eo .eq. 'yes' )then
-                    call b%eorecvols(s)%reset_all
-                else
-                    call b%recvols(s)%reset
-                endif
-            end do
-            DebugPrint '*** hadamard3D_matcher ***: did reset recvols'
-        endif
 
         ! STOCHASTIC IMAGE ALIGNMENT
         ! create the search objects, need to re-create every round because parameters are changing
@@ -167,9 +155,10 @@ contains
         do iptcl=p%fromp,p%top
             call primesrch3D(iptcl)%new(b%a, p, pftcc)
         end do
+        ! prep ctf & filter
+        if(p%ctf .ne. 'no') call pftcc%create_polar_ctfmats(p%smpd, b%a)
         ! execute the search
         call del_file(p%outfile)
-        if(p%ctf .ne. 'no') call pftcc%create_polar_ctfmats(p%smpd, b%a)
         select case(p%refine)
             case( 'snhc' )
                 !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
@@ -177,7 +166,7 @@ contains
                     call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp, szsn=p%szsn)
                 end do
                 !$omp end parallel do
-            case( 'no','adasym','shc' )
+            case( 'no','shc' )
                 if( p%oritab .eq. '' )then
                     !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                     do iptcl=p%fromp,p%top
@@ -195,7 +184,21 @@ contains
                 if( p%oritab .eq. '' ) stop 'cannot run the refine=neigh mode without input oridoc (oritab)'
                 !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                 do iptcl=p%fromp,p%top
-                    call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp, nnmat=b%nnmat)
+                    call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a,&
+                        b%e, p%lp, nnmat=b%nnmat, grid_projs=b%grid_projs)
+                end do
+                !$omp end parallel do
+            case('greedy')
+                !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
+                do iptcl=p%fromp,p%top
+                    call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp, greedy=.true.)
+                end do
+                !$omp end parallel do
+            case('greedyneigh')
+                !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
+                do iptcl=p%fromp,p%top
+                    call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp,&
+                        greedy=.true., nnmat=b%nnmat, grid_projs=b%grid_projs)
                 end do
                 !$omp end parallel do
             case('het')
@@ -220,12 +223,17 @@ contains
                 write(*,*) 'The refinement mode: ', trim(p%refine), ' is unsupported'
                 stop
         end select
+        call pftcc%kill
+
         ! output orientations
         call b%a%write(p%outfile, [p%fromp,p%top])
         p%oritab = p%outfile
 
         ! volumetric 3d reconstruction
         if( p%norec .eq. 'no' )then
+            ! init volumes
+            call preprecvols(b, p)
+            ! reconstruction
             do iptcl=p%fromp,p%top
                 orientation = b%a%get_ori(iptcl)
                 prev_state  = nint( orientation%get('state') )
@@ -245,6 +253,8 @@ contains
             else
                 call norm_struct_facts(b, p, which_iter)
             endif
+            ! destruct volumes
+            call killrecvols(b, p)
         endif
 
         ! destruct
@@ -252,7 +262,6 @@ contains
             call primesrch3D(iptcl)%kill
         end do
         deallocate( primesrch3D )
-        call pftcc%kill
         call prime3D_oris%kill
 
         ! report convergence
@@ -278,6 +287,8 @@ contains
         integer              :: i, k, nsamp, alloc_stat
         type(kbinterpol)     :: kbwin
         if( p%vols(1) == '' )then
+            ! init volumes
+            call preprecvols(b, p)
             p%oritab = 'prime3D_startdoc.txt'
             call b%a%rnd_oris
             call b%a%zero_shifts
@@ -325,6 +336,7 @@ contains
             end do
             deallocate(sample)
             call norm_struct_facts(b, p)
+            call killrecvols(b, p)
         endif
     end subroutine gen_random_model
     !> Prepare alignment search using polar projection Fourier cross correlation
@@ -353,11 +365,25 @@ contains
     end subroutine preppftcc4align
     !> Prepare reference images and create polar projections
     subroutine prep_refs_pftcc4align( b, p, cline )
+<<<<<<< variant A
         class(build),   intent(inout) :: b          !< build object
         class(params),  intent(inout) :: p          !< param object
         class(cmdline), intent(inout) :: cline      !< command line
         type(ori) :: o
         integer   :: cnt, s, iref, nrefs
+>>>>>>> variant B
+        class(build),   intent(inout) :: b
+        class(params),  intent(inout) :: p
+        class(cmdline), intent(inout) :: cline
+        type(ori)         :: o
+        integer           :: cnt, s, iref, nrefs
+####### Ancestor
+        class(build),   intent(inout) :: b
+        class(params),  intent(inout) :: p
+        class(cmdline), intent(inout) :: cline
+        type(ori) :: o
+        integer   :: cnt, s, iref, nrefs
+======= end
         ! PREPARATION OF REFERENCES IN PFTCC
         ! read reference volumes and create polar projections
         nrefs = p%nspace*p%nstates
@@ -419,11 +445,6 @@ contains
                         ! empty state
                         cycle
                     endif
-                    ! if( p%doautomsk )then
-                    !     ! read & pre-process mask volume
-                    !     b%mskvol = b%mskvols(s)
-                    !     call b%mskvol%init_mskproj(p)
-                    ! endif
                     do iptcl=p%fromp,p%top
                         o      = b%a%get_ori(iptcl)
                         istate = nint(o%get('state'))
@@ -434,7 +455,6 @@ contains
                         call prepimg4align(b, p, o)
                         call b%img_match%polarize(pftcc, iptcl)
                     end do
-                    if( p%doautomsk )call b%mskvols(s)%kill_mskproj
                 end do
                 call progress(ntot, ntot)
             end subroutine prep_pftcc_local

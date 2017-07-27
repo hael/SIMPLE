@@ -37,6 +37,7 @@ type :: ori
     ! CONSTRUCTOR
     procedure          :: new_ori
     procedure          :: new => new_ori
+    procedure          :: new_ori_clean
     procedure          :: ori_from_rotmat
     ! SETTERS
     procedure          :: reject
@@ -59,6 +60,7 @@ type :: ori
     generic            :: rnd_euler => rnd_euler_1, rnd_euler_2
     procedure          :: rnd_ori
     procedure          :: rnd_inpl
+    procedure          :: rnd_shift
     procedure          :: revshsgn
     ! GETTERS
     procedure          :: exists
@@ -81,7 +83,7 @@ type :: ori
     procedure          :: ori2str
     ! PRINTING & I/O
     procedure          :: print_mat
-    procedure          :: display
+    procedure          :: print_ori
     procedure          :: write
     procedure          :: read
     ! CALCULATORS
@@ -138,19 +140,20 @@ contains
         call self%htab%set('e3',0.)
         call self%htab%set('x',0.)
         call self%htab%set('y',0.)
-        call self%htab%set('mi',0.)
-        call self%htab%set('mi_hard',0.)
         call self%htab%set('dist',180.)
         call self%htab%set('state',1.)
-        call self%htab%set('corr',-1.)
-        call self%htab%set('w',1.)
-        call self%htab%set('class',1.)
-        call self%htab%set('mirr',0.)
         call self%htab%set('frac',0.)
         self%chtab = chash(NNAMES)
         self%existence = .true.
     end subroutine new_ori
 
+    !>  \brief  is a constructor
+    subroutine new_ori_clean( self )
+        class(ori), intent(inout) :: self
+        self%chtab = chash(NNAMES)
+        self%existence = .true.
+    end subroutine new_ori_clean
+    
     !>  \brief  is a parameterized constructor
     subroutine ori_from_rotmat( self, rotmat )
         class(ori), intent(inout) :: self
@@ -169,22 +172,11 @@ contains
     !>  \brief  sets parameters for particle rejection
     subroutine reject( self )
         class(ori), intent(inout) :: self
-        call self%set_euler([0.,0.,0.])
-        call self%htab%set('e1',0.)
-        call self%htab%set('e2',0.)
-        call self%htab%set('e3',0.)
-        call self%htab%set('x',0.)
-        call self%htab%set('y',0.)
-        call self%htab%set('mi',0.)
-        call self%htab%set('mi_hard',0.)
-        call self%htab%set('dist',180.)
-        call self%htab%set('state',0.)
-        call self%htab%set('corr',-1.)
-        call self%htab%set('w',0.)
-        call self%htab%set('class',0.)
-        call self%htab%set('mirr',0.)
-        call self%htab%set('frac',0.)
-        call self%htab%set('specscore',0.)
+        call self%set_euler([0., 0., 0.])
+        call self%set_shift([0., 0.])
+        call self%htab%set('state', 0.)
+        if( self%isthere('corr') )     call self%htab%set('corr',     -1.)
+        if( self%isthere('specscore') )call self%htab%set('specscore', 0.)
     end subroutine reject
 
     !>  \brief  is a polymorphic assigner
@@ -342,7 +334,7 @@ contains
         self%normal = matmul(zvec, self%rmat)
     end subroutine rnd_euler_1
 
-    !>  \brief  for generating a random Euler angle neighbor to o_prev
+    !>  \brief  for generating a random Euler angle neighbour to o_prev 
     subroutine rnd_euler_2( self, o_prev, athres, proj )
         use simple_math, only: deg2rad
         class(ori),        intent(inout) :: self   !< instance
@@ -399,20 +391,27 @@ contains
         class(ori), intent(inout)  :: self
         real, intent(in), optional :: trs
         real :: x, y
-        if( present(trs) )then
-            if( abs(trs) < 1e-3 )then
-                x = 0.
-                y = 0.
-            else
-                x = ran3()*2*trs-trs
-                y = ran3()*2*trs-trs
-            endif
-            call self%set('x', x)
-            call self%set('y', y)
-        endif
+        if( present(trs) )call self%rnd_shift(trs)
         call self%e3set(ran3()*359.99)
     end subroutine rnd_inpl
 
+    !>  \brief  for generating random in-plane parameters
+    subroutine rnd_shift( self, trs )
+        use simple_rnd, only: ran3
+        class(ori), intent(inout)  :: self
+        real,       intent(in)     :: trs
+        real :: x, y
+        if( abs(trs) < 1e-3 )then
+            x = 0.
+            y = 0.
+        else
+            x = ran3()*2*trs-trs
+            y = ran3()*2*trs-trs
+        endif
+        call self%set('x', x)
+        call self%set('y', y)
+    end subroutine rnd_shift
+    
     !>  \brief  for reversing the shift signs (to fit convention)
     subroutine revshsgn( self )
         class(ori), intent(inout) :: self
@@ -580,14 +579,16 @@ contains
         write(*,*) self%rmat(3,:)
     end subroutine print_mat
 
-    !>  \brief  prints oris data based on the existence of intent(in) character strings whose variable names are
-    !! equivalent to the variables contained in the align derived type. The input character variables are printed
-    !! first, preceeding printing of their associated value (key-value style for simple parsing of data)
-    subroutine display( self )
+    !>  \brief prints oris data based on the existence of intent(in) character
+    !! strings whose variable names are equivalent to the variables contained in
+    !! the align derived type. The input character variables are printed first,
+    !! preceeding printing of their associated value (key-value style for simple
+    !! parsing of data)
+    subroutine print_ori( self )
         class(ori), intent(inout) :: self
         call self%htab%print()
         call self%chtab%print_key_val_pairs
-    end subroutine display
+    end subroutine print_ori
 
     !>  \brief  writes orientation info
     subroutine write( self, fhandle )
@@ -640,7 +641,8 @@ contains
         class(ori), intent(in) :: self1, self2
         type(ori) :: self_out
         call self_out%new_ori
-        self_out%rmat = matmul(self2%rmat,self1%rmat) 
+        self_out%rmat = matmul(self2%rmat,self1%rmat)  ! multiplication of two rotation matrices commute (n>2 not)
+        ! the composed rotation matrix is constructed
         ! convert to euler
         self_out%euls = m2euler(self_out%rmat)
         call self_out%set('e1',self_out%euls(1))

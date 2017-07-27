@@ -90,6 +90,7 @@ contains
         type(kbinterpol)   :: kbwin
         real               :: snr_pink, snr_detector, bfac, bfacerr, dfx, dfy, angast
         integer            :: i, cnt, ntot
+        debug=.false. ! declared in local flags
         p = params(cline, .false.)          ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         kbwin = kbinterpol(KBWINSZ, KBALPHA)
@@ -133,7 +134,7 @@ contains
         call b%vol%mask(p%msk, 'soft')
         DebugPrint  '>>> DID READ VOL'
         call prep4cgrid(b%vol, b%vol_pad, p%msk, kbwin)
-        call b%vol%expand_cmat
+        call b%vol_pad%expand_cmat
         DebugPrint  '>>> DONE PREPARING FOR IMAGE GENERATION'
         write(*,'(A)') '>>> GENERATING IMAGES'
         cnt = 0
@@ -194,6 +195,7 @@ contains
         integer, allocatable :: ptcl_positions(:,:)
         real, allocatable    :: shifts(:,:)
         logical              :: here
+        debug=.false. ! declared in local flags
         p = params(cline)                     ! parameters generated
         if( p%box == 0 ) stop 'box=0, something is fishy!'
         call b%build_general_tbox(p, cline)   ! general objects built

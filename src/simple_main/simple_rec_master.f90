@@ -43,6 +43,7 @@ contains
         character(len=*), optional, intent(in)    :: fbody_in
         real,             optional, intent(in)    :: wmat(:,:)
         character(len=:), allocatable :: fbody
+        character(len=STDLEN)         :: rho_name
         integer :: s, fri, toi, file_stat, fnr, nstates_oritab
         ! rebuild b%vol according to box size (beacuse it is otherwise boxmatch)
         call b%vol%new([p%box,p%box,p%box], p%smpd, p%imgkind)
@@ -67,23 +68,23 @@ contains
                 endif
                 if( p%even .eq. 'yes' .and. p%odd .eq. 'no' )then
                     p%vols(s) = fbody//'_even'//p%ext
-                    p%masks(s) = 'rho_'//fbody//'_even'//p%ext
+                    rho_name  = 'rho_'//fbody//'_even'//p%ext
                     call b%recvol%rec(p%stk, p, b%a, b%se, s, mul=p%mul, eo=2, part=p%part, wmat=wmat)
                 else if( p%odd .eq. 'yes' .and. p%even .eq. 'no' )then
                     p%vols(s) = fbody//'_odd'//p%ext
-                    p%masks(s) = 'rho_'//fbody//'_odd'//p%ext
+                    rho_name  = 'rho_'//fbody//'_odd'//p%ext
                     call b%recvol%rec(p%stk, p, b%a, b%se, s, mul=p%mul, eo=1, part=p%part, wmat=wmat)
                 else if( p%even .eq. 'yes' .and. p%odd .eq. 'yes' )then
                     stop 'ERROR! even and odd cannot both be yes!'
                 else
-                    p%vols(s)  = fbody//p%ext
-                    p%masks(s) = 'rho_'//fbody//p%ext
+                    p%vols(s) = fbody//p%ext
+                    rho_name  = 'rho_'//fbody//p%ext
                     call b%recvol%rec(p%stk, p, b%a, b%se, s, mul=p%mul,&
                     part=p%part, wmat=wmat)
                 endif
                 call b%recvol%compress_exp
                 call b%recvol%write(p%vols(s), del_if_exists=.true.)
-                call b%recvol%write_rho(p%masks(s))
+                call b%recvol%write_rho(trim(rho_name))
             else ! shared-mem parallel rec
                 if( present(fbody_in) )then
                     allocate(fbody, source=trim(adjustl(fbody_in))//'_state')

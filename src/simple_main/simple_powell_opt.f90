@@ -5,9 +5,9 @@
 !!
 !! Minimization of an externally defined function by Powell's direction set method
 !
-! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
-! Redistribution or modification is regulated by the GNU General Public License.
-! *Author:* Hans Elmlund, 2013-10-15
+! The code is distributed with the hope that it will be useful, but _WITHOUT_
+! _ANY_ _WARRANTY_. Redistribution or modification is regulated by the GNU
+! General Public License. *Author:* Hans Elmlund, 2013-10-15
 !
 module simple_powell_opt
 use simple_optimizer, only: optimizer
@@ -27,11 +27,10 @@ type, extends(optimizer) :: powell_opt
   contains
     procedure :: new          => new_powell_opt
     procedure :: minimize     => powell_minimize
-    procedure :: get_vertices => powell_get_vertices
     procedure :: kill         => kill_powell_opt
-end type
+end type powell_opt
 
-logical :: warn=.false.
+#include "simple_local_flags.inc"
 
 contains
 
@@ -187,17 +186,6 @@ contains
             end subroutine
 
     end subroutine
-
-    ! GETTERS
-
-    !> \brief  dummy procedure, only defined in simplex
-    subroutine powell_get_vertices( self, spec, vertices, costs )
-        use simple_opt_spec,           only: opt_spec
-        class(powell_opt), intent(inout) :: self
-        class(opt_spec),    intent(inout) :: spec
-        real, allocatable,  intent(inout) :: vertices(:,:), costs(:)
-        stop 'procedure only defined for simplex optimisation'
-    end subroutine powell_get_vertices
 
     ! DESTRUCTOR
 

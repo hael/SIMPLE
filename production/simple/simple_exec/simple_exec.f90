@@ -3,7 +3,7 @@
 !------------------------------------------------------------------------------!
 !> SIMPLE_EXEC is the primary program of SIMPLE 
 !
-!! @detail `simple_exec' executes every individual program in the SIMPLE library.
+!! \detail `simple_exec' executes every individual program in the SIMPLE library.
 !! To list all programs type `simple_exec prg=list'.
 !!
 !! To execute program prime3D type simple_exec prg=prime3D and instructions are
@@ -12,9 +12,9 @@
 !! this case, simple_exec is also the invoker as it executes the request.
 ! 
 !
-!! @author Cyril Reboul & Hans Elmlund 2016
+!! \author Cyril Reboul & Hans Elmlund 2016
 !
-! The code is distributed with the hope that it will be useful, but WITHOUT ANY
+! The SIMPLE code is distributed with the hope that it will be useful, but WITHOUT ANY
 ! WARRANTY. Redistribution and modification is regulated by the GNU General
 ! Public License.
 ! -----------------------------------------------------------------------------!
@@ -45,6 +45,7 @@ implicit none
 type(noiseimgs_commander)          :: xnoiseimgs
 type(simimgs_commander)            :: xsimimgs
 type(simmovie_commander)           :: xsimmovie
+type(simsubtomo_commander)         :: xsimsubtomo
 
 ! PRE-PROCESSING PROGRAMS
 type(preproc_commander)            :: xpreproc
@@ -54,6 +55,8 @@ type(powerspecs_commander)         :: xpowerspecs
 type(unblur_commander)             :: xunblur
 type(ctffind_commander)            :: xctffind
 type(select_commander)             :: xselect
+type(makepickrefs_commander)       :: xmakepickrefs
+type(pick_commander)               :: xpick
 type(extract_commander)            :: xextract
 
 ! PRIME2D PROGRAMS
@@ -68,10 +71,13 @@ type(resrange_commander)           :: xresrange
 type(npeaks_commander)             :: xnpeaks
 type(nspace_commander)             :: xnspace
 type(prime3D_init_commander)       :: xprime3D_init
+type(multiptcl_init_commander)     :: xmultiptcl_init
 type(prime3D_commander)            :: xprime3D
+type(cont3D_commander)             :: xcont3D
 type(check3D_conv_commander)       :: xcheck3D_conv
     
 ! COMMON-LINES PROGRAMS
+type(comlin_smat_commander)        :: xcomlin_smat
 type(symsrch_commander)            :: xsymsrch
 
 ! SYMMETRY PROGRAMS
@@ -81,7 +87,6 @@ type(dsymsrch_commander)           :: xdsymsrch
 ! MASK PROGRAMS
 type(mask_commander)               :: xmask
 type(automask2D_commander)         :: xautomask2D
-type(automask3D_commander)         :: xautomask3D
     
 ! RECONSTRUCTION PROGRAMS
 type(eo_volassemble_commander)     :: xeo_volassemble
@@ -94,6 +99,7 @@ type(check_nptcls_commander)       :: xcheck_nptcls
 type(iminfo_commander)             :: ximinfo
 
 ! VOLOPS PROGRAMS
+type(fsc_commander)                :: xfsc
 type(cenvol_commander)             :: xcenvol
 type(postproc_vol_commander)       :: xpostproc_vol
 type(projvol_commander)            :: xprojvol
@@ -107,6 +113,7 @@ type(convert_commander)            :: xconvert
 type(corrcompare_commander)        :: xcorrcompare
 type(ctfops_commander)             :: xctfops
 type(filter_commander)             :: xfilter
+type(image_smat_commander)         :: ximage_smat
 type(norm_commander)               :: xnorm
 type(scale_commander)              :: xscale
 type(stack_commander)              :: xstack
@@ -114,6 +121,7 @@ type(stackops_commander)           :: xstackops
 ! type(fixmapheader_commander)       :: xfixmapheader
     
 ! MISCELLANOUS PROGRAMS
+type(cluster_smat_commander)       :: xcluster_smat
 type(masscen_commander)            :: xmasscen
 type(print_cmd_dict_commander)     :: xprint_cmd_dict
 type(print_dose_weights_commander) :: xprint_dose_weights
@@ -271,9 +279,80 @@ select case(prg)
         call cline%set('eo',   'no')
         ! execute
         call xsimmovie%execute(cline)
+    case( 'simsubtomo' )
+        !==Program simsubtomo
+        !
+        ! <simsubtomo/begin>is a program for crude simulation of a subtomograms<simsubtomo/end>
+        !
+        ! set required keys
+        keys_required(1) = 'vol1'
+        keys_required(2) = 'smpd'
+        keys_required(3) = 'nptcls'
+        keys_required(4) = 'snr'
+        ! set optional keys
+        keys_optional(1) = 'nthr'
+        ! parse command line
+        if( describe ) call print_doc_simsubtomo
+        call cline%parse(keys_required(:4), keys_optional(:1))
+        ! execute
+        call xsimsubtomo%execute(cline)
 
     ! PRE-PROCESSING PROGRAMS
 
+    case( 'preproc' )
+        !==Program preproc
+        !
+        ! <preproc/begin>is a program that executes unblur, ctffind and pick in sequence
+        ! <preproc/end>
+        !
+        ! set required keys
+        keys_required(1)   = 'filetab'
+        keys_required(2)   = 'smpd'
+        keys_required(3)   = 'kv'
+        keys_required(4)   = 'cs'
+        keys_required(5)   = 'fraca'
+        ! set optional keys
+        keys_optional(1)   = 'nthr'
+        keys_optional(2)   = 'refs'
+        keys_optional(3)   = 'fbody'
+        keys_optional(4)   = 'dose_rate'
+        keys_optional(5)   = 'exp_time'
+        keys_optional(6)   = 'lpstart'
+        keys_optional(7)   = 'lpstop'
+        keys_optional(8)   = 'trs'
+        keys_optional(9)   = 'pspecsz_unblur'
+        keys_optional(10)  = 'pspecsz_ctffind'
+        keys_optional(11)  = 'numlen'
+        keys_optional(12)  = 'startit'
+        keys_optional(13)  = 'scale'
+        keys_optional(14)  = 'nframesgrp'
+        keys_optional(15)  = 'fromf'
+        keys_optional(16)  = 'tof'
+        keys_optional(17)  = 'hp_ctffind'
+        keys_optional(18)  = 'lp_ctffind'
+        keys_optional(19)  = 'lp_pick'
+        keys_optional(20)  = 'dfmin'
+        keys_optional(21)  = 'dfmax'
+        keys_optional(22)  = 'astigstep'
+        keys_optional(23)  = 'expastig'
+        keys_optional(24)  = 'phaseplate'
+        keys_optional(25)  = 'thres'
+        keys_optional(26)  = 'rm_outliers'
+        keys_optional(27)  = 'nsig'
+        keys_optional(28)  = 'dopick'
+        ! parse command line
+        if( describe ) call print_doc_preproc
+        call cline%parse(keys_required(:5), keys_optional(:28))
+        ! set defaults
+        if( .not. cline%defined('trs')             ) call cline%set('trs',        5.)
+        if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',   15.)
+        if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',     8.)
+        if( .not. cline%defined('pspecsz_unblur')  ) call cline%set('pspecsz',  512.)
+        if( .not. cline%defined('pspecsz_ctffind') ) call cline%set('pspecsz', 1024.)
+        if( .not. cline%defined('hp_ctffind')      ) call cline%set('hp',        30.)
+        if( .not. cline%defined('lp_ctffind')      ) call cline%set('lp',         5.)
+        if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',   20.)
+        call xpreproc%execute(cline)
     case( 'select_frames' )
         !==Program select_frames
         !
@@ -486,6 +565,45 @@ select case(prg)
         if( .not. cline%defined('outfile') )  call cline%set('outfile', 'selected_lines.txt')
         ! execute
         call xselect%execute(cline)
+    case( 'makepickrefs' )
+        !==Program pickrefs
+        !
+        ! <makepickrefs/begin>is a program for generating references for template-based particle picking<makepickrefs/end> 
+        !
+        ! set required keys
+        keys_required(1) = 'pgrp'
+        keys_required(2) = 'smpd'
+        ! set optional keys
+        keys_optional(1) = 'nthr'
+        keys_optional(2) = 'vol1'
+        keys_optional(3) = 'stk'
+        keys_optional(4) = 'neg'
+        ! parse command line
+        if( describe ) call print_doc_makepickrefs
+        call cline%parse(keys_required(:1), keys_optional(:4))
+        ! set defaults
+        if( .not. cline%defined('neg') )  call cline%set('neg', 'yes')
+        ! execute
+        call xmakepickrefs%execute(cline)
+    case( 'pick' )
+        !==Program pick
+        !
+        ! <pick/begin>is a template-based picker program<pick/end> 
+        !
+        ! set required keys
+        keys_required(1) = 'filetab'
+        keys_required(2) = 'refs'
+        keys_required(3) = 'smpd'
+        ! set optional keys
+        keys_optional(1) = 'nthr'
+        keys_optional(2) = 'lp'
+        keys_optional(3) = 'thres'
+        keys_optional(4) = 'rm_outliers'
+        ! parse command line
+        if( describe ) call print_doc_pick
+        call cline%parse(keys_required(:3), keys_optional(:4))
+        ! execute
+        call xpick%execute(cline)
     case( 'extract' )
         !==Program extract
         !
@@ -539,11 +657,12 @@ select case(prg)
         keys_optional(8)  = 'outfile'
         keys_optional(9)  = 'refs'
         keys_optional(10) = 'remap_classes'
+        keys_optional(11) = 'weights2D'
         ! parse command line
         if( describe ) call print_doc_makecavgs
-        call cline%parse(keys_required(:3), keys_optional(:10))
+        call cline%parse(keys_required(:3), keys_optional(:11))
         ! set defaults
-        if( .not. cline%defined('eo') ) call cline%set('eo', 'no')
+        if( .not. cline%defined('weights2D') ) call cline%set('weights2D', 'no')
         ! execute
         call xmakecavgs%execute(cline)
     case( 'prime2D' )
@@ -569,22 +688,28 @@ select case(prg)
         keys_optional(8)  = 'lpstop'
         keys_optional(9)  = 'cenlp'
         keys_optional(10) = 'trs'
-        keys_optional(11) = 'inner'
-        keys_optional(12) = 'width'
-        keys_optional(13) = 'startit'
-        keys_optional(14) = 'maxits'
-        keys_optional(15) = 'center'
+        keys_optional(11) = 'automsk'
+        keys_optional(12) = 'amsklp'
+        keys_optional(13) = 'edge'
+        keys_optional(14) = 'inner'
+        keys_optional(15) = 'width'
+        keys_optional(16) = 'startit'
+        keys_optional(17) = 'maxits'
+        keys_optional(18) = 'center'
+        keys_optional(19) = 'oritab3D'
+        keys_optional(20) = 'weights2D'
         ! parse command line
         if( describe ) call print_doc_prime2D
-        call cline%parse(keys_required(:5), keys_optional(:15))
+        call cline%parse(keys_required(:5), keys_optional(:20))
         ! set defaults
-        if( .not. cline%defined('lpstart') ) call cline%set('lpstart',  15.)
-        if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',    8.)
-        if( .not. cline%defined('amsklp')  ) call cline%set('amsklp',   25.)
-        if( .not. cline%defined('cenlp')   ) call cline%set('cenlp',    30.)
-        if( .not. cline%defined('edge')    ) call cline%set('edge',     20.)
-        if( .not. cline%defined('eo')      ) call cline%set('eo',      'no')
-        if( .not. cline%defined('maxits')  ) call cline%set('maxits',   30.)
+        if( .not. cline%defined('lpstart')   ) call cline%set('lpstart',  15.)
+        if( .not. cline%defined('lpstop')    ) call cline%set('lpstop',    8.)
+        if( .not. cline%defined('amsklp')    ) call cline%set('amsklp',   20.)
+        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',    30.)
+        if( .not. cline%defined('edge')      ) call cline%set('edge',     10.)
+        if( .not. cline%defined('eo')        ) call cline%set('eo',      'no')
+        if( .not. cline%defined('maxits')    ) call cline%set('maxits',   30.)
+        if( .not. cline%defined('weights2D') ) call cline%set('weights2D','no')
         ! execute
         call xprime2D%execute(cline)
     case( 'cavgassemble' )
@@ -754,6 +879,40 @@ select case(prg)
         if( .not. cline%defined('nspace') ) call cline%set('nspace', 1000.)
         ! execute
         call xprime3D_init%execute(cline)
+    case( 'multiptcl_init' )
+        !==Program multiptcl_init
+        !
+        ! <multiptcl_init/begin>is a program for generating random initial models for initialisation of PRIME3D
+        ! when run in multiparticle mode<multiptcl_init/end> 
+        !
+        ! set required keys
+        keys_required(1)  = 'stk'
+        keys_required(2)  = 'smpd'
+        keys_required(3)  = 'ctf'
+        keys_required(4)  = 'pgrp'
+        keys_required(5)  = 'nstates'
+        keys_required(6)  = 'msk'
+        ! set optionnal keys
+        keys_optional(1)  = 'nthr'
+        keys_optional(2)  = 'oritab'
+        keys_optional(3)  = 'deftab'
+        keys_optional(4)  = 'inner'
+        keys_optional(5)  = 'width'
+        keys_optional(6)  = 'lp'
+        keys_optional(7)  = 'eo'
+        keys_optional(8)  = 'frac'
+        keys_optional(9)  = 'state2split'
+        keys_optional(10) = 'norec'
+        keys_optional(11) = 'mul'
+        keys_optional(12) = 'zero'
+        keys_optional(13) = 'tseries'
+        ! parse command line
+        if( describe ) call print_doc_multiptcl_init
+        call cline%parse(keys_required(:6), keys_optional(:13))
+        ! set defaults
+        if( .not. cline%defined('trs') ) call cline%set('trs', 3.) ! to assure that shifts are being used
+        !execute
+        call xmultiptcl_init%execute(cline)
     case( 'prime3D' )
         !==Program prime3D
         !
@@ -786,34 +945,33 @@ select case(prg)
         keys_optional(12) = 'eo'
         keys_optional(13) = 'refine'
         keys_optional(14) = 'frac'
-        keys_optional(15) = 'automsk'
-        keys_optional(16) = 'mw'
-        keys_optional(17) = 'amsklp'
-        keys_optional(18) = 'edge'
-        keys_optional(19) = 'binwidth'
-        keys_optional(20) = 'inner'
-        keys_optional(21) = 'width'
-        keys_optional(22) = 'nspace'
-        keys_optional(23) = 'nstates'
-        keys_optional(24) = 'npeaks'
-        keys_optional(25) = 'startit'
-        keys_optional(26) = 'maxits'
-        keys_optional(27) = 'shbarrier'
-        keys_optional(28) = 'noise'
-        keys_optional(29) = 'xfel'
-        keys_optional(30) = 'nnn'
-        keys_optional(31) = 'rrate'
-        keys_optional(32) = 'norec'
+        keys_optional(15) = 'mskfile'
+        keys_optional(16) = 'inner'
+        keys_optional(17) = 'width'
+        keys_optional(18) = 'nspace'
+        keys_optional(19) = 'nstates'
+        keys_optional(20) = 'npeaks'
+        keys_optional(21) = 'startit'
+        keys_optional(22) = 'maxits'
+        keys_optional(23) = 'shbarrier'
+        keys_optional(24) = 'noise'
+        keys_optional(25) = 'xfel'
+        keys_optional(26) = 'nnn'
+        keys_optional(27) = 'rrate'
+        keys_optional(28) = 'norec'
+        keys_optional(29) = 'nsub'
+        keys_optional(30) = 'lp_grid'
         ! parse command line
         if( describe ) call print_doc_prime3D
-        call cline%parse(keys_required(:6), keys_optional(:32))
+        call cline%parse(keys_required(:6), keys_optional(:30))
         ! set defaults
         if( .not. cline%defined('nspace')                  ) call cline%set('nspace', 1000.)
-        if( cline%defined('lp') .or. cline%defined('find') ) call cline%set('dynlp',   'no')
+        if( cline%defined('lp') .or. cline%defined('find') )then
+            call cline%set('dynlp',   'no')
+        endif
         if( .not. cline%defined('cenlp')                   ) call cline%set('cenlp',    30.)
-        if( .not. cline%defined('amsklp')                  ) call cline%set('amsklp',   25.)
         if( .not. cline%defined('refine') )then
-             call cline%set('refine',  'no')
+            call cline%set('refine',  'no')
         else
             if( cline%get_carg('refine').eq.'het' )then
                 if( .not. cline%defined('nstates') ) stop 'refine=HET requires specification of NSTATES'
@@ -821,7 +979,55 @@ select case(prg)
             endif
         endif
         ! execute
-        call xprime3D%execute(cline)    
+        call xprime3D%execute(cline)
+    case( 'cont3D' )
+        !==Program cont3D
+        !
+        ! <cont3D/begin>is a continuous refinement code under development<cont3D/end>
+        !
+        ! set required keys
+        keys_required(1)  = 'stk'
+        keys_required(2)  = 'vol1'
+        keys_required(3)  = 'smpd'
+        keys_required(4)  = 'msk'
+        keys_required(5)  = 'oritab'
+        keys_required(6)  = 'trs'
+        keys_required(7)  = 'ctf'
+        keys_required(8)  = 'pgrp'
+        ! set optional keys
+        keys_optional(1)  = 'nthr'
+        keys_optional(2)  = 'deftab'
+        keys_optional(3)  = 'frac'
+        keys_optional(4)  = 'mskfile'
+        keys_optional(5)  = 'inner'
+        keys_optional(6)  = 'width'
+        keys_optional(7)  = 'hp'
+        keys_optional(8)  = 'lp'
+        keys_optional(9)  = 'lpstop'
+        keys_optional(10) = 'startit'
+        keys_optional(11) = 'maxits'
+        keys_optional(12) = 'xfel'
+        keys_optional(13) = 'refine'
+        keys_optional(14) = 'eo'
+        keys_optional(15) = 'athres'
+        ! parse command line
+        if( describe ) call print_doc_cont3D
+        call cline%parse(keys_required(:8), keys_optional(:15))
+        ! set defaults
+        call cline%set('dynlp', 'no')
+        if( cline%defined('eo') )then
+            if( cline%get_carg('eo').eq.'yes')then
+                ! alles klar
+            else
+                if( .not.cline%defined('lp'))stop 'Low-pass must be set with EO=NO'
+            endif
+        else
+            call cline%set('eo','no')
+        endif
+        if( .not.cline%defined('refine') )call cline%set('refine','yes')
+        if( .not.cline%defined('nspace') )call cline%set('nspace',1000.)
+        ! execute
+        call xcont3D%execute(cline)        
     case( 'check3D_conv' )
         !==Program check3D_conv
         !
@@ -862,6 +1068,29 @@ select case(prg)
     
     ! COMMON-LINES PROGRAMS
     
+    case( 'comlin_smat' )
+        !==Program comlin_smat
+        !
+        ! <comlin_smat/begin>is a program for creating a similarity matrix based on common
+        ! line correlation. The idea being that it should be possible to cluster images based
+        ! on their 3D similarity witout having a 3D model by only operating on class averages
+        ! and find averages that fit well together in 3D<comlin_smat/end>
+        !
+        ! set required keys
+        keys_required(1) = 'stk'
+        keys_required(2) = 'smpd'
+        keys_required(3) = 'lp'
+        keys_required(4) = 'msk'
+        ! set optional keys
+        keys_optional(1) = 'hp'
+        keys_optional(2) = 'trs'
+        ! parse command line
+        if( describe ) call print_doc_comlin_smat
+        call cline%parse(keys_required(:4), keys_optional(:2))
+        ! set defaults
+        if( .not. cline%defined('trs') ) call cline%set('trs', 3.0)
+        ! execute
+        call xcomlin_smat%execute(cline)
     case( 'symsrch' )
         !==Program symsrch
         !
@@ -979,12 +1208,12 @@ select case(prg)
        keys_optional(7)  = 'nthr'
        keys_optional(8)  = 'mw'
        keys_optional(9)  = 'edge'
-       keys_optional(10) = 'binwidth'
-       keys_optional(11) = 'amsklp'
-       keys_optional(12) = 'automsk'
-       keys_optional(13) = 'smpd'
-       keys_optional(14)  = 'outstk'
-       keys_optional(15)  = 'outvol'
+       keys_optional(10) = 'amsklp'
+       keys_optional(11) = 'automsk'
+       keys_optional(12) = 'smpd'
+       keys_optional(13) = 'outstk'
+       keys_optional(14) = 'outvol'
+       keys_optional(15) = 'mskfile'
        ! parse command line
        if( describe ) call print_doc_mask
        call cline%parse( keys_required(:2), keys_optional(:15))
@@ -1013,38 +1242,10 @@ select case(prg)
         call cline%parse(keys_required(:3), keys_optional(:3))
         ! set defaults
         call cline%set('automsk', 'yes')
-        if( .not. cline%defined('amsklp') ) call cline%set('amsklp', 25.)
-        if( .not. cline%defined('edge')   ) call cline%set('edge', 20.)
+        if( .not. cline%defined('amsklp') ) call cline%set('amsklp', 20.)
+        if( .not. cline%defined('edge')   ) call cline%set('edge',   10.)
         ! execute
         call xautomask2D%execute(cline)
-    case( 'automask3D' )
-        !==Program automask3D
-        !
-        ! <automask3D/begin>is a program for solvent flattening of a volume. The algorithm 
-        ! for background removal is based on low-pass filtering and binarization. First, the volume is low-pass
-        ! filtered to amsklp. A binary volume is then generated by assigning foreground pixels 
-        ! (=1) based on the volume calculated from the molecular weight. A cosine function softens the edge 
-        ! of the binary mask before it is  multiplied with the unmasked input to generate the flattened map
-        ! <automask3D/end>
-        !
-        ! set required keys
-        keys_required(1) = 'vol1'
-        keys_required(2) = 'smpd'
-        keys_required(3) = 'msk'
-        keys_required(4) = 'mw'
-        ! set optional keys
-        keys_optional(1) = 'nthr'
-        keys_optional(2) = 'vol2'
-        keys_optional(3) = 'amsklp'
-        keys_optional(4) = 'edge'
-        keys_optional(5) = 'binwidth'
-        ! parse command line
-        if( describe ) call print_doc_automask3D
-        call cline%parse(keys_required(:4), keys_optional(:5))
-        ! set defaults
-        call cline%set('automsk', 'yes')
-        ! execute
-        call xautomask3D%execute(cline)
 
     ! RECONSTRUCTION PROGRAMS
 
@@ -1058,32 +1259,28 @@ select case(prg)
         ! implementing this algorithm was to enable quick, reliable reconstruction from aligned individual 
         ! particle images. mul is used to scale the origin shifts if down-sampled 
         ! were used for alignment and the original images are used for reconstruction. ctf=yes or ctf=flip 
-        ! turns on the Wiener restoration. If the images were phase-flipped set ctf=flip. amsklp, mw, and edge 
-        ! control the solvent mask: the low-pass limit used to generate the envelope; the molecular weight of the 
-        ! molecule (protein assumed but it works reasonably well also for RNA; slight modification of mw 
-        ! might be needed). The inner parameter controls the radius of the soft-edged mask used to remove 
-        ! the unordered DNA/RNA core of spherical icosahedral viruses<recvol/end>
+        ! turns on the Wiener restoration. If the images were phase-flipped set ctf=flip. The inner parameter 
+        ! controls the radius of the soft-edged mask used to remove the unordered DNA/RNA core of spherical 
+        ! icosahedral viruses<recvol/end>
         !
         ! set required keys
-        keys_required(1) = 'stk'
-        keys_required(2) = 'smpd'
-        keys_required(3) = 'oritab'
-        keys_required(4) = 'msk'
-        keys_required(5) = 'ctf'
-        keys_required(6) = 'pgrp'
+        keys_required(1)  = 'stk'
+        keys_required(2)  = 'smpd'
+        keys_required(3)  = 'oritab'
+        keys_required(4)  = 'msk'
+        keys_required(5)  = 'ctf'
+        keys_required(6)  = 'pgrp'
         ! set optional keys
-        keys_optional(1) = 'nthr'
-        keys_optional(2) = 'eo'
-        keys_optional(3) = 'deftab'
-        keys_optional(4) = 'frac'
-        keys_optional(5) = 'mw'
-        keys_optional(6) = 'mul'
-        keys_optional(7) = 'state'
-        keys_optional(8) = 'refine'
-        keys_optional(9) = 'npeaks'
+        keys_optional(1)  = 'nthr'
+        keys_optional(2)  = 'eo'
+        keys_optional(3)  = 'deftab'
+        keys_optional(4)  = 'frac'
+        keys_optional(5)  = 'mul'
+        keys_optional(6)  = 'state'
+        keys_optional(7)  = 'mskfile'
         ! parse command line
         if( describe ) call print_doc_recvol
-        call cline%parse(keys_required(:6), keys_optional(:9))
+        call cline%parse(keys_required(:6), keys_optional(:7))
         ! set defaults
         if( .not. cline%defined('trs') ) call cline%set('trs', 5.) ! to assure that shifts are being used
         if( .not. cline%defined('eo')  ) call cline%set('eo', 'no')
@@ -1112,9 +1309,10 @@ select case(prg)
         keys_optional(3)  = 'mul'
         keys_optional(4)  = 'state'
         keys_optional(5)  = 'nstates'
+        keys_optional(6)  = 'mskfile'
         ! parse command line
         if( describe ) call print_doc_eo_volassemble
-        call cline%parse(keys_required(:6), keys_optional(:5))
+        call cline%parse(keys_required(:6), keys_optional(:6))
         ! set defaults
         if( cline%defined('state') ) call cline%set('nstates', 1.) ! to assure that shifts are being used
         ! execute
@@ -1198,7 +1396,22 @@ select case(prg)
         call ximinfo%execute(cline)
         
     ! VOLOPS PROGRAMS
-    
+
+    case( 'fsc' )
+        !==Program fsc
+        !
+        ! <fsc/begin>is a program for calculating the FSC between the two input volumes. No modifications 
+        ! are done to the volumes, which allow you to test different masking options and see how they 
+        ! affect the FSCs<fsc/end>
+        !
+        keys_required(1) = 'smpd'
+        keys_required(2) = 'vol1'
+        keys_required(3) = 'vol2'
+        ! parse command line
+        ! if( describe ) call print_doc_fsc
+        call cline%parse(keys_required(:3))
+        ! execute
+        call xfsc%execute(cline)
     case( 'cenvol' )
         !==Program cenvol
         !
@@ -1237,9 +1450,12 @@ select case(prg)
         keys_optional(6)  = 'amsklp'
         keys_optional(7)  = 'edge'
         keys_optional(8)  = 'binwidth'
+        keys_optional(9)  = 'frac_outliers'
+        keys_optional(10) = 'thres'
+        keys_optional(11) = 'mskfile'
         ! parse command line
         if( describe ) call print_doc_postproc_vol
-        call cline%parse(keys_required(:3), keys_optional(:8))
+        call cline%parse(keys_required(:3), keys_optional(:11))
         ! execute
         call xpostproc_vol%execute(cline)
     case( 'projvol' )
@@ -1359,9 +1575,10 @@ select case(prg)
         keys_optional(8)  = 'neg'
         keys_optional(9)  = 'outvol'
         keys_optional(10) = 'outstk'
+        keys_optional(11) = 'frac_outliers'
         ! parse command line
         if( describe ) call print_doc_binarise
-        call cline%parse(keys_optional=keys_optional(:10))
+        call cline%parse(keys_optional=keys_optional(:11))
         ! execute
         call xbinarise%execute(cline)
     case( 'convert' )
@@ -1429,21 +1646,43 @@ select case(prg)
         ! <filter/end> 
         !
         ! Required keys
-        keys_required(1) = 'smpd'
+        keys_required(1)  = 'smpd'
         ! Optional keys
-        keys_optional(1) = 'stk'
-        keys_optional(2) = 'vol1'
-        keys_optional(3) = 'outstk'
-        keys_optional(4) = 'outvol'
-        keys_optional(5) = 'lp'
-        keys_optional(6) = 'hp'
-        keys_optional(7) = 'phrand'
-        keys_optional(8) = 'bfac'
+        keys_optional(1)  = 'stk'
+        keys_optional(2)  = 'vol1'
+        keys_optional(3)  = 'outstk'
+        keys_optional(4)  = 'outvol'
+        keys_optional(5)  = 'lp'
+        keys_optional(6)  = 'hp'
+        keys_optional(7)  = 'phrand'
+        keys_optional(8)  = 'bfac'
+        keys_optional(9)  = 'winsz'
+        keys_optional(10) = 'real_filter'
         ! parse command line
         if( describe ) call print_doc_filter
-        call cline%parse(keys_required(:1), keys_optional(:8))
+        call cline%parse(keys_required(:1), keys_optional(:10))
         ! execute
         call xfilter%execute(cline)
+    case( 'image_smat' )
+        !==Program image_smat
+        !
+        ! <image_smat/begin>is a program for creating a similarity matrix based on common line correlation. The idea
+        ! being that it should be possible to cluster images based on their 3D similarity witout having a 3D model
+        ! by only operating on class averages and find averages that fit well together in 3D<image_smat/end>
+        !
+        ! set required keys
+        keys_required(1)  = 'stk'
+        keys_required(2)  = 'smpd'
+        ! set optional keys
+        keys_optional(1)  = 'lp'
+        keys_optional(2)  = 'msk'
+        keys_optional(3)  = 'hp'
+        keys_optional(4)  = 'nthr'
+        ! parse command line
+        if( describe ) call print_doc_image_smat
+        call cline%parse(keys_required(:2), keys_optional(:4))
+        ! execute
+        call ximage_smat%execute(cline)
     case( 'norm' )
         !==Program norm
         !
@@ -1486,7 +1725,7 @@ select case(prg)
         keys_optional(7)  = 'newbox'
         keys_optional(8)  = 'clip'
         keys_optional(9)  = 'outvol'
-        keys_optional(10) = 'outstk'
+        keys_optional(10)  = 'outstk'
         keys_optional(11) = 'outstk2'
         ! parse command line
         if( describe ) call print_doc_scale
@@ -1521,8 +1760,8 @@ select case(prg)
         !
         ! <stackops/begin>is a program that provides standard single-particle image processing routines that are applied to MRC or SPIDER
         ! stacks. If you want to extract a particular state, give an alignment document (oritab) and set state
-        ! to the state that you want to extract. If you want to select the fraction of best particles (according to the goal function), 
-        ! input an alignment doc (oritab) and set frac. You can combine the state and frac options. If you
+        ! to the state that you want to extract. If you want to select the fraction of best particles (according to the goal function), input
+        ! an alignment doc (oritab) and set frac. You can combine the state and frac options. If you
         ! want to apply noise to images, give the desired signal-to-noise ratio via snr. If you want to calculate the autocorrelation
         ! function of your images set acf=yes. If you want to extract a contiguous subset of particle images from the stack, set 
         ! fromp and top. If you want to fish out a number of particle images from your stack at random, set nran to
@@ -1555,14 +1794,36 @@ select case(prg)
         keys_optional(19) = 'order'
         keys_optional(20) = 'bfac'
         keys_optional(21) = 'outfile'
+        keys_optional(22) = 'ctfreslim'
+        keys_optional(23) = 'df_close'
+        keys_optional(24) = 'df_far'
         ! parse command line
         if( describe ) call print_doc_stackops
-        call cline%parse( keys_required(:2),keys_optional(:21) )
+        call cline%parse( keys_required(:2),keys_optional(:24) )
         ! execute
         call xstackops%execute(cline)
 
     ! MISCELLANOUS PROGRAMS
         
+    case( 'cluster_smat' )
+        !==Program cluster_smat
+        !
+        ! <cluster_smat/begin>is a program for clustering a similarity matrix and use
+        ! an combined cluster validation index to assess the quality of the clustering
+        ! based on the number of clusters<cluster_smat/end>
+        !
+        ! set required keys
+        keys_required(1) = 'nptcls'
+        keys_required(2) = 'fname'
+        keys_required(3) = 'ncls'
+        keys_required(4) = 'label'
+        ! set optional keys
+        keys_optional(1) = 'nthr'
+        ! parse command line
+        if( describe ) call print_doc_cluster_smat
+        call cline%parse(keys_required(:4), keys_optional(:1))
+        ! execute
+        call xcluster_smat%execute(cline)
     case( 'masscen' )
         !==Program masscen
         !
@@ -1776,9 +2037,10 @@ select case(prg)
        keys_optional(5)  = 'deftab'
        keys_optional(6)  = 'outfile'
        keys_optional(7)  = 'mul'
+       keys_optional(8)  = 'scale'
        ! parse command line
        if( describe ) call print_doc_map2ptcls
-       call cline%parse(keys_required(:4), keys_optional(:7))
+       call cline%parse(keys_required(:4), keys_optional(:8))
        ! set defaults
        if( .not. cline%defined('outfile') ) call cline%set('outfile', 'mapped_ptcls_params.txt')
        ! execute
@@ -1973,7 +2235,22 @@ select case(prg)
         if( describe ) call print_doc_merge_nnmat
         call cline%parse( keys_required(:3) )
         ! execute
-        call xmerge_nnmat%execute(cline)   
+        call xmerge_nnmat%execute(cline)
+    case( 'merge_similarities' )
+        !==Program merge_similarities
+        !
+        ! <merge_similarities/begin>is a program for merging similarities calculated between pairs of objects 
+        ! into a similarity matrix that can be inputted to cluster_smat<merge_similarities/end>
+        !
+        ! set required keys
+        keys_required(1)  = 'nptcls'
+        ! set optional keys
+        keys_optional(1)  = 'nparts'
+        ! parse command line
+        if( describe ) call print_doc_merge_similarities
+        call cline%parse(keys_required(:1), keys_optional(:1))
+        ! execute
+        call xmerge_similarities%execute(cline)    
     case( 'split_pairs' )
         !==Program split_pairs
         !

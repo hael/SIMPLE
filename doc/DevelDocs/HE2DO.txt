@@ -1,0 +1,2 @@
+fsc files should have iter flag
+parallel scaling on split stacks

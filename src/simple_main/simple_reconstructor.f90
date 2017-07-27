@@ -54,6 +54,7 @@ type, extends(image) :: reconstructor
     procedure          :: compress_exp
     ! SUMMATION
     procedure          :: sum
+    procedure          :: invctfsq_shellsum
     ! RECONSTRUCTION
     procedure          :: rec
     ! DESTRUCTORS
@@ -73,7 +74,7 @@ contains
         use simple_math,   only: fdim
         class(reconstructor), intent(inout) :: self  !< instance
         class(params),        intent(in)    :: p     !< parameters
-        logical, optional,    intent(in)    :: expand!< exapanded matricies flag
+        logical, optional,    intent(in)    :: expand
         character(len=:), allocatable :: ikind_tmp
         integer :: rho_shape(3), rho_lims(3,2), lims(3,2), rho_exp_lims(3,2), ldim_exp(3,2)
         integer :: alloc_stat, dim, maxlims
@@ -152,7 +153,7 @@ contains
     end function get_kbwin
 
     ! I/O
-    !>Write rectructed image
+    !>Write reconstructed image
     subroutine write_rho( self, kernam )
         use simple_filehandling, only: get_fileunit, fopen_err, del_file
         class(reconstructor), intent(in) :: self
@@ -175,7 +176,7 @@ contains
     subroutine read_rho( self, kernam )
         use simple_filehandling, only: get_fileunit, fopen_err
         class(reconstructor), intent(inout) :: self
-        character(len=*),     intent(in)    :: kernam !< kernel name
+        character(len=*),     intent(in)    :: kernam
         character(len=100) :: io_message
         integer :: filnum, ier, io_stat
         filnum = get_fileunit( )
@@ -194,9 +195,8 @@ contains
 
     subroutine inout_fcomp( self, h, k, e, inoutmode, comp, oshift, pwght)
         use simple_ori,    only: ori
-        use simple_math,   only: sqwin_3d, euclid, hyp, cyci_1d
-        use simple_jiffys, only: alloc_err
-        class(reconstructor), intent(inout) :: self      !< the objetc
+        use simple_math,   only: sqwin_3d
+        class(reconstructor), intent(inout) :: self      !< the object
         integer,              intent(in)    :: h, k      !< Fourier indices
         class(ori),           intent(inout) :: e         !< orientation
         logical,              intent(in)    :: inoutmode !< add = .true., subtract = .false.
@@ -275,15 +275,15 @@ contains
     end subroutine calc_tfun_vals
 
     subroutine inout_fplane( self, o, inoutmode, fpl, pwght, mul, shellweights )
-        use simple_math, only: deg2rad, hyp
+        use simple_math, only: hyp
         use simple_ori,  only: ori
         class(reconstructor), intent(inout) :: self      !< instance
         class(ori),           intent(inout) :: o         !< orientation
         logical,              intent(in)    :: inoutmode !< add = .true., subtract = .false.
         class(image),         intent(inout) :: fpl       !< Fourier plane
         real,    optional,    intent(in)    :: pwght     !< external particle weight (affects both fplane and rho)
-        real,    optional,    intent(in)    :: mul       !< multiplying factor
-        real,    optional,    intent(in)    :: shellweights(:) !< 
+        real,    optional,    intent(in)    :: mul
+        real,    optional,    intent(in)    :: shellweights(:)
         integer :: h, k, lims(3,2), sh, lfny, logi(3), phys(3)
         complex :: oshift
         real    :: x, y, xtmp, ytmp, pw
@@ -424,6 +424,52 @@ contains
          !$omp end parallel workshare
     end subroutine sum
 
+    ! for summing the spectral inverse CTF square sum
+    ! untested
+    subroutine invctfsq_shellsum( self, invctfsqsum  )
+        use simple_math, only: hyp
+        class(reconstructor), intent(inout) :: self
+        real,    allocatable, intent(out)   :: invctfsqsum(:)
+        real,    allocatable :: ctfsqsum(:)
+        integer, allocatable :: sh_cnt(:)
+        integer :: sh, h, k, l, n, lfny, lims(3,2), phys(3)
+        if( .not.self%rho_allocated )stop 'Invalid call; simple_reconstructor%invctfsq_shellsum'
+        n    = self%get_filtsz()
+        lfny = self%get_lfny(1)
+        lims = self%loop_lims(2)
+        allocate(invctfsqsum(n), ctfsqsum(n), sh_cnt(n))
+        invctfsqsum = 0.
+        ctfsqsum    = 0.
+        sh_cnt      = 0
+        !$omp parallel do collapse(3) default(shared) private(sh,h,k,l,phys)&
+        !$omp reduction(+:ctfsqsum,sh_cnt) schedule(static) proc_bind(close)
+        do h=lims(1,1),lims(1,2)
+            do k=lims(2,1),lims(2,2)
+                do l=lims(3,1),lims(3,2)
+                    sh = nint(hyp(real(h),real(k),real(l)))
+                    if(sh > lfny)cycle
+                    phys = self%comp_addr_phys([h,k,l])
+                    ctfsqsum(sh) = ctfsqsum(sh) + self%rho(phys(1), phys(2), phys(3))
+                    sh_cnt(sh)   = sh_cnt(sh) + 1
+                end do
+            end do
+        end do
+        !$omp end parallel do
+        do k = 1, n
+            if( sh_cnt(k) == 0 )then
+                invctfsqsum(k) = 0.0
+            else
+                if( ctfsqsum(k) < TINY )then
+                    invctfsqsum = 0.0
+                else
+                    invctfsqsum(k) = real(sh_cnt(k)) / ctfsqsum(k)
+                endif
+            endif
+        enddo
+        where( invctfsqsum < TINY )invctfsqsum = 0.0
+        deallocate(ctfsqsum, sh_cnt)
+    end subroutine invctfsq_shellsum
+    
     ! RECONSTRUCTION
     !> reconstruction routine
     subroutine rec( self, fname, p, o, se, state, mul, eo, part, wmat )
@@ -432,7 +478,7 @@ contains
         use simple_params,   only: params
         use simple_jiffys,   only: find_ldim_nptcls, progress
         use simple_gridding  ! use all in there
-        class(reconstructor), intent(inout) :: self      !< this object
+        class(reconstructor), intent(inout) :: self
         character(len=*),     intent(inout) :: fname     !< spider/MRC stack filename
         class(params),        intent(in)    :: p         !< parameters
         class(oris),          intent(inout) :: o         !< orientations

@@ -6,8 +6,9 @@
 !! simple_params provides global distribution of constants and derived constants
 !! used in the SIMPLE library.
 !
-! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_. Redistribution
-! or modification is regulated by the GNU General Public License.
+! The code is distributed with the hope that it will be useful, but _WITHOUT_
+! _ANY_ _WARRANTY_. Redistribution or modification is regulated by the GNU
+! General Public License.
 !
 ! *Author:* Hans Elmlund, 2011-08-18.
 !
@@ -37,7 +38,6 @@ type :: params
     character(len=3)      :: acf='no'          !< calculate autocorrelation function(yes|no){no}
     character(len=3)      :: append='no'       !< append in context of files(yes|no){no}
     character(len=3)      :: async='no'        !< asynchronous (yes|no){no}
-    character(len=3)      :: automsk='no'      !< envelope masking(yes|no|cavg){no}
     character(len=3)      :: autoscale='yes'   !< automatic down-scaling(yes|no){yes}
     character(len=3)      :: avg='no'          !< calc average automatic (yes|no){no}
     character(len=3)      :: bin='no'          !< binarise image(yes|no){no}
@@ -89,7 +89,6 @@ type :: params
     character(len=3)      :: shbarrier='yes'   !< use shift search barrier constraint(yes|no){yes}
     character(len=3)      :: single='no'       !< simulate a single image(yes|no){no}
     character(len=3)      :: soften='no'       !< soften envelope with cosine edge(yes|no){no}
-    character(len=3)      :: srch_inpl='yes'   !< search in-plane degrees of freedom(yes|no){yes}
     character(len=3)      :: stats='no'        !< provide statistics(yes|no){yes}
     character(len=3)      :: stream='no'       !< sream (real time) execution mode(yes|no){no}
     character(len=3)      :: swap='no'
@@ -98,12 +97,14 @@ type :: params
     character(len=3)      :: time='no'
     character(len=3)      :: trsstats='no'     !< provide origin shift statistics(yes|no){no}
     character(len=3)      :: tseries='no'      !< images represent a time-series(yes|no){no}
-    character(len=3)      :: verbose='no'      !< verbosity flag (yes|no){no}
+!    character(len=3)      :: verbose='no'      !< verbosity flag (yes|no){no}
     character(len=3)      :: vis='no'          !< visualise(yes|no)
+    character(len=3)      :: weights2D='no'
     character(len=3)      :: xfel='no'         !< images are XFEL diffraction patterns(yes|no){no}
     character(len=3)      :: zero='no'         !< zeroing(yes|no){no}
     ! other fixed length character variables in ascending alphabetical order
     character(len=STDLEN) :: angastunit='degrees' !< angle of astigmatism unit (radians|degrees){degrees}
+    character(len=4)      :: automsk='no'
     character(len=STDLEN) :: boxfile=''           !< file with EMAN particle coordinates(.txt/.asc)
     character(len=STDLEN) :: boxtab=''            !< table (text file) of files with EMAN particle coordinates(.txt/.asc)
     character(len=STDLEN) :: boxtype='eman'
@@ -136,7 +137,6 @@ type :: params
     character(len=STDLEN) :: imgkind='em'
     character(len=STDLEN) :: infile='infile.txt'  !< table (text file) of inputs(.asc/.txt)
     character(len=STDLEN) :: label='class'        !< discrete label(class|state){class}
-    character(len=STDLEN) :: masks(MAXS)=''
     character(len=STDLEN) :: mskfile=''           !< maskfile.ext
     character(len=STDLEN) :: msktype='soft'       !< type of mask(hard|soft){soft}
     character(len=STDLEN) :: opt='simplex'        !< optimiser (powell|simplex|oasis|bforce|pso|de){simplex}
@@ -153,6 +153,7 @@ type :: params
     character(len=STDLEN) :: pgrp='c1'            !< point-group symmetry(cn|dn|t|o|i)
     character(len=STDLEN) :: plaintexttab=''      !< plain text file of input parameters
     character(len=STDLEN) :: prg=''               !< SIMPLE program to execute
+    character(len=STDLEN) :: real_filter=''
     character(len=STDLEN) :: refine='no'
     character(len=STDLEN) :: refs_msk=''
     character(len=STDLEN) :: refs=''              !< initial2Dreferences.ext
@@ -167,7 +168,6 @@ type :: params
     character(len=STDLEN) :: unidoc=''            !< unified resources and orientations doc
     character(len=STDLEN) :: vol=''
     character(len=STDLEN) :: vollist=''           !< table (text file) of volume files(.txt/.asc)
-    character(len=STDLEN) :: vols_msk(MAXS)=''
     character(len=STDLEN) :: vols(MAXS)=''
     character(len=STDLEN) :: voltab=''            !< table (text file) of volume files(.txt/.asc)
     character(len=STDLEN) :: voltab2=''           !< 2nd table (text file) of volume files(.txt/.asc)
@@ -187,7 +187,7 @@ type :: params
     integer :: clip=0              !< clipped image box size(in pixels)
     integer :: corner=0            !< corner size(in pixels){0}
     integer :: cube=0              !< side size(in pixels){0}
-    integer :: edge=14             !< edge size for softening molecular envelope(in pixels)
+    integer :: edge=3              !< edge size for softening molecular envelope(in pixels)
     integer :: find=1              !< Fourier index
     integer :: nframesgrp=0        !< # frames to group before unblur(Falcon 3){0}
     integer :: fromf=1             !< start frame index
@@ -201,6 +201,7 @@ type :: params
     integer :: jptcl=1
     integer :: jumpsz=0            !< size of contigous segment
     integer :: kfromto(2)
+    integer :: kstop_grid=0
     integer :: ldim(3)=0
     integer :: maxits=500          !< maximum # iterations
     integer :: maxp=0
@@ -230,6 +231,7 @@ type :: params
     integer :: nrots=0
     integer :: nspace=1000         !< # projection directions
     integer :: nstates=1           !< # states to reconstruct
+    integer :: nsub=300
     integer :: nsym=1
     integer :: nthr=1              !< # OpenMP threads{1}
     integer :: nthr_master=1       !< # OpenMP threads on master node{1}
@@ -283,6 +285,8 @@ type :: params
     real    :: deflim=4.
     real    :: defocus=3.          !< defocus(in microns){3.}
     real    :: dens=0.
+    real    :: df_close=1.
+    real    :: df_far=4.
     real    :: dferr=1.            !< defocus error(in microns){1.0}
     real    :: dfmax=7.0           !< maximum expected defocus(in microns)
     real    :: dfmin=0.5           !< minimum expected defocus(in microns)
@@ -303,6 +307,7 @@ type :: params
     real    :: frac=1.            !< fraction of ptcls(0-1){1}
     real    :: fraca=0.07         !< fraction of amplitude contrast used for fitting CTF{0.07}
     real    :: fracdeadhot=0.05   !< fraction of dead or hot pixels{0.01}
+    real    :: frac_outliers=0.
     real    :: fraczero=0.
     real    :: ftol=1e-6
     real    :: gw=0.5
@@ -312,6 +317,7 @@ type :: params
     real    :: kv=300.            !< acceleration voltage(in kV){300.}
     real    :: lam=0.5
     real    :: lp_dyn=20.
+    real    :: lp_grid=20.
     real    :: lp=20.             !< low-pass limit(in A)
     real    :: lp_ctffind=5.0     !< low-pass limit 4 ctffind(in A)
     real    :: lp_pick=20.        !< low-pass limit 4 picker(in A)
@@ -350,14 +356,13 @@ type :: params
     real    :: zsh=0.             !< z shift(in pixels){0}
     ! logical variables in ascending alphabetical order
     logical :: cyclic(7)       = .false.
-    logical :: doautomsk       = .false.        !< envelope masking(yes|no|cavg){no}
-    logical :: doshift         = .false.
-    logical :: l_automsk       = .false.
-    logical :: l_autoscale     = .false.
-    logical :: l_chunk_distr   = .false.
     logical :: l_distr_exec    = .false.
-    logical :: l_dose_weight   = .false.
-    logical :: l_innermsk      = .false.
+    logical :: l_chunk_distr   = .false.
+    logical :: doshift         = .false.
+    logical :: l_envmsk       = .false.
+    logical :: l_autoscale     = .false.
+    logical :: l_dose_weight   = .false. 
+    logical :: l_innermsk      = .false. 
     logical :: l_pick          = .false.
     logical :: l_remap_classes = .false.
     logical :: l_xfel          = .false.
@@ -388,16 +393,17 @@ contains
         class(params),     intent(inout) :: self
         class(cmdline),    intent(inout) :: cline
         logical, optional, intent(in)    :: checkdistr, allow_mix
-        integer                          :: i, s, ncls, ifoo, lfoo(3), cntfile, nthr_local
+        integer                          :: i, ncls, ifoo, lfoo(3), cntfile
         logical                          :: here, ccheckdistr, aamix
-        character(len=STDLEN)            :: cwd_local, debug_str
+        character(len=STDLEN)            :: cwd_local, debug_local, verbose_local
         character(len=1)                 :: checkupfile(50)
         character(len=:), allocatable    :: conv
-        integer,          allocatable    :: parts(:,:)
         logical                          :: nparts_set
         logical                          :: vol_defined(MAXS)
         nparts_set        = .false.
         vol_defined(MAXS) = .false.
+        debug_local = 'no'
+        verbose_local = 'no'
         ! take care of optionals
         ccheckdistr = .true.
         if( present(checkdistr) ) ccheckdistr = checkdistr
@@ -412,13 +418,13 @@ contains
         cwd_local = self%cwd
         ! get absolute path of executable
         call getarg(0,self%exec_abspath)
-        call check_carg('debug',          debug_str)
-        if (debug_str == 'yes')then
+        call check_carg('debug',          debug_local)
+        if (debug_local == 'yes')then
             global_debug = .true.  ! from simple_params
             debug = .true.         ! from simple_local_flags.inc
         end if
-        call check_carg('verbose',        self%verbose)
-        if(self%verbose == 'yes')then
+        call check_carg('verbose',        verbose_local)
+        if(verbose_local == 'yes')then
             global_verbose = .true.
             verbose = .true.
         end if
@@ -442,7 +448,6 @@ contains
         call check_carg('ctf',            self%ctf)
         call check_carg('ctfstats',       self%ctfstats)
         call check_carg('cure',           self%cure)
-        call check_carg('debug',          debug_str)
         call check_carg('deftab',         self%deftab)
         call check_carg('dfunit',         self%dfunit)
         call check_carg('dir',            self%dir)
@@ -494,6 +499,7 @@ contains
         call check_carg('phrand',         self%phrand)
         call check_carg('prg',            self%prg)
         call check_carg('readwrite',      self%readwrite)
+        call check_carg('real_filter',    self%real_filter)
         call check_carg('refine',         self%refine)
         call check_carg('refs',           self%refs)
         call check_carg('remap_classes',  self%remap_classes)
@@ -508,7 +514,6 @@ contains
         call check_carg('single',         self%single)
         call check_carg('soften',         self%soften)
         call check_carg('speckind',       self%speckind)
-        call check_carg('srch_inpl',      self%srch_inpl)
         call check_carg('stats',          self%stats)
         call check_carg('stk_part_fbody', self%stk_part_fbody)
         call check_carg('stream',         self%stream)
@@ -522,6 +527,7 @@ contains
         call check_carg('vis',            self%vis)
         call check_carg('vol',            self%vol)
         call check_carg('wfun',           self%wfun)
+        call check_carg('weights2D',      self%weights2D)
         call check_carg('xfel',           self%xfel)
         call check_carg('zero',           self%zero)
         ! File args
@@ -592,6 +598,7 @@ contains
         call check_iarg('nrefs',          self%nrefs)
         call check_iarg('nrestarts',      self%nrestarts)
         call check_iarg('nspace',         self%nspace)
+        call check_iarg('nsub',           self%nsub)
         call check_iarg('nstates',        self%nstates)
         call check_iarg('class',          self%class)
         call check_iarg('nparts',         self%nparts)
@@ -643,6 +650,8 @@ contains
         call check_rarg('dcrit_rel',      self%dcrit_rel)
         call check_rarg('deflim',         self%deflim)
         call check_rarg('defocus',        self%defocus)
+        call check_rarg('df_close',       self%df_close)
+        call check_rarg('df_far',         self%df_far)
         call check_rarg('dens',           self%dens)
         call check_rarg('dferr',          self%dferr)
         call check_rarg('dfmax',          self%dfmax)
@@ -660,6 +669,7 @@ contains
         call check_rarg('frac',           self%frac)
         call check_rarg('fraca',          self%fraca)
         call check_rarg('fracdeadhot',    self%fracdeadhot)
+        call check_rarg('frac_outliers',  self%frac_outliers)
         call check_rarg('fraczero',       self%fraczero)
         call check_rarg('ftol',           self%ftol)
         call check_rarg('gw',             self%gw)
@@ -670,6 +680,7 @@ contains
         call check_rarg('lam',            self%lam)
         call check_rarg('lp',             self%lp)
         call check_rarg('lp_ctffind',     self%lp_ctffind)
+        call check_rarg('lp_grid',        self%lp_grid)
         call check_rarg('lp_pick',        self%lp_pick)
         call check_rarg('lpstart',        self%lpstart)
         call check_rarg('lpstop',         self%lpstop)
@@ -938,15 +949,14 @@ contains
         ! set default outer mask value
         if( .not. cline%defined('outer') ) self%outer = self%msk
         ! checks automask related values
-        self%l_automsk = .false.
-        self%doautomsk = .false.
-        if( self%automsk .eq. 'yes' ) self%l_automsk = .true.
-        if( cline%defined('mw') .and. self%automsk .ne. 'no' ) self%doautomsk = .true.
-        if( .not.cline%defined('mw') .and. self%automsk.eq.'yes') &
-            write(*,*) 'WARNING! MW argument not provided in conjunction with AUTOMSK'
-        if( self%doautomsk )then
-            if( self%edge <= 0    ) stop 'Invalid value for edge'
-            if( self%binwidth < 0 ) stop 'Invalid value for binwidth'
+        self%l_envmsk = .false.
+        if( self%automsk .ne. 'no' ) self%l_envmsk = .true.
+        if( cline%defined('mskfile') )then
+            if( .not. file_exists(self%mskfile) )then
+                write(*,*) 'file: ', trim(self%mskfile)
+                stop 'input mask file not in cwd'
+            endif
+            self%l_envmsk = .true.
         endif
         ! scaling stuff
         self%l_autoscale = .false.
@@ -1005,7 +1015,7 @@ contains
         ! fix translation param
         self%trs = abs(self%trs)
         if( .not. cline%defined('trs') )then
-            if( self%refine.eq.'no' .or. self%refine.eq.'shc' .or. self%refine.eq.'qcont' )then
+            if( self%refine.eq.'no' .or. self%refine.eq.'snhc' )then
                 self%trs = 0.
             else
                 self%trs = 1.
@@ -1212,11 +1222,6 @@ contains
           end subroutine double_check_file_formats
 
           subroutine mkfnames
-              integer :: i
-              do i=1,self%nstates
-                  self%vols_msk(i) = add2fbody(self%vols(i), self%ext, 'msk')
-                  self%masks(i)    = 'automask_state'//int2str_pad(i,2)//self%ext
-              end do
               if( .not. cline%defined('outstk')  ) self%outstk  = 'outstk'//self%ext
               if( .not. cline%defined('outstk2') ) self%outstk2 = 'outstk2'//self%ext
               if( .not. cline%defined('outvol')  ) self%outvol  = 'outvol'//self%ext

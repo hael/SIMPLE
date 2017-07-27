@@ -10,8 +10,8 @@ use simple_cmdline,           only: cmdline
 use simple_polarft_corrcalc,  only: polarft_corrcalc
 use simple_oris,              only: oris
 use simple_ori,               only: ori
-!use simple_masker,           only: automask
-use simple_cont3D_greedysrch, only: cont3D_greedysrch
+use simple_cont3D_de_srch,    only: cont3D_de_srch
+use simple_cont3D_ada_srch,   only: cont3D_ada_srch
 use simple_cont3D_srch,       only: cont3D_srch
 use simple_hadamard_common   ! use all in there
 use simple_math              ! use all in there
@@ -24,16 +24,14 @@ integer,                   parameter :: BATCHSZ_MUL = 10   !< particles per thre
 integer,                   parameter :: MAXNPEAKS   = 10   !< Max num peaks
 integer,                   parameter :: NREFS       = 50   !< Max num of references
 
-type(polarft_corrcalc)               :: pftcc                   !< polar fourier correlation calculator
-type(oris)                           :: orefs                   !< per particle projection direction search space
-type(cont3D_srch),       allocatable :: cont3Dsrch(:)           !< cont 3D  search objects
-type(cont3D_greedysrch), allocatable :: cont3Dgreedysrch(:)     !< cont 3D greedy search objects
+type(oris)                           :: orefs               !< per particle projection direction search space (refine=yes)
+type(cont3D_srch),       allocatable :: cont3Dsrch(:)       !< pftcc array for refine=yes
+type(cont3D_de_srch),    allocatable :: cont3Ddesrch(:)     !< pftcc array for refine=de
+type(cont3D_ada_srch),   allocatable :: cont3Dadasrch(:)    !< pftcc array for refine=ada
 logical, allocatable                 :: state_exists(:)
-real                                 :: reslim          = 0.
-!real                                 :: frac_srch_space = 0.   ! so far unused
-integer                              :: nptcls          = 0     !< number of particles processed
-integer                              :: nrefs_per_ptcl  = 0     !< number of references per particle
-integer                              :: neff_states     = 0     !< number of non-empty states
+integer                              :: nptcls          = 0 !< number of particle images per part
+integer                              :: nrefs_per_ptcl  = 0 !< number of references per particle 
+integer                              :: neff_states     = 0
 
 contains
 
@@ -51,14 +49,17 @@ contains
         integer,        intent(in)    :: which_iter      !< iteration
         logical,        intent(inout) :: converged       !< have converged
         ! batches-related variables
-        type(projector),         allocatable :: batch_imgs(:)
-        type(polarft_corrcalc),  allocatable :: pftccs(:)
-        integer,                 allocatable :: batches(:,:)
+        type(projector),        allocatable :: batch_imgs(:)
+        type(polarft_corrcalc), allocatable :: pftccs(:)
+        integer,                allocatable :: batches(:,:)
+        integer                             :: nbatches, batch
         ! other variables
-        type(oris)           :: softoris
-        type(ori)            :: orientation
-        integer              :: nbatches, batch, fromp, top, iptcl,iptcl_tmp, state, alloc_stat, ind
-        ! AUTOMASKING DEACTIVATED FOR NOW
+        type(polarft_corrcalc) :: pftcc            !< dummy convenience pftcc
+        real, allocatable      :: eopart(:)
+        type(oris)             :: softoris
+        type(ori)              :: orientation
+        real                   :: reslim
+        integer                :: fromp, top, iptcl, state, alloc_stat,iptcl_tmp
         ! MULTIPLE STATES DEACTIVATED FOR NOW
         if(p%nstates>1)stop 'MULTIPLE STATES DEACTIVATED FOR NOW; cont3D_matcher::cont3Dexec'
         ! INIT
@@ -69,15 +70,13 @@ contains
         neff_states  = count(state_exists)              ! number of non-empty states
         ! number of references per particle
         select case(p%refine)
-            case('yes')
-                nrefs_per_ptcl = NREFS*neff_states
-            case('greedy')
+            case('yes', 'ada')
+                nrefs_per_ptcl = NREFS * neff_states
+            case('de')
                 nrefs_per_ptcl = 1
             case DEFAULT
-                stop 'Uknown refinement mode; pcont3D_matcher::cont3D_exec'
+                stop 'Unknown refinement mode; pcont3D_matcher::cont3D_exec'
         end select
-        ! Fraction of the search space
-        ! frac_srch_space = b%a%get_avg('frac')      ! unused
         ! batches
         nbatches = ceiling(real(nptcls)/real(p%nthr*BATCHSZ_MUL))
         batches  = split_nobjs_even(nptcls, nbatches)
@@ -86,20 +85,20 @@ contains
         call set_bp_range( b, p, cline )
         reslim = p%lp
 
-        ! CALCULATE ANGULAR THRESHOLD (USED BY THE SPARSE WEIGHTING SCHEME)
-        p%athres = rad2deg(atan(max(p%fny,p%lp)/(p%moldiam/2.)))
-        if( p%refine.eq.'yes' )write(*,'(A,F6.2)')'>>> ANGULAR THRESHOLD: ', p%athres
+        ! CALCULATE ANGULAR THRESHOLD
+        if( .not.cline%defined('athres') ) p%athres = max(p%lp, ATHRES_LIM)
+        write(*,'(A,F6.2)')'>>> ANGULAR THRESHOLD: ', p%athres
+
 
         ! DETERMINE THE NUMBER OF PEAKS
         select case(p%refine)
-            case('yes')
-                if( .not. cline%defined('npeaks') )then
-                    p%npeaks = min(MAXNPEAKS,b%e%find_npeaks(p%lp, p%moldiam))
-                endif
-                write(*,'(A,I2)')'>>> NPEAKS: ', p%npeaks
+            case('yes','de','ada')
+                if( .not. cline%defined('npeaks') )p%npeaks = MAXNPEAKS
+                p%npeaks = min(MAXNPEAKS, p%npeaks)
             case DEFAULT
-                p%npeaks = 1
+                stop 'Unknown refinement mode; pcont3D_matcher::cont3D_exec'
         end select
+        write(*,'(A,I2)')'>>> NPEAKS: ', p%npeaks
 
         ! SETUP WEIGHTS FOR THE 3D RECONSTRUCTION
         if( p%nptcls <= SPECWMINPOP )then
@@ -108,32 +107,20 @@ contains
             call b%a%calc_spectral_weights(p%frac)
         endif
 
-        ! PREPARE REFERENCE VOLUMES
+        ! PREPARE REFERENCE & RECONSTRUCTION VOLUMES
         call prep_vols(b, p, cline)
-
-        ! RESET RECVOLS
         if(p%norec .eq. 'no')then
-            do state=1,p%nstates
-                if( state_exists(state) )then
-                    if( p%eo .eq. 'yes' )then
-                        call b%eorecvols(state)%reset_all
-                    else
-                        call b%recvols(state)%reset
-                    endif
-                endif
-            end do
-            if(debug)write(*,*)'*** pcont3D_matcher ***: did reset recvols'
+            call preprecvols(b, p)
+            if( p%eo.eq.'yes')call prep_eopairs(b, p, eopart)
         endif
 
         ! INIT IMGPOLARIZER
-        ! dummy pftcc is only init here so the img polarizer can be initialized
-        ! todo: write init_imgpolarizer constructor that does not require pftcc
         call pftcc%new(nrefs_per_ptcl, [1,1], [p%boxmatch,p%boxmatch,1],p%kfromto, p%ring2, p%ctf)
         call b%img_match%init_polarizer(pftcc)
         call pftcc%kill
 
         ! INITIALIZE
-        write(*,'(A,1X,I3)')'>>> CONTINUOUS POLAR-FT ORIENTATION SEARCH, ITERATION:', which_iter
+        write(*,'(A,1X,I3)')'>>> CONTINUOUS ORIENTATION SEARCH, ITERATION:', which_iter
         if( .not. p%l_distr_exec )then
             p%outfile = 'cont3Ddoc_'//int2str_pad(which_iter,3)//'.txt'
         endif
@@ -145,9 +132,9 @@ contains
             fromp = p%fromp-1 + batches(batch,1)
             top   = p%fromp-1 + batches(batch,2)
             ! PREP BATCH
-            allocate(pftccs(fromp:top), cont3Dsrch(fromp:top), cont3Dgreedysrch(fromp:top),&
-                &batch_imgs(fromp:top), stat=alloc_stat)
-            call alloc_err('In pcont3D_matcher::pcont3D_exec_single',alloc_stat)
+            allocate(pftccs(fromp:top), cont3Dsrch(fromp:top), cont3Ddesrch(fromp:top),&
+                &cont3Dadasrch(fromp:top), batch_imgs(fromp:top), stat=alloc_stat)
+            call alloc_err('In pcont3D_matcher::pcont3D_exec',alloc_stat)
             do iptcl = fromp, top
 
                 state = nint(b%a%get(iptcl, 'state'))
@@ -157,16 +144,19 @@ contains
                 call batch_imgs(iptcl)%copy(b%img)
                 ! prep pftccs & ctf
                 call init_pftcc(p, iptcl, pftccs(iptcl))
+                iptcl_tmp = iptcl
                 call prep_pftcc_ptcl(b, p, iptcl_tmp, pftccs(iptcl))
                 if( p%ctf.ne.'no' )call pftccs(iptcl)%create_polar_ctfmats(p%smpd, b%a)
                 select case(p%refine)
                     case('yes')
                         call prep_pftcc_refs(b, p, iptcl, pftccs(iptcl))
                         call cont3Dsrch(iptcl)%new(p, orefs, pftccs(iptcl))
-                    case('greedy')
-                        call cont3Dgreedysrch(iptcl)%new(p, pftccs(iptcl), b%refvols)
+                    case('de')
+                        call cont3Ddesrch(iptcl)%new(p, pftccs(iptcl), b%refvols)
+                    case('ada')
+                        call cont3Dadasrch(iptcl)%new(p, pftccs(iptcl), b%refvols)
                     case DEFAULT
-                        stop 'Uknown refinement mode; pcont3D_matcher::cont3D_exec'
+                        stop 'Unknown refinement mode; pcont3D_matcher::cont3D_exec'
                 end select
             enddo
             ! SERIAL SEARCHES
@@ -175,46 +165,66 @@ contains
                 select case(p%refine)
                     case('yes')
                         call cont3Dsrch(iptcl)%exec_srch(b%a, iptcl)
-                    case('greedy')
-                        call cont3Dgreedysrch(iptcl)%exec_srch(b%a, iptcl, 1, 1)
+                    case('de')
+                        call cont3Ddesrch(iptcl)%exec_srch(b%a, iptcl, 1, 1)
+                    case('ada')
+                        call cont3Dadasrch(iptcl)%exec_srch(b%a, iptcl)
                 end select
             enddo
             !$omp end parallel do
+            ! ORIENTATIONS OUTPUT: only here for now
+            do iptcl = fromp, top
+                call b%a%write(iptcl, p%outfile)
+            enddo
             ! GRID & 3D REC
             if(p%norec .eq. 'no')then
                 do iptcl = fromp, top
                     orientation = b%a%get_ori(iptcl)
                     state       = nint(orientation%get('state'))
                     if(state == 0)cycle
-                    ind   = iptcl-fromp+1
                     call b%img%copy(batch_imgs(iptcl))
                     if(p%npeaks == 1)then
-                        call grid_ptcl(b, p, orientation)
+                        if( p%eo.eq.'yes' )then
+                            call grid_ptcl(b, p, orientation, ran_eo=eopart(iptcl) )
+                        else
+                            call grid_ptcl(b, p, orientation)
+                        endif
                     else
-                        softoris = cont3Dsrch(iptcl)%get_softoris()
-                        call grid_ptcl(b, p, orientation, os=softoris)
+                        select case(p%refine)
+                            case('yes')
+                                softoris = cont3Dsrch(iptcl)%get_softoris()
+                            case('de')
+                                softoris = cont3Ddesrch(iptcl)%get_softoris()
+                            case('ada')
+                                softoris = cont3Dadasrch(iptcl)%get_o_peaks()
+                        end select
+                        if( p%eo.eq.'yes' )then
+                            call grid_ptcl(b, p, orientation, os=softoris, ran_eo=eopart(iptcl) )
+                        else
+                            call grid_ptcl(b, p, orientation, os=softoris )
+                        endif
                     endif
                 enddo
             endif
-            ! ORIENTATIONS OUTPUT: only here for now
-            do iptcl = fromp, top
-                call b%a%write(iptcl, p%outfile)
-            enddo
             ! CLEANUP BATCH
             do iptcl = fromp, top
                 call cont3Dsrch(iptcl)%kill
-                call cont3Dgreedysrch(iptcl)%kill
+                call cont3Ddesrch(iptcl)%kill
+                call cont3Dadasrch(iptcl)%kill
                 call pftccs(iptcl)%kill
                 call batch_imgs(iptcl)%kill
             enddo
-            deallocate(pftccs, cont3Dsrch, cont3Dgreedysrch, batch_imgs)
+            deallocate(pftccs, cont3Dsrch, cont3Ddesrch, cont3Dadasrch, batch_imgs)
         enddo
+
         ! CLEANUP SEARCH
         call b%img_match%kill_polarizer
         do state=1,p%nstates
             call b%refvols(state)%kill_expanded
             call b%refvols(state)%kill
         enddo
+        if(allocated(eopart))deallocate(eopart)
+        deallocate(batches, state_exists)
 
         ! ORIENTATIONS OUTPUT
         !call b%a%write(p%outfile, [p%fromp,p%top])
@@ -222,11 +232,13 @@ contains
 
         ! NORMALIZE STRUCTURE FACTORS
         if(p%norec .eq. 'no')then
+            call b%vol%new([p%box, p%box,p%box], p%smpd)
             if( p%eo .eq. 'yes' )then
                 call eonorm_struct_facts(b, p, reslim, which_iter)
             else
                 call norm_struct_facts(b, p, which_iter)
             endif
+            call killrecvols(b, p)
         endif
 
         ! REPORT CONVERGENCE
@@ -235,10 +247,6 @@ contains
         else
             converged = b%conv%check_conv_cont3D()
         endif
-
-        ! DEALLOCATE
-        deallocate(batches)
-        deallocate(state_exists)
     end subroutine cont3D_exec
 
     !>  \brief  preps volumes for projection
@@ -249,11 +257,13 @@ contains
         integer :: state
         do state=1,p%nstates
             if( state_exists(state) )then
+                call b%vol%new([p%box,p%box,p%box],p%smpd) 
                 call preprefvol( b, p, cline, state, doexpand=.false. )
                 b%refvols(state) = b%vol
                 call b%refvols(state)%expand_cmat
             endif
         enddo
+        call b%vol%kill
         DebugPrint 'prep volumes done'
         ! bring back the original b%vol size
         if( p%boxmatch < p%box )call b%vol%new([p%box,p%box,p%box], p%smpd) ! to double check
@@ -271,30 +281,27 @@ contains
         endif
     end subroutine init_pftcc
 
-    !>  \brief  preps search space and performs reference projection
+    !>  \brief  preps search space and performs reference projection, for refine=yes
     subroutine prep_pftcc_refs(b, p, iptcl, pftcc)
-        use simple_image, only: image
-        use simple_ctf,   only: ctf
         class(build),               intent(inout) :: b      !< build object
         class(params),              intent(inout) :: p      !< params object
-        integer,                    intent(in) :: iptcl     !< index to particle
+        integer,                    intent(in)    :: iptcl  !< index to particle
         class(polarft_corrcalc),    intent(inout) :: pftcc  !< calculator and storage object
-        type(ctf)   :: tfun
-        type(image) :: ref_img, ctf_img
         type(oris)  :: cone
         type(ori)   :: optcl, oref
-        real        :: eullims(3,2),  dfx, dfy, angast
+        real        :: eullims(3,2)
         integer     :: state, iref, cnt
         optcl = b%a%get_ori(iptcl)
         ! SEARCH SPACE PREP
         eullims = b%se%srchrange()
-        call cone%rnd_proj_space(NREFS, optcl, p%athres, eullims)
+        ! call cone%rnd_proj_space(NREFS, optcl, p%athres, eullims) ! old style uniform stochastic distribution
+        call cone%rnd_gau_neighbors(NREFS, optcl, p%athres, eullims)
         call cone%set_euler(1, optcl%get_euler()) ! previous best is the first
         do iref = 1, NREFS
             call cone%e3set(iref, 0.)
         enddo
         ! replicates to states
-        if( p%nstates==1 )then
+        if( p%nstates == 1 )then
             call cone%set_all2single('state', 1.)
             orefs = cone
         else
@@ -329,5 +336,33 @@ contains
         call prepimg4align(b, p, optcl)
         call b%img_match%polarize(pftcc, iptcl, isptcl=.true.)
     end subroutine prep_pftcc_ptcl
+
+    !>  \brief  is for balanced distribution of the even/odd pairs
+    subroutine prep_eopairs(b, p, eopart)
+        use simple_ran_tabu, only: ran_tabu
+        class(build),      intent(inout) :: b
+        class(params),     intent(inout) :: p
+        real, allocatable, intent(out)   :: eopart(:)
+        type(ran_tabu)       :: rt
+        real,    allocatable :: rec_weights(:)
+        integer, allocatable :: part(:)
+        integer              :: iptcl, cnt, n_recptcls
+        allocate(eopart(p%fromp:p%top), source=-1.) ! -1. is default excluded value
+        rec_weights = b%a%get_all('w')
+        n_recptcls  = count(rec_weights(p%fromp:p%top) > TINY)
+        rt          = ran_tabu( n_recptcls )
+        allocate(part(n_recptcls), source=0)
+        call rt%balanced(2, part)
+        part = part - 1 ! 0/1 outcome
+        cnt = 0
+        do iptcl = p%fromp, p%top
+            if(rec_weights(iptcl) > TINY)then
+                cnt = cnt + 1
+                eopart(iptcl) = real(part(cnt))
+            endif
+        enddo
+        call rt%kill
+        deallocate(rec_weights, part)
+    end subroutine prep_eopairs
 
 end module simple_cont3D_matcher

@@ -15,7 +15,8 @@ contains
     !> DOSE FILTERING (Grant, Grigorieff eLife 2015)
     !! input is template image, accumulative dose (in e/A2) and acceleration voltage
     !!         output is filter coefficients
-    !! \f$  A_\mathsf{dose} = \int^{N}_{1} \mathsf{dose\_weight}(a,F,V),\ e/A^{2}  \f$
+    !! \f$  \mathsf{dose}_\mathsf{acc} = \int^{N}_{1} \mathsf{dose\_weight}(a,F,V),\ n_\mathsf{e}/\si{\angstrom\squared}  \f$
+    !! \param acc_dose accumulative dose (in \f$n_\mathsf{e} per \si{\angstrom\squared}\f$)
     function acc_dose2filter( img, acc_dose, kV ) result( filter )
         type(image), intent(in) :: img           !< input image
         real,        intent(in) :: acc_dose, kV  !< accumulative dose (in e/A2) and acceleration voltage
@@ -34,7 +35,7 @@ contains
     !!         before correlation search and averaging
     !!
     !! \f$  \mathsf{dose\_weight}(a,F,V) = \exp\left(- \frac{A_\mathsf{dose}}{k\times (2.0\times A\times f^B + C)} \right), \f$
-    !! where \f$k\f$ is 0.75 for \f$V<200\f$ kV, 1.0 for \f$200 <= V <= 300\f$
+    !! where \f$k\f$ is 0.75 for \f$V<200\f$ kV, 1.0 for \f$200 \leqslant  V \leqslant  300\f$
     real function dose_weight( acc_dose, spat_freq, kV )
         real, intent(in) :: acc_dose                !< accumulative dose (in e/A2)
         real, intent(in) :: spat_freq               !< spatial frequency (in 1/A)
@@ -73,7 +74,7 @@ contains
 
     !>  \brief does the Wiener restoration of aligned images in 2D
     !!   only for testing
-    subroutine wiener_restore2D( img_set, o_set, tfplan, img_rec, msk, shellw )
+    subroutine wiener_restore2D( img_set, o_set, tfplan, img_rec, msk )
         use simple_oris,  only: oris
         use simple_ori,   only: ori
         class(image),     intent(inout) :: img_set(:) !< input images
@@ -81,15 +82,12 @@ contains
         type(ctfplan),    intent(in)    :: tfplan     !< CTF plan
         class(image),     intent(inout) :: img_rec     !< reconstructed image
         real,             intent(in)    :: msk         !< mask
-        real, optional,   intent(in)    :: shellw(:,:) !< weighted shell
         integer           :: ldim(3), ldim_pad(3), nimgs, iptcl
         type(ori)         :: o
         type(image)       :: ctfsqsum
         real              :: smpd         !< sampling distance
-        logical           :: doshellw
         if( o_set%get_noris() /= size(img_set) )&
         stop 'nr of imgs and oris not consistent; simple_filterer :: wiener_restore2D_1'
-        doshellw = present(shellw)
         ! set constants
         ldim     = img_set(1)%get_ldim()
         smpd     = img_set(1)%get_smpd()
@@ -102,13 +100,8 @@ contains
         ! average in the assumption of infinite signal
         do iptcl=1,nimgs
             o = o_set%get_ori(iptcl)
-            if( doshellw )then
-                call wiener_restore2D_online(img_set(iptcl), o,&
-                &tfplan, img_rec, ctfsqsum, msk, shellw(iptcl,:))
-            else
-                call wiener_restore2D_online(img_set(iptcl), o,&
-                &tfplan, img_rec, ctfsqsum, msk)
-            endif
+            call wiener_restore2D_online(img_set(iptcl), o,&
+            &tfplan, img_rec, ctfsqsum, msk)
         end do
         ! do the density correction
         call img_rec%fwd_ft
@@ -120,7 +113,7 @@ contains
 
     !>  \brief does the online Wiener restoration of 2D images, including shift+rotations
     !!         the image is left shifted and Fourier transformed on output
-    subroutine wiener_restore2D_online( img, o, tfplan, img_rec, ctfsqsum, msk, shellw, add )
+    subroutine wiener_restore2D_online( img, o, tfplan, img_rec, ctfsqsum, msk, add )
         use simple_ori,            only: ori
         use simple_ctf,            only: ctf
         use simple_projector_hlev, only: rotimg
@@ -130,12 +123,11 @@ contains
         class(image),      intent(inout) :: img_rec   !< reconstructed image
         class(image),      intent(inout) :: ctfsqsum  !< instrument CTF filter
         real,              intent(in)    :: msk       !< mask
-        real,    optional, intent(in)    :: shellw(:) !< weighting shell
         logical, optional, intent(in)    :: add       !< add or subtr  rotation and ctfsumsq
         type(image) :: roimg, ctfsq
         type(ctf)   :: tfun
         integer     :: ldim(3)
-        real        :: angast,dfx,dfy,x,y,smpd,w
+        real        :: angast, dfx, dfy, x, y, smpd, w
         logical     :: aadd
         aadd = .true.
         if( present(add) ) aadd = add
@@ -160,7 +152,7 @@ contains
         end select
         x = -o%get('x')
         y = -o%get('y')
-        w =  o%get('w')
+        w = o%get('w')
         ! apply
         call img%fwd_ft
         ! take care of the nominator
@@ -173,14 +165,14 @@ contains
                 call tfun%apply_and_shift(img, ctfsq, x, y, dfx, '', dfy, angast)
         end select
         ! griding-based image rotation and filtering
-        call rotimg(img, -o%e3get(), msk, roimg, shellw)
+        call rotimg(img, -o%e3get(), msk, roimg)
         ! assemble img_rec sum
         if( aadd )then
-            call img_rec%add(roimg,w)
-            call ctfsqsum%add(ctfsq,w)
+            call img_rec%add(roimg, w)
+            call ctfsqsum%add(ctfsq, w)
         else
-            call img_rec%subtr(roimg,w)
-            call ctfsqsum%subtr(ctfsq,w)
+            call img_rec%subtr(roimg, w)
+            call ctfsqsum%subtr(ctfsq, w)
         endif
         call roimg%kill
         call ctfsq%kill

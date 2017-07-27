@@ -101,14 +101,15 @@ contains
         call b%build_general_tbox(p, cline) ! general objects built
         call b%build_eo_rec_tbox(p)         ! reconstruction toolbox built
         call b%eorecvol%kill_exp            ! reduced meory usage
+        call b%mskvol%kill                 ! reduced memory usage
         allocate(res05s(p%nstates), res0143s(p%nstates), stat=alloc_stat)
+        call alloc_err("In: simple_eo_volassemble", alloc_stat)
         res0143s = 0.
         res05s   = 0.
-        call alloc_err("In: simple_eo_volassemble", alloc_stat)
         ! rebuild b%vol according to box size (beacuse it is otherwise boxmatch)
         call b%vol%new([p%box,p%box,p%box], p%smpd, p%imgkind)
         call eorecvol_read%new(p)
-        call eorecvol_read%kill_exp        ! reduced meory usage
+        call eorecvol_read%kill_exp        ! reduced memory usage
         n = p%nstates*p%nparts
         do ss=1,p%nstates
             if( cline%defined('state') )then
@@ -174,7 +175,7 @@ contains
         type(params)                  :: p
         type(build)                   :: b
         character(len=:), allocatable :: fbody
-        character(len=STDLEN)         :: recvolname
+        character(len=STDLEN)         :: recvolname, rho_name
         integer                       :: part, s, ss, endit, i, state4name, file_stat, fnr
         type(reconstructor)           :: recvol_read
         logical                       :: here(2)
@@ -211,10 +212,10 @@ contains
                     if( cline%defined('even') .or. cline%defined('odd') )then
                         if( p%even .eq. 'yes' .and. p%odd .eq. 'no' )then
                             p%vols(s) = fbody//'_even'//p%ext
-                            p%masks(s) = 'rho_'//fbody//'_even'//p%ext
+                            rho_name  = 'rho_'//fbody//'_even'//p%ext
                         else if( p%odd .eq. 'yes' .and. p%even .eq. 'no' )then
                             p%vols(s) = fbody//'_odd'//p%ext
-                            p%masks(s) = 'rho_'//fbody//'_odd'//p%ext
+                            rho_name  = 'rho_'//fbody//'_odd'//p%ext
                         else if( p%odd .eq. 'yes' .and. p%even .eq. 'yes' )then
                             stop 'ERROR! Cannot have even=yes and odd=yes simultaneously'
                         endif
@@ -222,17 +223,17 @@ contains
                         if( p%eo .eq. 'yes' )then
                             if( i == 1 )then
                                 p%vols(s) = fbody//'_odd'//p%ext
-                                p%masks(s) = 'rho_'//fbody//'_odd'//p%ext
+                                rho_name  = 'rho_'//fbody//'_odd'//p%ext
                             else
                                 p%vols(s) = fbody//'_even'//p%ext
-                                p%masks(s) = 'rho_'//fbody//'_even'//p%ext
+                                rho_name  = 'rho_'//fbody//'_even'//p%ext
                             endif   
                         else
-                            p%vols(s)  = fbody//p%ext
-                            p%masks(s) = 'rho_'//fbody//p%ext
+                            p%vols(s) = fbody//p%ext
+                            rho_name  = 'rho_'//fbody//p%ext
                         endif
                     endif
-                    call assemble(p%vols(s), p%masks(s))
+                    call assemble(p%vols(s), trim(rho_name))
                 end do
                 deallocate(fbody)
             end do

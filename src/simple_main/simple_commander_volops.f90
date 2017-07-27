@@ -24,6 +24,7 @@ use simple_jiffys          ! use all in there
 use simple_filehandling    ! use all in there
 implicit none
 
+public :: fsc_commander
 public :: cenvol_commander
 public :: postproc_vol_commander
 public :: projvol_commander
@@ -32,6 +33,10 @@ public :: volops_commander
 public :: volume_smat_commander
 private
 #include "simple_local_flags.inc"
+type, extends(commander_base) :: fsc_commander
+  contains
+    procedure :: execute      => exec_fsc
+end type fsc_commander
 type, extends(commander_base) :: cenvol_commander
   contains
     procedure :: execute      => exec_cenvol
@@ -59,6 +64,37 @@ end type volume_smat_commander
 
 contains
 
+    subroutine exec_fsc( self, cline )
+        use simple_image, only: image
+        use simple_math,  only: get_resolution
+        class(fsc_commander), intent(inout) :: self
+        class(cmdline),       intent(inout) :: cline
+        type(params)      :: p
+        type(image)       :: even, odd
+        integer           :: j
+        real              :: res_fsc05, res_fsc0143
+        real, allocatable :: res(:), corrs(:)
+        p = params(cline)
+        ! read even/odd pair
+        call even%new([p%box,p%box,p%box], p%smpd)
+        call odd%new([p%box,p%box,p%box], p%smpd)
+        call odd%read(p%vols(1))
+        call even%read(p%vols(2))
+        ! forward FT
+        call even%fwd_ft
+        call odd%fwd_ft
+        ! calculate FSC
+        call even%fsc(odd, res, corrs)
+        do j=1,size(res)
+           write(*,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', corrs(j)
+        end do
+        call get_resolution(corrs, res, res_fsc05, res_fsc0143)
+        write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', res_fsc0143
+        write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', res_fsc05
+        call even%kill
+        call odd%kill
+    end subroutine exec_fsc
+    
     subroutine exec_cenvol( self, cline )
         class(cenvol_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
@@ -66,7 +102,7 @@ contains
         type(build)          :: b
         real, allocatable    :: shvec(:,:)
         integer              :: istate
-
+        debug=.false. ! declared in module by local flags
         p = params(cline)                           ! parameters generated
         call b%build_general_tbox(p, cline, .true.) ! general objects built
         ! center volume(s)
@@ -86,28 +122,31 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_CENVOL NORMAL STOP ****')
     end subroutine exec_cenvol
-
-    subroutine exec_postproc_vol(self,cline)
-        use simple_math, only: get_resolution
+    !> exec_postproc_vol post-process volume program
+    !! \param cline commandline
+    !!
+    subroutine exec_postproc_vol(self, cline)
+        use simple_math,  only: get_resolution
+        use simple_image, only: image 
         use simple_estimate_ssnr ! use all in there
-        use simple_masker,       only: automask
         class(postproc_vol_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(params)      :: p
         type(build)       :: b
+        type(image)       :: vol_copy
         real, allocatable :: fsc(:), optlp(:), res(:)
         real              :: fsc0143, fsc05
-        integer           :: k, state
+        integer           :: k, state, ldim(3)
         state = 1
         ! pre-proc
         p = params(cline, checkdistr=.false.) ! constants & derived constants produced, mode=2
         call b%build_general_tbox(p, cline)   ! general objects built
         call b%vol%read(p%vols(state))
         call b%vol%fwd_ft
-        ! lp filt
+        ! optimal low-pass filt
         if( cline%defined('fsc') )then
             if( file_exists(p%fsc) )then
-                fsc = file2rarr(p%fsc)
+                fsc   = file2rarr(p%fsc)
                 optlp = fsc2optlp(fsc)
             else
                 write(*,*) 'FSC file: ', trim(p%fsc), ' not in cwd'
@@ -123,23 +162,39 @@ contains
             write(*,*) 'no method for low-pass filtering defined; give fsc or lp on command line'
             stop 'comple_commander_volops :: exec_postproc_vol'
         endif
+        vol_copy = b%vol
         ! B-fact
         if( cline%defined('bfac') ) call b%vol%apply_bfac(p%bfac)
         ! masking
         call b%vol%bwd_ft
-        p%vols_msk(state) = add2fbody(trim(p%vols(state)), p%ext, 'msk')
-        if( p%automsk .eq. 'yes' )then
-            p%masks(state) = 'automask_state'//int2str_pad(state,2)//p%ext
-            call automask(b, p, cline, b%vol, b%mskvol, p%vols_msk(state), p%masks(state))
+        call vol_copy%bwd_ft
+        if( cline%defined('mskfile') )then
+            if( file_exists(p%mskfile) )then
+                ldim = b%vol%get_ldim()
+                call b%mskvol%new(ldim, p%smpd)
+                call b%mskvol%read(p%mskfile)
+                call b%vol%mul(b%mskvol)
+            else
+                write(*,*) 'file: ', trim(p%mskfile)
+                stop 'maskfile does not exists in cwd'                
+            endif
+        else if( p%automsk .eq. 'yes' )then
+            call b%mskvol%automask3D(p, vol_copy)
+            call b%mskvol%write('automask'//p%ext)
+            call b%vol%mul(b%mskvol)
         else
             call b%vol%mask(p%msk, 'soft')
         endif
         ! output
         p%outvol = add2fbody(trim(p%vols(state)), p%ext, 'pproc')
         call b%vol%write(p%outvol)
+        call vol_copy%kill
         call simple_end('**** SIMPLE_POSTPROC_VOL NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_postproc_vol
 
+    !> exec_projvol build projection from volume
+    !! \param cline command line
+    !!
     subroutine exec_projvol( self, cline )
         use simple_image,          only: image
         use simple_projector_hlev, only: projvol
@@ -150,7 +205,7 @@ contains
         type(image), allocatable :: imgs(:)
         integer                  :: i, loop_end
         real                     :: x, y, dfx, dfy, angast
-
+        debug=.false. ! local module flag
         if( .not. cline%defined('oritab') )then
             if( .not. cline%defined('nspace') ) stop 'need nspace (for number of projections)!'
         endif
@@ -205,6 +260,9 @@ contains
         call simple_end('**** SIMPLE_PROJVOL NORMAL STOP ****')
     end subroutine exec_projvol
 
+    !> exec_volaverager Create volume average
+    !! \param cline 
+    !!
     subroutine exec_volaverager( self, cline )
         use simple_image, only: image
         class(volaverager_commander), intent(inout) :: self
@@ -217,7 +275,7 @@ contains
         integer                            :: istate, ivol, nvols, funit_vols, numlen, ifoo
         character(len=:), allocatable      :: fname
         character(len=1)                   :: fformat
-#include "simple_local_flags.inc"
+        debug=.false.
         p = params(cline) ! parameters generated
         ! read the volnames
         nvols = nlines(p%vollist)
@@ -274,6 +332,9 @@ contains
         call simple_end('**** SIMPLE_VOLAVERAGER NORMAL STOP ****')
     end subroutine exec_volaverager
 
+    !> exec_volops Volume calculations and operations - incl Guinier, snr, mirror or b-factor
+    !! \param cline commandline
+    !!
     subroutine exec_volops( self, cline )
         class(volops_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
@@ -299,12 +360,14 @@ contains
             if( cline%defined('neg')  ) call b%vol%neg
             if( cline%defined('snr')  ) call b%vol%add_gauran(p%snr)
             if( cline%defined('mirr') ) call b%vol%mirror(p%mirr)
+            if( cline%defined('bfac') ) call b%vol%apply_bfac(p%bfac)
             call b%vol%write(p%outvol, del_if_exists=.true.)
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_VOLOPS NORMAL STOP ****')
     end subroutine exec_volops
 
+    !> volume_smat Calculate similarity matrix between volumes
     subroutine exec_volume_smat( self, cline )
         use simple_projector, only: projector
         use simple_ori,       only: ori
@@ -320,7 +383,7 @@ contains
         type(projector)      :: vol1, vol2
         type(ori)            :: o
         ! this overrides the module debug
-#include "simple_local_flags.inc"
+        debug=.false.
         real,                  allocatable :: corrmat(:,:), corrs(:), corrs_avg(:)
         integer,               allocatable :: pairs(:,:)
         character(len=STDLEN), allocatable :: vollist(:)

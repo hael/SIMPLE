@@ -7,7 +7,7 @@ use simple_opt_spec,          only: opt_spec
 use simple_pftcc_opt,         only: pftcc_opt
 use simple_polarft_corrcalc,  only: polarft_corrcalc
 use simple_projector,         only: projector
-use simple_simplex_pftcc_opt, only: simplex_pftcc_opt
+use simple_de_pftcc_opt,      only: de_pftcc_opt
 use simple_defs               ! use all in there
 implicit none
 
@@ -17,7 +17,7 @@ private
 type, extends(pftcc_opt) :: pftcc_srch
     private
     type(opt_spec)                   :: ospec                  !< optimizer specification object
-    type(simplex_pftcc_opt)          :: nlopt                  !< optimizer object
+    type(de_pftcc_opt)               :: nlopt                  !< simplex optimizer object
     class(polarft_corrcalc), pointer :: pftcc_ptr   => null()  !< pointer to pftcc object
     class(projector),        pointer :: vols_ptr(:) => null()  !< pointer to pftcc object
     integer                          :: reference   =  0       !< reference pft
@@ -28,22 +28,27 @@ type, extends(pftcc_opt) :: pftcc_srch
     logical                          :: shbarr      =  .true.  !< shift barrier constraint or not
     integer                          :: nrestarts   =  5       !< simplex restarts (randomized bounds)
   contains
-    procedure :: new         => srch_new
-    procedure :: set_indices => srch_set_indices
-    procedure :: costfun     => srch_costfun
-    procedure :: minimize    => srch_minimize
-    procedure :: get_nevals  => srch_get_nevals
-    procedure :: kill
+    procedure           :: new         => srch_new
+    procedure           :: set_indices => srch_set_indices
+    procedure           :: set_inipop  => srch_set_inipop
+    procedure           :: costfun     => srch_costfun
+    procedure           :: minimize    => srch_minimize
+    procedure           :: get_nevals  => srch_get_nevals
+    procedure           :: get_peaks   => srch_get_peaks
+    procedure, private  :: check_lims
+    procedure           :: kill
 end type pftcc_srch
 
 contains
 
-    subroutine srch_new( self, pftcc, lims, shbarrier, nrestarts, vols )
+    subroutine srch_new( self, pftcc, lims, shbarrier, nrestarts, npeaks, maxits, vols )
         class(pftcc_srch),                  intent(inout) :: self
         class(polarft_corrcalc),    target, intent(in)    :: pftcc      !< correllation calc object in polar Fourier form
         real,                               intent(in)    :: lims(:,:)  !< search limits
         character(len=*), optional,         intent(in)    :: shbarrier  !< bool set shbarr
         integer,          optional,         intent(in)    :: nrestarts  !< number of restarts
+        integer,          optional,         intent(in)    :: npeaks     !< number of peaks
+        integer,          optional,         intent(in)    :: maxits     !< maximum iterations
         class(projector), optional, target, intent(in)    :: vols(:)    !< projection volumes
         real :: srchlims(5,2)
         ! flag the barrier constraint
@@ -51,12 +56,22 @@ contains
         if( present(shbarrier) )then
             if( shbarrier .eq. 'no' ) self%shbarr = .false.
         endif
-        self%nrestarts = 2
-        if( present(nrestarts) ) self%nrestarts = nrestarts 
+        self%nrestarts = 1
         ! make optimizer spec
         srchlims = lims
-        call self%ospec%specify('de', 5, ftol=1e-4,&
-        &gtol=1e-4, limits=srchlims, nrestarts=self%nrestarts)
+        ndim     = 5
+        if( present(nrestarts) )self%nrestarts = nrestarts 
+        maxits_here = 1000 * ndim
+        if(present(maxits))maxits_here = maxits
+        ! de
+        if(present(npeaks))then
+            npeaks_here = npeaks
+            call self%ospec%specify('de', ndim, limits=srchlims,&
+            &nrestarts=1, maxits=maxits_here, npeaks=npeaks_here)
+        else
+            call self%ospec%specify('de', ndim, limits=srchlims,&
+            &nrestarts=1, maxits=maxits_here)
+        endif
         ! generate the simplex optimizer object 
         call self%nlopt%new(self%ospec)
         ! set pointer to corrcalc object
@@ -69,6 +84,7 @@ contains
         self%maxshift = real(maxval(self%ldim))/2.
     end subroutine srch_new
     
+    !>  \brief  is a setter
     subroutine srch_set_indices( self, ref, ptcl, rot, state )
         class(pftcc_srch), intent(inout) :: self
         integer,           intent(in)    :: ref, ptcl
@@ -77,6 +93,17 @@ contains
         self%particle  = ptcl
         self%state     = state
     end subroutine srch_set_indices
+
+    !>  \brief  is a setter
+    subroutine srch_set_inipop( self, inipop )
+        class(pftcc_srch), intent(inout) :: self
+        real,              intent(in)    :: inipop(:,:)
+        integer :: i
+        call self%ospec%set_inipop(inipop)
+        do i = 1, size(self%ospec%inipopulation, dim=1)
+            call self%check_lims(self%ospec%inipopulation(i,:))
+        enddo
+    end subroutine srch_set_inipop
 
     function srch_costfun( self, vec, D ) result( cost )
         use simple_math, only: enforce_cyclic_limit
@@ -88,9 +115,8 @@ contains
         real      :: vec_here(5), cost
         integer   :: i
         vec_here = vec
+        call self%check_lims(vec_here)
         do i = 1,5
-            ! euler angles range
-            if(i<=3)call enforce_cyclic_limit(vec_here(i), 360.)
             ! euler angles & shift boundaries
             if(vec_here(i) < self%ospec%limits(i,1) .or.&
               &vec_here(i) > self%ospec%limits(i,2))then
@@ -98,9 +124,6 @@ contains
                 return
             endif
         enddo
-        ! zero small shifts
-        if( abs(vec(4)) < 1e-6 ) vec_here(4) = 0.
-        if( abs(vec(5)) < 1e-6 ) vec_here(5) = 0.
         ! projection
         call o%new
         call o%set_euler(vec_here(1:3))
@@ -111,7 +134,6 @@ contains
     end function srch_costfun
     
     function srch_minimize( self, irot, shvec, rxy, fromto ) result( crxy )
-        use simple_math, only: enforce_cyclic_limit
         class(pftcc_srch),     intent(inout) :: self
         integer, optional,     intent(in)    :: irot
         real,    optional,     intent(in)    :: shvec(:)
@@ -119,6 +141,7 @@ contains
         integer, optional,     intent(in)    :: fromto(2)
         real, allocatable :: crxy(:)
         real    :: cost_init, cost
+        integer :: i
         logical :: irot_here, shvec_here, rxy_here
         allocate(crxy(6))
         irot_here  = present(irot)
@@ -133,30 +156,33 @@ contains
         self%ospec%x(1:3) = rxy
         self%ospec%x(4:5) = 0.  ! particle is pre-shifted
         ! previous correlation
-        cost_init = self%costfun(self%ospec%x, self%ospec%ndim)
+        cost_init     = self%costfun(self%ospec%x, self%ospec%ndim)
+        self%ospec%yb = cost_init
         ! minimisation
         call self%nlopt%minimize(self%ospec, self, cost)
-        crxy(1) = -cost    ! correlation
+        ! updates best solution
+        crxy(1)   = -cost    ! correlation
+        crxy(2:6) = self%ospec%x
+        call self%check_lims(crxy(2:6))
+        ! updates population
+        self%ospec%peaks(:,6) = -self%ospec%peaks(:,6)  ! cost to correlation
         if(cost < cost_init)then
             ! improvement
-            crxy(2:4) = self%ospec%x(1:3) ! euler angles
-            crxy(5:6) = self%ospec%x(4:5) ! shifts
-            ! enforce all ddf range
-            call enforce_cyclic_limit(crxy(2), 360.)
-            call enforce_cyclic_limit(crxy(3), 360.)
-            call enforce_cyclic_limit(crxy(4), 360.)
-            if( abs(crxy(5)) < 1e-6 ) crxy(5) = 0.
-            if( abs(crxy(6)) < 1e-6 ) crxy(6) = 0.
-            ! shifts by vector addition must be done in the driver
-            if( any(crxy(5:) > self%maxshift) .or. any(crxy(5:) < -self%maxshift) )then
-                crxy(1)  = -1.
-                crxy(5:) = 0.
-            endif
+            do i = 1, self%ospec%npeaks
+                call self%check_lims(self%ospec%peaks(i,1:5))
+                ! shifts by vector addition must be done in the driver
+                if( any(self%ospec%peaks(i,4:5)>self%maxshift) .or.&
+                &any(self%ospec%peaks(i,4:5)<-self%maxshift) )then
+                    self%ospec%peaks(i,6)   = -1.
+                    self%ospec%peaks(i,4:5) = 0.
+                endif
+            enddo
         else
             ! no improvement
-            crxy(1)   = -cost_init  ! previous correlation
-            crxy(2:4) = rxy         ! previous euler
-            crxy(5:)  = 0.          ! previous shift
+            self%ospec%peaks      = 0.
+            self%ospec%peaks(:,6) = -1.
+            self%ospec%peaks(self%ospec%npeaks,1:5) = crxy(2:6)     ! previous euler & shift
+            self%ospec%peaks(self%ospec%npeaks,6)   = -cost_init    ! previous cost
         endif
     end function srch_minimize
 
@@ -166,10 +192,28 @@ contains
         nevals = self%ospec%nevals
     end function  srch_get_nevals
 
+    subroutine srch_get_peaks( self, peaks )
+        class(pftcc_srch), intent(inout) :: self
+        real, allocatable, intent(out)   :: peaks(:,:)
+        peaks = self%ospec%peaks
+    end subroutine srch_get_peaks
+
+    subroutine check_lims( self, individual )
+        use simple_math, only: enforce_cyclic_limit
+        class(pftcc_srch), intent(inout) :: self
+        real,              intent(inout) :: individual(5)
+        call enforce_cyclic_limit(individual(1), 360.)
+        call enforce_cyclic_limit(individual(2), 360.)
+        call enforce_cyclic_limit(individual(3), 360.)
+        if(abs(individual(4)) < 1e-6) individual(4) = 0.
+        if(abs(individual(5)) < 1e-6) individual(5) = 0.
+    end subroutine check_lims
+
     subroutine kill( self )
         class(pftcc_srch), intent(inout) :: self
         self%pftcc_ptr => null()
         self%vols_ptr  => null()
+        call self%ospec%kill
     end subroutine kill
 
 end module simple_pftcc_srch

@@ -37,6 +37,7 @@ type :: opt_spec
     real, allocatable     :: xi(:)                            !< search direction used in linmin
     real, allocatable     :: xt(:)                            !< test point, used in linmin
     real, allocatable     :: sdevs(:)                         !< standard deviations of the variables, used in oasis
+    real, allocatable     :: inipopulation(:,:)               !< input population for the evolutionary approaches
     real, allocatable     :: population(:,:)                  !< output solution population from the evolutionary approaches
     real, allocatable     :: peaks(:,:)                       !< output peaks (local optimal solutions)
 #include "simple_local_flags.inc"
@@ -51,6 +52,7 @@ type :: opt_spec
     procedure :: set_limits
     procedure :: set_costfun
     procedure :: set_gcostfun
+    procedure :: set_inipop
     procedure :: kill
 end type opt_spec
 
@@ -168,7 +170,7 @@ contains
         if(present(warn_arg))    self%warn    = warn_arg
         ! allocate
         if( self%npeaks > 0 )then
-            allocate( self%peaks(self%npeaks,self%ndim+1), stat=alloc_stat )
+            allocate( self%peaks(self%npeaks,self%ndim+1), source=1., stat=alloc_stat )
             call alloc_err('In: specify; simple_opt_spec, peaks', alloc_stat)
         endif
         select case(str_opt)
@@ -217,6 +219,18 @@ contains
         endif
         self%limits = lims
     end subroutine set_limits
+    
+    !>  \brief  sets the initialization population for de
+    subroutine set_inipop( self, pop )
+        use simple_jiffys, only: alloc_err
+        class(opt_spec), intent(inout) :: self              !< instance
+        real,            intent(in)    :: pop(:,:)
+        if(self%str_opt.ne.'de')stop 'Only for use with DE; simple_opt_spec%set_inipop'
+        if(size(pop,dim=1) > self%npop)stop 'non-congruent initial population 1; simple_pftcc_srch%srchset_inipop'
+        if(size(pop,dim=2) .ne. self%ndim)stop 'non-congruent initial population 2; simple_pftcc_srch%srchset_inipop'
+        if(allocated(self%inipopulation))deallocate(self%inipopulation)
+        self%inipopulation = pop
+    end subroutine set_inipop
 
     !>  \brief  sets the cost function in the spec object
     subroutine set_costfun( self, fun )
@@ -262,15 +276,16 @@ contains
     subroutine kill( self )
         class(opt_spec), intent(inout) :: self !< instance
         if( self%exists )then
-            if( allocated(self%cyclic) )      deallocate(self%cyclic)
-            if( allocated(self%limits) )      deallocate(self%limits)
-            if( allocated(self%stepsz) )      deallocate(self%stepsz)
-            if( allocated(self%x) )           deallocate(self%x)
-            if( allocated(self%xi) )          deallocate(self%xi)
-            if( allocated(self%xt) )          deallocate(self%xt)
-            if( allocated(self%sdevs) )       deallocate(self%sdevs)
-            if( allocated(self%population) )  deallocate(self%population)
-            if( allocated(self%peaks) )       deallocate(self%peaks)
+            if( allocated(self%cyclic) )       deallocate(self%cyclic)
+            if( allocated(self%limits) )       deallocate(self%limits)
+            if( allocated(self%stepsz) )       deallocate(self%stepsz)
+            if( allocated(self%x) )            deallocate(self%x)
+            if( allocated(self%xi) )           deallocate(self%xi)
+            if( allocated(self%xt) )           deallocate(self%xt)
+            if( allocated(self%sdevs) )        deallocate(self%sdevs)
+            if( allocated(self%population) )   deallocate(self%population)
+            if( allocated(self%inipopulation) )deallocate(self%inipopulation)
+            if( allocated(self%peaks) )        deallocate(self%peaks)
             self%costfun  => null()
             self%gcostfun => null()
             self%exists = .false.
