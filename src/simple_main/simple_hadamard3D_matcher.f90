@@ -82,7 +82,7 @@ contains
         call set_bp_range( b, p, cline )
 
         ! CALCULATE ANGULAR THRESHOLD (USED BY THE SPARSE WEIGHTING SCHEME)
-        p%athres = rad2deg(atan(max(p%fny,p%lp)/(p%moldiam/2.)))
+        p%athres = rad2deg( atan(max(p%fny,p%lp)/(p%moldiam/2.) ))
         reslim   = p%lp
         DebugPrint '*** hadamard3D_matcher ***: calculated angular threshold (used by the sparse weighting scheme)'
 
@@ -157,7 +157,7 @@ contains
             call primesrch3D(iptcl)%new(b%a, p, pftcc)
         end do
         ! prep ctf & filter
-        if(p%ctf .ne. 'no') call pftcc%create_polar_ctfmats(p%smpd, b%a)
+        if(p%ctf .ne. 'no') call pftcc%create_polar_ctfmats(b%a)
         ! execute the search
         call del_file(p%outfile)
         select case(p%refine)
@@ -353,10 +353,10 @@ contains
         nrefs = p%nspace*p%nstates
         if( p%l_xfel )then
             call pftcc%new(nrefs, [p%fromp,p%top], [p%boxmatch,p%boxmatch,1],&
-            p%kfromto, p%ring2, p%ctf, isxfel='yes')
+            p%smpd, p%kfromto, p%ring2, p%ctf, isxfel='yes')
         else
             call pftcc%new(nrefs, [p%fromp,p%top], [p%boxmatch,p%boxmatch,1],&
-            p%kfromto, p%ring2, p%ctf)
+            p%smpd, p%kfromto, p%ring2, p%ctf)
         endif
         call prep_refs_pftcc4align( b, p, cline )
         call prep_ptcls_pftcc4align( b, p, ppfts_fname )

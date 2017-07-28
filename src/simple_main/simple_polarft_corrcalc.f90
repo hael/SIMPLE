@@ -28,6 +28,7 @@ type :: polarft_corrcalc
     integer                  :: winsz      = 0         !< size of moving window in correlation calculations
     integer                  :: ldim(3)    = 0         !< logical dimensions of original cartesian image
     integer                  :: kfromto(2) = 0         !< Fourier index range
+    real(sp)                 :: smpd       = 0.        !< sampling distance
     real(sp),    allocatable :: sqsums_ptcls(:)        !< memoized square sums for the correlation calculations
     real(sp),    allocatable :: angtab(:)              !< table of in-plane angles (in degrees)
     real(sp),    allocatable :: argtransf(:,:)         !< argument transfer constants for shifting the references
@@ -90,6 +91,7 @@ type :: polarft_corrcalc
     procedure, private :: corr_2
     generic            :: corr => corr_1, corr_2
     procedure          :: euclid
+    procedure          :: euclid_norm
     ! DESTRUCTOR
     procedure          :: kill
 end type polarft_corrcalc
@@ -99,10 +101,11 @@ contains
     ! CONSTRUCTORS
     
     !>  \brief  is a constructor
-    subroutine new( self, nrefs, pfromto, ldim, kfromto, ring2, ctfflag, isxfel )
+    subroutine new( self, nrefs, pfromto, ldim, smpd, kfromto, ring2, ctfflag, isxfel )
         use simple_math, only: rad2deg, is_even, round2even
         class(polarft_corrcalc),    intent(inout) :: self
         integer,                    intent(in)    :: nrefs, pfromto(2), ldim(3), kfromto(2), ring2
+        real,                       intent(in)    :: smpd
         character(len=*),           intent(in)    :: ctfflag
         character(len=*), optional, intent(in)    :: isxfel
         integer  :: alloc_stat, irot, k
@@ -158,6 +161,7 @@ contains
         self%winsz   = self%refsz - 1                  !< size of moving window in correlation cacluations
         self%ptclsz  = self%nrots * 2                  !< size of particle (2*nrots)
         self%ldim    = ldim                            !< logical dimensions of original cartesian image
+        self%smpd    = smpd                            !< sampling distance
         self%kfromto = kfromto                         !< Fourier index range
         ! generate polar coordinates
         allocate( self%polar(self%ptclsz,self%kfromto(1):self%kfromto(2)), self%angtab(self%nrots), stat=alloc_stat)
@@ -616,11 +620,10 @@ contains
     end function create_polar_ctfmat
 
     !>  \brief  is for generating all matrices of CTF values
-    subroutine create_polar_ctfmats( self, smpd, a )
+    subroutine create_polar_ctfmats( self, a )
         use simple_ctf,  only: ctf
         use simple_oris, only: oris
         class(polarft_corrcalc), intent(inout) :: self
-        real(sp),                intent(in)    :: smpd
         class(oris),             intent(inout) :: a
         type(ctf) :: tfun
         integer   :: iptcl,alloc_stat 
@@ -641,7 +644,7 @@ contains
                 dfy    = a%get(iptcl, 'dfy'   )
                 angast = a%get(iptcl, 'angast')
             endif
-            tfun = ctf(smpd, kv, cs, fraca)
+            tfun = ctf(self%smpd, kv, cs, fraca)
             self%ctfmats(iptcl,:,:) = self%create_polar_ctfmat(tfun, dfx, dfy, angast, self%refsz)
         end do
     end subroutine create_polar_ctfmats
@@ -771,7 +774,7 @@ contains
         if( sqsum_ref < TINY ) return
         ! numerator
         cc = sum(real( pft_ref * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:)) ))
-        ! denominator
+        ! finalize cross-correlation
         cc = cc / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
     end function corr_1
 
@@ -809,9 +812,10 @@ contains
     end function corr_2
 
     !>  \brief  for calculating the Euclidean distance between reference & particle
-    !!          This ought to be a better choice for the orientation weights
+    !!          it is unclear what this distance represents as the reference volume
+    !!          is whitened and then FOM filtered whereas no normalisations or SNR-
+    !!          based resolution weights are applied to the particle image.
     function euclid( self, iref, iptcl, irot ) result( dist )
-        use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl, irot
         real        :: dist, sqsum_ref
@@ -820,6 +824,70 @@ contains
         dist = sum(cabs(pft_ref - self%pfts_ptcls(iptcl,irot:irot+self%winsz,:))**2.0)&
                & /real(self%refsz * (self%kfromto(2) - self%kfromto(1) + 1))
     end function euclid
+
+    !>  \brief  for calculating the normalized Euclidean distance between reference & particle
+    function euclid_norm( self, iref, iptcl, irot, bfac ) result( dist )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref, iptcl, irot
+        real, optional,          intent(in)    :: bfac
+        real        :: dist, sqsum_ref, rn
+        integer     :: k
+        complex(sp) :: pft_ref(self%refsz,self%kfromto(1):self%kfromto(2))
+        complex(sp) :: pft_ptcl(self%refsz,self%kfromto(1):self%kfromto(2))
+        real(sp)    :: real_pft_ref(self%refsz,self%kfromto(1):self%kfromto(2))
+        real(sp)    :: aimag_pft_ref(self%refsz,self%kfromto(1):self%kfromto(2))
+        real(sp)    :: real_pft_ptcl(self%refsz,self%kfromto(1):self%kfromto(2))
+        real(sp)    :: aimag_pft_ptcl(self%refsz,self%kfromto(1):self%kfromto(2))
+        ! prep ptcl PFT
+        if( present(bfac) )then
+             ! apply B-factor
+            do k=self%kfromto(1),self%kfromto(2)
+                pft_ptcl(:,k) = self%pfts_ptcls(iptcl,irot:irot+self%winsz,k) * eval_bfac(k)
+            end do
+        else
+            ! just copy
+            pft_ptcl = self%pfts_ptcls(iptcl,irot:irot+self%winsz,:)
+        endif
+        ! prep ref PFT
+        call self%prep_ref4corr(iptcl, iref, pft_ref, sqsum_ref)
+        ! get real matrices and number of components
+        real_pft_ref   = real(pft_ref)
+        aimag_pft_ref  = aimag(pft_ref)
+        real_pft_ptcl  = real(pft_ptcl)
+        aimag_pft_ptcl = aimag(pft_ptcl)
+        rn             = real(self%refsz * (self%kfromto(2) - self%kfromto(1) + 1))
+        ! normalise
+        call norm_mat(real_pft_ref)
+        call norm_mat(aimag_pft_ref)
+        call norm_mat(real_pft_ptcl)
+        call norm_mat(aimag_pft_ptcl)
+        ! calculate L2 norm
+        dist = ( sqrt( sum( (real_pft_ref  - real_pft_ptcl)**2.0 ) ) + &
+                &sqrt( sum( (aimag_pft_ref - aimag_pft_ptcl)**2.0 ) ) )/(2.0 * rn)
+
+        contains
+
+            subroutine norm_mat( mat )
+                real, intent(inout) :: mat(self%refsz,self%kfromto(1):self%kfromto(2))
+                real(sp) :: ave, ep, var
+                real(sp) :: devs(self%refsz,self%kfromto(1):self%kfromto(2))
+                ave  = sum(mat)/rn
+                devs = mat - ave
+                ep   = sum(devs)
+                var  = sum(devs*devs)
+                var  = (var-ep**2.0/rn)/(rn-1.0) ! corrected two-pass formula    
+                mat = mat - ave
+                if( var > 0. ) mat = mat / sqrt(var)
+            end subroutine norm_mat
+
+            real function eval_bfac( k )
+                integer, intent(in) :: k
+                real :: res
+                res = real(k)/(real(self%ldim(1))*self%smpd) ! assuming square dimensions
+                eval_bfac = max(0.,exp(-(bfac/4.)*res*res))
+            end function eval_bfac
+
+    end function euclid_norm
 
     ! DESTRUCTOR
 

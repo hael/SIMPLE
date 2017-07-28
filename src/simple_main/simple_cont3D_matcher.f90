@@ -115,7 +115,7 @@ contains
         endif
 
         ! INIT IMGPOLARIZER
-        call pftcc%new(nrefs_per_ptcl, [1,1], [p%boxmatch,p%boxmatch,1],p%kfromto, p%ring2, p%ctf)
+        call pftcc%new(nrefs_per_ptcl, [1,1], [p%boxmatch,p%boxmatch,1], p%smpd, p%kfromto, p%ring2, p%ctf)
         call b%img_match%init_polarizer(pftcc)
         call pftcc%kill
 
@@ -145,8 +145,8 @@ contains
                 ! prep pftccs & ctf
                 call init_pftcc(p, iptcl, pftccs(iptcl))
                 iptcl_tmp = iptcl
-                call prep_pftcc_ptcl(b, p, iptcl_tmp, pftccs(iptcl))
-                if( p%ctf.ne.'no' )call pftccs(iptcl)%create_polar_ctfmats(p%smpd, b%a)
+                 call prep_pftcc_ptcl(b, p, iptcl_tmp, pftccs(iptcl_tmp))
+                if( p%ctf.ne.'no' )call pftccs(iptcl_tmp)%create_polar_ctfmats(b%a)
                 select case(p%refine)
                     case('yes')
                         call prep_pftcc_refs(b, p, iptcl, pftccs(iptcl))
@@ -264,9 +264,9 @@ contains
             endif
         enddo
         call b%vol%kill
-        DebugPrint 'prep volumes done'
         ! bring back the original b%vol size
         if( p%boxmatch < p%box )call b%vol%new([p%box,p%box,p%box], p%smpd) ! to double check
+        DebugPrint 'prep volumes done'
     end subroutine prep_vols
 
     !>  \brief  initialize pftcc
@@ -275,9 +275,9 @@ contains
         integer,                    intent(in)    :: iptcl    !< index to particle
         class(polarft_corrcalc),    intent(inout) :: pftcc    !< calculator object
         if( p%l_xfel )then
-            call pftcc%new(nrefs_per_ptcl, [iptcl,iptcl], [p%boxmatch,p%boxmatch,1],p%kfromto, p%ring2, p%ctf, isxfel='yes')
+            call pftcc%new(nrefs_per_ptcl, [iptcl,iptcl], [p%boxmatch,p%boxmatch,1], p%smpd, p%kfromto, p%ring2, p%ctf, isxfel='yes')
         else
-            call pftcc%new(nrefs_per_ptcl, [iptcl,iptcl], [p%boxmatch,p%boxmatch,1],p%kfromto, p%ring2, p%ctf)
+            call pftcc%new(nrefs_per_ptcl, [iptcl,iptcl], [p%boxmatch,p%boxmatch,1], p%smpd, p%kfromto, p%ring2, p%ctf)
         endif
     end subroutine init_pftcc
 
@@ -289,17 +289,12 @@ contains
         class(polarft_corrcalc),    intent(inout) :: pftcc  !< calculator and storage object
         type(oris)  :: cone
         type(ori)   :: optcl, oref
-        real        :: eullims(3,2)
         integer     :: state, iref, cnt
         optcl = b%a%get_ori(iptcl)
-        ! SEARCH SPACE PREP
-        eullims = b%se%srchrange()
-        ! call cone%rnd_proj_space(NREFS, optcl, p%athres, eullims) ! old style uniform stochastic distribution
-        call cone%rnd_gau_neighbors(NREFS, optcl, p%athres, eullims)
+        call cone%rnd_gau_neighbors(NREFS, optcl, p%athres)
+        if( trim(p%pgrp).ne.'c1' )call b%se%rotall_to_asym(cone)
         call cone%set_euler(1, optcl%get_euler()) ! previous best is the first
-        do iref = 1, NREFS
-            call cone%e3set(iref, 0.)
-        enddo
+        call cone%set_all2single('e3', 0.)
         ! replicates to states
         if( p%nstates == 1 )then
             call cone%set_all2single('state', 1.)
@@ -329,7 +324,7 @@ contains
     subroutine prep_pftcc_ptcl(b, p, iptcl, pftcc)
         class(build),               intent(inout) :: b        !< build object
         class(params),              intent(inout) :: p        !< params object
-        integer,                    intent(in) :: iptcl       !< index to particle
+        integer,                    intent(in)    :: iptcl       !< index to particle
         class(polarft_corrcalc),    intent(inout) :: pftcc    !< calculator object
         type(ori)  :: optcl
         optcl = b%a%get_ori(iptcl)

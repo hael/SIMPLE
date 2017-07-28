@@ -237,16 +237,15 @@ contains
     ! INTERPOLATION
 
     !> \brief  for gridding a Fourier plane
-    subroutine grid_fplane(self, o, fpl, pwght, mul, ran, shellweights)
+    subroutine grid_fplane(self, o, fpl, pwght, mul, ran )
         use simple_ori, only: ori
         use simple_rnd, only: ran3
-        class(eo_reconstructor), intent(inout) :: self            !< instance
-        class(ori),              intent(inout) :: o               !< orientation
-        class(image),            intent(inout) :: fpl             !< Fourier plane
-        real, optional,          intent(in)    :: pwght           !< external particle weight (affects both fplane and rho)
-        real, optional,          intent(in)    :: mul             !< shift multiplication factor
-        real, optional,          intent(in)    :: ran             !< external random number
-        real, optional,          intent(in)    :: shellweights(:) !< resolution weights
+        class(eo_reconstructor), intent(inout) :: self    !< instance
+        class(ori),              intent(inout) :: o       !< orientation
+        class(image),            intent(inout) :: fpl     !< Fourier plane
+        real, optional,          intent(in)    :: pwght   !< external particle weight (affects both fplane and rho)
+        real, optional,          intent(in)    :: mul     !< shift multiplication factor
+        real, optional,          intent(in)    :: ran     !< external random number
         real    :: rran
         if( present(ran) )then
             rran = ran
@@ -254,11 +253,9 @@ contains
             rran = ran3()
         endif
         if( rran > 0.5 )then
-            call self%even%inout_fplane(o, .true., fpl,&
-            &pwght=pwght, mul=mul, shellweights=shellweights)
+            call self%even%inout_fplane(o, .true., fpl, pwght=pwght, mul=mul)
         else
-            call self%odd%inout_fplane(o, .true., fpl,&
-            &pwght=pwght, mul=mul, shellweights=shellweights)
+            call self%odd%inout_fplane(o, .true., fpl, pwght=pwght, mul=mul)
         endif
     end subroutine grid_fplane
 
@@ -372,10 +369,10 @@ contains
     end subroutine sampl_dens_correct_sum
 
     ! RECONSTRUCTION
-
-    !> \brief  for reconstructing Fourier volumes according to the orientations
-    !!         and states in o, assumes that stack is open
-    subroutine eorec( self, fname, p, o, se, state, vol, mul, part, fbody, wmat )
+    
+    !> \brief  for reconstructing Fourier volumes according to the orientations 
+    !!         and states in o, assumes that stack is open   
+    subroutine eorec( self, fname, p, o, se, state, vol, mul, part, fbody )
         use simple_oris,       only: oris
         use simple_sym,        only: sym
         use simple_params,     only: params
@@ -394,17 +391,14 @@ contains
         real,             optional, intent(in)    :: mul       !< shift multiplication factor
         integer,          optional, intent(in)    :: part      !< partition (4 parallel rec)
         character(len=*), optional, intent(in)    :: fbody     !< body of output file
-        real,             optional, intent(in)    :: wmat(:,:) !< shellweights
         type(image)       :: img, img_pad
         type(kbinterpol)  :: kbwin
         real, allocatable :: invctfsq(:)
         integer           :: i, cnt, n, ldim(3), io_stat, filnum, state_glob
         integer           :: statecnt(p%nstates), alloc_stat, state_here
-        logical           :: doshellweight
         call find_ldim_nptcls(fname, ldim, n)
         if( n /= o%get_noris() ) stop 'inconsistent nr entries; eorec; simple_eo_reconstructor'
-        kbwin = self%get_kbwin()
-        doshellweight = present(wmat)
+        kbwin = self%get_kbwin() 
         ! stash global state index
         state_glob = state
         ! make the images
@@ -475,22 +469,12 @@ contains
                         call prep4cgrid(img, img_pad, p%msk, kbwin)
                     endif
                     if( p%pgrp == 'c1' )then
-                        if( doshellweight )then
-                            call self%grid_fplane(orientation, img_pad, pwght=pw, mul=mul,&
-                                &shellweights=wmat(i,:))
-                        else
-                            call self%grid_fplane(orientation, img_pad, pwght=pw, mul=mul)
-                        endif
+                        call self%grid_fplane(orientation, img_pad, pwght=pw, mul=mul)
                     else
                         ran = ran3()
                         do j=1,se%get_nsym()
                             o_sym = se%apply(orientation, j)
-                            if( doshellweight )then
-                                call self%grid_fplane(o_sym, img_pad, pwght=pw, mul=mul, ran=ran,&
-                                    &shellweights=wmat(i,:))
-                            else
-                                call self%grid_fplane(o_sym, img_pad, pwght=pw, mul=mul, ran=ran)
-                            endif
+                            call self%grid_fplane(o_sym, img_pad, pwght=pw, mul=mul, ran=ran)
                         end do
                     endif
                  endif

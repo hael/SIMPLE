@@ -19,29 +19,27 @@ private
 
 contains
 
-    subroutine exec_rec_master( b, p, cline, fbody_in, wmat )
+    subroutine exec_rec_master( b, p, cline, fbody_in )
         class(build),               intent(inout) :: b
         class(params),              intent(inout) :: p
         class(cmdline),             intent(inout) :: cline
         character(len=*), optional, intent(in)    :: fbody_in
-        real,             optional, intent(in)    :: wmat(:,:)
         select case(p%eo)
             case( 'yes' )
-                call exec_eorec( b, p, cline, fbody_in, wmat  )
+                call exec_eorec( b, p, cline, fbody_in )
             case( 'no' )
-                call exec_rec( b, p, cline, fbody_in, wmat )
+                call exec_rec( b, p, cline, fbody_in )
             case DEFAULT
                 stop 'unknonw eo flag; simple_rec_master :: exec_rec_master'
         end select
     end subroutine exec_rec_master
     
-    subroutine exec_rec( b, p, cline, fbody_in, wmat )
+    subroutine exec_rec( b, p, cline, fbody_in )
         use simple_strings, only: int2str_pad
         class(build),               intent(inout) :: b
         class(params),              intent(inout) :: p
         class(cmdline),             intent(inout) :: cline
         character(len=*), optional, intent(in)    :: fbody_in
-        real,             optional, intent(in)    :: wmat(:,:)
         character(len=:), allocatable :: fbody
         character(len=STDLEN)         :: rho_name
         integer :: s, fri, toi, file_stat, fnr, nstates_oritab
@@ -69,18 +67,17 @@ contains
                 if( p%even .eq. 'yes' .and. p%odd .eq. 'no' )then
                     p%vols(s) = fbody//'_even'//p%ext
                     rho_name  = 'rho_'//fbody//'_even'//p%ext
-                    call b%recvol%rec(p%stk, p, b%a, b%se, s, mul=p%mul, eo=2, part=p%part, wmat=wmat)
+                    call b%recvol%rec(p%stk, p, b%a, b%se, s, mul=p%mul, eo=2, part=p%part)
                 else if( p%odd .eq. 'yes' .and. p%even .eq. 'no' )then
                     p%vols(s) = fbody//'_odd'//p%ext
                     rho_name  = 'rho_'//fbody//'_odd'//p%ext
-                    call b%recvol%rec(p%stk, p, b%a, b%se, s, mul=p%mul, eo=1, part=p%part, wmat=wmat)
+                    call b%recvol%rec(p%stk, p, b%a, b%se, s, mul=p%mul, eo=1, part=p%part)
                 else if( p%even .eq. 'yes' .and. p%odd .eq. 'yes' )then
                     stop 'ERROR! even and odd cannot both be yes!'
                 else
                     p%vols(s) = fbody//p%ext
                     rho_name  = 'rho_'//fbody//p%ext
-                    call b%recvol%rec(p%stk, p, b%a, b%se, s, mul=p%mul,&
-                    part=p%part, wmat=wmat)
+                    call b%recvol%rec(p%stk, p, b%a, b%se, s, mul=p%mul, part=p%part)
                 endif
                 call b%recvol%compress_exp
                 call b%recvol%write(p%vols(s), del_if_exists=.true.)
@@ -92,7 +89,7 @@ contains
                     allocate(fbody, source='recvol_state')
                 endif
                 p%vols(s) = fbody//int2str_pad(s,2)//p%ext ! shared mem parallel rec
-                call b%recvol%rec(p%stk, p, b%a, b%se, s, mul=p%mul, wmat=wmat)
+                call b%recvol%rec(p%stk, p, b%a, b%se, s, mul=p%mul)
                 call b%recvol%clip(b%vol)
                 call b%vol%write(p%vols(s), del_if_exists=.true.)
             endif
@@ -101,14 +98,13 @@ contains
         write(*,'(a)') "GENERATED VOLUMES: recvol*.ext"
         call qsys_job_finished( p, 'simple_rec_master :: exec_rec')
     end subroutine exec_rec
-    !> even odd reconstruction routine
-    subroutine exec_eorec( b, p, cline, fbody_in, wmat )
+    
+    subroutine exec_eorec( b, p, cline, fbody_in )
         use simple_strings, only: int2str_pad
         class(build),               intent(inout) :: b
         class(params),              intent(inout) :: p
         class(cmdline),             intent(inout) :: cline    
         character(len=*), optional, intent(in)    :: fbody_in
-        real,             optional, intent(in)    :: wmat(:,:)
         character(len=:), allocatable :: fbody, fname
         integer :: s, fri, toi, fnr, file_stat, ldim(3)
         real    :: smpd
@@ -131,14 +127,14 @@ contains
                     allocate(fbody, source='recvol_state')
                 endif
                 call b%eorecvol%eorec(p%stk, p, b%a, b%se, s, b%vol, mul=p%mul,&
-                part=p%part, fbody=fbody, wmat=wmat)
+                part=p%part, fbody=fbody)
             else
                 if( present(fbody_in) )then
                     allocate( fbody, source=trim(adjustl(fbody_in))//'_state' )
                 else
                     allocate( fbody, source='recvol_state' )
                 endif                
-                call b%eorecvol%eorec(p%stk, p, b%a, b%se, s, b%vol, mul=p%mul, wmat=wmat)
+                call b%eorecvol%eorec(p%stk, p, b%a, b%se, s, b%vol, mul=p%mul)
                 allocate(fname, source=fbody//int2str_pad(s,2)//p%ext)
                 call b%vol%write(fname, del_if_exists=.true.)
                 deallocate(fname)

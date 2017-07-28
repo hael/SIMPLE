@@ -162,7 +162,7 @@ contains
         call b%a%calc_hard_ptcl_weights(p%frac)
         b%a = o_ptcls
         call pftcc%new(NPROJS, [p%fromp,p%top], [p%boxmatch,p%boxmatch,1],&
-        p%kfromto, p%ring2, p%ctf)
+        p%smpd, p%kfromto, p%ring2, p%ctf)
         call b%img_match%init_polarizer( pftcc )
         do i=1,NPROJS
             call imgs_ptcls(i)%clip(b%img_match)
@@ -171,7 +171,7 @@ contains
             call b%img_match%polarize(pftcc, i, isptcl=.true.)
             call b%img_match%polarize(pftcc, i, isptcl=.false.)
         enddo
-        !call preppftcc4align( b, p, cline )
+        ! call preppftcc4align( b, p, cline )
         ! The pftcc & primesrch3D objects are now globally available in the module
         ! because of the use simple_hadamard3D_matcher statement in the top
         ! now instantiatable, so create it

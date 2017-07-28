@@ -160,13 +160,12 @@ contains
     end subroutine set_bp_range2D
 
     !>  \brief  grids one particle image to the volume
-    subroutine grid_ptcl( b, p, orientation, os, shellweights, ran_eo )
+    subroutine grid_ptcl( b, p, orientation, os, ran_eo )
         use simple_kbinterpol, only: kbinterpol
         class(build),              intent(inout) :: b
         class(params),             intent(inout) :: p
         class(ori),                intent(inout) :: orientation
         class(oris),     optional, intent(inout) :: os
-        real,            optional, intent(in)    :: shellweights(:)
         real,            optional, intent(in)    :: ran_eo
         real             :: pw, ran, w
         integer          :: jpeak, s, k, npeaks
@@ -186,7 +185,7 @@ contains
         endif
         pw = 1.0
         if( orientation%isthere('w') ) pw = orientation%get('w')
-        if( pw > 0. )then
+        if( pw > TINY )then
             ! prepare image for gridding
             ! using the uncorrected/unmodified image as input
             if( p%l_xfel )then
@@ -202,7 +201,7 @@ contains
                 DebugPrint  '*** simple_hadamard_common ***: gridding, iteration:', jpeak
                 ! get ori info
                 if( softrec )then
-                    orisoft =  os%get_ori(jpeak)
+                    orisoft = os%get_ori(jpeak)
                     w = orisoft%get('ow')
                 else
                     w = 1.
@@ -210,20 +209,20 @@ contains
                 s = nint(orisoft%get('state'))
                 DebugPrint  '*** simple_hadamard_common ***: got orientation'
                 if( p%frac < 0.99 ) w = w*pw
-                if( w > 0. )then
+                if( w > TINY )then
                     if( p%pgrp == 'c1' )then
                         if( p%eo .eq. 'yes' )then
-                            call b%eorecvols(s)%grid_fplane(orisoft, b%img_pad, pwght=w, ran=ran, shellweights=shellweights)
+                            call b%eorecvols(s)%grid_fplane(orisoft, b%img_pad, pwght=w, ran=ran)
                         else
-                            call b%recvols(s)%inout_fplane(orisoft, .true., b%img_pad, pwght=w, shellweights=shellweights)
+                            call b%recvols(s)%inout_fplane(orisoft, .true., b%img_pad, pwght=w)
                         endif
                     else
                         do k=1,b%se%get_nsym()
                             o_sym = b%se%apply(orisoft, k)
                             if( p%eo .eq. 'yes' )then
-                                call b%eorecvols(s)%grid_fplane(o_sym, b%img_pad, pwght=w, ran=ran, shellweights=shellweights)
+                                call b%eorecvols(s)%grid_fplane(o_sym, b%img_pad, pwght=w, ran=ran)
                             else
-                                call b%recvols(s)%inout_fplane(o_sym, .true., b%img_pad, pwght=w, shellweights=shellweights)
+                                call b%recvols(s)%inout_fplane(o_sym, .true., b%img_pad, pwght=w)
                             endif
                         end do
                     endif

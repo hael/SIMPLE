@@ -1038,7 +1038,7 @@ contains
         self%cyclic(3) = .true.
         ! Set molecular diameter
         if( .not. cline%defined('moldiam') )then
-            self%moldiam = 0.7*real(self%box)*self%smpd
+            self%moldiam = 2. * self%msk * self%smpd
         endif
         ! set imgkind and check so that ctf and xfel parameters are congruent
         self%imgkind = 'em'

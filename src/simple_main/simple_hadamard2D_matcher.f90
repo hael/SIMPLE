@@ -113,37 +113,42 @@ contains
             call primesrch2D(iptcl)%new(p, pftcc)
         end do
         ! calculate CTF matrices
-        if( p%ctf .ne. 'no' ) call pftcc%create_polar_ctfmats(p%smpd, b%a)
+        if( p%ctf .ne. 'no' ) call pftcc%create_polar_ctfmats(b%a)
         ! execute the search
-        if( p%refine .eq. 'neigh' )then
-            call del_file(p%outfile)
-            !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
-            do iptcl=p%fromp,p%top
-                call primesrch2D(iptcl)%nn_srch(pftcc, iptcl, b%a, b%nnmat)
-            end do
-            !$omp end parallel do
-        else
-            ! execute the search
-            call del_file(p%outfile)
-            if( p%oritab .eq. '' )then
+        call del_file(p%outfile)
+        select case(trim(p%refine))
+            case('neigh')
                 !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                 do iptcl=p%fromp,p%top
-                    call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, greedy=.true.)
+                    call primesrch2D(iptcl)%nn_srch(pftcc, iptcl, b%a, b%nnmat)
                 end do
                 !$omp end parallel do
-            else
-                if( corr_thresh > 0. )then
-                    write(*,'(A,F8.2)') '>>> PARTICLE RANDOMIZATION(%):', 100.*p%extr_thresh
-                    write(*,'(A,F8.2)') '>>> CORRELATION THRESHOLD:    ', corr_thresh
+            case('bfac')
+                !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
+                do iptcl=p%fromp,p%top
+                    call primesrch2D(iptcl)%bfac_srch(pftcc, iptcl, b%a)
+                end do
+                !$omp end parallel do
+            case DEFAULT
+                if( p%oritab .eq. '' )then
+                    !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
+                    do iptcl=p%fromp,p%top
+                        call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, greedy=.true.)
+                    end do
+                    !$omp end parallel do
+                else
+                    if( corr_thresh > 0. )then
+                        write(*,'(A,F8.2)') '>>> PARTICLE RANDOMIZATION(%):', 100.*p%extr_thresh
+                        write(*,'(A,F8.2)') '>>> CORRELATION THRESHOLD:    ', corr_thresh
+                    endif
+                    !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
+                    do iptcl=p%fromp,p%top
+                        call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, extr_bound=corr_thresh)
+                    end do
+                    !$omp end parallel do
                 endif
-                !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
-                do iptcl=p%fromp,p%top
-                    call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, extr_bound=corr_thresh)
-                end do
-                !$omp end parallel do
-            endif
-        endif
-        DebugPrint  ' completed alignment'
+        end select
+        if( DEBUG ) print *, 'DEBUG, hadamard2D_matcher; completed alignment'
         ! output orientations
         call b%a%write(p%outfile, [p%fromp,p%top])
         p%oritab = p%outfile
@@ -444,7 +449,7 @@ contains
         integer   :: filtsz, alloc_stat, filnum, io_stat
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PRIME2D SEARCH ENGINE'
         ! must be done here since constants in p are dynamically set
-        call pftcc%new(p%ncls, [p%fromp,p%top], [p%boxmatch,p%boxmatch,1], p%kfromto, p%ring2, p%ctf)
+        call pftcc%new(p%ncls, [p%fromp,p%top], [p%boxmatch,p%boxmatch,1], p%smpd, p%kfromto, p%ring2, p%ctf)
         ! prepare the polarizers
         call b%img_match%init_polarizer(pftcc)
         ! prepare the automasker
