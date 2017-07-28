@@ -181,7 +181,7 @@ contains
             ! return best
             orientation_best = resoris%get_ori(order(1))
             write(*,'(A)') '>>> FOUND REFINED SYMMETRY AXIS ORIENTATION'
-            call orientation_best%display()
+            call orientation_best%print_ori()
         endif
     end subroutine comlin_srch_symaxis
 

@@ -793,7 +793,7 @@ contains
                 print *, 'corr = ', corr
                 if( corr > 1. )               corr = 1.
                 if( .not. is_a_number(corr) ) corr = 0.
-                call o_prev%print
+                call o_prev%print_ori()
             endif
             if( self%refine.eq.'no' .and. self%nstates==1 )then
                 ! moving average for single state only

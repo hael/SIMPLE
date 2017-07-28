@@ -3328,12 +3328,6 @@ contains
 
     end subroutine cos_edge
 
-<<<<<<< variant A
-    !>  \brief increment increments the logi pixel value with incr
-    !! \param logi coordinates
-    !! \param incr increment
-    !!
->>>>>>> variant B
     !>  \brief  remove edge from binary image
     subroutine remove_edge( self )
         class(image), intent(inout) :: self
@@ -3343,10 +3337,11 @@ contains
         where( self%rmat < 0.999 ) self%rmat = 0.
     end subroutine remove_edge
 
+
     !>  \brief  increments the logi pixel value with incr
-####### Ancestor
-    !>  \brief  increments the logi pixel value with incr
-======= end
+   !! \param logi coordinates
+    !! \param incr increment
+    !!
     subroutine increment( self, logi, incr )
         class(image), intent(inout) :: self
         integer, intent(in)         :: logi(3)
@@ -5711,7 +5706,7 @@ contains
                                 kr = self%ldim(3)+1-k
                                 e = cosedge(cis(i),cjs(j),cks(k),minlen,mskrad)
                                 if( doinner )e = e * cosedge_inner(cis(i),cjs(j),cks(k),wwidth,inner)
-                                if(e > 0.9999)cycle
+                                if(e > 0.9999) cycle
                                 self%rmat(i,j,k)    = e * self%rmat(i,j,k)
                                 self%rmat(i,j,kr)   = e * self%rmat(i,j,kr)
                                 self%rmat(i,jr,k)   = e * self%rmat(i,jr,k)

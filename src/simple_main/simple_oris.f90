@@ -1211,7 +1211,7 @@ contains
     subroutine print_( self, i )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: i
-        call self%o(i)%display()
+        call self%o(i)%print_ori()
     end subroutine print_
 
     !>  \brief  is for printing

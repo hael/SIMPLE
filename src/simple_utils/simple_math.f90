@@ -137,7 +137,7 @@ contains
     ! JIFFYS
 
     !>  nvoxfind_1  to find the volume in number of voxels, given molecular weight
-    !! \param smpd sampling distance in angstroms (SI unit \f$\si{\angstrom}= \SI{1e-10}{\metre}\f$)
+    !! \param smpd sampling distance in angstroms (SI unit \f$\si{\angstrom}= \si{1e-10}{\metre}\f$)
     !! \param mwkda molecular weight \f$M_{\mathsf{molecule}}\f$ in kDa (SI unit \f$\si{\kilo\dalton}= \SI{1e-10}{\metre}\f$, one dalton is the mass of 1 hydrogen atom  \SI{1.6727e-27}{\kilogram}\f$)
     !! Protein density \f$\rho_{\mathsf{prot}} \text{ is defined as } \si{1.43}{\gram\per\centimetre\cubed}\f$
     !! protein density in \f$\si{\gram\per\angstrom\cubed},\ \rho_{\mathsf{prot}\si{\angstrom}} = \rho_{\mathsf{prot}} \num{1e-24}\f$

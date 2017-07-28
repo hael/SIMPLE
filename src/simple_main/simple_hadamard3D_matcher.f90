@@ -32,7 +32,8 @@ type(ori)                       :: orientation, o_sym
 character(len=:), allocatable   :: ppfts_fname
 
 contains
-!> Find resolution range in Prime3D search
+
+    !> Find resolution range in Prime3D search
     subroutine prime3D_find_resrange( b, p, lp_start, lp_finish )
         use simple_oris, only: oris
         class(build),  intent(inout) :: b
@@ -121,7 +122,7 @@ contains
             else
                 corr_thresh = -huge(corr_thresh)
             endif
-        endif       
+        endif
 
         ! PREPARE THE POLARFT_CORRCALC DATA STRUCTURE
         if( p%refine.eq.'het' )then
@@ -138,7 +139,7 @@ contains
             ! generate projections (polar FTs)
             call preppftcc4align( b, p, cline )
         endif
-        
+
         ! INITIALIZE
         write(*,'(A,1X,I3)') '>>> PRIME3D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
         if( .not. p%l_distr_exec )then
@@ -365,25 +366,12 @@ contains
     end subroutine preppftcc4align
     !> Prepare reference images and create polar projections
     subroutine prep_refs_pftcc4align( b, p, cline )
-<<<<<<< variant A
         class(build),   intent(inout) :: b          !< build object
         class(params),  intent(inout) :: p          !< param object
         class(cmdline), intent(inout) :: cline      !< command line
         type(ori) :: o
         integer   :: cnt, s, iref, nrefs
->>>>>>> variant B
-        class(build),   intent(inout) :: b
-        class(params),  intent(inout) :: p
-        class(cmdline), intent(inout) :: cline
-        type(ori)         :: o
-        integer           :: cnt, s, iref, nrefs
-####### Ancestor
-        class(build),   intent(inout) :: b
-        class(params),  intent(inout) :: p
-        class(cmdline), intent(inout) :: cline
-        type(ori) :: o
-        integer   :: cnt, s, iref, nrefs
-======= end
+
         ! PREPARATION OF REFERENCES IN PFTCC
         ! read reference volumes and create polar projections
         nrefs = p%nspace*p%nstates
@@ -458,7 +446,7 @@ contains
                 end do
                 call progress(ntot, ntot)
             end subroutine prep_pftcc_local
-        
+
     end subroutine prep_ptcls_pftcc4align
 
 end module simple_hadamard3D_matcher

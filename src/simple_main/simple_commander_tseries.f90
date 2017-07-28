@@ -28,7 +28,7 @@ public :: tseries_extract_commander
 public :: tseries_track_commander
 public :: tseries_split_commander
 private
-
+#include "simple_local_flags.inc"
 type, extends(commander_base) :: tseries_extract_commander
   contains
     procedure :: execute      => exec_tseries_extract

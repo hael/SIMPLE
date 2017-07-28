@@ -3,7 +3,7 @@ use lib './';
 use warnings;
 use strict;
 use Env;
-use simple_user_input;
+# use simple_user_input;
 my $maxlen = 80;           # maximum string length of shell commands
 my $maxlc  = 53;           # maximum line count (LaTEX table)
 my @cmdlinkeys;            # command line keys
@@ -14,18 +14,21 @@ my %prgcmdlineinstr;       # program command line instructions
 my %prgcmdlineinstr_distr; # distributed program command line instructions
 my @prgkeys;               # program keys
 my @prgkeys_distr;         # distributed program keys
+
 if( scalar(@ARGV) < 1 ){
     die "Need to know which kind of documentation to generate (tex|web|f90)\n";
 }
 my $doc = $ARGV[0];
-my $simple_exec_abspath = "$SIMPLE_PATH/production/simple/simple_exec/simple_exec.f90";
-my $simple_distr_exec_abspath = "$SIMPLE_PATH/production/simple/simple_distr_exec/simple_distr_exec.f90";
+my $SIMPLE_SOURCE_PATH = $ENV{SIMPLE_SOURCE_PATH};
+my $SIMPLE_PATH = $ENV{SIMPLE_PATH};
+my $simple_exec_abspath = $SIMPLE_SOURCE_PATH."/production/simple/simple_exec/simple_exec.f90";
+my $simple_distr_exec_abspath = $SIMPLE_SOURCE_PATH."/production/simple/simple_distr_exec/simple_distr_exec.f90";
 
 # PARSERS
 
 # extract program names
 my @prgnames;
-open( EXEC, "<$simple_exec_abspath", ) or die "Cannot open: $!\n";
+open( EXEC, "<$simple_exec_abspath", ) or die "Cannot open: $!\n Check SIMPLE_SOURCE_PATH is defined.\n";
 while(my$line=<EXEC>){
     if( $line =~ /case\(\s*\'(\w+)\'\s*\)/ ){
         push(@prgnames,$1);
@@ -33,7 +36,7 @@ while(my$line=<EXEC>){
 }
 close(EXEC);
 my @prgnames_distr;
-open( EXEC, "<$simple_distr_exec_abspath", ) or die "Cannot open: $!\n";
+open( EXEC, "<$simple_distr_exec_abspath", ) or die "Cannot open: $!\n Check SIMPLE_SOURCE_PATH is defined.\n";
 while(my$line=<EXEC>){
     if( $line =~ /case\(\s*\'(\w+)\'\s*\)/ ){
         push(@prgnames_distr,$1);     

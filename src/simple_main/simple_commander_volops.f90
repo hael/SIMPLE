@@ -64,6 +64,7 @@ end type volume_smat_commander
 
 contains
 
+    !> Program to calculate Fourier shell correlation from Even/Odd Volume pairs
     subroutine exec_fsc( self, cline )
         use simple_image, only: image
         use simple_math,  only: get_resolution
@@ -74,6 +75,7 @@ contains
         integer           :: j
         real              :: res_fsc05, res_fsc0143
         real, allocatable :: res(:), corrs(:)
+       
         p = params(cline)
         ! read even/odd pair
         call even%new([p%box,p%box,p%box], p%smpd)
@@ -94,7 +96,8 @@ contains
         call even%kill
         call odd%kill
     end subroutine exec_fsc
-    
+
+    !> Program to shift 3D volume ( circular wrapping ) 
     subroutine exec_cenvol( self, cline )
         class(cenvol_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
@@ -102,7 +105,7 @@ contains
         type(build)          :: b
         real, allocatable    :: shvec(:,:)
         integer              :: istate
-        debug=.false. ! declared in module by local flags
+      
         p = params(cline)                           ! parameters generated
         call b%build_general_tbox(p, cline, .true.) ! general objects built
         ! center volume(s)
@@ -127,7 +130,7 @@ contains
     !!
     subroutine exec_postproc_vol(self, cline)
         use simple_math,  only: get_resolution
-        use simple_image, only: image 
+        use simple_image, only: image
         use simple_estimate_ssnr ! use all in there
         class(postproc_vol_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
@@ -137,6 +140,7 @@ contains
         real, allocatable :: fsc(:), optlp(:), res(:)
         real              :: fsc0143, fsc05
         integer           :: k, state, ldim(3)
+ 
         state = 1
         ! pre-proc
         p = params(cline, checkdistr=.false.) ! constants & derived constants produced, mode=2
@@ -176,7 +180,7 @@ contains
                 call b%vol%mul(b%mskvol)
             else
                 write(*,*) 'file: ', trim(p%mskfile)
-                stop 'maskfile does not exists in cwd'                
+                stop 'maskfile does not exists in cwd'
             endif
         else if( p%automsk .eq. 'yes' )then
             call b%mskvol%automask3D(p, vol_copy)
@@ -205,7 +209,7 @@ contains
         type(image), allocatable :: imgs(:)
         integer                  :: i, loop_end
         real                     :: x, y, dfx, dfy, angast
-        debug=.false. ! local module flag
+   
         if( .not. cline%defined('oritab') )then
             if( .not. cline%defined('nspace') ) stop 'need nspace (for number of projections)!'
         endif
@@ -231,7 +235,7 @@ contains
         else
             call b%vol%read(p%vols(1))
         endif
-        DebugPrint   'read volume'
+        DebugPrint 'read volume'
         ! masking
         if(cline%defined('msk'))then
             call b%vol%mask(p%msk, 'soft')
@@ -261,7 +265,7 @@ contains
     end subroutine exec_projvol
 
     !> exec_volaverager Create volume average
-    !! \param cline 
+    !! \param cline
     !!
     subroutine exec_volaverager( self, cline )
         use simple_image, only: image
@@ -275,7 +279,7 @@ contains
         integer                            :: istate, ivol, nvols, funit_vols, numlen, ifoo
         character(len=:), allocatable      :: fname
         character(len=1)                   :: fformat
-        debug=.false.
+       
         p = params(cline) ! parameters generated
         ! read the volnames
         nvols = nlines(p%vollist)
@@ -341,6 +345,8 @@ contains
         type(params) :: p
         type(build)  :: b
         logical      :: here
+     
+
         p = params(cline,checkdistr=.false.)        ! constants & derived constants produced, mode=2
         call b%build_general_tbox(p, cline)         ! general objects built
         call b%vol%new([p%box,p%box,p%box], p%smpd) ! reallocate vol (boxmatch issue)
@@ -357,10 +363,18 @@ contains
             p%bfac = b%vol%guinier_bfac(p%hp, p%lp)
             write(*,'(A,1X,F8.2)') '>>> B-FACTOR DETERMINED TO:', p%bfac
         else
-            if( cline%defined('neg')  ) call b%vol%neg
-            if( cline%defined('snr')  ) call b%vol%add_gauran(p%snr)
-            if( cline%defined('mirr') ) call b%vol%mirror(p%mirr)
-            if( cline%defined('bfac') ) call b%vol%apply_bfac(p%bfac)
+            if( cline%defined('neg')  )then
+                call b%vol%neg()
+            end if
+            if( cline%defined('snr') )then
+                call b%vol%add_gauran(p%snr)
+            end if
+            if( cline%defined('mirr') )then
+                call b%vol%mirror(p%mirr)
+            end if
+            if( cline%defined('bfac') )then
+                call b%vol%apply_bfac(p%bfac)
+            end if
             call b%vol%write(p%outvol, del_if_exists=.true.)
         endif
         ! end gracefully
@@ -382,8 +396,6 @@ contains
         real                 :: furthest_from_spat_med_corr
         type(projector)      :: vol1, vol2
         type(ori)            :: o
-        ! this overrides the module debug
-        debug=.false.
         real,                  allocatable :: corrmat(:,:), corrs(:), corrs_avg(:)
         integer,               allocatable :: pairs(:,:)
         character(len=STDLEN), allocatable :: vollist(:)
@@ -398,15 +410,15 @@ contains
         DebugPrint   'found logical dimension: ', ldim
         if( cline%defined('part') )then
             npairs = p%top-p%fromp+1
-            DebugPrint   'allocating this number of similarities: ', npairs
+            DebugPrint 'allocating this number of similarities: ', npairs
             allocate(corrs(p%fromp:p%top), pairs(p%fromp:p%top,2), stat=alloc_stat)
             call alloc_err('In: simple_volume_smat, 1', alloc_stat)
             ! read the pairs
             funit = get_fileunit()
             allocate(fname, source='pairs_part'//int2str_pad(p%part,p%numlen)//'.bin')
             if( .not. file_exists(fname) )then
-                write(*,*) 'file: ', fname, 'does not exist!'
-                write(*,*) 'If all pair_part* are not in cwd, please execute simple_split_pairs to generate the required files'
+!                write(*,*) 'file: ', fname, 'does not exist.'
+ !               write(*,*) 'If all pair_part* are not in cwd, please execute simple_split_pairs to generate the required files'
                 stop 'I/O error; simple_volume_smat'
             endif
             open(unit=funit, status='OLD', action='READ', file=fname, access='STREAM')

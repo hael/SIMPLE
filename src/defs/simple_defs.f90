@@ -51,6 +51,10 @@ real(sp), parameter :: MINTRSSDEV=0.5
 real(sp), parameter :: FTOL=1e-4
 real(dp), parameter :: DSMALL=1e-6
 real(dp), parameter :: pisqr = PI*PI   ! PI^2.
+real(sp), parameter :: ATHRES_LIM = 5.
+
+! constants for masks
+real, parameter :: COSMSKHALFWIDTH = 3.0
 
 !> plan for the CTF
 type :: ctfplan
@@ -78,11 +82,13 @@ integer,           parameter :: SZSN_MAX  = 20
 
 !! constants that control search and convergence
 real,    parameter :: FRAC_SH_LIM      = 80.0 !< at what frac to turn on the shift search
+real,    parameter :: FRAC_INTERPOL    = 60.0 ! at what frac to turn on the gridding interpolation (2D)
 real,    parameter :: EXTRINITHRESH    = 0.5
 real,    parameter :: EXTRTHRESH_CONST = 0.2
 real,    parameter :: LP2SMPDFAC       = 0.4125
 integer, parameter :: LPLIM1ITERBOUND  = 5
 integer, parameter :: LPLIM3ITERBOUND  = 7
+integer, parameter :: GRIDNPEAKS       = 3
 
 character(len=:), allocatable :: endconv   !< endianness conversion
 integer(kind=c_int):: nthr_glob            !< number of threads global variable

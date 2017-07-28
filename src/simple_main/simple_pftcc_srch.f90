@@ -51,6 +51,7 @@ contains
         integer,          optional,         intent(in)    :: maxits     !< maximum iterations
         class(projector), optional, target, intent(in)    :: vols(:)    !< projection volumes
         real :: srchlims(5,2)
+        integer :: ndim, npeaks_here, maxits_here
         ! flag the barrier constraint
         self%shbarr = .true.
         if( present(shbarrier) )then
