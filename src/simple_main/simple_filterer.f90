@@ -178,4 +178,86 @@ contains
         call ctfsq%kill
     end subroutine wiener_restore2D_online
 
+    subroutine fit_bfac( img_ref, img_ptcl, o, tfplan, bfac_range, lp, msk, bfac_best )
+        use simple_ctf, only: ctf
+        use simple_ori, only: ori
+        class(image),  intent(in)    :: img_ref, img_ptcl
+        class(ori),    intent(inout) :: o
+        type(ctfplan), intent(in)    :: tfplan
+        real,          intent(in)    :: bfac_range(2), lp, msk
+        real,          intent(out)   :: bfac_best
+        character(len=STDLEN) :: mode
+        type(ctf)             :: tfun
+        type(image)           :: ref, ptcl, maskimg, ref_tmp
+        real                  :: dfx, dfy, angast, bfac_range_refine(2), smpd, corr_best, bfac, cc
+        integer               :: npix, ldim(3), imode
+        real, parameter       :: BFAC_STEPSZ = 5.0, BFAC_STEPSZ_REFINE = 1.0
+        if( .not. (img_ref.eqdims.img_ptcl)) stop 'ref & ptcl imgs not of same dims; filterer :: fit_bfac'
+        ! extract image info
+        ldim = img_ref%get_ldim()
+        smpd = img_ref%get_smpd()
+        ! extract CTF info
+        select case(tfplan%flag)
+            case('yes')  ! multiply with CTF
+                mode  ='ctf'
+                imode = 1
+            case('flip') ! multiply with abs(CTF)
+                mode  = 'abs'
+                imode = 2
+            case('mul','no')
+                mode  = ''
+                imode = 3
+        end select
+        dfx    = o%get('dfx')
+        dfy    = o%get('dfy')
+        angast = o%get('angast')
+        ! make hard mask
+        call maskimg%disc(ldim, smpd, msk, npix)
+        ! make CTF object
+        tfun = ctf(smpd, o%get('kv'), o%get('cs'), o%get('fraca'))
+        ! prepare particle image
+        ptcl = img_ptcl
+        call ptcl%bp(0.,lp)
+        call ptcl%bwd_ft
+        ! prepare reference image
+        ref = img_ref
+        call ref%fwd_ft
+        ! init
+        corr_best = -1.
+        bfac_best =  0.
+        ! coarse search
+        bfac = bfac_range(1)
+        do while( bfac < bfac_range(2) )
+            call iteration
+            bfac = bfac + BFAC_STEPSZ
+        end do
+        ! refinement
+        bfac_range_refine(1) = bfac_best - BFAC_STEPSZ
+        bfac_range_refine(2) = bfac_best + BFAC_STEPSZ
+        bfac = bfac_range_refine(1)
+        do while( bfac < bfac_range_refine(2) )
+            call iteration
+             bfac = bfac + BFAC_STEPSZ_REFINE
+        end do
+
+        contains
+
+            subroutine iteration
+                ref_tmp = ref
+                if( imode < 3 )then
+                    call tfun%apply(ref_tmp, dfx, trim(mode), dfy, angast, bfac)
+                else
+                    call ref_tmp%apply_bfac(bfac)
+                endif
+                call ref_tmp%bp(0.,lp)
+                call ref_tmp%bwd_ft
+                cc = ref_tmp%real_corr(ptcl, maskimg)
+                if( cc > corr_best )then
+                    corr_best = cc
+                    bfac_best = bfac
+                endif
+            end subroutine iteration
+
+    end subroutine fit_bfac
+
 end module simple_filterer

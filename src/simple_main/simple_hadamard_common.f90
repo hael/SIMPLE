@@ -37,6 +37,7 @@ contains
         else
             call b%img%read(p%stk, iptcl)
         endif
+        call b%img%norm
     end subroutine read_img_from_stk
 
     subroutine set_bp_range( b, p, cline )
@@ -186,8 +187,7 @@ contains
         pw = 1.0
         if( orientation%isthere('w') ) pw = orientation%get('w')
         if( pw > TINY )then
-            ! prepare image for gridding
-            ! using the uncorrected/unmodified image as input
+            ! pre-gridding correction for the kernel convolution
             if( p%l_xfel )then
                 call b%img%pad(b%img_pad)
             else
@@ -195,7 +195,7 @@ contains
             endif
             DebugPrint  '*** simple_hadamard_common ***: prepared image for gridding'
             ran = ran3()
-            if( present(ran_eo) )ran = ran_eo
+            if( present(ran_eo) ) ran = ran_eo 
             orisoft = orientation
             do jpeak=1, npeaks
                 DebugPrint  '*** simple_hadamard_common ***: gridding, iteration:', jpeak
@@ -327,10 +327,10 @@ contains
                 call b%a%add_shift2class(icls, -xyz(1:2))
             endif
         endif
+        ! normalise
+        call b%img%norm
         ! clip image if needed
         call b%img%clip(b%img_match)
-        ! normalise
-        call b%img_match%norm
         ! apply mask
         if( p%l_envmsk .and. p%automsk .eq. 'cavg' )then
             ! automasking
@@ -449,7 +449,6 @@ contains
                 call b%mskvol%read(p%mskfile)
                 call b%mskvol%clip_inplace([p%boxmatch,p%boxmatch,p%boxmatch])
                 ! no need for the below line anymore as I (HE) removed auto-normalisation on read
-                ! call b%mskvol%norm_bin ! ensures [0;1] range
                 call b%vol%mul(b%mskvol)
                 ! re-initialise the object for 2D envelope masking
                 call b%mskvol%init_envmask2D(p%msk)

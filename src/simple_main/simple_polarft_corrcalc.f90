@@ -91,7 +91,6 @@ type :: polarft_corrcalc
     procedure, private :: corr_2
     generic            :: corr => corr_1, corr_2
     procedure          :: euclid
-    procedure          :: euclid_norm
     ! DESTRUCTOR
     procedure          :: kill
 end type polarft_corrcalc
@@ -811,22 +810,8 @@ contains
         cc = cc/sqrt(sqsum_ref_sh*self%sqsums_ptcls(iptcl))
     end function corr_2
 
-    !>  \brief  for calculating the Euclidean distance between reference & particle
-    !!          it is unclear what this distance represents as the reference volume
-    !!          is whitened and then FOM filtered whereas no normalisations or SNR-
-    !!          based resolution weights are applied to the particle image.
-    function euclid( self, iref, iptcl, irot ) result( dist )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: iref, iptcl, irot
-        real        :: dist, sqsum_ref
-        complex(sp) :: pft_ref(self%refsz,self%kfromto(1):self%kfromto(2))
-        call self%prep_ref4corr(iptcl, iref, pft_ref, sqsum_ref)
-        dist = sum(cabs(pft_ref - self%pfts_ptcls(iptcl,irot:irot+self%winsz,:))**2.0)&
-               & /real(self%refsz * (self%kfromto(2) - self%kfromto(1) + 1))
-    end function euclid
-
     !>  \brief  for calculating the normalized Euclidean distance between reference & particle
-    function euclid_norm( self, iref, iptcl, irot, bfac ) result( dist )
+    function euclid( self, iref, iptcl, irot, bfac ) result( dist )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl, irot
         real, optional,          intent(in)    :: bfac
@@ -834,10 +819,6 @@ contains
         integer     :: k
         complex(sp) :: pft_ref(self%refsz,self%kfromto(1):self%kfromto(2))
         complex(sp) :: pft_ptcl(self%refsz,self%kfromto(1):self%kfromto(2))
-        real(sp)    :: real_pft_ref(self%refsz,self%kfromto(1):self%kfromto(2))
-        real(sp)    :: aimag_pft_ref(self%refsz,self%kfromto(1):self%kfromto(2))
-        real(sp)    :: real_pft_ptcl(self%refsz,self%kfromto(1):self%kfromto(2))
-        real(sp)    :: aimag_pft_ptcl(self%refsz,self%kfromto(1):self%kfromto(2))
         ! prep ptcl PFT
         if( present(bfac) )then
              ! apply B-factor
@@ -850,35 +831,9 @@ contains
         endif
         ! prep ref PFT
         call self%prep_ref4corr(iptcl, iref, pft_ref, sqsum_ref)
-        ! get real matrices and number of components
-        real_pft_ref   = real(pft_ref)
-        aimag_pft_ref  = aimag(pft_ref)
-        real_pft_ptcl  = real(pft_ptcl)
-        aimag_pft_ptcl = aimag(pft_ptcl)
-        rn             = real(self%refsz * (self%kfromto(2) - self%kfromto(1) + 1))
-        ! normalise
-        call norm_mat(real_pft_ref)
-        call norm_mat(aimag_pft_ref)
-        call norm_mat(real_pft_ptcl)
-        call norm_mat(aimag_pft_ptcl)
-        ! calculate L2 norm
-        dist = ( sqrt( sum( (real_pft_ref  - real_pft_ptcl)**2.0 ) ) + &
-                &sqrt( sum( (aimag_pft_ref - aimag_pft_ptcl)**2.0 ) ) )/(2.0 * rn)
+        dist = sum(cabs(pft_ref - pft_ptcl)**2.0)/real(self%refsz * (self%kfromto(2) - self%kfromto(1) + 1))
 
         contains
-
-            subroutine norm_mat( mat )
-                real, intent(inout) :: mat(self%refsz,self%kfromto(1):self%kfromto(2))
-                real(sp) :: ave, ep, var
-                real(sp) :: devs(self%refsz,self%kfromto(1):self%kfromto(2))
-                ave  = sum(mat)/rn
-                devs = mat - ave
-                ep   = sum(devs)
-                var  = sum(devs*devs)
-                var  = (var-ep**2.0/rn)/(rn-1.0) ! corrected two-pass formula    
-                mat = mat - ave
-                if( var > 0. ) mat = mat / sqrt(var)
-            end subroutine norm_mat
 
             real function eval_bfac( k )
                 integer, intent(in) :: k
@@ -887,7 +842,7 @@ contains
                 eval_bfac = max(0.,exp(-(bfac/4.)*res*res))
             end function eval_bfac
 
-    end function euclid_norm
+    end function euclid
 
     ! DESTRUCTOR
 

@@ -39,7 +39,6 @@ type prime2D_srch
     real                 :: best_bfac     =  0.  !< best B-factor found by search
     real                 :: prev_corr     = -1.  !< previous best correlation
     real                 :: best_corr     = -1.  !< best corr found by search
-    real                 :: bfac_corr     = -1.  !< corr after B-factor optimisation
     real                 :: specscore     =  0.  !< spectral score
     integer, allocatable :: srch_order(:)        !< stochastic search order
     logical              :: doshift = .true.     !< origin shift search indicator
@@ -96,7 +95,7 @@ contains
         lims(2,2)        =  self%trs
         call self%shsrch_obj%new(pftcc, lims)
         lims_bfac(1,1)   = -50.
-        lims_bfac(1,2)   =  0.
+        lims_bfac(1,2)   =  50.
         call self%bfacsrch_obj%new(pftcc, lims_bfac)
         ! the instance now exists
         self%exists = .true.
@@ -393,7 +392,6 @@ contains
             call self%update_best(pftcc, iptcl, a)
 
             ! here 4 now
-            call a%set(iptcl, 'bfac_corr', self%bfac_corr)
             call a%set(iptcl, 'bfac',      self%best_bfac)
 
         else
@@ -406,20 +404,11 @@ contains
     subroutine bfac_srch_local( self, iptcl )
         class(prime2D_srch), intent(inout) :: self
         integer,             intent(in)    :: iptcl
-        real :: cb(2), corr_before, corr_after
-        self%best_bfac = 0.
-        corr_before    = self%best_corr
+        real :: cb(2)
         call self%bfacsrch_obj%set_indices(self%best_class, iptcl, self%best_rot)
         cb = self%bfacsrch_obj%minimize()
-        corr_after = cb(1)
-        if( corr_after > corr_before )then
-            self%bfac_corr = cb(1)
-            self%best_bfac = cb(2)
-        else
-            self%bfac_corr = corr_before
-            self%best_bfac = 0.
-        endif
-       DebugPrint '>>> PRIME2D_SRCH::FINISHED B-FACTOR SEARCH'
+        self%best_bfac = cb(2)
+        DebugPrint '>>> PRIME2D_SRCH::FINISHED B-FACTOR SEARCH'
     end subroutine bfac_srch_local
 
     ! DESTRUCTOR

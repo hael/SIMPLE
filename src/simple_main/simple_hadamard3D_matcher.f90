@@ -156,7 +156,7 @@ contains
         do iptcl=p%fromp,p%top
             call primesrch3D(iptcl)%new(b%a, p, pftcc)
         end do
-        ! prep ctf & filter
+        ! prep ctf
         if(p%ctf .ne. 'no') call pftcc%create_polar_ctfmats(b%a)
         ! execute the search
         call del_file(p%outfile)
@@ -258,7 +258,7 @@ contains
             call killrecvols(b, p)
         endif
 
-        ! destruct
+        ! destruct search objects and prime3D_oris
         do iptcl=p%fromp,p%top
             call primesrch3D(iptcl)%kill
         end do

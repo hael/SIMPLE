@@ -17,7 +17,7 @@ type, extends(pftcc_opt) :: pftcc_bfacsrch
     integer                          :: reference   = 0       !< reference pft
     integer                          :: particle    = 0       !< particle pft
     integer                          :: rot         = 1       !< in-plane rotation
-    integer                          :: nrestarts   = 10      !< simplex restarts (randomized bounds)
+    integer                          :: nrestarts   = 5       !< simplex restarts (randomized bounds)
   contains
     procedure :: new         => bfacsrch_new
     procedure :: set_indices => bfacsrch_set_indices
@@ -71,7 +71,7 @@ contains
         integer,               intent(in)    :: D
         real,                  intent(in)    :: vec(D)
         real :: cost
-        ! cost = -self%pftcc_ptr%corr(self%reference, self%particle, self%rot, vec(1))
+        cost = self%pftcc_ptr%euclid(self%reference, self%particle, self%rot, vec(1))
     end function bfacsrch_costfun
 
     function bfacsrch_minimize( self, irot, shvec, rxy, fromto ) result( cb )
