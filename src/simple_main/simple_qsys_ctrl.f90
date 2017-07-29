@@ -1,3 +1,7 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple batch-processing manager - control module
 module simple_qsys_ctrl
 use simple_defs
 use simple_qsys_base, only: qsys_base
@@ -7,9 +11,8 @@ implicit none
 
 public :: qsys_ctrl
 private
-
+#include "simple_local_flags.inc"
 integer, parameter :: SHORTTIME = 3
-logical, parameter :: DEBUG     = .false.
 
 type qsys_ctrl
     private
@@ -61,21 +64,21 @@ interface qsys_ctrl
 end interface qsys_ctrl
 
 contains
-    
+
     ! CONSTRUCTORS
-    
+
     !>  \brief  is a constructor
     function constructor( exec_binary, qsys_obj, parts, fromto_part, ncomputing_units, stream ) result( self )
         character(len=*),         intent(in) :: exec_binary      !< the binary that we want to execute in parallel
         class(qsys_base), target, intent(in) :: qsys_obj         !< the object that defines the qeueuing system
-        integer,          target, intent(in) :: parts(:,:)       !< defines the start_ptcl/stop_ptcl ranges  
+        integer,          target, intent(in) :: parts(:,:)       !< defines the start_ptcl/stop_ptcl ranges
         integer,                  intent(in) :: fromto_part(2)   !< defines the range of partitions controlled by this object
         integer,                  intent(in) :: ncomputing_units !< number of computing units (<= the number of parts controlled)
         logical,                  intent(in) :: stream           !< stream flag
         type(qsys_ctrl) :: self
         call self%new(exec_binary, qsys_obj, parts, fromto_part, ncomputing_units, stream )
     end function constructor
-    
+
     !>  \brief  is a constructor
     subroutine new( self, exec_binary, qsys_obj, parts, fromto_part, ncomputing_units, stream )
         use simple_jiffys, only: alloc_err
@@ -94,7 +97,7 @@ contains
         self%parts                  => parts
         self%fromto_part            =  fromto_part
         self%nparts_tot             =  size(parts,1)
-        self%ncomputing_units       =  ncomputing_units        
+        self%ncomputing_units       =  ncomputing_units
         self%ncomputing_units_avail =  ncomputing_units
         if( stream )then
             self%numlen = 5
@@ -171,9 +174,9 @@ contains
         self%jobs_done(:size(jobs_done)) = jobs_done
         self%jobs_submitted(:size(jobs_submitted)) = jobs_submitted
     end subroutine set_jobs_status
-    
+
     ! SCRIPT GENERATORS
-    
+
     !>  \brief  public script generator
     subroutine generate_scripts( self, job_descr, ext, q_descr, outfile_body, part_params, chunkdistr )
         class(qsys_ctrl),           intent(inout) :: self
@@ -264,13 +267,13 @@ contains
         write(funit,'(a)',advance='yes') 'cd '//trim(self%pwd)
         write(funit,'(a)',advance='yes') ''
         ! compose the command line
-        write(funit,'(a)',advance='no') trim(self%exec_binary)//' '//job_descr%chash2str() 
+        write(funit,'(a)',advance='no') trim(self%exec_binary)//' '//job_descr%chash2str()
         ! direct output
         write(funit,'(a)',advance='yes') ' > OUT'//int2str_pad(ipart,self%numlen)
         ! exit shell when done
         write(funit,'(a)',advance='yes') ''
         write(funit,'(a)',advance='yes') 'exit'
-        call flush(funit)
+
         close(funit)
         if( q_descr%get('qsys_name').eq.'local' )call chmod(trim(self%script_names(ipart)),'+x')
         if( ios .ne. 0 )then
@@ -311,15 +314,13 @@ contains
         write(funit,'(a)',advance='yes') 'cd '//trim(self%pwd)
         write(funit,'(a)',advance='yes') ''
         ! compose the command line
-        write(funit,'(a)',advance='no') trim(exec_bin)//' '//job_descr%chash2str() 
+        write(funit,'(a)',advance='no') trim(exec_bin)//' '//job_descr%chash2str()
         ! direct output
         write(funit,'(a)',advance='yes') ' > '//outfile
         ! exit shell when done
         write(funit,'(a)',advance='yes') ''
         write(funit,'(a)',advance='yes') 'exit'
-        call flush(funit)        
         close(funit)
-        !call flush(funit)
         if( q_descr%get('qsys_name').eq.'local' )call chmod(trim(script_name),'+x')
         if( ios .ne. 0 )then
             write(*,'(a)',advance='no') 'simple_qsys_ctrl :: generate_script_2; Error'
@@ -375,9 +376,8 @@ contains
         end do
         write(fnr,'(a)') 'exit'
         close( unit=fnr )
-        call flush(fnr)
         call chmod(master_submit_script,'+x')
-        if( DEBUG )then
+        if( debug.or.global_debug )then
             call exec_cmdline('echo DISTRIBUTED MODE :: submitting scripts:')
             call exec_cmdline('ls -1 distr_simple_script_*')
         endif
@@ -402,7 +402,7 @@ contains
         ! execute the command
         call exec_cmdline(cmd)
     end subroutine submit_script
-    
+
     ! QUERIES
 
     subroutine update_queue( self )
@@ -432,9 +432,9 @@ contains
             call simple_sleep(SHORTTIME)
         end do
     end subroutine schedule_jobs
-    
+
     ! DESTRUCTOR
-    
+
     !>  \brief  is a destructor
     subroutine kill( self )
         class(qsys_ctrl), intent(inout) :: self

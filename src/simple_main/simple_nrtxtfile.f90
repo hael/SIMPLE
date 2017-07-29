@@ -1,4 +1,7 @@
-!>  \brief  Class to deal with text files of numbers
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!>  \brief Simple file module: Class to deal with text files of numbers
 module simple_nrtxtfile
 use simple_defs
 use simple_strings ! use all in there
@@ -12,11 +15,11 @@ integer, parameter :: OPEN_TO_WRITE = 2
 
 type :: nrtxtfile
     private
-    integer               :: funit
-    character(len=STDLEN) :: fname
-    integer               :: recs_per_line = 0
-    integer               :: ndatalines    = 0
-    integer               :: access_type
+    integer               :: funit              !< FILE*
+    character(len=STDLEN) :: fname              !< filename
+    integer               :: recs_per_line = 0  !< recordings per line
+    integer               :: ndatalines    = 0  !< # lines
+    integer               :: access_type        !< read/write
 contains
     procedure          :: new
     procedure          :: readNextDataLine
@@ -34,7 +37,7 @@ contains
     subroutine new( self, fname, access_type, wanted_recs_per_line )
         use simple_filehandling, only: get_fileunit
         class(nrtxtfile),  intent(inout) :: self
-        character(len=*),  intent(in)    :: fname
+        character(len=*),  intent(in)    :: fname       !< filename
         integer,           intent(in)    :: access_type !< Either OPEN_TO_READ or OPEN_TO_WRITE
         integer, optional, intent(in)    :: wanted_recs_per_line
         character(len=line_max_len)      :: buffer      !< will hold a line from the file
@@ -106,7 +109,7 @@ contains
     
     subroutine readNextDataLine( self, read_data )
         class(nrtxtfile), intent(inout) :: self
-        real,             intent(inout) :: read_data(:)
+        real,             intent(inout) :: read_data(:) !< output data
         character(len=line_max_len) :: buffer
         integer                     :: ios
         character(len=256)          :: io_message
@@ -135,7 +138,7 @@ contains
 
     subroutine writeDataLineReal( self, data_to_write )
         class(nrtxtfile), intent(inout) :: self
-        real, intent(in)                :: data_to_write(:)
+        real, intent(in)                :: data_to_write(:) !< input data
         integer                         :: record_counter
         if( self%access_type .ne. OPEN_TO_WRITE )then
             stop 'simple_nrtxtfile::writeDataLineReal; File is not OPEN_TO_WRITE'
@@ -154,7 +157,7 @@ contains
 
     subroutine writeDataLineInt( self, data_to_write )
         class(nrtxtfile), intent(inout) :: self
-        integer, intent(inout)          :: data_to_write(:)
+        integer, intent(inout)          :: data_to_write(:) !< input data
         integer                         :: record_counter
         ! Check we are open to write
         if (self%access_type .ne. OPEN_TO_WRITE) then
@@ -176,7 +179,7 @@ contains
 
     subroutine writeCommentLine( self, comment_to_write )
         class(nrtxtfile), intent(inout) :: self
-        character(len=*), intent(in)    :: comment_to_write
+        character(len=*), intent(in)    :: comment_to_write !< input data
         ! Check we are open to write
         if (self%access_type .ne. OPEN_TO_WRITE) then
             stop 'simple_nrtxtfile::writeCommentLine; File is not OPEN_TO_WRITE'

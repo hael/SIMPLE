@@ -1,3 +1,7 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple optimisation module: Fourier shift search
 module simple_ft_shsrch
 use simple_opt_factory, only: opt_factory
 use simple_opt_spec,    only: opt_spec
@@ -21,7 +25,7 @@ real, parameter               :: TOL=1e-4          !< tolerance parameter
 integer, parameter            :: MAXITS=30         !< maximum number of iterations
 
 contains
-    
+    !> Initialise Fourier shift search
     subroutine ft_shsrch_init( ref, ptcl, lims, lp_in, hp_in, opt, nrestarts_in )
         class(image), target,       intent(in) :: ref, ptcl
         real,                       intent(in) :: lims(2,2), lp_in, hp_in

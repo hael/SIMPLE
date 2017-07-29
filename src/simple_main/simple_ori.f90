@@ -1,7 +1,13 @@
-!==Class simple_ori
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple ori class handles orientational information.
 !
-! simple_ori handles orientational information. The code is distributed with the hope that it will be useful,
-! but _WITHOUT_ _ANY_ _WARRANTY_. Redistribution or modification is regulated by the GNU General Public License. 
+! The code is distributed with the
+! hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_. Redistribution or
+! modification is regulated by the GNU General Public License.
+!
+!
 ! *Author:* Hans Elmlund, 2009-05-26
 !
 !==Changes are documented below
@@ -77,7 +83,7 @@ type :: ori
     procedure          :: ori2str
     ! PRINTING & I/O
     procedure          :: print_mat
-    procedure          :: print
+    procedure          :: print_ori
     procedure          :: write
     procedure          :: read
     ! CALCULATORS
@@ -104,7 +110,7 @@ type :: ori
     generic            :: operator(.inplrotdist.) => inplrotdist
     ! DESTRUCTOR
     procedure          :: kill
-end type
+end type ori
 
 interface ori
     module procedure constructor
@@ -116,9 +122,9 @@ class(ori), pointer   :: class_self1=>null(), class_self2=>null(), class_self3=>
 real                  :: angthres = 0.
 
 contains
-    
+
     ! CONSTRUCTORS
-    
+
     !>  \brief  is a constructor
     function constructor( ) result( self )
         type(ori) :: self
@@ -162,7 +168,7 @@ contains
     end subroutine ori_from_rotmat
 
     ! SETTERS
-    
+
     !>  \brief  sets parameters for particle rejection
     subroutine reject( self )
         class(ori), intent(inout) :: self
@@ -172,16 +178,16 @@ contains
         if( self%isthere('corr') )     call self%htab%set('corr',     -1.)
         if( self%isthere('specscore') )call self%htab%set('specscore', 0.)
     end subroutine reject
-    
+
     !>  \brief  is a polymorphic assigner
     subroutine assign_ori( self_out, self_in )
         type(ori), intent(in)     :: self_in
         class(ori), intent(inout) :: self_out
         call self_out%copy(self_in)
     end subroutine assign_ori
-    
+
     !>  \brief  is a polymorphic copier
-    subroutine copy_ori( self_out, self_in ) 
+    subroutine copy_ori( self_out, self_in )
         class(ori), intent(in)    :: self_in
         class(ori), intent(inout) :: self_out
         integer                   :: sz
@@ -191,7 +197,7 @@ contains
         self_out%htab   = self_in%htab
         self_out%chtab  = self_in%chtab
     end subroutine copy_ori
-    
+
     !>  \brief  is a setter
     subroutine set_euler( self, euls  )
         class(ori), intent(inout) :: self
@@ -217,18 +223,18 @@ contains
         real, intent(in)          :: e2
         call self%set_euler([self%euls(1),e2,self%euls(3)])
     end subroutine e2set
-    
+
     !>  \brief  is a setter
     subroutine e3set( self, e3 )
         class(ori), intent(inout) :: self
         real, intent(in)          :: e3
         call self%set_euler([self%euls(1),self%euls(2),e3])
     end subroutine e3set
-    
+
     !>  \brief  is a setter
     subroutine swape1e3( self )
         class(ori), intent(inout) :: self
-        real :: e 
+        real :: e
         e = self%euls(1)
         self%euls(1) = self%euls(3)
         self%euls(3) = e
@@ -299,7 +305,7 @@ contains
         self%rmat(3,2) = vz * sy
         self%rmat(3,3) = 1. - z
     end subroutine rnd_romat
-    
+
     !>  \brief  for generating a random Euler angle
     subroutine rnd_euler_1( self, eullims )
         class(ori),     intent(inout) :: self
@@ -350,7 +356,7 @@ contains
             endif
         end do
     end subroutine rnd_euler_2
-    
+
     !>  \brief  for generating random ori
     subroutine rnd_ori( self, trs, eullims )
         use simple_rnd, only: ran3
@@ -415,7 +421,7 @@ contains
         call self%set('x', -x)
         call self%set('y', -y)
     end subroutine revshsgn
-    
+
     ! GETTERS
 
      !>  \brief  is a getter
@@ -424,42 +430,42 @@ contains
         logical :: t
         t = self%existence
     end function exists
-    
+
     !>  \brief  is a getter
     pure function get_euler( self ) result( euls )
         class(ori), intent(in) :: self
         real :: euls(3)
         euls = self%euls
     end function get_euler
-    
+
     !>  \brief  is a getter
     pure function e1get( self ) result( e1 )
         class(ori), intent(in) :: self
         real :: e1
         e1 = self%euls(1)
     end function e1get
-    
+
     !>  \brief  is a getter
     pure function e2get( self ) result( e2 )
         class(ori), intent(in) :: self
         real :: e2
         e2 = self%euls(2)
     end function e2get
-    
+
     !>  \brief  is a getter
     pure function e3get( self ) result( e3 )
         class(ori), intent(in) :: self
         real :: e3
         e3 = self%euls(3)
     end function e3get
-    
+
     !>  \brief  is a getter
     pure function get_normal( self ) result( normal )
         class(ori), intent(in) :: self
         real :: normal(3)
         normal = self%normal
     end function get_normal
-    
+
     !>  \brief  is a getter
     pure function get_mat( self ) result( mat )
         class(ori), intent(in) :: self
@@ -467,7 +473,7 @@ contains
         mat = self%rmat
     end function get_mat
 
-    !>  \brief  is a getter   
+    !>  \brief  is a getter
     function get( self, key ) result( val )
         class(ori), intent(inout)    :: self
         character(len=*), intent(in) :: key
@@ -475,7 +481,7 @@ contains
         val = self%htab%get(key)
     end function get
 
-    !>  \brief  is a getter   
+    !>  \brief  is a getter
     subroutine getter_1( self, key, val )
         class(ori),                    intent(inout) :: self
         character(len=*),              intent(in)    :: key
@@ -484,7 +490,7 @@ contains
         val = self%chtab%get(key)
     end subroutine getter_1
 
-    !>  \brief  is a getter   
+    !>  \brief  is a getter
     subroutine getter_2( self, key, val )
         class(ori),       intent(inout) :: self
         character(len=*), intent(in)    :: key
@@ -492,25 +498,25 @@ contains
         val = self%htab%get(key)
     end subroutine getter_2
 
-    !>  \brief  is a getter   
+    !>  \brief  is a getter
     function get_shift( self ) result( vec )
         class(ori), intent(inout) :: self
         real :: vec(2)
         vec(1) = self%htab%get('x')
         vec(2) = self%htab%get('y')
     end function get_shift
-    
+
     !>  \brief  returns size of hash
     function hash_size( self ) result( sz )
         class(ori), intent(in) :: self
-        integer :: sz 
+        integer :: sz
         sz = self%htab%size_of_hash()
     end function hash_size
 
     !>  \brief  returns size of chash
     function chash_size( self ) result( sz )
         class(ori), intent(in) :: self
-        integer :: sz 
+        integer :: sz
         sz = self%chtab%size_of_chash()
     end function chash_size
 
@@ -563,7 +569,7 @@ contains
             allocate( str, source=str_chtab )
         endif
     end function ori2str
-    
+
     !<  \brief  to print the rotation matrix
     subroutine print_mat( self )
         class(ori), intent(inout) :: self
@@ -572,16 +578,18 @@ contains
         write(*,*) self%rmat(2,:)
         write(*,*) self%rmat(3,:)
     end subroutine print_mat
-    
-    !>  \brief  prints oris data based on the existence of intent(in) character strings whose variable names are 
-    !! equivalent to the variables contained in the align derived type. The input character variables are printed 
-    !! first, preceeding printing of their associated value (key-value style for simple parsing of data)
-    subroutine print( self ) 
+
+    !>  \brief prints oris data based on the existence of intent(in) character
+    !! strings whose variable names are equivalent to the variables contained in
+    !! the align derived type. The input character variables are printed first,
+    !! preceeding printing of their associated value (key-value style for simple
+    !! parsing of data)
+    subroutine print_ori( self )
         class(ori), intent(inout) :: self
-        call self%htab%print
+        call self%htab%print()
         call self%chtab%print_key_val_pairs
-    end subroutine print
-    
+    end subroutine print_ori
+
     !>  \brief  writes orientation info
     subroutine write( self, fhandle )
         class(ori), intent(inout) :: self
@@ -606,12 +614,12 @@ contains
     end subroutine read
 
     ! CALCULATORS
-    
+
     !>  \brief  rounds the origin shifts
     subroutine round_shifts( self )
         class(ori), intent(inout) :: self
         call self%set('x', real(nint(self%get('x'))))
-        call self%set('y', real(nint(self%get('y')))) 
+        call self%set('y', real(nint(self%get('y'))))
     end subroutine round_shifts
 
     !>  \brief  corrects the Euler angle bounds
@@ -624,8 +632,11 @@ contains
         if( self%euls(3) < 0. .or. self%euls(3) > 360. ) doshift = .true.
         if( doshift ) self%euls = m2euler(self%rmat)
     end subroutine shift
-    
+
     !>  \brief  is for composing Euler angles
+    !! multiplication of two rotation matrices commute (n>2 not)
+    !! the composed rotation matrix is constructed
+    !! \param self1,self2 ori class type rotational matrices
     function compeuler( self1, self2 ) result( self_out )
         class(ori), intent(in) :: self1, self2
         type(ori) :: self_out
@@ -639,8 +650,9 @@ contains
         call self_out%set('e3',self_out%euls(3))
         self_out%normal = matmul(zvec, self_out%rmat)
     end function compeuler
-    
+
     !>  combines 3d and 2d oris and flags for ptcl mirroring
+    !! \param ori3d,ori2d,o_out ori class type rotational matrices
     subroutine compose3d2d( ori3d, ori2d, o_out )
         use simple_math, only: make_transfmat, transfmat2inpls
         class(ori), intent(inout) :: ori3d, ori2d, o_out
@@ -657,12 +669,12 @@ contains
             euls(3) = -euls(3)
             ori3dy  = -ori3dy
         endif
-        R3d = make_transfmat(euls(3), ori3dx, ori3dy)                
+        R3d = make_transfmat(euls(3), ori3dx, ori3dy)
         x  = ori2d%get('x')
         y  = ori2d%get('y')
         e3 = ori2d%e3get()
         ! inpls composition and determination
-        R2d = make_transfmat(e3, x, y)                  
+        R2d = make_transfmat(e3, x, y)
         R   = matmul(R2d,R3d)
         call transfmat2inpls(R, e3, x, y)
         ! mirror for southern hemisphere
@@ -680,7 +692,7 @@ contains
     subroutine map3dshift22d( self, sh3d )
         use simple_math, only: deg2rad
         class(ori), intent(inout) :: self
-        real, intent(in)          :: sh3d(3)
+        real, intent(in)          :: sh3d(3) !< 3D shift 
         real                      :: old_x,old_y,x,y,cx,cy
         real                      :: u(3),v(3),shift(3)
         real                      :: phi,cosphi,sinphi
@@ -700,15 +712,15 @@ contains
         cx =  old_x*cosphi+old_y*sinphi+dot_product( u,shift )
         cy = -old_x*sinphi+old_y*cosphi+dot_product( v,shift )
         ! Identification
-        x = cx*cosphi-cy*sinphi 
-        y = cx*sinphi+cy*cosphi 
+        x = cx*cosphi-cy*sinphi
+        y = cx*sinphi+cy*cosphi
         ! the end
         call self%set( 'x',x )
         call self%set( 'y',y )
     end subroutine map3dshift22d
 
     !>  \brief  generates the opposite hand of an Euler angle
-    !!          so that a set of Euler angles transformed by 
+    !!          so that a set of Euler angles transformed by
     !!          this operation changes the handedness of the volume
     subroutine mirror3d( self )
         class(ori), intent(inout) :: self
@@ -745,6 +757,8 @@ contains
         self%normal = matmul(zvec, self%rmat)
     end subroutine mirror2d
 
+
+    !! \param self1,self2 ori class type rotational matrices
     subroutine oripair_diverse( self1, self2 )
         use simple_simplex_opt, only: simplex_opt
         use simple_opt_spec,    only: opt_spec
@@ -811,21 +825,24 @@ contains
         angthres = 0.
     end subroutine oripair_diverse_projdir
 
-    !>  \brief  if mode='median' this function creates a spatial median rotation matrix 
-    !!          that is "in between" the two inputted rotation matrices in a geodesic 
-    !!          distance sense and if mode='diverse' it creates the rotation matrix that 
-    !!          is maximally diverse with respect to the inputted two 
+    !>  \brief creates a spatial median or maximally diverse rotation matrix
+    !!  if mode='median' this function creates a spatial median rotation matrix
+    !!          that is "in between" the two inputted rotation matrices in a geodesic
+    !!          distance sense and if mode='diverse' it creates the rotation matrix that
+    !!          is maximally diverse with respect to the inputted two
+    !! \param mode 'median' or 'diverse'
+    !! \param self1,self2 ori class type rotaional matrices
     function ori_generator( self1, self2, mode ) result( oout )
         use simple_simplex_opt, only: simplex_opt
         use simple_opt_spec,    only: opt_spec
         class(ori), target, intent(in) :: self1, self2
         character(len=*),   intent(in) :: mode
-        real, parameter   :: TOL=1e-6
-        type(ori)         :: oout
-        type(ori), target ::otst
-        type(opt_spec)    :: ospec
-        type(simplex_opt) :: opt
-        real              :: dist, lims(3,2)
+        real,      parameter           :: TOL=1e-6
+        type(ori)                      :: oout
+        type(ori), target              :: otst
+        type(opt_spec)                 :: ospec
+        type(simplex_opt)              :: opt
+        real                           :: dist, lims(3,2)
         call oout%new_ori
         call otst%new_ori
         call otst%rnd_euler
@@ -863,9 +880,9 @@ contains
 
     ! Here we seek to define a bi-invariant metric that respect the topology on SO(3), i.e.
     ! we will define ta metric that attemts to find the rotation required to bring
-    ! R1 in register with R2. Our goal is to find R such that R1=matmul(R,R2), thus 
-    ! R=matmul(R1,transpose(R2)). 
-    ! 
+    ! R1 in register with R2. Our goal is to find R such that R1=matmul(R,R2), thus
+    ! R=matmul(R1,transpose(R2)).
+    !
     ! Formally:
     !
     ! dist: SO(3)xSO(3)->R+
@@ -873,9 +890,10 @@ contains
     ! This metric is sensitive to in-plane rotation
 
     !>  \brief  this metric is measuring the frobenius deviation from the identity matrix .in.[0,2*sqrt(2)]
-    !!          Larochelle, P.M., Murray, A.P., Angeles, J., A distance metric for finite 
-    !!          sets of rigid-body displacement in the polar decomposition. ASME J. Mech. Des. 
+    !!          Larochelle, P.M., Murray, A.P., Angeles, J., A distance metric for finite
+    !!          sets of rigid-body displacement in the polar decomposition. ASME J. Mech. Des.
     !!          129, 883–886 (2007)
+    !! \param self1,self2 ori class type rotational matrices
     pure real function geodesic_dist( self1, self2 )
         class(ori), intent(in) :: self1, self2
         real :: Imat(3,3), sumsq, diffmat(3,3)
@@ -893,6 +911,7 @@ contains
     end function geodesic_dist
 
     !>  \brief  this is the same metric as above, scaled to [0,pi]
+    !! \param self1,self2 ori class type rotational matrices
     pure real function geodesic_dist_scaled( self1, self2 )
         class(ori), intent(in) :: self1, self2
         real, parameter :: old_max = 2.*sqrt(2.)
@@ -902,14 +921,16 @@ contains
     ! CLASSIC DISTANCE METRICS
 
     !>  \brief  calculates the distance (in radians) btw two Euler angles
+    !! \param self1,self2 ori class type rotational matrices
     pure function euldist( self1, self2 ) result( dist )
         use simple_math, only: myacos
         class(ori), intent(in) :: self1, self2
         real :: dist
         dist = myacos(dot_product(self1%normal,self2%normal))
     end function euldist
-    
+
     !>  \brief  calculates the distance (in radians) btw all df:s
+    !! \param self1,self2 ori class type rotaional matrices
     pure function inpldist( self1, self2 ) result( dist )
         use simple_math, only: myacos, rotmat2d
         class(ori), intent(in) :: self1, self2
@@ -917,7 +938,8 @@ contains
         dist = ((self1.inplrotdist.self2)+(self1.euldist.self2))/2.
     end function inpldist
 
-     !>  \brief  calculates the distance (in radians) btw the in-plane rotations
+    !>  \brief  calculates the distance (in radians) btw the in-plane rotations
+    !! \param self1,self2 ori class type rotaional matrices
     pure function inplrotdist( self1, self2 ) result( dist )
         use simple_math, only: myacos, rotmat2d
         class(ori), intent(in) :: self1, self2
@@ -938,21 +960,22 @@ contains
         class(ori), intent(inout) :: self
         call self%chtab%kill
     end subroutine kill
-  
+
     ! PRIVATE STUFF
-    
+
     !>  \brief  makes a rotation matrix from a Spider format Euler triplet
+    !! \param e1,e2,e3 Euler triplet
     pure function euler2m( e1, e2, e3 ) result( r )
         real, intent(in)     :: e1, e2, e3
         real, dimension(3,3) :: r1, r2, r3, r, tmp
         r1 = rotmat(e1,3) ! rotation around z
-        r2 = rotmat(e2,2) ! tilt 
+        r2 = rotmat(e2,2) ! tilt
         r3 = rotmat(e3,3) ! rotation around z
         ! order of multiplication is r3r2r1
         tmp = matmul(r3,r2)
         r = matmul(tmp,r1)
     end function euler2m
-    
+
     !>  \brief  calculates the normal of a Fourier plane
     pure function euler2vec( phi, theta, psi ) result( normal )
         real, intent(in) :: phi, theta, psi
@@ -966,7 +989,7 @@ contains
         use simple_math, only: rad2deg, myacos
         real, intent(in), dimension(3,3) :: mat(3,3)
         real, dimension(3,3):: tmp, anticomp1z, anticomp2y, get_euler3eul
-        real :: imagevec(3), absxy, mceul1deg, mceul2deg, phitmp, euls(3) 
+        real :: imagevec(3), absxy, mceul1deg, mceul2deg, phitmp, euls(3)
         ! get_euler image of (0,0,1)
         imagevec = matmul( zvec, mat )
         ! extract eul1 from imagevec:
@@ -989,8 +1012,8 @@ contains
         mceul2deg  = rad2deg( -euls(2) )
         anticomp1z = rotmat( mceul1deg,3 )
         anticomp2y = rotmat( mceul2deg,2 )
-        tmp = matmul( anticomp1z,anticomp2y  )        
-        get_euler3eul = matmul( mat,tmp )                    
+        tmp = matmul( anticomp1z,anticomp2y  )
+        get_euler3eul = matmul( mat,tmp )
         ! get_euler3eul is a rotation around z, 1st element is cosangle
         if( get_euler3eul( 1,2 ) > 0. ) then
             euls(3) = myacos(get_euler3eul(1,1))
@@ -1007,7 +1030,7 @@ contains
             euls(1)=euls(1)+360.
         end do
     end function m2euler
-    
+
     !>  \brief  returns the rotation matrix for _ang_ degrees of rotation
     !! around x,y or z for _choice_ = _1_,_2_ or _3_
     pure function rotmat( ang, choice ) result( r )
@@ -1133,7 +1156,7 @@ contains
         print *, 'average distance for spatial extremes: ', adist, ' maxdist: ',&
         frob_lim, ' frac_of_max: ', 100*(adist/frob_lim), ' %'
     end subroutine test_ori_dists
-    
+
     !>  \brief  is the unit test for the ori class
     subroutine test_ori
     ! this test only tests the Euler part of ori,
@@ -1193,5 +1216,5 @@ contains
         if( .not. passed ) stop 'Euler composer corrupt!'
         write(*,'(a)') 'SIMPLE_ORI_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
     end subroutine test_ori
-    
+
 end module simple_ori

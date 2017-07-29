@@ -1,9 +1,13 @@
-!==Class simple_powell_opt
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple optimisation module: Powell's direction optimisation
+!!
+!! Minimization of an externally defined function by Powell's direction set method
 !
-! Minimization of an externally defined function by Powell's direction set method
-! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_. 
-! Redistribution or modification is regulated by the GNU General Public License. 
-! *Author:* Hans Elmlund, 2013-10-15
+! The code is distributed with the hope that it will be useful, but _WITHOUT_
+! _ANY_ _WARRANTY_. Redistribution or modification is regulated by the GNU
+! General Public License. *Author:* Hans Elmlund, 2013-10-15
 !
 module simple_powell_opt
 use simple_optimizer, only: optimizer
@@ -13,7 +17,7 @@ implicit none
 
 public :: powell_opt
 private
-  
+
 type, extends(optimizer) :: powell_opt
     private
     type(opt_spec)    :: spec_linmin        !< specification of linmin optimizer
@@ -24,12 +28,12 @@ type, extends(optimizer) :: powell_opt
     procedure :: new          => new_powell_opt
     procedure :: minimize     => powell_minimize
     procedure :: kill         => kill_powell_opt
-end type
+end type powell_opt
 
-logical :: warn=.false.
+#include "simple_local_flags.inc"
 
 contains
-    
+
     !> \brief  is a constructor
     subroutine new_powell_opt( self, spec )
         class(powell_opt), intent(inout) :: self !< instance
@@ -46,7 +50,7 @@ contains
         call self%spec_linmin%set_costfun(spec%costfun)
         self%exists = .true.
     end subroutine
-    
+
     !>  \brief  the high-level minimization routine
     subroutine powell_minimize(self,spec,lowest_cost)
         use simple_rnd, only: ran3
@@ -57,7 +61,7 @@ contains
         real    :: cost
         integer :: i, j
         logical :: arezero(spec%ndim)
-        if( .not. associated(spec%costfun) )then 
+        if( .not. associated(spec%costfun) )then
             stop 'cost function not associated in opt_spec; powell_minimize; simple_powell_opt'
         endif
         ! initialize the direction set
@@ -104,18 +108,18 @@ contains
         end do
         spec%nevals = spec%nevals/spec%nrestarts
         lowest_cost = self%yb
-        
+
         contains
-        
-            !>  \brief  minimization of a function spec%costfun of spec%ndim variables. 
-            !!          Input consists of an initial starting point self%spec_linmin%x 
-            !!          that is a vector of length spec%ndim; an initial matrix 
-            !!          self%direction_set whose logical dimensions are spec%ndim by 
+
+            !>  \brief  minimization of a function spec%costfun of spec%ndim variables.
+            !!          Input consists of an initial starting point self%spec_linmin%x
+            !!          that is a vector of length spec%ndim; an initial matrix
+            !!          self%direction_set whose logical dimensions are spec%ndim by
             !!          spec%ndim, physical dimensions np by np, and whose columns
             !!          contain the initial set of directions (usually the n unit
             !!          vectors); and spec%ftol, the fractional tolerance in the func-
             !!          tion value such that failure to decrease by more than this
-            !!          amount on one iteration signals doneness. On output, 
+            !!          amount on one iteration signals doneness. On output,
             !!          self%spec_linmin%x is
             !!          set to the best point found, xi is the then-current direc-
             !!          tion set,  cost is the returned function value at p,  and
@@ -131,7 +135,7 @@ contains
                 call alloc_err("In: powell; simple_powell_opt", alloc_stat)
                 cost=spec%costfun(self%spec_linmin%x,spec%ndim) ! set initial costfun val
                 spec%nevals = spec%nevals+1
-                do j=1,spec%ndim                
+                do j=1,spec%ndim
                     pt(j)=self%spec_linmin%x(j) ! save initial pont
                 end do
                 iter=0
@@ -148,7 +152,7 @@ contains
                         self%spec_linmin%nevals = 0
                         call linmin(self%spec_linmin,cost) ! minimize along it
                         spec%nevals = spec%nevals+self%spec_linmin%nevals
-                        if (abs(fptt-cost).gt.del) then
+                        if (abs(fptt-cost) > del) then
                             del=abs(fptt-cost)
                             ibig=i
                         end if
@@ -157,19 +161,19 @@ contains
                     if(iter.eq.spec%maxits)then
                         if( warn ) write(*,'(a)') 'powell exceeding maximum iterations; simple_powell_opt'
                         return
-                    end if         
+                    end if
                     do j=1,spec%ndim
                         ! construct the extrapolated point and the average
                         ptt(j)=2.*self%spec_linmin%x(j)-pt(j)
-                        ! direction moved. Save the old starting point              
-                        self%spec_linmin%xi(j)=self%spec_linmin%x(j)-pt(j) 
+                        ! direction moved. Save the old starting point
+                        self%spec_linmin%xi(j)=self%spec_linmin%x(j)-pt(j)
                         pt(j)=self%spec_linmin%x(j)
                     end do
                     fptt=spec%costfun(ptt,spec%ndim)   ! function value at extrapolated point
                     spec%nevals = spec%nevals+1        ! increment nr ov cost fun evals counter
-                    if (fptt.ge.fp) cycle              ! one reason not to use new direction 
+                    if (fptt > fp) cycle              ! one reason not to use new direction
                     t=2.*(fp-2.*cost+fptt)*(fp-cost-del)**2-del*(fp-fptt)**2
-                    if (t.ge.0.) cycle                 ! another reason not to use new direction
+                    if (t > 0.0) cycle                 ! another reason not to use new direction
                     self%spec_linmin%nevals = 0
                     call linmin(self%spec_linmin,cost) ! move to the minimum of the new direction
                     spec%nevals = spec%nevals+self%spec_linmin%nevals
@@ -184,7 +188,7 @@ contains
     end subroutine
 
     ! DESTRUCTOR
-    
+
     !> \brief  is a destructor
     subroutine kill_powell_opt( self )
         class(powell_opt), intent(inout) :: self
@@ -194,5 +198,5 @@ contains
             self%exists = .false.
         endif
     end subroutine
-    
-end module simple_powell_opt       
+
+end module simple_powell_opt

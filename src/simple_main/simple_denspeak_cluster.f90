@@ -1,3 +1,7 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple cluster class : peak density
 module simple_denspeak_cluster
 use simple_jiffys, only: alloc_err
 implicit none

@@ -1,3 +1,7 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple Kaiser-Bessel interpolation module
 module simple_kbinterpol
 use simple_defs
 implicit none
@@ -101,7 +105,7 @@ contains
         class(kbinterpol), intent(in) :: self
         real,              intent(in) :: x
         real :: bess
-        double precision :: y, ax ! accumulate polynomials in double precision
+        double precision :: y, ax !< accumulate polynomials in double precision
         if( abs(x) .lt. self%thresh)then
             y = x/self%thresh
             y = y*y

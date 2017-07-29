@@ -1,3 +1,7 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple image module: 3D volume reconstruction with EO
 module simple_eo_reconstructor
 use simple_defs
 use simple_reconstructor, only: reconstructor
@@ -16,7 +20,9 @@ type :: eo_reconstructor
     type(reconstructor)    :: eosum
     type(image)            :: envmask
     character(len=4)       :: ext
-    real                   :: fsc05, fsc0143, smpd, msk, fny, inner=0., width=10.
+    real                   :: fsc05      !<   target resolution at FSC=0.5
+    real                   :: fsc0143    !<   target resolution at FSC=0.143
+    real                   :: smpd, msk, fny, inner=0., width=10.
     integer                :: box=0, nstates=1, numlen=2, lfny=0
     logical                :: automsk = .false.
     logical                :: xfel    = .false.
@@ -46,8 +52,8 @@ type :: eo_reconstructor
     ! INTERPOLATION
     procedure          :: grid_fplane
     procedure          :: compress_exp
-    procedure          :: sum_eos ! for merging even and odd into sum
-    procedure          :: sum     ! for summing eo_recs obtained by parallell exec
+    procedure          :: sum_eos !< for merging even and odd into sum
+    procedure          :: sum     !< for summing eo_recs obtained by parallell exec
     procedure          :: sampl_dens_correct_eos
     procedure          :: sampl_dens_correct_sum
     ! RECONSTRUCTION
@@ -60,7 +66,7 @@ end type eo_reconstructor
 contains
 
     ! CONSTRUCTOR
-    
+
     !>  \brief  is a constructor
     subroutine new(self, p )
         use simple_filehandling, only: file_exists
@@ -103,43 +109,43 @@ contains
         ! set existence
         self%exists = .true.
     end subroutine new
-    
+
     ! SETTERS
-    
+
     !>  \brief  resets all
     subroutine reset_all( self )
         class(eo_reconstructor), intent(inout) :: self
         call self%reset_eos
         call self%reset_sum
     end subroutine reset_all
-    
+
     !>  \brief  resets the even odd pairs
     subroutine reset_eos( self )
         class(eo_reconstructor), intent(inout) :: self
         call self%even%reset
         call self%odd%reset
     end subroutine reset_eos
-    
+
     !>  \brief  resets the even
     subroutine reset_even( self )
         class(eo_reconstructor), intent(inout) :: self
         call self%even%reset
     end subroutine reset_even
-    
+
     !>  \brief  resets the odd
     subroutine reset_odd( self )
         class(eo_reconstructor), intent(inout) :: self
         call self%odd%reset
     end subroutine reset_odd
-    
+
     !>  \brief  resets the sum
     subroutine reset_sum( self )
         class(eo_reconstructor), intent(inout) :: self
         call self%eosum%reset
     end subroutine reset_sum
-    
+
     ! GETTERS
-    
+
     !>  \brief  return the window functions used by eo_reconstructor
     function get_kbwin( self ) result( wf )
         use simple_kbinterpol, only: kbinterpol
@@ -147,8 +153,10 @@ contains
         type(kbinterpol) :: wf
         wf = self%even%get_kbwin()
     end function get_kbwin
-    
+
     !> \brief  for getting the resolution
+    !> \param fsc05  target resolution a FSC=0.5
+    !> \param fsc0143  target resolution a FSC=0.143
     subroutine get_res( self, fsc05, fsc0143 )
         class(eo_reconstructor), intent(in)  :: self !< instance
         real,                    intent(out) :: fsc05, fsc0143
@@ -157,15 +165,15 @@ contains
     end subroutine get_res
 
     ! I/O
-    
+
     !>  \brief  write the even and odd reconstructions
     subroutine write_eos( self, fbody )
         class(eo_reconstructor), intent(inout) :: self
-        character(len=*),        intent(in)    :: fbody
+        character(len=*),        intent(in)    :: fbody !< filename
         call self%write_even(fbody)
         call self%write_odd(fbody)
     end subroutine write_eos
-    
+
     !>  \brief  write the even reconstruction
     subroutine write_even( self, fbody )
         class(eo_reconstructor), intent(inout) :: self
@@ -173,7 +181,7 @@ contains
         call self%even%write(trim(trim(adjustl(fbody))//'_even'//self%ext), del_if_exists=.true.)
         call self%even%write_rho(trim('rho_'//trim(adjustl(fbody))//'_even'//self%ext))
     end subroutine write_even
-    
+
     !>  \brief  write the odd reconstruction
     subroutine write_odd( self, fbody )
         class(eo_reconstructor), intent(inout) :: self
@@ -181,7 +189,7 @@ contains
         call self%odd%write(trim(adjustl(fbody))//'_odd'//self%ext, del_if_exists=.true.)
         call self%odd%write_rho('rho_'//trim(adjustl(fbody))//'_odd'//self%ext)
     end subroutine write_odd
-    
+
     !>  \brief read the even and odd reconstructions
     subroutine read_eos( self, fbody )
         class(eo_reconstructor), intent(inout) :: self
@@ -207,7 +215,7 @@ contains
             call self%reset_even
         endif
     end subroutine read_even
-    
+
     !>  \brief  read the odd reconstruction
     subroutine read_odd( self, fbody )
         class(eo_reconstructor), intent(inout) :: self
@@ -227,7 +235,7 @@ contains
     end subroutine read_odd
 
     ! INTERPOLATION
-    
+
     !> \brief  for gridding a Fourier plane
     subroutine grid_fplane(self, o, fpl, pwght, mul, ran )
         use simple_ori, only: ori
@@ -250,7 +258,7 @@ contains
             call self%odd%inout_fplane(o, .true., fpl, pwght=pwght, mul=mul)
         endif
     end subroutine grid_fplane
-    
+
     !> \brief  for summing the even odd pairs, resulting sum in self%even
     subroutine sum_eos( self )
         class(eo_reconstructor), intent(inout) :: self !< instance
@@ -258,7 +266,7 @@ contains
         call self%eosum%sum(self%even)
         call self%eosum%sum(self%odd)
     end subroutine sum_eos
-    
+
     !> \brief  for summing reconstructors generated by parallel execution
     subroutine sum( self, self_in )
          class(eo_reconstructor), intent(inout) :: self
@@ -273,7 +281,7 @@ contains
         call self%even%compress_exp
         call self%odd%compress_exp
     end subroutine compress_exp
-    
+
     !> \brief  for sampling density correction of the eo pairs
     subroutine sampl_dens_correct_eos( self, state )
         use simple_strings,      only: int2str_pad
@@ -335,7 +343,7 @@ contains
         ! save, get & print resolution
         call arr2file(corrs, 'fsc_state'//int2str_pad(state,2)//'.bin')
         call get_resolution(corrs, res, self%fsc05, self%fsc0143)
-        self%fsc05   = max(self%fsc05,self%fny) 
+        self%fsc05   = max(self%fsc05,self%fny)
         self%fsc0143 = max(self%fsc0143,self%fny)
         write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', self%fsc0143
         write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', self%fsc05
@@ -392,7 +400,7 @@ contains
         if( n /= o%get_noris() ) stop 'inconsistent nr entries; eorec; simple_eo_reconstructor'
         kbwin = self%get_kbwin() 
         ! stash global state index
-        state_glob = state 
+        state_glob = state
         ! make the images
         call img%new([p%box,p%box,1],p%smpd,p%imgkind)
         call img_pad%new([p%boxpd,p%boxpd,1],p%smpd,p%imgkind)
@@ -407,7 +415,7 @@ contains
             call progress(i, p%nptcls)
             if( i <= p%top .and. i >= p%fromp )then
                 cnt = cnt+1
-                state_here = nint(o%get(i,'state')) 
+                state_here = nint(o%get(i,'state'))
                 if( state_here > 0 .and. (state_here == state ) )then
                     statecnt(state) = statecnt(state)+1
                     call rec_dens
@@ -434,9 +442,9 @@ contains
         if( p%nstates > 1 )then
             write(*,'(a,1x,i3,1x,a,1x,i6)') '>>> NR OF PARTICLES INCLUDED IN STATE:', state, 'WAS:', statecnt(state)
         endif
-        
+
         contains
-        
+
             !> \brief  the density reconstruction functionality
             subroutine rec_dens
                 use simple_ori, only: ori
@@ -472,7 +480,7 @@ contains
                  endif
             end subroutine rec_dens
     end subroutine eorec
-    
+
     ! DESTRUCTOR
 
     !>  \brief  is the expanded destructor
@@ -484,7 +492,7 @@ contains
             call self%eosum%dealloc_exp
         endif
     end subroutine kill_exp
-    
+
     !>  \brief  is a destructor
     subroutine kill( self )
         class(eo_reconstructor), intent(inout)   :: self !< instance
@@ -501,5 +509,5 @@ contains
             self%exists = .false.
         endif
     end subroutine kill
-    
+
 end module simple_eo_reconstructor

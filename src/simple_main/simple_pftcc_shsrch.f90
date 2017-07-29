@@ -1,3 +1,7 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple optimisation method: Shift search of pftcc objects
 module simple_pftcc_shsrch
 use simple_opt_spec,          only: opt_spec
 use simple_pftcc_opt,         only: pftcc_opt
@@ -38,11 +42,13 @@ contains
     subroutine shsrch_new( self, pftcc, lims, shbarrier, nrestarts, npeaks, maxits, vols )
         use simple_projector, only: projector
         class(pftcc_shsrch),                intent(inout) :: self
-        class(polarft_corrcalc),    target, intent(in)    :: pftcc
-        real,                               intent(in)    :: lims(:,:)
-        character(len=*), optional,         intent(in)    :: shbarrier
-        integer,          optional,         intent(in)    :: nrestarts, npeaks, maxits
-        class(projector), optional, target, intent(in)    :: vols(:)
+        class(polarft_corrcalc),    target, intent(in)    :: pftcc     !< pointer to pftcc object
+        real,                               intent(in)    :: lims(:,:) !< logical dimension of Cartesian image
+        character(len=*), optional,         intent(in)    :: shbarrier !< shift barrier constraint or not
+        integer,          optional,         intent(in)    :: nrestarts !< simplex restarts (randomized bounds)
+        integer,          optional,         intent(in)    :: npeaks    !< # peaks
+        integer,          optional,         intent(in)    :: maxits    !< maximum iterations
+        class(projector), optional, target, intent(in)    :: vols(:)   !< projector volume objects
         ! flag the barrier constraint
         self%shbarr = .true.
         if( present(shbarrier) )then
@@ -53,7 +59,7 @@ contains
         ! make optimizer spec
         call self%ospec%specify('simplex', 2, ftol=1e-4,&
         &gtol=1e-4, limits=lims, nrestarts=self%nrestarts)
-        ! generate the simplex optimizer object 
+        ! generate the simplex optimizer object
         call self%nlopt%new(self%ospec)
         ! set pointer to corrcalc object
         self%pftcc_ptr => pftcc
@@ -66,12 +72,12 @@ contains
         self%rotmat(1,1) = 1.
         self%rotmat(2,2) = 1.
     end subroutine shsrch_new
-    
+
     subroutine shsrch_set_indices( self, ref, ptcl, rot, state )
         class(pftcc_shsrch), intent(inout) :: self
         integer,             intent(in)    :: ref, ptcl
         integer, optional,   intent(in)    :: rot, state
-        self%reference = ref 
+        self%reference = ref
         self%particle  = ptcl
         self%rot = 1
         if( present(rot) ) self%rot = rot
@@ -85,10 +91,10 @@ contains
 
     function shsrch_costfun( self, vec, D ) result( cost )
         class(pftcc_shsrch), intent(inout) :: self
-        integer,             intent(in)    :: D
-        real,                intent(in)    :: vec(D)
-        real    :: vec_here(2)    ! current set of values
-        real    :: rotvec_here(2) ! current set of values rotated to frame of reference
+        integer,             intent(in)    :: D          !< size of vec
+        real,                intent(in)    :: vec(D)     !< input search values
+        real    :: vec_here(2)    !< current set of values
+        real    :: rotvec_here(2) !< current set of values rotated to frame of reference
         real    :: cost
         vec_here = vec
         if( abs(vec(1)) < 1e-6 ) vec_here(1) = 0.
@@ -108,13 +114,14 @@ contains
         cost = -self%pftcc_ptr%corr(self%reference, self%particle, self%rot, vec_here)
     end function shsrch_costfun
 
+    
     function shsrch_minimize( self, irot, shvec, rxy, fromto ) result( cxy )
         use simple_math, only: rotmat2d
         class(pftcc_shsrch), intent(inout) :: self
-        integer, optional,   intent(in)    :: irot
-        real,    optional,   intent(in)    :: shvec(:)
-        real,    optional,   intent(in)    :: rxy(:)
-        integer, optional,   intent(in)    :: fromto(2)
+        integer, optional,   intent(in)    :: irot        !< index of rotation (obsolete)
+        real,    optional,   intent(in)    :: shvec(:)    !< search values vector (obsolete)
+        real,    optional,   intent(in)    :: rxy(:)      !< (obsolete)
+        integer, optional,   intent(in)    :: fromto(2)   !< (obsolete)
         real              :: cost, cost_init
         real, allocatable :: cxy(:)
         allocate(cxy(3))
@@ -143,7 +150,7 @@ contains
         self%rotmat(1,1) = 1.
         self%rotmat(2,2) = 1.
     end function shsrch_minimize
-    
+
     function shsrch_get_nevals( self ) result( nevals )
         class(pftcc_shsrch), intent(inout) :: self
         integer :: nevals
@@ -161,5 +168,5 @@ contains
         class(pftcc_shsrch), intent(inout) :: self
         self%pftcc_ptr => null()
     end subroutine kill
-    
+
 end module simple_pftcc_shsrch

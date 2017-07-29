@@ -1,5 +1,8 @@
-!==Class simple_matchingpursuit
-!
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple module: matching pursuit
+!!  pearson correlation-based matching pursuit
 module simple_matchpursuit
 use simple_defs
 use simple_jiffys, only: alloc_err
@@ -12,14 +15,14 @@ private
 type matchpursuit
 
   private
-    real, pointer     :: pD(:,:) => null()     ! Pointer to centered data (NxD)
-    real, pointer     :: pW(:,:) => null()     ! Pointer to loadings      (DxQ)
-    real, pointer     :: pE(:,:) => null()     ! Pointer to expectations  (NxQ)
-    real, pointer     :: pAVG(:) => null()     ! Pointer to data average  (D)
-    integer                  :: N         = 0       ! number of observations
-    integer                  :: Q         = 0       ! size of feature space
-    integer                  :: D         = 0       ! dimension of observartions
-    character(len=STDLEN)    :: fname               ! read from file
+    real, pointer     :: pD(:,:) => null()     !< Pointer to centered data (NxD)
+    real, pointer     :: pW(:,:) => null()     !< Pointer to loadings      (DxQ)
+    real, pointer     :: pE(:,:) => null()     !< Pointer to expectations  (NxQ)
+    real, pointer     :: pAVG(:) => null()     !< Pointer to data average  (D)
+    integer                  :: N         = 0       !< number of observations
+    integer                  :: Q         = 0       !< size of feature space
+    integer                  :: D         = 0       !< dimension of observartions
+    character(len=STDLEN)    :: fname               !< read from file
     logical                  :: doprint   = .false.
     logical                  :: inplace   = .true.
     logical                  :: exists    = .false.
@@ -34,7 +37,7 @@ type matchpursuit
     ! DESTRUCTOR
     procedure          :: kill
 
-end type
+end type matchpursuit
 
 contains
 
@@ -42,11 +45,11 @@ contains
     !>  \brief  is a constructor
     !>  should only be used if rotation onto orthogonal basis has been performed
     subroutine new( self, W, E, AVG, D, fname, doprint )
-        class(matchpursuit), intent(inout) :: self
-        real, intent(in), pointer          :: W(:,:),E(:,:)
-        real, intent(in), target           :: AVG(:)
-        real, intent(in), target, optional :: D(:,:)
-        character( len=STDLEN),   optional :: fname
+        class(matchpursuit), intent(inout) :: self 
+        real, intent(in), pointer          :: W(:,:),E(:,:) !< loadings (DxQ) and expectations (NxQ)
+        real, intent(in), target           :: AVG(:)     !< data average (D)
+        real, intent(in), target, optional :: D(:,:)     !< arr for inplace matching (not to be used with fname)
+        character( len=STDLEN),   optional :: fname      !< filename used for matching , disables inplace
         logical, intent(in),      optional :: doprint
         call self%kill
         self%N = size(D,1)
@@ -79,9 +82,9 @@ contains
     !>  \brief  performs pearson correlation-based matching pursuit & returns feature index
     subroutine exec( self, featlims, featlim, limit )
         class(matchpursuit), intent(inout)     :: self
-        integer, intent(in)                    :: featlims(2) ! range of features to cycle trhough
-        integer, intent(inout)                 :: featlim     ! return value
-        real,    intent(in), optional          :: limit       ! optional convergence criterion
+        integer, intent(in)                    :: featlims(2) !< range of features to cycle trhough
+        integer, intent(inout)                 :: featlim     !< feature index (return value)
+        real,    intent(in), optional          :: limit       !< optional convergence criterion
         integer :: i, feat_ini
         real    :: avgcc, avgcc_prev
         real    :: lim
@@ -107,9 +110,9 @@ contains
         use simple_stat,                    only: pearsn
         class(matchpursuit), intent(inout)     :: self
         real, intent(inout)      :: avgcc
-        integer, intent(in)      :: feats(2)
-        real    :: obs(self%D)    ! observed D-dimensional data
-        real    :: model(self%D)  ! re-sampled
+        integer, intent(in)      :: feats(2)  !< resampling for subset features
+        real    :: obs(self%D)    !< observed D-dimensional data
+        real    :: model(self%D)  !< re-sampled
         real    :: X(self%D,1)
         integer :: i,file_stat,recsz,funit
         if( .not.self%inplace )then

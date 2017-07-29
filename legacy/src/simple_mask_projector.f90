@@ -1,4 +1,7 @@
-!>  \brief  SIMPLE projector class
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!>  \brief  SIMPLE class  mask projector
 module simple_mask_projector
 use simple_defs       ! use all in there
 use simple_image,     only: image
@@ -11,9 +14,9 @@ implicit none
 
 public :: mask_projector
 private
+#include "simple_local_flags.inc"
 
 real,    parameter :: MSKWIDTH = 10.                     !< HALF SOFT MASK WIDTH (+/-)
-logical, parameter :: DEBUG    = .false.
 
 type, extends(image) :: mask_projector
     private
@@ -82,7 +85,7 @@ contains
         call alloc_err('in simple_mask_projector::init2D 1', alloc_stat)
         self%adamsks = 0.
         self%mskproj_exists = .true.
-        if( DEBUG )write(*,*)'simple_mask_projector::init2D done'
+        DebugPrint'simple_mask_projector::init2D done'
     end subroutine init2D
 
     !>  \brief  is a 3D constructor and modifier
@@ -112,7 +115,7 @@ contains
         call vol_inout%mul(self)
         ! the end
         if( was_ft )call vol_inout%fwd_ft
-        if( DEBUG )write(*,*)'simple_mask_projector::automask2D done'
+        DebugPrint 'simple_mask_projector::automask2D done'
     end subroutine automask3D
 
     ! CALCULATORS
@@ -132,7 +135,7 @@ contains
         minmax  = tmp_img%minmax()
         new_msk = real( ceiling(minmax(2) + self%mskwidth) )
         new_msk = min(new_msk, self%msk)
-        if( DEBUG )write(*,*)'simple_mask_projector::calc_adamsk done'
+        DebugPrint'simple_mask_projector::calc_adamsk done'
     end function calc_adamsk
 
     ! 2D CALCULATORS
@@ -155,7 +158,7 @@ contains
         call img%norm('sigm')
         ! apply enveloppe mask to reference
         call ref%mul(img)
-        if( DEBUG )write(*,*)'simple_mask_projector::update_cls done'
+        DebugPrint'simple_mask_projector::update_cls done'
     end subroutine update_cls
 
     !>  \brief  is for binarizing the 2D image
@@ -168,7 +171,7 @@ contains
         ldim_pad(1:2) = self%idim(1:2)*2
         ldim_pad(3)   = 1
         call img_pad%new(ldim_pad,  self%get_smpd())
-        img_copy = img
+        call img_copy%copy(img)
         ! normalize
         call img_copy%norm()
         ! soft masking
@@ -181,14 +184,14 @@ contains
         call img_pad%bwd_ft
         ! binarize within mask
         call img_pad%bin('msk', self%msk)
-        ! add one layer 
+        ! add one layer
         call img_pad%grow_bins(1)
         ! clip
         call img_pad%clip(img)
         ! clean
         call img_copy%kill
         call img_pad%kill
-        if( DEBUG )write(*,*)'simple_mask_projector::bin_cavg done'
+        DebugPrint'simple_mask_projector::bin_cavg done'
     end subroutine bin_cavg
 
     ! 3D CALCULATORS
@@ -202,7 +205,7 @@ contains
         if( self%dens > 0. )then
             nnvox = nvoxfind(self%get_smpd(), self%mw, self%dens)
         else
-            nnvox = nvoxfind(self%get_smpd(), self%mw)     
+            nnvox = nvoxfind(self%get_smpd(), self%mw)
         endif
         nnvox = nint(1.1*real(nnvox))   ! this is to compensate for the low-pass filter
         ! binarize
@@ -210,7 +213,7 @@ contains
         ! binary layers
         call self%grow_bins(self%binwidth)
         call self%norm_bin
-        if( DEBUG )write(*,*)'simple_mask_projector::bin_vol done'
+        DebugPrint'simple_mask_projector::bin_vol done'
     end subroutine bin_vol
 
     !>  \brief  volume mask projector
@@ -263,7 +266,7 @@ contains
         enddo
         !$omp end parallel do
         deallocate(rmat)
-        if( DEBUG )write(*,*)'simple_mask_projector::env_rproject done'
+        DebugPrint'simple_mask_projector::env_rproject done'
     end subroutine env_rproject
 
     ! MODIFIER
@@ -280,7 +283,7 @@ contains
         if( .not.self%is_2d() )stop 'erroneous function call; simple_mask_projector::apply_mask2D'
         if( cls > self%n )stop 'class index out of range; simple_mask_projector::apply_mask2D'
         call img%mask(self%adamsks(cls), 'soft')
-        if( DEBUG )write(*,*)'simple_mask_projector::apply_mask2D done'
+        DebugPrint'simple_mask_projector::apply_mask2D done'
     end subroutine apply_mask2D
 
     ! GETTERS

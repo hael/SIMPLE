@@ -1,8 +1,13 @@
-!==Class simple_commander_sim
-!
-! This class contains the set of concrete simulation commanders of the SIMPLE library. This class provides the glue between the reciver 
-! (main reciever is simple_exec program) and the abstract action, which is simply execute (defined by the base class: simple_commander_base). 
-! Later we can use the composite pattern to create MacroCommanders (or workflows)
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> simple_commander_sim
+!!
+!! This class contains the set of concrete simulation commanders of the SIMPLE
+!! library. This class provides the glue between the reciver (main reciever is
+!! simple_exec program) and the abstract action, which is simply execute
+!! (defined by the base class: simple_commander_base). Later we can use the
+!! composite pattern to create MacroCommanders (or workflows)
 !
 ! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
 ! Redistribution and modification is regulated by the GNU General Public License.
@@ -24,7 +29,7 @@ public :: simimgs_commander
 public :: simmovie_commander
 public :: simsubtomo_commander
 private
-
+#include "simple_local_flags.inc"
 type, extends(commander_base) :: noiseimgs_commander
   contains
     procedure :: execute      => exec_noiseimgs
@@ -41,6 +46,7 @@ type, extends(commander_base) :: simsubtomo_commander
   contains
     procedure :: execute      => exec_simsubtomo
 end type simsubtomo_commander
+
 
 contains
 
@@ -84,7 +90,7 @@ contains
         type(kbinterpol)   :: kbwin
         real               :: snr_pink, snr_detector, bfac, bfacerr, dfx, dfy, angast
         integer            :: i, cnt, ntot
-        logical, parameter :: debug=.false.
+        debug=.false. ! declared in local flags
         p = params(cline, .false.)          ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         kbwin = kbinterpol(KBWINSZ, KBALPHA)
@@ -117,19 +123,19 @@ contains
         if( .not. b%a%isthere('dfx') )then
             if( p%ctf .ne. 'no' ) call b%a%rnd_ctf(p%kv, p%cs, p%fraca, p%defocus, p%dferr, p%astigerr)
         endif
-        if( debug ) write(*,'(A)') '>>> DONE GENERATING ORIENTATION/CTF PARAMETERS'
+        DebugPrint  '>>> DONE GENERATING ORIENTATION/CTF PARAMETERS'
         call b%a%write(p%outfile)
         ! calculate snr:s
         snr_pink = p%snr/0.2
         snr_detector = p%snr/0.8
-        if( debug ) write(*,'(A)') '>>> DONE CALCULATING SNR:S'
+        DebugPrint  '>>> DONE CALCULATING SNR:S'
         ! prepare for image generation
         call b%vol%read(p%vols(1))
         call b%vol%mask(p%msk, 'soft')
-        if( debug ) write(*,'(A)') '>>> DID READ VOL'
+        DebugPrint  '>>> DID READ VOL'
         call prep4cgrid(b%vol, b%vol_pad, p%msk, kbwin)
         call b%vol_pad%expand_cmat
-        if( debug ) write(*,'(A)') '>>> DONE PREPARING FOR IMAGE GENERATION'
+        DebugPrint  '>>> DONE PREPARING FOR IMAGE GENERATION'
         write(*,'(A)') '>>> GENERATING IMAGES'
         cnt = 0
         ntot = p%top-p%fromp+1
@@ -189,7 +195,7 @@ contains
         integer, allocatable :: ptcl_positions(:,:)
         real, allocatable    :: shifts(:,:)
         logical              :: here
-        logical, parameter   :: debug=.false.
+        debug=.false. ! declared in local flags
         p = params(cline)                     ! parameters generated
         if( p%box == 0 ) stop 'box=0, something is fishy!'
         call b%build_general_tbox(p, cline)   ! general objects built
@@ -228,11 +234,11 @@ contains
             call b%img%insert(ptcl_positions(i,:), base_image)
         end do
         if( p%vis .eq. 'yes' ) call base_image%vis
-        if( debug ) write(*,'(a)') 'inserted projections'
+        DebugPrint  'inserted projections'
         ! calculate snr:s
         snr_pink     = p%snr/0.2
         snr_detector = p%snr/0.8
-        if( debug ) write(*,'(a)') 'calculated SNR:s'
+        DebugPrint  'calculated SNR:s'
         ! set CTF parameters
         deferr = ran3()*0.2
         if( ran3() < 0.5 )then
@@ -247,8 +253,8 @@ contains
             dfy = p%defocus+deferr
         endif
         angast = ran3()*360.
-        if( debug ) write(*,'(a)') 'did set CTF parameters'
-        if( debug ) write(*,'(a)') 'initialized shifts'
+        DebugPrint  'did set CTF parameters'
+        DebugPrint  'initialized shifts'
         ! generate shifts
         allocate( shifts(p%nframes,2), stat=alloc_stat )
         call alloc_err('In: simple_simmovie; shifts', alloc_stat)
@@ -278,7 +284,7 @@ contains
             call b%a%set(1, 'y'//int2str(i), shifts(i,2))
         end do
         ! make and open a stack for the movie frames
-        if( debug ) write(*,'(a)') 'made stack for output movie frames'
+        DebugPrint  'made stack for output movie frames'
         write(*,'(a)') '>>> GENERATING MOVIE FRAMES'
         do i=1,p%nframes
             call progress(i,p%nframes)
@@ -309,7 +315,7 @@ contains
             call b%a%set(1, 'dfy',    dfy)
             call b%a%set(1, 'angast', angast)
         end do
-        if( debug ) write(*,'(a)') 'generated movie'
+        DebugPrint  'generated movie'
         ! generate the optimal average
         base_image = 0.
         write(*,'(a)') '>>> GENERATING OPTIMAL AVERAGE'
@@ -323,7 +329,7 @@ contains
         end do
         if( debug ) write(*,'(a,1x,f7.4)') 'constant 4 division:', real(p%nframes)
         call base_image%div(real(p%nframes))
-        if( debug ) write(*,'(a)') 'generated optimal average'
+        DebugPrint  'generated optimal average'
         call base_image%write('optimal_movie_average'//p%ext, 1)
         if( p%vis .eq. 'yes' ) call base_image%vis
         ! output orientations

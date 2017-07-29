@@ -1,8 +1,11 @@
-!==Class simple_simplex_pftcc_opt
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> simple optimisation module: Simplex optimisation on pft correlations
 !
-! Minimization of an externally defined function by the simplex method of Nelder and Mead
-! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_. 
-! Redistribution or modification is regulated by the GNU General Public License. 
+!! Minimization of an externally defined function by the simplex method of Nelder and Mead
+! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
+! Redistribution or modification is regulated by the GNU General Public License.
 ! *Author:* Hans Elmlund, 2013-10-15
 module simple_simplex_pftcc_opt
 use simple_pftcc_opt, only: pftcc_opt
@@ -87,7 +90,7 @@ contains
         lowest_cost = self%yb
 
         contains
-        
+
             !> \brief  initializes the simplex using randomized bounds
             subroutine init
                 use simple_rnd, only: ran3
@@ -105,7 +108,7 @@ contains
                     self%y(i) = funcontainer%costfun(self%p(i,:), spec%ndim)
                 end do
             end subroutine init
-        
+
     end subroutine minimize
 
     !> \brief  is a destructor
@@ -175,7 +178,7 @@ contains
                 iter=iter+1
                 if(ytry >= ysave)then ! can’t seem to get rid of that high point
                     p(:,:)=0.5*(p(:,:)+spread(p(ilo,:),1,size(p,1))) ! better contract around the lowest (best) point
-                    do i=1,ndim+1 
+                    do i=1,ndim+1
                         if(i /= ilo)then
                             y(i)=funcontainer%costfun(p(i,:),ndim)
                             nevals = nevals+1
@@ -191,9 +194,9 @@ contains
             pb(:) = p(1,:)
             yb    = y(1)
         endif
-       
+
       contains
-       
+
         !>  \brief  extrapolates by a factor fac through the face of the simplex across from the
         !!          high point, tries it, and replaces the high point if the new point is better
         function amotry(fac)

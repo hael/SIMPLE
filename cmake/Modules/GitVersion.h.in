@@ -1,0 +1,24 @@
+#ifdef BUILD_NAME
+   character(len=STDLEN) :: build_descr = BUILD_NAME                         !< compiler, build type and FFT backend - defined on commandline
+#else
+  character(len=STDLEN) :: build_descr = "NONE"
+#endif
+
+  character(len=STDLEN) :: SIMPLE_LIB_VERSION="@SIMPLE_VERSION@"            !< version
+  character(len=STDLEN) :: SIMPLE_GIT_VERSION="@SIMPLE_GIT_VERSION@"        !< git hash
+  character(len=STDLEN) :: SIMPLE_SOURCE_PATH="@CMAKE_SOURCE_DIR@"          !< source dir
+    character(len=STDLEN) :: SIMPLE_BUILD_PATH="@CMAKE_BINARY_DIR@"         !< where SIMPLE was built (not necessarily the same as SIMPLE_PATH)
+  character(len=STDLEN) :: SIMPLE_PATH="@CMAKE_INSTALL_DIR@"
+
+#ifdef INTEL
+    character(len=STDLEN) :: COMPILER= "Intel ifort 64"
+    integer :: COMPILER_VERSION = (__INTEL_COMPILER * 100000) + __INTEL_COMPILER_BUILD_DATE
+#elif GNU
+    character(len=STDLEN) :: COMPILER= "GNU gfortran"
+    integer :: COMPILER_VERSION = (__GNUC__ *1000000) + (__GNUC_MINOR__ *1000 ) + __GNUC_PATCHLEVEL__
+#elif PGI
+    character(len=STDLEN) :: COMPILER= "PGI fortran"
+    integer :: COMPILER_VERSION = (__PGIC__ *1000000) + (__PGIC_MINOR__ *1000 ) + __PGIC_PATCHLEVEL__
+#else
+#error 'Compiler must be GNU, Intel or PGI'
+#endif

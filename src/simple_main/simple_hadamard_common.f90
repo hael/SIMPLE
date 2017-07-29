@@ -1,3 +1,7 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple Hadamard module: Generic Prime 2D/3D search module
 module simple_hadamard_common
 use simple_defs
 use simple_cmdline,      only: cmdline
@@ -15,8 +19,8 @@ implicit none
 public :: read_img_from_stk, set_bp_range, set_bp_range2D, grid_ptcl, prepimg4align,&
 &eonorm_struct_facts, norm_struct_facts, preprefvol, prep2Dref, preprecvols, killrecvols
 private
+#include "simple_local_flags.inc"
 
-logical, parameter :: DEBUG     = .false.
 real,    parameter :: SHTHRESH  = 0.0001
 real,    parameter :: CENTHRESH = 0.01   ! threshold for performing volume/cavg centering in pixels
     
@@ -34,7 +38,7 @@ contains
             call b%img%read(p%stk, iptcl)
         endif
     end subroutine read_img_from_stk
-    
+
     subroutine set_bp_range( b, p, cline )
         use simple_math,          only: calc_fourier_index
         class(build),   intent(inout) :: b
@@ -82,7 +86,7 @@ contains
                     if( p%kfromto(2) == 1 )then
                         stop 'simple_math::get_lplim gives nonsensical result (==1)'
                     endif
-                    if( DEBUG ) write(*,*) '*** simple_hadamard_common ***: extracted FSC info'
+                    DebugPrint ' extracted FSC info'
                 else if( cline%defined('lp') )then
                     p%kfromto(2) = calc_fourier_index( p%lp, p%boxmatch, p%smpd )
                 else if( cline%defined('find') )then
@@ -122,7 +126,7 @@ contains
         ! set highest Fourier index for coarse grid search
         p%kstop_grid = calc_fourier_index(p%lp_grid, p%boxmatch, p%smpd)
         if( p%kstop_grid > p%kfromto(2) ) p%kstop_grid = p%kfromto(2)
-        if( DEBUG ) write(*,*) '*** simple_hadamard_common ***: did set Fourier index range'
+        DebugPrint '*** simple_hadamard_common ***: did set Fourier index range'
     end subroutine set_bp_range
 
     subroutine set_bp_range2D( b, p, cline, which_iter, frac_srch_space )
@@ -134,7 +138,7 @@ contains
         real,           intent(in)    :: frac_srch_space
         real :: lplim
         p%kfromto(1) = max(2, calc_fourier_index(p%hp, p%boxmatch, p%smpd))
-        if( cline%defined('lp') )then        
+        if( cline%defined('lp') )then
             ! set Fourier index range
             p%kfromto(2) = calc_fourier_index(p%lp, p%boxmatch, p%smpd)
             p%lp_dyn     = p%lp
@@ -152,7 +156,7 @@ contains
             p%lp_dyn = lplim
             call b%a%set_all2single('lp',lplim)
         endif
-        if( DEBUG ) write(*,*) '*** simple_hadamard_common ***: did set Fourier index range'
+        DebugPrint  '*** simple_hadamard_common ***: did set Fourier index range'
     end subroutine set_bp_range2D
 
     !>  \brief  grids one particle image to the volume
@@ -189,12 +193,12 @@ contains
             else
                 call prep4cgrid(b%img, b%img_pad, p%msk, kbwin)
             endif
-            if( DEBUG ) write(*,*) '*** simple_hadamard_common ***: prepared image for gridding'
+            DebugPrint  '*** simple_hadamard_common ***: prepared image for gridding'
             ran = ran3()
-            if( present(ran_eo) )ran = ran_eo 
+            if( present(ran_eo) )ran = ran_eo
             orisoft = orientation
-            do jpeak = 1, npeaks
-                if( DEBUG ) write(*,*) '*** simple_hadamard_common ***: gridding, iteration:', jpeak
+            do jpeak=1, npeaks
+                DebugPrint  '*** simple_hadamard_common ***: gridding, iteration:', jpeak
                 ! get ori info
                 if( softrec )then
                     orisoft = os%get_ori(jpeak)
@@ -203,7 +207,7 @@ contains
                     w = 1.
                 endif
                 s = nint(orisoft%get('state'))
-                if( DEBUG ) write(*,*) '*** simple_hadamard_common ***: got orientation'
+                DebugPrint  '*** simple_hadamard_common ***: got orientation'
                 if( p%frac < 0.99 ) w = w*pw
                 if( w > TINY )then
                     if( p%pgrp == 'c1' )then
@@ -223,7 +227,7 @@ contains
                         end do
                     endif
                 endif
-                if( DEBUG ) write(*,*) '*** simple_hadamard_common ***: gridded ptcl'
+                DebugPrint  '*** simple_hadamard_common ***: gridded ptcl'
             end do
         endif
     end subroutine grid_ptcl
@@ -269,7 +273,7 @@ contains
             ! deal with CTF
             select case(p%ctf)
                 case('mul')  ! images have been multiplied with the CTF, no CTF-dependent weighting of the correlations
-                    stop 'ctf=mul is not supported; simple_hadamard_common :: prepimg4align' 
+                    stop 'ctf=mul is not supported; simple_hadamard_common :: prepimg4align'
                 case('no')   ! do nothing
                 case('yes')  ! do nothing
                 case('flip') ! flip back
@@ -301,7 +305,7 @@ contains
             ! return in Fourier space
             call b%img_match%fwd_ft
         endif
-        if( DEBUG ) write(*,*) '*** simple_hadamard_common ***: finished prepimg4align'
+        DebugPrint  '*** simple_hadamard_common ***: finished prepimg4align'
     end subroutine prepimg4align
 
     !>  \brief  prepares one cluster centre image for alignment
@@ -340,7 +344,7 @@ contains
             ! soft masking
             if( p%l_innermsk )then
                 call b%img_match%mask(p%msk, 'soft', inner=p%inner, width=p%width)
-            else 
+            else
                 call b%img_match%mask(p%msk, 'soft')
             endif
         endif
@@ -521,7 +525,7 @@ contains
             p%lp = min(p%lp,max(p%lpstop,res))
         endif
     end subroutine eonorm_struct_facts
-    
+
     subroutine norm_struct_facts( b, p, which_iter )
         class(build),      intent(inout) :: b
         class(params),     intent(inout) :: p

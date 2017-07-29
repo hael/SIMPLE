@@ -1,3 +1,6 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 !>  \brief  SIMPLE Fourier iterator class
 module simple_ftiter
 use simple_defs
@@ -8,17 +11,17 @@ private
 
 type :: ftiter
     private
-     character(len=STDLEN) :: imgkind=''    !< image kind 'xfel' or 'em' 
+     character(len=STDLEN) :: imgkind=''    !< image kind 'xfel' or 'em'
     integer :: rlogi_lbounds(3)=[0,0,0]     !<  In each dimension, the lower bound of the real image's logical addresses
     integer :: rlogi_ubounds(3)=[0,0,0]     !<  In each dimension, the upper bound of the real image's logical addresses
     integer :: clogi_lbounds(3)=[0,0,0]     !<  In each dimension, the lower bound of the complex image's logical addresses
     integer :: clogi_ubounds(3)=[0,0,0]     !<  In each dimension, the upper bound of the complex image's logical addresses
-    integer :: clogi_lbounds_all(3)=[0,0,0] !<  In each dimension, the lower bound of the complex image's logical addresses, 
+    integer :: clogi_lbounds_all(3)=[0,0,0] !<  In each dimension, the lower bound of the complex image's logical addresses,
                                             !! including redundant Friedel mates in the negative frequencies of the first dimension
-    integer :: clogi_ubounds_all(3)=[0,0,0] !<  In each dimension, the upper bound of the complex image's logical addresses, 
+    integer :: clogi_ubounds_all(3)=[0,0,0] !<  In each dimension, the upper bound of the complex image's logical addresses,
                                             !! including redundant Friedel mates in the negative frequencies of the first dimension
-    integer :: cphys_ubounds(3)=[0,0,0]     !<  In each dimension, the upper bound of the complex image's physical addresses                 
-    integer :: ldim(3)=[1,1,1]              !< logical image dimensions 
+    integer :: cphys_ubounds(3)=[0,0,0]     !<  In each dimension, the upper bound of the complex image's physical addresses
+    integer :: ldim(3)=[1,1,1]              !< logical image dimensions
     integer :: lfnys(3)=0                   !< Nyqvist indices
     integer :: lhps(3)=0                    !< High-pass indices
     integer :: llps(3)=0                    !< Low-pass indices
@@ -44,13 +47,13 @@ type :: ftiter
     procedure :: comp_addr_logi
     ! TESTS
     procedure, private :: test_addr
-end type
+end type ftiter
 
 interface ftiter
     module procedure constructor
 end interface
 
-contains    
+contains
 
     !>  \brief is a parameterized constructor
     function constructor( ldim, smpd, imgkind ) result( self )
@@ -123,16 +126,16 @@ contains
             self%clogi_ubounds(3) = 0
         endif
     end subroutine new
-    
+
     ! SETTERS/GETTERS
-    
+
     !>  \brief  is a setter
     subroutine set_hp( self, hp )
         class(ftiter), intent(inout) :: self
         real, intent(in)             :: hp
         self%lhps = int(self%dsteps/hp)
     end subroutine set_hp
-    
+
     !>  \brief  is a getter
     pure function get_lhp( self, which ) result( hpl )
         class(ftiter), intent(in) :: self
@@ -140,7 +143,7 @@ contains
         integer :: hpl
         hpl = self%lhps(which)
     end function get_lhp
-    
+
     !>  \brief  is a getter
     pure function get_llp( self, which ) result( lpl )
         class(ftiter), intent(in) :: self
@@ -148,7 +151,7 @@ contains
         integer :: lpl
         lpl = self%llps(which)
     end function get_llp
-    
+
     !>  \brief  is a getter
     pure function get_find( self, which, res ) result( ind )
         class(ftiter), intent(in) :: self
@@ -157,7 +160,7 @@ contains
         integer :: ind
         ind = int(self%dsteps(which)/res)
     end function get_find
-    
+
     !>  \brief  is a getter
     pure function get_lfny( self, which ) result( fnyl )
         class(ftiter), intent(in) :: self
@@ -165,7 +168,7 @@ contains
         integer :: fnyl
         fnyl = self%lfnys(which)
     end function get_lfny
-    
+
     !>  \brief  is a getter
     pure function get_lp( self, which, ind ) result( lp )
         class(ftiter), intent(in) :: self
@@ -181,7 +184,7 @@ contains
         real :: spat_freq
         spat_freq = real(ind)/self%dsteps(which)
     end function get_spat_freq
-    
+
     !>  \brief  is a getter
     pure function get_clin_lims( self, lp_dyn ) result( lims )
         class(ftiter), intent(in) :: self
@@ -190,9 +193,9 @@ contains
         lims(2) = dynfind( self%dsteps(1), lp_dyn, self%lfnys(1) )
         lims(1) = self%lhps(1)
     end function get_clin_lims
-    
+
     ! LOOPING LIMITS
-    
+
     !>  \brief is for determining loop limits for transforms
     function loop_lims( self, mode, lp_dyn ) result( lims )
         class(ftiter), intent(in)  :: self
@@ -203,7 +206,7 @@ contains
             select case(mode)
                 case(1) ! limits for correlation calculation etc.
                     lims(1,2) = dynfind( self%dsteps(1), lp_dyn, self%lfnys(1) )
-                    lims(2,2) = dynfind( self%dsteps(2), lp_dyn, self%lfnys(2) ) 
+                    lims(2,2) = dynfind( self%dsteps(2), lp_dyn, self%lfnys(2) )
                     lims(1,1) = self%lhps(1)
                     lims(2,1) = -lims(2,2)
                     if( self%ldim(3) == 1 )then
@@ -217,7 +220,7 @@ contains
                      stop 'undefined mode; loop_lims; simple_ftiter'
             end select
         else
-            select case(mode) 
+            select case(mode)
                 case(1) ! loop over physical addresses
                     lims(1,1) = 1
                     lims(1,2) = self%cphys_ubounds(1)
@@ -226,7 +229,7 @@ contains
                     lims(3,1) = 1
                     lims(3,2) = self%ldim(3)
                 case(2) ! loop over logical addresses
-                ! (exluding redundant Friedel mates in 
+                ! (exluding redundant Friedel mates in
                 ! the negative frequencies of the 1st dimension)
                     if( self%imgkind .eq. 'xfel' )then
                         lims(1,1) = self%clogi_lbounds_all(1)
@@ -243,7 +246,7 @@ contains
                         lims(3,1) = self%clogi_lbounds(3)
                         lims(3,2) = self%clogi_ubounds(3)
                     endif
-                case(3) ! loop over logical addresses 
+                case(3) ! loop over logical addresses
                 ! (including redundant Friedel mates)
                     lims(1,1) = self%clogi_lbounds_all(1)
                     lims(1,2) = self%clogi_ubounds_all(1)
@@ -256,9 +259,9 @@ contains
             end select
         end if
     end function loop_lims
-    
+
     ! LOGICAL<->PHYSICAL ADDRESS CONVERTERS
-    
+
     !>  \brief  Convert logical address to physical address. Complex image.
     function comp_addr_phys(self,logi) result(phys)
         class(ftiter), intent(in) :: self
@@ -289,8 +292,8 @@ contains
             endif
         endif
     end function comp_addr_phys
-    
-    !>  \brief  Convert physical address to logical address. Complex image.
+
+    !> \brief Convert physical address to logical address. Complex image.
     function comp_addr_logi(self,phys) result(logi)
         class(ftiter), intent(in) :: self
         integer,       intent(in) :: phys(3) !<  Physical address
@@ -303,9 +306,9 @@ contains
             if (phys(i) .gt. self%clogi_ubounds(i)+1) logi(i) = phys(i) - self%ldim(i) - 1
         enddo
     end function comp_addr_logi
-    
+
     ! PRIVATE STUFF
-    
+
     !> \brief  for finding the dynamic low-pass limit
     pure function dynfind( dstep, lp_dyn, tofny ) result( target_to )
         real, intent(in) :: dstep, lp_dyn
@@ -318,9 +321,9 @@ contains
             target_to = 3
         endif
     end function dynfind
-    
+
     ! TESTS
-    
+
     subroutine test_ftiter
         type(ftiter) :: fit
         write(*,'(a)') '**info(simple_ftiter_unit_test): testing square dimensions'
@@ -335,7 +338,7 @@ contains
         call fit%test_addr
          write(*,'(a)') 'SIMPLE_FTITER_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
     end subroutine test_ftiter
-    
+
     !>  \brief  Test the addressing of the FT'ed image for consistency
     subroutine test_addr(self)
         class(ftiter), intent(in) :: self

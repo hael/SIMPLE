@@ -1,3 +1,6 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 module simple_polarizer
 !$ use omp_lib
 !$ use omp_lib_kinds
@@ -11,8 +14,6 @@ implicit none
 
 public :: polarizer
 private
-
-logical, parameter :: DEBUG = .true.
 
 type, extends(image) :: polarizer
     private
@@ -28,7 +29,7 @@ type, extends(image) :: polarizer
   contains
     procedure :: init_polarizer
     procedure :: polarize
-    procedure :: kill_polarizer    
+    procedure :: kill_polarizer
 end type polarizer
 
 contains
@@ -87,8 +88,8 @@ contains
         use simple_polarft_corrcalc, only: polarft_corrcalc
         class(polarizer),        intent(inout) :: self   !< projector instance
         class(polarft_corrcalc), intent(inout) :: pftcc  !< polarft_corrcalc object to be filled
-        integer,                 intent(in)    :: img_ind
-        logical, optional,       intent(in)    :: isptcl
+        integer,                 intent(in)    :: img_ind !< image index
+        logical, optional,       intent(in)    :: isptcl !< is the input in polarised coords
         complex, allocatable :: pft(:,:), comps(:,:)
         integer :: i, k, l, m, alloc_stat, windim, vecdim, addr_l
         integer :: lims(3,2), ldim_img(3), ldim_pft(3), pdim(3), logi(3), phys(3)
@@ -140,7 +141,7 @@ contains
 
     ! DESTRUCTOR
 
-    !>  \brief  is a destructor of impolarizer 
+    !>  \brief  is a destructor of impolarizer
     subroutine kill_polarizer( self )
         class(polarizer), intent(inout) :: self !< projector instance
         if( allocated(self%polweights_mat) ) deallocate(self%polweights_mat)
@@ -149,4 +150,3 @@ contains
     end subroutine kill_polarizer
 
 end module simple_polarizer
-

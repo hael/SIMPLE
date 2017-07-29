@@ -1,12 +1,17 @@
-!==Class simple_commander_misc
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple commander module: miscellanous commanders
 !
-! This class contains the set of concrete miscellanous commanders of the SIMPLE library. This class provides the glue between the reciver 
-! (main reciever is simple_exec program) and the abstract action, which is simply execute (defined by the base class: simple_commander_base). 
-! Later we can use the composite pattern to create MacroCommanders (or workflows)
+!! This class contains the set of concrete miscellanous commanders of the SIMPLE
+!! library. This class provides the glue between the reciver (main reciever is
+!! simple_exec program) and the abstract action, which is simply execute (defined
+!! by the base class: simple_commander_base). Later we can use the composite
+!! pattern to create MacroCommanders (or workflows)
 !
-! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
-! Redistribution and modification is regulated by the GNU General Public License.
-! *Authors:* Cyril Reboul & Hans Elmlund 2016
+! The code is distributed with the hope that it will be useful, but _WITHOUT_
+! _ANY_ _WARRANTY_. Redistribution and modification is regulated by the GNU
+! General Public License. *Authors:* Cyril Reboul & Hans Elmlund 2016
 !
 module simple_commander_misc
 use simple_defs
@@ -30,6 +35,7 @@ public :: shift_commander
 public :: sym_aggregate_commander
 public :: dsymsrch_commander
 private
+#include "simple_local_flags.inc"
 
 type, extends(commander_base) :: cluster_smat_commander
   contains
@@ -90,7 +96,7 @@ contains
         real                :: avg_ratio, min_ratio, ratio, x, sim
         real, allocatable   :: validinds(:)
         integer, parameter  :: NRESTARTS=10
-        logical             :: debug=.false., done=.false.
+        logical             :: done=.false.
         p = params(cline,.false.)                        ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.)! general objects built
         ! obtain similarity matrix
@@ -130,7 +136,7 @@ contains
             validinds(ncls) = avg_ratio/real(NRESTARTS)
         end do
         ncls_stop = 0
-        done = .false. 
+        done = .false.
         do ncls=2,p%ncls
             write(*,'(a,1x,f9.3,8x,a,1x,i3)') 'COHESION/SEPARATION RATIO INDEX: ', validinds(ncls), ' NCLS: ', ncls
             call b%a%read('shc_clustering_ncls'//int2str_pad(ncls,numlen)//'.txt')
@@ -156,6 +162,7 @@ contains
         call simple_end('**** SIMPLE_CLUSTER_SMAT NORMAL STOP ****')
     end subroutine exec_cluster_smat
 
+    !> Calculate centre of mass 
     subroutine exec_masscen( self, cline )
         use simple_procimgfile, only: masscen_imgfile
         class(masscen_commander), intent(inout) :: self
@@ -173,6 +180,7 @@ contains
         call simple_end('**** SIMPLE_MASSCEN NORMAL STOP ****')
     end subroutine exec_masscen
 
+    !> for printing the command line key dictonary
     subroutine exec_print_cmd_dict( self, cline )
         use simple_cmd_dict
         class(print_cmd_dict_commander), intent(inout) :: self
@@ -183,6 +191,7 @@ contains
         call simple_end('**** SIMPLE_PRINT_CMD_DICT NORMAL STOP ****')
     end subroutine exec_print_cmd_dict
 
+    !> is a program for printing the dose weights applied to individual frames
     subroutine exec_print_dose_weights( self, cline )
         use simple_image,    only: image
         use simple_filterer, only: acc_dose2filter
@@ -209,6 +218,7 @@ contains
         call simple_end('**** SIMPLE_PRINT_DOSE_WEIGHTS NORMAL STOP ****')
     end subroutine exec_print_dose_weights
 
+    !> print_fsc  is a program for printing the binary FSC files produced by PRIME3D
     subroutine exec_print_fsc( self, cline )
         use simple_math,  only: get_resolution, get_lplim
         use simple_image, only: image
@@ -221,9 +231,9 @@ contains
         real              :: res0143, res05
         p = params(cline) ! parameters generated
         call img%new([p%box,p%box,1], p%smpd)
-        res = img%get_res() 
+        res = img%get_res()
         fsc = file2rarr(p%fsc)
-        do k=1,size(fsc) 
+        do k=1,size(fsc)
         write(*,'(A,1X,F6.2,1X,A,1X,F15.3)') '>>> RESOLUTION:', res(k), '>>> FSC:', fsc(k)
         end do
         ! get & print resolution
@@ -234,6 +244,7 @@ contains
         call simple_end('**** SIMPLE_PRINT_FSC NORMAL STOP ****')
     end subroutine exec_print_fsc
 
+    !> print_magic_boxesis a program for printing magic box sizes (fast FFT)
     subroutine exec_print_magic_boxes( self, cline )
         use simple_magic_boxes, only: print_magic_box_range
         class(print_magic_boxes_commander), intent(inout) :: self
@@ -244,7 +255,8 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_PRINT_MAGIC_BOXES NORMAL STOP ****')
     end subroutine exec_print_magic_boxes
-    
+
+    !> find the resolution, or low-pass limit
     subroutine exec_res( self, cline )
         class(res_commander), intent(inout) :: self
         class(cmdline),       intent(inout) :: cline
@@ -256,6 +268,7 @@ contains
         call simple_end('**** SIMPLE_RES NORMAL STOP ****')
     end subroutine exec_res
 
+    !> shift is a program for shifting a stack according to shifts in oritab
     subroutine exec_shift( self, cline )
         use simple_procimgfile, only: shift_imgfile
         class(shift_commander), intent(inout) :: self
@@ -270,6 +283,8 @@ contains
         call simple_end('**** SIMPLE_SHIFT NORMAL STOP ****')
     end subroutine exec_shift
 
+    !> sym_aggregateis a program for robust identifiaction of the symmetry axis
+    !> of a map using image-to-volume simiarity validation of the axis
     subroutine exec_sym_aggregate( self, cline )
         use simple_oris,  only: oris
         use simple_ori,   only: ori
@@ -287,12 +302,12 @@ contains
         type(sym)          :: se_c1
         real               :: cc, rotmat(3,3)
         integer            :: i, fnr, file_stat
-        integer, parameter :: MAXLABELS = 10   ! maximum numbers symmetry peaks
-        real,    parameter :: ANGTHRESH = 10.  ! maximum half-distance between symmetry peaks
+        integer, parameter :: MAXLABELS = 10   !< maximum numbers symmetry peaks
+        real,    parameter :: ANGTHRESH = 10.  !< maximum half-distance between symmetry peaks
         p = params(cline)                      ! parameters generated
         call b%build_general_tbox(p, cline)    ! general objects built
         ! init
-        e = b%a ! b%a contains the orientations of the references projections 
+        e = b%a ! b%a contains the orientations of the references projections
         cline_c1 = cline
         call cline_c1%set('pgrp', 'c1')
         p_c1 = params(cline_c1)
@@ -314,12 +329,12 @@ contains
             call b%a%rot(symaxis)
             ! symmetry
             call rec_vol(p, b%se)
-            symvol = b%vol
-            call symvol%write('sym_vol'//int2str_pad(i,2)//p%ext)
+            call symvol%copy( b%vol )
+             call symvol%write('sym_vol'//int2str_pad(i,2)//p%ext)
             ! c1
             rotmat = symaxis%get_mat()
             call o%ori_from_rotmat(transpose(rotmat))
-            b%vol = rotvol(asym_vol, o, p)
+            call b%vol%copy( rotvol(asym_vol, o, p) )
             call b%vol%bp(p%hp, p%lp)
             call b%vol%mask(p%msk, 'soft')
             call b%vol%write('asym_vol'//int2str_pad(i,2)//p%ext)
@@ -397,8 +412,10 @@ contains
                 deallocate(sort_inds)
             end subroutine find_sym_peaks
 
-    end subroutine exec_sym_aggregate
+        end subroutine exec_sym_aggregate
 
+    !> dsymsrch is a program for identifying rotational symmetries in class averages
+    !> of D-symmetric molecules and generating a cylinder that matches the shape.
     subroutine exec_dsymsrch( self, cline )
         use simple_symsrcher, only: dsym_cylinder
         class(dsymsrch_commander), intent(inout) :: self

@@ -1,3 +1,7 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple image module: gridding utilities
 module simple_gridding
 use simple_defs        ! use all in there
 use simple_image,      only: image
@@ -5,7 +9,7 @@ use simple_kbinterpol, only: kbinterpol
 implicit none
 
 contains
-    
+
     ! bails when zero images
 
     !>  \brief  prepare image for gridding interpolation in Fourier space
@@ -16,11 +20,11 @@ contains
         real  :: med
         call img%bwd_ft                      ! make sure not FTed
         med = img%median_pixel()
-        call img%pad(img4grid, backgr=med)   ! padding in real space                     
+        call img%pad(img4grid, backgr=med)   ! padding in real space
         call divide_w_instr(img4grid, kbwin) ! division w instr in real space
         call img4grid%fwd_ft                 ! return the Fourier transform
     end subroutine prep4cgrid
-    
+
     !> \brief  for dividing a real or complex image with the instrument function
     subroutine divide_w_instr( img, kbwin )
         !$ use omp_lib
@@ -32,7 +36,7 @@ contains
         integer :: ldim(3), i, j, k, alloc_stat, lims(3,2)
         real    :: arg
         ! get the limits
-        ldim = img%get_ldim()      
+        ldim = img%get_ldim()
         if( img%is_ft() )then
             lims = img%loop_lims(2)
         else
@@ -83,7 +87,7 @@ contains
                     ci = ci+1.
                 end do
             end subroutine calc_w
-            
+
     end subroutine divide_w_instr
-    
+
 end module simple_gridding

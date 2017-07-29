@@ -1,10 +1,12 @@
-!==Class simple_build
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> simple_build is the builder class for the methods in _SIMPLE_. Access is global in the using unit
 !
-! simple_build is the builder class for the methods in _SIMPLE_. Access is global in the
-! using unit. The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
-! Redistribution or modification is regulated by the GNU General Public License. 
+! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
+! Redistribution or modification is regulated by the GNU General Public License.
 ! *Author:* Hans Elmlund, 2009-06-11.
-! 
+!
 !==Changes are documented below
 !
 !* deugged and incorporated in the _SIMPLE_ library, HE 2009-06-25
@@ -36,8 +38,7 @@ implicit none
 
 public :: build, test_build
 private
-
-logical :: debug=.false.
+#include "simple_local_flags.inc"
 
 type build
     ! GENERAL TOOLBOX
@@ -134,12 +135,12 @@ contains
         if( present(force_ctf) ) fforce_ctf = force_ctf
         ! seed the random number generator
         call seed_rnd
-        if( debug ) write(*,'(a)') 'seeded random number generator'
+        DebugPrint   'seeded random number generator'
         ! set up symmetry functionality
         call self%se%new(trim(p%pgrp))
         p%nsym    = self%se%get_nsym()
         p%eullims = self%se%srchrange()
-        if( debug ) write(*,'(a)') 'did setup symmetry functionality'
+        DebugPrint   'did setup symmetry functionality'
         ! create object for orientations
         call self%a%new(p%nptcls)
         if( present(nooritab) )then
@@ -166,8 +167,8 @@ contains
                 endif
             endif
         endif
-        if( debug ) write(*,'(a)') 'created & filled object for orientations'  
-        if( debug ) write(*,'(a)') 'read deftab'
+        DebugPrint   'created & filled object for orientations'
+        DebugPrint   'read deftab'
         if( self%a%isthere('dfx') .and. self%a%isthere('dfy'))then
             p%tfplan%mode = 'astig'
         else if( self%a%isthere('dfx') )then
@@ -179,32 +180,32 @@ contains
             write(*,'(a)') 'WARNING! It looks like you want to do Wiener restoration (p%ctf .ne. no)'
             write(*,'(a)') 'but your input orientation table lacks defocus values'
         endif
-        if( debug ) write(*,'(a)') 'did set number of dimensions and ctfmode'
+        DebugPrint   'did set number of dimensions and ctfmode'
         if( fforce_ctf ) call self%raise_hard_ctf_exception(p)
         ! generate discrete projection direction spaces
         call self%e%new( p%nspace )
         call self%e%spiral( p%nsym, p%eullims )
         self%grid_projs = self%e%create_proj_subspace(p%nsub, p%nsym, p%eullims )
-        if( debug ) write(*,'(a)') 'generated discrete projection direction space'
+        DebugPrint 'generated discrete projection direction space'
         if( p%box > 0 )then
             ! build image objects
             ! box-sized ones
             call self%img%new([p%box,p%box,1],p%smpd,p%imgkind)
             call self%img_match%new([p%boxmatch,p%boxmatch,1],p%smpd,p%imgkind)
             call self%img_copy%new([p%boxmatch,p%boxmatch,1],p%smpd,p%imgkind)
-            if( debug ) write(*,'(a)') 'did build box-sized image objects'
+            DebugPrint   'did build box-sized image objects'
             ! boxmatch-sized ones
             call self%img_tmp%new([p%boxmatch,p%boxmatch,1],p%smpd,p%imgkind)
             call self%img_msk%new([p%boxmatch,p%boxmatch,1],p%smpd,p%imgkind)
             call self%mskimg%new([p%boxmatch, p%boxmatch, 1],p%smpd,p%imgkind)
-            if( debug ) write(*,'(a)') 'did build boxmatch-sized image objects'
+            DebugPrint  'did build boxmatch-sized image objects'
             ! boxpd-sized ones
             call self%img_pad%new([p%boxpd,p%boxpd,1],p%smpd,p%imgkind)
             if( ddo3d )then
                 call self%vol%new([p%box,p%box,p%box], p%smpd, p%imgkind)
                 call self%vol_pad%new([p%boxpd,p%boxpd,p%boxpd],p%smpd,p%imgkind)
             endif
-            if( debug ) write(*,'(a)') 'did build boxpd-sized image objects'
+            DebugPrint  'did build boxpd-sized image objects'
             ! build arrays
             lfny = self%img%get_lfny(1)
             lfny_match = self%img_match%get_lfny(1)         
@@ -214,7 +215,7 @@ contains
             if( .not. cline%defined('amsklp') .and. cline%defined('lp') )then
                 p%amsklp = self%img%get_lp(self%img%get_find(p%lp)-2)
             endif
-            if( debug ) write(*,'(a)') 'did set default values'
+            DebugPrint   'did set default values'
         endif
         ! build convergence checkers
         self%conv   = convergence(self%a, p, cline)
@@ -236,7 +237,7 @@ contains
         write(*,'(A)') '>>> DONE BUILDING GENERAL TOOLBOX'
         self%general_tbox_exists = .true.
     end subroutine build_general_tbox
-    
+
     !> \brief  destructs the general toolbox
     subroutine kill_general_tbox( self )
         class(build), intent(inout)  :: self
@@ -264,7 +265,7 @@ contains
             self%general_tbox_exists = .false.
         endif
     end subroutine kill_general_tbox
-    
+
     !> \brief  constructs the cluster toolbox
     subroutine build_cluster_tbox( self, p )
         class(build),  intent(inout) :: self
@@ -275,16 +276,16 @@ contains
         call img%new([p%box,p%box,1], p%smpd, p%imgkind)
         p%ncomps = img%get_npix(p%msk)
         call img%kill
-        if( debug ) print *, 'ncomps (npixels): ', p%ncomps
-        if( debug ) print *, 'nvars (nfeatures): ', p%nvars
-        call self%pca%new(p%nptcls, p%ncomps, p%nvars)
+        DebugPrint   'ncomps (npixels): ', p%ncomps
+        DebugPrint   'nvars (nfeatures): ', p%nvars
+        call self%pca%new(p%nptcls, p%ncomps, p%nvars) !< Dmat not pre-allocated (possible bug... /ME)
         call self%cenclust%new(self%features, self%a, p%nptcls, p%nvars, p%ncls)
         allocate( self%features(p%nptcls,p%nvars), stat=alloc_stat )
         call alloc_err('build_cluster_toolbox', alloc_stat)
         write(*,'(A)') '>>> DONE BUILDING CLUSTER TOOLBOX'
         self%cluster_tbox_exists = .true.
     end subroutine build_cluster_tbox
-    
+
     !> \brief  destructs the cluster toolbox
     subroutine kill_cluster_tbox( self )
         class(build), intent(inout) :: self
@@ -295,7 +296,7 @@ contains
             self%cluster_tbox_exists = .false.
         endif
     end subroutine kill_cluster_tbox
-    
+
     !> \brief  constructs the common lines toolbox
     subroutine build_comlin_tbox( self, p )
         class(build),  intent(inout) :: self
@@ -316,13 +317,13 @@ contains
             call alloc_err( 'build_comlin_tbox; simple_build, 2', alloc_stat )
             do i=1,p%nptcls
                 call self%imgs(i)%new([p%box,p%box,1],p%smpd,p%imgkind)
-            end do  
+            end do
             self%clins = comlin( self%a, self%imgs, p%lp )
         endif
         write(*,'(A)') '>>> DONE BUILDING COMLIN TOOLBOX'
         self%comlin_tbox_exists = .true.
     end subroutine build_comlin_tbox
-    
+
     !> \brief  destructs the common lines toolbox
     subroutine kill_comlin_tbox( self )
         class(build), intent(inout) :: self
@@ -345,7 +346,7 @@ contains
             endif
             if( allocated(self%imgs) )then
                 do i=1,size(self%imgs)
-                    call self%imgs(i)%kill 
+                    call self%imgs(i)%kill
                 end do
                 deallocate(self%imgs)
             endif
@@ -353,7 +354,7 @@ contains
             self%comlin_tbox_exists = .false.
         endif
     end subroutine kill_comlin_tbox
-    
+
     !> \brief  constructs the reconstruction toolbox
     subroutine build_rec_tbox( self, p )
         class(build),  intent(inout) :: self
@@ -365,7 +366,7 @@ contains
         write(*,'(A)') '>>> DONE BUILDING RECONSTRUCTION TOOLBOX'
         self%rec_tbox_exists = .true.
     end subroutine build_rec_tbox
-    
+
     !> \brief  destructs the reconstruction toolbox
     subroutine kill_rec_tbox( self )
         class(build), intent(inout) :: self
@@ -375,7 +376,7 @@ contains
             self%rec_tbox_exists = .false.
         endif
     end subroutine kill_rec_tbox
-    
+
     !> \brief  constructs the eo reconstruction toolbox
     subroutine build_eo_rec_tbox( self, p )
         class(build),  intent(inout) :: self
@@ -386,7 +387,7 @@ contains
         write(*,'(A)') '>>> DONE BUILDING EO RECONSTRUCTION TOOLBOX'
         self%eo_rec_tbox_exists = .true.
     end subroutine build_eo_rec_tbox
-    
+
     !> \brief  destructs the eo reconstruction toolbox
     subroutine kill_eo_rec_tbox( self )
         class(build), intent(inout) :: self
@@ -395,7 +396,7 @@ contains
             self%eo_rec_tbox_exists = .false.
         endif
     end subroutine kill_eo_rec_tbox
-    
+
     !> \brief  constructs the prime2D toolbox
     subroutine build_hadamard_prime2D_tbox( self, p )
         use simple_strings, only: str_has_substr
@@ -424,7 +425,7 @@ contains
         write(*,'(A)') '>>> DONE BUILDING HADAMARD PRIME2D TOOLBOX'
         self%hadamard_prime2D_tbox_exists = .true.
     end subroutine build_hadamard_prime2D_tbox
-    
+
     !> \brief  destructs the prime2D toolbox
     subroutine kill_hadamard_prime2D_tbox( self )
         class(build), intent(inout) :: self
@@ -462,7 +463,7 @@ contains
         write(*,'(A)') '>>> DONE BUILDING HADAMARD PRIME3D TOOLBOX'
         self%hadamard_prime3D_tbox_exists = .true.
     end subroutine build_hadamard_prime3D_tbox
-    
+
     !> \brief  destructs the prime3D toolbox
     subroutine kill_hadamard_prime3D_tbox( self )
         class(build), intent(inout) :: self
@@ -485,7 +486,7 @@ contains
             self%hadamard_prime3D_tbox_exists = .false.
         endif
     end subroutine kill_hadamard_prime3D_tbox
-    
+
     !> \brief  constructs the toolbox for continuous refinement
     subroutine build_cont3D_tbox( self, p )
         class(build),  intent(inout) :: self
@@ -506,13 +507,13 @@ contains
         endif
         allocate( self%refvols(p%nstates), stat=alloc_stat)
         call alloc_err('build_cont3D_tbox; simple_build, 3', alloc_stat)
-        do s=1,p%nstates 
+        do s=1,p%nstates
             call self%refvols(s)%new([p%boxmatch,p%boxmatch,p%boxmatch],p%smpd,p%imgkind)
         end do
         write(*,'(A)') '>>> DONE BUILDING CONT3D TOOLBOX'
         self%cont3D_tbox_exists = .true.
     end subroutine build_cont3D_tbox
-    
+
     !> \brief  destructs the toolbox for continuous refinement
     subroutine kill_cont3D_tbox( self )
         class(build), intent(inout) :: self
@@ -567,7 +568,7 @@ contains
             self%extremal3D_tbox_exists = .false.
         endif
     end subroutine kill_extremal3D_tbox
-    
+
     !>  \brief  for reading feature vectors from disk
     subroutine read_features( self, p )
         class(build),  intent(inout) :: self
@@ -584,7 +585,7 @@ contains
         end do
         close(unit=funit)
     end subroutine read_features
-    
+
     !> \brief  fall-over if CTF params are missing
     subroutine raise_hard_ctf_exception( self, p )
         class(build),  intent(inout) :: self
@@ -594,7 +595,7 @@ contains
             params_present(1) = self%a%isthere('kv')
             params_present(2) = self%a%isthere('cs')
             params_present(3) = self%a%isthere('fraca')
-            params_present(4) = self%a%isthere('dfx') 
+            params_present(4) = self%a%isthere('dfx')
             if( all(params_present) )then
                 ! alles ok
             else
@@ -606,9 +607,9 @@ contains
             endif
         endif
     end subroutine raise_hard_ctf_exception
-    
+
     ! UNIT TEST
-    
+
     !> \brief  build unit test
     subroutine test_build
         type(build)   :: myb
@@ -640,7 +641,7 @@ contains
         call mycline_varying%set('refine', 'no')
         call mycline_varying%set('pgrp',   'c1')
         call mycline_varying%set('eo',    'yes')
-        myp = params(mycline_varying, checkdistr=.false.) 
+        myp = params(mycline_varying, checkdistr=.false.)
         call tester
         write(*,'(a)') '**info(simple_build_unit_test): case 2 passed'
         ! case 3:  refine=no, pgrp=c2, eo=yes
@@ -649,7 +650,7 @@ contains
         call mycline_varying%set('refine', 'no')
         call mycline_varying%set('pgrp',   'c1')
         call mycline_varying%set('eo',    'yes')
-        myp = params(mycline_varying, checkdistr=.false.) 
+        myp = params(mycline_varying, checkdistr=.false.)
         call tester
         write(*,'(a)') '**info(simple_build_unit_test): case 3 passed'
         ! case 4:  refine=no, pgrp=c2, eo=no
@@ -658,7 +659,7 @@ contains
         call mycline_varying%set('refine', 'no')
         call mycline_varying%set('pgrp',   'c1')
         call mycline_varying%set('eo',    'yes')
-        myp = params(mycline_varying, checkdistr=.false.) 
+        myp = params(mycline_varying, checkdistr=.false.)
         call tester
         write(*,'(a)') '**info(simple_build_unit_test): case 4 passed'
         ! case 5:  refine=neigh, pgrp=c1, eo=yes
@@ -667,7 +668,7 @@ contains
         call mycline_varying%set('refine', 'no')
         call mycline_varying%set('pgrp',   'c1')
         call mycline_varying%set('eo',    'yes')
-        myp = params(mycline_varying, checkdistr=.false.) 
+        myp = params(mycline_varying, checkdistr=.false.)
         call tester
         write(*,'(a)') '**info(simple_build_unit_test): case 5 passed'
         ! case 6:  refine=neigh, pgrp=c1, eo=no
@@ -676,7 +677,7 @@ contains
         call mycline_varying%set('refine', 'no')
         call mycline_varying%set('pgrp',   'c1')
         call mycline_varying%set('eo',    'yes')
-        myp = params(mycline_varying, checkdistr=.false.) 
+        myp = params(mycline_varying, checkdistr=.false.)
         call tester
         write(*,'(a)') '**info(simple_build_unit_test): case 6 passed'
         ! case 7:  refine=neigh, pgrp=c2, eo=yes
@@ -685,7 +686,7 @@ contains
         call mycline_varying%set('refine', 'no')
         call mycline_varying%set('pgrp',   'c1')
         call mycline_varying%set('eo',    'yes')
-        myp = params(mycline_varying, checkdistr=.false.) 
+        myp = params(mycline_varying, checkdistr=.false.)
         call tester
         write(*,'(a)') '**info(simple_build_unit_test): case 7 passed'
         ! case 8:  refine=neigh, pgrp=c2, eo=no
@@ -694,7 +695,7 @@ contains
         call mycline_varying%set('refine', 'no')
         call mycline_varying%set('pgrp',   'c1')
         call mycline_varying%set('eo',    'yes')
-        myp = params(mycline_varying, checkdistr=.false.) 
+        myp = params(mycline_varying, checkdistr=.false.)
         call tester
         write(*,'(a)') '**info(simple_build_unit_test): case 8 passed'
         ! case 9:  refine=neigh, pgrp=c1, eo=yes
@@ -703,7 +704,7 @@ contains
         call mycline_varying%set('refine', 'no')
         call mycline_varying%set('pgrp',   'c1')
         call mycline_varying%set('eo',    'yes')
-        myp = params(mycline_varying, checkdistr=.false.) 
+        myp = params(mycline_varying, checkdistr=.false.)
         call tester
         write(*,'(a)') '**info(simple_build_unit_test): case 9 passed'
         ! case 10: refine=neigh, pgrp=c1, eo=no
@@ -720,7 +721,7 @@ contains
         call mycline_varying%set('refine', 'no')
         call mycline_varying%set('pgrp',   'c1')
         call mycline_varying%set('eo',    'yes')
-        myp = params(mycline_varying, checkdistr=.false.) 
+        myp = params(mycline_varying, checkdistr=.false.)
         call tester
         write(*,'(a)') '**info(simple_build_unit_test): case 11 passed'
         ! case 12: refine=neigh, pgrp=c2, eo=no
@@ -729,13 +730,13 @@ contains
         call mycline_varying%set('refine', 'no')
         call mycline_varying%set('pgrp',   'c1')
         call mycline_varying%set('eo',    'yes')
-        myp = params(mycline_varying, checkdistr=.false.) 
+        myp = params(mycline_varying, checkdistr=.false.)
         call tester
         write(*,'(a)') '**info(simple_build_unit_test): case 12 passed'
         write(*,'(a)') 'SIMPLE_BUILD_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
-        
+
       contains
-        
+
           subroutine tester
               call myb%build_general_tbox(myp, mycline_varying, do3d=.true., nooritab=.true.)
               call myb%build_general_tbox(myp, mycline_varying, do3d=.true., nooritab=.true.)
@@ -774,7 +775,7 @@ contains
               call myb%kill_extremal3D_tbox
               write(*,'(a)') 'build_extremal3D_tbox passed'
           end subroutine tester
-        
+
     end subroutine test_build
 
 end module simple_build

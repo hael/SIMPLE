@@ -1,13 +1,20 @@
-!==Program simple_distr_exec
+!------------------------------------------------------------------------------!
+! SIMPLE  v2.5          Elmlund & Elmlund Lab       simplecryoem.com           !
+!------------------------------------------------------------------------------!
+!> SIMPLE_DISTR_EXEC executes the parallel (or distributed workflows) of SIMPLE
 !
-! <simple_distr_exec/begin> executes the parallel (or distributed workflows) of SIMPLE <simple_distr_exec/end>
+!! \detail `simple_distr_exec' executes most individual programs in the SIMPLE
+!! library. To list all programs type `simple_distr_exec prg=list'. See
+!! `simple_exec' for a more detailed list.
 !
-! The code is distributed with the hope that it will be useful, but WITHOUT ANY WARRANTY.
-! Redistribution and modification is regulated by the GNU General Public License.
-! Authors: Cyril Reboul & Hans Elmlund 2016
+!! \author Cyril Reboul & Hans Elmlund 
 !
+! The SIMPLE code is distributed with the hope that it will be useful, but
+! WITHOUT ANY WARRANTY. Redistribution and modification is regulated by the GNU
+! General Public License.
+! -----------------------------------------------------------------------------!
 program simple_distr_exec
-use simple_defs  
+use simple_defs
 use simple_cmdline,      only: cmdline
 use simple_strings,      only: str_has_substr
 use simple_jiffys,       only: cmdline_err
@@ -478,12 +485,12 @@ select case(prg)
     case( 'prime3D' )
         !==Program prime3D
         !
-        ! <prime3D/begin>is a distributed workflow for ab inito reconstruction/refinement based on 
-        ! probabilistic projection matching. PRIME is short for PRobabilistic Initial 3D Model 
-        ! generation for Single-particle cryo-Electron microscopy. There are a daunting number of 
-        ! options in PRIME3D. If you are processing class averages we recommend that you instead 
-        ! use the simple_distr_exec prg=ini3D_from_cavgs route for executing PRIME3D. Automated 
-        ! workflows for single- and multi-particle refinement using prime3D are planned for the 
+        ! <prime3D/begin>is a distributed workflow for ab inito reconstruction/refinement based on
+        ! probabilistic projection matching. PRIME is short for PRobabilistic Initial 3D Model
+        ! generation for Single-particle cryo-Electron microscopy. There are a daunting number of
+        ! options in PRIME3D. If you are processing class averages we recommend that you instead
+        ! use the simple_distr_exec prg=ini3D_from_cavgs route for executing PRIME3D. Automated
+        ! workflows for single- and multi-particle refinement using prime3D are planned for the
         ! next release (3.0)<prime3D/end>
         !
         ! set required keys
@@ -594,16 +601,18 @@ select case(prg)
     case( 'recvol' )
         !==Program recvol
         !
-        ! <recvol/begin>is a distributed workflow for reconstructing volumes from MRC and SPIDER stacks, 
+        ! <recvol/begin>is a distributed workflow for reconstructing volumes from MRC and SPIDER stacks,
         ! given input orientations and state assignments. The algorithm is based on direct Fourier inversion
-        ! with a Kaiser-Bessel (KB) interpolation kernel. This window function reduces the real-space ripple 
-        ! artifacts associated with direct moving windowed-sinc interpolation. The feature sought when 
-        ! implementing this algorithm was to enable quick, reliable reconstruction from aligned individual 
-        ! particle images. mul is used to scale the origin shifts if down-sampled 
-        ! were used for alignment and the original images are used for reconstruction. ctf=yes or ctf=flip 
-        ! turns on the Wiener restoration. If the images were phase-flipped set ctf=flip. The inner parameter 
-        ! controls the radius of the soft-edged mask used to remove the unordered DNA/RNA core of spherical 
-        ! icosahedral viruses<recvol/end>
+        ! with a Kaiser-Bessel (KB) interpolation kernel. This window function reduces the real-space ripple
+        ! artifacts associated with direct moving windowed-sinc interpolation. The feature sought when
+        ! implementing this algorithm was to enable quick, reliable reconstruction from aligned individual
+        ! particle images. mul is used to scale the origin shifts if down-sampled
+        ! were used for alignment and the original images are used for reconstruction. ctf=yes or ctf=flip
+        ! turns on the Wiener restoration. If the images were phase-flipped set ctf=flip. amsklp, mw, and edge
+        ! control the solvent mask: the low-pass limit used to generate the envelope; the molecular weight of
+        ! the molecule (protein assumed but it works reasonably well also for RNA; slight modification of mw
+        ! might be needed). The inner parameter controls the radius of the soft-edged mask used to remove
+        ! the unordered DNA/RNA core of spherical icosahedral viruses<recvol/end>
         !
         ! set required keys
         keys_required(1)  = 'stk'
@@ -633,18 +642,18 @@ select case(prg)
     case( 'symsrch' )
         !==Program symsrch
         !
-        ! <symsrch/begin>is a distributed workflow for searching for the principal symmetry axis of a volume 
-        ! reconstructed without assuming any point-group symmetry. The program takes as input an 
-        ! asymmetrical 3D reconstruction. The alignment document for all the particle images 
-        ! that have gone into the 3D reconstruction and the desired point-group symmetry needs to 
-        ! be inputted. The 3D reconstruction is then projected in 50 (default option) even directions, 
-        ! common lines-based optimisation is used to identify the principal symmetry axis, the rotational 
-        ! transformation is applied to the inputted orientations, and a new alignment document is produced. 
-        ! Input this document to recvol together with the images and the point-group symmetry to generate a 
-        ! symmetrised map. If you are unsure about the point-group, you should use the compare=yes mode and 
-        ! input the highest conceviable point-group. The program then calculates probabilities for all lower 
+        ! <symsrch/begin>is a distributed workflow for searching for the principal symmetry axis of a volume
+        ! reconstructed without assuming any point-group symmetry. The program takes as input an
+        ! asymmetrical 3D reconstruction. The alignment document for all the particle images
+        ! that have gone into the 3D reconstruction and the desired point-group symmetry needs to
+        ! be inputted. The 3D reconstruction is then projected in 50 (default option) even directions,
+        ! common lines-based optimisation is used to identify the principal symmetry axis, the rotational
+        ! transformation is applied to the inputted orientations, and a new alignment document is produced.
+        ! Input this document to recvol together with the images and the point-group symmetry to generate a
+        ! symmetrised map. If you are unsure about the point-group, you should use the compare=yes mode and
+        ! input the highest conceviable point-group. The program then calculates probabilities for all lower
         ! groups inclusive.<symsrch/end>
-        !        
+        !
         ! set required keys
         keys_required(1)  = 'vol1'
         keys_required(2)  = 'smpd'

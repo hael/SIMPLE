@@ -1,10 +1,15 @@
-!==Class simple_aff_prop
-!
-! simple_aff_prop is the SIMPLE class for clustering by affinity propagation.
-! Affinity propagation is based on loopy belief propagation.
-! The code is distributed with the hope that it will be useful, but _WITHOUT_ 
-! _ANY_ _WARRANTY_. Redistribution or modification is regulated by the 
-! GNU General Public License. *Author:* Hans Elmlund, 2011-09-03.
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple affinity propogation module
+!!
+!! simple_aff_prop is the SIMPLE class for clustering by affinity propagation.
+!! Affinity propagation is based on loopy belief propagation.
+!!
+!  The code is distributed with the hope that it will be useful, but _WITHOUT_
+! _ANY_ _WARRANTY_. Redistribution or modification is regulated by the
+! GNU General Public License.
+! *Author:* Hans Elmlund, 2011-09-03.
 !
 !==Changes are documented below
 !
@@ -20,10 +25,10 @@ private
 type aff_prop
     private
     integer              :: N                    !< nr of data entries
-    real, allocatable    :: A(:,:), R(:,:)       !< affinities & responsibilities
-    real, allocatable    :: Aold(:,:), Rold(:,:) !< old affinities & responsibilities
-    real, allocatable    :: Rp(:,:), tmp(:)      !< other stufff needed
-    real, allocatable    :: AS(:,:), dA(:)       !< A+S & diag(A)
+    real, allocatable    :: A(:,:), R(:,:)       !< \param A affinities & \param R responsibilities
+    real, allocatable    :: Aold(:,:), Rold(:,:) !< \param Aold Old affinities & \param Rold Old responsibilities
+    real, allocatable    :: Rp(:,:), tmp(:)      !< other stuff needed
+    real, allocatable    :: AS(:,:), dA(:)       !< \parm AS A+S & \param dA diag(A)
     real, pointer        :: S(:,:)               !< pointer to similarity matrix
     real, allocatable    :: Y(:), Y2(:)          !< maxvals
     integer, allocatable :: I(:), I2(:)          !< index arrays
@@ -42,17 +47,20 @@ type aff_prop
     procedure :: get_resp
     ! DESTRUCTOR
     procedure :: kill
-end type
+end type aff_prop
 
 contains
 
     ! CONSTRUCTOR
 
     !>  \brief  is a constructor
+    !! \param N  num of data entries
+    !! \param S pointer to similarity matrix
+    !! \param  ftol,lam,pref,maxits,convits Initialise aff_prop type variables
     subroutine new( self, N, S, ftol, lam, pref, maxits, convits )
         class(aff_prop),   intent(inout) :: self
-        integer,           intent(in)    :: N
-        real,    target,   intent(inout) :: S(N,N)
+        integer,           intent(in)    :: N               
+        real,    target,   intent(inout) :: S(N,N)          
         real,    optional, intent(in)    :: ftol, lam, pref
         integer, optional, intent(in)    :: maxits, convits
         integer :: alloc_stat, i, j
@@ -67,7 +75,7 @@ contains
         if( present(convits) ) self%convits = convits
         ! calculate similarity characteristics
         call analyze_smat(s, .false., self%Smin, self%Smax)
-        ! low pref [0.1,1] leads to small numbers of clusters and 
+        ! low pref [0.1,1] leads to small numbers of clusters and
         ! high pref leads to large numbers of clusters
         ppref = self%Smin
         if( present(pref) ) ppref = pref
@@ -97,16 +105,17 @@ contains
         self%I      = 0
         self%I2     = 0
         self%dA     = 0.
-        self%exists = .true.        
+        self%exists = .true.
     end subroutine new
 
     ! PROPAGATOR
-    
+
     !>  \brief  is the message passing algorithm
     subroutine propagate( self, centers, labels, simsum )
         class(aff_prop),      intent(inout) :: self
-        integer, allocatable, intent(out)   :: centers(:), labels(:)
-        real,                 intent(out)   :: simsum
+        integer, allocatable, intent(out)   :: centers(:) !< cluster centres
+        integer, allocatable, intent(out)   :: labels(:)  !< cluster lablse
+        real,                 intent(out)   :: simsum     !< similarity sum
         real, allocatable :: similarities(:)
         real              :: x, realmax
         integer           :: i, j, k, alloc_stat, ncls, loc(1), convits, ncls_prev
@@ -126,7 +135,7 @@ contains
         self%dA   = 0.
         convits   = 0
         ncls      = 0
-        ! iterate        
+        ! iterate
         do i=1,self%maxits
             ! FIRST, COMPUTE THE RESPONSIBILITIES
             self%Rold = self%R
@@ -216,7 +225,7 @@ contains
     end function get_resp
 
     ! UNIT TEST
-    
+
     !>  \brief  is the aff_prop unit test
     subroutine test_aff_prop
         real                 :: datavecs(900,5)
@@ -272,9 +281,9 @@ contains
             write(*,'(a)') 'SIMPLE_AFF_PROP_UNIT_TEST FAILED!'
         endif
     end subroutine test_aff_prop
-    
+
     ! DESTRUCTOR
-    
+
     subroutine kill( self )
         class(aff_prop), intent(inout) :: self
         if( self%exists )then

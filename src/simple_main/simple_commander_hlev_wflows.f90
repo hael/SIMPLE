@@ -1,12 +1,16 @@
-!==Class simple_commander_hlev_wflows
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple commander module: high-level workflows
 !
-! This class contains commanders responsible for execution of high-level workflows in SIMPLE. This class provides 
-! the glue between the reciver (main reciever is simple_distr_exec) and the abstract action, which is simply execute 
-! (defined by the base class: simple_commander_base).
+!! This class contains commanders responsible for execution of high-level
+!! workflows in SIMPLE. This class provides the glue between the reciver (main
+!! reciever is simple_distr_exec) and the abstract action, which is simply
+!! execute (defined by the base class: simple_commander_base).
 !
-! The code is hlevibuted with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
-! Redistribution and modification is regulated by the GNU General Public License.
-! *Authors:* Hans Elmlund 2017
+! The code is distributed with the hope that it will be useful, but _WITHOUT_
+! _ANY_ _WARRANTY_. Redistribution and modification is regulated by the GNU
+! General Public License. *Authors:* Hans Elmlund 2017
 !
 module simple_commander_hlev_wflows
 use simple_defs
@@ -49,7 +53,6 @@ contains
         class(prime2D_autoscale_commander), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         ! constants
-        logical,           parameter :: DEBUG           = .false.
         integer,           parameter :: MAXITS_STAGE1   = 10
         character(len=32), parameter :: CAVGS_ITERFBODY = 'cavgs_iter'
         character(len=32), parameter :: STKSCALEDBODY   = 'stk_sc_prime2D'
@@ -58,7 +61,7 @@ contains
         type(makecavgs_distr_commander)              :: xmakecavgs
         type(prime2D_distr_commander),       target  :: xprime2D_distr
         type(prime2D_chunk_distr_commander), target  :: xprime2D_chunk_distr
-        class(commander_base),               pointer :: xprime2D => null() 
+        class(commander_base),               pointer :: xprime2D => null()
         type(rank_cavgs_commander)                   :: xrank_cavgs
         ! command lines
         type(cmdline) :: cline_prime2D_stage1
@@ -93,7 +96,7 @@ contains
             call cline_prime2D_stage1%delete('automsk') ! deletes possible automsk flag from stage 1
             call cline_prime2D_stage1%set('maxits', real(MAXITS_STAGE1))
             call xprime2D%execute(cline_prime2D_stage1)
-            ! prepare stage 2 input -- re-scale 
+            ! prepare stage 2 input -- re-scale
             call scobj%uninit(cline) ! puts back the old command line
             call scobj%init(p_master, cline, p_master%smpd_targets2D(2), STKSCALEDBODY)
             scale_stage2 = scobj%get_scaled_var('scale')
@@ -132,7 +135,7 @@ contains
         else
             call xprime2D%execute(cline)
         endif
-        call cline_rank_cavgs%print
+        call cline_rank_cavgs%printline
         ! ranking
         call cline_rank_cavgs%set('oritab', trim(FINALDOC))
         call cline_rank_cavgs%set('stk',    'cavgs_final'//p_master%ext)
@@ -145,8 +148,14 @@ contains
         call simple_end('**** SIMPLE_PRIME2D NORMAL STOP ****')
     end subroutine exec_prime2D_autoscale
 
-    ! GENERATE INITIAL 3D MODEL FROM CLASS AVERAGES
-
+    !> ini3D_from_cavgs is a SIMPLE program to generate initial 3d model from class averages
+    !! @see  http://simplecryoem.com/tutorials.html?#ab-initio-3d-reconstruction-from-class-averages
+    !!
+    !! Example:
+    !! ```sh
+    !!nohup simple_distr_exec prg=ini3D_from_cavgs stk=../2d/cavgs_selected.mrc \
+    !!    smpd=1.62 msk=88 pgrp=d2 pgrp_known=yes nparts=2 nthr=4 >& INI3DOUT &
+    !!```
     subroutine exec_ini3D_from_cavgs( self, cline )
         use simple_commander_volops,  only: projvol_commander
         use simple_commander_rec,     only: recvol_commander
@@ -156,9 +165,8 @@ contains
         class(ini3D_from_cavgs_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         ! constants
-        logical,               parameter :: DEBUG=.false.
-        real,                  parameter :: LPLIMS(2)=[20.,10.] ! default low-pass limits
-        real,                  parameter :: CENLP=30.           ! consistency with prime3D
+        real,                  parameter :: LPLIMS(2)=[20.,10.] !< default low-pass limits
+        real,                  parameter :: CENLP=30.           !< consistency with prime3D
         integer,               parameter :: MAXITS_SNHC=30, MAXITS_INIT=15, MAXITS_REFINE=40
         integer,               parameter :: STATE=1, NPROJS_SYMSRCH=50, NPEAKS_REFINE=6
         character(len=32),     parameter :: ITERFBODY     = 'prime3Ddoc_'
@@ -354,7 +362,7 @@ contains
                 character(len=3) :: str_iter
                 str_iter = int2str_pad(nint(iter),3)
                 oritab   = trim(ITERFBODY)//trim(str_iter)//'.txt'
-                vol_iter = trim(VOLFBODY)//trim(str_state)//'_iter'//trim(str_iter)//p_master%ext                
+                vol_iter = trim(VOLFBODY)//trim(str_state)//'_iter'//trim(str_iter)//p_master%ext
             end subroutine set_iter_dependencies
 
             subroutine update_lp( cl, refine_step )
@@ -379,7 +387,7 @@ contains
     end subroutine exec_ini3D_from_cavgs
 
     ! ENSEMBLE HETEROGEINITY ANALYSIS
-
+    !> het_ensemble is a SIMPLE program for ensemble heterogeinity analysis
     subroutine exec_het_ensemble( self, cline )
         use simple_commander_rec,    only: recvol_commander
         use simple_commander_volops, only: postproc_vol_commander, projvol_commander
@@ -390,14 +398,13 @@ contains
         class(het_ensemble_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         ! constants
-        logical,            parameter :: DEBUG=.false.
-        integer,            parameter :: MAXITS_INIT=50, NREPEATS=5
-        character(len=32),  parameter :: HETFBODY    = 'hetrep_'
-        character(len=32),  parameter :: REPEATFBODY = 'hetdoc_'
-        character(len=32),  parameter :: VOLFBODY    = 'recvol_state'
+        integer,               parameter :: MAXITS_INIT=50, NREPEATS=5
+        character(len=32),     parameter :: HETFBODY    = 'hetrep_'
+        character(len=32),     parameter :: REPEATFBODY = 'hetdoc_'
+        character(len=32),     parameter :: VOLFBODY    = 'recvol_state'
         ! distributed commanders
         type(prime3D_distr_commander) :: xprime3D_distr
-        type(recvol_distr_commander)  :: xrecvol_distr        
+        type(recvol_distr_commander)  :: xrecvol_distr
         ! shared-mem commanders
         type(postproc_vol_commander)  :: xpostproc_vol
         type(projvol_commander)       :: xprojvol
@@ -452,7 +459,7 @@ contains
         call cline_prime3D_master%set('maxits', real(MAXITS_INIT))
         call cline_prime3D_master%set('refine', 'het')
         call cline_prime3D_master%set('dynlp', 'no')
-        call cline_prime3D_master%set('lp', p_master%lp) 
+        call cline_prime3D_master%set('lp', p_master%lp)
 
         ! GENERATE DIVERSE INITIAL LABELS
         write(*,'(A)') '>>>'
@@ -528,7 +535,7 @@ contains
         enddo
 
         ! end gracefully
-        call simple_end('**** SIMPLE_HET_ENSEMBLE NORMAL STOP ****')        
+        call simple_end('**** SIMPLE_HET_ENSEMBLE NORMAL STOP ****')
         contains
 
             subroutine prime3d_cleanup

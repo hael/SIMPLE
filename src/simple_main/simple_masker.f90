@@ -1,4 +1,7 @@
-!>  \brief  SIMPLE projector class
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple image module: generate mask from images
 module simple_masker
 use simple_defs    ! use all in there
 use simple_image,  only: image
@@ -8,8 +11,8 @@ implicit none
 
 public :: masker
 private
+#include "simple_local_flags.inc"
 
-logical, parameter :: DEBUG = .false. !< debug flag
 integer, parameter :: WINSZ = 3       !< real-space filter half-width window
 
 type, extends(image) :: masker

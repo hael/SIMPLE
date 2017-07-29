@@ -1,9 +1,15 @@
-!==Class simple_commander_rec
-!
-! This class contains the set of concrete 3D reconstruction commanders of the SIMPLE library. This class provides the glue between the reciver 
-! (main reciever is simple_exec program) and the abstract action, which is simply execute (defined by the base class: simple_commander_base). 
-! Later we can use the composite pattern to create MacroCommanders (or workflows)
-!
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple commander module: 3D volume reconstruction interface
+!!
+!! This class contains the set of concrete 3D reconstruction commanders of the
+!! SIMPLE library. This class provides the glue between the reciver (main
+!! reciever is simple_exec program) and the abstract action, which is simply
+!! execute (defined by the base class: simple_commander_base). Later we can use
+!! the composite pattern to create MacroCommanders (or workflows)
+!!
+!! @see http://simplecryoem.com/tutorials.html?#reconstruction-of-symmetrical-structures-with-simple
 ! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
 ! Redistribution and modification is regulated by the GNU General Public License.
 ! *Authors:* Cyril Reboul & Hans Elmlund 2016
@@ -24,7 +30,7 @@ public :: recvol_commander
 public :: eo_volassemble_commander
 public :: volassemble_commander
 private
-
+#include "simple_local_flags.inc"
 type, extends(commander_base) :: recvol_commander
   contains
     procedure :: execute      => exec_recvol
@@ -38,8 +44,26 @@ type, extends(commander_base) :: volassemble_commander
     procedure :: execute      => exec_volassemble
 end type volassemble_commander
 
-contains
-
+contains 
+    !> RECVOL is a SIMPLE program to reconstruct volumes from EM stacks and their estimated orientations
+    !!
+    !! @see http://simplecryoem.com/tutorials.html?#resolution-estimate-from-single-particle-images
+    !!
+    !! `map2ptcls' generates a document named mapped_params_ptcls.txt that we can directly use to reconstruct a new map from the particle images and calculate the resolution
+    !!
+    !! ```sh
+    !! simple_distr_exec prg=recvol eo=yes stk=../stack/sumstack.mrc \
+    !!    oritab=mapped_params_ptcls.txt smpd=1.62 msk=88 ctf=yes \
+    !!    pgrp=d2 nparts=2 nthr=4 >& EOREC
+    !!```
+    !!    This will only takes a few minutes and will print out the FSC values
+    !!    in the EOREC file. The eo=yes option specifies that the resolution
+    !!    will be calculated from the FSC between the even/odd halves of the
+    !!    dataset. The final reconstruction is the recvol_state01.mrc. The end
+    !!    of the RESOLUTION file produced gives you the calculated resolution
+    !!
+    !!    >>> RESOLUTION AT FSC=0.143 DETERMINED TO:    9.87
+    !!    >>> RESOLUTION AT FSC=0.500 DETERMINED TO:  13.38
     subroutine exec_recvol( self, cline )
         use simple_rec_master, only: exec_rec_master
         class(recvol_commander), intent(inout) :: self
@@ -61,7 +85,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_RECVOL NORMAL STOP ****', print_simple=.false.) 
     end subroutine exec_recvol
-
+    !> EO_VOLASSEMBLE is a SIMPLE program to reconstruct volume with EO enabled
     subroutine exec_eo_volassemble( self, cline )
         use simple_eo_reconstructor, only: eo_reconstructor
         class(eo_volassemble_commander), intent(inout) :: self
@@ -73,7 +97,6 @@ contains
         real, allocatable             :: res05s(:), res0143s(:)
         real                          :: res
         integer                       :: part, s, alloc_stat, n, ss, state4name, file_stat, fnr
-        logical                       :: debug=.false.
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         call b%build_eo_rec_tbox(p)         ! reconstruction toolbox built
@@ -94,7 +117,7 @@ contains
             else
                 s = ss
             endif
-            if( debug ) write(*,*) 'processing state: ', s
+            DebugPrint  'processing state: ', s
             if( b%a%get_statepop( s ) == 0 )cycle           ! Empty state
             call b%eorecvol%reset_all
             do part=1,p%nparts
@@ -104,7 +127,7 @@ contains
                     state4name = s
                 endif
                 allocate(fname, source='recvol_state'//int2str_pad(state4name,2)//'_part'//int2str_pad(part,p%numlen))
-                if( debug ) write(*,*) 'processing file: ', fname
+                DebugPrint  'processing file: ', fname
                 call assemble(fname)
                 deallocate(fname)
             end do
@@ -114,7 +137,6 @@ contains
         res  = maxval(res0143s)
         p%lp = max( p%lpstop,res )
         write(*,'(a,1x,F6.2)') '>>> LOW-PASS LIMIT:', p%lp
-        write(0,'(a)') "GENERATED VOLUMES: recvol*.ext"
         call eorecvol_read%kill
         ! end gracefully
         call simple_end('**** SIMPLE_EO_VOLASSEMBLE NORMAL STOP ****', print_simple=.false.)
@@ -145,7 +167,7 @@ contains
             end subroutine normalize
 
     end subroutine exec_eo_volassemble
-    
+     !> VOLASSEMBLE is a SIMPLE program to reconstruct volumes
     subroutine exec_volassemble( self, cline )
         use simple_reconstructor, only: reconstructor
         class(volassemble_commander), intent(inout) :: self
@@ -157,7 +179,6 @@ contains
         integer                       :: part, s, ss, endit, i, state4name, file_stat, fnr
         type(reconstructor)           :: recvol_read
         logical                       :: here(2)
-        logical, parameter            :: debug=.false.
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         call b%build_rec_tbox(p)            ! reconstruction toolbox built
@@ -176,7 +197,7 @@ contains
             else
                 s = ss
             endif
-            if( debug ) write(*,*) 'processing state: ', s
+            DebugPrint  'processing state: ', s
             if( b%a%get_statepop( s ) == 0 )cycle           ! Empty state
             call b%recvol%reset
             do part=1,p%nparts
@@ -186,7 +207,7 @@ contains
                     state4name = s
                 endif
                 allocate(fbody, source='recvol_state'//int2str_pad(state4name,2)//'_part'//int2str_pad(part,p%numlen))
-                if( debug ) write(*,*) 'processing fbody: ', fbody
+                DebugPrint  'processing fbody: ', fbody
                 do i=1,endit
                     if( cline%defined('even') .or. cline%defined('odd') )then
                         if( p%even .eq. 'yes' .and. p%odd .eq. 'no' )then

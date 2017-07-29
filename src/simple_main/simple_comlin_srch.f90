@@ -1,3 +1,7 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple optimisation module: common-line mode search
 module simple_comlin_srch
 use simple_defs
 use simple_build,       only: build
@@ -14,8 +18,7 @@ implicit none
 public :: comlin_srch_init, comlin_srch_get_nproj, comlin_srch_get_nbest, comlin_srch_write_resoris,&
 comlin_srch_symaxis, comlin_srch_pair
 private
-
-logical, parameter :: DEBUG      = .false.
+#include "simple_local_flags.inc"
 integer, parameter :: NPROJ      = 200
 integer, parameter :: NBEST      = 20
 integer, parameter :: NBEST_PAIR = 10
@@ -43,9 +46,9 @@ contains
 
     subroutine comlin_srch_init( b, p, opt_str, mode )
         class(build),  target, intent(in) :: b
-        class(params), target, intent(in) :: p
-        character(len=*),      intent(in) :: opt_str
-        character(len=*),      intent(in) :: mode
+        class(params), target, intent(in) :: p           !< Parameters
+        character(len=*),      intent(in) :: opt_str     !< 'simplex', 'de' or 'oasis' search type
+        character(len=*),      intent(in) :: mode        !< 'sym' or 'pair' mode
         character(len=8) :: str_opt= 'simplex'
         bp     => b
         pp     => p
@@ -178,7 +181,7 @@ contains
             ! return best
             orientation_best = resoris%get_ori(order(1))
             write(*,'(A)') '>>> FOUND REFINED SYMMETRY AXIS ORIENTATION'
-            call orientation_best%print
+            call orientation_best%print_ori()
         endif
     end subroutine comlin_srch_symaxis
 

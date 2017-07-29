@@ -1,3 +1,7 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple optimisation module: DE optimisation
 module simple_de_opt
 use simple_defs
 use simple_optimizer, only: optimizer
@@ -11,7 +15,7 @@ private
 integer, parameter :: N_GENERAL = 136,    N_VALLEY = 126,    N_MULTIMODAL = 103,    N_FLAT = 106
 real,    parameter :: F_GENERAL = 0.2790, F_VALLEY = 0.4027, F_MULTIMODAL = 0.3976, F_FLAT = 0.5860
 real,    parameter :: X_GENERAL = 0.9813, X_VALLEY = 0.9211, X_MULTIMODAL = 0.9794, X_FLAT = 0.3345
-logical, parameter :: DEBUG = .false.
+#include "simple_local_flags.inc"
 
 type, extends(optimizer) :: de_opt
     private

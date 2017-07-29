@@ -1,3 +1,7 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple optimisation module:  particle swarm optimisation
 module simple_particle_swarm_opt
 use simple_defs
 use simple_optimizer, only: optimizer
@@ -7,7 +11,7 @@ implicit none
 
 public :: particle_swarm_opt
 private
-
+#include "simple_local_flags.inc"
 type, extends(optimizer) :: particle_swarm_opt
     private
     real, allocatable :: swarm(:,:)       !< particle positions
@@ -23,10 +27,8 @@ type, extends(optimizer) :: particle_swarm_opt
     procedure :: kill         => kill_particle_swarm
 end type particle_swarm_opt
 
-logical, parameter :: debug=.false.
-
 contains
-    
+
     !> \brief  is a constructor
     subroutine new_particle_swarm( self, spec )
         use simple_jiffys,   only: alloc_err
@@ -39,18 +41,19 @@ contains
         allocate(self%swarm(spec%npop,spec%ndim), self%velocities(spec%npop,spec%ndim), stat=alloc_stat)
         call alloc_err("In: new_particle_swarm_opt, 1", alloc_stat)
         self%exists = .true. ! indicates existence
-        if( spec%debug ) write(*,*) 'created new particle swarm'
+        if( spec%debug ) write(*,*) 'created new particle swarm (spec debug)'
+        DebugPrint 'created new particle swarm (instance)'
     end subroutine new_particle_swarm
-    
+
     !> \brief  is the particle swarm minimize minimization routine
     subroutine particle_swarm_minimize( self, spec, lowest_cost )
-        class(particle_swarm_opt), intent(inout) :: self        !< instance     
+        class(particle_swarm_opt), intent(inout) :: self        !< instance
         class(opt_spec), intent(inout)           :: spec        !< specification
         real, intent(out)                        :: lowest_cost !< lowest cost
-        integer :: t                ! iteration counter
-        integer :: npeaks           ! number of local minima
-        real    :: rtol             ! relative tolerance
-        real    :: costs(spec%npop) ! particle costs
+        integer :: t                !< iteration counter
+        integer :: npeaks           !< number of local minima
+        real    :: rtol             !< relative tolerance
+        real    :: costs(spec%npop) !< particle costs
         integer :: loc(1), nworse
         if( .not. associated(spec%costfun) )then
             stop 'cost function not associated in opt_spec; particle_swarm_minimize; simple_particle_swarm_opt'
@@ -64,16 +67,16 @@ contains
             ! update a randomly selected particle
             call update_particle(irnd_uni(spec%npop))
             if( spec%npeaks > 0 )then
-                ! exit when we have identified spec%npeaks local optima
+                ! exit when we have idetified spec%npeaks local optima
                 if( npeaks == spec%npeaks ) exit
             endif
             if( nworse == 5*spec%npop ) exit ! if no better solutions have been found in the last 5*npop iterations
         end do
         lowest_cost = self%yb
         spec%x = self%swarm(self%best,:)
-        
+
       contains
-        
+
         !> \brief  initialize the particle positions & velocities
         subroutine init
             integer :: i, j
@@ -106,7 +109,7 @@ contains
             self%best = loc(1)
             self%yb   = costs(self%best)
         end subroutine init
-        
+
         subroutine update_particle( i )
             integer, intent(in) :: i
             integer :: j
@@ -145,7 +148,7 @@ contains
                 nworse = nworse+1
             endif
         end subroutine update_particle
-    
+
     end subroutine particle_swarm_minimize
 
     !> \brief  is a destructor
@@ -156,5 +159,5 @@ contains
             self%exists = .false.
         endif
     end subroutine kill_particle_swarm
-    
+
 end module simple_particle_swarm_opt

@@ -1,8 +1,11 @@
-!==Class simple_simplex_opt
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple optimisation module: Simplex optimisation method
 !
-! Minimization of an externally defined function by the simplex method of Nelder and Mead
-! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_. 
-! Redistribution or modification is regulated by the GNU General Public License. 
+!! Minimization of an externally defined function by the simplex method of Nelder and Mead
+! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
+! Redistribution or modification is regulated by the GNU General Public License.
 ! *Author:* Hans Elmlund, 2013-10-15
 module simple_simplex_opt
 use simple_optimizer, only: optimizer
@@ -41,7 +44,7 @@ contains
         self%yb = huge(x)
         self%exists = .true. ! indicates existence
     end subroutine new_simplex_opt
-    
+
     !> \brief  restarted simplex minimization
     subroutine simplex_minimize( self, spec, lowest_cost )
         !$ use omp_lib
@@ -89,7 +92,7 @@ contains
         lowest_cost = self%yb
 
         contains
-        
+
             !> \brief  initializes the simplex using randomized bounds
             subroutine init
                 use simple_rnd, only: ran3
@@ -107,7 +110,7 @@ contains
                     self%y(i) = spec%costfun(self%p(i,:), spec%ndim)
                 end do
             end subroutine init
-        
+
     end subroutine simplex_minimize
 
     !> \brief  is a destructor
@@ -118,5 +121,5 @@ contains
         if( allocated(self%pb) ) deallocate(self%pb)
         self%exists = .false.
     end subroutine kill_simplex_opt
-    
+
 end module simple_simplex_opt

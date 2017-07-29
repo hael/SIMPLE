@@ -1,8 +1,12 @@
-!==Class simple_commander_oris
-!
-! This class contains the set of concrete commanders for orientation data management in the SIMPLE library. This class provides 
-! the glue between the reciver (main reciever is simple_exec program) and the abstract action, which is simply execute (defined 
-! by the base class: simple_commander_base). Later we can use the composite pattern to create MacroCommanders (or workflows)
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> simple_commander_oris This class contains the set of concrete commanders for
+!> orientation data management in the SIMPLE library.
+!! This class provides the glue between the reciver (main reciever is
+!! simple_exec program) and the abstract action, which is simply execute
+!! (defined by the base class: simple_commander_base). Later we can use the
+!! composite pattern to create MacroCommanders (or workflows)
 !
 ! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
 ! Redistribution and modification is regulated by the GNU General Public License.
@@ -26,7 +30,7 @@ public :: orisops_commander
 public :: oristats_commander
 public :: rotmats2oris_commander
 private
-
+#include "simple_local_flags.inc"
 type, extends(commander_base) :: cluster_oris_commander
  contains
    procedure :: execute      => exec_cluster_oris
@@ -57,7 +61,7 @@ type, extends(commander_base) :: rotmats2oris_commander
 end type rotmats2oris_commander
 
 contains
-
+    !> cluster_oris is a program for clustering orientations based on geodesic distance
     subroutine exec_cluster_oris( self, cline )
         use simple_shc_cluster, only: shc_cluster
         use simple_math,        only: rad2deg
@@ -94,6 +98,14 @@ contains
         call simple_end('**** SIMPLE_CLUSTER_ORIS NORMAL STOP ****')
     end subroutine exec_cluster_oris
 
+  !>  makedeftab is a program for creating a SIMPLE conformant file of CTF
+  !!  parameter values (deftab). Input is either an earlier SIMPLE
+  !!  deftab/oritab. The purpose is to get the kv, cs, and fraca parameters as
+  !!  part of the CTF input doc as that is the new convention. The other
+  !!  alternative is to input a plain text file with CTF parameters dfx, dfy,
+  !!  angast according to the Frealign convention. Unit conversions are dealt
+  !!  with using optional variables. The units refer to the units in the
+  !!  inputted d
     subroutine exec_makedeftab( self, cline )
         use simple_nrtxtfile, only: nrtxtfile
         use simple_math,      only: rad2deg
@@ -149,7 +161,7 @@ contains
                         if( nrecs > 1 )  line(2) = line(2)/1.0e4
                     case( 'microns' )
                         ! nothing to do
-                    case DEFAULT 
+                    case DEFAULT
                         stop 'unsupported dfunit; simple_commander_oris :: exec_makedeftab'
                 end select
                 select case(p%angastunit)
@@ -157,7 +169,7 @@ contains
                         if( nrecs == 3 ) line(3) = rad2deg(line(3))
                     case( 'degrees' )
                         ! nothing to do
-                    case DEFAULT 
+                    case DEFAULT
                         stop 'unsupported angastunit; simple_commander_oris :: exec_makedeftab'
                 end select
                 call b%a%set(iptcl, 'smpd',  p%smpd )
@@ -178,6 +190,20 @@ contains
         call simple_end('**** SIMPLE_MAKEDEFTAB NORMAL STOP ****')
     end subroutine exec_makedeftab
 
+    !> makeoris is a program for making SIMPLE orientation/parameter files (text
+    !! files containing input parameters and/or parameters estimated by prime2D or
+    !! prime3D). The program generates random Euler angles e1.in.[0,360],
+    !! e2.in.[0,180], and e3.in.[0,360] and random origin shifts x.in.[-trs,yrs] and
+    !! y.in.[-trs,yrs]. If ndiscrete is set to an integer number > 0, the
+    !! orientations produced are randomly sampled from the set of ndiscrete
+    !! quasi-even projection directions, and the in-plane parameters are assigned
+    !! randomly. If even=yes, then all nptcls orientations are assigned quasi-even
+    !! projection directions,and random in-plane parameters. If nstates is set to
+    !! some integer number > 0, then states are assigned randomly .in.[1,nstates].
+    !! If zero=yes in this mode of execution, the projection directions are zeroed
+    !! and only the in-plane parameters are kept intact. If errify=yes and astigerr
+    !! is defined, then uniform random astigmatism errors are introduced
+    !! .in.[-astigerr,astigerr]
     subroutine exec_makeoris( self, cline )
         use simple_ori,           only: ori
         use simple_oris,          only: oris
@@ -226,7 +252,7 @@ contains
                         call b%a%set_ori(cnt, orientation)
                     end do
                 end do
-                if( p%zero .ne. 'yes' ) call b%a%rnd_inpls(p%trs) 
+                if( p%zero .ne. 'yes' ) call b%a%rnd_inpls(p%trs)
             endif
         else if( cline%defined('ndiscrete') )then
             if( p%ndiscrete > 0 )then
@@ -297,7 +323,11 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_MAKEORIS NORMAL STOP ****')
     end subroutine exec_makeoris
-    
+
+    !> map2ptcls is a program for mapping parameters that have been obtained using class averages
+    !!  to the individual particle images
+    !! @see http://simplecryoem.com/tutorials.html?#using-simple-in-the-wildselecting-good-class-averages-and-mapping-the-selection-to-the-particles
+    !! @see http://simplecryoem.com/tutorials.html?#resolution-estimate-from-single-particle-images
     subroutine exec_map2ptcls( self, cline )
         use simple_oris,    only: oris
         use simple_ori,     only: ori
@@ -307,7 +337,7 @@ contains
         class(cmdline),             intent(inout) :: cline
         type state_organiser
             integer, allocatable :: particles(:)
-            integer              :: cls_orig = 0 
+            integer              :: cls_orig = 0
             integer              :: cls_sel  = 0
             integer              :: istate   = 0
             type(ori)            :: ori3d
@@ -326,7 +356,7 @@ contains
         integer                            :: cnt, istate, funit, iline, nls, lfoo(3)
         character(len=STDLEN)              :: statedoc
         real                               :: corr
-        logical, parameter                 :: debug=.false.
+
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         ! find number of selected cavgs
@@ -343,7 +373,7 @@ contains
         endif
         if( cline%defined('doclist') )then
             if( .not. cline%defined('comlindoc') )then
-                if( nlines(p%doclist) /= 1 ) stop 'need a comlindoc together with statelist'        
+                if( nlines(p%doclist) /= 1 ) stop 'need a comlindoc together with statelist'
             endif
         endif
         if( cline%defined('comlindoc') .and. cline%defined('oritab3D') )&
@@ -428,7 +458,7 @@ contains
                 labeler(isel)%istate = nint(labeler(isel)%ori3d%get('state'))
                 corr                 = labeler(isel)%ori3d%get('corr')
                 do iptcl=1,size(labeler(isel)%particles)
-                    ! get particle index 
+                    ! get particle index
                     pind = labeler(isel)%particles(iptcl)
                     ! get 2d ori
                     ori2d = b%a%get_ori(pind)
@@ -436,7 +466,7 @@ contains
                         call ori2d%set('x', p%mul*ori2d%get('x'))
                         call ori2d%set('y', p%mul*ori2d%get('y'))
                     endif
-                    ! transfer original parameters in b%a 
+                    ! transfer original parameters in b%a
                     ori_comp = b%a%get_ori(pind)
                     ! compose ori3d and ori2d
                     call labeler(isel)%ori3d%compose3d2d(ori2d, ori_comp)
@@ -547,7 +577,7 @@ contains
         call b%a%write(p%outfile)
         call simple_end('**** SIMPLE_MAP2PTCLS NORMAL STOP ****')
     end subroutine exec_map2ptcls
-   
+
     subroutine exec_orisops(self,cline)
         use simple_ori,  only: ori
         use simple_math, only: normvec
@@ -572,7 +602,7 @@ contains
             call orientation%new
             call orientation%e1set(p%e1)
             call orientation%e2set(p%e2)
-            call orientation%e3set(p%e3) 
+            call orientation%e3set(p%e3)
             if( cline%defined('state') )then
                 do i=1,b%a%get_noris()
                     s = nint(b%a%get(i, 'state'))
@@ -588,7 +618,7 @@ contains
             call b%a%mul_shifts(p%mul)
         endif
         if( p%zero  .eq. 'yes' ) call b%a%zero_shifts
-        if( p%plot  .eq. 'yes' )then ! plot polar vectors                          
+        if( p%plot  .eq. 'yes' )then ! plot polar vectors
             do i=1,b%a%get_noris()
                 normal = b%a%get_normal(i)
                 write(*,'(1x,f7.2,3x,f7.2)') normal(1), normal(2)
@@ -633,12 +663,20 @@ contains
                 percen = percen + b%a%cls_corr_sigthresh(icls, p%nsig)
             end do
             percen = percen/real(ncls)
-            write(*,*) percen, ' % of the particles included at sigma ', p%nsig 
+            write(*,*) percen, ' % of the particles included at sigma ', p%nsig
         endif
         call b%a%write(p%outfile)
         call simple_end('**** SIMPLE_ORISOPS NORMAL STOP ****')
     end subroutine exec_orisops
-    
+
+    !> oristats is a program for analyzing SIMPLE orientation/parameter files (text files
+    !! containing input parameters and/or parameters estimated by prime2D or
+    !! prime3D). If two orientation tables (oritab and oritab2) are inputted, the
+    !! program provides statistics of the distances between the orientations in the
+    !! two documents. These statistics include the sum of angular distances between
+    !! the orientations, the average angular distance between the orientations, the
+    !! standard deviation of angular distances, the minimum angular distance, and
+    !! the maximum angular distance
     subroutine exec_oristats(self,cline)
         use simple_oris, only: oris
         class(oristats_commander), intent(inout) :: self
@@ -728,6 +766,7 @@ contains
         999 call simple_end('**** SIMPLE_ORISTATS NORMAL STOP ****')
     end subroutine exec_oristats
 
+    !> convert rotation matrix to orientation oris class
     subroutine exec_rotmats2oris( self, cline )
         use simple_oris,      only: oris
         use simple_ori,       only: ori

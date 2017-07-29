@@ -1,3 +1,7 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple optimisation module: core specification module
 module simple_opt_spec
 use simple_defs
 implicit none
@@ -36,9 +40,10 @@ type :: opt_spec
     real, allocatable     :: inipopulation(:,:)               !< input population for the evolutionary approaches
     real, allocatable     :: population(:,:)                  !< output solution population from the evolutionary approaches
     real, allocatable     :: peaks(:,:)                       !< output peaks (local optimal solutions)
-    logical               :: verbose   = .false.              !< verbose output of optimizer on/off
-    logical               :: debug     = .false.              !< debugging mode on/off
-    logical               :: warn      = .false.              !< warning mode on/off
+#include "simple_local_flags.inc"
+!    logical               :: verbose   = .false.              !< verbose output of optimizer on/off
+!    logical               :: opt_spec_debug = .false.         !< debugging mode on/off unique to opt_spec
+!    logical               :: warn      = .false.              !< warning mode on/off
     logical               :: converged = .false.              !< converged status
     logical               :: exists    = .false.              !< to indicate existence
   contains
@@ -49,7 +54,7 @@ type :: opt_spec
     procedure :: set_gcostfun
     procedure :: set_inipop
     procedure :: kill
-end type
+end type opt_spec
 
 !>  \brief  defines the cost function interface
 abstract interface
@@ -57,7 +62,7 @@ abstract interface
         integer, intent(in) :: D
         real,    intent(in) :: vec(D)
         real                :: cost
-    end function 
+    end function
 end interface
 
 !>  \brief  defines the cost function gradient interface
@@ -66,22 +71,23 @@ abstract interface
         integer, intent(in)    :: D
         real,    intent(inout) :: vec(D)
         real                   :: grad(D)
-    end function 
+    end function
 end interface
 
-contains      
+contains
 
     !>  \brief  specifies the optimization parameters
     subroutine specify( self, str_opt, ndim, mode, ldim, ftol, gtol, maxits,&
-    nrestarts, nsample, limits, cyclic, verbose, debug, npop,&
-    eps, cfac, warn, nbest, nstates, stepsz, npeaks, nnn )
+    nrestarts, nsample, limits, cyclic, verbose_arg, debug_arg, npop,&
+    eps, cfac, warn_arg, nbest, nstates, stepsz, npeaks, nnn )
         use simple_jiffys, only: alloc_err
         class(opt_spec),            intent(inout) :: self           !< instance
         character(len=*),           intent(in)    :: str_opt        !< string descriptor (of optimization routine to be used)
         integer,                    intent(in)    :: ndim           !< problem dimensionality
         character(len=*), optional, intent(in)    :: mode           !< mode string descriptor
-        integer,          optional, intent(in)    :: ldim           !< second problem dimensionality 
-        real,             optional, intent(in)    :: ftol,gtol      !< fractional convergence tolerance to be achieved in costfun/gradient
+        integer,          optional, intent(in)    :: ldim           !< second problem dimensionality
+        real,             optional, intent(in)    :: ftol           !< fractional convergence tolerance to be achieved in costfun
+        real,             optional, intent(in)    :: gtol           !< fractional convergence tolerance to be achieved in gradient
         integer,          optional, intent(in)    :: maxits         !< maximum number of iterations
         integer,          optional, intent(in)    :: nbest          !< nr of best solutions used to update the CE model
         integer,          optional, intent(in)    :: nrestarts      !< number of restarts
@@ -89,9 +95,9 @@ contains
         integer,          optional, intent(in)    :: nstates        !< nr of states
         real,             optional, intent(in)    :: limits(ndim,2) !< variable bounds
         logical,          optional, intent(in)    :: cyclic(ndim)   !< to indicate which variables are cyclic (Euler angles)
-        logical,          optional, intent(in)    :: verbose        !< verbose output of optimizer
-        logical,          optional, intent(in)    :: debug          !< debugging mode
-        logical,          optional, intent(in)    :: warn           !< warning mode
+        logical,          optional, intent(in)    :: verbose_arg    !< verbose output of optimizer
+        logical,          optional, intent(in)    :: debug_arg      !< debugging mode
+        logical,          optional, intent(in)    :: warn_arg       !< warning mode
         integer,          optional, intent(in)    :: npop           !< population size (4 evolutionary optimizers)
         integer,          optional, intent(in)    :: npeaks         !< number of peaks (local optima to identify)
         integer,          optional, intent(in)    :: nnn            !< number of nearest neighbors
@@ -156,12 +162,12 @@ contains
             call alloc_err('In: specify; simple_opt_spec, stepsz', alloc_stat)
             self%stepsz = stepsz
         endif
-        if(present(verbose)) self%verbose = verbose
+        if(present(verbose_arg)) self%verbose = verbose_arg
         if(present(npop))    self%npop    = npop
         if(present(cfac))    self%cfac    = cfac
         if(present(eps))     self%eps     = eps
-        if(present(debug))   self%debug   = debug
-        if(present(warn))    self%warn    = warn
+        if(present(debug_arg))   self%debug   = debug_arg
+        if(present(warn_arg))    self%warn    = warn_arg
         ! allocate
         if( self%npeaks > 0 )then
             allocate( self%peaks(self%npeaks,self%ndim+1), source=1., stat=alloc_stat )
@@ -179,12 +185,12 @@ contains
                 self%xt = 0.
             case DEFAULT
                 allocate( self%x(self%ndim), stat=alloc_stat )
-                call alloc_err('In: specify; simple_opt_spec, DEFAULT', alloc_stat) 
+                call alloc_err('In: specify; simple_opt_spec, DEFAULT', alloc_stat)
         end select
         self%x  = 0.
         self%exists = .true.
     end subroutine specify
-    
+
     !>  \brief  to change optimizer
     subroutine change_opt( self, str_opt )
         class(opt_spec), intent(inout) :: self    !< instance
@@ -228,37 +234,39 @@ contains
 
     !>  \brief  sets the cost function in the spec object
     subroutine set_costfun( self, fun )
-        class(opt_spec), intent(inout) :: self !< instance        
+        class(opt_spec), intent(inout) :: self !< instance
 #if defined (PGI)
         ! GNU COMPILER DOES NOT COPE W EXTERNAL
-        real, external :: fun
+        real, external :: fun !< defines cost function interface
 #else
         ! PGI COMPILER DOES NOT COPE W INTERFACE
-        interface !< defines cost function interface
+        interface
+            !< defines cost function interface
             function fun( vec, D ) result(cost)
                 integer, intent(in) :: D
                 real,    intent(in) :: vec(D)
                 real :: cost
-            end function 
+            end function
         end interface
 #endif
         self%costfun => fun
     end subroutine set_costfun
-    
+
     !>  \brief  sets the gradient function in the spec object
     subroutine set_gcostfun( self, fun )
         class(opt_spec), intent(inout) :: self !< instance
 #if defined (PGI)
         ! GNU COMPILER DOES NOT COPE W EXTERNAL
-        real, external  :: fun
+        real, external  :: fun !< defines cost function gradient interface
 #else
         ! PGI COMPILER DOES NOT COPE W INTERFACE
-        interface !< defines cost function gradient interface
+        interface
+            !< defines cost function gradient interface
             function fun( vec, D ) result( grad )
                 integer, intent(in)    :: D
                 real,    intent(inout) :: vec( D )
                 real :: grad( D )
-            end function 
+            end function
         end interface
 #endif
         self%gcostfun => fun
@@ -283,5 +291,5 @@ contains
             self%exists = .false.
         endif
     end subroutine kill
-    
+
 end module simple_opt_spec

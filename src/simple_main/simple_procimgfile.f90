@@ -1,19 +1,22 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 !>  \brief  SIMPLE stack image processing routines for SPIDER/MRC files
 module simple_procimgfile
-use simple_defs
-use simple_image,  only: image
-use simple_jiffys, only: find_ldim_nptcls, progress
-implicit none
+    use simple_defs
+    use simple_image,  only: image
+    use simple_jiffys, only: find_ldim_nptcls, progress
+    implicit none
 
-private :: raise_exception_imgfile
-public
+    private :: raise_exception_imgfile
+    public
 
 contains
-    
+
     !>  \brief  is for raising exception
     subroutine raise_exception_imgfile( n, ldim, routine )
-        integer, intent(in) :: n, ldim(3)
-        character(len=*)    :: routine
+        integer, intent(in) :: n, ldim(3)   !< num of images and logical dimensions
+        character(len=*)    :: routine      !< Error message caller
         if( n < 1 .or. any(ldim == 0))then
             write(*,*) routine
             write(*,*) 'The input stack is corrupt!'
@@ -23,11 +26,12 @@ contains
         endif
     end subroutine raise_exception_imgfile
 
-    !>  \brief  is for copying
+    !>  \brief  is for copying image file
+    !! \param fname2copy,fname Filenames to copy
     subroutine copy_imgfile( fname2copy, fname, smpd, fromto )
         character(len=*),  intent(in) :: fname2copy, fname
-        real,              intent(in) :: smpd
-        integer, optional, intent(in) :: fromto(2)
+        real,              intent(in) :: smpd       !< sampling distance
+        integer, optional, intent(in) :: fromto(2)  !< ranges
         type(image) :: img
         integer     :: n, i, cnt, ldim(3)
         call find_ldim_nptcls(fname2copy, ldim, n)
@@ -44,7 +48,7 @@ contains
                     call img%read(fname2copy, i)
                     call img%write(fname, cnt)
                 end do
-            else                
+            else
                 do i=1,n
                     call progress(i, n)
                     call img%read(fname2copy, i)
@@ -54,8 +58,9 @@ contains
         endif
         call img%kill
     end subroutine copy_imgfile
-    
-    !>  \brief  is for making a stack of normalized vectors for PCA analysis    
+
+    !>  \brief  is for making a stack of normalized vectors for PCA analysis
+    !! \param fnameStack,fnamePatterns filenames for stacka and pattern
     subroutine make_pattern_stack( fnameStack, fnamePatterns, mskrad, D, recsz, avg, otab, hfun )
         use simple_filehandling, only: get_fileunit, fopen_err
         use simple_stat,         only: normalize, normalize_sigm
@@ -63,17 +68,17 @@ contains
         use simple_math,         only: check4nans
         use simple_jiffys,       only: alloc_err
         character(len=*),            intent(in)    :: fnameStack, fnamePatterns
-        real,                        intent(in)    :: mskrad
-        integer,                     intent(out)   :: D, recsz
-        real, allocatable, optional, intent(out)   :: avg(:)
-        class(oris),       optional, intent(inout) :: otab
-        character(len=*),  optional, intent(in)    :: hfun
+        real,                        intent(in)    :: mskrad       !< mask radius
+        integer,                     intent(out)   :: D, recsz     !< record size
+        real, allocatable, optional, intent(out)   :: avg(:)       !< frame stack average
+        class(oris),       optional, intent(inout) :: otab         !< oris table
+        character(len=*),  optional, intent(in)    :: hfun         !< which normalise pca vec 
         type(image)        :: img
         real, allocatable  :: pcavec(:)
         real               :: x, y
         integer            :: n, fnum, ier, i, alloc_stat, ldim(3)
         logical            :: err
-        logical, parameter :: debug=.false.        
+#include "simple_local_flags.inc" 
         call find_ldim_nptcls(fnameStack, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'make_pattern_stack' )
@@ -93,7 +98,7 @@ contains
         ! extract patterns and write to file
         fnum = get_fileunit()
         open(unit=fnum, status='replace', action='readwrite', file=fnamePatterns,&
-        access='direct', form='unformatted', recl=recsz, iostat=ier)
+             access='direct', form='unformatted', recl=recsz, iostat=ier)
         call fopen_err('make_pattern_stack; simple_procimgfile', ier)
         write(*,'(a)') '>>> MAKING PATTERN STACK'
         do i=1,n
@@ -118,7 +123,7 @@ contains
             else
                 call normalize(pcavec, err)
             endif
-            if( err ) write(*,'(a,i7)') 'WARNING: variance zero! image nr: ', i 
+            if( err ) write(*,'(a,i7)') 'WARNING: variance zero! image nr: ', i
             if( present(avg) ) avg = avg+pcavec
             write(fnum,rec=i) pcavec
             if( debug )then
@@ -142,8 +147,12 @@ contains
         close(unit=fnum)
         call img%kill
     end subroutine make_pattern_stack
-    
-    !>  \brief  is for padding
+
+    !>  \brief pad_imgfile is for padding
+    !! \param fname2pad,fname filename strings 
+    !! \param ldim_pad logical dimension of padding
+    !! \param smpd sampling distance
+    !!
     subroutine pad_imgfile( fname2pad, fname, ldim_pad, smpd )
         character(len=*), intent(in) :: fname2pad, fname
         integer,          intent(in) :: ldim_pad(3)
@@ -155,7 +164,7 @@ contains
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'pad_imgfile' )
         if( ldim_pad(1) >= ldim(1) .and. ldim(2) >= ldim(2)&
-        .and. ldim(3) >= ldim(3) )then
+             .and. ldim(3) >= ldim(3) )then
             call img%new(ldim,smpd)
             call img_pad%new(ldim_pad,smpd)
             write(*,'(a)') '>>> PADDING IMAGES'
@@ -166,7 +175,7 @@ contains
                     call img%pad(img_pad) ! FT state preserved
                 else
                     ! get background statistics
-                    call img%stats('background', ave, sdev, var, med=med) 
+                    call img%stats('background', ave, sdev, var, med=med)
                     call img%pad(img_pad, backgr=med) ! FT state preserved
                 endif
                 call img_pad%write(fname, i)
@@ -175,8 +184,14 @@ contains
             call img_pad%kill
         end if
     end subroutine pad_imgfile
-    
-    !>  \brief  is for resizing
+
+    !>  \brief resize_imgfile is for resizing
+    !! \param fname2resize,fname string filenames
+    !! \param smpd sampling distance
+    !! \param ldim_new new logical dimension
+    !! \param smpd_new new sampling distance
+    !! \param fromptop index range for copying
+    !!
     subroutine resize_imgfile( fname2resize, fname, smpd, ldim_new, smpd_new, fromptop )
         character(len=*),  intent(in)  :: fname2resize, fname
         real,              intent(in)  :: smpd
@@ -205,7 +220,7 @@ contains
             call img%read(fname2resize, i)
             call img%fwd_ft
             if( ldim_new(1) <= ldim(1) .and. ldim_new(2) <= ldim(2)&
-            .and. ldim_new(3) <= ldim(3) )then
+                 .and. ldim_new(3) <= ldim(3) )then
                 call img%clip(img_resized)
             else
                 call img%pad(img_resized)
@@ -217,8 +232,13 @@ contains
         call img%kill
         call img_resized%kill
     end subroutine resize_imgfile
-    
-    !>  \brief  is for clipping
+
+    !>  \brief clip_imgfile is for clipping
+    !! \param fname2clip output filename
+    !! \param fname input filename
+    !! \param ldim_clip clipped logical dimension
+    !! \param smpd sampling distance
+    !!
     subroutine clip_imgfile( fname2clip, fname, ldim_clip, smpd )
         character(len=*), intent(in) :: fname2clip, fname
         integer,          intent(in) :: ldim_clip(3)
@@ -230,7 +250,7 @@ contains
         call raise_exception_imgfile( n, ldim, 'clip_imgfile' )
         ! do the work
         if( ldim_clip(1) <= ldim(1) .and. ldim_clip(2) <= ldim(2)&
-        .and. ldim_clip(3) <= ldim(3) )then
+             .and. ldim_clip(3) <= ldim(3) )then
             call img%new(ldim,smpd)
             call img_clip%new(ldim_clip,smpd)
             write(*,'(a)') '>>> CLIPPING IMAGES'
@@ -244,8 +264,16 @@ contains
             call img_clip%kill
         end if
     end subroutine clip_imgfile
-    
-    !>  \brief  is for resizing and clipping
+
+    !>  \brief  resize_and_clip_imgfile is for resizing and clipping
+    !! \param fname2resize  output filename
+    !! \param fname  input filename
+    !! \param smpd  sampling distance
+    !! \param ldim_new new logical dimension
+    !! \param ldim_clip clipped logical dimension
+    !! \param smpd_new new sampling distance
+    !! \param fromptop  index range for copying
+    !!
     subroutine resize_and_clip_imgfile( fname2resize, fname, smpd, ldim_new, ldim_clip, smpd_new, fromptop )
         character(len=*),  intent(in)  :: fname2resize, fname
         real,              intent(in)  :: smpd
@@ -278,7 +306,7 @@ contains
             call img_resized%bwd_ft
             call img_clip%new(ldim_clip,img_resized%get_smpd())
             if( ldim_clip(1) <= ldim_new(1) .and. ldim_clip(2) <= ldim_new(2)&
-            .and. ldim_clip(3) <= ldim_new(3) )then
+                 .and. ldim_clip(3) <= ldim_new(3) )then
                 call img_resized%clip(img_clip)
             else
                 call img_resized%pad(img_clip)
@@ -292,6 +320,14 @@ contains
     end subroutine resize_and_clip_imgfile
 
     !>  \brief  is for resizing and clipping
+     !! \param fname2resize  output filename
+    !! \param fname  input filename
+    !! \param smpd  sampling distance
+    !! \param ldim_new new logical dimension
+    !! \param ldim_clip clipped logical dimension
+    !! \param smpd_new new sampling distance
+    !! \param fromptop  index range for copying
+    !!
     subroutine resize_imgfile_double( fname2resize, fname1, fname2, smpd, ldims_new, smpds_new, fromptop )
         character(len=*),  intent(in)  :: fname2resize, fname1, fname2
         real,              intent(in)  :: smpd
@@ -333,8 +369,13 @@ contains
         call img_resized1%kill
         call img_resized2%kill
     end subroutine resize_imgfile_double
-    
-    !>  \brief  is for normalization
+
+    !>  \brief norm_imgfile is for normalization plus sigmoid contrast enhancement
+    !! \param fname2norm  output filename
+    !! \param fname  input filename
+    !! \param smpd  sampling distance
+    !! \param hfun normalisation type
+    !!
     subroutine norm_imgfile( fname2norm, fname, smpd, hfun )
         character(len=*),           intent(in) :: fname2norm, fname
         real,                       intent(in) :: smpd
@@ -354,8 +395,12 @@ contains
         end do
         call img%kill
     end subroutine norm_imgfile
-    
-    !>  \brief  is for normalization
+
+    !>  \brief  is for normalization [mean,stdev] ->  [new mean, new stdev]
+    !! \param fname2norm  output filename
+    !! \param fname  input filename
+    !! \param smpd  sampling distance
+    !! \param avg,sdev new average and standard deviation
     subroutine norm_ext_imgfile( fname2norm, avg, sdev, fname, smpd )
         character(len=*), intent(in) :: fname2norm, fname
         real,             intent(in)  :: avg, sdev, smpd
@@ -374,11 +419,15 @@ contains
         end do
         call img%kill
     end subroutine norm_ext_imgfile
-    
+
     !>  \brief  is for noise normalization
+    !! \param fname2norm  output filename
+    !! \param fname  input filename
+    !! \param smpd  sampling distance
+    !! \param msk masking threshold
     subroutine noise_norm_imgfile( fname2norm, msk, fname, smpd )
         character(len=*), intent(in) :: fname2norm, fname
-        real,             intent(in) :: msk, smpd             
+        real,             intent(in) :: msk, smpd
         type(image)      :: img
         integer          :: i, n, ldim(3)
         call find_ldim_nptcls(fname2norm, ldim, n)
@@ -396,6 +445,9 @@ contains
     end subroutine noise_norm_imgfile
 
     !>  \brief  is for noise normalization
+    !! \param fname2norm  output filename
+    !! \param fname  input filename
+    !! \param smpd  sampling distance
     subroutine shellnorm_imgfile( fname2norm, fname, smpd )
         character(len=*), intent(in) :: fname2norm, fname
         real,             intent(in) :: smpd
@@ -416,6 +468,12 @@ contains
     end subroutine shellnorm_imgfile
 
     !>  \brief  is for calculating statistics
+    !> stats_imgfile
+    !! \param fname filename
+    !! \param which file type
+    !! \param ave,sdev,var,med output statistics
+    !! \param msk mask threshold
+    !!
     subroutine stats_imgfile( fname, which, ave, sdev, var, med, msk )
         character(len=*), intent(in)  :: fname, which
         real,             intent(out) :: ave, sdev, var, med
@@ -435,7 +493,7 @@ contains
         do i=1,n
             call progress(i,n)
             call img%read(fname,i)
-            call img%stats(which, ave_loc, sdev_loc, var_loc, msk=msk, med=med_loc) 
+            call img%stats(which, ave_loc, sdev_loc, var_loc, msk=msk, med=med_loc)
             ave  = ave  + ave_loc
             sdev = sdev + sdev_loc
             var  = var  + var_loc
@@ -447,8 +505,11 @@ contains
         med  = med/real(n)
         call img%kill
     end subroutine stats_imgfile
-    
+
     !>  \brief  is for contrast inversion
+    !! \param fname2neg  output filename
+    !! \param fname  input filename
+    !! \param smpd  sampling distance
     subroutine neg_imgfile( fname2neg, fname, smpd )
         character(len=*), intent(in) :: fname2neg, fname
         real,             intent(in) :: smpd
@@ -467,8 +528,12 @@ contains
         end do
         call img%kill
     end subroutine neg_imgfile
-    
+
     !>  \brief  is for centering based on center of mass
+    !! \param fname2masscen  output filename
+    !! \param fname  input filename
+    !! \param smpd  sampling distance
+    !! \param  lp,msk,tres low-pass cutoff, threshold and interpolation type
     subroutine masscen_imgfile( fname2masscen, fname, smpd, lp, neg, msk, tres )
         character(len=*), intent(in) :: fname2masscen, fname
         real,             intent(in) :: smpd, lp
@@ -490,8 +555,11 @@ contains
         end do
         call img%kill
     end subroutine masscen_imgfile
-    
+
     !>  \brief  is for curing
+    !! \param fname2cure  output filename
+    !! \param fname  input filename
+    !! \param smpd  sampling distance
     subroutine cure_imgfile( fname2cure, fname, smpd )
         use simple_image,        only: image
         use simple_filehandling, only: get_fileunit
@@ -512,14 +580,17 @@ contains
             call img%read(fname2cure, i)
             call img%cure(maxv, minv, ave, sdev, n_nans)
             write(filnum,'(A,1X,f12.2,1X,A,1X,f12.2,1X,A,1X,f12.2,1X,A,1X,f12.2,1X,A,1X,I9)') 'MAX:', maxv,&
-            'MIN:', minv, 'AVE:', ave, 'SDEV:', sdev, 'NANS:', n_nans
+                 'MIN:', minv, 'AVE:', ave, 'SDEV:', sdev, 'NANS:', n_nans
             call img%write(fname, i)
         end do
         close(filnum)
         call img%kill
     end subroutine cure_imgfile
-    
+
     !>  \brief  is for calculating the acf of a stack
+    !! \param fname2acf  output filename
+    !! \param fname  input filename
+   
     subroutine acf_imgfile( fname2acf, fname )
         character(len=*), intent(in) :: fname2acf, fname
         type(image)   :: img
@@ -537,8 +608,12 @@ contains
         end do
         call img%kill
     end subroutine acf_imgfile
-    
+
     !>  \brief  is for adding noise
+    !! \param fname2process  output filename
+    !! \param fname  input filename
+    !! \param smpd  sampling distance
+    !! \param snr signal to noise ratio
     subroutine add_noise_imgfile( fname2process, fname, snr, smpd )
         character(len=*), intent(in) :: fname2process, fname
         real,             intent(in) :: snr, smpd
@@ -557,8 +632,12 @@ contains
         end do
         call img%kill
     end subroutine add_noise_imgfile
-    
+
     !>  \brief  is for making frame averages of dose-fractionated image series
+    !! \param fname2process  output filename
+    !! \param fname  input filename
+    !! \param smpd  sampling distance
+    !! \param navg number of averages
     subroutine frameavg_imgfile( fname2process, fname, navg, smpd )
         character(len=*), intent(in) :: fname2process, fname
         integer,          intent(in) :: navg
@@ -590,8 +669,11 @@ contains
         call img%kill
         call avg%kill
     end subroutine frameavg_imgfile
-    
+
     !>  \brief  is for Fourier transformation visualization
+    !! \param fname2process  output filename
+    !! \param fname  input filename
+    !! \param which file type
     subroutine ft2img_imgfile( fname2process, fname, which )
         character(len=*), intent(in) :: fname2process, fname
         character(len=*), intent(in) :: which
@@ -615,8 +697,14 @@ contains
         call img%kill
         call img2%kill
     end subroutine ft2img_imgfile
-    
+
     !>  \brief  is for origin shifting a stack according to info in o
+    !! \param fname2shift  output filename
+    !! \param fname  input filename
+    !! \param o orientation object used for shifting
+    !! \param mul multiplier
+    !! \param round optional flag for rounding
+
     subroutine shift_imgfile( fname2shift, fname, o, smpd, mul, round )
         use simple_oris, only: oris
         character(len=*),  intent(in)    :: fname2shift, fname
@@ -657,8 +745,15 @@ contains
         end do
         call img%kill
     end subroutine shift_imgfile
-    
+
     !>  \brief  is for band-pass filtering
+    !> bp_imgfile
+    !! \param fname2filter output filename
+    !! \param fname input filename
+    !! \param smpd sampling distance
+    !! \param hp high-pass cutoff freq
+    !! \param lp low-pass cutoff freq
+    !!
     subroutine bp_imgfile( fname2filter, fname, smpd, hp, lp )
         character(len=*), intent(in) :: fname2filter, fname
         real,             intent(in) :: smpd, hp, lp
@@ -669,7 +764,7 @@ contains
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'bp_imgfile' )
         call img%new(ldim,smpd)
-        write(*,'(a)') '>>> BAND-PASS FILTERING IMAGES'   
+        write(*,'(a)') '>>> BAND-PASS FILTERING IMAGES'
         do i=1,n
             call progress(i,n)
             call img%read(fname2filter, i)
@@ -702,6 +797,11 @@ contains
     end subroutine real_filter_imgfile
     
     !>  \brief  is for phase randomization
+    !! \param fname2process output filename
+    !! \param fname input filename
+    !! \param smpd sampling distance
+    !! \param lp low-pass cutoff freq
+    !!
     subroutine phase_rand_imgfile( fname2process, fname, smpd, lp )
         character(len=*), intent(in) :: fname2process, fname
         real,             intent(in) :: smpd, lp
@@ -711,7 +811,7 @@ contains
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'phase_rand_imgfile' )
         call img%new(ldim,smpd)
-        write(*,'(a)') '>>> PHASE RANDOMIZING IMAGES'     
+        write(*,'(a)') '>>> PHASE RANDOMIZING IMAGES'
         do i=1,n
             call progress(i,n)
             call img%read(fname2process, i)
@@ -720,8 +820,14 @@ contains
         end do
         call img%kill
     end subroutine phase_rand_imgfile
-    
+
     !>  \brief  is for applying CTF
+    !! \param fname2process output filename
+    !! \param fname input filename
+    !! \param smpd sampling distance
+    !! \param mode,bfac ctf mode and bfac args
+    !! \param o orientation object used for ctf
+
     subroutine apply_ctf_imgfile( fname2process, fname, o, smpd, mode, bfac )
         use simple_math,  only: deg2rad
         use simple_oris,  only: oris
@@ -754,8 +860,13 @@ contains
         end do
         call img%kill
     end subroutine apply_ctf_imgfile
-    
+
     !>  \brief  is for visualization of the CTF power spectrum
+    !! \param fname2process output filename
+    !! \param fname input filename
+    !! \param smpd sampling distance
+    !! \param tfun,bfac ctf transfer function and bfac args
+    !! \param o orientation object used for ctf
     subroutine ctf2imgfile( fname2process, fname, o, smpd, tfun, bfac )
         use simple_math,  only: deg2rad
         use simple_oris,  only: oris
@@ -776,7 +887,7 @@ contains
         write(*,'(a)') '>>> MAKING CTF POWSPEC IMAGES'
         do i=1,n
             call progress(i,n)
-            if( o%isthere('dfy') )then ! astigmatic CTF   
+            if( o%isthere('dfy') )then ! astigmatic CTF
                 call tfun%ctf2img(img, o%get(i,'dfx'), 'square', dfy=o%get(i,'dfy'), angast=o%get(i,'angast'), bfac=bfac)
             else
                 call tfun%ctf2img(img, o%get(i,'dfx'), 'square', bfac=bfac)
@@ -787,9 +898,13 @@ contains
         call img%kill
         call img2%kill
     end subroutine ctf2imgfile
-    
+
     !>  \brief  is for origin shifting and rotating a stack
-    !!          according to info in o 
+    !!          according to info in o
+    !! \param fname2process  output filename
+    !! \param fname  input filename
+    !! \param o orientation object used for shifting and rotating
+    !! \param mul multiplier
     subroutine shrot_imgfile( fname2process, fname, o, smpd, mul )
         use simple_oris,  only: oris
         character(len=*), intent(in)    :: fname2process, fname
@@ -802,7 +917,7 @@ contains
         call find_ldim_nptcls(fname2process, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'shrot_imgfile' )
-        ! do the work      
+        ! do the work
         if( n /= o%get_noris() )then
             write(*,*) 'nr of entries in stack: ', n
             write(*,*) 'nr of entries in oris object: ', o%get_noris()
@@ -810,7 +925,7 @@ contains
         endif
         call img%new(ldim,smpd)
         call img_rot%new(ldim,smpd)
-        write(*,'(a)') '>>> SHIFTING AND ROTATING IMAGES' 
+        write(*,'(a)') '>>> SHIFTING AND ROTATING IMAGES'
         do i=1,n
             call progress(i,n)
             call img%read(fname2process, i)
@@ -829,8 +944,13 @@ contains
         call img%kill
         call img_rot%kill
     end subroutine shrot_imgfile
-    
+
     !>  \brief  is for applying a soft circular mask to all images in stack
+    !! \param fname2mask  output filename
+    !! \param fname  input filename
+    !! \param maskrad masking radius
+    !! \param  inner,width masking parameters
+    !! \param which  file type
     subroutine mask_imgfile( fname2mask, fname, mskrad, smpd, inner, width, which )
         character(len=*),           intent(in) :: fname2mask, fname
         real,                       intent(in) :: mskrad
@@ -847,17 +967,21 @@ contains
         call raise_exception_imgfile( n, ldim, 'mask_imgfile' )
         ! do the work
         call img%new(ldim,smpd)
-        write(*,'(a)') '>>> MASKING IMAGES' 
+        write(*,'(a)') '>>> MASKING IMAGES'
         do i=1,n
             call progress(i,n)
             call img%read(fname2mask, i)
-            call img%mask(mskrad, which, inner, width) ! FT state preserved 
+            call img%mask(mskrad, which, inner, width) ! FT state preserved
             call img%write(fname, i)
         end do
         call img%kill
     end subroutine mask_imgfile
-    
+
     !>  \brief  is for binarizing all images in the stack
+    !! \param fname2process  output filename
+    !! \param fname  input filename
+    !! \param thres binary threshold
+    !! \param smpd sampling distance
     subroutine bin_imgfile( fname2process, fname, smpd, thres )
         character(len=*), intent(in) :: fname2process, fname
         real,             intent(in) :: smpd
@@ -889,11 +1013,13 @@ contains
         end do
         call img%kill
     end subroutine bin_imgfile
-    
-    !>  \brief  is for making an average of the entire stack
+
+    !>   make_avg_imgfile is for making an average of the entire stack
+    !! \param fname stack filename
+    !! \param avgname output filename
     subroutine make_avg_imgfile( fname, avgname, smpd )
         character(len=*), intent(in) :: fname, avgname
-        real,             intent(in) :: smpd
+        real,             intent(in) :: smpd              !<  sample resolution
         type(image)                  :: avg, img
         integer                      :: i, n, ldim(3)
         call find_ldim_nptcls(fname, ldim, n)
@@ -906,12 +1032,16 @@ contains
         do i=1,n
             call progress(i,n)
             call img%read(fname, i)
-            call avg%add(img)       
+            call avg%add(img)
         end do
         call avg%div(real(n))
         call avg%write(avgname,1)
     end subroutine make_avg_imgfile
-
+    !>  random_selection_from_imgfile
+    !! \param fname2selfrom  output filename
+    !! \param fname  input filename
+    !! \param nran number of random samples
+    !! \param smpd sampling distance
     subroutine random_selection_from_imgfile( fname2selfrom, fname, nran, smpd )
         use simple_ran_tabu, only: ran_tabu
         character(len=*), intent(in) :: fname2selfrom, fname

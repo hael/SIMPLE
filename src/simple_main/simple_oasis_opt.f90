@@ -1,7 +1,10 @@
-!==Class simple_oasis_opt
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple optimisation module: oasis method
 !
-! Minimization of an externally defined function by the OASIS method of Hans Elmlund.
-! OASIS stands for Optimization by Adaptive Sampling around Important Solutions.
+!! Minimization of an externally defined function by the OASIS method of Hans Elmlund.
+!! OASIS stands for Optimization by Adaptive Sampling around Important Solutions.
 ! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
 ! Redistribution or modification is regulated by the GNU General Public License.
 ! *Author:* Hans Elmlund, 2013-10-15
@@ -26,7 +29,7 @@ type, extends(optimizer) :: oasis_opt
     procedure :: new          => new_oasis_opt
     procedure :: minimize     => oasis_minimize
     procedure :: kill         => kill_oasis_opt
-end type
+end type oasis_opt
 
 contains
 

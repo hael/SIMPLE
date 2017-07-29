@@ -1,3 +1,7 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple optimisation method: generic polar Fourier cross-correlation optimisation
 module simple_pftcc_opt
 implicit none
 
@@ -30,7 +34,7 @@ abstract interface
         class(projector), optional, target, intent(in)    :: vols(:)
     end subroutine generic_new
 
-    !>  \brief  is a setter
+    !>  \brief  is a virtual setter
     subroutine generic_set_indices( self, ref, ptcl, rot, state )
         import :: pftcc_opt
         class(pftcc_opt),  intent(inout) :: self
@@ -54,7 +58,7 @@ abstract interface
         real :: cost
     end function generic_costfun
 
-    !> \brief  minimization of the costfunction
+    !> \brief  Virtual minimization of the costfunction
     function generic_minimize( self, irot, shvec, rxy, fromto ) result( crxy )
         import :: pftcc_opt
         class(pftcc_opt),  intent(inout) :: self
@@ -65,7 +69,7 @@ abstract interface
         real, allocatable  :: crxy(:)
     end function generic_minimize
 
-    !> \brief  getter for number of function evaluations
+    !> \brief  Virtual getter for number of function evaluations
     function generic_get_nevals( self ) result( nevals )
         import :: pftcc_opt
         class(pftcc_opt), intent(inout) :: self

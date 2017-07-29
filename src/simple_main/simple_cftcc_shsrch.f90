@@ -1,3 +1,7 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple CTF optimisation module:  basic shift search
 module simple_cftcc_shsrch
 use simple_opt_factory,     only: opt_factory
 use simple_opt_spec,        only: opt_spec

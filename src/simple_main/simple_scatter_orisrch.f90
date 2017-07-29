@@ -1,3 +1,7 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple ori methods module: scatter orientation search
 module simple_scatter_orisrch
 use simple_defs
 use simple_oris, only: oris
@@ -9,11 +13,11 @@ private
 
 type scatter_orisrch
     private
-    integer    :: ndiverse = 50
-    integer    :: nquality = 20
+    integer    :: ndiverse = 50       !< the ndiverse most diverse solutions become part of the diverse ref_set
+    integer    :: nquality = 20       !< num of quality elements in pool. the nquality best solutions become part of the quality ref_set
     integer    :: nopt     = 0
-    type(oris) :: ref_set_diverse
-    type(oris) :: ref_set_quality
+    type(oris) :: ref_set_diverse     !< the most diverse solutions of the ref_set
+    type(oris) :: ref_set_quality     !< the best solutions of the ref_set
     logical    :: found_better =.false.
     logical    :: quality_set  =.false.
     logical    :: exists       =.false.

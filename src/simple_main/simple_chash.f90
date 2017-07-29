@@ -1,3 +1,7 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple hash module
 module simple_chash
 use simple_defs
 implicit none
@@ -13,18 +17,18 @@ type :: chash
     integer :: chash_index = 0                      !< current highest index in hash
     logical :: exists      = .false.                !< to indicate existence
   contains
-    ! CONSTRUCTORS
+    !< CONSTRUCTORS
     procedure          :: new
     procedure, private :: copy
     procedure, private :: assign
     generic            :: assignment(=) => assign
     procedure          :: parse_cmdline
     procedure          :: gen_job_descr
-    ! SETTERS 
+    !< SETTERS
     procedure          :: push
     procedure          :: set
     procedure          :: delete
-    ! GETTERS
+    !< GETTERS
     procedure          :: isthere
     procedure          :: lookup
     procedure, private :: get_1
@@ -34,35 +38,35 @@ type :: chash
     procedure          :: get_key
     procedure          :: chash2str
     procedure          :: size_of_chash
-    ! MODIFIERS
+    !< MODIFIERS
     procedure          :: sort
-    ! PRINTERS
+    !< PRINTERS
     procedure, private :: print_key_val_pair_1
     procedure, private :: print_key_val_pair_2
     generic            :: print_key_val_pair => print_key_val_pair_1, print_key_val_pair_2
     procedure          :: print_key_val_pairs
-    ! I/O
+    !< I/O
     procedure          :: read
     procedure          :: write
-    ! DESTRUCTOR
+    !< DESTRUCTOR
     procedure          :: kill
 end type chash
 
 interface chash
     module procedure constructor
-end interface 
+end interface chash
 
 contains
-    
+
     ! CONSTRUCTORS
-    
+
     !>  \brief  is a constructor
     function constructor( nmax ) result( self )
         integer, intent(in) :: nmax !< max nr of entries in hash table
         type(chash)         :: self
         call self%new(nmax)
     end function constructor
-    
+
     !>  \brief  is a constructor
     subroutine new( self, nmax )
         use simple_jiffys, only: alloc_err
@@ -75,12 +79,12 @@ contains
         call alloc_err("In: simple_chash :: new", alloc_stat)
         self%exists = .true.
     end subroutine new
-    
+
     !>  \brief  copies a chash instance
     subroutine copy( self_out, self_in )
         class(chash), intent(inout) :: self_out
         class(chash), intent(in)    :: self_in
-        integer :: i        
+        integer :: i
         call self_out%new(self_in%nmax)
         if( self_in%chash_index > 0 )then
             do i=1,self_in%chash_index
@@ -90,11 +94,11 @@ contains
         endif
         self_out%chash_index = self_in%chash_index
     end subroutine copy
-    
+
     !>  \brief  is a polymorphic assigner
     subroutine assign( self_out, self_in )
         class(chash), intent(inout) :: self_out
-        class(chash), intent(in)    :: self_in 
+        class(chash), intent(in)    :: self_in
         call self_out%copy(self_in)
     end subroutine assign
 
@@ -106,7 +110,7 @@ contains
         integer :: cmdstat, cmdlen, i, argcnt, pos1
         argcnt  = command_argument_count()
         if( .not. self%exists ) call self%new(NMAX)
-        do i=1,argcnt 
+        do i=1,argcnt
             call get_command_argument(i, arg, cmdlen, cmdstat)
             if( cmdstat == -1 )then
                 write(*,*) 'ERROR! while parsing the command line; simple_chash :: parse_cmdline'
@@ -128,9 +132,9 @@ contains
         call self%parse_cmdline
         call self%set('prg', prg)
     end subroutine gen_job_descr
-    
+
     ! SETTERS
-    
+
     !>  \brief  pushes values to the chash
     subroutine push( self, key, val )
         class(chash),     intent(inout) :: self
@@ -146,8 +150,8 @@ contains
         self%keys(self%chash_index)   = trim(adjustl(key))
         self%values(self%chash_index) = trim(adjustl(val))
     end subroutine push
-    
-    !>  \brief  sets a value in the chash 
+
+    !>  \brief  sets a value in the chash
     subroutine set( self, key, val )
         class(chash),     intent(inout) :: self
         character(len=*), intent(in)    :: key, val
@@ -163,7 +167,7 @@ contains
         call self%push(key, val)
     end subroutine set
 
-    !>  \brief  sets a value in the chash 
+    !>  \brief  sets a value in the chash
     subroutine delete( self, key )
         class(chash),     intent(inout) :: self
         character(len=*), intent(in)    :: key
@@ -183,7 +187,7 @@ contains
     end subroutine delete
 
     ! GETTERS
-    
+
     !>  \brief  check for presence of key in the chash
     function isthere( self, key ) result( found )
         class(chash),     intent(inout) :: self
@@ -200,7 +204,7 @@ contains
             end do
         endif
     end function isthere
-    
+
     !>  \brief  looks up the index of a key value in the chash
     function lookup( self, key ) result( which )
         class(chash),     intent(in) :: self
@@ -214,9 +218,9 @@ contains
             endif
         end do
     end function lookup
-    
+
     !>  \brief  gets a value in the chash
-    function get_1( self, key ) result( val ) 
+    function get_1( self, key ) result( val )
         class(chash),     intent(in)  :: self
         character(len=*), intent(in)  :: key
         character(len=:), allocatable :: val
@@ -228,9 +232,9 @@ contains
             endif
         end do
     end function get_1
-    
+
     !>  \brief  gets a value in the chash
-    function get_2( self, ival ) result( val ) 
+    function get_2( self, ival ) result( val )
         class(chash), intent(in)      :: self
         integer,      intent(in)      :: ival
         character(len=:), allocatable :: val
@@ -243,9 +247,9 @@ contains
         integer :: nmax
         nmax = self%nmax
     end function get_nmax
-    
+
     !>  \brief  gets a key in the chash
-    function get_key( self, ikey ) result( val ) 
+    function get_key( self, ikey ) result( val )
         class(chash), intent(in)      :: self
         integer,      intent(in)      :: ikey
         character(len=:), allocatable :: val
@@ -262,7 +266,7 @@ contains
                 allocate(str, source=trim(self%keys(1))//'='//trim(self%values(1)))
                 return
             endif
-            allocate(str_moving, source=trim(self%keys(1))//'='//trim(self%values(1))//' ') 
+            allocate(str_moving, source=trim(self%keys(1))//'='//trim(self%values(1))//' ')
             if( self%chash_index > 2 )then
                 do i=2,self%chash_index-1
                     allocate(str, source=str_moving//trim(self%keys(i))//'='//trim(self%values(i))//' ')
@@ -274,14 +278,14 @@ contains
             allocate(str,source=trim(str_moving//trim(self%keys(self%chash_index))//'='//trim(self%values(self%chash_index))))
         endif
     end function chash2str
-    
+
     !>  \brief  returns size of chash
     function size_of_chash( self ) result( sz )
         class(chash), intent(in) :: self
-        integer :: sz 
+        integer :: sz
         sz = self%chash_index
     end function size_of_chash
-    
+
     ! MODIFIERS
 
     !>  \brief  sort chash lexographically based on the keys
@@ -312,7 +316,7 @@ contains
     end subroutine sort
 
     ! PRINTERS
-    
+
     !>  \brief  pretty printing of a key-value pair
     subroutine print_key_val_pair_1( self, key, maxlen, fhandle, advance )
         class(chash), intent(in)      :: self
@@ -357,9 +361,9 @@ contains
         else
             write(*,*) 'key: ', trim(key), ' does not exist in the chash'
             stop 'simple_chash :: print_key_val'
-        endif 
+        endif
     end subroutine print_key_val_pair_1
-    
+
     !>  \brief  pretty printing of a key-value pair
     subroutine print_key_val_pair_2( self, ikey, maxlen, fhandle )
         class(chash), intent(in)      :: self
@@ -377,7 +381,7 @@ contains
             write(*,'(a,1x,a)') key_padded, '= '//trim(self%values(ikey))
         endif
     end subroutine print_key_val_pair_2
-    
+
     !>  \brief  pretty printing of all key-value pairs
     subroutine print_key_val_pairs( self, keys2print, fhandle, oneline )
         class(chash),               intent(in) :: self
@@ -404,7 +408,7 @@ contains
                 maxlen = 0
                 do ikey=1,sz
                     keylen = len_trim(keys2print(ikey))
-                    if( keylen > maxlen ) maxlen = keylen 
+                    if( keylen > maxlen ) maxlen = keylen
                 end do
                 ! print selected key-value pairs
                 do ikey=1,sz
@@ -417,7 +421,7 @@ contains
                 maxlen = 0
                 do ikey=1,self%chash_index
                     keylen = len_trim(self%keys(ikey))
-                    if( keylen > maxlen ) maxlen = keylen 
+                    if( keylen > maxlen ) maxlen = keylen
                 end do
                 ! print all key-value pairs
                 do ikey=1,self%chash_index
@@ -426,9 +430,9 @@ contains
             endif
         endif
     end subroutine print_key_val_pairs
-    
+
     ! I/O
-    
+
     !>  \brief  for reading key-vals from a text file
     subroutine read( self, fname )
         use simple_filehandling, only: get_fileunit
@@ -463,7 +467,7 @@ contains
         enddo
         close(funit)
     end subroutine read
-    
+
     !>  \brief  for writing key-vals to a text file
     subroutine write( self, fname )
         use simple_filehandling, only: get_fileunit
@@ -483,9 +487,9 @@ contains
         call self%print_key_val_pairs(fhandle=funit)
         close(funit)
     end subroutine write
-        
+
     ! DESTRUCTOR
-    
+
     !>  \brief  is a destructor
     subroutine kill( self )
         class(chash), intent(inout) :: self !< instance

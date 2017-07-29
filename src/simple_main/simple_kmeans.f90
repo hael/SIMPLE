@@ -1,8 +1,9 @@
-!==Class simple_kmeans
-!
-! simple_kmeans is the SIMPLE class for k-means refinement of the clustering solution in o. 
-! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_. 
-! Redistribution or modification is regulated by the GNU General Public License. 
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> simple_kmeans is the SIMPLE class for k-means refinement of the clustering solution in o.
+! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
+! Redistribution or modification is regulated by the GNU General Public License.
 ! *Author:* Hans Elmlund, 2012-02-02.
 !
 !==Changes are documented below
@@ -23,8 +24,8 @@ type kmeans
     integer               :: N                              !< nr of ptcls
     integer               :: D                              !< dimension of data vec
     integer               :: ncls                           !< nr of classes
-    class(oris), pointer  :: o_ptr                          !< ponter to orientation data struct
-    logical               :: existence=.false.              !< indicates existence 
+    class(oris), pointer  :: o_ptr                          !< pionter to orientation data struct
+    logical               :: existence=.false.              !< indicates existence
   contains
     procedure :: new
     ! GETTERS/SETTERS
@@ -50,13 +51,20 @@ end interface
 contains
 
     !>  \brief  is a constructor
+    !! \param vecs data vectors
+    !! \param o oris object for storing cluster info
+    !! \param N  nr of ptcls
+    !! \param D  dimension of data
+    !! \param ncls  nr of classes
+    !! \return function
+    !!
     function constructor( vecs, o, N, D, ncls ) result( self )
         use simple_oris,  only: oris
-        class(oris), intent(in), target :: o          !< for storing cluster info
-        integer, intent(in)             :: N, D, ncls !< params
-        real, intent(in), target        :: vecs(N,D)  !< data vectors
+        class(oris), intent(in), target :: o
+        integer, intent(in)             :: N, D, ncls
+        real, intent(in), target        :: vecs(N,D)
         type(kmeans)                    :: self
-        call self%new( vecs, o, N, D, ncls ) 
+        call self%new( vecs, o, N, D, ncls )
     end function
 
     !>  \brief  is a constructor
@@ -83,9 +91,9 @@ contains
         self%avgs  = 0.
         self%existence = .true.
     end subroutine
-    
+
     ! GETTERS/SETTERS
-    
+
     !>  \brief  is for gettign the averages
     function get_avgs( self ) result( avgs )
         class(kmeans), intent(in) :: self
@@ -95,26 +103,26 @@ contains
         call alloc_err('get_avgs; simple_kmeans', alloc_stat)
         avgs = self%avgs
     end function
-    
+
     !>  \brief  is for setting the averages
     subroutine set_avgs( self, avgs )
         class(kmeans), intent(inout) :: self
         real, intent(in)             :: avgs(self%ncls,self%D)
         self%avgs = avgs
     end subroutine
-    
+
     ! PUBLIC
-    
+
     !>  \brief  this one does it all
     subroutine refine( self, maxits )
         class(kmeans), intent(inout) :: self
-        integer, intent(in)          :: maxits
+        integer, intent(in)          :: maxits  !< max iterations
         integer                      :: i, it
         real                         :: adist, adist_prev, x
         write(*,'(A)') '>>> K-MEANS REFINEMENT'
         it = 1
         adist = huge(x)
-        call self%calc_avgs 
+        call self%calc_avgs
         do
             adist_prev = adist
             adist = self%cost()
@@ -130,7 +138,7 @@ contains
     end subroutine
 
     ! PRIVATE
-    
+
     !>  \brief  is for calculating averages given the clustering solution, assumes that data stack is open
     subroutine calc_avgs( self )
         class(kmeans), intent(inout) :: self
@@ -153,7 +161,7 @@ contains
             endif
         end do
     end subroutine
-    
+
     !>  \brief  is for assigning class to ptcl, assumes that data stack is open
     subroutine assign_class( self, i )
         class(kmeans), intent(inout) :: self
@@ -163,53 +171,53 @@ contains
         call self%subtr_ptcl(i,cls)
         call self%calc_dists(i)
         loc = minloc(self%dists)
-        call self%o_ptr%set(i, 'class', real(loc(1)))  
+        call self%o_ptr%set(i, 'class', real(loc(1)))
         call self%add_ptcl(i,loc(1))
     end subroutine
-  
+
     !>  \brief  is for subtracting the contribution from ptcl, assumes that ptcl is read
     subroutine subtr_ptcl( self, i, cls )
         class(kmeans), intent(inout) :: self
-        integer, intent(in)          :: i
-        integer, intent(in)          :: cls
+        integer, intent(in)          :: i   !< index of particle
+        integer, intent(in)          :: cls !< num of class
         if( cls /= 0 )then
             self%sums(cls,:) = self%sums(cls,:)-self%vecs(i,:)
             self%pops(cls)   = self%pops(cls)-1
             self%avgs(cls,:) = self%sums(cls,:)/real(self%pops(cls))
         endif
     end subroutine
-    
+
     !>  \brief  is for adding the contribution from ptcl i, assumes that ptcl is read
     subroutine add_ptcl( self, i, cls )
         class(kmeans), intent(inout) :: self
-        integer, intent(in)          :: i
-        integer, intent(in)          :: cls
+        integer, intent(in)          :: i   !< index of particle
+        integer, intent(in)          :: cls !< num of class
         self%sums(cls,:) = self%sums(cls,:)+self%vecs(i,:)
         self%pops(cls)   = self%pops(cls)+1
         self%avgs(cls,:) = self%sums(cls,:)/real(self%pops(cls))
     end subroutine
-    
+
     !>  \brief  is for claculating all distances, assumes that  ptcl is read
     subroutine calc_dists( self, i )
         class(kmeans), intent(inout) :: self
-        integer, intent(in) :: i
+        integer, intent(in) :: i !< index of particle
         integer :: k
         real :: x
         do k=1,self%ncls
             if( self%pops(k) > 0 )then
                 self%dists(k) = self%sq_dist(i,k)
             else
-                self%dists(k) = huge(x) 
+                self%dists(k) = huge(x)
             endif
         end do
     end subroutine
-    
+
     !>  \brief  is for calculating the square distance between data vec and average, assumes that ptcl is read
     function sq_dist( self, i, k ) result( dist )
         use simple_math, only: euclid
         class(kmeans), intent(in) :: self
-        integer, intent(in)       :: i
-        integer, intent(in)       :: k
+        integer, intent(in)       :: i !< index of particle
+        integer, intent(in)       :: k !< index of average particle
         real :: dist
         dist = euclid(self%vecs(i,:),self%avgs(k,:))**2.
     end function
@@ -220,11 +228,11 @@ contains
         real    :: adist
         integer :: i, cnt, cls
         adist = 0.
-        cnt = 0 
+        cnt = 0
         do i=1,self%N
-            cls = nint(self%o_ptr%get(i, 'class'))  
+            cls = nint(self%o_ptr%get(i, 'class'))
             if( cls /= 0  )then
-                if( self%pops(cls) > 1 )then 
+                if( self%pops(cls) > 1 )then
                     adist = adist+self%sq_dist(i,cls)
                     cnt = cnt+1
                 endif
@@ -232,9 +240,9 @@ contains
         end do
         adist = adist/real(cnt)
     end function
-    
+
     ! TEST KMEANS
-    
+
     !>  \brief  is the kmeans unit test
     subroutine test_kmeans
         !$ use omp_lib
@@ -264,7 +272,7 @@ contains
         end do
         !$omp parallel default(shared) private(ib) proc_bind(close)
         do ia=1,100-1
-            !$omp do schedule(static) 
+            !$omp do schedule(static)
             do ib=ia+1,100
                 call pd%set_pair_d(ia, ib, euclid(datavecs(hacls%get_node(ia),:),datavecs(hacls%get_node(ib),:)))
             end do
@@ -283,7 +291,7 @@ contains
         write(*,'(a)') 'SIMPLE_KMEANS_UNIT_TEST COMPLETED WITHOUT TERMINAL BUGS ;-)'
         write(*,'(a)') 'PLEASE, INSPECT THE RESULTS'
     end subroutine
-    
+
     !>  \brief  is a destructor
     subroutine kill( self )
         class(kmeans), intent(inout) :: self

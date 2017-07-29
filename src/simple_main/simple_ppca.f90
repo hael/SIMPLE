@@ -1,9 +1,11 @@
-!==Class simple_ppca
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple math module: a class for probabilistic principal component analysis.
+!! This code should be able to deal with many millions of particle images.
 !
-! simple_ppca is the SIMPLE class for probabilistic principal component analysis.
-! This code should be able to deal with many millions of particle images. 
-! The code is distributed with the hope that it will be useful, but _WITHOUT_ 
-! _ANY_ _WARRANTY_. Redistribution or modification is regulated by the 
+! The code is distributed with the hope that it will be useful, but _WITHOUT_
+! _ANY_ _WARRANTY_. Redistribution or modification is regulated by the
 ! GNU General Public License. *Author:* Hans Elmlund, 2011-09-03.
 !
 !==Changes are documented below
@@ -22,16 +24,16 @@ type ppca
     integer              :: D           !< nr of components in each data vec
     integer              :: Q           !< nr of components in each latent vec
     integer              :: funit       !< file handle data stack
-    real, pointer        :: ptr_Dmat(:,:) => null()
-    real, allocatable    :: evals(:)
+    real, pointer        :: ptr_Dmat(:,:) => null() !< pointer to D matrix
+    real, allocatable    :: evals(:)    !< evaluations
     real, allocatable    :: W(:,:)      !< principal subspace, defined by the W columns
     real, allocatable    :: E_zn(:,:,:) !< expectations (feature vecs)
     real, allocatable    :: W_1(:,:), W_2(:,:), W_3(:,:), Wt(:,:)
     real, allocatable    :: M(:,:), Minv(:,:), MinvWt(:,:), X(:,:), E_znzn(:,:)
     logical              :: inplace     = .false. !< controls whether PPCA performed in memory
     logical              :: dorot       = .false. !< is to perform final orthogonal basis rotation
-    logical              :: existence   = .false.
-    logical              :: doprint     = .false.
+    logical              :: existence   = .false. !< kill object flag
+    logical              :: doprint     = .false. !< verbose printing
   contains
     ! CONSTRUCTOR
     procedure          :: new
@@ -52,13 +54,14 @@ type ppca
     procedure, private :: em_opt
     ! DESTRUCTOR
     procedure :: kill
-end type
+end type ppca
 
 contains
 
     ! CONSTRUCTORS
 
-     !>  \brief  is a constructor
+    !>  \brief  is a constructor
+    !! \param N,D,Q num of data vectors and their components
     function constructor( N, D, Q, Dmat ) result( self )
         real, intent(in), dimension(:,:), optional :: Dmat
         integer, intent(in)           :: N, D, Q
@@ -67,9 +70,11 @@ contains
     end function constructor
 
     !>  \brief  is a constructor
+    !! \param N,D,Q num of data vectors and their components
+    !! \param dorot create evaluations vector and perform final orthogonal basis rotation
     subroutine new( self, N, D, Q, Dmat, dorot, doprint )
         class(ppca), intent(inout)         :: self
-        real, intent(in), dimension(:,:), optional, target :: Dmat
+        real, intent(in), dimension(:,:), optional, target :: Dmat  !< \todo no fallback if Dmat not pre-allocated (simple_build)
         integer, intent(in)                :: N, D, Q
         logical, intent(in), optional      :: dorot, doprint
         integer                            :: alloc_stat
@@ -106,24 +111,24 @@ contains
         self%E_znzn = 0.
         self%existence = .true.
     end subroutine new
-    
+
     ! GETTERS
-    
+
     !>  \brief  is for getting the eigenvalues after rotation to the orthogonal basis
     function get_evals( self )result( e )
         class(ppca), intent(inout) :: self
         real :: e(self%Q)
         e = self%evals
-    end function get_evals        
+    end function get_evals
 
     !>  \brief  is for getting a feature vector
     function get_feat( self, i ) result( feat )
         class(ppca), intent(inout) :: self
-        integer, intent(in)        :: i
+        integer, intent(in)        :: i     !< index of feature vector
         real, allocatable          :: feat(:)
         allocate(feat(self%Q), source=self%E_zn(i,:,1))
     end function get_feat
-    
+
     !>  \brief  is for getting a pointer to the features (that become exposed)
     function get_feats_ptr( self ) result( ptr )
         class(ppca), intent(inout), target :: self
@@ -166,10 +171,11 @@ contains
 
     !>  \brief  is for sampling the generative model at a given image index for a subset of features
     !>  should only be used if rotation onto orthogonal basis has been performed
-    function generate_cumul( self, i, feats, AVG ) result( dat ) 
+    !! \param i image index
+    function generate_cumul( self, i, feats, AVG ) result( dat )
         class(ppca),    intent(inout) :: self
-        integer,        intent(in)    :: i, feats(2)
-        real, optional, intent(in)    :: AVG(self%D)
+        integer,        intent(in)    :: i, feats(2) !< subset of features
+        real, optional, intent(in)    :: AVG(self%D) !< average matrix of size D
         real, allocatable :: dat(:)
         real :: tmp(self%D,1)
         tmp = matmul(self%W(:,feats(1):feats(2)),self%E_zn(i,feats(1):feats(2),:))
@@ -178,7 +184,7 @@ contains
     end function generate_cumul
 
     !>  \brief  is for sampling the generative model at a given image index
-    function generate_1( self, i, AVG ) result( dat ) 
+    function generate_1( self, i, AVG ) result( dat )
         class(ppca),    intent(inout) :: self
         integer,        intent(in)    :: i
         real, optional, intent(in)    :: AVG(self%D)
@@ -222,16 +228,20 @@ contains
             dat = tmp2(:,1)
         endif
     end function generate_2
-    
+
     ! CALCULATORS
-    
-    !>  \brief  doing it all
+
+    !>  Principle component analysis master
+    !! \param datastk data stack
+    !! \param featstk feature stack
+    !! \param recsz record size
+    !! \param maxpcaits Maximum iterations for PCA
     subroutine master( self, datastk, recsz, featstk, maxpcaits, feats_txt )
         use simple_filehandling, only: get_fileunit, fopen_err
         class(ppca),                intent(inout) :: self
         character(len=*),           intent(in)    :: datastk, featstk
         integer,                    intent(in)    :: recsz, maxpcaits
-        character(len=*), optional, intent(in)    :: feats_txt
+        character(len=*), optional, intent(in)    :: feats_txt !< features text
         integer :: k, file_stat, funit2, recsz2, err, fhandle_txt
         real    :: p, p_prev
         self%doprint = .true.
@@ -263,7 +273,7 @@ contains
                 write(*,'(A)') 'ERROR, in matrix inversion, iteration:', k
                 write(*,'(A)') 'RESTARTING'
                 call self%init
-                k = 0 
+                k = 0
                 cycle
             endif
             if( self%doprint.and.(k == 1 .or. mod(k,5) == 0) )then
@@ -372,7 +382,7 @@ contains
     end subroutine em_opt
 
     ! DESTRUCTOR
-    
+
     !>  \brief  is a destructor
     subroutine kill( self )
         class(ppca), intent(inout) :: self
@@ -386,5 +396,5 @@ contains
             self%ptr_Dmat  => null()
         endif
     end subroutine kill
-    
+
 end module simple_ppca

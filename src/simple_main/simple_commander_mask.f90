@@ -1,8 +1,13 @@
-!==Class simple_commander_mask
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple commander module: mask interface
 !
-! This class contains the set of concrete mask commanders of the SIMPLE library. This class provides the glue between the reciver 
-! (main reciever is simple_exec program) and the abstract action, which is simply execute (defined by the base class: simple_commander_base). 
-! Later we can use the composite pattern to create MacroCommanders (or workflows)
+!! This class contains the set of concrete mask commanders of the SIMPLE
+!! library. This class provides the glue between the reciver (main reciever is
+!! simple_exec program) and the abstract action, which is simply execute
+!! (defined by the base class: simple_commander_base). Later we can use the
+!! composite pattern to create MacroCommanders (or workflows)
 !
 ! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
 ! Redistribution and modification is regulated by the GNU General Public License.
@@ -32,7 +37,10 @@ type, extends(commander_base) :: automask2D_commander
 end type automask2D_commander
 
 contains
-  
+
+    !> mask is a program for masking images and volumes.
+    !! If you want to mask your images with a spherical mask with a soft
+    !! falloff, set msk to the radius in pixels
     subroutine exec_mask( self, cline )
         use simple_image,       only: image
         use simple_procimgfile, only: mask_imgfile
@@ -111,7 +119,13 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_MASK NORMAL STOP ****')
     end subroutine exec_mask
-
+    
+    !> automask2D is a program for solvent flattening of class averages.
+    !! The algorithm for backgro und removal is based on low-pass filtering and
+    !! binarization. First, the class averages are low-pass filtered to amsklp.
+    !! Binary representatives are then generate d by assigning foreground pixels
+    !! using sortmeans. A cosine function softens the edge of the binary mask
+    !! before it is multiplied with the unmasked input average
     subroutine exec_automask2D( self, cline )
         !use simple_masker, only: automask2D
         class(automask2D_commander), intent(inout) :: self

@@ -1,8 +1,13 @@
-!==Class simple_commander_volops
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple commander module: volume operations interface
 !
-! This class contains the set of concrete volops (volume operations) commanders of the SIMPLE library. This class provides the glue between the reciver 
-! (main reciever is simple_exec program) and the abstract action, which is simply execute (defined by the base class: simple_commander_base). 
-! Later we can use the composite pattern to create MacroCommanders (or workflows)
+!! This class contains the set of concrete volops (volume operations) commanders
+!! of the SIMPLE library. This class provides the glue between the reciver (main
+!! reciever is simple_exec program) and the abstract action, which is simply
+!! execute (defined by the base class: simple_commander_base). Later we can use
+!! the composite pattern to create MacroCommanders (or workflows)
 !
 ! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
 ! Redistribution and modification is regulated by the GNU General Public License.
@@ -27,7 +32,7 @@ public :: volaverager_commander
 public :: volops_commander
 public :: volume_smat_commander
 private
-
+#include "simple_local_flags.inc"
 type, extends(commander_base) :: fsc_commander
   contains
     procedure :: execute      => exec_fsc
@@ -59,6 +64,7 @@ end type volume_smat_commander
 
 contains
 
+    !> Program to calculate Fourier shell correlation from Even/Odd Volume pairs
     subroutine exec_fsc( self, cline )
         use simple_image, only: image
         use simple_math,  only: get_resolution
@@ -69,6 +75,7 @@ contains
         integer           :: j
         real              :: res_fsc05, res_fsc0143
         real, allocatable :: res(:), corrs(:)
+       
         p = params(cline)
         ! read even/odd pair
         call even%new([p%box,p%box,p%box], p%smpd)
@@ -89,7 +96,8 @@ contains
         call even%kill
         call odd%kill
     end subroutine exec_fsc
-    
+
+    !> Program to shift 3D volume ( circular wrapping ) 
     subroutine exec_cenvol( self, cline )
         class(cenvol_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
@@ -97,7 +105,7 @@ contains
         type(build)          :: b
         real, allocatable    :: shvec(:,:)
         integer              :: istate
-        logical, parameter   :: debug=.false.
+      
         p = params(cline)                           ! parameters generated
         call b%build_general_tbox(p, cline, .true.) ! general objects built
         ! center volume(s)
@@ -117,10 +125,12 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_CENVOL NORMAL STOP ****')
     end subroutine exec_cenvol
-    
+    !> exec_postproc_vol post-process volume program
+    !! \param cline commandline
+    !!
     subroutine exec_postproc_vol(self, cline)
         use simple_math,  only: get_resolution
-        use simple_image, only: image 
+        use simple_image, only: image
         use simple_estimate_ssnr ! use all in there
         class(postproc_vol_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
@@ -130,6 +140,7 @@ contains
         real, allocatable :: fsc(:), optlp(:), res(:)
         real              :: fsc0143, fsc05
         integer           :: k, state, ldim(3)
+ 
         state = 1
         ! pre-proc
         p = params(cline, checkdistr=.false.) ! constants & derived constants produced, mode=2
@@ -169,7 +180,7 @@ contains
                 call b%vol%mul(b%mskvol)
             else
                 write(*,*) 'file: ', trim(p%mskfile)
-                stop 'maskfile does not exists in cwd'                
+                stop 'maskfile does not exists in cwd'
             endif
         else if( p%automsk .eq. 'yes' )then
             call b%mskvol%automask3D(p, vol_copy)
@@ -184,7 +195,10 @@ contains
         call vol_copy%kill
         call simple_end('**** SIMPLE_POSTPROC_VOL NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_postproc_vol
-    
+
+    !> exec_projvol build projection from volume
+    !! \param cline command line
+    !!
     subroutine exec_projvol( self, cline )
         use simple_image,          only: image
         use simple_projector_hlev, only: projvol
@@ -195,7 +209,7 @@ contains
         type(image), allocatable :: imgs(:)
         integer                  :: i, loop_end
         real                     :: x, y, dfx, dfy, angast
-        logical, parameter       :: debug=.false.
+   
         if( .not. cline%defined('oritab') )then
             if( .not. cline%defined('nspace') ) stop 'need nspace (for number of projections)!'
         endif
@@ -221,7 +235,7 @@ contains
         else
             call b%vol%read(p%vols(1))
         endif
-        if( debug ) print *, 'read volume'
+        DebugPrint 'read volume'
         ! masking
         if(cline%defined('msk'))then
             call b%vol%mask(p%msk, 'soft')
@@ -249,7 +263,10 @@ contains
         call b%a%write('projvol_oris.txt')
         call simple_end('**** SIMPLE_PROJVOL NORMAL STOP ****')
     end subroutine exec_projvol
-    
+
+    !> exec_volaverager Create volume average
+    !! \param cline
+    !!
     subroutine exec_volaverager( self, cline )
         use simple_image, only: image
         class(volaverager_commander), intent(inout) :: self
@@ -262,17 +279,17 @@ contains
         integer                            :: istate, ivol, nvols, funit_vols, numlen, ifoo
         character(len=:), allocatable      :: fname
         character(len=1)                   :: fformat
-        logical, parameter                 :: debug=.false.
+       
         p = params(cline) ! parameters generated
         ! read the volnames
         nvols = nlines(p%vollist)
-        if( debug ) print *, 'number of volumes: ', nvols
+        DebugPrint   'number of volumes: ', nvols
         allocate(volnames(nvols))
         funit_vols = get_fileunit()
         open(unit=funit_vols, status='old', file=p%vollist)
         do ivol=1,nvols
             read(funit_vols,'(a256)') volnames(ivol)
-            if( debug ) print *, 'read volname: ', volnames(ivol)
+            DebugPrint   'read volname: ', volnames(ivol)
         end do
         close(funit_vols)
         ! find logical dimension
@@ -294,37 +311,42 @@ contains
             case DEFAULT
                 stop 'This file format is not supported by SIMPLE; simple_volaverager'
         end select
-        if( debug ) print *, 'file extension: ', p%ext
+        DebugPrint   'file extension: ', p%ext
         ! average the states
         call vol_avg%copy(b%vol)
         p%nstates = b%a%get_nstates()
-        if( debug ) print *, 'number of states: ', p%nstates
+        DebugPrint   'number of states: ', p%nstates
         numlen = len(int2str(p%nstates))
         do istate=1,p%nstates
-            if( debug ) print *, 'processing state: ', istate
+            DebugPrint   'processing state: ', istate
             ptcls = b%a%get_ptcls_in_state(istate)
             vol_avg = 0.
             do ivol=1,size(ptcls)
                 call b%vol%read(volnames(ptcls(ivol)))
-                if( debug ) print *, 'read volume: ', volnames(ptcls(ivol))
+                DebugPrint   'read volume: ', volnames(ptcls(ivol))
                 call vol_avg%add(b%vol)
             end do
             call vol_avg%div(real(size(ptcls)))
             allocate(fname, source='sumvol_state'//int2str_pad(istate, numlen)//p%ext)
-            if( debug ) print *, 'trying to write volume to file: ', fname
+            DebugPrint   'trying to write volume to file: ', fname
             call vol_avg%write(fname)
             deallocate(ptcls,fname)
         end do
         ! end gracefully
         call simple_end('**** SIMPLE_VOLAVERAGER NORMAL STOP ****')
     end subroutine exec_volaverager
-    
+
+    !> exec_volops Volume calculations and operations - incl Guinier, snr, mirror or b-factor
+    !! \param cline commandline
+    !!
     subroutine exec_volops( self, cline )
         class(volops_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(params) :: p
         type(build)  :: b
-        logical      :: here 
+        logical      :: here
+     
+
         p = params(cline,checkdistr=.false.)        ! constants & derived constants produced, mode=2
         call b%build_general_tbox(p, cline)         ! general objects built
         call b%vol%new([p%box,p%box,p%box], p%smpd) ! reallocate vol (boxmatch issue)
@@ -341,16 +363,25 @@ contains
             p%bfac = b%vol%guinier_bfac(p%hp, p%lp)
             write(*,'(A,1X,F8.2)') '>>> B-FACTOR DETERMINED TO:', p%bfac
         else
-            if( cline%defined('neg')  ) call b%vol%neg
-            if( cline%defined('snr')  ) call b%vol%add_gauran(p%snr)
-            if( cline%defined('mirr') ) call b%vol%mirror(p%mirr)
-            if( cline%defined('bfac') ) call b%vol%apply_bfac(p%bfac)
+            if( cline%defined('neg')  )then
+                call b%vol%neg()
+            end if
+            if( cline%defined('snr') )then
+                call b%vol%add_gauran(p%snr)
+            end if
+            if( cline%defined('mirr') )then
+                call b%vol%mirror(p%mirr)
+            end if
+            if( cline%defined('bfac') )then
+                call b%vol%apply_bfac(p%bfac)
+            end if
             call b%vol%write(p%outvol, del_if_exists=.true.)
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_VOLOPS NORMAL STOP ****')
     end subroutine exec_volops
-    
+
+    !> volume_smat Calculate similarity matrix between volumes
     subroutine exec_volume_smat( self, cline )
         use simple_projector, only: projector
         use simple_ori,       only: ori
@@ -365,7 +396,6 @@ contains
         real                 :: furthest_from_spat_med_corr
         type(projector)      :: vol1, vol2
         type(ori)            :: o
-        logical, parameter   :: debug=.false.
         real,                  allocatable :: corrmat(:,:), corrs(:), corrs_avg(:)
         integer,               allocatable :: pairs(:,:)
         character(len=STDLEN), allocatable :: vollist(:)
@@ -377,22 +407,22 @@ contains
         npairs = (nvols*(nvols-1))/2
         ! find logical dimension & make volumes for matching
         call find_ldim_nptcls(vollist(1), ldim, ifoo)
-        if( debug ) write(*,*) 'found logical dimension: ', ldim
+        DebugPrint   'found logical dimension: ', ldim
         if( cline%defined('part') )then
             npairs = p%top-p%fromp+1
-            if( debug ) print *, 'allocating this number of similarities: ', npairs
+            DebugPrint 'allocating this number of similarities: ', npairs
             allocate(corrs(p%fromp:p%top), pairs(p%fromp:p%top,2), stat=alloc_stat)
             call alloc_err('In: simple_volume_smat, 1', alloc_stat)
             ! read the pairs
             funit = get_fileunit()
             allocate(fname, source='pairs_part'//int2str_pad(p%part,p%numlen)//'.bin')
             if( .not. file_exists(fname) )then
-                write(*,*) 'file: ', fname, 'does not exist!'
-                write(*,*) 'If all pair_part* are not in cwd, please execute simple_split_pairs to generate the required files'
+!                write(*,*) 'file: ', fname, 'does not exist.'
+ !               write(*,*) 'If all pair_part* are not in cwd, please execute simple_split_pairs to generate the required files'
                 stop 'I/O error; simple_volume_smat'
             endif
             open(unit=funit, status='OLD', action='READ', file=fname, access='STREAM')
-            if( debug ) print *, 'reading pairs in range: ', p%fromp, p%top
+            DebugPrint   'reading pairs in range: ', p%fromp, p%top
             read(unit=funit,pos=1,iostat=io_stat) pairs(p%fromp:p%top,:)
             ! Check if the read was successful
             if( io_stat .ne. 0 )then
@@ -408,10 +438,10 @@ contains
                 ivol = pairs(ipair,1)
                 jvol = pairs(ipair,2)
                 call read_and_prep_vols( ivol, jvol )
-                o = volpft_srch_minimize() 
+                o = volpft_srch_minimize()
                 corrs(ipair) = o%get('corr')
             end do
-            if( debug ) print *, 'did set this number of similarities: ', cnt
+            DebugPrint   'did set this number of similarities: ', cnt
             ! write the similarities
             funit = get_fileunit()
             allocate(fname, source='similarities_part'//int2str_pad(p%part,p%numlen)//'.bin')
@@ -438,7 +468,7 @@ contains
                     cnt = cnt + 1
                     call progress(cnt, npairs)
                     call read_and_prep_vols( ivol, jvol )
-                    o = volpft_srch_minimize() 
+                    o = volpft_srch_minimize()
                     corrmat(ivol,jvol) = o%get('corr')
                     corrmat(jvol,ivol) = corrmat(ivol,jvol)
                     if( corrmat(ivol,jvol) > corr_max ) corr_max = corrmat(ivol,jvol)
@@ -456,7 +486,7 @@ contains
             furthest_from_spat_med_corr = corrmat(spat_med,furthest_from_spat_med)
             write(*,'(a,1x,f7.4)') 'MAX VOL PAIR CORR          :', corr_max
             write(*,'(a,1x,f7.4)') 'MIN VOL PAIR CORR          :', corr_min
-            write(*,'(a,1x,i7)'  ) 'SPATIAL MEDIAN             :', spat_med 
+            write(*,'(a,1x,i7)'  ) 'SPATIAL MEDIAN             :', spat_med
             write(*,'(a,1x,f7.4)') 'SPATIAL MEDIAN CORR        :', spat_med_corr
             write(*,'(a,1x,i7)'  ) 'FURTHEST FROM SPAT MED     :', furthest_from_spat_med
             write(*,'(a,1x,f7.4)') 'FURTHEST FROM SPAT MED CORR:', furthest_from_spat_med_corr
@@ -469,7 +499,7 @@ contains
             endif
             close(funit)
             deallocate(corrmat)
-        endif     
+        endif
         ! end gracefully
         call simple_end('**** SIMPLE_VOLUME_SMAT NORMAL STOP ****')
 
@@ -485,7 +515,7 @@ contains
                 call vol2%read(vollist(jvol))
                 if( p%boxmatch < p%box )then
                     call vol1%clip_inplace([p%boxmatch,p%boxmatch,p%boxmatch])
-                    call vol2%clip_inplace([p%boxmatch,p%boxmatch,p%boxmatch]) 
+                    call vol2%clip_inplace([p%boxmatch,p%boxmatch,p%boxmatch])
                 endif
                 call vol1%mask(p%msk,'soft')
                 call vol2%mask(p%msk,'soft')

@@ -1,3 +1,7 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple class expanded Fourier transform functions of images
 module simple_ft_expanded
 !$ use omp_lib
 !$ use omp_lib_kinds
@@ -134,7 +138,7 @@ contains
         if( didft ) call img%bwd_ft
         self%existence = .true.
     end subroutine new_1
-    
+
     !>  \brief  is a constructor
     subroutine new_2( self, ldim, smpd, hp, lp )
         use simple_jiffys, only: alloc_err
@@ -150,7 +154,7 @@ contains
         call img%kill
     end subroutine new_2
 
-    !>  \brief  is a constructor 
+    !>  \brief  is a constructor
     subroutine new_3( self, self_in )
         class(ft_expanded), intent(inout) :: self
         class(ft_expanded), intent(in)    :: self_in
@@ -161,7 +165,7 @@ contains
             stop 'self_in does not exists; simple_ft_expanded::new_3'
         endif
     end subroutine new_3
-    
+
     !>  \brief  is a constructor that copies the input object
     subroutine copy( self, self_in )
         class(ft_expanded), intent(inout) :: self
@@ -173,16 +177,16 @@ contains
             stop 'self_in does not exists; simple_ft_expanded::copy'
         endif
     end subroutine copy
-    
+
     ! CHECKERS
-    
+
     !>  \brief  checks if an instance exists
     pure function exists( self ) result( yep )
         class(ft_expanded), intent(in) :: self
         logical :: yep
         yep = self%existence
     end function exists
-    
+
     !>  \brief  checks for same dimensions, overloaded as (.eqdims.)
     pure function same_dims( self1, self2 ) result( yep )
         class(ft_expanded), intent(in) :: self1, self2
@@ -212,7 +216,7 @@ contains
         integer :: lims(3,2)
         lims = self%lims
     end function get_lims
-    
+
     ! ARITHMETICS
 
     !>  \brief  polymorphic assignment (=)
@@ -221,7 +225,7 @@ contains
         class(ft_expanded), intent(in)    :: selfin
         call selfout%copy(selfin)
     end subroutine assign
-    
+
     !>  \brief  is for ft_expanded summation
     subroutine add( self, self2add, w )
         class(ft_expanded), intent(inout) :: self
@@ -264,9 +268,9 @@ contains
             stop 'the object to subtract from does not exist; subtr; simple_ft_expanded'
         endif
     end subroutine subtr
-    
+
     ! MODIFIERS
-    
+
     !>  \brief  is 4 shifting an ft_expanded instance
     subroutine shift( self, shvec, self_out )
         class(ft_expanded), intent(in)    :: self
@@ -302,7 +306,7 @@ contains
             stop 'cannot shift non-existent object; simple_ft_expanded::shift'
         endif
     end subroutine shift
-    
+
     ! CALCULATORS
 
     !>  \brief  is a correlation calculator
@@ -367,7 +371,7 @@ contains
             stop 'cannot correlate expanded_ft:s with different dims; ft_expanded::corr_shifted'
         endif ! end of if( self1.eqdims.self2 ) statement
     end function corr_shifted
-    
+
     ! DESTRUCTOR
 
     !>  \brief  is a destructor

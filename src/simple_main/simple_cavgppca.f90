@@ -1,3 +1,7 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple program:  class averages of particles
 module simple_cavgppca
 use simple_defs
 use simple_oris,             only: oris
@@ -21,19 +25,19 @@ type cavgppca
   private
     class(params), pointer   :: pp=>null()
     class(build), pointer    :: pb=>null()
-    type(ppca)               :: pca              ! Probabilistic PCA object
-    type(oris), pointer      :: oris             ! Local oris (current class)
-    type(image), pointer     :: ptr_ptcls(:)     ! Pointer to Particles stack
-    real, allocatable        :: D(:,:)           ! Data matrix (ptcls)
-    real, allocatable        :: avg(:)           ! average
-    real, allocatable        :: evals(:)         ! Eigenvalues from PPCA
+    type(ppca)               :: pca              !< Probabilistic PCA object
+    type(oris), pointer      :: oris             !< Local oris (current class)
+    type(image), pointer     :: ptr_ptcls(:)     !< Pointer to Particles stack
+    real, allocatable        :: D(:,:)           !< Data matrix (ptcls)
+    real, allocatable        :: avg(:)           !< average
+    real, allocatable        :: evals(:)         !< Eigenvalues from PPCA
     real                     :: msk       = 0.
-    integer                  :: n         = 0        ! number of ptcls
-    integer                  :: nD        = 0        ! number of pixels/ptcl
-    integer                  :: nfeats    = 10       ! number of latent vectors
-    integer                  :: nselfeats = 10       ! number of selected latent vectors
-    character(len=STDLEN)    :: metric    = 'realcc' ! Pixel of PFT space
-    logical                  :: usemsk    = .false.  ! Whether to mask ptcls
+    integer                  :: n         = 0        !< number of ptcls
+    integer                  :: nD        = 0        !< number of pixels/ptcl
+    integer                  :: nfeats    = 10       !< n umber of latent vectors
+    integer                  :: nselfeats = 10       !< number of selected latent vectors
+    character(len=STDLEN)    :: metric    = 'realcc' !< Pixel of PFT space
+    logical                  :: usemsk    = .false.  !< Whether to mask ptcls
     logical                  :: exists    = .false.
 
   contains

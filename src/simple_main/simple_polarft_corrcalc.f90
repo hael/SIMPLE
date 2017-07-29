@@ -1,4 +1,8 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 !>  \brief  SIMPLE polarft_corrcalc class
+
 module simple_polarft_corrcalc
 use simple_defs      ! use all in there
 use simple_params,   only: params
@@ -11,7 +15,6 @@ private
 
 ! CLASS PARAMETERS/VARIABLES
 complex(sp), parameter :: zero=cmplx(0.,0.) !< just a complex zero
-logical,     parameter :: DEBUG = .true.
 
 type :: polarft_corrcalc
     private

@@ -1,8 +1,13 @@
-!==Class simple_commander_distr_wflows
-!
-! This class contains the set of concrete commanders responsible for execution of parallel (or distributed)
-! workflows in SIMPLE. This class provides the glue between the reciver (main reciever is simple_distr_exec 
-! program) and the abstract action, which is simply execute (defined by the base class: simple_commander_base).
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple commander module: parallel (or distributed) workflows
+!!
+!! This class contains the set of concrete commanders responsible for execution
+!! of parallel (or distributed) workflows in SIMPLE. This class provides the
+!! glue between the reciver (main reciever is simple_distr_exec program) and the
+!! abstract action, which is simply execute (defined by the base class:
+!! simple_commander_base).
 !
 ! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
 ! Redistribution and modification is regulated by the GNU General Public License.
@@ -107,7 +112,7 @@ integer, parameter :: KEYLEN=32
 contains
 
     ! PIPELINED UNBLUR + CTFFIND
-
+    !> unblur_ctffind_distr is a distributed version of the pipelined unblur + ctffind programs
     subroutine exec_unblur_ctffind_distr( self, cline )
         use simple_commander_preproc
         class(unblur_ctffind_distr_commander), intent(inout) :: self
@@ -274,7 +279,7 @@ contains
     end subroutine exec_ctffind_distr
 
     ! PICKER
-
+    !> distributed version of picker
     subroutine exec_pick_distr( self, cline )
         use simple_commander_preproc
         class(pick_distr_commander), intent(inout) :: self
@@ -296,15 +301,14 @@ contains
         call simple_end('**** SIMPLE_DISTR_PICK NORMAL STOP ****')
     end subroutine exec_pick_distr
 
-    ! PARALLEL CLASS AVERAGE GENERATION
-
+    !! PARALLEL CLASS AVERAGE GENERATION
+!> makecavgs_distr parallel class average generation
     subroutine exec_makecavgs_distr( self, cline )
         use simple_commander_prime2D
         use simple_commander_distr
         use simple_commander_mask
         class(makecavgs_distr_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
-        logical, parameter    :: DEBUG=.false.
         type(split_commander) :: xsplit
         type(cmdline)         :: cline_cavgassemble
         type(qsys_env)        :: qenv
@@ -341,7 +345,9 @@ contains
     end subroutine exec_makecavgs_distr
 
     ! PRIME2D
-
+    !> parallel prime2d
+    !! Prime2D is a reference-free 2D alignment/clustering algorithm adopted
+    !! from the prime3D probabilistic ab initio 3D reconstruction algorithm
     subroutine exec_prime2D_distr( self, cline )
         use simple_commander_prime2D ! use all in there
         use simple_commander_distr   ! use all in there
@@ -351,7 +357,6 @@ contains
         class(prime2D_distr_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         ! constants
-        logical,               parameter :: DEBUG           = .true.
         character(len=32),     parameter :: ALGNFBODY       = 'algndoc_'
         character(len=32),     parameter :: ITERFBODY       = 'prime2Ddoc_'
         character(len=32),     parameter :: CAVGS_ITERFBODY = 'cavgs_iter'
@@ -487,7 +492,8 @@ contains
     end subroutine exec_prime2D_distr
 
     ! PRIME2D CHUNK-BASED DISTRIBUTION 
-
+    !> parallel Prime2D_chuck
+    !! prime2d chunk-based distribution 
     subroutine exec_prime2D_chunk_distr( self, cline )
         use simple_commander_prime2D ! use all in there
         use simple_commander_distr   ! use all in there
@@ -617,9 +623,8 @@ contains
             end subroutine read_part_and_write
 
     end subroutine exec_prime2D_chunk_distr
-
-    ! 3D SIMILARITY MATRIX GENERATION WITH COMMON LINES
-
+    !> parallel comlin_smat
+    !! comlin_smat calculates the 3d similarity matrix generation with common lines
     subroutine exec_comlin_smat_distr( self, cline )
         use simple_commander_comlin, only: comlin_smat_commander
         use simple_commander_distr,  only: merge_similarities_commander
@@ -655,13 +660,12 @@ contains
     end subroutine exec_comlin_smat_distr
 
     ! PRIME3D_INIT
-
+    !> initialise prime3D in parallel
     subroutine exec_prime3D_init_distr( self, cline )
         use simple_commander_prime3D
         use simple_commander_rec
         class(prime3D_init_distr_commander), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
-        logical, parameter    :: debug=.false.
         type(split_commander) :: xsplit
         type(cmdline)         :: cline_volassemble
         type(qsys_env)        :: qenv
@@ -697,8 +701,14 @@ contains
         call simple_end('**** SIMPLE_DISTR_PRIME3D_INIT NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_prime3D_init_distr
 
-    ! PRIME3D
-
+    !> PRIME3D is an ab inito reconstruction/refinement program based on
+    !> probabilistic projection matching.
+    !! PRIME is short for PRobabilistic Initial 3D Model generation for
+    !! Single-particle cryo-Electron microscopy. There are a daunting number of
+    !! options in PRIME3D. If you are processing class averages we recommend
+    !! that you instead use the simple_distr_exec prg= ini3D_from_cavgs route
+    !! for executing PRIME3D. Automated workflows for single- and multi-particle
+    !! refinement using prime3D are planned for the next release (3.0)
     subroutine exec_prime3D_distr( self, cline )
         use simple_commander_prime3D
         use simple_commander_mask
@@ -709,7 +719,6 @@ contains
         class(prime3D_distr_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         ! constants
-        logical,           parameter :: DEBUG=.false.
         character(len=32), parameter :: ALGNFBODY    = 'algndoc_'
         character(len=32), parameter :: VOLFBODY     = 'recvol_state'
         character(len=32), parameter :: ITERFBODY    = 'prime3Ddoc_'
@@ -1029,7 +1038,6 @@ contains
         class(cont3D_distr_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         ! constants
-        logical,           parameter :: DEBUG=.false.
         character(len=32), parameter :: ALGNFBODY    = 'algndoc_'
         character(len=32), parameter :: ITERFBODY    = 'cont3Ddoc_'
         character(len=32), parameter :: VOLFBODY     = 'recvol_state'
@@ -1215,13 +1223,27 @@ contains
         call simple_end('**** SIMPLE_DISTR_CONT3D NORMAL STOP ****')
     end subroutine exec_cont3D_distr
 
-    ! RECVOL
-
+    !> parallel recvol
+    !! recvol is a program for reconstructing volumes from MRC and SPIDER
+    !! stacks, given input orientations and state assignments. The algorithm is
+    !! based on direct Fourier inversion with a Kaiser-Bessel (KB) interpolation
+    !! kernel. This window function reduces the real-space ripple artifacts
+    !! associated with direct moving windowed-sinc interpolation. The feature
+    !! sought when implementing this algorithm was to enable quick, reliable
+    !! reconstruction from aligned individual particle images. mul is used to
+    !! scale the origin shifts if down-sampled were used for alignment and the
+    !! original images are used for reconstruction. ctf=yes or ctf=flip turns on
+    !! the Wiener restoration. If the images were phase-flipped set ctf=flip.
+    !! amsklp, mw, and edge control the solvent mask: the low-pass limit used to
+    !! generate the envelope; the molecular weight of the molecule (protein
+    !! assumed but it works reasonably well also for RNA; slight modification of
+    !! mw might be needed). The inner parameter controls the radius of the
+    !! soft-edged mask used to remove the unordered DNA/RNA core of spherical
+    !! icosahedral viruses
     subroutine exec_recvol_distr( self, cline )
         use simple_commander_rec
         class(recvol_distr_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        logical, parameter    :: debug=.false.
         type(split_commander) :: xsplit
         type(qsys_env)        :: qenv
         type(params)          :: p_master
@@ -1254,13 +1276,12 @@ contains
         call simple_end('**** SIMPLE_RECVOL NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_recvol_distr
 
-    ! TIME-SERIES ROUTINES
-
+    !> parallel TIME-SERIES ROUTINES
+    !! tseries_track_distr  is a program for particle tracking in time-series data
     subroutine exec_tseries_track_distr( self, cline )
         use simple_nrtxtfile,         only: nrtxtfile 
         class(tseries_track_distr_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
-        logical, parameter            :: debug=.false.
         type(qsys_env)                :: qenv
         type(params)                  :: p_master
         type(chash)                   :: job_descr
@@ -1313,8 +1334,18 @@ contains
         call simple_end('**** SIMPLE_TSERIES_TRACK NORMAL STOP ****')
     end subroutine exec_tseries_track_distr
 
-    ! SYMMETRY SEARCH
-
+    !> parallel SYMMETRY SEARCH
+    !! symsrch_distr is a program for searching for the principal symmetry axis
+    !! of a volume reconstructed without assuming any point-group symmetry. The
+    !! program takes as input an asymmetrical 3D reconstruction. The alignment
+    !! document for all the particle images that have gone into the 3D
+    !! reconstruction and the desired point-group symmetry needs to be inputted.
+    !! The 3D reconstruction is then projected in 50 (default option) even
+    !! directions, common lines-based optimisation is used to identify the
+    !! principal symmetry axis, the rotational transformation is applied to the
+    !! inputted orientations, and a new alignment document is produced. Input
+    !! this document to recvol together with the images and the point-group
+    !! symmetry to generate a symmet
     subroutine exec_symsrch_distr( self, cline )
         use simple_comlin_srch,    only: comlin_srch_get_nproj
         use simple_commander_misc, only: sym_aggregate_commander
@@ -1339,13 +1370,12 @@ contains
         real                    :: shvec(3)
         integer                 :: i, comlin_srch_nproj
         character(len=STDLEN)   :: part_tab
-        character(len=32), parameter :: SYMFBODY    = 'symaxes_part'        ! symmetry axes doc (distributed mode)
-        character(len=32), parameter :: SYMTAB      = 'symaxes.txt'         ! continuous symmetry axes doc
-        character(len=32), parameter :: FINALSYMTAB = 'symaxes_final.txt'   ! final symmetry peaks doc
-        character(len=32), parameter :: SYMSHTAB    = 'sym_3dshift.txt'     ! volume 3D shift
-        character(len=32), parameter :: SYMPROJSTK  = 'sym_projs.mrc'       ! volume reference projections
-        character(len=32), parameter :: SYMPROJTAB  = 'sym_projs.txt'       ! volume reference projections doc
-        logical,           parameter :: debug = .false.
+        character(len=32), parameter :: SYMFBODY    = 'symaxes_part'        !< symmetry axes doc (distributed mode)
+        character(len=32), parameter :: SYMTAB      = 'symaxes.txt'         !< continuous symmetry axes doc
+        character(len=32), parameter :: FINALSYMTAB = 'symaxes_final.txt'   !< final symmetry peaks doc
+        character(len=32), parameter :: SYMSHTAB    = 'sym_3dshift.txt'     !< volume 3D shift
+        character(len=32), parameter :: SYMPROJSTK  = 'sym_projs.mrc'       !< volume reference projections
+        character(len=32), parameter :: SYMPROJTAB  = 'sym_projs.txt'       !< volume reference projections doc
         ! make master parameters
         p_master          = params(cline, checkdistr=.false.)
         comlin_srch_nproj = comlin_srch_get_nproj()
@@ -1374,7 +1404,7 @@ contains
         ! order_inds  = sym_os%order_corr()
         ! symaxis_ori = sym_os%get_ori(order_inds(1))
         ! write(*,'(A)') '>>> FOUND SYMMETRY AXIS ORIENTATION:'
-        ! call symaxis_ori%print
+        ! call symaxis_ori%display()
         ! ! sort the output
         ! call sym_os_ordered%new(comlin_srch_nproj)
         ! do i=1,comlin_srch_nproj
@@ -1400,7 +1430,7 @@ contains
         order_inds  = sym_os%order_corr()
         symaxis_ori = sym_os%get_ori(order_inds(1))
         write(*,'(A)') '>>> FOUND SYMMETRY AXIS ORIENTATION:'
-        call symaxis_ori%print
+        call symaxis_ori%print_ori()
         call sym_os_ordered%new(sym_os%get_noris())
         do i = 1, sym_os%get_noris()
             o = sym_os%get_ori(order_inds(i))

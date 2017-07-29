@@ -1,10 +1,11 @@
-!==Class simple_sa_opt
-!
-! simple_sa_opt performs cobinatorial minimization of an externally defined function by simulated annealing
+!> simple optimisation module: simulated annealing
+!!
+!! simple_sa_opt performs cobinatorial minimization of an externally defined
+!! function by simulated annealing
 ! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
-! Redistribution or modification is regulated by the GNU General Public License. 
+! Redistribution or modification is regulated by the GNU General Public License.
 ! *Author:* Hans Elmlund, 2009-05-25.
-! 
+!
 !==Changes are documented below
 !
 !* incorporated in the _SIMPLE_ library, HE 2009-06-25
@@ -22,9 +23,9 @@ type sa_opt
     private
     procedure(costfun),   pointer, nopass :: costfun =>null()   !< defines cost function
     procedure(acceptfun), pointer, nopass :: acceptfun =>null() !< defines acceptance function
-    procedure(statefun),  pointer, nopass :: statefun=>null()   !< defines state function 
+    procedure(statefun),  pointer, nopass :: statefun=>null()   !< defines state function
     type(ran_tabu), allocatable :: rt(:)                        !< for constraint satisfaction
-    integer, allocatable        :: vec(:,:)                     !< solution vector 
+    integer, allocatable        :: vec(:,:)                     !< solution vector
     real, allocatable           :: cost(:)                      !< costs (one per label)
     integer, allocatable        :: params(:)                    !< nr of params per discrete variable
     logical, allocatable        :: nevars(:)                    !< indicates no two equal constraint
@@ -41,20 +42,23 @@ type sa_opt
     procedure, private :: minimize_one_chain
     procedure, private :: minimize_one_chain_climb
     procedure          :: kill
-end type
+end type sa_opt
 
 !>  \brief  defines the function interfaces
 abstract interface
+    !> Template for cost minimisation/maximisation function of optimisation
     function costfun( vec, i, N, L ) result( cost )
         integer, intent(in) :: N, L, vec(N,L), i
         real                :: cost
-    end function
+    end function costfun
+    !> Template for completion function of optimisation
     subroutine acceptfun( vec, i, L )
         integer, intent(in) :: L, vec(L), i
-    end subroutine
+    end subroutine acceptfun
+    !< Template for current state of optimisation
     subroutine statefun( T, Tinit )
         real, intent(in) :: T, Tinit
-    end subroutine    
+    end subroutine
 end interface
 
 interface sa_opt
@@ -64,6 +68,8 @@ end interface
 contains
 
     !> \brief is a constructor
+    !! \param costfun Cost minimisation/maximisation function
+    !! \param acceptfun Definition of completion function
     function constructor( params, nevars, N, L, costfun, acceptfun  ) result( self )
         integer, intent(in) :: N         !< nr of individuals to optimize (nr of ptcls)
         integer, intent(in) :: L         !< vector length (problem dimensionality)
@@ -73,16 +79,18 @@ contains
             function costfun( vec, i, N, L ) result( cost )
                 integer, intent(in) :: N, L, vec(N,L), i
                 real                :: cost
-            end function
+            end function costfun
             subroutine acceptfun( vec, i, L )
                 integer, intent(in) :: L, vec(L), i
-            end subroutine   
+            end subroutine
         end interface
         type(sa_opt)        :: self
         call self%new( params, nevars, N, L, costfun, acceptfun )
     end function
-    
+
     !> \brief is a constructor
+    !> \param costfun Cost minimisation/maximisation function
+    !> \param acceptfun Definition of completion function
     subroutine new( self, params, nevars, N, L, costfun, acceptfun )
         class(sa_opt), intent(inout) :: self      !< object
         integer, intent(in)          :: N         !< nr of individuals to optimize (nr of ptcls)
@@ -90,16 +98,18 @@ contains
         integer, intent(in)          :: params(L) !< array with nr of params per discrete variable
         logical, intent(in)          :: nevars(L) !< variables that are not allowed to be equal
         interface
+             !> Cost minimisation/maximisation function
             function costfun( vec, i, N, L ) result( cost )
                 integer, intent(in) :: N, L, vec(N,L), i
                 real                :: cost
-            end function
+            end function costfun
+            !> Definition of completion function
             subroutine acceptfun( vec, i, L )
                 integer, intent(in) :: L, vec(L), i
-            end subroutine   
-        end interface  
+            end subroutine
+        end interface
         integer                      :: alloc_stat, j
-        call self%kill  
+        call self%kill
         allocate(self%vec(N,L), self%cost(N), self%params(L),&
         self%nevars(L), self%rt(L), stat=alloc_stat)
         call alloc_err('new; simple_sa_opt', alloc_stat)
@@ -115,30 +125,32 @@ contains
         self%acceptfun => acceptfun
         self%existence= .true.
     end subroutine
-    
+
     !> \brief  communicates statefun to the object
     subroutine set_statefun( self, statefun )
         class(sa_opt), intent(inout) :: self
         interface
             subroutine statefun( T, Tinit )
                 real, intent(in) :: T, Tinit
-            end subroutine   
+            end subroutine
         end interface
         self%statefun => statefun
     end subroutine
 
-    !> \brief is the combinatorial minimization. I have found the params defined by Kirkpatrick to work well: 
-    !!        T_init=1000000, TC=0.9, max_rearr=10**L*N, and T_lowlim=0.01. The parameter max_rearr (maximum 
-    !!        number of rearrangements per T_-level) affects performance and CPU time most, requires testing 
+    !> \brief is the combinatorial minimization. I have found the params defined by Kirkpatrick to work well:
+    !!        T_init=1000000, TC=0.9, max_rearr=10**L*N, and T_lowlim=0.01. The parameter max_rearr (maximum
+    !!        number of rearrangements per T_-level) affects performance and CPU time most, requires testing
     !!        for specific problems.
+    !! \param T_init,TC,T_lowlim state variables, initial, critial and lower limit
     subroutine minimize( self, cost_err, T_init, TC, max_rearr, T_lowlim, out_solution, cost )
         use simple_rnd,    only: irnd_uni
         use simple_jiffys, only: progress
         class(sa_opt), intent(inout)  :: self
-        real, intent(in)              :: cost_err, T_init, TC, T_lowlim
-        integer, intent(in)           :: max_rearr      
-        integer, intent(out)          :: out_solution(self%N,self%L)
-        real, intent(out)             :: cost
+        real, intent(in)              :: cost_err    !< Convergence factor, range of error
+        real, intent(in)              :: T_init, TC, T_lowlim
+        integer, intent(in)           :: max_rearr   !< maximum number of rearrangements per T_-level
+        integer, intent(out)          :: out_solution(self%N,self%L) !< final output of params
+        real, intent(out)             :: cost                    !< final cost value of solution
         real                          :: joint_cost, T, costs(2)
         integer                       :: it, convergence, mits, i, j
         logical                       :: frozen
@@ -168,7 +180,7 @@ contains
         write(*,'(A)') '>>> ANNEALING_STARTS'
         do while (frozen .neqv. .true.)
             it = it+1
-            call progress(it, mits)    
+            call progress(it, mits)
             if( associated(self%statefun) ) then
                 ! use the state function to perform temerature dependent external changes
                 call self%statefun(T,T_init)
@@ -198,9 +210,9 @@ contains
         end do
         out_solution = self%vec
         cost = joint_cost
-        
+
         contains
-        
+
             function nits( ) result( n )
                 integer :: n
                 real :: tmp
@@ -211,17 +223,17 @@ contains
                     tmp = tmp*TC
                 end do
             end function
-        
+
     end subroutine
 
-    !> \brief  provides the core functionality of the simulated annealing 
+    !> \brief  provides the core functionality of the simulated annealing
     !!         and parallel tempering algorithms
     subroutine minimize_one_chain( self, T, max_rearr, cost )
         use simple_rnd, only: irnd_uni
         class(sa_opt), intent(inout) :: self
-        real, intent(in)             :: T
-        integer, intent(in)          :: max_rearr
-        real, intent(out)            :: cost
+        real, intent(in)             :: T          !< state variable
+        integer, intent(in)          :: max_rearr  !< maximum number of rearrangements per T_-level
+        real, intent(out)            :: cost       !< minimisation value
         integer                      :: i, j, nr_rearr, olds(self%L)
         real                         :: cost_perm
         ! initialize costs
@@ -251,10 +263,10 @@ contains
             nr_rearr = nr_rearr+1
         end do
         cost = sum(self%cost)/real(self%N)
-        
+
         contains
-        
-            !> \brief  is for temperature-weighted probabilistic acceptance of 
+
+            !> \brief  is for temperature-weighted probabilistic acceptance of
             !!         trial solutions according to the Metropolis-Hastings criterion
             subroutine metropolis_accept
                 use simple_rnd, only: ran3
@@ -278,13 +290,13 @@ contains
                 if( perm_accepted )then
                     self%cost(i) = cost_perm
                     ! take care of the constraint satisfaction
-                    do j=1,self%L 
+                    do j=1,self%L
                         if( self%nevars(j) ) then
                             call self%rt(j)%remove(olds(j))
                             call self%rt(j)%insert(self%vec(i,j))
                         endif
                     end do
-                    ! use the observer function to notify the change 
+                    ! use the observer function to notify the change
                     call self%acceptfun(self%vec(i,:), i, self%L)
                 else
                     do j=1,self%L
@@ -292,16 +304,16 @@ contains
                     end do
                 endif
             end subroutine
-        
+
     end subroutine
-    
+
     !> \brief combinatorial minimization by simple hill climbing
-    subroutine minimize_climb( self, max_rearr, in_solution, out_solution, cost ) 
+    subroutine minimize_climb( self, max_rearr, in_solution, out_solution, cost )
         class(sa_opt), intent(inout) :: self
-        integer, intent(in)          :: max_rearr
-        integer, intent(in)          :: in_solution(self%N,self%L)
-        integer, intent(out)         :: out_solution(self%N,self%L)
-        real, intent(out)            :: cost
+        integer, intent(in)          :: max_rearr !< limit rearranging
+        integer, intent(in)          :: in_solution(self%N,self%L)  !< input solution
+        integer, intent(out)         :: out_solution(self%N,self%L) !< output of optimisation
+        real, intent(out)            :: cost                        !< best result
         real                         :: joint_cost
         integer                      :: i, j
         ! Initialization based on input
@@ -322,14 +334,14 @@ contains
         end do
         call self%minimize_one_chain_climb(max_rearr, joint_cost)
         out_solution = self%vec
-        cost = joint_cost        
+        cost = joint_cost
     end subroutine
-    
+
     !> \brief  provides local search functionality
     subroutine minimize_one_chain_climb( self, max_rearr, cost )
         class(sa_opt), intent(inout) :: self
-        integer, intent(in)          :: max_rearr
-        real, intent(out)            :: cost
+        integer, intent(in)          :: max_rearr  !< maximum rearrangements
+        real, intent(out)            :: cost       !< final cost value
         integer                      :: i, j, k, nr_rearr, accepted, no_change, olds(self%L), alloc_stat
         logical                      :: steady
         real, allocatable            :: costs(:)
@@ -383,9 +395,9 @@ contains
             write(*,'(A,13X,F8.4)') 'COST: ', sum(self%cost)/real(self%N)
         end do
         cost = sum(self%cost)/real(self%N)
-        
+
         contains
-        
+
             subroutine climb_accept
                 integer :: loc(1)
                 loc = minloc(costs)
@@ -399,15 +411,15 @@ contains
                         call self%rt(j)%remove(olds(j))
                         call self%rt(j)%insert(self%vec(i,j))
                     endif
-                    ! use the observer function to notify the change 
+                    ! use the observer function to notify the change
                     call self%acceptfun(self%vec(i,:), i, self%L)
                 else
                     self%vec(i,j) = olds(j)
                 endif
             end subroutine
-        
+
     end subroutine
-    
+
     !> \brief is a destructor
     subroutine kill( self )
         class(sa_opt), intent(inout) :: self
@@ -417,8 +429,8 @@ contains
                 if( self%nevars(j) ) then
                     call self%rt(j)%kill
                 endif
-            end do 
-            deallocate( self%vec, self%cost, self%params, self%nevars, self%rt )   
+            end do
+            deallocate( self%vec, self%cost, self%params, self%nevars, self%rt )
             self%existence= .false.
         endif
     end subroutine

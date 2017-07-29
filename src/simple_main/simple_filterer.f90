@@ -1,3 +1,7 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple filter class
 module simple_filterer
 use simple_defs
 use simple_image,     only: image
@@ -8,13 +12,14 @@ real, private, parameter :: SHTHRESH=0.0001
 
 contains
 
-    ! DOSE FILTERING (Grant, Grigorieff eLife 2015)
-
-    !>  \brief input is template image, accumulative dose (in e/A2) and acceleration voltage
+    !> DOSE FILTERING (Grant, Grigorieff eLife 2015)
+    !! input is template image, accumulative dose (in e/A2) and acceleration voltage
     !!         output is filter coefficients
+    !! \f$  \mathsf{dose}_\mathsf{acc} = \int^{N}_{1} \mathsf{dose\_weight}(a,F,V),\ n_\mathsf{e}/\si{\angstrom\squared}  \f$
+    !! \param acc_dose accumulative dose (in \f$n_\mathsf{e} per \si{\angstrom\squared}\f$)
     function acc_dose2filter( img, acc_dose, kV ) result( filter )
-        type(image), intent(in) :: img
-        real,        intent(in) :: acc_dose, kV
+        type(image), intent(in) :: img           !< input image
+        real,        intent(in) :: acc_dose, kV  !< accumulative dose (in e/A2) and acceleration voltage
         real, allocatable       :: filter(:)
         integer :: find, sz
         sz = img%get_filtsz()
@@ -24,13 +29,19 @@ contains
         end do
     end function acc_dose2filter
 
-    !>  \brief input is accumulative dose (in e/A2) and spatial frequency (in 1/A)
+    !>  \brief Calculate dose weight. Input is accumulative dose (in e/A2) and
+    !>  spatial frequency (in 1/A)
     !!         output is resolution dependent weight applied to individual frames
     !!         before correlation search and averaging
+    !!
+    !! \f$  \mathsf{dose\_weight}(a,F,V) = \exp\left(- \frac{A_\mathsf{dose}}{k\times (2.0\times A\times f^B + C)} \right), \f$
+    !! where \f$k\f$ is 0.75 for \f$V<200\f$ kV, 1.0 for \f$200 \leqslant  V \leqslant  300\f$
     real function dose_weight( acc_dose, spat_freq, kV )
-        real, intent(in) :: acc_dose, spat_freq, kV
+        real, intent(in) :: acc_dose                !< accumulative dose (in e/A2)
+        real, intent(in) :: spat_freq               !< spatial frequency (in 1/A)
+        real, intent(in) :: kV                      !< accelleration voltage
         real, parameter  :: A=0.245, B=-1.665, C=2.81, kV_factor=0.75
-        real :: critical_exp ! critical exposure (only depends on spatial frequency)
+        real             :: critical_exp !< critical exposure (only depends on spatial frequency)
         critical_exp = A*(spat_freq**B)+C
         if( abs(kV-300.) < 0.001 )then
             ! critical exposure does not need modification
@@ -47,7 +58,7 @@ contains
     function resample_filter( filt_orig, res_orig, res_new ) result( filt_resamp )
         use simple_math, only: find
         real, intent(in)  :: filt_orig(:), res_orig(:), res_new(:)
-        real, allocatable :: filt_resamp(:)
+        real, allocatable :: filt_resamp(:)                 !< output filter array
         integer :: filtsz_orig, filtsz_resamp, k, ind
         real    :: dist
         filtsz_orig   = size(filt_orig)
@@ -58,23 +69,23 @@ contains
             filt_resamp(k) = filt_orig(ind)
         end do
     end function resample_filter
-    
-    ! WIENER RESTORATION ROUTINES
+
+    !> WIENER RESTORATION ROUTINES
 
     !>  \brief does the Wiener restoration of aligned images in 2D
     !!   only for testing
     subroutine wiener_restore2D( img_set, o_set, tfplan, img_rec, msk )
         use simple_oris,  only: oris
         use simple_ori,   only: ori
-        class(image),     intent(inout) :: img_set(:)
-        class(oris),      intent(inout) :: o_set
-        type(ctfplan),    intent(in)    :: tfplan
-        class(image),     intent(inout) :: img_rec
-        real,             intent(in)    :: msk
+        class(image),     intent(inout) :: img_set(:) !< input images
+        class(oris),      intent(inout) :: o_set      !< set of oris objects
+        type(ctfplan),    intent(in)    :: tfplan     !< CTF plan
+        class(image),     intent(inout) :: img_rec     !< reconstructed image
+        real,             intent(in)    :: msk         !< mask
         integer           :: ldim(3), ldim_pad(3), nimgs, iptcl
         type(ori)         :: o
         type(image)       :: ctfsqsum
-        real              :: smpd
+        real              :: smpd         !< sampling distance
         if( o_set%get_noris() /= size(img_set) )&
         stop 'nr of imgs and oris not consistent; simple_filterer :: wiener_restore2D_1'
         ! set constants
@@ -106,13 +117,13 @@ contains
         use simple_ori,            only: ori
         use simple_ctf,            only: ctf
         use simple_projector_hlev, only: rotimg
-        class(image),      intent(inout) :: img
-        class(ori),        intent(inout) :: o
-        type(ctfplan),     intent(in)    :: tfplan
-        class(image),      intent(inout) :: img_rec
-        class(image),      intent(inout) :: ctfsqsum
-        real,              intent(in)    :: msk
-        logical, optional, intent(in)    :: add
+        class(image),      intent(inout) :: img       !< input image
+        class(ori),        intent(inout) :: o         !< ori object
+        type(ctfplan),     intent(in)    :: tfplan    !< CTF plan object
+        class(image),      intent(inout) :: img_rec   !< reconstructed image
+        class(image),      intent(inout) :: ctfsqsum  !< instrument CTF filter
+        real,              intent(in)    :: msk       !< mask
+        logical, optional, intent(in)    :: add       !< add or subtr  rotation and ctfsumsq
         type(image) :: roimg, ctfsq
         type(ctf)   :: tfun
         integer     :: ldim(3)
@@ -123,7 +134,7 @@ contains
         ! set constants
         ldim = img%get_ldim()
         smpd = img%get_smpd()
-        ! create & init objs 
+        ! create & init objs
         call ctfsq%new(ldim, smpd)
         call ctfsq%set_ft(.true.)
         if( tfplan%flag .ne. 'no' )&

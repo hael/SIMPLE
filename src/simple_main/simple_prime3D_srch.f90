@@ -1,3 +1,8 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple search module: Prime3D method
+!!
 module simple_prime3D_srch
 use simple_defs
 use simple_prime_srch,       only: prime_srch
@@ -12,8 +17,8 @@ implicit none
 
 public :: prime3D_srch
 private
+#include "simple_local_flags.inc"
 
-logical, parameter :: DEBUG = .false.
 real,    parameter :: FACTWEIGHTS_THRESH = 0.001
 
 type prime3D_srch
@@ -179,7 +184,7 @@ contains
         ! create in-plane search objects
         call self%shsrch_obj%new(pftcc, self%lims, shbarrier=self%shbarr)
         call self%inplsrch_obj%new(pftcc, self%lims, shbarrier=self%shbarr)
-        if( DEBUG ) write(*,'(A)') '>>> PRIME3D_SRCH::CONSTRUCTED NEW SIMPLE_PRIME3D_SRCH OBJECT'
+        DebugPrint '>>> PRIME3D_SRCH::CONSTRUCTED NEW SIMPLE_PRIME3D_SRCH OBJECT'
     end subroutine new
 
     ! SEARCH ROUTINES
@@ -210,7 +215,7 @@ contains
             call self%stochastic_srch( pftcc, iptcl, a, e, lp, nnmat, grid_projs )
         endif
         call self%online_destruct
-        if( DEBUG ) write(*,'(A)') '>>> PRIME3D_SRCH::EXECUTED PRIME3D_SRCH'
+        DebugPrint '>>> PRIME3D_SRCH::EXECUTED PRIME3D_SRCH'
     end subroutine exec_prime3D_srch
 
     !>  \brief state labeler
@@ -223,7 +228,7 @@ contains
         integer,                 intent(inout) :: statecnt(self%nstates)
         call self%stochastic_srch_het(pftcc, iptcl, a, e, extr_bound, statecnt)
         call self%online_destruct
-        if( DEBUG ) write(*,'(A)') '>>> PRIME3D_SRCH::EXECUTED PRIME3D_HET_SRCH'
+        DebugPrint '>>> PRIME3D_SRCH::EXECUTED PRIME3D_HET_SRCH'
     end subroutine exec_prime3D_srch_het
 
     !>  \brief  greedy hill-climbing
@@ -278,7 +283,7 @@ contains
         else
             call a%reject(iptcl)
         endif
-        if( DEBUG ) write(*,'(A)') '>>> PRIME3D_SRCH::FINISHED GREEDY SEARCH'
+        DebugPrint '>>> PRIME3D_SRCH::FINISHED GREEDY SEARCH'
 
         contains
 
@@ -343,7 +348,7 @@ contains
         else
             call a%reject(iptcl)
         endif
-        if( DEBUG ) write(*,'(A)') '>>> PRIME3D_SRCH::FINISHED GREEDY SEARCH'
+        DebugPrint '>>> PRIME3D_SRCH::FINISHED GREEDY SEARCH'
 
         contains
 
@@ -412,7 +417,7 @@ contains
         else
             call a%reject(iptcl)
         endif
-        if( DEBUG ) write(*,'(A)') '>>> PRIME3D_SRCH::FINISHED STOCHASTIC SEARCH'
+        DebugPrint '>>> PRIME3D_SRCH::FINISHED STOCHASTIC SEARCH'
 
         contains
 
@@ -503,7 +508,7 @@ contains
         else
             call a%reject(iptcl)
         endif
-        if( DEBUG ) write(*,'(A)') '>>> PRIME3D_SRCH::FINISHED STOCHASTIC SEARCH (REFINE=SHC|SHCNEIGH)'
+        DebugPrint '>>> PRIME3D_SRCH::FINISHED STOCHASTIC SEARCH (REFINE=SHC|SHCNEIGH)'
 
         contains
         
@@ -556,7 +561,7 @@ contains
         else
             call a%reject(iptcl)
         endif
-        if( DEBUG ) write(*,'(A)') '>>> PRIME3D_SRCH::FINISHED EXTREMAL SEARCH'
+        DebugPrint '>>> PRIME3D_SRCH::FINISHED EXTREMAL SEARCH'
 
         contains
 
@@ -637,7 +642,7 @@ contains
         else
             call a%reject(iptcl)
         endif
-        if( DEBUG ) write(*,'(A)') '>>> PRIME3D_SRCH::FINISHED HET SEARCH'
+        DebugPrint '>>> PRIME3D_SRCH::FINISHED HET SEARCH'
     end subroutine stochastic_srch_het
 
     subroutine inpl_peaks( self, pftcc, iptcl )
@@ -737,7 +742,7 @@ contains
                 endif
             end do
         endif
-        if( DEBUG ) write(*,'(A)') '>>> PRIME3D_SRCH::FINISHED INPL SEARCH'
+        DebugPrint '>>> PRIME3D_SRCH::FINISHED INPL SEARCH'
     end subroutine inpl_srch
 
     !>  \brief  prepares reference indices for the search & fetches ctf
@@ -789,7 +794,7 @@ contains
                 print *, 'corr = ', corr
                 if( corr > 1. )               corr = 1.
                 if( .not. is_a_number(corr) ) corr = 0.
-                call o_prev%print
+                call o_prev%print_ori()
             endif
             if( self%refine.eq.'no' .and. self%nstates==1 )then
                 ! moving average for single state only
@@ -808,7 +813,7 @@ contains
         ! prep specscore
         frc = pftcc%genfrc(self%prev_ref, iptcl, self%prev_roind)
         self%specscore = max(0., median_nocopy(frc))
-        if( DEBUG ) write(*,'(A)') '>>> PRIME3D_SRCH::PREPARED FOR SIMPLE_PRIME3D_SRCH'
+        DebugPrint '>>> PRIME3D_SRCH::PREPARED FOR SIMPLE_PRIME3D_SRCH'
     end subroutine prep4srch
 
     !>  \brief  prepares the search space (ref oris) & search order per particle
@@ -961,7 +966,7 @@ contains
         endif
         ! the end
         self%o_peaks = o_peaks
-        if( DEBUG ) write(*,'(A)') '>>> PRIME3D_SRCH::EXECUTED PREP_NPEAKS_ORIS'
+        DebugPrint '>>> PRIME3D_SRCH::EXECUTED PREP_NPEAKS_ORIS'
     end subroutine prep_npeaks_oris
 
     !>  \brief  determines and updates stochastic weights
@@ -1135,7 +1140,7 @@ contains
         ! stash and return
         o_new = a%get_ori(iptcl)
         call self%o_peaks%set_ori(best_loc(1), o_new)
-        if( DEBUG ) write(*,'(A)') '>>> PRIME3D_SRCH::GOT BEST ORI'
+        DebugPrint '>>> PRIME3D_SRCH::GOT BEST ORI'
     end subroutine update_best
 
     !>  \brief  to get one orientation
@@ -1212,7 +1217,7 @@ contains
         class(prime3D_srch), intent(inout) :: self
         class(oris),         intent(in)    :: oris_in
         self%o_peaks = oris_in
-        if( DEBUG ) write(*,'(A)') '>>> PRIME3D_SRCH::EXECUTED SET_O_PEAKS'
+        DebugPrint '>>> PRIME3D_SRCH::EXECUTED SET_O_PEAKS'
     end subroutine set_o_peaks
 
     !>  \brief  is for getting o_peaks

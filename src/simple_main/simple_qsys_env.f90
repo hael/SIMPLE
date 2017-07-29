@@ -1,3 +1,7 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple batch-processing manager - environment module
 module simple_qsys_env
 use simple_qsys_factory, only: qsys_factory
 use simple_qsys_base,    only: qsys_base
@@ -8,6 +12,7 @@ use simple_qsys_funs     ! use all in there
 use simple_defs          ! use all in there   
 use simple_filehandling  ! use all in there
 implicit none
+#include "simple_local_flags.inc"
 
 type :: qsys_env
     integer, allocatable,      public  :: parts(:,:)
@@ -37,7 +42,7 @@ contains
         real                          :: rtpi, tot_time_sec
         logical                       :: sstream
         integer, parameter            :: MAXNKEYS = 30
-        logical, parameter            :: DEBUG = .true.
+        !DEBUG removed -- use simple_local_flags when debugging
         call self%kill
         sstream = .false.
         if( present(stream) ) sstream = stream

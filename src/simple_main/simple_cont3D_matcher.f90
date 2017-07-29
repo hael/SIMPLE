@@ -1,3 +1,7 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple matcher class:  3D continous algorithm
 module simple_cont3D_matcher
 use simple_defs
 use simple_build,             only: build
@@ -15,11 +19,11 @@ implicit none
 
 public :: cont3D_exec
 private
+#include "simple_local_flags.inc"
+integer,                   parameter :: BATCHSZ_MUL = 10   !< particles per thread
+integer,                   parameter :: MAXNPEAKS   = 10   !< Max num peaks
+integer,                   parameter :: NREFS       = 50   !< Max num of references
 
-integer,                   parameter :: BATCHSZ_MUL = 20    !< particles per thread
-integer,                   parameter :: NREFS       = 100   !< number of references projection per stage used per particle
-integer,                   parameter :: MAXNPEAKS   = 10    !< number of peaks for soft reconstruction
-logical,                   parameter :: DEBUG       = .false.
 type(oris)                           :: orefs               !< per particle projection direction search space (refine=yes)
 type(cont3D_srch),       allocatable :: cont3Dsrch(:)       !< pftcc array for refine=yes
 type(cont3D_de_srch),    allocatable :: cont3Ddesrch(:)     !< pftcc array for refine=de
@@ -39,11 +43,11 @@ contains
         use simple_projector,  only: projector
         !$ use omp_lib
         !$ use omp_lib_kinds
-        class(build),   intent(inout) :: b
-        class(params),  intent(inout) :: p
-        class(cmdline), intent(inout) :: cline
-        integer,        intent(in)    :: which_iter
-        logical,        intent(inout) :: converged
+        class(build),   intent(inout) :: b               !< build object
+        class(params),  intent(inout) :: p               !< params object
+        class(cmdline), intent(inout) :: cline           !< command line input
+        integer,        intent(in)    :: which_iter      !< iteration
+        logical,        intent(inout) :: converged       !< have converged
         ! batches-related variables
         type(projector),        allocatable :: batch_imgs(:)
         type(polarft_corrcalc), allocatable :: pftccs(:)
@@ -55,7 +59,7 @@ contains
         type(oris)             :: softoris
         type(ori)              :: orientation
         real                   :: reslim
-        integer                :: fromp, top, iptcl, state, alloc_stat
+        integer                :: fromp, top, iptcl, state, alloc_stat,iptcl_tmp
         ! MULTIPLE STATES DEACTIVATED FOR NOW
         if(p%nstates>1)stop 'MULTIPLE STATES DEACTIVATED FOR NOW; cont3D_matcher::cont3Dexec'
         ! INIT
@@ -122,7 +126,7 @@ contains
         endif
 
         ! BATCH PROCESSING
-        call del_file(p%outfile)      
+        call del_file(p%outfile)
         do batch = 1, nbatches
             ! BATCH INDICES
             fromp = p%fromp-1 + batches(batch,1)
@@ -132,15 +136,17 @@ contains
                 &cont3Dadasrch(fromp:top), batch_imgs(fromp:top), stat=alloc_stat)
             call alloc_err('In pcont3D_matcher::pcont3D_exec',alloc_stat)
             do iptcl = fromp, top
+
                 state = nint(b%a%get(iptcl, 'state'))
                 if(state == 0)cycle
                 ! stash raw image for rec
                 call read_img_from_stk(b, p, iptcl)
-                batch_imgs(iptcl) = b%img
+                call batch_imgs(iptcl)%copy(b%img)
                 ! prep pftccs & ctf
                 call init_pftcc(p, iptcl, pftccs(iptcl))
-                call prep_pftcc_ptcl(b, p, iptcl, pftccs(iptcl))
-                if( p%ctf.ne.'no' )call pftccs(iptcl)%create_polar_ctfmats(b%a)
+                iptcl_tmp = iptcl
+                 call prep_pftcc_ptcl(b, p, iptcl_tmp, pftccs(iptcl_tmp))
+                if( p%ctf.ne.'no' )call pftccs(iptcl_tmp)%create_polar_ctfmats(b%a)
                 select case(p%refine)
                     case('yes')
                         call prep_pftcc_refs(b, p, iptcl, pftccs(iptcl))
@@ -176,7 +182,7 @@ contains
                     orientation = b%a%get_ori(iptcl)
                     state       = nint(orientation%get('state'))
                     if(state == 0)cycle
-                    b%img = batch_imgs(iptcl)
+                    call b%img%copy(batch_imgs(iptcl))
                     if(p%npeaks == 1)then
                         if( p%eo.eq.'yes' )then
                             call grid_ptcl(b, p, orientation, ran_eo=eopart(iptcl) )
@@ -245,9 +251,9 @@ contains
 
     !>  \brief  preps volumes for projection
     subroutine prep_vols( b, p, cline )
-        class(build),   intent(inout) :: b
-        class(params),  intent(inout) :: p
-        class(cmdline), intent(inout) :: cline
+        class(build),   intent(inout) :: b           !< build object
+        class(params),  intent(inout) :: p           !< params object
+        class(cmdline), intent(inout) :: cline       !< command line input
         integer :: state
         do state=1,p%nstates
             if( state_exists(state) )then
@@ -259,15 +265,15 @@ contains
         enddo
         call b%vol%kill
         ! bring back the original b%vol size
-        if( p%boxmatch < p%box )call b%vol%new([p%box,p%box,p%box], p%smpd)
-        if( debug )write(*,*)'prep volumes done'
+        if( p%boxmatch < p%box )call b%vol%new([p%box,p%box,p%box], p%smpd) ! to double check
+        DebugPrint 'prep volumes done'
     end subroutine prep_vols
 
-    !>  \brief  initialize pftcc 
+    !>  \brief  initialize pftcc
     subroutine init_pftcc(p, iptcl, pftcc)
-        class(params),              intent(inout) :: p
-        integer,                    intent(in)    :: iptcl
-        class(polarft_corrcalc),    intent(inout) :: pftcc
+        class(params),              intent(inout) :: p        !< params object
+        integer,                    intent(in)    :: iptcl    !< index to particle
+        class(polarft_corrcalc),    intent(inout) :: pftcc    !< calculator object
         if( p%l_xfel )then
             call pftcc%new(nrefs_per_ptcl, [iptcl,iptcl], [p%boxmatch,p%boxmatch,1], p%smpd, p%kfromto, p%ring2, p%ctf, isxfel='yes')
         else
@@ -277,13 +283,13 @@ contains
 
     !>  \brief  preps search space and performs reference projection, for refine=yes
     subroutine prep_pftcc_refs(b, p, iptcl, pftcc)
-        class(build),               intent(inout) :: b
-        class(params),              intent(inout) :: p
-        integer,                    intent(in)    :: iptcl
-        class(polarft_corrcalc),    intent(inout) :: pftcc
-        type(oris) :: cone
-        type(ori)  :: optcl, oref
-        integer    :: state, iref, cnt
+        class(build),               intent(inout) :: b      !< build object
+        class(params),              intent(inout) :: p      !< params object
+        integer,                    intent(in)    :: iptcl  !< index to particle
+        class(polarft_corrcalc),    intent(inout) :: pftcc  !< calculator and storage object
+        type(oris)  :: cone
+        type(ori)   :: optcl, oref
+        integer     :: state, iref, cnt
         optcl = b%a%get_ori(iptcl)
         call cone%rnd_gau_neighbors(NREFS, optcl, p%athres)
         if( trim(p%pgrp).ne.'c1' )call b%se%rotall_to_asym(cone)
@@ -311,15 +317,15 @@ contains
             oref  = orefs%get_ori(iref)
             state = nint(oref%get('state'))
             call b%refvols(state)%fproject_polar(iref, oref, pftcc)
-        enddo          
+        enddo
     end subroutine prep_pftcc_refs
 
-    !>  \brief  particle projection into pftcc 
+    !>  \brief  particle projection into pftcc
     subroutine prep_pftcc_ptcl(b, p, iptcl, pftcc)
-        class(build),               intent(inout) :: b
-        class(params),              intent(inout) :: p
-        integer,                    intent(in)    :: iptcl
-        class(polarft_corrcalc),    intent(inout) :: pftcc
+        class(build),               intent(inout) :: b        !< build object
+        class(params),              intent(inout) :: p        !< params object
+        integer,                    intent(in)    :: iptcl       !< index to particle
+        class(polarft_corrcalc),    intent(inout) :: pftcc    !< calculator object
         type(ori)  :: optcl
         optcl = b%a%get_ori(iptcl)
         call prepimg4align(b, p, optcl)

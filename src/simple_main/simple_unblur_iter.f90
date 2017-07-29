@@ -1,3 +1,13 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!>  \brief Simple unblur iterator class
+!! Run unblur_movie within checks so parent call does not have to
+!
+! The SIMPLE code is distributed with the hope that it will be
+! useful, but WITHOUT ANY WARRANTY. Redistribution and modification is regulated
+! by the GNU General Public License.
+! -----------------------------------------------------------------------------!
 module simple_unblur_iter
 use simple_image,   only: image
 use simple_cmdline, only: cmdline
@@ -12,8 +22,7 @@ implicit none
 
 public :: unblur_iter
 private
-
-logical, parameter :: DEBUG = .false.
+#include "simple_local_flags.inc"
 
 type :: unblur_iter
     private
@@ -100,11 +109,10 @@ contains
             else
                 call unblur_calc_sums(self%moviesum, self%moviesum_corrected, self%moviesum_ctf)
             endif
-            if( DEBUG )then
-                print *, 'ldim(moviesum):           ', self%moviesum%get_ldim()
-                print *, 'ldim(moviesum_corrected): ', self%moviesum_corrected%get_ldim()
-                print *, 'ldim(moviesum_ctf):       ', self%moviesum_ctf%get_ldim()
-            endif
+            DebugPrint 'ldim(moviesum):           ', self%moviesum%get_ldim()
+            DebugPrint 'ldim(moviesum_corrected): ', self%moviesum_corrected%get_ldim()
+            DebugPrint 'ldim(moviesum_ctf):       ', self%moviesum_ctf%get_ldim()
+            
         endif
         ! generate power-spectra
         self%pspec_sum         = self%moviesum%mic2spec(p%pspecsz, self%speckind)

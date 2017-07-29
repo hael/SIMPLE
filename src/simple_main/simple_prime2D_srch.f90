@@ -1,3 +1,8 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple search module: Prime2D method
+!!
 module simple_prime2D_srch
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_pftcc_shsrch,     only: pftcc_shsrch
@@ -10,8 +15,7 @@ implicit none
 
 public :: prime2D_srch
 private
-
-logical, parameter :: DEBUG=.false.
+#include "simple_local_flags.inc"
 
 type prime2D_srch
     private
@@ -96,7 +100,7 @@ contains
         call self%bfacsrch_obj%new(pftcc, lims_bfac)
         ! the instance now exists
         self%exists = .true.
-        if( DEBUG ) write(*,'(A)') '>>> PRIME2D_SRCH::CONSTRUCTED NEW SIMPLE_PRIME2D_SRCH OBJECT'
+        DebugPrint '>>> PRIME2D_SRCH::CONSTRUCTED NEW SIMPLE_PRIME2D_SRCH OBJECT'
     end subroutine new
 
     ! GETTERS
@@ -153,7 +157,7 @@ contains
         ! cleanup
         call o_old%kill
         call o_new%kill
-        if( DEBUG ) write(*,'(A)') '>>> PRIME2D_SRCH::GOT BEST ORI'
+        DebugPrint '>>> PRIME2D_SRCH::GOT BEST ORI'
     end subroutine update_best
 
     ! PREPARATION ROUTINES
@@ -189,7 +193,7 @@ contains
         call put_last(self%prev_class, self%srch_order)
         call rt%kill
         if( any(self%srch_order == 0) ) stop 'Invalid index in srch_order; simple_prime2D_srch :: prep4srch'
-        if( DEBUG ) write(*,'(A)') '>>> PRIME2D_SRCH::PREPARED FOR SIMPLE_PRIME2D_SRCH'
+        DebugPrint '>>> PRIME2D_SRCH::PREPARED FOR SIMPLE_PRIME2D_SRCH'
     end subroutine prep4srch
 
     ! SEARCH ROUTINES
@@ -212,7 +216,7 @@ contains
         endif
         ! memory management (important for ompenMP distr over arrays of prime2D_srch objects)
         if( allocated(self%srch_order) ) deallocate(self%srch_order)
-        if( DEBUG ) write(*,'(A)') '>>> PRIME2D_SRCH::EXECUTED PRIME2D_SRCH'
+        DebugPrint '>>> PRIME2D_SRCH::EXECUTED PRIME2D_SRCH'
     end subroutine exec_prime2D_srch
 
     !>  \brief  executes greedy rotational search (for initialisation)
@@ -244,7 +248,7 @@ contains
         else
             call a%reject(iptcl)
         endif
-        if( DEBUG ) write(*,'(A)') '>>> PRIME2D_SRCH::FINISHED STOCHASTIC SEARCH'
+        DebugPrint '>>> PRIME2D_SRCH::FINISHED STOCHASTIC SEARCH'
     end subroutine greedy_srch
 
     !>  \brief  executes stochastic rotational search
@@ -308,7 +312,7 @@ contains
         else
             call a%reject(iptcl)
         endif
-        if( DEBUG ) write(*,'(A)') '>>> PRIME2D_SRCH::FINISHED STOCHASTIC SEARCH'
+        DebugPrint '>>> PRIME2D_SRCH::FINISHED STOCHASTIC SEARCH'
     end subroutine stochastic_srch
 
     !>  \brief  executes nearest-neighbor rotational search
@@ -354,7 +358,7 @@ contains
         else
             call a%reject(iptcl)
         endif
-        if( DEBUG ) write(*,'(A)') '>>> PRIME2D_SRCH::FINISHED NEAREST-NEIGHBOR SEARCH'
+        DebugPrint '>>> PRIME2D_SRCH::FINISHED NEAREST-NEIGHBOR SEARCH'
     end subroutine nn_srch
 
     !>  \brief  executes the shift search over the best matching reference
@@ -395,7 +399,7 @@ contains
         else
             call a%reject(iptcl)
         endif
-        if( DEBUG ) write(*,'(A)') '>>> PRIME2D_SRCH::FINISHED SHIFT SEARCH'
+        DebugPrint '>>> PRIME2D_SRCH::FINISHED SHIFT SEARCH'
     end subroutine bfac_srch
 
     !>  \brief  executes B-factor search on the best matching reference
@@ -415,7 +419,7 @@ contains
             self%bfac_corr = corr_before
             self%best_bfac = 0.
         endif
-        if( DEBUG ) write(*,'(A)') '>>> PRIME2D_SRCH::FINISHED B-FACTOR SEARCH'
+       DebugPrint '>>> PRIME2D_SRCH::FINISHED B-FACTOR SEARCH'
     end subroutine bfac_srch_local
 
     ! DESTRUCTOR

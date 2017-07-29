@@ -1,17 +1,21 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!>  Simple image module: estimation routines for 2D analysis
 module simple_estimate_ssnr
 use simple_defs
 use simple_image, only: image
 implicit none
 
 contains
-    
+
     ! ESTIMATION ROUTINES FOR THE 2D ANALYSIS
-    
+
     !>  \brief make a fake ssnr estimate, useful for testing purposes
     function fake_ssnr( img, lplim, width ) result( ssnr )
-        class(image), intent(in)   :: img
-        real, intent(in)           :: lplim
-        real, intent(in), optional :: width
+        class(image), intent(in)   :: img           !< image object
+        real, intent(in)           :: lplim         !< low-pass limit
+        real, intent(in), optional :: width         !< window width
         real, allocatable :: ssnr(:), fsc(:), res(:)
         integer           :: nyq, k
         real              :: freq, wwidth, lplim_freq
@@ -33,17 +37,17 @@ contains
         ssnr = fsc2ssnr(fsc)
         deallocate(fsc,res)
     end function fake_ssnr
-    
+
     !>  \brief estimate the SSNR using Unser's method
     !!         this routine is too slow in practice but it was useful for prototyping
     function estimate_ssnr( imgs, os, msk, tfun, tfplan ) result( ssnr )
         use simple_oris, only: oris
         use simple_ctf, only: ctf
-        class(image),     intent(inout) :: imgs(:)
-        class(oris),      intent(inout) :: os
-        real,             intent(in)    :: msk
-        class(ctf),       intent(inout) :: tfun
-        type(ctfplan),    intent(in)    :: tfplan
+        class(image),     intent(inout) :: imgs(:) !< image objects
+        class(oris),      intent(inout) :: os      !< orientation set object
+        real,             intent(in)    :: msk     !< mask
+        class(ctf),       intent(inout) :: tfun    !< Instrument CTF
+        type(ctfplan),    intent(in)    :: tfplan  !< CTF plan object
         type(image)       :: favg, fdiff
         integer           :: ldim(3), iptcl
         real, allocatable :: spec(:), specsum(:), ssnr(:), specdiff(:), specdiffsum(:), s(:)
@@ -70,7 +74,7 @@ contains
                     angast = 0.
             end select
             select case(tfplan%flag)
-                case('mul','no') 
+                case('mul','no')
                     ! do nothing
                 case('yes')  ! multiply with CTF
                     call tfun%apply(imgs(iptcl), dfx, 'ctf', dfy, angast)
@@ -123,21 +127,21 @@ contains
         call fdiff%kill
         call favg%kill
     end function estimate_ssnr
-    
+
     !>  \brief estimate the noise power spectrum in an highly optimised online fashion
     !!         it is assumed that img is rotated, shifted and multiplied with the CTF
     !!         Hence, the reference should be multiplied with the square of the CTF
     subroutine estimate_specnoise_online( avg, img, msk, o, tfun, tfplan, specnoisesum, inner_width )
         use simple_ori, only: ori
         use simple_ctf, only: ctf
-        class(image),     intent(inout) :: avg
-        class(image),     intent(inout) :: img
-        real,             intent(in)    :: msk
-        class(ori),       intent(inout) :: o
-        class(ctf),       intent(inout) :: tfun
-        type(ctfplan),    intent(in)    :: tfplan
-        real,             intent(inout) :: specnoisesum(:)
-        real, optional,   intent(in)    :: inner_width(2)
+        class(image),     intent(inout) :: avg !< image average object
+        class(image),     intent(inout) :: img !< image object
+        real,             intent(in)    :: msk !< mask
+        class(ori),       intent(inout) :: o   !< orientation object
+        class(ctf),       intent(inout) :: tfun !< CTF object
+        type(ctfplan),    intent(in)    :: tfplan !< plan object
+        real,             intent(inout) :: specnoisesum(:)  !< sum of the spectral noise
+        real, optional,   intent(in)    :: inner_width(2)   !< mask width
         type(image)       :: fdiff, favg, fimg
         real, allocatable :: specnoise(:)
         real              :: dfx, dfy, angast
@@ -181,15 +185,15 @@ contains
         deallocate(specnoise)
         call favg%kill
         call fimg%kill
-        call fdiff%kill        
+        call fdiff%kill
     end subroutine estimate_specnoise_online
-    
+
     ! ESTIMATION ROUTINES FOR THE 3D ANALYSIS
-    
+
     !> \brief  converts the FSC to SSNR (the 2.* is because of the division of the data)
     function fsc2ssnr( corrs ) result( ssnr )
-        real, intent(in)  :: corrs(:)
-        real, allocatable :: ssnr(:)
+        real, intent(in)  :: corrs(:) !<  instrument FSC 
+        real, allocatable :: ssnr(:) !<  instrument SSNR
         integer :: nyq, k
         real    :: fsc
         nyq = size(corrs)
@@ -199,7 +203,7 @@ contains
             ssnr(k) = (2.*fsc)/(1.-fsc)
         end do
     end function fsc2ssnr
-    
+
     !> \brief  converts the FSC to the optimal low-pass filter
     function fsc2optlp( corrs ) result( filt )
         real, intent(in)           :: corrs(:) !< fsc plot (correlations)
@@ -214,8 +218,8 @@ contains
 
     !> \brief  converts the SSNR to FSC
     function ssnr2fsc( ssnr ) result( corrs )
-        real, intent(in)  :: ssnr(:)
-        real, allocatable :: corrs(:)
+        real, intent(in)  :: ssnr(:)  !< input SSNR array
+        real, allocatable :: corrs(:) !< output FSC result
         integer :: nyq, k
         nyq = size(ssnr)
         allocate( corrs(nyq) )
@@ -223,11 +227,11 @@ contains
             corrs(k) = ssnr(k)/(ssnr(k)+1.)
         end do
     end function ssnr2fsc
-    
+
     !> \brief  converts the SSNR 2 the optimal low-pass filter
     function ssnr2optlp( ssnr ) result( w )
-        real, intent(in)  :: ssnr(:)
-        real, allocatable :: w(:)
+        real, intent(in)  :: ssnr(:) !<  instrument SSNR
+        real, allocatable :: w(:) !<  FIR low-pass filter
         integer :: nyq, k
         nyq = size(ssnr)
         allocate( w(nyq) )
@@ -235,46 +239,45 @@ contains
             w(k) = ssnr(k)/(ssnr(k)+1.)
         end do
     end function ssnr2optlp
-    
+
     !> \brief  calculates the particle SSNR in 2D (Grigorieff)
     function estimate_pssnr2D( avr, fsc ) result( pssnr )
         use simple_AVratios, only: AVratios
-        class(AVratios), intent(in) :: avr
-        real, intent(in)            :: fsc(:)
-        real, allocatable :: pssnr(:)
+        class(AVratios), intent(in) :: avr     !< Atomic to volume conversion object
+        real, intent(in)            :: fsc(:)  !<  instrument FSC
+        real, allocatable :: pssnr(:) !<  particle SSNR
         pssnr = fsc2ssnr(fsc)
         pssnr = pssnr*avr%Abox_o_Aptcl()*avr%Vmsk_o_Vbox()
     end function estimate_pssnr2D
-    
+
     !> \brief  calculates the particle SSNR in 3D (Grigorieff)
     function estimate_pssnr3D( avr, fsc ) result( pssnr )
         use simple_AVratios, only: AVratios
-        class(AVratios), intent(in) :: avr
-        real, intent(in)            :: fsc(:)
-        real, allocatable :: pssnr(:)
+        class(AVratios), intent(in) :: avr !< Atomic to volume conversion object
+        real, intent(in)            :: fsc(:) !<  instrument FSC
+        real, allocatable :: pssnr(:) !<  particle SSNR
         pssnr = estimate_pssnr2D(avr, fsc)
         pssnr = pssnr*avr%Vbox_o_Vptcl()*avr%Aptcl_o_Abox()
     end function estimate_pssnr3D
-    
+
     !> \brief  calculates the particle SSNR in 2D (Grigorieff)
     function from_ssnr_estimate_pssnr2D( avr, ssnr ) result( pssnr )
         use simple_AVratios, only: AVratios
-        class(AVratios), intent(in) :: avr
-        real, intent(in)            :: ssnr(:)
-        real, allocatable :: pssnr(:)
+        class(AVratios), intent(in) :: avr !< Atomic to volume conversion object
+        real, intent(in)            :: ssnr(:) !<  instrument SSNR
+        real, allocatable :: pssnr(:) !<  particle SSNR
         allocate(pssnr(size(ssnr)), source=ssnr)
         pssnr = pssnr*avr%Abox_o_Aptcl()*avr%Vmsk_o_Vbox()
     end function from_ssnr_estimate_pssnr2D
-    
+
     !> \brief  calculates the particle SSNR in 3D (Grigorieff)
     function from_ssnr_estimate_pssnr3D( avr, ssnr ) result( pssnr )
         use simple_AVratios, only: AVratios
-        class(AVratios), intent(in) :: avr
-        real, intent(in)            :: ssnr(:)
-        real, allocatable :: pssnr(:)
+        class(AVratios), intent(in) :: avr !< Atomic to volume conversion object
+        real, intent(in)            :: ssnr(:) !<  instrument SSNR
+        real, allocatable :: pssnr(:)           !<  particle SSNR
         pssnr = from_ssnr_estimate_pssnr2D(avr, ssnr)
         pssnr = pssnr*avr%Vbox_o_Vptcl()*avr%Aptcl_o_Abox()
     end function from_ssnr_estimate_pssnr3D
 
-end module simple_estimate_ssnr          
-        
+end module simple_estimate_ssnr

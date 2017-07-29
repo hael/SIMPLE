@@ -1,3 +1,8 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple search module: symmetry search method
+!!
 module simple_symsrcher
 use simple_defs
 use simple_math
@@ -12,7 +17,7 @@ public :: dsym_cylinder
 private
 
 contains
-
+    !>  dsym_cylinder search intended for symmetry of order D
     subroutine dsym_cylinder(p, dsym_os, cylinder)
         class(params), intent(in)    :: p
         class(oris),   intent(inout) :: dsym_os

@@ -1,7 +1,10 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 !>  \brief  Class that defines the Contrast Transfer Function (CTF) of the electron microscope
 !!
 !! This class is based on a class used in CTFFIND4, developed by Alexis Rohou
-!! and Nikolaus Grigorieff at Janelia Farm. The below copyright statement therefore 
+!! and Nikolaus Grigorieff at Janelia Farm. The below copyright statement therefore
 !! needs to be included here:
 !! Copyright 2014 Howard Hughes Medical Institute
 !! All rights reserved
@@ -20,7 +23,7 @@ private
 type ctf
     private
     real    :: smpd        = 0.    !< sampling distance (input unit: A)
-    real    :: kV          = 0.    !< acceleration voltage of the electron microscope (input unit: kV) 
+    real    :: kV          = 0.    !< acceleration voltage of the electron microscope (input unit: kV)
     real    :: Cs          = 0.    !< spherical aberration (input unit: mm)
     real    :: wl          = 0.    !< wavelength (input unit: A)
     real    :: amp_contr   = 0.07  !< fraction of amplitude contrast ([0.07,0.15] see Mindell 03)
@@ -46,18 +49,21 @@ type ctf
     procedure, private :: solve4PhSh
     procedure, private :: sqFreq4PhSh
     procedure, private :: sqSf4PhSh
-end type
+end type ctf
 
 interface ctf
     module procedure constructor
 end interface
 
 contains
-    
+
     !>  \brief  is a constructor
     function constructor( smpd, kV, Cs, amp_contr ) result( self )
         use simple_math, only: kV2wl
-        real, intent(in) :: smpd, kV, Cs, amp_contr
+        real, intent(in) :: smpd !< sampling distance
+        real, intent(in) :: kV   !< accelleration voltage
+        real, intent(in) :: Cs   !< constant
+        real, intent(in) :: amp_contr !< amplitude contrast
         type(ctf) :: self
         ! set constants
         self%wl        = kV2wl(kV)/smpd
@@ -68,21 +74,21 @@ contains
         self%phaseq = sqrt(1.-amp_contr**2.)
         self%ampliq = amp_contr
     end function constructor
-    
+
     !>  \brief  initialise a CTF object with defocus/astigmatism params
     subroutine init( self, dfx, dfy, angast )
         use simple_math, only: deg2rad
         class(ctf), intent(inout) :: self   !< instance
-        real,       intent(in)    :: dfx    !< um
-        real,       intent(in)    :: dfy    !< um
-        real,       intent(in)    :: angast !< degrees
+        real,       intent(in)    :: dfx    !< defocus x-axis (um)
+        real,       intent(in)    :: dfy    !< defocus y-axis (um)
+        real,       intent(in)    :: angast !< astigmatism (degrees)
         self%dfx    = (dfx*1.0e4)/self%smpd
         self%dfy    = (dfy*1.0e4)/self%smpd
         self%angast = deg2rad(angast)
     end subroutine init
 
     ! CTF EVALUATORS
-    
+
     !>  \brief Returns the CTF, based on CTFFIND3 subroutine (see Mindell 2003)
     !
     ! How to use eval:
@@ -117,7 +123,7 @@ contains
         ! compute value of CTF, assuming white particles
         val = (self%phaseq * sin(phase_shift) + self%ampliq * cos(phase_shift))
     end function eval
-    
+
     !>  \brief returns the argument (radians) to the sine and cosine terms of the ctf
     !!
     !!  We follow the convention, like the rest of the cryo-EM/3DEM field, that underfocusing the objective lens
@@ -127,25 +133,24 @@ contains
         class(ctf), intent(in) :: self      !< instance
         real,       intent(in) :: spaFreqSq !< square of spatial frequency at which to compute the ctf (1/pixels^2)
         real,       intent(in) :: ang       !< angle at which to compute the ctf (radians)
-        real :: df ! defocus at point at which we're evaluating the ctf
-        ! compute the defocus
-
+        real :: df                          !< defocus at point at which we're evaluating the ctf
+        !! compute the defocus
         df = self%eval_df(ang)
-        ! compute the ctf argument
+        !! compute the ctf argument
         phase_shift = pi * self%wl * spaFreqSq * (df - 0.5 * self%wl**2 * spaFreqSq * self%Cs)
     end function evalPhSh
-    
+
     !>  \brief  Return the effective defocus given the pre-set CTF parameters (from CTFFIND4)
     pure elemental real function eval_df( self, ang ) result (df)
         class(ctf), intent(in) :: self !< instance
         real,       intent(in) :: ang  !< angle at which to compute the defocus (radians)
         df = 0.5 * (self%dfx + self%dfy + cos(2.0 * (ang - self%angast)) * (self%dfx - self%dfy))
     end function eval_df
-    
+
     ! CTF APPLICATION ROUTINES
-    
+
     !>  \brief  is for making a CTF image
-    !!          modes: abs, ctf, flip, flipneg, neg, square 
+    !!          modes: abs, ctf, flip, flipneg, neg, square
     subroutine ctf2img( self, img, dfx, mode, dfy, angast, bfac )
         use simple_image, only: image
         class(ctf),                 intent(inout) :: self        !< instance
@@ -204,12 +209,12 @@ contains
                 call img%set_fcomp([h,k,0], phys, cmplx(tval,0.))
             end do
         end do
-        !$omp end parallel do 
-        if( present(bfac) ) call img%apply_bfac(bfac) 
+        !$omp end parallel do
+        if( present(bfac) ) call img%apply_bfac(bfac)
     end subroutine ctf2img
 
     !>  \brief  is for making a CTF spectrum (1d)
-    !!          modes: abs, ctf, flip, flipneg, neg, square 
+    !!          modes: abs, ctf, flip, flipneg, neg, square
     function ctf2spec( self, kfromto, box, dfx, mode, bfac ) result(spec)
         use simple_image,  only: image
         use simple_jiffys, only: alloc_err
@@ -217,7 +222,7 @@ contains
         integer,          intent(in)    :: kfromto(2) !< Fourier index range
         integer,          intent(in)    :: box        !< box size
         real,             intent(in)    :: dfx        !< defocus
-        character(len=*), intent(in)    :: mode       !< abs, ctf, flip, flipneg, neg, square 
+        character(len=*), intent(in)    :: mode       !< abs, ctf, flip, flipneg, neg, square
         real, optional,   intent(in)    :: bfac       !< bfactor
         real, allocatable :: spec(:)
         integer           :: k,alloc_stat
@@ -257,7 +262,7 @@ contains
                 wght = max(0.,exp(-(bfac/4.)*res*res)) ! b-factor weight
                 spec(k) = spec(k)*wght                 ! apply it
             end do
-        endif      
+        endif
     end function ctf2spec
 
     !>  \brief  is for applying CTF to an image
@@ -367,9 +372,9 @@ contains
         end do
         !$omp end parallel do
     end subroutine apply_and_shift
-    
-    ! CALCULATORS        
-    
+
+    ! CALCULATORS
+
     !>  \brief  Return the spatial frequency (reciprocal pixels) of the n-th zero, where n is given as which_zero
     real function freqOfAZero( self, dfx, dfy, angast, ang, which_zero )
         class(ctf), intent(inout) :: self       !< instance
@@ -391,20 +396,20 @@ contains
         call self%sqFreq4PhSh(phase_shifts_of_zeroes,ang,sq_sfs_of_zeroes,num_freqs)
         freqOfAZero = sqrt(sq_sfs_of_zeroes(which_zero))
     end function freqOfAZero
-    
+
     !>  \brief  Find the ctf argument (phase shift) values at which CTF=ctf_value
     !!
-    !!  According to Wolfram Alpha, the solutions to a*cos(t) + b*sin(t) = c are:
-    !!  1)  t = 2 (atan((b-sqrt(a^2+b^2-c^2))/(a+c))+pi*n),   with n an integer
-    !!  2)  t = 2 (atan((b+sqrt(a^2+b^2-c^2))/(a+c))+pi*n),   with n an integer
+    !!  According to Wolfram Alpha, the solutions to \f$a*\cos(t) + b*\sin(t) = c \f$ are:
+    !!  1)  \f$ t = 2 (\atan((b-\sqrt(a^2+b^2-c^2))/(a+c))+\pi*n) \f$,   with n an integer
+    !!  2)  \f$ t = 2 (\atan((b+\sqrt(a^2+b^2-c^2))/(a+c))+\pi*n) \f$,   with n an integer
     !!
     !!  The above two solutions only hold if:
-    !!                  a+c != 0
-    !!                 -b*sqrt(a**2+b**2-c**2)+a**2+ac+b**2 != 0   [for solution 1]
-    !!                  b*sqrt(a**2+b**2-c**2)+a**2+ac+b**2 != 0   [for solution 2]
+    !!                \f$  a+c != 0 \f$
+    !!                \f$ -b*\sqrt(a^2+b^2-c^2)+a^2+ac+b^2 != 0 \f$  [for solution 1]
+    !!                \f$  b*\sqrt(a^2+b^2-c^2)+a^2+ac+b^2 != 0 \f$  [for solution 2]
     !!
     !!  In our case, a = - ampl_const
-    !!           and b = - sqrt(1-ampl_const**2)
+    !!           and b = \f$ - \sqrt(1-\mathsf{ampl_const}^2) \f$
     !!               c = ctf_value
     !!  and t is the "argument" to the ctf (i.e. the phase shift), which can be "converted" to a spatial frequency
     subroutine solve4PhSh( self, sols, ctf_value )
@@ -416,7 +421,7 @@ contains
         if( .not. allocated(sols) ) stop 'array of solutions is not allocated; solve4PhSh; simple_ctf'
         c = 0.
         if (present(ctf_value)) c = ctf_value
-        a = -self%amp_contr 
+        a = -self%amp_contr
         b = -sqrt(1-self%amp_contr**2)
         ! Note that since 0.0 <= ampl_cont <= 1.0:
         ! a**2+b**2 = 1.0
@@ -433,15 +438,15 @@ contains
             sols(j) = 2.*(sol_first_term_2+pi*real(i-size(sols)/4))
         enddo
     end subroutine solve4PhSh
-    
-    !>  \brief  Compute set of squared spatial frequencies at which the given phase shift is obtained by the CTF
+
+    !>  \brief  sqFreq4PhSh Compute set of squared spatial frequencies at which the given phase shift is obtained by the CTF
     subroutine sqFreq4PhSh( self, phase_shifts, ang, spaFreqSq, nsols )
         use simple_math, only: hpsort
         class(ctf), intent(in)    :: self
-        real,       intent(in)    :: phase_shifts(:)
-        real,       intent(in)    :: ang
-        real,       intent(inout) :: spaFreqSq(:) ! assumed to be 2x size of phase_shift array
-        integer,    intent(out)   :: nsols
+        real,       intent(in)    :: phase_shifts(:) !< CTF phase shifts
+        real,       intent(in)    :: ang             !< angle (radians)
+        real,       intent(inout) :: spaFreqSq(:)    !< assumed to be 2x size of phase_shift array
+        integer,    intent(out)   :: nsols           !< num of solutions
         integer :: i
         real    :: curr_sols(2)
         integer :: curr_nsols
@@ -455,7 +460,7 @@ contains
         enddo
         call hpsort(nsols,spaFreqSq(1:nsols))
     end subroutine sqFreq4PhSh
-    
+
     !>  \brief  Given the argument to the ctf (phase shift, in radians), return the squared spatial frequency
     subroutine sqSf4PhSh( self, phase_shift, ang, sq_sf, nsols )
         class(ctf), intent(in)  :: self        !< instance
@@ -515,7 +520,7 @@ contains
         real,    parameter :: MAX_DF       = 10.
         real,    parameter :: CS           = 2.7
         real,    parameter :: FRACA        = 0.07
-        real,    parameter :: KVS(3)       = [120.,200.,300.] 
+        real,    parameter :: KVS(3)       = [120.,200.,300.]
         integer, parameter :: NTESTS       = 10000
         real               :: dfx, dfy, angast
         integer            :: ibox, itst, ldim(3), imode, ikv, ntot, cnt

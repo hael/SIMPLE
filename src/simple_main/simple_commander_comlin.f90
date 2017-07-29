@@ -1,8 +1,13 @@
-!==Class simple_commander_comlin
-!
-! This class contains the set of concrete common-lines commanders of the SIMPLE library. This class provides the glue between the reciver 
-! (main reciever is simple_exec program) and the abstract action, which is simply execute (defined by the base class: simple_commander_base). 
-! Later we can use the composite pattern to create MacroCommanders (or workflows)
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple commander module: common-line commander
+!!
+!! This class contains the set of concrete common-lines commanders of the SIMPLE
+!! library. This class provides the glue between the reciver (main reciever is
+!! simple_exec program) and the abstract action, which is simply execute
+!! (defined by the base class: simple_commander_base). Later we can use the
+!! composite pattern to create MacroCommanders (or workflows)
 !
 ! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
 ! Redistribution and modification is regulated by the GNU General Public License.
@@ -21,7 +26,7 @@ implicit none
 public :: comlin_smat_commander
 public :: symsrch_commander
 private
-
+#include "simple_local_flags.inc"
 type, extends(commander_base) :: comlin_smat_commander
   contains
     procedure :: execute      => exec_comlin_smat
@@ -32,7 +37,7 @@ type, extends(commander_base) :: symsrch_commander
 end type symsrch_commander
 
 contains
-    
+!> comlin_smat commander for common-line search
     subroutine exec_comlin_smat( self, cline )
         use simple_comlin_srch   ! use all in there
         use simple_ori,          only: ori
@@ -49,13 +54,12 @@ contains
         integer                       :: ntot, npairs, ipair, fnr
         real,    allocatable          :: corrmat(:,:), corrs(:)
         integer, allocatable          :: pairs(:,:)
-        logical                       :: debug=.false.
         character(len=:), allocatable :: fname
         p = params(cline, .false.)                           ! constants & derived constants produced
         call b%build_general_tbox(p, cline, .false., .true.) ! general objects built (no oritab reading)
         allocate(b%imgs_sym(p%nptcls), stat=alloc_stat)
         call alloc_err('In: simple_comlin_smat, 1', alloc_stat)
-        if( debug ) print *, 'analysing this number of objects: ', p%nptcls
+        DebugPrint  'analysing this number of objects: ', p%nptcls
         do iptcl=1,p%nptcls
             call b%imgs_sym(iptcl)%new([p%box,p%box,1], p%smpd, p%imgkind)
             call b%imgs_sym(iptcl)%read(p%stk, iptcl)
@@ -67,7 +71,7 @@ contains
         b%clins = comlin(b%a, b%imgs_sym, p%lp)
         if( cline%defined('part') )then
             npairs = p%top - p%fromp + 1
-            if( debug ) print *, 'allocating this number of similarities: ', npairs
+            DebugPrint  'allocating this number of similarities: ', npairs
             allocate(corrs(p%fromp:p%top), pairs(p%fromp:p%top,2), stat=alloc_stat)
             call alloc_err('In: simple_comlin_smat, 1', alloc_stat)
             ! read the pairs
@@ -79,7 +83,7 @@ contains
                 stop 'I/O error; simple_comlin_smat'
             endif
             open(unit=funit, status='OLD', action='READ', file=fname, access='STREAM')
-            if( debug ) print *, 'reading pairs in range: ', p%fromp, p%top
+            DebugPrint  'reading pairs in range: ', p%fromp, p%top
             read(unit=funit,pos=1,iostat=io_stat) pairs(p%fromp:p%top,:)
             ! check if the read was successful
             if( io_stat .ne. 0 )then
@@ -137,7 +141,18 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_COMLIN_SMAT NORMAL STOP ****')
     end subroutine exec_comlin_smat
-    
+    !> symsrch commander for symmetry searching
+    !! is a program for searching for the principal symmetry axis of a volume
+    !! reconstructed without assuming any point-group symmetry. The program
+    !! takes as input an asymmetrical 3D reconstruction. The alignment document
+    !! for all the particle images that have gone into the 3D reconstruction and
+    !! the desired point-group symmetry needs to be inputted. The 3D
+    !! reconstruction is then projected in 50 (default option) even directions,
+    !! common lines-based optimisation is used to identify the principal
+    !! symmetry axis, the rotational transformation is applied to the inputted
+    !! orientations, and a new alignment document is produced. Input this
+    !! document to recvol together with the images and the point-group symmetry
+    !! to generate a symmetrised map
     subroutine exec_symsrch( self, cline )
         use simple_strings,        only: int2str_pad
         use simple_oris,           only: oris

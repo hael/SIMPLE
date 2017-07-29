@@ -1,14 +1,19 @@
-!==Class simple_hac
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple hierarchical clustering module
 !
-! simple_hac is the SIMPLE class for hierarchical clustering. The code is 
-! distributed with the hope that it will be useful, but _WITHOUT_ 
-! _ANY_ _WARRANTY_. Redistribution or modification is regulated by the 
+!! simple_hac is the SIMPLE class for hierarchical clustering.
+!
+! The code is
+! distributed with the hope that it will be useful, but _WITHOUT_
+! _ANY_ _WARRANTY_. Redistribution or modification is regulated by the
 ! GNU General Public License. *Author:* Hans Elmlund, 2012-02-02.
 !
 !==Changes are documented below
 !
 module simple_hac
-use simple_sll,    only: sll      
+use simple_sll,    only: sll
 use simple_oris,   only: oris
 use simple_jiffys, only: alloc_err
 implicit none
@@ -41,7 +46,7 @@ contains
     function constructor( nobj, o, nran ) result( self )
         integer, intent(in)             :: nobj !< nr of objects to cluster
         class(oris), intent(in), target :: o    !< for storing cluster info
-        integer, intent(in), optional   :: nran !< size of random sample to cluster 
+        integer, intent(in), optional   :: nran !< size of random sample to cluster
         type(hac)                       :: self
         if( present(nran) )then
             call self%new( nobj, o, nran )
@@ -56,7 +61,7 @@ contains
         class(hac), intent(inout)       :: self !< object
         integer, intent(in)             :: nobj !< nr of objects to cluster
         class(oris), intent(in), target :: o    !< for storing cluster info
-        integer, intent(in), optional   :: nran !< size of random sample to cluster 
+        integer, intent(in), optional   :: nran !< size of random sample to cluster
         type(ran_tabu)                  :: rt
         integer                         :: alloc_stat, irnd, i
         self%nobj = nobj
@@ -66,7 +71,7 @@ contains
         allocate( self%clusters(self%nran), stat=alloc_stat )
         call alloc_err('new; simple_hac', alloc_stat)
         call self%o_ptr%zero('class') ! zero class vars in oris
-        do i=1,self%nran    
+        do i=1,self%nran
             call self%clusters(i)%new ! one list per object to cluster
         end do
         if( present(nran) )then       ! nran is a random sample from the larger set of nobj objs
@@ -87,7 +92,7 @@ contains
 
     !>  \brief  is a getter
     function get_node( self, a ) result( ax )
-        class(hac), intent(inout) :: self 
+        class(hac), intent(inout) :: self
         integer, intent(in)       :: a
         integer, allocatable      :: axa(:)
         integer                   :: ax
@@ -95,7 +100,7 @@ contains
         call self%clusters(a)%get(1, iarr=axa)
         ax = axa(1)
     end function
-    
+
     !>  \brief  Hierachical Agglomerative Clustering of a pair-distance table that is cleared
     !!          after this operation and stored on disk name: pdfile
     subroutine cluster( self, pd_tab, pdfile, ncls, minpop )
@@ -141,7 +146,7 @@ contains
         call pd_tab%clear
         call self%convert_sll_rep(minpop)
     end subroutine
-    
+
     function find_centroids( self, pd_tab, pdfile ) result( centroids )
         use simple_pair_dtab, only: pair_dtab
         class(hac), intent(inout)       :: self   !< object
@@ -180,12 +185,12 @@ contains
                     if( dsum < dmin )then
                         dmin = dsum
                         centroids(cnt) = j
-                    endif 
+                    endif
                 end do
             endif
         end do
     end function
-    
+
     !>  \brief  communicate the sll representation to the oris obj
     subroutine convert_sll_rep( self, minpop )
         class(hac), intent(inout)     :: self
@@ -202,13 +207,13 @@ contains
                     call self%clusters(i)%get(j, iarr=val)
                     call self%o_ptr%set(val(1), 'class', real(clsnr))
                 end do
-                clsnr = clsnr+1             
+                clsnr = clsnr+1
             endif
-        end do       
+        end do
     end subroutine
-    
+
     ! HAC UNIT TEST
-    
+
     !>  \brief  is the hac unit test
     subroutine test_hac
         use simple_pair_dtab, only: pair_dtab
@@ -246,17 +251,17 @@ contains
         write(*,'(a)') 'SIMPLE_HAC_UNIT_TEST COMPLETED WITHOUT TERMINAL BUGS ;-)'
         write(*,'(a)') 'PLEASE, INSPECT THE RESULTS'
     end subroutine
-    
+
     !>  \brief  is a destructor
     subroutine kill( self )
         class(hac), intent(inout) :: self !< object
         integer :: i
         if( self%exists )then
-            do i=1,self%nran       
+            do i=1,self%nran
                 call self%clusters(i)%kill
             end do
             self%o_ptr => null()
         endif
     end subroutine
-  
+
 end module simple_hac

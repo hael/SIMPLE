@@ -1,3 +1,7 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple class Hadamard3D matcher is the workhorse for Prime3D
 module simple_hadamard3D_matcher
 !$ use omp_lib
 !$ use omp_lib_kinds
@@ -18,9 +22,8 @@ implicit none
 public :: prime3D_find_resrange, prime3D_exec, gen_random_model
 public :: preppftcc4align, prep_refs_pftcc4align, pftcc
 private
-
+#include "simple_local_flags.inc"
 integer, parameter              :: MAXNPEAKS=10
-logical, parameter              :: DEBUG=.false.
 type(polarft_corrcalc)          :: pftcc
 type(prime3D_srch), allocatable :: primesrch3D(:)
 real                            :: reslim
@@ -30,6 +33,7 @@ character(len=:), allocatable   :: ppfts_fname
 
 contains
 
+    !> Find resolution range in Prime3D search
     subroutine prime3D_find_resrange( b, p, lp_start, lp_finish )
         use simple_oris, only: oris
         class(build),  intent(inout) :: b
@@ -54,7 +58,7 @@ contains
         deallocate(peaks)
         call o%kill
     end subroutine prime3D_find_resrange
-
+    !> Execute prime3D (Hadamard method)
     subroutine prime3D_exec( b, p, cline, which_iter, update_res, converged )
         use simple_qsys_funs, only: qsys_job_finished
         use simple_oris,      only: oris
@@ -80,7 +84,7 @@ contains
         ! CALCULATE ANGULAR THRESHOLD (USED BY THE SPARSE WEIGHTING SCHEME)
         p%athres = rad2deg( atan(max(p%fny,p%lp)/(p%moldiam/2.) ))
         reslim   = p%lp
-        if( DEBUG ) write(*,*) '*** hadamard3D_matcher ***: calculated angular threshold (used by the sparse weighting scheme)'
+        DebugPrint '*** hadamard3D_matcher ***: calculated angular threshold (used by the sparse weighting scheme)'
 
         ! DETERMINE THE NUMBER OF PEAKS
         if( .not. cline%defined('npeaks') )then
@@ -90,7 +94,7 @@ contains
                 case DEFAULT
                     p%npeaks = 1
             end select
-            if( DEBUG ) write(*,*) '*** hadamard3D_matcher ***: determined the number of peaks'
+            DebugPrint '*** hadamard3D_matcher ***: determined the number of peaks'
         endif
 
         ! RANDOM MODEL GENERATION
@@ -100,7 +104,7 @@ contains
             else
                 call gen_random_model(b, p)
             endif
-            if( DEBUG ) write(*,*) '*** hadamard3D_matcher ***: generated random model'
+            DebugPrint '*** hadamard3D_matcher ***: generated random model'
         endif
 
         ! SETUP WEIGHTS
@@ -118,7 +122,7 @@ contains
             else
                 corr_thresh = -huge(corr_thresh)
             endif
-        endif       
+        endif
 
         ! PREPARE THE POLARFT_CORRCALC DATA STRUCTURE
         if( p%refine.eq.'het' )then
@@ -135,7 +139,7 @@ contains
             ! generate projections (polar FTs)
             call preppftcc4align( b, p, cline )
         endif
-        
+
         ! INITIALIZE
         write(*,'(A,1X,I3)') '>>> PRIME3D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
         if( .not. p%l_distr_exec )then
@@ -276,9 +280,9 @@ contains
     subroutine gen_random_model( b, p, nsamp_in )
         use simple_ran_tabu,   only: ran_tabu
         use simple_kbinterpol, only: kbinterpol
-        class(build),      intent(inout) :: b
-        class(params),     intent(inout) :: p
-        integer, optional, intent(in)    :: nsamp_in
+        class(build),      intent(inout) :: b         !< build object
+        class(params),     intent(inout) :: p         !< param object
+        integer, optional, intent(in)    :: nsamp_in  !< num input samples
         type(ran_tabu)       :: rt
         integer, allocatable :: sample(:)
         integer              :: i, k, nsamp, alloc_stat
@@ -336,11 +340,11 @@ contains
             call killrecvols(b, p)
         endif
     end subroutine gen_random_model
-
+    !> Prepare alignment search using polar projection Fourier cross correlation
     subroutine preppftcc4align( b, p, cline, ppfts_fname )
-        class(build),               intent(inout) :: b
-        class(params),              intent(inout) :: p
-        class(cmdline),             intent(inout) :: cline
+        class(build),               intent(inout) :: b       !< build object
+        class(params),              intent(inout) :: p       !< param object
+        class(cmdline),             intent(inout) :: cline   !< command line
         character(len=*), optional, intent(in)    :: ppfts_fname
         integer :: nrefs
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PRIME3D SEARCH ENGINE'
@@ -358,15 +362,16 @@ contains
         call prep_ptcls_pftcc4align( b, p, ppfts_fname )
         ! subtract the mean shell values for xfel correlations
         if( p%l_xfel ) call pftcc%xfel_subtract_shell_mean()
-        if( DEBUG ) write(*,*) '*** hadamard3D_matcher ***: finished preppftcc4align'
+        DebugPrint '*** hadamard3D_matcher ***: finished preppftcc4align'
     end subroutine preppftcc4align
-
+    !> Prepare reference images and create polar projections
     subroutine prep_refs_pftcc4align( b, p, cline )
-        class(build),   intent(inout) :: b
-        class(params),  intent(inout) :: p
-        class(cmdline), intent(inout) :: cline
-        type(ori)         :: o
-        integer           :: cnt, s, iref, nrefs
+        class(build),   intent(inout) :: b          !< build object
+        class(params),  intent(inout) :: p          !< param object
+        class(cmdline), intent(inout) :: cline      !< command line
+        type(ori) :: o
+        integer   :: cnt, s, iref, nrefs
+
         ! PREPARATION OF REFERENCES IN PFTCC
         ! read reference volumes and create polar projections
         nrefs = p%nspace*p%nstates
@@ -396,10 +401,10 @@ contains
         ! bring back the original b%vol size for clean exit
         if( p%boxmatch < p%box )call b%vol%new([p%box,p%box,p%box], p%smpd)
     end subroutine prep_refs_pftcc4align
-
+    !> Prepare particle images and create polar projections
     subroutine prep_ptcls_pftcc4align( b, p, ppfts_fname )
-        class(build),               intent(inout) :: b
-        class(params),              intent(inout) :: p
+        class(build),               intent(inout) :: b          !< build object
+        class(params),              intent(inout) :: p          !< param object
         character(len=*), optional, intent(in)    :: ppfts_fname
         ! read particle images and create polar projections
         if( present(ppfts_fname) )then
@@ -441,7 +446,7 @@ contains
                 end do
                 call progress(ntot, ntot)
             end subroutine prep_pftcc_local
-        
+
     end subroutine prep_ptcls_pftcc4align
 
 end module simple_hadamard3D_matcher

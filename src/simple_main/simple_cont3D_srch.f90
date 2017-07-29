@@ -1,3 +1,7 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple search class: 3D continous algorithm
 module simple_cont3D_srch
 use simple_defs
 use simple_params,           only: params
@@ -13,7 +17,7 @@ public :: cont3D_srch
 private
 
 real,    parameter :: E3HALFWINSZ = 90. !< in-plane angle half window size
-logical, parameter :: debug = .false.
+#include "simple_local_flags.inc"
 
 type cont3D_srch
     private
@@ -63,11 +67,11 @@ end type cont3D_srch
 contains
 
     !>  \brief  is a constructor
-    subroutine new( self, p, e, pftcc )
-        class(cont3D_srch),             intent(inout) :: self     !< instance
-        class(params),                   intent(in)   :: p        !< parameters
-        class(oris),                     intent(in)   :: e        !< references
-        class(polarft_corrcalc), target, intent(in)   :: pftcc    !< corrcalc obj
+    subroutine new( self, p, e, pftcc)
+        class(cont3D_srch),              intent(inout) :: self  !< instance
+        class(params),                   intent(in)    :: p     !< parameters
+        class(oris),                     intent(in)    :: e     !< references
+        class(polarft_corrcalc), target, intent(in)    :: pftcc !< correlation calculator obj
         call self%kill
         ! set constants
         self%pftcc_ptr => pftcc
@@ -84,16 +88,16 @@ contains
             &stop 'Inconsistent number of references & orientations'
         ! done
         self%exists = .true.
-        if( debug ) write(*,'(A)') '>>> cont3D_srch::CONSTRUCTED NEW SIMPLE_cont3D_srch OBJECT'
+        DebugPrint  '>>> cont3D_srch::CONSTRUCTED NEW SIMPLE_cont3D_srch OBJECT'
     end subroutine new
 
     ! PREP ROUTINES
 
     !>  \brief  is the master search routine
     subroutine prep_srch(self, a, iptcl)
-        class(cont3D_srch), intent(inout) :: self
-        class(oris),         intent(inout) :: a
-        integer,             intent(in)    :: iptcl
+        class(cont3D_srch),  intent(inout) :: self
+        class(oris),         intent(inout) :: a     !< oris object        
+        integer,             intent(in)    :: iptcl !< index to ori in a  
         real, allocatable :: frc(:)
         if(iptcl == 0)stop 'ptcl index mismatch; cont3D_srch::do_srch'
         self%iptcl      = iptcl
@@ -114,7 +118,7 @@ contains
         &shbarrier=self%shbarr, nrestarts=5)
         call self%inplsrch_obj%new(self%pftcc_ptr, self%lims,&
         &shbarrier=self%shbarr, nrestarts=5)
-        if( debug ) write(*,'(A)') '>>> cont3D_srch::END OF PREP_SRCH'
+        DebugPrint '>>> cont3D_srch::END OF PREP_SRCH'
     end subroutine prep_srch
 
     ! SEARCH ROUTINES
@@ -122,8 +126,8 @@ contains
     !>  \brief  is the master search routine
     subroutine exec_srch( self, a, iptcl )
         class(cont3D_srch), intent(inout) :: self
-        class(oris),        intent(inout) :: a
-        integer,            intent(in)    :: iptcl
+        class(oris),        intent(inout) :: a       !< oris object - references
+        integer,            intent(in)    :: iptcl   !< index to ori in a
         if(nint(a%get(iptcl,'state')) > 0)then
             ! INIT
             call self%prep_srch(a, iptcl)
@@ -138,7 +142,7 @@ contains
         else
             call a%reject(iptcl)
         endif
-        if( debug ) write(*,'(A)') '>>> cont3D_srch::END OF SRCH'
+        DebugPrint  '>>> cont3D_srch::END OF SRCH'
     end subroutine exec_srch
 
     !>  \brief  performs euler angles search
@@ -157,7 +161,7 @@ contains
         if(debug)write(*,*)'simple_cont3D_srch::do_refs_srch done'
 
         contains
-
+            !> greedy inplane search
             subroutine greedy_inpl_srch(iref_here, corr_here)
                 integer, intent(in)    :: iref_here
                 real,    intent(inout) :: corr_here
@@ -172,7 +176,7 @@ contains
                 call self%reforis%e3set(iref_here, e3)
                 call self%reforis%set(iref_here, 'corr', corr_here)
             end subroutine greedy_inpl_srch
-            
+
     end subroutine do_euler_srch
 
     !>  \brief  performs the shift search
@@ -267,7 +271,7 @@ contains
         call self%softoris%set_all2single('specscore', self%specscore)
         ! best orientation
         self%o_out = self%softoris%get_ori(self%npeaks)
-        call self%o_out%set('corr', wcorr)  
+        call self%o_out%set('corr', wcorr)
         ! angular distances & deviation
         euldist   = rad2deg( self%o_in.euldist.self%o_out )
         dist_inpl = rad2deg( self%o_in.inplrotdist.self%o_out )

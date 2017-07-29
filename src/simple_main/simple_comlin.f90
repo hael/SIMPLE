@@ -1,6 +1,10 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple image ops module: common-line correlation
 module simple_comlin
 use simple_defs    ! use all in there
-use simple_image,  only: image 
+use simple_image,  only: image
 use simple_oris,   only: oris
 use simple_math,   only: csq, calc_corr
 implicit none
@@ -28,7 +32,7 @@ interface comlin
 end interface comlin
 
 contains
-    
+
     !>  \brief  is a constructor
     function constructor( a, fpls, lp ) result( self )
         use simple_oris,  only: oris
@@ -37,7 +41,7 @@ contains
         class(image), target, intent(in) :: fpls(:) !< Fourier planes
         real,                 intent(in) :: lp      !< low-pass limit
         type(comlin) :: self                        !< object
-        call self%new( a, fpls, lp ) 
+        call self%new( a, fpls, lp )
     end function constructor
 
     !>  \brief  is a constructor
@@ -62,7 +66,7 @@ contains
         self%xdim   = ld_here(1)/2
         self%lims   = fpls(1)%get_clin_lims(lp)
     end subroutine new
-    
+
     !>  \brief  is for calculating the joint common line correlation
     function corr( self ) result( cc )
         !$ use omp_lib
@@ -88,7 +92,7 @@ contains
     end function corr
 
     !>  \brief  is for interpolating the common line between a pair of images
-    !!          and calculating the common line correlation 
+    !!          and calculating the common line correlation
     function pcorr( self, iptcl, jptcl ) result( corr )
         class(comlin), intent(inout) :: self
         integer,       intent(in)    :: iptcl, jptcl
@@ -104,17 +108,19 @@ contains
             corr = -1.
         endif
     end function pcorr
-    
+
     ! PRIVATE STUFF
-    
+
     !>  \brief  calculates common line algebra, interpolates the
     !!          complex vectors, and calculates corr precursors
+    !! \param pind,j  indecies to normals
+    !! \param corr,sumasq,sumbsq output statistics
     subroutine extr_comlin( self, pind, j, corr, sumasq, sumbsq, foundline )
         use simple_math, only: projz
         class(comlin), intent(inout) :: self
         integer,       intent(in)    :: pind,j
         real,          intent(out)   :: corr,sumasq,sumbsq
-        logical,       intent(inout) :: foundline
+        logical,       intent(inout) :: foundline          !< output success
         integer            :: k
         real               :: h1,k1,h2,k2,px,py,jx,jy,scalprod,abscom,line(2,2)
         real, dimension(3) :: comlin,tmp1,tmpb1,norm1,norm2
@@ -168,19 +174,19 @@ contains
             cline(k,2) = self%fpls(j   )%extr_fcomp(h2,k2,jx,jy)
             corr = corr + dot_product([real(cline(k,1)), aimag(cline(k,1))],&
                 &[real(cline(k,2)), aimag(cline(k,2))])
-            sumasq = sumasq+csq(cline(k,1)) 
+            sumasq = sumasq+csq(cline(k,1))
             sumbsq = sumbsq+csq(cline(k,2))
         end do
         foundline = .true.
     end subroutine extr_comlin
-    
+
     ! DESTRUCTOR
-    
+
     !>  \brief  is a destructor
     subroutine kill( self )
         class(comlin), intent(inout) :: self
         self%a    => null()
         self%fpls => null()
     end subroutine kill
-    
+
 end module simple_comlin

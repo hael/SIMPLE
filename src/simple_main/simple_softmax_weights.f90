@@ -1,3 +1,7 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple soft-max weighting module
 module simple_softmax_weights
 implicit none
 
@@ -6,9 +10,9 @@ private
 
 type softmax_weights
     private
-    integer           :: n
-    real              :: t=1. ! temperature factor, hardens the distribution close to 0
-    real, allocatable :: w(:)
+    integer           :: n    !< num of weights
+    real              :: t=1. !< temperature factor, hardens the distribution close to 0
+    real, allocatable :: w(:) !< weight vector
   contains
     procedure, private :: get_1
     procedure, private :: get_2

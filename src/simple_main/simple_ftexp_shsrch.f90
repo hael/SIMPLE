@@ -1,3 +1,7 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple optimisation module: Fourier-expanded shift search
 module simple_ftexp_shsrch
 use simple_opt_factory, only: opt_factory
 use simple_opt_spec,    only: opt_spec
@@ -20,14 +24,14 @@ real,    parameter            :: TOL=1e-4          !< tolerance parameter
 integer, parameter            :: MAXITS=30         !< maximum number of iterations
 
 contains
-    
+    !> Initialise  ftexp_shsrch
     subroutine ftexp_shsrch_init( ref, ptcl, lims, opt, nrestarts_in )
         class(ft_expanded), target, intent(in) :: ref, ptcl
         real,                       intent(in) :: lims(2,2)
         character(len=*), optional, intent(in) :: opt
         integer,          optional, intent(in) :: nrestarts_in
         ! set pointers
-        reference => ref 
+        reference => ref
         particle  => ptcl
         ! set opt_str & nrestarts
         if( allocated(opt_str) ) deallocate(opt_str)
@@ -37,7 +41,7 @@ contains
             allocate(opt_str, source='simplex')
         endif
         nrestarts = 1
-        if( present(nrestarts_in) ) nrestarts = nrestarts_in        
+        if( present(nrestarts_in) ) nrestarts = nrestarts_in
         ! make optimizer spec
         call ospec%specify(opt_str, 2, ftol=TOL, gtol=TOL,&
         limits=lims, nrestarts=nrestarts )
@@ -46,21 +50,21 @@ contains
         ! generate optimizer object with the factory
         call ofac%new(ospec, nlopt)
     end subroutine ftexp_shsrch_init
-    
+
     subroutine ftexp_shsrch_reset_ptrs( ref, ptcl )
         class(ft_expanded), intent(in), target :: ref, ptcl
         ! re-set pointers
-        reference => ref 
+        reference => ref
         particle  => ptcl
     end subroutine ftexp_shsrch_reset_ptrs
-    
+    !> Cost function
     function ftexp_shsrch_cost( vec, D ) result( cost )
         integer, intent(in) :: D
         real,    intent(in) :: vec(D)
         real :: cost
         cost = -reference%corr_shifted(particle, -vec)
     end function ftexp_shsrch_cost
-    
+    !> Main search routine
     function ftexp_shsrch_minimize( prev_corr, prev_shift ) result( cxy )
         real, optional, intent(in) :: prev_corr, prev_shift(2)
         real :: cxy(3), maxshift, maxlim, lims(2,2)
@@ -91,7 +95,7 @@ contains
             endif
         endif
     end function ftexp_shsrch_minimize
-    
+
     subroutine test_ftexp_shsrch
         use simple_rnd, only: ran3
         type(image)       :: img_ref, img_ptcl
@@ -120,5 +124,5 @@ contains
         end do
         write(*,'(a)') 'SIMPLE_ftexp_shsrch_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
     end subroutine test_ftexp_shsrch
-    
+
 end module simple_ftexp_shsrch

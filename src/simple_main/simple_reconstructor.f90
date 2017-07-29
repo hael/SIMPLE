@@ -1,3 +1,7 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple class for particle reconstruction
 module simple_reconstructor
 !$ use omp_lib
 !$ use omp_lib_kinds
@@ -58,7 +62,6 @@ type, extends(image) :: reconstructor
 end type reconstructor
 
 real            :: dfx=0., dfy=0., angast=0.
-logical         :: debug=.false.
 real, parameter :: SHTHRESH=0.0001
 
 contains
@@ -132,44 +135,43 @@ contains
     end subroutine alloc_rho
 
     ! SETTERS
-    
+
     ! resets the reconstructor object before reconstruction
     subroutine reset( self )
         class(reconstructor), intent(inout) :: self
         self     = cmplx(0.,0.)
         self%rho = 0.
     end subroutine reset
-    
+
     ! GETTERS
-    
+    !> get the kbintpol window
     function get_kbwin( self ) result( wf )
         class(reconstructor), intent(inout) :: self
-        type(kbinterpol) :: wf
+        type(kbinterpol) :: wf   !< return kbintpol window
         wf = kbinterpol(self%winsz,self%alpha)
     end function get_kbwin
 
     ! I/O
-
+    !>Write reconstructed image
     subroutine write_rho( self, kernam )
         use simple_filehandling, only: get_fileunit, fopen_err, del_file
         class(reconstructor), intent(in) :: self
-        character(len=*),     intent(in) :: kernam
+        character(len=*),     intent(in) :: kernam !< kernel name
         character(len=100) :: io_message
         integer :: filnum, ier, io_stat
         call del_file(trim(kernam))
         filnum = get_fileunit( )
         open(unit=filnum, status='NEW', action='WRITE', file=trim(kernam), access='STREAM', iostat=ier)
         call fopen_err('write_rho; simple_reconstructor', ier)
-        write(filnum, pos=1, iostat=io_stat, iomsg=io_message) self%rho    
+        write(filnum, pos=1, iostat=io_stat, iomsg=io_message) self%rho
         if( io_stat .ne. 0 )then
             write(*,'(a,i0,2a)') '**ERROR(write_rho): I/O error ', io_stat, ' when writing to: ', trim(kernam)
             write(*,'(2a)') 'IO error message was: ', io_message
             stop 'I/O error; write_rho; simple_reconstructor'
         endif
-        call flush(filnum)
         close(unit=filnum)
     end subroutine write_rho
-    
+    !> Read reconstructed image
     subroutine read_rho( self, kernam )
         use simple_filehandling, only: get_fileunit, fopen_err
         class(reconstructor), intent(inout) :: self
@@ -187,7 +189,7 @@ contains
         endif
         close(unit=filnum)
     end subroutine read_rho
-    
+
     ! INTERPOLATION
 
     subroutine inout_fcomp( self, h, k, e, inoutmode, comp, oshift, pwght)
@@ -257,7 +259,7 @@ contains
             inv2       = vec(2)*(1./real(ldim(2)))
             sqSpatFreq = inv1*inv1+inv2*inv2
             ang        = atan2(vec(2), vec(1))
-            ! calculate CTF and CTF**2 values 
+            ! calculate CTF and CTF**2 values
             ! dfx, dfy, angast are class vars that are set by inout fplane
             tval   = self%tfun%eval(sqSpatFreq, dfx, dfy, angast, ang) ! no bfactor 4 now
             tvalsq = min(1.,max(tval**2.,0.001))
@@ -327,6 +329,9 @@ contains
         !$omp end parallel do
     end subroutine inout_fplane
 
+    !> sampl_dens_correct Correct sample density
+    !! \param self_out corrected image output
+    !! 
     subroutine sampl_dens_correct( self, self_out )
         class(reconstructor),   intent(inout) :: self
         class(image), optional, intent(inout) :: self_out
@@ -335,7 +340,7 @@ contains
         self_out_present = present(self_out)
         ! set constants
         lims = self%loop_lims(2)
-        if( self_out_present ) self_out = self
+        if( self_out_present ) call self_out%copy(self)
         !$omp parallel do collapse(3) default(shared) private(h,k,l,phys)&
         !$omp schedule(static) proc_bind(close)
         do h=lims(1,1),lims(1,2)
@@ -345,8 +350,8 @@ contains
                     if( self_out_present )then
                         call self_out%div([h,k,l],self%rho(phys(1),phys(2),phys(3)),phys_in=phys)
                     else
-                        call self%div([h,k,l],self%rho(phys(1),phys(2),phys(3)),phys_in=phys) 
-                    endif                    
+                        call self%div([h,k,l],self%rho(phys(1),phys(2),phys(3)),phys_in=phys)
+                    endif
                 end do
             end do
         end do
@@ -375,18 +380,18 @@ contains
                         phys = self%comp_addr_phys(logi)
                         ! addition because FC and its Friedel mate must be summed
                         ! as the expansion updates one or the other
-                        call self%add_fcomp(logi, phys, comp) 
+                        call self%add_fcomp(logi, phys, comp)
                         self%rho(phys(1),phys(2),phys(3)) = &
                             &self%rho(phys(1),phys(2),phys(3)) + self%rho_exp(h,k,m)
                     end do
                 endif
-            end do 
+            end do
         end do
     end subroutine compress_exp
-    
+
     ! SUMMATION
-    
-    ! for summing reconstructors generated by parallel execution
+
+    !> for summing reconstructors generated by parallel execution
     subroutine sum( self, self_in )
          class(reconstructor), intent(inout) :: self
          class(reconstructor), intent(in)    :: self_in
@@ -397,14 +402,14 @@ contains
     end subroutine sum
     
     ! RECONSTRUCTION
-    
+    !> reconstruction routine
     subroutine rec( self, fname, p, o, se, state, mul, eo, part )
         use simple_oris,     only: oris
         use simple_sym,      only: sym
         use simple_params,   only: params
         use simple_jiffys,   only: find_ldim_nptcls, progress
         use simple_gridding  ! use all in there
-        class(reconstructor), intent(inout) :: self      !< object
+        class(reconstructor), intent(inout) :: self      !< this object
         character(len=*),     intent(inout) :: fname     !< spider/MRC stack filename
         class(params),        intent(in)    :: p         !< parameters
         class(oris),          intent(inout) :: o         !< orientations
@@ -419,7 +424,7 @@ contains
         call find_ldim_nptcls(fname, ldim, n)
         if( n /= o%get_noris() ) stop 'inconsistent nr entries; rec; simple_reconstructor'
         ! stash global state index
-        state_glob = state 
+        state_glob = state
         ! make random number generator
         ! make the images
         call img_pd%new([p%boxpd,p%boxpd,1],self%get_smpd(),p%imgkind)
@@ -432,10 +437,10 @@ contains
         statecnt = 0
         cnt      = 0
         do i=1,p%nptcls
-            call progress(i, p%nptcls) 
+            call progress(i, p%nptcls)
             if( i <= p%top .and. i >= p%fromp )then
                 cnt = cnt+1
-                state_here = nint(o%get(i,'state')) 
+                state_here = nint(o%get(i,'state'))
                 if( state_here > 0 .and. (state_here == state) )then
                     statecnt(state) = statecnt(state)+1
                     if( present(eo) )then
@@ -470,10 +475,10 @@ contains
         if( p%nstates > 1 )then
             write(*,'(a,1x,i3,1x,a,1x,i6)') '>>> NR OF PARTICLES INCLUDED IN STATE:', state, 'WAS:', statecnt(state)
         endif
-        
+
         contains
-        
-            !> \brief  the densty reconstruction functionality
+
+            !> \brief  the density reconstruction functionality
             subroutine rec_dens
                 use simple_ori, only: ori
                 type(ori) :: orientation, o_sym
@@ -505,7 +510,7 @@ contains
                     endif
                 endif
             end subroutine rec_dens
-            
+
     end subroutine rec
 
     ! DESTRUCTORS

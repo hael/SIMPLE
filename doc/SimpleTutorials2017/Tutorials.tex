@@ -332,7 +332,7 @@ astigstep  = step size for astigamtism search(in microns)
 expastig   = expected astigmatism(in microns)
 phaseplate = images obtained with phaseplate(yes|no){no}
 \end{verbatim}
-Output is a text file with defocus parameters \texttt{ctffind\_output\_merged.txt}. First, we need to create a file table, listing the integrated movies to be processed with  \prgname{ctffind}.
+Output is a text file with defocus parameters \texttt{ctffind\_output.txt}. First, we need to create a file table, listing the integrated movies to be processed with  \prgname{ctffind}.
 \begin{verbatim}
 bash-3.2$ ls proteasome_forctf* > ctf_movies.txt
 \end{verbatim}
@@ -341,7 +341,7 @@ As explained above, the \texttt{*forctf*} output is created because weighted ave
 bash-3.2$ simple_distr_exec prg=ctffind filetab=ctf_movies.txt smpd=5.26
 kv=300 cs=2.7 fraca=0.1 nparts=2
 \end{verbatim}
-Output is the file \texttt{ctffind\_output\_merged.txt}.
+Output is the file \texttt{ctffind\_output.txt}.
 
 In SIMPLE, we have yet to implement a particle picker but rely on EMAN1.9 and EMAN2 for particle identification. However, if you have \texttt{*.box} files obtained with EMAN you can extract the particle images and their associated CTF parameters using SIMPLE. To illustrate this functionality, we have prepared box files in the \texttt{data} folder for use in conjunction with SIMPLE program \prgname{extract}. As before, we need to prepare file tables. First, we prepare a file table for the motion corrected integrated movies:
 \begin{verbatim}
@@ -354,7 +354,7 @@ bash-3.2$ ls ./data/boxfiles/*box > boxfiles.txt
 Finally, we execute the program:
 \begin{verbatim}
 bash-3.2$ simple_exec prg=extract filetab=intg_movies.txt boxtab=boxfiles.txt
-smpd=5.26 ctffind_doc=ctffind_output_merged.txt 
+smpd=5.26 ctffind_doc=ctffind_output.txt 
 >>> DONE PROCESSING PARAMETERS
 >>> DONE BUILDING GENERAL TOOLBOX
   100%  |==================================================| done.
@@ -528,7 +528,7 @@ pgrp_known = point-group known a priori(yes|no){no}\end{verbatim}
 In order to reconstruct an \textit{ab initio} 3D reconstruction, please execute:
 \begin{verbatim}
 bash-3.2$ simple_distr_exec prg=ini3D_from_cavgs stk=./data/pfrib80S_cavgs.mrc
-smpd=2.68 msk=80 pgrp=c1 nthr=4 nparts=2
+smpd=2.68 msk=80 pgrp=c1 nthr=4 nparts=2 nthr_master=8
 \end{verbatim}
 For every iteration, we expect to see an output similar to that of PRIME2D in the terminal:
 \begin{verbatim}
@@ -584,22 +584,21 @@ To illustrate how to use the SIMPLE suite, we provide the following workflow inc
 \item Symmetric \textit{ab initio} 3D reconstruction and refinement on class averages in the D2 symmetry point group in one automated step
 \item Final resolution estimate from single particles images
 \end{enumerate}
-We used a dataset of 5,500 256x256 images. After extraction of the images from the micrographs, the image stack is named \texttt{sumstack.mrc} and the corresponding CTF parameters (obtained with CTFFIND) are contained in a document called \texttt{extract\_params.txt}. Both files are located in the \texttt{4\_SYM\_STRUCTURES} folder.
+We used a dataset of 5,500 256x256 images. After extraction of the images from the micrographs, the image stack is named \texttt{sumstack.mrc} and the corresponding CTF parameters (obtained with CTFFIND) are contained in a document called \texttt{extract\_params.txt}. Both files are located in the \texttt{./stack} folder.
 
 \subsection{In-plane alignment and clustering}
 We first create a working directory called \texttt{2d} where PRIME2D will perform the 2D alignment and clustering of the images.
 \begin{verbatim}
-        $ cd 4_SYM_STRUCTURES
         $ mkdir 2d
         $ cd 2d
 \end{verbatim}
 Now, we execute the PRIME2D workflow with a single command line
 \begin{verbatim}
-        $ nohup simple_distr_exec prg=prime2D stk=../sumstack.mrc 
-        smpd=1.275 msk=88 ncls=100 ctf=yes deftab=../extract_params.txt 
+        $ nohup simple_distr_exec prg=prime2D stk=../stack/sumstack.mrc 
+        smpd=1.62 msk=88 ncls=100 ctf=yes deftab=../stack/extract_params.txt 
         nparts=2 nthr=4 >& PRIME2DOUT &
 \end{verbatim}
-The \texttt{stk} argument points to the location of the images. Throughout the different steps of this workflow we will use a circular mask radius of 88 pixels (\texttt{msk=88}) and a sampling distance of 1.275 Angstroms/pixel (\texttt{smpd=1.275}). With the \texttt{ncls} argument we specify how many cluster centres (or class averages) will be produced. In this case one hundred clusters means we aim at producing 55 images per cluster. Values up to 100-150 are also valid choices but in this case would only produce 30-40 cluster centres. With the argument \texttt{ctf=yes} we turn on the Wiener restoration of the cluster centres. Accordingly, we provide the defocus parameters with the \texttt{deftab} argument.
+The \texttt{stk} argument points to the location of the images. Throughout the different steps of this workflow we will use a circular mask radius of 88 pixels (\texttt{msk=88}) and a sampling distance of 1.62 Angstroms/pixel (\texttt{smpd=1.62}). With the \texttt{ncls} argument we specify how many cluster centres (or class averages) will be produced. In this case one hundred clusters means we aim at producing 55 images per cluster. Values up to 100-150 are also valid choices but in this case would only produce 30-40 cluster centres. With the argument \texttt{ctf=yes} we turn on the Wiener restoration of the cluster centres. Accordingly, we provide the defocus parameters with the \texttt{deftab} argument.
 
 Finally, we specify how to perform the calculations. With \texttt{nparts=2} and \texttt{nthr=4} all the computations will be split into two batches of 4 threads each. All PRIME2D standard output is written to the PRIME2DOUT log file. At each PRIME2D iteration class averages are produced along with the corresponding document containing in-plane parameters and cluster assignment of all the images, named \texttt{cavgs\_iterXXX.mrc} and \texttt{prime2Ddoc\_XXX.txt}, respectively.
 
@@ -631,9 +630,9 @@ We are now ready to generate an \textit{ab initio} 3D reconstruction based on th
 and execute the automated workflow \texttt{ini3D\_from\_cavgs}
 \begin{verbatim}
         $ nohup simple_distr_exec prg=ini3D_from_cavgs stk=../2d/cavgs_selected.mrc 
-        smpd=1.275 msk=88 pgrp=d2 pgrp_known=yes nparts=2 nthr=4 >& INI3DOUT &
+        smpd=1.62 msk=88 pgrp=d2 pgrp_known=yes nparts=2 nthr=4 >& INI3DOUT &
 \end{verbatim}
-This command line is very similar to the one used to run PRIME2D. The image stack (\texttt{stk=}) is the previously selected class averages. In our 2x4 CPUs workstation this step is completed after a dozen iterations in just 8 to 9 minutes.
+This command line is very similar to the one used to run PRIME2D. The image stack (\texttt{stk=?}) is the previously selected class averages. In our 2x4 CPUs workstation this step is completed after a dozen iterations in just 8 to 9 minutes.
 
 This automated workflow uses its own scheme to low-pass filter images and volumes. For more challenging cases, it may be preferable to set the low-pass limit to 20-25 Angstroms; for class averages derived from negative stain images to 30-35 Angstroms. This is achieved by setting the \texttt{lp} argument to the desired value (e.g. \texttt{lp=25.0}).
 
@@ -646,7 +645,7 @@ It is possible to start with no symmetry assumed, perform a symmetry search in a
 \end{SCfigure}
 The \textit{ab inito} 3D model generated is indeed in excellent agreement with previous beta-galactosidase maps and crystallographic structures, but the volumes display the alternate known handedness. To mirror one volume to the correct handedness (then named for instance \texttt{vol\_mirr.mrc}) type
 \begin{verbatim}
-        $ simple_exec prg=volops smpd=1.275 vol1=recvol_state01_iter012pproc.mrc 
+        $ simple_exec prg=volops smpd=1.62 vol1=recvol_state01_iter012pproc.mrc 
         outvol=vol_mirr.mrc
 \end{verbatim}
 \texttt{ini3D\_from\_cavgs} also automatically generates re-projections of \texttt{rec\_final.mrc} (\texttt{reprojs.mrc}) in orientations directly comparable to the selected cluster centres obtained in step 1. Excellent agreement between re-projections and cluster centres validates that the final reconstruction is representative of the class averages.
@@ -660,7 +659,7 @@ To calculate the resolution of the map obtained we calculate the Fourier Shell C
 \end{verbatim}
 First, we need to combine the 2D parameters of the particle images (cluster assignment and in-plane parameters; from step 1) with the 3D parameters derived for the class averages (from step 2):
 \begin{verbatim}
-        $ simple_exec prg=map2ptcls stk=../sumstack.mrc
+        $ simple_exec prg=map2ptcls stk=../stack/sumstack.mrc
         stk2=../2d/cavgs_selected.mrc stk3=../2d/cavgs_final.mrc
         oritab=../2d/prime2Ddoc_final.txt 
         oritab3D=../3d_cavg/prime3Ddoc_final.txt nthr=4
@@ -670,19 +669,19 @@ First, we need to combine the 2D parameters of the particle images (cluster assi
 \item[--] \texttt{stk:} original stack of images
 \item[--] \texttt{stk2:} stack of \textit{selected} cluster centres
 \item[--] \texttt{stk3:} stack of cluster centres used for the selection (e.g., to produce \texttt{stk2})
-\item[--] \texttt{oritab:} document produced by PRIME2D corresponding to \texttt{stk}
+\item[--] \texttt{oritab:} document produced by PRIME2D corresponding to \texttt{stk3}
 \item[--] \texttt{oritab3D:} document produced by \prgname{ini3D\_from\_cavgs} corresponding to \texttt{stk2}
 \end{itemize}
 This generates a document named \texttt{mapped\_params\_ptcls.txt} that we can directly use to reconstruct a new map from the particle images and calculate the resolution
 \begin{verbatim}
-        $ simple_distr_exec prg=recvol eo=yes stk=../sumstack.mrc 
-        oritab=mapped_params_ptcls.txt smpd=1.275 msk=88 ctf=yes 
+        $ simple_distr_exec prg=recvol eo=yes stk=../stack/sumstack.mrc 
+        oritab=mapped_params_ptcls.txt smpd=1.62 msk=88 ctf=yes 
         pgrp=d2 nparts=2 nthr=4 >& EOREC
 \end{verbatim}
 This will only takes a few minutes and will print out the FSC values in the EOREC file. The \texttt{eo=yes} option specifies that the resolution will be calculated from the FSC between the even/odd halves of the dataset. The final reconstruction is the \texttt{recvol\_state01.mrc}. The end of the RESOLUTION file produced gives you the calculated resolution
 \begin{verbatim}
-        >>> RESOLUTION AT FSC=0.143 DETERMINED TO:   9.89
-        >>> RESOLUTION AT FSC=0.500 DETERMINED TO:  14.19
+        >>> RESOLUTION AT FSC=0.143 DETERMINED TO:    9.87
+        >>> RESOLUTION AT FSC=0.500 DETERMINED TO:  13.38
 \end{verbatim}
 \bibliographystyle{elsarticle-harv}
 \bibliography{Prime2bibfile}

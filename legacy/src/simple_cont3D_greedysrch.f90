@@ -1,3 +1,7 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> \brief Simple search class: greedy search 
 module simple_cont3D_greedysrch
 use simple_defs
 use simple_params,           only: params
@@ -11,8 +15,7 @@ implicit none
 
 public :: cont3D_greedysrch
 private
-
-logical, parameter :: debug = .false.
+#include "simple_local_flags.inc"
 
 type cont3D_greedysrch
     private
@@ -57,9 +60,9 @@ contains
     !>  \brief  is a constructor
     subroutine new( self, p, pftcc, vols)
         class(cont3D_greedysrch),              intent(inout) :: self  !< instance
-        class(params),                   intent(in)    :: p     !< parameters
-        class(polarft_corrcalc), target, intent(in)    :: pftcc
-        class(projector),        target, intent(in)    :: vols(:)    !< references
+        class(params),                   intent(in)    :: p          !< parameters
+        class(polarft_corrcalc), target, intent(in)    :: pftcc      !< polar fourier correlation calculator
+        class(projector),        target, intent(in)    :: vols(:)    !< reference volumes
         call self%kill
         ! set constants
         self%pftcc_ptr  => pftcc
@@ -73,12 +76,12 @@ contains
         self%shbarr     = p%shbarrier
         ! done
         self%exists = .true.
-        if( debug ) write(*,'(A)') '>>> cont3D_greedysrch::CONSTRUCTED NEW SIMPLE_cont3D_greedysrch OBJECT'
+        DebugPrint  '>>> cont3D_greedysrch::CONSTRUCTED NEW SIMPLE_cont3D_greedysrch OBJECT'
     end subroutine new
 
     ! PREP ROUTINES
 
-    !>  \brief  is the master search routine
+    !>  \brief  is the search routine's initialiser
     subroutine prep_srch(self, a, iptcl, iref, istate)
         class(cont3D_greedysrch), intent(inout) :: self
         class(oris),        intent(inout) :: a
@@ -106,7 +109,7 @@ contains
         &vols=self%vols_ptr)
         ! cleanup
         deallocate(frc)
-        if( debug ) write(*,'(A)') '>>> cont3D_greedysrch::END OF PREP_SRCH'
+        DebugPrint  '>>> cont3D_greedysrch::END OF PREP_SRCH'
     end subroutine prep_srch
 
     ! SEARCH ROUTINES
@@ -124,7 +127,7 @@ contains
         else
             call a%reject(iptcl)
         endif
-        if( debug ) write(*,'(A)') '>>> cont3D_greedysrch::END OF SRCH'
+        DebugPrint  '>>> cont3D_greedysrch::END OF SRCH'
     end subroutine exec_srch
 
     !>  \brief  performs the shift search

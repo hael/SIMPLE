@@ -1,6 +1,11 @@
-!==Class simple_oris
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> simple_oris module
+!!
+!! simple_oris handles orientation information.
 !
-! simple_oris handles orientation information. The code is distributed with the hope that it will be useful,
+!    The code is distributed with the hope that it will be useful,
 ! but _WITHOUT_ _ANY_ _WARRANTY_. Redistribution or modification is regulated by the GNU General Public License. 
 ! *Author:* Hans Elmlund, 2009-05-26
 !
@@ -22,6 +27,7 @@ implicit none
 
 public :: oris, test_oris
 private
+#include "simple_local_flags.inc"
 
 !>  \brief  aggregates ori objects
 type :: oris
@@ -82,7 +88,7 @@ type :: oris
     procedure          :: ang_sdev
     procedure          :: stochastic_weights
     procedure          :: included
-    procedure          :: print
+    procedure          :: print_
     procedure          :: print_chash_sizes
     procedure          :: print_mats
     ! SETTERS
@@ -208,11 +214,11 @@ type :: oris
     procedure          :: cls_overlap
     ! DESTRUCTOR
     procedure          :: kill
-end type
+end type oris
 
 interface oris
     module procedure constructor
-end interface
+end interface oris
 
 type(ori),  pointer  :: op(:)=>null()
 type(oris), pointer  :: ops  =>null()
@@ -226,7 +232,7 @@ contains
 
     ! CONSTRUCTORS
     
-    !>  \brief  is a constructor
+    !>  \brief  is an abstract constructor
     function constructor( n ) result( self )
         integer, intent(in) :: n
         type(oris) :: self
@@ -312,7 +318,7 @@ contains
 
     !>  \brief  is a getter   
     subroutine getter_1( self, i, key, val )
-        class(oris),                    intent(inout) :: self
+        class(oris),                   intent(inout) :: self
         integer,                       intent(in)    :: i
         character(len=*),              intent(in)    :: key
         character(len=:), allocatable, intent(inout) :: val
@@ -374,7 +380,7 @@ contains
             vals(i) = tmp
         enddo
     end subroutine getter_all_2
-    
+
     !>  \brief  is for getting the i:th rotation matrix
     pure function get_mat( self, i ) result( mat )
         class(oris), intent(in) :: self
@@ -1202,11 +1208,11 @@ contains
     end function included
     
     !>  \brief  is for printing
-    subroutine print( self, i )
+    subroutine print_( self, i )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: i
-        call self%o(i)%print
-    end subroutine print
+        call self%o(i)%print_ori()
+    end subroutine print_
 
     !>  \brief  is for printing
     subroutine print_chash_sizes( self )
@@ -1481,10 +1487,10 @@ contains
     subroutine rnd_proj_space( self, nsample, o_prev, thres, eullims )
         use simple_math, only: rad2deg
         class(oris),          intent(inout) :: self
-        integer,              intent(in)    :: nsample
-        class(ori), optional, intent(inout) :: o_prev
-        real,       optional, intent(inout) :: eullims(3,2)
-        real,       optional, intent(in)    :: thres ! half-angle of spherical cap
+        integer,              intent(in)    :: nsample      !< # samples
+        class(ori), optional, intent(inout) :: o_prev       !< orientation
+        real,       optional, intent(inout) :: eullims(3,2) !< Euler limits
+        real,       optional, intent(in)    :: thres        !< half-angle of spherical cap
         type(ori) :: o_stoch
         integer   :: i
         logical   :: within_lims, found
@@ -1906,12 +1912,12 @@ contains
         real                 :: homo_cls
         real, allocatable    :: vals(:)
         integer, allocatable :: labelpops(:)
-        logical, parameter   :: debug=.false.
+        
         nlabels = self%get_nlabels()
-        if( debug ) print *, 'number of labels: ', nlabels
+        DebugPrint  'number of labels: ', nlabels
         allocate(labelpops(nlabels))
-        if( debug ) print *, 'allocated labelpops'
-        if( debug ) print *, '>>> PROCESSING CLASS: ', icls
+        DebugPrint  'allocated labelpops'
+        DebugPrint  '>>> PROCESSING CLASS: ', icls
         ! get pop 
         if( which .eq. 'class' )then
             pop = self%get_cls_pop(icls)
@@ -1928,7 +1934,7 @@ contains
         else
             vals = self%get_arr('label', state=icls)
         endif
-        if( debug ) print *, nint(vals)
+        DebugPrint  nint(vals)
         ! count label occurences
         labelpops = 0
         do i=1,pop
@@ -1938,7 +1944,7 @@ contains
         medlab   = maxloc(labelpops)
         homo_cls = real(count(medlab(1) == nint(vals)))/real(pop)
         homo_avg = homo_avg+homo_cls
-        if( debug ) print *, '>>> CLASS HOMOGENEITY: ', homo_cls
+        DebugPrint  '>>> CLASS HOMOGENEITY: ', homo_cls
         ! apply homogeneity threshold
         if( homo_cls >= thres ) homo_cnt = homo_cnt+1.
         deallocate(labelpops)
@@ -1953,7 +1959,6 @@ contains
         real,             intent(out)   :: homo_cnt, homo_avg
         integer :: k, ncls
         real    :: cnt
-        logical, parameter :: debug=.false.
         if( which .eq. 'class' )then
             ncls = self%get_ncls()
         else if( which .eq. 'state' )then
@@ -1961,7 +1966,7 @@ contains
         else
             stop 'Unsupported which flag; simple_oris::homogeneity'
         endif
-        if( debug ) print *, 'number of clusters to analyse: ', ncls
+        DebugPrint  'number of clusters to analyse: ', ncls
         homo_cnt = 0.
         homo_avg = 0.
         cnt      = 0.
@@ -2188,6 +2193,7 @@ contains
                     dfx = self%o(i)%get('dfx')+ran3()*dferr-dferr/2.
                     if( dfx > 0. ) exit
                 end do
+                
                 call self%o(i)%set('dfx', dfx)
             endif
             if( self%o(i)%isthere('dfy') )then
@@ -2410,6 +2416,7 @@ contains
         allocate(arr(ncls), classpops(ncls), stat=alloc_stat)
         classpops = 0
         call alloc_err('order_cls; simple_oris', alloc_stat)
+        classpops = 0
         ! calculate class populations
         do i=1,ncls
             classpops(i) = self%get_cls_pop(i)
@@ -3355,8 +3362,8 @@ contains
     
     !>  \brief  returns cluster population overlap between two already clustered orientations sets
     function cls_overlap( self, os, key ) result( overlap )
-        class(oris),      intent(inout)   :: self ! previous oris
-        type(oris),       intent(inout)   :: os   ! new oris (eg number of clusters clusters > number of self clusters)
+        class(oris),      intent(inout)   :: self !< previous oris
+        type(oris),       intent(inout)   :: os   !< new oris (eg number of clusters clusters > number of self clusters)
         character(len=*), intent(in)      :: key
         integer, allocatable              :: cls_pop(:), pop_spawn(:)
         real                              :: overlap, ov
@@ -3452,17 +3459,17 @@ contains
             call os%rnd_oris(5.)
             write(*,*) '********'
             do i=1,100
-                call os%print(i)
+                call os%print_(i)
             end do
             call os2%rnd_oris(5.)
             write(*,*) '********'
             do i=1,100
-                call os2%print(i)
+                call os2%print_(i)
             end do
             ! call os%merge(os2)
             ! write(*,*) '********'
             ! do i=1,200
-            !     call os%print(i)
+            !     call os%print_(i)
             ! end do
         endif
         write(*,'(a)') '**info(simple_oris_unit_test, part2): testing assignment'
@@ -3520,7 +3527,7 @@ contains
         order = os%order()
         if( doprint )then
             do i=1,100
-                call os%print(order(i))
+                call os%print_(order(i))
             end do
             write(*,*) 'median:', os%median('lp')
         endif

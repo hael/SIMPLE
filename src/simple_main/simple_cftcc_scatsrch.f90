@@ -1,3 +1,7 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple CTF module: scattered search 
 module simple_cftcc_scatsrch
 use simple_scatter_orisrch, only: scatter_orisrch
 use simple_cartft_corrcalc, only: cartft_corrcalc
@@ -18,7 +22,7 @@ integer                         :: state=1           !< state to evaluate
 integer                         :: nevals=0          !< nr of score fun evals
 
 contains
-
+    !< Initialise search
     subroutine cftcc_scatsrch_init( cftcc, img, opt_str, lims, nrestarts )
         class(cartft_corrcalc), intent(in), target :: cftcc
         class(image), intent(in), target           :: img
@@ -45,7 +49,7 @@ contains
         integer :: nevals
         nevals_out = nevals
     end function cftcc_scatsrch_get_nevals
-    
+    !< Scattered search cost function
     function cftcc_scatsrch_cost( vec, D ) result( cost )
         use simple_ori, only: ori
         integer, intent(in) :: D
@@ -70,7 +74,7 @@ contains
         call cftcc_ptr%project(o, 1)
         cost = -cftcc_ptr%correlate(pimg, 1, shvec)
     end function cftcc_scatsrch_cost
-    
+    !< Scattered search minimize
     subroutine cftcc_scatsrch_minimize( o )
         use simple_ori,  only: ori
         use simple_math, only: rad2deg

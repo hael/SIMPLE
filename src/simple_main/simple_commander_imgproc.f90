@@ -1,13 +1,20 @@
-!==Class simple_commander_imgproc
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple commander module: image processing interface
 !
-! This class contains the set of concrete general image processing commanders of the SIMPLE library. This class provides the glue 
-! between the reciver (main reciever is simple_exec program) and the abstract action, which is simply execute (defined by the base 
-! class: simple_commander_base). Later we can use the composite pattern to create MacroCommanders (or workflows)
+!! This class contains the set of concrete general image processing commanders
+!! of the SIMPLE library. This class provides the glue between the reciver (main
+!! reciever is simple_exec program) and the abstract action, which is simply
+!! execute (defined by the base class: simple_commander_base). Later we can use
+!! the composite pattern to create MacroCommanders (or workflows)
 !
 ! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
 ! Redistribution and modification is regulated by the GNU General Public License.
-! *Authors:* Cyril Reboul & Hans Elmlund 2016
 !
+! @author Cyril Reboul & Hans Elmlund
+! @date 2016
+!------------------------------------------------------------------------------!
 module simple_commander_imgproc
 use simple_defs
 use simple_cmdline,        only: cmdline
@@ -18,7 +25,7 @@ use simple_strings,        only: int2str, int2str_pad
 use simple_filehandling    ! use all in there
 use simple_jiffys          ! use all in there
 implicit none
-
+#include "simple_local_flags.inc"
 public :: binarise_commander
 public :: convert_commander
 public :: corrcompare_commander
@@ -73,7 +80,7 @@ type, extends(commander_base) :: stackops_commander
 end type stackops_commander
 
 contains
-    
+    !> binarise is a program for binarisation of stacks and volumes
     subroutine exec_binarise( self, cline )
         class(binarise_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
@@ -106,9 +113,9 @@ contains
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_BINARISE NORMAL STOP ****')
-        
+
         contains
-            
+
             subroutine doit( img_or_vol )
                 use simple_image, only: image
                 class(image), intent(inout) :: img_or_vol
@@ -133,9 +140,21 @@ contains
                 if( cline%defined('edge') ) call img_or_vol%cos_edge(p%edge)
                 if( cline%defined('neg')  ) call img_or_vol%bin_inv
             end subroutine
-                
+
     end subroutine exec_binarise
-    
+    !> convert is a program for converting between SPIDER and MRC formats
+    !! @see http://simplecryoem.com/tutorials.html?#using-simple-in-the-wildpower-spectrum-analysis-and-movie-selection
+    !!
+    !! bash-3.2$ `simple_exec prg=convert'
+    !!USAGE:
+    !!bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
+    !!    
+    !!OPTIONAL
+    !!stk    = particle stack with all images(ptcls.ext)
+    !!vol1   = input volume no1(invol1.ext)
+    !!outstk = output image stack
+    !!outvol = output volume{outvol.ext}
+    !!
     subroutine exec_convert( self, cline )
         class(convert_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
@@ -149,7 +168,7 @@ contains
                 call progress(iptcl, p%nptcls)
                 call b%img%read(p%stk, iptcl)
                 call b%img%write(p%outstk, iptcl)
-            end do 
+            end do
         else if( cline%defined('vol1') )then
             call b%vol%read(p%vols(1))
             call b%img%write(p%outvol)
@@ -159,7 +178,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_CONVERT NORMAL STOP ****')
     end subroutine exec_convert
-
+    !> corrcompare is a wrapper program for CTFFIND4 (Grigorieff lab)
     subroutine exec_corrcompare( self, cline )
         use simple_image, only: image
         use simple_stat,  only: moment
@@ -237,7 +256,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_CORRCOMPARE NORMAL STOP ****')
     end subroutine exec_corrcompare
-
+    !> ctfops is a program for applying CTF to stacked images
     subroutine exec_ctfops( self, cline )
         use simple_procimgfile, only: apply_ctf_imgfile
         use simple_ctf,         only: ctf
@@ -246,7 +265,6 @@ contains
         type(params) :: p
         type(build)  :: b
         type(ctf)    :: tfun
-        logical      :: debug = .false.
         real         :: dfx, dfy, angast
         p = params(cline)                     ! parameters generated
         call b%build_general_tbox(p, cline)   ! general objects built
@@ -283,7 +301,7 @@ contains
                         call apply_ctf_imgfile(p%stk, p%outstk, b%a, p%smpd, 'neg')
                     else
                         call apply_ctf_imgfile(p%stk, p%outstk, b%a, p%smpd, 'ctf')
-                    endif                
+                    endif
                 case DEFAULT
                     stop 'Unknown ctf argument'
             end select
@@ -293,7 +311,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_CTFOPS NORMAL STOP ****')
     end subroutine exec_ctfops
-
+    !> filter is a program for stacking individual images or multiple stacks into one
     subroutine exec_filter( self, cline )
         use simple_procimgfile, only: bp_imgfile, phase_rand_imgfile, real_filter_imgfile
         class(filter_commander), intent(inout) :: self
@@ -356,7 +374,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_FILTER NORMAL STOP ****')
     end subroutine exec_filter
-    
+   !> volume/image_smat is a program for creating a similarity matrix based on volume2volume correlation
     subroutine exec_image_smat(self, cline)
         use simple_corrmat  ! use all in there
         use simple_ori,     only: ori
@@ -368,7 +386,7 @@ contains
         type(build)          :: b
         integer              :: iptcl, alloc_stat, funit, io_stat
         real, allocatable    :: corrmat(:,:)
-        logical              :: debug=.false.
+
         p = params(cline, .false.)                           ! constants & derived constants produced
         call b%build_general_tbox(p, cline, .false., .true.) ! general objects built (no oritab reading)
         allocate(b%imgs_sym(p%nptcls), stat=alloc_stat)
@@ -400,6 +418,13 @@ contains
         call simple_end('**** SIMPLE_IMAGE_SMAT NORMAL STOP ****')
     end subroutine exec_image_smat
 
+
+    !> norm is a program for normalization of MRC or SPIDER stacks and volumes.
+    !! If you want to normalise your images inputted with stk, set norm=yes.
+    !! hfun (e.g. hfun=sigm) controls the normalisation function. If you want to
+    !! perform noise normalisation of the images set noise_norm=yes given a mask
+    !! radius msk (pixels). If you want to normalise your images or volume
+    !! (vol1) with respect to their power spectrum set shell_norm=yes
     subroutine exec_norm( self, cline )
         use simple_procimgfile,   only: norm_imgfile, noise_norm_imgfile, shellnorm_imgfile
         class(norm_commander), intent(inout) :: self
@@ -457,7 +482,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_NORM NORMAL STOP ****')
     end subroutine exec_norm
-    
+    !> scale is a program that provides re-scaling and clipping routines for MRC or SPIDER stacks and volumes
     subroutine exec_scale( self, cline )
         use simple_procimgfile  ! use all in there
         use simple_image,       only: image
@@ -539,9 +564,9 @@ contains
                 else if( p%newbox > p%box )then
                     call b%vol%pad(vol2)
                 else
-                    vol2 = b%vol
+                    call vol2%copy(b%vol)
                 endif
-                b%vol = vol2
+                call b%vol%copy(vol2)
                 call b%vol%bwd_ft
                 scale = real(p%newbox)/real(p%box)
                 p%box = p%newbox
@@ -551,17 +576,17 @@ contains
             if( cline%defined('clip') )then
                 ! Clipping
                 call vol2%new([p%clip,p%clip,p%clip],p%smpd)
-                if( p%clip < p%box )then 
+                if( p%clip < p%box )then
                     call b%vol%clip(vol2)
                 else
                     if( cline%defined('msk') )then
-                        call b%vol%stats( 'background', ave, sdev, var, med, p%msk ) 
+                        call b%vol%stats( 'background', ave, sdev, var, med, p%msk )
                     else
-                        call b%vol%stats( 'background', ave, sdev, var, med ) 
+                        call b%vol%stats( 'background', ave, sdev, var, med )
                     endif
                     call b%vol%pad(vol2, backgr=med)
                 endif
-                b%vol = vol2
+                call b%vol%copy(vol2)
             else
                  write(*,'(a,1x,i5)') 'BOX SIZE AFTER SCALING:', p%newbox
             endif
@@ -597,12 +622,13 @@ contains
                 deallocate(fname)
             end do
         else
-            stop 'SIMPLE_SCALE needs input image(s) or volume or filetable!'          
+            stop 'SIMPLE_SCALE needs input image(s) or volume or filetable!'
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_SCALE NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_scale
-    
+
+    !> stack is a program for stacking individual images or multiple stacks into one
     subroutine exec_stack( self, cline )
         use simple_imgfile,      only: imgfile
         use simple_image,        only: image
@@ -616,7 +642,7 @@ contains
         character(len=:), allocatable         :: moviename
         type(image)                           :: mask, tmp, frameimg
         real                                  :: mm(2)
-        logical, parameter                    :: debug = .false.
+
         if( cline%defined('lp') )then
             if( .not. cline%defined('smpd') ) stop 'smpd (sampling distance) needs to be defined if lp is'
         endif
@@ -624,14 +650,14 @@ contains
         call b%build_general_tbox(p,cline,do3d=.false.) ! general stuff built
         call read_filetable(p%filetab, filenames)
         nfiles = size(filenames)
-        if( debug ) write(*,*) 'read the filenames'
+        DebugPrint  'read the filenames'
         if( cline%defined('xdim') .and. cline%defined('ydim') )then
             ldim = [p%xdim,p%ydim,1]
         else
             call find_ldim_nptcls(filenames(1),ldim,ifoo)
             ldim(3) = 1 ! to correct for the stupid 3:d dim of mrc stacks
         endif
-        if( debug ) write(*,*) 'logical dimension: ', ldim
+        DebugPrint  'logical dimension: ', ldim
         if( cline%defined('nframes') )then
             if( .not. cline%defined('fbody') ) stop 'need fbody (file body of output stacks) on the command line'
             if( mod(nfiles,p%nframes) .eq. 0 )then
@@ -683,9 +709,9 @@ contains
                     cnt = cnt+1
                     call b%img%read(filenames(ifile), iimg, readhead=.false., rwaction='READ')
                     if( cline%defined('clip') )then
-                        call b%img%clip(tmp)  
+                        call b%img%clip(tmp)
                         mm = tmp%minmax()
-                        if( debug ) print *, 'min/max: ', mm(1), mm(2)
+                        DebugPrint 'min/max: ', mm(1), mm(2)
                         call tmp%write(p%outstk, cnt)
                     else
                         call b%img%write(p%outstk, cnt)
@@ -697,7 +723,23 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_STACK NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_stack
-
+    !> stackops is a program that provides standard single-particle image
+    !> processing routines that are applied to MRC or SPIDER stacks.
+    !! If you want to extract a particular state, give an alignment document
+    !! (oritab) and set state to the state that you want' to extract. If you
+    !! want to select the fraction of best particles (according to t he goal
+    !! function), input an alignment doc (oritab) and set frac. You can combine
+    !! the state and frac options. If you want to apply noise to images, give
+    !! the desired signal-to-noise ratio via snr. If you want to calculate the
+    !! autocorrelation function of your images set acf=yes. If you want to
+    !! extract a contiguous subset of particle images from the stack, set fromp
+    !! and top. If you want to fish out a number of particle images from your
+    !! stack at random, set nran to some nonzero in teger number less than
+    !! nptcls. With avg=yes the global average of the input stack is calculated.
+    !! If you define nframesgrp to some integer number larger than one averages
+    !! with chunk sizes of nframesgrp are produced, which may be useful for
+    !! analysis of dose-fractionated image series. neg inverts the contrast of
+    !! the images
     subroutine exec_stackops( self, cline )
         use simple_ran_tabu,    only: ran_tabu
         use simple_procimgfile, only: neg_imgfile, acf_imgfile, frameavg_imgfile

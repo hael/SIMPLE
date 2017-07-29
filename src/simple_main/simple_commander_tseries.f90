@@ -1,8 +1,13 @@
-!==Class simple_commander_tseries
-!
-! This class contains the set of concrete time-series commanders of the SIMPLE library. This class provides the glue 
-! between the reciver (main reciever is simple_exec program) and the abstract action, which is simply execute (defined by the base 
-! class: simple_commander_base). Later we can use the composite pattern to create MacroCommanders (or workflows)
+!------------------------------------------------------------------------------!
+! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> simple_commander_tseries
+!!
+!! This class contains the set of concrete time-series commanders of the SIMPLE
+!! library. This class provides the glue between the reciver (main reciever is
+!! simple_exec program) and the abstract action, which is simply execute
+!! (defined by the base class: simple_commander_base). Later we can use the
+!! composite pattern to create MacroCommanders (or workflows)
 !
 ! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
 ! Redistribution and modification is regulated by the GNU General Public License.
@@ -23,7 +28,7 @@ public :: tseries_extract_commander
 public :: tseries_track_commander
 public :: tseries_split_commander
 private
-
+#include "simple_local_flags.inc"
 type, extends(commander_base) :: tseries_extract_commander
   contains
     procedure :: execute      => exec_tseries_extract
@@ -130,7 +135,7 @@ contains
             endif
         else if( cline%defined('xcoord') .and. cline%defined('ycoord') )then
             if( .not. cline%defined('box') ) stop 'need box to be part of command linefor this mode of&
-            execution; simple_commander_tseries :: exec_tseries_track'
+            &execution; simple_commander_tseries :: exec_tseries_track'
             allocate( boxdata(1,2) )
             boxdata(1,1) = real(p%xcoord)
             boxdata(1,2) = real(p%ycoord)
