@@ -1129,7 +1129,7 @@ contains
         call a%set(iptcl, 'mi_inpl',  mi_inpl )
         call a%set(iptcl, 'mi_state', mi_state)
         call a%set(iptcl, 'mi_joint', mi_joint)
-        ! set the distances before we update the orientation        
+        ! set the distances before we update the orientation
         call a%set(iptcl, 'dist', 0.5*euldist + 0.5*o_old%get('dist'))
         call a%set(iptcl, 'dist_inpl', dist_inpl)
         ! all the other stuff
