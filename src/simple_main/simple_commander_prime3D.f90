@@ -331,7 +331,7 @@ contains
     end subroutine exec_prime3D
     !> CONT3D is a SIMPLE program
     subroutine exec_cont3D( self, cline )
-        use simple_cont3D_matcher,         only: cont3D_exec
+        use simple_cont3D_matcher, only: cont3D_exec
         class(cont3D_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(params) :: p
@@ -341,7 +341,7 @@ contains
         converged = .false.
         p = params(cline) ! parameters generated
         select case(p%refine)
-            case('yes','de','ada')
+            case('yes')
                 ! alles klar  
             case DEFAULT
                 stop 'unknown refinement mode; simple_commander_prime3D%exec_cont3D'

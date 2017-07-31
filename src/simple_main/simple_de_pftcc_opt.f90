@@ -136,25 +136,24 @@ contains
         if( spec%npeaks == 0 )then
             ! peaks <- population
             if(allocated(spec%peaks))deallocate(spec%peaks)
-            allocate(spec%peaks(spec%npop,6), source=1.)
-            spec%peaks(:,6)   = self%costs 
-            spec%peaks(:,1:5) = self%pop
-            where(spec%peaks(:,6) >= 0.)spec%peaks(:,6) = 1.
+            allocate(spec%peaks(spec%npop, 4), source=1.)
+            spec%peaks(:,  4) = self%costs 
+            spec%peaks(:,1:3) = self%pop
+            where(spec%peaks(:,4) >= 0.) spec%peaks(:,4) = 1.
         else
             if( npeaks == spec%npeaks )then
                 ! alles klar
             else
                 ! reports peaks as top-ranking individuals
                 if(allocated(spec%peaks))deallocate(spec%peaks)
-                allocate(spec%peaks(spec%npeaks,6), source=1.)
+                allocate(spec%peaks(spec%npeaks, 4), source=1.)
                 allocate(inds(spec%npop))
                 inds  = (/ (i, i=1,spec%npop) /)
                 call hpsort(spec%npeaks, self%costs, inds)
-                spec%peaks(:,6)   = self%costs(inds(spec%npop-spec%npeaks+1:)) 
-                spec%peaks(:,1:5) = self%pop(inds(spec%npop-spec%npeaks+1:),:)
-                where(spec%peaks(:,6) >= 0.)spec%peaks(:,6) = 1.
+                spec%peaks(:,  4) = self%costs(inds(spec%npop-spec%npeaks+1:)) 
+                spec%peaks(:,1:3) = self%pop(inds(spec%npop-spec%npeaks+1:),:)
+                where(spec%peaks(:,4) >= 0.) spec%peaks(:,4) = 1.
                 deallocate(inds)
-                print *,'2'
             endif
         endif
         contains

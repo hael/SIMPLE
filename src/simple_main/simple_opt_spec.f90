@@ -104,7 +104,7 @@ contains
         real,             optional, intent(in)    :: cfac           !< convergence factor (bfgs)
         real,             optional, intent(in)    :: eps            !< learning rate (OASIS)
         real,             optional, intent(in)    :: stepsz(ndim)   !< step sizes for brute force search
-        integer :: alloc_stat, i
+        integer :: alloc_stat
         call self%kill
         ! take care of optimizer specifics
         select case(str_opt)
@@ -226,8 +226,8 @@ contains
         class(opt_spec), intent(inout) :: self              !< instance
         real,            intent(in)    :: pop(:,:)
         if(self%str_opt.ne.'de')stop 'Only for use with DE; simple_opt_spec%set_inipop'
-        if(size(pop,dim=1) > self%npop)stop 'non-congruent initial population 1; simple_pftcc_srch%srchset_inipop'
-        if(size(pop,dim=2) .ne. self%ndim)stop 'non-congruent initial population 2; simple_pftcc_srch%srchset_inipop'
+        if(size(pop,dim=1) > self%npop)stop 'non-congruent initial population 1; simple_opt_spec%set_inipop'
+        if(size(pop,dim=2) .ne. self%ndim)stop 'non-congruent initial population 2; simple_opt_spec%set_inipop'
         if(allocated(self%inipopulation))deallocate(self%inipopulation)
         self%inipopulation = pop
     end subroutine set_inipop
