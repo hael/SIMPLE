@@ -7,12 +7,13 @@ use simple_oris,             only: oris
 use simple_ori,              only: ori
 use simple_sym,              only: sym
 use simple_pftcc_inplsrch,   only: pftcc_inplsrch
+use simple_pftcc_shsrch,     only: pftcc_shsrch
 use simple_math              ! use all in there
 implicit none
 
 public :: cont3D_ada_srch
 private
-
+!#include "simple_local_flags.inc"
 real,    parameter :: FACTWEIGHTS_THRESH = 0.001    !< threshold for factorial weights
 real,    parameter :: E3HALFWINSZ = 90.             !< in-plane angle half window size
 integer, parameter :: NREFS       = 80
@@ -23,6 +24,7 @@ type cont3D_ada_srch
     class(polarft_corrcalc), pointer :: pftcc_ptr   => null()  !< polar fourier correlation calculator
     class(projector),        pointer :: vols_ptr(:) => null()  !< volumes for projection
     type(pftcc_inplsrch)             :: inplsrch_obj           !< in-plane search object
+    type(pftcc_shsrch)               :: shiftsrch_obj          !< in-plane search object
     type(sym)                        :: se                     !< symmery object
     type(ori)                        :: o_in                   !< input orientation
     type(ori)                        :: o_out                  !< best orientation found
@@ -39,6 +41,7 @@ type cont3D_ada_srch
     integer                          :: nrots         = 0      !< number of in-plane rotations
     integer                          :: nbetter       = 0      !< number of time an improving reference is found
     integer                          :: npeaks        = 0      !< number of peaks
+    integer                          :: npeaks_inpl   = 0      !< number of peaks
     integer                          :: iptcl         = 0      !< orientation general index
     integer                          :: ref           = 0      !< previous ref
     integer                          :: state         = 0      !< previous state
@@ -59,6 +62,7 @@ type cont3D_ada_srch
     procedure          :: exec_srch
     procedure, private :: do_euler_srch
     procedure, private :: do_inpl_srch
+    procedure, private :: do_inpl_peaks_srch
     procedure, private :: gen_ori
     ! GETTERS/SETTERS
     procedure          :: get_best_ori
@@ -80,20 +84,21 @@ contains
         real :: trs
         call self%kill
         ! set constants
-        self%pftcc_ptr  => pftcc
-        self%vols_ptr   => vols
-        self%se         = se
-        self%nstates    = p%nstates
+        self%pftcc_ptr => pftcc
+        self%vols_ptr  => vols
+        self%se        = se
+        self%nstates   = p%nstates
         if( size(vols).ne.self%nstates )stop 'Inconsistent number of volumes; cont3D_ada_srch%new'
-        self%angthresh  = p%athres
-        self%shbarr     = p%shbarrier
-        self%npeaks     = p%npeaks
-        self%refine     = p%refine
-        self%nstates    = p%nstates
-        self%nrefs      = NREFS !!! 1 state assumed here
-        self%nrots      = self%pftcc_ptr%get_nrots()
-        self%state      = 1     !!! 1 state assumed here
-        self%lims(:3,:) = self%se%srchrange()
+        self%angthresh   = p%athres
+        self%shbarr      = p%shbarrier
+        self%npeaks      = p%npeaks
+        self%npeaks_inpl = self%npeaks * 3
+        self%refine      = p%refine
+        self%nstates     = p%nstates
+        self%nrefs       = NREFS !!! 1 state assumed here
+        self%nrots       = self%pftcc_ptr%get_nrots()
+        self%state       = 1     !!! 1 state assumed here
+        self%lims(:3,:)  = self%se%srchrange()
         trs = p%trs
         self%lims(4,:)  = [-trs, trs]
         self%lims(5,:)  = self%lims(4,:)
@@ -242,6 +247,7 @@ contains
         call o_transform%new
         call o_transform%rnd_euler
         val = gasdev(0., self%angthresh)
+        call enforce_cyclic_limit(val, 180.)
         call o_transform%e2set(val)
         call o_transform%e3set(0.)
         o = self%o_best.compose.o_transform
@@ -289,6 +295,70 @@ contains
         deallocate(roind_vec)
         if(debug)write(*,*)'simple_cont3D_srch::do_refs_srch done'
     end subroutine do_euler_srch
+
+    !>  \brief  performs the in-plane search
+    subroutine do_inpl_peaks_srch( self )
+        class(cont3D_ada_srch), intent(inout) :: self
+        real, allocatable :: corrs(:)
+        type(ori)         :: o
+        real, allocatable :: crxy(:), cxy(:)
+        integer, allocatable :: roind_vec(:)    ! slice of in-plane angles
+        real              :: inpl_corrs(self%npeaks,self%nrots)
+
+        real              :: corr, thresh
+        integer           :: i, iref, inpl_ind, ref_inds(self%nrefs), ncorrs, projdir_cnt, peak_cnt, cnt
+        ! sort searched orientations
+        ! ref_inds = (/(iref,iref=1,self%nrefs)/)
+        ! corrs = self%o_srch%get_all('corr')
+        ! call hpsort(self%nrefs, corrs, ref_inds)
+        ! deallocate(corrs)
+        ! ! in-plane correlations
+        ! cnt = 0
+        ! do i = self%nrefs-self%npeaks+1, self%nrefs
+        !     cnt       = cnt + 1
+        !     iref      = ref_inds(i)
+        !     o         = self%o_srch%get_ori(iref)
+        !     roind_vec = self%pftcc_ptr%get_win_roind(360.-o%e3get(), E3HALFWINSZ)
+        !     inpl_corrs(cnt,:) = self%pftcc_ptr%gencorrs(iref, self%iptcl, roind_vec=roind_vec)
+        !     deallocate(roind_vec)
+        ! enddo
+        ! !
+        ! corrs  = pack(inpl_corrs, .true.)
+        ! ncorrs = self%npeaks * self%nrots
+        ! call hpsort( ncorrs, corrs )
+        ! thresh = corrs(ncorrs - self%npeaks_inpl + 1)
+        ! self%npeaks_inpl = count( corrs >= thresh )
+        ! print *,'npeaks_inpl:', self%npeaks_inpl
+        ! call self%o_peaks%new( self%npeaks_inpl )
+        ! deallocate(corrs)
+        ! ! Shift search
+        ! projdir_cnt = 0
+        ! peak_cnt    = 0
+        ! do i = self%nrefs - self%npeaks_inpl + 1, self%nrefs
+        !     projdir_cnt = projdir_cnt + 1
+        !     do inpl_ind = 1, self%nrots
+        !         if( inpl_corrs(projdir_cnt, inpl_ind) >= thresh )then
+        !             peak_cnt = peak_cnt + 1
+        !             ! shift search
+        !             iref = ref_inds(i)
+        !             o = self%o_srch%get_ori(iref)
+        !             call self%shiftsrch_obj%set_indices(iref, self%iptcl, inpl_ind)
+        !             cxy = self%shiftsrch_obj%minimize()
+        !             if(cxy(1) >= o%get('corr'))then
+        !                 call o%set('corr', cxy(1))
+        !                 call o%set_shift( cxy(2:3) + self%prev_shift)
+        !             else
+        !                 call o%set_shift(self%prev_shift)
+        !             endif
+        !             deallocate(cxy)
+        !             ! update
+        !             call self%o_peaks(peak_cnt, o)
+        !         endif
+        !     enddo
+        ! enddo
+        !
+        if(debug)write(*,*)'simple_cont3d_srch::do_inpl_peaks_srch done'
+    end subroutine do_inpl_peaks_srch
 
     !>  \brief  performs the in-plane search
     subroutine do_inpl_srch( self )
