@@ -1,5 +1,5 @@
 !------------------------------------------------------------------------------!
-! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
 !------------------------------------------------------------------------------!
 !> Simple CTF module: scattered search 
 module simple_cftcc_scatsrch

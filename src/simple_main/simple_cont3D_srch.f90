@@ -1,5 +1,5 @@
 !------------------------------------------------------------------------------!
-! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
 !------------------------------------------------------------------------------!
 !> Simple search class: 3D continous algorithm
 module simple_cont3D_srch

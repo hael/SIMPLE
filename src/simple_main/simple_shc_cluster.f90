@@ -1,5 +1,5 @@
 !------------------------------------------------------------------------------!
-! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
 !------------------------------------------------------------------------------!
 !> Simple clustering module: stochastic hill climbing module for clustering
 module simple_shc_cluster

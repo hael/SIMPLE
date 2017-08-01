@@ -1,6 +1,6 @@
 
 !------------------------------------------------------------------------------!
-! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
 !------------------------------------------------------------------------------!
 !> Simple math module: statistics utility functions
 !

@@ -1,5 +1,5 @@
 !------------------------------------------------------------------------------!
-! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
 !------------------------------------------------------------------------------!
 !> Simple Hadamard module: Generic Prime 2D/3D search module
 module simple_hadamard_common

@@ -12,8 +12,8 @@ set(PROJECT_BRIEF "SIMPLE is a program package for cryo-EM image processing (htt
 # VERSION
 #
 #################################################################
-set(SIMPLE_VERSION_MAJOR 2)
-set(SIMPLE_VERSION_MINOR 5)
+set(SIMPLE_VERSION_MAJOR 3)
+set(SIMPLE_VERSION_MINOR 0)
 set(SIMPLE_VERSION "${SIMPLE_VERSION_MAJOR}.${SIMPLE_VERSION_MINOR}")
 
 #################################################################

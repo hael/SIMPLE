@@ -1,5 +1,5 @@
 !------------------------------------------------------------------------------!
-! SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
 !------------------------------------------------------------------------------!
 !> Simple math module
 !
@@ -139,15 +139,16 @@ contains
     !>  nvoxfind_1  to find the volume in number of voxels, given molecular weight
     !! \param smpd sampling distance in angstroms (SI unit \f$\si{\angstrom}= \si{1e-10}{\metre}\f$)
     !! \param mwkda molecular weight \f$M_{\mathsf{molecule}}\f$ in kDa (SI unit \f$\si{\kilo\dalton}= \SI{1e-10}{\metre}\f$, one dalton is the mass of 1 hydrogen atom  \SI{1.6727e-27}{\kilogram}\f$)
-    !! Protein density \f$\rho_{\mathsf{prot}} \text{ is defined as } \si{1.43}{\gram\per\centimetre\cubed}\f$
+    !! Protein density \f$\rho_{\mathsf{prot}}\f$ is defined as \f$\si{1.43}{\gram\per\centimetre\cubed}\f$
+    !!   see  Quillin and Matthews, Accurate calculation of the density of proteins, doi:10.1107/S090744490000679X
     !! protein density in \f$\si{\gram\per\angstrom\cubed},\ \rho_{\mathsf{prot}\si{\angstrom}} = \rho_{\mathsf{prot}} \num{1e-24}\f$
     !! unit voxel volume v in \f$\si{\per\angstrom\cubed},\ v  = \mathsf{smpd}^3 \f$
     !! mass of protein in Da, \f$M_\mathsf{prot Da} = \mathsf{mwkda}\times\num{1e3}\f$
     !! mass of protein in kg \f$M_\mathsf{kg prot} = M_\mathsf{prot Da}*M_{Hydrogen (\mathsf{kg/Da})\f$
     !! mass of protein in g\f$  = ((mwkda*1e3)*one_da)*1e3\f$
     !! therefore number of voxels in protein is:
-    !! \f$ N_{\mathsf{vox}} = \frac{ M_{\mathsf{molecule}} }{ \rho_{\mathsf{prot}} \times \frac{1}{v^3} \f$
-    !! \f$                     \sim \nint {frac{\mathsf{mwkda}\times\num{1e3}\times\num{1.66e-27)} {\num{1.43}\times\num{1e-24}} \times \frac{1}{\mathsf{smpd}^3}}} \f$
+    !! \f[ N_{\mathsf{vox}} = \frac{ M_{\mathsf{molecule}} }{ \rho_{\mathsf{prot}} \times \frac{1}{v^3} \\
+    !! \f                     \sim \nint {frac{\mathsf{mwkda}\times\num{1e3}\times\num{1.66e-27)} {\num{1.43}\times\num{1e-24}} \times \frac{1}{\mathsf{smpd}^3}}} \f$
     !! we must also assume the number of voxels are discrete, hence we must round to the nearest integer
     pure function nvoxfind_1( smpd, mwkda ) result( nvox )
         real, intent(in) :: smpd             !< sampling distance
@@ -818,6 +819,7 @@ contains
     ! edge functions
 
     !>   two-dimensional hard edge
+    !! \f$r^2 < x^2+y^2\f$.
     pure function hardedge_1( x, y, mskrad ) result( w )
         real,intent(in) :: x, y, mskrad
         real :: w
@@ -826,6 +828,7 @@ contains
     end function
 
     !>   three-dimensional hard edge
+     !! \f$r^2 < x^2+y^2+z^2\f$.
     pure function hardedge_2( x, y, z, mskrad ) result( w )
         real,intent(in) :: x, y, z, mskrad
         real :: w
@@ -834,6 +837,7 @@ contains
     end function
 
     !>   two-dimensional hard edge
+     !! \f$r < \sqrt{x^2+y^2}\f$.
     pure function hardedge_inner_1( x, y, mskrad ) result( w )
         real,intent(in) :: x, y, mskrad
         real :: w
@@ -842,6 +846,7 @@ contains
     end function
 
     !>   three-dimensional hard edge
+     !! \f$r < \sqrt{ x^2+y^2+z^2 }\f$.
     pure function hardedge_inner_2( x, y, z, mskrad ) result( w )
         real,intent(in) :: x, y, z, mskrad
         real :: w
@@ -879,6 +884,7 @@ contains
     end function cosedge_2
 
     !>   three-dimensional gaussian edge
+     !! \f$r = \cos{(1+{(\pi{r - (d+2m)/(d-2m)})})}\f$.
     pure function cosedge_3( x, y, z, box, mskrad ) result( w )
         real, intent(in)    :: x, y, z   !< input points
         integer, intent(in) :: box       !< window size
@@ -939,6 +945,7 @@ contains
     end function
 
     !>   returns the shell to which the voxel with address h,k,l belongs
+    !! \f$s = \nint{\sqrt{h^2+k^2+l^2}}\f$.
     pure function shell( h, k, l ) result( sh )
         integer, intent(in) :: h, k, l
         integer :: sh

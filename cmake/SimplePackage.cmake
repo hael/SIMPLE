@@ -38,7 +38,7 @@ HOMEPAGE: http://simplecryoem.com
 LICENCE: GNU Public licence (version 3 or newer)
 AUTHORS: Hans Elmlund, Dominika Elmlund, Cyril Reboul, Michael Eager, Fred Bonnet
 
- What is new in SIMPLE release 2.5
+ What is new in SIMPLE release ${SIMPLE_VERSION}
 
 – A new DDD movie pre-processing program unblur that implements motion
   correction based the same principal strategy as Grigorieff’s program (hence

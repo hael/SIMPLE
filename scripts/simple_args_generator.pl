@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 #------------------------------------------------------------------------------!
-# SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
+# SIMPLE              Elmlund & Elmlund Lab          simplecryoem.com          !
 #------------------------------------------------------------------------------!
 use warnings;
 use strict;

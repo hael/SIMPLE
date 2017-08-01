@@ -1,5 +1,5 @@
 /*-----------------------------------------------------------------------------*/
-/* SIMPLE v2.5          Elmlund & Elmlund Lab         simplecryoem.com         */
+/* SIMPLE v3.0          Elmlund & Elmlund Lab         simplecryoem.com         */
 /*-----------------------------------------------------------------------------*/
 /** Simple timer macros
 * \brief C/FORTRAN preprocessor macros for timing module blocks
