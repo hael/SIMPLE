@@ -309,7 +309,7 @@ contains
 
     !>  \brief  Constructor for simple_image class
     !!
-    !!\param self this image
+    !!\param self this image object
     !!\param ldim 3D dimensions
     !!\param smpd sampling distance
     !!\param imgkind type of image, options 'em' (default), 'xfel'
@@ -419,7 +419,7 @@ contains
     end subroutine disc
 
     !>  \brief copy is a constructor that copies the input object
-    !! \param self this object
+    !! \param self image object
     !! \param self_in rhs object
     !!
     subroutine copy( self, self_in )
@@ -446,7 +446,7 @@ contains
     end subroutine copy
 
     !> mic2spec calculates the average powerspectrum over a micrograph
-    !! \param self this object
+    !! \param self image object
     !! \param box boxwidth filter size
     !! \param speckind
     !! \return img_out processed image
@@ -573,7 +573,7 @@ contains
     end subroutine window
 
     !>  window_slim  extracts a particle image from a box as defined by EMAN 1.9
-    !! \param self_in this object
+    !! \param self_in image object
     !! \param coord x,y coordinates
     !! \param box  boxwidth filter size
     !! \param self_out output image object
@@ -1794,8 +1794,8 @@ contains
 
     !>  \brief  checks for same dimensions, overloaded as (.eqdims.)
     !!
-    !! \param self1
-    !! \param self2
+    !! \param self1 image object
+    !! \param self2 image object
     !! \return logical flag if two image objects have same dimensions
     pure function same_dims_1( self1, self2 ) result( yep )
         class(image), intent(in) :: self1, self2
@@ -1822,8 +1822,8 @@ contains
 
     !>  \brief  checks for same sampling distance, overloaded as (.eqsmpd.)
     !!
-    !! \param self1
-    !! \param self2
+    !! \param self1 image object
+    !! \param self2 image object
     !! \return logical flag if image objects have same sampling distance
     pure  function same_smpd( self1, self2 ) result( yep )
         class(image), intent(in) :: self1, self2
@@ -1837,8 +1837,8 @@ contains
 
     !>  \brief same_kind  checks if image are of the same kind
     !!
-    !! \param self1
-    !! \param self2
+    !! \param self1 image object
+    !! \param self2 image object
     !! \return  yep logical flag if image objects have same kind
     pure function same_kind( self1, self2 ) result( yep )
         class(image), intent(in) :: self1, self2
@@ -1985,7 +1985,7 @@ contains
     end function l1weights
 
     !>  \brief add_1 is for image summation, not overloaded
-    !! \param self_to_add
+    !! \param self_to_add image object
     !! \param w
     !!
     subroutine add_1( self, self_to_add, w )
@@ -2123,7 +2123,7 @@ contains
     end function subtraction
 
     !>  \brief subtr_1 is for image subtraction,  not overloaded
-    !! \param self_to_subtr
+    !! \param self_to_subtr image object
     !! \param w
     !!
     subroutine subtr_1( self, self_to_subtr, w )
@@ -2217,8 +2217,8 @@ contains
     end subroutine subtr_4
 
     !>  \brief multiplication is for image multiplication(*)
-    !! \param self1
-    !! \param self2
+    !! \param self1 image object
+    !! \param self2 image object
     !! \return  self
     !!
     function multiplication( self1, self2 ) result( self )
@@ -3366,8 +3366,8 @@ contains
     end subroutine acf
 
     !>  \brief ccf calculates the cross-correlation function between two images
-    !! \param self1
-    !! \param self2
+    !! \param self1 image object
+    !! \param self2 image object
     !! \return  cc
     !!  calculates thecross-correlation function between two images
     function ccf( self1, self2 ) result( cc )
@@ -4568,8 +4568,8 @@ contains
 
     !>  \brief real_corr_2 is for calculating a real-space correlation coefficient between images within a mask
     !>  Input mask is assumed binarized
-    !! \param self1
-    !! \param self2
+    !! \param self1 image object
+    !! \param self2 image object
     !! \param maskimg
     !! \return  r
     !!
@@ -4628,8 +4628,8 @@ contains
     end subroutine prenorm4real_corr
 
     !>  \brief real_corr_prenorm is for calculating a real-space correlation coefficient between images (reference is pre-normalised)
-    !! \param self_ref
-    !! \param self_ptcl
+    !! \param self_ref image object
+    !! \param self_ptcl image object
     !! \param sxx_ref
     !! \return  r
     !!
@@ -4655,8 +4655,8 @@ contains
     end function real_corr_prenorm
 
     !>  \brief rank_corr is for calculating a rank correlation coefficient between 'rankified' images
-    !! \param self1
-    !! \param self2
+    !! \param self1 image object
+    !! \param self2 image object
     !! \return  r
     !!
     function rank_corr( self1, self2 ) result( r )
@@ -4684,8 +4684,8 @@ contains
     !>  \brief is for calculate a real-space distance between images within a mask
     !!         assumes that images are normalized
 !> real_dist
-    !! \param self1
-    !! \param self2
+    !! \param self1 image object
+    !! \param self2 image object
     !! \param msk
     !! \return  r
     !!
@@ -4712,8 +4712,8 @@ contains
     end function real_dist
 
     !> \brief fsc is for calculation of Fourier ring/shell correlation
-    !! \param self1
-    !! \param self2
+    !! \param self1 image object
+    !! \param self2 image object
     !! \param res
     !! \param corrs
     !!
@@ -4832,9 +4832,9 @@ contains
     !>  \brief  returns the real and imaginary parts of the phase shift at point
     !!          logi in a Fourier transform caused by the origin shift in shvec
 !> oshift_1
-    !! \param logi
-    !! \param shvec
-    !! \param ldim
+    !! \param logi index in Fourier domain
+    !! \param shvec origin shift
+    !! \param ldim image dimensions
     !! \return  comp
     !!
     function oshift_1( self, logi, shvec, ldim ) result( comp )
@@ -4857,9 +4857,9 @@ contains
     !>  \brief  returns the real and imaginary parts of the phase shift at point
     !!          logi in a Fourier transform caused by the origin shift in shvec
 !> oshift_2
-    !! \param logi
-    !! \param shvec
-    !! \param ldim
+    !! \param logi index in Fourier domain
+    !! \param shvec origin shift
+    !! \param ldim image dimensions
     !! \return  comp
     !!
     function oshift_2( self, logi, shvec, ldim ) result( comp )
@@ -4873,8 +4873,8 @@ contains
 
     !>  \brief  returns the real argument transfer matrix components at point logi in a Fourier transform
 !> gen_argtransf_comp
-    !! \param logi
-    !! \param ldim
+    !! \param logi index in Fourier domain
+    !! \param ldim image dimensions
     !! \return  arg
     !!
     function gen_argtransf_comp( self, logi, ldim ) result( arg )
@@ -4901,7 +4901,7 @@ contains
     end function gen_argtransf_comp
 
     !> \brief gen_argtransf_mats  is for generating the argument transfer matrix for fast shifting of a FT
-    !! \param transfmats
+    !! \param transfmats transfer matrix 
     !!
     subroutine gen_argtransf_mats( self, transfmats )
         class(image), intent(inout) :: self, transfmats(3)
@@ -4930,9 +4930,9 @@ contains
     ! MODIFIERS
 
     !> \brief insert  inserts a box*box particle image into a micrograph
-    !! \param self_in
-    !! \param coord
-    !! \param self_out
+    !! \param self_in input image
+    !! \param coord box coordinates
+    !! \param self_out output image
     !!
     subroutine insert(self_in, coord, self_out )
         class(image), intent(in)   :: self_in
@@ -4988,8 +4988,8 @@ contains
     end subroutine ran
 
     !> \brief gauran  is for making a Gaussian random image (0,1)
-    !! \param mean
-    !! \param sdev
+    !! \param mean Mean of noise
+    !! \param sdev Standard deviation of noise
     !!
     subroutine gauran( self, mean, sdev )
         class(image), intent(inout) :: self
@@ -5008,7 +5008,7 @@ contains
 
     !> \brief add_gauran  is for adding Gaussian noise to an image
     !! \param snr signal-to-noise ratio
-    !! \param noiseimg
+    !! \param noiseimg output image
     !!
     subroutine add_gauran( self, snr, noiseimg )
         class(image), intent(inout)        :: self
@@ -5032,7 +5032,7 @@ contains
     end subroutine add_gauran
 
     !>  \brief dead_hot_positions is for generating dead/hot pixel positions in an image
-    !! \param frac
+    !! \param frac fraction of ON/OFF pixels
     !! \return  pos binary 2D map
     !!
     function dead_hot_positions( self, frac ) result( pos )
@@ -5234,7 +5234,7 @@ contains
     end subroutine salt_n_pepper
 
     !>  \brief square just a binary square for testing purposes
-    !! \param sqrad
+    !! \param sqrad half width of square 
     !!
     subroutine square( self, sqrad )
         class(image), intent(inout) :: self
@@ -5263,6 +5263,8 @@ contains
     end subroutine square
 
     !>  \brief  just a corner filling fun for testing purposes
+    !! \param sqrad half width of square
+    !!
     subroutine corners( self, sqrad )
         class(image), intent(inout) :: self
         integer, intent(in)         :: sqrad
@@ -5293,9 +5295,8 @@ contains
     end subroutine corners
 
     !> before_after to generate a before (left) and after (right) image
-    !! \param left
-    !! \param right
-    !! \return ba
+    !! \param left.right input images
+    !! \return ba output montage
     !!
     function before_after( left, right ) result( ba )
         class(image), intent(in) :: left, right
@@ -5318,7 +5319,7 @@ contains
     end function before_after
 
     !> \brief gauimg  just a Gaussian fun for testing purposes
-    !! \param wsz
+    !! \param wsz window size
     !!
     subroutine gauimg( self, wsz)
         class(image), intent(inout) :: self
@@ -5829,7 +5830,7 @@ contains
         frac = sum_masked/sum_unmasked
     end function fmaskv_1
 
-    !>  \brief fmaskv_2 is for calculating the fractional area/volume of the mask
+    !> \brief fmaskv_2 is for calculating the fractional area/volume of the mask
     !> 
     !! \return  frac fraction of masked pixels
     !!
@@ -5859,8 +5860,8 @@ contains
     end subroutine neg
 
     !> \brief resize_nn for image resizing using nearest neighbor interpolation
-    !! \param self_in
-    !! \param self_out
+    !! \param self_in image object
+    !! \param self_out image object
     !!
     subroutine resize_nn( self_in, self_out )
         class(image), intent(inout) :: self_in, self_out
@@ -5933,8 +5934,8 @@ contains
     end subroutine resize_bilin
 
     !> \brief pad is a constructor that pads the input image to input ldim
-    !! \param self_in
-    !! \param self_out
+    !! \param self_in image object
+    !! \param self_out image object
     !! \param backgr
     !!
     subroutine pad( self_in, self_out, backgr )
@@ -6014,8 +6015,8 @@ contains
     end subroutine pad
 
     !> \brief pad_mirr is a constructor that pads the input image to input ldim in real space using mirroring
-    !! \param self_in
-    !! \param self_out
+    !! \param self_in image object
+    !! \param self_out image object
     !!
     subroutine pad_mirr( self_in, self_out )
         use simple_winfuns, only: winfuns
@@ -6073,8 +6074,8 @@ contains
     end subroutine pad_mirr
 
     !> \brief clip is a constructor that clips the input image to input ldim
-    !! \param self_in
-    !! \param self_out
+    !! \param self_in image object
+    !! \param self_out image object
     !!
     subroutine clip( self_in, self_out )
         use simple_winfuns, only: winfuns
@@ -6181,7 +6182,7 @@ contains
 
     !> \brief norm  is for statistical normalization of an image
     !! \param hfun
-    !! \param err
+    !! \param err error flag
     !!
     subroutine norm( self, hfun, err )
         class(image), intent(inout)            :: self
@@ -6208,8 +6209,8 @@ contains
     end subroutine norm
 
     !> \brief norm_ext  is for normalization of an image using inputted average and standard deviation
-    !! \param avg
-    !! \param sdev
+    !! \param avg Average
+    !! \param sdev Standard deviation
     !!
     subroutine norm_ext( self, avg, sdev )
         class(image), intent(inout) :: self
@@ -6222,8 +6223,8 @@ contains
     end subroutine norm_ext
 
     !> \brief noise_norm  normalizes the image according to the background noise
-    !! \param msk
-    !! \param errout
+    !! \param msk Mask value
+    !! \param errout error flag
     !!
     subroutine noise_norm( self, msk, errout )
         class(image),      intent(inout) :: self
@@ -6265,8 +6266,8 @@ contains
     end subroutine noise_norm
 
     !> \brief radius_norm  normalizes the image based on a central sphere of input radius
-    !! \param radius
-    !! \param errout
+    !! \param radius Radius of sphere
+    !! \param errout error flag
     !!
     subroutine radius_norm( self, radius, errout )
         class(image),      intent(inout) :: self
@@ -6353,7 +6354,7 @@ contains
     end subroutine roavg
 
     !> \brief rtsq  rotation of image by quadratic interpolation (from spider)
-    !! \param self_in
+    !! \param self_in image object
     !! \param ang angle of rotation
     !! \param shxi shift in x axis
     !! \param shyi shift in y axis
@@ -6449,10 +6450,10 @@ contains
 
     !>  \brief  cure_outliers for replacing extreme outliers with median of a 13x13 neighbourhood window
     !!          only done on negative values, assuming white ptcls on black bkgr
-    !! \param ncured
-    !! \param nsigma
-    !! \param deadhot
-    !! \param outliers
+    !! \param ncured number of corrected points
+    !! \param nsigma number of std. dev. to set upper and lower limits
+    !! \param deadhot output index of corrected pixels
+    !! \param outliers -
     !!
     subroutine cure_outliers( self, ncured, nsigma, deadhot, outliers )
         use simple_stat, only: moment

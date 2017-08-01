@@ -163,7 +163,7 @@ contains
 
     !>  \brief is forprinting the header
     subroutine print_header( self )
-        class(imgfile), intent(in) :: self
+        class(imgfile), intent(in) :: self   !< Imagefile object 
         call self%overall_head%print_imghead()
     end subroutine print_header
 
@@ -171,7 +171,7 @@ contains
 
     !>  \brief open the file(s) for the imgfile
     subroutine open_local( self, del_if_exists, rwaction )
-        class(imgfile),             intent(inout) :: self
+        class(imgfile),             intent(inout) :: self   !< Imagefile object 
         logical, optional,          intent(in) :: del_if_exists !< overwrite flag
         character(len=*), optional, intent(in) :: rwaction      !< read/write flag
         character(len=9) :: rw_str
@@ -219,7 +219,7 @@ contains
 
     !>  \brief  close the file(s)
     subroutine close_nowrite( self )
-        class(imgfile), intent(inout) :: self
+        class(imgfile), intent(inout) :: self   !< Imagefile object 
         integer :: ret
         if( is_open(self%funit) )then
         !    flush(fnum(self%funit))
@@ -234,7 +234,7 @@ contains
 
     !>  \brief  Check whether the file exists on disk
     logical function exists( self )
-        class(imgfile), intent(inout) :: self
+        class(imgfile), intent(inout) :: self   !< Imagefile object 
         character(len=STDLEN)         :: new_fname
         exists = file_exists(self%fname)
         if( exists) exists = exists .and. file_size(self%fname) .gt. 0
@@ -247,7 +247,7 @@ contains
     !!         if .hed: I
     !!         else: N
     pure function get_format( self )
-        class(imgfile), intent(in) :: self
+        class(imgfile), intent(in) :: self   !< Imagefile object 
         character(len=1)           :: get_format
         get_format = self%head_format
     end function get_format
@@ -255,7 +255,7 @@ contains
     !>  \brief  for translating an image index to record indices in the stack
     !! \param[out] hedinds,iminds header and image indices in the stack
     subroutine slice2recpos( self, nr, hedinds, iminds )
-        class(imgfile), intent(in), target :: self
+        class(imgfile), intent(in), target :: self   !< Imagefile object 
         integer, intent(in)                :: nr      !< num images
         integer(kind=8), intent(out)       :: hedinds(2), iminds(2)
         integer                            :: cnt, j, dims(3)
@@ -291,7 +291,7 @@ contains
     !>  \brief  for translating an image index to record indices in the stack
     !! \param[out] hedinds,iminds indices in the stack
     subroutine slice2bytepos( self, nr, hedinds, iminds )
-        class(imgfile), intent(in)     :: self
+        class(imgfile), intent(in)     :: self   !< Imagefile object 
         integer, intent(in)            :: nr                    !< num in stack
         integer(kind=8), intent(inout) :: hedinds(2), iminds(2)
         integer                        :: cnt, j
@@ -327,7 +327,7 @@ contains
 
     !>  \brief  read a slice of the image file from disk into memory
     subroutine rSlice( self, slice_nr, rarr )
-        class(imgfile), intent(inout)    :: self
+        class(imgfile), intent(inout)    :: self        !< Imagefile object 
         integer, intent(in)              :: slice_nr    !< Number of the slice to read in (the first slice in the file is numbered 1)
         real, intent(inout), allocatable :: rarr(:,:,:) !< Array of reals. Will be (re)allocated if needed
         call self%rwSlices('r',slice_nr,slice_nr,rarr)
@@ -336,7 +336,7 @@ contains
 
     !>  \brief  write a slice of the image file from memory to disk
     subroutine wSlice( self, slice_nr, rarr, ldim )
-        class(imgfile), intent(inout) :: self
+        class(imgfile), intent(inout) :: self        !< Imagefile object 
         integer, intent(in)           :: slice_nr    !<  Number of the slice to read in (the first slice in the file is numbered 1)
         real, intent(inout)           :: rarr(:,:,:) !<  Array of reals. Will be (re)allocated if needed
         integer, intent(in)           :: ldim(3)     !<  Logical size of the array. This will be written to disk: rarr(1:ldim_1,:,:)
@@ -346,7 +346,7 @@ contains
 
     !>  \brief  reads an image or stack header
     subroutine rHead( self, slice, head, ldim )
-        class(imgfile), intent(inout), target :: self      !<
+        class(imgfile), intent(inout), target :: self      !< Imagefile object 
         integer, intent(in)                   :: slice     !< stack slice or zero for individual
         class(imghead), intent(inout)         :: head      !< img head object
         integer, intent(inout), optional      :: ldim(3)   !< for reading the overall stack header of SPIDER files
@@ -405,7 +405,7 @@ contains
 
     !>  \brief  writes an image or stack header
     subroutine wHead( self, slice, head )
-        class(imgfile), intent(inout), target   :: self
+        class(imgfile), intent(inout), target   :: self    !< Imagefile object 
         integer, intent(in)                     :: slice   !< stack slice
         class(imghead), intent(inout), optional :: head    !< img head object
         class(imghead), pointer                 :: ptr=>null()
@@ -449,7 +449,7 @@ contains
         use, intrinsic :: iso_c_binding
         use simple_imghead, only: ImgHead, SpiImgHead, MrcImgHead, dataRbytes, dataRinteger, dataRfloat
         use simple_math, only: is_even
-        class(imgfile), target, intent(inout) :: self         !< instance
+        class(imgfile), target, intent(inout) :: self         !< instance  Imagefile object 
         character(len=1),       intent(in)    :: mode         !< read (r) or write (w)
         integer,                intent(in)    :: first_slice  !< First slice (the first slice in the file is numbered 1)
         integer,                intent(in)    :: last_slice   !< Last slice
@@ -762,7 +762,7 @@ contains
 
     !>  \brief  Print out basic information about the file
     subroutine print_imgfile( self )
-        class(imgfile), intent(in) :: self
+        class(imgfile), intent(in) :: self   !< Imagefile object 
         write(*,'(/2a)') 'Summary information for file ', trim(adjustl(self%fname))
         call self%overall_head%print_imghead()
         write(*,'(a)') ' '
@@ -770,7 +770,7 @@ contains
 
     !>  \brief  Return the dimension of the image stack
     function getDims( self )
-        class(imgfile), intent(in) :: self
+        class(imgfile), intent(in) :: self   !< Imagefile object 
         integer :: getDims(3)
         getDims = self%overall_head%getDims()
     end function getDims
@@ -785,7 +785,7 @@ contains
 
     !>  \brief Return the fname
     function getFname( self )
-        class(imgfile), intent(in) :: self
+        class(imgfile), intent(in) :: self   !< Imagefile object 
         character(len=STDLEN)      :: getFname
         getFname = self%fname
     end function getFname
@@ -798,27 +798,27 @@ contains
 
     !>  \brief  Return the format descriptor of the stack
     integer function getIform( self )
-        class(imgfile), intent(in) :: self
+        class(imgfile), intent(in) :: self   !< Imagefile object 
         getIform = self%overall_head%getIform()
     end function getIform
 
     !>  \brief  Return the format descriptor of the stack
     integer function getMode( self )
-        class(imgfile), intent(in) :: self
+        class(imgfile), intent(in) :: self   !< Imagefile object 
         getMode = self%overall_head%getMode()
     end function getMode
 
     !>  \brief  Set the format descriptor of the stack
     subroutine setIform( self, iform )
-        class(imgfile), intent(inout) :: self
-        integer, intent(in)           :: iform
+        class(imgfile), intent(inout) :: self   !< Imagefile object 
+        integer, intent(in)           :: iform   !< format descriptor
         call self%overall_head%setIform(iform)
         self%was_written_to = .true.
     end subroutine setIform
 
     !>  \brief  Set the pixel size of the stack
     subroutine setPixSz( self, smpd )
-        class(imgfile), intent(inout) :: self
+        class(imgfile), intent(inout) :: self !< Imagefile object 
         real, intent(in)              :: smpd !< sample resolution or pixel size (angstroms)
         call self%overall_head%setPixSz(smpd)
         self%was_written_to = .true.
@@ -826,7 +826,7 @@ contains
 
     !>  \brief  Set the pixel size of the stack
     subroutine setRMSD( self, dev )
-        class(imgfile), intent(inout) :: self
+        class(imgfile), intent(inout) :: self !< Imagefile object 
         real,           intent(in)    :: dev !< rmsd
         call self%overall_head%setRMSD(dev)
         self%was_written_to = .true.
@@ -834,7 +834,7 @@ contains
 
     !>  \brief  Set the mode of the MRC file
     subroutine setMode( self, mode )
-        class(imgfile), intent(inout) :: self
+        class(imgfile), intent(inout) :: self !< Imagefile object 
         integer, intent(in)           :: mode !< MRC mode type
         call self%overall_head%setMode(mode)
         self%was_written_to = .true.
@@ -842,7 +842,7 @@ contains
 
     !>  \brief  for setting the logical dimensions
     subroutine setDims( self, ldim )
-        class(imgfile), intent(inout) :: self
+        class(imgfile), intent(inout) :: self !< Imagefile object 
         integer, intent(in)           :: ldim(3) !< dimensions
         call self%overall_head%setDims(ldim)
         self%was_written_to = .true.

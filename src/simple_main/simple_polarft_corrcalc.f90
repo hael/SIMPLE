@@ -100,13 +100,20 @@ contains
     ! CONSTRUCTORS
     
     !>  \brief  is a constructor
+    !! \param pfromto  from/to particle indices (in parallel execution)
+    !! \param nrefs    the number of references (logically indexded [1,nrefs])
+    !! \param ring2    radius of molecule
+    !! \param ldim     logical dimensions of original cartesian image                              
+    !! \param smpd     sampling distance                                                           
+    !! \param kfromto  Fourier index range                                                         
+    
     subroutine new( self, nrefs, pfromto, ldim, smpd, kfromto, ring2, ctfflag, isxfel )
         use simple_math, only: rad2deg, is_even, round2even
-        class(polarft_corrcalc),    intent(inout) :: self
+        class(polarft_corrcalc),    intent(inout) :: self    !< this object
         integer,                    intent(in)    :: nrefs, pfromto(2), ldim(3), kfromto(2), ring2
         real,                       intent(in)    :: smpd
-        character(len=*),           intent(in)    :: ctfflag
-        character(len=*), optional, intent(in)    :: isxfel
+        character(len=*),           intent(in)    :: ctfflag !< are we using ctf
+        character(len=*), optional, intent(in)    :: isxfel  !< are we using xfel type
         integer  :: alloc_stat, irot, k
         logical  :: even_dims, test(3)
         real(sp) :: ang
@@ -200,34 +207,44 @@ contains
 
     !>  \brief  sets reference pft iref
     subroutine set_ref_pft( self, iref, pft )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: iref
-        complex(sp),             intent(in)    :: pft(:,:)
+        class(polarft_corrcalc), intent(inout) :: self     !< this object
+        integer,                 intent(in)    :: iref     !< reference index
+        complex(sp),             intent(in)    :: pft(:,:) !< reference pft
         self%pfts_refs(iref,:,:) = pft(:self%refsz,:)
     end subroutine set_ref_pft
 
     !>  \brief  sets particle pft iptcl
     subroutine set_ptcl_pft( self, iptcl, pft )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: iptcl
-        complex(sp),             intent(in)    :: pft(:,:)
+        class(polarft_corrcalc), intent(inout) :: self  !< this object
+        integer,                 intent(in)    :: iptcl  !< particle index
+        complex(sp),             intent(in)    :: pft(:,:) !< particle's pft
         self%pfts_ptcls(iptcl,:self%nrots,:)   = pft
         self%pfts_ptcls(iptcl,self%nrots+1:,:) = pft ! because rot dim is expanded
         ! calculate the square sum required for correlation calculation
         call self%memoize_sqsum_ptcl(iptcl)
     end subroutine set_ptcl_pft
 
-    !>  \brief  sets a reference Fourier component
+    !>  \brief set_ref_fcomp sets a reference Fourier component
+    !! \param iref reference index 
+    !! \param irot rotation index
+    !! \param k  index (third dim ptfs_refs)
+    !! \param comp Fourier component
+    !!
     subroutine set_ref_fcomp( self, iref, irot, k, comp )
-        class(polarft_corrcalc), intent(inout) :: self
+        class(polarft_corrcalc), intent(inout) :: self  !< this object
         integer,                 intent(in)    :: iref, irot, k
         complex(sp),             intent(in)    :: comp
         self%pfts_refs(iref,irot,k) = comp
     end subroutine set_ref_fcomp
     
     !>  \brief  sets a particle Fourier component
+    !! \param iptcl particle index 
+    !! \param irot rotation index
+    !! \param k  index (third dim ptfs_ptcls)
+    !! \param comp Fourier component
+    !!
     subroutine set_ptcl_fcomp( self, iptcl, irot, k, comp )
-        class(polarft_corrcalc), intent(inout) :: self
+        class(polarft_corrcalc), intent(inout) :: self  !< this object
         integer,                 intent(in)    :: iptcl, irot, k
         complex(sp),             intent(in)    :: comp
         self%pfts_ptcls(iptcl,irot,k) = comp
@@ -245,6 +262,10 @@ contains
     end subroutine cp_ptcls2refs
 
     !>  \brief  copies the particles to the references
+    !! \param iref reference index
+    !! \param iptcl particle index 
+    !! \param irot rotation index
+    !!
     subroutine cp_ptcl2ref( self, iptcl, iref, irot )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iptcl, iref
@@ -257,6 +278,7 @@ contains
     end subroutine cp_ptcl2ref
 
     !>  \brief  zeroes the iref reference
+     !! \param iref reference index
     subroutine zero_ref( self, iref )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref
@@ -345,7 +367,7 @@ contains
     !!         corresponding to in-plane rotation index roind
     function get_rot( self, roind ) result( rot )
         class(polarft_corrcalc), intent(in) :: self
-        integer,                 intent(in) :: roind
+        integer,                 intent(in) :: roind !<  in-plane rotation index
         real(sp) :: rot
         if( roind < 1 .or. roind > self%nrots )then
             stop 'roind is out of range; get_rot; simple_polarft_corrcalc'
@@ -357,7 +379,7 @@ contains
     !!         index corresponding to continuous rotation rot
     function get_roind( self, rot ) result( ind )
         class(polarft_corrcalc), intent(in) :: self
-        real(sp),                intent(in) :: rot
+        real(sp),                intent(in) :: rot !<  continuous rotation 
         real(sp) :: dists(self%nrots)
         integer  :: ind, loc(1)
         dists = abs(self%angtab-rot)
@@ -369,11 +391,15 @@ contains
     !>  \brief is for getting the discrete in-plane rotational
     !!         indices within a window of +-winsz degrees of ang
     !!         For use together with gencorrs
+    !! \param ang angle
+    !! \param winsz window size
+    !! \return roind_vec in-plane rotational indices
+    !!
     function get_win_roind( self, ang, winsz )result( roind_vec )
         use simple_math, only: rad2deg
         class(polarft_corrcalc), intent(in) :: self
         real(sp),                intent(in) :: ang, winsz
-        integer, allocatable :: roind_vec(:)
+        integer, allocatable :: roind_vec(:)  
         real(sp) :: dist(self%nrots)
         integer  :: i, irot, nrots, alloc_stat
         if(ang>360. .or. ang<TINY)stop 'input angle outside of the conventional range; simple_polarft_corrcalc::get_win_roind'
@@ -405,6 +431,8 @@ contains
     end function get_coord
     
     !>  \brief  returns polar Fourier transform of particle iptcl in rotation irot
+    !! \param iref reference index
+    !! \param iptcl particle index 
     function get_ptcl_pft( self, iptcl, irot ) result( pft )
         class(polarft_corrcalc), intent(in) :: self
         integer,                 intent(in) :: iptcl, irot
@@ -416,6 +444,8 @@ contains
     end function get_ptcl_pft
     
     !>  \brief  returns polar Fourier transform of reference iref
+    !! \param iref reference index
+   
     function get_ref_pft( self, iref ) result( pft )
         class(polarft_corrcalc), intent(in) :: self
         integer,                 intent(in) :: iref
@@ -436,6 +466,7 @@ contains
     ! PRINTERS/VISUALISERS
 
     !>  \brief  is for plotting a particle polar FT
+    !! \param iptcl particle index 
     subroutine vis_ptcl( self, iptcl )
         use gnufor2
         class(polarft_corrcalc), intent(in) :: self
@@ -445,6 +476,8 @@ contains
     end subroutine vis_ptcl
     
     !>  \brief  is for plotting a particle polar FT
+    !! \param iref reference index
+   
     subroutine vis_ref( self, iref )
         use gnufor2
         class(polarft_corrcalc), intent(in) :: self
@@ -471,6 +504,7 @@ contains
     ! MEMOIZERS
 
     !>  \brief  is for memoization of the complex square sums required for correlation calculation
+    !! \param iptcl particle index 
     subroutine memoize_sqsum_ptcl( self, iptcl )
         use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
@@ -488,7 +522,7 @@ contains
     subroutine write_pfts_ptcls( self, fname )
         use simple_filehandling, only: get_fileunit
         class(polarft_corrcalc), intent(in) :: self
-        character(len=*),        intent(in) :: fname
+        character(len=*),        intent(in) :: fname !< filename
         integer :: funit, io_stat
         funit = get_fileunit()
         open(unit=funit, status='REPLACE', action='WRITE', file=trim(fname), access='STREAM')
@@ -527,7 +561,13 @@ contains
     end subroutine read_pfts_ptcls
     
     ! MODIFIERS
-
+    !> prep_ref4corr
+    !! \param iref reference index
+    !! \param iptcl particle index 
+    !! \param pft_ref 
+    !! \param sqsum_ref 
+    !! \param kstop 
+    !!
     subroutine prep_ref4corr( self, iptcl, iref, pft_ref, sqsum_ref, kstop )
         use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
@@ -590,7 +630,13 @@ contains
 
     ! CALCULATORS
 
-    !>  \brief  is for generating a matrix of CTF values
+    !>  \brief create_polar_ctfmat  is for generating a matrix of CTF values
+    !! \param tfun transfer function object
+    !! \param dfx,dfy resolution along Fourier axes 
+    !! \param angast astigmatic angle
+    !! \param endrot number of rotations
+    !! \return ctfmat matrix with CTF values
+    !!
     function create_polar_ctfmat( self, tfun, dfx, dfy, angast, endrot ) result( ctfmat )
         !$ use omp_lib
         !$ use omp_lib_kinds
@@ -648,7 +694,10 @@ contains
         end do
     end subroutine create_polar_ctfmats
 
-    !>  \brief  is for generating rotational correlations
+    !>  \brief gencorrs is for generating rotational correlations
+    !! \param iref reference index
+    !! \param iptcl particle index
+    !! \param roind_vec vector of rotational indices
     function gencorrs_1( self, iref, iptcl, roind_vec ) result( cc )
         use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self        !< instance
@@ -681,8 +730,11 @@ contains
     end function gencorrs_1
 
     !>  \brief  is for generating rotational correlations
+    !! \param iref reference index
+    !! \param iptcl particle index
+    !! \param roind_vec vector of rotational indices
     function gencorrs_2( self, iref, iptcl, kstop, roind_vec ) result( cc )
-        use simple_math, only: csq
+    use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self        !< instance
         integer,                 intent(in)    :: iref, iptcl !< ref & ptcl indices
         integer,                 intent(in)    :: kstop       !< last frequency
@@ -721,8 +773,11 @@ contains
     end function gencorrs_2
 
     !>  \brief  is for generating resolution dependent correlations
+    !! \param iref reference index
+    !! \param iptcl particle index
+    !! \param roind_vec vector of rotational indices
     function genfrc( self, iref, iptcl, irot ) result( frc )
-        use simple_math, only: csq
+    use simple_math, only: csq
         class(polarft_corrcalc), target, intent(inout) :: self              !< instance
         integer,                         intent(in)    :: iref, iptcl, irot !< reference, particle, rotation
         real(sp), allocatable :: frc(:)
@@ -760,6 +815,9 @@ contains
     end function genfrc
 
     !>  \brief  for calculating the correlation between reference iref and particle iptcl in rotation irot
+    !! \param iref reference index
+    !! \param iptcl particle index
+    !! \param roind_vec vector of rotational indices
     function corr_1( self, iref, iptcl, irot ) result( cc )
         class(polarft_corrcalc), intent(inout) :: self              !< instance
         integer,                 intent(in)    :: iref, iptcl, irot !< reference, particle, rotation
@@ -778,6 +836,9 @@ contains
     end function corr_1
 
     !>  \brief  for calculating the on-fly shifted correlation between reference iref and particle iptcl in rotation irot
+    !! \param iref reference index
+    !! \param iptcl particle index
+    !! \param roind_vec vector of rotational indices
     function corr_2( self, iref, iptcl, irot, shvec ) result( cc )
         use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self              !< instance
@@ -811,6 +872,9 @@ contains
     end function corr_2
 
     !>  \brief  for calculating the normalized Euclidean distance between reference & particle
+    !! \param iref reference index
+    !! \param iptcl particle index
+    !! \param roind_vec vector of rotational indices
     function euclid( self, iref, iptcl, irot, bfac ) result( dist )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl, irot

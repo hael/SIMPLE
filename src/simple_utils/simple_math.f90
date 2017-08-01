@@ -136,19 +136,20 @@ contains
 
     ! JIFFYS
 
-    !>  nvoxfind_1  to find the volume in number of voxels, given molecular weight
+    !> \brief nvoxfind_1  to find the volume in number of voxels, given molecular weight
     !! \param smpd sampling distance in angstroms (SI unit \f$\si{\angstrom}= \si{1e-10}{\metre}\f$)
-    !! \param mwkda molecular weight \f$M_{\mathsf{molecule}}\f$ in kDa (SI unit \f$\si{\kilo\dalton}= \SI{1e-10}{\metre}\f$, one dalton is the mass of 1 hydrogen atom  \SI{1.6727e-27}{\kilogram}\f$)
-    !! Protein density \f$\rho_{\mathsf{prot}}\f$ is defined as \f$\si{1.43}{\gram\per\centimetre\cubed}\f$
+    !! \param mwkda molecular weight \f$M_{\mathrm{molecule}}\f$ in kDa (SI unit \f$\si{\kilo\dalton}= \SI{1e-10}{\metre}\f$, one dalton is the mass of 1 hydrogen atom  \SI{1.6727e-27}{\kilo\gram}\f$)
+    !!
+    !! \detail Protein density \f$\rho_{\mathrm{prot}}\f$ is defined as \f$\si{1.43}{\gram\per\centimetre\cubed}\f$
     !!   see  Quillin and Matthews, Accurate calculation of the density of proteins, doi:10.1107/S090744490000679X
-    !! protein density in \f$\si{\gram\per\angstrom\cubed},\ \rho_{\mathsf{prot}\si{\angstrom}} = \rho_{\mathsf{prot}} \num{1e-24}\f$
-    !! unit voxel volume v in \f$\si{\per\angstrom\cubed},\ v  = \mathsf{smpd}^3 \f$
-    !! mass of protein in Da, \f$M_\mathsf{prot Da} = \mathsf{mwkda}\times\num{1e3}\f$
-    !! mass of protein in kg \f$M_\mathsf{kg prot} = M_\mathsf{prot Da}*M_{Hydrogen (\mathsf{kg/Da})\f$
+    !! protein density in \f$\si{\gram\per\angstrom\cubed},\ \rho_{\mathrm{prot}\si{\angstrom}} = \rho_{\mathrm{prot}} \num{1e-24}\f$
+    !! unit voxel volume v in \f$\si{\per\angstrom\cubed},\ v  = \mathrm{smpd}^3 \f$
+    !! mass of protein in Da, \f$M_\mathrm{prot Da} = \mathrm{mwkda}\times\num{1e3}\f$
+    !! mass of protein in kg \f$M_\mathrm{kg prot} = M_\mathrm{prot Da}*M_{Hydrogen (\mathrm{kg/Da})\f$
     !! mass of protein in g\f$  = ((mwkda*1e3)*one_da)*1e3\f$
     !! therefore number of voxels in protein is:
-    !! \f[ N_{\mathsf{vox}} = \frac{ M_{\mathsf{molecule}} }{ \rho_{\mathsf{prot}} \times \frac{1}{v^3} \\
-    !! \f                     \sim \nint {frac{\mathsf{mwkda}\times\num{1e3}\times\num{1.66e-27)} {\num{1.43}\times\num{1e-24}} \times \frac{1}{\mathsf{smpd}^3}}} \f$
+    !! \f[ N_{\mathrm{vox}} = \frac{ M_{\mathrm{molecule}} }{ \rho_{\mathrm{prot}} \times \frac{1}{v^3} \\
+    !! \f                     \sim \nint {frac{\mathrm{mwkda}\times\num{1e3}\times\num{1.66e-27)} {\num{1.43}\times\num{1e-24}} \times \frac{1}{\mathrm{smpd}^3}}} \f$
     !! we must also assume the number of voxels are discrete, hence we must round to the nearest integer
     pure function nvoxfind_1( smpd, mwkda ) result( nvox )
         real, intent(in) :: smpd             !< sampling distance
@@ -156,7 +157,7 @@ contains
         integer          :: nvox             !< nr of voxels
         double precision , parameter :: prot_d = 1.43d0            ! g/cm**3
         double precision , parameter :: one_da = 1.66053892173e-27 ! kg/Da
-!        nvox = nint((((mwkda*1e3)*one_da)*1e3) / (prot_d * 1e-24 * (smpd**3)))
+!        nvox = nint( ( ( (mwkda * 1e3) * one_da ) * 1e3 ) / ( prot_d * 1e-24 * (smpd**3) )  )
         nvox = nint((mwkda*one_da*1e30) / (prot_d * (smpd**3.)))
 
     end function nvoxfind_1

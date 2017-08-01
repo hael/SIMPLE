@@ -15,7 +15,8 @@ contains
 
     !>  \brief  is for raising exception
     subroutine raise_exception_imgfile( n, ldim, routine )
-        integer, intent(in) :: n, ldim(3)   !< num of images and logical dimensions
+        integer, intent(in) :: n            !< num of images
+        integer, intent(in) :: ldim(3)      !< logical dimensions
         character(len=*)    :: routine      !< Error message caller
         if( n < 1 .or. any(ldim == 0))then
             write(*,*) routine
@@ -321,11 +322,10 @@ contains
 
     !>  \brief  is for resizing and clipping
      !! \param fname2resize  output filename
-    !! \param fname  input filename
+    !! \param fname1,fname2  input filenames
     !! \param smpd  sampling distance
     !! \param ldim_new new logical dimension
-    !! \param ldim_clip clipped logical dimension
-    !! \param smpd_new new sampling distance
+    !! \param smpds_new new sampling distance
     !! \param fromptop  index range for copying
     !!
     subroutine resize_imgfile_double( fname2resize, fname1, fname2, smpd, ldims_new, smpds_new, fromptop )
@@ -533,12 +533,12 @@ contains
     !! \param fname2masscen  output filename
     !! \param fname  input filename
     !! \param smpd  sampling distance
-    !! \param  lp,msk,tres low-pass cutoff, threshold and interpolation type
+    !! \param  msk threshold
     subroutine masscen_imgfile( fname2masscen, fname, smpd, lp, neg, msk, tres )
         character(len=*), intent(in) :: fname2masscen, fname
-        real,             intent(in) :: smpd, lp
-        character(len=*), intent(in) :: neg
-        real, optional,   intent(in) :: msk, tres
+        real,             intent(in) :: smpd, lp  !< low-pass cutoff
+        character(len=*), intent(in) :: neg       !< use negative image
+        real, optional,   intent(in) :: msk, tres !< interpolation type
         type(image) :: img
         integer     :: i, n, ldim(3)
         real        :: xyz(3)
@@ -827,7 +827,7 @@ contains
     !! \param smpd sampling distance
     !! \param mode,bfac ctf mode and bfac args
     !! \param o orientation object used for ctf
-
+    !!
     subroutine apply_ctf_imgfile( fname2process, fname, o, smpd, mode, bfac )
         use simple_math,  only: deg2rad
         use simple_oris,  only: oris
@@ -948,8 +948,9 @@ contains
     !>  \brief  is for applying a soft circular mask to all images in stack
     !! \param fname2mask  output filename
     !! \param fname  input filename
-    !! \param maskrad masking radius
-    !! \param  inner,width masking parameters
+    !! \param mskrad masking radius
+    !! \param smpd sampling distance
+    !! \param inner,width masking parameters
     !! \param which  file type
     subroutine mask_imgfile( fname2mask, fname, mskrad, smpd, inner, width, which )
         character(len=*),           intent(in) :: fname2mask, fname
@@ -984,7 +985,7 @@ contains
     !! \param smpd sampling distance
     subroutine bin_imgfile( fname2process, fname, smpd, thres )
         character(len=*), intent(in) :: fname2process, fname
-        real,             intent(in) :: smpd
+        real,             intent(in) :: smpd 
         real, optional,   intent(in) :: thres
         type(image) :: img
         integer     :: n, i, ldim(3)
@@ -1019,7 +1020,7 @@ contains
     !! \param avgname output filename
     subroutine make_avg_imgfile( fname, avgname, smpd )
         character(len=*), intent(in) :: fname, avgname
-        real,             intent(in) :: smpd              !<  sample resolution
+        real,             intent(in) :: smpd              !< sampling distance, resolution
         type(image)                  :: avg, img
         integer                      :: i, n, ldim(3)
         call find_ldim_nptcls(fname, ldim, n)

@@ -13,21 +13,6 @@
 $treeview
 $search
 $mathjax
-<script type="text/javascript">
-  window.MathJax = {
-    AuthorInit: function () {
-          MathJax.Ajax.config.path["Contrib"] = "https://cdn.mathjax.org/mathjax/contrib";
-        }
-  };
-</script>
-<script type="text/x-mathjax-config>
- MathJax.Hub.Config({
-   extensions: ["tex2jax.js","[Contrib]/siunitx/siunitx.js"],
-   jax: ["input/TeX","output/HTML-CSS"],
-   tex2jax: {inlineMath: [["$","$"],["\\(","\\)"]]},
-   TeX: {extensions: ["AMSmath.js","AMSsymbols.js", "sinuitx.js"]}
- });
- </script>
 <link href="$relpath^$stylesheet" rel="stylesheet" type="text/css" />
 $extrastylesheet
 </head>
@@ -36,11 +21,11 @@ $extrastylesheet
 
 <!--BEGIN TITLEAREA-->
 <div id="titlearea">
-<table cellspacing="0" cellpadding="0">
+<table cellspacing="0.5em" cellpadding="0.5em">
  <tbody>
- <tr style="height: 56px;">
+ <tr style="height: 18px;">
   <!--BEGIN PROJECT_LOGO-->
-  <td id="projectlogo"><img alt="Logo" src="$relpath^$projectlogo"/></td>
+  <a href="https://www.simplecroem.com"><td id="projectlogo"><img height="32" alt="Logo" src="$relpath^$projectlogo"/></td></a>
   <!--END PROJECT_LOGO-->
   <!--BEGIN PROJECT_NAME-->
   <td id="projectalign" style="padding-left: 0.5em;">

@@ -33,6 +33,8 @@ list(REMOVE_ITEM SIMPLE_src
   "${CMAKE_CURRENT_SOURCE_DIR}/simple_main/simple_polarft_corrcalc_dble.f90"
   "${CMAKE_CURRENT_SOURCE_DIR}/simple_main/simple_cftcc_scatsrch.f90"
   "${CMAKE_CURRENT_SOURCE_DIR}/simple_main/simple_kninterpol_elemental.f90"
+  "${CMAKE_CURRENT_SOURCE_DIR}/simple_utils/simple_wavelet.f90"
+ "${CMAKE_CURRENT_SOURCE_DIR}/simple_utils/simple_wavelet_csd.f90"
 ) #  "${CMAKE_CURRENT_SOURCE_DIR}/simple_main/simple_symsrcher.f90"
 
 
