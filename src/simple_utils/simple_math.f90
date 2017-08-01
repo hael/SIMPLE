@@ -197,11 +197,11 @@ contains
 
     !>    Convert acceleration voltage in kV into electron wavelength in Angstroms
     !! \f$ \lambda (\si{\angstrom}) =  \frac{12.26}{\sqrt{(eV+0.9784 eV^2) / 10^6 }} \f$
-    pure function kV2wl( kV ) result( kV_to_wl )
-        real, intent(in):: kV         !< acceleration voltage in \f$\si{\kilovolt}\f$
-        real :: kV_to_wl              !< electron wavelength in Angstroms \f$\si{\angstrom}\f$
+    
+    pure real function kV2wl( kV )
+        real, intent(in):: kV      !< acceleration voltage in \f$\si{\kilovolt}\f$
         kV2wl = 12.26/sqrt(1000.0*kV+0.9784*(1000.0*kV)**2/(10.0**6.0))
-    end function kV2wl
+    end function
 
     !>   converts from correlation to euclidean distance
     pure function corr2dist( corr ) result( dist )
