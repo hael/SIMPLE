@@ -323,7 +323,6 @@ contains
                 real        :: dfx, dfy, angast, x, y, pw
                 call ctfsq%new(img%get_ldim(), p%smpd)
                 call ctfsq%set_ft(.true.)
-                if( p%tfplan%flag .ne. 'no' )&
                 tfun = ctf(img%get_smpd(), o%get('kv'), o%get('cs'), o%get('fraca'))
                 ! set CTF and shift parameters
                 select case(p%tfplan%mode)
