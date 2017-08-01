@@ -1,0 +1,108 @@
+<div class=tasktitle>
+	Extract Particles
+	<div class=taskhovertext>Calculate CTF Parameters</div>
+</div>	
+<table class=taskattributestable>
+	<input class=jobarg type=hidden id=cmd value=simple_exec>
+	<input class=jobarg type=hidden id=prg value=extract>
+	<input class=jobarg type=hidden id=jobtype value=extract>
+	<tr>
+		<td>Job Name</td>
+		<td><input class=jobarg type=text id=jobname></td>
+	</tr>
+	<tr>
+		<td>Job Description</td>
+		<td><input class=jobarg type=text id=jobdescription></td>
+	</tr>
+		<tr>
+			<td>Required Arguments</td>
+		</tr>
+		<tr>
+			<td>Micrograph List File</td>
+			<td><input class=jobarg type=text id=filetab></td>
+			<td class=taskhelp>
+				<img class=taskhelpimage src=img/info.png>
+				<div class=taskhelptext>Sampling distance of the microscope in A/pixel</div>
+			</td>
+		</tr>
+		<tr>
+			<td>Boxfiles List File</td>
+			<td><input class=jobarg type=text id=boxtab></td>
+			<td class=taskhelp>
+				<img class=taskhelpimage src=img/info.png>
+				<div class=taskhelptext>Sampling distance of the microscope in A/pixel</div>
+			</td>
+		</tr>
+		<tr>
+			<td>Sampling Distance</td>
+			<td><input class=jobarg type=text id=smpd></td>
+			<td class=taskhelp>
+				<img class=taskhelpimage src=img/info.png>
+				<div class=taskhelptext>Text file containing a list of micrographs</div>
+			</td>
+		</tr>	
+		<tr>
+			<td>Optional Arguments</td>
+		</tr>
+		<tr>
+			<td>Mask Radius</td>
+			<td><input class=jobarg type=text id=msk></td>
+			<td class=taskhelp>
+				<img class=taskhelpimage src=img/info.png>
+				<div class=taskhelptext>File body prepended to each output file</div>
+			</td>
+		</tr>
+		<tr>
+			<td>CTF Parameters</td>
+			<td><input class=jobarg type=text id=ctffind_doc></td>
+			<td class=taskhelp>
+				<img class=taskhelpimage src=img/info.png>
+				<div class=taskhelptext>Start low-pass limit (A)</div>
+			</td>
+		</tr>
+		<tr>
+			<td>Invert Contrast</td>
+			<td><input class=jobarg type=text id=rm_outliers></td>
+			<td class=taskhelp>
+				<img class=taskhelpimage src=img/info.png>
+				<div class=taskhelptext>Stop low-pass limit (A)</div>
+			</td>
+		</tr>
+		<tr>
+			<td>Box Size</td>
+			<td><input class=jobarg type=text id=box></td>
+			<td class=taskhelp>
+				<img class=taskhelpimage src=img/info.png>
+				<div class=taskhelptext>Stop low-pass limit (A)</div>
+			</td>
+		</tr>
+		<tr>
+			<td>Normalise</td>
+			<td>
+				<select class=jobarg id=noise_norm>
+					<option value=no>no</option>
+					<option value=yes>yes</option>
+				</select>
+			</td>
+			<td class=taskhelp>
+				<img class=taskhelpimage src=img/info.png>
+				<div class=taskhelptext>Stop low-pass limit (A)</div>
+			</td>
+		</tr>
+		<tr>
+			<td>Extract Outside Boundaries</td>
+			<td>
+				<select class=jobarg id=outside>
+					<option value=no>no</option>
+					<option value=yes>yes</option>
+				</select>
+			</td>
+			<td class=taskhelp>
+				<img class=taskhelpimage src=img/info.png>
+				<div class=taskhelptext>Stop low-pass limit (A)</div>
+			</td>
+		</tr>
+	</table>
+	<div class=clickbutton onclick=hideTasks()>Cancel</div>
+	<div class=clickbutton onclick=showRunParameters('extracttask')>Run</div>
+</div>

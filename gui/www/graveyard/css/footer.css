@@ -1,0 +1,17 @@
+.footer{
+	position: absolute;
+	bottom: 0px;
+	width: 100%
+}
+
+.modeselector {
+	display: inline-block;
+	padding: 10px;
+	color: white;
+}
+
+.fileviewericon {
+	float: right;
+	height: 20px;
+	margin: 11px;
+}

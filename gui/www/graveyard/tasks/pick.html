@@ -1,0 +1,74 @@
+<div class=tasktitle>
+	Reference Picking
+	<div class=taskhovertext>Calculate CTF Parameters</div>
+</div>	
+<table class=taskattributestable>
+	<input class=jobarg type=hidden id=cmd value=simple_distr_exec>
+	<input class=jobarg type=hidden id=prg value=pick>
+	<input class=jobarg type=hidden id=jobtype value=refpick>
+	<tr>
+		<td>Job Name</td>
+		<td><input class=jobarg type=text id=jobname></td>
+	</tr>
+	<tr>
+		<td>Job Description</td>
+		<td><input class=jobarg type=text id=jobdescription></td>
+	</tr>
+		<tr>
+			<td>Required Arguments</td>
+		</tr>
+		<tr>
+			<td>Micrograph List File</td>
+			<td><input class=jobarg type=text id=filetab></td>
+			<td class=taskhelp>
+				<img class=taskhelpimage src=img/info.png>
+				<div class=taskhelptext>Sampling distance of the microscope in A/pixel</div>
+			</td>
+		</tr>
+		<tr>
+			<td>References</td>
+			<td><input class=jobarg type=text id=refs></td>
+			<td class=taskhelp>
+				<img class=taskhelpimage src=img/info.png>
+				<div class=taskhelptext>Sampling distance of the microscope in A/pixel</div>
+			</td>
+		</tr>
+		<tr>
+			<td>Sampling Distance</td>
+			<td><input class=jobarg type=text id=smpd></td>
+			<td class=taskhelp>
+				<img class=taskhelpimage src=img/info.png>
+				<div class=taskhelptext>Text file containing a list of micrographs</div>
+			</td>
+		</tr>	
+		<tr>
+			<td>Optional Arguments</td>
+		</tr>
+		<tr>
+			<td>Low Pass Limit</td>
+			<td><input class=jobarg type=text id=lp></td>
+			<td class=taskhelp>
+				<img class=taskhelpimage src=img/info.png>
+				<div class=taskhelptext>File body prepended to each output file</div>
+			</td>
+		</tr>
+		<tr>
+			<td>Threshold</td>
+			<td><input class=jobarg type=text id=thres></td>
+			<td class=taskhelp>
+				<img class=taskhelpimage src=img/info.png>
+				<div class=taskhelptext>Start low-pass limit (A)</div>
+			</td>
+		</tr>
+		<tr>
+			<td>Remove Outliers</td>
+			<td><input class=jobarg type=text id=rm_outliers></td>
+			<td class=taskhelp>
+				<img class=taskhelpimage src=img/info.png>
+				<div class=taskhelptext>Stop low-pass limit (A)</div>
+			</td>
+		</tr>
+	</table>
+	<div class=clickbutton onclick=hideTasks()>Cancel</div>
+	<div class=clickbutton onclick=showRunParameters('picktask')>Run</div>
+</div>

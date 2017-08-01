@@ -1,0 +1,306 @@
+##############################################
+# settings
+#
+# COMPILER = gfortran-4.9
+# CFLAGS   = -ffree-form -cpp -O3 -fno-second-underscore -fopenmp -DMACOSX -DBENCH
+# LINK     = -lblas -llapack -lstdc++ -lpthread -lm
+#
+# .SUFFIXES: .f90 .o
+# .f90.o:
+#        $(COMPILER) $(CFLAGS) -c $<
+#
+##############################################
+# Massive settings
+# module load fftw/3.3.4-gcc ;
+# module load gcc/4.9.1 ;
+# module load lapack/3.4.2 ;
+# module load openmpi ;
+#
+COMPILER_GFORTRAN = /sw/bin/gfortran
+
+MAGMADIR     = 
+MAGMADIR_LIB = /lib
+CUDADIR      = 
+SHARE_LIB    = 
+FFTW_LIB     = /sw/lib
+
+CFLAGS = -ffree-form -cpp -O3 -fno-second-underscore -fopenmp \
+         -DMACOSX    
+LINK   = -L $(FFTW_LIB) -lfftw3                   \
+         -L $(FFTW_LIB) -lfftw3f                  \
+         -L $(FFTW_LIB) -lfftw3_threads           \
+         -lblas -llapack -lstdc++ -lpthread       \
+         -lcuda -lcublas -lcudart -lcufft -lcudnn \
+         -L $(CUDADIR)/lib64                      \
+         -lmagma                                  \
+         -L $(MAGMADIR_LIB)                       \
+         -lm
+
+SIMPLE_SOURCE=../../../
+XC_DIR=$(SIMPLE_SOURCE)/checks/simple_LibTests/gpu_test_code
+COMDIR = $(SIMPLE_SOURCE)/obj/GFORTgpu
+OBJDIR = $(SIMPLE_SOURCE)/obj/GFORTgpu
+
+.SUFFIXES: .f90 .o 
+.f90.o:
+	$(COMPILER_GFORTRAN) $(CFLAGS) -I $(OBJDIR) -c $<
+
+COMMON = $(OBJDIR)/simple_defs.o \
+         $(OBJDIR)/matrixGetter.o \
+         $(OBJDIR)/simple_testfunction.o \
+         $(OBJDIR)/greeting_version.o \
+         $(OBJDIR)/simple_timing.o \
+         $(OBJDIR)/timming.o \
+         $(OBJDIR)/timming_c.o \
+         $(OBJDIR)/get_cpu_time_c.o \
+         $(OBJDIR)/timestamp.o \
+         $(OBJDIR)/initialu.o \
+         $(OBJDIR)/su3random.o \
+         $(OBJDIR)/su2random.o \
+         $(OBJDIR)/simple_sorting.o \
+         $(OBJDIR)/simple_textHandler.o \
+         $(OBJDIR)/get_systemQuery_cpu.o \
+         $(OBJDIR)/get_systemQuery_cpu_c.o \
+         $(OBJDIR)/simple_systemQuery_cpu.o \
+         $(OBJDIR)/simple_file_utils.o \
+         $(OBJDIR)/simple_yaml_output.o \
+         $(OBJDIR)/simple_yaml_strings.o \
+         $(OBJDIR)/simple_DataParallel_IO.o \
+         $(OBJDIR)/simple_file_defs.o \
+         $(OBJDIR)/simple_resources_defs.o \
+         $(OBJDIR)/invert_cpu_utils.o \
+         $(OBJDIR)/fft123D_cpu.o \
+         $(OBJDIR)/get_fft123D_cpu.o \
+         $(OBJDIR)/get_fft123D_cpu_c.o \
+         $(OBJDIR)/fortran.o \
+         $(OBJDIR)/simple_fortran.o \
+         $(OBJDIR)/simple_cuda.o \
+         $(OBJDIR)/simple_cuda_defs.o \
+         $(OBJDIR)/simple_deviceQuery_gpu.o \
+         $(OBJDIR)/get_deviceQuery_gpu.o \
+         $(OBJDIR)/get_deviceQuery_gpu_c.o \
+         $(OBJDIR)/invert_gpu_utils.o \
+         $(OBJDIR)/magma_invert_gpu-v2.o \
+         $(OBJDIR)/magma_zgetri_blocked_gpu-v2.o \
+         $(OBJDIR)/magma_dgetri_blocked_gpu-v2.o \
+         $(OBJDIR)/magma_get_getri_nb_gpu.o \
+         $(OBJDIR)/fft123D_gpu.o \
+         $(OBJDIR)/get_fft123D_gpu.o \
+         $(OBJDIR)/get_fft123D_gpu_c.o \
+         $(OBJDIR)/polarft_corr_Helpr_gpu.o \
+         $(OBJDIR)/polarft_corr_Helpr_gpu_c.o \
+         $(OBJDIR)/Global_polarft.o \
+         $(OBJDIR)/simple_pfts_Sizes.o \
+         $(OBJDIR)/simple_mesh3D.o \
+         $(OBJDIR)/simple_mesh1D.o \
+         $(OBJDIR)/simple_mesh1DV.o \
+         $(OBJDIR)/simple_img_2D_cart_Sizes.o \
+         $(OBJDIR)/simple_math_gpu.o \
+         $(OBJDIR)/simple_math_gpu_c.o \
+         $(OBJDIR)/matmul_gpu_utils.o \
+         $(OBJDIR)/matvec_gpu_utils.o \
+         $(OBJDIR)/matmul_cuda_transfers.o \
+         $(OBJDIR)/matmul_cuda_device.o \
+         $(OBJDIR)/matvec_cuda_transfers.o \
+         $(OBJDIR)/matvec_cuda_device.o \
+         $(OBJDIR)/simple_ErrorHandler.o \
+         $(OBJDIR)/gen_polar_coords_gpu.o \
+         $(OBJDIR)/simple_polarft_gpu_c.o \
+         $(OBJDIR)/zz2dgemm_ElmtWs_tesla_N_N.o \
+         $(OBJDIR)/zz2dgemm_ElmtWs_tesla_T_N.o \
+         $(OBJDIR)/zz2dgemm_ElmtWs_tesla_N_T.o \
+         $(OBJDIR)/zz2dgemm_ElmtWs_tesla_T_T.o \
+         $(OBJDIR)/zz2dgemm_ElmtWs_tesla_gpu.o \
+         $(OBJDIR)/zz2dgemm_ElmtWs_tesla_sumsq_N_N.o \
+         $(OBJDIR)/zz2dgemm_ElmtWs_tesla_sumsq_T_T.o \
+         $(OBJDIR)/zz2dgemm_ElmtWs_tesla_sumsq_gpu.o \
+         $(OBJDIR)/strlen.o \
+         $(OBJDIR)/simple_eglossary.o \
+         $(OBJDIR)/simple_err_defs.o \
+         $(OBJDIR)/simple_error_handling.o \
+         $(OBJDIR)/simple_eglossary_lowlev.o \
+         $(OBJDIR)/simple_file_highlev.o \
+         $(OBJDIR)/simple_dynamic_memory.o \
+         $(OBJDIR)/simple_memory_profiling.o
+
+#Matmul tester code
+MAIN = testing_SMatmult_gpu.o
+#Matvec tester code
+MAIN_SMATVEC = testing_SMatvect_gpu.o
+#devicequery tester code
+MAIN_DEVQ = testing_deviceQuery_gpu.o
+#Inverstion Lapacks
+MAIN_DEGTRI = testing_dgetri_gpu.o
+MAIN_ZEGTRI = testing_zgetri_gpu.o
+#FFT3W
+MAIN_cuFFT_3D_C2S_GPU = testing_cuFFT_3D_C2S_gpu.o
+MAIN_cuFFT_3D_S2C_GPU = testing_cuFFT_3D_S2C_gpu.o
+MAIN_cuFFT_3D_C2C_GPU = testing_cuFFT_3D_C2C_gpu.o
+
+MAIN_cuFFT_3D_Z2D_GPU = testing_cuFFT_3D_Z2D_gpu.o
+MAIN_cuFFT_3D_D2Z_GPU = testing_cuFFT_3D_D2Z_gpu.o
+MAIN_cuFFT_3D_Z2Z_GPU = testing_cuFFT_3D_Z2Z_gpu.o
+
+MAIN_cuFFT_2D_C2S_GPU = testing_cuFFT_2D_C2S_gpu.o
+MAIN_cuFFT_2D_S2C_GPU = testing_cuFFT_2D_S2C_gpu.o
+MAIN_cuFFT_2D_C2C_GPU = testing_cuFFT_2D_C2C_gpu.o
+
+MAIN_cuFFT_2D_Z2D_GPU = testing_cuFFT_2D_Z2D_gpu.o
+MAIN_cuFFT_2D_D2Z_GPU = testing_cuFFT_2D_D2Z_gpu.o
+MAIN_cuFFT_2D_Z2Z_GPU = testing_cuFFT_2D_Z2Z_gpu.o
+
+MAIN_cuFFT_1D_Z2Z_GPU = testing_cuFFT_1D_Z2Z_gpu.o
+
+#Executables
+XCS = mcSMatmult_gpu
+XCS_SMATVEC = mcSMatvect_gpu
+XCS_DEVQ = mcdeviceQuery_gpu
+XCS_DEGTRI = mcdgetri_gpu
+XCS_ZEGTRI = mczgetri_gpu
+
+XCS_cuFFT_3D_C2S_GPU = mccufft_3d_c2s_gpu
+XCS_cuFFT_3D_S2C_GPU = mccufft_3d_s2c_gpu
+XCS_cuFFT_3D_C2C_GPU = mccufft_3d_c2c_gpu
+
+XCS_cuFFT_3D_Z2D_GPU = mccufft_3d_z2d_gpu
+XCS_cuFFT_3D_D2Z_GPU = mccufft_3d_d2z_gpu
+XCS_cuFFT_3D_Z2Z_GPU = mccufft_3d_z2z_gpu
+
+XCS_cuFFT_2D_C2S_GPU = mccufft_2d_c2s_gpu
+XCS_cuFFT_2D_S2C_GPU = mccufft_2d_s2c_gpu
+XCS_cuFFT_2D_C2C_GPU = mccufft_2d_c2c_gpu
+
+XCS_cuFFT_2D_Z2D_GPU = mccufft_2d_z2d_gpu
+XCS_cuFFT_2D_D2Z_GPU = mccufft_2d_d2z_gpu
+XCS_cuFFT_2D_Z2Z_GPU = mccufft_2d_z2z_gpu
+
+XCS_cuFFT_1D_Z2Z_GPU = mccufft_1d_z2z_gpu
+
+#Compilations
+all: $(XCS) $(XCS_SMATVEC) $(XCS_DEVQ)                                 \
+     $(XCS_DEGTRI) $(XCS_ZEGTRI)                         \
+     $(XCS_cuFFT_3D_C2S_GPU) $(XCS_cuFFT_3D_S2C_GPU) $(XCS_cuFFT_3D_C2C_GPU) \
+     $(XCS_cuFFT_3D_Z2D_GPU) $(XCS_cuFFT_3D_D2Z_GPU) $(XCS_cuFFT_3D_Z2Z_GPU) \
+     $(XCS_cuFFT_2D_C2S_GPU) $(XCS_cuFFT_2D_S2C_GPU) $(XCS_cuFFT_2D_C2C_GPU) \
+     $(XCS_cuFFT_2D_Z2D_GPU) $(XCS_cuFFT_2D_D2Z_GPU) $(XCS_cuFFT_2D_Z2Z_GPU) \
+     $(XCS_cuFFT_1D_Z2Z_GPU)
+
+mcSMatmult_gpu: $(COMMON) $(MAIN)
+	$(COMPILER_GFORTRAN) $(CFLAGS) -o $(XC_DIR)/mcSMatmult_gpu \
+        $(COMMON) $(MAIN) $(LINK)
+mcSMatvect_gpu: $(COMMON) $(MAIN_SMATVEC)
+	$(COMPILER_GFORTRAN) $(CFLAGS) -o $(XC_DIR)/$(XCS_SMATVEC) \
+        $(COMMON) $(MAIN_SMATVEC) $(LINK)
+
+mcdeviceQuery_gpu: $(COMMON) $(MAIN_DEVQ)
+	$(COMPILER_GFORTRAN) $(CFLAGS) -o $(XC_DIR)/$(XCS_DEVQ) \
+        $(COMMON) $(MAIN_DEVQ) $(LINK)
+
+mcdgetri_gpu: $(COMMON) $(MAIN_DEGTRI)
+	$(COMPILER_GFORTRAN) $(CFLAGS) -o $(XC_DIR)/mcdgetri_gpu \
+        $(COMMON) $(MAIN_DEGTRI) $(LINK)
+mczgetri_gpu: $(COMMON) $(MAIN_ZEGTRI)
+	$(COMPILER_GFORTRAN) $(CFLAGS) -o $(XC_DIR)/mczgetri_gpu \
+        $(COMMON) $(MAIN_ZEGTRI) $(LINK)
+
+mccufft_3d_c2s_gpu: $(COMMON) $(MAIN_cuFFT_3D_C2S_GPU)
+	$(COMPILER_GFORTRAN) $(CFLAGS) -o $(XC_DIR)/mccufft_3d_c2s_gpu \
+        $(COMMON) $(MAIN_cuFFT_3D_C2S_GPU) $(LINK)
+mccufft_3d_s2c_gpu: $(COMMON) $(MAIN_cuFFT_3D_S2C_GPU)
+	$(COMPILER_GFORTRAN) $(CFLAGS) -o $(XC_DIR)/mccufft_3d_s2c_gpu \
+        $(COMMON) $(MAIN_cuFFT_3D_S2C_GPU) $(LINK)
+mccufft_3d_c2c_gpu: $(COMMON) $(MAIN_cuFFT_3D_C2C_GPU)
+	$(COMPILER_GFORTRAN) $(CFLAGS) -o $(XC_DIR)/mccufft_3d_c2c_gpu \
+        $(COMMON) $(MAIN_cuFFT_3D_C2C_GPU) $(LINK)
+
+mccufft_3d_z2d_gpu: $(COMMON) $(MAIN_cuFFT_3D_Z2D_GPU)
+	$(COMPILER_GFORTRAN) $(CFLAGS) -o $(XC_DIR)/mccufft_3d_z2d_gpu \
+        $(COMMON) $(MAIN_cuFFT_3D_Z2D_GPU) $(LINK)
+mccufft_3d_d2z_gpu: $(COMMON) $(MAIN_cuFFT_3D_D2Z_GPU)
+	$(COMPILER_GFORTRAN) $(CFLAGS) -o $(XC_DIR)/mccufft_3d_d2z_gpu \
+        $(COMMON) $(MAIN_cuFFT_3D_D2Z_GPU) $(LINK)
+mccufft_3d_z2z_gpu: $(COMMON) $(MAIN_cuFFT_3D_Z2Z_GPU)
+	$(COMPILER_GFORTRAN) $(CFLAGS) -o $(XC_DIR)/mccufft_3d_z2z_gpu \
+        $(COMMON) $(MAIN_cuFFT_3D_Z2Z_GPU) $(LINK)
+
+mccufft_2d_c2s_gpu: $(COMMON) $(MAIN_cuFFT_2D_C2S_GPU)
+	$(COMPILER_GFORTRAN) $(CFLAGS) -o $(XC_DIR)/mccufft_2d_c2s_gpu \
+        $(COMMON) $(MAIN_cuFFT_2D_C2S_GPU) $(LINK)
+mccufft_2d_s2c_gpu: $(COMMON) $(MAIN_cuFFT_2D_S2C_GPU)
+	$(COMPILER_GFORTRAN) $(CFLAGS) -o $(XC_DIR)/mccufft_2d_s2c_gpu \
+        $(COMMON) $(MAIN_cuFFT_2D_S2C_GPU) $(LINK)
+mccufft_2d_c2c_gpu: $(COMMON) $(MAIN_cuFFT_2D_C2C_GPU)
+	$(COMPILER_GFORTRAN) $(CFLAGS) -o $(XC_DIR)/mccufft_2d_c2c_gpu \
+        $(COMMON) $(MAIN_cuFFT_2D_C2C_GPU) $(LINK)
+
+mccufft_2d_z2d_gpu: $(COMMON) $(MAIN_cuFFT_2D_Z2D_GPU)
+	$(COMPILER_GFORTRAN) $(CFLAGS) -o $(XC_DIR)/mccufft_2d_z2d_gpu \
+        $(COMMON) $(MAIN_cuFFT_2D_Z2D_GPU) $(LINK)
+mccufft_2d_d2z_gpu: $(COMMON) $(MAIN_cuFFT_2D_D2Z_GPU)
+	$(COMPILER_GFORTRAN) $(CFLAGS) -o $(XC_DIR)/mccufft_2d_d2z_gpu \
+        $(COMMON) $(MAIN_cuFFT_2D_D2Z_GPU) $(LINK)
+mccufft_2d_z2z_gpu: $(COMMON) $(MAIN_cuFFT_2D_Z2Z_GPU)
+	$(COMPILER_GFORTRAN) $(CFLAGS) -o $(XC_DIR)/mccufft_2d_z2z_gpu \
+        $(COMMON) $(MAIN_cuFFT_2D_Z2Z_GPU) $(LINK)
+
+mccufft_1d_z2z_gpu: $(COMMON) $(MAIN_cuFFT_1D_Z2Z_GPU)
+	$(COMPILER_GFORTRAN) $(CFLAGS) -o $(XC_DIR)/mccufft_1d_z2z_gpu \
+        $(COMMON) $(MAIN_cuFFT_1D_Z2Z_GPU) $(LINK)
+
+clean :
+	rm -f *.o *.d *~* *#* fort.* SMatmult_2D.asc SMatvect_2D.asc  \
+ Times_magma_dgetri_block_gpu_v2.log Times_magma_zgetri_block_gpu_v2.log \
+ $(XC_DIR)/$(XCS) $(XC_DIR)/$(XCS_SMATVEC) $(XC_DIR)/$(XCS_DEVQ) \
+ $(XC_DIR)/$(XCS_DEGTRI) $(XC_DIR)/$(XCS_ZEGTRI) \
+ $(XC_DIR)/$(XCS_cuFFT_3D_C2S_GPU) $(XC_DIR)/$(XCS_cuFFT_3D_S2C_GPU) \
+ $(XC_DIR)/$(XCS_cuFFT_3D_C2C_GPU) $(XC_DIR)/$(XCS_cuFFT_3D_Z2D_GPU) \
+ $(XC_DIR)/$(XCS_cuFFT_3D_D2Z_GPU) $(XC_DIR)/$(XCS_cuFFT_3D_Z2Z_GPU) \
+ $(XC_DIR)/$(XCS_cuFFT_2D_C2S_GPU) $(XC_DIR)/$(XCS_cuFFT_2D_S2C_GPU) \
+ $(XC_DIR)/$(XCS_cuFFT_2D_C2C_GPU) $(XC_DIR)/$(XCS_cuFFT_2D_Z2D_GPU) \
+ $(XC_DIR)/$(XCS_cuFFT_2D_D2Z_GPU) $(XC_DIR)/$(XCS_cuFFT_2D_Z2Z_GPU) \
+ $(XC_DIR)/$(XCS_cuFFT_1D_Z2Z_GPU)
+
+cleanall:
+######################## Fortran Code ########################
+#./f90g95_local.csh ./test_code/cpu/testing_DataParallelIO.f90;
+
+#./f90g95_local.csh ./test_code/cpu/testing_sgetri_cpu.f90;
+#./f90g95_local.csh ./test_code/cpu/testing_dgetri_cpu.f90;
+#./f90g95_local.csh ./test_code/cpu/testing_zgetri_cpu.f90;
+
+#./f90g95_local.csh ./test_code/cpu/testing_FFT_3D_C2S_cpu.f90;
+#./f90g95_local.csh ./test_code/cpu/testing_FFT_3D_S2C_cpu.f90;
+#./f90g95_local.csh ./test_code/cpu/testing_FFT_3D_C2C_cpu.f90;
+#./f90g95_local.csh ./test_code/cpu/testing_FFT_3D_D2Z_cpu.f90;
+#./f90g95_local.csh ./test_code/cpu/testing_FFT_3D_Z2D_cpu.f90;
+#./f90g95_local.csh ./test_code/cpu/testing_FFT_3D_Z2Z_cpu.f90;
+
+#./f90g95_local.csh ./test_code/cpu/testing_FFT_2D_C2S_cpu.f90;
+#./f90g95_local.csh ./test_code/cpu/testing_FFT_2D_S2C_cpu.f90;
+#./f90g95_local.csh ./test_code/cpu/testing_FFT_2D_C2C_cpu.f90;
+#./f90g95_local.csh ./test_code/cpu/testing_FFT_2D_D2Z_cpu.f90;
+#./f90g95_local.csh ./test_code/cpu/testing_FFT_2D_Z2D_cpu.f90;
+#./f90g95_local.csh ./test_code/cpu/testing_FFT_2D_Z2Z_cpu.f90;
+
+#./f90g95_local.csh ./test_code/cpu/testing_FFT_1D_Z2Z_cpu.f90;
+############################
+#./f90g95_local.csh ./test_code/cpu/testing_systemQuery_cpu.f90;
+#./f90g95_local.csh ./test_code/cpu/testing_yaml.f90;
+
+#./f90g95_local.csh ./test_code/cpu/testing_summing.f90;
+#./f90g95_local.csh ./test_code/cpu/testing_RowColMajF90.f90;
+#./f90g95_local.csh ./test_code/cpu/testing_congruence.f90;
+#./f90g95_local.csh ./test_code/cpu/testing_BFGSNum_2D_cpu.f90;
+#./f90g95_local.csh ./test_code/cpu/testing_corr_cpu.f90;
+#./f90g95_local.csh ./test_code/cpu/testing_corr_gpu.f90;
+#./f90g95_local.csh ./test_code/cpu/testing_cshift.f90;
+#./f90g95_local.csh ./test_code/cpu/testing_NumDiff_1D_cpu.f90;
+#./f90g95_local.csh ./test_code/cpu/testing_NumGrad_2D_cpu.f90;
+#./f90g95_local.csh ./test_code/cpu/timer_tester_c.f90;
+#./f90g95_local.csh ./test_code/cpu/timer_tester.f90;
+
+#./f90g95_local.csh ./test_code/gpu/cuda/testing_SMatmult_cpu.f90;
+#./f90g95_local.csh ./test_code/gpu/cuda/testing_SMatvect_cpu.f90;
+
+############################## C++ Code ########################
+#./gccg++_local.csh ./test_code/cpu/testing_RowColMajCpp.cpp;

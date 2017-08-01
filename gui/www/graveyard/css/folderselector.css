@@ -1,0 +1,24 @@
+#folderlisttable tr:nth-child(even) {
+	background: #CCC;
+}
+
+#folderlisttable tr:nth-child(odd) {
+	background: #FFF;
+}
+
+.folderselectorpopup {
+	position: absolute;
+	height: 400px;
+	width: 400px;
+	top: calc(50% - 200px);
+	left: calc(50% - 200px);
+	background-color: white;
+	border-radius: 5px;
+	display: none;
+}
+
+#folderlisttable{
+	overflow: auto;
+	height: 300px;
+	display: block;
+}

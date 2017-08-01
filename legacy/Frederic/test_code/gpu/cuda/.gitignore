@@ -1,0 +1,6 @@
+f90g95_local.csh
+compile_and_link.csh
+compile_and_link_local.csh
+simple_old_makefile
+testing_zgetri
+

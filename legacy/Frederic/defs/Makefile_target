@@ -1,0 +1,46 @@
+defs_code: numRecp                      \
+           ps_defs                      \
+           ps_mpi_defs                  \
+           ps_cuda_defs                 \
+           ps_dpl_defs                  \
+           ps_openCL_defs               \
+           ps_lattice_defs              \
+           ps_file_defs                 \
+           ps_reso_defs                 \
+           ps_err_defs                  \
+           s_defs                       \
+           s_hdf5                       \
+           s_h5_ncem                    \
+           s_h5_rdwt                    \
+           fftw3                        ;
+
+numRecp: nrtype.o                       \
+         nr.o                           \
+         nrutil.o                       ;
+
+ps_defs: simple_defs.o                  ;
+
+ps_mpi_defs:  simple_mpi_defs.o         ;
+
+ps_cuda_defs: simple_cuda_defs.o        ;
+
+ps_dpl_defs: simple_deepLearning_defs.o ;
+
+ps_openCL_defs: simple_OpenCL_defs.o    ;
+
+ps_lattice_defs: simple_lattice_defs.o  ;
+
+ps_file_defs: simple_file_defs.o        ;
+
+ps_reso_defs: simple_resources_defs.o   ;
+
+ps_err_defs: simple_err_defs.o          ;
+
+s_defs:                                 ;
+
+s_hdf5:                                 ;
+
+s_h5_ncem:                              ;
+s_h5_rdwt:                              ;
+
+fftw3: simple_fftw3.o                   ;

@@ -1,0 +1,294 @@
+#!/bin/bash
+
+# Creates the Makefile for the modules.
+
+echo "makemake: a script that makes the Makefile"
+echo
+
+srcdirs=""
+targets=""
+all=""
+
+# Scan the directories for Makefile_target files.
+
+for dir in */;
+do
+
+  if [[ -e ${dir}Makefile_target ]];
+  then
+
+    target=$(< ${dir}Makefile_target)
+    target_name=${target%%:*}
+    target_name=${target_name##*[[:space:]]}
+
+# Also scan the subdirectories.
+
+    for subdir in ${dir}*/;
+    do
+
+      if [[ -e ${subdir}Makefile_target ]];
+      then
+
+        subtarget=$(< ${subdir}Makefile_target)
+        subtarget_name=${subtarget%%:*}
+        subtarget_name=${subtarget_name##*[[:space:]]}
+
+# Also scan the sub-subdirectories !
+
+        for subsubdir in ${subdir}*/;
+        do
+
+          if [[ -e ${subsubdir}Makefile_target ]];
+          then
+
+            subsubtarget=$(< ${subsubdir}Makefile_target)
+            subsubtarget_name=${subsubtarget%%:*}
+            subsubtarget_name=${subsubtarget_name##*[[:space:]]}
+
+            if [[ -n $subsubtarget_name ]];
+            then
+
+              echo "Directory: "$subsubdir
+              echo "Target name: "$subsubtarget_name
+              echo "Rule: "$subsubtarget
+              echo
+          
+              if [[ $subsubtarget_name != ".CONTROL" ]];
+              then
+                all=$all" "$subsubtarget_name
+                srcdirs=$srcdirs" "${subsubdir%/}
+              else
+                subsubtarget=${subsubtarget#*:[[:space:]]*}
+              fi
+
+              targets=$targets$'\n'$subsubtarget$'\n'
+
+            else
+
+# Concatenate unnamed targets with the one of the parent directory.
+
+              srcdirs=$srcdirs" "${subsubdir%/}
+              subtarget=${subtarget%;*}" "${subsubtarget#:}
+
+            fi
+
+          fi
+
+        done
+
+        if [[ -n $subtarget_name ]];
+        then
+
+          echo "Directory: "$subdir
+          echo "Target name: "$subtarget_name
+          echo "Rule: "$subtarget
+          echo
+          
+          if [[ $subtarget_name != ".CONTROL" ]];
+          then
+            all=$all" "$subtarget_name
+            srcdirs=$srcdirs" "${subdir%/}
+          else
+            subtarget=${subtarget#*:[[:space:]]*}
+          fi
+
+          targets=$targets$'\n'$subtarget$'\n'
+
+        else
+
+# Concatenate unnamed targets with the one of the parent directory.
+
+          srcdirs=$srcdirs" "${subdir%/}
+          target=${target%;*}" "${subtarget#:}
+
+        fi
+
+      fi
+
+    done
+
+    echo "Directory: "$dir
+    echo "Target name: "$target_name
+    echo "Rule: "$target
+    echo
+
+    if [[ $target_name != ".CONTROL" ]];
+    then
+      all=$all" "$target_name
+      srcdirs=$srcdirs" "${dir%/}
+    else
+      target=${target#*:[[:space:]]*}
+    fi
+    targets=$targets$'\n'$target$'\n'
+
+  fi
+
+done 
+
+# Write the Makefile to disk.
+
+echo "Writing the Makefile..."
+
+cat << END > Makefile
+include Makefile_macros
+
+# Source directories.
+
+SRCDIRS =$srcdirs
+
+# Search directories.
+
+vpath %.c   \$(SRCDIRS)
+vpath %.cpp \$(SRCDIRS)
+vpath %.cu  \$(SRCDIRS)
+vpath %.f   \$(SRCDIRS)
+vpath %.for \$(SRCDIRS)
+vpath %.t90 \$(SRCDIRS)
+vpath %.mpi.f90 \$(SRCDIRS)
+vpath %.f90 \$(SRCDIRS)
+vpath %.o   \$(OBJDIR)
+
+# Implicit rules.
+
+%.o:%.c
+	\$(CCLIB) -o \$(OBJDIR)/\$@ \$<
+
+%.o:%.cpp
+	\$(CPPCLIB) -o \$(OBJDIR)/\$@ \$<
+
+%.o:%.cu
+	\$(NVCCCLIB) -o \$(OBJDIR)/\$@ \$<
+
+%.o:%.f
+	\$(F77CLIB) -o \$(OBJDIR)/\$@ \$<
+
+%.o:%.for
+	\$(F90CLIB77) -o \$(OBJDIR)/\$@ \$<; \$(F90POST)
+
+%.o:%.t90
+	./template \$<
+	\$(F90CLIB) -o \$(OBJDIR)/\$@ \$(basename \$<).f90; \$(F90POST)
+
+%.o:%.mpi.f90
+	\$(MPIF90CLIB) -o \$(OBJDIR)/\$@ \$<; \$(MPIF90POST)
+
+%.o:%.f90
+	\$(F90CLIB) -o \$(OBJDIR)/\$@ \$<; \$(F90POST)
+
+# Targets.
+
+.PHONY:$all default all makedir checkclean clean cleanall robodoc checknews wc tar detar;
+
+default:
+	@./makemake > /dev/null; \\
+	make --no-print-directory all
+
+all: makedir checkclean$all checknews;
+$targets 
+makedir:
+	@if [ ! -d \$(OBJDIR) ]; \\
+	then \\
+		echo "Creating directory "\$(OBJDIR)"."; \\
+		mkdir \$(OBJDIR); \\
+	fi; \\
+	if [ ! -d \$(MODDIR) ]; \\
+	then \\
+		echo "Creating directory "\$(MODDIR)"."; \\
+		mkdir \$(MODDIR); \\
+	fi
+
+checkclean:
+	@if [ -e CLEAN ]; \\
+	then \\
+		clean=1; \\
+		if [ -e \$(OBJDIR)/LASTCLEAN ]; \\
+		then \\
+			if cmp -s CLEAN \$(OBJDIR)/LASTCLEAN; \\
+			then \\
+				clean=0; \\
+			fi; \\
+		fi; \\
+		if [ \$\$clean -eq 1 ]; \\
+		then \\
+			make -s clean; \\
+			cp CLEAN \$(OBJDIR)/LASTCLEAN; \\
+		fi \\
+	fi; \\
+
+clean:
+	@echo "Cleaning .o and .mod files in "\$(OBJDIR)"."; \\
+	rm -f \$(OBJDIR)/*.o; \\
+	rm -f \$(MODDIR)/*.mod; \\
+	rm -f \$(MODDIR)/*.h
+
+cleanall:
+	@echo "Cleaning .o and .mod files in "\$(OBJDIR)" and "\$(OBJDIR)"/lapack/lapack95."; \\
+	rm -f \$(OBJDIR)/*.o; \\
+	rm -f \$(OBJDIR)/lapack/lapack95/*.o; \\
+	rm -f \$(MODDIR)/*.mod; \\
+	rm -f \$(MODDIR)/*.h
+
+robodoc:
+	@echo "Building RoBoDoc documentation."; \\
+	robodoc --rc robodoc/robodoc.rc; \\
+	cd robodoc; \\
+	./makemdoc; \\
+	cp ../news/news ../news/.lastnews
+
+checknews:
+	@news=1; \\
+	if [ -e news/.lastnews ]; \\
+	then \\
+		if cmp -s news/news news/.lastnews; \\
+		then \\
+			news=0; \\
+		fi; \\
+	fi; \\
+	if [ \$\$news -eq 1 ]; \\
+	then \\
+		echo ""; \\
+		echo "*********************************************************"; \\
+		echo "* The Makefile was created and                          *"; \\
+		echo "* Simple-v2.0 compiled properly                         *"; \\
+		echo "*********************************************************"; \\
+		echo ""; \\
+	fi; \\
+
+wc:
+	@echo "Count the number of lines, words and characters in the modules."; \\
+	unset list; \\
+	DIRS="\$(SRCDIRS)"; \\
+	for dir in \$\${DIRS/lapack/}; \\
+	do \\
+		for ext in "*.c" "*.cpp" "*.cu" "*.h" "*.f90" "*.f" "*.for"; \\
+		do \\
+			list=\$\$list" "\$\$(find \$\$dir"/" -maxdepth 1 -name "\$\$ext"); \\
+		done; \\
+	done; \\
+	wc \$\$list
+
+tar:
+	@echo "Creating a tar archive 'modules.tar.gz' with the modules."; \\
+	unset list; \\
+	for dir in \$(SRCDIRS); \\
+	do \\
+		for ext in "*.c" "*.cpp" "*.cu" "*.h" "*.f90" ".t90" "*.f" "*.for" "Makefile_*" "*.par*"; \\
+		do \\
+			list=\$\$list" "\$\$(find \$\$dir"/" -maxdepth 1 -name "\$\$ext"); \\
+		done; \\
+	done; \\
+	tar czvf modules.tar.gz makemake template macros/Makefile_macros* \$\$list
+
+detar:
+	@echo "Creating a tar backup 'modules.old.tar.gz' with the modules before unpacking the tar archive 'modules.tar.gz'."; \\
+	unset list; \\
+	for dir in \$(SRCDIRS); \\
+	do \\
+		for ext in "*.c" "*.cpp" "*.cu" "*.h" "*.f90" ".t90" "*.f" "*.for" "Makefile_*" "*.par*"; \\
+		do \\
+			list=\$\$list" "\$\$(find \$\$dir"/" -maxdepth 1 -name "\$\$ext"); \\
+		done; \\
+	done; \\
+	tar czvf modules.old.tar.gz makemake template macros/Makefile_macros* \$\$list; \\
+	tar xzvf modules.tar.gz
+END

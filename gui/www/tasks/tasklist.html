@@ -1,0 +1,114 @@
+<div class=bodyheader>
+	<img src=img/up_chevron.png>
+	<b>New Job</b>
+</div>
+
+<div class=modeselector>
+	<b>Workflow</b>
+	<select id=modeselector name=mode onchange=selectMode()>
+		<option value=standardtasklist selected>Standard</option>
+		<option value=pipelinetasklist>Pipeline</option>
+		<option value=pipeline2dtasklist>Pipeline 2D</option>
+		<option value=advancedtasklist>Advanced</option>
+	</select>
+</div>
+
+<div id=standardtasklist class=tasklist>
+	<table class=tasklisttable>
+		<tr class=taskrow onclick=showTask('importtask')>
+			<td class=taskbutton>Import</td>
+			<td class=taskdescription>Import movies</td>
+		</tr>
+		<tr class=taskrow onclick=showTask('unblurctftask')>
+			<td class=taskbutton>Motion Correction & CTF Estimation</td>
+			<td class=taskdescription>Perform alignment of movie frames to correct for movement and estimate CTF parameters for each resulting micrograph</td>
+		</tr>
+		<tr class=taskrow onclick=showTask('picktask')>
+			<td class=taskbutton>Manual Picking</td>
+			<td class=taskdescription>We haven't implemented this just yet</td>
+		</tr>
+		<tr class=taskrow onclick=showTask('extracttask')>
+			<td class=taskbutton>Extract Particles</td>
+			<td class=taskdescription>Extract particles from micrographs using manually picked coorfinates to create a particle stack</td>
+		</tr>
+		<tr class=taskrow onclick=showTask('prime2dtask')>
+			<td class=taskbutton>2D Clustering</td>
+			<td class=taskdescription>Sort the extracted particles into clusters in 2D</td>
+		</tr>
+		<tr class=taskrow onclick=showTask('picktask')>
+			<td class=taskbutton>Reference Based Picking</td>
+			<td class=taskdescription>Automatically pick particles using the 2D clusters as references</td>
+		</tr>
+		<tr class=taskrow onclick=showTask('extracttask')>
+			<td class=taskbutton>Extract Particles</td>
+			<td class=taskdescription>Extract particles from micrographs using automatically picked coordinates to create a particle stack</td>
+		</tr>
+		<tr class=taskrow onclick=showTask('prime2dtask')>
+			<td class=taskbutton>2D Clustering</td>
+			<td class=taskdescription>Sort the extracted particles into clusters in 2D</td>
+		</tr>
+		<tr class=taskrow onclick=showTask('ini3dtask')>
+			<td class=taskbutton>Initial Model Generation</td>
+			<td class=taskdescription>Generate an initial 3D model from the 2D clusters</td>
+		</tr>
+		<tr class=taskrow onclick=showTask('prime3dtask')>
+			<td class=taskbutton>3D Refinement</td>
+			<td class=taskdescription>Refine the 3D model at the single particle level</td>
+		</tr>
+	</table>
+</div>
+
+<div id=pipelinetasklist class=tasklist>
+	<table class=tasklisttable>
+		<tr class=taskrow onclick=showTask('pipelinetask')>
+			<td class=taskbutton>Pipeline</td>
+			<td class=taskdescription>Run the automated pipeline for motion correction, CTF estimation and automatic picking</td>
+		</tr>
+		<tr class=taskrow onclick=showTask('extracttask')>
+			<td class=taskbutton>Extract Particles</td>
+			<td class=taskdescription>Extract particles from micrographs using automatically picked coordinates to create a particle stack</td>
+		</tr>
+		<tr class=taskrow onclick=showTask('prime2dtask')>
+			<td class=taskbutton>2D Clustering</td>
+			<td class=taskdescription>Sort the extracted particles into clusters in 2D</td>
+		</tr>
+		<tr class=taskrow onclick=showTask('ini3dtask')>
+			<td class=taskbutton>Initial Model Generation</td>
+			<td class=taskdescription>Generate an initial 3D model from the 2D clusters</td>
+		</tr>
+		<tr class=taskrow onclick=showTask('prime3dtask')>
+			<td class=taskbutton>3D Refinement</td>
+			<td class=taskdescription>Refine the 3D model at the single particle level</td>
+		</tr>
+	</table>
+</div>
+
+<div id=pipeline2dtasklist class=tasklist>
+	<table class=tasklisttable>
+		<tr class=taskrow onclick=showTask('pipelinetask')>
+			<td class=taskbutton>Pipeline 2D</td>
+			<td class=taskdescription>Run the automated pipeline for motion correction, CTF estimation, automatic picking and 2D clustering</td>
+		</tr>
+		<tr class=taskrow onclick=showTask('ini3dtask')>
+			<td class=taskbutton>Initial Model Generation</td>
+			<td class=taskdescription>Generate an initial 3D model from the 2D clusters</td>
+		</tr>
+		<tr class=taskrow onclick=showTask('prime3dtask')>
+			<td class=taskbutton>3D Refinement</td>
+			<td class=taskdescription>Refine the 3D model at the single particle level</td>
+		</tr>
+	</table>	
+</div>
+
+
+
+<div id=advancedtasklist class=tasklist>
+	<div class=taskbutton onclick=showTask('externaltask')>
+		External Job
+		<div class=hoverdiv>
+			Add a job executed externally to the gui to the project history
+		</div>
+	</div>
+</div>
+
+

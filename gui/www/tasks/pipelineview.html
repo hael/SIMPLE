@@ -1,0 +1,142 @@
+<div class=bodyheader>
+	<img src=img/up_chevron.png>
+	<b>Selection View</b>
+	<div class=hoverdiv>Select micrographs based on their thumbnails, CTF parameters and power spectra</div>
+</div>
+
+<input type=hidden id=pipelineviewdirectory>
+
+<div class=bodytoolbar>
+	<div class=bodybutton id=pipelineactionsbutton>
+		<b>Actions</b>
+		<div class=hoverdiv>
+			<div onclick=pipelineViewSelectAll()>Select All</div>
+			<div onclick=pipelineViewClearAll()>Deselect All</div>
+			<div onclick=pipelineViewSave()>Save Selection</div>
+		</div>
+	</div>
+
+	<div class=bodybutton id=pipelineviewbutton>
+		<b>View</b>
+		<div class=hoverdiv>
+			<table>
+				<tr>
+					<td>
+						<label for=pipelinepspeccontrast>Pspec Contrast</label>
+					</td>
+					<td>
+						<input type=range id=pipelinepspeccontrast value=4 max=10 min=0 onchange=pipelineViewShowPage()>
+					</td>
+				</tr>
+				<tr>
+					<td>
+						<label for=pipelinepspecbrightness>Pspec Brightness</label>
+					</td>
+					<td>
+						<input type=range id=pipelinepspecbrightness value=64 max=255 min=0 onchange=pipelineViewShowPage()>
+					</td>
+				</tr>
+				<tr>
+					<td>
+						<label for=pipelinepspeczoom>Pspec Zoom</label>
+					</td>
+					<td>
+						<input type=range id=pipelinepspeczoom value=1 max=4 min=0.5 step=0.1 onchange=pipelineViewUpdateZoom()>
+					</td>
+				</tr>
+				<tr>
+					<td>
+						<label for=pipelinethumbcontrast>Thumb Contrast</label>
+					</td>
+					<td>
+						<input type=range id=pipelinethumbcontrast value=2 max=10 min=0 onchange=pipelineViewShowPage()>
+					</td>
+				</tr>
+					<tr>
+					<td>
+						<label for=pipelinethumbbrightness>Thumb Brightness</label>
+					</td>
+					<td>
+						<input type=range id=pipelinethumbbrightness value=128 max=255 min=0 onchange=pipelineViewShowPage()>
+					</td>
+				</tr>
+				<tr>
+					<td>
+						<label for=pipelinethumbzoom>Thumb Zoom</label>
+					</td>
+					<td>
+						<input type=range id=pipelinethumbzoom value=1 max=4 min=0.5 step=0.1 onchange=pipelineViewUpdateZoom()>	
+					</td>
+				</tr>
+				<tr>
+					<td>
+						<label for=pipelinepagecount>Lines Per Page</label>
+					</td>
+					<td>
+						<select name=pipelinepagecount id=pipelinepagecount>
+							<option value=10>10</option>
+							<option value=25 selected>25</option>
+							<option value=50>50</option>
+							<option value=100>100</option>
+							<option value=200>200</option>
+						</select>
+					</td>
+				</tr>
+			</table>	
+		</div>
+	</div>
+
+	<div class=bodybutton id=pipelinesortbutton>
+		<b>Sort</b>
+		<div class=hoverdiv>
+			<div onclick=pipelineViewSort('name')>Name</div>
+			<div onclick=pipelineViewSort('dfx')>DFX</div>
+			<div onclick=pipelineViewSort('dfy')>DFY</div>
+			<div onclick=pipelineViewSort('angast')>Angast</div>
+		</div>
+	</div>
+
+	<div class=bodybutton id=pipelinepage>
+		<b>Page</b>
+		<img src=img/left-arrow.png onclick=pipelineViewPageDown()>
+		<input type=text id=pipelinepagenumber onchange=pipelineViewShowPage()>/
+		<div id=pipelinepagemax></div>
+		<img src=img/right-arrow.png onclick=pipelineViewPageUp()>
+	</div>
+</div>
+
+<div id=pipelineviewdiv></div>
+
+<div class=pipelineviewboxselect id=pipelineviewboxselect>
+	<div class=popupheader id=pipelineviewboxselectheader>
+		<div id=pipelineviewboxname>Boxes</div>
+		<img src=img/close.png onclick=pipelineHideMicrograph()>
+	</div>
+	<div>
+		<div class=clickbutton onclick=pipelineViewClearBoxes()>Clear Boxes</div>
+		<div class=clickbutton onclick=pipelineViewSaveBoxes()>Save Boxes</div>
+		
+	</div>
+	<div id=pipelineviewboxselectmicrograph>
+	</div>
+</div>
+
+<div class=pipelineviewsave id=pipelineviewsave>
+	<div class=popupheader>
+		Save Selection
+	</div>
+	<input type=hidden id=pipelineviewfolder>
+	<table class=popuptable>
+		<tr>
+			<td>Filename</td>
+			<td><input id=pipelineviewsavefilename type=text></td>
+		</tr>
+		<tr>
+			<td>Folder</td>
+			<td><input id=pipelineviewsavefolder type=text></td>
+			<td><img src=img/folder.png onclick=selectFolder('pipelineviewsavefolder')></img></td>
+		</tr>
+	</table>
+	<div class=clickbutton onclick=cancelPipelineViewSave()>Cancel</div>
+	<div class=clickbutton onclick=confirmPipelineViewSave()>Save</div>
+</div>
