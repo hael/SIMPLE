@@ -66,7 +66,8 @@ contains
         real, intent(in) :: amp_contr !< amplitude contrast
         type(ctf) :: self
         ! set constants
-        self%wl        = kV2wl(kV)/smpd
+        self%kV        = kV
+        self%wl        = kV2wl(self%kV)/smpd
         self%Cs        = (Cs*1.0e7)/smpd
         self%amp_contr = amp_contr
         self%smpd      = smpd

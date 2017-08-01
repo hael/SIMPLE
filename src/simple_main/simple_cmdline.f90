@@ -128,7 +128,10 @@ contains
             write(*,'(a)') 'Perhaps you have misspelled?'
             stop
          endif
-         if( index(arg(pos1+1:), '.spi') /= 0 )then
+         if( index(arg(pos1+1:), '/') /= 0  )then
+            ! it is a directory        
+            self%cmds(i)%carg = adjustl(arg(pos1+1:))
+         else if( index(arg(pos1+1:), '.spi') /= 0 )then
             self%cmds(i)%carg = adjustl(arg(pos1+1:))
          else if( index(arg(pos1+1:), '.mrc') /= 0 )then
             self%cmds(i)%carg = adjustl(arg(pos1+1:))
