@@ -158,7 +158,7 @@ contains
             endif
             res = b%vol%get_res()
             call get_resolution( fsc, res, fsc05, fsc0143 )
-            where(res < fsc0143) optlp = 0.
+            where(res < TINY) optlp = 0.
             call b%vol%apply_filter(optlp)
         else if( cline%defined('lp') )then
             call b%vol%bp(0., p%lp)
@@ -169,9 +169,12 @@ contains
         vol_copy = b%vol
         ! B-fact
         if( cline%defined('bfac') ) call b%vol%apply_bfac(p%bfac)
+        ! final low-pass filtering
+        if( cline%defined('fsc') )then
+            call b%vol%bp(0., fsc0143)
+        endif
         ! masking
         call b%vol%bwd_ft
-        call vol_copy%bwd_ft
         if( cline%defined('mskfile') )then
             if( file_exists(p%mskfile) )then
                 ldim = b%vol%get_ldim()
@@ -183,6 +186,7 @@ contains
                 stop 'maskfile does not exists in cwd'
             endif
         else if( p%automsk .eq. 'yes' )then
+            call vol_copy%bwd_ft
             call b%mskvol%automask3D(p, vol_copy)
             call b%mskvol%write('automask'//p%ext)
             call b%vol%mul(b%mskvol)

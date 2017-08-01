@@ -202,13 +202,15 @@ contains
             if( p%stream .eq. 'yes' )then
                 ! write unidoc
                 call os_uni%write(fname_unidoc_output)
-                cline_extract = cline
-                call cline_extract%set('dir_ptcls', trim(dir_ptcls))
-                call cline_extract%set('smpd',      p%smpd)
-                call cline_extract%set('unidoc',    fname_unidoc_output)
-                call cline_extract%set('outfile',   'extract_params_movie'//int2str_pad(movie_ind,p%numlen)//'.txt')
-                call cline_extract%set('outstk',    'ptcls_from_movie'//int2str_pad(movie_ind,p%numlen)//p%ext)
-                call xextract%execute(cline_extract)
+                if( p%l_pick )then
+                    cline_extract = cline
+                    call cline_extract%set('dir_ptcls', trim(dir_ptcls))
+                    call cline_extract%set('smpd',      p%smpd)
+                    call cline_extract%set('unidoc',    fname_unidoc_output)
+                    call cline_extract%set('outfile',   'extract_params_movie'//int2str_pad(movie_ind,p%numlen)//'.txt')
+                    call cline_extract%set('outstk',    'ptcls_from_movie'//int2str_pad(movie_ind,p%numlen)//p%ext)
+                    call xextract%execute(cline_extract)
+                endif
             endif
         end do
         if( p%stream .eq. 'no' )then

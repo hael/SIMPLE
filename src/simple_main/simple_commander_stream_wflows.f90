@@ -123,7 +123,8 @@ contains
         class(cmdline),                  intent(inout) :: cline
         logical,               parameter   :: DEBUG = .true.
         character(len=STDLEN), parameter   :: FILETABNAME='movieftab_preproc_stream.txt'
-        integer,               parameter   :: SHORTTIME = 15
+        integer,               parameter   :: SHORTTIME = 30    ! 30 secs for watching folder
+        integer,               parameter   :: LONGTIME  = 900   ! 15 mins before processing a new movie
         character(len=STDLEN), allocatable :: movienames(:)
         type(qsys_env)           :: qenv
         type(params)             :: p_master
@@ -147,8 +148,8 @@ contains
         ! make target directory
         call exec_cmdline('mkdir -p '//trim(adjustl(p_master%dir_target)))
         ! movie watcher init
-        movie_buff   = moviewatcher(p_master%dir_movies, SHORTTIME, print=.true.)
-        nmovies      = 0
+        movie_buff = moviewatcher(p_master%dir_movies, LONGTIME, print=.true.)
+        nmovies    = 0
         do
             nmovies_prev = nmovies
             call movie_buff%watch( nmovies, movienames )

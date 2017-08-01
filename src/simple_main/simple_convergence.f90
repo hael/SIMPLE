@@ -249,51 +249,6 @@ contains
             case('yes')
                 self%corr      = self%bap%get_avg('corr')
                 self%dist      = self%bap%get_avg('dist')
-                self%mi_proj   = self%bap%get_avg('mi_proj')
-                self%mi_state  = self%bap%get_avg('mi_state')
-                self%sdev      = self%bap%get_avg('sdev')
-                write(*,'(A,1X,F7.1)') '>>> ANGLE OF FEASIBLE REGION:          ', self%pp%athres
-                write(*,'(A,1X,F7.4)') '>>> PROJ     DISTRIBUTION OVERLAP:     ', self%mi_proj
-                if( self%pp%nstates > 1 )&
-                write(*,'(A,1X,F7.4)') '>>> STATE DISTRIBUTION OVERLAP:        ', self%mi_state
-                write(*,'(A,1X,F7.1)') '>>> AVERAGE ANGULAR DISTANCE BTW ORIS: ', self%dist
-                write(*,'(A,1X,F7.4)') '>>> CORRELATION:                       ', self%corr
-                write(*,'(A,1X,F7.2)') '>>> ANGULAR SDEV OF MODEL:             ', self%sdev
-                if( self%pp%nstates == 1 )then
-                    if( self%frac > FRAC_LIM .and.&
-                        &self%mi_proj > MI_CLASS_LIM_3D )then
-                        write(*,'(A)') '>>> CONVERGED: .YES.'
-                        converged = .true.
-                    else
-                        write(*,'(A)') '>>> CONVERGED: .NO.'
-                        converged = .false.
-                    endif
-                endif
-            case('de')
-                self%corr      = self%bap%get_avg('corr')
-                self%dist      = self%bap%get_avg('dist')
-                self%sdev      = self%bap%get_avg('sdev')
-                self%mi_proj   = self%bap%get_avg('mi_proj')
-                self%mi_state  = self%bap%get_avg('mi_state')
-                write(*,'(A,1X,F7.1)') '>>> ANGLE OF FEASIBLE REGION:          ', self%pp%athres
-                write(*,'(A,1X,F7.4)') '>>> PROJ     DISTRIBUTION OVERLAP:     ', self%mi_proj
-                if( self%pp%nstates > 1 )&
-                write(*,'(A,1X,F7.4)') '>>> STATE DISTRIBUTION OVERLAP:        ', self%mi_state
-                write(*,'(A,1X,F7.1)') '>>> AVERAGE ANGULAR DISTANCE BTW ORIS: ', self%dist
-                write(*,'(A,1X,F7.4)') '>>> CORRELATION:                       ', self%corr
-                write(*,'(A,1X,F7.2)') '>>> ANGULAR SDEV OF MODEL:             ', self%sdev                ! determine convergence
-                if( self%pp%nstates == 1 )then
-                    if( self%mi_proj > MI_CLASS_LIM_3D )then
-                        write(*,'(A)') '>>> CONVERGED: .YES.'
-                        converged = .true.
-                    else
-                        write(*,'(A)') '>>> CONVERGED: .NO.'
-                        converged = .false.
-                    endif
-                endif
-            case('ada')
-                self%corr      = self%bap%get_avg('corr')
-                self%dist      = self%bap%get_avg('dist')
                 self%frac      = self%bap%get_avg('frac')
                 self%sdev      = self%bap%get_avg('sdev')
                 self%mi_proj   = self%bap%get_avg('mi_proj')

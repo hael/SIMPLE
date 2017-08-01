@@ -18,6 +18,7 @@ type moviewatcher
         integer                            :: report_time       !< time ellapsed prior to processing
         integer                            :: starttime         !< time of first watch
         integer                            :: ellapsedtime      !< time ellapsed between last and first watch
+        integer                            :: lastreporttime    !< time ellapsed between last and first watch
         integer                            :: n_watch   = 0     !< number of times the folder has been watched
         integer                            :: n_fails   = 0     !< number of times a watch has resulted in some error
         logical                            :: doprint   = .false.
@@ -116,6 +117,7 @@ contains
                     &.and. is_closed )then
                         ! new file to report
                         call self%add2history( fname )
+                        self%lastreporttime = tnow
                         print *,'New_movie: ', trim(abs_fname), ', ',ctime(maxval(stats(9:11)))
                     endif
                 else
@@ -193,13 +195,14 @@ contains
         self%cwd       = ''
         self%watch_dir = ''
         if(allocated(self%history))deallocate(self%history)
-        self%report_time  = 0
-        self%starttime    = 0
-        self%ellapsedtime = 0
-        self%n_watch      = 0
-        self%n_fails      = 0
-        self%n_history    = 0
-        self%doprint      = .false.
+        self%report_time    = 0
+        self%starttime      = 0
+        self%ellapsedtime   = 0
+        self%lastreporttime = 0
+        self%n_watch        = 0
+        self%n_fails        = 0
+        self%n_history      = 0
+        self%doprint        = .false.
     end subroutine kill
 
 end module simple_moviewatcher

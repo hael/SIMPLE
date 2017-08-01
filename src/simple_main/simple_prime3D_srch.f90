@@ -19,7 +19,7 @@ public :: prime3D_srch
 private
 #include "simple_local_flags.inc"
 
-real,    parameter :: FACTWEIGHTS_THRESH = 0.001
+real,    parameter :: FACTWEIGHTS_THRESH = 0.001    !< threshold for factorial weights
 
 type prime3D_srch
     private
@@ -646,7 +646,6 @@ contains
     end subroutine stochastic_srch_het
 
     subroutine inpl_peaks( self, pftcc, iptcl )
-        use simple_strings, only: int2str_pad
         class(prime3D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: iptcl
@@ -654,7 +653,7 @@ contains
         real, allocatable :: corrs(:)
         real              :: inpl_corrs(self%npeaks,self%nrots), e3, cc, cxy(3), thresh
         integer           :: ipeak, iref, cnt, ncorrs, inpl_ind, irot
-        integer           :: peaks_projs(self%npeaks_inpl), loc(1)
+        integer           :: peaks_projs(self%npeaks_inpl)
         ! re-generate in-plane corrs
         inpl_corrs = 0.
         cnt = 0 
@@ -823,7 +822,7 @@ contains
         class(oris),          intent(inout) :: e
         integer,    optional, intent(in)    :: nnvec(:)
         type(ran_tabu) :: rt
-        integer        :: i, end, cnt, istate, iproj
+        integer        :: i, cnt, istate, iproj
         type(ori)      :: o
         ! dynamic update of number of nearest neighbours
         if( present(nnvec) )then
@@ -879,7 +878,7 @@ contains
         real, allocatable :: corrs(:)
         real       :: euls(3), shvec(2)
         real       :: corr, frac, ang_sdev, dist
-        integer    :: ipeak, cnt, ref, state, proj, isym, loc(1), npeaks
+        integer    :: ipeak, cnt, ref, state, proj, loc(1), npeaks
         integer    :: neff_states ! number of effective (non-empty) states
         ! empty states
         neff_states = 1
@@ -976,9 +975,10 @@ contains
         integer,                 intent(in)    :: iptcl
         class(oris),             intent(inout) :: e
         real,                    intent(out)   :: wcorr
-        real              :: ws(self%npeaks), dists(self%npeaks)
-        real, allocatable :: corrs(:)
         type(ori)         :: o
+        real, allocatable :: corrs(:)
+        real              :: ws(self%npeaks), dists(self%npeaks)
+        logical           :: included(self%npeaks)
         integer           :: state, roind, proj, ref, ipeak
         if( self%npeaks == 1 )then
             call self%o_peaks%set(1,'ow',1.0)
@@ -994,15 +994,18 @@ contains
             ref          = (state - 1) * self%nprojs + proj
             dists(ipeak) = pftcc%euclid(ref, iptcl, roind)
         end do
-        ! calculate weights and weighted corr
-        ws    = exp(-dists)
-        wcorr = sum(ws*corrs)/sum(ws)
+        ! calculate weights
+        ws = exp(-dists)
         ! thresholding of the weights
+        included(:) = .true.
         if( self%do_weight_inpl )then
-            where( ws < FACTWEIGHTS_THRESH ) ws = 0.
+            included = (ws>=FACTWEIGHTS_THRESH)
+            where( .not.included ) ws = 0.
         else
             ! all are included
         endif
+        ! weighted corr
+        wcorr = sum(ws*corrs, mask=included)/sum(ws, mask=included)
         ! update npeaks individual weights
         call self%o_peaks%set_all('ow', ws)
         deallocate(corrs)
@@ -1017,6 +1020,7 @@ contains
         real,                    intent(out)   :: wcorr
         real,    allocatable :: corrs(:), frc(:), ws(:), frcmeds(:), logws(:)
         integer, allocatable :: order(:) 
+        logical, allocatable :: included(:)
         type(ori) :: o
         integer   :: state, roind, proj, ref, ipeak, npeaks
         if( self%npeaks == 1 )then
@@ -1051,14 +1055,16 @@ contains
         call reverse(order)
         call reverse(logws)
         forall(ipeak=1:npeaks) ws(order(ipeak)) = exp(sum(logws(:ipeak))) 
-        ! weighted corr
-        wcorr = sum(ws*corrs)/sum(ws)
         ! thresholding of the weights
+        allocate(included(npeaks), source=.true.)
         if( self%do_weight_inpl )then
-            where( ws < FACTWEIGHTS_THRESH ) ws = 0.
+            included = (ws>=FACTWEIGHTS_THRESH)
+            where( .not.included ) ws = 0.
         else
             ! all are included
         endif
+        ! weighted corr
+        wcorr = sum(ws*corrs, mask=included)/sum(ws, mask=included)
         ! update npeaks individual weights
         call self%o_peaks%set_all('ow', ws)
         deallocate(corrs)
@@ -1123,7 +1129,7 @@ contains
         call a%set(iptcl, 'mi_inpl',  mi_inpl )
         call a%set(iptcl, 'mi_state', mi_state)
         call a%set(iptcl, 'mi_joint', mi_joint)
-        ! set the distances before we update the orientation        
+        ! set the distances before we update the orientation
         call a%set(iptcl, 'dist', 0.5*euldist + 0.5*o_old%get('dist'))
         call a%set(iptcl, 'dist_inpl', dist_inpl)
         ! all the other stuff
