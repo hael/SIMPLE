@@ -16,8 +16,8 @@
 module simple_commander_preproc
 use simple_defs
 use simple_jiffys          ! use all in there
-use simple_strings,        only: int2str, int2str_pad
 use simple_filehandling    ! use all in there
+use simple_strings,        only: int2str, int2str_pad
 use simple_syscalls,       only: exec_cmdline
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params

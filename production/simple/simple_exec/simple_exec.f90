@@ -1163,6 +1163,7 @@ select case(prg)
         call cline%parse(keys_required(:9), keys_optional(:3))
         ! set defaults
         call cline%set('eo','no')
+        if( .not. cline%defined('cenlp') ) call cline%set('cenlp', 30.)
         ! execute
         call xsym_aggregate%execute(cline)        
     case( 'dsymsrch' )
@@ -1185,7 +1186,7 @@ select case(prg)
         if( describe ) call print_doc_symsrch
         call cline%parse(keys_required(:4), keys_optional(:4))
         ! set defaults
-        !
+        if( .not. cline%defined('cenlp') ) call cline%set('cenlp', 30.)
         ! execute
         call xdsymsrch%execute(cline)
 
@@ -1432,7 +1433,7 @@ select case(prg)
         if( describe ) call print_doc_cenvol
         call cline%parse(keys_required(:2), keys_optional(:3))
         ! set defaults
-        if( .not. cline%defined('cenlp') ) call cline%set('cenlp', 50.)
+        if( .not. cline%defined('cenlp') ) call cline%set('cenlp', 30.)
         ! execute
         call xcenvol%execute(cline)
     case( 'postproc_vol' )

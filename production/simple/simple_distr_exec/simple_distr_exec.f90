@@ -112,9 +112,10 @@ select case(prg)
         keys_optional(26)  = 'rm_outliers'
         keys_optional(27)  = 'nsig'
         keys_optional(28)  = 'dopick'
+        keys_optional(29)  = 'fromm'
         ! parse command line
         if( describe ) call print_doc_preproc
-        call cline%parse(keys_required(:7), keys_optional(:28))
+        call cline%parse(keys_required(:7), keys_optional(:29))
         ! set defaults
         if( .not. cline%defined('trs')             ) call cline%set('trs',        5.)
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',   15.)

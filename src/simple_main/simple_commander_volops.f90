@@ -105,14 +105,14 @@ contains
         type(build)          :: b
         real, allocatable    :: shvec(:,:)
         integer              :: istate
-      
         p = params(cline)                           ! parameters generated
         call b%build_general_tbox(p, cline, .true.) ! general objects built
         ! center volume(s)
         allocate(shvec(p%nstates,3))
         do istate=1,p%nstates
             call b%vol%read(p%vols(istate))
-            shvec(istate,:) = b%vol%center(p%cenlp,'no',p%msk)
+            shvec(istate,:) = b%vol%center(p%cenlp, 'no', p%msk)
+            print *, shvec
             if( istate == 1 ) call b%vol%write(p%outvol)
             if( debug )then
                 call b%vol%shift(-shvec(istate,1), -shvec(istate,2), -shvec(istate,3))
@@ -125,6 +125,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_CENVOL NORMAL STOP ****')
     end subroutine exec_cenvol
+
     !> exec_postproc_vol post-process volume program
     !! \param cline commandline
     !!
@@ -140,7 +141,6 @@ contains
         real, allocatable :: fsc(:), optlp(:), res(:)
         real              :: fsc0143, fsc05
         integer           :: k, state, ldim(3)
- 
         state = 1
         ! pre-proc
         p = params(cline, checkdistr=.false.) ! constants & derived constants produced, mode=2
@@ -169,10 +169,8 @@ contains
         vol_copy = b%vol
         ! B-fact
         if( cline%defined('bfac') ) call b%vol%apply_bfac(p%bfac)
-        ! final low-pass filtering
-        if( cline%defined('fsc') )then
-            call b%vol%bp(0., fsc0143)
-        endif
+        ! final low-pass filtering for smoothness
+        if( cline%defined('fsc') ) call b%vol%bp(0., fsc0143)
         ! masking
         call b%vol%bwd_ft
         if( cline%defined('mskfile') )then

@@ -114,7 +114,6 @@ contains
         cost = -self%pftcc_ptr%corr(self%reference, self%particle, self%rot, vec_here)
     end function shsrch_costfun
 
-    
     function shsrch_minimize( self, irot, shvec, rxy, fromto ) result( cxy )
         use simple_math, only: rotmat2d
         class(pftcc_shsrch), intent(inout) :: self
