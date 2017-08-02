@@ -147,7 +147,7 @@ contains
         endif
         if( irot_here ) self%ospec%x(1) = self%pftcc_ptr%get_rot(irot)
         if( shvec_here )then
-            self%ospec%x(1:2) = shvec(1:2)
+            self%ospec%x(2:3) = shvec(1:2)
         endif
         ! minimisation
         call self%nlopt%minimize(self%ospec, self, crxy(1))

@@ -23,7 +23,7 @@ type, extends(pftcc_opt) :: pftcc_shsrch
     integer                          :: rot            = 1       !< in-plane rotation
     integer                          :: ldim(3)        = [0,0,0] !< logical dimension of Cartesian image
     real                             :: maxshift       = 0.      !< maximal shift
-    real                             :: shift_norm_lim = 0.      !< barrier to shift vector 
+    real                             :: shift_lim      = 0.      !< barrier to shift vector 
     logical                          :: shbarr         = .true.  !< shift barrier constraint or not
     integer                          :: nrestarts      =  5      !< simplex restarts (randomized bounds)
   contains
@@ -54,8 +54,8 @@ contains
         if( present(shbarrier) )then
             if( shbarrier .eq. 'no' ) self%shbarr = .false.
         endif
-        self%shift_norm_lim = maxval(lims)
-        self%nrestarts      = 5
+        self%shift_lim = maxval(lims)
+        self%nrestarts = 5
         if( present(nrestarts) ) self%nrestarts = nrestarts
         ! make optimizer spec
         call self%ospec%specify('simplex', 2, ftol=1e-4,&
@@ -96,7 +96,7 @@ contains
         where( abs(vec) < 1.e-6 ) vec_here = 0.
         if( self%shbarr )then
             shift_norm = sqrt(dot_product(vec_here, vec_here))
-            if( shift_norm > self%shift_norm_lim )then
+            if( shift_norm > self%shift_lim )then
                 cost = 1.
                 return
             endif

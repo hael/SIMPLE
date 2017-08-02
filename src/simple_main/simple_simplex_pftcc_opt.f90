@@ -59,11 +59,17 @@ contains
         integer :: i, avgniter
         integer :: niters(spec%nrestarts)
         ! generate initial vector
-        if( all(spec%x == 0.) )then
-            do i=1,spec%ndim
-                ! initialize each variable by randomized bounds
-                spec%x(i) = spec%limits(i,1)+ran3()*(spec%limits(i,2)-spec%limits(i,1))
-            end do
+        if(spec%ndim == 2)then
+            ! shift search: nothing to do, spec%x should be inputted
+        else if(spec%ndim == 3)then
+            ! inpl_search: nothing to do,  spec%x should be inputted
+        else
+            ! optionally initialize each variable by randomized bounds
+            if( all(spec%x == 0.) )then
+                do i=1,spec%ndim
+                    spec%x(i) = spec%limits(i,1)+ran3()*(spec%limits(i,2)-spec%limits(i,1))
+                end do
+            endif
         endif
         ! set best point to best point in spec
         self%pb = spec%x
