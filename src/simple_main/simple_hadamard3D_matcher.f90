@@ -427,7 +427,7 @@ contains
                 if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PARTICLES'
                 ! initialize
                 call b%img_match%init_polarizer(pftcc)
-                ntot = p%top-p%fromp+1
+                ntot = (p%top-p%fromp+1) * p%nstates
                 cnt  = 0
                 do s=1,p%nstates
                     if( b%a%get_statepop(s) == 0 )then
@@ -437,15 +437,14 @@ contains
                     do iptcl=p%fromp,p%top
                         o      = b%a%get_ori(iptcl)
                         istate = nint(o%get('state'))
-                        if( istate /= s ) cycle
                         cnt = cnt + 1
+                        if( istate /= s ) cycle
                         call progress(cnt, ntot)
                         call read_img_from_stk( b, p, iptcl )
                         call prepimg4align(b, p, o)
                         call b%img_match%polarize(pftcc, iptcl)
                     end do
                 end do
-                call progress(ntot, ntot)
             end subroutine prep_pftcc_local
 
     end subroutine prep_ptcls_pftcc4align
