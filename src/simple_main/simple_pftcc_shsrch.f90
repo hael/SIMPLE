@@ -15,17 +15,17 @@ private
 
 type, extends(pftcc_opt) :: pftcc_shsrch
     private
-    type(opt_spec)                   :: ospec                 !< optimizer specification object
-    type(simplex_pftcc_opt)          :: nlopt                 !< optimizer object
-    class(polarft_corrcalc), pointer :: pftcc_ptr   =>null()  !< pointer to pftcc object
-    integer                          :: reference   = 0       !< reference pft
-    integer                          :: particle    = 0       !< particle pft
-    integer                          :: rot         = 1       !< in-plane rotation
-    integer                          :: ldim(3)     = [0,0,0] !< logical dimension of Cartesian image
-    real                             :: rotmat(2,2) = 0.      !< rotation matrix for checking limits
-    real                             :: maxshift    = 0.      !< maximal shift
-    logical                          :: shbarr      = .true.  !< shift barrier constraint or not
-    integer                          :: nrestarts   =  5      !< simplex restarts (randomized bounds)
+    type(opt_spec)                   :: ospec                    !< optimizer specification object
+    type(simplex_pftcc_opt)          :: nlopt                    !< optimizer object
+    class(polarft_corrcalc), pointer :: pftcc_ptr      =>null()  !< pointer to pftcc object
+    integer                          :: reference      = 0       !< reference pft
+    integer                          :: particle       = 0       !< particle pft
+    integer                          :: rot            = 1       !< in-plane rotation
+    integer                          :: ldim(3)        = [0,0,0] !< logical dimension of Cartesian image
+    real                             :: maxshift       = 0.      !< maximal shift
+    real                             :: shift_norm_lim = 0.      !< barrier to shift vector 
+    logical                          :: shbarr         = .true.  !< shift barrier constraint or not
+    integer                          :: nrestarts      =  5      !< simplex restarts (randomized bounds)
   contains
     procedure :: new         => shsrch_new
     procedure :: set_indices => shsrch_set_indices
@@ -54,7 +54,8 @@ contains
         if( present(shbarrier) )then
             if( shbarrier .eq. 'no' ) self%shbarr = .false.
         endif
-        self%nrestarts = 5
+        self%shift_norm_lim = maxval(lims)
+        self%nrestarts      = 5
         if( present(nrestarts) ) self%nrestarts = nrestarts
         ! make optimizer spec
         call self%ospec%specify('simplex', 2, ftol=1e-4,&
@@ -67,10 +68,6 @@ contains
         self%ldim = self%pftcc_ptr%get_ldim()
         ! set maxshift
         self%maxshift = real(maxval(self%ldim))/2.
-        ! rotmat init
-        self%rotmat      = 0.
-        self%rotmat(1,1) = 1.
-        self%rotmat(2,2) = 1.
     end subroutine shsrch_new
 
     subroutine shsrch_set_indices( self, ref, ptcl, rot, state )
@@ -94,19 +91,12 @@ contains
         integer,             intent(in)    :: D          !< size of vec
         real,                intent(in)    :: vec(D)     !< input search values
         real    :: vec_here(2)    !< current set of values
-        real    :: rotvec_here(2) !< current set of values rotated to frame of reference
-        real    :: cost
+        real    :: shift_norm, cost
         vec_here = vec
-        if( abs(vec(1)) < 1e-6 ) vec_here(1) = 0.
-        if( abs(vec(2)) < 1e-6 ) vec_here(2) = 0.
-        rotvec_here = matmul(vec_here,self%rotmat)
+        where( abs(vec) < 1.e-6 ) vec_here = 0.
         if( self%shbarr )then
-            if( rotvec_here(1) < self%ospec%limits(1,1) .or.&
-               &rotvec_here(1) > self%ospec%limits(1,2) )then
-                cost = 1.
-                return
-            else if( rotvec_here(2) < self%ospec%limits(2,1) .or.&
-                    &rotvec_here(2) > self%ospec%limits(2,2) )then
+            shift_norm = sqrt(dot_product(vec_here, vec_here))
+            if( shift_norm > self%shift_norm_lim )then
                 cost = 1.
                 return
             endif
@@ -115,7 +105,6 @@ contains
     end function shsrch_costfun
 
     function shsrch_minimize( self, irot, shvec, rxy, fromto ) result( cxy )
-        use simple_math, only: rotmat2d
         class(pftcc_shsrch), intent(inout) :: self
         integer, optional,   intent(in)    :: irot        !< index of rotation (obsolete)
         real,    optional,   intent(in)    :: shvec(:)    !< search values vector (obsolete)
@@ -124,18 +113,14 @@ contains
         real              :: cost, cost_init
         real, allocatable :: cxy(:)
         allocate(cxy(3))
-        ! set rotmat for boudary checking and final rotation
-        self%rotmat = rotmat2d( self%pftcc_ptr%get_rot(self%rot) )
         ! minimisation
-        self%ospec%x = 0.
+        self%ospec%x      = 0.
         self%ospec%nevals = 0
-        cost_init = self%costfun(self%ospec%x, self%ospec%ndim)
+        cost_init         = self%costfun(self%ospec%x, self%ospec%ndim)
         call self%nlopt%minimize(self%ospec, self, cost)
         if( cost < cost_init )then
-            cxy(1)  = -cost ! correlation
-            ! rotate the shift vector to the frame of reference
+            cxy(1)  = -cost        ! correlation
             cxy(2:) = self%ospec%x ! shift
-            cxy(2:) = matmul(cxy(2:),self%rotmat)
             if( any(cxy(2:) > self%maxshift) .or. any(cxy(2:) < -self%maxshift) )then
                 cxy(1)  = -1.
                 cxy(2:) = 0.
@@ -144,10 +129,6 @@ contains
              cxy(1)  = -cost_init ! correlation
              cxy(2:) = 0.
         endif
-        ! clean exit
-        self%rotmat      = 0.
-        self%rotmat(1,1) = 1.
-        self%rotmat(2,2) = 1.
     end function shsrch_minimize
 
     function shsrch_get_nevals( self ) result( nevals )

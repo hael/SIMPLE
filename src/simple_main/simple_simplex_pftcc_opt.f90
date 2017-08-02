@@ -58,14 +58,8 @@ contains
         real,                     intent(out)   :: lowest_cost  !< lowest cost
         integer :: i, avgniter
         integer :: niters(spec%nrestarts)
-        logical :: arezero(spec%ndim)
-        ! test if best point in spec is set
-        arezero = .false.
-        do i=1,spec%ndim
-            if( spec%x(i) == 0. ) arezero(i) = .true.
-        end do
         ! generate initial vector
-        if( all(arezero) )then
+        if( all(spec%x == 0.) )then
             do i=1,spec%ndim
                 ! initialize each variable by randomized bounds
                 spec%x(i) = spec%limits(i,1)+ran3()*(spec%limits(i,2)-spec%limits(i,1))
