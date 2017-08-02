@@ -58,18 +58,31 @@ contains
         real,                     intent(out)   :: lowest_cost  !< lowest cost
         integer :: i, avgniter
         integer :: niters(spec%nrestarts)
+        logical :: arezero(spec%ndim)
         ! generate initial vector
-        if(spec%ndim == 2)then
-            ! shift search: nothing to do, spec%x should be inputted
-        else if(spec%ndim == 3)then
-            ! inpl_search: nothing to do,  spec%x should be inputted
-        else
-            ! optionally initialize each variable by randomized bounds
-            if( all(spec%x == 0.) )then
-                do i=1,spec%ndim
-                    spec%x(i) = spec%limits(i,1)+ran3()*(spec%limits(i,2)-spec%limits(i,1))
-                end do
-            endif
+        ! if(spec%ndim == 2)then
+        !     ! shift search: nothing to do, spec%x should be inputted
+        ! else if(spec%ndim == 3)then
+        !     ! inpl_search: nothing to do,  spec%x should be inputted
+        ! else
+        !     ! optionally initialize each variable by randomized bounds
+        !     if( all(spec%x == 0.) )then
+        !         do i=1,spec%ndim
+        !             spec%x(i) = spec%limits(i,1)+ran3()*(spec%limits(i,2)-spec%limits(i,1))
+        !         end do
+        !     endif
+        ! endif
+        ! test if best point in spec is set
+        arezero = .false.
+        do i=1,spec%ndim
+            if( spec%x(i) == 0. ) arezero(i) = .true.
+        end do
+        ! generate initial vector
+        if( all(arezero) )then
+            do i=1,spec%ndim
+                ! initialize each variable by randomized bounds
+                spec%x(i) = spec%limits(i,1)+ran3()*(spec%limits(i,2)-spec%limits(i,1))
+            end do
         endif
         ! set best point to best point in spec
         self%pb = spec%x
