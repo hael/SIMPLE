@@ -73,7 +73,7 @@ contains
         class(moviewatcher),           intent(inout) :: self
         integer,                       intent(out)   :: n_files
         character(len=*), allocatable, intent(out)   :: files(:)
-        character(len=STDLEN), allocatable :: farray(:), tmp_farr(:)
+        character(len=STDLEN), allocatable :: farray(:)
         integer,               allocatable :: stats(:)
         integer               :: tnow, last_accessed, last_modified, last_status_change ! in seconds
         integer               :: i, fstat, fail_cnt, alloc_stat, n_lsfiles
@@ -127,7 +127,7 @@ contains
                     fail_cnt = fail_cnt + 1
                     print *,'Error watching file: ', trim(fname), ' with code: ',fstat
                 endif
-                deallocate(stats)
+                if(allocated(stats))deallocate(stats)
             endif
         enddo
         ! Failures handling
@@ -144,8 +144,6 @@ contains
             call alloc_err("In: simple_moviewatcher%watch", alloc_stat)
             files = self%history
         endif
-        ! cleanup
-        deallocate(farray)
     end subroutine watch
 
     !>  \brief  is for adding to the history of already reported files

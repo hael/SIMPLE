@@ -59,19 +59,6 @@ contains
         integer :: i, avgniter
         integer :: niters(spec%nrestarts)
         logical :: arezero(spec%ndim)
-        ! generate initial vector
-        ! if(spec%ndim == 2)then
-        !     ! shift search: nothing to do, spec%x should be inputted
-        ! else if(spec%ndim == 3)then
-        !     ! inpl_search: nothing to do,  spec%x should be inputted
-        ! else
-        !     ! optionally initialize each variable by randomized bounds
-        !     if( all(spec%x == 0.) )then
-        !         do i=1,spec%ndim
-        !             spec%x(i) = spec%limits(i,1)+ran3()*(spec%limits(i,2)-spec%limits(i,1))
-        !         end do
-        !     endif
-        ! endif
         ! test if best point in spec is set
         arezero = .false.
         do i=1,spec%ndim
@@ -88,7 +75,7 @@ contains
         self%pb = spec%x
         ! set best cost
         spec%nevals = 0
-        self%yb = funcontainer%costfun(self%pb, spec%ndim)
+        self%yb     = funcontainer%costfun(self%pb, spec%ndim)
         spec%nevals = spec%nevals+1
         ! run nrestarts
         do i=1,spec%nrestarts
