@@ -58,6 +58,7 @@ contains
         deallocate(peaks)
         call o%kill
     end subroutine prime3D_find_resrange
+
     !> Execute prime3D (Hadamard method)
     subroutine prime3D_exec( b, p, cline, which_iter, update_res, converged )
         use simple_qsys_funs, only: qsys_job_finished
@@ -82,6 +83,7 @@ contains
 
         ! CALCULATE ANGULAR THRESHOLD (USED BY THE SPARSE WEIGHTING SCHEME)
         p%athres = rad2deg( atan(max(p%fny,p%lp)/(p%moldiam/2.) ))
+        !p%athres = max(p%athres, ATHRES_LIM)
         reslim   = p%lp
         DebugPrint '*** hadamard3D_matcher ***: calculated angular threshold (used by the sparse weighting scheme)'
 
@@ -219,6 +221,8 @@ contains
                             &'; pop=',statecnt(istate)
                     end do
                 endif
+            case ('exp')
+                ! todo
             case DEFAULT
                 write(*,*) 'The refinement mode: ', trim(p%refine), ' is unsupported'
                 stop

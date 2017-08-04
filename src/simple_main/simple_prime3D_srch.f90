@@ -1052,7 +1052,7 @@ contains
         mi_inpl  = 0.
         mi_state = 0.
         mi_joint = 0.
-        if( euldist < 0.1 )then
+        if( euldist < 0.5 )then
             mi_proj = mi_proj + 1.
             mi_joint = mi_joint + 1.
         endif

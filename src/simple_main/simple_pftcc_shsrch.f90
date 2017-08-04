@@ -23,7 +23,6 @@ type, extends(pftcc_opt) :: pftcc_shsrch
     integer                          :: rot            = 1       !< in-plane rotation
     integer                          :: ldim(3)        = [0,0,0] !< logical dimension of Cartesian image
     real                             :: maxshift       = 0.      !< maximal shift
-    real                             :: shift_lim      = 0.      !< barrier to shift vector 
     logical                          :: shbarr         = .true.  !< shift barrier constraint or not
     integer                          :: nrestarts      =  5      !< simplex restarts (randomized bounds)
   contains
@@ -54,7 +53,6 @@ contains
         if( present(shbarrier) )then
             if( shbarrier .eq. 'no' ) self%shbarr = .false.
         endif
-        self%shift_lim = maxval(lims)
         self%nrestarts = 5
         if( present(nrestarts) ) self%nrestarts = nrestarts
         ! make optimizer spec
@@ -91,12 +89,16 @@ contains
         integer,             intent(in)    :: D          !< size of vec
         real,                intent(in)    :: vec(D)     !< input search values
         real    :: vec_here(2)    !< current set of values
-        real    :: shift_norm, cost
+        real    :: cost
         vec_here = vec
         where( abs(vec) < 1.e-6 ) vec_here = 0.
         if( self%shbarr )then
-            shift_norm = sqrt(dot_product(vec_here, vec_here))
-            if( shift_norm > self%shift_lim )then
+            if( vec_here(1) < self%ospec%limits(1,1) .or.&
+               &vec_here(1) > self%ospec%limits(1,2) )then
+                cost = 1.
+                return
+            else if( vec_here(2) < self%ospec%limits(2,1) .or.&
+                    &vec_here(2) > self%ospec%limits(2,2) )then
                 cost = 1.
                 return
             endif
@@ -105,13 +107,14 @@ contains
     end function shsrch_costfun
 
     function shsrch_minimize( self, irot, shvec, rxy, fromto ) result( cxy )
+        use simple_math, only: rotmat2d
         class(pftcc_shsrch), intent(inout) :: self
         integer, optional,   intent(in)    :: irot        !< index of rotation (obsolete)
         real,    optional,   intent(in)    :: shvec(:)    !< search values vector (obsolete)
         real,    optional,   intent(in)    :: rxy(:)      !< (obsolete)
         integer, optional,   intent(in)    :: fromto(2)   !< (obsolete)
-        real              :: cost, cost_init
         real, allocatable :: cxy(:)
+        real              :: cost, cost_init
         allocate(cxy(3))
         ! minimisation
         self%ospec%x      = 0.
@@ -121,6 +124,8 @@ contains
         if( cost < cost_init )then
             cxy(1)  = -cost        ! correlation
             cxy(2:) = self%ospec%x ! shift
+            ! rotate the shift vector to the frame of reference
+            cxy(2:) = matmul(cxy(2:), rotmat2d(self%pftcc_ptr%get_rot(self%rot)))
             if( any(cxy(2:) > self%maxshift) .or. any(cxy(2:) < -self%maxshift) )then
                 cxy(1)  = -1.
                 cxy(2:) = 0.

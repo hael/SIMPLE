@@ -125,7 +125,6 @@ contains
         real,    optional,     intent(in) :: rxy(:)
         integer, optional,     intent(in) :: fromto(2)
         real, allocatable :: crxy(:)
-        real              :: rotmat(2,2)
         logical           :: irot_here, shvec_here, rxy_here
         allocate(crxy(4))
         irot_here  = present(irot)
@@ -138,7 +137,7 @@ contains
         self%ospec%x(1)   = ran3()*360.
         self%ospec%nevals = 0
         if( rxy_here )  self%ospec%x(1:3) = rxy(1:3)
-        if( irot_here ) self%ospec%x(1) = self%pftcc_ptr%get_rot(irot)
+        if( irot_here ) self%ospec%x(1)   = self%pftcc_ptr%get_rot(irot)
         if( shvec_here )self%ospec%x(2:3) = shvec(1:2)
         ! determines & applies shift scaling
         self%shift_scale = (self%ospec%limits(1,2) - self%ospec%limits(1,1)) /&
@@ -156,8 +155,7 @@ contains
         ! check so that the in-plane rotation is within the limit
         call enforce_cyclic_limit(crxy(2), 360.)
         ! rotate the shift vector to the frame of reference
-        rotmat = rotmat2d(crxy(2))
-        crxy(3:) = matmul(crxy(3:), rotmat)
+        crxy(3:) = matmul(crxy(3:), rotmat2d(crxy(2)))
         if( any(crxy(3:) > self%maxshift) .or. any(crxy(3:) < -self%maxshift) )then
             crxy(1)  = -1.
             crxy(3:) = 0.
