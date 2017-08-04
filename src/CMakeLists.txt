@@ -12,6 +12,32 @@ add_custom_target(simple_args
   USES_TERMINAL
   )
 
+add_custom_target(simple_gen_doc_f90
+  COMMAND [ -x "${CMAKE_INSTALL_PREFIX}/bin/simple_exec" ] && SIMPLE_PATH=${CMAKE_INSTALL_PREFIX} ${CMAKE_SOURCE_DIR}/scripts/gen_simple_doc_primer.pl f90 > ${CMAKE_BINARY_DIR}/lib/simple/simple_gen_doc.f90
+  DEPENDS "${CMAKE_SOURCE_DIR}/scripts/gen_simple_doc_primer.pl" 
+  BYPRODUCTS "${CMAKE_BINARY_DIR}/lib/simple/simple_gen_doc.f90"
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  COMMENT "Create new simple_gen_doc.f90 ... requires existing build of simple"
+  USES_TERMINAL
+  )
+
+# if(NOT EXISTS "${CMAKE_BINARY_DIR}/lib/simple/simple_gen_doc.f90")
+# add_custom_target(simple_gen_doc
+#   COMMAND cp "${CMAKE_CURRENT_SOURCE_DIR}/simple_main/simple_gen_doc.f90" "${CMAKE_BINARY_DIR}/lib/simple/simple_gen_doc.f90"
+#   DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/simple_main/simple_gen_doc.f90"
+#   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+#   USES_TERMINAL
+#   )
+# else()
+# add_custom_target(simple_gen_doc
+#   COMMAND echo "Leaving gen_doc alone"
+#   DEPENDS "${CMAKE_SOURCE_DIR}/scripts/gen_simple_doc_primer.pl"
+#   BYPRODUCTS "${CMAKE_BINARY_DIR}/lib/simple/simple_gen_doc.f90"
+#   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+#   USES_TERMINAL
+#   )
+# endif()
+
 file(GLOB DEFS_src "${CMAKE_CURRENT_SOURCE_DIR}/defs/*.f[90][08]" PARENT_SCOPE)
 file(GLOB UTILS_src "${CMAKE_CURRENT_SOURCE_DIR}/simple_utils/*.f90" PARENT_SCOPE)
 if ( USE_CUDA )
@@ -25,7 +51,8 @@ endif()
 # Simple_main folder
 ##########################################################################
 file(GLOB SIMPLE_src "${CMAKE_CURRENT_SOURCE_DIR}/simple_main/*.f[09][0-9]" PARENT_SCOPE)
-list(APPEND SIMPLE_src "${CMAKE_BINARY_DIR}/lib/simple/simple_args.f90")
+list(APPEND SIMPLE_src
+  "${CMAKE_BINARY_DIR}/lib/simple/simple_args.f90")
 
 # Remove unused files
 list(REMOVE_ITEM SIMPLE_src

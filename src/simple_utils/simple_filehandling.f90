@@ -98,11 +98,11 @@ contains
     !> \brief  is for deleting a file
     subroutine del_file( file )
         character(len=*), intent(in) :: file !< input filename
-        integer :: fnr, file_stat
+        integer :: fnr, file_status
         if( file_exists(file) )then
             fnr = get_fileunit()
-            open(unit=fnr, iostat=file_stat, file=trim(file), status='old')
-            if( file_stat == 0 ) close(fnr, status='delete')
+            open(unit=fnr, iostat=file_status, file=trim(file), status='old')
+            if( file_status == 0 ) close(fnr, status='delete')
         endif
     end subroutine del_file
 
@@ -134,11 +134,11 @@ contains
         integer,          optional, intent(in) :: numlen  !< number length
         character(len=*), optional, intent(in) :: suffix  !< file suffix
         character(len=STDLEN), allocatable :: names(:)
-        integer :: ifile, fnr, file_stat
+        integer :: ifile, fnr, file_status
         names = make_filenames( body, n, ext, numlen=numlen, suffix=suffix )
         fnr = get_fileunit()
-        open(unit=fnr, status='replace', action='write', file=tabname, iostat=file_stat)
-        call fopen_err('simple_filehandling :: make_filetable', file_stat)
+        open(unit=fnr, status='replace', action='write', file=tabname, iostat=file_status)
+        call fopen_err('simple_filehandling :: make_filetable', file_status)
         do ifile=1,n
             write(fnr,'(a)') trim(names(ifile))
         end do
@@ -152,14 +152,14 @@ contains
         character(len=*),                intent(in) :: tabname
         character(len=STDLEN),           intent(in) :: tab1(:), tab2(:)
         character(len=STDLEN), optional, intent(in) :: tab3(:), tab4(:)
-        integer :: ntabs, n, fnr, ifile, file_stat
+        integer :: ntabs, n, fnr, ifile, file_status
         ntabs = 2
         if( present(tab3) ) ntabs = 3
         if( present(tab4) ) ntabs = 4
         n = size(tab1)
         fnr = get_fileunit()
-        open(unit=fnr, status='replace', action='write', file=tabname, iostat=file_stat)
-        call fopen_err('simple_filehandling :: make_filetable', file_stat)
+        open(unit=fnr, status='replace', action='write', file=tabname, iostat=file_status)
+        call fopen_err('simple_filehandling :: make_filetable', file_status)
         do ifile=1,n
             if( ntabs == 2 ) write(fnr,'(a)') trim(tab1(ifile))//' '//trim(tab2(ifile))
             if( ntabs == 3 ) write(fnr,'(a)') trim(tab1(ifile))//' '//trim(tab2(ifile))&
@@ -203,10 +203,10 @@ contains
     end function file_kind
 
     !> \brief  is for checking file open status
-    subroutine fopen_err( message, file_stat )
+    subroutine fopen_err( message, file_status )
         character(len=*), intent(in) :: message  !< error message
-        integer, intent(in)          :: file_stat!< error status
-        if( file_stat /= 0 ) then
+        integer, intent(in)          :: file_status!< error status
+        if( file_status /= 0 ) then
             write(*,'(a)') 'ERROR: File opening failure!'
             write(*,'(a)') message
             stop
@@ -246,21 +246,94 @@ contains
     end function is_file_open
 
     !>  \brief  check whether a IO unit is current open
-    subroutine file_stats( fname, fstat, vals )
-        character(len=*),     intent(in)  :: fname
-        integer,              intent(out) :: fstat
-        integer, allocatable, intent(out) :: vals(:)
+    subroutine file_stat( fname, fstat, vals )
+        character(len=*),     intent(inout) :: fname
+        integer,              intent(inout) :: fstat
+        integer, allocatable, intent(inout) :: vals(:)
         if( file_exists(trim(adjustl(fname))) )then
             allocate(vals(13), source=0)
-            call stat(trim(adjustl(fname)), vals, status=fstat)
+            call sys_stat(fname, fstat, vals)
             if( fstat.ne.0 )then
-                print *, 'Error simple_filehandling%file_stats for file:', trim(adjustl(fname))
+                print *, 'Error simple_filehandling%file_stat for file:', trim(adjustl(fname))
             endif
         else
             fstat = 0
             print *, 'Unknown file: ',trim(adjustl(fname))
         endif
-    end subroutine file_stats
+    end subroutine file_stat
+
+    !>  Wrapper for system call
+    subroutine sys_stat( filename, status, buffer )
+#if defined(INTEL)
+        use ifport
+        use ifposix
+#elif defined(PGI)
+        include 'lib3f.h'
+#endif
+        character(len=*),  intent(inout) :: filename
+        integer,  intent(inout)    :: buffer(:)  !< POSIX stat struct
+        integer, intent(inout)     :: status
+        character(len=STDLEN)      :: cmsg
+        integer,allocatable        :: statb(:)
+        integer                    :: stato
+        logical                    :: doprint = .true.
+
+#if defined(INTEL)
+  integer(4) :: ierror
+  integer(8) :: jhandle
+  call pxfstat (trim(adjustl(filename)), len_trim(adjustl(filename)), jhandle, ierror)
+  call PXFSTRUCTCREATE('stat', jhandle, ierror)
+  if(ierror.EQ.0) then
+      !call pxfstat (trim(adjustl(filename)), len_trim(adjustl(filename)), jhandle1, ierror)
+      if(ierror.EQ.0) then
+          CALL PXFINTGET (jhandle,'st_dev',buffer(1), ierror) !	Device ID
+          CALL PXFINTGET (jhandle,'st_ino',buffer(2), ierror) !	Inode number
+          CALL PXFINTGET (jhandle,'st_mode' , buffer(3), ierror) ! 	File mode
+          CALL PXFINTGET (jhandle,'st_nlink' ,buffer(4), ierror) !	Number of links
+          CALL PXFINTGET (jhandle,'st_uid' ,buffer(5), ierror) !	Owner’s uid
+          CALL PXFINTGET (jhandle,'st_gid' ,buffer(6), ierror) !	Owner’s gid
+          buffer(7)=0 !	ID of device containing directory entry for file (0 if not available)
+          CALL PXFINTGET (jhandle,'st_size',buffer(8), ierror) !	File size (bytes)
+          CALL PXFINTGET (jhandle,'st_atime',buffer(9), ierror) !	Last access time
+          CALL PXFINTGET (jhandle,'st_mtime',buffer(10), ierror) !	Last modification time
+          CALL PXFINTGET (jhandle,'st_ctime',buffer(11), ierror) !	Last file status change time
+          buffer(12)=0 !	Preferred I/O block size (-1 if not available)
+          buffer(13)=0 !	Number of blocks allocated (-1 if not available)
+          call PXFSTRUCTFREE(jhandle,ierror)
+      else
+          print *, 'Filehandling sys_stat PXFSTAT failed, file ', trim(adjustl(filename)),' error ', ierror
+      end if
+      if (ierror.NE.0)then
+          print *, 'Filehandling sys_stat PXFINTGET failed, file ', trim(adjustl(filename)),' error ', ierror
+      end if
+  else
+      call PXFSTRUCTFREE(jhandle,ierror)
+      stop 'Filehandling sys_stat  failed - cannot create structure for jhandle1'
+  end if
+  status=ierror
+#elif defined(PGI)
+        debug=.true.
+!        allocate(statb(13))
+        stato =  stat(trim(adjustl(filename)), statb)
+        status = stato
+        buffer = statb
+#ifdef _DEBUG
+        print *, 'filehandling sys_stat PGI stato ', stato
+        print *, 'filehandling sys_stat PGI size of statb ', size(statb)
+#endif
+
+#else
+        call stat(trim(adjustl(filename)), buffer, status)
+#endif
+        if( doprint )then
+            write(*,*) 'command: stat ', trim(adjustl(filename))
+            write(*,*) 'status of execution: ', status
+        endif
+
+    end subroutine sys_stat
+
+
+
 
     !> \brief  is for adding to filebody
     function add2fbody( fname, suffix, str ) result( newname )

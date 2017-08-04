@@ -67,14 +67,17 @@ unlink(${tmp_varlist})# do nothing
 # generate the code
 unlink($tmp_argsfile);
 open(MODULE, "> ".$tmp_argsfile) or die "Cannot open simple_args.f90\n";
-print MODULE "!==Class simple_args
-!
+print MODULE "!------------------------------------------------------------------------------!
+! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
 !\> \\brief simple_args is for error checking of the SIMPLE command line arguments.
+!!
 ! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_. Redistribution
 ! or modification is regulated by the GNU General Public License. *Author:* Hans Elmlund, 2011-08-18.
 !
-!==Changes are documented below
 !
+!==Changes are documented below
+!  Modified  2017  Michael Eager - create at compile time
 module simple_args
 use simple_defs
 implicit none
@@ -124,12 +127,12 @@ function is_present( self, arg ) result( yep )
 end function
 
 subroutine test_args()
-    use simple_filehandling, only: get_fileunit, nlines
-    use simple_syscalls
+    use simple_filehandling, only: file_stat, get_fileunit, nlines
+    use simple_syscalls, only: exec_cmdline
     type(args) :: as
     character(len=STDLEN) :: vfilename,arg, errarg1, errarg2, errarg3, spath, srcpath
     integer :: funit, n, i
-    integer,dimension(13) :: buff
+    integer,allocatable :: buff(:)
     integer :: status,length1,length2
     character(len=STDLEN) :: varlist = 'simple/simple_varlist.txt'
     write(*,'(a)') '**info(simple_args_unit_test): testing it all'
@@ -150,18 +153,18 @@ subroutine test_args()
     vfilename = trim(adjustl(vfilename))
     print *, 'varlist: ', trim(adjustl(vfilename))
     write(*,'(a,a)') '**info(simple_args_unit_test): checking varlist file ',trim(adjustl(vfilename))
-    call sys_stat(trim(adjustl(vfilename)), buff, status)
+    call file_stat(vfilename,status,buff)
     if(status /= 0)then
       print *,' varlist not in lib/simple/,  checking lib64/simple'
       vfilename = trim(adjustl(spath)) // '/lib64/' // trim(adjustl(varlist))
       vfilename = trim(adjustl(vfilename))
       print *, 'varlist: ', trim(adjustl(vfilename))
       write(*,'(a)') '**info(simple_args_unit_test): checking varlist file'
-      call sys_stat(trim(adjustl(vfilename)) , buff, status)
+      call file_stat(vfilename,status,buff)
       if(status /= 0)then
         print *,' varlist not in lib64/simple/,  calling simple_args_varlist.pl'
         call exec_cmdline(\"simple_args_varlist.pl\")
-        call sys_stat(trim(adjustl(vfilename)) , buff, status)
+        call file_stat(vfilename,status,buff)
         if(status /= 0)then
           print *,' varlist still not in lib/simple/ after calling simple_args_varlist.pl'
         end if

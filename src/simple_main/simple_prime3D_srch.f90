@@ -187,6 +187,7 @@ contains
         DebugPrint '>>> PRIME3D_SRCH::CONSTRUCTED NEW SIMPLE_PRIME3D_SRCH OBJECT'
     end subroutine new
 
+
     ! SEARCH ROUTINES
     
     !>  \brief a master prime search routine

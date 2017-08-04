@@ -25,8 +25,8 @@ module simple_timer_profile_test
    use simple_timer
    implicit none
    public:: exec_profiletest
-
-
+#include "simple_local_flags.inc"
+   
 contains
 
     subroutine exec_profiletest(be_verbose)
@@ -37,7 +37,7 @@ contains
       real(dp)    :: xx, etime, sysclockrate
       integer(dp) ::  t1, t2
       integer(dp) :: i, j
-#include "simple_local_flags.inc"
+
       if(present(be_verbose)) verbose=be_verbose
       !    The following is a Statement function
       ! slaxpy(x,y,z)= x*y+z
@@ -58,7 +58,6 @@ contains
       c = .1
 
       TPROFILER(nrep, i, foo bar)
-
       do i = 1, nrep
          TBEG(foo)
          c = cfac*c + b
@@ -77,7 +76,6 @@ contains
       c = .1
 
       TPROFILER(nrep, i,  foo bar)
-
       do i = 1, nrep
          TBEG(foo)
          c = cfac*c + b
@@ -96,7 +94,6 @@ contains
       c = .1
 
       TPROFILER(1, i, standard subrout common empty)
-
       TBEG(standard)
       do i = 1, nrep
          c = cfac*c + b
@@ -106,7 +103,6 @@ contains
       c = .1
       c = saxy(c)
       TEND(subrout)
-
       TBEG(common)
       do i = 1, nrep
          call scsaxpy

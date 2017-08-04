@@ -27,6 +27,8 @@ module simple_timer_basic_test
   use simple_timer
   implicit none
   public:: exec_timertest
+  private
+#include "simple_local_flags.inc"
 contains
   subroutine exec_timertest(be_verbose)
     logical,optional,intent(in)    :: be_verbose
@@ -36,67 +38,68 @@ contains
     integer(dp) ::  t1,t2
     integer(dp) :: i
 
+    if(present(be_verbose)) verbose=be_verbose
     c=.1
     cfac=.25
     b=1.
     xx=12.0_dp
-    if (be_verbose) print*,'High resolution Fortran Timer'
+    VerbosePrint 'High resolution Fortran Timer'
 
     sysclockrate=REAL(tickrate(),dp)
-    if (be_verbose) print*,'Clock rate (ticks per second): ',sysclockrate
-    if (be_verbose) print*,"   "
+    VerbosePrint 'Clock rate (ticks per second): ',sysclockrate
+    VerbosePrint "   "
 
-    if (be_verbose) write (*,'(A)') "1. Simple timestamp and diff "
+    VerbosePrint "1. Simple timestamp and diff "
     t1=tic()
-    if (be_verbose) write (*,'(A,1d20.10)') "    t1 = ",real(t1,dp)
+    VerbosePrint "    t1 = ",real(t1,dp)
     do i=1,nrep
       c=cfac*c+b
     end do
     t2=tic()
-    if (be_verbose) write (*,'(A,1d20.10)') "    t2 = ",real(t2,dp)
+    VerbosePrint "    t2 = ",real(t2,dp)
     etime=tdiff(t2,t1)
-    if (be_verbose) write (*,'(A,1d20.10)') '    Time for simple evaluation (s) = ',etime
+    VerbosePrint '    Time for simple evaluation (s) = ',etime
 
     call reset_timer()
-    if (be_verbose) write (*,"(A)") "  "
-    if (be_verbose) write (*,'(A)') "2. Simple tic toc usage "
-    if (be_verbose) write (*,'(A)') "    t1=TIC etime=TOC(T1)"
+    VerbosePrint "  "
+    VerbosePrint "2. Simple tic toc usage "
+    VerbosePrint "    t1=TIC etime=TOC(T1)"
 
     t1=tic()
-    if (be_verbose) write (*,'(A,1d20.10)') "    t1 = ",real(t1,dp)
+    VerbosePrint "    t1 = ",real(t1,dp)
     c=.1
     do i=1,nrep
       c=cfac*c+b
     end do
     etime=toc(t1)
-    if (be_verbose) write (*,'(A,1d20.10)') '    toc(t1) = ',etime
-    if (be_verbose) write (*,"(A)") "  "
+    VerbosePrint '    toc(t1) = ',etime
+    VerbosePrint "  "
 
     call reset_timer()
-    if (be_verbose) write (*,'(A)') "3. Simple tic toc "
+    VerbosePrint "3. Simple tic toc "
     t1=tic()
-    if (be_verbose) write (*,'(A,1d20.10)') "    t1 = ",real(t1,dp)
+    VerbosePrint "    t1 = ",real(t1,dp)
     c=.1
     do i=1,nrep
       c=cfac*c+b
     end do
     etime=toc()
-    if (be_verbose) write (*,'(A,1d20.10)') '    toc() = ',etime
-    if (be_verbose) write (*,"(A)") ' '
+    VerbosePrint '    toc() = ',etime
+    VerbosePrint ' '
 
     call reset_timer()
-    if (be_verbose) write (*,'(A)') "4.  Testing return of toc in write cmd "
+    VerbosePrint "4.  Testing return of toc in write cmd "
     t1=tic()
-    if (be_verbose) write (*,'(A,1d20.10)') "    t1 = ",real(t1,dp)
+    VerbosePrint "    t1 = ",real(t1,dp)
     c=.1
     do i=1,nrep
       c=cfac*c+b
     end do
-    if (be_verbose) write (*,'(A,1d20.10)') '    toc in write ',toc(t1)
-    if (be_verbose) write (*,"(A)") "  "
+    VerbosePrint '    toc in write ',toc(t1)
+    VerbosePrint "  "
 
     call reset_timer()
-    if (be_verbose) write (*,'(A)') "5.  Testing empty tic() lhs "
+    VerbosePrint "5.  Testing empty tic() lhs "
     open (10,file=DEV_NULL)
     if (be_verbose) write (10,'(A,1i20)') "    Inline tic ",tic()
     ! if(be_verbose) write (*, '(A,1d20.10)') "2. t1 = ", real(t1, dp)
@@ -104,36 +107,36 @@ contains
     do i=1,nrep
       c=cfac*c+b
     end do
-    if (be_verbose) write (*,'(A,1d20.10)') "    tic/toc in write ",toc()
+    VerbosePrint "    tic/toc in write ",toc()
 
     call reset_timer()
-    if (be_verbose) write (*,"(A)") ' '
-    if (be_verbose) write (*,'(A)') '6.  Testing tic toc in preprocessor macro  '
+    VerbosePrint ' '
+    VerbosePrint '6.  Testing tic toc in preprocessor macro  '
     TBLOCK()
     c=.1
     do i=1,nrep
       c=cfac*c+b
     end do
     TSTOP()
-    if (be_verbose) write (*,"(A)") ' '
+    VerbosePrint ' '
 
     call reset_timer()
-    if (be_verbose) write (*,"(A)") ' '
-    if (be_verbose) write (*,'(A)') '7.  Testing tic toc in preprocessor macro with subroutine  '
+    VerbosePrint ' '
+    VerbosePrint '7.  Testing tic toc in preprocessor macro with subroutine  '
     TBLOCK()
     c=saxy(c)
     TSTOP()
-    if (be_verbose) write (*,"(A)") ' '
+    VerbosePrint ' '
 
     call reset_timer()
-    if (be_verbose) write (*,"(A)") ' '
-    if (be_verbose) write (*,'(A)') '8.  Testing timed_loop in subroutine '
+    VerbosePrint ' '
+    VerbosePrint '8.  Testing timed_loop in subroutine '
     c=test_loop()
 
 #if !defined(PGI)
     call reset_timer()
-    if (be_verbose) write (*,"(A)") ' '
-    if (be_verbose) write (*,'(A)') '9.  Testing timed loop macro '
+    VerbosePrint ' '
+    VerbosePrint '9.  Testing timed loop macro '
 
     START_TIMER_LOOP(10)
     c=.1
@@ -141,13 +144,13 @@ contains
     STOP_TIMER_LOOP_( 'my test loop comment')
 
     call reset_timer()
-    if (be_verbose) write (*,"(A)") ' '
-    if (be_verbose) write (*,'(A)') '10.  Testing timed block macro '
+    VerbosePrint ' '
+    VerbosePrint '10.  Testing timed block macro '
 #if defined(__STDC__)
     TIMER_BLOCK(
     c=.1;
     c=saxy(c)
-    , ' my block comment ')
+    , ' my block comment multiline ')
 #else
     TIMER_BLOCK(   c=.1;  c=saxy(c) , ' my block comment (Intel does not like multi line in macro)')
 #endif
@@ -176,7 +179,7 @@ contains
     real(dp)                :: cloop
     integer(dp)             :: timestamp
     integer, parameter     :: N=100
-    real(dp),dimension(N)  :: elapsed
+    real(dp)  :: elapsed(N)
     integer :: ii
     do ii=1,N
       timestamp=tic()

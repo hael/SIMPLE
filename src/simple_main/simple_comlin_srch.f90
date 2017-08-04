@@ -43,9 +43,9 @@ real                      :: lp=0.            !< fixed low-pass limit
 real                      :: trs=0.           !< half shift range
 
 contains
-
+    !> common-line mode search constructor
     subroutine comlin_srch_init( b, p, opt_str, mode )
-        class(build),  target, intent(in) :: b
+        class(build),  target, intent(in) :: b           !< build object
         class(params), target, intent(in) :: p           !< Parameters
         character(len=*),      intent(in) :: opt_str     !< 'simplex', 'de' or 'oasis' search type
         character(len=*),      intent(in) :: mode        !< 'sym' or 'pair' mode
@@ -102,13 +102,13 @@ contains
         integer :: nbestout
         nbestout = NBEST
     end function comlin_srch_get_nbest
-
+    !> Write results of common-line mode search to file
     subroutine comlin_srch_write_resoris( fname, fromto )
         character(len=*) :: fname
         integer          :: fromto(2)
         call resoris%write(fname, fromto)
     end subroutine comlin_srch_write_resoris
-
+    !> common-line mode search symmetry axis
     subroutine comlin_srch_symaxis( orientation_best, fromto )
         class(ori)           :: orientation_best
         integer, optional    :: fromto(2)
@@ -184,7 +184,7 @@ contains
             call orientation_best%print_ori()
         endif
     end subroutine comlin_srch_symaxis
-
+    !> Calculate similarity between pairs
     function comlin_srch_pair() result( similarity )
         integer, allocatable :: order(:)
         type(ori) :: orientation, orientation_best
@@ -222,10 +222,10 @@ contains
         ! we are only interested in a similarity value, return best
         similarity = resoris%get(order(1), 'corr')
     end function comlin_srch_pair
-
+    !> common-line mode search minimisation function
     function comlin_srch_minimize( otarget ) result( cxy )
-        class(ori) :: otarget
-        real       :: cxy(4)
+        class(ori) :: otarget  !< orientation target
+        real       :: cxy(4)   !< output correlation and spec coordinates
         oref    = otarget
         call oref%swape1e3
         ospec%x = otarget%get_euler()
@@ -234,7 +234,7 @@ contains
         cxy(1)  = -cxy(1) ! correlation 
         cxy(2:) = ospec%x ! euler set
     end function comlin_srch_minimize
-    
+    !> Pair search minimisation
     function comlin_pairsrch_minimize( otarget ) result( cxy )
         class(ori) :: otarget
         real       :: cxy(6)
@@ -246,10 +246,10 @@ contains
         cxy(1)  = -cxy(1) ! correlation 
         cxy(2:) = ospec%x ! ori set
     end function comlin_pairsrch_minimize
-    
+    !> Common-line mode search cost function
     function comlin_srch_cost( vec, D ) result( cost )
-        integer, intent(in)  :: D
-        real,    intent(in)  :: vec(D)
+        integer, intent(in)  :: D     !< size of parameter vector
+        real,    intent(in)  :: vec(D)!<  parameter vector
         type(ori) :: o, oswap
         real      :: cost, euldist
         cost = 0.
@@ -274,10 +274,10 @@ contains
             bp%a = a_copy ! puts back unmodified oris
         endif
     end function comlin_srch_cost
-    
+     !> Pair search cost function
     function comlin_pairsrch_cost( vec, D ) result( cost )
-        integer, intent(in)  :: D
-        real,    intent(in)  :: vec(D)
+        integer, intent(in)  :: D   !< size of parameter vector
+        real,    intent(in)  :: vec(D) !< parameter vector
         real :: cost
         cost = 0.
         if(any(vec(1:3)-eullims(:,1) < 0.))then     ! lower limits

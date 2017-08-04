@@ -84,7 +84,7 @@ contains
     !>  \brief  is a constructor
     subroutine new( self, pgrp )
         use simple_ori, only: ori
-        class(sym), intent(inout)    :: self
+        class(sym), intent(inout)    :: self !< this instance
         character(len=*), intent(in) :: pgrp !< sym group string
         call self%kill
         self%c_or_d = .false.
@@ -137,7 +137,7 @@ contains
     !>  \brief  builds the search range for the point-group
     function build_srchrange( self ) result( eullims )
         use simple_ori, only: ori
-        class(sym), intent(inout) :: self
+        class(sym), intent(inout) :: self !< this instance
         real                      :: eullims(3,2) !< 3-axis search range
         eullims(:,1) = 0.
         eullims(:,2) = 360.
@@ -162,28 +162,28 @@ contains
     !>  \brief  returns the search range for the point-group
     function srchrange( self ) result( eullims )
         use simple_ori, only: ori
-        class(sym), intent(inout) :: self
+        class(sym), intent(inout) :: self !< this instance
         real                      :: eullims(3,2) !< 3-axis search range
         eullims = self%eullims
     end function srchrange
 
     !>  \brief  to check which point-group symmetry
     pure function which( self ) result( pgrp )
-        class(sym), intent(in) :: self
+        class(sym), intent(in) :: self !< this instance
         character(len=3) :: pgrp        !< sym group string
         pgrp = self%pgrp
     end function which
 
     !>  \brief  is a getter
     pure function get_nsym( self ) result( n )
-        class(sym), intent(in) :: self
+        class(sym), intent(in) :: self !< this instance
         integer :: n
         n = self%n
     end function get_nsym
 
     !>  \brief  is a getter
     pure function get_pgrp( self ) result( pgrp_str )
-        class(sym), intent(in) :: self
+        class(sym), intent(in) :: self !< this instance
         character(len=3) :: pgrp_str  !< sym group string
         pgrp_str = self%pgrp
     end function get_pgrp
@@ -298,7 +298,7 @@ contains
     subroutine rot_to_asym( self, osym )
         use simple_ori, only: ori
         class(sym), intent(inout) :: self
-        class(ori), intent(inout) :: osym
+        class(ori), intent(inout) :: osym !< orientation
         type(ori) :: oasym
         integer   :: nsym
         if( self%within_asymunit(osym) )then
@@ -316,7 +316,7 @@ contains
     subroutine rotall_to_asym( self, osyms )
         use simple_ori, only: ori
         class(sym),  intent(inout) :: self     
-        class(oris), intent(inout) :: osyms    
+        class(oris), intent(inout) :: osyms     !< orientations
         type(ori) :: o
         integer   :: i
         do i = 1, osyms%get_noris()
@@ -334,7 +334,7 @@ contains
         class(sym), intent(inout) :: self
         class(ori), intent(in)    :: oref   !< is the untouched reference
         class(ori), intent(inout) :: oasym  !< is outputted as symmetrized
-        real,       intent(out)   :: euldist
+        real,       intent(out)   :: euldist !< Euler distance
         type(ori) :: o, osym
         real      :: dist
         integer   :: isym
@@ -360,7 +360,7 @@ contains
     function get_symori( self, symop ) result( e_sym )
         use simple_ori, only: ori
         class(sym), intent(inout) :: self
-        integer, intent(in)       :: symop
+        integer, intent(in)       :: symop !< symmetry orientation
         type(ori) :: e_sym
         e_sym = self%e_sym%get_ori(symop)
     end function get_symori
@@ -369,7 +369,7 @@ contains
     subroutine apply2all( self, e_in )
         use simple_ori, only: ori
         class(sym),  intent(inout) :: self
-        class(oris), intent(inout) :: e_in
+        class(oris), intent(inout) :: e_in !< symmetry orientations
         type(ori)                  :: orientation
         integer                    :: j, cnt
         cnt = 0
@@ -385,7 +385,7 @@ contains
     function within_asymunit( self, o )result( is_within )
         use simple_ori, only: ori
         class(sym), intent(inout) :: self
-        class(ori), intent(in)    :: o
+        class(ori), intent(in)    :: o !< symmetry orientation
         logical :: is_within
         real    :: euls(3)
         euls = o%get_euler()
@@ -402,7 +402,7 @@ contains
     !>  \brief  4 writing the symmetry orientations 2 file
     subroutine write( self, orifile )
         class(sym), intent(inout)    :: self
-        character(len=*), intent(in) :: orifile
+        character(len=*), intent(in) :: orifile  !< output filename
         call self%e_sym%write(orifile)
     end subroutine write
     !>  apply symmetry orientations with shift
@@ -411,8 +411,8 @@ contains
         class(sym),        intent(inout) :: self
         class(oris),       intent(inout) :: os          !< output orientations
         class(ori),        intent(in)    :: symaxis_ori !< input orientations
-        real,              intent(in)    :: shvec(3)
-        integer, optional, intent(in)    :: state
+        real,              intent(in)    :: shvec(3)    !< shift vector
+        integer, optional, intent(in)    :: state       !< current state
         type(ori) :: o
         integer   :: i, s
         if( present(state) )then
@@ -439,7 +439,7 @@ contains
         class(sym),           intent(inout) :: self
         type(oris),           intent(inout) :: asym_os !< sampled orientations from asymetric unit, eg from spiral with symmetry
         integer,              intent(inout) :: k
-        integer, allocatable, intent(inout) :: nnmat(:,:)
+        integer, allocatable, intent(inout) :: nnmat(:,:) !< nearest-neighbour matrix
         real,    allocatable :: dists(:)
         integer, allocatable :: inds(:)
         type(ori)  :: oasym, osym, oj

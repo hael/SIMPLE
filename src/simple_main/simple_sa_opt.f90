@@ -47,6 +47,12 @@ end type sa_opt
 !>  \brief  defines the function interfaces
 abstract interface
     !> Template for cost minimisation/maximisation function of optimisation
+    !! \param vec solution vector
+    !! \param i index
+    !! \param N number of particles
+    !! \param L number of dimensions (labels)
+    !! \return cost minimisation value
+    !!
     function costfun( vec, i, N, L ) result( cost )
         integer, intent(in) :: N, L, vec(N,L), i
         real                :: cost
@@ -57,7 +63,7 @@ abstract interface
     end subroutine acceptfun
     !< Template for current state of optimisation
     subroutine statefun( T, Tinit )
-        real, intent(in) :: T, Tinit
+        real, intent(in) :: T, Tinit !< state variables
     end subroutine
 end interface
 

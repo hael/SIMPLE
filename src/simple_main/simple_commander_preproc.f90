@@ -523,7 +523,7 @@ contains
     end subroutine exec_unblur
 
     !> ctffind  is a wrapper program for CTFFIND4 (Grigorieff lab)
-    !! @see http://simplecryoem.com/tutorials.html?#ctf-parameter-determination
+    !! \seealso  http://simplecryoem.com/tutorials.html?#ctf-parameter-determination
     subroutine exec_ctffind( self, cline )
         use simple_ctffind_iter, only: ctffind_iter
         use simple_oris,         only: oris
@@ -576,7 +576,7 @@ contains
 
     !> SELECT is a program for selecting files based on image correlation matching
     !!
-    !! @see http://simplecryoem.com/tutorials.html?#prime2d-analysis-of-trpv1-membrane-receptor-images
+    !! \seealso http://simplecryoem.com/tutorials.html?#prime2d-analysis-of-trpv1-membrane-receptor-images
     !! ```sh
     !! simple_exec prg=select
     !!  USAGE:

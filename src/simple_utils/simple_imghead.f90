@@ -352,7 +352,7 @@ contains
             stop 'Unsupported header type; initImgHead; simple_imghead'
         end select
         self%exists = .true.
-        DebugPrint  'created imghead (imghead::new)'
+        DebugPrint  'created imghead ::new '
     end subroutine new
 
 !>  \brief  Reset all the values in the header to default values
@@ -1418,11 +1418,13 @@ contains
         recsz = 120*4
         funit = get_fileunit()
         open(unit=funit,access='STREAM',file='test_imghed.spi',&
-             &action='READWRITE',status='UNKNOWN',&
-#ifndef INTEL
-            &convert='BIG_ENDIAN'&
+             &action='READWRITE',status='UNKNOWN'&
+#ifdef INTEL
+             &)
+#else
+        &,convert='BIG_ENDIAN')
 #endif
-            &)
+   
         call hed%write(funit)
         call hed2%read(funit)
         close(funit)

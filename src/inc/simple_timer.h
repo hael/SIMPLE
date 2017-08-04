@@ -22,13 +22,12 @@
 #ifndef SIMPLE_TIMER_H
 #define SIMPLE_TIMER_H
 
+#if 0
 /*  getting into ## preprocessor magic */
 #define CAT(prefix, suffix)            prefix ## suffix
 #define _UNIQUE_LABEL(prefix, suffix)  CAT(prefix, suffix)
 #define UNIQUE_LABEL(prefix)           _UNIQUE_LABEL(prefix, __LINE__)
 
-
-#if 0
 /*calculate the number of arguments in macro - max 10*/
 /*C99 __VA_ARGS__ versions */
 #define c99_count(...)    _c99_count1 ( , ##__VA_ARGS__)
@@ -63,8 +62,7 @@
 
 #endif
 
-#define TBEG(TOKEN) p_tmp = #TOKEN; \
- call timer_profile_start(trim(p_tmp))
+#define TBEG(TOKEN) p_tmp = #TOKEN; call timer_profile_start(trim(p_tmp))
 
 #define TEND(TOKEN) p_tmp = #TOKEN; \
  call timer_profile_break(trim(p_tmp))
@@ -138,8 +136,7 @@ call timer_loop_end(cblock);end block
 #define TSTOP_omp()                              \
   write(*,'(A,A,1i4,A,1d20.10)') __FILENAME__,":",__LINE__,": Elapsed time (s) ", toc_omp()
 
-#endif
-  /*OPENMP*/
+#endif /*OPENMP*/
 
 
 #if defined(CUDA)

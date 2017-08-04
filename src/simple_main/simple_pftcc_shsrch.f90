@@ -38,7 +38,7 @@ type, extends(pftcc_opt) :: pftcc_shsrch
 end type pftcc_shsrch
 
 contains
-
+    !> Shift search constructor
     subroutine shsrch_new( self, pftcc, lims, shbarrier, nrestarts, npeaks, maxits, vols )
         use simple_projector, only: projector
         class(pftcc_shsrch),                intent(inout) :: self
@@ -72,7 +72,12 @@ contains
         self%rotmat(1,1) = 1.
         self%rotmat(2,2) = 1.
     end subroutine shsrch_new
-
+    !> shsrch_set_indices Set indicies for shift search
+    !! \param ref reference
+    !! \param ptcl particle index
+    !! \param rot rotational index
+    !! \param state current state
+    !!
     subroutine shsrch_set_indices( self, ref, ptcl, rot, state )
         class(pftcc_shsrch), intent(inout) :: self
         integer,             intent(in)    :: ref, ptcl
@@ -82,13 +87,13 @@ contains
         self%rot = 1
         if( present(rot) ) self%rot = rot
     end subroutine shsrch_set_indices
-
+    !> shsrch_set_inipop Set init population for shift search
     subroutine shsrch_set_inipop( self, inipop )
         class(pftcc_shsrch), intent(inout) :: self
-        real,                intent(in)    :: inipop(:,:)
+        real,                intent(in)    :: inipop(:,:) !< initial population
         stop 'Not for simplex use; simple_pftcc_shsrch%srch_set_inipop'
     end subroutine shsrch_set_inipop
-
+    !> Cost function
     function shsrch_costfun( self, vec, D ) result( cost )
         class(pftcc_shsrch), intent(inout) :: self
         integer,             intent(in)    :: D          !< size of vec
@@ -114,7 +119,7 @@ contains
         cost = -self%pftcc_ptr%corr(self%reference, self%particle, self%rot, vec_here)
     end function shsrch_costfun
 
-    
+    !> minimisation routine
     function shsrch_minimize( self, irot, shvec, rxy, fromto ) result( cxy )
         use simple_math, only: rotmat2d
         class(pftcc_shsrch), intent(inout) :: self
@@ -159,11 +164,11 @@ contains
 
     subroutine shsrch_get_peaks( self, peaks )
         class(pftcc_shsrch), intent(inout) :: self
-        real, allocatable,   intent(out)   :: peaks(:,:)
+        real, allocatable,   intent(out)   :: peaks(:,:) !< output peak matrix
         allocate(peaks(1,2))
         peaks(1,:) = self%ospec%x
     end subroutine shsrch_get_peaks
-
+    !> Destructor
     subroutine kill( self )
         class(pftcc_shsrch), intent(inout) :: self
         self%pftcc_ptr => null()

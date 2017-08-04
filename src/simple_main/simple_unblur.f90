@@ -23,6 +23,7 @@ implicit none
 public :: unblur_movie, unblur_calc_sums, unblur_calc_sums_tomo
 private
 #include "simple_local_flags.inc"
+
 interface unblur_calc_sums
     module procedure unblur_calc_sums_1
     module procedure unblur_calc_sums_2
@@ -227,7 +228,7 @@ contains
         call movie_sum%bwd_ft
     end subroutine unblur_calc_sums_1
     !> Calulate stack sums in range 
-    !! \param fromto ranges
+    !! \param fromto ranges to calc sum
     !! \param movie_sum_corrected corrected movie stack sums
     subroutine unblur_calc_sums_2( movie_sum_corrected, fromto )
         type(image), intent(out) :: movie_sum_corrected
@@ -294,11 +295,9 @@ contains
         ! SET SAMPLING DISTANCE
         smpd        = p%smpd
         smpd_scaled = p%smpd/p%scale
-        if( debug ) then
-            write(*,*) 'logical dimension of frame: ',        ldim
-            write(*,*) 'scaled logical dimension of frame: ', ldim_scaled
-            write(*,*) 'number of frames: ',                  nframes
-        end if
+        DebugPrint 'logical dimension of frame: ',        ldim
+        DebugPrint 'scaled logical dimension of frame: ', ldim_scaled
+        DebugPrint 'number of frames: ',                  nframes
         maxshift = p%trs/p%scale
         ! set fixed frame (all others are shifted by reference to this at 0,0)
         fixed_frame = nint(real(nframes)/2.)
@@ -382,9 +381,11 @@ contains
         existence = .true.
         DebugPrint  'unblur_init, done'
     end subroutine unblur_init
-
+    !> center_shifts
+    !! \param shifts  2D origin shifts
+    !!
     subroutine center_shifts( shifts )
-        real, intent(inout) :: shifts(nframes,2) !< 2D origin shifts
+        real, intent(inout) :: shifts(nframes,2)
         real    :: xsh, ysh
         integer :: iframe
         xsh = -shifts(fixed_frame,1)
@@ -396,7 +397,9 @@ contains
             if( abs(shifts(iframe,2)) < 1e-6 ) shifts(iframe,2) = 0.
         end do
     end subroutine center_shifts
-
+    !> shift_frames
+    !! \param shifts  2D origin shifts
+    !!
     subroutine shift_frames( shifts )
         real, intent(in) :: shifts(nframes,2)
         integer :: iframe
@@ -409,7 +412,7 @@ contains
         end do
     end subroutine shift_frames
 
-    subroutine calc_corrmat
+    subroutine calc_corrmat()
         integer :: iframe, jframe
         corrmat = 1. ! diagonal elements are 1
         !$omp parallel do schedule(guided) default(shared) private(iframe,jframe) proc_bind(close)
@@ -422,7 +425,7 @@ contains
         !$omp end parallel do
     end subroutine calc_corrmat
 
-    subroutine calc_corrs
+    subroutine calc_corrs()
         integer :: iframe
         real    :: old_corr
         do iframe=1,nframes
@@ -433,8 +436,9 @@ contains
             call add_movie_frame(iframe)
         end do
     end subroutine calc_corrs
-
-    subroutine corrmat2weights
+    !> corrmat2weight
+    !!
+    subroutine corrmat2weights()
         use simple_stat, only: corrs2weights
         integer :: iframe, jframe
         corrs = 0.
@@ -449,8 +453,9 @@ contains
         !$omp end parallel do
         frameweights = corrs2weights(corrs)
     end subroutine corrmat2weights
-
-    subroutine sum_movie_frames_ftexp
+    !> sum_movie_frames_ftexp
+    !!
+    subroutine sum_movie_frames_ftexp()
         integer :: iframe
         real    :: w
         call movie_sum_global_ftexp%new(movie_frames_ftexp_sh(1))
@@ -459,7 +464,9 @@ contains
             call movie_sum_global_ftexp%add(movie_frames_ftexp_sh(iframe), w=w)
         end do
     end subroutine sum_movie_frames_ftexp
-
+    !> sum_movie_frames
+    !! \param shifts 2D array of shifts for each frame
+    !!
     subroutine sum_movie_frames( shifts )
         real, intent(in), optional :: shifts(nframes,2)
         integer :: iframe
@@ -480,8 +487,9 @@ contains
         end do
         call frame_tmp%kill
     end subroutine sum_movie_frames
-
-    subroutine wsum_movie_frames_ftexp
+    !> wsum_movie_frames_ftexp
+    !!
+    subroutine wsum_movie_frames_ftexp()
         integer :: iframe
         call movie_sum_global_ftexp%new(movie_frames_ftexp_sh(1))
         do iframe=1,nframes
@@ -489,7 +497,10 @@ contains
             &call movie_sum_global_ftexp%add(movie_frames_ftexp_sh(iframe), w=frameweights(iframe))
         end do
     end subroutine wsum_movie_frames_ftexp
-
+    !> wsum_movie_frames
+    !! \param shifts 
+    !! \param fromto 
+    !!
     subroutine wsum_movie_frames( shifts, fromto )
         real,              intent(in) :: shifts(nframes,2)
         integer, optional, intent(in) :: fromto(2)
@@ -513,7 +524,11 @@ contains
             endif
         end do
     end subroutine wsum_movie_frames
-
+    !> wsum movie frames tomo
+    !! \param shifts 
+    !! \param frame_counter 
+    !! \param time_per_frame 
+    !!
     subroutine wsum_movie_frames_tomo( shifts, frame_counter, time_per_frame )
         real,    intent(in)    :: shifts(nframes,2)
         integer, intent(inout) :: frame_counter
@@ -526,7 +541,7 @@ contains
         call frame_tmp%new(ldim_scaled, smpd_scaled)
         do iframe=1,nframes
             frame_counter = frame_counter + 1
-            current_time  = real(frame_counter)*time_per_frame ! unit: s
+            current_time  = real(frame_counter)*time_per_frame ! unit: seconds
             acc_dose      = dose_rate*current_time             ! unit e/A2
             if( frameweights(iframe) > 0. )then
                 call movie_frames_scaled(iframe)%shift(-shifts(iframe,1), -shifts(iframe,2), imgout=frame_tmp)
@@ -537,7 +552,10 @@ contains
             endif
         end do
     end subroutine wsum_movie_frames_tomo
-
+    !> add movie frame
+    !! \param iframe frame index to insert
+    !! \param w frame weight
+    !!
     subroutine add_movie_frame( iframe, w )
         integer,        intent(in) :: iframe
         real, optional, intent(in) :: w
@@ -547,13 +565,16 @@ contains
         if( frameweights(iframe) > 0. )&
         &call movie_sum_global_ftexp%add(movie_frames_ftexp_sh(iframe), w=ww)
     end subroutine add_movie_frame
-
+    !> subtract_movie_frame
+    !! \param iframe frame index to remove 
+    !!
     subroutine subtract_movie_frame( iframe )
         integer, intent(in) :: iframe
         if( frameweights(iframe) > 0. )&
         &call movie_sum_global_ftexp%subtr(movie_frames_ftexp_sh(iframe), w=frameweights(iframe))
     end subroutine subtract_movie_frame
-
+    !> unblur_kill class destructor
+    !!
     subroutine unblur_kill
         integer :: iframe
         if( existence )then

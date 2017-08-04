@@ -157,7 +157,7 @@ contains
     !>  \brief  is a parameterized constructor
     subroutine ori_from_rotmat( self, rotmat )
         class(ori), intent(inout) :: self
-        real, intent(in)          :: rotmat(3,3)
+        real, intent(in)          :: rotmat(3,3) !< rotation matrix
         call self%new_ori
         self%rmat = rotmat
         self%euls = m2euler(self%rmat)
@@ -190,7 +190,6 @@ contains
     subroutine copy_ori( self_out, self_in )
         class(ori), intent(in)    :: self_in
         class(ori), intent(inout) :: self_out
-        integer                   :: sz
         self_out%euls   = self_in%euls
         self_out%normal = self_in%normal
         self_out%rmat   = self_in%rmat
@@ -201,7 +200,7 @@ contains
     !>  \brief  is a setter
     subroutine set_euler( self, euls  )
         class(ori), intent(inout) :: self
-        real, intent(in)          :: euls(3)
+        real, intent(in)          :: euls(3)!< Euler angle
         self%rmat   = euler2m(euls(1),euls(2),euls(3))
         self%euls   = m2euler(self%rmat)
         call self%htab%set('e1',self%euls(1))
@@ -213,21 +212,21 @@ contains
     !>  \brief  is a setter
     subroutine e1set( self, e1 )
         class(ori), intent(inout) :: self
-        real, intent(in)          :: e1
+        real, intent(in)          :: e1     !< Euler angle
         call self%set_euler([e1,self%euls(2),self%euls(3)])
     end subroutine e1set
 
     !>  \brief  is a setter
     subroutine e2set( self, e2 )
         class(ori), intent(inout) :: self
-        real, intent(in)          :: e2
+        real, intent(in)          :: e2      !< Euler angle
         call self%set_euler([self%euls(1),e2,self%euls(3)])
     end subroutine e2set
 
     !>  \brief  is a setter
     subroutine e3set( self, e3 )
         class(ori), intent(inout) :: self
-        real, intent(in)          :: e3
+        real, intent(in)          :: e3      !< Euler angle
         call self%set_euler([self%euls(1),self%euls(2),e3])
     end subroutine e3set
 
@@ -244,7 +243,7 @@ contains
     !>  \brief  is a setter
     subroutine set_shift( self, shvec )
         class(ori), intent(inout) :: self
-        real,       intent(in)    :: shvec(2)
+        real,       intent(in)    :: shvec(2) !< shift vector
         call self%htab%set( 'x', shvec(1) )
         call self%htab%set( 'y', shvec(2) )
     end subroutine set_shift
@@ -309,7 +308,7 @@ contains
     !>  \brief  for generating a random Euler angle
     subroutine rnd_euler_1( self, eullims )
         class(ori),     intent(inout) :: self
-        real, optional, intent(inout) :: eullims(3,2)
+        real, optional, intent(inout) :: eullims(3,2)!< Euler angles
         logical :: found
         if( present(eullims) )then
             found = .false.
@@ -361,8 +360,8 @@ contains
     subroutine rnd_ori( self, trs, eullims )
         use simple_rnd, only: ran3
         class(ori),     intent(inout) :: self
-        real, optional, intent(in)    :: trs
-        real, optional, intent(inout) :: eullims(3,2)
+        real, optional, intent(in)    :: trs         !< threshold
+        real, optional, intent(inout) :: eullims(3,2)!< Euler angles
         real :: x, y, z
         if( present(trs) )then
             if( abs(trs) < 1e-3 )then
@@ -389,7 +388,7 @@ contains
     subroutine rnd_inpl( self, trs )
         use simple_rnd, only: ran3
         class(ori), intent(inout)  :: self
-        real, intent(in), optional :: trs
+        real, intent(in), optional :: trs         !< threshold
         real :: x, y
         if( present(trs) )call self%rnd_shift(trs)
         call self%e3set(ran3()*359.99)
@@ -399,7 +398,7 @@ contains
     subroutine rnd_shift( self, trs )
         use simple_rnd, only: ran3
         class(ori), intent(inout)  :: self
-        real,       intent(in)     :: trs
+        real,       intent(in)     :: trs         !< threshold
         real :: x, y
         if( abs(trs) < 1e-3 )then
             x = 0.

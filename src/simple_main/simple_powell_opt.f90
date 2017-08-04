@@ -127,7 +127,7 @@ contains
             !!          is used
             subroutine powell(cost)
                 use simple_opt_subs, only: linmin
-                real, intent(out) :: cost
+                real, intent(out) :: cost        !< return minimisatation value
                 real, allocatable :: pt(:),ptt(:)
                 integer :: i,ibig,j,iter,alloc_stat
                 real    :: del,fp,fptt,t

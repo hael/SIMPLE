@@ -13,7 +13,6 @@ emx2simple.pl
 exec_batchbox.pl
 exec_ctffind4.1.X.pl
 exec_ctffind.pl
-gen_simple_doc_primer.pl
 get_PixSz_XML.pl
 kill.pl
 parse_ctffind3.pl
@@ -28,7 +27,6 @@ relion2simple.pl
 restart.pl
 sam2emanbox.pl
 simmovies.pl
-simple_args_generator.pl
 simple_args_varlist.pl
 split_filetab.pl
 tab2space.pl)
@@ -39,6 +37,21 @@ tab2space.pl)
 #     PERMISSIONS OWNER_READ GROUP_READ WORLD_READ OWNER_EXECUTE GROUP_EXECUTE WORLD_EXECUTE
 #     )
 # endforeach()
+
+add_custom_target(gen_doc_primer_web
+  COMMAND SIMPLE_PATH=${CMAKE_INSTALL_PREFIX} "${CMAKE_SOURCE_DIR}/scripts/gen_simple_doc_primer.pl" "web" 
+  DEPENDS "${CMAKE_SOURCE_DIR}/scripts/gen_simple_doc_primer.pl" 
+  WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX}
+  USES_TERMINAL
+  )
+add_custom_target(gen_doc_primer_tex
+  COMMAND SIMPLE_PATH=${CMAKE_INSTALL_PREFIX} "${CMAKE_SOURCE_DIR}/scripts/gen_simple_doc_primer.pl" "tex" 
+  DEPENDS "${CMAKE_SOURCE_DIR}/scripts/gen_simple_doc_primer.pl" 
+  WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX}
+  USES_TERMINAL
+  )
+
+
 
 install(DIRECTORY  ${CMAKE_CURRENT_SOURCE_DIR}
   DESTINATION  ${CMAKE_INSTALL_PREFIX}

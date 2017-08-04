@@ -324,7 +324,7 @@ contains
      !! \param fname2resize  output filename
     !! \param fname1,fname2  input filenames
     !! \param smpd  sampling distance
-    !! \param ldim_new new logical dimension
+    !! \param ldims_new new logical dimension
     !! \param smpds_new new sampling distance
     !! \param fromptop  index range for copying
     !!
@@ -704,7 +704,7 @@ contains
     !! \param o orientation object used for shifting
     !! \param mul multiplier
     !! \param round optional flag for rounding
-
+    !! \param smpd  sampling distance
     subroutine shift_imgfile( fname2shift, fname, o, smpd, mul, round )
         use simple_oris, only: oris
         character(len=*),  intent(in)    :: fname2shift, fname
@@ -774,7 +774,13 @@ contains
         call img%kill
     end subroutine bp_imgfile
 
-    !>  \brief  is for real-space filtering
+    !>  \brief real_filter_imgfile is for real-space filtering
+    !! \param fname2filter input filename
+    !! \param fname output filename
+    !! \param smpd sampling distance
+    !! \param which_filter filter tag
+    !! \param winsz window size
+    !!
     subroutine real_filter_imgfile( fname2filter, fname, smpd, which_filter, winsz )
         character(len=*), intent(in) :: fname2filter, fname
         real,             intent(in) :: smpd

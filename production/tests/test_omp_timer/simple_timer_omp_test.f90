@@ -43,7 +43,7 @@ contains
       cfac = .25
       b = 1.
       xx = 12.0_dp
-      verbose = be_verbose
+      if(present(be_verbose)) verbose = be_verbose
       VerbosePrint 'OpenMP Fortran Timer'
       VerbosePrint 'Note: in debug, OpenMP may not be present, timer defaults to cpu_time'
       VerbosePrint "1. Simple timestamp and diff "

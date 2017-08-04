@@ -668,7 +668,7 @@ contains
     end subroutine rank_transform_2
 
     !>    Spearman rank correlation
-    !<  \param pi1,pi2 test and reference data
+    !<  \param pi1 test data 1 and \param pi2 reference data
     function spear( n, pi1, pi2 ) result( corr )
         integer, intent(in) :: n
         real, intent(in)    :: pi1(n), pi2(n)  !<  pi1 test data 1  pi2 test data 2
@@ -872,9 +872,10 @@ contains
     !! Mutual Information \f$ I(X;Y)=\sum_{y\in Y}\sum_{x\in X}p(x,y)\log{\left({\frac{p(x,y)}{p(x)\,p(y)}}\right)} \f$
     !!
     !! Normalised MI also known as Information Quality Ratio (IQR)
-    !! \f$ IQR(X,Y)=E\left[I(X;Y)\right]={\frac{I(X;Y)}{\mathrm{H}(X,Y)}}=
+    !! \f[ IQR(X,Y)=E\left[I(X;Y)\right]={\frac{I(X;Y)}{\mathrm{H}(X,Y)}}=
     !!   {\frac{\sum_{x\in X}\sum_{y\in Y}p(x,y)\log {p(x)p(y)}}
-    !!   {\sum _{x\in X}\sum _{y\in Y}p(x,y)\log {p(x,y)}}-1} \f$
+    !!   {\sum _{x\in X}\sum _{y\in Y}p(x,y)\log {p(x,y)}}-1}
+    !! \f]
     !! @see https://en.wikipedia.org/wiki/Mutual_information#Normalized_variants
     !! \param x input reference array
     !! \param y input test array

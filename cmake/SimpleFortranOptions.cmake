@@ -151,7 +151,7 @@ if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" ) #AND Fortran_COMPILER_NAME MAT
     message(FATAL_ERROR "${PROJECT_NAME} requires gfortran version 4.9 or above")
   endif ()
   set(EXTRA_FLAGS "${EXTRA_FLAGS}")
-  set(CMAKE_CPP_COMPILER_FLAGS           "-E -w -C -P") # only seen by preprocessor if #include is present
+  set(CMAKE_CPP_COMPILER_FLAGS           "-E -w ") # only seen by preprocessor if #include is present
 
   set(CMAKE_Fortran_FLAGS                " ${EXTRA_FLAGS} ") #${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
   set(CMAKE_Fortran_FLAGS_DEBUG          " ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_DEBUG_INIT}" )
@@ -190,7 +190,7 @@ elseif (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel" OR Fortran_COMPILER_NAME M
   #
   set(CMAKE_AR                           "xiar")
   set(CMAKE_CPP_COMPILER                 "fpp")
-  set(CMAKE_CPP_COMPILER_FLAGS           " -noJ -B -C -P")
+  set(CMAKE_CPP_COMPILER_FLAGS           " -noJ -noB -noC ")  #Recognize C,C++,F90 style comments. 
   set(CMAKE_Fortran_FLAGS                " ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
   set(CMAKE_Fortran_FLAGS_DEBUG          " ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_DEBUG_INIT}")
   # set(CMAKE_Fortran_FLAGS_MINSIZEREL    "-Os ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
@@ -505,6 +505,11 @@ if (ENABLE_FAST_MATH_OPTIMISATION)
     "-ffast-math"      # GNU
     "-Mcuda=fastmath"  # Portland Group
     )
+  SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
+    Fortran
+    "-ffp-contract=fast"              # GNU
+    "-Mfma -Mvect=fma,fuse,gather"        # Portland Group
+    )   
 endif(ENABLE_FAST_MATH_OPTIMISATION)
 
 if  (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI" OR CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
@@ -556,8 +561,11 @@ add_definitions(" -D__FILENAME__='\"$(notdir $<)\"'")
 
 # Override Fortran preprocessor
 # block constructs (F2008), unlimited polymorphism and variadic macros (not included in F2003 -- but is part of C99 )
-set(CMAKE_Fortran_COMPILE_OBJECT "grep --silent '#include' <SOURCE> && ( ${CMAKE_CPP_COMPILER} ${CMAKE_CPP_COMPILER_FLAGS} -DOPENMP <DEFINES> <INCLUDES> <SOURCE> > <OBJECT>.f90 &&  <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <OBJECT>.f90 -o <OBJECT> ) || <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <SOURCE> -o <OBJECT>")
-
+if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel")
+set(CMAKE_Fortran_COMPILE_OBJECT "grep --silent -E '#include' <SOURCE> && ( ${CMAKE_CPP_COMPILER} ${CMAKE_CPP_COMPILER_FLAGS} -DOPENMP <DEFINES> <INCLUDES> <SOURCE> > <OBJECT>.f90 &&  <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <OBJECT>.f90 -o <OBJECT> ) || <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <SOURCE> -o <OBJECT>")
+else()
+set(CMAKE_Fortran_COMPILE_OBJECT "grep --silent -E '#include.*timer.h' <SOURCE> && ( ${CMAKE_CPP_COMPILER} ${CMAKE_CPP_COMPILER_FLAGS} -DOPENMP <DEFINES> <INCLUDES> <SOURCE> > <OBJECT>.f90 &&  <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <OBJECT>.f90 -o <OBJECT> ) || <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <SOURCE> -o <OBJECT>")
+endif()
 
 # Option for code coverage
 if(VERBOSE OR ${BUILD_WITH_COVERAGE})

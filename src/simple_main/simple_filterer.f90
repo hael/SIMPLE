@@ -15,11 +15,11 @@ contains
     !> DOSE FILTERING (Grant, Grigorieff eLife 2015)
     !! input is template image, accumulative dose (in e/A2) and acceleration voltage
     !!         output is filter coefficients
-    !! \f$  \mathsf{dose}_\mathsf{acc} = \int^{N}_{1} \mathsf{dose\_weight}(a,F,V),\ n_\mathsf{e}/\si{\angstrom\squared}  \f$
-    !! \param acc_dose accumulative dose (in \f$n_\mathsf{e} per \si{\angstrom\squared}\f$)
+    !! \f$  \mathrm{dose}_\mathrm{acc} = \int^{N}_{1} \mathrm{dose\_weight}(a,F,V),\ n_\mathrm{e}/\si{\angstrom\squared}  \f$
+    !! \param acc_dose accumulative dose (in \f$n_\mathrm{e}^- per \si{\angstrom\squared}\f$)
     function acc_dose2filter( img, acc_dose, kV ) result( filter )
         type(image), intent(in) :: img           !< input image
-        real,        intent(in) :: acc_dose, kV  !< accumulative dose (in e/A2) and acceleration voltage
+        real,        intent(in) :: acc_dose, kV  !< acceleration voltage
         real, allocatable       :: filter(:)
         integer :: find, sz
         sz = img%get_filtsz()
@@ -34,7 +34,7 @@ contains
     !!         output is resolution dependent weight applied to individual frames
     !!         before correlation search and averaging
     !!
-    !! \f$  \mathsf{dose\_weight}(a,F,V) = \exp\left(- \frac{A_\mathsf{dose}}{k\times (2.0\times A\times f^B + C)} \right), \f$
+    !! \f$  \mathrm{dose\_weight}(a,F,V) = \exp\left(- \frac{A_\mathrm{dose}}{k\times (2.0\times A\times f^B + C)} \right), \f$
     !! where \f$k\f$ is 0.75 for \f$V<200\f$ kV, 1.0 for \f$200 \leqslant  V \leqslant  300\f$
     real function dose_weight( acc_dose, spat_freq, kV )
         real, intent(in) :: acc_dose                !< accumulative dose (in e/A2)

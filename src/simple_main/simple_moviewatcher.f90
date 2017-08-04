@@ -104,7 +104,7 @@ contains
                 ! already been reported, nothing to do
             else
                 abs_fname = trim(self%cwd)//'/'//trim(adjustl(fname))
-                call file_stats(trim(abs_fname), fstat, stats)
+                call file_stat(abs_fname, fstat, stats)
                 is_closed = .not. is_file_open(abs_fname)
                 if( fstat.eq.0 )then
                     ! new file identified

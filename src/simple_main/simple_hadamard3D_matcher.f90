@@ -21,8 +21,10 @@ implicit none
 
 public :: prime3D_find_resrange, prime3D_exec, gen_random_model
 public :: preppftcc4align, prep_refs_pftcc4align, pftcc
+
 private
 #include "simple_local_flags.inc"
+
 integer, parameter              :: MAXNPEAKS=10
 type(polarft_corrcalc)          :: pftcc
 type(prime3D_srch), allocatable :: primesrch3D(:)
@@ -71,7 +73,7 @@ contains
         real              :: norm, corr_thresh
         integer           :: iptcl, inptcls, prev_state, istate
         integer           :: statecnt(p%nstates)
-
+#include "simple_local_flags.inc"
         inptcls = p%top - p%fromp + 1
 
         ! SET FRACTION OF SEARCH SPACE
@@ -339,6 +341,7 @@ contains
             call killrecvols(b, p)
         endif
     end subroutine gen_random_model
+    
     !> Prepare alignment search using polar projection Fourier cross correlation
     subroutine preppftcc4align( b, p, cline, ppfts_fname )
         class(build),               intent(inout) :: b       !< build object

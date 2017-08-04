@@ -192,50 +192,6 @@ contains
 #endif        
     end subroutine simple_sleep
 
-    !>  Wrapper for system call
-    subroutine sys_stat( filename, buffer, status )
-#if defined(INTEL)
-        use ifport
-#elif defined(PGI)
-        include 'lib3f.h'
-#include "simple_local_flags.inc"
-        
-#endif
-        character(len=*),  intent(in) :: filename
-        integer,dimension(13), intent(inout) :: buffer
-        integer, intent(inout) :: status
-        character(len=STDLEN) :: cmsg
-        integer,allocatable   :: statb(:)
-        integer               :: stato
-        logical               :: doprint = .true.
-        logical exists
-        
-#if defined(INTEL)
-        cmsg = ' failed to find '//trim(adjustl(filename))
-        inquire(FILE = trim(adjustl(filename)), IOMSG=cmsg, EXIST = exists )
-        status = INT(exists)
-#elif defined(PGI)
-        debug=.true.
-!        allocate(statb(13))
-        stato =  stat(trim(adjustl(filename)), statb)
-        DebugPrint 'stato ', stato
-        DebugPrint 'size of statb ', size(statb)
-        status = stato
-!        cmsg = ' failed to find '//trim(adjustl(filename))
-!        inquire(FILE = trim(adjustl(filename)), IOMSG=cmsg, EXIST=exists )
-!        stato = INT(exists)
-!        status = stato
-
-#else
-        call stat(trim(adjustl(filename)), buffer, status)
-#endif
-        if( doprint )then
-            write(*,*) 'command: stat ', trim(adjustl(filename))
-            write(*,*) 'status of execution: ', status
-        endif
-
-    end subroutine sys_stat
-
 
     function waitforfileclose( funit )result( all_good )
         integer, intent(inout) :: funit

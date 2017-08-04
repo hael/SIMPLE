@@ -1,31 +1,34 @@
 /**
-  @mainpage SIMPLE API documentation
+  \mainpage SIMPLE API documentation
 
-  @section Introduction
+  \section Introduction
 
   This document describes the source code for SIMPLE.
   Visit the [SIMPLE homepage][1] for more information.
 
 
-  @section Developer documentation
+  \section Developer documentation
 
-  You've reached the automically generated documentation of SIMPLE. This document contains information about architecture and code structure. It is attended for developers wanting to understand or contribute to SIMPLE.
+  You've reached the automically generated documentation of SIMPLE.
+  This document contains information about architecture and code structure.
+  It is attended for developers wanting to understand or contribute to SIMPLE.
 
-  @section Modules
+  \section Modules
 
-Documentation is generate from comments placed in all parts of the code. But you will also find some groups describing specific functional parts:
+  Documentation is generate from comments placed in all parts of the code.
+  But you will also find some groups describing specific functional parts:
        -  Definitions
        -  Utilities
        -  Image Operations
        -  Optimisation and search
        -  Command-line and program interfaces
 
-    @section Definitions
+    \subsection Definitions
 
     * singletons: defs, params
     * abstract factory
     
-    @section Utilities
+    \subsection Utilities
 
    * Math,
    * array,
@@ -36,7 +39,7 @@ Documentation is generate from comments placed in all parts of the code. But you
    * image format handling
    
 
-    @section Image Operations
+    \subsection Image Operations
    * Image class
    * Image operations and transforms
    * Volume operations
@@ -46,7 +49,7 @@ Documentation is generate from comments placed in all parts of the code. But you
    * Image reconstruction
 
 
-    @section Optimisation and search
+    \subsection Optimisation and search
 
    * Core class
      + Orientation Alignment Optimisation
@@ -58,7 +61,7 @@ Documentation is generate from comments placed in all parts of the code. But you
      + Particle swarm
      + Brute-force
 
-    @section Command-line and program interfaces
+    \subsection Command-line and program interfaces
 
    * Command-line arguments
      + Files: stk= outstk= deftab=

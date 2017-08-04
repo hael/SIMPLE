@@ -796,7 +796,7 @@ INPUT_ENCODING         = UTF-8
 # *.m, *.markdown, *.md, *.mm, *.dox, *.py, *.pyw, *.f90, *.f95, *.f03, *.f08,
 # *.f, *.for, *.tcl, *.vhd, *.vhdl, *.ucf and *.qsf.
 
-FILE_PATTERNS          = *.h *.f90 *.f08 *.f03 *.cuf 
+FILE_PATTERNS          = *.h *.f90 *.f08 *.f03 *.cuf *.txt *.inc *.i90 *.i03
 
 # The RECURSIVE tag can be used to specify whether or not subdirectories should
 # be searched for input files as well.
@@ -845,7 +845,7 @@ EXCLUDE_PATTERNS       = "*/.*" "self" "*self*"\
 # Note that the wildcards are matched against the file with absolute path, so to
 # exclude all test directories use the pattern */test/*
 
-EXCLUDE_SYMBOLS        = "self"  "*/self/*" "test_*" "self"  \
+EXCLUDE_SYMBOLS        = self  "*/self/*" "test_*" "self"  \
                          "*self*"  \
                          "*/*self*/*"
 
@@ -925,7 +925,7 @@ FILTER_SOURCE_PATTERNS =
 # (index.html). This can be useful if you have a project on for instance GitHub
 # and want to reuse the introduction page also for the doxygen output.
 
-#USE_MDFILE_AS_MAINPAGE =
+USE_MDFILE_AS_MAINPAGE =  "@PROJECT_MAINPAGE@"
 # ${DOCS_DIR}/Doxygen.md
 
 #---------------------------------------------------------------------------
@@ -1465,7 +1465,7 @@ USE_MATHJAX            = YES
 # The default value is: HTML-CSS.
 # This tag requires that the tag USE_MATHJAX is set to YES.
 
-MATHJAX_FORMAT         = NativeMML
+MATHJAX_FORMAT         = SVG
 
 # When MathJax is enabled you need to specify the location relative to the HTML
 # output directory using the MATHJAX_RELPATH option. The destination directory

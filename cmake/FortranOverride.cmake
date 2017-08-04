@@ -159,13 +159,13 @@ ENDIF(APPLE)
 message( STATUS "CMAKE_Fortran_COMPILER_ID: ${CMAKE_Fortran_COMPILER_ID}")
 if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
   # gfortran
-  set(preproc  "-cpp -P ")                                                                      # preprocessor flags
+  set(preproc  "-cpp  ")                                                                        # preprocessor flags
   set(dialect  "-ffree-form  -fimplicit-none  -ffree-line-length-none -fno-second-underscore")  # language style
   set(warn     "-Wampersand -Wsurprising -Wtabs -Wline-truncation -Winteger-division -Wreal-q-constant ")
-  set(forspeed "-O3")                                                                           # optimisation
+  set(forspeed "-O3 ")                                                                           # optimisation
   set(forpar   "-fopenmp  ")                                                                    # parallel flags
   set(target   "${GNUNATIVE} -fPIC ")                                                           # target platform
-  set(common   "${preproc} ${dialect} ${target} -DGNU ")
+  set(common   "${preproc} ${dialect} ${target}")
   set(checks   "-fcheck-array-temporaries -frange-check -fstack-protector -fstack-check -fbounds-check") # checks
   set(warnDebug "-Wall -Wextra -Wimplicit-interface  ${checks}")                                # extra warning flags
   set(fordebug "-O0 -g -pedantic -fno-inline -fno-f2c -Og -ggdb -fbacktrace  ${warnDebug} ")    # debug flags
@@ -179,11 +179,11 @@ elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
   set(checks   "-Mdclchk -Mchkptr -Mchkstk  -Munixlogical -Mlarge_arrays -Mflushz -Mdaz -Mfpmisalign")
   set(warn     "-Minform=warn -Minfo=all,ftn ${checks}")
   # bounds checking cannot be done in CUDA fortran or OpenACC GPU
-  set(fordebug "${warn}  -traceback -gopt -Mneginfo=all,ftn -Mnodwarf -Mpgicoff -traceback -Mprof  ")
+  set(fordebug "-g ${warn}  -traceback -gopt -Mneginfo=all,ftn -Mnodwarf -Mpgicoff -traceback -Mprof  ")
   set(forspeed "-O3 " ) # -Munroll -O4  -Mipa=fast -fast -Mcuda=fastmath,unroll -Mvect=nosizelimit,short,simd,sse  ")
   set(forpar   " -mp -acc -Mcuda=cc60") # -Mconcur=bind,allcores -Mcuda=cuda8.0,cc60,flushz,fma
   set(target   " -m64 -fPIC ")
-  set(common   "${preproc} ${dialect} ${target}  -DPGI")
+  set(common   "${preproc} ${dialect} ${target}")
   #
   set(FFTWDIR "/usr/local/pgi/src/fftw/")
 
@@ -194,18 +194,20 @@ elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
   set(dialect  "-free -implicitnone -std08  -list-line-len=264 -diag-disable 6477  -gen-interfaces  ")
   set(checks   "-check bounds -check uninit -assume buffered_io ") # -mcmodel=medium -shared-intel
   set(warn     "-warn all ")
-  set(fordebug "-debug -O0 -ftrapuv -debug all -check all ${warn} -assume byterecl -align sequence  -diag-disable 6477  -gen-interfaces ")
+  set(fordebug "-g -debug -O0 -ftrapuv -debug all -check all ${warn} -assume byterecl -align sequence  -diag-disable 6477  -gen-interfaces ")
   set(forspeed "-O3 -fp-model fast=2 -inline all -unroll-aggressive ")
   set(forpar   "-qopenmp")
   set(target   "-no-prec-div -static -fPIC")
-  set(common   "${preproc} ${dialect} ${checks} ${target} -DINTEL")
+  set(common   "${preproc} ${dialect} ${checks} ${target}")
   # else()
   #   message(" Fortran compiler not supported. Set FC environment variable")
   set(MKLROOT $ENV{MKLROOT})
 
 endif ()
-set(CMAKE_Fortran_FLAGS_RELEASE_INIT "${common} ${forspeed} ${forpar}"  CACHE STRING "Default release flags -- this cannot be edited (see cmake/FortranOverride.cmake) -- Use CMAKE_Fortran_FLAGS_RELEASE instead" FORCE)
-set(CMAKE_Fortran_FLAGS_DEBUG_INIT  "${common} ${fordebug} ${forpar} -g"  CACHE STRING "Default debug flags -- this cannot be edited (see cmake/FortranOverride.cmake -- Use CMAKE_Fortran_FLAGS_DEBUG instead)" FORCE)
+
+string(TOUPPER "${CMAKE_Fortran_COMPILER_ID}" ID_STRING)
+set(CMAKE_Fortran_FLAGS_RELEASE_INIT "${common} ${forspeed} ${forpar} -D${ID_STRING}"  CACHE STRING "Default release flags -- this cannot be edited (see cmake/FortranOverride.cmake) -- Use CMAKE_Fortran_FLAGS_RELEASE instead" FORCE)
+set(CMAKE_Fortran_FLAGS_DEBUG_INIT  "${common} ${fordebug} ${forpar} -D${ID_STRING}"  CACHE STRING "Default debug flags -- this cannot be edited (see cmake/FortranOverride.cmake -- Use CMAKE_Fortran_FLAGS_DEBUG instead)" FORCE)
 message( STATUS "CMAKE_Fortran_FLAGS_RELEASE_INIT: ${CMAKE_Fortran_FLAGS_RELEASE_INIT}") 
 message( STATUS "CMAKE_Fortran_FLAGS_DEBUG_INIT: ${CMAKE_Fortran_FLAGS_DEBUG_INIT}")
 # 

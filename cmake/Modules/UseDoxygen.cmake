@@ -109,8 +109,10 @@ if(DOXYGEN_FOUND AND DOXYFILE_IN_FOUND)
         STRING "Doxygen HTML output directory")
     usedoxygen_set_default(DOXYFILE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src"
         PATH "Input files source directory")
-      usedoxygen_set_default(DOXYFILE_EXTRA_SOURCE_DIRS  "${CMAKE_CURRENT_SOURCE_DIR}/production ${CMAKE_BINARY_DIR}/lib/simple ${CMAKE_CURRENT_SOURCE_DIR}/doc/doxy/mainpage.txt"
+    usedoxygen_set_default(DOXYFILE_EXTRA_SOURCE_DIRS  "${CMAKE_CURRENT_SOURCE_DIR}/production ${CMAKE_BINARY_DIR}/lib/simple "
         STRING "Additional source files/directories separated by space")
+    usedoxygen_set_default(DOXYFILE_MAINPAGE  "${CMAKE_CURRENT_SOURCE_DIR}/doc/simple.md"
+        STRING "Main page ")
     set(DOXYFILE_SOURCE_DIRS "\"${DOXYFILE_SOURCE_DIR}\" ${DOXYFILE_EXTRA_SOURCES}")
 
     usedoxygen_set_default(DOXYFILE_LATEX YES BOOL "Generate LaTeX API documentation" OFF)

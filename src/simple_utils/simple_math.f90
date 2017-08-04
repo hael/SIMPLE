@@ -137,22 +137,25 @@ contains
     ! JIFFYS
 
     !> \brief nvoxfind_1  to find the volume in number of voxels, given molecular weight
-    !! \param smpd sampling distance in angstroms (SI unit \f$\si{\angstrom}= \si{1e-10}{\metre}\f$)
-    !! \param mwkda molecular weight \f$M_{\mathrm{molecule}}\f$ in kDa (SI unit \f$\si{\kilo\dalton}= \SI{1e-10}{\metre}\f$, one dalton is the mass of 1 hydrogen atom  \SI{1.6727e-27}{\kilo\gram}\f$)
+    
+    !! \detail SI units \f$\si{\kilo\dalton}= \SI{1e-10}{\metre}\f$, one dalton is defined as 1/12 of the mass of an atom of Carbon 12, or 1 amu  \SI{1.66053892173e-27}{\kilo\gram} \f$
     !!
-    !! \detail Protein density \f$\rho_{\mathrm{prot}}\f$ is defined as \f$\si{1.43}{\gram\per\centimetre\cubed}\f$
+    !!  Protein density \f$\rho_{\mathrm{prot}}\f$ is defined as \f$\si{1.43}{\gram\per\centimetre\cubed}\f$
     !!   see  Quillin and Matthews, Accurate calculation of the density of proteins, doi:10.1107/S090744490000679X
-    !! protein density in \f$\si{\gram\per\angstrom\cubed},\ \rho_{\mathrm{prot}\si{\angstrom}} = \rho_{\mathrm{prot}} \num{1e-24}\f$
-    !! unit voxel volume v in \f$\si{\per\angstrom\cubed},\ v  = \mathrm{smpd}^3 \f$
-    !! mass of protein in Da, \f$M_\mathrm{prot Da} = \mathrm{mwkda}\times\num{1e3}\f$
-    !! mass of protein in kg \f$M_\mathrm{kg prot} = M_\mathrm{prot Da}*M_{Hydrogen (\mathrm{kg/Da})\f$
-    !! mass of protein in g\f$  = ((mwkda*1e3)*one_da)*1e3\f$
+    !! protein density in \f$ \si{\gram\per\angstrom\cubed},\ \rho_{\mathrm{prot}\si{\angstrom}} = \rho_{\mathrm{prot}} \num{1e-24} \f$
+    !! unit voxel volume v in \f$ \si{\per\angstrom\cubed},\ v  = \mathrm{smpd}^3 \f$
+    !! mass of protein in Da, \f$ M_\mathrm{prot Da} = \mathrm{mwkda}\times\num{1e3} \f$
+    !! mass of protein in kg \f$ M_\mathrm{kg prot} = M_\mathrm{prot Da}*M_{Hydrogen (\mathrm{kg/Da}) \f$
+    !! mass of protein in g\f$ M_\mathrm{g prot} = ((mwkda*1e3)*one_da)*1e3 \f$
     !! therefore number of voxels in protein is:
-    !! \f[ N_{\mathrm{vox}} = \frac{ M_{\mathrm{molecule}} }{ \rho_{\mathrm{prot}} \times \frac{1}{v^3} \\
-    !! \f                     \sim \nint {frac{\mathrm{mwkda}\times\num{1e3}\times\num{1.66e-27)} {\num{1.43}\times\num{1e-24}} \times \frac{1}{\mathrm{smpd}^3}}} \f$
+    !! \f[ N_{\mathrm{vox}} = \frac{ M_{\mathrm{molecule}} }{ \rho_{\mathrm{prot}} \times \frac{1}{v^3} 
+    !!                      \sim \nint {frac{\mathrm{mwkda}\times\num{1e3}\times\num{1.66e-27)} {\num{1.43}\times\num{1e-24}} \times \frac{1}{\mathrm{smpd}^3}}}
+    !! \f]
     !! we must also assume the number of voxels are discrete, hence we must round to the nearest integer
+    !! \param smpd sampling distance in angstroms (SI unit \f$\si{\angstrom}= \si{1e-10}{\metre}\f$)
+    !! \param mwkda molecular weight \f$M_{\mathrm{molecule}}\f$ in kDa
     pure function nvoxfind_1( smpd, mwkda ) result( nvox )
-        real, intent(in) :: smpd             !< sampling distance
+    real, intent(in) :: smpd             !< sampling distance
         real, intent(in) :: mwkda            !< molecular weight
         integer          :: nvox             !< nr of voxels
         double precision , parameter :: prot_d = 1.43d0            ! g/cm**3
@@ -195,11 +198,21 @@ contains
         deg = (rad/DPI)*180.d0
     end function
 
-    !>    Convert acceleration voltage in kV into electron wavelength in Angstroms
-    !! \f$ \lambda (\si{\angstrom}) =  \frac{12.26}{\sqrt{(eV+0.9784 eV^2) / 10^6 }} \f$
-    
+    !> \brief   Convert acceleration voltage in kV into electron wavelength in Angstroms
+    !! \detail  DeBroglie showed that  \f$ \lambda = \frac{h}{mv}
+    !! h is Planck’s constant  \f$ \SI{6.626e-34}{\joule\second} \f$
+    !! mv is momentum, which is  \f$ \sqrt{2 m_e e V} \f$
+    !! mass of an electron is \f$ \SI{9.1e-31}{\kilo\gram} \f$ and charge of e is  \f$ \SI{1.6e-19}{\coulomb} \f$
+    !! Equation for converting acceleration voltage into electron wavelength in Angstroms (\si{\angstrom}) :
+    !! \f$ \lambda (\si{\metre}) =  \frac{12.26 \times 10^{-10}}{\sqrt{V}} \f$
+    !! Due to relativistic effects Lorentz law applies:
+    !!  \f$ \lambda (\si{\metre}) =  \frac{12.26 \times 10^{-10}}{\sqrt{V}} \times \frac{1}{\sqrt{1+\frac{e V}{2 m_e c^2}}} \f$
+    !! where c is the speed of light, which is \f$ \sim \SI{3e8}{\metre\per\second}
+    !!  \f$ \lambda (\si{\angstrom}) =  \frac{12.26}{\sqrt{\left(10^3 kV + 0.9784 \times (10^3 kV)^2 \right) / 10^6 }} \f$
+    !! 
     pure real function kV2wl( kV )
-        real, intent(in):: kV      !< acceleration voltage in \f$\si{\kilovolt}\f$
+        real, intent(in):: kV      !< acceleration voltage in \f$\si{\kilo\volt}\f$
+        ! kV2wl = 12.26/sqrt(0.001*kV*(1+0.9784*kV))
         kV2wl = 12.26/sqrt(1000.0*kV+0.9784*(1000.0*kV)**2/(10.0**6.0))
     end function
 

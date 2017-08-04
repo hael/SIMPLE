@@ -410,7 +410,7 @@ contains
     !!                \f$  b*\sqrt(a^2+b^2-c^2)+a^2+ac+b^2 != 0 \f$  [for solution 2]
     !!
     !!  In our case, a = - ampl_const
-    !!           and b = \f$ - \sqrt(1-\mathsf{ampl_const}^2) \f$
+    !!           and b = \f$ - \sqrt(1-\mathrm{ampl_const}^2) \f$
     !!               c = ctf_value
     !!  and t is the "argument" to the ctf (i.e. the phase shift), which can be "converted" to a spatial frequency
     subroutine solve4PhSh( self, sols, ctf_value )

@@ -431,7 +431,7 @@ contains
     end function get_coord
     
     !>  \brief  returns polar Fourier transform of particle iptcl in rotation irot
-    !! \param iref reference index
+    !! \param irot rotation index
     !! \param iptcl particle index 
     function get_ptcl_pft( self, iptcl, irot ) result( pft )
         class(polarft_corrcalc), intent(in) :: self
@@ -522,7 +522,7 @@ contains
     subroutine write_pfts_ptcls( self, fname )
         use simple_filehandling, only: get_fileunit
         class(polarft_corrcalc), intent(in) :: self
-        character(len=*),        intent(in) :: fname !< filename
+        character(len=*),        intent(in) :: fname !< output filename
         integer :: funit, io_stat
         funit = get_fileunit()
         open(unit=funit, status='REPLACE', action='WRITE', file=trim(fname), access='STREAM')
@@ -541,7 +541,7 @@ contains
         !$ use omp_lib_kinds
         use simple_filehandling, only: get_fileunit
         class(polarft_corrcalc), intent(inout) :: self
-        character(len=*),        intent(in)    :: fname
+        character(len=*),        intent(in)    :: fname !< input filename
         integer :: funit, io_stat, iptcl
         funit = get_fileunit()
         open(unit=funit, status='OLD', action='READ', file=trim(fname), access='STREAM')
@@ -564,9 +564,9 @@ contains
     !> prep_ref4corr
     !! \param iref reference index
     !! \param iptcl particle index 
-    !! \param pft_ref 
-    !! \param sqsum_ref 
-    !! \param kstop 
+    !! \param pft_ref references
+    !! \param sqsum_ref squared sum references
+    !! \param kstop end point
     !!
     subroutine prep_ref4corr( self, iptcl, iref, pft_ref, sqsum_ref, kstop )
         use simple_math, only: csq
@@ -669,7 +669,7 @@ contains
         use simple_ctf,  only: ctf
         use simple_oris, only: oris
         class(polarft_corrcalc), intent(inout) :: self
-        class(oris),             intent(inout) :: a
+        class(oris),             intent(inout) :: a !< oris object
         type(ctf) :: tfun
         integer   :: iptcl,alloc_stat 
         real(sp)  :: kv,cs,fraca,dfx,dfy,angast
@@ -736,7 +736,7 @@ contains
     function gencorrs_2( self, iref, iptcl, kstop, roind_vec ) result( cc )
     use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self        !< instance
-        integer,                 intent(in)    :: iref, iptcl !< ref & ptcl indices
+        integer,                 intent(in)    :: iref, iptcl
         integer,                 intent(in)    :: kstop       !< last frequency
         integer,       optional, intent(in)    :: roind_vec(:)
         complex(sp) :: pft_ref(self%refsz,self%kfromto(1):self%kfromto(2))
@@ -775,11 +775,11 @@ contains
     !>  \brief  is for generating resolution dependent correlations
     !! \param iref reference index
     !! \param iptcl particle index
-    !! \param roind_vec vector of rotational indices
+   
     function genfrc( self, iref, iptcl, irot ) result( frc )
     use simple_math, only: csq
         class(polarft_corrcalc), target, intent(inout) :: self              !< instance
-        integer,                         intent(in)    :: iref, iptcl, irot !< reference, particle, rotation
+        integer,                         intent(in)    :: iref, iptcl, irot !< rotation index
         real(sp), allocatable :: frc(:)
         complex(sp) :: pft_ref_ctf(self%refsz,self%kfromto(1):self%kfromto(2))        
         real(sp)    :: sumsqref, sumsqptcl
@@ -817,7 +817,7 @@ contains
     !>  \brief  for calculating the correlation between reference iref and particle iptcl in rotation irot
     !! \param iref reference index
     !! \param iptcl particle index
-    !! \param roind_vec vector of rotational indices
+    !! \param irot rotational 
     function corr_1( self, iref, iptcl, irot ) result( cc )
         class(polarft_corrcalc), intent(inout) :: self              !< instance
         integer,                 intent(in)    :: iref, iptcl, irot !< reference, particle, rotation
@@ -838,7 +838,7 @@ contains
     !>  \brief  for calculating the on-fly shifted correlation between reference iref and particle iptcl in rotation irot
     !! \param iref reference index
     !! \param iptcl particle index
-    !! \param roind_vec vector of rotational indices
+    !! \param irot rotational index
     function corr_2( self, iref, iptcl, irot, shvec ) result( cc )
         use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self              !< instance
@@ -874,11 +874,11 @@ contains
     !>  \brief  for calculating the normalized Euclidean distance between reference & particle
     !! \param iref reference index
     !! \param iptcl particle index
-    !! \param roind_vec vector of rotational indices
+    !! \param irot rotational indices
     function euclid( self, iref, iptcl, irot, bfac ) result( dist )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl, irot
-        real, optional,          intent(in)    :: bfac
+        real, optional,          intent(in)    :: bfac  !< B-factor
         real        :: dist, sqsum_ref, rn
         integer     :: k
         complex(sp) :: pft_ref(self%refsz,self%kfromto(1):self%kfromto(2))

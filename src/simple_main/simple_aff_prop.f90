@@ -28,7 +28,7 @@ type aff_prop
     real, allocatable    :: A(:,:), R(:,:)       !< \param A affinities & \param R responsibilities
     real, allocatable    :: Aold(:,:), Rold(:,:) !< \param Aold Old affinities & \param Rold Old responsibilities
     real, allocatable    :: Rp(:,:), tmp(:)      !< other stuff needed
-    real, allocatable    :: AS(:,:), dA(:)       !< \parm AS A+S & \param dA diag(A)
+    real, allocatable    :: AS(:,:), dA(:)       !< \param AS A+S & \param dA diag(A)
     real, pointer        :: S(:,:)               !< pointer to similarity matrix
     real, allocatable    :: Y(:), Y2(:)          !< maxvals
     integer, allocatable :: I(:), I2(:)          !< index arrays
