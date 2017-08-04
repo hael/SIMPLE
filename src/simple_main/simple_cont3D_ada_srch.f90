@@ -62,7 +62,6 @@ type cont3D_ada_srch
     procedure          :: exec_srch
     procedure, private :: do_euler_srch
     procedure, private :: do_inpl_srch
-    procedure, private :: do_inpl_peaks_srch
     procedure, private :: gen_ori
     ! GETTERS/SETTERS
     procedure          :: get_best_ori
@@ -295,70 +294,6 @@ contains
         deallocate(roind_vec)
         if(debug)write(*,*)'simple_cont3D_srch::do_refs_srch done'
     end subroutine do_euler_srch
-
-    !>  \brief  performs the in-plane search
-    subroutine do_inpl_peaks_srch( self )
-        class(cont3D_ada_srch), intent(inout) :: self
-        real, allocatable :: corrs(:)
-        type(ori)         :: o
-        real, allocatable :: crxy(:), cxy(:)
-        integer, allocatable :: roind_vec(:)    ! slice of in-plane angles
-        real              :: inpl_corrs(self%npeaks,self%nrots)
-
-        real              :: corr, thresh
-        integer           :: i, iref, inpl_ind, ref_inds(self%nrefs), ncorrs, projdir_cnt, peak_cnt, cnt
-        ! sort searched orientations
-        ! ref_inds = (/(iref,iref=1,self%nrefs)/)
-        ! corrs = self%o_srch%get_all('corr')
-        ! call hpsort(self%nrefs, corrs, ref_inds)
-        ! deallocate(corrs)
-        ! ! in-plane correlations
-        ! cnt = 0
-        ! do i = self%nrefs-self%npeaks+1, self%nrefs
-        !     cnt       = cnt + 1
-        !     iref      = ref_inds(i)
-        !     o         = self%o_srch%get_ori(iref)
-        !     roind_vec = self%pftcc_ptr%get_win_roind(360.-o%e3get(), E3HALFWINSZ)
-        !     inpl_corrs(cnt,:) = self%pftcc_ptr%gencorrs(iref, self%iptcl, roind_vec=roind_vec)
-        !     deallocate(roind_vec)
-        ! enddo
-        ! !
-        ! corrs  = pack(inpl_corrs, .true.)
-        ! ncorrs = self%npeaks * self%nrots
-        ! call hpsort( ncorrs, corrs )
-        ! thresh = corrs(ncorrs - self%npeaks_inpl + 1)
-        ! self%npeaks_inpl = count( corrs >= thresh )
-        ! print *,'npeaks_inpl:', self%npeaks_inpl
-        ! call self%o_peaks%new( self%npeaks_inpl )
-        ! deallocate(corrs)
-        ! ! Shift search
-        ! projdir_cnt = 0
-        ! peak_cnt    = 0
-        ! do i = self%nrefs - self%npeaks_inpl + 1, self%nrefs
-        !     projdir_cnt = projdir_cnt + 1
-        !     do inpl_ind = 1, self%nrots
-        !         if( inpl_corrs(projdir_cnt, inpl_ind) >= thresh )then
-        !             peak_cnt = peak_cnt + 1
-        !             ! shift search
-        !             iref = ref_inds(i)
-        !             o = self%o_srch%get_ori(iref)
-        !             call self%shiftsrch_obj%set_indices(iref, self%iptcl, inpl_ind)
-        !             cxy = self%shiftsrch_obj%minimize()
-        !             if(cxy(1) >= o%get('corr'))then
-        !                 call o%set('corr', cxy(1))
-        !                 call o%set_shift( cxy(2:3) + self%prev_shift)
-        !             else
-        !                 call o%set_shift(self%prev_shift)
-        !             endif
-        !             deallocate(cxy)
-        !             ! update
-        !             call self%o_peaks(peak_cnt, o)
-        !         endif
-        !     enddo
-        ! enddo
-        !
-        if(debug)write(*,*)'simple_cont3d_srch::do_inpl_peaks_srch done'
-    end subroutine do_inpl_peaks_srch
 
     !>  \brief  performs the in-plane search
     subroutine do_inpl_srch( self )

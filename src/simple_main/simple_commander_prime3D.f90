@@ -255,7 +255,7 @@ contains
                 stop 'no mask allowed when processing XFEL patterns; simple_prime3D'
             endif
         endif
-        if( str_has_substr(p%refine,'neigh') .or. p%refine .eq. 'shift' )then
+        if( str_has_substr(p%refine,'neigh') .or. p%refine .eq. 'exp' )then
             if( .not. cline%defined('oritab') )then
                 stop 'need oritab input for execution of prime3D with this refine mode'
             endif

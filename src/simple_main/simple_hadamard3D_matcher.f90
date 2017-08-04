@@ -91,7 +91,7 @@ contains
         ! DETERMINE THE NUMBER OF PEAKS
         if( .not. cline%defined('npeaks') )then
             select case(p%refine)
-                case('no', 'neigh', 'greedy', 'greedyneigh')
+                case('no', 'neigh', 'greedy', 'greedyneigh', 'exp')
                     p%npeaks = min(MAXNPEAKS,b%e%find_npeaks(p%lp, p%moldiam))
                 case DEFAULT
                     p%npeaks = 1
@@ -223,7 +223,12 @@ contains
                     end do
                 endif
             case ('exp')
-                ! todo
+                !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
+                do iptcl=p%fromp,p%top
+                    call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp,&
+                        greedy=.true., nnmat=b%nnmat, grid_projs=b%grid_projs)
+                end do
+                !$omp end parallel do
             case DEFAULT
                 write(*,*) 'The refinement mode: ', trim(p%refine), ' is unsupported'
                 stop

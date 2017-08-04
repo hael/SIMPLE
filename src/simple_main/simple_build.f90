@@ -456,7 +456,7 @@ contains
             allocate( self%recvols(p%nstates), stat=alloc_stat )
             call alloc_err('build_hadamard_prime3D_tbox; simple_build, 2', alloc_stat)
         endif
-        if( str_has_substr(p%refine,'neigh') )then
+        if( str_has_substr(p%refine,'neigh') .or. trim(p%refine).eq.'exp' )then
             nnn = p%nnn
             call self%se%nearest_neighbors(self%e, nnn, self%nnmat)
         endif
