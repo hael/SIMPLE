@@ -21,7 +21,7 @@ type, extends(pftcc_opt) :: pftcc_inplsrch
     integer                          :: reference   =  0       !< reference pft
     integer                          :: particle    =  0       !< particle pft
     integer                          :: ldim(3)     =  [0,0,0] !< logical dimension of Cartesian image
-    real                             :: rotmat(2,2) =  0.      !< rotation matrix for checking limits
+    real                             :: shift_scale =  1.      !< shift scale factor
     real                             :: maxshift    =  0.      !< maximal shift
     logical                          :: shbarr      =  .true.  !< shift barrier constraint or not
     integer                          :: nrestarts   =  5       !< simplex restarts (randomized bounds)
@@ -67,10 +67,6 @@ contains
         self%ldim = self%pftcc_ptr%get_ldim()
         ! set maxshift
         self%maxshift = real(maxval(self%ldim))/2.
-        ! rotmat init
-        self%rotmat      = 0.
-        self%rotmat(1,1) = 1.
-        self%rotmat(2,2) = 1.
     end subroutine inplsrch_new
     
     subroutine inplsrch_set_indices( self, ref, ptcl, rot, state )
@@ -89,37 +85,35 @@ contains
     end subroutine inplsrch_set_inipop
 
     function inplsrch_costfun( self, vec, D ) result( cost )
-        use simple_math, only: rotmat2d, enforce_cyclic_limit
+        use simple_math, only: enforce_cyclic_limit
         class(pftcc_inplsrch), intent(inout) :: self
         integer,               intent(in)    :: D
         real,                  intent(in)    :: vec(D)
         real    :: vec_here(3)    ! current set of values
-        real    :: rotvec_here(2) ! current set of shift values rotated to frame of reference
-        real    :: cost
+        real    :: shift(2), cost
         integer :: rot
         vec_here = vec
         ! check so that the in-plane rotation is within the limit
         call enforce_cyclic_limit(vec_here(1), 360.)
-        ! zero small shifts
-        if( abs(vec(2)) < 1e-6 ) vec_here(2) = 0.
-        if( abs(vec(3)) < 1e-6 ) vec_here(3) = 0.
-        ! set rotmat for boudary checking and final rotation
-        self%rotmat = rotmat2d( vec_here(1) )
-        rotvec_here = matmul(vec_here(2:3),self%rotmat)
-        ! check boundary 
+        ! check boundary
         if( self%shbarr )then
-            if( rotvec_here(1) < self%ospec%limits(2,1) .or.&
-               &rotvec_here(1) > self%ospec%limits(2,2) )then
+            if( vec_here(2) < self%ospec%limits(2,1) .or.&
+               &vec_here(2) > self%ospec%limits(2,2) )then
                 cost = 1.
                 return
-            else if( rotvec_here(2) < self%ospec%limits(3,1) .or.&
-                    &rotvec_here(2) > self%ospec%limits(3,2) )then
+            else if( vec_here(3) < self%ospec%limits(3,1) .or.&
+                    &vec_here(3) > self%ospec%limits(3,2) )then
                 cost = 1.
                 return
             endif
         endif
+        ! unscale shift
+        shift = vec_here(2:3) / self%shift_scale
+        ! zero small shift
+        where( abs(shift) < 1.e-6 ) shift = 0.
+        ! cost
         rot  =  self%pftcc_ptr%get_roind(vec_here(1))
-        cost = -self%pftcc_ptr%corr(self%reference, self%particle, rot, vec_here(2:3))
+        cost = -self%pftcc_ptr%corr(self%reference, self%particle, rot, shift)
     end function inplsrch_costfun
     
     function inplsrch_minimize( self, irot, shvec, rxy, fromto ) result( crxy )
@@ -130,8 +124,8 @@ contains
         real,    optional,     intent(in) :: shvec(:)
         real,    optional,     intent(in) :: rxy(:)
         integer, optional,     intent(in) :: fromto(2)
-        logical           :: irot_here, shvec_here, rxy_here
         real, allocatable :: crxy(:)
+        logical           :: irot_here, shvec_here, rxy_here
         allocate(crxy(4))
         irot_here  = present(irot)
         shvec_here = present(shvec)
@@ -142,32 +136,30 @@ contains
         self%ospec%x      = 0.
         self%ospec%x(1)   = ran3()*360.
         self%ospec%nevals = 0
-        if( rxy_here )then
-            self%ospec%x(1:3) = rxy(1:3)
-        endif
-        if( irot_here ) self%ospec%x(1) = self%pftcc_ptr%get_rot(irot)
-        if( shvec_here )then
-            self%ospec%x(1:2) = shvec(1:2)
-        endif
+        if( rxy_here )  self%ospec%x(1:3) = rxy(1:3)
+        if( irot_here ) self%ospec%x(1)   = self%pftcc_ptr%get_rot(irot)
+        if( shvec_here )self%ospec%x(2:3) = shvec(1:2)
+        ! determines & applies shift scaling
+        self%shift_scale = (self%ospec%limits(1,2) - self%ospec%limits(1,1)) /&
+        &( maxval(self%ospec%limits(2:,2)) - minval(self%ospec%limits(2:,1)) )
+        self%ospec%limits(2:,:) = self%ospec%limits(2:,:) * self%shift_scale
+        self%ospec%x(2:3)       = self%ospec%x(2:3) * self%shift_scale
         ! minimisation
         call self%nlopt%minimize(self%ospec, self, crxy(1))
-        crxy(1) = -crxy(1)        ! correlation
-        crxy(2) = self%ospec%x(1) ! in-plane rotation
+        ! solution and un-scaling
+        crxy(1)           = -crxy(1)                                ! correlation
+        crxy(2)           = self%ospec%x(1)                         ! in-plane angle
+        self%ospec%x(2:3) = self%ospec%x(2:3) / self%shift_scale    ! shift unscaling
+        crxy(3:4)         = self%ospec%x(2:3)                       ! shift
+        self%ospec%limits(2:3,:) = self%ospec%limits(2:3,:) / self%shift_scale
         ! check so that the in-plane rotation is within the limit
         call enforce_cyclic_limit(crxy(2), 360.)
-        ! set rotmat for boudary checking and final rotation
-        self%rotmat = rotmat2d(crxy(2))
         ! rotate the shift vector to the frame of reference
-        crxy(3:) = self%ospec%x(2:) ! shift
-        crxy(3:) = matmul(crxy(3:), self%rotmat)
+        crxy(3:) = matmul(crxy(3:), rotmat2d(crxy(2)))
         if( any(crxy(3:) > self%maxshift) .or. any(crxy(3:) < -self%maxshift) )then
             crxy(1)  = -1.
             crxy(3:) = 0.
         endif
-        ! clean exit
-        self%rotmat      = 0.
-        self%rotmat(1,1) = 1.
-        self%rotmat(2,2) = 1.
     end function inplsrch_minimize
 
     function  inplsrch_get_nevals( self ) result( nevals )

@@ -123,8 +123,8 @@ contains
         class(cmdline),                  intent(inout) :: cline
         logical,               parameter   :: DEBUG = .true.
         character(len=STDLEN), parameter   :: FILETABNAME='movieftab_preproc_stream.txt'
-        integer,               parameter   :: SHORTTIME = 30    ! 30 secs for watching folder
-        integer,               parameter   :: LONGTIME  = 900   ! 15 mins before processing a new movie
+        integer,               parameter   :: SHORTTIME = 60    ! 60 secs for watching folder
+        integer,               parameter   :: LONGTIME  = 1200   ! 20 mins before processing a new movie
         character(len=STDLEN), allocatable :: movienames(:)
         type(qsys_env)           :: qenv
         type(params)             :: p_master
@@ -132,7 +132,7 @@ contains
         type(moviewatcher)       :: movie_buff
         type(chash), allocatable :: part_params(:)
         logical,     allocatable :: jobs_done(:), jobs_submitted(:)
-        integer                  :: nmovies, nmovies_prev
+        integer                  :: nmovies, nmovies_prev, max_ind
         integer, parameter       :: TRAILING=5
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
@@ -148,7 +148,7 @@ contains
         ! make target directory
         call exec_cmdline('mkdir -p '//trim(adjustl(p_master%dir_target)))
         ! movie watcher init
-        movie_buff = moviewatcher(p_master%dir_movies, LONGTIME, print=.true.)
+        movie_buff = moviewatcher(p_master, LONGTIME, print=.true.)
         nmovies    = 0
         do
             nmovies_prev = nmovies
@@ -176,7 +176,8 @@ contains
                 individual_filetabs = make_filenames('movie_to_process', nmovies, '.txt', p_master%numlen)
                 if( allocated(part_params) ) deallocate(part_params)
                 allocate(part_params(size(individual_filetabs)))
-                do imovie=1,nmovies
+                do imovie = 1, nmovies
+                    if( imovie < p_master%fromm )cycle ! exclude for restart
                     fname = trim(individual_filetabs(imovie))
                     call part_params(imovie)%new(1)
                     call part_params(imovie)%set('filetab', fname)
@@ -194,7 +195,14 @@ contains
                 ! setup the environment for distributed execution
                 call qenv%new(p_master, stream=.true.)
                 ! put back the old jobs status
-                if( allocated(jobs_done) ) call qenv%qscripts%set_jobs_status( jobs_done, jobs_submitted )
+                if( allocated(jobs_done) )then
+                    if( p_master%fromm > 1)then
+                        max_ind = min(p_master%fromm-1, size(jobs_done))
+                        jobs_done(:max_ind)      = .true.
+                        jobs_submitted(:max_ind) = .true.
+                    endif
+                    call qenv%qscripts%set_jobs_status( jobs_done, jobs_submitted )
+                endif
                 ! prepare job description
                 call cline%gen_job_descr(job_descr)
                 ! prepare scripts

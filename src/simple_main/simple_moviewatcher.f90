@@ -4,6 +4,7 @@ use simple_defs
 use simple_syscalls
 use simple_filehandling
 use simple_jiffys
+use simple_params
 implicit none
 
 public :: moviewatcher
@@ -40,24 +41,25 @@ end interface moviewatcher
 
 character(len=STDLEN), parameter   :: FILETABNAME='movieftab_preproc_stream.txt'
 integer,               parameter   :: FAIL_THRESH = 50
+integer,               parameter   :: FAIL_TIME   = 7200 ! 2 hours
 
 contains
     
     !>  \brief  is a constructor
-    function constructor( workdir, report_time, print )result( self )
-        character(len=*),  intent(in) :: workdir
+    function constructor( p, report_time, print )result( self )
+        class(params),     intent(in) :: p
         integer,           intent(in) :: report_time  ! in seconds
         logical, optional, intent(in) :: print
         type(moviewatcher)            :: self
         character(len=STDLEN)         :: cwd
         call self%kill
-        if( .not. file_exists(trim(adjustl(workdir))) )then
-            print *, 'Directory does not exist: ', trim(adjustl(workdir))
+        if( .not. file_exists(trim(adjustl(p%dir_movies))) )then
+            print *, 'Directory does not exist: ', trim(adjustl(p%dir_movies))
             stop
         endif
         call getcwd(cwd)
         self%cwd         = trim(cwd)
-        self%watch_dir   = trim(adjustl(workdir))
+        self%watch_dir   = trim(adjustl(p%dir_movies))
         self%report_time = report_time
         if( present(print) )then
             self%doprint = print
@@ -92,7 +94,7 @@ contains
         ! builds files array
         call sys_gen_mrcfiletab(self%watch_dir, trim(FILETABNAME))
         call read_filetable( trim(FILETABNAME), farray )
-        n_lsfiles  = size(farray)
+        n_lsfiles = size(farray)
         if( n_lsfiles .eq. 0 )then
             if(allocated(self%history))deallocate(self%history)
             return
@@ -125,7 +127,7 @@ contains
                     fail_cnt = fail_cnt + 1
                     print *,'Error watching file: ', trim(fname), ' with code: ',fstat
                 endif
-                deallocate(stats)
+                if(allocated(stats))deallocate(stats)
             endif
         enddo
         ! Failures handling
@@ -142,8 +144,6 @@ contains
             call alloc_err("In: simple_moviewatcher%watch", alloc_stat)
             files = self%history
         endif
-        ! cleanup
-        deallocate(farray)
     end subroutine watch
 
     !>  \brief  is for adding to the history of already reported files

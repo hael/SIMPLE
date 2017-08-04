@@ -84,6 +84,7 @@ contains
 
         ! CALCULATE ANGULAR THRESHOLD (USED BY THE SPARSE WEIGHTING SCHEME)
         p%athres = rad2deg( atan(max(p%fny,p%lp)/(p%moldiam/2.) ))
+        !p%athres = max(p%athres, ATHRES_LIM)
         reslim   = p%lp
         DebugPrint '*** hadamard3D_matcher ***: calculated angular threshold (used by the sparse weighting scheme)'
 
@@ -221,6 +222,8 @@ contains
                             &'; pop=',statecnt(istate)
                     end do
                 endif
+            case ('exp')
+                ! todo
             case DEFAULT
                 write(*,*) 'The refinement mode: ', trim(p%refine), ' is unsupported'
                 stop
@@ -366,6 +369,7 @@ contains
         if( p%l_xfel ) call pftcc%xfel_subtract_shell_mean()
         DebugPrint '*** hadamard3D_matcher ***: finished preppftcc4align'
     end subroutine preppftcc4align
+
     !> Prepare reference images and create polar projections
     subroutine prep_refs_pftcc4align( b, p, cline )
         class(build),   intent(inout) :: b          !< build object
@@ -373,7 +377,6 @@ contains
         class(cmdline), intent(inout) :: cline      !< command line
         type(ori) :: o
         integer   :: cnt, s, iref, nrefs
-
         ! PREPARATION OF REFERENCES IN PFTCC
         ! read reference volumes and create polar projections
         nrefs = p%nspace*p%nstates
@@ -403,6 +406,7 @@ contains
         ! bring back the original b%vol size for clean exit
         if( p%boxmatch < p%box )call b%vol%new([p%box,p%box,p%box], p%smpd)
     end subroutine prep_refs_pftcc4align
+
     !> Prepare particle images and create polar projections
     subroutine prep_ptcls_pftcc4align( b, p, ppfts_fname )
         class(build),               intent(inout) :: b          !< build object
@@ -428,7 +432,7 @@ contains
                 if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PARTICLES'
                 ! initialize
                 call b%img_match%init_polarizer(pftcc)
-                ntot = p%top-p%fromp+1
+                ntot = (p%top-p%fromp+1) * p%nstates
                 cnt  = 0
                 do s=1,p%nstates
                     if( b%a%get_statepop(s) == 0 )then
@@ -438,15 +442,14 @@ contains
                     do iptcl=p%fromp,p%top
                         o      = b%a%get_ori(iptcl)
                         istate = nint(o%get('state'))
-                        if( istate /= s ) cycle
                         cnt = cnt + 1
+                        if( istate /= s ) cycle
                         call progress(cnt, ntot)
                         call read_img_from_stk( b, p, iptcl )
                         call prepimg4align(b, p, o)
                         call b%img_match%polarize(pftcc, iptcl)
                     end do
                 end do
-                call progress(ntot, ntot)
             end subroutine prep_pftcc_local
 
     end subroutine prep_ptcls_pftcc4align

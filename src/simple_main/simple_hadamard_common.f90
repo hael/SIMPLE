@@ -413,11 +413,13 @@ contains
         else
             ! Volume filtering
             if( p%eo.eq.'yes' )then
-                ! Rosenthal & Henderson, 2003 
-                call b%vol%fwd_ft
-                filter = fsc2optlp(b%fsc(s,:))
-                call b%vol%shellnorm()
-                call b%vol%apply_filter(filter)
+                if( any(b%fsc(s,:) > 0.143) )then
+                    ! Rosenthal & Henderson, 2003 
+                    call b%vol%fwd_ft
+                    filter = fsc2optlp(b%fsc(s,:))
+                    call b%vol%shellnorm()
+                    call b%vol%apply_filter(filter)
+                endif
             endif
             ! centering            
             do_center = .true.

@@ -83,7 +83,6 @@ type prime3D_srch
     procedure          :: prep_reforis
     ! CALCULATORS
     procedure          :: prep_npeaks_oris
-    procedure          :: stochastic_weights_L2norm
     procedure          :: stochastic_weights
     ! GETTERS & SETTERS
     procedure          :: update_best
@@ -970,56 +969,13 @@ contains
     end subroutine prep_npeaks_oris
 
     !>  \brief  determines and updates stochastic weights
-    subroutine stochastic_weights_L2norm( self, pftcc, iptcl, e, wcorr )
-        class(prime3D_srch),     intent(inout) :: self
-        class(polarft_corrcalc), intent(inout) :: pftcc
-        integer,                 intent(in)    :: iptcl
-        class(oris),             intent(inout) :: e
-        real,                    intent(out)   :: wcorr
-        type(ori)         :: o
-        real, allocatable :: corrs(:)
-        real              :: ws(self%npeaks), dists(self%npeaks)
-        logical           :: included(self%npeaks)
-        integer           :: state, roind, proj, ref, ipeak
-        if( self%npeaks == 1 )then
-            call self%o_peaks%set(1,'ow',1.0)
-            wcorr = self%o_peaks%get(1,'corr')
-            return
-        endif
-        corrs = self%o_peaks%get_all('corr')
-        do ipeak=1,self%npeaks
-            o            = self%o_peaks%get_ori(ipeak)
-            state        = nint(o%get('state'))
-            roind        = pftcc%get_roind(360.-o%e3get())
-            proj         = e%find_closest_proj(o,1)
-            ref          = (state - 1) * self%nprojs + proj
-            dists(ipeak) = pftcc%euclid(ref, iptcl, roind)
-        end do
-        ! calculate weights
-        ws = exp(-dists)
-        ! thresholding of the weights
-        included(:) = .true.
-        if( self%do_weight_inpl )then
-            included = (ws>=FACTWEIGHTS_THRESH)
-            where( .not.included ) ws = 0.
-        else
-            ! all are included
-        endif
-        ! weighted corr
-        wcorr = sum(ws*corrs, mask=included)/sum(ws, mask=included)
-        ! update npeaks individual weights
-        call self%o_peaks%set_all('ow', ws)
-        deallocate(corrs)
-    end subroutine stochastic_weights_L2norm
-
-    !>  \brief  determines and updates stochastic weights
     subroutine stochastic_weights( self, pftcc, iptcl, e, wcorr )
         class(prime3D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: iptcl
         class(oris),             intent(inout) :: e
         real,                    intent(out)   :: wcorr
-        real,    allocatable :: corrs(:), frc(:), ws(:), frcmeds(:), logws(:)
+        real,    allocatable :: corrs(:), ws(:), logws(:)
         integer, allocatable :: order(:) 
         logical, allocatable :: included(:)
         type(ori) :: o
@@ -1029,27 +985,17 @@ contains
             wcorr = self%o_peaks%get(1,'corr')
             return
         endif
-        corrs = self%o_peaks%get_all('corr')
         if( self%do_weight_inpl )then
             npeaks = self%npeaks_inpl
         else
             npeaks = self%npeaks
         endif
-        allocate( ws(npeaks), frcmeds(npeaks), logws(npeaks) )
-        do ipeak=1,npeaks
-            o              = self%o_peaks%get_ori(ipeak)
-            state          = nint(o%get('state'))
-            roind          = pftcc%get_roind(360.-o%e3get())
-            proj           = e%find_closest_proj(o,1)
-            ref            = (state - 1) * self%nprojs + proj
-            frc            = pftcc%genfrc(ref, iptcl, roind)
-            frcmeds(ipeak) = max(0., median_nocopy(frc))
-            deallocate(frc)
-        end do
         ! calculate the exponential of the negative distances
         ! so that when diff==0 the weights are maximum and when
         ! diff==corrmax the weights are minimum
-        ws    = exp(-(1.-frcmeds))
+        allocate( ws(npeaks), logws(npeaks) )
+        corrs = self%o_peaks%get_all('corr')
+        ws    = exp(-(1.-corrs))
         logws = log(ws)
         order = (/(ipeak,ipeak=1,npeaks)/)
         call hpsort(npeaks, logws, order)
@@ -1068,7 +1014,6 @@ contains
         wcorr = sum(ws*corrs, mask=included)/sum(ws, mask=included)
         ! update npeaks individual weights
         call self%o_peaks%set_all('ow', ws)
-        deallocate(corrs)
     end subroutine stochastic_weights
 
     ! GETTERS & SETTERS
@@ -1108,7 +1053,7 @@ contains
         mi_inpl  = 0.
         mi_state = 0.
         mi_joint = 0.
-        if( euldist < 0.1 )then
+        if( euldist < 0.5 )then
             mi_proj = mi_proj + 1.
             mi_joint = mi_joint + 1.
         endif

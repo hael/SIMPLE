@@ -75,7 +75,7 @@ contains
         self%pb = spec%x
         ! set best cost
         spec%nevals = 0
-        self%yb = funcontainer%costfun(self%pb, spec%ndim)
+        self%yb     = funcontainer%costfun(self%pb, spec%ndim)
         spec%nevals = spec%nevals+1
         ! run nrestarts
         do i=1,spec%nrestarts

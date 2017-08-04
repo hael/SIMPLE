@@ -192,7 +192,7 @@ type :: params
     integer :: nframesgrp=0        !< # frames to group before unblur(Falcon 3){0}
     integer :: fromf=1             !< start frame index
     integer :: fromp=1             !< start ptcl index
-    integer :: froms=1
+    integer :: fromm=1
     integer :: fstep=1
     integer :: grow=0              !< # binary layers to grow(in pixels)
     integer :: iares=10            !< integer angular resolution{10}
@@ -572,7 +572,7 @@ contains
         call check_iarg('nframesgrp',     self%nframesgrp)
         call check_iarg('fromf',          self%fromf)
         call check_iarg('fromp',          self%fromp)
-        call check_iarg('froms',          self%froms)
+        call check_iarg('fromm',          self%fromm)
         call check_iarg('fstep',          self%fstep)
         call check_iarg('grow',           self%grow)
         call check_iarg('iares',          self%iares)
