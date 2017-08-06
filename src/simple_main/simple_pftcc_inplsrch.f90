@@ -21,6 +21,7 @@ type, extends(pftcc_opt) :: pftcc_inplsrch
     integer                          :: reference   =  0       !< reference pft
     integer                          :: particle    =  0       !< particle pft
     integer                          :: ldim(3)     =  [0,0,0] !< logical dimension of Cartesian image
+    integer                          :: maxits      =  100     !< max nr of iterations
     real                             :: shift_scale =  1.      !< shift scale factor
     real                             :: maxshift    =  0.      !< maximal shift
     logical                          :: shbarr      =  .true.  !< shift barrier constraint or not
@@ -53,12 +54,14 @@ contains
         endif
         self%nrestarts = 5
         if( present(nrestarts) ) self%nrestarts = nrestarts 
+        self%maxits = 100
+        if( present(maxits) ) self%maxits = maxits
         ! make optimizer spec
         inpllims(1,1)  = 0.
         inpllims(1,2)  = 360.
         inpllims(2:,:) = lims
-        call self%ospec%specify('simplex', 3, ftol=1e-4,&
-        &gtol=1e-4, limits=inpllims, nrestarts=self%nrestarts)
+        call self%ospec%specify('simplex', 3, ftol=1e-4, gtol=1e-4,&
+            limits=inpllims, nrestarts=self%nrestarts, maxits=self%maxits)
         ! generate the simplex optimizer object 
         call self%nlopt%new(self%ospec)
         ! set pointer to corrcalc object

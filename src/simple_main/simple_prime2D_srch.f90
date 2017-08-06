@@ -91,8 +91,7 @@ contains
         lims(1,2)        =  self%trs
         lims(2,1)        = -self%trs
         lims(2,2)        =  self%trs
-        call self%shsrch_obj%new(pftcc, lims)
-        call self%inplsrch_obj%new(pftcc, lims)
+        call self%inplsrch_obj%new(pftcc, lims, nrestarts=3, maxits=30)
         lims_bfac(1,1)   = -50.
         lims_bfac(1,2)   =  50.
         call self%bfacsrch_obj%new(pftcc, lims_bfac)
