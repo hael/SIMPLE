@@ -37,6 +37,7 @@ type, extends(pftcc_opt) :: pftcc_shsrch
 end type pftcc_shsrch
 
 contains
+
     !> Shift search constructor
     subroutine shsrch_new( self, pftcc, lims, shbarrier, nrestarts, npeaks, maxits, vols )
         use simple_projector, only: projector
@@ -67,6 +68,7 @@ contains
         ! set maxshift
         self%maxshift = real(maxval(self%ldim))/2.
     end subroutine shsrch_new
+
     !> shsrch_set_indices Set indicies for shift search
     !! \param ref reference
     !! \param ptcl particle index
@@ -82,12 +84,14 @@ contains
         self%rot = 1
         if( present(rot) ) self%rot = rot
     end subroutine shsrch_set_indices
+
     !> shsrch_set_inipop Set init population for shift search
     subroutine shsrch_set_inipop( self, inipop )
         class(pftcc_shsrch), intent(inout) :: self
         real,                intent(in)    :: inipop(:,:) !< initial population
         stop 'Not for simplex use; simple_pftcc_shsrch%srch_set_inipop'
     end subroutine shsrch_set_inipop
+
     !> Cost function
     function shsrch_costfun( self, vec, D ) result( cost )
         class(pftcc_shsrch), intent(inout) :: self
@@ -154,6 +158,7 @@ contains
         allocate(peaks(1,2))
         peaks(1,:) = self%ospec%x
     end subroutine shsrch_get_peaks
+    
     !> Destructor
     subroutine kill( self )
         class(pftcc_shsrch), intent(inout) :: self

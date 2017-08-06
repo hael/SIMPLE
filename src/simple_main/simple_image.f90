@@ -10,7 +10,7 @@ module simple_image
 !$ use omp_lib
 !$ use omp_lib_kinds
 use simple_defs
- use simple_ftiter, only: ftiter
+use simple_ftiter, only: ftiter
 use simple_jiffys, only: alloc_err
 use simple_fftw3
 use simple_math
@@ -1169,6 +1169,7 @@ contains
         array_shape(2:3) = self%ldim(2:3)
         allocate(cmat(array_shape(1),array_shape(2),array_shape(3)), source=self%cmat)
     end function get_cmat
+
     !> print_cmat
     !!
     subroutine print_cmat( self )
@@ -2379,9 +2380,9 @@ contains
                 call self%new(self1%ldim, self1%smpd)
                 if( self1%ft .and. self2%ft )then
                     lims = self1%loop_lims(2)
-                        !$omp parallel default(shared) private(h,k,l,phys) proc_bind(close)
-                        !$omp do collapse(3) schedule(static)
-                        do h=lims(1,1),lims(1,2)
+                    !$omp parallel default(shared) private(h,k,l,phys) proc_bind(close)
+                    !$omp do collapse(3) schedule(static)
+                    do h=lims(1,1),lims(1,2)
                         do k=lims(2,1),lims(2,2)
                             do l=lims(3,1),lims(3,2)
                                 phys = self%fit%comp_addr_phys([h,k,l])
@@ -2542,9 +2543,11 @@ contains
         class(image),           intent(inout) :: self_rho
         class(image), optional, intent(inout) :: self_out
         integer :: h, k, l, lims(3,2), phys(3)
+        logical :: self_out_present
         ! set constants
         lims = self_sum%loop_lims(2)
-        if( present(self_out) ) call self_out%copy(self_sum)
+        self_out_present = present(self_out)
+        if( self_out_present ) call self_out%copy(self_sum)
         !$omp parallel do collapse(3) default(shared) private(h,k,l,phys)&
         !$omp schedule(static) proc_bind(close)
         do h=lims(1,1),lims(1,2)
@@ -2552,7 +2555,7 @@ contains
                 do l=lims(3,1),lims(3,2)
                     phys = self_sum%comp_addr_phys([h,k,l])
                     if( abs(real(self_rho%cmat(phys(1),phys(2),phys(3)))) > 1e-6 )then
-                        if( present(self_out) )then
+                        if( self_out_present )then
                             call self_out%div([h,k,l],&
                             real(self_rho%cmat(phys(1),phys(2),phys(3))),phys_in=phys)
                         else
@@ -2560,7 +2563,7 @@ contains
                             real(self_rho%cmat(phys(1),phys(2),phys(3))),phys_in=phys)
                         endif
                     else
-                        if( present(self_out) )then
+                        if( self_out_present )then
                             self_out%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
                         else
                             self_sum%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
@@ -2987,6 +2990,7 @@ contains
         endif
         deallocate( add_pixels )
     end subroutine grow_bin
+
     !>  \brief shrink_bin removes one layer of pixels bordering the background in a binary image
     !! Classical erosion of binary image
     subroutine shrink_bin( self )
@@ -3196,6 +3200,7 @@ contains
             call   self%grow_bins(nlayers)
         end if
     end subroutine binary_dilation
+
     !> binary_erosion wrapper for shrink_bin(s)
     !! \param nlayers number of layers
     !!
@@ -3208,6 +3213,7 @@ contains
             call   self%shrink_bins(nlayers)
         end if
     end subroutine binary_erosion
+
     subroutine binary_opening (self,nlayers)
         class(image), intent(inout) :: self
         integer, intent(inout),optional :: nlayers
@@ -3218,6 +3224,7 @@ contains
             call  self%binary_dilation()
         end do
     end subroutine binary_opening
+
     subroutine binary_closing (self,nlayers)
         class(image), intent(inout) :: self
         integer, intent(inout),optional  :: nlayers
@@ -3228,7 +3235,6 @@ contains
             call  self%binary_erosion()
         end do
     end subroutine binary_closing
-
 
     !>  \brief cos_edge applies cosine squared edge to a binary image
     !! \param falloff
@@ -3341,7 +3347,7 @@ contains
 
 
     !>  \brief  increments the logi pixel value with incr
-   !! \param logi coordinates
+    !! \param logi coordinates
     !! \param incr increment
     !!
     subroutine increment( self, logi, incr )
@@ -4685,7 +4691,7 @@ contains
 
     !>  \brief is for calculate a real-space distance between images within a mask
     !!         assumes that images are normalized
-!> real_dist
+    !> real_dist
     !! \param self1 image object
     !! \param self2 image object
     !! \param msk
@@ -4833,7 +4839,7 @@ contains
 
     !>  \brief  returns the real and imaginary parts of the phase shift at point
     !!          logi in a Fourier transform caused by the origin shift in shvec
-!> oshift_1
+    !> oshift_1
     !! \param logi index in Fourier domain
     !! \param shvec origin shift
     !! \param ldim image dimensions
@@ -4858,7 +4864,7 @@ contains
 
     !>  \brief  returns the real and imaginary parts of the phase shift at point
     !!          logi in a Fourier transform caused by the origin shift in shvec
-!> oshift_2
+    !> oshift_2
     !! \param logi index in Fourier domain
     !! \param shvec origin shift
     !! \param ldim image dimensions
@@ -4874,7 +4880,7 @@ contains
     end function oshift_2
 
     !>  \brief  returns the real argument transfer matrix components at point logi in a Fourier transform
-!> gen_argtransf_comp
+    !> gen_argtransf_comp
     !! \param logi index in Fourier domain
     !! \param ldim image dimensions
     !! \return  arg
@@ -5018,16 +5024,18 @@ contains
         type(image), intent(out), optional :: noiseimg
         real    :: noisesdev, ran
         integer :: i, j, k
+        logical :: noiseimg_present
         if( self%imgkind .eq. 'xfel' ) stop 'not intended for xfel-kind images; simple_image::add_gauran'
         call self%norm
-        if( present(noiseimg) ) call noiseimg%new(self%ldim, self%smpd)
+        noiseimg_present = present(noiseimg)
+        if( noiseimg_present ) call noiseimg%new(self%ldim, self%smpd)
         noisesdev = sqrt(1/snr)
         do i=1,self%ldim(1)
             do j=1,self%ldim(2)
                 do k=1,self%ldim(3)
                     ran = gasdev(0., noisesdev)
                     self%rmat(i,j,k) = self%rmat(i,j,k)+ran
-                    if( present(noiseimg) ) call noiseimg%set([i,j,k], ran)
+                    if( noiseimg_present ) call noiseimg%set([i,j,k], ran)
                 end do
             end do
         end do
@@ -6597,7 +6605,6 @@ contains
         real,         intent(in)    :: thres
         where( self%rmat < thres ) self%rmat = 0.
     end subroutine zero_below
-
 
     !>  \brief  is the image class unit test
     subroutine test_image( doplot )

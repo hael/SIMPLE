@@ -5,7 +5,7 @@
 !!
 module simple_prime2D_srch
 use simple_polarft_corrcalc, only: polarft_corrcalc
-use simple_pftcc_shsrch,     only: pftcc_shsrch
+use simple_pftcc_inplsrch,   only: pftcc_inplsrch
 use simple_pftcc_bfacsrch,   only: pftcc_bfacsrch
 use simple_prime_srch,       only: prime_srch
 use simple_oris,             only: oris
@@ -19,8 +19,7 @@ private
 
 type prime2D_srch
     private
-    type(prime_srch)     :: srch_common          !< functionalities common to primesrch2D/3D
-    type(pftcc_shsrch )  :: shsrch_obj           !< shift search object
+    type(pftcc_inplsrch) :: inplsrch_obj         !< in-plane search object
     type(pftcc_bfacsrch) :: bfacsrch_obj         !< B-factor search object
     integer              :: nrefs         =  0   !< number of references
     integer              :: nrots         =  0   !< number of in-plane rotations in polar representation
@@ -56,7 +55,7 @@ type prime2D_srch
     procedure          :: greedy_srch
     procedure          :: stochastic_srch
     procedure          :: nn_srch
-    procedure, private :: shift_srch
+    procedure, private :: inpl_srch
     procedure          :: bfac_srch
     procedure, private :: bfac_srch_local
     ! DESTRUCTOR
@@ -88,12 +87,12 @@ contains
         self%top         =  p%top
         self%nnn         =  p%nnn
         ! construct composites
-        self%srch_common =  prime_srch(p)
         lims(1,1)        = -self%trs
         lims(1,2)        =  self%trs
         lims(2,1)        = -self%trs
         lims(2,2)        =  self%trs
         call self%shsrch_obj%new(pftcc, lims)
+        call self%inplsrch_obj%new(pftcc, lims)
         lims_bfac(1,1)   = -50.
         lims_bfac(1,2)   =  50.
         call self%bfacsrch_obj%new(pftcc, lims_bfac)
@@ -242,7 +241,7 @@ contains
                 endif    
             end do
             self%nrefs_eval = self%nrefs
-            call self%shift_srch(iptcl)
+            call self%inpl_srch(pftcc, iptcl)
             call self%update_best(pftcc, iptcl, a)
         else
             call a%reject(iptcl)
@@ -306,7 +305,7 @@ contains
                 self%best_corr  = self%prev_corr
                 self%best_rot   = self%prev_rot
             endif
-            call self%shift_srch(iptcl)
+            call self%inpl_srch(pftcc, iptcl)
             call self%update_best(pftcc, iptcl, a)
         else
             call a%reject(iptcl)
@@ -352,7 +351,7 @@ contains
                 endif    
             end do
             self%nrefs_eval = self%nrefs
-            call self%shift_srch(iptcl)
+            call self%inpl_srch(pftcc, iptcl)
             call self%update_best(pftcc, iptcl, a)
         else
             call a%reject(iptcl)
@@ -361,23 +360,27 @@ contains
     end subroutine nn_srch
 
     !>  \brief  executes the shift search over the best matching reference
-    subroutine shift_srch( self, iptcl )
-        class(prime2D_srch), intent(inout) :: self
-        integer,             intent(in)    :: iptcl
-        real :: cxy(3), corr_before, corr_after
+    subroutine inpl_srch( self, pftcc, iptcl )
+        class(prime2D_srch),     intent(inout) :: self
+        class(polarft_corrcalc), intent(inout) :: pftcc
+        integer,                 intent(in)    :: iptcl
+        real, allocatable :: crxy(:)
+        real :: corr_before, corr_after
         self%best_shvec = [0.,0.]
         if( self%doshift )then
             corr_before = self%best_corr
-            call self%shsrch_obj%set_indices(self%best_class, iptcl, self%best_rot)
-            cxy = self%shsrch_obj%minimize()
-            corr_after = cxy(1)
+            call self%inplsrch_obj%set_indices(self%best_class, iptcl)
+            crxy = self%inplsrch_obj%minimize(irot=self%best_rot)
+            corr_after = crxy(1)
             if( corr_after > corr_before )then
-                self%best_corr  = cxy(1)
-                self%best_shvec = cxy(2:3)
+                self%best_corr = crxy(1)
+                ! no negation of angle here, see pftcc_inplsrch class
+                self%best_rot  = pftcc%get_roind( crxy(2) ) 
+                self%best_shvec = crxy(3:4)
             endif
         endif
         if( DEBUG ) write(*,'(A)') '>>> PRIME2D_SRCH::FINISHED SHIFT SEARCH'
-    end subroutine shift_srch
+    end subroutine inpl_srch
 
     !>  \brief  executes B-factor search
     subroutine bfac_srch( self, pftcc, iptcl, a )
@@ -418,7 +421,6 @@ contains
         class(prime2D_srch), intent(inout) :: self !< instance
         if( self%exists )then
             if( allocated(self%srch_order) ) deallocate(self%srch_order)
-            call self%srch_common%kill
             self%exists = .false.
         endif
     end subroutine kill

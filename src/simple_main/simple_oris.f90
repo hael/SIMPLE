@@ -60,6 +60,7 @@ type :: oris
     procedure          :: get_ncls
     procedure          :: get_pop
     procedure          :: get_cls_pop
+    procedure          :: get_proj_pop
     procedure          :: get_cls_corr
     procedure          :: cls_corr_sigthresh
     procedure          :: get_statepop
@@ -73,7 +74,9 @@ type :: oris
     procedure          :: remap_classes
     procedure          :: shift_classes
     procedure          :: get_cls_pinds
+    procedure          :: get_proj_pinds
     procedure          :: get_cls_oris
+    procedure          :: get_proj_oris
     procedure          :: get_state
     procedure          :: get_arr
     procedure, private :: calc_sum
@@ -460,18 +463,17 @@ contains
     function get_cls_pop( self, class ) result( pop )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: class
-        integer :: mycls, pop, i, mystate
-        pop = 0
-        do i=1,self%n
-            mystate = nint(self%o(i)%get('state'))
-            if( mystate > 0 )then
-                mycls   = nint(self%o(i)%get('class'))
-                if( mycls == class )then
-                    pop = pop+1
-                endif
-            endif
-        end do
+        integer :: pop
+        pop = self%get_pop(class, 'class')
     end function get_cls_pop
+
+    !>  \brief  is for checking proj population
+    function get_proj_pop( self, proj ) result( pop )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: proj
+        integer :: pop
+        pop = self%get_pop(proj, 'proj')
+    end function get_proj_pop
 
     !>  \brief  is for getting the class score (stored per-particle)
     function get_cls_corr( self, class ) result( corr )
@@ -723,7 +725,7 @@ contains
         pop = self%get_cls_pop( class )
         if( pop > 0 )then
             allocate( clsarr(pop), stat=alloc_stat )
-            call alloc_err('get_cls; simple_oris', alloc_stat)
+            call alloc_err('get_cls_pinds; simple_oris', alloc_stat)
             cnt = 0
             do i=1,self%n
                 clsnr = nint(self%get( i, 'class'))
@@ -734,6 +736,27 @@ contains
             end do
         endif
     end function get_cls_pinds
+
+    !>  \brief  is for getting an allocatable array with ptcl indices of the proj 'proj'
+    function get_proj_pinds( self, proj ) result( projarr )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: proj
+        integer, allocatable       :: projarr(:)
+        integer                    :: projnr, i, pop, alloc_stat, cnt
+        pop = self%get_proj_pop( proj )
+        if( pop > 0 )then
+            allocate( projarr(pop), stat=alloc_stat )
+            call alloc_err('get_proj_pinds; simple_oris', alloc_stat)
+            cnt = 0
+            do i=1,self%n
+                projnr = nint(self%get( i, 'proj'))
+                if( projnr == proj )then
+                    cnt = cnt+1
+                    projarr(cnt) = i
+                endif
+            end do
+        endif
+    end function get_proj_pinds
 
     !>  \brief  is for extracting the subset of oris with class label class
     function get_cls_oris( self, class ) result( clsoris )
@@ -754,6 +777,26 @@ contains
             end do
         endif
     end function get_cls_oris
+
+    !>  \brief  is for extracting the subset of oris with proj label proj
+    function get_proj_oris( self, proj ) result( projoris )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: proj
+        type(oris)                 :: projoris
+        integer                    :: projnr, i, pop, cnt
+        pop = self%get_proj_pop( proj )
+        if( pop > 0 )then
+            call projoris%new(pop)
+            cnt = 0
+            do i=1,self%n
+                projnr = nint(self%get(i, 'proj'))
+                if( projnr == proj )then
+                    cnt = cnt+1
+                    projoris%o(cnt) = self%o(i)
+                endif
+            end do
+        endif
+    end function get_proj_oris
     
     !>  \brief  is for getting an allocatable array with ptcl indices of the stategroup 'state'
     function get_state( self, state ) result( statearr )
