@@ -19,7 +19,7 @@ module simple_oris
 !$ use omp_lib_kinds
 use simple_defs
 use simple_ori,         only: ori
-use simple_math,        only: hpsort, is_a_number
+use simple_math,        only: hpsort, is_a_number, rad2deg
 use simple_jiffys,      only: alloc_err
 use simple_stat,        only: moment
 use simple_filehandling ! use all in there
@@ -189,6 +189,8 @@ type :: oris
     procedure          :: find_angres_geod
     procedure          :: extremal_bound
     procedure          :: find_npeaks
+    procedure          :: find_athres_from_npeaks
+    procedure          :: find_npeaks_from_athres
     procedure          :: class_calc_frac
     procedure          :: class_dist_stat
     procedure          :: class_corravg
@@ -2849,7 +2851,46 @@ contains
         !$omp end parallel do
         npeaks = nint(npeaksum/real(self%n)) ! nr of peaks is average of peaksum
     end function find_npeaks
+
+    !>  \brief  find angular threshold from number of peaks
+    function find_athres_from_npeaks( self, npeaks ) result( athres )
+        class(oris), intent(in) :: self
+        integer,     intent(in) :: npeaks
+        real :: athres, dist, maxdist
+        integer :: pdirinds(npeaks), i, j
+        athres = 0.
+        do i=1,self%n
+            call self%find_closest_projs(self%o(i), pdirinds)
+            maxdist = 0.
+            do j=1,npeaks
+                if( i /= pdirinds(j) )then
+                    dist = self%o(i).euldist.self%o(pdirinds(j))
+                    if( dist > maxdist )then
+                        maxdist = dist
+                    endif
+                endif
+            end do
+            athres = athres + maxdist
+        end do
+        athres = rad2deg(athres / real(self%n))
+    end function find_athres_from_npeaks
     
+    !>  \brief  find number of peaks from angular threshold
+    function find_npeaks_from_athres( self, athres ) result( npeaks )
+        class(oris), intent(in) :: self
+        real,        intent(in) :: athres
+        integer :: i, j, npeaks
+        real :: dists(self%n), rnpeaks
+        rnpeaks = 0.
+        do i=1,self%n
+            do j=1,self%n
+                dists(j) = rad2deg( self%o(i).euldist.self%o(j) )
+            end do
+            rnpeaks = rnpeaks + real(count(dists <= athres))
+        end do
+        npeaks = nint(rnpeaks/real(self%n))
+    end function find_npeaks_from_athres
+
     !>  \brief  calculate fraction of ptcls in class within lims
     function class_calc_frac( self, class, lims ) result( frac )
         class(oris), intent(inout) :: self

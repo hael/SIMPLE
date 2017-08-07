@@ -19,7 +19,6 @@ public :: cont3D_exec
 private
 #include "simple_local_flags.inc"
 integer,                   parameter :: BATCHSZ_MUL = 10   !< particles per thread
-integer,                   parameter :: MAXNPEAKS   = 10   !< Max num peaks
 integer,                   parameter :: NREFS       = 80   !< Max num of references
 type(cont3D_ada_srch),   allocatable :: cont3Dadasrch(:)    !< pftcc array for refine=ada
 logical, allocatable                 :: state_exists(:)

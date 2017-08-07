@@ -97,6 +97,8 @@ contains
         n_lsfiles = size(farray)
         if( n_lsfiles .eq. 0 )then
             if(allocated(self%history))deallocate(self%history)
+            n_files = 0
+            if(allocated(files))deallocate(files)
             return
         endif
         ! identifies files to report

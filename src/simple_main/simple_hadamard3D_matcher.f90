@@ -25,7 +25,6 @@ public :: preppftcc4align, prep_refs_pftcc4align, pftcc
 private
 #include "simple_local_flags.inc"
 
-integer, parameter              :: MAXNPEAKS=10
 type(polarft_corrcalc)          :: pftcc
 type(prime3D_srch), allocatable :: primesrch3D(:)
 real                            :: reslim
@@ -60,6 +59,7 @@ contains
         deallocate(peaks)
         call o%kill
     end subroutine prime3D_find_resrange
+
     !> Execute prime3D (Hadamard method)
     subroutine prime3D_exec( b, p, cline, which_iter, update_res, converged )
         use simple_qsys_funs, only: qsys_job_finished
@@ -73,7 +73,6 @@ contains
         real              :: norm, corr_thresh
         integer           :: iptcl, inptcls, prev_state, istate
         integer           :: statecnt(p%nstates)
-#include "simple_local_flags.inc"
         inptcls = p%top - p%fromp + 1
 
         ! SET FRACTION OF SEARCH SPACE
@@ -84,7 +83,6 @@ contains
 
         ! CALCULATE ANGULAR THRESHOLD (USED BY THE SPARSE WEIGHTING SCHEME)
         p%athres = rad2deg( atan(max(p%fny,p%lp)/(p%moldiam/2.) ))
-        !p%athres = max(p%athres, ATHRES_LIM)
         reslim   = p%lp
         DebugPrint '*** hadamard3D_matcher ***: calculated angular threshold (used by the sparse weighting scheme)'
 
@@ -92,7 +90,11 @@ contains
         if( .not. cline%defined('npeaks') )then
             select case(p%refine)
                 case('no', 'neigh', 'greedy', 'greedyneigh', 'exp')
-                    p%npeaks = min(MAXNPEAKS,b%e%find_npeaks(p%lp, p%moldiam))
+                    if( p%eo .eq. 'yes' )then
+                        p%npeaks = min(b%e%find_npeaks_from_athres(NPEAKSATHRES), MAXNPEAKS)
+                    else
+                        p%npeaks = min(10,b%e%find_npeaks(p%lp, p%moldiam))
+                    endif
                 case DEFAULT
                     p%npeaks = 1
             end select
