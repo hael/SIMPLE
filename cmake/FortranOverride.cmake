@@ -159,13 +159,15 @@ ENDIF(APPLE)
 message( STATUS "CMAKE_Fortran_COMPILER_ID: ${CMAKE_Fortran_COMPILER_ID}")
 if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
   # gfortran
-  set(preproc  "-cpp  ")                                                                        # preprocessor flags
+  set(preproc  "-cpp  ")                                                               # preprocessor flags
   set(dialect  "-ffree-form  -fimplicit-none  -ffree-line-length-none -fno-second-underscore")  # language style
   set(warn     "-Wampersand -Wsurprising -Wtabs -Wline-truncation -Winteger-division -Wreal-q-constant ")
-  set(forspeed "-O3 ")                                                                           # optimisation
-  set(forpar   "-fopenmp  ")                                                                    # parallel flags
+  set(forspeed "-O3")                                                                           # optimisation
+  set(forpar   "-fopenmp  -Wp,-fopenmp")                                                        # parallel flags
   set(target   "${GNUNATIVE} -fPIC ")                                                           # target platform
+
   set(common   "${preproc} ${dialect} ${target}")
+
   set(checks   "-fcheck-array-temporaries -frange-check -fstack-protector -fstack-check -fbounds-check") # checks
   set(warnDebug "-Wall -Wextra -Wimplicit-interface  ${checks}")                                # extra warning flags
   set(fordebug "-O0 -g -pedantic -fno-inline -fno-f2c -Og -ggdb -fbacktrace  ${warnDebug} ")    # debug flags
@@ -185,8 +187,16 @@ elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
   set(target   " -m64 -fPIC ")
   set(common   "${preproc} ${dialect} ${target}")
   #
-  set(FFTWDIR "/usr/local/pgi/src/fftw/")
-
+  message(STATUS "FFTW should be set with one of the following environment variables: FFTWDIR,FFTW_DIR, or FFTW_ROOT ")
+  if(NOT "$ENV{FFTW_DIR}" STREQUAL "")
+    set(FFTWDIR "$ENV{FFTW_DIR}")
+  elseif (NOT "$ENV{FFTWDIR}" STREQUAL "")
+    set(FFTWDIR "$ENV{FFTWDIR}")
+  elseif (NOT "$ENV{FFTW_ROOT}" STREQUAL "")
+    set(FFTWDIR "$ENV{FFTW_ROOT}")
+  else()
+    set(FFTWDIR "/usr/local/pgi/src/fftw/")
+  endif()
 elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
   # ifort
   # set(FC "ifort" CACHE PATH "Intel Fortran compiler")
@@ -201,7 +211,11 @@ elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
   set(common   "${preproc} ${dialect} ${checks} ${target}")
   # else()
   #   message(" Fortran compiler not supported. Set FC environment variable")
-  set(MKLROOT $ENV{MKLROOT})
+  if(NOT "$ENV{MKLROOT}" STREQUAL "")
+    set(MKLROOT $ENV{MKLROOT})
+  else()
+    message( "MKLROOT must be set using INTEL compilervars or mklvars ")
+  endif()
 
 endif ()
 
@@ -221,9 +235,37 @@ endif()
 
 
 ## Remove EMAN bin and possible library paths from PATH
-set(TMPPATH $ENV{PATH})
-string(REGEX REPLACE  "[^:]\+EMAN[2]*/extlib[^:]\+" "" TMPPATH ${TMPPATH})
+file(TO_CMAKE_PATH "$ENV{PATH}" TMPPATH)
+string(REGEX REPLACE  "[^:]\+(EMAN|eman)[2]*[^:]\+" "" TMPPATH ${TMPPATH})
+file(TO_CMAKE_PATH "${TMPPATH}" TMPPATH)
 set(ENV{PATH} ${TMPPATH})
+if (NOT "$ENV{LD_LIBRARY_PATH}" STREQUAL "")
+  file(TO_CMAKE_PATH   "$ENV{LD_LIBRARY_PATH}" TMPPATH)
+  string(REGEX REPLACE  "[^:]\+(eman|EMAN)[2]*[^:]\+" "" TMPPATH ${TMPPATH})
+  file(TO_CMAKE_PATH "${TMPPATH}" TMPPATH)
+  set(ENV{LD_LIBRARY_PATH} ${TMPPATH})
+elseif(NOT "$ENV{DYLD_LIBRARY_PATH}" STREQUAL "")
+  file(TO_CMAKE_PATH "$ENV{DYLD_LIBRARY_PATH}" TMPPATH)
+  string(REGEX REPLACE  "[^:]\+(eman|EMAN)[2]*[^:]\+" "" TMPPATH ${TMPPATH})
+  file(TO_CMAKE_PATH "${TMPPATH}" TMPPATH)
+  set(ENV{DYLD_LIBRARY_PATH} ${TMPPATH})
+endif()
+if (NOT "$ENV{FFTW_ROOT}" STREQUAL "")
+  file(TO_CMAKE_PATH  "$ENV{FFTW_ROOT}" TMPPATH)
+  string(REGEX REPLACE  "[^:]\+(eman|EMAN)[2]*[^:]\+" "" TMPPATH ${TMPPATH})
+  file(TO_CMAKE_PATH "${TMPPATH}" TMPPATH)
+  set(ENV{FFTW_ROOT} ${TMPPATH})
+elseif (NOT "$ENV{FFTW_DIR}" STREQUAL "")
+  file(TO_CMAKE_PATH  "$ENV{FFTW_DIR}" TMPPATH)
+  string(REGEX REPLACE  "[^:]\+(eman|EMAN)[2]*[^:]\+" "" TMPPATH ${TMPPATH})
+  file(TO_CMAKE_PATH "${TMPPATH}" TMPPATH)
+  set(ENV{FFTW_DIR} ${TMPPATH})
+elseif (NOT "$ENV{FFTW_ROOT}" STREQUAL "")
+  file(TO_CMAKE_PATH "$ENV{FFTWDIR}" TMPPATH)
+  string(REGEX REPLACE  "[^:]\+(eman|EMAN)[2]*[^:]\+" "" TMPPATH ${TMPPATH})
+  file(TO_CMAKE_PATH "${TMPPATH}" TMPPATH)
+  set(ENV{FFTWDIR} ${TMPPATH})
+endif()
 
 # Make sure the build type is uppercase
 string(TOUPPER "${CMAKE_BUILD_TYPE}" BT)
