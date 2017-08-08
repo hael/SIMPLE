@@ -100,14 +100,14 @@ contains
         type(cmdline)           :: cline_extract
         character(len=STDLEN), allocatable :: movienames(:)
         character(len=:),      allocatable :: fname_ctffind_ctrl, fname_unidoc_output
-        character(len=:),      allocatable :: moviename_forctf, moviename_intg, outfile
+        character(len=:),      allocatable :: moviename_forctf, moviename_intg
         character(len=STDLEN) :: boxfile, dir_ptcls
         type(params) :: p
         type(oris)   :: os_uni
         type(ori)    :: orientation
         real         :: smpd_native, smpd_scaled
         integer      :: nmovies, fromto(2), imovie, ntot, movie_counter
-        integer      :: frame_counter, lfoo(3), nframes, i, movie_ind, nptcls_out
+        integer      :: frame_counter, movie_ind, nptcls_out
         p = params(cline, checkdistr=.false.) ! constants & derived constants produced
         if( p%scale > 1.05 )then
             stop 'scale cannot be > 1; simple_commander_preproc :: exec_preproc'
@@ -723,11 +723,11 @@ contains
         integer, parameter           :: NREFS=100
         type(params)                 :: p
         type(build)                  :: b
-        type(cmdline)                :: cline_projvol, cline_stackops, cline_scale
+        type(cmdline)                :: cline_projvol, cline_stackops
         type(projvol_commander)      :: xprojvol
         type(stackops_commander)     :: xstackops
         integer                      :: nrots, cnt, iref, irot
-        real                         :: ang, rot, rclip
+        real                         :: ang, rot
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         if( cline%defined('stk') .or. cline%defined('vol1') )then
@@ -774,6 +774,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_MAKEPICKREFS NORMAL STOP ****')
     end subroutine exec_makepickrefs
+
     !> PICK is a program to pick particles
     subroutine exec_pick( self, cline)
         use simple_pick_iter, only: pick_iter
@@ -837,7 +838,7 @@ contains
         character(len=STDLEN), allocatable :: movienames(:), boxfilenames(:), movienames_frames(:)
         real, allocatable                  :: boxdata(:,:)
         integer, allocatable               :: pinds(:)
-        real                               :: x, y, kv, cs, fraca, dfx, dfy, angast, ctfres
+        real                               :: kv, cs, fraca, dfx, dfy, angast, ctfres
         real                               :: med, ave, sdev, var, particle_position(2)
         type(image)                        :: micrograph
         type(oris)                         :: outoris, os_uni

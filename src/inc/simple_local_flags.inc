@@ -12,7 +12,7 @@
     logical :: debug=.false.
     logical :: warn=.false.
     logical :: verbose=.false.
-#define _WPRINT_FILE_LINE_(FFFF,LLLL)  if(debug.or.global_debug)write(*,'(A,A,I0,A)',advance='no') FFFF,':',LLLL,': ';
+#define _WPRINT_FILE_LINE_(FFFF,LLLL) if(debug.or.global_debug)write(*,'(A,A,I0,A)',advance='no') FFFF,':',LLLL,': '
 #define __WPRINT_FILE_LINE_(FFFF,LLLL) write(*,'("DEBUG:",/,A,/,":",I0,":",A)',advance='no') FFFF,LLLL
 #define _PRINT_FILE_LINE_(myFILE,myLine) if(debug.or.global_debug) print *, myFILE//':myLine',
 #ifdef __PRETTY_FUNCTION__
@@ -24,9 +24,10 @@
 #  if defined(PGI)
 #    define DebugPrint if(debug.or.global_debug) print *,
 #  elif defined(Intel)
-#    define DebugPrint if(debug.or.global_debug) print *,__FILENAME__,':',__LINE__,':',
+#    define LinePrint(N) #N
+#    define DebugPrint if(debug.or.global_debug) print *,__FILENAME__//':',__LINE__,':',
 #  else
-#   define DebugPrint  _WPRINT_FILE_LINE_(__FILENAME__,__LINE__) if(debug.or.global_debug) print *,
+#   define DebugPrint  _WPRINT_FILE_LINE_(__FILENAME__,__LINE__);if(debug.or.global_debug) print *,
 #  endif
 # endif
 #endif
@@ -37,5 +38,6 @@
 # define VerbosePrint if(verbose.or.global_verbose.or.debug.or.global_debug) print *, 
 #endif
 #ifndef ERRORMSG
-#define ERRORMSG(msg) write(0,'("There was an error at line ",I4," in file ",/,A,/,"Error message: ",A)') __LINE__,__FILENAME__,msg
+#define ERRORMSG(msg) write(0,'(A,/,":",I0,":")',advance='no') __FILENAME__,__LINE__; print *,msg
+
 #endif

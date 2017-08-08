@@ -18,11 +18,10 @@ use simple_ft_expanded_tester
 use simple_defs
 implicit none
 integer(8) :: version(3)
+print *, 'SIMPLE build type',  trim(adjustl(BUILD_TYPE))
 print *, 'SIMPLE VERSION:', trim(adjustl(SIMPLE_LIB_VERSION)), " (", trim(adjustl(build_descr)), ")"
 print *, 'SIMPLE_PATH: ', trim(adjustl(SIMPLE_PATH))
-print *, 'COMPILER: ', trim(adjustl(COMPILER))
-version(1) =  INT(COMPILER_VERSION,8)/INT(1000000,8)
-version(2) =  (COMPILER_VERSION - version(1))/1000
-write(*,'(A,I0,A,I0)') 'COMPILER VERSION: ', version(1), '.',version(2)
+print *, 'COMPILER: ', trim(adjustl(FC_COMPILER))
+write(*,'(A,I0,A,I0,A,I0)') 'COMPILER VERSION: ', FC_COMPILER_VERSION(1), '.',FC_COMPILER_VERSION(2), '.',FC_COMPILER_VERSION(3)
 call exec_ft_expanded_test
 end program simple_test_ft_expanded

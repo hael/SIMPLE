@@ -77,20 +77,20 @@ find_path(FFTW_INCLUDE_DIRS
         ${FFTW_ROOT}/include
         ${FFTW_ROOT}/api
         ${FFTW_ROOT}
-        ${FFTWDIR}/include
         $ENV{FFTW_ROOT}/include
         $ENV{FFTW_ROOT}/api
         ENV FFTWDIR
         ENV FFTW_ROOT
+        ${FFTWDIR}/include
         $ENV{FFTWDIR}/include
     PATHS
+        ${FFTWDIR}/include
         /usr/include
         /usr/local/include          #Homebrew
         /opt/local/include          #MacPorts
         /sw/include                 #Fink
         /usr/opt/local/include
         /usr/local/pgi/src/fftw/include
-        ${FFTWDIR}/include
 )
 mark_as_advanced( FFTW_INCLUDE_DIRS )
 

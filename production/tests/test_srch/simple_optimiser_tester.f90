@@ -133,7 +133,7 @@ contains
     subroutine test_all_optimizers
         use simple_jiffys, only: progress
         use simple_stat,   only: moment
-        integer :: i, j, k, mval, cnt, nfuns
+        integer :: i, j, k, cnt, nfuns
         real    :: maxeval, neval
         logical :: err
         str_opts(1) = 'powell'

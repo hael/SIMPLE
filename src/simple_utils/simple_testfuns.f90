@@ -635,7 +635,7 @@ contains
         real, intent(in)    :: x(d)
         integer :: i
         real    :: r, abx, mabx
-        r = 0.
+        r = 0. ; mabx = 0.
         do i=1,d
             abx = abs(x(i))
             if( i == 1 )then

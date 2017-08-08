@@ -10,7 +10,7 @@ implicit none
 integer,               parameter   :: NPARTS=10 
 character(len=STDLEN), allocatable :: labels(:)
 type(chash),           allocatable :: work_assignments(:)
-integer :: i, nlayers, njobs, n, nworkers
+integer :: i, nlayers, njobs, nworkers
 
 ! figure out how many workers are needed
 if( mod(NPARTS,2) == 0. )then

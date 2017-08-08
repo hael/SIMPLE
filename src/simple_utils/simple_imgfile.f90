@@ -465,7 +465,7 @@ contains
         integer                      :: io_stat, dims(3),i,j,k,itmp,cnt,ldim_here(3),iform,maxim
         integer(kind=8)              :: first_byte,hedbyteinds(2),imbyteinds(2),first_hedbyte
         logical                      :: arr_is_ready, ft_indic
-        real                         :: min_val,max_val,smpd_here
+        real                         :: min_val,max_val
         class(imghead), pointer      :: ptr=>null()
         class(imghead), allocatable  :: imghed
         character(len=20)            :: conv

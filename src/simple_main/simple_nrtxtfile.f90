@@ -49,7 +49,7 @@ contains
         character(len=512)               :: io_msg
         ! always destruct first
         call self%kill
-        tot_nr_of_recs   = 0
+        tot_nr_of_recs   = 0;  recs_on_curr_line = 0
         self%fname       = fname
         self%access_type = access_type
         ! if we are opening to read, work out the file details..

@@ -133,7 +133,7 @@ contains
     VerbosePrint '8.  Testing timed_loop in subroutine '
     c=test_loop()
 
-#if !defined(PGI)
+#if ! defined(PGI)
     call reset_timer()
     VerbosePrint ' '
     VerbosePrint '9.  Testing timed loop macro '
@@ -146,11 +146,12 @@ contains
     call reset_timer()
     VerbosePrint ' '
     VerbosePrint '10.  Testing timed block macro '
-#if defined(__STDC__)
+    DebugPrint 'Testing line num'
+#if defined(GNU)
     TIMER_BLOCK(
     c=.1;
     c=saxy(c)
-    , ' my block comment multiline ')
+    , ' my multiline timer block')
 #else
     TIMER_BLOCK(   c=.1;  c=saxy(c) , ' my block comment (Intel does not like multi line in macro)')
 #endif
@@ -163,10 +164,10 @@ contains
     integer(dp),parameter :: nrep=NREP_MAX
     real(dp)              :: c,cfac,b
     integer(dp)           :: i
-    b=1.
+    b=1.0_dp
     c=c_in
-    c=.1
-    cfac=.25
+    c=0.1_dp
+    cfac=0.25_dp
     do i=1,nrep
       c=cfac*c+b
     end do

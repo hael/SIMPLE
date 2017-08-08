@@ -310,7 +310,7 @@ contains
     function int2str_pad(intg, numlen) result(string)
         integer, intent(in)           :: intg, numlen
         character(len=:), allocatable :: string, str_tmp, str_tmp2
-        integer :: str_tmp_len, slen
+        integer :: slen
         str_tmp = int2str(intg)
         slen    = len(str_tmp)
         if( slen > numlen )then
@@ -502,7 +502,7 @@ contains
             nrecs = 0
         else
             buffer = trim(line)
-            nrecs = 0
+            nrecs = 0; pos2 = 0; pos1 = 0
             do
                 if (present(separators)) then
                     ! find the first non-separator character

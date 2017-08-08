@@ -30,7 +30,7 @@ if( command_argument_count() < 0 )then
     write(*,'(a)') 'simple_test_timer [verbose=<yes|no{no}>]'
     stop
 endif
-!call cline%parse
+call cline%parse
 ! call cline%checkvar('nthr', 1)
 !call cline%check
 be_verbose = .true.

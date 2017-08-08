@@ -344,7 +344,7 @@ contains
         logical, intent(out) :: err              !< error status
         real, intent(in)     :: data(:,:)        !< input data
         integer              :: nx, ny, i, j, h, k, px, py, tmpcnt
-        real                 :: n, tmpave, nrpatch
+        real                 :: n, tmpave!, nrpatch
         err = .false.
         nx = size(data,1)
         ny = size(data,2)
@@ -916,7 +916,7 @@ contains
                 mi = mi + pxy * log( pxy/ (px*py) ) / logtwo
             enddo
         enddo
-        if( ex /= 0.0 .and. ey /= 0.0 )then
+        if( ( ex /= 0.0) .and. (ey /= 0.0) )then
             val = mi / sqrt(ex*ey)
         else
             val = 0.0

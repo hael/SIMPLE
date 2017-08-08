@@ -36,7 +36,7 @@ contains
       logical, optional, intent(in)    :: be_verbose
       integer(dp), parameter :: nrep = NREP_MAX
       real(dp)    :: xx, c, cfac, b
-      real(dp)    :: etime, sysclockrate
+      real(dp)    :: etime
       real(dp) ::  t1, t2
       integer(dp) :: i
       c = .1

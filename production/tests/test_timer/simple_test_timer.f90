@@ -26,13 +26,13 @@ logical           :: be_verbose=.false.
 character(STDLEN) :: time
 call date_and_time(TIME=time)
 starttime = str2real(time)
-if( command_argument_count() < 0 )then
-    write(*,'(a)') 'simple_test_timer [verbose=<yes|no{no}>]'
-    stop
-endif
+!if( command_argument_count() < 0 )then
+!    write(*,'(a)') 'simple_test_timer [verbose=<yes|no{no}>]'
+!    stop
+!endif
 !call cline%parse
 ! call cline%checkvar('nthr', 1)
-!call cline%check
+! call cline%check
 be_verbose = .true.
 !if( cline%defined('verbose') )then
 !    if( trim(cline%get_carg('verbose')) .eq. 'yes' )then

@@ -7,9 +7,9 @@ implicit none
 type(ori)   :: o
 type(oris)  :: os
 integer     :: i
-real        :: rval
-type(image) :: img
-integer, parameter :: NORIS=20000, NTST=1000
+!real        :: rval
+!type(image) :: img
+integer, parameter :: NORIS=20000  !, NTST=1000
 o = ori()
 call o%set('movie', 'mymovie.mrc')
 call o%set('movie_ctf', 'mymovie_forctf.mrc')

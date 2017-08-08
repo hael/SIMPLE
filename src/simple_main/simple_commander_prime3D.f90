@@ -387,7 +387,7 @@ contains
         !if( cline%defined('nstates') )then
         !    if( p%nstates /= b%a%get_nstates() ) stop 'Inconsistent number of states between command-line and oritab'
         !endif
-        limset = .false.
+        limset = .false. ;  update_res = .false.
         if( p%eo .eq. 'yes' )then
             allocate( maplp(p%nstates) )
             maplp = 0.

@@ -1123,7 +1123,7 @@ contains
             call trapzd(func,a,b,st,j)
             s = (4.*st-ost)/3.
             if( abs(s-os) .lt. EPS*abs(os) ) return
-            if( s == 0. .and. os == 0. .and.j.gt.6 ) return
+            if( s == 0. .and. os == 0. .and. j.gt.6 ) return
             os = s
             ost = st
         end do
@@ -1307,7 +1307,7 @@ contains
                     endif
                     if(flag .eqv. .false.)then
                         inverse = 0.d0
-                        errflg = -1.d0
+                        errflg = -1
                         return
                     endif
                 end do
@@ -1323,7 +1323,7 @@ contains
         do i=1,n
             if( augmatrix(i,i) == 0.d0 )then
                 inverse = 0.d0
-                errflg = -1.d0
+                errflg = -1
                 return
             endif
         end do
@@ -1732,9 +1732,9 @@ contains
     ! U ·W ·V T . The matrix U replaces a on output. The diagonal matrix of singular values W is output
     ! as a vector w[1..n]. The matrix V (not the transpose V T ) is output as v[1..n][1..n].
     subroutine svdcmp(a,m,n,mp,np,w,v)
-      integer :: m,mp,n,np,nmax
+      integer :: m,mp,n,np!,nmax
       real, intent(inout) :: a(mp,np),v(np,np),w(np)
-      integer ::i,its,j,jj,k,l,nm
+      integer ::i,its,j,k,l,nm !,jj
       real :: anorm,c,f,g,h,s,scale,x,y,z,rv1(n)!,pythag
       g=0.0
       scale=0.0
@@ -1749,7 +1749,7 @@ contains
           do 11 k=i,m
             scale=scale+abs(a(k,i))
 11        continue
-          if (scale.ne.0.0) then
+          if (scale.ne.0.) then
             do 12 k=i,m
               a(k,i)=a(k,i)/scale
               s=s+a(k,i)*a(k,i)
@@ -1783,7 +1783,7 @@ contains
           do 17 k=l,n
             scale=scale+abs(a(i,k))
 17        continue
-          if (scale.ne.0.0) then
+          if (scale.ne.0.) then
             do 18 k=l,n
               a(i,k)=a(i,k)/scale
               s=s+a(i,k)*a(i,k)
@@ -1815,7 +1815,7 @@ contains
 25    continue
       do 32 i=n,1,-1
         if (i.lt.n) then
-          if (g.ne.0.0) then
+          if (g.ne.0.) then
             do 26 j=l,n
               v(j,i)=(a(i,j)/a(i,l))/g
 26          continue
@@ -1846,7 +1846,7 @@ contains
             a(i,j)=0.0
 33        continue
         endif
-        if (g.ne.0.0) then
+        if (g.ne.0.) then
           g=1.0/g
           if (i.ne.n) then
             do 36 j=l,n

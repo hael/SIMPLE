@@ -22,6 +22,9 @@
 #ifndef SIMPLE_TIMER_H
 #define SIMPLE_TIMER_H
 
+#define STRINGIFY_(x) #x
+#define STRINGIFY(x) STRINGIFY_(x)
+
 #if 0
 /*  getting into ## preprocessor magic */
 #define CAT(prefix, suffix)            prefix ## suffix
@@ -42,7 +45,7 @@
   integer :: IDX,np;\
   integer(timer_int_kind):: tn;\
   integer,parameter :: nv=c99_count (__VA_ARGS__);\
-  character(255)::p_tokens= #__VA_ARGS__ ; \
+  character(255)::p_tokens= STRINGIFY(__VA_ARGS__) ; \
   tn=tic();\
   np=NLOOPS;\
   call timer_profile_setup(np,nv,p_tokens);
@@ -55,19 +58,19 @@
  character(len=255)::p_comment;\
  integer :: IDX,np;\
  integer(timer_int_kind):: tn;\
- character(len=255)::p_tokens= #TOKENS; \
+ character(len=255)::p_tokens= STRINGIFY(TOKENS); \
  tn=tic();\
  np=NLOOPS;\
  call timer_profile_setup(np,-1,p_tokens);
 
 #endif
 
-#define TBEG(TOKEN) p_tmp = #TOKEN; call timer_profile_start(trim(p_tmp))
+#define TBEG(TOKEN) p_tmp = STRINGIFY (TOKEN); call timer_profile_start(trim(p_tmp))
 
-#define TEND(TOKEN) p_tmp = #TOKEN; \
+#define TEND(TOKEN) p_tmp = STRINGIFY (TOKEN); \
  call timer_profile_break(trim(p_tmp))
 
-#define TREPORT(COMMENT) p_comment = #COMMENT; \
+#define TREPORT(COMMENT) p_comment = STRINGIFY (COMMENT); \
   call timer_profile_report(trim(adjustl(p_comment)),toc(tn));  \
  end block
 
@@ -76,12 +79,13 @@
   print *,"TBLOCK:  Start timer: ", tic()
 
 #define TIMER_BLOCK(YBLOCK,COMMENT) \
-block; \
- use simple_timer;\
+block; use simple_timer;\
 character(len=80) :: comment_,srcname; \
- integer(timer_int_kind) :: t1;integer :: srcline;  \
-t1=tic();srcline=__LINE__; \
- comment_=trim(adjustl(COMMENT)); \
+integer(timer_int_kind) :: t1; \
+integer :: srcline;  \
+t1=tic(); \
+srcline= __LINE__ ; \
+comment_=trim(adjustl(COMMENT)); \
 srcname=trim(__FILENAME__); \
 YBLOCK; \
  write(*,'(A,A,A,1i4,A,A,A,1ES20.6)') "TIMER_BLOCK:",trim(srcname),":",srcline,":",trim(adjustl(comment_)),': Elapsed time (sec): ', toc(t1); \
@@ -114,13 +118,13 @@ do
 #define STOP_TIMER_LOOP_(COMMENT)               \
   if (.not.in_timer_loop()) exit;               \
   end do;                                       \
-  call timer_loop_end(#COMMENT)
+  call timer_loop_end( STRINGIFY(COMMENT) )
 #endif
 
 
 
 #define TIMER_BLOCK_LOOP(NLOOP,COMMENT,YBLOCK) block;      \
-  character(len=*) :: cblock=trim(COMMENT);                \
+  character(len=*) :: cblock=trim( STRINGIFY(COMMENT) );   \
   call timer_loop_start(NLOOP);do i=1,NLOOP; YBLOCK;\
   if (.not.in_timer_loop()) exit; \
 end do;\

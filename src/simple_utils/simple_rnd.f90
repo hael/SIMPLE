@@ -103,7 +103,7 @@ contains
     !>  \brief  returns a random matrix
     subroutine ran3arr( harvest )
         real, intent(inout) :: harvest(:)
-        integer :: i
+        !integer :: i
         call random_number(harvest)
         ! do i=1,size(harvest)
         !     harvest(i) = ran3()
@@ -161,7 +161,7 @@ contains
         real,     intent(in) :: pvec(:) !< probabilities
         real,    allocatable :: pvec_sorted(:)
         integer, allocatable :: inds(:)
-        integer :: n, which, irnd, i
+        integer :: i, n, which !, irnd
         real    :: rnd, bound
         n = size(pvec)
         allocate(pvec_sorted(n), source=pvec)
@@ -238,7 +238,7 @@ contains
     !>  \brief  generate a uniformly distributed random integer [_1_,_NP_]
     function irnd_uni( NP ) result( irnd )
         integer, intent(in) :: NP
-        real                :: rrnd
+        !real                :: rrnd
         integer             :: irnd
         irnd = 1
         if( NP == 0 )then
@@ -392,7 +392,7 @@ contains
         real, intent(in)     :: corr_prev
         real    :: diffs(ncorrs)
         logical :: avail(ncorrs)
-        integer :: this, alloc_stat
+        integer :: this !, alloc_stat
         this  = 0
         diffs = corrs-corr_prev
         avail = .true.

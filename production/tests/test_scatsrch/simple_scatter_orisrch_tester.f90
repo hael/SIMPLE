@@ -15,7 +15,7 @@ integer               :: nevals
 contains
 
     subroutine exec_scatter_orisrch_test
-        type(oris)         :: subset_div
+        !type(oris)         :: subset_div
         type(ori)          :: o, o_prev
         integer            :: npool, i, t, conv_cnt
         integer, parameter :: MAXITS=15
@@ -26,6 +26,7 @@ contains
         ! initialise
         score_best = -1.0*sqrt(2.0)
         nevals     = 0
+        conv_cnt = 0
         do t=1,MAXITS  
             ! score pool
             npool = pool%get_noris()

@@ -93,8 +93,8 @@ contains
         use simple_projector_hlev, only: projvol
         class(cmdline),    intent(inout) :: cline
         logical, optional, intent(in)    :: be_verbose
-        type(ori)          :: o
-        integer            :: i, state,noris
+        !type(ori)          :: o
+        integer            :: i   !, state ,noris
         if( present(be_verbose) ) verbose = be_verbose
         verbose=.true.
         ! it is assumed that vol1, smpd, msk are part of the inputted command line
@@ -182,7 +182,7 @@ contains
     subroutine test_prep4srch
         use simple_prime_srch, only: prime_srch
         type(ori) :: o, o_saved
-        real      :: class,e3, shvec(2), x, y
+        real      :: e3, shvec(2), x, y
         integer   :: nrefs, nrots, ind,i, state, proj
         nrefs = primesrch3D%get_ntotrefs()
         nrots = primesrch3D%get_nrots()
@@ -217,7 +217,7 @@ contains
         use simple_rnd,        only: ran3
         type(ori) :: o
         real      :: prev_corr, corr
-        integer   :: nrefs, nrots, ind,i, state, proj, j
+        integer   :: nrefs, nrots,i,j !, ind,state, proj
         nrefs = primesrch3D%get_ntotrefs()
         nrots = primesrch3D%get_nrots()
         if( p%refine.eq.'no' .and. p%ctf.eq.'no' )then
@@ -261,9 +261,10 @@ contains
         type(oris) :: test_os
         type(ori)  :: o, oref, orefs
         integer    :: iptcl,i, ref,s, ind
-        real,allocatable :: vals(:), test_vals(:)
-        integer,allocatable :: ivals(:), test_ivals(:), srch_order(:),nnmat(:,:)
-        real :: euldist
+        !real,allocatable :: vals(:), test_vals(:)
+        !integer,allocatable :: ivals(:), test_ivals(:)
+        integer,allocatable :: srch_order(:),nnmat(:,:)
+        ! real :: euldist
         select case(p%refine)
             case('no','shc')
                 if( p%nstates==1 )then

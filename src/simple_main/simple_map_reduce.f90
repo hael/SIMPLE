@@ -125,7 +125,7 @@ contains
         do ipart=1,nparts
             call progress(ipart,nparts)
             funit = get_fileunit()
-            allocate(fname, source='pairs_part'//int2str_pad(ipart,numlen)//'.bin')
+            allocate(fname, source='pairs_part' // int2str_pad(ipart,numlen) // '.bin')
             open(unit=funit, status='REPLACE', action='WRITE', file=fname, access='STREAM')
             DebugPrint   'writing pairs in range: ', parts(ipart,1), parts(ipart,2)
             write(unit=funit,pos=1,iostat=io_stat) pairs(parts(ipart,1):parts(ipart,2),:)

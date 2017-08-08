@@ -208,7 +208,7 @@ real(kind=4) :: proj      !< (40) project number
 real(kind=4) :: mic       !< (41) micrograph number
 real(kind=4) :: num       !< (42) micrograph window number
 real(kind=4) :: glonum    !< (43) global image number
-contains
+! contains
 end type SpiImgHead
 
 contains
@@ -220,7 +220,7 @@ contains
         class(ImgHead), target, intent(inout) :: self    !< instance
         integer, intent(in), optional         :: ldim(3) !< logical dims of image
         integer, intent(in), optional         :: length  !< length of the header record.
-        integer               :: llength, ierr, i, lenbyt, labrec, labbyt
+        integer               :: ierr,llength, i !, lenbyt, labrec, labbyt
         character(len=STDLEN) :: err
         call self%kill
         select type( self )
@@ -549,7 +549,7 @@ contains
 !>  \brief  print information contained in the header to the terminal
     subroutine print_imghead( self )
         class(ImgHead), intent(in) :: self
-        integer :: i
+        !integer :: i
         real    :: smpd(3)
         integer :: bytes_per_pixel
         select type( self )
@@ -708,7 +708,7 @@ contains
         integer(kind=8), intent(in), optional :: pos
         integer(kind=8)                       :: ppos, i
         integer                               :: io_status, cnt
-        integer                               :: rsz, labrec, dim1, alloc_stat, ldim(3)
+        !integer                               :: rsz, labrec, dim1, alloc_stat, ldim(3)
         real(kind=4)                          :: spihed(CLOSE2THEANSWER), zero
         zero = 0.
         if( self%exists )then
@@ -1081,6 +1081,7 @@ contains
 !>  \brief  Return the pixel size
     real function getPixSz(self)
         class(ImgHead), intent(in)  ::  self
+        getPixSz = 0.
         select type(self)
         type is (MrcImgHead)
             if (self%mx%get() .ne. 0) then
@@ -1418,13 +1419,8 @@ contains
         recsz = 120*4
         funit = get_fileunit()
         open(unit=funit,access='STREAM',file='test_imghed.spi',&
-             &action='READWRITE',status='UNKNOWN'&
-#ifdef INTEL
-             &)
-#else
-        &,convert='BIG_ENDIAN')
-#endif
-   
+             &action='READWRITE',status='UNKNOWN')
+!         ,convert='BIG_ENDIAN')
         call hed%write(funit)
         call hed2%read(funit)
         close(funit)

@@ -236,7 +236,7 @@ contains
         real    :: a,alam,alam2,alamin,b,disc,f2,fold2
         real    :: rhs1,rhs2,slope,sum,temp,test,tmplam
         check=.false.
-        sum=0.
+        sum=0.;fold2=0.;alam=0.;alam2=0.;f2=0.
         do i=1,n
             sum=sum+p(i)*p(i)
         end do

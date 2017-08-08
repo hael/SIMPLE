@@ -1357,13 +1357,13 @@ contains
         class(symsrch_distr_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(merge_algndocs_commander) :: xmerge_algndocs
-        type(sym_aggregate_commander)  :: xsym_aggregate
+        !type(sym_aggregate_commander)  :: xsym_aggregate
         type(cmdline)                  :: cline_merge_algndocs
         type(cmdline)                  :: cline_sym_aggregate
         type(qsys_env)          :: qenv
         type(params)            :: p_master
         type(chash)             :: job_descr
-        type(oris)              :: os, sym_os, o_shift, sym_os_ordered, sympeaks, e
+        type(oris)              :: os, sym_os, o_shift, sym_os_ordered
         type(ori)               :: o, symaxis_ori
         type(sym)               :: syme
         integer,    allocatable :: order_inds(:)

@@ -34,9 +34,9 @@ contains
       integer(dp), parameter :: nrep = INT(100000,dp)
       real(dp)    :: c, cfac, b
       common b, c, cfac
-      real(dp)    :: xx, etime, sysclockrate
-      integer(dp) ::  t1, t2
-      integer(dp) :: i, j
+      real(dp)    :: xx
+
+    
 
       if(present(be_verbose)) verbose=be_verbose
       !    The following is a Statement function

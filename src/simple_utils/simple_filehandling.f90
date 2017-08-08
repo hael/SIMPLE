@@ -267,51 +267,51 @@ contains
 #if defined(INTEL)
         use ifport
         use ifposix
-#elif defined(PGI)
-        include 'lib3f.h'
-#endif
         character(len=*),  intent(inout) :: filename
         integer,  intent(inout)    :: buffer(:)  !< POSIX stat struct
         integer, intent(inout)     :: status
-        character(len=STDLEN)      :: cmsg
-        integer,allocatable        :: statb(:)
-        integer                    :: stato
+        logical                    :: doprint = .true.
+        integer(4) :: ierror
+        integer(8) :: jhandle
+        call pxfstat (trim(adjustl(filename)), len_trim(adjustl(filename)), jhandle, ierror)
+        call PXFSTRUCTCREATE('stat', jhandle, ierror)
+        if(ierror.EQ.0) then
+            !call pxfstat (trim(adjustl(filename)), len_trim(adjustl(filename)), jhandle1, ierror)
+            if(ierror.EQ.0) then
+                CALL PXFINTGET (jhandle,'st_dev',buffer(1), ierror)    ! Device ID
+                CALL PXFINTGET (jhandle,'st_ino',buffer(2), ierror)    ! Inode number
+                CALL PXFINTGET (jhandle,'st_mode' , buffer(3), ierror) !  File mode
+                CALL PXFINTGET (jhandle,'st_nlink' ,buffer(4), ierror) ! Number of links
+                CALL PXFINTGET (jhandle,'st_uid' ,buffer(5), ierror)   ! Owner’s uid
+                CALL PXFINTGET (jhandle,'st_gid' ,buffer(6), ierror)   ! Owner’s gid
+                buffer(7)=0 ! ID of device containing directory entry for file (0 if not available)
+                CALL PXFINTGET (jhandle,'st_size',buffer(8), ierror)   ! File size (bytes)
+                CALL PXFINTGET (jhandle,'st_atime',buffer(9), ierror)  ! Last access time
+                CALL PXFINTGET (jhandle,'st_mtime',buffer(10), ierror) ! Last modification time
+                CALL PXFINTGET (jhandle,'st_ctime',buffer(11), ierror) ! Last file status change time
+                buffer(12)=0 ! Preferred I/O block size (-1 if not available)
+                buffer(13)=0 ! Number of blocks allocated (-1 if not available)
+                call PXFSTRUCTFREE(jhandle,ierror)
+            else
+                print *, 'Filehandling sys_stat PXFSTAT failed, file ', trim(adjustl(filename)),' error ', ierror
+            end if
+            if (ierror.NE.0)then
+                print *, 'Filehandling sys_stat PXFINTGET failed, file ', trim(adjustl(filename)),' error ', ierror
+            end if
+        else
+            call PXFSTRUCTFREE(jhandle,ierror)
+            stop 'Filehandling sys_stat  failed - cannot create structure for jhandle1'
+        end if
+        status=ierror
+#elif defined(PGI)
+        include 'lib3f.h'
+        character(len=*),  intent(inout) :: filename
+        integer,  intent(inout)    :: buffer(:)  !< POSIX stat struct
+        integer, intent(inout)     :: status
         logical                    :: doprint = .true.
 
-#if defined(INTEL)
-  integer(4) :: ierror
-  integer(8) :: jhandle
-  call pxfstat (trim(adjustl(filename)), len_trim(adjustl(filename)), jhandle, ierror)
-  call PXFSTRUCTCREATE('stat', jhandle, ierror)
-  if(ierror.EQ.0) then
-      !call pxfstat (trim(adjustl(filename)), len_trim(adjustl(filename)), jhandle1, ierror)
-      if(ierror.EQ.0) then
-          CALL PXFINTGET (jhandle,'st_dev',buffer(1), ierror) !	Device ID
-          CALL PXFINTGET (jhandle,'st_ino',buffer(2), ierror) !	Inode number
-          CALL PXFINTGET (jhandle,'st_mode' , buffer(3), ierror) ! 	File mode
-          CALL PXFINTGET (jhandle,'st_nlink' ,buffer(4), ierror) !	Number of links
-          CALL PXFINTGET (jhandle,'st_uid' ,buffer(5), ierror) !	Owner’s uid
-          CALL PXFINTGET (jhandle,'st_gid' ,buffer(6), ierror) !	Owner’s gid
-          buffer(7)=0 !	ID of device containing directory entry for file (0 if not available)
-          CALL PXFINTGET (jhandle,'st_size',buffer(8), ierror) !	File size (bytes)
-          CALL PXFINTGET (jhandle,'st_atime',buffer(9), ierror) !	Last access time
-          CALL PXFINTGET (jhandle,'st_mtime',buffer(10), ierror) !	Last modification time
-          CALL PXFINTGET (jhandle,'st_ctime',buffer(11), ierror) !	Last file status change time
-          buffer(12)=0 !	Preferred I/O block size (-1 if not available)
-          buffer(13)=0 !	Number of blocks allocated (-1 if not available)
-          call PXFSTRUCTFREE(jhandle,ierror)
-      else
-          print *, 'Filehandling sys_stat PXFSTAT failed, file ', trim(adjustl(filename)),' error ', ierror
-      end if
-      if (ierror.NE.0)then
-          print *, 'Filehandling sys_stat PXFINTGET failed, file ', trim(adjustl(filename)),' error ', ierror
-      end if
-  else
-      call PXFSTRUCTFREE(jhandle,ierror)
-      stop 'Filehandling sys_stat  failed - cannot create structure for jhandle1'
-  end if
-  status=ierror
-#elif defined(PGI)
+  integer,allocatable        :: statb(:)
+  integer                    :: stato
         debug=.true.
 !        allocate(statb(13))
         stato =  stat(trim(adjustl(filename)), statb)
@@ -322,7 +322,12 @@ contains
         print *, 'filehandling sys_stat PGI size of statb ', size(statb)
 #endif
 
-#else
+#elif defined(GNU)
+        character(len=*),  intent(inout) :: filename
+        integer,  intent(inout)    :: buffer(:)  !< POSIX stat struct
+        integer, intent(inout)     :: status
+        logical                    :: doprint = .true.
+       !intrinsic :: stat
         call stat(trim(adjustl(filename)), buffer, status)
 #endif
         if( doprint )then
@@ -408,7 +413,7 @@ contains
         logical, allocatable          :: pos(:)
         character(len=:), allocatable :: str_copy
         integer :: j, lstr, io_stat, nrrange(2)
-        lstr = len(str)
+        lstr = len(str);  nrrange = 0
         pos = map_str_nrs(str)
         if( any(pos) )then
             do j=lstr,1,-1

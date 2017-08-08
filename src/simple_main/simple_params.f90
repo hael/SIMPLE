@@ -192,7 +192,7 @@ type :: params
     integer :: nframesgrp=0        !< # frames to group before unblur(Falcon 3){0}
     integer :: fromf=1             !< start frame index
     integer :: fromp=1             !< start ptcl index
-    integer :: fromm=1
+    integer :: fromm=1             !< start movie index
     integer :: fstep=1
     integer :: grow=0              !< # binary layers to grow(in pixels)
     integer :: iares=10            !< integer angular resolution{10}

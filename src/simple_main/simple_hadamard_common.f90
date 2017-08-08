@@ -56,8 +56,8 @@ contains
                 all_fsc_bin_exist = .true.
                 fsc_bin_exists    = .false.
                 do s=1,p%nstates
-                    fsc_fname = adjustl('fsc_state'//int2str_pad(s,2)//'.bin')
-                    if( file_exists(trim(fsc_fname)) )fsc_bin_exists( s ) = .true.
+                    fsc_fname = 'fsc_state'//int2str_pad(s,2)//'.bin'
+                    if( file_exists(trim(adjustl(fsc_fname))) )fsc_bin_exists( s ) = .true.
                     if( b%a%get_statepop( s )>0 .and. .not.fsc_bin_exists(s))&
                         & all_fsc_bin_exist = .false.
                 enddo
@@ -69,8 +69,8 @@ contains
                     do s=1,p%nstates
                         if( fsc_bin_exists(s) )then
                             ! these are the 'classical' resolution measures
-                            fsc_fname   = adjustl('fsc_state'//int2str_pad(s,2)//'.bin')
-                            tmp_arr     = file2rarr(trim(fsc_fname))
+                            fsc_fname   = 'fsc_state'//int2str_pad(s,2)//'.bin'
+                            tmp_arr     = file2rarr(trim(adjustl(fsc_fname)))
                             b%fsc(s,:)  = tmp_arr(:)
                             deallocate(tmp_arr)
                             call get_resolution(b%fsc(s,:), resarr, fsc05, fsc0143)

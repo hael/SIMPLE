@@ -30,6 +30,7 @@ public :: simmovie_commander
 public :: simsubtomo_commander
 private
 #include "simple_local_flags.inc"
+
 type, extends(commander_base) :: noiseimgs_commander
   contains
     procedure :: execute      => exec_noiseimgs
@@ -415,3 +416,4 @@ contains
     end subroutine exec_simsubtomo
 
 end module simple_commander_sim
+

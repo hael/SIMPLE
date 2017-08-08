@@ -62,7 +62,7 @@ files and will finish with the following message (a reminder for step 5 below):
 Installation complete.
 ==========================================================================
 Please ensure the following variables are set properly in add2.*rc file:
-    SIMPLE_EMAIL SIMPLE_QSYS SIMPLE_PATH SIMPLE_SOURCE_PATH
+    SIMPLE_EMAIL SIMPLE_QSYS SIMPLE_PATH 
 To use SIMPLE, append the relevant add2.* to your HOME shell rc file:
   bash$ cat add2.bashrc >> ~/.bashrc
   tcsh$ cat add2.tcshrc >> ~/.tcshrc
@@ -76,7 +76,7 @@ to your PATH environment variable.
 
 When the build and installation directories are the same (default) and you are
 happy with the install, you may want to clean compilation-generated and
-unnecessary files using distclean.
+unnecessary build files using distclean.
 
     $ make distclean
 
