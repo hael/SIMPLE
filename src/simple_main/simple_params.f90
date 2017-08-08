@@ -273,7 +273,7 @@ type :: params
     real    :: angerr=0.           !< angular error(in degrees){0}
     real    :: ares=7.
     real    :: astigerr=0.         !< astigmatism error(in microns)
-    real    :: astigstep=0.05      !< step size for astigamtism search(in microns)
+    real    :: astigtol=0.05       !< expected (tolerated) astigmatism(in microns){0.1}
     real    :: athres=0.           !< angular threshold(in degrees)
     real    :: batchfrac=1.0
     real    :: bfac=200            !< bfactor for sharpening/low-pass filtering(in A**2){200.}
@@ -285,12 +285,13 @@ type :: params
     real    :: deflim=4.
     real    :: defocus=3.          !< defocus(in microns){3.}
     real    :: dens=0.
-    real    :: df_close=1.
-    real    :: df_far=4.
+    real    :: dfclose=1.
+    real    :: dffar=4.
     real    :: dferr=1.            !< defocus error(in microns){1.0}
-    real    :: dfmax=7.0           !< maximum expected defocus(in microns)
+    real    :: dfmax=5.0           !< maximum expected defocus(in microns)
     real    :: dfmin=0.5           !< minimum expected defocus(in microns)
     real    :: dfsdev=0.1
+    real    :: dfstep=0.05         !< defocus step size for grid search
     real    :: dose_rate=30.0      !< dose rate(in e/A2/s)
     real    :: dstep=0.
     real    :: dsteppd=0.
@@ -300,7 +301,6 @@ type :: params
     real    :: eps=0.003
     real    :: extr_thresh=EXTRINITHRESH
     real    :: eullims(3,2)=0.
-    real    :: expastig=0.1       !< expected astigmatism(in microns)
     real    :: exp_time=2.0       !< exposure time(in s)
     real    :: filwidth=0.        !< width of filament (in A)
     real    :: fny=0.
@@ -428,8 +428,6 @@ contains
             global_verbose = .true.
             verbose = .true.
         end if
-
-
         ! checkers in ascending alphabetical order
         call check_carg('acf',            self%acf)
         call check_carg('angastunit',     self%angastunit)
@@ -639,7 +637,7 @@ contains
         call check_rarg('angerr',         self%angerr)
         call check_rarg('ares',           self%ares)
         call check_rarg('astigerr',       self%astigerr)
-        call check_rarg('astigstep',      self%astigstep)
+        call check_rarg('astigtol',       self%astigtol)
         call check_rarg('athres',         self%athres)
         call check_rarg('batchfrac',      self%batchfrac)
         call check_rarg('bfac',           self%bfac)
@@ -650,19 +648,19 @@ contains
         call check_rarg('dcrit_rel',      self%dcrit_rel)
         call check_rarg('deflim',         self%deflim)
         call check_rarg('defocus',        self%defocus)
-        call check_rarg('df_close',       self%df_close)
-        call check_rarg('df_far',         self%df_far)
+        call check_rarg('dfclose',        self%dfclose)
+        call check_rarg('dffar',          self%dffar)
         call check_rarg('dens',           self%dens)
         call check_rarg('dferr',          self%dferr)
         call check_rarg('dfmax',          self%dfmax)
         call check_rarg('dfmin',          self%dfmin)
         call check_rarg('dfsdev',         self%dfsdev)
+        call check_rarg('dfstep',         self%dfstep)
         call check_rarg('dose_rate',      self%dose_rate)
         call check_rarg('e1',             self%e1)
         call check_rarg('e2',             self%e2)
         call check_rarg('e3',             self%e3)
         call check_rarg('eps',            self%eps)
-        call check_rarg('expastig',       self%expastig)
         call check_rarg('exp_time',       self%exp_time)
         call check_rarg('extr_thresh',    self%extr_thresh)
         call check_rarg('filwidth',       self%filwidth)

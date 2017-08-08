@@ -80,6 +80,7 @@ type, extends(commander_base) :: stackops_commander
 end type stackops_commander
 
 contains
+
     !> binarise is a program for binarisation of stacks and volumes
     subroutine exec_binarise( self, cline )
         class(binarise_commander), intent(inout) :: self
@@ -142,6 +143,7 @@ contains
             end subroutine
 
     end subroutine exec_binarise
+
     !> convert is a program for converting between SPIDER and MRC formats
     !! @see http://simplecryoem.com/tutorials.html?#using-simple-in-the-wildpower-spectrum-analysis-and-movie-selection
     !!
@@ -178,6 +180,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_CONVERT NORMAL STOP ****')
     end subroutine exec_convert
+
     !> corrcompare is a wrapper program for CTFFIND4 (Grigorieff lab)
     subroutine exec_corrcompare( self, cline )
         use simple_image, only: image
@@ -256,6 +259,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_CORRCOMPARE NORMAL STOP ****')
     end subroutine exec_corrcompare
+
     !> ctfops is a program for applying CTF to stacked images
     subroutine exec_ctfops( self, cline )
         use simple_procimgfile, only: apply_ctf_imgfile
@@ -311,6 +315,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_CTFOPS NORMAL STOP ****')
     end subroutine exec_ctfops
+
     !> filter is a program for stacking individual images or multiple stacks into one
     subroutine exec_filter( self, cline )
         use simple_procimgfile, only: bp_imgfile, phase_rand_imgfile, real_filter_imgfile
@@ -374,6 +379,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_FILTER NORMAL STOP ****')
     end subroutine exec_filter
+
    !> volume/image_smat is a program for creating a similarity matrix based on volume2volume correlation
     subroutine exec_image_smat(self, cline)
         use simple_corrmat  ! use all in there
@@ -417,7 +423,6 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_IMAGE_SMAT NORMAL STOP ****')
     end subroutine exec_image_smat
-
 
     !> norm is a program for normalization of MRC or SPIDER stacks and volumes.
     !! If you want to normalise your images inputted with stk, set norm=yes.
@@ -482,6 +487,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_NORM NORMAL STOP ****')
     end subroutine exec_norm
+
     !> scale is a program that provides re-scaling and clipping routines for MRC or SPIDER stacks and volumes
     subroutine exec_scale( self, cline )
         use simple_procimgfile  ! use all in there
@@ -723,6 +729,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_STACK NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_stack
+    
     !> stackops is a program that provides standard single-particle image
     !> processing routines that are applied to MRC or SPIDER stacks.
     !! If you want to extract a particular state, give an alignment document
@@ -986,7 +993,7 @@ contains
             goto 999
         endif
         !set state flag on basis of ctfreslim and/or defocus limits
-        if( cline%defined('ctfreslim') .or. cline%defined('df_close') .or. cline%defined('df_far')) then
+        if( cline%defined('ctfreslim') .or. cline%defined('dfclose') .or. cline%defined('dffar')) then
             if( p%oritab == '' ) stop 'need input orientation doc for fishing expedition; simple_stackops'   
             !first do selection on basis of ctfreslim
             if( cline%defined('ctfreslim') )then
@@ -1002,14 +1009,14 @@ contains
                 print *, 'ctfreslim                  --> ptcls set state 1: ', (p%nptcls-cnt), ' ptcls set state 0: ', cnt
             endif
             !now select on defocus limits
-            if( cline%defined('df_close') .and. .not. cline%defined('df_far') ) stop 'need both df_close and df_far for state setting on basis of defocus values'
-            if( cline%defined('df_far') .and. .not. cline%defined('df_close') ) stop 'need both df_close and df_far for state setting on basis of defocus values'
-            if( cline%defined('df_close') ) then
+            if( cline%defined('dfclose') .and. .not. cline%defined('dffar') ) stop 'need both dfclose and dffar for state setting on basis of defocus values'
+            if( cline%defined('dffar') .and. .not. cline%defined('dfclose') ) stop 'need both dfclose and dffar for state setting on basis of defocus values'
+            if( cline%defined('dfclose') ) then
                 cnt2=0
                 do i=1,p%nptcls
                     call progress(i, p%nptcls)
                     p_dfx = (b%a%get(i, 'dfx'))
-                    if( (p_dfx < p%df_close ) .or. (p_dfx > p%df_far) ) then
+                    if( (p_dfx < p%dfclose ) .or. (p_dfx > p%dffar) ) then
                         cnt2=cnt2+1
                         call b%a%set(i, 'state', 0.)
                     endif
@@ -1017,7 +1024,7 @@ contains
                 print *, 'defocus limits             --> ptcls set state 1: ', (p%nptcls-cnt2), ' ptcls set state 0: ', cnt2
             endif
             !if both ctfreslim and defocus limits were set now work out the overall change in states and report on what has happened
-             if( cline%defined('ctfreslim') .and. cline%defined('df_close')) then
+             if( cline%defined('ctfreslim') .and. cline%defined('dfclose')) then
                 cnt3=0
                 do i=1,p%nptcls
                     ipst = (b%a%get(i, 'state'))

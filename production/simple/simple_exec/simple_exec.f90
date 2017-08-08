@@ -336,8 +336,8 @@ select case(prg)
         keys_optional(19)  = 'lp_pick'
         keys_optional(20)  = 'dfmin'
         keys_optional(21)  = 'dfmax'
-        keys_optional(22)  = 'astigstep'
-        keys_optional(23)  = 'expastig'
+        keys_optional(22)  = 'dfstep'
+        keys_optional(23)  = 'astigtol'
         keys_optional(24)  = 'phaseplate'
         keys_optional(25)  = 'thres'
         keys_optional(26)  = 'rm_outliers'
@@ -347,14 +347,15 @@ select case(prg)
         if( describe ) call print_doc_preproc
         call cline%parse(keys_required(:5), keys_optional(:28))
         ! set defaults
-        if( .not. cline%defined('trs')             ) call cline%set('trs',        5.)
-        if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',   15.)
-        if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',     8.)
-        if( .not. cline%defined('pspecsz_unblur')  ) call cline%set('pspecsz',  512.)
-        if( .not. cline%defined('pspecsz_ctffind') ) call cline%set('pspecsz', 1024.)
-        if( .not. cline%defined('hp_ctffind')      ) call cline%set('hp',        30.)
-        if( .not. cline%defined('lp_ctffind')      ) call cline%set('lp',         5.)
-        if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',   20.)
+        if( .not. cline%defined('trs')             ) call cline%set('trs',                5.)
+        if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',           15.)
+        if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',             8.)
+        if( .not. cline%defined('pspecsz_unblur')  ) call cline%set('pspecsz_unblur',   512.)
+        if( .not. cline%defined('pspecsz_ctffind') ) call cline%set('pspecsz_ctffind', 1024.)
+        if( .not. cline%defined('hp_ctffind')      ) call cline%set('hp_ctffind',        30.)
+        if( .not. cline%defined('lp_ctffind')      ) call cline%set('lp_ctffind',         5.)
+        if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',           20.)
+        if( .not. cline%defined('outfile')         ) call cline%set('outfile', 'simple_unidoc.txt')
         call xpreproc%execute(cline)
     case( 'select_frames' )
         !==Program select_frames
@@ -483,8 +484,8 @@ select case(prg)
         keys_optional(3) = 'lp'
         keys_optional(4) = 'dfmin'
         keys_optional(5) = 'dfmax'
-        keys_optional(6) = 'astigstep'
-        keys_optional(7) = 'expastig'
+        keys_optional(6) = 'dfstep'
+        keys_optional(7) = 'astigtol'
         keys_optional(8) = 'phaseplate'
         ! parse command line
         if( describe ) call print_doc_ctffind
@@ -527,8 +528,8 @@ select case(prg)
         keys_optional(18) = 'lp'
         keys_optional(19) = 'dfmin'
         keys_optional(20) = 'dfmax'
-        keys_optional(21) = 'astigstep'
-        keys_optional(22) = 'expastig'
+        keys_optional(21) = 'dfstep'
+        keys_optional(22) = 'astigtol'
         keys_optional(23) = 'phaseplate'
         ! parse command line
         if( describe ) call print_doc_unblur_ctffind
@@ -536,13 +537,14 @@ select case(prg)
         ! set defaults
         call cline%set('dopick', 'no'     )
         call cline%set('prg',    'preproc')
-        if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz',               1024.)
-        if( .not. cline%defined('hp')      ) call cline%set('hp',                      30.)
-        if( .not. cline%defined('lp')      ) call cline%set('lp',                       5.)
-        if( .not. cline%defined('trs')     ) call cline%set('trs',                      5.)
-        if( .not. cline%defined('lpstart') ) call cline%set('lpstart',                 15.)
-        if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',                   8.)
-        if( .not. cline%defined('outfile') ) call cline%set('outfile', 'simple_unidoc.txt')
+        if( .not. cline%defined('trs')             ) call cline%set('trs',                5.)
+        if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',           15.)
+        if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',             8.)
+        if( .not. cline%defined('pspecsz_unblur')  ) call cline%set('pspecsz_unblur',   512.)
+        if( .not. cline%defined('pspecsz_ctffind') ) call cline%set('pspecsz_ctffind', 1024.)
+        if( .not. cline%defined('hp_ctffind')      ) call cline%set('hp_ctffind',        30.)
+        if( .not. cline%defined('lp_ctffind')      ) call cline%set('lp_ctffind',         5.)
+        if( .not. cline%defined('outfile')         ) call cline%set('outfile', 'simple_unidoc.txt')
         ! execute
         call xpreproc%execute(cline)
     case( 'select' )

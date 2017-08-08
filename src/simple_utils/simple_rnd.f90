@@ -31,83 +31,28 @@ integer(long), save   :: idum
 
 contains
 
-    !>  \brief  set idum to any negative value to initialize or reinitialize the sequence
+    !>  \brief  random seed
     subroutine seed_rnd
-        ! real :: rrnd
-        call init_random_seed
-        ! call random_number(rrnd)
-        ! idum = -nint(rrnd*(real(3000000)))
-
-        contains
-
-            subroutine init_random_seed
-                integer :: i, n, clock
-                integer, dimension(:), allocatable :: seed
-                call random_seed(size = n)
-                allocate(seed(n))
-                call system_clock(count=clock)
-                seed = clock + 37 * (/ (i - 1, i = 1, n) /)
-                call random_seed(put = seed)
-                deallocate(seed)
-            end subroutine
-
+        integer :: i, n, clock
+        integer, dimension(:), allocatable :: seed                
+        call random_seed(size = n)
+        allocate(seed(n))
+        call system_clock(count=clock)
+        seed = clock + 37 * (/ (i - 1, i = 1, n) /)
+        call random_seed(put = seed)
+        deallocate(seed)
     end subroutine seed_rnd
 
-    !! NEW: the intrinsic Fortran random number generator (because ran3() is buggy in OpenMP sections)
-    !! OLD:
-    !>  \brief  returns a random deviate between 0.0 and 1.0. The algorithm is developed
-    !!          by Donald Knuth, fetched from numerical recepies. If suspecting that the
-    !!          randomness is not sufficient using this routine, implement ran4 from NR or
-    !!          go back to the standard generator
+    !>  \brief  wrapper for the intrinsic Fortran random number generator
     function ran3( ) result( harvest )
-        ! integer(long), parameter :: mbig=1000000000, mseed=161803398, mz=0
-        ! real, parameter          :: fac=1.e-9
-        ! integer(long), save      :: ma(55),inext,inextp,iff=0
-        ! integer(long)            :: mj,mk,i,ii,k
-        real                     :: harvest
-        ! if( idum < 0 .or. iff == 0 )then ! Initialization
-        !     iff    = 1
-        !     mj     = mseed-iabs(idum) ! Initialize ma(55) using the seed idum and the large number mseed
-        !     mj     = mod(mj,mbig)
-        !     ma(55) = mj
-        !     mk     = 1
-        !     do i=1,54                 ! Now, initialize the rest of the table
-        !         ii     = mod(21*i,55) ! in a slightly random order
-        !         ma(ii) = mk           ! with numbers that are not especially random
-        !         mk     = mj-mk
-        !         if( mk < mz ) mk = mk+mbig
-        !         mj     = ma(ii)
-        !     end do
-        !     do k=1,4          ! randomize by "warming up the generator"
-        !         do i=1,55
-        !               ma(i) = ma(i)-ma(1+mod(i+30,55))
-        !               if( ma(i) < mz ) ma(i) = ma(i)+mbig
-        !         end do
-        !     end do
-        !     inext  = 0  ! prepare indices for our first generated number
-        !     inextp = 31 ! constant 31 is special, see Knuth
-        !     idum   = 1
-        ! endif
-        ! ! Here is were it starts, except on initialization
-        ! inext  = inext+1
-        ! if( inext == 56 ) inext = 1
-        ! inextp = inextp+1
-        ! if( inextp == 56 ) inextp = 1
-        ! mj = ma(inext)-ma(inextp)
-        ! if( mj < mz ) mj = mj+mbig
-        ! ma(inext) = mj
-        ! harvest = real(mj)*fac
+        real :: harvest
         call random_number(harvest)
     end function ran3
 
     !>  \brief  returns a random matrix
     subroutine ran3arr( harvest )
         real, intent(inout) :: harvest(:)
-        !integer :: i
         call random_number(harvest)
-        ! do i=1,size(harvest)
-        !     harvest(i) = ran3()
-        ! end do
     end subroutine ran3arr
 
     !>  \brief  returns a random array [-1,1]

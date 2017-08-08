@@ -53,6 +53,7 @@ type, extends(commander_base) :: rank_cavgs_commander
 end type rank_cavgs_commander
 
 contains
+
     !> MAKECAVGS is a SIMPLE program to create class-averages
     subroutine exec_makecavgs( self, cline )
         use simple_hadamard2D_matcher, only: prime2D_assemble_sums, prime2D_write_sums, &
@@ -140,6 +141,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_MAKECAVGS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_makecavgs
+    
     !> Prime2D  implementation of a bespoke probabilistic algorithm for simultaneous 2D alignment and clustering
     !! @see http://simplecryoem.com/tutorials.html?#d-analysis-with-prime2d
     !!

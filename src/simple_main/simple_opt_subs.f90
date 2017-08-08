@@ -416,128 +416,128 @@ contains
 
     end subroutine amoeba
 
-    !>  \brief multidimensional minimization of the function func(x) (x(1:ndim)
-    !>          is a vector in ndim dimensions) by simulated annealing combined with the
-    !>          downhill contsa method of Nelder and Mead.
-    !!          The matrix p(1:ndim+1,1:ndim) is input/output. Its ndim+1 rows
-    !!          are ndim-dimensional vectors which are the vertices of the
-    !!          starting contsa. Input is also the vector y(1:ndim+1), whose
-    !!          components must be pre-initialized to the values of funk
-    !!          evaluated at the ndim+1 vertices (rows) of p. ftol is the
-    !!          fractional convergence tolerance to be achieved in the function
-    !!          value. The routine makes iter function evaluations at an
-    !!          annealign temperature of temptr, then returns. You should then
-    !!          decrease temptr according to your annealing schedule, reset
-    !!          iter, and call the routine again (leaving other arguments
-    !!          unaltered between calls). If iter iter is returned with a
-    !!          positive value, then early convergence and return occured.
-    subroutine amebsa(p,y,pb,yb,ftol,func,iter,temptr)
-        use simple_rnd, only: ran3arr, ran3
-        real, intent(inout)    :: p(:,:)      !< input contsa
-        real, intent(inout)    :: y(:)        !< const function vals of input siomplex
-        real, intent(inout)    :: pb(:)       !< for updating the best point
-        real, intent(inout)    :: yb          !< for updating the cost of best point
-        real, intent(in)       :: ftol        !< fractional tolerance
-        integer, intent(inout) :: iter        !< iteration,
-        !! ***note the difference from the amoeba routine***
-        !! this gives the number of iterations to be executed at the given temp-level
-        !! and is decreased, so positive value on return indicates early convergence
-         real, intent(in)       :: temptr !<  temp
-         interface
-             !< the external function used for callback
-             function func( vec, D ) result( cost )
-                integer, intent(in) :: d
-                real, intent(in)    :: vec(D)
-                real :: cost
-            end function
-        end interface
-        integer :: ihi,ndim
-        real :: yhi
-        real, dimension(size(p,2)) :: psum
-        call amebsa_private
+    ! !>  \brief multidimensional minimization of the function func(x) (x(1:ndim)
+    ! !>          is a vector in ndim dimensions) by simulated annealing combined with the
+    ! !>          downhill contsa method of Nelder and Mead.
+    ! !!          The matrix p(1:ndim+1,1:ndim) is input/output. Its ndim+1 rows
+    ! !!          are ndim-dimensional vectors which are the vertices of the
+    ! !!          starting contsa. Input is also the vector y(1:ndim+1), whose
+    ! !!          components must be pre-initialized to the values of funk
+    ! !!          evaluated at the ndim+1 vertices (rows) of p. ftol is the
+    ! !!          fractional convergence tolerance to be achieved in the function
+    ! !!          value. The routine makes iter function evaluations at an
+    ! !!          annealign temperature of temptr, then returns. You should then
+    ! !!          decrease temptr according to your annealing schedule, reset
+    ! !!          iter, and call the routine again (leaving other arguments
+    ! !!          unaltered between calls). If iter iter is returned with a
+    ! !!          positive value, then early convergence and return occured.
+    ! subroutine amebsa(p,y,pb,yb,ftol,func,iter,temptr)
+    !     use simple_rnd, only: ran3arr, ran3
+    !     real, intent(inout)    :: p(:,:)      !< input contsa
+    !     real, intent(inout)    :: y(:)        !< const function vals of input siomplex
+    !     real, intent(inout)    :: pb(:)       !< for updating the best point
+    !     real, intent(inout)    :: yb          !< for updating the cost of best point
+    !     real, intent(in)       :: ftol        !< fractional tolerance
+    !     integer, intent(inout) :: iter        !< iteration,
+    !     !! ***note the difference from the amoeba routine***
+    !     !! this gives the number of iterations to be executed at the given temp-level
+    !     !! and is decreased, so positive value on return indicates early convergence
+    !      real, intent(in)       :: temptr !<  temp
+    !      interface
+    !          !< the external function used for callback
+    !          function func( vec, D ) result( cost )
+    !             integer, intent(in) :: d
+    !             real, intent(in)    :: vec(D)
+    !             real :: cost
+    !         end function
+    !     end interface
+    !     integer :: ihi,ndim
+    !     real :: yhi
+    !     real, dimension(size(p,2)) :: psum
+    !     call amebsa_private
 
-        contains
+    !     contains
 
-        subroutine amebsa_private
-            use simple_jiffys, only: assert_eq, swap
-            integer :: i,ilo,inhi,loc(1)
-            real :: rtol,ylo,ynhi,ysave,ytry
-            real, dimension(size(y)) :: yt,harvest
-            ndim=assert_eq(size(p,2),size(p,1)-1,size(y)-1,size(pb),'amebsa; simple_opt_subs')
-            psum(:)=sum(p(:,:),dim=1)
-            do
-                call ran3arr(harvest)    ! determine which point has the highest (worst), next-highest, and lowest (best)
-                yt=y-temptr*log(harvest) ! whenever we "look" at avertex, it gets random thermal fluctuation
-                loc=minloc(yt)
-                ilo=loc(1)
-                ylo=yt(ilo)
-                loc=maxloc(yt)
-                ihi=loc(1)
-                yhi=yt(ihi)
-                yt(ihi)=ylo
-                loc=maxloc(yt)
-                inhi=loc(1)
-                ynhi=yt(inhi)
-                ! Compute the fractional range from highest to lowest and return if satisfactory
-                rtol=2.0*abs(yhi-ylo)/(abs(yhi)+abs(ylo)) ! relative tolerance
-                if(rtol < ftol .or. iter < 0) then
-                    call swap(y(1),y(ilo))
-                    call swap(p(1,:),p(ilo,:))
-                    return
-                end if
-                ! Begin a new iteration. First extrapolate by a factor −1 through the face of the
-                ! contsa across from the high point, i.e. reflect the contsa from the high point
-                ytry=amotsa(-1.0)
-                iter=iter-1
-                if (ytry <= ylo) then
-                    ! gives a result better than the best point, so try an additional extrapolation by a factor 2
-                    ytry=amotsa(2.0)
-                    iter=iter-1
-                else if (ytry >= ynhi) then
-                    ! the reflected point is worse than the second-highest, so look for an intermediate
-                    ! lower point, i.e. do a one-dimensional contraction
-                    ysave=yhi
-                    ytry=amotsa(0.5)
-                    iter=iter-1
-                    if (ytry >= ysave) then ! can’t seem to get rid of that high point
-                        p(:,:)=0.5*(p(:,:)+spread(p(ilo,:),1,size(p,1))) ! better contract around the lowest (best) point
-                        do i=1,ndim+1
-                            if (i /= ilo) y(i)=func(p(i,:),ndim)
-                        end do
-                        iter=iter-ndim ! keep track of function evaluations
-                        psum(:)=sum(p(:,:),dim=1) ! recompute psum
-                    end if
-                end if
-            end do
-        end subroutine amebsa_private
+    !     subroutine amebsa_private
+    !         use simple_jiffys, only: assert_eq, swap
+    !         integer :: i,ilo,inhi,loc(1)
+    !         real :: rtol,ylo,ynhi,ysave,ytry
+    !         real, dimension(size(y)) :: yt,harvest
+    !         ndim=assert_eq(size(p,2),size(p,1)-1,size(y)-1,size(pb),'amebsa; simple_opt_subs')
+    !         psum(:)=sum(p(:,:),dim=1)
+    !         do
+    !             call ran3arr(harvest)    ! determine which point has the highest (worst), next-highest, and lowest (best)
+    !             yt=y-temptr*log(harvest) ! whenever we "look" at avertex, it gets random thermal fluctuation
+    !             loc=minloc(yt)
+    !             ilo=loc(1)
+    !             ylo=yt(ilo)
+    !             loc=maxloc(yt)
+    !             ihi=loc(1)
+    !             yhi=yt(ihi)
+    !             yt(ihi)=ylo
+    !             loc=maxloc(yt)
+    !             inhi=loc(1)
+    !             ynhi=yt(inhi)
+    !             ! Compute the fractional range from highest to lowest and return if satisfactory
+    !             rtol=2.0*abs(yhi-ylo)/(abs(yhi)+abs(ylo)) ! relative tolerance
+    !             if(rtol < ftol .or. iter < 0) then
+    !                 call swap(y(1),y(ilo))
+    !                 call swap(p(1,:),p(ilo,:))
+    !                 return
+    !             end if
+    !             ! Begin a new iteration. First extrapolate by a factor −1 through the face of the
+    !             ! contsa across from the high point, i.e. reflect the contsa from the high point
+    !             ytry=amotsa(-1.0)
+    !             iter=iter-1
+    !             if (ytry <= ylo) then
+    !                 ! gives a result better than the best point, so try an additional extrapolation by a factor 2
+    !                 ytry=amotsa(2.0)
+    !                 iter=iter-1
+    !             else if (ytry >= ynhi) then
+    !                 ! the reflected point is worse than the second-highest, so look for an intermediate
+    !                 ! lower point, i.e. do a one-dimensional contraction
+    !                 ysave=yhi
+    !                 ytry=amotsa(0.5)
+    !                 iter=iter-1
+    !                 if (ytry >= ysave) then ! can’t seem to get rid of that high point
+    !                     p(:,:)=0.5*(p(:,:)+spread(p(ilo,:),1,size(p,1))) ! better contract around the lowest (best) point
+    !                     do i=1,ndim+1
+    !                         if (i /= ilo) y(i)=func(p(i,:),ndim)
+    !                     end do
+    !                     iter=iter-ndim ! keep track of function evaluations
+    !                     psum(:)=sum(p(:,:),dim=1) ! recompute psum
+    !                 end if
+    !             end if
+    !         end do
+    !     end subroutine amebsa_private
 
-        !>  \brief  extrapolates by a factor fac through the face of the contsa across from the
-        !!          high point, tries it, and replaces the high point if the new point is better
-        function amotsa(fac)
-            real, intent(in) :: fac
-            real :: amotsa
-            real :: fac1,fac2,yflu,ytry,harv
-            real, dimension(size(p,2)) :: ptry
-            fac1=(1.0-fac)/ndim
-            fac2=fac1-fac
-            ptry(:)=psum(:)*fac1-p(ihi,:)*fac2
-            ytry=func(ptry,ndim) ! evaluate the function at the trial point
-            if(ytry <= yb)then   ! save the best ever
-                pb(:)=ptry(:)
-                yb=ytry
-            end if
-            harv = ran3()
-            yflu=ytry+temptr*log(harv) ! a thermal fluctuation was added to all current vertices,
-            if (yflu < yhi) then       ! but is subtracted here to give the contsa a thermal Brownian motion
-                y(ihi)=ytry
-                yhi=yflu
-                psum(:)=psum(:)-p(ihi,:)+ptry(:)
-                p(ihi,:)=ptry(:)
-            end if
-            amotsa=yflu
-        end function amotsa
+    !     !>  \brief  extrapolates by a factor fac through the face of the contsa across from the
+    !     !!          high point, tries it, and replaces the high point if the new point is better
+    !     function amotsa(fac)
+    !         real, intent(in) :: fac
+    !         real :: amotsa
+    !         real :: fac1,fac2,yflu,ytry,harv
+    !         real, dimension(size(p,2)) :: ptry
+    !         fac1=(1.0-fac)/ndim
+    !         fac2=fac1-fac
+    !         ptry(:)=psum(:)*fac1-p(ihi,:)*fac2
+    !         ytry=func(ptry,ndim) ! evaluate the function at the trial point
+    !         if(ytry <= yb)then   ! save the best ever
+    !             pb(:)=ptry(:)
+    !             yb=ytry
+    !         end if
+    !         harv = ran3()
+    !         yflu=ytry+temptr*log(harv) ! a thermal fluctuation was added to all current vertices,
+    !         if (yflu < yhi) then       ! but is subtracted here to give the contsa a thermal Brownian motion
+    !             y(ihi)=ytry
+    !             yhi=yflu
+    !             psum(:)=psum(:)-p(ihi,:)+ptry(:)
+    !             p(ihi,:)=ptry(:)
+    !         end if
+    !         amotsa=yflu
+    !     end function amotsa
 
-    end subroutine amebsa
+    ! end subroutine amebsa
 
     !> \brief  stochastic hill climbing selection rule for distance arrays
     function shc_selector( dists, old_ind ) result( new_ind )

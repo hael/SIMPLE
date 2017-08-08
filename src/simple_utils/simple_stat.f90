@@ -387,6 +387,7 @@ contains
         !$omp end parallel do
     
     end subroutine mean_2D
+
     !> stdev_2D Standard deviation 2D filter
     !! \param data 2D array
     !! \param winsz window size
@@ -447,6 +448,7 @@ contains
         !$omp end parallel do
     
     end subroutine stdev_2D
+    
     ! CORRELATION
 
     !>    calculates Pearson's correlation coefficient
