@@ -40,24 +40,24 @@ contains
         fname_diag    = add2fbody(moviename_forctf, p%ext, '_ctffind_diag')
         fname_param   = fname_new_ext(fname_diag, 'txt')
         open(unit=funit, status='REPLACE', action='WRITE', file=fname_ctrl)
-        write(funit,'(a)') trim(moviename_forctf)
-        write(funit,'(a)') trim(fname_diag)
-        write(funit,'(a)') real2str(p%smpd)
-        write(funit,'(a)') real2str(p%kv)
-        write(funit,'(a)') real2str(p%cs)
-        write(funit,'(a)') real2str(p%fraca)
-        write(funit,'(a)') real2str(real(p%pspecsz))
-        write(funit,'(a)') real2str(p%hp)
-        write(funit,'(a)') real2str(p%lp)
-        write(funit,'(a)') real2str(1.0e4*p%dfmin)
-        write(funit,'(a)') real2str(1.0e4*p%dfmax)
-        write(funit,'(a)') real2str(1.0e4*p%astigstep)
-        write(funit,'(a)') 'no'
-        write(funit,'(a)') 'no'
-        write(funit,'(a)') 'yes'
-        write(funit,'(a)') real2str(1.0e4*p%expastig)
-        write(funit,'(a)') trim(p%phaseplate)
-        write(funit,'(a)') 'no';
+        write(funit,'(a)') trim(moviename_forctf)      ! integrated movie used for fitting
+        write(funit,'(a)') trim(fname_diag)            ! diagnostic file
+        write(funit,'(a)') real2str(p%smpd)            ! magnification dependent sampling distance
+        write(funit,'(a)') real2str(p%kv)              ! acceleration voltage, default 300 kV (Titan)
+        write(funit,'(a)') real2str(p%cs)              ! sperical aberration, default 2.7 mm (Titan/Arctica)
+        write(funit,'(a)') real2str(p%fraca)           ! fraction of amplitude contrast, default 0.1 (10%)
+        write(funit,'(a)') real2str(real(p%pspecsz))   ! size of power spectrum, default 1024 to avoid aliasing
+        write(funit,'(a)') real2str(p%hp)              ! high-pass limit, default 30.0 A
+        write(funit,'(a)') real2str(p%lp)              ! low-pass  limit, default 5.0 A  
+        write(funit,'(a)') real2str(1.0e4*p%dfmin)     ! minimum defocus, default 0.5 microns
+        write(funit,'(a)') real2str(1.0e4*p%dfmax)     ! maximum defocus, default 5.0 microns
+        write(funit,'(a)') real2str(1.0e4*p%dfstep)    ! defocus grid search step size, default 0.05 microns
+        write(funit,'(a)') 'no'                        ! do you know what astigmatism is present?
+        write(funit,'(a)') 'yes'                       ! slower, more exhaustive search
+        write(funit,'(a)') 'yes'                       ! use a restraint on astigmatism
+        write(funit,'(a)') real2str(1.0e4*p%astigtol)  ! defocus grid search step size, default 0.05 microns
+        write(funit,'(a)') trim(p%phaseplate)          ! phase-plate or not (yes|no) {no}       
+        write(funit,'(a)') 'no';                       ! set expert options
         close(funit)
         cmd_str = 'cat ' // fname_ctrl//' | ctffind'
         call system(trim(cmd_str))

@@ -141,6 +141,7 @@ type :: oris
     procedure          :: merge
     ! I/O
     procedure          :: read
+    procedure          :: read_ctfparams_and_state
     procedure, private :: write_1
     procedure, private :: write_2
     generic            :: write => write_1, write_2
@@ -1902,6 +1903,40 @@ contains
         end do
         close(fnr)
     end subroutine read
+
+    !>  \brief  reads CTF parameters and state info from file
+    subroutine read_ctfparams_and_state( self, ctfparamfile )
+        class(oris),       intent(inout) :: self
+        character(len=*),  intent(in)    :: ctfparamfile
+        logical    :: params_are_there(10)
+        integer    :: i
+        type(oris) :: os_tmp
+        call os_tmp%new(self%n)
+        call os_tmp%read(ctfparamfile)
+        params_are_there(1)  = os_tmp%isthere('smpd')
+        params_are_there(2)  = os_tmp%isthere('kv')
+        params_are_there(3)  = os_tmp%isthere('cs')
+        params_are_there(4)  = os_tmp%isthere('fraca')
+        params_are_there(5)  = os_tmp%isthere('phaseplate')
+        params_are_there(6)  = os_tmp%isthere('dfx')
+        params_are_there(7)  = os_tmp%isthere('dfy')
+        params_are_there(8)  = os_tmp%isthere('angast')
+        params_are_there(9)  = os_tmp%isthere('bfac')
+        params_are_there(10) = os_tmp%isthere('state')
+        do i=1,self%n
+            if( params_are_there(1) )  call self%set(i, 'smpd',       os_tmp%get(i, 'smpd')      )
+            if( params_are_there(2) )  call self%set(i, 'kv',         os_tmp%get(i, 'kv')        )
+            if( params_are_there(3) )  call self%set(i, 'cs',         os_tmp%get(i, 'cs')        )
+            if( params_are_there(4) )  call self%set(i, 'fraca',      os_tmp%get(i, 'fraca')     )
+            if( params_are_there(5) )  call self%set(i, 'phaseplate', os_tmp%get(i, 'phaseplate'))
+            if( params_are_there(6) )  call self%set(i, 'dfx',        os_tmp%get(i, 'dfx')       )
+            if( params_are_there(7) )  call self%set(i, 'dfy',        os_tmp%get(i, 'dfy')       )
+            if( params_are_there(8) )  call self%set(i, 'angast',     os_tmp%get(i, 'angast')    )
+            if( params_are_there(9) )  call self%set(i, 'bfac',       os_tmp%get(i, 'bfac')      )
+            if( params_are_there(10) ) call self%set(i, 'state',      os_tmp%get(i, 'state')     )
+        end do
+        call os_tmp%kill
+    end subroutine read_ctfparams_and_state
 
     !>  \brief  writes orientation info to file
     subroutine write_1( self, orifile, fromto )

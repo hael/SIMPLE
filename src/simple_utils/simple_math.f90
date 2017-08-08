@@ -131,7 +131,6 @@ logical, parameter,private :: warn=.false.
 !find_1, find_2, locate_1, locate_2, selec, selec_1, selec_2, hpsort_1, hpsort_2,&
 !hpsort_3, reverse_iarr, reverse_rarr,g reverse_carr
 
-
 contains
 
     ! JIFFYS
@@ -159,9 +158,8 @@ contains
         integer          :: nvox             !< nr of voxels
         double precision , parameter :: prot_d = 1.43d0            ! g/cm**3
         double precision , parameter :: one_da = 1.66053892173e-27 ! kg/Da
-!        nvox = nint( ( ( (mwkda * 1e3) * one_da ) * 1e3 ) / ( prot_d * 1e-24 * (smpd**3) )  )
+        ! nvox = nint( ( ( (mwkda * 1e3) * one_da ) * 1e3 ) / ( prot_d * 1e-24 * (smpd**3) )  )
         nvox = nint((mwkda*one_da*1e30) / (prot_d * (smpd**3.)))
-
     end function nvoxfind_1
 
     !>   to find the volume in number of voxels, given molecular weight
@@ -210,8 +208,7 @@ contains
     !!  \f[ \lambda (\si{\angstrom}) =  \frac{12.26}{\sqrt{\left(10^3 kV + 0.9784 \times (10^3 kV)^2 \right) / 10^6 }} 
     !! \f]
     pure real function kV2wl( kV )
-        real, intent(in):: kV      !< acceleration voltage in \f$\si{\kilo\volt}\f$
-        ! kV2wl = 12.26/sqrt(0.001*kV*(1+0.9784*kV))
+        real, intent(in):: kV !< acceleration voltage in \f$\si{\kilo\volt}\f$
         kV2wl = 12.26/sqrt(1000.0*kV+0.9784*(1000.0*kV)**2/(10.0**6.0))
     end function
 
@@ -614,17 +611,6 @@ contains
         win(1) = win(1)-iwinsz
         win(2) = win(2)+iwinsz
     end function
-
-
-    ! iwinsz        = ceiling(winsz)
-    ! xyzrange(:,1) = nint(loc)
-    ! xyzrange(:,2) = xyzrange(:,1)
-    ! xyzrange(:,1) = xyzrange(:,1) - iwinsz
-    ! xyzrange(:,2) = xyzrange(:,2) + iwinsz
-    ! allocate(gridpoints(xyzrange(1,1):xyzrange(1,2),xyzrange(2,1):xyzrange(2,2),xyzrange(3,1):xyzrange(3,2),3))
-    ! forall(ix=xyzrange(1,1):xyzrange(1,2), iy=xyzrange(2,1):xyzrange(2,2), iz=xyzrange(3,1):xyzrange(3,2) )&
-    ! gridpoints(ix,iy,iz,:) = real([ix,iy,iz])-loc
-
 
     !>    two-dimensional symmetric hard window
     !! \param x,y      input points

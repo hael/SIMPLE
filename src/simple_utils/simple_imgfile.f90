@@ -74,7 +74,9 @@ contains
     procedure          :: setRMSD
     procedure          :: setMode
 end type imgfile
+
 contains
+
     ! CONSTRUCTOR
     !>  \brief  constructs an imgfile object (file-handle)
     subroutine open( self, fname, ldim, smpd, del_if_exists, formatchar, readhead, rwaction )
@@ -207,9 +209,7 @@ contains
                 call self%overall_head%write(self%funit)
                 DebugPrint  '(simple_imgfile::close) wrote overall_head'
             endif
-      !      flush(fnum(self%funit))
             close(self%funit)
-           
         endif
         if( allocated(self%overall_head) ) call self%overall_head%kill
         if( allocated(self%overall_head) ) deallocate(self%overall_head)
@@ -221,11 +221,7 @@ contains
     subroutine close_nowrite( self )
         class(imgfile), intent(inout) :: self   !< Imagefile object 
         integer :: ret
-        if( is_open(self%funit) )then
-        !    flush(fnum(self%funit))
-            close(self%funit)
-            
-        endif
+        if( is_open(self%funit) ) close(self%funit)
         if( allocated(self%overall_head) ) call self%overall_head%kill
         if( allocated(self%overall_head) ) deallocate(self%overall_head)
         self%was_written_to = .false.
@@ -568,9 +564,6 @@ contains
             case DEFAULT
                 stop 'Format not supported; rwSlices; simple_imgfile'
         end select
-
-        ! stop
-
         ! process data on disk
         if( mode .eq. 'r' )then
             select case(self%overall_head%bytesPerPix())
@@ -647,9 +640,6 @@ contains
                     enddo
                 enddo
             enddo
-
-            ! stop
-
             select case(self%overall_head%bytesPerPix())
                 case(4)
                     select case(self%head_format)
@@ -698,9 +688,6 @@ contains
                     print *, 'bit depth: ', int2str(self%overall_head%bytesPerPix())
                     stop 'Unsupported bit-depth; rwSlices; simple_imgfile'
             end select
-
-            ! stop
-
             ! Check the write was successful
             if( io_stat .ne. 0 )then
                 write(*,'(a,i0,2a)') '**ERROR(wSlices): I/O error ', io_stat, ' when writing to: ', self%fname

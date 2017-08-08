@@ -10,7 +10,8 @@ use simple_jiffys,       only: alloc_err
 implicit none
 
 #include "simple_local_flags.inc"
-public ::  split_nobjs_even,split_nobjs_in_chunks,split_pairs_in_parts,merge_similarities_from_parts,merge_rmat_from_parts
+public ::  split_nobjs_even,split_nobjs_in_chunks,split_pairs_in_parts,&
+&merge_similarities_from_parts,merge_rmat_from_parts
 contains
     
     !>  \brief  for generating balanced partitions of nobjs objects

@@ -147,7 +147,7 @@ contains
             call self%a%spiral(p%nsym, p%eullims)
         else
             ! we need the oritab to override the deftab in order not to loose parameters
-            if( p%deftab /= '' ) call self%a%read(p%deftab)
+            if( p%deftab /= '' ) call self%a%read_ctfparams_and_state(p%deftab)
             if( p%oritab /= '' )then
                 if( .not. cline%defined('nstates') )then
                     call self%a%read(p%oritab, p%nstates)

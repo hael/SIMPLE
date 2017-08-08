@@ -31,16 +31,15 @@ module simple_imghead
     private
 #include "simple_local_flags.inc"
 
-    integer, parameter         :: NREALS=104
-    integer, parameter, public :: dataRbytes   = 1
-    integer, parameter, public :: dataRinteger = 2
-    integer, parameter, public :: dataRfloat   = 3
-    integer, parameter         :: NREMAINS=14
-    integer, parameter         :: CLOSE2THEANSWER=43
-    integer, parameter         :: MRCHEADSZ=1024
-    integer, parameter         :: MRCFEIHEADSZ=128
-    integer, parameter         :: NLABL=10
-
+    integer, parameter         :: NREALS          = 104
+    integer, parameter, public :: dataRbytes      = 1
+    integer, parameter, public :: dataRinteger    = 2
+    integer, parameter, public :: dataRfloat      = 3
+    integer, parameter         :: NREMAINS        = 14
+    integer, parameter         :: CLOSE2THEANSWER = 43
+    integer, parameter         :: MRCHEADSZ       = 1024
+    integer, parameter         :: MRCFEIHEADSZ    = 128
+    integer, parameter         :: NLABL           = 10
 
     type ImgHead
         private
@@ -355,7 +354,7 @@ contains
         DebugPrint  'created imghead ::new '
     end subroutine new
 
-!>  \brief  Reset all the values in the header to default values
+    !>  \brief  Reset all the values in the header to default values
     subroutine reset2default(self)
         class(ImgHead), intent(inout) :: self
         integer ::  i
@@ -462,7 +461,7 @@ contains
         end select
     end subroutine reset2default
 
-!>  \brief  if for setting the minimal info in the image header
+    !>  \brief  if for setting the minimal info in the image header
     subroutine setMinimal( self, ldim, is_ft, smpd )
         class(ImgHead), intent(inout) :: self
         integer, intent(in)           :: ldim(3)
@@ -546,7 +545,7 @@ contains
 
     end subroutine setMinimal
 
-!>  \brief  print information contained in the header to the terminal
+    !>  \brief  print information contained in the header to the terminal
     subroutine print_imghead( self )
         class(ImgHead), intent(in) :: self
         !integer :: i
@@ -612,7 +611,7 @@ contains
         end select
     end subroutine print_imghead
 
-!>  \brief  Read the header data from disk
+    !>  \brief  Read the header data from disk
     subroutine read( self, lun, pos, print_entire )
         class(ImgHead), intent(inout)         :: self
         integer, intent(in)                   :: lun
@@ -701,7 +700,7 @@ contains
         DebugPrint '(imghead::read) done'
     end subroutine read
 
-!>  \brief write header data to disk
+    !>  \brief write header data to disk
     subroutine write( self, lun, pos )
         class(ImgHead), intent(inout)         :: self
         integer, intent(in)                   :: lun
@@ -798,8 +797,8 @@ contains
         end select
     end subroutine write
 
-!>  \brief  Check whether the header was created by a machine with the same endianess as the machine we're on now
-!!          If the header doesn't have a machine stamp (or it is 0), we assume it's in the local endianess.
+    !>  \brief  Check whether the header was created by a machine with the same endianess as the machine we're on now
+    !!          If the header doesn't have a machine stamp (or it is 0), we assume it's in the local endianess.
     logical function hasLocalEndianess(self)
         class(ImgHead), intent(in)      ::  self
 
@@ -819,7 +818,7 @@ contains
         hasLocalEndianess = .true.
     end function hasLocalEndianess
 
-!> \brief   Set the machine stamp
+    !> \brief   Set the machine stamp
     subroutine setMachineStamp(self)
         class(ImgHead), intent(inout)   ::  self
         select type(self)
@@ -828,7 +827,7 @@ contains
         end select
     end subroutine setMachineStamp
 
-!>  \brief  Return the local machine's "machinestamp", which is endian-specific
+    !>  \brief  Return the local machine's "machinestamp", which is endian-specific
     function getLocalMachineStamp()
         integer(kind=4) :: getLocalMachineStamp
         integer(kind=1)            :: machst(4)
@@ -880,9 +879,9 @@ contains
         getLocalMachineStamp = transfer(machst,getLocalMachineStamp)
     end function getLocalMachineStamp
 
-!>  \brief  Return the number of bytes per pixel
-!!          All SPIDER image files consist of unformatted, direct access records.
-!!          Each record contains NX 4-byte words which are stored as floating point numbers.
+    !>  \brief  Return the number of bytes per pixel
+    !!          All SPIDER image files consist of unformatted, direct access records.
+    !!          Each record contains NX 4-byte words which are stored as floating point numbers.
     integer function bytesPerPix(self)
         class(ImgHead), intent(in) :: self
         bytesPerPix = 4
@@ -899,7 +898,7 @@ contains
         end select
     end function bytesPerPix
 
-!>  \brief  Does the header indicate that pixel density values are stored in unsigned format?
+    !>  \brief  Does the header indicate that pixel density values are stored in unsigned format?
     logical function pixIsSigned(self)
         class(ImgHead), intent(in) :: self
         pixIsSigned = .true.
@@ -912,9 +911,9 @@ contains
         end select
     end function pixIsSigned
 
-!>  \brief  Work out whether pixel data are byte, integer or float
-!!          All SPIDER image files consist of unformatted, direct access records.
-!!          Each record contains NX 4-byte words which are stored as floating point numbers.
+    !>  \brief  Work out whether pixel data are byte, integer or float
+    !!          All SPIDER image files consist of unformatted, direct access records.
+    !!          Each record contains NX 4-byte words which are stored as floating point numbers.
     integer function getPixType(self)
         class(ImgHead), intent(in) :: self
         getPixType = dataRfloat
@@ -931,7 +930,7 @@ contains
         end select
     end function getPixType
 
-!>  \brief  Does the header indicate that pixel density values are complex numbers
+    !>  \brief  Does the header indicate that pixel density values are complex numbers
     logical function pixIsComplex(self)
         class(ImgHead), intent(in) ::  self
         pixIsComplex = .false.
@@ -944,7 +943,7 @@ contains
         end select
     end function pixIsComplex
 
-!>  \brief  Return the index of the first byte containing image data
+    !>  \brief  Return the index of the first byte containing image data
     integer function firstDataByte( self )
         class(ImgHead), intent(in) :: self
         select type(self)
@@ -959,7 +958,7 @@ contains
         end select
     end function firstDataByte
 
-!>  \brief  assignment overloader
+    !>  \brief  assignment overloader
     subroutine assign( lhs, rhs )
         class(ImgHead), intent(inout) :: lhs
         class(ImgHead), intent(in)    :: rhs
@@ -1028,7 +1027,7 @@ contains
         end select
     end subroutine assign
 
-!>  \brief  Return the minimum pixel value
+    !>  \brief  Return the minimum pixel value
     real function getMinPixVal(self)
         class(ImgHead), intent(in) :: self
         getMinPixVal = 0.
@@ -1040,7 +1039,7 @@ contains
         end select
     end function getMinPixVal
 
-!>  \brief  Return the maximum pixel value
+    !>  \brief  Return the maximum pixel value
     real function getMaxPixVal(self)
         class(ImgHead), intent(in) :: self
         getMaxPixVal = 0.
@@ -1052,7 +1051,7 @@ contains
         end select
     end function getMaxPixVal
 
-!>  \brief  Set the minimum pixel value
+    !>  \brief  Set the minimum pixel value
     subroutine setMinPixVal(self,new_value)
         class(ImgHead), intent(inout)  :: self
         real,               intent(in) :: new_value
@@ -1065,7 +1064,7 @@ contains
         end select
     end subroutine setMinPixVal
 
-!>  \brief  Set the maximum pixel value
+    !>  \brief  Set the maximum pixel value
     subroutine setMaxPixVal(self,new_value)
         class(ImgHead), intent(inout) :: self
         real,           intent(in)    :: new_value
@@ -1078,7 +1077,7 @@ contains
         end select
     end subroutine setMaxPixVal
 
-!>  \brief  Return the pixel size
+    !>  \brief  Return the pixel size
     real function getPixSz(self)
         class(ImgHead), intent(in)  ::  self
         getPixSz = 0.
@@ -1094,7 +1093,7 @@ contains
         end select
     end function getPixSz
 
-!>  \brief  Set the pixel size
+    !>  \brief  Set the pixel size
     subroutine setPixSz( self, smpd )
         class(ImgHead), intent(inout) :: self
         real, intent(in)              :: smpd
@@ -1110,7 +1109,7 @@ contains
         end select
     end subroutine setPixSz
 
-!>  \brief  Return the number of 2D images in the stack
+    !>  \brief  Return the number of 2D images in the stack
     integer function getStackSz(self) result(stack_size)
         class(ImgHead), intent(in) ::  self
         stack_size = 0
@@ -1122,7 +1121,7 @@ contains
         end select
     end function getStackSz
 
-!>  \brief  Return the dims stored in the header
+    !>  \brief  Return the dims stored in the header
     function getDims(self) result( dims )
         class(ImgHead), intent(in) ::  self
         integer ::  dims(3)
@@ -1135,7 +1134,7 @@ contains
         end select
     end function getDims
 
-!>  \brief  Return one of the dims stored in the header
+    !>  \brief  Return one of the dims stored in the header
     function getDim( self, which_dim ) result( dim )
         class(ImgHead), intent(in) :: self
         integer, intent(in)        :: which_dim
@@ -1167,7 +1166,7 @@ contains
         end select
     end function getDim
 
-!>  \brief  set the dims in the header
+    !>  \brief  set the dims in the header
     subroutine setDims( self, ldim )
         class(ImgHead), intent(inout) :: self
         integer, intent(in)           :: ldim(3)
@@ -1186,7 +1185,7 @@ contains
         end select
     end subroutine setDims
 
-!>  \brief  set the dims in the header
+    !>  \brief  set the dims in the header
     subroutine setDim( self, which_dim, d )
         class(ImgHead), intent(inout) :: self
         integer, intent(in)           :: which_dim, d
@@ -1224,7 +1223,7 @@ contains
         end select
     end subroutine setDim
 
-!>  \brief  Return the number of records in file header
+    !>  \brief  Return the number of records in file header
     function getLabrec( self ) result( labrec )
         class(ImgHead), intent(in) :: self
         integer :: labrec
@@ -1235,7 +1234,7 @@ contains
         end select
     end function getLabrec
 
-!>  \brief  Return the record length in bytes
+    !>  \brief  Return the record length in bytes
     function getLenbyt( self ) result( lenbyt )
         class(ImgHead), intent(in) :: self
         integer :: lenbyt
@@ -1246,7 +1245,7 @@ contains
         end select
     end function getLenbyt
 
-!>  \brief  Return the record length in bytes
+    !>  \brief  Return the record length in bytes
     function getLabbyt( self ) result( labbyt )
         class(ImgHead), intent(in) :: self
         integer :: labbyt
@@ -1257,7 +1256,7 @@ contains
         end select
     end function getLabbyt
 
-!>  \brief  Return the maximum nr of images in stack
+    !>  \brief  Return the maximum nr of images in stack
     function getMaxim( self ) result( maxim )
         class(ImgHead), intent(in) :: self
         integer :: maxim
@@ -1270,7 +1269,7 @@ contains
         end select
     end function getMaxim
 
-!>  \brief  Set the maximum nr of images in stack
+    !>  \brief  Set the maximum nr of images in stack
     subroutine setMaxim( self, maxim )
         class(ImgHead), intent(inout) :: self
         integer, intent(in) :: maxim
@@ -1280,7 +1279,7 @@ contains
         end select
     end subroutine setMaxim
 
-!>  \brief  Return the image format tag
+    !>  \brief  Return the image format tag
     function getIform( self ) result( iform )
         class(ImgHead), intent(in) :: self
         integer :: iform
@@ -1291,7 +1290,7 @@ contains
         end select
     end function getIform
 
-!>  \brief  Return the image format tag
+    !>  \brief  Return the image format tag
     function getMode( self ) result( mode )
         class(ImgHead), intent(in) :: self
         integer :: mode
@@ -1302,7 +1301,7 @@ contains
         end select
     end function getMode
 
-!>  \brief  Set the maximum nr of images in stack
+    !>  \brief  Set the maximum nr of images in stack
     subroutine setIform( self, iform )
         class(ImgHead), intent(inout) :: self
         integer, intent(in)           :: iform
@@ -1312,7 +1311,7 @@ contains
         end select
     end subroutine setIform
 
-!>  \brief  Set the image format tag
+    !>  \brief  Set the image format tag
     subroutine setMode( self, mode )
         class(ImgHead), intent(inout) :: self
         integer, intent(in)           :: mode
@@ -1322,7 +1321,7 @@ contains
         end select
     end subroutine setMode
 
-!>  \brief  Set the root-mean-square deviation
+    !>  \brief  Set the root-mean-square deviation
     subroutine setRMSD( self, RMSD )
         class(ImgHead), intent(inout) :: self
         real,           intent(in)    :: RMSD
@@ -1332,7 +1331,7 @@ contains
         end select
     end subroutine setRMSD
 
-! POLYMORPHIC DESTRUCTOR
+    ! POLYMORPHIC DESTRUCTOR
 
     subroutine kill(self)
         class(ImgHead), intent(inout) :: self

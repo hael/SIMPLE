@@ -334,11 +334,7 @@ contains
             write(*,*) 'command: stat ', trim(adjustl(filename))
             write(*,*) 'status of execution: ', status
         endif
-
     end subroutine sys_stat
-
-
-
 
     !> \brief  is for adding to filebody
     function add2fbody( fname, suffix, str ) result( newname )
