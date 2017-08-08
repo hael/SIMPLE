@@ -160,7 +160,7 @@ contains
          cloop = saxy(cloop)
          elapsed(ii) = toc_omp(timestamp)
       end do
-      write (*, '(A,A,1i4,A)') __FILE__, ":", __LINE__, ' *** Timed loop *** '
+      write (*, '(A,A,1i4,A)') __FILENAME__, ":", __LINE__, ' *** Timed loop *** '
       write (*, '(A,1d20.10)') "    Average over 3 (sec):", SUM(elapsed, DIM=1)/REAL(3., dp)
       write (*, '(A,1d20.10)') "    Min time (sec) ", MINVAL(elapsed, DIM=1)
       write (*, "(A)") ' '

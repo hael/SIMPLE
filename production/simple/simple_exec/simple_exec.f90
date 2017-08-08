@@ -2093,9 +2093,11 @@ select case(prg)
         keys_optional(23) = 'xsh'
         keys_optional(24) = 'ysh'
         keys_optional(25) = 'zsh'
+        keys_optional(26) = 'npeaks'
+        keys_optional(27) = 'athres'
         ! parse command line
         if( describe ) call print_doc_orisops
-        call cline%parse(keys_optional=keys_optional(:25))
+        call cline%parse(keys_optional=keys_optional(:27))
         ! execute
         call xorisops%execute(cline)
     case( 'oristats' )

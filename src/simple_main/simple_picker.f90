@@ -18,7 +18,7 @@ private
 integer,          parameter   :: MAXKMIT  = 20
 integer,          parameter   :: SPECNCLS = 10
 real,             parameter   :: BOXFRAC  = 0.5
-logical,          parameter   :: WRITESHRUNKEN=.true., DOPRINT=.true.
+logical,          parameter   :: WRITESHRUNKEN=.false., DOPRINT=.true.
 type(image)                   :: micrograph, mic_shrunken, mic_shrunken_refine, ptcl_target
 type(image),      allocatable :: refs(:), refs_refine(:)
 logical,          allocatable :: selected_peak_positions(:), is_a_peak(:,:)
@@ -45,7 +45,7 @@ contains
         integer     :: alloc_stat, ifoo, iref
         allocate(micname,  source=trim(micfname))
         allocate(refsname, source=trim(refsfname))
-        boxname = fname_new_ext(micname,'box')
+        boxname = remove_abspath( fname_new_ext(micname,'box') )   
         smpd    = smpd_in
         lp      = 20.0
         if( present(lp_in) ) lp = lp_in

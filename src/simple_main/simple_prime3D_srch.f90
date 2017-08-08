@@ -19,7 +19,7 @@ public :: prime3D_srch
 private
 #include "simple_local_flags.inc"
 
-real,    parameter :: FACTWEIGHTS_THRESH = 0.0001        !< threshold for factorial weights
+real,    parameter :: FACTWEIGHTS_THRESH = 0.001        !< threshold for factorial weights
 
 type prime3D_srch
     private
@@ -1052,12 +1052,8 @@ contains
         forall(ipeak=1:npeaks) ws(order(ipeak)) = exp(sum(logws(:ipeak))) 
         ! thresholding of the weights
         allocate(included(npeaks), source=.true.)
-        if( self%do_weight_inpl )then
-            included = (ws>=FACTWEIGHTS_THRESH)
-            where( .not.included ) ws = 0.
-        else
-            ! all are included
-        endif
+        included = (ws>=FACTWEIGHTS_THRESH)
+        where( .not.included ) ws = 0.
         ! weighted corr
         wcorr = sum(ws*corrs, mask=included)/sum(ws, mask=included)
         ! update npeaks individual weights

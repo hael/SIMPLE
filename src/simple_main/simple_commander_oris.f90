@@ -61,6 +61,7 @@ type, extends(commander_base) :: rotmats2oris_commander
 end type rotmats2oris_commander
 
 contains
+
     !> cluster_oris is a program for clustering orientations based on geodesic distance
     subroutine exec_cluster_oris( self, cline )
         use simple_shc_cluster, only: shc_cluster
@@ -664,6 +665,16 @@ contains
             end do
             percen = percen/real(ncls)
             write(*,*) percen, ' % of the particles included at sigma ', p%nsig
+        endif
+        if( cline%defined('npeaks') )then
+            call b%a%new(p%nspace)
+            call b%a%spiral
+            write(*,*) 'ATHRESH: ', b%a%find_athres_from_npeaks( p%npeaks )
+        endif
+        if( cline%defined('athres') )then
+            call b%a%new(p%nspace)
+            call b%a%spiral
+            write(*,*) 'NPEAKS: ', b%a%find_npeaks_from_athres( p%athres )
         endif
         call b%a%write(p%outfile)
         call simple_end('**** SIMPLE_ORISOPS NORMAL STOP ****')

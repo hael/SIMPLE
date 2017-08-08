@@ -26,11 +26,11 @@ logical           :: be_verbose=.false.
 character(STDLEN) :: time
 call date_and_time(TIME=time)
 starttime = str2real(time)
-if( command_argument_count() < 0 )then
-    write(*,'(a)') 'simple_test_timer [verbose=<yes|no{no}>]'
-    stop
-endif
-call cline%parse
+!if( command_argument_count() < 0 )then
+!    write(*,'(a)') 'simple_test_timer [verbose=<yes|no{no}>]'
+!    stop
+!endif
+!call cline%parse
 ! call cline%checkvar('nthr', 1)
 !call cline%check
 be_verbose = .true.
@@ -42,5 +42,5 @@ be_verbose = .true.
 call exec_OpenMP_timer_test(be_verbose)
 call date_and_time(TIME=time)
 stoptime = str2real(time)
-write(*,'(a,1x,f9.2)') '\n <<< \ndate_and_time elapsed (s): ', stoptime - starttime
+write(*,'(a,1x,f9.2)') '<<< intrinsic date_and_time elapsed (s): ', stoptime - starttime
 end program simple_omp_timer_test

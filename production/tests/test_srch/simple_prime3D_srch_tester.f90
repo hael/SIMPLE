@@ -20,7 +20,6 @@ private
 ! module global constants
 integer,           parameter :: NPROJS      = 15
 integer,           parameter :: NSTATES     = 3
-integer,           parameter :: MAXNPEAKS   = 10
 character(len=32), parameter :: ptclsname   = 'prime3D_srch_test_ptcls.mrc'
 character(len=32), parameter :: orisname    = 'prime3D_srch_test_oris.txt'
 character(len=32), parameter :: outfilename = 'prime3D_srch_test_algndoc.txt'

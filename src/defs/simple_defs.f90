@@ -86,9 +86,11 @@ real,    parameter :: FRAC_INTERPOL    = 60.0 ! at what frac to turn on the grid
 real,    parameter :: EXTRINITHRESH    = 0.5
 real,    parameter :: EXTRTHRESH_CONST = 0.2
 real,    parameter :: LP2SMPDFAC       = 0.4125
+real,    parameter :: NPEAKSATHRES     = 12.0
 integer, parameter :: LPLIM1ITERBOUND  = 5
 integer, parameter :: LPLIM3ITERBOUND  = 7
 integer, parameter :: GRIDNPEAKS       = 3
+integer, parameter :: MAXNPEAKS        = 40
 
 character(len=:), allocatable :: endconv   !< endianness conversion
 integer(kind=c_int):: nthr_glob            !< number of threads global variable

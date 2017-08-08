@@ -302,7 +302,7 @@ contains
     end subroutine exec_pick_distr
 
     !! PARALLEL CLASS AVERAGE GENERATION
-!> makecavgs_distr parallel class average generation
+    !> makecavgs_distr parallel class average generation
     subroutine exec_makecavgs_distr( self, cline )
         use simple_commander_prime2D
         use simple_commander_distr
