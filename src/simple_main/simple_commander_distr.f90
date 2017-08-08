@@ -32,6 +32,7 @@ public :: split_pairs_commander
 public :: split_commander
 private
 
+!> generator type
 type, extends(commander_base) :: merge_algndocs_commander
   contains
     procedure :: execute      => exec_merge_algndocs

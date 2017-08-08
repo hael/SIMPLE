@@ -3,7 +3,7 @@
 !------------------------------------------------------------------------------!
 !> Simple module: runtime polymorphic singly linked list class.
 !!
-!! @author Dominika Elmlund, 2009-05-25.
+!! \author Dominika Elmlund, 2009-05-25.
 !!
 !==Changes are documented below
 !!

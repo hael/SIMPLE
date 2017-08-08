@@ -1,6 +1,7 @@
 !------------------------------------------------------------------------------!
 ! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
 !------------------------------------------------------------------------------!
+!> Simple class: particle picking module
 module simple_picker
 !$ use omp_lib
 !$ use omp_lib_kinds

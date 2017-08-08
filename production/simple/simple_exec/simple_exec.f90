@@ -3,7 +3,7 @@
 !------------------------------------------------------------------------------!
 !> SIMPLE_EXEC is the primary program of SIMPLE 
 !
-!! \detail `simple_exec' executes every individual program in the SIMPLE library.
+!! \details `simple_exec' executes every individual program in the SIMPLE library.
 !! To list all programs type `simple_exec prg=list'.
 !!
 !! To execute program prime3D type simple_exec prg=prime3D and instructions are
@@ -163,8 +163,6 @@ call get_command_argument(1, arg, cmdlen, cmdstat)
 call get_command(entire_line)
 if( str_has_substr(entire_line, 'prg=list') ) call list_all_simple_programs
 describe = str_has_substr(entire_line, 'describe=yes')
-describe = describe .or. str_has_substr(entire_line, 'verbose=yes')
-describe = describe .or. str_has_substr(entire_line, 'debug=yes')
 
 pos = index(arg, '=') ! position of '='
 call cmdline_err( cmdstat, cmdlen, arg, pos )

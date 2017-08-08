@@ -4,7 +4,7 @@
 !> Simple random tabulated module contains routines for generation of directed random numbers.
 !>
 !! simple_math contains various mathematical subroutines and functions.
-!! @author Cyril Reboul & Hans Elmlund
+!! \author Cyril Reboul & Hans Elmlund
 !!
 !
 !==changes are documented below

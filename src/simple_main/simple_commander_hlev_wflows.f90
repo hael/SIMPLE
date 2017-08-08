@@ -149,7 +149,7 @@ contains
     end subroutine exec_prime2D_autoscale
 
     !> ini3D_from_cavgs is a SIMPLE program to generate initial 3d model from class averages
-    !! @see  http://simplecryoem.com/tutorials.html?#ab-initio-3d-reconstruction-from-class-averages
+    !! \see  http://simplecryoem.com/tutorials.html?#ab-initio-3d-reconstruction-from-class-averages
     !!
     !! Example:
     !! ```sh

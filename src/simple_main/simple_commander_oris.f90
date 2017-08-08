@@ -31,6 +31,8 @@ public :: oristats_commander
 public :: rotmats2oris_commander
 private
 #include "simple_local_flags.inc"
+
+!> generator type
 type, extends(commander_base) :: cluster_oris_commander
  contains
    procedure :: execute      => exec_cluster_oris
@@ -327,8 +329,8 @@ contains
 
     !> map2ptcls is a program for mapping parameters that have been obtained using class averages
     !!  to the individual particle images
-    !! @see http://simplecryoem.com/tutorials.html?#using-simple-in-the-wildselecting-good-class-averages-and-mapping-the-selection-to-the-particles
-    !! @see http://simplecryoem.com/tutorials.html?#resolution-estimate-from-single-particle-images
+    !! \see http://simplecryoem.com/tutorials.html?#using-simple-in-the-wildselecting-good-class-averages-and-mapping-the-selection-to-the-particles
+    !! \see http://simplecryoem.com/tutorials.html?#resolution-estimate-from-single-particle-images
     subroutine exec_map2ptcls( self, cline )
         use simple_oris,    only: oris
         use simple_ori,     only: ori
@@ -336,7 +338,7 @@ contains
         use simple_corrmat  ! use all in there
         class(map2ptcls_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
-        type state_organiser
+        type state_organiser !> map2ptcls state struct
             integer, allocatable :: particles(:)
             integer              :: cls_orig = 0
             integer              :: cls_sel  = 0

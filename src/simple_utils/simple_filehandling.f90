@@ -312,7 +312,7 @@ contains
 
   integer,allocatable        :: statb(:)
   integer                    :: stato
-        debug=.true.
+        !debug=.true.
 !        allocate(statb(13))
         stato =  stat(trim(adjustl(filename)), statb)
         status = stato

@@ -6,11 +6,12 @@ module simple_denspeak_cluster
 use simple_jiffys, only: alloc_err
 implicit none
 
+!> type definition for  peak density cluster class
 type denspeak_cluster
     private
-    integer              :: N=0
-    real,    pointer     :: dmat(:,:)=>null()
-    real                 :: d_crit=0.
+    integer              :: N=0                !< max num peaks
+    real,    pointer     :: dmat(:,:)=>null()  !< distance matrix
+    real                 :: d_crit=0.          !< critical density
     real,    allocatable :: rhos(:)
     real,    allocatable :: deltas(:)
     integer, allocatable :: centers(:)
@@ -42,7 +43,7 @@ contains
         type(denspeak_cluster)   :: self
         call self%new(N, dmat, d_crit)
     end function constructor
-
+    !> constructor 
     subroutine new( self, N, dmat, d_crit )
         class(denspeak_cluster), intent(inout) :: self
         integer,                 intent(in)    :: N

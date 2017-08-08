@@ -33,7 +33,7 @@ implicit none
 
 public :: winfuns
 private
-
+!>  window function stuct and operations 
 type :: winfuns
     private
     character(STDLEN) :: wfun_str=''                      !< wfun string descriptor
@@ -62,7 +62,7 @@ type :: winfuns
     procedure, private :: nn_instr
     procedure, private :: sinc_apod
     procedure, private :: sinc_instr
-end type
+end type winfuns
 
 !>  \brief  defines the interface for the window
 abstract interface

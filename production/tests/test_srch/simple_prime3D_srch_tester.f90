@@ -17,6 +17,7 @@ public :: exec_prime3D_srch_test
 
 private
 #include "simple_local_flags.inc"
+
 ! module global constants
 integer,           parameter :: NPROJS      = 15
 integer,           parameter :: NSTATES     = 3
@@ -94,6 +95,7 @@ contains
         logical, optional, intent(in)    :: be_verbose
         !type(ori)          :: o
         integer            :: i   !, state ,noris
+
         if( present(be_verbose) ) verbose = be_verbose
         verbose=.true.
         ! it is assumed that vol1, smpd, msk are part of the inputted command line

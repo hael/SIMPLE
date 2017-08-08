@@ -29,7 +29,7 @@ public :: oris, test_oris
 private
 #include "simple_local_flags.inc"
 
-!>  \brief  aggregates ori objects
+!>  \brief struct type aggregates ori objects
 type :: oris
     private
     type(ori), allocatable :: o(:)

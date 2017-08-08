@@ -1,6 +1,7 @@
 !------------------------------------------------------------------------------!
 ! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
 !------------------------------------------------------------------------------!
+!> Simple PRIME abstract class
 module simple_prime_srch
 use simple_defs
 use simple_math

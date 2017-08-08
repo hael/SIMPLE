@@ -12,8 +12,8 @@
 ! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
 ! Redistribution and modification is regulated by the GNU General Public License.
 !
-! @author Cyril Reboul & Hans Elmlund
-! @date 2016
+! \author Cyril Reboul & Hans Elmlund
+! \date 2016
 !------------------------------------------------------------------------------!
 module simple_commander_imgproc
 use simple_defs
@@ -38,6 +38,7 @@ public :: stack_commander
 public :: stackops_commander
 private
 
+!> generator type
 type, extends(commander_base) :: binarise_commander
   contains
     procedure :: execute      => exec_binarise
@@ -143,7 +144,7 @@ contains
 
     end subroutine exec_binarise
     !> convert is a program for converting between SPIDER and MRC formats
-    !! @see http://simplecryoem.com/tutorials.html?#using-simple-in-the-wildpower-spectrum-analysis-and-movie-selection
+    !! \see http://simplecryoem.com/tutorials.html?#using-simple-in-the-wildpower-spectrum-analysis-and-movie-selection
     !!
     !! bash-3.2$ `simple_exec prg=convert'
     !!USAGE:

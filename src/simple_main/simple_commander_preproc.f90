@@ -38,6 +38,7 @@ public :: pick_commander
 public :: extract_commander
 private
 
+!> generator type
 type, extends(commander_base) :: preproc_commander
   contains
     procedure :: execute      => exec_preproc
@@ -437,7 +438,7 @@ contains
     !! will be pre-averaged in the given chunk size (Falcon 3 movies). If
     !! fromf/tof are given, a contiguous subset of frames will be averaged
     !! without any dose-weighting applied.
-    !! @see http://simplecryoem.com/tutorials.html?#motion-correction
+    !! \see http://simplecryoem.com/tutorials.html?#motion-correction
     !! EXAMPLE:
     !! ```sh
     !! cat movies.txt 
@@ -523,7 +524,7 @@ contains
     end subroutine exec_unblur
 
     !> ctffind  is a wrapper program for CTFFIND4 (Grigorieff lab)
-    !! \seealso  http://simplecryoem.com/tutorials.html?#ctf-parameter-determination
+    !! \sa  http://simplecryoem.com/tutorials.html?#ctf-parameter-determination
     subroutine exec_ctffind( self, cline )
         use simple_ctffind_iter, only: ctffind_iter
         use simple_oris,         only: oris
@@ -576,7 +577,7 @@ contains
 
     !> SELECT is a program for selecting files based on image correlation matching
     !!
-    !! \seealso http://simplecryoem.com/tutorials.html?#prime2d-analysis-of-trpv1-membrane-receptor-images
+    !! \sa http://simplecryoem.com/tutorials.html?#prime2d-analysis-of-trpv1-membrane-receptor-images
     !! ```sh
     !! simple_exec prg=select
     !!  USAGE:

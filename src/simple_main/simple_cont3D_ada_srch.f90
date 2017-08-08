@@ -1,3 +1,7 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple search class:  continous 3D ADA algorithm
 module simple_cont3D_ada_srch
 use simple_defs
 use simple_params,           only: params
@@ -13,7 +17,7 @@ implicit none
 
 public :: cont3D_ada_srch
 private
-!#include "simple_local_flags.inc"
+! #include "simple_local_flags.inc"
 real,    parameter :: FACTWEIGHTS_THRESH = 0.001    !< threshold for factorial weights
 real,    parameter :: E3HALFWINSZ = 90.             !< in-plane angle half window size
 integer, parameter :: NREFS       = 80
@@ -113,8 +117,8 @@ contains
     !>  \brief  is the master search routine
     subroutine prep_srch(self, a, iptcl)
         class(cont3D_ada_srch), intent(inout) :: self
-        class(oris),         intent(inout) :: a
-        integer,             intent(in)    :: iptcl
+        class(oris),         intent(inout) :: a     !< search orientations
+        integer,             intent(in)    :: iptcl !< input particle
         type(ori)         :: o
         real, allocatable :: frc(:)
         integer           :: inpl_ind
@@ -221,8 +225,8 @@ contains
     !>  \brief  is the master search routine
     subroutine exec_srch( self, a, iptcl )
         class(cont3D_ada_srch), intent(inout) :: self
-        class(oris),        intent(inout) :: a
-        integer,            intent(in)    :: iptcl
+        class(oris),        intent(inout) :: a      !< search orientations
+        integer,            intent(in)    :: iptcl  !< input particle
         if(nint(a%get(iptcl,'state')) > 0)then
             call self%prep_srch(a, iptcl)
             call self%do_euler_srch
@@ -240,7 +244,7 @@ contains
     subroutine gen_ori( self, o )
         use simple_rnd, only: gasdev
         class(cont3D_ada_srch), intent(inout) :: self
-        class(ori),             intent(out)   :: o
+        class(ori),             intent(out)   :: o !< rand orientation
         type(ori) :: o_transform
         real      :: val
         call o_transform%new
@@ -335,7 +339,7 @@ contains
     !>  \brief  determines and updates stochastic weights
     subroutine stochastic_weights( self, wcorr )
         class(cont3D_ada_srch), intent(inout) :: self
-        real,                   intent(out)   :: wcorr
+        real,                   intent(out)   :: wcorr   !<  stochastic weights
         type(ori)         :: o
         real, allocatable :: frc(:)
         real              :: ws(self%npeaks), corrs(self%npeaks), logws(self%npeaks), frcmed

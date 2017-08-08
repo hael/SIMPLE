@@ -1,4 +1,7 @@
-
+!------------------------------------------------------------------------------!
+! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple movie watcher class
 module simple_moviewatcher
 use simple_defs
 use simple_syscalls

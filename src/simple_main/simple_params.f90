@@ -29,7 +29,7 @@ implicit none
 public :: params
 private
 #include "simple_local_flags.inc"
-
+!> global parameters
 type :: params
     ! global objects
     type(ori)             :: ori_glob

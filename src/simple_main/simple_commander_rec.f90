@@ -9,7 +9,7 @@
 !! execute (defined by the base class: simple_commander_base). Later we can use
 !! the composite pattern to create MacroCommanders (or workflows)
 !!
-!! @see http://simplecryoem.com/tutorials.html?#reconstruction-of-symmetrical-structures-with-simple
+!! \see http://simplecryoem.com/tutorials.html?#reconstruction-of-symmetrical-structures-with-simple
 ! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
 ! Redistribution and modification is regulated by the GNU General Public License.
 ! *Authors:* Cyril Reboul & Hans Elmlund 2016
@@ -47,7 +47,7 @@ end type volassemble_commander
 contains 
     !> RECVOL is a SIMPLE program to reconstruct volumes from EM stacks and their estimated orientations
     !!
-    !! @see http://simplecryoem.com/tutorials.html?#resolution-estimate-from-single-particle-images
+    !! \see http://simplecryoem.com/tutorials.html?#resolution-estimate-from-single-particle-images
     !!
     !! `map2ptcls' generates a document named mapped_params_ptcls.txt that we can directly use to reconstruct a new map from the particle images and calculate the resolution
     !!

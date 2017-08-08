@@ -1,6 +1,7 @@
 !------------------------------------------------------------------------------!
 ! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
 !------------------------------------------------------------------------------!
+!> Simple class: Correlation calculator for volume polar FT's
 module simple_volpft_corrcalc
 !$ use omp_lib
 !$ use omp_lib_kinds

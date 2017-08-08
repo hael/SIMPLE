@@ -648,7 +648,7 @@ contains
         deallocate(pgrps)
 
         contains
-
+            !> get even symmetry
             subroutine getevensym( cstr, o )
                 integer,intent(in)           :: o     !< order
                 character(len=1), intent(in) :: cstr  !< sym type 
@@ -660,9 +660,10 @@ contains
                     endif
                 enddo
             end subroutine getevensym
-
-            function fmtsymstr( symtype, iord )result( ostr )
-                character(len=1), intent(in)  :: symtype !< 'c', 'd', 't' or 'i' symmetry type
+            !> format symmetry string
+            !! \param symtype   symmetry type, one char options  c, d, t or i
+            function fmtsymstr( symtype, iord ) result( ostr )
+                character(len=1), intent(in)  :: symtype 
                 integer, intent(in)           :: iord    !< order
                 character(len=2)              :: ord     !< temp
                 character(len=3)              :: ostr    !< formatted output

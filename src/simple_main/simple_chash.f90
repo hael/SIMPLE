@@ -8,7 +8,7 @@ implicit none
 
 public :: chash
 private
-
+!> Simple chash type
 type :: chash
     private
     character(len=32),     allocatable :: keys(:)   !< chash keys

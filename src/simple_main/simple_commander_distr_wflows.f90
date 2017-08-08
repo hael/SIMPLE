@@ -47,7 +47,7 @@ public :: symsrch_distr_commander
 private
 
 type, extends(commander_base) :: unblur_ctffind_distr_commander
-  contains
+  contain
     procedure :: execute      => exec_unblur_ctffind_distr
 end type unblur_ctffind_distr_commander
 type, extends(commander_base) :: unblur_distr_commander

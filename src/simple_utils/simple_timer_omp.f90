@@ -3,7 +3,7 @@
 !------------------------------------------------------------------------------!
 !> Simple timer module using OpenMP functions
 !!
-!! @author
+!! \author
 !!     Michael Eager 
 !! Original version: 2017-03-15
 !

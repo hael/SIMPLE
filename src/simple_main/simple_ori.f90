@@ -24,7 +24,7 @@ implicit none
 public :: ori, test_ori, test_ori_dists
 private
 
-!>  \brief  orientation parameters
+!>  orientation parameter stuct and operations 
 type :: ori
     private
     real                        :: euls(3)=0.        !< Euler angle

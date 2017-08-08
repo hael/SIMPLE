@@ -11,7 +11,7 @@ public :: hash, test_hash
 private
 
 integer, parameter :: NMAX=100 !< maximum number of entries in hash table
-
+!> hash stuct
 type :: hash
     private
     character(len=32) :: keys(NMAX)

@@ -8,7 +8,7 @@ implicit none
 
 public :: opt_spec
 private
-
+!> struct for all opt specifications
 type :: opt_spec
     procedure(costfun),  pointer, nopass :: costfun  =>null() !< defines cost function
     procedure(gcostfun), pointer, nopass :: gcostfun =>null() !< defines the gradient of the cost function

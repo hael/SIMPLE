@@ -3,7 +3,7 @@
 !------------------------------------------------------------------------------!
 !> SIMPLE_DISTR_EXEC executes the parallel (or distributed workflows) of SIMPLE
 !
-!! \detail `simple_distr_exec' executes most individual programs in the SIMPLE
+!! \details `simple_distr_exec' executes most individual programs in the SIMPLE
 !! library. To list all programs type `simple_distr_exec prg=list'. See
 !! `simple_exec' for a more detailed list.
 !

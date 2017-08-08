@@ -18,8 +18,8 @@ implicit none
 
 public :: sa_opt
 private
-
-type sa_opt
+!> abstract type
+type :: sa_opt
     private
     procedure(costfun),   pointer, nopass :: costfun =>null()   !< defines cost function
     procedure(acceptfun), pointer, nopass :: acceptfun =>null() !< defines acceptance function

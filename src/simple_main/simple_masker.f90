@@ -15,6 +15,7 @@ private
 
 integer, parameter :: WINSZ = 3       !< real-space filter half-width window
 
+!> image child type
 type, extends(image) :: masker
     private
     type(image)       :: img_dist             !< distances to center of image

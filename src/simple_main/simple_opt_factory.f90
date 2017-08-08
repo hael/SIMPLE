@@ -17,7 +17,7 @@ implicit none
 
 public :: opt_factory
 private
-
+!> abstract optimisation factory type
 type :: opt_factory
     private
     class(optimizer), allocatable :: optimizer_type

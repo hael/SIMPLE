@@ -24,12 +24,12 @@ real                   :: smpd, sxx, lp
 
 contains
     !> initialise time series tracker
-    !! @param filetabname file table name
-    !! @param boxcoord box coordinates
-    !! @param box_in box input value
-    !! @param offset_in offset input value
-    !! @param smpd_in smpd input value
-    !! @param lp_in lp input value
+    !! \param filetabname file table name
+    !! \param boxcoord box coordinates
+    !! \param box_in box input value
+    !! \param offset_in offset input value
+    !! \param smpd_in smpd input value
+    !! \param lp_in lp input value
     subroutine init_tracker( filetabname, boxcoord, box_in, offset_in, smpd_in, lp_in  )
         character(len=*), intent(in) :: filetabname
         integer,          intent(in) :: boxcoord(2), box_in, offset_in

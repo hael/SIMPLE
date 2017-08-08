@@ -40,20 +40,20 @@ public :: build, test_build
 private
 #include "simple_local_flags.inc"
 
-type build
+type :: build
     ! GENERAL TOOLBOX
     type(oris)                          :: a, e               !< aligndata, discrete space
     type(sym)                           :: se                 !< symmetry elements object
     type(convergence)                   :: conv               !< object for convergence checking of the PRIME2D/3D approaches
     type(convergence_perptcl)           :: ppconv             !< per-particle convergence checking object
-    type(image)                         :: img                !< individual image objects
-    type(polarizer)                     :: img_match          !< -"-
-    type(image)                         :: img_pad            !< -"-
-    type(image)                         :: img_tmp            !< -"-
-    type(image)                         :: img_msk            !< -"-
-    type(image)                         :: img_copy           !< -"-
-    type(projector)                     :: vol                !< -"-
-    type(projector)                     :: vol_pad            !< -"-
+    type(image)                         :: img                !< individual image objects 
+    type(polarizer)                     :: img_match          !< -"- image objects
+    type(image)                         :: img_pad            !< -"- image objects
+    type(image)                         :: img_tmp            !< -"- image objects
+    type(image)                         :: img_msk            !< -"- image objects
+    type(image)                         :: img_copy           !< -"- image objects
+    type(projector)                     :: vol                !< -"- image objects
+    type(projector)                     :: vol_pad            !< -"- image objects
     type(masker)                        :: mskimg             !< mask image
     type(masker)                        :: mskvol             !< mask volume
     ! CLUSTER TOOLBOX

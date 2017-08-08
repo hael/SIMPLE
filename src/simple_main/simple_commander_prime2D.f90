@@ -8,7 +8,7 @@
 !! (defined by the base class: simple_commander_base). Later we can use the
 !! composite pattern to create MacroCommanders (or workflows)
 !!
-!! @see http://simplecryoem.com/tutorials.html?#d-analysis-with-prime2d
+!! \see http://simplecryoem.com/tutorials.html?#d-analysis-with-prime2d
 !!
 ! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
 ! Redistribution and modification is regulated by the GNU General Public License.
@@ -31,6 +31,7 @@ public :: check2D_conv_commander
 public :: rank_cavgs_commander
 private
 
+!> generator type
 type, extends(commander_base) :: makecavgs_commander 
   contains
     procedure :: execute      => exec_makecavgs
@@ -141,7 +142,7 @@ contains
         call simple_end('**** SIMPLE_MAKECAVGS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_makecavgs
     !> Prime2D  implementation of a bespoke probabilistic algorithm for simultaneous 2D alignment and clustering
-    !! @see http://simplecryoem.com/tutorials.html?#d-analysis-with-prime2d
+    !! \see http://simplecryoem.com/tutorials.html?#d-analysis-with-prime2d
     !!
     !!    Algorithms that can rapidly discover clusters corresponding to sets of
     !!    images with similar projection direction and conformational state play

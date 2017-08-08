@@ -138,22 +138,21 @@ contains
 
     !> \brief nvoxfind_1  to find the volume in number of voxels, given molecular weight
     
-    !! \detail SI units \f$\si{\kilo\dalton}= \SI{1e-10}{\metre}\f$, one dalton is defined as 1/12 of the mass of an atom of Carbon 12, or 1 amu  \SI{1.66053892173e-27}{\kilo\gram} \f$
+    !! \details SI units \f$ \si{\kilo\dalton}= \SI{1e-10}{\metre} \f$, one dalton is defined as 1/12 of the mass of an atom of Carbon 12, or 1 amu \f$ \SI{1.66053892173e-27}{\kilo\gram} \f$
     !!
-    !!  Protein density \f$\rho_{\mathrm{prot}}\f$ is defined as \f$\si{1.43}{\gram\per\centimetre\cubed}\f$
-    !!   see  Quillin and Matthews, Accurate calculation of the density of proteins, doi:10.1107/S090744490000679X
+    !!  Protein density \f$ \rho_{\mathrm{prot}} \f$ is defined as \f$ \si{1.43}{\gram\per\centimetre\cubed} \f$
+    !!   see  Quillin and Matthews, Accurate calculation of the density of proteins, DOI 10.1107/S090744490000679X
     !! protein density in \f$ \si{\gram\per\angstrom\cubed},\ \rho_{\mathrm{prot}\si{\angstrom}} = \rho_{\mathrm{prot}} \num{1e-24} \f$
     !! unit voxel volume v in \f$ \si{\per\angstrom\cubed},\ v  = \mathrm{smpd}^3 \f$
     !! mass of protein in Da, \f$ M_\mathrm{prot Da} = \mathrm{mwkda}\times\num{1e3} \f$
     !! mass of protein in kg \f$ M_\mathrm{kg prot} = M_\mathrm{prot Da}*M_{Hydrogen (\mathrm{kg/Da}) \f$
-    !! mass of protein in g\f$ M_\mathrm{g prot} = ((mwkda*1e3)*one_da)*1e3 \f$
+    !! mass of protein in g \f$ M_\mathrm{g prot} = ((mwkda*1e3)*one_da)*1e3 \f$
     !! therefore number of voxels in protein is:
-    !! \f[ N_{\mathrm{vox}} = \frac{ M_{\mathrm{molecule}} }{ \rho_{\mathrm{prot}} \times \frac{1}{v^3} 
-    !!                      \sim \nint {frac{\mathrm{mwkda}\times\num{1e3}\times\num{1.66e-27)} {\num{1.43}\times\num{1e-24}} \times \frac{1}{\mathrm{smpd}^3}}}
+    !! \f[ \begin{align*} N_{\mathrm{vox}} &=& \frac{ M_{\mathrm{molecule}} }{ \rho_{\mathrm{prot}} \times \frac{1}{v^3}\\ & \sim& \nint {frac{\mathrm{mwkda}\times\num{1e3}\times\num{1.66e-27)} {\num{1.43}\times\num{1e-24}} \times \frac{1}{\mathrm{smpd}^3}}} \end{align*}
     !! \f]
     !! we must also assume the number of voxels are discrete, hence we must round to the nearest integer
-    !! \param smpd sampling distance in angstroms (SI unit \f$\si{\angstrom}= \si{1e-10}{\metre}\f$)
-    !! \param mwkda molecular weight \f$M_{\mathrm{molecule}}\f$ in kDa
+    !! \param smpd sampling distance in angstroms (SI unit \f$ \si{\angstrom}= \si{1e-10}{\metre} \f$)
+    !! \param mwkda molecular weight \f$ M_{\mathrm{molecule}} \f$ in kDa
     pure function nvoxfind_1( smpd, mwkda ) result( nvox )
     real, intent(in) :: smpd             !< sampling distance
         real, intent(in) :: mwkda            !< molecular weight
@@ -169,7 +168,7 @@ contains
     pure function nvoxfind_2( smpd, mwkda, dens ) result( nvox )
         real, intent(in) :: smpd             !< sampling distance
         real, intent(in) :: mwkda            !< molecular weight
-        real, intent(in) :: dens             !< density in Da/A3  \f$\si{\dalton\per\angstrom\cubed}\f$
+        real, intent(in) :: dens             !< density in Da/A3  \f$ \si{\dalton\per\angstrom\cubed} \f$
         real             :: vol_per_pix, vol !< volume per pixel & volume
         integer          :: nvox             !< nr of voxels
         vol_per_pix = smpd**3.
@@ -199,17 +198,17 @@ contains
     end function
 
     !> \brief   Convert acceleration voltage in kV into electron wavelength in Angstroms
-    !! \detail  DeBroglie showed that  \f$ \lambda = \frac{h}{mv}
+    !! \details  DeBroglie showed that  \f$ \lambda = \frac{h}{mv} \f$, where
     !! h is Planck’s constant  \f$ \SI{6.626e-34}{\joule\second} \f$
-    !! mv is momentum, which is  \f$ \sqrt{2 m_e e V} \f$
-    !! mass of an electron is \f$ \SI{9.1e-31}{\kilo\gram} \f$ and charge of e is  \f$ \SI{1.6e-19}{\coulomb} \f$
-    !! Equation for converting acceleration voltage into electron wavelength in Angstroms (\si{\angstrom}) :
-    !! \f$ \lambda (\si{\metre}) =  \frac{12.26 \times 10^{-10}}{\sqrt{V}} \f$
+    !! mv is momentum (mass times velocity), which is  \f$ \sqrt{2 m_e q V} \f$
+    !! mass of an electron is \f$ \SI{9.1e-31}{\kilo\gram} \f$ and charge of an electron is  \f$ \SI{1.6e-19}{\coulomb} \f$
+    !! Equation for converting acceleration voltage into electron wavelength in Angstroms (\f$ \si{\angstrom} \f$) :
+    !! \f[ \lambda (\si{\metre}) =  \frac{12.26 \times 10^{-10}}{\sqrt{V}} \f]
     !! Due to relativistic effects Lorentz law applies:
-    !!  \f$ \lambda (\si{\metre}) =  \frac{12.26 \times 10^{-10}}{\sqrt{V}} \times \frac{1}{\sqrt{1+\frac{e V}{2 m_e c^2}}} \f$
-    !! where c is the speed of light, which is \f$ \sim \SI{3e8}{\metre\per\second}
-    !!  \f$ \lambda (\si{\angstrom}) =  \frac{12.26}{\sqrt{\left(10^3 kV + 0.9784 \times (10^3 kV)^2 \right) / 10^6 }} \f$
-    !! 
+    !!  \f[ \lambda (\si{\metre}) =  \frac{12.26 \times 10^{-10}}{\sqrt{V}} \times \frac{1}{\sqrt{1+\frac{e V}{2 m_e c^2}}} \f]
+    !! where c is the speed of light,\f$ \sim \SI{3e8}{\metre\per\second} \f$
+    !!  \f[ \lambda (\si{\angstrom}) =  \frac{12.26}{\sqrt{\left(10^3 kV + 0.9784 \times (10^3 kV)^2 \right) / 10^6 }} 
+    !! \f]
     pure real function kV2wl( kV )
         real, intent(in):: kV      !< acceleration voltage in \f$\si{\kilo\volt}\f$
         ! kV2wl = 12.26/sqrt(0.001*kV*(1+0.9784*kV))
@@ -570,8 +569,8 @@ contains
 
     !>   to enforce cyclic limit
     pure subroutine enforce_cyclic_limit( x, lim )
-        real, intent(inout) :: x
-        real, intent(in)    :: lim
+        real, intent(inout) :: x   !< input var
+        real, intent(in)    :: lim !< limit
         do while( x > lim )
             x = x-lim
         end do
@@ -581,8 +580,9 @@ contains
     end subroutine enforce_cyclic_limit
 
     !>   one-dimensional cyclic index generation
+    !! \param lims limits
     pure function cyci_1d( lims, i ) result( ind )
-        integer, intent(in) :: lims(2), i
+        integer, intent(in) :: lims(2), i !< input var
         integer :: ind, del
         ind = i
         if( ind > lims(2) )then
@@ -831,6 +831,11 @@ contains
 
     !>   two-dimensional hard edge
     !! \f$r^2 < x^2+y^2\f$.
+    !! \param x x position
+    !! \param y y position
+    !! \param mskrad masking radius
+    !! \return w on or off
+    !!
     pure function hardedge_1( x, y, mskrad ) result( w )
         real,intent(in) :: x, y, mskrad
         real :: w
@@ -839,7 +844,12 @@ contains
     end function
 
     !>   three-dimensional hard edge
-     !! \f$r^2 < x^2+y^2+z^2\f$.
+    !! \f$r^2 < x^2+y^2+z^2\f$.
+    !! \param x x position
+    !! \param y y position
+    !! \param mskrad masking radius
+    !! \return w on or off
+    !!
     pure function hardedge_2( x, y, z, mskrad ) result( w )
         real,intent(in) :: x, y, z, mskrad
         real :: w
@@ -848,7 +858,12 @@ contains
     end function
 
     !>   two-dimensional hard edge
-     !! \f$r < \sqrt{x^2+y^2}\f$.
+    !! \f$r < \sqrt{x^2+y^2}\f$.
+    !! \param x x position
+    !! \param y y position
+    !! \param mskrad masking radius
+    !! \return w on or off
+    !!
     pure function hardedge_inner_1( x, y, mskrad ) result( w )
         real,intent(in) :: x, y, mskrad
         real :: w
@@ -857,7 +872,13 @@ contains
     end function
 
     !>   three-dimensional hard edge
-     !! \f$r < \sqrt{ x^2+y^2+z^2 }\f$.
+    !! \f$r < \sqrt{ x^2+y^2+z^2 }\f$.
+    !! \param x x position
+    !! \param y y position
+    !! \param z z position
+    !! \param mskrad masking radius
+    !! \return w on or off
+    !!
     pure function hardedge_inner_2( x, y, z, mskrad ) result( w )
         real,intent(in) :: x, y, z, mskrad
         real :: w
@@ -866,6 +887,10 @@ contains
     end function
 
     !>   low-end one-dimensional gaussian edge
+    !! \param d distance
+    !! \param mskrad masking radius
+    !! \return w off or graded edge
+    !!
     pure function cosedge_1( d,rad ) result( w )
         real, intent(in) :: d,rad
         real             :: w,halfrad
@@ -878,6 +903,8 @@ contains
     end function cosedge_1
 
     !>   two-dimensional gaussian edge
+    !! \param x x position
+    !! \param y y position
    pure function cosedge_2( x, y, box, mskrad ) result( w )
        real, intent(in)    :: x, y     !< input points
        integer, intent(in) :: box      !< window size
@@ -895,7 +922,9 @@ contains
     end function cosedge_2
 
     !>   three-dimensional gaussian edge
-     !! \f$r = \cos{(1+{(\pi{r - (d+2m)/(d-2m)})})}\f$.
+    !! \f$r = \cos{(1+{(\pi{r - (d+2m)/(d-2m)})})}\f$.
+    !! \param x x position
+    !! \param y y position
     pure function cosedge_3( x, y, z, box, mskrad ) result( w )
         real, intent(in)    :: x, y, z   !< input points
         integer, intent(in) :: box       !< window size
@@ -913,6 +942,8 @@ contains
     end function cosedge_3
 
     !> \brief  two-dimensional gaussian edge
+    !! \param x x position
+    !! \param y y position
     pure function cosedge_inner_1( x, y, width, mskrad ) result( w )
         real, intent(in) :: x, y, width  !< input points and width
         real, intent(in) :: mskrad       !< mask radius
@@ -928,8 +959,11 @@ contains
     end function
 
     !>   two-dimensional gaussian edge
+    !! \param x x position
+    !! \param y y position
+    !! \param z z position
     pure function cosedge_inner_2( x, y, z, width, mskrad ) result( w )
-        real, intent(in) :: x, y, z, width
+        real, intent(in) :: x, y, z, width !< inner mask radius
         real, intent(in) :: mskrad !< mask radius
         real             :: w, rad
         rad = sqrt(x**2.+y**2.+z**2.)
@@ -946,7 +980,7 @@ contains
 
     !>   is for working out the fourier dimension
     pure function fdim( d ) result( fd )
-        integer, intent(in) :: d
+        integer, intent(in) :: d !< dimension
         integer :: fd
         if(is_even(d))then
             fd = d/2+1
@@ -957,6 +991,7 @@ contains
 
     !>   returns the shell to which the voxel with address h,k,l belongs
     !! \f$s = \nint{\sqrt{h^2+k^2+l^2}}\f$.
+    !! \param h,k,l voxel indices
     pure function shell( h, k, l ) result( sh )
         integer, intent(in) :: h, k, l
         integer :: sh
@@ -1023,8 +1058,10 @@ contains
     end function
 
     !>   returns the Fourier index of resolution \f$ (\si{\per\angstrom}) \f$
+    !< \param smpd pixel size
+    !! \param res resolution \f$ (\si{\angstrom}) \f$
     integer pure function calc_fourier_index( res, box, smpd )
-        real, intent(in)    :: res, smpd !<  smpd pixel size,  res resolution \f$ (\si{\angstrom}) \f$
+        real, intent(in)    :: res, smpd 
         integer, intent(in) :: box       !< box size
         calc_fourier_index = nint((real(box-1)*smpd)/res)
     end function calc_fourier_index
@@ -1135,7 +1172,9 @@ contains
     !!          initial stepsize; it need not to be small but rather should be an
     !!          increment in x over which func changes substantially. An estimate of
     !!          the error in the derivative is returned in err
-    !! \param  func is the function to be derived at point x.
+    !! \param func is the function to be derived at point x.
+    !! \param x point query
+    !! \param err  estimated error 
     subroutine numderiv( func, x, h, err, df )
     ! Parameters: Stepsize is decreased by CON at each iteration. Max size of tableu is
     ! set by NTAB. Return when error is SAFE worse than the best so far. The number of
@@ -1152,7 +1191,7 @@ contains
         integer, parameter :: NTAB=10                                   !< max size of tableu
         real, parameter    :: CON=1.4, CON2=CON*CON, BIG=1.E30, SAFE=2. !< real params
         real, intent(in)   :: x, h                                      !< point & step
-        real, intent(out)  :: err, df                                   !< estimated error and gradient
+        real, intent(out)  :: err, df                                   !< gradient
         real               :: errt, fac, hh, a(NTAB,NTAB)
         integer            :: i, j
         if(abs(h)<TINY) stop 'h must be nonzero; numderiv; simple_math'
@@ -1393,8 +1432,8 @@ contains
 
     !>   trace of a square matrix
     pure function tr( matrix, n ) result( sum )
-        integer, intent(in) :: n
-        real, intent(in), dimension(n,n) :: matrix
+        integer, intent(in) :: n          !< matrix size
+        real, intent(in), dimension(n,n) :: matrix !< input matrix
         real :: sum
         integer :: i
         sum = 0.
@@ -1405,8 +1444,8 @@ contains
 
     !>   determinant of a square matrix, matrix is modified
     function det( matrix, n ) result( d )
-        integer, intent(in)   :: n
-        real, dimension(n,n)  :: matrix
+        integer, intent(in)   :: n          !< matrix size
+        real, dimension(n,n)  :: matrix     !< input matrix
         integer, dimension(n) :: indx(n)
         real                  :: d
         logical               :: err
@@ -1423,7 +1462,7 @@ contains
 
     !>   determinant of a square matrix, matrix is modified
     function det_D( matrix, n ) result( d )
-        integer, intent(in)   :: n
+        integer, intent(in)   :: n           !< matrix size
         real(dp), dimension(n,n)  :: matrix
         integer, dimension(n) :: indx(n)
         real(dp)                  :: d
@@ -1441,8 +1480,8 @@ contains
 
     !>   diagonal of a square matrix
     pure function diag( diagvals, n ) result( mat )
-        integer, intent(in) :: n
-        real,    intent(in) :: diagvals(n)
+        integer, intent(in) :: n          !< matrix size
+        real,    intent(in) :: diagvals(n) !< input vector
         real :: mat(n,n)
         integer :: i
         mat = 0.
@@ -1453,7 +1492,7 @@ contains
 
     !>   to allocate a one-dim array with zeros
     function zeros_1( n ) result( a )
-        integer, intent(in) :: n
+        integer, intent(in) :: n          !< matrix size
         real, allocatable   :: a(:)
         integer             :: alloc_stat
         allocate( a(n), stat=alloc_stat )
@@ -1463,7 +1502,7 @@ contains
 
     !>   to allocate a two-dim array with zeros
     function zeros_2( n1, n2 ) result( a )
-        integer, intent(in) :: n1, n2
+        integer, intent(in) :: n1, n2    !< matrix size
         real, allocatable   :: a(:,:)
         integer             :: alloc_stat
         allocate( a(n1,n2), stat=alloc_stat )
@@ -1472,6 +1511,14 @@ contains
     end function
 
     !>   lu decomposition, nr
+    !! \see Numerical recipes
+    !! \param a 
+    !! \param n 
+    !! \param np 
+    !! \param indx 
+    !! \param d 
+    !! \param err 
+    !!
     subroutine ludcmp(a,n,np,indx,d,err)
         integer :: n,np,indx(n),nmax
         real    :: d,a(np,np), tiny
@@ -1610,6 +1657,14 @@ contains
     end subroutine ludcmp_D
 
     !>  jacobi SVD, NR
+    !! \see Numerical recipes
+    !! \param a matrix
+    !! \param n size
+    !! \param np matrix size
+    !! \param d output vector
+    !! \param v output matrix
+    !! \param nrot 
+    !!
     subroutine jacobi( a, n, np, d, v, nrot)
         integer, intent(in)    :: n,np
         real,    intent(inout) :: a(np,np), v(np,np), d(np)

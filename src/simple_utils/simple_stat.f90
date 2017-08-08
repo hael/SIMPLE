@@ -5,7 +5,7 @@
 !> Simple math module: statistics utility functions
 !
 !! simple_stat contains various statistical subroutines and functions.
-!! @author Cyril Reboul & Hans Elmlund
+!! \author Cyril Reboul & Hans Elmlund
 !!
 
 !
@@ -876,7 +876,7 @@ contains
     !!   {\frac{\sum_{x\in X}\sum_{y\in Y}p(x,y)\log {p(x)p(y)}}
     !!   {\sum _{x\in X}\sum _{y\in Y}p(x,y)\log {p(x,y)}}-1}
     !! \f]
-    !! @see https://en.wikipedia.org/wiki/Mutual_information#Normalized_variants
+    !! \see https://en.wikipedia.org/wiki/Mutual_information#Normalized_variants
     !! \param x input reference array
     !! \param y input test array
     function nmi( x, y, nbins )result( val )

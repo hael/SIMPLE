@@ -10,7 +10,7 @@
 !! composite pattern to create MacroCommanders (or workflows)
 !!
 !!
-!! @see  http://simplecryoem.com/tutorials.html?#ab-initio-3d-reconstruction-from-class-averages-using-prime3d
+!! \see  http://simplecryoem.com/tutorials.html?#ab-initio-3d-reconstruction-from-class-averages-using-prime3d
 !! Ab initio 3D Reconstruction from Class Averages Using PRIME3D
 !!
 !! A major obstacle to achieving near-atomic resolution with single-particle
@@ -60,6 +60,7 @@ public :: cont3D_commander
 public :: check3D_conv_commander
 private
 
+!> generator type
 type, extends(commander_base) :: resrange_commander
   contains
     procedure :: execute      => exec_resrange

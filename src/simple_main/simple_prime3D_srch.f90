@@ -20,7 +20,7 @@ private
 #include "simple_local_flags.inc"
 
 real,    parameter :: FACTWEIGHTS_THRESH = 0.001        !< threshold for factorial weights
-
+!> struct for prime3d params
 type prime3D_srch
     private
     type(oris)              :: o_refs                   !< projection directions search space
@@ -191,7 +191,16 @@ contains
 
     ! SEARCH ROUTINES
     
-    !>  \brief a master prime search routine
+    !>  \brief  exec_prime3D_srch is a master prime search routine
+    !! \param pftcc polarft corrcalc search storage
+    !! \param iptcl particle index
+    !! \param a,e search orientation
+    !! \param lp low-pass cutoff freq
+    !! \param greedy are we processing using greedy
+    !! \param nnmat nearest neighbour matrix
+    !! \param grid_projs grid projections
+    !! \param szsn optional size for snhc refinement
+    !!
     subroutine exec_prime3D_srch( self, pftcc, iptcl, a, e, lp, greedy, nnmat, grid_projs, szsn )
         class(prime3D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
@@ -240,7 +249,13 @@ contains
         DebugPrint '>>> PRIME3D_SRCH::EXECUTED PRIME3D_HET_SRCH'
     end subroutine exec_prime3D_srch_het
 
-    !>  \brief  
+    !>  \brief  Dev search
+    !! \param pftcc polarft corrcalc search storage
+    !! \param iptcl particle index
+    !! \param a,e search orientation
+    !! \param lp low-pass cutoff freq
+    !! \param nnmat nearest neighbour matrix
+    !! \param grid_projs grid projections
     subroutine dev_srch( self, pftcc, iptcl, a, e, lp, nnmat, grid_projs )
         class(prime3D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
@@ -304,6 +319,12 @@ contains
     end subroutine dev_srch
 
     !>  \brief  greedy hill-climbing
+    !! \param pftcc polarft corrcalc search storage
+    !! \param iptcl particle index
+    !! \param a,e search orientation
+    !! \param lp low-pass cutoff freq
+    !! \param nnmat nearest neighbour matrix
+    !! \param grid_projs grid projections
     subroutine greedy_srch( self, pftcc, iptcl, a, e, lp, nnmat, grid_projs )
         class(prime3D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
@@ -372,6 +393,13 @@ contains
     end subroutine greedy_srch
 
     !>  \brief  greedy hill-climbing (4 initialisation)
+    !! \param pftcc polarft corrcalc search storage
+    !! \param iptcl particle index
+    !! \param a,e search orientation
+    !! \param lp low-pass cutoff freq
+    !! \param nnmat nearest neighbour matrix
+    !! \param grid_projs grid projections
+    !! \param target_projs target projections
     subroutine greedy_subspace_srch( self, pftcc, iptcl, a, e, grid_projs, target_projs )
         class(prime3D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
@@ -435,6 +463,12 @@ contains
     end subroutine greedy_subspace_srch
 
     !>  \brief  executes the stochastic soft orientation search
+    !! \param pftcc polarft corrcalc search storage
+    !! \param iptcl particle index
+    !! \param a,e search orientation
+    !! \param lp low-pass cutoff freq
+    !! \param nnmat nearest neighbour matrix
+    !! \param grid_projs grid projections
     subroutine stochastic_srch( self, pftcc, iptcl, a, e, lp, nnmat, grid_projs )
         class(prime3D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
@@ -516,8 +550,14 @@ contains
 
     !>  \brief  executes the stochastic hard orientation search using pure stochastic hill climbing
     !!          (no probabilistic weighting + stochastic search of in-plane angles)
+    !! \param pftcc polarft corrcalc search storage
+    !! \param iptcl particle index
+    !! \param a,e search orientation
+    !! \param lp low-pass cutoff freq
+    !! \param nnmat nearest neighbour matrix
+    !! \param grid_projs grid projections
     subroutine stochastic_srch_shc( self, pftcc, iptcl, a, e, lp, nnmat, grid_projs )
-        class(prime3D_srch),     intent(inout) :: self
+    class(prime3D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: iptcl
         class(oris),             intent(inout) :: a, e
@@ -597,8 +637,13 @@ contains
     end subroutine stochastic_srch_shc
 
     !>  \brief  stochastic neighborhood hill-climbing
+    !! \param pftcc polarft corrcalc search storage
+    !! \param iptcl particle index
+    !! \param a,e search orientation
+    !! \param lp low-pass cutoff freq
+    !! \param szsn size ref evals
     subroutine stochastic_srch_snhc( self, pftcc, iptcl, a, e, lp, szsn )
-        class(prime3D_srch),     intent(inout) :: self
+    class(prime3D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: iptcl
         class(oris),             intent(inout) :: a, e
@@ -648,7 +693,13 @@ contains
             end subroutine per_ref_srch
 
     end subroutine stochastic_srch_snhc
-    
+    !> stochastic search het
+    !! \param pftcc polarft corrcalc search storage
+    !! \param iptcl particle index
+    !! \param a,e search orientation
+    !! \param lp low-pass cutoff freq
+    !! \param statecnt state-variable matrix
+    !! \param extr_bound corr threshold
     subroutine stochastic_srch_het( self, pftcc, iptcl, a, e, extr_bound, statecnt)
         use simple_rnd, only: shcloc, irnd_uni
         class(prime3D_srch),     intent(inout) :: self
@@ -710,7 +761,9 @@ contains
         endif
         DebugPrint '>>> PRIME3D_SRCH::FINISHED HET SEARCH'
     end subroutine stochastic_srch_het
-
+    !> in-plane peak calc corr
+    !! \param pftcc polarft corrcalc search storage
+    !! \param iptcl particle index
     subroutine inpl_peaks( self, pftcc, iptcl )
         class(prime3D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
@@ -755,6 +808,8 @@ contains
     end subroutine inpl_peaks
 
     !>  \brief  executes the in-plane search for discrete mode
+    !! \param pftcc polarft corrcalc search storage
+    !! \param iptcl particle index
     subroutine inpl_srch( self, pftcc, iptcl )
         class(prime3D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
@@ -793,8 +848,14 @@ contains
     end subroutine inpl_srch
 
     !>  \brief  prepares reference indices for the search & fetches ctf
+    !! \param pftcc polarft corrcalc search storage
+    !! \param iptcl particle index
+    !! \param a,e search orientation
+    !! \param lp low-pass cutoff freq
+    !! \param nnmat nearest neighbour matrix
+    !! \param target_projs grid projections
     subroutine prep4srch( self, pftcc, iptcl, a, e, lp, nnmat, target_projs )
-        use simple_combinatorics, only: merge_into_disjoint_set
+    use simple_combinatorics, only: merge_into_disjoint_set
         class(prime3D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: iptcl
@@ -864,8 +925,10 @@ contains
     end subroutine prep4srch
 
     !>  \brief  prepares the search space (ref oris) & search order per particle
+    !! \param e search orientation
+    !! \param nnvec nearest neighbour matrix
     subroutine prep_reforis( self, e, nnvec )
-        use simple_ran_tabu, only: ran_tabu
+    use simple_ran_tabu, only: ran_tabu
         class(prime3D_srch),  intent(inout) :: self
         class(oris),          intent(inout) :: e
         integer,    optional, intent(in)    :: nnvec(:)
@@ -1017,6 +1080,10 @@ contains
     end subroutine prep_npeaks_oris
 
     !>  \brief  determines and updates stochastic weights
+    !! \param pftcc polarft corrcalc search storage
+    !! \param iptcl particle index
+    !! \param e search orientation
+    !! \param wcorr weights
     subroutine stochastic_weights( self, pftcc, iptcl, e, wcorr )
         class(prime3D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
@@ -1063,6 +1130,9 @@ contains
     ! GETTERS & SETTERS
     
     !>  \brief  to get the best orientation
+    !! \param pftcc polarft corrcalc search storage
+    !! \param iptcl particle index
+    !! \param a search orientation
     subroutine update_best( self, pftcc, iptcl, a )
         use simple_sym,  only: sym
         use simple_math, only: myacos, rotmat2d, rad2deg
@@ -1142,8 +1212,8 @@ contains
     !>  \brief  to get one orientation
     subroutine get_ori( self, ipeak, o2update )
         class(prime3D_srch), intent(inout) :: self
-        integer,             intent(in)    :: ipeak
-        class(ori),          intent(inout) :: o2update
+        integer,             intent(in)    :: ipeak    !< which peak
+        class(ori),          intent(inout) :: o2update !< search orientation
         real      :: euls(3), x, y, rstate, ow
         integer   :: ind, npeaks
         if( str_has_substr(self%refine,'shc') .and. ipeak /= 1 ) stop 'get_ori not for shc-modes; simple_prime3D_srch'
@@ -1169,8 +1239,8 @@ contains
     !>  \brief  to produce oris object for probabilistic reconstruction
     subroutine get_oris( self, os, o )
         class(prime3D_srch), intent(inout) :: self
-        class(oris),         intent(inout) :: os
-        class(ori),          intent(inout) :: o
+        class(oris),         intent(inout) :: os !< search orientation list
+        class(ori),          intent(inout) :: o  !< search orientation
         type(ori) :: o_new
         integer   :: ipeak, npeaks
         npeaks = self%o_peaks%get_noris()
@@ -1182,7 +1252,13 @@ contains
         enddo
     end subroutine get_oris
 
-    !>  \brief  stash solution in o_refs
+    !>  \brief store_solution stash solution in o_refs
+    !! \param pftcc  polarft corrcalc search storage
+    !! \param ind proj index
+    !! \param ref ref index
+    !! \param inpl_ind in-plane index
+    !! \param corr solution
+    !!
     subroutine store_solution( self, pftcc, ind, ref, inpl_ind, corr )
         class(prime3D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
@@ -1226,7 +1302,7 @@ contains
     !>  \brief  is for getting the n-last reference orientations
     function get_o_refs( self, n )result( out_os )
         class(prime3D_srch), intent(inout) :: self
-        integer, optional,   intent(in)    :: n
+        integer, optional,   intent(in)    :: n !<  nth-last reference
         type(oris) :: out_os
         integer    :: i, cnt, in
         if( present(n) )then

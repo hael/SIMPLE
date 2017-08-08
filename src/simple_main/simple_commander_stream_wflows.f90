@@ -121,7 +121,6 @@ contains
         use simple_moviewatcher,      only: moviewatcher
         class(preproc_stream_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
-        logical,               parameter   :: DEBUG = .true.
         character(len=STDLEN), parameter   :: FILETABNAME='movieftab_preproc_stream.txt'
         integer,               parameter   :: SHORTTIME = 60    ! 60 secs for watching folder
         integer,               parameter   :: LONGTIME  = 1200   ! 20 mins before processing a new movie
@@ -134,6 +133,8 @@ contains
         logical,     allocatable :: jobs_done(:), jobs_submitted(:)
         integer                  :: nmovies, nmovies_prev, max_ind
         integer, parameter       :: TRAILING=5
+#include "simple_local_flags.inc"
+        debug=.true.
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! set defaults

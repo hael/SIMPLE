@@ -1,3 +1,7 @@
+!------------------------------------------------------------------------------!
+! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
+!------------------------------------------------------------------------------!
+!> Simple class:  B factor search of polar FT correlations 
 module simple_pftcc_bfacsrch
 use simple_opt_spec,          only: opt_spec
 use simple_pftcc_opt,         only: pftcc_opt
@@ -30,7 +34,7 @@ type, extends(pftcc_opt) :: pftcc_bfacsrch
 end type pftcc_bfacsrch
 
 contains
-
+    !> Constructor
     subroutine bfacsrch_new( self, pftcc, lims, shbarrier, nrestarts, npeaks, maxits, vols )
         use simple_projector, only: projector
         class(pftcc_bfacsrch),              intent(inout) :: self
@@ -65,7 +69,7 @@ contains
         real,                  intent(in)    :: inipop(:,:)
         stop 'Not for simplex use; simple_pftcc_bfacsrch%srch_set_inipop'
     end subroutine bfacsrch_set_inipop
-
+    !> cost function 
     function bfacsrch_costfun( self, vec, D ) result( cost )
         class(pftcc_bfacsrch), intent(inout) :: self
         integer,               intent(in)    :: D

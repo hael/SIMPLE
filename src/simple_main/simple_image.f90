@@ -26,7 +26,7 @@ private
 
 ! CLASS PARAMETERS/VARIABLES
 logical, parameter :: shift_to_phase_origin=.true.
-
+!>  image parameter stuct and operations 
 type :: image
     private
     logical                                :: ft=.false.           !< Fourier transformed or not
@@ -5305,7 +5305,7 @@ contains
     end subroutine corners
 
     !> before_after to generate a before (left) and after (right) image
-    !! \param left.right input images
+    !! \param left,right input images
     !! \return ba output montage
     !!
     function before_after( left, right ) result( ba )
